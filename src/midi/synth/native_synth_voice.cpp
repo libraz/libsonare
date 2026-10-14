@@ -1032,9 +1032,11 @@ int64_t sustained_one_shot_tail_samples(const NativeSynthPatch& patch, double sa
       return fm_one_shot_tail_samples(patch.fm, sample_rate);
     case SynthEngineMode::kPercussion:
       return numeric::ceil_sample_count(
-          static_cast<double>(PercussionVoiceCore::ring_bound_s(patch.percussion)) * sample_rate);
+          static_cast<double>(PercussionVoiceCore::ring_bound_s(patch.percussion, sample_rate)) *
+          sample_rate);
     case SynthEngineMode::kSample:
-      return sample_one_shot_tail_samples(bank, patch.sample, sample_rate);
+      return sample_one_shot_tail_samples(bank, patch.sample, sample_rate,
+                                          patch.pitch_offset_cents);
     default:
       return std::numeric_limits<int64_t>::max();
   }

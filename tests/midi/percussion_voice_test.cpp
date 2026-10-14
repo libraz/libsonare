@@ -4,10 +4,14 @@
 ///        weighting (centre thump vs rim pitch), and backward-compatible
 ///        deterministic rendering at strike_r == 0.
 
+#include "midi/synth/percussion_voice.h"
+
 #include <algorithm>
+#include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <cstdint>
 #include <vector>
 
 #include "midi/midi_event.h"
@@ -1436,6 +1440,8 @@ TEST_CASE("percussion strike level is the resting one's whatever the pitch_drop"
 TEST_CASE("a drum-kit patch bounds its tail by the drum table alone",
           "[midi][synth][percussion][gs-tail]") {
   NativeSynthConfig cfg;
+  // Isolate drum-table routing from the final DC-blocker decay.
+  cfg.dc_block = false;
   cfg.patch = drum_kit_patch();
   NativeSynth synth(cfg);
   synth.prepare(kRate, 512);
@@ -1471,6 +1477,8 @@ TEST_CASE("a drum-kit patch narrows its tail to the pieces struck",
   using sonare::midi::synth::native_patch_tail_samples;
 
   NativeSynthConfig cfg;
+  // Isolate drum-table routing from the final DC-blocker decay.
+  cfg.dc_block = false;
   cfg.patch = drum_kit_patch();
   NativeSynth synth(cfg);
   synth.prepare(kRate, 512);
@@ -1485,4 +1493,265 @@ TEST_CASE("a drum-kit patch narrows its tail to the pieces struck",
   INFO("kick tail = " << expected << ", kit max = " << kit_max);
   CHECK(synth.tail_samples() == expected);
   CHECK(synth.tail_samples() < kit_max);
+}
+
+namespace {
+
+using sonare::midi::Velocity16;
+using sonare::midi::synth::PercussionPatchParams;
+using sonare::midi::synth::PercussionVoiceCore;
+using sonare::midi::synth::SynthFilterOutput;
+
+struct TailObservation {
+  int bound = 0;
+  int first_silent = -1;
+  int last_above_floor = -1;
+  float post_bound_peak = 0.0f;
+  bool all_finite = true;
+};
+
+TailObservation render_particles(double sample_rate, int lane) {
+  PercussionPatchParams params;
+  params.num_modes = 0;
+  params.tone_gain = 0.0f;
+  params.noise_gain = 0.0f;
+  params.phisem_beans = 64.0f;
+  params.phisem_energy_ms = 20.0f;
+  params.phisem_sound_ms = 3.0f;
+  params.phisem_res_hz = (lane & 1) != 0 ? 80.0f : 0.0f;
+  params.phisem_res_q = 25.0f;
+  params.phisem_body_hz = (lane & 2) != 0 ? 80.0f : 0.0f;
+  params.phisem_body_q = 25.0f;
+  params.phisem_body_gain = 0.01f;
+
+  PercussionVoiceCore voice;
+  voice.start(params, sample_rate, 60, Velocity16::from7(100), 42);
+  const int bound = static_cast<int>(
+      std::ceil(PercussionVoiceCore::ring_bound_s(params, sample_rate) * sample_rate));
+  TailObservation result;
+  result.bound = bound;
+  for (int frame = 0; frame < bound + 256; ++frame) {
+    const float sample = voice.render(1.0f);
+    result.all_finite = result.all_finite && std::isfinite(sample);
+    if (std::abs(sample) > 1.0e-5f) result.last_above_floor = frame;
+    if (frame >= bound) result.post_bound_peak = std::max(result.post_bound_peak, std::abs(sample));
+    if (result.first_silent < 0 && voice.silent()) result.first_silent = frame;
+  }
+  return result;
+}
+
+struct BurstObservation {
+  int trigger = -1;
+  float pre = 0.0f;
+  std::array<float, 4> prefix{};
+  std::vector<float> samples;
+  bool all_finite = true;
+};
+
+BurstObservation second_burst(int sample_rate, int interval_ms, bool with_air) {
+  PercussionPatchParams params;
+  params.num_modes = 0;
+  params.tone_gain = 0.0f;
+  params.noise_gain = 0.5f;
+  params.noise_decay_ms = 1.0f;
+  params.noise_burst_count = 1;
+  params.noise_burst_interval_ms = static_cast<float>(interval_ms);
+  params.noise_burst_decay_ms = 1.0f;
+  params.noise_cutoff_hz = 80.0f;
+  params.noise_q = 25.0f;
+  params.noise_output = SynthFilterOutput::kBandpass;
+  params.noise_air_hz = with_air ? 4000.0f : 0.0f;
+
+  PercussionVoiceCore voice;
+  voice.start(params, sample_rate, 60, Velocity16::from7(100), 42);
+  const int trigger = static_cast<int>(std::lround(interval_ms * 0.001 * sample_rate)) - 1;
+  BurstObservation result;
+  result.trigger = trigger;
+  result.samples.resize(512, 0.0f);
+  for (int frame = 0; frame <= trigger + static_cast<int>(result.samples.size()); ++frame) {
+    const float sample = voice.render(1.0f);
+    result.all_finite = result.all_finite && std::isfinite(sample);
+    if (frame == trigger - 1) result.pre = sample;
+    if (frame >= trigger && frame < trigger + static_cast<int>(result.prefix.size()))
+      result.prefix[static_cast<size_t>(frame - trigger)] = sample;
+    if (frame >= trigger && frame < trigger + static_cast<int>(result.samples.size()))
+      result.samples[static_cast<size_t>(frame - trigger)] = sample;
+  }
+  return result;
+}
+
+}  // namespace
+
+TEST_CASE("percussion PhISEM and shimmer bounds include recursive paths",
+          "[boundary][midi][synth][percussion]") {
+  for (const double sample_rate : {48000.0, 96000.0}) {
+    for (int lane = 0; lane < 4; ++lane) {
+      const TailObservation observation = render_particles(sample_rate, lane);
+      INFO("sample rate = " << sample_rate << ", lane = " << lane);
+      REQUIRE(observation.all_finite);
+      REQUIRE(observation.first_silent >= 0);
+      CHECK(observation.first_silent <= observation.bound);
+      CHECK(observation.last_above_floor < observation.bound);
+      CHECK(observation.post_bound_peak < 1.0e-5f);
+    }
+  }
+
+  for (const double sample_rate : {48000.0, 96000.0}) {
+    for (const bool shimmer : {false, true}) {
+      PercussionPatchParams params;
+      params.num_modes = 1;
+      params.mode_ratios[0] = 1.0f;
+      params.base_freq_hz = 400.0f;
+      params.mode_decay_s = 0.03f;
+      params.tone_gain = 1.0f;
+      params.noise_gain = 0.0f;
+      params.shimmer = shimmer ? 1.0f : 0.0f;
+      params.shimmer_attack_ms = 500.0f;
+      params.shimmer_cutoff_hz = 4000.0f;
+
+      PercussionVoiceCore voice;
+      voice.start(params, sample_rate, 60, Velocity16::from7(100), 42);
+      const int bound = static_cast<int>(
+          std::ceil(PercussionVoiceCore::ring_bound_s(params, sample_rate) * sample_rate));
+      int first_silent = -1;
+      int last_above = -1;
+      float post_bound_peak = 0.0f;
+      bool all_finite = true;
+      for (int frame = 0; frame < bound + 256; ++frame) {
+        const float sample = voice.render(1.0f);
+        all_finite = all_finite && std::isfinite(sample);
+        if (std::abs(sample) > 1.0e-5f) last_above = frame;
+        if (frame >= bound) post_bound_peak = std::max(post_bound_peak, std::abs(sample));
+        if (first_silent < 0 && voice.silent()) first_silent = frame;
+      }
+      INFO("sample rate = " << sample_rate << ", shimmer = " << shimmer);
+      REQUIRE(all_finite);
+      REQUIRE(first_silent >= 0);
+      CHECK(first_silent <= bound);
+      CHECK(last_above < bound);
+      CHECK(post_bound_peak < 1.0e-5f);
+    }
+  }
+}
+
+TEST_CASE("percussion noise gate resets only recursive history on re-entry",
+          "[boundary][midi][synth][percussion]") {
+  struct Fixture {
+    int sample_rate;
+    bool with_air;
+    std::array<float, 4> prefix;
+  };
+  const std::array<Fixture, 4> fixtures = {{
+      {48000,
+       false,
+       {-5.94254088355228e-05f, 0.00204805377870798f, 0.00459520984441042f, 0.00324943102896214f}},
+      {48000,
+       true,
+       {-2.94096116704168e-06f, 9.17128345463425e-05f, 0.000545955321285874f,
+        0.00137182662729174f}},
+      {96000,
+       false,
+       {-9.25548592931591e-05f, -0.00166559196077287f, -0.00388842006213963f,
+        -0.00315233739092946f}},
+      {96000,
+       true,
+       {-1.33292337523017e-06f, -2.88294286292512e-05f, -0.000151463376823813f,
+        -0.000408811902161688f}},
+  }};
+
+  for (const Fixture& fixture : fixtures) {
+    const BurstObservation short_gap = second_burst(fixture.sample_rate, 100, fixture.with_air);
+    const BurstObservation long_gap = second_burst(fixture.sample_rate, 500, fixture.with_air);
+    INFO("sample rate = " << fixture.sample_rate << ", with air = " << fixture.with_air);
+    REQUIRE(short_gap.all_finite);
+    REQUIRE(long_gap.all_finite);
+    REQUIRE(short_gap.trigger == static_cast<int>(std::lround(0.1 * fixture.sample_rate)) - 1);
+    REQUIRE(long_gap.trigger == static_cast<int>(std::lround(0.5 * fixture.sample_rate)) - 1);
+    CHECK(short_gap.pre == 0.0f);
+    CHECK(long_gap.pre == 0.0f);
+    for (size_t i = 0; i < fixture.prefix.size(); ++i) {
+      INFO("prefix sample = " << i);
+      CHECK(short_gap.prefix[i] == Catch::Approx(fixture.prefix[i]).margin(1.0e-7f));
+      CHECK(long_gap.prefix[i] == Catch::Approx(fixture.prefix[i]).margin(1.0e-7f));
+    }
+    REQUIRE(short_gap.samples.size() == long_gap.samples.size());
+    for (size_t i = 0; i < short_gap.samples.size(); ++i) {
+      INFO("sample = " << i);
+      CHECK(short_gap.samples[i] == long_gap.samples[i]);
+    }
+  }
+}
+
+TEST_CASE("TPT ring bound covers its live float state matrix",
+          "[boundary][midi][synth][percussion]") {
+  for (const double sample_rate : {48000.0, 96000.0, 192000.0, 384000.0}) {
+    for (const float q : {25.0f, 30.0f}) {
+      const float cutoff_hz = 80.0f;
+      const int bound = sonare::midi::synth::TptSvf::ring(cutoff_hz, q, sample_rate).samples();
+      sonare::midi::synth::TptSvf filter;
+      filter.prepare(sample_rate);
+      filter.set(cutoff_hz, q);
+      int last_above_floor = -1;
+      bool all_finite = true;
+      for (int frame = 0; frame < bound + 256; ++frame) {
+        const float sample = filter.process(frame == 0 ? 1.0f : 0.0f).bp;
+        all_finite = all_finite && std::isfinite(sample);
+        if (std::abs(sample) > 1.0e-5f) last_above_floor = frame;
+      }
+      INFO("sample rate = " << sample_rate << ", q = " << q);
+      REQUIRE(all_finite);
+      CHECK(last_above_floor < bound);
+    }
+  }
+}
+
+TEST_CASE("percussion wire bound includes the wire filter and air rings",
+          "[boundary][midi][synth][percussion]") {
+  for (const double sample_rate : {48000.0, 96000.0}) {
+    for (const bool air : {false, true}) {
+      PercussionPatchParams params;
+      params.num_modes = 1;
+      params.mode_ratios[0] = 1.0f;
+      params.base_freq_hz = 200.0f;
+      params.mode_decay_s = 0.01f;
+      params.tone_gain = 1.0f;
+      params.noise_gain = 0.0f;
+      params.wire_buzz = 1.0f;
+      params.wire_threshold = 0.0f;
+      params.wire_decay_ms = 0.0f;
+      // A low wire corner rings far longer than the gated noise feeding it.
+      params.wire_cutoff_hz = 20.0f;
+      params.noise_air_hz = air ? 30.0f : 0.0f;
+
+      PercussionVoiceCore voice;
+      voice.start(params, sample_rate, 60, Velocity16::from7(127), 42);
+      const int bound = static_cast<int>(
+          std::ceil(PercussionVoiceCore::ring_bound_s(params, sample_rate) * sample_rate));
+      int last_above = -1;
+      bool all_finite = true;
+      for (int frame = 0; frame < 4 * bound + 4096; ++frame) {
+        const float sample = voice.render(1.0f);
+        all_finite = all_finite && std::isfinite(sample);
+        if (std::abs(sample) > 1.0e-5f) last_above = frame;
+      }
+      INFO("sample rate = " << sample_rate << ", air = " << air << ", bound = " << bound
+                            << ", last above floor = " << last_above);
+      REQUIRE(all_finite);
+      REQUIRE(last_above >= 0);
+      CHECK(last_above < bound);
+
+      // The rendered ring sits inside the follower allowance, so read the bound's own response:
+      // a lower wire corner rings longer and must lengthen it.
+      PercussionPatchParams bright = params;
+      bright.wire_cutoff_hz = 4000.0f;
+      CHECK(PercussionVoiceCore::ring_bound_s(params, sample_rate) >
+            PercussionVoiceCore::ring_bound_s(bright, sample_rate));
+      if (air) {
+        PercussionPatchParams dry = params;
+        dry.noise_air_hz = 0.0f;
+        CHECK(PercussionVoiceCore::ring_bound_s(params, sample_rate) >
+              PercussionVoiceCore::ring_bound_s(dry, sample_rate));
+      }
+    }
+  }
 }

@@ -12,6 +12,7 @@
 
 #include "midi/builtin_synth.h"
 #include "midi/synth/gm_fallback_map.h"
+#include "midi/synth/mix_dc_blocker.h"
 #include "midi/ump.h"
 #include "util/constants.h"
 #include "util/numeric_validation.h"
@@ -331,6 +332,10 @@ int64_t Sf2Player::tail_bound() const noexcept {
         numeric::saturating_add(tail, std::max<int64_t>(0, effects_->tail_samples(sample_rate_)));
   }
 #endif
+  // The bus DC blocker runs after the effect returns, so its decay comes last.
+  if (config_.dc_block) {
+    tail = numeric::saturating_add<int64_t>(tail, mix_dc_blocker_tail_samples(dc_r_));
+  }
   return tail;
 }
 

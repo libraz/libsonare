@@ -9,8 +9,8 @@
 /// realism is ALL in the mode-ratio data:
 ///   - uniform bar / glockenspiel: 1 : 2.756 : 5.404 : 8.933 (inharmonic)
 ///   - tuned marimba / vibraphone bars: 1 : 4 : 10 (deep-arch tuning)
-/// Each mode is a two-pole resonator (y = a1*y1 + a2*y2) excited by a single
-/// strike impulse, with:
+/// Each mode is a radius-preserving quadrature oscillator (equivalent to a
+/// two-pole resonator at fixed pitch) excited by a single strike impulse, with:
 ///   - mallet hardness: velocity weights the per-mode excitation (soft mallet
 ///     = fundamental only, hard strike = upper modes ring), the modal twin of
 ///     the KS dynamic-level lowpass.
@@ -76,14 +76,14 @@ class ModalVoiceCore {
   void refresh_coefficients(float pitch_ratio) noexcept;
 
   struct Mode {
-    float omega = 0.0f;       // radians/sample at pitch_ratio == 1
-    float r = 0.0f;           // per-sample decay radius
-    float excitation = 0.0f;  // impulse weight before sin normalization
-    float gain = 0.0f;        // pitch-adjusted impulse weight
-    float a1 = 0.0f;
-    float a2 = 0.0f;
-    float y1 = 0.0f;
-    float y2 = 0.0f;
+    double omega = 0.0;       // radians/sample at pitch_ratio == 1
+    double r = 0.0;           // per-sample decay radius
+    double excitation = 0.0;  // impulse weight before sin normalization
+    double sin_w = 0.0;       // current oscillator angle, sine component
+    double cos_w = 1.0;       // current oscillator angle, cosine component
+    double y_s = 0.0;         // radius-scaled quadrature sine state
+    double y_c = 0.0;         // radius-scaled quadrature cosine state
+    bool started = false;     // strike consumed, including while out of band
     bool audible = false;
   };
 
@@ -92,7 +92,7 @@ class ModalVoiceCore {
   double sample_rate_ = 48000.0;
   float cached_ratio_ = 0.0f;
   /// Per-sample damp radius cap installed by release().
-  float release_r_ = 1.0f;
+  double release_r_ = 1.0;
   bool excite_ = false;
 };
 

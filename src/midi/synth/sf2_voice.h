@@ -181,7 +181,7 @@ class Sf2Lfo {
     const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
     delay_samples_ = delay_seconds > 0.0f ? static_cast<int64_t>(delay_seconds * sr) : 0;
     inc_ = freq_hz > 0.0f ? static_cast<float>(freq_hz / sr) : 0.0f;
-    phase_ = 0.0f;
+    phase_ = 0.0;
     settling_ = false;
   }
 
@@ -195,13 +195,13 @@ class Sf2Lfo {
       settling_ = false;
     } else if (inc_ > 0.0f) {
       // The output is pinned at zero during the delay and at a zero crossing, so freeze now.
-      if (delay_samples_ > 0 || phase_ == 0.0f || phase_ == 0.5f) {
+      if (delay_samples_ > 0 || phase_ == 0.0 || phase_ == 0.5) {
         inc_ = 0.0f;
         settling_ = false;
         return;
       }
       settling_ = true;
-      settle_phase_ = phase_ < 0.5f ? 0.5f : 1.0f;
+      settle_phase_ = phase_ < 0.5 ? 0.5 : 1.0;
     }
   }
 
@@ -215,26 +215,26 @@ class Sf2Lfo {
       return 0.0f;
     }
     // Triangle from phase [0,1): 0 -> +1 -> 0 -> -1 -> 0.
-    const float p = phase_;
-    phase_ += inc_ * rate_scale;
-    if (phase_ >= 1.0f) phase_ -= 1.0f;
-    if (settling_ && (settle_phase_ < 1.0f ? phase_ >= settle_phase_ : phase_ < p)) {
-      phase_ = settle_phase_ < 1.0f ? settle_phase_ : 0.0f;
-      inc_ = 0.0f;
+    const double p = phase_;
+    phase_ += static_cast<double>(inc_) * static_cast<double>(rate_scale);
+    if (phase_ >= 1.0) phase_ -= 1.0;
+    if (settling_ && (settle_phase_ < 1.0 ? phase_ >= settle_phase_ : phase_ < p)) {
+      phase_ = settle_phase_ < 1.0 ? settle_phase_ : 0.0;
+      inc_ = 0.0;
       settling_ = false;
     }
-    if (p < 0.25f) return 4.0f * p;
-    if (p < 0.75f) return 2.0f - 4.0f * p;
-    return 4.0f * p - 4.0f;
+    if (p < 0.25) return static_cast<float>(4.0 * p);
+    if (p < 0.75) return static_cast<float>(2.0 - 4.0 * p);
+    return static_cast<float>(4.0 * p - 4.0);
   }
 
  private:
   int64_t delay_samples_ = 0;
   float inc_ = 0.0f;
-  float phase_ = 0.0f;
+  double phase_ = 0.0;
   // Set by set_frequency(0): run on to settle_phase_, then freeze.
   bool settling_ = false;
-  float settle_phase_ = 0.0f;
+  double settle_phase_ = 0.0;
 };
 
 /// Playback parameters resolved from a zone pair for one note-on.

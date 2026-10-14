@@ -37,7 +37,9 @@ class ICounterpointEngine {
   ///        `cantus` voices to harmonize/counterpoint against and the optional
   ///        harmony/dissonance/judge query slots registered by the host.
   /// @return an AssistResult (EditCommands + candidate payload). Deterministic
-  ///         for a fixed seed; budget-cooperative; never mutates the project.
+  ///         for a fixed seed, request and view when no time deadline is reached;
+  ///         a time-truncated boundary depends on execution timing.
+  ///         Budget-cooperative; never mutates the project.
   virtual AssistResult derive(const arrangement::ProjectView& view, const AssistRequest& request,
                               const std::vector<VoiceModel>& cantus,
                               const AssistQueryContext& queries) = 0;

@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
@@ -17,6 +18,7 @@
 
 #if SONARE_BUILD_FX && defined(SONARE_WITH_MASTERING)
 #include "mastering/api/insert_factory.h"
+#include "mastering/stereo/stereo_balance.h"
 #endif
 #include "midi/synth/gs_efx.h"
 #include "midi/synth/gs_efx_bindings.h"
@@ -475,6 +477,63 @@ TEST_CASE("GS EFX facade reports latency of the realized modern child graph",
     if (type != 0x1100) CHECK(expected.samples > 0);
     CHECK(processor.latency_samples() == expected.samples);
     CHECK(processor.latency_samples_q8() == expected.q8);
+  }
+}
+
+TEST_CASE("GS PAN preserves measured magnitude through construction and live plans",
+          "[midi][gs][efx][audio][boundary]") {
+  struct PanCase {
+    uint16_t type;
+    std::array<uint8_t, 2> slots;
+    size_t n_slots;
+    bool raw;
+  };
+  constexpr std::array<PanCase, 2> kCases = {{
+      {0x0101, {18, 0}, 1, false},
+      {0x1100, {15, 17}, 2, true},
+  }};
+  for (const double rate : {48000.0, 96000.0}) {
+    for (const PanCase& pan_case : kCases) {
+      for (const uint8_t value :
+           {uint8_t{0}, uint8_t{32}, uint8_t{64}, uint8_t{96}, uint8_t{127}}) {
+        GsEfx state = state_for(pan_case.type);
+        for (size_t i = 0; i < pan_case.n_slots; ++i) state.params[pan_case.slots[i]] = value;
+        std::vector<sonare::mastering::stereo::StereoBalance*> pans;
+        const auto factory = [&pans](std::string_view name, std::string_view json) {
+          std::unique_ptr<ProcessorBase> processor =
+              sonare::mastering::api::make_insert(std::string(name), std::string(json));
+          if (name == "stereo.stereoBalance") {
+            pans.push_back(
+                dynamic_cast<sonare::mastering::stereo::StereoBalance*>(processor.get()));
+          }
+          return processor;
+        };
+        GsEfxProcessor processor(state, GsEfxRealization::kModern, factory);
+        REQUIRE(pans.size() == pan_case.n_slots);
+        const float expected_construction =
+            sonare::midi::synth::gs_efx_pan_gain(value, pan_case.raw);
+        INFO("[boundary] RED construction rate=" << rate << " type=0x" << std::hex << pan_case.type
+                                                 << " byte=" << std::dec << int(value));
+        for (auto* pan : pans) {
+          REQUIRE(pan != nullptr);
+          CHECK(pan->config().gain == Catch::Approx(expected_construction).margin(1e-6f));
+        }
+        INFO("[boundary] GREEN construction gain=" << expected_construction);
+
+        processor.prepare(rate, 512, 2);
+        const uint8_t live_value = static_cast<uint8_t>((value + 32u) & 0x7Fu);
+        for (size_t i = 0; i < pan_case.n_slots; ++i) {
+          REQUIRE(processor.set_parameter(pan_case.slots[i], static_cast<float>(live_value)));
+        }
+        const float expected_live = sonare::midi::synth::gs_efx_pan_gain(live_value, pan_case.raw);
+        INFO("[boundary] GREEN live rate=" << rate << " type=0x" << std::hex << pan_case.type
+                                           << " byte=" << std::dec << int(live_value)
+                                           << " gain=" << expected_live);
+        for (auto* pan : pans) {
+          CHECK(pan->config().gain == Catch::Approx(expected_live).margin(1e-6f));
+        }
+      }
+    }
   }
 }
 #endif  // SONARE_BUILD_FX && SONARE_WITH_MASTERING

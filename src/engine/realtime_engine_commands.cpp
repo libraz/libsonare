@@ -40,13 +40,10 @@ bool RealtimeEngine::pop_telemetry(Telemetry& out) noexcept {
     out = Telemetry{};
     out.type = TelemetryType::kError;
     out.error = TelemetryErrorCode::kCommandQueueOverflow;
-    // render_frame()/sample_position() read plain int64_t transport counters
-    // written by the audio thread without synchronization. On 64-bit targets
-    // these are naturally-aligned aligned loads (no tearing); on a hypothetical
-    // 32-bit target a torn read could momentarily report a half-updated value.
-    // This is a benign, best-effort diagnostic stamp on an overflow-error
-    // telemetry record, not a control value, so the unsynchronized read is
-    // intentional and acceptable.
+    // render_frame()/sample_position() use Transport's atomic getters, which
+    // load with memory_order_acquire. The values are best-effort telemetry
+    // stamps; the individual loads do not form a synchronized snapshot with
+    // the other fields in this record.
     out.render_frame = transport_.render_frame();
     out.timeline_sample = transport_.sample_position();
     out.graph_latency_samples_q8 = graph_latency_samples_q8_.load(std::memory_order_relaxed);

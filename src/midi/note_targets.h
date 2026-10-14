@@ -21,10 +21,10 @@
 namespace sonare::midi {
 
 /// @brief Reads @p track_index of an in-memory SMF as reference note targets.
-/// @details Each note-on is paired with the next note-off of the same note
-///          number on the same channel, and the pair becomes one target at the
-///          note's own pitch. **A note-on the track never closes is dropped.** It
-///          has no end, and the track's end is not a substitute for one: the
+/// @details Each note-off closes the most recent open note-on (LIFO) with the
+///          same group, channel and note number, and the pair becomes one target
+///          at the note's own pitch. **A note-on the track never closes is
+///          dropped.** It has no end, and the track's end is not a substitute for one: the
 ///          importer derives that from the last event, which is the open note-on
 ///          itself when the file stops there, so the note would come back with
 ///          zero length. Worse in the other case -- an open note-on with events

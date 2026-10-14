@@ -372,7 +372,9 @@ bool PartFxStage::apply_control_sysex(const uint8_t* data, size_t size) {
 
   // PART EFX ASSIGN can be reached after the first byte of a bulk run. An
   // accepted route change always needs a full snapshot rebuild.
-  const bool assign_changed = apply_gs_efx_assign_sysex(&assign_, data, size);
+  const auto previous_assign = assign_;
+  apply_gs_efx_assign_sysex(&assign_, data, size);
+  const bool assign_changed = assign_ != previous_assign;
 
   const std::array<GsEfx, kGsEfxUnitCount> previous = efx_;
   uint32_t type_changed = 0;
@@ -404,6 +406,7 @@ bool PartFxStage::apply_control_sysex(const uint8_t* data, size_t size) {
     }
   }
   if (needs_rebuild) return true;
+  if (std::none_of(changed.begin(), changed.end(), [](bool value) { return value; })) return false;
 
   const PartFxSnapshot* snapshot = pub_->control_current().get();
   if (snapshot == nullptr) return true;
@@ -418,7 +421,7 @@ bool PartFxStage::apply_control_sysex(const uint8_t* data, size_t size) {
       return true;
     }
   }
-  if (pending_count == 0) return true;
+  if (pending_count == 0) return false;
   if (!queue_->push_batch(pending.data(), pending_count)) return true;
   return false;
 }
@@ -554,7 +557,16 @@ void PartFxStage::build_legacy_plan(Sf2EfxUnitRt& unit, size_t unit_index, const
     dest.row = row;
     dest.stage_index = static_cast<uint8_t>(target.stage_index);
     dest.param_id = target.param_id;
+    dest.transform = Sf2EfxValueTransform::kBinding;
     unit.legacy_param_dests.push_back(dest);
+    if (target.companion_stage_index >= 0) {
+      Sf2EfxLegacyParamDest companion;
+      companion.row = row;
+      companion.stage_index = static_cast<uint8_t>(target.companion_stage_index);
+      companion.param_id = target.companion_param_id;
+      companion.transform = target.companion_transform;
+      unit.legacy_param_dests.push_back(companion);
+    }
   }
 
   for (size_t i = 0; i < rows.n_enables; ++i) {
@@ -598,8 +610,9 @@ void PartFxStage::apply_legacy_plan(size_t unit, const GsEfx& target, int contro
       if (dest.stage_index >= live.stages.size() || dest.row.slot >= target.params.size()) continue;
       const Sf2EfxStageRt& stage = live.stages[dest.stage_index];
       if (stage.proc == nullptr || !stage.proc->parameter_is_realtime_safe(dest.param_id)) continue;
-      stage.proc->set_parameter(dest.param_id,
-                                gs_efx_binding_value(dest.row, target.params[dest.row.slot]));
+      stage.proc->set_parameter(
+          dest.param_id,
+          sf2_efx_destination_value(dest.row, target.params[dest.row.slot], dest.transform));
     }
   }
 
@@ -629,8 +642,9 @@ void PartFxStage::apply_legacy_plan(size_t unit, const GsEfx& target, int contro
       if (dest.stage_index >= live.stages.size()) continue;
       rt::ProcessorBase* proc = live.stages[dest.stage_index].proc.get();
       if (proc == nullptr || !proc->parameter_is_realtime_safe(dest.param_id)) continue;
-      const float value =
-          dest.binding != nullptr ? gs_efx_binding_value(*dest.binding, byte) : byte;
+      const float value = dest.binding != nullptr
+                              ? sf2_efx_destination_value(*dest.binding, byte, dest.transform)
+                              : byte;
       proc->set_parameter(dest.param_id, value);
     }
   }
@@ -865,8 +879,9 @@ void PartFxStage::apply_controls(const PartFxHost& host) noexcept {
       if (dest.stage_index >= stages.size()) continue;
       rt::ProcessorBase* proc = stages[dest.stage_index].proc.get();
       if (proc == nullptr || !proc->parameter_is_realtime_safe(dest.param_id)) continue;
-      const float value =
-          dest.binding != nullptr ? gs_efx_binding_value(*dest.binding, byte) : byte;
+      const float value = dest.binding != nullptr
+                              ? sf2_efx_destination_value(*dest.binding, byte, dest.transform)
+                              : byte;
       if (proc->set_parameter(dest.param_id, value)) changed = true;
     }
   }

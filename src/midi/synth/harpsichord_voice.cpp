@@ -608,7 +608,8 @@ float HarpsichordVoiceCore::render_internal(float pitch_ratio) noexcept {
   }
 
   const float output = output_scale_ * result;
-  if (tail_active_ && (--tail_remaining_samples_ <= 0)) {
+  // Consume nominal traversals; downward bends extend time within the .01 ratio floor.
+  if (tail_active_ && (tail_remaining_samples_ -= std::min(ratio, 1.0f)) <= 0.0) {
     kill();
     return 0.0f;
   }

@@ -25,7 +25,7 @@ int effective_loop_mode(const SampleRegion& region, const SamplePatchParams& p) 
 }  // namespace
 
 int64_t sample_one_shot_tail_samples(const SampleBank* bank, const SamplePatchParams& params,
-                                     double sample_rate) noexcept {
+                                     double sample_rate, float pitch_offset_cents) noexcept {
   if (bank == nullptr || !(sample_rate > 0.0)) return 0;
   double longest = 0.0;
   const size_t count = bank->zone_count(params.set_index);
@@ -39,7 +39,9 @@ int64_t sample_one_shot_tail_samples(const SampleBank* bank, const SamplePatchPa
                          : 0.0f;
     const double rate_ratio = zone.source_rate > 0.0 ? zone.source_rate / sample_rate : 1.0;
     const double increment =
-        rate_ratio * std::exp2(static_cast<double>(key_cents + zone.tune_cents) / kCentsPerOctave);
+        rate_ratio *
+        std::exp2(static_cast<double>(key_cents + zone.tune_cents + pitch_offset_cents) /
+                  kCentsPerOctave);
     const double span =
         static_cast<double>(zone.region.end) - static_cast<double>(zone.region.start);
     if (increment > 0.0) longest = std::max(longest, span / increment);

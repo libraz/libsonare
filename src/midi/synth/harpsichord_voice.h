@@ -281,7 +281,7 @@ class HarpsichordVoiceCore {
   bool released_ = false;
   bool has_undamped_tail_ = false;
   bool tail_active_ = false;
-  int64_t tail_remaining_samples_ = 0;
+  double tail_remaining_samples_ = 0.0;
   /// A choir of strings and the jack that plucks it.
   struct Choir {
     StringLoop loop;

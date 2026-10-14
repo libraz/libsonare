@@ -25,6 +25,8 @@
 #include <cstdint>
 #include <string>
 
+#include "rt/pan_law.h"
+
 namespace {
 
 using sonare::midi::synth::gs_efx_accel_tau_s;
@@ -38,6 +40,8 @@ using sonare::midi::synth::gs_efx_freq_hz;
 using sonare::midi::synth::gs_efx_gain_db;
 using sonare::midi::synth::gs_efx_level_mul;
 using sonare::midi::synth::gs_efx_pan;
+using sonare::midi::synth::gs_efx_pan_gain;
+using sonare::midi::synth::gs_efx_pan_position;
 using sonare::midi::synth::gs_efx_post_gain_db;
 using sonare::midi::synth::gs_efx_rate_hz;
 using sonare::midi::synth::gs_efx_ratio;
@@ -567,6 +571,38 @@ TEST_CASE("gs_efx_convert reproduces the archive's measured readings", "[gs-efx-
 
   WARN("comparisons: " << tally.count());
   REQUIRE(tally.count() >= 40);
+}
+
+TEST_CASE("GS pan companion gains reconstruct the measured pair at both rates",
+          "[gs-efx-convert][boundary]") {
+  constexpr std::array<uint8_t, 5> kValues = {0, 32, 64, 96, 127};
+  constexpr std::array<float, 5> kMeasuredLeft = {1.00100005f, 0.903376f, 0.754908979f, 0.518187f,
+                                                  0.0595830008f};
+  constexpr std::array<float, 5> kMeasuredRight = {0.0590169989f, 0.529286f, 0.756398976f,
+                                                   0.902617f, 0.996955991f};
+  for (const double rate : {48000.0, 96000.0}) {
+    for (size_t i = 0; i < kValues.size(); ++i) {
+      float measured_left = 0.0f;
+      float measured_right = 0.0f;
+      gs_efx_pan(kValues[i], &measured_left, &measured_right);
+      INFO("[boundary] RED baseline rate=" << rate << " byte=" << int(kValues[i]) << " left="
+                                           << kMeasuredLeft[i] << " right=" << kMeasuredRight[i]);
+      CHECK(measured_left == Catch::Approx(kMeasuredLeft[i]).margin(1e-6f));
+      CHECK(measured_right == Catch::Approx(kMeasuredRight[i]).margin(1e-6f));
+      const float position = gs_efx_pan_position(kValues[i]);
+      for (const bool raw : {false, true}) {
+        const auto normalization =
+            raw ? sonare::rt::PanNormalization::Raw : sonare::rt::PanNormalization::CenterUnity;
+        const auto pair =
+            sonare::rt::compute_pan_gains(position, sonare::rt::PanLaw::Const3dB, normalization);
+        const float gain = gs_efx_pan_gain(kValues[i], raw);
+        INFO("[boundary] GREEN actual rate=" << rate << " byte=" << int(kValues[i])
+                                             << " raw=" << raw << " gain=" << gain);
+        CHECK(gain * pair.left == Catch::Approx(measured_left).margin(2e-6f));
+        CHECK(gain * pair.right == Catch::Approx(measured_right).margin(2e-6f));
+      }
+    }
+  }
 }
 
 TEST_CASE("gs_efx_ratio reads a slot only where the printed ends force one step",

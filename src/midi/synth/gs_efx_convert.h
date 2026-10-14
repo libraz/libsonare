@@ -77,6 +77,11 @@ void gs_efx_balance(uint8_t value, float* direct, float* effect) noexcept;
 /// pair has the measured left/right ratio. A receiver applies its own pan law.
 float gs_efx_pan_position(uint8_t value) noexcept;
 
+/// PAN byte -> the scalar that makes a receiver's constant-power pair recover
+/// the measured pair. Raw pairs have unit norm; CenterUnity pairs have norm
+/// sqrt(2), so the latter divides the measured norm by sqrt(2).
+float gs_efx_pan_gain(uint8_t value, bool raw_constant_power) noexcept;
+
 /// BALANCE byte -> the dry/wet position from which the two-ramp mix law
 /// (effects::common::MixLaw::kTwoRamps) gives back the measured direct and
 /// effect gains exactly, level as well as ratio: one ramp is always whole.

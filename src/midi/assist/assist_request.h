@@ -10,11 +10,14 @@
 /// core/binding surface.
 ///
 /// Contract highlights:
-///   - Determinism: every request carries a uint32_t seed; the same seed + same
-///     request must produce an identical AssistResult. Modules use a seeded
-///     inline PRNG (no Date/now/std::rand).
-///   - Budget: an optional time/iteration cap bounds a run; overrun yields a
-///     partial/empty result, never an unbounded block.
+///   - Determinism: every request carries a uint32_t seed; when no time cap is
+///     reached, the same seed + same request produces an identical AssistResult.
+///     Modules use a seeded inline PRNG (no Date/now/std::rand). A time-capped
+///     boundary is cooperative and may stop at the monotonic deadline; content
+///     already accepted before that boundary remains deterministic.
+///   - Budget: modules cooperate with optional time/iteration caps and return
+///     partial/empty results on exhaustion. The driver cannot preempt a module
+///     that does not return.
 ///   - All output is a sequence of arrangement::EditCommand: assist NEVER returns
 ///     raw mutations and NEVER mutates a live Project. The caller applies the
 ///     returned commands via EditHistory so undo/redo/serialize/replay stay
@@ -75,10 +78,12 @@ struct AssistScope {
 
 /// @brief A deterministic assist request handed to a module.
 ///
-/// The same (seed, scope, params_json) must always produce the same result.
+/// The same request, including its budget, produces the same result when no
+/// time deadline is reached. A time-truncated boundary depends on execution
+/// time; the accepted candidates retain their deterministic content and order.
 /// `params_json` is a module-specific opaque blob the core never interprets.
 struct AssistRequest {
-  /// Deterministic PRNG seed. Same seed + same request -> same result.
+  /// Deterministic PRNG seed; deadline truncation can change the accepted prefix.
   uint32_t seed = 0;
   /// Target scope (tracks + PPQ range + generation mode).
   AssistScope scope;
@@ -108,10 +113,11 @@ struct AssistDiagnostics {
   AssistStatus status = AssistStatus::kEmpty;
   /// Human-readable reason (owned). Empty when uninteresting.
   std::string reason;
-  /// Iterations actually consumed by the module (for budget reporting).
+  /// Reported work from normally returning modules, including work whose slot
+  /// is later rejected, discarded, or truncated. Saturates at UINT32_MAX.
   uint32_t iterations_consumed = 0;
-  /// Number of module slots discarded because they threw or returned commands
-  /// that failed dry-run validation.
+  /// Number of module slots discarded because they threw, exceeded the assigned
+  /// budget, or returned commands that failed dry-run validation.
   uint32_t slots_discarded = 0;
 };
 

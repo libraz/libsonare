@@ -8,6 +8,7 @@
 
 #include "midi/synth/modal_voice.h"
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -18,6 +19,7 @@
 #include "midi/midi_event.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/pitch.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 #include "support/audio_fixtures.h"
@@ -133,13 +135,75 @@ ModalPatchParams single_modal_mode(float ratio) {
   return params;
 }
 
+std::vector<float> render_modal_core_at_rate(const ModalPatchParams& params, double sample_rate,
+                                             uint8_t note, float pitch_ratio, size_t num_samples,
+                                             bool vibrato = false);
+
 std::vector<float> render_modal_core(const ModalPatchParams& params, uint8_t note,
                                      float pitch_ratio, size_t num_samples) {
+  return render_modal_core_at_rate(params, kRate, note, pitch_ratio, num_samples);
+}
+
+std::vector<float> render_modal_core_at_rate(const ModalPatchParams& params, double sample_rate,
+                                             uint8_t note, float pitch_ratio, size_t num_samples,
+                                             bool vibrato) {
   ModalVoiceCore core;
-  core.start(params, kRate, note, sonare::midi::Velocity16::from_f7(127), 0x4d4f44414cULL);
+  core.start(params, sample_rate, note, sonare::midi::Velocity16::from_f7(127), 0x4d4f44414cULL);
   std::vector<float> out;
   out.reserve(num_samples);
-  for (size_t i = 0; i < num_samples; ++i) out.push_back(core.render(pitch_ratio));
+  for (size_t i = 0; i < num_samples; ++i) {
+    const float ratio =
+        vibrato
+            ? static_cast<float>(std::exp2(
+                  50.0 * std::sin(2.0 * 3.14159265358979323846 * 8.0 * i / sample_rate) / 1200.0))
+            : pitch_ratio;
+    out.push_back(core.render(ratio));
+  }
+  return out;
+}
+
+double crossing_frequency(const std::vector<float>& samples, double sample_rate, size_t from,
+                          size_t to) {
+  size_t crossings = 0;
+  double first = 0.0;
+  double last = 0.0;
+  for (size_t i = from + 1; i < to && i < samples.size(); ++i) {
+    if (samples[i - 1] <= 0.0f && samples[i] > 0.0f) {
+      const double y0 = samples[i - 1];
+      const double y1 = samples[i];
+      const double position =
+          y1 != y0 ? static_cast<double>(i - 1) - y0 / (y1 - y0) : static_cast<double>(i - 1);
+      if (crossings == 0) first = position;
+      last = position;
+      ++crossings;
+    }
+  }
+  return crossings > 1 ? sample_rate * static_cast<double>(crossings - 1) / (last - first) : 0.0;
+}
+
+std::vector<float> render_modal_reference(double sample_rate, uint8_t note, float mode_ratio,
+                                          float decay_s, size_t num_samples) {
+  const double f0 = static_cast<double>(sonare::midi::synth::note_to_hz(note));
+  const double omega = 2.0 * 3.14159265358979323846 * f0 * mode_ratio / sample_rate;
+  const double radius =
+      std::exp(-6.9077552789821370521 / (sample_rate * static_cast<double>(decay_s)));
+  double phase = 0.0;
+  double amplitude = 1.0;
+  std::vector<float> out;
+  out.reserve(num_samples);
+  for (size_t i = 0; i < num_samples; ++i) {
+    const float ratio = static_cast<float>(std::exp2(
+        50.0 * std::sin(2.0 * 3.14159265358979323846 * 8.0 * static_cast<double>(i) / sample_rate) /
+        1200.0));
+    const double w = omega * ratio;
+    if (i == 0) {
+      phase = w;
+    } else {
+      amplitude *= radius;
+      phase += w;
+    }
+    out.push_back(static_cast<float>(amplitude * std::sin(phase)));
+  }
   return out;
 }
 
@@ -150,6 +214,55 @@ float peak_abs(const std::vector<float>& buf) {
 }
 
 }  // namespace
+
+TEST_CASE("low modal notes keep their pitch across render sample rates",
+          "[midi][synth][modal][boundary]") {
+  ModalPatchParams params = single_modal_mode(1.0f);
+  params.decay_s = 2.0f;
+  for (const uint8_t note : {0, 24, 36}) {
+    for (const double sample_rate : {48000.0, 96000.0, 192000.0, 384000.0}) {
+      const size_t samples = static_cast<size_t>(sample_rate * 2.0);
+      const std::vector<float> tone =
+          render_modal_core_at_rate(params, sample_rate, note, 1.0f, samples);
+      const double measured =
+          crossing_frequency(tone, sample_rate, static_cast<size_t>(sample_rate * 0.1),
+                             static_cast<size_t>(sample_rate * 1.9));
+      const double expected =
+          static_cast<double>(sonare::midi::synth::note_to_hz(static_cast<float>(note)));
+      REQUIRE(measured > 0.0);
+      INFO("note = " << static_cast<int>(note) << ", sample rate = " << sample_rate
+                     << ", measured = " << measured);
+      CHECK(std::abs(1200.0 * std::log2(measured / expected)) < 1.0);
+      CHECK(std::all_of(tone.begin(), tone.end(),
+                        [](float sample) { return std::isfinite(sample); }));
+    }
+  }
+}
+
+TEST_CASE("low modal vibrato follows a damped phase reference without pumping",
+          "[midi][synth][modal][boundary]") {
+  constexpr double sample_rate = 96000.0;
+  constexpr size_t sample_count = 6 * 96000;
+  ModalPatchParams params = single_modal_mode(0.25f);
+  params.decay_s = 5.0f;
+  const std::vector<float> actual =
+      render_modal_core_at_rate(params, sample_rate, 24, 1.0f, sample_count, true);
+  const std::vector<float> reference =
+      render_modal_reference(sample_rate, 24, 0.25f, 5.0f, sample_count);
+  const float actual_first = std::fabs(actual.front());
+  const float reference_first = std::fabs(reference.front());
+  REQUIRE(actual_first > 1.0e-5f);
+  REQUIRE(reference_first > 1.0e-5f);
+  const float actual_rms = rms(actual, 5 * 96000, 6 * 96000);
+  const float reference_rms = rms(reference, 5 * 96000, 6 * 96000);
+  REQUIRE(reference_rms > 1.0e-7f);
+  INFO("actual late RMS = " << actual_rms << ", reference late RMS = " << reference_rms);
+  const double normalized_ratio = (static_cast<double>(actual_rms) / actual_first) /
+                                  (static_cast<double>(reference_rms) / reference_first);
+  CHECK(std::abs(normalized_ratio - 1.0) < 1.0e-4);
+  CHECK(std::all_of(actual.begin(), actual.end(),
+                    [](float sample) { return std::isfinite(sample); }));
+}
 
 TEST_CASE("modal excitation stays normalized over ordinary live pitch ratios",
           "[midi][synth][modal]") {

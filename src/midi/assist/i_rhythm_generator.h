@@ -34,8 +34,10 @@ class IRhythmGenerator {
   virtual const char* module_id() const noexcept = 0;
 
   /// @brief Produces an AssistResult of EditCommands realizing a rhythm for
-  ///        `request` against `view`. Deterministic for a fixed seed;
-  ///        budget-cooperative; never mutates the project.
+  ///        `request` against `view`. Deterministic for a fixed seed, request and
+  ///        view when no time deadline is reached; a time-truncated boundary
+  ///        depends on execution timing. Budget-cooperative; never mutates the
+  ///        project.
   virtual AssistResult generate(const arrangement::ProjectView& view,
                                 const AssistRequest& request) = 0;
 };

@@ -78,9 +78,9 @@ struct FreeReedPatchParams {
   float slot_gap = 0.14f;
   /// How much of a free monopole the reed plate is (only when slot_duty > 0):
   /// 0 radiates the flow itself, 1 its time derivative, the +6 dB/octave tilt a
-  /// small source radiates with. Normalised at the fundamental, so it is timbre
-  /// only and moves no level. The harmonium and the bandoneon measure at 1, the
-  /// harmonica — played inside the cupped hands — at 0.
+  /// small source radiates with. Normalised at the fundamental from 20 Hz to
+  /// Nyquist, so it changes timbre without moving that level. The harmonium and
+  /// bandoneon measure at 1, the harmonica — played inside cupped hands — at 0.
   float radiation = 1.0f;
 };
 
@@ -182,6 +182,8 @@ class FreeReedVoiceCore {
   float radiation_ratio_ = 1.0f;
   float radiation_norm_ = 0.0f;
   float radiation_norm_b_ = 0.0f;
+  float radiation_mix_norm_ = 1.0f;
+  float radiation_mix_norm_b_ = 1.0f;
   float prev_flow_ = 0.0f;
   float prev_flow_b_ = 0.0f;
   bool radiation_history_ready_ = false;

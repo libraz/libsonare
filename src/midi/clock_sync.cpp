@@ -9,6 +9,9 @@
 namespace sonare::midi {
 namespace {
 
+constexpr double kSppBeatToPpq =
+    static_cast<double>(kClocksPerSppBeat) / static_cast<double>(kClockPulsesPerQuarter);
+
 bool valid_mtc_time(const MtcTime& time) noexcept {
   return time.hours < 24 && time.minutes < 60 && time.seconds < 60 &&
          time.frames < static_cast<uint8_t>(mtc_fps(time.rate));
@@ -76,8 +79,8 @@ uint16_t ppq_to_spp_beats(double ppq) noexcept {
   if (ppq < 0.0) {
     ppq = 0.0;
   }
-  // One sixteenth note = 0.25 quarter notes -> SPP beat units.
-  const double beats = ppq / 0.25;
+  // One sixteenth note = kSppBeatToPpq quarter notes -> SPP beat units.
+  const double beats = ppq / kSppBeatToPpq;
   const double truncated = std::floor(beats);
   if (truncated >= 16383.0) {
     return 0x3FFFu;
@@ -86,7 +89,7 @@ uint16_t ppq_to_spp_beats(double ppq) noexcept {
 }
 
 double spp_beats_to_ppq(uint16_t midi_beats) noexcept {
-  return static_cast<double>(midi_beats & 0x3FFFu) * 0.25;
+  return static_cast<double>(midi_beats & 0x3FFFu) * kSppBeatToPpq;
 }
 
 size_t encode_mtc_quarter_frame(const MtcTime& time, int piece, uint8_t* out, size_t cap) noexcept {

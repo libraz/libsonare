@@ -1,14 +1,14 @@
 #pragma once
 
 /// @file interpolation.h
-/// @brief Sample / fractional-delay interpolation helpers for the voice
-///        toolkit: linear and first-order allpass interpolators, plus a
-///        position-based sample reader for pitched sample playback (SF2).
+/// @brief Interpolation helpers for the voice toolkit: linear and first-order
+///        allpass interpolators, plus a clamped position-based sample reader.
 ///
 /// The 3rd-order Lagrange fractional delay already exists in
 /// rt/fractional_delay.h (lagrange3_fractional_delay) and is reused as-is for
-/// waveguide loops; this header only adds the cheaper linear / allpass forms
-/// and the buffer-position reader the SF2 voice uses.
+/// waveguide loops. This header provides standalone linear / allpass forms and
+/// a clamped reader. The production SF2 SampleReader keeps its own loop
+/// wrapping and seam handling.
 ///
 /// RT contract: everything here is allocation-free and header-only.
 
@@ -23,8 +23,8 @@ inline float linear_interpolate(float y0, float y1, float mu) noexcept {
 }
 
 /// Reads @p data at fractional position @p pos with linear interpolation.
-/// Out-of-range positions clamp to the buffer edges (no wrap) — loop handling
-/// is the caller's job (the SF2 voice wraps `pos` before reading).
+/// Out-of-range positions clamp to the buffer edges (no wrap). Loop wrapping
+/// and seam handling are the caller's responsibility.
 inline float read_sample_linear(const float* data, size_t size, double pos) noexcept {
   if (data == nullptr || size == 0) return 0.0f;
   if (pos <= 0.0) return data[0];

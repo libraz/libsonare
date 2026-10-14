@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "midi/synth/gs_efx_bindings.h"
+#include "midi/synth/gs_efx_tables.h"
 #if defined(SONARE_GS_CLASSIC)
 #include "midi/synth/gs_classic/classic_unit.h"
 #include "midi/synth/gs_classic/model_registry.h"
@@ -53,6 +54,19 @@ int sf2_find_efx_stage(const Sf2EfxUnitRt& unit, std::string_view name, uint8_t 
   return -1;
 }
 
+float sf2_efx_destination_value(const GsEfxBindingRow& row, uint8_t byte,
+                                Sf2EfxValueTransform transform) noexcept {
+  switch (transform) {
+    case Sf2EfxValueTransform::kPanGainCenter:
+      return gs_efx_pan_gain(byte, false);
+    case Sf2EfxValueTransform::kPanGainRaw:
+      return gs_efx_pan_gain(byte, true);
+    case Sf2EfxValueTransform::kBinding:
+      break;
+  }
+  return gs_efx_binding_value(row, byte);
+}
+
 Sf2EfxRowTarget sf2_resolve_efx_row(const Sf2EfxUnitRt& unit, const GsEfxBindingRow& row) {
   Sf2EfxRowTarget target;
   if (row.stage >= kGsEfxRowStages.size() || row.key >= kGsEfxRowKeys.size()) return target;
@@ -66,14 +80,29 @@ Sf2EfxRowTarget sf2_resolve_efx_row(const Sf2EfxUnitRt& unit, const GsEfxBinding
     target.status = Sf2EfxRowResolution::kNoProcessor;
     return target;
   }
-  target.status = Sf2EfxRowResolution::kNoRealtimeControl;
   const std::string_view key = kGsEfxRowKeys[row.key];
+  target.status = Sf2EfxRowResolution::kNoRealtimeControl;
   for (const rt::ParamDescriptor& descriptor : proc->parameter_descriptors()) {
     if (descriptor.key != key) continue;
     if (proc->parameter_is_realtime_safe(descriptor.id)) {
       target.status = Sf2EfxRowResolution::kResolved;
       target.param_id = descriptor.id;
     }
+    break;
+  }
+  if (target.status != Sf2EfxRowResolution::kResolved) return target;
+  if (row.conv_class != kGsEfxClassPan || key != "balance" ||
+      kGsEfxRowStages[row.stage] != "stereo.stereoBalance") {
+    return target;
+  }
+  for (const rt::ParamDescriptor& descriptor : proc->parameter_descriptors()) {
+    if (descriptor.key != "gain" || !proc->parameter_is_realtime_safe(descriptor.id)) continue;
+    target.companion_param_id = descriptor.id;
+    target.companion_stage_index = target.stage_index;
+    const uint8_t branch = unit.stages[static_cast<size_t>(target.stage_index)].branch;
+    target.companion_transform = branch == kGsEfxBranchHalfA || branch == kGsEfxBranchHalfB
+                                     ? Sf2EfxValueTransform::kPanGainRaw
+                                     : Sf2EfxValueTransform::kPanGainCenter;
     break;
   }
   return target;
@@ -96,10 +125,22 @@ Sf2EfxLegacyControlPlan sf2_resolve_efx_control(const Sf2EfxUnitRt& unit, const 
       plan.n_dest = 1;
       break;
     }
-    if (plan.n_dest >= plan.dest.size()) break;
     const Sf2EfxRowTarget target = sf2_resolve_efx_row(unit, row);
     if (target.status != Sf2EfxRowResolution::kResolved) continue;
-    plan.dest[plan.n_dest++] = {static_cast<uint8_t>(target.stage_index), target.param_id, &row};
+    if (plan.n_dest >= plan.dest.size()) {
+      plan.n_dest = 0;
+      return plan;
+    }
+    plan.dest[plan.n_dest++] = {static_cast<uint8_t>(target.stage_index), target.param_id, &row,
+                                Sf2EfxValueTransform::kBinding};
+    if (target.companion_stage_index >= 0) {
+      if (plan.n_dest >= plan.dest.size()) {
+        plan.n_dest = 0;
+        return plan;
+      }
+      plan.dest[plan.n_dest++] = {static_cast<uint8_t>(target.companion_stage_index),
+                                  target.companion_param_id, &row, target.companion_transform};
+    }
   }
   if (first == nullptr || plan.n_dest == 0) {
     plan.n_dest = 0;
@@ -553,9 +594,20 @@ void GsEfxProcessor::build_parameter_plan() {
       unsupported[row.slot] = true;
       continue;
     }
-    destinations_[row.slot][count] =
-        ParamDestination{static_cast<uint8_t>(target.stage_index), target.param_id, row};
-    destination_count_[row.slot] = static_cast<uint8_t>(count + 1);
+    uint8_t next = count;
+    destinations_[row.slot][next++] =
+        ParamDestination{static_cast<uint8_t>(target.stage_index), target.param_id, row,
+                         Sf2EfxValueTransform::kBinding};
+    if (target.companion_stage_index >= 0) {
+      if (next >= destinations_[row.slot].size()) {
+        unsupported[row.slot] = true;
+        continue;
+      }
+      destinations_[row.slot][next++] =
+          ParamDestination{static_cast<uint8_t>(target.companion_stage_index),
+                           target.companion_param_id, row, target.companion_transform};
+    }
+    destination_count_[row.slot] = next;
   }
 
   for (size_t slot = 0; slot < unsupported.size(); ++slot) {
@@ -729,13 +781,15 @@ bool GsEfxProcessor::set_parameter_impl(unsigned int param_id, float value) {
     for (uint8_t i = 0; i < destination_count_[param_id]; ++i) {
       const ParamDestination& destination = destinations_[param_id][i];
       rt::ProcessorBase* proc = unit_.stages[destination.stage_index].proc.get();
-      if (!proc->set_parameter(destination.param_id, gs_efx_binding_value(destination.row, byte))) {
+      if (!proc->set_parameter(
+              destination.param_id,
+              sf2_efx_destination_value(destination.row, byte, destination.transform))) {
         // Put the destinations already written back on the byte state_ still holds.
         const uint8_t held = state_.params[param_id];
         for (uint8_t j = 0; j < i; ++j) {
           const ParamDestination& written = destinations_[param_id][j];
           unit_.stages[written.stage_index].proc->set_parameter(
-              written.param_id, gs_efx_binding_value(written.row, held));
+              written.param_id, sf2_efx_destination_value(written.row, held, written.transform));
         }
         return false;
       }

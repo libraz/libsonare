@@ -857,6 +857,15 @@ std::shared_ptr<Sf2Player::PreparedEfxNode> Sf2Player::find_or_build_prepared_no
       dest.row = row;
       dest.stage_index = static_cast<uint8_t>(target.stage_index);
       dest.param_id = target.param_id;
+      dest.transform = Sf2EfxValueTransform::kBinding;
+      if (target.companion_stage_index >= 0) {
+        if (node->param_dest_count >= node->param_dests.size()) return nullptr;
+        PreparedEfxParamDest& companion = node->param_dests[node->param_dest_count++];
+        companion.row = row;
+        companion.stage_index = static_cast<uint8_t>(target.companion_stage_index);
+        companion.param_id = target.companion_param_id;
+        companion.transform = target.companion_transform;
+      }
     }
     for (size_t i = 0; i < rows.n_enables; ++i) {
       const GsEfxEnable& enable = rows.enables[i];
@@ -1041,8 +1050,9 @@ void Sf2Player::apply_prepared_node_plan(PreparedEfxNode& node, const GsEfx& tar
     if (dest.stage_index >= node.unit_rt.stages.size()) continue;
     Sf2EfxStageRt& stage = node.unit_rt.stages[dest.stage_index];
     if (stage.proc == nullptr || !stage.proc->parameter_is_realtime_safe(dest.param_id)) continue;
-    stage.proc->set_parameter(dest.param_id,
-                              gs_efx_binding_value(dest.row, target.params[dest.row.slot]));
+    stage.proc->set_parameter(
+        dest.param_id,
+        sf2_efx_destination_value(dest.row, target.params[dest.row.slot], dest.transform));
   }
 
   // AND every rule in table order over the raw bytes, as gs_efx_insert_chain does.
@@ -1108,8 +1118,9 @@ void Sf2Player::apply_prepared_efx_controls() noexcept {
         if (dest.stage_index >= stages.size()) continue;
         rt::ProcessorBase* proc = stages[dest.stage_index].proc.get();
         if (proc == nullptr || !proc->parameter_is_realtime_safe(dest.param_id)) continue;
-        const float value =
-            dest.binding != nullptr ? gs_efx_binding_value(*dest.binding, byte) : byte;
+        const float value = dest.binding != nullptr
+                                ? sf2_efx_destination_value(*dest.binding, byte, dest.transform)
+                                : byte;
         proc->set_parameter(dest.param_id, value);
       }
     }

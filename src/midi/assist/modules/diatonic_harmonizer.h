@@ -12,8 +12,8 @@
 ///
 /// Proposes only, and proposes content rather than structure: the result is a
 /// PatchMidiClip against a clip the request NAMES, and a request naming none
-/// comes back empty saying so. The family's contract -- rule-based, applied by
-/// the caller, seeded rather than clocked -- is in sonare_c_assist.h.
+/// is rejected when none is named. The family's rule-based, caller-applied
+/// contract, including cooperative time cutoffs, is in sonare_c_assist.h.
 ///
 /// Control/offline thread only.
 
@@ -54,9 +54,8 @@ class DiatonicHarmonizer final : public ICounterpointEngine {
   ///          transposition leaves the MIDI range, or when the judge refuses it.
   /// @return An AssistResult carrying at most one PatchMidiClip, a JSON
   ///         candidate payload of the per-note decisions, and diagnostics.
-  ///         Never throws for a malformed request -- it comes back empty with a
-  ///         reason, because a throw is discarded by the driver and the reason
-  ///         would be lost with it.
+  ///         A malformed request returns kRejected with its reason; a thrown
+  ///         failure is discarded by the driver and loses its module reason.
   AssistResult derive(const arrangement::ProjectView& view, const AssistRequest& request,
                       const std::vector<VoiceModel>& cantus,
                       const AssistQueryContext& queries) override;

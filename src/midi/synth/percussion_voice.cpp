@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <initializer_list>
+#include <limits>
 
 #include "midi/synth/bessel.h"
 #include "midi/synth/pitch.h"
@@ -107,7 +108,7 @@ float piston_area(float alpha) noexcept {
 
 void PercussionVoiceCore::start(const PercussionPatchParams& params, double sample_rate,
                                 uint8_t note, Velocity16 velocity, uint64_t seed) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double sr = sample_rate > 0.0 ? sample_rate : constants::kDefaultDawSampleRate;
   noise_ = VoiceRandomSequence(seed);
   noise_index_ = 0;
   // Starts at full scale so the follower has to fall the whole way before a
@@ -245,6 +246,7 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   noise_filter_.prepare(sr);
   noise_filter_.set(params.noise_cutoff_hz, std::max(0.5f, params.noise_q));
   noise_filter_.reset();
+  noise_gate_active_ = false;
 
   // Burst train. The retriggers reopen the gate to the level the strike itself
   // opened it to, velocity scaling included, so a soft clap stays a soft clap.
@@ -330,7 +332,7 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
                       : 0.0f;
   wire_index_ = 0;
   wire_filter_.prepare(sr);
-  wire_filter_.set(params.wire_cutoff_hz, 0.9f);
+  wire_filter_.set(params.wire_cutoff_hz, kWireFilterQ);
   wire_filter_.reset();
 
   // Nonlinear cymbal shimmer: the membrane energy pumps a high shimmer band
@@ -481,6 +483,12 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
   }
   const float noise_env = noise_level_ + burst_level_;
   if (noise_env > 1.0e-5f) {
+    if (!noise_gate_active_) {
+      // Clear recursive history without changing envelopes, scheduling or generator draws.
+      noise_filter_.reset();
+      if (noise_air_hz_ > 0.0f) noise_air_.reset();
+    }
+    noise_gate_active_ = true;
     const float burst =
         noise_.bipolar_at(kNoiseIndexBase + noise_index_++) * noise_env * noise_rate_gain_;
     noise_level_ *= noise_coeff_;
@@ -499,6 +507,8 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
         break;
     }
     mix += noise_air_hz_ > 0.0f ? noise_air_.process(voiced).lp : voiced;
+  } else {
+    noise_gate_active_ = false;
   }
 
   // Stochastic particle excitation (PhISEM). The shake energy decays over the
@@ -579,13 +589,16 @@ bool PercussionVoiceCore::silent() const noexcept {
   return burst_remaining_ == 0 && !particles_pending && silence_env_ < kSilenceFloor;
 }
 
-float PercussionVoiceCore::ring_bound_s(const PercussionPatchParams& params) noexcept {
+float PercussionVoiceCore::ring_bound_s(const PercussionPatchParams& params,
+                                        double sample_rate) noexcept {
+  const double rate = sample_rate > 0.0 ? sample_rate : constants::kDefaultDawSampleRate;
   const auto tau_t60 = [](float tau_ms) noexcept { return kT60PerTau * 0.001f * tau_ms; };
   float source_t60 = 0.0f;
+  float mode_t60 = 0.0f;
+  float particle_t60 = 0.0f;
   float schedule_s = 0.0f;
   if (params.num_modes > 0) {
     const float decay_exp = params.mode_decay_exp > 0.0f ? params.mode_decay_exp : 1.0f;
-    float mode_t60 = 0.0f;
     const int count = std::min(params.num_modes, kMaxPercussionModes);
     for (int k = 0; k < count; ++k) {
       const float ratio = params.mode_ratios[static_cast<size_t>(k)];
@@ -609,21 +622,77 @@ float PercussionVoiceCore::ring_bound_s(const PercussionPatchParams& params) noe
     }
   }
   if (params.phisem_beans > 0.0f) {
-    source_t60 = std::max(source_t60, tau_t60(std::max(1.0f, params.phisem_energy_ms) +
-                                              std::max(0.2f, params.phisem_sound_ms)));
+    particle_t60 =
+        tau_t60(std::max(1.0f, params.phisem_energy_ms) + std::max(0.2f, params.phisem_sound_ms));
+    source_t60 = std::max(source_t60, particle_t60);
   }
-  float chain_t60 = source_t60;
-  if (params.plate_gain > 0.0f) chain_t60 += std::max(0.01f, params.plate_t60_s);
+  const float span_db = -20.0f * std::log10(kSilenceFloor) + kRingPeakHeadroomDb;
+  const double t60_to_floor = static_cast<double>(span_db) / 60.0;
+  const double source_s = static_cast<double>(source_t60) * t60_to_floor;
+  double parallel_s = source_s;
+
+  // TPT rings already reach kTailFloor; append them once without rescaling source headroom.
+  const auto tail_seconds = [rate](const rt::TailBudget& tail) noexcept {
+    if (tail.samples() == rt::TailBudget::kUnbounded)
+      return std::numeric_limits<double>::infinity();
+    return static_cast<double>(tail.samples()) / rate;
+  };
+  if (params.phisem_beans > 0.0f) {
+    const double particle_s = static_cast<double>(particle_t60) * t60_to_floor;
+    if (params.phisem_res_hz > 0.0f) {
+      rt::TailBudget resonance =
+          TptSvf::ring(params.phisem_res_hz, std::max(0.5f, params.phisem_res_q), rate);
+      // A cuica glide visits both centres, so retain the slower endpoint.
+      const float glide_hz = params.phisem_res_hz * (1.0f + params.phisem_pitch_glide);
+      resonance.alongside(TptSvf::ring(glide_hz, std::max(0.5f, params.phisem_res_q), rate));
+      parallel_s = std::max(parallel_s, particle_s + tail_seconds(resonance));
+    }
+    if (params.phisem_body_hz > 0.0f && params.phisem_body_gain > 0.0f) {
+      const rt::TailBudget body =
+          TptSvf::ring(params.phisem_body_hz, std::max(0.5f, params.phisem_body_q), rate);
+      parallel_s = std::max(parallel_s, particle_s + 2.0 * tail_seconds(body));
+    }
+  }
+
+  // The modal shimmer follower and HP SVF each contribute their own tail.
+  if (params.num_modes > 0 && params.shimmer > 0.0f) {
+    const float attack_ms = std::max(1.0f, params.shimmer_attack_ms);
+    const float attack_coeff =
+        1.0f - std::exp(-1.0f / (attack_ms * 0.001f * static_cast<float>(rate)));
+    const float follower_radius = 1.0f - attack_coeff;
+    rt::TailBudget follower;
+    follower.decay(static_cast<double>(follower_radius));
+    rt::TailBudget shimmer_filter = TptSvf::ring(params.shimmer_cutoff_hz, 0.7f, rate);
+    double shimmer_s = static_cast<double>(mode_t60) * t60_to_floor + tail_seconds(follower) +
+                       tail_seconds(shimmer_filter);
+    if (params.noise_air_hz > 0.0f) {
+      shimmer_s += tail_seconds(TptSvf::ring(params.noise_air_hz, kInvSqrt2, rate));
+    }
+    parallel_s = std::max(parallel_s, shimmer_s);
+  }
+
+  // The wire rattle rings through its own high-pass SVF and, with air on, the air low-pass.
+  if (params.num_modes > 0 && params.wire_buzz > 0.0f) {
+    double wire_s = static_cast<double>(mode_t60) * t60_to_floor +
+                    tail_seconds(TptSvf::ring(params.wire_cutoff_hz, kWireFilterQ, rate));
+    if (params.noise_air_hz > 0.0f) {
+      wire_s += tail_seconds(TptSvf::ring(params.noise_air_hz, kInvSqrt2, rate));
+    }
+    parallel_s = std::max(parallel_s, wire_s);
+  }
+
+  double serial_s = 0.0;
+  if (params.plate_gain > 0.0f) serial_s += std::max(0.01f, params.plate_t60_s);
   float shell_t60 = 0.0f;
   const int shells = std::clamp(params.shell_num_modes, 0, kMaxShellModes);
   for (int k = 0; k < shells; ++k) {
     shell_t60 = std::max(shell_t60, std::max(0.005f, params.shell_t60_s[static_cast<size_t>(k)]));
   }
-  chain_t60 += shell_t60;
-  const float span_db = -20.0f * std::log10(kSilenceFloor) + kRingPeakHeadroomDb;
+  serial_s += static_cast<double>(shell_t60);
   // The follower needs its own fall once the output is already below the floor.
   const float follower_s = 0.001f * kSilenceFollowerMs * span_db * std::log(10.0f) / 20.0f;
-  return schedule_s + chain_t60 * span_db / 60.0f + follower_s;
+  return static_cast<float>(static_cast<double>(schedule_s) + parallel_s + serial_s * t60_to_floor +
+                            static_cast<double>(follower_s));
 }
 
 void PercussionVoiceCore::kill() noexcept {
@@ -640,6 +709,7 @@ void PercussionVoiceCore::kill() noexcept {
   noise_peak_ = 0.0f;
   burst_level_ = 0.0f;
   burst_remaining_ = 0;
+  noise_gate_active_ = false;
   excite_ = false;
   noise_air_hz_ = 0.0f;
   noise_air_.reset();

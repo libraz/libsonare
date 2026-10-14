@@ -199,6 +199,16 @@ const char* native_synth_param_name(NativeSynthParamId id) noexcept {
   return nullptr;
 }
 
+bool native_synth_param_range(NativeSynthParamId id, const char** key, float* lo,
+                              float* hi) noexcept {
+  const ParamEntry* entry = find_param_entry(id);
+  if (entry == nullptr) return false;
+  if (key != nullptr) *key = entry->key;
+  if (lo != nullptr) *lo = entry->min;
+  if (hi != nullptr) *hi = entry->max;
+  return true;
+}
+
 size_t native_synth_param_count() noexcept { return kParams.size(); }
 
 const char* native_synth_param_name_at(size_t index) noexcept {
@@ -300,8 +310,10 @@ bool NativeSynth::apply_parameter(unsigned int param_id, float value) noexcept {
     case NativeSynthParamId::kDriftCents:
       p.drift_cents = clamp_finite(value, entry->min, entry->max, p.drift_cents);
       return true;
+    // A lower offset plays a one-shot sample slower, so it lengthens the tail.
     case NativeSynthParamId::kPitchOffsetCents:
       p.pitch_offset_cents = clamp_finite(value, entry->min, entry->max, p.pitch_offset_cents);
+      raise_tail();
       return true;
     case NativeSynthParamId::kHpCutoffHz:
       p.hp_cutoff_hz = clamp_finite(value, entry->min, entry->max, p.hp_cutoff_hz);

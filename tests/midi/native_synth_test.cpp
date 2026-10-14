@@ -35,6 +35,7 @@
 #include "midi/midi_event.h"
 #include "midi/synth/gm_fallback_data.h"
 #include "midi/synth/gm_fallback_map.h"
+#include "midi/synth/gs_layer.h"
 #include "midi/synth/oscillator.h"
 #include "midi/synth/patch_tuning.h"
 #include "midi/synth/sf2_player.h"
@@ -3995,4 +3996,161 @@ TEST_CASE("a carried absolute-pitch voice keeps its pitch and its glide origin",
       0, event(sonare::midi::make_midi2_note_on(0, 0, 0, kPerNoteVelocity, 3, absolute_pitch(60))));
   const std::vector<float> fresh = render(synth, 4096).left;
   CHECK(near_hz(estimate_frequency(fresh, kOutRate, 256), note_hz(60.0)));
+}
+
+namespace {
+
+using sonare::midi::make_midi1_note_off;
+using sonare::midi::make_midi1_note_on;
+using sonare::midi::MidiEvent;
+using sonare::midi::synth::NativeSynth;
+using sonare::midi::synth::NativeSynthConfig;
+using sonare::midi::synth::SynthEngineMode;
+
+struct TailMeasurement {
+  int declared = 0;
+  float peak_after_declared = 0.0f;
+  int last_above_floor = -1;
+  int nonfinite = 0;
+};
+
+TailMeasurement render_reed(bool dc_block, int sample_rate) {
+  NativeSynthConfig config;
+  config.dc_block = dc_block;
+  config.gain = 1.0f;
+  config.patch.mode = SynthEngineMode::kReed;
+  config.patch.cutoff_hz = 20000.0f;
+  config.patch.amp_env.attack_ms = 5.0f;
+  config.patch.amp_env.sustain = 1.0f;
+  config.patch.amp_env.release_ms = 10.0f;
+  config.patch.reed.release_ms = 5000.0f;
+
+  NativeSynth synth(config);
+  synth.prepare(sample_rate, 256);
+  MidiEvent event;
+  event.ump = make_midi1_note_on(0, 0, 72, 100);
+  synth.on_event(0, event);
+
+  std::array<float, 256> left{};
+  std::array<float, 256> right{};
+  float* channels[2] = {left.data(), right.data()};
+  for (int block = 0; block < 94; ++block) synth.process(channels, 2, 256);
+
+  event.ump = make_midi1_note_off(0, 0, 72, 0);
+  synth.on_event(0, event);
+  TailMeasurement result;
+  result.declared = synth.tail_samples();
+  const int frame_count = result.declared + sample_rate / 2;
+  for (int offset = 0; offset < frame_count; offset += 256) {
+    const int count = std::min(256, frame_count - offset);
+    std::fill(left.begin(), left.end(), 0.0f);
+    std::fill(right.begin(), right.end(), 0.0f);
+    synth.process(channels, 2, count);
+    for (int i = 0; i < count; ++i) {
+      const float value = std::max(std::fabs(left[static_cast<size_t>(i)]),
+                                   std::fabs(right[static_cast<size_t>(i)]));
+      const int frame = offset + i;
+      if (!std::isfinite(value)) ++result.nonfinite;
+      if (frame >= result.declared) {
+        result.peak_after_declared = std::max(result.peak_after_declared, value);
+      }
+      if (value > 1.0e-5f) result.last_above_floor = frame;
+    }
+  }
+  return result;
+}
+
+}  // namespace
+
+TEST_CASE("NativeSynth tail includes the mix-bus DC blocker decay", "[boundary]") {
+  for (const int sample_rate : {48000, 96000}) {
+    const TailMeasurement with_dc = render_reed(true, sample_rate);
+    const TailMeasurement without_dc = render_reed(false, sample_rate);
+    INFO("sample rate " << sample_rate << ", declared " << with_dc.declared << ", DC peak "
+                        << with_dc.peak_after_declared << ", no-DC peak "
+                        << without_dc.peak_after_declared);
+    CHECK(with_dc.nonfinite == 0);
+    CHECK(without_dc.nonfinite == 0);
+    CHECK(with_dc.last_above_floor <= with_dc.declared);
+    CHECK(without_dc.last_above_floor <= without_dc.declared);
+  }
+}
+
+TEST_CASE("Sf2Player synth-fallback tail includes the mix-bus DC blocker decay", "[boundary]") {
+  // Both hosts run the same blocker after everything else on the bus, so turning it on must
+  // lengthen each bound by the same decay.
+  for (const int sample_rate : {48000, 96000}) {
+    const auto sf2_tail = [sample_rate](bool dc_block) {
+      Sf2PlayerConfig config;
+      config.dc_block = dc_block;
+      Sf2Player player(config);  // no SoundFont: the synth fallback voices every program
+      player.prepare(sample_rate, 256);
+      return player.tail_samples();
+    };
+    const auto native_tail = [sample_rate](bool dc_block) {
+      NativeSynthConfig config;
+      config.dc_block = dc_block;
+      config.use_gm_programs = true;
+      NativeSynth synth(config);
+      synth.prepare(sample_rate, 256);
+      return synth.tail_samples();
+    };
+    const int sf2_on = sf2_tail(true);
+    const int sf2_off = sf2_tail(false);
+    const int native_on = native_tail(true);
+    const int native_off = native_tail(false);
+    INFO("sample rate " << sample_rate << ", Sf2Player " << sf2_off << " -> " << sf2_on
+                        << ", NativeSynth " << native_off << " -> " << native_on);
+    REQUIRE(sf2_on < std::numeric_limits<int>::max());
+    REQUIRE(native_on < std::numeric_limits<int>::max());
+    CHECK(native_on - native_off > 0);
+    CHECK(sf2_on - sf2_off == native_on - native_off);
+  }
+}
+
+TEST_CASE("GM fallback tail covers every source across supported rates", "[boundary]") {
+  using sonare::midi::synth::EnvelopeTimeScales;
+  using sonare::midi::synth::gm_drum_kit_max_tail_samples;
+  using sonare::midi::synth::gm_fallback_max_tail_samples;
+  using sonare::midi::synth::native_patch_tail_samples;
+
+  for (const double sample_rate : {8000.0, 11025.0, 24000.0, 32000.0, 44100.0, 48000.0, 53777.0,
+                                   88200.0, 96000.0, 176400.0, 192000.0, 384000.0}) {
+    const int64_t bound = gm_fallback_max_tail_samples(sample_rate, 1.0f, 1.0f, 1.0f);
+    const int64_t drum_bound = gm_drum_kit_max_tail_samples(sample_rate, 1.0f, 1.0f, 1.0f);
+    INFO("sample rate " << sample_rate << ", bound " << bound);
+    REQUIRE(bound > 0);
+    REQUIRE(bound < std::numeric_limits<int64_t>::max());
+    REQUIRE(drum_bound > 0);
+    REQUIRE(drum_bound < std::numeric_limits<int64_t>::max());
+    REQUIRE(drum_bound <= bound);
+    const auto covered = [&](const sonare::midi::synth::NativeSynthPatch& patch) {
+      return bound >= native_patch_tail_samples(patch, sample_rate, EnvelopeTimeScales{}, nullptr);
+    };
+    const auto drum_covered = [&](const sonare::midi::synth::NativeSynthPatch& patch) {
+      return drum_bound >=
+             native_patch_tail_samples(patch, sample_rate, EnvelopeTimeScales{}, nullptr);
+    };
+    for (const auto& patch : sonare::midi::synth::detail::family_patches()) {
+      REQUIRE(covered(patch));
+    }
+    for (const auto& patch : sonare::midi::synth::detail::drum_note_table()) {
+      REQUIRE(covered(patch));
+      REQUIRE(drum_covered(patch));
+    }
+    for (size_t kit = 0; kit < sonare::midi::synth::kGsDrumKits.size(); ++kit) {
+      for (int note = 0; note < 128; ++note) {
+        auto patch = sonare::midi::synth::gm_fallback_drum_patch(static_cast<uint8_t>(note));
+        sonare::midi::synth::apply_gs_drum_kit(
+            patch.percussion, patch.amp_env, static_cast<uint8_t>(kit), static_cast<uint8_t>(note));
+        REQUIRE(covered(patch));
+        REQUIRE(drum_covered(patch));
+      }
+    }
+    const auto& overrides = sonare::midi::synth::detail::program_overrides();
+    const auto* patches = sonare::midi::synth::detail::program_override_patches(overrides);
+    for (std::size_t i = 0; i < sonare::midi::synth::detail::kProgramOverrideCount; ++i) {
+      REQUIRE(covered(patches[i]));
+    }
+  }
 }

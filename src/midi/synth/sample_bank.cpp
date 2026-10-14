@@ -5,6 +5,16 @@
 
 namespace sonare::midi::synth {
 
+namespace {
+
+bool zone_matches(const SampleZone& zone, uint8_t key, Velocity16 velocity) noexcept {
+  const uint8_t velocity7 = velocity.u7();
+  return key >= zone.key_lo && key <= zone.key_hi && velocity7 >= zone.vel_lo &&
+         velocity7 <= zone.vel_hi;
+}
+
+}  // namespace
+
 bool SampleBank::add_sample(const float* data, size_t n_frames, const SampleDesc& desc,
                             uint32_t* out_index) {
   if (data == nullptr || n_frames == 0) return false;
@@ -44,10 +54,17 @@ bool SampleBank::add_sample(const float* data, size_t n_frames, const SampleDesc
 bool SampleBank::add_zone(uint32_t set, const SampleZoneDesc& zone) {
   if (zone.sample_index >= samples_.size()) return false;
   if (zone.key_lo > zone.key_hi || zone.vel_lo > zone.vel_hi) return false;
+  if (!std::isfinite(zone.tune_cents) || !std::isfinite(zone.gain) ||
+      !std::isfinite(zone.pan_units)) {
+    return false;
+  }
+
+  const Sample& s = samples_[zone.sample_index];
+  const float resolved_tune_cents = s.fine_tune_cents + zone.tune_cents;
+  if (!std::isfinite(resolved_tune_cents)) return false;
 
   if (set >= sets_.size()) sets_.resize(static_cast<size_t>(set) + 1);
 
-  const Sample& s = samples_[zone.sample_index];
   SampleZone z;
   z.region = s.region;
   z.key_lo = zone.key_lo;
@@ -55,7 +72,7 @@ bool SampleBank::add_zone(uint32_t set, const SampleZoneDesc& zone) {
   z.vel_lo = zone.vel_lo;
   z.vel_hi = zone.vel_hi;
   z.root_key = s.root_key;
-  z.tune_cents = s.fine_tune_cents + zone.tune_cents;
+  z.tune_cents = resolved_tune_cents;
   z.gain = zone.gain;
   z.pan_units = zone.pan_units;
   z.source_rate = s.source_rate;
@@ -66,8 +83,7 @@ bool SampleBank::add_zone(uint32_t set, const SampleZoneDesc& zone) {
 const SampleZone* SampleBank::find(int32_t set, uint8_t key, Velocity16 velocity) const noexcept {
   if (set < 0 || static_cast<size_t>(set) >= sets_.size()) return nullptr;
   for (const SampleZone& z : sets_[static_cast<size_t>(set)]) {
-    if (key >= z.key_lo && key <= z.key_hi && velocity.u7() >= z.vel_lo &&
-        velocity.u7() <= z.vel_hi) {
+    if (zone_matches(z, key, velocity)) {
       return &z;
     }
   }
@@ -80,8 +96,7 @@ SampleZoneMix SampleBank::find_mix(int32_t set, uint8_t key, Velocity16 velocity
   const SampleZone* first = nullptr;
   const SampleZone* second = nullptr;
   for (const SampleZone& z : sets_[static_cast<size_t>(set)]) {
-    if (key < z.key_lo || key > z.key_hi || velocity.u7() < z.vel_lo || velocity.u7() > z.vel_hi)
-      continue;
+    if (!zone_matches(z, key, velocity)) continue;
     if (first == nullptr) {
       first = &z;
     } else {

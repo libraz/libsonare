@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "effects/delay/stereo_delay.h"
 #include "mastering/api/insert_factory.h"
 #include "midi/midi_event.h"
 #include "midi/synth/gs_address_table.h"
@@ -678,6 +679,71 @@ TEST_CASE("a queued EFX update from a stale generation cannot raise the new grap
   fx.settle_block(LiveTailHost{});
   REQUIRE(state->updates == updates_before_drain);
   REQUIRE(fx.tail_samples() == 64);
+}
+
+TEST_CASE("identical EFX controls keep the live graph and pending delay tail",
+          "[gs-efx-realization][gs-efx-tail][boundary]") {
+  s::PartFxStageConfig cfg;
+  cfg.bank_rig_binding = false;
+  cfg.insert_factory = [](std::string_view name, std::string_view) {
+    if (name != "effects.delay.stereo") return std::unique_ptr<sonare::rt::ProcessorBase>{};
+    sonare::effects::delay::StereoDelayConfig delay;
+    delay.delay_time_l_ms = 20.0f;
+    delay.delay_time_r_ms = 20.0f;
+    delay.feedback = 0.0f;
+    delay.dry_wet = 1.0f;
+    return std::unique_ptr<sonare::rt::ProcessorBase>(
+        new sonare::effects::delay::StereoDelay(delay));
+  };
+  s::PartFxStage fx(cfg);
+  fx.prepare(kRate);
+  fx.assign_part(0, 1);
+  const auto type = type_write(kStereoDelay);
+  REQUIRE(fx.apply_unit_sysex(type.data(), type.size()));
+  fx.publish();
+  fx.acquire();
+  REQUIRE(fx.current() != nullptr);
+  const auto* initial = fx.current();
+  const uint32_t generation = fx.generation();
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left[0] = right[0] = 0.1f;
+  s::sf2_run_efx_unit(initial->units[0], left.data(), right.data(), kBlock);
+  const uint8_t held = fx.efx()[0].params[0];
+  const auto update = slot_write(0, held);
+  REQUIRE_FALSE(fx.apply_control_sysex(update.data(), update.size()));
+  const auto& state = fx.efx()[0];
+  const std::array<std::vector<uint8_t>, 8> no_ops = {efx_bulk(0x404122, {1}),
+                                                      efx_bulk(0x400317, {state.send_reverb}),
+                                                      efx_bulk(0x400318, {state.send_chorus}),
+                                                      efx_bulk(0x400319, {state.send_delay}),
+                                                      efx_bulk(0x40031B, {state.control_source[0]}),
+                                                      efx_bulk(0x40031C, {state.control_depth[0]}),
+                                                      efx_bulk(0x40031D, {state.control_source[1]}),
+                                                      efx_bulk(0x40031E, {state.control_depth[1]})};
+  for (const auto& message : no_ops) {
+    CAPTURE(message[6], message[7]);
+    REQUIRE_FALSE(fx.apply_control_sysex(message.data(), message.size()));
+  }
+  CHECK(fx.generation() == generation);
+  CHECK(fx.current() == initial);
+  CHECK(fx.efx()[0].params[0] == held);
+
+  float tail_peak = 0.0f;
+  for (int block = 0; block < 8; ++block) {
+    left.fill(0.0f);
+    right.fill(0.0f);
+    s::sf2_run_efx_unit(initial->units[0], left.data(), right.data(), kBlock);
+    for (int i = 0; i < kBlock; ++i) {
+      tail_peak = std::max(tail_peak, std::max(std::abs(left[static_cast<size_t>(i)]),
+                                               std::abs(right[static_cast<size_t>(i)])));
+    }
+  }
+  REQUIRE(tail_peak > 0.05f);
+  const auto reroute = efx_bulk(0x404122, {0});
+  REQUIRE(fx.apply_control_sysex(reroute.data(), reroute.size()));
+  CHECK(fx.checkpoint().assign[0] == 0);
 }
 
 TEST_CASE("all PartFxStage SysEx paths walk uniform EFX blocks in wire order",

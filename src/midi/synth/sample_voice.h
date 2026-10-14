@@ -38,11 +38,14 @@ struct SamplePatchParams {
 };
 
 /// Longest a one-shot voice of @p params can play once its key is up, in output
-/// samples: the longest zone at the slowest rate its keys reach, with no pitch
-/// modulation (a voice bent down plays proportionally longer). INT64_MAX when a
-/// zone loops continuously; 0 with no bank, which leaves the voice silent.
+/// samples: the longest zone at the slowest rate its keys reach, with no live
+/// pitch modulation (a voice bent down after note-on is deliberately not a
+/// finite promise). @p pitch_offset_cents is the patch's pitch offset at the
+/// call; it is live, so a host re-derives the bound whenever the offset moves.
+/// INT64_MAX when a zone loops continuously; 0 with no bank, which leaves the
+/// voice silent.
 int64_t sample_one_shot_tail_samples(const SampleBank* bank, const SamplePatchParams& params,
-                                     double sample_rate) noexcept;
+                                     double sample_rate, float pitch_offset_cents = 0.0f) noexcept;
 
 /// One voice's sample source.
 class SampleVoiceCore {

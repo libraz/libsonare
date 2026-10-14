@@ -82,16 +82,29 @@ float slot_flow(float phase, float duty, float return_amount, float gap,
   return flow_hump(phase, 0.0f, duty) + return_amount * flow_hump(phase, gap, return_width);
 }
 
-float radiation_norm(float halfangle, float ratio, float sample_rate) noexcept {
+float effective_radiation_halfangle(float halfangle, float ratio, float sample_rate) noexcept {
   // A first difference has no useful fundamental calibration below 20 Hz or
   // above Nyquist. Keeping the effective angle in that physical interval also
   // prevents an aliased pitch from landing on a numerical zero of sin().
   const float nyquist_halfangle = 0.25f * static_cast<float>(kTwoPi);
   const float minimum_halfangle =
       std::min(0.5f * static_cast<float>(kTwoPi) * 20.0f / sample_rate, nyquist_halfangle);
-  const float effective_halfangle =
-      std::clamp(std::abs(halfangle * ratio), minimum_halfangle, nyquist_halfangle);
+  return std::clamp(std::abs(halfangle * ratio), minimum_halfangle, nyquist_halfangle);
+}
+
+float radiation_norm(float halfangle, float ratio, float sample_rate) noexcept {
+  const float effective_halfangle = effective_radiation_halfangle(halfangle, ratio, sample_rate);
   return 1.0f / std::max(2.0f * std::abs(std::sin(effective_halfangle)), 1.0e-6f);
+}
+
+float radiation_mix_norm(float radiation, float halfangle, float ratio,
+                         float sample_rate) noexcept {
+  if (radiation <= 0.0f || radiation >= 1.0f) return 1.0f;
+  const float theta = effective_radiation_halfangle(halfangle, ratio, sample_rate);
+  const float dry = 1.0f - radiation;
+  const float magnitude_sq =
+      dry * dry + radiation * radiation + 2.0f * dry * radiation * std::sin(theta);
+  return 1.0f / std::sqrt(std::max(magnitude_sq, 1.0e-12f));
 }
 
 }  // namespace
@@ -168,6 +181,11 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   radiation_norm_ = radiation_norm(radiation_halfangle_, 1.0f, static_cast<float>(sr));
   radiation_norm_b_ =
       dual_ ? radiation_norm(radiation_halfangle_b_, 1.0f, static_cast<float>(sr)) : 0.0f;
+  radiation_mix_norm_ =
+      radiation_mix_norm(radiation_, radiation_halfangle_, 1.0f, static_cast<float>(sr));
+  radiation_mix_norm_b_ =
+      dual_ ? radiation_mix_norm(radiation_, radiation_halfangle_b_, 1.0f, static_cast<float>(sr))
+            : 1.0f;
 
   // The differentiator history is primed on the first render, after its live
   // pitch ratio is known. Keep the old zero history for a normal mono start.
@@ -294,9 +312,13 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
     if (radiation_ > 0.0f && ratio != radiation_ratio_) {
       radiation_norm_ =
           radiation_norm(radiation_halfangle_, ratio, static_cast<float>(sample_rate_));
+      radiation_mix_norm_ = radiation_mix_norm(radiation_, radiation_halfangle_, ratio,
+                                               static_cast<float>(sample_rate_));
       if (dual_) {
         radiation_norm_b_ =
             radiation_norm(radiation_halfangle_b_, ratio, static_cast<float>(sample_rate_));
+        radiation_mix_norm_b_ = radiation_mix_norm(radiation_, radiation_halfangle_b_, ratio,
+                                                   static_cast<float>(sample_rate_));
       }
       radiation_ratio_ = ratio;
     }
@@ -311,12 +333,17 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
         flow -= slot_mean_;
         const float radiated = (flow - prev_flow_) * radiation_norm_;
         prev_flow_ = flow;
-        const float tongue_a = flow + radiation_ * (radiated - flow);
+        const float tongue_a = radiation_ >= 1.0f
+                                   ? flow + radiation_ * (radiated - flow)
+                                   : (flow + radiation_ * (radiated - flow)) * radiation_mix_norm_;
 
         float flow_b_centered = flow_b - slot_mean_;
         const float radiated_b = (flow_b_centered - prev_flow_b_) * radiation_norm_b_;
         prev_flow_b_ = flow_b_centered;
-        const float tongue_b = flow_b_centered + radiation_ * (radiated_b - flow_b_centered);
+        const float tongue_b =
+            radiation_ >= 1.0f ? flow_b_centered + radiation_ * (radiated_b - flow_b_centered)
+                               : (flow_b_centered + radiation_ * (radiated_b - flow_b_centered)) *
+                                     radiation_mix_norm_b_;
         tongue = 0.5f * (tongue_a + tongue_b);
       } else {
         // Preserve the established dual dry path's average-then-subtract
@@ -329,7 +356,8 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
       flow -= slot_mean_;
       const float radiated = (flow - prev_flow_) * radiation_norm_;
       prev_flow_ = flow;
-      tongue = flow + radiation_ * (radiated - flow);
+      tongue = radiation_ >= 1.0f ? flow + radiation_ * (radiated - flow)
+                                  : (flow + radiation_ * (radiated - flow)) * radiation_mix_norm_;
     }
   } else {
     // The soft-clipped asymmetric saw: the in-slot and out-of-slot half-cycles

@@ -7,8 +7,11 @@
 
 #include "midi/synth/free_reed_voice.h"
 
+#include <algorithm>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <complex>
 #include <vector>
 
 #include "midi/midi_event.h"
@@ -20,6 +23,8 @@
 namespace {
 
 using sonare::midi::MidiEvent;
+using sonare::midi::synth::FreeReedPatchParams;
+using sonare::midi::synth::FreeReedVoiceCore;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
@@ -92,6 +97,21 @@ double rms_after_pitch_change(sonare::midi::synth::FreeReedVoiceCore& voice, flo
                               float target_ratio, int warmup, int samples) {
   for (int i = 0; i < warmup; ++i) voice.render(start_ratio);
   return rms_after(voice, target_ratio, 0, samples);
+}
+
+double fundamental_amplitude(const FreeReedPatchParams& params, double sample_rate, uint8_t note,
+                             int warmup, int samples) {
+  FreeReedVoiceCore voice;
+  voice.start(params, sample_rate, note, sonare::midi::Velocity16::from7(100), 42);
+  for (int i = 0; i < warmup; ++i) voice.render(1.0f);
+  const double frequency = note_hz(note);
+  const double omega = 2.0 * 3.14159265358979323846 * frequency / sample_rate;
+  std::complex<double> projection(0.0, 0.0);
+  for (int i = 0; i < samples; ++i) {
+    projection += static_cast<double>(voice.render(1.0f)) *
+                  std::exp(std::complex<double>(0.0, -omega * static_cast<double>(i)));
+  }
+  return 2.0 * std::abs(projection) / static_cast<double>(samples);
 }
 
 }  // namespace
@@ -205,6 +225,41 @@ TEST_CASE("the free reed's slot flow stays bounded across the keyboard",
           REQUIRE(peak(tone) < 4.0f);
         }
       }
+    }
+  }
+}
+
+TEST_CASE("the free reed radiation blend preserves its fundamental level",
+          "[midi][synth][free_reed][boundary]") {
+  for (const double sample_rate : {48000.0, 96000.0}) {
+    FreeReedPatchParams params;
+    params.slot_duty = 0.29f;
+    params.slot_return = 0.7f;
+    params.detune = 0.0f;
+    params.breath_noise = 0.0f;
+    std::array<double, 5> mono{};
+    const std::array<float, 5> radiations = {0.0f, 0.25f, 0.5f, 0.75f, 1.0f};
+    for (size_t i = 0; i < radiations.size(); ++i) {
+      params.radiation = radiations[i];
+      mono[i] = fundamental_amplitude(params, sample_rate, 69, static_cast<int>(sample_rate),
+                                      static_cast<int>(sample_rate));
+      REQUIRE(mono[i] > 1.0e-4);
+      INFO("sample rate = " << sample_rate << ", radiation = " << radiations[i]);
+      CHECK(std::isfinite(mono[i]));
+      CHECK(std::abs(20.0 * std::log10(mono[i] / mono.front())) < 0.05);
+    }
+
+    // Per-tongue compensation leaves only beating/window projection residual.
+    params.detune = 0.3f;
+    std::array<double, 5> musette{};
+    for (size_t i = 0; i < radiations.size(); ++i) {
+      params.radiation = radiations[i];
+      musette[i] = fundamental_amplitude(params, sample_rate, 69, static_cast<int>(sample_rate),
+                                         static_cast<int>(sample_rate));
+      REQUIRE(musette[i] > 1.0e-4);
+      INFO("musette sample rate = " << sample_rate << ", radiation = " << radiations[i]);
+      CHECK(std::isfinite(musette[i]));
+      CHECK(std::abs(20.0 * std::log10(musette[i] / musette.front())) < 0.1);
     }
   }
 }

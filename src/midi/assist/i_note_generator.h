@@ -25,10 +25,14 @@ class INoteGenerator {
 
   /// @brief Produces an AssistResult for `request` against the read-only `view`.
   ///
-  /// Determinism: same seed + same request -> identical result. The generator
-  /// must honor request.budget cooperatively (partial result on overrun) and
-  /// must NOT mutate any live project. On an internal failure it may throw or
-  /// return an invalid result; the CompositionAssist driver discards such calls.
+  /// Determinism: with no time cap, or when the run reaches no time deadline,
+  /// the same seed + same request + same view produce an identical result. A
+  /// monotonic clock may be used only for the cooperative `maxTimeMs` cutoff;
+  /// at that execution-dependent boundary, the reached candidates' content and
+  /// order remain deterministic. The generator must honor request.budget
+  /// cooperatively (partial result on overrun) and must NOT mutate any live
+  /// project. On an internal failure it may throw or return an invalid result;
+  /// the CompositionAssist driver discards such calls.
   virtual AssistResult generate(const arrangement::ProjectView& view,
                                 const AssistRequest& request) = 0;
 };

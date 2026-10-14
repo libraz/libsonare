@@ -7,6 +7,7 @@
 #include "midi/synth/articulation.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_address_table.h"
+#include "midi/synth/mix_dc_blocker.h"
 #include "midi/synth/voice_random.h"
 #include "midi/ump.h"
 #include "util/constants.h"
@@ -71,6 +72,10 @@ NativeSynth::NativeSynth(const NativeSynthConfig& config) : config_(config) {
 
 int64_t NativeSynth::recompute_tail() const noexcept {
   const EnvelopeTimeScales scales = gs_tail_scales();
+  const auto with_dc_tail = [this](int64_t tail) noexcept {
+    if (!config_.dc_block) return tail;
+    return numeric::saturating_add<int64_t>(tail, mix_dc_blocker_tail_samples(dc_r_));
+  };
   // A kit patch resolves each note against the drum table and a program change only selects
   // kits, so neither the melodic programs nor the piano and guitar halos are reachable.
   const bool kit_preset = !config_.use_gm_programs &&
@@ -78,7 +83,8 @@ int64_t NativeSynth::recompute_tail() const noexcept {
                           config_.patch.percussion.gm_kit;
   const bool heard_set_usable = tail_patch_count_ > 0 && !tail_patches_full_;
   if (kit_preset && !heard_set_usable) {
-    return gm_drum_kit_max_tail_samples(sample_rate_, scales.attack, scales.decay, scales.release);
+    return with_dc_tail(
+        gm_drum_kit_max_tail_samples(sample_rate_, scales.attack, scales.decay, scales.release));
   }
   // Once a note has resolved its patch, only the patches heard so far can still be ringing.
   if ((config_.use_gm_programs || kit_preset) && heard_set_usable) {
@@ -101,7 +107,7 @@ int64_t NativeSynth::recompute_tail() const noexcept {
       tail =
           numeric::saturating_add(tail, numeric::ceil_sample_count(sample_rate_ * kPianoBodyRingS));
     }
-    return tail;
+    return with_dc_tail(tail);
   }
   // GM mode resolves the patch per program at note-on, so the fallback tables bound it.
   const bool gm_tables = config_.use_gm_programs;
@@ -119,7 +125,7 @@ int64_t NativeSynth::recompute_tail() const noexcept {
     tail =
         numeric::saturating_add(tail, numeric::ceil_sample_count(sample_rate_ * kPianoBodyRingS));
   }
-  return tail;
+  return with_dc_tail(tail);
 }
 
 void NativeSynth::raise_tail() noexcept {
@@ -349,9 +355,9 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   refresh_all_channel_mods();
   tail_patch_count_ = 0;
   tail_patches_full_ = false;
-  tail_samples_->store(recompute_tail(), std::memory_order_relaxed);
   // Mix-bus polish: ~8 Hz DC blocker pole and the gain-neutral drive factor.
   dc_r_ = 1.0f - static_cast<float>(constants::kTwoPiD * 8.0 / sample_rate_);
+  tail_samples_->store(recompute_tail(), std::memory_order_relaxed);
   dc_x1_ = {};
   dc_y1_ = {};
   bus_drive_gain_ = config_.bus_drive > 0.0f ? 1.0f + 3.0f * config_.bus_drive : 0.0f;

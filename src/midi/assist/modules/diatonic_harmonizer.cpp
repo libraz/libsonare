@@ -2,13 +2,16 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <map>
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "arrangement/edit_command.h"
+#include "midi/assist/assist_budget_detail.h"
+#include "midi/assist/clip_ppq.h"
 #include "midi/assist/modules/music_theory.h"
+#include "midi/note_pairing.h"
 #include "midi/ump.h"
 #include "util/json.h"
 
@@ -20,13 +23,24 @@ namespace json = sonare::util::json;
 
 /// One sounding note recovered from a clip's event list.
 struct SourceNote {
-  double ppq = 0.0;
+  double content_ppq = 0.0;
   double length_ppq = 0.0;
   uint8_t note = 0;
   uint8_t velocity = 0;
   uint8_t group = 0;
   uint8_t channel = 0;
 };
+
+/// Candidate order: onset, note, group, channel, then end. Notes equal in all
+/// five keep their pairing order under std::stable_sort, so every standard
+/// library yields the same sequence.
+bool source_note_less(const SourceNote& left, const SourceNote& right) noexcept {
+  if (left.content_ppq != right.content_ppq) return left.content_ppq < right.content_ppq;
+  if (left.note != right.note) return left.note < right.note;
+  if (left.group != right.group) return left.group < right.group;
+  if (left.channel != right.channel) return left.channel < right.channel;
+  return left.length_ppq < right.length_ppq;
+}
 
 sonare::midi::Ump ump_from_event(const arrangement::MidiClipEvent& event) noexcept {
   sonare::midi::Ump ump;
@@ -35,45 +49,6 @@ sonare::midi::Ump ump_from_event(const arrangement::MidiClipEvent& event) noexce
   ump.word_count = sonare::midi::ump_word_count_for_word0(event.data0);
   ump.group = sonare::midi::ump_group_from_word0(event.data0);
   return ump;
-}
-
-/// Pairs note-ons with their note-offs on the same (group, channel, note).
-/// A note-on never closed is dropped: a note with no end has no length, and
-/// guessing one would put a note in the output the source never had.
-std::vector<SourceNote> read_notes(const arrangement::MidiClipEventList& events) {
-  struct OpenKey {
-    uint8_t group;
-    uint8_t channel;
-    uint8_t note;
-    bool operator<(const OpenKey& o) const noexcept {
-      if (group != o.group) return group < o.group;
-      if (channel != o.channel) return channel < o.channel;
-      return note < o.note;
-    }
-  };
-  std::map<OpenKey, SourceNote> open;
-  std::vector<SourceNote> notes;
-  for (const arrangement::MidiClipEvent& event : events) {
-    const sonare::midi::Ump ump = ump_from_event(event);
-    const OpenKey key{ump.group, ump.channel(), ump.note_number()};
-    if (ump.is_note_off()) {
-      const auto it = open.find(key);
-      if (it == open.end()) continue;
-      SourceNote note = it->second;
-      open.erase(it);
-      if (event.ppq <= note.ppq) continue;
-      note.length_ppq = event.ppq - note.ppq;
-      notes.push_back(note);
-    } else if (ump.is_note_on()) {
-      open[key] =
-          SourceNote{event.ppq, 0.0, ump.note_number(), ump.data2_7bit(), ump.group, ump.channel()};
-    }
-  }
-  std::sort(notes.begin(), notes.end(), [](const SourceNote& a, const SourceNote& b) noexcept {
-    if (a.ppq != b.ppq) return a.ppq < b.ppq;
-    return a.note < b.note;
-  });
-  return notes;
 }
 
 AssistResult empty_with_reason(std::string reason) {
@@ -99,12 +74,31 @@ uint8_t scaled_velocity(uint8_t source, float scale) noexcept {
   return static_cast<uint8_t>(scaled + 0.5f);
 }
 
+SourceNote source_note_from_pair(const sonare::midi::detail::NotePair& pair) noexcept {
+  return SourceNote{pair.start_ppq, pair.end_ppq - pair.start_ppq,
+                    pair.note,      pair.note_on.data2_7bit(),
+                    pair.group,     pair.channel};
+}
+
+template <typename OnPair>
+bool pair_source_events(const arrangement::MidiClipEventList& events, OnPair on_pair) {
+  return sonare::midi::detail::pair_notes(
+      events,
+      [](const arrangement::MidiClipEvent& event) noexcept {
+        return sonare::midi::detail::DecodedNoteEvent{event.ppq, ump_from_event(event)};
+      },
+      std::move(on_pair),
+      []() noexcept { return !sonare::midi::assist::detail::deadline_expired(); });
+}
+
 }  // namespace
 
 AssistResult DiatonicHarmonizer::derive(const arrangement::ProjectView& view,
                                         const AssistRequest& request,
                                         const std::vector<VoiceModel>& cantus,
                                         const AssistQueryContext& queries) {
+  sonare::midi::assist::detail::RequestDeadlineScope deadline_scope(request);
+
   GeneratorParams params;
   std::string params_error;
   if (!read_generator_params(request.params_json, &params, &params_error)) {
@@ -118,17 +112,20 @@ AssistResult DiatonicHarmonizer::derive(const arrangement::ProjectView& view,
   const arrangement::ClipId source_clip_id =
       params.source_clip_id != 0 ? params.source_clip_id : params.target_clip_id;
 
+  const arrangement::EditClip* target_clip = view.find_clip(params.target_clip_id);
+  if (target_clip == nullptr) {
+    return empty_with_reason("target clip " + std::to_string(params.target_clip_id) +
+                             " does not exist");
+  }
+  const arrangement::EditClip* source_clip = view.find_clip(source_clip_id);
+  if (source_clip == nullptr) {
+    return empty_with_reason("source clip " + std::to_string(source_clip_id) + " does not exist");
+  }
   const arrangement::MidiClipEventList* source_events = view.clip_events(source_clip_id);
   if (source_events == nullptr || source_events->empty()) {
     return empty_with_reason("source clip " + std::to_string(source_clip_id) +
                              " carries no MIDI events");
   }
-  const std::vector<SourceNote> notes = read_notes(*source_events);
-  if (notes.empty()) {
-    return empty_with_reason("source clip " + std::to_string(source_clip_id) +
-                             " carries no completed notes");
-  }
-
   // An explicitly modelled voice outranks the params' defaults: a host that
   // built a VoiceModel has said more about the part than a fallback range has.
   VoiceModel voice;
@@ -145,30 +142,92 @@ AssistResult DiatonicHarmonizer::derive(const arrangement::ProjectView& view,
   patch.clip_id = params.target_clip_id;
   json::Array decisions;
   uint32_t iterations = 0;
-  bool truncated = false;
+  bool iteration_truncated = false;
+  bool time_truncated = false;
 
-  for (const SourceNote& note : notes) {
+  std::vector<SourceNote> qualified;
+  bool has_completed_note = false;
+  const bool first_pass_completed =
+      pair_source_events(*source_events, [&](const sonare::midi::detail::NotePair& pair) {
+        has_completed_note = true;
+        const SourceNote note = source_note_from_pair(pair);
+        const double timeline_ppq = clip_content_to_timeline_ppq(*source_clip, note.content_ppq);
+        if (request.scope.start_ppq.has_value() && timeline_ppq < *request.scope.start_ppq) return;
+        if (request.scope.end_ppq.has_value() && timeline_ppq >= *request.scope.end_ppq) return;
+        qualified.push_back(note);
+      });
+  time_truncated = !first_pass_completed || sonare::midi::assist::detail::deadline_expired();
+
+  if (!has_completed_note && !time_truncated) {
+    return empty_with_reason("source clip " + std::to_string(source_clip_id) +
+                             " carries no completed notes");
+  }
+
+  // Preparation checks the deadline every 64 entries and around the sort.
+  constexpr size_t kPreparationCheckCadence = 64;
+  const auto preparation_deadline = [&]() noexcept {
+    if (sonare::midi::assist::detail::deadline_expired()) {
+      time_truncated = true;
+      return true;
+    }
+    return false;
+  };
+
+  if (!time_truncated) {
+    bool sorted = true;
+    for (size_t i = 1; i < qualified.size(); ++i) {
+      if ((i & (kPreparationCheckCadence - 1)) == 0 && preparation_deadline()) break;
+      if (source_note_less(qualified[i], qualified[i - 1])) {
+        sorted = false;
+        break;
+      }
+    }
+    if (!time_truncated) preparation_deadline();
+    if (!time_truncated && !sorted && !preparation_deadline()) {
+      std::stable_sort(qualified.begin(), qualified.end(), source_note_less);
+      preparation_deadline();
+    }
+  }
+
+  for (size_t candidate_index = 0; candidate_index < qualified.size(); ++candidate_index) {
+    const SourceNote& note = qualified[candidate_index];
+    const bool has_more_candidates = candidate_index + 1 < qualified.size();
+    const auto stop_for_expired_deadline = [&]() noexcept {
+      if (!sonare::midi::assist::detail::deadline_expired()) return false;
+      if (has_more_candidates && request.budget.has_iteration_cap() &&
+          iterations >= request.budget.max_iterations) {
+        iteration_truncated = true;
+      } else {
+        time_truncated = true;
+      }
+      return true;
+    };
+
     if (request.budget.has_iteration_cap() && iterations >= request.budget.max_iterations) {
-      truncated = true;
+      iteration_truncated = true;
       break;
     }
-    ++iterations;
+    if (time_truncated) break;
+    if (stop_for_expired_deadline()) break;
+    iterations = sonare::midi::assist::detail::saturating_add_u32(iterations, 1);
 
-    if (request.scope.start_ppq.has_value() && note.ppq < *request.scope.start_ppq) continue;
-    if (request.scope.end_ppq.has_value() && note.ppq >= *request.scope.end_ppq) continue;
-
+    const double source_timeline_ppq = clip_content_to_timeline_ppq(*source_clip, note.content_ppq);
     json::Object decision;
-    decision["sourcePpq"] = json::Value(note.ppq);
+    decision["sourcePpq"] = json::Value(note.content_ppq);
     decision["sourceNote"] = json::Value(static_cast<int>(note.note));
 
-    const std::vector<uint8_t> scale = queries.harmony != nullptr
-                                           ? queries.harmony->scale_pitch_classes(view, note.ppq)
-                                           : std::vector<uint8_t>{};
+    const std::vector<uint8_t> scale =
+        queries.harmony != nullptr ? queries.harmony->scale_pitch_classes(view, source_timeline_ppq)
+                                   : std::vector<uint8_t>{};
+    if (stop_for_expired_deadline()) {
+      break;
+    }
     if (scale.empty()) {
       decision["accepted"] = json::Value(false);
       decision["reason"] =
           json::Value("no key is annotated here, so there are no scale steps to move through");
       decisions.push_back(json::Value(std::move(decision)));
+      if (stop_for_expired_deadline()) break;
       continue;
     }
 
@@ -178,11 +237,12 @@ AssistResult DiatonicHarmonizer::derive(const arrangement::ProjectView& view,
       decision["reason"] = json::Value("moving " + std::to_string(config_.interval_steps) +
                                        " scale steps leaves the MIDI range");
       decisions.push_back(json::Value(std::move(decision)));
+      if (stop_for_expired_deadline()) break;
       continue;
     }
 
     CandidateNote candidate;
-    candidate.ppq = note.ppq;
+    candidate.ppq = source_timeline_ppq;
     candidate.length_ppq = note.length_ppq;
     candidate.note = static_cast<uint8_t>(derived);
     candidate.velocity = scaled_velocity(note.velocity != 0 ? note.velocity : params.base_velocity,
@@ -196,10 +256,12 @@ AssistResult DiatonicHarmonizer::derive(const arrangement::ProjectView& view,
         decision["accepted"] = json::Value(false);
         decision["reason"] = json::Value(reason);
         decisions.push_back(json::Value(std::move(decision)));
+        if (stop_for_expired_deadline()) break;
         continue;
       }
       candidate = verdict.adjusted;
     }
+    if (stop_for_expired_deadline()) break;
 
     decision["accepted"] = json::Value(true);
     decision["note"] = json::Value(static_cast<int>(candidate.note));
@@ -211,9 +273,16 @@ AssistResult DiatonicHarmonizer::derive(const arrangement::ProjectView& view,
         note.group, note.channel, candidate.note, candidate.velocity);
     const sonare::midi::Ump off =
         sonare::midi::make_midi1_note_off(note.group, note.channel, candidate.note, 0);
-    patch.add.push_back(arrangement::MidiClipEvent{candidate.ppq, on.words[0], on.words[1], 0});
-    patch.add.push_back(arrangement::MidiClipEvent{candidate.ppq + candidate.length_ppq,
-                                                   off.words[0], off.words[1], 0});
+    const double on_content_ppq = timeline_to_clip_content_ppq(*target_clip, candidate.ppq);
+    const double off_content_ppq =
+        timeline_to_clip_content_ppq(*target_clip, candidate.ppq + candidate.length_ppq);
+    patch.add.push_back(arrangement::MidiClipEvent{on_content_ppq, on.words[0], on.words[1], 0});
+    patch.add.push_back(arrangement::MidiClipEvent{off_content_ppq, off.words[0], off.words[1], 0});
+    if (stop_for_expired_deadline()) break;
+  }
+
+  if (!time_truncated && !iteration_truncated && sonare::midi::assist::detail::deadline_expired()) {
+    time_truncated = true;
   }
 
   AssistResult result;
@@ -230,9 +299,10 @@ AssistResult DiatonicHarmonizer::derive(const arrangement::ProjectView& view,
   if (!patch.add.empty()) {
     result.commands.push_back(std::make_unique<arrangement::PatchMidiClip>(std::move(patch)));
   }
-  if (truncated) {
+  if (iteration_truncated || time_truncated) {
     result.diagnostics.status = AssistStatus::kBudgetTruncated;
-    result.diagnostics.reason = "stopped after the request's iteration budget";
+    result.diagnostics.reason = iteration_truncated ? "stopped after the request's iteration budget"
+                                                    : "stopped after the request's time budget";
   } else if (result.commands.empty()) {
     result.diagnostics.status = AssistStatus::kEmpty;
     result.diagnostics.reason = "every derived note was refused; see the candidate payload";

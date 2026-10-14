@@ -406,7 +406,10 @@ TEST_CASE("a received GS envelope-time edit raises NativeSynth's tail and never 
   const int64_t base = DahdsrEnvelope::release_tail_samples(kRate, 100.0f);
   const int64_t scaled = DahdsrEnvelope::release_tail_samples(kRate, 100.0f * kMaxScale);
 
-  NativeSynth synth(release_patch(100.0f));
+  NativeSynthConfig voice_config = release_patch(100.0f);
+  // Compare envelope scaling without the independently covered mix-bus DC tail.
+  voice_config.dc_block = false;
+  NativeSynth synth(voice_config);
   synth.prepare(kRate, kBlock);
   CHECK(tail_of(synth) == base);
   send_nrpn(synth, 0x66, 127);

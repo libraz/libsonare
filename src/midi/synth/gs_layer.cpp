@@ -775,6 +775,10 @@ void write_bound(ParamsJson& out, const char* key, const GsEfxBindingRow& row, u
   out.number(key, gs_efx_binding_value(row, byte));
 }
 
+bool raw_pan_law(const GsEfxStage& stage) noexcept {
+  return stage.branch == kGsEfxBranchHalfA || stage.branch == kGsEfxBranchHalfB;
+}
+
 /// The stage named @p name at @p ordinal, or end.
 std::vector<GsEfxStage>::iterator find_stage(std::vector<GsEfxStage>& chain, std::string_view name,
                                              uint8_t ordinal) {
@@ -916,9 +920,15 @@ void apply_bindings(std::vector<GsEfxStage>& chain, const GsEfx& efx, const GsEf
     }
     // A skeleton constant is only the default; the bound byte replaces it.
     drop_key(found->params_json, key);
+    if (row.conv_class == kGsEfxClassPan && stage == "stereo.stereoBalance" && key == "balance") {
+      drop_key(found->params_json, "gain");
+    }
 
     ParamsJson one;
     write_bound(one, std::string(key).c_str(), row, efx_byte(efx, row.slot));
+    if (row.conv_class == kGsEfxClassPan && stage == "stereo.stereoBalance" && key == "balance") {
+      one.number("gain", gs_efx_pan_gain(efx_byte(efx, row.slot), raw_pan_law(*found)));
+    }
     // A balance byte is a two-ramp position, which only that law reads back
     // as the measured direct and effect gains.
     if (row.conv_class == kGsEfxClassBalance && row.law.form == kGsEfxFormNone) {

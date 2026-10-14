@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <cstdint>
 #include <vector>
 
 #include "midi/synth/gm_fallback_map.h"
@@ -461,4 +462,83 @@ TEST_CASE("harpsichord kill overrides an active undamped tail immediately",
   REQUIRE(core.finished());
   REQUIRE_FALSE(core.tail_active());
   for (int i = 0; i < 128; ++i) REQUIRE(core.render(1.0f) == 0.0f);
+}
+
+namespace {
+
+using sonare::midi::Velocity16;
+using sonare::midi::synth::harpsichord_buffer_capacity;
+using sonare::midi::synth::harpsichord_release_tail_seconds;
+using sonare::midi::synth::harpsichord_slab_capacity;
+using sonare::midi::synth::HarpsichordPatchParams;
+using sonare::midi::synth::HarpsichordVoiceCore;
+
+struct TailRun {
+  int nominal_samples = 0;
+  int finished_at = -1;
+  float peak_after_nominal = 0.0f;
+  bool all_finite = true;
+};
+
+HarpsichordPatchParams tail_patch() {
+  HarpsichordPatchParams params;
+  params.eight_a = false;
+  params.four = true;
+  params.undamped_from_note = 80;
+  params.decay_s = 0.3f;
+  params.decay_stretch = 0.0f;
+  params.octave_detune_cents = 0.0f;
+  params.rear_segment_mm = 0.0f;
+  params.board_diffuse_db = -120.0f;
+  return params;
+}
+
+TailRun render_tail(double sample_rate, float pitch_ratio) {
+  const HarpsichordPatchParams params = tail_patch();
+  constexpr uint8_t kNote = 80;
+  const int bend_at = static_cast<int>(sample_rate * 0.05);
+  const int release_at = static_cast<int>(sample_rate * 0.1);
+  const int nominal =
+      static_cast<int>(std::ceil(harpsichord_release_tail_seconds(params, kNote) * sample_rate));
+  const int frames = release_at + 2 * nominal + 256;
+  std::vector<float> slab(static_cast<size_t>(harpsichord_slab_capacity(sample_rate)), 0.0f);
+  HarpsichordVoiceCore voice;
+  voice.attach(slab.data(), harpsichord_buffer_capacity(sample_rate));
+  voice.start(params, sample_rate, kNote, Velocity16::from7(100), 42);
+
+  TailRun result;
+  result.nominal_samples = nominal;
+  for (int frame = 0; frame < frames; ++frame) {
+    if (frame == release_at) voice.release();
+    const float sample = voice.render(frame < bend_at ? 1.0f : pitch_ratio);
+    result.all_finite = result.all_finite && std::isfinite(sample);
+    if (frame >= release_at + nominal)
+      result.peak_after_nominal = std::max(result.peak_after_nominal, std::abs(sample));
+    if (voice.finished() && result.finished_at < 0) result.finished_at = frame;
+  }
+  return result;
+}
+
+}  // namespace
+
+TEST_CASE("harpsichord downbend consumes tail by physical traversal",
+          "[boundary][midi][synth][harpsichord]") {
+  for (const double sample_rate : {48000.0, 96000.0}) {
+    const TailRun unity = render_tail(sample_rate, 1.0f);
+    const TailRun upbend = render_tail(sample_rate, 2.0f);
+    const TailRun downbend = render_tail(sample_rate, 0.5f);
+
+    REQUIRE(unity.all_finite);
+    REQUIRE(upbend.all_finite);
+    REQUIRE(downbend.all_finite);
+    REQUIRE(unity.finished_at >= 0);
+    REQUIRE(upbend.finished_at >= 0);
+    REQUIRE(downbend.finished_at >= 0);
+    CHECK(std::abs(unity.finished_at - upbend.finished_at) <= 1);
+    CHECK(std::abs(unity.finished_at -
+                   (static_cast<int>(sample_rate * 0.1) + unity.nominal_samples - 1)) <= 1);
+    CHECK(std::abs(downbend.finished_at -
+                   (static_cast<int>(sample_rate * 0.1) + 2 * downbend.nominal_samples - 1)) <= 1);
+    CHECK(downbend.peak_after_nominal > 1.0e-5f);
+  }
 }

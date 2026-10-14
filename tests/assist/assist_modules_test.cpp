@@ -12,10 +12,12 @@
 #include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <chrono>
 #include <cstdint>
 #include <map>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "arrangement/edit_command.h"
@@ -23,8 +25,11 @@
 #include "arrangement/edit_model.h"
 #include "arrangement/harmonic_timeline.h"
 #include "arrangement/project_view.h"
+#include "midi/assist/assist_budget_detail.h"
 #include "midi/assist/assist_registry.h"
+#include "midi/assist/clip_ppq.h"
 #include "midi/assist/composition_assist.h"
+#include "midi/assist/i_harmony_context.h"
 #include "midi/assist/i_note_generator.h"
 #include "midi/assist/modules/chord_tone_generator.h"
 #include "midi/assist/modules/diatonic_harmonizer.h"
@@ -35,8 +40,11 @@
 #include "midi/assist/modules/placement_judge.h"
 #include "midi/ump.h"
 #include "serialize/project_serializer.h"
+#include "util/json.h"
 
 namespace {
+
+namespace json = sonare::util::json;
 
 using sonare::arrangement::AddClip;
 using sonare::arrangement::AddTrack;
@@ -65,9 +73,12 @@ using sonare::midi::assist::AssistRequest;
 using sonare::midi::assist::AssistResult;
 using sonare::midi::assist::AssistStatus;
 using sonare::midi::assist::CandidateNote;
+using sonare::midi::assist::clip_content_to_timeline_ppq;
 using sonare::midi::assist::CompositionAssist;
+using sonare::midi::assist::IHarmonyContext;
 using sonare::midi::assist::INoteGenerator;
 using sonare::midi::assist::PlacementVerdict;
+using sonare::midi::assist::timeline_to_clip_content_ppq;
 using sonare::midi::assist::VoiceModel;
 using sonare::midi::assist::modules::ChordToneGenerator;
 using sonare::midi::assist::modules::ChordToneGeneratorConfig;
@@ -167,6 +178,18 @@ MidiClipEvent note_off_event(double ppq, uint8_t note, uint8_t group = 0, uint8_
   return MidiClipEvent{ppq, ump.words[0], ump.words[1], 0};
 }
 
+MidiClipEvent midi2_note_on_event(double ppq, uint8_t note, uint16_t velocity16, uint8_t group = 0,
+                                  uint8_t channel = 0) {
+  const sonare::midi::Ump ump = sonare::midi::make_midi2_note_on(group, channel, note, velocity16);
+  return MidiClipEvent{ppq, ump.words[0], ump.words[1], 0};
+}
+
+MidiClipEvent midi2_note_off_event(double ppq, uint8_t note, uint8_t group = 0,
+                                   uint8_t channel = 0) {
+  const sonare::midi::Ump ump = sonare::midi::make_midi2_note_off(group, channel, note, 0);
+  return MidiClipEvent{ppq, ump.words[0], ump.words[1], 0};
+}
+
 /// Four rising notes of the C major triad plus its octave, one per beat.
 MidiClipEventList c_major_line(uint8_t velocity = 100) {
   MidiClipEventList events;
@@ -183,6 +206,43 @@ void set_events(Fixture* f, MidiClipEventList events) {
   REQUIRE(f->history.apply(std::make_unique<ReplaceMidiClipEvents>(f->clip_id, std::move(events))));
 }
 
+void set_events(Fixture* f, ClipId clip_id, MidiClipEventList events) {
+  REQUIRE(f->history.apply(std::make_unique<ReplaceMidiClipEvents>(clip_id, std::move(events))));
+}
+
+void set_clip_position(Fixture* f, ClipId clip_id, double start_ppq, double source_offset_ppq) {
+  EditClip* clip = f->history.project().find_clip_mutable(clip_id);
+  REQUIRE(clip != nullptr);
+  clip->start_ppq = start_ppq;
+  clip->source_offset_ppq = source_offset_ppq;
+  clip->length_ppq = 4000.0;
+}
+
+ClipId add_midi_clip(Fixture* f) {
+  Track target_track;
+  target_track.name = "target";
+  target_track.kind = Track::Kind::kMidi;
+  auto add_track = std::make_unique<AddTrack>(target_track);
+  auto* add_track_ptr = add_track.get();
+  REQUIRE(f->history.apply(std::move(add_track)));
+
+  MidiSourceRef target_source;
+  target_source.name = "target-src";
+  auto attach = std::make_unique<AttachMidiSource>(target_source);
+  auto* attach_ptr = attach.get();
+  REQUIRE(f->history.apply(std::move(attach)));
+
+  EditClip target;
+  target.track_id = add_track_ptr->allocated_id();
+  target.source_id = attach_ptr->allocated_id();
+  target.start_ppq = 4000.0;
+  target.length_ppq = 4000.0;
+  auto add_clip = std::make_unique<AddClip>(target);
+  auto* add_clip_ptr = add_clip.get();
+  REQUIRE(f->history.apply(std::move(add_clip)));
+  return add_clip_ptr->allocated_id();
+}
+
 // ---------------------------------------------------------------------------
 // Reading a module's proposal back
 // ---------------------------------------------------------------------------
@@ -190,6 +250,8 @@ void set_events(Fixture* f, MidiClipEventList events) {
 struct EmittedNote {
   double on_ppq = 0.0;
   double off_ppq = 0.0;
+  uint8_t group = 0;
+  uint8_t channel = 0;
   uint8_t note = 0;
   uint8_t velocity = 0;
 };
@@ -204,7 +266,8 @@ const PatchMidiClip* sole_patch(const AssistResult& result) {
 /// Pairs the patch's note-ons with their note-offs in emission order. A patch
 /// whose events do not pair up fails here rather than being summarised away.
 std::vector<EmittedNote> emitted_notes(const PatchMidiClip& patch) {
-  std::map<uint8_t, EmittedNote> open;
+  using NoteKey = std::tuple<uint8_t, uint8_t, uint8_t>;
+  std::map<NoteKey, std::vector<EmittedNote>> open;
   std::vector<EmittedNote> notes;
   for (const MidiClipEvent& event : patch.patch().add) {
     sonare::midi::Ump ump;
@@ -213,15 +276,19 @@ std::vector<EmittedNote> emitted_notes(const PatchMidiClip& patch) {
     ump.word_count = sonare::midi::ump_word_count_for_word0(event.data0);
     ump.group = sonare::midi::ump_group_from_word0(event.data0);
     if (ump.is_note_off()) {
-      const auto it = open.find(ump.note_number());
+      const NoteKey key{ump.group, ump.channel(), ump.note_number()};
+      const auto it = open.find(key);
       REQUIRE(it != open.end());
-      EmittedNote note = it->second;
-      open.erase(it);
+      REQUIRE_FALSE(it->second.empty());
+      EmittedNote note = it->second.back();
+      it->second.pop_back();
+      if (it->second.empty()) open.erase(it);
       note.off_ppq = event.ppq;
       notes.push_back(note);
     } else {
       REQUIRE(ump.is_note_on());
-      open[ump.note_number()] = EmittedNote{event.ppq, 0.0, ump.note_number(), ump.data2_7bit()};
+      open[NoteKey{ump.group, ump.channel(), ump.note_number()}].push_back(EmittedNote{
+          event.ppq, 0.0, ump.group, ump.channel(), ump.note_number(), ump.data2_7bit()});
     }
   }
   CHECK(open.empty());
@@ -239,6 +306,18 @@ bool reason_mentions(const std::string& reason, const std::string& fragment) {
   return reason.find(fragment) != std::string::npos;
 }
 
+std::vector<bool> decision_acceptances(const AssistResult& result) {
+  const json::Value payload = json::parse_strict(result.candidate_payload);
+  REQUIRE(payload.contains("decisions"));
+  REQUIRE(payload["decisions"].is_array());
+  std::vector<bool> accepted;
+  for (const json::Value& decision : payload["decisions"].as_array()) {
+    REQUIRE(decision.contains("accepted"));
+    accepted.push_back(decision["accepted"].as_bool());
+  }
+  return accepted;
+}
+
 AssistRequest request_with(const std::string& params_json) {
   AssistRequest request;
   request.params_json = params_json;
@@ -247,6 +326,11 @@ AssistRequest request_with(const std::string& params_json) {
 
 std::string target_params(ClipId clip_id) {
   return "{\"target_clip_id\": " + std::to_string(clip_id) + "}";
+}
+
+std::string source_target_params(ClipId target_clip_id, ClipId source_clip_id) {
+  return "{\"target_clip_id\": " + std::to_string(target_clip_id) +
+         ", \"source_clip_id\": " + std::to_string(source_clip_id) + "}";
 }
 
 constexpr char kStubRefusal[] = "the host module will not answer this request";
@@ -287,6 +371,129 @@ class StubGenerator final : public INoteGenerator {
   AssistStatus status_;
 };
 
+/// A test-only oracle that records which timeline positions a harmonizer asks
+/// about while delegating the answer to the project's real timeline.
+class RecordingHarmony final : public IHarmonyContext {
+ public:
+  ChordSymbol chord_at(const ProjectView& view, double ppq) const override {
+    return delegate_.chord_at(view, ppq);
+  }
+
+  KeySegment key_at(const ProjectView& view, double ppq) const override {
+    return delegate_.key_at(view, ppq);
+  }
+
+  std::vector<uint8_t> scale_pitch_classes(const ProjectView& view, double ppq) const override {
+    scale_queries.push_back(ppq);
+    return delegate_.scale_pitch_classes(view, ppq);
+  }
+
+  mutable std::vector<double> scale_queries;
+
+ private:
+  TimelineHarmonyContext delegate_;
+};
+
+/// A test-only judge that records timeline onset and can move accepted notes.
+class RecordingJudge final : public sonare::midi::assist::INotePlacementJudge {
+ public:
+  PlacementVerdict judge(const ProjectView& view, const VoiceModel& voice,
+                         const CandidateNote& candidate) const override {
+    (void)view;
+    (void)voice;
+    seen_ppq.push_back(candidate.ppq);
+    PlacementVerdict verdict;
+    verdict.accepted = true;
+    verdict.adjusted = candidate;
+    verdict.adjusted.ppq += ppq_adjustment;
+    verdict.reason = "recorded timeline onset";
+    return verdict;
+  }
+
+  mutable std::vector<double> seen_ppq;
+  double ppq_adjustment = 0.0;
+};
+
+/// A deterministic judge script for the generator's per-voice acceptance
+/// diagnostic. Rejected voices still appear in the candidate payload, but only
+/// voices whose patch events were actually emitted make the chord accepted.
+class ScriptedJudge final : public sonare::midi::assist::INotePlacementJudge {
+ public:
+  explicit ScriptedJudge(std::vector<bool> accepted) noexcept : accepted_(std::move(accepted)) {}
+
+  PlacementVerdict judge(const ProjectView& view, const VoiceModel& voice,
+                         const CandidateNote& candidate) const override {
+    (void)view;
+    (void)voice;
+    const bool accepted = calls_ < accepted_.size() && accepted_[calls_++];
+    PlacementVerdict verdict;
+    verdict.accepted = accepted;
+    verdict.adjusted = candidate;
+    verdict.reason = accepted ? "script accepted" : "script rejected";
+    return verdict;
+  }
+
+ private:
+  std::vector<bool> accepted_;
+  mutable size_t calls_ = 0;
+};
+
+sonare::midi::assist::detail::AssistTimePoint g_assist_test_now;
+int g_assist_test_reads_until_expiry = -1;
+
+sonare::midi::assist::detail::AssistTimePoint assist_test_now() noexcept {
+  if (g_assist_test_reads_until_expiry == 0) {
+    g_assist_test_now += std::chrono::milliseconds(100);
+    g_assist_test_reads_until_expiry = -1;
+  } else if (g_assist_test_reads_until_expiry > 0) {
+    --g_assist_test_reads_until_expiry;
+  }
+  return g_assist_test_now;
+}
+
+/// A deterministic judge clock used to exercise the cooperative deadline at a
+/// candidate boundary without sleeping or depending on wall-clock scheduling.
+class AdvancingJudge final : public sonare::midi::assist::INotePlacementJudge {
+ public:
+  explicit AdvancingJudge(std::chrono::milliseconds advance) noexcept : advance_(advance) {}
+
+  PlacementVerdict judge(const ProjectView& view, const VoiceModel& voice,
+                         const CandidateNote& candidate) const override {
+    (void)view;
+    (void)voice;
+    g_assist_test_now += advance_;
+    PlacementVerdict verdict;
+    verdict.accepted = true;
+    verdict.adjusted = candidate;
+    verdict.reason = "clock-advancing test judge";
+    return verdict;
+  }
+
+ private:
+  std::chrono::milliseconds advance_;
+};
+
+class ArmDeadlineAfterFirstJudge final : public sonare::midi::assist::INotePlacementJudge {
+ public:
+  PlacementVerdict judge(const ProjectView& view, const VoiceModel& voice,
+                         const CandidateNote& candidate) const override {
+    (void)view;
+    (void)voice;
+    if (!armed_) {
+      armed_ = true;
+      g_assist_test_reads_until_expiry = 1;
+    }
+    PlacementVerdict verdict;
+    verdict.accepted = true;
+    verdict.adjusted = candidate;
+    verdict.reason = "deadline-arm test judge";
+    return verdict;
+  }
+
+ private:
+  mutable bool armed_ = false;
+};
+
 }  // namespace
 
 // ===========================================================================
@@ -321,6 +528,15 @@ TEST_CASE("TimelineHarmonyContext serves the project's own annotations", "[assis
   CHECK(harmony.key_at(view, 5000.0).mode == KeyMode::kUnknown);
   CHECK(harmony.chord_at(view, 5000.0).quality == ChordQuality::kUnknown);
   CHECK(harmony.scale_pitch_classes(view, 5000.0).empty());
+}
+
+TEST_CASE("clip PPQ transforms keep equal large origins finite", "[assist][modules]") {
+  EditClip clip;
+  clip.start_ppq = 1.0e308;
+  clip.source_offset_ppq = 1.0e308;
+
+  CHECK(clip_content_to_timeline_ppq(clip, 1.0e308) == 1.0e308);
+  CHECK(timeline_to_clip_content_ppq(clip, 1.0e308) == 1.0e308);
 }
 
 TEST_CASE("an unannotated project answers unknown everywhere", "[assist][modules]") {
@@ -911,6 +1127,48 @@ TEST_CASE("a refused request and an empty outcome are different statuses", "[ass
   CHECK_FALSE(empty.diagnostics.reason.empty());
 }
 
+TEST_CASE("missing assist clips are empty while a zero target is rejected", "[assist][modules]") {
+  Fixture f = make_fixture();
+  annotate(&f, {key_segment(0.0, 1920.0, 0, KeyMode::kMajor)},
+           {chord_symbol(0.0, 960.0, 0, ChordQuality::kMajor)});
+  set_events(&f, c_major_line());
+
+  const TimelineHarmonyContext harmony;
+  const AssistQueryContext queries{&harmony, nullptr, nullptr};
+  DiatonicHarmonizer harmonizer;
+  ChordToneGenerator generator;
+
+  const AssistResult missing_source =
+      harmonizer.derive(f.view(), request_with(source_target_params(f.clip_id, 4242)), {}, queries);
+  CHECK(missing_source.commands.empty());
+  CHECK(missing_source.diagnostics.status == AssistStatus::kEmpty);
+  CHECK(reason_mentions(missing_source.diagnostics.reason, "4242"));
+
+  const AssistResult missing_target =
+      harmonizer.derive(f.view(), request_with(source_target_params(4242, f.clip_id)), {}, queries);
+  CHECK(missing_target.commands.empty());
+  CHECK(missing_target.diagnostics.status == AssistStatus::kEmpty);
+  CHECK(reason_mentions(missing_target.diagnostics.reason, "4242"));
+
+  const AssistResult zero_harmonizer =
+      harmonizer.derive(f.view(), request_with(source_target_params(0, f.clip_id)), {}, queries);
+  CHECK(zero_harmonizer.commands.empty());
+  CHECK(zero_harmonizer.diagnostics.status == AssistStatus::kRejected);
+  CHECK(reason_mentions(zero_harmonizer.diagnostics.reason, "target_clip_id"));
+
+  const AssistResult missing_chord_target =
+      generator.generate(f.view(), request_with(target_params(4242)));
+  CHECK(missing_chord_target.commands.empty());
+  CHECK(missing_chord_target.diagnostics.status == AssistStatus::kEmpty);
+  CHECK(reason_mentions(missing_chord_target.diagnostics.reason, "4242"));
+
+  const AssistResult zero_chord_target =
+      generator.generate(f.view(), request_with(target_params(0)));
+  CHECK(zero_chord_target.commands.empty());
+  CHECK(zero_chord_target.diagnostics.status == AssistStatus::kRejected);
+  CHECK(reason_mentions(zero_chord_target.diagnostics.reason, "target_clip_id"));
+}
+
 TEST_CASE("a malformed params document is REFUSED, naming the field", "[assist][modules]") {
   Fixture f = make_fixture();
   annotate(&f, {key_segment(0.0, 1920.0, 0, KeyMode::kMajor)}, {});
@@ -1016,6 +1274,433 @@ TEST_CASE("the scope's PPQ bounds exclude the notes outside them", "[assist][mod
   CHECK(none.commands.empty());
   CHECK(none.diagnostics.status == AssistStatus::kEmpty);
   CHECK_FALSE(none.diagnostics.reason.empty());
+}
+
+TEST_CASE("the harmonizer keeps group/channel note stacks and protocol zero velocities distinct",
+          "[assist][modules]") {
+  Fixture f = make_fixture();
+  annotate(&f, {key_segment(0.0, 2000.0, 0, KeyMode::kMajor)}, {});
+
+  MidiClipEventList events;
+  // Same key: the second note-on is closed first, then the first one.
+  events.push_back(note_on_event(0.0, 60, 100, 1, 2));
+  events.push_back(note_on_event(120.0, 60, 80, 1, 2));
+  events.push_back(note_off_event(240.0, 60, 1, 2));
+  events.push_back(note_off_event(360.0, 60, 1, 2));
+  // Equal note numbers remain independent across group and channel.
+  events.push_back(note_on_event(0.0, 60, 90, 2, 2));
+  events.push_back(note_off_event(240.0, 60, 2, 2));
+  events.push_back(note_on_event(0.0, 60, 90, 1, 3));
+  events.push_back(note_off_event(240.0, 60, 1, 3));
+  // A wrong-group off cannot close the open note; both that note and a
+  // zero-length pair are intentionally absent from the derived patch.
+  events.push_back(note_on_event(0.0, 60, 90, 3, 4));
+  events.push_back(note_off_event(120.0, 60, 4, 4));
+  events.push_back(note_on_event(480.0, 60, 90, 3, 5));
+  events.push_back(note_off_event(480.0, 60, 3, 5));
+  set_events(&f, std::move(events));
+
+  const TimelineHarmonyContext harmony;
+  const AssistQueryContext queries{&harmony, nullptr, nullptr};
+  const AssistResult result =
+      DiatonicHarmonizer().derive(f.view(), request_with(target_params(f.clip_id)), {}, queries);
+
+  REQUIRE(result.diagnostics.status == AssistStatus::kOk);
+  const std::vector<EmittedNote> notes = emitted_notes(*sole_patch(result));
+  REQUIRE(notes.size() == 4u);
+  std::map<std::tuple<uint8_t, uint8_t, uint8_t>, std::vector<double>> durations;
+  for (const EmittedNote& note : notes) {
+    durations[{note.group, note.channel, note.note}].push_back(note.off_ppq - note.on_ppq);
+  }
+  REQUIRE(durations.size() == 3u);
+  CHECK(durations.find({3, 4, 57}) == durations.end());
+  std::sort(durations[{1, 2, 57}].begin(), durations[{1, 2, 57}].end());
+  CHECK(durations[{1, 2, 57}] == std::vector<double>{120.0, 360.0});
+  CHECK(durations[{2, 2, 57}] == std::vector<double>{240.0});
+  CHECK(durations[{1, 3, 57}] == std::vector<double>{240.0});
+}
+
+TEST_CASE("MIDI 1 zero note-on closes while MIDI 2 zero note-on remains open",
+          "[assist][modules]") {
+  Fixture f = make_fixture();
+  annotate(&f, {key_segment(0.0, 1200.0, 0, KeyMode::kMajor)}, {});
+  MidiClipEventList events;
+  events.push_back(note_on_event(0.0, 60, 100, 1, 2));
+  events.push_back(note_on_event(240.0, 60, 0, 1, 2));
+  events.push_back(midi2_note_on_event(480.0, 64, 0, 3, 4));
+  events.push_back(midi2_note_off_event(720.0, 64, 3, 4));
+  set_events(&f, std::move(events));
+
+  const TimelineHarmonyContext harmony;
+  const AssistQueryContext queries{&harmony, nullptr, nullptr};
+  const AssistResult result =
+      DiatonicHarmonizer().derive(f.view(), request_with(target_params(f.clip_id)), {}, queries);
+
+  REQUIRE(result.diagnostics.status == AssistStatus::kOk);
+  const std::vector<EmittedNote> notes = emitted_notes(*sole_patch(result));
+  REQUIRE(notes.size() == 2u);
+  CHECK(note_numbers(notes) == std::vector<int>{57, 60});
+  CHECK(notes[0].off_ppq - notes[0].on_ppq == 240.0);
+  CHECK(notes[1].off_ppq - notes[1].on_ppq == 240.0);
+
+  // The pairing policy must not convert the source packet or its protocol
+  // velocity before the harmonizer's existing 7-bit scaling. The output is
+  // deliberately MIDI 1, but group/channel, velocity, and both words are
+  // pinned to the derived values for each non-overlapping source note.
+  const sonare::midi::Ump c_on = sonare::midi::make_midi1_note_on(1, 2, 57, 85);
+  const sonare::midi::Ump c_off = sonare::midi::make_midi1_note_off(1, 2, 57, 0);
+  const sonare::midi::Ump e_on = sonare::midi::make_midi1_note_on(3, 4, 60, 77);
+  const sonare::midi::Ump e_off = sonare::midi::make_midi1_note_off(3, 4, 60, 0);
+  CHECK(sole_patch(result)->patch().add ==
+        MidiClipEventList{MidiClipEvent{0.0, c_on.words[0], c_on.words[1], 0},
+                          MidiClipEvent{240.0, c_off.words[0], c_off.words[1], 0},
+                          MidiClipEvent{480.0, e_on.words[0], e_on.words[1], 0},
+                          MidiClipEvent{720.0, e_off.words[0], e_off.words[1], 0}});
+}
+
+TEST_CASE("scope filtering happens before the harmonizer iteration budget", "[assist][modules]") {
+  Fixture f = make_fixture();
+  annotate(&f, {key_segment(0.0, 2400.0, 0, KeyMode::kMajor)}, {});
+  MidiClipEventList events;
+  for (int i = 0; i < 5; ++i) {
+    events.push_back(note_on_event(i * 100.0, static_cast<uint8_t>(60 + i), 90));
+    events.push_back(note_off_event(i * 100.0 + 40.0, static_cast<uint8_t>(60 + i)));
+  }
+  events.push_back(note_on_event(1000.0, 67, 90));
+  events.push_back(note_off_event(1040.0, 67));
+  events.push_back(note_on_event(1200.0, 69, 90));
+  events.push_back(note_off_event(1240.0, 69));
+  set_events(&f, std::move(events));
+
+  AssistRequest request = request_with(target_params(f.clip_id));
+  request.scope.start_ppq = 1000.0;
+  request.scope.end_ppq = 1300.0;
+  request.budget.max_iterations = 1;
+  const TimelineHarmonyContext harmony;
+  const AssistQueryContext queries{&harmony, nullptr, nullptr};
+  const AssistResult result = DiatonicHarmonizer().derive(f.view(), request, {}, queries);
+
+  CHECK(result.diagnostics.status == AssistStatus::kBudgetTruncated);
+  CHECK(result.diagnostics.iterations_consumed == 1u);
+  const std::vector<EmittedNote> partial = emitted_notes(*sole_patch(result));
+  REQUIRE(partial.size() == 1u);
+  CHECK(partial[0].on_ppq == 1000.0);
+}
+
+TEST_CASE("scope crossing preserves the LIFO closing note outside the scope", "[assist][modules]") {
+  Fixture f = make_fixture();
+  annotate(&f, {key_segment(0.0, 500.0, 0, KeyMode::kMajor)}, {});
+  MidiClipEventList events;
+  events.push_back(note_on_event(0.0, 60, 90));
+  events.push_back(note_on_event(100.0, 60, 90));
+  events.push_back(note_on_event(200.0, 60, 90));
+  events.push_back(note_off_event(220.0, 60));
+  events.push_back(note_off_event(240.0, 60));
+  events.push_back(note_off_event(300.0, 60));
+  set_events(&f, std::move(events));
+
+  AssistRequest request = request_with(target_params(f.clip_id));
+  request.scope.start_ppq = 100.0;
+  request.scope.end_ppq = 200.0;
+  const TimelineHarmonyContext harmony;
+  const AssistQueryContext queries{&harmony, nullptr, nullptr};
+  const AssistResult result = DiatonicHarmonizer().derive(f.view(), request, {}, queries);
+
+  REQUIRE(result.diagnostics.status == AssistStatus::kOk);
+  const std::vector<EmittedNote> notes = emitted_notes(*sole_patch(result));
+  REQUIRE(notes.size() == 1u);
+  CHECK(notes[0].on_ppq == 100.0);
+  CHECK(notes[0].off_ppq == 240.0);
+}
+
+TEST_CASE("harmonizer orders candidates by onset then note group channel and end",
+          "[assist][modules]") {
+  Fixture f = make_fixture();
+  annotate(&f, {key_segment(0.0, 1000.0, 0, KeyMode::kMajor)}, {});
+
+  // Completion order is E4 first and C4 second; onset decides.
+  MidiClipEventList unique_events;
+  unique_events.push_back(note_on_event(0.0, 60, 100));
+  unique_events.push_back(note_on_event(100.0, 64, 100));
+  unique_events.push_back(note_off_event(150.0, 64));
+  unique_events.push_back(note_off_event(300.0, 60));
+  set_events(&f, std::move(unique_events));
+
+  const TimelineHarmonyContext harmony;
+  const AssistQueryContext queries{&harmony, nullptr, nullptr};
+  const AssistResult unique =
+      DiatonicHarmonizer().derive(f.view(), request_with(target_params(f.clip_id)), {}, queries);
+  REQUIRE(unique.diagnostics.status == AssistStatus::kOk);
+  const PatchMidiClip* unique_patch = sole_patch(unique);
+  const sonare::midi::Ump c_on = sonare::midi::make_midi1_note_on(0, 0, 57, 85);
+  const sonare::midi::Ump c_off = sonare::midi::make_midi1_note_off(0, 0, 57, 0);
+  const sonare::midi::Ump e_on = sonare::midi::make_midi1_note_on(0, 0, 60, 85);
+  const sonare::midi::Ump e_off = sonare::midi::make_midi1_note_off(0, 0, 60, 0);
+  CHECK(unique_patch->patch().add ==
+        MidiClipEventList{MidiClipEvent{0.0, c_on.words[0], c_on.words[1], 0},
+                          MidiClipEvent{300.0, c_off.words[0], c_off.words[1], 0},
+                          MidiClipEvent{100.0, e_on.words[0], e_on.words[1], 0},
+                          MidiClipEvent{150.0, e_off.words[0], e_off.words[1], 0}});
+
+  // Same onset and note: group, then channel, then end decide. Completion order
+  // is the reverse of the expected order, and one outside note sits before the scope.
+  MidiClipEventList tie_events;
+  tie_events.push_back(note_on_event(0.0, 62, 90, 3, 0));
+  tie_events.push_back(note_off_event(20.0, 62, 3, 0));
+  tie_events.push_back(note_on_event(100.0, 60, 90, 1, 2));
+  tie_events.push_back(note_on_event(100.0, 60, 90, 1, 2));
+  tie_events.push_back(note_on_event(100.0, 60, 90, 1, 0));
+  tie_events.push_back(note_on_event(100.0, 60, 90, 0, 5));
+  tie_events.push_back(note_on_event(100.0, 60, 90, 0, 3));
+  tie_events.push_back(note_off_event(110.0, 60, 1, 2));
+  tie_events.push_back(note_off_event(120.0, 60, 1, 2));
+  tie_events.push_back(note_off_event(150.0, 60, 1, 0));
+  tie_events.push_back(note_off_event(180.0, 60, 0, 5));
+  tie_events.push_back(note_off_event(190.0, 60, 0, 3));
+  set_events(&f, std::move(tie_events));
+  AssistRequest scoped = request_with(target_params(f.clip_id));
+  scoped.scope.start_ppq = 100.0;
+  scoped.scope.end_ppq = 200.0;
+  const AssistResult tie = DiatonicHarmonizer().derive(f.view(), scoped, {}, queries);
+  REQUIRE(tie.diagnostics.status == AssistStatus::kOk);
+
+  struct Expected {
+    uint8_t group;
+    uint8_t channel;
+    double end;
+  };
+  const Expected order[] = {
+      {0, 3, 190.0}, {0, 5, 180.0}, {1, 0, 150.0}, {1, 2, 110.0}, {1, 2, 120.0}};
+  MidiClipEventList expected_tie;
+  for (const Expected& e : order) {
+    const sonare::midi::Ump on = sonare::midi::make_midi1_note_on(e.group, e.channel, 57, 77);
+    const sonare::midi::Ump off = sonare::midi::make_midi1_note_off(e.group, e.channel, 57, 0);
+    expected_tie.push_back(MidiClipEvent{100.0, on.words[0], on.words[1], 0});
+    expected_tie.push_back(MidiClipEvent{e.end, off.words[0], off.words[1], 0});
+  }
+  CHECK(sole_patch(tie)->patch().add == expected_tie);
+}
+
+TEST_CASE("built-in modules keep a deterministic partial patch at a deadline",
+          "[assist][modules]") {
+  Fixture f = make_fixture();
+  annotate(&f, {key_segment(0.0, 1920.0, 0, KeyMode::kMajor)},
+           {chord_symbol(0.0, 960.0, 0, ChordQuality::kMajor)});
+  set_events(&f, c_major_line());
+
+  const TimelineHarmonyContext harmony;
+  AdvancingJudge judge(std::chrono::milliseconds(3));
+  const AssistQueryContext queries{&harmony, nullptr, &judge};
+  AssistRequest harmonizer_request = request_with(target_params(f.clip_id));
+  harmonizer_request.budget.max_time_ms = 5;
+  AssistRequest chord_request = harmonizer_request;
+
+  g_assist_test_now = {};
+  {
+    sonare::midi::assist::detail::NowFnScope clock(&assist_test_now);
+    const AssistResult result =
+        DiatonicHarmonizer().derive(f.view(), harmonizer_request, {}, queries);
+    CHECK(result.diagnostics.status == AssistStatus::kBudgetTruncated);
+    CHECK(result.diagnostics.iterations_consumed == 2u);
+    REQUIRE(result.commands.size() == 1u);
+    CHECK(emitted_notes(*sole_patch(result)).size() == 1u);
+    const json::Value payload = json::parse_strict(result.candidate_payload);
+    REQUIRE(payload.contains("decisions"));
+    CHECK(payload["decisions"].as_array().size() <= result.diagnostics.iterations_consumed);
+  }
+
+  g_assist_test_now = {};
+  {
+    sonare::midi::assist::detail::NowFnScope clock(&assist_test_now);
+    const AssistResult result =
+        ChordToneGenerator(nullptr, &judge).generate(f.view(), chord_request);
+    CHECK(result.diagnostics.status == AssistStatus::kBudgetTruncated);
+    CHECK(result.diagnostics.iterations_consumed == 1u);
+    REQUIRE(result.commands.size() == 1u);
+    CHECK(emitted_notes(*sole_patch(result)).size() == 1u);
+    const json::Value payload = json::parse_strict(result.candidate_payload);
+    REQUIRE(payload.contains("decisions"));
+    CHECK(payload["decisions"].as_array().size() <= result.diagnostics.iterations_consumed);
+  }
+}
+
+TEST_CASE("built-in modules prefer iteration when the next candidate meets both caps",
+          "[assist][modules]") {
+  Fixture f = make_fixture();
+  annotate(&f, {key_segment(0.0, 1920.0, 0, KeyMode::kMajor)},
+           {chord_symbol(0.0, 960.0, 0, ChordQuality::kMajor),
+            chord_symbol(960.0, 1920.0, 7, ChordQuality::kMajor)});
+  set_events(&f, c_major_line());
+
+  AssistRequest request = request_with(target_params(f.clip_id));
+  request.budget.max_iterations = 1;
+  request.budget.max_time_ms = 5;
+
+  const TimelineHarmonyContext harmony;
+  ArmDeadlineAfterFirstJudge judge;
+  const AssistQueryContext queries{&harmony, nullptr, &judge};
+
+  g_assist_test_now = {};
+  g_assist_test_reads_until_expiry = -1;
+  {
+    sonare::midi::assist::detail::NowFnScope clock(&assist_test_now);
+    const AssistResult result = DiatonicHarmonizer().derive(f.view(), request, {}, queries);
+    CHECK(result.diagnostics.status == AssistStatus::kBudgetTruncated);
+    CHECK(result.diagnostics.reason.find("iteration budget") != std::string::npos);
+    CHECK(result.diagnostics.iterations_consumed == 1u);
+    REQUIRE(result.commands.size() == 1u);
+    CHECK(emitted_notes(*sole_patch(result)).size() == 1u);
+    const json::Value payload = json::parse_strict(result.candidate_payload);
+    REQUIRE(payload.contains("decisions"));
+    CHECK(payload["decisions"].as_array().size() <= result.diagnostics.iterations_consumed);
+  }
+
+  g_assist_test_now = {};
+  g_assist_test_reads_until_expiry = -1;
+  ChordToneGeneratorConfig bass;
+  bass.voice_count = 1;
+  ArmDeadlineAfterFirstJudge chord_judge;
+  {
+    sonare::midi::assist::detail::NowFnScope clock(&assist_test_now);
+    const AssistResult result =
+        ChordToneGenerator(nullptr, &chord_judge, bass).generate(f.view(), request);
+    CHECK(result.diagnostics.status == AssistStatus::kBudgetTruncated);
+    CHECK(result.diagnostics.reason.find("iteration budget") != std::string::npos);
+    CHECK(result.diagnostics.iterations_consumed == 1u);
+    REQUIRE(result.commands.size() == 1u);
+    CHECK(emitted_notes(*sole_patch(result)).size() == 1u);
+    const json::Value payload = json::parse_strict(result.candidate_payload);
+    REQUIRE(payload.contains("decisions"));
+    CHECK(payload["decisions"].as_array().size() <= result.diagnostics.iterations_consumed);
+  }
+
+  // Consuming the exact final candidate is complete when no deadline is
+  // active: there is no unprocessed work for the iteration cap to truncate.
+  AssistRequest exact = request_with(target_params(f.clip_id));
+  exact.budget.max_iterations = 4;
+  const AssistResult exact_harmonizer = DiatonicHarmonizer().derive(
+      f.view(), exact, {}, AssistQueryContext{&harmony, nullptr, nullptr});
+  CHECK(exact_harmonizer.diagnostics.status == AssistStatus::kOk);
+  CHECK(exact_harmonizer.diagnostics.iterations_consumed == 4u);
+
+  exact.budget.max_iterations = 2;
+  const AssistResult exact_chord =
+      ChordToneGenerator(nullptr, nullptr, bass).generate(f.view(), exact);
+  CHECK(exact_chord.diagnostics.status == AssistStatus::kOk);
+  CHECK(exact_chord.diagnostics.iterations_consumed == 2u);
+}
+
+TEST_CASE("the harmonizer scopes source content on the timeline and writes target content",
+          "[assist][modules]") {
+  struct ClipPosition {
+    double start_ppq;
+    double source_offset_ppq;
+  };
+  const ClipPosition positions[] = {{0.0, 0.0}, {0.0, 120.0}, {1440.0, 0.0}, {1440.0, 120.0}};
+  DiatonicHarmonizer harmonizer;
+
+  for (const ClipPosition source_position : positions) {
+    for (const ClipPosition target_position : positions) {
+      Fixture f = make_fixture();
+      const ClipId target_clip_id = add_midi_clip(&f);
+      set_clip_position(&f, f.clip_id, source_position.start_ppq,
+                        source_position.source_offset_ppq);
+      set_clip_position(&f, target_clip_id, target_position.start_ppq,
+                        target_position.source_offset_ppq);
+
+      annotate(&f, {key_segment(0.0, 4000.0, 0, KeyMode::kMajor)}, {});
+      const double source_content_ppq =
+          source_position.source_offset_ppq + 1920.0 - source_position.start_ppq;
+      MidiClipEventList events;
+      events.push_back(note_on_event(source_content_ppq, 60, 100));
+      events.push_back(note_off_event(source_content_ppq + 240.0, 60));
+      set_events(&f, f.clip_id, std::move(events));
+
+      const TimelineHarmonyContext harmony;
+      const RangeScaleJudge judge(&harmony, nullptr);
+      const AssistQueryContext queries{&harmony, nullptr, &judge};
+      AssistRequest request = request_with(source_target_params(target_clip_id, f.clip_id));
+      request.scope.start_ppq = 1920.0;
+      request.scope.end_ppq = 1921.0;
+      const AssistResult result = harmonizer.derive(f.view(), request, {}, queries);
+
+      INFO("source start=" << source_position.start_ppq
+                           << ", source offset=" << source_position.source_offset_ppq
+                           << ", target start=" << target_position.start_ppq
+                           << ", target offset=" << target_position.source_offset_ppq);
+      REQUIRE(result.diagnostics.status == AssistStatus::kOk);
+      const std::vector<EmittedNote> notes = emitted_notes(*sole_patch(result));
+      REQUIRE(notes.size() == 1u);
+      const double expected_on_content =
+          target_position.source_offset_ppq + 1920.0 - target_position.start_ppq;
+      const double expected_off_content = expected_on_content + 240.0;
+      CHECK(notes[0].on_ppq == Catch::Approx(expected_on_content));
+      CHECK(notes[0].off_ppq == Catch::Approx(expected_off_content));
+      CHECK(notes[0].on_ppq + target_position.start_ppq - target_position.source_offset_ppq ==
+            Catch::Approx(1920.0));
+      CHECK(notes[0].off_ppq - notes[0].on_ppq == Catch::Approx(240.0));
+      const json::Value payload = json::parse_strict(result.candidate_payload);
+      REQUIRE(payload.contains("decisions"));
+      REQUIRE(payload["decisions"].is_array());
+      REQUIRE(payload["decisions"].as_array().size() == 1u);
+      CHECK(payload["decisions"][0]["sourcePpq"].as_number() == Catch::Approx(source_content_ppq));
+    }
+  }
+}
+
+TEST_CASE("the harmonizer sends timeline PPQ to harmony and judge before target conversion",
+          "[assist][modules]") {
+  Fixture f = make_fixture();
+  const ClipId target_clip_id = add_midi_clip(&f);
+  set_clip_position(&f, f.clip_id, 1440.0, 120.0);
+  set_clip_position(&f, target_clip_id, 1440.0, 0.0);
+  // The raw source-content position is 600, while the sounding timeline
+  // position is 1920. Distinct keys make the coordinate choice observable.
+  annotate(&f,
+           {key_segment(0.0, 1000.0, 2, KeyMode::kMajor),
+            key_segment(1000.0, 3000.0, 0, KeyMode::kMajor)},
+           {});
+  MidiClipEventList events;
+  events.push_back(note_on_event(600.0, 60, 100));
+  events.push_back(note_off_event(840.0, 60));
+  set_events(&f, f.clip_id, std::move(events));
+
+  RecordingHarmony harmony;
+  RecordingJudge judge;
+  judge.ppq_adjustment = 60.0;
+  const AssistQueryContext queries{&harmony, nullptr, &judge};
+  AssistRequest request = request_with(source_target_params(target_clip_id, f.clip_id));
+  request.scope.start_ppq = 1920.0;
+  request.scope.end_ppq = 1921.0;
+  const AssistResult result = DiatonicHarmonizer().derive(f.view(), request, {}, queries);
+
+  REQUIRE(result.diagnostics.status == AssistStatus::kOk);
+  REQUIRE(harmony.scale_queries.size() == 1u);
+  REQUIRE(judge.seen_ppq.size() == 1u);
+  CHECK(harmony.scale_queries[0] == Catch::Approx(1920.0));
+  CHECK(judge.seen_ppq[0] == Catch::Approx(1920.0));
+  const std::vector<EmittedNote> notes = emitted_notes(*sole_patch(result));
+  REQUIRE(notes.size() == 1u);
+  // The key is read at the timeline position (C major), not the content
+  // position, where D major at 600 would give a different third.
+  CHECK(notes[0].note == 57);
+  CHECK(notes[0].on_ppq == Catch::Approx(540.0));
+  CHECK(notes[0].off_ppq == Catch::Approx(780.0));
+  CHECK(notes[0].on_ppq + 1440.0 == Catch::Approx(1980.0));
+
+  // A scope around the raw source-content value must not select the note: the
+  // same source is only in scope at its translated timeline position above.
+  RecordingHarmony raw_scope_harmony;
+  RecordingJudge raw_scope_judge;
+  AssistRequest raw_scope = request_with(source_target_params(target_clip_id, f.clip_id));
+  raw_scope.scope.start_ppq = 600.0;
+  raw_scope.scope.end_ppq = 601.0;
+  const AssistResult raw_scope_result = DiatonicHarmonizer().derive(
+      f.view(), raw_scope, {}, AssistQueryContext{&raw_scope_harmony, nullptr, &raw_scope_judge});
+  CHECK(raw_scope_result.commands.empty());
+  CHECK(raw_scope_result.diagnostics.status == AssistStatus::kEmpty);
+  CHECK(raw_scope_harmony.scale_queries.empty());
+  CHECK(raw_scope_judge.seen_ppq.empty());
 }
 
 TEST_CASE("a note with no key under it is dropped with its reason recorded", "[assist][modules]") {
@@ -1259,6 +1944,60 @@ TEST_CASE("the chord tone generator voices each chord ascending from the low not
   for (const EmittedNote& note : notes) CHECK(note.note >= 36);
 }
 
+TEST_CASE("the chord tone generator writes target content for shifted clips", "[assist][modules]") {
+  struct ClipPosition {
+    double start_ppq;
+    double source_offset_ppq;
+  };
+  const ClipPosition positions[] = {{0.0, 0.0}, {0.0, 120.0}, {1440.0, 0.0}, {1440.0, 120.0}};
+
+  for (const ClipPosition position : positions) {
+    Fixture f = make_fixture();
+    set_clip_position(&f, f.clip_id, position.start_ppq, position.source_offset_ppq);
+    annotate(&f, {}, {chord_symbol(1920.0, 2160.0, 0, ChordQuality::kMajor)});
+
+    const AssistResult result =
+        ChordToneGenerator().generate(f.view(), request_with(target_params(f.clip_id)));
+    INFO("target start=" << position.start_ppq << ", target offset=" << position.source_offset_ppq);
+    REQUIRE(result.diagnostics.status == AssistStatus::kOk);
+    const std::vector<EmittedNote> notes = emitted_notes(*sole_patch(result));
+    REQUIRE(notes.size() == 3u);
+    const double expected_on = position.source_offset_ppq + 1920.0 - position.start_ppq;
+    const double expected_off = expected_on + 240.0;
+    for (const EmittedNote& note : notes) {
+      CHECK(note.on_ppq == Catch::Approx(expected_on));
+      CHECK(note.off_ppq == Catch::Approx(expected_off));
+      CHECK(note.on_ppq + position.start_ppq - position.source_offset_ppq == Catch::Approx(1920.0));
+    }
+    const json::Value payload = json::parse_strict(result.candidate_payload);
+    REQUIRE(payload.contains("decisions"));
+    REQUIRE(payload["decisions"].is_array());
+    REQUIRE(payload["decisions"].as_array().size() == 1u);
+    CHECK(payload["decisions"][0]["startPpq"].as_number() == Catch::Approx(1920.0));
+  }
+}
+
+TEST_CASE("the chord target conversion follows an adjusted judge onset", "[assist][modules]") {
+  Fixture f = make_fixture();
+  set_clip_position(&f, f.clip_id, 1440.0, 120.0);
+  annotate(&f, {}, {chord_symbol(1920.0, 2160.0, 0, ChordQuality::kMajor)});
+
+  RecordingJudge judge;
+  judge.ppq_adjustment = 60.0;
+  ChordToneGenerator generator(nullptr, &judge);
+  const AssistResult result = generator.generate(f.view(), request_with(target_params(f.clip_id)));
+
+  REQUIRE(result.diagnostics.status == AssistStatus::kOk);
+  REQUIRE(judge.seen_ppq.size() == 3u);
+  for (const double ppq : judge.seen_ppq) CHECK(ppq == Catch::Approx(1920.0));
+  const std::vector<EmittedNote> notes = emitted_notes(*sole_patch(result));
+  REQUIRE(notes.size() == 3u);
+  for (const EmittedNote& note : notes) {
+    CHECK(note.on_ppq == Catch::Approx(660.0));
+    CHECK(note.off_ppq == Catch::Approx(900.0));
+  }
+}
+
 TEST_CASE("voice_count and the voice range decide how a chord is voiced", "[assist][modules]") {
   Fixture f = make_fixture();
   annotate(&f, {}, {chord_symbol(0.0, 960.0, 0, ChordQuality::kMajor)});
@@ -1393,6 +2132,127 @@ TEST_CASE("the chord tone generator honours the scope and the iteration budget",
   CHECK(truncated.diagnostics.status == AssistStatus::kBudgetTruncated);
   CHECK(truncated.diagnostics.iterations_consumed == 1u);
   CHECK(note_numbers(emitted_notes(*sole_patch(truncated))) == std::vector<int>{36, 40, 43});
+}
+
+TEST_CASE("chord acceptance reflects emitted patch notes rather than rejected voices",
+          "[assist][modules]") {
+  Fixture f = make_fixture();
+  annotate(&f, {}, {chord_symbol(0.0, 960.0, 0, ChordQuality::kMajor)});
+  const AssistRequest request = request_with(target_params(f.clip_id));
+
+  ScriptedJudge all_rejected({false, false, false});
+  const AssistResult rejected =
+      ChordToneGenerator(nullptr, &all_rejected).generate(f.view(), request);
+  CHECK(rejected.diagnostics.status == AssistStatus::kEmpty);
+  CHECK(rejected.commands.empty());
+  CHECK(decision_acceptances(rejected) == std::vector<bool>{false});
+
+  ScriptedJudge partly_accepted({false, true, false});
+  const AssistResult partial =
+      ChordToneGenerator(nullptr, &partly_accepted).generate(f.view(), request);
+  CHECK(partial.diagnostics.status == AssistStatus::kOk);
+  REQUIRE(partial.commands.size() == 1u);
+  CHECK(emitted_notes(*sole_patch(partial)).size() == 1u);
+  CHECK(decision_acceptances(partial) == std::vector<bool>{true});
+
+  ScriptedJudge all_accepted({true, true, true});
+  const AssistResult accepted =
+      ChordToneGenerator(nullptr, &all_accepted).generate(f.view(), request);
+  CHECK(accepted.diagnostics.status == AssistStatus::kOk);
+  REQUIRE(accepted.commands.size() == 1u);
+  CHECK(emitted_notes(*sole_patch(accepted)).size() == 3u);
+  CHECK(decision_acceptances(accepted) == std::vector<bool>{true});
+
+  // A later chord must derive its own flag from its own patch delta. This
+  // catches an implementation that turns every later decision true merely
+  // because an earlier chord already emitted notes.
+  Fixture mixed_fixture = make_fixture();
+  annotate(&mixed_fixture, {},
+           {chord_symbol(0.0, 960.0, 0, ChordQuality::kMajor),
+            chord_symbol(960.0, 1920.0, 7, ChordQuality::kMajor)});
+  ScriptedJudge first_only({true, true, true, false, false, false});
+  const AssistResult mixed =
+      ChordToneGenerator(nullptr, &first_only)
+          .generate(mixed_fixture.view(), request_with(target_params(mixed_fixture.clip_id)));
+  CHECK(mixed.diagnostics.status == AssistStatus::kOk);
+  REQUIRE(mixed.commands.size() == 1u);
+  const std::vector<EmittedNote> mixed_notes = emitted_notes(*sole_patch(mixed));
+  REQUIRE(mixed_notes.size() == 3u);
+  CHECK(decision_acceptances(mixed) == std::vector<bool>{true, false});
+  for (const EmittedNote& note : mixed_notes) CHECK(note.on_ppq == 0.0);
+
+  ChordSymbol unusable;
+  unusable.start_ppq = 0.0;
+  unusable.end_ppq = 960.0;
+  annotate(&f, {}, {unusable});
+  const AssistResult no_usable_tones = ChordToneGenerator().generate(f.view(), request);
+  CHECK(no_usable_tones.diagnostics.status == AssistStatus::kEmpty);
+  CHECK(no_usable_tones.commands.empty());
+  CHECK(decision_acceptances(no_usable_tones) == std::vector<bool>{false});
+}
+
+TEST_CASE("chord acceptance distinguishes deadline before adoption from partial adoption",
+          "[assist][modules]") {
+  Fixture f = make_fixture();
+  annotate(&f, {}, {chord_symbol(0.0, 960.0, 0, ChordQuality::kMajor)});
+
+  AssistRequest before_adoption = request_with(target_params(f.clip_id));
+  before_adoption.budget.max_time_ms = 1;
+  AdvancingJudge before_judge(std::chrono::milliseconds(3));
+  g_assist_test_now = {};
+  g_assist_test_reads_until_expiry = -1;
+  AssistResult before;
+  {
+    sonare::midi::assist::detail::NowFnScope clock(&assist_test_now);
+    before = ChordToneGenerator(nullptr, &before_judge).generate(f.view(), before_adoption);
+  }
+  CHECK(before.diagnostics.status == AssistStatus::kBudgetTruncated);
+  CHECK(before.diagnostics.iterations_consumed == 1u);
+  CHECK(before.commands.empty());
+  CHECK(decision_acceptances(before) == std::vector<bool>{false});
+
+  AssistRequest partial_adoption = request_with(target_params(f.clip_id));
+  partial_adoption.budget.max_time_ms = 5;
+  AdvancingJudge partial_judge(std::chrono::milliseconds(3));
+  g_assist_test_now = {};
+  g_assist_test_reads_until_expiry = -1;
+  AssistResult partial;
+  {
+    sonare::midi::assist::detail::NowFnScope clock(&assist_test_now);
+    partial = ChordToneGenerator(nullptr, &partial_judge).generate(f.view(), partial_adoption);
+  }
+  CHECK(partial.diagnostics.status == AssistStatus::kBudgetTruncated);
+  CHECK(partial.diagnostics.iterations_consumed == 1u);
+  REQUIRE(partial.commands.size() == 1u);
+  CHECK(emitted_notes(*sole_patch(partial)).size() == 1u);
+  CHECK(decision_acceptances(partial) == std::vector<bool>{true});
+}
+
+TEST_CASE("the chord budget ignores zero-length and scope-outside chords", "[assist][modules]") {
+  Fixture f = make_fixture();
+  annotate(&f, {},
+           {chord_symbol(0.0, 240.0, 7, ChordQuality::kMajor),
+            chord_symbol(240.0, 240.0, 5, ChordQuality::kMajor),
+            chord_symbol(480.0, 960.0, 0, ChordQuality::kMajor),
+            chord_symbol(960.0, 1440.0, 7, ChordQuality::kMajor)});
+
+  AssistRequest request = request_with(target_params(f.clip_id));
+  request.scope.start_ppq = 480.0;
+  request.scope.end_ppq = 1920.0;
+  request.budget.max_iterations = 1;
+  ChordToneGeneratorConfig one_voice;
+  one_voice.voice_count = 1;
+
+  const AssistResult result =
+      ChordToneGenerator(nullptr, nullptr, one_voice).generate(f.view(), request);
+  CHECK(result.diagnostics.status == AssistStatus::kBudgetTruncated);
+  CHECK(result.diagnostics.iterations_consumed == 1u);
+  REQUIRE(result.commands.size() == 1u);
+  const std::vector<EmittedNote> notes = emitted_notes(*sole_patch(result));
+  REQUIRE(notes.size() == 1u);
+  CHECK(notes[0].on_ppq == 480.0);
+  CHECK(notes[0].off_ppq == 960.0);
+  CHECK(notes[0].note == 36);
 }
 
 TEST_CASE("an injected harmony context reaches the generator's own placement rules",

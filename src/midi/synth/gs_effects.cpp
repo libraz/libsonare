@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstring>
 
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/tunable.h"
 
@@ -72,14 +73,6 @@ float reverb_predelay_samples(float milliseconds, double sample_rate) noexcept {
   return std::clamp(samples, 0.0f, 4.0f * static_cast<float>(sample_rate));
 }
 
-double delay_feedback_magnitude(float feedback) noexcept {
-  return std::fabs(std::clamp(static_cast<double>(feedback), -0.9, 0.9));
-}
-
-double delay_time_milliseconds(float delay_time_ms) noexcept {
-  return std::max(1.0, static_cast<double>(delay_time_ms));
-}
-
 /// RT60 seconds -> tank feedback, the inverse of the ring-out bound below:
 /// -60 dB after t / kTankPassSeconds passes.
 float tank_decay_from_rt60(float seconds) noexcept {
@@ -132,8 +125,8 @@ GsEffectBus::GsEffectBus(const GsEffectsConfig& config)
       delay_(delay_config(config)) {
   reverb_delay_predelay_ms_ = config.reverb_predelay_ms;
   reverb_panning_delay_predelay_ms_ = config.reverb_predelay_ms;
-  reset_delay_history();
-  reset_reverb_history();
+  reset_reverb_predelay_history();
+  reset_child_tail_history();
   reset_reverb_activation();
 }
 
@@ -154,12 +147,27 @@ void GsEffectBus::prepare(double sample_rate) {
   reverb_panning_delay_.prepare(sample_rate_, kBlockFrames);
   chorus_.prepare(sample_rate_, kBlockFrames);
   delay_.prepare(sample_rate_, kBlockFrames);
-  reset_delay_history();
-  reset_reverb_history();
+  reset_reverb_predelay_history();
+  reset_child_tail_history();
   reset_reverb_activation();
 }
 
 void GsEffectBus::set_config(const GsEffectsConfig& config) noexcept {
+  const auto retain_child_tail = [this](const auto& child, double& retained_seconds) noexcept {
+    if (!(sample_rate_ > 0.0)) return;
+    retained_seconds =
+        std::max(retained_seconds, static_cast<double>(std::max(0, child.tail_samples())) /
+                                       static_cast<double>(sample_rate_));
+  };
+  if (!gs_reverb_character_is_delay(config.reverb_character)) {
+    retain_child_tail(reverb_, max_reverb_tail_s_);
+  } else if (config.reverb_character == 6) {
+    retain_child_tail(reverb_delay_, max_reverb_delay_tail_s_);
+  } else {
+    retain_child_tail(reverb_panning_delay_, max_reverb_panning_delay_tail_s_);
+  }
+  retain_child_tail(chorus_, max_chorus_tail_s_);
+  retain_child_tail(delay_, max_delay_tail_s_);
   const bool enable_reverb = config_.enable_reverb;
   const bool enable_chorus = config_.enable_chorus;
   const bool enable_delay = config_.enable_delay;
@@ -167,8 +175,7 @@ void GsEffectBus::set_config(const GsEffectsConfig& config) noexcept {
   config_.enable_reverb = enable_reverb;
   config_.enable_chorus = enable_chorus;
   config_.enable_delay = enable_delay;
-  observe_delay_config(config_);
-  observe_reverb_config(config_);
+  observe_reverb_predelay(config_);
   activate_reverb_mode(config_.reverb_character);
   // Automatable parameter ids, from each unit's header. Everything reached here
   // is a coefficient: nothing resizes a buffer or clears a delay line.
@@ -199,46 +206,30 @@ void GsEffectBus::reset() {
   for (auto& line : reverb_panning_delay_predelay_) line.reset();
   chorus_.reset();
   delay_.reset();
-  reset_delay_history();
-  reset_reverb_history();
+  reset_reverb_predelay_history();
+  reset_child_tail_history();
   reset_reverb_activation();
   begin_chunk();
 }
 
-void GsEffectBus::observe_delay_config(const GsEffectsConfig& config) noexcept {
-  max_delay_feedback_abs_ =
-      std::max(max_delay_feedback_abs_, delay_feedback_magnitude(config.delay_feedback));
-  max_delay_time_ms_ = std::max(max_delay_time_ms_, delay_time_milliseconds(config.delay_time_ms));
-}
-
-void GsEffectBus::reset_delay_history() noexcept {
-  max_delay_feedback_abs_ = delay_feedback_magnitude(config_.delay_feedback);
-  max_delay_time_ms_ = delay_time_milliseconds(config_.delay_time_ms);
-}
-
-void GsEffectBus::observe_reverb_config(const GsEffectsConfig& config) noexcept {
+void GsEffectBus::observe_reverb_predelay(const GsEffectsConfig& config) noexcept {
   if (gs_reverb_character_is_delay(config.reverb_character)) {
-    max_reverb_delay_feedback_ =
-        std::max(max_reverb_delay_feedback_,
-                 std::clamp(static_cast<double>(config.reverb_delay_feedback), 0.0, 0.95));
-    max_reverb_delay_time_ms_ = std::max(
-        max_reverb_delay_time_ms_, std::max(1.0, static_cast<double>(config.reverb_delay_time_ms)));
     max_reverb_predelay_ms_ = std::max(
         max_reverb_predelay_ms_, std::max(0.0, static_cast<double>(config.reverb_predelay_ms)));
-  } else {
-    has_reverb_decay_history_ = true;
-    max_reverb_decay_ = std::max(max_reverb_decay_,
-                                 std::clamp(static_cast<double>(config.reverb_decay), 0.0, 0.98));
   }
 }
 
-void GsEffectBus::reset_reverb_history() noexcept {
-  max_reverb_delay_feedback_ = 0.0;
-  max_reverb_delay_time_ms_ = 0.0;
+void GsEffectBus::reset_reverb_predelay_history() noexcept {
   max_reverb_predelay_ms_ = 0.0;
-  max_reverb_decay_ = 0.0;
-  has_reverb_decay_history_ = false;
-  observe_reverb_config(config_);
+  observe_reverb_predelay(config_);
+}
+
+void GsEffectBus::reset_child_tail_history() noexcept {
+  max_reverb_tail_s_ = 0.0;
+  max_reverb_delay_tail_s_ = 0.0;
+  max_reverb_panning_delay_tail_s_ = 0.0;
+  max_chorus_tail_s_ = 0.0;
+  max_delay_tail_s_ = 0.0;
 }
 
 void GsEffectBus::activate_reverb_mode(uint8_t character) noexcept {
@@ -351,37 +342,56 @@ void GsEffectBus::render_returns(float* out_l, float* out_r, int n) noexcept {
 
 int64_t GsEffectBus::tail_samples(double sample_rate) const noexcept {
   if (!(sample_rate > 0.0)) return 0;
-  double tail_s = 0.0;
+  rt::TailBudget tail;
+  /// Convert a prepared child report to the caller's requested frame rate.
+  const auto child_tail = [this, sample_rate](const auto& child) noexcept {
+    const int samples = child.tail_samples();
+    if (samples <= 0 || samples == rt::TailBudget::kUnbounded || sample_rate == sample_rate_ ||
+        !(sample_rate_ > 0.0)) {
+      return rt::TailBudget::reported(samples);
+    }
+    return rt::TailBudget().seconds(static_cast<double>(samples) / sample_rate_, sample_rate);
+  };
+  const auto retained_tail = [sample_rate](double seconds) noexcept {
+    return rt::TailBudget().seconds(seconds, sample_rate);
+  };
   if (config_.enable_reverb) {
-    // Energy falls by `decay` per tank pass. Ring-out to -80 dB takes
-    // n = ln(1e-4) / ln(decay) passes.
-    const double decay = std::clamp(max_reverb_decay_, 0.05, 0.98);
-    if (has_reverb_decay_history_) {
-      const double passes = std::log(1.0e-4) / std::log(decay);
-      tail_s = std::max(tail_s, kTankPassSeconds * passes);
+    if (reverb_tank_used_) {
+      tail.alongside(child_tail(reverb_));
+      tail.alongside(retained_tail(max_reverb_tail_s_));
+    }
+    const auto delay_tail = [this, sample_rate, &retained_tail, &child_tail](
+                                const effects::delay::StereoDelay& child, float predelay_ms,
+                                double retained_child_s) {
+      rt::TailBudget path;
+      const double retained_ms =
+          std::max(max_reverb_predelay_ms_, std::max(0.0, static_cast<double>(predelay_ms)));
+      path.delay(retained_ms * 0.001 * sample_rate);
+      path.then(child_tail(child));
+      rt::TailBudget retained;
+      retained.delay(retained_ms * 0.001 * sample_rate);
+      retained.then(retained_tail(retained_child_s));
+      path.alongside(retained);
+      return path;
+    };
+    if (reverb_delay_used_) {
+      tail.alongside(
+          delay_tail(reverb_delay_, reverb_delay_predelay_ms_, max_reverb_delay_tail_s_));
+    }
+    if (reverb_panning_delay_used_) {
+      tail.alongside(delay_tail(reverb_panning_delay_, reverb_panning_delay_predelay_ms_,
+                                max_reverb_panning_delay_tail_s_));
     }
   }
-  if (config_.enable_reverb && max_reverb_delay_time_ms_ > 0.0) {
-    const double fb = max_reverb_delay_feedback_;
-    const double time_s = max_reverb_delay_time_ms_ * 0.001;
-    const double predelay_s = max_reverb_predelay_ms_ * 0.001;
-    const double repeats = fb > 0.0 ? std::log(1.0e-4) / std::log(fb) : 0.0;
-    const double loop_s = time_s + 1.0 / sample_rate;
-    // PREDELAY delays the first echo but does not lengthen a feedback lap.
-    tail_s = std::max(tail_s, predelay_s + time_s + repeats * loop_s);
+  if (config_.enable_chorus) {
+    tail.alongside(child_tail(chorus_));
+    tail.alongside(retained_tail(max_chorus_tail_s_));
   }
   if (config_.enable_delay) {
-    const double fb = max_delay_feedback_abs_;
-    const double time_s = max_delay_time_ms_ * 0.001;
-    const double repeats = fb > 0.0 ? std::log(1.0e-4) / std::log(fb) : 0.0;
-    // Each lap adds one frame (the feedback cell); bound the last echo above -80 dB.
-    const double loop_s = time_s + 1.0 / sample_rate;
-    tail_s = std::max(tail_s, time_s + repeats * loop_s);
+    tail.alongside(child_tail(delay_));
+    tail.alongside(retained_tail(max_delay_tail_s_));
   }
-  if (config_.enable_chorus) {
-    tail_s = std::max(tail_s, 0.1);  // modulated delay line ring-out
-  }
-  return static_cast<int64_t>(std::ceil(tail_s * sample_rate));
+  return rt::tail_budget_samples(tail);
 }
 
 }  // namespace sonare::midi::synth

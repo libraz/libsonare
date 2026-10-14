@@ -31,6 +31,7 @@
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "engine/channel_delay.h"
+#include "engine/instrument_automation_destinations.h"
 #include "engine/instrument_rack.h"
 #include "engine/instrument_swap_tail.h"
 #include "host/midi_io.h"
@@ -45,7 +46,6 @@
 #endif
 #if defined(SONARE_WITH_MIXING)
 #include "engine/insert_automation_targets.h"
-#include "engine/instrument_automation_destinations.h"
 #include "engine/meter_telemetry.h"
 #include "engine/mixing_runtime.h"
 #include "engine/monitor_runtime.h"

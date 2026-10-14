@@ -165,6 +165,15 @@ float gs_efx_pan_position(uint8_t value) noexcept {
   return std::clamp(position, -1.0f, 1.0f);
 }
 
+float gs_efx_pan_gain(uint8_t value, bool raw_constant_power) noexcept {
+  using sonare::constants::kSqrt2;
+  float left = 0.0f;
+  float right = 0.0f;
+  gs_efx_pan(value, &left, &right);
+  const float measured_norm = std::hypot(left, right);
+  return raw_constant_power ? measured_norm : measured_norm / kSqrt2;
+}
+
 float gs_efx_balance_position(uint8_t value) noexcept {
   float direct = 0.0f;
   float effect = 0.0f;

@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 
 namespace sonare::midi::synth {
@@ -28,6 +29,33 @@ class TptSvf {
     float bp = 0.0f;
     float hp = 0.0f;
   };
+
+  /// Conservative decay bound for the bandpass state at a fixed setting.
+  ///
+  /// Build the denominator from the live float state transition. The bandpass
+  /// input/output taps have an absolute sum bounded by two.
+  static rt::TailBudget ring(float cutoff_hz, float q, double sample_rate) noexcept {
+    const double rate = sample_rate > 0.0 ? sample_rate : constants::kDefaultDawSampleRate;
+    // Match set()'s float clamps and arithmetic before converting the matrix.
+    const float rate_f = static_cast<float>(rate);
+    const float fc = std::clamp(cutoff_hz, 10.0f, static_cast<float>(0.49 * rate));
+    const float k = 1.0f / std::clamp(q, 0.5f, 100.0f);
+    const float g = std::tan(constants::kPi * fc / rate_f);
+    const float a1 = 1.0f / (1.0f + g * (g + k));
+    const float a2 = g * a1;
+    const float a3 = g * a2;
+    // process() advances [ic1, ic2] by this matrix once its input is zero.
+    const float m00 = 2.0f * a1 - 1.0f;
+    const float m01 = -2.0f * a2;
+    const float m10 = 2.0f * a2;
+    const float m11 = 1.0f - 2.0f * a3;
+    const double trace = static_cast<double>(m00) + static_cast<double>(m11);
+    const double determinant = static_cast<double>(m00) * static_cast<double>(m11) -
+                               static_cast<double>(m01) * static_cast<double>(m10);
+    rt::TailBudget tail;
+    tail.biquad(2.0, -trace, determinant);
+    return tail;
+  }
 
   void prepare(double sample_rate) noexcept {
     sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;

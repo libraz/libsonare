@@ -76,6 +76,7 @@ class GsEfxProcessor final : public rt::ProcessorBase {
     uint8_t stage_index = 0xFF;
     uint32_t param_id = 0;
     GsEfxBindingRow row{};
+    Sf2EfxValueTransform transform = Sf2EfxValueTransform::kBinding;
   };
   struct EnableDestination {
     GsEfxEnable rule{};

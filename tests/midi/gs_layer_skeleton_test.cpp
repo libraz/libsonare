@@ -26,6 +26,8 @@ namespace {
 using sonare::midi::synth::apply_gs_efx_units_sysex;
 using sonare::midi::synth::gs_efx_binding_value;
 using sonare::midi::synth::gs_efx_insert_chain;
+using sonare::midi::synth::gs_efx_pan_gain;
+using sonare::midi::synth::gs_efx_pan_position;
 using sonare::midi::synth::gs_efx_type_defaults;
 using sonare::midi::synth::GsAddressEntry;
 using sonare::midi::synth::GsEfx;
@@ -54,6 +56,7 @@ using sonare::midi::synth::kGsEfxUnitCount;
 using Chain = std::vector<GsEfxStage>;
 
 constexpr GsEfxRowView kNoRows{nullptr, 0, nullptr, 0};
+constexpr float kParamsJsonFloatMargin = 1.0e-6f;
 
 /// Index of @p name in the generated stage-name table the rows point into.
 uint16_t stage_id(std::string_view name) {
@@ -287,6 +290,34 @@ TEST_CASE("a parallel-2 type is two halves side by side, each ending in its own 
         CHECK(static_cast<int>(stage->branch) ==
               (ordinal == 0 ? kGsEfxBranchHalfA : kGsEfxBranchHalfB));
       }
+    }
+  }
+}
+
+TEST_CASE("GS pan construction carries the measured pair magnitude",
+          "[midi][gs-skeleton][boundary]") {
+  for (const uint8_t value : {uint8_t{0}, uint8_t{32}, uint8_t{64}, uint8_t{96}, uint8_t{127}}) {
+    GsEfx ordinary = efx_of(0x0101);
+    ordinary.params[18] = value;
+    const Chain ordinary_chain = gs_efx_insert_chain(ordinary);
+    const GsEfxStage* ordinary_pan = find_stage(ordinary_chain, "stereo.stereoBalance", 0);
+    REQUIRE(ordinary_pan != nullptr);
+    CHECK(number_at(*ordinary_pan, "balance") ==
+          Catch::Approx(gs_efx_pan_position(value)).margin(kParamsJsonFloatMargin));
+    CHECK(number_at(*ordinary_pan, "gain") ==
+          Catch::Approx(gs_efx_pan_gain(value, false)).margin(kParamsJsonFloatMargin));
+    CHECK(ordinary_pan->branch == kGsEfxBranchBack);
+
+    GsEfx parallel = efx_of(0x1100);
+    parallel.params[15] = value;
+    parallel.params[17] = value;
+    const Chain parallel_chain = gs_efx_insert_chain(parallel);
+    for (uint8_t ordinal = 0; ordinal < 2; ++ordinal) {
+      const GsEfxStage* parallel_pan = find_stage(parallel_chain, "stereo.stereoBalance", ordinal);
+      REQUIRE(parallel_pan != nullptr);
+      CHECK(number_at(*parallel_pan, "gain") ==
+            Catch::Approx(gs_efx_pan_gain(value, true)).margin(kParamsJsonFloatMargin));
+      CHECK(parallel_pan->branch == (ordinal == 0 ? kGsEfxBranchHalfA : kGsEfxBranchHalfB));
     }
   }
 }

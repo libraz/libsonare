@@ -11,6 +11,7 @@
 /// row and exercised under the classic realization only, which reads the wire
 /// byte rather than the row's stage and key.
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #if defined(SONARE_MIDI_WITH_FX) && defined(SONARE_WITH_MASTERING)
@@ -26,10 +27,12 @@
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
+#include "mastering/stereo/stereo_balance.h"
 #include "midi/control_value.h"
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/gs_classic/model_registry.h"
 #include "midi/synth/gs_efx_bindings.h"
+#include "midi/synth/gs_efx_graph.h"
 #include "midi/synth/gs_layer.h"
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_player.h"
@@ -612,6 +615,59 @@ TEST_CASE("an edit to a CONTROL's slot keeps the modulation", "[midi][synth][gs]
     rig.render(1);
     CHECK(rig.byte() > kBase);
     CHECK(rig.byte() < modulated);
+  }
+}
+
+TEST_CASE("a GS PAN CONTROL fans out the measured magnitude",
+          "[midi][synth][gs][gs-efx-control][boundary]") {
+  const s::GsEfxRowView rows{s::kGsEfxBindingRows.data(), s::kGsEfxBindingRows.size(),
+                             s::kGsEfxEnables.data(), s::kGsEfxEnables.size()};
+  const auto factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
+  for (const double rate : {48000.0, 96000.0}) {
+    for (const uint8_t value : {uint8_t{0}, uint8_t{32}, uint8_t{64}, uint8_t{96}, uint8_t{127}}) {
+      s::GsEfx efx;
+      efx.type = 0x0101;
+      efx.type_msb = 1;
+      efx.assigned = true;
+      const s::GsEfxTypeDefaults* defaults = s::gs_efx_type_defaults(efx.type);
+      REQUIRE(defaults != nullptr);
+      efx.params = defaults->params;
+      efx.params[18] = value;
+      s::Sf2EfxUnitRt unit = s::sf2_build_efx_unit(
+          efx, s::gs_efx_insert_chain(efx), s::GsEfxRealization::kModern, factory, rate, kBlock);
+      s::Sf2EfxLegacyControlPlan plan = s::sf2_resolve_efx_control(unit, rows, efx.type, 0);
+      REQUIRE(plan.n_dest == 2);
+      s::Sf2EfxControlDest* balance_dest = nullptr;
+      s::Sf2EfxControlDest* gain_dest = nullptr;
+      for (uint8_t i = 0; i < plan.n_dest; ++i) {
+        if (plan.dest[i].transform == s::Sf2EfxValueTransform::kBinding) {
+          balance_dest = &plan.dest[i];
+        } else {
+          gain_dest = &plan.dest[i];
+        }
+      }
+      REQUIRE(balance_dest != nullptr);
+      REQUIRE(gain_dest != nullptr);
+      REQUIRE(gain_dest->transform == s::Sf2EfxValueTransform::kPanGainCenter);
+      REQUIRE(gain_dest->binding != nullptr);
+      REQUIRE(balance_dest->binding != nullptr);
+      auto* pan = dynamic_cast<sonare::mastering::stereo::StereoBalance*>(
+          unit.stages[gain_dest->stage_index].proc.get());
+      REQUIRE(pan != nullptr);
+      INFO("[boundary] RED EFX CONTROL rate=" << rate << " byte=" << int(value));
+      for (uint8_t i = 0; i < plan.n_dest; ++i) {
+        const s::Sf2EfxControlDest& dest = plan.dest[i];
+        auto* proc = unit.stages[dest.stage_index].proc.get();
+        REQUIRE(proc != nullptr);
+        REQUIRE(proc->set_parameter(
+            dest.param_id, s::sf2_efx_destination_value(*dest.binding, value, dest.transform)));
+      }
+      const float expected = s::gs_efx_pan_gain(value, false);
+      INFO("[boundary] GREEN EFX CONTROL gain=" << expected);
+      CHECK(pan->config().gain == Catch::Approx(expected).margin(1e-6f));
+    }
   }
 }
 

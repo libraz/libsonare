@@ -8,6 +8,7 @@
 #include "midi/synth/sample_voice.h"
 
 #include <algorithm>
+#include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -32,6 +33,7 @@ using sonare::midi::synth::SampleBank;
 using sonare::midi::synth::SampleDesc;
 using sonare::midi::synth::SamplePatchParams;
 using sonare::midi::synth::SampleVoiceCore;
+using sonare::midi::synth::SampleZone;
 using sonare::midi::synth::SampleZoneDesc;
 using sonare::midi::synth::SynthEngineMode;
 
@@ -181,6 +183,73 @@ TEST_CASE("SampleBank rejects data and zones it cannot play", "[midi][sample]") 
   zone.key_lo = 0;
   CHECK(bank.add_zone(0, zone));
   CHECK(bank.set_count() == 1);
+}
+
+TEST_CASE("SampleBank rejects non-finite zone values before changing state", "[midi][sample]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  const float max = std::numeric_limits<float>::max();
+
+  SampleBank bank;
+  const std::vector<float> data(16, 0.25f);
+  uint32_t sample_index = 0;
+  REQUIRE(bank.add_sample(data.data(), data.size(), SampleDesc{}, &sample_index));
+  SampleDesc max_tune_sample;
+  max_tune_sample.fine_tune_cents = max;
+  uint32_t overflow_sample_index = 0;
+  REQUIRE(bank.add_sample(data.data(), data.size(), max_tune_sample, &overflow_sample_index));
+
+  struct InvalidField {
+    float SampleZoneDesc::*field;
+    float value;
+  };
+  const std::array<InvalidField, 9> invalid_fields = {{
+      {&SampleZoneDesc::tune_cents, nan},
+      {&SampleZoneDesc::tune_cents, inf},
+      {&SampleZoneDesc::tune_cents, -inf},
+      {&SampleZoneDesc::gain, nan},
+      {&SampleZoneDesc::gain, inf},
+      {&SampleZoneDesc::gain, -inf},
+      {&SampleZoneDesc::pan_units, nan},
+      {&SampleZoneDesc::pan_units, inf},
+      {&SampleZoneDesc::pan_units, -inf},
+  }};
+
+  constexpr uint32_t kAbsentSet = 7;
+  for (const InvalidField& invalid : invalid_fields) {
+    SampleZoneDesc zone;
+    zone.sample_index = sample_index;
+    zone.*(invalid.field) = invalid.value;
+    CHECK_FALSE(bank.add_zone(kAbsentSet, zone));
+    CHECK(bank.set_count() == 0);
+    CHECK(bank.zone_count(kAbsentSet) == 0);
+  }
+
+  SampleZoneDesc overflow;
+  overflow.sample_index = overflow_sample_index;
+  overflow.tune_cents = max;
+  CHECK_FALSE(bank.add_zone(kAbsentSet, overflow));
+  CHECK(bank.set_count() == 0);
+  CHECK(bank.zone_count(kAbsentSet) == 0);
+
+  SampleZoneDesc negative;
+  negative.sample_index = sample_index;
+  negative.tune_cents = -25.0f;
+  negative.gain = -0.5f;
+  negative.pan_units = -125.0f;
+  REQUIRE(bank.add_zone(0, negative));
+  REQUIRE(bank.set_count() == 1);
+  REQUIRE(bank.zone_count(0) == 1);
+  const SampleZone& stored = bank.zone_at(0, 0);
+  CHECK(stored.tune_cents == negative.tune_cents);
+  CHECK(stored.gain == negative.gain);
+  CHECK(stored.pan_units == negative.pan_units);
+
+  SampleZoneDesc existing_set_bad = negative;
+  existing_set_bad.gain = nan;
+  CHECK_FALSE(bank.add_zone(0, existing_set_bad));
+  CHECK(bank.set_count() == 1);
+  CHECK(bank.zone_count(0) == 1);
 }
 
 TEST_CASE("SampleBank drops a loop mode whose loop is empty", "[midi][sample]") {

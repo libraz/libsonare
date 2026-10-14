@@ -720,6 +720,10 @@ const char* native_synth_param_name(NativeSynthParamId id) noexcept;
 size_t native_synth_param_count() noexcept;
 /// JSON-key name at @p index in [0, native_synth_param_count()), or nullptr.
 const char* native_synth_param_name_at(size_t index) noexcept;
+/// The facade key and the [lo, hi] range @p id is clamped to and reports from
+/// describe_parameter. Returns false for an unknown id; a null out-pointer is skipped.
+bool native_synth_param_range(NativeSynthParamId id, const char** key, float* lo,
+                              float* hi) noexcept;
 
 /// The "gm" controller preset: CC2 on the force axis, CC74 on the second one,
 /// note-on velocity meaningful. What the synth answered before a profile layer

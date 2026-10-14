@@ -489,6 +489,8 @@ TEST_CASE("Sf2Player tail scans only reachable preset and instrument zone pairs"
   cfg.effects.enable_chorus = false;
   cfg.effects.enable_delay = false;
 #endif
+  // Compare zone scanning without the independently covered mix-bus DC tail.
+  cfg.dc_block = false;
   Sf2Player player(cfg);
   player.set_soundfont(make_disconnected_release_tail_fixture());
   player.prepare(kOutRate, 256);

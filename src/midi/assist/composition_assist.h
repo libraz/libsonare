@@ -11,6 +11,10 @@
 ///     and the registry registration is preserved.
 ///   - The returned commands are applied by the CALLER via EditHistory; this
 ///     driver NEVER mutates a live Project.
+///   - A non-zero iteration budget is shared across all dispatched slots;
+///     reported work is clamped/saturated before later slots receive the
+///     remaining budget. A non-zero time budget is one cooperative absolute
+///     monotonic deadline shared with built-in modules.
 ///
 /// CONTROL/OFFLINE-THREAD ONLY. Never called from RT / the audio callback / the
 /// the compiler / the engine. When SONARE_WITH_ASSIST is OFF this type is absent.
@@ -40,8 +44,8 @@ class CompositionAssist {
   ///   - Never mutates `view` / the project.
   ///   - Never lets a module exception escape: a throwing/invalid module call is
   ///     discarded (its commands dropped) and reflected in diagnostics.
-  ///   - Honors request.budget: stops dispatching further slots once the
-  ///     iteration budget is exhausted and marks the result truncated.
+  ///   - Honors request.budget across the whole run, stops dispatching further
+  ///     slots once an axis is exhausted, and marks deadline overruns truncated.
   ///   - With no modules registered, returns an empty result (kEmpty).
   AssistResult run(const arrangement::ProjectView& view, const AssistRequest& request) const;
 

@@ -73,6 +73,13 @@ struct Sf2EfxStageRt {
   mutable Sf2EfxDelayRt dry_delay{};
 };
 
+/// How a resolved destination turns the source byte into a parameter value.
+enum class Sf2EfxValueTransform : uint8_t {
+  kBinding,
+  kPanGainCenter,
+  kPanGainRaw,
+};
+
 /// One control destination resolved against an insertion stage. A modern
 /// destination reads the slot byte through @c binding; a classic one (null @c
 /// binding) takes the byte itself in slot @c param_id.
@@ -80,6 +87,7 @@ struct Sf2EfxControlDest {
   uint8_t stage_index = 0;
   uint32_t param_id = 0;
   const GsEfxBindingRow* binding = nullptr;
+  Sf2EfxValueTransform transform = Sf2EfxValueTransform::kBinding;
 };
 
 /// A descriptor resolved against a published legacy unit. Unlike a prepared
@@ -90,6 +98,7 @@ struct Sf2EfxLegacyParamDest {
   GsEfxBindingRow row{};
   uint8_t stage_index = 0;
   uint32_t param_id = 0;
+  Sf2EfxValueTransform transform = Sf2EfxValueTransform::kBinding;
 };
 
 /// One selector/switch rule resolved against a published legacy unit. The
@@ -110,7 +119,7 @@ struct Sf2EfxLegacyControlPlan {
   uint8_t hi = 0;
   uint8_t states = 0;
   uint8_t n_dest = 0;
-  std::array<Sf2EfxControlDest, 4> dest{};
+  std::array<Sf2EfxControlDest, 8> dest{};
 };
 
 /// One realised insertion unit: its stages in chain order and the scratch its
@@ -162,7 +171,7 @@ struct Sf2EfxControlRt {
   /// (00/7F is two); 0 where every byte between is a value.
   uint8_t states = 0;
   uint8_t n_dest = 0;
-  std::array<Sf2EfxControlDest, 4> dest{};
+  std::array<Sf2EfxControlDest, 8> dest{};
   /// AUDIO thread: the slot's unmodulated byte, moved by kControlBase.
   mutable uint8_t base_byte = 0;
   /// AUDIO thread: the byte the destinations last received.
@@ -187,7 +196,14 @@ struct Sf2EfxRowTarget {
   Sf2EfxRowResolution status = Sf2EfxRowResolution::kInvalidRow;
   int stage_index = -1;
   uint32_t param_id = 0;
+  int companion_stage_index = -1;
+  uint32_t companion_param_id = 0;
+  Sf2EfxValueTransform companion_transform = Sf2EfxValueTransform::kBinding;
 };
+
+/// Convert a source byte for a resolved modern destination.
+float sf2_efx_destination_value(const GsEfxBindingRow& row, uint8_t byte,
+                                Sf2EfxValueTransform transform) noexcept;
 
 /// Index of the stage named @p name at @p ordinal in @p unit, or -1.
 int sf2_find_efx_stage(const Sf2EfxUnitRt& unit, std::string_view name, uint8_t ordinal) noexcept;

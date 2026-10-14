@@ -146,28 +146,24 @@ class GsEffectBus {
   std::vector<float> reverb_panning_delay_bus_[2];
   std::vector<float> chorus_bus_[2];
   std::vector<float> delay_bus_[2];
-  /// set_config() slews delay feedback/time, so a new target can be shorter
-  /// while the old tail is still audible. Keep the largest targets since the
-  /// last prepare/reset as a conservative bound for that state.
-  double max_delay_feedback_abs_ = 0.0;
-  double max_delay_time_ms_ = 1.0;
-  /// Same conservative history for either CHARACTER 6/7 line. It remains
-  /// after a mode change until reset(), because the inactive line is draining.
-  double max_reverb_delay_feedback_ = 0.0;
-  double max_reverb_delay_time_ms_ = 0.0;
+  /// The pre-delay lines sit outside the child processors. Keep their longest
+  /// selected setting after a character change while the old line drains.
   double max_reverb_predelay_ms_ = 0.0;
-  /// Dattorro also drains across a live character change. The separate flag
-  /// distinguishes an observed zero-decay normal mode from no tank history.
-  double max_reverb_decay_ = 0.0;
-  bool has_reverb_decay_history_ = false;
+  /// A live coefficient edit changes a child in place while its old state is
+  /// still audible. Keep the child's own report from before that edit in
+  /// seconds; this retains the old bound without rebuilding it in the bus.
+  double max_reverb_tail_s_ = 0.0;
+  double max_reverb_delay_tail_s_ = 0.0;
+  double max_reverb_panning_delay_tail_s_ = 0.0;
+  double max_chorus_tail_s_ = 0.0;
+  double max_delay_tail_s_ = 0.0;
   bool reverb_tank_used_ = false;
   bool reverb_delay_used_ = false;
   bool reverb_panning_delay_used_ = false;
 
-  void observe_delay_config(const GsEffectsConfig& config) noexcept;
-  void reset_delay_history() noexcept;
-  void observe_reverb_config(const GsEffectsConfig& config) noexcept;
-  void reset_reverb_history() noexcept;
+  void observe_reverb_predelay(const GsEffectsConfig& config) noexcept;
+  void reset_reverb_predelay_history() noexcept;
+  void reset_child_tail_history() noexcept;
   void activate_reverb_mode(uint8_t character) noexcept;
   void reset_reverb_activation() noexcept;
 };

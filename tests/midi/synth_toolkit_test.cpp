@@ -538,6 +538,34 @@ TEST_CASE("Sf2Lfo set_frequency to zero during its delay freezes immediately",
   }
 }
 
+TEST_CASE("Sf2Lfo retains a very slow live rate and settles a zero request",
+          "[midi][synth][lfo-live][boundary]") {
+  constexpr double sample_rate = 96000.0;
+  Sf2Lfo lfo;
+  lfo.start(sample_rate, 0.0f, 5.0f);
+  for (int i = 0; i < 14400; ++i) lfo.next();
+  lfo.set_frequency(sample_rate, 0.001f);
+
+  const float before = lfo.next();
+  float slow_change = 0.0f;
+  for (int i = 0; i < 100000; ++i) {
+    slow_change = std::max(slow_change, std::fabs(lfo.next() - before));
+  }
+  CAPTURE(before, slow_change);
+  REQUIRE(slow_change > 1.0e-4f);
+
+  lfo.set_frequency(sample_rate, 0.0f);
+  bool reached_zero = false;
+  for (int i = 0; i < 24100000; ++i) {
+    if (std::fabs(lfo.next()) < 1.0e-6f) {
+      reached_zero = true;
+      break;
+    }
+  }
+  REQUIRE(reached_zero);
+  for (int i = 0; i < 1000; ++i) REQUIRE(std::fabs(lfo.next()) < 1.0e-6f);
+}
+
 TEST_CASE("BodyResonator set_mix rescales the body path and stop() bypasses the bank",
           "[midi][synth][body-live]") {
   BodyResonator a;

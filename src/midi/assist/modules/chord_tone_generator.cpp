@@ -8,6 +8,8 @@
 #include <vector>
 
 #include "arrangement/edit_command.h"
+#include "midi/assist/assist_budget_detail.h"
+#include "midi/assist/clip_ppq.h"
 #include "midi/assist/modules/generator_params.h"
 #include "midi/assist/modules/music_theory.h"
 #include "midi/ump.h"
@@ -73,6 +75,8 @@ ChordToneGenerator::ChordToneGenerator(const IHarmonyContext* harmony,
 
 AssistResult ChordToneGenerator::generate(const arrangement::ProjectView& view,
                                           const AssistRequest& request) {
+  sonare::midi::assist::detail::RequestDeadlineScope deadline_scope(request);
+
   GeneratorParams params;
   std::string params_error;
   if (!read_generator_params(request.params_json, &params, &params_error)) {
@@ -82,6 +86,11 @@ AssistResult ChordToneGenerator::generate(const arrangement::ProjectView& view,
     return rejected_with_reason(
         "params_json must name target_clip_id: this module writes into an existing clip and "
         "does not create one");
+  }
+  const arrangement::EditClip* target_clip = view.find_clip(params.target_clip_id);
+  if (target_clip == nullptr) {
+    return empty_with_reason("target clip " + std::to_string(params.target_clip_id) +
+                             " does not exist");
   }
   if (config_.voice_count <= 0 || config_.voice_count > kMaxVoices) {
     return empty_with_reason("voice_count must be within 1.." + std::to_string(kMaxVoices));
@@ -103,17 +112,61 @@ AssistResult ChordToneGenerator::generate(const arrangement::ProjectView& view,
   patch.clip_id = params.target_clip_id;
   json::Array decisions;
   uint32_t iterations = 0;
-  bool truncated = false;
+  bool iteration_truncated = false;
+  bool time_truncated = false;
 
-  for (const arrangement::ChordSymbol& chord : chords) {
-    if (request.budget.has_iteration_cap() && iterations >= request.budget.max_iterations) {
-      truncated = true;
+  const auto is_candidate = [&](const arrangement::ChordSymbol& chord) noexcept {
+    if (!(chord.length_ppq() > 0.0)) return false;
+    if (request.scope.start_ppq.has_value() && chord.start_ppq < *request.scope.start_ppq)
+      return false;
+    if (request.scope.end_ppq.has_value() && chord.start_ppq >= *request.scope.end_ppq)
+      return false;
+    return true;
+  };
+  std::size_t remaining_candidates = 0;
+  if (request.budget.has_iteration_cap()) {
+    for (const arrangement::ChordSymbol& chord : chords) {
+      if (sonare::midi::assist::detail::deadline_expired()) {
+        time_truncated = true;
+        break;
+      }
+      if (is_candidate(chord)) ++remaining_candidates;
+    }
+  }
+
+  const auto stop_after_completed_chord = [&]() noexcept {
+    if (!sonare::midi::assist::detail::deadline_expired()) return false;
+    if (remaining_candidates != 0 && request.budget.has_iteration_cap() &&
+        iterations >= request.budget.max_iterations) {
+      iteration_truncated = true;
+    } else {
+      time_truncated = true;
+    }
+    return true;
+  };
+
+  for (size_t chord_index = 0; chord_index < chords.size(); ++chord_index) {
+    if (time_truncated) break;
+    const arrangement::ChordSymbol& chord = chords[chord_index];
+    const bool candidate = is_candidate(chord);
+    if (request.budget.has_iteration_cap() && iterations >= request.budget.max_iterations &&
+        remaining_candidates != 0) {
+      iteration_truncated = true;
       break;
     }
-    ++iterations;
-    if (chord.length_ppq() <= 0.0) continue;
-    if (request.scope.start_ppq.has_value() && chord.start_ppq < *request.scope.start_ppq) continue;
-    if (request.scope.end_ppq.has_value() && chord.start_ppq >= *request.scope.end_ppq) continue;
+    if (!candidate) {
+      if (sonare::midi::assist::detail::deadline_expired()) {
+        time_truncated = true;
+        break;
+      }
+      continue;
+    }
+    if (request.budget.has_iteration_cap()) --remaining_candidates;
+    if (sonare::midi::assist::detail::deadline_expired()) {
+      time_truncated = true;
+      break;
+    }
+    iterations = sonare::midi::assist::detail::saturating_add_u32(iterations, 1);
 
     json::Object decision;
     decision["startPpq"] = json::Value(chord.start_ppq);
@@ -124,11 +177,20 @@ AssistResult ChordToneGenerator::generate(const arrangement::ProjectView& view,
       decision["accepted"] = json::Value(false);
       decision["reason"] = json::Value("the chord symbol carries no usable root or quality");
       decisions.push_back(json::Value(std::move(decision)));
+      if (stop_after_completed_chord()) break;
       continue;
     }
 
     json::Array voiced;
-    for (const int note : voicing(tones, voice.low_note, voice.high_note, config_.voice_count)) {
+    const std::size_t patch_add_before = patch.add.size();
+    const std::vector<int> voiced_notes =
+        voicing(tones, voice.low_note, voice.high_note, config_.voice_count);
+    for (size_t voice_index = 0; voice_index < voiced_notes.size(); ++voice_index) {
+      const int note = voiced_notes[voice_index];
+      if (sonare::midi::assist::detail::deadline_expired()) {
+        time_truncated = true;
+        break;
+      }
       CandidateNote candidate;
       candidate.ppq = chord.start_ppq;
       candidate.length_ppq = chord.length_ppq();
@@ -143,6 +205,14 @@ AssistResult ChordToneGenerator::generate(const arrangement::ProjectView& view,
         placed["reason"] = json::Value(verdict.reason);
         if (!verdict.accepted) {
           voiced.push_back(json::Value(std::move(placed)));
+          if (sonare::midi::assist::detail::deadline_expired()) {
+            if (voice_index + 1 == voiced_notes.size()) {
+              stop_after_completed_chord();
+            } else {
+              time_truncated = true;
+            }
+            break;
+          }
           continue;
         }
         candidate = verdict.adjusted;
@@ -151,18 +221,43 @@ AssistResult ChordToneGenerator::generate(const arrangement::ProjectView& view,
         placed["accepted"] = json::Value(true);
         placed["reason"] = json::Value("no placement judge installed");
       }
+      if (sonare::midi::assist::detail::deadline_expired()) {
+        time_truncated = true;
+        break;
+      }
       voiced.push_back(json::Value(std::move(placed)));
 
       const sonare::midi::Ump on =
           sonare::midi::make_midi1_note_on(0, 0, candidate.note, candidate.velocity);
       const sonare::midi::Ump off = sonare::midi::make_midi1_note_off(0, 0, candidate.note, 0);
-      patch.add.push_back(arrangement::MidiClipEvent{candidate.ppq, on.words[0], on.words[1], 0});
-      patch.add.push_back(arrangement::MidiClipEvent{candidate.ppq + candidate.length_ppq,
-                                                     off.words[0], off.words[1], 0});
+      const double on_content_ppq = timeline_to_clip_content_ppq(*target_clip, candidate.ppq);
+      const double off_content_ppq =
+          timeline_to_clip_content_ppq(*target_clip, candidate.ppq + candidate.length_ppq);
+      patch.add.push_back(arrangement::MidiClipEvent{on_content_ppq, on.words[0], on.words[1], 0});
+      patch.add.push_back(
+          arrangement::MidiClipEvent{off_content_ppq, off.words[0], off.words[1], 0});
+      if (sonare::midi::assist::detail::deadline_expired()) {
+        if (voice_index + 1 == voiced_notes.size()) {
+          if (remaining_candidates != 0 && request.budget.has_iteration_cap() &&
+              iterations >= request.budget.max_iterations) {
+            iteration_truncated = true;
+          } else {
+            time_truncated = true;
+          }
+        } else {
+          time_truncated = true;
+        }
+        break;
+      }
     }
-    decision["accepted"] = json::Value(!voiced.empty());
+    decision["accepted"] = json::Value(patch.add.size() > patch_add_before);
     decision["voices"] = json::Value(std::move(voiced));
     decisions.push_back(json::Value(std::move(decision)));
+    if (iteration_truncated || time_truncated) break;
+  }
+
+  if (!time_truncated && !iteration_truncated && sonare::midi::assist::detail::deadline_expired()) {
+    time_truncated = true;
   }
 
   AssistResult result;
@@ -178,9 +273,10 @@ AssistResult ChordToneGenerator::generate(const arrangement::ProjectView& view,
   if (!patch.add.empty()) {
     result.commands.push_back(std::make_unique<arrangement::PatchMidiClip>(std::move(patch)));
   }
-  if (truncated) {
+  if (iteration_truncated || time_truncated) {
     result.diagnostics.status = AssistStatus::kBudgetTruncated;
-    result.diagnostics.reason = "stopped after the request's iteration budget";
+    result.diagnostics.reason = iteration_truncated ? "stopped after the request's iteration budget"
+                                                    : "stopped after the request's time budget";
   } else if (result.commands.empty()) {
     result.diagnostics.status = AssistStatus::kEmpty;
     result.diagnostics.reason = "no chord produced a placeable note; see the candidate payload";

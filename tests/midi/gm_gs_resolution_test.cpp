@@ -907,8 +907,10 @@ TEST_CASE("NativeSynth sostenuto captures only the keys held at the press", "[mi
 
 TEST_CASE("NativeSynth tail covers configured release and one-shot decay", "[midi][synth]") {
   using sonare::midi::synth::DahdsrEnvelope;
+  // Isolate the voice envelope; mix-bus DC decay has separate regression coverage.
   for (const double rate : {44100.0, 96000.0}) {
     NativeSynthConfig sustained_cfg;
+    sustained_cfg.dc_block = false;
     sustained_cfg.gain = 1.0f;
     sustained_cfg.patch.amp_env.release_ms = 100.0f;
     sustained_cfg.patch.amp_env.sustain = 0.7f;
@@ -919,6 +921,7 @@ TEST_CASE("NativeSynth tail covers configured release and one-shot decay", "[mid
           DahdsrEnvelope::release_tail_samples(rate, 100.0f));
 
     NativeSynthConfig one_shot_cfg;
+    one_shot_cfg.dc_block = false;
     one_shot_cfg.gain = 1.0f;
     one_shot_cfg.patch.one_shot = true;
     one_shot_cfg.patch.amp_env.decay_ms = 400.0f;
@@ -931,6 +934,7 @@ TEST_CASE("NativeSynth tail covers configured release and one-shot decay", "[mid
           DahdsrEnvelope::release_tail_samples(rate, 400.0f));
 
     NativeSynthConfig delayed_cfg;
+    delayed_cfg.dc_block = false;
     delayed_cfg.gain = 1.0f;
     delayed_cfg.patch.one_shot = true;
     delayed_cfg.patch.amp_env.delay_ms = 100.0f;

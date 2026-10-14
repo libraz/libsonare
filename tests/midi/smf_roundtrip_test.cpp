@@ -3,21 +3,26 @@
 ///        running-status + meta-event coverage and malformed-input safety.
 
 #include <algorithm>
+#include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cfenv>
 #include <cstdint>
 #include <limits>
+#include <new>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
 
 #include "midi/midi_clip.h"
+#include "midi/note_pairing.h"
 #include "midi/note_targets.h"
 #include "midi/program_map.h"
 #include "midi/smf.h"
 #include "midi/ump.h"
+#include "support/alloc_guard.h"
 #include "transport/tempo_map.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -33,6 +38,9 @@ using sonare::midi::SmfExportOptions;
 using sonare::midi::SmfImportResult;
 using sonare::midi::SmfStatus;
 using sonare::midi::Ump;
+using sonare::midi::detail::DecodedNoteEvent;
+using sonare::midi::detail::NotePair;
+using sonare::midi::detail::pair_notes;
 
 // Appends a big-endian 32-bit value.
 void push_u32(std::vector<uint8_t>* v, uint32_t x) {
@@ -1540,6 +1548,326 @@ TEST_CASE("note_targets_from_smf follows a tempo change inside the file",
   REQUIRE(targets[0].end_sec == Catch::Approx(0.5).margin(1e-3));
   REQUIRE(targets[1].start_sec == Catch::Approx(0.5).margin(1e-3));
   REQUIRE(targets[1].end_sec == Catch::Approx(0.75).margin(1e-3));
+}
+
+TEST_CASE("note pairing closes retriggered notes with a group-aware LIFO stack",
+          "[midi][note_pairing]") {
+  const std::vector<MidiClipEvent> events = {
+      {0.0, sonare::midi::make_midi1_note_on(2, 3, 60, 100)},
+      {1.0, sonare::midi::make_midi1_note_on(2, 3, 60, 90)},
+      {2.0, sonare::midi::make_midi1_note_off(2, 3, 60, 0)},
+      {3.0, sonare::midi::make_midi1_note_off(2, 3, 60, 0)},
+  };
+  const auto decode = [](const MidiClipEvent& event) {
+    return DecodedNoteEvent{event.ppq, event.ump};
+  };
+  std::vector<NotePair> pairs;
+
+  REQUIRE(pair_notes(events, decode, [&pairs](const NotePair& pair) { pairs.push_back(pair); }));
+  REQUIRE(pairs.size() == 2);
+  CHECK(pairs[0].start_ppq == 1.0);
+  CHECK(pairs[0].end_ppq == 2.0);
+  CHECK(pairs[1].start_ppq == 0.0);
+  CHECK(pairs[1].end_ppq == 3.0);
+  CHECK(pairs[0].group == 2);
+  CHECK(pairs[0].channel == 3);
+  CHECK(pairs[0].note == 60);
+  CHECK(pairs[0].note_on == events[1].ump);
+  CHECK(pairs[1].note_on == events[0].ump);
+}
+
+TEST_CASE("note pairing keeps group and channel identities independent", "[midi][note_pairing]") {
+  Ump group_zero_on = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  Ump group_zero_off = sonare::midi::make_midi1_note_off(0, 0, 60, 0);
+  Ump group_one_on = sonare::midi::make_midi1_note_on(1, 0, 60, 100);
+  Ump group_one_off = sonare::midi::make_midi1_note_off(1, 0, 60, 0);
+  // The word-0 group is authoritative even if a copied side-band field is stale.
+  group_zero_on.group = 9;
+  group_zero_off.group = 8;
+  group_one_on.group = 0;
+  group_one_off.group = 7;
+  const std::vector<MidiClipEvent> events = {
+      {0.0, group_zero_on},
+      {1.0, group_one_on},
+      {2.0, group_zero_off},
+      {3.0, group_one_off},
+      {4.0, sonare::midi::make_midi1_note_on(0, 1, 62, 100)},
+      {5.0, sonare::midi::make_midi1_note_off(0, 1, 62, 0)},
+  };
+  const auto decode = [](const MidiClipEvent& event) {
+    return DecodedNoteEvent{event.ppq, event.ump};
+  };
+  std::vector<NotePair> pairs;
+  REQUIRE(pair_notes(events, decode, [&pairs](const NotePair& pair) { pairs.push_back(pair); }));
+
+  REQUIRE(pairs.size() == 3);
+  CHECK(pairs[0].group == 0);
+  CHECK(pairs[0].channel == 0);
+  CHECK(pairs[0].start_ppq == 0.0);
+  CHECK(pairs[0].end_ppq == 2.0);
+  CHECK(pairs[1].group == 1);
+  CHECK(pairs[1].channel == 0);
+  CHECK(pairs[1].start_ppq == 1.0);
+  CHECK(pairs[1].end_ppq == 3.0);
+  CHECK(pairs[2].group == 0);
+  CHECK(pairs[2].channel == 1);
+  CHECK(pairs[2].start_ppq == 4.0);
+  CHECK(pairs[2].end_ppq == 5.0);
+}
+
+TEST_CASE("note pairing drops wrong-group, nonpositive, NaN and unclosed pairs",
+          "[midi][note_pairing]") {
+  const std::vector<MidiClipEvent> events = {
+      {0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+      {1.0, sonare::midi::make_midi1_note_off(1, 0, 60, 0)},
+      {2.0, sonare::midi::make_midi1_note_off(0, 0, 60, 0)},
+      {3.0, sonare::midi::make_midi1_note_on(0, 0, 61, 100)},
+      {3.0, sonare::midi::make_midi1_note_off(0, 0, 61, 0)},
+      {4.0, sonare::midi::make_midi1_note_on(0, 0, 62, 100)},
+      {5.0, sonare::midi::make_midi1_note_on(0, 0, 63, 100)},
+      {std::numeric_limits<double>::quiet_NaN(), sonare::midi::make_midi1_note_off(0, 0, 63, 0)},
+  };
+  const auto decode = [](const MidiClipEvent& event) {
+    return DecodedNoteEvent{event.ppq, event.ump};
+  };
+  std::vector<NotePair> pairs;
+  REQUIRE(pair_notes(events, decode, [&pairs](const NotePair& pair) { pairs.push_back(pair); }));
+
+  REQUIRE(pairs.size() == 1);
+  CHECK(pairs[0].note == 60);
+  CHECK(pairs[0].start_ppq == 0.0);
+  CHECK(pairs[0].end_ppq == 2.0);
+}
+
+TEST_CASE("note pairing interruption discards open state and preserves velocity words",
+          "[midi][note_pairing]") {
+  const std::vector<MidiClipEvent> events = {
+      {0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+      // MIDI 1 Note On velocity 0 is the release that must close the pending note.
+      {1.0, sonare::midi::make_midi1_note_on(0, 0, 60, 0)},
+      {2.0, sonare::midi::make_midi2_note_on(0, 0, 61, 0)},
+      {3.0, sonare::midi::make_midi2_note_off(0, 0, 61, 0)},
+  };
+  const auto decode = [](const MidiClipEvent& event) {
+    return DecodedNoteEvent{event.ppq, event.ump};
+  };
+
+  std::vector<NotePair> stopped_pairs;
+  REQUIRE_FALSE(pair_notes(
+      events, decode, [&stopped_pairs](const NotePair& pair) { stopped_pairs.push_back(pair); },
+      [] { return false; }));
+  REQUIRE(stopped_pairs.empty());
+
+  std::vector<NotePair> pairs;
+  REQUIRE(pair_notes(events, decode, [&pairs](const NotePair& pair) { pairs.push_back(pair); }));
+  REQUIRE(pairs.size() == 2);
+  CHECK(pairs[0].note_on == events[0].ump);
+  CHECK(pairs[1].note_on == events[2].ump);
+  CHECK(pairs[0].end_ppq == 1.0);
+  CHECK(pairs[1].end_ppq == 3.0);
+}
+
+TEST_CASE("note pairing reuses overflow after triple LIFO retriggering", "[midi][note_pairing]") {
+  // All four packets address one key, but each note-on carries distinct UMP
+  // words. The first packet stays inline while the overflow is emptied and
+  // then refilled by the note at PPQ 5.
+  auto complete_note_on = [](uint16_t velocity, uint8_t attribute_type, uint16_t attribute_data,
+                             uint32_t tail0, uint32_t tail1) {
+    Ump ump = sonare::midi::make_midi2_note_on(3, 4, 60, velocity, attribute_type, attribute_data);
+    ump.words[2] = tail0;
+    ump.words[3] = tail1;
+    ump.word_count = 4;
+    ump.group = 15;  // Word 0 remains the group/key authority.
+    return ump;
+  };
+  const Ump first = complete_note_on(0x1111, 1, 0x2222, 0x33445566u, 0x77889900u);
+  const Ump second = complete_note_on(0x3333, 2, 0x4444, 0x55667788u, 0x99AABBCCu);
+  const Ump third = complete_note_on(0x5555, 3, 0x6666, 0x778899AAu, 0xBBCCDDEEu);
+  const Ump refill = complete_note_on(0x7777, 4, 0x8888, 0x99AABBCCu, 0xDDEEFF00u);
+  const std::vector<MidiClipEvent> events = {
+      {0.0, first},
+      {1.0, second},
+      {2.0, third},
+      {3.0, sonare::midi::make_midi2_note_off(3, 4, 60, 0)},
+      {4.0, sonare::midi::make_midi2_note_off(3, 4, 60, 0)},
+      {5.0, refill},
+      {6.0, sonare::midi::make_midi2_note_off(3, 4, 60, 0)},
+      {7.0, sonare::midi::make_midi2_note_off(3, 4, 60, 0)},
+  };
+  const auto decode = [](const MidiClipEvent& event) {
+    return DecodedNoteEvent{event.ppq, event.ump};
+  };
+  std::vector<NotePair> pairs;
+
+  REQUIRE(pair_notes(events, decode, [&pairs](const NotePair& pair) { pairs.push_back(pair); }));
+  REQUIRE(pairs.size() == 4);
+  CHECK(pairs[0].start_ppq == 2.0);
+  CHECK(pairs[0].end_ppq == 3.0);
+  CHECK(pairs[0].note_on == third);
+  CHECK(pairs[1].start_ppq == 1.0);
+  CHECK(pairs[1].end_ppq == 4.0);
+  CHECK(pairs[1].note_on == second);
+  CHECK(pairs[2].start_ppq == 5.0);
+  CHECK(pairs[2].end_ppq == 6.0);
+  CHECK(pairs[2].note_on == refill);
+  CHECK(pairs[3].start_ppq == 0.0);
+  CHECK(pairs[3].end_ppq == 7.0);
+  CHECK(pairs[3].note_on == first);
+  CHECK(pairs[3].group == 3);
+  CHECK(pairs[3].channel == 4);
+  CHECK(pairs[3].note == 60);
+}
+
+TEST_CASE("note pairing consumes NaN starts and recovers after an open cancellation",
+          "[midi][note_pairing]") {
+  const std::vector<MidiClipEvent> events = {
+      {std::numeric_limits<double>::quiet_NaN(), sonare::midi::make_midi1_note_on(0, 0, 64, 100)},
+      {1.0, sonare::midi::make_midi1_note_off(0, 0, 64, 0)},
+      {2.0, sonare::midi::make_midi1_note_on(0, 0, 65, 100)},
+      {3.0, sonare::midi::make_midi1_note_off(0, 0, 65, 0)},
+  };
+  const auto decode = [](const MidiClipEvent& event) {
+    return DecodedNoteEvent{event.ppq, event.ump};
+  };
+  std::size_t checks = 0;
+  std::vector<NotePair> stopped_pairs;
+  REQUIRE_FALSE(pair_notes(
+      events, decode, [&stopped_pairs](const NotePair& pair) { stopped_pairs.push_back(pair); },
+      [&checks] { return checks++ == 0; }));
+  REQUIRE(stopped_pairs.empty());
+  REQUIRE(checks == 2);
+
+  std::vector<NotePair> pairs;
+  REQUIRE(pair_notes(events, decode, [&pairs](const NotePair& pair) { pairs.push_back(pair); }));
+  REQUIRE(pairs.size() == 1);
+  CHECK(pairs[0].start_ppq == 2.0);
+  CHECK(pairs[0].end_ppq == 3.0);
+}
+
+TEST_CASE("note pairing decoder and callback exceptions leave later scans independent",
+          "[midi][note_pairing]") {
+  const std::vector<MidiClipEvent> events = {
+      {0.0, sonare::midi::make_midi1_note_on(1, 2, 66, 100)},
+      {1.0, sonare::midi::make_midi1_note_off(1, 2, 66, 0)},
+  };
+  const auto decode = [](const MidiClipEvent& event) {
+    return DecodedNoteEvent{event.ppq, event.ump};
+  };
+
+  std::size_t decode_calls = 0;
+  REQUIRE_THROWS_AS(pair_notes(
+                        events,
+                        [&decode_calls](const MidiClipEvent& event) {
+                          if (++decode_calls == 2) throw std::runtime_error("decode");
+                          return DecodedNoteEvent{event.ppq, event.ump};
+                        },
+                        [](const NotePair&) {}),
+                    std::runtime_error);
+  REQUIRE(decode_calls == 2);
+
+  std::size_t callback_calls = 0;
+  REQUIRE_THROWS_AS(pair_notes(events, decode,
+                               [&callback_calls](const NotePair&) {
+                                 ++callback_calls;
+                                 throw std::runtime_error("callback");
+                               }),
+                    std::runtime_error);
+  REQUIRE(callback_calls == 1);
+
+  std::vector<NotePair> pairs;
+  REQUIRE(pair_notes(events, decode, [&pairs](const NotePair& pair) { pairs.push_back(pair); }));
+  REQUIRE(pairs.size() == 1);
+  CHECK(pairs[0].start_ppq == 0.0);
+  CHECK(pairs[0].end_ppq == 1.0);
+}
+
+#if SONARE_BUILD_MIXING
+TEST_CASE(
+    "note pairing inline storage avoids the first overflow allocation and preserves failure state",
+    "[midi][note_pairing][allocation]") {
+  const MidiClipEvent first{0.0, sonare::midi::make_midi1_note_on(0, 0, 67, 100)};
+  const MidiClipEvent second{1.0, sonare::midi::make_midi1_note_on(0, 0, 67, 90)};
+  const MidiClipEvent first_off{3.0, sonare::midi::make_midi1_note_off(0, 0, 67, 0)};
+  const MidiClipEvent second_off{2.0, sonare::midi::make_midi1_note_off(0, 0, 67, 0)};
+  const std::array<MidiClipEvent, 2> depth_one = {first, first_off};
+  const std::array<MidiClipEvent, 4> depth_two = {first, second, second_off, first_off};
+  const auto decode = [](const MidiClipEvent& event) {
+    return DecodedNoteEvent{event.ppq, event.ump};
+  };
+  const auto count_allocations = [&decode](const auto& events) {
+    std::size_t pair_count = 0;
+    std::size_t allocations = 0;
+    bool completed = false;
+    {
+      sonare::test::AllocationGuard guard;
+      completed = pair_notes(events, decode, [&pair_count](const NotePair&) { ++pair_count; });
+      allocations = guard.count();
+    }
+    REQUIRE(completed);
+    REQUIRE(pair_count == events.size() / 2);
+    return allocations;
+  };
+
+  const std::size_t depth_one_allocations = count_allocations(depth_one);
+  const std::size_t depth_two_allocations = count_allocations(depth_two);
+  REQUIRE(depth_one_allocations > 0);
+  REQUIRE(depth_two_allocations > depth_one_allocations);
+
+  std::size_t overflow_failure_nth = 0;
+  const std::size_t max_attempts = depth_two_allocations;
+  for (std::size_t nth = 1; nth <= max_attempts; ++nth) {
+    std::size_t decoded_events = 0;
+    std::size_t pair_count = 0;
+    bool threw = false;
+    {
+      sonare::test::AllocationFailureAtGuard guard(nth);
+      try {
+        pair_notes(
+            depth_two,
+            [&decoded_events](const MidiClipEvent& event) {
+              ++decoded_events;
+              return DecodedNoteEvent{event.ppq, event.ump};
+            },
+            [&pair_count](const NotePair&) { ++pair_count; });
+      } catch (const std::bad_alloc&) {
+        threw = true;
+      }
+    }
+    if (threw && decoded_events == 2 && pair_count == 0) {
+      overflow_failure_nth = nth;
+      break;
+    }
+  }
+  REQUIRE(overflow_failure_nth != 0);
+
+  std::array<NotePair, 2> pairs{};
+  std::size_t pair_count = 0;
+  REQUIRE(pair_notes(depth_two, decode,
+                     [&pairs, &pair_count](const NotePair& pair) { pairs[pair_count++] = pair; }));
+  REQUIRE(pair_count == 2);
+  CHECK(pairs[0].start_ppq == 1.0);
+  CHECK(pairs[0].end_ppq == 2.0);
+  CHECK(pairs[0].note_on == second.ump);
+  CHECK(pairs[1].start_ppq == 0.0);
+  CHECK(pairs[1].end_ppq == 3.0);
+  CHECK(pairs[1].note_on == first.ump);
+}
+#endif
+
+TEST_CASE("note_targets_from_smf closes same-note retriggers in LIFO order",
+          "[midi][smf][note_target]") {
+  const std::vector<uint8_t> bytes =
+      melody_smf(melody_clip({{60, 0.0, 3.0}, {60, 1.0, 1.0}}), {tempo_at(0.0, 120.0)});
+
+  const std::vector<NoteTarget> targets = note_targets_from_smf(bytes.data(), bytes.size(), 0);
+  REQUIRE(targets.size() == 2);
+  // The later note closes first (1 -> 2); final target sorting restores onset order.
+  CHECK(targets[0].start_sec == Catch::Approx(0.0).margin(1e-3));
+  CHECK(targets[0].end_sec == Catch::Approx(1.5).margin(1e-3));
+  CHECK(targets[1].start_sec == Catch::Approx(0.5).margin(1e-3));
+  CHECK(targets[1].end_sec == Catch::Approx(1.0).margin(1e-3));
+  CHECK(targets[0].target_midi == 60.0f);
+  CHECK(targets[1].target_midi == 60.0f);
 }
 
 TEST_CASE("note_targets_from_smf drops a note the track never ends", "[midi][smf][note_target]") {

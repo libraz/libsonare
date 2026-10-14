@@ -395,6 +395,9 @@ struct PercussionPatchParams {
 /// Per-voice percussion state, embedded in NativeSynthVoice.
 class PercussionVoiceCore {
  public:
+  /// Q of the high-pass SVF that voices the snare wire rattle.
+  static constexpr float kWireFilterQ = 0.9f;
+
   void start(const PercussionPatchParams& params, double sample_rate, uint8_t note,
              Velocity16 velocity, uint64_t seed) noexcept;
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor
@@ -423,7 +426,10 @@ class PercussionVoiceCore {
   /// Upper bound, in seconds from the strike, on when silent() turns true for
   /// @p params: the slowest layer the patch enables, rung through the plate and
   /// shell after it, carried from above full scale down to the silence floor.
-  static float ring_bound_s(const PercussionPatchParams& params) noexcept;
+  /// @p sample_rate is the render rate used by every rate-aware recursive
+  /// section in the bound.
+  static float ring_bound_s(const PercussionPatchParams& params,
+                            double sample_rate = constants::kDefaultDawSampleRate) noexcept;
   /// Immediate silence.
   void kill() noexcept;
 
@@ -465,6 +471,10 @@ class PercussionVoiceCore {
   float noise_level_ = 0.0f;
   float noise_coeff_ = 0.0f;
   TptSvf noise_filter_;
+  // The VCA gate owns filter-history re-entry. While closed, the noise filter
+  // is intentionally not advanced; reopening it starts from rest without
+  // consuming a generator draw or changing the burst/envelope schedule.
+  bool noise_gate_active_ = false;
   SynthFilterOutput noise_output_ = SynthFilterOutput::kBandpass;
   // noise_gain_at_rate(sr) for the lowpass/bandpass outputs (a fixed-Hz band
   // loses level as sr rises); 1 for the highpass output, whose broadband

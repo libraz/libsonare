@@ -91,7 +91,8 @@ class SampleBank {
   bool add_sample(const float* data, size_t n_frames, const SampleDesc& desc, uint32_t* out_index);
 
   /// CONTROL thread. Appends a zone to @p set, creating intervening sets. False
-  /// when the zone names a sample that is not in the bank or an empty range.
+  /// when the zone names a missing sample, an empty range, a non-finite field, or
+  /// a tuning sum that is not finite.
   bool add_zone(uint32_t set, const SampleZoneDesc& zone);
 
   size_t sample_count() const noexcept { return samples_.size(); }

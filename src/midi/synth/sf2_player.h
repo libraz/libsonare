@@ -1045,6 +1045,7 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
     GsEfxBindingRow row{};
     uint8_t stage_index = 0xFF;
     uint32_t param_id = 0;
+    Sf2EfxValueTransform transform = Sf2EfxValueTransform::kBinding;
   };
 
   /// One enable term and the stage indices it names. At audio time the raw
