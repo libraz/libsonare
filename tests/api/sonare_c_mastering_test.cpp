@@ -2625,3 +2625,17 @@ TEST_CASE("EQ match resamples a reference at another rate", "[c_api][mastering][
 }
 
 #endif
+
+TEST_CASE("sonare_mastering_apply_processor runs eq.shelving with no params at a low rate",
+          "[c_api][mastering]") {
+  for (const int rate : {8000, 16000}) {
+    INFO("rate " << rate);
+    auto samples = generate_sine(440.0f, rate, 0.25f);
+    SonareMasteringResult result{};
+    REQUIRE(sonare_mastering_apply_processor("eq.shelving", samples.data(), samples.size(), rate,
+                                             nullptr, 0, &result) == SONARE_OK);
+    REQUIRE(result.samples != nullptr);
+    REQUIRE(result.length == samples.size());
+    sonare_free_mastering_result(&result);
+  }
+}

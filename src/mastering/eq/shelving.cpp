@@ -21,12 +21,24 @@ std::vector<rt::ParamDescriptor> ShelvingEq::parameter_descriptors() const {
           {"highFrequencyHz", 3}, {"highGainDb", 4}, {"highQ", 5}};
 }
 
-void ShelvingEq::set_low_shelf(float frequency_hz, float gain_db, float q, bool enabled) {
-  eq_.set_band(0, {EqBandType::LowShelf, frequency_hz, gain_db, q, enabled});
+void ShelvingEq::set_low_shelf(float frequency_hz, float gain_db, float q, bool enabled,
+                               bool resolve_at_rate) {
+  const EqBand band{EqBandType::LowShelf, frequency_hz, gain_db, q, enabled};
+  if (resolve_at_rate) {
+    eq_.set_band_at_rate(0, band);
+  } else {
+    eq_.set_band(0, band);
+  }
 }
 
-void ShelvingEq::set_high_shelf(float frequency_hz, float gain_db, float q, bool enabled) {
-  eq_.set_band(1, {EqBandType::HighShelf, frequency_hz, gain_db, q, enabled});
+void ShelvingEq::set_high_shelf(float frequency_hz, float gain_db, float q, bool enabled,
+                                bool resolve_at_rate) {
+  const EqBand band{EqBandType::HighShelf, frequency_hz, gain_db, q, enabled};
+  if (resolve_at_rate) {
+    eq_.set_band_at_rate(1, band);
+  } else {
+    eq_.set_band(1, band);
+  }
 }
 
 void ShelvingEq::clear_low_shelf() { eq_.clear_band(0); }

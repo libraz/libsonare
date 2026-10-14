@@ -21,10 +21,13 @@ class ShelvingEq : public rt::ProcessorBase {
     return rt::TailBudget::reported(eq_.tail_samples()).samples();
   }
 
+  /// @param resolve_at_rate Installs the corner as rate-resolvable: a frequency the prepared
+  ///        rate cannot carry is designed at that rate's ceiling instead of refused. For a
+  ///        corner the caller did not choose.
   void set_low_shelf(float frequency_hz, float gain_db, float q = sonare::constants::kButterworthQ,
-                     bool enabled = true);
+                     bool enabled = true, bool resolve_at_rate = false);
   void set_high_shelf(float frequency_hz, float gain_db, float q = sonare::constants::kButterworthQ,
-                      bool enabled = true);
+                      bool enabled = true, bool resolve_at_rate = false);
   void clear_low_shelf();
   void clear_high_shelf();
   void clear();

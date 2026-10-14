@@ -767,3 +767,36 @@ TEST_CASE("EqualizerProcessor keeps filter history through same-value and retuni
   }
   CHECK(worst == 0.0f);
 }
+
+TEST_CASE("eq.shelving at default frequencies resolves at any prepared rate", "[mastering][eq]") {
+  for (const int rate : {8000, 16000, 22050, 48000}) {
+    for (const double build_rate : {0.0, static_cast<double>(rate), 48000.0}) {
+      INFO("rate " << rate << " build rate " << build_rate);
+      auto insert = sonare::mastering::api::make_insert(
+          "eq.shelving", "{}", nullptr, sonare::resource::kDefaultProjectImportResourceLimits,
+          build_rate);
+      REQUIRE(insert != nullptr);
+      REQUIRE_NOTHROW(insert->prepare(rate, 256));
+      const auto source = sine(440.0f, rate, rate / 4);
+      auto out = source;
+      process(*insert, out);
+      for (const float sample : out) REQUIRE(std::isfinite(sample));
+      // Default gains are 0 dB, so the shelves are transparent.
+      REQUIRE(max_abs_difference(source, out) < 1e-3f);
+    }
+  }
+}
+
+TEST_CASE("eq.shelving still refuses an explicit corner the rate cannot carry", "[mastering][eq]") {
+  for (const double build_rate : {0.0, 8000.0}) {
+    INFO("build rate " << build_rate);
+    const auto build_and_prepare = [&](const char* json) {
+      auto insert = sonare::mastering::api::make_insert(
+          "eq.shelving", json, nullptr, sonare::resource::kDefaultProjectImportResourceLimits,
+          build_rate);
+      insert->prepare(8000, 256);
+    };
+    REQUIRE_THROWS_AS(build_and_prepare(R"({"highFrequencyHz":10000})"), sonare::SonareException);
+    REQUIRE_THROWS_AS(build_and_prepare(R"({"lowFrequencyHz":10000})"), sonare::SonareException);
+  }
+}

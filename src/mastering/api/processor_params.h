@@ -174,6 +174,9 @@ class ParamMap {
   }
   const_iterator end() const { return map_.end(); }
 
+  /// @brief Whether @p key was supplied, without recording it as probed.
+  bool has(const std::string& key) const { return map_.find(key) != map_.end(); }
+
   /// @brief Whether a supplied key is @p prefix followed by one of @p fields, without recording
   ///        anything as probed. Scans the supplied keys, so it suits the one- or two-key maps of
   ///        a bounds probe better than a lookup per field.
@@ -1072,12 +1075,15 @@ inline void configure_band_pass(eq::BandPassEq& p, const ParamMap& params) {
 }
 
 inline void configure_shelving(eq::ShelvingEq& p, const ParamMap& params) {
+  // A corner left at its default is resolved at the prepared rate; a supplied one is refused
+  // when that rate cannot carry it.
   p.set_low_shelf(f(params, "lowFrequencyHz", 100.0f, kHzLog), f(params, "lowGainDb", 0.0f, kDb),
-                  f(params, "lowQ", constants::kButterworthQ, kNone),
-                  b(params, "lowEnabled", true));
-  p.set_high_shelf(
-      f(params, "highFrequencyHz", 10000.0f, kHzLog), f(params, "highGainDb", 0.0f, kDb),
-      f(params, "highQ", constants::kButterworthQ, kNone), b(params, "highEnabled", true));
+                  f(params, "lowQ", constants::kButterworthQ, kNone), b(params, "lowEnabled", true),
+                  !params.has("lowFrequencyHz"));
+  p.set_high_shelf(f(params, "highFrequencyHz", 10000.0f, kHzLog),
+                   f(params, "highGainDb", 0.0f, kDb),
+                   f(params, "highQ", constants::kButterworthQ, kNone),
+                   b(params, "highEnabled", true), !params.has("highFrequencyHz"));
   params.note_coupled("lowFrequencyHz", "lowEnabled");
   params.note_coupled("lowQ", "lowEnabled");
   params.note_coupled("highFrequencyHz", "highEnabled");
