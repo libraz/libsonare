@@ -115,6 +115,8 @@ class BitCrusher : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  /// @brief The pre-filter ring, the hold of the last latched sample, then the post-filter ring.
+  int tail_samples() const noexcept override;
   void set_config(const BitCrusherConfig& config);
   const BitCrusherConfig& config() const { return config_; }
 

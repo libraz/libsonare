@@ -3,8 +3,12 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <memory>
 #include <string>
 #include <vector>
+
+#include "mastering/api/insert_factory.h"
+#include "rt/processor_base.h"
 
 namespace {
 
@@ -96,5 +100,65 @@ TEST_CASE("BitCrusher noise LPF re-entry does not replay any source history",
     REQUIRE(max_difference(reentry_subject, reentry_control) < 1.0e-5f);
     REQUIRE(subject.non_finite_discard_count() == 0u);
     REQUIRE(reset_control.non_finite_discard_count() == 0u);
+  }
+}
+
+TEST_CASE("BitCrusher is silent once its reported tail has elapsed",
+          "[mastering][saturation][tail]") {
+  struct Case {
+    const char* name;
+    const char* json;
+  };
+  const Case cases[] = {
+      {"count 4", R"({"downsampleFactor": 4})"},
+      {"hold 80 Hz", R"({"holdHz": 80})"},
+      {"pre 100 Hz", R"({"preFilterHz": 100})"},
+      {"post 100 Hz", R"({"postFilterHz": 100})"},
+  };
+  // One finite input frame, then silence: anything left after the reported tail is owed state.
+  const auto render = [](sonare::rt::ProcessorBase& processor, double rate, float* residual,
+                         float* inside) {
+    processor.prepare(rate, 256);
+    const int tail = processor.tail_samples();
+    const int silent_from = 1 + processor.latency_samples() + tail;
+    std::vector<float> samples(static_cast<size_t>(silent_from) + 4096, 0.0f);
+    samples[0] = 0.8f;
+    process_mono(processor, samples);
+    *residual = 0.0f;
+    *inside = 0.0f;
+    for (size_t i = 0; i < samples.size(); ++i) {
+      const float magnitude = std::abs(samples[i]);
+      if (static_cast<int>(i) >= silent_from) {
+        *residual = std::max(*residual, magnitude);
+      } else if (i > 0) {
+        *inside = std::max(*inside, magnitude);
+      }
+    }
+    return tail;
+  };
+  for (const double rate : {8000.0, 48000.0, 96000.0}) {
+    for (const Case& c : cases) {
+      CAPTURE(rate, c.name);
+      std::unique_ptr<sonare::rt::ProcessorBase> processor =
+          sonare::mastering::api::make_insert("saturation.bitcrusher", c.json);
+      REQUIRE(processor != nullptr);
+      float residual = 0.0f;
+      float inside = 0.0f;
+      const int tail = render(*processor, rate, &residual, &inside);
+      CHECK(tail > 0);
+      CHECK(inside > 1.0e-5f);
+      CHECK(residual <= 1.0e-5f);
+    }
+    // Pass-through settings own no state past the input frame.
+    for (const char* json : {"{}", R"({"mix": 0, "downsampleFactor": 4, "postFilterHz": 100})"}) {
+      CAPTURE(rate, json);
+      std::unique_ptr<sonare::rt::ProcessorBase> processor =
+          sonare::mastering::api::make_insert("saturation.bitcrusher", json);
+      REQUIRE(processor != nullptr);
+      float residual = 0.0f;
+      float inside = 0.0f;
+      CHECK(render(*processor, rate, &residual, &inside) == 0);
+      CHECK(residual == 0.0f);
+    }
   }
 }

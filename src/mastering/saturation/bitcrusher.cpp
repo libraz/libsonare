@@ -7,6 +7,7 @@
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
@@ -336,6 +337,21 @@ void BitCrusher::validate_config(const BitCrusherConfig& config) {
       static_cast<int>(config.filter_type) < 0 || static_cast<int>(config.filter_type) > 2) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid bitcrusher configuration");
   }
+}
+
+int BitCrusher::tail_samples() const noexcept {
+  const effects::common::MixGains mix =
+      effects::common::mix_gains(config_.mix_law, std::clamp(config_.mix, 0.0f, 1.0f));
+  const double scale = std::abs(static_cast<double>(mix.wet));
+  if (!(scale > 0.0)) return 0;
+  // A trapezoidal one-pole with gain g has its pole at 1 - 2g.
+  rt::TailBudget tail;
+  if (pre_gain_ > 0.0) tail.decay(std::abs(1.0 - 2.0 * pre_gain_), scale);
+  // The last latched sample is held until the next latch reads the silence behind it.
+  tail.delay(hold_increment_ > 0.0 ? std::ceil(1.0 / hold_increment_)
+                                   : static_cast<double>(config_.downsample_factor - 1));
+  if (post_gain_ > 0.0) tail.decay(std::abs(1.0 - 2.0 * post_gain_), scale);
+  return tail.samples();
 }
 
 void BitCrusher::update_hold_increment() noexcept {
