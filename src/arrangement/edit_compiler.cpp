@@ -9,6 +9,7 @@
 #include <new>
 #include <set>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 #include "arrangement/edit_command_internal.h"
@@ -456,9 +457,37 @@ void append_midi_render_events(const midi::MidiClip& midi_clip, const EditClip& 
 }  // namespace
 
 void CompiledTimeline::copy_from(const CompiledTimeline& other) {
+  copy_selected_from(other, {}, true, true);
+}
+
+CompiledTimeline CompiledTimeline::select_clips(const std::function<bool(uint32_t)>& keep_track,
+                                                bool with_audio, bool with_midi) const {
+  CompiledTimeline selected;
+  selected.copy_selected_from(*this, keep_track, with_audio, with_midi);
+  return selected;
+}
+
+void CompiledTimeline::copy_selected_from(const CompiledTimeline& other,
+                                          const std::function<bool(uint32_t)>& keep_track,
+                                          bool with_audio, bool with_midi) {
+  const auto copy_clips = [&keep_track](const auto& from, auto& to, bool with) {
+    if (!with) {
+      to.clear();
+    } else if (!keep_track) {
+      to = from;
+    } else {
+      std::remove_reference_t<decltype(to)> kept;
+      kept.reserve(static_cast<size_t>(std::count_if(
+          from.begin(), from.end(), [&](const auto& clip) { return keep_track(clip.track_id); })));
+      for (const auto& clip : from) {
+        if (keep_track(clip.track_id)) kept.push_back(clip);
+      }
+      to = std::move(kept);
+    }
+  };
   sample_rate = other.sample_rate;
-  audio_clips = other.audio_clips;
-  midi_clips = other.midi_clips;
+  copy_clips(other.audio_clips, audio_clips, with_audio);
+  copy_clips(other.midi_clips, midi_clips, with_midi);
   automation_lanes = other.automation_lanes;
   track_lanes = other.track_lanes;
   graph = other.graph;

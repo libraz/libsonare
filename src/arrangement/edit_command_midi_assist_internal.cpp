@@ -12,24 +12,20 @@
 namespace sonare::arrangement {
 
 namespace detail {
-namespace {
-
-bool midi_store_references_sysex(const MidiContentStore& store, uint32_t handle) {
-  if (handle == 0) return true;
-  for (const auto& [clip_id, events] : store.events) {
-    (void)clip_id;
-    for (const MidiClipEvent& event : events) {
-      if (event.sysex_handle == handle) return true;
-    }
-  }
-  return false;
-}
-
-}  // namespace
 
 void prune_unreferenced_sysex_payloads(MidiContentStore* store) {
+  if (store->sysex_payloads.empty()) return;
+  // One pass over the events collects every referenced handle; handle 0 is always kept.
+  std::vector<uint32_t> referenced;
+  for (const auto& [clip_id, events] : store->events) {
+    (void)clip_id;
+    for (const MidiClipEvent& event : events) {
+      if (event.sysex_handle != 0) referenced.push_back(event.sysex_handle);
+    }
+  }
+  std::sort(referenced.begin(), referenced.end());
   for (auto it = store->sysex_payloads.begin(); it != store->sysex_payloads.end();) {
-    if (midi_store_references_sysex(*store, it->first)) {
+    if (it->first == 0 || std::binary_search(referenced.begin(), referenced.end(), it->first)) {
       ++it;
     } else {
       it = store->sysex_payloads.erase(it);

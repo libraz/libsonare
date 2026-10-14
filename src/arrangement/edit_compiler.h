@@ -22,6 +22,7 @@
 /// timeline comes back alongside it.
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <optional>
 #include <string>
@@ -269,8 +270,17 @@ struct CompiledTimeline {
   CompiledTimeline(CompiledTimeline&&) = default;
   CompiledTimeline& operator=(CompiledTimeline&&) = default;
 
+  /// A copy whose clip lists hold only the clips on tracks @p keep_track accepts
+  /// (every clip when it is empty); @p with_audio / @p with_midi false leave that
+  /// list empty. Clips left out are never copied.
+  CompiledTimeline select_clips(const std::function<bool(uint32_t)>& keep_track, bool with_audio,
+                                bool with_midi) const;
+
  private:
   void copy_from(const CompiledTimeline& other);
+  void copy_selected_from(const CompiledTimeline& other,
+                          const std::function<bool(uint32_t)>& keep_track, bool with_audio,
+                          bool with_midi);
 };
 
 // ===========================================================================

@@ -1041,6 +1041,38 @@ TEST_CASE("TrackMixerRuntime mixes post-fader sends into buses", "[engine][track
   REQUIRE(out_l.back() < 1.01f);
 }
 
+TEST_CASE("TrackMixerRuntime keeps a lane send on its bus across a bus reorder",
+          "[engine][track_mixer]") {
+  std::array<float, 16> source{};
+  source.fill(1.0f);
+  const float* channels[] = {source.data()};
+
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, 16);
+  player.set_clips({clip_for_track(1, 10, channels, 1, 16)});
+
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, 16);
+  REQUIRE(mixer.set_buses({{1, 0.0f}, {2, -20.0f}}));
+  sonare::engine::TrackLaneConfig lane{10};
+  lane.sends.push_back({1, 0.0f, true});
+  REQUIRE(mixer.set_track_lanes({lane}));
+
+  std::array<float, 16> out_l{};
+  float* out[] = {out_l.data()};
+  REQUIRE(mixer.render_clips(player, out, 1, 16, 0));
+  REQUIRE(out_l.back() > 1.99f);
+  REQUIRE(out_l.back() < 2.01f);
+
+  // Bus 1 moves to index 1, where the -20 dB bus 2 used to sit.
+  REQUIRE(mixer.set_buses({{2, -20.0f}, {1, 0.0f}}));
+  mixer.settle_smoothers();
+  out_l.fill(0.0f);
+  REQUIRE(mixer.render_clips(player, out, 1, 16, 0));
+  CHECK(out_l.back() > 1.99f);
+  CHECK(out_l.back() < 2.01f);
+}
+
 TEST_CASE("TrackMixerRuntime disabled lane and bus sends add exactly nothing",
           "[engine][track_mixer]") {
   constexpr int kBlock = 128;

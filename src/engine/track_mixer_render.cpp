@@ -92,6 +92,8 @@ bool TrackMixerRuntime::render_clips_into_lanes(ClipPlayer& player, float* const
     // would freeze a reverb tail or a compressor release mid-decay.
     source_mix_lane_active_[lane_index] = true;
   }
+  // Sorted for the exclusion lookup; the lane loop above is done with the lane order.
+  std::sort(active_track_ids_.begin(), active_track_ids_.begin() + lanes->size());
   // Lane-less clips are staged in the direct bank at the master's width; finish_block()
   // adds them before lane output.
   for (int ch = 0; ch < num_channels; ++ch) {
@@ -473,13 +475,9 @@ void TrackMixerRuntime::mix_lane_sends(size_t lane_index, int num_channels, int 
 
   std::array<float*, kMaxLaneChannels> dest{};
   for (size_t send_index = 0; send_index < config.sends.size(); ++send_index) {
-    const TrackLaneConfig::Send& send = config.sends[send_index];
-    BusState* bus = bus_state_for(send.bus_id);
-    if (!bus) continue;
-    const auto bus_it = std::find_if(bus_states_.begin(), bus_states_.end(),
-                                     [bus](const BusState& state) { return &state == bus; });
-    if (bus_it == bus_states_.end()) continue;
-    const size_t bus_index = static_cast<size_t>(std::distance(bus_states_.begin(), bus_it));
+    const LaneRoute& route = lane_routes_[lane_index];
+    if (send_index >= route.send_count || route.send_indices[send_index] < 0) continue;
+    const size_t bus_index = static_cast<size_t>(route.send_indices[send_index]);
     for (int ch = 0; ch < rows; ++ch) {
       dest[static_cast<size_t>(ch)] = bus_channel(bus_index, ch);
     }
@@ -756,20 +754,17 @@ void TrackMixerRuntime::apply_lane_to_mix(size_t lane_index, float* const* chann
   int dest_channels = master_channels;
   bool routed_to_bus = false;
   std::array<float*, kMaxBusChannels> bus_planes{};
-  const std::vector<TrackLaneConfig>* lanes = lanes_.current();
-  if (lanes && lane_index < lanes->size() && (*lanes)[lane_index].output_bus_id != 0) {
-    const uint32_t output_bus_id = (*lanes)[lane_index].output_bus_id;
-    for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
-      if (bus_configs_[bus_index].bus_id != output_bus_id) continue;
-      dest_channels = bus_render_channels(bus_index, master_channels);
-      dest_left = bus_channel(bus_index, 0);
-      dest_right = dest_channels >= 2 ? bus_channel(bus_index, 1) : nullptr;
-      for (int ch = 0; ch < dest_channels; ++ch) {
-        bus_planes[static_cast<size_t>(ch)] = bus_channel(bus_index, ch);
-      }
-      routed_to_bus = true;
-      break;
+  // An unresolved output bus id falls back to the master mix.
+  const int output_index = lane_routes_[lane_index].output_index;
+  if (output_index >= 0) {
+    const size_t bus_index = static_cast<size_t>(output_index);
+    dest_channels = bus_render_channels(bus_index, master_channels);
+    dest_left = bus_channel(bus_index, 0);
+    dest_right = dest_channels >= 2 ? bus_channel(bus_index, 1) : nullptr;
+    for (int ch = 0; ch < dest_channels; ++ch) {
+      bus_planes[static_cast<size_t>(ch)] = bus_channel(bus_index, ch);
     }
+    routed_to_bus = true;
   }
   // Surround destination: a lane summing into a >2-channel master mix or a
   // surround group bus is scattered by the surround panner. Stereo/mono

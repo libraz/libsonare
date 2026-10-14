@@ -268,6 +268,7 @@ class ClipPlayer final : public rt::ProcessorBase {
                   int64_t timeline_sample) noexcept;
   void process_track_at(uint32_t track_id, float* const* channels, int num_channels,
                         int num_samples, int64_t timeline_sample) noexcept;
+  /// Renders every clip whose track is not in @p track_ids, which must be sorted ascending.
   void process_excluding_tracks_at(const uint32_t* track_ids, size_t track_count,
                                    float* const* channels, int num_channels, int num_samples,
                                    int64_t timeline_sample) noexcept;
@@ -399,7 +400,12 @@ class ClipPlayer final : public rt::ProcessorBase {
   bool external_page_miss_block_ = false;
   std::atomic<int64_t> page_prefetch_frames_{0};
   const transport::TempoMap* tempo_map_ = nullptr;
-  mutable rt::RtPublisher<std::vector<ClipSchedule>> clips_;
+  struct ClipSet {
+    std::vector<ClipSchedule> clips;
+    // Indices into clips ordered by track id, schedule order within one track.
+    std::vector<size_t> by_track;
+  };
+  mutable rt::RtPublisher<ClipSet> clips_;
   // Published by set_clips() on the control thread; read lock-free by
   // clip_count() so host polling never races the audio thread's acquire().
   std::atomic<size_t> clip_count_{0};

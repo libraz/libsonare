@@ -829,9 +829,12 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // entry @p skip.
   size_t collect_key_edges(std::array<KeyEdge, kMaxSidechainBindings>& out,
                            size_t skip) const noexcept;
-  // Re-derives bus_order_ and bus_routes_ from bus_configs_ and the binding
-  // table. Control thread; the current state is always valid here.
+  // Re-derives bus_order_, bus_routes_ and the lane route indices from
+  // bus_configs_ and the binding table. Control thread; the current state is
+  // always valid here.
   void refresh_bus_graph() noexcept;
+  // Resolves each applied lane's output and send bus ids to bus_configs_ indices.
+  void resolve_lane_routes() noexcept;
   // Routes of @p buses against the binding table, skipping flagged bindings.
   void build_routes(const std::vector<TrackBusConfig>& buses,
                     const std::array<bool, kMaxSidechainBindings>& skip,
@@ -1122,6 +1125,17 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // Topological bus processing order and resolved routes (control-written).
   std::array<size_t, kMaxBusLanes> bus_order_{};
   std::array<BusRoute, kMaxBusLanes> bus_routes_{};
+  // An applied lane's output and send bus ids with their bus_configs_ index (-1:
+  // none, the master for the output), kept current by prepare_lanes_from_snapshot
+  // and refresh_bus_graph.
+  struct LaneRoute {
+    uint32_t output_bus_id = 0;
+    int output_index = -1;
+    size_t send_count = 0;
+    std::array<uint32_t, mixing::ChannelStrip::kMaxSends> send_bus_ids{};
+    std::array<int, mixing::ChannelStrip::kMaxSends> send_indices{};
+  };
+  std::array<LaneRoute, kMaxTrackLanes> lane_routes_{};
   std::array<std::array<std::unique_ptr<mixing::SendProcessor>, mixing::ChannelStrip::kMaxSends>,
              kMaxBusLanes>
       bus_sends_{};

@@ -279,6 +279,32 @@ TEST_CASE("Track mixer routes a bus output into another bus", "[track_mixer_rout
   CHECK(agree(expected, out));
 }
 
+TEST_CASE("Track mixer keeps a lane on its output bus across a bus reorder and replacement",
+          "[track_mixer_routing]") {
+  constexpr int kBlocks = 3;
+  TrackMixerRuntime mixer;
+  mixer.prepare(kSampleRate, kBlock);
+  REQUIRE(mixer.set_buses({bus_config(1, -6.0f), bus_config(2, -20.0f)}));
+  REQUIRE(mixer.set_track_lanes({lane_to(10, 1)}));
+  const Planes expected = scaled(dry(10, kBlocks), sonare::db_to_linear(-6.0f));
+  REQUIRE(rms_db(expected[0]) > -40.0);
+
+  // Bus 1 moves from index 0 to index 1, where bus 2 used to sit.
+  REQUIRE(mixer.set_buses({bus_config(2, -20.0f), bus_config(1, -6.0f)}));
+  mixer.settle_smoothers();
+  CHECK(agree(expected, render(mixer, {10}, 2, kBlocks)));
+
+  // Bus 2 is replaced by bus 3 at index 0; the lane stays on bus 1.
+  REQUIRE(mixer.set_buses({bus_config(3, -20.0f), bus_config(1, -6.0f)}));
+  mixer.settle_smoothers();
+  CHECK(agree(expected, render(mixer, {10}, 2, kBlocks)));
+
+  // A lane snapshot moving the lane to the master resolves on the next block.
+  REQUIRE(mixer.set_track_lanes({TrackLaneConfig{10}}));
+  mixer.settle_smoothers();
+  CHECK(agree(dry(10, kBlocks), render(mixer, {10}, 2, kBlocks)));
+}
+
 TEST_CASE("Track mixer taps a pre-fader bus send before gain_db and a post one after",
           "[track_mixer_routing]") {
   constexpr int kBlocks = 3;

@@ -7,6 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <limits>
 #include <set>
+#include <utility>
 
 #include "arrangement/edit_source.h"
 
@@ -521,4 +522,44 @@ TEST_CASE("Track channel strip ref links to a mixing Scene strip id", "[arrangem
   REQUIRE(p.find_track(tid) != nullptr);
   CHECK(p.find_track(tid)->channel_strip_ref == "strip-A");
   CHECK(p.scene().strips.front().id == p.find_track(tid)->channel_strip_ref);
+}
+
+TEST_CASE("Part rigs are found, replaced and removed by (destination, part)", "[arrangement]") {
+  Project p;
+  const std::array<std::pair<uint32_t, uint8_t>, 6> keys{
+      {{7, 3}, {2, sonare::midi::kPartRigAllParts}, {7, 0}, {2, 15}, {9, 1}, {2, 0}}};
+  for (const auto& [destination, part] : keys) {
+    ProjectPartRig entry;
+    entry.destination_id = destination;
+    entry.part = part;
+    REQUIRE(p.set_part_rig(entry));
+  }
+  REQUIRE(p.part_rigs().size() == keys.size());
+  for (size_t i = 1; i < p.part_rigs().size(); ++i) {
+    const ProjectPartRig& a = p.part_rigs()[i - 1];
+    const ProjectPartRig& b = p.part_rigs()[i];
+    CHECK(std::pair(a.destination_id, a.part) < std::pair(b.destination_id, b.part));
+  }
+  for (const auto& [destination, part] : keys) {
+    const ProjectPartRig* found = p.find_part_rig(destination, part);
+    REQUIRE(found != nullptr);
+    CHECK(found->destination_id == destination);
+    CHECK(found->part == part);
+  }
+  CHECK(p.find_part_rig(7, 1) == nullptr);
+  CHECK(p.find_part_rig(1, 0) == nullptr);
+  CHECK(p.find_part_rig(10, 0) == nullptr);
+
+  ProjectPartRig replacement;
+  replacement.destination_id = 7;
+  replacement.part = 0;
+  REQUIRE(p.set_part_rig(replacement));
+  CHECK(p.part_rigs().size() == keys.size());
+
+  CHECK(p.remove_part_rig(7, 0));
+  CHECK_FALSE(p.remove_part_rig(7, 0));
+  CHECK_FALSE(p.remove_part_rig(8, 0));
+  CHECK(p.find_part_rig(7, 0) == nullptr);
+  CHECK(p.find_part_rig(7, 3) != nullptr);
+  CHECK(p.part_rigs().size() == keys.size() - 1);
 }

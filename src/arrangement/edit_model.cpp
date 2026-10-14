@@ -310,20 +310,32 @@ std::pair<WarpMapRef, bool> Project::remove_warp_map(WarpRefId id) {
   return {WarpMapRef{}, false};
 }
 
+namespace {
+
+// part_rigs_ is kept sorted by (destination_id, part); returns the first entry not below the key.
+template <typename Rigs>
+auto part_rig_lower_bound(Rigs& rigs, uint32_t destination_id, uint8_t part) noexcept {
+  return std::lower_bound(rigs.begin(), rigs.end(), std::pair(destination_id, part),
+                          [](const ProjectPartRig& entry, const std::pair<uint32_t, uint8_t>& key) {
+                            return std::pair(entry.destination_id, entry.part) < key;
+                          });
+}
+
+}  // namespace
+
 const ProjectPartRig* Project::find_part_rig(uint32_t destination_id, uint8_t part) const noexcept {
-  for (const ProjectPartRig& entry : part_rigs_) {
-    if (entry.destination_id == destination_id && entry.part == part) return &entry;
+  const auto it = part_rig_lower_bound(part_rigs_, destination_id, part);
+  if (it == part_rigs_.end() || it->destination_id != destination_id || it->part != part) {
+    return nullptr;
   }
-  return nullptr;
+  return &*it;
 }
 
 bool Project::set_part_rig(ProjectPartRig entry) {
   if (!midi::validate_part_rig(entry.part, entry.rig)) return false;
-  const auto key = [](const ProjectPartRig& e) { return std::pair(e.destination_id, e.part); };
-  auto it = std::lower_bound(
-      part_rigs_.begin(), part_rigs_.end(), entry,
-      [&](const ProjectPartRig& a, const ProjectPartRig& b) { return key(a) < key(b); });
-  if (it != part_rigs_.end() && key(*it) == key(entry)) {
+  auto it = part_rig_lower_bound(part_rigs_, entry.destination_id, entry.part);
+  if (it != part_rigs_.end() && it->destination_id == entry.destination_id &&
+      it->part == entry.part) {
     *it = std::move(entry);
   } else {
     part_rigs_.insert(it, std::move(entry));
@@ -332,13 +344,12 @@ bool Project::set_part_rig(ProjectPartRig entry) {
 }
 
 bool Project::remove_part_rig(uint32_t destination_id, uint8_t part) {
-  for (auto it = part_rigs_.begin(); it != part_rigs_.end(); ++it) {
-    if (it->destination_id == destination_id && it->part == part) {
-      part_rigs_.erase(it);
-      return true;
-    }
+  const auto it = part_rig_lower_bound(part_rigs_, destination_id, part);
+  if (it == part_rigs_.end() || it->destination_id != destination_id || it->part != part) {
+    return false;
   }
-  return false;
+  part_rigs_.erase(it);
+  return true;
 }
 
 uint32_t Project::add_marker(double ppq, std::string name, uint8_t kind, int8_t key_fifths,
@@ -368,11 +379,13 @@ std::pair<Track, bool> Project::remove_track(TrackId id) {
 }
 
 std::pair<EditClip, bool> Project::remove_clip(ClipId id) {
+  // Moving out is safe only because the erase that follows cannot throw.
+  static_assert(std::is_nothrow_move_assignable_v<EditClip>);
   for (auto it = clips_.begin(); it != clips_.end(); ++it) {
     if (it->id == id) {
-      EditClip removed = *it;
+      EditClip removed = std::move(*it);
       clips_.erase(it);
-      return {removed, true};
+      return {std::move(removed), true};
     }
   }
   return {EditClip{}, false};

@@ -199,6 +199,7 @@ void TrackMixerRuntime::build_routes(const std::vector<TrackBusConfig>& buses,
 }
 
 void TrackMixerRuntime::refresh_bus_graph() noexcept {
+  resolve_lane_routes();
   std::array<KeyEdge, kMaxSidechainBindings> edges{};
   const size_t edge_count = collect_key_edges(edges, kMaxSidechainBindings);
   std::array<size_t, kMaxBusLanes> order{};
@@ -206,6 +207,15 @@ void TrackMixerRuntime::refresh_bus_graph() noexcept {
   if (!validate_bus_graph(bus_configs_, edges.data(), edge_count, &order)) return;
   bus_order_ = order;
   build_routes(bus_configs_, {}, &bus_routes_);
+}
+
+void TrackMixerRuntime::resolve_lane_routes() noexcept {
+  for (LaneRoute& route : lane_routes_) {
+    route.output_index = configured_bus_index(route.output_bus_id);
+    for (size_t send = 0; send < route.send_count; ++send) {
+      route.send_indices[send] = configured_bus_index(route.send_bus_ids[send]);
+    }
+  }
 }
 
 bool TrackMixerRuntime::recompute_lane_pdc(const std::vector<TrackLaneConfig>& lanes) noexcept {

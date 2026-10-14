@@ -1803,6 +1803,18 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
   }
   applied_lane_snapshot_ = &lanes;
   applied_lane_count_ = lanes.size();
+  for (size_t lane_index = 0; lane_index < kMaxTrackLanes; ++lane_index) {
+    LaneRoute& route = lane_routes_[lane_index];
+    route = LaneRoute{};
+    if (lane_index >= lanes.size()) continue;
+    const TrackLaneConfig& lane = lanes[lane_index];
+    route.output_bus_id = lane.output_bus_id;
+    route.send_count = std::min(lane.sends.size(), route.send_bus_ids.size());
+    for (size_t send = 0; send < route.send_count; ++send) {
+      route.send_bus_ids[send] = lane.sends[send].bus_id;
+    }
+  }
+  resolve_lane_routes();
   // Slot identities were restaged, so no published reading still belongs to its slot.
   for (InsertGainReductionBoard& board : lane_insert_gr_boards_) board.clear();
 }

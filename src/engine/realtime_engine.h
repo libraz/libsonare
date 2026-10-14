@@ -1153,6 +1153,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   // Returns every mixer and effect processor to its prepared state; see
   // reset_processor_state. Not concurrent with process().
   void reset_processing_now() noexcept;
+  // AUDIO thread: flush every PDC delay line once on a transport discontinuity so
+  // no stale clip/instrument/lane audio rings out across a stop/seek/loop.
+  void flush_pdc_delays() noexcept;
 #if defined(SONARE_WITH_ARRANGEMENT)
   // CONTROL thread: refresh the PDC delays from the current instrument rack and
   // report the resulting graph latency. Called from prepare() and whenever an
@@ -1178,9 +1181,8 @@ class RealtimeEngine : private ClipPageRequestSink {
                                      PreparedPdc& out) const noexcept;
   void commit_pdc(PreparedPdc& prepared) noexcept;
   [[nodiscard]] bool recompute_pdc();
-  // AUDIO thread: flush the PDC delay lines on a transport discontinuity so no
-  // stale clip/instrument audio rings out across a stop/seek/loop.
-  void flush_pdc_delays() noexcept;
+  // AUDIO thread: flush the engine-owned clip/instrument PDC delay lines.
+  void flush_instrument_pdc_delays() noexcept;
   // AUDIO thread: the single live control-change decode. Resolves @p ump through
   // the kind-aware CcMap::observe_live_cc and pushes the resulting unit value to
   // its bound parameter; a non-controller message resolves to nothing. Every

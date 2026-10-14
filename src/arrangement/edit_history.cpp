@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <optional>
 #include <utility>
 
 namespace sonare::arrangement {
@@ -376,7 +377,8 @@ bool EditHistory::apply_transaction(std::vector<EditCommandPtr> commands) {
   };
 
   try {
-    for (auto& command : commands) {
+    for (size_t index = 0; index < commands.size(); ++index) {
+      EditCommandPtr& command = commands[index];
       if (command == nullptr) {
         rollback();
         pending_active = false;
@@ -384,13 +386,19 @@ bool EditHistory::apply_transaction(std::vector<EditCommandPtr> commands) {
         return false;
       }
 
-      Project before = project_;
+      // The first command's pre-state is the transaction snapshot itself.
+      const bool first = index == 0;
+      std::optional<Project> before_copy;
+      if (!first) before_copy.emplace(project_);
+      const Project& before = first ? transaction_before : *before_copy;
       const bool clone_store = command->mutates_midi_store();
       MidiContentStore store_copy;
-      if (clone_store) {
+      if (clone_store && !first) {
         store_copy = midi_content_;
       }
-      const MidiContentStore& store_before = clone_store ? store_copy : midi_content_;
+      const MidiContentStore& store_before = !clone_store ? midi_content_
+                                             : first      ? transaction_store_before
+                                                          : store_copy;
       active_command = command.get();
       if (!command->apply(project_, midi_content_)) {
         // A false result does not prove that the current command left its

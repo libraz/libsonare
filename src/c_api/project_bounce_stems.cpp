@@ -19,8 +19,7 @@ bool render_midi_source_stems(const arr::CompiledTimeline& timeline,
   }
   if (track_ids.size() > sonare::engine::TrackMixerRuntime::kMaxTrackLanes) return false;
 
-  arr::CompiledTimeline midi_only = timeline;
-  midi_only.audio_clips.clear();
+  const arr::CompiledTimeline midi_only = timeline.select_clips({}, false, true);
   sonare::engine::RealtimeEngine engine;
   engine.prepare(sample_rate, block_size);
   const arr::ApplyResult applied = arr::apply_to_engine(midi_only, engine);
@@ -53,8 +52,8 @@ bool render_midi_source_stems(const arr::CompiledTimeline& timeline,
   engine.prime_offline_parameters(2, block_size);
   sink->settle_typed_automation();
   engine.set_instrument_source_render_sink(sink);
-  std::vector<std::vector<float>> discard(2, std::vector<float>(render_frame_count, 0.0f));
-  float* channels[] = {discard[0].data(), discard[1].data()};
+  // Only the sink's per-source audio is read, so the master planes are left null.
+  float* channels[] = {nullptr, nullptr};
   sonare::rt::Command play{};
   play.type = sonare::rt::CommandType::kTransportPlay;
   play.sample_time = -1;

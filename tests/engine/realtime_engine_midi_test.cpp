@@ -2374,6 +2374,59 @@ TEST_CASE("render_offline flushes PDC delay tails from lane-routed clips", "[eng
 
   engine.set_midi_instrument(nullptr);
 }
+
+TEST_CASE("stop and seek flush lane-routed clip PDC tails", "[engine][midi]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 64;
+  constexpr int kLatency = 96;
+  RealtimeEngine engine;
+  engine.prepare(kSr, kBlock);
+  FractionalLatencyInstrument inst(kLatency << 8);
+  engine.set_midi_instrument(&inst);
+  auto clip = impulse_clip(32);
+  clip.track_id = 10;
+  engine.set_clips({clip});
+  REQUIRE(engine.set_track_lanes({{10}}));
+
+  push_play(engine);
+  std::vector<float> l(kBlock, 0.0f), r(kBlock, 0.0f);
+  float* io[] = {l.data(), r.data()};
+  engine.process(io, 2, kBlock);
+  // The impulse is still inside the 96-sample clip delay.
+  REQUIRE(block_peak(l) == Catch::Approx(0.0f));
+
+  const auto peak_of_next_blocks = [&]() {
+    float peak = 0.0f;
+    for (int b = 0; b < 2; ++b) {
+      std::fill(l.begin(), l.end(), 0.0f);
+      std::fill(r.begin(), r.end(), 0.0f);
+      engine.process(io, 2, kBlock);
+      peak = std::max(peak, block_peak(l));
+    }
+    return peak;
+  };
+
+  SECTION("uninterrupted playback delivers the delayed impulse") {
+    REQUIRE(peak_of_next_blocks() > 0.5f);
+  }
+  SECTION("stop") {
+    sonare::rt::Command stop{};
+    stop.type = sonare::rt::CommandType::kTransportStop;
+    stop.sample_time = kBlock;
+    REQUIRE(engine.push_command(stop));
+    REQUIRE(peak_of_next_blocks() == Catch::Approx(0.0f));
+  }
+  SECTION("seek past the clip") {
+    sonare::rt::Command seek{};
+    seek.type = sonare::rt::CommandType::kTransportSeekSample;
+    seek.arg.i = 48000;
+    seek.sample_time = kBlock;
+    REQUIRE(engine.push_command(seek));
+    REQUIRE(peak_of_next_blocks() == Catch::Approx(0.0f));
+  }
+
+  engine.set_midi_instrument(nullptr);
+}
 #endif
 
 TEST_CASE("PDC threads and applies fractional (Q8) instrument latency", "[engine][midi]") {

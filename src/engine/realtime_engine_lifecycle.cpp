@@ -518,16 +518,11 @@ ClipSchedule RealtimeEngine::freeze_offline(int num_channels, int64_t total_fram
 void RealtimeEngine::finish_offline_render() noexcept {
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_sequencer_.all_notes_off(midi::DeviceFrame{transport_.render_frame()});
-  flush_pdc_delays();
   // The render has ended, so a later swap has no output left to fade into.
   instrument_swap_tails_.end_stream();
 #endif
+  flush_pdc_delays();
 #if defined(SONARE_WITH_MIXING)
-  // Reached on its own when arrangement is compiled out; flush_pdc_delays()
-  // above already covers the mixing lines when both features are present, and
-  // the reset is idempotent.
-  track_mixer_runtime_.flush_pdc_delays();
-  track_mixer_runtime_.flush_clip_pdc_delays();
   // The true-peak readings run a reconstruction delay behind the audio; end the
   // signal so the last samples' inter-sample peaks reach the reported meters.
   track_mixer_runtime_.flush_meters();
@@ -700,7 +695,8 @@ void RealtimeEngine::reset_processing_now() noexcept {
   graph_runtime_.reset_processing();
 #endif
 #if defined(SONARE_WITH_ARRANGEMENT)
-  flush_pdc_delays();
+  // The mixer's reset_processing above already flushed its own PDC banks.
+  flush_instrument_pdc_delays();
   instrument_swap_tails_.discard_tails();
 #endif
 }

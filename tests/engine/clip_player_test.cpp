@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <random>
 #include <vector>
 
 #include "arrangement/edit_compiler.h"
@@ -135,6 +136,75 @@ TEST_CASE("ClipPlayer can render tracks separately without changing summed outpu
   for (size_t i = 0; i < full.size(); ++i) {
     REQUIRE(full[i] == lane_a[i] + lane_b[i]);
   }
+}
+
+TEST_CASE("ClipPlayer per-track and excluding renders equal a player holding only those clips",
+          "[engine][clip_player]") {
+  constexpr int kBlock = 64;
+  constexpr int kSourceLength = 48;
+  std::mt19937 rng(20261014u);
+  std::uniform_real_distribution<float> unit(-1.0f, 1.0f);
+  std::array<std::vector<float>, 4> sources;
+  std::array<const float*, 4> source_ptrs{};
+  for (size_t s = 0; s < sources.size(); ++s) {
+    sources[s].resize(kSourceLength);
+    for (float& v : sources[s]) v = unit(rng);
+    source_ptrs[s] = sources[s].data();
+  }
+  // Overlapping clips on several tracks, lane-less ones (track 0) and duplicate ids,
+  // so the per-lane summation order is what the comparison checks.
+  const std::array<uint32_t, 5> tracks{0, 3, 7, 7, 12};
+  std::vector<sonare::engine::ClipSchedule> all;
+  for (uint32_t i = 0; i < 40; ++i) {
+    sonare::engine::ClipSchedule clip{i % 13 + 1, {&source_ptrs[i % 4], 1, kSourceLength},
+                                      0.0,        static_cast<int64_t>(rng() % 96),
+                                      0,          kSourceLength,
+                                      false,      0.3f + 0.01f * static_cast<float>(i),
+                                      0,          0};
+    clip.track_id = tracks[rng() % tracks.size()];
+    all.push_back(clip);
+  }
+  const auto render = [&](const std::vector<sonare::engine::ClipSchedule>& clips,
+                          const auto& process) {
+    sonare::engine::ClipPlayer player;
+    player.prepare(48000.0, kBlock);
+    player.set_clips(clips);
+    std::vector<float> out(2 * kBlock, 0.0f);
+    for (int block = 0; block < 2; ++block) {
+      float* channels[] = {out.data() + block * kBlock};
+      process(player, channels, static_cast<int64_t>(block) * kBlock);
+    }
+    return out;
+  };
+  const auto subset = [&](auto&& keep) {
+    std::vector<sonare::engine::ClipSchedule> clips;
+    for (const auto& clip : all) {
+      if (keep(clip.track_id)) clips.push_back(clip);
+    }
+    return clips;
+  };
+
+  for (uint32_t track : {3u, 7u, 12u, 99u}) {
+    const auto lane = render(all, [track](auto& player, float** channels, int64_t at) {
+      player.process_track_at(track, channels, 1, kBlock, at);
+    });
+    const auto reference = render(subset([track](uint32_t id) { return id == track; }),
+                                  [](auto& player, float** channels, int64_t at) {
+                                    player.process_at(channels, 1, kBlock, at);
+                                  });
+    CHECK(lane == reference);
+  }
+
+  const std::array<uint32_t, 2> lanes{3, 12};
+  const auto excluded = render(all, [&lanes](auto& player, float** channels, int64_t at) {
+    player.process_excluding_tracks_at(lanes.data(), lanes.size(), channels, 1, kBlock, at);
+  });
+  const auto reference = render(subset([](uint32_t id) { return id != 3 && id != 12; }),
+                                [](auto& player, float** channels, int64_t at) {
+                                  player.process_at(channels, 1, kBlock, at);
+                                });
+  REQUIRE(std::any_of(reference.begin(), reference.end(), [](float v) { return v != 0.0f; }));
+  CHECK(excluded == reference);
 }
 
 TEST_CASE("ClipPlayer mono live monitoring matches the mono bounce downmix",

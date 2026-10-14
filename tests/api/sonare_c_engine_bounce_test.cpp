@@ -8,9 +8,16 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <cmath>
 #include <cstddef>
+#include <utility>
 #include <vector>
 
 #include "sonare_c_engine_test_helpers.h"
+
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_MIXING)
+#include "c_api/project_bounce_internal.h"
+#include "midi/ump.h"
+#include "support/alloc_guard.h"
+#endif
 
 namespace {
 
@@ -676,3 +683,56 @@ TEST_CASE("sonare_engine_bounce_offline resamples when the target differs from t
 
   sonare_engine_destroy(engine);
 }
+
+#if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_MIXING)
+TEST_CASE("project bounce gathers timeline events with one reservation",
+          "[c_api][engine][bounce]") {
+  namespace bounce = sonare_c_bounce_detail;
+  sonare::arrangement::CompiledTimeline timeline;
+  constexpr int kClips = 12;
+  constexpr int kEventsPerClip = 3;
+  for (int c = 0; c < kClips; ++c) {
+    sonare::midi::MidiClipSchedule clip;
+    clip.destination_id = static_cast<uint32_t>(c % 2 + 1);
+    for (int e = 0; e < kEventsPerClip; ++e) {
+      sonare::midi::MidiEvent event;
+      // Every clip shares frames 0, 10 and 20, so ties resolve by clip then event order.
+      event.render_frame = 10 * e;
+      event.ump = sonare::midi::make_midi1_note_on(0, 0, static_cast<uint8_t>(c), 100);
+      clip.events.push_back(event);
+    }
+    timeline.midi_clips.push_back(std::move(clip));
+  }
+
+  std::vector<bounce::TimelineEvent> all;
+  std::vector<bounce::TimelineEvent> second;
+  size_t all_allocations = 0;
+  size_t second_allocations = 0;
+  {
+    sonare::test::AllocationGuard guard;
+    all = bounce::timeline_events_in_render_order(timeline);
+    all_allocations = guard.count();
+  }
+  {
+    sonare::test::AllocationGuard guard;
+    second = bounce::timeline_events_in_render_order(timeline, 2u);
+    second_allocations = guard.count();
+  }
+  // The event vector plus at most one stable-sort buffer; never one per clip.
+  CHECK(all_allocations <= 2);
+  CHECK(second_allocations <= 2);
+
+  REQUIRE(all.size() == static_cast<size_t>(kClips * kEventsPerClip));
+  REQUIRE(second.size() == static_cast<size_t>(kClips / 2 * kEventsPerClip));
+  for (size_t i = 0; i < all.size(); ++i) {
+    const size_t clip = i % kClips;
+    CHECK(all[i].render_frame == static_cast<int64_t>(10 * (i / kClips)));
+    CHECK(all[i].event == &timeline.midi_clips[clip].events[i / kClips]);
+  }
+  for (size_t i = 0; i < second.size(); ++i) {
+    const size_t clip = 2 * (i % (kClips / 2)) + 1;
+    CHECK(second[i].destination_id == 2u);
+    CHECK(second[i].event == &timeline.midi_clips[clip].events[i / (kClips / 2)]);
+  }
+}
+#endif

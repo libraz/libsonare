@@ -162,15 +162,21 @@ void ClipPlayer::set_clips(std::vector<ClipSchedule> clips,
     clip.stretch_fragment_ordinal = fragment_counts[clip.id]++;
     clip.stretch_content_signature = stretch_signature(clip);
   }
-  const size_t count = clips.size();
-  if (clips_.publish(std::make_shared<const std::vector<ClipSchedule>>(std::move(clips)))) {
+  auto set = std::make_shared<ClipSet>();
+  set->by_track.resize(clips.size());
+  for (size_t i = 0; i < clips.size(); ++i) set->by_track[i] = i;
+  std::stable_sort(set->by_track.begin(), set->by_track.end(),
+                   [&clips](size_t a, size_t b) { return clips[a].track_id < clips[b].track_id; });
+  set->clips = std::move(clips);
+  const size_t count = set->clips.size();
+  if (clips_.publish(std::shared_ptr<const ClipSet>(std::move(set)))) {
     clip_count_.store(count, std::memory_order_relaxed);
   }
 }
 
 void ClipPlayer::upsert_clip(ClipSchedule clip, const transport::TempoMap* tempo_map_override) {
   std::vector<ClipSchedule> clips;
-  if (const auto& current = clips_.control_current()) clips = *current;
+  if (const auto& current = clips_.control_current()) clips = current->clips;
   clips.erase(std::remove_if(clips.begin(), clips.end(),
                              [&clip](const ClipSchedule& c) { return c.id == clip.id; }),
               clips.end());
@@ -181,7 +187,7 @@ void ClipPlayer::upsert_clip(ClipSchedule clip, const transport::TempoMap* tempo
 bool ClipPlayer::remove_clip(uint32_t clip_id, const transport::TempoMap* tempo_map_override) {
   const auto& current = clips_.control_current();
   if (!current) return false;
-  std::vector<ClipSchedule> clips = *current;
+  std::vector<ClipSchedule> clips = current->clips;
   const auto removed = std::remove_if(clips.begin(), clips.end(),
                                       [clip_id](const ClipSchedule& c) { return c.id == clip_id; });
   if (removed == clips.end()) return false;
@@ -225,34 +231,22 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
   // this idempotent re-acquire (a wait-free pointer swap, no alloc) keeps the
   // standalone ClipPlayer contract working (set_clips then process_at directly).
   clips_.acquire();
-  const std::vector<ClipSchedule>* clips = clips_.current();
+  const ClipSet* clips = clips_.current();
   if (!clips) {
     if (scoped_page_miss_block) end_page_miss_block();
     return;
   }
 
-  for (const ClipSchedule& clip : *clips) {
-    if (filter_mode == TrackFilterMode::kOnlyTrack) {
-      if (clip.track_id != track_id) continue;
-    } else if (filter_mode == TrackFilterMode::kExcludeTracks) {
-      bool matched = false;
-      for (size_t i = 0; i < track_count; ++i) {
-        if (clip.track_id == track_ids[i]) {
-          matched = true;
-          break;
-        }
-      }
-      if (matched) continue;
-    }
+  const int64_t block_end =
+      numeric::saturating_add(timeline_sample, static_cast<int64_t>(num_samples));
+  const auto render_clip = [&](const ClipSchedule& clip) noexcept {
     if (source_channel_count(clip) <= 0 || source_sample_count(clip) <= 0 ||
         clip.length_samples <= 0) {
-      continue;
+      return;
     }
     const int64_t clip_end = numeric::saturating_add(clip.start_sample, clip.length_samples);
-    const int64_t block_end =
-        numeric::saturating_add(timeline_sample, static_cast<int64_t>(num_samples));
     if (block_end <= clip.start_sample || timeline_sample >= clip_end) {
-      continue;
+      return;
     }
 
     const int start = static_cast<int>(std::max<int64_t>(0, clip.start_sample - timeline_sample));
@@ -260,7 +254,7 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
     if (clip.warp_mode == WarpMode::kTimeStretch &&
         render_stretched(clip, channels, num_channels, start, end, timeline_sample)) {
       prefetch_pages(clip, block_end);
-      continue;
+      return;
     }
     // The clip's pan is fixed for the whole schedule, so evaluate the law once
     // per clip rather than once per sample per channel.
@@ -313,6 +307,26 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
     // Look-ahead AFTER the block's own reads, so a genuine miss for the current
     // page is queued before the requests for the pages still to come.
     prefetch_pages(clip, block_end);
+  };
+
+  const std::vector<ClipSchedule>& schedules = clips->clips;
+  if (filter_mode == TrackFilterMode::kOnlyTrack) {
+    // The track's clips in schedule order, read off the per-track index.
+    const auto first = std::lower_bound(
+        clips->by_track.begin(), clips->by_track.end(), track_id,
+        [&schedules](size_t index, uint32_t id) { return schedules[index].track_id < id; });
+    for (auto it = first; it != clips->by_track.end() && schedules[*it].track_id == track_id;
+         ++it) {
+      render_clip(schedules[*it]);
+    }
+  } else {
+    for (const ClipSchedule& clip : schedules) {
+      if (filter_mode == TrackFilterMode::kExcludeTracks &&
+          std::binary_search(track_ids, track_ids + track_count, clip.track_id)) {
+        continue;
+      }
+      render_clip(clip);
+    }
   }
   if (scoped_page_miss_block) end_page_miss_block();
 }
@@ -327,9 +341,9 @@ void ClipPlayer::collect_boundaries(int64_t block_start_sample, int num_frames,
   // Idempotent re-acquire so standalone callers (and the engine block-start
   // acquire_clips()) both see the published set; a wait-free pointer swap.
   clips_.acquire();
-  const std::vector<ClipSchedule>* clips = clips_.current();
+  const ClipSet* clips = clips_.current();
   if (!clips) return;
-  for (const ClipSchedule& clip : *clips) {
+  for (const ClipSchedule& clip : clips->clips) {
     const int64_t start = clip.start_sample;
     const int64_t end = numeric::saturating_add(clip.start_sample, clip.length_samples);
     if (start > block_start_sample && start <= block_end) {

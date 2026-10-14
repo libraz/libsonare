@@ -23,6 +23,7 @@
 #include "arrangement/edit_source.h"
 #include "engine/clip_player.h"
 #include "serialize/project_serializer.h"
+#include "support/alloc_guard.h"
 #include "transport/tempo_map.h"
 
 using namespace sonare::arrangement;
@@ -627,6 +628,143 @@ TEST_CASE("RemoveClip prunes orphaned SysEx payloads and undo restores them", "[
 
   CHECK(project_equal(f.project, before));
   CHECK(store == store_before);
+}
+
+TEST_CASE("remove_clip moves a multi-take clip out and undo restores it exactly", "[arrangement]") {
+  Fixture f;
+  EditClip takes_clip;
+  takes_clip.track_id = f.audio_track;
+  takes_clip.source_id = f.audio_source;
+  takes_clip.start_ppq = 4000.0;
+  takes_clip.length_ppq = 480.0;
+  takes_clip.takes.resize(3);
+  for (size_t i = 0; i < takes_clip.takes.size(); ++i) {
+    takes_clip.takes[i].id = static_cast<TakeId>(i + 1);
+    takes_clip.takes[i].source_id = f.audio_source;
+    takes_clip.takes[i].name = "a take name long enough to leave the small-string buffer";
+  }
+  takes_clip.active_take_id = 2;
+  takes_clip.comp_segments = {ClipCompSegment{0.0, 240.0, 1, 0.0},
+                              ClipCompSegment{240.0, 480.0, 3, 0.0}};
+  const ClipId id = f.project.add_clip(takes_clip);
+  REQUIRE(id != 0);
+  const EditClip stored = *f.project.find_clip(id);
+  const Project before = f.project;
+
+  std::pair<EditClip, bool> removed;
+#if defined(SONARE_WITH_MIXING)
+  {
+    sonare::test::AllocationGuard guard;
+    removed = f.project.remove_clip(id);
+    // Moved out, not copied: neither the takes nor their names are reallocated.
+    CHECK(guard.count() == 0);
+  }
+#else
+  removed = f.project.remove_clip(id);
+#endif
+  REQUIRE(removed.second);
+  CHECK(clip_equal(removed.first, stored));
+  CHECK_FALSE(f.project.has_clip(id));
+
+  EditHistory history(before);
+  REQUIRE(history.apply(std::make_unique<RemoveClip>(id)));
+  CHECK_FALSE(history.project().has_clip(id));
+  REQUIRE(history.undo());
+  CHECK(project_equal(history.project(), before));
+  REQUIRE(history.redo());
+  CHECK_FALSE(history.project().has_clip(id));
+}
+
+TEST_CASE("a one-command transaction snapshots the project once, like a plain apply",
+          "[arrangement]") {
+  Fixture f;
+  for (int i = 0; i < 100; ++i) {
+    EditClip clip;
+    clip.track_id = f.audio_track;
+    clip.source_id = f.audio_source;
+    clip.start_ppq = 4000.0 + 1000.0 * i;
+    clip.length_ppq = 480.0;
+    clip.takes.resize(1);
+    clip.takes[0].id = 1;
+    clip.takes[0].source_id = f.audio_source;
+    clip.takes[0].name = "a take name long enough to leave the small-string buffer";
+    clip.active_take_id = 1;
+    REQUIRE(f.project.add_clip(clip) != 0);
+  }
+  const Project before = f.project;
+
+  EditHistory plain(before);
+  EditHistory transacted(before);
+  std::vector<EditCommandPtr> transaction;
+  transaction.push_back(std::make_unique<SetClipGain>(f.audio_clip, 0.5f));
+  auto command = std::make_unique<SetClipGain>(f.audio_clip, 0.5f);
+#if defined(SONARE_WITH_MIXING)
+  size_t plain_allocations = 0;
+  size_t transaction_allocations = 0;
+  {
+    sonare::test::AllocationGuard guard;
+    REQUIRE(plain.apply(std::move(command)));
+    plain_allocations = guard.count();
+  }
+  {
+    sonare::test::AllocationGuard guard;
+    REQUIRE(transacted.apply_transaction(std::move(transaction)));
+    transaction_allocations = guard.count();
+  }
+  // A second project snapshot would add one allocation per clip at least.
+  CHECK(transaction_allocations < plain_allocations + 50);
+#else
+  REQUIRE(plain.apply(std::move(command)));
+  REQUIRE(transacted.apply_transaction(std::move(transaction)));
+#endif
+  CHECK(project_equal(transacted.project(), plain.project()));
+  REQUIRE(transacted.undo());
+  CHECK(project_equal(transacted.project(), before));
+  REQUIRE(transacted.redo());
+  CHECK(project_equal(transacted.project(), plain.project()));
+}
+
+TEST_CASE("RemoveClip keeps SysEx payloads another clip still references", "[arrangement]") {
+  Fixture f;
+  EditClip second_midi = *f.project.find_clip(f.midi_clip);
+  second_midi.id = 0;
+  second_midi.start_ppq = 2400.0;
+  const ClipId second_midi_clip = f.project.add_clip(second_midi);
+  REQUIRE(second_midi_clip != 0);
+
+  EditHistory history(f.project);
+  MidiContentStore& store = history.midi_content();
+  store.events[f.midi_clip] = {{120.0, 0x30000000u, 0u, 31}, {240.0, 0x30000000u, 0u, 32}};
+  store.events[second_midi_clip] = {{48.0, 0x30000000u, 0u, 31}};
+  store.sysex_payloads[0] = {0xF0, 0x7D, 0x00, 0xF7};
+  store.sysex_payloads[31] = {0xF0, 0x7D, 0x31, 0xF7};
+  store.sysex_payloads[32] = {0xF0, 0x7D, 0x32, 0xF7};
+  store.sysex_payloads[33] = {0xF0, 0x7D, 0x33, 0xF7};
+  const MidiContentStore initial = store;
+  const auto handles = [&history]() {
+    std::vector<uint32_t> out;
+    for (const auto& [handle, payload] : history.midi_content().sysex_payloads) {
+      (void)payload;
+      out.push_back(handle);
+    }
+    return out;
+  };
+
+  REQUIRE(history.apply(std::make_unique<RemoveClip>(f.midi_clip)));
+  // 31 is still referenced by the second clip; 32 lost its last reference; 33 had none.
+  CHECK(handles() == std::vector<uint32_t>{0, 31});
+  const MidiContentStore after_first = history.midi_content();
+
+  REQUIRE(history.apply(std::make_unique<RemoveClip>(second_midi_clip)));
+  CHECK(handles() == std::vector<uint32_t>{0});
+
+  REQUIRE(history.undo());
+  CHECK(history.midi_content() == after_first);
+  REQUIRE(history.undo());
+  CHECK(history.midi_content().events == initial.events);
+  CHECK(handles() == std::vector<uint32_t>{0, 31, 32});
+  REQUIRE(history.redo());
+  CHECK(history.midi_content() == after_first);
 }
 
 TEST_CASE("Clip command round-trips", "[arrangement]") {

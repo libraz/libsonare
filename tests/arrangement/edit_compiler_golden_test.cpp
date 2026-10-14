@@ -301,6 +301,67 @@ TEST_CASE("compiled snapshot is a fully-allocated immutable RT object", "[arrang
   REQUIRE(copy.markers.front().name != rm.timeline->marker_names.front().c_str());
 }
 
+TEST_CASE("select_clips copies only the selected clips and keeps the rest of the snapshot",
+          "[arrangement]") {
+  arr::CompiledTimeline timeline;
+  timeline.sample_rate = kProjectSr;
+  constexpr uint32_t kTracks = 4;
+  constexpr uint32_t kClipsPerTrack = 10;
+  for (uint32_t i = 0; i < kTracks * kClipsPerTrack; ++i) {
+    sonare::midi::MidiClipSchedule midi;
+    midi.id = i + 1;
+    midi.track_id = i % kTracks + 1;
+    sonare::midi::MidiEvent event;
+    event.render_frame = i;
+    midi.events.assign(3, event);
+    timeline.midi_clips.push_back(std::move(midi));
+    sonare::engine::ClipSchedule audio;
+    audio.id = i + 1;
+    audio.track_id = i % kTracks + 1;
+    timeline.audio_clips.push_back(audio);
+  }
+  timeline.tempo_segments.push_back({0.0, 97.0});
+  timeline.marker_names = {"verse"};
+  timeline.markers.push_back({});
+  timeline.markers.front().name = timeline.marker_names.front().c_str();
+
+  const auto keep = [](uint32_t track) { return track == 2; };
+  const arr::CompiledTimeline selected = timeline.select_clips(keep, true, true);
+  REQUIRE(selected.midi_clips.size() == kClipsPerTrack);
+  REQUIRE(selected.audio_clips.size() == kClipsPerTrack);
+  for (size_t i = 0; i < kClipsPerTrack; ++i) {
+    CHECK(selected.midi_clips[i].id == timeline.midi_clips[4 * i + 1].id);
+    CHECK(selected.midi_clips[i].events.size() == 3);
+    CHECK(selected.audio_clips[i].id == timeline.audio_clips[4 * i + 1].id);
+  }
+  CHECK(selected.sample_rate == timeline.sample_rate);
+  REQUIRE(selected.tempo_segments.size() == 1);
+  CHECK(selected.tempo_segments.front().bpm == 97.0);
+  REQUIRE(selected.markers.size() == 1);
+  CHECK(selected.markers.front().name == selected.marker_names.front().c_str());
+
+  const arr::CompiledTimeline midi_only = timeline.select_clips({}, false, true);
+  CHECK(midi_only.audio_clips.empty());
+  CHECK(midi_only.midi_clips.size() == timeline.midi_clips.size());
+
+#if defined(SONARE_WITH_MIXING)
+  size_t full_allocations = 0;
+  size_t selected_allocations = 0;
+  {
+    sonare::test::AllocationGuard guard;
+    const arr::CompiledTimeline full = timeline;
+    full_allocations = guard.count();
+  }
+  {
+    sonare::test::AllocationGuard guard;
+    const arr::CompiledTimeline one_track = timeline.select_clips(keep, true, true);
+    selected_allocations = guard.count();
+  }
+  // The 30 MIDI clips on other tracks each own an event vector a full copy allocates.
+  CHECK(selected_allocations + 25 <= full_allocations);
+#endif
+}
+
 TEST_CASE("undo/redo then recompile yields equal compiled snapshot", "[arrangement]") {
   Fixture f = make_fixture();
 

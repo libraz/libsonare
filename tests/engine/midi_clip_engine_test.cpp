@@ -227,6 +227,45 @@ TEST_CASE("MIDI clip gain 0.5 halves every source-track output of a shared desti
   }
 }
 
+TEST_CASE("Source-track sink audio is the same whether the master planes are null or not",
+          "[midi_clip_engine]") {
+  constexpr int64_t kFrames = 1024;
+  constexpr int kBlock = 128;
+  constexpr uint32_t kDest = 44;
+  const std::map<uint32_t, float> levels = {{0u, 0.3f}, {101u, 0.5f}, {102u, 0.7f}};
+
+  const auto render = [&](bool null_planes) {
+    RealtimeEngine engine;
+    engine.prepare(kSampleRate, kBlock);
+    REQUIRE(engine.set_track_lanes({TrackLaneConfig{101}, TrackLaneConfig{102}}));
+    engine.set_midi_clips({make_clip(1, kDest, 0, kFrames, 0.8f, 100, 150,
+                                     sonare::FadeCurve::EqualPower, sonare::FadeCurve::Linear)});
+    PerSourceInstrument instrument(levels);
+    REQUIRE(engine.set_midi_instrument(kDest, &instrument));
+    CapturingSourceSink sink;
+    engine.set_instrument_source_render_sink(&sink);
+    std::vector<float> left(static_cast<size_t>(kFrames), 0.0f);
+    std::vector<float> right(static_cast<size_t>(kFrames), 0.0f);
+    float* planes[] = {left.data(), right.data()};
+    float* no_planes[] = {nullptr, nullptr};
+    engine.render_offline(null_planes ? no_planes : planes, 2, kFrames, kBlock);
+    engine.set_instrument_source_render_sink(nullptr);
+    engine.set_midi_instrument(kDest, nullptr);
+    return sink;
+  };
+
+  const CapturingSourceSink with_planes = render(false);
+  const CapturingSourceSink without_planes = render(true);
+  for (const auto& [source_track_id, level] : levels) {
+    (void)level;
+    const std::vector<float>& expected = with_planes.buffer_for(kDest, source_track_id);
+    CAPTURE(source_track_id);
+    REQUIRE(expected.size() == static_cast<size_t>(kFrames));
+    REQUIRE(rms(expected) >= kMinReferenceRms);
+    CHECK(without_planes.buffer_for(kDest, source_track_id) == expected);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Fade curves, hold-after-end, and a contained clip -- all against the
 // already-trusted pure evaluator as the oracle for what the rendered audio

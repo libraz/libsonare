@@ -878,23 +878,29 @@ bool RealtimeEngine::recompute_pdc() {
   return true;
 }
 
-void RealtimeEngine::flush_pdc_delays() noexcept {
+void RealtimeEngine::flush_instrument_pdc_delays() noexcept {
   if (pdc_total_q8_ > 0) {
     clip_pdc_delay_.reset();
     for (size_t i = 0; i < pdc_instrument_count_; ++i) {
       instrument_pdc_delays_[i].reset();
     }
   }
-#if defined(SONARE_WITH_MIXING)
-  track_mixer_runtime_.flush_pdc_delays();
-  track_mixer_runtime_.flush_clip_pdc_delays();
-#endif
 }
 
 }  // namespace sonare::engine
 #endif
 
 namespace sonare::engine {
+
+void RealtimeEngine::flush_pdc_delays() noexcept {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  flush_instrument_pdc_delays();
+#endif
+#if defined(SONARE_WITH_MIXING)
+  track_mixer_runtime_.flush_pdc_delays();
+  track_mixer_runtime_.flush_clip_pdc_delays();
+#endif
+}
 
 int RealtimeEngine::tail_samples() const noexcept {
   // Stages in signal order: instruments in parallel, then each serial stage after them.

@@ -187,10 +187,17 @@ struct TimelineEvent {
 // frames keep clip order, then the clip's own event order.
 inline std::vector<TimelineEvent> timeline_events_in_render_order(
     const arr::CompiledTimeline& timeline, std::optional<uint32_t> destination = std::nullopt) {
-  std::vector<TimelineEvent> events;
+  const auto selected = [&](const sonare::midi::MidiClipSchedule& clip) {
+    return !destination || clip.destination_id == *destination;
+  };
+  size_t total = 0;
   for (const auto& clip : timeline.midi_clips) {
-    if (destination && clip.destination_id != *destination) continue;
-    events.reserve(events.size() + clip.events.size());
+    if (selected(clip)) total += clip.events.size();
+  }
+  std::vector<TimelineEvent> events;
+  events.reserve(total);
+  for (const auto& clip : timeline.midi_clips) {
+    if (!selected(clip)) continue;
     for (const auto& event : clip.events) {
       events.push_back({event.render_frame, clip.destination_id, &event});
     }
@@ -221,19 +228,7 @@ inline bool render_timeline(const arr::CompiledTimeline& timeline,
       !checked_frame_count(render_frames, &render_frame_count)) {
     return false;
   }
-  arr::CompiledTimeline filtered = timeline;  // copy re-points marker name pointers
-  if (!include_audio) filtered.audio_clips.clear();
-  if (!include_midi) filtered.midi_clips.clear();
-  if (keep) {
-    filtered.audio_clips.erase(
-        std::remove_if(filtered.audio_clips.begin(), filtered.audio_clips.end(),
-                       [&](const sonare::engine::ClipSchedule& c) { return !keep(c.track_id); }),
-        filtered.audio_clips.end());
-    filtered.midi_clips.erase(
-        std::remove_if(filtered.midi_clips.begin(), filtered.midi_clips.end(),
-                       [&](const sonare::midi::MidiClipSchedule& c) { return !keep(c.track_id); }),
-        filtered.midi_clips.end());
-  }
+  const arr::CompiledTimeline filtered = timeline.select_clips(keep, include_audio, include_midi);
 
   sonare::engine::RealtimeEngine engine;
   engine.prepare(sample_rate, block_size);

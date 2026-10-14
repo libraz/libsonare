@@ -345,13 +345,10 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       // while stopped, so the instrument falls silent on the next render.
 #if defined(SONARE_WITH_ARRANGEMENT)
       midi_sequencer_.all_notes_off(midi::DeviceFrame{command.sample_time});
+#endif
       // Flush PDC delay tails: their buffered audio belongs to the pre-stop
       // position and must not ring out across the discontinuity.
       flush_pdc_delays();
-#endif
-#if defined(SONARE_WITH_MIXING)
-      track_mixer_runtime_.flush_pdc_delays();
-#endif
       break;
     case rt::CommandType::kTransportSeekSample:
       transport_.seek_sample(command.arg.i);
@@ -361,22 +358,16 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       // note-off that the new position will never reach.
 #if defined(SONARE_WITH_ARRANGEMENT)
       midi_sequencer_.all_notes_off(midi::DeviceFrame{command.sample_time});
+#endif
       flush_pdc_delays();
-#endif
-#if defined(SONARE_WITH_MIXING)
-      track_mixer_runtime_.flush_pdc_delays();
-#endif
       break;
     case rt::CommandType::kTransportSeekPpq:
       transport_.seek_ppq(command.arg.d);
       transport_.fold_into_loop();
 #if defined(SONARE_WITH_ARRANGEMENT)
       midi_sequencer_.all_notes_off(midi::DeviceFrame{command.sample_time});
+#endif
       flush_pdc_delays();
-#endif
-#if defined(SONARE_WITH_MIXING)
-      track_mixer_runtime_.flush_pdc_delays();
-#endif
       break;
     case rt::CommandType::kSeekMarker:
       if (!seek_marker(command.target_id)) {
@@ -387,11 +378,8 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
         // Successful marker seek is a playhead jump: same hang-note release.
 #if defined(SONARE_WITH_ARRANGEMENT)
         midi_sequencer_.all_notes_off(midi::DeviceFrame{command.sample_time});
+#endif
         flush_pdc_delays();
-#endif
-#if defined(SONARE_WITH_MIXING)
-        track_mixer_runtime_.flush_pdc_delays();
-#endif
       }
       break;
     case rt::CommandType::kMidiNoteOnImmediate:
