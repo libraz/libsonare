@@ -11,6 +11,7 @@
 #include "playback/layout_convert.h"
 #include "playback/speaker_stage.h"
 #include "rt/delay_line.h"
+#include "rt/gain_pair_glide.h"
 #include "rt/overflow_counter.h"
 #include "rt/rt_publisher.h"
 #include "rt/scoped_no_denormals.h"
@@ -37,6 +38,9 @@ constexpr int kLayoutCount = 4;
 constexpr int kInstancesPerLayout = 2;
 /// Limiter parameter id of `ceiling_db` (see BrickwallLimiter::set_parameter).
 constexpr unsigned kLimiterCeilingParam = 0;
+/// Output plane weights {limited, bypass} for each `output_limiter.enabled` state.
+constexpr rt::GainPairGlide::Pair kLimitedOutput{1.0f, 0.0f};
+constexpr rt::GainPairGlide::Pair kBypassOutput{0.0f, 1.0f};
 
 int layout_index(ChannelLayout layout) noexcept {
   switch (layout) {
@@ -113,6 +117,11 @@ struct PlaybackRenderer::Impl {
   // Audio thread.
   const RealtimeConfig* adopted = nullptr;
   bool limiter_enabled = true;
+  /// Weights of the limited and bypass planes in the output.
+  rt::GainPairGlide output_glide;
+  int limiter_switch_frames = 1;
+  /// The last render's output is in out_ptrs (limited or crossfaded), else in bypass_planes.
+  bool output_in_out_ptrs = true;
   std::vector<std::vector<float>> staging;
   std::array<const float*, kMaxInputPlanes> staging_ptrs{};
   std::vector<std::vector<float>> bus_planes;
@@ -146,7 +155,7 @@ struct PlaybackRenderer::Impl {
     for (int i = 0; i < static_cast<int>(front_ends.size()); ++i) {
       front_ends[static_cast<size_t>(i)]->apply_realtime(rt, immediate || !busy(i));
     }
-    if (speakers) speakers->set_levels(rt.trim_db, rt.lfe_gain_db, rt.lfe_mix_db);
+    if (speakers) speakers->set_levels(rt.trim_db, rt.lfe_gain_db, rt.lfe_mix_db, immediate);
     if (binaural) {
       BinauralParams params;
       params.room_enabled = rt.room_enabled;
@@ -156,6 +165,12 @@ struct PlaybackRenderer::Impl {
     }
     main_limiter.set_parameter(kLimiterCeilingParam, rt.limiter_ceiling_db);
     lfe_limiter.set_parameter(kLimiterCeilingParam, rt.limiter_ceiling_db);
+    const rt::GainPairGlide::Pair plane = rt.limiter_enabled ? kLimitedOutput : kBypassOutput;
+    if (immediate) {
+      output_glide.snap(plane);
+    } else if (rt.limiter_enabled != limiter_enabled) {
+      output_glide.retarget(plane, limiter_switch_frames);
+    }
     limiter_enabled = rt.limiter_enabled;
   }
 
@@ -250,12 +265,26 @@ struct PlaybackRenderer::Impl {
                                                            lfe_limiter.last_gain_reduction_db())
                                                 : main_limiter.last_gain_reduction_db();
     limiter_gain_reduction_db.store(gain_reduction, std::memory_order_relaxed);
+    output_in_out_ptrs = limiter_enabled || output_glide.gliding();
+    if (output_glide.gliding()) crossfade_output(frames);
   }
 
-  /// Output plane p of the last render (limited or bypassed).
+  /// Blends the limited and bypass planes into out_ptrs along the output glide.
+  void crossfade_output(int frames) noexcept {
+    const rt::GainPairGlide::Pair target = limiter_enabled ? kLimitedOutput : kBypassOutput;
+    for (int i = 0; i < frames; ++i) {
+      const rt::GainPairGlide::Pair weight = output_glide.advance(target);
+      for (int p = 0; p < out_count; ++p) {
+        float& limited = out_ptrs[static_cast<size_t>(p)][i];
+        limited = weight.first * limited + weight.second * bypass_planes[static_cast<size_t>(p)][i];
+      }
+    }
+  }
+
+  /// Output plane p of the last render.
   const float* output_plane(int p) const noexcept {
-    return limiter_enabled ? out_ptrs[static_cast<size_t>(p)]
-                           : bypass_planes[static_cast<size_t>(p)].data();
+    return output_in_out_ptrs ? out_ptrs[static_cast<size_t>(p)]
+                              : bypass_planes[static_cast<size_t>(p)].data();
   }
 
   bool accepts_input(int in_channels) const noexcept {
@@ -397,6 +426,8 @@ PlaybackRenderer::PlaybackRenderer(const RendererConfig& config, const HrtfSet* 
   const int limiter_latency = m.main_limiter.latency_samples();
   for (auto& delay : m.bypass) delay.prepare(static_cast<size_t>(limiter_latency));
   m.bypass_planes = make_planes(m.out_count, max_block_size);
+  m.limiter_switch_frames =
+      std::max(1, static_cast<int>(std::lround(kOutputLimiterSwitchMs * kSecondsPerMs * rate)));
 
   // Latency: front end + distance compensation + limiter.
   const FrontEnd& fe = *m.front_ends[static_cast<size_t>(m.active)];
@@ -512,6 +543,7 @@ void PlaybackRenderer::reset() noexcept {
   m.main_limiter.reset();
   m.lfe_limiter.reset();
   for (auto& delay : m.bypass) delay.reset();
+  m.output_glide.snap(m.limiter_enabled ? kLimitedOutput : kBypassOutput);
 }
 
 int PlaybackRenderer::latency_samples() const noexcept { return impl_->latency; }
@@ -593,7 +625,12 @@ std::vector<float> render_interleaved(const float* in, size_t frames, int in_cha
       "in_channels " + std::to_string(in_channels) + " does not match the input layout");
 
   const int channels = renderer.output_channel_count();
-  const auto latency = static_cast<size_t>(renderer.latency_samples());
+  // Distance compensation delays the nearer speakers' planes; that delay is signal, not padding.
+  const int calibration_q8 =
+      renderer.diagnostics().stage_latency_q8[static_cast<size_t>(Stage::SpeakerCalibration)];
+  const auto latency =
+      static_cast<size_t>(renderer.latency_samples() -
+                          static_cast<int>(std::lround(static_cast<double>(calibration_q8) / kQ8)));
   const size_t total = frames + latency;
   const auto in_ch = static_cast<size_t>(in_channels);
   const auto out_ch = static_cast<size_t>(channels);

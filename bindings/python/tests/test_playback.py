@@ -335,3 +335,34 @@ def test_loudness_meter_integrates_pushed_frames() -> None:
 def test_loudness_meter_rejects_an_unsupported_channel_count() -> None:
     with pytest.raises(SonareError):
         PlaybackLoudnessMeter(3, SR)
+
+
+def test_cli_render_trims_what_the_offline_render_trims_with_unequal_distances() -> None:
+    """The CLI's block loop keeps each speaker's distance delay, like the offline render."""
+    from libsonare._cli_playback import _OFFLINE_RENDER_BLOCK_FRAMES, _render_via_reporting_handle
+
+    config = {
+        "input": {"layout": "stereo"},
+        "target": {
+            "kind": "speakers",
+            "layout": "stereo",
+            "speakers": {"L": {"distance_m": 1.0}, "R": {"distance_m": 5.0}},
+        },
+        "output_limiter": {"enabled": False},
+    }
+    frames = 2400
+    burst = np.zeros(frames, dtype=np.float32)
+    burst[:480] = np.array(_sine(480, 1000.0), dtype=np.float32)
+    interleaved = np.repeat(burst, 2)
+
+    direct = render_playback(interleaved, channels=2, sample_rate=SR, config=config)
+    with PlaybackRenderer(
+        config, sample_rate=SR, max_block_size=_OFFLINE_RENDER_BLOCK_FRAMES
+    ) as renderer:
+        via_cli = _render_via_reporting_handle(renderer, interleaved, 2, frames)
+
+    np.testing.assert_array_equal(via_cli, direct)
+    # Both planes keep the opening burst: the near L speaker is delayed, not cropped.
+    energy = (direct.astype(np.float64) ** 2).sum(axis=0)
+    expected = 480 * 0.1**2 / 2.0
+    assert energy == pytest.approx([expected, expected], rel=1e-3)

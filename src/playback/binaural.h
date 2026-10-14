@@ -13,9 +13,11 @@
 /// HRIR, reflection and reverberation paths.
 
 #include <memory>
+#include <vector>
 
 #include "playback/config.h"
 #include "playback/hrtf_set.h"
+#include "playback/room_presets.h"
 #include "playback/speaker_geometry.h"
 
 namespace sonare::playback {
@@ -31,6 +33,24 @@ struct HeadPose {
 
 /// Head-relative direction of a room-fixed direction under @p pose.
 SpeakerDirection head_relative_direction(SpeakerDirection world, const HeadPose& pose) noexcept;
+
+/// Partition of the late-reverberation convolver, and so the depth of its FIFO.
+inline constexpr int kLateTailPartition = 128;
+
+/// One ear's late-reverberation IR as the renderer loads it. Lags below one
+/// partition are read by a direct FIR (@p head) and the rest by the partitioned
+/// convolver (@p tail), so the path adds no latency and drops no sample at or
+/// after the mixing time.
+struct LateTailIr {
+  std::vector<float> reference;  ///< normalised synthesized IR, indexed by lag
+  int mixing_sample = 0;         ///< first lag the late tail occupies
+  std::vector<float> head;       ///< lags [0, kLateTailPartition), zero before mixing_sample
+  std::vector<float> tail;       ///< tail[n] is lag n + kLateTailPartition
+};
+
+/// Synthesizes the late tail of @p spec at @p sample_rate for @p ear (0 left, 1 right).
+/// Throws SonareException when the synthesis fails.
+LateTailIr synthesize_late_tail(const RoomPresetSpec& spec, int sample_rate, int ear);
 
 /// Realtime parameters (`room.*`, `head_tracking.enabled`).
 struct BinauralParams {

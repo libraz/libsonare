@@ -1,5 +1,6 @@
 #include "playback/speaker_stage.h"
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -110,7 +111,7 @@ TEST_CASE("speaker trim applies its gain", "[playback][speakers]") {
   stage.prepare(kRate, kFrames, ChannelLayout::Stereo, speakers, BassManagementConfig{});
   std::array<float, kSpeakerRoleCount> trims{};
   trims[static_cast<size_t>(SpeakerRole::L)] = -6.0f;
-  stage.set_levels(trims, 10.0f, 0.0f);
+  stage.set_levels(trims, 10.0f, 0.0f, true);
 
   std::vector<float> l(kFrames), r(kFrames);
   for (int i = 0; i < kFrames; ++i) {
@@ -146,7 +147,7 @@ TEST_CASE("80 Hz LR4 bass management attenuates a small speaker and feeds the LF
   bass.subwoofer = true;
   stage.prepare(kRate, kFrames, ChannelLayout::FivePointOne, speakers, bass);
   std::array<float, kSpeakerRoleCount> trims{};
-  stage.set_levels(trims, 10.0f, 0.0f);
+  stage.set_levels(trims, 10.0f, 0.0f, true);
 
   const std::vector<float> tone = sonare::test::generate_sine(kFrames, 20.0f, 48000, 1.0f);
   std::vector<float> l = tone, r(kFrames, 0.0f), c(kFrames, 0.0f), lfe(kFrames, 0.0f),
@@ -186,7 +187,7 @@ TEST_CASE("80 Hz LR4 HPF and LPF sum stays flat 20 Hz-20 kHz", "[playback][speak
     std::array<float, kSpeakerRoleCount> trims{};
     // lfe_gain_db = 0 dB and a silent LFE input make the LFE plane output
     // exactly the low-band sum, so L + LFE reconstructs the crossover input.
-    stage.set_levels(trims, 0.0f, 0.0f);
+    stage.set_levels(trims, 0.0f, 0.0f, true);
 
     const std::vector<float> tone = sonare::test::generate_sine(kFrames, freq, 48000, 1.0f);
     std::vector<float> l = tone, r(kFrames, 0.0f), c(kFrames, 0.0f), lfe(kFrames, 0.0f),
@@ -221,7 +222,7 @@ TEST_CASE("distance compensation gives the exact requested delay and reported la
   stage.prepare(kRate, kFrames, ChannelLayout::Stereo, speakers, BassManagementConfig{});
   std::array<float, kSpeakerRoleCount> trims{};
   trims[static_cast<size_t>(SpeakerRole::L)] = -6.0f;
-  stage.set_levels(trims, 10.0f, 0.0f);
+  stage.set_levels(trims, 10.0f, 0.0f, true);
 
   // Spec formula: delay = (max distance - this speaker's distance) / speed of
   // sound. R sits at the max distance (5 m), so it gets zero delay; L is
@@ -279,7 +280,7 @@ TEST_CASE("sub-feed rule adds the LFE gain and the small speakers' low-band sum"
     bass.subwoofer = true;
     stage.prepare(kRate, kFrames, ChannelLayout::FivePointOne, speakers, bass);
     std::array<float, kSpeakerRoleCount> trims{};
-    stage.set_levels(trims, 10.0f, 0.0f);  // schema default lfe_gain_db
+    stage.set_levels(trims, 10.0f, 0.0f, true);  // schema default lfe_gain_db
 
     const std::vector<float> tone = sonare::test::generate_sine(kFrames, kFreq, 48000, 1.0f);
     std::vector<float> l(kFrames, 0.0f), r(kFrames, 0.0f), c(kFrames, 0.0f), lfe(kFrames, 0.0f),
@@ -326,7 +327,7 @@ TEST_CASE("subwoofer=false folds the low-band and LFE sum to the large L/R pair"
   stage.prepare(kRate, kFrames, ChannelLayout::FivePointOne, speakers, bass);
   std::array<float, kSpeakerRoleCount> trims{};
   const float lfe_mix_db = -6.0f;
-  stage.set_levels(trims, 10.0f, lfe_mix_db);
+  stage.set_levels(trims, 10.0f, lfe_mix_db, true);
 
   const std::vector<float> tone = sonare::test::generate_sine(kFrames, kFreq, 48000, 1.0f);
   std::vector<float> l(kFrames, 0.0f), r(kFrames, 0.0f), c(kFrames, 0.0f),
@@ -379,7 +380,7 @@ TEST_CASE("bass management disabled leaves the LFE plane untouched", "[playback]
   speakers[static_cast<size_t>(SpeakerRole::Ls)].size = SpeakerSize::Small;
   stage.prepare(kRate, kFrames, ChannelLayout::FivePointOne, speakers, BassManagementConfig{});
   std::array<float, kSpeakerRoleCount> trims{};
-  stage.set_levels(trims, 10.0f, 0.0f);
+  stage.set_levels(trims, 10.0f, 0.0f, true);
 
   const std::vector<float> tone = sonare::test::generate_sine(kFrames, 40.0f, 48000, 1.0f);
   std::vector<float> l(kFrames, 0.0f), r(kFrames, 0.0f), c(kFrames, 0.0f),
@@ -411,7 +412,7 @@ TEST_CASE("distance delay and 80 Hz crossover agree at 44.1 and 48 kHz", "[playb
     bass.subwoofer = true;
     stage.prepare(rate, frames, ChannelLayout::FivePointOne, speakers, bass);
     std::array<float, kSpeakerRoleCount> trims{};
-    stage.set_levels(trims, 10.0f, 0.0f);
+    stage.set_levels(trims, 10.0f, 0.0f, true);
 
     const double delay_seconds =
         (5.0 - 1.0) / static_cast<double>(sonare::constants::kSoundSpeedMps);
@@ -465,7 +466,7 @@ TEST_CASE("distance delay measured from the output's own cross-spectrum phase sl
     stage.prepare(kRate, kWarmupFrames + kAnalysisFrames, ChannelLayout::Stereo, speakers,
                   BassManagementConfig{});
     std::array<float, kSpeakerRoleCount> trims{};
-    stage.set_levels(trims, 10.0f, 0.0f);
+    stage.set_levels(trims, 10.0f, 0.0f, true);
 
     const double expected_delay =
         (static_cast<double>(r_distance) - static_cast<double>(kLDistance)) /
@@ -493,5 +494,118 @@ TEST_CASE("distance delay measured from the output's own cross-spectrum phase sl
     CAPTURE(target_delay_samples, expected_delay, measured_delay, error);
     CHECK(std::lround(measured_delay) == std::lround(expected_delay));
     CHECK(std::abs(error) <= 0.1);
+  }
+}
+
+namespace {
+
+/// Runs a constant 0.5 on every 5.1 plane through @p stage in 256-frame blocks.
+std::vector<std::vector<float>> run_dc(SpeakerStage& stage, int blocks) {
+  constexpr int kBlock = 256;
+  std::vector<std::vector<float>> out(6);
+  std::vector<std::vector<float>> block(6, std::vector<float>(kBlock));
+  float* planes[6] = {};
+  for (int p = 0; p < 6; ++p) planes[p] = block[static_cast<size_t>(p)].data();
+  for (int b = 0; b < blocks; ++b) {
+    for (auto& plane : block) std::fill(plane.begin(), plane.end(), 0.5f);
+    stage.process(planes, kBlock);
+    for (int p = 0; p < 6; ++p) {
+      out[static_cast<size_t>(p)].insert(out[static_cast<size_t>(p)].end(),
+                                         block[static_cast<size_t>(p)].begin(),
+                                         block[static_cast<size_t>(p)].end());
+    }
+  }
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("speaker trim and LFE gain glide from the gain in force on a change",
+          "[playback][speakers]") {
+  constexpr double kRate = 48000.0;
+  constexpr int kLfe = 3;
+  const int glide = static_cast<int>(std::lround(kSpeakerLevelGlideMs * 1e-3 * kRate));
+  SpeakerStage stage;
+  std::array<SpeakerPrepare, kSpeakerRoleCount> speakers{};
+  // L waits for R, so both the plain and the fractional-delay trim paths run.
+  speakers[static_cast<size_t>(SpeakerRole::L)].has_distance = true;
+  speakers[static_cast<size_t>(SpeakerRole::L)].distance_m = 1.0f;
+  speakers[static_cast<size_t>(SpeakerRole::R)].has_distance = true;
+  speakers[static_cast<size_t>(SpeakerRole::R)].distance_m = 2.0f;
+  BassManagementConfig bass;
+  bass.enabled = true;
+  bass.subwoofer = true;
+  stage.prepare(kRate, 256, ChannelLayout::FivePointOne, speakers, bass);
+
+  std::array<float, kSpeakerRoleCount> trims{};
+  stage.set_levels(trims, 10.0f, 0.0f, true);
+  run_dc(stage, 8);
+
+  // +12 dB, then -6 dB before the first glide has finished.
+  trims.fill(12.0f);
+  stage.set_levels(trims, 0.0f, 0.0f, false);
+  const auto rising = run_dc(stage, 2);
+  trims.fill(-6.0f);
+  stage.set_levels(trims, 0.0f, 0.0f, false);
+  const auto falling = run_dc(stage, 8);
+
+  const float trim_increment = 0.5f * (sonare::db_to_linear(12.0f) - 1.0f) / glide;
+  const float lfe_increment = 0.5f * (sonare::db_to_linear(10.0f) - 1.0f) / glide;
+  const float final_trim = 0.5f * sonare::db_to_linear(-6.0f);
+  for (int p = 0; p < 6; ++p) {
+    INFO("plane " << p);
+    std::vector<float> plane = rising[static_cast<size_t>(p)];
+    plane.insert(plane.end(), falling[static_cast<size_t>(p)].begin(),
+                 falling[static_cast<size_t>(p)].end());
+    float step = 0.0f;
+    for (size_t i = 1; i < plane.size(); ++i) {
+      step = std::max(step, std::abs(plane[i] - plane[i - 1]));
+    }
+    const float increment = p == kLfe ? lfe_increment : trim_increment;
+    CHECK(step <= 1.05f * increment);
+    CHECK(std::abs(plane.front() - (p == kLfe ? 0.5f * sonare::db_to_linear(10.0f) : 0.5f)) <=
+          1.05f * increment);
+    const float settled = p == kLfe ? 0.5f : final_trim;
+    if (p == 0) {
+      CHECK(std::abs(plane.back() - settled) <= 1e-5f);
+    } else {
+      CHECK(plane.back() == settled);
+    }
+  }
+}
+
+TEST_CASE("an unchanged speaker level renders bit-identically to one set once",
+          "[playback][speakers]") {
+  constexpr double kRate = 48000.0;
+  constexpr int kBlock = 256;
+  std::array<SpeakerPrepare, kSpeakerRoleCount> speakers{};
+  std::array<float, kSpeakerRoleCount> trims{};
+  trims[static_cast<size_t>(SpeakerRole::L)] = -3.0f;
+  SpeakerStage once;
+  SpeakerStage repeated;
+  for (SpeakerStage* stage : {&once, &repeated}) {
+    stage->prepare(kRate, kBlock, ChannelLayout::Stereo, speakers, BassManagementConfig{});
+    stage->set_levels(trims, 10.0f, 0.0f, true);
+  }
+
+  std::mt19937 rng(5u);
+  std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+  std::vector<float> l(kBlock), r(kBlock);
+  for (int b = 0; b < 8; ++b) {
+    for (int i = 0; i < kBlock; ++i) {
+      l[static_cast<size_t>(i)] = dist(rng);
+      r[static_cast<size_t>(i)] = dist(rng);
+    }
+    const std::vector<float> input_r = r;
+    std::vector<float> l2 = l, r2 = r;
+    float* once_planes[2] = {l.data(), r.data()};
+    float* repeated_planes[2] = {l2.data(), r2.data()};
+    once.process(once_planes, kBlock);
+    repeated.set_levels(trims, 10.0f, 0.0f, false);
+    repeated.process(repeated_planes, kBlock);
+    CHECK(l == l2);
+    CHECK(r == r2);
+    // A 0 dB trim on an undelayed plane leaves it untouched.
+    CHECK(r == input_r);
   }
 }

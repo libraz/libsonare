@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <utility>
 #include <vector>
 
 #include "acoustic/geometry.h"
@@ -11,6 +12,7 @@
 #include "acoustic/room_model.h"
 #include "playback/room_presets.h"
 #include "rt/fractional_delay.h"
+#include "rt/gain_pair_glide.h"
 #include "rt/partitioned_convolver.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/seqlock_cell.h"
@@ -30,8 +32,8 @@ constexpr float kDegToRad = kPi / 180.0f;
 constexpr float kRadToDeg = 180.0f / kPi;
 constexpr float kFullCircleDeg = 360.0f;
 constexpr float kMsPerSecond = 1000.0f;
-/// Partition of the late-reverberation convolver, and so the depth of its FIFO.
-constexpr int kLatePartition = 128;
+constexpr int kLatePartition = kLateTailPartition;
+static_assert((kLatePartition & (kLatePartition - 1)) == 0, "head history is masked");
 constexpr int kImageSourceOrder = 2;
 constexpr int kLateSeedLeft = 1;
 constexpr int kLateSeedRight = 2;
@@ -146,6 +148,8 @@ struct LateEar {
   std::unique_ptr<rt::PartitionedConvolver> convolver;
   std::array<float, kLatePartition> in{};
   std::array<float, kLatePartition> out{};
+  std::vector<float> head;  ///< direct-FIR taps, indexed by lag
+  int head_begin = 0;       ///< first nonzero lag of @p head
 };
 
 float wrap_degrees(float deg) noexcept {
@@ -171,6 +175,44 @@ SpeakerDirection head_relative_direction(SpeakerDirection world, const HeadPose&
   return rotate_into_head(direction_vector(world), pose_rotation(pose));
 }
 
+LateTailIr synthesize_late_tail(const RoomPresetSpec& spec, int sample_rate, int ear) {
+  const acoustic::ShoeboxRoom shoebox = acoustic::uniform_shoebox(spec.dims, spec.absorption);
+  const acoustic::Vec3 listener = listener_position(spec);
+  // Normalised so a source at the virtual-speaker distance has a unit direct path, like the
+  // direct HRIRs.
+  const float mixing_ms = std::sqrt(acoustic::room_volume(spec.dims));
+  const float norm = 4.0f * kPi * spec.speaker_distance_m;
+  const acoustic::Vec3 centre{spec.dims.length * 0.5f, spec.dims.width * 0.5f, kListenerEarHeightM};
+  acoustic::RirSynthConfig config;
+  config.mixing_time_ms = mixing_ms;
+  config.max_seconds = kLateTailMaxSeconds;
+  config.seed = static_cast<unsigned>(ear == 0 ? kLateSeedLeft : kLateSeedRight);
+  const acoustic::RirSynthResult result =
+      acoustic::synthesize_rir(shoebox, {centre, listener}, sample_rate, config);
+  if (result.rir.empty()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "binaural: " + acoustic::first_error_text(result.diagnostics));
+  }
+
+  LateTailIr ir;
+  ir.mixing_sample =
+      static_cast<int>(std::lround(mixing_ms / kMsPerSecond * static_cast<float>(sample_rate)));
+  const int length = static_cast<int>(result.rir.size());
+  ir.reference.resize(result.rir.size());
+  for (size_t n = 0; n < result.rir.size(); ++n) ir.reference[n] = norm * result.rir[n];
+  ir.head.assign(static_cast<size_t>(std::min(length, kLatePartition)), 0.0f);
+  for (int n = ir.mixing_sample; n < static_cast<int>(ir.head.size()); ++n) {
+    ir.head[static_cast<size_t>(n)] = ir.reference[static_cast<size_t>(n)];
+  }
+  ir.tail.assign(static_cast<size_t>(std::max(0, length - kLatePartition)), 0.0f);
+  for (int n = 0; n < static_cast<int>(ir.tail.size()); ++n) {
+    const int lag = n + kLatePartition;
+    if (lag >= ir.mixing_sample)
+      ir.tail[static_cast<size_t>(n)] = ir.reference[static_cast<size_t>(lag)];
+  }
+  return ir;
+}
+
 struct BinauralRenderer::Impl {
   rt::SeqlockCell<HeadPose> pose_cell;
   rt::SeqlockCell<HeadPose>::Reader pose_reader{pose_cell.reader()};
@@ -194,10 +236,14 @@ struct BinauralRenderer::Impl {
   std::array<std::vector<float>, kReflectionRingDirections> ring;
   std::array<LateEar, 2> late;
   int late_pos = 0;
+  std::array<float, kLatePartition> late_history{};  ///< ring of past late-bus input
+  int late_history_pos = 0;
   std::vector<float> late_in;
   std::array<std::vector<float>, 2> late_out;
   bool room_gain_valid = false;
-  float room_gain = 0.0f;
+  /// Room-path gain, ramped across one chunk when `room.*` changes.
+  rt::GainGlide room_gain;
+  std::vector<float> room_gains;  ///< per-sample room gain of the current chunk
   /// False once a silent room was skipped, so its state is cleared on re-entry.
   bool room_state_live = false;
 
@@ -297,6 +343,8 @@ void BinauralRenderer::Impl::clear_room_state() noexcept {
     if (ear.convolver) ear.convolver->reset();
   }
   late_pos = 0;
+  late_history.fill(0.0f);
+  late_history_pos = 0;
 }
 
 void BinauralRenderer::Impl::process_chunk(const float* const* bus, float* left, float* right,
@@ -309,17 +357,19 @@ void BinauralRenderer::Impl::process_chunk(const float* const* bus, float* left,
   const float target_gain =
       room_available && params.room_enabled ? db_to_linear(params.room_mix_db) : 0.0f;
   if (!room_gain_valid) {
-    room_gain = target_gain;
+    room_gain.snap(target_gain);
     room_gain_valid = true;
   }
-  const float gain_start = room_gain;
-  const float gain_step = (target_gain - gain_start) / static_cast<float>(frames);
-  room_gain = target_gain;
-  const bool room_active = gain_start > 0.0f || target_gain > 0.0f;
+  const float applied_gain = room_gain.applied();
+  if (applied_gain != target_gain) room_gain.retarget(target_gain, frames);
+  const bool room_active = applied_gain > 0.0f || target_gain > 0.0f;
   if (room_active && !room_state_live) clear_room_state();
   room_state_live = room_active;
 
   if (room_active) {
+    for (int k = 0; k < frames; ++k) {
+      room_gains[static_cast<size_t>(k)] = room_gain.advance(target_gain);
+    }
     for (auto& channel : ring) std::fill(channel.begin(), channel.begin() + frames, 0.0f);
     std::fill(late_in.begin(), late_in.begin() + frames, 0.0f);
     for (int s = 0; s < slot_count; ++s) {
@@ -345,17 +395,29 @@ void BinauralRenderer::Impl::process_chunk(const float* const* bus, float* left,
     }
     for (auto& channel : ring) {
       for (int k = 0; k < frames; ++k) {
-        channel[static_cast<size_t>(k)] *= gain_start + gain_step * static_cast<float>(k + 1);
+        channel[static_cast<size_t>(k)] *= room_gains[static_cast<size_t>(k)];
       }
     }
 
-    // The FIFO delays by one partition, which the IR head trim already removed.
+    // The FIFO delays the convolver by one partition, which the IR split already removed; the
+    // lags below one partition come from the direct head FIR.
+    constexpr int kHistoryMask = kLatePartition - 1;
     for (int k = 0; k < frames; ++k) {
-      const float gain = gain_start + gain_step * static_cast<float>(k + 1);
+      const float gain = room_gains[static_cast<size_t>(k)];
+      late_history[static_cast<size_t>(late_history_pos)] = late_in[static_cast<size_t>(k)];
       for (size_t ear = 0; ear < late.size(); ++ear) {
+        const LateEar& le = late[ear];
+        float head_out = 0.0f;
+        for (size_t lag = static_cast<size_t>(le.head_begin); lag < le.head.size(); ++lag) {
+          head_out +=
+              le.head[lag] * late_history[static_cast<size_t>(
+                                 (late_history_pos - static_cast<int>(lag)) & kHistoryMask)];
+        }
         late[ear].in[static_cast<size_t>(late_pos)] = late_in[static_cast<size_t>(k)];
-        late_out[ear][static_cast<size_t>(k)] = gain * late[ear].out[static_cast<size_t>(late_pos)];
+        late_out[ear][static_cast<size_t>(k)] =
+            gain * (head_out + late[ear].out[static_cast<size_t>(late_pos)]);
       }
+      late_history_pos = (late_history_pos + 1) & kHistoryMask;
       if (++late_pos == kLatePartition) {
         for (auto& ear : late) ear.convolver->process_block(ear.in.data(), ear.out.data());
         late_pos = 0;
@@ -480,36 +542,17 @@ void BinauralRenderer::prepare(double sample_rate, int max_block_size, const Hrt
 
     // Late tails, normalised so a source at the virtual-speaker distance has a
     // unit direct path, like the direct HRIRs.
-    const float mixing_ms = std::sqrt(acoustic::room_volume(spec.dims));
-    const int mixing_sample =
-        static_cast<int>(std::lround(mixing_ms / kMsPerSecond * static_cast<float>(sample_rate)));
-    const float norm = 4.0f * kPi * spec.speaker_distance_m;
-    const acoustic::Vec3 centre{spec.dims.length * 0.5f, spec.dims.width * 0.5f,
-                                kListenerEarHeightM};
-    acoustic::RirSynthConfig config;
-    config.mixing_time_ms = mixing_ms;
-    config.max_seconds = kLateTailMaxSeconds;
     for (size_t ear = 0; ear < im.late.size(); ++ear) {
-      config.seed = static_cast<unsigned>(ear == 0 ? kLateSeedLeft : kLateSeedRight);
-      const acoustic::RirSynthResult result =
-          acoustic::synthesize_rir(shoebox, {centre, listener}, rate, config);
-      if (result.rir.empty()) {
-        throw SonareException(ErrorCode::InvalidParameter,
-                              "binaural: " + acoustic::first_error_text(result.diagnostics));
-      }
-      const int length = static_cast<int>(result.rir.size());
-      // Trim the FIFO depth off the head so the path reports no latency.
-      std::vector<float> ir(static_cast<size_t>(std::max(0, length - kLatePartition)), 0.0f);
-      for (int n = 0; n < static_cast<int>(ir.size()); ++n) {
-        const int src = n + kLatePartition;
-        if (src >= mixing_sample)
-          ir[static_cast<size_t>(n)] = norm * result.rir[static_cast<size_t>(src)];
-      }
-      im.late[ear].convolver = std::make_unique<rt::PartitionedConvolver>(
+      LateTailIr ir = synthesize_late_tail(spec, rate, static_cast<int>(ear));
+      LateEar& late = im.late[ear];
+      late.head_begin = std::min(ir.mixing_sample, static_cast<int>(ir.head.size()));
+      late.head = std::move(ir.head);
+      late.convolver = std::make_unique<rt::PartitionedConvolver>(
           rt::PartitionedConvolverConfig{kLatePartition});
-      im.late[ear].convolver->set_impulse_response(ir);
+      late.convolver->set_impulse_response(ir.tail);
     }
     im.late_in.assign(static_cast<size_t>(max_block_size), 0.0f);
+    im.room_gains.assign(static_cast<size_t>(max_block_size), 0.0f);
     for (auto& out : im.late_out) out.assign(static_cast<size_t>(max_block_size), 0.0f);
   }
 

@@ -112,18 +112,32 @@ std::optional<float> resolved_program_lufs(const CliArgs& args,
   return lufs;
 }
 
+// Frames of the speaker calibration stage, rounded as the renderer rounds them.
+int speaker_calibration_frames(SonarePlaybackRenderer* renderer) {
+  char* text = nullptr;
+  const SonareError err = sonare_playback_renderer_diagnostics_json(renderer, &text);
+  if (err != SONARE_OK) throw_playback_error("query playback renderer", err);
+  const std::string json = text != nullptr ? text : "";
+  sonare_free_string(text);
+  const Value root = sonare::util::json::parse(json);
+  const double q8 = root["latency"]["stages"]["speaker_calibration"]["q8"].as_number();
+  return static_cast<int>(std::lround(q8 / 256.0));
+}
+
 // Renders `frames` input frames through `renderer` block by block, mirroring
-// `playback::render_interleaved` (src/playback/renderer.cpp): the tail is
-// padded with `latency_samples()` silent frames to flush the pipeline, and
-// that many frames are dropped from the front of the output, so the returned
-// audio and any diagnostics read from `renderer` afterward both come from the
-// same, actually-processed handle.
+// `playback::render_interleaved` (src/playback/renderer.cpp): the latency
+// common to every plane -- `latency_samples()` minus the speaker calibration
+// stage, whose per-plane distance delay is signal rather than padding -- is
+// flushed with silent frames and dropped from the front of the output, so the
+// returned audio and any diagnostics read from `renderer` afterward both come
+// from the same, actually-processed handle.
 std::vector<float> render_via_reporting_handle(SonarePlaybackRenderer* renderer,
                                                const std::vector<float>& interleaved,
                                                int in_channels, int out_channels, size_t frames) {
   int latency = 0;
   SonareError err = sonare_playback_renderer_latency_samples(renderer, &latency);
   if (err != SONARE_OK) throw_playback_error("query playback renderer", err);
+  latency -= speaker_calibration_frames(renderer);
 
   const size_t total = frames + static_cast<size_t>(latency);
   std::vector<float> result(frames * static_cast<size_t>(out_channels), 0.0f);

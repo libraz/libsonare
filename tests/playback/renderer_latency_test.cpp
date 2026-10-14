@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <cstddef>
 #include <functional>
 #include <string>
 #include <utility>
@@ -257,4 +258,184 @@ TEST_CASE("distance compensation adds the largest distance delay", "[playback][l
   // The nearest speaker waits for the farthest; the others play at the base latency.
   CHECK(std::abs(delays[0] - renderer.latency_samples()) <= 1);
   for (size_t p = 1; p < delays.size(); ++p) CHECK(std::abs(delays[p] - 1312) <= 1);
+}
+
+namespace {
+
+/// Left output of a stereo-speaker renderer fed a 1 kHz cosine at 0.5, with
+/// `output_limiter.enabled` set to @p after from @p switch_block on.
+std::vector<float> limiter_render(bool before, bool after, int switch_block, int blocks) {
+  constexpr int kRate = 48000;
+  constexpr int kFrames = 512;
+  RendererConfig config;
+  config.prepare.input_layout = InputLayout::Stereo;
+  config.prepare.target_kind = TargetKind::Speakers;
+  config.prepare.target_layout = ChannelLayout::Stereo;
+  config.realtime.night_amount = 0.0f;
+  config.realtime.limiter_ceiling_db = -12.0f;
+  config.realtime.limiter_enabled = before;
+  PlaybackRenderer renderer(config, nullptr, kRate, kFrames);
+  std::vector<float> l(kFrames), r(kFrames), out_l(kFrames), out_r(kFrames), result;
+  const float* in[2] = {l.data(), r.data()};
+  float* out[2] = {out_l.data(), out_r.data()};
+  for (int b = 0; b < blocks; ++b) {
+    if (b == switch_block) {
+      config.realtime.limiter_enabled = after;
+      renderer.set_config(config);
+    }
+    for (int i = 0; i < kFrames; ++i) {
+      const double t = static_cast<double>(b * kFrames + i) / kRate;
+      l[static_cast<size_t>(i)] =
+          static_cast<float>(0.5 * std::cos(sonare::constants::kTwoPiD * 1000.0 * t));
+      r[static_cast<size_t>(i)] = l[static_cast<size_t>(i)];
+    }
+    REQUIRE(renderer.process_planar(in, 2, out, 2, kFrames));
+    result.insert(result.end(), out_l.begin(), out_l.end());
+  }
+  return result;
+}
+
+float max_step(const std::vector<float>& x, size_t begin, size_t end) {
+  float step = 0.0f;
+  for (size_t i = begin + 1; i < end; ++i) step = std::max(step, std::abs(x[i] - x[i - 1]));
+  return step;
+}
+
+}  // namespace
+
+TEST_CASE("toggling the output limiter crossfades between the limited and bypass output",
+          "[playback][limiter]") {
+  constexpr int kSwitchBlock = 20;
+  constexpr int kBlocks = 26;
+  constexpr size_t kSwitch = static_cast<size_t>(kSwitchBlock) * 512;
+  const auto glide = static_cast<size_t>(std::lround(kOutputLimiterSwitchMs * 1e-3 * 48000));
+  const std::vector<float> on = limiter_render(true, true, -1, kBlocks);
+  const std::vector<float> off = limiter_render(false, false, -1, kBlocks);
+  const size_t begin = kSwitch - 2000;
+  const size_t end = kSwitch + 2000;
+  // Neither steady state steps by more than the larger of the two signals' own steps.
+  const float bound = 1.5f * std::max(max_step(on, begin, end), max_step(off, begin, end));
+  for (const bool enable : {false, true}) {
+    INFO((enable ? "off -> on" : "on -> off"));
+    const std::vector<float> toggled = limiter_render(!enable, enable, kSwitchBlock, kBlocks);
+    CHECK(max_step(toggled, begin, end) <= bound);
+    // After the crossfade the output is the destination state's output exactly.
+    const std::vector<float>& settled = enable ? on : off;
+    for (size_t i = kSwitch + glide; i < toggled.size(); ++i) {
+      INFO("sample " << i);
+      REQUIRE(toggled[i] == settled[i]);
+    }
+    // Before it, nothing moved.
+    const std::vector<float>& before = enable ? off : on;
+    CHECK(std::equal(toggled.begin(), toggled.begin() + static_cast<std::ptrdiff_t>(kSwitch),
+                     before.begin()));
+  }
+}
+
+TEST_CASE("offline rendering keeps the opening of speakers that distance compensation delays",
+          "[playback][latency]") {
+  constexpr int kRate = 48000;
+  constexpr size_t kFrames = 4800;
+  constexpr size_t kBurst = 480;
+  constexpr float kAmplitude = 0.1f;
+  constexpr float kOnset = 0.005f;
+  const double expected_delay = 4.0 / sonare::constants::kSoundSpeedMps * kRate;
+
+  for (const bool with_distance : {false, true}) {
+    for (const size_t burst_at : {size_t{0}, size_t{1000}}) {
+      INFO((with_distance ? "L 1 m / R 5 m" : "no distance") << ", burst at " << burst_at);
+      RendererConfig config;
+      config.prepare.input_layout = InputLayout::Stereo;
+      config.prepare.target_kind = TargetKind::Speakers;
+      config.prepare.target_layout = ChannelLayout::Stereo;
+      config.realtime.limiter_enabled = false;
+      if (with_distance) {
+        config.prepare.speakers[static_cast<size_t>(SpeakerRole::L)].has_distance = true;
+        config.prepare.speakers[static_cast<size_t>(SpeakerRole::L)].distance_m = 1.0f;
+        config.prepare.speakers[static_cast<size_t>(SpeakerRole::R)].has_distance = true;
+        config.prepare.speakers[static_cast<size_t>(SpeakerRole::R)].distance_m = 5.0f;
+      }
+      std::vector<float> in(kFrames * 2, 0.0f);
+      for (size_t i = 0; i < kBurst; ++i) {
+        const float s = kAmplitude * std::sin(sonare::constants::kTwoPi * 1000.0f *
+                                              static_cast<float>(i) / static_cast<float>(kRate));
+        in[(burst_at + i) * 2] = s;
+        in[(burst_at + i) * 2 + 1] = s;
+      }
+      int channels = 0;
+      const std::vector<float> out =
+          render_interleaved(in.data(), kFrames, 2, kRate, config, nullptr, &channels);
+      REQUIRE(channels == 2);
+
+      // 480 samples of a 1 kHz sine at 0.1: energy 2.4 per plane.
+      const double input_energy = kBurst * kAmplitude * kAmplitude / 2.0;
+      double energy[2] = {};
+      int onset[2] = {-1, -1};
+      for (size_t i = 0; i < kFrames; ++i) {
+        for (size_t c = 0; c < 2; ++c) {
+          const float s = out[i * 2 + c];
+          energy[c] += static_cast<double>(s) * s;
+          if (onset[c] < 0 && std::abs(s) > kOnset) onset[c] = static_cast<int>(i);
+        }
+      }
+      for (size_t c = 0; c < 2; ++c) {
+        INFO("plane " << c);
+        CHECK(std::abs(energy[c] - input_energy) <= 1e-3 * input_energy);
+      }
+      // The far speaker plays at the input's own position; the near one waits for it.
+      CHECK(std::abs(onset[1] - static_cast<int>(burst_at)) <= 2);
+      const double delay = with_distance ? expected_delay : 0.0;
+      CHECK(std::abs(onset[0] - onset[1] - delay) <= 2.0);
+    }
+  }
+}
+
+TEST_CASE("a dialogue level change ramps the centre plane linearly across one block",
+          "[playback][latency]") {
+  constexpr int kFrames = 512;
+  constexpr int kChannels = 6;
+  constexpr int kCentre = 2;
+  constexpr float kLevel = 0.25f;
+  RendererConfig config;
+  config.prepare.input_layout = InputLayout::FivePointOne;
+  config.prepare.target_kind = TargetKind::Speakers;
+  config.prepare.target_layout = ChannelLayout::FivePointOne;
+  config.realtime.limiter_enabled = false;
+  PlaybackRenderer renderer(config, nullptr, 48000, kFrames);
+  std::vector<float> in(static_cast<size_t>(kFrames * kChannels), kLevel);
+  std::vector<float> out(in.size(), 0.0f);
+  std::vector<std::vector<float>> planes(kChannels);
+  constexpr int kSwitchBlock = 8;
+  for (int b = 0; b < 16; ++b) {
+    if (b == kSwitchBlock) {
+      config.realtime.dialogue_level_db = 6.0f;
+      renderer.set_config(config);
+    }
+    REQUIRE(renderer.process_interleaved(in.data(), kChannels, out.data(), kChannels, kFrames));
+    for (int i = 0; i < kFrames; ++i) {
+      for (int c = 0; c < kChannels; ++c) {
+        planes[static_cast<size_t>(c)].push_back(out[static_cast<size_t>(i * kChannels + c)]);
+      }
+    }
+  }
+
+  const float gain = std::pow(10.0f, 6.0f / 20.0f);
+  const std::vector<float>& centre = planes[kCentre];
+  // The input is constant, so the ramp shows wherever the gain stage's own delay puts it.
+  auto ramp_start = static_cast<size_t>(kSwitchBlock * kFrames);
+  REQUIRE(centre[ramp_start] == kLevel);
+  while (ramp_start < centre.size() && centre[ramp_start] == kLevel) ++ramp_start;
+  REQUIRE(ramp_start + kFrames < centre.size());
+  for (int k = 0; k < kFrames; ++k) {
+    INFO("ramp sample " << k);
+    const float expected = kLevel + kLevel * (gain - 1.0f) * static_cast<float>(k + 1) / kFrames;
+    CHECK(std::abs(centre[ramp_start + static_cast<size_t>(k)] - expected) <= 1e-5f);
+  }
+  CHECK(centre.back() == kLevel * gain);
+  // The other planes carry no dialogue level and stay untouched.
+  for (int c = 0; c < kChannels; ++c) {
+    if (c == kCentre) continue;
+    INFO("plane " << c);
+    CHECK(planes[static_cast<size_t>(c)].back() == kLevel);
+  }
 }

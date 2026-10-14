@@ -8,6 +8,7 @@
 #include "metering/bs1770_weighting.h"
 #include "playback/night_mode_drc.h"
 #include "rt/biquad_design.h"
+#include "util/constants.h"
 
 using sonare::ChannelLayout;
 using namespace sonare::playback;
@@ -83,7 +84,120 @@ void calibrate_stereo_level(std::vector<float>& mono, float target_level_db, dou
   for (float& s : mono) s *= gain;
 }
 
+// A 1 kHz stereo tone whose measured level is `level_db`; `phase_offset` keeps a
+// tone built in segments phase-continuous.
+std::vector<float> tone_at(size_t frames, size_t phase_offset, float level_db, double sample_rate) {
+  const auto make = [&](size_t count, size_t offset) {
+    std::vector<float> tone(count);
+    for (size_t i = 0; i < count; ++i) {
+      tone[i] = std::sin(sonare::constants::kTwoPiD * 1000.0 * static_cast<double>(i + offset) /
+                         sample_rate);
+    }
+    return tone;
+  };
+  std::vector<float> reference = make(static_cast<size_t>(sample_rate), 0);
+  calibrate_stereo_level(reference, level_db, sample_rate);
+  std::vector<float> tone = make(frames, phase_offset);
+  const float amplitude = *std::max_element(reference.begin(), reference.end());
+  for (float& s : tone) s *= amplitude;
+  return tone;
+}
+
+/// Runs @p mono on both planes of @p drc in @p block-frame blocks and returns the left output.
+std::vector<float> run_blocks(NightModeDrc& drc, const std::vector<float>& mono, int block) {
+  std::vector<float> out(mono.size());
+  std::vector<float> l(static_cast<size_t>(block)), r(static_cast<size_t>(block));
+  float* planes[2] = {l.data(), r.data()};
+  for (size_t start = 0; start < mono.size(); start += static_cast<size_t>(block)) {
+    const size_t count = std::min(static_cast<size_t>(block), mono.size() - start);
+    std::copy_n(mono.begin() + static_cast<std::ptrdiff_t>(start), count, l.begin());
+    std::copy_n(mono.begin() + static_cast<std::ptrdiff_t>(start), count, r.begin());
+    drc.process(planes, static_cast<int>(count));
+    std::copy_n(l.begin(), count, out.begin() + static_cast<std::ptrdiff_t>(start));
+  }
+  return out;
+}
+
+float max_adjacent_step(const std::vector<float>& x) {
+  float step = 0.0f;
+  for (size_t i = 1; i < x.size(); ++i) step = std::max(step, std::abs(x[i] - x[i - 1]));
+  return step;
+}
+
 }  // namespace
+
+TEST_CASE("night mode switched off glides its gain back to exactly 0 dB", "[playback][night]") {
+  constexpr double kRate = 48000.0;
+  constexpr int kBlock = 480;
+  constexpr float kTarget = -24.0f;
+  constexpr size_t kSettle = static_cast<size_t>(kRate * 0.3);
+  constexpr size_t kAfter = static_cast<size_t>(kRate * 0.05);
+  const auto glide = static_cast<size_t>(std::lround(kNightModeUnityGlideMs * 1e-3 * kRate));
+
+  NightModeDrc drc;
+  drc.prepare(kRate, kBlock, ChannelLayout::Stereo);
+  drc.set_target_lufs(kTarget);
+  drc.set_amount(1.0f);
+  const std::vector<float> loud = tone_at(kSettle + kAfter, 0, kTarget + 15.0f, kRate);
+  const std::vector<float> head(loud.begin(), loud.begin() + static_cast<std::ptrdiff_t>(kSettle));
+  const std::vector<float> settled = run_blocks(drc, head, kBlock);
+  const float cut_db = drc.current_gain_db();
+  REQUIRE(cut_db < -6.0f);
+
+  drc.set_amount(0.0f);
+  float* none[2] = {nullptr, nullptr};
+  drc.process(none, 0);
+  CHECK(drc.current_gain_db() == cut_db);
+
+  const std::vector<float> tail(loud.begin() + static_cast<std::ptrdiff_t>(kSettle), loud.end());
+  const std::vector<float> after = run_blocks(drc, tail, kBlock);
+  CHECK(drc.current_gain_db() == 0.0f);
+
+  // The tone's own largest step at full level bounds the output across the switch.
+  const float natural_step = max_adjacent_step(tail);
+  std::vector<float> across(settled.end() - kBlock, settled.end());
+  across.insert(across.end(), after.begin(), after.end());
+  CHECK(max_adjacent_step(across) <= 1.5f * natural_step);
+
+  // Once the glide has finished, the output is the look-ahead-delayed input bit for bit.
+  const auto latency = static_cast<size_t>(drc.latency_samples());
+  for (size_t i = glide + latency; i < after.size(); ++i) {
+    INFO("sample " << i);
+    REQUIRE(after[i] == loud[kSettle + i - latency]);
+  }
+}
+
+TEST_CASE("night mode attacks a loud onset that follows a lifted quiet passage",
+          "[playback][night]") {
+  constexpr double kRate = 48000.0;
+  constexpr int kBlock = 480;
+  constexpr float kTarget = -24.0f;
+  constexpr size_t kQuiet = static_cast<size_t>(kRate * 0.4);
+  // 20 ms after the onset at the output, i.e. 25 ms of input past it with the look-ahead.
+  constexpr size_t kLoud = static_cast<size_t>(kRate * 0.025);
+
+  const auto gain_after_onset = [&](float lead_level_db, float* lead_gain_db) {
+    NightModeDrc drc;
+    drc.prepare(kRate, kBlock, ChannelLayout::Stereo);
+    drc.set_target_lufs(kTarget);
+    drc.set_amount(1.0f);
+    run_blocks(drc, tone_at(kQuiet, 0, kTarget + lead_level_db, kRate), kBlock);
+    *lead_gain_db = drc.current_gain_db();
+    run_blocks(drc, tone_at(kLoud, kQuiet, kTarget + 15.0f, kRate), kBlock);
+    return drc.current_gain_db();
+  };
+
+  float lifted = 0.0f;
+  float unity = 0.0f;
+  const float from_lift = gain_after_onset(-30.0f, &lifted);
+  const float from_unity = gain_after_onset(0.0f, &unity);
+  INFO("lead gains " << lifted << " / " << unity << " dB, after onset " << from_lift << " / "
+                     << from_unity << " dB");
+  REQUIRE(lifted > 6.0f);
+  REQUIRE(std::abs(unity) < 1.0f);
+  CHECK(from_lift <= -3.0f);
+  CHECK(from_lift - from_unity <= 3.0f);
+}
 
 TEST_CASE("night-mode static curve matches its analytic values", "[playback][night]") {
   CHECK(std::abs(night_mode_curve_db(15.0f, 1.0f) - 6.0f) < 0.05f);

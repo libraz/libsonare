@@ -8,6 +8,7 @@
 
 #include "mastering/multiband/crossover.h"
 #include "rt/fractional_delay.h"
+#include "rt/gain_pair_glide.h"
 #include "util/constants.h"
 #include "util/db.h"
 
@@ -69,13 +70,17 @@ struct SpeakerStage::Impl {
   std::vector<float> low_sum;
   std::vector<float> fold_input;
 
-  // Realtime levels.
-  std::array<float, kSpeakerRoleCount> trim_linear{};
-  float lfe_gain_linear = 1.0f;
-  float lfe_mix_linear = 1.0f;
+  // Realtime levels: the linear target of each and the glide holding the gain in force.
+  int glide_frames = 1;
+  std::array<float, kSpeakerRoleCount> trim_target{};
+  std::array<rt::GainGlide, kSpeakerRoleCount> trim{};
+  float lfe_gain_target = 1.0f;
+  rt::GainGlide lfe_gain;
+  float lfe_mix_target = 1.0f;
+  rt::GainGlide lfe_mix;
 };
 
-SpeakerStage::SpeakerStage() : impl_(std::make_unique<Impl>()) { impl_->trim_linear.fill(1.0f); }
+SpeakerStage::SpeakerStage() : impl_(std::make_unique<Impl>()) { impl_->trim_target.fill(1.0f); }
 SpeakerStage::~SpeakerStage() = default;
 
 void SpeakerStage::prepare(double sample_rate, int max_block_size, ChannelLayout layout,
@@ -83,6 +88,8 @@ void SpeakerStage::prepare(double sample_rate, int max_block_size, ChannelLayout
                            const BassManagementConfig& bass) {
   Impl& m = *impl_;
   m.layout = layout;
+  m.glide_frames =
+      std::max(1, static_cast<int>(std::lround(kSpeakerLevelGlideMs * 0.001 * sample_rate)));
   m.plane_count = channel_count(layout);
   m.lfe_plane = lfe_index(layout);
   m.bass = bass;
@@ -153,13 +160,22 @@ void SpeakerStage::prepare(double sample_rate, int max_block_size, ChannelLayout
 }
 
 void SpeakerStage::set_levels(const std::array<float, kSpeakerRoleCount>& trim_db,
-                              float lfe_gain_db, float lfe_mix_db) noexcept {
+                              float lfe_gain_db, float lfe_mix_db, bool immediate) noexcept {
   Impl& m = *impl_;
+  const auto set = [&](rt::GainGlide& glide, float& target, float db) {
+    const float linear = db_to_linear(db);
+    if (immediate) {
+      glide.snap(linear);
+    } else if (linear != target) {
+      glide.retarget(linear, m.glide_frames);
+    }
+    target = linear;
+  };
   for (std::size_t r = 0; r < static_cast<std::size_t>(kSpeakerRoleCount); ++r) {
-    m.trim_linear[r] = db_to_linear(trim_db[r]);
+    set(m.trim[r], m.trim_target[r], trim_db[r]);
   }
-  m.lfe_gain_linear = db_to_linear(lfe_gain_db);
-  m.lfe_mix_linear = db_to_linear(lfe_mix_db);
+  set(m.lfe_gain, m.lfe_gain_target, lfe_gain_db);
+  set(m.lfe_mix, m.lfe_mix_target, lfe_mix_db);
 }
 
 void SpeakerStage::process(float* const* planes, int frames) noexcept {
@@ -190,14 +206,16 @@ void SpeakerStage::process(float* const* planes, int frames) noexcept {
         // Sub-feed rule: LFE * lfe_gain_db + the small speakers' low-band sum,
         // straight into the LFE plane.
         for (int f = 0; f < frames; ++f) {
-          lfe[f] = m.lfe_gain_linear * lfe[f] + m.low_sum[static_cast<std::size_t>(f)];
+          lfe[f] = m.lfe_gain.advance(m.lfe_gain_target) * lfe[f] +
+                   m.low_sum[static_cast<std::size_t>(f)];
         }
       } else {
         // No subwoofer: the LFE fold-down rule applied to (low-band sum + LFE)
         // instead of to LFE alone, since neither has anywhere else to go.
         for (int f = 0; f < frames; ++f) {
+          const float mix = m.lfe_mix.advance(m.lfe_mix_target);
           m.fold_input[static_cast<std::size_t>(f)] =
-              m.lfe_mix_linear * (lfe[f] + m.low_sum[static_cast<std::size_t>(f)]);
+              mix * (lfe[f] + m.low_sum[static_cast<std::size_t>(f)]);
         }
         float* fold_ptr = m.fold_input.data();
         m.fold_filter.split_into(&fold_ptr, 1, frames, m.fold_scratch);
@@ -214,18 +232,19 @@ void SpeakerStage::process(float* const* planes, int frames) noexcept {
 
   for (int p = 0; p < m.plane_count; ++p) {
     if (p == m.lfe_plane) continue;
-    const float trim =
-        m.trim_linear[static_cast<std::size_t>(m.roles[static_cast<std::size_t>(p)])];
+    const auto role = static_cast<std::size_t>(m.roles[static_cast<std::size_t>(p)]);
+    rt::GainGlide& trim = m.trim[role];
+    const float target = m.trim_target[role];
     Impl::PlaneDelay& d = m.delays[static_cast<std::size_t>(p)];
     float* plane = planes[p];
     if (d.delay_q8 == 0) {
-      if (trim != 1.0f) {
-        for (int f = 0; f < frames; ++f) plane[f] *= trim;
+      if (trim.gliding() || target != 1.0f) {
+        for (int f = 0; f < frames; ++f) plane[f] *= trim.advance(target);
       }
     } else {
       for (int f = 0; f < frames; ++f) {
-        plane[f] =
-            rt::lagrange3_fractional_delay(d.buffer, d.write_index, d.delay_q8, trim * plane[f]);
+        plane[f] = rt::lagrange3_fractional_delay(d.buffer, d.write_index, d.delay_q8,
+                                                  trim.advance(target) * plane[f]);
       }
     }
   }
@@ -239,6 +258,9 @@ void SpeakerStage::reset() noexcept {
   }
   m.small_crossover.reset();
   m.fold_filter.reset();
+  for (std::size_t r = 0; r < m.trim.size(); ++r) m.trim[r].snap(m.trim_target[r]);
+  m.lfe_gain.snap(m.lfe_gain_target);
+  m.lfe_mix.snap(m.lfe_mix_target);
 }
 
 int SpeakerStage::latency_samples() const noexcept {

@@ -2,12 +2,14 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <string>
 #include <vector>
 
 #include "mastering/multiband/crossover.h"
 #include "mixing/downmix.h"
+#include "rt/gain_pair_glide.h"
 #include "util/db.h"
 #include "util/exception.h"
 
@@ -126,7 +128,9 @@ struct LayoutConverter::Impl {
   // LFE fold-down rule (bus without an LFE plane: stereo speakers, headphones).
   bool fold_needed = false;
   int fold_dst[2] = {-1, -1};
-  float fold_gain = 1.0f;  // linear, from lfe_mix_db
+  float fold_target = 1.0f;  // linear, from lfe_mix_db
+  rt::GainGlide fold_gain;
+  int fold_glide_frames = 1;
   mastering::multiband::Crossover fold_filter{fold_crossover_config()};
   mastering::multiband::CrossoverScratch fold_scratch;
   std::vector<float> fold_scaled;
@@ -188,6 +192,8 @@ void LayoutConverter::prepare(double sample_rate, int max_block_size, ChannelLay
   m.fold_filter.prepare(sample_rate, max_block_size, 1);
   m.fold_filter.prepare_scratch(m.fold_scratch, 1, max_block_size);
   m.fold_scaled.assign(static_cast<size_t>(max_block_size), 0.0f);
+  m.fold_glide_frames =
+      std::max(1, static_cast<int>(std::lround(kLfeFoldGlideMs * 0.001 * sample_rate)));
 
   // Decay horizon, measured on the prepared filter's own impulse response.
   m.decay = 0;
@@ -212,7 +218,16 @@ void LayoutConverter::prepare(double sample_rate, int max_block_size, ChannelLay
   }
 }
 
-void LayoutConverter::set_lfe_mix_db(float db) noexcept { impl_->fold_gain = db_to_linear(db); }
+void LayoutConverter::set_lfe_mix_db(float db, bool immediate) noexcept {
+  Impl& m = *impl_;
+  const float linear = db_to_linear(db);
+  if (immediate) {
+    m.fold_gain.snap(linear);
+  } else if (linear != m.fold_target) {
+    m.fold_gain.retarget(linear, m.fold_glide_frames);
+  }
+  m.fold_target = linear;
+}
 
 void LayoutConverter::process(const float* const* source, float* const* bus, int frames) noexcept {
   Impl& m = *impl_;
@@ -276,8 +291,10 @@ void LayoutConverter::process(const float* const* source, float* const* bus, int
 
   if (m.fold_needed) {
     const int lfe_plane = lfe_index(m.source);
-    for (int i = 0; i < frames; ++i)
-      m.fold_scaled[static_cast<size_t>(i)] = m.fold_gain * source[lfe_plane][i];
+    for (int i = 0; i < frames; ++i) {
+      m.fold_scaled[static_cast<size_t>(i)] =
+          m.fold_gain.advance(m.fold_target) * source[lfe_plane][i];
+    }
     float* ptr = m.fold_scaled.data();
     m.fold_filter.split_into(&ptr, 1, frames, m.fold_scratch);
     const float* low = m.fold_scratch.band_channels[0][0];
@@ -289,7 +306,11 @@ void LayoutConverter::process(const float* const* source, float* const* bus, int
   }
 }
 
-void LayoutConverter::reset() noexcept { impl_->fold_filter.reset(); }
+void LayoutConverter::reset() noexcept {
+  Impl& m = *impl_;
+  m.fold_filter.reset();
+  m.fold_gain.snap(m.fold_target);
+}
 
 int LayoutConverter::decay_frames() const noexcept { return impl_->decay; }
 

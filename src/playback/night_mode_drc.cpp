@@ -9,6 +9,7 @@
 #include "metering/bs1770_weighting.h"
 #include "rt/biquad_design.h"
 #include "rt/delay_line.h"
+#include "rt/gain_pair_glide.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
@@ -96,11 +97,12 @@ struct NightModeDrc::Impl {
 
   float attack_coeff = 0.0f;
   float release_coeff = 0.0f;
+  int unity_glide_frames = 1;
 
   float amount = 0.0f;
   float target_lufs = -24.0f;
   bool frozen = false;
-  float gain_db = 0.0f;  // smoothed gain applied to every plane
+  rt::GainGlide gain;  // smoothed gain (dB) applied to every plane
 };
 
 NightModeDrc::NightModeDrc() : impl_(std::make_unique<Impl>()) {}
@@ -130,6 +132,8 @@ void NightModeDrc::prepare(double sample_rate, int max_block_size, ChannelLayout
 
   m.attack_coeff = time_to_coefficient(sample_rate, kNightModeAttackMs);
   m.release_coeff = time_to_coefficient(sample_rate, kNightModeReleaseMs);
+  m.unity_glide_frames =
+      std::max(1, static_cast<int>(std::lround(kNightModeUnityGlideMs * 0.001 * sample_rate)));
 
   reset();
 }
@@ -170,16 +174,23 @@ void NightModeDrc::process(float* const* planes, int frames) noexcept {
       const float x_db = detected_lufs - m.target_lufs;
 
       if (evaluate_curve) {
+        const float gain_db = m.gain.applied();
         const float target_gain_db = night_mode_curve_db(x_db, m.amount) - x_db;
-        const float coeff =
-            std::abs(target_gain_db) > std::abs(m.gain_db) ? m.attack_coeff : m.release_coeff;
-        m.gain_db = coeff * m.gain_db + (1.0f - coeff) * target_gain_db;
+        // Any travel down toward a cut is attack, including the withdrawal of a lift.
+        const bool attack = target_gain_db < 0.0f ? target_gain_db < gain_db
+                                                  : std::abs(target_gain_db) > std::abs(gain_db);
+        const float coeff = attack ? m.attack_coeff : m.release_coeff;
+        m.gain.snap(coeff * gain_db + (1.0f - coeff) * target_gain_db);
       } else {
-        m.gain_db = 0.0f;  // amount == 0: bypass the curve entirely.
+        // amount == 0: the curve is bypassed and the gain glides back to exactly 0 dB.
+        if (!m.gain.gliding() && m.gain.applied() != 0.0f) {
+          m.gain.retarget(0.0f, m.unity_glide_frames);
+        }
+        m.gain.advance(0.0f);
       }
     }
 
-    const float linear_gain = db_to_linear(m.gain_db);
+    const float linear_gain = db_to_linear(m.gain.applied());
     for (int c = 0; c < channels; ++c) {
       float* plane = planes[static_cast<size_t>(c)];
       if (plane == nullptr) continue;
@@ -196,7 +207,7 @@ void NightModeDrc::reset() noexcept {
   m.ring_pos = 0;
   m.ring_sum = 0.0;
   for (auto& d : m.lookahead) d.reset();
-  m.gain_db = 0.0f;
+  m.gain.snap(0.0f);
 }
 
 int NightModeDrc::latency_samples() const noexcept { return impl_->latency; }
@@ -206,7 +217,7 @@ NightModeDrcHandover NightModeDrc::handover() const noexcept {
   NightModeDrcHandover state;
   state.mean_power =
       m.power_ring.empty() ? 0.0 : m.ring_sum / static_cast<double>(m.power_ring.size());
-  state.gain_db = m.gain_db;
+  state.gain_db = m.gain.applied();
   return state;
 }
 
@@ -216,9 +227,9 @@ void NightModeDrc::accept_handover(const NightModeDrcHandover& state) noexcept {
   std::fill(m.power_ring.begin(), m.power_ring.end(), state.mean_power);
   m.ring_sum = state.mean_power * static_cast<double>(m.power_ring.size());
   m.ring_pos = 0;
-  m.gain_db = state.gain_db;
+  m.gain.snap(state.gain_db);
 }
 
-float NightModeDrc::current_gain_db() const noexcept { return impl_->gain_db; }
+float NightModeDrc::current_gain_db() const noexcept { return impl_->gain.applied(); }
 
 }  // namespace sonare::playback

@@ -18,6 +18,9 @@
 
 namespace sonare::playback {
 
+/// Linear glide of an `lfe_mix_db` change on the fold-down rule.
+inline constexpr float kLfeFoldGlideMs = 20.0f;
+
 /// Plane layout of the bus between the front ends and the back end.
 struct OutputBus {
   TargetKind kind = TargetKind::Headphones;
@@ -59,8 +62,9 @@ class LayoutConverter {
   /// takes the fold-down rule, built at @p sample_rate; otherwise LFE passes to
   /// the bus LFE plane, where the speaker stage applies its own rules.
   void prepare(double sample_rate, int max_block_size, ChannelLayout source, const OutputBus& bus);
-  /// Realtime: `lfe_mix_db` of the fold-down rule.
-  void set_lfe_mix_db(float db) noexcept;
+  /// Realtime: `lfe_mix_db` of the fold-down rule. A change glides there over
+  /// `kLfeFoldGlideMs` from the gain in force; @p immediate lands on it at once.
+  void set_lfe_mix_db(float db, bool immediate) noexcept;
   /// Adds `channel_count(source)` planes into the bus planes (accumulates).
   void process(const float* const* source, float* const* bus, int frames) noexcept;
   void reset() noexcept;

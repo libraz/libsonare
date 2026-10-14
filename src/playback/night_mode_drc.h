@@ -10,7 +10,8 @@
 /// compressed at 1 + 3*amount : 1; between -12 and -40 dB lifted upward at
 /// 1 + amount : 1 (at most 12*amount dB), fading to no lift at -40 dB; 1:1 in
 /// between; 6 dB soft knees. The signal path is delayed 5 ms (look-ahead) in
-/// every state, including amount = 0, where the curve is not evaluated.
+/// every state, including amount = 0, where the curve is not evaluated and the
+/// gain glides back to exactly 0 dB.
 
 #include <memory>
 
@@ -22,6 +23,8 @@ inline constexpr float kNightModeLookaheadMs = 5.0f;
 inline constexpr float kNightModeAttackMs = 10.0f;
 inline constexpr float kNightModeReleaseMs = 300.0f;
 inline constexpr float kNightModeDetectorWindowMs = 50.0f;
+/// Linear glide of the gain back to 0 dB once the amount becomes 0.
+inline constexpr float kNightModeUnityGlideMs = 20.0f;
 
 /// Detector and gain state carried from one front end to the next on an
 /// input-layout switch.

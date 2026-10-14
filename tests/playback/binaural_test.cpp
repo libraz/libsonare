@@ -1,6 +1,7 @@
 #include "playback/binaural.h"
 
 #include <algorithm>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstring>
@@ -515,5 +516,70 @@ TEST_CASE("binaural output does not depend on how the stream is cut into blocks"
     CAPTURE(block);
     CHECK(cut.left == whole.left);
     CHECK(cut.right == whole.right);
+  }
+}
+
+TEST_CASE("binaural late tail keeps every sample from the mixing time at every rate",
+          "[playback][binaural]") {
+  for (RoomPreset preset :
+       {RoomPreset::LivingRoom, RoomPreset::HomeTheater, RoomPreset::ScreeningRoom}) {
+    RoomPresetSpec spec;
+    REQUIRE(room_preset_spec(preset, &spec));
+    for (int rate : {8000, 11025, 16000, 22050, 44100, 48000}) {
+      for (int ear = 0; ear < 2; ++ear) {
+        CAPTURE(static_cast<int>(preset), rate, ear);
+        const LateTailIr ir = synthesize_late_tail(spec, rate, ear);
+        REQUIRE(ir.reference.size() > static_cast<size_t>(ir.mixing_sample));
+
+        // Lag-indexed IR the renderer realises: head at its own lags, tail one partition later.
+        std::vector<float> kept(ir.reference.size(), 0.0f);
+        for (size_t n = 0; n < ir.head.size(); ++n) kept[n] += ir.head[n];
+        for (size_t n = 0; n < ir.tail.size(); ++n) {
+          kept[n + static_cast<size_t>(kLateTailPartition)] += ir.tail[n];
+        }
+
+        double kept_energy = 0.0;
+        double reference_energy = 0.0;
+        for (size_t n = 0; n < kept.size(); ++n) {
+          const bool late = n >= static_cast<size_t>(ir.mixing_sample);
+          // Exact: each kept lag is a copy of the reference or zero.
+          CHECK(kept[n] == (late ? ir.reference[n] : 0.0f));
+          kept_energy += static_cast<double>(kept[n]) * kept[n];
+          if (late) reference_energy += static_cast<double>(ir.reference[n]) * ir.reference[n];
+        }
+        REQUIRE(reference_energy > 0.0);
+        CHECK(kept_energy == Catch::Approx(reference_energy).epsilon(1e-9));
+      }
+    }
+  }
+}
+
+TEST_CASE("binaural late head FIR path adds no latency and survives block cuts at low rates",
+          "[playback][binaural]") {
+  const ShrfFixtureSpec spec;
+  const HrtfSet set = make_set(make_shrf_fixture(spec));
+  const HeadphoneSlotSet slots = headphone_slots(InputLayout::FivePointOne);
+  constexpr double kLowRate = 8000.0;
+  constexpr int kFrames = 1500;
+  auto impulse = [&](std::vector<std::vector<float>>& bus, int start, int n) {
+    const int plane = plane_of(slots, VirtualSlot::C);
+    if (start <= 10 && 10 < start + n) {
+      bus[static_cast<size_t>(plane)][static_cast<size_t>(10 - start)] = 1.0f;
+    }
+  };
+
+  BinauralRenderer renderer;
+  renderer.prepare(kLowRate, 64, set, slots, RoomPreset::LivingRoom);
+  CHECK(renderer.latency_samples() == 0);
+  const Run whole = render(renderer, slots, kFrames, 64, impulse);
+  renderer.reset();
+  const Run cut = render(renderer, slots, kFrames, 37, impulse);
+  double tail = 0.0;
+  for (int i = 11; i < kFrames; ++i) tail += std::fabs(whole.left[static_cast<size_t>(i)]);
+  CHECK(tail > 0.0);
+  for (size_t i = 0; i < whole.left.size(); ++i) {
+    CAPTURE(i);
+    CHECK(cut.left[i] == Catch::Approx(whole.left[i]).margin(1e-5));
+    CHECK(cut.right[i] == Catch::Approx(whole.right[i]).margin(1e-5));
   }
 }

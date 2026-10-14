@@ -5,6 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <random>
+#include <utility>
 #include <vector>
 
 #include "mixing/downmix.h"
@@ -411,7 +412,7 @@ TEST_CASE("LFE fold-down: in-band pass, treble rejected, tracks lfe_mix_db", "[p
 
     LayoutConverter converter;
     converter.prepare(kRate, kFrames, ChannelLayout::FivePointOne, bus);
-    converter.set_lfe_mix_db(kLfeMixDb);
+    converter.set_lfe_mix_db(kLfeMixDb, true);
     std::vector<std::vector<float>> out(2, std::vector<float>(kFrames, 0.0f));
     auto out_ptrs = ptrs(out);
     converter.process(in_ptrs.data(), out_ptrs.data(), kFrames);
@@ -492,4 +493,45 @@ TEST_CASE("headphone slot mapping follows the bus's fixed slot set", "[playback]
             in[static_cast<size_t>(src)][static_cast<size_t>(f)]);
     }
   }
+}
+
+TEST_CASE("an lfe_mix_db change glides the fold-down level instead of stepping it",
+          "[playback][layout]") {
+  OutputBus bus;
+  bus.kind = TargetKind::Speakers;
+  bus.speaker_layout = ChannelLayout::Stereo;
+  constexpr float kFrom = 0.0f;
+  constexpr float kTo = -20.0f;
+
+  // A constant LFE settles through the fold filter to kMinus3dB times the fold gain.
+  const auto render = [&](bool immediate) {
+    std::vector<std::vector<float>> in(6, std::vector<float>(kFrames, 0.0f));
+    std::fill(in[3].begin(), in[3].end(), 1.0f);
+    const auto in_ptrs = const_ptrs(in);
+    LayoutConverter converter;
+    converter.prepare(kRate, kFrames, ChannelLayout::FivePointOne, bus);
+    converter.set_lfe_mix_db(kFrom, true);
+    std::vector<std::vector<float>> out(2, std::vector<float>(kFrames, 0.0f));
+    auto out_ptrs = ptrs(out);
+    converter.process(in_ptrs.data(), out_ptrs.data(), kFrames);
+    const float before = out[0].back();
+    converter.set_lfe_mix_db(kTo, immediate);
+    for (auto& plane : out) std::fill(plane.begin(), plane.end(), 0.0f);
+    converter.process(in_ptrs.data(), out_ptrs.data(), kFrames);
+    return std::make_pair(before, out[0]);
+  };
+
+  const float settled_to = sonare::mixing::downmix_coeff::kMinus3dB * std::pow(10.0f, kTo / 20.0f);
+  const auto travelled = [&](const std::pair<float, std::vector<float>>& run, double ms) {
+    const auto at = static_cast<size_t>(ms * 1e-3 * kRate);
+    return (run.first - run.second[at]) / (run.first - settled_to);
+  };
+  const auto glided = render(false);
+  const auto snapped = render(true);
+  // 5 ms in, a 20 ms glide behind the 120 Hz LR4 has barely started; a step has mostly landed.
+  CHECK(travelled(snapped, 5.0) > 0.5);
+  CHECK(travelled(glided, 5.0) < 0.3);
+  // Both land on the same level once the glide and the filter have settled.
+  CHECK(std::abs(glided.second.back() - settled_to) <= 1e-4f * std::abs(glided.first));
+  CHECK(std::abs(snapped.second.back() - settled_to) <= 1e-4f * std::abs(snapped.first));
 }

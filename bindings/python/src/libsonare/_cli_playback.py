@@ -232,13 +232,16 @@ def _render_via_reporting_handle(
     """Render ``frames`` input frames through ``renderer`` block by block.
 
     Mirrors ``playback::render_interleaved`` (src/playback/renderer.cpp): the
-    tail is padded with ``latency_samples()`` silent frames to flush the
-    pipeline, and that many frames are dropped from the front of the output,
-    so the returned audio and any diagnostics read from ``renderer`` afterward
-    both come from the same, actually-processed handle.
+    latency common to every plane -- ``latency_samples()`` minus the speaker
+    calibration stage, whose per-plane distance delay is signal rather than
+    padding -- is flushed with silent frames and dropped from the front of the
+    output, so the returned audio and any diagnostics read from ``renderer``
+    afterward both come from the same, actually-processed handle.
     """
     out_channels = renderer.output_channels()
-    latency = renderer.latency_samples()
+    calibration_q8 = renderer.diagnostics()["latency"]["stages"]["speaker_calibration"]["q8"]
+    # lround(q8 / 256) for a non-negative q8, as the C++ trim rounds it.
+    latency = renderer.latency_samples() - (int(calibration_q8) + 128) // 256
     total = frames + latency
     result = np.zeros((frames, out_channels), dtype=np.float32)
     block = _OFFLINE_RENDER_BLOCK_FRAMES

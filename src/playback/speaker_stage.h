@@ -18,6 +18,9 @@
 
 namespace sonare::playback {
 
+/// Linear glide of a trim, LFE gain or LFE mix change.
+inline constexpr float kSpeakerLevelGlideMs = 20.0f;
+
 class SpeakerStage {
  public:
   SpeakerStage();
@@ -31,9 +34,10 @@ class SpeakerStage {
                const std::array<SpeakerPrepare, kSpeakerRoleCount>& speakers,
                const BassManagementConfig& bass);
   /// Realtime: per-role trims (indexed by SpeakerRole), LFE sub-feed gain and
-  /// LFE fold-down level.
+  /// LFE fold-down level. A changed level glides there over `kSpeakerLevelGlideMs`
+  /// from the gain in force; @p immediate lands on every level at once.
   void set_levels(const std::array<float, kSpeakerRoleCount>& trim_db, float lfe_gain_db,
-                  float lfe_mix_db) noexcept;
+                  float lfe_mix_db, bool immediate) noexcept;
   /// In place over `channel_count(layout)` planes.
   void process(float* const* planes, int frames) noexcept;
   void reset() noexcept;

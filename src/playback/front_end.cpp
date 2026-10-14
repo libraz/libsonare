@@ -6,6 +6,7 @@
 
 #include "playback/upmix.h"
 #include "rt/delay_line.h"
+#include "rt/gain_pair_glide.h"
 #include "util/db.h"
 
 namespace sonare::playback {
@@ -47,13 +48,15 @@ struct FrontEnd::Impl {
   std::vector<std::vector<float>> src;
   std::array<float*, kMaxSourcePlanes> src_ptrs{};
 
-  // Dialogue level (discrete C plane only) and loudness alignment, ramped over
-  // one block when they change.
+  // Loudness alignment on every plane, times the dialogue level on the discrete
+  // C plane, each ramped over one block when it changes.
   int centre_plane = -1;
-  float dialogue_target = 1.0f;
-  float dialogue_current = 1.0f;
-  float loudness_target = 1.0f;
-  float loudness_current = 1.0f;
+  float plane_target = 1.0f;
+  float centre_target = 1.0f;
+  rt::GainGlide plane_gain;
+  rt::GainGlide centre_gain;
+  std::vector<float> plane_ramp;
+  std::vector<float> centre_ramp;
 
   // Truncated-drain fade: the converter writes a private bus, faded onto the real one.
   std::vector<std::vector<float>> fade_bus;
@@ -62,28 +65,25 @@ struct FrontEnd::Impl {
   int fade_len = 1;
   int fade_pos = 0;
 
+  /// Writes this block's gains of @p glide into @p ramp; false when they are all unity.
+  static bool fill_ramp(rt::GainGlide& glide, float target, int frames, float* ramp) noexcept {
+    if (glide.applied() != target) glide.retarget(target, frames);
+    if (!glide.gliding() && target == 1.0f) return false;
+    for (int i = 0; i < frames; ++i) ramp[i] = glide.advance(target);
+    return true;
+  }
+
   void apply_gains(int frames) noexcept {
-    const bool steady = dialogue_current == dialogue_target && loudness_current == loudness_target;
-    if (steady && dialogue_current == 1.0f && loudness_current == 1.0f) return;
-    const float inv = 1.0f / static_cast<float>(frames);
+    const bool scale_planes = fill_ramp(plane_gain, plane_target, frames, plane_ramp.data());
+    const bool scale_centre =
+        centre_plane >= 0 && fill_ramp(centre_gain, centre_target, frames, centre_ramp.data());
     for (int p = 0; p < source_count; ++p) {
-      float* plane = src_ptrs[static_cast<size_t>(p)];
       const bool centre = p == centre_plane;
-      const float start = loudness_current * (centre ? dialogue_current : 1.0f);
-      const float end = loudness_target * (centre ? dialogue_target : 1.0f);
-      if (start == end) {
-        if (end != 1.0f) {
-          for (int i = 0; i < frames; ++i) plane[i] *= end;
-        }
-        continue;
-      }
-      const float step = (end - start) * inv;
-      for (int i = 0; i < frames; ++i) {
-        plane[i] *= i + 1 == frames ? end : start + step * static_cast<float>(i + 1);
-      }
+      if (!(centre ? scale_centre : scale_planes)) continue;
+      const float* ramp = centre ? centre_ramp.data() : plane_ramp.data();
+      float* plane = src_ptrs[static_cast<size_t>(p)];
+      for (int i = 0; i < frames; ++i) plane[i] *= ramp[i];
     }
-    dialogue_current = dialogue_target;
-    loudness_current = loudness_target;
   }
 };
 
@@ -137,6 +137,8 @@ void FrontEnd::prepare(double sample_rate, int max_block_size, ChannelLayout inp
   m.converter.prepare(sample_rate, max_block_size, m.source, bus);
 
   m.silence.assign(static_cast<size_t>(max_block_size), 0.0f);
+  m.plane_ramp.assign(static_cast<size_t>(max_block_size), 1.0f);
+  m.centre_ramp.assign(static_cast<size_t>(max_block_size), 1.0f);
   m.src = make_planes(m.source_count, max_block_size);
   for (int p = 0; p < m.source_count; ++p) {
     m.src_ptrs[static_cast<size_t>(p)] = m.src[static_cast<size_t>(p)].data();
@@ -162,14 +164,15 @@ void FrontEnd::apply_realtime(const RealtimeConfig& config, bool immediate) noex
     params.lfe_from_upmix = config.upmix_lfe_from_upmix;
     m.upmix.set_params(params, immediate);
   }
-  m.converter.set_lfe_mix_db(config.lfe_mix_db);
+  m.converter.set_lfe_mix_db(config.lfe_mix_db, immediate);
   m.drc.set_amount(config.night_amount);
   m.drc.set_target_lufs(config.target_lufs);
-  m.dialogue_target = m.centre_plane >= 0 ? db_to_linear(config.dialogue_level_db) : 1.0f;
-  m.loudness_target = db_to_linear(compute_loudness_gain(config).gain_db);
+  const float dialogue = m.centre_plane >= 0 ? db_to_linear(config.dialogue_level_db) : 1.0f;
+  m.plane_target = db_to_linear(compute_loudness_gain(config).gain_db);
+  m.centre_target = m.plane_target * dialogue;
   if (immediate) {
-    m.dialogue_current = m.dialogue_target;
-    m.loudness_current = m.loudness_target;
+    m.plane_gain.snap(m.plane_target);
+    m.centre_gain.snap(m.centre_target);
   }
 }
 
@@ -224,8 +227,8 @@ void FrontEnd::reset() noexcept {
   m.converter.reset();
   m.fading = false;
   m.fade_pos = 0;
-  m.dialogue_current = m.dialogue_target;
-  m.loudness_current = m.loudness_target;
+  m.plane_gain.snap(m.plane_target);
+  m.centre_gain.snap(m.centre_target);
 }
 
 int FrontEnd::latency() const noexcept {

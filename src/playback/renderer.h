@@ -31,6 +31,8 @@ namespace sonare::playback {
 
 /// Output-limiter look-ahead.
 inline constexpr float kOutputLimiterLookaheadMs = 1.0f;
+/// Crossfade between the limited and the bypass output on an `output_limiter.enabled` change.
+inline constexpr float kOutputLimiterSwitchMs = 20.0f;
 /// Block length of the offline one-shot render.
 inline constexpr int kOfflineRenderBlockFrames = 4096;
 
@@ -100,7 +102,8 @@ class PlaybackRenderer {
 };
 
 /// Renders a whole interleaved buffer offline, latency removed: the result has
-/// @p frames frames of `*out_channels` channels.
+/// @p frames frames of `*out_channels` channels. Only the latency common to every
+/// plane is removed; speaker distance compensation keeps each plane's own delay.
 /// @throws SonareException(InvalidParameter) if @p frames is 0, @p in is null,
 ///         @p in_channels is not positive, or @p in contains a non-finite
 ///         sample.
