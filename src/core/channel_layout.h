@@ -98,6 +98,52 @@ inline const SpeakerRole* speaker_roles(ChannelLayout layout) noexcept {
   return kStereo;
 }
 
+/// Speaker positions as WAVE_FORMAT_EXTENSIBLE dwChannelMask bit numbers. FFmpeg's
+/// AV_CHAN_* ids use the same numbering.
+enum class WaveSpeaker : int8_t {
+  None = -1,
+  FrontLeft = 0,
+  FrontRight = 1,
+  FrontCenter = 2,
+  LowFrequency = 3,
+  BackLeft = 4,
+  BackRight = 5,
+  BackCenter = 8,
+  SideLeft = 9,
+  SideRight = 10,
+};
+
+/// Positions that can carry one speaker role, primary first.
+struct RoleSpeakers {
+  WaveSpeaker primary = WaveSpeaker::None;
+  WaveSpeaker alternate = WaveSpeaker::None;
+};
+
+/// A 5.1 source spells its surround pair as the back or the side pair depending on the
+/// writer, so Ls/Rs accept either; 7.1 carries both and resolves the back pair first.
+constexpr RoleSpeakers role_speakers(SpeakerRole role) noexcept {
+  using W = WaveSpeaker;
+  switch (role) {
+    case SpeakerRole::L:
+      return {W::FrontLeft, W::None};
+    case SpeakerRole::R:
+      return {W::FrontRight, W::None};
+    case SpeakerRole::C:
+      return {W::FrontCenter, W::None};
+    case SpeakerRole::LFE:
+      return {W::LowFrequency, W::None};
+    case SpeakerRole::Ls:
+      return {W::BackLeft, W::SideLeft};
+    case SpeakerRole::Rs:
+      return {W::BackRight, W::SideRight};
+    case SpeakerRole::Lss:
+      return {W::SideLeft, W::None};
+    case SpeakerRole::Rss:
+      return {W::SideRight, W::None};
+  }
+  return {};
+}
+
 /// Role azimuth (degrees, 0 = front, +right) shared by the 5.1 and 7.1 rings;
 /// 7.1 overrides Ls/Rs below. LFE has no position.
 constexpr float speaker_azimuth_deg(SpeakerRole role) noexcept {

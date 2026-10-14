@@ -205,44 +205,21 @@ std::vector<double> mono_downmix_row(ChannelLayout layout) {
   return row;
 }
 
-/// @brief FFmpeg channel ids that can carry one canonical speaker role.
-/// @details A 5.1 stream spells its surround pair BACK_LEFT/BACK_RIGHT or
-///          SIDE_LEFT/SIDE_RIGHT depending on the muxer, so the surround planes
-///          accept either; 7.1 carries both pairs and resolves the back one
-///          first, which is the order the canonical plane list uses.
-struct RoleChannels {
-  AVChannel primary = AV_CHAN_NONE;
-  AVChannel alternate = AV_CHAN_NONE;
-};
+static_assert(AV_CHAN_FRONT_LEFT == 0 && AV_CHAN_LOW_FREQUENCY == 3 && AV_CHAN_BACK_CENTER == 8 &&
+                  AV_CHAN_SIDE_RIGHT == 10,
+              "FFmpeg channel ids must follow the WAVE speaker-mask bit numbering");
 
-RoleChannels role_channels(SpeakerRole role) {
-  switch (role) {
-    case SpeakerRole::L:
-      return {AV_CHAN_FRONT_LEFT, AV_CHAN_NONE};
-    case SpeakerRole::R:
-      return {AV_CHAN_FRONT_RIGHT, AV_CHAN_NONE};
-    case SpeakerRole::C:
-      return {AV_CHAN_FRONT_CENTER, AV_CHAN_NONE};
-    case SpeakerRole::LFE:
-      return {AV_CHAN_LOW_FREQUENCY, AV_CHAN_NONE};
-    case SpeakerRole::Ls:
-      return {AV_CHAN_BACK_LEFT, AV_CHAN_SIDE_LEFT};
-    case SpeakerRole::Rs:
-      return {AV_CHAN_BACK_RIGHT, AV_CHAN_SIDE_RIGHT};
-    case SpeakerRole::Lss:
-      return {AV_CHAN_SIDE_LEFT, AV_CHAN_NONE};
-    case SpeakerRole::Rss:
-      return {AV_CHAN_SIDE_RIGHT, AV_CHAN_NONE};
-  }
-  return {};
+AVChannel av_channel(WaveSpeaker speaker) {
+  return speaker == WaveSpeaker::None ? AV_CHAN_NONE
+                                      : static_cast<AVChannel>(static_cast<int>(speaker));
 }
 
 /// @brief Plane index of a canonical speaker role within @p layout, or -1.
 int layout_index_for_role(const AVChannelLayout& layout, SpeakerRole role) {
-  const RoleChannels candidates = role_channels(role);
-  int index = av_channel_layout_index_from_channel(&layout, candidates.primary);
-  if (index < 0 && candidates.alternate != AV_CHAN_NONE) {
-    index = av_channel_layout_index_from_channel(&layout, candidates.alternate);
+  const RoleSpeakers candidates = role_speakers(role);
+  int index = av_channel_layout_index_from_channel(&layout, av_channel(candidates.primary));
+  if (index < 0 && candidates.alternate != WaveSpeaker::None) {
+    index = av_channel_layout_index_from_channel(&layout, av_channel(candidates.alternate));
   }
   return index;
 }

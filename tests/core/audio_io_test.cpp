@@ -243,6 +243,45 @@ std::vector<uint8_t> create_wav_buffer_multichannel(const float* interleaved, si
   return buffer;
 }
 
+/// @brief WAVE_FORMAT_EXTENSIBLE float WAV carrying speaker mask @p channel_mask.
+std::vector<uint8_t> create_wav_buffer_extensible(const float* interleaved, size_t frame_count,
+                                                  int channels, int sample_rate,
+                                                  uint32_t channel_mask) {
+  const size_t data_bytes = frame_count * static_cast<size_t>(channels) * 4;
+  std::vector<uint8_t> buffer;
+  const auto put16 = [&](uint32_t v) {
+    for (int i = 0; i < 2; ++i) buffer.push_back(static_cast<uint8_t>(v >> (8 * i)));
+  };
+  const auto put32 = [&](uint32_t v) {
+    for (int i = 0; i < 4; ++i) buffer.push_back(static_cast<uint8_t>(v >> (8 * i)));
+  };
+  const auto tag = [&](const char* text) { buffer.insert(buffer.end(), text, text + 4); };
+  tag("RIFF");
+  put32(static_cast<uint32_t>(4 + 8 + 40 + 8 + data_bytes));
+  tag("WAVE");
+  tag("fmt ");
+  put32(40);
+  put16(0xFFFE);
+  put16(static_cast<uint32_t>(channels));
+  put32(static_cast<uint32_t>(sample_rate));
+  put32(static_cast<uint32_t>(sample_rate * channels * 4));
+  put16(static_cast<uint32_t>(channels * 4));
+  put16(32);
+  put16(22);
+  put16(32);
+  put32(channel_mask);
+  // KSDATAFORMAT_SUBTYPE_IEEE_FLOAT
+  const uint8_t subformat[16] = {0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
+                                 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71};
+  buffer.insert(buffer.end(), subformat, subformat + 16);
+  tag("data");
+  put32(static_cast<uint32_t>(data_bytes));
+  const size_t offset = buffer.size();
+  buffer.resize(offset + data_bytes);
+  std::memcpy(buffer.data() + offset, interleaved, data_bytes);
+  return buffer;
+}
+
 /// @brief Root-mean-square level of a signal.
 double rms(const std::vector<float>& samples) {
   double energy = 0.0;
@@ -459,6 +498,48 @@ TEST_CASE("load_buffer_wav drops LFE and attenuates the center when folding 5.1"
   REQUIRE_THAT(peak(lfe_mono), Catch::Matchers::WithinAbs(0.0f, 1e-7f));
   REQUIRE_THAT(peak(center_mono),
                Catch::Matchers::WithinAbs(sonare::constants::kInvSqrt2 * peak(tone), 1e-5f));
+}
+
+TEST_CASE("load_buffer_wav folds by the speaker mask a six-channel file declares",
+          "[audio_io][downmix]") {
+  // Six planes are not always 5.1: 6.0 (mask 0x707) carries a full-range back
+  // center where 5.1 carries the LFE, so that plane must survive the fold.
+  constexpr int sr = 48000;
+  constexpr size_t frames = 4096;
+  const std::vector<float> tone = generate_sine(static_cast<int>(frames), 1000.0f, sr, 0.5f);
+  const auto plane_only = [&](size_t plane) {
+    std::vector<std::vector<float>> planes(6);
+    planes[plane] = tone;
+    return interleave(planes, frames);
+  };
+  const auto load = [&](const std::vector<float>& interleaved, uint32_t mask) {
+    const std::vector<uint8_t> wav =
+        create_wav_buffer_extensible(interleaved.data(), frames, 6, sr, mask);
+    auto [mono, rate] = load_buffer_wav(wav.data(), wav.size());
+    REQUIRE(rate == sr);
+    REQUIRE(mono.size() == frames);
+    REQUIRE(std::all_of(mono.begin(), mono.end(), [](float x) { return std::isfinite(x); }));
+    return mono;
+  };
+
+  const std::vector<float> back_center = load(plane_only(3), 0x707u);
+  INFO("6.0 back-center-only peak " << peak(back_center));
+  REQUIRE_THAT(peak(back_center), Catch::Matchers::WithinAbs(peak(tone) / 6.0f, 1e-6f));
+
+  // The LFE of a real 5.1 is still dropped.
+  REQUIRE_THAT(peak(load(plane_only(3), 0x3Fu)), Catch::Matchers::WithinAbs(0.0f, 1e-7f));
+
+  // 5.1(side) spells the surround pair with the side positions and folds like 5.1(back).
+  for (size_t plane = 0; plane < 6; ++plane) {
+    CAPTURE(plane);
+    const std::vector<float> side = load(plane_only(plane), 0x60Fu);
+    const std::vector<float> back = load(plane_only(plane), 0x3Fu);
+    const std::vector<float> unmasked = load(plane_only(plane), 0u);
+    for (size_t i = 0; i < frames; ++i) {
+      REQUIRE(side[i] == back[i]);
+      REQUIRE(unmasked[i] == back[i]);
+    }
+  }
 }
 
 TEST_CASE("load_buffer_wav keeps the mono and stereo folds bit-identical", "[audio_io][downmix]") {

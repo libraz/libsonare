@@ -57,26 +57,74 @@ constexpr bool has_modelled_layout(int channels) noexcept {
   return channels == channel_count(layout_from_channel_count(channels));
 }
 
-/// @brief Folds one interleaved decode chunk down to mono and appends it to @p mono.
+/// @brief How a stream folds to mono, decided once from its channel count and speaker mask.
+struct MonoFold {
+  /// No modelled layout fits the planes, so the fold is their unweighted mean.
+  bool mean = false;
+  /// Source plane carrying each canonical plane of the modelled layout.
+  std::array<int, kMaxLayoutPlanes> source_plane{};
+};
+
+/// @brief Plane carrying @p speaker under WAVE speaker mask @p mask, or -1 when absent.
+int wave_mask_plane(uint32_t mask, WaveSpeaker speaker) noexcept {
+  if (speaker == WaveSpeaker::None) return -1;
+  const uint32_t bit = 1u << static_cast<int>(speaker);
+  if ((mask & bit) == 0) return -1;
+  int plane = 0;
+  for (uint32_t below = mask & (bit - 1u); below != 0; below &= below - 1u) ++plane;
+  return plane;
+}
+
+/// @brief Chooses the mono fold for @p channels planes carrying WAVE speaker mask @p mask.
 /// @details Layouts the speaker model covers go through @ref sonare::mixing::downmix,
 ///          so the built-in decoders apply the same ITU-R BS.775 rule the rest of
 ///          the library uses: the center and surround feeds enter the front pair
-///          at -3 dB and the LFE plane is dropped. Channel counts outside the
-///          model (quad, LCR, and anything above 7.1) carry no speaker assignment
-///          the matrix can reason about, so they keep the unweighted mean rather
-///          than losing their unmapped planes.
+///          at -3 dB and the LFE plane is dropped. A mask naming one position per
+///          plane places the planes by role; a mask missing a role the layout needs
+///          (6.0 has no LFE) leaves the planes unmodelled. A zero or inconsistent mask
+///          assigns no positions, so the channel count picks the canonical layout.
+///          Unmodelled planes (quad, LCR, 6.0, anything above 7.1) keep the unweighted
+///          mean rather than losing a plane.
+MonoFold mono_fold_for(int channels, uint32_t mask) {
+  MonoFold fold;
+  if (!has_modelled_layout(channels)) {
+    fold.mean = true;
+    return fold;
+  }
+  for (int plane = 0; plane < channels; ++plane)
+    fold.source_plane[static_cast<size_t>(plane)] = plane;
+  int positions = 0;
+  for (uint32_t bits = mask; bits != 0; bits &= bits - 1u) ++positions;
+  if (positions != channels) return fold;
+
+  const SpeakerRole* roles = speaker_roles(layout_from_channel_count(channels));
+  for (int plane = 0; plane < channels; ++plane) {
+    const RoleSpeakers candidates = role_speakers(roles[plane]);
+    int source = wave_mask_plane(mask, candidates.primary);
+    if (source < 0) source = wave_mask_plane(mask, candidates.alternate);
+    if (source < 0) {
+      fold.mean = true;
+      return fold;
+    }
+    fold.source_plane[static_cast<size_t>(plane)] = source;
+  }
+  return fold;
+}
+
+/// @brief Folds one interleaved decode chunk down to mono and appends it to @p mono.
 /// @param interleaved Frame-interleaved chunk of @p n_frames * @p channels samples.
 /// @param n_frames    Frames in the chunk.
 /// @param channels    Source channel count (>= @ref kMinSupportedChannels).
+/// @param fold        The stream's fold from @ref mono_fold_for.
 /// @param planar      Caller-owned de-interleave scratch, reused across chunks.
 /// @param mono        Destination; the folded frames are appended to it.
-void append_mono_fold(const float* interleaved, size_t n_frames, int channels,
+void append_mono_fold(const float* interleaved, size_t n_frames, int channels, const MonoFold& fold,
                       std::vector<float>& planar, std::vector<float>& mono) {
   const size_t base = mono.size();
   mono.resize(base + n_frames);
   float* out = mono.data() + base;
 
-  if (!has_modelled_layout(channels)) {
+  if (fold.mean) {
     for (size_t frame = 0; frame < n_frames; ++frame) {
       double sum = 0.0;
       const size_t frame_base = frame * static_cast<size_t>(channels);
@@ -90,14 +138,17 @@ void append_mono_fold(const float* interleaved, size_t n_frames, int channels,
 
   // downmix() reads planar input, so split the chunk into planes first.
   planar.resize(n_frames * static_cast<size_t>(channels));
-  std::array<const float*, kMaxLayoutPlanes> planes{};
   for (int channel = 0; channel < channels; ++channel) {
     float* plane = planar.data() + static_cast<size_t>(channel) * n_frames;
     for (size_t frame = 0; frame < n_frames; ++frame) {
       plane[frame] =
           interleaved[frame * static_cast<size_t>(channels) + static_cast<size_t>(channel)];
     }
-    planes[static_cast<size_t>(channel)] = plane;
+  }
+  std::array<const float*, kMaxLayoutPlanes> planes{};
+  for (int plane = 0; plane < channels; ++plane) {
+    const size_t source = static_cast<size_t>(fold.source_plane[static_cast<size_t>(plane)]);
+    planes[static_cast<size_t>(plane)] = planar.data() + source * n_frames;
   }
   float* mono_plane[1] = {out};
   mixing::downmix(layout_from_channel_count(channels), ChannelLayout::Mono, planes.data(),
@@ -452,6 +503,7 @@ DecodedInputData decode_builtin_wav(const uint8_t* data, size_t size, RetainChan
                    ErrorCode::DecodeFailed, "WAV channel layout exceeds the decode limit");
   std::vector<float> scratch(scratch_samples);
   std::vector<float> planar;
+  const MonoFold fold = mono_fold_for(channels, wav.fmt.channelMask);
   drwav_uint64 total_frames_read = 0;
   while (total_frames_read < wav.totalPCMFrameCount) {
     const drwav_uint64 request =
@@ -474,7 +526,7 @@ DecodedInputData decode_builtin_wav(const uint8_t* data, size_t size, RetainChan
           defer_retained_errors, retain_enabled, result.retained_error, result.interleaved);
     }
     if (include_mono) {
-      append_mono_fold(scratch.data(), frame_count, channels, planar, result.mono);
+      append_mono_fold(scratch.data(), frame_count, channels, fold, planar, result.mono);
     }
     total_frames_read += frames_read;
   }
@@ -526,6 +578,8 @@ DecodedInputData decode_builtin_mp3(const uint8_t* data, size_t size, RetainChan
   std::array<mp3d_sample_t, kMp3DecodeChunkSamples> chunk{};
   std::vector<float> normalized;
   std::vector<float> planar;
+  // MP3 carries no speaker positions, so its channel count decides the fold.
+  const MonoFold mp3_fold = mono_fold_for(channels, 0);
   size_t decoded_samples = 0;
   while (true) {
     const size_t read_samples = mp3dec_ex_read(&decoder_guard.decoder, chunk.data(), chunk.size());
@@ -554,7 +608,7 @@ DecodedInputData decode_builtin_mp3(const uint8_t* data, size_t size, RetainChan
     }
     if (include_mono) {
       append_mono_fold(normalized.data(), read_samples / static_cast<size_t>(channels), channels,
-                       planar, result.mono);
+                       mp3_fold, planar, result.mono);
     }
   }
   SONARE_CHECK_MSG(!include_mono || !result.mono.empty(), ErrorCode::DecodeFailed,
