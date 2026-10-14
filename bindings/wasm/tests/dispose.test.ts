@@ -1,17 +1,30 @@
+import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   Audio,
   ErrorCode,
+  HrtfSet,
   init,
   Mixer,
   mixingScenePresetJson,
+  PlaybackLoudnessMeter,
+  PlaybackRenderer,
   Project,
+  RealtimeEngine,
+  RealtimeVoiceChanger,
   SampleBank,
   SonareError,
   StreamAnalyzer,
+  StreamingEqualizer,
+  StreamingMasteringChain,
+  StreamingRetune,
 } from '../dist/index.js';
 
 const SR = 48000;
+
+function hrtfBytes(): Uint8Array {
+  return new Uint8Array(readFileSync(new URL('../dist/hrtf/default.shrf', import.meta.url)));
+}
 const BLOCK = 128;
 
 function expectInvalidState(call: () => unknown): void {
@@ -76,5 +89,70 @@ describe('Symbol.dispose / using', () => {
     const audio = Audio.fromBuffer(new Float32Array([0.5, -0.25]), SR);
     expect(() => audio[Symbol.dispose]()).not.toThrow();
     expect(audio.length).toBe(2);
+  });
+
+  const releasedHandleCases: Array<{
+    name: string;
+    make: () => { delete(): void };
+    call: (handle: never) => unknown;
+  }> = [
+    {
+      name: 'PlaybackRenderer',
+      make: () => {
+        const hrtf = HrtfSet.fromBytes(hrtfBytes());
+        const renderer = new PlaybackRenderer({ config: {}, hrtf, sampleRate: SR });
+        hrtf.delete();
+        return renderer;
+      },
+      call: (h: PlaybackRenderer) => h.reset(),
+    },
+    {
+      name: 'PlaybackLoudnessMeter',
+      make: () => new PlaybackLoudnessMeter(2, SR),
+      call: (h: PlaybackLoudnessMeter) => h.integratedLufs(),
+    },
+    {
+      name: 'RealtimeEngine',
+      make: () => new RealtimeEngine(SR, BLOCK),
+      call: (h: RealtimeEngine) => h.midiInstrumentCount(),
+    },
+    {
+      name: 'RealtimeVoiceChanger',
+      make: () => new RealtimeVoiceChanger(),
+      call: (h: RealtimeVoiceChanger) => h.reset(),
+    },
+    {
+      name: 'StreamingMasteringChain',
+      make: () => new StreamingMasteringChain({}),
+      call: (h: StreamingMasteringChain) => h.reset(),
+    },
+    {
+      name: 'StreamingEqualizer',
+      make: () => new StreamingEqualizer(),
+      call: (h: StreamingEqualizer) => h.clear(),
+    },
+    {
+      name: 'StreamingRetune',
+      make: () => new StreamingRetune(),
+      call: (h: StreamingRetune) => h.reset(),
+    },
+    {
+      name: 'Mixer',
+      make: () => Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), SR, BLOCK),
+      call: (h: Mixer) => h.drainTailStereo(BLOCK),
+    },
+    { name: 'SampleBank', make: () => new SampleBank(), call: (h: SampleBank) => h.sampleCount() },
+    {
+      name: 'StreamAnalyzer',
+      make: () => new StreamAnalyzer(),
+      call: (h: StreamAnalyzer) => h.frameCount(),
+    },
+    { name: 'Project', make: () => new Project(), call: (h: Project) => h.toJson() },
+  ];
+
+  it.each(releasedHandleCases)('$name refuses use after delete() with InvalidState', (testCase) => {
+    const handle = testCase.make();
+    handle.delete();
+    expectInvalidState(() => testCase.call(handle as never));
   });
 });

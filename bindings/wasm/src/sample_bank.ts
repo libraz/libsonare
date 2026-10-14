@@ -1,3 +1,4 @@
+import { assertHandleLive } from './_handle_guard.js';
 import type { SampleDesc, SampleZoneDesc } from './instrument_types.js';
 import { projectModule, type WasmSampleBank } from './project_internal.js';
 
@@ -36,8 +37,13 @@ import { projectModule, type WasmSampleBank } from './project_internal.js';
  * ```
  */
 export class SampleBank {
-  private readonly native: WasmSampleBank;
+  private readonly nativeHandle: WasmSampleBank;
   private released = false;
+
+  private get native(): WasmSampleBank {
+    assertHandleLive(this.released, 'SampleBank');
+    return this.nativeHandle;
+  }
 
   /**
    * Identity a binding names this bank by, so no raw pointer crosses into JS.
@@ -49,7 +55,7 @@ export class SampleBank {
 
   /** Create an empty bank. */
   constructor() {
-    this.native = new (projectModule().SampleBank)();
+    this.nativeHandle = new (projectModule().SampleBank)();
     this.nativeId = this.native.id;
   }
 
@@ -103,7 +109,7 @@ export class SampleBank {
       return;
     }
     this.released = true;
-    this.native.delete();
+    this.nativeHandle.delete();
   }
 
   /** Alias for {@link SampleBank.delete}, provided for cross-binding (Node) compatibility. */

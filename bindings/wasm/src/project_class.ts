@@ -1,3 +1,4 @@
+import { assertHandleLive, releasedHandleError } from './_handle_guard.js';
 import { packMidi2Program } from './_midi_program_pack.js';
 import { ErrorCode, SonareError } from './errors.js';
 import type {
@@ -253,7 +254,7 @@ export class ProjectTimeline {
    */
   get nativeId(): number {
     if (this.native === null) {
-      throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'ProjectTimeline is disposed');
+      throw releasedHandleError('ProjectTimeline');
     }
     return this.native.id;
   }
@@ -315,6 +316,12 @@ export class Project {
 
   /** The native project; refused while an instrument bounce is calling back into JavaScript. */
   private get native(): WasmProject {
+    assertHandleLive(this.released, 'Project');
+    this.assertNotBusy();
+    return this.nativeHandle;
+  }
+
+  private assertNotBusy(): void {
     if (this.instrumentBounceActive) {
       throw new SonareError(
         ErrorCode.InvalidState,
@@ -322,7 +329,6 @@ export class Project {
         'Project is busy: it cannot be used from inside a bounceWithInstruments callback',
       );
     }
-    return this.nativeHandle;
   }
 
   private set native(handle: WasmProject) {
@@ -349,7 +355,7 @@ export class Project {
     } finally {
       this.activeVocalRehydrateCalls -= 1;
       if (this.activeVocalRehydrateCalls === 0 && this.deleteRequested) {
-        this.native.delete();
+        this.nativeHandle.delete();
       }
     }
   }
@@ -1957,12 +1963,13 @@ export class Project {
     if (this.released) {
       return;
     }
+    this.assertNotBusy();
     this.released = true;
     if (this.activeVocalRehydrateCalls !== 0) {
       this.deleteRequested = true;
       return;
     }
-    this.native.delete();
+    this.nativeHandle.delete();
   }
 
   /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */

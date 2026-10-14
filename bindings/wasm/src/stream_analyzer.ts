@@ -1,3 +1,4 @@
+import { assertHandleLive } from './_handle_guard.js';
 import { resolveOrdinalInRange } from './codes.js';
 import { getSonareModule } from './module_state.js';
 import type { ChordQuality, PitchClass } from './public_types.js';
@@ -52,8 +53,13 @@ export function streamAnalyzerConfigDefaults(): StreamConfigDefaults {
  * shared-memory worker support.
  */
 export class StreamAnalyzer {
-  private analyzer: WasmStreamAnalyzer;
+  private analyzerHandle: WasmStreamAnalyzer;
   private released = false;
+
+  private get analyzer(): WasmStreamAnalyzer {
+    assertHandleLive(this.released, 'StreamAnalyzer');
+    return this.analyzerHandle;
+  }
 
   /**
    * Create a new StreamAnalyzer.
@@ -81,7 +87,7 @@ export class StreamAnalyzer {
         : resolveOrdinalInRange(config.window, 0, 3, 'stream analyzer window');
     const module = getSonareModule();
     const defaults = streamAnalyzerConfigDefaults();
-    this.analyzer = new module.StreamAnalyzer(
+    this.analyzerHandle = new module.StreamAnalyzer(
       config.sampleRate ?? defaults.sampleRate,
       config.nFft ?? defaults.nFft,
       config.hopLength ?? defaults.hopLength,
@@ -329,7 +335,7 @@ export class StreamAnalyzer {
       return;
     }
     this.released = true;
-    this.analyzer.delete();
+    this.analyzerHandle.delete();
   }
 
   /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */

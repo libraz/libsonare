@@ -1,3 +1,4 @@
+import { assertHandleLive } from './_handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
   RealtimeVoiceChangerConfigInput,
@@ -66,8 +67,13 @@ function requirePodFormantMode(config: unknown): void {
 }
 
 export class RealtimeVoiceChanger {
-  private changer: import('./sonare.js').WasmRealtimeVoiceChanger;
+  private changerHandle: import('./sonare.js').WasmRealtimeVoiceChanger;
   private released = false;
+
+  private get changer(): import('./sonare.js').WasmRealtimeVoiceChanger {
+    assertHandleLive(this.released, 'RealtimeVoiceChanger');
+    return this.changerHandle;
+  }
 
   /**
    * Creates a voice changer. Supplying `sampleRate` prepares it immediately,
@@ -82,7 +88,9 @@ export class RealtimeVoiceChanger {
   ) {
     requirePodFormantMode(config);
     const module = getSonareModule();
-    this.changer = module.createRealtimeVoiceChanger(config as Record<string, unknown> | string);
+    this.changerHandle = module.createRealtimeVoiceChanger(
+      config as Record<string, unknown> | string,
+    );
     if (sampleRate !== undefined) {
       // `prepare` rejects a non-positive sample rate, a negative block size and
       // a channel count outside [1, 2]. The handle is already allocated by
@@ -96,7 +104,7 @@ export class RealtimeVoiceChanger {
         prepared = true;
       } finally {
         if (!prepared) {
-          this.changer.delete();
+          this.changerHandle.delete();
         }
       }
     }
@@ -374,7 +382,7 @@ export class RealtimeVoiceChanger {
       return;
     }
     this.released = true;
-    this.changer.delete();
+    this.changerHandle.delete();
   }
 
   /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */

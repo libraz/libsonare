@@ -1,3 +1,4 @@
+import { assertHandleLive } from './_handle_guard.js';
 import {
   automationCurveCode,
   meterTapCode,
@@ -97,12 +98,17 @@ export interface MixerRealtimeBuffer {
  * ```
  */
 export class Mixer {
-  private mixer: import('./sonare.js').WasmMixer;
+  private mixerHandle: import('./sonare.js').WasmMixer;
   private released = false;
+
+  private get mixer(): import('./sonare.js').WasmMixer {
+    assertHandleLive(this.released, 'Mixer');
+    return this.mixerHandle;
+  }
   private readonly blockSize: number;
 
   private constructor(mixer: import('./sonare.js').WasmMixer, blockSize: number) {
-    this.mixer = mixer;
+    this.mixerHandle = mixer;
     this.blockSize = blockSize;
   }
 
@@ -824,7 +830,7 @@ export class Mixer {
       return;
     }
     this.released = true;
-    this.mixer.delete();
+    this.mixerHandle.delete();
   }
 
   /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */

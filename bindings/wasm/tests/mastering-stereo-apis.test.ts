@@ -23,7 +23,9 @@ describe('WASM stereo mastering design APIs', () => {
     const chain = new StreamingMasteringChain({ 'eq.tilt.enabled': true });
     chain.prepare(SAMPLE_RATE, 128, 1);
     chain.delete();
-    expect(() => chain.setParameter('eq.tilt.tiltDb', 3)).toThrow(/deleted object/);
+    expect(() => chain.setParameter('eq.tilt.tiltDb', 3)).toThrow(
+      /StreamingMasteringChain has been released/,
+    );
   });
 
   it('applies one crossfade to both channels and supports request and positional forms', () => {

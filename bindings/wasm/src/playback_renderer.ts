@@ -1,3 +1,4 @@
+import { assertHandleLive } from './_handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
   PlaybackDiagnostics,
@@ -28,11 +29,6 @@ function assertHeadOrientationAngle(value: unknown, argName: string): asserts va
   }
 }
 
-/**
- * Reads {@link HrtfSet}'s private `native`: TypeScript's `private` is a
- * compile-time rule, so one reviewed read here beats widening the class with a
- * handle accessor no caller wants.
- */
 function nativeHrtf(hrtf: HrtfSet | undefined): WasmHrtfSet | null {
   if (hrtf === undefined) {
     return null;
@@ -40,7 +36,7 @@ function nativeHrtf(hrtf: HrtfSet | undefined): WasmHrtfSet | null {
   if (!(hrtf instanceof HrtfSet)) {
     throw new TypeError('hrtf must be an HrtfSet');
   }
-  return (hrtf as unknown as { native: WasmHrtfSet }).native;
+  return hrtf.native;
 }
 
 /**
@@ -62,11 +58,17 @@ function nativeHrtf(hrtf: HrtfSet | undefined): WasmHrtfSet | null {
  * ```
  */
 export class HrtfSet {
-  private native: WasmHrtfSet;
+  private nativeHandle: WasmHrtfSet;
   private released = false;
 
+  /** @internal */
+  get native(): WasmHrtfSet {
+    assertHandleLive(this.released, 'HrtfSet');
+    return this.nativeHandle;
+  }
+
   private constructor(native: WasmHrtfSet) {
-    this.native = native;
+    this.nativeHandle = native;
   }
 
   /** Builds an HRTF set from SHRF v1 bytes; malformed data throws. */
@@ -80,7 +82,7 @@ export class HrtfSet {
       return;
     }
     this.released = true;
-    this.native.delete();
+    this.nativeHandle.delete();
   }
 
   /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
@@ -109,11 +111,16 @@ export class HrtfSet {
  * `SonarePlaybackWorkletProcessor` in the worklet bundle.
  */
 export class PlaybackRenderer {
-  private native: WasmPlaybackRenderer;
+  private nativeHandle: WasmPlaybackRenderer;
   private released = false;
 
+  private get native(): WasmPlaybackRenderer {
+    assertHandleLive(this.released, 'PlaybackRenderer');
+    return this.nativeHandle;
+  }
+
   constructor(options: PlaybackRendererOptions) {
-    this.native = getSonareModule().createPlaybackRenderer(
+    this.nativeHandle = getSonareModule().createPlaybackRenderer(
       configJsonText(options.config),
       nativeHrtf(options.hrtf),
       options.sampleRate ?? 48000,
@@ -212,7 +219,7 @@ export class PlaybackRenderer {
       return;
     }
     this.released = true;
-    this.native.delete();
+    this.nativeHandle.delete();
   }
 
   /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
@@ -232,11 +239,16 @@ export class PlaybackRenderer {
  * `loudness.program_lufs` ahead of a {@link PlaybackRenderer}.
  */
 export class PlaybackLoudnessMeter {
-  private native: WasmPlaybackLoudnessMeter;
+  private nativeHandle: WasmPlaybackLoudnessMeter;
   private released = false;
 
+  private get native(): WasmPlaybackLoudnessMeter {
+    assertHandleLive(this.released, 'PlaybackLoudnessMeter');
+    return this.nativeHandle;
+  }
+
   constructor(channels: number, sampleRate: number) {
-    this.native = getSonareModule().createPlaybackLoudnessMeter(channels, sampleRate);
+    this.nativeHandle = getSonareModule().createPlaybackLoudnessMeter(channels, sampleRate);
   }
 
   /** Feeds interleaved frames of any length. */
@@ -255,7 +267,7 @@ export class PlaybackLoudnessMeter {
       return;
     }
     this.released = true;
-    this.native.delete();
+    this.nativeHandle.delete();
   }
 
   /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */

@@ -1,4 +1,5 @@
 import { flattenChainConfig } from './_chain_config.js';
+import { assertHandleLive } from './_handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
   EqBand,
@@ -110,13 +111,18 @@ const EQ_PHASE_MODES: Record<string, number> = {
  * ```
  */
 export class StreamingMasteringChain {
-  private chain: import('./sonare.js').WasmStreamingMasteringChain;
+  private chainHandle: import('./sonare.js').WasmStreamingMasteringChain;
   private released = false;
+
+  private get chain(): import('./sonare.js').WasmStreamingMasteringChain {
+    assertHandleLive(this.released, 'StreamingMasteringChain');
+    return this.chainHandle;
+  }
 
   constructor(config: StreamingMasteringChainConfig) {
     const module = getSonareModule();
     const { loudnessStaticGainDb, loudnessStaticGainPeakDb, ...chainConfig } = config;
-    this.chain = module.createStreamingMasteringChain({
+    this.chainHandle = module.createStreamingMasteringChain({
       __flatParams: flattenChainConfig(chainConfig),
       loudnessStaticGainDb,
       loudnessStaticGainPeakDb,
@@ -257,7 +263,7 @@ export class StreamingMasteringChain {
       return;
     }
     this.released = true;
-    this.chain.delete();
+    this.chainHandle.delete();
   }
 
   /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
@@ -297,12 +303,17 @@ export class StreamingMasteringChain {
  * ```
  */
 export class StreamingEqualizer {
-  private eq: import('./sonare.js').WasmStreamingEqualizer;
+  private eqHandle: import('./sonare.js').WasmStreamingEqualizer;
   private released = false;
+
+  private get eq(): import('./sonare.js').WasmStreamingEqualizer {
+    assertHandleLive(this.released, 'StreamingEqualizer');
+    return this.eqHandle;
+  }
 
   constructor(config: StreamingEqualizerConfig = {}) {
     const module = getSonareModule();
-    this.eq = module.createEqualizer(config as Record<string, unknown>);
+    this.eqHandle = module.createEqualizer(config as Record<string, unknown>);
   }
 
   /**
@@ -488,7 +499,7 @@ export class StreamingEqualizer {
       return;
     }
     this.released = true;
-    this.eq.delete();
+    this.eqHandle.delete();
   }
 
   /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
@@ -514,12 +525,17 @@ export class StreamingEqualizer {
  * the underlying WASM object.
  */
 export class StreamingRetune {
-  private retune: import('./sonare.js').WasmStreamingRetune;
+  private retuneHandle: import('./sonare.js').WasmStreamingRetune;
   private released = false;
+
+  private get retune(): import('./sonare.js').WasmStreamingRetune {
+    assertHandleLive(this.released, 'StreamingRetune');
+    return this.retuneHandle;
+  }
 
   constructor(config: StreamingRetuneConfig = {}) {
     const module = getSonareModule();
-    this.retune = module.createStreamingRetune(config as Record<string, unknown>);
+    this.retuneHandle = module.createStreamingRetune(config as Record<string, unknown>);
   }
 
   /**
@@ -571,7 +587,7 @@ export class StreamingRetune {
       return;
     }
     this.released = true;
-    this.retune.delete();
+    this.retuneHandle.delete();
   }
 
   /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */

@@ -1,4 +1,4 @@
-import { ErrorCode, SonareError } from './errors.js';
+import { releasedHandleError } from './_handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
   NoteEditInput,
@@ -59,11 +59,7 @@ export class PolyphonicAnalysis {
 
   private handle(): WasmPolyphonicAnalysis {
     if (this.native === null) {
-      throw new SonareError(
-        ErrorCode.InvalidState,
-        'InvalidState',
-        'PolyphonicAnalysis has been released',
-      );
+      throw releasedHandleError('PolyphonicAnalysis');
     }
     return this.native;
   }

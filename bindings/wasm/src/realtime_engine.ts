@@ -1,3 +1,4 @@
+import { assertHandleLive } from './_handle_guard.js';
 import {
   panLawCode,
   panModeCode,
@@ -336,8 +337,13 @@ function nativeClip(clip: EngineClip): WasmEngineClip {
 }
 
 export class RealtimeEngine {
-  private native: WasmRealtimeEngine;
+  private nativeHandle: WasmRealtimeEngine;
   private released = false;
+
+  private get native(): WasmRealtimeEngine {
+    assertHandleLive(this.released, 'RealtimeEngine');
+    return this.nativeHandle;
+  }
   private sampleRate: number;
 
   constructor(
@@ -357,7 +363,7 @@ export class RealtimeEngine {
       );
     }
     this.sampleRate = sampleRate;
-    this.native = new module.RealtimeEngine(
+    this.nativeHandle = new module.RealtimeEngine(
       sampleRate,
       maxBlockSize,
       commandCapacity,
@@ -1384,6 +1390,12 @@ export class RealtimeEngine {
     return this.native.metronome();
   }
 
+  /**
+   * Sample at which a count-in of `bars` bars from `startSample` ends. Counting starts at the
+   * beginning of the bar containing `startSample` (a mid-bar start gets a short first bar), and
+   * every counted bar has the length of the time signature in effect at `startSample`.
+   * Returns `startSample` when `bars <= 0`.
+   */
   countInEndSample(startSample: number, bars: number): number {
     return Number(this.native.countInEndSample(startSample, bars));
   }
@@ -2396,7 +2408,7 @@ export class RealtimeEngine {
       return;
     }
     this.released = true;
-    this.native.delete();
+    this.nativeHandle.delete();
   }
 
   /** Alias for {@link destroy}, matching embind's own release method name. */
