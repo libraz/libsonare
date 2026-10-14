@@ -7,6 +7,7 @@
 
 #include "midi/synth/filter_models.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <vector>
@@ -108,6 +109,43 @@ TEST_CASE("filter models survive full cutoff/resonance sweeps without divergence
     INFO("model " << static_cast<int>(model));
     REQUIRE(all_finite);
     REQUIRE(peak < 100.0f);
+  }
+}
+
+TEST_CASE("settle puts every filter model at its DC steady state", "[midi][synth][filter]") {
+  // Reference: the same filter run from reset on a constant input until it has converged.
+  constexpr int kConvergeSamples = 20000;
+  constexpr float kCutoff = 2000.0f;
+  for (const SynthFilterModel model : kAllModels) {
+    for (const float q : {0.7f, 3.0f, 8.0f}) {
+      for (const float x : {0.4f, -0.7f}) {
+        for (const SynthFilterOutput out :
+             {SynthFilterOutput::kLowpass, SynthFilterOutput::kBandpass,
+              SynthFilterOutput::kHighpass}) {
+          SynthFilter reference;
+          reference.prepare(kRate);
+          reference.set_model(model);
+          reference.set(kCutoff, q);
+          float expected = 0.0f;
+          for (int i = 0; i < kConvergeSamples; ++i) expected = reference.process(x, out);
+
+          SynthFilter settled;
+          settled.prepare(kRate);
+          settled.set_model(model);
+          settled.set(kCutoff, q);
+          settled.settle(x);
+          const float first = settled.process(x, out);
+          const float second = settled.process(x, out);
+
+          // Float state error scales with the input; the loop gain amplifies it by Q.
+          const float tol = 1.0e-4f * std::fabs(x) * std::max(1.0f, q);
+          INFO("model " << static_cast<int>(model) << " q " << q << " x " << x << " output "
+                        << static_cast<int>(out));
+          REQUIRE(std::fabs(first - expected) <= tol);
+          REQUIRE(std::fabs(second - first) <= tol);
+        }
+      }
+    }
   }
 }
 

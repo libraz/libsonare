@@ -1077,6 +1077,76 @@ TEST_CASE("a filter sweep is audible on a held note", "[midi][synth]") {
   REQUIRE(rms(reopened.left, 4096) > 0.8f * open_rms);
 }
 
+TEST_CASE("re-engaging the voice filter after a skip does not replay stale state",
+          "[midi][synth]") {
+  using sonare::midi::synth::ModDestination;
+  using sonare::midi::synth::ModSource;
+  using sonare::midi::synth::NativeSynthParamId;
+  constexpr int kBlock = 256;
+  constexpr int kBlocks = 40;
+  constexpr float kControlCutoff = 17999.0f;  // just under the skip threshold
+
+  // Renders a held sine A4 block by block; `act` runs before each block.
+  const auto held = [&](float cutoff, bool wheel_route, auto&& act) {
+    NativeSynthConfig cfg;
+    cfg.patch.waveform = VaWaveform::kSine;
+    cfg.patch.cutoff_hz = cutoff;
+    cfg.patch.gain = 0.8f;
+    cfg.patch.amp_env.attack_ms = 1.0f;
+    cfg.patch.amp_env.sustain = 1.0f;
+    if (wheel_route) {
+      cfg.patch.mod_matrix.routes[0] = {ModSource::kModWheel, ModDestination::kCutoffCents,
+                                        -3600.0f};
+    }
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, kBlock);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 69, 100)));
+    std::vector<float> out;
+    for (int b = 0; b < kBlocks; ++b) {
+      act(synth, b);
+      const StereoRender blk = render(synth, kBlock);
+      out.insert(out.end(), blk.left.begin(), blk.left.end());
+    }
+    return out;
+  };
+  // Largest adjacent-sample step once the attack and DC blocker have settled.
+  const auto max_step = [](const std::vector<float>& x) {
+    float m = 0.0f;
+    for (size_t i = 2049; i < x.size(); ++i) m = std::max(m, std::fabs(x[i] - x[i - 1]));
+    return m;
+  };
+  const auto cutoff_id = static_cast<unsigned int>(NativeSynthParamId::kCutoffHz);
+
+  // Cutoff automation 12 kHz -> 20 kHz (skipped) -> 12 kHz.
+  const auto sweep = [&](float base) {
+    return held(base, false, [&](NativeSynth& s, int b) {
+      if (b == 0) s.apply_parameter(cutoff_id, 12000.0f);
+      if (b == 14) s.apply_parameter(cutoff_id, 20000.0f);
+      if (b == 28) s.apply_parameter(cutoff_id, 12000.0f);
+    });
+  };
+  const float control_sweep = max_step(held(kControlCutoff, false, [&](NativeSynth& s, int b) {
+    if (b == 0) s.apply_parameter(cutoff_id, 12000.0f);
+    if (b == 14) s.apply_parameter(cutoff_id, kControlCutoff);
+    if (b == 28) s.apply_parameter(cutoff_id, 12000.0f);
+  }));
+  REQUIRE(control_sweep > 0.0f);
+  REQUIRE(max_step(sweep(20000.0f)) <= 1.5f * control_sweep);
+
+  // Mod wheel routed to cutoff: 127 -> 0 (cutoff 20 kHz, skipped) -> 127.
+  const auto wheel = [&](float base) {
+    return max_step(held(base, true, [&](NativeSynth& s, int b) {
+      const int v = (b >= 14 && b < 28) ? 0 : 127;
+      if (b == 0 || b == 14 || b == 28) {
+        s.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 1, v)));
+      }
+    }));
+  };
+  const float control_wheel = wheel(kControlCutoff);
+  REQUIRE(control_wheel > 0.0f);
+  REQUIRE(wheel(20000.0f) <= 1.5f * control_wheel);
+}
+
 TEST_CASE("NativeSynth GM church organ keeps the configured wind response",
           "[midi][synth][organ]") {
   using sonare::midi::synth::gm_fallback_patch;

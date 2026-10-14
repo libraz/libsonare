@@ -391,6 +391,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   filter_env.note_on();
   filter.prepare(sample_rate);
   filter.set_model(p.filter_model);
+  filter_state_live = true;
   hp_active = p.hp_cutoff_hz > 0.0f;
   if (hp_active) {
     hp_stage.prepare(sample_rate);
@@ -752,7 +753,14 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     if (offsets.resonance_q != 0.0f) q = std::max(0.5f, q + offsets.resonance_q);
     if (gs_resonance_gain != 1.0f) q = std::max(0.5f, q * gs_resonance_gain);
     filter.set(fc, q);
+    if (!filter_state_live) {
+      // Re-engaging after a skip: the stale state would replay old history.
+      filter.settle(sample);
+      filter_state_live = true;
+    }
     sample = filter.process(sample, patch->filter_output);
+  } else {
+    filter_state_live = false;
   }
 
   // --- series highpass: the other end of a band the main filter cannot make ---

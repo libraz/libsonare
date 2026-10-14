@@ -65,6 +65,8 @@ class TransistorLadderFilter {
   /// @p resonance01 in [0,1]; 1 reaches self-oscillation.
   void set(float cutoff_hz, float resonance01) noexcept;
   float process(float x) noexcept;
+  /// Puts the state at the steady state of a constant input @p x at the current coefficients.
+  void settle(float x) noexcept;
 
  private:
   double sample_rate_ = 48000.0;
@@ -87,6 +89,8 @@ class DiodeLadderFilter {
   void reset() noexcept;
   void set(float cutoff_hz, float resonance01) noexcept;
   float process(float x) noexcept;
+  /// Puts the state at the steady state of a constant input @p x at the current coefficients.
+  void settle(float x) noexcept;
 
  private:
   double sample_rate_ = 48000.0;
@@ -113,6 +117,8 @@ class Korg35Filter {
   void reset() noexcept;
   void set(float cutoff_hz, float resonance01) noexcept;
   float process(float x) noexcept;
+  /// Puts the state at the steady state of a constant input @p x at the current coefficients.
+  void settle(float x) noexcept;
 
  private:
   double sample_rate_ = 48000.0;
@@ -146,6 +152,11 @@ class SynthFilter {
   /// Renders one sample. @p output selects the SVF tap; the ladder and
   /// Sallen-Key models are lowpass-only and ignore it.
   float process(float x, SynthFilterOutput output) noexcept;
+
+  /// Puts the selected model at the steady state of a constant input @p x, at the coefficients
+  /// of the last set(), so the next process(x) continues without a transient. Used when a
+  /// stage that was skipped as inaudible re-engages on a signal that moved on meanwhile.
+  void settle(float x) noexcept;
 
  private:
   SynthFilterModel model_ = SynthFilterModel::kSvf;

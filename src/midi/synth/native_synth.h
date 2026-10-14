@@ -354,6 +354,8 @@ struct NativeSynthVoice : VoiceState {
   DahdsrEnvelope amp_env;
   DahdsrEnvelope filter_env;
   SynthFilter filter;
+  /// False while the filter stage is skipped as inaudible, so its state is stale.
+  bool filter_state_live = true;
   /// Series highpass stage (patch hp_cutoff_hz); idle when the patch asks for
   /// no highpass. A bare SVF rather than a second SynthFilter: this stage is
   /// always the SVF highpass tap, so the other three models would be dead

@@ -92,6 +92,13 @@ class TptSvf {
     ic2_ = 0.0f;
   }
 
+  /// Puts the state at the steady state of a constant input @p x (ic1 = 0, ic2 = x), so the
+  /// next process(x) returns lp = x, bp = 0, hp = 0 with no transient.
+  void settle(float x) noexcept {
+    ic1_ = 0.0f;
+    ic2_ = x;
+  }
+
   /// Advance one sample; returns the simultaneous LP/BP/HP outputs.
   Outputs process(float x) noexcept {
     const float v3 = x - ic2_;
