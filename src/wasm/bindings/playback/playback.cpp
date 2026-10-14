@@ -189,9 +189,10 @@ class PlaybackRendererWasm {
     return takeCString(text);
   }
 
-  // Realtime: the C ABI ignores a non-finite angle, as on every surface. An
-  // angle past the float range arrives as an infinity rather than through an
-  // undefined narrowing.
+  // Realtime low-level behavior follows the C ABI: a non-finite angle is
+  // ignored and an out-of-range double narrows to an infinity before the C
+  // setter sees it. The public TypeScript facade validates type, finiteness
+  // and float32 range before reaching this method.
   void setHeadOrientation(double yaw_deg, double pitch_deg, double roll_deg) {
     const auto angle = [](double deg) {
       return std::abs(deg) <= FLT_MAX ? static_cast<float>(deg)

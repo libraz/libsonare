@@ -243,6 +243,30 @@ describe('createOpfsClipPageProvider', () => {
     }
   });
 
+  it('rejects the request and settles its pending entry when the worker refuses the post', async () => {
+    const engine = new RealtimeEngine(48000, 8);
+    const worker = new FakeClipPageWorker();
+    const binding = createOpfsClipPageProvider(engine, {
+      path: 'clips/clip.f32',
+      numChannels: 1,
+      numSamples: 8,
+      pageFrames: 4,
+      worker: worker as unknown as Worker,
+    });
+    try {
+      const post = worker.postMessage;
+      worker.postMessage = () => {
+        throw new Error('worker terminated');
+      };
+      await expect(binding.supplyPage(0)).rejects.toThrow('worker terminated');
+      worker.postMessage = post;
+      expect(await binding.supplyPage(1)).toBe(true);
+    } finally {
+      binding.close();
+      engine.destroy();
+    }
+  });
+
   it('rejects short non-final pages returned by the worker', async () => {
     const engine = new RealtimeEngine(48000, 8);
     const worker = new FakeClipPageWorker();

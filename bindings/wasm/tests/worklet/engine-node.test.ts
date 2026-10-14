@@ -15,6 +15,39 @@ function fakeNode(): AudioWorkletNode {
   } as unknown as AudioWorkletNode;
 }
 
+class RecordingPort {
+  onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
+  readonly messages: unknown[] = [];
+  throwForType: string | undefined;
+  throwError: Error | undefined;
+  postHook: ((message: unknown) => void) | undefined;
+
+  postMessage(message: unknown): void {
+    this.messages.push(message);
+    this.postHook?.(message);
+    if (
+      this.throwForType !== undefined &&
+      typeof message === 'object' &&
+      message !== null &&
+      'type' in message &&
+      message.type === this.throwForType
+    ) {
+      throw this.throwError ?? new Error(`dispatch failed for ${this.throwForType}`);
+    }
+  }
+}
+
+async function createNodeWithPort(
+  port: RecordingPort,
+  disconnect: () => void = () => undefined,
+): Promise<SonareRealtimeEngineNode> {
+  return SonareRealtimeEngineNode.create(fakeContext(), {
+    mode: 'sab',
+    engineAbiVersion: 1,
+    nodeFactory: () => ({ port, disconnect }) as unknown as AudioWorkletNode,
+  });
+}
+
 async function createNode(): Promise<SonareRealtimeEngineNode> {
   return SonareRealtimeEngineNode.create(fakeContext(), {
     mode: 'sab',
@@ -170,5 +203,129 @@ describe('SonareRealtimeEngineNode MIDI ring polling', () => {
     } finally {
       node.destroy();
     }
+  });
+});
+
+describe('SonareRealtimeEngineNode request and destruction lifecycle', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('returns a rejected transport promise when the initial dispatch throws', async () => {
+    const port = new RecordingPort();
+    const dispatchError = new Error('transport port is closed');
+    port.throwForType = 'transportRequest';
+    port.throwError = dispatchError;
+    const node = await createNodeWithPort(port);
+
+    const request = node.requestTransportState();
+    await expect(request).rejects.toBe(dispatchError);
+    expect(port.messages).toHaveLength(1);
+    node.destroy();
+  });
+
+  it('keeps a reentrant transport response when the dispatch then throws', async () => {
+    const port = new RecordingPort();
+    port.postHook = (message) => {
+      if (
+        typeof message === 'object' &&
+        message !== null &&
+        'type' in message &&
+        message.type === 'transportRequest' &&
+        port.onmessage
+      ) {
+        const requestId = (message as unknown as { requestId: number }).requestId;
+        port.onmessage({
+          data: { type: 'transportResponse', requestId, ok: true, state: {} },
+        } as MessageEvent<unknown>);
+        throw new Error('late transport dispatch failure');
+      }
+    };
+    const node = await createNodeWithPort(port);
+
+    await expect(node.requestTransportState()).resolves.toEqual({});
+    expect(port.messages).toHaveLength(1);
+    node.destroy();
+  });
+
+  it('continues all local cleanup when destroy notification fails', async () => {
+    vi.useFakeTimers();
+    const port = new RecordingPort();
+    port.throwForType = 'destroy';
+    const disconnect = vi.fn();
+    const node = await createNodeWithPort(port, disconnect);
+    const unsubscribes = [
+      node.onTelemetry(() => undefined),
+      node.onMeter(() => undefined),
+      node.onScope(() => undefined),
+      node.onMidiOut(() => undefined),
+      node.onClipPageRequests(() => undefined),
+      node.onSyncError(() => undefined),
+    ];
+    expect(vi.getTimerCount()).toBe(1);
+
+    const pending = [
+      node.requestCaptureStatus(),
+      node.requestTransportState(),
+      node.pollInsertGainReduction(0),
+    ];
+    const internal = node as unknown as {
+      captureRequests: Map<unknown, unknown>;
+      transportRequests: Map<unknown, unknown>;
+      insertGainReductionRequests: Map<unknown, unknown>;
+      telemetryListeners: Set<unknown>;
+      meterListeners: Set<unknown>;
+      scopeListeners: Set<unknown>;
+      midiOutListeners: Set<unknown>;
+      clipPageRequestListeners: Set<unknown>;
+      syncErrorListeners: Set<unknown>;
+    };
+    expect([
+      internal.captureRequests.size,
+      internal.transportRequests.size,
+      internal.insertGainReductionRequests.size,
+    ]).toEqual([1, 1, 1]);
+    expect([
+      internal.telemetryListeners.size,
+      internal.meterListeners.size,
+      internal.scopeListeners.size,
+      internal.midiOutListeners.size,
+      internal.clipPageRequestListeners.size,
+      internal.syncErrorListeners.size,
+    ]).toEqual([1, 1, 1, 1, 1, 1]);
+    const settled = Promise.allSettled(pending);
+
+    node.destroy();
+    const results = await settled;
+    expect(results).toHaveLength(3);
+    expect(results.every((result) => result.status === 'rejected')).toBe(true);
+    expect([
+      internal.captureRequests.size,
+      internal.transportRequests.size,
+      internal.insertGainReductionRequests.size,
+    ]).toEqual([0, 0, 0]);
+    expect([
+      internal.telemetryListeners.size,
+      internal.meterListeners.size,
+      internal.scopeListeners.size,
+      internal.midiOutListeners.size,
+      internal.clipPageRequestListeners.size,
+      internal.syncErrorListeners.size,
+    ]).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(disconnect).toHaveBeenCalledTimes(1);
+    expect(port.onmessage).toBeNull();
+    expect(
+      port.messages.filter((message) => (message as { type?: string }).type === 'destroy'),
+    ).toHaveLength(1);
+
+    for (const unsubscribe of unsubscribes) {
+      unsubscribe();
+    }
+    node.destroy();
+    expect(disconnect).toHaveBeenCalledTimes(1);
+    expect(
+      port.messages.filter((message) => (message as { type?: string }).type === 'destroy'),
+    ).toHaveLength(1);
   });
 });

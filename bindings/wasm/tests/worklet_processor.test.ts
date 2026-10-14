@@ -1,4 +1,8 @@
 import {
+  SONARE_METER_RING_PROTOCOL_VERSION,
+  SONARE_SPECTRUM_RING_PROTOCOL_VERSION,
+} from '../dist/worklet.js';
+import {
   createSonareMeterRingBuffer,
   createSonareSpectrumRingBuffer,
   describe,
@@ -230,6 +234,173 @@ describe('SonareWorkletProcessor', () => {
     }
   });
 
+  it('holds mixer meter records stable while a reader is active and resumes after release', () => {
+    const ring = createSonareMeterRingBuffer(1);
+    // A newly-created viewer ring is explicitly unacknowledged until a producer
+    // attaches it. This guards the version cut without depending on a record.
+    expect(ring.header[3]).toBe(0);
+    expect(readSonareMeterRingBuffer(ring)).toEqual({ nextReadIndex: 0, meters: [] });
+
+    const processor = new SonareWorkletProcessor({
+      sceneJson: mixingScenePresetJson('vocalReverbSend'),
+      sampleRate: 48000,
+      blockSize: 128,
+      meterSharedBuffer: ring.sharedBuffer,
+    });
+    try {
+      expect(ring.header[3]).toBe(SONARE_METER_RING_PROTOCOL_VERSION);
+      const internals = processor as unknown as {
+        writeMeterRing: (meter: unknown) => void;
+      };
+      const write = (meter: unknown): void => internals.writeMeterRing.call(processor, meter);
+      const meter = (frame: number) => ({
+        type: 'meter' as const,
+        targetId: 0,
+        frame,
+        peakDbL: frame + 0.1,
+        peakDbR: frame + 0.2,
+        rmsDbL: frame + 0.3,
+        rmsDbR: frame + 0.4,
+        correlation: frame + 0.5,
+        truePeakDbL: frame + 0.6,
+        truePeakDbR: frame + 0.7,
+        momentaryLufs: frame + 0.8,
+        shortTermLufs: frame + 0.9,
+        integratedLufs: frame + 1,
+        gainReductionDb: frame + 1.1,
+        inputPeakDbL: frame + 1.2,
+        inputPeakDbR: frame + 1.3,
+      });
+
+      // Establish a real publication first. Without this precondition the
+      // held-reader loop could pass while never reaching the writer branch.
+      write(meter(1));
+      expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+      expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+      const payloadA = Array.from(
+        new Uint8Array(ring.sharedBuffer, ring.header.byteLength, ring.records.byteLength),
+      );
+
+      expect(Atomics.add(ring.slotStates, 0, 1)).toBe(0);
+      for (let attempt = 0; attempt < 65; attempt++) {
+        write(meter(100 + attempt));
+      }
+      expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+      expect(
+        Array.from(
+          new Uint8Array(ring.sharedBuffer, ring.header.byteLength, ring.records.byteLength),
+        ),
+      ).toEqual(payloadA);
+      expect(Atomics.load(ring.slotStates, 0)).toBe(1);
+
+      expect(Atomics.sub(ring.slotStates, 0, 1)).toBe(1);
+      expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+      write(meter(2));
+      expect(Atomics.load(ring.header, 0) >>> 0).toBe(2);
+      expect(readSonareMeterRingBuffer(ring, 1).meters.at(-1)?.frame).toBe(2);
+    } finally {
+      processor.destroy();
+    }
+  });
+
+  it('materializes mixer meter properties before claiming and preserves the old record on throw', () => {
+    const ring = createSonareMeterRingBuffer(1);
+    const processor = new SonareWorkletProcessor({
+      sceneJson: mixingScenePresetJson('vocalReverbSend'),
+      sampleRate: 48000,
+      blockSize: 128,
+      meterSharedBuffer: ring.sharedBuffer,
+    });
+    try {
+      const internals = processor as unknown as {
+        writeMeterRing: (meter: unknown) => void;
+      };
+      const write = (meter: unknown): void => internals.writeMeterRing.call(processor, meter);
+      const baseline = {
+        type: 'meter' as const,
+        targetId: 0,
+        frame: 7,
+        peakDbL: 1,
+        peakDbR: 2,
+        rmsDbL: 3,
+        rmsDbR: 4,
+        correlation: 5,
+        truePeakDbL: 6,
+        truePeakDbR: 7,
+        momentaryLufs: 8,
+        shortTermLufs: 9,
+        integratedLufs: 10,
+        gainReductionDb: 11,
+        inputPeakDbL: 12,
+        inputPeakDbR: 13,
+      };
+      write(baseline);
+      expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+      const payloadA = Array.from(
+        new Uint8Array(ring.sharedBuffer, ring.header.byteLength, ring.records.byteLength),
+      );
+      const accesses: number[] = [];
+      const source = {
+        frame: 8,
+        targetId: 0,
+        peakDbL: '21',
+        peakDbR: '22',
+        rmsDbL: '23',
+        rmsDbR: '24',
+        correlation: '25',
+        truePeakDbL: '26',
+        truePeakDbR: '27',
+        momentaryLufs: '28',
+        shortTermLufs: '29',
+        integratedLufs: '30',
+        gainReductionDb: '31',
+        inputPeakDbL: '32',
+        get inputPeakDbR(): never {
+          accesses.push(Atomics.load(ring.slotStates, 0));
+          throw new Error('late mixer meter getter');
+        },
+      };
+      for (const key of [
+        'frame',
+        'targetId',
+        'peakDbL',
+        'peakDbR',
+        'rmsDbL',
+        'rmsDbR',
+        'correlation',
+        'truePeakDbL',
+        'truePeakDbR',
+        'momentaryLufs',
+        'shortTermLufs',
+        'integratedLufs',
+        'gainReductionDb',
+        'inputPeakDbL',
+      ]) {
+        const value = source[key as keyof typeof source];
+        Object.defineProperty(source, key, {
+          configurable: true,
+          get: () => {
+            accesses.push(Atomics.load(ring.slotStates, 0));
+            return value;
+          },
+        });
+      }
+      expect(() => write(source)).toThrow('late mixer meter getter');
+      // Every source access happened before the claim; the writer bit was never
+      // visible to the throwing getter and the completed A record remains intact.
+      expect(accesses).toEqual(new Array(15).fill(0));
+      expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+      expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+      expect(
+        Array.from(
+          new Uint8Array(ring.sharedBuffer, ring.header.byteLength, ring.records.byteLength),
+        ),
+      ).toEqual(payloadA);
+    } finally {
+      processor.destroy();
+    }
+  });
+
   it('refuses a publication interval instead of rounding it into range', () => {
     const sampleRate = 48000;
     const blockSize = 128;
@@ -342,6 +513,53 @@ describe('SonareWorkletProcessor', () => {
       expect(read.spectra[0].bands).toHaveLength(8);
     } finally {
       ringProcessor.destroy();
+    }
+  });
+
+  it('holds mixer spectrum records stable across 65 failed claims and resumes after release', () => {
+    const ring = createSonareSpectrumRingBuffer(1, 4);
+    expect(ring.header[4]).toBe(0);
+    expect(readSonareSpectrumRingBuffer(ring)).toEqual({ nextReadIndex: 0, spectra: [] });
+    const processor = new SonareWorkletProcessor({
+      sceneJson: mixingScenePresetJson('vocalReverbSend'),
+      sampleRate: 48000,
+      blockSize: 128,
+      spectrumSharedBuffer: ring.sharedBuffer,
+      spectrumBands: ring.bands,
+    });
+    try {
+      expect(ring.header[4]).toBe(SONARE_SPECTRUM_RING_PROTOCOL_VERSION);
+      const internals = processor as unknown as {
+        writeSpectrumRing: (frame: number, bands: Float32Array) => void;
+      };
+      const write = (frame: number, bands: Float32Array): void =>
+        internals.writeSpectrumRing.call(processor, frame, bands);
+      const bandsA = Float32Array.from([1, 2, 3, 4]);
+      write(1, bandsA);
+      expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+      expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+      const payloadA = Array.from(
+        new Uint8Array(ring.sharedBuffer, ring.header.byteLength, ring.records.byteLength),
+      );
+
+      expect(Atomics.add(ring.slotStates, 0, 1)).toBe(0);
+      for (let attempt = 0; attempt < 65; attempt++) {
+        write(100 + attempt, Float32Array.from([attempt, attempt + 1, attempt + 2, attempt + 3]));
+      }
+      expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+      expect(
+        Array.from(
+          new Uint8Array(ring.sharedBuffer, ring.header.byteLength, ring.records.byteLength),
+        ),
+      ).toEqual(payloadA);
+      expect(Atomics.load(ring.slotStates, 0)).toBe(1);
+
+      expect(Atomics.sub(ring.slotStates, 0, 1)).toBe(1);
+      write(2, Float32Array.from([5, 6, 7, 8]));
+      expect(Atomics.load(ring.header, 0) >>> 0).toBe(2);
+      expect(readSonareSpectrumRingBuffer(ring, 1).spectra.at(-1)?.frame).toBe(2);
+    } finally {
+      processor.destroy();
     }
   });
 

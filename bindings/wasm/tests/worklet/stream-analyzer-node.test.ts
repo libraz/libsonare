@@ -452,4 +452,21 @@ describe('SonareStreamAnalyzerNode', () => {
     send(signal(CHUNK), 0);
     expect(frames).not.toHaveBeenCalled();
   });
+
+  it('releases the analyzer and the node when the port rejects the destroy message', async () => {
+    const { analyzerNode, node } = await createNode();
+    const analyzer = (analyzerNode as unknown as { analyzer: { destroy(): void } }).analyzer;
+    const release = vi.spyOn(analyzer, 'destroy');
+    node.port.postMessage = () => {
+      throw new Error('port closed');
+    };
+    try {
+      expect(() => analyzerNode.destroy()).not.toThrow();
+      expect(node.disconnect).toHaveBeenCalledTimes(1);
+      expect(node.port.onmessage).toBeNull();
+      expect(release).toHaveBeenCalledTimes(1);
+    } finally {
+      release.mockRestore();
+    }
+  });
 });

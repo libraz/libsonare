@@ -49,9 +49,37 @@ export async function bindMicrophoneInput(
       audio: constraints.audio ?? true,
       video: constraints.video ?? false,
     }));
-  const source = context.createMediaStreamSource(stream);
-  const node = 'node' in engine ? engine.node : engine;
-  source.connect(node);
+  let source: MediaStreamAudioSourceNode | undefined;
+  try {
+    source = context.createMediaStreamSource(stream);
+    const node = 'node' in engine ? engine.node : engine;
+    source.connect(node);
+  } catch (error) {
+    // No binding escaped to the caller, so an acquired stream is still ours to
+    // release even when close was explicitly configured to keep tracks alive.
+    // Each cleanup step is independent: one broken track or source must not
+    // prevent the rest of the acquired stream from being stopped, and the
+    // setup error remains the rejection reason.
+    try {
+      source?.disconnect();
+    } catch {
+      // Best-effort cleanup must not replace the setup error.
+    }
+    if (ownsStream) {
+      try {
+        for (const track of stream.getTracks()) {
+          try {
+            track.stop();
+          } catch {
+            // Continue stopping the remaining tracks.
+          }
+        }
+      } catch {
+        // A stream boundary can fail while enumerating its tracks.
+      }
+    }
+    throw error;
+  }
   let closed = false;
   return {
     stream,

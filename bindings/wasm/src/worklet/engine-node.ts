@@ -723,7 +723,12 @@ export class SonareRealtimeEngineNode {
       clearInterval(this.ringPollTimer);
       this.ringPollTimer = undefined;
     }
-    this.node.port.postMessage({ type: 'destroy' });
+    try {
+      this.node.port.postMessage({ type: 'destroy' });
+    } catch {
+      // The worklet notification is best effort. Local ownership still needs
+      // to be released when the port has already closed or rejects dispatch.
+    }
     this.node.disconnect();
     for (const pending of this.captureRequests.values()) {
       pending.reject(new Error('Realtime engine node is destroyed.'));
@@ -869,7 +874,18 @@ export class SonareRealtimeEngineNode {
     const promise = new Promise<SonareEngineTransportResponseMessage>((resolve, reject) => {
       this.transportRequests.set(requestId, { resolve, reject });
     });
-    this.node.port.postMessage({ type: 'transportRequest', requestId, op: 'state' });
+    try {
+      this.node.port.postMessage({ type: 'transportRequest', requestId, op: 'state' });
+    } catch (error) {
+      // Keep a reentrant response as the winner if the port both delivers it
+      // and reports a late dispatch failure. A failed initial send is exposed
+      // through the returned Promise and is never retried.
+      const pending = this.transportRequests.get(requestId);
+      if (pending) {
+        this.transportRequests.delete(requestId);
+        pending.reject(error);
+      }
+    }
     return promise;
   }
 }

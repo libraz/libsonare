@@ -272,16 +272,27 @@ export function createOpfsClipPageProvider(
           entry?.reject(new Error('OpfsClipPageProvider is closed'));
           return;
         }
-        worker.postMessage({
-          type: 'sonare:read-clip-page',
-          requestId,
-          path: options.path,
-          pageIndex,
-          numChannels: options.numChannels,
-          numSamples: options.numSamples,
-          pageFrames: options.pageFrames,
-          dataOffsetBytes: options.dataOffsetBytes ?? 0,
-        });
+        try {
+          worker.postMessage({
+            type: 'sonare:read-clip-page',
+            requestId,
+            path: options.path,
+            pageIndex,
+            numChannels: options.numChannels,
+            numSamples: options.numSamples,
+            pageFrames: options.pageFrames,
+            dataOffsetBytes: options.dataOffsetBytes ?? 0,
+          });
+        } catch (error) {
+          // Only a still-pending entry is rolled back; a reply that raced the
+          // throw has already settled it.
+          const entry = pending.get(requestId);
+          if (entry) {
+            pending.delete(requestId);
+            entry.reject(error);
+          }
+          return;
+        }
         return promise.then(
           () => undefined,
           () => undefined,

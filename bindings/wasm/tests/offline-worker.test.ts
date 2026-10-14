@@ -71,6 +71,32 @@ class LoopbackWorker {
   }
 }
 
+class ThrowingWorker {
+  readonly calls: unknown[] = [];
+  private messageListener: MessageListener | undefined;
+
+  constructor(private readonly dispatch: (message: unknown) => void) {}
+
+  addEventListener(type: string, listener: EventListener): void {
+    if (type === 'message') {
+      this.messageListener = listener as unknown as MessageListener;
+    }
+  }
+
+  removeEventListener(): void {}
+
+  postMessage(message: unknown): void {
+    this.calls.push(message);
+    this.dispatch(message);
+  }
+
+  sendResponse(message: OfflineWorkerResponseMessage): void {
+    this.messageListener?.({ data: message } as MessageEvent);
+  }
+
+  terminate(): void {}
+}
+
 function makeTone(seconds = 2, sampleRate = 22050): Float32Array {
   const samples = new Float32Array(seconds * sampleRate);
   for (let i = 0; i < samples.length; ++i) {
@@ -278,5 +304,34 @@ describe('OfflineWorkerClient', () => {
     });
     const second = await nextMessage();
     expect(second.type).toBe('sonare:offline-result');
+  });
+
+  it('returns a rejected task when initial dispatch throws and does not retry on cancel', async () => {
+    const dispatchError = new Error('port is closed');
+    const worker = new ThrowingWorker(() => {
+      throw dispatchError;
+    });
+    const client = clientWith(worker as unknown as LoopbackWorker);
+    const task = client.detectBpm({ samples: new Float32Array([0, 0]) }, { copy: true });
+
+    await expect(task.result).rejects.toBe(dispatchError);
+    task.cancel();
+    expect(worker.calls).toHaveLength(1);
+    client.dispose();
+  });
+
+  it('keeps a reentrant response when the same dispatch then throws', async () => {
+    const result = 123.5;
+    let worker!: ThrowingWorker;
+    worker = new ThrowingWorker(() => {
+      worker.sendResponse({ type: 'sonare:offline-result', id: 1, result });
+      throw new Error('dispatch reported late failure');
+    });
+    const client = clientWith(worker as unknown as LoopbackWorker);
+    const task = client.detectBpm({ samples: new Float32Array([0, 0]) }, { copy: true });
+
+    await expect(task.result).resolves.toBe(result);
+    expect(worker.calls).toHaveLength(1);
+    client.dispose();
   });
 });

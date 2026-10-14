@@ -10,9 +10,9 @@ import type {
   WorkletTransport,
 } from './messages.js';
 import {
+  commitOverwriteWrite,
   encodeFrameHi,
   encodeFrameLo,
-  loadSonareRingCursor,
   magnitudeToDb,
   meterRingFromSharedBuffer,
   type SharedMeterRingWriter,
@@ -22,9 +22,8 @@ import {
   SONARE_METER_RING_RECORD_FLOATS,
   type SonareWorkletMeterSnapshot,
   type SonareWorkletSpectrumSnapshot,
-  sonareRingCursorSlot,
   spectrumRingFromSharedBuffer,
-  storeSonareRingCursor,
+  tryBeginOverwriteWrite,
 } from './protocol.js';
 
 /**
@@ -304,27 +303,53 @@ export class SonareWorkletProcessor {
     if (!ring) {
       return;
     }
-    const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
-    const offset =
-      sonareRingCursorSlot(writeIndex, ring.capacity) * SONARE_METER_RING_RECORD_FLOATS;
-    ring.records[offset] = encodeFrameLo(meter.frame);
-    ring.records[offset + 1] = encodeFrameHi(meter.frame);
-    ring.records[offset + 2] = meter.targetId;
-    ring.records[offset + 3] = meter.peakDbL;
-    ring.records[offset + 4] = meter.peakDbR;
-    ring.records[offset + 5] = meter.rmsDbL;
-    ring.records[offset + 6] = meter.rmsDbR;
-    ring.records[offset + 7] = meter.correlation;
-    ring.records[offset + 8] = meter.truePeakDbL;
-    ring.records[offset + 9] = meter.truePeakDbR;
-    ring.records[offset + 10] = meter.momentaryLufs;
-    ring.records[offset + 11] = meter.shortTermLufs;
-    ring.records[offset + 12] = meter.integratedLufs;
-    ring.records[offset + 13] = meter.gainReductionDb;
-    ring.records[offset + 14] = meter.inputPeakDbL;
-    ring.records[offset + 15] = meter.inputPeakDbR;
-    ring.records[offset + SONARE_METER_RING_CHANNEL_COUNT_OFFSET] = 2;
-    storeSonareRingCursor(ring.header, 0, writeIndex, ring.capacity);
+    const header = ring.header;
+    const records = ring.records;
+    const slotStates = ring.slotStates;
+    const capacity = ring.capacity;
+    // All property reads and numeric coercions happen before the claim. The
+    // region after it contains only fixed primitive stores and the commit.
+    const frame = +meter.frame;
+    const frameLo = encodeFrameLo(frame);
+    const frameHi = encodeFrameHi(frame);
+    const targetId = +meter.targetId;
+    const peakDbL = +meter.peakDbL;
+    const peakDbR = +meter.peakDbR;
+    const rmsDbL = +meter.rmsDbL;
+    const rmsDbR = +meter.rmsDbR;
+    const correlation = +meter.correlation;
+    const truePeakDbL = +meter.truePeakDbL;
+    const truePeakDbR = +meter.truePeakDbR;
+    const momentaryLufs = +meter.momentaryLufs;
+    const shortTermLufs = +meter.shortTermLufs;
+    const integratedLufs = +meter.integratedLufs;
+    const gainReductionDb = +meter.gainReductionDb;
+    const inputPeakDbL = +meter.inputPeakDbL;
+    const inputPeakDbR = +meter.inputPeakDbR;
+    const channelCount = 2;
+    const writeIndex = tryBeginOverwriteWrite(header, slotStates, capacity);
+    if (writeIndex === undefined) {
+      return;
+    }
+    const offset = (writeIndex % capacity) * SONARE_METER_RING_RECORD_FLOATS;
+    records[offset] = frameLo;
+    records[offset + 1] = frameHi;
+    records[offset + 2] = targetId;
+    records[offset + 3] = peakDbL;
+    records[offset + 4] = peakDbR;
+    records[offset + 5] = rmsDbL;
+    records[offset + 6] = rmsDbR;
+    records[offset + 7] = correlation;
+    records[offset + 8] = truePeakDbL;
+    records[offset + 9] = truePeakDbR;
+    records[offset + 10] = momentaryLufs;
+    records[offset + 11] = shortTermLufs;
+    records[offset + 12] = integratedLufs;
+    records[offset + 13] = gainReductionDb;
+    records[offset + 14] = inputPeakDbL;
+    records[offset + 15] = inputPeakDbR;
+    records[offset + SONARE_METER_RING_CHANNEL_COUNT_OFFSET] = channelCount;
+    commitOverwriteWrite(header, slotStates, capacity, writeIndex);
     // An overwrite ring keeps no drop count: readers detect overrun from the
     // cursor distance, so header slot 3 is left at its initial 0.
   }
@@ -388,13 +413,26 @@ export class SonareWorkletProcessor {
     if (!ring) {
       return;
     }
-    const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
-    const offset = sonareRingCursorSlot(writeIndex, ring.capacity) * ring.recordFloats;
-    ring.records[offset] = encodeFrameLo(frame);
-    ring.records[offset + 1] = encodeFrameHi(frame);
-    ring.records[offset + 2] = bands.length;
-    ring.records.set(bands.subarray(0, ring.bands), offset + 3);
-    storeSonareRingCursor(ring.header, 0, writeIndex, ring.capacity);
+    const header = ring.header;
+    const records = ring.records;
+    const slotStates = ring.slotStates;
+    const capacity = ring.capacity;
+    const recordFloats = ring.recordFloats;
+    const bandCount = ring.bands;
+    const frameLo = encodeFrameLo(frame);
+    const frameHi = encodeFrameHi(frame);
+    const writeIndex = tryBeginOverwriteWrite(header, slotStates, capacity);
+    if (writeIndex === undefined) {
+      return;
+    }
+    const offset = (writeIndex % capacity) * recordFloats;
+    records[offset] = frameLo;
+    records[offset + 1] = frameHi;
+    records[offset + 2] = bandCount;
+    for (let band = 0; band < bandCount; band++) {
+      records[offset + 3 + band] = bands[band];
+    }
+    commitOverwriteWrite(header, slotStates, capacity, writeIndex);
     // As in writeMeterRing, header slot 4 (the overflow slot) stays 0.
   }
 }

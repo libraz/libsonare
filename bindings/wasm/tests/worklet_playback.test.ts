@@ -168,6 +168,20 @@ describe('SonarePlaybackWorkletProcessor', () => {
       }
       expect(heard).toBe(true);
 
+      processor.receiveMessage({ type: 'orientation', yaw: Number.NaN, pitch: 0, roll: 0 });
+      const orientationError = port.messages.at(-1);
+      expect(orientationError?.type).toBe('error');
+      expect(orientationError?.request).toBe('orientation');
+      expect(String(orientationError?.message)).toMatch(/yawDeg/);
+      port.messages.length = 0;
+
+      // A rejected control message must leave the processor usable on the
+      // following valid update and render quantum.
+      processor.receiveMessage({ type: 'orientation', yaw: 15, pitch: -5, roll: 2 });
+      const afterOrientationError = outputBlock(2);
+      expect(processor.process([noiseBlock(6, 99)], [afterOrientationError])).toBe(true);
+      expect(afterOrientationError.every((plane) => plane.every(Number.isFinite))).toBe(true);
+
       processor.receiveMessage({
         type: 'config',
         config: JSON.stringify({ night_mode: { amount: 1 } }),
@@ -188,7 +202,88 @@ describe('SonarePlaybackWorkletProcessor', () => {
     } finally {
       processor.destroy();
     }
+    const messageCountAfterDestroy = port.messages.length;
+    const errorCountAfterDestroy = port.messages.filter(
+      (message) => message.type === 'error',
+    ).length;
+    expect(messageCountAfterDestroy).toBeGreaterThan(0);
+    processor.receiveMessage({ type: 'orientation', yaw: Number.NaN, pitch: 0, roll: 0 });
+    expect(port.messages).toHaveLength(messageCountAfterDestroy);
+    expect(port.messages.filter((message) => message.type === 'error')).toHaveLength(
+      errorCountAfterDestroy,
+    );
     expect(processor.process([noiseBlock(2, 1)], [outputBlock(2)])).toBe(false);
+  });
+
+  it('forwards valid orientation after rejecting an update without partial state', () => {
+    const expectedPort = capturePort();
+    const rejectedPort = capturePort();
+    const oldPosePort = capturePort();
+    const expected = new SonarePlaybackWorkletProcessor(
+      { config: {}, hrtf: hrtfBuffer() },
+      expectedPort,
+    );
+    const rejected = new SonarePlaybackWorkletProcessor(
+      { config: {}, hrtf: hrtfBuffer() },
+      rejectedPort,
+    );
+    const oldPose = new SonarePlaybackWorkletProcessor(
+      { config: {}, hrtf: hrtfBuffer() },
+      oldPosePort,
+    );
+    try {
+      const initialPose = { type: 'orientation' as const, yaw: 90, pitch: -20, roll: 10 };
+      for (const processor of [expected, rejected, oldPose]) {
+        processor.receiveMessage(initialPose);
+      }
+
+      let initialHeard = false;
+      for (let block = 0; block < 16; block++) {
+        const input = noiseBlock(2, block + 200);
+        const expectedOutput = outputBlock(2);
+        const rejectedOutput = outputBlock(2);
+        const oldPoseOutput = outputBlock(2);
+        expect(expected.process([input], [expectedOutput])).toBe(true);
+        expect(rejected.process([input], [rejectedOutput])).toBe(true);
+        expect(oldPose.process([input], [oldPoseOutput])).toBe(true);
+        expect(rejectedOutput).toEqual(expectedOutput);
+        initialHeard ||= oldPoseOutput.some((plane) => plane.some((value) => value !== 0));
+      }
+      expect(initialHeard).toBe(true);
+
+      rejected.receiveMessage({ type: 'orientation', yaw: Number.NaN, pitch: 0, roll: 0 });
+      expect(rejectedPort.messages).toHaveLength(1);
+      expect(rejectedPort.messages[0]?.type).toBe('error');
+      expect(rejectedPort.messages[0]?.request).toBe('orientation');
+      expect(expectedPort.messages).toHaveLength(0);
+      expect(oldPosePort.messages).toHaveLength(0);
+
+      const newPose = { type: 'orientation' as const, yaw: -90, pitch: 25, roll: -15 };
+      expected.receiveMessage(newPose);
+      rejected.receiveMessage(newPose);
+      let newPoseDiffersFromOld = false;
+      let newPoseHeard = false;
+      for (let block = 0; block < 16; block++) {
+        const input = noiseBlock(2, block + 400);
+        const expectedOutput = outputBlock(2);
+        const rejectedOutput = outputBlock(2);
+        const oldPoseOutput = outputBlock(2);
+        expect(expected.process([input], [expectedOutput])).toBe(true);
+        expect(rejected.process([input], [rejectedOutput])).toBe(true);
+        expect(oldPose.process([input], [oldPoseOutput])).toBe(true);
+        expect(rejectedOutput).toEqual(expectedOutput);
+        newPoseHeard ||= expectedOutput.some((plane) => plane.some((value) => value !== 0));
+        newPoseDiffersFromOld ||= expectedOutput.some((plane, channel) =>
+          plane.some((value, frame) => value !== oldPoseOutput[channel][frame]),
+        );
+      }
+      expect(newPoseHeard).toBe(true);
+      expect(newPoseDiffersFromOld).toBe(true);
+    } finally {
+      expected.destroy();
+      rejected.destroy();
+      oldPose.destroy();
+    }
   });
 
   it('refuses a headphones target without HRTF bytes', () => {

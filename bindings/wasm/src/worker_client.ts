@@ -298,16 +298,29 @@ export class OfflineWorkerClient {
         cancelFlag,
       });
     });
-    this.worker.postMessage(
-      {
-        type: 'sonare:offline-run',
-        id,
-        operation,
-        request: preparedRequest,
-        ...(cancelFlag ? { cancelBuffer: cancelFlag.buffer as SharedArrayBuffer } : {}),
-      },
-      transfers,
-    );
+    try {
+      this.worker.postMessage(
+        {
+          type: 'sonare:offline-run',
+          id,
+          operation,
+          request: preparedRequest,
+          ...(cancelFlag ? { cancelBuffer: cancelFlag.buffer as SharedArrayBuffer } : {}),
+        },
+        transfers,
+      );
+    } catch (error) {
+      // The pending entry is inserted before dispatch so a worker/port that
+      // answers reentrantly can settle the task first. Only the still-pending
+      // entry is rolled back: a response received before postMessage threw has
+      // already won the settlement race, and the transferred input must not be
+      // retried after a failed dispatch.
+      const pending = this.pending.get(id);
+      if (pending) {
+        this.pending.delete(id);
+        pending.reject(error);
+      }
+    }
     return new OfflineWorkerTask(result, () => {
       if (!this.pending.has(id)) {
         return;

@@ -135,8 +135,8 @@ export function synthEngineParamInfo(engineMode: SynthEngineMode | number): Synt
 }
 
 /**
- * Describe every numeric {@link SynthPatch} wrapper field: range it is clamped
- * to, unit and the init patch's default. Enum fields, the preset name and the
+ * Describe every numeric {@link SynthPatch} wrapper field: the range it is
+ * accepted in (a value outside it is refused), unit and the init patch's default. Enum fields, the preset name and the
  * mod matrix are not listed.
  */
 export function synthPatchParamInfo(): SynthParamInfo[] {

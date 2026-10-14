@@ -6,6 +6,7 @@ import {
   type Mixer,
   mixingScenePresetJson,
   readSonareMeterRingBuffer,
+  SONARE_METER_RING_PROTOCOL_VERSION,
   SonareWorkletProcessor,
   setupWorklet,
 } from './_worklet_helpers';
@@ -193,6 +194,62 @@ describe('SonareWorkletProcessor meter scratch', () => {
       });
     } finally {
       calls.restore();
+      processor.destroy();
+    }
+  });
+
+  it('leaves the last meter record intact when a late scratch getter throws', () => {
+    const ring = createSonareMeterRingBuffer(1);
+    expect(ring.header[3]).toBe(0);
+    const processor = new SonareWorkletProcessor(
+      {
+        sceneJson: mixingScenePresetJson('vocalReverbSend'),
+        sampleRate,
+        blockSize,
+        meterIntervalFrames: blockSize,
+        meterSharedBuffer: ring.sharedBuffer,
+      },
+      { postMessage: () => undefined },
+    );
+    const mixer = (processor as unknown as { mixer: Mixer }).mixer;
+    const realValue = mixer.meterScratchValue;
+    try {
+      expect(ring.header[3]).toBe(SONARE_METER_RING_PROTOCOL_VERSION);
+      const outL = new Float32Array(blockSize);
+      const outR = new Float32Array(blockSize);
+      const input = [block(0.25), block(0.25)];
+      expect(processor.process([input], [[outL, outR]])).toBe(true);
+      expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+      expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+      const payloadA = Array.from(
+        new Uint8Array(ring.sharedBuffer, ring.header.byteLength, ring.records.byteLength),
+      );
+
+      mixer.meterScratchValue = function (this: Mixer, field: number) {
+        if (field === 6) {
+          throw new Error('late mixer scratch getter');
+        }
+        return realValue.call(this, field);
+      };
+      expect(() => processor.process([input], [[outL, outR]])).toThrow('late mixer scratch getter');
+      // A is a real completed publication, so this failure reached the meter
+      // preparation path and proves no claim or partial store followed it.
+      expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+      expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+      expect(
+        Array.from(
+          new Uint8Array(ring.sharedBuffer, ring.header.byteLength, ring.records.byteLength),
+        ),
+      ).toEqual(payloadA);
+
+      mixer.meterScratchValue = realValue;
+      expect(processor.process([input], [[outL, outR]])).toBe(true);
+      // The failed preparation does not advance the cursor; the next complete
+      // generation is therefore the second publication.
+      expect(Atomics.load(ring.header, 0) >>> 0).toBe(2);
+      expect(readSonareMeterRingBuffer(ring, 1).meters.at(-1)?.frame).toBe(blockSize * 3);
+    } finally {
+      mixer.meterScratchValue = realValue;
       processor.destroy();
     }
   });

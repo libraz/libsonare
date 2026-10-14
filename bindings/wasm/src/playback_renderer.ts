@@ -7,10 +7,25 @@ import type {
   RenderPlaybackResult,
 } from './public_types_playback.js';
 import type { WasmHrtfSet, WasmPlaybackLoudnessMeter, WasmPlaybackRenderer } from './sonare.js';
-import { assertAudioInput, requestObject } from './validation.js';
+import { assertAudioInput, assertFiniteScalar, requestObject } from './validation.js';
 
 function configJsonText(config: PlaybackRendererConfig | string): string {
   return typeof config === 'string' ? config : JSON.stringify(config);
+}
+
+const FLOAT32_MAX = 3.4028234663852886e38;
+
+function assertHeadOrientationAngle(value: unknown, argName: string): asserts value is number {
+  const fnName = 'PlaybackRenderer.setHeadOrientation';
+  if (typeof value !== 'number') {
+    throw new TypeError(`${fnName}: ${argName} must be a number`);
+  }
+  assertFiniteScalar(fnName, value, argName);
+  if (Math.abs(value) > FLOAT32_MAX) {
+    throw new RangeError(
+      `${fnName}: ${argName} must be a finite number within the 32-bit float range`,
+    );
+  }
 }
 
 /**
@@ -136,10 +151,13 @@ export class PlaybackRenderer {
   /**
    * Publishes the listener head orientation in degrees: right-handed,
    * positive yaw turns the head right, positive pitch looks up, positive roll
-   * lowers the right ear. Ignored by a speakers target; a non-finite angle is
-   * ignored.
+   * lowers the right ear. Ignored by a speakers target. Each argument must be
+   * a finite number representable by a 32-bit float.
    */
   setHeadOrientation(yawDeg: number, pitchDeg = 0, rollDeg = 0): void {
+    assertHeadOrientationAngle(yawDeg, 'yawDeg');
+    assertHeadOrientationAngle(pitchDeg, 'pitchDeg');
+    assertHeadOrientationAngle(rollDeg, 'rollDeg');
     this.native.setHeadOrientation(yawDeg, pitchDeg, rollDeg);
   }
 

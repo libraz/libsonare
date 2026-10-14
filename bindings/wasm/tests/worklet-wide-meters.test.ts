@@ -12,6 +12,7 @@ import {
   expect,
   it,
   readSonareMeterRingBuffer,
+  SONARE_METER_RING_PROTOCOL_VERSION,
   SONARE_METER_RING_RECORD_FLOATS,
   SonareRealtimeEngineWorkletProcessor,
   setupWorklet,
@@ -122,6 +123,7 @@ describe('wide meters on the live worklet engine', () => {
     try {
       seedBus(engineOf(processor), 2, SURROUND_STRIP);
       processor.process([[]], [silent(6)]);
+      expect(ring.header[3]).toBe(SONARE_METER_RING_PROTOCOL_VERSION);
       const bus = readSonareMeterRingBuffer(ring).meters.find((m) => m.targetId === BUS_TARGET);
       expect(bus?.channelCount).toBe(6);
       expectPlanes(bus?.peakDb, reference.peakDb);
@@ -178,7 +180,7 @@ describe('wide meters on the live worklet engine', () => {
 
   it('widens the meter ring record to carry the per-plane block', () => {
     expect(SONARE_METER_RING_RECORD_FLOATS).toBe(49);
-    expect(createSonareMeterRingBuffer(4).header[3]).toBe(2);
+    expect(createSonareMeterRingBuffer(4).header[3]).toBe(0);
   });
 
   it('gates the meter interval per target', () => {

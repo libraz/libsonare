@@ -52,7 +52,7 @@ function startServer() {
 <meta charset="utf-8">
 <script type="module">
 import { init, SonareEngineCommandType, SonareRealtimeEngineNode } from '/dist/worklet.js';
-import { RealtimeEngine } from '/dist/index.js';
+import { init as initCore, RealtimeEngine } from '/dist/index.js';
 
 window.runSonareSmoke = async () => {
   const progress = [];
@@ -78,6 +78,7 @@ window.runSonareSmoke = async () => {
       return response.arrayBuffer();
     });
     await init({ locateFile: (path) => '/dist/' + path, wasmBinary: sonareWasmBinary });
+    await initCore({ locateFile: (path) => '/dist/' + path, wasmBinary: sonareWasmBinary });
 
     mark('mixer-context');
     const mixerContext = new OfflineAudioContext(1, 4096, 48000);

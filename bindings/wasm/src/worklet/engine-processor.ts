@@ -26,12 +26,13 @@ import {
 } from './messages.js';
 import {
   clipPageRequestRingFromSharedBuffer,
+  commitOverwriteWrite,
   commitSonareEngineTelemetryRingWrite,
   encodeFrameHi,
   encodeFrameLo,
   engineRingFromSharedBuffer,
+  engineTelemetryRingFromSharedBuffer,
   externalMidiRingFromSharedBuffer,
-  loadSonareRingCursor,
   meterFromEngine,
   meterRingFromSharedBuffer,
   pendingSonareEngineCommandCount,
@@ -60,10 +61,10 @@ import {
   type SonareWorkletScopeSnapshot,
   scopeRingFromSharedBuffer,
   sonareExternalMidiRingHasRoom,
-  sonareRingCursorSlot,
-  storeSonareRingCursor,
   telemetryFromEngine,
-  writeInt64Words,
+  toSafeInteger,
+  tryBeginOverwriteWrite,
+  writePreparedInt64Words,
   writeSonareEngineTelemetryRingBuffer,
 } from './protocol.js';
 
@@ -123,6 +124,11 @@ export class SonareRealtimeEngineWorkletProcessor {
   private scopeIntervalFrames: number;
   private scopeEnabled: boolean;
   private scopeBands: number;
+  // Prepared overwrite-ring payloads. These are allocated once with the
+  // processor and are filled completely before a producer claims a slot.
+  private readonly meterRingScratch = new Float32Array(SONARE_METER_RING_RECORD_FLOATS);
+  private readonly scopeRingBandScratch = new Float32Array(SONARE_SCOPE_MAX_BANDS);
+  private readonly scopeRingPointScratch = new Float32Array(SONARE_SCOPE_MAX_POINTS * 2);
   // Latest metronome gains/click length pushed via 'syncMetronome'. The
   // SetMetronome command only toggles enabled state; the config arrives here.
   private metronomeConfig: ResolvedMetronomeConfig = { ...DEFAULT_METRONOME_CONFIG };
@@ -1214,19 +1220,45 @@ export class SonareRealtimeEngineWorkletProcessor {
   }
 
   private writeTelemetryScratch(ring: SonareEngineTelemetryRingBuffer): void {
-    const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
-    const offset =
-      sonareRingCursorSlot(writeIndex, ring.capacity) * SONARE_ENGINE_TELEMETRY_RECORD_BYTES;
-    ring.view.setUint32(offset, this.engine.telemetryScratchType(), true);
-    ring.view.setUint32(offset + 4, this.engine.telemetryScratchError(), true);
-    writeInt64Words(ring.view, offset + 8, this.engine.telemetryScratchRenderFrame());
-    writeInt64Words(ring.view, offset + 16, this.engine.telemetryScratchTimelineSample());
-    writeInt64Words(ring.view, offset + 24, this.engine.telemetryScratchAudibleTimelineSample());
-    ring.view.setInt32(offset + 32, this.engine.telemetryScratchGraphLatencySamplesQ8(), true);
-    ring.view.setUint32(offset + 36, this.engine.telemetryScratchValue(), true);
-    ring.view.setUint32(offset + 40, 0, true);
-    ring.view.setUint32(offset + 44, 0, true);
-    commitSonareEngineTelemetryRingWrite(ring, writeIndex);
+    const header = ring.header;
+    const view = ring.view;
+    const slotStates = ring.slotStates;
+    const publicationWrapped = ring.publicationWrapped;
+    const capacity = ring.capacity;
+    // All facade calls and checked conversions happen before the claim. The
+    // native scratch remains untouched by the fixed primitive store region.
+    const type = +this.engine.telemetryScratchType();
+    const error = +this.engine.telemetryScratchError();
+    const renderFrame = toSafeInteger(this.engine.telemetryScratchRenderFrame(), 0);
+    const timelineSample = toSafeInteger(this.engine.telemetryScratchTimelineSample(), 0);
+    const audibleTimelineSample = toSafeInteger(
+      this.engine.telemetryScratchAudibleTimelineSample(),
+      0,
+    );
+    const graphLatencySamplesQ8 = +this.engine.telemetryScratchGraphLatencySamplesQ8();
+    const value = +this.engine.telemetryScratchValue();
+    const writeIndex = tryBeginOverwriteWrite(header, slotStates, capacity);
+    if (writeIndex === undefined) {
+      Atomics.add(header, 4, 1);
+      return;
+    }
+    const offset = (writeIndex % capacity) * SONARE_ENGINE_TELEMETRY_RECORD_BYTES;
+    view.setUint32(offset, type, true);
+    view.setUint32(offset + 4, error, true);
+    writePreparedInt64Words(view, offset + 8, renderFrame);
+    writePreparedInt64Words(view, offset + 16, timelineSample);
+    writePreparedInt64Words(view, offset + 24, audibleTimelineSample);
+    view.setInt32(offset + 32, graphLatencySamplesQ8, true);
+    view.setUint32(offset + 36, value, true);
+    view.setUint32(offset + 40, 0, true);
+    view.setUint32(offset + 44, 0, true);
+    commitSonareEngineTelemetryRingWrite(
+      header,
+      slotStates,
+      publicationWrapped,
+      capacity,
+      writeIndex,
+    );
   }
 
   private publishTelemetryRecord(record: SonareEngineTelemetryRecord): void {
@@ -1299,32 +1331,46 @@ export class SonareRealtimeEngineWorkletProcessor {
   }
 
   private writeMeterScratch(ring: SharedMeterRingWriter): void {
-    const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
-    const offset =
-      sonareRingCursorSlot(writeIndex, ring.capacity) * SONARE_METER_RING_RECORD_FLOATS;
+    const header = ring.header;
+    const records = ring.records;
+    const slotStates = ring.slotStates;
+    const capacity = ring.capacity;
+    const scratch = this.meterRingScratch;
     const frame = Number(this.engine.meterScratchRenderFrame());
-    ring.records[offset] = encodeFrameLo(frame);
-    ring.records[offset + 1] = encodeFrameHi(frame);
-    ring.records[offset + 2] = this.engine.meterScratchTargetId();
+    scratch[0] = encodeFrameLo(frame);
+    scratch[1] = encodeFrameHi(frame);
+    scratch[2] = +this.engine.meterScratchTargetId();
     for (let field = 0; field < 11; field++) {
-      ring.records[offset + 3 + field] = this.engine.meterScratchValue(field);
+      scratch[3 + field] = +this.engine.meterScratchValue(field);
     }
-    ring.records[offset + 14] = this.engine.meterScratchInputPeakDbL();
-    ring.records[offset + 15] = this.engine.meterScratchInputPeakDbR();
-    const channelCount = this.engine.meterScratchValue(METER_SCRATCH_CHANNEL_COUNT);
-    ring.records[offset + SONARE_METER_RING_CHANNEL_COUNT_OFFSET] = channelCount;
-    if (channelCount > 2) {
-      const planes = Math.min(channelCount, SONARE_METER_RING_MAX_CHANNELS);
-      for (let kind = 0; kind < 4; kind++) {
-        const out =
-          offset + SONARE_METER_RING_PLANES_OFFSET + kind * SONARE_METER_RING_MAX_CHANNELS;
-        const field = METER_SCRATCH_PLANES + kind * SONARE_METER_RING_MAX_CHANNELS;
-        for (let ch = 0; ch < planes; ch++) {
-          ring.records[out + ch] = this.engine.meterScratchValue(field + ch);
-        }
+    scratch[14] = +this.engine.meterScratchInputPeakDbL();
+    scratch[15] = +this.engine.meterScratchInputPeakDbR();
+    const channelCount = +this.engine.meterScratchValue(METER_SCRATCH_CHANNEL_COUNT);
+    scratch[SONARE_METER_RING_CHANNEL_COUNT_OFFSET] = channelCount;
+    const planes = channelCount > 2 ? Math.min(channelCount, SONARE_METER_RING_MAX_CHANNELS) : 0;
+    for (let kind = 0; kind < 4 && planes > 0; kind++) {
+      const out = SONARE_METER_RING_PLANES_OFFSET + kind * SONARE_METER_RING_MAX_CHANNELS;
+      const field = METER_SCRATCH_PLANES + kind * SONARE_METER_RING_MAX_CHANNELS;
+      for (let ch = 0; ch < planes; ch++) {
+        scratch[out + ch] = +this.engine.meterScratchValue(field + ch);
       }
     }
-    storeSonareRingCursor(ring.header, 0, writeIndex, ring.capacity);
+    const writeIndex = tryBeginOverwriteWrite(header, slotStates, capacity);
+    if (writeIndex === undefined) {
+      return;
+    }
+    const offset = (writeIndex % capacity) * SONARE_METER_RING_RECORD_FLOATS;
+    for (let field = 0; field < SONARE_METER_RING_PLANES_OFFSET; field++) {
+      records[offset + field] = scratch[field];
+    }
+    for (let kind = 0; kind < 4 && planes > 0; kind++) {
+      const out = offset + SONARE_METER_RING_PLANES_OFFSET + kind * SONARE_METER_RING_MAX_CHANNELS;
+      const source = SONARE_METER_RING_PLANES_OFFSET + kind * SONARE_METER_RING_MAX_CHANNELS;
+      for (let ch = 0; ch < planes; ch++) {
+        records[out + ch] = scratch[source + ch];
+      }
+    }
+    commitOverwriteWrite(header, slotStates, capacity, writeIndex);
   }
 
   // A snapshot-object ring writer used to live here as well. It was
@@ -1388,26 +1434,51 @@ export class SonareRealtimeEngineWorkletProcessor {
   }
 
   private writeScopeScratch(ring: SharedScopeRingWriter): void {
-    const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
-    const base = sonareRingCursorSlot(writeIndex, ring.capacity) * ring.recordFloats;
+    const header = ring.header;
+    const records = ring.records;
+    const slotStates = ring.slotStates;
+    const capacity = ring.capacity;
+    const recordFloats = ring.recordFloats;
+    const ringBands = ring.bands;
+    const ringMaxPoints = ring.maxPoints;
+    const bandScratch = this.scopeRingBandScratch;
+    const pointScratch = this.scopeRingPointScratch;
     const frame = Number(this.engine.scopeScratchRenderFrame());
-    ring.records[base] = encodeFrameLo(frame);
-    ring.records[base + 1] = encodeFrameHi(frame);
-    ring.records[base + 2] = this.engine.scopeScratchTargetId();
-    const bandCount = Math.min(ring.bands, this.engine.scopeScratchBandCount());
-    ring.records[base + 3] = bandCount;
-    const pointCount = Math.min(ring.maxPoints, this.engine.scopeScratchPointCount());
-    ring.records[base + 4] = pointCount;
+    const frameLo = encodeFrameLo(frame);
+    const frameHi = encodeFrameHi(frame);
+    const targetId = +this.engine.scopeScratchTargetId();
+    const bandCount = Math.min(ringBands, +this.engine.scopeScratchBandCount());
+    const pointCount = Math.min(ringMaxPoints, +this.engine.scopeScratchPointCount());
+    if (bandCount > SONARE_SCOPE_MAX_BANDS || pointCount > SONARE_SCOPE_MAX_POINTS) {
+      throw new RangeError('scope scratch exceeds the processor scratch capacity.');
+    }
+    for (let i = 0; i < bandCount; i++) {
+      bandScratch[i] = +this.engine.scopeScratchBand(i);
+    }
+    for (let i = 0; i < pointCount; i++) {
+      pointScratch[2 * i] = +this.engine.scopeScratchPointLeft(i);
+      pointScratch[2 * i + 1] = +this.engine.scopeScratchPointRight(i);
+    }
+    const writeIndex = tryBeginOverwriteWrite(header, slotStates, capacity);
+    if (writeIndex === undefined) {
+      return;
+    }
+    const base = (writeIndex % capacity) * recordFloats;
+    records[base] = frameLo;
+    records[base + 1] = frameHi;
+    records[base + 2] = targetId;
+    records[base + 3] = bandCount;
+    records[base + 4] = pointCount;
     const bandsBase = base + SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS;
     for (let i = 0; i < bandCount; i++) {
-      ring.records[bandsBase + i] = this.engine.scopeScratchBand(i);
+      records[bandsBase + i] = bandScratch[i];
     }
-    const pointsBase = bandsBase + ring.bands;
+    const pointsBase = bandsBase + ringBands;
     for (let i = 0; i < pointCount; i++) {
-      ring.records[pointsBase + 2 * i] = this.engine.scopeScratchPointLeft(i);
-      ring.records[pointsBase + 2 * i + 1] = this.engine.scopeScratchPointRight(i);
+      records[pointsBase + 2 * i] = pointScratch[2 * i];
+      records[pointsBase + 2 * i + 1] = pointScratch[2 * i + 1];
     }
-    storeSonareRingCursor(ring.header, 0, writeIndex, ring.capacity);
+    commitOverwriteWrite(header, slotStates, capacity, writeIndex);
   }
 
   // Drains queued external-MIDI events (already lowered to MIDI 1.0 bytes) and
@@ -1623,11 +1694,6 @@ export class SonareRealtimeEngineWorkletProcessor {
     sharedBuffer: SharedArrayBuffer,
     fallbackCapacity?: number,
   ): SonareEngineTelemetryRingBuffer {
-    const ring = engineRingFromSharedBuffer(
-      sharedBuffer,
-      SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
-      fallbackCapacity,
-    );
-    return { sharedBuffer, header: ring.header, view: ring.view, capacity: ring.capacity };
+    return engineTelemetryRingFromSharedBuffer(sharedBuffer, fallbackCapacity);
   }
 }

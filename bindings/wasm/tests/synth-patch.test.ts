@@ -238,8 +238,8 @@ describe('Sonare WASM NativeSynth', () => {
         { filterDelayMs: 80 },
         { filterHoldMs: 80 },
         { oneShot: true },
-        // An explicit zero is a value, not "keep the base".
-        { driftRateHz: 0 },
+        // The lowest rate the field accepts, which the base does not use.
+        { driftRateHz: 0.01 },
       ]) {
         const edited = project.bounceWithSynthInstrument({ ...base, ...edit }, frames);
         expect(edited, JSON.stringify(edit)).not.toEqual(reference);
@@ -375,6 +375,39 @@ describe('Sonare WASM NativeSynth', () => {
         { totalFrames: 24000 },
       );
       expect(peak(quiet)).toBeGreaterThan(0);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('refuses a field outside the range synthPatchParamInfo publishes, naming it', () => {
+    const project = buildMidiOnlyProject();
+    try {
+      const rejection = (patch: DistSynthPatch): unknown => {
+        try {
+          project.bounceWithSynthInstrument(patch, { totalFrames: 128 });
+        } catch (error) {
+          return error;
+        }
+        throw new Error('expected the bounce to be refused');
+      };
+      const info = synthPatchParamInfo();
+      const cutoff = info.find((field) => field.name === 'cutoffHz');
+      expect(cutoff?.max).toBe(22000);
+      for (const [patch, key] of [
+        [{ cutoffHz: 1e6 }, 'cutoffHz'],
+        [{ stereoSpread: 5 }, 'stereoSpread'],
+        [{ polyphony: 500 }, 'polyphony'],
+        [{ gain: 5 }, 'gain'],
+      ] as [DistSynthPatch, string][]) {
+        const error = rejection(patch);
+        expect(isSonareError(error) && error.code, key).toBe(ErrorCode.InvalidParameter);
+        expect((error as Error).message, key).toContain(`synth patch field '${key}': out of range`);
+      }
+      // The published ends are accepted.
+      expect(() =>
+        project.bounceWithSynthInstrument({ cutoffHz: cutoff?.max }, { totalFrames: 128 }),
+      ).not.toThrow();
     } finally {
       project.destroy();
     }

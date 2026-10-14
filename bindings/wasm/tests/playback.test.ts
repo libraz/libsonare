@@ -293,25 +293,110 @@ describe('playback renderer (WASM)', () => {
     }
   });
 
-  it('turns the binaural image with the head orientation', () => {
+  it('turns the binaural image and preserves state after rejected orientation updates', () => {
     const hrtf = HrtfSet.fromBytes(hrtfBytes());
     const still = new PlaybackRenderer({ config: {}, hrtf, sampleRate: SR, maxBlockSize: 512 });
-    const turned = new PlaybackRenderer({ config: {}, hrtf, sampleRate: SR, maxBlockSize: 512 });
+    const expected = new PlaybackRenderer({
+      config: {},
+      hrtf,
+      sampleRate: SR,
+      maxBlockSize: 512,
+    });
+    const rejected = new PlaybackRenderer({
+      config: {},
+      hrtf,
+      sampleRate: SR,
+      maxBlockSize: 512,
+    });
     hrtf.delete();
     try {
-      turned.setHeadOrientation(90);
-      turned.setHeadOrientation(Number.NaN, 0, 0);
+      expected.setHeadOrientation(90, -20, 10);
+      rejected.setHeadOrientation(90, -20, 10);
       let differs = false;
-      for (let block = 0; block < 6; block++) {
+      for (let block = 0; block < 2; block++) {
         const planes = noisePlanes(2, 512, block + 7);
         const a = still.processPlanar(planes);
-        const b = turned.processPlanar(planes);
+        const b = expected.processPlanar(planes);
+        const c = rejected.processPlanar(planes);
+        expect(c).toEqual(b);
         differs ||= a[0].some((v, i) => v !== b[0][i]);
+      }
+
+      // Validation completes before the native call, so a failed pitch does
+      // not leave a partially applied yaw or alter the next full block.
+      expect(() => rejected.setHeadOrientation(0, Number.POSITIVE_INFINITY, 0)).toThrow(/pitchDeg/);
+      for (let block = 2; block < 6; block++) {
+        const planes = noisePlanes(2, 512, block + 7);
+        const expectedOutput = expected.processPlanar(planes);
+        const rejectedOutput = rejected.processPlanar(planes);
+        expect(rejectedOutput).toEqual(expectedOutput);
+        const stillOutput = still.processPlanar(planes);
+        differs ||= stillOutput[0].some((v, i) => v !== expectedOutput[0][i]);
       }
       expect(differs).toBe(true);
     } finally {
       still.delete();
-      turned.delete();
+      expected.delete();
+      rejected.delete();
+    }
+  });
+
+  it('validates every orientation axis before calling the native renderer', () => {
+    const renderer = new PlaybackRenderer({ config: SPEAKERS_5_1, sampleRate: SR });
+    const float32Max = 3.4028234663852886e38;
+    const float32Overflow = float32Max * 2;
+    try {
+      const wrongValues = [null, 'wrong', true, {}] as const;
+      for (const value of wrongValues) {
+        expect(() => renderer.setHeadOrientation(value as unknown as number, 0, 0)).toThrow(
+          TypeError,
+        );
+        expect(() => renderer.setHeadOrientation(value as unknown as number, 0, 0)).toThrow(
+          /yawDeg/,
+        );
+        expect(() => renderer.setHeadOrientation(0, value as unknown as number, 0)).toThrow(
+          TypeError,
+        );
+        expect(() => renderer.setHeadOrientation(0, value as unknown as number, 0)).toThrow(
+          /pitchDeg/,
+        );
+        expect(() => renderer.setHeadOrientation(0, 0, value as unknown as number)).toThrow(
+          TypeError,
+        );
+        expect(() => renderer.setHeadOrientation(0, 0, value as unknown as number)).toThrow(
+          /rollDeg/,
+        );
+      }
+
+      const invalidValues = [
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+        Number.NEGATIVE_INFINITY,
+        float32Overflow,
+        -float32Overflow,
+      ];
+      for (const value of invalidValues) {
+        expect(() => renderer.setHeadOrientation(value, 0, 0)).toThrow(RangeError);
+        expect(() => renderer.setHeadOrientation(0, value, 0)).toThrow(RangeError);
+        expect(() => renderer.setHeadOrientation(0, 0, value)).toThrow(RangeError);
+        expect(() => renderer.setHeadOrientation(value, 0, 0)).toThrow(/yawDeg/);
+        expect(() => renderer.setHeadOrientation(0, value, 0)).toThrow(/pitchDeg/);
+        expect(() => renderer.setHeadOrientation(0, 0, value)).toThrow(/rollDeg/);
+      }
+
+      for (const value of [float32Max, -float32Max, 0, -0, 720, -1080, 360]) {
+        expect(() => renderer.setHeadOrientation(value, 0, 0)).not.toThrow();
+        expect(() => renderer.setHeadOrientation(0, value, 0)).not.toThrow();
+        expect(() => renderer.setHeadOrientation(0, 0, value)).not.toThrow();
+      }
+      expect(() => renderer.setHeadOrientation(Number.NaN, Number.POSITIVE_INFINITY, 1)).toThrow(
+        /yawDeg/,
+      );
+      expect(() => renderer.setHeadOrientation(0, Number.NaN, Number.POSITIVE_INFINITY)).toThrow(
+        /pitchDeg/,
+      );
+    } finally {
+      renderer.delete();
     }
   });
 

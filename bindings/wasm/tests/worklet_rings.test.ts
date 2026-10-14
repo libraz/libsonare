@@ -1,14 +1,19 @@
 import {
+  commitOverwriteWrite,
+  commitSonareEngineTelemetryRingWrite,
   createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,
   createSonareEngineTelemetryRingBuffer,
   createSonareExternalMidiRingBuffer,
   createSonareMeterRingBuffer,
+  createSonareScopeRingBuffer,
   createSonareSpectrumRingBuffer,
   describe,
+  engineTelemetryRingFromSharedBuffer,
   expect,
   it,
   Mixer,
+  meterRingFromSharedBuffer,
   mixingScenePresetJson,
   popSonareEngineCommandRingBuffer,
   pushSonareClipPageRequestRingBuffer,
@@ -18,28 +23,53 @@ import {
   readSonareEngineTelemetryRingBuffer,
   readSonareExternalMidiRingBuffer,
   readSonareMeterRingBuffer,
+  readSonareScopeRingBuffer,
   readSonareSpectrumRingBuffer,
+  releaseOverwriteRead,
   SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS,
   SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S,
   SONARE_ENGINE_COMMAND_RECORD_BYTES,
   SONARE_ENGINE_RING_HEADER_INTS,
   SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+  SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION,
   SONARE_EXTERNAL_MIDI_RING_HEADER_INTS,
   SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S,
   SONARE_METER_RING_HEADER_INTS,
+  SONARE_METER_RING_PROTOCOL_VERSION,
   SONARE_METER_RING_RECORD_FLOATS,
+  SONARE_SCOPE_RING_HEADER_INTS,
+  SONARE_SCOPE_RING_PROTOCOL_VERSION,
+  SONARE_SPECTRUM_RING_HEADER_INTS,
+  SONARE_SPECTRUM_RING_PROTOCOL_VERSION,
   SonareEngineCommandType,
   SonareEngineTelemetryError,
   SonareEngineTelemetryType,
   SonareWorkletProcessor,
+  scopeRingFromSharedBuffer,
   setupWorklet,
   sonareClipPageRequestRingBufferByteLength,
   sonareEngineCommandRingBufferByteLength,
   sonareEngineTelemetryRingBufferByteLength,
   sonareExternalMidiRingBufferByteLength,
   sonareMeterRingBufferByteLength,
+  sonareScopeRingBufferByteLength,
+  sonareScopeRingRecordFloats,
+  sonareSpectrumRingBufferByteLength,
+  spectrumRingFromSharedBuffer,
+  tryAcquireOverwriteRead,
+  tryBeginOverwriteWrite,
   writeSonareEngineTelemetryRingBuffer,
 } from './_worklet_helpers';
+
+type TelemetryRingWithPublicationWrapped = ReturnType<
+  typeof createSonareEngineTelemetryRingBuffer
+> & {
+  publicationWrapped: Int32Array;
+};
+
+function createTelemetryRing(capacity: number): TelemetryRingWithPublicationWrapped {
+  return createSonareEngineTelemetryRingBuffer(capacity) as TelemetryRingWithPublicationWrapped;
+}
 
 describe('Sonare worklet ring buffers', () => {
   setupWorklet();
@@ -82,6 +112,229 @@ describe('Sonare worklet ring buffers', () => {
         readSonareClipPageRequestRingBuffer({ sharedBuffer: sab, header, records, capacity }),
       ).toEqual({ requests: [{ clipId: 42, pageIndex: 7 }], dropped: 0 });
       expect(header[1]).toBe(1);
+    });
+  });
+
+  describe('overwrite SAB layouts and protocol cut', () => {
+    it('appends one zeroed claim word per slot and attaches each producer version', () => {
+      const capacity = 3;
+      const bands = 4;
+      const maxPoints = 5;
+      const meter = createSonareMeterRingBuffer(capacity);
+      const spectrum = createSonareSpectrumRingBuffer(capacity, bands);
+      const scope = createSonareScopeRingBuffer(capacity, bands, maxPoints);
+      const telemetry = createTelemetryRing(capacity);
+
+      expect(meter.header[3]).toBe(0);
+      expect(spectrum.header[4]).toBe(0);
+      expect(scope.header[5]).toBe(0);
+      expect(telemetry.header[1]).toBe(0);
+      expect(readSonareMeterRingBuffer(meter)).toEqual({ nextReadIndex: 0, meters: [] });
+      expect(readSonareSpectrumRingBuffer(spectrum)).toEqual({ nextReadIndex: 0, spectra: [] });
+      expect(readSonareScopeRingBuffer(scope)).toEqual({ nextReadIndex: 0, scopes: [] });
+      expect(readSonareEngineTelemetryRingBuffer(telemetry)).toEqual({
+        nextReadIndex: 0,
+        telemetry: [],
+      });
+
+      const meterStateOffset =
+        SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
+        capacity * SONARE_METER_RING_RECORD_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+      const spectrumStateOffset =
+        SONARE_SPECTRUM_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
+        capacity * (3 + bands) * Float32Array.BYTES_PER_ELEMENT;
+      const scopeStateOffset =
+        SONARE_SCOPE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
+        capacity * sonareScopeRingRecordFloats(bands, maxPoints) * Float32Array.BYTES_PER_ELEMENT;
+      const telemetryStateOffset =
+        SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
+        capacity * SONARE_ENGINE_TELEMETRY_RECORD_BYTES;
+      const telemetryPublicationWrappedOffset =
+        telemetryStateOffset + capacity * Int32Array.BYTES_PER_ELEMENT;
+      expect(meter.slotStates.byteOffset).toBe(meterStateOffset);
+      expect(spectrum.slotStates.byteOffset).toBe(spectrumStateOffset);
+      expect(scope.slotStates.byteOffset).toBe(scopeStateOffset);
+      expect(telemetry.slotStates.byteOffset).toBe(telemetryStateOffset);
+      expect(telemetry.publicationWrapped.byteOffset).toBe(telemetryPublicationWrappedOffset);
+      expect(telemetry.publicationWrapped.byteLength).toBe(Int32Array.BYTES_PER_ELEMENT);
+      expect(telemetry.publicationWrapped).toHaveLength(1);
+      expect(meter.sharedBuffer.byteLength).toBe(sonareMeterRingBufferByteLength(capacity));
+      expect(spectrum.sharedBuffer.byteLength).toBe(
+        sonareSpectrumRingBufferByteLength(capacity, bands),
+      );
+      expect(scope.sharedBuffer.byteLength).toBe(
+        sonareScopeRingBufferByteLength(capacity, bands, maxPoints),
+      );
+      expect(telemetry.sharedBuffer.byteLength).toBe(
+        sonareEngineTelemetryRingBufferByteLength(capacity),
+      );
+      expect(telemetry.sharedBuffer.byteLength).toBe(
+        telemetryPublicationWrappedOffset + Int32Array.BYTES_PER_ELEMENT,
+      );
+      expect(Array.from(meter.slotStates)).toEqual([0, 0, 0]);
+      expect(Array.from(spectrum.slotStates)).toEqual([0, 0, 0]);
+      expect(Array.from(scope.slotStates)).toEqual([0, 0, 0]);
+      expect(Array.from(telemetry.slotStates)).toEqual([0, 0, 0]);
+      expect(Array.from(telemetry.publicationWrapped)).toEqual([0]);
+
+      meterRingFromSharedBuffer(meter.sharedBuffer, capacity);
+      spectrumRingFromSharedBuffer(spectrum.sharedBuffer, capacity, bands);
+      scopeRingFromSharedBuffer(scope.sharedBuffer, capacity, bands, maxPoints);
+      engineTelemetryRingFromSharedBuffer(telemetry.sharedBuffer, capacity);
+      expect(meter.header[3]).toBe(SONARE_METER_RING_PROTOCOL_VERSION);
+      expect(spectrum.header[4]).toBe(SONARE_SPECTRUM_RING_PROTOCOL_VERSION);
+      expect(scope.header[5]).toBe(SONARE_SCOPE_RING_PROTOCOL_VERSION);
+      expect(telemetry.header[1]).toBe(SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION);
+    });
+
+    it('rejects stale versions, unpublished records, and old record tails without mutation', () => {
+      const stale = [
+        {
+          name: 'meter',
+          ring: createSonareMeterRingBuffer(2),
+          versionSlot: 3,
+        },
+        {
+          name: 'spectrum',
+          ring: createSonareSpectrumRingBuffer(2, 4),
+          versionSlot: 4,
+        },
+        {
+          name: 'scope',
+          ring: createSonareScopeRingBuffer(2, 4, 3),
+          versionSlot: 5,
+        },
+        {
+          name: 'telemetry',
+          ring: createTelemetryRing(2),
+          versionSlot: 1,
+        },
+      ] as const;
+      for (const entry of stale) {
+        entry.ring.header[entry.versionSlot] = 2;
+        const before = Array.from(entry.ring.header);
+        expect(() => {
+          if (entry.name === 'meter') {
+            readSonareMeterRingBuffer(entry.ring);
+          } else if (entry.name === 'spectrum') {
+            readSonareSpectrumRingBuffer(entry.ring);
+          } else if (entry.name === 'scope') {
+            readSonareScopeRingBuffer(entry.ring);
+          } else {
+            readSonareEngineTelemetryRingBuffer(entry.ring);
+          }
+        }).toThrow(/protocol version 2 is incompatible/);
+        expect(Array.from(entry.ring.header)).toEqual(before);
+      }
+
+      const staleMeter = createSonareMeterRingBuffer(2);
+      staleMeter.header[3] = 2;
+      const staleMeterBefore = Array.from(staleMeter.header);
+      expect(() => meterRingFromSharedBuffer(staleMeter.sharedBuffer, 2)).toThrow(
+        /protocol version 2 is incompatible/,
+      );
+      expect(Array.from(staleMeter.header)).toEqual(staleMeterBefore);
+
+      const staleSpectrum = createSonareSpectrumRingBuffer(2, 4);
+      staleSpectrum.header[4] = 2;
+      const staleSpectrumBefore = Array.from(staleSpectrum.header);
+      expect(() => spectrumRingFromSharedBuffer(staleSpectrum.sharedBuffer, 2, 4)).toThrow(
+        /protocol version 2 is incompatible/,
+      );
+      expect(Array.from(staleSpectrum.header)).toEqual(staleSpectrumBefore);
+
+      const staleScope = createSonareScopeRingBuffer(2, 4, 3);
+      staleScope.header[5] = 2;
+      const staleScopeBefore = Array.from(staleScope.header);
+      expect(() => scopeRingFromSharedBuffer(staleScope.sharedBuffer, 2, 4, 3)).toThrow(
+        /protocol version 2 is incompatible/,
+      );
+      expect(Array.from(staleScope.header)).toEqual(staleScopeBefore);
+
+      const staleTelemetry = createTelemetryRing(2);
+      staleTelemetry.header[1] = 2;
+      const staleTelemetryBefore = Array.from(staleTelemetry.header);
+      expect(() => engineTelemetryRingFromSharedBuffer(staleTelemetry.sharedBuffer, 2)).toThrow(
+        /protocol version 2 is incompatible/,
+      );
+      expect(Array.from(staleTelemetry.header)).toEqual(staleTelemetryBefore);
+
+      const unpublished = createTelemetryRing(2);
+      unpublished.header[0] = 1;
+      const unpublishedBefore = Array.from(unpublished.header);
+      expect(() => engineTelemetryRingFromSharedBuffer(unpublished.sharedBuffer, 2)).toThrow(
+        /records without a compatible producer/,
+      );
+      expect(Array.from(unpublished.header)).toEqual(unpublishedBefore);
+      expect(() =>
+        writeSonareEngineTelemetryRingBuffer(unpublished, {
+          type: SonareEngineTelemetryType.ProcessBlock,
+          error: SonareEngineTelemetryError.None,
+          renderFrame: 1,
+          timelineSample: 2,
+          audibleTimelineSample: 3,
+          graphLatencySamplesQ8: 4,
+          value: 5,
+        }),
+      ).toThrow(/records without a compatible producer/);
+      expect(Array.from(unpublished.header)).toEqual(unpublishedBefore);
+      expect(unpublished.publicationWrapped[0]).toBe(0);
+
+      const oldHeaderBytes = SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
+      const oldRecordBytes = SONARE_METER_RING_RECORD_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+      const oldSharedBuffer = new SharedArrayBuffer(oldHeaderBytes + 2 * oldRecordBytes);
+      const oldHeader = new Int32Array(oldSharedBuffer, 0, SONARE_METER_RING_HEADER_INTS);
+      const oldRecords = new Float32Array(
+        oldSharedBuffer,
+        oldHeaderBytes,
+        2 * SONARE_METER_RING_RECORD_FLOATS,
+      );
+      oldHeader[1] = 2;
+      oldHeader[2] = SONARE_METER_RING_RECORD_FLOATS;
+      oldHeader[3] = 2;
+      expect(() =>
+        readSonareMeterRingBuffer({
+          sharedBuffer: oldSharedBuffer,
+          header: oldHeader,
+          records: oldRecords,
+          slotStates: new Int32Array(oldSharedBuffer, 0, 2),
+          capacity: 2,
+        }),
+      ).toThrow(/invalid layout/);
+    });
+
+    it('rejects telemetry latch mappings with the wrong SAB, offset, length, or value', () => {
+      const capacity = 3;
+      const ring = createTelemetryRing(capacity);
+      const stateOffset =
+        SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
+        capacity * SONARE_ENGINE_TELEMETRY_RECORD_BYTES;
+      const publicationWrappedOffset = stateOffset + capacity * Int32Array.BYTES_PER_ELEMENT;
+      const wrongSab = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
+      const wrongOffset = new Int32Array(ring.sharedBuffer, publicationWrappedOffset - 4, 1);
+      const wrongLength = new Int32Array(ring.sharedBuffer, publicationWrappedOffset, 0);
+      const invalidViews = [wrongSab, wrongOffset, wrongLength];
+
+      for (const publicationWrapped of invalidViews) {
+        const headerBefore = Array.from(ring.header);
+        const malformedRing = {
+          ...ring,
+          publicationWrapped,
+        } as Parameters<typeof readSonareEngineTelemetryRingBuffer>[0];
+        expect(() => readSonareEngineTelemetryRingBuffer(malformedRing)).toThrow(
+          /invalid publicationWrapped view/,
+        );
+        expect(Array.from(ring.header)).toEqual(headerBefore);
+        expect(Array.from(ring.publicationWrapped)).toEqual([0]);
+      }
+
+      ring.publicationWrapped[0] = 2;
+      const headerBeforeInvalidValue = Array.from(ring.header);
+      expect(() => readSonareEngineTelemetryRingBuffer(ring)).toThrow(
+        /invalid publicationWrapped value/,
+      );
+      expect(Array.from(ring.header)).toEqual(headerBeforeInvalidValue);
+      expect(ring.publicationWrapped[0]).toBe(2);
     });
   });
 
@@ -158,8 +411,9 @@ describe('Sonare worklet ring buffers', () => {
         });
 
         it(`returns the newest telemetry in order (capacity ${capacity}, cursor ${seed})`, () => {
-          const ring = createSonareEngineTelemetryRingBuffer(capacity);
+          const ring = createTelemetryRing(capacity);
           seedCursors(ring.header, seed, [0]);
+          ring.header[1] = SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION;
           const written = Math.min(capacity, 3);
           for (let i = 0; i < 3; i++) {
             writeSonareEngineTelemetryRingBuffer(ring, {
@@ -198,6 +452,7 @@ describe('Sonare worklet ring buffers', () => {
       for (const seed of seeds) {
         const ring = createSonareMeterRingBuffer(3);
         ring.header[0] = seed;
+        ring.header[3] = SONARE_METER_RING_PROTOCOL_VERSION;
         const sceneJson = mixingScenePresetJson('vocalReverbSend');
         const reference = Mixer.fromSceneJson(sceneJson, 48000, 128);
         const stripCount = reference.stripCount();
@@ -234,6 +489,7 @@ describe('Sonare worklet ring buffers', () => {
       for (const seed of seeds) {
         const ring = createSonareSpectrumRingBuffer(3, 4);
         ring.header[0] = seed;
+        ring.header[4] = SONARE_SPECTRUM_RING_PROTOCOL_VERSION;
         const processor = new SonareWorkletProcessor({
           sceneJson: mixingScenePresetJson('vocalReverbSend'),
           sampleRate: 48000,
@@ -442,9 +698,14 @@ describe('Sonare worklet ring buffers', () => {
         SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
         capacity * SONARE_METER_RING_RECORD_FLOATS,
       );
-      // Header layout: [writeIndex, capacity, recordFloats, overflow].
+      const stateOffset =
+        SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
+        capacity * SONARE_METER_RING_RECORD_FLOATS * Float32Array.BYTES_PER_ELEMENT;
+      const slotStates = new Int32Array(sab, stateOffset, capacity);
+      // Header layout: [writeIndex, capacity, recordFloats, protocolVersion].
       header[1] = capacity;
       header[2] = SONARE_METER_RING_RECORD_FLOATS;
+      header[3] = SONARE_METER_RING_PROTOCOL_VERSION;
 
       const writeRecord = (
         frame: number,
@@ -478,7 +739,7 @@ describe('Sonare worklet ring buffers', () => {
         header[0] = writeIndex + 1;
       };
 
-      const ring = { sharedBuffer: sab, header, records, capacity };
+      const ring = { sharedBuffer: sab, header, records, slotStates, capacity };
 
       writeRecord(128, 0, -1, -2, -3, -4, 0.5, -9, -10);
       writeRecord(256, 1, -5, -6, -7, -8, 0.25, -11, -12);
@@ -599,10 +860,12 @@ describe('Sonare worklet ring buffers', () => {
     });
 
     it('round-trips fixed-layout telemetry records with wraparound', () => {
-      const ring = createSonareEngineTelemetryRingBuffer(2);
+      const ring = createTelemetryRing(2);
+      expect(ring.header[1]).toBe(0);
       expect(ring.header[2]).toBe(2);
       expect(ring.header[3]).toBe(SONARE_ENGINE_TELEMETRY_RECORD_BYTES);
       expect(ring.sharedBuffer.byteLength).toBe(sonareEngineTelemetryRingBufferByteLength(2));
+      expect(ring.publicationWrapped[0]).toBe(0);
 
       writeSonareEngineTelemetryRingBuffer(ring, {
         type: SonareEngineTelemetryType.ProcessBlock,
@@ -613,6 +876,9 @@ describe('Sonare worklet ring buffers', () => {
         graphLatencySamplesQ8: 0,
         value: 128,
       });
+      expect(ring.header[1]).toBe(SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION);
+      expect(ring.header[4]).toBe(0);
+      expect(ring.publicationWrapped[0]).toBe(0);
       const first = readSonareEngineTelemetryRingBuffer(ring);
       expect(first.nextReadIndex).toBe(1);
       expect(first.telemetry).toHaveLength(1);
@@ -646,13 +912,14 @@ describe('Sonare worklet ring buffers', () => {
       expect(wrapped.telemetry).toHaveLength(2);
       expect(wrapped.telemetry.map((item) => item.timelineSample)).toEqual([256, 384]);
       expect(ring.header[4]).toBe(1);
+      expect(ring.publicationWrapped[0]).toBe(1);
     });
 
     it('round-trips the worklet-only InvalidCommand and MaxChannelsExceeded errors', () => {
       expect(SonareEngineTelemetryError.InvalidCommand).toBe(19);
       expect(SonareEngineTelemetryError.MaxChannelsExceeded).toBe(20);
 
-      const ring = createSonareEngineTelemetryRingBuffer(2);
+      const ring = createTelemetryRing(2);
       const baseRecord = {
         type: SonareEngineTelemetryType.Error,
         renderFrame: 0,
@@ -686,6 +953,365 @@ describe('Sonare worklet ring buffers', () => {
       header[4] = 2; // overflow/drop count
 
       expect(Array.from(header)).toEqual([3, 1, capacity, SONARE_ENGINE_COMMAND_RECORD_BYTES, 2]);
+    });
+  });
+
+  describe('counted overwrite reader protocol', () => {
+    function telemetryRecord(generation: number) {
+      return {
+        type: SonareEngineTelemetryType.ProcessBlock,
+        error: SonareEngineTelemetryError.None,
+        renderFrame: generation,
+        timelineSample: generation + 100,
+        audibleTimelineSample: generation + 200,
+        graphLatencySamplesQ8: generation + 300,
+        value: generation + 400,
+      };
+    }
+
+    function viewWithFirstReadHook(view: DataView, hook: () => void): DataView {
+      let first = true;
+      return new Proxy(view, {
+        get(target, property) {
+          const member = Reflect.get(target, property, target);
+          if (property === 'getUint32' && first) {
+            first = false;
+            hook();
+          }
+          return typeof member === 'function' ? member.bind(target) : member;
+        },
+      });
+    }
+
+    it('claims one slot once and commits its cursor before clearing the writer bit', () => {
+      const ring = createTelemetryRing(2);
+      const cursor = tryBeginOverwriteWrite(ring.header, ring.slotStates, ring.capacity);
+      expect(cursor).toBe(0);
+      expect(Atomics.load(ring.slotStates, 0) >>> 0).toBe(0x8000_0000);
+      commitOverwriteWrite(ring.header, ring.slotStates, ring.capacity, cursor as number);
+      expect(ring.header[0]).toBe(1);
+      expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+
+      const nextCursor = tryBeginOverwriteWrite(ring.header, ring.slotStates, ring.capacity);
+      expect(nextCursor).toBe(1);
+      commitSonareEngineTelemetryRingWrite(
+        ring.header,
+        ring.slotStates,
+        ring.publicationWrapped,
+        ring.capacity,
+        nextCursor as number,
+      );
+      expect(ring.header[0]).toBe(2);
+      expect(ring.header[4]).toBe(0);
+      expect(ring.publicationWrapped[0]).toBe(0);
+      expect(Atomics.load(ring.slotStates, 1)).toBe(0);
+    });
+
+    it('resumes at a record whose writer has stored the cursor but not yet cleared its bit', () => {
+      const ring = createTelemetryRing(2);
+      const recordA = telemetryRecord(1);
+      const recordB = telemetryRecord(2);
+      writeSonareEngineTelemetryRingBuffer(ring, recordA);
+      writeSonareEngineTelemetryRingBuffer(ring, recordB);
+      // commitOverwriteWrite stores the cursor first, so a reader can see record 1 as
+      // published while its writer bit is still set.
+      Atomics.or(ring.slotStates, 1, 0x8000_0000);
+
+      const held = readSonareEngineTelemetryRingBuffer(ring, 0);
+      expect(held).toEqual({ nextReadIndex: 1, telemetry: [recordA] });
+
+      Atomics.and(ring.slotStates, 1, 0x7fff_ffff);
+      expect(readSonareEngineTelemetryRingBuffer(ring, held.nextReadIndex)).toEqual({
+        nextReadIndex: 2,
+        telemetry: [recordB],
+      });
+    });
+
+    it('lets two independent readers hold A together and both return the same cursor', () => {
+      const ring = createTelemetryRing(1);
+      const recordA = telemetryRecord(1);
+      writeSonareEngineTelemetryRingBuffer(ring, recordA);
+
+      let peakState = 0;
+      let second: ReturnType<typeof readSonareEngineTelemetryRingBuffer> | undefined;
+      const ringR2 = {
+        ...ring,
+        view: viewWithFirstReadHook(ring.view, () => {
+          peakState = Atomics.load(ring.slotStates, 0);
+        }),
+      };
+      const ringR1 = {
+        ...ring,
+        view: viewWithFirstReadHook(ring.view, () => {
+          second = readSonareEngineTelemetryRingBuffer(ringR2, 0);
+        }),
+      };
+
+      const first = readSonareEngineTelemetryRingBuffer(ringR1, 0);
+      expect(peakState).toBe(2);
+      expect(first).toEqual({ nextReadIndex: 1, telemetry: [recordA] });
+      expect(second).toEqual({ nextReadIndex: 1, telemetry: [recordA] });
+      expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+    });
+
+    it('drops 65 claimed-slot writes without touching A, then resumes at C', () => {
+      const ring = createTelemetryRing(1);
+      const recordA = telemetryRecord(1);
+      writeSonareEngineTelemetryRingBuffer(ring, recordA);
+      const payloadA = Array.from(
+        new Uint8Array(ring.sharedBuffer, SONARE_ENGINE_RING_HEADER_INTS * 4, 48),
+      );
+
+      expect(tryAcquireOverwriteRead(ring.slotStates, ring.capacity, 0)).toBe(true);
+      expect(Atomics.load(ring.slotStates, 0)).toBe(1);
+      for (let generation = 2; generation < 67; generation++) {
+        writeSonareEngineTelemetryRingBuffer(ring, telemetryRecord(generation));
+      }
+      expect(ring.header[0]).toBe(1);
+      expect(ring.header[4]).toBe(65);
+      expect(ring.publicationWrapped[0]).toBe(0);
+      expect(Array.from(ring.slotStates)).toEqual([1]);
+      expect(
+        Array.from(new Uint8Array(ring.sharedBuffer, SONARE_ENGINE_RING_HEADER_INTS * 4, 48)),
+      ).toEqual(payloadA);
+
+      releaseOverwriteRead(ring.slotStates, ring.capacity, 0);
+      expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+      expect(readSonareEngineTelemetryRingBuffer(ring, 0).telemetry).toEqual([recordA]);
+
+      const recordC = telemetryRecord(67);
+      writeSonareEngineTelemetryRingBuffer(ring, recordC);
+      expect(ring.header[0]).toBe(2);
+      expect(ring.header[4]).toBe(66);
+      expect(ring.publicationWrapped[0]).toBe(1);
+      expect(readSonareEngineTelemetryRingBuffer(ring, 1).telemetry).toEqual([recordC]);
+      expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+    });
+
+    it('separates capacity-two collision drops from an empty-slot resume and overwrite', () => {
+      const ring = createTelemetryRing(2);
+      const recordA = telemetryRecord(1);
+      writeSonareEngineTelemetryRingBuffer(ring, recordA);
+      const payloadA = Array.from(
+        new Uint8Array(ring.sharedBuffer, SONARE_ENGINE_RING_HEADER_INTS * 4, 48),
+      );
+
+      // Cursor 1 targets the still-empty second slot. Holding it makes all
+      // 65 attempted publications collide without making a physical wrap.
+      expect(tryAcquireOverwriteRead(ring.slotStates, ring.capacity, 1)).toBe(true);
+      for (let generation = 2; generation < 67; generation++) {
+        writeSonareEngineTelemetryRingBuffer(ring, telemetryRecord(generation));
+      }
+      expect(ring.header[0]).toBe(1);
+      expect(ring.header[4]).toBe(65);
+      expect(ring.publicationWrapped[0]).toBe(0);
+      expect(
+        Array.from(new Uint8Array(ring.sharedBuffer, SONARE_ENGINE_RING_HEADER_INTS * 4, 48)),
+      ).toEqual(payloadA);
+
+      releaseOverwriteRead(ring.slotStates, ring.capacity, 1);
+      const recordB = telemetryRecord(67);
+      writeSonareEngineTelemetryRingBuffer(ring, recordB);
+      expect(ring.header[0]).toBe(2);
+      expect(ring.header[4]).toBe(65);
+      expect(ring.publicationWrapped[0]).toBe(0);
+      expect(readSonareEngineTelemetryRingBuffer(ring, 1).telemetry).toEqual([recordB]);
+
+      const recordC = telemetryRecord(68);
+      writeSonareEngineTelemetryRingBuffer(ring, recordC);
+      expect(ring.header[0]).toBe(3);
+      expect(ring.header[4]).toBe(66);
+      expect(ring.publicationWrapped[0]).toBe(1);
+      expect(readSonareEngineTelemetryRingBuffer(ring, 2).telemetry).toEqual([recordC]);
+    });
+
+    it('keeps the physical-wrap latch across reattachment and the uint32 cursor span', () => {
+      const ring = createTelemetryRing(2);
+      writeSonareEngineTelemetryRingBuffer(ring, telemetryRecord(1));
+      writeSonareEngineTelemetryRingBuffer(ring, telemetryRecord(2));
+      writeSonareEngineTelemetryRingBuffer(ring, telemetryRecord(3));
+      expect(ring.header[0]).toBe(3);
+      expect(ring.header[4]).toBe(1);
+      expect(ring.publicationWrapped[0]).toBe(1);
+
+      // The cursor is stored as signed Int32 but is loaded as uint32. Remap
+      // the same SAB after seeding the full cursor-span boundary.
+      ring.header[0] = -1;
+      const reattached = engineTelemetryRingFromSharedBuffer(ring.sharedBuffer, 2);
+      expect(reattached.sharedBuffer).toBe(ring.sharedBuffer);
+      expect(reattached.publicationWrapped.buffer).toBe(ring.sharedBuffer);
+      expect(reattached.publicationWrapped.byteOffset).toBe(
+        SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
+          2 * SONARE_ENGINE_TELEMETRY_RECORD_BYTES +
+          2 * Int32Array.BYTES_PER_ELEMENT,
+      );
+      expect(reattached.publicationWrapped).toHaveLength(1);
+      expect(reattached.publicationWrapped[0]).toBe(1);
+
+      writeSonareEngineTelemetryRingBuffer(reattached, telemetryRecord(4));
+      expect(reattached.header[0]).toBe(0);
+      expect(reattached.header[4]).toBe(2);
+      expect(reattached.publicationWrapped[0]).toBe(1);
+
+      writeSonareEngineTelemetryRingBuffer(reattached, telemetryRecord(5));
+      expect(reattached.header[0]).toBe(1);
+      expect(reattached.header[4]).toBe(3);
+      expect(reattached.publicationWrapped[0]).toBe(1);
+      expect(readSonareEngineTelemetryRingBuffer(reattached, 0xffffffff).telemetry).toEqual([
+        telemetryRecord(4),
+        telemetryRecord(5),
+      ]);
+
+      const remappedAgain = engineTelemetryRingFromSharedBuffer(ring.sharedBuffer, 2);
+      expect(remappedAgain.publicationWrapped.buffer).toBe(ring.sharedBuffer);
+      expect(remappedAgain.publicationWrapped.byteOffset).toBe(
+        reattached.publicationWrapped.byteOffset,
+      );
+      expect(remappedAgain.publicationWrapped[0]).toBe(1);
+    });
+
+    it('captures every getter-backed mapping once before the committed publication', () => {
+      const ringA = createTelemetryRing(2);
+      const ringB = createTelemetryRing(2);
+      const reads = {
+        sharedBuffer: 0,
+        header: 0,
+        view: 0,
+        slotStates: 0,
+        publicationWrapped: 0,
+        capacity: 0,
+      };
+      const getterRing = {
+        get sharedBuffer() {
+          reads.sharedBuffer += 1;
+          return reads.sharedBuffer === 1 ? ringA.sharedBuffer : ringB.sharedBuffer;
+        },
+        get header() {
+          reads.header += 1;
+          return reads.header === 1 ? ringA.header : ringB.header;
+        },
+        get view() {
+          reads.view += 1;
+          return reads.view === 1 ? ringA.view : ringB.view;
+        },
+        get slotStates() {
+          reads.slotStates += 1;
+          return reads.slotStates === 1 ? ringA.slotStates : ringB.slotStates;
+        },
+        get publicationWrapped() {
+          reads.publicationWrapped += 1;
+          return reads.publicationWrapped === 1
+            ? ringA.publicationWrapped
+            : ringB.publicationWrapped;
+        },
+        get capacity() {
+          reads.capacity += 1;
+          return reads.capacity === 1 ? ringA.capacity : ringB.capacity;
+        },
+      } as unknown as Parameters<typeof writeSonareEngineTelemetryRingBuffer>[0];
+      const recordB = telemetryRecord(7);
+
+      writeSonareEngineTelemetryRingBuffer(getterRing, recordB);
+
+      expect(reads).toEqual({
+        sharedBuffer: 1,
+        header: 1,
+        view: 1,
+        slotStates: 1,
+        publicationWrapped: 1,
+        capacity: 1,
+      });
+      expect(ringA.header[0]).toBe(1);
+      expect(ringA.header[1]).toBe(SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION);
+      expect(ringA.publicationWrapped[0]).toBe(0);
+      expect(readSonareEngineTelemetryRingBuffer(ringA).telemetry).toEqual([recordB]);
+      expect(Array.from(ringB.header)).toEqual([0, 0, 2, SONARE_ENGINE_TELEMETRY_RECORD_BYTES, 0]);
+      expect(Array.from(ringB.slotStates)).toEqual([0, 0]);
+      expect(ringB.publicationWrapped[0]).toBe(0);
+    });
+
+    it('restores the saturated reader count before throwing on overrun', () => {
+      const ring = createTelemetryRing(1);
+      Atomics.store(ring.slotStates, 0, 0x7fff_ffff);
+      expect(() => tryAcquireOverwriteRead(ring.slotStates, ring.capacity, 0)).toThrow(
+        /reader count overflow/,
+      );
+      expect(Atomics.load(ring.slotStates, 0)).toBe(0x7fff_ffff);
+      Atomics.store(ring.slotStates, 0, 0);
+    });
+
+    it('finishes late producer getters before claiming, preserving A and allowing C', () => {
+      const ring = createTelemetryRing(1);
+      const recordA = telemetryRecord(1);
+      writeSonareEngineTelemetryRingBuffer(ring, recordA);
+      const payloadA = Array.from(
+        new Uint8Array(ring.sharedBuffer, SONARE_ENGINE_RING_HEADER_INTS * 4, 48),
+      );
+      let sawUnclaimedA = false;
+      const lateThrow = {
+        get type() {
+          return SonareEngineTelemetryType.ProcessBlock;
+        },
+        get error() {
+          return SonareEngineTelemetryError.None;
+        },
+        get renderFrame() {
+          return 2;
+        },
+        get timelineSample() {
+          return 102;
+        },
+        get audibleTimelineSample() {
+          return 202;
+        },
+        get graphLatencySamplesQ8() {
+          return 302;
+        },
+        get value() {
+          sawUnclaimedA =
+            Atomics.load(ring.slotStates, 0) === 0 &&
+            ring.header[0] === 1 &&
+            Array.from(
+              new Uint8Array(ring.sharedBuffer, SONARE_ENGINE_RING_HEADER_INTS * 4, 48),
+            ).every((byte, index) => byte === payloadA[index]);
+          throw new Error('late telemetry getter');
+        },
+      } as unknown as Parameters<typeof writeSonareEngineTelemetryRingBuffer>[1];
+
+      expect(() => writeSonareEngineTelemetryRingBuffer(ring, lateThrow)).toThrow(
+        'late telemetry getter',
+      );
+      expect(sawUnclaimedA).toBe(true);
+      expect(ring.header[0]).toBe(1);
+      expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+      expect(
+        Array.from(new Uint8Array(ring.sharedBuffer, SONARE_ENGINE_RING_HEADER_INTS * 4, 48)),
+      ).toEqual(payloadA);
+      expect(readSonareEngineTelemetryRingBuffer(ring, 0).telemetry).toEqual([recordA]);
+
+      const recordC = telemetryRecord(3);
+      writeSonareEngineTelemetryRingBuffer(ring, recordC);
+      expect(readSonareEngineTelemetryRingBuffer(ring, 1).telemetry).toEqual([recordC]);
+    });
+
+    it('releases a reader exactly once when materialization throws', () => {
+      const ring = createTelemetryRing(1);
+      writeSonareEngineTelemetryRingBuffer(ring, telemetryRecord(1));
+      const throwingRing = {
+        ...ring,
+        view: viewWithFirstReadHook(ring.view, () => {
+          throw new Error('telemetry materializer');
+        }),
+      };
+      expect(() => readSonareEngineTelemetryRingBuffer(throwingRing, 0)).toThrow(
+        'telemetry materializer',
+      );
+      expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+
+      const recordC = telemetryRecord(3);
+      writeSonareEngineTelemetryRingBuffer(ring, recordC);
+      expect(readSonareEngineTelemetryRingBuffer(ring, 1).telemetry).toEqual([recordC]);
+      expect(Atomics.load(ring.slotStates, 0)).toBe(0);
     });
   });
 });

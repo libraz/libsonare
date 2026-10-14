@@ -637,8 +637,10 @@ export interface SynthModRouting {
  * The patch starts from a BASE — the named `preset` (see
  * {@link synthPresetNames}; a `"va:"` routing prefix is accepted) or, when
  * `preset` is omitted, the default subtractive patch. Omitting a numeric field
- * keeps the base value; supplying one overrides it (clamped to its audible
- * range), including an explicit `0` such as `stereoSpread: 0`. The enum fields
+ * keeps the base value; supplying one overrides it, including an explicit `0` such as
+ * `stereoSpread: 0`. A value that is non-finite or outside the range
+ * {@link synthPatchParamInfo} publishes for its field, and more than 8
+ * `modRoutings`, are refused with a coded `SonareError` naming the field. The enum fields
  * reserve `'default'` as keep. A `modRoutings` array REPLACES the base mod
  * matrix, and an empty array clears it, while omitting the key keeps it.
  *
@@ -743,8 +745,8 @@ export interface SynthPatch {
   velToCutoffCents?: number;
   // --- pitch offset ---
   /**
-   * Constant transposition of the voice's own pitch, in cents, clamped to
-   * [-4800, 4800]; 0 leaves the pitch alone. Applied on top of the note, so it
+   * Constant transposition of the voice's own pitch, in cents, within
+   * [-4800, 4800] (outside it is refused); 0 leaves the pitch alone. Applied on top of the note, so it
    * shifts a whole patch without rewriting the part — a detuned layer, a sample
    * set mapped a semitone off, an instrument pitched to a reference other than
    * A440. Carried in the per-sample pitch factor every engine's render already

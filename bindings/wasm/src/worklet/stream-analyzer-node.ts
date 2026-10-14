@@ -126,7 +126,11 @@ export class SonareStreamAnalyzerNode {
       return;
     }
     this.destroyed = true;
-    this.node.port.postMessage({ type: 'destroy' });
+    try {
+      this.node.port.postMessage({ type: 'destroy' });
+    } catch {
+      // Best effort: local ownership is released even when the port rejects dispatch.
+    }
     this.node.disconnect();
     this.frameListeners.clear();
     this.statsListeners.clear();

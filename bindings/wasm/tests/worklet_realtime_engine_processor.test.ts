@@ -1,35 +1,53 @@
 import { vi } from 'vitest';
 import { RealtimeEngine } from '../dist/index.js';
+import {
+  SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION,
+  SONARE_METER_RING_PROTOCOL_VERSION,
+  SONARE_SCOPE_RING_PROTOCOL_VERSION,
+} from '../dist/worklet.js';
 // The accepted-type table itself, so the coverage below is generated from the
 // same source of truth as the guard rather than restated.
 import { ENGINE_SYNC_MESSAGE_TYPES, isEngineSyncMessage } from '../src/worklet/guards';
 import type { SonareEngineSyncMessage } from '../src/worklet/messages';
-import type { SonareEngineCommandRecord } from '../src/worklet/protocol';
+import type {
+  SonareEngineCommandRecord,
+  SonareEngineTelemetryRecord,
+} from '../src/worklet/protocol';
 import {
   createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,
   createSonareEngineTelemetryRingBuffer,
   createSonareExternalMidiRingBuffer,
+  createSonareMeterRingBuffer,
   createSonareScopeRingBuffer,
   describe,
+  engineTelemetryRingFromSharedBuffer,
   expect,
   it,
   pushSonareEngineCommandRingBuffer,
   readSonareClipPageRequestRingBuffer,
   readSonareEngineTelemetryRingBuffer,
   readSonareExternalMidiRingBuffer,
+  readSonareMeterRingBuffer,
   readSonareScopeRingBuffer,
   registerSonareRealtimeEngineWorkletProcessor,
+  SONARE_ENGINE_RING_HEADER_INTS,
+  SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
   SonareEngine,
   SonareEngineCommandType,
   SonareEngineTelemetryError,
   SonareEngineTelemetryType,
   SonareRealtimeEngineWorkletProcessor,
+  scopeRingFromSharedBuffer,
   setupWorklet,
+  writeSonareEngineTelemetryRingBuffer,
 } from './_worklet_helpers';
 
 describe('SonareRealtimeEngineWorkletProcessor', () => {
   setupWorklet();
+
+  const recordBytes = (buffer: SharedArrayBuffer, offset: number, length: number): number[] =>
+    Array.from(new Uint8Array(buffer, offset, length));
 
   describe('SonareRealtimeEngineWorkletProcessor', () => {
     const midi1Word = (status: number, channel: number, data0: number, data1: number): number =>
@@ -275,6 +293,490 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         expect(processor.process([[]], [[outL, outR]])).toBe(true);
         const second = readSonareEngineTelemetryRingBuffer(telemetryRing, first.nextReadIndex);
         expect(second.telemetry.at(-1)?.timelineSample).toBe(48000 + blockSize);
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('keeps a public telemetry publication coherent across 65 held-reader writes', () => {
+      const ring = createSonareEngineTelemetryRingBuffer(1);
+      // A viewer must accept a newly-created, unacknowledged ring as empty.
+      expect(ring.header[1]).toBe(0);
+      expect(readSonareEngineTelemetryRingBuffer(ring)).toEqual({
+        nextReadIndex: 0,
+        telemetry: [],
+      });
+
+      const telemetry = (frame: number): SonareEngineTelemetryRecord => ({
+        type: SonareEngineTelemetryType.ProcessBlock,
+        error: SonareEngineTelemetryError.None,
+        renderFrame: frame,
+        timelineSample: 1000 + frame,
+        audibleTimelineSample: 2000 + frame,
+        graphLatencySamplesQ8: 256 + frame,
+        value: 3000 + frame,
+      });
+      writeSonareEngineTelemetryRingBuffer(ring, telemetry(1));
+      expect(ring.header[1]).toBe(SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION);
+      expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+      expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+      expect(Atomics.load(ring.publicationWrapped, 0)).toBe(0);
+      const payloadA = recordBytes(
+        ring.sharedBuffer,
+        SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
+        SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+      );
+
+      // Establish the held-reader precondition after a real A publication. The
+      // loop therefore reaches the writer's failed CAS rather than a setup path.
+      expect(Atomics.add(ring.slotStates, 0, 1)).toBe(0);
+      for (let attempt = 0; attempt < 65; attempt++) {
+        writeSonareEngineTelemetryRingBuffer(ring, telemetry(100 + attempt));
+      }
+      expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+      expect(Atomics.load(ring.header, 4)).toBe(65);
+      expect(Atomics.load(ring.publicationWrapped, 0)).toBe(0);
+      expect(
+        recordBytes(
+          ring.sharedBuffer,
+          SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
+          SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+        ),
+      ).toEqual(payloadA);
+      expect(Atomics.load(ring.slotStates, 0)).toBe(1);
+
+      expect(Atomics.sub(ring.slotStates, 0, 1)).toBe(1);
+      expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+      writeSonareEngineTelemetryRingBuffer(ring, telemetry(2));
+      expect(Atomics.load(ring.header, 0) >>> 0).toBe(2);
+      // A successful write after the held-reader drops must not be counted as a
+      // second collision merely because the cumulative counter is nonzero.
+      expect(Atomics.load(ring.header, 4)).toBe(66);
+      expect(Atomics.load(ring.publicationWrapped, 0)).toBe(1);
+      expect(readSonareEngineTelemetryRingBuffer(ring, 1).telemetry).toEqual([telemetry(2)]);
+    });
+
+    it('separates capacity-two collision history from physical overwrites across reattach and cursor wrap', () => {
+      const ring = createSonareEngineTelemetryRingBuffer(2);
+      const telemetry = (frame: number): SonareEngineTelemetryRecord => ({
+        type: SonareEngineTelemetryType.ProcessBlock,
+        error: SonareEngineTelemetryError.None,
+        renderFrame: frame,
+        timelineSample: 1000 + frame,
+        audibleTimelineSample: 2000 + frame,
+        graphLatencySamplesQ8: 256 + frame,
+        value: 3000 + frame,
+      });
+
+      writeSonareEngineTelemetryRingBuffer(ring, telemetry(1));
+      expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+      expect(Atomics.load(ring.header, 4)).toBe(0);
+      expect(Atomics.load(ring.publicationWrapped, 0)).toBe(0);
+      const payloadA = recordBytes(
+        ring.sharedBuffer,
+        SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
+        SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+      );
+
+      // Hold the empty next slot so the 65 attempts reach the writer's failed
+      // claim. A's published slot must remain untouched while cursor 1 is held.
+      expect(Atomics.add(ring.slotStates, 1, 1)).toBe(0);
+      for (let attempt = 0; attempt < 65; attempt++) {
+        writeSonareEngineTelemetryRingBuffer(ring, telemetry(100 + attempt));
+      }
+      expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+      expect(Atomics.load(ring.header, 4)).toBe(65);
+      expect(Atomics.load(ring.publicationWrapped, 0)).toBe(0);
+      expect(Atomics.load(ring.slotStates, 1)).toBe(1);
+      expect(
+        recordBytes(
+          ring.sharedBuffer,
+          SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
+          SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+        ),
+      ).toEqual(payloadA);
+
+      expect(Atomics.sub(ring.slotStates, 1, 1)).toBe(1);
+      writeSonareEngineTelemetryRingBuffer(ring, telemetry(2));
+      expect(Atomics.load(ring.header, 0) >>> 0).toBe(2);
+      // Cursor 1 is still an empty slot, so this resume is not a physical
+      // overwrite even though the collision counter is already nonzero.
+      expect(Atomics.load(ring.header, 4)).toBe(65);
+      expect(Atomics.load(ring.publicationWrapped, 0)).toBe(0);
+      expect(readSonareEngineTelemetryRingBuffer(ring, 1).telemetry).toEqual([telemetry(2)]);
+
+      writeSonareEngineTelemetryRingBuffer(ring, telemetry(3));
+      expect(Atomics.load(ring.header, 0) >>> 0).toBe(3);
+      expect(Atomics.load(ring.header, 4)).toBe(66);
+      expect(Atomics.load(ring.publicationWrapped, 0)).toBe(1);
+      expect(readSonareEngineTelemetryRingBuffer(ring, 2).telemetry).toEqual([telemetry(3)]);
+
+      const reattached = engineTelemetryRingFromSharedBuffer(ring.sharedBuffer, ring.capacity);
+      expect(Atomics.load(reattached.publicationWrapped, 0)).toBe(1);
+
+      // Capacity two has a 2^32 cursor span. Place the producer at the final
+      // cursor so one ordinary producer write exercises the full wrap without
+      // billions of setup writes; the publication latch must survive it.
+      Atomics.store(reattached.header, 0, -1);
+      writeSonareEngineTelemetryRingBuffer(reattached, telemetry(4));
+      expect(Atomics.load(reattached.header, 0) >>> 0).toBe(0);
+      expect(Atomics.load(reattached.header, 4)).toBe(67);
+      expect(Atomics.load(reattached.publicationWrapped, 0)).toBe(1);
+    });
+
+    it('reads and coerces every public telemetry field before a late getter failure', () => {
+      const ring = createSonareEngineTelemetryRingBuffer(1);
+      writeSonareEngineTelemetryRingBuffer(ring, {
+        type: SonareEngineTelemetryType.ProcessBlock,
+        error: SonareEngineTelemetryError.None,
+        renderFrame: 1,
+        timelineSample: 2,
+        audibleTimelineSample: 3,
+        graphLatencySamplesQ8: 4,
+        value: 5,
+      });
+      const payloadA = recordBytes(
+        ring.sharedBuffer,
+        SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
+        SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+      );
+      const accesses: number[] = [];
+      const source = Object.create(null) as Record<string, unknown>;
+      const values: Record<string, unknown> = {
+        type: '0',
+        error: '0',
+        renderFrame: 6n,
+        timelineSample: 7n,
+        audibleTimelineSample: 8n,
+        graphLatencySamplesQ8: '9',
+      };
+      for (const [key, value] of Object.entries(values)) {
+        Object.defineProperty(source, key, {
+          enumerable: true,
+          get: () => {
+            accesses.push(Atomics.load(ring.slotStates, 0));
+            return value;
+          },
+        });
+      }
+      Object.defineProperty(source, 'value', {
+        enumerable: true,
+        get: () => {
+          accesses.push(Atomics.load(ring.slotStates, 0));
+          throw new Error('late public telemetry getter');
+        },
+      });
+
+      expect(() =>
+        writeSonareEngineTelemetryRingBuffer(
+          ring,
+          source as unknown as SonareEngineTelemetryRecord,
+        ),
+      ).toThrow('late public telemetry getter');
+      // The initial A publication proves the writer branch was reached. The
+      // late accessor then proves all source reads happened before its claim.
+      expect(accesses).toEqual(new Array(7).fill(0));
+      expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+      expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+      expect(
+        recordBytes(
+          ring.sharedBuffer,
+          SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
+          SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+        ),
+      ).toEqual(payloadA);
+    });
+
+    it('holds engine telemetry scratch writes and resumes after the reader releases', () => {
+      const ring = createSonareEngineTelemetryRingBuffer(1);
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize: 128,
+        channelCount: 1,
+        telemetrySharedBuffer: ring.sharedBuffer,
+        telemetryRingCapacity: ring.capacity,
+      });
+      try {
+        expect(ring.header[1]).toBe(SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION);
+        const internals = processor as unknown as {
+          engine: {
+            telemetryScratchType: () => number;
+            telemetryScratchError: () => number;
+            telemetryScratchRenderFrame: () => number;
+            telemetryScratchTimelineSample: () => number;
+            telemetryScratchAudibleTimelineSample: () => number;
+            telemetryScratchGraphLatencySamplesQ8: () => number;
+            telemetryScratchValue: () => number;
+          };
+          writeTelemetryScratch: (target: typeof ring) => void;
+        };
+        let frame = 1;
+        internals.engine.telemetryScratchType = () => 0;
+        internals.engine.telemetryScratchError = () => 0;
+        internals.engine.telemetryScratchRenderFrame = () => frame;
+        internals.engine.telemetryScratchTimelineSample = () => 100 + frame;
+        internals.engine.telemetryScratchAudibleTimelineSample = () => 200 + frame;
+        internals.engine.telemetryScratchGraphLatencySamplesQ8 = () => 256 + frame;
+        internals.engine.telemetryScratchValue = () => 300 + frame;
+        const write = (): void => internals.writeTelemetryScratch(ring);
+        write();
+        expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+        expect(Atomics.load(ring.publicationWrapped, 0)).toBe(0);
+        const payloadA = recordBytes(
+          ring.sharedBuffer,
+          SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
+          SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+        );
+
+        expect(Atomics.add(ring.slotStates, 0, 1)).toBe(0);
+        for (let attempt = 0; attempt < 65; attempt++) {
+          frame = 100 + attempt;
+          write();
+        }
+        expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+        expect(Atomics.load(ring.header, 4)).toBe(65);
+        expect(Atomics.load(ring.publicationWrapped, 0)).toBe(0);
+        expect(
+          recordBytes(
+            ring.sharedBuffer,
+            SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
+            SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+          ),
+        ).toEqual(payloadA);
+        expect(Atomics.sub(ring.slotStates, 0, 1)).toBe(1);
+        frame = 2;
+        write();
+        expect(Atomics.load(ring.header, 0) >>> 0).toBe(2);
+        expect(Atomics.load(ring.header, 4)).toBe(66);
+        expect(Atomics.load(ring.publicationWrapped, 0)).toBe(1);
+        expect(readSonareEngineTelemetryRingBuffer(ring, 1).telemetry.at(-1)?.renderFrame).toBe(2);
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('keeps engine telemetry scratch A intact when the last prepared getter throws', () => {
+      const ring = createSonareEngineTelemetryRingBuffer(1);
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize: 128,
+        channelCount: 1,
+        telemetrySharedBuffer: ring.sharedBuffer,
+        telemetryRingCapacity: ring.capacity,
+      });
+      try {
+        const internals = processor as unknown as {
+          engine: {
+            telemetryScratchType: () => number;
+            telemetryScratchError: () => number;
+            telemetryScratchRenderFrame: () => number;
+            telemetryScratchTimelineSample: () => number;
+            telemetryScratchAudibleTimelineSample: () => number;
+            telemetryScratchGraphLatencySamplesQ8: () => number;
+            telemetryScratchValue: () => number;
+          };
+          writeTelemetryScratch: (target: typeof ring) => void;
+        };
+        const engine = internals.engine;
+        engine.telemetryScratchType = () => 0;
+        engine.telemetryScratchError = () => 0;
+        engine.telemetryScratchRenderFrame = () => 1;
+        engine.telemetryScratchTimelineSample = () => 2;
+        engine.telemetryScratchAudibleTimelineSample = () => 3;
+        engine.telemetryScratchGraphLatencySamplesQ8 = () => 4;
+        engine.telemetryScratchValue = () => 5;
+        internals.writeTelemetryScratch(ring);
+        const payloadA = recordBytes(
+          ring.sharedBuffer,
+          SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
+          SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+        );
+        engine.telemetryScratchValue = () => {
+          throw new Error('late engine telemetry scratch getter');
+        };
+        expect(() => internals.writeTelemetryScratch(ring)).toThrow(
+          'late engine telemetry scratch getter',
+        );
+        expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+        expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+        expect(
+          recordBytes(
+            ring.sharedBuffer,
+            SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
+            SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+          ),
+        ).toEqual(payloadA);
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('holds every engine wide-meter scratch write until the reader releases', () => {
+      const ring = createSonareMeterRingBuffer(1);
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize: 128,
+        channelCount: 1,
+        meterSharedBuffer: ring.sharedBuffer,
+        meterRingCapacity: ring.capacity,
+        meterIntervalFrames: 1,
+      });
+      try {
+        expect(ring.header[3]).toBe(SONARE_METER_RING_PROTOCOL_VERSION);
+        const internals = processor as unknown as {
+          engine: {
+            meterScratchTargetId: () => number;
+            meterScratchRenderFrame: () => number;
+            meterScratchInputPeakDbL: () => number;
+            meterScratchInputPeakDbR: () => number;
+            meterScratchValue: (field: number) => number;
+          };
+          writeMeterScratch: (target: typeof ring) => void;
+        };
+        let frame = 1;
+        internals.engine.meterScratchTargetId = () => '7' as unknown as number;
+        internals.engine.meterScratchRenderFrame = () => frame;
+        internals.engine.meterScratchInputPeakDbL = () => '8' as unknown as number;
+        internals.engine.meterScratchInputPeakDbR = () => '9' as unknown as number;
+        internals.engine.meterScratchValue = (field) =>
+          field === 11
+            ? (2 as unknown as number)
+            : (String(10 + frame + field) as unknown as number);
+        const write = (): void => internals.writeMeterScratch(ring);
+        write();
+        expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+        expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+        const payloadA = recordBytes(
+          ring.sharedBuffer,
+          ring.header.byteLength,
+          ring.records.byteLength,
+        );
+
+        expect(Atomics.add(ring.slotStates, 0, 1)).toBe(0);
+        for (let attempt = 0; attempt < 65; attempt++) {
+          frame = 100 + attempt;
+          write();
+        }
+        expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+        expect(
+          recordBytes(ring.sharedBuffer, ring.header.byteLength, ring.records.byteLength),
+        ).toEqual(payloadA);
+        expect(Atomics.load(ring.slotStates, 0)).toBe(1);
+        expect(Atomics.sub(ring.slotStates, 0, 1)).toBe(1);
+        frame = 2;
+        write();
+        expect(Atomics.load(ring.header, 0) >>> 0).toBe(2);
+        const resumed = readSonareMeterRingBuffer(ring, 1).meters.at(-1);
+        expect(resumed).toMatchObject({ frame: 2, targetId: 7 });
+
+        const payloadB = recordBytes(
+          ring.sharedBuffer,
+          ring.header.byteLength,
+          ring.records.byteLength,
+        );
+        internals.engine.meterScratchValue = (field) => {
+          if (field === 11) {
+            throw new Error('late engine meter getter');
+          }
+          return field === 11 ? 2 : 20 + field;
+        };
+        expect(() => write()).toThrow('late engine meter getter');
+        expect(Atomics.load(ring.header, 0) >>> 0).toBe(2);
+        expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+        expect(
+          recordBytes(ring.sharedBuffer, ring.header.byteLength, ring.records.byteLength),
+        ).toEqual(payloadB);
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('holds every engine scope scratch write until release and keeps scope A on a late getter throw', () => {
+      const ring = createSonareScopeRingBuffer(1, 4, 2);
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize: 128,
+        channelCount: 1,
+        scopeSharedBuffer: ring.sharedBuffer,
+        scopeRingCapacity: ring.capacity,
+        scopeBands: ring.bands,
+        scopeIntervalFrames: 1,
+      });
+      try {
+        expect(ring.header[5]).toBe(SONARE_SCOPE_RING_PROTOCOL_VERSION);
+        // The public scope-ring creator is a reader shape. The producer needs
+        // the mapped writer's recordFloats descriptor to address each slot.
+        const scopeWriter = scopeRingFromSharedBuffer(
+          ring.sharedBuffer,
+          ring.capacity,
+          ring.bands,
+          ring.maxPoints,
+        );
+        const internals = processor as unknown as {
+          engine: {
+            scopeScratchTargetId: () => number;
+            scopeScratchRenderFrame: () => number;
+            scopeScratchBandCount: () => number;
+            scopeScratchBand: (index: number) => number;
+            scopeScratchPointCount: () => number;
+            scopeScratchPointLeft: (index: number) => number;
+            scopeScratchPointRight: (index: number) => number;
+          };
+          writeScopeScratch: (target: typeof scopeWriter) => void;
+        };
+        let frame = 1;
+        internals.engine.scopeScratchTargetId = () => '4' as unknown as number;
+        internals.engine.scopeScratchRenderFrame = () => frame;
+        internals.engine.scopeScratchBandCount = () => 4;
+        internals.engine.scopeScratchBand = (index) =>
+          String(10 + frame + index) as unknown as number;
+        internals.engine.scopeScratchPointCount = () => 1;
+        internals.engine.scopeScratchPointLeft = () => '0.25' as unknown as number;
+        internals.engine.scopeScratchPointRight = () => '0.5' as unknown as number;
+        const write = (): void => internals.writeScopeScratch(scopeWriter);
+        write();
+        expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+        expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+        const payloadA = recordBytes(
+          ring.sharedBuffer,
+          ring.header.byteLength,
+          ring.records.byteLength,
+        );
+
+        expect(Atomics.add(ring.slotStates, 0, 1)).toBe(0);
+        for (let attempt = 0; attempt < 65; attempt++) {
+          frame = 100 + attempt;
+          write();
+        }
+        expect(Atomics.load(ring.header, 0) >>> 0).toBe(1);
+        expect(
+          recordBytes(ring.sharedBuffer, ring.header.byteLength, ring.records.byteLength),
+        ).toEqual(payloadA);
+        expect(Atomics.sub(ring.slotStates, 0, 1)).toBe(1);
+        frame = 2;
+        write();
+        expect(Atomics.load(ring.header, 0) >>> 0).toBe(2);
+        expect(readSonareScopeRingBuffer(ring, 1).scopes.at(-1)).toMatchObject({
+          frame: 2,
+          targetId: 4,
+          bands: Float32Array.from([12, 13, 14, 15]),
+          points: Float32Array.from([0.25, 0.5]),
+        });
+
+        const payloadB = recordBytes(
+          ring.sharedBuffer,
+          ring.header.byteLength,
+          ring.records.byteLength,
+        );
+        internals.engine.scopeScratchPointRight = () => {
+          throw new Error('late engine scope getter');
+        };
+        expect(() => write()).toThrow('late engine scope getter');
+        expect(Atomics.load(ring.header, 0) >>> 0).toBe(2);
+        expect(Atomics.load(ring.slotStates, 0)).toBe(0);
+        expect(
+          recordBytes(ring.sharedBuffer, ring.header.byteLength, ring.records.byteLength),
+        ).toEqual(payloadB);
       } finally {
         processor.destroy();
       }
