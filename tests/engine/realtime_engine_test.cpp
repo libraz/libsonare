@@ -2363,6 +2363,54 @@ TEST_CASE("RealtimeEngine immediate set ends an in-flight ramp on the same targe
   REQUIRE(processor.values[static_cast<size_t>(before)] < 0.5f);
 }
 
+TEST_CASE("RealtimeEngine smoother retargeted mid-block re-evaluates every control period",
+          "[engine][realtime]") {
+  constexpr int kPeriod = 64;
+  constexpr int kLongBlock = 512;
+  constexpr int kRetargetFrame = kPeriod + 36;
+
+  const auto run = [&](int block_size) {
+    sonare::engine::RealtimeEngine engine;
+    engine.prepare(48000.0, block_size);
+    engine.set_param_smoothing_ms(20.0f);
+    CaptureProcessor processor;
+    engine.automation().bind_target(7, &processor);
+    std::array<float, kLongBlock> left{};
+    float* io[] = {left.data()};
+
+    sonare::rt::Command baseline{};
+    baseline.type = sonare::rt::CommandType::kSetParamSmoothed;
+    baseline.target_id = 7;
+    baseline.sample_time = -1;
+    baseline.arg.f = 0.0f;
+    REQUIRE(engine.push_command(baseline));
+    engine.process(io, 1, kPeriod);
+    engine.settle_parameters();
+
+    sonare::rt::Command retarget = baseline;
+    retarget.sample_time = kRetargetFrame;
+    retarget.arg.f = 1.0f;
+    REQUIRE(engine.push_command(retarget));
+    const int before = processor.count;
+    for (int done = 0; done < kLongBlock; done += block_size) {
+      engine.process(io, 1, block_size);
+    }
+    std::vector<float> values(processor.values.begin() + before,
+                              processor.values.begin() + processor.count);
+    return values;
+  };
+
+  const std::vector<float> long_block = run(kLongBlock);
+  const std::vector<float> split = run(kPeriod);
+
+  REQUIRE(split.size() > 4);
+  REQUIRE(long_block.size() == split.size());
+  for (size_t i = 0; i < split.size(); ++i) {
+    CAPTURE(i);
+    REQUIRE(long_block[i] == Catch::Approx(split[i]).margin(1.0e-5));
+  }
+}
+
 TEST_CASE("RealtimeEngine re-prepare at a new sample rate stays consistent",
           "[engine][realtime][reinit]") {
   static constexpr int kFrames = 128;

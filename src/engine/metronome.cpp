@@ -168,13 +168,19 @@ bool Metronome::process(float* const* channels, int num_channels, int num_frames
 }
 
 int64_t Metronome::count_in_end_sample(int64_t start_sample, int bars) const noexcept {
-  if (!tempo_map_ || bars <= 0) return start_sample;
-  const double start_ppq = tempo_map_->sample_to_ppq(start_sample);
-  const double bar_start = tempo_map_->bar_start_ppq(start_ppq);
-  const transport::TimeSignature sig = tempo_map_->time_signature_at_ppq(start_ppq);
+  if (!tempo_map_) return start_sample;
+  return count_in_end_sample(*tempo_map_, start_sample, bars);
+}
+
+int64_t Metronome::count_in_end_sample(const transport::TempoMap& map, int64_t start_sample,
+                                       int bars) noexcept {
+  if (bars <= 0) return start_sample;
+  const double start_ppq = map.sample_to_ppq(start_sample);
+  const double bar_start = map.bar_start_ppq(start_ppq);
+  const transport::TimeSignature sig = map.time_signature_at_ppq(start_ppq);
   const double bar_len = static_cast<double>(std::max(sig.numerator, 1)) * 4.0 /
                          static_cast<double>(std::max(sig.denominator, 1));
-  return tempo_map_->ppq_to_sample(bar_start + bar_len * static_cast<double>(bars));
+  return map.ppq_to_sample(bar_start + bar_len * static_cast<double>(bars));
 }
 
 }  // namespace sonare::engine

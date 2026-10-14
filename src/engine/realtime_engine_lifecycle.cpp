@@ -646,15 +646,8 @@ void RealtimeEngine::set_metronome_config(MetronomeConfig config) noexcept {
 }
 
 int64_t RealtimeEngine::count_in_end_sample(int64_t start_sample, int bars) const noexcept {
-  if (bars <= 0) return start_sample;
   const transport::TempoMap* snapshot = tempo_map_snapshot_.control_current().get();
-  const transport::TempoMap& map = *(snapshot ? snapshot : &tempo_map_);
-  const double start_ppq = map.sample_to_ppq(start_sample);
-  const double bar_start = map.bar_start_ppq(start_ppq);
-  const transport::TimeSignature sig = map.time_signature_at_ppq(start_ppq);
-  const double bar_len = static_cast<double>(std::max(sig.numerator, 1)) * 4.0 /
-                         static_cast<double>(std::max(sig.denominator, 1));
-  return map.ppq_to_sample(bar_start + bar_len * static_cast<double>(bars));
+  return Metronome::count_in_end_sample(snapshot ? *snapshot : tempo_map_, start_sample, bars);
 }
 
 void RealtimeEngine::set_clips(std::vector<ClipSchedule> clips) {

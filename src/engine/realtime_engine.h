@@ -458,6 +458,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool set_loop_from_markers(uint32_t start_marker_id, uint32_t end_marker_id) noexcept;
   void set_metronome_config(MetronomeConfig config) noexcept;
   const MetronomeConfig& metronome_config() const noexcept { return metronome_.config(); }
+  /// End of a @p bars-bar count-in from @p start_sample; see Metronome::count_in_end_sample for
+  /// the bar-start and meter rule.
   int64_t count_in_end_sample(int64_t start_sample, int bars) const noexcept;
   void set_clips(std::vector<ClipSchedule> clips);
   /// Replaces the clip with @p clip's id, or adds it, leaving every other clip as published.

@@ -405,6 +405,12 @@ export class RealtimeEngine {
     return this.native.metronome();
   }
 
+  /**
+   * Sample at which a count-in of `bars` bars from `startSample` ends. Counting starts at the
+   * beginning of the bar containing `startSample` (a mid-bar start gets a short first bar), and
+   * every counted bar has the length of the time signature in effect at `startSample`.
+   * Returns `startSample` when `bars <= 0`.
+   */
   countInEndSample(startSample: number, bars: number): number {
     return this.native.countInEndSample(startSample, bars);
   }

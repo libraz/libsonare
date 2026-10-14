@@ -7,6 +7,8 @@
 #include <iterator>
 #include <vector>
 
+#include "engine/realtime_engine.h"
+
 TEST_CASE("Metronome collects beat clicks at sample-accurate offsets", "[engine][metronome]") {
   sonare::transport::TempoMap tempo;
   tempo.prepare(48000.0);
@@ -179,6 +181,40 @@ TEST_CASE("Metronome count-in ends at requested bar boundary", "[engine][metrono
 
   REQUIRE(metro.count_in_end_sample(0, 2) == 192000);
   REQUIRE(metro.count_in_end_sample(24000, 1) == 96000);
+}
+
+TEST_CASE("Count-in counts from the start of the starting bar with that bar's meter",
+          "[engine][metronome]") {
+  const std::vector<sonare::transport::TempoSegment> tempo_segments = {{0.0, 120.0, 0.0},
+                                                                       {4.0, 240.0, 0.0}};
+  const std::vector<sonare::transport::TimeSignatureSegment> signatures = {{0.0, {4, 4}},
+                                                                           {4.0, {3, 4}}};
+  sonare::transport::TempoMap tempo;
+  tempo.prepare(48000.0);
+  tempo.set_segments(tempo_segments);
+  tempo.set_time_signatures(signatures);
+  sonare::engine::Metronome metro;
+  metro.prepare(48000.0, &tempo);
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 512);
+  engine.set_tempo_segments(tempo_segments);
+  engine.set_time_signature_segments(signatures);
+
+  // The 4/4 bar's length applies to both bars although 3/4 begins after the first one.
+  REQUIRE(metro.count_in_end_sample(0, 2) == 144000);
+  // A start inside the 3/4 segment counts from that segment's bar grid, at 240 BPM.
+  REQUIRE(metro.count_in_end_sample(120000, 1) == 132000);
+  // A mid-bar start gets a short first bar.
+  REQUIRE(metro.count_in_end_sample(24000, 1) == 96000);
+  REQUIRE(metro.count_in_end_sample(24000, 0) == 24000);
+
+  for (const int64_t start : {int64_t{0}, int64_t{24000}, int64_t{100000}, int64_t{120000}}) {
+    for (const int bars : {0, 1, 2}) {
+      CAPTURE(start, bars);
+      REQUIRE(engine.count_in_end_sample(start, bars) == metro.count_in_end_sample(start, bars));
+    }
+  }
 }
 
 TEST_CASE("Metronome emits the first beat of a signature segment starting mid-beat",

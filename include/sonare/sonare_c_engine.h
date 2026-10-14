@@ -295,6 +295,11 @@ SonareError sonare_engine_set_loop_from_markers(SonareRealtimeEngine* engine,
 SonareError sonare_engine_set_metronome(SonareRealtimeEngine* engine,
                                         const SonareEngineMetronomeConfig* config);
 SonareError sonare_engine_metronome(SonareRealtimeEngine* engine, SonareEngineMetronomeConfig* out);
+/// @brief Returns the sample at which a count-in of @p bars bars starting at @p start_sample ends.
+/// @details Counting starts at the beginning of the bar containing @p start_sample, so a
+///          mid-bar start gets a short first bar. Every counted bar has the length of the time
+///          signature in effect at @p start_sample; tempo changes apply through the tempo map.
+///          Writes @p start_sample when @p bars <= 0.
 SonareError sonare_engine_count_in_end_sample(SonareRealtimeEngine* engine, int64_t start_sample,
                                               int bars, int64_t* out_sample);
 SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEngineClip* clips,

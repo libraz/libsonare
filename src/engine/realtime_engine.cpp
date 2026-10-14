@@ -224,6 +224,10 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     int span = next_boundary < boundaries.size() ? boundaries[next_boundary].offset - offset
                                                  : frames - offset;
     span = timeline_span(span);
+    // A smoother a command started inside this block has no up-front boundary.
+    if (any_smoothed_param_active()) {
+      span = std::min(span, kControlPeriod - offset % kControlPeriod);
+    }
     // Automation is evaluated at the span start with the transport the commands left.
     automation_.apply(transport_.snapshot(), 0, span);
 #if defined(SONARE_WITH_ARRANGEMENT)

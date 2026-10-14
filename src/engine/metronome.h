@@ -65,7 +65,15 @@ class Metronome {
   bool process(float* const* channels, int num_channels, int num_frames,
                int64_t block_start_sample) const noexcept;
 
+  /// Sample at which a count-in of @p bars bars ends, measured on this metronome's tempo map.
   int64_t count_in_end_sample(int64_t start_sample, int bars) const noexcept;
+
+  /// Count-in end on @p map: the bar containing @p start_sample is counted from its own
+  /// start, so a mid-bar start gets a short first bar. Every counted bar has the length of the
+  /// time signature in effect at @p start_sample; later signature changes do not alter it, and
+  /// tempo changes apply through the map. Returns @p start_sample when @p bars <= 0.
+  static int64_t count_in_end_sample(const transport::TempoMap& map, int64_t start_sample,
+                                     int bars) noexcept;
 
  private:
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
