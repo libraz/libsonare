@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "rt/param_smoother.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::editing::voice_changer {
 
@@ -57,6 +58,12 @@ class StreamingRetune {
   ///          grain length so that every overlapping grain has contributed
   ///          before a slot is read and normalized.
   int latency_samples() const noexcept { return grain_size_; }
+  /// @brief Output beyond @ref latency_samples() after the input stops: a source sample can be
+  ///        read into a grain until the history ring overwrites it.
+  rt::TailBudget tail() const noexcept {
+    rt::TailBudget budget;
+    return budget.delay(static_cast<double>(ring_cap_));
+  }
 
   /// @brief Process a block of samples. RT-safe and @c noexcept.
   /// @details Pre-condition violations (not prepared, oversize block, null

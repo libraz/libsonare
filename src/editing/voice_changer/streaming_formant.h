@@ -8,6 +8,7 @@
 #include "editing/voice_changer/control_cadence.h"
 #include "rt/biquad_design.h"
 #include "rt/param_smoother.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::editing::voice_changer {
 
@@ -37,6 +38,9 @@ class StreamingFormant {
   ///         @ref process_block applies the rule itself, so an owner polling
   ///         afterwards would otherwise never see the discard it performed.
   bool discard_non_finite() noexcept;
+  /// @brief Ring of the four sections after the input stops, taken at the extremes of every
+  ///        control so a glide still in progress is covered.
+  static rt::TailBudget tail(double sample_rate) noexcept;
 
  private:
   void update_filters() noexcept;

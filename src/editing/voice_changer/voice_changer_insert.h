@@ -26,7 +26,8 @@ namespace sonare::editing::voice_changer {
 ///          is an automatable parameter (see @ref parameter_descriptors).
 ///
 ///          Latency is one retune grain plus, in absolute formant mode, one warp frame plus, when
-///          the limiter switch is on, the limiter's look-ahead. The tail is the reverb's decay
+///          the limiter switch is on, the limiter's look-ahead. The tail is
+///          RealtimeVoiceChanger::tail_budget(): the filters, the retune history and the reverb
 ///          down to the project's tail floor. Gain reduction covers the compressor, de-esser and
 ///          sample limiter.
 class VoiceChangerInsert : public rt::ProcessorBase {

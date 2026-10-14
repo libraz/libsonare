@@ -4,6 +4,7 @@
 #include "editing/voice_changer/realtime.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/dsp_primitives.h"
 #include "util/exception.h"
 
 // kVoiceChangerAbiVersion is checked against the C macro in
@@ -17,8 +18,27 @@ constexpr float kDeessGainSmoothingHz = 200.0f;
 constexpr float kDeessEnvelopeHz = 100.0f;
 constexpr float kFastDetectorHz = 200.0f;
 constexpr float kLimiterAttackMs = 0.1f;
+/// Glide time of the dry/wet mix.
+constexpr float kWetMixGlideMs = 10.0f;
 
 float db_to_gain(float db) noexcept { return sonare::db_to_linear(db); }
+
+rt::BiquadCoeffs input_highpass(double sample_rate, float corner_hz) {
+  return rt::rbj_highpass(rt::frequency_to_w0(corner_hz, sample_rate),
+                          sonare::constants::kButterworthQ);
+}
+
+rt::BiquadCoeffs body_peak(double sample_rate, float gain_db) {
+  return rt::rbj_peak(rt::frequency_to_w0(180.0f, sample_rate), 0.85f, gain_db);
+}
+
+rt::BiquadCoeffs presence_peak(double sample_rate, float gain_db) {
+  return rt::rbj_peak(rt::frequency_to_w0(3600.0f, sample_rate), 0.9f, gain_db);
+}
+
+rt::BiquadCoeffs air_shelf(double sample_rate, float gain_db) {
+  return rt::rbj_high_shelf(rt::frequency_to_w0(9500.0f, sample_rate), 0.75f, gain_db);
+}
 
 }  // namespace
 
@@ -87,7 +107,11 @@ void RealtimeVoiceChanger::reset() {
 }
 
 void RealtimeVoiceChanger::reset_channels() {
-  for (auto& channel : channels_) reset_channel(channel);
+  for (auto& channel : channels_) {
+    reset_channel(channel);
+    // Already at rest, so the next block that includes it must not reset it again.
+    channel.gate.admit(true, [] {});
+  }
   last_gain_reduction_db_.store(0.0f, std::memory_order_relaxed);
 }
 
@@ -109,7 +133,10 @@ void RealtimeVoiceChanger::set_config(const RealtimeVoiceChangerConfig& config) 
   config_ = normalized;
   // Record the request before the effective-value mirror below lands on the
   // same field; prepare() seeds the retune stages from this, not from config_.
-  requested_retune_grain_size_ = config_.retune.grain_size;
+  // A grain equal to the effective one is config() read back, not a new request.
+  if (channels_.empty() || config_.retune.grain_size != channels_[0].retune.grain_size()) {
+    requested_retune_grain_size_ = config_.retune.grain_size;
+  }
   // Keep config() reporting the effective grain: grain size is structural and
   // cannot change after prepare(), so a newly-requested grain in `config` has
   // no effect until the next prepare(). Overwrite it with the resolved value so
@@ -168,7 +195,7 @@ void RealtimeVoiceChanger::allocate_channel(ChannelState& state) {
   state.reverb.prepare(sample_rate_, max_block_size_);
   state.input_gain.prepare(sample_rate_, 10.0f);
   state.output_gain.prepare(sample_rate_, 10.0f);
-  state.wet_mix.prepare(sample_rate_, 10.0f);
+  state.wet_mix.prepare(sample_rate_, kWetMixGlideMs);
   state.eq_highpass_hz.prepare(sample_rate_, 12.0f);
   state.eq_body_db.prepare(sample_rate_, 12.0f);
   state.eq_presence_db.prepare(sample_rate_, 12.0f);
@@ -197,8 +224,11 @@ void RealtimeVoiceChanger::allocate_channel(ChannelState& state) {
 
 void RealtimeVoiceChanger::apply_channel_config(ChannelState& state, int channel_index,
                                                 const RealtimeVoiceChangerConfig& config) {
-  // Sub-component coefficient updates (no buffer resizing).
-  state.retune.set_config(config.retune);
+  // Sub-component coefficient updates (no buffer resizing). The grain is structural and the
+  // request lives in requested_retune_grain_size_, so the stage only ever sees its own size.
+  StreamingRetuneConfig retune = config.retune;
+  retune.grain_size = state.retune.grain_size();
+  state.retune.set_config(retune);
   if (prepared_formant_mode_ == FormantMode::Absolute) {
     // The warp carries the factor, so the colour stage stays neutral; amount does not apply.
     StreamingFormantConfig colour = config.formant;
@@ -244,17 +274,13 @@ void RealtimeVoiceChanger::apply_channel_config(ChannelState& state, int channel
 }
 
 void RealtimeVoiceChanger::update_input_filter(ChannelState& state) noexcept {
-  state.hpf.set(rt::rbj_highpass(rt::frequency_to_w0(state.filter_highpass_hz, sample_rate_),
-                                 sonare::constants::kButterworthQ));
+  state.hpf.set(input_highpass(sample_rate_, state.filter_highpass_hz));
 }
 
 void RealtimeVoiceChanger::update_output_filters(ChannelState& state) noexcept {
-  state.body.set(
-      rt::rbj_peak(rt::frequency_to_w0(180.0f, sample_rate_), 0.85f, state.filter_body_db));
-  state.presence.set(
-      rt::rbj_peak(rt::frequency_to_w0(3600.0f, sample_rate_), 0.9f, state.filter_presence_db));
-  state.air.set(
-      rt::rbj_high_shelf(rt::frequency_to_w0(9500.0f, sample_rate_), 0.75f, state.filter_air_db));
+  state.body.set(body_peak(sample_rate_, state.filter_body_db));
+  state.presence.set(presence_peak(sample_rate_, state.filter_presence_db));
+  state.air.set(air_shelf(sample_rate_, state.filter_air_db));
   state.deess_band.set(
       rt::rbj_bandpass(rt::frequency_to_w0(state.filter_deess_frequency_hz, sample_rate_), 2.2f));
 }
@@ -301,6 +327,46 @@ const RealtimeVoiceChangerConfig& RealtimeVoiceChanger::adopt_snapshot_for_block
     // whole branch is retried on the next block instead of being skipped.
   }
   return active_config_;
+}
+
+rt::TailBudget RealtimeVoiceChanger::tail_budget() const noexcept {
+  rt::TailBudget wet;
+  if (channels_.empty() || !(sample_rate_ > 0.0)) return wet;
+  // Gains around the filters scale every residual; the limiters only ever reduce it.
+  const double scale =
+      db_to_linear(static_cast<double>(config_.input_gain_db)) *
+      db_to_linear(static_cast<double>(std::max(0.0f, config_.compressor.makeup_gain_db))) *
+      db_to_linear(static_cast<double>(config_.output_gain_db));
+  const auto ring = [scale](const rt::BiquadCoeffs& c) {
+    rt::TailBudget section;
+    return section.biquad(
+        scale * (std::abs(static_cast<double>(c.b0)) + std::abs(static_cast<double>(c.b1)) +
+                 std::abs(static_cast<double>(c.b2))),
+        static_cast<double>(c.a1), static_cast<double>(c.a2));
+  };
+  // The high-pass corner glides down to the lowest accepted one, where it rings longest.
+  wet.then(ring(input_highpass(sample_rate_, kVoiceHighpassMinHz)));
+  const ChannelState& channel = channels_[0];
+  if (prepared_formant_mode_ == FormantMode::Absolute) {
+    wet.delay(static_cast<double>(channel.warp.latency_samples()));
+  }
+  wet.then(channel.retune.tail());
+  wet.then(StreamingFormant::tail(sample_rate_));
+  rt::TailBudget body;
+  rt::TailBudget presence;
+  rt::TailBudget air;
+  for (const float gain_db : {-kVoiceEqGainLimitDb, kVoiceEqGainLimitDb}) {
+    body.alongside(ring(body_peak(sample_rate_, gain_db)));
+    presence.alongside(ring(presence_peak(sample_rate_, gain_db)));
+    air.alongside(ring(air_shelf(sample_rate_, gain_db)));
+  }
+  wet.then(body).then(presence).then(air);
+  wet.then(StreamingReverb::tail(config_.reverb, sample_rate_, num_channels_, scale));
+  if (config_.wet_mix > 0.0f) return wet;
+  // A mix gliding to zero still lets the wet path through until it lands.
+  rt::TailBudget glide;
+  glide.decay(1.0 - time_to_attack_release_rate(sample_rate_, kWetMixGlideMs), scale);
+  return rt::TailBudget::reported(std::min(wet.samples(), glide.samples()));
 }
 
 void RealtimeVoiceChanger::reset_channel(ChannelState& state) {

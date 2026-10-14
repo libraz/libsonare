@@ -514,10 +514,10 @@ RealtimeVoiceChangerConfig normalize_realtime_voice_changer_config(
   c.formant.brightness = std::clamp(c.formant.brightness, -1.0f, 1.0f);
   c.formant.nasal = std::clamp(c.formant.nasal, -1.0f, 1.0f);
   if (c.formant_mode != FormantMode::Absolute) c.formant_mode = FormantMode::Relative;
-  c.eq.highpass_hz = std::clamp(c.eq.highpass_hz, 20.0f, 300.0f);
-  c.eq.body_db = std::clamp(c.eq.body_db, -12.0f, 12.0f);
-  c.eq.presence_db = std::clamp(c.eq.presence_db, -12.0f, 12.0f);
-  c.eq.air_db = std::clamp(c.eq.air_db, -12.0f, 12.0f);
+  c.eq.highpass_hz = std::clamp(c.eq.highpass_hz, kVoiceHighpassMinHz, 300.0f);
+  c.eq.body_db = std::clamp(c.eq.body_db, -kVoiceEqGainLimitDb, kVoiceEqGainLimitDb);
+  c.eq.presence_db = std::clamp(c.eq.presence_db, -kVoiceEqGainLimitDb, kVoiceEqGainLimitDb);
+  c.eq.air_db = std::clamp(c.eq.air_db, -kVoiceEqGainLimitDb, kVoiceEqGainLimitDb);
   c.gate.threshold_db = std::clamp(c.gate.threshold_db, -90.0f, -12.0f);
   c.gate.attack_ms = std::clamp(c.gate.attack_ms, 0.05f, 100.0f);
   c.gate.release_ms = std::clamp(c.gate.release_ms, 5.0f, 1000.0f);

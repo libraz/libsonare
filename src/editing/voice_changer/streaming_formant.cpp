@@ -22,6 +22,33 @@ float effective_factor(const StreamingFormantConfig& config) noexcept {
   return effective_factor(config.factor, config.amount);
 }
 
+/// The four sections for one setting of the factor and tone controls.
+void filters_coefficients(double sample_rate, float raw_factor, float raw_body,
+                          float raw_brightness, float raw_nasal,
+                          std::array<rt::BiquadState, 4>& filters) noexcept {
+  // `amount` controls only the formant-frequency displacement. Body,
+  // brightness, and nasal are independent tonal controls and must still work
+  // at amount=0 (the neutral-monitor preset intentionally relies on this).
+  const float factor = clamp_factor(raw_factor);
+  const float shift = factor - 1.0f;
+  const float body = std::clamp(raw_body, -1.0f, 1.0f);
+  const float brightness = std::clamp(raw_brightness, -1.0f, 1.0f);
+  const float nasal = std::clamp(raw_nasal, -1.0f, 1.0f);
+
+  const float body_freq = std::clamp(210.0f / factor, 90.0f, 420.0f);
+  const float vowel_freq = std::clamp(900.0f * factor, 420.0f, 1800.0f);
+  const float nasal_freq = std::clamp(1350.0f * factor, 700.0f, 2600.0f);
+
+  filters[0].set(rt::rbj_low_shelf(rt::frequency_to_w0(body_freq, sample_rate), 0.75f,
+                                   body * 3.0f - shift * 4.5f));
+  filters[1].set(
+      rt::rbj_peak(rt::frequency_to_w0(vowel_freq, sample_rate), 0.9f, shift * 7.0f + body * 1.5f));
+  filters[2].set(rt::rbj_peak(rt::frequency_to_w0(nasal_freq, sample_rate), 1.6f,
+                              nasal * 4.0f + shift * 2.0f));
+  filters[3].set(rt::rbj_high_shelf(rt::frequency_to_w0(5200.0f, sample_rate), 0.8f,
+                                    brightness * 5.0f + shift * 3.0f));
+}
+
 }  // namespace
 
 StreamingFormant::StreamingFormant(StreamingFormantConfig config) : config_(config) {}
@@ -87,27 +114,29 @@ void StreamingFormant::update_filters() noexcept {
   // could otherwise compute biquad coefficients against a stale or
   // uninitialized rate and emit garbage on the first block.
   if (!(sample_rate_ > 0.0)) return;
-  // `amount` controls only the formant-frequency displacement. Body,
-  // brightness, and nasal are independent tonal controls and must still work
-  // at amount=0 (the neutral-monitor preset intentionally relies on this).
-  const float factor = clamp_factor(filter_factor_);
-  const float shift = factor - 1.0f;
-  const float body = std::clamp(filter_body_, -1.0f, 1.0f);
-  const float brightness = std::clamp(filter_brightness_, -1.0f, 1.0f);
-  const float nasal = std::clamp(filter_nasal_, -1.0f, 1.0f);
+  filters_coefficients(sample_rate_, filter_factor_, filter_body_, filter_brightness_,
+                       filter_nasal_, filters_);
+}
 
-  const float body_freq = std::clamp(210.0f / factor, 90.0f, 420.0f);
-  const float vowel_freq = std::clamp(900.0f * factor, 420.0f, 1800.0f);
-  const float nasal_freq = std::clamp(1350.0f * factor, 700.0f, 2600.0f);
-
-  filters_[0].set(rt::rbj_low_shelf(rt::frequency_to_w0(body_freq, sample_rate_), 0.75f,
-                                    body * 3.0f - shift * 4.5f));
-  filters_[1].set(rt::rbj_peak(rt::frequency_to_w0(vowel_freq, sample_rate_), 0.9f,
-                               shift * 7.0f + body * 1.5f));
-  filters_[2].set(rt::rbj_peak(rt::frequency_to_w0(nasal_freq, sample_rate_), 1.6f,
-                               nasal * 4.0f + shift * 2.0f));
-  filters_[3].set(rt::rbj_high_shelf(rt::frequency_to_w0(5200.0f, sample_rate_), 0.8f,
-                                     brightness * 5.0f + shift * 3.0f));
+rt::TailBudget StreamingFormant::tail(double sample_rate) noexcept {
+  rt::TailBudget budget;
+  if (!(sample_rate > 0.0)) return budget;
+  // Each section rings longest at one end of the factor and tone ranges.
+  std::array<rt::TailBudget, 4> worst{};
+  for (const float factor : {kFormantFactorMin, kFormantFactorMax}) {
+    for (const float body : {-1.0f, 1.0f}) {
+      for (const float tone : {-1.0f, 1.0f}) {
+        std::array<rt::BiquadState, 4> sections{};
+        filters_coefficients(sample_rate, factor, body, tone, tone, sections);
+        for (std::size_t k = 0; k < sections.size(); ++k) {
+          rt::TailBudget section;
+          worst[k].alongside(section.section(sections[k].c));
+        }
+      }
+    }
+  }
+  for (const rt::TailBudget& section : worst) budget.then(section);
+  return budget;
 }
 
 void StreamingFormant::process_block(const float* input, float* output, int num_samples) noexcept {

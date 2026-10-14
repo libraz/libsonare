@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <string>
@@ -487,15 +488,19 @@ TEST_CASE("voice.changer reports the reverb decay as its tail", "[voice_changer]
   CHECK(tail > static_cast<int>(std::ceil(0.4 * kRate)));
   CHECK(tail < static_cast<int>(std::ceil(3.0 * kRate)));
 
+  // Without the reverb the tail is what the filters and the retune history still owe.
   config.reverb.mix = 0.0f;
   VoiceChangerInsert dry_reverb(config);
   dry_reverb.prepare(kRate, kBlock, 1);
-  CHECK(dry_reverb.tail_samples() == 0);
+  CHECK(dry_reverb.tail_samples() > 0);
+  CHECK(dry_reverb.tail_samples() < tail);
+  // A wet mix at zero owes only what its glide still lets through.
   config.reverb.mix = 0.45f;
   config.wet_mix = 0.0f;
   VoiceChangerInsert dry_mix(config);
   dry_mix.prepare(kRate, kBlock, 1);
-  CHECK(dry_mix.tail_samples() == 0);
+  CHECK(dry_mix.tail_samples() > 0);
+  CHECK(dry_mix.tail_samples() < static_cast<int>(std::ceil(0.2 * kRate)));
 
   // A short burst, then silence for the reported latency and tail.
   const auto render = [&](VoiceChangerInsert& processor, int total) {
@@ -545,48 +550,74 @@ TEST_CASE("voice.changer reports the reverb decay as its tail", "[voice_changer]
 
 namespace {
 
-// Renders a unit impulse or a 0.5 s two-tone burst (peak 0.35) through a reverberant insert at
-// @p rate and requires silence below the tail floor once latency + reported tail have elapsed.
-void require_silent_after_reported_tail(double rate, float reverb_time_ms, bool impulse) {
-  RealtimeVoiceChangerConfig config;
-  config.reverb.mix = 0.45f;
-  config.reverb.time_ms = reverb_time_ms;
-  config.limiter.enable_isp_limiter = false;
+// Renders a unit impulse or a 0.5 s two-tone burst (peak 0.35) through an insert built from
+// @p config at @p rate and requires silence below the tail floor once latency + reported tail
+// have elapsed. @p prime runs first; @p at_input_end runs once the input has been fed and before
+// the tail is read, so a live change made there must be covered by the tail it reports.
+void require_silent_after_reported_tail(
+    double rate, const RealtimeVoiceChangerConfig& config, bool impulse,
+    const std::function<void(VoiceChangerInsert&)>& prime = {},
+    const std::function<void(VoiceChangerInsert&)>& at_input_end = {}) {
   VoiceChangerInsert insert(config);
   insert.prepare(rate, kBlock, 1);
+  if (prime) prime(insert);
 
   const int input_length = impulse ? 1 : static_cast<int>(0.5 * rate);
+  std::vector<float> input(static_cast<size_t>(input_length), 0.0f);
+  if (impulse) {
+    input[0] = 1.0f;
+  } else {
+    for (int i = 0; i < input_length; ++i) {
+      const double t = static_cast<double>(i) / rate;
+      input[static_cast<size_t>(i)] =
+          static_cast<float>(0.25 * std::sin(sonare::constants::kTwoPiD * 220.0 * t) +
+                             0.1 * std::sin(sonare::constants::kTwoPiD * 1370.0 * t));
+    }
+  }
+  std::vector<float> output;
+  const auto feed = [&](std::vector<float> block) {
+    for (size_t pos = 0; pos < block.size(); pos += kBlock) {
+      float* plane = block.data() + pos;
+      insert.process(&plane, 1, static_cast<int>(std::min<size_t>(kBlock, block.size() - pos)));
+    }
+    output.insert(output.end(), block.begin(), block.end());
+  };
+  feed(input);
+  if (at_input_end) at_input_end(insert);
+
   const int latency = insert.latency_samples();
   const int tail = insert.tail_samples();
   REQUIRE(tail > 0);
   const int silent_from = input_length + latency + tail;
   const int total = silent_from + static_cast<int>(0.25 * rate);
+  feed(std::vector<float>(static_cast<size_t>(total - input_length), 0.0f));
 
-  std::vector<float> signal(static_cast<size_t>(total), 0.0f);
-  if (impulse) {
-    signal[0] = 1.0f;
-  } else {
-    for (int i = 0; i < input_length; ++i) {
-      const double t = static_cast<double>(i) / rate;
-      signal[static_cast<size_t>(i)] =
-          static_cast<float>(0.25 * std::sin(sonare::constants::kTwoPiD * 220.0 * t) +
-                             0.1 * std::sin(sonare::constants::kTwoPiD * 1370.0 * t));
-    }
-  }
-  for (int pos = 0; pos < total; pos += kBlock) {
-    float* plane = signal.data() + pos;
-    insert.process(&plane, 1, std::min(kBlock, total - pos));
-  }
   float residual = 0.0f;
   int last_audible = -1;
   for (int i = silent_from; i < total; ++i) {
-    const float magnitude = std::fabs(signal[static_cast<size_t>(i)]);
+    const float magnitude = std::fabs(output[static_cast<size_t>(i)]);
     residual = std::max(residual, magnitude);
     if (magnitude >= 1.0e-5f) last_audible = i;
   }
-  INFO("rate " << rate << " time " << reverb_time_ms << " ms impulse " << impulse << " tail "
-               << tail << " residual " << residual << " last audible " << last_audible);
+  INFO("rate " << rate << " impulse " << impulse << " latency " << latency << " tail " << tail
+               << " residual " << residual << " last audible " << last_audible);
   CHECK(residual < 1.0e-5f);
+}
+
+RealtimeVoiceChangerConfig reverberant_config(float reverb_time_ms) {
+  RealtimeVoiceChangerConfig config;
+  config.reverb.mix = 0.45f;
+  config.reverb.time_ms = reverb_time_ms;
+  config.limiter.enable_isp_limiter = false;
+  return config;
+}
+
+unsigned int parameter_id(const VoiceChangerInsert& insert, const std::string& key) {
+  for (const auto& descriptor : insert.parameter_descriptors()) {
+    if (descriptor.key == key) return descriptor.id;
+  }
+  FAIL("no parameter " << key);
+  return 0;
 }
 
 }  // namespace
@@ -594,16 +625,52 @@ void require_silent_after_reported_tail(double rate, float reverb_time_ms, bool 
 TEST_CASE("voice.changer is silent after its reported latency and tail",
           "[voice_changer][insert]") {
   for (const double rate : {44100.0, 48000.0, 96000.0}) {
+    CAPTURE(rate);
     for (const bool impulse : {true, false}) {
-      require_silent_after_reported_tail(rate, 320.0f, impulse);
+      require_silent_after_reported_tail(rate, reverberant_config(320.0f), impulse);
     }
-  }
 
-  RealtimeVoiceChangerConfig config;
-  config.reverb.mix = 0.0f;
-  VoiceChangerInsert dry(config);
-  dry.prepare(kRate, kBlock, 1);
-  CHECK(dry.tail_samples() == 0);
+    // A short reverb whose diffusion allpass outlasts the comb echoes.
+    RealtimeVoiceChangerConfig diffuse = reverberant_config(40.0f);
+    diffuse.reverb.damping = 0.55f;
+    diffuse.reverb.seed = 1;
+    require_silent_after_reported_tail(rate, diffuse, true);
+
+    // No reverb: the high-pass, colour and EQ sections and the retune history still ring.
+    RealtimeVoiceChangerConfig dry = reverberant_config(320.0f);
+    dry.reverb.mix = 0.0f;
+    dry.wet_mix = 1.0f;
+    require_silent_after_reported_tail(rate, dry, true);
+
+    // The wet mix taken to zero as the input ends still lets the wet path through its glide.
+    require_silent_after_reported_tail(rate, reverberant_config(320.0f), false, {},
+                                       [](VoiceChangerInsert& insert) {
+                                         insert.set_parameter(parameter_id(insert, "wetMix"), 0.0f);
+                                       });
+
+    // A retune held at -5 semitones and returned to unity keeps reading its source history.
+    RealtimeVoiceChangerConfig retuned = reverberant_config(320.0f);
+    retuned.reverb.mix = 0.0f;
+    retuned.retune.mix = 1.0f;
+    retuned.retune.semitones = -5.0f;
+    require_silent_after_reported_tail(rate, retuned, true, [rate](VoiceChangerInsert& insert) {
+      std::vector<float> program(static_cast<size_t>(rate));
+      for (size_t i = 0; i < program.size(); ++i) {
+        program[i] = 0.3f * std::sin(sonare::constants::kTwoPi * 220.0f * static_cast<float>(i) /
+                                     static_cast<float>(rate));
+      }
+      program.resize(program.size() + 2 * static_cast<size_t>(rate), 0.0f);
+      bool returned = false;
+      for (size_t pos = 0; pos < program.size(); pos += kBlock) {
+        if (!returned && pos >= static_cast<size_t>(rate)) {
+          insert.set_parameter(parameter_id(insert, "retuneSemitones"), 0.0f);
+          returned = true;
+        }
+        float* plane = program.data() + pos;
+        insert.process(&plane, 1, static_cast<int>(std::min<size_t>(kBlock, program.size() - pos)));
+      }
+    });
+  }
 }
 
 TEST_CASE("voice.changer is silent after its reported tail at long decay times",
@@ -611,7 +678,7 @@ TEST_CASE("voice.changer is silent after its reported tail at long decay times",
   for (const double rate : {44100.0, 48000.0, 96000.0}) {
     for (const float time_ms : {800.0f, 1800.0f}) {
       for (const bool impulse : {true, false}) {
-        require_silent_after_reported_tail(rate, time_ms, impulse);
+        require_silent_after_reported_tail(rate, reverberant_config(time_ms), impulse);
       }
     }
   }

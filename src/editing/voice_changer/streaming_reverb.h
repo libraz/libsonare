@@ -82,7 +82,7 @@ class StreamingReverb {
   /// @brief How long the wet path rings after its input goes silent.
   /// @param output_scale Linear gain applied downstream of the reverb.
   /// @param num_channels Channels sharing @p config, each with its own seed-derived taps.
-  /// @return A zero tail when `config.mix <= 0`.
+  /// @return With `config.mix <= 0`, only what the mix glide still lets through.
   static rt::TailBudget tail(const StreamingReverbConfig& config, double sample_rate,
                              int num_channels, double output_scale = 1.0);
 
@@ -103,12 +103,16 @@ class StreamingReverb {
 
  private:
   static constexpr int kNumCombs = 2;
+  /// Glide time of the wet mix.
+  static constexpr float kMixGlideMs = 10.0f;
 
   struct CombTap {
     float delay_samples;
     float feedback;
   };
   static std::size_t comb_capacity(double sample_rate);
+  /// Fixed 5 ms diffusion allpass line, in samples.
+  static std::size_t allpass_capacity(double sample_rate);
   static std::array<CombTap, kNumCombs> comb_taps(const StreamingReverbConfig& config,
                                                   double sample_rate, std::size_t max_delay,
                                                   int channel_index);

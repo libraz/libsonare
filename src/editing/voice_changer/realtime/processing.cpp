@@ -254,6 +254,12 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
   const RealtimeVoiceChangerConfig& config = adopt_snapshot_for_block();
   bool discarded = false;
   float deepest_reduction_linear = 1.0f;
+  // A channel this block leaves out re-enters from rest instead of resuming its old history.
+  for (int ch = 0; ch < num_channels_; ++ch) {
+    auto& channel = channels_[static_cast<std::size_t>(ch)];
+    const bool active = ch < num_channels && channels[ch] != nullptr;
+    channel.gate.admit(active, [&] { reset_channel(channel); });
+  }
   for (int ch = 0; ch < num_channels; ++ch) {
     // Skip null channel pointers (caller's responsibility) rather than aborting
     // the whole block: a null right pointer must not leave the left output

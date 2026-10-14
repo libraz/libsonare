@@ -1361,3 +1361,118 @@ TEST_CASE("RealtimeVoiceChanger gain reduction meter still reports compression",
   }
   CHECK(worst < -6.0f);
 }
+
+namespace {
+
+// First index above half scale in each channel after a unit impulse in both, or -1.
+std::array<int, 2> impulse_arrival(RealtimeVoiceChanger& changer, int channels, int block) {
+  const int total = (changer.latency_samples() / block + 4) * block;
+  std::array<std::vector<float>, 2> planes;
+  for (auto& plane : planes) {
+    plane.assign(static_cast<size_t>(total), 0.0f);
+    plane[0] = 1.0f;
+  }
+  for (int pos = 0; pos < total; pos += block) {
+    float* ptrs[2] = {planes[0].data() + pos, planes[1].data() + pos};
+    changer.process_block(ptrs, channels, block);
+  }
+  std::array<int, 2> arrival = {-1, -1};
+  for (int ch = 0; ch < channels; ++ch) {
+    const auto& plane = planes[static_cast<size_t>(ch)];
+    for (int i = 0; i < total; ++i) {
+      if (std::fabs(plane[static_cast<size_t>(i)]) > 0.5f) {
+        arrival[static_cast<size_t>(ch)] = i;
+        break;
+      }
+    }
+  }
+  return arrival;
+}
+
+}  // namespace
+
+TEST_CASE("RealtimeVoiceChanger keeps the requested retune grain across config round trips",
+          "[voice_changer][retune][config]") {
+  constexpr int kBlock = 512;
+  RealtimeVoiceChangerConfig base;
+  base.wet_mix = 0.0f;
+  base.retune.mix = 0.0f;
+  base.limiter.enable_isp_limiter = false;
+  RealtimeVoiceChanger fresh(base);
+  fresh.prepare(96000.0, kBlock, 1);
+  const int auto_grain = fresh.config().retune.grain_size;
+  REQUIRE(auto_grain != 4096);
+
+  for (const int channels : {1, 2}) {
+    for (const bool pending : {false, true}) {
+      for (const bool round_trip : {false, true}) {
+        CAPTURE(channels, pending, round_trip);
+        RealtimeVoiceChanger changer(base);
+        changer.prepare(48000.0, kBlock, channels);
+        if (pending) {
+          RealtimeVoiceChangerConfig request = changer.config();
+          request.retune.grain_size = 4096;
+          changer.set_config(request);
+        }
+        if (round_trip) {
+          // An unrelated edit writes back the effective grain config() reports.
+          RealtimeVoiceChangerConfig edited = changer.config();
+          edited.output_gain_db = 1.0f;
+          changer.set_config(edited);
+        }
+        changer.prepare(96000.0, kBlock, channels);
+        const int expected = pending ? 4096 : auto_grain;
+        CHECK(changer.config().retune.grain_size == expected);
+        CHECK(changer.latency_samples() == expected);
+        const std::array<int, 2> arrival = impulse_arrival(changer, channels, kBlock);
+        CHECK(arrival[0] == expected);
+        if (channels == 2) CHECK(arrival[1] == expected);
+      }
+    }
+  }
+
+  // Preparing again at the same rate keeps the grain instead of alternating.
+  RealtimeVoiceChanger changer(base);
+  changer.prepare(48000.0, kBlock, 1);
+  RealtimeVoiceChangerConfig edited = changer.config();
+  edited.output_gain_db = 1.0f;
+  changer.set_config(edited);
+  for (int pass = 0; pass < 3; ++pass) {
+    CAPTURE(pass);
+    changer.prepare(96000.0, kBlock, 1);
+    CHECK(changer.config().retune.grain_size == auto_grain);
+    CHECK(changer.latency_samples() == auto_grain);
+  }
+}
+
+TEST_CASE("RealtimeVoiceChanger resets a channel a block leaves out", "[voice_changer][reset]") {
+  // Stereo, then mono, then stereo again: the right channel must come back from rest
+  // rather than replaying what it held when it was dropped.
+  constexpr int kRate = 48000;
+  constexpr int kBlock = 128;
+  RealtimeVoiceChangerConfig config;
+  config.limiter.enable_isp_limiter = false;
+  RealtimeVoiceChanger changer(config);
+  changer.prepare(kRate, kBlock, 2);
+  const std::vector<float> tone = sine(330.0f, kRate, kRate / 2);
+  std::vector<float> left(static_cast<size_t>(kBlock));
+  std::vector<float> right(static_cast<size_t>(kBlock));
+  const auto run = [&](int channels, int blocks, bool with_tone) {
+    float peak = 0.0f;
+    for (int b = 0; b < blocks; ++b) {
+      for (int i = 0; i < kBlock; ++i) {
+        const float x = with_tone ? tone[static_cast<size_t>(b * kBlock + i)] : 0.0f;
+        left[static_cast<size_t>(i)] = x;
+        right[static_cast<size_t>(i)] = x;
+      }
+      float* ptrs[2] = {left.data(), right.data()};
+      changer.process_block(ptrs, channels, kBlock);
+      for (const float v : right) peak = std::max(peak, std::fabs(v));
+    }
+    return peak;
+  };
+  const int blocks = kRate / 2 / kBlock;
+  CHECK(run(2, blocks, true) > 0.05f);
+  run(1, blocks, false);
+  CHECK(run(2, blocks, false) == 0.0f);
+}

@@ -22,6 +22,8 @@
 #include "rt/overflow_counter.h"
 #include "rt/param_smoother.h"
 #include "rt/seqlock_cell.h"
+#include "rt/stage_gate.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::editing::voice_changer {
 
@@ -46,6 +48,11 @@ inline constexpr int kVoiceChangerPresetSchemaVersion = 1;
 //     (float) to SonareRealtimeVoiceChangerConfig.
 // v3: added struct_version (first) and formant_mode to SonareRealtimeVoiceChangerConfig.
 inline constexpr std::uint32_t kVoiceChangerAbiVersion = 3u;
+
+/// @brief Lowest input high-pass corner the configuration accepts, in hertz.
+inline constexpr float kVoiceHighpassMinHz = 20.0f;
+/// @brief Largest output EQ boost or cut the configuration accepts, in dB.
+inline constexpr float kVoiceEqGainLimitDb = 12.0f;
 
 enum class VoiceCharacterPreset {
   NeutralMonitor,
@@ -217,6 +224,12 @@ class RealtimeVoiceChanger {
   ///          samples combined and are intentionally omitted. Returns 0 before
   ///          prepare() has been called.
   int latency_samples() const noexcept;
+  /// @brief How long output keeps sounding past @ref latency_samples() once the input stops.
+  /// @details Control thread, from the published configuration. Every stage's owned memory is
+  ///          bounded with each live control at the extreme it could still be gliding from, and
+  ///          a wet mix gliding to zero still owes its path until the glide lands. Zero before
+  ///          prepare().
+  rt::TailBudget tail_budget() const noexcept;
   /// @brief Blocks in which the chain discarded its own state because a
   ///        non-finite value had reached it.
   /// @details Any thread; monotonic since @ref prepare, which clears it. The
@@ -249,6 +262,8 @@ class RealtimeVoiceChanger {
 
  private:
   struct ChannelState {
+    /// Resets the channel when a block includes it again after leaving it out.
+    rt::StageGate gate;
     StreamingRetune retune;
     StreamingFormant formant;
     /// Formant warp ahead of the retune; prepared only in absolute formant mode.

@@ -7,6 +7,7 @@
 #include "rt/biquad_design.h"
 #include "rt/tail_budget.h"
 #include "util/db.h"
+#include "util/dsp_primitives.h"
 
 namespace sonare::editing::voice_changer {
 
@@ -22,8 +23,7 @@ void StreamingReverb::prepare(double sample_rate, int max_block_size) {
   }
   // Fixed 5 ms diffusion allpass. Plenty long for speech material and short
   // enough to keep the impulse response tight on percussive sounds.
-  const std::size_t allpass_samples =
-      std::max<std::size_t>(8, static_cast<std::size_t>(sample_rate_ * 0.005));
+  const std::size_t allpass_samples = allpass_capacity(sample_rate_);
   allpass_buf_.assign(allpass_samples, 0.0f);
   allpass_delay_ = allpass_samples - 1;
 
@@ -32,7 +32,7 @@ void StreamingReverb::prepare(double sample_rate, int max_block_size) {
   for (auto& smoother : comb_delay_) smoother.prepare(sample_rate_, 20.0f);
   for (auto& smoother : comb_fb_) smoother.prepare(sample_rate_, 20.0f);
   damping_alpha_.prepare(sample_rate_, 20.0f);
-  mix_.prepare(sample_rate_, 10.0f);
+  mix_.prepare(sample_rate_, kMixGlideMs);
   allpass_g_.prepare(sample_rate_, 20.0f);
   set_config(config_);
   reset();
@@ -53,6 +53,10 @@ void StreamingReverb::reset() noexcept {
 
 std::size_t StreamingReverb::comb_capacity(double sample_rate) {
   return static_cast<std::size_t>(sample_rate * (kMaxTimeMs * 0.001) + 8);
+}
+
+std::size_t StreamingReverb::allpass_capacity(double sample_rate) {
+  return std::max<std::size_t>(8, static_cast<std::size_t>(sample_rate * 0.005));
 }
 
 std::array<StreamingReverb::CombTap, StreamingReverb::kNumCombs> StreamingReverb::comb_taps(
@@ -123,27 +127,39 @@ void StreamingReverb::set_config(const StreamingReverbConfig& config, int channe
 rt::TailBudget StreamingReverb::tail(const StreamingReverbConfig& config, double sample_rate,
                                      int num_channels, double output_scale) {
   rt::TailBudget budget;
-  const double mix = std::clamp(config.mix, 0.0f, 1.0f);
-  if (!(mix > 0.0) || !(sample_rate > 0.0)) return budget;
+  if (!(sample_rate > 0.0)) return budget;
+  // A mix gliding to zero still lets the loops through, at most at full level, until it lands.
+  const double target_mix = std::clamp(config.mix, 0.0f, 1.0f);
+  const double mix = target_mix > 0.0 ? target_mix : 1.0;
 
   const std::size_t max_delay = comb_capacity(sample_rate) - 2;
   const double damping_alpha =
       rt::one_pole_lowpass_alpha_matched(damping_cutoff_hz(config), sample_rate);
   // The damping cell delays every pass by its group delay and rings on after the last echo.
   const double damping_lag = (1.0 - damping_alpha) / std::max(damping_alpha, 1.0e-6);
+  double heard = 0.0;
   for (int ch = 0; ch < std::max(1, num_channels); ++ch) {
     // The two comb outputs are averaged, so either alone is at most the full level; the
     // diffusion allpass then spreads an echo over a kernel of at most (1+|g|)/(1-|g|).
     const double g = std::abs(static_cast<double>(allpass_gain(config, ch)));
     const double scale = mix * output_scale * (1.0 + g) / (1.0 - g);
+    heard = std::max(heard, scale);
+    rt::TailBudget combs;
     for (const CombTap& tap : comb_taps(config, sample_rate, max_delay, ch)) {
       const double loop = static_cast<double>(tap.delay_samples) + damping_lag + 1.0;
       rt::TailBudget comb;
       comb.delay(loop).recirculation(loop, tap.feedback, scale).decay(1.0 - damping_alpha, scale);
-      budget.alongside(comb);
+      combs.alongside(comb);
     }
+    // The allpass recirculates whatever the combs leave in it once they have died away.
+    rt::TailBudget diffusion;
+    diffusion.recirculation(static_cast<double>(allpass_capacity(sample_rate)), g, scale);
+    budget.alongside(combs.then(diffusion));
   }
-  return budget;
+  if (target_mix > 0.0) return budget;
+  rt::TailBudget glide;
+  glide.decay(1.0 - time_to_attack_release_rate(sample_rate, kMixGlideMs), heard);
+  return rt::TailBudget::reported(std::min(budget.samples(), glide.samples()));
 }
 
 float StreamingReverb::process_sample(float input) noexcept {
