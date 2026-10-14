@@ -500,6 +500,43 @@ TEST_CASE("Sf2Player tail scans only reachable preset and instrument zone pairs"
   CHECK(static_cast<int64_t>(player.tail_samples()) == expected);
 }
 
+TEST_CASE("Sf2Player tail grows by the ring of a boosted master EQ shelf", "[midi][sf2]") {
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.synth_fallback = false;
+#if defined(SONARE_MIDI_WITH_FX)
+  cfg.effects.enable_reverb = false;
+  cfg.effects.enable_chorus = false;
+  cfg.effects.enable_delay = false;
+#endif
+  cfg.dc_block = false;
+  cfg.realize_efx_inline = true;
+  const auto tail_with_low_gain = [&](uint8_t low_gain) {
+    Sf2Player player(cfg);
+    player.set_soundfont(make_disconnected_release_tail_fixture());
+    // DT1 40 02 01 (EQ LOW GAIN) with the Roland checksum.
+    const int sum = 0x40 + 0x02 + 0x01 + low_gain;
+    const std::vector<uint8_t> eq{
+        0xF0, 0x41, 0x10, 0x42,     0x12,
+        0x40, 0x02, 0x01, low_gain, static_cast<uint8_t>((128 - sum % 128) & 0x7F),
+        0xF7};
+    player.prepare(kOutRate, 256);
+    REQUIRE(player.handle_sysex(eq.data(), eq.size()));
+    // Inline mode applies the staged system block, and recomputes the tail, at the next block.
+    std::vector<float> left(256, 0.0f);
+    std::vector<float> right(256, 0.0f);
+    float* channels[2] = {left.data(), right.data()};
+    player.process(channels, 2, 256);
+    CHECK(player.gs_master_eq().low_gain == low_gain);
+    return static_cast<int64_t>(player.tail_samples());
+  };
+
+  const int64_t flat = tail_with_low_gain(0x40);
+  CHECK(flat == sonare::midi::synth::DahdsrEnvelope::release_tail_samples(kOutRate, 4000.0f));
+  // A flat shelf adds nothing; a +12 dB shelf rings past the release.
+  CHECK(tail_with_low_gain(0x4C) > flat);
+}
+
 TEST_CASE("Sf2Player tail clamps extreme SoundFont release generators", "[midi][sf2]") {
   Sf2PlayerConfig cfg;
   cfg.gain = 1.0f;

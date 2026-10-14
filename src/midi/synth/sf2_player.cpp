@@ -14,6 +14,8 @@
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/mix_dc_blocker.h"
 #include "midi/ump.h"
+#include "rt/biquad_design.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/numeric_validation.h"
 
@@ -27,6 +29,24 @@ constexpr uint8_t kDrumChannel = 9;  // MIDI channel 10
 /// share of the bus-wide residual (part insert/body/reverb tail after its dry
 /// voice stops) decays toward the other live sources.
 constexpr float kResidualTauSeconds = 0.5f;
+
+/// Ring of the two master EQ shelves in series, as the filter designs them.
+int64_t master_eq_ring_samples(const GsMasterEq& eq, double sample_rate) noexcept {
+  rt::TailBudget low;
+  rt::TailBudget high;
+  const float low_db = gs_eq_gain_db(eq.low_gain);
+  const float high_db = gs_eq_gain_db(eq.high_gain);
+  if (low_db != 0.0f) {
+    low.section(rt::rbj_low_shelf(rt::frequency_to_w0(gs_eq_low_freq_hz(eq.low_freq), sample_rate),
+                                  constants::kButterworthQ, low_db));
+  }
+  if (high_db != 0.0f) {
+    high.section(
+        rt::rbj_high_shelf(rt::frequency_to_w0(gs_eq_high_freq_hz(eq.high_freq), sample_rate),
+                           constants::kButterworthQ, high_db));
+  }
+  return rt::tail_budget_samples(low.then(high));
+}
 
 bool ranges_overlap(const Sf2Zone& lhs, const Sf2Zone& rhs) noexcept {
   return std::max(lhs.key_lo, rhs.key_lo) <= std::min(lhs.key_hi, rhs.key_hi) &&
@@ -332,6 +352,11 @@ int64_t Sf2Player::tail_bound() const noexcept {
         numeric::saturating_add(tail, std::max<int64_t>(0, effects_->tail_samples(sample_rate_)));
   }
 #endif
+  // The master EQ's state is set from any of these three tables, so the longest ring bounds it.
+  tail = numeric::saturating_add(
+      tail, std::max({master_eq_ring_samples(master_eq_, sample_rate_),
+                      master_eq_ring_samples(prepared_master_eq_, sample_rate_),
+                      master_eq_ring_samples(direct_system_audio_eq_, sample_rate_)}));
   // The bus DC blocker runs after the effect returns, so its decay comes last.
   if (config_.dc_block) {
     tail = numeric::saturating_add<int64_t>(tail, mix_dc_blocker_tail_samples(dc_r_));
