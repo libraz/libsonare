@@ -453,7 +453,6 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, Velocity16 velocity, uint
     return;
   }
   const float* pool_data = soundfont_->sample_pool().data();
-  const float vel_gain = sf2_velocity_gain(route.velocity);
   // SoundFont 2.04 section 8.1.2 scopes exclusiveClass to notes that are ALREADY
   // sounding, so the layers this one note-on allocates must not choke each
   // other — a stereo hi-hat's two legs, or a layered kit piece, share one class
@@ -484,7 +483,7 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, Velocity16 velocity, uint
 
         Sf2Voice* voice = pool_.allocate(channel & 0x0Fu, note, source_track_id);
         if (voice == nullptr) return true;
-        voice->start(pool_data, params, sample_rate_, vel_gain);
+        voice->start(pool_data, params, sample_rate_);
         voice->glide_cents = porta.cents;
         voice->glide_coeff = porta.coeff;
         voice->per_note = route.per_note;

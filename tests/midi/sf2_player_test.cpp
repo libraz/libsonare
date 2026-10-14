@@ -933,7 +933,7 @@ TEST_CASE("Sf2Voice wraps sustained loops in constant time", "[midi][sf2]") {
   params.pitch_increment = 1.0;
 
   Sf2Voice voice;
-  voice.start(pool, params, kOutRate, 1.0f);
+  voice.start(pool, params, kOutRate);
   voice.active = true;
   voice.reader.set_position(1.0e12);
 
@@ -1980,4 +1980,253 @@ TEST_CASE("Sf2Player organ wind demand follows the number of sounding ranks",
   CAPTURE(one_voice, three_rank_chord, eight_rank_chord, three_ratio, eight_ratio);
   REQUIRE(one_voice > 1.0e-4f);
   REQUIRE(eight_ratio + 0.01f < three_ratio);
+}
+
+namespace {
+
+using sonare::midi::Velocity16;
+using sonare::midi::synth::resolve_voice_params;
+using sonare::midi::synth::sf2_gen_spec;
+using sonare::midi::synth::Sf2GenRole;
+using sonare::midi::synth::Sf2GenSet;
+using sonare::midi::synth::Sf2Sample;
+using sonare::midi::synth::Sf2Zone;
+namespace synth = sonare::midi::synth;
+
+/// One looped 1 kHz sine preset (program 0) whose instrument zone carries @p gens.
+std::shared_ptr<Sf2File> make_generator_fixture(std::vector<Sf2Builder::GenValue> gens) {
+  Sf2Builder b;
+  std::vector<float> sine(96);
+  for (size_t i = 0; i < sine.size(); ++i) {
+    sine[i] =
+        0.9f * static_cast<float>(std::sin(2.0 * 3.14159265358979 * static_cast<double>(i) / 32.0));
+  }
+  const int sample = b.add_sample("gen-sine", sine, 32000, 60, 32, 96);
+  Sf2Builder::ZoneSpec zone;
+  zone.gens = std::move(gens);
+  zone.gens.push_back({synth::kGenSampleModes, 1});
+  zone.target = sample;
+  const int instrument = b.add_instrument("gen-instrument", {zone});
+  Sf2Builder::ZoneSpec preset_zone;
+  preset_zone.target = instrument;
+  b.add_preset("gen-preset", 0, 0, {preset_zone});
+  const auto bytes = b.build();
+  auto sf2 = std::make_shared<Sf2File>();
+  REQUIRE(sf2->parse(bytes.data(), bytes.size(), nullptr));
+  return sf2;
+}
+
+std::vector<float> render_generator_note(std::vector<Sf2Builder::GenValue> gens, uint8_t key,
+                                         uint8_t velocity, int num_samples) {
+  Sf2Player player = make_player(make_generator_fixture(std::move(gens)));
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, key, velocity)));
+  return render(player, num_samples).left;
+}
+
+bool same_envelope(const sonare::midi::synth::DahdsrConfig& a,
+                   const sonare::midi::synth::DahdsrConfig& b) {
+  return a.delay_ms == b.delay_ms && a.attack_ms == b.attack_ms && a.hold_ms == b.hold_ms &&
+         a.decay_ms == b.decay_ms && a.sustain == b.sustain && a.release_ms == b.release_ms;
+}
+
+bool same_resolution(const Sf2VoiceParams& a, const Sf2VoiceParams& b) {
+  return a.start == b.start && a.end == b.end && a.loop_start == b.loop_start &&
+         a.loop_end == b.loop_end && a.loop_mode == b.loop_mode &&
+         a.pitch_increment == b.pitch_increment && a.attenuation_gain == b.attenuation_gain &&
+         a.velocity_gain == b.velocity_gain && a.pan_units == b.pan_units &&
+         same_envelope(a.volume_env, b.volume_env) && a.filter_fc_cents == b.filter_fc_cents &&
+         a.filter_q == b.filter_q && a.filter_bypass == b.filter_bypass &&
+         same_envelope(a.mod_env, b.mod_env) && a.mod_env_to_pitch == b.mod_env_to_pitch &&
+         a.mod_env_to_filter_fc == b.mod_env_to_filter_fc &&
+         a.mod_lfo_delay_s == b.mod_lfo_delay_s && a.mod_lfo_freq_hz == b.mod_lfo_freq_hz &&
+         a.mod_lfo_to_pitch == b.mod_lfo_to_pitch &&
+         a.mod_lfo_to_filter_fc == b.mod_lfo_to_filter_fc &&
+         a.mod_lfo_to_volume_cb == b.mod_lfo_to_volume_cb &&
+         a.vib_lfo_delay_s == b.vib_lfo_delay_s && a.vib_lfo_freq_hz == b.vib_lfo_freq_hz &&
+         a.vib_lfo_to_pitch == b.vib_lfo_to_pitch && a.reverb_send == b.reverb_send &&
+         a.chorus_send == b.chorus_send && a.reverb_send_scale == b.reverb_send_scale &&
+         a.chorus_send_scale == b.chorus_send_scale && a.delay_send_scale == b.delay_send_scale &&
+         a.exclusive_class == b.exclusive_class;
+}
+
+/// A step away from the baseline that every applied generator must answer to.
+int16_t generator_step(uint16_t oper) {
+  switch (oper) {
+    case synth::kGenEndAddrsOffset:
+    case synth::kGenEndloopAddrsOffset:
+      return -100;
+    case synth::kGenStartAddrsCoarseOffset:
+    case synth::kGenStartloopAddrsCoarseOffset:
+    case synth::kGenSampleModes:
+      return 1;
+    case synth::kGenEndAddrsCoarseOffset:
+    case synth::kGenEndloopAddrsCoarseOffset:
+      return -1;
+    default:
+      return 100;
+  }
+}
+
+/// RMS ratio in dB of @p treatment over @p control across [from, to).
+double window_ratio_db(const std::vector<float>& treatment, const std::vector<float>& control,
+                       size_t from, size_t to) {
+  return 20.0 * std::log10(static_cast<double>(rms_window(treatment, from, to)) /
+                           std::max(1.0e-20, static_cast<double>(rms_window(control, from, to))));
+}
+
+}  // namespace
+
+TEST_CASE("Sf2 generator table gives every operator exactly one consumer", "[midi][sf2][sf2gen]") {
+  // Hold and decay sit off the -12000 tc floor so the keynum generators have a time to scale;
+  // release sits above its 5 ms floor so a one-step nudge reaches the envelope.
+  Sf2Zone base;
+  base.gens = {{synth::kGenHoldVolEnv, 0},    {synth::kGenDecayVolEnv, 0},
+               {synth::kGenReleaseVolEnv, 0}, {synth::kGenHoldModEnv, 0},
+               {synth::kGenDecayModEnv, 0},   {synth::kGenReleaseModEnv, 0}};
+  Sf2Sample sample;
+  sample.start = 0;
+  sample.end = 200000;
+  sample.loop_start = 1000;
+  sample.loop_end = 150000;
+  sample.sample_rate = 48000;
+  sample.original_pitch = 60;
+  constexpr uint8_t kKey = 72;
+  const Velocity16 velocity = Velocity16::from7(64);
+
+  Sf2GenSet base_set;
+  base_set.apply_absolute(base);
+  const Sf2VoiceParams baseline = resolve_voice_params(base_set, sample, kKey, velocity, kOutRate);
+
+  for (uint16_t oper = 0; oper < Sf2GenSet::kNumGens; ++oper) {
+    CAPTURE(oper);
+    const Sf2GenRole role = sf2_gen_spec(oper).role;
+    REQUIRE(sf2_gen_spec(oper).oper == oper);
+    // SF2 2.04 section 8.1.2: the operators the specification leaves unused or reserved.
+    const bool spec_reserved = oper == 14 || oper == 18 || oper == 19 || oper == 20 || oper == 42 ||
+                               oper == 49 || oper == 55 || oper == 59 || oper == 60;
+    const bool zone_link = oper == synth::kGenInstrument || oper == synth::kGenKeyRange ||
+                           oper == synth::kGenVelRange || oper == synth::kGenSampleId;
+    REQUIRE((role == Sf2GenRole::kReserved) == spec_reserved);
+    REQUIRE((role == Sf2GenRole::kZoneLink) == zone_link);
+    if (role == Sf2GenRole::kZoneLink) continue;
+
+    Sf2Zone moved = base;
+    moved.gens.push_back({oper, static_cast<int16_t>(base_set.get(oper) + generator_step(oper))});
+    Sf2GenSet moved_set;
+    moved_set.apply_absolute(moved);
+    const Sf2VoiceParams params = resolve_voice_params(moved_set, sample, kKey, velocity, kOutRate);
+    // An applied generator moves the voice; an ignored one leaves it untouched.
+    CHECK(same_resolution(params, baseline) == (role == Sf2GenRole::kReserved));
+  }
+}
+
+TEST_CASE("Sf2 modLfoToVolume swings the level both ways in the file's direction",
+          "[midi][sf2][sf2gen]") {
+  // freqModLFO -2438 abs cents is about 2 Hz: the LFO peaks near 125 ms and bottoms near 375 ms.
+  constexpr int16_t kFreq2Hz = -2438;
+  constexpr int kSamples = 21600;                       // 450 ms at kOutRate
+  const size_t peak_from = 5760, peak_to = 6240;        // 120-130 ms
+  const size_t trough_from = 17760, trough_to = 18240;  // 370-380 ms
+  // A soft note keeps the +10 dB excursion well inside full scale.
+  constexpr uint8_t kVelocity = 40;
+  const std::vector<float> control =
+      render_generator_note({{synth::kGenFreqModLfo, kFreq2Hz}}, 60, kVelocity, kSamples);
+  const std::vector<float> plus =
+      render_generator_note({{synth::kGenFreqModLfo, kFreq2Hz}, {synth::kGenModLfoToVolume, 100}},
+                            60, kVelocity, kSamples);
+  const std::vector<float> minus =
+      render_generator_note({{synth::kGenFreqModLfo, kFreq2Hz}, {synth::kGenModLfoToVolume, -100}},
+                            60, kVelocity, kSamples);
+
+  const double plus_peak = window_ratio_db(plus, control, peak_from, peak_to);
+  const double plus_trough = window_ratio_db(plus, control, trough_from, trough_to);
+  const double minus_peak = window_ratio_db(minus, control, peak_from, peak_to);
+  const double minus_trough = window_ratio_db(minus, control, trough_from, trough_to);
+  CAPTURE(plus_peak, plus_trough, minus_peak, minus_trough);
+  // 100 cB is 10 dB at the LFO extremes; a 10 ms window around them loses a fraction of a dB.
+  REQUIRE(plus_peak >= 9.0);
+  REQUIRE(plus_trough <= -9.0);
+  REQUIRE(minus_peak <= -9.0);
+  REQUIRE(minus_trough >= 9.0);
+}
+
+TEST_CASE("Sf2 keynum-to-envelope generators scale hold and decay about key 60",
+          "[midi][sf2][sf2gen]") {
+  using Gens = std::vector<Sf2Builder::GenValue>;
+  struct Case {
+    const char* name;
+    Gens shared;         // the zone the generator is measured on
+    uint16_t time_op;    // hold or decay operator, set to 0 tc
+    uint16_t keynum_op;  // the keynum generator scaling it
+  };
+  // Volume cases decay toward -96 dB; modulation cases sweep the filter across the 1 kHz tone.
+  const Gens vol = {{synth::kGenSustainVolEnv, 960}, {synth::kGenDecayVolEnv, 0}};
+  const Gens mod = {{synth::kGenInitialFilterFc, 6000},
+                    {synth::kGenModEnvToFilterFc, 6000},
+                    {synth::kGenSustainModEnv, 1000},
+                    {synth::kGenDecayModEnv, 0}};
+  const Case cases[] = {
+      {"volume decay", vol, synth::kGenDecayVolEnv, synth::kGenKeynumToVolEnvDecay},
+      {"volume hold", vol, synth::kGenHoldVolEnv, synth::kGenKeynumToVolEnvHold},
+      {"modulation decay", mod, synth::kGenDecayModEnv, synth::kGenKeynumToModEnvDecay},
+      {"modulation hold", mod, synth::kGenHoldModEnv, synth::kGenKeynumToModEnvHold},
+  };
+  constexpr int kSamples = 24000;  // 500 ms at kOutRate
+  for (const Case& c : cases) {
+    CAPTURE(c.name);
+    auto zone = [&c](int16_t time_tc, bool keynum) {
+      Gens g = c.shared;
+      g.push_back({c.time_op, time_tc});
+      if (keynum) g.push_back({c.keynum_op, 100});
+      return g;
+    };
+    // keynum 100 at key 84 is 0 + 100 * (60 - 84) = -2400 tc; at key 36 it is +2400 tc.
+    const std::vector<float> high = render_generator_note(zone(0, true), 84, 127, kSamples);
+    const std::vector<float> high_reference =
+        render_generator_note(zone(-2400, false), 84, 127, kSamples);
+    const std::vector<float> high_unscaled =
+        render_generator_note(zone(0, false), 84, 127, kSamples);
+    CHECK(high == high_reference);
+    CHECK(high != high_unscaled);
+
+    const std::vector<float> low = render_generator_note(zone(0, true), 36, 127, kSamples);
+    const std::vector<float> low_reference =
+        render_generator_note(zone(2400, false), 36, 127, kSamples);
+    CHECK(low == low_reference);
+
+    const std::vector<float> middle = render_generator_note(zone(0, true), 60, 127, kSamples);
+    const std::vector<float> middle_unscaled =
+        render_generator_note(zone(0, false), 60, 127, kSamples);
+    CHECK(middle == middle_unscaled);
+  }
+}
+
+TEST_CASE("Sf2 velocity generator replaces the struck velocity for every velocity term",
+          "[midi][sf2][sf2gen][midi2]") {
+  constexpr int kSamples = 9600;
+  constexpr size_t kFrom = 2400;
+  const std::vector<float> pinned_soft =
+      render_generator_note({{synth::kGenVelocity, 127}}, 60, 20, kSamples);
+  const std::vector<float> pinned_hard =
+      render_generator_note({{synth::kGenVelocity, 127}}, 60, 127, kSamples);
+  Sf2Player midi2 = make_player(make_generator_fixture({{synth::kGenVelocity, 127}}));
+  const uint16_t between =
+      static_cast<uint16_t>(midpoint(Velocity16::from7(20).raw, Velocity16::from7(21).raw));
+  midi2.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, 60, between)));
+  const std::vector<float> pinned_midi2 = render(midi2, kSamples).left;
+  const std::vector<float> free_soft = render_generator_note({}, 60, 20, kSamples);
+
+  const float hard = rms(pinned_hard, kFrom);
+  const float soft = rms(pinned_soft, kFrom);
+  const float wide = rms(pinned_midi2, kFrom);
+  const float unpinned = rms(free_soft, kFrom);
+  CAPTURE(hard, soft, wide, unpinned);
+  REQUIRE(hard > 0.1f);
+  // Same effective velocity on one code path: equal up to float rounding of the level.
+  const float tolerance = hard * 1.0e-5f;
+  CHECK(std::fabs(soft - hard) <= tolerance);
+  CHECK(std::fabs(wide - hard) <= tolerance);
+  // Filter darkening follows the pinned velocity too, so the soft strike is sample-identical.
+  CHECK(pinned_soft == pinned_hard);
+  CHECK(unpinned < hard * 0.4f);
 }

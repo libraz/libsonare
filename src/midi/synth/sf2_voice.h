@@ -77,10 +77,31 @@ class Sf2GenSet {
   int32_t values_[kNumGens];
 };
 
+/// Where a stacked generator is consumed. Every operator number has exactly one
+/// role, so a generator the parser stores cannot go unapplied unnoticed.
+enum class Sf2GenRole : uint8_t {
+  kVoice,     ///< Read by resolve_voice_params().
+  kZoneLink,  ///< Decoded by the parser into Sf2Zone (key/velocity range, links).
+  kReserved,  ///< Unused or reserved by SF2 2.04 section 8.1.2; ignored.
+};
+
+/// Per-operator generator contract: spec default, preset-level additivity and role.
+struct Sf2GenSpec {
+  uint16_t oper;
+  int32_t default_value;
+  bool preset_additive;
+  Sf2GenRole role;
+};
+
+/// The contract row for @p oper (operators at or above Sf2GenSet::kNumGens read as reserved).
+const Sf2GenSpec& sf2_gen_spec(uint16_t oper) noexcept;
+
 /// SF2 timecents -> seconds (2^(tc/1200)); tc <= -12000 is ~1 ms or less.
 float timecents_to_seconds(int32_t timecents) noexcept;
 /// SF2 centibels (attenuation) -> linear gain (10^(-cb/200)).
 float centibels_to_gain(float centibels) noexcept;
+/// Signed SF2 centibel offset -> linear gain (10^(cb/200)); positive raises the level.
+float centibel_offset_to_gain(float centibels) noexcept;
 /// SF2 absolute cents -> Hz (8.176 Hz * 2^(cents/1200)).
 float abs_cents_to_hz(float cents) noexcept;
 
@@ -248,8 +269,11 @@ struct Sf2VoiceParams {
   int loop_mode = 0;
   /// Sample-position increment per output sample at the voice's pitch.
   double pitch_increment = 1.0;
-  /// Linear gain from initialAttenuation (velocity handling is separate).
+  /// Linear gain from initialAttenuation.
   float attenuation_gain = 1.0f;
+  /// Default velocity -> attenuation modulator at the zone's effective velocity
+  /// (the velocity generator when set, otherwise the struck velocity).
+  float velocity_gain = 1.0f;
   /// Zone pan in SF2 units (-500..500); the mixer combines it with CC10.
   float pan_units = 0.0f;
   /// Volume envelope (already converted to ms / level units).
@@ -296,9 +320,9 @@ struct Sf2VoiceParams {
 
 /// Resolves the effective parameters for (@p key, @p velocity) at
 /// @p output_sample_rate from the stacked generators and the sample header
-/// (root key / correction / loops). Velocity applies the default-modulator
-/// filter darkening; the velocity GAIN is returned separately by
-/// sf2_velocity_gain().
+/// (root key / correction / loops). Every velocity-sourced term (gain and
+/// filter darkening) reads the zone's effective velocity: the velocity
+/// generator when set, otherwise @p velocity.
 Sf2VoiceParams resolve_voice_params(const Sf2GenSet& gens, const Sf2Sample& sample, uint8_t key,
                                     Velocity16 velocity, double output_sample_rate) noexcept;
 
@@ -339,7 +363,6 @@ inline float per_note_cents(const Sf2PerNoteVoice& state, const ComposedPitch& p
 struct Sf2Voice : VoiceState {
   SampleReader reader;
   Sf2VoiceParams params;
-  float velocity_gain = 1.0f;
   DahdsrEnvelope env;
   DahdsrEnvelope mod_env;
   Sf2Lfo mod_lfo;
@@ -363,9 +386,8 @@ struct Sf2Voice : VoiceState {
   float gain_left = ::sonare::constants::kInvSqrt2;
   float gain_right = ::sonare::constants::kInvSqrt2;
 
-  /// Starts playback of @p p (pool base @p pool_data) at @p velocity_gain_in.
-  void start(const float* pool_data, const Sf2VoiceParams& p, double sample_rate,
-             float velocity_gain_in) noexcept;
+  /// Starts playback of @p p (pool base @p pool_data).
+  void start(const float* pool_data, const Sf2VoiceParams& p, double sample_rate) noexcept;
   /// Renders one mono sample (envelope/filter/LFO applied; pan is applied by
   /// the mixer via gain_left/right, refreshed from @p mod). Returns 0 and
   /// deactivates once the sample / envelope ends.

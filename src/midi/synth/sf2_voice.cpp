@@ -9,81 +9,136 @@ namespace sonare::midi::synth {
 
 namespace {
 
-// SF2 2.04 §8.1.3 generator defaults (raw units). Unlisted operators default
-// to zero.
-struct GenDefault {
-  uint16_t oper;
-  int32_t value;
-};
-constexpr GenDefault kGenDefaults[] = {
-    {kGenInitialFilterFc, 13500}, {kGenDelayModLfo, -12000},
-    {kGenDelayVibLfo, -12000},    {kGenDelayModEnv, -12000},
-    {kGenAttackModEnv, -12000},   {kGenHoldModEnv, -12000},
-    {kGenDecayModEnv, -12000},    {kGenReleaseModEnv, -12000},
-    {kGenDelayVolEnv, -12000},    {kGenAttackVolEnv, -12000},
-    {kGenHoldVolEnv, -12000},     {kGenDecayVolEnv, -12000},
-    {kGenReleaseVolEnv, -12000},  {kGenScaleTuning, 100},
-    {kGenOverridingRootKey, -1},  {kGenKeynum, -1},
-    {kGenVelocity, -1},
+constexpr bool kAdditive = true;
+constexpr bool kAbsolute = false;
+constexpr Sf2GenRole kVoice = Sf2GenRole::kVoice;
+constexpr Sf2GenRole kZoneLink = Sf2GenRole::kZoneLink;
+constexpr Sf2GenRole kReserved = Sf2GenRole::kReserved;
+
+/// SF2 2.04 section 8.1.3 generator contract, one row per operator number. Preset-level
+/// index / range / sample addressing operators are not additive (section 9.4).
+constexpr Sf2GenSpec kGenSpecs[Sf2GenSet::kNumGens] = {
+    {kGenStartAddrsOffset, 0, kAbsolute, kVoice},
+    {kGenEndAddrsOffset, 0, kAbsolute, kVoice},
+    {kGenStartloopAddrsOffset, 0, kAbsolute, kVoice},
+    {kGenEndloopAddrsOffset, 0, kAbsolute, kVoice},
+    {kGenStartAddrsCoarseOffset, 0, kAbsolute, kVoice},
+    {kGenModLfoToPitch, 0, kAdditive, kVoice},
+    {kGenVibLfoToPitch, 0, kAdditive, kVoice},
+    {kGenModEnvToPitch, 0, kAdditive, kVoice},
+    {kGenInitialFilterFc, 13500, kAdditive, kVoice},
+    {kGenInitialFilterQ, 0, kAdditive, kVoice},
+    {kGenModLfoToFilterFc, 0, kAdditive, kVoice},
+    {kGenModEnvToFilterFc, 0, kAdditive, kVoice},
+    {kGenEndAddrsCoarseOffset, 0, kAbsolute, kVoice},
+    {kGenModLfoToVolume, 0, kAdditive, kVoice},
+    {14, 0, kAbsolute, kReserved},  // unused1
+    {kGenChorusEffectsSend, 0, kAdditive, kVoice},
+    {kGenReverbEffectsSend, 0, kAdditive, kVoice},
+    {kGenPan, 0, kAdditive, kVoice},
+    {18, 0, kAbsolute, kReserved},  // unused2
+    {19, 0, kAbsolute, kReserved},  // unused3
+    {20, 0, kAbsolute, kReserved},  // unused4
+    {kGenDelayModLfo, -12000, kAdditive, kVoice},
+    {kGenFreqModLfo, 0, kAdditive, kVoice},
+    {kGenDelayVibLfo, -12000, kAdditive, kVoice},
+    {kGenFreqVibLfo, 0, kAdditive, kVoice},
+    {kGenDelayModEnv, -12000, kAdditive, kVoice},
+    {kGenAttackModEnv, -12000, kAdditive, kVoice},
+    {kGenHoldModEnv, -12000, kAdditive, kVoice},
+    {kGenDecayModEnv, -12000, kAdditive, kVoice},
+    {kGenSustainModEnv, 0, kAdditive, kVoice},
+    {kGenReleaseModEnv, -12000, kAdditive, kVoice},
+    {kGenKeynumToModEnvHold, 0, kAdditive, kVoice},
+    {kGenKeynumToModEnvDecay, 0, kAdditive, kVoice},
+    {kGenDelayVolEnv, -12000, kAdditive, kVoice},
+    {kGenAttackVolEnv, -12000, kAdditive, kVoice},
+    {kGenHoldVolEnv, -12000, kAdditive, kVoice},
+    {kGenDecayVolEnv, -12000, kAdditive, kVoice},
+    {kGenSustainVolEnv, 0, kAdditive, kVoice},
+    {kGenReleaseVolEnv, -12000, kAdditive, kVoice},
+    {kGenKeynumToVolEnvHold, 0, kAdditive, kVoice},
+    {kGenKeynumToVolEnvDecay, 0, kAdditive, kVoice},
+    {kGenInstrument, 0, kAbsolute, kZoneLink},
+    {42, 0, kAbsolute, kReserved},  // reserved1
+    {kGenKeyRange, 0, kAbsolute, kZoneLink},
+    {kGenVelRange, 0, kAbsolute, kZoneLink},
+    {kGenStartloopAddrsCoarseOffset, 0, kAbsolute, kVoice},
+    {kGenKeynum, -1, kAbsolute, kVoice},
+    {kGenVelocity, -1, kAbsolute, kVoice},
+    {kGenInitialAttenuation, 0, kAdditive, kVoice},
+    {49, 0, kAbsolute, kReserved},  // reserved2
+    {kGenEndloopAddrsCoarseOffset, 0, kAbsolute, kVoice},
+    {kGenCoarseTune, 0, kAdditive, kVoice},
+    {kGenFineTune, 0, kAdditive, kVoice},
+    {kGenSampleId, 0, kAbsolute, kZoneLink},
+    {kGenSampleModes, 0, kAbsolute, kVoice},
+    {55, 0, kAbsolute, kReserved},  // reserved3
+    {kGenScaleTuning, 100, kAdditive, kVoice},
+    {kGenExclusiveClass, 0, kAbsolute, kVoice},
+    {kGenOverridingRootKey, -1, kAbsolute, kVoice},
+    {59, 0, kAbsolute, kReserved},  // unused5
+    {60, 0, kAbsolute, kReserved},  // endOper
 };
 
-/// Preset-level generators that are NOT additive (index / range / sample
-/// addressing operators; SF2 2.04 §9.4).
-bool preset_additive(uint16_t oper) noexcept {
-  switch (oper) {
-    case kGenStartAddrsOffset:
-    case kGenEndAddrsOffset:
-    case kGenStartloopAddrsOffset:
-    case kGenEndloopAddrsOffset:
-    case kGenStartAddrsCoarseOffset:
-    case kGenEndAddrsCoarseOffset:
-    case kGenStartloopAddrsCoarseOffset:
-    case kGenEndloopAddrsCoarseOffset:
-    case kGenInstrument:
-    case kGenKeyRange:
-    case kGenVelRange:
-    case kGenKeynum:
-    case kGenVelocity:
-    case kGenSampleId:
-    case kGenSampleModes:
-    case kGenExclusiveClass:
-    case kGenOverridingRootKey:
-      return false;
-    default:
-      return true;
+constexpr bool gen_specs_indexed_by_oper() noexcept {
+  for (int i = 0; i < Sf2GenSet::kNumGens; ++i) {
+    if (kGenSpecs[i].oper != i) return false;
   }
+  return true;
 }
+static_assert(gen_specs_indexed_by_oper(), "kGenSpecs must hold one row per operator, in order");
+
+constexpr Sf2GenSpec kOutOfRangeGenSpec = {Sf2GenSet::kNumGens, 0, kAbsolute, kReserved};
+
+/// SF2 2.04 section 8.1.3: keynumTo*Hold/Decay leave key 60 unchanged.
+constexpr int kKeynumEnvelopePivotKey = 60;
 
 /// Default modulator: velocity -> initialFilterFc darkening (soft notes lose
 /// brightness). Linearised form of the spec's -2400 cent modulator.
 constexpr float kVelToFilterCents = -2400.0f;
 
-/// Converts a DAHDSR generator block (timecents / sustain unit) to ms config.
-DahdsrConfig envelope_from_gens(const Sf2GenSet& gens, uint16_t delay_op, uint16_t attack_op,
-                                uint16_t hold_op, uint16_t decay_op, uint16_t sustain_op,
-                                uint16_t release_op, bool sustain_is_centibels) noexcept {
+/// Generator operators of one DAHDSR block.
+struct EnvelopeOps {
+  uint16_t delay, attack, hold, decay, sustain, release, keynum_to_hold, keynum_to_decay;
+  bool sustain_is_centibels;
+};
+
+constexpr EnvelopeOps kVolumeEnvOps = {
+    kGenDelayVolEnv,        kGenAttackVolEnv,        kGenHoldVolEnv,
+    kGenDecayVolEnv,        kGenSustainVolEnv,       kGenReleaseVolEnv,
+    kGenKeynumToVolEnvHold, kGenKeynumToVolEnvDecay, true};
+constexpr EnvelopeOps kModEnvOps = {
+    kGenDelayModEnv,        kGenAttackModEnv,        kGenHoldModEnv,
+    kGenDecayModEnv,        kGenSustainModEnv,       kGenReleaseModEnv,
+    kGenKeynumToModEnvHold, kGenKeynumToModEnvDecay, false};
+
+/// Converts a DAHDSR generator block (timecents / sustain unit) to ms config at @p key.
+DahdsrConfig envelope_from_gens(const Sf2GenSet& gens, const EnvelopeOps& ops, int key) noexcept {
+  const int32_t key_steps = kKeynumEnvelopePivotKey - key;
+  const int32_t hold_tc = gens.get(ops.hold) + gens.get(ops.keynum_to_hold) * key_steps;
+  const int32_t decay_tc = gens.get(ops.decay) + gens.get(ops.keynum_to_decay) * key_steps;
   DahdsrConfig cfg;
   cfg.delay_ms =
-      gens.get(delay_op) <= -12000 ? 0.0f : 1000.0f * timecents_to_seconds(gens.get(delay_op));
-  cfg.attack_ms = 1000.0f * timecents_to_seconds(gens.get(attack_op));
-  cfg.hold_ms =
-      gens.get(hold_op) <= -12000 ? 0.0f : 1000.0f * timecents_to_seconds(gens.get(hold_op));
-  cfg.decay_ms = 1000.0f * timecents_to_seconds(gens.get(decay_op));
-  if (sustain_is_centibels) {
-    cfg.sustain = centibels_to_gain(static_cast<float>(gens.get(sustain_op)));
+      gens.get(ops.delay) <= -12000 ? 0.0f : 1000.0f * timecents_to_seconds(gens.get(ops.delay));
+  cfg.attack_ms = 1000.0f * timecents_to_seconds(gens.get(ops.attack));
+  cfg.hold_ms = hold_tc <= -12000 ? 0.0f : 1000.0f * timecents_to_seconds(hold_tc);
+  cfg.decay_ms = 1000.0f * timecents_to_seconds(decay_tc);
+  if (ops.sustain_is_centibels) {
+    cfg.sustain = centibels_to_gain(static_cast<float>(gens.get(ops.sustain)));
   } else {
     // Modulation envelope sustain: 0.1% DECREASE units (0 = full, 1000 = none).
-    cfg.sustain = std::clamp(1.0f - static_cast<float>(gens.get(sustain_op)) / 1000.0f, 0.0f, 1.0f);
+    cfg.sustain =
+        std::clamp(1.0f - static_cast<float>(gens.get(ops.sustain)) / 1000.0f, 0.0f, 1.0f);
   }
-  cfg.release_ms = std::max(5.0f, 1000.0f * timecents_to_seconds(gens.get(release_op)));
+  cfg.release_ms = std::max(5.0f, 1000.0f * timecents_to_seconds(gens.get(ops.release)));
   return cfg;
 }
 
 }  // namespace
 
 Sf2GenSet::Sf2GenSet() noexcept {
-  for (int i = 0; i < kNumGens; ++i) values_[i] = 0;
-  for (const GenDefault& d : kGenDefaults) values_[d.oper] = d.value;
+  for (int i = 0; i < kNumGens; ++i) values_[i] = kGenSpecs[i].default_value;
 }
 
 void Sf2GenSet::apply_absolute(const Sf2Zone& zone) noexcept {
@@ -94,7 +149,7 @@ void Sf2GenSet::apply_absolute(const Sf2Zone& zone) noexcept {
 
 void Sf2GenSet::add_relative(const Sf2Zone& zone) noexcept {
   for (const Sf2Gen& g : zone.gens) {
-    if (g.oper < kNumGens && preset_additive(g.oper)) values_[g.oper] += g.amount;
+    if (g.oper < kNumGens && kGenSpecs[g.oper].preset_additive) values_[g.oper] += g.amount;
   }
 }
 
@@ -104,10 +159,18 @@ float timecents_to_seconds(int32_t timecents) noexcept {
   return std::exp2(static_cast<float>(timecents) / 1200.0f);
 }
 
+const Sf2GenSpec& sf2_gen_spec(uint16_t oper) noexcept {
+  return oper < Sf2GenSet::kNumGens ? kGenSpecs[oper] : kOutOfRangeGenSpec;
+}
+
 float centibels_to_gain(float centibels) noexcept {
   if (centibels <= 0.0f) return 1.0f;
   if (centibels >= 1440.0f) return 0.0f;
   return std::pow(10.0f, -centibels / 200.0f);
+}
+
+float centibel_offset_to_gain(float centibels) noexcept {
+  return std::pow(10.0f, centibels / 200.0f);
 }
 
 float abs_cents_to_hz(float cents) noexcept { return 8.176f * std::exp2(cents / 1200.0f); }
@@ -165,22 +228,26 @@ Sf2VoiceParams resolve_voice_params(const Sf2GenSet& gens, const Sf2Sample& samp
       output_sample_rate > 0.0 ? static_cast<double>(sample.sample_rate) / output_sample_rate : 1.0;
   p.pitch_increment = sr_ratio * std::exp2(cents / 1200.0);
 
+  // --- velocity: the generator, when set, replaces the struck velocity for every term ---
+  const int32_t velocity_override = gens.get(kGenVelocity);
+  const Velocity16 effective_velocity =
+      velocity_override >= 0
+          ? Velocity16::from7(static_cast<uint8_t>(std::min<int32_t>(velocity_override, 127)))
+          : velocity;
+  p.velocity_gain = sf2_velocity_gain(effective_velocity);
+
   // --- attenuation / pan ---
   p.attenuation_gain = centibels_to_gain(static_cast<float>(gens.get(kGenInitialAttenuation)));
   p.pan_units = std::clamp(static_cast<float>(gens.get(kGenPan)), -500.0f, 500.0f);
 
   // --- volume / modulation envelopes ---
-  p.volume_env = envelope_from_gens(gens, kGenDelayVolEnv, kGenAttackVolEnv, kGenHoldVolEnv,
-                                    kGenDecayVolEnv, kGenSustainVolEnv, kGenReleaseVolEnv,
-                                    /*sustain_is_centibels=*/true);
-  p.mod_env = envelope_from_gens(gens, kGenDelayModEnv, kGenAttackModEnv, kGenHoldModEnv,
-                                 kGenDecayModEnv, kGenSustainModEnv, kGenReleaseModEnv,
-                                 /*sustain_is_centibels=*/false);
+  p.volume_env = envelope_from_gens(gens, kVolumeEnvOps, effective_key);
+  p.mod_env = envelope_from_gens(gens, kModEnvOps, effective_key);
   p.mod_env_to_pitch = static_cast<float>(gens.get(kGenModEnvToPitch));
   p.mod_env_to_filter_fc = static_cast<float>(gens.get(kGenModEnvToFilterFc));
 
   // --- filter: velocity darkening (default modulator) on top of the zone Fc ---
-  const float vel_offset = kVelToFilterCents * (1.0f - velocity.f7() / 127.0f);
+  const float vel_offset = kVelToFilterCents * (1.0f - effective_velocity.f7() / 127.0f);
   p.filter_fc_cents = static_cast<float>(gens.get(kGenInitialFilterFc)) + vel_offset;
   // initialFilterQ is the resonance peak height in centibels: Q = 10^(cB/200).
   const float q_cb = static_cast<float>(gens.get(kGenInitialFilterQ));
@@ -212,11 +279,9 @@ Sf2VoiceParams resolve_voice_params(const Sf2GenSet& gens, const Sf2Sample& samp
   return p;
 }
 
-void Sf2Voice::start(const float* pool_data, const Sf2VoiceParams& p, double sample_rate,
-                     float velocity_gain_in) noexcept {
+void Sf2Voice::start(const float* pool_data, const Sf2VoiceParams& p, double sample_rate) noexcept {
   params = p;
   reader.start(pool_data, SampleRegion{p.start, p.end, p.loop_start, p.loop_end, p.loop_mode});
-  velocity_gain = velocity_gain_in;
   key_down = true;
   releasing = false;
   // A slot can be reused while its previous voice was still sostenuto-captured
@@ -315,9 +380,9 @@ float Sf2Voice::render(const Sf2ChannelMod& mod) noexcept {
     active = false;
     return 0.0f;
   }
-  float gain = level * params.attenuation_gain * velocity_gain * mod.gain;
+  float gain = level * params.attenuation_gain * params.velocity_gain * mod.gain;
   if (params.mod_lfo_to_volume_cb != 0.0f) {
-    gain *= centibels_to_gain(mod_lfo_value * params.mod_lfo_to_volume_cb);
+    gain *= centibel_offset_to_gain(mod_lfo_value * params.mod_lfo_to_volume_cb);
   }
   if (mod.tremolo_depth01 != 0.0f) {
     // The LFO's peak is the part's own level and the depth is spent below it.

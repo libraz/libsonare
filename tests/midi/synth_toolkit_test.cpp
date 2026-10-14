@@ -242,7 +242,7 @@ TEST_CASE("Sf2Voice steal retriggers from residual envelope level", "[midi][sf2]
   voice.channel = 0;
   voice.note = 60;
   voice.age = 1;
-  voice.start(samples, params, kSampleRate, 1.0f);
+  voice.start(samples, params, kSampleRate);
 
   Sf2ChannelMod mod;
   for (int i = 0; i < 480; ++i) {
@@ -255,7 +255,7 @@ TEST_CASE("Sf2Voice steal retriggers from residual envelope level", "[midi][sf2]
 
   voice.note = 67;
   voice.age = 2;
-  voice.start(samples, params, kSampleRate, 1.0f);
+  voice.start(samples, params, kSampleRate);
 
   REQUIRE(voice.env.level() == Approx(amp_before).margin(1.0e-6f));
   REQUIRE(voice.mod_env.level() == Approx(mod_before).margin(1.0e-6f));
