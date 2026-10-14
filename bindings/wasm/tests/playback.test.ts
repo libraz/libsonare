@@ -457,6 +457,60 @@ describe('playback renderer (WASM)', () => {
     expect(() => new PlaybackLoudnessMeter(3, SR)).toThrow(SonareError);
   });
 
+  it('renders a whole buffer offline through an existing renderer like renderPlayback', () => {
+    const config: PlaybackRendererConfig = {
+      input: { layout: 'stereo' },
+      target: {
+        kind: 'speakers',
+        layout: 'stereo',
+        speakers: { L: { distance_m: 1 }, R: { distance_m: 5 } },
+      },
+      output_limiter: { enabled: false },
+    };
+    const input = interleave(noisePlanes(2, 3000, 11));
+    const expected = renderPlayback({ samples: input, channels: 2, sampleRate: SR, config });
+    const renderer = new PlaybackRenderer({ config, sampleRate: SR, maxBlockSize: 512 });
+    try {
+      renderer.processInterleaved(input.subarray(0, 512 * 2), 2);
+      const out = renderer.renderOffline(input, 2);
+      expect(out.length).toBe(expected.samples.length);
+      expect(out.length).toBe((input.length / 2) * renderer.outputChannels());
+      expect(Array.from(out)).toEqual(Array.from(expected.samples));
+    } finally {
+      renderer.delete();
+    }
+  });
+
+  it('refuses a wrong channel count and non-finite input in renderOffline', () => {
+    const renderer = new PlaybackRenderer({
+      config: { input: { layout: 'stereo' }, target: { kind: 'speakers', layout: 'stereo' } },
+      sampleRate: SR,
+    });
+    try {
+      expect(() => renderer.renderOffline(new Float32Array(600), 6)).toThrow(SonareError);
+      expect(() => renderer.renderOffline(new Float32Array(7), 2)).toThrow(RangeError);
+      const bad = new Float32Array(512);
+      bad[100] = Number.NaN;
+      expect(() => renderer.renderOffline(bad, 2)).toThrow(SonareError);
+      expect(() => renderer.renderOffline(new Float32Array(0), 2)).toThrow(SonareError);
+    } finally {
+      renderer.delete();
+    }
+  });
+
+  it('throws InvalidState from renderOffline on a released renderer', () => {
+    const renderer = new PlaybackRenderer({ config: SPEAKERS_5_1, sampleRate: SR });
+    renderer.delete();
+    let caught: unknown;
+    try {
+      renderer.renderOffline(new Float32Array(12), 6);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(SonareError);
+    expect((caught as SonareError).codeName).toBe('InvalidState');
+  });
+
   it('releases every handle through delete() or destroy()', () => {
     for (const release of ['delete', 'destroy'] as const) {
       const handles = [

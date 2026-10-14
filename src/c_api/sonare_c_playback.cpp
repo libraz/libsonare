@@ -279,6 +279,29 @@ SonareError sonare_playback_render_interleaved(const float* in, size_t frames, i
 #endif
 }
 
+SonareError sonare_playback_renderer_render_offline(SonarePlaybackRenderer* renderer,
+                                                    const float* in, size_t frames, int in_channels,
+                                                    float** out, size_t* out_frames,
+                                                    int* out_channels) {
+  SONARE_C_API_ENTRY;
+  if (out) *out = nullptr;
+  if (out_frames) *out_frames = 0;
+  if (out_channels) *out_channels = 0;
+#if defined(SONARE_WITH_PLAYBACK)
+  if (!renderer || !out || !out_frames || !out_channels) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  const std::vector<float> result =
+      playback::render_interleaved(*renderer->renderer, in, frames, in_channels);
+  *out_channels = renderer->renderer->output_channel_count();
+  *out_frames = frames;
+  *out = copy_vector(result);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(renderer, in, frames, in_channels, out, out_frames, out_channels);
+#endif
+}
+
 void sonare_free_playback_render(float* samples) { delete[] samples; }
 
 SonareError sonare_playback_loudness_meter_create(int channels, int sample_rate,

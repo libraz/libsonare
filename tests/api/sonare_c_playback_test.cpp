@@ -388,6 +388,67 @@ TEST_CASE("sonare_playback_render_interleaved renders offline and validates its 
   CHECK(out == nullptr);
 }
 
+TEST_CASE("playback renderer render_offline matches the one-shot render through a used handle",
+          "[playback][capi]") {
+  // Unequal distances make the per-plane calibration delay part of the trim decision.
+  const std::string config =
+      R"({"target": {"kind": "speakers", "layout": "stereo",
+                     "speakers": {"L": {"distance_m": 1.0}, "R": {"distance_m": 5.0}}},
+          "output_limiter": {"enabled": false}})";
+  constexpr size_t kFrames = 6000;
+  std::vector<float> in(kFrames * 2, 0.0f);
+  for (size_t i = 0; i < 480; ++i) {
+    const float v = 0.1f * std::sin(0.13f * static_cast<float>(i));
+    in[2 * i] = v;
+    in[2 * i + 1] = v;
+  }
+
+  float* expected = nullptr;
+  size_t expected_frames = 0;
+  int expected_channels = 0;
+  REQUIRE(sonare_playback_render_interleaved(in.data(), kFrames, 2, 48000, config.c_str(), nullptr,
+                                             &expected, &expected_frames,
+                                             &expected_channels) == SONARE_OK);
+
+  SonarePlaybackRenderer* renderer = create_renderer(config, 48000, 4096);
+  // Leave state behind first: the offline render resets the handle before it starts.
+  std::vector<float> scratch_out(512 * 2, 0.0f);
+  REQUIRE(sonare_playback_renderer_process_interleaved(renderer, in.data(), 2, scratch_out.data(),
+                                                       2, 512) == SONARE_OK);
+
+  float* out = nullptr;
+  size_t out_frames = 0;
+  int out_channels = 0;
+  REQUIRE(sonare_playback_renderer_render_offline(renderer, in.data(), kFrames, 2, &out,
+                                                  &out_frames, &out_channels) == SONARE_OK);
+  REQUIRE(out_frames == expected_frames);
+  REQUIRE(out_channels == expected_channels);
+  CHECK(std::equal(out, out + out_frames * static_cast<size_t>(out_channels), expected));
+  sonare_free_playback_render(out);
+  sonare_free_playback_render(expected);
+
+  out = reinterpret_cast<float*>(uintptr_t{1});
+  out_frames = 5;
+  out_channels = 5;
+  CHECK(sonare_playback_renderer_render_offline(nullptr, in.data(), kFrames, 2, &out, &out_frames,
+                                                &out_channels) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(out == nullptr);
+  CHECK(out_frames == 0u);
+  CHECK(out_channels == 0);
+  CHECK(sonare_playback_renderer_render_offline(renderer, nullptr, 0, 2, &out, &out_frames,
+                                                &out_channels) == SONARE_ERROR_INVALID_PARAMETER);
+  const std::vector<float> in3(256 * 3, 0.1f);
+  CHECK(sonare_playback_renderer_render_offline(renderer, in3.data(), 256, 3, &out, &out_frames,
+                                                &out_channels) == SONARE_ERROR_INVALID_PARAMETER);
+  std::vector<float> non_finite(256 * 2, 0.1f);
+  non_finite[7] = std::numeric_limits<float>::quiet_NaN();
+  CHECK(sonare_playback_renderer_render_offline(renderer, non_finite.data(), 256, 2, &out,
+                                                &out_frames,
+                                                &out_channels) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(out == nullptr);
+  sonare_playback_renderer_destroy(renderer);
+}
+
 TEST_CASE("playback loudness meter integrates pushed frames", "[playback][capi]") {
   SonarePlaybackLoudnessMeter* meter = nullptr;
   REQUIRE(sonare_playback_loudness_meter_create(2, 48000, &meter) == SONARE_OK);
@@ -500,6 +561,9 @@ TEST_CASE("playback entry points return NOT_SUPPORTED when compiled out",
   CHECK(rendered_frames == 0u);
   CHECK(rendered_channels == 0);
   sonare_free_playback_render(nullptr);
+  CHECK(sonare_playback_renderer_render_offline(nullptr, plane.data(), 16, 1, &rendered,
+                                                &rendered_frames,
+                                                &rendered_channels) == SONARE_ERROR_NOT_SUPPORTED);
 
   SonarePlaybackLoudnessMeter* meter = reinterpret_cast<SonarePlaybackLoudnessMeter*>(uintptr_t{1});
   CHECK(sonare_playback_loudness_meter_create(2, 48000, &meter) == SONARE_ERROR_NOT_SUPPORTED);

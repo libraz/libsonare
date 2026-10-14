@@ -176,6 +176,23 @@ class PlaybackRendererWasm {
     return vectorToFloat32Array(output);
   }
 
+  val renderOffline(const val& samples, const val& in_channels_val) {
+    const int in_channels = checkedIntFromVal(in_channels_val, "inChannels");
+    std::size_t frames = 0;
+    const std::vector<float> input =
+        loadPlaybackInterleaved(samples, in_channels, "PlaybackRenderer.renderOffline", &frames);
+    float* rendered = nullptr;
+    std::size_t out_frames = 0;
+    int out_channels = 0;
+    checkPlayback(
+        sonare_playback_renderer_render_offline(renderer_.get(), input.data(), frames, in_channels,
+                                                &rendered, &out_frames, &out_channels),
+        "PlaybackRenderer.renderOffline");
+    std::unique_ptr<float, void (*)(float*)> owned(rendered, &sonare_free_playback_render);
+    return vectorToFloat32Array(std::vector<float>(
+        owned.get(), owned.get() + out_frames * static_cast<std::size_t>(out_channels)));
+  }
+
   void setConfig(const std::string& config_json) {
     checkPlayback(sonare_playback_renderer_set_config_json(renderer_.get(),
                                                            wasmCString(config_json, "configJson")),
@@ -387,6 +404,7 @@ void registerPlaybackBindings() {
   class_<PlaybackRendererWasm>("PlaybackRenderer")
       .function("processPlanar", &PlaybackRendererWasm::processPlanar)
       .function("processInterleaved", &PlaybackRendererWasm::processInterleaved)
+      .function("renderOffline", &PlaybackRendererWasm::renderOffline)
       .function("setConfig", &PlaybackRendererWasm::setConfig)
       .function("configJson", &PlaybackRendererWasm::configJson)
       .function("setHeadOrientation", &PlaybackRendererWasm::setHeadOrientation)

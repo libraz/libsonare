@@ -604,26 +604,25 @@ uint32_t PlaybackRenderer::non_finite_discard_count() const noexcept {
   return impl_->non_finite.load();
 }
 
-std::vector<float> render_interleaved(const float* in, size_t frames, int in_channels,
-                                      int sample_rate, const RendererConfig& config,
-                                      const HrtfSet* hrtf, int* out_channels) {
-  // Offline entry point: unlike process_interleaved below, the caller does
+std::vector<float> render_interleaved(PlaybackRenderer& renderer, const float* in, size_t frames,
+                                      int in_channels) {
+  // Offline entry point: unlike process_interleaved above, the caller does
   // not own the finite check here.
   SONARE_CHECK_MSG(frames != 0, ErrorCode::InvalidParameter, "input samples must not be empty");
   SONARE_CHECK_MSG(in != nullptr, ErrorCode::InvalidParameter, "input samples is null");
   SONARE_CHECK_MSG(in_channels > 0, ErrorCode::InvalidParameter, "in_channels must be positive");
   SONARE_CHECK_MSG(numeric::all_finite(in, frames * static_cast<size_t>(in_channels)),
                    ErrorCode::InvalidParameter, "input samples contains a non-finite sample");
-  PlaybackRenderer renderer(config, hrtf, sample_rate, kOfflineRenderBlockFrames);
-  const bool auto_layout = config.prepare.input_layout == InputLayout::Auto;
+  const InputLayout input_layout = renderer.config().prepare.input_layout;
   ChannelLayout layout = ChannelLayout::Stereo;
-  const bool valid =
-      auto_layout ? layout_for_channel_count(in_channels, &layout)
-                  : in_channels == channel_count(to_channel_layout(config.prepare.input_layout));
+  const bool valid = input_layout == InputLayout::Auto
+                         ? layout_for_channel_count(in_channels, &layout)
+                         : in_channels == channel_count(to_channel_layout(input_layout));
   SONARE_CHECK_MSG(
       valid, ErrorCode::InvalidParameter,
       "in_channels " + std::to_string(in_channels) + " does not match the input layout");
 
+  renderer.reset();
   const int channels = renderer.output_channel_count();
   // Distance compensation delays the nearer speakers' planes; that delay is signal, not padding.
   const int calibration_q8 =
@@ -632,14 +631,16 @@ std::vector<float> render_interleaved(const float* in, size_t frames, int in_cha
       static_cast<size_t>(renderer.latency_samples() -
                           static_cast<int>(std::lround(static_cast<double>(calibration_q8) / kQ8)));
   const size_t total = frames + latency;
+  const auto block =
+      static_cast<size_t>(std::min(kOfflineRenderBlockFrames, renderer.max_block_size()));
   const auto in_ch = static_cast<size_t>(in_channels);
   const auto out_ch = static_cast<size_t>(channels);
   std::vector<float> result(frames * out_ch, 0.0f);
-  std::vector<float> in_block(static_cast<size_t>(kOfflineRenderBlockFrames) * in_ch, 0.0f);
-  std::vector<float> out_block(static_cast<size_t>(kOfflineRenderBlockFrames) * out_ch, 0.0f);
+  std::vector<float> in_block(block * in_ch, 0.0f);
+  std::vector<float> out_block(block * out_ch, 0.0f);
 
-  for (size_t start = 0; start < total; start += static_cast<size_t>(kOfflineRenderBlockFrames)) {
-    const size_t count = std::min(static_cast<size_t>(kOfflineRenderBlockFrames), total - start);
+  for (size_t start = 0; start < total; start += block) {
+    const size_t count = std::min(block, total - start);
     std::fill(in_block.begin(), in_block.end(), 0.0f);
     if (start < frames) {
       const size_t available = std::min(count, frames - start);
@@ -656,7 +657,15 @@ std::vector<float> render_interleaved(const float* in, size_t frames, int in_cha
                 result.begin() + static_cast<std::ptrdiff_t>((t - latency) * out_ch));
     }
   }
-  if (out_channels != nullptr) *out_channels = channels;
+  return result;
+}
+
+std::vector<float> render_interleaved(const float* in, size_t frames, int in_channels,
+                                      int sample_rate, const RendererConfig& config,
+                                      const HrtfSet* hrtf, int* out_channels) {
+  PlaybackRenderer renderer(config, hrtf, sample_rate, kOfflineRenderBlockFrames);
+  std::vector<float> result = render_interleaved(renderer, in, frames, in_channels);
+  if (out_channels != nullptr) *out_channels = renderer.output_channel_count();
   return result;
 }
 

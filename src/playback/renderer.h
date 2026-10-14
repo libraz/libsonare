@@ -111,4 +111,13 @@ std::vector<float> render_interleaved(const float* in, size_t frames, int in_cha
                                       int sample_rate, const RendererConfig& config,
                                       const HrtfSet* hrtf, int* out_channels);
 
+/// Renders a whole interleaved buffer offline through @p renderer, which is reset
+/// first, so its diagnostics afterwards describe this render. The result has
+/// @p frames frames of `renderer.output_channel_count()` channels and the same
+/// latency treatment as the one-shot overload.
+/// @throws SonareException(InvalidParameter) on the one-shot overload's input
+///         errors, or when @p in_channels does not match the input layout.
+std::vector<float> render_interleaved(PlaybackRenderer& renderer, const float* in, size_t frames,
+                                      int in_channels);
+
 }  // namespace sonare::playback

@@ -112,6 +112,15 @@ export class PlaybackRenderer {
     return this.native.processInterleaved(samples, inChannels);
   }
 
+  /**
+   * Renders a whole interleaved buffer offline. The renderer is reset first, so the result equals
+   * {@link renderPlayback} for the same configuration, and {@link diagnostics} afterwards
+   * describes this render. The result carries {@link outputChannels} interleaved channels.
+   */
+  renderOffline(samples: Float32Array, inChannels: number): Float32Array {
+    return this.native.renderOffline(samples, inChannels);
+  }
+
   /** Applies a complete configuration document; a changed prepare key throws. */
   setConfig(config: PlaybackRendererConfig | string): void {
     this.native.setConfig(configJsonText(config));

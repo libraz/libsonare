@@ -70,6 +70,7 @@ class PlaybackRendererWrap : public Napi::ObjectWrap<PlaybackRendererWrap> {
  private:
   Napi::Value ProcessPlanar(const Napi::CallbackInfo& info);
   Napi::Value ProcessInterleaved(const Napi::CallbackInfo& info);
+  Napi::Value RenderOffline(const Napi::CallbackInfo& info);
   Napi::Value SetConfig(const Napi::CallbackInfo& info);
   Napi::Value Config(const Napi::CallbackInfo& info);
   Napi::Value SetHeadOrientation(const Napi::CallbackInfo& info);

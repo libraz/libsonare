@@ -3877,6 +3877,7 @@ export interface WasmHrtfSet {
 export interface WasmPlaybackRenderer {
   processPlanar: (planes: Float32Array[]) => Float32Array[];
   processInterleaved: (samples: Float32Array, inChannels: number) => Float32Array;
+  renderOffline: (samples: Float32Array, inChannels: number) => Float32Array;
   setConfig: (configJson: string) => void;
   configJson: () => string;
   setHeadOrientation: (yawDeg: number, pitchDeg: number, rollDeg: number) => void;

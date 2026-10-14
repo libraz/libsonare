@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -12,6 +13,7 @@ Napi::Object PlaybackRendererWrap::Init(Napi::Env env, Napi::Object exports) {
       {
           InstanceMethod<&PlaybackRendererWrap::ProcessPlanar>("processPlanar"),
           InstanceMethod<&PlaybackRendererWrap::ProcessInterleaved>("processInterleaved"),
+          InstanceMethod<&PlaybackRendererWrap::RenderOffline>("renderOffline"),
           InstanceMethod<&PlaybackRendererWrap::SetConfig>("setConfig"),
           InstanceMethod<&PlaybackRendererWrap::Config>("config"),
           InstanceMethod<&PlaybackRendererWrap::SetHeadOrientation>("setHeadOrientation"),
@@ -159,6 +161,39 @@ Napi::Value PlaybackRendererWrap::ProcessInterleaved(const Napi::CallbackInfo& i
                                              out_channels, static_cast<int>(frames)));
   if (env.IsExceptionPending()) return env.Undefined();
   return output;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value PlaybackRendererWrap::RenderOffline(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (!EnsureAlive(env)) return env.Undefined();
+  if (!sonare_node::RequireFloat32Array(info, 0, "Expected (Float32Array, inChannels)")) {
+    return env.Undefined();
+  }
+  int in_channels = 0;
+  if (!sonare_node::RequiredIntArg(env, info, 1, "inChannels", &in_channels))
+    return env.Undefined();
+  Napi::Float32Array input = info[0].As<Napi::Float32Array>();
+  if (in_channels <= 0 || input.ElementLength() % static_cast<size_t>(in_channels) != 0) {
+    Napi::RangeError::New(env, "invalid channel count").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const size_t frames = input.ElementLength() / static_cast<size_t>(in_channels);
+
+  float* out = nullptr;
+  size_t out_frames = 0;
+  int out_channels = 0;
+  sonare_node::ThrowIfError(
+      env, sonare_playback_renderer_render_offline(renderer_, input.Data(), frames, in_channels,
+                                                   &out, &out_frames, &out_channels));
+  if (env.IsExceptionPending()) return env.Undefined();
+
+  Napi::Float32Array samples =
+      Napi::Float32Array::New(env, out_frames * static_cast<size_t>(out_channels));
+  std::memcpy(samples.Data(), out, samples.ElementLength() * sizeof(float));
+  sonare_free_playback_render(out);
+  return samples;
   SONARE_NODE_CATCH(env)
 }
 

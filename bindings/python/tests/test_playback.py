@@ -242,6 +242,7 @@ def test_closed_renderer_rejects_further_calls() -> None:
         "diagnostics": lambda: renderer.diagnostics(),
         "process_planar": lambda: renderer.process_planar(None),  # type: ignore[arg-type]
         "process_interleaved": lambda: renderer.process_interleaved(None, 0),  # type: ignore[arg-type]
+        "render_offline": lambda: renderer.render_offline(None, 0),  # type: ignore[arg-type]
     }
     for name, operation in operations.items():
         with pytest.raises(SonareError) as raised:
@@ -359,10 +360,60 @@ def test_cli_render_trims_what_the_offline_render_trims_with_unequal_distances()
     with PlaybackRenderer(
         config, sample_rate=SR, max_block_size=_OFFLINE_RENDER_BLOCK_FRAMES
     ) as renderer:
-        via_cli = _render_via_reporting_handle(renderer, interleaved, 2, frames)
+        via_cli = _render_via_reporting_handle(renderer, interleaved, 2)
 
     np.testing.assert_array_equal(via_cli, direct)
     # Both planes keep the opening burst: the near L speaker is delayed, not cropped.
     energy = (direct.astype(np.float64) ** 2).sum(axis=0)
     expected = 480 * 0.1**2 / 2.0
     assert energy == pytest.approx([expected, expected], rel=1e-3)
+
+
+_UNEQUAL_DISTANCE_CONFIG = {
+    "input": {"layout": "stereo"},
+    "target": {
+        "kind": "speakers",
+        "layout": "stereo",
+        "speakers": {"L": {"distance_m": 1.0}, "R": {"distance_m": 5.0}},
+    },
+    "output_limiter": {"enabled": False},
+}
+
+
+def _offline_burst(frames: int = 2400) -> np.ndarray:
+    burst = np.zeros(frames, dtype=np.float32)
+    burst[:480] = np.array(_sine(480, 1000.0), dtype=np.float32)
+    return np.repeat(burst, 2)
+
+
+def test_render_offline_after_processing_equals_render_playback() -> None:
+    interleaved = _offline_burst()
+    direct = render_playback(
+        interleaved, channels=2, sample_rate=SR, config=_UNEQUAL_DISTANCE_CONFIG
+    )
+    with PlaybackRenderer(_UNEQUAL_DISTANCE_CONFIG, sample_rate=SR, max_block_size=BLOCK) as r:
+        r.process_interleaved(np.full(2 * BLOCK, 0.5, dtype=np.float32), 2)
+        rendered = r.render_offline(interleaved, 2)
+    assert rendered.dtype == np.float32
+    np.testing.assert_array_equal(rendered.reshape(-1, 2), direct)
+
+
+def test_render_offline_diagnostics_are_readable() -> None:
+    with PlaybackRenderer(_UNEQUAL_DISTANCE_CONFIG, sample_rate=SR, max_block_size=BLOCK) as r:
+        r.render_offline(_offline_burst(), 2)
+        assert "latency" in r.diagnostics()
+
+
+def test_render_offline_rejects_bad_input() -> None:
+    good = _offline_burst(480)
+    with PlaybackRenderer(_UNEQUAL_DISTANCE_CONFIG, sample_rate=SR, max_block_size=BLOCK) as r:
+        # A layout mismatch is refused by the library, as render_playback refuses it.
+        with pytest.raises(SonareError, match="does not match the input layout") as raised:
+            r.render_offline(good, 3)
+        assert raised.value.code == 4
+        with pytest.raises(SonareValueError):
+            r.render_offline(good, 0)
+        with pytest.raises(SonareValueError):
+            r.render_offline(np.array([0.0, float("nan")], dtype=np.float32), 2)
+        with pytest.raises(SonareValueError):
+            r.render_offline(np.empty(0, dtype=np.float32), 2)

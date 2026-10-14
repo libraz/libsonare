@@ -152,7 +152,21 @@ SonareError sonare_playback_render_interleaved(const float* in, size_t frames, i
                                                int sample_rate, const char* config_json,
                                                const SonareHrtfSet* hrtf, float** out,
                                                size_t* out_frames, int* out_channels);
-/// @brief Releases a buffer returned by @ref sonare_playback_render_interleaved.
+/// @brief Renders a whole interleaved buffer offline through an existing renderer.
+/// @details The renderer is reset first; the output matches
+///          @ref sonare_playback_render_interleaved for the same configuration,
+///          and @ref sonare_playback_renderer_diagnostics_json afterwards
+///          describes this render.
+/// @note Release @p out with @ref sonare_free_playback_render.
+/// @note SONARE_ERROR_INVALID_PARAMETER when @p renderer is null, @p frames is 0,
+///       @p in is null, @p in_channels does not match the input layout, or
+///       @p in contains a non-finite sample.
+SonareError sonare_playback_renderer_render_offline(SonarePlaybackRenderer* renderer,
+                                                    const float* in, size_t frames, int in_channels,
+                                                    float** out, size_t* out_frames,
+                                                    int* out_channels);
+/// @brief Releases a buffer returned by @ref sonare_playback_render_interleaved
+///        or @ref sonare_playback_renderer_render_offline.
 void sonare_free_playback_render(float* samples);
 
 /// @brief Creates an integrated-loudness meter (BS.1770 channel weights by

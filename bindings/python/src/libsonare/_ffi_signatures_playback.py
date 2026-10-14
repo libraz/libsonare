@@ -146,6 +146,18 @@ def configure_playback_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_int),
         ]
 
+    if hasattr(lib, "sonare_playback_renderer_render_offline"):
+        lib.sonare_playback_renderer_render_offline.restype = ctypes.c_int32
+        lib.sonare_playback_renderer_render_offline.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+            ctypes.POINTER(ctypes.c_int),
+        ]
+
     if hasattr(lib, "sonare_free_playback_render"):
         lib.sonare_free_playback_render.restype = None
         lib.sonare_free_playback_render.argtypes = [ctypes.POINTER(ctypes.c_float)]

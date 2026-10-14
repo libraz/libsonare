@@ -227,38 +227,11 @@ def _resolved_program_lufs(
 
 
 def _render_via_reporting_handle(
-    renderer: PlaybackRenderer, interleaved: np.ndarray, in_channels: int, frames: int
+    renderer: PlaybackRenderer, interleaved: np.ndarray, in_channels: int
 ) -> np.ndarray:
-    """Render ``frames`` input frames through ``renderer`` block by block.
-
-    Mirrors ``playback::render_interleaved`` (src/playback/renderer.cpp): the
-    latency common to every plane -- ``latency_samples()`` minus the speaker
-    calibration stage, whose per-plane distance delay is signal rather than
-    padding -- is flushed with silent frames and dropped from the front of the
-    output, so the returned audio and any diagnostics read from ``renderer``
-    afterward both come from the same, actually-processed handle.
-    """
+    """Render offline through ``renderer`` so its diagnostics describe this render."""
     out_channels = renderer.output_channels()
-    calibration_q8 = renderer.diagnostics()["latency"]["stages"]["speaker_calibration"]["q8"]
-    # lround(q8 / 256) for a non-negative q8, as the C++ trim rounds it.
-    latency = renderer.latency_samples() - (int(calibration_q8) + 128) // 256
-    total = frames + latency
-    result = np.zeros((frames, out_channels), dtype=np.float32)
-    block = _OFFLINE_RENDER_BLOCK_FRAMES
-    for start in range(0, total, block):
-        count = min(block, total - start)
-        in_block = np.zeros(count * in_channels, dtype=np.float32)
-        if start < frames:
-            available = min(count, frames - start)
-            in_block[: available * in_channels] = interleaved[
-                start * in_channels : (start + available) * in_channels
-            ]
-        out_block = renderer.process_interleaved(in_block, in_channels).reshape(count, out_channels)
-        lo = max(latency - start, 0)
-        if lo < count:
-            dest_start = start + lo - latency
-            result[dest_start : dest_start + (count - lo)] = out_block[lo:count]
-    return result
+    return renderer.render_offline(interleaved, in_channels).reshape(-1, out_channels)
 
 
 def cmd_playback(args: argparse.Namespace) -> int:
@@ -286,8 +259,6 @@ def cmd_playback(args: argparse.Namespace) -> int:
             raise SonareValueError(f"cannot open --hrtf file: {args.hrtf}") from exc
         hrtf = HrtfSet.from_bytes(hrtf_bytes)
 
-    in_frames = len(planes[0]) if planes else 0
-
     renderer: PlaybackRenderer | None = None
     try:
         renderer = PlaybackRenderer(
@@ -297,7 +268,7 @@ def cmd_playback(args: argparse.Namespace) -> int:
             max_block_size=_OFFLINE_RENDER_BLOCK_FRAMES,
         )
         out_channels = renderer.output_channels()
-        rendered = _render_via_reporting_handle(renderer, interleaved, channels, in_frames)
+        rendered = _render_via_reporting_handle(renderer, interleaved, channels)
         # Read after the render so a limiter/loudness clamp or a non-finite
         # discard the render itself triggered shows up in the report.
         diagnostics = renderer.diagnostics() if args.json else None

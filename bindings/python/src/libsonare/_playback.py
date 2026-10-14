@@ -350,6 +350,45 @@ class PlaybackRenderer:
         )
         return out_buf
 
+    def render_offline(
+        self, samples: Sequence[float] | list[float] | np.ndarray, in_channels: int
+    ) -> np.ndarray:
+        """Render a whole interleaved buffer offline; returns an interleaved ``float32`` array.
+
+        The renderer is reset first and the result is time-aligned with the
+        input, matching :func:`render_playback` for the same configuration.
+        Unlike that function, the render runs through this handle, so
+        :meth:`diagnostics` afterwards describes it. The result holds
+        ``frames * output_channels()`` samples.
+        """
+        handle = self._require_handle()
+        ch = _narrow_int(in_channels, "in_channels", _C_INT_MIN, _C_INT_MAX)
+        if ch <= 0:
+            raise SonareValueError("in_channels must be positive")
+        validated = _validate_samples("render_offline", samples)
+        c_in, total = _to_c_float_array(validated)
+        if total % ch != 0:
+            raise SonareValueError("interleaved samples length must be divisible by in_channels")
+        out_ptr = ctypes.POINTER(ctypes.c_float)()
+        out_frames = ctypes.c_size_t()
+        out_channels = ctypes.c_int()
+        _check(
+            self._lib.sonare_playback_renderer_render_offline(
+                handle,
+                c_in,
+                _to_c_size_t(total // ch, "frames"),
+                _to_c_int(ch, "in_channels"),
+                ctypes.byref(out_ptr),
+                ctypes.byref(out_frames),
+                ctypes.byref(out_channels),
+            )
+        )
+        try:
+            return _from_c_float_array(out_ptr, int(out_frames.value) * int(out_channels.value))
+        finally:
+            if out_ptr:
+                self._lib.sonare_free_playback_render(out_ptr)
+
 
 @_guard_buffer("samples")
 def render_playback(

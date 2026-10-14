@@ -16,8 +16,8 @@ namespace {
 using sonare::util::json::Object;
 using sonare::util::json::Value;
 
-// Matches src/playback/renderer.h's kOfflineRenderBlockFrames: the chunk
-// size the C++ one-shot reference render loop uses.
+// Matches src/playback/renderer.h's kOfflineRenderBlockFrames, so the offline
+// render through this handle uses the one-shot render's block length.
 constexpr size_t kOfflineRenderBlockFrames = 4096;
 
 std::vector<uint8_t> read_hrtf_file(const std::string& path) {
@@ -112,58 +112,19 @@ std::optional<float> resolved_program_lufs(const CliArgs& args,
   return lufs;
 }
 
-// Frames of the speaker calibration stage, rounded as the renderer rounds them.
-int speaker_calibration_frames(SonarePlaybackRenderer* renderer) {
-  char* text = nullptr;
-  const SonareError err = sonare_playback_renderer_diagnostics_json(renderer, &text);
-  if (err != SONARE_OK) throw_playback_error("query playback renderer", err);
-  const std::string json = text != nullptr ? text : "";
-  sonare_free_string(text);
-  const Value root = sonare::util::json::parse(json);
-  const double q8 = root["latency"]["stages"]["speaker_calibration"]["q8"].as_number();
-  return static_cast<int>(std::lround(q8 / 256.0));
-}
-
-// Renders `frames` input frames through `renderer` block by block, mirroring
-// `playback::render_interleaved` (src/playback/renderer.cpp): the latency
-// common to every plane -- `latency_samples()` minus the speaker calibration
-// stage, whose per-plane distance delay is signal rather than padding -- is
-// flushed with silent frames and dropped from the front of the output, so the
-// returned audio and any diagnostics read from `renderer` afterward both come
-// from the same, actually-processed handle.
+// Renders `frames` input frames offline through `renderer`, so the returned audio
+// and any diagnostics read from `renderer` afterward come from the same handle.
 std::vector<float> render_via_reporting_handle(SonarePlaybackRenderer* renderer,
                                                const std::vector<float>& interleaved,
-                                               int in_channels, int out_channels, size_t frames) {
-  int latency = 0;
-  SonareError err = sonare_playback_renderer_latency_samples(renderer, &latency);
-  if (err != SONARE_OK) throw_playback_error("query playback renderer", err);
-  latency -= speaker_calibration_frames(renderer);
-
-  const size_t total = frames + static_cast<size_t>(latency);
-  std::vector<float> result(frames * static_cast<size_t>(out_channels), 0.0f);
-  std::vector<float> in_block(kOfflineRenderBlockFrames * static_cast<size_t>(in_channels), 0.0f);
-  std::vector<float> out_block(kOfflineRenderBlockFrames * static_cast<size_t>(out_channels), 0.0f);
-
-  for (size_t start = 0; start < total; start += kOfflineRenderBlockFrames) {
-    const size_t count = std::min(kOfflineRenderBlockFrames, total - start);
-    std::fill(in_block.begin(), in_block.begin() + count * in_channels, 0.0f);
-    if (start < frames) {
-      const size_t available = std::min(count, frames - start);
-      std::copy(interleaved.begin() + start * in_channels,
-                interleaved.begin() + (start + available) * in_channels, in_block.begin());
-    }
-    err = sonare_playback_renderer_process_interleaved(renderer, in_block.data(), in_channels,
-                                                       out_block.data(), out_channels,
-                                                       static_cast<int>(count));
-    if (err != SONARE_OK) throw_playback_error("render playback", err);
-
-    const size_t lo = latency > static_cast<int>(start) ? static_cast<size_t>(latency) - start : 0;
-    if (lo < count) {
-      const size_t dest_start = start + lo - static_cast<size_t>(latency);
-      std::copy(out_block.begin() + lo * out_channels, out_block.begin() + count * out_channels,
-                result.begin() + dest_start * out_channels);
-    }
-  }
+                                               int in_channels, size_t frames) {
+  float* out = nullptr;
+  size_t out_frames = 0;
+  int out_channels = 0;
+  const SonareError err = sonare_playback_renderer_render_offline(
+      renderer, interleaved.data(), frames, in_channels, &out, &out_frames, &out_channels);
+  if (err != SONARE_OK) throw_playback_error("render playback", err);
+  std::vector<float> result(out, out + out_frames * static_cast<size_t>(out_channels));
+  sonare_free_playback_render(out);
   return result;
 }
 
@@ -225,8 +186,7 @@ int cmd_playback(const CliArgs& args, const Audio&) {
   // triggers is visible in the report.
   std::vector<float> rendered;
   try {
-    rendered =
-        render_via_reporting_handle(renderer, interleaved, in_channels, out_channels, frames);
+    rendered = render_via_reporting_handle(renderer, interleaved, in_channels, frames);
   } catch (...) {
     sonare_playback_renderer_destroy(renderer);
     if (hrtf != nullptr) sonare_hrtf_set_destroy(hrtf);

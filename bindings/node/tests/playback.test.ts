@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ErrorCode, isSonareError } from '../src/errors.js';
 import {
   capabilities,
   HrtfSet,
@@ -319,5 +320,77 @@ describe('renderPlayback', () => {
     ).toThrow();
     const result = renderPlayback({ samples, channels: 2, sampleRate: 48000, config: {} });
     expect(result.channels).toBe(2);
+  });
+});
+
+describe('PlaybackRenderer.renderOffline', () => {
+  const unequalSpeakers = {
+    target: {
+      kind: 'speakers' as const,
+      layout: 'stereo' as const,
+      speakers: { L: { distance_m: 1 }, R: { distance_m: 5 } },
+    },
+    output_limiter: { enabled: false },
+  };
+
+  function interleavedStereo(frames: number): Float32Array {
+    const [l, r] = stereoBlock(frames);
+    const interleaved = new Float32Array(frames * 2);
+    for (let i = 0; i < frames; i++) {
+      interleaved[i * 2] = l[i];
+      interleaved[i * 2 + 1] = r[i] * 0.5;
+    }
+    return interleaved;
+  }
+
+  it('matches renderPlayback after the handle has processed a block', () => {
+    const samples = interleavedStereo(4096);
+    const expected = renderPlayback({
+      samples,
+      channels: 2,
+      sampleRate: 48000,
+      config: unequalSpeakers,
+    });
+    using renderer = new PlaybackRenderer({ config: unequalSpeakers, sampleRate: 48000 });
+    renderer.processInterleaved(interleavedStereo(256), 2);
+    const out = renderer.renderOffline(samples, 2);
+    expect(out).toHaveLength(expected.samples.length);
+    expect(Array.from(out)).toEqual(Array.from(expected.samples));
+  });
+
+  it('refuses a mismatched channel count and non-finite input as a coded error', () => {
+    using renderer = new PlaybackRenderer({ config: unequalSpeakers, sampleRate: 48000 });
+    let caught: unknown;
+    try {
+      renderer.renderOffline(new Float32Array(12), 3);
+    } catch (error) {
+      caught = error;
+    }
+    expect(isSonareError(caught)).toBe(true);
+    expect((caught as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+
+    const bad = interleavedStereo(64);
+    bad[10] = Number.NaN;
+    caught = undefined;
+    try {
+      renderer.renderOffline(bad, 2);
+    } catch (error) {
+      caught = error;
+    }
+    expect(isSonareError(caught)).toBe(true);
+    expect((caught as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+  });
+
+  it('reports a destroyed handle as InvalidState', () => {
+    const renderer = new PlaybackRenderer({ config: unequalSpeakers, sampleRate: 48000 });
+    renderer.destroy();
+    let caught: unknown;
+    try {
+      renderer.renderOffline(interleavedStereo(64), 2);
+    } catch (error) {
+      caught = error;
+    }
+    expect(isSonareError(caught)).toBe(true);
+    expect((caught as { code: number }).code).toBe(ErrorCode.InvalidState);
   });
 });
