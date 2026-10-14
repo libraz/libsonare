@@ -16,6 +16,8 @@
 - A `SampleBank` zone with a non-finite tune, gain or pan, or a tune that overflows when added to the sample's own tuning, is refused and the bank is left unchanged; an infinite pan used to clamp.
 - Silence trimming and splitting refuse a `top_db` that is not finite and strictly positive, and note segmentation refuses a negative or NaN `segmentationThresholdCents` / `minNoteMs`, on every surface.
 - Pre-emphasis and de-emphasis refuse a non-finite coefficient or initial value on the C ABI and Node, as WASM and Python already did.
+- Match EQ band generation from a measured curve refuses the Q, gain and smoothing values the match EQ configuration refuses, and a curve with non-finite values or decreasing frequencies.
+- Warping audio to a warp map refuses a map whose spans are non-finite or longer than `INT_MAX` samples.
 - WASM `PlaybackRenderer.setHeadOrientation` refuses a non-finite angle, or one beyond the 32-bit float range, with a `RangeError` (a non-number with a `TypeError`), as Node and Python do; such angles used to be ignored.
 - In C++: a non-finite clip start, source offset, length or loop length in `AddClip`; non-finite Gate, Expander, UpwardCompressor, UpwardExpander and MultibandImager settings (Gate's `range_db = -inf` is still accepted); a `PartitionedConvolver` partition size above `INT_MAX / 2` or an IR longer than `INT_MAX`; and early-IR image delays that are non-finite or out of range.
 
@@ -27,13 +29,18 @@
 
 - Built-in synth renders change, including MIDI 1.0 renders: free-reed radiation level, modal-voice low-register precision and modulated decay, the slow modulation clocks of the plate reverb, pitch shifter and SoundFont LFO, the harpsichord release after a downward bend, and GS pan level, which now matches between the initial setup and live edits.
 - A stage that has been off, bypassed or fed mono starts from rest when it resumes, instead of replaying its old filter or delay state. This covers chorus, flanger, rotary, wah, auto-wah, vowel filter, phaser, the room-morph suppressor, the pitch shifter's right channel, the compressor, gate and sidechain-router high-pass filters, the parallel-compressor limiter, the amp-sim power stage, the imager, the bitcrusher noise filters, the exciter and percussion noise.
-- `tailSamples` covers gliding, boosted and rate-dependent state for the stereo delay, pitch shifter, auto-wah, GS effect bus, synth and SoundFont DC blockers, sample one-shots whose pitch offset is lowered mid-note, and percussion voices. `saturation.transformer` reports an unbounded tail while `asymmetry` is non-zero (the default) and none when fully dry.
+- `tailSamples` covers gliding, boosted and rate-dependent state for the stereo delay, pitch shifter, auto-wah, GS effect bus, synth and SoundFont DC blockers, sample one-shots whose pitch offset is lowered mid-note, percussion voices, and the decay of a SoundFont player's master EQ. `saturation.transformer` reports an unbounded tail while `asymmetry` is non-zero (the default) and none when fully dry.
 - `sonare_project_assist_apply_json` commits nothing when a run is truncated by its iteration or time budget, and still returns `SONARE_OK` with the proposed patches in the document; check the reported status before treating the patches as applied. `maxIterations` counts only qualified in-scope candidates, saturating at the cap.
 - Composition assist passes the remaining iteration budget to each module; the built-in modules check the time budget and report truncation, and notes outside the scope no longer use up the harmonizer's iterations. Harmonizer output is ordered by onset, note, group, channel and end, so the same request gives the same order on every platform.
 - The maximum automatic RIR length is 13,421,772 samples (about 280 s at 48 kHz), down from 16,777,216, because the mono path holds five live buffers rather than four.
 - The NNLS solver bounds its step by the row-sum norm of `AᵀA`, so `mel_to_stft` and NNLS chroma results can differ from v1.9.1 within the solver tolerance.
 - Project-load warnings for invalid warp maps, SysEx handle keys and MIDI clip keys count toward the bounded diagnostic list and are summarised past its limit.
 - A closed Python `PlaybackRenderer` or `PlaybackLoudnessMeter` raises `InvalidState` instead of `InvalidParameter`.
+- Python raises `TypeError` instead of `SonareValueError` when a numeric argument or field receives a non-number, such as a string or a bool; a fractional, non-finite or out-of-range number is still `SonareValueError`.
+- On WASM, a method called on a deleted handle throws `SonareError` with code `InvalidState`, as on Node and Python, instead of embind's generic error.
+- `countInEndSample` (Python `count_in_end_sample`, C `sonare_engine_count_in_end_sample`) counts from the start of the bar containing the start sample, so a mid-bar start gets a short first bar, and every counted bar has the length of the time signature in effect at the start; the realtime engine's count-in uses the same rule.
+- A smoothed parameter change the realtime engine starts in the middle of a block advances at its 64-frame control period whatever the host block size.
+- In C++, `AutomationEngine::bind`, `unbind` and `clear` are no longer `noexcept`; they wait until the audio thread has stopped reading the previous target table.
 
 ### Fixes
 
@@ -46,7 +53,10 @@
 - On macOS, opening an explicitly chosen output device fails if the device cannot be bound, instead of playing on the default device.
 - C note-target assignment reports an allocation failure as an error code instead of letting a C++ exception cross the C boundary.
 - Note segmentation returns no notes when the minimum note length is too long to count in frames, instead of overflowing.
-- A convolution reverb that refuses an IR keeps its previous IR and engine.
+- A convolution reverb refuses an impulse response containing NaN or infinity, and one that refuses an IR keeps its previous IR and engine.
+- Rebinding realtime automation while the engine plays never applies one target's lane to another target, and published tempo maps, markers and automation targets are not freed while the audio thread still reads them, however many publishes it falls behind.
+- The multiband expander and limiter count the non-finite audio their bands recover from in their diagnostics counters.
+- The mixing meter measures true peak over the whole of a block longer than its prepared maximum, instead of only its head.
 - A project whose clip loop is off keeps a negative loop length through save and load, as the editing commands allow.
 - `sonare-cli mastering --report`, `mastering-suggest --config-out` and `suggest-mix --scene-out` write through a temporary file and replace the destination only on success, so a failed write leaves an existing file intact and exits 12; on Windows, project export replaces an existing file.
 
