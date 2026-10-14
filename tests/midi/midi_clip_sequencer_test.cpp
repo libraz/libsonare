@@ -2887,3 +2887,129 @@ TEST_CASE("MidiSequencer dispatches a late block of long clips in merged order",
     CHECK(sink.events[i].destination == expected[i].second);
   }
 }
+
+namespace {
+
+SequencerClock jumped_clock(int64_t device, int64_t timeline, bool rolling = true) {
+  return {DeviceFrame{device}, sonare::midi::TimelineFrame{timeline}, rolling};
+}
+
+void enable_unit_grid_quantize(MidiSequencer* seq) {
+  MidiFxChain fx;
+  sonare::midi::QuantizeConfig quantize;
+  quantize.enabled = true;
+  quantize.grid_frames = 1000;
+  quantize.strength = 1.0f;
+  fx.set_quantize(quantize);
+  REQUIRE(seq->set_midi_fx(9, fx));
+  seq->acquire_midi_fx(DeviceFrame{0});
+}
+
+}  // namespace
+
+TEST_CASE("MidiSequencer drains overdue pending output in frame order past a channel reset",
+          "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+  enable_unit_grid_quantize(&seq);
+
+  // Each timeline jump moves the quantize grid with it, so the note-ons below land on
+  // device frames 500 (ch0), 600 (ch1), 450 (ch2) and 600 (ch0, after the reset).
+  MidiClipSchedule clip;
+  clip.id = 1300;
+  clip.destination_id = 9;
+  for (uint8_t note = 40; note < 44; ++note) {
+    clip.events.push_back({1600, sonare::midi::make_midi1_note_on(0, 0, note, 100)});
+  }
+  for (uint8_t note = 50; note < 54; ++note) {
+    clip.events.push_back({1700, sonare::midi::make_midi1_note_on(0, 1, note, 100)});
+  }
+  for (uint8_t note = 60; note < 63; ++note) {
+    clip.events.push_back({1750, sonare::midi::make_midi1_note_on(0, 2, note, 100)});
+  }
+  clip.events.push_back({1800, sonare::midi::make_midi1_control_change(0, 0, 123, 0)});
+  clip.events.push_back({1800, sonare::midi::make_midi1_note_on(0, 0, 70, 100)});
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+
+  seq.dispatch_due(jumped_clock(100, 1600));
+  seq.dispatch_due(jumped_clock(300, 1700));
+  seq.dispatch_due(jumped_clock(200, 1750));
+  REQUIRE(sink.events.empty());
+
+  // All-notes-off on channel 0 retires the four pending channel-0 note-ons only.
+  seq.dispatch_due(jumped_clock(400, 1800));
+  REQUIRE(sink.events.size() == 1);
+  REQUIRE(sink.events[0].event.render_frame == 400);
+  REQUIRE(sink.events[0].event.ump.note_number() == 123);
+
+  // Both remaining frames are overdue: oldest first, insertion order within a frame.
+  seq.dispatch_due(jumped_clock(2000, 5000, /*rolling=*/false));
+  struct Expected {
+    uint8_t channel;
+    uint8_t note;
+  };
+  constexpr std::array<Expected, 8> kExpected{
+      {{2, 60}, {2, 61}, {2, 62}, {1, 50}, {1, 51}, {1, 52}, {1, 53}, {0, 70}}};
+  REQUIRE(sink.events.size() == 1 + kExpected.size());
+  for (size_t i = 0; i < kExpected.size(); ++i) {
+    const auto& captured = sink.events[1 + i];
+    REQUIRE(captured.destination == 9);
+    REQUIRE(captured.event.render_frame == 2000);
+    REQUIRE(captured.event.ump.is_note_on());
+    REQUIRE(captured.event.ump.channel() == kExpected[i].channel);
+    REQUIRE(captured.event.ump.note_number() == kExpected[i].note);
+  }
+  REQUIRE(seq.frames_until_next_event(jumped_clock(2000, 5000, false), 1000) == 1000);
+}
+
+TEST_CASE("MidiSequencer accepts a full pending list again after a same-frame burst drains",
+          "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+  enable_unit_grid_quantize(&seq);
+
+  constexpr size_t kBurst = MidiSequencer::kMaxPendingFxEvents;
+  static_assert(kBurst == 4 * 128);
+  MidiClipSchedule clip;
+  clip.id = 1301;
+  clip.destination_id = 9;
+  for (uint8_t channel = 0; channel < 4; ++channel) {
+    for (uint8_t note = 0; note < 128; ++note) {
+      clip.events.push_back({1600, sonare::midi::make_midi1_note_on(0, channel, note, 100)});
+    }
+  }
+  // One event more than the list holds, so the second burst must overflow exactly once.
+  for (uint8_t channel = 0; channel < 4; ++channel) {
+    for (uint8_t note = 0; note < 128; ++note) {
+      clip.events.push_back({3600, sonare::midi::make_midi1_note_on(0, channel, note, 100)});
+    }
+  }
+  clip.events.push_back({3600, sonare::midi::make_midi1_note_on(0, 4, 0, 100)});
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+
+  // The first burst fills the list at device frame 500; nothing overflows or dispatches yet.
+  seq.dispatch_due(jumped_clock(100, 1600));
+  REQUIRE(sink.events.empty());
+  REQUIRE(seq.midi_fx_pending_overflow_count() == 0);
+
+  // Draining dispatches every note-on the active table can hold, in insertion order.
+  seq.dispatch_due(jumped_clock(2000, 5000, /*rolling=*/false));
+  REQUIRE(sink.events.size() == MidiSequencer::kMaxActiveNotes);
+  for (size_t i = 0; i < sink.events.size(); ++i) {
+    REQUIRE(sink.events[i].event.render_frame == 2000);
+    REQUIRE(static_cast<size_t>(sink.events[i].event.ump.channel()) == i / 128);
+    REQUIRE(static_cast<size_t>(sink.events[i].event.ump.note_number()) == i % 128);
+  }
+  REQUIRE(seq.frames_until_next_event(jumped_clock(2000, 5000, false), 1000) == 1000);
+
+  // The emptied list takes a full second burst, and refuses only the event past capacity.
+  seq.dispatch_due(jumped_clock(2100, 3600));
+  REQUIRE(seq.midi_fx_pending_overflow_count() == 1);
+  REQUIRE(seq.frames_until_next_event(jumped_clock(2100, 5000, false), 1000) == 400);
+}

@@ -284,6 +284,8 @@ class MidiSequencer {
     MidiEvent event;
     uint32_t clip_id = 0;
     bool from_clip = false;
+    // Dispatched or cancelled; skipped by every reader until compact_pending() drops it.
+    bool dead = false;
   };
   // The MIDI FX work buffers are large enough that keeping them inline makes
   // every engine instance unnecessarily expensive to construct on the stack.
@@ -341,10 +343,12 @@ class MidiSequencer {
   // False when the pending list is full and the event was not kept.
   bool enqueue_pending(uint32_t destination_id, const MidiEvent& event, bool from_clip,
                        uint32_t clip_id) noexcept;
-  // Remove one pending FX event without changing the order of the remaining
-  // fixed-capacity queue. The audio path uses this instead of swap-remove so
-  // same-frame controller gestures retain their stream order.
-  void erase_pending(size_t index) noexcept;
+  // Retire one pending FX event in place. Slots keep their positions until
+  // compact_pending(), so a drain never shifts the queue per event and same-frame
+  // controller gestures retain their stream order.
+  void cancel_pending(size_t index) noexcept;
+  // Drops retired slots, preserving the order of the live ones.
+  void compact_pending() noexcept;
   void clear_active_notes_for_channel(uint32_t destination_id, uint8_t group,
                                       uint8_t channel) noexcept;
   void clear_pending_note_events_for_channel(uint32_t destination_id, uint8_t group,
@@ -391,9 +395,9 @@ class MidiSequencer {
   SequencerClock clock_{};
   uint64_t next_midi_fx_generation_ = 1;  // control-thread only
   std::unique_ptr<RuntimeStorage> runtime_storage_;
+  // Slots in use, retired ones included; pending_fx_live_ counts the rest and bounds capacity.
   size_t pending_fx_count_ = 0;
-  // Bumped by every erase_pending, so a drain can tell whether a dispatch removed anything.
-  uint32_t pending_erase_epoch_ = 0;
+  size_t pending_fx_live_ = 0;
   std::atomic<uint32_t> midi_fx_pending_overflow_count_{0};
 };
 
