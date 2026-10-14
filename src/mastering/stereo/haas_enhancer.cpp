@@ -41,17 +41,15 @@ void HaasEnhancer::process(float* const* channels, int num_channels, int num_sam
 
   const int delayed_ch = config_.delay_right ? 1 : 0;
   const int source_ch = config_.delay_right ? 0 : 1;
+  delay_.route(config_.delay_right);
   for (int i = 0; i < num_samples; ++i) {
-    const float delayed = process_delay(channels[source_ch][i]);
+    const float delayed = delay_.exchange(channels[source_ch][i]);
     channels[delayed_ch][i] =
         channels[delayed_ch][i] * (1.0f - config_.mix) + delayed * config_.mix;
   }
 }
 
-void HaasEnhancer::reset() {
-  std::fill(delay_.begin(), delay_.end(), 0.0f);
-  delay_index_ = 0;
-}
+void HaasEnhancer::reset() { delay_.clear(); }
 
 int HaasEnhancer::tail_samples() const noexcept {
   // The delayed cross-channel path is finite: after input becomes silent, the
@@ -111,15 +109,7 @@ void HaasEnhancer::validate_config(const HaasEnhancerConfig& config) {
 
 void HaasEnhancer::rebuild_delay() {
   delay_samples_ = static_cast<int>(std::round(sample_rate_ * config_.delay_ms * 0.001));
-  delay_.assign(static_cast<size_t>(std::max(delay_samples_, 1)), 0.0f);
-  delay_index_ = 0;
-}
-
-float HaasEnhancer::process_delay(float input) {
-  float delayed = delay_[delay_index_];
-  delay_[delay_index_] = input;
-  delay_index_ = (delay_index_ + 1) % delay_.size();
-  return delayed;
+  delay_.assign(static_cast<size_t>(std::max(delay_samples_, 1)));
 }
 
 }  // namespace sonare::mastering::stereo

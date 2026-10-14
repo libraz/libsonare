@@ -5,6 +5,7 @@
 
 #include <vector>
 
+#include "mastering/stereo/cross_channel_delay.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::stereo {
@@ -43,8 +44,7 @@ class PhaseAlign : public rt::ProcessorBase {
   float process_delay(float input);
 
   PhaseAlignConfig config_{};
-  size_t delay_index_ = 0;
-  std::vector<float> delay_;
+  CrossChannelDelay delay_;
   bool prepared_ = false;
 };
 

@@ -5,6 +5,7 @@
 
 #include <vector>
 
+#include "mastering/stereo/cross_channel_delay.h"
 #include "rt/processor_base.h"
 #include "rt/stage_gate.h"
 #include "util/constants.h"
@@ -42,13 +43,11 @@ class HaasEnhancer : public rt::ProcessorBase {
  private:
   static void validate_config(const HaasEnhancerConfig& config);
   void rebuild_delay();
-  float process_delay(float input);
 
   HaasEnhancerConfig config_{};
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int delay_samples_ = 0;
-  size_t delay_index_ = 0;
-  std::vector<float> delay_;
+  CrossChannelDelay delay_;
   bool prepared_ = false;
   rt::StageGate stage_;
 };

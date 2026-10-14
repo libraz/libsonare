@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <type_traits>
 #include <vector>
 
 #include "mastering/stereo/auto_pan.h"
@@ -982,4 +983,72 @@ TEST_CASE("A law change interrupted mid-glide continues from the gains in force"
       REQUIRE_THAT(r2.back(), WithinAbs(rs.back(), 1e-5));
     }
   }
+}
+
+namespace {
+
+// Primes a delay on the old source plane only, flips the side, then renders silence.
+// Returns the peak of the newly delayed channel.
+template <typename Processor, typename Config>
+float side_change_peak(Config config, bool initial_right, bool change_side) {
+  constexpr double kSr = 48000.0;
+  constexpr int kPrime = 1024;
+  constexpr int kTail = 256;
+  config.delay_right = initial_right;
+  Processor proc(config);
+  proc.prepare(kSr, kPrime);
+
+  const std::vector<float> tone =
+      generate_sine_samples(440.0f, static_cast<int>(kSr), kPrime, 0.1f);
+  std::vector<float> zeros(kPrime, 0.0f);
+  std::vector<float> a = tone;
+  std::vector<float> b = zeros;
+  // The old source is the left plane for Haas and the delayed (right) plane for PhaseAlign.
+  const bool haas = std::is_same<Processor, HaasEnhancer>::value;
+  const bool tone_left = haas ? initial_right : !initial_right;
+  float* planes[2] = {tone_left ? a.data() : b.data(), tone_left ? b.data() : a.data()};
+  proc.process(planes, 2, kPrime);
+
+  if (change_side) {
+    config.delay_right = !initial_right;
+    proc.set_config(config);
+  }
+  std::vector<float> l(kTail, 0.0f), r(kTail, 0.0f);
+  float* silent[2] = {l.data(), r.data()};
+  proc.process(silent, 2, kTail);
+  const std::vector<float>& new_delayed = (change_side ? !initial_right : initial_right) ? r : l;
+  float peak = 0.0f;
+  for (float v : new_delayed) peak = std::max(peak, std::abs(v));
+  return peak;
+}
+
+}  // namespace
+
+TEST_CASE("Delay side change does not move old history into the opposite channel",
+          "[mastering][stereo][delay_routing]") {
+  PhaseAlignConfig pa;
+  pa.delay_samples = 64;
+  HaasEnhancerConfig haas;
+  haas.delay_ms = 1.0f;
+  haas.mix = 1.0f;
+
+  for (bool initial_right : {true, false}) {
+    SECTION(initial_right ? "right to left" : "left to right") {
+      REQUIRE(side_change_peak<PhaseAlign>(pa, initial_right, true) <= 1e-7f);
+      REQUIRE(side_change_peak<HaasEnhancer>(haas, initial_right, true) <= 1e-7f);
+    }
+  }
+}
+
+TEST_CASE("Delay routing-unrelated updates preserve the buffered tail",
+          "[mastering][stereo][delay_routing]") {
+  PhaseAlignConfig pa;
+  pa.delay_samples = 64;
+  HaasEnhancerConfig haas;
+  haas.delay_ms = 1.0f;
+  haas.mix = 1.0f;
+
+  // Same side re-applied: the tail written just before the update still emerges.
+  REQUIRE(side_change_peak<PhaseAlign>(pa, true, false) > 0.01f);
+  REQUIRE(side_change_peak<HaasEnhancer>(haas, true, false) > 0.01f);
 }

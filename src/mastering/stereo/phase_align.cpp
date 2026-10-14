@@ -31,15 +31,13 @@ void PhaseAlign::process(float* const* channels, int num_channels, int num_sampl
   }
 
   const int delayed_ch = config_.delay_right ? 1 : 0;
+  delay_.route(config_.delay_right);
   for (int i = 0; i < num_samples; ++i) {
     channels[delayed_ch][i] = process_delay(channels[delayed_ch][i]);
   }
 }
 
-void PhaseAlign::reset() {
-  std::fill(delay_.begin(), delay_.end(), 0.0f);
-  delay_index_ = 0;
-}
+void PhaseAlign::reset() { delay_.clear(); }
 
 int PhaseAlign::tail_samples() const noexcept {
   rt::TailBudget tail;
@@ -55,7 +53,7 @@ void PhaseAlign::set_config(const PhaseAlignConfig& config) {
   validate_config(config);
   rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<PhaseAlignConfig>& diff) {
     // The line is rebuilt, and its audio dropped, only for a new length; the
-    // fraction and side are read per sample.
+    // fraction is read per sample and the side is routed in process().
     if (prepared_ && diff.changed(&PhaseAlignConfig::delay_samples)) rebuild_delay();
   });
 }
@@ -84,18 +82,13 @@ void PhaseAlign::validate_config(const PhaseAlignConfig& config) {
   }
 }
 
-void PhaseAlign::rebuild_delay() {
-  const size_t delay_line_size = static_cast<size_t>(config_.delay_samples) + 5u;
-  delay_.assign(std::max(delay_line_size, size_t{1}), 0.0f);
-  delay_index_ = 0;
-}
+void PhaseAlign::rebuild_delay() { delay_.assign(static_cast<size_t>(config_.delay_samples) + 5u); }
 
 float PhaseAlign::process_delay(float input) {
   const int whole_delay = config_.delay_samples;
   const float fraction = config_.fractional_delay_samples;
 
-  delay_[delay_index_] = input;
-  const size_t size = delay_.size();
+  delay_.write(input);
 
   // Fractional delay via a 5-point Lagrange interpolator. The fraction in [0, 1)
   // is evaluated at the edge of the node grid {0, 1, 2, 3, 4} (taps
@@ -116,10 +109,9 @@ float PhaseAlign::process_delay(float input) {
       weight *= (fraction - static_cast<float>(other)) / static_cast<float>(tap - other);
     }
     const size_t tap_offset = static_cast<size_t>(whole_delay) + static_cast<size_t>(tap);
-    const size_t read_index = (delay_index_ + size - tap_offset) % size;
-    delayed += weight * delay_[read_index];
+    delayed += weight * delay_.tap(tap_offset);
   }
-  delay_index_ = (delay_index_ + 1) % delay_.size();
+  delay_.advance();
   return delayed;
 }
 
