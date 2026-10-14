@@ -33,6 +33,9 @@ using namespace sonare;
 using namespace sonare_c_detail;
 
 #if defined(SONARE_WITH_ARRANGEMENT)
+static_assert(sonare::midi::kArticulationModeCount == SONARE_ARTICULATION_COUNT,
+              "articulation mode count out of step with the C ABI");
+
 namespace {
 
 // Maps a refused set_midi_instrument() to its C status: a permanent refusal is

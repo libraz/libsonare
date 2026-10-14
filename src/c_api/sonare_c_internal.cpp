@@ -2,7 +2,21 @@
 
 #include <cmath>
 
+#include "c_api/sonare_c_error_mapping.h"
+#include "util/error_classification.h"
+
 namespace sonare_c_detail {
+
+namespace {
+
+constexpr const char* kErrorDetailUnavailable = "Error detail unavailable";
+
+const char*& last_error_fallback_storage() noexcept {
+  static thread_local const char* fallback = nullptr;
+  return fallback;
+}
+
+}  // namespace
 
 std::string& last_error_storage() {
   static thread_local std::string storage;
@@ -14,14 +28,25 @@ SonareError& last_error_code_storage() {
   return code;
 }
 
-void set_last_error(SonareError code, const char* msg) {
-  last_error_storage().assign(msg != nullptr ? msg : "");
-  last_error_code_storage() = code;
+const char* last_error_message() noexcept {
+  const char* fallback = last_error_fallback_storage();
+  return fallback != nullptr ? fallback : last_error_storage().c_str();
 }
 
-void clear_last_error() {
-  last_error_storage().clear();
+void set_last_error(SonareError code, const char* msg) noexcept {
+  last_error_code_storage() = code;
+  last_error_fallback_storage() = nullptr;
+  try {
+    last_error_storage().assign(msg != nullptr ? msg : "");
+  } catch (...) {
+    last_error_fallback_storage() = kErrorDetailUnavailable;
+  }
+}
+
+void clear_last_error() noexcept {
   last_error_code_storage() = SONARE_OK;
+  last_error_storage().clear();
+  last_error_fallback_storage() = nullptr;
 }
 
 std::string& last_warning_storage() {
@@ -46,35 +71,24 @@ void clear_last_warning() {
 }
 
 SonareError map_sonare_exception(const SonareException& e) {
-  switch (e.code()) {
-    // An exception carrying Ok is a programming error, and SONARE_OK would tell
-    // the caller the call succeeded. It answers like the addon and the WASM
-    // module rather than falling through to a default arm, so adding an
-    // enumerator without a case here stops compiling instead of arriving as 99.
-    case sonare::ErrorCode::Ok:
-      return SONARE_ERROR_UNKNOWN;
-    case sonare::ErrorCode::FileNotFound:
-      return SONARE_ERROR_FILE_NOT_FOUND;
-    case sonare::ErrorCode::InvalidFormat:
-      return SONARE_ERROR_INVALID_FORMAT;
-    case sonare::ErrorCode::DecodeFailed:
-      return SONARE_ERROR_DECODE_FAILED;
-    case sonare::ErrorCode::InvalidParameter:
-      return SONARE_ERROR_INVALID_PARAMETER;
-    case sonare::ErrorCode::OutOfMemory:
-      return SONARE_ERROR_OUT_OF_MEMORY;
-    case sonare::ErrorCode::NotImplemented:
-      return SONARE_ERROR_NOT_SUPPORTED;
-    case sonare::ErrorCode::InvalidState:
-      return SONARE_ERROR_INVALID_STATE;
-    case sonare::ErrorCode::Cancelled:
-      return SONARE_ERROR_CANCELLED;
-    case sonare::ErrorCode::EncodeFailed:
-      return SONARE_ERROR_ENCODE_FAILED;
+  return c_error_from_error_code(e.code());
+}
+
+SonareError record_current_exception() noexcept {
+  try {
+    throw;
+  } catch (const SonareException& e) {
+    const SonareError code = map_sonare_exception(e);
+    set_last_error(code, e.what());
+    return code;
+  } catch (const std::exception& e) {
+    const SonareError code = static_cast<SonareError>(sonare::error_code_for_std_exception(e));
+    set_last_error(code, e.what());
+    return code;
+  } catch (...) {
+    set_last_error(SONARE_ERROR_UNKNOWN, kUnknownExceptionMessage);
+    return SONARE_ERROR_UNKNOWN;
   }
-  // A scoped enum can hold any value of its underlying type, so an out-of-range
-  // code still needs a landing place the switch cannot provide.
-  return SONARE_ERROR_UNKNOWN;
 }
 
 SonareError validate_audio_params(const float* samples, size_t length, int sample_rate) {

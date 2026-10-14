@@ -5,6 +5,7 @@
 
 #include <sonare/sonare_c.h>
 
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstring>
@@ -147,6 +148,78 @@ TEST_CASE("a sample bank refuses a value it could not attribute later", "[projec
   CHECK(index == 0);
   REQUIRE(sonare_sample_bank_sample_count(bank, &count) == SONARE_OK);
   CHECK(count == 1);
+
+  sonare_sample_bank_destroy(bank);
+}
+
+TEST_CASE("a C sample bank rejects non-finite zone values before changing state",
+          "[project][sample_bank]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  const float max = std::numeric_limits<float>::max();
+
+  SonareSampleBank* bank = sonare_sample_bank_create();
+  REQUIRE(bank != nullptr);
+  const std::vector<float> pcm(16, 0.25f);
+  SonareSampleDesc desc{};
+  uint32_t sample_index = 0;
+  REQUIRE(sonare_sample_bank_add_sample(bank, pcm.data(), pcm.size(), &desc, &sample_index) ==
+          SONARE_OK);
+
+  SonareSampleDesc max_tune_desc{};
+  max_tune_desc.fine_tune_cents = max;
+  uint32_t overflow_sample_index = 0;
+  REQUIRE(sonare_sample_bank_add_sample(bank, pcm.data(), pcm.size(), &max_tune_desc,
+                                        &overflow_sample_index) == SONARE_OK);
+
+  struct InvalidField {
+    float SonareSampleZoneDesc::*field;
+    float value;
+  };
+  const std::array<InvalidField, 9> invalid_fields = {{
+      {&SonareSampleZoneDesc::tune_cents, nan},
+      {&SonareSampleZoneDesc::tune_cents, inf},
+      {&SonareSampleZoneDesc::tune_cents, -inf},
+      {&SonareSampleZoneDesc::gain, nan},
+      {&SonareSampleZoneDesc::gain, inf},
+      {&SonareSampleZoneDesc::gain, -inf},
+      {&SonareSampleZoneDesc::pan_units, nan},
+      {&SonareSampleZoneDesc::pan_units, inf},
+      {&SonareSampleZoneDesc::pan_units, -inf},
+  }};
+
+  constexpr uint32_t kAbsentSet = 7;
+  for (const InvalidField& invalid : invalid_fields) {
+    SonareSampleZoneDesc zone{};
+    zone.sample_index = sample_index;
+    zone.*(invalid.field) = invalid.value;
+    CHECK(sonare_sample_bank_add_zone(bank, kAbsentSet, &zone) == SONARE_ERROR_INVALID_PARAMETER);
+    size_t set_count = 99;
+    REQUIRE(sonare_sample_bank_set_count(bank, &set_count) == SONARE_OK);
+    CHECK(set_count == 0);
+  }
+
+  SonareSampleZoneDesc overflow{};
+  overflow.sample_index = overflow_sample_index;
+  overflow.tune_cents = max;
+  CHECK(sonare_sample_bank_add_zone(bank, kAbsentSet, &overflow) == SONARE_ERROR_INVALID_PARAMETER);
+  size_t set_count = 99;
+  REQUIRE(sonare_sample_bank_set_count(bank, &set_count) == SONARE_OK);
+  CHECK(set_count == 0);
+
+  SonareSampleZoneDesc negative{};
+  negative.sample_index = sample_index;
+  negative.tune_cents = -25.0f;
+  negative.gain = -0.5f;
+  negative.pan_units = -125.0f;
+  REQUIRE(sonare_sample_bank_add_zone(bank, 0, &negative) == SONARE_OK);
+
+  SonareSampleZoneDesc out_of_range_pan{};
+  out_of_range_pan.sample_index = sample_index;
+  out_of_range_pan.pan_units = 900.0f;
+  REQUIRE(sonare_sample_bank_add_zone(bank, 1, &out_of_range_pan) == SONARE_OK);
+  REQUIRE(sonare_sample_bank_set_count(bank, &set_count) == SONARE_OK);
+  CHECK(set_count == 2);
 
   sonare_sample_bank_destroy(bank);
 }

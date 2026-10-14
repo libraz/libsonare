@@ -198,7 +198,7 @@ const char* sonare_error_message(SonareError error) {
 // Diagnostic accessors are the explicit exception to the public-entry clearing
 // rule: callers must be able to inspect a message repeatedly until another API
 // operation replaces or clears it.
-const char* sonare_last_error_message(void) { return last_error_storage().c_str(); }
+const char* sonare_last_error_message(void) { return last_error_message(); }
 
 SonareError sonare_last_error_code(void) { return last_error_code_storage(); }
 

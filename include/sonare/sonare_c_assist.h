@@ -5,9 +5,11 @@
 ///        applied over a project. Included via @ref sonare_c.h.
 ///
 /// The library ships a set of RULE-BASED modules -- no trained model, no
-/// statistical classifier, no learned parameter, no clock and no ambient
-/// randomness. Every note a module proposes carries a written reason, and the
-/// reasons come back with the result rather than being summarised away.
+/// statistical classifier, no learned parameter and no ambient randomness in
+/// musical decisions. A request with @c budget.maxTimeMs may read a monotonic
+/// clock only for its cooperative cutoff. Every note a module proposes carries
+/// a written reason, and the reasons come back with the result rather than
+/// being summarised away.
 ///
 /// Two entry points, in the same shape as the tempo pair in
 /// @ref sonare_c_project_annotate.h: @ref sonare_project_assist_preview_json
@@ -70,7 +72,13 @@ const char* sonare_assist_module_ids(void);
 ///   - @c scope: @c { "trackIds": [...], "startPpq": n, "endPpq": n }. Absent
 ///     bounds mean the whole timeline.
 ///   - @c budget: @c { "maxTimeMs": n, "maxIterations": n }. 0 on either axis
-///     means no cap on that axis.
+///     means no cap on that axis. @c maxIterations counts positive-length,
+///     completed source notes or chords whose onset is inside the requested
+///     scope when a built-in module attempts the candidate, including candidates later
+///     declined by a key or placement judge. Scope-outside, unclosed and
+///     zero-length notes do not consume it. The driver accumulates reported
+///     work even when a returned patch is discarded. The run-level counter is
+///     clamped at the requested cap and saturates at UINT32_MAX when uncapped.
 ///   - @c params: the module parameter object. @c target_clip_id is required;
 ///     @c source_clip_id, @c low_note, @c high_note, @c base_velocity and
 ///     @c velocity_scale are optional.
@@ -104,6 +112,13 @@ const char* sonare_assist_module_ids(void);
 ///     still owes an account of the module that did nothing. Read it as "what
 ///     happened", not as "what went wrong".
 ///   - @c iterationsConsumed, @c slotsDiscarded: the driver's own counters.
+///     When no time cap is present, or a run finishes before its monotonic
+///     deadline, the same seed, request and project produce the same document.
+///     At a time-cutoff boundary the amount of work completed can depend on
+///     execution timing, but the content and order of the candidates that were
+///     reached remain deterministic. A time-truncated preview may therefore
+///     contain partial @c patches and @c payloads; those partial results are
+///     descriptive and are never committed by the apply entry point.
 ///   - @c patches: one entry per proposed clip edit, @c { "clipId": n, "add":
 ///     [ { "ppq": n, "data0": n, "data1": n } ] }. The event triples are exactly
 ///     @ref SonareMidiEventPod, so a caller applies a suggestion by merging them

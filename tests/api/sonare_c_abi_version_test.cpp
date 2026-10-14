@@ -6,10 +6,17 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <new>
+#include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "c_api/sonare_c_error_mapping.h"
+#include "c_api/sonare_c_internal.h"
+#ifdef SONARE_WITH_MIXING
+#include "support/alloc_guard.h"
+#endif
 
 TEST_CASE("sonare_abi_version mirrors the compile-time aggregate", "[c_api][abi]") {
   REQUIRE(sonare_abi_version() == SONARE_ABI_VERSION);
@@ -18,7 +25,158 @@ TEST_CASE("sonare_abi_version mirrors the compile-time aggregate", "[c_api][abi]
   REQUIRE((sonare_abi_version() & 0xFFu) == SONARE_FEATURE_ABI_VERSION);
 }
 
+TEST_CASE("C exception recording preserves the existing classifications", "[c_api][abi]") {
+  const auto classify = [](auto&& thrower) -> SonareError {
+    try {
+      thrower();
+    } catch (...) {
+      return sonare_c_detail::record_current_exception();
+    }
+    return SONARE_OK;
+  };
+
+  REQUIRE(classify([] {
+            throw sonare::SonareException(sonare::ErrorCode::EncodeFailed, "encode failed");
+          }) == SONARE_ERROR_ENCODE_FAILED);
+  REQUIRE(sonare_last_error_code() == SONARE_ERROR_ENCODE_FAILED);
+  REQUIRE(std::string(sonare_last_error_message()) == "encode failed");
+
+  REQUIRE(classify([] { throw std::bad_alloc(); }) == SONARE_ERROR_OUT_OF_MEMORY);
+  REQUIRE(classify([] { throw std::invalid_argument("bad argument"); }) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(classify([] { throw std::logic_error("bad state"); }) == SONARE_ERROR_INVALID_STATE);
+  REQUIRE(classify([] { throw std::runtime_error("runtime failure"); }) == SONARE_ERROR_UNKNOWN);
+  REQUIRE(classify([] { throw 42; }) == SONARE_ERROR_UNKNOWN);
+  REQUIRE(std::string(sonare_last_error_message()) != "");
+
+  sonare_c_detail::clear_last_error();
+}
+
+TEST_CASE("C diagnostic writer remains noexcept and preserves normal diagnostics", "[c_api][abi]") {
+  static_assert(noexcept(sonare_c_detail::set_last_error(SONARE_OK, nullptr)));
+  static_assert(noexcept(sonare_c_detail::clear_last_error()));
+  static_assert(noexcept(sonare_c_detail::last_error_message()));
+
+  const std::string long_message(4096, 'x');
+  sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_STATE, long_message.c_str());
+  REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_STATE);
+  REQUIRE(std::string(sonare_last_error_message()) == long_message);
+
+  // SONARE_OK is also used for successful calls that carry a diagnostic.
+  sonare_c_detail::set_last_error(SONARE_OK, "success diagnostic");
+  REQUIRE(sonare_last_error_code() == SONARE_OK);
+  REQUIRE(std::string(sonare_last_error_message()) == "success diagnostic");
+
+  sonare_c_detail::clear_last_error();
+  REQUIRE(sonare_last_error_code() == SONARE_OK);
+  REQUIRE(std::string(sonare_last_error_message()).empty());
+}
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("C output helpers publish only after a complete copy", "[c_api][abi]") {
+  const std::vector<float> values = {0.25f, -0.5f, 0.75f};
+
+  float* vector_out = const_cast<float*>(values.data());
+  size_t vector_length = 123;
+  bool vector_threw = false;
+  {
+    sonare::test::AllocationFailureAtGuard fail_first(1);
+    try {
+      (void)sonare_c_detail::copy_vector(values, &vector_out, &vector_length);
+    } catch (const std::bad_alloc&) {
+      vector_threw = true;
+    }
+  }
+  if (vector_out != nullptr && vector_out != values.data()) sonare_free_floats(vector_out);
+  REQUIRE(vector_threw);
+  REQUIRE(vector_out == nullptr);
+  REQUIRE(vector_length == 0);
+
+  const std::vector<float> empty;
+  vector_out = const_cast<float*>(values.data());
+  vector_length = 123;
+  REQUIRE(sonare_c_detail::copy_vector(empty, &vector_out, &vector_length) == SONARE_OK);
+  REQUIRE(vector_out == nullptr);
+  REQUIRE(vector_length == 0);
+  REQUIRE(sonare_c_detail::copy_vector(values, static_cast<float**>(nullptr), &vector_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_c_detail::copy_vector(values, &vector_out, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  const sonare::Audio audio = sonare::Audio::from_buffer(values.data(), values.size(), 22050);
+  float* audio_out = const_cast<float*>(values.data());
+  size_t audio_length = 123;
+  bool audio_threw = false;
+  {
+    sonare::test::AllocationFailureAtGuard fail_first(1);
+    try {
+      (void)sonare_c_detail::copy_audio_result(audio, &audio_out, &audio_length);
+    } catch (const std::bad_alloc&) {
+      audio_threw = true;
+    }
+  }
+  if (audio_out != nullptr && audio_out != values.data()) sonare_free_floats(audio_out);
+  REQUIRE(audio_threw);
+  REQUIRE(audio_out == nullptr);
+  REQUIRE(audio_length == 0);
+
+  REQUIRE(sonare_c_detail::copy_audio_result(audio, nullptr, &audio_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_c_detail::copy_audio_result(audio, &audio_out, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("C diagnostic storage failure preserves the code and recovers", "[c_api][abi]") {
+  bool escaped = false;
+  SonareError fallback_code = SONARE_OK;
+  std::string fallback_message;
+  SonareError cleared_code = SONARE_ERROR_UNKNOWN;
+  std::string cleared_message;
+  SonareError recovered_code = SONARE_OK;
+  std::string recovered_message;
+
+  std::thread worker([&] {
+    // A fresh thread starts with an empty TLS string. Construct the requested
+    // text before arming the allocator so the first guarded allocation is the
+    // diagnostic assignment itself.
+    const std::string long_message(4096, 'x');
+    try {
+      sonare::test::AllocationFailureAtGuard fail_first(1);
+      sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, long_message.c_str());
+    } catch (...) {
+      escaped = true;
+    }
+
+    fallback_code = sonare_last_error_code();
+    fallback_message = sonare_last_error_message();
+
+    sonare_c_detail::clear_last_error();
+    cleared_code = sonare_last_error_code();
+    cleared_message = sonare_last_error_message();
+
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_STATE, long_message.c_str());
+    recovered_code = sonare_last_error_code();
+    recovered_message = sonare_last_error_message();
+    sonare_c_detail::clear_last_error();
+  });
+  worker.join();
+
+  REQUIRE_FALSE(escaped);
+  REQUIRE(fallback_code == SONARE_ERROR_INVALID_FORMAT);
+  REQUIRE_FALSE(fallback_message.empty());
+  REQUIRE(fallback_message != std::string(4096, 'x'));
+  REQUIRE(cleared_code == SONARE_OK);
+  REQUIRE(cleared_message.empty());
+  REQUIRE(recovered_code == SONARE_ERROR_INVALID_STATE);
+  REQUIRE(recovered_message.size() == 4096);
+  REQUIRE(recovered_message == std::string(4096, 'x'));
+}
+#endif
+
 TEST_CASE("C error mapping preserves cancellation", "[c_api][abi]") {
+  static_assert(noexcept(sonare_c_detail::c_error_from_error_code(sonare::ErrorCode::Ok)));
+  static_assert(sonare_c_detail::c_error_from_error_code(sonare::ErrorCode::Ok) ==
+                SONARE_ERROR_UNKNOWN);
   REQUIRE(sonare_c_detail::error_code_from_c_error(SONARE_ERROR_CANCELLED) ==
           sonare::ErrorCode::Cancelled);
   REQUIRE(sonare_c_detail::error_code_from_c_error(SONARE_ERROR_INVALID_PARAMETER) ==

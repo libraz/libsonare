@@ -13,6 +13,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <tuple>
 #include <vector>
 
@@ -21,6 +22,10 @@
 #include "midi/smf.h"
 #include "midi/ump.h"
 #include "transport/tempo_map.h"
+#endif
+
+#ifdef SONARE_WITH_MIXING
+#include "support/alloc_guard.h"
 #endif
 
 namespace {
@@ -273,6 +278,61 @@ TEST_CASE("assignment leaves every field it does not write", "[c_api][note_targe
   REQUIRE(notes[0].edit.vibrato_depth_change == before.edit.vibrato_depth_change);
   REQUIRE(notes[0].edit.drift_change == before.edit.drift_change);
 }
+
+#ifdef SONARE_WITH_MIXING
+TEST_CASE("assignment catches a target staging allocation failure before touching notes",
+          "[c_api][note_targets][allocation]") {
+  SonareNoteObject note = note_at(0, kHalfSecond, kA4Hz);
+  note.amplitude_offset = 17;
+  note.frame_start = 3;
+  note.frame_end = 11;
+  note.median_cents = 123.0f;
+  note.f0_stability = 0.75f;
+  note.edit.time_offset_samples = 64;
+  note.edit.envelope_offset = 2;
+  note.edit.envelope_count = 5;
+  note.edit.pitch_shift_semitones = -4.0f;
+  note.edit.gain_db = -3.0f;
+  note.edit.time_stretch_ratio = 1.5f;
+  note.edit.formant_shift_semitones = 2.0f;
+  note.edit.vibrato_depth_change = 0.25f;
+  note.edit.drift_change = -0.5f;
+  note.edit.muted = 1;
+  const SonareNoteObject before = note;
+  const SonareNoteTarget target = target_at(0.0, 0.5, 72.0f);
+  size_t assigned = 99;
+
+  SonareError error;
+  {
+    // Fail only the target-staging allocation.
+    sonare::test::AllocationFailureAtGuard guard(1);
+    error = sonare_assign_note_targets(&note, 1, kSampleRate, &target, 1, nullptr, &assigned);
+  }
+
+  REQUIRE(error == SONARE_ERROR_OUT_OF_MEMORY);
+  REQUIRE(assigned == 0);
+  CHECK(sonare_last_error_code() == SONARE_ERROR_OUT_OF_MEMORY);
+  CHECK(std::string(sonare_last_error_message()).empty() == false);
+  CHECK(note.onset_sample == before.onset_sample);
+  CHECK(note.offset_sample == before.offset_sample);
+  CHECK(note.amplitude_offset == before.amplitude_offset);
+  CHECK(note.frame_start == before.frame_start);
+  CHECK(note.frame_end == before.frame_end);
+  CHECK(note.median_hz == before.median_hz);
+  CHECK(note.median_cents == before.median_cents);
+  CHECK(note.f0_stability == before.f0_stability);
+  CHECK(note.edit.time_offset_samples == before.edit.time_offset_samples);
+  CHECK(note.edit.envelope_offset == before.edit.envelope_offset);
+  CHECK(note.edit.envelope_count == before.edit.envelope_count);
+  CHECK(note.edit.pitch_shift_semitones == before.edit.pitch_shift_semitones);
+  CHECK(note.edit.gain_db == before.edit.gain_db);
+  CHECK(note.edit.time_stretch_ratio == before.edit.time_stretch_ratio);
+  CHECK(note.edit.formant_shift_semitones == before.edit.formant_shift_semitones);
+  CHECK(note.edit.vibrato_depth_change == before.edit.vibrato_depth_change);
+  CHECK(note.edit.drift_change == before.edit.drift_change);
+  CHECK(note.edit.muted == before.edit.muted);
+}
+#endif
 
 TEST_CASE("assignment keeps an edit the caller already made when no target reaches it",
           "[c_api][note_targets]") {

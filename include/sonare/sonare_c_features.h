@@ -963,9 +963,15 @@ SonareError sonare_db_to_amplitude(const float* values, size_t length, float ref
                                    size_t* out_length);
 
 /// @note Free @p out with @ref sonare_free_floats.
+/// @details @p coef must be finite. When @p use_zi is non-zero, @p zi must be
+///   finite; when it is zero, @p zi is ignored. Empty input remains a valid
+///   empty transform after parameter validation.
 SonareError sonare_preemphasis(const float* samples, size_t length, float coef, float zi,
                                int use_zi, float** out, size_t* out_length);
 /// @note Free @p out with @ref sonare_free_floats.
+/// @details @p coef must be finite. When @p use_zi is non-zero, @p zi must be
+///   finite; when it is zero, @p zi is ignored. Empty input remains a valid
+///   empty transform after parameter validation.
 SonareError sonare_deemphasis(const float* samples, size_t length, float coef, float zi, int use_zi,
                               float** out, size_t* out_length);
 
@@ -974,6 +980,7 @@ SonareError sonare_deemphasis(const float* samples, size_t length, float coef, f
 ///   @c *out == NULL, @c *out_length == 0, @c *start_sample == @c *end_sample == 0.
 ///   An EMPTY input (@p length == 0) is rejected with
 ///   SONARE_ERROR_INVALID_PARAMETER so it cannot be confused with that result.
+///   @p top_db must be finite and strictly positive.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_trim_silence(const float* samples, size_t length, float top_db, int frame_length,
                                 int hop_length, float** out, size_t* out_length, int* start_sample,
@@ -982,7 +989,8 @@ SonareError sonare_trim_silence(const float* samples, size_t length, float top_d
 /// @details An entirely silent input succeeds with zero intervals
 ///   (@c *out_intervals == NULL, @c *out_interval_count == 0). An EMPTY input
 ///   (@p length == 0) is rejected with SONARE_ERROR_INVALID_PARAMETER so it
-///   cannot be confused with that result.
+///   cannot be confused with that result. @p top_db must be finite and
+///   strictly positive.
 /// @note Free @p out_intervals with @ref sonare_free_ints.
 SonareError sonare_split_silence(const float* samples, size_t length, float top_db,
                                  int frame_length, int hop_length, int** out_intervals,

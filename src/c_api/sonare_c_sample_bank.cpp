@@ -1,6 +1,7 @@
 #include <sonare/sonare_c.h>
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 
 #include "midi/synth/sample_bank.h"
@@ -76,6 +77,10 @@ SonareSampleBank* sonare_sample_bank_create(void) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     SONARE_C_TRY
+    if (!std::isfinite(zone->tune_cents) || !std::isfinite(zone->gain) ||
+        !std::isfinite(zone->pan_units)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
     sonare::midi::synth::SampleZoneDesc cpp;
     // Every bound defaults on its own, so narrowing one edge never collapses
     // another into an empty range. An upper bound of zero is the unset one --

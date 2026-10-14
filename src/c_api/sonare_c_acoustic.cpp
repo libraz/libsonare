@@ -69,12 +69,6 @@ sonare::acoustic::ShoeboxRoom make_room(float length, float width, float height,
   return make_uniform_room(sonare::RoomDimensions{length, width, height}, request);
 }
 
-// Heap-copies a float vector into a caller-owned array (NULL when empty).
-float* copy_bands(const std::vector<float>& values, size_t* count) {
-  *count = values.size();
-  return sonare_c_detail::copy_vector(values);
-}
-
 // RIR synthesis reports geometry and synthesis limits as non-fatal core
 // diagnostics so a caller can inspect the result. Preserve their Error and
 // Warning content in the matching C-ABI channels as well: a C caller (and the
@@ -264,10 +258,9 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
                                  const SonareRoomEstimateConfig* config, SonareRoomEstimate* out) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
-  if (!config || !out) return SONARE_ERROR_INVALID_PARAMETER;
-  out->absorption_bands = nullptr;
-  out->rt60_bands = nullptr;
-  out->band_count = 0;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = {};
+  if (!config) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     sonare::RoomEstimateConfig cfg;
@@ -301,12 +294,13 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
     }
 
     const sonare::RoomEstimate est = sonare::estimate_room(audio, cfg);
-    out->volume = est.volume;
-    out->length_m = est.dims.length;
-    out->width_m = est.dims.width;
-    out->height_m = est.dims.height;
-    out->drr_db = est.drr_db;
-    out->confidence = est.confidence;
+    SonareRoomEstimate staged{};
+    staged.volume = est.volume;
+    staged.length_m = est.dims.length;
+    staged.width_m = est.dims.width;
+    staged.height_m = est.dims.height;
+    staged.drr_db = est.drr_db;
+    staged.confidence = est.confidence;
     // The two band vectors are independent estimates (absorption from the
     // inverse problem, RT60 from the decay fit) and either can legitimately
     // fail to converge on its own. band_count is documented as the length of
@@ -316,15 +310,14 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
     // instead so both arrays reach band_count and neither is ever discarded
     // because the other came back empty.
     const size_t max_count = std::max(est.absorption_bands.size(), est.rt60_bands.size());
-    auto pad_with_nan = [max_count](std::vector<float> values) {
-      values.resize(max_count, std::numeric_limits<float>::quiet_NaN());
-      return values;
-    };
-    size_t a_count = 0;
-    size_t r_count = 0;
-    out->absorption_bands = copy_bands(pad_with_nan(est.absorption_bands), &a_count);
-    out->rt60_bands = copy_bands(pad_with_nan(est.rt60_bands), &r_count);
-    out->band_count = max_count;
+    std::unique_ptr<float[]> staged_absorption(
+        sonare_c_detail::copy_float_vector_padded(est.absorption_bands, max_count));
+    std::unique_ptr<float[]> staged_rt60(
+        sonare_c_detail::copy_float_vector_padded(est.rt60_bands, max_count));
+    staged.absorption_bands = staged_absorption.release();
+    staged.rt60_bands = staged_rt60.release();
+    staged.band_count = max_count;
+    *out = staged;
     return SONARE_OK;
   });
 #else

@@ -14,6 +14,9 @@
 #include <vector>
 
 #include "support/audio_fixtures.h"
+#if defined(SONARE_WITH_MIXING)
+#include "support/alloc_guard.h"
+#endif
 #include "util/constants.h"
 #include "util/db.h"
 
@@ -74,6 +77,55 @@ TEST_CASE("sonare_note_segments validates and returns frame-accurate regions",
   const float good_f0 = 220.0f;
   REQUIRE(sonare_note_segments(&good_f0, 1, &bad_prob, 1, 100.0f, &config, &out) ==
           SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("sonare_note_segments treats an oversized finite duration as empty",
+          "[c_api][features]") {
+  const std::vector<float> f0 = {440.0f, 440.0f, 440.0f};
+  const std::vector<float> voiced = {1.0f, 1.0f, 1.0f};
+  SonareNoteSegmenterConfig config{};
+  config.struct_version = 1;
+  config.min_note_ms = std::numeric_limits<float>::max();
+
+  SonareNoteSegmentsResult out;
+  out.segments = reinterpret_cast<SonareNoteSegment*>(static_cast<std::uintptr_t>(0x1));
+  out.count = 9;
+  REQUIRE(sonare_note_segments(f0.data(), f0.size(), voiced.data(), voiced.size(), 100.0f, &config,
+                               &out) == SONARE_OK);
+  REQUIRE(out.segments == nullptr);
+  REQUIRE(out.count == 0);
+}
+
+TEST_CASE("sonare_note_segments rejects invalid timing controls and clears outputs",
+          "[c_api][features]") {
+  const std::vector<float> f0 = {440.0f, 440.0f};
+  const std::vector<float> voiced = {1.0f, 1.0f};
+  SonareNoteSegmenterConfig config{};
+  config.struct_version = 1;
+  SonareNoteSegmentsResult out{};
+
+  const float negative_neighbor = std::nextafter(0.0f, -1.0f);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  for (const float bad_threshold : {negative_neighbor, nan}) {
+    config.segmentation_threshold_cents = bad_threshold;
+    config.min_note_ms = 0.0f;
+    out.segments = reinterpret_cast<SonareNoteSegment*>(static_cast<std::uintptr_t>(0x1));
+    out.count = 7;
+    REQUIRE(sonare_note_segments(f0.data(), f0.size(), voiced.data(), voiced.size(), 100.0f,
+                                 &config, &out) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out.segments == nullptr);
+    REQUIRE(out.count == 0);
+  }
+  for (const float bad_min_note_ms : {negative_neighbor, nan}) {
+    config.segmentation_threshold_cents = 0.0f;
+    config.min_note_ms = bad_min_note_ms;
+    out.segments = reinterpret_cast<SonareNoteSegment*>(static_cast<std::uintptr_t>(0x1));
+    out.count = 7;
+    REQUIRE(sonare_note_segments(f0.data(), f0.size(), voiced.data(), voiced.size(), 100.0f,
+                                 &config, &out) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out.segments == nullptr);
+    REQUIRE(out.count == 0);
+  }
 }
 
 TEST_CASE("sonare_spectral_contrast", "[c_api][features]") {
@@ -247,6 +299,50 @@ TEST_CASE("sonare_rms_energy follows empty-output C ABI contract", "[c_api][feat
     REQUIRE(count == 0);
   }
 }
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("RMS feature output remains null on final allocation failure",
+          "[c_api][features][allocation]") {
+  const auto samples = sonare::test::generate_sine_samples(
+      440.0f, kSampleRate, static_cast<int>(static_cast<float>(kSampleRate) * 0.5f), 1.0f);
+
+  const auto measure_success = [&]() {
+    float* out = nullptr;
+    size_t count = 0;
+    SonareError error = SONARE_ERROR_UNKNOWN;
+    size_t allocations = 0;
+    {
+      sonare::test::AllocationGuard guard;
+      error =
+          sonare_rms_energy(samples.data(), samples.size(), kSampleRate, 1024, 256, &out, &count);
+      allocations = guard.count();
+    }
+    REQUIRE(error == SONARE_OK);
+    REQUIRE(out != nullptr);
+    REQUIRE(count > 0);
+    sonare_free_floats(out);
+    return allocations;
+  };
+
+  (void)measure_success();
+  const size_t allocations = measure_success();
+  const size_t repeated_allocations = measure_success();
+  REQUIRE(allocations > 0);
+  REQUIRE(allocations == repeated_allocations);
+
+  float* out = non_null_floats();
+  size_t count = 99;
+  SonareError error = SONARE_OK;
+  {
+    sonare::test::AllocationFailureAtGuard fail_output_copy(allocations);
+    error = sonare_rms_energy(samples.data(), samples.size(), kSampleRate, 1024, 256, &out, &count);
+  }
+  REQUIRE(error == SONARE_ERROR_OUT_OF_MEMORY);
+  REQUIRE(out == nullptr);
+  REQUIRE(count == 0);
+  sonare_free_floats(out);
+}
+#endif
 
 TEST_CASE("sonare_pitch_tuning", "[c_api][features]") {
   SECTION("returns a tuning offset in [-0.5, 0.5)") {

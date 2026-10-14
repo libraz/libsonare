@@ -4,9 +4,14 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <string>
 #include <vector>
+
+#if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_ACOUSTIC_SIM)
+#include "support/alloc_guard.h"
+#endif
 
 namespace {
 
@@ -495,6 +500,94 @@ TEST_CASE("sonare acoustic C API estimates a room from a synthesized RIR", "[c_a
   REQUIRE(estimate.band_count == 0);
   sonare_free_rir_synth_result(&rir);
 }
+
+#if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_ACOUSTIC_SIM)
+TEST_CASE("sonare acoustic room estimates publish atomically on allocation failure",
+          "[c_api][acoustic][allocation]") {
+  SonareRirSynthConfig synth_cfg = valid_rir_config();
+  synth_cfg.max_seconds = 0.1f;
+  SonareRirSynthResult rir{};
+  REQUIRE(sonare_synthesize_rir(&synth_cfg, 48000, &rir) == SONARE_OK);
+  REQUIRE(rir.rir != nullptr);
+  REQUIRE(rir.length > 0);
+
+  const SonareRoomEstimateConfig estimate_cfg = valid_estimate_config();
+  SonareRoomEstimate warm{};
+  REQUIRE(sonare_estimate_room(rir.rir, rir.length, 48000, &estimate_cfg, &warm) == SONARE_OK);
+  REQUIRE(warm.band_count > 0);
+  REQUIRE(warm.absorption_bands != nullptr);
+  REQUIRE(warm.rt60_bands != nullptr);
+  sonare_free_room_estimate(&warm);
+
+  SonareRoomEstimate first{};
+  SonareError first_error = SONARE_ERROR_UNKNOWN;
+  std::size_t first_allocations = 0;
+  {
+    sonare::test::AllocationGuard guard;
+    first_error = sonare_estimate_room(rir.rir, rir.length, 48000, &estimate_cfg, &first);
+    first_allocations = guard.count();
+  }
+  REQUIRE(first_error == SONARE_OK);
+  REQUIRE(first_allocations > 0);
+  REQUIRE(first.band_count > 0);
+  REQUIRE(first.absorption_bands != nullptr);
+  REQUIRE(first.rt60_bands != nullptr);
+  sonare_free_room_estimate(&first);
+
+  SonareRoomEstimate second{};
+  SonareError second_error = SONARE_ERROR_UNKNOWN;
+  std::size_t second_allocations = 0;
+  {
+    sonare::test::AllocationGuard guard;
+    second_error = sonare_estimate_room(rir.rir, rir.length, 48000, &estimate_cfg, &second);
+    second_allocations = guard.count();
+  }
+  REQUIRE(second_error == SONARE_OK);
+  REQUIRE(second_allocations == first_allocations);
+  REQUIRE(second_allocations > 0);
+  REQUIRE(second.band_count > 0);
+  REQUIRE(second.absorption_bands != nullptr);
+  REQUIRE(second.rt60_bands != nullptr);
+  sonare_free_room_estimate(&second);
+
+  SonareRoomEstimate failed{};
+  failed.volume = 1.0f;
+  failed.length_m = 2.0f;
+  failed.width_m = 3.0f;
+  failed.height_m = 4.0f;
+  failed.drr_db = 5.0f;
+  failed.confidence = 6.0f;
+  failed.absorption_bands = reinterpret_cast<float*>(static_cast<std::uintptr_t>(1));
+  failed.rt60_bands = reinterpret_cast<float*>(static_cast<std::uintptr_t>(2));
+  failed.band_count = 7;
+  SonareError failed_error = SONARE_OK;
+  {
+    // The final allocation is the RT60 array. The guard is scoped to the C
+    // call, so Catch2's assertions cannot consume the injected failure.
+    sonare::test::AllocationFailureAtGuard guard(second_allocations);
+    failed_error = sonare_estimate_room(rir.rir, rir.length, 48000, &estimate_cfg, &failed);
+  }
+  REQUIRE(failed_error == SONARE_ERROR_OUT_OF_MEMORY);
+  // REQUIRE aborts before the free below if a future implementation leaves a
+  // sentinel or partially published allocation behind; neither is safe to
+  // pass to the C free routine.
+  REQUIRE(failed.volume == 0.0f);
+  REQUIRE(failed.length_m == 0.0f);
+  REQUIRE(failed.width_m == 0.0f);
+  REQUIRE(failed.height_m == 0.0f);
+  REQUIRE(failed.drr_db == 0.0f);
+  REQUIRE(failed.confidence == 0.0f);
+  REQUIRE(failed.absorption_bands == nullptr);
+  REQUIRE(failed.rt60_bands == nullptr);
+  REQUIRE(failed.band_count == 0);
+  sonare_free_room_estimate(&failed);
+  CHECK(failed.absorption_bands == nullptr);
+  CHECK(failed.rt60_bands == nullptr);
+  CHECK(failed.band_count == 0);
+
+  sonare_free_rir_synth_result(&rir);
+}
+#endif
 
 TEST_CASE("sonare acoustic C API rejects invalid estimate priors and morph geometry",
           "[c_api][acoustic][numeric]") {

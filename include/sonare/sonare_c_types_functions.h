@@ -457,8 +457,11 @@ const char* sonare_error_message(SonareError error);
 ///     process / latency entry points.
 ///   - A message is recorded on every caught-C++-exception return path (the
 ///     library mapped a thrown sonare::SonareException / std::exception to a
-///     SonareError); this returns the exception's what() text. A few validation
-///     paths record a message of their own.
+///     SonareError); under normal memory conditions this returns the exact
+///     exception's what() text. If storing that diagnostic fails, this remains
+///     non-NULL and returns a static fallback while
+///     @ref sonare_last_error_code retains the mapped error code. A few
+///     validation paths record a message of their own.
 ///   - Most validation early-returns that produce an error code WITHOUT throwing
 ///     (e.g. a NULL out-pointer, an out-of-range sample rate, a non-finite input
 ///     sample) record NO message: this returns "" even though the call failed.

@@ -53,20 +53,24 @@ bool fill_decompose_stems_config(const SonareDecomposeStemsConfig* config,
 template <typename DecomposeResult>
 SonareError copy_decompose_factors(const DecomposeResult& result, float** out_w,
                                    size_t* out_w_length, float** out_h, size_t* out_h_length) {
+  if ((out_w != nullptr) != (out_w_length != nullptr) ||
+      (out_h != nullptr) != (out_h_length != nullptr)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  // Stage both factor buffers before publishing either output.
+  std::unique_ptr<float[]> staged_w;
+  std::unique_ptr<float[]> staged_h;
+  if (out_w != nullptr) staged_w.reset(copy_vector(result.W));
+  if (out_h != nullptr) staged_h.reset(copy_vector(result.H));
+
   if (out_w != nullptr) {
-    SonareError werr = copy_vector(result.W, out_w, out_w_length);
-    if (werr != SONARE_OK) return werr;
+    *out_w = staged_w.release();
+    *out_w_length = result.W.size();
   }
   if (out_h != nullptr) {
-    SonareError herr = copy_vector(result.H, out_h, out_h_length);
-    if (herr != SONARE_OK) {
-      if (out_w != nullptr) {
-        sonare_free_floats(*out_w);
-        *out_w = nullptr;
-        *out_w_length = 0;
-      }
-      return herr;
-    }
+    *out_h = staged_h.release();
+    *out_h_length = result.H.size();
   }
   return SONARE_OK;
 }
@@ -334,9 +338,7 @@ SonareError sonare_decompose_with_init(const float* s, int n_features, int n_fra
   DecomposeResult result =
       decompose(s, n_features, n_frames, n_components, n_iter, "mu", beta, init_str);
 
-  SonareError werr = copy_vector(result.W, out_w, out_w_length);
-  if (werr != SONARE_OK) return werr;
-  return copy_vector(result.H, out_h, out_h_length);
+  return copy_decompose_factors(result, out_w, out_w_length, out_h, out_h_length);
   SONARE_C_CATCH
 }
 

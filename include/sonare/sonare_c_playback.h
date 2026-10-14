@@ -98,7 +98,9 @@ SonareError sonare_playback_renderer_config_json(const SonarePlaybackRenderer* r
 /// @brief Publishes the listener head orientation in degrees.
 /// @details Right-handed: positive yaw turns the head right, positive pitch
 ///          looks up, positive roll lowers the right ear. Applied in
-///          yaw, pitch, roll order. Ignored by speakers targets.
+///          yaw, pitch, roll order. Ignored by speakers targets. The low-level
+///          realtime C ABI accepts non-finite angles as a successful no-op;
+///          higher-level language facades may reject them before this call.
 SonareError sonare_playback_renderer_set_head_orientation(SonarePlaybackRenderer* renderer,
                                                           float yaw_deg, float pitch_deg,
                                                           float roll_deg);

@@ -48,17 +48,23 @@ struct ProjectFixture {
   ~ProjectFixture() { sonare_project_destroy(project); }
 };
 
-void add_c_major_line(SonareProject* project, uint32_t clip_id) {
+std::vector<SonareMidiEventPod> c_major_events(uint8_t group = 0, uint8_t channel = 0) {
   const uint8_t notes[] = {60, 64, 67, 72};
   std::vector<SonareMidiEventPod> events;
   for (int i = 0; i < 4; ++i) {
     SonareMidiEventPod on{};
     SonareMidiEventPod off{};
-    REQUIRE(sonare_midi_note_on(i * 480.0, 0, 0, notes[i], 100, &on) == SONARE_OK);
-    REQUIRE(sonare_midi_note_off(i * 480.0 + 240.0, 0, 0, notes[i], 0, &off) == SONARE_OK);
+    REQUIRE(sonare_midi_note_on(i * 480.0, group, channel, notes[i], 100, &on) == SONARE_OK);
+    REQUIRE(sonare_midi_note_off(i * 480.0 + 240.0, group, channel, notes[i], 0, &off) ==
+            SONARE_OK);
     events.push_back(on);
     events.push_back(off);
   }
+  return events;
+}
+
+void add_c_major_line(SonareProject* project, uint32_t clip_id) {
+  const std::vector<SonareMidiEventPod> events = c_major_events();
   REQUIRE(sonare_project_set_midi_events(project, clip_id, events.data(), events.size()) ==
           SONARE_OK);
 }
@@ -142,6 +148,36 @@ std::vector<int> patch_note_ons(const json::Value& patch) {
     if (status == 0x9u && velocity != 0) notes.push_back(note);
   }
   return notes;
+}
+
+struct PatchNoteEvent {
+  double ppq = 0.0;
+  uint32_t word = 0;
+  bool note_on = false;
+  uint8_t group = 0;
+  uint8_t channel = 0;
+  uint8_t note = 0;
+};
+
+std::vector<PatchNoteEvent> patch_note_events(const json::Value& patch) {
+  std::vector<PatchNoteEvent> events;
+  const json::Value* add = patch.find("add");
+  REQUIRE(add != nullptr);
+  REQUIRE(add->is_array());
+  for (const json::Value& event : add->as_array()) {
+    const uint32_t word = static_cast<uint32_t>(event["data0"].as_number());
+    const uint32_t status = (word >> 20) & 0x0Fu;
+    if (status != 0x8u && status != 0x9u) continue;
+    events.push_back(PatchNoteEvent{
+        event["ppq"].as_number(),
+        word,
+        status == 0x9u && (word & 0x7Fu) != 0,
+        static_cast<uint8_t>((word >> 24) & 0x0Fu),
+        static_cast<uint8_t>((word >> 16) & 0x0Fu),
+        static_cast<uint8_t>((word >> 8) & 0x7Fu),
+    });
+  }
+  return events;
 }
 
 std::vector<std::string> split_on_newline(const char* text) {
@@ -434,6 +470,45 @@ TEST_CASE("a run whose status is not ok commits nothing", "[c_api][assist]") {
   CHECK(serialize_project(fixture.project) != before);
 }
 
+TEST_CASE("a truncated apply returns its preview without committing or adding history",
+          "[c_api][assist]") {
+  ProjectFixture fixture;
+  make_project(&fixture);
+  const std::string before_sentinel = serialize_project(fixture.project);
+
+  // Establish one known, undoable edit before the assist call. The unmatched
+  // note-off is deliberately inert to the harmonizer, but makes the edit
+  // visible in the serialized project without changing the source notes.
+  std::vector<SonareMidiEventPod> with_sentinel = c_major_events();
+  SonareMidiEventPod sentinel{};
+  REQUIRE(sonare_midi_note_off(999.0, 0, 0, 12, 0, &sentinel) == SONARE_OK);
+  with_sentinel.push_back(sentinel);
+  REQUIRE(sonare_project_set_midi_events(fixture.project, fixture.clip_id, with_sentinel.data(),
+                                         with_sentinel.size()) == SONARE_OK);
+  const std::string before_assist = serialize_project(fixture.project);
+  REQUIRE(before_assist != before_sentinel);
+
+  const std::string request =
+      "{\"modules\": [\"sonare.builtin.diatonic_harmonizer\"], \"budget\": "
+      "{\"maxIterations\": 2}, \"params\": {\"target_clip_id\": " +
+      std::to_string(fixture.clip_id) + "}}";
+  Document applied;
+  REQUIRE(sonare_project_assist_apply_json(fixture.project, request.c_str(), applied.out()) ==
+          SONARE_OK);
+  const json::Value root = applied.parsed();
+  CHECK(root["status"].as_string() == "budgetTruncated");
+  REQUIRE(root["patches"].is_array());
+  CHECK_FALSE(root["patches"].as_array().empty());
+  // The partial document remains useful to a preview-style caller, while the
+  // apply entry point must leave both the model and history alone.
+  CHECK(serialize_project(fixture.project) == before_assist);
+
+  // One undo reaches the sentinel edit. If the rejected assist had created a
+  // transaction, this would first undo its partial patch instead.
+  REQUIRE(sonare_project_undo(fixture.project) == SONARE_OK);
+  CHECK(serialize_project(fixture.project) == before_sentinel);
+}
+
 // ---------------------------------------------------------------------------
 // Request validation
 // ---------------------------------------------------------------------------
@@ -683,6 +758,83 @@ TEST_CASE("the request's scope and budget reach the modules", "[c_api][assist]")
   // Only the generator's patch is there: the harmonizer never ran.
   REQUIRE(gated_root["patches"].as_array().size() == 1u);
   CHECK(patch_note_ons(gated_root["patches"][0]) == std::vector<int>{36, 40, 43});
+
+  // Iteration is charged to qualified candidates, rather than to the two
+  // completed notes before this scope. A cap of one must therefore reach the
+  // first note beginning at 960 PPQ.
+  Document scoped_budget;
+  const std::string scoped_budget_request =
+      "{\"modules\": [\"sonare.builtin.diatonic_harmonizer\"], \"scope\": "
+      "{\"startPpq\": 960, \"endPpq\": 1920}, \"budget\": {\"maxIterations\": 1}, "
+      "\"params\": {\"target_clip_id\": " +
+      std::to_string(fixture.clip_id) + "}}";
+  REQUIRE(sonare_project_assist_preview_json(fixture.project, scoped_budget_request.c_str(),
+                                             scoped_budget.out()) == SONARE_OK);
+  const json::Value scoped_budget_root = scoped_budget.parsed();
+  CHECK(scoped_budget_root["status"].as_string() == "budgetTruncated");
+  CHECK(scoped_budget_root["iterationsConsumed"].as_number() == 1.0);
+  REQUIRE(scoped_budget_root["patches"].as_array().size() == 1u);
+  CHECK(patch_note_ons(scoped_budget_root["patches"][0]) == std::vector<int>{64});
+}
+
+TEST_CASE("harmonizer apply preserves UMP routing and LIFO overlap through undo/redo",
+          "[c_api][assist]") {
+  ProjectFixture fixture;
+  make_bare_project(&fixture);
+  annotate_c_major(fixture.project);
+
+  // The second note-on is closed first. Both voices share a key, so a
+  // FIFO/single-value pairing would give the two generated durations the wrong
+  // endpoints. Group and channel make the routing part of the assertion too.
+  std::vector<SonareMidiEventPod> source;
+  SonareMidiEventPod event{};
+  REQUIRE(sonare_midi_note_on(0.0, 2, 3, 60, 100, &event) == SONARE_OK);
+  source.push_back(event);
+  REQUIRE(sonare_midi_note_on(120.0, 2, 3, 60, 80, &event) == SONARE_OK);
+  source.push_back(event);
+  REQUIRE(sonare_midi_note_off(240.0, 2, 3, 60, 0, &event) == SONARE_OK);
+  source.push_back(event);
+  REQUIRE(sonare_midi_note_off(480.0, 2, 3, 60, 0, &event) == SONARE_OK);
+  source.push_back(event);
+  REQUIRE(sonare_project_set_midi_events(fixture.project, fixture.clip_id, source.data(),
+                                         source.size()) == SONARE_OK);
+  const std::string before = serialize_project(fixture.project);
+
+  const std::string request =
+      "{\"modules\": [\"sonare.builtin.diatonic_harmonizer\"], \"params\": {\"target_clip_id\": " +
+      std::to_string(fixture.clip_id) + "}}";
+  Document preview;
+  REQUIRE(sonare_project_assist_preview_json(fixture.project, request.c_str(), preview.out()) ==
+          SONARE_OK);
+  const json::Value preview_root = preview.parsed();
+  CHECK(preview_root["status"].as_string() == "ok");
+  REQUIRE(preview_root["patches"].as_array().size() == 1u);
+  const std::vector<PatchNoteEvent> preview_events = patch_note_events(preview_root["patches"][0]);
+  REQUIRE(preview_events.size() == 4u);
+  CHECK(preview_events[0].note_on);
+  CHECK(preview_events[0].ppq == 0.0);
+  CHECK(preview_events[1].note_on == false);
+  CHECK(preview_events[1].ppq == 480.0);
+  CHECK(preview_events[2].note_on);
+  CHECK(preview_events[2].ppq == 120.0);
+  CHECK(preview_events[3].note_on == false);
+  CHECK(preview_events[3].ppq == 240.0);
+  for (const PatchNoteEvent& generated : preview_events) {
+    CHECK(generated.group == 2u);
+    CHECK(generated.channel == 3u);
+    CHECK(generated.note == 57u);
+  }
+
+  Document applied;
+  REQUIRE(sonare_project_assist_apply_json(fixture.project, request.c_str(), applied.out()) ==
+          SONARE_OK);
+  CHECK(applied.parsed()["status"].as_string() == "ok");
+  const std::string after = serialize_project(fixture.project);
+  CHECK(after != before);
+  REQUIRE(sonare_project_undo(fixture.project) == SONARE_OK);
+  CHECK(serialize_project(fixture.project) == before);
+  REQUIRE(sonare_project_redo(fixture.project) == SONARE_OK);
+  CHECK(serialize_project(fixture.project) == after);
 }
 
 TEST_CASE("assist params reach the modules through the opaque blob", "[c_api][assist]") {

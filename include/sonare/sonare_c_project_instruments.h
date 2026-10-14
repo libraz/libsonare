@@ -263,7 +263,8 @@ const char* sonare_synth_engine_param_info(int engine_mode);
 /// @details `name` is the field's binding spelling (the name
 ///          @ref sonare_engine_resolve_instrument_automation_id takes where the
 ///          field is automatable); `min` / `max` are the range the field is
-///          clamped to, and `default` is the init patch's value, which a zero
+///          accepted in (a value outside it, or a non-finite one, is refused
+///          when the patch is applied), and `default` is the init patch's value, which a zero
 ///          left in the field keeps when no preset is named. Enum fields, the
 ///          preset name and the mod matrix are not described here. Owned by
 ///          libsonare in static storage and remains valid for the program

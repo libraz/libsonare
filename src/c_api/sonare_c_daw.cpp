@@ -922,6 +922,7 @@ SonareError sonare_assign_note_targets(SonareNoteObject* notes, size_t note_coun
   if (targets == nullptr && target_count != 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (sample_rate <= 0) return SONARE_ERROR_INVALID_PARAMETER;
 
+  SONARE_C_TRY
   editing::note_model::NoteTargetAssignConfig assign_config;
   const SonareError config_error = resolve_note_target_config(config, assign_config);
   if (config_error != SONARE_OK) return config_error;
@@ -940,7 +941,6 @@ SonareError sonare_assign_note_targets(SonareNoteObject* notes, size_t note_coun
     core_targets[i].target_midi = targets[i].target_midi;
   }
 
-  SONARE_C_TRY
   // Only the fields the rule reads go across, and only the two it writes come
   // back, so a note's amplitude slice and its other edits survive the call
   // untouched -- which is what editing in place has to mean here.

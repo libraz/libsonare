@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <set>
 #include <string>
 
@@ -74,7 +75,7 @@ std::size_t retained_audio_transfer_state_bytes(const AudioContentTransferState&
   return arr::retained::saturating_add(total, arr::retained::dynamic_bytes(state.contents));
 }
 
-class TransferAudioContent final : public arr::EditCommand, public arr::EditCommandRollback {
+class TransferAudioContent final : public arr::EditCommand, public arr::EditCommandExternalEffects {
  public:
   TransferAudioContent(std::shared_ptr<AudioContentTransferState> state,
                        AudioContentTransferDirection direction)
@@ -136,6 +137,14 @@ class TransferAudioContent final : public arr::EditCommand, public arr::EditComm
     }
     applied_ = false;
   }
+
+  bool affects_audio_source(arr::SourceId source_id) const noexcept override {
+    if (state_ == nullptr) return false;
+    return std::find(state_->source_ids.begin(), state_->source_ids.end(), source_id) !=
+           state_->source_ids.end();
+  }
+
+  bool affects_warp_source(arr::WarpRefId /*warp_id*/) const noexcept override { return false; }
 
   arr::EditCommandPtr invert(const arr::Project& /*before*/,
                              const arr::MidiContentStore& /*midi_before*/) const override {
@@ -227,7 +236,7 @@ std::size_t retained_audio_replace_state_bytes(const AudioContentReplaceState& s
   return arr::retained::saturating_add(sizeof(state), arr::retained::dynamic_bytes(state.contents));
 }
 
-class ReplaceAudioContent final : public arr::EditCommand, public arr::EditCommandRollback {
+class ReplaceAudioContent final : public arr::EditCommand, public arr::EditCommandExternalEffects {
  public:
   ReplaceAudioContent(std::shared_ptr<AudioContentReplaceState> state,
                       AudioContentReplaceDirection direction)
@@ -304,6 +313,12 @@ class ReplaceAudioContent final : public arr::EditCommand, public arr::EditComma
     }
     applied_ = false;
   }
+
+  bool affects_audio_source(arr::SourceId source_id) const noexcept override {
+    return state_ != nullptr && state_->source_id == source_id;
+  }
+
+  bool affects_warp_source(arr::WarpRefId /*warp_id*/) const noexcept override { return false; }
 
   arr::EditCommandPtr invert(const arr::Project& /*before*/,
                              const arr::MidiContentStore& /*midi_before*/) const override {

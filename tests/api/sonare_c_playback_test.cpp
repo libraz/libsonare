@@ -150,10 +150,29 @@ TEST_CASE("playback renderer set_head_orientation is realtime-safe", "[playback]
   SonarePlaybackRenderer* renderer = create_renderer(headphones_config());
   CHECK(sonare_playback_renderer_set_head_orientation(renderer, 30.0f, -10.0f, 5.0f) == SONARE_OK);
   // Non-finite angles are silently ignored rather than rejected (RT entries
-  // report nothing through the error channel).
-  CHECK(sonare_playback_renderer_set_head_orientation(
-            renderer, std::numeric_limits<float>::quiet_NaN(), 0.0f, 0.0f) == SONARE_OK);
+  // report nothing through the error channel), independently for every axis.
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  CHECK(sonare_playback_renderer_set_head_orientation(renderer, nan, 0.0f, 0.0f) == SONARE_OK);
+  CHECK(sonare_playback_renderer_set_head_orientation(renderer, 0.0f, nan, 0.0f) == SONARE_OK);
+  CHECK(sonare_playback_renderer_set_head_orientation(renderer, 0.0f, 0.0f, nan) == SONARE_OK);
+  CHECK(sonare_playback_renderer_set_head_orientation(renderer, inf, 0.0f, 0.0f) == SONARE_OK);
+  CHECK(sonare_playback_renderer_set_head_orientation(renderer, 0.0f, inf, 0.0f) == SONARE_OK);
+  CHECK(sonare_playback_renderer_set_head_orientation(renderer, 0.0f, 0.0f, -inf) == SONARE_OK);
+  CHECK(sonare_playback_renderer_set_head_orientation(renderer, -inf, 0.0f, 0.0f) == SONARE_OK);
+  CHECK(sonare_playback_renderer_set_head_orientation(renderer, 0.0f, -inf, 0.0f) == SONARE_OK);
+  CHECK(sonare_playback_renderer_set_head_orientation(renderer, 0.0f, 0.0f, inf) == SONARE_OK);
+  const float float32_max = std::numeric_limits<float>::max();
+  for (const float value : {float32_max, -float32_max, 0.0f, -0.0f}) {
+    CHECK(sonare_playback_renderer_set_head_orientation(renderer, value, 0.0f, 0.0f) == SONARE_OK);
+    CHECK(sonare_playback_renderer_set_head_orientation(renderer, 0.0f, value, 0.0f) == SONARE_OK);
+    CHECK(sonare_playback_renderer_set_head_orientation(renderer, 0.0f, 0.0f, value) == SONARE_OK);
+  }
+  CHECK(sonare_playback_renderer_set_head_orientation(renderer, 1440.0f, -720.0f, 360.0f) ==
+        SONARE_OK);
   CHECK(sonare_playback_renderer_set_head_orientation(nullptr, 0.0f, 0.0f, 0.0f) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_playback_renderer_set_head_orientation(nullptr, nan, 0.0f, 0.0f) ==
         SONARE_ERROR_INVALID_PARAMETER);
   sonare_playback_renderer_destroy(renderer);
 }

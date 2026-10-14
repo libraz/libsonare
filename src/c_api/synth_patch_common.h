@@ -8,7 +8,9 @@
 #include <sonare/sonare_c_types.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -17,6 +19,7 @@
 #include "midi/synth/patch_tuning.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/synth/synth_presets.h"
+#include "util/number_format.h"
 #include "util/zero_is_default.h"
 
 namespace sonare_c_detail {
@@ -197,6 +200,56 @@ inline std::string& synth_patch_error_message() {
   return message;
 }
 
+/// Refuses @p value for the patch field @p key unless it is finite and in [lo, hi].
+inline bool synth_patch_field_in_range(const char* key, float value, float lo, float hi,
+                                       const char** out_error) {
+  if (std::isfinite(value) && value >= lo && value <= hi) return true;
+  std::string& message = synth_patch_error_message();
+  message = std::string("synth patch field '") + key + "': ";
+  if (std::isfinite(value)) {
+    message +=
+        "out of range [" + sonare::util::to_text(lo) + ", " + sonare::util::to_text(hi) + "]";
+  } else {
+    message += "not a finite number";
+  }
+  if (out_error) *out_error = message.c_str();
+  return false;
+}
+
+/// The automation table's range check for the patch field behind @p id.
+inline bool synth_patch_param_in_range(sonare::midi::synth::NativeSynthParamId id, float value,
+                                       const char** out_error) {
+  const char* key = "";
+  float lo = 0.0f;
+  float hi = 0.0f;
+  sonare::midi::synth::native_synth_param_range(id, &key, &lo, &hi);
+  return synth_patch_field_in_range(key, value, lo, hi, out_error);
+}
+
+/// The sample-engine level and start-offset ranges, read back from the patch clamp's extremes.
+struct SynthPatchSampleBounds {
+  float level_lo;
+  float level_hi;
+  float start_offset_lo;
+  float start_offset_hi;
+};
+
+inline const SynthPatchSampleBounds& synth_patch_sample_bounds() {
+  static const SynthPatchSampleBounds bounds = [] {
+    const auto extreme = [](float value) {
+      sonare::midi::synth::NativeSynthPatch p = sonare::midi::synth::NativeSynthConfig{}.patch;
+      p.sample.level = value;
+      p.sample.start_offset01 = value;
+      return sonare::midi::synth::clamp_synth_patch(p);
+    };
+    const auto low = extreme(-std::numeric_limits<float>::max());
+    const auto high = extreme(std::numeric_limits<float>::max());
+    return SynthPatchSampleBounds{low.sample.level, high.sample.level, low.sample.start_offset01,
+                                  high.sample.start_offset01};
+  }();
+  return bounds;
+}
+
 /// Copies the engine section @p mode reads from @p from into @p to, leaving
 /// every other section of @p to as it was. Modes without a section copy nothing.
 inline void copy_engine_section(const sonare::midi::synth::NativeSynthPatch& from,
@@ -267,9 +320,10 @@ inline void copy_engine_section(const sonare::midi::synth::NativeSynthPatch& fro
 /// Version 4 adds the series highpass, 5 the converter, 6 the pitch offset, 7
 /// the retrigger mode and 8 the engine params; an older caller's tail is never
 /// read. Returns false (and sets @p out_error, valid until the next refusal on
-/// this thread) for an unsupported struct_version, an unknown preset name or a
-/// refused engine param; nothing is clamped silently at that step. The result
-/// still passes through NativeSynth's own constructor clamping.
+/// this thread) for an unsupported struct_version, an unknown preset name, a
+/// refused engine param, a bounded numeric field that is non-finite or outside
+/// the range sonare_synth_patch_param_info() publishes for it, or more mod
+/// routings than the matrix holds; nothing is clamped silently at that step.
 inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
                                       sonare::midi::synth::NativeSynthConfig* out,
                                       const char** out_error) {
@@ -279,6 +333,7 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   using sonare::midi::synth::ModDestination;
   using sonare::midi::synth::ModSource;
   using sonare::midi::synth::NativeSynthConfig;
+  using ParamId = sonare::midi::synth::NativeSynthParamId;
   using sonare::midi::synth::SynthEngineMode;
   using sonare::midi::synth::SynthFilterModel;
   using sonare::midi::synth::SynthFilterOutput;
@@ -286,6 +341,14 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   using sonare::midi::synth::VaWaveform;
 
   if (out_error) *out_error = nullptr;
+  // A field is applied when its presence bit is set or it is non-zero (NaN included);
+  // an applied value outside the automation table's range is refused.
+  const auto take = [out_error](bool given, ParamId id, float value, float* dst) {
+    if (!given && value == 0.0f) return true;
+    if (!synth_patch_param_in_range(id, value, out_error)) return false;
+    *dst = value;
+    return true;
+  };
   if (c.struct_version > SONARE_SYNTH_PATCH_STRUCT_VERSION) {
     if (out_error) *out_error = "unsupported SonareSynthPatch struct_version";
     return false;
@@ -355,55 +418,79 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   }
   // Oscillator section.
   if (c.waveform > 0) p.waveform = static_cast<VaWaveform>(c.waveform - 1);
-  if (set(SONARE_SYNTH_FIELD_UNISON) || c.unison != 0) p.unison = c.unison;
-  if (set(SONARE_SYNTH_FIELD_DETUNE_CENTS) || c.detune_cents != 0.0f)
-    p.detune_cents = c.detune_cents;
-  if (set(SONARE_SYNTH_FIELD_DRIFT_CENTS) || c.drift_cents != 0.0f) p.drift_cents = c.drift_cents;
-  if (set(SONARE_SYNTH_FIELD_DRIVE) || c.drive != 0.0f) p.drive = c.drive;
+  if (set(SONARE_SYNTH_FIELD_UNISON) || c.unison != 0) {
+    if (!synth_patch_field_in_range("unison", static_cast<float>(c.unison), 1.0f,
+                                    static_cast<float>(sonare::midi::synth::kMaxUnisonOscs),
+                                    out_error)) {
+      return false;
+    }
+    p.unison = c.unison;
+  }
+  if (!take(set(SONARE_SYNTH_FIELD_DETUNE_CENTS), ParamId::kDetuneCents, c.detune_cents,
+            &p.detune_cents) ||
+      !take(set(SONARE_SYNTH_FIELD_DRIFT_CENTS), ParamId::kDriftCents, c.drift_cents,
+            &p.drift_cents) ||
+      !take(set(SONARE_SYNTH_FIELD_DRIVE), ParamId::kDrive, c.drive, &p.drive)) {
+    return false;
+  }
   // Filter section.
   if (c.filter_model > 0) p.filter_model = static_cast<SynthFilterModel>(c.filter_model - 1);
   if (c.filter_output > 0) p.filter_output = static_cast<SynthFilterOutput>(c.filter_output - 1);
-  if (set(SONARE_SYNTH_FIELD_CUTOFF_HZ) || c.cutoff_hz != 0.0f) p.cutoff_hz = c.cutoff_hz;
-  if (set(SONARE_SYNTH_FIELD_RESONANCE_Q) || c.resonance_q != 0.0f) p.resonance_q = c.resonance_q;
-  if (set(SONARE_SYNTH_FIELD_KEY_TRACK) || c.key_track != 0.0f) p.key_track = c.key_track;
-  if (set(SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS) || c.env_to_cutoff_cents != 0.0f)
-    p.env_to_cutoff_cents = c.env_to_cutoff_cents;
-  if (set(SONARE_SYNTH_FIELD_VEL_TO_CUTOFF_CENTS) || c.vel_to_cutoff_cents != 0.0f)
-    p.vel_to_cutoff_cents = c.vel_to_cutoff_cents;
+  if (!take(set(SONARE_SYNTH_FIELD_CUTOFF_HZ), ParamId::kCutoffHz, c.cutoff_hz, &p.cutoff_hz) ||
+      !take(set(SONARE_SYNTH_FIELD_RESONANCE_Q), ParamId::kResonanceQ, c.resonance_q,
+            &p.resonance_q) ||
+      !take(set(SONARE_SYNTH_FIELD_KEY_TRACK), ParamId::kKeyTrack, c.key_track, &p.key_track) ||
+      !take(set(SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS), ParamId::kEnvToCutoffCents,
+            c.env_to_cutoff_cents, &p.env_to_cutoff_cents) ||
+      !take(set(SONARE_SYNTH_FIELD_VEL_TO_CUTOFF_CENTS), ParamId::kVelToCutoffCents,
+            c.vel_to_cutoff_cents, &p.vel_to_cutoff_cents)) {
+    return false;
+  }
   // Envelopes.
-  if (set(SONARE_SYNTH_FIELD_AMP_ATTACK_MS) || c.amp_attack_ms != 0.0f)
-    p.amp_env.attack_ms = c.amp_attack_ms;
-  if (set(SONARE_SYNTH_FIELD_AMP_DECAY_MS) || c.amp_decay_ms != 0.0f)
-    p.amp_env.decay_ms = c.amp_decay_ms;
-  if (set(SONARE_SYNTH_FIELD_AMP_SUSTAIN) || c.amp_sustain != 0.0f)
-    p.amp_env.sustain = c.amp_sustain;
-  if (set(SONARE_SYNTH_FIELD_AMP_RELEASE_MS) || c.amp_release_ms != 0.0f)
-    p.amp_env.release_ms = c.amp_release_ms;
-  if (set(SONARE_SYNTH_FIELD_FILTER_ATTACK_MS) || c.filter_attack_ms != 0.0f)
-    p.filter_env.attack_ms = c.filter_attack_ms;
-  if (set(SONARE_SYNTH_FIELD_FILTER_DECAY_MS) || c.filter_decay_ms != 0.0f)
-    p.filter_env.decay_ms = c.filter_decay_ms;
-  if (set(SONARE_SYNTH_FIELD_FILTER_SUSTAIN) || c.filter_sustain != 0.0f)
-    p.filter_env.sustain = c.filter_sustain;
-  if (set(SONARE_SYNTH_FIELD_FILTER_RELEASE_MS) || c.filter_release_ms != 0.0f)
-    p.filter_env.release_ms = c.filter_release_ms;
+  if (!take(set(SONARE_SYNTH_FIELD_AMP_ATTACK_MS), ParamId::kAmpAttackMs, c.amp_attack_ms,
+            &p.amp_env.attack_ms) ||
+      !take(set(SONARE_SYNTH_FIELD_AMP_DECAY_MS), ParamId::kAmpDecayMs, c.amp_decay_ms,
+            &p.amp_env.decay_ms) ||
+      !take(set(SONARE_SYNTH_FIELD_AMP_SUSTAIN), ParamId::kAmpSustain, c.amp_sustain,
+            &p.amp_env.sustain) ||
+      !take(set(SONARE_SYNTH_FIELD_AMP_RELEASE_MS), ParamId::kAmpReleaseMs, c.amp_release_ms,
+            &p.amp_env.release_ms) ||
+      !take(set(SONARE_SYNTH_FIELD_FILTER_ATTACK_MS), ParamId::kFilterAttackMs, c.filter_attack_ms,
+            &p.filter_env.attack_ms) ||
+      !take(set(SONARE_SYNTH_FIELD_FILTER_DECAY_MS), ParamId::kFilterDecayMs, c.filter_decay_ms,
+            &p.filter_env.decay_ms) ||
+      !take(set(SONARE_SYNTH_FIELD_FILTER_SUSTAIN), ParamId::kFilterSustain, c.filter_sustain,
+            &p.filter_env.sustain) ||
+      !take(set(SONARE_SYNTH_FIELD_FILTER_RELEASE_MS), ParamId::kFilterReleaseMs,
+            c.filter_release_ms, &p.filter_env.release_ms)) {
+    return false;
+  }
   // LFOs / glide.
-  if (set(SONARE_SYNTH_FIELD_LFO_RATE_HZ) || c.lfo_rate_hz != 0.0f) p.lfo_rate_hz = c.lfo_rate_hz;
-  if (set(SONARE_SYNTH_FIELD_LFO_TO_PITCH_CENTS) || c.lfo_to_pitch_cents != 0.0f)
-    p.lfo_to_pitch_cents = c.lfo_to_pitch_cents;
-  if (set(SONARE_SYNTH_FIELD_LFO2_RATE_HZ) || c.lfo2_rate_hz != 0.0f)
-    p.lfo2_rate_hz = c.lfo2_rate_hz;
-  if (set(SONARE_SYNTH_FIELD_GLIDE_MS) || c.glide_ms != 0.0f) p.glide_ms = c.glide_ms;
+  if (!take(set(SONARE_SYNTH_FIELD_LFO_RATE_HZ), ParamId::kLfoRateHz, c.lfo_rate_hz,
+            &p.lfo_rate_hz) ||
+      !take(set(SONARE_SYNTH_FIELD_LFO_TO_PITCH_CENTS), ParamId::kLfoToPitchCents,
+            c.lfo_to_pitch_cents, &p.lfo_to_pitch_cents) ||
+      !take(set(SONARE_SYNTH_FIELD_LFO2_RATE_HZ), ParamId::kLfo2RateHz, c.lfo2_rate_hz,
+            &p.lfo2_rate_hz) ||
+      !take(set(SONARE_SYNTH_FIELD_GLIDE_MS), ParamId::kGlideMs, c.glide_ms, &p.glide_ms)) {
+    return false;
+  }
   // Realism polish.
   if (c.body > 0) p.body = static_cast<BodyType>(c.body - 1);
-  if (set(SONARE_SYNTH_FIELD_BODY_MIX) || c.body_mix != 0.0f) p.body_mix = c.body_mix;
-  if (set(SONARE_SYNTH_FIELD_STEREO_SPREAD) || c.stereo_spread != 0.0f)
-    p.stereo_spread = c.stereo_spread;
+  if (!take(set(SONARE_SYNTH_FIELD_BODY_MIX), ParamId::kBodyMix, c.body_mix, &p.body_mix) ||
+      !take(set(SONARE_SYNTH_FIELD_STEREO_SPREAD), ParamId::kStereoSpread, c.stereo_spread,
+            &p.stereo_spread)) {
+    return false;
+  }
   // Mod matrix: a non-empty C table replaces the base matrix, and the presence
   // bit lets an empty table clear it instead of keeping the base.
+  if (!synth_patch_field_in_range("modRoutings", static_cast<float>(c.num_mod_routings), 0.0f,
+                                  static_cast<float>(kMaxModRoutes), out_error)) {
+    return false;
+  }
   if (c.num_mod_routings > 0 || set(SONARE_SYNTH_FIELD_MOD_ROUTINGS)) {
     p.mod_matrix = {};
-    const int count = std::min(c.num_mod_routings, kMaxModRoutes);
+    const int count = c.num_mod_routings;
     for (int i = 0; i < count; ++i) {
       const SonareSynthModRouting& r = c.mod_routings[i];
       // Refused like ControllerBinding's axis none: a caller mistake, not an empty slot.
@@ -416,48 +503,50 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     }
   }
   // Voice pool / bus.
-  if (set(SONARE_SYNTH_FIELD_GAIN) || c.gain != 0.0f) {
-    // NativeSynth clamps the master gain to [0, 4]; a value past it would otherwise
-    // render as 4 (or, if negative or NaN, as the default) with no sign of it.
-    if (!(c.gain >= 0.0f && c.gain <= 4.0f)) {
-      if (out_error) *out_error = "synth gain must be a finite value in [0, 4]";
+  if (!take(set(SONARE_SYNTH_FIELD_GAIN), ParamId::kGain, c.gain, &cfg.gain)) return false;
+  if (set(SONARE_SYNTH_FIELD_POLYPHONY) || c.polyphony != 0) {
+    if (!synth_patch_field_in_range("polyphony", static_cast<float>(c.polyphony), 1.0f,
+                                    static_cast<float>(sonare::midi::kMaxSynthVoices), out_error)) {
       return false;
     }
-    cfg.gain = c.gain;
+    cfg.polyphony = c.polyphony;
   }
-  if (set(SONARE_SYNTH_FIELD_POLYPHONY) || c.polyphony != 0) cfg.polyphony = c.polyphony;
-  if (set(SONARE_SYNTH_FIELD_BUS_DRIVE) || c.bus_drive != 0.0f) cfg.bus_drive = c.bus_drive;
+  if (!take(set(SONARE_SYNTH_FIELD_BUS_DRIVE), ParamId::kBusDrive, c.bus_drive, &cfg.bus_drive)) {
+    return false;
+  }
 
   // Sample engine: only a version-3 caller's struct reaches this block, and
   // only a sample patch reads it, which is what keeps set 0 addressable
   // without a presence bit of its own.
-  if (c.struct_version >= 4 && (set(SONARE_SYNTH_FIELD_HP_CUTOFF_HZ) || c.hp_cutoff_hz != 0.0f)) {
-    p.hp_cutoff_hz = c.hp_cutoff_hz;
+  if (c.struct_version >= 4 && !take(set(SONARE_SYNTH_FIELD_HP_CUTOFF_HZ), ParamId::kHpCutoffHz,
+                                     c.hp_cutoff_hz, &p.hp_cutoff_hz)) {
+    return false;
   }
-  if (c.struct_version >= 5) {
-    if (set(SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ) || c.sample_hold_hz != 0.0f) {
-      p.sample_hold_hz = c.sample_hold_hz;
-    }
-    if (set(SONARE_SYNTH_FIELD_BIT_DEPTH) || c.bit_depth != 0.0f) {
-      p.bit_depth = c.bit_depth;
-    }
+  if (c.struct_version >= 5 &&
+      (!take(set(SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ), ParamId::kSampleHoldHz, c.sample_hold_hz,
+             &p.sample_hold_hz) ||
+       !take(set(SONARE_SYNTH_FIELD_BIT_DEPTH), ParamId::kBitDepth, c.bit_depth, &p.bit_depth))) {
+    return false;
   }
   if (c.struct_version >= 6 &&
-      (set(SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS) || c.pitch_offset_cents != 0.0f)) {
-    p.pitch_offset_cents = c.pitch_offset_cents;
+      !take(set(SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS), ParamId::kPitchOffsetCents,
+            c.pitch_offset_cents, &p.pitch_offset_cents)) {
+    return false;
   }
   if (retrigger > 0) p.retrigger = static_cast<SynthRetrigger>(retrigger - 1);
   if (c.struct_version >= 9) {
-    if (set2(SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ) || c.drift_rate_hz != 0.0f)
-      p.drift_rate_hz = c.drift_rate_hz;
-    if (set2(SONARE_SYNTH_FIELD2_AMP_DELAY_MS) || c.amp_delay_ms != 0.0f)
-      p.amp_env.delay_ms = c.amp_delay_ms;
-    if (set2(SONARE_SYNTH_FIELD2_AMP_HOLD_MS) || c.amp_hold_ms != 0.0f)
-      p.amp_env.hold_ms = c.amp_hold_ms;
-    if (set2(SONARE_SYNTH_FIELD2_FILTER_DELAY_MS) || c.filter_delay_ms != 0.0f)
-      p.filter_env.delay_ms = c.filter_delay_ms;
-    if (set2(SONARE_SYNTH_FIELD2_FILTER_HOLD_MS) || c.filter_hold_ms != 0.0f)
-      p.filter_env.hold_ms = c.filter_hold_ms;
+    if (!take(set2(SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ), ParamId::kDriftRateHz, c.drift_rate_hz,
+              &p.drift_rate_hz) ||
+        !take(set2(SONARE_SYNTH_FIELD2_AMP_DELAY_MS), ParamId::kAmpDelayMs, c.amp_delay_ms,
+              &p.amp_env.delay_ms) ||
+        !take(set2(SONARE_SYNTH_FIELD2_AMP_HOLD_MS), ParamId::kAmpHoldMs, c.amp_hold_ms,
+              &p.amp_env.hold_ms) ||
+        !take(set2(SONARE_SYNTH_FIELD2_FILTER_DELAY_MS), ParamId::kFilterDelayMs, c.filter_delay_ms,
+              &p.filter_env.delay_ms) ||
+        !take(set2(SONARE_SYNTH_FIELD2_FILTER_HOLD_MS), ParamId::kFilterHoldMs, c.filter_hold_ms,
+              &p.filter_env.hold_ms)) {
+      return false;
+    }
     if (set2(SONARE_SYNTH_FIELD2_ONE_SHOT) || c.one_shot != 0) p.one_shot = c.one_shot != 0;
   }
   if (engine_param_count > 0) {
@@ -474,8 +563,22 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   }
   if (c.struct_version >= 3 && p.mode == SynthEngineMode::kSample) {
     p.sample.set_index = c.sample_set;
-    if (c.sample_level != 0.0f) p.sample.level = c.sample_level;
-    if (c.sample_start_offset != 0.0f) p.sample.start_offset01 = c.sample_start_offset;
+    const SynthPatchSampleBounds& sample_bounds = synth_patch_sample_bounds();
+    if (c.sample_level != 0.0f) {
+      if (!synth_patch_field_in_range("sampleLevel", c.sample_level, sample_bounds.level_lo,
+                                      sample_bounds.level_hi, out_error)) {
+        return false;
+      }
+      p.sample.level = c.sample_level;
+    }
+    if (c.sample_start_offset != 0.0f) {
+      if (!synth_patch_field_in_range("sampleStartOffset", c.sample_start_offset,
+                                      sample_bounds.start_offset_lo, sample_bounds.start_offset_hi,
+                                      out_error)) {
+        return false;
+      }
+      p.sample.start_offset01 = c.sample_start_offset;
+    }
     switch (c.sample_loop) {
       case SONARE_SAMPLE_LOOP_NONE:
         p.sample.loop_override = 0;

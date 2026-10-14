@@ -1253,3 +1253,117 @@ TEST_CASE("buffer and result entry points define their outputs on a refused inpu
     REQUIRE(lufs.integrated_lufs == 0.0f);
   }
 }
+
+TEST_CASE("silence C entry points validate finite positive thresholds",
+          "[c_api][features][validation]") {
+  const std::vector<float> samples = {0.0f, 1.0f, 0.0f};
+  const float negative_zero = -0.0f;
+  const float negative_neighbor = std::nextafter(0.0f, -1.0f);
+  const float positive_neighbor = std::nextafter(0.0f, 1.0f);
+  const std::vector<float> invalid = {
+      std::numeric_limits<float>::quiet_NaN(),
+      std::numeric_limits<float>::infinity(),
+      -std::numeric_limits<float>::infinity(),
+      0.0f,
+      negative_zero,
+      negative_neighbor,
+  };
+
+  for (const float top_db : invalid) {
+    CAPTURE(top_db);
+    float* trimmed = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
+    size_t trimmed_length = 7;
+    int start = 42;
+    int end = 43;
+    REQUIRE(sonare_trim_silence(samples.data(), samples.size(), top_db, 3, 1, &trimmed,
+                                &trimmed_length, &start, &end) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(trimmed == nullptr);
+    REQUIRE(trimmed_length == 0);
+    REQUIRE(start == 0);
+    REQUIRE(end == 0);
+
+    int* intervals = reinterpret_cast<int*>(static_cast<uintptr_t>(0x1));
+    size_t interval_count = 7;
+    REQUIRE(sonare_split_silence(samples.data(), samples.size(), top_db, 3, 1, &intervals,
+                                 &interval_count) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(intervals == nullptr);
+    REQUIRE(interval_count == 0);
+  }
+
+  for (const float top_db : {positive_neighbor, std::numeric_limits<float>::max()}) {
+    CAPTURE(top_db);
+    float* trimmed = nullptr;
+    size_t trimmed_length = 0;
+    int start = 0;
+    int end = 0;
+    REQUIRE(sonare_trim_silence(samples.data(), samples.size(), top_db, 3, 1, &trimmed,
+                                &trimmed_length, &start, &end) == SONARE_OK);
+    sonare_free_floats(trimmed);
+
+    int* intervals = nullptr;
+    size_t interval_count = 0;
+    REQUIRE(sonare_split_silence(samples.data(), samples.size(), top_db, 3, 1, &intervals,
+                                 &interval_count) == SONARE_OK);
+    sonare_free_ints(intervals);
+  }
+}
+
+TEST_CASE("pre and de-emphasis C entry points validate parameters and clear outputs",
+          "[c_api][features][validation]") {
+  const std::vector<float> samples = {1.0f, 2.0f, 3.0f};
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+
+  for (const bool de : {false, true}) {
+    for (const float coef : {nan, inf, -inf}) {
+      CAPTURE(de, coef);
+      float* out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
+      size_t out_length = 7;
+      const SonareError error =
+          de ? sonare_deemphasis(samples.data(), samples.size(), coef, 0.0f, 0, &out, &out_length)
+             : sonare_preemphasis(samples.data(), samples.size(), coef, 0.0f, 0, &out, &out_length);
+      REQUIRE(error == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(out == nullptr);
+      REQUIRE(out_length == 0);
+    }
+
+    float* out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
+    size_t out_length = 7;
+    const SonareError error =
+        de ? sonare_deemphasis(samples.data(), samples.size(), 0.5f, nan, 1, &out, &out_length)
+           : sonare_preemphasis(samples.data(), samples.size(), 0.5f, nan, 1, &out, &out_length);
+    REQUIRE(error == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
+  }
+
+  // A raw poisoned zi is deliberately ignored when use_zi is zero. This is
+  // the C representation of an unengaged std::optional<float>.
+  float* pre = nullptr;
+  size_t pre_length = 0;
+  REQUIRE(sonare_preemphasis(samples.data(), samples.size(), 0.5f, nan, 0, &pre, &pre_length) ==
+          SONARE_OK);
+  REQUIRE(pre_length == samples.size());
+  REQUIRE(pre[0] == Catch::Approx(1.0f));
+  REQUIRE(pre[1] == Catch::Approx(1.5f));
+  REQUIRE(pre[2] == Catch::Approx(2.0f));
+  sonare_free_floats(pre);
+
+  float* de = nullptr;
+  size_t de_length = 0;
+  REQUIRE(sonare_deemphasis(samples.data(), samples.size(), 0.5f, nan, 0, &de, &de_length) ==
+          SONARE_OK);
+  REQUIRE(de_length == samples.size());
+  REQUIRE(de[0] == Catch::Approx(1.2f));
+  REQUIRE(de[1] == Catch::Approx(2.6f));
+  REQUIRE(de[2] == Catch::Approx(4.3f));
+  sonare_free_floats(de);
+
+  // Parameter checks remain active even for an allowed empty transform.
+  float* empty_out = reinterpret_cast<float*>(static_cast<uintptr_t>(0x1));
+  size_t empty_length = 7;
+  REQUIRE(sonare_preemphasis(nullptr, 0, nan, nan, 0, &empty_out, &empty_length) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(empty_out == nullptr);
+  REQUIRE(empty_length == 0);
+}

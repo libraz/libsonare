@@ -277,7 +277,10 @@ SonareError run_assist(SonareProject* project, const char* request_json, bool ap
 
   // Applied as ONE transaction, so an assist run is one undo step rather than a
   // pile of per-module ones a user has to walk back individually.
-  if (apply && !result.commands.empty()) {
+  // A preview that stopped at a cooperative budget boundary may still carry
+  // useful partial patches, but apply is a transaction boundary: only a fully
+  // successful run is allowed to change the model or its undo history.
+  if (apply && result.diagnostics.status == assist::AssistStatus::kOk && !result.commands.empty()) {
     if (!project->history.apply_transaction(std::move(result.commands))) {
       return SONARE_ERROR_INVALID_STATE;
     }

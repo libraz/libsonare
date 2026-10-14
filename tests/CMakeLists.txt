@@ -26,6 +26,7 @@ add_executable(sonare_tests
   util/time_map_test.cpp
   util/types_test.cpp
   util/lru_cache_test.cpp
+  rt/tail_budget_test.cpp
   util/json_test.cpp
   util/number_format_test.cpp
   util/insertion_sort_test.cpp
@@ -238,6 +239,18 @@ endif()
 
 if(BUILD_MASTERING)
   target_sources(sonare_tests PRIVATE
+    mastering/dynamics/compressor_test.cpp
+    mastering/dynamics/gate_test.cpp
+    mastering/dynamics/parallel_comp_test.cpp
+    mastering/dynamics/sidechain_router_test.cpp
+    mastering/eq/tilt_test.cpp
+    mastering/maximizer/true_peak_limiter_test.cpp
+    mastering/saturation/amp_sim_test.cpp
+    mastering/saturation/bitcrusher_test.cpp
+    mastering/saturation/exciter_test.cpp
+    mastering/saturation/transformer_test.cpp
+    mastering/spectral/air_band_test.cpp
+    mastering/stereo/imager_test.cpp
     mastering/transient_gain_reduction_test.cpp
     mastering/assistant_defect_profile_test.cpp
     mastering/assistant_test.cpp
@@ -443,6 +456,18 @@ if(BUILD_FX)
   target_sources(sonare_tests PRIVATE effects/gs_efx_rt_parameters_test.cpp)
   target_sources(sonare_tests PRIVATE effects/lofi_extras_test.cpp)
   target_sources(sonare_tests PRIVATE effects/auto_wah_modes_test.cpp)
+  target_sources(sonare_tests PRIVATE
+    effects/delay/stereo_delay_test.cpp
+    effects/filter/vowel_filter_test.cpp
+    effects/modulation/auto_wah_test.cpp
+    effects/modulation/chorus_test.cpp
+    effects/modulation/flanger_test.cpp
+    effects/modulation/phaser_test.cpp
+    effects/modulation/rotary_test.cpp
+    effects/modulation/wah_test.cpp
+    effects/modulation/pitch_shifter_test.cpp
+    effects/reverb/convolution_reverb_test.cpp
+  )
   target_sources(sonare_tests PRIVATE effects/modulator_shapes_test.cpp)
   target_sources(sonare_tests PRIVATE effects/mod_delay_interp_test.cpp)
   target_sources(sonare_tests PRIVATE effects/rotary_model_test.cpp)
@@ -472,6 +497,8 @@ if(BUILD_ACOUSTIC_SIM)
       effects/room_morph_test.cpp
       effects/room_mono_regression_test.cpp
       effects/room_reverb_test.cpp
+      effects/acoustic/room_morph_test.cpp
+      effects/reverb/room_reverb_test.cpp
     )
     target_sources(sonare_tests PRIVATE
       api/sonare_c_acoustic_test.cpp
@@ -629,6 +656,7 @@ if(BUILD_ARRANGEMENT)
     midi/midi1_control_golden_test.cpp
     midi/builtin_synth_test.cpp
     midi/native_synth_test.cpp
+    midi/synth/native_synth_voice_test.cpp
     midi/native_synth_live_params_test.cpp
     midi/native_synth_rig_test.cpp
     midi/native_synth_gsfx_test.cpp
@@ -770,6 +798,7 @@ if(BUILD_ARRANGEMENT)
   endif()
   if(BUILD_FX)
     target_sources(sonare_tests PRIVATE
+      midi/synth/gs_effects_test.cpp
       midi/gs_classic_engine_test.cpp
       midi/gs_classic_nodes_test.cpp
       midi/gs_classic_registry_test.cpp

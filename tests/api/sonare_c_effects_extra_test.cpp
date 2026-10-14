@@ -11,6 +11,9 @@
 #include <limits>
 #include <vector>
 
+#if defined(SONARE_WITH_MIXING)
+#include "support/alloc_guard.h"
+#endif
 #include "util/constants.h"
 
 namespace {
@@ -400,6 +403,68 @@ TEST_CASE("sonare_decompose", "[c_api][effects]") {
   }
 }
 
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("sonare_decompose stages both factors before publication on allocation failure",
+          "[c_api][effects][allocation]") {
+  constexpr int n_features = 16;
+  constexpr int n_frames = 24;
+  constexpr int n_components = 4;
+  const auto s = generate_spectrogram(n_features, n_frames);
+
+  const auto measure_success = [&]() {
+    float* w = nullptr;
+    float* h = nullptr;
+    size_t w_length = 0;
+    size_t h_length = 0;
+    SonareError error = SONARE_ERROR_UNKNOWN;
+    size_t allocations = 0;
+    {
+      sonare::test::AllocationGuard guard;
+      error = sonare_decompose_with_init(s.data(), n_features, n_frames, n_components, 20, 2.0f,
+                                         "nndsvd", &w, &w_length, &h, &h_length);
+      allocations = guard.count();
+    }
+    REQUIRE(error == SONARE_OK);
+    REQUIRE(w != nullptr);
+    REQUIRE(h != nullptr);
+    REQUIRE(w_length > 0);
+    REQUIRE(h_length > 0);
+    sonare_free_floats(w);
+    sonare_free_floats(h);
+    return allocations;
+  };
+
+  // A warm run removes one-time setup from the measurement. Two subsequent
+  // deterministic NNDSVD calls must have the same allocation sequence, so the
+  // final allocation is specifically the H copy targeted below.
+  (void)measure_success();
+  const size_t allocations = measure_success();
+  const size_t repeated_allocations = measure_success();
+  REQUIRE(allocations > 0);
+  REQUIRE(allocations == repeated_allocations);
+
+  float* w = non_null_sentinel_float_ptr();
+  float* h = non_null_sentinel_float_ptr();
+  size_t w_length = 99;
+  size_t h_length = 99;
+  SonareError error = SONARE_OK;
+  {
+    sonare::test::AllocationFailureAtGuard fail_last_h(allocations);
+    error = sonare_decompose_with_init(s.data(), n_features, n_frames, n_components, 20, 2.0f,
+                                       "nndsvd", &w, &w_length, &h, &h_length);
+  }
+  REQUIRE(error == SONARE_ERROR_OUT_OF_MEMORY);
+  REQUIRE(w == nullptr);
+  REQUIRE(h == nullptr);
+  REQUIRE(w_length == 0);
+  REQUIRE(h_length == 0);
+  // The free entry points are intentionally null-safe, including after a
+  // partially completed multi-output call.
+  sonare_free_floats(w);
+  sonare_free_floats(h);
+}
+#endif
+
 TEST_CASE("sonare_nn_filter", "[c_api][effects]") {
   const int n_features = 16;
   const int n_frames = 24;
@@ -583,6 +648,49 @@ TEST_CASE("sonare_decompose_stems", "[c_api][effects]") {
     REQUIRE(count == 4);
     REQUIRE(length == samples.size());
     sonare_free_floats(out);
+  }
+
+  SECTION("W and H can be requested independently") {
+    SonareDecomposeStemsConfig config{};
+    config.struct_version = 1;
+    config.n_components = 2;
+    config.n_fft = 256;
+    config.hop_length = 64;
+    config.n_iter = 4;
+
+    float* w_only_out = nullptr;
+    size_t w_only_count = 0;
+    size_t w_only_length = 0;
+    float* w_only = nullptr;
+    size_t w_only_factor_length = 0;
+    REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, &config, &w_only_out,
+                                   &w_only_count, &w_only_length, &w_only, &w_only_factor_length,
+                                   nullptr, nullptr) == SONARE_OK);
+    REQUIRE(w_only_out != nullptr);
+    REQUIRE(w_only_count == static_cast<size_t>(config.n_components));
+    REQUIRE(w_only_length == samples.size());
+    REQUIRE(w_only != nullptr);
+    REQUIRE(w_only_factor_length ==
+            static_cast<size_t>(config.n_fft / 2 + 1) * config.n_components);
+    sonare_free_floats(w_only_out);
+    sonare_free_floats(w_only);
+
+    float* h_only_out = nullptr;
+    size_t h_only_count = 0;
+    size_t h_only_length = 0;
+    float* h_only = nullptr;
+    size_t h_only_factor_length = 0;
+    REQUIRE(sonare_decompose_stems(samples.data(), samples.size(), sr, &config, &h_only_out,
+                                   &h_only_count, &h_only_length, nullptr, nullptr, &h_only,
+                                   &h_only_factor_length) == SONARE_OK);
+    REQUIRE(h_only_out != nullptr);
+    REQUIRE(h_only_count == static_cast<size_t>(config.n_components));
+    REQUIRE(h_only_length == samples.size());
+    REQUIRE(h_only != nullptr);
+    REQUIRE(h_only_factor_length > 0);
+    REQUIRE(h_only_factor_length % static_cast<size_t>(config.n_components) == 0);
+    sonare_free_floats(h_only_out);
+    sonare_free_floats(h_only);
   }
 
   SECTION("rejects an unknown struct version and an out-of-range mask power") {

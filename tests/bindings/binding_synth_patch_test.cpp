@@ -7,7 +7,9 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <limits>
 #include <set>
 #include <string>
@@ -667,6 +669,208 @@ TEST_CASE("synth patch conversion refuses a master gain outside [0, 4]",
   REQUIRE(cfg.gain == 0.0f);
 }
 
+namespace {
+
+struct BoundedPatchField {
+  const char* key;
+  float SonareSynthPatch::*member;
+  uint32_t bit;
+  bool second_word;
+};
+
+// Every SonareSynthPatch float the automation table bounds, under its facade name.
+const BoundedPatchField kBoundedPatchFields[] = {
+    {"gain", &SonareSynthPatch::gain, SONARE_SYNTH_FIELD_GAIN, false},
+    {"busDrive", &SonareSynthPatch::bus_drive, SONARE_SYNTH_FIELD_BUS_DRIVE, false},
+    {"cutoffHz", &SonareSynthPatch::cutoff_hz, SONARE_SYNTH_FIELD_CUTOFF_HZ, false},
+    {"resonanceQ", &SonareSynthPatch::resonance_q, SONARE_SYNTH_FIELD_RESONANCE_Q, false},
+    {"drive", &SonareSynthPatch::drive, SONARE_SYNTH_FIELD_DRIVE, false},
+    {"keyTrack", &SonareSynthPatch::key_track, SONARE_SYNTH_FIELD_KEY_TRACK, false},
+    {"envToCutoffCents", &SonareSynthPatch::env_to_cutoff_cents,
+     SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS, false},
+    {"velToCutoffCents", &SonareSynthPatch::vel_to_cutoff_cents,
+     SONARE_SYNTH_FIELD_VEL_TO_CUTOFF_CENTS, false},
+    {"ampAttackMs", &SonareSynthPatch::amp_attack_ms, SONARE_SYNTH_FIELD_AMP_ATTACK_MS, false},
+    {"ampDecayMs", &SonareSynthPatch::amp_decay_ms, SONARE_SYNTH_FIELD_AMP_DECAY_MS, false},
+    {"ampSustain", &SonareSynthPatch::amp_sustain, SONARE_SYNTH_FIELD_AMP_SUSTAIN, false},
+    {"ampReleaseMs", &SonareSynthPatch::amp_release_ms, SONARE_SYNTH_FIELD_AMP_RELEASE_MS, false},
+    {"filterAttackMs", &SonareSynthPatch::filter_attack_ms, SONARE_SYNTH_FIELD_FILTER_ATTACK_MS,
+     false},
+    {"filterDecayMs", &SonareSynthPatch::filter_decay_ms, SONARE_SYNTH_FIELD_FILTER_DECAY_MS,
+     false},
+    {"filterSustain", &SonareSynthPatch::filter_sustain, SONARE_SYNTH_FIELD_FILTER_SUSTAIN, false},
+    {"filterReleaseMs", &SonareSynthPatch::filter_release_ms, SONARE_SYNTH_FIELD_FILTER_RELEASE_MS,
+     false},
+    {"lfoRateHz", &SonareSynthPatch::lfo_rate_hz, SONARE_SYNTH_FIELD_LFO_RATE_HZ, false},
+    {"lfoToPitchCents", &SonareSynthPatch::lfo_to_pitch_cents,
+     SONARE_SYNTH_FIELD_LFO_TO_PITCH_CENTS, false},
+    {"lfo2RateHz", &SonareSynthPatch::lfo2_rate_hz, SONARE_SYNTH_FIELD_LFO2_RATE_HZ, false},
+    {"glideMs", &SonareSynthPatch::glide_ms, SONARE_SYNTH_FIELD_GLIDE_MS, false},
+    {"bodyMix", &SonareSynthPatch::body_mix, SONARE_SYNTH_FIELD_BODY_MIX, false},
+    {"stereoSpread", &SonareSynthPatch::stereo_spread, SONARE_SYNTH_FIELD_STEREO_SPREAD, false},
+    {"detuneCents", &SonareSynthPatch::detune_cents, SONARE_SYNTH_FIELD_DETUNE_CENTS, false},
+    {"driftCents", &SonareSynthPatch::drift_cents, SONARE_SYNTH_FIELD_DRIFT_CENTS, false},
+    {"pitchOffsetCents", &SonareSynthPatch::pitch_offset_cents,
+     SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS, false},
+    {"hpCutoffHz", &SonareSynthPatch::hp_cutoff_hz, SONARE_SYNTH_FIELD_HP_CUTOFF_HZ, false},
+    {"sampleHoldHz", &SonareSynthPatch::sample_hold_hz, SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ, false},
+    {"bitDepth", &SonareSynthPatch::bit_depth, SONARE_SYNTH_FIELD_BIT_DEPTH, false},
+    {"driftRateHz", &SonareSynthPatch::drift_rate_hz, SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ, true},
+    {"ampDelayMs", &SonareSynthPatch::amp_delay_ms, SONARE_SYNTH_FIELD2_AMP_DELAY_MS, true},
+    {"ampHoldMs", &SonareSynthPatch::amp_hold_ms, SONARE_SYNTH_FIELD2_AMP_HOLD_MS, true},
+    {"filterDelayMs", &SonareSynthPatch::filter_delay_ms, SONARE_SYNTH_FIELD2_FILTER_DELAY_MS,
+     true},
+    {"filterHoldMs", &SonareSynthPatch::filter_hold_ms, SONARE_SYNTH_FIELD2_FILTER_HOLD_MS, true},
+};
+
+const BoundedPatchField* find_bounded_patch_field(const std::string& key) {
+  for (const BoundedPatchField& f : kBoundedPatchFields) {
+    if (key == f.key) return &f;
+  }
+  return nullptr;
+}
+
+// Converts a current-version patch with @p f set to @p value and its presence bit raised.
+bool convert_with_field(const BoundedPatchField& f, float value, const char** error) {
+  SonareSynthPatch patch{};
+  patch.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+  patch.*(f.member) = value;
+  (f.second_word ? patch.present_fields2 : patch.present_fields) |= f.bit;
+  sonare::midi::synth::NativeSynthConfig cfg;
+  *error = nullptr;
+  return sonare_c_detail::synth_config_from_patch_c(patch, &cfg, error);
+}
+
+}  // namespace
+
+TEST_CASE("synth patch conversion refuses each bounded field at the range the info publishes",
+          "[project][synth_patch]") {
+  const sonare::util::json::Value info = parse_info(sonare_synth_patch_param_info());
+  const auto published = [&](const std::string& name) -> const sonare::util::json::Value* {
+    for (const auto& d : info.as_array()) {
+      if (d["name"].as_string() == name) return &d;
+    }
+    return nullptr;
+  };
+
+  const size_t count = sonare::midi::synth::native_synth_param_count();
+  REQUIRE(count == std::size(kBoundedPatchFields));
+  for (size_t i = 0; i < count; ++i) {
+    const std::string key = sonare::midi::synth::native_synth_param_name_at(i);
+    CAPTURE(key);
+    const BoundedPatchField* field = find_bounded_patch_field(key);
+    REQUIRE(field != nullptr);
+    const sonare::util::json::Value* row = published(key);
+    REQUIRE(row != nullptr);
+    const float lo = static_cast<float>((*row)["min"].as_number());
+    const float hi = static_cast<float>((*row)["max"].as_number());
+
+    const char* error = nullptr;
+    REQUIRE(convert_with_field(*field, lo, &error));
+    REQUIRE(convert_with_field(*field, hi, &error));
+    for (const float bad : {std::nextafter(lo, -std::numeric_limits<float>::infinity()),
+                            std::nextafter(hi, std::numeric_limits<float>::infinity())}) {
+      REQUIRE_FALSE(convert_with_field(*field, bad, &error));
+      REQUIRE(error != nullptr);
+      REQUIRE(std::string(error).find("synth patch field '" + key + "': out of range [") == 0);
+    }
+    for (const float bad :
+         {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
+      REQUIRE_FALSE(convert_with_field(*field, bad, &error));
+      REQUIRE(error != nullptr);
+      REQUIRE(std::string(error).find("synth patch field '" + key + "':") == 0);
+    }
+  }
+}
+
+TEST_CASE("synth patch conversion refuses out-of-range values rather than clamping them",
+          "[project][synth_patch]") {
+  sonare::midi::synth::NativeSynthConfig cfg;
+  const char* error = nullptr;
+  const auto refused = [&](auto mutate, const char* key) {
+    SonareSynthPatch patch{};
+    patch.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+    mutate(patch);
+    error = nullptr;
+    return !sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error) && error != nullptr &&
+           std::string(error).find(std::string("synth patch field '") + key + "'") == 0;
+  };
+
+  REQUIRE(refused([](SonareSynthPatch& p) { p.cutoff_hz = 1e6f; }, "cutoffHz"));
+  REQUIRE(refused([](SonareSynthPatch& p) { p.stereo_spread = 5.0f; }, "stereoSpread"));
+  REQUIRE(refused(
+      [](SonareSynthPatch& p) {
+        p.amp_release_ms = 0.0f;
+        p.present_fields |= SONARE_SYNTH_FIELD_AMP_RELEASE_MS;
+      },
+      "ampReleaseMs"));
+  REQUIRE(refused([](SonareSynthPatch& p) { p.polyphony = 500; }, "polyphony"));
+  REQUIRE(refused([](SonareSynthPatch& p) { p.polyphony = -3; }, "polyphony"));
+  REQUIRE(refused([](SonareSynthPatch& p) { p.unison = sonare::midi::synth::kMaxUnisonOscs + 1; },
+                  "unison"));
+  REQUIRE(refused([](SonareSynthPatch& p) { p.unison = -1; }, "unison"));
+  REQUIRE(refused(
+      [](SonareSynthPatch& p) {
+        p.unison = 0;
+        p.present_fields |= SONARE_SYNTH_FIELD_UNISON;
+      },
+      "unison"));
+  REQUIRE(
+      refused([](SonareSynthPatch& p) { p.num_mod_routings = SONARE_SYNTH_PATCH_MOD_ROUTINGS + 1; },
+              "modRoutings"));
+  REQUIRE(refused(
+      [](SonareSynthPatch& p) {
+        p.num_mod_routings = -1;
+        p.present_fields |= SONARE_SYNTH_FIELD_MOD_ROUTINGS;
+      },
+      "modRoutings"));
+  REQUIRE(refused([](SonareSynthPatch& p) { p.num_mod_routings = -1; }, "modRoutings"));
+  REQUIRE(refused(
+      [](SonareSynthPatch& p) {
+        p.engine_mode = SONARE_SYNTH_ENGINE_SAMPLE;
+        p.sample_level = 100.0f;
+      },
+      "sampleLevel"));
+  REQUIRE(refused(
+      [](SonareSynthPatch& p) {
+        p.engine_mode = SONARE_SYNTH_ENGINE_SAMPLE;
+        p.sample_start_offset = 2.0f;
+      },
+      "sampleStartOffset"));
+
+  // The ends of the integer ranges and a full routing table are accepted.
+  SonareSynthPatch edge{};
+  edge.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+  edge.unison = sonare::midi::synth::kMaxUnisonOscs;
+  edge.polyphony = sonare::midi::kMaxSynthVoices;
+  edge.num_mod_routings = SONARE_SYNTH_PATCH_MOD_ROUTINGS;
+  for (int i = 0; i < SONARE_SYNTH_PATCH_MOD_ROUTINGS; ++i) {
+    edge.mod_routings[i] = {3 /*lfo1*/, 1 /*pitchCents*/, 10.0f};
+  }
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(edge, &cfg, &error));
+  REQUIRE(cfg.polyphony == sonare::midi::kMaxSynthVoices);
+  edge.unison = 1;
+  edge.polyphony = 1;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(edge, &cfg, &error));
+  REQUIRE(cfg.polyphony == 1);
+
+  // A sample patch accepts the published ends of its level and start offset.
+  const sonare::util::json::Value info = parse_info(sonare_synth_patch_param_info());
+  for (const auto& d : info.as_array()) {
+    const std::string& name = d["name"].as_string();
+    if (name != "sampleLevel" && name != "sampleStartOffset") continue;
+    for (const char* edge_name : {"min", "max"}) {
+      SonareSynthPatch patch{};
+      patch.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+      patch.engine_mode = SONARE_SYNTH_ENGINE_SAMPLE;
+      const float value = static_cast<float>(d[edge_name].as_number());
+      (name == "sampleLevel" ? patch.sample_level : patch.sample_start_offset) = value;
+      INFO(name << " " << edge_name);
+      REQUIRE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
+    }
+  }
+}
+
 TEST_CASE("bounce_with_synth_instruments renders preset patches deterministically",
           "[project][synth_patch]") {
   SonareProject* project = make_synth_project(3);
@@ -970,9 +1174,11 @@ TEST_CASE("the second presence word's fields are read only by a caller that decl
   REQUIRE(saw->config.patch.drift_rate_hz != 0.0f);
   REQUIRE(sonare_c_detail::synth_config_from_patch_c(zero, &read, &error));
   REQUIRE(read.patch.drift_rate_hz == saw->config.patch.drift_rate_hz);
+  // The rate's accepted range starts above zero, so an explicit zero is refused by name.
   zero.present_fields2 = SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ;
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(zero, &read, &error));
-  REQUIRE(read.patch.drift_rate_hz == 0.0f);
+  REQUIRE_FALSE(sonare_c_detail::synth_config_from_patch_c(zero, &read, &error));
+  REQUIRE(std::string(error).find("synth patch field 'driftRateHz'") == 0);
+  zero.present_fields2 = 0;
 
   // A version-8 caller's struct ends at engine_param_count, so nothing past it is read.
   SonareSynthPatch older = asked;

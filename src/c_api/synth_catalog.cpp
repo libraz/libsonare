@@ -343,7 +343,6 @@ constexpr AutomatedWrapperField kAutomatedWrapperFields[] = {
 std::string synth_patch_param_info_json() {
   using sonare::midi::synth::NativeSynth;
   using sonare::midi::synth::NativeSynthConfig;
-  using sonare::midi::synth::NativeSynthPatch;
   std::vector<DescriptorRow> rows;
   const NativeSynth describer;
   for (const AutomatedWrapperField& field : kAutomatedWrapperFields) {
@@ -356,16 +355,8 @@ std::string synth_patch_param_info_json() {
                     description.max_value, description.default_value, field.unit});
   }
   const NativeSynthConfig init{};
-  // The ranges of the fields not automated are the patch clamp's, read back
-  // from its extremes.
-  const auto extreme = [&init](float value) {
-    NativeSynthPatch p = init.patch;
-    p.sample.level = value;
-    p.sample.start_offset01 = value;
-    return sonare::midi::synth::clamp_synth_patch(p);
-  };
-  const NativeSynthPatch low = extreme(-std::numeric_limits<float>::max());
-  const NativeSynthPatch high = extreme(std::numeric_limits<float>::max());
+  // The ranges of the fields not automated are the patch clamp's, read back from its extremes.
+  const auto& sample = sonare_c_detail::synth_patch_sample_bounds();
   rows.push_back({"unison", true, false, true, 1.0f,
                   static_cast<float>(sonare::midi::synth::kMaxUnisonOscs),
                   static_cast<float>(init.patch.unison), Unit::Count});
@@ -375,10 +366,10 @@ std::string synth_patch_param_info_json() {
   // Negative selects no keymap; the upper end is whatever the bound bank holds.
   rows.push_back({"sampleSet", true, false, false, 0.0f, 0.0f,
                   static_cast<float>(init.patch.sample.set_index), Unit::None});
-  rows.push_back({"sampleLevel", false, false, true, low.sample.level, high.sample.level,
+  rows.push_back({"sampleLevel", false, false, true, sample.level_lo, sample.level_hi,
                   init.patch.sample.level, Unit::Ratio});
-  rows.push_back({"sampleStartOffset", false, false, true, low.sample.start_offset01,
-                  high.sample.start_offset01, init.patch.sample.start_offset01, Unit::None});
+  rows.push_back({"sampleStartOffset", false, false, true, sample.start_offset_lo,
+                  sample.start_offset_hi, init.patch.sample.start_offset01, Unit::None});
   rows.push_back(
       {"oneShot", false, true, false, 0.0f, 0.0f, init.patch.one_shot ? 1.0f : 0.0f, Unit::None});
   return descriptor_array(rows);

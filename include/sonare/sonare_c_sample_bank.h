@@ -95,7 +95,10 @@ SonareError sonare_sample_bank_add_sample(SonareSampleBank* bank, const float* d
 ///        note is the one that sounds.
 /// @details SONARE_ERROR_INVALID_PARAMETER for a NULL bank/@p zone, a
 ///          sample_index the bank does not have, an inverted key or velocity
-///          range, or a @p set_index at or above 4096.
+///          range, a non-finite @p tune_cents, @p gain, or @p pan_units, a
+///          tuning sum with the sample's fine tuning that is not finite, or a
+///          @p set_index at or above 4096. A refused call leaves the bank's
+///          set and zone counts unchanged. Finite pan is clamped to -500..500.
 SonareError sonare_sample_bank_add_zone(SonareSampleBank* bank, uint32_t set_index,
                                         const SonareSampleZoneDesc* zone);
 

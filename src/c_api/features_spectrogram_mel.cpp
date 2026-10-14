@@ -186,9 +186,7 @@ SonareError sonare_mel_delta(const float* features, int n_features, int n_frames
 
   SONARE_C_TRY
   const std::vector<float> result = MelSpectrogram::delta(features, n_features, n_frames, width);
-  if (result.empty()) return SONARE_OK;
-  std::unique_ptr<float[]> buffer(new float[result.size()]);
-  std::memcpy(buffer.get(), result.data(), result.size() * sizeof(float));
+  std::unique_ptr<float[]> buffer(copy_vector(result));
   *out = release_array(buffer);
   return SONARE_OK;
   SONARE_C_CATCH

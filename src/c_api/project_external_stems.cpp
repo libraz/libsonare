@@ -96,7 +96,8 @@ std::size_t retained_external_stem_state_bytes(const ExternalStemImportState& st
   return arr::retained::saturating_add(total, arr::retained::dynamic_bytes(state.detached_audio));
 }
 
-class ExternalStemImportCommand final : public arr::EditCommand, public arr::EditCommandRollback {
+class ExternalStemImportCommand final : public arr::EditCommand,
+                                        public arr::EditCommandExternalEffects {
  public:
   explicit ExternalStemImportCommand(std::shared_ptr<ExternalStemImportState> state)
       : state_(std::move(state)) {}
@@ -117,6 +118,14 @@ class ExternalStemImportCommand final : public arr::EditCommand, public arr::Edi
     (void)state_->toggle(project);
     applied_ = false;
   }
+
+  bool affects_audio_source(arr::SourceId source_id) const noexcept override {
+    if (state_ == nullptr) return false;
+    return std::find(state_->source_ids.begin(), state_->source_ids.end(), source_id) !=
+           state_->source_ids.end();
+  }
+
+  bool affects_warp_source(arr::WarpRefId /*warp_id*/) const noexcept override { return false; }
 
   arr::EditCommandPtr invert(const arr::Project&, const arr::MidiContentStore&) const override {
     if (state_ == nullptr) return nullptr;

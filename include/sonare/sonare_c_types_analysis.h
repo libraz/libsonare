@@ -596,13 +596,14 @@ typedef struct {
    the engine's base preset's, so every engine but sample sounds from
    @c engine_mode alone. Base presets alias the GM bank, so such a render
    follows the bank's version. Every numeric field then uses
-   "0 => keep the base value"; non-zero values override (and are clamped to
-   their audible ranges). Enum fields reserve 0 as "keep" (see the enums
-   above). Because struct_version 1 has no per-field presence bits, explicit
-   zero values for numeric fields (for example @c amp_sustain = 0) cannot be
-   represented through this C ABI; pass a non-zero value or choose a base preset
-   that already contains the desired zero. A non-empty @c num_mod_routings
-   REPLACES the base mod matrix.
+   "0 => keep the base value"; non-zero values override. A value that is non-finite
+   or outside the range @ref sonare_synth_patch_param_info publishes for its
+   field, and a @c num_mod_routings outside [0, 8], is refused with
+   SONARE_ERROR_INVALID_PARAMETER rather than clamped. Enum fields reserve 0 as "keep" (see the
+   enums above). Because struct_version 1 has no per-field presence bits, explicit zero values for
+   numeric fields (for example @c amp_sustain = 0) cannot be represented through this C ABI; pass a
+   non-zero value or choose a base preset that already contains the desired zero. A non-empty @c
+   num_mod_routings REPLACES the base mod matrix.
 
    The struct fields are the wrapper sections; a field of the engine section
    is set by key through @c engine_params (struct_version 8). Which engines
