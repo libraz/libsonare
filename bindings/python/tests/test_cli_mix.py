@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from types import SimpleNamespace
+from typing import Any
 
 # ruff: noqa: F403,F405
 from ._analyzer_helpers import *
@@ -383,3 +384,57 @@ def test_mix_cli_real_mixer_handles_multiple_blocks_and_stems(tmp_path) -> None:
     with wave.open(str(output), "rb") as wav:
         assert wav.getnchannels() == 2
         assert wav.getnframes() == payload["rendered_samples"]
+
+
+def test_suggest_mix_tempo_auto_decodes_each_input_once(monkeypatch) -> None:
+    """``--tempo-bpm auto`` measures the loaded first track instead of decoding it again."""
+    import numpy as np
+
+    import libsonare
+    from libsonare import _cli_mixing, cli
+
+    left = np.array([0.25, -0.5, 1.0], dtype=np.float32)
+    right = np.array([0.75, 0.5, -0.125], dtype=np.float32)
+    decodes: list[str] = []
+
+    def load_channels(path):
+        decodes.append(path)
+        if path == "stereo.wav":
+            return [left.copy(), right.copy()], 44_100
+        return [np.zeros(3, dtype=np.float32)], 48_000
+
+    def load_mono(path):
+        decodes.append(path)
+        return list(0.5 * (left + right)), 44_100
+
+    measured: list[tuple[list[float], int]] = []
+
+    def detect_bpm(samples, sample_rate):
+        measured.append((list(np.asarray(samples, dtype=np.float32)), sample_rate))
+        return 96.0
+
+    scene_calls: list[tuple[list[Any], dict[str, Any]]] = []
+    monkeypatch.setattr(_cli_mixing, "_load_channels_or_downmix", load_channels)
+    monkeypatch.setattr(cli, "_load_audio", load_mono)
+    monkeypatch.setattr(libsonare, "detect_bpm", detect_bpm)
+    monkeypatch.setattr(
+        libsonare,
+        "suggest_mix_scene",
+        lambda tracks, sample_rate, **options: scene_calls.append((tracks, options)) or {},
+    )
+    args = argparse.Namespace(
+        input=["vox=stereo.wav", "bass=mono.wav"],
+        params=None,
+        tempo_bpm="auto",
+        sample_rate=48_000,
+        scene_out=None,
+    )
+
+    assert _cli_mixing.cmd_suggest_mix(args) == 0
+    assert decodes == ["stereo.wav", "mono.wav"]
+    assert measured == [(list(np.float32(0.5) * (left + right)), 44_100)]
+    tracks, options = scene_calls[0]
+    assert options["tempo_bpm"] == 96.0
+    assert [track.track_id for track in tracks] == ["vox", "bass"]
+    assert tracks[0].right is not None
+    assert tracks[1].right is None

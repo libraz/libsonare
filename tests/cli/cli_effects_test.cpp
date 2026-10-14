@@ -495,10 +495,23 @@ TEST_CASE("CLI mix-strip preserves stereo input so --width changes the output", 
   REQUIRE_THAT(mono_message, ContainsSubstring("requires a stereo input"));
   REQUIRE_FALSE(std::ifstream(rejected).good());
 
+  // A mono input is carried on both sides of the strip.
+  const std::string mono_out = unique_temp_path("_mono_out.wav");
+  auto [mono_out_code, mono_out_message] =
+      exec_command(CLI + " mix-strip " + mono + " -o " + mono_out + " -q");
+  REQUIRE(mono_out_code == 0);
+  auto [mono_samples, mono_rate, mono_channels] = load_audio_interleaved(mono_out);
+  REQUIRE(mono_channels == 2);
+  REQUIRE_FALSE(mono_samples.empty());
+  for (size_t frame = 0; frame < mono_samples.size() / 2; ++frame) {
+    REQUIRE(mono_samples[2 * frame] == mono_samples[2 * frame + 1]);
+  }
+
   std::remove(input.c_str());
   std::remove(narrow.c_str());
   std::remove(wide.c_str());
   std::remove(mono.c_str());
+  std::remove(mono_out.c_str());
 }
 
 TEST_CASE("CLI filter applies zero phase to fourth-order filters only when requested", "[cli]") {

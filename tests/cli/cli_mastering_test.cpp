@@ -1173,3 +1173,40 @@ TEST_CASE("CLI mixing command", "[cli][mixing]") {
   }
 }
 #endif
+
+#if defined(SONARE_WITH_MIXING_ASSISTANT)
+TEST_CASE("CLI suggest-mix tempo auto measures what the bpm command measures", "[cli][mixing]") {
+  constexpr int kRate = 22050;
+  constexpr size_t kFrames = static_cast<size_t>(kRate) * 4;
+  const std::string input = unique_temp_path("_tempo_stereo.wav");
+  std::vector<float> interleaved(kFrames * 2, 0.0f);
+  const size_t beat = static_cast<size_t>(kRate) / 2;
+  for (size_t frame = 0; frame < kFrames; ++frame) {
+    const size_t phase = frame % beat;
+    const float click = phase < 256 ? 0.8f * (1.0f - static_cast<float>(phase) / 256.0f) : 0.0f;
+    interleaved[2 * frame] = click;
+    interleaved[2 * frame + 1] = 0.5f * click + 0.05f * ((frame % 7 < 3) ? 1.0f : -1.0f);
+  }
+  save_wav_multichannel(input, interleaved.data(), kFrames, 2, ChannelLayout::Stereo, kRate);
+
+  const auto bpm = exec_command_split(CLI + " bpm " + input + " --json -q");
+  REQUIRE(bpm.exit_code == 0);
+  const std::string key = "\"bpm\":";
+  const auto at = bpm.out.find(key);
+  REQUIRE(at != std::string::npos);
+  const auto end = bpm.out.find_first_of(",}", at + key.size());
+  REQUIRE(end != std::string::npos);
+  const auto start = bpm.out.find_first_not_of(' ', at + key.size());
+  REQUIRE(start < end);
+  const std::string measured = bpm.out.substr(start, end - start);
+
+  const std::string run = CLI + " suggest-mix --input " + input + " --json -q --tempo-bpm ";
+  const auto automatic = exec_command_split(run + "auto");
+  const auto explicit_tempo = exec_command_split(run + measured);
+  INFO(automatic.err);
+  REQUIRE(automatic.exit_code == 0);
+  REQUIRE(explicit_tempo.exit_code == 0);
+  CHECK(automatic.out == explicit_tempo.out);
+  std::remove(input.c_str());
+}
+#endif

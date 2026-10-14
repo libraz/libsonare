@@ -26,9 +26,6 @@ from ._cli_common import (
     _write_channel_output,
     _write_wav_stereo_frames,
 )
-from ._cli_common import (
-    _load_audio_from_facade as _load_audio,
-)
 from ._cli_options import SharedParsers, _ContractArgumentParser
 
 
@@ -92,21 +89,33 @@ def _mix_assistant_tracks(entries: list[str]) -> list[Any]:
     return tracks
 
 
-def _resolve_tempo_bpm(raw: str, entries: list[str]) -> float:
+def _resolve_tempo_bpm(raw: str, entries: list[str]) -> tuple[float, list[Any]]:
     """Read ``--tempo-bpm``, detecting it from the first track when asked to.
 
     ``auto`` measures the first ``--input`` rather than the whole set: a tempo is
     a property of the song, so every track shares one, and detecting it once on
     the track the caller listed first keeps which file was measured visible in
-    the command instead of hidden in an averaging rule.
+    the command instead of hidden in an averaging rule. It is measured on the
+    track already loaded for the scene, folded to mono by the decoder's own
+    stereo rule, so the file is decoded once. Returns the tempo and the tracks
+    loaded to reach it.
     """
+    import numpy as np
+
     from . import detect_bpm
 
     if raw.strip().lower() != "auto":
-        return float(raw)
-    _, _, path = entries[0].partition("=")
-    samples, sample_rate = _load_audio(path or entries[0])
-    return float(detect_bpm(samples, sample_rate=sample_rate))
+        return float(raw), []
+    tracks = _mix_assistant_tracks(entries[:1])
+    first = tracks[0]
+    if first.right is None:
+        mono = first.left
+    else:
+        # The decoder's stereo-to-mono fold, 0.5 * (L + R) in float32.
+        mono = np.float32(0.5) * (
+            np.asarray(first.left, dtype=np.float32) + np.asarray(first.right, dtype=np.float32)
+        )
+    return float(detect_bpm(mono, sample_rate=first.sample_rate)), tracks
 
 
 def cmd_suggest_mix(args: argparse.Namespace) -> int:
@@ -114,14 +123,15 @@ def cmd_suggest_mix(args: argparse.Namespace) -> int:
 
     if not args.input:
         raise ValueError("suggest-mix requires at least one --input")
+    tracks: list[Any] = []
     options = _mix_assistant_options(_parse_kv_params(args.params) if args.params else {})
     if args.tempo_bpm:
         # The dedicated option and `--params tempoBpm=` reach the same field, so
         # naming both is a contradiction rather than a precedence question.
         if "tempo_bpm" in options:
             raise ValueError("--tempo-bpm and --params tempoBpm= set the same value")
-        options["tempo_bpm"] = _resolve_tempo_bpm(args.tempo_bpm, args.input)
-    tracks = _mix_assistant_tracks(args.input)
+        options["tempo_bpm"], tracks = _resolve_tempo_bpm(args.tempo_bpm, args.input)
+    tracks += _mix_assistant_tracks(args.input[len(tracks) :])
     document = suggest_mix_scene(tracks, sample_rate=args.sample_rate, **options)
     if args.scene_out:
         # Written from the document already in hand rather than through

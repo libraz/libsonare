@@ -1,3 +1,4 @@
+#include <optional>
 #include <utility>
 
 #include "sonare_cli.h"
@@ -32,8 +33,8 @@ int cmd_mix(const CliArgs& args, const Audio& audio) {
   strip.set_pan_mode(parse_pan_mode_option(args.get_string("pan-mode", "balance")));
   strip.set_width(width);
 
-  std::vector<float> left(audio.begin(), audio.end());
-  std::vector<float> right(audio.begin(), audio.end());
+  std::vector<float> left;
+  std::vector<float> right;
   // main() already probed the channel count for this invocation and stored it;
   // re-probing here read the file again and gave the handler a second, parallel
   // answer that nothing kept in step with the first.
@@ -45,6 +46,9 @@ int cmd_mix(const CliArgs& args, const Audio& audio) {
   } else if (width != 1.0f) {
     std::cerr << color::red << "Error: --width requires a stereo input" << color::reset << "\n";
     return 1;
+  } else {
+    left.assign(audio.begin(), audio.end());
+    right = left;
   }
   // Both the prepared block size and the processed frame count come from the
   // buffers actually being processed, not from the mono decode that sized
@@ -102,6 +106,8 @@ struct AssistantTrack {
   std::string id;
   std::vector<float> left;
   std::vector<float> right;
+  /// The decoder's mono fold of a stereo entry, kept only where the tempo is measured on it.
+  std::vector<float> mono_fold;
   int sample_rate = 0;
 };
 
@@ -123,36 +129,38 @@ void split_track_entry(const std::string& entry, std::string* id, std::string* p
   if (path->empty()) throw std::invalid_argument("--input requires a file path: " + entry);
 }
 
-/// Load one entry at its own rate, keeping a two-channel file as a pair.
+/// Decode one entry at its own rate, keeping a two-channel file as a pair.
 ///
 /// The image domain is the one part of the assistant that reads both channels --
 /// it measures interchannel cancellation, width and mono risk -- so a folded
 /// copy of a stereo stem would have it describe a signal the caller never has.
 /// A mono file stays mono rather than being duplicated across both sides, which
-/// would reach the same domain as a stereo track of zero width.
-AssistantTrack load_assistant_track(const std::string& entry) {
+/// would reach the same domain as a stereo track of zero width. One codec pass
+/// yields both the pair and the mono fold; the fold is kept only on request.
+/// The caller validates the samples, so a tempo read stays ahead of the config.
+AssistantTrack decode_assistant_track(const std::string& entry, bool keep_mono_fold) {
   AssistantTrack track;
   std::string path;
   split_track_entry(entry, &track.id, &path);
 
-  int source_rate = 0;
-  if (audio_channel_count(path) == 2) {
-    auto [interleaved, rate, channels] = load_audio_interleaved(path);
-    source_rate = rate;
-    const size_t frames = channels > 0 ? interleaved.size() / static_cast<size_t>(channels) : 0;
+  auto decoded = load_audio_input_once(path, RetainChannels::StereoIfExact);
+  if (decoded.metadata_error != nullptr) std::rethrow_exception(decoded.metadata_error);
+  if (decoded.source_channels == 2) {
+    if (decoded.retained_error != nullptr) std::rethrow_exception(decoded.retained_error);
+    SONARE_CHECK(decoded.retained_channels == 2 && decoded.interleaved.size() % 2 == 0,
+                 ErrorCode::DecodeFailed);
+    const size_t frames = decoded.interleaved.size() / 2;
     track.left.resize(frames);
     track.right.resize(frames);
     for (size_t frame = 0; frame < frames; ++frame) {
-      track.left[frame] = interleaved[frame * static_cast<size_t>(channels)];
-      track.right[frame] = interleaved[frame * static_cast<size_t>(channels) + 1];
+      track.left[frame] = decoded.interleaved[2 * frame];
+      track.right[frame] = decoded.interleaved[2 * frame + 1];
     }
+    if (keep_mono_fold) track.mono_fold = std::move(decoded.mono);
   } else {
-    auto [samples, rate] = load_audio(path);
-    source_rate = rate;
-    track.left = std::move(samples);
+    track.left = std::move(decoded.mono);
   }
-  validate_offline_audio_input(track.left.data(), track.left.size(), source_rate);
-  track.sample_rate = source_rate;
+  track.sample_rate = decoded.sample_rate;
   return track;
 }
 
@@ -161,9 +169,11 @@ AssistantTrack load_assistant_track(const std::string& entry) {
 /// `auto` measures the first `--input` and not the whole set: a tempo belongs to
 /// the song, so every track shares one, and measuring the track the caller
 /// listed first keeps which file was read visible in the command line. It is
-/// decoded at its own rate rather than at --sample-rate, because resampling
-/// first would measure a different signal.
-double resolve_assistant_tempo(const std::string& raw, const std::string& first_entry) {
+/// measured on the mono fold at the file's own rate rather than at
+/// --sample-rate, because resampling first would measure a different signal.
+/// The decoded entry is returned through @p first_track for the track list.
+double resolve_assistant_tempo(const std::string& raw, const std::string& first_entry,
+                               std::optional<AssistantTrack>* first_track) {
   const std::string lowered = lowercase_cli_value(raw);
   if (lowered != "auto") {
     std::istringstream stream(raw);
@@ -175,14 +185,16 @@ double resolve_assistant_tempo(const std::string& raw, const std::string& first_
     }
     return value;
   }
-  std::string id;
-  std::string path;
-  split_track_entry(first_entry, &id, &path);
-  auto [samples, rate] = load_audio(path);
+  *first_track = decode_assistant_track(first_entry, true);
+  const AssistantTrack& track = **first_track;
+  const std::vector<float>& mono = track.right.empty() ? track.left : track.mono_fold;
   // The same entry the `bpm` command and the Python facade use. The analysis
   // class's own detect_bpm is a different estimator and answered 165 where both
   // front-ends answer 65 on the same file.
-  return static_cast<double>(quick::detect_bpm(samples.data(), samples.size(), rate));
+  const double bpm =
+      static_cast<double>(quick::detect_bpm(mono.data(), mono.size(), track.sample_rate));
+  std::vector<float>().swap(first_track->value().mono_fold);
+  return bpm;
 }
 
 }  // namespace
@@ -205,6 +217,7 @@ int cmd_suggest_mix(const CliArgs& args, const Audio&) {
 
   auto params = parse_mastering_params(args.get_string("params"));
   const std::string tempo_text = args.get_string("tempo-bpm");
+  std::optional<AssistantTrack> first_track;
   if (!tempo_text.empty()) {
     // Both spellings reach the same config field, so naming both is a
     // contradiction rather than a precedence question.
@@ -213,7 +226,8 @@ int cmd_suggest_mix(const CliArgs& args, const Audio&) {
         throw std::invalid_argument("--tempo-bpm and --params tempoBpm= set the same value");
       }
     }
-    params.push_back({"tempoBpm", resolve_assistant_tempo(tempo_text, entries.front())});
+    params.push_back(
+        {"tempoBpm", resolve_assistant_tempo(tempo_text, entries.front(), &first_track)});
   }
   const auto config =
       mixing::assistant::mix_assistant_config_from_params(params.data(), params.size());
@@ -221,7 +235,13 @@ int cmd_suggest_mix(const CliArgs& args, const Audio&) {
   std::vector<AssistantTrack> storage;
   storage.reserve(entries.size());
   for (const std::string& entry : entries) {
-    storage.push_back(load_assistant_track(entry));
+    if (storage.empty() && first_track.has_value()) {
+      storage.push_back(std::move(*first_track));
+    } else {
+      storage.push_back(decode_assistant_track(entry, false));
+    }
+    const AssistantTrack& track = storage.back();
+    validate_offline_audio_input(track.left.data(), track.left.size(), track.sample_rate);
   }
 
   std::vector<mixing::assistant::TrackInput> inputs;
