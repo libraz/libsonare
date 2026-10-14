@@ -18,6 +18,7 @@ import numpy as np
 
 from ._errors import _invalid_state, _not_supported
 from ._ffi_types_mastering_project import SonareSampleDesc, SonareSampleZoneDesc
+from ._narrowing import _is_number
 from ._runtime import (
     _UINT8_MAX,
     _UINT32_MAX,
@@ -326,7 +327,8 @@ def _unsigned(value: int, name: str, limit: int) -> int:
     here is what keeps the value the C ABI sees the one the caller wrote.
     """
     if isinstance(value, bool) or not isinstance(value, int):
-        raise SonareValueError(f"{name} must be an integer")
+        message = f"{name} must be an integer"
+        raise SonareValueError(message) if _is_number(value) else TypeError(message)
     if value < 0 or value > limit:
         raise SonareValueError(f"{name} must be in [0, {limit}]")
     return value

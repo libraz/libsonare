@@ -284,6 +284,7 @@ def downmix(
     Raises:
         RuntimeError: If the loaded native library predates this additive
             entry point.
+        TypeError: If ``normalize`` or ``include_lfe`` is not a ``bool``.
         SonareValueError: If ``channels`` is empty, not planar, or its channels
             differ in length.
         SonareError: For an upmix or an unknown ``target_layout``.
@@ -296,9 +297,9 @@ def downmix(
             "rebuild or install a newer native library"
         )
     if not isinstance(normalize, bool):
-        raise SonareValueError("downmix: normalize must be a bool")
+        raise TypeError("downmix: normalize must be a bool")
     if not isinstance(include_lfe, bool):
-        raise SonareValueError("downmix: include_lfe must be a bool")
+        raise TypeError("downmix: include_lfe must be a bool")
     layout = ChannelLayout(_to_c_int(target_layout, "target_layout").value)
     planes = _linked_channel_planes("downmix", channels)
     frame_count = int(planes[0].shape[0])

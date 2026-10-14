@@ -180,7 +180,7 @@ def test_a_bool_is_refused_rather_than_read_as_zero_or_one(
 ) -> None:
     """Both spellings, because 0 and 1 are legal ordinals in every table here."""
     for value in (True, False):
-        with pytest.raises(SonareValueError, match=what):
+        with pytest.raises(TypeError, match=what):
             resolve(value)
 
 
@@ -291,7 +291,8 @@ def test_a_refused_ordinal_never_reaches_the_arrangement() -> None:
         assert project.to_json() == by_name
 
         for ordinal in (4, 99, -1, True):
-            with pytest.raises(SonareValueError, match="warp mode"):
+            expected = TypeError if isinstance(ordinal, bool) else SonareValueError
+            with pytest.raises(expected, match="warp mode"):
                 project.set_clip_warp_mode(clip, ordinal)
         assert project.to_json() == by_name
     finally:

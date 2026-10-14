@@ -218,6 +218,11 @@ def test_silence_transcribes_to_nothing_and_still_reports_the_tempo() -> None:
     assert result.tempo_bpm == pytest.approx(96.0)
 
 
+def _refusal_type(options: dict[str, object]) -> type[Exception]:
+    """A wrong-typed option is a TypeError; an out-of-domain value is a SonareValueError."""
+    return TypeError if any(isinstance(v, bool) for v in options.values()) else SonareValueError
+
+
 def _rejections(entry: str) -> list[tuple[str, dict[str, object], str]]:
     """(id, keyword options, message fragment) for the shared config arguments."""
     return [
@@ -298,7 +303,7 @@ def _rejections(entry: str) -> list[tuple[str, dict[str, object], str]]:
 def test_transcribe_rejects_out_of_domain_options(
     melody: np.ndarray, options: dict[str, object], fragment: str
 ) -> None:
-    with pytest.raises(SonareValueError) as excinfo:
+    with pytest.raises(_refusal_type(options)) as excinfo:
         libsonare.transcribe(melody, SR, **options)
     assert fragment in str(excinfo.value)
 
@@ -424,7 +429,7 @@ def test_transcribe_to_clip_rejects_out_of_domain_options(
     project = libsonare.Project()
     try:
         _track_id, clip_id = project.add_midi_clip(0.0, 16.0)
-        with pytest.raises(SonareValueError) as excinfo:
+        with pytest.raises(_refusal_type(options)) as excinfo:
             project.transcribe_to_clip(clip_id, melody, SR, **options)
         assert fragment in str(excinfo.value)
     finally:

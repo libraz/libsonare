@@ -81,7 +81,7 @@ def test_downmix_is_not_normalised_and_takes_options() -> None:
     np.testing.assert_allclose(
         downmix(surround, ChannelLayout.STEREO, include_lfe=True)[0], left + inv * 0.4, atol=1e-6
     )
-    with pytest.raises(SonareValueError, match="normalize must be a bool"):
+    with pytest.raises(TypeError, match="normalize must be a bool"):
         downmix(surround, ChannelLayout.STEREO, normalize=1)  # type: ignore[arg-type]
 
 

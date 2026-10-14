@@ -44,7 +44,7 @@ def _trim_length(value: int, arg_name: str) -> int:
     domain = "must fit in a positive signed 32-bit integer"
     try:
         length = _narrow_int(value, arg_name, _C_INT_MIN, _C_INT_MAX)
-    except SonareValueError as exc:
+    except (TypeError, SonareValueError) as exc:
         raise _int_refusal("trim", value, arg_name, domain) from exc
     if length <= 0:
         raise SonareValueError(f"trim: {arg_name} {domain}")

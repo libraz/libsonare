@@ -108,7 +108,7 @@ def test_builtin_synth_waveform_outside_the_enum_is_rejected() -> None:
     project = _build_midi_only_project()
     try:
         for waveform in (4, -1, 5, 2**31, True):
-            with pytest.raises(SonareValueError):
+            with pytest.raises(TypeError if isinstance(waveform, bool) else SonareValueError):
                 project.bounce_with_builtin_instrument(
                     BuiltinSynthConfig(waveform=waveform), total_frames=1200
                 )

@@ -323,7 +323,8 @@ def test_realtime_engine_warp_mode_validation_matches_project_helper() -> None:
 
     with RealtimeEngine(sample_rate=48000.0, max_block_size=4) as engine:
         for mode in ("typo", 1.9, True):
-            with pytest.raises(ValueError, match="unknown warp mode"):
+            expected = TypeError if isinstance(mode, bool) else ValueError
+            with pytest.raises(expected, match="unknown warp mode"):
                 engine.set_clips(
                     [
                         EngineClip(

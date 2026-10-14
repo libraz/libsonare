@@ -123,8 +123,8 @@ def test_an_index_only_trim_window_trims_as_the_window_it_names(keyword, value, 
 # -- refused for the range it missed, not for its type -------------------------
 
 
-def _refusal(entry, **kwargs) -> str:
-    with pytest.raises(SonareValueError) as raised:
+def _refusal(entry, error=SonareValueError, **kwargs) -> str:
+    with pytest.raises(error) as raised:
         entry(**kwargs)
     return str(raised.value)
 
@@ -180,14 +180,14 @@ def test_a_bool_is_still_refused_by_name_on_every_validator(value, tone, padded)
     above could have carried it in.
     """
     assert "kernel_harmonic must be an integer" in _refusal(
-        ls.hpss, samples=tone, sample_rate=SR, kernel_harmonic=value
+        ls.hpss, error=TypeError, samples=tone, sample_rate=SR, kernel_harmonic=value
     )
     assert "n_fft must be an integer" in _refusal(
-        ls.hpss, samples=tone, sample_rate=SR, n_fft=value
+        ls.hpss, error=TypeError, samples=tone, sample_rate=SR, n_fft=value
     )
     assert "n_components must be an integer" in _refusal(
-        ls.decompose_stems, samples=tone, sample_rate=SR, n_components=value
+        ls.decompose_stems, error=TypeError, samples=tone, sample_rate=SR, n_components=value
     )
     assert "frame_length must be an integer" in _refusal(
-        ls.trim, samples=padded, sample_rate=SR, frame_length=value
+        ls.trim, error=TypeError, samples=padded, sample_rate=SR, frame_length=value
     )

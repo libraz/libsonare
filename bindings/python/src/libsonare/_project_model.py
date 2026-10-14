@@ -230,7 +230,7 @@ def _automation_target_kind_value(value: object) -> int:
             "unknown automation target kind; expected opaque, track-fader-db, or track-pan"
         )
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
-        raise SonareValueError("automation target kind must be an integer in [0, 2]")
+        raise TypeError("automation target kind must be an integer in [0, 2]")
     ordinal = float(cast(SupportsFloat, value))
     if not math.isfinite(ordinal) or not ordinal.is_integer() or ordinal < 0.0 or ordinal > 2.0:
         raise SonareValueError("automation target kind must be an integer in [0, 2]")
@@ -1399,7 +1399,7 @@ def _midi_event_tuple(name: str, *args: float | ctypes._SimpleCData[int]) -> tup
 
 def _validate_midi_event_word(value: object, label: str) -> int:
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
-        raise SonareValueError(f"{label} must be an integer in [0, 4294967295]")
+        raise TypeError(f"{label} must be an integer in [0, 4294967295]")
     word = float(cast(SupportsFloat, value))
     if not math.isfinite(word) or not word.is_integer() or word < 0.0 or word > _UINT32_MAX:
         raise SonareValueError(f"{label} must be an integer in [0, 4294967295]")
@@ -1408,7 +1408,7 @@ def _validate_midi_event_word(value: object, label: str) -> int:
 
 def _validate_midi_event_ppq(value: object, label: str) -> float:
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
-        raise SonareValueError(f"{label} must be a non-negative finite number")
+        raise TypeError(f"{label} must be a non-negative finite number")
     ppq = float(cast(SupportsFloat, value))
     if not math.isfinite(ppq) or ppq < 0.0:
         raise SonareValueError(f"{label} must be a non-negative finite number")

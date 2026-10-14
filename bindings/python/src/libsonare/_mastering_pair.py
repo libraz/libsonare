@@ -127,7 +127,7 @@ def mastering_pair_process_stereo(
     and applies one mix to both channels.
     """
     if not isinstance(processor_name, str):
-        raise SonareValueError("processor_name must be a string")
+        raise TypeError("processor_name must be a string")
     _reject_nul(processor_name, "processor_name")
     param_array, param_count = _stereo_pair_params(params)
     lib = _get_lib()

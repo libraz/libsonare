@@ -8,6 +8,7 @@ the same wording.
 from __future__ import annotations
 
 import math
+import numbers
 import operator
 from typing import SupportsFloat, SupportsIndex
 
@@ -40,7 +41,9 @@ def _narrow_int(value: object, name: str, low: int, high: int) -> int:
         The value as a plain ``int``.
 
     Raises:
-        SonareValueError: If ``value`` is not an integer, or does not fit.
+        TypeError: If ``value`` is not a number (a ``bool`` included).
+        SonareValueError: If ``value`` is a number that is not an integer or does
+            not fit the target range.
     """
     if not isinstance(value, bool) and isinstance(value, SupportsIndex):
         try:
@@ -50,7 +53,15 @@ def _narrow_int(value: object, name: str, low: int, high: int) -> int:
         else:
             if low <= integer <= high:
                 return integer
-    raise SonareValueError(_narrowing_error(name, low, high))
+            raise SonareValueError(_narrowing_error(name, low, high))
+    if _is_number(value):
+        raise SonareValueError(_narrowing_error(name, low, high))
+    raise TypeError(_narrowing_error(name, low, high))
+
+
+def _is_number(value: object) -> bool:
+    """Whether ``value`` is a real number (a ``bool`` is not one), whatever its value."""
+    return isinstance(value, numbers.Real) and not isinstance(value, bool)
 
 
 def _narrowing_error(name: str, low: int, high: int) -> str:
@@ -91,17 +102,21 @@ def _narrow_float(value: object, name: str) -> float:
         The value as a plain ``float``.
 
     Raises:
-        SonareValueError: If ``value`` is not a number, or does not fit.
+        TypeError: If ``value`` is not a number (a ``bool`` included).
+        SonareValueError: If ``value`` is not finite or does not fit a 32-bit float.
     """
     if not isinstance(value, bool) and isinstance(value, SupportsFloat):
         try:
             number = float(value)
-        except (TypeError, ValueError, OverflowError):
+        except OverflowError:
+            raise SonareValueError(_float_narrowing_error(name)) from None
+        except (TypeError, ValueError):
             pass
         else:
             if math.isfinite(number) and abs(number) <= _FLOAT32_MAX:
                 return number
-    raise SonareValueError(_float_narrowing_error(name))
+            raise SonareValueError(_float_narrowing_error(name))
+    raise TypeError(_float_narrowing_error(name))
 
 
 def _float_narrowing_error(name: str) -> str:
@@ -121,7 +136,7 @@ def _narrow_double(value: object, name: str) -> float:
     range.
 
     An ``int`` too large for a double raises ``OverflowError`` inside ``float``
-    and is refused with the same message; ``bool`` is refused rather than read
+    and is refused with the same message as a non-finite value; ``bool`` is refused rather than read
     as 0/1, for the reason :func:`_narrow_int` gives.
 
     Args:
@@ -132,17 +147,21 @@ def _narrow_double(value: object, name: str) -> float:
         The value as a plain ``float``.
 
     Raises:
-        SonareValueError: If ``value`` is not a number, or is not finite.
+        TypeError: If ``value`` is not a number (a ``bool`` included).
+        SonareValueError: If ``value`` is not finite.
     """
     if not isinstance(value, bool) and isinstance(value, SupportsFloat):
         try:
             number = float(value)
-        except (TypeError, ValueError, OverflowError):
+        except OverflowError:
+            raise SonareValueError(f"{name} must be a finite number") from None
+        except (TypeError, ValueError):
             pass
         else:
             if math.isfinite(number):
                 return number
-    raise SonareValueError(f"{name} must be a finite number")
+            raise SonareValueError(f"{name} must be a finite number")
+    raise TypeError(f"{name} must be a finite number")
 
 
 _INT64_MIN = -(2**63)
@@ -159,8 +178,9 @@ def _seconds_to_samples(seconds: object, sample_rate: float, name: str) -> int:
     names the same sample on every surface.
 
     Raises:
-        SonareValueError: If ``seconds`` is not a finite number, or the result
-            does not fit an ``int64``.
+        TypeError: If ``seconds`` is not a number.
+        SonareValueError: If ``seconds`` is not finite, or the result does not
+            fit an ``int64``.
     """
     samples = math.floor(_narrow_double(seconds, name) * sample_rate + 0.5)
     if not _INT64_MIN <= samples <= _INT64_MAX:
@@ -186,8 +206,9 @@ def _resolve_sample_bound(
     value is refused, never read as "absent".
 
     Raises:
-        SonareValueError: If both spellings are given, the value is not a valid
-            number, or a position is negative.
+        TypeError: If the given value is not a number.
+        SonareValueError: If both spellings are given, the value is out of
+            range, or a position is negative.
     """
     if sample_value is not None and sec_value is not None:
         raise SonareValueError(f"give {sample_name} or {sec_name}, not both")
@@ -238,7 +259,8 @@ def _resolve_render_frame(render_frame: object) -> int:
     frame is refused rather than read as the same thing.
 
     Raises:
-        SonareValueError: If ``render_frame`` is not a non-negative integer.
+        TypeError: If ``render_frame`` is not an integer.
+        SonareValueError: If ``render_frame`` is negative or out of range.
     """
     if render_frame is None:
         return _C_ABSENT
@@ -252,7 +274,8 @@ def _resolve_optional_non_negative(value: object, name: str) -> int | float:
     is refused rather than read as the same thing.
 
     Raises:
-        SonareValueError: If ``value`` is not a finite number, or is negative.
+        TypeError: If ``value`` is not a number.
+        SonareValueError: If ``value`` is not finite, or is negative.
     """
     if value is None:
         return _C_ABSENT

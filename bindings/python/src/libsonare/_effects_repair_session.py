@@ -15,7 +15,6 @@ from ._cancellation import CancellationState, make_cancel_trampoline
 from ._effects_repair_common import _linked_channel_planes, _linked_output_planes
 from ._ffi import SonareMasteringProgressCallback
 from ._runtime import (
-    SonareValueError,
     _check,
     _get_lib,
     _planar_channel_arrays,
@@ -202,9 +201,9 @@ def mastering_repair_apply(
         applied stage, in application order.
 
     Raises:
+        TypeError: If ``stages`` is not a sequence of mappings.
         SonareValueError: If ``channels`` is empty, the channels disagree in
-            length, any channel is empty or carries a non-finite sample, or
-            ``stages`` is not a sequence of mappings.
+            length, or any channel is empty or carries a non-finite sample.
         SonareError: If the C call rejects the request (a repeated or unknown
             stage, an unknown or out-of-range setting) or it was cancelled.
     """
@@ -215,7 +214,7 @@ def mastering_repair_apply(
     if isinstance(stages, (str, bytes, Mapping)) or not all(
         isinstance(stage, Mapping) for stage in stages
     ):
-        raise SonareValueError("mastering_repair_apply: stages must be a sequence of mappings")
+        raise TypeError("mastering_repair_apply: stages must be a sequence of mappings")
     planes = _linked_channel_planes("mastering_repair_apply", channels)
     arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
     stages_json = json.dumps([dict(stage) for stage in stages])

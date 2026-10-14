@@ -327,3 +327,26 @@ def test_a_number_too_wide_for_a_double_is_refused_by_the_library_not_by_python(
         pytest.fail("a too-wide int leaked OverflowError")
     except SonareValueError:
         pass
+
+
+@pytest.mark.parametrize("value", ["1.0", True, None, b"1", object()])
+def test_a_non_number_is_a_type_error_in_the_float_helpers(value) -> None:
+    from libsonare._narrowing import _narrow_double, _narrow_float
+
+    with pytest.raises(TypeError):
+        _narrow_float(value, "gain")
+    with pytest.raises(TypeError):
+        _narrow_double(value, "gain")
+
+
+@pytest.mark.parametrize("value", [1e40, -1e40, float("nan"), float("inf"), 10**400])
+def test_a_number_outside_the_float_domain_is_a_value_error(value) -> None:
+    from libsonare._narrowing import _narrow_double, _narrow_float
+
+    with pytest.raises(SonareValueError):
+        _narrow_float(value, "gain")
+    if value == 1e40 or value == -1e40:
+        assert _narrow_double(value, "gain") == value
+    else:
+        with pytest.raises(SonareValueError):
+            _narrow_double(value, "gain")

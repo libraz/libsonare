@@ -27,6 +27,7 @@ from ._narrowing import _FLOAT32_MAX as _FLOAT32_MAX
 from ._narrowing import _INT64_MAX as _INT64_MAX
 from ._narrowing import _INT64_MIN as _INT64_MIN
 from ._narrowing import _float_narrowing_error as _float_narrowing_error
+from ._narrowing import _is_number as _is_number
 from ._narrowing import _narrow_double as _narrow_double
 from ._narrowing import _narrow_float as _narrow_float
 from ._narrowing import _narrow_int as _narrow_int
@@ -758,7 +759,8 @@ def _resolve_enum(
     ``names`` maps accepted lowercase spellings (with underscores folded to
     dashes when ``dash`` is set) to ordinals. An integer must name one of those
     ordinals, and a ``bool`` is not an ordinal; an ``enum_cls`` instance is
-    coerced with ``int()``. Unknown inputs raise :class:`SonareValueError` built
+    coerced with ``int()``. A value that is neither a string nor a number raises
+    ``TypeError``; any other unknown input raises :class:`SonareValueError` built
     from ``verb`` / ``what``, listing the accepted names: a refusal that names
     none of them leaves the caller with nothing to try next.
 
@@ -769,13 +771,14 @@ def _resolve_enum(
     if enum_cls is not None and isinstance(value, enum_cls):
         return cast(int, value)
     if isinstance(value, int):
-        if (reject_bool and isinstance(value, bool)) or (
-            validate_int and value not in names.values()
-        ):
+        if reject_bool and isinstance(value, bool):
+            raise TypeError(_enum_error(value, names, what, verb, expected))
+        if validate_int and value not in names.values():
             raise SonareValueError(_enum_error(value, names, what, verb, expected))
         return value
     if not isinstance(value, str):
-        raise SonareValueError(_enum_error(value, names, what, verb, expected))
+        message = _enum_error(value, names, what, verb, expected)
+        raise SonareValueError(message) if _is_number(value) else TypeError(message)
     key = value.strip() if strip else value
     if dash:
         key = key.replace("_", "-")
@@ -791,16 +794,19 @@ _C_INT_MAX = 2**31 - 1
 _C_INT_MIN = -(2**31)
 
 
-def _int_refusal(fn_name: str, value: object, arg_name: str, domain: str) -> SonareValueError:
+def _int_refusal(
+    fn_name: str, value: object, arg_name: str, domain: str
+) -> TypeError | SonareValueError:
     """Word a refusal :func:`_narrow_int` raised, keeping its two halves apart.
 
     The shared predicate words a bad type and a value out of range identically.
-    The validators below name a non-integer as such and name everything else
-    against ``domain``, which states the field's whole accepted range rather
-    than only the C type's.
+    The validators below name a non-integer as such (a ``TypeError`` when it is
+    not a number at all) and name everything else against ``domain``, which
+    states the field's whole accepted range rather than only the C type's.
     """
     if isinstance(value, bool) or not isinstance(value, SupportsIndex):
-        return SonareValueError(f"{fn_name}: {arg_name} must be an integer")
+        message = f"{fn_name}: {arg_name} must be an integer"
+        return SonareValueError(message) if _is_number(value) else TypeError(message)
     return SonareValueError(f"{fn_name}: {arg_name} {domain}")
 
 
@@ -830,11 +836,12 @@ def _validate_c_int_field(fn_name: str, value: object, arg_name: str) -> int:
         The value as a plain ``int``.
 
     Raises:
-        SonareValueError: If the value is not an integer or does not fit.
+        TypeError: If the value is not a number.
+        SonareValueError: If the value does not fit.
     """
     try:
         return _narrow_int(value, arg_name, _C_INT_MIN, _C_INT_MAX)
-    except SonareValueError as exc:
+    except (TypeError, SonareValueError) as exc:
         raise _int_refusal(fn_name, value, arg_name, "must fit in a signed 32-bit integer") from exc
 
 
@@ -855,12 +862,13 @@ def _validate_hpss_kernel(fn_name: str, value: int, arg_name: str) -> int:
         The kernel size as a plain ``int``.
 
     Raises:
+        TypeError: If the value is not a number.
         SonareValueError: If the value is not a positive odd signed 32-bit int.
     """
     domain = "must be a positive odd signed 32-bit integer"
     try:
         kernel = _narrow_int(value, arg_name, _C_INT_MIN, _C_INT_MAX)
-    except SonareValueError as exc:
+    except (TypeError, SonareValueError) as exc:
         raise _int_refusal(fn_name, value, arg_name, domain) from exc
     if kernel <= 0 or kernel % 2 == 0:
         raise SonareValueError(f"{fn_name}: {arg_name} {domain}")
@@ -905,13 +913,14 @@ def _validate_stft_n_fft(fn_name: str, n_fft: int) -> int:
         The validated size as a plain ``int``.
 
     Raises:
+        TypeError: If ``n_fft`` is not a number.
         SonareValueError: If ``n_fft`` is not an even integer in
             ``[4, 2**31 - 1]``.
     """
     domain = "must be an even signed 32-bit integer >= 4"
     try:
         size = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
-    except SonareValueError as exc:
+    except (TypeError, SonareValueError) as exc:
         raise _int_refusal(fn_name, n_fft, "n_fft", domain) from exc
     if size < 4 or size % 2 != 0:
         raise SonareValueError(f"{fn_name}: n_fft {domain}")
@@ -939,13 +948,14 @@ def _validate_effect_fft_options(fn_name: str, n_fft: int, hop_length: int) -> t
         The validated ``(n_fft, hop_length)`` pair as plain ``int`` values.
 
     Raises:
+        TypeError: If either value is not a number.
         SonareValueError: If either value falls outside the accepted domain.
     """
     n_fft = _validate_stft_n_fft(fn_name, n_fft)
     domain = "must fit in a positive signed 32-bit integer"
     try:
         hop = _narrow_int(hop_length, "hop_length", _C_INT_MIN, _C_INT_MAX)
-    except SonareValueError as exc:
+    except (TypeError, SonareValueError) as exc:
         raise _int_refusal(fn_name, hop_length, "hop_length", domain) from exc
     if hop <= 0:
         raise SonareValueError(f"{fn_name}: hop_length {domain}")

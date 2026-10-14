@@ -365,7 +365,7 @@ class StreamingMasteringChain:
         """
         self._ensure_open()
         if not isinstance(key, str):
-            raise SonareValueError("key must be a string")
+            raise TypeError("key must be a string")
         if not key:
             raise SonareValueError("key must not be empty")
         if not hasattr(self._lib, "sonare_streaming_mastering_chain_set_parameter"):

@@ -651,6 +651,12 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         return _metronome_from_c(raw)
 
     def count_in_end_sample(self, start_sample: int, bars: int) -> int:
+        """Return the sample at which a count-in of ``bars`` bars from ``start_sample`` ends.
+
+        Counting starts at the beginning of the bar containing ``start_sample`` (a mid-bar start
+        gets a short first bar), and every counted bar has the length of the time signature in
+        effect at ``start_sample``. Returns ``start_sample`` when ``bars <= 0``.
+        """
         out = ctypes.c_int64()
         _check(
             _get_lib().sonare_engine_count_in_end_sample(
@@ -841,7 +847,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 # MIDI range.
                 try:
                     group = _narrow_int(event.group, "EngineMidiEvent.group", 0, _UINT8_MAX)
-                except SonareValueError as exc:
+                except (TypeError, SonareValueError) as exc:
                     raise _int_refusal(
                         "set_midi_clips",
                         event.group,

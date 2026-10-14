@@ -298,7 +298,8 @@ def test_automation_lane_rejects_invalid_target_kind_without_mutation() -> None:
     p, track, _clip = _audio_project()
     before = p.to_json()
     for invalid in ("unknown", 3, 1.5, float("nan"), float("inf"), True, None):
-        with pytest.raises(ValueError):
+        expected = TypeError if invalid is None or isinstance(invalid, bool) else ValueError
+        with pytest.raises(expected):
             p.add_automation_lane(track, 1, [(0.0, 0.0, "linear")], target_kind=invalid)
         assert p.to_json() == before
 

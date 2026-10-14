@@ -975,6 +975,8 @@ class Mixer:
         # than a `float` test, which a numpy scalar walks straight past.
         try:
             count = _narrow_int(num_samples, "num_samples", _C_INT_MIN, _C_INT_MAX)
+        except TypeError as exc:
+            raise TypeError(f"num_samples must be an integer in [1, {self._block_size}]") from exc
         except SonareValueError as exc:
             raise SonareValueError(
                 f"num_samples must be an integer in [1, {self._block_size}]"

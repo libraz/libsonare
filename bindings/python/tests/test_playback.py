@@ -180,11 +180,11 @@ def test_set_head_orientation_validates_each_axis_and_float32_range() -> None:
             renderer.set_head_orientation(0.0, 0.0, value)
 
         for value in (None, "wrong", True, object()):
-            with pytest.raises(SonareValueError, match="yaw_deg"):
+            with pytest.raises(TypeError, match="yaw_deg"):
                 renderer.set_head_orientation(value, 0.0, 0.0)  # type: ignore[arg-type]
-            with pytest.raises(SonareValueError, match="pitch_deg"):
+            with pytest.raises(TypeError, match="pitch_deg"):
                 renderer.set_head_orientation(0.0, value, 0.0)  # type: ignore[arg-type]
-            with pytest.raises(SonareValueError, match="roll_deg"):
+            with pytest.raises(TypeError, match="roll_deg"):
                 renderer.set_head_orientation(0.0, 0.0, value)  # type: ignore[arg-type]
         with pytest.raises(SonareValueError, match="yaw_deg"):
             renderer.set_head_orientation(float("nan"), float("inf"), "roll")  # type: ignore[arg-type]

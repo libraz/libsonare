@@ -17,6 +17,7 @@ from ._ffi import (
     SonareTranscribeConfig,
     SonareTranscribeResult,
 )
+from ._narrowing import _is_number
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -294,7 +295,7 @@ def _transcribe_int(fn_name: str, value: object, arg_name: str, low: int, high: 
     domain = f"must be an integer in [{low}, {high}]"
     try:
         return _narrow_int(value, arg_name, low, high)
-    except SonareValueError as exc:
+    except (TypeError, SonareValueError) as exc:
         raise _int_refusal(fn_name, value, arg_name, domain) from exc
 
 
@@ -584,7 +585,8 @@ def _note_set_index(fn_name: str, arg_name: str, value: int) -> int:
     which carries the ceiling -- an index past it folds onto a live note.
     """
     if isinstance(value, bool) or not isinstance(value, Integral):
-        raise SonareValueError(f"{fn_name}: {arg_name} must be an integer")
+        message = f"{fn_name}: {arg_name} must be an integer"
+        raise SonareValueError(message) if _is_number(value) else TypeError(message)
     if int(value) < 0:
         raise SonareValueError(f"{fn_name}: {arg_name} must be non-negative")
     return int(value)

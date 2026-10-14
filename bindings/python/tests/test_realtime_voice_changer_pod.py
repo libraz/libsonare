@@ -137,7 +137,7 @@ def test_preset_config_refuses_a_bool_rather_than_reading_it_as_an_ordinal(entry
     explicit test rather than a bound: ``True`` selected preset 1 and ``False``
     preset 0, both legal answers to a question nobody asked.
     """
-    with pytest.raises(SonareValueError, match=r"^preset must be"):
+    with pytest.raises(TypeError, match=r"^preset must be"):
         entry(value)
 
 

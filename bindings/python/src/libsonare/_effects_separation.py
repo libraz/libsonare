@@ -546,7 +546,7 @@ def hpss(
     kernel_harmonic = _validate_hpss_kernel("hpss", kernel_harmonic, "kernel_harmonic")
     kernel_percussive = _validate_hpss_kernel("hpss", kernel_percussive, "kernel_percussive")
     if not isinstance(hard_mask, bool):
-        raise SonareValueError("hpss: hard_mask must be a bool")
+        raise TypeError("hpss: hard_mask must be a bool")
 
     lib = _get_lib()
     use_soft_mask = 0 if hard_mask else 1
@@ -715,7 +715,7 @@ def hpss_with_residual(
         "hpss_with_residual", kernel_percussive, "kernel_percussive"
     )
     if not isinstance(hard_mask, bool):
-        raise SonareValueError("hpss_with_residual: hard_mask must be a bool")
+        raise TypeError("hpss_with_residual: hard_mask must be a bool")
 
     lib = _get_lib()
     use_soft_mask = 0 if hard_mask else 1

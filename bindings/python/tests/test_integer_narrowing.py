@@ -614,7 +614,7 @@ def test_a_pitch_bend_keeps_the_range_its_own_width_carries() -> None:
 def test_a_wrong_typed_packer_argument_is_refused_by_name_not_by_ctypes() -> None:
     """A value ctypes cannot convert used to escape as a raw ``ctypes.ArgumentError``.
 
-    That is neither a ``SonareValueError`` nor anything the binding's contract
+    That is neither a ``TypeError`` nor anything the binding's contract
     names, so a caller catching the library's own error types did not catch it.
     """
     for packer, names in _PACKERS:
@@ -623,14 +623,14 @@ def test_a_wrong_typed_packer_argument_is_refused_by_name_not_by_ctypes() -> Non
             for value in ("60", None, True):
                 args = list(base)
                 args[index] = value
-                with pytest.raises(SonareValueError):
+                with pytest.raises(TypeError):
                     packer(*args)
                 # And specifically not the ctypes exception it used to be.
                 try:
                     packer(*args)
                 except ctypes.ArgumentError:  # pragma: no cover - the repaired path
                     pytest.fail(f"{packer.__name__}/{name} leaked ctypes.ArgumentError")
-                except SonareValueError:
+                except TypeError:
                     pass
 
 
@@ -675,3 +675,61 @@ def test_every_integer_array_argument_names_itself_when_it_refuses() -> None:
     matrix = np.tile(np.arange(cols, dtype=np.float32), rows)
     with pytest.raises(SonareValueError, match=re.escape("boundaries[1]")):
         ls.subsegment(matrix, rows, cols, [0, 16.5], n_segments=2)
+
+
+@pytest.mark.parametrize("value", ["1", True, None, b"1", object()])
+def test_a_non_number_is_a_type_error_in_the_integer_helper(value) -> None:
+    from libsonare._narrowing import _narrow_int
+
+    with pytest.raises(TypeError):
+        _narrow_int(value, "count", 0, 100)
+
+
+@pytest.mark.parametrize("value", [101, -1, 2**40, 1.5, float("nan")])
+def test_a_number_outside_the_integer_domain_is_a_value_error(value) -> None:
+    from libsonare._narrowing import _narrow_int
+
+    with pytest.raises(SonareValueError):
+        _narrow_int(value, "count", 0, 100)
+
+
+def _wrong_type_sites():
+    from libsonare._effects_note_model import _note_set_index
+    from libsonare._project_model import _automation_target_kind_value, _validate_midi_event_word
+    from libsonare._project_synth import _unsigned
+    from libsonare._runtime import _curve_value
+    from libsonare.vocal_edit import _finite_float
+
+    return [
+        ("finite_float", lambda v: _finite_float(v, "gain"), "x", float("nan")),
+        ("unsigned", lambda v: _unsigned(v, "key", 127), "x", 1.5),
+        ("note_set_index", lambda v: _note_set_index("fn", "index", v), "x", 1.5),
+        ("target_kind", _automation_target_kind_value, [], 1.5),
+        ("midi_word", lambda v: _validate_midi_event_word(v, "word"), "x", -1),
+        ("enum", _curve_value, [], 1.5),
+    ]
+
+
+@pytest.mark.parametrize("index", range(6))
+def test_a_wrong_typed_value_is_a_type_error_and_a_wrong_valued_number_is_not(index) -> None:
+    _name, call, wrong_type, wrong_value = _wrong_type_sites()[index]
+    with pytest.raises(TypeError):
+        call(wrong_type)
+    with pytest.raises(SonareValueError):
+        call(wrong_value)
+
+
+def test_a_non_bool_flag_is_a_type_error_on_the_boolean_arguments() -> None:
+    samples = np.zeros((2, 64), dtype=np.float32)
+    with pytest.raises(TypeError, match="hard_mask must be a bool"):
+        ls.hpss(np.zeros(4096, dtype=np.float32), 22050, hard_mask=1)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="include_lfe must be a bool"):
+        ls.downmix(samples, ls.ChannelLayout.STEREO, include_lfe=1)  # type: ignore[arg-type]
+
+
+def test_a_non_bool_is_a_type_error_in_the_vocal_edit_flag() -> None:
+    from libsonare.vocal_edit import _bool_flag
+
+    with pytest.raises(TypeError):
+        _bool_flag(1, "flag")
+    assert _bool_flag(True, "flag") == 1

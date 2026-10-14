@@ -94,8 +94,10 @@ FloatArray: TypeAlias = NDArray[np.float32]
 def _finite_float(value: object, name: str) -> float:
     try:
         result = float(cast(SupportsFloat, value))
-    except (TypeError, ValueError, OverflowError) as exc:
+    except OverflowError as exc:
         raise SonareValueError(f"{name} must be a finite number") from exc
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"{name} must be a finite number") from exc
     if not math.isfinite(result):
         raise SonareValueError(f"{name} must be a finite number")
     return result
@@ -103,7 +105,7 @@ def _finite_float(value: object, name: str) -> float:
 
 def _bool_flag(value: object, name: str) -> int:
     if not isinstance(value, (bool, np.bool_)):
-        raise SonareValueError(f"{name} must be a bool")
+        raise TypeError(f"{name} must be a bool")
     return int(value)
 
 
@@ -137,6 +139,8 @@ def _uint64(value: object, name: str, *, allow_zero: bool = True) -> int:
 def _enum(value: object, enum_type: type[IntEnum], name: str) -> int:
     try:
         result = _int64(value, name)
+    except TypeError as exc:
+        raise TypeError(f"{name} must be one of {[e.value for e in enum_type]}") from exc
     except SonareValueError as exc:
         raise SonareValueError(f"{name} must be one of {[e.value for e in enum_type]}") from exc
     try:
@@ -670,7 +674,7 @@ def _edit_to_c(lib: ctypes.CDLL, edit: VocalNoteEdit) -> tuple[SonareVocalNoteEd
     )
     raw.gain_db = _finite_float(edit.gain_db, "gain_db")
     if not isinstance(edit.muted, (bool, np.bool_)):
-        raise SonareValueError("muted must be a bool")
+        raise TypeError("muted must be a bool")
     raw.muted = int(edit.muted)
     raw.formant_mode = _enum(edit.formant_mode, VocalFormantMode, "formant_mode")
     raw.formant_shift_semitones = _finite_float(

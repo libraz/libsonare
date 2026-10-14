@@ -85,7 +85,8 @@ def assign(path: str, field: str, value: object) -> Probe:
 @pytest.mark.parametrize("value", FOLDED_BY_FLOAT32)
 def test_a_folding_value_is_refused_on_every_path_into_a_float_field(path, value) -> None:
     """The defect itself, across the value shapes and the three delivery paths."""
-    with pytest.raises(SonareValueError, match="gain"):
+    expected = TypeError if value is None or isinstance(value, (bool, str)) else SonareValueError
+    with pytest.raises(expected, match="gain"):
         assign(path, "gain", value)
 
 
@@ -136,7 +137,8 @@ def test_a_double_field_stores_what_it_accepted() -> None:
 @pytest.mark.parametrize("value", (1e40, float("nan"), float("inf"), 0.1, -6.25, True, "x", 2**32))
 def test_an_integer_field_keeps_the_guard_it_already_had(path, value) -> None:
     """The integer half is untouched: a non-index and an out-of-range int are refused."""
-    with pytest.raises(SonareValueError, match="count"):
+    expected = TypeError if isinstance(value, (bool, str)) else SonareValueError
+    with pytest.raises(expected, match="count"):
         assign(path, "count", value)
 
 

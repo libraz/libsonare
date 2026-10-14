@@ -126,7 +126,7 @@ class TestApply:
         assert excinfo.value.code == libsonare.ErrorCode.INVALID_PARAMETER
 
     def test_refuses_stages_that_are_not_mappings(self) -> None:
-        with pytest.raises(libsonare.SonareValueError):
+        with pytest.raises(TypeError):
             libsonare.mastering_repair_apply(
                 [_material(440.0, 11)],
                 SR,
