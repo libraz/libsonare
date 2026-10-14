@@ -21,8 +21,9 @@ constexpr int kFrameRateReference = 48000;
 constexpr float kUnityTolerance = 1.0e-6f;
 /// Mean-square frame level below which a frame counts as silent.
 constexpr double kSilentFrameEnergy = 1.0e-20;
-/// Prediction error, relative to the frame energy, at which the recursion stops adding order.
-constexpr double kMinRelativeError = 1.0e-9;
+/// Prediction error, relative to the frame energy, below which a frame is a few pure tones with
+/// no envelope to move; recolouring a predictor that singular only changes the level.
+constexpr double kMinRelativeError = 1.0e-7;
 
 }  // namespace
 
@@ -156,8 +157,8 @@ void FormantWarpStream::process_frame() noexcept {
     accumulate_unwarped();
     return;
   }
-  // Levinson-Durbin, stopped on prediction error relative to the frame energy so an
-  // amplitude-scaled frame takes the same path.
+  // Levinson-Durbin. Its degeneracy test reads prediction error relative to the frame energy,
+  // so an amplitude-scaled frame takes the same path.
   const double error_floor = kMinRelativeError * energy;
   double error = energy;
   for (size_t i = 1; i <= order; ++i) {
@@ -165,8 +166,10 @@ void FormantWarpStream::process_frame() noexcept {
     for (size_t j = 1; j < i; ++j) acc += levinson_a_[j] * lags_[i - j];
     const double reflection = -acc / error;
     const double next_error = error * (1.0 - reflection * reflection);
-    // A frame this order already predicts keeps the predictor it has.
-    if (!(next_error > error_floor)) break;
+    if (!(next_error > error_floor)) {
+      accumulate_unwarped();
+      return;
+    }
     levinson_next_ = levinson_a_;
     for (size_t j = 1; j < i; ++j) {
       levinson_next_[j] = levinson_a_[j] + reflection * levinson_a_[i - j];

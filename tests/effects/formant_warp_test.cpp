@@ -312,3 +312,27 @@ TEST_CASE("FormantWarp warps quiet voiced input like loud input", "[effects][for
   CHECK(
       std::all_of(silent.data(), silent.data() + silent.size(), [](float v) { return v == 0.0f; }));
 }
+
+TEST_CASE("FormantWarp keeps the level of a pure tone at any amplitude", "[effects][formant]") {
+  // A pure tone is predicted almost exactly, leaving no envelope to move; recolouring that
+  // singular a predictor would change the level, so the tone passes at every amplitude.
+  constexpr int kRate = 48000;
+  constexpr size_t kSamples = 24000;
+  for (const float amp : {0.5f, 0.0125f}) {
+    CAPTURE(amp);
+    std::vector<float> input(kSamples);
+    for (size_t i = 0; i < kSamples; ++i) {
+      input[i] = amp * std::sin(sonare::constants::kTwoPi * 440.0f * static_cast<float>(i) /
+                                static_cast<float>(kRate));
+    }
+    const sonare::Audio out =
+        sonare::FormantWarp({1.3f, 12, 1.0f}).process(sonare::Audio::from_vector(input, kRate));
+    double in_energy = 0.0;
+    double out_energy = 0.0;
+    for (size_t i = 2048; i < kSamples - 2048; ++i) {
+      in_energy += static_cast<double>(input[i]) * input[i];
+      out_energy += static_cast<double>(out[i]) * out[i];
+    }
+    CHECK(std::abs(10.0 * std::log10(out_energy / in_energy)) < 1.5);
+  }
+}
