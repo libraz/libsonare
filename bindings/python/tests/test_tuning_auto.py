@@ -163,6 +163,9 @@ def test_result_helpers_equal_the_explicit_inverse() -> None:
     assert libsonare.mel_result_to_stft(mel) == libsonare.mel_to_stft(
         mel.power, 40, mel.n_frames, _SR, 1024, 100.0, 4000.0, True
     )
+    stft = libsonare.mel_result_to_stft(mel)
+    assert isinstance(stft, libsonare.StftMagnitudeResult)
+    assert stft.n_bins == 1024 // 2 + 1
     assert libsonare.mel_result_to_audio(mel, n_iter=2) == libsonare.mel_to_audio(
         mel.power, 40, mel.n_frames, _SR, 1024, 256, 100.0, 4000.0, 2, True
     )
@@ -170,6 +173,8 @@ def test_result_helpers_equal_the_explicit_inverse() -> None:
     result = libsonare.mfcc(_MEL_SAMPLES, _SR, 1024, 256, 40, 13, 0.0, 8000.0, False, 22.0)
     from_result = libsonare.mfcc_result_to_mel(result)
     assert from_result == libsonare.mfcc_to_mel(result.coefficients, 13, result.n_frames, 40, 22.0)
+    assert isinstance(from_result, libsonare.MelPowerResult)
+    assert from_result.n_mels == 40
     # The lifter is part of the answer: an inverse that dropped it would differ.
     assert from_result != libsonare.mfcc_to_mel(result.coefficients, 13, result.n_frames, 40, 0.0)
     assert libsonare.mfcc_result_to_audio(result, n_iter=2) == libsonare.mfcc_to_audio(

@@ -22,16 +22,27 @@ class CqtResult:
 
 
 @dataclass(frozen=True, slots=True)
-class InverseResult:
-    """Inverse spectrogram reconstruction result.
+class StftMagnitudeResult:
+    """STFT magnitude matrix reconstructed from a Mel spectrogram.
 
-    ``data`` is a row-major ``[rows x n_frames]`` matrix (``rows`` are the
-    reconstructed frequency/Mel bins).
+    ``magnitude`` is a row-major ``[n_bins x n_frames]`` matrix (not squared).
     """
 
-    rows: int
+    n_bins: int
     n_frames: int
-    data: list[float]
+    magnitude: list[float]
+
+
+@dataclass(frozen=True, slots=True)
+class MelPowerResult:
+    """Mel power matrix reconstructed from MFCC coefficients.
+
+    ``power`` is a row-major ``[n_mels x n_frames]`` matrix.
+    """
+
+    n_mels: int
+    n_frames: int
+    power: list[float]
 
 
 @dataclass(frozen=True, slots=True)

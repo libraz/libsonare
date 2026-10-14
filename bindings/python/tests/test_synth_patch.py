@@ -17,6 +17,7 @@ from libsonare import (
     Project,
     RealtimeEngine,
     SonareError,
+    SonareValueError,
     SynthModRouting,
     SynthPatch,
     synth_engine_param_info,
@@ -284,8 +285,8 @@ def test_synth_patch_second_presence_word_fields() -> None:
             {"filter_delay_ms": 80.0},
             {"filter_hold_ms": 80.0},
             {"one_shot": True},
-            # An explicit zero is a value, not "keep the base".
-            {"drift_rate_hz": 0.0},
+            # The lowest rate the field accepts, which the base does not use.
+            {"drift_rate_hz": 0.01},
         ):
             edited = project.bounce_with_synth_instrument(
                 dataclasses.replace(base, **edit), total_frames=72000
@@ -462,6 +463,39 @@ def test_synth_patch_gain_zero_renders_silence() -> None:
         assert float(np.max(np.abs(quiet))) > 0.0
     finally:
         project.close()
+
+
+def test_synth_patch_field_outside_the_published_range_is_refused_by_name() -> None:
+    project = _build_midi_only_project()
+    try:
+        info = {d["name"]: d for d in synth_patch_param_info()}
+        cases = [
+            (SynthPatch(cutoff_hz=1e6), "cutoffHz"),
+            (SynthPatch(stereo_spread=5.0), "stereoSpread"),
+            (SynthPatch(polyphony=500), "polyphony"),
+            (SynthPatch(gain=5.0), "gain"),
+        ]
+        for patch, key in cases:
+            expected = f"synth patch field '{key}': out of range"
+            with pytest.raises(SonareError, match=expected) as err:
+                project.bounce_with_synth_instrument(patch, total_frames=128)
+            assert err.value.code == 4
+        # The published ends are accepted.
+        project.bounce_with_synth_instrument(
+            SynthPatch(cutoff_hz=info["cutoffHz"]["max"]), total_frames=128
+        )
+    finally:
+        project.close()
+
+
+@pytest.mark.parametrize("field", ["cutoff_hz", "detune_cents", "gain", "drift_rate_hz"])
+def test_synth_patch_float_beyond_float32_is_refused_as_narrowing(field: str) -> None:
+    with pytest.raises(SonareValueError, match=rf"{field} must be a finite number within"):
+        SynthPatch(**{field: 1e40})._to_c()
+    with pytest.raises(SonareValueError, match=rf"{field} must be a finite number within"):
+        SynthPatch(**{field: -1e40})._to_c()
+    with pytest.raises(SonareValueError, match=rf"{field} must be a finite number within"):
+        SynthPatch(**{field: True})._to_c()
 
 
 def test_mod_routing_naming_none_is_refused() -> None:

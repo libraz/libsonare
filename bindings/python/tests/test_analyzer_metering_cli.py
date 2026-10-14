@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 # ruff: noqa: F403,F405
 from ._analyzer_helpers import *
+from ._helpers import patch_mono_decode
 
 
 def test_onset_envelope() -> None:
@@ -306,7 +307,7 @@ def test_mastering_pair_analyze_cli_takes_reference_at_its_own_rate(monkeypatch,
             return reference_samples, 44100
         raise AssertionError(path)
 
-    monkeypatch.setattr(cli, "_load_audio", fake_load_audio)
+    patch_mono_decode(monkeypatch, fake_load_audio)
 
     args = argparse.Namespace(
         analysis="match.referenceLoudness",
@@ -456,7 +457,7 @@ def test_mastering_chain_cli_writes_output_and_merges_params(monkeypatch, tmp_pa
             stages=["eq.tilt", "loudness"],
         )
 
-    monkeypatch.setattr(cli, "_load_audio", fake_load_audio)
+    patch_mono_decode(monkeypatch, fake_load_audio)
     monkeypatch.setattr(libsonare, "mastering_chain", fake_mastering_chain)
 
     output = tmp_path / "chain.wav"
@@ -486,7 +487,7 @@ def test_master_cli_applies_preset_and_override_params(monkeypatch, tmp_path, ca
 
     calls: dict[str, object] = {}
 
-    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.1, -0.1], 44100))
+    patch_mono_decode(monkeypatch, lambda path: ([0.1, -0.1], 44100))
 
     def fake_master_audio(
         samples: list[float],
@@ -547,7 +548,7 @@ def test_mastering_processor_feeds_a_mono_source_to_both_channels(monkeypatch, c
     from libsonare import _cli_common, cli
 
     monkeypatch.setattr(_cli_common, "_source_channel_count", lambda path: 1)
-    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.1, -0.1], 44100))
+    patch_mono_decode(monkeypatch, lambda path: ([0.1, -0.1], 44100))
 
     def fake_mastering_process_stereo(
         processor: str,
@@ -635,7 +636,7 @@ def test_declip_cli_writes_repaired_audio(monkeypatch, tmp_path, capsys) -> None
 
     calls: dict[str, object] = {}
 
-    monkeypatch.setattr(cli, "_load_audio", lambda path: ([1.0, -1.0, 0.25], 22050))
+    patch_mono_decode(monkeypatch, lambda path: ([1.0, -1.0, 0.25], 22050))
 
     def fake_declip(
         samples: list[float],

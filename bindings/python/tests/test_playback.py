@@ -154,13 +154,42 @@ def test_set_config_accepts_a_json_string() -> None:
         renderer.set_config('{"target": {"kind": "speakers", "layout": "5.1"}}')
 
 
-def test_set_head_orientation_accepts_finite_and_refuses_non_finite() -> None:
+def test_set_head_orientation_validates_each_axis_and_float32_range() -> None:
+    float32_max = 3.4028234663852886e38
+    float32_overflow = float32_max * 2.0
     with PlaybackRenderer({}, max_block_size=BLOCK) as renderer:
         renderer.set_head_orientation(30.0, -10.0, 5.0)
-        with pytest.raises(SonareValueError):
-            renderer.set_head_orientation(float("nan"))
-        with pytest.raises(SonareValueError):
-            renderer.set_head_orientation(0.0, 1e40)
+        invalid_values = (
+            float("nan"),
+            float("inf"),
+            float("-inf"),
+            float32_overflow,
+            -float32_overflow,
+        )
+        for value in invalid_values:
+            with pytest.raises(SonareValueError, match="yaw_deg"):
+                renderer.set_head_orientation(value, 0.0, 0.0)
+            with pytest.raises(SonareValueError, match="pitch_deg"):
+                renderer.set_head_orientation(0.0, value, 0.0)
+            with pytest.raises(SonareValueError, match="roll_deg"):
+                renderer.set_head_orientation(0.0, 0.0, value)
+
+        for value in (float32_max, -float32_max, 0.0, -0.0, 720.0, -1080.0, 360.0):
+            renderer.set_head_orientation(value, 0.0, 0.0)
+            renderer.set_head_orientation(0.0, value, 0.0)
+            renderer.set_head_orientation(0.0, 0.0, value)
+
+        for value in (None, "wrong", True, object()):
+            with pytest.raises(SonareValueError, match="yaw_deg"):
+                renderer.set_head_orientation(value, 0.0, 0.0)  # type: ignore[arg-type]
+            with pytest.raises(SonareValueError, match="pitch_deg"):
+                renderer.set_head_orientation(0.0, value, 0.0)  # type: ignore[arg-type]
+            with pytest.raises(SonareValueError, match="roll_deg"):
+                renderer.set_head_orientation(0.0, 0.0, value)  # type: ignore[arg-type]
+        with pytest.raises(SonareValueError, match="yaw_deg"):
+            renderer.set_head_orientation(float("nan"), float("inf"), "roll")  # type: ignore[arg-type]
+        with pytest.raises(SonareValueError, match="pitch_deg"):
+            renderer.set_head_orientation(0.0, float("nan"), float("inf"))
 
 
 def test_reset_clears_state() -> None:
@@ -182,9 +211,38 @@ def test_create_json_rejects_an_unknown_key() -> None:
 def test_closed_renderer_rejects_further_calls() -> None:
     renderer = PlaybackRenderer({}, max_block_size=BLOCK)
     renderer.close()
-    with pytest.raises(SonareError):
-        renderer.reset()
+    operations = {
+        "reset": lambda: renderer.reset(),
+        "set_config": lambda: renderer.set_config(None),  # type: ignore[arg-type]
+        "config": lambda: renderer.config(),
+        "set_head_orientation": lambda: renderer.set_head_orientation(float("nan")),
+        "input_channels": lambda: renderer.input_channels(),
+        "output_channels": lambda: renderer.output_channels(),
+        "latency_samples": lambda: renderer.latency_samples(),
+        "non_finite_discard_count": lambda: renderer.non_finite_discard_count(),
+        "diagnostics": lambda: renderer.diagnostics(),
+        "process_planar": lambda: renderer.process_planar(None),  # type: ignore[arg-type]
+        "process_interleaved": lambda: renderer.process_interleaved(None, 0),  # type: ignore[arg-type]
+    }
+    for name, operation in operations.items():
+        with pytest.raises(SonareError) as raised:
+            operation()
+        assert raised.value.code == 7, name
     renderer.close()  # idempotent
+
+
+def test_closed_loudness_meter_rejects_further_calls_before_buffer_validation() -> None:
+    meter = PlaybackLoudnessMeter(2, SR)
+    meter.close()
+    operations = {
+        "push_interleaved": lambda: meter.push_interleaved(None),  # type: ignore[arg-type]
+        "integrated_lufs": lambda: meter.integrated_lufs(),
+    }
+    for name, operation in operations.items():
+        with pytest.raises(SonareError) as raised:
+            operation()
+        assert raised.value.code == 7, name
+    meter.close()
 
 
 def test_render_playback_is_time_aligned_and_finite() -> None:

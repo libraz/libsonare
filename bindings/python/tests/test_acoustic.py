@@ -212,6 +212,53 @@ def test_estimate_room_band_arrays_share_length() -> None:
     assert len(est.band_absorption) == len(est.rt60_bands)
 
 
+def test_estimate_room_frees_a_partial_foreign_result_before_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An error result from an older library still gets its owned buffers freed."""
+    import libsonare._acoustic as acoustic_module
+
+    real_library = acoustic_module._get_lib()
+
+    class ForeignLibrary:
+        def __init__(self) -> None:
+            self.absorption = (ctypes.c_float * 1)(0.25)
+            self.rt60 = (ctypes.c_float * 1)(0.5)
+            self.estimate_calls = 0
+            self.free_calls = 0
+
+        def __getattr__(self, name: str) -> object:
+            # Keep selector metadata and every other ABI accessor on the real
+            # current library. Only the estimate/free pair is foreign here.
+            return getattr(real_library, name)
+
+        def sonare_estimate_room(self, *_args: object) -> int:
+            self.estimate_calls += 1
+            out = _args[-1]._obj  # type: ignore[attr-defined]
+            out.absorption_bands = ctypes.cast(self.absorption, ctypes.POINTER(ctypes.c_float))
+            out.rt60_bands = ctypes.cast(self.rt60, ctypes.POINTER(ctypes.c_float))
+            out.band_count = 1
+            return int(libsonare.ErrorCode.INVALID_PARAMETER)
+
+        def sonare_free_room_estimate(self, out_arg: object) -> None:
+            out = out_arg._obj  # type: ignore[attr-defined]
+            assert bool(out.absorption_bands)
+            assert bool(out.rt60_bands)
+            self.free_calls += 1
+
+    foreign = ForeignLibrary()
+    monkeypatch.setattr(acoustic_module, "_get_lib", lambda: foreign)
+
+    def raise_from_check(_rc: int) -> None:
+        raise RuntimeError("foreign estimate failure")
+
+    monkeypatch.setattr(acoustic_module, "_check", raise_from_check)
+    with pytest.raises(RuntimeError, match="foreign estimate failure"):
+        acoustic_module.estimate_room([0.0, 1.0], sample_rate=48000)
+    assert foreign.estimate_calls == 1
+    assert foreign.free_calls == 1
+
+
 @acoustic
 def test_synthesize_rir_routes_air_absorption_through_the_c_abi() -> None:
     # The ISO 9613-1 atmospheric term used to be reachable only through the

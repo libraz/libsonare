@@ -10,6 +10,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from ._helpers import patch_mono_decode
+
 
 def _result(*, stages: list[str] | None = None, report: object | None = None) -> SimpleNamespace:
     return SimpleNamespace(
@@ -31,7 +33,7 @@ def test_mastering_preset_params_and_bits_reach_api_and_writer(
     from libsonare import _cli_common, _cli_mastering, cli
 
     calls: dict[str, object] = {}
-    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.0], 44_100))
+    patch_mono_decode(monkeypatch, lambda path: ([0.0], 44_100))
 
     def master_audio(*args, **kwargs):
         calls["preset"] = kwargs["preset_name"]
@@ -76,7 +78,7 @@ def test_mastering_config_unwraps_native_wrapper_and_forwards_params(monkeypatch
     from libsonare import _cli_mastering, cli
 
     calls: dict[str, object] = {}
-    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.0], 44_100))
+    patch_mono_decode(monkeypatch, lambda path: ([0.0], 44_100))
 
     def mastering_chain(*args, **kwargs):
         calls["config"] = kwargs["config"]
@@ -113,7 +115,7 @@ def test_mastering_assistant_enable_repair_explain_reaches_suggestion_and_chain(
     from libsonare import _cli_mastering, cli
 
     calls: dict[str, object] = {}
-    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.0], 48_000))
+    patch_mono_decode(monkeypatch, lambda path: ([0.0], 48_000))
 
     def suggest(*args, **kwargs):
         calls["assistant_params"] = kwargs["params"]
@@ -160,9 +162,9 @@ def test_mastering_assistant_enable_repair_explain_reaches_suggestion_and_chain(
 
 
 def test_mastering_semantic_selector_conflicts_are_invalid_parameters(monkeypatch) -> None:
-    from libsonare import _cli_mastering, cli
+    from libsonare import _cli_mastering
 
-    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.0], 48_000))
+    patch_mono_decode(monkeypatch, lambda path: ([0.0], 48_000))
     args = argparse.Namespace(
         file="input.wav",
         preset="pop",
@@ -196,7 +198,7 @@ def test_mastering_processor_hands_a_stereo_source_to_the_facade_unmixed(
     calls: dict[str, object] = {}
     monkeypatch.setattr(_cli_common, "_source_channel_count", lambda path: 2)
     monkeypatch.setattr(
-        _cli_common, "_load_audio_channels", lambda path: ([[0.5], [-0.25]], 44_100)
+        _cli_common, "_load_audio_channels_known", lambda path, channels: ([[0.5], [-0.25]], 44_100)
     )
     monkeypatch.setattr(libsonare, "mastering_processor_catalog", lambda: [])
 
@@ -262,10 +264,10 @@ def test_mastering_processor_rejects_the_removed_stereo_flag() -> None:
 
 def test_mastering_processor_stereo_only_catalog_auto_routes(monkeypatch, capsys) -> None:
     import libsonare
-    from libsonare import _cli_mastering, cli
+    from libsonare import _cli_mastering
 
     calls: list[str] = []
-    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.0], 44_100))
+    patch_mono_decode(monkeypatch, lambda path: ([0.0], 44_100))
     monkeypatch.setattr(
         libsonare,
         "mastering_processor_catalog",
@@ -310,7 +312,7 @@ def test_eq_params_and_shortcut_conflict_is_invalid_parameter(monkeypatch) -> No
     """
     from libsonare import _cli_mastering, cli
 
-    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.0], 44_100))
+    patch_mono_decode(monkeypatch, lambda path: ([0.0], 44_100))
     for shortcut in (["--frequency-hz", "1500"], ["--q", "1.0"]):
         args = cli._build_parser().parse_args(
             ["eq", "input.wav", "--params", "band0.gainDb=1", *shortcut]
@@ -434,7 +436,7 @@ def test_mastering_cli_reports_a_blocked_loudness_target(capsys, monkeypatch) ->
     samples = [
         math.sin(2.0 * math.pi * 440.0 * index / sample_rate) for index in range(sample_rate)
     ]
-    monkeypatch.setattr(cli, "_load_audio", lambda path: (samples, sample_rate))
+    patch_mono_decode(monkeypatch, lambda path: (samples, sample_rate))
 
     args = cli._build_parser().parse_args(
         [
@@ -477,7 +479,7 @@ def test_target_platform_moves_the_loudness_the_assistant_masters_to(capsys, mon
     samples = [
         0.5 * math.sin(2.0 * math.pi * 440.0 * index / sample_rate) for index in range(sample_rate)
     ]
-    monkeypatch.setattr(cli, "_load_audio", lambda path: (samples, sample_rate))
+    patch_mono_decode(monkeypatch, lambda path: (samples, sample_rate))
 
     def master_to(platform: str | None) -> float:
         argv = ["mastering", "input.wav", "--assistant", "--json"]
@@ -507,7 +509,7 @@ def test_preset_names_the_base_the_assistant_starts_from(monkeypatch, capsys) ->
     samples = [
         0.5 * math.sin(2.0 * math.pi * 440.0 * index / sample_rate) for index in range(sample_rate)
     ]
-    monkeypatch.setattr(cli, "_load_audio", lambda path: (samples, sample_rate))
+    patch_mono_decode(monkeypatch, lambda path: (samples, sample_rate))
 
     def explanation(*extra: str) -> list[str]:
         argv = ["mastering", "input.wav", "--assistant", "--explain", "--json", *extra]
@@ -526,7 +528,7 @@ def test_assistant_controls_are_refused_without_assistant(monkeypatch) -> None:
     """Options that only reach an AssistantConfig field are refused, not dropped."""
     from libsonare import _cli_mastering, cli
 
-    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.0], 48_000))
+    patch_mono_decode(monkeypatch, lambda path: ([0.0], 48_000))
     for option in (
         ["--target-platform", "broadcast"],
         ["--no-streaming-safe"],
@@ -557,7 +559,7 @@ def test_a_loudness_option_carrying_its_default_still_reaches_the_assistant(
     from libsonare import _cli_mastering, cli
 
     calls: dict[str, object] = {}
-    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.0], 48_000))
+    patch_mono_decode(monkeypatch, lambda path: ([0.0], 48_000))
     monkeypatch.setattr(
         libsonare,
         "mastering_assistant_suggest",
@@ -595,7 +597,7 @@ def test_a_loudness_option_carrying_its_default_is_refused_by_the_preset_chain(
     """A preset chain ignores the loudness flags, so supplying one is refused."""
     from libsonare import _cli_mastering, cli
 
-    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.0], 48_000))
+    patch_mono_decode(monkeypatch, lambda path: ([0.0], 48_000))
     args = cli._build_parser().parse_args(
         ["mastering", "input.wav", "--preset", "pop", f"{option}={value}"]
     )
@@ -613,7 +615,7 @@ def test_an_assistant_option_carrying_its_default_is_refused_without_assistant(
     """The refusal follows the flag, not the value it happens to carry."""
     from libsonare import _cli_mastering, cli
 
-    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.0], 48_000))
+    patch_mono_decode(monkeypatch, lambda path: ([0.0], 48_000))
     args = cli._build_parser().parse_args(["mastering", "input.wav", option])
     with pytest.raises(ValueError, match="requires --assistant"):
         _cli_mastering.cmd_mastering(args)
@@ -677,7 +679,7 @@ def test_no_streaming_safe_reaches_the_suggester(capsys, monkeypatch) -> None:
         0.5 * math.sin(2.0 * math.pi * 440.0 * index / sample_rate) + rng.uniform(-0.3, 0.3)
         for index in range(sample_rate * 3)
     ]
-    monkeypatch.setattr(cli, "_load_audio", lambda path: (samples, sample_rate))
+    patch_mono_decode(monkeypatch, lambda path: (samples, sample_rate))
 
     def explanation(*extra: str) -> list[str]:
         args = cli._build_parser().parse_args(
@@ -747,7 +749,7 @@ def test_eq_names_and_refuses_a_params_key_the_processor_does_not_read(monkeypat
     """A supplied key no config builder probes took no effect at all."""
     from libsonare import _cli_mastering, cli
 
-    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.0] * 2048, 48_000))
+    patch_mono_decode(monkeypatch, lambda path: ([0.0] * 2048, 48_000))
     args = cli._build_parser().parse_args(
         ["eq", "input.wav", "--params", "band0.bogusKey=42", "--json"]
     )

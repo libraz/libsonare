@@ -36,7 +36,7 @@ MODE_NAMES = ["major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "l
 # CLI exit codes. Failures map to codes aligned with the C-ABI SonareError so
 # scripts can distinguish usage / missing-file / decode / processing errors.
 # argparse keeps its native exit 2 for usage errors. Set SONARE_LEGACY_EXIT=1 to
-# fold every failure back to 1 for scripts that hardcode the old contract.
+# fold every failure back to 1 for scripts that hardcode the all-failures-are-1 contract.
 #
 # NOTE: for an undecodable input, whether the CLI reports 5 (INVALID_FORMAT)
 # or 6 (DECODE_FAILED) depends on whether the native library was built with
@@ -58,6 +58,12 @@ EXIT_CANCELLED = 11
 EXIT_ENCODE_FAILED = 12
 # Python-only: the native CLI links its library statically and cannot skew.
 EXIT_ABI_MISMATCH = 13
+
+# Keep the path loader's native file ceiling and read granularity when a
+# channel-preserving command takes the buffer decode route below. The native
+# reader uses these same values for regular files and streaming inputs.
+_MAX_AUDIO_FILE_BYTES = 500 * 1024 * 1024
+_AUDIO_READ_CHUNK_BYTES = 64 * 1024
 
 _SONARE_CODE_TO_EXIT = {
     SONARE_ERROR_INVALID_PARAMETER: EXIT_INVALID_PARAMETER,
@@ -155,7 +161,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 
 def _legacy_exit_codes() -> bool:
-    """Whether SONARE_LEGACY_EXIT requests the old all-failures-are-1 behaviour."""
+    """Whether SONARE_LEGACY_EXIT requests the all-failures-are-1 behaviour."""
     return os.environ.get("SONARE_LEGACY_EXIT") == "1"
 
 
@@ -212,8 +218,6 @@ def _load_audio(path: str) -> tuple[list[float], int]:
     the same commands, and a warning on only one of them is a difference a user
     would read as a difference in what was processed.
     """
-    from .audio import Audio
-
     channels = _source_channel_count(path)
     if channels > 1:
         print(
@@ -221,8 +225,7 @@ def _load_audio(path: str) -> tuple[list[float], int]:
             "use the stereo library API for channel-preserving processing",
             file=sys.stderr,
         )
-    with Audio.from_file(path) as audio:
-        return audio.data, audio.sample_rate
+    return _load_audio_known_channels(path, channels, emit_warning=False)
 
 
 def _load_audio_channels(path: str) -> tuple[list[list[float]], int]:
@@ -236,24 +239,110 @@ def _load_audio_channels(path: str) -> tuple[list[list[float]], int]:
     Raises:
         SonareError: As :meth:`Audio.from_file` does.
     """
+    channels = _source_channel_count(path)
+    return _load_audio_channels_known(path, channels)
+
+
+def _load_audio_known_channels(
+    path: str, channels: int, *, emit_warning: bool = False
+) -> tuple[list[float], int]:
+    """Load mono audio given the source channel count the caller already probed.
+
+    ``channels`` is used only for the downmix warning, so the probe runs once per
+    command rather than once per loader.
+    """
     from .audio import Audio
 
-    channels = _source_channel_count(path)
+    if emit_warning and channels > 1:
+        print(
+            f"warning: {channels}-channel input is downmixed to mono by this CLI command; "
+            "use the stereo library API for channel-preserving processing",
+            file=sys.stderr,
+        )
+    with Audio.from_file(path) as audio:
+        return audio.data, audio.sample_rate
+
+
+def _read_audio_bounded(path: str) -> bytes:
+    """Read an audio path in bounded chunks with the native 500 MiB ceiling.
+
+    The path probe remains advisory and has already happened before this helper
+    is called. A second path read is therefore deliberate: it is the one input
+    handed to :func:`decode_channels`, and its chunked ceiling also applies to
+    FIFOs and other streams whose size is unknown before reading.
+    """
+    try:
+        file_size = os.stat(path).st_size
+    except OSError:
+        # Opening below gives the same file-not-found/read classification as the
+        # native path loader for a path whose metadata cannot be inspected.
+        file_size = 0
+    if file_size > _MAX_AUDIO_FILE_BYTES:
+        raise SonareError(
+            SONARE_ERROR_INVALID_PARAMETER,
+            f"File too large: {file_size} bytes (max: {_MAX_AUDIO_FILE_BYTES} bytes)",
+        )
+
+    try:
+        stream = open(path, "rb")  # noqa: SIM115 - classify the open before entering context
+    except IsADirectoryError:
+        # On POSIX, Python reports a directory at open time while the native
+        # ifstream path can open it and hand an empty stream to the decoder.
+        # Preserve that decoder-specific classification instead of guessing an
+        # open or read error here.
+        return b""
+    except OSError as exc:
+        # Native read_file() maps every failure to open the path, including
+        # PermissionError and other open-time OSError subclasses, to
+        # FileNotFound/Cannot open file. Only errors after this point are read
+        # failures and retain DecodeFailed/Failed to read file.
+        raise SonareError(SONARE_ERROR_FILE_NOT_FOUND, f"Cannot open file: {path}") from exc
+
+    data = bytearray()
+    try:
+        with stream:
+            while True:
+                try:
+                    chunk = stream.read(_AUDIO_READ_CHUNK_BYTES)
+                except OSError as exc:
+                    raise SonareError(
+                        SONARE_ERROR_DECODE_FAILED, f"Failed to read file: {path}"
+                    ) from exc
+                if not chunk:
+                    break
+                if len(chunk) > _MAX_AUDIO_FILE_BYTES - len(data):
+                    raise SonareError(
+                        SONARE_ERROR_INVALID_PARAMETER,
+                        f"File too large: exceeds {_MAX_AUDIO_FILE_BYTES} bytes",
+                    )
+                data.extend(chunk)
+    except SonareError:
+        raise
+    except OSError as exc:
+        # A stream read or close can fail outside the direct read() call. It is
+        # still a post-open failure and therefore has native read semantics.
+        raise SonareError(SONARE_ERROR_DECODE_FAILED, f"Failed to read file: {path}") from exc
+    return bytes(data)
+
+
+def _load_audio_channels_known(path: str, channels: int) -> tuple[list[list[float]], int]:
+    """Load channel planes after a probe, decoding a multi-channel source once."""
     if channels <= 1:
-        samples, sample_rate = _load_audio(path)
+        samples, sample_rate = _load_audio_known_channels(path, channels, emit_warning=False)
         return [samples], sample_rate
 
-    planes: list[list[float]] = []
-    sample_rate = 0
-    for index in range(channels):
-        with Audio.from_file_channel(path, index) as audio:
-            planes.append(audio.data)
-            sample_rate = audio.sample_rate
-    return planes, sample_rate
+    from .audio import decode_channels
+
+    decoded, sample_rate = decode_channels(_read_audio_bounded(path))
+    # Each row is a contiguous NumPy view into ``decoded``. Keeping the parent
+    # array alive through the row views makes the planes independently mutable
+    # without aliasing one another or copying every channel a second time.
+    rows = [decoded[index, :] for index in range(int(decoded.shape[0]))]
+    return cast(list[list[float]], rows), sample_rate
 
 
 def _load_audio_from_facade(path: str) -> tuple[list[float], int]:
-    """Load through the stable facade so its historical patch point remains usable."""
+    """Load mono audio through ``cli._load_audio``, the facade the command modules share."""
     from . import cli
 
     return cli._load_audio(path)
@@ -677,8 +766,8 @@ def _write_wav(
         for offset in range(0, len(samples), _WAV_CHUNK_FRAMES):
             chunk = samples[offset : offset + _WAV_CHUNK_FRAMES]
             if bits_per_sample == 16:
-                # Keep the historical two-argument call shape for callers that
-                # instrument this helper; 24-bit output opts into the width.
+                # 16-bit output uses the helper's default width; 24-bit passes it
+                # explicitly.
                 _write_wav_mono_frames(wav, chunk)
             else:
                 _write_wav_mono_frames(wav, chunk, bits_per_sample)
@@ -701,8 +790,8 @@ def _write_wav_stereo(
         for offset in range(0, count, _WAV_CHUNK_FRAMES):
             end = min(offset + _WAV_CHUNK_FRAMES, count)
             if bits_per_sample == 16:
-                # Keep the historical three-argument call shape for callers that
-                # instrument this helper; 24-bit output opts into the width.
+                # 16-bit output uses the helper's default width; 24-bit passes it
+                # explicitly.
                 _write_wav_stereo_frames(wav, left[offset:end], right[offset:end])
             else:
                 _write_wav_stereo_frames(wav, left[offset:end], right[offset:end], bits_per_sample)
@@ -717,15 +806,13 @@ def _load_channels_or_downmix(path: str) -> tuple[list[list[float]], int]:
     so: silently keeping channel 0 of a surround file would deliver a quarter of
     the record under the name of the whole.
 
-    The mono path goes through the facade loader rather than the direct one, so
-    the documented ``cli._load_audio`` patch point still intercepts it. Calling
-    the module-local loader here would work identically in production and stop
-    the seam working, which is the shape of difference a test suite finds and a
-    reader does not.
+    The channel count is probed once and handed to the decode, so the file is not
+    probed again for the downmix warning.
     """
-    if _source_channel_count(path) == 2:
-        return _load_audio_channels(path)
-    samples, sample_rate = _load_audio_from_facade(path)
+    channels = _source_channel_count(path)
+    if channels == 2:
+        return _load_audio_channels_known(path, channels)
+    samples, sample_rate = _load_audio_known_channels(path, channels, emit_warning=True)
     return [samples], sample_rate
 
 
@@ -883,8 +970,7 @@ def _emit_effect_result(
     and giving it its own emitter would put two spellings on one payload. The
     JSON payload keeps the key order ``length, sample_rate, duration,
     <extra...>, output`` and the human-readable form prints ``<label>: <n>
-    samples`` followed by an optional ``Wrote:`` line, matching each command's
-    historical output exactly.
+    samples`` followed by an optional ``Wrote:`` line.
 
     ``length`` is per channel, not the frame count times the channel count, so a
     stereo result reports the same figure its mono downmix would. The payload

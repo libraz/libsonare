@@ -44,3 +44,20 @@ LIB_AVAILABLE: bool = is_lib_available()
 
 def _midi1_word(status: int, channel: int, data0: int, data1: int) -> int:
     return (0x2 << 28) | ((status & 0xF) << 20) | ((channel & 0xF) << 16) | (data0 << 8) | data1
+
+
+def patch_mono_decode(monkeypatch, loader) -> None:
+    """Route the CLI's mono decode through ``loader(path) -> (samples, rate)``.
+
+    The one seam under both the downmixing and the channel-preserving loaders:
+    a mono or downmixed source reaches ``_load_audio_known_channels``, so a test
+    replaces the decode itself rather than a loader the production path
+    selects between.
+    """
+    from libsonare import _cli_common
+
+    monkeypatch.setattr(
+        _cli_common,
+        "_load_audio_known_channels",
+        lambda path, channels, *, emit_warning=False: loader(path),
+    )

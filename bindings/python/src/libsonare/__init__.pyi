@@ -1006,7 +1006,6 @@ from .types import (
 from .types import (
     HumDetection as HumDetection,
 )
-from .types import InverseResult as InverseResult
 from .types import (
     Key as Key,
 )
@@ -1119,6 +1118,7 @@ from .types import (
 from .types import (
     MelodyResult as MelodyResult,
 )
+from .types import MelPowerResult as MelPowerResult
 from .types import (
     MelSpectrogramResult as MelSpectrogramResult,
 )
@@ -1249,6 +1249,7 @@ from .types import (
 from .types import (
     StereoMonoCompatCheckResult as StereoMonoCompatCheckResult,
 )
+from .types import StftMagnitudeResult as StftMagnitudeResult
 from .types import (
     StftResult as StftResult,
 )

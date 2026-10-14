@@ -25,9 +25,10 @@ from ._runtime import (
 )
 from .types import (
     CqtResult,
-    InverseResult,
+    MelPowerResult,
     MelSpectrogramResult,
     MfccResult,
+    StftMagnitudeResult,
 )
 
 # ============================================================================
@@ -204,7 +205,7 @@ def mel_to_stft(
     fmin: float = 0.0,
     fmax: float = 0.0,
     htk: bool = False,
-) -> InverseResult:
+) -> StftMagnitudeResult:
     """Approximate inverse of a Mel filterbank (Mel power -> STFT magnitude).
 
     Args:
@@ -219,7 +220,7 @@ def mel_to_stft(
         htk: Use the HTK Mel formula instead of Slaney (default False).
 
     Returns:
-        An :class:`InverseResult` with the reconstructed STFT magnitude matrix (not squared).
+        An :class:`StftMagnitudeResult` with the reconstructed STFT magnitude matrix (not squared).
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mel_to_stft"):
@@ -256,10 +257,10 @@ def mel_to_stft(
     _check(rc)
     try:
         total = out.rows * out.n_frames
-        return InverseResult(
-            rows=int(out.rows),
+        return StftMagnitudeResult(
+            n_bins=int(out.rows),
             n_frames=int(out.n_frames),
-            data=_float_array_result(out.data, total),
+            magnitude=_float_array_result(out.data, total),
         )
     finally:
         lib.sonare_free_inverse_result(ctypes.byref(out))
@@ -389,7 +390,7 @@ def mfcc_to_mel(
     n_frames: int,
     n_mels: int = 128,
     lifter: float = 0.0,
-) -> InverseResult:
+) -> MelPowerResult:
     """Invert MFCC coefficients back to a Mel power spectrogram.
 
     Args:
@@ -399,7 +400,7 @@ def mfcc_to_mel(
         n_mels: Number of Mel bins to reconstruct (default 128).
 
     Returns:
-        An :class:`InverseResult` with the reconstructed Mel power matrix.
+        An :class:`MelPowerResult` with the reconstructed Mel power matrix.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mfcc_to_mel"):
@@ -430,10 +431,10 @@ def mfcc_to_mel(
     _check(rc)
     try:
         total = out.rows * out.n_frames
-        return InverseResult(
-            rows=int(out.rows),
+        return MelPowerResult(
+            n_mels=int(out.rows),
             n_frames=int(out.n_frames),
-            data=_float_array_result(out.data, total),
+            power=_float_array_result(out.data, total),
         )
     finally:
         lib.sonare_free_inverse_result(ctypes.byref(out))
@@ -532,7 +533,7 @@ def _require_linear_mel(fn_name: str, result: MelSpectrogramResult) -> None:
         )
 
 
-def mel_result_to_stft(result: MelSpectrogramResult) -> InverseResult:
+def mel_result_to_stft(result: MelSpectrogramResult) -> StftMagnitudeResult:
     """Approximate inverse of a Mel result (Mel power -> STFT magnitude).
 
     Reads the matrix and every forward parameter from ``result``, so the call
@@ -542,7 +543,7 @@ def mel_result_to_stft(result: MelSpectrogramResult) -> InverseResult:
         result: A :func:`mel_spectrogram` result.
 
     Returns:
-        An :class:`InverseResult` with the reconstructed STFT magnitude matrix (not squared).
+        An :class:`StftMagnitudeResult` with the reconstructed STFT magnitude matrix (not squared).
 
     Raises:
         SonareValueError: If ``result`` is in dB (``result.is_db``).
@@ -591,14 +592,14 @@ def mel_result_to_audio(result: MelSpectrogramResult, n_iter: int = 32) -> list[
     )
 
 
-def mfcc_result_to_mel(result: MfccResult) -> InverseResult:
+def mfcc_result_to_mel(result: MfccResult) -> MelPowerResult:
     """Invert an MFCC result back to a Mel power spectrogram, undoing its lifter.
 
     Args:
         result: An :func:`mfcc` result.
 
     Returns:
-        An :class:`InverseResult` with the reconstructed Mel power matrix.
+        An :class:`MelPowerResult` with the reconstructed Mel power matrix.
     """
     return mfcc_to_mel(
         result.coefficients, result.n_mfcc, result.n_frames, result.n_mels, result.lifter

@@ -9,12 +9,60 @@ from types import SimpleNamespace
 # ruff: noqa: F403,F405
 from ._analyzer_helpers import *
 from ._analyzer_helpers import _run_cli, _write_test_wav
+from ._helpers import patch_mono_decode
 
 # The scene a single-strip FakeMixer must be built from. The command reads the
 # strip ids out of the scene text and hands the buffers to the compiled mixer, so
 # a double whose strip_count disagrees with its own scene is a double that could
 # not exist: "{}" declares no strips at all.
 _ONE_STRIP_SCENE = '{"version":1,"strips":[{"id":"strip0"}],"buses":[],"connections":[]}'
+
+
+def test_mix_strip_resamples_mono_once_then_copies_both_sides(monkeypatch) -> None:
+    """A rate-mismatched mono stem shares one resampler result safely."""
+    from libsonare import _cli_mixing
+
+    calls: list[tuple[list[float], int, int]] = []
+    monkeypatch.setattr(
+        _cli_mixing, "_load_channels_or_downmix", lambda _path: ([[1.0, 2.0]], 44_100)
+    )
+
+    def resample(samples, source_rate, target_rate):
+        calls.append((list(samples), source_rate, target_rate))
+        return [10.0, 20.0]
+
+    monkeypatch.setattr(_cli_mixing, "_resample", resample)
+    left, right = _cli_mixing._load_strip_pair("stem.wav", 48_000)
+
+    assert calls == [([1.0, 2.0], 44_100, 48_000)]
+    assert left == [10.0, 20.0]
+    assert right == [10.0, 20.0]
+    assert left is not right
+
+
+def test_mix_strip_resample_call_count_stereo_and_same_rate(monkeypatch) -> None:
+    """Stereo keeps two resamplers while same-rate input keeps zero."""
+    from libsonare import _cli_mixing
+
+    calls: list[list[float]] = []
+    monkeypatch.setattr(
+        _cli_mixing, "_load_channels_or_downmix", lambda _path: ([[1.0], [2.0]], 44_100)
+    )
+    monkeypatch.setattr(
+        _cli_mixing,
+        "_resample",
+        lambda samples, _source_rate, _target_rate: calls.append(list(samples)) or list(samples),
+    )
+    left, right = _cli_mixing._load_strip_pair("stereo.wav", 48_000)
+    assert (left, right) == ([1.0], [2.0])
+    assert calls == [[1.0], [2.0]]
+
+    calls.clear()
+    monkeypatch.setattr(_cli_mixing, "_load_channels_or_downmix", lambda _path: ([[3.0]], 48_000))
+    left, right = _cli_mixing._load_strip_pair("mono.wav", 48_000)
+    assert (left, right) == ([3.0], [3.0])
+    assert left is not right
+    assert calls == []
 
 
 def test_mix_cli_resamples_inputs_to_mixer_rate(monkeypatch, tmp_path) -> None:
@@ -25,7 +73,7 @@ def test_mix_cli_resamples_inputs_to_mixer_rate(monkeypatch, tmp_path) -> None:
     captured: dict[str, object] = {}
 
     # A 44.1 kHz stem: mixing it untouched at the 48 kHz default would play fast.
-    monkeypatch.setattr(cli, "_load_audio", lambda path: ([0.0] * 441, 44100))
+    patch_mono_decode(monkeypatch, lambda path: ([0.0] * 441, 44100))
 
     class FakeMixer:
         @classmethod
@@ -76,7 +124,7 @@ def test_mix_cli_processes_blocks_partial_block_and_tail(monkeypatch, tmp_path) 
 
     block_lengths: list[int] = []
     drain_lengths: list[int] = []
-    monkeypatch.setattr(cli, "_load_audio", lambda _path: ([0.25] * 513, 48000))
+    patch_mono_decode(monkeypatch, lambda _path: ([0.25] * 513, 48000))
 
     class FakeMixer:
         @classmethod

@@ -706,8 +706,11 @@ class SynthPatch:
     :func:`synth_preset_names`; a ``"va:"`` routing prefix is accepted) or,
     when ``preset`` is empty, the default subtractive patch. Every numeric
     field defaults to ``None``, meaning "keep the base value"; any value given
-    overrides (clamped to its audible range), including an explicit ``0``. Enum
-    fields accept the C ordinal or a name with ``"default"`` = keep. A
+    overrides it, including an explicit ``0``. A value that is non-finite or
+    outside the range :func:`synth_patch_param_info` publishes for its field is
+    refused with a :class:`SonareError` naming the field, and so are more than 8
+    mod routings. Enum fields accept the C ordinal or a name with ``"default"``
+    = keep. A
     ``mod_routings`` tuple REPLACES the base mod matrix, and an empty tuple
     clears it, while ``None`` keeps it.
 
@@ -871,7 +874,8 @@ class SynthPatch:
         def _set_float(name: str, bit: int, value: float | None) -> None:
             if value is None:
                 return
-            setattr(c, name, float(value))
+            # Unconverted, so the struct's _narrow_float refuses overflow and bool by name.
+            setattr(c, name, value)
             c.present_fields |= bit
 
         def _set_int(name: str, bit: int, value: int | None) -> None:
@@ -885,7 +889,7 @@ class SynthPatch:
         def _set_float2(name: str, bit: int, value: float | None) -> None:
             if value is None:
                 return
-            setattr(c, name, float(value))
+            setattr(c, name, value)
             c.present_fields2 |= bit
 
         c.preset = _utf8_arg(_strip_va_prefix(self.preset), "preset")[
@@ -1116,8 +1120,9 @@ def synth_patch_param_info() -> list[SynthParamInfo]:
 
     One descriptor per field, in the layout of :func:`synth_engine_param_info`:
     ``name`` is the binding spelling of the field, ``min`` / ``max`` the range it
-    is clamped to and ``default`` the init patch's value. Enum fields, the preset
-    name and the mod matrix are not described.
+    is accepted in (a value outside it is refused) and ``default`` the init
+    patch's value. Enum fields, the preset name and the mod matrix are not
+    described.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_synth_patch_param_info"):

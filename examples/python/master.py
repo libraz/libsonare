@@ -5,29 +5,16 @@ from __future__ import annotations
 import json
 import math
 import sys
-import wave
-from array import array
 from collections.abc import Sequence
 from dataclasses import asdict
 
 import libsonare
+from pcm16_wav import write_pcm16_wav
 
 
 def write_wav(path: str, samples: Sequence[float], sample_rate: int) -> None:
-    """Write PCM in bounded chunks instead of materializing a full second copy."""
-    with wave.open(path, "wb") as output:
-        output.setnchannels(1)
-        output.setsampwidth(2)
-        output.setframerate(sample_rate)
-        for offset in range(0, len(samples), 8192):
-            pcm = array(
-                "h",
-                (
-                    round(max(-1.0, min(1.0, sample)) * 32767)
-                    for sample in samples[offset : offset + 8192]
-                ),
-            )
-            output.writeframes(pcm.tobytes())
+    """Write mono PCM using the shared bounded PCM16 conversion."""
+    write_pcm16_wav(path, samples, sample_rate, 1)
 
 
 def json_safe(value: object) -> object:

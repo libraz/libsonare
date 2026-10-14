@@ -58,11 +58,12 @@ def test_mel_inverse_roundtrip():
     assert len(mel.power) == n_mels * n_frames
 
     stft = ls.mel_to_stft(mel.power, n_mels, n_frames, sample_rate=sr, n_fft=n_fft)
-    assert stft.rows == n_fft // 2 + 1
+    assert isinstance(stft, ls.StftMagnitudeResult)
+    assert stft.n_bins == n_fft // 2 + 1
     assert stft.n_frames == n_frames
-    assert len(stft.data) == stft.rows * stft.n_frames
-    assert _is_finite_list(stft.data)
-    assert max(stft.data) > 0.0  # reconstructed magnitude is non-trivial
+    assert len(stft.magnitude) == stft.n_bins * stft.n_frames
+    assert _is_finite_list(stft.magnitude)
+    assert max(stft.magnitude) > 0.0  # reconstructed magnitude is non-trivial
 
     out = ls.mel_to_audio(mel.power, n_mels, n_frames, sample_rate=sr, n_fft=n_fft, hop_length=hop)
     assert len(out) >= (n_frames - 1) * hop
@@ -83,10 +84,10 @@ def test_mel_inverse_honours_htk():
     slaney = ls.mel_to_stft(mel.power, n_mels, mel.n_frames, sample_rate=sr, n_fft=n_fft, htk=False)
     htk = ls.mel_to_stft(mel.power, n_mels, mel.n_frames, sample_rate=sr, n_fft=n_fft, htk=True)
 
-    assert htk.rows == n_fft // 2 + 1
+    assert htk.n_bins == n_fft // 2 + 1
     assert htk.n_frames == mel.n_frames
-    assert _is_finite_list(htk.data)
-    assert sum((a - b) ** 2 for a, b in zip(slaney.data, htk.data, strict=True)) > 1e-6
+    assert _is_finite_list(htk.magnitude)
+    assert sum((a - b) ** 2 for a, b in zip(slaney.magnitude, htk.magnitude, strict=True)) > 1e-6
 
     out = ls.mel_to_audio(
         mel.power,
@@ -115,14 +116,15 @@ def test_mfcc_inverse_roundtrip():
     assert len(mf.coefficients) == 20 * n_frames
 
     mel = ls.mfcc_to_mel(mf.coefficients, 20, n_frames, n_mels=n_mels)
-    assert mel.rows == n_mels
+    assert isinstance(mel, ls.MelPowerResult)
+    assert mel.n_mels == n_mels
     assert mel.n_frames == n_frames
-    assert len(mel.data) == n_mels * n_frames
-    assert _is_finite_list(mel.data)
+    assert len(mel.power) == n_mels * n_frames
+    assert _is_finite_list(mel.power)
 
     lifted_mel = ls.mfcc_to_mel(mf.coefficients, 20, n_frames, n_mels=n_mels, lifter=22.0)
-    assert _is_finite_list(lifted_mel.data)
-    assert any(abs(a - b) > 1.0e-5 for a, b in zip(lifted_mel.data, mel.data, strict=True))
+    assert _is_finite_list(lifted_mel.power)
+    assert any(abs(a - b) > 1.0e-5 for a, b in zip(lifted_mel.power, mel.power, strict=True))
 
     out = ls.mfcc_to_audio(
         mf.coefficients, 20, n_frames, sample_rate=sr, n_fft=n_fft, hop_length=hop, n_mels=n_mels

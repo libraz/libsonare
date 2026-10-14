@@ -8,6 +8,7 @@ import json
 # ruff: noqa: F403,F405
 from ._analyzer_helpers import *
 from ._analyzer_helpers import _run_cli, _write_test_wav
+from ._helpers import patch_mono_decode
 
 
 @pytest.mark.parametrize(
@@ -280,7 +281,7 @@ def test_mastering_processor_cli_uses_the_runtime_stereo_catalog(monkeypatch) ->
     import libsonare
     from libsonare import cli
 
-    monkeypatch.setattr(cli, "_load_audio", lambda _path: ([0.1, -0.1], 22050))
+    patch_mono_decode(monkeypatch, lambda _path: ([0.1, -0.1], 22050))
     monkeypatch.setattr(
         libsonare,
         "mastering_processor_catalog",

@@ -163,11 +163,18 @@ def _load_strip_pair(path: str, sample_rate: int) -> tuple[list[float], list[flo
     """
     planes, in_sr = _load_channels_or_downmix(path)
     left = list(planes[0])
-    right = list(planes[1]) if len(planes) == 2 else list(left)
+    if len(planes) == 2:
+        right = list(planes[1])
+        if in_sr != sample_rate:
+            left = _resample(left, in_sr, sample_rate)
+            right = _resample(right, in_sr, sample_rate)
+        return left, right
+
+    # The two sides of a mono strip must be independent mutable buffers, but
+    # they share the one resampling result; stereo resamples each side independently.
     if in_sr != sample_rate:
-        left = list(_resample(left, in_sr, sample_rate))
-        right = list(_resample(right, in_sr, sample_rate))
-    return left, right
+        left = _resample(left, in_sr, sample_rate)
+    return left, list(left)
 
 
 def _mix_strip_channels(
@@ -180,8 +187,8 @@ def _mix_strip_channels(
     name names a strip — a scene may carry strips no input feeds, which is what
     an assistant-suggested scene always looks like: its effect returns are fed
     by sends rather than by a file, and requiring a silent WAV for each of them
-    made the suggestion unrenderable without one. Addressed positionally, the
-    historical form, every strip takes the input at its own index; it is kept
+    made the suggestion unrenderable without one. Addressed positionally,
+    every strip takes the input at its own index; it is kept
     because a built-in preset's strip ids are fixed vocabulary that a file on
     disk has no reason to match.
 

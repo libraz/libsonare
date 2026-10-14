@@ -40,7 +40,6 @@ from .types import (
     GoniometerPoint,
     HpssResult,
     HumDetection,
-    InverseResult,
     Key,
     KeyCandidate,
     KeyDetection,
@@ -58,6 +57,7 @@ from .types import (
     MasteringStereoResult,
     MaterialPresetName,
     MelodyResult,
+    MelPowerResult,
     MelSpectrogramResult,
     MeterEstimate,
     MeterTap,
@@ -86,6 +86,7 @@ from .types import (
     SegmentMatrix,
     SendTiming,
     SpectrumReport,
+    StftMagnitudeResult,
     StftResult,
     StreamingLoudnessGain,
     TimbreResult,
@@ -2595,7 +2596,7 @@ def mel_to_stft(
     fmin: float = 0.0,
     fmax: float = 0.0,
     htk: bool = False,
-) -> InverseResult: ...
+) -> StftMagnitudeResult: ...
 def cqt_to_audio(
     magnitude: FloatSamples,
     n_bins: int,
@@ -2645,7 +2646,7 @@ def mfcc_to_mel(
     n_frames: int,
     n_mels: int = 128,
     lifter: float = 0.0,
-) -> InverseResult: ...
+) -> MelPowerResult: ...
 def mfcc_to_audio(
     mfcc_coeffs: FloatSamples,
     n_mfcc: int,
@@ -2660,9 +2661,9 @@ def mfcc_to_audio(
     htk: bool = False,
     lifter: float = 0.0,
 ) -> list[float]: ...
-def mel_result_to_stft(result: MelSpectrogramResult) -> InverseResult: ...
+def mel_result_to_stft(result: MelSpectrogramResult) -> StftMagnitudeResult: ...
 def mel_result_to_audio(result: MelSpectrogramResult, n_iter: int = 32) -> list[float]: ...
-def mfcc_result_to_mel(result: MfccResult) -> InverseResult: ...
+def mfcc_result_to_mel(result: MfccResult) -> MelPowerResult: ...
 def mfcc_result_to_audio(result: MfccResult, n_iter: int = 32) -> list[float]: ...
 def mastering_dynamics_compressor(
     samples: FloatSamples,

@@ -35,6 +35,7 @@ from ._runtime import (
     _to_c_int,
     _to_c_size_t,
     _utf8_arg,
+    _validate_samples,
 )
 
 
@@ -184,12 +185,19 @@ class PlaybackRenderer:
         with contextlib.suppress(Exception):
             self.close()
 
+    def _require_handle(self) -> ctypes.c_void_p:
+        """Return the live renderer handle, or reject a closed renderer."""
+        if not self._handle:
+            raise _invalid_state("PlaybackRenderer is closed")
+        return self._handle
+
     def reset(self) -> None:
         """Clear DSP state (filters, FIFOs, DRC, convolution history, pending drains).
 
         Configuration and head pose are kept.
         """
-        _check(self._lib.sonare_playback_renderer_reset(self._handle))
+        handle = self._require_handle()
+        _check(self._lib.sonare_playback_renderer_reset(handle))
 
     def set_config(self, config: Mapping[str, Any] | str) -> None:
         """Apply a complete configuration document.
@@ -198,16 +206,18 @@ class PlaybackRenderer:
         that differs from the current value raises :class:`SonareError`; realtime
         keys take effect at the next block boundary.
         """
+        handle = self._require_handle()
         _check(
             self._lib.sonare_playback_renderer_set_config_json(
-                self._handle, _playback_config_to_json(config)
+                handle, _playback_config_to_json(config)
             )
         )
 
     def config(self) -> dict[str, Any]:
         """The current complete configuration document."""
+        handle = self._require_handle()
         out = ctypes.c_char_p()
-        _check(self._lib.sonare_playback_renderer_config_json(self._handle, ctypes.byref(out)))
+        _check(self._lib.sonare_playback_renderer_config_json(handle, ctypes.byref(out)))
         return _json_out_result(self._lib, out)
 
     def set_head_orientation(
@@ -221,9 +231,10 @@ class PlaybackRenderer:
         Raises:
             SonareValueError: An angle is not finite or does not fit a C float.
         """
+        handle = self._require_handle()
         _check_realtime(
             self._lib.sonare_playback_renderer_set_head_orientation(
-                self._handle,
+                handle,
                 _to_c_float(yaw_deg, "yaw_deg"),
                 _to_c_float(pitch_deg, "pitch_deg"),
                 _to_c_float(roll_deg, "roll_deg"),
@@ -236,18 +247,16 @@ class PlaybackRenderer:
         With ``input.layout = "auto"`` this follows the channel count of the
         most recent non-empty ``process_*`` call (2 before the first call).
         """
+        handle = self._require_handle()
         out = ctypes.c_int()
-        _check(
-            self._lib.sonare_playback_renderer_input_channel_count(self._handle, ctypes.byref(out))
-        )
+        _check(self._lib.sonare_playback_renderer_input_channel_count(handle, ctypes.byref(out)))
         return int(out.value)
 
     def output_channels(self) -> int:
         """Channel count of the output target; fixed for the renderer's lifetime."""
+        handle = self._require_handle()
         out = ctypes.c_int()
-        _check(
-            self._lib.sonare_playback_renderer_output_channel_count(self._handle, ctypes.byref(out))
-        )
+        _check(self._lib.sonare_playback_renderer_output_channel_count(handle, ctypes.byref(out)))
         return int(out.value)
 
     def latency_samples(self) -> int:
@@ -256,24 +265,25 @@ class PlaybackRenderer:
         Depends only on the output target, the sample rate and the speaker
         distance compensation -- never on realtime keys or the input layout.
         """
+        handle = self._require_handle()
         out = ctypes.c_int()
-        _check(self._lib.sonare_playback_renderer_latency_samples(self._handle, ctypes.byref(out)))
+        _check(self._lib.sonare_playback_renderer_latency_samples(handle, ctypes.byref(out)))
         return int(out.value)
 
     def non_finite_discard_count(self) -> int:
         """Non-finite input samples replaced with 0 since creation."""
+        handle = self._require_handle()
         out = ctypes.c_uint32()
         _check(
-            self._lib.sonare_playback_renderer_non_finite_discard_count(
-                self._handle, ctypes.byref(out)
-            )
+            self._lib.sonare_playback_renderer_non_finite_discard_count(handle, ctypes.byref(out))
         )
         return int(out.value)
 
     def diagnostics(self) -> dict[str, Any]:
         """Inactive stages, per-stage latency, clamps, active input layout and counters."""
+        handle = self._require_handle()
         out = ctypes.c_char_p()
-        _check(self._lib.sonare_playback_renderer_diagnostics_json(self._handle, ctypes.byref(out)))
+        _check(self._lib.sonare_playback_renderer_diagnostics_json(handle, ctypes.byref(out)))
         return _json_out_result(self._lib, out)
 
     def process_planar(self, planes: Sequence[Sequence[float]] | np.ndarray) -> np.ndarray:
@@ -285,6 +295,7 @@ class PlaybackRenderer:
         2, 6 or 8, and a change switches the input layout at the start of this
         block without changing :meth:`latency_samples`.
         """
+        handle = self._require_handle()
         in_arrays, in_ptrs, frames = _planar_channel_arrays(planes, subject="planes")
         out_channels = self.output_channels()
         out_arrays = [(ctypes.c_float * frames)() for _ in range(out_channels)]
@@ -294,7 +305,7 @@ class PlaybackRenderer:
         )
         _check_realtime(
             self._lib.sonare_playback_renderer_process_planar(
-                self._handle,
+                handle,
                 in_ptrs,
                 _to_c_int(len(in_arrays), "in_channels"),
                 out_ptrs,
@@ -314,6 +325,7 @@ class PlaybackRenderer:
         Unlike :meth:`process_planar`, ``in_channels`` is explicit rather than
         inferred from the buffer's shape.
         """
+        handle = self._require_handle()
         ch = _narrow_int(in_channels, "in_channels", _C_INT_MIN, _C_INT_MAX)
         if ch <= 0:
             raise SonareValueError("in_channels must be positive")
@@ -329,7 +341,7 @@ class PlaybackRenderer:
         )
         _check_realtime(
             self._lib.sonare_playback_renderer_process_interleaved(
-                self._handle,
+                handle,
                 c_in,
                 _to_c_int(ch, "in_channels"),
                 c_out,
@@ -436,25 +448,29 @@ class PlaybackLoudnessMeter:
         with contextlib.suppress(Exception):
             self.close()
 
-    @_guard_buffer("samples")
+    def _require_handle(self) -> ctypes.c_void_p:
+        """Return the live meter handle, or reject a closed meter."""
+        if not self._handle:
+            raise _invalid_state("PlaybackLoudnessMeter is closed")
+        return self._handle
+
     def push_interleaved(self, samples: Sequence[float] | list[float] | np.ndarray) -> None:
         """Feed interleaved frames of any length."""
-        c_array, total = _to_c_float_array(samples)
+        handle = self._require_handle()
+        validated = _validate_samples("push_interleaved", samples)
+        c_array, total = _to_c_float_array(validated)
         if total % self._channels != 0:
             raise SonareValueError("interleaved samples length must be divisible by channels")
         frames = total // self._channels
         _check(
             self._lib.sonare_playback_loudness_meter_push_interleaved(
-                self._handle, c_array, _to_c_size_t(frames, "frames")
+                handle, c_array, _to_c_size_t(frames, "frames")
             )
         )
 
     def integrated_lufs(self) -> float:
         """Integrated loudness of everything pushed so far, in LUFS."""
+        handle = self._require_handle()
         out = ctypes.c_float()
-        _check(
-            self._lib.sonare_playback_loudness_meter_integrated_lufs(
-                self._handle, ctypes.byref(out)
-            )
-        )
+        _check(self._lib.sonare_playback_loudness_meter_integrated_lufs(handle, ctypes.byref(out)))
         return float(out.value)

@@ -1079,11 +1079,17 @@ class DynamicRangeReport:
         window_rms_db: list[float],
     ) -> None: ...
 
-class InverseResult:
-    rows: int
+class StftMagnitudeResult:
+    n_bins: int
     n_frames: int
-    data: list[float]
-    def __init__(self, rows: int, n_frames: int, data: list[float]) -> None: ...
+    magnitude: list[float]
+    def __init__(self, n_bins: int, n_frames: int, magnitude: list[float]) -> None: ...
+
+class MelPowerResult:
+    n_mels: int
+    n_frames: int
+    power: list[float]
+    def __init__(self, n_mels: int, n_frames: int, power: list[float]) -> None: ...
 
 class VectorscopeReport:
     mid: NDArray[np.float32]

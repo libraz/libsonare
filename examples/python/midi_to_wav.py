@@ -3,27 +3,14 @@
 from __future__ import annotations
 
 import sys
-import wave
-from array import array
 
 import libsonare
+from pcm16_wav import write_pcm16_wav
 
 
 def write_wav(path: str, samples: object, sample_rate: int) -> None:
     interleaved = samples.reshape(-1)
-    with wave.open(path, "wb") as output:
-        output.setnchannels(2)
-        output.setsampwidth(2)
-        output.setframerate(sample_rate)
-        for offset in range(0, len(interleaved), 8192):
-            pcm = array(
-                "h",
-                (
-                    round(max(-1.0, min(1.0, float(sample))) * 32767)
-                    for sample in interleaved[offset : offset + 8192]
-                ),
-            )
-            output.writeframes(pcm.tobytes())
+    write_pcm16_wav(path, interleaved, sample_rate, 2)
 
 
 def main() -> int:
