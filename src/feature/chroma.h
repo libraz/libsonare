@@ -196,6 +196,14 @@ class Chroma {
   /// @brief Returns pointer to feature data.
   const float* data() const { return features_.data(); }
 
+  /// @brief Hands the feature matrix to the caller without copying it.
+  /// @details Leaves the chromagram without features; only the dimensions stay readable.
+  std::vector<float> release_features() noexcept {
+    std::vector<float> released;
+    released.swap(features_);
+    return released;
+  }
+
   /// @brief Computes mean energy for each pitch class.
   /// @return Array of 12 mean energy values (C, C#, D, ..., B). Defined only
   ///         for the standard 12-bin chromagram: when n_chroma() != 12 (or

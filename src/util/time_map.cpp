@@ -28,9 +28,9 @@ size_t checked_ceil(double position) {
 
 /// Segment covering output position @p x.
 size_t segment_at(const std::vector<double>& output_start, double x) {
-  size_t index = 0;
-  while (index + 1 < output_start.size() && x >= output_start[index + 1]) ++index;
-  return index;
+  if (output_start.size() < 2) return 0;
+  const auto after = std::upper_bound(output_start.begin() + 1, output_start.end(), x);
+  return static_cast<size_t>(after - (output_start.begin() + 1));
 }
 
 /// The piecewise-affine position itself, before any narrowing. Both counts are
@@ -48,11 +48,11 @@ double exact_position(const std::vector<TimeStretchSegment>& segments,
 double solve_output(const std::vector<TimeStretchSegment>& segments,
                     const std::vector<double>& output_start, double target) {
   SONARE_CHECK(std::isfinite(target), ErrorCode::InvalidParameter);
-  size_t index = 0;
-  while (index + 1 < segments.size() &&
-         target >= static_cast<double>(segments[index + 1].input_start)) {
-    ++index;
-  }
+  const auto after = std::upper_bound(segments.begin() + 1, segments.end(), target,
+                                      [](double value, const TimeStretchSegment& segment) {
+                                        return value < static_cast<double>(segment.input_start);
+                                      });
+  const size_t index = static_cast<size_t>(after - (segments.begin() + 1));
   return output_start[index] + (target - static_cast<double>(segments[index].input_start)) /
                                    static_cast<double>(segments[index].rate);
 }

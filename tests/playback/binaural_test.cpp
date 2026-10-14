@@ -488,3 +488,32 @@ TEST_CASE("binaural room presets place the listener and speakers inside the room
     CHECK(p.y < spec.dims.width);
   }
 }
+
+TEST_CASE("binaural output does not depend on how the stream is cut into blocks",
+          "[playback][binaural]") {
+  const ShrfFixtureSpec spec;
+  const HrtfSet set = make_set(make_shrf_fixture(spec));
+  const HeadphoneSlotSet slots = headphone_slots(InputLayout::FivePointOne);
+  constexpr int kMaxBlock = 512;
+  constexpr int kFrames = 16384;
+  const std::vector<float> noise = lowpass_noise(kFrames, 11u);
+  const int plane = plane_of(slots, VirtualSlot::R);
+  auto fill = [&](std::vector<std::vector<float>>& bus, int start, int n) {
+    std::copy_n(noise.begin() + start, n, bus[static_cast<size_t>(plane)].begin());
+  };
+
+  BinauralRenderer renderer;
+  renderer.prepare(kRate, kMaxBlock, set, slots, RoomPreset::None);
+  renderer.set_head_pose({25.0f, 10.0f, 5.0f});
+  const Run whole = render(renderer, slots, kFrames, kMaxBlock, fill);
+
+  // Many short blocks slide the history through its buffer far more often than
+  // it is long, so a wrong compaction would surface as a different output.
+  for (const int block : {7, 64}) {
+    renderer.reset();
+    const Run cut = render(renderer, slots, kFrames, block, fill);
+    CAPTURE(block);
+    CHECK(cut.left == whole.left);
+    CHECK(cut.right == whole.right);
+  }
+}

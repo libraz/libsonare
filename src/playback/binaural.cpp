@@ -64,15 +64,67 @@ struct EarFilter {
   int offset = 0;
 };
 
+/// A direction as components along (front, right, up).
+struct DirectionVector {
+  float front = 1.0f;
+  float right = 0.0f;
+  float up = 0.0f;
+};
+
+/// Sines and cosines of a head pose, evaluated once per block for every source.
+struct PoseRotation {
+  float cy = 1.0f, sy = 0.0f, cp = 1.0f, sp = 0.0f, cr = 1.0f, sr = 0.0f;
+};
+
+DirectionVector direction_vector(SpeakerDirection direction) noexcept {
+  const float az = direction.azimuth_deg * kDegToRad;
+  const float el = direction.elevation_deg * kDegToRad;
+  return {std::cos(el) * std::cos(az), std::cos(el) * std::sin(az), std::sin(el)};
+}
+
+PoseRotation pose_rotation(const HeadPose& pose) noexcept {
+  return {std::cos(pose.yaw_deg * kDegToRad),   std::sin(pose.yaw_deg * kDegToRad),
+          std::cos(pose.pitch_deg * kDegToRad), std::sin(pose.pitch_deg * kDegToRad),
+          std::cos(pose.roll_deg * kDegToRad),  std::sin(pose.roll_deg * kDegToRad)};
+}
+
+SpeakerDirection rotate_into_head(const DirectionVector& v, const PoseRotation& rot) noexcept {
+  const float vf = v.front;
+  const float vr = v.right;
+  const float vu = v.up;
+  const float cy = rot.cy;
+  const float sy = rot.sy;
+  const float cp = rot.cp;
+  const float sp = rot.sp;
+  const float cr = rot.cr;
+  const float sr = rot.sr;
+
+  // Yaw turns the front toward the right, about the up axis.
+  const float f1 = cy * vf + sy * vr;
+  const float r1 = -sy * vf + cy * vr;
+  const float u1 = vu;
+  // Pitch tilts the front toward the up axis, about the right axis.
+  const float f2 = cp * f1 + sp * u1;
+  const float u2 = -sp * f1 + cp * u1;
+  const float r2 = r1;
+  // Roll lowers the right axis, about the front axis.
+  const float r3 = cr * r2 - sr * u2;
+  const float u3 = sr * r2 + cr * u2;
+  const float f3 = f2;
+
+  return {std::atan2(r3, f3) * kRadToDeg, std::asin(std::clamp(u3, -1.0f, 1.0f)) * kRadToDeg};
+}
+
 /// A convolved direction: a virtual speaker slot or a reflection-ring channel.
 struct Source {
-  SpeakerDirection world{};
+  DirectionVector world;
   SpeakerDirection head{};
   bool has_filter = false;
   std::array<EarFilter, 2> current;
   std::array<EarFilter, 2> previous;
-  /// `history_len` past input samples, then the current block.
+  /// Past input, then the current block; `block_start` is where the block lands.
   std::vector<float> history;
+  int block_start = 0;
 };
 
 /// One image source folded onto the reflection ring.
@@ -116,34 +168,7 @@ void fir(const EarFilter& filter, const float* block, float* out, int frames) no
 }  // namespace
 
 SpeakerDirection head_relative_direction(SpeakerDirection world, const HeadPose& pose) noexcept {
-  // Components along (front, right, up).
-  const float az = world.azimuth_deg * kDegToRad;
-  const float el = world.elevation_deg * kDegToRad;
-  const float vf = std::cos(el) * std::cos(az);
-  const float vr = std::cos(el) * std::sin(az);
-  const float vu = std::sin(el);
-
-  const float cy = std::cos(pose.yaw_deg * kDegToRad);
-  const float sy = std::sin(pose.yaw_deg * kDegToRad);
-  const float cp = std::cos(pose.pitch_deg * kDegToRad);
-  const float sp = std::sin(pose.pitch_deg * kDegToRad);
-  const float cr = std::cos(pose.roll_deg * kDegToRad);
-  const float sr = std::sin(pose.roll_deg * kDegToRad);
-
-  // Yaw turns the front toward the right, about the up axis.
-  const float f1 = cy * vf + sy * vr;
-  const float r1 = -sy * vf + cy * vr;
-  const float u1 = vu;
-  // Pitch tilts the front toward the up axis, about the right axis.
-  const float f2 = cp * f1 + sp * u1;
-  const float u2 = -sp * f1 + cp * u1;
-  const float r2 = r1;
-  // Roll lowers the right axis, about the front axis.
-  const float r3 = cr * r2 - sr * u2;
-  const float u3 = sr * r2 + cr * u2;
-  const float f3 = f2;
-
-  return {std::atan2(r3, f3) * kRadToDeg, std::asin(std::clamp(u3, -1.0f, 1.0f)) * kRadToDeg};
+  return rotate_into_head(direction_vector(world), pose_rotation(pose));
 }
 
 struct BinauralRenderer::Impl {
@@ -177,7 +202,7 @@ struct BinauralRenderer::Impl {
   bool room_state_live = false;
 
   void build_filters(Source& source, SpeakerDirection direction) noexcept;
-  void render_source(Source& source, const float* input, const HeadPose& pose, float* left,
+  void render_source(Source& source, const float* input, const PoseRotation& rotation, float* left,
                      float* right, int frames) noexcept;
   void clear_room_state() noexcept;
   void process_chunk(const float* const* bus, float* left, float* right, int frames) noexcept;
@@ -211,12 +236,13 @@ void BinauralRenderer::Impl::build_filters(Source& source, SpeakerDirection dire
   }
 }
 
-void BinauralRenderer::Impl::render_source(Source& source, const float* input, const HeadPose& pose,
-                                           float* left, float* right, int frames) noexcept {
-  float* block = source.history.data() + history_len;
+void BinauralRenderer::Impl::render_source(Source& source, const float* input,
+                                           const PoseRotation& rotation, float* left, float* right,
+                                           int frames) noexcept {
+  float* block = source.history.data() + source.block_start;
   std::copy(input, input + frames, block);
 
-  const SpeakerDirection direction = head_relative_direction(source.world, pose);
+  const SpeakerDirection direction = rotate_into_head(source.world, rotation);
   bool crossfade = false;
   if (!source.has_filter || direction.azimuth_deg != source.head.azimuth_deg ||
       direction.elevation_deg != source.head.elevation_deg) {
@@ -245,8 +271,14 @@ void BinauralRenderer::Impl::render_source(Source& source, const float* input, c
     }
   }
 
-  std::copy(source.history.begin() + frames, source.history.begin() + frames + history_len,
-            source.history.begin());
+  // The history slides forward with the block and is compacted only when the next block would
+  // overrun the buffer.
+  source.block_start += frames;
+  if (source.block_start + max_block > static_cast<int>(source.history.size())) {
+    std::copy(source.history.begin() + (source.block_start - history_len),
+              source.history.begin() + source.block_start, source.history.begin());
+    source.block_start = history_len;
+  }
 }
 
 void BinauralRenderer::Impl::clear_room_state() noexcept {
@@ -256,6 +288,7 @@ void BinauralRenderer::Impl::clear_room_state() noexcept {
   }
   for (size_t i = static_cast<size_t>(slot_count); i < sources.size(); ++i) {
     std::fill(sources[i].history.begin(), sources[i].history.end(), 0.0f);
+    sources[i].block_start = history_len;
     sources[i].has_filter = false;
   }
   for (auto& ear : late) {
@@ -334,13 +367,14 @@ void BinauralRenderer::Impl::process_chunk(const float* const* bus, float* left,
     }
   }
 
+  const PoseRotation rotation = pose_rotation(pose);
   for (int s = 0; s < slot_count; ++s) {
-    render_source(sources[static_cast<size_t>(s)], bus[s], pose, left, right, frames);
+    render_source(sources[static_cast<size_t>(s)], bus[s], rotation, left, right, frames);
   }
   if (room_active) {
     for (int r = 0; r < kReflectionRingDirections; ++r) {
       render_source(sources[static_cast<size_t>(slot_count + r)],
-                    ring[static_cast<size_t>(r)].data(), pose, left, right, frames);
+                    ring[static_cast<size_t>(r)].data(), rotation, left, right, frames);
     }
   }
 
@@ -386,14 +420,15 @@ void BinauralRenderer::prepare(double sample_rate, int max_block_size, const Hrt
   im.sources.assign(static_cast<size_t>(source_count), Source{});
   for (int i = 0; i < source_count; ++i) {
     Source& source = im.sources[static_cast<size_t>(i)];
-    source.world =
+    source.world = direction_vector(
         i < slots.count
             ? virtual_slot_direction(slots.slots[i])
-            : SpeakerDirection{static_cast<float>(i - slots.count) * kReflectionRingStepDeg, 0.0f};
+            : SpeakerDirection{static_cast<float>(i - slots.count) * kReflectionRingStepDeg, 0.0f});
     for (auto* set : {&source.current, &source.previous}) {
       for (EarFilter& f : *set) f.coeffs.assign(static_cast<size_t>(filter_capacity), 0.0f);
     }
-    source.history.assign(static_cast<size_t>(im.history_len + max_block_size), 0.0f);
+    source.history.assign(static_cast<size_t>(2 * im.history_len + 2 * max_block_size), 0.0f);
+    source.block_start = im.history_len;
   }
   im.scratch_left.assign(static_cast<size_t>(im.taps), 0.0f);
   im.scratch_right.assign(static_cast<size_t>(im.taps), 0.0f);
@@ -514,6 +549,7 @@ void BinauralRenderer::reset() noexcept {
   Impl& im = *impl_;
   for (Source& source : im.sources) {
     std::fill(source.history.begin(), source.history.end(), 0.0f);
+    source.block_start = im.history_len;
     source.has_filter = false;
   }
   im.clear_room_state();

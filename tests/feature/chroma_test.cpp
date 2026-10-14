@@ -437,3 +437,19 @@ TEST_CASE("ChromaConfig binds its converted fields by name", "[chroma][config]")
   REQUIRE(runtime_stft.center == runtime.center);
   REQUIRE(runtime_stft.pad_mode == PadMode::Constant);
 }
+
+TEST_CASE("Chroma release_features hands over the matrix without copying it", "[chroma]") {
+  Chroma chroma = Chroma::compute(create_sine_audio(440.0f), ChromaConfig{});
+  const int n_chroma = chroma.n_chroma();
+  const int n_frames = chroma.n_frames();
+  const float* storage = chroma.data();
+  const std::vector<float> expected(storage, storage + static_cast<size_t>(n_chroma) * n_frames);
+
+  const std::vector<float> released = chroma.release_features();
+
+  CHECK(released == expected);
+  // The buffer itself moved: a copy would sit at a different address.
+  CHECK(released.data() == storage);
+  CHECK(chroma.n_chroma() == n_chroma);
+  CHECK(chroma.n_frames() == n_frames);
+}

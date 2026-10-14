@@ -75,18 +75,13 @@ void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
     return;
   }
 
-  /// Sanitize input first: replace any NaN/Inf with 0 so a single bad input
-  /// sample cannot poison the FFT and, through it, every downstream estimate
-  /// (mel, chroma, onset, spectral features) for the rest of the stream. Done
-  /// before resampling so corrupted values never enter the resampler's filter
-  /// history either. The sanitized copy reuses a persistent scratch buffer.
-  bool discarded = false;
-  const float* clean_samples = sanitize_into(samples, n_samples, sanitize_buffer_, discarded);
-  /// One bump per call, never per sample: a block carrying a thousand NaNs lost
-  /// its state once, and the number must not depend on how many.
-  if (discarded) publication_->non_finite_discards.bump();
-
-  const float* process_samples = clean_samples;
+  /// Non-finite samples are replaced by 0 before they can reach the FFT or the
+  /// resampler's filter history, where one bad sample would poison every
+  /// downstream estimate for the rest of the stream. A resampled stream is
+  /// scrubbed in a scratch copy ahead of the resampler; a direct one is scrubbed
+  /// in place after it lands in the overlap buffer. One bump per call, never per
+  /// sample: a block carrying a thousand NaNs lost its state once.
+  const float* process_samples = nullptr;
   size_t process_n_samples = n_samples;
 
   /// Resample if needed (for high sample rates like 96000 Hz). Use the
@@ -95,6 +90,9 @@ void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
   /// which we clear first because its previous contents were already drained
   /// into overlap_buffer_ on the prior call.
   if (needs_resampling_) {
+    bool discarded = false;
+    const float* clean_samples = sanitize_into(samples, n_samples, sanitize_buffer_, discarded);
+    if (discarded) publication_->non_finite_discards.bump();
     resample_buffer_.clear();
     stream_resampler_->process(clean_samples, n_samples, resample_buffer_);
     process_samples = resample_buffer_.data();
@@ -109,13 +107,19 @@ void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
   /// Append (resampled) samples to overlap buffer with normalization gain
   size_t prev_size = overlap_buffer_.size();
   overlap_buffer_.resize(prev_size + process_n_samples);
+  float* appended = overlap_buffer_.data() + prev_size;
+  if (process_samples != nullptr) {
+    std::copy(process_samples, process_samples + process_n_samples, appended);
+  } else {
+    std::copy(samples, samples + n_samples, appended);
+    if (resolve_non_finite_run(SampleDestination::kRecursiveState, appended, n_samples) != 0u) {
+      publication_->non_finite_discards.bump();
+    }
+  }
   if (normalization_gain_ != 1.0f) {
     for (size_t i = 0; i < process_n_samples; ++i) {
-      overlap_buffer_[prev_size + i] = process_samples[i] * normalization_gain_;
+      appended[i] *= normalization_gain_;
     }
-  } else {
-    std::copy(process_samples, process_samples + process_n_samples,
-              overlap_buffer_.begin() + prev_size);
   }
 
   process_complete_frames();

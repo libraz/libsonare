@@ -85,13 +85,10 @@ void PartitionedConvolver::process_block(const float* input, float* output) noex
   // Zero-padded forward transform of the current block ([block, zeros]).
   std::copy(input, input + partition_size, fft_input_.begin());
   std::fill(fft_input_.begin() + partition_size, fft_input_.end(), 0.0f);
-  fft_->forward(fft_input_.data(), current_spectrum_.data());
-
-  // Store this block's spectrum in the ring and accumulate the partitioned
-  // products in the frequency domain: Y[bin] = sum_p X[m-p] * IR[p][bin].
+  // The transform lands directly in this block's ring slot, then the partitioned
+  // products accumulate in the frequency domain: Y[bin] = sum_p X[m-p] * IR[p][bin].
   const int partitions = num_partitions();
-  std::copy(current_spectrum_.begin(), current_spectrum_.end(),
-            input_spectrum_ring_[static_cast<size_t>(ring_pos_)].begin());
+  fft_->forward(fft_input_.data(), input_spectrum_ring_[static_cast<size_t>(ring_pos_)].data());
 
   std::fill(accum_spectrum_.begin(), accum_spectrum_.end(), std::complex<float>{0.0f, 0.0f});
   for (int partition = 0; partition < partitions; ++partition) {
@@ -134,7 +131,6 @@ void PartitionedConvolver::rebuild_fft() {
   fft_->prepare(/*real_forward=*/true, /*real_inverse=*/true, /*complex_forward=*/false);
   fft_input_.assign(static_cast<size_t>(fft_size_), 0.0f);
   fft_output_.assign(static_cast<size_t>(fft_size_), 0.0f);
-  current_spectrum_.assign(static_cast<size_t>(fft_->n_bins()), {0.0f, 0.0f});
   accum_spectrum_.assign(static_cast<size_t>(fft_->n_bins()), {0.0f, 0.0f});
 }
 

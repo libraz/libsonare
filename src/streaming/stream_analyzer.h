@@ -306,6 +306,9 @@ class StreamAnalyzer {
   int window_offset_ = 0;     // Leading zero padding: (fft_length_ - window_length_) / 2
   bool needs_resampling_ = false;
   bool needs_mel_analysis_ = false;
+  bool needs_magnitude_ = false;  // Per-bin sqrt: magnitude output or spectral features
+  bool needs_power_ = false;      // Per-bin power: mel or chroma
+  bool needs_mel_log_ = false;    // Per-mel log: onset flux
   float resample_ratio_ = 1.0f;
   std::vector<float> resample_buffer_;  // Buffer for resampled audio
   std::vector<float> sanitize_buffer_;  // Scratch for NaN/Inf-sanitized input

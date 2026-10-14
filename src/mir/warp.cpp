@@ -334,29 +334,38 @@ std::vector<std::pair<int, int>> mrmsdtw_path(const std::vector<float>& ref, int
     return full_dtw_path(ref, n_chroma, ref_frames, tgt, tgt_frames);
   }
   const int scale = cfg.scale_factor;
-  // Build the coarsening pyramid (level 0 = original).
+  // Coarsening pyramid above the original; level 0 is the caller's own matrices, read in place.
   struct Level {
     std::vector<float> ref, tgt;
-    int ref_frames, tgt_frames;
+    int ref_frames = 0, tgt_frames = 0;
   };
-  std::vector<Level> pyramid;
-  pyramid.push_back({ref, tgt, ref_frames, tgt_frames});
-  while (std::max(pyramid.back().ref_frames, pyramid.back().tgt_frames) > cfg.coarse_max_frames) {
-    const Level& top = pyramid.back();
-    int rf = 0, tf = 0;
-    std::vector<float> dr = downsample_time(top.ref, n_chroma, top.ref_frames, scale, &rf);
-    std::vector<float> dt = downsample_time(top.tgt, n_chroma, top.tgt_frames, scale, &tf);
-    pyramid.push_back({std::move(dr), std::move(dt), rf, tf});
+  std::vector<Level> coarse;
+  const std::vector<float>* top_ref = &ref;
+  const std::vector<float>* top_tgt = &tgt;
+  int top_ref_frames = ref_frames;
+  int top_tgt_frames = tgt_frames;
+  while (std::max(top_ref_frames, top_tgt_frames) > cfg.coarse_max_frames) {
+    Level next;
+    next.ref = downsample_time(*top_ref, n_chroma, top_ref_frames, scale, &next.ref_frames);
+    next.tgt = downsample_time(*top_tgt, n_chroma, top_tgt_frames, scale, &next.tgt_frames);
+    coarse.push_back(std::move(next));
+    top_ref = &coarse.back().ref;
+    top_tgt = &coarse.back().tgt;
+    top_ref_frames = coarse.back().ref_frames;
+    top_tgt_frames = coarse.back().tgt_frames;
   }
   // Full DTW at the coarsest level.
-  const Level& coarse = pyramid.back();
   std::vector<std::pair<int, int>> path =
-      full_dtw_path(coarse.ref, n_chroma, coarse.ref_frames, coarse.tgt, coarse.tgt_frames);
+      full_dtw_path(*top_ref, n_chroma, top_ref_frames, *top_tgt, top_tgt_frames);
   // Refine down through finer levels inside a band.
-  for (int lvl = static_cast<int>(pyramid.size()) - 2; lvl >= 0; --lvl) {
-    const Level& fine = pyramid[lvl];
-    std::vector<int> projected = project_path(path, scale, fine.ref_frames, fine.tgt_frames);
-    path = detail::banded_dtw_path(fine.ref, n_chroma, fine.ref_frames, fine.tgt, fine.tgt_frames,
+  for (int lvl = static_cast<int>(coarse.size()) - 1; lvl >= 0; --lvl) {
+    const Level* fine = lvl == 0 ? nullptr : &coarse[static_cast<size_t>(lvl - 1)];
+    const std::vector<float>& fine_ref = fine ? fine->ref : ref;
+    const std::vector<float>& fine_tgt = fine ? fine->tgt : tgt;
+    const int fine_ref_frames = fine ? fine->ref_frames : ref_frames;
+    const int fine_tgt_frames = fine ? fine->tgt_frames : tgt_frames;
+    std::vector<int> projected = project_path(path, scale, fine_ref_frames, fine_tgt_frames);
+    path = detail::banded_dtw_path(fine_ref, n_chroma, fine_ref_frames, fine_tgt, fine_tgt_frames,
                                    projected, cfg.band_radius);
   }
   return path;
@@ -567,8 +576,8 @@ ChromaDtwResult chroma_dtw_align(const Audio& reference, const Audio& target,
   SONARE_CHECK(ref_frames >= 2 && tgt_frames >= 2 && tgt_chroma.n_chroma() == n_chroma,
                ErrorCode::InvalidParameter);
 
-  std::vector<float> ref_feat(ref_chroma.data(), ref_chroma.data() + n_chroma * ref_frames);
-  std::vector<float> tgt_feat(tgt_chroma.data(), tgt_chroma.data() + n_chroma * tgt_frames);
+  const std::vector<float> ref_feat = ref_chroma.release_features();
+  const std::vector<float> tgt_feat = tgt_chroma.release_features();
 
   ChromaDtwResult result;
   result.reference_frames = ref_frames;

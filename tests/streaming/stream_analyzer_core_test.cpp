@@ -2089,3 +2089,93 @@ TEST_CASE("StreamAnalyzer converts n_fft from 44100 Hz samples to the analysis r
     }
   }
 }
+
+TEST_CASE("StreamAnalyzer treats scrubbed input exactly as zeros, direct and resampled",
+          "[streaming][non_finite]") {
+  for (const int sample_rate : {22050, 96000}) {
+    CAPTURE(sample_rate);
+    StreamConfig config;
+    config.sample_rate = sample_rate;
+    config.n_fft = 1024;
+    config.hop_length = 256;
+    config.max_pending_frames = 512;
+
+    std::vector<float> clean = generate_sine(sample_rate / 2, 330.0f, sample_rate);
+    std::vector<float> poisoned = clean;
+    for (size_t i = 100; i < poisoned.size(); i += 37) {
+      poisoned[i] = (i % 2 == 0) ? std::numeric_limits<float>::quiet_NaN()
+                                 : -std::numeric_limits<float>::infinity();
+      clean[i] = 0.0f;
+    }
+
+    auto run = [&](const std::vector<float>& audio) {
+      StreamAnalyzer analyzer(config);
+      analyzer.set_normalization_gain(2.0f);
+      for (size_t offset = 0; offset < audio.size(); offset += 700) {
+        analyzer.process(audio.data() + offset, std::min<size_t>(700, audio.size() - offset));
+      }
+      analyzer.finalize();
+      return analyzer.read_frames(512);
+    };
+    const auto expected = run(clean);
+    const auto actual = run(poisoned);
+    REQUIRE_FALSE(expected.empty());
+    REQUIRE(actual.size() == expected.size());
+    for (size_t f = 0; f < actual.size(); ++f) {
+      CAPTURE(f);
+      REQUIRE(actual[f].mel == expected[f].mel);
+      REQUIRE(actual[f].chroma == expected[f].chroma);
+      REQUIRE(actual[f].onset_strength == expected[f].onset_strength);
+      REQUIRE(actual[f].spectral_centroid == expected[f].spectral_centroid);
+    }
+  }
+}
+
+TEST_CASE("StreamAnalyzer enabled features do not depend on which others are enabled",
+          "[streaming][features]") {
+  StreamConfig base;
+  base.sample_rate = 22050;
+  base.n_fft = 1024;
+  base.hop_length = 256;
+  base.max_pending_frames = 512;
+
+  const std::vector<float> audio = generate_click_train(22050, 120.0f, 22050);
+  auto run = [&](bool magnitude, bool mel, bool chroma, bool onset, bool spectral) {
+    StreamConfig config = base;
+    config.compute_magnitude = magnitude;
+    config.compute_mel = mel;
+    config.compute_chroma = chroma;
+    config.compute_onset = onset;
+    config.compute_spectral = spectral;
+    StreamAnalyzer analyzer(config);
+    analyzer.process(audio.data(), audio.size());
+    return analyzer.read_frames(512);
+  };
+
+  const auto all = run(true, true, true, true, true);
+  const auto chroma_only = run(false, false, true, false, false);
+  const auto mel_only = run(false, true, false, false, false);
+  const auto onset_only = run(false, false, false, true, false);
+  const auto spectral_only = run(false, false, false, false, true);
+  const auto magnitude_only = run(true, false, false, false, false);
+  REQUIRE_FALSE(all.empty());
+  REQUIRE(chroma_only.size() == all.size());
+  REQUIRE(mel_only.size() == all.size());
+  REQUIRE(onset_only.size() == all.size());
+  REQUIRE(spectral_only.size() == all.size());
+  REQUIRE(magnitude_only.size() == all.size());
+
+  bool saw_energy = false;
+  for (size_t f = 0; f < all.size(); ++f) {
+    CAPTURE(f);
+    REQUIRE(chroma_only[f].chroma == all[f].chroma);
+    REQUIRE(mel_only[f].mel == all[f].mel);
+    REQUIRE(onset_only[f].onset_strength == all[f].onset_strength);
+    REQUIRE(spectral_only[f].spectral_centroid == all[f].spectral_centroid);
+    REQUIRE(spectral_only[f].spectral_flatness == all[f].spectral_flatness);
+    REQUIRE(magnitude_only[f].magnitude == all[f].magnitude);
+    saw_energy = saw_energy || all[f].onset_strength > 0.0f || all[f].spectral_centroid > 0.0f;
+  }
+  // Equal zeros would also pass, so the fixture has to have produced signal.
+  REQUIRE(saw_energy);
+}

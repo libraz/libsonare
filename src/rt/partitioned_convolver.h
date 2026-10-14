@@ -54,7 +54,6 @@ class PartitionedConvolver {
   std::vector<float> ola_buffer_;
   std::vector<float> fft_input_;
   std::vector<float> fft_output_;
-  std::vector<std::complex<float>> current_spectrum_;
   std::vector<std::complex<float>> accum_spectrum_;
 };
 

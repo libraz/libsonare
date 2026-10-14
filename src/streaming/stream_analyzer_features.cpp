@@ -22,13 +22,21 @@ void StreamAnalyzer::compute_stft(const float* frame_start) {
   /// Forward FFT
   fft_->forward(frame_buffer_.data(), spectrum_.data());
 
-  /// Compute magnitude and power
+  /// Compute magnitude and power, only what an enabled feature reads
   int n_bins = this->n_bins();
-  for (int k = 0; k < n_bins; ++k) {
-    float re = spectrum_[k].real();
-    float im = spectrum_[k].imag();
-    magnitude_[k] = std::sqrt(re * re + im * im);
-    power_[k] = re * re + im * im;
+  if (needs_power_) {
+    for (int k = 0; k < n_bins; ++k) {
+      float re = spectrum_[k].real();
+      float im = spectrum_[k].imag();
+      power_[k] = re * re + im * im;
+    }
+  }
+  if (needs_magnitude_) {
+    for (int k = 0; k < n_bins; ++k) {
+      float re = spectrum_[k].real();
+      float im = spectrum_[k].imag();
+      magnitude_[k] = std::sqrt(re * re + im * im);
+    }
   }
 }
 
@@ -44,6 +52,7 @@ void StreamAnalyzer::compute_mel() {
   Eigen::Map<Eigen::VectorXf> mel_map(mel_buffer_.data(), n_mels);
   mel_map.noalias() = fb_map * power_map;
 
+  if (!needs_mel_log_) return;
   for (int m = 0; m < n_mels; ++m) {
     mel_log_[m] = std::log(std::max(mel_buffer_[m], kLogAmin));
   }

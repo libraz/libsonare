@@ -113,6 +113,9 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   // compute_onset=true/compute_mel=false produces onset output without falsely
   // advertising or populating the disabled mel output array.
   needs_mel_analysis_ = config_.compute_mel || config_.compute_onset;
+  needs_magnitude_ = config_.compute_magnitude || config_.compute_spectral;
+  needs_power_ = needs_mel_analysis_ || config_.compute_chroma;
+  needs_mel_log_ = config_.compute_onset;
 
   /// Determine if resampling is needed for high sample rates
   if (config_.sample_rate > kMaxDirectSampleRate) {

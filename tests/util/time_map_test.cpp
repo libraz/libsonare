@@ -849,3 +849,71 @@ TEST_CASE("the hold profile matches the scalar count across the measured grid", 
   REQUIRE(checked > 400);
   REQUIRE(mismatches == 0);
 }
+
+TEST_CASE("a many-segment profile agrees with a linear scan at every boundary", "[time_map]") {
+  constexpr float kRates[] = {1.0f, 2.0f, 0.5f, 4.0f, 0.25f};
+  constexpr int kSegments = 300;
+  constexpr int kSpan = 100;
+  std::vector<TimeStretchSegment> segments;
+  std::vector<double> output_start;
+  double running = 0.0;
+  for (int i = 0; i < kSegments; ++i) {
+    const float rate = kRates[i % 5];
+    segments.push_back({static_cast<float>(i * kSpan), rate});
+    output_start.push_back(running);
+    running += static_cast<double>(kSpan) / static_cast<double>(rate);
+  }
+  const TimeStretchMap map(segments);
+
+  auto reference_segment = [&](double x) {
+    size_t index = 0;
+    while (index + 1 < output_start.size() && x >= output_start[index + 1]) ++index;
+    return index;
+  };
+  auto reference_position = [&](double x) {
+    const size_t s = reference_segment(x);
+    return static_cast<float>(static_cast<double>(segments[s].input_start) +
+                              (x - output_start[s]) * static_cast<double>(segments[s].rate));
+  };
+  auto reference_output = [&](double target) {
+    size_t s = 0;
+    while (s + 1 < segments.size() && target >= static_cast<double>(segments[s + 1].input_start)) {
+      ++s;
+    }
+    return output_start[s] + (target - static_cast<double>(segments[s].input_start)) /
+                                 static_cast<double>(segments[s].rate);
+  };
+
+  std::vector<int> frames = {-5, -1, 0, 1};
+  for (const double start : output_start) {
+    for (int delta = -1; delta <= 1; ++delta) frames.push_back(static_cast<int>(start) + delta);
+  }
+  frames.push_back(static_cast<int>(running) + 7);
+  for (const int frame : frames) {
+    CAPTURE(frame);
+    CHECK(map.input_position(frame) == reference_position(static_cast<double>(frame)));
+  }
+
+  std::vector<int> inputs = {0, 1};
+  for (int i = 0; i < kSegments; ++i) {
+    for (int delta = -1; delta <= 1; ++delta) {
+      if (i * kSpan + delta >= 0) inputs.push_back(i * kSpan + delta);
+    }
+  }
+  for (const int input : inputs) {
+    CAPTURE(input);
+    CHECK(map.output_frame_count(input) ==
+          static_cast<int>(std::ceil(reference_output(static_cast<double>(input)))));
+    CHECK(map.output_sample_count(static_cast<std::size_t>(input), 4) ==
+          static_cast<std::size_t>(
+              std::ceil(reference_output(static_cast<double>(input) / 4.0) * 4.0)));
+  }
+
+  // A map diverging from this one at the last segment agrees right up to it.
+  std::vector<TimeStretchSegment> other = segments;
+  other.back().rate = 3.0f;
+  const TimeStretchMap diverging(other);
+  const int boundary = static_cast<int>(output_start.back());
+  CHECK(map.agrees_through(diverging, boundary - 1));
+  CHECK_FALSE(map.agrees_through(diverging, boundary + 10));
+}
