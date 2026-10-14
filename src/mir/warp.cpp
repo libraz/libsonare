@@ -611,6 +611,24 @@ Audio warp_to_length(const Audio& audio, size_t target_length, const WarpTsmConf
   return tsm_rate(audio, rate, target_length, config);
 }
 
+namespace {
+
+/// Rounds a warp-axis span to a sample count, refusing spans that are non-finite or exceed the
+/// int range tsm_rate indexes with.
+size_t checked_span_length(double span) {
+  SONARE_CHECK(std::isfinite(span) && span > 0.0 &&
+                   span <= static_cast<double>(std::numeric_limits<int>::max()),
+               ErrorCode::InvalidParameter);
+  return static_cast<size_t>(std::llround(span));
+}
+
+/// Rounds a source position after clamping it to [0, size] in the double domain.
+int64_t clamped_source_position(double position, size_t size) {
+  return static_cast<int64_t>(std::llround(std::clamp(position, 0.0, static_cast<double>(size))));
+}
+
+}  // namespace
+
 Audio warp_to_map(const Audio& audio, const WarpMap& map, const WarpTsmConfig& config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   SONARE_CHECK(map.valid(), ErrorCode::InvalidState);
@@ -619,8 +637,9 @@ Audio warp_to_map(const Audio& audio, const WarpMap& map, const WarpTsmConfig& c
   const WarpAnchor& last = anchors.back();
   const double warp_span = last.warp_sample - first.warp_sample;
   const double source_span = last.source_sample - first.source_sample;
+  SONARE_CHECK(std::isfinite(source_span), ErrorCode::InvalidParameter);
   SONARE_CHECK(warp_span > 0.0 && source_span > 0.0, ErrorCode::InvalidState);
-  const size_t target_length = static_cast<size_t>(std::llround(warp_span));
+  const size_t target_length = checked_span_length(warp_span);
   SONARE_CHECK(target_length > 0, ErrorCode::InvalidState);
 
   std::vector<float> out;
@@ -632,12 +651,10 @@ Audio warp_to_map(const Audio& audio, const WarpMap& map, const WarpTsmConfig& c
     const double segment_source_span = b.source_sample - a.source_sample;
     SONARE_CHECK(segment_warp_span > 0.0 && segment_source_span > 0.0, ErrorCode::InvalidState);
 
-    const size_t segment_target_length = static_cast<size_t>(std::llround(segment_warp_span));
+    const size_t segment_target_length = checked_span_length(segment_warp_span);
     SONARE_CHECK(segment_target_length > 0, ErrorCode::InvalidState);
-    int64_t source_start = static_cast<int64_t>(std::llround(a.source_sample));
-    int64_t source_end = static_cast<int64_t>(std::llround(b.source_sample));
-    source_start = std::clamp<int64_t>(source_start, 0, static_cast<int64_t>(audio.size()));
-    source_end = std::clamp<int64_t>(source_end, 0, static_cast<int64_t>(audio.size()));
+    const int64_t source_start = clamped_source_position(a.source_sample, audio.size());
+    const int64_t source_end = clamped_source_position(b.source_sample, audio.size());
     SONARE_CHECK(source_end > source_start, ErrorCode::InvalidState);
 
     std::vector<float> segment(static_cast<size_t>(source_end - source_start));

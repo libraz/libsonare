@@ -890,6 +890,27 @@ TEST_CASE("warp_to_map follows local segment rates instead of one global rate", 
   REQUIRE(stable_hash(sa) != stable_hash(ga));
 }
 
+TEST_CASE("warp_to_map refuses spans beyond the representable range", "[mir]") {
+  Audio tone = make_tone(22050, 330.0, 0.1);
+  const double n = static_cast<double>(tone.size());
+  WarpTsmConfig cfg;
+  cfg.n_fft = 512;
+  cfg.hop_length = 128;
+
+  // Warp axis far past the int range: refused before any allocation or rounding.
+  const WarpMap huge_warp = WarpMap::from_anchors({{0.0, 0.0}, {1e30, n}});
+  REQUIRE_THROWS_AS(warp_to_map(tone, huge_warp, cfg), sonare::SonareException);
+
+  // Finite anchors whose difference overflows to infinity.
+  const WarpMap overflow = WarpMap::from_anchors({{0.0, -1e308}, {n, 1e308}});
+  REQUIRE_THROWS_AS(warp_to_map(tone, overflow, cfg), sonare::SonareException);
+
+  // A source anchor past the audio end clamps to the end.
+  const WarpMap far_source = WarpMap::from_anchors({{0.0, 0.0}, {n, 3.0 * n}});
+  Audio out = warp_to_map(tone, far_source, cfg);
+  REQUIRE(out.size() == tone.size());
+}
+
 TEST_CASE("TSM preserves percussive energy within tolerance", "[mir]") {
   const int sr = 22050;
   Audio clicks = make_clicks(sr, 1.0, 8.0);  // 8 clicks/sec.
