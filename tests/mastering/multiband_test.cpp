@@ -1052,6 +1052,36 @@ TEST_CASE("MultibandSaturation counts a block its crossover or a band discarded"
   REQUIRE(discards <= 2u);
 }
 
+TEST_CASE("MultibandExpander and MultibandLimiter count a block a member discarded once",
+          "[mastering][multiband][non_finite]") {
+  const auto check = [](auto& processor) {
+    constexpr int kBlock = 256;
+    processor.prepare(48000.0, kBlock);
+    std::vector<float> left(kBlock, 0.25f);
+    std::vector<float> right(kBlock, 0.25f);
+    float* channels[] = {left.data(), right.data()};
+
+    // Control: an ordinary block adds nothing.
+    processor.process(channels, 2, kBlock);
+    REQUIRE(processor.non_finite_discard_count() == 0u);
+
+    left[8] = std::numeric_limits<float>::quiet_NaN();
+    right[8] = std::numeric_limits<float>::quiet_NaN();
+    processor.process(channels, 2, kBlock);
+    // Every band and both channels see the poison; the parent still counts one block.
+    REQUIRE(processor.non_finite_discard_count() == 1u);
+
+    std::fill(left.begin(), left.end(), 0.25f);
+    std::fill(right.begin(), right.end(), 0.25f);
+    processor.process(channels, 2, kBlock);
+    REQUIRE(processor.non_finite_discard_count() <= 2u);
+  };
+  MultibandExpander expander;
+  MultibandLimiter limiter;
+  check(expander);
+  check(limiter);
+}
+
 TEST_CASE("MultibandSaturation applies a Tape band's mix to its audio", "[mastering][multiband]") {
   const auto render = [](float mix, bool enabled, bool automate) {
     MultibandSaturationConfig config;

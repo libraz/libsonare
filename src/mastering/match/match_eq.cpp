@@ -685,12 +685,9 @@ Audio align_reference_to_source(const Audio& source, const Audio& reference, int
 std::vector<eq::EqBand> match_eq_bands(const ReferenceSpectrum& source,
                                        const ReferenceSpectrum& reference,
                                        const MatchEqConfig& config) {
-  if (config.max_bands == 0 || config.max_bands > eq::ParametricEq::kMaxBands) {
+  validate_config(config);
+  if (config.max_bands > eq::ParametricEq::kMaxBands) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid match EQ band count");
-  }
-  if (!(config.max_gain_db >= 0.0f) || !(config.min_frequency_hz > 0.0f) ||
-      !(config.max_frequency_hz > config.min_frequency_hz) || !(config.q > 0.0f)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid match EQ configuration");
   }
   if (source.sample_rate != reference.sample_rate) {
     throw SonareException(ErrorCode::InvalidParameter, "sample rates must match");
@@ -702,15 +699,20 @@ std::vector<eq::EqBand> match_eq_bands(const ReferenceSpectrum& source,
 
 std::vector<eq::EqBand> match_eq_bands_from_curve(const MatchEqCurve& curve,
                                                   const MatchEqConfig& config) {
-  if (config.max_bands == 0 || config.max_bands > eq::EqualizerProcessor::kMaxBands) {
+  validate_config(config);
+  if (config.max_bands > eq::EqualizerProcessor::kMaxBands) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid match EQ band count");
-  }
-  if (!(config.max_gain_db >= 0.0f) || !(config.min_frequency_hz > 0.0f) ||
-      !(config.max_frequency_hz > config.min_frequency_hz) || !(config.q > 0.0f)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid match EQ configuration");
   }
   if (curve.frequencies.size() != curve.gain_db.size()) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid match EQ curve");
+  }
+  // Band selection ranks and spaces by frequency, so the curve must be finite and ascending.
+  for (size_t i = 0; i < curve.frequencies.size(); ++i) {
+    const float frequency = curve.frequencies[i];
+    if (!std::isfinite(frequency) || !std::isfinite(curve.gain_db[i]) ||
+        (i > 0 && frequency < curve.frequencies[i - 1])) {
+      throw SonareException(ErrorCode::InvalidParameter, "invalid match EQ curve");
+    }
   }
   if (curve.frequencies.empty()) {
     return {};

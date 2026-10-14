@@ -55,6 +55,17 @@ void MultibandLimiter::process(float* const* channels, int num_channels, int num
   }
   validate_channel_buffers(channels, num_channels);
 
+  // Summed over the crossover and every band, read once on either side of the
+  // whole block: this processor records one discard per process() call.
+  const auto member_discards = [this]() noexcept -> uint64_t {
+    uint64_t total = crossover_.non_finite_discard_count();
+    for (const auto& limiter : limiters_) {
+      total += limiter.non_finite_discard_count();
+    }
+    return total;
+  };
+  const uint64_t member_discards_before = member_discards();
+
   crossover_.ensure_scratch(scratch_, num_channels, num_samples);
   crossover_.split_into(channels, num_channels, num_samples, scratch_);
   const int num_bands = scratch_.num_bands();
@@ -71,6 +82,8 @@ void MultibandLimiter::process(float* const* channels, int num_channels, int num
   }
 
   scratch_.sum_into(channels, num_channels, num_samples);
+
+  if (member_discards() != member_discards_before) note_non_finite_discard();
 }
 
 void MultibandLimiter::reset() {

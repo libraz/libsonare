@@ -4,6 +4,8 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <complex>
+#include <limits>
+#include <utility>
 #include <vector>
 
 #include "mastering/common/loudness_measure.h"
@@ -17,6 +19,7 @@
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace sonare;
@@ -260,6 +263,35 @@ TEST_CASE("MatchEq places its full band set at zero gain when the limit is zero"
     REQUIRE(bands[i].enabled);
     REQUIRE(bands[i].gain_db == 0.0f);
   }
+}
+
+TEST_CASE("MatchEq band generation shares the configuration validation",
+          "[mastering][match][validation]") {
+  MatchEqCurve curve;
+  curve.sample_rate = 48000;
+  curve.frequencies = {100.0f, 1000.0f, 5000.0f};
+  curve.gain_db = {3.0f, -4.0f, 2.0f};
+
+  const float inf = std::numeric_limits<float>::infinity();
+  MatchEqConfig bad_gain;
+  bad_gain.max_gain_db = inf;
+  MatchEqConfig bad_max_frequency;
+  bad_max_frequency.max_frequency_hz = inf;
+  MatchEqConfig bad_q;
+  bad_q.q = inf;
+  for (const MatchEqConfig& config : {bad_gain, bad_max_frequency, bad_q}) {
+    REQUIRE_THROWS_AS(match_eq_bands_from_curve(curve, config), SonareException);
+  }
+
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  MatchEqCurve nan_gain = curve;
+  nan_gain.gain_db[1] = nan;
+  MatchEqCurve unordered = curve;
+  std::swap(unordered.frequencies[0], unordered.frequencies[2]);
+  for (const MatchEqCurve& bad : {nan_gain, unordered}) {
+    REQUIRE_THROWS_AS(match_eq_bands_from_curve(bad, MatchEqConfig{}), SonareException);
+  }
+  REQUIRE_NOTHROW(match_eq_bands_from_curve(curve, MatchEqConfig{}));
 }
 
 TEST_CASE("MatchEq places a featureless correction across the range and fits it without overshoot",
