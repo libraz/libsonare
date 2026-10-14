@@ -1099,3 +1099,57 @@ TEST_CASE("Realtime voice changer config JSON round-trips grain and latency at e
     sonare_realtime_voice_changer_destroy(second);
   }
 }
+
+TEST_CASE("C ABI voice changer reset acts on the latest published configuration",
+          "[voice_changer][capi][reset]") {
+  for (const int rate : {44100, 48000, 96000}) {
+    for (const int block : {97, 128}) {
+      for (const float gain_db : {12.0f, -12.0f}) {
+        INFO("rate=" << rate << " block=" << block << " gain_db=" << gain_db);
+        SonareRealtimeVoiceChangerConfig old_config;
+        REQUIRE(sonare_realtime_voice_changer_config_default(&old_config) == SONARE_OK);
+        old_config.input_gain_db = -gain_db;
+        SonareRealtimeVoiceChangerConfig new_config = old_config;
+        new_config.input_gain_db = gain_db;
+
+        SonareRealtimeVoiceChanger* fresh = nullptr;
+        REQUIRE(sonare_realtime_voice_changer_create(&new_config, rate, block, 1, &fresh) ==
+                SONARE_OK);
+        int latency = 0;
+        REQUIRE(sonare_realtime_voice_changer_latency_samples(fresh, &latency) == SONARE_OK);
+        // Render past the chain latency so the compared output carries the gain ramp.
+        const int total = (latency / block + 12) * block;
+        const std::vector<float> input = sine(440.0f, rate, total);
+        auto render = [&](SonareRealtimeVoiceChanger* handle) {
+          std::vector<float> out(input.size());
+          for (int pos = 0; pos < total; pos += block) {
+            REQUIRE(sonare_realtime_voice_changer_process_mono(
+                        handle, input.data() + pos, out.data() + pos, static_cast<size_t>(block)) ==
+                    SONARE_OK);
+          }
+          return out;
+        };
+
+        const std::vector<float> expected = render(fresh);
+        sonare_realtime_voice_changer_destroy(fresh);
+
+        SonareRealtimeVoiceChanger* handle = nullptr;
+        REQUIRE(sonare_realtime_voice_changer_create(&old_config, rate, block, 1, &handle) ==
+                SONARE_OK);
+        REQUIRE(sonare_realtime_voice_changer_set_config(handle, &new_config) == SONARE_OK);
+        REQUIRE(sonare_realtime_voice_changer_reset(handle) == SONARE_OK);
+        const std::vector<float> actual = render(handle);
+        sonare_realtime_voice_changer_destroy(handle);
+
+        float peak = 0.0f;
+        for (const float v : expected) peak = std::max(peak, std::fabs(v));
+        REQUIRE(peak > 0.0f);
+        float worst = 0.0f;
+        for (std::size_t i = 0; i < expected.size(); ++i) {
+          worst = std::max(worst, std::fabs(actual[i] - expected[i]));
+        }
+        CHECK(worst <= 1.0e-5f * peak);
+      }
+    }
+  }
+}

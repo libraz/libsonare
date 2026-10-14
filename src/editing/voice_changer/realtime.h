@@ -154,7 +154,9 @@ class RealtimeVoiceChanger {
 
   void prepare(double sample_rate, int max_block_size, int num_channels = 1);
   /// @brief Clears streaming DSP state.
-  /// @details Control-thread operation. It must not run concurrently with
+  /// @details Adopts the latest published configuration first, so the state it
+  ///          snaps to is the one @ref set_config last requested. Control-thread
+  ///          operation. It must not run concurrently with
   ///          @ref process_block on the same instance: reset writes filter,
   ///          envelope, reverb, and ISP-limiter state directly. To update a
   ///          live processor safely, use @ref set_config instead.
@@ -237,7 +239,7 @@ class RealtimeVoiceChanger {
   /// @brief Largest gain reduction, in dB (<= 0), the compressor, de-esser and
   ///        sample-domain limiter applied together during the last block.
   /// @details Any thread; 0 before the first block and after @ref reset. The
-  ///          compressor's make-up gain is divided out, so a chain that is not
+  ///          compressor's make-up gain is excluded, so a chain that is not
   ///          reducing reads 0 whatever the make-up. With two channels it is the
   ///          deeper of the two. The gate and the inter-sample-peak limiter are
   ///          not included.
@@ -260,6 +262,7 @@ class RealtimeVoiceChanger {
     float gate_gain = 1.0f;
     float comp_env = 0.0f;
     float comp_gain = 1.0f;
+    float comp_reduction_gain = 1.0f;  // comp_gain without make-up; feeds the meter only.
     float deess_env = 0.0f;
     float deess_gain = 1.0f;  // Smoothed deesser reduction gain.
     float limiter_gain = 1.0f;
@@ -341,6 +344,8 @@ class RealtimeVoiceChanger {
   ///        values. Called at a bounded cadence from the audio thread.
   void update_output_filters(ChannelState& state) noexcept;
   void reset_channel(ChannelState& state);
+  /// @brief Clears every channel without adopting the published snapshot.
+  void reset_channels();
   /// @brief Returns the channel's recursive cells to rest when a non-finite
   ///        value has reached them (see util/non_finite_state.h).
   /// @details The block loop flushes a non-finite *input* sample to zero, which

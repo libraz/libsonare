@@ -678,3 +678,27 @@ TEST_CASE("voice.changer refuses an unreachable absolute warp and clamps it unde
   }
   for (const float v : signal) REQUIRE(std::isfinite(v));
 }
+
+TEST_CASE("voice.changer insert gain reduction ignores the make-up ramp",
+          "[voice_changer][insert][gain-reduction]") {
+  for (const double rate : {44100.0, 48000.0, 96000.0}) {
+    for (const int block : {1, 128, 512}) {
+      for (const float makeup_db : {0.0f, 6.0f, 12.0f}) {
+        INFO("rate=" << rate << " block=" << block << " makeup_db=" << makeup_db);
+        RealtimeVoiceChangerConfig config;
+        config.compressor.ratio = 1.0f;
+        config.compressor.makeup_gain_db = makeup_db;
+        config.deesser.ratio = 1.0f;
+        VoiceChangerInsert insert(config);
+        insert.prepare(rate, block, 1);
+        std::vector<float> silence(static_cast<size_t>(block), 0.0f);
+        const int blocks = std::max(4, static_cast<int>(rate * 0.2) / block);
+        for (int b = 0; b < blocks; ++b) {
+          float* plane = silence.data();
+          insert.process(&plane, 1, block);
+          REQUIRE(std::fabs(insert.last_gain_reduction_db()) < 0.01f);
+        }
+      }
+    }
+  }
+}

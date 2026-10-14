@@ -1223,3 +1223,141 @@ TEST_CASE("RealtimeVoiceChanger rejects oversized blocks as a silent no-op", "[v
 // Test runs from CMAKE_SOURCE_DIR (see catch_discover_tests
 // WORKING_DIRECTORY), so the schema path is relative to the repo root.
 // ===================================================================
+
+TEST_CASE("RealtimeVoiceChanger reset acts on the latest published configuration",
+          "[voice_changer][reset][config]") {
+  for (const double rate : {44100.0, 48000.0, 96000.0}) {
+    for (const int block : {97, 128}) {
+      for (const float gain_db : {12.0f, -12.0f}) {
+        INFO("rate=" << rate << " block=" << block << " gain_db=" << gain_db);
+        RealtimeVoiceChangerConfig old_config;
+        old_config.input_gain_db = -gain_db;
+        RealtimeVoiceChangerConfig new_config = old_config;
+        new_config.input_gain_db = gain_db;
+
+        RealtimeVoiceChanger fresh(new_config);
+        fresh.prepare(rate, block, 1);
+        // Render past the chain latency so the compared output carries the gain ramp.
+        const int total = (fresh.latency_samples() / block + 12) * block;
+        const std::vector<float> input = sine(440.0f, static_cast<int>(rate), total);
+        auto render = [&](RealtimeVoiceChanger& changer) {
+          std::vector<float> out(input.size());
+          for (int pos = 0; pos < total; pos += block) {
+            changer.process_block(input.data() + pos, out.data() + pos, block);
+          }
+          return out;
+        };
+        const std::vector<float> expected = render(fresh);
+
+        RealtimeVoiceChanger reset_after(old_config);
+        reset_after.prepare(rate, block, 1);
+        reset_after.set_config(new_config);
+        reset_after.reset();
+        const std::vector<float> actual = render(reset_after);
+
+        float peak = 0.0f;
+        for (const float v : expected) peak = std::max(peak, std::fabs(v));
+        REQUIRE(peak > 0.0f);
+        float worst = 0.0f;
+        for (std::size_t i = 0; i < expected.size(); ++i) {
+          worst = std::max(worst, std::fabs(actual[i] - expected[i]));
+        }
+        CHECK(worst <= 1.0e-5f * peak);
+      }
+    }
+  }
+}
+
+TEST_CASE("RealtimeVoiceChanger set_config without reset still ramps",
+          "[voice_changer][reset][config]") {
+  constexpr double rate = 48000.0;
+  constexpr int block = 128;
+  RealtimeVoiceChangerConfig old_config;
+  old_config.input_gain_db = -12.0f;
+  RealtimeVoiceChangerConfig new_config = old_config;
+  new_config.input_gain_db = 12.0f;
+  int latency = 0;
+  {
+    RealtimeVoiceChanger probe(old_config);
+    probe.prepare(rate, block, 1);
+    latency = probe.latency_samples();
+  }
+  // The first output after the latency is where the ramp shows; compare four blocks of it.
+  const int total = (latency / block + 5) * block;
+  const std::vector<float> input = sine(440.0f, static_cast<int>(rate), total);
+  auto first_blocks = [&](bool reset_first) {
+    RealtimeVoiceChanger changer(old_config);
+    changer.prepare(rate, block, 1);
+    changer.set_config(new_config);
+    if (reset_first) changer.reset();
+    std::vector<float> out(input.size());
+    for (int pos = 0; pos < total; pos += block) {
+      changer.process_block(input.data() + pos, out.data() + pos, block);
+    }
+    return out;
+  };
+  const auto ramped = first_blocks(false);
+  const auto snapped = first_blocks(true);
+  float ramped_peak = 0.0f;
+  float snapped_peak = 0.0f;
+  for (std::size_t i = static_cast<std::size_t>(latency);
+       i < std::min(ramped.size(), static_cast<std::size_t>(latency + block * 4)); ++i) {
+    ramped_peak = std::max(ramped_peak, std::fabs(ramped[i]));
+    snapped_peak = std::max(snapped_peak, std::fabs(snapped[i]));
+  }
+  CHECK(ramped_peak < snapped_peak);
+}
+
+TEST_CASE("RealtimeVoiceChanger gain reduction meter excludes the make-up ramp",
+          "[voice_changer][gain-reduction]") {
+  for (const double rate : {44100.0, 48000.0, 96000.0}) {
+    for (const int block : {1, 128, 512}) {
+      for (const float makeup_db : {0.0f, 6.0f, 12.0f}) {
+        INFO("rate=" << rate << " block=" << block << " makeup_db=" << makeup_db);
+        RealtimeVoiceChangerConfig config;
+        config.compressor.ratio = 1.0f;
+        config.compressor.makeup_gain_db = makeup_db;
+        config.deesser.ratio = 1.0f;
+        RealtimeVoiceChanger changer(config);
+        changer.prepare(rate, block, 1);
+        std::vector<float> in(static_cast<std::size_t>(block), 0.0f);
+        std::vector<float> out(in.size());
+        const int blocks = std::max(4, static_cast<int>(rate * 0.2) / block);
+        for (int b = 0; b < blocks; ++b) {
+          changer.process_block(in.data(), out.data(), block);
+          REQUIRE_THAT(changer.last_gain_reduction_db(), WithinAbs(0.0f, 0.01f));
+        }
+        // Warm make-up changes: up, then back down.
+        for (const float target : {12.0f, 0.0f}) {
+          RealtimeVoiceChangerConfig next = config;
+          next.compressor.makeup_gain_db = target;
+          changer.set_config(next);
+          for (int b = 0; b < blocks; ++b) {
+            changer.process_block(in.data(), out.data(), block);
+            REQUIRE_THAT(changer.last_gain_reduction_db(), WithinAbs(0.0f, 0.01f));
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST_CASE("RealtimeVoiceChanger gain reduction meter still reports compression",
+          "[voice_changer][gain-reduction]") {
+  constexpr int rate = 48000;
+  constexpr int block = 128;
+  RealtimeVoiceChangerConfig config;
+  config.compressor.ratio = 10.0f;
+  config.compressor.threshold_db = -40.0f;
+  config.compressor.makeup_gain_db = 6.0f;
+  RealtimeVoiceChanger changer(config);
+  changer.prepare(rate, block, 1);
+  const std::vector<float> input = sine(1000.0f, rate, block * 80);
+  std::vector<float> out(input.size());
+  float worst = 0.0f;
+  for (int pos = 0; pos < block * 80; pos += block) {
+    changer.process_block(input.data() + pos, out.data() + pos, block);
+    worst = std::min(worst, changer.last_gain_reduction_db());
+  }
+  CHECK(worst < -6.0f);
+}

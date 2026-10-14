@@ -131,14 +131,17 @@ float RealtimeVoiceChanger::process_output_stage(ChannelState& state, float inpu
   // established compressor recurrence; only config-derived A/R transforms are
   // refreshed at the bounded control cadence above.
   const float over = amp_to_db(state.comp_env) - comp_threshold_db;
-  float comp_target = 1.0f;
+  float comp_target = db_to_gain(comp_makeup_db);
+  float comp_reduction_target = 1.0f;
   if (over > 0.0f) {
     const float reduction_db = over - over / comp_ratio;
     comp_target = db_to_gain(-reduction_db + comp_makeup_db);
-  } else {
-    comp_target = db_to_gain(comp_makeup_db);
+    comp_reduction_target = db_to_gain(-reduction_db);
   }
   smooth_attack_release(state.comp_gain, comp_target, state.comp_attack_alpha,
+                        state.comp_release_alpha, /*attack_when_decreasing=*/true);
+  // Same smoothing without the make-up, so the meter never reads the make-up ramp.
+  smooth_attack_release(state.comp_reduction_gain, comp_reduction_target, state.comp_attack_alpha,
                         state.comp_release_alpha, /*attack_when_decreasing=*/true);
   x *= state.comp_gain;
 
@@ -294,15 +297,14 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
       const bool control_update =
           ControlCadence::is_due(block_start + static_cast<std::uint64_t>(i));
       const float wet = process_output_stage(channel, scratch_[i], control_update);
-      lowest_dynamics_gain = std::min(
-          lowest_dynamics_gain, channel.comp_gain * channel.deess_gain * channel.limiter_gain);
+      lowest_dynamics_gain =
+          std::min(lowest_dynamics_gain,
+                   channel.comp_reduction_gain * channel.deess_gain * channel.limiter_gain);
       const float wet_mix = channel.wet_mix.process();
       channels[ch][i] = delayed_dry * (1.0f - wet_mix) + wet * wet_mix;
     }
-    // Make-up is part of comp_gain, so it is divided out at the block-end value.
-    deepest_reduction_linear = std::min(
-        deepest_reduction_linear,
-        std::min(1.0f, lowest_dynamics_gain * db_to_gain(-channel.comp_makeup_db.current())));
+    deepest_reduction_linear =
+        std::min(deepest_reduction_linear, std::min(1.0f, lowest_dynamics_gain));
     // Final inter-sample-peak limiter — applied after the aligned dry/wet mix.
     // It stays active at wet_mix == 0 so toggling the mix cannot introduce a
     // second latency discontinuity in addition to the deliberately aligned
@@ -341,9 +343,11 @@ bool RealtimeVoiceChanger::discard_non_finite_state(ChannelState& state) noexcep
   discarded |= discard_if_non_finite(state.gate_gain, 1.0f);
   if (discard_if_non_finite(state.comp_env, 0.0f)) {
     state.comp_gain = 1.0f;
+    state.comp_reduction_gain = 1.0f;
     discarded = true;
   }
   discarded |= discard_if_non_finite(state.comp_gain, 1.0f);
+  discarded |= discard_if_non_finite(state.comp_reduction_gain, 1.0f);
   if (discard_if_non_finite(state.deess_env, 0.0f)) {
     state.deess_gain = 1.0f;
     discarded = true;

@@ -68,7 +68,7 @@ void RealtimeVoiceChanger::prepare(double sample_rate, int max_block_size, int n
   sync_effective_grain_size();
   update_latency_mirrors();
   non_finite_discard_count_.reset();
-  reset();
+  reset_channels();
   // Re-publish so the audio thread sees the same (post-prepare) config and
   // does NOT re-apply coefficients on its first block (they are already
   // up-to-date from the loop above). adopt_snapshot_for_block() detects this
@@ -81,6 +81,12 @@ void RealtimeVoiceChanger::prepare(double sample_rate, int max_block_size, int n
 }
 
 void RealtimeVoiceChanger::reset() {
+  // Latest published scalars, so the snapped smoothers match a fresh prepare().
+  if (!channels_.empty()) adopt_snapshot_for_block();
+  reset_channels();
+}
+
+void RealtimeVoiceChanger::reset_channels() {
   for (auto& channel : channels_) reset_channel(channel);
   last_gain_reduction_db_.store(0.0f, std::memory_order_relaxed);
 }
@@ -310,6 +316,7 @@ void RealtimeVoiceChanger::reset_channel(ChannelState& state) {
   state.gate_gain = 1.0f;
   state.comp_env = 0.0f;
   state.comp_gain = 1.0f;
+  state.comp_reduction_gain = 1.0f;
   state.deess_env = 0.0f;
   state.deess_gain = 1.0f;
   state.limiter_gain = 1.0f;
