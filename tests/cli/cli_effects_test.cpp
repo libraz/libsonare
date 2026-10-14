@@ -21,6 +21,93 @@ TEST_CASE("CLI effect commands require an output destination", "[cli]") {
   }
 }
 
+TEST_CASE("CLI normalize keeps stereo source order and validates mode first", "[cli]") {
+  const std::string input = unique_temp_path("_normalize_stereo_input.wav");
+  const std::string output = unique_temp_path("_normalize_stereo_output.wav");
+  const std::string invalid_output = unique_temp_path("_normalize_stereo_invalid.wav");
+  std::vector<float> source(2 * 128);
+  for (size_t frame = 0; frame < 128; ++frame) {
+    source[2 * frame] = 0.25f;
+    source[2 * frame + 1] = -0.5f;
+  }
+  save_wav_multichannel(input, source.data(), 128, 2, ChannelLayout::Stereo, 22050);
+
+  const auto [code, message] = exec_command(CLI + " normalize " + input + " -o " + output +
+                                            " --mode peak --target-db -1 -q");
+  REQUIRE(code == 0);
+  const auto [rendered, sample_rate, channels] = load_audio_interleaved(output);
+  REQUIRE(sample_rate == 22050);
+  REQUIRE(channels == 2);
+  REQUIRE(rendered.size() == source.size());
+  REQUIRE(rendered[0] > 0.0f);
+  REQUIRE(rendered[1] < 0.0f);
+  REQUIRE(std::fabs(rendered[1]) > std::fabs(rendered[0]));
+
+  const auto [invalid_code, invalid_message] =
+      exec_command(CLI + " normalize " + input + " -o " + invalid_output + " --mode invalid -q");
+  REQUIRE(invalid_code == 3);
+  REQUIRE_THAT(invalid_message, ContainsSubstring("--mode must be 'peak' or 'rms'"));
+  REQUIRE_FALSE(std::ifstream(invalid_output).good());
+
+  std::remove(input.c_str());
+  std::remove(output.c_str());
+  std::remove(invalid_output.c_str());
+}
+
+#ifdef SONARE_WITH_FFMPEG
+TEST_CASE("CLI normalize preserves retained-layout error ordering", "[cli][ffmpeg]") {
+  if (std::system("command -v ffmpeg >/dev/null 2>&1") != 0) {
+    SKIP("ffmpeg CLI not found on PATH");
+  }
+
+  const std::string mono = unique_temp_path("_layout_mono.aac");
+  const std::string stereo = unique_temp_path("_layout_stereo.aac");
+  const std::string input = unique_temp_path("_layout_change.ts");
+  const std::string valid_output = unique_temp_path("_layout_valid.wav");
+  const std::string invalid_output = unique_temp_path("_layout_invalid.wav");
+  const auto cleanup = [&] {
+    std::remove(mono.c_str());
+    std::remove(stereo.c_str());
+    std::remove(input.c_str());
+    std::remove(valid_output.c_str());
+    std::remove(invalid_output.c_str());
+  };
+
+  const std::string generate_mono =
+      "ffmpeg -loglevel error -f lavfi -i "
+      "'sine=frequency=440:sample_rate=22050:duration=0.3' "
+      "-ac 1 -c:a aac -b:a 96k -f adts -y " +
+      mono;
+  const std::string generate_stereo =
+      "ffmpeg -loglevel error -f lavfi -i "
+      "'sine=frequency=880:sample_rate=22050:duration=0.3' "
+      "-ac 2 -c:a aac -b:a 96k -f adts -y " +
+      stereo;
+  const std::string concatenate = "ffmpeg -loglevel error -i 'concat:" + stereo + "|" + mono +
+                                  "' -c copy -f mpegts -y " + input;
+  REQUIRE(std::system(generate_mono.c_str()) == 0);
+  REQUIRE(std::system(generate_stereo.c_str()) == 0);
+  REQUIRE(std::system(concatenate.c_str()) == 0);
+
+  // A valid mode reaches the stereo-plane load and surfaces the deferred retained-layout failure.
+  const auto [valid_code, valid_message] =
+      exec_command(CLI + " normalize " + input + " -o " + valid_output + " --mode peak -q");
+  REQUIRE(valid_code == 6);
+  REQUIRE_THAT(
+      valid_message,
+      ContainsSubstring(
+          "FFmpeg: interleaved decode does not support a channel layout change midstream"));
+
+  // Handler validation still wins over that deferred decode failure.
+  const auto [invalid_code, invalid_message] =
+      exec_command(CLI + " normalize " + input + " -o " + invalid_output + " --mode invalid -q");
+  REQUIRE(invalid_code == 3);
+  REQUIRE_THAT(invalid_message, ContainsSubstring("--mode must be 'peak' or 'rms'"));
+  REQUIRE_FALSE(std::ifstream(invalid_output).good());
+  cleanup();
+}
+#endif
+
 TEST_CASE("CLI trim-silence keeps the native threshold fallback dynamic", "[cli]") {
   create_test_wav(TEST_WAV);
 

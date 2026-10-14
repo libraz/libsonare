@@ -238,18 +238,10 @@ std::string mastering_report_json(const mastering::api::MasteringReport& report)
   return json.build();
 }
 
-// Opening the file and writing it are both stages of producing the artifact, so
-// both carry the class save_wav gives a failed render: EncodeFailed, which is
-// exit 12. As std::invalid_argument they landed on the invalid-parameter code
-// that describes the argument rather than the write.
 void write_mastering_report(const std::string& path,
                             const mastering::api::MasteringReport& report) {
-  std::ofstream file(path, std::ios::binary | std::ios::trunc);
-  if (!file.is_open()) {
-    throw SonareException(ErrorCode::EncodeFailed, "cannot write mastering report: " + path);
-  }
-  file << mastering_report_json(report) << '\n';
-  if (!file) {
+  const std::string payload = mastering_report_json(report) + '\n';
+  if (!write_binary_file(path, reinterpret_cast<const uint8_t*>(payload.data()), payload.size())) {
     throw SonareException(ErrorCode::EncodeFailed, "cannot write mastering report: " + path);
   }
 }
@@ -987,10 +979,9 @@ int cmd_mastering_suggest(const CliArgs& args, const Audio& audio) {
     // Through the chain serializer on the config already in hand: that is the
     // form `mastering --chain-config` parses, and re-deriving it from the
     // printed document would re-key what the library must read back verbatim.
-    std::ofstream file(config_out, std::ios::binary);
-    file << mastering::api::chain_config_to_json(suggestion.config) << "\n";
-    // The class save_wav gives a failed render, as the report writer uses.
-    if (!file) {
+    const std::string payload = mastering::api::chain_config_to_json(suggestion.config) + '\n';
+    if (!write_binary_file(config_out, reinterpret_cast<const uint8_t*>(payload.data()),
+                           payload.size())) {
       throw SonareException(ErrorCode::EncodeFailed, "cannot write chain config: " + config_out);
     }
   }

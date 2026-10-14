@@ -67,7 +67,7 @@ import libsonare
 import metrics_chain
 import metrics_repair
 from metric_common import rms_matched as _rms_matched
-from run import DOWNMIX, _as_stereo, load_item, mono_feeds, provenance
+from run import DOWNMIX, _as_stereo, _declick_params, load_item, mono_feeds, provenance
 
 SCHEMA = 1
 
@@ -253,11 +253,7 @@ def _declick_defaults(defect: dict | None) -> dict:
     """The declicker aimed under the quietest planted click, as run.py aims it."""
     if defect is None:
         return {"threshold": 0.8, "max_click_samples": 8}
-    quietest = min(abs(a) for a in defect["amplitudes"])
-    return {
-        "threshold": round(0.9 * quietest, 6),
-        "max_click_samples": max(8, 4 * int(defect["width_samples"])),
-    }
+    return _declick_params(defect)
 
 
 def build_cases(manifest: dict) -> list[Case]:

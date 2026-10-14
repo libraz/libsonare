@@ -20,6 +20,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import threading
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
@@ -181,36 +182,44 @@ class Signals:
         else:
             env.pop("SONARE_TUNING_OVERRIDES", None)
         env.update(extra_env or {})
-        tmp = out_path.with_suffix(".partial.npz")
-        p = subprocess.run(
-            [
-                sys.executable,
-                "-c",
-                _WORKER,
-                json.dumps(pairs),
-                str(tmp),
-                str(self.corpus_root) if ref else "",
-            ],
-            input=json.dumps(
-                {
-                    "request": {
-                        k: v
-                        for k, v in asdict(replace(self.request, overrides=ov)).items()
-                        if k != "smf"
-                    },
-                    "gate_s": self.gate_s,
-                    "preroll_s": self.preroll_s,
-                }
-            ),
-            capture_output=True,
-            check=False,
-            text=True,
-            env=env,
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{out_path.name}.",
+            suffix=".partial.npz",
+            dir=out_path.parent,
         )
-        if p.returncode:
+        tmp = Path(tmp_name)
+        try:
+            os.close(fd)
+            p = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    _WORKER,
+                    json.dumps(pairs),
+                    str(tmp),
+                    str(self.corpus_root) if ref else "",
+                ],
+                input=json.dumps(
+                    {
+                        "request": {
+                            k: v
+                            for k, v in asdict(replace(self.request, overrides=ov)).items()
+                            if k != "smf"
+                        },
+                        "gate_s": self.gate_s,
+                        "preroll_s": self.preroll_s,
+                    }
+                ),
+                capture_output=True,
+                check=False,
+                text=True,
+                env=env,
+            )
+            if p.returncode:
+                raise RuntimeError(p.stderr[-4000:])
+            tmp.replace(out_path)
+        finally:
             tmp.unlink(missing_ok=True)
-            raise RuntimeError(p.stderr[-4000:])
-        tmp.replace(out_path)
 
     def assert_tunable(self) -> None:
         """Refuse to score an override set against a library that ignores it.

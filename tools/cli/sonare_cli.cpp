@@ -473,36 +473,32 @@ int main(int argc, char* argv[]) {
                 << std::flush;
     }
 
-    // Through Audio::from_file, not load_audio() plus Audio::from_vector.
-    // from_vector checks only sample_rate > 0, so that pairing was the one way
-    // into the library that skipped the offline-input policy every other surface
-    // applies: a float WAV carrying a NaN, or one declaring a rate outside
-    // [8000, 384000], produced a usable handle here and analysis fields that
-    // were quietly null, while the Python CLI refused the same two files with 6
-    // and 5. The empty-decode case is covered by the same validator (DecodeFailed),
-    // which is also what the Python CLI reports for it.
-    Audio audio = Audio::from_file(args.input_file);
-    const int sample_rate = audio.sample_rate();
-
-    int source_channels = 0;
-    try {
-      source_channels = audio_channel_count(args.input_file);
-    } catch (const sonare::SonareException&) {
-      if (args.command == "info") throw;
-      // The successful decoder remains authoritative; channel inspection is
-      // advisory for containers handled by an optional external decoder.
+    // One codec pass: mono fold plus the planes the command needs (none, two, or the full layout).
+    const CliCommandSpec* command_spec = cli_command_spec_for_path(command_path_for_args(args));
+    RetainChannels retention = RetainChannels::None;
+    if (command_spec != nullptr && command_spec->preserves_multichannel_input) {
+      retention = RetainChannels::All;
+    } else if (command_spec != nullptr && command_spec->preserves_stereo_input) {
+      retention = RetainChannels::StereoIfExact;
     }
-    if (args.command == "info" && source_channels <= 0) {
+    auto decoded = load_audio_input_once(args.input_file, retention);
+    Audio audio = audio_from_decoded_mono(std::move(decoded.mono), decoded.sample_rate);
+    if (decoded.metadata_error != nullptr && args.command == "info") {
+      std::rethrow_exception(decoded.metadata_error);
+    }
+    if (args.command == "info" && decoded.source_channels <= 0) {
       throw std::invalid_argument("invalid audio channel count");
     }
-    args.source_channels = source_channels;
+    args.source_channels = decoded.source_channels;
+    args.decoded_input = &decoded;
+    const int source_channels = decoded.source_channels;
+    const int sample_rate = audio.sample_rate();
     // Every requires_audio command loads through the mono downmix in
     // load_audio, so any multi-channel input silently loses its channels
     // (metering skews, and an audio-producing command like `eq` writes a mono
     // file). Warn uniformly instead of only for a hand-picked few commands: the
     // exception is the leaf's own declared behaviour, read from the registry,
     // and only for the two channels such a leaf carries.
-    const CliCommandSpec* command_spec = cli_command_spec_for_path(command_path_for_args(args));
     const bool carries_every_channel =
         command_spec != nullptr &&
         ((source_channels == 2 && command_spec->preserves_stereo_input) ||

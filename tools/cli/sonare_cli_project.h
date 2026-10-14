@@ -32,7 +32,6 @@ struct ProjectHandle {
 void project_report_error(const std::string& what, SonareError err);
 int project_exit_code(SonareError err);
 int report_output_write_failure(const std::string& path);
-bool write_binary_file(const std::string& path, const uint8_t* data, size_t len);
 std::string project_input_path(const CliArgs& args);
 bool load_project_from_args(const CliArgs& args, ProjectHandle* handle,
                             std::string* diagnostics = nullptr, SonareError* load_error = nullptr);

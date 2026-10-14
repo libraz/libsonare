@@ -22,7 +22,10 @@ from typing import Any
 
 # The checker runs as a script and is also loaded by path from the conformance
 # tests, so its own directory is not always on sys.path already.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _repo import REPO_ROOT
 
 # `_validate_option` and `validate_payload` are not called here; the conformance
 # self-tests reach every checker helper through this module, so both stay part of
@@ -55,8 +58,7 @@ from cli_contract_schema import (
     _validate_option,  # noqa: F401
 )
 
-ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_MANIFEST = ROOT / "tests" / "conformance" / "cli_contract_v2.json"
+DEFAULT_MANIFEST = REPO_ROOT / "tests" / "conformance" / "cli_contract_v2.json"
 
 
 def load_manifest(path: Path) -> dict[str, Any]:
@@ -89,7 +91,7 @@ def _resolve_executable(executable: str) -> str:
         # symlinks whose *spelling* determines discovery of pyvenv.cfg; resolving
         # them would invoke the base interpreter and drop its dependencies.
         return (
-            os.path.abspath(os.path.join(ROOT, executable))
+            os.path.abspath(os.path.join(REPO_ROOT, executable))
             if not Path(executable).is_absolute()
             else executable
         )
@@ -108,7 +110,7 @@ def _resolved_python_library(python_executable: str, timeout: float) -> str | No
     """
     if Path(python_executable).name.startswith("sonare"):
         return None
-    cwd = ROOT / "bindings" / "python"
+    cwd = REPO_ROOT / "bindings" / "python"
     environment = os.environ.copy()
     environment["PYTHONPATH"] = str(cwd / "src") + os.pathsep + environment.get("PYTHONPATH", "")
     try:
@@ -147,7 +149,7 @@ _TRANSLATION_UNIT_SUFFIXES = frozenset({".c", ".cc", ".cpp", ".cxx", ".m", ".mm"
 # neither artifact under comparison. The compilation database says which
 # translation units this build actually compiled, so the surface-specific trees
 # are derived from the build rather than listed here.
-_COMPILE_DB = ROOT / "build" / "compile_commands.json"
+_COMPILE_DB = REPO_ROOT / "build" / "compile_commands.json"
 
 
 def _uncompiled_source_dirs() -> frozenset[Path]:
@@ -172,7 +174,7 @@ def _uncompiled_source_dirs() -> frozenset[Path]:
         except (KeyError, TypeError, OSError):
             continue
     uncompiled: set[Path] = set()
-    src_root = ROOT / "src"
+    src_root = REPO_ROOT / "src"
     if not src_root.is_dir():
         return frozenset()
     for directory in {path.parent for path in src_root.rglob("*") if path.is_file()}:
@@ -195,7 +197,7 @@ def _straddling_source(older: float, newer: float) -> Path | None:
     """Return a core source file last modified between two artifact link times."""
     uncompiled = _uncompiled_source_dirs()
     for directory in ("src", "include"):
-        root = ROOT / directory
+        root = REPO_ROOT / directory
         if not root.is_dir():
             continue
         for path in root.rglob("*"):
@@ -215,7 +217,7 @@ def _count_sources_after(mtime: float) -> int:
     count = 0
     uncompiled = _uncompiled_source_dirs()
     for directory in ("src", "include"):
-        root = ROOT / directory
+        root = REPO_ROOT / directory
         if not root.is_dir():
             continue
         for path in root.rglob("*"):
@@ -281,7 +283,7 @@ def _check_artifact_skew(
         (
             "fail",
             (
-                f"artifact skew: {straddling.relative_to(ROOT)} changed after {behind} "
+                f"artifact skew: {straddling.relative_to(REPO_ROOT)} changed after {behind} "
                 f"was linked and before {ahead} was -- rebuild both before comparing"
             ),
         )
@@ -309,14 +311,14 @@ def _run(
         environment["SONARE_LEGACY_EXIT"] = "1"
     if surface == "native":
         command = [executable, *argv]
-        cwd = ROOT
+        cwd = REPO_ROOT
     else:
         executable_name = Path(executable).name
         if executable_name.startswith("sonare"):
             command = [executable, *argv]
         else:
             command = [executable, "-m", "libsonare.cli", *argv]
-        cwd = ROOT / "bindings" / "python"
+        cwd = REPO_ROOT / "bindings" / "python"
         python_src = str(cwd / "src")
         environment["PYTHONPATH"] = python_src + os.pathsep + environment.get("PYTHONPATH", "")
     try:

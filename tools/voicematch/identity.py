@@ -55,11 +55,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from _repo import REPO_ROOT
 from shape.render import DRUM_SCOPE, scope_overrides
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
 
 #: Rendered per case. Long enough to carry a resonator's tail, since a
 #: mechanism that only differs after the amplitude envelope has closed is still

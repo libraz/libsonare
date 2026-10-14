@@ -53,7 +53,6 @@ TEMPO_TOLERANCE = 0.04
 # a few milliseconds early costs a few frames instead of a whole segment.
 CHORD_FRAME_SEC = 0.010
 
-PITCH_CLASS_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 PITCH_CLASS_INDEX = {
     "C": 0, "B#": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Eb": 3, "E": 4, "Fb": 4,
     "F": 5, "E#": 5, "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9, "A#": 10,

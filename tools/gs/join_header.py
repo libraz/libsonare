@@ -28,6 +28,16 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Keep path-loaded GS modules ahead of the shared tools directory for a
+# standalone invocation, while making ``tools/_repo.py`` importable.
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+if str(Path(__file__).resolve().parent.parent) not in sys.path:
+    sys.path.insert(1, str(Path(__file__).resolve().parent.parent))
+
+from _repo import REPO_ROOT
+
+TOOLS = Path(__file__).resolve().parent
 GENERATED_BY = "tools/gs/join_header.py"
 
 # The forms, in the order the header numbers them.
@@ -54,7 +64,7 @@ MARK_LITERALS = {None: "0", "+": "'+'", "#": "'#'"}
 
 
 def _coverage():
-    path = Path(__file__).resolve().parent / "coverage.py"
+    path = TOOLS / "coverage.py"
     spec = importlib.util.spec_from_file_location("gs_efx_coverage", path)
     if spec is None or spec.loader is None:
         sys.exit(f"could not load {path}")
@@ -204,7 +214,7 @@ def render(entries: list[dict]) -> str:
 
 def laid_out(text: str, header: Path) -> str:
     """The header as clang-format lays it out, which is how it is committed."""
-    style = Path(__file__).resolve().parents[2] / ".clang-format"
+    style = REPO_ROOT / ".clang-format"
     try:
         done = subprocess.run(
             ["clang-format", f"--style=file:{style}", f"--assume-filename={header}"],

@@ -1,7 +1,16 @@
 #include <algorithm>
+#include <atomic>
 #include <cctype>
+#include <cstdint>
+#include <exception>
 #include <limits>
 #include <optional>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 #include "sonare_cli.h"
 
@@ -64,6 +73,66 @@ std::string read_plain_text_file(const std::string& path) {
 
 namespace {
 
+std::string cli_atomic_tmp_path(const std::string& path) {
+  static std::atomic<uint64_t> counter{0};
+#ifdef _WIN32
+  const unsigned long pid = ::GetCurrentProcessId();
+#else
+  const unsigned long pid = static_cast<unsigned long>(::getpid());
+#endif
+  const uint64_t sequence = counter.fetch_add(1, std::memory_order_relaxed);
+  return path + ".sonare-tmp." + std::to_string(pid) + "." + std::to_string(sequence);
+}
+
+struct CliTmpFileGuard {
+  std::string path;
+  bool committed = false;
+
+  ~CliTmpFileGuard() {
+    if (!committed) std::remove(path.c_str());
+  }
+};
+
+bool replace_cli_output(const std::string& temporary, const std::string& destination) {
+#ifdef _WIN32
+  return ::MoveFileExA(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING) != 0;
+#else
+  return std::rename(temporary.c_str(), destination.c_str()) == 0;
+#endif
+}
+
+}  // namespace
+
+bool write_binary_file(const std::string& path, const uint8_t* data, size_t len) {
+  if ((len > 0 && data == nullptr) ||
+      len > static_cast<size_t>(std::numeric_limits<std::streamsize>::max())) {
+    return false;
+  }
+
+  const std::string temporary = cli_atomic_tmp_path(path);
+  CliTmpFileGuard cleanup{temporary};
+  try {
+    std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
+    if (!file.is_open()) return false;
+    if (len > 0) {
+      file.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(len));
+    }
+    const bool write_ok = file.good();
+    file.flush();
+    const bool flush_ok = file.good();
+    file.close();
+    const bool close_ok = !file.fail();
+    if (!write_ok || !flush_ok || !close_ok) return false;
+    if (!replace_cli_output(temporary, path)) return false;
+    cleanup.committed = true;
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
+namespace {
+
 Audio load_reference_audio_impl(const CliArgs& args, std::optional<int> expected_sample_rate,
                                 std::optional<size_t> expected_size) {
   const std::string path = args.get_string("reference");
@@ -92,6 +161,23 @@ Audio load_pair_reference_audio(const CliArgs& args) {
 }
 
 StereoPlanes load_stereo_planes(const CliArgs& args, const Audio& audio) {
+  if (args.decoded_input != nullptr) {
+    const auto& cached = cached_interleaved_audio(args);
+    SONARE_CHECK(args.decoded_input->sample_rate == audio.sample_rate() &&
+                     args.decoded_input->retained_channels == 2,
+                 ErrorCode::DecodeFailed);
+    SONARE_CHECK(cached.size() % 2 == 0, ErrorCode::DecodeFailed);
+    StereoPlanes planes;
+    planes.left.resize(cached.size() / 2);
+    planes.right.resize(cached.size() / 2);
+    for (size_t frame = 0; frame < planes.left.size(); ++frame) {
+      planes.left[frame] = cached[2 * frame];
+      planes.right[frame] = cached[2 * frame + 1];
+    }
+    // Nothing reads the interleaved source after this; release it while the planes are processed.
+    std::vector<float>().swap(args.decoded_input->interleaved);
+    return planes;
+  }
   auto [interleaved, sample_rate, channels] = load_audio_interleaved(args.input_file);
   SONARE_CHECK(sample_rate == audio.sample_rate() && channels == 2, ErrorCode::DecodeFailed);
   StereoPlanes planes;
@@ -104,15 +190,50 @@ StereoPlanes load_stereo_planes(const CliArgs& args, const Audio& audio) {
   return planes;
 }
 
+const std::vector<float>& cached_interleaved_audio(const CliArgs& args) {
+  SONARE_CHECK_MSG(args.decoded_input != nullptr, ErrorCode::DecodeFailed,
+                   "decoded audio cache is unavailable");
+  if (args.decoded_input->retained_error != nullptr) {
+    std::rethrow_exception(args.decoded_input->retained_error);
+  }
+  SONARE_CHECK_MSG(!args.decoded_input->interleaved.empty(), ErrorCode::DecodeFailed,
+                   "decoded audio has no retained channels");
+  return args.decoded_input->interleaved;
+}
+
+namespace {
+
+void save_stereo_wav_impl(const std::string& path, const float* left, size_t left_size,
+                          const float* right, size_t right_size, int sample_rate, int bits) {
+  SONARE_CHECK_MSG(left != nullptr || left_size == 0, ErrorCode::InvalidParameter,
+                   "stereo WAV left channel is null");
+  SONARE_CHECK_MSG(right != nullptr || right_size == 0, ErrorCode::InvalidParameter,
+                   "stereo WAV right channel is null");
+  SONARE_CHECK_MSG(left_size <= std::numeric_limits<size_t>::max() / 2, ErrorCode::InvalidParameter,
+                   "stereo WAV is too large");
+  std::vector<float> interleaved(left_size * 2);
+  for (size_t frame = 0; frame < left_size; ++frame) {
+    interleaved[2 * frame] = left[frame];
+    interleaved[2 * frame + 1] = frame < right_size ? right[frame] : 0.0f;
+  }
+  save_wav_multichannel(path, interleaved.data(), left_size, 2, ChannelLayout::Stereo, sample_rate,
+                        bits);
+}
+
+}  // namespace
+
 void save_stereo_wav(const std::string& path, const std::vector<float>& left,
                      const std::vector<float>& right, int sample_rate, int bits) {
-  std::vector<float> interleaved(2 * left.size());
-  for (size_t frame = 0; frame < left.size(); ++frame) {
-    interleaved[2 * frame] = left[frame];
-    interleaved[2 * frame + 1] = frame < right.size() ? right[frame] : 0.0f;
-  }
-  save_wav_multichannel(path, interleaved.data(), left.size(), 2, ChannelLayout::Stereo,
-                        sample_rate, bits);
+  save_stereo_wav_impl(path, left.data(), left.size(), right.data(), right.size(), sample_rate,
+                       bits);
+}
+
+void save_stereo_wav(const std::string& path, const Audio& left, const Audio& right,
+                     int sample_rate, int bits) {
+  SONARE_CHECK_MSG(left.sample_rate() == sample_rate && right.sample_rate() == sample_rate,
+                   ErrorCode::InvalidParameter, "stereo WAV sample rates do not match");
+  save_stereo_wav_impl(path, left.data(), left.size(), right.data(), right.size(), sample_rate,
+                       bits);
 }
 
 std::string lowercase_cli_value(std::string value) {

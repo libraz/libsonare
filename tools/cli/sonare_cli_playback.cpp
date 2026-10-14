@@ -165,7 +165,10 @@ int cmd_playback(const CliArgs& args, const Audio&) {
                                 std::to_string(probed_channels) + " channels)");
   }
 
-  auto [interleaved, sample_rate, in_channels] = load_audio_interleaved(args.input_file);
+  const auto& interleaved = cached_interleaved_audio(args);
+  const int sample_rate = args.decoded_input->sample_rate;
+  // Stride by the decoded width; the probed count only gates acceptance above.
+  const int in_channels = args.decoded_input->retained_channels;
   const size_t frames = in_channels > 0 ? interleaved.size() / static_cast<size_t>(in_channels) : 0;
 
   Value config_document = playback_config_document(args);

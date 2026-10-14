@@ -28,7 +28,10 @@ from pathlib import Path
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from _repo import REPO_ROOT
+
 DEFAULT_SOURCE = REPO_ROOT / "src/playback/default.shrf"
 DEFAULT_OUTPUT = REPO_ROOT / "src/mastering/stereo/binaural_ring.inc"
 

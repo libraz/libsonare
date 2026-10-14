@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -30,6 +32,7 @@
 #include "analysis/timbre_analyzer.h"
 #include "core/audio.h"
 #include "core/audio_io.h"
+#include "core/audio_io_detail.h"
 #include "core/convert.h"
 #include "core/db_convert.h"
 #include "core/pcen.h"
@@ -121,6 +124,7 @@ std::vector<int> parse_int_list(const std::string& text);
 int print_name_catalog(const CliArgs& args, std::string_view key,
                        const std::vector<std::string>& names);
 std::string read_plain_text_file(const std::string& path);
+bool write_binary_file(const std::string& path, const uint8_t* data, size_t len);
 #ifdef SONARE_WITH_ARRANGEMENT
 /// Reads a file into a byte buffer, binary-safe, refusing an input past the
 /// shared project / SMF / MIDI 2.0 size cap. Declared here rather than kept
@@ -158,14 +162,20 @@ struct StereoPlanes {
   std::vector<float> right;
 };
 
-/// Re-reads `args.input_file` as stereo. A handler is handed the mono downmix
-/// main() decoded, so carrying both channels costs a second decode; the mono
-/// decode stays authoritative on the sample rate, which is what this checks.
+/// De-interleaves the cached stereo representation produced by main(). The
+/// mono decode stays authoritative on the sample rate, which is what this
+/// checks; a direct unit caller without a cache falls back to loading the file.
 StereoPlanes load_stereo_planes(const CliArgs& args, const Audio& audio);
+
+/// Returns the retained interleaved input for a channel-preserving handler.
+/// The cache is borrowed from CliArgs and is valid only during the handler.
+const std::vector<float>& cached_interleaved_audio(const CliArgs& args);
 
 /// Writes a processed pair as an interleaved stereo WAV.
 void save_stereo_wav(const std::string& path, const std::vector<float>& left,
                      const std::vector<float>& right, int sample_rate, int bits = 16);
+void save_stereo_wav(const std::string& path, const Audio& left, const Audio& right,
+                     int sample_rate, int bits = 16);
 
 int cmd_version(const CliArgs& args);
 int cmd_doctor(const CliArgs& args);

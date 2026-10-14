@@ -26,7 +26,13 @@ import re
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+if str(Path(__file__).resolve().parent.parent) not in sys.path:
+    sys.path.insert(1, str(Path(__file__).resolve().parent.parent))
+
+from _repo import REPO_ROOT
+
 UNIT = "roland-sc8850-01"
 TYPE_ALIASES = {"03 00": "02 0C"}
 MEASURED_SOURCES = ("law", "measured")
@@ -303,10 +309,10 @@ def table_pairs(tables: Path) -> set[tuple[str, str]]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--archive", default=os.environ.get("GS_EFX_ARCHIVE"))
-    ap.add_argument("--bindings", type=Path, default=REPO / "tools/gs/efx-bindings")
-    ap.add_argument("--overlays", type=Path, default=REPO / "tools/gs/classic-overlays")
-    ap.add_argument("--tables", type=Path, default=REPO / "tools/gs/efx-tables.json")
-    ap.add_argument("--inc", type=Path, default=REPO / "src/midi/synth/gs_classic_models.inc")
+    ap.add_argument("--bindings", type=Path, default=REPO_ROOT / "tools/gs/efx-bindings")
+    ap.add_argument("--overlays", type=Path, default=REPO_ROOT / "tools/gs/classic-overlays")
+    ap.add_argument("--tables", type=Path, default=REPO_ROOT / "tools/gs/efx-tables.json")
+    ap.add_argument("--inc", type=Path, default=REPO_ROOT / "src/midi/synth/gs_classic_models.inc")
     args = ap.parse_args(argv)
     if not args.archive:
         print("soundings_drift: no archive: pass --archive or set GS_EFX_ARCHIVE", file=sys.stderr)

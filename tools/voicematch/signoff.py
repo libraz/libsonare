@@ -72,12 +72,16 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_PATH = HERE / "signoff.json"
-REPO_ROOT = HERE.parents[1]
+sys.path.insert(0, str(HERE.parent))
+
+from _repo import REPO_ROOT
+
 BANK_VERSIONS = REPO_ROOT / "tools" / "bank-versions.json"
 
 #: `boundary.SCOPE_*` and the matched status, repeated because `boundary` needs

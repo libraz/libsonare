@@ -30,7 +30,6 @@ from dataclasses import dataclass, field
 from .render import write_overrides
 
 COARSE_STEPS = (0.4, 0.6, 0.8, 1.25, 1.6, 2.5)
-FINE_STEPS = (0.72, 0.85, 0.93, 1.08, 1.18, 1.4)
 #: A multiplicative grid cannot leave zero, so a coordinate that ships at
 #: exactly zero gets this ladder instead. It spans decades rather than the unit
 #: interval because the coordinates that ship at zero are of two kinds and only

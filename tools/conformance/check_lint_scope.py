@@ -21,9 +21,13 @@ Stdlib only, no build. Run directly:
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from _repo import REPO_ROOT
+
 MAKEFILE = REPO_ROOT / "Makefile"
 WORKFLOWS = (
     REPO_ROOT / ".github/workflows/ci.yml",

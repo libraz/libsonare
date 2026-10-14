@@ -4,7 +4,30 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 
 #include "cli/cli_test_helpers.h"
+
+#ifdef SONARE_WITH_MASTERING
+#include <glob.h>
+
 #include "mastering/api/named_processor.h"
+
+namespace {
+
+std::string read_cli_output_bytes(const std::string& path) {
+  std::ifstream file(path, std::ios::binary);
+  return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+}
+
+size_t count_cli_temp_files(const std::string& destination) {
+  glob_t matches{};
+  const std::string pattern = destination + ".sonare-tmp.*";
+  const int result = glob(pattern.c_str(), 0, nullptr, &matches);
+  const size_t count = result == 0 ? matches.gl_pathc : 0;
+  globfree(&matches);
+  return count;
+}
+
+}  // namespace
+#endif
 
 #ifdef SONARE_WITH_MASTERING
 TEST_CASE("CLI mastering command", "[cli][mastering]") {
@@ -399,6 +422,88 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     std::remove(eq_out.c_str());
   }
 }
+
+#ifdef SONARE_WITH_MASTERING
+TEST_CASE("CLI auxiliary outputs are atomic", "[cli][atomic-output]") {
+  create_test_wav(TEST_WAV);
+
+  const auto write_sentinel = [](const std::string& path) {
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    file << "sentinel-before-output\n";
+  };
+  const auto verify_json_line = [](const std::string& path) {
+    const std::string bytes = read_cli_output_bytes(path);
+    REQUIRE(bytes.size() > 1);
+    REQUIRE(bytes.back() == '\n');
+    REQUIRE(bytes[bytes.size() - 2] != '\n');
+    const auto payload = sonare::util::json::parse_strict(bytes.substr(0, bytes.size() - 1));
+    REQUIRE(payload.is_object());
+  };
+
+  SECTION("a write limit preserves an existing report") {
+    const std::string report = unique_temp_path("_limited_report.json");
+    write_sentinel(report);
+    const auto [code, output] =
+        exec_command("trap '' XFSZ; ulimit -f 0; exec " + CLI + " mastering " + TEST_WAV +
+                     " --report " + report + " --json -q");
+    CHECK(code == 12);
+    CHECK_THAT(output, ContainsSubstring("cannot write mastering report: " + report));
+    CHECK(read_cli_output_bytes(report) == "sentinel-before-output\n");
+    CHECK(count_cli_temp_files(report) == 0);
+    std::remove(report.c_str());
+  }
+
+  SECTION("a replacement failure preserves a destination directory") {
+    const std::string destination = unique_temp_path("_report_directory");
+    REQUIRE(mkdir(destination.c_str(), 0700) == 0);
+    const std::string sentinel = destination + "/sentinel";
+    write_sentinel(sentinel);
+    const auto [code, output] =
+        exec_command(CLI + " mastering " + TEST_WAV + " --report " + destination + " --json -q");
+    CHECK(code == 12);
+    CHECK_THAT(output, ContainsSubstring("cannot write mastering report: " + destination));
+    CHECK(read_cli_output_bytes(sentinel) == "sentinel-before-output\n");
+    CHECK(count_cli_temp_files(destination) == 0);
+    std::remove(sentinel.c_str());
+    CHECK(rmdir(destination.c_str()) == 0);
+  }
+
+  SECTION("report output replaces a file with one strict JSON line") {
+    const std::string report = unique_temp_path("_report_replace.json");
+    write_sentinel(report);
+    const auto [code, output] =
+        exec_command(CLI + " mastering " + TEST_WAV + " --report " + report + " --json -q");
+    REQUIRE(code == 0);
+    verify_json_line(report);
+    CHECK(count_cli_temp_files(report) == 0);
+    std::remove(report.c_str());
+  }
+
+  SECTION("mastering config output replaces a file with one strict JSON line") {
+    const std::string config = unique_temp_path("_config_replace.json");
+    write_sentinel(config);
+    const auto [code, output] = exec_command(CLI + " mastering-suggest " + TEST_WAV +
+                                             " --config-out " + config + " --json -q");
+    REQUIRE(code == 0);
+    verify_json_line(config);
+    CHECK(count_cli_temp_files(config) == 0);
+    std::remove(config.c_str());
+  }
+
+#if defined(SONARE_WITH_MIXING_ASSISTANT)
+  SECTION("mix scene output replaces a file with one strict JSON line") {
+    const std::string scene = unique_temp_path("_scene_replace.json");
+    write_sentinel(scene);
+    const auto [code, output] = exec_command(CLI + " suggest-mix --input " + TEST_WAV +
+                                             " --scene-out " + scene + " --json -q");
+    REQUIRE(code == 0);
+    verify_json_line(scene);
+    CHECK(count_cli_temp_files(scene) == 0);
+    std::remove(scene.c_str());
+  }
+#endif
+}
+#endif
 
 TEST_CASE("CLI mastering takes an enum-valued key by its name", "[cli][mastering]") {
   create_test_wav(TEST_WAV);

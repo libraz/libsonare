@@ -29,6 +29,12 @@ Reference:
 import json
 import math
 import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from _repo import REPO_ROOT
 
 # ---------------------------------------------------------------------------
 # K-weighting analog prototype parameters (ITU-R BS.1770-4 Annex 2)
@@ -178,9 +184,7 @@ def compute_sample_rate_data(sample_rate: float) -> dict:
 
 
 def main() -> None:
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    repo_root = os.path.normpath(os.path.join(script_dir, "..", ".."))
-    out_path = os.path.join(repo_root, "tests", "fixtures", "k_weighting_reference.json")
+    out_path = os.path.join(REPO_ROOT, "tests", "fixtures", "k_weighting_reference.json")
 
     sample_rates = [22050.0, 44100.0, 48000.0, 96000.0]
 

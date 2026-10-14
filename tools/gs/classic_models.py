@@ -49,18 +49,24 @@ import tempfile
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+if str(Path(__file__).resolve().parent.parent) not in sys.path:
+    sys.path.insert(1, str(Path(__file__).resolve().parent.parent))
+
+from _repo import REPO_ROOT
+
 TOOLS = Path(__file__).resolve().parent
 UNIT = "roland-sc8850-01"
 EFFECT_BLOCK = "40 03"
 FIRST_PARAMETER = 0x03
 SLOTS = 20
 
-OUT_DEFAULT = REPO / "src/midi/synth/gs_classic_models.inc"
-OUT_RAW = REPO / "tests/midi/gs_classic_models_raw.inc"
-OUT_TSV = REPO / "tests/midi/gs_classic_reference.tsv"
-OUT_EXPANSION = REPO / "tests/midi/gs_classic_map_expansion.inc"
-OUT_DOC = REPO / "tools/gs/docs/classic.md"
+OUT_DEFAULT = REPO_ROOT / "src/midi/synth/gs_classic_models.inc"
+OUT_RAW = REPO_ROOT / "tests/midi/gs_classic_models_raw.inc"
+OUT_TSV = REPO_ROOT / "tests/midi/gs_classic_reference.tsv"
+OUT_EXPANSION = REPO_ROOT / "tests/midi/gs_classic_map_expansion.inc"
+OUT_DOC = REPO_ROOT / "tools/gs/docs/classic.md"
 DEFAULT_OVERLAYS = TOOLS / "classic-overlays"
 TABLES = TOOLS / "efx-tables.json"
 
@@ -1473,10 +1479,10 @@ def check_overlays(directory: Path) -> int:
                 recorded = m.group(1)
     current = overlay_digest(directory)
     if recorded == current:
-        print(f"classic overlays match {OUT_DEFAULT.relative_to(REPO)}")
+        print(f"classic overlays match {OUT_DEFAULT.relative_to(REPO_ROOT)}")
         return 0
     print(
-        f"classic overlays changed since {OUT_DEFAULT.relative_to(REPO)} was generated "
+        f"classic overlays changed since {OUT_DEFAULT.relative_to(REPO_ROOT)} was generated "
         "(recorded "
         f"{recorded or 'none'}, now {current}): run `make gs-classic-models`",
         file=sys.stderr,
@@ -2201,7 +2207,7 @@ def main() -> int:
     if not args.check:
         for path, text in outputs.items():
             path.write_text(text)
-            print(f"wrote {path.relative_to(REPO)}")
+            print(f"wrote {path.relative_to(REPO_ROOT)}")
         return 0
 
     committed = committed_revision([OUT_RAW, OUT_DEFAULT, OUT_TSV])
@@ -2218,7 +2224,10 @@ def main() -> int:
             old = path.read_text().splitlines(keepends=True) if path.is_file() else []
             diff = list(
                 difflib.unified_diff(
-                    old, text.splitlines(keepends=True), str(path.relative_to(REPO)), str(fresh)
+                    old,
+                    text.splitlines(keepends=True),
+                    str(path.relative_to(REPO_ROOT)),
+                    str(fresh),
                 )
             )
             if diff:

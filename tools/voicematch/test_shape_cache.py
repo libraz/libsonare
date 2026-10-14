@@ -13,12 +13,17 @@ here -- that is `identity.py --isolate`, which needs a built dylib.
 
 from __future__ import annotations
 
+import concurrent.futures
 import sys
 from pathlib import Path
+
+import numpy as np
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from boundary import RenderRequest
+from shape import render as render_module
 from shape.loss import ShapeLoss
 from shape.render import (
     DRUM_SCOPE,
@@ -208,3 +213,108 @@ def test_a_corpus_with_no_manifest_still_keys(tmp_path):
         cache_dir=tmp_path / "cache",
     )
     assert sigs._key([(60, 100)], "", False)
+
+
+# --- concurrent reference publication ------------------------------------
+
+
+_BARRIER_WORKER = r"""
+import os
+import sys
+import time
+from pathlib import Path
+
+import numpy as np
+
+out = Path(sys.argv[2])
+log = Path(os.environ["SHAPE_CACHE_TEST_WORKER_LOG"])
+with log.open("a", encoding="utf-8") as stream:
+    stream.write(str(out) + "\n")
+    stream.flush()
+deadline = time.monotonic() + 5.0
+while time.monotonic() < deadline:
+    if len(log.read_text(encoding="utf-8").splitlines()) >= 2:
+        break
+    time.sleep(0.01)
+else:
+    raise SystemExit("barrier timeout")
+np.savez(out, **{"60_100": np.arange(4, dtype=np.float32)})
+"""
+
+_SUCCESS_WORKER = r"""
+import sys
+import numpy as np
+
+np.savez(sys.argv[2], **{"60_100": np.array([7.0], dtype=np.float32)})
+"""
+
+_FAILURE_WORKER = r"""
+import sys
+
+sys.stderr.write("shape worker failed\n")
+raise SystemExit(17)
+"""
+
+
+def _cache_signals(tmp_path: Path) -> Signals:
+    return Signals(
+        corpus_root=tmp_path / "corpus",
+        request=RenderRequest(program=0, seconds=1.0),
+        gate_s=0.05,
+        cache_dir=tmp_path / "cache",
+    )
+
+
+def test_two_reference_signals_publish_distinct_temps_to_one_complete_cache(tmp_path, monkeypatch):
+    """Cold-cache workers may race, but readers see one complete NPZ only."""
+    log = tmp_path / "worker-paths.log"
+    monkeypatch.setenv("SHAPE_CACHE_TEST_WORKER_LOG", str(log))
+    monkeypatch.setattr(render_module, "_WORKER", _BARRIER_WORKER)
+    left = _cache_signals(tmp_path)
+    right = _cache_signals(tmp_path)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(signal, [(60, 100)], ref=True) for signal in (left, right)]
+        results = [future.result(timeout=15) for future in futures]
+
+    expected = np.arange(4, dtype=np.float32)
+    for result in results:
+        np.testing.assert_array_equal(result[(60, 100)], expected)
+    paths = log.read_text(encoding="utf-8").splitlines()
+    assert len(paths) == 2
+    assert len(set(paths)) == 2
+    assert {Path(path).parent for path in paths} == {left.cache_dir}
+
+    final = sorted(left.cache_dir.glob("ref-*.npz"))
+    assert len(final) == 1
+    with np.load(final[0]) as archive:
+        np.testing.assert_array_equal(archive["60_100"], expected)
+    assert not list(left.cache_dir.glob("*.partial.npz"))
+
+
+def test_failed_subprocess_removes_its_private_temp(tmp_path, monkeypatch):
+    monkeypatch.setattr(render_module, "_WORKER", _FAILURE_WORKER)
+    signals = _cache_signals(tmp_path)
+    final = signals.cache_dir / "ref-failure.npz"
+
+    with pytest.raises(RuntimeError, match="shape worker failed"):
+        signals._render([(60, 100)], "", True, final)
+
+    assert not final.exists()
+    assert not list(signals.cache_dir.glob("*.partial.npz"))
+
+
+def test_publish_failure_removes_the_completed_temp(tmp_path, monkeypatch):
+    monkeypatch.setattr(render_module, "_WORKER", _SUCCESS_WORKER)
+    signals = _cache_signals(tmp_path)
+    final = signals.cache_dir / "ref-publish-failure.npz"
+
+    def fail_replace(self, target):
+        raise OSError("publish failed")
+
+    monkeypatch.setattr(Path, "replace", fail_replace)
+    with pytest.raises(OSError, match="publish failed"):
+        signals._render([(60, 100)], "", True, final)
+
+    assert not final.exists()
+    assert not list(signals.cache_dir.glob("*.partial.npz"))

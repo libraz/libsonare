@@ -1,10 +1,11 @@
 """Assert every surface agrees on what each ``sonare::ErrorCode`` means.
 
-Five tables translate the core error enumeration for a consumer, and no two of
-them live in the same file: the C ABI's ``map_sonare_exception`` and its
-inverse, the Node addon's ``CErrorFromException`` / ``ErrorCodeName``, the WASM
-module's inline ``{code, codeName, message}`` switch, the two TypeScript
-``ErrorCode`` enums, and the Python ``ErrorCode`` plus its name table.  A new
+Five tables translate the core error enumeration for a consumer. The canonical
+C ABI forward switch and its inverse live in ``sonare_c_error_mapping.h``; the
+C and Node exception wrappers delegate to that switch. The Node addon's
+``ErrorCodeName``, the WASM module's inline ``{code, codeName, message}``
+switch, the two TypeScript ``ErrorCode`` enums, and the Python ``ErrorCode``
+plus its name table are the other tables. A new
 enumerator added to the core and missed in one of them does not fail to
 compile; it reaches that surface as ``Unknown`` / 99 while every other surface
 reports the real cause, and the caller branching on the code takes the wrong
@@ -48,8 +49,10 @@ ROOT = Path(__file__).resolve().parents[2]
 
 CORE_ENUM = "src/util/types.h"
 C_ENUM = "include/sonare/sonare_c_types_enums.h"
-C_MAPPING = "src/c_api/sonare_c_internal.cpp"
+C_MAPPING = "src/c_api/sonare_c_error_mapping.h"
 C_INVERSE = "src/c_api/sonare_c_error_mapping.h"
+C_FORWARD_FUNCTION = "c_error_from_error_code"
+C_WRAPPER = "src/c_api/sonare_c_internal.cpp"
 NODE_ADDON = "bindings/node/src/addon/sonare_wrap_utils.cpp"
 WASM_BINDINGS = "src/wasm/bindings.cpp"
 NODE_TYPES = "bindings/node/src/errors.ts"
@@ -61,6 +64,7 @@ SOURCES = (
     C_ENUM,
     C_MAPPING,
     C_INVERSE,
+    C_WRAPPER,
     NODE_ADDON,
     WASM_BINDINGS,
     NODE_TYPES,
@@ -143,6 +147,22 @@ def core_to_c(root: Path, relative: str, function: str) -> dict[str, str]:
     )
 
 
+def delegates_to_canonical(root: Path, relative: str, function: str) -> bool:
+    """Whether an exception wrapper returns the canonical forward map."""
+    text = _strip_comments(_read(root, relative))
+    body = _braced_body(text, text.index(function))
+    return re.search(
+        r"return\s+(?:sonare_c_detail::)?c_error_from_error_code\(e\.code\(\)\)\s*;",
+        body,
+    ) is not None
+
+
+def canonical_forward_body(root: Path) -> str:
+    """The canonical forward function body, including its switch."""
+    text = _strip_comments(_read(root, C_MAPPING))
+    return _braced_body(text, text.index(C_FORWARD_FUNCTION))
+
+
 def c_to_core(root: Path) -> dict[str, str]:
     """``SONARE_ERROR_Y -> ErrorCode::X``, the inverse the facades use."""
     return _case_arms(
@@ -212,9 +232,14 @@ class Tables:
     def __init__(self, root: Path) -> None:
         self.core = core_enumerators(root)
         self.c_enum = c_enumerators(root)
-        self.c_abi = core_to_c(root, C_MAPPING, "map_sonare_exception")
+        self.c_abi = core_to_c(root, C_MAPPING, C_FORWARD_FUNCTION)
         self.c_inverse = c_to_core(root)
-        self.addon = core_to_c(root, NODE_ADDON, "CErrorFromException")
+        # The C and Node exception wrappers are compatibility entry points. The
+        # canonical table above is their answer; delegate checks below ensure
+        # neither wrapper grows a private mapping again.
+        self.addon = self.c_abi
+        self.c_wrapper_delegates = delegates_to_canonical(root, C_WRAPPER, "map_sonare_exception")
+        self.addon_delegates = delegates_to_canonical(root, NODE_ADDON, "CErrorFromException")
         self.addon_names = c_to_name(root)
         self.wasm = wasm_mapping(root)
         self.node_ts = ts_enumerators(root, NODE_TYPES)
@@ -285,10 +310,7 @@ def inconsistencies(tables: Tables) -> list[str]:
 def non_error_disagreements(tables: Tables) -> list[str]:
     """Every surface that answers for `Ok` with something other than Unknown."""
     problems: list[str] = []
-    for label, table in (
-        ("the C ABI mapping", tables.c_abi),
-        ("the Node addon mapping", tables.addon),
-    ):
+    for label, table in (("the canonical C ABI mapping", tables.c_abi),):
         answer = table.get(NOT_AN_ERROR)
         if answer is None:
             problems.append(
@@ -343,6 +365,12 @@ class SourcePresenceTest(unittest.TestCase):
                     size, floor, f"{label} parsed as {size} entries; the parser or the table broke"
                 )
 
+    def test_canonical_forward_switch_has_no_default(self) -> None:
+        # The population floor above proves every current enumerator has an
+        # arm. This separate assertion keeps a future enumerator from silently
+        # taking a default branch.
+        self.assertNotIn("default:", canonical_forward_body(ROOT))
+
 
 class AgreementTest(unittest.TestCase):
     def test_every_enumerator_means_the_same_thing_on_every_surface(self) -> None:
@@ -352,6 +380,13 @@ class AgreementTest(unittest.TestCase):
     def test_a_non_error_carried_by_an_exception_is_unknown_everywhere(self) -> None:
         problems = non_error_disagreements(Tables(ROOT))
         self.assertEqual(problems, [], "\n".join(problems))
+
+
+class DelegateTest(unittest.TestCase):
+    def test_c_and_node_exception_wrappers_delegate_to_the_canonical_map(self) -> None:
+        tables = Tables(ROOT)
+        self.assertTrue(tables.c_wrapper_delegates)
+        self.assertTrue(tables.addon_delegates)
 
 
 class NonVacuityTest(unittest.TestCase):
@@ -408,7 +443,7 @@ class NonVacuityTest(unittest.TestCase):
             problems = non_error_disagreements(Tables(root))
         self.assertEqual(problems, ["Ok: the WASM mapping says (0, 'Ok'), not (99, 'Unknown')"])
 
-    def test_dropping_the_non_error_case_from_the_c_abi_names_it(self) -> None:
+    def test_dropping_the_non_error_case_from_the_canonical_map_names_it(self) -> None:
         holder, root = self._copy()
         with holder:
             path = root / C_MAPPING
@@ -417,15 +452,15 @@ class NonVacuityTest(unittest.TestCase):
                 r"[ \t]*case sonare::ErrorCode::Ok:\n[ \t]*return SONARE_ERROR_UNKNOWN;\n",
                 text,
             )
-            self.assertIsNotNone(arm, "the C ABI switch arm is no longer written this way")
+            self.assertIsNotNone(arm, "the canonical C ABI switch arm is no longer written this way")
             assert arm is not None
             path.write_text(text[: arm.start()] + text[arm.end() :], encoding="utf-8")
             problems = non_error_disagreements(Tables(root))
         self.assertEqual(
             problems,
             [
-                ("Ok: the C ABI mapping has no case for it, so it answers by falling "
-                "through rather than by saying so")
+                ("Ok: the canonical C ABI mapping has no case for it, so it answers by "
+                 "falling through rather than by saying so")
             ],
         )
 

@@ -4,13 +4,7 @@
 
 #ifdef SONARE_WITH_ARRANGEMENT
 
-#include <atomic>
 #include <cstdint>
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <unistd.h>
-#endif
 
 // Every subcommand here reports its result on stdout and keeps stderr for
 // errors, usage, and advisory output, matching the rest of this CLI. The
@@ -133,46 +127,6 @@ bool read_binary_file(const std::string& path, std::vector<uint8_t>* out) {
     // where the remaining budget cannot.
     if (read_bytes > kMaxProjectOrMidiBytes - out->size()) reject_oversized_input(path);
     out->insert(out->end(), chunk.data(), chunk.data() + read_bytes);
-  }
-  return true;
-}
-
-// Per-writer-unique sibling temp path for an atomic write. The process id plus a
-// monotonic counter keep concurrent writers to the same destination on distinct
-// temp files, so a fixed name cannot let two writers interleave into the same
-// temp before either renames. Mirrors atomic_tmp_path() in
-// src/core/audio_io.cpp (the CLI reaches the core only through the C ABI and
-// cannot share that internal helper).
-std::string project_atomic_tmp_path(const std::string& path) {
-  static std::atomic<uint64_t> counter{0};
-#ifdef _WIN32
-  const unsigned long pid = ::GetCurrentProcessId();
-#else
-  const unsigned long pid = static_cast<unsigned long>(::getpid());
-#endif
-  const uint64_t seq = counter.fetch_add(1, std::memory_order_relaxed);
-  return path + ".sonare-tmp." + std::to_string(pid) + "." + std::to_string(seq);
-}
-
-// Writes atomically: the payload lands in a sibling temp file that only replaces
-// the destination once fully written, so an interrupted or failed export never
-// truncates an existing project file.
-bool write_binary_file(const std::string& path, const uint8_t* data, size_t len) {
-  const std::string tmp = project_atomic_tmp_path(path);
-  {
-    std::ofstream file(tmp, std::ios::binary);
-    if (!file.is_open()) return false;
-    if (len > 0) file.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(len));
-    file.flush();
-    if (!file.good()) {
-      file.close();
-      std::remove(tmp.c_str());
-      return false;
-    }
-  }
-  if (std::rename(tmp.c_str(), path.c_str()) != 0) {
-    std::remove(tmp.c_str());
-    return false;
   }
   return true;
 }

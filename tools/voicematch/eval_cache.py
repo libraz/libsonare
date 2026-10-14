@@ -54,16 +54,31 @@ def file_digest(path: Path) -> str:
 
 
 def source_digest(directory: Path) -> str:
-    """Digest of the harness modules that can change a render or a score.
+    """Digest the recursive source tree that can change a render or a score.
 
-    Every `.py` in the directory except the tests, rather than the handful that
-    obviously matter. Naming them would be a second list to keep in step with
-    the imports, and the failure it invites is silent and one-sided: a module
-    left off the list keeps serving values computed by code that has since
-    changed. Over-invalidating costs a cold run.
+    Every production `.py` below the directory is included, rather than the
+    handful that obviously matter. Naming them would be a second list to keep
+    in step with the imports, and the failure it invites is silent and
+    one-sided: a nested module left off the list keeps serving values computed
+    by code that has since changed. Tests and generated/cache directories are
+    excluded because they do not participate in the fit and should not make a
+    valid measurement cold.
     """
-    files = sorted(p for p in directory.glob("*.py") if not p.name.startswith("test_"))
-    return digest(*(p.name.encode() + b"\0" + p.read_bytes() for p in files))
+    excluded_dirs = {"tests", "__pycache__", ".pytest_cache", ".cache"}
+    files = []
+    for path in directory.rglob("*.py"):
+        relative = path.relative_to(directory)
+        if any(part in excluded_dirs for part in relative.parts[:-1]):
+            continue
+        if (
+            path.name.startswith("test_")
+            or path.name.endswith("_test_fixtures.py")
+            or path.name == "conftest.py"
+        ):
+            continue
+        files.append((relative.as_posix(), path))
+    files.sort(key=lambda item: item[0])
+    return digest(*(relative.encode() + b"\0" + path.read_bytes() for relative, path in files))
 
 
 class EvalCache:

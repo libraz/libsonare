@@ -7,12 +7,15 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-CORPUS_PATH = ROOT / "tests/conformance/public_input_corpus.json"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from _repo import REPO_ROOT, public_header
+
+CORPUS_PATH = REPO_ROOT / "tests/conformance/public_input_corpus.json"
 
 
 def _read(path: str) -> str:
-    return (ROOT / path).read_text(encoding="utf-8")
+    return (REPO_ROOT / path).read_text(encoding="utf-8")
 
 
 def _block(text: str, pattern: str, label: str, errors: list[str]) -> str:
@@ -21,6 +24,20 @@ def _block(text: str, pattern: str, label: str, errors: list[str]) -> str:
         errors.append(f"{label}: declaration not found")
         return ""
     return match.group("body")
+
+
+def _c_typedef_block(text: str, target: str, label: str, errors: list[str]) -> str:
+    """Return the named C typedef struct body without allowing an earlier struct to match."""
+    pattern = re.compile(
+        r"typedef\s+struct(?:\s+[A-Za-z_]\w*)?\s*"
+        r"\{(?P<body>[^{}]*)\}\s*(?P<name>[A-Za-z_]\w*)\s*;",
+        re.DOTALL | re.MULTILINE,
+    )
+    for match in pattern.finditer(text):
+        if match.group("name") == target:
+            return match.group("body")
+    errors.append(f"{label}: declaration not found")
+    return ""
 
 
 def _require_fields(label: str, body: str, fields: list[str], errors: list[str]) -> None:
@@ -62,7 +79,7 @@ def main() -> int:
     snake_fields = contract["frame_fields"]
     camel_fields = [_camel(field) for field in snake_fields]
 
-    c_header = _read("include/sonare/sonare_c_streaming.h")
+    c_header = public_header("sonare_c_streaming.h").read_text(encoding="utf-8")
     cpp_header = _read("src/streaming/stream_frame.h")
     node_types = _read("bindings/node/src/types_features.ts")
     wasm_types = _read("bindings/wasm/src/stream_types.ts")
@@ -73,9 +90,9 @@ def main() -> int:
     declarations = [
         (
             "C SonareStreamFrames",
-            _block(
+            _c_typedef_block(
                 c_header,
-                r"typedef struct\s*\{(?P<body>.*?)\}\s*SonareStreamFrames;",
+                "SonareStreamFrames",
                 "C SonareStreamFrames",
                 errors,
             ),

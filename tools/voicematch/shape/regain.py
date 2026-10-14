@@ -23,8 +23,15 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 import numpy as np
+
+_VOICEMATCH_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_VOICEMATCH_DIR.parent))
+sys.path.insert(0, str(_VOICEMATCH_DIR))
+
+from _repo import REPO_ROOT
 
 from . import struck, terms
 
@@ -67,9 +74,7 @@ def profile_levels(config: str, notes, lib: str, overrides: str) -> dict[int, fl
     """Run `profile.py compare` and read its level column."""
     import os
     import subprocess
-    from pathlib import Path
 
-    here = Path(__file__).resolve().parents[1]
     env = dict(os.environ)
     if lib:
         env["SONARE_LIB_PATH"] = lib
@@ -80,7 +85,7 @@ def profile_levels(config: str, notes, lib: str, overrides: str) -> dict[int, fl
     p = subprocess.run(
         [
             sys.executable,
-            str(here / "profile.py"),
+            str(_VOICEMATCH_DIR / "profile.py"),
             "compare",
             "--config",
             config,
@@ -91,7 +96,7 @@ def profile_levels(config: str, notes, lib: str, overrides: str) -> dict[int, fl
         check=False,
         text=True,
         env=env,
-        cwd=here.parents[1],
+        cwd=REPO_ROOT,
     )
     if p.returncode:
         raise RuntimeError(p.stderr[-3000:])

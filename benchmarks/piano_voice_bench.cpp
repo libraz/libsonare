@@ -2,12 +2,12 @@
 /// @brief CPU microbenchmark for the extended-waveguide piano (kPiano /
 ///        midi/synth/piano_voice). Measures the real-time factor (CPU time
 ///        per second of rendered audio) across voice counts and block sizes,
-///        so the per-voice cost and polyphony headroom can be projected onto
-///        a single-threaded WebAssembly AudioWorklet budget.
+///        so the measured workload cost and real-time multiplier can be
+///        compared with a single-threaded WebAssembly AudioWorklet budget.
 ///
 /// Reports CPU-ms per 1 s of audio and the real-time factor RTF = cpu/audio
-/// (RTF < 1 => renders faster than real time; 1/RTF is the theoretical voice
-/// headroom at that operating point). The block sizes 128 and 256 bracket the
+/// (RTF < 1 => renders faster than real time; 1/RTF is the measured-workload
+/// multiplier at that operating point). The block sizes 128 and 256 bracket the
 /// AudioWorklet render quantum.
 
 #include <algorithm>
@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <vector>
 
+#include "bench_utils.h"
 #include "midi/midi_event.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
@@ -38,13 +39,6 @@ MidiEvent note_on(uint8_t note, uint8_t velocity) {
   MidiEvent e;
   e.ump = make_midi1_note_on(0, 0, note, velocity);
   return e;
-}
-
-double median(std::vector<double> v) {
-  std::sort(v.begin(), v.end());
-  const size_t n = v.size();
-  if (n == 0) return 0.0;
-  return (n % 2) ? v[n / 2] : 0.5 * (v[n / 2 - 1] + v[n / 2]);
 }
 
 /// Render @p polyphony held piano notes for kAudioSeconds at @p block_size and
@@ -81,7 +75,7 @@ double measure(int polyphony, int block_size, int* sounding) {
     per_run_ms_per_s.push_back(cpu_ms / audio_s);
     if (sounding) *sounding = synth.active_voice_count();
   }
-  return median(std::move(per_run_ms_per_s));
+  return sonare::bench_utils::median_ms(std::move(per_run_ms_per_s));
 }
 
 }  // namespace
@@ -89,9 +83,9 @@ double measure(int polyphony, int block_size, int* sounding) {
 int main() {
   std::printf("kPiano (extended-waveguide) CPU microbench @ %.0f Hz, %.1f s/render\n", kSampleRate,
               kAudioSeconds);
-  std::printf("RTF = CPU/audio (<1 = real-time capable); headroom = 1/RTF voices\n\n");
+  std::printf("RTF = CPU/audio (<1 = real-time capable); workload multiplier = 1/RTF\n\n");
   std::printf("%-10s %-7s %-10s %-14s %-8s %-10s\n", "voices", "block", "sounding", "CPU-ms/1s",
-              "RTF", "headroom");
+              "RTF", "multiplier");
   std::printf("%s\n", "------------------------------------------------------------------");
 
   const int voice_counts[] = {1, 8, 16, 32, 64};
@@ -101,9 +95,9 @@ int main() {
       int sounding = 0;
       const double ms_per_s = measure(vc, bs, &sounding);
       const double rtf = ms_per_s / 1000.0;
-      const double headroom = rtf > 0.0 ? 1.0 / rtf : 0.0;
+      const double multiplier = rtf > 0.0 ? 1.0 / rtf : 0.0;
       std::printf("%-10d %-7d %-10d %-14.3f %-8.4f %-10.1f\n", vc, bs, sounding, ms_per_s, rtf,
-                  headroom);
+                  multiplier);
     }
     std::printf("\n");
   }

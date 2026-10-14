@@ -750,9 +750,7 @@ int cmd_room_morph(const CliArgs& args, const Audio& audio) {
     const Audio& left = stereo_morph.left;
     const Audio& right = stereo_morph.right;
     out_samples = left.size();
-    save_stereo_wav(args.output_file, std::vector<float>(left.data(), left.data() + left.size()),
-                    std::vector<float>(right.data(), right.data() + right.size()),
-                    left.sample_rate());
+    save_stereo_wav(args.output_file, left, right, left.sample_rate());
   } else {
     const Audio& result = mono_morph.audio;
     out_samples = result.size();

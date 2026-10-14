@@ -35,12 +35,14 @@ from types import ModuleType
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "voicematch"))
 # After voicematch, so this directory wins: it has a `corpus.py` of its own, and
 # a same-named module there would shadow one of ours without saying so.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import libsonare
+from _repo import REPO_ROOT
 from wavio import read_wav
 
 LEDGER_SCHEMA = 1
@@ -592,7 +594,7 @@ def provenance() -> dict:
     def git(*args: str) -> str:
         return subprocess.run(
             ["git", *args],
-            cwd=Path(__file__).resolve().parents[2],
+            cwd=REPO_ROOT,
             capture_output=True,
             text=True,
             check=False,

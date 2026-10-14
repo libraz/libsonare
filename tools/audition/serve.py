@@ -84,13 +84,16 @@ import webbrowser
 from pathlib import Path
 from typing import ClassVar
 
-from heard import oracle_flag
-
 APP_DIR = Path(__file__).resolve().parent
 #: The page itself: `index.html`, with its stylesheets under `css/` and its
 #: modules under `js/`.
 WEB_DIR = APP_DIR / "web"
-REPO_ROOT = APP_DIR.parents[1]
+sys.path.insert(0, str(APP_DIR.parent))
+sys.path.insert(0, str(APP_DIR))
+
+from _repo import REPO_ROOT
+from heard import oracle_flag
+
 AUDIO_SUFFIXES = (".wav", ".flac", ".mp3", ".ogg", ".m4a", ".aac")
 #: The scratch root the whole harness renders into, and the one `capture.py`
 #: reads. Untracked on purpose — the reference side of a comparison is captured

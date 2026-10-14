@@ -246,10 +246,9 @@ int cmd_suggest_mix(const CliArgs& args, const Audio&) {
     // Written from the result already in hand rather than through the
     // scene-only entry point, which would re-measure every track to reach the
     // same scene.
-    std::ofstream file(scene_out, std::ios::binary);
-    file << mixing::api::scene_to_json(result.scene) << "\n";
-    // The class save_wav gives a failed render, as the report writer above uses.
-    if (!file) {
+    const std::string payload = mixing::api::scene_to_json(result.scene) + '\n';
+    if (!write_binary_file(scene_out, reinterpret_cast<const uint8_t*>(payload.data()),
+                           payload.size())) {
       throw SonareException(ErrorCode::EncodeFailed, "cannot write scene: " + scene_out);
     }
   }

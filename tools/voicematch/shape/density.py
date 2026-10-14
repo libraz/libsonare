@@ -56,9 +56,6 @@ PEAK_PROMINENCE_DB = 6.0
 #: is NOT what `envelope_diffuseness` returns for a diffuse field -- see the
 #: module docstring and `diffuse_floor`, which measures it instead.
 RAYLEIGH_CV = 0.5227
-#: dB a band must stand over the same recording's own floor before its texture
-#: is a reading rather than a description of that floor. See `band_snr_db`.
-TEXTURE_SNR_DB = 10.0
 
 
 def _fine_spectrum(sig, window, sr):

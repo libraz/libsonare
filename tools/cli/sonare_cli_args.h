@@ -11,6 +11,10 @@
 #include "util/constants.h"
 #include "util/types.h"
 
+namespace sonare {
+struct DecodedInputData;
+}
+
 /// One option occurrence the parser accepted, in command-line order, recorded
 /// as it was written rather than as it will be interpreted.
 ///
@@ -53,6 +57,8 @@ struct CliArgs {
   // runtime metadata, not a user-facing option; zero means that no source
   // channel probe was available.
   int source_channels = 0;
+  // Non-owning pointer to the one decoded input main() keeps until the handler returns.
+  sonare::DecodedInputData* decoded_input = nullptr;
   bool json_output = false;
   bool quiet = false;
   bool help = false;

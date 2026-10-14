@@ -18,14 +18,16 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-CHAIN_JSON_PATH = ROOT / "src/mastering/api/chain_json.cpp"
-CLI_REPAIR_PATH = ROOT / "bindings/python/src/libsonare/_cli_repair.py"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from _repo import REPO_ROOT
+
+CHAIN_JSON_PATH = REPO_ROOT / "src/mastering/api/chain_json.cpp"
+CLI_REPAIR_PATH = REPO_ROOT / "bindings/python/src/libsonare/_cli_repair.py"
 
 # One `add_field(params, "dotted.key", <cpp expression>);` call, possibly
 # wrapped across two lines (the printed form breaks long calls after the key).
 _ADD_FIELD_RE = re.compile(r'add_field\(\s*params\s*,\s*"([\w.]+)"\s*,\s*(.*?)\)\s*;', re.DOTALL)
-_PLAIN_MEMBER_RE = re.compile(r"^cfg\.repair\.(\w+)\.config\.(\w+)$")
 
 
 def _extract_python_string_set(source: str, name: str) -> set[str]:

@@ -46,6 +46,15 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Keep GS modules first; expose tools/_repo.py for standalone runs.
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+if str(Path(__file__).resolve().parent.parent) not in sys.path:
+    sys.path.insert(1, str(Path(__file__).resolve().parent.parent))
+
+from _repo import REPO_ROOT
+
+TOOLS = Path(__file__).resolve().parent
 GENERATED_BY = "tools/gs/derive_efx_tables.py"
 
 # Concrete readings shown per aggregated finding on stdout. The tables file
@@ -518,9 +527,7 @@ def printed_parameters(root: Path) -> int:
     installed package, and an import by name would take whichever the
     interpreter's path offered first.
     """
-    spec = importlib.util.spec_from_file_location(
-        "gs_coverage", Path(__file__).resolve().parent / "coverage.py"
-    )
+    spec = importlib.util.spec_from_file_location("gs_coverage", TOOLS / "coverage.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
@@ -2602,7 +2609,7 @@ def emit_header(tables: dict, path: Path) -> None:
     # target renders into a scratch directory, and a style found by proximity
     # would lay that copy out differently from the committed one and report the
     # difference as drift in the tables.
-    style = Path(__file__).resolve().parents[2] / ".clang-format"
+    style = REPO_ROOT / ".clang-format"
     try:
         subprocess.run(["clang-format", f"--style=file:{style}", "-i", str(path)], check=True)
     except (OSError, subprocess.CalledProcessError) as failure:

@@ -40,10 +40,18 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Keep GS siblings first; expose shared tools for absolute-path standalone runs.
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+if str(Path(__file__).resolve().parent.parent) not in sys.path:
+    sys.path.insert(1, str(Path(__file__).resolve().parent.parent))
+
+from _repo import REPO_ROOT
+
+TOOLS = Path(__file__).resolve().parent
 GENERATED_BY = "tools/gs/bindings_header.py"
-ROOT = Path(__file__).resolve().parents[2]
-CONVERT_HEADER = ROOT / "src" / "midi" / "synth" / "gs_efx_convert.h"
-RANGES_HEADER = ROOT / "src" / "effects" / "common" / "control_ranges.h"
+CONVERT_HEADER = REPO_ROOT / "src" / "midi" / "synth" / "gs_efx_convert.h"
+RANGES_HEADER = REPO_ROOT / "src" / "effects" / "common" / "control_ranges.h"
 
 # Controls whose accepted range src/effects/common/control_ranges.h defines once,
 # on the inserts that clamp to it. A row reaching past one would be flattened at
@@ -92,7 +100,7 @@ def _module(name: str, path: Path):
 
 # Row forms, law resolution and printed-domain reading are coverage.py's; the
 # generator reads them from there so the two agree by construction.
-coverage = _module("gs_efx_coverage", Path(__file__).resolve().parent / "coverage.py")
+coverage = _module("gs_efx_coverage", TOOLS / "coverage.py")
 
 
 def class_order(derive_path: Path) -> tuple[str, ...]:
@@ -232,7 +240,7 @@ def check_shared_limits(entries: list[dict], classes: dict, limits: dict[str, fl
         if reached > limits[constant] + 1e-6:
             sys.exit(
                 f"{where}: reaches {reached:g}, past {constant} = {limits[constant]:g} in "
-                f"{RANGES_HEADER.relative_to(ROOT)}; the receiver would flatten the top of it"
+                f"{RANGES_HEADER.relative_to(REPO_ROOT)}; the receiver would flatten the top of it"
             )
 
 
@@ -449,7 +457,7 @@ def laid_out(text: str, header: Path) -> str:
     explicitly: a style found by proximity would lay a scratch copy out
     differently from the committed one.
     """
-    style = Path(__file__).resolve().parents[2] / ".clang-format"
+    style = REPO_ROOT / ".clang-format"
     try:
         done = subprocess.run(
             ["clang-format", f"--style=file:{style}", f"--assume-filename={header}"],

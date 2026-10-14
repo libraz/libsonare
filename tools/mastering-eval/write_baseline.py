@@ -51,9 +51,10 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-if str(HERE) not in sys.path:
-    sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE))
 
+from _repo import REPO_ROOT
 from nonvacuity import corpus_digest, corpus_paths, corpus_tree_digest
 
 SCHEMA = 1
@@ -261,10 +262,42 @@ STEP_MATERIAL = "speech_pink_noise"
 MARGINAL_RATIO = 2.0
 
 
-def _worst(delta: Any) -> float:
-    if isinstance(delta, list):
-        return max(abs(v) for v in delta)
-    return abs(delta)
+def _worst(delta: Any) -> float | None:
+    values = delta if isinstance(delta, list) else [delta]
+    if not values:
+        return None
+    magnitudes = []
+    for value in values:
+        if isinstance(value, bool) or value is None:
+            return None
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return None
+        if not math.isfinite(numeric):
+            return None
+        magnitudes.append(abs(numeric))
+    return max(magnitudes)
+
+
+def _floor(spread: Any, metric: str) -> float | None:
+    """Return a usable positive redraw floor for one metric, if it has one."""
+    if not isinstance(spread, dict):
+        return None
+    metric_spread = spread.get(metric)
+    if not isinstance(metric_spread, dict):
+        return None
+    if metric == "band_energy_delta":
+        value = metric_spread.get("max_range_over_bands")
+    else:
+        value = metric_spread.get("range")
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    return numeric if math.isfinite(numeric) and numeric > 0.0 else None
 
 
 def one_step_resolution(gate: dict) -> dict[str, Any]:
@@ -273,27 +306,76 @@ def one_step_resolution(gate: dict) -> dict[str, Any]:
     Computed from the non-vacuity ledger rather than transcribed, so the table
     cannot drift away from the run it claims to summarize.
     """
-    floors = {e["case"]: e["spread"] for e in gate.get("ensembles", [])}
-    steps = [r for r in gate.get("tables", {}).get("steps", []) if r["item"] == STEP_MATERIAL]
+    floors = {
+        e["case"]: e.get("spread")
+        for e in gate.get("ensembles", [])
+        if isinstance(e, dict) and "case" in e
+    }
+    tables = gate.get("tables", {})
+    step_rows = tables.get("steps", []) if isinstance(tables, dict) else []
+    steps = [row for row in step_rows if isinstance(row, dict) and row.get("item") == STEP_MATERIAL]
 
-    metrics = [m for m in steps[0]["delta"]] if steps else []
+    # Keep metric names in first-seen order across partial step rows.
+    metrics = []
+    for row in steps:
+        delta = row.get("delta")
+        if not isinstance(delta, dict):
+            continue
+        for metric in delta:
+            if metric not in metrics:
+                metrics.append(metric)
+
+    rows_by_case = {
+        row["case"]: row
+        for row in steps
+        if row.get("case") in {f"{knob}{sign}" for knob in STEP_FLOOR_SOURCE for sign in ("-", "+")}
+    }
+    missing_step_cases = [
+        f"{knob}{sign}"
+        for knob in STEP_FLOOR_SOURCE
+        for sign in ("-", "+")
+        if f"{knob}{sign}" not in rows_by_case
+    ]
+    missing_floor_sources = []
+    for source in STEP_FLOOR_SOURCE.values():
+        if (
+            source not in floors or not isinstance(floors[source], dict)
+        ) and source not in missing_floor_sources:
+            missing_floor_sources.append(source)
+
     ratios: dict[str, dict[str, float]] = {m: {} for m in metrics}
     for knob, source in STEP_FLOOR_SOURCE.items():
         spread = floors.get(source)
-        rows = [r for r in steps if r["case"] in (knob + "-", knob + "+")]
-        if spread is None or not rows:
+        rows = [rows_by_case.get(f"{knob}{sign}") for sign in ("-", "+")]
+        if any(row is None for row in rows) or not isinstance(spread, dict):
             continue
         for metric in metrics:
-            if metric == "band_energy_delta":
-                floor = spread["band_energy_delta"]["max_range_over_bands"]
-            else:
-                floor = (spread.get(metric) or {}).get("range")
-            if not floor:
+            floor = _floor(spread, metric)
+            if floor is None:
                 continue
-            moved = max(_worst(r["delta"][metric]) for r in rows if r["delta"][metric] is not None)
-            ratios[metric][knob] = round(moved / floor, 4)
+            deltas = []
+            for row in rows:
+                delta = row.get("delta")
+                if not isinstance(delta, dict) or metric not in delta:
+                    break
+                magnitude = _worst(delta[metric])
+                if magnitude is None:
+                    break
+                deltas.append(magnitude)
+            if len(deltas) == len(rows):
+                ratios[metric][knob] = round(max(deltas) / floor, 4)
 
-    clears_all = sorted(m for m, r in ratios.items() if r and min(r.values()) >= 1.0)
+    all_knobs = set(STEP_FLOOR_SOURCE)
+    incomplete_metrics = []
+    for metric in metrics:
+        has_floor = any(
+            _floor(floors.get(source), metric) is not None for source in STEP_FLOOR_SOURCE.values()
+        )
+        if has_floor and set(ratios[metric]) != all_knobs:
+            incomplete_metrics.append(metric)
+    clears_all = sorted(
+        m for m, r in ratios.items() if set(r) == all_knobs and min(r.values()) >= 1.0
+    )
     with_room = {
         m: sorted(k for k, v in ratios[m].items() if v >= MARGINAL_RATIO) for m in clears_all
     }
@@ -302,8 +384,8 @@ def one_step_resolution(gate: dict) -> dict[str, Any]:
         for m, r in ratios.items()
         if any(1.0 <= v < MARGINAL_RATIO for v in r.values())
     }
-    silent = sorted(m for m, r in ratios.items() if r and max(r.values()) < 1.0)
-    return {
+    silent = sorted(m for m, r in ratios.items() if set(r) == all_knobs and max(r.values()) < 1.0)
+    result = {
         "definition": {
             "step_ratio_knobs": "+/-20% of the value, multiplicatively",
             "step_decibel_knobs": "+/-0.5 dB, absolutely",
@@ -328,6 +410,25 @@ def one_step_resolution(gate: dict) -> dict[str, Any]:
             "strength of its silence"
         ),
     }
+    if missing_step_cases or missing_floor_sources or incomplete_metrics:
+        raw_steps_not_taken = gate.get("steps_not_taken", [])
+        missing_knobs = {case[:-1] for case in missing_step_cases if case.endswith(("-", "+"))}
+        related_steps_not_taken = (
+            [
+                entry
+                for entry in raw_steps_not_taken
+                if isinstance(entry, dict) and entry.get("knob") in missing_knobs
+            ]
+            if isinstance(raw_steps_not_taken, list)
+            else []
+        )
+        result["coverage"] = {
+            "complete": False,
+            "missing_step_cases": missing_step_cases,
+            "missing_floor_sources": missing_floor_sources,
+            "steps_not_taken": related_steps_not_taken,
+        }
+    return result
 
 
 # Facts about a metric's reach that a row of numbers does not carry on its own.
@@ -447,7 +548,7 @@ def main() -> int:
 
     def git(*rest: str) -> str:
         return subprocess.run(
-            ["git", *rest], cwd=HERE.parents[1], capture_output=True, text=True, check=False
+            ["git", *rest], cwd=REPO_ROOT, capture_output=True, text=True, check=False
         ).stdout.strip()
 
     moved_total: list[str] = []

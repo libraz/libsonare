@@ -521,6 +521,65 @@ def test_a_store_past_its_size_limit_says_so_rather_than_just_shrinking(tmp_path
     assert reopened.dropped and reopened.entries == {}
 
 
+def _write_digest_sources(root: Path) -> None:
+    """Create the nested render/scorer layout used by the source fingerprint."""
+    files = {
+        "metrics_texture.py": b"from shape import density\n",
+        "render.py": b"def render():\n    return 1\n",
+        "shape/render.py": b"def render_shape():\n    return 2\n",
+        "shape/scorers/density.py": b"def score():\n    return 3\n",
+    }
+    for relative, contents in files.items():
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(contents)
+
+
+def test_source_digest_includes_nested_relative_render_and_scorer_sources(tmp_path):
+    root = tmp_path / "voicematch"
+    _write_digest_sources(root)
+    before = eval_cache.source_digest(root)
+
+    (root / "shape/scorers/density.py").write_bytes(b"def score():\n    return 4\n")
+    changed = eval_cache.source_digest(root)
+    assert changed != before
+
+    (root / "shape/scorers/density.py").rename(root / "shape/scorers/level.py")
+    assert eval_cache.source_digest(root) != changed
+
+
+def test_source_digest_ignores_test_fixtures_and_generated_cache_files(tmp_path):
+    root = tmp_path / "voicematch"
+    _write_digest_sources(root)
+    before = eval_cache.source_digest(root)
+
+    ignored = {
+        "test_added.py": b"test = True\n",
+        "shape/test_nested.py": b"test = True\n",
+        "shape/scorers/score_test_fixtures.py": b"fixture = True\n",
+        "shape/conftest.py": b"fixture = True\n",
+        "tests/test_scoring.py": b"test = True\n",
+        "__pycache__/module.py": b"generated = True\n",
+        ".pytest_cache/generated.py": b"generated = True\n",
+        ".cache/generated.py": b"generated = True\n",
+    }
+    for relative, contents in ignored.items():
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(contents)
+
+    assert eval_cache.source_digest(root) == before
+
+
+def test_source_digest_uses_relative_paths_so_checkout_location_does_not_matter(tmp_path):
+    first = tmp_path / "checkout-one"
+    second = tmp_path / "checkout-two"
+    _write_digest_sources(first)
+    _write_digest_sources(second)
+
+    assert eval_cache.source_digest(first) == eval_cache.source_digest(second)
+
+
 # --------------------------------------------------------------------------- #
 # The tree-state precondition: whatever is in src/ at fit startup is what
 # gets compiled and fit against, silently, and this tree routinely has several

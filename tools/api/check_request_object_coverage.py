@@ -8,12 +8,16 @@ inventory so the migration plan can be completed without losing functions.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from _repo import REPO_ROOT
+
 SURFACES = {
-    "node": ROOT / "bindings/node/src",
-    "wasm": ROOT / "bindings/wasm/src",
+    "node": REPO_ROOT / "bindings/node/src",
+    "wasm": REPO_ROOT / "bindings/wasm/src",
 }
 # A leading underscore marks a module as internal: no `index.ts` re-exports one,
 # so everything it exports is a helper shared between facades rather than a

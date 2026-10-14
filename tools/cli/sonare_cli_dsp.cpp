@@ -25,10 +25,7 @@ int cmd_normalize(const CliArgs& args, const Audio& audio) {
     // further and collapse the image toward centre.
     const NormalizeStereoResult result = rms ? normalize_rms_stereo(left, right, target_db)
                                              : normalize_stereo(left, right, target_db);
-    const std::vector<float> out_left(result.left.data(), result.left.data() + result.left.size());
-    const std::vector<float> out_right(result.right.data(),
-                                       result.right.data() + result.right.size());
-    save_stereo_wav(args.output_file, out_left, out_right, result.left.sample_rate());
+    save_stereo_wav(args.output_file, result.left, result.right, result.left.sample_rate());
     length = result.left.size();
     duration = result.left.duration();
   } else {

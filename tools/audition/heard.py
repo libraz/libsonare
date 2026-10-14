@@ -49,12 +49,14 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-REPO_ROOT = HERE.parents[1]
-if str(REPO_ROOT / "tools" / "voicematch") not in sys.path:
-    sys.path.append(str(REPO_ROOT / "tools" / "voicematch"))
+sys.path.insert(0, str(HERE.parent))
+# Appended: voicematch holds modules named like stdlib ones (profile), which an
+# insert at the front would shadow.
+sys.path.append(str(HERE.parent / "voicematch"))
 
 import policy
 import signoff as claims
+from _repo import REPO_ROOT
 
 #: The same root the server writes to and the rest of the harness renders into.
 SCRATCH_ROOT = (
