@@ -5,10 +5,13 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <chrono>
 #include <random>
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "support/alloc_guard.h"
 
 using namespace sonare;
 
@@ -55,4 +58,40 @@ TEST_CASE("insertion_sort moves non-trivial elements", "[util][insertion_sort]")
   std::vector<std::string> empty;
   insertion_sort(empty.begin(), empty.end());
   REQUIRE(empty.empty());
+}
+
+TEST_CASE("insertion_sort stays stable and fast on long reversed input", "[util][insertion_sort]") {
+  constexpr int kCount = 100000;
+  std::vector<std::pair<int, int>> values(kCount);
+  for (int i = 0; i < kCount; ++i) values[static_cast<size_t>(i)] = {(kCount - i) / 7, i};
+  std::vector<std::pair<int, int>> expected = values;
+  const auto by_key = [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+    return a.first < b.first;
+  };
+  std::stable_sort(expected.begin(), expected.end(), by_key);
+
+  const auto begin = std::chrono::steady_clock::now();
+  insertion_sort(values.begin(), values.end(), by_key);
+  const double seconds =
+      std::chrono::duration<double>(std::chrono::steady_clock::now() - begin).count();
+
+  REQUIRE(values == expected);
+  REQUIRE(seconds < 5.0);
+}
+
+TEST_CASE("insertion_sort does not allocate on long input", "[util][insertion_sort][no_alloc]") {
+  std::vector<std::pair<int, int>> values(5000);
+  for (size_t i = 0; i < values.size(); ++i) {
+    values[i] = {static_cast<int>((values.size() - i) % 97), static_cast<int>(i)};
+  }
+  std::size_t allocations = 0;
+  {
+    sonare::test::AllocationGuard guard;
+    insertion_sort(values.begin(), values.end(),
+                   [](const auto& a, const auto& b) { return a.first < b.first; });
+    allocations = guard.count();
+  }
+  REQUIRE(allocations == 0);
+  REQUIRE(std::is_sorted(values.begin(), values.end(),
+                         [](const auto& a, const auto& b) { return a.first < b.first; }));
 }
