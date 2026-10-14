@@ -117,16 +117,20 @@ void take_third_octave_band(std::vector<float>& residual, std::vector<float>& ba
   for (std::size_t i = 0; i < band.size(); ++i) residual[i] -= band[i];
 }
 
-// Accumulates @p band under the exp(-ln(1000) t / rt60) envelope into @p out.
-void add_enveloped_band(std::vector<float>& out, const std::vector<float>& band, float rt60,
-                        float sr) {
-  const int length = static_cast<int>(out.size());
+// Fills @p envelope with exp(-ln(1000) t / rt60) over @p length samples.
+void fill_decay_envelope(std::vector<float>& envelope, int length, float rt60, float sr) {
+  envelope.resize(static_cast<size_t>(length));
   const double decay_rate = kLn1000 / static_cast<double>(rt60);
   for (int i = 0; i < length; ++i) {
     const double t = static_cast<double>(i) / sr;
-    const float env = static_cast<float>(std::exp(-decay_rate * t));
-    out[static_cast<size_t>(i)] += band[static_cast<size_t>(i)] * env;
+    envelope[static_cast<size_t>(i)] = static_cast<float>(std::exp(-decay_rate * t));
   }
+}
+
+// Accumulates @p band under @p envelope into @p out.
+void add_enveloped_band(std::vector<float>& out, const std::vector<float>& band,
+                        const std::vector<float>& envelope) {
+  for (size_t i = 0; i < out.size(); ++i) out[i] += band[i] * envelope[i];
 }
 
 // Intervals of the composite Simpson rule averaging sinc over a band.
@@ -344,12 +348,14 @@ Audio synthesize_late_tail(const ReverbTime& rt, int sample_rate, const LateReve
   // Third-octave bands, RT60 interpolated log-log, so the decay does not step at an octave edge.
   std::vector<float> out(static_cast<size_t>(length), 0.0f);
   std::vector<float> band;
+  std::vector<float> envelope;
   const int thirds = late_tail_band_count(rt.rt60_bands.size(), sample_rate);
   for (int k = 0; k < thirds; ++k) {
     take_third_octave_band(residual, band, k, thirds, sample_rate);
     const float rt60 = third_octave_rt60(rt.rt60_bands, k);
     if (!(rt60 > 0.0f)) continue;
-    add_enveloped_band(out, band, rt60, sr);
+    fill_decay_envelope(envelope, length, rt60, sr);
+    add_enveloped_band(out, band, envelope);
   }
 
   return Audio::from_vector(std::move(out), sample_rate);
@@ -402,20 +408,22 @@ LateTailPair synthesize_late_tail_pair(const ReverbTime& rt, int sample_rate,
   std::vector<float> out_r(static_cast<size_t>(length), 0.0f);
   std::vector<float> band_l;
   std::vector<float> band_r;
+  std::vector<float> envelope;
   const int thirds = late_tail_band_count(rt.rt60_bands.size(), sample_rate);
   for (int k = 0; k < thirds; ++k) {
     take_third_octave_band(residual_l, band_l, k, thirds, sample_rate);
     take_third_octave_band(residual_r, band_r, k, thirds, sample_rate);
     const float rt60 = third_octave_rt60(rt.rt60_bands, k);
     if (!(rt60 > 0.0f)) continue;
-    add_enveloped_band(out_l, band_l, rt60, sr);
+    fill_decay_envelope(envelope, length, rt60, sr);
+    add_enveloped_band(out_l, band_l, envelope);
     // Only the right band is mixed, so the left channel stays the mono tail.
     const float gamma = late_tail_pair_coherence(k, spacing_m, sample_rate, rt.rt60_bands.size());
     const float ortho = std::sqrt(std::max(0.0f, 1.0f - gamma * gamma));
     for (std::size_t i = 0; i < band_r.size(); ++i) {
       band_r[i] = gamma * band_l[i] + ortho * band_r[i];
     }
-    add_enveloped_band(out_r, band_r, rt60, sr);
+    add_enveloped_band(out_r, band_r, envelope);
   }
 
   pair.left = Audio::from_vector(std::move(out_l), sample_rate);

@@ -181,6 +181,13 @@ void validate_offline_audio_extent(std::size_t length, int sample_rate);
 ///         audio is never a valid zero-length analysis, matching the C ABI.
 void validate_offline_audio_input(const float* samples, std::size_t length, int sample_rate);
 
+/// @brief The rules of @ref validate_offline_audio_input, reported instead of thrown.
+/// @return nullptr when the buffer satisfies the policy, otherwise the message the
+///         validator would throw with. For a surface that maps the refusal to its own
+///         error class.
+const char* offline_audio_input_problem(const float* samples, std::size_t length,
+                                        int sample_rate) noexcept;
+
 /// @brief Validates an offline-analysis buffer whose analysis reads one window of it.
 /// @param samples       Pointer to mono/interleaved float sample data.
 /// @param length        Number of float samples in the whole buffer.

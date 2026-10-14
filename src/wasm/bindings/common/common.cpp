@@ -194,10 +194,13 @@ std::vector<float> float32ArrayToVector(val arr) {
   return result;
 }
 
-Audio loadValidatedAudio(val samples, int sample_rate) {
-  std::vector<float> data = float32ArrayToVector(samples);
+static Audio validatedAudioFromVector(std::vector<float> data, int sample_rate) {
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  return Audio::from_buffer(data.data(), data.size(), sample_rate);
+  return Audio::from_vector(std::move(data), sample_rate);
+}
+
+Audio loadValidatedAudio(val samples, int sample_rate) {
+  return validatedAudioFromVector(float32ArrayToVector(samples), sample_rate);
 }
 
 std::vector<Audio> loadValidatedChannelSet(const val& channels, int sample_rate,
@@ -236,8 +239,7 @@ std::vector<Audio> loadChannelSet(const val& channels, int sample_rate, const ch
     if (validation == ChannelSetValidation::Offline) {
       loaded.push_back(loadValidatedAudio(channel, sample_rate));
     } else {
-      const std::vector<float> data = float32ArrayToVector(channel);
-      loaded.push_back(Audio::from_buffer(data.data(), data.size(), sample_rate));
+      loaded.push_back(Audio::from_vector(float32ArrayToVector(channel), sample_rate));
     }
   }
   return loaded;
@@ -283,7 +285,7 @@ Audio loadValidatedAudioWindow(val samples, int sample_rate, std::size_t scan_of
   if (count != 0) {
     validate_offline_audio_window(window.data(), count, sample_rate, 0, count);
   }
-  return Audio::from_buffer(window.data(), window.size(), sample_rate);
+  return Audio::from_vector(std::move(window), sample_rate);
 }
 
 std::vector<float> loadValidatedInterleaved(val samples, int channels, int sample_rate,

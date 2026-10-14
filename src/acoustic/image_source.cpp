@@ -87,6 +87,21 @@ std::vector<ImageSource> shoebox_image_sources(const ShoeboxRoom& room,
   const std::vector<float> bz1 = material_beta(room.walls[kWallZMax], bands);
 
   const int m = max_order;  // generous lattice bound; filtered by total order
+  // pow(beta, e) for every wall, band and wall-bounce count e the lattice can reach (|mx - px| <= m
+  // + 1).
+  const size_t powers = static_cast<size_t>(m) + 2;
+  const auto power_table = [&](const std::vector<float>& beta) {
+    std::vector<float> table(bands * powers);
+    for (size_t b = 0; b < bands; ++b) {
+      for (size_t e = 0; e < powers; ++e) {
+        table[b * powers + e] = std::pow(beta[b], static_cast<float>(e));
+      }
+    }
+    return table;
+  };
+  const std::vector<float> px0 = power_table(bx0), px1 = power_table(bx1);
+  const std::vector<float> py0 = power_table(by0), py1 = power_table(by1);
+  const std::vector<float> pz0 = power_table(bz0), pz1 = power_table(bz1);
   for (int px = 0; px <= 1; ++px) {
     for (int mx = -m; mx <= m; ++mx) {
       const int ox = std::abs(2 * mx - px);
@@ -112,12 +127,11 @@ std::vector<ImageSource> shoebox_image_sources(const ShoeboxRoom& room,
               const int ey0 = std::abs(my - py), ey1 = std::abs(my);
               const int ez0 = std::abs(mz - pz), ez1 = std::abs(mz);
               for (size_t b = 0; b < bands; ++b) {
-                im.reflection[b] = std::pow(bx0[b], static_cast<float>(ex0)) *
-                                   std::pow(bx1[b], static_cast<float>(ex1)) *
-                                   std::pow(by0[b], static_cast<float>(ey0)) *
-                                   std::pow(by1[b], static_cast<float>(ey1)) *
-                                   std::pow(bz0[b], static_cast<float>(ez0)) *
-                                   std::pow(bz1[b], static_cast<float>(ez1));
+                const size_t row = b * powers;
+                im.reflection[b] =
+                    px0[row + static_cast<size_t>(ex0)] * px1[row + static_cast<size_t>(ex1)] *
+                    py0[row + static_cast<size_t>(ey0)] * py1[row + static_cast<size_t>(ey1)] *
+                    pz0[row + static_cast<size_t>(ez0)] * pz1[row + static_cast<size_t>(ez1)];
               }
               out.push_back(std::move(im));
             }
@@ -211,15 +225,15 @@ void prune_frontier_by_energy(std::vector<PendingImage>& v,
 // Validate a candidate image by walking listener -> reflection points -> source,
 // checking each reflection point is inside its face and each segment is
 // unoccluded. `partial[k]` is the source reflected across chain[0..k).
-bool validate_path(const PolyhedralRoom& room, const VoxelGrid& grid,
-                   const std::vector<Vec3>& partial, const std::vector<int>& chain,
-                   const Vec3& source, const Vec3& listener) {
+bool validate_path(const PolyhedralRoom& room, const std::vector<Plane>& planes,
+                   const VoxelGrid& grid, const std::vector<Vec3>& partial,
+                   const std::vector<int>& chain, const Vec3& source, const Vec3& listener) {
   Vec3 prev = listener;
   int prev_face = -1;  // the face `prev` lies on (-1 for the listener endpoint)
   for (int k = static_cast<int>(chain.size()) - 1; k >= 0; --k) {
     const int fi = chain[static_cast<size_t>(k)];
     const Triangle& tri = room.faces[static_cast<size_t>(fi)];
-    const Plane plane{tri.a, triangle_normal(tri)};
+    const Plane& plane = planes[static_cast<size_t>(fi)];
     const Vec3 img = partial[static_cast<size_t>(k) + 1];
     float d;
     if (!segment_plane(prev, img, plane, d) || d <= 1e-4f || d >= 1.0f - 1e-4f) {
@@ -270,15 +284,22 @@ std::vector<ImageSource> polyhedral_image_sources(const PolyhedralRoom& room,
     face_betas[f] = material_beta(face_material(room, f), bands);
   }
 
+  // Face planes depend only on the face, so build them once rather than per candidate.
+  std::vector<Plane> planes;
+  planes.reserve(room.faces.size());
+  for (const Triangle& tri : room.faces) planes.push_back({tri.a, triangle_normal(tri)});
+
   // Breadth-first reflection across faces, validating each candidate's full path.
   std::vector<PendingImage> frontier;
   frontier.push_back({source, 0, std::vector<float>(bands, 1.0f), {}});
-  // Scratch for one candidate's partial-image chain. The expansion visits
-  // faces^order candidates and every entry is written before it is read, so the
-  // buffer is reused rather than allocated per candidate.
+  // Scratch for the partial-image chain: the parent's prefix is built once per
+  // parent and only the last entry differs between that parent's children.
   std::vector<Vec3> partial;
 
   for (int order = 1; order <= max_order; ++order) {
+    // Images are appended in non-decreasing order, so a duplicate can only sit at or after this
+    // index.
+    const size_t order_begin = out.size();
     std::vector<PendingImage> next;
     std::set<FrontierEntry, FrontierEntryLess> ranking;
     std::uint64_t next_sequence = 0;
@@ -287,13 +308,18 @@ std::vector<ImageSource> polyhedral_image_sources(const PolyhedralRoom& room,
     // the number of faces.
     next.reserve(kMaxPolyhedralFrontier + 1);
     for (const auto& parent : frontier) {
+      const size_t prefix = parent.chain.size();
+      partial.resize(prefix + 2);
+      partial[0] = source;
+      for (size_t k = 0; k < prefix; ++k) {
+        partial[k + 1] =
+            reflect_across_plane(partial[k], planes[static_cast<size_t>(parent.chain[k])]);
+      }
       for (size_t f = 0; f < room.faces.size(); ++f) {
         if (!parent.chain.empty() && parent.chain.back() == static_cast<int>(f)) {
           continue;  // reflecting across the same face twice undoes the bounce
         }
-        const Triangle& tri = room.faces[f];
-        const Plane plane{tri.a, triangle_normal(tri)};
-        const Vec3 img = reflect_across_plane(parent.pos, plane);
+        const Vec3 img = reflect_across_plane(parent.pos, planes[f]);
 
         PendingImage cand;
         cand.pos = img;
@@ -305,22 +331,16 @@ std::vector<ImageSource> polyhedral_image_sources(const PolyhedralRoom& room,
         cand.reflection.resize(bands);
         for (size_t b = 0; b < bands; ++b) cand.reflection[b] = parent.reflection[b] * fb[b];
 
-        // Reconstruct the partial-image chain for validation.
-        partial.resize(cand.chain.size() + 1);
-        partial[0] = source;
-        for (size_t k = 0; k < cand.chain.size(); ++k) {
-          const Triangle& t2 = room.faces[static_cast<size_t>(cand.chain[k])];
-          partial[k + 1] = reflect_across_plane(partial[k], {t2.a, triangle_normal(t2)});
-        }
-        if (validate_path(room, grid, partial, cand.chain, source, listener)) {
+        partial[prefix + 1] = reflect_across_plane(partial[prefix], planes[f]);
+        if (validate_path(room, planes, grid, partial, cand.chain, source, listener)) {
           // A planar wall is usually several coplanar triangles; a specular
           // point on a shared edge passes the inclusive in-triangle test for
           // more than one of them. Drop a candidate whose image coincides with
           // an already-accepted one (same order) to avoid double-counting that
           // reflection's energy.
-          const bool duplicate = std::any_of(out.begin(), out.end(), [&](const ImageSource& e) {
-            return e.order == order && length(e.position - img) < 1e-4f;
-          });
+          const bool duplicate =
+              std::any_of(out.begin() + static_cast<std::ptrdiff_t>(order_begin), out.end(),
+                          [&](const ImageSource& e) { return length(e.position - img) < 1e-4f; });
           if (!duplicate) {
             ImageSource im;
             im.order = order;

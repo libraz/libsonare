@@ -601,3 +601,58 @@ TEST_CASE("early IR auto length is capped at kMaxAutoSamples", "[acoustic][image
   REQUIRE(static_cast<int>(ir.size()) <= kMaxAutoSamples);
   for (size_t i = 0; i < ir.size(); ++i) REQUIRE(std::isfinite(ir.data()[i]));
 }
+
+TEST_CASE("shoebox reflection products equal the per-image pow of each wall's beta",
+          "[acoustic][image_source][image_source_pow]") {
+  ShoeboxRoom room = make_room(5.0f, 4.0f, 3.0f, 0.0f);
+  const float alphas[kShoeboxWallCount] = {0.12f, 0.31f, 0.47f, 0.2f, 0.66f, 0.05f};
+  for (size_t w = 0; w < kShoeboxWallCount; ++w) {
+    Material m;
+    m.absorption = {alphas[w], alphas[w] * 0.5f, 0.9f * alphas[w]};
+    m.scattering = {0.1f, 0.1f, 0.1f};
+    room.walls[w] = m;
+  }
+  const SourceListener pl{{1.2f, 1.7f, 0.9f}, {3.1f, 2.2f, 1.4f}};
+  constexpr int kOrder = 5;
+  const auto images = shoebox_image_sources(room, pl, kOrder);
+
+  std::vector<std::vector<float>> beta(kShoeboxWallCount);
+  for (size_t w = 0; w < kShoeboxWallCount; ++w) {
+    for (size_t b = 0; b < 3; ++b) {
+      beta[w].push_back(std::sqrt(std::max(0.0f, 1.0f - material_alpha_at(room.walls[w], b))));
+    }
+  }
+  size_t index = 0;
+  for (int px = 0; px <= 1; ++px) {
+    for (int mx = -kOrder; mx <= kOrder; ++mx) {
+      const int ox = std::abs(2 * mx - px);
+      if (ox > kOrder) continue;
+      for (int py = 0; py <= 1; ++py) {
+        for (int my = -kOrder; my <= kOrder; ++my) {
+          const int oy = std::abs(2 * my - py);
+          if (ox + oy > kOrder) continue;
+          for (int pz = 0; pz <= 1; ++pz) {
+            for (int mz = -kOrder; mz <= kOrder; ++mz) {
+              if (ox + oy + std::abs(2 * mz - pz) > kOrder) continue;
+              REQUIRE(index < images.size());
+              const int e[6] = {std::abs(mx - px), std::abs(mx),      std::abs(my - py),
+                                std::abs(my),      std::abs(mz - pz), std::abs(mz)};
+              const size_t walls[6] = {kWallXMin, kWallXMax, kWallYMin,
+                                       kWallYMax, kWallZMin, kWallZMax};
+              REQUIRE(images[index].reflection.size() == 3);
+              for (size_t b = 0; b < 3; ++b) {
+                float expected = std::pow(beta[walls[0]][b], static_cast<float>(e[0]));
+                for (int k = 1; k < 6; ++k) {
+                  expected *= std::pow(beta[walls[k]][b], static_cast<float>(e[k]));
+                }
+                REQUIRE(images[index].reflection[b] == expected);
+              }
+              ++index;
+            }
+          }
+        }
+      }
+    }
+  }
+  REQUIRE(index == images.size());
+}

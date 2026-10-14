@@ -182,6 +182,8 @@ class VoxelGrid {
   int nx_ = 1, ny_ = 1, nz_ = 1;
   Vec3 cell_size_{};
   std::vector<std::vector<int>> cells_;  // face indices per cell
+  std::vector<std::array<int, 6>>
+      face_cells_;  // per face: inclusive cell range {x0, y0, z0, x1, y1, z1}
 };
 
 /// @brief True if @p p lies within the (closed) shoebox interior.

@@ -227,6 +227,7 @@ MeshHit mesh_first_hit_bruteforce(const std::vector<Triangle>& faces, const Vec3
 void VoxelGrid::build(const std::vector<Triangle>& faces, int resolution) {
   faces_ = &faces;
   cells_.clear();
+  face_cells_.clear();
   if (faces.empty()) {
     nx_ = ny_ = nz_ = 1;
     cells_.assign(1, {});
@@ -264,6 +265,7 @@ void VoxelGrid::build(const std::vector<Triangle>& faces, int resolution) {
   cells_.assign(static_cast<size_t>(nx_) * ny_ * nz_, {});
 
   // Bin each face into every cell its AABB overlaps (conservative).
+  face_cells_.resize(faces.size());
   for (size_t f = 0; f < faces.size(); ++f) {
     const Triangle& tri = faces[f];
     Vec3 tlo{std::min({tri.a.x, tri.b.x, tri.c.x}), std::min({tri.a.y, tri.b.y, tri.c.y}),
@@ -276,6 +278,7 @@ void VoxelGrid::build(const std::vector<Triangle>& faces, int resolution) {
     const int iy1 = clamp_cell(thi.y, bounds_.min.y, cell_size_.y, ny_);
     const int iz0 = clamp_cell(tlo.z, bounds_.min.z, cell_size_.z, nz_);
     const int iz1 = clamp_cell(thi.z, bounds_.min.z, cell_size_.z, nz_);
+    face_cells_[f] = {ix0, iy0, iz0, ix1, iy1, iz1};
     for (int iz = iz0; iz <= iz1; ++iz) {
       for (int iy = iy0; iy <= iy1; ++iy) {
         for (int ix = ix0; ix <= ix1; ++ix) {
@@ -337,10 +340,17 @@ MeshHit VoxelGrid::first_hit(const Vec3& origin, const Vec3& dir,
     }
   }
 
+  int prev[3] = {-1, -1, -1};
   while (idx[0] >= 0 && idx[0] < n[0] && idx[1] >= 0 && idx[1] < n[1] && idx[2] >= 0 &&
          idx[2] < n[2]) {
     const auto& bucket = cells_[static_cast<size_t>(cell_index(idx[0], idx[1], idx[2]))];
     for (int f : bucket) {
+      // A face binned into the previous cell was already tested there.
+      const std::array<int, 6>& range = face_cells_[static_cast<size_t>(f)];
+      if (prev[0] >= range[0] && prev[0] <= range[3] && prev[1] >= range[1] &&
+          prev[1] <= range[4] && prev[2] >= range[2] && prev[2] <= range[5]) {
+        continue;
+      }
       float t = 0.0f;
       if (ray_triangle_intersect(origin, dir, (*faces_)[static_cast<size_t>(f)], cull_backface,
                                  t) &&
@@ -361,6 +371,9 @@ MeshHit VoxelGrid::first_hit(const Vec3& origin, const Vec3& dir,
     int axis = 0;
     if (t_max[1] < t_max[axis]) axis = 1;
     if (t_max[2] < t_max[axis]) axis = 2;
+    prev[0] = idx[0];
+    prev[1] = idx[1];
+    prev[2] = idx[2];
     idx[axis] += step[axis];
     t_max[axis] += t_delta[axis];
   }

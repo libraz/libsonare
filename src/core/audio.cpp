@@ -17,6 +17,23 @@ Audio::Audio(std::shared_ptr<const std::vector<float>> buffer, size_t offset, si
 
 namespace {
 
+const char* extent_problem(std::size_t length, int sample_rate) noexcept {
+  if (length == 0) return "audio input must be a non-empty buffer";
+  if (sample_rate < kMinAudioSampleRate || sample_rate > kMaxAudioSampleRate) {
+    return "sample_rate is out of the supported range";
+  }
+  if (length > kMaxAudioBufferSize) return "audio buffer is too large";
+  return nullptr;
+}
+
+const char* finite_range_problem(const float* samples, std::size_t begin,
+                                 std::size_t end) noexcept {
+  for (std::size_t i = begin; i < end; ++i) {
+    if (!std::isfinite(samples[i])) return "audio buffer contains a non-finite sample";
+  }
+  return nullptr;
+}
+
 // The O(1) preconditions, which describe the buffer as a whole and so are
 // identical for a whole-buffer and a windowed validation.
 void check_offline_audio_bounds(const float* samples, std::size_t length, int sample_rate) {
@@ -26,21 +43,24 @@ void check_offline_audio_bounds(const float* samples, std::size_t length, int sa
 }
 
 void check_finite_range(const float* samples, std::size_t begin, std::size_t end) {
-  for (std::size_t i = begin; i < end; ++i) {
-    SONARE_CHECK_MSG(std::isfinite(samples[i]), ErrorCode::InvalidParameter,
-                     "audio buffer contains a non-finite sample");
+  if (const char* problem = finite_range_problem(samples, begin, end)) {
+    SONARE_CHECK_MSG(false, ErrorCode::InvalidParameter, problem);
   }
 }
 
 }  // namespace
 
 void validate_offline_audio_extent(std::size_t length, int sample_rate) {
-  SONARE_CHECK_MSG(length != 0, ErrorCode::InvalidParameter,
-                   "audio input must be a non-empty buffer");
-  SONARE_CHECK_MSG(sample_rate >= kMinAudioSampleRate && sample_rate <= kMaxAudioSampleRate,
-                   ErrorCode::InvalidParameter, "sample_rate is out of the supported range");
-  SONARE_CHECK_MSG(length <= kMaxAudioBufferSize, ErrorCode::InvalidParameter,
-                   "audio buffer is too large");
+  if (const char* problem = extent_problem(length, sample_rate)) {
+    SONARE_CHECK_MSG(false, ErrorCode::InvalidParameter, problem);
+  }
+}
+
+const char* offline_audio_input_problem(const float* samples, std::size_t length,
+                                        int sample_rate) noexcept {
+  if (samples == nullptr) return "audio input must be a non-empty buffer";
+  if (const char* problem = extent_problem(length, sample_rate)) return problem;
+  return finite_range_problem(samples, 0, length);
 }
 
 void validate_offline_audio_input(const float* samples, std::size_t length, int sample_rate) {

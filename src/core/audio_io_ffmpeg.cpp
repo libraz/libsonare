@@ -651,24 +651,35 @@ DecodedInputData decode_first_audio_stream(AVFormatContext* format_ctx, RetainCh
 
 namespace {
 
-DecodedInputData load_buffer_ffmpeg_impl(const uint8_t* data, size_t size, RetainChannels retention,
-                                         bool include_mono) {
+/// @brief An opened in-memory FFmpeg input; members release in reverse order, so the format
+///        context closes before the AVIO context and the read state it points at.
+struct MemoryInput {
+  std::unique_ptr<MemoryIOState> io_state;
+  AVIOContextPtr avio;
+  AVFormatContextPtr format_ctx;
+};
+
+/// @brief Opens @p data as an AVFormat input over custom memory AVIO.
+/// @throws SonareException on an empty buffer, an allocation failure, or an unreadable container.
+MemoryInput open_memory_input(const uint8_t* data, size_t size) {
   SONARE_CHECK_MSG(data != nullptr && size > 0, ErrorCode::InvalidParameter,
                    "FFmpeg: empty input buffer");
 
   constexpr int kIOBufferSize = 32 * 1024;
-  auto io_state = std::make_unique<MemoryIOState>();
-  io_state->data = data;
-  io_state->size = size;
-  io_state->pos = 0;
+  MemoryInput input;
+  input.io_state = std::make_unique<MemoryIOState>();
+  input.io_state->data = data;
+  input.io_state->size = size;
+  input.io_state->pos = 0;
 
   uint8_t* io_buffer = static_cast<uint8_t*>(av_malloc(kIOBufferSize));
   SONARE_CHECK_MSG(io_buffer != nullptr, ErrorCode::OutOfMemory,
                    "FFmpeg: av_malloc for AVIO buffer failed");
 
-  AVIOContextPtr avio(avio_alloc_context(io_buffer, kIOBufferSize, /*write_flag=*/0, io_state.get(),
-                                         &memory_read, /*write=*/nullptr, &memory_seek));
-  if (avio == nullptr) {
+  input.avio.reset(avio_alloc_context(io_buffer, kIOBufferSize, /*write_flag=*/0,
+                                      input.io_state.get(), &memory_read, /*write=*/nullptr,
+                                      &memory_seek));
+  if (input.avio == nullptr) {
     av_free(io_buffer);
     SONARE_CHECK_MSG(false, ErrorCode::OutOfMemory, "FFmpeg: avio_alloc_context returned null");
   }
@@ -676,24 +687,27 @@ DecodedInputData load_buffer_ffmpeg_impl(const uint8_t* data, size_t size, Retai
   AVFormatContext* fmt_raw = avformat_alloc_context();
   SONARE_CHECK_MSG(fmt_raw != nullptr, ErrorCode::OutOfMemory,
                    "FFmpeg: avformat_alloc_context returned null");
-  fmt_raw->pb = avio.get();
+  fmt_raw->pb = input.avio.get();
   fmt_raw->flags |= AVFMT_FLAG_CUSTOM_IO;
 
-  AVFormatContextPtr format_ctx(fmt_raw);
+  input.format_ctx.reset(fmt_raw);
 
   int ret = avformat_open_input(&fmt_raw, /*url=*/nullptr, /*fmt=*/nullptr, /*options=*/nullptr);
-  // avformat_open_input nulls fmt_raw on success and sets it to the same
-  // pointer on failure-then-cleanup, so re-seat the unique_ptr in both cases.
   if (ret < 0) {
     // On failure libavformat already freed the context; release ours to avoid
     // a double-free in the destructor.
-    (void)format_ctx.release();
+    (void)input.format_ctx.release();
     SONARE_CHECK_MSG(false, ErrorCode::DecodeFailed,
                      "FFmpeg: avformat_open_input failed: " + ff_err(ret));
   }
   // After success fmt_raw is unchanged but is now owned by format_ctx.
+  return input;
+}
 
-  return decode_first_audio_stream(format_ctx.get(), retention, include_mono);
+DecodedInputData load_buffer_ffmpeg_impl(const uint8_t* data, size_t size, RetainChannels retention,
+                                         bool include_mono) {
+  const MemoryInput input = open_memory_input(data, size);
+  return decode_first_audio_stream(input.format_ctx.get(), retention, include_mono);
 }
 
 }  // namespace
@@ -719,35 +733,9 @@ DecodedInputData load_buffer_ffmpeg_input(const uint8_t* data, size_t size,
 }
 
 int probe_channels_ffmpeg(const uint8_t* data, size_t size) {
-  SONARE_CHECK_MSG(data != nullptr && size > 0, ErrorCode::InvalidParameter,
-                   "FFmpeg: empty input buffer");
-
-  constexpr int kIOBufferSize = 32 * 1024;
-  MemoryIOState io_state{data, size, 0};
-  uint8_t* io_buffer = static_cast<uint8_t*>(av_malloc(kIOBufferSize));
-  SONARE_CHECK_MSG(io_buffer != nullptr, ErrorCode::OutOfMemory,
-                   "FFmpeg: av_malloc for AVIO buffer failed");
-  AVIOContextPtr avio(avio_alloc_context(io_buffer, kIOBufferSize, 0, &io_state, &memory_read,
-                                         nullptr, &memory_seek));
-  if (avio == nullptr) {
-    av_free(io_buffer);
-    SONARE_CHECK_MSG(false, ErrorCode::OutOfMemory, "FFmpeg: avio_alloc_context returned null");
-  }
-
-  AVFormatContext* fmt_raw = avformat_alloc_context();
-  SONARE_CHECK_MSG(fmt_raw != nullptr, ErrorCode::OutOfMemory,
-                   "FFmpeg: avformat_alloc_context returned null");
-  fmt_raw->pb = avio.get();
-  fmt_raw->flags |= AVFMT_FLAG_CUSTOM_IO;
-  AVFormatContextPtr format_ctx(fmt_raw);
-
-  int ret = avformat_open_input(&fmt_raw, nullptr, nullptr, nullptr);
-  if (ret < 0) {
-    (void)format_ctx.release();
-    SONARE_CHECK_MSG(false, ErrorCode::DecodeFailed,
-                     "FFmpeg: avformat_open_input failed: " + ff_err(ret));
-  }
-  ret = avformat_find_stream_info(format_ctx.get(), nullptr);
+  const MemoryInput input = open_memory_input(data, size);
+  AVFormatContext* format_ctx = input.format_ctx.get();
+  const int ret = avformat_find_stream_info(format_ctx, nullptr);
   SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed,
                    "FFmpeg: avformat_find_stream_info failed: " + ff_err(ret));
   for (unsigned i = 0; i < format_ctx->nb_streams; ++i) {

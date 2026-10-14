@@ -973,17 +973,17 @@ void validateRirShapeAndTiming(const sonare::acoustic::SourceListener& placement
   }
 }
 
-// Rejects an empty input buffer and any non-finite sample, matching the C ABI's
-// validate_audio_params contract for the estimate/morph entry points.
-void validateAcousticInput(const std::vector<float>& data) {
-  if (data.empty()) {
-    throw WasmRangeError("input buffer is empty");
+Audio acousticAudioFromVector(std::vector<float> data, int sample_rate) {
+  if (const char* problem = offline_audio_input_problem(data.data(), data.size(), sample_rate)) {
+    throw WasmRangeError(problem);
   }
-  for (const float s : data) {
-    if (!std::isfinite(s)) {
-      throw WasmRangeError("input contains NaN or Inf samples");
-    }
-  }
+  return Audio::from_vector(std::move(data), sample_rate);
+}
+
+// Loads a JS buffer under the shared offline-input policy, refusing it as a RangeError.
+Audio loadAcousticAudio(val samples, int sample_rate) {
+  std::vector<float> data = float32ArrayToVector(samples);
+  return acousticAudioFromVector(std::move(data), sample_rate);
 }
 
 // Wire string for a diagnostic severity, matching the RirDiagnostic type.
@@ -1055,12 +1055,8 @@ val js_synthesize_rir(val opts) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   sonare::acoustic::first_error_text(result.diagnostics));
   }
-  std::vector<float> rir;
-  if (!result.rir.empty()) {
-    rir.assign(result.rir.data(), result.rir.data() + result.rir.size());
-  }
   val out = val::object();
-  out.set("rir", vectorToFloat32Array(rir));
+  out.set("rir", vectorToFloat32Array(result.rir.data(), result.rir.size()));
   out.set("sampleRate", result.rir.sample_rate());
   out.set("diagnostics", diagnosticsArray(result.diagnostics));
   return out;
@@ -1069,10 +1065,7 @@ val js_synthesize_rir(val opts) {
 val js_estimate_room(val samples, const val& sample_rate_val, val opts) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateAcousticSampleRate(sample_rate);
-  std::vector<float> data = float32ArrayToVector(samples);
-  validateAcousticInput(data);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadAcousticAudio(samples, sample_rate);
   sonare::RoomEstimateConfig config;
   // Match the C ABI: an explicit 0 aspect hint means "use the default 1.0", so
   // the same input is accepted identically on every surface (raw 0 would be
@@ -1165,23 +1158,16 @@ static sonare::effects::acoustic::RoomMorphConfig roomMorphConfigFromVal(val opt
 val js_room_morph(val samples, const val& sample_rate_val, val opts) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateAcousticSampleRate(sample_rate);
-  std::vector<float> data = float32ArrayToVector(samples);
-  validateAcousticInput(data);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  Audio audio = loadAcousticAudio(samples, sample_rate);
   const auto config = roomMorphConfigFromVal(opts);
 
   const auto result = sonare::effects::acoustic::room_morph(audio, config);
-  std::vector<float> morphed;
-  if (!result.audio.empty()) {
-    morphed.assign(result.audio.data(), result.audio.data() + result.audio.size());
-  }
 
   // Shaped like js_synthesize_rir's result rather than a bare buffer: the same
   // synthesis runs underneath and its warnings describe a room the caller did
   // not ask for. An unusable request throws, so every entry here is a warning.
   val out = val::object();
-  out.set("audio", vectorToFloat32Array(morphed));
+  out.set("audio", vectorToFloat32Array(result.audio.data(), result.audio.size()));
   out.set("sampleRate", result.audio.sample_rate());
   out.set("diagnostics", diagnosticsArray(result.diagnostics));
   return out;
@@ -1195,23 +1181,15 @@ val js_room_morph_stereo(val left, val right, const val& sample_rate_val, val op
   if (left_data.size() != right_data.size()) {
     throw WasmRangeError("Stereo channel lengths must match.");
   }
-  validateAcousticInput(left_data);
-  validateAcousticInput(right_data);
-  validate_offline_audio_input(left_data.data(), left_data.size(), sample_rate);
-  validate_offline_audio_input(right_data.data(), right_data.size(), sample_rate);
-  Audio left_audio = Audio::from_buffer(left_data.data(), left_data.size(), sample_rate);
-  Audio right_audio = Audio::from_buffer(right_data.data(), right_data.size(), sample_rate);
+  Audio left_audio = acousticAudioFromVector(std::move(left_data), sample_rate);
+  Audio right_audio = acousticAudioFromVector(std::move(right_data), sample_rate);
   auto config = roomMorphConfigFromVal(opts);
   config.receiver_spacing_m = floatProperty(opts, "receiverSpacingM", config.receiver_spacing_m);
 
   const auto result = sonare::effects::acoustic::room_morph_stereo(left_audio, right_audio, config);
-  const auto to_vector = [](const Audio& audio) {
-    return audio.empty() ? std::vector<float>()
-                         : std::vector<float>(audio.data(), audio.data() + audio.size());
-  };
   val out = val::object();
-  out.set("left", vectorToFloat32Array(to_vector(result.left)));
-  out.set("right", vectorToFloat32Array(to_vector(result.right)));
+  out.set("left", vectorToFloat32Array(result.left.data(), result.left.size()));
+  out.set("right", vectorToFloat32Array(result.right.data(), result.right.size()));
   out.set("sampleRate", result.left.sample_rate());
   out.set("diagnostics", diagnosticsArray(result.diagnostics));
   return out;

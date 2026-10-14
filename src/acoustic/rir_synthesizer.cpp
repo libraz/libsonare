@@ -562,12 +562,16 @@ RirPairResult synthesize_rir_pair(const ShoeboxRoom& room, const SourceListener&
   }
 
   const std::size_t length = std::max(left_rir.size(), right_rir.size());
-  std::vector<float> left_out(length, 0.0f);
-  std::vector<float> right_out(length, 0.0f);
-  if (!left_rir.empty()) std::copy_n(left_rir.data(), left_rir.size(), left_out.data());
-  if (!right_rir.empty()) std::copy_n(right_rir.data(), right_rir.size(), right_out.data());
-  result.left = Audio::from_vector(std::move(left_out), sample_rate);
-  result.right = Audio::from_vector(std::move(right_out), sample_rate);
+  // A channel already at the common length is handed over as it is; only a shorter one is
+  // zero-padded.
+  const auto padded_to_length = [length, sample_rate](const Audio& rir) {
+    if (!rir.empty() && rir.size() == length) return rir;
+    std::vector<float> out(length, 0.0f);
+    if (!rir.empty()) std::copy_n(rir.data(), rir.size(), out.data());
+    return Audio::from_vector(std::move(out), sample_rate);
+  };
+  result.left = padded_to_length(left_rir);
+  result.right = padded_to_length(right_rir);
 
   append_new_diagnostic_codes(result.diagnostics, left_diagnostics);
   append_new_diagnostic_codes(result.diagnostics, right_diagnostics);

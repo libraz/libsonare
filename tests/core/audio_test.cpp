@@ -347,3 +347,37 @@ TEST_CASE("Audio from_file_channel keeps the channels apart", "[audio]") {
   REQUIRE_THROWS_AS(Audio::from_file_channel(mono_path, 1), SonareException);
   std::remove(mono_path.c_str());
 }
+
+TEST_CASE("offline_audio_input_problem reports what validate_offline_audio_input throws",
+          "[audio][offline_audio_input_problem]") {
+  const std::vector<float> valid(64, 0.25f);
+  REQUIRE(offline_audio_input_problem(valid.data(), valid.size(), 22050) == nullptr);
+
+  std::vector<float> nan_buffer = valid;
+  nan_buffer[10] = std::numeric_limits<float>::quiet_NaN();
+  std::vector<float> inf_buffer = valid;
+  inf_buffer[3] = std::numeric_limits<float>::infinity();
+
+  struct Case {
+    const float* samples;
+    std::size_t length;
+    int sample_rate;
+  };
+  const Case cases[] = {{valid.data(), 0, 22050},
+                        {nullptr, 0, 22050},
+                        {valid.data(), valid.size(), kMinAudioSampleRate - 1},
+                        {valid.data(), valid.size(), kMaxAudioSampleRate + 1},
+                        {nan_buffer.data(), nan_buffer.size(), 22050},
+                        {inf_buffer.data(), inf_buffer.size(), 22050}};
+  for (const Case& c : cases) {
+    const char* problem = offline_audio_input_problem(c.samples, c.length, c.sample_rate);
+    REQUIRE(problem != nullptr);
+    std::string thrown;
+    try {
+      validate_offline_audio_input(c.samples, c.length, c.sample_rate);
+    } catch (const SonareException& e) {
+      thrown = e.what();
+    }
+    REQUIRE(thrown.find(problem) != std::string::npos);
+  }
+}
