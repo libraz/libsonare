@@ -1696,7 +1696,8 @@ typedef struct {
   int harmonics;          // notch count including fundamental (default 4)
   float q;                // notch Q (default 20)
   int adaptive;           // 0/1; enable adaptive tracking (default 0)
-  float search_range_hz;  // tracking search range in Hz (default 2)
+  float search_range_hz;  // tracking search range in Hz (default 2); detection and adaptive
+                          // tracking refuse a window missing [1 Hz, 0.49 x sample rate]
   float adaptation;       // tracking step size (default 0.25)
   int frame_size;         // analysis frame size (default 2048, must be >= 16)
   float pll_bandwidth;    // PLL bandwidth (default 0.01)

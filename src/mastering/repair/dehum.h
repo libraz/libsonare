@@ -26,6 +26,8 @@ struct DehumConfig {
   /// time a notch of bandwidth fundamental_hz / q rings.
   float q = 20.0f;
   bool adaptive = false;
+  /// Half-width of the fundamental search. Detection and adaptive tracking refuse a
+  /// window fundamental_hz +/- search_range_hz that misses [1 Hz, 0.49 x sample rate].
   float search_range_hz = 2.0f;
   float adaptation = 0.25f;
   int frame_size = 2048;

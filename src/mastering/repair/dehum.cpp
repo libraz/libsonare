@@ -119,6 +119,34 @@ constexpr float kAnchorSlewRatio = 0.1f;
 /// returning the offset to the anchor over seconds when nothing locks.
 constexpr float kIntegratorLeakRatio = 0.1f;
 
+/// Highest frequency the search may reach, as a fraction of the sample rate.
+constexpr float kSearchCeilingRatio = 0.49f;
+
+/// Frequencies the fundamental search and the PLL may apply: the configured window
+/// intersected with [1 Hz, kSearchCeilingRatio * sample rate].
+struct SearchWindow {
+  float low = 0.0f;
+  float high = 0.0f;
+};
+
+SearchWindow search_window(const DehumConfig& config, int sample_rate) noexcept {
+  return {std::max(1.0f, config.fundamental_hz - config.search_range_hz),
+          std::min(static_cast<float>(sample_rate) * kSearchCeilingRatio,
+                   config.fundamental_hz + config.search_range_hz)};
+}
+
+/// Refuses a configuration whose search window the sample rate leaves empty. A window
+/// collapsed to one frequency stays valid.
+void require_search_window(const DehumConfig& config, int sample_rate) {
+  const SearchWindow window = search_window(config, sample_rate);
+  if (!(window.low <= window.high)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "fundamental_hz +/- search_range_hz must overlap [1 Hz, 0.49 x "
+                          "sample_rate] at " +
+                              std::to_string(sample_rate) + " Hz");
+  }
+}
+
 /// Second-order PLL around the per-frame frequency estimate.
 /// @details A quadrature detector, a low-pass pair, and a PI loop filter. The
 ///   products a phase detector forms carry an image at twice the tracked
@@ -155,10 +183,8 @@ struct PllTracker {
     offset_hz = std::clamp(offset_hz, -config.search_range_hz, config.search_range_hz);
 
     frequency_hz = anchor_hz + 2.0f * kLoopDamping * loop_hz * error + offset_hz;
-    frequency_hz =
-        std::clamp(frequency_hz, std::max(1.0f, config.fundamental_hz - config.search_range_hz),
-                   std::min(static_cast<float>(sample_rate) * 0.49f,
-                            config.fundamental_hz + config.search_range_hz));
+    const SearchWindow window = search_window(config, sample_rate);
+    frequency_hz = std::clamp(frequency_hz, window.low, window.high);
     phase += kTwoPi * frequency_hz / rate;
     if (phase > kTwoPi) {
       phase -= kTwoPi;
@@ -206,11 +232,12 @@ FundamentalSearch search_fundamental(
   // strong tone in band drags the notch to the edge of the window and holds it
   // there, cutting programme content instead of hum.
   FundamentalSearch search;
-  search.window_low = std::max(1.0f, config.fundamental_hz - config.search_range_hz);
-  search.window_high = std::min(static_cast<float>(sample_rate) * 0.49f,
-                                config.fundamental_hz + config.search_range_hz);
+  const SearchWindow window = search_window(config, sample_rate);
+  search.window_low = window.low;
+  search.window_high = window.high;
+  // A window collapsed to one frequency has nothing to search.
   if (!(search.window_high > search.window_low)) {
-    search.best_hz = std::clamp(previous_hz, search.window_low, search.window_high);
+    search.best_hz = search.window_low;
     return search;
   }
   const float anchored_previous = std::clamp(previous_hz, search.window_low, search.window_high);
@@ -665,6 +692,7 @@ HumDetection detect_hum(const float* samples, size_t size, int sample_rate,
   if (sample_rate <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
+  require_search_window(validated.get(), sample_rate);
   if (samples == nullptr || size == 0) return {};
 
   const std::vector<float> buffer(samples, samples + size);
@@ -732,6 +760,7 @@ Audio dehum(const Audio& audio, const DehumConfig& config, DehumReport* report) 
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
   PassTrace trace;
   if (config.adaptive) {
+    require_search_window(validated.get(), sample_rate);
     const std::vector<float> tracking = samples;
     const std::vector<std::vector<float>*> channels = {&samples};
     trace = run_adaptive(channels, tracking, sample_rate, validated.get());
@@ -783,6 +812,7 @@ std::vector<DehumReport> dehum_linked(const Audio* const* channels, size_t chann
   }
   std::vector<PassTrace> traces(channel_count);
   if (config.adaptive) {
+    require_search_window(validated.get(), sample_rate);
     const std::vector<std::vector<float>> originals = samples;
     std::vector<const std::vector<float>*> search_channels;
     std::vector<std::vector<float>*> targets;
@@ -842,7 +872,9 @@ void StreamingDehum::prepare(double sample_rate, int max_block_size) {
 
 void StreamingDehum::prepare(double sample_rate, int max_block_size, int max_channels) {
   validate_prepare_args(sample_rate, max_block_size, max_channels, "StreamingDehum");
-  state_->sample_rate = static_cast<int>(std::lround(sample_rate));
+  const int rate = static_cast<int>(std::lround(sample_rate));
+  if (config_.adaptive) require_search_window(config_, rate);
+  state_->sample_rate = rate;
   state_->max_channels = max_channels;
   state_->max_block_size = max_block_size;
   reset();

@@ -20,6 +20,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <limits>
 #include <utility>
 #include <vector>
@@ -27,10 +28,12 @@
 #include "mastering/api/audio_utils.h"
 #include "mastering/repair/decrackle.h"
 #include "mastering/repair/dehum.h"
+#include "mastering/repair/dehum_streaming.h"
 #include "mastering/repair/trim_silence.h"
 #include "repair_drum_fixtures.h"
 #include "support/golden_hash.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace sonare;
@@ -1247,4 +1250,87 @@ TEST_CASE("Trim keeps a lead-in only one channel carries", "[repair][stereo][hum
   const TrimRange from_downmix = detect_trim_range(mixed.data(), mixed.size(), kSampleRate, kTrim);
   REQUIRE(from_downmix.first >= 9600);
   REQUIRE(from_downmix.first > trimmed.report.range.first);
+}
+
+namespace {
+
+bool refuses_with_invalid_parameter(const std::function<void()>& call) {
+  try {
+    call();
+  } catch (const SonareException& error) {
+    return error.code() == ErrorCode::InvalidParameter;
+  }
+  return false;
+}
+
+bool all_finite(const Audio& audio) {
+  return std::all_of(audio.data(), audio.data() + audio.size(),
+                     [](float sample) { return std::isfinite(sample); });
+}
+
+}  // namespace
+
+TEST_CASE("Dehum refuses a search window its sample rate leaves empty", "[repair][hum]") {
+  struct Case {
+    int rate;
+    float fundamental_hz;
+  };
+  // 3950 Hz sits above 0.49 x 8 kHz, and 0.5 Hz below the 1 Hz floor; neither window holds a
+  // frequency once the range is zero.
+  for (const Case c : {Case{8000, 3950.0f}, Case{48000, 0.5f}}) {
+    CAPTURE(c.rate, c.fundamental_hz);
+    std::vector<float> samples(4096);
+    for (size_t i = 0; i < samples.size(); ++i) {
+      samples[i] = 0.1f * std::sin(constants::kTwoPi * 50.0f * static_cast<float>(i) /
+                                   static_cast<float>(c.rate));
+    }
+    const Audio audio = Audio::from_vector(samples, c.rate);
+    DehumConfig config;
+    config.fundamental_hz = c.fundamental_hz;
+    config.search_range_hz = 0.0f;
+    config.harmonics = 1;
+    config.frame_size = 512;
+
+    CHECK(refuses_with_invalid_parameter(
+        [&] { detect_hum(samples.data(), samples.size(), c.rate, config); }));
+
+    DehumConfig adaptive = config;
+    adaptive.adaptive = true;
+    CHECK(refuses_with_invalid_parameter([&] { dehum(audio, adaptive); }));
+    CHECK(refuses_with_invalid_parameter([&] { dehum_stereo(audio, audio, adaptive); }));
+    StreamingDehum insert(adaptive);
+    CHECK(refuses_with_invalid_parameter([&] { insert.prepare(c.rate, 256); }));
+
+    // Fixed removal never searches, so the same frequencies stay accepted there.
+    for (const DehumMode mode : {DehumMode::Notch, DehumMode::Subtract}) {
+      DehumConfig fixed = config;
+      fixed.mode = mode;
+      CHECK(all_finite(dehum(audio, fixed)));
+    }
+  }
+
+  // A window collapsed to one in-range frequency, and an ordinary one, still track.
+  for (const float range : {0.0f, 2.0f}) {
+    CAPTURE(range);
+    std::vector<float> samples(48000);
+    for (size_t i = 0; i < samples.size(); ++i) {
+      samples[i] = 0.1f * std::sin(constants::kTwoPi * 50.0f * static_cast<float>(i) / 48000.0f);
+    }
+    const Audio audio = Audio::from_vector(samples, 48000);
+    DehumConfig config;
+    config.adaptive = true;
+    config.search_range_hz = range;
+    const HumDetection detection = detect_hum(samples.data(), samples.size(), 48000, config);
+    CHECK(std::isfinite(detection.fundamental_hz));
+    CHECK(detection.fundamental_hz >= 50.0f - range);
+    CHECK(detection.fundamental_hz <= 50.0f + range);
+    CHECK(all_finite(dehum(audio, config)));
+
+    StreamingDehum insert(config);
+    REQUIRE_NOTHROW(insert.prepare(48000.0, 512));
+    std::vector<float> block(samples.begin(), samples.begin() + 512);
+    float* planes[1] = {block.data()};
+    insert.process(planes, 1, 512);
+    CHECK(std::all_of(block.begin(), block.end(), [](float s) { return std::isfinite(s); }));
+  }
 }
