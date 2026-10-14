@@ -25,6 +25,7 @@
 
 - `stereo.stereoBalance` takes a `gain` parameter (linear, at least 0, default 1), applied to both channels after the balance law.
 - `synthEnumTables()` (Python `synth_enum_tables()`) and the C `sonare_synth_enum_names` cover the sample loop modes, sample key tracks and retrigger modes (`SONARE_SYNTH_ENUM_SAMPLE_LOOP_MODE`, `SAMPLE_KEY_TRACK`, `RETRIGGER`), part rig modes (`PART_RIG_MODE`) and sample-descriptor loop modes (`SAMPLE_DESC_LOOP_MODE`); the tables gain `partRigModes` and `sampleDescLoopModes` (Python `part_rig_modes`, `sample_desc_loop_modes`).
+- `PlaybackRenderer.renderOffline(samples, inChannels)` (Python `render_offline`, C `sonare_playback_renderer_render_offline`) renders a whole buffer offline through an existing renderer, which is reset first, with the same output as `renderPlayback`; the renderer's diagnostics afterwards describe that render. `sonare playback` uses it on both command lines.
 
 ### Behaviour changes
 
@@ -67,6 +68,13 @@
 - The mixing meter measures true peak over the whole of a block longer than its prepared maximum, instead of only its head.
 - A project whose clip loop is off keeps a negative loop length through save and load, as the editing commands allow.
 - `sonare-cli mastering --report`, `mastering-suggest --config-out` and `suggest-mix --scene-out` write through a temporary file and replace the destination only on success, so a failed write leaves an existing file intact and exits 12; on Windows, project export replaces an existing file.
+- Playback realtime gain changes glide over about 20 ms instead of stepping: switching night mode off, toggling the output limiter, and changing speaker trim, LFE gain or the LFE fold-down level during playback.
+- Night mode reacts to a loud passage that follows a quiet one as fast as to any other loud onset, instead of briefly playing it boosted.
+- Offline speaker playback keeps the beginning of the nearer speakers when speaker distances differ; only the latency common to every channel is trimmed. Both command lines trim the same amount.
+- Headphone room simulation at low sample rates keeps the beginning of the late reverberation.
+- SoundFont playback follows more of the file: volume modulation from the modulation LFO swings both ways by the programmed depth in the file's direction, hold and decay times that scale with the key shorten toward the treble and lengthen toward the bass, and a zone with a fixed velocity plays at that velocity whatever the played velocity.
+- A synth voice's filter no longer clicks when it re-engages after sitting fully open, for example when its cutoff is swept down from the top of its range or a mod wheel routed to cutoff is raised.
+- `stereo.phaseAlign` and `stereo.haasEnhancer` no longer route audio buffered from the previous source into the other channel when the delayed side is switched.
 
 ## v1.9.1 (2026-10-13)
 
