@@ -184,16 +184,14 @@ void TempoMap::prepare(double sample_rate) {
     sample_rate_ = sample_rate;
   }
 
-  // Control-thread reads of the current snapshots are safe via load().
-  const std::vector<TempoSegment>* segments = segments_.load();
-  std::vector<TempoSegment> seg_values =
-      segments ? *segments : std::vector<TempoSegment>{{0.0, constants::kDefaultBpm, 0.0}};
+  // Copy out under a pin released before publishing, so the copied snapshot can be reclaimed.
+  std::vector<TempoSegment> seg_values{{0.0, constants::kDefaultBpm, 0.0}};
+  if (const auto segments = segments_.read()) seg_values = *segments;
   segments_.publish(std::make_shared<const std::vector<TempoSegment>>(
       normalize_segments(std::move(seg_values), sample_rate_)));
 
-  const std::vector<TimeSignatureSegment>* time_signatures = time_signatures_.load();
-  std::vector<TimeSignatureSegment> sig_values =
-      time_signatures ? *time_signatures : std::vector<TimeSignatureSegment>{{0.0, {4, 4}}};
+  std::vector<TimeSignatureSegment> sig_values{{0.0, {4, 4}}};
+  if (const auto time_signatures = time_signatures_.read()) sig_values = *time_signatures;
   time_signatures_.publish(std::make_shared<const std::vector<TimeSignatureSegment>>(
       normalize_time_signatures(std::move(sig_values))));
 }
@@ -209,7 +207,7 @@ void TempoMap::set_time_signatures(std::vector<TimeSignatureSegment> time_signat
 }
 
 double TempoMap::sample_to_ppq(int64_t sample) const noexcept {
-  const std::vector<TempoSegment>* segments = segments_.load();
+  const auto segments = segments_.read();
   if (!segments || segments->empty()) return 0.0;
   const double sample_d = static_cast<double>(sample);
   const size_t index = segment_index_for_sample(*segments, sample_d);
@@ -218,7 +216,7 @@ double TempoMap::sample_to_ppq(int64_t sample) const noexcept {
 }
 
 int64_t TempoMap::ppq_to_sample(double ppq) const noexcept {
-  const std::vector<TempoSegment>* segments = segments_.load();
+  const auto segments = segments_.read();
   if (!segments || segments->empty()) return 0;
   // Guard non-finite input: llround on NaN/Inf is undefined behavior (mirrors
   // the isfinite guard in ppq_duration_to_samples).
@@ -240,14 +238,14 @@ int64_t TempoMap::ppq_to_sample(double ppq) const noexcept {
 }
 
 double TempoMap::ppq_to_seconds(double ppq) const noexcept {
-  const std::vector<TempoSegment>* segments = segments_.load();
+  const auto segments = segments_.read();
   if (!segments || segments->empty() || !std::isfinite(ppq)) return 0.0;
   const TempoSegment& segment = (*segments)[segment_index_for_ppq(*segments, ppq)];
   return (segment.start_sample + segment_samples_at_ppq(segment, sample_rate_, ppq)) / sample_rate_;
 }
 
 double TempoMap::bpm_at_sample(int64_t sample) const noexcept {
-  const std::vector<TempoSegment>* segments = segments_.load();
+  const auto segments = segments_.read();
   if (!segments || segments->empty()) return constants::kDefaultBpm;
   const TempoSegment& segment =
       (*segments)[segment_index_for_sample(*segments, static_cast<double>(sample))];
@@ -267,19 +265,19 @@ double TempoMap::bpm_at_sample(int64_t sample) const noexcept {
 }
 
 TimeSignature TempoMap::time_signature_at_ppq(double ppq) const noexcept {
-  const std::vector<TimeSignatureSegment>* time_signatures = time_signatures_.load();
+  const auto time_signatures = time_signatures_.read();
   if (!time_signatures || time_signatures->empty()) return TimeSignature{};
   return (*time_signatures)[time_signature_index_for_ppq(*time_signatures, ppq)].time_sig;
 }
 
 double TempoMap::time_signature_start_ppq(double ppq) const noexcept {
-  const std::vector<TimeSignatureSegment>* time_signatures = time_signatures_.load();
+  const auto time_signatures = time_signatures_.read();
   if (!time_signatures || time_signatures->empty()) return 0.0;
   return (*time_signatures)[time_signature_index_for_ppq(*time_signatures, ppq)].start_ppq;
 }
 
 BarBeat TempoMap::ppq_to_bar_beat(double ppq) const noexcept {
-  const std::vector<TimeSignatureSegment>* time_signatures = time_signatures_.load();
+  const auto time_signatures = time_signatures_.read();
   if (!time_signatures || time_signatures->empty()) return BarBeat{};
   const auto& sigs = *time_signatures;
   const size_t sig_index = time_signature_index_for_ppq(sigs, ppq);
@@ -314,7 +312,7 @@ BarBeat TempoMap::ppq_to_bar_beat(double ppq) const noexcept {
 }
 
 double TempoMap::bar_start_ppq(double ppq) const noexcept {
-  const std::vector<TimeSignatureSegment>* time_signatures = time_signatures_.load();
+  const auto time_signatures = time_signatures_.read();
   if (!time_signatures || time_signatures->empty()) return 0.0;
   return bar_start_ppq_in(*time_signatures, ppq);
 }

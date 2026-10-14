@@ -14,12 +14,12 @@ void MarkerMap::set_markers(std::vector<Marker> markers) {
 }
 
 size_t MarkerMap::marker_count() const noexcept {
-  const auto* markers = markers_.load();
+  const auto markers = markers_.read();
   return markers ? markers->size() : 0;
 }
 
 bool MarkerMap::marker_by_id(uint32_t id, Marker* out) const noexcept {
-  const auto* markers = markers_.load();
+  const auto markers = markers_.read();
   if (!markers) return false;
   for (const Marker& marker : *markers) {
     if (marker.id == id) {
@@ -31,14 +31,14 @@ bool MarkerMap::marker_by_id(uint32_t id, Marker* out) const noexcept {
 }
 
 bool MarkerMap::marker_by_index(size_t index, Marker* out) const noexcept {
-  const auto* markers = markers_.load();
+  const auto markers = markers_.read();
   if (!markers || index >= markers->size()) return false;
   if (out) *out = (*markers)[index];
   return true;
 }
 
 bool MarkerMap::next_marker(double ppq, Marker* out) const noexcept {
-  const auto* markers = markers_.load();
+  const auto markers = markers_.read();
   if (!markers) return false;
   for (const Marker& marker : *markers) {
     if (marker.ppq > ppq) {
@@ -50,7 +50,7 @@ bool MarkerMap::next_marker(double ppq, Marker* out) const noexcept {
 }
 
 bool MarkerMap::previous_marker(double ppq, Marker* out) const noexcept {
-  const auto* markers = markers_.load();
+  const auto markers = markers_.read();
   if (!markers) return false;
   for (auto it = markers->rbegin(); it != markers->rend(); ++it) {
     if (it->ppq < ppq) {

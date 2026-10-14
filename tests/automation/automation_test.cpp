@@ -1,7 +1,9 @@
+#include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <limits>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "automation/automation_engine.h"
@@ -34,6 +36,40 @@ class CaptureProcessor final : public sonare::rt::ProcessorBase {
   unsigned int last_param = 0;
   float last_value = 0.0f;
   int set_count = 0;
+};
+
+// Counts parameter writes per id from any thread. When `hold` is set, the
+// first write signals `entered` and then waits for `release`, parking the
+// calling apply() mid-lane-loop with its target table pinned.
+class HandshakeProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  explicit HandshakeProcessor(uint32_t owned_id) : owned_id_(owned_id) {}
+
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+
+  bool set_parameter_impl(unsigned int param_id, float) override {
+    if (param_id == owned_id_) {
+      owned_writes.fetch_add(1, std::memory_order_relaxed);
+    } else {
+      foreign_writes.fetch_add(1, std::memory_order_relaxed);
+    }
+    if (hold.exchange(false, std::memory_order_acq_rel)) {
+      entered.store(true, std::memory_order_release);
+      while (!release.load(std::memory_order_acquire)) std::this_thread::yield();
+    }
+    return true;
+  }
+
+  std::atomic<int> owned_writes{0};
+  std::atomic<int> foreign_writes{0};
+  std::atomic<bool> hold{false};
+  std::atomic<bool> entered{false};
+  std::atomic<bool> release{false};
+
+ private:
+  uint32_t owned_id_;
 };
 
 // Captures AutomationEngine::EngineParamRouter callbacks (engine-reserved
@@ -381,9 +417,8 @@ TEST_CASE("AutomationEngine preserves duplicate boundaries before reporting over
 
 TEST_CASE("AutomationEngine resolves targets bound after an interior gap",
           "[automation][regression]") {
-  // Regression: target_for() used to stop scanning at the first null/cleared
-  // slot. After unbinding an interior target (leaving bound_count_ untouched),
-  // a parameter bound to a slot AFTER the gap must still be resolved/applied.
+  // After unbinding an interior target (leaving the bound range untouched), a
+  // parameter bound to a slot AFTER the gap must still be resolved/applied.
   CaptureProcessor p10;
   CaptureProcessor p20;
   CaptureProcessor p30;
@@ -411,6 +446,62 @@ TEST_CASE("AutomationEngine resolves targets bound after an interior gap",
   REQUIRE_FALSE(engine.set_parameter(20, 0.5f));
   REQUIRE(p20.set_count == 0);
   REQUIRE(engine.unknown_target_count() == unknown_before + 1);
+}
+
+TEST_CASE("AutomationEngine never pairs a reused slot's id with a superseded processor",
+          "[automation][rt][concurrency]") {
+  sonare::transport::TempoMap tempo;
+  tempo.prepare(48000.0);
+  sonare::automation::AutomationLane lane_a(5);
+  lane_a.set_points({{0.0, 0.25f, sonare::automation::CurveType::Linear}});
+  sonare::automation::AutomationLane lane_b(9);
+  lane_b.set_points({{0.0, 0.5f, sonare::automation::CurveType::Linear}});
+
+  HandshakeProcessor pa(5);
+  HandshakeProcessor pb(9);
+  HandshakeProcessor pc(9);
+  sonare::automation::AutomationEngine engine;
+  engine.prepare(48000.0, &tempo);
+  engine.set_lanes({lane_a, lane_b});
+  engine.acquire_lanes();
+  REQUIRE(engine.bind_target(5, &pa));  // slot 0
+  REQUIRE(engine.bind_target(9, &pb));  // slot 1
+
+  // The reader parks inside pa's write for id 5, before it resolves id 9.
+  pa.hold.store(true, std::memory_order_release);
+  std::thread reader([&] { engine.apply({}, 0, 64); });
+  while (!pa.entered.load(std::memory_order_acquire)) std::this_thread::yield();
+
+  // Rebinding 9 reuses slot 0, which held pa for id 5 when the reader pinned.
+  std::atomic<bool> writer_started{false};
+  int pb_writes_when_unbind_returned = -1;
+  std::thread writer([&] {
+    writer_started.store(true, std::memory_order_release);
+    engine.unbind_target(5);
+    pb_writes_when_unbind_returned = pb.owned_writes.load(std::memory_order_relaxed);
+    engine.unbind_target(9);
+    engine.bind_target(9, &pc);
+  });
+  while (!writer_started.load(std::memory_order_acquire)) std::this_thread::yield();
+  pa.release.store(true, std::memory_order_release);
+  reader.join();
+  writer.join();
+
+  // The parked reader resolves 9 from the table it pinned, whatever the writer did meanwhile.
+  REQUIRE(pa.owned_writes.load() == 1);
+  REQUIRE(pb.owned_writes.load() == 1);
+  REQUIRE(pc.owned_writes.load() == 0);
+  REQUIRE(pa.foreign_writes.load() == 0);
+  REQUIRE(pb.foreign_writes.load() == 0);
+  REQUIRE(pc.foreign_writes.load() == 0);
+  // The unbind waited for the reader, so pb was still in use until it returned.
+  REQUIRE(pb_writes_when_unbind_returned == 1);
+
+  REQUIRE(engine.set_parameter(9, 0.75f));
+  REQUIRE(pc.owned_writes.load() == 1);
+  REQUIRE(pb.owned_writes.load() == 1);
+  REQUIRE_FALSE(engine.set_parameter(5, 0.75f));
+  REQUIRE(pa.owned_writes.load() == 1);
 }
 
 TEST_CASE("AutomationEngine routes engine-namespace lane values through the param router",

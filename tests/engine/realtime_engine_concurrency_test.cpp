@@ -25,10 +25,8 @@ bool all_finite(const float* data, int count) noexcept {
 // Exercises the lock-free control->audio hand-off end-to-end: one thread runs
 // the audio render loop while a second thread concurrently pushes commands and
 // invokes the control-thread setters that publish snapshots (clips, tempo,
-// markers, automation). The control loop is paced (20 us/iteration) so it never
-// laps the bounded RtSnapshot retention window regardless of how aggressively
-// the OS deschedules the audio thread under oversubscribed parallel runs.
-// Asserts no crash/UB and finite, sane output.
+// markers, automation) unpaced, so a descheduled audio thread can fall any
+// number of publishes behind. Asserts no crash/UB and finite, sane output.
 static void run_concurrent_mutation(int blocks) {
   constexpr int kFrames = 128;
 
@@ -99,10 +97,6 @@ static void run_concurrent_mutation(int blocks) {
         REQUIRE(engine.bind_midi_cc(74, 0, 11, 0.0f, 1.0f));
       }
 #endif
-
-      // Pace the control thread so it stays well within the 64-generation
-      // RtSnapshot retention window even if the audio thread is descheduled.
-      std::this_thread::sleep_for(std::chrono::microseconds(20));
     }
     done.store(true, std::memory_order_release);
   });

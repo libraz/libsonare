@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <thread>
+#include <vector>
 
 namespace {
 
@@ -430,14 +431,6 @@ TEST_CASE("RtPublisher callback acquire never destroys a snapshot on the consumi
 TEST_CASE("RtSnapshot concurrent readers always see a valid pointer", "[rt][publisher]") {
   using Holder = sonare::rt::RtSnapshot<CountedSnapshot>;
   constexpr uint64_t kIterations = 20000;
-  // RtSnapshot keeps only kRetain past generations alive (its documented
-  // contract: a reader must finish using a loaded pointer before kRetain further
-  // publishes occur). Flow-control the producer so it never runs more than
-  // kRetain/2 generations ahead of the slowest reader's last-observed value.
-  // This bounds the in-flight window regardless of thread scheduling (so the
-  // test is robust even when readers are starved under a parallel test run),
-  // while still exercising the concurrent lock-free load path.
-  constexpr uint64_t kLead = Holder::kRetain / 2;
 
   CountedSnapshot::live.store(0);
   CountedSnapshot::destroyed.store(0);
@@ -447,38 +440,23 @@ TEST_CASE("RtSnapshot concurrent readers always see a valid pointer", "[rt][publ
 
   std::atomic<bool> producer_done{false};
   std::atomic<bool> bad_read{false};
-  std::array<std::atomic<uint64_t>, 2> reader_progress{};
-  reader_progress[0].store(1, std::memory_order_relaxed);
-  reader_progress[1].store(1, std::memory_order_relaxed);
 
-  auto reader = [&](int id) {
+  // The producer runs unthrottled; a pin must keep its snapshot valid however far it laps.
+  auto reader = [&] {
     while (!producer_done.load(std::memory_order_acquire)) {
-      const CountedSnapshot* snapshot = snapshot_holder.load();
-      // The control thread keeps kRetain generations alive, so a loaded pointer
-      // must always be dereferenceable and internally consistent.
+      const auto snapshot = snapshot_holder.read();
       if (!snapshot || snapshot->value != snapshot->mirror) {
         bad_read.store(true, std::memory_order_relaxed);
         return;
       }
-      // Report the generation just observed so the producer can avoid lapping
-      // the retention window ahead of this reader.
-      reader_progress[static_cast<size_t>(id)].store(snapshot->value, std::memory_order_relaxed);
     }
   };
 
-  std::thread reader_a(reader, 0);
-  std::thread reader_b(reader, 1);
+  std::thread reader_a(reader);
+  std::thread reader_b(reader);
 
   std::thread producer([&] {
     for (uint64_t i = 2; i <= kIterations; ++i) {
-      // Wait until the slowest reader is within kLead generations before
-      // publishing, so the slot a reader may currently hold is never reclaimed.
-      while (!bad_read.load(std::memory_order_relaxed)) {
-        const uint64_t slowest = std::min(reader_progress[0].load(std::memory_order_relaxed),
-                                          reader_progress[1].load(std::memory_order_relaxed));
-        if (i - slowest < kLead) break;
-        std::this_thread::yield();
-      }
       snapshot_holder.publish(make_snapshot(i));
     }
     producer_done.store(true, std::memory_order_release);
@@ -489,7 +467,85 @@ TEST_CASE("RtSnapshot concurrent readers always see a valid pointer", "[rt][publ
   reader_b.join();
 
   REQUIRE_FALSE(bad_read.load(std::memory_order_relaxed));
-  // The current snapshot is always valid after publishing completes.
-  REQUIRE(snapshot_holder.load() != nullptr);
-  REQUIRE(snapshot_holder.load()->value == kIterations);
+  // With every pin released, every superseded snapshot is reclaimable.
+  REQUIRE(snapshot_holder.try_reclaim());
+  REQUIRE(CountedSnapshot::live.load() - CountedSnapshot::destroyed.load() == 1);
+  const auto current = snapshot_holder.read();
+  REQUIRE(current.get() != nullptr);
+  REQUIRE(current->value == kIterations);
+}
+
+TEST_CASE("RtSnapshot keeps a stalled reader's snapshot alive across any number of publishes",
+          "[rt][publisher]") {
+  sonare::rt::RtSnapshot<CountedSnapshot> holder;
+  auto first = make_snapshot(1);
+  const std::weak_ptr<const CountedSnapshot> first_weak = first;
+  holder.publish(std::move(first));
+
+  std::vector<std::weak_ptr<const CountedSnapshot>> later;
+  {
+    const auto pin = holder.read();
+    REQUIRE(pin.get() != nullptr);
+    // Well past any fixed retention depth.
+    for (uint64_t i = 2; i <= 200; ++i) {
+      auto next = make_snapshot(i);
+      later.emplace_back(next);
+      holder.publish(std::move(next));
+    }
+    REQUIRE_FALSE(first_weak.expired());
+    REQUIRE(pin->value == 1);
+    REQUIRE(pin->mirror == 1);
+    REQUIRE_FALSE(holder.try_reclaim());
+    REQUIRE_FALSE(first_weak.expired());
+  }
+
+  REQUIRE(holder.try_reclaim());
+  REQUIRE(first_weak.expired());
+  // Every superseded snapshot is gone; only the newest is still owned.
+  for (size_t i = 0; i + 1 < later.size(); ++i) {
+    REQUIRE(later[i].expired());
+  }
+  REQUIRE_FALSE(later.back().expired());
+}
+
+TEST_CASE("RtSnapshot frees a superseded snapshot at publish when no pin is held",
+          "[rt][publisher]") {
+  sonare::rt::RtSnapshot<CountedSnapshot> holder;
+  auto first = make_snapshot(1);
+  const std::weak_ptr<const CountedSnapshot> first_weak = first;
+  holder.publish(std::move(first));
+  {
+    const auto pin = holder.read();
+    REQUIRE(pin->value == 1);
+  }
+  holder.publish(make_snapshot(2));
+  REQUIRE(first_weak.expired());
+}
+
+TEST_CASE("RtSnapshot synchronize returns only after a pin taken on another thread is released",
+          "[rt][publisher]") {
+  sonare::rt::RtSnapshot<CountedSnapshot> holder;
+  auto first = make_snapshot(1);
+  const std::weak_ptr<const CountedSnapshot> first_weak = first;
+  holder.publish(std::move(first));
+
+  std::atomic<bool> pinned{false};
+  std::atomic<bool> release{false};
+  std::atomic<uint64_t> value_at_release{0};
+  std::thread reader([&] {
+    const auto pin = holder.read();
+    pinned.store(true, std::memory_order_release);
+    while (!release.load(std::memory_order_acquire)) std::this_thread::yield();
+    value_at_release.store(pin->value, std::memory_order_relaxed);
+  });
+  while (!pinned.load(std::memory_order_acquire)) std::this_thread::yield();
+
+  holder.publish(make_snapshot(2));
+  REQUIRE_FALSE(first_weak.expired());
+  release.store(true, std::memory_order_release);
+  holder.synchronize();
+  // The reader's last use of the pinned snapshot happens before synchronize returns.
+  REQUIRE(value_at_release.load(std::memory_order_relaxed) == 1);
+  REQUIRE(first_weak.expired());
+  reader.join();
 }

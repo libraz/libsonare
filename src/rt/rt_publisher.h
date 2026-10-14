@@ -20,16 +20,18 @@
 /// pending publish does no refcount work at all.
 ///
 /// For state read from MORE than one thread, use `RtSnapshot<T>` instead:
-/// readers do one lock-free pointer load and the control thread owns every
-/// lifetime through a bounded retention ring.
+/// readers take a lock-free pin and the control thread frees a superseded
+/// snapshot only after every pin that could observe it is released.
 
 #include <array>
 #include <atomic>
 #include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <thread>
 #include <utility>
+#include <vector>
 
 namespace sonare::rt {
 
@@ -399,12 +401,14 @@ class RtPublisher {
 /// concurrently from more than one thread (e.g. the audio thread AND a control
 /// thread) but only published from the control thread.
 ///
-/// Unlike RtPublisher (strictly single-reader), readers here just perform one
-/// acquire-load of a raw `const T*`: no lock, no allocation, no shared_ptr
-/// refcount, and no free on the reader. The control thread owns all snapshot
-/// lifetimes through a bounded retention ring of shared_ptrs; an old snapshot
-/// is freed (on the control thread) only after `kRetain` further publishes,
-/// which keeps any pointer a reader loaded valid for the duration of its use.
+/// A reader takes a `Reader` pin from read(): one epoch load, one counter
+/// increment and one pointer load, with no lock, allocation, shared_ptr refcount
+/// or free on the reader. The pin keeps the snapshot it observed alive until the
+/// pin is destroyed, however many publishes follow. The control thread retires
+/// each superseded snapshot tagged with the current epoch and frees it only
+/// after two epoch advances, each taken when the counter of the reader phase it
+/// retires has drained to zero; a stalled reader therefore defers reclamation
+/// rather than invalidating its pointer.
 ///
 /// This replaces `std::atomic_load/store(std::shared_ptr*)`, whose libstdc++/
 /// libc++ implementation takes a global spinlock and may free on the caller.
@@ -413,10 +417,30 @@ class RtPublisher {
 template <typename T>
 class RtSnapshot {
  public:
-  /// Number of past generations kept alive after being superseded. A reader
-  /// that loaded a pointer must finish using it before this many subsequent
-  /// publishes occur; sized generously so that holds for any realistic block.
-  static constexpr size_t kRetain = 64;
+  /// Scoped pin on the snapshot current when read() was called. Not copyable or
+  /// movable; bind it to a local (`const auto snapshot = holder.read();`).
+  class Reader {
+   public:
+    ~Reader() { counter_->fetch_sub(1, std::memory_order_release); }
+    Reader(const Reader&) = delete;
+    Reader& operator=(const Reader&) = delete;
+    Reader(Reader&&) = delete;
+    Reader& operator=(Reader&&) = delete;
+
+    /// Pinned snapshot, or nullptr if none had been published.
+    const T* get() const noexcept { return snapshot_; }
+    const T& operator*() const noexcept { return *snapshot_; }
+    const T* operator->() const noexcept { return snapshot_; }
+    explicit operator bool() const noexcept { return snapshot_ != nullptr; }
+
+   private:
+    friend class RtSnapshot;
+    Reader(std::atomic<uint32_t>* counter, const T* snapshot) noexcept
+        : counter_(counter), snapshot_(snapshot) {}
+
+    std::atomic<uint32_t>* counter_;
+    const T* snapshot_;
+  };
 
   RtSnapshot() = default;
   RtSnapshot(const RtSnapshot&) = delete;
@@ -424,28 +448,74 @@ class RtSnapshot {
   RtSnapshot(RtSnapshot&&) = delete;
   RtSnapshot& operator=(RtSnapshot&&) = delete;
 
-  /// Publish a new snapshot from the CONTROL thread. May allocate/free. The
-  /// previous snapshot stays alive in the retention ring and is reclaimed only
-  /// after kRetain further publishes (always on the control thread).
+  /// Publish a new snapshot from the CONTROL thread. May allocate/free. Never
+  /// blocks: the previous snapshot is retired and freed (on the control thread,
+  /// here or in a later publish/try_reclaim) once no pin can still observe it.
   void publish(std::shared_ptr<const T> snapshot) {
-    // Park the owning shared_ptr; reclaim the slot kRetain generations back
-    // (its reader window has long since closed) by overwriting it here.
-    const size_t index = static_cast<size_t>(write_index_ & (kRetain - 1));
-    retain_[index] = std::move(snapshot);
-    write_index_++;
-    current_.store(retain_[index].get(), std::memory_order_release);
+    std::shared_ptr<const T> previous = std::move(owner_);
+    owner_ = std::move(snapshot);
+    current_.store(owner_.get(), std::memory_order_seq_cst);
+    if (previous) {
+      retired_.push_back(Retired{epoch_.load(std::memory_order_relaxed), std::move(previous)});
+    }
+    try_reclaim();
   }
 
-  /// Lock-free read of the current snapshot pointer, or nullptr if none has
-  /// been published. Safe to call from any reader thread. RT-safe.
-  const T* load() const noexcept { return current_.load(std::memory_order_acquire); }
+  /// Pin and return the current snapshot. Safe to call from any reader thread,
+  /// including while already holding a pin. RT-safe: wait-free on targets with
+  /// native atomic add, never allocates or frees.
+  Reader read() const noexcept {
+    std::atomic<uint32_t>* counter = &readers_[epoch_.load(std::memory_order_seq_cst) & 1u];
+    counter->fetch_add(1, std::memory_order_seq_cst);
+    return Reader(counter, current_.load(std::memory_order_seq_cst));
+  }
+
+  /// CONTROL thread: free every retired snapshot no pin can still observe, never
+  /// blocking. Returns true when nothing superseded remains alive.
+  bool try_reclaim() {
+    for (int step = 0; step < 2 && !retired_.empty(); ++step) {
+      free_expired();
+      if (retired_.empty()) break;
+      const uint32_t epoch = epoch_.load(std::memory_order_relaxed);
+      // Advancing to epoch + 1 retires the phase of epoch - 1; its pins must have drained.
+      if (readers_[(epoch + 1u) & 1u].load(std::memory_order_seq_cst) != 0) break;
+      epoch_.store(epoch + 1u, std::memory_order_seq_cst);
+    }
+    free_expired();
+    return retired_.empty();
+  }
+
+  /// CONTROL thread: block until every pin taken before this call that could
+  /// observe a superseded snapshot is released, then free those snapshots. Must
+  /// not be called while the calling thread holds a pin on this holder.
+  void synchronize() {
+    while (!try_reclaim()) {
+      std::this_thread::yield();
+    }
+  }
 
  private:
-  static_assert((kRetain & (kRetain - 1)) == 0, "kRetain must be a power of two");
+  struct Retired {
+    uint32_t epoch;
+    std::shared_ptr<const T> snapshot;
+  };
+
+  // Retired entries are in epoch order; one is unobservable once the epoch has
+  // advanced twice past its tag.
+  void free_expired() {
+    const uint32_t epoch = epoch_.load(std::memory_order_relaxed);
+    auto it = retired_.begin();
+    while (it != retired_.end() && static_cast<uint32_t>(epoch - it->epoch) >= 2u) {
+      ++it;
+    }
+    retired_.erase(retired_.begin(), it);
+  }
 
   std::atomic<const T*> current_{nullptr};
-  std::array<std::shared_ptr<const T>, kRetain> retain_{};  // control thread only
-  size_t write_index_ = 0;                                  // control thread only
+  std::atomic<uint32_t> epoch_{0};
+  mutable std::array<std::atomic<uint32_t>, 2> readers_{};
+  std::shared_ptr<const T> owner_;  // control thread only
+  std::vector<Retired> retired_;    // control thread only
 };
 
 }  // namespace sonare::rt

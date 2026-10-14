@@ -78,54 +78,54 @@ void AutomationEngine::set_lanes(std::vector<AutomationLane> lanes) {
   lanes_.publish(std::make_shared<const std::vector<AutomationLane>>(std::move(lanes)));
 }
 
-bool AutomationEngine::bind_target(uint32_t param_id, rt::ProcessorBase* processor) noexcept {
+bool AutomationEngine::bind_target(uint32_t param_id, rt::ProcessorBase* processor) {
   if (param_id == 0 || processor == nullptr) return false;  // 0 is reserved as invalid/none.
-  const size_t bound = bound_count_.load(std::memory_order_relaxed);
-  // Reuse an existing slot for the same param_id, or the first free slot within
-  // the bound range, so a rebind after a clear lands deterministically and does
-  // not grow bound_count_ unnecessarily.
-  for (size_t i = 0; i < bound; ++i) {
-    if (targets_[i].param_id.load(std::memory_order_relaxed) == param_id) {
-      // Re-binding an existing param_id: publish the processor with release so
-      // the audio thread sees the matching param_id before the new pointer.
-      targets_[i].processor.store(processor, std::memory_order_release);
-      return true;
+  TargetTable& table = control_targets_;
+  // Reuse an existing slot for the same param_id, or the first cleared slot
+  // within the bound range, so a rebind after a clear lands deterministically.
+  TargetSlot* slot = nullptr;
+  for (size_t i = 0; i < table.bound && slot == nullptr; ++i) {
+    if (table.slots[i].param_id == param_id) slot = &table.slots[i];
+  }
+  for (size_t i = 0; i < table.bound && slot == nullptr; ++i) {
+    if (table.slots[i].processor == nullptr) slot = &table.slots[i];
+  }
+  if (slot == nullptr) {
+    if (table.bound >= table.slots.size()) {
+      bind_target_overflow_count_.fetch_add(1, std::memory_order_relaxed);
+      return false;
     }
+    slot = &table.slots[table.bound++];
   }
-  for (size_t i = 0; i < bound; ++i) {
-    if (targets_[i].processor.load(std::memory_order_relaxed) == nullptr) {
-      // Claim a cleared slot. Set param_id first, then publish processor with
-      // release; target_for() loads processor before param_id, so it never
-      // matches a half-populated slot.
-      targets_[i].param_id.store(param_id, std::memory_order_relaxed);
-      targets_[i].processor.store(processor, std::memory_order_release);
-      return true;
-    }
-  }
-  if (bound >= targets_.size()) {
-    bind_target_overflow_count_.fetch_add(1, std::memory_order_relaxed);
-    return false;
-  }
-  // Append a new slot: fully populate it, then publish the grown count with
-  // release so the audio thread (acquire load in target_for) only observes it
-  // once the slot is complete.
-  targets_[bound].param_id.store(param_id, std::memory_order_relaxed);
-  targets_[bound].processor.store(processor, std::memory_order_relaxed);
-  bound_count_.store(bound + 1, std::memory_order_release);
+  slot->param_id = param_id;
+  slot->processor = processor;
+  publish_targets();
   return true;
 }
 
-void AutomationEngine::clear_targets() noexcept {
-  // Clear slot contents but keep bound_count_ so target_for() keeps scanning
-  // the full range and skips the cleared (null) slots instead of stopping at
-  // the first one; freshly bound targets reuse the cleared slots.
-  const size_t bound = bound_count_.load(std::memory_order_relaxed);
-  for (size_t i = 0; i < bound; ++i) {
-    // Clear the processor with release first so the audio thread never sees a
-    // live pointer paired with a stale param_id, then reset param_id.
-    targets_[i].processor.store(nullptr, std::memory_order_release);
-    targets_[i].param_id.store(0, std::memory_order_relaxed);
+bool AutomationEngine::unbind_target(uint32_t param_id) {
+  for (size_t i = 0; i < control_targets_.bound; ++i) {
+    TargetSlot& slot = control_targets_.slots[i];
+    if (slot.processor != nullptr && slot.param_id == param_id) {
+      slot = TargetSlot{};
+      publish_targets();
+      return true;
+    }
   }
+  return false;
+}
+
+void AutomationEngine::clear_targets() {
+  // Keep `bound` so freshly bound targets reuse the cleared slots.
+  for (size_t i = 0; i < control_targets_.bound; ++i) {
+    control_targets_.slots[i] = TargetSlot{};
+  }
+  publish_targets();
+}
+
+void AutomationEngine::publish_targets() {
+  targets_.publish(std::make_shared<const TargetTable>(control_targets_));
+  targets_.synchronize();
 }
 
 void AutomationEngine::apply(const transport::TransportState& state, int sub_block_offset,
@@ -148,6 +148,8 @@ void AutomationEngine::apply(const transport::TransportState& state, int sub_blo
     }
     return;
   }
+  // Pinned for the whole loop, so every processor resolved below outlives its use.
+  const auto targets = targets_.read();
   for (const AutomationLane& lane : *lanes) {
     const uint32_t param_id = lane.target_param_id();
     // An empty lane has nothing to play back; value_at() on it reports a
@@ -171,7 +173,7 @@ void AutomationEngine::apply(const transport::TransportState& state, int sub_blo
       non_realtime_safe_rejection_count_.fetch_add(1, std::memory_order_relaxed);
       continue;
     }
-    rt::ProcessorBase* processor = target_for(param_id);
+    rt::ProcessorBase* processor = target_for(targets.get(), param_id);
     if (!processor) {
       unknown_target_count_.fetch_add(1, std::memory_order_relaxed);
       continue;
@@ -207,7 +209,8 @@ bool AutomationEngine::set_parameter(uint32_t param_id, float value) noexcept {
     non_realtime_safe_rejection_count_.fetch_add(1, std::memory_order_relaxed);
     return false;
   }
-  rt::ProcessorBase* processor = target_for(param_id);
+  const auto targets = targets_.read();
+  rt::ProcessorBase* processor = target_for(targets.get(), param_id);
   if (!processor) {
     unknown_target_count_.fetch_add(1, std::memory_order_relaxed);
     return false;
@@ -253,7 +256,8 @@ size_t AutomationEngine::lane_count() const noexcept {
   return lane_count_.load(std::memory_order_relaxed);
 }
 
-rt::ProcessorBase* AutomationEngine::target_for(uint32_t param_id) const noexcept {
+rt::ProcessorBase* AutomationEngine::target_for(const TargetTable* table,
+                                                uint32_t param_id) const noexcept {
   if (param_id == 0) return nullptr;  // 0 is reserved as the invalid/none id.
   if (external_target_resolver_ != nullptr) {
     if (rt::ProcessorBase* processor =
@@ -261,19 +265,12 @@ rt::ProcessorBase* AutomationEngine::target_for(uint32_t param_id) const noexcep
       return processor;
     }
   }
-  // Scan the full bound range and SKIP null/cleared slots instead of stopping
-  // at the first one. Stopping early silently dropped any target bound after a
-  // cleared earlier slot (e.g. after a clear+rebind). bound_count_ is read with
-  // acquire to pair with bind_target's release publish.
-  const size_t bound = bound_count_.load(std::memory_order_acquire);
-  for (size_t i = 0; i < bound; ++i) {
-    // Load processor with acquire first; a non-null pointer here was published
-    // (release) after its param_id was set, so the subsequent param_id load
-    // observes the matching value. A concurrently-cleared slot reads null and
-    // is skipped, never producing a torn pointer / garbage vtable call.
-    rt::ProcessorBase* processor = targets_[i].processor.load(std::memory_order_acquire);
-    if (processor != nullptr && targets_[i].param_id.load(std::memory_order_relaxed) == param_id) {
-      return processor;
+  if (table == nullptr) return nullptr;
+  // Scan the full bound range and skip cleared slots instead of stopping at the first one.
+  for (size_t i = 0; i < table->bound; ++i) {
+    const TargetSlot& slot = table->slots[i];
+    if (slot.processor != nullptr && slot.param_id == param_id) {
+      return slot.processor;
     }
   }
   return nullptr;
@@ -303,8 +300,8 @@ void AutomationEngine::notify_lane_targets_released(
 }
 
 bool AutomationEngine::registered_parameter_rejects_realtime(uint32_t param_id) const noexcept {
-  const std::vector<ParameterInfo>* metadata = parameter_metadata_.load();
-  if (metadata == nullptr) return false;
+  const auto metadata = parameter_metadata_.read();
+  if (!metadata) return false;
   const auto found =
       std::lower_bound(metadata->begin(), metadata->end(), param_id,
                        [](const ParameterInfo& info, uint32_t id) { return info.id < id; });

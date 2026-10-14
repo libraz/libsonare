@@ -82,32 +82,18 @@ class AutomationEngine {
     lane_release_context_ = context;
   }
   void set_lanes(std::vector<AutomationLane> lanes);
-  bool bind_target(uint32_t param_id, rt::ProcessorBase* processor) noexcept;
-  void clear_targets() noexcept;
-
-  // Unbind the slot currently holding @p param_id, leaving bound_count_
-  // untouched so the slot becomes an interior gap that target_for() must skip
-  // over (not stop at). Returns true if a matching bound slot was found. Useful
-  // for selectively removing a single automation target without disturbing the
-  // others' slot assignments.
-  bool unbind_target(uint32_t param_id) noexcept {
-    const size_t bound = bound_count_.load(std::memory_order_relaxed);
-    for (size_t i = 0; i < bound; ++i) {
-      if (targets_[i].processor.load(std::memory_order_relaxed) != nullptr &&
-          targets_[i].param_id.load(std::memory_order_relaxed) == param_id) {
-        // Publish the cleared slot atomically. The audio thread's target_for()
-        // reads processor first; storing nullptr there with release ensures it
-        // never observes a stale processor pointer paired with a torn param_id
-        // (which would produce a garbage vtable call). param_id is cleared after
-        // so a concurrent reader that already loaded the (now-null) processor
-        // simply skips the slot.
-        targets_[i].processor.store(nullptr, std::memory_order_release);
-        targets_[i].param_id.store(0, std::memory_order_relaxed);
-        return true;
-      }
-    }
-    return false;
-  }
+  /// Binds @p param_id to @p processor, reusing the slot already holding that
+  /// id or the first cleared one. CONTROL thread. Publishes the whole target
+  /// table as one snapshot, then waits until no reader still uses the table it
+  /// replaced, so a processor this call unbinds may be destroyed once it
+  /// returns. Must not be called from inside apply() or set_parameter().
+  bool bind_target(uint32_t param_id, rt::ProcessorBase* processor);
+  /// Unbinds every target, with the same publish-and-wait contract as bind_target().
+  void clear_targets();
+  /// Unbinds the slot holding @p param_id, leaving an interior gap later binds
+  /// reuse. Same publish-and-wait contract as bind_target(). Returns true if a
+  /// bound slot matched.
+  bool unbind_target(uint32_t param_id);
 
   /// Adopt the latest published lane set on the audio thread. Call once at
   /// block start before apply / collect_boundaries. RT-safe, no alloc.
@@ -154,17 +140,27 @@ class AutomationEngine {
   }
 
  private:
+  static constexpr size_t kMaxTargets = 128;
+
   // param_id 0 is reserved as the invalid/none sentinel: an unbound slot keeps
   // the default (param_id 0, processor null) and must never match a real lane.
-  // Both fields are atomic because the control thread (bind/unbind/clear) and
-  // the audio thread (target_for) touch them concurrently; a non-atomic
-  // pointer write would tear and yield a garbage vtable call on the reader.
-  struct Target {
-    std::atomic<uint32_t> param_id{0};
-    std::atomic<rt::ProcessorBase*> processor{nullptr};
+  struct TargetSlot {
+    uint32_t param_id = 0;
+    rt::ProcessorBase* processor = nullptr;
+  };
+  // Immutable once published, so a reader sees each slot's id and processor
+  // from one generation. `bound` is the highest ever-occupied index + 1;
+  // lookups skip cleared slots inside it rather than stopping at them.
+  struct TargetTable {
+    std::array<TargetSlot, kMaxTargets> slots{};
+    size_t bound = 0;
   };
 
-  rt::ProcessorBase* target_for(uint32_t param_id) const noexcept;
+  // Resolves @p param_id through the external resolver, then @p table (may be
+  // null). The caller keeps the pin on @p table while it uses the result.
+  rt::ProcessorBase* target_for(const TargetTable* table, uint32_t param_id) const noexcept;
+  // Publishes control_targets_ and waits for readers of the table it replaces.
+  void publish_targets();
   bool registered_parameter_rejects_realtime(uint32_t param_id) const noexcept;
   // Merge-walk helper backing acquire_lanes()'s release notification (see
   // there). @p previous/@p next may each be null (no lane set adopted yet).
@@ -199,13 +195,8 @@ class AutomationEngine {
   rt::RtSnapshot<std::vector<ParameterInfo>> parameter_metadata_{};
   mutable rt::RtPublisher<std::vector<AutomationLane>> lanes_;
   std::atomic<size_t> lane_count_{0};
-  std::array<Target, 128> targets_{};
-  // Number of slots in targets_ that have ever been bound (highest occupied
-  // index + 1). target_for() scans [0, bound_count_) and *skips* null/cleared
-  // slots rather than terminating at the first one, so a target bound to a slot
-  // after an earlier cleared slot is still resolved. Published with release on
-  // bind/clear, read with acquire on the audio thread.
-  std::atomic<size_t> bound_count_{0};
+  rt::RtSnapshot<TargetTable> targets_{};
+  TargetTable control_targets_{};  // control thread only
   std::atomic<uint32_t> unknown_target_count_{0};
   std::atomic<uint32_t> non_realtime_safe_rejection_count_{0};
   std::atomic<uint32_t> bind_target_overflow_count_{0};
