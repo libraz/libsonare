@@ -31,6 +31,12 @@ struct PartRigStage {
   std::string params_json;
 };
 
+/// Spelling of each PartRigMode, indexed by ordinal; the serialized and binding name.
+inline constexpr const char* kPartRigModeNames[] = {"bank", "none", "chain"};
+static_assert(sizeof(kPartRigModeNames) / sizeof(kPartRigModeNames[0]) ==
+                  static_cast<size_t>(PartRigMode::kChain) + 1,
+              "part rig mode names out of step with the enum");
+
 /// A part's rig selection.
 struct PartRig {
   PartRigMode mode = PartRigMode::kBank;

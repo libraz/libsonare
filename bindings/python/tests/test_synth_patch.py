@@ -123,6 +123,8 @@ EXPECTED_SYNTH_ENUM_TABLES = {
     "sample_loop_modes": ("default", "none", "continuous", "key-down"),
     "sample_key_tracks": ("default", "on", "off"),
     "retriggers": ("default", "free", "note"),
+    "part_rig_modes": ("bank", "none", "chain"),
+    "sample_desc_loop_modes": ("none", "continuous", "key-down"),
 }
 
 
@@ -269,8 +271,11 @@ def test_every_python_enum_table_matches_the_c_abi_kind() -> None:
         "sample_loop_modes": synth._SAMPLE_LOOP_MODES,
         "sample_key_tracks": synth._SAMPLE_KEY_TRACKS,
         "retriggers": synth._SYNTH_RETRIGGERS,
+        "part_rig_modes": synth.PART_RIG_MODES,
     }
-    assert set(ordinal_maps) | {"builtin_waveforms"} == set(synth._SYNTH_ENUM_KINDS)
+    assert set(ordinal_maps) | {"builtin_waveforms", "sample_desc_loop_modes"} == set(
+        synth._SYNTH_ENUM_KINDS
+    )
     for key, table in ordinal_maps.items():
         names = c_names(synth._SYNTH_ENUM_KINDS[key])
         assert names, key
@@ -280,6 +285,10 @@ def test_every_python_enum_table_matches_the_c_abi_kind() -> None:
     assert tuple(synth._BUILTIN_SYNTH_WAVEFORMS) == builtin
     for name, ordinal in synth._BUILTIN_SYNTH_WAVEFORMS.items():
         assert lib.sonare_synth_builtin_waveform_from_name(name.encode()) == ordinal, name
+    # The descriptor's loop modes are SoundFont values (no ordinal 2), so names map to values.
+    desc_loop = c_names(synth._SYNTH_ENUM_KINDS["sample_desc_loop_modes"])
+    assert tuple(synth._SAMPLE_DESC_LOOP_MODES) == desc_loop
+    assert tuple(synth._SAMPLE_DESC_LOOP_MODES.values()) == (0, 1, 3)
     # Input-only spellings are accepted but never listed.
     assert synth._SYNTH_FILTER_MODEL_INPUT == {**synth._SYNTH_FILTER_MODELS, "moog-ladder": 2}
     assert "moog-ladder" not in c_names(synth._SYNTH_ENUM_KINDS["filter_models"])

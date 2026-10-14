@@ -27,6 +27,9 @@ from ._project_model import (
     _track_kind_value,
 )
 from ._project_synth import (
+    PART_RIG_MODES as PART_RIG_MODES,
+)
+from ._project_synth import (
     SYNTH_ENUM_TABLES as SYNTH_ENUM_TABLES,
 )
 from ._project_synth import (
@@ -71,8 +74,7 @@ from ._runtime import (
 )
 from .types import Chord, Mode, ProjectSource
 
-# SonarePartRigMode, and SONARE_PART_RIG_ALL_PARTS (every part of a destination).
-PART_RIG_MODES = {"bank": 0, "none": 1, "chain": 2}
+# SONARE_PART_RIG_ALL_PARTS: every part of a destination.
 PART_RIG_ALL_PARTS = 0xFF
 
 

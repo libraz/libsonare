@@ -16,6 +16,7 @@ import {
   isSonareError,
   MPE_DIMENSIONS,
   NOTE_TRACKINGS,
+  PART_RIG_MODES,
   Project,
   RealtimeEngine,
   SAMPLE_KEY_TRACKS,
@@ -113,6 +114,8 @@ describe('Sonare WASM NativeSynth', () => {
       sampleLoopModes: [...SAMPLE_LOOP_MODES],
       sampleKeyTracks: [...SAMPLE_KEY_TRACKS],
       retriggers: [...SYNTH_RETRIGGERS],
+      partRigModes: [...PART_RIG_MODES],
+      sampleDescLoopModes: ['none', 'continuous', 'key-down'],
     });
 
     for (const [ordinal, name] of SYNTH_ENGINE_MODES.entries()) {

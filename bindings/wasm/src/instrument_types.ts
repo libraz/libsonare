@@ -313,6 +313,8 @@ export interface SynthEnumTables {
   sampleLoopModes: string[];
   sampleKeyTracks: string[];
   retriggers: string[];
+  partRigModes: string[];
+  sampleDescLoopModes: string[];
 }
 
 /** NativeSynth engine selector ({@link SynthPatch}; `'default'` keeps the base patch's). */

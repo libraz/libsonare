@@ -27,6 +27,8 @@ inline constexpr const auto& kSynthBodyTypes = synth_names::kBodyTypes;
 inline constexpr const auto& kSynthRetriggers = synth_names::kRetriggers;
 inline constexpr const auto& kSynthModSources = synth_names::kModSources;
 inline constexpr const auto& kSynthModDestinations = synth_names::kModDestinations;
+inline constexpr const auto& kPartRigModes = synth_names::kPartRigModes;
+inline constexpr int kPartRigModeCount = synth_names::kPartRigModeCount;
 
 // SonareSynthPatch enum-name maps (shared by the project bounce and realtime
 // engine TUs; the names agree with the Python / WASM facades). 0 / "default"

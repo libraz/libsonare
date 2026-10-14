@@ -39,6 +39,8 @@ inline constexpr const auto& kControllerAxes = synth_names::kControllerAxes;
 inline constexpr const auto& kArticulations = synth_names::kArticulations;
 inline constexpr const auto& kMpeDimensions = synth_names::kMpeDimensions;
 inline constexpr const auto& kNoteTrackings = synth_names::kNoteTrackings;
+inline constexpr const auto& kPartRigModes = synth_names::kPartRigModes;
+inline constexpr int kPartRigModeCount = synth_names::kPartRigModeCount;
 
 inline emscripten::val synthEnumTablesToVal() {
   using emscripten::val;
@@ -81,6 +83,9 @@ inline emscripten::val synthEnumTablesToVal() {
   out.set("sampleKeyTracks",
           array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_KEY_TRACK)));
   out.set("retriggers", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_RETRIGGER)));
+  out.set("partRigModes", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_PART_RIG_MODE)));
+  out.set("sampleDescLoopModes",
+          array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_DESC_LOOP_MODE)));
   return out;
 }
 

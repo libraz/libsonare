@@ -304,7 +304,11 @@ TEST_CASE("NativeSynth enum names are supplied by the C project ABI", "[project]
         std::vector<std::string>{"default", "on", "off"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_RETRIGGER)) ==
         std::vector<std::string>{"default", "free", "note"});
-  CHECK(std::string(sonare_synth_enum_names(SONARE_SYNTH_ENUM_RETRIGGER + 1)) == "");
+  CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_PART_RIG_MODE)) ==
+        std::vector<std::string>{"bank", "none", "chain"});
+  CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_DESC_LOOP_MODE)) ==
+        std::vector<std::string>{"none", "continuous", "key-down"});
+  CHECK(std::string(sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_DESC_LOOP_MODE + 1)) == "");
   CHECK(std::string(sonare_synth_enum_names(-1)) == "");
   CHECK(sonare_synth_builtin_waveform_from_name("sine") == SONARE_SYNTH_WAVEFORM_SINE);
   CHECK(sonare_synth_builtin_waveform_from_name("saw") == SONARE_SYNTH_WAVEFORM_SAW);

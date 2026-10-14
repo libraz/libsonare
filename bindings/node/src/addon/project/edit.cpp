@@ -1,6 +1,5 @@
 #include <cmath>
 #include <cstdint>
-#include <iterator>
 #include <string>
 #include <utility>
 #include <vector>
@@ -14,11 +13,6 @@
 using namespace sonare_node::project;
 
 namespace {
-
-// Part-rig mode spellings, shared with the Python and WASM facades.
-constexpr const char* kPartRigModes[] = {"bank", "none", "chain"};
-static_assert(std::size(kPartRigModes) == 3 && SONARE_PART_RIG_CHAIN == 2,
-              "Node part-rig mode table drifted from C");
 
 bool ClipFadeFromObject(Napi::Env env, const Napi::Object& obj, SonareProjectClipFade* out) {
   if (out == nullptr) return false;
@@ -526,7 +520,8 @@ Napi::Value ProjectWrap::SetPartRig(const Napi::CallbackInfo& info) {
   std::string inserts_json;
   if (!sonare_node::RequiredUint32Arg(env, info, 0, "destinationId", &destination_id) ||
       !sonare_node::RequiredMidiByteValue(env, info[1], "part", &part) ||
-      !sonare_node::SynthEnumValue(env, info[2], kPartRigModes, 3, "mode", &mode) ||
+      !sonare_node::SynthEnumValue(env, info[2], sonare_node::kPartRigModes,
+                                   sonare_node::kPartRigModeCount, "mode", &mode) ||
       !sonare_node::OptionalStringArg(env, info, 3, "inserts", "", &inserts_json)) {
     return env.Undefined();
   }
@@ -556,7 +551,8 @@ Napi::Value ProjectWrap::GetPartRig(const Napi::CallbackInfo& info) {
   if (env.IsExceptionPending()) return env.Undefined();
   if (!present) return env.Null();
   Napi::Object out = Napi::Object::New(env);
-  out.Set("mode", sonare_node::SynthEnumName(env, mode, kPartRigModes, 3));
+  out.Set("mode", sonare_node::SynthEnumName(env, mode, sonare_node::kPartRigModes,
+                                             sonare_node::kPartRigModeCount));
   if (has_inserts) out.Set("inserts", Napi::String::New(env, inserts_json));
   return out;
   SONARE_NODE_CATCH(env)

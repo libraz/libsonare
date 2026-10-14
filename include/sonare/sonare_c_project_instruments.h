@@ -206,7 +206,12 @@ typedef enum SONARE_ENUM_BASE {
   /// The patch's override of a sample's key tracking (@ref SonareSampleKeyTrack).
   SONARE_SYNTH_ENUM_SAMPLE_KEY_TRACK = 14,
   /// How a voice's start phases and random streams restart (@ref SonareSynthRetrigger).
-  SONARE_SYNTH_ENUM_RETRIGGER = 15
+  SONARE_SYNTH_ENUM_RETRIGGER = 15,
+  /// Where a part's rig comes from (@ref SonarePartRigMode).
+  SONARE_SYNTH_ENUM_PART_RIG_MODE = 16,
+  /// A sample's own looping, as SonareSampleDesc.loop_mode spells it. The names
+  /// are not ordinals: "none" is 0, "continuous" 1 and "key-down" 3.
+  SONARE_SYNTH_ENUM_SAMPLE_DESC_LOOP_MODE = 17
 } SonareSynthEnumKind;
 
 /// @brief Returns the canonical names for one synth enum separated by '\n'.

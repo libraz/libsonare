@@ -320,10 +320,6 @@ void ProjectWasm::setTrackPan(const val& track_id_val, const val& pan_val) {
 
 namespace {
 
-constexpr const char* kPartRigModes[] = {"bank", "none", "chain"};
-static_assert(SONARE_PART_RIG_BANK == 0 && SONARE_PART_RIG_NONE == 1 && SONARE_PART_RIG_CHAIN == 2,
-              "WASM PartRigMode table drifted from C");
-
 // A part is 0-15 or SONARE_PART_RIG_ALL_PARTS; anything else is refused before
 // the byte it would narrow into, so 256 cannot arrive as part 0.
 uint8_t partRigPart(int part) {
@@ -339,7 +335,9 @@ void ProjectWasm::setPartRig(const val& destination_id_val, const val& part_val,
                              val inserts_json_val) {
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   const uint8_t part = partRigPart(checkedIntFromVal(part_val, "part"));
-  const int mode = sonare_wasm_synth::enumFromVal(mode_val, kPartRigModes, 3, "part rig mode");
+  const int mode =
+      sonare_wasm_synth::enumFromVal(mode_val, sonare_wasm_synth::kPartRigModes,
+                                     sonare_wasm_synth::kPartRigModeCount, "part rig mode");
   std::string inserts_json;
   const bool has_inserts = !inserts_json_val.isUndefined() && !inserts_json_val.isNull();
   if (has_inserts) inserts_json = inserts_json_val.as<std::string>();
@@ -368,7 +366,8 @@ val ProjectWasm::getPartRig(const val& destination_id_val, const val& part_val) 
   }
   if (!present) return val::null();
   val out = val::object();
-  out.set("mode", sonare_wasm_synth::enumNameVal(mode, kPartRigModes, 3));
+  out.set("mode", sonare_wasm_synth::enumNameVal(mode, sonare_wasm_synth::kPartRigModes,
+                                                 sonare_wasm_synth::kPartRigModeCount));
   out.set("insertsJson", has_inserts ? val(inserts_json) : val::null());
   return out;
 }

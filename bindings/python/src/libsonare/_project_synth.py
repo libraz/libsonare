@@ -88,6 +88,8 @@ _SAMPLE_DESC_LOOP_MODES = {
     "continuous": 1,
     "key-down": 3,
 }
+# SonarePartRigMode.
+PART_RIG_MODES = {"bank": 0, "none": 1, "chain": 2}
 _SYNTH_OSC_WAVEFORMS = {
     "default": 0,
     "sine": 1,
@@ -216,6 +218,8 @@ SYNTH_ENUM_TABLES = {
     "sample_loop_modes": tuple(_SAMPLE_LOOP_MODES),
     "sample_key_tracks": tuple(_SAMPLE_KEY_TRACKS),
     "retriggers": tuple(_SYNTH_RETRIGGERS),
+    "part_rig_modes": tuple(PART_RIG_MODES),
+    "sample_desc_loop_modes": tuple(_SAMPLE_DESC_LOOP_MODES),
 }
 _SYNTH_ENUM_KINDS = {
     "engine_modes": 0,
@@ -234,6 +238,8 @@ _SYNTH_ENUM_KINDS = {
     "sample_loop_modes": 13,
     "sample_key_tracks": 14,
     "retriggers": 15,
+    "part_rig_modes": 16,
+    "sample_desc_loop_modes": 17,
 }
 
 

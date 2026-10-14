@@ -11,10 +11,13 @@
 
 #include <sonare/sonare_c.h>
 #include <sonare/sonare_c_engine.h>
+#include <sonare/sonare_c_project_part_rig.h>
 
 #include <cstddef>
 #include <iterator>
 #include <string_view>
+
+#include "midi/part_rig.h"
 
 namespace sonare::c_api::synth_names {
 
@@ -60,7 +63,19 @@ inline constexpr const char* kControllerAxes[] = {"none",        "excitation",  
 inline constexpr const char* kArticulations[] = {"poly", "mono-retrigger", "mono-legato"};
 inline constexpr const char* kMpeDimensions[] = {"bend", "pressure", "timbre"};
 inline constexpr const char* kNoteTrackings[] = {"last", "lowest", "highest", "all"};
+inline constexpr const auto& kPartRigModes = sonare::midi::kPartRigModeNames;
+inline constexpr int kPartRigModeCount = SONARE_PART_RIG_CHAIN + 1;
+// SonareSampleDesc.loop_mode, in SoundFont sampleModes values: 0 = no loop,
+// 1 = continuous, 3 = loop while the key is held. Not the scale of
+// kSampleLoopModes, and the names carry no ordinal 2, so the value of name i is
+// kSampleDescLoopValues[i].
+inline constexpr const char* kSampleDescLoopModes[] = {"none", "continuous", "key-down"};
+inline constexpr int kSampleDescLoopValues[] = {0, 1, 3};
 
+static_assert(std::size(kPartRigModes) == kPartRigModeCount,
+              "part rig mode names out of step with the enum");
+static_assert(std::size(kSampleDescLoopModes) == std::size(kSampleDescLoopValues),
+              "sample descriptor loop mode names out of step with their values");
 static_assert(std::size(kEngineModes) == SONARE_SYNTH_ENGINE_MODE_COUNT,
               "engine mode names out of step with the enum");
 static_assert(std::size(kSampleLoopModes) == SONARE_SAMPLE_LOOP_MODE_COUNT,
@@ -112,6 +127,14 @@ inline int input_alias(const char* const* table, std::string_view name) {
   return -1;
 }
 
+/// SonareSampleDesc.loop_mode value of a sample descriptor loop mode name, or -1.
+inline int sample_desc_loop_value(std::string_view name) {
+  for (std::size_t i = 0; i < std::size(kSampleDescLoopModes); ++i) {
+    if (name == kSampleDescLoopModes[i]) return kSampleDescLoopValues[i];
+  }
+  return -1;
+}
+
 /// One table with its entry count, for code that takes a table at runtime.
 struct NameTable {
   const char* const* names;
@@ -130,10 +153,10 @@ inline constexpr NameTable kTablesByKind[] = {
     name_table(kModDestinations), name_table(kBuiltinWaveforms), name_table(kControllerInputs),
     name_table(kControllerAxes),  name_table(kArticulations),    name_table(kMpeDimensions),
     name_table(kNoteTrackings),   name_table(kSampleLoopModes),  name_table(kSampleKeyTracks),
-    name_table(kRetriggers),
+    name_table(kRetriggers),      name_table(kPartRigModes),     name_table(kSampleDescLoopModes),
 };
 
-static_assert(std::size(kTablesByKind) == SONARE_SYNTH_ENUM_RETRIGGER + 1,
+static_assert(std::size(kTablesByKind) == SONARE_SYNTH_ENUM_SAMPLE_DESC_LOOP_MODE + 1,
               "every SonareSynthEnumKind needs a table, in kind order");
 
 }  // namespace sonare::c_api::synth_names

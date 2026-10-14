@@ -110,16 +110,15 @@ double integerField(val object, const char* key, const char* subject, double max
 
 /// SonareSampleDesc.loop_mode carries SoundFont sampleModes, so a NUMBER passes
 /// through as the raw SF2 value and SF2-derived data needs no translation. The
-/// names are SynthPatch.sampleLoop's spellings mapped onto that scale, matching
-/// the Node reader.
+/// names are the C ABI's own table mapped onto that scale, matching the
+/// Node reader.
 int sampleDescLoopMode(val desc) {
   if (!hasProperty(desc, "loopMode")) return 0;
   const val value = desc["loopMode"];
   if (value.typeOf().as<std::string>() == "string") {
     const std::string name = value.as<std::string>();
-    if (name == "none") return 0;
-    if (name == "continuous") return 1;
-    if (name == "key-down") return 3;
+    const int mapped = sonare::c_api::synth_names::sample_desc_loop_value(name);
+    if (mapped >= 0) return mapped;
     throw WasmRangeError("Unknown sample loop mode name: '" + name +
                          "' (expected none, continuous or key-down)");
   }

@@ -1853,6 +1853,8 @@ export interface WasmSynthEnumTables {
   sampleLoopModes: string[];
   sampleKeyTracks: string[];
   retriggers: string[];
+  partRigModes: string[];
+  sampleDescLoopModes: string[];
 }
 
 export interface SonareModule {

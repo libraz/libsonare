@@ -810,7 +810,6 @@ uint32_t RealtimeEngineWasm::legatoFallbackCount(const val& destination_id_val) 
 void RealtimeEngineWasm::setPartRig(const val& destination_id_val, const val& part_val, val mode,
                                     val inserts_json) {
 #if defined(SONARE_WITH_ARRANGEMENT)
-  static constexpr const char* kPartRigModes[] = {"bank", "none", "chain"};
   static_assert(static_cast<int>(sonare::midi::PartRigMode::kChain) == 2,
                 "WASM PartRigMode table drifted from C");
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
@@ -820,7 +819,8 @@ void RealtimeEngineWasm::setPartRig(const val& destination_id_val, const val& pa
   }
   sonare::midi::PartRig rig;
   rig.mode = static_cast<sonare::midi::PartRigMode>(
-      sonare_wasm_synth::enumFromVal(mode, kPartRigModes, 3, "part rig mode"));
+      sonare_wasm_synth::enumFromVal(mode, sonare_wasm_synth::kPartRigModes,
+                                     sonare_wasm_synth::kPartRigModeCount, "part rig mode"));
   const bool has_inserts = !inserts_json.isUndefined() && !inserts_json.isNull();
   if ((rig.mode == sonare::midi::PartRigMode::kChain) != has_inserts) {
     throw WasmRangeError("insertsJson is required for the chain mode and only then");

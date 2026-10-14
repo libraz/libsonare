@@ -5,7 +5,6 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <iterator>
 #include <limits>
 #include <string>
 #include <type_traits>
@@ -43,11 +42,6 @@ bool ReadEngineBuiltinSynthConfig(Napi::Env env, const Napi::Object& obj,
 // Controller-profile spellings: the C ABI's own tables.
 constexpr const auto& kControllerInputs = sonare::c_api::synth_names::kControllerInputs;
 constexpr const auto& kControllerAxes = sonare::c_api::synth_names::kControllerAxes;
-
-// Part-rig mode spellings, shared with the Python and WASM facades.
-constexpr const char* kPartRigModes[] = {"bank", "none", "chain"};
-static_assert(std::size(kPartRigModes) == 3 && SONARE_PART_RIG_CHAIN == 2,
-              "Node part-rig mode table drifted from C");
 
 // Articulation, MPE dimension and note-tracking spellings: the C ABI's own tables.
 constexpr const auto& kArticulations = sonare::c_api::synth_names::kArticulations;
@@ -1497,7 +1491,8 @@ Napi::Value RealtimeEngineWrap::SetPartRig(const Napi::CallbackInfo& info) {
   // 'chain' into the bank rig, which is a request that looks as if it took.
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id) ||
       !RequiredMidiByteValue(env, info[1], "part", &part) ||
-      !sonare_node::SynthEnumValue(env, info[2], kPartRigModes, 3, "mode", &mode) ||
+      !sonare_node::SynthEnumValue(env, info[2], sonare_node::kPartRigModes,
+                                   sonare_node::kPartRigModeCount, "mode", &mode) ||
       !OptionalStringArg(env, info, 3, "inserts", "", &inserts_json)) {
     return env.Undefined();
   }

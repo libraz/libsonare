@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 
+#include "c_api/synth_enum_names.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
@@ -21,17 +22,9 @@ namespace {
 // addon is loaded once per process and the reference dies with it.
 Napi::FunctionReference* g_sample_bank_constructor = nullptr;
 
-struct SampleDescLoopMode {
-  const char* name;
-  int value;
-};
-
 // SonareSampleDesc.loop_mode carries SoundFont sampleModes, so a NUMBER passes
 // through as the raw SF2 value and SF2-derived data needs no translation. The
-// names are the spellings SynthPatch.sampleLoop uses, mapped onto that scale.
-constexpr SampleDescLoopMode kSampleDescLoopModes[] = {
-    {"none", 0}, {"continuous", 1}, {"key-down", 3}};
-
+// names are the C ABI's own table, mapped onto that scale.
 // Reads SonareSampleDesc.loop_mode from either spelling. An absent value keeps
 // the caller's zero-initialized default (no loop).
 bool ReadSampleLoopMode(Napi::Env env, const Napi::Value& value, int* out) {
@@ -47,11 +40,10 @@ bool ReadSampleLoopMode(Napi::Env env, const Napi::Value& value, int* out) {
   }
   const std::string name = sonare_node::node_narrow_string(env, value, "loopMode");
   if (env.IsExceptionPending()) return false;
-  for (const SampleDescLoopMode& entry : kSampleDescLoopModes) {
-    if (name == entry.name) {
-      *out = entry.value;
-      return true;
-    }
+  const int mapped = sonare::c_api::synth_names::sample_desc_loop_value(name);
+  if (mapped >= 0) {
+    *out = mapped;
+    return true;
   }
   Napi::TypeError::New(
       env, "Unknown sample loop mode name: '" + name + "' (expected none, continuous or key-down)")
