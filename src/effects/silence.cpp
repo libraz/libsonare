@@ -5,6 +5,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <limits>
+#include <string>
 
 #include "util/db.h"
 #include "util/exception.h"
@@ -29,11 +32,12 @@ std::vector<float> centered_rms(const float* x, std::size_t n, int frame_length,
   const int n_frames = static_cast<int>(n) / hop_length + 1;
   rms.reserve(static_cast<std::size_t>(n_frames));
   for (int f = 0; f < n_frames; ++f) {
-    const int center = f * hop_length;
-    const int start = center - half;
-    const int end = start + frame_length;  // exclusive
+    const std::int64_t center = static_cast<std::int64_t>(f) * hop_length;
+    const std::int64_t start = center - half;
+    const std::int64_t end = start + frame_length;  // exclusive
     double sum_sq = 0.0;
-    for (int i = std::max(0, start); i < std::min(static_cast<int>(n), end); ++i) {
+    for (std::int64_t i = std::max<std::int64_t>(0, start);
+         i < std::min(static_cast<std::int64_t>(n), end); ++i) {
       const double v = x[i];
       sum_sq += v * v;
     }
@@ -58,6 +62,14 @@ std::vector<bool> non_silent_frames(const std::vector<float>& rms, float top_db)
   return mask;
 }
 
+/// @brief Rejects inputs whose sample indices do not fit the int interval arithmetic.
+void require_indexable_length(std::size_t n, const char* who) {
+  if (n > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(who) + ": input length exceeds the supported maximum");
+  }
+}
+
 }  // namespace
 
 TrimResult trim(const float* x, std::size_t n, float top_db, int frame_length, int hop_length) {
@@ -75,6 +87,7 @@ TrimResult trim(const float* x, std::size_t n, float top_db, int frame_length, i
     throw SonareException(ErrorCode::InvalidParameter,
                           "trim: frame_length and hop_length must be > 0");
   }
+  require_indexable_length(n, "trim");
   if (!numeric::finite_positive(top_db)) {
     throw SonareException(ErrorCode::InvalidParameter, "trim: top_db must be finite and > 0");
   }
@@ -121,6 +134,7 @@ SplitReport split_with_report(const float* x, std::size_t n, float top_db, int f
     throw SonareException(ErrorCode::InvalidParameter,
                           "split: frame_length and hop_length must be > 0");
   }
+  require_indexable_length(n, "split");
   if (!numeric::finite_positive(top_db)) {
     throw SonareException(ErrorCode::InvalidParameter, "split: top_db must be finite and > 0");
   }

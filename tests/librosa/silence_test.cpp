@@ -213,3 +213,16 @@ TEST_CASE("silence validation preserves input and framing precedence", "[silence
     }
   }
 }
+
+TEST_CASE("silence rejects lengths that do not fit int sample indices", "[silence][validation]") {
+  const float sample = 1.0f;
+  const std::size_t too_long = static_cast<std::size_t>(std::numeric_limits<int>::max()) + 1;
+
+  REQUIRE_THROWS_AS(trim(&sample, too_long, 60.0f, 2048, 512), SonareException);
+  REQUIRE_THROWS_AS(split(&sample, too_long, 60.0f, 2048, 512), SonareException);
+
+  const float* signals[] = {&sample};
+  const std::size_t lengths[] = {too_long};
+  REQUIRE_THROWS_AS(split_common_with_report(signals, lengths, 1, 60.0f, 2048, 512),
+                    SonareException);
+}
