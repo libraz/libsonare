@@ -194,11 +194,14 @@ Napi::Value PlaybackRendererWrap::SetHeadOrientation(const Napi::CallbackInfo& i
   SONARE_NODE_TRY
   if (!EnsureAlive(env)) return env.Undefined();
   float yaw_deg = 0.0f;
-  if (!sonare_node::RequiredFloatValue(env, info[0], "yawDeg", &yaw_deg)) return env.Undefined();
+  if (!sonare_node::RequiredFiniteFloatValue(env, info[0], "yawDeg", &yaw_deg)) {
+    return env.Undefined();
+  }
   float pitch_deg = 0.0f;
   float roll_deg = 0.0f;
-  if (!sonare_node::OptionalFloatArg(env, info, 1, "pitchDeg", 0.0f, &pitch_deg) ||
-      !sonare_node::OptionalFloatArg(env, info, 2, "rollDeg", 0.0f, &roll_deg)) {
+  if (!sonare_node::OptionalFiniteFloatArgRefusingNull(env, info, 1, "pitchDeg", 0.0f,
+                                                       &pitch_deg) ||
+      !sonare_node::OptionalFiniteFloatArgRefusingNull(env, info, 2, "rollDeg", 0.0f, &roll_deg)) {
     return env.Undefined();
   }
   // Realtime entry: see the note in sonare_wrap_playback.h.

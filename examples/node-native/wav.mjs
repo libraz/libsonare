@@ -1,8 +1,11 @@
 import { closeSync, openSync, writeSync } from 'node:fs';
+import { floatToPcm16 } from '../pcm16.mjs';
 
 /** Write interleaved float samples as a PCM16 WAV without a full PCM copy. */
 export function writePcm16Wav(path, samples, sampleRate, channels = 1) {
-  if (!Number.isInteger(sampleRate) || sampleRate <= 0) throw new RangeError('sampleRate must be positive');
+  if (!Number.isInteger(sampleRate) || sampleRate <= 0) {
+    throw new RangeError('sampleRate must be positive');
+  }
   if (!Number.isInteger(channels) || channels <= 0 || samples.length % channels !== 0) {
     throw new RangeError('samples must be interleaved for channels');
   }
@@ -29,8 +32,7 @@ export function writePcm16Wav(path, samples, sampleRate, channels = 1) {
       const count = Math.min(8192, samples.length - offset);
       const pcm = Buffer.allocUnsafe(count * bytesPerSample);
       for (let i = 0; i < count; i += 1) {
-        const sample = Math.max(-1, Math.min(1, samples[offset + i]));
-        pcm.writeInt16LE(Math.round(sample * 32767), i * bytesPerSample);
+        pcm.writeInt16LE(floatToPcm16(samples[offset + i]), i * bytesPerSample);
       }
       writeSync(fd, pcm);
     }

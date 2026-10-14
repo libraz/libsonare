@@ -6,6 +6,8 @@
  * its historical call sites use a different arg order or sample-count shape.
  */
 
+import { writeFileSync } from 'node:fs';
+
 export interface SineOptions {
   /** Sample rate in Hz (default 44100). */
   sampleRate?: number;
@@ -62,4 +64,42 @@ export function glide(startHz: number, durationSec: number, opts: GlideOptions =
     out[i] = amp * (Math.sin(phase) + 0.5 * Math.sin(octavePhase));
   }
   return out;
+}
+
+/**
+ * Write the given planes as one interleaved 16-bit PCM WAV.
+ *
+ * Fixtures are written by the test rather than committed, so a decoded channel
+ * is compared against the exact samples it was written from.
+ */
+export function writePcm16Wav(filePath: string, planes: Float32Array[], sampleRate: number): void {
+  const channels = planes.length;
+  const frameCount = planes[0].length;
+  const bytesPerSample = 2;
+  const dataSize = frameCount * channels * bytesPerSample;
+  const wav = Buffer.alloc(44 + dataSize);
+  wav.write('RIFF', 0, 4, 'ascii');
+  wav.writeUInt32LE(36 + dataSize, 4);
+  wav.write('WAVE', 8, 4, 'ascii');
+  wav.write('fmt ', 12, 4, 'ascii');
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(channels, 22);
+  wav.writeUInt32LE(sampleRate, 24);
+  wav.writeUInt32LE(sampleRate * channels * bytesPerSample, 28);
+  wav.writeUInt16LE(channels * bytesPerSample, 32);
+  wav.writeUInt16LE(16, 34);
+  wav.write('data', 36, 4, 'ascii');
+  wav.writeUInt32LE(dataSize, 40);
+  for (let frame = 0; frame < frameCount; frame++) {
+    for (let channel = 0; channel < channels; channel++) {
+      const offset = 44 + (frame * channels + channel) * bytesPerSample;
+      const quantized = Math.max(
+        -32768,
+        Math.min(32767, Math.round(planes[channel][frame] * 32767)),
+      );
+      wav.writeInt16LE(quantized, offset);
+    }
+  }
+  writeFileSync(filePath, wav);
 }

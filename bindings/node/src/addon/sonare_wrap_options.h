@@ -632,6 +632,16 @@ inline bool RequiredFloatValue(Napi::Env env, const Napi::Value& value, const st
   return true;
 }
 
+/// @brief Read a required finite float value (@ref node_narrow_finite_float).
+/// @details This composes the common number/type check with the finite float
+///        narrowing used by public fields that have no non-finite sentinel.
+inline bool RequiredFiniteFloatValue(Napi::Env env, const Napi::Value& value,
+                                     const std::string& label, float* out) {
+  if (!RequireNumberValue(env, value, label)) return false;
+  *out = node_narrow_finite_float(env, value, label.c_str());
+  return true;
+}
+
 /// @brief Read a required double value.
 inline bool RequiredDoubleValue(Napi::Env env, const Napi::Value& value, const std::string& label,
                                 double* out) {
@@ -1132,6 +1142,22 @@ inline bool OptionalFiniteFloatArg(Napi::Env env, const Napi::CallbackInfo& info
   if (!RequireNumberValue(env, value, name)) return false;
   *out = node_narrow_finite_float(env, value, name);
   return true;
+}
+
+/// @brief Optional finite-float positional argument where only `undefined` reads as
+///        absent: `null` is refused by name like any other wrong type, matching the
+///        WASM and Python facades. Use it only where that parity is the contract;
+///        @ref OptionalFiniteFloatArg is the family default.
+inline bool OptionalFiniteFloatArgRefusingNull(Napi::Env env, const Napi::CallbackInfo& info,
+                                               size_t index, const char* name, float fallback,
+                                               float* out) {
+  if (env.IsExceptionPending()) return false;
+  const Napi::Value value = info[index];
+  if (value.IsUndefined()) {
+    *out = fallback;
+    return true;
+  }
+  return RequiredFiniteFloatValue(env, value, name, out);
 }
 
 /// @brief Read an optional double positional argument.

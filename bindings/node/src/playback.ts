@@ -125,7 +125,8 @@ export class PlaybackRenderer {
   /**
    * Publishes the listener head orientation in degrees: right-handed,
    * positive yaw turns the head right, positive pitch looks up, positive roll
-   * lowers the right ear. Ignored by a speakers target.
+   * lowers the right ear. Ignored by a speakers target. Each argument must be
+   * a finite number representable by a 32-bit float.
    */
   setHeadOrientation(yawDeg: number, pitchDeg = 0, rollDeg = 0): void {
     this.native.setHeadOrientation(yawDeg, pitchDeg, rollDeg);

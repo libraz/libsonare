@@ -3,48 +3,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { Audio } from '../src/index.js';
-import { sine } from './_helpers.js';
+import { sine, writePcm16Wav } from './_helpers.js';
 
 const SR = 22050;
-
-/**
- * Write the given planes as one interleaved 16-bit PCM WAV.
- *
- * The fixture is written by the test rather than committed, so the expected
- * plane is the array this was handed: a decoded channel is compared against its
- * own source samples, not against the other channel.
- */
-function writePcm16Wav(filePath: string, planes: Float32Array[], sampleRate: number): void {
-  const channels = planes.length;
-  const frameCount = planes[0].length;
-  const bytesPerSample = 2;
-  const dataSize = frameCount * channels * bytesPerSample;
-  const wav = Buffer.alloc(44 + dataSize);
-  wav.write('RIFF', 0, 4, 'ascii');
-  wav.writeUInt32LE(36 + dataSize, 4);
-  wav.write('WAVE', 8, 4, 'ascii');
-  wav.write('fmt ', 12, 4, 'ascii');
-  wav.writeUInt32LE(16, 16);
-  wav.writeUInt16LE(1, 20);
-  wav.writeUInt16LE(channels, 22);
-  wav.writeUInt32LE(sampleRate, 24);
-  wav.writeUInt32LE(sampleRate * channels * bytesPerSample, 28);
-  wav.writeUInt16LE(channels * bytesPerSample, 32);
-  wav.writeUInt16LE(16, 34);
-  wav.write('data', 36, 4, 'ascii');
-  wav.writeUInt32LE(dataSize, 40);
-  for (let frame = 0; frame < frameCount; frame++) {
-    for (let channel = 0; channel < channels; channel++) {
-      const offset = 44 + (frame * channels + channel) * bytesPerSample;
-      const quantized = Math.max(
-        -32768,
-        Math.min(32767, Math.round(planes[channel][frame] * 32767)),
-      );
-      wav.writeInt16LE(quantized, offset);
-    }
-  }
-  fs.writeFileSync(filePath, wav);
-}
 
 /** Largest absolute difference between two equal-length planes. */
 function maxAbsDiff(a: Float32Array, b: Float32Array): number {

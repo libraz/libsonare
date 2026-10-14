@@ -8,6 +8,9 @@
  * shared string readers the only route from a JS string to a C++ one.
  */
 
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   Audio,
@@ -28,6 +31,7 @@ import {
 } from '../src/index.js';
 import { addon } from '../src/native.js';
 import { addonSources } from './_addon_sources.js';
+import { sine, writePcm16Wav } from './_helpers.js';
 
 const NUL = '\0';
 
@@ -64,7 +68,6 @@ const SCENE_JSON = JSON.stringify({
   buses: [{ id: '1', inserts: [] }],
   connections: [],
 });
-const WAV_PATH = new URL('../resampled.wav', import.meta.url).pathname;
 
 describe('embedded NUL refusal, mastering preset names', () => {
   const samples = new Float32Array(4096).fill(0.1);
@@ -191,8 +194,15 @@ describe('embedded NUL refusal, by handoff kind', () => {
   });
 
   it('a path', () => {
-    expect(() => Audio.fromFile(WAV_PATH)).not.toThrow();
-    expectNulRefusal(() => Audio.fromFile(`${WAV_PATH}${NUL}x`), 'path');
+    const dir = mkdtempSync(join(tmpdir(), 'sonare-nul-path-'));
+    try {
+      const wavPath = join(dir, 'tone.wav');
+      writePcm16Wav(wavPath, [sine(440, 0.05)], 44100);
+      expect(() => Audio.fromFile(wavPath)).not.toThrow();
+      expectNulRefusal(() => Audio.fromFile(`${wavPath}${NUL}x`), 'path');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('a string handed to C++ as std::string (voice changer preset id)', () => {

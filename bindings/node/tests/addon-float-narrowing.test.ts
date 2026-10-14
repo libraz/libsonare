@@ -611,6 +611,14 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     },
   },
   {
+    name: 'preemphasis coef',
+    site: 'features/signal.cpp Preemphasis coef',
+    // Coefficients outside the usual unit interval remain valid finite input;
+    // the output must still prove that the addon consumed the argument.
+    control: [-1.5, 1.5],
+    call: (v) => magnitudeSum(native.preemphasis(Float32Array.from([1, 2, 3, 4]), v)),
+  },
+  {
     // `init` is pinned to nndsvd: sonare_decompose's default initialiser is
     // "random", which would make the control itself non-deterministic.
     name: 'decompose beta',
@@ -625,6 +633,12 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     site: 'features/signal.cpp Preemphasis zi',
     control: [0, 1],
     call: (v) => native.preemphasis(Float32Array.from([1, 2, 3, 4]), 0.97, v)[0],
+  },
+  {
+    name: 'deemphasis coef',
+    site: 'features/signal.cpp Deemphasis coef',
+    control: [-1.5, 1.5],
+    call: (v) => magnitudeSum(native.deemphasis(Float32Array.from([1, 2, 3, 4]), v)),
   },
   {
     name: 'deemphasis zi',

@@ -151,16 +151,6 @@ describe('SonareError is a value class with brand-based instanceof', () => {
   });
 });
 
-/*
- * `CErrorFromException` is the addon's hand-written switch from a core
- * `sonare::ErrorCode` to the C-ABI code the caller sees, and it duplicates the
- * C ABI's own `map_sonare_exception`. An enumerator missing from it reaches JS
- * as Unknown/99 with the cause lost, and no test can drive that: the enumerator
- * that was missing, `EncodeFailed`, is thrown only by the core's file-writing
- * paths, and this addon exposes no entry point that writes a file. So the
- * switch is asserted against the enum it mirrors, and against the C-ABI table
- * that is its oracle.
- */
 /**
  * A file in the CORE tree. Addon sources go through `addonSourceText` instead,
  * so `src/addon/` keeps one definition across the test tree.
@@ -191,7 +181,7 @@ function coreErrorCodeEnumerators(): string[] {
     .filter((name): name is string => name !== undefined);
 }
 
-/** `{ Enumerator: SONARE_ERROR_* }` from a `switch (e.code())` / `switch (err)`. */
+/** `{ Enumerator: SONARE_ERROR_* }` from a `switch (ErrorCode)`. */
 function switchArms(text: string, signature: string): Map<string, string> {
   const start = text.indexOf(signature);
   expect(start, signature).toBeGreaterThan(-1);
@@ -208,51 +198,68 @@ function switchArms(text: string, signature: string): Map<string, string> {
   return arms;
 }
 
-const addonArms = (): Map<string, string> =>
-  switchArms(addonSourceText('sonare_wrap_utils.cpp'), 'SonareError CErrorFromException(');
+const canonicalArms = (): Map<string, string> =>
+  switchArms(repoFile('src/c_api/sonare_c_error_mapping.h'), 'c_error_from_error_code(');
 
-/** The C ABI's own exception map, which the addon's copy must agree with. */
-const oracleArms = (): Map<string, string> =>
-  switchArms(repoFile('src/c_api/sonare_c_internal.cpp'), 'SonareError map_sonare_exception(');
+function delegatesToCanonical(text: string, signature: string): boolean {
+  const start = text.indexOf(signature);
+  expect(start, signature).toBeGreaterThan(-1);
+  const body = text.slice(start, text.indexOf('\n}', start));
+  return /return\s+(?:sonare_c_detail::)?c_error_from_error_code\(e\.code\(\)\);/.test(body);
+}
 
-describe('the addon exception map covers every core ErrorCode', () => {
-  it('reads the enum and both switches it has to agree with', () => {
+const canonicalSwitchText = (): string => {
+  const text = repoFile('src/c_api/sonare_c_error_mapping.h');
+  const start = text.indexOf('c_error_from_error_code(');
+  const open = text.indexOf('switch (', start);
+  const end = text.indexOf('\n  }', open);
+  expect(start).toBeGreaterThan(-1);
+  expect(open).toBeGreaterThan(start);
+  expect(end).toBeGreaterThan(open);
+  return text.slice(open, end);
+};
+
+// Checked statically: EncodeFailed cannot be reached from any addon entry
+// point, so no call through the addon can exercise its mapping.
+describe('the canonical exception map covers every core ErrorCode', () => {
+  it('reads the enum and the canonical switch', () => {
     // Self-check: every assertion below is vacuous if a regex stopped matching.
     const enumerators = coreErrorCodeEnumerators();
     expect(enumerators[0]).toBe('Ok');
     expect(enumerators).toContain('EncodeFailed');
-    expect(addonArms().size).toBe(enumerators.length);
-    expect(oracleArms().get('EncodeFailed')).toBe('SONARE_ERROR_ENCODE_FAILED');
+    expect(canonicalArms().size).toBe(enumerators.length);
+    expect(canonicalArms().get('EncodeFailed')).toBe('SONARE_ERROR_ENCODE_FAILED');
   });
 
   it('maps every enumerator exactly once, with no default: to hide the next one', () => {
     const enumerators = coreErrorCodeEnumerators();
-    expect([...addonArms().keys()].sort()).toEqual([...enumerators].sort());
+    expect([...canonicalArms().keys()].sort()).toEqual([...enumerators].sort());
     // A default: would satisfy the count above while still sending a future
     // enumerator to SONARE_ERROR_UNKNOWN, which is the failure this prevents.
-    const text = addonSourceText('sonare_wrap_utils.cpp');
-    const start = text.indexOf('SonareError CErrorFromException(');
-    expect(text.slice(start, text.indexOf('\n}', start))).not.toMatch(/\bdefault\s*:/);
+    expect(canonicalSwitchText()).not.toMatch(/\bdefault\s*:/);
   });
 
-  it('agrees with the C ABI oracle on every enumerator the oracle maps', () => {
-    const addon = addonArms();
-    const oracle = oracleArms();
-    for (const [enumerator, code] of oracle) {
-      expect(addon.get(enumerator), enumerator).toBe(code);
-    }
-    // `Ok` is not an error, and both spell it out rather than leaving it to a
-    // default arm: an exception carrying it is a programming error, so it is
-    // reported as Unknown instead of as the success its ordinal would mean.
-    expect(oracle.get('Ok')).toBe('SONARE_ERROR_UNKNOWN');
-    expect(addon.get('Ok')).toBe('SONARE_ERROR_UNKNOWN');
-    expect([...oracle.keys()].sort()).toEqual([...addon.keys()].sort());
+  it('spells out Ok as Unknown', () => {
+    // `Ok` is not an error, and the canonical switch spells it out rather than
+    // leaving it to a default arm: an exception carrying it is a programming
+    // error, so it is reported as Unknown instead of as the success its ordinal
+    // would mean.
+    expect(canonicalArms().get('Ok')).toBe('SONARE_ERROR_UNKNOWN');
   });
 
-  it('leaves no default: in the C ABI oracle either', () => {
-    const text = repoFile('src/c_api/sonare_c_internal.cpp');
-    const start = text.indexOf('SonareError map_sonare_exception(');
-    expect(text.slice(start, text.indexOf('\n}', start))).not.toMatch(/\bdefault\s*:/);
+  it('keeps the C and Node wrappers as delegates', () => {
+    expect(
+      delegatesToCanonical(
+        repoFile('src/c_api/sonare_c_internal.cpp'),
+        'SonareError map_sonare_exception(',
+      ),
+    ).toBe(true);
+    expect(
+      delegatesToCanonical(
+        addonSourceText('sonare_wrap_utils.cpp'),
+        'SonareError CErrorFromException(',
+      ),
+    ).toBe(true);
   });
 });
 

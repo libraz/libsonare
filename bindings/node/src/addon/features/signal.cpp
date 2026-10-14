@@ -436,7 +436,7 @@ Napi::Value SonareWrap::Preemphasis(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   float coef{};
-  if (!OptionalFloatArg(env, info, 1, "coef", 0.97f, &coef)) return env.Undefined();
+  if (!OptionalFiniteFloatArg(env, info, 1, "coef", 0.97f, &coef)) return env.Undefined();
   bool use_zi = info.Length() >= 3 && info[2].IsNumber();
   float zi{};
   if (!OptionalFiniteFloatArg(env, info, 2, "zi", 0.0f, &zi)) return env.Undefined();
@@ -457,7 +457,7 @@ Napi::Value SonareWrap::Deemphasis(const Napi::CallbackInfo& info) {
   }
   auto arr = info[0].As<Napi::Float32Array>();
   float coef{};
-  if (!OptionalFloatArg(env, info, 1, "coef", 0.97f, &coef)) return env.Undefined();
+  if (!OptionalFiniteFloatArg(env, info, 1, "coef", 0.97f, &coef)) return env.Undefined();
   bool use_zi = info.Length() >= 3 && info[2].IsNumber();
   float zi{};
   if (!OptionalFiniteFloatArg(env, info, 2, "zi", 0.0f, &zi)) return env.Undefined();

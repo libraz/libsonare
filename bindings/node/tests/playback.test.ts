@@ -166,11 +166,67 @@ describe('PlaybackRenderer latency, config and diagnostics', () => {
     expect(() => speakers.setHeadOrientation(30)).not.toThrow();
   });
 
-  it('rejects a non-number pitchDeg/rollDeg and stays usable', () => {
+  it('rejects wrong orientation types and stays usable', () => {
     using renderer = new PlaybackRenderer({ config: {} });
-    expect(() => renderer.setHeadOrientation(0, 'up' as unknown as number, 0)).toThrow();
-    expect(() => renderer.setHeadOrientation(0, 0, 'level' as unknown as number)).toThrow();
-    expect(() => renderer.setHeadOrientation(0, 0, 0)).not.toThrow();
+    const expectWrongType = (axis: string, invoke: () => void) => {
+      expect(invoke).toThrow(TypeError);
+      expect(invoke).toThrow(new RegExp(axis));
+    };
+    for (const value of [null, 'wrong', true, {}] as const) {
+      expectWrongType('yawDeg', () =>
+        renderer.setHeadOrientation(value as unknown as number, 0, 0),
+      );
+      expectWrongType('pitchDeg', () =>
+        renderer.setHeadOrientation(0, value as unknown as number, 0),
+      );
+      expectWrongType('rollDeg', () =>
+        renderer.setHeadOrientation(0, 0, value as unknown as number),
+      );
+    }
+    expect(() => renderer.setHeadOrientation(0)).not.toThrow();
+    expect(() => renderer.setHeadOrientation(0, undefined, undefined)).not.toThrow();
+  });
+
+  it('rejects non-finite and float32-overflow orientation values in yaw-pitch-roll order', () => {
+    using renderer = new PlaybackRenderer({ config: {} });
+    const float32Max = 3.4028234663852886e38;
+    const float32Overflow = float32Max * 2;
+
+    const invalidValues = [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      float32Overflow,
+      -float32Overflow,
+    ];
+    for (const value of invalidValues) {
+      expect(() => renderer.setHeadOrientation(value, 0, 0)).toThrow(RangeError);
+      expect(() => renderer.setHeadOrientation(0, value, 0)).toThrow(RangeError);
+      expect(() => renderer.setHeadOrientation(0, 0, value)).toThrow(RangeError);
+      expect(() => renderer.setHeadOrientation(value, 0, 0)).toThrow(/yawDeg/);
+      expect(() => renderer.setHeadOrientation(0, value, 0)).toThrow(/pitchDeg/);
+      expect(() => renderer.setHeadOrientation(0, 0, value)).toThrow(/rollDeg/);
+    }
+
+    // Exact float32 limits, signed zero, and multiple turns remain valid and
+    // are passed through without normalization.
+    for (const value of [float32Max, -float32Max, 0, -0, 720, -1080, 360]) {
+      expect(() => renderer.setHeadOrientation(value, 0, 0)).not.toThrow();
+      expect(() => renderer.setHeadOrientation(0, value, 0)).not.toThrow();
+      expect(() => renderer.setHeadOrientation(0, 0, value)).not.toThrow();
+    }
+
+    // All three values are invalid, so the leftmost axis owns the error.
+    expect(() =>
+      renderer.setHeadOrientation(
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+        'roll' as unknown as number,
+      ),
+    ).toThrow(/yawDeg/);
+    expect(() => renderer.setHeadOrientation(0, Number.NaN, Number.POSITIVE_INFINITY)).toThrow(
+      /pitchDeg/,
+    );
   });
 
   it('reports a diagnostics document with the documented shape', () => {
@@ -196,6 +252,9 @@ describe('PlaybackRenderer latency, config and diagnostics', () => {
     renderer.destroy();
     expect(() => renderer.destroy()).not.toThrow();
     expect(() => renderer.reset()).toThrow('destroyed');
+    expect(() =>
+      renderer.setHeadOrientation(Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY),
+    ).toThrow('destroyed');
   });
 });
 
