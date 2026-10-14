@@ -48,6 +48,11 @@ void DynamicEq::prepare(double sample_rate, int max_block_size) {
   }
   sub_channels_.assign(kRealtimePreparedChannels, nullptr);
   prepared_ = true;
+  // No band carries gain state into a new prepare; rebuild() seeds them all.
+  last_applied_gain_db_.fill(0.0f);
+  smoothed_gain_db_.fill(0.0f);
+  target_gain_db_.fill(0.0f);
+  last_applied_coeff_gain_db_.fill(std::numeric_limits<float>::quiet_NaN());
   rebuild();
 }
 
@@ -519,12 +524,9 @@ float DynamicEq::dynamic_gain_delta(const DynamicEqBand& band, float detector_db
 }
 
 void DynamicEq::rebuild(int /*num_samples*/) {
-  // Immediate (non-process) reconfiguration path used by set_band/set_parameter:
-  // recompute each band's static target gain and program the biquad now without
-  // smoothing (no audio is flowing). The per-sample smoothing during process()
-  // then evolves from this seed. Dynamic deltas are recomputed each block in
-  // process(), so here we seed with the static gain plus the last known
-  // detector-driven delta to avoid a jump on the first processed block.
+  // Non-process reconfiguration (set_band/set_parameter): a band that is already running keeps
+  // its smoothed gain and is reprogrammed only if its filter shape moved; process() smooths to
+  // the new target. A band with no prior state is seeded at its target now.
   for (size_t i = 0; i < kMaxBands; ++i) {
     const auto& dynamic_band = bands_[i];
     if (!admit_band(i)) {
@@ -537,12 +539,21 @@ void DynamicEq::rebuild(int /*num_samples*/) {
     }
     const float target_gain =
         dynamic_band.static_gain_db + dynamic_gain_delta(dynamic_band, last_band_detector_db_[i]);
-    smoothed_gain_db_[i] = target_gain;
     target_gain_db_[i] = target_gain;
-    last_applied_gain_db_[i] = target_gain;
-    last_applied_coeff_gain_db_[i] = target_gain;
+    const bool running = !std::isnan(last_applied_coeff_gain_db_[i]);
+    if (!running) {
+      smoothed_gain_db_[i] = target_gain;
+    }
+    const EqBand& slot = eq_.band(i);
+    if (running && slot.enabled && slot.type == dynamic_band.type &&
+        slot.frequency_hz == dynamic_band.frequency_hz && slot.q == dynamic_band.q) {
+      continue;
+    }
+    const float gain = smoothed_gain_db_[i];
+    last_applied_gain_db_[i] = gain;
+    last_applied_coeff_gain_db_[i] = gain;
     eq_.set_band_at_rate(
-        i, {dynamic_band.type, dynamic_band.frequency_hz, target_gain, dynamic_band.q, true});
+        i, {dynamic_band.type, dynamic_band.frequency_hz, gain, dynamic_band.q, true});
   }
 }
 

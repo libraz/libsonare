@@ -184,6 +184,9 @@ class EqualizerProcessor : public rt::ProcessorBase {
   bool discard_non_finite_dynamic_state() noexcept;
   void update_iir_bands_preserving_state(int num_samples = 0);
   void rebuild_iir(int num_samples = 0);
+  /// Returns band @p index's applied dynamic gain: smoothed over @p num_samples while the band
+  /// is running, held on a non-process rebuild, seeded at @p target_gain when it has no state.
+  float settle_dynamic_gain(size_t index, float target_gain, int num_samples);
   static EqBand backend_band(EqBand band, PhaseMode global_phase, float gain_scale);
   void process_mono_backend(ParametricEq& backend, float* samples, int num_samples);
   void process_mono_fir(LinearPhaseEq& backend, float* samples, int num_samples);
@@ -212,6 +215,8 @@ class EqualizerProcessor : public rt::ProcessorBase {
   std::array<std::vector<DetectorState>, kMaxBands> detector_states_{};
   std::array<float, kMaxBands> last_applied_gain_db_{};
   std::array<float, kMaxBands> smoothed_gain_db_{};
+  // True while smoothed_gain_db_ describes a running dynamic band.
+  std::array<bool, kMaxBands> dynamic_gain_live_{};
   std::array<float, kMaxBands> auto_threshold_db_{};
   float last_detector_db_ = sonare::constants::kFloorDb;
   bool auto_gain_enabled_ = false;

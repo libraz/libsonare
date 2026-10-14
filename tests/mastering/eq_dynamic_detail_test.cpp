@@ -506,3 +506,197 @@ TEST_CASE("DynamicEq band switched back on reads no stale detector or gain", "[m
   const std::vector<float> expected = run(fresh, quiet);
   REQUIRE(max_abs_difference(after, expected) < 1.0e-6f);
 }
+
+// ===================================================================
+// Live reconfiguration must leave unrelated in-flight gain smoothing alone.
+// ===================================================================
+namespace {
+
+constexpr int kReconfigRate = 48000;
+constexpr int kReconfigSamples = 8192;
+
+// Quiet for two blocks, then loud, so the dynamic band is mid-attack after the first loud block.
+std::vector<float> reconfig_signal(int block) {
+  std::vector<float> out(static_cast<size_t>(kReconfigSamples));
+  for (int i = 0; i < kReconfigSamples; ++i) {
+    const float amp = i < 2 * block ? 0.005f : 0.5f;
+    out[static_cast<size_t>(i)] =
+        amp * static_cast<float>(std::sin(2.0 * kPiD * 1000.0 * i / kReconfigRate));
+  }
+  return out;
+}
+
+DynamicEqBand reconfig_dynamic_band() {
+  return {EqBandType::Peak, 1000.0f, 0.0f, 1.5f, -36.0f, 8.0f, -18.0f, true};
+}
+
+// Renders blocks of @p block; @p edit runs once, between the first loud block and the next.
+template <typename Eq, typename Edit>
+std::vector<float> render_with_edit(Eq& eq, int block, const Edit& edit) {
+  std::vector<float> samples = reconfig_signal(block);
+  const int edit_after = 3 * block;
+  for (int pos = 0; pos < kReconfigSamples; pos += block) {
+    const int count = std::min(block, kReconfigSamples - pos);
+    float* channels[] = {samples.data() + pos};
+    eq.process(channels, 1, count);
+    if (pos + count == edit_after) edit(eq);
+  }
+  return samples;
+}
+
+EqBand reconfig_streaming_band() {
+  EqBand band{EqBandType::Peak, 1000.0f, 0.0f, 1.5f, true};
+  band.dyn.enabled = true;
+  band.dyn.threshold_db = -36.0f;
+  band.dyn.ratio = 8.0f;
+  band.dyn.range_db = -18.0f;
+  band.dyn.attack_ms = 5.0f;
+  band.dyn.release_ms = 50.0f;
+  return band;
+}
+
+float max_step(const std::vector<float>& samples) {
+  float step = 0.0f;
+  for (size_t i = 1; i < samples.size(); ++i) {
+    step = std::max(step, std::abs(samples[i] - samples[i - 1]));
+  }
+  return step;
+}
+
+}  // namespace
+
+TEST_CASE("DynamicEq unrelated edits leave an in-flight gain transition untouched",
+          "[mastering][eq][dynamic-smooth]") {
+  for (const int block : {128, 256, 512}) {
+    CAPTURE(block);
+    const auto make = [&] {
+      auto eq = std::make_unique<DynamicEq>();
+      eq->prepare(kReconfigRate, block);
+      eq->set_band(0, reconfig_dynamic_band());
+      return eq;
+    };
+    auto control = make();
+    const auto expected = render_with_edit(*control, block, [](DynamicEq&) {});
+    const float tolerance = 1.0e-5f * peak_abs(expected);
+    // The swing the test relies on: the band is cutting by the end.
+    REQUIRE(control->last_applied_gain_db(0) < -3.0f);
+
+    SECTION("disabled band set_band") {
+      auto eq = make();
+      const auto out = render_with_edit(*eq, block, [](DynamicEq& e) {
+        e.set_band(1, {EqBandType::Peak, 3000.0f, 3.0f, 2.0f, -20.0f, 4.0f, -6.0f, false});
+      });
+      REQUIRE(max_abs_difference(out, expected) < tolerance);
+    }
+    SECTION("disabled band set_parameter") {
+      auto eq = make();
+      const auto out = render_with_edit(*eq, block, [](DynamicEq& e) {
+        REQUIRE(e.set_parameter(DynamicEq::kParamsPerBand * 1 + 0, 4000.0f));
+      });
+      REQUIRE(max_abs_difference(out, expected) < tolerance);
+    }
+    SECTION("same band resent through set_band") {
+      auto eq = make();
+      const auto out = render_with_edit(
+          *eq, block, [](DynamicEq& e) { e.set_band(0, reconfig_dynamic_band()); });
+      REQUIRE(max_abs_difference(out, expected) < tolerance);
+    }
+    SECTION("same value resent through set_parameter") {
+      auto eq = make();
+      const auto out = render_with_edit(*eq, block, [](DynamicEq& e) {
+        REQUIRE(e.set_parameter(DynamicEq::kParamsPerBand * 0 + 4, 8.0f));
+        REQUIRE(e.set_parameter(DynamicEq::kParamsPerBand * 0 + 1, 0.0f));
+      });
+      REQUIRE(max_abs_difference(out, expected) < tolerance);
+    }
+  }
+}
+
+TEST_CASE("DynamicEq retargets only the edited band and keeps smoothing from its current gain",
+          "[mastering][eq][dynamic-smooth]") {
+  for (const int block : {128, 256, 512}) {
+    CAPTURE(block);
+    const auto make = [&] {
+      auto eq = std::make_unique<DynamicEq>();
+      eq->prepare(kReconfigRate, block);
+      eq->set_band(0, reconfig_dynamic_band());
+      return eq;
+    };
+    auto control = make();
+    const auto expected = render_with_edit(*control, block, [](DynamicEq&) {});
+
+    auto eq = make();
+    float before = 0.0f;
+    float after = 0.0f;
+    const auto out = render_with_edit(*eq, block, [&](DynamicEq& e) {
+      before = e.last_applied_gain_db(0);
+      REQUIRE(e.set_parameter(1, 6.0f));
+      after = e.last_applied_gain_db(0);
+    });
+    // The edit does not snap the applied gain; process() moves it from where it was.
+    REQUIRE_THAT(after, WithinAbs(before, 1.0e-4f));
+    // The new static gain is audible afterwards, with no step beyond the control's own.
+    REQUIRE(max_abs_difference(out, expected) > 1.0e-2f * peak_abs(expected));
+    REQUIRE(max_step(out) <= 1.1f * max_step(expected));
+  }
+}
+
+TEST_CASE("EqualizerProcessor unrelated edits leave an in-flight gain transition untouched",
+          "[mastering][eq][dynamic-smooth]") {
+  for (const int block : {128, 256, 512}) {
+    CAPTURE(block);
+    const auto make = [&] {
+      auto eq = std::make_unique<EqualizerProcessor>(EqualizerProcessorConfig{1});
+      eq->prepare(kReconfigRate, block);
+      eq->set_band(0, reconfig_streaming_band());
+      return eq;
+    };
+    auto control = make();
+    const auto expected = render_with_edit(*control, block, [](EqualizerProcessor&) {});
+    const float tolerance = 1.0e-5f * peak_abs(expected);
+    REQUIRE(control->last_applied_gain_db(0) < -3.0f);
+
+    SECTION("disabled band set_band") {
+      auto eq = make();
+      const auto out = render_with_edit(*eq, block, [](EqualizerProcessor& e) {
+        e.set_band(1, EqBand{EqBandType::Peak, 3000.0f, 3.0f, 2.0f, false});
+      });
+      REQUIRE(max_abs_difference(out, expected) < tolerance);
+    }
+    SECTION("same value resent through set_parameter") {
+      auto eq = make();
+      const auto out = render_with_edit(*eq, block, [](EqualizerProcessor& e) {
+        REQUIRE(e.set_parameter(2, 1.5f));
+        REQUIRE(e.set_parameter(0, 1000.0f));
+      });
+      REQUIRE(max_abs_difference(out, expected) < tolerance);
+    }
+  }
+}
+
+TEST_CASE("EqualizerProcessor edited band keeps smoothing from its current gain",
+          "[mastering][eq][dynamic-smooth]") {
+  for (const int block : {128, 256, 512}) {
+    CAPTURE(block);
+    const auto make = [&] {
+      auto eq = std::make_unique<EqualizerProcessor>(EqualizerProcessorConfig{1});
+      eq->prepare(kReconfigRate, block);
+      eq->set_band(0, reconfig_streaming_band());
+      return eq;
+    };
+    auto control = make();
+    const auto expected = render_with_edit(*control, block, [](EqualizerProcessor&) {});
+
+    auto eq = make();
+    float before = 0.0f;
+    float after = 0.0f;
+    const auto out = render_with_edit(*eq, block, [&](EqualizerProcessor& e) {
+      before = e.last_applied_gain_db(0);
+      REQUIRE(e.set_parameter(1, 6.0f));
+      after = e.last_applied_gain_db(0);
+    });
+    REQUIRE_THAT(after, WithinAbs(before, 1.0e-4f));
+    REQUIRE(max_abs_difference(out, expected) > 1.0e-2f * peak_abs(expected));
+    REQUIRE(max_step(out) <= 1.1f * max_step(expected));
+  }
+}

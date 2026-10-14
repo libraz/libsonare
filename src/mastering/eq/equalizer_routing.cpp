@@ -211,6 +211,20 @@ void EqualizerProcessor::magnitude_response_db(StereoPlacement placement,
   }
 }
 
+float EqualizerProcessor::settle_dynamic_gain(size_t index, float target_gain, int num_samples) {
+  const bool running = prepared_ && dynamic_gain_live_[index];
+  dynamic_gain_live_[index] = true;
+  if (!running) {
+    smoothed_gain_db_[index] = target_gain;
+  } else if (num_samples > 0) {
+    const double smoothing_samples = std::max(sample_rate_ * 0.005, 1.0);
+    const float coeff =
+        static_cast<float>(1.0 - std::exp(-static_cast<double>(num_samples) / smoothing_samples));
+    smoothed_gain_db_[index] += coeff * (target_gain - smoothed_gain_db_[index]);
+  }
+  return smoothed_gain_db_[index];
+}
+
 void EqualizerProcessor::update_iir_bands_preserving_state(int num_samples) {
   has_mid_side_bands_ = false;
   has_dynamic_bands_ = false;
@@ -272,18 +286,10 @@ void EqualizerProcessor::update_iir_bands_preserving_state(int num_samples) {
       const float target_gain =
           band.gain_db +
           gain_scale_ * dynamic_gain_delta(bands_[i], last_band_detector_db_[i], threshold);
-      if (num_samples > 0) {
-        const double smoothing_samples = std::max(sample_rate_ * 0.005, 1.0);
-        const float coeff = static_cast<float>(
-            1.0 - std::exp(-static_cast<double>(num_samples) / smoothing_samples));
-        smoothed_gain_db_[i] += coeff * (target_gain - smoothed_gain_db_[i]);
-        band.gain_db = smoothed_gain_db_[i];
-      } else {
-        smoothed_gain_db_[i] = target_gain;
-        band.gain_db = target_gain;
-      }
+      band.gain_db = settle_dynamic_gain(i, target_gain, num_samples);
       last_applied_gain_db_[i] = band.gain_db;
     } else {
+      dynamic_gain_live_[i] = false;
       last_applied_gain_db_[i] = 0.0f;
     }
 
@@ -435,18 +441,10 @@ void EqualizerProcessor::rebuild_iir(int num_samples) {
       const float target_gain =
           band.gain_db +
           gain_scale_ * dynamic_gain_delta(bands_[i], last_band_detector_db_[i], threshold);
-      if (prepared_ && num_samples > 0) {
-        const double smoothing_samples = std::max(sample_rate_ * 0.005, 1.0);
-        const float coeff = static_cast<float>(
-            1.0 - std::exp(-static_cast<double>(num_samples) / smoothing_samples));
-        smoothed_gain_db_[i] += coeff * (target_gain - smoothed_gain_db_[i]);
-        band.gain_db = smoothed_gain_db_[i];
-      } else {
-        smoothed_gain_db_[i] = target_gain;
-        band.gain_db = target_gain;
-      }
+      band.gain_db = settle_dynamic_gain(i, target_gain, num_samples);
       last_applied_gain_db_[i] = band.gain_db;
     } else {
+      dynamic_gain_live_[i] = false;
       last_applied_gain_db_[i] = 0.0f;
     }
 

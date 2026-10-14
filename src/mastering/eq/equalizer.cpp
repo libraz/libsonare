@@ -97,6 +97,7 @@ void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
   last_band_detector_db_.fill(kFloorDb);
   last_applied_gain_db_.fill(0.0f);
   smoothed_gain_db_.fill(0.0f);
+  dynamic_gain_live_.fill(false);
   auto_threshold_db_.fill(kFloorDb);
   // Preallocate persistent detector state per band so the audio-thread detector
   // never resizes. Sized to the IIR backend's prepared channel capacity, with
@@ -258,6 +259,7 @@ void EqualizerProcessor::reset() {
   }
   last_applied_gain_db_.fill(0.0f);
   smoothed_gain_db_.fill(0.0f);
+  dynamic_gain_live_.fill(false);
   auto_threshold_db_.fill(kFloorDb);
   last_auto_gain_db_ = 0.0f;
   smoothed_auto_gain_db_ = 0.0f;
