@@ -1,5 +1,55 @@
 # Changelog
 
+## Unreleased
+
+### Upgrade notes
+
+#### Removed and renamed
+
+- Python `mel_to_stft` / `mel_result_to_stft` return `StftMagnitudeResult` (`n_bins`, `n_frames`, `magnitude`) and `mfcc_to_mel` / `mfcc_result_to_mel` return `MelPowerResult` (`n_mels`, `n_frames`, `power`), matching Node and WASM; `InverseResult` and its `rows` / `data` fields are removed.
+- The WASM `/worklet` shared-memory rings carry a per-slot state word and a protocol version: the meter ring is protocol 3 and the spectrum, scope and telemetry rings are protocol 1. A ring must be created with its `createSonare*RingBuffer` helper, which fills in the descriptors the processors now check, and the worklet and main-thread code must come from the same package version; a buffer sized by hand is refused when the processor is constructed.
+
+#### Now refused
+
+- Every `SynthPatch` field `synthPatchParamInfo()` (Python: `synth_patch_param_info()`) publishes a range for is refused with `INVALID_PARAMETER` naming the field when it is non-finite or outside that range (`synth patch field 'cutoffHz': out of range [10, 22000]`), on the C ABI, Node, WASM and Python; these values were clamped. This includes `unison`, `polyphony`, `sampleLevel` and `sampleStartOffset`, and an explicit zero where the range starts above it (`ampReleaseMs`, `filterReleaseMs`, `driftRateHz`). A C `num_mod_routings` above 8 or below 0 is refused instead of truncated.
+- Loading a project (`Project.fromJson`; C: `sonare_project_deserialize`; Python likewise) refuses duplicate take ids, an active take that does not exist, takes on a MIDI track, and comp segments that overlap, run past the clip end or carry a negative crossfade; such a project used to load and skip the clip at compile time. The C++ `Project::add_clip` applies the same rules. A take whose source is missing or of the wrong kind still loads with a warning.
+- A `SampleBank` zone with a non-finite tune, gain or pan, or a tune that overflows when added to the sample's own tuning, is refused and the bank is left unchanged; an infinite pan used to clamp.
+- Silence trimming and splitting refuse a `top_db` that is not finite and strictly positive, and note segmentation refuses a negative or NaN `segmentationThresholdCents` / `minNoteMs`, on every surface.
+- Pre-emphasis and de-emphasis refuse a non-finite coefficient or initial value on the C ABI and Node, as WASM and Python already did.
+- WASM `PlaybackRenderer.setHeadOrientation` refuses a non-finite angle, or one beyond the 32-bit float range, with a `RangeError` (a non-number with a `TypeError`), as Node and Python do; such angles used to be ignored.
+- In C++: a non-finite clip start, source offset, length or loop length in `AddClip`; non-finite Gate, Expander, UpwardCompressor, UpwardExpander and MultibandImager settings (Gate's `range_db = -inf` is still accepted); a `PartitionedConvolver` partition size above `INT_MAX / 2` or an IR longer than `INT_MAX`; and early-IR image delays that are non-finite or out of range.
+
+### New
+
+- `stereo.stereoBalance` takes a `gain` parameter (linear, at least 0, default 1), applied to both channels after the balance law.
+
+### Behaviour changes
+
+- Built-in synth renders change, including MIDI 1.0 renders: free-reed radiation level, modal-voice low-register precision and modulated decay, the slow modulation clocks of the plate reverb, pitch shifter and SoundFont LFO, the harpsichord release after a downward bend, and GS pan level, which now matches between the initial setup and live edits.
+- A stage that has been off, bypassed or fed mono starts from rest when it resumes, instead of replaying its old filter or delay state. This covers chorus, flanger, rotary, wah, auto-wah, vowel filter, phaser, the room-morph suppressor, the pitch shifter's right channel, the compressor, gate and sidechain-router high-pass filters, the parallel-compressor limiter, the amp-sim power stage, the imager, the bitcrusher noise filters, the exciter and percussion noise.
+- `tailSamples` covers gliding, boosted and rate-dependent state for the stereo delay, pitch shifter, auto-wah, GS effect bus, synth and SoundFont DC blockers, sample one-shots whose pitch offset is lowered mid-note, and percussion voices. `saturation.transformer` reports an unbounded tail while `asymmetry` is non-zero (the default) and none when fully dry.
+- `sonare_project_assist_apply_json` commits nothing when a run is truncated by its iteration or time budget, and still returns `SONARE_OK` with the proposed patches in the document; check the reported status before treating the patches as applied. `maxIterations` counts only qualified in-scope candidates, saturating at the cap.
+- Composition assist passes the remaining iteration budget to each module; the built-in modules check the time budget and report truncation, and notes outside the scope no longer use up the harmonizer's iterations. Harmonizer output is ordered by onset, note, group, channel and end, so the same request gives the same order on every platform.
+- The maximum automatic RIR length is 13,421,772 samples (about 280 s at 48 kHz), down from 16,777,216, because the mono path holds five live buffers rather than four.
+- The NNLS solver bounds its step by the row-sum norm of `AᵀA`, so `mel_to_stft` and NNLS chroma results can differ from v1.9.1 within the solver tolerance.
+- Project-load warnings for invalid warp maps, SysEx handle keys and MIDI clip keys count toward the bounded diagnostic list and are summarised past its limit.
+- A closed Python `PlaybackRenderer` or `PlaybackLoudnessMeter` raises `InvalidState` instead of `InvalidParameter`.
+
+### Fixes
+
+- CQT and VQT build their kernels from the exact `fmin` and VQT `gamma` given, instead of reusing a kernel cached for a nearby value. In C++, VQT `filter_scale` and the CQT `window` take effect, and `nnls` no longer returns zero for systems orthogonal to its starting vector.
+- The built-in chord generator and harmonizer place notes correctly in clips with a non-zero start or source offset. The harmonizer covers both of two overlapping same-pitch notes, and a chord decision reports `accepted: false` when every voice was rejected.
+- Assist commands that change a track outside the scope (its gain, mute, solo, pan or automation, or a clip's warp, takes, comp or loop crossfade) are discarded.
+- Realtime automation keeps every distinct breakpoint in a block when many lanes share a breakpoint time.
+- WASM meter, scope, spectrum and telemetry readers never return a record mixing two writes, and never skip a record that was published while they read.
+- WASM live input stops the microphone tracks it acquired if setup fails. The offline worker client and OPFS clip pages settle a request whose message could not be posted. Worklet `destroy()` disconnects and settles pending requests even if notifying the processor fails.
+- On macOS, opening an explicitly chosen output device fails if the device cannot be bound, instead of playing on the default device.
+- C note-target assignment reports an allocation failure as an error code instead of letting a C++ exception cross the C boundary.
+- Note segmentation returns no notes when the minimum note length is too long to count in frames, instead of overflowing.
+- A convolution reverb that refuses an IR keeps its previous IR and engine.
+- A project whose clip loop is off keeps a negative loop length through save and load, as the editing commands allow.
+- `sonare-cli mastering --report`, `mastering-suggest --config-out` and `suggest-mix --scene-out` write through a temporary file and replace the destination only on success, so a failed write leaves an existing file intact and exits 12; on Windows, project export replaces an existing file.
+
 ## v1.9.1 (2026-10-13)
 
 This release renames processor ids, amp models and amp presets that carried product designations, refuses unknown keys in Node and WASM request objects, fixes Butterworth and Bessel multiband crossovers that cancelled at their cutoffs, weights 7.1 and quad loudness by loudspeaker position, fixes level changes at note-edit seams and drum hits read as repair defects, closes notes cut at a MIDI clip end, keeps the monitor cue out of offline renders, and closes several gaps between the bindings, the CLIs and the C ABI. No ABI counter moved.

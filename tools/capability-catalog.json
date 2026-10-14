@@ -130244,7 +130244,7 @@
       "realtimeInsertable": true,
       "slots": [],
       "stereoOnly": false,
-      "tailSamples": 0
+      "tailSamples": 2147483647
     },
     {
       "category": "saturation",
@@ -131664,6 +131664,26 @@
           "uiMax": null,
           "uiMin": null,
           "unit": null
+        },
+        {
+          "choices": null,
+          "coupledWith": [],
+          "default": 1,
+          "dependsOn": [],
+          "id": 2,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": 0,
+          "minExclusive": false,
+          "name": "gain",
+          "rtSafe": true,
+          "scale": "linear",
+          "slot": null,
+          "type": "number",
+          "uiMax": 2,
+          "uiMin": 0,
+          "unit": "none"
         },
         {
           "choices": null,
