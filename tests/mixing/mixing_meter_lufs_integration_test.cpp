@@ -639,6 +639,49 @@ TEST_CASE("MeterProcessor resolves every requested true-peak oversample to its d
   }
 }
 
+TEST_CASE("MeterProcessor true peak covers a block longer than the prepared size",
+          "[mixing][meter]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kPrepared = 128;
+  constexpr int kLong = 4 * kPrepared;
+  std::vector<float> left(kLong);
+  std::vector<float> right(kLong);
+  for (int i = 0; i < kLong; ++i) {
+    // Quiet bed with a loud burst at the end, past the first prepared-size chunk.
+    const bool burst = i >= kLong - 40;
+    const float amp = burst ? 0.9f : 0.05f;
+    left[static_cast<size_t>(i)] = amp * std::sin(0.4f * static_cast<float>(i));
+    right[static_cast<size_t>(i)] = left[static_cast<size_t>(i)];
+  }
+
+  sonare::mixing::MeterConfig config;
+  config.measure_lufs = false;
+  config.measure_true_peak = true;
+  sonare::mixing::MeterProcessor whole(config);
+  sonare::mixing::MeterProcessor pieces(config);
+  whole.prepare(kSr, kPrepared);
+  pieces.prepare(kSr, kPrepared);
+
+  float* whole_ch[] = {left.data(), right.data()};
+  whole.process(whole_ch, 2, kLong);
+  for (int offset = 0; offset < kLong; offset += kPrepared) {
+    float* piece_ch[] = {left.data() + offset, right.data() + offset};
+    pieces.process(piece_ch, 2, kPrepared);
+  }
+  REQUIRE(whole.snapshot().max_true_peak_db > -2.0f);
+
+  // The next block reads the filter history the long block left behind.
+  std::vector<float> next_left(kPrepared, 0.0f);
+  std::vector<float> next_right(kPrepared, 0.0f);
+  float* next_ch[] = {next_left.data(), next_right.data()};
+  whole.process(next_ch, 2, kPrepared);
+  const auto whole_next = whole.snapshot();
+  pieces.process(next_ch, 2, kPrepared);
+  const auto pieces_next = pieces.snapshot();
+  REQUIRE(whole_next.true_peak_db[0] == pieces_next.true_peak_db[0]);
+  REQUIRE(whole_next.max_true_peak_db == pieces_next.max_true_peak_db);
+}
+
 TEST_CASE("StereoWidthProcessor settles exactly on its target and then passes audio through",
           "[mixing][width]") {
   constexpr int kBlockSize = 512;

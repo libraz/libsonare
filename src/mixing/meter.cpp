@@ -195,35 +195,39 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
     // per-channel L/R compatibility, but max_true_peak_db must include surround channels so
     // rear/LFE overs are not hidden on multichannel buses.
     const int tp_channels = std::min(num_channels, kTruePeakChannels);
-    // Guard against a block larger than the prepared capacity (would otherwise
-    // grow the scratch and allocate on the audio thread); clamp instead.
-    const int tp_samples = std::min(num_samples, max_block_size_);
+    // A block longer than the prepared capacity runs through the preallocated scratch in
+    // capacity-sized chunks, so every sample passes through the filter history in order.
+    true_peak_channels_ = tp_channels;
+    std::array<float, kTruePeakChannels> tp_peaks{};
+    for (int ch = 0; ch < tp_channels; ++ch) {
+      if (ch < meters) tp_peaks[static_cast<size_t>(ch)] = sample_peaks[static_cast<size_t>(ch)];
+      true_peak_out_ptrs_[static_cast<size_t>(ch)] =
+          true_peak_oversampled_[static_cast<size_t>(ch)].data();
+      true_peak_live_[static_cast<size_t>(ch)] = channels[ch] != nullptr;
+    }
+    const size_t oversample = static_cast<size_t>(true_peak_filter_.factor());
+    for (int offset = 0; max_block_size_ > 0 && offset < num_samples; offset += max_block_size_) {
+      const int chunk = std::min(max_block_size_, num_samples - offset);
+      for (int ch = 0; ch < tp_channels; ++ch) {
+        // A null meter channel is fed silence so the filter's positional history
+        // stays aligned to each channel slot (the upsampler rejects null inputs).
+        true_peak_in_ptrs_[static_cast<size_t>(ch)] =
+            channels[ch] != nullptr ? channels[ch] + offset : true_peak_zero_in_.data();
+      }
+      true_peak_filter_.upsample_with_history_delayed(
+          true_peak_in_ptrs_.data(), true_peak_out_ptrs_.data(), tp_channels, chunk);
+      const size_t oversampled = static_cast<size_t>(chunk) * oversample;
+      for (int ch = 0; ch < tp_channels; ++ch) {
+        if (channels[ch] == nullptr) continue;
+        const auto& os = true_peak_oversampled_[static_cast<size_t>(ch)];
+        float& peak = tp_peaks[static_cast<size_t>(ch)];
+        for (size_t i = 0; i < oversampled; ++i) peak = std::max(peak, std::abs(os[i]));
+      }
+    }
     float max_true_peak = 0.0f;
     for (int ch = 0; ch < tp_channels; ++ch) {
-      const size_t c = static_cast<size_t>(ch);
-      // A null meter channel is fed silence so the filter's positional history
-      // stays aligned to each channel slot (the upsampler rejects null inputs).
-      true_peak_in_ptrs_[c] = channels[ch] != nullptr ? channels[ch] : true_peak_zero_in_.data();
-      true_peak_out_ptrs_[c] = true_peak_oversampled_[c].data();
-      true_peak_live_[c] = channels[ch] != nullptr;
-    }
-    true_peak_channels_ = tp_channels;
-    if (tp_samples > 0) {
-      // Upsample all meter channels in one allocation-free call.
-      true_peak_filter_.upsample_with_history_delayed(
-          true_peak_in_ptrs_.data(), true_peak_out_ptrs_.data(), tp_channels, tp_samples);
-    }
-    const int oversample = true_peak_filter_.factor();
-    const size_t oversampled = static_cast<size_t>(tp_samples) * static_cast<size_t>(oversample);
-    for (int ch = 0; ch < tp_channels; ++ch) {
-      if (channels[ch] == nullptr) {
-        continue;
-      }
-      const auto& os = true_peak_oversampled_[static_cast<size_t>(ch)];
-      float peak = ch < meters ? sample_peaks[static_cast<size_t>(ch)] : 0.0f;
-      for (size_t i = 0; i < oversampled; ++i) {
-        peak = std::max(peak, std::abs(os[i]));
-      }
+      if (channels[ch] == nullptr) continue;
+      const float peak = tp_peaks[static_cast<size_t>(ch)];
       if (ch < static_cast<int>(next.true_peak_db.size())) {
         next.true_peak_db[static_cast<size_t>(ch)] = linear_to_db(peak);
       }
