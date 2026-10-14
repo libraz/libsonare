@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include "editing/note_model/seam_crossfade.h"
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/pitch_editor/pitch_corrector.h"
 #include "editing/vocal_edit/render_cache.h"
@@ -59,11 +60,7 @@ int64_t checked_end(int64_t start, int64_t length, const char* field) {
 
 int64_t fade_samples(double fade_ms, int sample_rate, int64_t length) noexcept {
   if (!(fade_ms > 0.0) || sample_rate <= 0 || length <= 1) return 0;
-  const double requested = std::round(fade_ms * 0.001 * static_cast<double>(sample_rate));
-  const int64_t limit = std::max<int64_t>(0, length / 2);
-  if (!(requested > 0.0)) return 0;
-  if (requested >= static_cast<double>(limit)) return limit;
-  return static_cast<int64_t>(requested);
+  return note_model::edge_fade_samples(fade_ms, sample_rate, length);
 }
 
 float fade_phase(int64_t offset, int64_t length, int64_t fade) noexcept {

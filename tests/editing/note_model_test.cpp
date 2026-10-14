@@ -19,6 +19,7 @@
 #include "editing/note_model/note_renderer.h"
 #include "editing/note_model/note_split_merge.h"
 #include "editing/note_model/note_target.h"
+#include "editing/note_model/seam_crossfade.h"
 #include "editing/pitch_editor/f0_provider.h"
 #include "effects/formant_warp.h"
 #include "effects/pitch_shift.h"
@@ -2659,5 +2660,92 @@ TEST_CASE("render_notes chained stretch, shift and formant edits equal the stage
   const size_t span = std::min(expected.size(), kOffset - kOnset);
   for (size_t i = 0; i < span; ++i) {
     REQUIRE(rendered[kOnset + i] == expected[i]);
+  }
+}
+
+// --- shared pitch rules ---------------------------------------------------
+
+TEST_CASE("edge_fade_samples matches the per-site clamp arithmetic", "[note_model]") {
+  const auto int_reference = [](float fade_ms, int sample_rate, int region_length) {
+    const double requested =
+        std::round(static_cast<double>(fade_ms) * 0.001 * static_cast<double>(sample_rate));
+    const int limit = std::max(0, region_length / 2);
+    if (!(requested > 0.0)) return 0;
+    if (requested >= static_cast<double>(limit)) return limit;
+    return static_cast<int>(requested);
+  };
+  const auto wide_reference = [](float fade_ms, int sample_rate, int64_t region_length) {
+    const double requested =
+        std::round(static_cast<double>(fade_ms) * 0.001 * static_cast<double>(sample_rate));
+    const int64_t limit = std::max<int64_t>(0, region_length / 2);
+    if (!(requested > 0.0)) return int64_t{0};
+    if (requested >= static_cast<double>(limit)) return limit;
+    return static_cast<int64_t>(requested);
+  };
+
+  // Zero, odd and even lengths, fades shorter than, equal to and longer than half the region.
+  for (const float fade_ms : {0.0f, -1.0f, 0.02f, 5.0f, 10.0f, 250.0f}) {
+    for (const int sample_rate : {8000, 44100, 48000}) {
+      for (const int length : {-4, 0, 1, 2, 3, 7, 100, 479, 480, 481, 960, 100000}) {
+        const int64_t shared = edge_fade_samples(fade_ms, sample_rate, length);
+        REQUIRE(shared == int_reference(fade_ms, sample_rate, length));
+        REQUIRE(shared == wide_reference(fade_ms, sample_rate, length));
+      }
+    }
+  }
+
+  // The double-width call site guards sample rate, length and fade before the shared helper.
+  const auto guarded_reference = [](double fade_ms, int sample_rate, int64_t length) {
+    if (!(fade_ms > 0.0) || sample_rate <= 0 || length <= 1) return int64_t{0};
+    const double requested = std::round(fade_ms * 0.001 * static_cast<double>(sample_rate));
+    const int64_t limit = std::max<int64_t>(0, length / 2);
+    if (!(requested > 0.0)) return int64_t{0};
+    if (requested >= static_cast<double>(limit)) return limit;
+    return static_cast<int64_t>(requested);
+  };
+  for (const double fade_ms : {0.0, -1.0, 0.3, 5.0, 12.5, 250.0, 1.0e12, static_cast<double>(kInf),
+                               static_cast<double>(kNaN)}) {
+    for (const int sample_rate : {-48000, 0, 1, 8000, 44100, 48000}) {
+      for (const int64_t length : {int64_t{-3}, int64_t{0}, int64_t{1}, int64_t{2}, int64_t{3},
+                                   int64_t{481}, int64_t{960}, int64_t{100000}, int64_t{1} << 40}) {
+        const bool guarded = !(fade_ms > 0.0) || sample_rate <= 0 || length <= 1;
+        const int64_t shared = guarded ? 0 : edge_fade_samples(fade_ms, sample_rate, length);
+        REQUIRE(shared == guarded_reference(fade_ms, sample_rate, length));
+      }
+    }
+  }
+
+  // Lengths past the int range, where the fade is the requested one and where it is the cap.
+  const int64_t huge = int64_t{1} << 40;
+  const int64_t past_int = static_cast<int64_t>(std::numeric_limits<int>::max()) * 4;
+  for (const int64_t length : {huge, huge + 1, past_int}) {
+    REQUIRE(edge_fade_samples(10.0f, 48000, length) == wide_reference(10.0f, 48000, length));
+    REQUIRE(edge_fade_samples(10.0f, 48000, length) == 480);
+  }
+  REQUIRE(edge_fade_samples(1.0e12f, 48000, huge) == huge / 2);
+}
+
+TEST_CASE("extract_notes reads a non-finite voiced frame as unvoiced", "[note_model]") {
+  constexpr int kFrames = 40;
+  F0Track track = voiced_track(440.0f, kFrames);
+  track.f0_hz[10] = kInf;
+  track.f0_hz[11] = kNaN;
+  track.voiced[12] = false;
+  const sonare::Audio audio = tone(440.0f, 0.5f, kFrames * kHopLength);
+
+  const std::vector<NoteObject> notes = extract_notes(audio, track);
+  REQUIRE_FALSE(notes.empty());
+  for (const NoteObject& note : notes) {
+    for (size_t i = 0; i < note.f0_hz.values.size(); ++i) {
+      const int frame = note.f0_hz.frame_offset + static_cast<int>(i);
+      const bool silent = frame == 10 || frame == 11 || frame == 12;
+      if (silent) {
+        REQUIRE(note.f0_hz.values[i] == 0.0f);
+      } else {
+        REQUIRE(note.f0_hz.values[i] == 440.0f);
+      }
+    }
+    REQUIRE_THAT(note.median_hz, WithinRel(440.0f, 1.0e-4f));
+    REQUIRE(note.f0_stability == 1.0f);
   }
 }

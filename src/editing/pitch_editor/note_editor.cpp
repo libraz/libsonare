@@ -170,12 +170,8 @@ Audio NoteEditor::stretch_note(const Audio& audio, const NoteRegion& region,
 }
 
 int NoteEditor::fade_samples(int sample_rate, int region_length) const noexcept {
-  const double requested =
-      std::round(static_cast<double>(config_.fade_ms) * 0.001 * static_cast<double>(sample_rate));
-  const int limit = std::max(0, region_length / 2);
-  if (!(requested > 0.0)) return 0;
-  if (requested >= static_cast<double>(limit)) return limit;
-  return static_cast<int>(requested);
+  return static_cast<int>(
+      note_model::edge_fade_samples(config_.fade_ms, sample_rate, region_length));
 }
 
 void NoteEditor::apply_edge_fades(std::vector<float>& samples, int fade_samples) {

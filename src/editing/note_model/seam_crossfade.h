@@ -35,6 +35,16 @@ inline float seam_correlation(const float* a, const float* b, int64_t n) noexcep
   return norm > 0.0 ? static_cast<float>(ab / norm) : 0.0f;
 }
 
+/// @brief Edge fade length for a region of @p region_length: @p fade_ms at @p sample_rate,
+///        capped at half the region so the head and tail zones never share samples.
+inline int64_t edge_fade_samples(double fade_ms, int sample_rate, int64_t region_length) noexcept {
+  const double requested = std::round(fade_ms * 0.001 * static_cast<double>(sample_rate));
+  const int64_t limit = std::max<int64_t>(0, region_length / 2);
+  if (!(requested > 0.0)) return 0;
+  if (requested >= static_cast<double>(limit)) return limit;
+  return static_cast<int64_t>(requested);
+}
+
 /// @brief Gains of a level-keeping fade.
 struct SeamGains {
   float outgoing;

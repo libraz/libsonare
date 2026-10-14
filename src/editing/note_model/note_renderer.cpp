@@ -27,17 +27,6 @@ using sonare::constants::kCentsPerSemitone;
 using sonare::constants::kHalfPi;
 using sonare::constants::kSemitonesPerOctave;
 
-/// Same rule as NoteEditor::fade_samples: half the placed region at most, so
-/// the head and tail zones never consume the same samples.
-int64_t fade_samples(float fade_ms, int sample_rate, int64_t region_length) noexcept {
-  const double requested =
-      std::round(static_cast<double>(fade_ms) * 0.001 * static_cast<double>(sample_rate));
-  const int64_t limit = std::max<int64_t>(0, region_length / 2);
-  if (!(requested > 0.0)) return 0;
-  if (requested >= static_cast<double>(limit)) return limit;
-  return static_cast<int64_t>(requested);
-}
-
 void check_disjoint_spans(const std::vector<NoteObject>& notes) {
   std::vector<size_t> order(notes.size());
   std::iota(order.begin(), order.end(), size_t{0});
@@ -307,8 +296,9 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
     // An edge the rendered note lands back on keeps its source for overlay to fade against.
     const bool keeps_onset = !note.edit.muted && note.edit.time_offset_samples == 0;
     const bool keeps_offset = keeps_onset && note.edit.time_stretch_ratio == 1.0f;
-    vacate(output, audio, onset, offset, fade_samples(config.fade_ms, sample_rate, offset - onset),
-           keeps_onset, keeps_offset);
+    vacate(output, audio, onset, offset,
+           edge_fade_samples(config.fade_ms, sample_rate, offset - onset), keeps_onset,
+           keeps_offset);
   }
 
   // Render in vector order after clearing all edited source spans. Later notes
@@ -348,7 +338,7 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
     apply_envelope(segment, note.edit.amplitude_envelope, gain);
 
     const int64_t fade =
-        fade_samples(config.fade_ms, sample_rate, static_cast<int64_t>(segment.size()));
+        edge_fade_samples(config.fade_ms, sample_rate, static_cast<int64_t>(segment.size()));
     overlay(output, segment, numeric::saturating_add<int64_t>(onset, note.edit.time_offset_samples),
             fade);
   }

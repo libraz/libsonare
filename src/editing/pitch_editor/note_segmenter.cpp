@@ -25,16 +25,6 @@ int saturated_sample_offset(int frame, double samples_per_frame) noexcept {
   return static_cast<int>(samples);
 }
 
-// A frame carries a usable pitch only when it is both voiced and a finite,
-// positive Hz value. +inf satisfies "> 0.0f", so a plain positivity check
-// alone reads a non-finite frame as strongly voiced instead of as carrying no
-// measurement -- the same contract note_extractor.cpp's own usable_pitch()
-// enforces for the shared non-finite-F0 convention.
-bool usable_pitch(const F0Track& track, int frame) noexcept {
-  const float hz = track.f0_hz[static_cast<size_t>(frame)];
-  return track.voiced[static_cast<size_t>(frame)] && std::isfinite(hz) && hz > 0.0f;
-}
-
 // Cents in double so a span compared against 2 x threshold does not round at the boundary.
 double frame_cents(float hz, float reference_hz) noexcept {
   return static_cast<double>(constants::kCentsPerOctave) *
@@ -42,6 +32,11 @@ double frame_cents(float hz, float reference_hz) noexcept {
 }
 
 }  // namespace
+
+bool usable_pitch(const F0Track& track, int frame) noexcept {
+  const float hz = track.f0_hz[static_cast<size_t>(frame)];
+  return track.voiced[static_cast<size_t>(frame)] && std::isfinite(hz) && hz > 0.0f;
+}
 
 NoteSegmenter::NoteSegmenter(NoteSegmenterConfig config) : config_(config) {}
 

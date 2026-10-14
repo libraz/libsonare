@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "core/convert.h"
+#include "editing/pitch_editor/note_segmenter.h"
 #include "effects/pitch_shift.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -23,8 +24,7 @@ namespace {
 
 bool valid_voiced_frame(const F0Track& track, int frame) {
   const size_t index = static_cast<size_t>(frame);
-  return index < track.f0_hz.size() && index < track.voiced.size() && track.voiced[index] &&
-         track.f0_hz[index] > 0.0f && std::isfinite(track.f0_hz[index]);
+  return index < track.f0_hz.size() && index < track.voiced.size() && usable_pitch(track, frame);
 }
 
 // Each PSOLA pass stays within this interval. Larger caller requests are split

@@ -16,12 +16,6 @@ namespace {
 
 using sonare::constants::kCentsPerOctave;
 
-/// @p index is a position in the track's own arrays.
-bool usable_pitch(const pitch_editor::F0Track& track, int index) {
-  const float hz = track.f0_hz[static_cast<size_t>(index)];
-  return hz > 0.0f && std::isfinite(hz);
-}
-
 int64_t frame_to_sample(int frame, double samples_per_frame, int64_t n_samples) noexcept {
   if (frame <= 0 || !(samples_per_frame > 0.0)) return 0;
   const double samples = static_cast<double>(frame) * samples_per_frame;
@@ -146,7 +140,7 @@ NoteObject build_note(const Audio& audio, int64_t audio_start, int64_t n_samples
   // as zero Hz so a merged gap cannot become voiced during curve editing.
   for (int frame = start; frame < end; ++frame) {
     const int index = frame - first_frame;
-    if (!resolved.voiced[static_cast<size_t>(index)] || !usable_pitch(resolved, index)) {
+    if (!pitch_editor::usable_pitch(resolved, index)) {
       note.f0_hz.values[static_cast<size_t>(frame - start)] = 0.0f;
     }
   }
@@ -170,8 +164,7 @@ NoteObject build_note(const Audio& audio, int64_t audio_start, int64_t n_samples
   voiced_cents.reserve(static_cast<size_t>(end - start));
   for (int frame = start; frame < end; ++frame) {
     const int index = frame - first_frame;
-    if (!resolved.voiced[static_cast<size_t>(index)]) continue;
-    if (usable_pitch(resolved, index)) {
+    if (pitch_editor::usable_pitch(resolved, index)) {
       voiced_cents.push_back(pitch_editor::NoteSegmenter::hz_to_cents(
           resolved.f0_hz[static_cast<size_t>(index)], config.segmenter.reference_hz));
     }

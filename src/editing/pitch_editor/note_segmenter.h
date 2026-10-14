@@ -27,6 +27,11 @@ struct NoteSegmenterConfig {
   float reference_hz = constants::kA4Hz;
 };
 
+/// @brief True when @p frame of @p track is voiced and carries a finite, positive Hz value.
+/// @details A non-finite F0 reads as no measurement, never as a voiced frame. @p frame must index
+///          both f0_hz and voiced.
+bool usable_pitch(const F0Track& track, int frame) noexcept;
+
 class NoteSegmenter {
  public:
   explicit NoteSegmenter(NoteSegmenterConfig config = {});
