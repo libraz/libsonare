@@ -284,6 +284,23 @@ TEST_CASE("UpwardExpander raises signal above threshold and leaves quiet signal 
   REQUIRE(upward.last_gain_reduction_db() == upward.last_gain_db());
 }
 
+TEST_CASE("Linked expanders read digital silence below a threshold under the reporting floor",
+          "[mastering][dynamics]") {
+  // Ratio 2, range 12 dB: silence at -130 dB must sit below the threshold, not at -120 dB above it.
+  UpwardExpander upward({-130.0f, 2.0f, 0.0f, 20.0f, 12.0f});
+  upward.prepare(48000.0, 1024);
+  std::vector<float> silence(4096, 0.0f);
+  process(upward, silence);
+  REQUIRE(upward.last_gain_db() == 0.0f);
+
+  Expander expander({-130.0f, 2.0f, 0.0f, 20.0f, -12.0f});
+  expander.prepare(48000.0, 1024);
+  std::vector<float> silence_down(4096, 0.0f);
+  process(expander, silence_down);
+  REQUIRE(expander.last_gain_reduction_db() == Catch::Approx(-12.0f));
+  for (float s : silence_down) REQUIRE(s == 0.0f);
+}
+
 TEST_CASE("UpwardExpander validates configuration", "[mastering][dynamics]") {
   REQUIRE_THROWS(UpwardExpander({-24.0f, 0.5f, 10.0f, 100.0f, 12.0f}));
   REQUIRE_THROWS(UpwardExpander({-24.0f, 2.0f, -1.0f, 100.0f, 12.0f}));

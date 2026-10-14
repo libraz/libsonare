@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/dynamics/detector_level.h"
 #include "util/db.h"
 
 namespace sonare::mastering::dynamics {
@@ -37,7 +38,7 @@ float apply_linked_gain(float* const* channels, int num_channels, int num_sample
   for (int i = 0; i < num_samples; ++i) {
     const float linked_level = linked_peak(channels, num_channels, i, excluded_channel);
     const float envelope = follower.process(linked_level);
-    const float gain_db = law(linear_to_db(envelope));
+    const float gain_db = law(detector_level_db(envelope));
     const float gain = db_to_linear(gain_db);
     for (int ch = 0; ch < num_channels; ++ch) {
       channels[ch][i] *= gain;
