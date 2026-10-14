@@ -24,7 +24,7 @@
 ### New
 
 - `stereo.stereoBalance` takes a `gain` parameter (linear, at least 0, default 1), applied to both channels after the balance law.
-- `synthEnumTables()` (Python `synth_enum_tables()`) and the C `sonare_synth_enum_names` cover the sample loop modes, sample key tracks and retrigger modes (`SONARE_SYNTH_ENUM_SAMPLE_LOOP_MODE`, `SAMPLE_KEY_TRACK`, `RETRIGGER`).
+- `synthEnumTables()` (Python `synth_enum_tables()`) and the C `sonare_synth_enum_names` cover the sample loop modes, sample key tracks and retrigger modes (`SONARE_SYNTH_ENUM_SAMPLE_LOOP_MODE`, `SAMPLE_KEY_TRACK`, `RETRIGGER`), part rig modes (`PART_RIG_MODE`) and sample-descriptor loop modes (`SAMPLE_DESC_LOOP_MODE`); the tables gain `partRigModes` and `sampleDescLoopModes` (Python `part_rig_modes`, `sample_desc_loop_modes`).
 
 ### Behaviour changes
 
@@ -45,6 +45,7 @@
 - `countInEndSample` (Python `count_in_end_sample`, C `sonare_engine_count_in_end_sample`) counts from the start of the bar containing the start sample, so a mid-bar start gets a short first bar, and every counted bar has the length of the time signature in effect at the start; the realtime engine's count-in uses the same rule.
 - A smoothed parameter change the realtime engine starts in the middle of a block advances at its 64-frame control period whatever the host block size.
 - In C++, `AutomationEngine::bind`, `unbind` and `clear` are no longer `noexcept`; they wait until the audio thread has stopped reading the previous target table.
+- Loading a project drops SysEx payloads that no MIDI event references.
 
 ### Fixes
 
@@ -54,6 +55,7 @@
 - Realtime automation keeps every distinct breakpoint in a block when many lanes share a breakpoint time.
 - In C++, a MIDI clip published to the realtime engine or sequencer with events out of frame order is played in frame order instead of stalling the audio thread; the C ABI, WASM and project paths already sorted their events.
 - In C++, `compile_pitch_plan` refuses the malformed pitch targets a vocal-edit session refuses (a centre target carrying curve points, an unset target carrying a value).
+- Undoing a MIDI event replacement or patch on a clip that had no events removes the clip's event entry again, so the saved project and its SMF export match those from before the edit.
 - WASM meter, scope, spectrum and telemetry readers never return a record mixing two writes, and never skip a record that was published while they read.
 - WASM live input stops the microphone tracks it acquired if setup fails. The offline worker client and OPFS clip pages settle a request whose message could not be posted. Worklet `destroy()` disconnects and settles pending requests even if notifying the processor fails.
 - On macOS, opening an explicitly chosen output device fails if the device cannot be bound, instead of playing on the default device.
