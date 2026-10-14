@@ -14,23 +14,14 @@
 namespace sonare::editing::polyphony {
 namespace {
 
-/// The track is full-length rather than cut to the ridge: make_note reads a
-/// frame number as an absolute sample position, so a span-length track would
-/// place every note at zero.
-pitch_editor::F0Track ridge_track(const MultiF0Track& track, const F0Ridge& ridge,
-                                  const NoteMaskSet& masks) {
+/// The ridge's frames as a track window; the note is built with the ridge's absolute frame
+/// numbers, so the window carries only the frames it reads.
+pitch_editor::F0Track ridge_window(const F0Ridge& ridge, const NoteMaskSet& masks) {
   pitch_editor::F0Track out;
-  const std::size_t n_frames = static_cast<std::size_t>(track.n_frames);
-  out.f0_hz.assign(n_frames, 0.0f);
-  out.voiced.assign(n_frames, false);
-
   // Every frame of a ridge is voiced, so the span's statistics are measured over
   // all of it and voiced_prob is never consulted.
-  const std::size_t start = static_cast<std::size_t>(ridge.frame_start);
-  for (std::size_t i = 0; i < ridge.f0_hz.size(); ++i) {
-    out.f0_hz[start + i] = ridge.f0_hz[i];
-    out.voiced[start + i] = true;
-  }
+  out.f0_hz = ridge.f0_hz;
+  out.voiced.assign(ridge.f0_hz.size(), true);
 
   // frame_rate_hz stays 0: the cadence is the framing's, derived from the pair.
   out.hop_length = masks.hop_length;
@@ -91,8 +82,8 @@ std::vector<note_model::NoteObject> make_notes_over(const StftGeometry& geometry
     // in the input rather than paying a full-length inverse per note.
     const NoteSegment segment = invert(i);
     note_model::NoteObject note = note_model::make_note(
-        segment.audio, segment.first_sample, whole, ridge_track(track, ridge, masks),
-        ridge.frame_start, ridge.frame_end(), config);
+        segment.audio, segment.first_sample, whole, ridge_window(ridge, masks), ridge.frame_start,
+        track.n_frames, ridge.frame_start, ridge.frame_end(), config);
     // A length ending before the ridge clamps the span empty, which make_note accepts.
     note_model::validate_note_for_render(note);
     notes.push_back(std::move(note));

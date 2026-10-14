@@ -215,3 +215,45 @@ TEST_CASE("vocal commit of a never-applied draft keeps history and redo",
   session.redo(revision);
   CHECK(session.notes().front().edit.gain_db == -6.0);
 }
+
+TEST_CASE("vocal range render skips notes the range cannot touch",
+          "[vocal_render_range][vocal_range_selection]") {
+  auto session = three_note_session();
+  const auto notes = session.notes();
+  REQUIRE(notes.size() == 3);
+  const auto& a = notes[0];
+  const auto& b = notes[1];
+  const auto& c = notes[2];
+
+  // B and A swap places, so a range at the start needs B (destination) and A (source) only.
+  auto moved_b = b.edit;
+  moved_b.destination_start_sample = 0;
+  moved_b.gain_db = -4.0;
+  auto moved_a = a.edit;
+  moved_a.destination_start_sample = b.edit.destination_length_samples;
+  {
+    auto draft = session.begin_edit(session.token().committed_revision);
+    draft->apply(draft->token().draft_generation,
+                 {SetNoteEditOp{b.id, moved_b}, SetNoteEditOp{a.id, moved_a}});
+    draft->commit(session.token().committed_revision);
+  }
+
+  const auto snapshot = session.capture_render_snapshot();
+  const SampleRange range{0, 256};
+  VocalRenderJob job(snapshot, {range, 21});
+  // Two notes plus one assembly tile; a note outside the range is not a unit of work.
+  CHECK(job.progress().total_units == 3);
+  while (job.progress().state != VocalRenderJobState::kComplete) REQUIRE(job.next());
+  const auto preview = job.finalize();
+
+  const auto full = render_snapshot(snapshot, {{0, session.output_length_samples()}, 22});
+  REQUIRE(preview.samples.size() == 256);
+  for (std::size_t i = 0; i < preview.samples.size(); ++i) {
+    CHECK(bits(preview.samples[i]) == bits(full.samples[i]));
+  }
+  // No processed range reaches note C, whose source and destination lie beyond the range.
+  REQUIRE_FALSE(preview.processed_ranges.empty());
+  for (const auto processed : preview.processed_ranges) {
+    CHECK(processed.end <= c.source_range.start);
+  }
+}

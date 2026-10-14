@@ -2,8 +2,9 @@
 
 #include <algorithm>
 #include <cstring>
-#include <deque>
+#include <iterator>
 #include <limits>
+#include <list>
 #include <map>
 #include <mutex>
 #include <string_view>
@@ -128,12 +129,18 @@ void append_plan(util::Sha256& digest, const PitchPlan& plan) {
 struct VocalRenderCache::Impl {
   explicit Impl(uint64_t limit) : max_bytes(limit) {}
 
-  using Map = std::map<Sha256Digest, std::shared_ptr<const RenderArtifact>>;
+  // Entries in publication order, oldest first; each map entry holds its position in the list.
+  using Fifo = std::list<Sha256Digest>;
+  struct Entry {
+    std::shared_ptr<const RenderArtifact> artifact;
+    Fifo::iterator position;
+  };
+  using Map = std::map<Sha256Digest, Entry>;
   mutable std::mutex mutex;
   uint64_t max_bytes = 0;
   uint64_t used_bytes = 0;
   Map artifacts;
-  std::deque<Sha256Digest> fifo;
+  Fifo fifo;
 };
 
 VocalRenderCache::VocalRenderCache(uint64_t max_bytes) : impl_(std::make_unique<Impl>(max_bytes)) {}
@@ -143,7 +150,7 @@ VocalRenderCache::~VocalRenderCache() = default;
 std::shared_ptr<const RenderArtifact> VocalRenderCache::find(const Sha256Digest& key) const {
   std::lock_guard lock(impl_->mutex);
   const auto it = impl_->artifacts.find(key);
-  return it == impl_->artifacts.end() ? nullptr : it->second;
+  return it == impl_->artifacts.end() ? nullptr : it->second.artifact;
 }
 
 void VocalRenderCache::publish(std::shared_ptr<const RenderArtifact> artifact) {
@@ -161,27 +168,33 @@ void VocalRenderCache::publish(std::shared_ptr<const RenderArtifact> artifact) {
   std::lock_guard lock(impl_->mutex);
   const auto existing = impl_->artifacts.find(artifact->key);
   if (existing != impl_->artifacts.end()) {
-    impl_->used_bytes -= static_cast<uint64_t>(existing->second->samples->size() * sizeof(float));
+    const uint64_t existing_size =
+        static_cast<uint64_t>(existing->second.artifact->samples->size() * sizeof(float));
+    if (existing_size == size) {
+      // Same footprint: nothing to evict, so re-publishing only renews the entry in place.
+      existing->second.artifact = std::move(artifact);
+      impl_->fifo.splice(impl_->fifo.end(), impl_->fifo, existing->second.position);
+      return;
+    }
+    impl_->used_bytes -= existing_size;
+    impl_->fifo.erase(existing->second.position);
     impl_->artifacts.erase(existing);
-    impl_->fifo.erase(std::remove(impl_->fifo.begin(), impl_->fifo.end(), artifact->key),
-                      impl_->fifo.end());
   }
   if (size == 0 || size > impl_->max_bytes) return;
   while (!impl_->fifo.empty() && impl_->used_bytes > impl_->max_bytes - size) {
-    const Sha256Digest evict_key = impl_->fifo.front();
-    impl_->fifo.pop_front();
-    const auto it = impl_->artifacts.find(evict_key);
-    if (it == impl_->artifacts.end()) continue;
-    impl_->used_bytes -= static_cast<uint64_t>(it->second->samples->size() * sizeof(float));
+    const auto it = impl_->artifacts.find(impl_->fifo.front());
+    impl_->used_bytes -=
+        static_cast<uint64_t>(it->second.artifact->samples->size() * sizeof(float));
     impl_->artifacts.erase(it);
+    impl_->fifo.pop_front();
   }
   if (impl_->used_bytes > impl_->max_bytes - size) return;
   const Sha256Digest key = artifact->key;
-  const auto inserted = impl_->artifacts.emplace(key, std::move(artifact));
+  impl_->fifo.push_back(key);
   try {
-    impl_->fifo.push_back(key);
+    impl_->artifacts.emplace(key, Impl::Entry{std::move(artifact), std::prev(impl_->fifo.end())});
   } catch (...) {
-    impl_->artifacts.erase(inserted.first);
+    impl_->fifo.pop_back();
     throw;
   }
   impl_->used_bytes += size;

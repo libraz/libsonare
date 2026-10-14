@@ -9,6 +9,7 @@
 #include <mutex>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <utility>
 
 #include "editing/pitch_editor/f0_provider.h"
@@ -24,6 +25,8 @@
 
 namespace sonare::editing::vocal_edit {
 namespace {
+
+constexpr int64_t kAssemblyTileSamples = 4096;
 
 using sonare::editing::pitch_editor::F0Track;
 using sonare::editing::pitch_editor::PitchCorrector;
@@ -92,6 +95,13 @@ bool renders_in_place(const VocalNote& note) noexcept {
          note.edit.destination_length_samples == note.source_range.length();
 }
 
+/// True when the edit leaves the note's source untouched, sample for sample.
+bool effective_identity(const VocalNote& note, const PitchPlan& plan) {
+  return renders_in_place(note) && plan.pitch_identity && note.edit.gain_db == 0.0 &&
+         note.edit.amplitude_envelope.empty() && note.edit.formant.mode == FormantMode::kPreserve &&
+         note.edit.formant.shift_semitones == 0.0;
+}
+
 /// Crossfades @p segment over @p output. A segment sitting on the source it was cut from is
 /// coherent with it, so complementary gains keep a no-op edit at unity; elsewhere the two are
 /// independent and the gains are equal-power.
@@ -156,18 +166,11 @@ std::vector<float> stretch_note(const std::vector<float>& input, std::size_t out
   return detail::fit_stretched_note_output(std::move(output), output_size);
 }
 
-const PitchTransition* incoming_transition(const VocalEditState& state, VocalNoteId id) {
-  for (const auto& transition : state.transitions) {
-    if (transition.right_note_id == id) return &transition;
-  }
-  return nullptr;
-}
-
-const PitchTransition* outgoing_transition(const VocalEditState& state, VocalNoteId id) {
-  for (const auto& transition : state.transitions) {
-    if (transition.left_note_id == id) return &transition;
-  }
-  return nullptr;
+const PitchTransition* transition_for(const VocalEditState& state,
+                                      const std::unordered_map<VocalNoteId, std::size_t>& by_note,
+                                      VocalNoteId id) {
+  const auto found = by_note.find(id);
+  return found == by_note.end() ? nullptr : &state.transitions[found->second];
 }
 
 std::shared_ptr<VocalRenderCache> cache_for(const VocalRenderSnapshotData& data) {
@@ -180,19 +183,54 @@ struct NoteArtifactResult {
   PitchPlan plan;
 };
 
+/// Lowest voiced F0 of the analysis, or the vocal floor when no frame is voiced.
+double minimum_voiced_f0(const VocalAnalysisData& analysis) {
+  double lowest = std::numeric_limits<double>::infinity();
+  for (std::size_t frame = 0; frame < analysis.f0_hz.size(); ++frame) {
+    if (analysis.voiced[frame] != 0 && std::isfinite(analysis.f0_hz[frame]) &&
+        analysis.f0_hz[frame] > 0.0f) {
+      lowest = std::min(lowest, static_cast<double>(analysis.f0_hz[frame]));
+    }
+  }
+  return std::isfinite(lowest) && lowest > 0.0 ? lowest : 65.0;
+}
+
+/// Analysis frames [first, last) the pitch backend can look up for a context buffer.
+struct FrameWindow {
+  std::size_t first = 0;
+  std::size_t last = 0;
+};
+
+/// Positions the PSOLA clocks reach stay below a few buffer lengths past the start (each step is
+/// at most one buffer, the grain clocks never lag below zero), so six buffers bound them.
+FrameWindow context_frame_window(const VocalAnalysisData& analysis, const VocalNote& note,
+                                 int64_t context_start, int64_t context_end,
+                                 std::size_t buffer_size) {
+  const double hop = analysis.grid.samples_per_frame;
+  const double origin = analysis.grid.frame_origin_sample;
+  const double reach = 6.0 * static_cast<double>(buffer_size) + 4.0 * hop;
+  const double low = std::floor((static_cast<double>(context_start) - origin) / hop) - 2.0;
+  const double high = std::ceil((static_cast<double>(context_end) + reach - origin) / hop) + 2.0;
+  const std::size_t total = analysis.f0_hz.size();
+  FrameWindow window;
+  window.first =
+      low <= 0.0 ? 0 : static_cast<std::size_t>(std::min(low, static_cast<double>(total)));
+  window.last =
+      high >= static_cast<double>(total) ? total : static_cast<std::size_t>(std::max(high, 0.0));
+  window.first = std::min<std::size_t>(window.first, note.analysis_frame_start);
+  window.last = std::max<std::size_t>(window.last, note.analysis_frame_end);
+  window.last = std::min(window.last, total);
+  return window;
+}
+
 NoteArtifactResult render_note(const VocalRenderSnapshotData& snapshot, const VocalNote& note,
                                PitchPlan plan, const PitchTransition* incoming,
-                               const PitchTransition* outgoing) {
+                               const PitchTransition* outgoing, double lowest_voiced_f0) {
   if (!snapshot.analysis) invalid_state("snapshot.analysis", "render snapshot has no analysis");
   const auto& analysis = *snapshot.analysis;
 
-  const bool effective_identity =
-      !note.edit.muted && plan.pitch_identity &&
-      note.edit.destination_start_sample == note.source_range.start &&
-      note.edit.destination_length_samples == note.source_range.length() &&
-      note.edit.gain_db == 0.0 && note.edit.amplitude_envelope.empty() &&
-      note.edit.formant.mode == FormantMode::kPreserve && note.edit.formant.shift_semitones == 0.0;
-  if (effective_identity) {
+  const bool identity = effective_identity(note, plan);
+  if (identity) {
     for (auto& point : plan.points) {
       point.delta_semitones = 0.0f;
       point.effective_midi = point.measured_midi;
@@ -222,7 +260,7 @@ NoteArtifactResult render_note(const VocalRenderSnapshotData& snapshot, const Vo
     source_segment.push_back(snapshot.source[checked_size(i, "source_range")]);
   }
 
-  if (effective_identity) {
+  if (identity) {
     rendered = source_segment;
     artifact.samples = std::make_shared<const std::vector<float>>(std::move(rendered));
     return {std::make_shared<const RenderArtifact>(std::move(artifact)), std::move(plan)};
@@ -231,18 +269,7 @@ NoteArtifactResult render_note(const VocalRenderSnapshotData& snapshot, const Vo
   std::vector<float> pitch_segment = source_segment;
   if (!plan.pitch_identity) {
     const int64_t sample_count = static_cast<int64_t>(snapshot.source.size());
-    double minimum_voiced_f0 = std::numeric_limits<double>::infinity();
-    for (std::size_t frame = 0; frame < analysis.f0_hz.size(); ++frame) {
-      if (analysis.voiced[frame] != 0 && std::isfinite(analysis.f0_hz[frame]) &&
-          analysis.f0_hz[frame] > 0.0f) {
-        minimum_voiced_f0 = std::min(minimum_voiced_f0, static_cast<double>(analysis.f0_hz[frame]));
-      }
-    }
-    if (!std::isfinite(minimum_voiced_f0) || !(minimum_voiced_f0 > 0.0)) {
-      minimum_voiced_f0 = 65.0;
-    }
-    const double period_context =
-        std::ceil(3.0 * snapshot.source.sample_rate() / minimum_voiced_f0);
+    const double period_context = std::ceil(3.0 * snapshot.source.sample_rate() / lowest_voiced_f0);
     const double context_double =
         std::max(static_cast<double>(analysis.grid.frame_length_samples), period_context);
     const int64_t context =
@@ -276,11 +303,14 @@ NoteArtifactResult render_note(const VocalRenderSnapshotData& snapshot, const Vo
         ++artifact.dry_passed_frames;
       }
     }
+    const FrameWindow window =
+        context_frame_window(analysis, note, context_start, context_end, context_audio.size());
     F0Track track;
-    track.f0_hz = analysis.f0_hz;
-    track.voiced.resize(analysis.voiced.size(), false);
-    for (std::size_t i = 0; i < analysis.voiced.size(); ++i) {
-      track.voiced[i] = analysis.voiced[i] != 0;
+    track.f0_hz.assign(analysis.f0_hz.begin() + static_cast<std::ptrdiff_t>(window.first),
+                       analysis.f0_hz.begin() + static_cast<std::ptrdiff_t>(window.last));
+    track.voiced.resize(window.last - window.first, false);
+    for (std::size_t i = 0; i < track.voiced.size(); ++i) {
+      track.voiced[i] = analysis.voiced[window.first + i] != 0;
     }
     track.sample_rate = snapshot.source.sample_rate();
     track.hop_length = analysis.grid.samples_per_frame >= 1.0 &&
@@ -293,12 +323,15 @@ NoteArtifactResult render_note(const VocalRenderSnapshotData& snapshot, const Vo
     std::vector<float> deltas(track.f0_hz.size(), 0.0f);
     for (std::size_t offset = 0; offset < plan.points.size(); ++offset) {
       const std::size_t frame = static_cast<std::size_t>(plan.analysis_frame_start) + offset;
-      if (frame < deltas.size()) deltas[frame] = plan.points[offset].delta_semitones;
+      if (frame >= window.first && frame < window.last) {
+        deltas[frame - window.first] = plan.points[offset].delta_semitones;
+      }
     }
     const double local_origin =
         analysis.grid.frame_origin_sample - static_cast<double>(context_start);
-    const Audio corrected = PitchCorrector().resynthesize(
-        context_audio, track, deltas, local_origin, analysis.grid.samples_per_frame);
+    const Audio corrected = PitchCorrector().resynthesize_window(
+        context_audio, track, deltas, local_origin, analysis.grid.samples_per_frame,
+        static_cast<int>(window.first), static_cast<int>(analysis.f0_hz.size()));
     const int64_t local_start = note.source_range.start - context_start;
     const int64_t local_end = local_start + source_length;
     if (local_start < 0 || local_end > static_cast<int64_t>(corrected.size())) {
@@ -309,10 +342,8 @@ NoteArtifactResult render_note(const VocalRenderSnapshotData& snapshot, const Vo
 
   rendered = stretch_note(pitch_segment, rendered.size(), snapshot.source.sample_rate());
   if (note.edit.formant.mode == FormantMode::kShift && note.edit.formant.shift_semitones != 0.0) {
-    const float factor = static_cast<float>(
-        std::pow(2.0, note.edit.formant.shift_semitones / sonare::constants::kSemitonesPerOctave));
-    if (!std::isfinite(factor) || factor < sonare::kFormantFactorMin ||
-        factor > sonare::kFormantFactorMax) {
+    const float factor = sonare::formant_factor_for_shift(note.edit.formant.shift_semitones);
+    if (!sonare::formant_factor_in_range(factor)) {
       invalid("formant.shift_semitones", "requested formant shift is outside renderer capability");
     }
     const Audio warped =
@@ -325,15 +356,6 @@ NoteArtifactResult render_note(const VocalRenderSnapshotData& snapshot, const Vo
   apply_gain_and_envelope(rendered, note.edit);
   artifact.samples = std::make_shared<const std::vector<float>>(std::move(rendered));
   return {std::make_shared<const RenderArtifact>(std::move(artifact)), plan};
-}
-
-bool effective_identity(const VocalNote& note, const PitchPlan& plan) {
-  return !note.edit.muted && plan.pitch_identity &&
-         note.edit.destination_start_sample == note.source_range.start &&
-         note.edit.destination_length_samples == note.source_range.length() &&
-         note.edit.gain_db == 0.0 && note.edit.amplitude_envelope.empty() &&
-         note.edit.formant.mode == FormantMode::kPreserve &&
-         note.edit.formant.shift_semitones == 0.0;
 }
 
 void add_range(std::vector<SampleRange>& ranges, SampleRange range) {
@@ -416,6 +438,12 @@ struct VocalRenderJob::Impl {
   std::vector<std::shared_ptr<const RenderArtifact>> artifacts;
   std::vector<PitchPlan> plans;
   std::vector<PitchPlan> compiled_plans;
+  VocalStateIndex state_index;
+  // Notes whose source or destination touches the request, in state order, and the same notes
+  // in the order their segments are laid over the source.
+  std::vector<std::size_t> needed;
+  std::vector<std::size_t> overlay_order;
+  double lowest_voiced_f0 = 0.0;
   std::vector<SampleRange> processed_ranges;
   VocalRenderResult result{};
   VocalRenderJobState state = VocalRenderJobState::kRenderingUnits;
@@ -451,9 +479,27 @@ VocalRenderJob::VocalRenderJob(std::shared_ptr<const VocalRenderSnapshot> snapsh
   }
   impl_->cache = cache_for(data);
   const auto& state = *data.state;
-  constexpr int64_t kAssemblyTileSamples = 4096;
+  for (std::size_t i = 0; i < state.notes.size(); ++i) {
+    const auto& note = state.notes[i];
+    const int64_t length = note.edit.destination_length_samples;
+    const int64_t start = note.edit.destination_start_sample;
+    // An unrepresentable destination stays needed so the render refuses it.
+    const bool destination_overflows =
+        start < 0 || length < 0 || length > std::numeric_limits<int64_t>::max() - start;
+    const bool touches_destination =
+        destination_overflows ||
+        (start < request.range.end && start + length > request.range.start);
+    const bool touches_source =
+        note.source_range.start < request.range.end && note.source_range.end > request.range.start;
+    if (touches_source || touches_destination) impl_->needed.push_back(i);
+  }
+  impl_->overlay_order = impl_->needed;
+  insertion_sort(impl_->overlay_order.begin(), impl_->overlay_order.end(),
+                 [&](std::size_t lhs, std::size_t rhs) {
+                   return state.notes[lhs].source_range.start < state.notes[rhs].source_range.start;
+                 });
   impl_->total_units =
-      static_cast<uint64_t>(state.notes.size()) +
+      static_cast<uint64_t>(impl_->needed.size()) +
       static_cast<uint64_t>((request.range.length() - 1) / kAssemblyTileSamples + 1);
   impl_->assembly_cursor = request.range.start;
   impl_->result.samples.reserve(checked_size(request.range.length(), "request.range"));
@@ -467,8 +513,11 @@ VocalRenderJob::VocalRenderJob(std::shared_ptr<const VocalRenderSnapshot> snapsh
   impl_->job_count = data.render_job_count;
   impl_->artifacts.resize(state.notes.size());
   impl_->plans.resize(state.notes.size());
-  impl_->compiled_plans = compile_pitch_plans(*data.analysis, state, data.render_settings,
-                                              data.source_descriptor.sample_rate);
+  impl_->state_index = index_state(state);
+  impl_->lowest_voiced_f0 = minimum_voiced_f0(*data.analysis);
+  impl_->compiled_plans =
+      compile_pitch_plans(*data.analysis, state, impl_->state_index, data.render_settings,
+                          data.source_descriptor.sample_rate);
   if (impl_->compiled_plans.size() != state.notes.size())
     invalid_state("pitch_plan", "planner returned an unexpected number of note plans");
   impl_->result.start_sample = request.range.start;
@@ -503,11 +552,12 @@ bool VocalRenderJob::next(const VocalCancelProbe& cancel) {
     const auto& data = impl_->snapshot->data();
     const auto& state = *data.state;
     if (impl_->state == VocalRenderJobState::kRenderingUnits) {
-      const std::size_t index = static_cast<std::size_t>(impl_->completed_units);
-      if (index < state.notes.size()) {
+      const std::size_t unit = static_cast<std::size_t>(impl_->completed_units);
+      if (unit < impl_->needed.size()) {
+        const std::size_t index = impl_->needed[unit];
         const auto& note = state.notes[index];
-        const auto* incoming = incoming_transition(state, note.id);
-        const auto* outgoing = outgoing_transition(state, note.id);
+        const auto* incoming = transition_for(state, impl_->state_index.incoming, note.id);
+        const auto* outgoing = transition_for(state, impl_->state_index.outgoing, note.id);
         const auto& key_plan = impl_->compiled_plans[index];
         const bool plan_identity = key_plan.pitch_identity;
         PitchPlan lookup_plan = key_plan;
@@ -524,7 +574,8 @@ bool VocalRenderJob::next(const VocalCancelProbe& cancel) {
           impl_->plans[index] = std::move(lookup_plan);
           ++impl_->cache_hits;
         } else {
-          const auto rendered = render_note(data, note, lookup_plan, incoming, outgoing);
+          const auto rendered =
+              render_note(data, note, lookup_plan, incoming, outgoing, impl_->lowest_voiced_f0);
           impl_->artifacts[index] = rendered.artifact;
           impl_->plans[index] = rendered.plan;
         }
@@ -536,7 +587,7 @@ bool VocalRenderJob::next(const VocalCancelProbe& cancel) {
           return false;
         }
         if (impl_->state == VocalRenderJobState::kAborted) return false;
-        if (impl_->completed_units == state.notes.size()) {
+        if (impl_->completed_units == impl_->needed.size()) {
           impl_->state = VocalRenderJobState::kAssembling;
         }
         return true;
@@ -551,8 +602,9 @@ bool VocalRenderJob::next(const VocalCancelProbe& cancel) {
       }
       if (impl_->state == VocalRenderJobState::kAborted) return false;
       const int64_t remaining = impl_->request.range.end - impl_->assembly_cursor;
-      const SampleRange request{impl_->assembly_cursor,
-                                impl_->assembly_cursor + std::min<int64_t>(4096, remaining)};
+      const SampleRange request{
+          impl_->assembly_cursor,
+          impl_->assembly_cursor + std::min<int64_t>(kAssemblyTileSamples, remaining)};
       const std::size_t output_size = checked_size(request.length(), "request.range");
       std::vector<float> tile(output_size);
       const Audio& source = data.source;
@@ -563,7 +615,7 @@ bool VocalRenderJob::next(const VocalCancelProbe& cancel) {
                       : 0.0f;
       }
       const int sample_rate = source.sample_rate();
-      for (std::size_t i = 0; i < state.notes.size(); ++i) {
+      for (const std::size_t i : impl_->needed) {
         const auto& note = state.notes[i];
         if (effective_identity(note, impl_->plans[i])) {
           continue;
@@ -575,12 +627,7 @@ bool VocalRenderJob::next(const VocalCancelProbe& cancel) {
                      fade_samples(data.render_settings.edge_fade_ms, sample_rate,
                                   note.source_range.length()));
       }
-      std::vector<std::size_t> order(state.notes.size());
-      for (std::size_t i = 0; i < order.size(); ++i) order[i] = i;
-      insertion_sort(order.begin(), order.end(), [&](std::size_t lhs, std::size_t rhs) {
-        return state.notes[lhs].source_range.start < state.notes[rhs].source_range.start;
-      });
-      for (const std::size_t index : order) {
+      for (const std::size_t index : impl_->overlay_order) {
         const auto& note = state.notes[index];
         if (effective_identity(note, impl_->plans[index])) {
           continue;
@@ -601,8 +648,8 @@ bool VocalRenderJob::next(const VocalCancelProbe& cancel) {
       impl_->assembly_cursor = request.end;
       ++impl_->completed_units;
       if (request.end != impl_->request.range.end) return true;
-      for (std::size_t i = 0; i < impl_->artifacts.size(); ++i) {
-        if (impl_->artifacts[i]) impl_->cache->publish(impl_->artifacts[i]);
+      for (const std::size_t i : impl_->needed) {
+        impl_->cache->publish(impl_->artifacts[i]);
         impl_->result.diagnostics.limited_correction_frames +=
             impl_->plans[i].diagnostics.limited_correction_frames;
         impl_->result.diagnostics.dry_passed_frames += impl_->artifacts[i]->dry_passed_frames;

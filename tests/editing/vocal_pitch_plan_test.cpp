@@ -273,3 +273,22 @@ TEST_CASE("successive transitions use immutable pre-transition neighbour deltas"
   const double expected = 4.0 + (8.0 - 4.0) * (t * t * (3.0 - 2.0 * t));
   CHECK_THAT(plans[1].points[2].delta_semitones, WithinAbs(expected, 1.0e-5));
 }
+
+TEST_CASE("pitch plan refuses the same malformed targets as the session", "[vocal_pitch_plan]") {
+  const float c4 =
+      static_cast<float>(kA4Hz * std::pow(2.0, (60.0 - kMidiA4) / kSemitonesPerOctave));
+  const VocalAnalysisData track = analysis({c4}, {1});
+
+  VocalNote centre_with_points = note(0, 1, 60.0);
+  centre_with_points.edit.pitch.target.mode = PitchTargetMode::kCenter;
+  centre_with_points.edit.pitch.target.center_midi = 62.0;
+  centre_with_points.edit.pitch.target.points = {{0.0, 60.0}, {480.0, 61.0}};
+  CHECK_THROWS_AS(compile_pitch_plan(track, centre_with_points, RenderSettings{}, 48000),
+                  sonare::editing::vocal_edit::VocalEditException);
+
+  VocalNote none_with_centre = note(0, 1, 60.0);
+  none_with_centre.edit.pitch.target.mode = PitchTargetMode::kNone;
+  none_with_centre.edit.pitch.target.center_midi = 5.0;
+  CHECK_THROWS_AS(compile_pitch_plan(track, none_with_centre, RenderSettings{}, 48000),
+                  sonare::editing::vocal_edit::VocalEditException);
+}

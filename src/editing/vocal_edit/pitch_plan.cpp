@@ -26,7 +26,9 @@ namespace {
 
 double hz_to_midi(double hz) { return kMidiA4 + kSemitonesPerOctave * std::log2(hz / kA4Hz); }
 
-void validate_pitch(const VocalPitchEdit& pitch, const VocalNote& note) {
+}  // namespace
+
+void validate_pitch_parameters(const VocalPitchEdit& pitch, SampleRange source_range) {
   const auto finite = [](double value) { return std::isfinite(value); };
   if (!finite(pitch.amount) || pitch.amount < 0.0 || pitch.amount > 1.0) {
     invalid("pitch.amount", "must be finite and in [0, 1]");
@@ -47,6 +49,8 @@ void validate_pitch(const VocalPitchEdit& pitch, const VocalNote& note) {
         pitch.target.center_midi > 127.0) {
       invalid("pitch.target.center_midi", "must be finite and in [0, 127]");
     }
+    if (!pitch.target.points.empty())
+      invalid("pitch.target.points", "centre targets cannot carry curve points");
   } else if (pitch.target.mode == PitchTargetMode::kCurve) {
     if (pitch.target.points.size() < 2)
       invalid("pitch.target.points", "a curve needs at least two points");
@@ -60,16 +64,19 @@ void validate_pitch(const VocalPitchEdit& pitch, const VocalNote& note) {
         invalid("pitch.target.points", "source samples must be strictly increasing");
       previous = point.source_sample;
     }
-    if (pitch.target.points.front().source_sample != static_cast<double>(note.source_range.start) ||
-        pitch.target.points.back().source_sample != static_cast<double>(note.source_range.end)) {
+    if (pitch.target.points.front().source_sample != static_cast<double>(source_range.start) ||
+        pitch.target.points.back().source_sample != static_cast<double>(source_range.end)) {
       invalid("pitch.target.points", "curve endpoints must equal the source note range");
     }
-  } else if (pitch.target.mode != PitchTargetMode::kNone) {
+  } else if (pitch.target.mode == PitchTargetMode::kNone) {
+    if (!finite(pitch.target.center_midi) || pitch.target.center_midi != 0.0 ||
+        !pitch.target.points.empty()) {
+      invalid("pitch.target", "none targets must carry canonical empty values");
+    }
+  } else {
     invalid("pitch.target.mode", "unknown pitch target mode");
   }
 }
-
-}  // namespace
 
 double pitch_target_at(const VocalPitchTarget& target, double source_sample, double fallback) {
   if (target.mode == PitchTargetMode::kNone) return fallback;
@@ -121,7 +128,7 @@ CompiledPitchPlan compile_pitch_plan_at_rate(const VocalAnalysisData& analysis,
                          !std::isfinite(note.centre_midi))) {
     invalid("note.measurement", "pitched note measurements are malformed");
   }
-  validate_pitch(note.edit.pitch, note);
+  validate_pitch_parameters(note.edit.pitch, note.source_range);
   if (!std::isfinite(settings.vibrato_cutoff_hz) || settings.vibrato_cutoff_hz <= 0.0) {
     invalid("render_settings.vibrato_cutoff_hz", "must be finite and > 0");
   }
@@ -297,8 +304,27 @@ CompiledPitchPlan compile_pitch_plan(const VocalAnalysisData& analysis, const Vo
   return compile_pitch_plan_at_rate(analysis, note, settings, source_sample_rate);
 }
 
+VocalStateIndex index_state(const VocalEditState& state) {
+  VocalStateIndex index;
+  index.note.reserve(state.notes.size());
+  for (std::size_t i = 0; i < state.notes.size(); ++i) index.note.emplace(state.notes[i].id, i);
+  for (std::size_t i = 0; i < state.transitions.size(); ++i) {
+    index.incoming.emplace(state.transitions[i].right_note_id, i);
+    index.outgoing.emplace(state.transitions[i].left_note_id, i);
+  }
+  return index;
+}
+
 std::vector<CompiledPitchPlan> compile_pitch_plans(const VocalAnalysisData& analysis,
                                                    const VocalEditState& state,
+                                                   const RenderSettings& settings,
+                                                   uint32_t source_sample_rate) {
+  return compile_pitch_plans(analysis, state, index_state(state), settings, source_sample_rate);
+}
+
+std::vector<CompiledPitchPlan> compile_pitch_plans(const VocalAnalysisData& analysis,
+                                                   const VocalEditState& state,
+                                                   const VocalStateIndex& index,
                                                    const RenderSettings& settings,
                                                    uint32_t source_sample_rate) {
   std::vector<CompiledPitchPlan> plans;
@@ -312,22 +338,16 @@ std::vector<CompiledPitchPlan> compile_pitch_plans(const VocalAnalysisData& anal
 
   // Bridge the endpoint deltas across the boundary; scaling a correction toward zero would dip.
   const auto pre_plan_for = [&](VocalNoteId id) -> const CompiledPitchPlan* {
-    for (const auto& plan : pre_transition_plans) {
-      if (plan.note_id == id) return &plan;
-    }
-    return nullptr;
+    const auto found = index.note.find(id);
+    return found == index.note.end() ? nullptr : &pre_transition_plans[found->second];
   };
   const auto output_plan_for = [&](VocalNoteId id) -> CompiledPitchPlan* {
-    for (auto& plan : plans) {
-      if (plan.note_id == id) return &plan;
-    }
-    return nullptr;
+    const auto found = index.note.find(id);
+    return found == index.note.end() ? nullptr : &plans[found->second];
   };
   const auto note_for = [&](VocalNoteId id) -> const VocalNote* {
-    for (const auto& note : state.notes) {
-      if (note.id == id) return &note;
-    }
-    return nullptr;
+    const auto found = index.note.find(id);
+    return found == index.note.end() ? nullptr : &state.notes[found->second];
   };
   const auto raw_delta_at_destination = [](const CompiledPitchPlan& plan, const VocalNote& note,
                                            double destination) {

@@ -224,12 +224,13 @@ NoteMaskSet build_note_masks(const StftGeometry& geometry, const MultiF0Track& t
   std::vector<int> claims(static_cast<size_t>(n_bins), 0);
   std::vector<int32_t> touched;
   std::vector<PartialClaim> partials;
+  detail::ActiveMasks active(set.notes);
   for (int frame = 0; frame < n_frames; ++frame) {
+    const std::vector<size_t>& live = active.advance(frame);
     // Every note names its bins and counts itself on each before any share is read.
-    for (size_t i = 0; i < set.notes.size(); ++i) {
+    for (const size_t i : live) {
       NoteMask& mask = set.notes[i];
       const int index = frame - mask.frame_start;
-      if (index < 0 || index >= mask.n_frames) continue;
       place_claims(track.ridges[i].f0_hz[static_cast<size_t>(index)], per_ridge[i], bins_per_hz,
                    half_width, n_bins, partials);
       for (const PartialClaim& partial : partials) {
@@ -245,9 +246,9 @@ NoteMaskSet build_note_masks(const StftGeometry& geometry, const MultiF0Track& t
       }
     }
     // A bin claimed by n notes gives each of them 1/n of it.
-    for (NoteMask& mask : set.notes) {
+    for (const size_t i : live) {
+      NoteMask& mask = set.notes[i];
       const int index = frame - mask.frame_start;
-      if (index < 0 || index >= mask.n_frames) continue;
       for (int32_t k = mask.frame_offset[static_cast<size_t>(index)];
            k < mask.frame_offset[static_cast<size_t>(index) + 1]; ++k) {
         const int32_t bin = mask.bins[static_cast<size_t>(k)];

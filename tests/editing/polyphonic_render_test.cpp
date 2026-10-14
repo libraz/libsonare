@@ -676,6 +676,45 @@ TEST_CASE("the result is the residual plus each note rendered over its own maske
   REQUIRE(edited.worst > kGuardMargin * kTelescopeRelative * edited.scale);
 }
 
+TEST_CASE("segment inversion renders the same samples as inverting each whole masked spectrogram",
+          "[polyphony_render]") {
+  const sonare::Spectrogram spec = source_spectrogram();
+  const int length = static_cast<int>(kSourceSamples);
+  const MultiF0Track track = track_over(
+      spec,
+      {steady_ridge(kLowHz, 2, 24), steady_ridge(kHighHz, 6, 18), steady_ridge(kLowHz, 20, 8)});
+  const NoteMaskSet masks = build_note_masks(spec, track);
+  REQUIRE(masks.notes.size() == 3);
+
+  std::vector<NoteObject> notes = notes_for(track);
+  notes[0].edit.pitch_shift_semitones = 2.0f;
+  notes[0].edit.time_offset_samples = 2048;
+  notes[1].edit.muted = true;
+  notes[2].edit.gain_db = -3.0f;
+
+  // The reference walks the order render_masked_notes does: residual first, then each note.
+  const NoteRenderConfig config;
+  const sonare::Audio residual = residual_audio(spec, masks, length);
+  std::vector<float> expected(residual.begin(), residual.end());
+  for (size_t i = 0; i < masks.notes.size(); ++i) {
+    const sonare::Audio edited =
+        note_model::render_notes(masked_audio(spec, masks.notes[i], length), {notes[i]}, config);
+    REQUIRE(edited.size() == expected.size());
+    for (size_t j = 0; j < expected.size(); ++j) expected[j] += edited[j];
+  }
+
+  const sonare::Audio got = render_masked_notes(spec, masks, notes, length, config);
+  REQUIRE(got.size() == expected.size());
+  size_t mismatches = 0;
+  for (size_t j = 0; j < expected.size(); ++j) mismatches += got[j] != expected[j] ? 1 : 0;
+  CHECK(mismatches == 0);
+
+  // The edits moved the output, so equal buffers are not two copies of the round trip.
+  const Agreement moved = agreement(got, spec.to_audio(length));
+  REQUIRE(moved.scale > kFixturePeakFloor);
+  REQUIRE(moved.worst > kGuardMargin * kTelescopeRelative * moved.scale);
+}
+
 TEST_CASE("an empty note set leaves the spectrogram's own round trip", "[polyphony_render]") {
   const sonare::Spectrogram spec = source_spectrogram();
   const NoteMaskSet masks = build_note_masks(spec, track_over(spec, {}));

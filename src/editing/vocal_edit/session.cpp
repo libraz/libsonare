@@ -15,6 +15,7 @@
 
 #include "editing/vocal_edit/pitch_plan.h"
 #include "editing/vocal_edit/state_codec.h"
+#include "effects/formant_warp.h"
 #include "util/db.h"
 #include "util/insertion_sort.h"
 #include "util/sha256.h"
@@ -109,48 +110,7 @@ constexpr double kMaxFormantShiftSemitones = 8.669592293653093;   // 12*log2(1.6
 void validate_pitch_edit(const VocalNoteEdit& edit, const SampleRange source_range,
                          int64_t output_length) {
   const auto finite = [](double value) { return std::isfinite(value); };
-  const auto& pitch = edit.pitch;
-  if (!finite(pitch.amount) || pitch.amount < 0.0 || pitch.amount > 1.0)
-    invalid("pitch.amount", "must be in [0, 1]");
-  if (!finite(pitch.speed_ms) || pitch.speed_ms < 0.0) invalid("pitch.speed_ms", "must be >= 0");
-  if (!finite(pitch.max_correction_semitones) || pitch.max_correction_semitones < 0.0) {
-    invalid("pitch.max_correction_semitones", "must be >= 0");
-  }
-  if (!finite(pitch.transpose_semitones)) invalid("pitch.transpose_semitones", "must be finite");
-  if (!finite(pitch.drift_scale) || pitch.drift_scale < 0.0)
-    invalid("pitch.drift_scale", "must be >= 0");
-  if (!finite(pitch.vibrato_scale) || pitch.vibrato_scale < 0.0)
-    invalid("pitch.vibrato_scale", "must be >= 0");
-  if (pitch.target.mode == PitchTargetMode::kCenter) {
-    if (!finite(pitch.target.center_midi) || pitch.target.center_midi < 0.0 ||
-        pitch.target.center_midi > 127.0) {
-      invalid("pitch.target.center_midi", "must be in [0, 127]");
-    }
-    if (!pitch.target.points.empty())
-      invalid("pitch.target.points", "centre targets cannot carry curve points");
-  } else if (pitch.target.mode == PitchTargetMode::kCurve) {
-    if (pitch.target.points.size() < 2)
-      invalid("pitch.target.points", "curve needs at least two points");
-    double previous = -std::numeric_limits<double>::infinity();
-    for (const auto& point : pitch.target.points) {
-      if (!finite(point.source_sample) || !finite(point.target_midi) || point.target_midi < 0.0 ||
-          point.target_midi > 127.0 || !(point.source_sample > previous)) {
-        invalid("pitch.target.points", "curve points are malformed");
-      }
-      previous = point.source_sample;
-    }
-    if (pitch.target.points.front().source_sample != static_cast<double>(source_range.start) ||
-        pitch.target.points.back().source_sample != static_cast<double>(source_range.end)) {
-      invalid("pitch.target.points", "curve endpoints must equal the source range");
-    }
-  } else if (pitch.target.mode == PitchTargetMode::kNone) {
-    if (!finite(pitch.target.center_midi) || pitch.target.center_midi != 0.0 ||
-        !pitch.target.points.empty()) {
-      invalid("pitch.target", "none targets must carry canonical empty values");
-    }
-  } else {
-    invalid("pitch.target.mode", "unknown target mode");
-  }
+  validate_pitch_parameters(edit.pitch, source_range);
   if (!finite(edit.destination_start_sample) || edit.destination_start_sample < 0 ||
       edit.destination_length_samples <= 0) {
     invalid("destination", "destination range is malformed");
@@ -168,8 +128,7 @@ void validate_pitch_edit(const VocalNoteEdit& edit, const SampleRange source_ran
     }
   } else if (edit.formant.mode == FormantMode::kShift) {
     if (!finite(edit.formant.shift_semitones) ||
-        edit.formant.shift_semitones < kMinFormantShiftSemitones ||
-        edit.formant.shift_semitones > kMaxFormantShiftSemitones) {
+        !formant_factor_in_range(formant_factor_for_shift(edit.formant.shift_semitones))) {
       invalid("formant.shift_semitones", "is outside the renderer capability range");
     }
   } else {

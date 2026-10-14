@@ -179,8 +179,8 @@ bool has_usable_pitch(const std::vector<float>& f0_hz) noexcept {
 /// repitches @p segment through them. The deltas are a change from the measured
 /// curve, so -1 cancels a component and 0 leaves it alone. Duration-preserving,
 /// so the segment keeps its length for the rest of the chain.
-void apply_pitch_curve(std::vector<float>& segment, const NoteObject& note, int sample_rate,
-                       const NoteRenderConfig& config) {
+Audio apply_pitch_curve(const Audio& segment, const NoteObject& note,
+                        const NoteRenderConfig& config) {
   const PitchDecomposition split = decompose_pitch(note, config.decomposition);
   const size_t n = note.f0_hz.values.size();
   // Unreachable while validation and decompose_pitch agree on what a usable
@@ -204,12 +204,10 @@ void apply_pitch_curve(std::vector<float>& segment, const NoteObject& note, int 
     // the pitch corrector consumes a normalized, validated F0 track.
     if (!track.voiced[i]) track.f0_hz[i] = 0.0f;
   }
-  track.sample_rate = sample_rate;
+  track.sample_rate = segment.sample_rate();
   track.frame_rate_hz = note.f0_hz.frame_rate_hz;
 
-  const Audio repitched = pitch_editor::PitchCorrector().resynthesize(
-      Audio::from_vector(segment, sample_rate), track, deltas);
-  segment.assign(repitched.begin(), repitched.end());
+  return pitch_editor::PitchCorrector().resynthesize(segment, track, deltas);
 }
 
 }  // namespace
@@ -321,34 +319,31 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
     const int64_t onset = note.onset_sample;
     const int64_t offset = note.offset_sample;
 
-    std::vector<float> segment(audio.begin() + onset, audio.begin() + offset);
+    // Each stage reads the previous stage's Audio directly; the source slice shares the input
+    // buffer.
+    Audio staged = audio.slice_samples(static_cast<size_t>(onset), static_cast<size_t>(offset));
     if (note.edit.vibrato_depth_change != 0.0f || note.edit.drift_change != 0.0f) {
-      apply_pitch_curve(segment, note, sample_rate, config);
+      staged = apply_pitch_curve(staged, note, config);
     }
     if (note.edit.time_stretch_ratio != 1.0f) {
       TimeStretchConfig stretch_config;
       stretch_config.backend = config.stretch_backend;
       // time_stretch takes a rate, which is the reciprocal of a stretch ratio.
-      const Audio stretched = time_stretch(Audio::from_vector(segment, sample_rate),
-                                           1.0f / note.edit.time_stretch_ratio, stretch_config);
-      segment.assign(stretched.begin(), stretched.end());
+      staged = time_stretch(staged, 1.0f / note.edit.time_stretch_ratio, stretch_config);
     }
     if (note.edit.pitch_shift_semitones != 0.0f) {
       PitchShiftConfig shift_config;
       shift_config.backend = config.stretch_backend;
-      const Audio shifted = pitch_shift(Audio::from_vector(segment, sample_rate),
-                                        note.edit.pitch_shift_semitones, shift_config);
-      segment.assign(shifted.begin(), shifted.end());
+      staged = pitch_shift(staged, note.edit.pitch_shift_semitones, shift_config);
     }
-    if (segment.empty()) continue;
+    if (staged.empty()) continue;
     if (note.edit.formant_shift_semitones != 0.0f) {
       FormantWarpConfig warp_config;
       // The warp takes a frequency ratio for what the edit states in semitones.
       warp_config.factor = std::pow(2.0f, note.edit.formant_shift_semitones / kSemitonesPerOctave);
-      const Audio warped =
-          FormantWarp(warp_config).process(Audio::from_vector(segment, sample_rate));
-      segment.assign(warped.begin(), warped.end());
+      staged = FormantWarp(warp_config).process(staged);
     }
+    std::vector<float> segment(staged.begin(), staged.end());
     const float gain = db_to_linear(note.edit.gain_db);
     apply_envelope(segment, note.edit.amplitude_envelope, gain);
 

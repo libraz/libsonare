@@ -4,7 +4,9 @@
 /// @brief Pure compilation of an editable note into per-frame pitch deltas.
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 #include "editing/vocal_edit/types.h"
@@ -69,9 +71,34 @@ double pitch_target_at(const VocalPitchTarget& target, double source_sample, dou
 CompiledPitchPlan compile_pitch_plan(const VocalAnalysisData& analysis, const VocalNote& note,
                                      const RenderSettings& settings, uint32_t source_sample_rate);
 
+/// Lookup tables over one immutable edit state. The first entry wins on a repeated key.
+struct VocalStateIndex {
+  /// Note id to index into `state.notes`.
+  std::unordered_map<VocalNoteId, std::size_t> note;
+  /// `right_note_id` to index into `state.transitions`.
+  std::unordered_map<VocalNoteId, std::size_t> incoming;
+  /// `left_note_id` to index into `state.transitions`.
+  std::unordered_map<VocalNoteId, std::size_t> outgoing;
+};
+
+VocalStateIndex index_state(const VocalEditState& state);
+
 std::vector<CompiledPitchPlan> compile_pitch_plans(const VocalAnalysisData& analysis,
                                                    const VocalEditState& state,
                                                    const RenderSettings& settings,
                                                    uint32_t source_sample_rate);
+
+/// Same as above for a caller that already holds `index_state(state)`.
+std::vector<CompiledPitchPlan> compile_pitch_plans(const VocalAnalysisData& analysis,
+                                                   const VocalEditState& state,
+                                                   const VocalStateIndex& index,
+                                                   const RenderSettings& settings,
+                                                   uint32_t source_sample_rate);
+
+/// @brief Validates the pitch half of a note edit against the note's source range.
+/// @details The one rule set behind the session's edit validation and the planner, so both refuse
+///          the same target for the same reason.
+/// @throws VocalEditException(kInvalidInput) naming the offending field.
+void validate_pitch_parameters(const VocalPitchEdit& pitch, SampleRange source_range);
 
 }  // namespace sonare::editing::vocal_edit

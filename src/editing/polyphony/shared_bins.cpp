@@ -167,11 +167,11 @@ void build_bin_claims(const NoteMaskSet& masks, std::vector<size_t>& bin_start,
   std::vector<size_t> cursor(bin_start.begin(), bin_start.end() - 1);
   claims.assign(total, BinClaim{});
   // Frames outermost, so the claims of one bin come out sorted by frame.
+  detail::ActiveMasks active(masks.notes);
   for (int frame = 0; frame < masks.n_frames; ++frame) {
-    for (size_t i = 0; i < masks.notes.size(); ++i) {
+    for (const size_t i : active.advance(frame)) {
       const NoteMask& mask = masks.notes[i];
       const int index = frame - mask.frame_start;
-      if (index < 0 || index >= mask.n_frames) continue;
       for (int32_t k = mask.frame_offset[static_cast<size_t>(index)];
            k < mask.frame_offset[static_cast<size_t>(index) + 1]; ++k) {
         const size_t bin = static_cast<size_t>(mask.bins[static_cast<size_t>(k)]);

@@ -64,6 +64,17 @@ NoteObject make_note(const Audio& segment, int64_t segment_start, int64_t n_samp
                      const pitch_editor::F0Track& track, int frame_start, int frame_end,
                      const NoteExtractorConfig& config = {});
 
+/// @brief @ref make_note with the track given as a window of it.
+/// @details @p window holds frames [@p first_frame, first_frame + window.n_frames()) of a track
+///          of @p total_frames, with the cadence fields of the whole track. Frame numbers,
+///          the end-of-track handling and the result are those of the full-track overload;
+///          only the frames the span reads are copied.
+/// @throws SonareException(InvalidParameter) on what @ref make_note rejects, or a span or
+///         window that does not fit inside the track.
+NoteObject make_note(const Audio& segment, int64_t segment_start, int64_t n_samples,
+                     const pitch_editor::F0Track& window, int first_frame, int total_frames,
+                     int frame_start, int frame_end, const NoteExtractorConfig& config = {});
+
 /// @brief Repairs physical bounds after a note set was re-derived from frame spans.
 /// @details A terminal frame whose raw sample range lies beyond the audio is
 ///        nudged one sample left by @ref make_note. When that frame follows a

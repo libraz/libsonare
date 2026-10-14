@@ -55,19 +55,19 @@ void validate_f0_track(const Audio& audio, const F0Track& track) {
   const float nyquist = 0.5f * static_cast<float>(audio.sample_rate());
   for (size_t i = 0; i < track.f0_hz.size(); ++i) {
     const float f0 = track.f0_hz[i];
-    const std::string at = "f0Hz[" + std::to_string(i) + "]";
+    const auto at = [i] { return "f0Hz[" + std::to_string(i) + "]"; };
     if (track.voiced[i]) {
       SONARE_CHECK_MSG(!std::isnan(f0), ErrorCode::InvalidParameter,
-                       at + " is NaN but the frame is voiced");
-      SONARE_CHECK_MSG(std::isfinite(f0), ErrorCode::InvalidParameter, at + " is not finite");
+                       at() + " is NaN but the frame is voiced");
+      SONARE_CHECK_MSG(std::isfinite(f0), ErrorCode::InvalidParameter, at() + " is not finite");
       SONARE_CHECK_MSG(f0 > 0.0f && f0 <= nyquist, ErrorCode::InvalidParameter,
-                       at + " must be in (0, Nyquist] for a voiced frame");
+                       at() + " must be in (0, Nyquist] for a voiced frame");
     } else if (!std::isnan(f0)) {
       // pYIN uses NaN for unvoiced F0. A finite non-negative value is also
       // accepted for host-supplied tracks because voiced[] is authoritative.
-      SONARE_CHECK_MSG(std::isfinite(f0), ErrorCode::InvalidParameter, at + " is not finite");
+      SONARE_CHECK_MSG(std::isfinite(f0), ErrorCode::InvalidParameter, at() + " is not finite");
       SONARE_CHECK_MSG(f0 >= 0.0f && f0 <= nyquist, ErrorCode::InvalidParameter,
-                       at + " must be in [0, Nyquist]");
+                       at() + " must be in [0, Nyquist]");
     }
   }
   for (size_t i = 0; i < track.voiced_prob.size(); ++i) {
@@ -138,6 +138,10 @@ bool clamp_log2_to_bounds(double& value, double lower, double upper, float sourc
   }
   return true;
 }
+
+Audio resynthesize_validated(const Audio& audio, const F0Track& track,
+                             const std::vector<float>& deltas_semitones, double frame_origin_sample,
+                             double samples_per_frame, int first_frame, int total_frames);
 
 }  // namespace
 
@@ -258,7 +262,8 @@ Audio PitchCorrector::correct_timevarying(const Audio& audio, const F0Track& tra
     return audio;
   }
   const std::vector<float> smooth = compute_smooth_deltas(track, mode, fixed_target_midi);
-  return resynthesize(audio, track, smooth);
+  return resynthesize_validated(audio, track, smooth, 0.0, track.samples_per_frame(), 0,
+                                track.n_frames());
 }
 
 // Phase 1 (per-frame target) + Phase 2 (retune IIR with vibrato bypass and unvoiced decay).
@@ -329,7 +334,8 @@ namespace {
 // and splits requests larger than kPsolaMaxSemitones before calling this helper.
 Audio resynthesize_psola_pass(const Audio& audio, const F0Track& track,
                               const std::vector<float>& deltas_semitones,
-                              double frame_origin_sample, double samples_per_frame) {
+                              double frame_origin_sample, double samples_per_frame, int first_frame,
+                              int total_frames) {
   SONARE_CHECK(audio.size() <= static_cast<size_t>(std::numeric_limits<int>::max()),
                ErrorCode::InvalidParameter);
   const int n_samples = static_cast<int>(audio.size());
@@ -339,9 +345,20 @@ Audio resynthesize_psola_pass(const Audio& audio, const F0Track& track,
   // double: this is the unit frame_at converts to/from, and frame_at feeds the
   // grain clock below, which must not lose precision past 2^24 samples.
   const double hop = samples_per_frame;
-  const int n_frames = track.n_frames();
+  // The track holds frames [first_frame, first_frame + track.n_frames()) of a grid of
+  // total_frames; every lookup works in grid coordinates and is resolved through the window.
+  const int n_frames = total_frames;
+  const int window_frames = track.n_frames();
 
   const float* input = audio.data();
+  const auto in_window = [&](int frame) {
+    SONARE_CHECK(frame >= first_frame && frame - first_frame < window_frames,
+                 ErrorCode::InvalidParameter);
+    return static_cast<size_t>(frame - first_frame);
+  };
+  const auto active_frame = [&](int frame) {
+    return valid_voiced_frame(track, static_cast<int>(in_window(frame)));
+  };
 
   // Helper: frame index (real) for a sample position. double throughout: this
   // sits directly under the grain clock (output_epoch/analysis_epoch), whose
@@ -370,31 +387,30 @@ Audio resynthesize_psola_pass(const Audio& audio, const F0Track& track,
     const int f0 = static_cast<int>(std::floor(ff));
     const int f1 = std::clamp(f0 + 1, 0, n_frames - 1);
     const float frac = static_cast<float>(ff - static_cast<double>(f0));
-    const bool first_active = valid_voiced_frame(track, f0);
-    const bool second_active = valid_voiced_frame(track, f1);
+    const bool first_active = active_frame(f0);
+    const bool second_active = active_frame(f1);
     float value = 0.0f;
     if (first_active && second_active) {
-      const float first = curve[static_cast<size_t>(f0)];
-      const float second = curve[static_cast<size_t>(f1)];
+      const float first = curve[in_window(f0)];
+      const float second = curve[in_window(f1)];
       // a+(b-a)*t keeps equal +/-6 endpoints exact; FMA can make a*(1-t)+b*t overshoot by one ULP.
       value = first + (second - first) * frac;
     } else if (first_active) {
-      value = curve[static_cast<size_t>(f0)];
+      value = curve[in_window(f0)];
     } else if (second_active) {
-      value = curve[static_cast<size_t>(f1)];
+      value = curve[in_window(f1)];
     }
     return std::clamp(value, -kPsolaMaxSemitones, kPsolaMaxSemitones);
   };
 
   // Build a per-sample voiced flag and per-sample f0 (for epoch spacing).
   auto sample_voiced = [&](int sample_pos) -> bool {
-    return valid_voiced_frame(track, nearest_frame(static_cast<double>(sample_pos)));
+    return active_frame(nearest_frame(static_cast<double>(sample_pos)));
   };
   auto sample_f0 = [&](double sample_pos) -> float {
     const int f = nearest_frame(sample_pos);
-    if (!valid_voiced_frame(track, f)) return 0.0f;
-    const float hz = track.f0_hz[static_cast<size_t>(f)];
-    return hz;
+    if (!active_frame(f)) return 0.0f;
+    return track.f0_hz[in_window(f)];
   };
 
   std::vector<float> out(static_cast<size_t>(n_samples), 0.0f);
@@ -520,6 +536,17 @@ Audio resynthesize_psola_pass(const Audio& audio, const F0Track& track,
   }
 
   const int xfade = std::max(1, static_cast<int>(std::lround(kCrossfadeMs * 0.001f * sr_f)));
+  // Active-run length on each side of a sample, capped at the cross-fade length.
+  std::vector<int> run_back(static_cast<size_t>(n_samples), 0);
+  std::vector<int> run_fwd(static_cast<size_t>(n_samples), 0);
+  for (int i = 1; i < n_samples; ++i) {
+    const size_t idx = static_cast<size_t>(i);
+    if (norm[idx - 1] > kSpectrumEpsilon) run_back[idx] = std::min(run_back[idx - 1] + 1, xfade);
+  }
+  for (int i = n_samples - 2; i >= 0; --i) {
+    const size_t idx = static_cast<size_t>(i);
+    if (norm[idx + 1] > kSpectrumEpsilon) run_fwd[idx] = std::min(run_fwd[idx + 1] + 1, xfade);
+  }
   std::vector<float> result(static_cast<size_t>(n_samples), 0.0f);
   for (int i = 0; i < n_samples; ++i) {
     const size_t idx = static_cast<size_t>(i);
@@ -530,17 +557,7 @@ Audio resynthesize_psola_pass(const Audio& audio, const F0Track& track,
     }
     // Cross-fade weight ramps from dry to PSOLA across boundary samples.
     float w = 1.0f;
-    int run_back = 0;
-    while (run_back < xfade && i - run_back - 1 >= 0 &&
-           norm[static_cast<size_t>(i - run_back - 1)] > kSpectrumEpsilon) {
-      ++run_back;
-    }
-    int run_fwd = 0;
-    while (run_fwd < xfade && i + run_fwd + 1 < n_samples &&
-           norm[static_cast<size_t>(i + run_fwd + 1)] > kSpectrumEpsilon) {
-      ++run_fwd;
-    }
-    const int edge = std::min(run_back, run_fwd);
+    const int edge = std::min(run_back[idx], run_fwd[idx]);
     if (edge < xfade) {
       w = static_cast<float>(edge) / static_cast<float>(xfade);
     }
@@ -550,34 +567,12 @@ Audio resynthesize_psola_pass(const Audio& audio, const F0Track& track,
   return Audio::from_vector(std::move(result), sr);
 }
 
-}  // namespace
-
-Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
-                                   const std::vector<float>& deltas_semitones) const {
-  return resynthesize(audio, track, deltas_semitones, 0.0);
-}
-
-Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
-                                   const std::vector<float>& deltas_semitones,
-                                   double frame_origin_sample) const {
-  return resynthesize(audio, track, deltas_semitones, frame_origin_sample,
-                      track.samples_per_frame());
-}
-
-Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
-                                   const std::vector<float>& deltas_semitones,
-                                   double frame_origin_sample, double samples_per_frame) const {
-  SONARE_CHECK(std::isfinite(samples_per_frame) && samples_per_frame >= 1.0,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(!audio.empty() && track.n_frames() > 0, ErrorCode::InvalidParameter);
-  // One delta per track frame prevents interpolation from reading past the correction curve.
-  SONARE_CHECK(deltas_semitones.size() == static_cast<size_t>(track.n_frames()),
-               ErrorCode::InvalidParameter);
+// Everything resynthesize does once the track and curve have been validated.
+Audio resynthesize_validated(const Audio& audio, const F0Track& track,
+                             const std::vector<float>& deltas_semitones, double frame_origin_sample,
+                             double samples_per_frame, int first_frame, int total_frames) {
   SONARE_CHECK(audio.size() <= static_cast<size_t>(std::numeric_limits<int>::max()),
                ErrorCode::InvalidParameter);
-  SONARE_CHECK(std::isfinite(frame_origin_sample), ErrorCode::InvalidParameter);
-  validate_f0_track(audio, track);
-
   const int n_samples = static_cast<int>(audio.size());
   const double sample_rate = static_cast<double>(audio.sample_rate());
   const double min_target_log2 = std::log2(sample_rate / static_cast<double>(n_samples));
@@ -654,9 +649,56 @@ Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
       pass_deltas[index] = std::clamp(pass_delta, -kPsolaMaxSemitones, kPsolaMaxSemitones);
     }
     working = resynthesize_psola_pass(working, working_track, pass_deltas, frame_origin_sample,
-                                      samples_per_frame);
+                                      samples_per_frame, first_frame, total_frames);
   }
   return working;
+}
+
+}  // namespace
+
+Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
+                                   const std::vector<float>& deltas_semitones) const {
+  return resynthesize(audio, track, deltas_semitones, 0.0);
+}
+
+Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
+                                   const std::vector<float>& deltas_semitones,
+                                   double frame_origin_sample) const {
+  return resynthesize(audio, track, deltas_semitones, frame_origin_sample,
+                      track.samples_per_frame());
+}
+
+Audio PitchCorrector::resynthesize(const Audio& audio, const F0Track& track,
+                                   const std::vector<float>& deltas_semitones,
+                                   double frame_origin_sample, double samples_per_frame) const {
+  SONARE_CHECK(std::isfinite(samples_per_frame) && samples_per_frame >= 1.0,
+               ErrorCode::InvalidParameter);
+  SONARE_CHECK(!audio.empty() && track.n_frames() > 0, ErrorCode::InvalidParameter);
+  // One delta per track frame prevents interpolation from reading past the correction curve.
+  SONARE_CHECK(deltas_semitones.size() == static_cast<size_t>(track.n_frames()),
+               ErrorCode::InvalidParameter);
+  SONARE_CHECK(std::isfinite(frame_origin_sample), ErrorCode::InvalidParameter);
+  validate_f0_track(audio, track);
+  return resynthesize_validated(audio, track, deltas_semitones, frame_origin_sample,
+                                samples_per_frame, 0, track.n_frames());
+}
+
+Audio PitchCorrector::resynthesize_window(const Audio& audio, const F0Track& window,
+                                          const std::vector<float>& window_deltas,
+                                          double frame_origin_sample, double samples_per_frame,
+                                          int first_frame, int total_frames) const {
+  SONARE_CHECK(first_frame >= 0 && total_frames >= window.n_frames() &&
+                   first_frame <= total_frames - window.n_frames(),
+               ErrorCode::InvalidParameter);
+  SONARE_CHECK(std::isfinite(samples_per_frame) && samples_per_frame >= 1.0,
+               ErrorCode::InvalidParameter);
+  SONARE_CHECK(!audio.empty() && window.n_frames() > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(window_deltas.size() == static_cast<size_t>(window.n_frames()),
+               ErrorCode::InvalidParameter);
+  SONARE_CHECK(std::isfinite(frame_origin_sample), ErrorCode::InvalidParameter);
+  validate_f0_track(audio, window);
+  return resynthesize_validated(audio, window, window_deltas, frame_origin_sample,
+                                samples_per_frame, first_frame, total_frames);
 }
 
 }  // namespace sonare::editing::pitch_editor

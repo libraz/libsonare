@@ -6,6 +6,7 @@
 /// Core-side rather than voice-changer-side: note editing warps formants too,
 /// and its build option is the one the voice changer already requires.
 
+#include <cmath>
 #include <complex>
 #include <cstddef>
 #include <cstdint>
@@ -13,6 +14,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "util/constants.h"
 
 namespace sonare {
 
@@ -22,6 +24,16 @@ class FFT;
 /// they belong to the warp rather than to any one caller's parameter policy.
 inline constexpr float kFormantFactorMin = 0.55f;
 inline constexpr float kFormantFactorMax = 1.65f;
+
+/// Warp factor a formant shift of @p semitones asks for, narrowed to the float the warp takes.
+inline float formant_factor_for_shift(double semitones) noexcept {
+  return static_cast<float>(std::pow(2.0, semitones / constants::kSemitonesPerOctave));
+}
+
+/// True when @p factor is finite and inside [kFormantFactorMin, kFormantFactorMax].
+inline bool formant_factor_in_range(float factor) noexcept {
+  return std::isfinite(factor) && factor >= kFormantFactorMin && factor <= kFormantFactorMax;
+}
 
 /// Analysis frame of the warp, in samples at 48 kHz (about 21.3 ms). The hop is a
 /// quarter of the frame and the FFT the next power of two of at least twice the frame.

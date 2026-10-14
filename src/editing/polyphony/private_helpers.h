@@ -1,6 +1,9 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
+#include <numeric>
+#include <vector>
 
 #include "editing/polyphony/multi_f0.h"
 #include "editing/polyphony/note_mask.h"
@@ -27,6 +30,43 @@ inline void check_mask_shape(const NoteMask& mask, int n_bins, int n_frames) {
     SONARE_CHECK(bin >= 0 && bin < n_bins, ErrorCode::InvalidParameter);
   }
 }
+
+/// The masks that cover a frame, ascending in note index, advanced one frame at a time from
+/// frame 0 so a sparse score is not rescanned in full at every frame.
+class ActiveMasks {
+ public:
+  explicit ActiveMasks(const std::vector<NoteMask>& notes)
+      : notes_(notes), by_start_(notes.size()) {
+    std::iota(by_start_.begin(), by_start_.end(), size_t{0});
+    std::stable_sort(by_start_.begin(), by_start_.end(), [&](size_t lhs, size_t rhs) {
+      return notes_[lhs].frame_start < notes_[rhs].frame_start;
+    });
+  }
+
+  /// The masks live at @p frame; @p frame must not decrease between calls.
+  const std::vector<size_t>& advance(int frame) {
+    const auto live = [&](size_t note) { return frame < notes_[note].frame_end(); };
+    active_.erase(
+        std::remove_if(active_.begin(), active_.end(), [&](size_t note) { return !live(note); }),
+        active_.end());
+    bool joined = false;
+    while (next_ < by_start_.size() && notes_[by_start_[next_]].frame_start <= frame) {
+      if (live(by_start_[next_])) {
+        active_.push_back(by_start_[next_]);
+        joined = true;
+      }
+      ++next_;
+    }
+    if (joined) std::sort(active_.begin(), active_.end());
+    return active_;
+  }
+
+ private:
+  const std::vector<NoteMask>& notes_;
+  std::vector<size_t> by_start_;
+  std::vector<size_t> active_;
+  size_t next_ = 0;
+};
 
 /// The ridge's f0 at @p frame, falling back to its median where the requested
 /// frame is outside the ridge span.

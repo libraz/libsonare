@@ -96,6 +96,17 @@ class PitchCorrector {
                      const std::vector<float>& deltas_semitones, double frame_origin_sample,
                      double samples_per_frame) const;
 
+  /// @brief Repitches with a track that holds only part of the analysis grid.
+  /// @details @p window carries frames [first_frame, first_frame + window.n_frames()) of a grid
+  ///          of @p total_frames, and @p window_deltas is parallel to it. Frame positions, the
+  ///          end-of-grid clamp and the origin are those of the whole grid, so the result equals
+  ///          the full-track overload whenever the window covers every frame the audio reaches.
+  /// @throws SonareException(InvalidParameter) on an inconsistent window, or when the
+  ///         resynthesis looks up a frame outside it.
+  Audio resynthesize_window(const Audio& audio, const F0Track& window,
+                            const std::vector<float>& window_deltas, double frame_origin_sample,
+                            double samples_per_frame, int first_frame, int total_frames) const;
+
   float estimate_median_midi(const F0Track& track) const;
   float correction_to_midi(const F0Track& track, float target_midi) const;
   float correction_to_scale(const F0Track& track) const;

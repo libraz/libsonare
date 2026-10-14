@@ -5,9 +5,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <limits>
 #include <random>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/audio.h"
@@ -2096,4 +2099,116 @@ TEST_CASE("ScaleQuantizer root shift moves enabled pitch classes", "[pitch_edito
   // correction_semitones must be within +/-6 (nearest semitone).
   REQUIRE(std::abs(root_c.correction_semitones(60.0f)) <= 6.0f);
   REQUIRE(std::abs(root_d.correction_semitones(60.0f)) <= 6.0f);
+}
+
+TEST_CASE("NoteSegmenter::hz_to_cents is zero for a non-finite or non-positive input",
+          "[pitch_editor]") {
+  using sonare::editing::pitch_editor::NoteSegmenter;
+  REQUIRE(NoteSegmenter::hz_to_cents(440.0f, 440.0f) == 0.0f);
+  REQUIRE_THAT(NoteSegmenter::hz_to_cents(880.0f, 440.0f),
+               Catch::Matchers::WithinAbs(1200.0, 1e-3));
+  REQUIRE(NoteSegmenter::hz_to_cents(std::numeric_limits<float>::infinity(), 440.0f) == 0.0f);
+  REQUIRE(NoteSegmenter::hz_to_cents(0.0f, 440.0f) == 0.0f);
+  REQUIRE(NoteSegmenter::hz_to_cents(440.0f, 0.0f) == 0.0f);
+}
+
+namespace {
+
+std::vector<uint32_t> sample_bits(const sonare::Audio& audio) {
+  std::vector<uint32_t> bits(audio.size());
+  for (size_t i = 0; i < audio.size(); ++i) {
+    static_assert(sizeof(float) == sizeof(uint32_t));
+    std::memcpy(&bits[i], &audio.data()[i], sizeof(uint32_t));
+  }
+  return bits;
+}
+
+// A context buffer cut from a longer grid: global sample `offset` is its sample 0.
+struct WindowedCase {
+  static constexpr int kSampleRate = 16000;
+  static constexpr int kHop = 256;
+  static constexpr int kTotalFrames = 300;
+  static constexpr int kSamples = 8192;
+  static constexpr int kOffset = 100 * kHop + 37;
+
+  sonare::Audio audio =
+      sonare::Audio::from_vector(sine(200.0f, kSampleRate, kSamples), kSampleRate);
+  F0Track track = constant_track(200.0f, kSampleRate, kHop, kTotalFrames);
+  std::vector<float> deltas = std::vector<float>(static_cast<size_t>(kTotalFrames), 0.0f);
+
+  WindowedCase() {
+    for (int frame = 104; frame < 126; ++frame) {
+      deltas[static_cast<size_t>(frame)] = 3.0f;
+    }
+    for (int frame = 0; frame < 104; ++frame) track.voiced[static_cast<size_t>(frame)] = false;
+    for (int frame = 126; frame < kTotalFrames; ++frame) {
+      track.voiced[static_cast<size_t>(frame)] = false;
+    }
+  }
+
+  F0Track window(int first, int last) const {
+    F0Track part = track;
+    part.f0_hz.assign(track.f0_hz.begin() + first, track.f0_hz.begin() + last);
+    part.voiced.assign(track.voiced.begin() + first, track.voiced.begin() + last);
+    part.voiced_prob.clear();
+    return part;
+  }
+};
+
+}  // namespace
+
+TEST_CASE("PitchCorrector window resynthesis equals the full track bit for bit", "[pitch_editor]") {
+  const WindowedCase c;
+  const PitchCorrector corrector;
+  const double origin = -static_cast<double>(WindowedCase::kOffset);
+  const double hop = WindowedCase::kHop;
+
+  const sonare::Audio full = corrector.resynthesize(c.audio, c.track, c.deltas, origin, hop);
+  const auto expected = sample_bits(full);
+  // Guard against a vacuous comparison: the edit must have moved the signal.
+  REQUIRE(sample_bits(c.audio) != expected);
+
+  for (const auto& [first, last] : {std::pair{0, 300}, std::pair{98, 300}, std::pair{98, 250}}) {
+    const std::vector<float> part_deltas(c.deltas.begin() + first, c.deltas.begin() + last);
+    const sonare::Audio windowed =
+        corrector.resynthesize_window(c.audio, c.window(first, last), part_deltas, origin, hop,
+                                      first, WindowedCase::kTotalFrames);
+    CHECK(sample_bits(windowed) == expected);
+  }
+}
+
+TEST_CASE("PitchCorrector window resynthesis refuses a lookup outside its window",
+          "[pitch_editor]") {
+  const WindowedCase c;
+  const PitchCorrector corrector;
+  const double origin = -static_cast<double>(WindowedCase::kOffset);
+  const double hop = WindowedCase::kHop;
+
+  // The buffer starts at global frame ~100, which a window of frames 110..120 does not hold.
+  const std::vector<float> narrow(c.deltas.begin() + 110, c.deltas.begin() + 120);
+  CHECK_THROWS_AS(corrector.resynthesize_window(c.audio, c.window(110, 120), narrow, origin, hop,
+                                                110, WindowedCase::kTotalFrames),
+                  sonare::SonareException);
+  // A window reaching past the grid it claims to belong to.
+  const std::vector<float> part(c.deltas.begin() + 98, c.deltas.end());
+  CHECK_THROWS_AS(corrector.resynthesize_window(c.audio, c.window(98, 300), part, origin, hop, 99,
+                                                WindowedCase::kTotalFrames),
+                  sonare::SonareException);
+}
+
+TEST_CASE("PitchCorrector time-varying correction names the offending frame", "[pitch_editor]") {
+  constexpr int sample_rate = 16000;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(sine(200.0f, sample_rate, 4096), sample_rate);
+  F0Track track = constant_track(200.0f, sample_rate, 256, 16);
+  track.f0_hz[5] = std::numeric_limits<float>::infinity();
+
+  const PitchCorrector corrector;
+  std::string message;
+  try {
+    (void)corrector.correct_to_midi_timevarying(audio, track, 60.0f);
+  } catch (const sonare::SonareException& error) {
+    message = error.what();
+  }
+  CHECK(message.find("f0Hz[5]") != std::string::npos);
 }

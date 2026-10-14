@@ -1,5 +1,6 @@
 #include "editing/polyphony/masked_renderer.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -33,9 +34,16 @@ Audio render_masked_notes(const Spectrogram& spec, const NoteMaskSet& masks,
   std::vector<float> accumulator(residual.begin(), residual.end());
 
   for (std::size_t i = 0; i < notes.size(); ++i) {
-    // The masked spectrogram is a temporary, so it dies with the statement that
-    // inverts it and only its inverse outlives the step.
-    const Audio note_audio = apply_note_mask(spec, masks.notes[i]).to_audio(length);
+    // Only the frames the note reaches are inverted; the rest of its audio is silence.
+    const NoteSegment segment = invert_note_mask(spec, masks.notes[i], length);
+    SONARE_CHECK(segment.first_sample >= 0 &&
+                     static_cast<uint64_t>(segment.first_sample) + segment.audio.size() <=
+                         accumulator.size(),
+                 ErrorCode::InvalidParameter);
+    std::vector<float> samples(accumulator.size(), 0.0f);
+    std::copy(segment.audio.begin(), segment.audio.end(),
+              samples.begin() + static_cast<std::ptrdiff_t>(segment.first_sample));
+    const Audio note_audio = Audio::from_vector(std::move(samples), residual.sample_rate());
     const Audio edited = note_model::render_notes(note_audio, {notes[i]}, config);
     // render_notes returns its input's length, so every inverse in the call was
     // given the same one; an error rather than a clamp if that ever parts.

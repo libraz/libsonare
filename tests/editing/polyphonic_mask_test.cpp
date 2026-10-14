@@ -2069,3 +2069,51 @@ TEST_CASE("a claim lands on the partial it names", "[polyphony_mask]") {
     REQUIRE(worst_harmonic > 0);
   }
 }
+
+TEST_CASE(
+    "a sparse score gives each mask exactly its own frames and shares only where ridges overlap",
+    "[polyphony_mask]") {
+  const sonare::Spectrogram spec = spectrogram_of(tone_audio(300.0f));
+  const int hop = spec.hop_length();
+  constexpr float kHz = 300.0f;
+  // Short ridges spaced four frames apart: only one is ever live, and joins and leaves alternate.
+  const int count = (spec.n_frames() - 2) / 4;
+  REQUIRE(count >= 4);
+  std::vector<F0Ridge> ridges;
+  for (int i = 0; i < count; ++i) ridges.push_back(steady_ridge(kHz, 2 + 4 * i, 3, hop));
+  // Two long ridges overlapping each other for four frames, started out of index order.
+  const int late = 2 + 4 * count;
+  if (late + 6 <= spec.n_frames()) {
+    ridges.push_back(steady_ridge(kHz, late + 2, 4, hop));
+    ridges.push_back(steady_ridge(kHz, late, 4, hop));
+  }
+  const MultiF0Track track = track_over(spec, ridges);
+  const NoteMaskSet masks = build_note_masks(spec, track);
+  require_well_formed(masks);
+  REQUIRE(masks.notes.size() == ridges.size());
+
+  const std::vector<int> bins = claimed_bins(partial_claims(spec, kHz, masks.config));
+  REQUIRE(!bins.empty());
+  for (int i = 0; i < count; ++i) {
+    const NoteMask& mask = masks.notes[static_cast<size_t>(i)];
+    REQUIRE(mask.n_frames == 3);
+    for (int f = 0; f < mask.n_frames; ++f) REQUIRE(frame_bins(mask, f) == bins);
+    // Nobody else is live in these frames, so every claim is whole.
+    for (const std::complex<float>& weight : mask.weights) REQUIRE(weight == 1.0f);
+  }
+  if (masks.notes.size() > static_cast<size_t>(count)) {
+    const NoteMask& first = masks.notes[static_cast<size_t>(count)];
+    const NoteMask& second = masks.notes[static_cast<size_t>(count) + 1];
+    // `second` starts two frames before `first`; the two frames they share split evenly.
+    for (int f = 0; f < first.n_frames; ++f) {
+      REQUIRE(frame_bins(first, f) == bins);
+      REQUIRE(frame_bins(second, f + 2) == bins);
+    }
+    const size_t per_frame = bins.size();
+    for (size_t k = 0; k < per_frame; ++k) {
+      REQUIRE(first.weights[k] == 0.5f);
+      REQUIRE(second.weights[2 * per_frame + k] == 0.5f);
+      REQUIRE(second.weights[k] == 1.0f);
+    }
+  }
+}

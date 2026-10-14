@@ -55,8 +55,10 @@ class NoteSegmenter {
   ///         minimum duration after the early-return cases above.
   std::vector<NoteRegion> segment(const F0Track& track) const;
 
- private:
+  /// @brief Cents of @p hz above @p reference_hz; 0 for a non-finite or non-positive input.
   static float hz_to_cents(float hz, float reference_hz);
+
+ private:
   NoteRegion make_region(const F0Track& track, int start, int end) const;
 
   NoteSegmenterConfig config_{};

@@ -1553,6 +1553,37 @@ TEST_CASE("make_note reproduces the note extract_notes builds for the same span"
   }
 }
 
+TEST_CASE("make_note over a track window equals make_note over the whole track",
+          "[note_model][note_window]") {
+  const sonare::Audio audio = two_pitch_tone(6400);
+  const F0Track track = two_pitch_track(40);
+  const int total = track.n_frames();
+
+  for (const NoteObject& expected : extract_notes(audio, track)) {
+    INFO("frames [" << expected.frame_start << ", " << expected.frame_end << ")");
+    F0Track window = track;
+    window.f0_hz.assign(track.f0_hz.begin() + expected.frame_start,
+                        track.f0_hz.begin() + expected.frame_end);
+    window.voiced.assign(track.voiced.begin() + expected.frame_start,
+                         track.voiced.begin() + expected.frame_end);
+    window.voiced_prob.clear();
+    const NoteObject built =
+        make_note(audio, 0, static_cast<int64_t>(audio.size()), window, expected.frame_start, total,
+                  expected.frame_start, expected.frame_end);
+    require_same_note(built, expected);
+  }
+
+  // A span outside the window, or a window past the track, is refused.
+  F0Track window = track;
+  window.f0_hz.assign(track.f0_hz.begin() + 4, track.f0_hz.begin() + 12);
+  window.voiced.assign(track.voiced.begin() + 4, track.voiced.begin() + 12);
+  window.voiced_prob.clear();
+  CHECK_THROWS_AS(make_note(audio, 0, static_cast<int64_t>(audio.size()), window, 4, total, 2, 8),
+                  sonare::SonareException);
+  CHECK_THROWS_AS(make_note(audio, 0, static_cast<int64_t>(audio.size()), window, 4, 10, 4, 8),
+                  sonare::SonareException);
+}
+
 TEST_CASE("make_note measures a span the segmenter would not have emitted", "[note_model]") {
   const sonare::Audio audio = tone(440.0f, 0.5f, 6400);
   F0Track gapped = voiced_track(440.0f, 40);
@@ -2599,5 +2630,34 @@ TEST_CASE("make_note, split_note and merge_notes refuse a non-positive reference
     CHECK_THROWS_AS(make_note(audio, track, 10, 20, config), sonare::SonareException);
     CHECK_THROWS_AS(split_note(audio, track, notes, 0, 15, config), sonare::SonareException);
     CHECK_THROWS_AS(merge_notes(audio, track, notes, 0, 1, config), sonare::SonareException);
+  }
+}
+
+TEST_CASE("render_notes chained stretch, shift and formant edits equal the stage-by-stage chain",
+          "[note_model][note_render_chain]") {
+  constexpr size_t kOnset = 1600;
+  constexpr size_t kOffset = 6400;
+  const sonare::Audio audio = tone(440.0f, 0.5f, 8000);
+
+  NoteObject note = synthetic_note(kOnset, kOffset, 440.0f);
+  note.edit.pitch_shift_semitones = 2.0f;
+  note.edit.formant_shift_semitones = -1.0f;
+  NoteRenderConfig config;
+  config.fade_ms = 0.0f;
+  const sonare::Audio rendered = render_notes(audio, {note}, config);
+
+  const sonare::Audio source = sonare::Audio::from_vector(
+      std::vector<float>(audio.begin() + kOnset, audio.begin() + kOffset), kSampleRate);
+  sonare::PitchShiftConfig shift_config;
+  shift_config.backend = config.stretch_backend;
+  const sonare::Audio shifted = sonare::pitch_shift(source, 2.0f, shift_config);
+  sonare::FormantWarpConfig warp_config;
+  warp_config.factor = std::pow(2.0f, -1.0f / sonare::constants::kSemitonesPerOctave);
+  const sonare::Audio expected = sonare::FormantWarp(warp_config).process(shifted);
+
+  REQUIRE(expected.size() > 0);
+  const size_t span = std::min(expected.size(), kOffset - kOnset);
+  for (size_t i = 0; i < span; ++i) {
+    REQUIRE(rendered[kOnset + i] == expected[i]);
   }
 }
