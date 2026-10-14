@@ -152,6 +152,79 @@ TEST_CASE("NoteSegmenter returns nothing for an invalid reference frequency", "[
   REQUIRE(neg_ref.segment(track).empty());
 }
 
+TEST_CASE("NoteSegmenter validates finite non-negative timing configuration", "[pitch_editor]") {
+  const F0Track track = constant_track(440.0f, 1000, 1, 3);
+  const float negative_neighbor = std::nextafter(0.0f, -1.0f);
+  const float positive_neighbor = std::nextafter(0.0f, 1.0f);
+  const float infinity = std::numeric_limits<float>::infinity();
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+
+  // The finite maximum is a valid threshold, and zero remains a valid minimum
+  // duration. These controls ensure the invalid cases below are not vacuous.
+  REQUIRE(NoteSegmenter({std::numeric_limits<float>::max(), 0.0f, 440.0f}).segment(track).size() ==
+          1);
+  REQUIRE(NoteSegmenter({0.0f, positive_neighbor, 440.0f}).segment(track).size() == 1);
+
+  const auto require_invalid_parameter = [&](const NoteSegmenterConfig config) {
+    bool threw = false;
+    try {
+      (void)NoteSegmenter(config).segment(track);
+    } catch (const sonare::SonareException& error) {
+      threw = true;
+      CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    }
+    REQUIRE(threw);
+  };
+  for (const float threshold : {nan, infinity, -infinity, negative_neighbor}) {
+    CAPTURE(threshold);
+    require_invalid_parameter({threshold, 0.0f, 440.0f});
+  }
+  for (const float min_note_ms : {nan, infinity, -infinity, negative_neighbor}) {
+    CAPTURE(min_note_ms);
+    require_invalid_parameter({0.0f, min_note_ms, 440.0f});
+  }
+
+  // An extremely long but finite minimum is valid input; it simply cannot fit
+  // in this track and therefore produces the normal empty segmentation.
+  REQUIRE(NoteSegmenter({0.0f, std::numeric_limits<float>::max(), 440.0f}).segment(track).empty());
+
+  // The early malformed-track result remains independent of later config
+  // validation, including an invalid threshold and reference.
+  F0Track empty;
+  REQUIRE(NoteSegmenter({nan, -1.0f, nan}).segment(empty).empty());
+
+  // Invalid reference remains an early empty result even when both later
+  // controls are malformed; this fixes the precedence at a usable track.
+  REQUIRE(NoteSegmenter({nan, -1.0f, nan}).segment(track).empty());
+}
+
+TEST_CASE("NoteSegmenter rounds duration thresholds without integer overflow", "[pitch_editor]") {
+  F0Track two_frames = constant_track(440.0f, 1000, 1, 2);
+  const float just_below = std::nextafter(2.0f, 0.0f);
+  const float just_above = std::nextafter(2.0f, std::numeric_limits<float>::infinity());
+
+  REQUIRE(NoteSegmenter({50.0f, just_below, 440.0f}).segment(two_frames).size() == 1);
+  REQUIRE(NoteSegmenter({50.0f, 2.0f, 440.0f}).segment(two_frames).size() == 1);
+  REQUIRE(NoteSegmenter({50.0f, just_above, 440.0f}).segment(two_frames).empty());
+}
+
+TEST_CASE("NoteSegmenter keeps high-rate short tracks from settling early", "[pitch_editor]") {
+  F0Track track;
+  track.sample_rate = 48000;
+  track.hop_length = 1;
+  track.frame_rate_hz = 6.0e9f;
+  for (const float cents : {0.0f, 25.0f, 50.0f, 70.0f}) {
+    track.f0_hz.push_back(440.0f * std::pow(2.0f, cents / 1200.0f));
+  }
+  track.voiced.assign(track.f0_hz.size(), true);
+  track.voiced_prob.assign(track.f0_hz.size(), 1.0f);
+
+  const auto regions = NoteSegmenter({55.0f, 0.0f, 440.0f}).segment(track);
+  REQUIRE(regions.size() == 1);
+  REQUIRE(regions[0].frame_start == 0);
+  REQUIRE(regions[0].frame_end == 4);
+}
+
 TEST_CASE("NoteSegmenter splits sustained pitch changes without silence", "[pitch_editor]") {
   F0Track track;
   track.sample_rate = 1000;
@@ -458,6 +531,30 @@ TEST_CASE("ScaleQuantizer reference MIDI shifts the tuning grid", "[pitch_editor
 
   REQUIRE_THAT(concert_pitch.quantize_midi(69.1f), WithinAbs(69.0f, 0.0001f));
   REQUIRE_THAT(raised_grid.quantize_midi(69.1f), WithinAbs(69.25f, 0.0001f));
+}
+
+TEST_CASE("ScaleQuantizer validates only the reference MIDI domain", "[pitch_editor]") {
+  const float infinity = std::numeric_limits<float>::infinity();
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float negative_neighbor = std::nextafter(0.0f, -1.0f);
+  const float above_max = std::nextafter(kMaxReferenceMidi, infinity);
+
+  for (const float reference : {nan, infinity, -infinity, negative_neighbor, above_max,
+                                std::numeric_limits<float>::max()}) {
+    CAPTURE(reference);
+    REQUIRE_THROWS_AS(ScaleQuantizer({0, 0b101010110101, reference}), sonare::SonareException);
+  }
+
+  for (const float reference : {0.0f, std::nextafter(0.0f, 1.0f), 69.5f,
+                                std::nextafter(kMaxReferenceMidi, 0.0f), kMaxReferenceMidi}) {
+    CAPTURE(reference);
+    REQUIRE_NOTHROW(ScaleQuantizer({0, 0b101010110101, reference}));
+  }
+
+  // The existing chromatic fallback remains available with an otherwise valid
+  // fractional reference and does not require a non-empty mode mask.
+  const ScaleQuantizer chromatic({0, 0, 69.5f});
+  REQUIRE_THAT(chromatic.quantize_midi(60.4f), WithinAbs(60.0f, 0.0001f));
 }
 
 TEST_CASE("PyinF0Provider adapts existing pYIN output to F0Track", "[pitch_editor]") {
@@ -1645,8 +1742,20 @@ TEST_CASE("NoteEditor refuses a move target with no room in the buffer", "[pitch
   // land used to erase the note and write it nowhere, under a successful return.
   REQUIRE_THROWS_AS(editor.move_note(audio, region, 1000), sonare::SonareException);
   REQUIRE_THROWS_AS(editor.move_note(audio, region, 99999999), sonare::SonareException);
+  REQUIRE_THROWS_AS(editor.move_note(audio, region, std::numeric_limits<int>::max()),
+                    sonare::SonareException);
   // A negative folded into 0, making -1 and a deliberate 0 indistinguishable.
   REQUIRE_THROWS_AS(editor.move_note(audio, region, -1), sonare::SonareException);
+  REQUIRE_THROWS_AS(editor.move_note(audio, region, std::numeric_limits<int>::min()),
+                    sonare::SonareException);
+
+  // Region endpoints are clamped only after the int-sized Audio bound has
+  // been established; extreme caller values must not enter a subtract first.
+  NoteRegion extreme_region;
+  extreme_region.onset_sample = std::numeric_limits<int>::min();
+  extreme_region.offset_sample = std::numeric_limits<int>::max();
+  const sonare::Audio extreme_region_move = editor.move_note(audio, extreme_region, 999);
+  REQUIRE(extreme_region_move.size() == audio.size());
 
   // A note landing near the end keeps the part that fits, which is the same
   // clipping clamp_region applies to the source span.

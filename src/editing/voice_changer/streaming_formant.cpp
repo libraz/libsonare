@@ -65,7 +65,7 @@ void StreamingFormant::reset() {
   filter_body_ = config_.body;
   filter_brightness_ = config_.brightness;
   filter_nasal_ = config_.nasal;
-  filter_update_countdown_ = 0;
+  control_cadence_.reset();
   update_filters();
 }
 
@@ -122,10 +122,9 @@ void StreamingFormant::process_block(const float* input, float* output, int num_
   // Updating the biquad coefficients every sample would be CPU-expensive; the
   // 32-sample interval gives ~1.5 ms granularity at 22 kHz, which is below the
   // audible block-rate stepping that the previous once-per-block update produced
-  // when the factor changed quickly across consecutive blocks. The countdown is
-  // a member (not a local) so it carries across block boundaries — otherwise
-  // every block would force a rebuild on sample 0 regardless of factor drift.
-  constexpr int kFilterUpdateInterval = 32;
+  // when the factor changed quickly across consecutive blocks. The cadence is
+  // stateful so it carries across block boundaries — otherwise every block would
+  // force a rebuild on sample 0 regardless of factor drift.
   constexpr float kRebuildEpsilon = 1.0e-4f;
   for (int i = 0; i < num_samples; ++i) {
     const float target_factor =
@@ -134,7 +133,7 @@ void StreamingFormant::process_block(const float* input, float* output, int num_
     const float body = body_smoother_.process();
     const float brightness = brightness_smoother_.process();
     const float nasal = nasal_smoother_.process();
-    if (--filter_update_countdown_ <= 0) {
+    if (control_cadence_.advance()) {
       if (std::abs(smoothed_factor_ - filter_factor_) > kRebuildEpsilon ||
           std::abs(body - filter_body_) > kRebuildEpsilon ||
           std::abs(brightness - filter_brightness_) > kRebuildEpsilon ||
@@ -145,7 +144,6 @@ void StreamingFormant::process_block(const float* input, float* output, int num_
         filter_nasal_ = nasal;
         update_filters();
       }
-      filter_update_countdown_ = kFilterUpdateInterval;
     }
     float y = input[i];
     for (auto& filter : filters_) y = filter.process(y);

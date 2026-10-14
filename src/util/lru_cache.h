@@ -104,8 +104,13 @@ class LruCache {
       lru_.pop_back();
     }
     lru_.push_front(key);
-    auto [it, _] = map_.emplace(key, Entry{std::move(value), lru_.begin()});
-    return it->second.value;
+    try {
+      auto [it, _] = map_.emplace(key, Entry{std::move(value), lru_.begin()});
+      return it->second.value;
+    } catch (...) {
+      lru_.pop_front();
+      throw;
+    }
   }
 
   std::size_t capacity_;

@@ -5,7 +5,9 @@
 #include <cstdint>
 #include <limits>
 
+#include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::editing::pitch_editor {
 namespace {
@@ -49,22 +51,52 @@ std::vector<NoteRegion> NoteSegmenter::segment(const F0Track& track) const {
       track.sample_rate <= 0) {
     return regions;
   }
+  if (track.f0_hz.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+    return regions;
+  }
   // A non-positive or non-finite reference frequency makes every hz_to_cents
   // return 0 (its own guard), collapsing all pitch statistics to a single value
   // and silently producing meaningless segmentation. Bail out explicitly.
   if (!(config_.reference_hz > 0.0f) || !std::isfinite(config_.reference_hz)) {
     return regions;
   }
+  // Invalid track/reference inputs intentionally retain the early-return
+  // precedence above. Once those inputs are usable, malformed controls are
+  // API errors rather than silent empty results; validate threshold first so
+  // the reported field is deterministic when both controls are malformed.
+  SONARE_CHECK_MSG(numeric::finite_non_negative(config_.segmentation_threshold_cents),
+                   ErrorCode::InvalidParameter,
+                   "segmentation_threshold_cents must be finite and non-negative");
+  SONARE_CHECK_MSG(numeric::finite_non_negative(config_.min_note_ms), ErrorCode::InvalidParameter,
+                   "min_note_ms must be finite and non-negative");
 
   // One cadence rule per track (F0Track::frame_rate): the sample offsets below
   // are derived from the same one, so a host-supplied frame_rate_hz cannot be
   // honoured for the duration threshold and ignored for the region bounds.
   const float frame_rate = track.frame_rate();
+  const int n_frames = static_cast<int>(track.f0_hz.size());
+  const double milliseconds_per_frame = 1000.0 / static_cast<double>(frame_rate);
+  std::size_t min_frames_count = 0;
+  if (!numeric::checked_ceil_ratio(static_cast<double>(config_.min_note_ms), milliseconds_per_frame,
+                                   static_cast<std::size_t>(n_frames), &min_frames_count)) {
+    // A finite positive duration whose required frame count exceeds this track
+    // simply cannot produce a note. Keep that as the segmenter's normal empty
+    // result rather than narrowing an oversized count to int.
+    if (config_.min_note_ms > 0.0f) return regions;
+  }
+  const std::size_t min_frames_value = std::max<std::size_t>(1, min_frames_count);
+  const int min_frames = static_cast<int>(min_frames_value);
+
+  std::size_t settle_frames_count = 0;
+  if (!numeric::checked_ceil_ratio(kReferenceSettleMs, milliseconds_per_frame,
+                                   static_cast<std::size_t>(n_frames), &settle_frames_count)) {
+    // The settle span is an internal cadence heuristic. If it exceeds the
+    // track, cap it at the track length so it cannot overflow when doubled.
+    settle_frames_count = static_cast<std::size_t>(n_frames);
+  }
+  const std::size_t settle_frames_value = std::max(min_frames_value, settle_frames_count);
+  const int settle_frames = static_cast<int>(settle_frames_value);
   const double threshold = config_.segmentation_threshold_cents;
-  const int min_frames =
-      std::max(1, static_cast<int>(std::ceil(config_.min_note_ms * 0.001f * frame_rate)));
-  const int settle_frames =
-      std::max(min_frames, static_cast<int>(std::ceil(kReferenceSettleMs * 0.001 * frame_rate)));
 
   int start = -1;
   int sustained = 0;
@@ -91,7 +123,7 @@ std::vector<NoteRegion> NoteSegmenter::segment(const F0Track& track) const {
     }
   };
 
-  for (int frame = 0; frame < track.n_frames(); ++frame) {
+  for (int frame = 0; frame < n_frames; ++frame) {
     if (!usable_pitch(track, frame)) {
       close_region(frame);
       start = -1;
@@ -138,11 +170,13 @@ std::vector<NoteRegion> NoteSegmenter::segment(const F0Track& track) const {
         last_growth = frame;
       }
       ++member_count;
-      frozen = (member_count >= settle_frames && frame - last_growth >= settle_frames / 2) ||
-               frame - start >= 2 * settle_frames;
+      const std::size_t growth_elapsed = static_cast<std::size_t>(frame - last_growth);
+      const std::size_t region_elapsed = static_cast<std::size_t>(frame - start);
+      frozen = (member_count >= settle_frames && growth_elapsed >= settle_frames_value / 2) ||
+               region_elapsed / 2 >= settle_frames_value;
     }
   }
-  close_region(track.n_frames());
+  close_region(n_frames);
 
   return regions;
 }

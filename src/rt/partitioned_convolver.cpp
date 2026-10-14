@@ -1,6 +1,7 @@
 #include "rt/partitioned_convolver.h"
 
 #include <algorithm>
+#include <limits>
 
 #include "util/exception.h"
 
@@ -19,7 +20,8 @@ void PartitionedConvolver::set_impulse_response(const float* impulse_response, i
   }
 
   const int partition_size = config_.partition_size;
-  const int partitions = num_samples == 0 ? 0 : (num_samples + partition_size - 1) / partition_size;
+  const int partitions =
+      num_samples == 0 ? 0 : num_samples / partition_size + (num_samples % partition_size != 0);
   ir_partitions_.assign(static_cast<size_t>(partitions),
                         std::vector<std::complex<float>>(static_cast<size_t>(fft_->n_bins())));
 
@@ -42,6 +44,9 @@ void PartitionedConvolver::set_impulse_response(const float* impulse_response, i
 }
 
 void PartitionedConvolver::set_impulse_response(const std::vector<float>& impulse_response) {
+  if (impulse_response.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    throw SonareException(ErrorCode::InvalidParameter, "impulse_response size must be <= INT_MAX");
+  }
   set_impulse_response(impulse_response.data(), static_cast<int>(impulse_response.size()));
 }
 
@@ -106,6 +111,9 @@ void PartitionedConvolver::process_block(const float* input, float* output) noex
 void PartitionedConvolver::validate_config() const {
   if (config_.partition_size <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "partition_size must be positive");
+  }
+  if (config_.partition_size > std::numeric_limits<int>::max() / 2) {
+    throw SonareException(ErrorCode::InvalidParameter, "partition_size must be <= INT_MAX / 2");
   }
 }
 

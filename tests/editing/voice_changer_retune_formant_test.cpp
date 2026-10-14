@@ -631,6 +631,48 @@ TEST_CASE("StreamingFormant live updates are invariant to caller chunking",
   REQUIRE(one_block_output != unchanged_output);
 }
 
+TEST_CASE("StreamingFormant reset restarts the shared control cadence",
+          "[voice_changer][formant]") {
+  constexpr int sample_rate = 48000;
+  constexpr int max_block = 256;
+  constexpr int prime_prefix = 19;
+  constexpr int rendered = 128;
+  const StreamingFormantConfig initial{1.0f, 1.0f, 0.0f, 0.0f, 0.0f};
+  const StreamingFormantConfig updated{1.45f, 1.0f, -0.8f, 0.9f, 0.7f};
+
+  const auto input = [&] {
+    std::vector<float> signal(static_cast<size_t>(prime_prefix + rendered));
+    for (size_t i = 0; i < signal.size(); ++i) {
+      signal[i] = 0.45f * std::sin(sonare::constants::kTwoPiD * 180.0 * i / sample_rate) +
+                  0.20f * std::sin(sonare::constants::kTwoPiD * 900.0 * i / sample_rate) +
+                  0.10f * std::sin(sonare::constants::kTwoPiD * 5200.0 * i / sample_rate);
+    }
+    return signal;
+  }();
+
+  StreamingFormant fresh(initial);
+  StreamingFormant reset_after_prime(initial);
+  StreamingFormant unchanged(initial);
+  fresh.prepare(sample_rate, max_block);
+  reset_after_prime.prepare(sample_rate, max_block);
+  unchanged.prepare(sample_rate, max_block);
+  std::vector<float> prime_output(static_cast<size_t>(prime_prefix), 0.0f);
+  reset_after_prime.process_block(input.data(), prime_output.data(), prime_prefix);
+  reset_after_prime.reset();
+  fresh.set_config(updated);
+  reset_after_prime.set_config(updated);
+
+  std::vector<float> fresh_output(static_cast<size_t>(rendered), 0.0f);
+  std::vector<float> reset_output(static_cast<size_t>(rendered), 0.0f);
+  std::vector<float> unchanged_output(static_cast<size_t>(rendered), 0.0f);
+  fresh.process_block(input.data() + prime_prefix, fresh_output.data(), rendered);
+  reset_after_prime.process_block(input.data() + prime_prefix, reset_output.data(), rendered);
+  unchanged.process_block(input.data() + prime_prefix, unchanged_output.data(), rendered);
+
+  CHECK(reset_output == fresh_output);
+  CHECK(reset_output != unchanged_output);
+}
+
 // The requested grain size and the effective one shared a field: set_config()
 // overwrote config_.grain_size with what the LAST prepare() resolved, and
 // prepare() then read that same field to resolve the next one. A new request

@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "util/exception.h"
@@ -16,6 +17,20 @@
 
 using namespace sonare;
 using namespace sonare::test;
+
+namespace {
+template <typename Fn>
+bool throws_invalid_parameter_with_message(Fn&& fn, const char* expected_message) {
+  try {
+    fn();
+  } catch (const SonareException& error) {
+    return error.code() == ErrorCode::InvalidParameter &&
+           std::string(error.what()).find(expected_message) != std::string::npos;
+  } catch (...) {
+  }
+  return false;
+}
+}  // namespace
 
 TEST_CASE("pcen matches librosa reference", "[librosa][pcen]") {
   auto json = JsonReader::parse_file("tests/librosa/reference/pcen.json");
@@ -92,6 +107,18 @@ TEST_CASE("pcen rejects malformed and non-finite configuration", "[librosa][pcen
     cfg.time_constant = std::numeric_limits<float>::denorm_min();
     REQUIRE_THROWS_AS(pcen(input.data(), 1, 1, cfg), SonareException);
   }
+}
+
+TEST_CASE("pcen vector overload requires the declared matrix size", "[librosa][pcen][edge]") {
+  PcenConfig cfg;
+  cfg.b = {0.5f};
+
+  REQUIRE_THROWS_AS(pcen(std::vector<float>{1.0f, 2.0f}, 2, 2, cfg), SonareException);
+  REQUIRE_THROWS_AS(pcen(std::vector<float>{1.0f, 2.0f, 3.0f, 4.0f, 5.0f}, 2, 2, cfg),
+                    SonareException);
+  REQUIRE(throws_invalid_parameter_with_message(
+      [&] { pcen(std::vector<float>{}, std::numeric_limits<int>::max(), 2, cfg); },
+      "pcen: S size must equal"));
 }
 
 namespace {

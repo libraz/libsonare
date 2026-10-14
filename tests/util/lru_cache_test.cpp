@@ -6,11 +6,60 @@
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
 
 using namespace sonare;
+
+namespace {
+struct ThrowingCopyKey {
+  int value;
+  std::shared_ptr<int> copies_before_throw;
+
+  ThrowingCopyKey(int value, std::shared_ptr<int> remaining)
+      : value(value), copies_before_throw(std::move(remaining)) {}
+
+  ThrowingCopyKey(const ThrowingCopyKey& other)
+      : value(other.value), copies_before_throw(other.copies_before_throw) {
+    if (*copies_before_throw > 0 && --*copies_before_throw == 0) {
+      throw std::runtime_error("key copy failed");
+    }
+  }
+
+  bool operator==(const ThrowingCopyKey& other) const noexcept { return value == other.value; }
+};
+
+struct ThrowingCopyKeyHash {
+  size_t operator()(const ThrowingCopyKey& key) const noexcept {
+    return std::hash<int>{}(key.value);
+  }
+};
+}  // namespace
+
+TEST_CASE("LruCache rolls back recency nodes when map insertion throws", "[util][lru]") {
+  for (bool build_under_lock : {false, true}) {
+    CAPTURE(build_under_lock);
+    auto remaining = std::make_shared<int>(2);
+    ThrowingCopyKey a(1, remaining), b(2, remaining), c(3, remaining);
+    LruCache<ThrowingCopyKey, int, ThrowingCopyKeyHash> cache(2);
+    auto get = [&](const ThrowingCopyKey& key, int value) {
+      auto build = [value] { return value; };
+      return build_under_lock ? cache.get_or_build_value(key, build)
+                              : cache.get_or_build(key, build);
+    };
+
+    REQUIRE_THROWS_AS(get(a, 10), std::runtime_error);
+    *remaining = 0;
+    REQUIRE(get(a, 10) == 10);
+    REQUIRE(get(b, 20) == 20);
+    REQUIRE(get(a, -1) == 10);
+    REQUIRE(get(c, 30) == 30);
+    REQUIRE(get(a, -1) == 10);
+    REQUIRE(get(b, 22) == 22);
+  }
+}
 
 TEST_CASE("LruCache builds a missing value exactly once per key", "[util][lru]") {
   LruCache<int, std::string> cache(4);

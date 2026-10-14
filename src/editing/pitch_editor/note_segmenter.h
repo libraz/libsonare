@@ -43,6 +43,16 @@ class NoteSegmenter {
   /// on. After a split the new note follows the glide while the pitch keeps
   /// moving the same way, so it begins where the glide ends. Each region's
   /// median_cents is the median of its voiced frames.
+  ///
+  /// Empty or malformed tracks and non-positive/non-finite reference_hz return
+  /// an empty result before validating the remaining controls. Once the track
+  /// and reference are usable, segmentation_threshold_cents and min_note_ms
+  /// must each be finite and non-negative; otherwise InvalidParameter is
+  /// thrown, with the threshold checked before the minimum duration. A finite
+  /// positive minimum that is longer than the track is valid and returns the
+  /// normal empty result.
+  /// @throws SonareException InvalidParameter for an invalid threshold or
+  ///         minimum duration after the early-return cases above.
   std::vector<NoteRegion> segment(const F0Track& track) const;
 
  private:

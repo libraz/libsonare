@@ -4,24 +4,40 @@
 #include "feature/vqt.h"
 
 #include <algorithm>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <complex>
 #include <cstdint>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include "core/spectrum.h"
 #include "feature/spectral_projection.h"
 #include "filters/wavelet.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
 namespace {
+
+template <typename Operation>
+void require_invalid_parameter(Operation&& operation) {
+  try {
+    operation();
+  } catch (const SonareException& error) {
+    REQUIRE(error.code() == ErrorCode::InvalidParameter);
+    return;
+  } catch (...) {
+    FAIL("operation threw a non-SonareException");
+  }
+  FAIL("operation did not throw");
+}
 
 /// @brief Generates a pure sine wave.
 Audio generate_sine(float freq, float duration, int sr = 22050) {
@@ -56,6 +72,42 @@ std::vector<float> reference_relative_bandwidth(const std::vector<float>& freqs)
   }
   for (size_t k = 0; k < n; ++k) alpha[k] = std::max(alpha[k], 1e-6f);
   return alpha;
+}
+
+void evict_vqt_kernel_cache(const Audio& audio, int family) {
+  VqtConfig first;
+  first.fmin = 300.0f + 20.0f * static_cast<float>(family);
+  first.n_bins = 4 + family;
+  first.hop_length = 128 + family;
+  first.gamma = 24.0f;
+  VqtConfig second = first;
+  second.fmin += 40.0f;
+  second.n_bins += 1;
+  second.hop_length += 17;
+  static_cast<void>(vqt(audio, first));
+  static_cast<void>(vqt(audio, second));
+}
+
+void check_vqt_matches_cold(const VqtResult& actual, const VqtResult& cold) {
+  CHECK(actual.n_bins() == cold.n_bins());
+  CHECK(actual.n_frames() == cold.n_frames());
+  CHECK(actual.frequencies().size() == cold.frequencies().size());
+  if (actual.empty() || cold.empty() || actual.n_bins() <= 0 || cold.n_bins() <= 0 ||
+      actual.n_frames() <= 0 || cold.n_frames() <= 0) {
+    return;
+  }
+  CHECK_THAT(actual.frequencies().front(), WithinAbs(cold.frequencies().front(), 1e-7f));
+  const auto& actual_magnitude = actual.magnitude();
+  const auto& cold_magnitude = cold.magnitude();
+  const int shared_bins = std::min(actual.n_bins(), cold.n_bins());
+  const int shared_frames = std::min(actual.n_frames(), cold.n_frames());
+  const std::array<std::pair<int, int>, 3> samples = {
+      std::pair<int, int>{0, 0}, std::pair<int, int>{shared_bins / 2, shared_frames / 2},
+      std::pair<int, int>{shared_bins - 1, shared_frames - 1}};
+  for (const auto& [bin, frame] : samples) {
+    CHECK_THAT(actual_magnitude[bin * actual.n_frames() + frame],
+               WithinAbs(cold_magnitude[bin * cold.n_frames() + frame], 1e-7f));
+  }
 }
 
 }  // namespace
@@ -225,6 +277,26 @@ TEST_CASE("vqt with gamma=0 equals cqt", "[vqt]") {
 
   for (size_t i = 0; i < vqt_mag.size(); ++i) {
     REQUIRE_THAT(vqt_mag[i], WithinAbs(cqt_mag[i], 1e-5f));
+  }
+}
+
+TEST_CASE("vqt gamma=0 and CQT agree for a non-Hann window", "[vqt][cqt]") {
+  Audio audio = generate_sine(440.0f, 0.2f, 22050);
+
+  VqtConfig vqt_config;
+  vqt_config.fmin = 65.4f;
+  vqt_config.n_bins = 24;
+  vqt_config.hop_length = 256;
+  vqt_config.gamma = 0.0f;
+  vqt_config.window = WindowType::Hamming;
+
+  const VqtResult vqt_result = vqt(audio, vqt_config);
+  const CqtResult cqt_result = cqt(audio, vqt_config.to_cqt_config());
+  REQUIRE(vqt_result.n_bins() == cqt_result.n_bins());
+  REQUIRE(vqt_result.n_frames() == cqt_result.n_frames());
+  REQUIRE(vqt_result.magnitude().size() == cqt_result.magnitude().size());
+  for (size_t i = 0; i < vqt_result.magnitude().size(); ++i) {
+    REQUIRE_THAT(vqt_result.magnitude()[i], WithinAbs(cqt_result.magnitude()[i], 1e-5f));
   }
 }
 
@@ -668,6 +740,67 @@ TEST_CASE("VQT kernel cache distinguishes window type", "[vqt][regression][cache
   REQUIRE(max_diff > 1e-4);
 }
 
+TEST_CASE("VQT kernel cache distinguishes filter_scale", "[vqt][regression][cache]") {
+  Audio audio = generate_sine(440.0f, 0.08f, 22050);
+
+  VqtConfig first;
+  first.fmin = 93.295f;
+  first.n_bins = 12;
+  first.hop_length = 257;
+  first.gamma = 0.0002f;
+  first.filter_scale = 0.999951f;
+  VqtConfig second = first;
+  second.filter_scale = 0.999999f;
+
+  static_cast<void>(vqt(audio, first));
+  const VqtResult warm_second = vqt(audio, second);
+  evict_vqt_kernel_cache(audio, 3);
+  const VqtResult cold_second = vqt(audio, second);
+  check_vqt_matches_cold(warm_second, cold_second);
+
+  VqtConfig reverse_first = first;
+  reverse_first.n_bins = 13;
+  reverse_first.hop_length = 258;
+  VqtConfig reverse_second = reverse_first;
+  reverse_second.filter_scale = second.filter_scale;
+
+  static_cast<void>(vqt(audio, reverse_second));
+  const VqtResult warm_reverse_first = vqt(audio, reverse_first);
+  evict_vqt_kernel_cache(audio, 4);
+  const VqtResult cold_reverse_first = vqt(audio, reverse_first);
+  check_vqt_matches_cold(warm_reverse_first, cold_reverse_first);
+}
+
+TEST_CASE("VQT cache preserves exact near-quantization gamma values", "[vqt][regression][cache]") {
+  Audio audio = generate_sine(440.0f, 0.08f, 22050);
+
+  VqtConfig first;
+  first.fmin = 93.295f;
+  first.n_bins = 12;
+  first.hop_length = 259;
+  first.gamma = 0.0002f;
+  VqtConfig second = first;
+  second.gamma = 0.0004f;
+
+  static_cast<void>(vqt(audio, first));
+  const VqtResult warm_second = vqt(audio, second);
+  evict_vqt_kernel_cache(audio, 5);
+  const VqtResult cold_second = vqt(audio, second);
+  check_vqt_matches_cold(warm_second, cold_second);
+
+  VqtConfig reverse_first = first;
+  reverse_first.n_bins = 13;
+  reverse_first.hop_length = 260;
+  VqtConfig reverse_second = reverse_first;
+  reverse_second.gamma = second.gamma;
+
+  static_cast<void>(vqt(audio, reverse_second));
+  const VqtResult warm_reverse_first = vqt(audio, reverse_first);
+  evict_vqt_kernel_cache(audio, 6);
+  const VqtResult cold_reverse_first = vqt(audio, reverse_first);
+  check_vqt_matches_cold(warm_reverse_first, cold_reverse_first);
+}
+
 // =============================================================================
 // Reference-formula tests
 // =============================================================================
@@ -749,6 +882,24 @@ TEST_CASE("vqt bandwidth formula matches reference", "[vqt][reference]") {
     }
   }
 
+  SECTION("irregular grid preserves reference alpha at both endpoints") {
+    const int sr = 22050;
+    const float filter_scale = 1.0f;
+    const std::vector<float> freqs{55.0f, 71.0f, 123.0f, 260.0f, 511.0f};
+    const std::vector<float> alpha = reference_relative_bandwidth(freqs);
+    const std::vector<float> bandwidths = vqt_bandwidths(freqs, bins_per_octave, 0.0f);
+    const std::vector<float> lengths = wavelet_lengths(freqs, sr, filter_scale);
+
+    REQUIRE_THAT(bandwidths.front(), WithinRel(alpha.front() * freqs.front(), 1e-6f));
+    REQUIRE_THAT(bandwidths.back(), WithinRel(alpha.back() * freqs.back(), 1e-6f));
+    REQUIRE(lengths.size() == bandwidths.size());
+    for (size_t i = 0; i < freqs.size(); ++i) {
+      REQUIRE_THAT(bandwidths[i], WithinRel(alpha[i] * freqs[i], 1e-6f));
+      REQUIRE_THAT(lengths[i],
+                   WithinRel(filter_scale * static_cast<float>(sr) / bandwidths[i], 1e-5f));
+    }
+  }
+
   // Continuity with the CQT path: the gamma=0 VQT bandwidth reproduces the CQT
   // filter length exactly, since wavelet_lengths(Q=0) uses the same alpha.
   //   cqt_length = filter_scale * sr / (alpha * freq) = filter_scale * sr / bw.
@@ -764,6 +915,74 @@ TEST_CASE("vqt bandwidth formula matches reference", "[vqt][reference]") {
       const float expected_len = filter_scale * static_cast<float>(sr) / bw[i];
       REQUIRE_THAT(cqt_lengths[i], WithinRel(expected_len, 1e-4f));
     }
+  }
+}
+
+TEST_CASE("CQT and VQT reject non-finite and oversized kernel parameters",
+          "[cqt][vqt][validation]") {
+  const Audio audio = generate_sine(440.0f, 0.02f, 22050);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  const float denorm = std::numeric_limits<float>::denorm_min();
+  const float max_float = std::numeric_limits<float>::max();
+
+  for (float fmin : {nan, inf}) {
+    CqtConfig cqt_config;
+    cqt_config.fmin = fmin;
+    cqt_config.n_bins = 2;
+    require_invalid_parameter([&] { cqt(audio, cqt_config); });
+
+    VqtConfig vqt_config;
+    vqt_config.fmin = fmin;
+    vqt_config.n_bins = 2;
+    vqt_config.gamma = 24.0f;
+    require_invalid_parameter([&] { vqt(audio, vqt_config); });
+  }
+
+  // Positive subnormal fmin is accepted by a plain sign check, but its
+  // derived kernel length exceeds the bounded FFT/resource domain.
+  CqtConfig denorm_cqt;
+  denorm_cqt.fmin = denorm;
+  denorm_cqt.n_bins = 2;
+  require_invalid_parameter([&] { cqt(audio, denorm_cqt); });
+
+  VqtConfig denorm_vqt;
+  denorm_vqt.fmin = denorm;
+  denorm_vqt.n_bins = 2;
+  denorm_vqt.gamma = 1e-6f;
+  require_invalid_parameter([&] { vqt(audio, denorm_vqt); });
+
+  // fmin=1 Hz gives a finite but over-cap ceil length, exercising the cap
+  // before CQT/VQT's integer conversion and FFT allocation.
+  CqtConfig cqt_ceil;
+  cqt_ceil.fmin = 1.0f;
+  cqt_ceil.n_bins = 2;
+  require_invalid_parameter([&] { cqt(audio, cqt_ceil); });
+
+  VqtConfig vqt_ceil;
+  vqt_ceil.fmin = 1.0f;
+  vqt_ceil.n_bins = 2;
+  vqt_ceil.gamma = 1e-6f;
+  require_invalid_parameter([&] { vqt(audio, vqt_ceil); });
+
+  CqtConfig cqt_scale;
+  cqt_scale.fmin = 65.4f;
+  cqt_scale.n_bins = 2;
+  cqt_scale.filter_scale = max_float;
+  require_invalid_parameter([&] { cqt(audio, cqt_scale); });
+
+  VqtConfig vqt_scale;
+  vqt_scale.fmin = 65.4f;
+  vqt_scale.n_bins = 2;
+  vqt_scale.gamma = 24.0f;
+  vqt_scale.filter_scale = max_float;
+  require_invalid_parameter([&] { vqt(audio, vqt_scale); });
+
+  for (float filter_scale : {nan, inf}) {
+    cqt_scale.filter_scale = filter_scale;
+    require_invalid_parameter([&] { cqt(audio, cqt_scale); });
+    vqt_scale.filter_scale = filter_scale;
+    require_invalid_parameter([&] { vqt(audio, vqt_scale); });
   }
 }
 

@@ -352,7 +352,10 @@ Audio synthesize_early_ir(const std::vector<ImageSource>& images, int sample_rat
 
   float max_delay = 0.0f;
   for (const auto& im : images) {
-    if (im.distance > 1e-6f) max_delay = std::max(max_delay, im.distance / c * sr);
+    if (im.distance > 1e-6f) {
+      const float delay = im.distance / c * sr;
+      if (std::isfinite(delay)) max_delay = std::max(max_delay, delay);
+    }
   }
   // Auto-size to the farthest image arrival, clamped to the same ceiling
   // synthesize_late_tail uses (kMaxAutoSamples): without a cap, a pathological
@@ -371,6 +374,8 @@ Audio synthesize_early_ir(const std::vector<ImageSource>& images, int sample_rat
   int length = static_cast<int>(auto_length);
   if (length < 1) length = 1;
   std::vector<float> ir(static_cast<size_t>(length), 0.0f);
+  const std::int64_t half64 = static_cast<std::int64_t>(half);
+  const std::int64_t length64 = static_cast<std::int64_t>(length);
 
   auto band_gain = [&](const ImageSource& im) -> float {
     if (im.reflection.empty()) return 1.0f;
@@ -386,17 +391,23 @@ Audio synthesize_early_ir(const std::vector<ImageSource>& images, int sample_rat
   };
 
   for (const auto& im : images) {
-    // Use the negated >-form so a non-finite (NaN) distance is also skipped,
-    // matching the max-delay scan above; NaN < 1e-6f would be false and would
-    // otherwise render a NaN tap into the IR.
+    // Use the negated >-form so non-finite distances are skipped consistently.
     if (!(im.distance > 1e-6f)) continue;
     const float delay = im.distance / c * sr;
+    if (!std::isfinite(delay)) continue;
+    const double delay_d = static_cast<double>(delay);
+    if (delay_d <= -static_cast<double>(half64) - 0.5 ||
+        delay_d >= static_cast<double>(length64 - 1) + static_cast<double>(half64) + 0.5) {
+      continue;
+    }
     const float gain = band_gain(im) / (4.0f * kPi * im.distance);
-    const int n0 = static_cast<int>(std::lround(delay));
+    const std::int64_t n0 = std::llround(delay);
     const float frac = delay - static_cast<float>(n0);
-    for (int k = -half; k <= half; ++k) {
-      const int idx = n0 + k;
-      if (idx < 0 || idx >= length) continue;
+    const std::int64_t first_k = std::max(-half64, -n0);
+    const std::int64_t last_k = std::min(half64, (length64 - 1) - n0);
+    for (std::int64_t k = first_k; k <= last_k; ++k) {
+      const std::int64_t idx64 = n0 + k;
+      const size_t idx = static_cast<size_t>(idx64);
       const float x = static_cast<float>(k) - frac;  // continuous offset from the true delay
       float h;
       if (std::fabs(x) < 1e-7f) {
@@ -418,7 +429,7 @@ Audio synthesize_early_ir(const std::vector<ImageSource>& images, int sample_rat
           w = std::sin(pxn) / pxn;
         }
       }
-      ir[static_cast<size_t>(idx)] += gain * h * w;
+      ir[idx] += gain * h * w;
     }
   }
   return Audio::from_vector(std::move(ir), sample_rate);

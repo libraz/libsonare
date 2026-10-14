@@ -9,6 +9,8 @@
 #include <cstring>
 #include <string>
 
+#include "core/audio_io_detail.h"
+
 // File-path I/O is unavailable in WebAssembly builds; the core exposes only the
 // buffer-based loaders there (see the load_buffer_* functions below).
 #ifndef __EMSCRIPTEN__
@@ -376,7 +378,31 @@ bool built_in_wav_decoder_supports(const uint8_t* data, size_t size) {
 }
 #endif  // SONARE_WITH_FFMPEG
 
-InterleavedAudioLoadResult load_buffer_wav_interleaved(const uint8_t* data, size_t size) {
+template <typename Append>
+void append_optional_retained(Append&& append, bool defer_errors, bool& enabled,
+                              std::exception_ptr& retained_error,
+                              std::vector<float>& retained_samples) {
+  if (!enabled) return;
+  if (!defer_errors) {
+    append();
+    return;
+  }
+  try {
+    append();
+  } catch (...) {
+    retained_error = std::current_exception();
+    retained_samples.clear();
+    enabled = false;
+  }
+}
+
+bool builtin_retains_channels(RetainChannels retention, int channels) {
+  return retention == RetainChannels::All ||
+         (retention == RetainChannels::StereoIfExact && channels == 2);
+}
+
+DecodedInputData decode_builtin_wav(const uint8_t* data, size_t size, RetainChannels retention,
+                                    bool include_mono, bool defer_retained_errors) {
   WavDecoderGuard guard;
   guard.opened = drwav_init_memory(&guard.wav, data, size, nullptr) != 0;
   SONARE_CHECK_MSG(guard.opened, ErrorCode::DecodeFailed, "Failed to parse WAV data");
@@ -395,42 +421,79 @@ InterleavedAudioLoadResult load_buffer_wav_interleaved(const uint8_t* data, size
                    ErrorCode::DecodeFailed,
                    "WAV declares more samples than the offline decode limit");
   constexpr size_t kDecodeChunkFrames = 16 * 1024;
+  const size_t frame_capacity = static_cast<size_t>(wav.totalPCMFrameCount);
+  const bool keep_channels = builtin_retains_channels(retention, channels);
+
+  DecodedInputData result;
+  result.sample_rate = sample_rate;
+  result.source_channels = channels;
+  result.retained_channels = keep_channels ? channels : 0;
+  if (include_mono) {
+    // Passing the offline limit is not the same as being backed by real data:
+    // the limit still admits a declared 500M frames, which is a 2 GB
+    // reservation for whatever bytes the file actually carries.
+    result.mono.reserve(std::min(
+        frame_capacity, decodable_sample_ceiling(wav, size) / static_cast<size_t>(channels)));
+  }
+
+  bool retain_enabled = keep_channels;
+  if (retain_enabled) {
+    append_optional_retained(
+        [&] {
+          result.interleaved.reserve(std::min(total_samples, decodable_sample_ceiling(wav, size)));
+        },
+        defer_retained_errors, retain_enabled, result.retained_error, result.interleaved);
+  }
+
   size_t scratch_samples = 0;
-  SONARE_CHECK_MSG(
-      numeric::checked_size_product(kDecodeChunkFrames, static_cast<size_t>(channels),
-                                    resource::kMaxOfflineAudioSamples, &scratch_samples),
-      ErrorCode::DecodeFailed, "WAV channel layout exceeds the decode limit");
+  SONARE_CHECK_MSG(numeric::checked_size_product(
+                       std::min(kDecodeChunkFrames, frame_capacity), static_cast<size_t>(channels),
+                       resource::kMaxOfflineAudioSamples, &scratch_samples),
+                   ErrorCode::DecodeFailed, "WAV channel layout exceeds the decode limit");
   std::vector<float> scratch(scratch_samples);
-  // The reservation is capped by what the data chunk can back, so a header
-  // declaring 500M frames over a kilobyte of PCM buys a kilobyte of memory
-  // instead of a multi-GB zero-init that stalls or OOMs the process. The
-  // buffer then grows with the frames actually decoded, which is the property
-  // the sibling mono loader documents and this one did not have.
-  std::vector<float> interleaved;
-  interleaved.reserve(std::min(total_samples, decodable_sample_ceiling(wav, size)));
+  std::vector<float> planar;
   drwav_uint64 total_frames_read = 0;
   while (total_frames_read < wav.totalPCMFrameCount) {
     const drwav_uint64 request =
         std::min<drwav_uint64>(kDecodeChunkFrames, wav.totalPCMFrameCount - total_frames_read);
     const drwav_uint64 frames_read = drwav_read_pcm_frames_f32(&wav, request, scratch.data());
     if (frames_read == 0) break;
-    const size_t read_samples = static_cast<size_t>(frames_read) * static_cast<size_t>(channels);
-    SONARE_CHECK_MSG(interleaved.size() + read_samples <= resource::kMaxOfflineAudioSamples,
-                     ErrorCode::DecodeFailed,
-                     "WAV decoded more samples than the offline decode limit");
-    interleaved.insert(interleaved.end(), scratch.begin(),
-                       scratch.begin() + static_cast<std::ptrdiff_t>(read_samples));
+    const size_t frame_count = static_cast<size_t>(frames_read);
+    const size_t read_samples = frame_count * static_cast<size_t>(channels);
+    if (retain_enabled) {
+      append_optional_retained(
+          [&] {
+            size_t next_size = 0;
+            SONARE_CHECK_MSG(
+                numeric::checked_add(result.interleaved.size(), read_samples, &next_size) &&
+                    next_size <= resource::kMaxOfflineAudioSamples,
+                ErrorCode::DecodeFailed, "WAV decoded more samples than the offline decode limit");
+            result.interleaved.insert(result.interleaved.end(), scratch.begin(),
+                                      scratch.begin() + static_cast<std::ptrdiff_t>(read_samples));
+          },
+          defer_retained_errors, retain_enabled, result.retained_error, result.interleaved);
+    }
+    if (include_mono) {
+      append_mono_fold(scratch.data(), frame_count, channels, planar, result.mono);
+    }
     total_frames_read += frames_read;
   }
 
   SONARE_CHECK_MSG(total_frames_read > 0, ErrorCode::DecodeFailed, "No audio frames in WAV data");
-  return {std::move(interleaved), sample_rate, channels};
+  if (!keep_channels) result.retained_channels = 0;
+  return result;
 }
 
-InterleavedAudioLoadResult load_buffer_mp3_interleaved(const uint8_t* data, size_t size) {
+DecodedInputData decode_builtin_mp3(const uint8_t* data, size_t size, RetainChannels retention,
+                                    bool include_mono, bool defer_retained_errors) {
+  // mp3dec_load_buf decodes the entire stream into one malloc before exposing
+  // its sample count, so a low-bitrate, long-duration upload can OOM before we
+  // get a chance to enforce kMaxOfflineAudioSamples. The streaming API scans
+  // metadata/indexes first, then lets us enforce the bound for every decoded
+  // chunk before appending PCM to the result.
   Mp3DecoderGuard decoder_guard;
-  const int result = mp3dec_ex_open_buf(&decoder_guard.decoder, data, size, 0);
-  SONARE_CHECK_MSG(result == 0, ErrorCode::DecodeFailed, "Failed to decode MP3 data");
+  const int open_result = mp3dec_ex_open_buf(&decoder_guard.decoder, data, size, 0);
+  SONARE_CHECK_MSG(open_result == 0, ErrorCode::DecodeFailed, "Failed to decode MP3 data");
   decoder_guard.opened = true;
 
   SONARE_CHECK_MSG(decoder_guard.decoder.samples > 0, ErrorCode::DecodeFailed,
@@ -445,26 +508,84 @@ InterleavedAudioLoadResult load_buffer_mp3_interleaved(const uint8_t* data, size
                    "MP3 declares more samples than the offline decode limit");
 
   constexpr size_t kMp3DecodeChunkSamples = 16 * 1024;
+  const bool keep_channels = builtin_retains_channels(retention, channels);
+  DecodedInputData result;
+  result.sample_rate = sample_rate;
+  result.source_channels = channels;
+  result.retained_channels = keep_channels ? channels : 0;
+  if (include_mono) {
+    result.mono.reserve(static_cast<size_t>(declared_samples / static_cast<uint64_t>(channels)));
+  }
+  bool retain_enabled = keep_channels;
+  if (retain_enabled) {
+    append_optional_retained(
+        [&] { result.interleaved.reserve(static_cast<size_t>(declared_samples)); },
+        defer_retained_errors, retain_enabled, result.retained_error, result.interleaved);
+  }
+
   std::array<mp3d_sample_t, kMp3DecodeChunkSamples> chunk{};
-  std::vector<float> interleaved;
-  interleaved.reserve(static_cast<size_t>(declared_samples));
+  std::vector<float> normalized;
+  std::vector<float> planar;
+  size_t decoded_samples = 0;
   while (true) {
     const size_t read_samples = mp3dec_ex_read(&decoder_guard.decoder, chunk.data(), chunk.size());
     if (read_samples == 0) break;
     size_t next_total = 0;
-    SONARE_CHECK_MSG(numeric::checked_add(interleaved.size(), read_samples, &next_total) &&
+    SONARE_CHECK_MSG(numeric::checked_add(decoded_samples, read_samples, &next_total) &&
                          next_total <= resource::kMaxOfflineAudioSamples,
                      ErrorCode::DecodeFailed,
                      "MP3 decoded more samples than the offline decode limit");
     SONARE_CHECK_MSG(read_samples % static_cast<size_t>(channels) == 0, ErrorCode::DecodeFailed,
                      "MP3 decoder returned an incomplete audio frame");
-    interleaved.reserve(next_total);
+    decoded_samples = next_total;
+
+    normalized.resize(read_samples);
     for (size_t i = 0; i < read_samples; ++i) {
-      interleaved.push_back(static_cast<float>(chunk[i]) / 32768.0f);
+      normalized[i] = static_cast<float>(chunk[i]) / 32768.0f;
+    }
+    if (retain_enabled) {
+      append_optional_retained(
+          [&] {
+            result.interleaved.reserve(next_total);
+            result.interleaved.insert(result.interleaved.end(), normalized.begin(),
+                                      normalized.end());
+          },
+          defer_retained_errors, retain_enabled, result.retained_error, result.interleaved);
+    }
+    if (include_mono) {
+      append_mono_fold(normalized.data(), read_samples / static_cast<size_t>(channels), channels,
+                       planar, result.mono);
     }
   }
-  SONARE_CHECK_MSG(!interleaved.empty(), ErrorCode::DecodeFailed, "No audio samples in MP3 data");
-  return {std::move(interleaved), sample_rate, channels};
+  SONARE_CHECK_MSG(!include_mono || !result.mono.empty(), ErrorCode::DecodeFailed,
+                   "No audio samples in MP3 data");
+  SONARE_CHECK_MSG(include_mono || !result.interleaved.empty(), ErrorCode::DecodeFailed,
+                   "No audio samples in MP3 data");
+  if (!keep_channels) result.retained_channels = 0;
+  return result;
+}
+
+DecodedInputData decode_builtin_input(const uint8_t* data, size_t size, AudioFormat format,
+                                      RetainChannels retention, bool include_mono,
+                                      bool defer_retained_errors) {
+  if (format == AudioFormat::WAV) {
+    return decode_builtin_wav(data, size, retention, include_mono, defer_retained_errors);
+  }
+  SONARE_CHECK_MSG(format == AudioFormat::MP3, ErrorCode::InvalidFormat,
+                   "Built-in input loader received an unsupported format");
+  return decode_builtin_mp3(data, size, retention, include_mono, defer_retained_errors);
+}
+
+InterleavedAudioLoadResult load_buffer_wav_interleaved(const uint8_t* data, size_t size) {
+  auto result =
+      decode_builtin_input(data, size, AudioFormat::WAV, RetainChannels::All, false, false);
+  return {std::move(result.interleaved), result.sample_rate, result.retained_channels};
+}
+
+InterleavedAudioLoadResult load_buffer_mp3_interleaved(const uint8_t* data, size_t size) {
+  auto result =
+      decode_builtin_input(data, size, AudioFormat::MP3, RetainChannels::All, false, false);
+  return {std::move(result.interleaved), result.sample_rate, result.retained_channels};
 }
 
 // @p max_bytes is the ceiling the caller is under, with 0 meaning no limit, so
@@ -498,110 +619,15 @@ InterleavedAudioLoadResult load_buffer_interleaved_bounded(const uint8_t* data, 
 }  // namespace
 
 AudioLoadResult load_buffer_wav(const uint8_t* data, size_t size) {
-  WavDecoderGuard guard;
-  guard.opened = drwav_init_memory(&guard.wav, data, size, nullptr) != 0;
-  SONARE_CHECK_MSG(guard.opened, ErrorCode::DecodeFailed, "Failed to parse WAV data");
-  drwav& wav = guard.wav;
-
-  int sample_rate = static_cast<int>(wav.sampleRate);
-  int channels = static_cast<int>(wav.channels);
-  SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::DecodeFailed, "Invalid WAV sample rate");
-  SONARE_CHECK_MSG(channels >= kMinSupportedChannels, ErrorCode::DecodeFailed,
-                   "Invalid WAV channel count");
-
-  // A crafted WAV (e.g. an MS-ADPCM `fact` chunk) can declare a huge PCM frame
-  // count before any real sample data is present. Reject over the offline decode
-  // limit — with an overflow-safe multiply — before committing memory for it.
-  size_t total_samples = 0;
-  SONARE_CHECK_MSG(numeric::checked_size_product(static_cast<size_t>(wav.totalPCMFrameCount),
-                                                 static_cast<size_t>(wav.channels),
-                                                 resource::kMaxOfflineAudioSamples, &total_samples),
-                   ErrorCode::DecodeFailed,
-                   "WAV declares more samples than the offline decode limit");
-  constexpr size_t kDecodeChunkFrames = 16 * 1024;
-  const size_t frame_capacity = static_cast<size_t>(wav.totalPCMFrameCount);
-  std::vector<float> mono;
-  // Passing the offline limit is not the same as being backed by real data: the
-  // limit still admits a declared 500M frames, which is a 2 GB reservation for
-  // whatever bytes the file actually carries. Cap it at what the data chunk can
-  // yield and let the fold below grow the buffer with the decode.
-  mono.reserve(std::min(frame_capacity,
-                        decodable_sample_ceiling(wav, size) / static_cast<size_t>(channels)));
-  size_t scratch_samples = 0;
-  SONARE_CHECK_MSG(numeric::checked_size_product(
-                       std::min(kDecodeChunkFrames, frame_capacity), static_cast<size_t>(channels),
-                       resource::kMaxOfflineAudioSamples, &scratch_samples),
-                   ErrorCode::DecodeFailed, "WAV channel layout exceeds the decode limit");
-  std::vector<float> scratch(scratch_samples);
-  std::vector<float> planar;
-  drwav_uint64 total_frames_read = 0;
-  while (total_frames_read < wav.totalPCMFrameCount) {
-    const drwav_uint64 request =
-        std::min<drwav_uint64>(kDecodeChunkFrames, wav.totalPCMFrameCount - total_frames_read);
-    const drwav_uint64 frames_read = drwav_read_pcm_frames_f32(&wav, request, scratch.data());
-    if (frames_read == 0) break;
-    append_mono_fold(scratch.data(), static_cast<size_t>(frames_read), channels, planar, mono);
-    total_frames_read += frames_read;
-  }
-
-  SONARE_CHECK_MSG(total_frames_read > 0, ErrorCode::DecodeFailed, "No audio frames in WAV data");
-  return {std::move(mono), sample_rate};
+  auto result =
+      decode_builtin_input(data, size, AudioFormat::WAV, RetainChannels::None, true, false);
+  return {std::move(result.mono), result.sample_rate};
 }
 
 AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size) {
-  // mp3dec_load_buf decodes the entire stream into one malloc before exposing
-  // its sample count, so a low-bitrate, long-duration upload can OOM before we
-  // get a chance to enforce kMaxOfflineAudioSamples. The streaming API scans
-  // metadata/indexes first, then lets us enforce the bound for every decoded
-  // chunk before appending PCM to the result.
-  Mp3DecoderGuard decoder_guard;
-  const int result = mp3dec_ex_open_buf(&decoder_guard.decoder, data, size, 0);
-  SONARE_CHECK_MSG(result == 0, ErrorCode::DecodeFailed, "Failed to decode MP3 data");
-  decoder_guard.opened = true;
-
-  SONARE_CHECK_MSG(decoder_guard.decoder.samples > 0, ErrorCode::DecodeFailed,
-                   "No audio samples in MP3 data");
-
-  int sample_rate = decoder_guard.decoder.info.hz;
-  int channels = decoder_guard.decoder.info.channels;
-  SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::DecodeFailed, "Invalid MP3 sample rate");
-  SONARE_CHECK_MSG(channels >= kMinSupportedChannels, ErrorCode::DecodeFailed,
-                   "Invalid MP3 channel count");
-
-  const uint64_t declared_samples = decoder_guard.decoder.samples;
-  SONARE_CHECK_MSG(declared_samples <= resource::kMaxOfflineAudioSamples, ErrorCode::DecodeFailed,
-                   "MP3 declares more samples than the offline decode limit");
-
-  constexpr size_t kMp3DecodeChunkSamples = 16 * 1024;
-  std::array<mp3d_sample_t, kMp3DecodeChunkSamples> chunk{};
-  std::vector<float> mono;
-  mono.reserve(static_cast<size_t>(declared_samples / static_cast<uint64_t>(channels)));
-  std::vector<float> normalized;
-  std::vector<float> planar;
-  size_t decoded_samples = 0;
-  while (true) {
-    const size_t read_samples = mp3dec_ex_read(&decoder_guard.decoder, chunk.data(), chunk.size());
-    if (read_samples == 0) break;
-
-    size_t next_total = 0;
-    SONARE_CHECK_MSG(numeric::checked_add(decoded_samples, read_samples, &next_total) &&
-                         next_total <= resource::kMaxOfflineAudioSamples,
-                     ErrorCode::DecodeFailed,
-                     "MP3 decoded more samples than the offline decode limit");
-    SONARE_CHECK_MSG(read_samples % static_cast<size_t>(channels) == 0, ErrorCode::DecodeFailed,
-                     "MP3 decoder returned an incomplete audio frame");
-    decoded_samples = next_total;
-
-    const size_t frame_count = read_samples / static_cast<size_t>(channels);
-    normalized.resize(read_samples);
-    for (size_t i = 0; i < read_samples; ++i) {
-      normalized[i] = static_cast<float>(chunk[i]) / 32768.0f;
-    }
-    append_mono_fold(normalized.data(), frame_count, channels, planar, mono);
-  }
-  SONARE_CHECK_MSG(!mono.empty(), ErrorCode::DecodeFailed, "No audio samples in MP3 data");
-
-  return {std::move(mono), sample_rate};
+  auto result =
+      decode_builtin_input(data, size, AudioFormat::MP3, RetainChannels::None, true, false);
+  return {std::move(result.mono), result.sample_rate};
 }
 
 InterleavedAudioLoadResult load_buffer_interleaved(const uint8_t* data, size_t size) {
@@ -613,6 +639,39 @@ InterleavedAudioLoadResult load_audio_interleaved(const std::string& path,
                                                   const AudioLoadOptions& options) {
   const std::vector<uint8_t> data = read_file(path, options.max_file_size);
   return load_buffer_interleaved_bounded(data.data(), data.size(), options.max_file_size);
+}
+
+DecodedInputData load_audio_input_once(const std::string& path, RetainChannels retention,
+                                       const AudioLoadOptions& options) {
+  const std::vector<uint8_t> data = read_file(path, options.max_file_size);
+  const AudioFormat format = detect_format(data.data(), data.size());
+  switch (format) {
+    case AudioFormat::WAV:
+#ifdef SONARE_WITH_FFMPEG
+      if (!built_in_wav_decoder_supports(data.data(), data.size())) {
+        return load_buffer_ffmpeg_input(data.data(), data.size(), retention);
+      }
+#endif
+      break;
+    case AudioFormat::MP3:
+      break;
+    case AudioFormat::Unknown:
+#ifdef SONARE_WITH_FFMPEG
+      return load_buffer_ffmpeg_input(data.data(), data.size(), retention);
+#else
+      SONARE_CHECK_MSG(false, ErrorCode::InvalidFormat, unsupported_file_message(path));
+#endif
+  }
+  // Built-in WAV/MP3 decode reuses the bytes read above for every representation.
+  if (format == AudioFormat::WAV || format == AudioFormat::MP3) {
+    // Retained-only failures are deferred so the mono result still reaches the handler.
+    return decode_builtin_input(data.data(), data.size(), format, retention, true, true);
+  }
+#ifdef SONARE_WITH_FFMPEG
+  SONARE_CHECK_MSG(false, ErrorCode::InvalidFormat, "Unsupported audio format");
+#else
+  SONARE_CHECK_MSG(false, ErrorCode::InvalidFormat, unsupported_file_message(path));
+#endif
 }
 
 AudioLoadResult load_wav(const std::string& path) {

@@ -372,7 +372,6 @@ class MusicAnalyzer {
   std::unique_ptr<Chroma> bass_chroma_;
   std::unique_ptr<MelSpectrogram> mel_spectrogram_;
   std::vector<float> onset_strength_;
-  bool onset_strength_computed_ = false;
   std::vector<float> beat_low_frequency_energy_;
 
   // One-shot flags guarding each lazy initialization. They make the unique_ptr

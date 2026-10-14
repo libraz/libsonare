@@ -5,6 +5,7 @@
 
 #include <array>
 
+#include "editing/voice_changer/control_cadence.h"
 #include "rt/biquad_design.h"
 #include "rt/param_smoother.h"
 
@@ -63,11 +64,7 @@ class StreamingFormant {
   float filter_brightness_ = 0.0f;
   float filter_nasal_ = 0.0f;
   float factor_alpha_ = 1.0f;
-  /// @brief Counts down to the next coefficient rebuild across blocks. Used to
-  ///        be a per-block local variable, which reset the cadence at every
-  ///        block boundary and effectively forced a rebuild on sample 0 of
-  ///        every block (the opposite of the intended 32-sample interval).
-  int filter_update_countdown_ = 0;
+  ControlCadence control_cadence_;
 };
 
 }  // namespace sonare::editing::voice_changer

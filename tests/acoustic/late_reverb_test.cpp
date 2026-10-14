@@ -201,17 +201,36 @@ TEST_CASE("late-tail sample resolver enforces the shared working-set cap",
   ReverbTime rt;
   rt.rt60_bands = {60.0f};
 
-  // 60 s * 2 * 384 kHz is substantially above the four-buffer 256-MiB
-  // working-set budget. This is resolver-only so the regression never needs to
+  // 60 s * 2 * 384 kHz is substantially above the five-buffer 256-MiB
+  // full-length float-storage budget. This is resolver-only so the regression never needs to
   // allocate the otherwise enormous tail.
   const LateTailResolution resolution = resolve_late_tail(rt, 384000);
   REQUIRE(resolution.samples == resource::kMaxAcousticRirSamples);
-  REQUIRE(resolution.samples == 16'777'216u);
+  REQUIRE(resolution.samples == 13'421'772u);
   REQUIRE(resolution.resource_clamped);
   REQUIRE(resolve_late_tail_samples(rt, 384000) == resolution.samples);
-  static_assert(resource::kMaxAcousticRirSamples * resource::kAcousticRirLiveFloatBuffers *
+  static_assert(resource::kMaxAcousticRirSamples * resource::kAcousticRirMonoLiveFloatBuffers *
                     sizeof(float) <=
                 resource::kMaxAcousticRirPeakBytes);
+}
+
+TEST_CASE("acoustic sample capacities are maximal for each live-buffer path",
+          "[acoustic][late_reverb][resource_limit]") {
+  constexpr std::size_t budget = resource::kMaxAcousticRirPeakBytes;
+  constexpr std::size_t mono = resource::kMaxAcousticRirSamples;
+  constexpr std::size_t pair_tail = resource::kMaxAcousticLateTailPairSamples;
+  constexpr std::size_t pair_rir = resource::kMaxAcousticRirPairSamples;
+
+  REQUIRE(mono == 13'421'772u);
+  REQUIRE(pair_tail == 11'184'810u);
+  REQUIRE(pair_rir == 7'456'540u);
+  REQUIRE(mono * resource::kAcousticRirMonoLiveFloatBuffers * sizeof(float) <= budget);
+  REQUIRE((mono + 1u) * resource::kAcousticRirMonoLiveFloatBuffers * sizeof(float) > budget);
+  REQUIRE(pair_tail * resource::kAcousticLateTailPairLiveFloatBuffers * sizeof(float) <= budget);
+  REQUIRE((pair_tail + 1u) * resource::kAcousticLateTailPairLiveFloatBuffers * sizeof(float) >
+          budget);
+  REQUIRE(pair_rir * resource::kAcousticRirPairLiveFloatBuffers * sizeof(float) <= budget);
+  REQUIRE((pair_rir + 1u) * resource::kAcousticRirPairLiveFloatBuffers * sizeof(float) > budget);
 }
 
 TEST_CASE("late-tail resolver applies explicit caps and rejects invalid rates",
@@ -241,6 +260,18 @@ TEST_CASE("late-tail resolver remains bounded for hostile sizing values",
   REQUIRE(resolution.samples == resource::kMaxAcousticRirSamples);
   REQUIRE(resolution.resource_clamped);
   REQUIRE(resolve_late_tail_samples(rt, 384000, LateReverbConfig{1u, 17, 1.0f}) == 17u);
+}
+
+TEST_CASE("late-tail pair enforces its standalone six-buffer cap",
+          "[acoustic][late_reverb][resource_limit][.][slow]") {
+  ReverbTime rt;
+  rt.rt60_bands = {60.0f};
+  LateReverbConfig config;
+  config.seed = 7u;
+
+  const LateTailPair pair = synthesize_late_tail_pair(rt, 384000, config, 0.5f);
+  REQUIRE(pair.left.size() == resource::kMaxAcousticLateTailPairSamples);
+  REQUIRE(pair.right.size() == resource::kMaxAcousticLateTailPairSamples);
 }
 
 TEST_CASE("unbounded RT60 does not overflow the auto length", "[acoustic][late_reverb]") {

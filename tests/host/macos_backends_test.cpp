@@ -7,6 +7,7 @@
 /// the default ctest run and only execute when named explicitly; they are
 /// inherently hardware / environment sensitive.
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <catch2/catch_approx.hpp>
@@ -605,14 +606,87 @@ TEST_CASE("AU host descriptors carry the units the installed plugins publish", "
 #endif  // SONARE_HOST_TEST_AU
 
 #if defined(SONARE_HOST_TEST_COREAUDIO)
+#include <CoreAudio/CoreAudio.h>
+
+#include <limits>
+
 #include "host/audio_device.h"
 #include "host/backends/coreaudio/coreaudio_device.h"
 
 namespace {
+struct DefaultOutputSnapshot {
+  AudioObjectID device = kAudioObjectUnknown;
+  UInt32 buffer_frames = 0;
+  Float64 nominal_rate = 0.0;
+};
+
+bool read_default_output_snapshot(DefaultOutputSnapshot* snapshot) {
+  if (snapshot == nullptr) return false;
+  AudioObjectPropertyAddress default_out{kAudioHardwarePropertyDefaultOutputDevice,
+                                         kAudioObjectPropertyScopeGlobal,
+                                         kAudioObjectPropertyElementMain};
+  UInt32 device_size = sizeof(snapshot->device);
+  if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &default_out, 0, nullptr, &device_size,
+                                 &snapshot->device) != noErr ||
+      snapshot->device == kAudioObjectUnknown) {
+    return false;
+  }
+
+  AudioObjectPropertyAddress buffer_frames{kAudioDevicePropertyBufferFrameSize,
+                                           kAudioDevicePropertyScopeOutput,
+                                           kAudioObjectPropertyElementMain};
+  UInt32 buffer_size = sizeof(snapshot->buffer_frames);
+  if (AudioObjectGetPropertyData(snapshot->device, &buffer_frames, 0, nullptr, &buffer_size,
+                                 &snapshot->buffer_frames) != noErr ||
+      snapshot->buffer_frames == 0 ||
+      snapshot->buffer_frames > static_cast<UInt32>(std::numeric_limits<int>::max())) {
+    return false;
+  }
+
+  AudioObjectPropertyAddress nominal_rate{kAudioDevicePropertyNominalSampleRate,
+                                          kAudioObjectPropertyScopeGlobal,
+                                          kAudioObjectPropertyElementMain};
+  UInt32 rate_size = sizeof(snapshot->nominal_rate);
+  if (AudioObjectGetPropertyData(snapshot->device, &nominal_rate, 0, nullptr, &rate_size,
+                                 &snapshot->nominal_rate) != noErr ||
+      !std::isfinite(snapshot->nominal_rate) || snapshot->nominal_rate <= 0.0) {
+    return false;
+  }
+  return true;
+}
+
+bool find_unenumerated_device_id(uint32_t* device_id) {
+  if (device_id == nullptr) return false;
+  AudioObjectPropertyAddress devices{kAudioHardwarePropertyDevices, kAudioObjectPropertyScopeGlobal,
+                                     kAudioObjectPropertyElementMain};
+  UInt32 data_size = 0;
+  if (AudioObjectGetPropertyDataSize(kAudioObjectSystemObject, &devices, 0, nullptr, &data_size) !=
+          noErr ||
+      data_size == 0 || data_size % sizeof(AudioObjectID) != 0) {
+    return false;
+  }
+  std::vector<AudioObjectID> enumerated(data_size / sizeof(AudioObjectID));
+  if (AudioObjectGetPropertyData(kAudioObjectSystemObject, &devices, 0, nullptr, &data_size,
+                                 enumerated.data()) != noErr) {
+    return false;
+  }
+
+  AudioObjectID candidate = std::numeric_limits<AudioObjectID>::max();
+  while (candidate != kAudioObjectUnknown) {
+    if (std::find(enumerated.begin(), enumerated.end(), candidate) == enumerated.end()) {
+      *device_id = static_cast<uint32_t>(candidate);
+      return true;
+    }
+    --candidate;
+  }
+  return false;
+}
+
 // Emits a quiet sine so the device has well-defined finite output.
 class SineCallback final : public sonare::host::AudioDeviceCallback {
  public:
   bool open(const sonare::host::AudioStreamConfig& config) override {
+    open_calls_.fetch_add(1, std::memory_order_relaxed);
     config_ = config;
     return true;
   }
@@ -631,9 +705,11 @@ class SineCallback final : public sonare::host::AudioDeviceCallback {
       }
     }
   }
-  void close() noexcept override {}
+  void close() noexcept override { close_calls_.fetch_add(1, std::memory_order_relaxed); }
 
   sonare::host::AudioStreamConfig config_{};
+  std::atomic<int> open_calls_{0};
+  std::atomic<int> close_calls_{0};
   std::atomic<int> callbacks_{0};
   std::atomic<int> max_frames_seen_{0};
   std::atomic<int> host_timestamps_{0};
@@ -702,6 +778,46 @@ TEST_CASE("CoreAudio opens the default output device", "[host][coreaudio][.]") {
 
   device.close();
   REQUIRE(device.output_latency_samples() >= 0);
+}
+
+TEST_CASE("CoreAudio rejects an invalid device binding and cleans up for reuse",
+          "[host][coreaudio][.]") {
+  using sonare::host::backends::CoreAudioDevice;
+  DefaultOutputSnapshot snapshot;
+  if (!read_default_output_snapshot(&snapshot)) {
+    SKIP("no usable default output configuration; skipping");
+  }
+
+  sonare::host::AudioStreamConfig config;
+  config.sample_rate = snapshot.nominal_rate;
+  config.max_block_size = static_cast<int>(snapshot.buffer_frames);
+  config.num_output_channels = 1;
+
+  CoreAudioDevice device;
+  SineCallback usable_callback;
+  if (!device.open(config, &usable_callback)) {
+    SKIP("default output cannot be opened; skipping");
+  }
+  device.close();
+  REQUIRE(usable_callback.open_calls_.load(std::memory_order_relaxed) == 1);
+  REQUIRE(usable_callback.close_calls_.load(std::memory_order_relaxed) == 1);
+
+  uint32_t invalid_device_id = 0;
+  if (!find_unenumerated_device_id(&invalid_device_id)) {
+    SKIP("unable to select an unenumerated device id; skipping");
+  }
+  REQUIRE(invalid_device_id != 0);
+
+  SineCallback invalid_callback;
+  REQUIRE_FALSE(device.open_device(invalid_device_id, config, &invalid_callback));
+  REQUIRE(invalid_callback.open_calls_.load(std::memory_order_relaxed) == 0);
+  REQUIRE(invalid_callback.close_calls_.load(std::memory_order_relaxed) == 0);
+
+  SineCallback reopened_callback;
+  REQUIRE(device.open(config, &reopened_callback));
+  REQUIRE(reopened_callback.open_calls_.load(std::memory_order_relaxed) == 1);
+  device.close();
+  REQUIRE(reopened_callback.close_calls_.load(std::memory_order_relaxed) == 1);
 }
 
 TEST_CASE("CoreAudio xrun telemetry spans the whole open, not one start", "[host][coreaudio][.]") {

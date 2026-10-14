@@ -20,11 +20,14 @@
 #include <tuple>
 #include <vector>
 
+#include "core/audio_io_detail.h"
+
 #ifndef _WIN32
 #include <sys/stat.h>
 #endif
 
 #include "core/audio.h"
+#include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -490,6 +493,109 @@ TEST_CASE("load_buffer_wav keeps the mono and stereo folds bit-identical", "[aud
   }
 }
 
+TEST_CASE("private combined loader retains only the requested channel layout",
+          "[audio_io][combined]") {
+  constexpr int sample_rate = 24000;
+  constexpr size_t frames = 37;
+  const std::filesystem::path dir = scratch_dir();
+
+  for (const int channels : {1, 2, 6, 8}) {
+    std::vector<float> source(frames * static_cast<size_t>(channels));
+    for (size_t frame = 0; frame < frames; ++frame) {
+      for (int channel = 0; channel < channels; ++channel) {
+        // Keep every plane distinguishable while staying well inside [-1, 1].
+        source[frame * static_cast<size_t>(channels) + static_cast<size_t>(channel)] =
+            0.01f * static_cast<float>(channel + 1) + 0.0001f * static_cast<float>(frame + 1);
+      }
+    }
+
+    const std::filesystem::path path = dir / ("combined_" + std::to_string(channels) + ".wav");
+    const auto wav = create_wav_buffer_multichannel(source.data(), frames, channels, sample_rate);
+    {
+      std::ofstream output(path, std::ios::binary);
+      REQUIRE(output.is_open());
+      output.write(reinterpret_cast<const char*>(wav.data()),
+                   static_cast<std::streamsize>(wav.size()));
+      REQUIRE(output.good());
+    }
+
+    const auto [legacy_mono, legacy_rate] = load_audio(path.string());
+    const auto [legacy_interleaved, interleaved_rate, legacy_channels] =
+        load_audio_interleaved(path.string());
+    REQUIRE(legacy_rate == sample_rate);
+    REQUIRE(interleaved_rate == sample_rate);
+    REQUIRE(legacy_channels == channels);
+
+    const auto mono_only = load_audio_input_once(path.string(), RetainChannels::None);
+    REQUIRE(mono_only.sample_rate == sample_rate);
+    REQUIRE(mono_only.source_channels == channels);
+    REQUIRE(mono_only.mono == legacy_mono);
+    REQUIRE(mono_only.interleaved.empty());
+
+    const auto stereo_only = load_audio_input_once(path.string(), RetainChannels::StereoIfExact);
+    REQUIRE(stereo_only.mono == legacy_mono);
+    REQUIRE(stereo_only.source_channels == channels);
+    if (channels == 2) {
+      REQUIRE(stereo_only.interleaved == legacy_interleaved);
+    } else {
+      REQUIRE(stereo_only.interleaved.empty());
+    }
+
+    const auto all_channels = load_audio_input_once(path.string(), RetainChannels::All);
+    REQUIRE(all_channels.mono == legacy_mono);
+    REQUIRE(all_channels.source_channels == channels);
+    REQUIRE(all_channels.interleaved == legacy_interleaved);
+  }
+
+  std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("combined built-in retained allocation failure defers only the retained branch",
+          "[audio_io][combined][allocation]") {
+  const auto dir = scratch_dir();
+  const auto path = dir / "retained_allocation.wav";
+  constexpr size_t frames = 4096;
+  std::vector<float> source(frames * 2);
+  for (size_t frame = 0; frame < frames; ++frame) {
+    source[2 * frame] = static_cast<float>(frame) / static_cast<float>(frames);
+    source[2 * frame + 1] = -source[2 * frame];
+  }
+  save_wav_multichannel(path.string(), source.data(), frames, 2, ChannelLayout::Stereo, 22050);
+
+  bool deferred = false;
+  int source_channels = 0;
+  int retained_channels = 0;
+  size_t mono_size = 0;
+  size_t retained_size = 0;
+  // The exact allocation ordering is an implementation detail, so walk the
+  // one-shot hook until it lands on retained reserve/insert rather than
+  // coupling the regression to a particular std::vector growth sequence.
+  for (size_t failure_point = 1; failure_point <= 128 && !deferred; ++failure_point) {
+    {
+      sonare::test::AllocationFailureAtGuard guard(failure_point);
+      try {
+        const auto decoded =
+            load_audio_input_once(path.string(), RetainChannels::All, kDefaultLoadOptions);
+        deferred = decoded.retained_error != nullptr;
+        source_channels = decoded.source_channels;
+        retained_channels = decoded.retained_channels;
+        mono_size = decoded.mono.size();
+        retained_size = decoded.interleaved.size();
+      } catch (const std::exception&) {
+        // Earlier points can hit file/mono/scratch allocations, which are
+        // shared failures and must still throw immediately.
+      }
+    }
+  }
+
+  REQUIRE(deferred);
+  REQUIRE(source_channels == 2);
+  REQUIRE(retained_channels == 2);
+  REQUIRE(mono_size == frames);
+  REQUIRE(retained_size == 0);
+  std::filesystem::remove_all(dir);
+}
+
 TEST_CASE("load_buffer_wav averages channel counts outside the speaker model",
           "[audio_io][downmix]") {
   // ChannelLayout covers 1/2/6/8 planes. A quad or LCR file carries no speaker
@@ -879,6 +985,12 @@ TEST_CASE("load_audio decodes m4a when built with FFmpeg", "[audio_io][ffmpeg]")
   REQUIRE(std::get<1>(loaded) > 0);
   REQUIRE(audio_channel_count(m4a_path) == 2);
 
+  const auto combined = load_audio_input_once(m4a_path, RetainChannels::StereoIfExact);
+  REQUIRE(combined.source_channels == audio_channel_count(m4a_path));
+  REQUIRE(combined.retained_channels == 2);
+  REQUIRE(combined.retained_error == nullptr);
+  REQUIRE_FALSE(combined.interleaved.empty());
+
   cleanup();
 }
 
@@ -1055,6 +1167,52 @@ TEST_CASE("load_audio folds a bed identically through the built-in and FFmpeg de
   REQUIRE(worst < 1e-4);
 }
 
+TEST_CASE("retained FFmpeg stereo survives an input rate and format renegotiation",
+          "[audio_io][ffmpeg][retained]") {
+  if (std::system("command -v ffmpeg >/dev/null 2>&1") != 0) {
+    SKIP("ffmpeg CLI not found on PATH");
+  }
+
+  const std::string first_path = "test_retained_rate_change_22050.aac";
+  const std::string second_path = "test_retained_rate_change_44100.aac";
+  const std::string concat_path = "test_retained_rate_change.ts";
+  auto cleanup = [&]() {
+    std::remove(first_path.c_str());
+    std::remove(second_path.c_str());
+    std::remove(concat_path.c_str());
+  };
+
+  const std::string generate_first =
+      "ffmpeg -loglevel error -f lavfi -i "
+      "'sine=frequency=440:sample_rate=22050:duration=0.3' "
+      "-ac 2 -c:a aac -b:a 96k -f adts -y " +
+      first_path;
+  const std::string generate_second =
+      "ffmpeg -loglevel error -f lavfi -i "
+      "'sine=frequency=880:sample_rate=44100:duration=0.3' "
+      "-ac 2 -c:a aac -b:a 96k -f adts -y " +
+      second_path;
+  const std::string concatenate = "ffmpeg -loglevel error -i 'concat:" + first_path + "|" +
+                                  second_path + "' -c copy -f mpegts -y " + concat_path;
+  REQUIRE(std::system(generate_first.c_str()) == 0);
+  REQUIRE(std::system(generate_second.c_str()) == 0);
+  REQUIRE(std::system(concatenate.c_str()) == 0);
+
+  const auto combined = load_audio_input_once(concat_path, RetainChannels::StereoIfExact);
+  REQUIRE(combined.source_channels == 2);
+  REQUIRE(combined.retained_channels == 2);
+  REQUIRE(combined.retained_error == nullptr);
+  REQUIRE_FALSE(combined.mono.empty());
+  REQUIRE_FALSE(combined.interleaved.empty());
+  REQUIRE(combined.sample_rate == 22050);
+
+  const auto [legacy_mono, legacy_rate] = load_audio(concat_path);
+  REQUIRE(legacy_rate == combined.sample_rate);
+  REQUIRE(legacy_mono == combined.mono);
+
+  cleanup();
+}
+
 TEST_CASE("load_audio_interleaved rejects FFmpeg channel renegotiation",
           "[audio_io][ffmpeg][interleaved]") {
   if (std::system("command -v ffmpeg >/dev/null 2>&1") != 0) {
@@ -1065,10 +1223,18 @@ TEST_CASE("load_audio_interleaved rejects FFmpeg channel renegotiation",
   const std::string mono_path = "test_interleaved_ffmpeg_renegotiate_mono.aac";
   const std::string stereo_path = "test_interleaved_ffmpeg_renegotiate_stereo.aac";
   const std::string concat_path = "test_interleaved_ffmpeg_renegotiate.ts";
+  const std::string reverse_concat_path = "test_interleaved_ffmpeg_renegotiate_reverse.ts";
+  const std::string same_layout_path = "test_interleaved_ffmpeg_same_layout.ts";
+  const std::string transport_fault_path = "test_interleaved_ffmpeg_transport_fault.ts";
+  const std::string fault_order_path = "test_interleaved_ffmpeg_fault_order.ts";
   auto cleanup = [&]() {
     std::remove(mono_path.c_str());
     std::remove(stereo_path.c_str());
     std::remove(concat_path.c_str());
+    std::remove(reverse_concat_path.c_str());
+    std::remove(same_layout_path.c_str());
+    std::remove(transport_fault_path.c_str());
+    std::remove(fault_order_path.c_str());
   };
 
   // ADTS carries the channel configuration in every AAC frame. Concatenating
@@ -1086,18 +1252,73 @@ TEST_CASE("load_audio_interleaved rejects FFmpeg channel renegotiation",
       stereo_path;
   const std::string concatenate = "ffmpeg -loglevel error -i 'concat:" + mono_path + "|" +
                                   stereo_path + "' -c copy -f mpegts -y " + concat_path;
+  const std::string concatenate_reverse = "ffmpeg -loglevel error -i 'concat:" + stereo_path + "|" +
+                                          mono_path + "' -c copy -f mpegts -y " +
+                                          reverse_concat_path;
+  const std::string remux_same_layout =
+      "ffmpeg -loglevel error -i " + stereo_path + " -c copy -f mpegts -y " + same_layout_path;
   REQUIRE(std::system(generate_mono.c_str()) == 0);
   REQUIRE(std::system(generate_stereo.c_str()) == 0);
   REQUIRE(std::system(concatenate.c_str()) == 0);
+  REQUIRE(std::system(concatenate_reverse.c_str()) == 0);
+  REQUIRE(std::system(remux_same_layout.c_str()) == 0);
+
+  const auto append_malformed_transport_packet = [](const std::string& source_path,
+                                                    const std::string& destination_path) {
+    std::ifstream input(source_path, std::ios::binary);
+    REQUIRE(input.is_open());
+    std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(input)), {});
+    input.close();
+    bytes.insert(bytes.end(), 188, 0);
+    std::ofstream output(destination_path, std::ios::binary);
+    REQUIRE(output.is_open());
+    output.write(reinterpret_cast<const char*>(bytes.data()),
+                 static_cast<std::streamsize>(bytes.size()));
+    REQUIRE(output.good());
+  };
+  append_malformed_transport_packet(same_layout_path, transport_fault_path);
+  append_malformed_transport_packet(concat_path, fault_order_path);
+
+  // Control: with no preceding layout failure, the malformed packet is an
+  // actual later read fault rather than an ignored tail.
+  REQUIRE_THROWS_WITH(load_audio_interleaved(transport_fault_path),
+                      Catch::Matchers::ContainsSubstring("FFmpeg: av_read_frame failed"));
 
   REQUIRE_THROWS_WITH(load_audio_interleaved(concat_path),
-                      Catch::Matchers::ContainsSubstring("channel layout change"));
+                      Catch::Matchers::ContainsSubstring(
+                          "FFmpeg: interleaved decode does not support a channel layout change "
+                          "midstream"));
+
+  // A malformed transport packet follows the real layout change. If the
+  // required public retained branch merely stored its failure and continued,
+  // av_read_frame would reach this packet and replace the canonical layout
+  // diagnostic with an unrelated transport error. The canonical error proves
+  // that the decoder stopped at the first required retained failure.
+  REQUIRE_THROWS_WITH(
+      load_audio_interleaved(fault_order_path),
+      Catch::Matchers::ContainsSubstring(
+          "FFmpeg: interleaved decode does not support a channel layout change midstream"));
 
   // The legacy loader still downmixes the same stream while rebuilding its
   // mono resampler, so this guard does not weaken its established behavior.
   auto [decoded, decoded_rate] = load_audio(concat_path);
   REQUIRE(decoded_rate == sample_rate);
   REQUIRE(decoded.size() > 0);
+
+  // Put the stereo segment first as well, so StereoIfExact has already created
+  // its retained resampler when the stream changes to mono. The retained error
+  // must be deferred while the authoritative mono result remains usable.
+  const auto combined = load_audio_input_once(reverse_concat_path, RetainChannels::StereoIfExact);
+  REQUIRE(combined.source_channels == 2);
+  REQUIRE(combined.sample_rate == sample_rate);
+  REQUIRE_FALSE(combined.mono.empty());
+  REQUIRE(combined.interleaved.empty());
+  REQUIRE(combined.retained_error != nullptr);
+
+  const auto mono_only = load_audio_input_once(reverse_concat_path, RetainChannels::None);
+  REQUIRE(mono_only.source_channels == 2);
+  REQUIRE(mono_only.retained_error == nullptr);
+  REQUIRE_FALSE(mono_only.mono.empty());
 
   cleanup();
 }

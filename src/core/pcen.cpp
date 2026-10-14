@@ -4,6 +4,7 @@
 
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -123,6 +124,14 @@ std::vector<float> pcen(const float* S, int n_bins, int n_frames, const PcenConf
 
 std::vector<float> pcen(const std::vector<float>& S, int n_bins, int n_frames,
                         const PcenConfig& config) {
+  if (n_bins > 0 && n_frames > 0) {
+    std::size_t expected = 0;
+    if (!numeric::checked_matrix_element_count(n_bins, n_frames, &expected) ||
+        S.size() != expected) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "pcen: S size must equal n_bins * n_frames");
+    }
+  }
   return pcen(S.data(), n_bins, n_frames, config);
 }
 

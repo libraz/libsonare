@@ -191,9 +191,11 @@ std::vector<TimeStretchSegment> hold_profile(const std::vector<HoldRange>& holds
   int cursor = 0;
   for (const HoldRange& hold : holds) {
     SONARE_CHECK(hold.frame_count > 0 && hold.first_frame >= cursor &&
-                     hold.first_frame + hold.frame_count <= input_frame_count,
+                     hold.first_frame <= input_frame_count &&
+                     hold.frame_count <= input_frame_count - hold.first_frame,
                  ErrorCode::InvalidParameter);
-    cursor = hold.first_frame + hold.frame_count;
+    cursor = hold.first_frame;
+    cursor += hold.frame_count;
     held += hold.frame_count;
   }
 
@@ -223,7 +225,8 @@ std::vector<TimeStretchSegment> hold_profile(const std::vector<HoldRange>& holds
       segments.push_back(TimeStretchSegment{static_cast<float>(cursor), rate});
     }
     segments.push_back(TimeStretchSegment{static_cast<float>(hold.first_frame), 1.0f});
-    cursor = hold.first_frame + hold.frame_count;
+    cursor = hold.first_frame;
+    cursor += hold.frame_count;
   }
   if (cursor < input_frame_count) {
     segments.push_back(TimeStretchSegment{static_cast<float>(cursor), rate});

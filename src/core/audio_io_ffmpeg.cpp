@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "core/audio_io_detail.h"
 #include "mixing/downmix.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
@@ -284,11 +285,11 @@ int set_mono_downmix_matrix(SwrContext* swr, const AVChannelLayout& in_layout) {
 // ---------------------------------------------------------------------------
 
 /// @brief Decodes the first audio stream of @p format_ctx into float32.
-/// @param preserve_channels Keep the source channel layout/order when true;
-///        otherwise downmix to mono for the legacy loader.
-/// @return Tuple of (samples, sample_rate, channel count).
-InterleavedAudioLoadResult decode_first_audio_stream(AVFormatContext* format_ctx,
-                                                     bool preserve_channels) {
+/// @param retention Select whether source-order channels are retained alongside
+///        the mandatory mono fold.
+/// @return The validated mono output plus optional retained source channels.
+DecodedInputData decode_first_audio_stream(AVFormatContext* format_ctx, RetainChannels retention,
+                                           bool include_mono) {
   int ret = avformat_find_stream_info(format_ctx, nullptr);
   SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed,
                    "FFmpeg: avformat_find_stream_info failed: " + ff_err(ret));
@@ -305,6 +306,17 @@ InterleavedAudioLoadResult decode_first_audio_stream(AVFormatContext* format_ctx
 
   AVStream* stream = format_ctx->streams[stream_index];
   AVCodecParameters* codecpar = stream->codecpar;
+
+  // Metadata, not the first frame, is the advisory channel count; a missing layout is deferred.
+  int metadata_channels = 0;
+  std::exception_ptr metadata_error;
+  try {
+    SONARE_CHECK_MSG(codecpar->ch_layout.nb_channels > 0, ErrorCode::DecodeFailed,
+                     "FFmpeg: audio stream has no channel layout");
+    metadata_channels = codecpar->ch_layout.nb_channels;
+  } catch (...) {
+    metadata_error = std::current_exception();
+  }
 
   const AVCodec* codec = avcodec_find_decoder(codecpar->codec_id);
   SONARE_CHECK_MSG(codec != nullptr, ErrorCode::DecodeFailed,
@@ -328,15 +340,23 @@ InterleavedAudioLoadResult decode_first_audio_stream(AVFormatContext* format_ctx
   // frame parameters. The legacy mono path may rebuild it if a
   // concatenated/renegotiated stream changes format later; interleaved output
   // rejects channel-layout changes because changing output_channels after
-  // appending samples would make the result ambiguous.
+  // appending samples would make the result ambiguous.  The private combined
+  // path keeps this mono resampler authoritative and runs a second resampler
+  // over the same decoded frames only when the caller asks to retain channels;
+  // the public interleaved wrapper passes include_mono=false and remains a
+  // channel-only decode.
   int sample_rate = 0;
   const AVChannelLayout mono_layout = AV_CHANNEL_LAYOUT_MONO;
-  SwrContextPtr swr;
+  SwrContextPtr mono_swr;
+  SwrContextPtr retained_swr;
   ChannelLayoutGuard active_in_layout;
-  ChannelLayoutGuard active_out_layout;
+  ChannelLayoutGuard active_retained_layout;
   int active_input_rate = 0;
   AVSampleFormat active_input_format = AV_SAMPLE_FMT_NONE;
-  int output_channels = preserve_channels ? 0 : 1;
+  int retained_channels = 0;
+  bool retain_enabled = retention == RetainChannels::All ||
+                        (retention == RetainChannels::StereoIfExact && metadata_channels == 2);
+  std::exception_ptr retained_error;
 
   AVPacketPtr packet(av_packet_alloc());
   SONARE_CHECK_MSG(packet != nullptr, ErrorCode::OutOfMemory,
@@ -345,16 +365,18 @@ InterleavedAudioLoadResult decode_first_audio_stream(AVFormatContext* format_ctx
   SONARE_CHECK_MSG(frame != nullptr, ErrorCode::OutOfMemory,
                    "FFmpeg: av_frame_alloc returned null");
 
-  std::vector<float> samples;
+  std::vector<float> mono_samples;
+  std::vector<float> retained_samples;
 
-  auto append_swr_flush = [&]() {
-    if (!swr || sample_rate <= 0 || active_input_rate <= 0) return;
+  auto append_swr_flush = [&](SwrContext* context, int output_channels,
+                              std::vector<float>& output) {
+    if (context == nullptr || sample_rate <= 0 || active_input_rate <= 0) return;
     while (true) {
-      const int64_t delay = swr_get_delay(swr.get(), active_input_rate);
+      const int64_t delay = swr_get_delay(context, active_input_rate);
       const int max_out =
           static_cast<int>(av_rescale_rnd(delay, sample_rate, active_input_rate, AV_ROUND_UP));
       if (max_out <= 0) return;
-      const size_t prev_size = samples.size();
+      const size_t prev_size = output.size();
       size_t output_capacity = 0;
       SONARE_CHECK_MSG(prev_size <= resource::kMaxOfflineAudioSamples && output_channels > 0,
                        ErrorCode::DecodeFailed, "FFmpeg flush output exceeds the offline limit");
@@ -364,11 +386,11 @@ InterleavedAudioLoadResult decode_first_audio_stream(AVFormatContext* format_ctx
                            numeric::checked_add(prev_size, output_capacity, &output_capacity),
                        ErrorCode::DecodeFailed, "FFmpeg flush exceeds the offline decode limit");
       const size_t output_end = output_capacity;
-      samples.resize(output_end);
-      uint8_t* out_ptr = reinterpret_cast<uint8_t*>(samples.data() + prev_size);
-      const int converted = swr_convert(swr.get(), &out_ptr, max_out, nullptr, 0);
+      output.resize(output_end);
+      uint8_t* out_ptr = reinterpret_cast<uint8_t*>(output.data() + prev_size);
+      const int converted = swr_convert(context, &out_ptr, max_out, nullptr, 0);
       if (converted <= 0) {
-        samples.resize(prev_size);
+        output.resize(prev_size);
         return;
       }
       size_t converted_samples = 0;
@@ -377,7 +399,7 @@ InterleavedAudioLoadResult decode_first_audio_stream(AVFormatContext* format_ctx
                            resource::kMaxOfflineAudioSamples, &converted_samples) &&
                            converted_samples <= output_end - prev_size,
                        ErrorCode::DecodeFailed, "FFmpeg flush produced too many samples");
-      samples.resize(prev_size + converted_samples);
+      output.resize(prev_size + converted_samples);
     }
   };
 
@@ -408,63 +430,89 @@ InterleavedAudioLoadResult decode_first_audio_stream(AVFormatContext* format_ctx
     }
 
     if (sample_rate == 0) sample_rate = input_rate;
-    if (preserve_channels && swr) {
-      SONARE_CHECK_MSG(resolved_layout.nb_channels > 0, ErrorCode::DecodeFailed,
-                       "FFmpeg: decoded frame has no valid channel count");
-      const bool output_layout_changed =
-          resolved_layout.nb_channels != output_channels ||
-          av_channel_layout_compare(&resolved_layout, &active_out_layout.layout) != 0;
-      SONARE_CHECK_MSG(!output_layout_changed, ErrorCode::DecodeFailed,
-                       "FFmpeg: interleaved decode does not support a channel layout change "
-                       "midstream");
+    const int frame_channels = resolved_layout.nb_channels;
+    SONARE_CHECK_MSG(frame_channels > 0, ErrorCode::DecodeFailed,
+                     "FFmpeg: decoded frame has no valid channel count");
+    const bool input_unchanged =
+        active_input_rate > 0 && input_rate == active_input_rate &&
+        input_format == active_input_format && active_in_layout.layout.nb_channels > 0 &&
+        av_channel_layout_compare(&resolved_layout, &active_in_layout.layout) == 0;
+    if (!input_unchanged && include_mono) {
+      append_swr_flush(mono_swr.get(), 1, mono_samples);
+      mono_swr.reset();
     }
-    const bool unchanged =
-        swr && input_rate == active_input_rate && input_format == active_input_format &&
-        av_channel_layout_compare(&resolved_layout, &active_in_layout.layout) == 0 &&
-        (!preserve_channels ||
-         av_channel_layout_compare(&resolved_layout, &active_out_layout.layout) == 0);
-    if (unchanged) {
-      av_channel_layout_uninit(&resolved_layout);
-      return;
-    }
-
-    append_swr_flush();
-    swr.reset();
-    av_channel_layout_uninit(&active_in_layout.layout);
-    ret = av_channel_layout_copy(&active_in_layout.layout, &resolved_layout);
-    SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed,
-                     "FFmpeg: failed to retain decoded frame channel layout: " + ff_err(ret));
-
-    const AVChannelLayout* output_layout = &mono_layout;
-    if (preserve_channels) {
-      SONARE_CHECK_MSG(resolved_layout.nb_channels > 0, ErrorCode::DecodeFailed,
-                       "FFmpeg: decoded frame has no valid channel count");
-      av_channel_layout_uninit(&active_out_layout.layout);
-      ret = av_channel_layout_copy(&active_out_layout.layout, &resolved_layout);
+    if (!input_unchanged) {
+      av_channel_layout_uninit(&active_in_layout.layout);
+      ret = av_channel_layout_copy(&active_in_layout.layout, &resolved_layout);
       SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed,
-                       "FFmpeg: failed to retain output channel layout: " + ff_err(ret));
-      output_layout = &active_out_layout.layout;
-      output_channels = resolved_layout.nb_channels;
+                       "FFmpeg: failed to retain decoded frame channel layout: " + ff_err(ret));
+
+      if (include_mono) {
+        SwrContext* mono_raw = nullptr;
+        ret = swr_alloc_set_opts2(&mono_raw, &mono_layout, AV_SAMPLE_FMT_FLT, sample_rate,
+                                  &active_in_layout.layout, input_format, input_rate, 0, nullptr);
+        mono_swr.reset(mono_raw);
+        SONARE_CHECK_MSG(ret >= 0 && mono_swr != nullptr, ErrorCode::DecodeFailed,
+                         "FFmpeg: swr_alloc_set_opts2 failed: " + ff_err(ret));
+        // Rebuilt with the context, so a midstream layout change re-derives the
+        // matrix for the new source layout rather than carrying the old one over.
+        ret = set_mono_downmix_matrix(mono_swr.get(), active_in_layout.layout);
+        SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed,
+                         "FFmpeg: swr_set_matrix failed: " + ff_err(ret));
+        ret = swr_init(mono_swr.get());
+        SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed,
+                         "FFmpeg: swr_init failed: " + ff_err(ret));
+      }
+    }
+
+    if (retention != RetainChannels::None && retain_enabled && !retained_error) {
+      try {
+        const bool retained_layout_unchanged =
+            retained_swr != nullptr &&
+            av_channel_layout_compare(&resolved_layout, &active_retained_layout.layout) == 0;
+        if (retained_swr != nullptr && !retained_layout_unchanged) {
+          throw SonareException(
+              ErrorCode::DecodeFailed,
+              "FFmpeg: interleaved decode does not support a channel layout change midstream");
+        }
+        // A rate/format renegotiation (e.g. AAC SBR) flushes and rebuilds; only a layout change is
+        // refused.
+        if (retained_swr != nullptr && !input_unchanged) {
+          append_swr_flush(retained_swr.get(), retained_channels, retained_samples);
+          retained_swr.reset();
+        }
+        if (retained_swr == nullptr) {
+          if (!retained_layout_unchanged) {
+            av_channel_layout_uninit(&active_retained_layout.layout);
+            ret = av_channel_layout_copy(&active_retained_layout.layout, &resolved_layout);
+            SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed,
+                             "FFmpeg: failed to retain output channel layout: " + ff_err(ret));
+          }
+          retained_channels = frame_channels;
+          SwrContext* retained_raw = nullptr;
+          ret = swr_alloc_set_opts2(&retained_raw, &active_retained_layout.layout,
+                                    AV_SAMPLE_FMT_FLT, sample_rate, &active_in_layout.layout,
+                                    input_format, input_rate, 0, nullptr);
+          retained_swr.reset(retained_raw);
+          SONARE_CHECK_MSG(ret >= 0 && retained_swr != nullptr, ErrorCode::DecodeFailed,
+                           "FFmpeg: swr_alloc_set_opts2 failed: " + ff_err(ret));
+          ret = swr_init(retained_swr.get());
+          SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed,
+                           "FFmpeg: swr_init failed: " + ff_err(ret));
+        }
+      } catch (...) {
+        if (!include_mono) throw;
+        retained_error = std::current_exception();
+        retained_swr.reset();
+        retained_samples.clear();
+        retain_enabled = false;
+      }
     }
     av_channel_layout_uninit(&resolved_layout);
-
-    SwrContext* swr_raw = nullptr;
-    ret = swr_alloc_set_opts2(&swr_raw, output_layout, AV_SAMPLE_FMT_FLT, sample_rate,
-                              &active_in_layout.layout, input_format, input_rate, 0, nullptr);
-    swr.reset(swr_raw);
-    SONARE_CHECK_MSG(ret >= 0 && swr != nullptr, ErrorCode::DecodeFailed,
-                     "FFmpeg: swr_alloc_set_opts2 failed: " + ff_err(ret));
-    if (!preserve_channels) {
-      // Rebuilt with the context, so a midstream layout change re-derives the
-      // matrix for the new source layout rather than carrying the old one over.
-      ret = set_mono_downmix_matrix(swr.get(), active_in_layout.layout);
-      SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed,
-                       "FFmpeg: swr_set_matrix failed: " + ff_err(ret));
+    if (!input_unchanged) {
+      active_input_rate = input_rate;
+      active_input_format = input_format;
     }
-    ret = swr_init(swr.get());
-    SONARE_CHECK_MSG(ret >= 0, ErrorCode::DecodeFailed, "FFmpeg: swr_init failed: " + ff_err(ret));
-    active_input_rate = input_rate;
-    active_input_format = input_format;
   };
 
   auto drain_decoder = [&]() {
@@ -479,49 +527,63 @@ InterleavedAudioLoadResult decode_first_audio_stream(AVFormatContext* format_ctx
       }
 
       configure_swr_for_frame();
-      // Estimate the worst-case number of output samples for this input frame.
-      int64_t delay = swr_get_delay(swr.get(), active_input_rate);
-      int max_out = static_cast<int>(
-          av_rescale_rnd(delay + frame->nb_samples, sample_rate, active_input_rate, AV_ROUND_UP));
-      if (max_out <= 0) {
-        max_out = frame->nb_samples;
-      }
+      const auto append_frame = [&](SwrContext* context, int output_channels,
+                                    std::vector<float>& output, bool optional) {
+        try {
+          // Estimate the worst-case number of output samples for this input frame.
+          const int64_t delay = swr_get_delay(context, active_input_rate);
+          int max_out = static_cast<int>(av_rescale_rnd(delay + frame->nb_samples, sample_rate,
+                                                        active_input_rate, AV_ROUND_UP));
+          if (max_out <= 0) max_out = frame->nb_samples;
 
-      size_t prev_size = samples.size();
-      size_t output_capacity = 0;
-      SONARE_CHECK_MSG(prev_size <= resource::kMaxOfflineAudioSamples && output_channels > 0,
-                       ErrorCode::DecodeFailed, "FFmpeg output exceeds the offline decode limit");
-      SONARE_CHECK_MSG(numeric::checked_size_product(
-                           static_cast<size_t>(max_out), static_cast<size_t>(output_channels),
-                           resource::kMaxOfflineAudioSamples - prev_size, &output_capacity) &&
-                           numeric::checked_add(prev_size, output_capacity, &output_capacity),
-                       ErrorCode::DecodeFailed,
-                       "FFmpeg decoded frame exceeds the offline decode limit");
-      const size_t output_end = output_capacity;
-      samples.resize(output_end);
-      uint8_t* out_ptr = reinterpret_cast<uint8_t*>(samples.data() + prev_size);
-
-      int converted =
-          swr_convert(swr.get(), &out_ptr, max_out,
-                      const_cast<const uint8_t**>(frame->extended_data), frame->nb_samples);
-      if (converted < 0) {
-        samples.resize(prev_size);
-        SONARE_CHECK_MSG(false, ErrorCode::DecodeFailed,
-                         "FFmpeg: swr_convert failed: " + ff_err(converted));
+          const size_t prev_size = output.size();
+          size_t output_capacity = 0;
+          SONARE_CHECK_MSG(prev_size <= resource::kMaxOfflineAudioSamples && output_channels > 0,
+                           ErrorCode::DecodeFailed,
+                           "FFmpeg output exceeds the offline decode limit");
+          SONARE_CHECK_MSG(numeric::checked_size_product(
+                               static_cast<size_t>(max_out), static_cast<size_t>(output_channels),
+                               resource::kMaxOfflineAudioSamples - prev_size, &output_capacity) &&
+                               numeric::checked_add(prev_size, output_capacity, &output_capacity),
+                           ErrorCode::DecodeFailed,
+                           "FFmpeg decoded frame exceeds the offline decode limit");
+          const size_t output_end = output_capacity;
+          output.resize(output_end);
+          uint8_t* out_ptr = reinterpret_cast<uint8_t*>(output.data() + prev_size);
+          const int converted =
+              swr_convert(context, &out_ptr, max_out,
+                          const_cast<const uint8_t**>(frame->extended_data), frame->nb_samples);
+          if (converted < 0) {
+            output.resize(prev_size);
+            SONARE_CHECK_MSG(false, ErrorCode::DecodeFailed,
+                             "FFmpeg: swr_convert failed: " + ff_err(converted));
+          }
+          size_t converted_samples = 0;
+          SONARE_CHECK_MSG(numeric::checked_size_product(
+                               static_cast<size_t>(converted), static_cast<size_t>(output_channels),
+                               resource::kMaxOfflineAudioSamples, &converted_samples) &&
+                               converted_samples <= output_end - prev_size,
+                           ErrorCode::DecodeFailed,
+                           "FFmpeg produced too many samples for the output buffer");
+          output.resize(prev_size + converted_samples);
+          // A short, highly-compressed stream can decode to an unbounded sample pool.
+          // Cap total accumulation at the offline decode limit so a crafted file
+          // cannot drive an out-of-memory condition.
+          SONARE_CHECK_MSG(output.size() <= resource::kMaxOfflineAudioSamples,
+                           ErrorCode::DecodeFailed,
+                           "FFmpeg decoded more samples than the offline decode limit");
+        } catch (...) {
+          if (!optional) throw;
+          retained_error = std::current_exception();
+          retained_swr.reset();
+          retained_samples.clear();
+          retain_enabled = false;
+        }
+      };
+      if (include_mono) append_frame(mono_swr.get(), 1, mono_samples, false);
+      if (retained_swr != nullptr && retain_enabled && !retained_error) {
+        append_frame(retained_swr.get(), retained_channels, retained_samples, include_mono);
       }
-      size_t converted_samples = 0;
-      SONARE_CHECK_MSG(numeric::checked_size_product(
-                           static_cast<size_t>(converted), static_cast<size_t>(output_channels),
-                           resource::kMaxOfflineAudioSamples, &converted_samples) &&
-                           converted_samples <= output_end - prev_size,
-                       ErrorCode::DecodeFailed,
-                       "FFmpeg produced too many samples for the output buffer");
-      samples.resize(prev_size + converted_samples);
-      // A short, highly-compressed stream can decode to an unbounded sample pool.
-      // Cap total accumulation at the offline decode limit so a crafted file
-      // cannot drive an out-of-memory condition.
-      SONARE_CHECK_MSG(samples.size() <= resource::kMaxOfflineAudioSamples, ErrorCode::DecodeFailed,
-                       "FFmpeg decoded more samples than the offline decode limit");
       av_frame_unref(frame.get());
     }
   };
@@ -554,19 +616,43 @@ InterleavedAudioLoadResult decode_first_audio_stream(AVFormatContext* format_ctx
                    "FFmpeg: flushing decoder failed: " + ff_err(ret));
   drain_decoder();
 
-  append_swr_flush();
+  if (include_mono) append_swr_flush(mono_swr.get(), 1, mono_samples);
+  if (retained_swr != nullptr && retain_enabled && !retained_error) {
+    try {
+      append_swr_flush(retained_swr.get(), retained_channels, retained_samples);
+    } catch (...) {
+      if (!include_mono) throw;
+      retained_error = std::current_exception();
+      retained_samples.clear();
+      retained_swr.reset();
+      retain_enabled = false;
+    }
+  }
 
-  SONARE_CHECK_MSG(!samples.empty(), ErrorCode::DecodeFailed, "FFmpeg: decoded zero audio samples");
+  if (include_mono) {
+    SONARE_CHECK_MSG(!mono_samples.empty(), ErrorCode::DecodeFailed,
+                     "FFmpeg: decoded zero audio samples");
+  }
 
-  return {std::move(samples), sample_rate, output_channels};
+  DecodedInputData result;
+  result.mono = std::move(mono_samples);
+  result.sample_rate = sample_rate;
+  result.source_channels = metadata_channels;
+  result.retained_channels = retained_channels;
+  if (retained_swr != nullptr && retain_enabled && !retained_error) {
+    result.interleaved = std::move(retained_samples);
+  }
+  result.metadata_error = metadata_error;
+  result.retained_error = retained_error;
+  return result;
 }
 
 }  // namespace
 
 namespace {
 
-InterleavedAudioLoadResult load_buffer_ffmpeg_impl(const uint8_t* data, size_t size,
-                                                   bool preserve_channels) {
+DecodedInputData load_buffer_ffmpeg_impl(const uint8_t* data, size_t size, RetainChannels retention,
+                                         bool include_mono) {
   SONARE_CHECK_MSG(data != nullptr && size > 0, ErrorCode::InvalidParameter,
                    "FFmpeg: empty input buffer");
 
@@ -607,19 +693,29 @@ InterleavedAudioLoadResult load_buffer_ffmpeg_impl(const uint8_t* data, size_t s
   }
   // After success fmt_raw is unchanged but is now owned by format_ctx.
 
-  return decode_first_audio_stream(format_ctx.get(), preserve_channels);
+  return decode_first_audio_stream(format_ctx.get(), retention, include_mono);
 }
 
 }  // namespace
 
 AudioLoadResult load_buffer_ffmpeg(const uint8_t* data, size_t size) {
-  auto [samples, sample_rate, channels] = load_buffer_ffmpeg_impl(data, size, false);
-  (void)channels;
-  return {std::move(samples), sample_rate};
+  auto result = load_buffer_ffmpeg_impl(data, size, RetainChannels::None, true);
+  return {std::move(result.mono), result.sample_rate};
 }
 
 InterleavedAudioLoadResult load_buffer_ffmpeg_interleaved(const uint8_t* data, size_t size) {
-  return load_buffer_ffmpeg_impl(data, size, true);
+  auto result = load_buffer_ffmpeg_impl(data, size, RetainChannels::All, false);
+  if (result.retained_error != nullptr) std::rethrow_exception(result.retained_error);
+  SONARE_CHECK_MSG(!result.interleaved.empty(), ErrorCode::DecodeFailed,
+                   "FFmpeg: retained channel decode is unavailable");
+  const int channels =
+      result.retained_channels > 0 ? result.retained_channels : result.source_channels;
+  return {std::move(result.interleaved), result.sample_rate, channels};
+}
+
+DecodedInputData load_buffer_ffmpeg_input(const uint8_t* data, size_t size,
+                                          RetainChannels retention) {
+  return load_buffer_ffmpeg_impl(data, size, retention, true);
 }
 
 int probe_channels_ffmpeg(const uint8_t* data, size_t size) {

@@ -18,7 +18,7 @@ inline constexpr uint32_t kVocalStateSchemaVersion = 1;
 struct VocalPersistedState {
   VocalSessionId session_id{};
   uint64_t next_note_id = 1;
-  VocalRevision committed_revision = 0;
+  VocalRevision committed_revision = kInitialVocalRevision;
   SourceDescriptor source{};
   int64_t output_length_samples = 0;
   VocalAnalysisData analysis{};

@@ -103,6 +103,7 @@ struct RirPlan {
   float sr = 0.0f;
   int direct_sample = 0;
   int cap = 0;
+  std::size_t resource_cap = 0;
   bool length_floored = false;
   std::vector<ImageSource> images;
   Audio early_audio;
@@ -117,8 +118,6 @@ struct RirPlan {
   int level_half = 0;
   int early_lo = 0;
 };
-
-constexpr int kWorkingSetCap = static_cast<int>(resource::kMaxAcousticRirSamples);
 
 // Geometry, configuration and sample-rate validation shared by the mono and pair entries.
 std::vector<Diagnostic> validate_rir_request(const ShoeboxRoom& room,
@@ -141,10 +140,13 @@ int diagnostic_sample_rate(int sample_rate) noexcept {
 }
 
 RirPlan plan_rir(const ShoeboxRoom& room, const SourceListener& placement, int sample_rate,
-                 const RirSynthConfig& config, std::vector<Diagnostic>& diagnostics) {
+                 const RirSynthConfig& config, std::size_t resource_cap,
+                 std::vector<Diagnostic>& diagnostics) {
   RirPlan plan;
   const float sr = static_cast<float>(sample_rate);
   plan.sr = sr;
+  plan.resource_cap = resource_cap;
+  const int resource_cap_int = static_cast<int>(resource_cap);
 
   // Bound the image-source order: cost grows ~ order^3, so an unbounded value is
   // a memory/CPU exhaustion vector. shoebox_image_sources clamps internally; we
@@ -167,21 +169,20 @@ RirPlan plan_rir(const ShoeboxRoom& room, const SourceListener& placement, int s
   const int early_half = (early_cfg.fdl < 1 ? 1 : early_cfg.fdl | 1) / 2;
 
   // A max_seconds cap bounds every synthesized buffer. The shared acoustic
-  // working-set cap also applies when max_seconds is omitted, so the early,
-  // late, colouring, and final RIR buffers remain bounded together.
+  // full-length float-storage cap also applies when max_seconds is omitted.
   const int requested_cap = config.max_seconds > 0.0f
                                 ? std::max(1, static_cast<int>(std::ceil(config.max_seconds * sr)))
-                                : kWorkingSetCap;
+                                : resource_cap_int;
   // A cap below the direct sound's arrival truncates every buffer before the
   // first tap is rendered, so the RIR comes back all zeros -- digital silence on
   // a convolution insert, with no error anywhere. max_seconds is an upper bound
   // on the *tail*, not a licence to drop the direct sound, so floor it at the
   // arrival plus the kernel half-width (the whole direct tap, sized exactly as
   // synthesize_early_ir would) and tell the caller its request was widened. The
-  // working-set cap still wins: it is a memory bound, not a length preference.
-  const int direct_floor = std::min(plan.direct_sample + early_half + 2, kWorkingSetCap);
+  // full-length float-storage cap still wins: it is a memory bound, not a length preference.
+  const int direct_floor = std::min(plan.direct_sample + early_half + 2, resource_cap_int);
   plan.length_floored = requested_cap < direct_floor;
-  plan.cap = std::min(std::max(requested_cap, direct_floor), kWorkingSetCap);
+  plan.cap = std::min(std::max(requested_cap, direct_floor), resource_cap_int);
 
   // Early reflections (image-source) and the per-band reverberation time.
   plan.images = shoebox_image_sources(room, placement, ism_order);
@@ -327,13 +328,14 @@ Audio assemble_rir(const RirPlan& plan, const Audio& late_audio, float scale,
 
   int length = std::max(early_n, late_n);
   const bool resource_clamped =
-      plan.late_resolution.resource_clamped || plan.early_natural_len > kWorkingSetCap;
+      plan.late_resolution.resource_clamped ||
+      static_cast<std::size_t>(plan.early_natural_len) > plan.resource_cap;
   // Measured against the effective cap, not the raw request: when the request
   // was floored to fit the direct sound the RIR is longer than max_seconds, and
   // reporting that as "exceeded max_seconds and was clamped" would contradict
   // the rir_length_floored warning standing next to it.
   const bool max_seconds_clamped =
-      config.max_seconds > 0.0f && cap < kWorkingSetCap &&
+      config.max_seconds > 0.0f && static_cast<std::size_t>(cap) < plan.resource_cap &&
       (static_cast<std::size_t>(plan.early_natural_len) > static_cast<std::size_t>(cap) ||
        plan.natural_tail_samples > static_cast<std::size_t>(cap));
   if (plan.natural_len > static_cast<std::size_t>(cap) || resource_clamped || max_seconds_clamped) {
@@ -472,7 +474,8 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
     return result;
   }
 
-  const RirPlan plan = plan_rir(room, placement, sample_rate, config, result.diagnostics);
+  const RirPlan plan = plan_rir(room, placement, sample_rate, config,
+                                resource::kMaxAcousticRirSamples, result.diagnostics);
   const Audio late_audio =
       synthesize_late_tail(plan.rt, sample_rate, late_config_for(plan, config));
   const float scale = level_match_scale(plan, late_audio);
@@ -537,27 +540,32 @@ RirPairResult synthesize_rir_pair(const ShoeboxRoom& room, const SourceListener&
   std::vector<Diagnostic> right_diagnostics =
       validate_rir_request(room, right_placement, sample_rate, config);
 
-  std::vector<Diagnostic> unused;
-  const RirPlan centre = plan_rir(room, placement, sample_rate, config, unused);
-  const RirPlan left = plan_rir(room, left_placement, sample_rate, config, left_diagnostics);
-  const RirPlan right = plan_rir(room, right_placement, sample_rate, config, right_diagnostics);
-  SONARE_CHECK_MSG(left.cap == right.cap, ErrorCode::InvalidState,
-                   "receiver pair resolved different RIR length caps");
+  Audio left_rir;
+  Audio right_rir;
+  {
+    std::vector<Diagnostic> unused;
+    const RirPlan centre = plan_rir(room, placement, sample_rate, config,
+                                    resource::kMaxAcousticRirPairSamples, unused);
+    const RirPlan left = plan_rir(room, left_placement, sample_rate, config,
+                                  resource::kMaxAcousticRirPairSamples, left_diagnostics);
+    const RirPlan right = plan_rir(room, right_placement, sample_rate, config,
+                                   resource::kMaxAcousticRirPairSamples, right_diagnostics);
+    SONARE_CHECK_MSG(left.cap == right.cap, ErrorCode::InvalidState,
+                     "receiver pair resolved different RIR length caps");
 
-  const LateTailPair late =
-      synthesize_late_tail_pair(left.rt, sample_rate, late_config_for(left, config), spacing_m);
-  // One scale for both channels, taken at the centre listener against the mono-stream tail.
-  const float scale = level_match_scale(centre, late.left);
-  const Audio left_rir =
-      assemble_rir(left, late.left, scale, config, sample_rate, left_diagnostics);
-  const Audio right_rir =
-      assemble_rir(right, late.right, scale, config, sample_rate, right_diagnostics);
+    const LateTailPair late =
+        synthesize_late_tail_pair(left.rt, sample_rate, late_config_for(left, config), spacing_m);
+    // One scale for both channels, taken at the centre listener against the mono-stream tail.
+    const float scale = level_match_scale(centre, late.left);
+    left_rir = assemble_rir(left, late.left, scale, config, sample_rate, left_diagnostics);
+    right_rir = assemble_rir(right, late.right, scale, config, sample_rate, right_diagnostics);
+  }
 
   const std::size_t length = std::max(left_rir.size(), right_rir.size());
-  std::vector<float> left_out(left_rir.data(), left_rir.data() + left_rir.size());
-  std::vector<float> right_out(right_rir.data(), right_rir.data() + right_rir.size());
-  left_out.resize(length, 0.0f);
-  right_out.resize(length, 0.0f);
+  std::vector<float> left_out(length, 0.0f);
+  std::vector<float> right_out(length, 0.0f);
+  if (!left_rir.empty()) std::copy_n(left_rir.data(), left_rir.size(), left_out.data());
+  if (!right_rir.empty()) std::copy_n(right_rir.data(), right_rir.size(), right_out.data());
   result.left = Audio::from_vector(std::move(left_out), sample_rate);
   result.right = Audio::from_vector(std::move(right_out), sample_rate);
 

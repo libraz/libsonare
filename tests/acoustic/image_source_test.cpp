@@ -5,6 +5,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstddef>
+#include <cstring>
 #include <limits>
 #include <vector>
 
@@ -445,6 +446,126 @@ TEST_CASE("synthesize_early_ir skips non-finite image distances", "[acoustic][im
   bool all_finite = true;
   for (float s : ir) all_finite = all_finite && std::isfinite(s);
   REQUIRE(all_finite);
+}
+
+TEST_CASE("early IR ignores non-finite derived delays in sizing and rendering",
+          "[acoustic][image_source][early_ir_limits]") {
+  const int sample_rate = 1000;
+  EarlyIrConfig cfg;
+  cfg.sound_speed = 1.0f;
+  cfg.max_samples = 10032;
+
+  ImageSource ordinary;
+  ordinary.distance = 10.0f;
+  ordinary.reflection = {1.0f};
+  const Audio expected = synthesize_early_ir({ordinary}, sample_rate, cfg);
+
+  ImageSource infinite = ordinary;
+  infinite.distance = std::numeric_limits<float>::infinity();
+  ImageSource overflow = ordinary;
+  overflow.distance = std::numeric_limits<float>::max();
+  REQUIRE(std::isinf(overflow.distance / cfg.sound_speed * static_cast<float>(sample_rate)));
+
+  SECTION("positive infinity") {
+    const Audio got = synthesize_early_ir({ordinary, infinite}, sample_rate, cfg);
+    REQUIRE(got.size() == expected.size());
+    REQUIRE(std::memcmp(got.data(), expected.data(), got.size() * sizeof(float)) == 0);
+    for (float sample : got) REQUIRE(std::isfinite(sample));
+  }
+
+  SECTION("finite distance whose derived delay overflows") {
+    const Audio got = synthesize_early_ir({ordinary, overflow}, sample_rate, cfg);
+    REQUIRE(got.size() == expected.size());
+    REQUIRE(std::memcmp(got.data(), expected.data(), got.size() * sizeof(float)) == 0);
+    for (float sample : got) REQUIRE(std::isfinite(sample));
+  }
+}
+
+TEST_CASE("early IR rejects a finite delay before signed index overflow",
+          "[acoustic][image_source][early_ir_limits]") {
+  ImageSource image;
+  image.distance = std::nextafter(std::ldexp(1.0f, std::numeric_limits<int>::digits), 0.0f);
+  image.reflection = {1.0f};
+
+  EarlyIrConfig cfg;
+  cfg.sound_speed = 1.0f;
+  cfg.fdl = 511;
+  cfg.max_samples = 1;
+  const Audio ir = synthesize_early_ir({image}, 1, cfg);
+
+  REQUIRE(ir.size() == 1);
+  REQUIRE(std::isfinite(ir.data()[0]));
+  REQUIRE(ir.data()[0] == 0.0f);
+}
+
+TEST_CASE("early IR keeps a late kernel edge and skips its half-away tie",
+          "[acoustic][image_source][early_ir_limits]") {
+  auto render = [](float delay) {
+    ImageSource image;
+    image.distance = delay;
+    image.reflection = {1.0f};
+
+    EarlyIrConfig cfg;
+    cfg.sound_speed = 1.0f;
+    cfg.fdl = 11;
+    cfg.max_samples = 1;
+    return synthesize_early_ir({image}, 1, cfg);
+  };
+
+  const Audio below_tie = render(std::nextafter(5.5f, 0.0f));
+  REQUIRE(below_tie.size() == 1);
+  REQUIRE(std::isfinite(below_tie.data()[0]));
+  REQUIRE(std::fabs(below_tie.data()[0]) > 1e-8f);
+
+  const Audio at_tie = render(5.5f);
+  REQUIRE(at_tie.size() == 1);
+  REQUIRE(std::isfinite(at_tie.data()[0]));
+  REQUIRE(at_tie.data()[0] == 0.0f);
+}
+
+TEST_CASE("early IR bounds work for an extreme fractional-delay length",
+          "[acoustic][image_source][early_ir_limits]") {
+  ImageSource image;
+  image.distance = 0.25f;
+  image.reflection = {1.0f};
+
+  EarlyIrConfig cfg;
+  cfg.sound_speed = 1.0f;
+  cfg.fdl = std::numeric_limits<int>::max();
+  cfg.max_samples = 1;
+  const Audio ir = synthesize_early_ir({image}, 1, cfg);
+
+  REQUIRE(ir.size() == 1);
+  REQUIRE(std::isfinite(ir.data()[0]));
+  REQUIRE(std::fabs(ir.data()[0]) > 1e-8f);
+}
+
+TEST_CASE("early IR preserves default and even-to-odd FDL output parity",
+          "[acoustic][image_source][early_ir_limits]") {
+  std::vector<ImageSource> images;
+  ImageSource direct;
+  direct.distance = 0.75f;
+  direct.reflection = {1.0f};
+  images.push_back(direct);
+
+  ImageSource reflection;
+  reflection.distance = 2.25f;
+  reflection.reflection = {0.8f, 0.6f};
+  images.push_back(reflection);
+
+  const Audio default_fdl = synthesize_early_ir(images, 1000);
+  EarlyIrConfig explicit_odd;
+  explicit_odd.fdl = 21;
+  const Audio odd_fdl = synthesize_early_ir(images, 1000, explicit_odd);
+  EarlyIrConfig explicit_even;
+  explicit_even.fdl = 20;
+  const Audio even_fdl = synthesize_early_ir(images, 1000, explicit_even);
+
+  REQUIRE(default_fdl.size() == odd_fdl.size());
+  REQUIRE(default_fdl.size() == even_fdl.size());
+  REQUIRE(std::memcmp(default_fdl.data(), odd_fdl.data(), default_fdl.size() * sizeof(float)) == 0);
+  REQUIRE(std::memcmp(default_fdl.data(), even_fdl.data(), default_fdl.size() * sizeof(float)) ==
+          0);
 }
 
 TEST_CASE("shoebox image order is clamped to the safe maximum", "[acoustic][image_source]") {

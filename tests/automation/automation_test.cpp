@@ -299,6 +299,86 @@ TEST_CASE("AutomationEngine collects breakpoint boundaries", "[automation]") {
   REQUIRE_FALSE(boundaries.overflowed);
 }
 
+TEST_CASE("Automation boundaries do not spend capacity on duplicate PPQ values",
+          "[automation][regression]") {
+  sonare::automation::AutomationBoundaryList boundaries;
+  constexpr double kShared = 1.25;
+  constexpr double kLater = 2.5;
+
+  for (size_t i = 0; i < sonare::automation::AutomationBoundaryList::kCapacity; ++i) {
+    REQUIRE(boundaries.add(kShared));
+  }
+  REQUIRE(boundaries.add(kLater));
+  REQUIRE(boundaries.size == 2);
+  REQUIRE_FALSE(boundaries.overflowed);
+  boundaries.sort_unique();
+  REQUIRE(boundaries.size == 2);
+  REQUIRE(boundaries.ppq[0] == kShared);
+  REQUIRE(boundaries.ppq[1] == kLater);
+
+  // Reversing lane order preserves the same unique set; a 65th distinct value overflows.
+  sonare::automation::AutomationBoundaryList reversed;
+  REQUIRE(reversed.add(kLater));
+  for (size_t i = 0; i < sonare::automation::AutomationBoundaryList::kCapacity; ++i) {
+    REQUIRE(reversed.add(kShared));
+  }
+  REQUIRE(reversed.size == 2);
+  REQUIRE_FALSE(reversed.overflowed);
+  reversed.sort_unique();
+  REQUIRE(reversed.ppq[0] == kShared);
+  REQUIRE(reversed.ppq[1] == kLater);
+
+  sonare::automation::AutomationBoundaryList distinct;
+  for (size_t i = 0; i < sonare::automation::AutomationBoundaryList::kCapacity; ++i) {
+    REQUIRE(distinct.add(static_cast<double>(i)));
+  }
+  REQUIRE_FALSE(
+      distinct.add(static_cast<double>(sonare::automation::AutomationBoundaryList::kCapacity)));
+  REQUIRE(distinct.size == sonare::automation::AutomationBoundaryList::kCapacity);
+  REQUIRE(distinct.overflowed);
+}
+
+TEST_CASE("AutomationEngine preserves duplicate boundaries before reporting overflow",
+          "[automation][regression]") {
+  const auto make_lane = [](uint32_t target, double boundary) {
+    sonare::automation::AutomationLane lane(target);
+    lane.set_points({{0.0, 0.0f, sonare::automation::CurveType::Linear},
+                     {boundary, 1.0f, sonare::automation::CurveType::Linear}});
+    return lane;
+  };
+
+  std::vector<sonare::automation::AutomationLane> duplicate_lanes;
+  duplicate_lanes.reserve(65);
+  for (uint32_t target = 1; target <= 64; ++target) {
+    duplicate_lanes.push_back(make_lane(target, 1.25));
+  }
+  duplicate_lanes.push_back(make_lane(65, 2.5));
+
+  sonare::automation::AutomationEngine duplicate_engine;
+  duplicate_engine.set_lanes(std::move(duplicate_lanes));
+  duplicate_engine.acquire_lanes();
+  sonare::automation::AutomationBoundaryList duplicate_boundaries;
+  duplicate_engine.collect_boundaries(0.0, 3.0, &duplicate_boundaries);
+  REQUIRE(duplicate_boundaries.size == 2);
+  REQUIRE_FALSE(duplicate_boundaries.overflowed);
+  REQUIRE(duplicate_engine.boundary_overflow_count() == 0);
+
+  std::vector<sonare::automation::AutomationLane> distinct_lanes;
+  distinct_lanes.reserve(65);
+  for (uint32_t target = 1; target <= 65; ++target) {
+    distinct_lanes.push_back(make_lane(target, static_cast<double>(target)));
+  }
+
+  sonare::automation::AutomationEngine distinct_engine;
+  distinct_engine.set_lanes(std::move(distinct_lanes));
+  distinct_engine.acquire_lanes();
+  sonare::automation::AutomationBoundaryList distinct_boundaries;
+  distinct_engine.collect_boundaries(0.0, 66.0, &distinct_boundaries);
+  REQUIRE(distinct_boundaries.size == sonare::automation::AutomationBoundaryList::kCapacity);
+  REQUIRE(distinct_boundaries.overflowed);
+  REQUIRE(distinct_engine.boundary_overflow_count() == 1);
+}
+
 TEST_CASE("AutomationEngine resolves targets bound after an interior gap",
           "[automation][regression]") {
   // Regression: target_for() used to stop scanning at the first null/cleared

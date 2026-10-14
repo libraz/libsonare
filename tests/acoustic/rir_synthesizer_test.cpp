@@ -153,6 +153,48 @@ TEST_CASE("synthesize_rir reports a late-tail resource clamp", "[acoustic][rir][
   REQUIRE(res.rir.size() == resource::kMaxAcousticRirSamples);
 }
 
+TEST_CASE("receiver-pair RIR applies the full-pair resource cap",
+          "[acoustic][rir][resource_limit][.][slow]") {
+  const int sr = 384000;
+  ShoeboxRoom room;
+  room.dims = {2.0f, 2.0f, 2.0f};
+  for (Material& wall : room.walls) wall = uniform_material(0.000001f, 0.0f, 1);
+  const SourceListener pl{{0.5f, 0.5f, 0.5f}, {1.5f, 1.5f, 1.5f}};
+
+  RirSynthConfig config;
+  config.ism_order = 0;
+  const RirPairResult res = synthesize_rir_pair(room, pl, 0.5f, sr, config);
+  REQUIRE_FALSE(has_error(res.diagnostics));
+  REQUIRE(res.left.size() == resource::kMaxAcousticRirPairSamples);
+  REQUIRE(res.right.size() == resource::kMaxAcousticRirPairSamples);
+  REQUIRE(res.left.size() == res.right.size());
+  REQUIRE(has_code(res.diagnostics, "acoustic.rir_length_clamped"));
+  const auto clamp = std::find_if(res.diagnostics.begin(), res.diagnostics.end(),
+                                  [](const Diagnostic& diagnostic) {
+                                    return diagnostic.code == "acoustic.rir_length_clamped";
+                                  });
+  REQUIRE(clamp != res.diagnostics.end());
+  REQUIRE(clamp->message == "synthesized RIR length exceeded its resource limit and was clamped");
+}
+
+TEST_CASE("receiver-pair max_seconds keeps its diagnostic classification",
+          "[acoustic][rir][resource_limit]") {
+  const int sr = 48000;
+  const ShoeboxRoom room = uniform_room(8.0f, 6.0f, 3.5f, 0.15f);
+  const SourceListener pl{{2.0f, 3.0f, 1.2f}, {6.0f, 3.0f, 1.5f}};
+  RirSynthConfig config;
+  config.max_seconds = 0.25f;
+
+  const RirPairResult res = synthesize_rir_pair(room, pl, 0.5f, sr, config);
+  REQUIRE_FALSE(has_error(res.diagnostics));
+  const auto clamp = std::find_if(res.diagnostics.begin(), res.diagnostics.end(),
+                                  [](const Diagnostic& diagnostic) {
+                                    return diagnostic.code == "acoustic.rir_length_clamped";
+                                  });
+  REQUIRE(clamp != res.diagnostics.end());
+  REQUIRE(clamp->message == "synthesized RIR length exceeded max_seconds and was clamped");
+}
+
 TEST_CASE("rir_length_clamped is not raised by an above-Nyquist band's huge RT60",
           "[acoustic][rir]") {
   const int sr = 8000;  // nyquist = 4000 Hz
@@ -863,4 +905,31 @@ TEST_CASE("receiver-pair RIRs without a late tail are each receiver's mono RIR",
     REQUIRE(std::all_of(channel->begin() + static_cast<std::ptrdiff_t>(mono.size()), channel->end(),
                         [](float v) { return v == 0.0f; }));
   }
+}
+
+TEST_CASE("receiver-pair no-tail padding preserves an asymmetric shorter prefix",
+          "[acoustic][rir]") {
+  ShoeboxRoom room;
+  room.dims = {3.0f, 4.0f, 2.5f};
+  for (Material& wall : room.walls) wall = uniform_material(0.99f, 0.0f);
+  const SourceListener pl{{0.25f, 0.35f, 0.45f}, {2.7f, 3.4f, 2.1f}};
+  RirSynthConfig config;
+  config.ism_order = 3;
+  config.mixing_time_ms = 10000.0f;
+
+  const RirPairResult pair = synthesize_rir_pair(room, pl, 0.5f, 48000, config);
+  REQUIRE_FALSE(has_error(pair.diagnostics));
+  REQUIRE(has_code(pair.diagnostics, "acoustic.no_late_tail"));
+  const ReceiverPair receivers = receiver_pair(pl, 0.5f);
+  const std::vector<float> left_mono =
+      samples_of(synthesize_rir(room, {pl.source, receivers.left}, 48000, config).rir);
+  const std::vector<float> right_mono =
+      samples_of(synthesize_rir(room, {pl.source, receivers.right}, 48000, config).rir);
+  REQUIRE(left_mono.size() > right_mono.size());
+  REQUIRE(pair.left.size() == left_mono.size());
+  REQUIRE(pair.right.size() == left_mono.size());
+  REQUIRE(std::equal(left_mono.begin(), left_mono.end(), pair.left.begin()));
+  REQUIRE(std::equal(right_mono.begin(), right_mono.end(), pair.right.begin()));
+  REQUIRE(std::all_of(pair.right.begin() + static_cast<std::ptrdiff_t>(right_mono.size()),
+                      pair.right.end(), [](float value) { return value == 0.0f; }));
 }

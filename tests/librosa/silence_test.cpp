@@ -5,6 +5,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <limits>
+#include <string>
 #include <vector>
 
 #include "util/constants.h"
@@ -148,5 +150,66 @@ TEST_CASE("split separates an empty input from an all-silent one", "[silence][ed
       REQUIRE(error.code() == ErrorCode::InvalidParameter);
     }
     REQUIRE_THROWS_AS(split(nullptr, 0, 60.0f, 2048, 512), SonareException);
+  }
+}
+
+TEST_CASE("silence thresholds are finite and strictly positive", "[silence][validation]") {
+  const std::vector<float> signal{0.0f, 1.0f, 0.0f};
+  const float negative_zero = -0.0f;
+  const float negative_neighbor = std::nextafter(0.0f, -1.0f);
+  const float positive_neighbor = std::nextafter(0.0f, 1.0f);
+  const std::vector<float> invalid = {
+      std::numeric_limits<float>::quiet_NaN(),
+      std::numeric_limits<float>::infinity(),
+      -std::numeric_limits<float>::infinity(),
+      0.0f,
+      negative_zero,
+      negative_neighbor,
+  };
+
+  for (const float top_db : invalid) {
+    CAPTURE(top_db);
+    REQUIRE_THROWS_AS(trim(signal, top_db, 3, 1), SonareException);
+    REQUIRE_THROWS_AS(split(signal, top_db, 3, 1), SonareException);
+  }
+
+  // The positive subnormal and FLT_MAX are both valid domain values, even
+  // though the detector's threshold arithmetic may classify this tiny signal
+  // differently at the two extremes.
+  REQUIRE_NOTHROW(trim(signal, positive_neighbor, 3, 1));
+  REQUIRE_NOTHROW(split(signal, positive_neighbor, 3, 1));
+  REQUIRE_NOTHROW(trim(signal, std::numeric_limits<float>::max(), 3, 1));
+  REQUIRE_NOTHROW(split(signal, std::numeric_limits<float>::max(), 3, 1));
+}
+
+TEST_CASE("silence validation preserves input and framing precedence", "[silence][validation]") {
+  const float sample = 1.0f;
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+
+  SECTION("empty input wins over every other parameter") {
+    try {
+      static_cast<void>(trim(nullptr, 0, nan, 0, 0));
+      FAIL("Expected trim to reject an empty input first");
+    } catch (const SonareException& error) {
+      REQUIRE(std::string(error.what()).find("empty") != std::string::npos);
+    }
+  }
+
+  SECTION("null input wins over framing and threshold checks") {
+    try {
+      static_cast<void>(trim(nullptr, 1, nan, 0, 0));
+      FAIL("Expected trim to reject a null input first");
+    } catch (const SonareException& error) {
+      REQUIRE(std::string(error.what()).find("null input") != std::string::npos);
+    }
+  }
+
+  SECTION("framing wins over threshold checks") {
+    try {
+      static_cast<void>(trim(&sample, 1, nan, 0, 0));
+      FAIL("Expected trim to reject framing first");
+    } catch (const SonareException& error) {
+      REQUIRE(std::string(error.what()).find("frame_length") != std::string::npos);
+    }
   }
 }

@@ -15,7 +15,10 @@ namespace sonare {
 /// @param B Right-hand side matrix [A_rows x B_cols] row-major.
 /// @param B_cols Number of columns in B.
 /// @param max_iter Maximum iterations per column.
-/// @param tol Convergence tolerance on the dual variables (KKT residual).
+/// @param tol Convergence tolerance for the L2 norm of the iterate change.
+///        After the warm-up, iteration stops when that change is at most
+///        0.1 * tol * max(1, ||x||); the threshold is absolute below unit
+///        norm and scales with the current solution norm above it.
 /// @return X [A_cols x B_cols] row-major, with X >= 0.
 std::vector<float> nnls(const float* A, int A_rows, int A_cols, const float* B, int B_cols,
                         int max_iter = 100, float tol = 1e-4f);

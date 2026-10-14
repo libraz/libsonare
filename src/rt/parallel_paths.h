@@ -63,6 +63,16 @@ class ParallelPaths {
     }
   }
 
+  /// @brief Clears compensation history for one channel while preserving all other channels.
+  void reset_channel(size_t channel) noexcept {
+    if (channel >= channels_) return;
+    for (size_t path = 0; path < latencies_q8_.size(); ++path) {
+      Line& line = lines_[channel * latencies_q8_.size() + path];
+      std::fill(line.ring.begin(), line.ring.end(), 0.0f);
+      line.write = 0;
+    }
+  }
+
   /// @brief Whether every held compensation sample is finite.
   bool finite() const noexcept {
     for (const Line& line : lines_) {

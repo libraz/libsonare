@@ -778,6 +778,7 @@ TEST_CASE("hold_profile rejects the hold sets and arguments the contract names",
     rejected({{101, 5}}, "starting past the input end");
     rejected({{95, 10}}, "running past the input end");
     rejected({{10, 10}, {20, 10}, {15, 5}}, "sorted pair followed by an earlier one");
+    REQUIRE(code_of([&] { return hold_profile({{INT_MAX - 1, 10}}, INT_MAX, 1.0f); }) == kInvalid);
   }
 
   SECTION("input frame counts") {

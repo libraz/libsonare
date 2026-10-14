@@ -19,6 +19,7 @@
 #include "mir/warp.h"
 #include "mir/warp_detail.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace {
 
@@ -32,6 +33,17 @@ using sonare::mir::warp_to_map;
 using sonare::mir::WarpAnchor;
 using sonare::mir::WarpMap;
 using sonare::mir::WarpTsmConfig;
+
+template <typename Fn>
+bool throws_invalid_parameter(Fn&& fn) {
+  try {
+    fn();
+  } catch (const sonare::SonareException& error) {
+    return error.code() == sonare::ErrorCode::InvalidParameter;
+  } catch (...) {
+  }
+  return false;
+}
 
 // Deterministic order-independent stable hash over a float buffer (FNV-1a over
 // the raw bit patterns). Used to assert run-to-run repeatability.
@@ -540,6 +552,68 @@ TEST_CASE("chroma-DTW builds its chroma grid from the requested resolution", "[m
     ChromaDtwConfig cfg;
     cfg.bins_per_octave = 0;
     REQUIRE_THROWS(chroma_dtw_align(a, b, cfg));
+  }
+}
+
+TEST_CASE("chroma-DTW rejects invalid multiscale settings before feature extraction", "[mir]") {
+  const int sr = 22050;
+  const Audio reference = make_tone(sr, 261.63, 0.3);
+  const Audio target = make_tone(sr, 261.63, 0.35);
+  ChromaDtwConfig baseline;
+  REQUIRE_NOTHROW(chroma_dtw_align(reference, target, baseline));
+
+  SECTION("positive hop, coarse limit, scale, and band are required") {
+    ChromaDtwConfig cfg;
+    cfg.hop_length = 0;
+    REQUIRE(throws_invalid_parameter([&] { chroma_dtw_align(reference, target, cfg); }));
+
+    cfg = ChromaDtwConfig();
+    cfg.coarse_max_frames = 0;
+    // Force the full-DTW path so only the invalid coarse limit is under test.
+    cfg.max_full_frames = std::numeric_limits<int>::max();
+    REQUIRE(throws_invalid_parameter([&] { chroma_dtw_align(reference, target, cfg); }));
+    cfg.coarse_max_frames = -1;
+    REQUIRE(throws_invalid_parameter([&] { chroma_dtw_align(reference, target, cfg); }));
+
+    cfg = ChromaDtwConfig();
+    cfg.max_full_frames = -1;
+    cfg.coarse_max_frames = std::numeric_limits<int>::max();
+    REQUIRE(throws_invalid_parameter([&] { chroma_dtw_align(reference, target, cfg); }));
+
+    for (const int scale : {0, 1, -1}) {
+      cfg = ChromaDtwConfig();
+      cfg.scale_factor = scale;
+      cfg.max_full_frames = std::numeric_limits<int>::max();
+      CAPTURE(scale);
+      REQUIRE(throws_invalid_parameter([&] { chroma_dtw_align(reference, target, cfg); }));
+    }
+
+    cfg = ChromaDtwConfig();
+    cfg.band_radius = -1;
+    cfg.max_full_frames = std::numeric_limits<int>::max();
+    REQUIRE(throws_invalid_parameter([&] { chroma_dtw_align(reference, target, cfg); }));
+  }
+}
+
+TEST_CASE("chroma-DTW handles zero full-frame limit and extreme projection settings", "[mir]") {
+  const int sr = 22050;
+  const Audio reference = make_tone(sr, 261.63, 0.3);
+  const Audio target = make_tone(sr, 261.63, 0.35);
+  ChromaDtwConfig cfg;
+  cfg.coarse_max_frames = 2;
+  cfg.max_full_frames = 0;
+  cfg.scale_factor = std::numeric_limits<int>::max();
+  cfg.band_radius = std::numeric_limits<int>::max();
+
+  const ChromaDtwResult result = chroma_dtw_align(reference, target, cfg);
+  REQUIRE(result.path.size() >= 2);
+  REQUIRE(result.path.front().first == 0);
+  REQUIRE(result.path.front().second == 0);
+  REQUIRE(result.path.back().first == result.reference_frames - 1);
+  REQUIRE(result.path.back().second == result.target_frames - 1);
+  for (std::size_t i = 1; i < result.path.size(); ++i) {
+    REQUIRE(result.path[i - 1].first <= result.path[i].first);
+    REQUIRE(result.path[i - 1].second <= result.path[i].second);
   }
 }
 

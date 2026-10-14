@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <utility>
 
@@ -49,9 +50,10 @@ std::vector<std::pair<int, int>> banded_dtw_path(const std::vector<float>& ref, 
   // Per reference frame i, the target band is [lo[i], hi[i]] (inclusive).
   std::vector<int> lo(ref_frames), hi(ref_frames);
   for (int i = 0; i < ref_frames; ++i) {
-    const int center = projected_tgt[i];
-    lo[i] = std::max(0, center - band_radius);
-    hi[i] = std::min(tgt_frames - 1, center + band_radius);
+    const int64_t center = projected_tgt[i];
+    const int64_t radius = band_radius;
+    lo[i] = static_cast<int>(std::max<int64_t>(0, center - radius));
+    hi[i] = static_cast<int>(std::min<int64_t>(tgt_frames - 1, center + radius));
     if (hi[i] < lo[i]) hi[i] = lo[i];
   }
   // Anchor the start corner before the repair below, so the repair sees it.
@@ -271,12 +273,13 @@ double piecewise_map(const std::vector<WarpAnchor>& anchors, double x, double Wa
 // time. Used by the multiscale DTW coarsening.
 std::vector<float> downsample_time(const std::vector<float>& feat, int n_chroma, int n_frames,
                                    int factor, int* out_frames) {
-  const int out_n = (n_frames + factor - 1) / factor;
+  const int out_n = 1 + (n_frames - 1) / factor;
   std::vector<float> out(static_cast<size_t>(n_chroma) * out_n, 0.0f);
   for (int c = 0; c < n_chroma; ++c) {
     for (int of = 0; of < out_n; ++of) {
       const int start = of * factor;
-      const int end = std::min(start + factor, n_frames);
+      const int count = std::min(factor, n_frames - start);
+      const int end = start + count;
       float acc = 0.0f;
       for (int f = start; f < end; ++f) {
         acc += feat[static_cast<size_t>(c) * n_frames + f];
@@ -312,12 +315,12 @@ std::vector<int> project_path(const std::vector<std::pair<int, int>>& coarse_pat
   std::vector<int> coarse_tgt;
   int max_ref = 0;
   for (const auto& p : coarse_path) max_ref = std::max(max_ref, p.first);
-  coarse_tgt.assign(max_ref + 1, 0);
+  coarse_tgt.assign(static_cast<size_t>(max_ref) + 1, 0);
   for (const auto& p : coarse_path) coarse_tgt[p.first] = p.second;
   for (int i = 0; i < fine_ref_frames; ++i) {
     const int ci = std::min(i / scale, max_ref);
-    const int proj = coarse_tgt[ci] * scale;
-    projected[i] = std::clamp(proj, 0, fine_tgt_frames - 1);
+    const int64_t proj = static_cast<int64_t>(coarse_tgt[ci]) * scale;
+    projected[i] = static_cast<int>(std::clamp<int64_t>(proj, 0, fine_tgt_frames - 1));
   }
   return projected;
 }
@@ -330,7 +333,7 @@ std::vector<std::pair<int, int>> mrmsdtw_path(const std::vector<float>& ref, int
   if (ref_frames <= cfg.max_full_frames && tgt_frames <= cfg.max_full_frames) {
     return full_dtw_path(ref, n_chroma, ref_frames, tgt, tgt_frames);
   }
-  const int scale = std::max(2, cfg.scale_factor);
+  const int scale = cfg.scale_factor;
   // Build the coarsening pyramid (level 0 = original).
   struct Level {
     std::vector<float> ref, tgt;
@@ -530,6 +533,10 @@ double WarpMap::source_to_warp(double source_sample) const {
 ChromaDtwResult chroma_dtw_align(const Audio& reference, const Audio& target,
                                  const ChromaDtwConfig& config) {
   SONARE_CHECK(!reference.empty() && !target.empty(), ErrorCode::InvalidParameter);
+  SONARE_CHECK(config.hop_length > 0 && config.coarse_max_frames > 0 &&
+                   config.max_full_frames >= 0 && config.scale_factor >= 2 &&
+                   config.band_radius >= 0,
+               ErrorCode::InvalidParameter);
   SONARE_CHECK(config.bins_per_octave > 0 &&
                    config.bins_per_octave <= std::numeric_limits<int>::max() / kChromaOctaves,
                ErrorCode::InvalidParameter);

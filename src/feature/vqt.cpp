@@ -1,7 +1,6 @@
 #include "feature/vqt.h"
 
 #include <algorithm>
-#include <climits>
 #include <cmath>
 #include <memory>
 
@@ -10,6 +9,7 @@
 #include "core/window.h"
 #include "feature/sparse_kernel.h"
 #include "feature/spectral_projection.h"
+#include "filters/wavelet.h"
 #include "util/exception.h"
 #include "util/lru_cache.h"
 #include "util/math_utils.h"
@@ -21,13 +21,6 @@ using sonare::constants::kTwoPi;
 
 namespace {
 
-/// @brief Snaps a float key field to a fixed grid so bitwise-different but
-/// logically-equal UI inputs (e.g. 32.70 vs 32.7000007) collapse to the same
-/// value before the key is hashed/compared. Quantizing at key construction is
-/// what lets us keep strict `==` in the key (so the equal/hash contract holds)
-/// while still getting cache hits for near-equal inputs.
-float quantize(float value, float grid) { return std::round(value / grid) * grid; }
-
 /// @brief Cache key for VQT kernel
 struct VqtKernelCacheKey {
   int sample_rate;
@@ -36,37 +29,22 @@ struct VqtKernelCacheKey {
   int n_bins;
   int bins_per_octave;
   float gamma;
+  float filter_scale;
   WindowType window;
 
-  // Exact equality so the equal/hash contract holds: the hash mixes the raw
-  // float bits of fmin/gamma, so a fuzzy operator== would let two
-  // logically-"equal" keys hash to different buckets and silently miss the
-  // cache — triggering a redundant (expensive) wavelet + per-bin FFT rebuild —
-  // and, on a bucket collision, could even return the wrong cached kernel. The
-  // float fields are quantized at construction (see make_key), so exact
-  // comparison still produces cache hits for near-equal inputs.
+  // Exact equality: a near-equal configuration must never reuse another kernel.
   bool operator==(const VqtKernelCacheKey& other) const {
     return sample_rate == other.sample_rate && hop_length == other.hop_length &&
            fmin == other.fmin && n_bins == other.n_bins &&
            bins_per_octave == other.bins_per_octave && gamma == other.gamma &&
-           window == other.window;
+           filter_scale == other.filter_scale && window == other.window;
   }
 };
 
-/// @brief Builds a VQT cache key with float fields snapped to fixed grids.
-/// @details fmin is in Hz; gamma is in Hz (the VQT bandwidth offset). Both use
-/// a 0.001 grid: fine enough to resolve real config changes, coarse enough to
-/// absorb UI float noise.
 VqtKernelCacheKey make_key(int sr, const VqtConfig& config) {
-  constexpr float kFminGrid = 0.001f;   // Hz
-  constexpr float kGammaGrid = 0.001f;  // Hz
-  return VqtKernelCacheKey{sr,
-                           config.hop_length,
-                           quantize(config.fmin, kFminGrid),
-                           config.n_bins,
-                           config.bins_per_octave,
-                           quantize(config.gamma, kGammaGrid),
-                           config.window};
+  return VqtKernelCacheKey{
+      sr,           config.hop_length,   config.fmin,  config.n_bins, config.bins_per_octave,
+      config.gamma, config.filter_scale, config.window};
 }
 
 struct VqtKernelCacheKeyHash {
@@ -74,7 +52,8 @@ struct VqtKernelCacheKeyHash {
     return std::hash<int>()(k.sample_rate) ^ (std::hash<int>()(k.hop_length) << 1) ^
            (std::hash<float>()(k.fmin) << 2) ^ (std::hash<int>()(k.n_bins) << 3) ^
            (std::hash<int>()(k.bins_per_octave) << 4) ^ (std::hash<float>()(k.gamma) << 5) ^
-           (std::hash<int>()(static_cast<int>(k.window)) << 6);
+           (std::hash<float>()(k.filter_scale) << 6) ^
+           (std::hash<int>()(static_cast<int>(k.window)) << 7);
   }
 };
 
@@ -91,11 +70,11 @@ constexpr int kMaxVqtFftLength = 131072;
 CachedVqtKernel get_cached_vqt_kernel(int sr, const VqtConfig& config) {
   VqtKernelCacheKey key = make_key(sr, config);
 
-  // Returned by value so the shared-pointer snapshot survives eviction; the
-  // build runs under the lock (see LruCache::get_or_build_value).
+  // Returned by value so the shared-pointer snapshot survives eviction. The
+  // expensive wavelet and per-bin FFT build runs outside the cache lock.
   static LruCache<VqtKernelCacheKey, CachedVqtKernel, VqtKernelCacheKeyHash> cache(
       kMaxVqtCacheSize);
-  return cache.get_or_build_value(key, [&]() -> CachedVqtKernel {
+  return cache.get_or_build(key, [&]() -> CachedVqtKernel {
     auto kernel = VqtKernel::create(sr, config);
 
     return CachedVqtKernel{std::shared_ptr<VqtKernel>(std::move(kernel))};
@@ -135,46 +114,14 @@ std::vector<float> vqt_bandwidths(const std::vector<float>& frequencies, int bin
   const size_t n = frequencies.size();
   std::vector<float> bandwidths(n);
 
-  // Relative bandwidth per bin, matching librosa.filters._relative_bandwidth and
-  // the CQT filter geometry in filters/wavelet.cpp (wavelet_lengths with Q=0).
-  // The local bins-per-octave is derived from the actual frequency spacing
-  // rather than the nominal bins_per_octave argument, so that the gamma=0 VQT
-  // bandwidth reproduces the CQT bandwidth exactly and the filter lengths
-  // (filter_scale * sr / bandwidth) stay continuous with the CQT path as
-  // gamma -> 0. librosa's VQT filter length is
-  //   Q = filter_scale / alpha;  length = Q * sr / (freq + gamma / alpha)
-  //                                     = filter_scale * sr / (alpha * freq + gamma),
-  // so the bandwidth returned here is the denominator `alpha * freq + gamma`.
-  // The previously-used simplified closed form `2^(1/bpo) - 1` disagrees with
-  // this relative-bandwidth alpha by ~3% at bins_per_octave=12 (0.05946 vs the
-  // correct 0.05770) and is discontinuous with this library's own CQT.
-  //
-  // The small `1e-9`/`1e-6` guards mirror filters/wavelet.cpp exactly; matching
-  // them bit-for-bit is what keeps the gamma->0 limit continuous with CQT, so
-  // they are intentionally the same raw literals used there rather than a
-  // general-purpose epsilon constant.
-  std::vector<float> alpha(n, 1.0f);
-  if (n >= 2) {
-    std::vector<float> logf(n);
-    for (size_t i = 0; i < n; ++i) {
-      logf[i] = std::log2(std::max(frequencies[i], 1e-9f));
-    }
-    std::vector<float> bpo(n);
-    bpo[0] = 1.0f / std::max(logf[1] - logf[0], 1e-9f);
-    bpo[n - 1] = 1.0f / std::max(logf[n - 1] - logf[n - 2], 1e-9f);
-    for (size_t k = 1; k + 1 < n; ++k) {
-      bpo[k] = 2.0f / std::max(logf[k + 1] - logf[k - 1], 1e-9f);
-    }
-    for (size_t k = 0; k < n; ++k) {
-      const float t = std::pow(2.0f, 2.0f / bpo[k]);
-      alpha[k] = (t - 1.0f) / (t + 1.0f);
-    }
-  }
+  // Relative bandwidth is shared with wavelet_lengths so gamma=0 produces the
+  // same geometry as CQT for irregular frequency grids and at both endpoints.
+  const std::vector<float> alpha = detail::relative_bandwidths(frequencies);
 
   for (size_t k = 0; k < n; ++k) {
-    // VQT bandwidth: alpha * f_k + gamma (with wavelet.cpp's alpha floor).
-    const float a = std::max(alpha[k], 1e-6f);
-    bandwidths[k] = a * frequencies[k] + gamma;
+    // VQT bandwidth: alpha * f_k + gamma.
+    bandwidths[k] = alpha[k] * frequencies[k] + gamma;
+    SONARE_CHECK(numeric::finite_positive(bandwidths[k]), ErrorCode::InvalidParameter);
   }
 
   return bandwidths;
@@ -210,10 +157,12 @@ std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
     // sample count for windowing / FFT sizing.
     float bandwidth = kernel->bandwidths_[k];
     const float raw_length = config.filter_scale * static_cast<float>(sr) / bandwidth;
+    const long double rounded_length = std::ceil(static_cast<long double>(raw_length));
     SONARE_CHECK(numeric::finite_positive(bandwidth) && numeric::finite_positive(raw_length) &&
-                     raw_length <= static_cast<float>(INT_MAX),
+                     std::isfinite(rounded_length) && rounded_length >= 1.0L &&
+                     rounded_length <= static_cast<long double>(kMaxVqtFftLength),
                  ErrorCode::InvalidParameter);
-    int length = static_cast<int>(std::ceil(raw_length));
+    int length = static_cast<int>(rounded_length);
     kernel->raw_lengths_[k] = raw_length;
     kernel->lengths_[k] = length;
     max_length = std::max(max_length, length);

@@ -134,6 +134,51 @@ constexpr int kCoherenceSimpsonIntervals = 64;
 
 double sinc(double x) noexcept { return x == 0.0 ? 1.0 : std::sin(x) / x; }
 
+LateTailResolution resolve_late_tail_with_cap(const ReverbTime& rt, int sample_rate,
+                                              const LateReverbConfig& config,
+                                              std::size_t resource_cap) noexcept {
+  LateTailResolution resolution;
+  if (sample_rate <= 0) return resolution;
+
+  const float sr = static_cast<float>(sample_rate);
+  const float nyquist = sr * 0.5f;
+  float longest = 0.0f;
+  for (size_t b = 0; b < rt.rt60_bands.size(); ++b) {
+    const float center = octave_center_hz(static_cast<int>(b));
+    if (center * kSqrt2 >= nyquist) continue;
+    // NaN carries no measurement; infinity reaches the clamp via std::min.
+    const float rt60 = unbounded_rt60_as_max(rt.rt60_bands[b]);
+    if (std::isnan(rt60)) continue;
+    longest = std::max(longest, std::min(rt60, kMaxRt60Seconds));
+  }
+  if (!(longest > 0.0f)) return resolution;
+
+  const std::size_t max_samples = std::min(static_cast<std::size_t>(kMaxAutoSamples), resource_cap);
+  static_assert(resource::kMaxAcousticRirSamples <=
+                        static_cast<std::size_t>(std::numeric_limits<int>::max()) &&
+                    resource::kMaxAcousticLateTailPairSamples <=
+                        static_cast<std::size_t>(std::numeric_limits<int>::max()),
+                "resolved acoustic tail length must fit the synthesis loop index");
+
+  // Double keeps finite in-cap lengths bit-stable; +inf headroom saturates.
+  const float non_negative_headroom = config.headroom > 0.0f ? config.headroom : 0.0f;
+  const double raw = std::isinf(non_negative_headroom)
+                         ? std::numeric_limits<double>::infinity()
+                         : std::ceil(static_cast<double>(longest) *
+                                     (1.0 + static_cast<double>(non_negative_headroom)) *
+                                     static_cast<double>(sample_rate));
+  // Clamp before narrowing so even a saturated/non-finite product never reaches
+  // an undefined integral cast.
+  const double bounded = std::min(raw, static_cast<double>(max_samples));
+  resolution.resource_clamped = raw > static_cast<double>(max_samples);
+  std::size_t length = bounded > 0.0 ? static_cast<std::size_t>(bounded) : 0u;
+  if (config.max_samples > 0) {
+    length = std::min(length, static_cast<std::size_t>(config.max_samples));
+  }
+  resolution.samples = std::max<std::size_t>(1u, length);
+  return resolution;
+}
+
 }  // namespace
 
 // Octave-band centres matching the analyzer's split (kDefaultOctaveBands = 6:
@@ -340,7 +385,8 @@ float late_tail_pair_coherence(int band, float spacing_m, int sample_rate,
 LateTailPair synthesize_late_tail_pair(const ReverbTime& rt, int sample_rate,
                                        const LateReverbConfig& config, float spacing_m) {
   LateTailPair pair;
-  const LateTailResolution resolution = resolve_late_tail(rt, sample_rate, config);
+  const LateTailResolution resolution = resolve_late_tail_with_cap(
+      rt, sample_rate, config, resource::kMaxAcousticLateTailPairSamples);
   if (resolution.samples == 0u) {
     pair.left = Audio::from_vector(std::vector<float>{}, sample_rate);
     pair.right = Audio::from_vector(std::vector<float>{}, sample_rate);
@@ -379,47 +425,7 @@ LateTailPair synthesize_late_tail_pair(const ReverbTime& rt, int sample_rate,
 
 LateTailResolution resolve_late_tail(const ReverbTime& rt, int sample_rate,
                                      const LateReverbConfig& config) noexcept {
-  LateTailResolution resolution;
-  if (sample_rate <= 0) return resolution;
-
-  const float sr = static_cast<float>(sample_rate);
-  const float nyquist = sr * 0.5f;
-  float longest = 0.0f;
-  for (size_t b = 0; b < rt.rt60_bands.size(); ++b) {
-    const float center = octave_center_hz(static_cast<int>(b));
-    if (center * kSqrt2 >= nyquist) continue;
-    // NaN carries no measurement; infinity reaches the clamp via std::min.
-    const float rt60 = unbounded_rt60_as_max(rt.rt60_bands[b]);
-    if (std::isnan(rt60)) continue;
-    longest = std::max(longest, std::min(rt60, kMaxRt60Seconds));
-  }
-  if (!(longest > 0.0f)) return resolution;
-
-  constexpr std::size_t kMaxSamples =
-      std::min(static_cast<std::size_t>(kMaxAutoSamples), resource::kMaxAcousticRirSamples);
-  static_assert(kMaxSamples <= static_cast<std::size_t>(std::numeric_limits<int>::max()),
-                "resolved acoustic tail length must fit the synthesis loop index");
-
-  // Keep the historical double expression for ordinary finite values so the
-  // normal <=cap tail length (and therefore its seeded samples) stays
-  // bit-stable. The largest finite float headroom and int sample rate still
-  // fit comfortably in double; positive infinity is handled as saturation.
-  const float non_negative_headroom = config.headroom > 0.0f ? config.headroom : 0.0f;
-  const double raw = std::isinf(non_negative_headroom)
-                         ? std::numeric_limits<double>::infinity()
-                         : std::ceil(static_cast<double>(longest) *
-                                     (1.0 + static_cast<double>(non_negative_headroom)) *
-                                     static_cast<double>(sample_rate));
-  // Clamp before narrowing so even a saturated/non-finite product never reaches
-  // an undefined integral cast.
-  const double bounded = std::min(raw, static_cast<double>(kMaxSamples));
-  resolution.resource_clamped = raw > static_cast<double>(kMaxSamples);
-  std::size_t length = bounded > 0.0 ? static_cast<std::size_t>(bounded) : 0u;
-  if (config.max_samples > 0) {
-    length = std::min(length, static_cast<std::size_t>(config.max_samples));
-  }
-  resolution.samples = std::max<std::size_t>(1u, length);
-  return resolution;
+  return resolve_late_tail_with_cap(rt, sample_rate, config, resource::kMaxAcousticRirSamples);
 }
 
 std::size_t resolve_late_tail_samples(const ReverbTime& rt, int sample_rate,

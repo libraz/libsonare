@@ -108,6 +108,15 @@ inline bool checked_size_product(std::size_t lhs, std::size_t rhs, std::size_t l
   return true;
 }
 
+/// Computes the element count of a matrix whose dimensions are supplied as
+/// signed API values. Negative dimensions are rejected before either value is
+/// converted to size_t; the only limit is representability in size_t.
+inline bool checked_matrix_element_count(int rows, int columns, std::size_t* out) noexcept {
+  if (rows < 0 || columns < 0) return false;
+  return checked_size_product(static_cast<std::size_t>(rows), static_cast<std::size_t>(columns),
+                              std::numeric_limits<std::size_t>::max(), out);
+}
+
 /// Adds two integral values without overflowing. `out` is written only on
 /// success.
 template <typename Int>

@@ -48,6 +48,8 @@ class GainPairGlide {
 
   /// @brief The pair applied by the latest snap() or advance().
   Pair applied() const noexcept { return applied_; }
+  /// @brief Number of samples left before the current target is reached.
+  int remaining_samples() const noexcept { return remaining_; }
   bool gliding() const noexcept { return remaining_ > 0; }
 
  private:

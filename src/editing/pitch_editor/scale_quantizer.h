@@ -10,8 +10,8 @@
 namespace sonare::editing::pitch_editor {
 
 /// Highest accepted chromatic origin. quantize_midi is noexcept and rounds the
-/// reference to an int, so a caller-supplied origin is bounded to the MIDI note
-/// range by the public entry points before it reaches the cast.
+/// reference to an int, so the constructor and public entry points bound a
+/// caller-supplied origin to the MIDI note range before it reaches the cast.
 inline constexpr float kMaxReferenceMidi = 127.0f;
 
 struct ScaleQuantizerConfig {
@@ -35,8 +35,11 @@ class ScaleQuantizer {
   /// consider it in scale) is decided by rounding reference_midi to the
   /// nearest MIDI note once; a reference sitting exactly between two notes
   /// (69.5, equidistant between A4 and A#4) can resolve to either, and every
-  /// grid point's scale membership shifts by a semitone with it. Keep
-  /// reference_midi within 0.5 semitones of the note it is meant to anchor.
+  /// grid point's scale membership shifts by a semitone with it. The
+  /// non-negative reference is rounded with std::lround (halfway values go
+  /// away from zero), and equal candidate distances select the lower pitch.
+  /// Keep reference_midi within 0.5 semitones of the note it is meant to
+  /// anchor; the constructor accepts only finite values in [0, 127].
   float quantize_midi(float midi) const noexcept;
   float correction_semitones(float midi) const noexcept { return quantize_midi(midi) - midi; }
   bool pitch_class_enabled(int pitch_class) const noexcept;

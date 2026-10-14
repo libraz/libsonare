@@ -24,17 +24,56 @@ inline constexpr std::size_t kMaxEngineOfflinePeakBytes = 1024u * 1024u * 1024u;
 inline constexpr std::size_t kEngineBounceLiveFloatCopies = 3u;
 inline constexpr std::size_t kEngineBounceDitherLiveFloatCopies = 4u;
 
-/// Peak working-set budget for a synthesized acoustic RIR, chosen as a budget
-/// rather than measured. The RIR path can retain four full-length float buffers
-/// while colouring early reflections, and the division below turns the budget
-/// into a sample cap: about 350 seconds at 48 kHz, longer than any real decay.
+/// Budget for a synthesized acoustic RIR helper's simultaneously live,
+/// full-length float sample storage. This is not a whole-process RSS ceiling:
+/// retained RIRs in callers such as RoomReverb/RoomMorph and bounded metadata
+/// remain additive.
 inline constexpr std::size_t kMaxAcousticRirPeakBytes = 256u * 1024u * 1024u;
-inline constexpr std::size_t kAcousticRirLiveFloatBuffers = 4u;
+inline constexpr std::size_t acoustic_sample_capacity(std::size_t live_buffers) noexcept {
+  return live_buffers == 0u || live_buffers > kMaxAcousticRirPeakBytes / sizeof(float)
+             ? 0u
+             : kMaxAcousticRirPeakBytes / (live_buffers * sizeof(float));
+}
+
+inline constexpr std::size_t kAcousticRirMonoLiveFloatBuffers = 5u;
+inline constexpr std::size_t kAcousticLateTailPairLiveFloatBuffers = 6u;
+inline constexpr std::size_t kAcousticRirPairLiveFloatBuffers = 9u;
 inline constexpr std::size_t kMaxAcousticRirSamples =
-    kMaxAcousticRirPeakBytes / (kAcousticRirLiveFloatBuffers * sizeof(float));
-static_assert(kMaxAcousticRirSamples * kAcousticRirLiveFloatBuffers * sizeof(float) <=
+    acoustic_sample_capacity(kAcousticRirMonoLiveFloatBuffers);
+inline constexpr std::size_t kMaxAcousticLateTailPairSamples =
+    acoustic_sample_capacity(kAcousticLateTailPairLiveFloatBuffers);
+inline constexpr std::size_t kMaxAcousticRirPairSamples =
+    acoustic_sample_capacity(kAcousticRirPairLiveFloatBuffers);
+static_assert(kMaxAcousticRirSamples * kAcousticRirMonoLiveFloatBuffers * sizeof(float) <=
                   kMaxAcousticRirPeakBytes,
-              "acoustic RIR sample capacity must fit the four-buffer working-set budget");
+              "mono acoustic RIR sample capacity must fit the float-storage budget");
+static_assert((kMaxAcousticRirSamples + 1u) * kAcousticRirMonoLiveFloatBuffers * sizeof(float) >
+                  kMaxAcousticRirPeakBytes,
+              "mono acoustic RIR sample capacity must be the maximal integral floor");
+static_assert(kMaxAcousticLateTailPairSamples * kAcousticLateTailPairLiveFloatBuffers *
+                      sizeof(float) <=
+                  kMaxAcousticRirPeakBytes,
+              "pair late-tail sample capacity must fit the float-storage budget");
+static_assert((kMaxAcousticLateTailPairSamples + 1u) * kAcousticLateTailPairLiveFloatBuffers *
+                      sizeof(float) >
+                  kMaxAcousticRirPeakBytes,
+              "pair late-tail sample capacity must be the maximal integral floor");
+static_assert(kMaxAcousticRirPairSamples * kAcousticRirPairLiveFloatBuffers * sizeof(float) <=
+                  kMaxAcousticRirPeakBytes,
+              "pair RIR sample capacity must fit the float-storage budget");
+static_assert((kMaxAcousticRirPairSamples + 1u) * kAcousticRirPairLiveFloatBuffers * sizeof(float) >
+                  kMaxAcousticRirPeakBytes,
+              "pair RIR sample capacity must be the maximal integral floor");
+static_assert(kMaxAcousticRirSamples == 13'421'772u &&
+                  kMaxAcousticLateTailPairSamples == 11'184'810u &&
+                  kMaxAcousticRirPairSamples == 7'456'540u,
+              "acoustic sample capacities changed; update the documented limits");
+static_assert(kMaxAcousticRirSamples <= static_cast<std::size_t>(std::numeric_limits<int>::max()) &&
+                  kMaxAcousticLateTailPairSamples <=
+                      static_cast<std::size_t>(std::numeric_limits<int>::max()) &&
+                  kMaxAcousticRirPairSamples <=
+                      static_cast<std::size_t>(std::numeric_limits<int>::max()),
+              "acoustic sample capacities must fit synthesis loop indices");
 
 /// Upper bound for caller-controlled iterative phase reconstruction.
 inline constexpr int kMaxGriffinLimIterations = 256;

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <numeric>
 
+#include "core/convert.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/nnls.h"
@@ -12,14 +13,6 @@
 namespace sonare {
 
 namespace {
-
-using sonare::constants::kA4Hz;
-using sonare::constants::kMidiA4;
-using sonare::constants::kSemitonesPerOctave;
-
-float midi_to_hz(int midi) {
-  return kA4Hz * std::pow(2.0f, (static_cast<float>(midi) - kMidiA4) / kSemitonesPerOctave);
-}
 
 float harmonic_weight(int harmonic) {
   static constexpr float kWeights[] = {1.0f, 0.6f, 0.5f, 0.4f, 0.3f, 0.2f};
@@ -94,7 +87,8 @@ std::vector<float> build_nnls_harmonic_template(const std::vector<float>& cqt_fr
   std::vector<float> matrix(static_cast<size_t>(n_bins) * config.n_pitches, 0.0f);
 
   for (int pitch = 0; pitch < config.n_pitches; ++pitch) {
-    const float fundamental = tune_cqt_fmin(midi_to_hz(config.midi_min + pitch), config.tuning);
+    const float fundamental =
+        tune_cqt_fmin(midi_to_hz(static_cast<float>(config.midi_min + pitch)), config.tuning);
     for (int harmonic = 1; harmonic <= config.n_harmonics; ++harmonic) {
       const float harmonic_freq = fundamental * static_cast<float>(harmonic);
       if (harmonic_freq < cqt_frequencies.front() || harmonic_freq > cqt_frequencies.back()) {

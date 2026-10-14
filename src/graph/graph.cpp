@@ -19,9 +19,19 @@ bool Graph::add_node(std::string id, std::unique_ptr<rt::ProcessorBase> processo
     return false;
   }
   auto new_node = std::make_unique<Node>(id, std::move(processor), num_ports);
-  Node* raw = new_node.get();
-  node_map_.emplace(raw->id(), raw);
   nodes_.push_back(std::move(new_node));
+  Node* raw = nodes_.back().get();
+  try {
+    const bool inserted = node_map_.emplace(raw->id(), raw).second;
+    if (!inserted) {
+      nodes_.pop_back();
+      return false;
+    }
+  } catch (...) {
+    // Roll back ownership so the map never retains a destroyed node.
+    nodes_.pop_back();
+    throw;
+  }
   compiled_ = false;
   return true;
 }
@@ -109,6 +119,8 @@ bool Graph::set_node_sidechain_ports(const std::string& node_id, int first_port,
 }
 
 bool Graph::compile() {
+  // Keep a partial plan hidden if rebuilding throws.
+  compiled_ = false;
   topo_order_.clear();
   topo_order_ids_.clear();
   topo_index_.clear();
@@ -263,6 +275,8 @@ void Graph::adopt_connection_state(Graph& previous) noexcept {
 }
 
 void Graph::prepare(double sample_rate, int max_block_size) {
+  // Hide the old plan before changing node or runtime state.
+  compiled_ = false;
   if (max_block_size <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be positive");
   }
@@ -271,21 +285,10 @@ void Graph::prepare(double sample_rate, int max_block_size) {
   for (auto& node_ptr : nodes_) {
     node_ptr->prepare(sample_rate_, max_block_size_);
   }
-  // Topology must be compiled before processing. If a structural change
-  // invalidated a prior compile (or it was never compiled), (re)compile now so
-  // prepare() never leaves stale/empty runtime connections. compile() also sizes
-  // the per-connection delay lines because max_block_size_ is now set.
-  if (!compiled_) {
-    if (!compile()) {
-      throw SonareException(ErrorCode::InvalidState,
-                            "graph topology could not be compiled (cycle or invalid edge)");
-    }
-  } else {
-    // The nodes' latencies settle in their own prepare(), so the compensation a
-    // compile before it computed is recomputed against them, delay lines included.
-    runtime_connections_.clear();
-    node_latency_q8_.clear();
-    build_arrival_plan();
+  // Rebuild the complete plan from post-prepare node latencies.
+  if (!compile()) {
+    throw SonareException(ErrorCode::InvalidState,
+                          "graph topology could not be compiled (cycle or invalid edge)");
   }
 }
 

@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <new>
 #include <vector>
 
 #if defined(__SSE__) || defined(__x86_64__) || defined(_M_X64) || defined(_M_IX86)
@@ -21,6 +22,7 @@
 #include "mixing/fx_bus.h"
 #endif
 #include "rt/processor_base.h"
+#include "support/alloc_guard.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -31,6 +33,18 @@ class PassthroughProcessor : public sonare::rt::ProcessorBase {
   void prepare(double, int) override {}
   void process(float* const*, int, int) override {}
   void reset() override {}
+};
+
+class CountingProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  explicit CountingProcessor(int* process_count) : process_count_(process_count) {}
+
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override { ++*process_count_; }
+  void reset() override {}
+
+ private:
+  int* process_count_ = nullptr;
 };
 
 class GainProcessor final : public sonare::rt::ProcessorBase {
@@ -140,6 +154,115 @@ TEST_CASE("Graph rejects out-of-range port counts", "[graph]") {
   // At the cap is accepted.
   REQUIRE(graph.add_node("ok", pass(), sonare::graph::Node::kMaxPorts));
 }
+
+#ifdef SONARE_WITH_MIXING
+TEST_CASE("Graph add_node rolls back when lookup publication cannot allocate",
+          "[graph][exceptions]") {
+  bool observed_failure = false;
+  for (std::size_t failure_point = 1; failure_point <= 32; ++failure_point) {
+    // Recreate the one-node graph for every failure point so its owner vector
+    // still has to grow at the publication boundary.
+    sonare::graph::Graph graph;
+    REQUIRE(graph.add_node("existing", pass(), 1));
+    REQUIRE(graph.compile());
+
+    auto candidate = pass();
+    bool threw = false;
+    bool added = false;
+    {
+      sonare::test::AllocationFailureAtGuard guard(failure_point);
+      try {
+        added = graph.add_node("candidate", std::move(candidate), 1);
+      } catch (const std::bad_alloc&) {
+        threw = true;
+      }
+    }
+
+    if (!threw) {
+      REQUIRE(added);
+      REQUIRE(graph.remove_node("candidate"));
+      REQUIRE(graph.compile());
+      continue;
+    }
+
+    observed_failure = true;
+    REQUIRE(graph.compiled());
+    REQUIRE(graph.node_count() == 1);
+    REQUIRE(graph.node("candidate") == nullptr);
+
+    // Retry outside the guard to detect a stale lookup entry.
+    REQUIRE(graph.add_node("candidate", pass(), 1));
+    REQUIRE(graph.node("candidate") != nullptr);
+    REQUIRE(graph.remove_node("candidate"));
+    REQUIRE(graph.compile());
+  }
+
+  REQUIRE(observed_failure);
+}
+
+TEST_CASE("Graph compile and prepare failures leave an uncompiled plan", "[graph][exceptions]") {
+  sonare::graph::Graph graph;
+  int process_count = 0;
+  REQUIRE(graph.add_node("input", pass(), 1));
+  REQUIRE(graph.add_node("output", std::make_unique<CountingProcessor>(&process_count), 1));
+  REQUIRE(graph.connect({"input", 0, "output", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.compile());
+  graph.prepare(48000.0, 8);
+  REQUIRE(graph.compiled());
+
+  bool compile_failure_observed = false;
+  for (std::size_t failure_point = 1; failure_point <= 24; ++failure_point) {
+    bool threw = false;
+    {
+      sonare::test::AllocationFailureAtGuard guard(failure_point);
+      try {
+        graph.compile();
+      } catch (const std::bad_alloc&) {
+        threw = true;
+      }
+    }
+    if (!threw) {
+      REQUIRE(graph.compiled());
+      continue;
+    }
+
+    compile_failure_observed = true;
+    REQUIRE_FALSE(graph.compiled());
+    const int before_process = process_count;
+    graph.process_block(8);
+    REQUIRE(process_count == before_process);
+    REQUIRE(graph.compile());
+    REQUIRE(graph.compiled());
+  }
+  REQUIRE(compile_failure_observed);
+
+  bool prepare_failure_observed = false;
+  for (std::size_t failure_point = 1; failure_point <= 24; ++failure_point) {
+    bool threw = false;
+    {
+      sonare::test::AllocationFailureAtGuard guard(failure_point);
+      try {
+        graph.prepare(48000.0, 64 + static_cast<int>(failure_point) * 8);
+      } catch (const std::bad_alloc&) {
+        threw = true;
+      }
+    }
+    if (!threw) {
+      REQUIRE(graph.compiled());
+      continue;
+    }
+
+    prepare_failure_observed = true;
+    REQUIRE_FALSE(graph.compiled());
+    const int before_process = process_count;
+    graph.process_block(8);
+    REQUIRE(process_count == before_process);
+    REQUIRE_NOTHROW(graph.prepare(48000.0, 64 + static_cast<int>(failure_point) * 8));
+    REQUIRE(graph.compiled());
+  }
+  REQUIRE(prepare_failure_observed);
+}
+#endif
 
 TEST_CASE("Graph compiles acyclic routing in topological order", "[graph]") {
   sonare::graph::Graph graph;

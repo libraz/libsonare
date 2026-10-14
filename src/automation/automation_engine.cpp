@@ -32,6 +32,12 @@ void AutomationBoundaryList::clear() noexcept {
 }
 
 bool AutomationBoundaryList::add(double value) noexcept {
+  // Deduplicate before the capacity check; this remains allocation-free.
+  for (size_t i = 0; i < size; ++i) {
+    if (ppq[i] == value) {
+      return true;
+    }
+  }
   if (size >= ppq.size()) {
     overflowed = true;
     return false;

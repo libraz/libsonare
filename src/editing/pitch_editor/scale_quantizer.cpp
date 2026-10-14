@@ -3,9 +3,15 @@
 #include <algorithm>
 #include <cmath>
 
+#include "util/exception.h"
+
 namespace sonare::editing::pitch_editor {
 
-ScaleQuantizer::ScaleQuantizer(ScaleQuantizerConfig config) : config_(config) {}
+ScaleQuantizer::ScaleQuantizer(ScaleQuantizerConfig config) : config_(config) {
+  SONARE_CHECK(std::isfinite(config_.reference_midi) && config_.reference_midi >= 0.0f &&
+                   config_.reference_midi <= kMaxReferenceMidi,
+               ErrorCode::InvalidParameter);
+}
 
 float ScaleQuantizer::quantize_midi(float midi) const noexcept {
   // Non-finite input has no meaningful quantization and would make the int cast

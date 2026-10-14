@@ -641,7 +641,7 @@ struct VocalEditSession::Impl {
   int64_t output_length_samples = 0;
   VocalSessionLimits limits{};
   VocalSessionEpoch epoch = 0;
-  VocalRevision revision = 0;
+  VocalRevision revision = kInitialVocalRevision;
   VocalDraftId next_draft_id = 1;
   uint64_t next_note_id = 1;
   std::shared_ptr<std::atomic<uint32_t>> render_job_count =

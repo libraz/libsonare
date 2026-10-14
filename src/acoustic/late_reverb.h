@@ -38,8 +38,8 @@ inline constexpr float kAbsoluteZeroCelsius = -273.15f;
 /// @brief Historical upper bound for auto-sized acoustic buffers.
 ///
 /// The effective RIR/late-tail cap is lower and is derived from the shared
-/// four-buffer working-set budget in `resource_limits.h`. Keep this ceiling as
-/// an upper bound for compatibility with the early image-source path.
+/// five-buffer mono sample-storage budget in `resource_limits.h`. Keep this
+/// ceiling as an upper bound for compatibility with the early image-source path.
 inline constexpr int kMaxAutoSamples = 1 << 26;  // 67,108,864
 
 /// @brief Sabine reverberation time (s): 0.161 * V / A.
@@ -162,8 +162,8 @@ LateTailResolution resolve_late_tail(const ReverbTime& rt, int sample_rate,
 /// `synthesize_late_tail`: invalid sample rates and rooms with no representable
 /// positive-decay band return zero; bands at/above Nyquist do not affect the
 /// length; RT60 is capped at 60 seconds for sizing; and a positive explicit
-/// `max_samples` is an upper bound. The shared acoustic working-set limit is
-/// applied after the historical `kMaxAutoSamples` ceiling, so even hostile
+/// `max_samples` is an upper bound. The shared acoustic full-length float-storage
+/// limit is applied after the `kMaxAutoSamples` ceiling, so even hostile
 /// sample-rate/RT60/headroom combinations remain representable as `int`.
 std::size_t resolve_late_tail_samples(const ReverbTime& rt, int sample_rate,
                                       const LateReverbConfig& config = {}) noexcept;

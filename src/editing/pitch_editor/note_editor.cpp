@@ -36,16 +36,21 @@ NoteEditor::NoteEditor(NoteEditorConfig config) : config_(config) {
 Audio NoteEditor::move_note(const Audio& audio, const NoteRegion& region,
                             int target_onset_sample) const {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  // clamp_region stores the audio bound in an int, and the output indexing below
+  // relies on that same bound. Reject an unrepresentable Audio before narrowing
+  // its size or doing any region arithmetic.
+  SONARE_CHECK(audio.size() <= static_cast<std::size_t>(INT_MAX), ErrorCode::InvalidParameter);
   NoteRegion clipped = clamp_region(audio, region);
   const int length = clipped.offset_sample - clipped.onset_sample;
   SONARE_CHECK(length > 0, ErrorCode::InvalidParameter);
   // The vacated span is ramped out whatever the target is, so a target outside the
   // buffer would erase the note and paste it nowhere.
-  SONARE_CHECK_MSG(target_onset_sample >= 0 && target_onset_sample < static_cast<int>(audio.size()),
-                   ErrorCode::InvalidParameter,
-                   "NoteEditor::move_note: targetOnsetSample must fall inside the buffer, got " +
-                       std::to_string(target_onset_sample) + " for " +
-                       std::to_string(audio.size()) + " samples");
+  SONARE_CHECK_MSG(
+      target_onset_sample >= 0 && static_cast<std::size_t>(target_onset_sample) < audio.size(),
+      ErrorCode::InvalidParameter,
+      "NoteEditor::move_note: targetOnsetSample must fall inside the buffer, got " +
+          std::to_string(target_onset_sample) + " for " + std::to_string(audio.size()) +
+          " samples");
 
   // Validate before the identity return so no-op edits also reject malformed input.
   if (target_onset_sample == clipped.onset_sample) {
@@ -64,9 +69,10 @@ Audio NoteEditor::move_note(const Audio& audio, const NoteRegion& region,
 
   // A note landing near the end keeps the part that fits; only a target with no
   // room at all is refused above.
-  const int target_end = std::min(target_onset_sample + length, static_cast<int>(output.size()));
-  for (int i = target_onset_sample; i < target_end; ++i) {
-    output[static_cast<size_t>(i)] += segment[static_cast<size_t>(i - target_onset_sample)];
+  const std::size_t target = static_cast<std::size_t>(target_onset_sample);
+  const std::size_t paste_count = std::min(segment.size(), output.size() - target);
+  for (std::size_t i = 0; i < paste_count; ++i) {
+    output[target + i] += segment[i];
   }
 
   return Audio::from_vector(std::move(output), audio.sample_rate());
@@ -75,6 +81,9 @@ Audio NoteEditor::move_note(const Audio& audio, const NoteRegion& region,
 Audio NoteEditor::stretch_note(const Audio& audio, const NoteRegion& region,
                                float stretch_ratio) const {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  // clamp_region narrows audio.size() to int below; reject an oversized buffer
+  // before that conversion even when the edit would otherwise be a no-op.
+  SONARE_CHECK(audio.size() <= static_cast<std::size_t>(INT_MAX), ErrorCode::InvalidParameter);
   SONARE_CHECK(stretch_ratio > 0.0f && std::isfinite(stretch_ratio), ErrorCode::InvalidParameter);
   NoteRegion clipped = clamp_region(audio, region);
   const int length = clipped.offset_sample - clipped.onset_sample;

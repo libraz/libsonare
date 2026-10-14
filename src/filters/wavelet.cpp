@@ -2,74 +2,97 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "core/convert.h"
+#include "core/window.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
 using sonare::constants::kSemitonesPerOctave;
 using sonare::constants::kTwoPi;
 
+namespace detail {
+
+// alpha is the bandwidth divisor in length = filter_scale * sr / (alpha * f + gamma).
+std::vector<float> relative_bandwidths(const std::vector<float>& freqs) {
+  constexpr float kLogGuard = 1e-9f;
+  constexpr float kAlphaFloor = 1e-6f;
+
+  std::vector<float> alpha(freqs.size(), 1.0f);
+  for (float frequency : freqs) {
+    if (!numeric::finite_positive(frequency)) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "relative_bandwidths: frequencies must be finite and positive");
+    }
+  }
+  if (freqs.size() < 2) return alpha;
+
+  std::vector<float> logf(freqs.size(), 0.0f);
+  for (size_t i = 0; i < freqs.size(); ++i) {
+    logf[i] = std::log2(std::max(freqs[i], kLogGuard));
+  }
+
+  std::vector<float> bpo(freqs.size(), 0.0f);
+  bpo[0] = 1.0f / std::max(logf[1] - logf[0], kLogGuard);
+  bpo[freqs.size() - 1] =
+      1.0f / std::max(logf[freqs.size() - 1] - logf[freqs.size() - 2], kLogGuard);
+  for (size_t k = 1; k + 1 < freqs.size(); ++k) {
+    bpo[k] = 2.0f / std::max(logf[k + 1] - logf[k - 1], kLogGuard);
+  }
+  for (size_t k = 0; k < freqs.size(); ++k) {
+    const float t = std::pow(2.0f, 2.0f / bpo[k]);
+    alpha[k] = std::max((t - 1.0f) / (t + 1.0f), kAlphaFloor);
+  }
+  return alpha;
+}
+
+}  // namespace detail
+
 std::vector<float> wavelet_lengths(const std::vector<float>& freqs, int sr, float window_param,
                                    float Q) {
   if (sr <= 0)
     throw SonareException(ErrorCode::InvalidParameter, "wavelet_lengths: sr must be positive");
-  if (window_param <= 0.0f) {
+  if (!numeric::finite_positive(window_param)) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "wavelet_lengths: window_param must be positive");
+                          "wavelet_lengths: window_param must be finite and positive");
   }
-  if (Q < 0.0f)
-    throw SonareException(ErrorCode::InvalidParameter, "wavelet_lengths: Q must be non-negative");
+  if (!numeric::finite_non_negative(Q))
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "wavelet_lengths: Q must be finite and non-negative");
   const bool use_Q = (Q > 0.0f);
   if (!use_Q && freqs.size() < 2) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "wavelet_lengths: at least two frequencies are required without Q");
   }
-
-  // Pre-compute alpha[k] from the local bins-per-octave (matches
-  // librosa.filters._relative_bandwidth). For each interior k:
-  //   bpo[k] = 2 / (log2(freqs[k+1]) - log2(freqs[k-1]))
-  //   alpha[k] = (2^(2/bpo) - 1) / (2^(2/bpo) + 1)
-  // Edge bins reflect using a one-sided log difference.
-  std::vector<float> alpha;
-  if (!use_Q && freqs.size() >= 2) {
-    alpha.assign(freqs.size(), 0.0f);
-    std::vector<float> bpo(freqs.size(), 0.0f);
-    std::vector<float> logf(freqs.size(), 0.0f);
-    for (size_t i = 0; i < freqs.size(); ++i) {
-      logf[i] = std::log2(std::max(freqs[i], 1e-9f));
-    }
-    bpo[0] = 1.0f / std::max(logf[1] - logf[0], 1e-9f);
-    bpo[freqs.size() - 1] = 1.0f / std::max(logf[freqs.size() - 1] - logf[freqs.size() - 2], 1e-9f);
-    for (size_t k = 1; k + 1 < freqs.size(); ++k) {
-      bpo[k] = 2.0f / std::max(logf[k + 1] - logf[k - 1], 1e-9f);
-    }
-    for (size_t k = 0; k < freqs.size(); ++k) {
-      const float t = std::pow(2.0f, 2.0f / bpo[k]);
-      alpha[k] = (t - 1.0f) / (t + 1.0f);
+  for (float frequency : freqs) {
+    if (!numeric::finite_positive(frequency)) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "wavelet_lengths: frequencies must be finite and positive");
     }
   }
+
+  const std::vector<float> alpha =
+      use_Q ? std::vector<float>() : detail::relative_bandwidths(freqs);
 
   // Return raw fractional lengths to match librosa exactly. Callers that need
   // integer kernel sizes can floor/ceil as appropriate.
   std::vector<float> lengths(freqs.size(), 0.0f);
   for (size_t i = 0; i < freqs.size(); ++i) {
-    if (freqs[i] <= 0.0f) {
-      lengths[i] = 0.0f;
-      continue;
-    }
     if (use_Q) {
       lengths[i] = Q * static_cast<float>(sr) / freqs[i];
-    } else if (!alpha.empty()) {
-      // librosa: Q = filter_scale / alpha; length = Q * sr / freq.
-      const float a = std::max(alpha[i], 1e-6f);
-      lengths[i] = (window_param / a) * static_cast<float>(sr) / freqs[i];
     } else {
-      lengths[i] = window_param * static_cast<float>(sr) / freqs[i];
+      // librosa: Q = filter_scale / alpha; length = Q * sr / freq.
+      lengths[i] = (window_param / alpha[i]) * static_cast<float>(sr) / freqs[i];
+    }
+    if (!numeric::finite_positive(lengths[i])) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "wavelet_lengths: derived length must be finite and positive");
     }
   }
   return lengths;
@@ -80,11 +103,27 @@ namespace {
 // Replicates Python's floor-division semantics for floats: `floor(x / 2)`.
 int python_floordiv_by2(float x) { return static_cast<int>(std::floor(x * 0.5f)); }
 
+bool checked_floor_by2(float value, int* out) {
+  const long double floored = std::floor(-static_cast<long double>(value) * 0.5L);
+  const long double ceiled = std::floor(static_cast<long double>(value) * 0.5L);
+  if (!std::isfinite(floored) || !std::isfinite(ceiled) ||
+      floored < static_cast<long double>(std::numeric_limits<int>::lowest()) ||
+      floored > static_cast<long double>(std::numeric_limits<int>::max()) ||
+      ceiled < static_cast<long double>(std::numeric_limits<int>::lowest()) ||
+      ceiled > static_cast<long double>(std::numeric_limits<int>::max())) {
+    return false;
+  }
+  if (out != nullptr) *out = python_floordiv_by2(value);
+  return true;
+}
+
 }  // namespace
 
-std::vector<std::complex<float>> wavelet(const std::vector<float>& freqs, int sr,
-                                         float window_param, bool is_cqt, bool pad_fft, float Q,
-                                         int* n_fft_out) {
+namespace detail {
+
+std::vector<std::complex<float>> wavelet_with_window(const std::vector<float>& freqs, int sr,
+                                                     float window_param, bool is_cqt, bool pad_fft,
+                                                     float Q, WindowType window, int* n_fft_out) {
   std::vector<float> lengths = wavelet_lengths(freqs, sr, window_param, Q);
   const size_t n_filters = freqs.size();
 
@@ -95,26 +134,56 @@ std::vector<std::complex<float>> wavelet(const std::vector<float>& freqs, int sr
   float max_ilen = 0.0f;
   for (size_t i = 0; i < n_filters; ++i) {
     const float ilen = lengths[i];
-    if (ilen <= 0.0f) continue;
-    const int s = python_floordiv_by2(-ilen);
-    const int e = python_floordiv_by2(ilen);
-    L[i] = e - s;
+    int s = 0;
+    int e = 0;
+    if (!checked_floor_by2(-ilen, &s) || !checked_floor_by2(ilen, &e)) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "wavelet: derived length is outside the integer range");
+    }
+    const long long effective = static_cast<long long>(e) - static_cast<long long>(s);
+    if (effective <= 0 || effective > std::numeric_limits<int>::max()) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "wavelet: effective length is outside the integer range");
+    }
+    L[i] = static_cast<int>(effective);
     n_start[i] = s;
     max_ilen = std::max(max_ilen, ilen);
   }
 
   size_t n_fft = 0;
   if (pad_fft) {
-    const int max_ceil = std::max(1, static_cast<int>(std::ceil(max_ilen)));
-    n_fft = static_cast<size_t>(next_power_of_2(max_ceil));
+    // Empty input still reports the minimum padded FFT length.
+    const long double max_ceil_wide = std::max(1.0L, std::ceil(static_cast<long double>(max_ilen)));
+    constexpr int kMaxIntPowerOfTwo = 1 << 30;
+    if (!std::isfinite(max_ceil_wide) || max_ceil_wide < 1.0L ||
+        max_ceil_wide > static_cast<long double>(kMaxIntPowerOfTwo)) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "wavelet: FFT length is outside the supported range");
+    }
+    const int max_ceil = static_cast<int>(max_ceil_wide);
+    const int fft_length = next_power_of_2(max_ceil);
+    if (fft_length <= 0) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "wavelet: FFT length is outside the supported range");
+    }
+    n_fft = static_cast<size_t>(fft_length);
   }
   const size_t per_kernel = pad_fft ? n_fft : 0;
 
   size_t total = 0;
   if (pad_fft) {
-    total = n_filters * n_fft;
+    if (!numeric::checked_size_product(n_filters, n_fft, std::numeric_limits<size_t>::max(),
+                                       &total)) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "wavelet: output element count overflows size_t");
+    }
   } else {
-    for (int Lk : L) total += static_cast<size_t>(Lk);
+    for (int Lk : L) {
+      if (!numeric::checked_add(total, static_cast<size_t>(Lk), &total)) {
+        throw SonareException(ErrorCode::InvalidParameter,
+                              "wavelet: output element count overflows size_t");
+      }
+    }
   }
   std::vector<std::complex<float>> out(total, std::complex<float>(0.0f, 0.0f));
 
@@ -132,8 +201,13 @@ std::vector<std::complex<float>> wavelet(const std::vector<float>& freqs, int sr
     const size_t slot_offset =
         pad_fft ? (cursor + (per_kernel - static_cast<size_t>(Lk)) / 2) : cursor;
 
-    // Build windowed complex sinusoid:
-    //   sig[i] = exp(j * 2π * f * (s + i) / sr) * hann(L)[i]
+    std::vector<float> selected_window;
+    if (window != WindowType::Hann) {
+      selected_window = create_window(window, Lk, /*periodic=*/true);
+    }
+
+    // Build the selected periodic-windowed complex sinusoid:
+    //   sig[i] = exp(j * 2π * f * (s + i) / sr) * window(L)[i]
     // Hann is the scipy.signal.get_window default (periodic / fftbins=True):
     //   w[n] = 0.5 * (1 - cos(2π n / L)).
     float l1 = 0.0f;
@@ -143,9 +217,12 @@ std::vector<std::complex<float>> wavelet(const std::vector<float>& freqs, int sr
       // scipy.signal.get_window returns [1.0] for a length-1 window; the generic
       // periodic-Hann formula would instead give 0 here (cos(0) == 1), zeroing
       // the single-sample kernel before normalization. Special-case it.
-      const float w = Lk == 1 ? 1.0f
-                              : 0.5f * (1.0f - std::cos(constants::kTwoPi * static_cast<float>(n) /
-                                                        static_cast<float>(Lk)));
+      const float w =
+          window == WindowType::Hann
+              ? (Lk == 1 ? 1.0f
+                         : 0.5f * (1.0f - std::cos(constants::kTwoPi * static_cast<float>(n) /
+                                                   static_cast<float>(Lk))))
+              : selected_window[static_cast<size_t>(n)];
       const std::complex<float> v(w * std::cos(angle), w * std::sin(angle));
       out[slot_offset + n] = v;
       l1 += std::abs(v);
@@ -165,6 +242,15 @@ std::vector<std::complex<float>> wavelet(const std::vector<float>& freqs, int sr
   }
   if (n_fft_out) *n_fft_out = pad_fft ? static_cast<int>(n_fft) : 0;
   return out;
+}
+
+}  // namespace detail
+
+std::vector<std::complex<float>> wavelet(const std::vector<float>& freqs, int sr,
+                                         float window_param, bool is_cqt, bool pad_fft, float Q,
+                                         int* n_fft_out) {
+  return detail::wavelet_with_window(freqs, sr, window_param, is_cqt, pad_fft, Q, WindowType::Hann,
+                                     n_fft_out);
 }
 
 std::vector<float> semitone_filterbank(int n_octaves, int bins_per_octave, float fmin, int sr) {

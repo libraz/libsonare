@@ -3,15 +3,35 @@
 
 #include "filters/wavelet.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "rt/biquad_design.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
+
+namespace {
+
+template <typename Operation>
+void require_invalid_parameter(Operation&& operation) {
+  try {
+    operation();
+  } catch (const SonareException& error) {
+    REQUIRE(error.code() == ErrorCode::InvalidParameter);
+    return;
+  } catch (...) {
+    FAIL("operation threw a non-SonareException");
+  }
+  FAIL("operation did not throw");
+}
+
+}  // namespace
 
 TEST_CASE("wavelet_lengths is decreasing with frequency", "[util][wavelet]") {
   std::vector<float> freqs{100.0f, 200.0f, 400.0f};
@@ -52,7 +72,60 @@ TEST_CASE("wavelet length-1 kernel is non-zero (scipy get_window Nx==1)", "[util
 }
 
 TEST_CASE("wavelet rejects one frequency without an explicit Q", "[util][wavelet]") {
-  REQUIRE_THROWS(wavelet_lengths({440.0f}, 22050, 1.0f));
+  require_invalid_parameter([&] { wavelet_lengths({440.0f}, 22050, 1.0f); });
+}
+
+TEST_CASE("wavelet preserves the empty explicit-Q shape", "[util][wavelet]") {
+  int n_fft = -1;
+  const auto padded = wavelet({}, 22050, 1.0f, true, true, 1.0f, &n_fft);
+  REQUIRE(padded.empty());
+  REQUIRE(n_fft == 1);
+
+  n_fft = -1;
+  const auto unpadded = wavelet({}, 22050, 1.0f, true, false, 1.0f, &n_fft);
+  REQUIRE(unpadded.empty());
+  REQUIRE(n_fft == 0);
+}
+
+TEST_CASE("wavelet supports non-Hann periodic windows", "[util][wavelet]") {
+  const std::vector<float> freqs{200.0f, 400.0f};
+  const auto hann = wavelet(freqs, 22050, 1.0f, true);
+  const auto hamming =
+      detail::wavelet_with_window(freqs, 22050, 1.0f, true, false, 0.0f, WindowType::Hamming);
+  const auto blackman =
+      detail::wavelet_with_window(freqs, 22050, 1.0f, true, false, 0.0f, WindowType::Blackman);
+  const auto rectangular =
+      detail::wavelet_with_window(freqs, 22050, 1.0f, true, false, 0.0f, WindowType::Rectangular);
+
+  REQUIRE(hann.size() == hamming.size());
+  REQUIRE(hann.size() == blackman.size());
+  REQUIRE(hann.size() == rectangular.size());
+  for (const auto& selected : {hamming, blackman, rectangular}) {
+    double max_diff = 0.0;
+    for (size_t i = 0; i < hann.size(); ++i) {
+      max_diff = std::max(max_diff, static_cast<double>(std::abs(hann[i] - selected[i])));
+    }
+    REQUIRE(max_diff > 1e-5);
+  }
+}
+
+TEST_CASE("wavelet validates non-finite and unrepresentable lengths", "[util][wavelet]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  require_invalid_parameter([&] { wavelet_lengths({100.0f, nan}, 22050, 1.0f); });
+  require_invalid_parameter([&] { wavelet_lengths({100.0f, inf}, 22050, 1.0f); });
+  require_invalid_parameter([&] { wavelet_lengths({100.0f, 200.0f}, 22050, nan); });
+  require_invalid_parameter([&] { wavelet_lengths({100.0f, 200.0f}, 22050, inf); });
+  require_invalid_parameter([&] { wavelet_lengths({100.0f, 200.0f}, 22050, 1.0f, nan); });
+  require_invalid_parameter([&] { wavelet_lengths({100.0f, 200.0f}, 22050, 1.0f, inf); });
+
+  // The raw lengths remain finite, but the derived floor indices cannot fit in
+  // int. wavelet must reject before converting them or allocating the output.
+  require_invalid_parameter([&] { wavelet({1e-30f, 2e-30f}, 22050, 1.0f, true); });
+
+  // This finite Q produces an effective length above the generic FFT ceiling,
+  // so the ceil-to-int/power-of-two path must reject before allocation.
+  require_invalid_parameter([&] { wavelet({1.5e-5f}, 22050, 1.0f, true, true, 1.0f); });
 }
 
 TEST_CASE("semitone_filterbank produces n_filters rows of 6 coeffs", "[util][wavelet]") {

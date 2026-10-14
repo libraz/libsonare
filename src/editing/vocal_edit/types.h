@@ -160,7 +160,7 @@ struct PitchTransition {
 
 struct VocalStateToken {
   VocalSessionEpoch epoch = 0;
-  VocalRevision committed_revision = 0;
+  VocalRevision committed_revision = kInitialVocalRevision;
   VocalDraftId draft_id = 0;
   VocalGeneration draft_generation = 0;
 };

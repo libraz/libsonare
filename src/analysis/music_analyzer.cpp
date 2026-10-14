@@ -447,7 +447,6 @@ const std::vector<float>& MusicAnalyzer::onset_strength() {
     onset_strength_ =
         center_onset_strength(compute_onset_strength(mel_spectrogram(), onset_config),
                               config_->n_fft, config_->hop_length, onset_config.center);
-    onset_strength_computed_ = true;
   });
   return onset_strength_;
 }

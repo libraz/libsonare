@@ -37,18 +37,31 @@ class TailBudget {
   /// @brief A line (or FIR) that emits its input @p samples later.
   TailBudget& delay(double samples) noexcept { return add(std::ceil(std::max(0.0, samples))); }
 
-  /// @brief A loop of @p loop_samples that feeds back @p gain per pass: the passes
-  ///        it takes for |gain|^n to fall below the floor, each one loop long.
+  /// @brief A loop whose first heard residual has unit scale and decays by gain each pass.
   TailBudget& recirculation(double loop_samples, double gain) noexcept {
+    return recirculation(loop_samples, gain, 1.0);
+  }
+
+  /// @brief A loop whose first heard residual is scaled by @p output_scale.
+  TailBudget& recirculation(double loop_samples, double gain, double output_scale) noexcept {
+    const double scale = std::abs(output_scale);
+    if (!(scale > 0.0)) return *this;
     const double magnitude = std::abs(gain);
     if (!(magnitude > 0.0)) return *this;
+    if (!std::isfinite(scale)) return unbounded();
     if (!(magnitude < 1.0)) return unbounded();
-    const double passes = std::ceil(std::log(kTailFloor) / std::log(magnitude));
+    const double passes =
+        std::max(0.0, std::ceil(std::log(kTailFloor / scale) / std::log(magnitude)));
     return add(passes * std::max(1.0, loop_samples));
   }
 
   /// @brief A one-pole decay whose state is multiplied by @p radius each sample.
   TailBudget& decay(double radius) noexcept { return recirculation(1.0, radius); }
+
+  /// @brief A one-pole decay with an explicit heard-output scale.
+  TailBudget& decay(double radius, double output_scale) noexcept {
+    return recirculation(1.0, radius, output_scale);
+  }
 
   /// @brief A two-pole section with denominator 1 + a1 z^-1 + a2 z^-2 and numerator taps
   ///        summing to @p numerator_sum in magnitude. Its impulse response is bounded by
@@ -142,5 +155,14 @@ class TailBudget {
 
   std::int64_t samples_ = 0;
 };
+
+/// @brief @p tail as a 64-bit sample count for an owner that sums tails past INT_MAX.
+/// @details @ref TailBudget::kUnbounded becomes INT64_MAX, so an unbounded tail stays
+///   unbounded in the wider domain instead of reading as a finite INT_MAX samples.
+inline std::int64_t tail_budget_samples(const TailBudget& tail) noexcept {
+  const int samples = tail.samples();
+  return samples == TailBudget::kUnbounded ? std::numeric_limits<std::int64_t>::max()
+                                           : static_cast<std::int64_t>(samples);
+}
 
 }  // namespace sonare::rt

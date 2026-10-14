@@ -21,13 +21,6 @@ using sonare::constants::kEpsilon;
 
 namespace {
 
-/// @brief Snaps a float key field to a fixed grid so bitwise-different but
-/// logically-equal UI inputs (e.g. 32.70 vs 32.7000007) collapse to the same
-/// value before the key is hashed/compared. Quantizing at key construction is
-/// what lets us keep strict `==` in the key (so the equal/hash contract holds)
-/// while still getting cache hits for near-equal inputs.
-float quantize(float value, float grid) { return std::round(value / grid) * grid; }
-
 /// @brief Cache key for CQT kernel
 struct CqtKernelCacheKey {
   int sample_rate;
@@ -38,13 +31,9 @@ struct CqtKernelCacheKey {
   float filter_scale;
   WindowType window;
 
-  // Exact equality so the equal/hash contract holds: the hash mixes the raw
-  // float bits of fmin/filter_scale, so a fuzzy operator== would let two
-  // logically-"equal" keys hash to different buckets and silently miss the
-  // cache — triggering a redundant (expensive) wavelet + per-bin FFT rebuild —
-  // and, on a bucket collision, could even return the wrong cached kernel. The
-  // float fields are quantized at construction (see make_key), so exact
-  // comparison still produces cache hits for near-equal inputs.
+  // Exact equality keeps the cache key identical to the configuration used to
+  // build the kernel. Near-equal configurations intentionally remain distinct:
+  // the transform must never return a kernel built from a different cold value.
   bool operator==(const CqtKernelCacheKey& other) const {
     return sample_rate == other.sample_rate && hop_length == other.hop_length &&
            fmin == other.fmin && n_bins == other.n_bins &&
@@ -53,19 +42,13 @@ struct CqtKernelCacheKey {
   }
 };
 
-/// @brief Builds a CQT cache key with float fields snapped to fixed grids.
-/// @details fmin is in Hz (0.001 Hz grid: fine enough to resolve real config
-/// changes, coarse enough to absorb UI float noise); filter_scale is
-/// dimensionless (1e-4 grid, matching the historical fuzzy tolerance).
 CqtKernelCacheKey make_key(int sr, const CqtConfig& config) {
-  constexpr float kFminGrid = 0.001f;        // Hz
-  constexpr float kFilterScaleGrid = 1e-4f;  // dimensionless
   return CqtKernelCacheKey{sr,
                            config.hop_length,
-                           quantize(config.fmin, kFminGrid),
+                           config.fmin,
                            config.n_bins,
                            config.bins_per_octave,
-                           quantize(config.filter_scale, kFilterScaleGrid),
+                           config.filter_scale,
                            config.window};
 }
 
@@ -95,11 +78,11 @@ constexpr int kMaxCqtFftLength = 131072;
 CachedCqtKernel get_cached_kernel(int sr, const CqtConfig& config) {
   CqtKernelCacheKey key = make_key(sr, config);
 
-  // Returned by value so the shared-pointer snapshot survives eviction; the
-  // build runs under the lock (see LruCache::get_or_build_value).
+  // Returned by value so the shared-pointer snapshot survives eviction. The
+  // expensive wavelet and per-bin FFT build runs outside the cache lock.
   static LruCache<CqtKernelCacheKey, CachedCqtKernel, CqtKernelCacheKeyHash> cache(
       kMaxCqtCacheSize);
-  return cache.get_or_build_value(key, [&]() -> CachedCqtKernel {
+  return cache.get_or_build(key, [&]() -> CachedCqtKernel {
     std::shared_ptr<CqtKernel> kernel = CqtKernel::create(sr, config);
 
     return CachedCqtKernel{std::move(kernel)};
@@ -178,7 +161,15 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
   std::vector<float> raw_lengths = wavelet_lengths(kernel->frequencies_, sr, config.filter_scale);
   const float longest =
       raw_lengths.empty() ? 0.0f : *std::max_element(raw_lengths.begin(), raw_lengths.end());
-  int predicted_n_fft = next_power_of_2(std::max(2, static_cast<int>(std::ceil(longest))));
+  SONARE_CHECK(
+      numeric::finite_non_negative(longest) && longest <= static_cast<float>(kMaxCqtFftLength),
+      ErrorCode::InvalidParameter);
+  const long double longest_ceil = std::ceil(static_cast<long double>(longest));
+  SONARE_CHECK(std::isfinite(longest_ceil) && longest_ceil >= 1.0L &&
+                   longest_ceil <= static_cast<long double>(kMaxCqtFftLength),
+               ErrorCode::InvalidParameter);
+  const int predicted_max_length = std::max(2, static_cast<int>(longest_ceil));
+  int predicted_n_fft = next_power_of_2(predicted_max_length);
   if (config.hop_length > 0) {
     predicted_n_fft = std::max(predicted_n_fft, 2 * next_power_of_2(config.hop_length));
   }
@@ -189,12 +180,12 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
                                                  kMaxCqtKernelElements, &predicted_elements),
                ErrorCode::InvalidParameter);
 
-  // Build the time-domain wavelet basis (Hann window * complex sinusoid,
+  // Build the time-domain wavelet basis (selected periodic window * complex sinusoid,
   // L1-normalised, pad-centred to a common length n_fft = next_pow2(ceil(max))).
   int n_fft_basis = 0;
-  std::vector<std::complex<float>> basis =
-      wavelet(kernel->frequencies_, sr, config.filter_scale, /*is_cqt=*/true,
-              /*pad_fft=*/true, /*Q=*/0.0f, &n_fft_basis);
+  std::vector<std::complex<float>> basis = detail::wavelet_with_window(
+      kernel->frequencies_, sr, config.filter_scale,
+      /*is_cqt=*/true, /*pad_fft=*/true, /*Q=*/0.0f, config.window, &n_fft_basis);
   int n_fft = n_fft_basis;
 
   // librosa widens n_fft when it is shorter than 2 * next_pow2(hop_length).

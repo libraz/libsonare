@@ -7,8 +7,26 @@
 #include <vector>
 
 #include "util/constants.h"
+#include "util/types.h"
 
 namespace sonare {
+
+namespace detail {
+
+/// @brief Builds wavelet kernels with an explicitly selected periodic window.
+/// @details This is the internal implementation used by CQT. The public
+/// `wavelet` entry point remains the Hann-windowed compatibility wrapper.
+std::vector<std::complex<float>> wavelet_with_window(const std::vector<float>& freqs, int sr,
+                                                     float window_param, bool is_cqt, bool pad_fft,
+                                                     float Q, WindowType window,
+                                                     int* n_fft_out = nullptr);
+
+/// @brief Computes librosa's relative bandwidth for each frequency bin.
+/// @details The result includes the same floor used by wavelet lengths. A
+/// single frequency uses the caller-compatible default alpha of 1.0.
+std::vector<float> relative_bandwidths(const std::vector<float>& freqs);
+
+}  // namespace detail
 
 /// @brief Complex Hann-windowed sinusoid kernels at @p freqs.
 /// @details Mirrors `librosa.filters.wavelet` sizing and normalization. By default returns the

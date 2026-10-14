@@ -79,8 +79,8 @@ class MatrixView {
 
 /// @brief Error codes for library operations.
 /// @details Mirrors the C ABI @c SonareError enum; new values MUST be added to
-///          both enums in lockstep and to the @c map_sonare_exception switch in
-///          @c sonare_c_internal.cpp.
+///          both enums in lockstep and to the @c c_error_from_error_code switch in
+///          @c c_api/sonare_c_error_mapping.h.
 enum class ErrorCode : int {
   Ok = 0,
   FileNotFound,

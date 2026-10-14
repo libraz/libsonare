@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -14,6 +15,9 @@ namespace {
 /// @param freqs Bin center frequencies, monotonically increasing.
 float interp_at(const float* S, int n_bins, int n_frames, const std::vector<float>& freqs,
                 float target_freq, int frame, float fill_value) {
+  if (n_bins == 1) {
+    return target_freq == freqs.front() ? S[frame] : fill_value;
+  }
   if (target_freq < freqs.front() || target_freq > freqs.back()) return fill_value;
   // Binary-search the upper bound; clamp to [1, n_bins-1] for safe interpolation.
   auto it = std::lower_bound(freqs.begin(), freqs.end(), target_freq);
@@ -59,6 +63,14 @@ std::vector<float> interp_harmonics(const float* x, int n_bins, int n_frames,
 std::vector<float> interp_harmonics(const std::vector<float>& x, int n_bins, int n_frames,
                                     const std::vector<float>& freqs,
                                     const std::vector<float>& harmonics) {
+  if (n_bins > 0 && n_frames > 0 && !harmonics.empty()) {
+    std::size_t expected = 0;
+    if (!numeric::checked_matrix_element_count(n_bins, n_frames, &expected) ||
+        x.size() != expected) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "interp_harmonics: x size must equal n_bins * n_frames");
+    }
+  }
   return interp_harmonics(x.data(), n_bins, n_frames, freqs, harmonics);
 }
 
@@ -99,6 +111,14 @@ std::vector<float> salience(const float* S, int n_bins, int n_frames,
 std::vector<float> salience(const std::vector<float>& S, int n_bins, int n_frames,
                             const std::vector<float>& freqs, const std::vector<float>& harmonics,
                             float fill_value, const std::vector<float>& weights) {
+  if (n_bins > 0 && n_frames > 0 && !harmonics.empty()) {
+    std::size_t expected = 0;
+    if (!numeric::checked_matrix_element_count(n_bins, n_frames, &expected) ||
+        S.size() != expected) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "salience: S size must equal n_bins * n_frames");
+    }
+  }
   return salience(S.data(), n_bins, n_frames, freqs, harmonics, fill_value, weights);
 }
 
@@ -131,6 +151,14 @@ std::vector<float> f0_harmonics(const float* S, int n_bins, int n_frames,
 std::vector<float> f0_harmonics(const std::vector<float>& S, int n_bins, int n_frames,
                                 const std::vector<float>& f0, const std::vector<float>& freqs,
                                 const std::vector<float>& harmonics) {
+  if (n_bins > 0 && n_frames > 0 && !harmonics.empty()) {
+    std::size_t expected = 0;
+    if (!numeric::checked_matrix_element_count(n_bins, n_frames, &expected) ||
+        S.size() != expected) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "f0_harmonics: S size must equal n_bins * n_frames");
+    }
+  }
   return f0_harmonics(S.data(), n_bins, n_frames, f0, freqs, harmonics);
 }
 

@@ -5,24 +5,22 @@
 #include <cmath>
 
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
 namespace {
 
-double largest_eigenvalue(const Eigen::MatrixXd& matrix) {
-  const int n = static_cast<int>(matrix.cols());
-  if (n == 0) return 0.0;
-  Eigen::VectorXd vector = Eigen::VectorXd::Constant(n, 1.0 / std::sqrt(n));
-  double eigenvalue = 0.0;
-  for (int iteration = 0; iteration < 24; ++iteration) {
-    Eigen::VectorXd next = matrix * vector;
-    const double norm = next.norm();
-    if (norm <= 1e-18) return 0.0;
-    vector = next / norm;
-    eigenvalue = vector.dot(matrix * vector);
+double lipschitz_upper_bound(const Eigen::MatrixXd& matrix) {
+  double bound = 0.0;
+  for (Eigen::Index row = 0; row < matrix.rows(); ++row) {
+    double row_sum = 0.0;
+    for (Eigen::Index column = 0; column < matrix.cols(); ++column) {
+      row_sum += std::abs(matrix(row, column));
+    }
+    bound = std::max(bound, row_sum);
   }
-  return eigenvalue;
+  return bound;
 }
 
 }  // namespace
@@ -61,7 +59,7 @@ std::vector<float> nnls(const float* A, int A_rows, int A_cols, const float* B, 
   Eigen::MatrixXd x = Eigen::MatrixXd::Zero(A_cols, B_cols);
   Eigen::MatrixXd y = x;
   double momentum = 1.0;
-  const double lipschitz = largest_eigenvalue(AtA);
+  const double lipschitz = lipschitz_upper_bound(AtA);
   if (lipschitz > 0.0) {
     const double step = 1.0 / lipschitz;
     for (int iteration = 0; iteration < max_iter; ++iteration) {
@@ -92,6 +90,16 @@ std::vector<float> nnls(const float* A, int A_rows, int A_cols, const float* B, 
 
 std::vector<float> nnls(const std::vector<float>& A, int A_rows, int A_cols,
                         const std::vector<float>& B, int B_cols, int max_iter, float tol) {
+  if (A_rows > 0 && A_cols > 0 && B_cols > 0) {
+    std::size_t expected_a = 0;
+    std::size_t expected_b = 0;
+    if (!numeric::checked_matrix_element_count(A_rows, A_cols, &expected_a) ||
+        !numeric::checked_matrix_element_count(A_rows, B_cols, &expected_b) ||
+        A.size() != expected_a || B.size() != expected_b) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "nnls: A and B sizes must match their matrix dimensions");
+    }
+  }
   return nnls(A.data(), A_rows, A_cols, B.data(), B_cols, max_iter, tol);
 }
 

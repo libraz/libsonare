@@ -1084,7 +1084,7 @@ if(BUILD_ARRANGEMENT)
   # arrangement/ + midi/ + mir/ (and core for util::json). NOTHING in
   # rt/engine/midi/arrangement/mir depends on serialize; the RT-critical CI guard
   # forbids rt/ and engine/ from including serialize/. The mixer Scene is embedded
-  # through the canonical scene_to_json/scene_from_json helpers in sonare_core,
+  # through the canonical scene Value builder/decoder in sonare_core,
   # so mixing-ON and mixing-OFF builds use the same schema walker.
   add_library(sonare_serialize STATIC
     serialize/project_serializer.cpp
@@ -1628,9 +1628,20 @@ if(BUILD_WASM)
       c_api/sonare_c_internal.cpp
       c_api/sonare_c_memory.cpp
       c_api/sonare_c_vocal_edit.cpp
+      core/audio_io.cpp
       core/convert.cpp
+      feature/cqt.cpp
+      feature/vqt.cpp
+      filters/chroma.cpp
+      filters/mel.cpp
       mixing/api/scene_json.cpp
       TARGET_DIRECTORY sonare_core_objects
+      PROPERTIES COMPILE_OPTIONS -fexceptions)
+  endif()
+  if(TARGET sonare_graph)
+    set_source_files_properties(
+      graph/graph.cpp
+      TARGET_DIRECTORY sonare_graph
       PROPERTIES COMPILE_OPTIONS -fexceptions)
   endif()
   if(TARGET sonare_engine)
@@ -1665,6 +1676,7 @@ if(BUILD_WASM)
     set_source_files_properties(
       midi/layered_instrument.cpp
       midi/midi_clip.cpp
+      midi/note_targets.cpp
       midi/sequencer.cpp
       midi/synth/native_synth_live_control.cpp
       midi/synth/part_fx_stage.cpp

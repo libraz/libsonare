@@ -52,6 +52,12 @@ install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/
     PATTERN "c_api" EXCLUDE
     PATTERN "wasm" EXCLUDE
     PATTERN "host/backends" EXCLUDE
+    # Private implementation seams; no installed header includes them.
+    PATTERN "core/audio_io_detail.h" EXCLUDE
+    PATTERN "midi/assist/assist_budget_detail.h" EXCLUDE
+    PATTERN "midi/note_pairing.h" EXCLUDE
+    PATTERN "mixing/api/scene_json_detail.h" EXCLUDE
+    PATTERN "serialize/project_serializer_private.h" EXCLUDE
 )
 
 # --- Export set ------------------------------------------------------------

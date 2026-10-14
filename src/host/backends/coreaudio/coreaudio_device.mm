@@ -327,8 +327,12 @@ bool CoreAudioDevice::open_device(uint32_t device_id, const AudioStreamConfig& c
     }
   }
   if (impl_->device_id != kAudioObjectUnknown) {
-    AudioUnitSetProperty(impl_->unit, kAudioOutputUnitProperty_CurrentDevice,
-                         kAudioUnitScope_Global, 0, &impl_->device_id, sizeof(impl_->device_id));
+    if (!ok(AudioUnitSetProperty(impl_->unit, kAudioOutputUnitProperty_CurrentDevice,
+                                 kAudioUnitScope_Global, 0, &impl_->device_id,
+                                 sizeof(impl_->device_id)))) {
+      close();
+      return false;
+    }
   }
 
   // Negotiate the canonical interleaved float32 stream format at the requested

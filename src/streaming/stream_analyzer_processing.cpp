@@ -157,23 +157,6 @@ void StreamAnalyzer::process_complete_frames() {
     key_fed_pos_ -= std::min(key_fed_pos_, overlap_read_pos_);
     overlap_read_pos_ = 0;
   }
-
-  /// Capacity guard (safety net): after compaction the unconsumed tail is
-  /// normally < the window, because the frame loop above drains every complete
-  /// frame whenever the buffer reaches a window. A pathological caller, however,
-  /// could feed sub-frame chunks (each smaller than a window) for a very long time
-  /// in a config where a frame is never completed, letting overlap_buffer_ grow
-  /// without an upper bound. Cap it at a generous multiple of the window and drop the
-  /// oldest excess so a long-running session cannot leak. Under correct
-  /// frame-sized operation this branch is never taken, so normal behavior is
-  /// unchanged.
-  const size_t kMaxOverlapSamples = static_cast<size_t>(window_length_) * 10;
-  if (overlap_buffer_.size() > kMaxOverlapSamples) {
-    const size_t drop = overlap_buffer_.size() - kMaxOverlapSamples;
-    overlap_buffer_.erase(overlap_buffer_.begin(),
-                          overlap_buffer_.begin() + static_cast<std::ptrdiff_t>(drop));
-    key_fed_pos_ -= std::min(key_fed_pos_, drop);
-  }
 }
 
 void StreamAnalyzer::finalize() {

@@ -5,10 +5,16 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <limits>
 #include <random>
+#include <string>
 #include <utility>
 #include <vector>
 
+#include "util/exception.h"
+
+using sonare::ErrorCode;
+using sonare::SonareException;
 using sonare::rt::PartitionedConvolver;
 using sonare::rt::PartitionedConvolverConfig;
 
@@ -27,6 +33,20 @@ std::vector<float> naive_convolve(const std::vector<float>& x, const std::vector
 }
 
 }  // namespace
+
+TEST_CASE("PartitionedConvolver rejects an unrepresentable FFT size", "[rt][convolver]") {
+  const int too_large = std::numeric_limits<int>::max() / 2 + 1;
+
+  try {
+    PartitionedConvolver conv(PartitionedConvolverConfig{too_large});
+    FAIL("expected an invalid partition size");
+  } catch (const SonareException& error) {
+    REQUIRE(error.code() == ErrorCode::InvalidParameter);
+    const std::string message = error.what();
+    REQUIRE(message.find("partition_size") != std::string::npos);
+    REQUIRE(message.find("INT_MAX / 2") != std::string::npos);
+  }
+}
 
 TEST_CASE("PartitionedConvolver passes input through a unit-impulse IR", "[rt][convolver]") {
   constexpr int kN = 64;

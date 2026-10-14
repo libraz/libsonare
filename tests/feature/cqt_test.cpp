@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <iterator>
+#include <utility>
 #include <vector>
 
 #include "core/fft.h"
@@ -22,6 +23,7 @@
 #include "util/constants.h"
 
 using namespace sonare;
+using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
 namespace {
@@ -52,6 +54,41 @@ int find_bin_for_freq(const std::vector<float>& freqs, float target) {
     }
   }
   return best_bin;
+}
+
+void evict_cqt_kernel_cache(const Audio& audio, int family) {
+  CqtConfig first;
+  first.fmin = 300.0f + 20.0f * static_cast<float>(family);
+  first.n_bins = 4 + family;
+  first.hop_length = 128 + family;
+  CqtConfig second = first;
+  second.fmin += 40.0f;
+  second.n_bins += 1;
+  second.hop_length += 17;
+  static_cast<void>(cqt(audio, first));
+  static_cast<void>(cqt(audio, second));
+}
+
+void check_cqt_matches_cold(const CqtResult& actual, const CqtResult& cold) {
+  CHECK(actual.n_bins() == cold.n_bins());
+  CHECK(actual.n_frames() == cold.n_frames());
+  CHECK(actual.frequencies().size() == cold.frequencies().size());
+  if (actual.empty() || cold.empty() || actual.n_bins() <= 0 || cold.n_bins() <= 0 ||
+      actual.n_frames() <= 0 || cold.n_frames() <= 0) {
+    return;
+  }
+  CHECK_THAT(actual.frequencies().front(), WithinAbs(cold.frequencies().front(), 1e-7f));
+  const auto& actual_magnitude = actual.magnitude();
+  const auto& cold_magnitude = cold.magnitude();
+  const int shared_bins = std::min(actual.n_bins(), cold.n_bins());
+  const int shared_frames = std::min(actual.n_frames(), cold.n_frames());
+  const std::array<std::pair<int, int>, 3> samples = {
+      std::pair<int, int>{0, 0}, std::pair<int, int>{shared_bins / 2, shared_frames / 2},
+      std::pair<int, int>{shared_bins - 1, shared_frames - 1}};
+  for (const auto& [bin, frame] : samples) {
+    CHECK_THAT(actual_magnitude[bin * actual.n_frames() + frame],
+               WithinAbs(cold_magnitude[bin * cold.n_frames() + frame], 1e-7f));
+  }
 }
 
 }  // namespace
@@ -485,13 +522,9 @@ TEST_CASE("CQT kernel cache distinguishes filter_scale", "[cqt][regression][cach
   REQUIRE(max_diff > 1e-3);
 }
 
-// Regression: the CQT kernel cache key must include `window` so that two
-// configurations differing only in the window function never alias to the same
-// cached kernel. The current `cqt()` implementation hardcodes a Hann wavelet
-// in `wavelet()`, so the externally observable output does not yet depend on
-// `config.window`; this test exercises the cache key path with different
-// windows to guard against a stale-kernel regression if the CQT kernel ever
-// starts honoring `config.window` (as the VQT kernel already does).
+// Regression: the CQT kernel cache key must include `window` and the selected
+// window must reach the generated kernel. A stale cache entry would make the
+// Hamming output equal to the first Hann request.
 TEST_CASE("CQT kernel cache distinguishes window type", "[cqt][regression][cache]") {
   Audio audio = generate_sine(440.0f, 0.5f, 22050);
 
@@ -515,11 +548,82 @@ TEST_CASE("CQT kernel cache distinguishes window type", "[cqt][regression][cache
   // (Hann) kernel rather than a Hamming-keyed entry from the second call.
   CqtResult res_a_again = cqt(audio, cfg_a);
   const auto& mag_a = res_a.magnitude();
+  const auto& mag_b = res_b.magnitude();
   const auto& mag_a_again = res_a_again.magnitude();
   REQUIRE(mag_a.size() == mag_a_again.size());
   for (size_t i = 0; i < mag_a.size(); ++i) {
     REQUIRE(mag_a[i] == mag_a_again[i]);
   }
+
+  REQUIRE(mag_a.size() == mag_b.size());
+  double max_diff = 0.0;
+  for (size_t i = 0; i < mag_a.size(); ++i) {
+    max_diff = std::max(max_diff, static_cast<double>(std::abs(mag_a[i] - mag_b[i])));
+  }
+  CAPTURE(max_diff);
+  REQUIRE(max_diff > 1e-4);
+}
+
+TEST_CASE("CQT cache preserves exact near-quantization configuration values",
+          "[cqt][regression][cache]") {
+  Audio audio = generate_sine(440.0f, 0.08f, 22050);
+
+  CqtConfig first;
+  first.fmin = 73.4002f;
+  first.n_bins = 37;
+  first.hop_length = 257;
+  first.bins_per_octave = 12;
+  CqtConfig second = first;
+  second.fmin = 73.4004f;
+
+  static_cast<void>(cqt(audio, first));
+  const CqtResult warm_second = cqt(audio, second);
+  evict_cqt_kernel_cache(audio, 1);
+  const CqtResult cold_second = cqt(audio, second);
+  check_cqt_matches_cold(warm_second, cold_second);
+
+  CqtConfig reverse_first = first;
+  reverse_first.fmin = 83.4002f;
+  reverse_first.n_bins = 38;
+  reverse_first.hop_length = 258;
+  CqtConfig reverse_second = reverse_first;
+  reverse_second.fmin = 83.4004f;
+
+  static_cast<void>(cqt(audio, reverse_second));
+  const CqtResult warm_reverse_first = cqt(audio, reverse_first);
+  evict_cqt_kernel_cache(audio, 2);
+  const CqtResult cold_reverse_first = cqt(audio, reverse_first);
+  check_cqt_matches_cold(warm_reverse_first, cold_reverse_first);
+}
+
+TEST_CASE("CQT cache preserves near-boundary filter_scale kernels", "[cqt][regression][cache]") {
+  Audio audio = generate_sine(440.0f, 0.08f, 22050);
+
+  CqtConfig first;
+  first.fmin = 93.3f;
+  first.n_bins = 12;
+  first.hop_length = 257;
+  first.filter_scale = 0.999951f;
+  CqtConfig second = first;
+  second.filter_scale = 0.999999f;
+
+  static_cast<void>(cqt(audio, first));
+  const CqtResult warm_second = cqt(audio, second);
+  evict_cqt_kernel_cache(audio, 3);
+  const CqtResult cold_second = cqt(audio, second);
+  check_cqt_matches_cold(warm_second, cold_second);
+
+  CqtConfig reverse_first = first;
+  reverse_first.n_bins = 13;
+  reverse_first.hop_length = 258;
+  CqtConfig reverse_second = reverse_first;
+  reverse_second.filter_scale = second.filter_scale;
+
+  static_cast<void>(cqt(audio, reverse_second));
+  const CqtResult warm_reverse_first = cqt(audio, reverse_first);
+  evict_cqt_kernel_cache(audio, 4);
+  const CqtResult cold_reverse_first = cqt(audio, reverse_first);
+  check_cqt_matches_cold(warm_reverse_first, cold_reverse_first);
 }
 
 // Suppress deprecated warning for icqt round-trip tests.

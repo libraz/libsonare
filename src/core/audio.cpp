@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "core/audio_io.h"
+#include "core/audio_io_detail.h"
 #include "util/exception.h"
 
 namespace sonare {
@@ -104,7 +105,11 @@ Audio validated_decoded_audio(std::vector<float> samples, int sample_rate) {
 }  // namespace
 
 Audio Audio::from_file(const std::string& path) {
-  auto [samples, sample_rate] = load_audio(path);
+  auto decoded = load_audio_input_once(path, RetainChannels::None);
+  return audio_from_decoded_mono(std::move(decoded.mono), decoded.sample_rate);
+}
+
+Audio audio_from_decoded_mono(std::vector<float> samples, int sample_rate) {
   return validated_decoded_audio(std::move(samples), sample_rate);
 }
 
