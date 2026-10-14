@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "mastering/common/prepare_args.h"
+#include "mastering/dynamics/detector_level.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
@@ -81,7 +82,7 @@ void DeEsser::process(float* const* channels, int num_channels, int num_samples)
       // approximation for a split-band de-esser of this design.
       const float sibilant = filter2.process(filter.process(input));
       const float envelope = follower.process(sibilant);
-      const float reduction_db = gain_reduction_db(linear_to_db(envelope), cfg);
+      const float reduction_db = gain_reduction_db(detector_level_db(envelope), cfg);
       const float linear_reduction = db_to_linear(reduction_db);
       // out = dry full-band minus the attenuated portion of the detected band.
       channels[ch][i] = input + sibilant * (linear_reduction - 1.0f);

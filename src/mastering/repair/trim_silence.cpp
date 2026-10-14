@@ -5,7 +5,6 @@
 #include <vector>
 
 #include "core/stereo_pair.h"
-#include "util/constants.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
@@ -20,9 +19,9 @@ bool is_active_sample(const float* samples, size_t index, const TrimSilenceConfi
     return std::abs(samples[index]) > config.threshold;
   }
   const float window_rms = static_cast<float>(std::sqrt(energy.mean_square_at(index)));
-  const float loudness_db =
-      window_rms <= 1.0e-12f ? sonare::constants::kFloorDb : linear_to_db(window_rms);
-  return loudness_db > config.gate_lufs;
+  // Silence is below every accepted gate; the -120 dB reporting floor must not stand in for it.
+  if (window_rms <= 1.0e-12f) return false;
+  return linear_to_db(window_rms) > config.gate_lufs;
 }
 
 bool is_empty_range(const TrimRange& range) { return range.first >= range.last_exclusive; }

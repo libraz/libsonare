@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "mastering/common/prepare_args.h"
+#include "mastering/dynamics/detector_level.h"
 #include "mastering/dynamics/linked_gain.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
@@ -116,7 +117,7 @@ void ParallelComp::process(float* const* channels, int num_channels, int num_sam
     for (int i = 0; i < num_samples; ++i) {
       const float linked_level = linked_peak(channels, num_channels, i, excluded_channel);
       const float level = followers_[0].process(linked_level);
-      const float reduction_db = gain_reduction_db(linear_to_db(level), cfg);
+      const float reduction_db = gain_reduction_db(detector_level_db(level), cfg);
       const float gain = db_to_linear(reduction_db + cfg.makeup_gain_db);
       float output_peak = 0.0f;
       for (int ch = 0; ch < num_channels; ++ch) {
@@ -148,7 +149,7 @@ void ParallelComp::process(float* const* channels, int num_channels, int num_sam
       for (int i = 0; i < num_samples; ++i) {
         const float dry = channels[ch][i];
         const float level = follower.process(std::abs(dry));
-        const float reduction_db = gain_reduction_db(linear_to_db(level), cfg);
+        const float reduction_db = gain_reduction_db(detector_level_db(level), cfg);
         const float compressed = dry * db_to_linear(reduction_db + cfg.makeup_gain_db);
         float out = dry * (1.0f - cfg.mix) + compressed * cfg.mix;
         if (output_limiter) {

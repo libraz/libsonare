@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <complex>
@@ -83,6 +84,93 @@ TEST_CASE("TrimSilence supports LUFS-gated trimming", "[mastering][repair]") {
   REQUIRE(result.size() < samples.size());
   REQUIRE(result.size() >= 20);
   REQUIRE(rms(result) > 0.05f);
+}
+
+namespace {
+
+TrimSilenceConfig gated_config(float gate_lufs) {
+  return {0.001f, 0, TrimSilenceMode::LufsGated, gate_lufs, 1.0f};
+}
+
+size_t gate_window_radius(int sample_rate, const TrimSilenceConfig& config) {
+  return std::max<size_t>(1, static_cast<size_t>(sample_rate * config.window_ms * 0.0005f));
+}
+
+// Zeros around a loud cosine burst; the burst is [start, end).
+std::vector<float> burst_signal(int sample_rate, size_t* start, size_t* end) {
+  const size_t size = static_cast<size_t>(sample_rate) / 4;
+  *start = size / 3;
+  *end = *start + static_cast<size_t>(sample_rate) / 50;
+  std::vector<float> samples(size, 0.0f);
+  for (size_t i = *start; i < *end; ++i) {
+    samples[i] = 0.5f * static_cast<float>(std::cos(sonare::constants::kTwoPiD * 1000.0 *
+                                                    static_cast<double>(i) / sample_rate));
+  }
+  return samples;
+}
+
+}  // namespace
+
+TEST_CASE("TrimSilence gated trim removes all-zero input at every accepted gate",
+          "[mastering][repair]") {
+  const int rate = GENERATE(8000, 48000, 96000);
+  const float gate = GENERATE(-119.0f, -120.0f, -120.1f, -130.0f, -144.0f);
+  CAPTURE(rate, gate);
+  const std::vector<float> zeros(static_cast<size_t>(rate) / 10, 0.0f);
+  const auto config = gated_config(gate);
+
+  const TrimRange range = detect_trim_range(zeros.data(), zeros.size(), rate, config);
+  CHECK(range.first == zeros.size());
+  CHECK(range.last_exclusive == zeros.size());
+
+  TrimReport report;
+  const auto trimmed =
+      trim_silence(Audio::from_buffer(zeros.data(), zeros.size(), rate), config, &report);
+  CHECK(trimmed.size() == 0);
+  CHECK(report.removed_head_samples == zeros.size());
+}
+
+TEST_CASE("TrimSilence gated trim keeps a tone burst's true extent below the reporting floor",
+          "[mastering][repair]") {
+  const int rate = GENERATE(8000, 48000, 96000);
+  const float gate = GENERATE(-119.0f, -130.0f, -144.0f);
+  CAPTURE(rate, gate);
+  size_t start = 0;
+  size_t end = 0;
+  const auto samples = burst_signal(rate, &start, &end);
+  const auto config = gated_config(gate);
+  const size_t radius = gate_window_radius(rate, config);
+
+  const TrimRange range = detect_trim_range(samples.data(), samples.size(), rate, config);
+  CHECK(range.first <= start);
+  CHECK(range.first + 2 * radius >= start);
+  CHECK(range.last_exclusive >= end);
+  CHECK(range.last_exclusive <= end + 2 * radius + 1);
+}
+
+TEST_CASE("TrimSilence gated stereo trim ignores a silent plane at a gate below the floor",
+          "[mastering][repair]") {
+  const int rate = GENERATE(8000, 48000);
+  const float gate = GENERATE(-120.1f, -130.0f, -144.0f);
+  CAPTURE(rate, gate);
+  size_t start = 0;
+  size_t end = 0;
+  const auto burst = burst_signal(rate, &start, &end);
+  const std::vector<float> silent(burst.size(), 0.0f);
+  const auto config = gated_config(gate);
+
+  const TrimRange expected = detect_trim_range(burst.data(), burst.size(), rate, config);
+  const TrimRange range =
+      detect_trim_range_stereo(silent.data(), burst.data(), burst.size(), rate, config);
+  CHECK(range.first == expected.first);
+  CHECK(range.last_exclusive == expected.last_exclusive);
+  CHECK(range.first > 0);
+
+  const auto result =
+      trim_silence_stereo(Audio::from_buffer(silent.data(), silent.size(), rate),
+                          Audio::from_buffer(burst.data(), burst.size(), rate), config);
+  CHECK(result.left.size() == expected.last_exclusive - expected.first);
+  CHECK(result.right.size() == result.left.size());
 }
 
 namespace {

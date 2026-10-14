@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "mastering/common/prepare_args.h"
+#include "mastering/dynamics/detector_level.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
@@ -82,7 +83,7 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
               std::max(linked_level, followers_[static_cast<size_t>(ch)].process(channels[ch][i]));
         }
       }
-      const float level_db = linear_to_db(linked_level);
+      const float level_db = detector_level_db(linked_level);
       float ride_db = 0.0f;
       if (level_db >= cfg.noise_floor_db) {
         const float target_gain_db = cfg.target_db - level_db;
@@ -110,7 +111,7 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
       float& gain_state = gain_state_db_[static_cast<size_t>(ch)];
       for (int i = 0; i < num_samples; ++i) {
         const float level = follower.process(channels[ch][i]);
-        const float level_db = linear_to_db(level);
+        const float level_db = detector_level_db(level);
         float ride_db = 0.0f;
         if (level_db >= cfg.noise_floor_db) {
           const float target_gain_db = cfg.target_db - level_db;

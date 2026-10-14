@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "mastering/common/prepare_args.h"
+#include "mastering/dynamics/detector_level.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
@@ -94,7 +95,7 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
       }
       detector = std::max(detector, std::abs(s));
     }
-    const float level_db = linear_to_db(detector);
+    const float level_db = detector_level_db(detector);
     if (level_db >= cfg.threshold_db) {
       hold_samples_remaining_ = hold_samples;
     } else if (hold_samples_remaining_ > 0) {

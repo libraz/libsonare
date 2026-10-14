@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "mastering/common/prepare_args.h"
+#include "mastering/dynamics/detector_level.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -162,7 +163,7 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
     float level_db = kFloorDb;
     switch (cfg.detector) {
       case DetectorMode::Peak:
-        level_db = linear_to_db(peak_lin);
+        level_db = detector_level_db(peak_lin);
         break;
       case DetectorMode::Rms:
         // Linear-domain RMS smoothing (10 ms window). Fast response, follows
@@ -172,7 +173,7 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
           reseed_rms_state = false;
         }
         rms_state_ = rms_coeff_ * rms_state_ + (1.0f - rms_coeff_) * power_lin;
-        level_db = linear_to_db(std::sqrt(std::max(rms_state_, 0.0f)));
+        level_db = detector_level_db(std::sqrt(std::max(rms_state_, 0.0f)));
         break;
       case DetectorMode::LogRms:
         // Slower RMS smoothing (50 ms window) for sustained-level estimation.
@@ -182,7 +183,7 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
           reseed_rms_state = false;
         }
         rms_state_ = log_rms_coeff_ * rms_state_ + (1.0f - log_rms_coeff_) * power_lin;
-        level_db = linear_to_db(std::sqrt(std::max(rms_state_, 0.0f)));
+        level_db = detector_level_db(std::sqrt(std::max(rms_state_, 0.0f)));
         break;
     }
 

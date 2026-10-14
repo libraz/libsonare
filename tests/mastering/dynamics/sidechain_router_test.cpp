@@ -2,9 +2,12 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <cmath>
+#include <memory>
 #include <vector>
 
+#include "mastering/api/insert_factory.h"
 #include "util/constants.h"
 
 namespace {
@@ -166,4 +169,92 @@ TEST_CASE("SidechainRouter switching from the key to the internal detector clear
   CHECK(max_difference(reentry, control_reentry) < kTolerance);
   CHECK(subject.non_finite_discard_count() == 0u);
   CHECK(control.non_finite_discard_count() == 0u);
+}
+
+namespace {
+
+constexpr int kLongBlock = 512;
+constexpr int kShortKey = 128;
+constexpr int kIdleBlocks = 99;
+constexpr float kBed = 0.5f;
+
+// Runs a bed block under a loud key head of kShortKey frames, then `idle_blocks` blocks keyed by
+// a single zero sample, then a block with a full zero key. `padded` supplies each key zero-padded
+// to the block instead of short. Returns every output sample.
+std::vector<float> run_short_key(const SidechainRouterConfig& config, bool padded,
+                                 int idle_blocks) {
+  SidechainRouter router(config);
+  router.prepare(kRate, kLongBlock);
+  std::vector<float> output;
+  std::vector<float> head(kLongBlock, 0.0f);
+  std::fill(head.begin(), head.begin() + kShortKey, kBed);
+  const std::vector<float> zeros(kLongBlock, 0.0f);
+
+  auto run_block = [&](const std::vector<float>& key, int key_frames) {
+    std::vector<float> bed(kLongBlock, kBed);
+    const float* key_channels[] = {key.data()};
+    router.set_sidechain(key_channels, 1, key_frames);
+    float* channels[] = {bed.data()};
+    router.process(channels, 1, kLongBlock);
+    output.insert(output.end(), bed.begin(), bed.end());
+  };
+
+  run_block(head, padded ? kLongBlock : kShortKey);
+  for (int i = 0; i < idle_blocks; ++i) run_block(zeros, padded ? kLongBlock : 1);
+  run_block(zeros, kLongBlock);
+  return output;
+}
+
+}  // namespace
+
+TEST_CASE("SidechainRouter a key shorter than the block behaves as a zero-padded key",
+          "[mastering][dynamics][boundary]") {
+  SidechainRouterConfig config = ducking_config();
+  config.attack_ms = 0.0f;
+  config.release_ms = 0.0f;
+  const int idle_blocks = GENERATE(0, kIdleBlocks);
+  const int mode = GENERATE(0, 1, 2, 3);
+  CAPTURE(idle_blocks, mode);
+  if (mode == 1) config.sidechain_hpf_enabled = false;
+  if (mode == 2) config.key_listen = true;
+  if (mode == 3) config.lookahead_ms = 2.0f;
+
+  const auto short_key = run_short_key(config, false, idle_blocks);
+  const auto padded_key = run_short_key(config, true, idle_blocks);
+  REQUIRE(short_key.size() == padded_key.size());
+  CHECK(max_difference(short_key, padded_key) < kBed * 1.0e-5f);
+  if (mode == 0 || mode == 3) {
+    // The loud head leaves the bed ducked only while the key is live: the closing block is clean.
+    const std::vector<float> last_short(short_key.end() - kLongBlock, short_key.end());
+    const std::vector<float> flat(kLongBlock, kBed);
+    CHECK(max_difference(last_short, flat) < kBed * 1.0e-5f);
+  }
+}
+
+TEST_CASE("Sidechain inserts leave the bed alone under a silent key at thresholds below the floor",
+          "[mastering][dynamics][boundary]") {
+  const std::string name =
+      GENERATE(std::string("dynamics.sidechainRouter"), std::string("dynamics.duckingProcessor"));
+  const float threshold = GENERATE(-120.0f, -120.1f, -130.0f, -144.0f);
+  CAPTURE(name, threshold);
+  const std::string params = "{\"thresholdDb\":" + std::to_string(threshold) +
+                             ",\"ratio\":4,\"attackMs\":0,\"releaseMs\":0,\"rangeDb\":18}";
+
+  auto run = [&](float key_level) {
+    auto insert = sonare::mastering::api::make_insert(name, params);
+    REQUIRE(insert != nullptr);
+    insert->prepare(kRate, kLongBlock);
+    const std::vector<float> key(kLongBlock, key_level);
+    const float* key_channels[] = {key.data()};
+    insert->set_sidechain(key_channels, 1, kLongBlock);
+    std::vector<float> bed(kLongBlock, kBed);
+    float* channels[] = {bed.data()};
+    insert->process(channels, 1, kLongBlock);
+    return bed;
+  };
+
+  const std::vector<float> flat(kLongBlock, kBed);
+  CHECK(max_difference(run(0.0f), flat) < kBed * 1.0e-6f);
+  const auto keyed = run(0.5f);
+  CHECK(*std::min_element(keyed.begin(), keyed.end()) < kBed * 0.9f);
 }

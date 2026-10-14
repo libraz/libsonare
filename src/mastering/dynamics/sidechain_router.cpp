@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "mastering/dynamics/channel_limits.h"
+#include "mastering/dynamics/detector_level.h"
 #include "mastering/dynamics/lookahead_validation.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
@@ -126,7 +127,7 @@ void SidechainRouter::process(float* const* channels, int num_channels, int num_
       continue;
     }
     const float envelope = follower_.process(detector);
-    const float reduction_db = gain_reduction_db(linear_to_db(envelope), cfg);
+    const float reduction_db = gain_reduction_db(detector_level_db(envelope), cfg);
     // Only the main signal is delayed: the gain is the key's current one, so it
     // moves lookahead_samples_ ahead of the transient it answers.
     const float reduction_gain = db_to_linear(reduction_db);
@@ -276,9 +277,9 @@ float SidechainRouter::detector_sample(float* const* channels, int num_channels,
                                        int excluded_channel, const bool* hpf_admitted) {
   // The detector source is the external sidechain when set, otherwise the main
   // channels (self / internal detection). The sidechain HPF is honored in both.
-  if (use_external && sample >= sidechain_num_samples_) {
-    return 0.0f;
-  }
+  // A key shorter than the block reads as zero-padded: the HPF still advances on silence, so its
+  // state never goes stale across blocks.
+  const bool key_present = !use_external || sample < sidechain_num_samples_;
   const int source_channels = use_external ? sidechain_num_channels_ : num_channels;
 
   // Fold the source down to a single linked detector value, applying the
@@ -291,7 +292,9 @@ float SidechainRouter::detector_sample(float* const* channels, int num_channels,
   int included_channels = 0;
   for (int ch = 0; ch < source_channels; ++ch) {
     if (ch == excluded_channel) continue;
-    float s = use_external ? sidechain_channels_[ch][sample] : channels[ch][sample];
+    float s = !key_present
+                  ? 0.0f
+                  : (use_external ? sidechain_channels_[ch][sample] : channels[ch][sample]);
     if (hpf_admitted[ch]) {
       const auto idx = static_cast<size_t>(ch);
       s = rt::onepole_highpass_step(hpf_b0_, hpf_a1_, hpf_x1_[idx], hpf_y1_[idx], s);
