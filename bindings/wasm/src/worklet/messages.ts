@@ -36,6 +36,10 @@ export interface SonareWorkletProcessorOptions {
    */
   wasmBinary?: ArrayBuffer | Uint8Array;
   sceneJson: string;
+  /**
+   * Defaults to the AudioWorkletGlobalScope `sampleRate`; any other value is
+   * refused with a RangeError. Outside a worklet scope it is required.
+   */
   sampleRate?: number;
   blockSize?: number;
   stripCount?: number;
@@ -53,8 +57,10 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
   initialSyncMessages?: SonareEngineSyncMessage[];
   initialCommands?: SonareEngineCommandRecord[];
   /**
-   * Engine rate. Node creation defaults it to the AudioContext's and throws a
-   * RangeError for any other value, since nothing resamples the context's quanta.
+   * Engine rate. Defaults to the AudioWorkletGlobalScope `sampleRate` and any
+   * other value is refused with a RangeError, since nothing resamples the
+   * scope's quanta. Outside a worklet scope it is required. Node creation
+   * defaults it to the AudioContext's.
    */
   sampleRate?: number;
   blockSize?: number;
@@ -106,6 +112,10 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
 
 export interface SonareRealtimeVoiceChangerWorkletProcessorOptions {
   preset?: RealtimeVoiceChangerConfigInput;
+  /**
+   * Defaults to the AudioWorkletGlobalScope `sampleRate`; any other value is
+   * refused with a RangeError. Outside a worklet scope it is required.
+   */
   sampleRate?: number;
   blockSize?: number;
   channelCount?: number;
@@ -186,9 +196,10 @@ export interface SonarePlaybackWorkletProcessorOptions {
   /** Largest render quantum the processor accepts. Default 128. */
   maxBlockSize?: number;
   /**
-   * Defaults to the AudioWorkletGlobalScope `sampleRate`, then 48000.
-   * `createSonarePlaybackNode` defaults it to the AudioContext's and throws a
-   * RangeError for any other value.
+   * Defaults to the AudioWorkletGlobalScope `sampleRate`; any other value is
+   * refused with a RangeError, since nothing resamples the scope's quanta.
+   * Outside a worklet scope there is no default and the option is required.
+   * `createSonarePlaybackNode` defaults it to the AudioContext's.
    */
   sampleRate?: number;
   /**

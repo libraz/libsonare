@@ -5,7 +5,11 @@ import {
   type WorkletInput,
   type WorkletOutput,
 } from './audio_types.js';
-import { isRealtimeVoiceChangerMessage, requireChannelCount } from './guards.js';
+import {
+  isRealtimeVoiceChangerMessage,
+  requireChannelCount,
+  resolveScopeSampleRate,
+} from './guards.js';
 import type {
   SonareRealtimeVoiceChangerMessage,
   SonareRealtimeVoiceChangerWorkletProcessorOptions,
@@ -35,7 +39,10 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
   private destroyed = false;
 
   constructor(options: SonareRealtimeVoiceChangerWorkletProcessorOptions = {}) {
-    this.sampleRate = options.sampleRate ?? 48000;
+    this.sampleRate = resolveScopeSampleRate(
+      options.sampleRate,
+      'SonareRealtimeVoiceChangerWorkletProcessor',
+    );
     this.blockSize = options.blockSize ?? 128;
     this.channelCount = requireChannelCount(options.channelCount, 1);
     this.changer = new RealtimeVoiceChanger(options.preset ?? 'neutral-monitor');

@@ -154,7 +154,10 @@ describe('SonarePlaybackWorkletProcessor', () => {
 
   it('renders binaural output from HRTF bytes and answers its control messages', () => {
     const port = capturePort();
-    const processor = new SonarePlaybackWorkletProcessor({ config: {}, hrtf: hrtfBuffer() }, port);
+    const processor = new SonarePlaybackWorkletProcessor(
+      { config: {}, hrtf: hrtfBuffer(), sampleRate: 48000 },
+      port,
+    );
     try {
       let heard = false;
       for (let block = 0; block < 16; block++) {
@@ -220,15 +223,15 @@ describe('SonarePlaybackWorkletProcessor', () => {
     const rejectedPort = capturePort();
     const oldPosePort = capturePort();
     const expected = new SonarePlaybackWorkletProcessor(
-      { config: {}, hrtf: hrtfBuffer() },
+      { config: {}, hrtf: hrtfBuffer(), sampleRate: 48000 },
       expectedPort,
     );
     const rejected = new SonarePlaybackWorkletProcessor(
-      { config: {}, hrtf: hrtfBuffer() },
+      { config: {}, hrtf: hrtfBuffer(), sampleRate: 48000 },
       rejectedPort,
     );
     const oldPose = new SonarePlaybackWorkletProcessor(
-      { config: {}, hrtf: hrtfBuffer() },
+      { config: {}, hrtf: hrtfBuffer(), sampleRate: 48000 },
       oldPosePort,
     );
     try {
@@ -287,7 +290,9 @@ describe('SonarePlaybackWorkletProcessor', () => {
   });
 
   it('refuses a headphones target without HRTF bytes', () => {
-    expect(() => new SonarePlaybackWorkletProcessor({ config: {} })).toThrow(/hrtf required/);
+    expect(() => new SonarePlaybackWorkletProcessor({ config: {}, sampleRate: 48000 })).toThrow(
+      /hrtf required/,
+    );
   });
 
   it('creates a node whose input follows its source without browser remixing', () => {

@@ -541,6 +541,7 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
       try {
         new SonareRealtimeVoiceChangerWorkletProcessor({
           preset: 'definitely-not-a-preset',
+          sampleRate: 48000,
         } as never);
       } catch (error) {
         caught = error;

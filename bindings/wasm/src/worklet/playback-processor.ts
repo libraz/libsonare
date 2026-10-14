@@ -8,7 +8,12 @@ import {
   type WorkletOutput,
 } from './audio_types.js';
 import { initializeEmbindInWorklet, isEmbindReady } from './embind-init.js';
-import { isPlaybackMessage, requireIntegerOption, resolveContextSampleRate } from './guards.js';
+import {
+  isPlaybackMessage,
+  requireIntegerOption,
+  resolveContextSampleRate,
+  resolveScopeSampleRate,
+} from './guards.js';
 import type {
   SonarePlaybackDiagnosticsReplyMessage,
   SonarePlaybackErrorMessage,
@@ -71,8 +76,7 @@ export class SonarePlaybackWorkletProcessor {
   constructor(options: SonarePlaybackWorkletProcessorOptions = {}, port?: WorkletPort) {
     this.port = port;
     this.maxBlockSize = requireIntegerOption(options.maxBlockSize, 128, 'maxBlockSize', 1);
-    const scopeRate = (globalThis as { sampleRate?: unknown }).sampleRate;
-    const sampleRate = options.sampleRate ?? (typeof scopeRate === 'number' ? scopeRate : 48000);
+    const sampleRate = resolveScopeSampleRate(options.sampleRate, 'SonarePlaybackWorkletProcessor');
     const hrtf = options.hrtf ? HrtfSet.fromBytes(new Uint8Array(options.hrtf)) : undefined;
     try {
       this.renderer = new PlaybackRenderer({

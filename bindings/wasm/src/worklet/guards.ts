@@ -458,6 +458,35 @@ export function resolveContextSampleRate(
 }
 
 /**
+ * The rate a processor constructed inside an AudioWorkletGlobalScope runs at:
+ * the scope's own `sampleRate`, which is the rate the host drives `process()`
+ * at. An explicit `requested` rate that differs is refused before any DSP is
+ * built. Outside a worklet scope (no usable global `sampleRate`, e.g. a test
+ * harness) the explicit rate is taken as given, and omitting it is an error:
+ * a guessed rate would prepare the DSP at a rate nothing drives it with.
+ *
+ * @throws RangeError when `requested` is given and differs from the scope rate.
+ * @throws Error when neither a scope rate nor `requested` exists.
+ */
+export function resolveScopeSampleRate(requested: number | undefined, what: string): number {
+  const scopeRate = (globalThis as { sampleRate?: unknown }).sampleRate;
+  if (typeof scopeRate === 'number' && Number.isFinite(scopeRate) && scopeRate > 0) {
+    if (requested !== undefined && requested !== scopeRate) {
+      throw new RangeError(
+        `${what}: sampleRate ${String(requested)} differs from the AudioWorkletGlobalScope rate ${scopeRate}`,
+      );
+    }
+    return scopeRate;
+  }
+  if (requested === undefined) {
+    throw new Error(
+      `${what}: no sampleRate option and no AudioWorkletGlobalScope sampleRate to default to`,
+    );
+  }
+  return requested;
+}
+
+/**
  * Resolves an integer option, refusing anything the field's own domain cannot
  * hold instead of rounding it into range.
  *

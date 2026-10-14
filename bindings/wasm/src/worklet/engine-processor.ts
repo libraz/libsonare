@@ -6,6 +6,7 @@ import {
   requireChannelCount,
   requireIntegerOption,
   resolveScopeBandCount,
+  resolveScopeSampleRate,
   SONARE_SCOPE_MAX_BANDS,
   SONARE_SCOPE_MAX_POINTS,
 } from './guards.js';
@@ -188,7 +189,10 @@ export class SonareRealtimeEngineWorkletProcessor {
     options: SonareRealtimeEngineWorkletProcessorOptions = {},
     transport?: WorkletTransport,
   ) {
-    this.sampleRate = options.sampleRate ?? 48000;
+    this.sampleRate = resolveScopeSampleRate(
+      options.sampleRate,
+      'SonareRealtimeEngineWorkletProcessor',
+    );
     this.clipPageRepostFrames = Math.max(1, Math.round(this.sampleRate * CLIP_PAGE_REPOST_SECONDS));
     this.blockSize = options.blockSize ?? 128;
     this.channelCount = requireChannelCount(options.channelCount, 2);

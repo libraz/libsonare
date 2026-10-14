@@ -2,7 +2,7 @@ import type { MixerRealtimeBuffer } from '../index.js';
 import { Mixer } from '../index.js';
 import { leadingSamples, type WorkletInput, type WorkletOutput } from './audio_types.js';
 import { initializeEmbindInWorklet, isEmbindReady } from './embind-init.js';
-import { isWorkletMessage, requireIntegerOption } from './guards.js';
+import { isWorkletMessage, requireIntegerOption, resolveScopeSampleRate } from './guards.js';
 import type {
   SonareWorkletMessage,
   SonareWorkletProcessorOptions,
@@ -81,7 +81,7 @@ export class SonareWorkletProcessor {
     if (!options.sceneJson) {
       throw new Error('sceneJson is required.');
     }
-    this.sampleRate = options.sampleRate ?? 48000;
+    this.sampleRate = resolveScopeSampleRate(options.sampleRate, 'SonareWorkletProcessor');
     this.blockSize = options.blockSize ?? 128;
     // Zero is the off switch for both publications, so the floor is 0.
     this.meterIntervalFrames = requireIntegerOption(
