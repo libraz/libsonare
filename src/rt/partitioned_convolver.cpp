@@ -1,7 +1,9 @@
 #include "rt/partitioned_convolver.h"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
+#include <utility>
 
 #include "util/exception.h"
 
@@ -18,12 +20,19 @@ void PartitionedConvolver::set_impulse_response(const float* impulse_response, i
   if (num_samples > 0 && impulse_response == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "impulse_response must not be null");
   }
+  for (int i = 0; i < num_samples; ++i) {
+    if (!std::isfinite(impulse_response[i])) {
+      throw SonareException(ErrorCode::InvalidParameter, "impulse_response must be finite");
+    }
+  }
 
   const int partition_size = config_.partition_size;
   const int partitions =
       num_samples == 0 ? 0 : num_samples / partition_size + (num_samples % partition_size != 0);
-  ir_partitions_.assign(static_cast<size_t>(partitions),
-                        std::vector<std::complex<float>>(static_cast<size_t>(fft_->n_bins())));
+  // Built aside so a failure leaves the previous response and state untouched.
+  std::vector<std::vector<std::complex<float>>> new_partitions(
+      static_cast<size_t>(partitions),
+      std::vector<std::complex<float>>(static_cast<size_t>(fft_->n_bins())));
 
   std::vector<float> partition_time(static_cast<size_t>(fft_size_), 0.0f);
   for (int partition = 0; partition < partitions; ++partition) {
@@ -31,12 +40,13 @@ void PartitionedConvolver::set_impulse_response(const float* impulse_response, i
     const int offset = partition * partition_size;
     const int copy_count = std::min(partition_size, num_samples - offset);
     std::copy_n(impulse_response + offset, copy_count, partition_time.begin());
-    fft_->forward(partition_time.data(), ir_partitions_[static_cast<size_t>(partition)].data());
+    fft_->forward(partition_time.data(), new_partitions[static_cast<size_t>(partition)].data());
   }
 
   // One input spectrum per partition forms the frequency-domain ring; the
   // overlap-add tail spans a single partition (fft_size_ - partition_size).
   const size_t bins = static_cast<size_t>(fft_->n_bins());
+  ir_partitions_ = std::move(new_partitions);
   input_spectrum_ring_.assign(static_cast<size_t>(partitions),
                               std::vector<std::complex<float>>(bins, {0.0f, 0.0f}));
   ola_buffer_.assign(static_cast<size_t>(fft_size_), 0.0f);

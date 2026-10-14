@@ -138,3 +138,32 @@ TEST_CASE("PartitionedConvolver process_block is noexcept and null-safe", "[rt][
   conv.process_block(nullptr, nullptr);
   SUCCEED();
 }
+
+TEST_CASE("PartitionedConvolver rejects a non-finite IR and keeps the loaded response",
+          "[rt][convolver]") {
+  constexpr int kN = 32;
+  PartitionedConvolver conv(PartitionedConvolverConfig{kN});
+  std::vector<float> ir(3 * kN, 0.0f);
+  ir[0] = 1.0f;
+  conv.set_impulse_response(ir);
+
+  for (float bad :
+       {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
+    // The bad sample sits in the last partition, after finite ones were already seen.
+    std::vector<float> proposed(3 * kN, 0.25f);
+    proposed.back() = bad;
+    try {
+      conv.set_impulse_response(proposed);
+      FAIL("expected a non-finite IR to be rejected");
+    } catch (const SonareException& error) {
+      REQUIRE(error.code() == ErrorCode::InvalidParameter);
+    }
+  }
+
+  REQUIRE(conv.num_partitions() == 3);
+  std::vector<float> in(kN, 0.0f);
+  in[3] = 1.0f;
+  std::vector<float> out(kN, 0.0f);
+  conv.process_block(in.data(), out.data());
+  for (int i = 0; i < kN; ++i) REQUIRE(std::abs(out[i] - in[i]) < 1.0e-4f);
+}
