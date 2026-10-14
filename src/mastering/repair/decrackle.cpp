@@ -22,30 +22,30 @@ float soft_threshold(float value, float threshold) {
   return 0.0f;
 }
 
-float median_abs(std::vector<float> values) {
-  if (values.empty()) return 0.0f;
-  for (auto& value : values) value = std::abs(value);
-  const auto middle = values.begin() + static_cast<std::ptrdiff_t>(values.size() / 2);
-  std::nth_element(values.begin(), middle, values.end());
+float median_abs(const float* values, size_t count, std::vector<float>& scratch) {
+  if (count == 0) return 0.0f;
+  scratch.resize(count);
+  for (size_t i = 0; i < count; ++i) scratch[i] = std::abs(values[i]);
+  const auto middle = scratch.begin() + static_cast<std::ptrdiff_t>(count / 2);
+  std::nth_element(scratch.begin(), middle, scratch.begin() + static_cast<std::ptrdiff_t>(count));
   return *middle;
 }
 
-float variance(const std::vector<float>& values) {
-  if (values.empty()) return 0.0f;
-  const double mean =
-      std::accumulate(values.begin(), values.end(), 0.0) / static_cast<double>(values.size());
+float variance(const float* values, size_t count) {
+  if (count == 0) return 0.0f;
+  const double mean = std::accumulate(values, values + count, 0.0) / static_cast<double>(count);
   double sum = 0.0;
-  for (float value : values) {
-    const double centered = static_cast<double>(value) - mean;
+  for (size_t i = 0; i < count; ++i) {
+    const double centered = static_cast<double>(values[i]) - mean;
     sum += centered * centered;
   }
-  return static_cast<float>(sum / static_cast<double>(values.size()));
+  return static_cast<float>(sum / static_cast<double>(count));
 }
 
-float bayes_shrink_threshold(const std::vector<float>& details, float noise_sigma,
+float bayes_shrink_threshold(const float* details, size_t count, float noise_sigma,
                              float max_threshold) {
-  if (details.empty()) return max_threshold;
-  const float detail_variance = variance(details);
+  if (count == 0) return max_threshold;
+  const float detail_variance = variance(details, count);
   const float noise_variance = noise_sigma * noise_sigma;
   const float signal_sigma = std::sqrt(std::max(0.0f, detail_variance - noise_variance));
   if (signal_sigma <= 1e-9f) {
@@ -65,51 +65,60 @@ struct HaarAnalysis {
   float noise_sigma = 0.0f;          ///< MAD estimate from the level-0 detail band.
 };
 
-HaarAnalysis haar_forward(std::vector<float>& samples, int levels) {
+/// Working buffers one transform needs, sized once for the longest band and reused by every
+/// level and every cycle spin.
+struct HaarScratch {
   HaarAnalysis analysis;
+  std::vector<float> temp;
+  std::vector<float> abs_details;
+};
+
+void haar_forward(std::vector<float>& samples, int levels, HaarScratch& scratch) {
+  HaarAnalysis& analysis = scratch.analysis;
+  analysis.active_sizes.clear();
+  analysis.noise_sigma = 0.0f;
   size_t active = samples.size();
+  scratch.temp.resize(active);
   for (int level = 0; level < levels && active >= 2; ++level) {
     const size_t pairs = active / 2;
-    std::vector<float> temp(active, 0.0f);
-    std::vector<float> details(pairs, 0.0f);
+    float* temp = scratch.temp.data();
     for (size_t i = 0; i < pairs; ++i) {
       const float a = samples[2 * i];
       const float b = samples[2 * i + 1];
       temp[i] = 0.5f * (a + b);
-      details[i] = 0.5f * (a - b);
+      temp[pairs + i] = 0.5f * (a - b);
     }
 
     if (level == 0) {
       // Phi^-1(0.75): scales MAD to Gaussian sigma
       static constexpr float kMadGaussianConstant = 0.67448975f;
-      analysis.noise_sigma = median_abs(details) / kMadGaussianConstant;
+      analysis.noise_sigma =
+          median_abs(temp + pairs, pairs, scratch.abs_details) / kMadGaussianConstant;
     }
-    for (size_t i = 0; i < pairs; ++i) temp[pairs + i] = details[i];
     if (active % 2 != 0) {
       temp[active - 1] = samples[active - 1];
     }
-    std::copy(temp.begin(), temp.end(), samples.begin());
+    std::copy(temp, temp + active, samples.begin());
     analysis.active_sizes.push_back(active);
     active = pairs;
   }
-  return analysis;
 }
 
 void haar_shrink_details(std::vector<float>& samples, const HaarAnalysis& analysis, float threshold,
                          DecrackleReport* report) {
   for (size_t level = 0; level < analysis.active_sizes.size(); ++level) {
     const size_t pairs = analysis.active_sizes[level] / 2;
-    const auto band = samples.begin() + static_cast<std::ptrdiff_t>(pairs);
-    const std::vector<float> details(band, band + static_cast<std::ptrdiff_t>(pairs));
+    float* details = samples.data() + pairs;
     // Each level averages the approximation band, so the white-noise standard
     // deviation in the detail band shrinks by 1/sqrt(2) per level. Reusing the
     // level-0 sigma verbatim would grossly over-threshold the coarser levels.
     float level_noise_sigma = analysis.noise_sigma;
     for (size_t l = 0; l < level; ++l) level_noise_sigma *= sonare::constants::kInvSqrt2;
-    const float level_threshold = bayes_shrink_threshold(details, level_noise_sigma, threshold);
+    const float level_threshold =
+        bayes_shrink_threshold(details, pairs, level_noise_sigma, threshold);
     for (size_t i = 0; i < pairs; ++i) {
       const float shrunk = soft_threshold(details[i], level_threshold);
-      samples[pairs + i] = shrunk;
+      details[i] = shrunk;
       if (report == nullptr) continue;
       ++report->detail_coefficients;
       if (shrunk == 0.0f) ++report->shrunk_coefficients;
@@ -117,12 +126,12 @@ void haar_shrink_details(std::vector<float>& samples, const HaarAnalysis& analys
   }
 }
 
-void haar_inverse(std::vector<float>& samples, const HaarAnalysis& analysis) {
+void haar_inverse(std::vector<float>& samples, const HaarAnalysis& analysis, HaarScratch& scratch) {
   for (int level = static_cast<int>(analysis.active_sizes.size()) - 1; level >= 0; --level) {
     const size_t reconstruct = analysis.active_sizes[static_cast<size_t>(level)];
     const size_t pairs = reconstruct / 2;
     if (pairs == 0) continue;
-    std::vector<float> temp(reconstruct, 0.0f);
+    float* temp = scratch.temp.data();
     for (size_t i = 0; i < pairs; ++i) {
       const float avg = samples[i];
       const float detail = samples[pairs + i];
@@ -130,18 +139,18 @@ void haar_inverse(std::vector<float>& samples, const HaarAnalysis& analysis) {
       temp[2 * i + 1] = avg - detail;
     }
     if (reconstruct % 2 != 0) temp[reconstruct - 1] = samples[reconstruct - 1];
-    std::copy(temp.begin(), temp.end(), samples.begin());
+    std::copy(temp, temp + reconstruct, samples.begin());
   }
 }
 
-std::vector<float> wavelet_shrink_once(const std::vector<float>& samples,
-                                       const DecrackleConfig& config, DecrackleReport* report) {
-  std::vector<float> output = samples;
-  const HaarAnalysis analysis = haar_forward(output, config.levels);
-  haar_shrink_details(output, analysis, config.threshold, report);
-  haar_inverse(output, analysis);
+/// Shrinks @p samples in place through one Haar transform.
+void wavelet_shrink_once(std::vector<float>& samples, const DecrackleConfig& config,
+                         HaarScratch& scratch, DecrackleReport* report) {
+  haar_forward(samples, config.levels, scratch);
+  const HaarAnalysis& analysis = scratch.analysis;
+  haar_shrink_details(samples, analysis, config.threshold, report);
+  haar_inverse(samples, analysis, scratch);
   if (report != nullptr) report->noise_sigma = analysis.noise_sigma;
-  return output;
 }
 
 /// This module's definition of the defect: a sample deviating from the median of
@@ -225,11 +234,17 @@ std::vector<float> wavelet_shrink_spun(const std::vector<float>& samples,
 
   std::vector<double> accumulator(size, 0.0);
   std::vector<float> shifted(size, 0.0f);
+  HaarScratch scratch;
   for (size_t shift = 0; shift < spins; ++shift) {
-    for (size_t i = 0; i < size; ++i) shifted[i] = samples[(i + shift) % size];
-    const std::vector<float> processed =
-        wavelet_shrink_once(shifted, config, shift == 0 ? report : nullptr);
-    for (size_t i = 0; i < size; ++i) accumulator[(i + shift) % size] += processed[i];
+    // shifted[i] = samples[(i + shift) % size], as two contiguous runs.
+    const size_t head = size - shift;
+    std::copy(samples.begin() + static_cast<std::ptrdiff_t>(shift), samples.end(), shifted.begin());
+    std::copy(samples.begin(), samples.begin() + static_cast<std::ptrdiff_t>(shift),
+              shifted.begin() + static_cast<std::ptrdiff_t>(head));
+    wavelet_shrink_once(shifted, config, scratch, shift == 0 ? report : nullptr);
+    // accumulator[(i + shift) % size] += shifted[i], as two contiguous runs.
+    for (size_t i = 0; i < head; ++i) accumulator[shift + i] += shifted[i];
+    for (size_t i = head; i < size; ++i) accumulator[i - head] += shifted[i];
   }
 
   std::vector<float> output(size, 0.0f);

@@ -70,30 +70,44 @@ void require_indexable_length(std::size_t n, const char* who) {
   }
 }
 
-}  // namespace
+/// @brief Per-frame RMS and the non-silent mask derived from it.
+struct FrameDecision {
+  std::vector<float> rms;
+  std::vector<bool> mask;
+};
 
-TrimResult trim(const float* x, std::size_t n, float top_db, int frame_length, int hop_length) {
-  // Empty input is rejected rather than answered with {{}, 0, 0}: that value is
-  // the all-silent result, so accepting an empty buffer would make "nothing was
-  // passed in" and "nothing in the signal rose above the threshold"
-  // indistinguishable to the caller.
+/// @brief Validates the arguments trim and split share and decides which frames are non-silent.
+/// @details Empty input is rejected rather than answered with an empty result: that value is the
+///          all-silent result, so accepting an empty buffer would make "nothing was passed in"
+///          and "nothing rose above the threshold" indistinguishable to the caller.
+FrameDecision decide_frames(const float* x, std::size_t n, float top_db, int frame_length,
+                            int hop_length, const char* who) {
+  const std::string prefix = std::string(who) + ": ";
   if (n == 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "trim: input must not be empty");
+    throw SonareException(ErrorCode::InvalidParameter, prefix + "input must not be empty");
   }
   if (x == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "trim: null input with non-zero length");
+    throw SonareException(ErrorCode::InvalidParameter, prefix + "null input with non-zero length");
   }
   if (frame_length <= 0 || hop_length <= 0) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "trim: frame_length and hop_length must be > 0");
+                          prefix + "frame_length and hop_length must be > 0");
   }
-  require_indexable_length(n, "trim");
+  require_indexable_length(n, who);
   if (!numeric::finite_positive(top_db)) {
-    throw SonareException(ErrorCode::InvalidParameter, "trim: top_db must be finite and > 0");
+    throw SonareException(ErrorCode::InvalidParameter, prefix + "top_db must be finite and > 0");
   }
+  FrameDecision decision;
+  decision.rms = centered_rms(x, n, frame_length, hop_length);
+  decision.mask = non_silent_frames(decision.rms, top_db);
+  return decision;
+}
+
+}  // namespace
+
+TrimResult trim(const float* x, std::size_t n, float top_db, int frame_length, int hop_length) {
   TrimResult result{{}, 0, 0};
-  const auto rms = centered_rms(x, n, frame_length, hop_length);
-  const auto mask = non_silent_frames(rms, top_db);
+  const auto mask = decide_frames(x, n, top_db, frame_length, hop_length, "trim").mask;
 
   int first = -1;
   int last = -1;
@@ -122,25 +136,10 @@ TrimResult trim(const std::vector<float>& x, float top_db, int frame_length, int
 
 SplitReport split_with_report(const float* x, std::size_t n, float top_db, int frame_length,
                               int hop_length) {
-  // Rejected for the same reason as trim(): an empty interval list is already
-  // the all-silent result, so an empty input must not share it.
-  if (n == 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "split: input must not be empty");
-  }
-  if (x == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "split: null input with non-zero length");
-  }
-  if (frame_length <= 0 || hop_length <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "split: frame_length and hop_length must be > 0");
-  }
-  require_indexable_length(n, "split");
-  if (!numeric::finite_positive(top_db)) {
-    throw SonareException(ErrorCode::InvalidParameter, "split: top_db must be finite and > 0");
-  }
   std::vector<std::pair<int, int>> intervals;
-  const auto rms = centered_rms(x, n, frame_length, hop_length);
-  const auto mask = non_silent_frames(rms, top_db);
+  const auto decision = decide_frames(x, n, top_db, frame_length, hop_length, "split");
+  const auto& rms = decision.rms;
+  const auto& mask = decision.mask;
 
   // Scan contiguous true regions.
   int run_start = -1;

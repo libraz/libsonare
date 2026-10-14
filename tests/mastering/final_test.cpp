@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <iterator>
 #include <limits>
@@ -348,6 +349,36 @@ TEST_CASE("Final helpers validate inputs", "[mastering][final]") {
   REQUIRE_THROWS(output_chain(empty));
   REQUIRE_THROWS(bit_depth(make_audio({0.0f}), {1, true}));
   REQUIRE_THROWS(dither(make_audio({0.0f}), {DitherType::Tpdf, 40, 0}));
+}
+
+TEST_CASE("output_chain equals running the dither and bit-depth stages in turn",
+          "[mastering][final][output-chain-single-pass]") {
+  const auto type =
+      GENERATE(DitherType::None, DitherType::Rpdf, DitherType::Tpdf, DitherType::NoiseShaped);
+  const int bits = GENERATE(2, 8, 16, 24, 26, 32);
+  const bool clamp = GENERATE(true, false);
+  std::vector<float> input;
+  for (int i = 0; i < 4000; ++i) {
+    input.push_back(1.3f * std::sin(0.037f * static_cast<float>(i)) + 0.0004f * (i % 7));
+  }
+  input[10] = std::numeric_limits<float>::quiet_NaN();
+  input[11] = std::numeric_limits<float>::infinity();
+  input[12] = -std::numeric_limits<float>::infinity();
+  const Audio audio = make_audio(input);
+
+  size_t dither_count = 0;
+  size_t bit_count = 0;
+  const Audio staged =
+      bit_depth(dither(audio, {type, bits}, &dither_count), {bits, clamp}, &bit_count);
+  size_t chain_count = 0;
+  const Audio chained = output_chain(audio, {bits, type, clamp}, &chain_count);
+
+  REQUIRE(chain_count == dither_count + bit_count);
+  REQUIRE(chained.size() == staged.size());
+  for (size_t i = 0; i < staged.size(); ++i) {
+    INFO("sample " << i);
+    REQUIRE(std::memcmp(&chained.data()[i], &staged.data()[i], sizeof(float)) == 0);
+  }
 }
 
 // A sample the final stage put on the b-bit grid is a PCM code already, so the

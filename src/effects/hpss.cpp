@@ -194,6 +194,13 @@ int median_filter_worker_count(int total, int kernel_size, int staged_column_len
   return affordable == 0 ? 1 : static_cast<int>(affordable);
 }
 
+int median_filter_workers_for_work(int workers, int total, int line_length) {
+  const long long cells = static_cast<long long>(std::max(total, 0)) * std::max(line_length, 0);
+  const long long affordable = cells / kMinMedianCellsPerWorker;
+  if (affordable < 1) return 1;
+  return static_cast<int>(std::min<long long>(std::max(workers, 1), affordable));
+}
+
 std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, int n_frames,
                                             int kernel_size) {
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
@@ -222,7 +229,10 @@ std::vector<float> median_filter_horizontal(const float* magnitude, int n_bins, 
 #ifndef __EMSCRIPTEN__
   // The horizontal filter stages nothing per column, so the kernel pair is its
   // whole per-worker scratch.
-  parallel_for(n_bins, median_filter_worker_count(n_bins, kernel_size, 0, available_workers()),
+  parallel_for(n_bins,
+               median_filter_workers_for_work(
+                   median_filter_worker_count(n_bins, kernel_size, 0, available_workers()), n_bins,
+                   n_frames),
                process_rows);
 #else
   process_rows(0, n_bins);
@@ -271,7 +281,9 @@ std::vector<float> median_filter_vertical(const float* magnitude, int n_bins, in
 
 #ifndef __EMSCRIPTEN__
   parallel_for(n_frames,
-               median_filter_worker_count(n_frames, kernel_size, n_bins, available_workers()),
+               median_filter_workers_for_work(
+                   median_filter_worker_count(n_frames, kernel_size, n_bins, available_workers()),
+                   n_frames, n_bins),
                process_cols);
 #else
   process_cols(0, n_frames);

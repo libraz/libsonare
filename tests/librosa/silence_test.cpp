@@ -3,10 +3,13 @@
 
 #include "effects/silence.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "util/constants.h"
@@ -225,4 +228,64 @@ TEST_CASE("silence rejects lengths that do not fit int sample indices", "[silenc
   const std::size_t lengths[] = {too_long};
   REQUIRE_THROWS_AS(split_common_with_report(signals, lengths, 1, 60.0f, 2048, 512),
                     SonareException);
+}
+
+namespace {
+
+std::vector<std::pair<int, int>> reference_split(const std::vector<float>& x, float top_db,
+                                                 int frame_length, int hop) {
+  const int n = static_cast<int>(x.size());
+  const int half = frame_length / 2;
+  const int n_frames = n / hop + 1;
+  std::vector<float> rms(static_cast<size_t>(n_frames));
+  float peak = 0.0f;
+  for (int f = 0; f < n_frames; ++f) {
+    const int start = f * hop - half;
+    double sum = 0.0;
+    for (int i = std::max(0, start); i < std::min(n, start + frame_length); ++i) {
+      sum += static_cast<double>(x[static_cast<size_t>(i)]) * x[static_cast<size_t>(i)];
+    }
+    rms[static_cast<size_t>(f)] = static_cast<float>(std::sqrt(sum / frame_length));
+    peak = std::max(peak, rms[static_cast<size_t>(f)]);
+  }
+  const float thr = peak * std::pow(10.0f, -top_db / 20.0f);
+  std::vector<std::pair<int, int>> out;
+  int run = -1;
+  for (int f = 0; f <= n_frames; ++f) {
+    const bool on = f < n_frames && rms[static_cast<size_t>(f)] > thr;
+    if (on && run < 0) {
+      run = f;
+    } else if (!on && run >= 0) {
+      const int s = run * hop;
+      const int e = f == n_frames ? n : std::min(n, f * hop);
+      if (e > s) out.emplace_back(s, e);
+      run = -1;
+    }
+  }
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("split matches a direct per-frame RMS reference across window shapes",
+          "[librosa][silence][frame-rms]") {
+  uint32_t state = 0x1357bdf1u;
+  const auto next = [&]() {
+    state = state * 1664525u + 1013904223u;
+    return static_cast<float>(state >> 8) / static_cast<float>(1u << 24) - 0.5f;
+  };
+  std::vector<float> y(30000, 0.0f);
+  // Bursts of widely different level so a drifting running sum would show at the edges.
+  for (size_t i = 3000; i < 7000; ++i) y[i] = 0.9f * next();
+  for (size_t i = 12000; i < 13500; ++i) y[i] = 0.002f * next();
+  for (size_t i = 20000; i < 26000; ++i) y[i] = 0.3f * next();
+  for (int frame_length : {255, 256, 1024, 2047, 2048}) {
+    for (int hop : {64, 512, 3000}) {
+      INFO("frame_length " << frame_length << " hop " << hop);
+      for (float top_db : {30.0f, 60.0f}) {
+        REQUIRE(split(y, top_db, frame_length, hop) ==
+                reference_split(y, top_db, frame_length, hop));
+      }
+    }
+  }
 }

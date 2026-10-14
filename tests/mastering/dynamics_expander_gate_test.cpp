@@ -2,8 +2,12 @@
 /// @brief Expander, gate, upward dynamics, and de-esser tests.
 
 #include <array>
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_template_test_macros.hpp>
+#include <utility>
 
 #include "dynamics_test_helpers.h"
+#include "util/exception.h"
 
 TEST_CASE("Expander reduces signal below threshold and preserves louder signal",
           "[mastering][dynamics]") {
@@ -45,6 +49,80 @@ TEST_CASE("Gate strongly attenuates noise below threshold", "[mastering][dynamic
 
   REQUIRE(rms_tail(noise, 4096) / noise_before < 0.05f);
   REQUIRE(rms_tail(signal, 4096) / signal_before > 0.95f);
+}
+
+TEST_CASE("Gate detector follows the non-excluded planes and applies one gain to all",
+          "[mastering][dynamics][detector-exclusion]") {
+  constexpr int kBlock = 1024;
+  constexpr int kBlocks = 40;
+  const auto run = [&](int excluded_channel) {
+    Gate gate({-35.0f, 0.0f, 20.0f, -70.0f});
+    gate.prepare(48000.0, kBlock);
+    gate.set_detector_excluded_channel(excluded_channel);
+    std::vector<float> loud(kBlock * kBlocks, 0.4f);
+    std::vector<float> quiet(kBlock * kBlocks, 0.005f);
+    for (int b = 0; b < kBlocks; ++b) {
+      float* planes[2] = {loud.data() + b * kBlock, quiet.data() + b * kBlock};
+      gate.process(planes, 2, kBlock);
+    }
+    return std::make_pair(loud.back(), quiet.back());
+  };
+
+  // Nothing excluded: the loud plane keeps the gate open for both planes.
+  const auto open = run(-1);
+  REQUIRE(open.first == Catch::Approx(0.4f).margin(1.0e-4f));
+  REQUIRE(open.second == Catch::Approx(0.005f).margin(1.0e-6f));
+
+  // Loud plane excluded: only the quiet plane is heard, the gate closes, and both planes drop.
+  const auto closed = run(0);
+  REQUIRE(closed.first < 0.4f * 0.05f);
+  REQUIRE(closed.second < 0.005f * 0.05f);
+  REQUIRE(closed.first / 0.4f == Catch::Approx(closed.second / 0.005f).epsilon(1.0e-5));
+}
+
+TEMPLATE_TEST_CASE("Linked dynamics share one gain across the prepared channel limit",
+                   "[mastering][dynamics][linked-follower]", Expander, UpwardCompressor,
+                   UpwardExpander) {
+  constexpr int kBlock = 512;
+  const int limit = static_cast<int>(sonare::mastering::dynamics::kRealtimePreparedChannels);
+
+  const auto run = [&](int channels, bool automate) {
+    TestType processor;
+    processor.prepare(48000.0, kBlock);
+    std::vector<std::vector<float>> planes(static_cast<size_t>(channels));
+    for (int ch = 0; ch < channels; ++ch) {
+      planes[static_cast<size_t>(ch)].assign(kBlock, 0.01f * static_cast<float>(ch + 1));
+    }
+    std::vector<float*> pointers;
+    for (auto& plane : planes) pointers.push_back(plane.data());
+    for (int block = 0; block < 4; ++block) {
+      for (int ch = 0; ch < channels; ++ch) {
+        planes[static_cast<size_t>(ch)].assign(kBlock, 0.01f * static_cast<float>(ch + 1));
+      }
+      // Re-sending the held threshold must neither reset the envelope nor change the result.
+      if (automate) REQUIRE(processor.set_parameter(0, processor.config().threshold_db));
+      processor.process(pointers.data(), channels, kBlock);
+    }
+    return planes;
+  };
+
+  const auto planes = run(limit, false);
+  for (int ch = 1; ch < limit; ++ch) {
+    const auto& plane = planes[static_cast<size_t>(ch)];
+    INFO("channel " << ch);
+    // The same gain on every plane: the ratio of output to input is the channel-0 ratio.
+    REQUIRE(plane.back() / (0.01f * static_cast<float>(ch + 1)) ==
+            Catch::Approx(planes[0].back() / 0.01f).epsilon(1.0e-5));
+  }
+  REQUIRE(run(limit, true) == planes);
+
+  TestType processor;
+  processor.prepare(48000.0, kBlock);
+  std::vector<std::vector<float>> too_many(static_cast<size_t>(limit) + 1,
+                                           std::vector<float>(kBlock, 0.1f));
+  std::vector<float*> pointers;
+  for (auto& plane : too_many) pointers.push_back(plane.data());
+  REQUIRE_THROWS_AS(processor.process(pointers.data(), limit + 1, kBlock), sonare::SonareException);
 }
 
 TEST_CASE("Gate hold and hysteresis keep the gate open briefly", "[mastering][dynamics]") {

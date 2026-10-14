@@ -23,9 +23,6 @@ void Expander::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   prepared_ = true;
   active_ = config_;
-  if (followers_.size() < kRealtimePreparedChannels) {
-    followers_.resize(kRealtimePreparedChannels);
-  }
   update_coefficients(active_);
   reset();
   // Re-publish so the audio thread observes the same snapshot that prepare()
@@ -41,7 +38,7 @@ void Expander::process(float* const* channels, int num_channels, int num_samples
     return;
   }
 
-  ensure_followers(num_channels);
+  ensure_channel_capacity(num_channels);
 
   // Adopt the latest published configuration once per block. The returned
   // pointer is stable for the entire per-sample loop — RtPublisher only
@@ -49,7 +46,7 @@ void Expander::process(float* const* channels, int num_channels, int num_samples
   const ExpanderConfig& cfg = *adopt_snapshot_for_block();
 
   // Linked detection (mirrors Compressor): one detector envelope drives every channel.
-  auto& follower = followers_[0];
+  auto& follower = follower_;
   const int excluded_channel = detector_excluded_channel(num_channels);
   const float min_reduction = apply_linked_gain(
       channels, num_channels, num_samples, excluded_channel, follower,
@@ -57,17 +54,15 @@ void Expander::process(float* const* channels, int num_channels, int num_samples
       [](float acc, float applied_db) { return std::min(acc, applied_db); });
 
   // One float, once per block: the follower is recursive, so a non-finite level
-  // that reached it would otherwise outlive every later block. Only followers_[0]
-  // advances under linked detection, so it is the only cell to scrub.
+  // that reached it would otherwise outlive every later block. The
+  // single follower drives every channel, so it is the only cell to scrub.
   if (follower.discard_if_non_finite()) note_non_finite_discard();
 
   last_gain_reduction_db_ = min_reduction;
 }
 
 void Expander::reset() {
-  for (auto& follower : followers_) {
-    follower.reset();
-  }
+  follower_.reset();
   last_gain_reduction_db_ = 0.0f;
 }
 
@@ -122,8 +117,8 @@ float Expander::gain_reduction_db(float input_db, const ExpanderConfig& config) 
   return std::max(config.range_db, -reduction);
 }
 
-void Expander::ensure_followers(int num_channels) {
-  if (followers_.size() >= static_cast<size_t>(num_channels)) {
+void Expander::ensure_channel_capacity(int num_channels) {
+  if (static_cast<size_t>(num_channels) <= kRealtimePreparedChannels) {
     return;
   }
 
@@ -132,9 +127,7 @@ void Expander::ensure_followers(int num_channels) {
 }
 
 void Expander::update_coefficients(const ExpanderConfig& config) {
-  for (auto& follower : followers_) {
-    follower.prepare(sample_rate_, config.attack_ms, config.release_ms);
-  }
+  follower_.prepare(sample_rate_, config.attack_ms, config.release_ms);
 }
 
 }  // namespace sonare::mastering::dynamics

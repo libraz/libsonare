@@ -341,6 +341,7 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
   std::vector<std::pair<float, int>> sims;
   sims.reserve(static_cast<size_t>(n_frames));
   std::vector<float> dots(static_cast<size_t>(n_frames), 0.0f);
+  std::vector<int> kept;
   const int n_neighbors = std::min(n_frames - 1, k + 2 * width);
   for (int i = 0; i < n_frames; ++i) {
     sims.clear();
@@ -369,7 +370,7 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
     std::partial_sort(sims.begin(), sims.begin() + nn, sims.end(),
                       [](const auto& a, const auto& b) { return a.first > b.first; });
     // (2) Drop those falling inside |i-j| < width (self already excluded).
-    std::vector<int> kept;
+    kept.clear();
     kept.reserve(static_cast<size_t>(nn));
     for (int q = 0; q < nn; ++q) {
       const int j = sims[q].second;
@@ -384,8 +385,7 @@ std::vector<float> nn_filter(const float* S, int n_features, int n_frames,
     // After the final `.T`, column i of the recurrence matrix lists i's k-NN
     // — exactly what librosa's `nn_filter` aggregates when emitting output
     // column i.
-    auto& dst = selectors_for[i];
-    for (int q = 0; q < kk; ++q) dst.push_back(kept[q]);
+    selectors_for[i].assign(kept.begin(), kept.begin() + kk);
   }
 
   std::vector<float> out(static_cast<size_t>(n_features) * n_frames, 0.0f);

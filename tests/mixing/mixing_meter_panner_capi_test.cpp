@@ -1,6 +1,9 @@
 /// @file mixing_meter_panner_capi_test.cpp
 /// @brief Mixing meter, panner, and C API tests.
 
+#include <catch2/catch_approx.hpp>
+#include <cstdint>
+
 #include "c_api/mixing_internal.h"
 #include "mixing_test_helpers.h"
 
@@ -190,6 +193,46 @@ TEST_CASE("Meter snapshot exposes mono compatibility fields", "[mixing]") {
   REQUIRE(std::isfinite(snapshot.mono_compat_width));
   REQUIRE_THAT(snapshot.mono_compat_peak, WithinAbs(0.0f, 0.0001f));
   REQUIRE_FALSE(snapshot.likely_mono_compatible);
+}
+
+TEST_CASE("Meter stereo statistics match a direct double-precision reference",
+          "[mixing][meter-stereo-accumulation]") {
+  constexpr int kSamples = 4096;
+  std::vector<float> left(kSamples);
+  std::vector<float> right(kSamples);
+  uint32_t state = 0x2468ace1u;
+  const auto next = [&]() {
+    state = state * 1664525u + 1013904223u;
+    return static_cast<float>(state >> 8) / static_cast<float>(1u << 24) - 0.5f;
+  };
+  for (int i = 0; i < kSamples; ++i) {
+    left[static_cast<size_t>(i)] = next();
+    right[static_cast<size_t>(i)] = 0.6f * left[static_cast<size_t>(i)] + 0.3f * next();
+  }
+  double sum_l = 0.0, sum_r = 0.0, sum_lr = 0.0, sum_mid = 0.0, sum_side = 0.0, side_rms_sum = 0.0;
+  for (int i = 0; i < kSamples; ++i) {
+    const double l = left[static_cast<size_t>(i)];
+    const double r = right[static_cast<size_t>(i)];
+    sum_l += l * l;
+    sum_r += r * r;
+    sum_lr += l * r;
+    sum_mid += (l + r) * (l + r) * 0.5;
+    sum_side += (l - r) * (l - r) * 0.5;
+    side_rms_sum += 0.25 * (l - r) * (l - r);
+  }
+
+  float* channels[] = {left.data(), right.data()};
+  sonare::mixing::MeterProcessor meter({false, false, 4, 0.0f});
+  meter.prepare(48000.0, kSamples);
+  meter.process(channels, 2, kSamples);
+  const auto snapshot = meter.snapshot();
+
+  REQUIRE(snapshot.correlation == Catch::Approx(sum_lr / std::sqrt(sum_l * sum_r)).epsilon(1e-6));
+  REQUIRE(snapshot.mono_compat_side_rms ==
+          Catch::Approx(std::sqrt(side_rms_sum / kSamples)).epsilon(1e-6));
+  REQUIRE(snapshot.mono_compat_width == Catch::Approx(std::sqrt(sum_side / sum_mid)).epsilon(1e-6));
+  REQUIRE(snapshot.rms_db[0] ==
+          Catch::Approx(20.0 * std::log10(std::sqrt(sum_l / kSamples))).epsilon(1e-6));
 }
 
 TEST_CASE("Mixing C API processes stereo strips and exposes meters", "[mixing][capi]") {

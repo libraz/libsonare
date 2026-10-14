@@ -1285,6 +1285,19 @@ TEST_CASE("the scratch bound leaves ordinary filter shapes every worker", "[hpss
   REQUIRE(median_filter_worker_count(total, default_kernel, 0, 0) == 1);
 }
 
+TEST_CASE("short inputs do not launch a worker per host core", "[hpss][worker-threshold]") {
+  const long long cell = kMinMedianCellsPerWorker;
+  // Below one worker's worth of cells the filter runs inline whatever the host offers.
+  REQUIRE(median_filter_workers_for_work(64, 100, 100) == 1);
+  REQUIRE(median_filter_workers_for_work(64, 1, static_cast<int>(cell) - 1) == 1);
+  // Workers are added only while each keeps a full share, and never exceed the host's count.
+  REQUIRE(median_filter_workers_for_work(64, 4, static_cast<int>(cell)) == 4);
+  REQUIRE(median_filter_workers_for_work(2, 1000, static_cast<int>(cell)) == 2);
+  REQUIRE(median_filter_workers_for_work(0, 1000, 1000) == 1);
+  // A spectrogram of ordinary analysis size still uses the whole host.
+  REQUIRE(median_filter_workers_for_work(8, 1025, 4096) == 8);
+}
+
 TEST_CASE("a filter the scratch bound slowed down still covers every row", "[hpss]") {
   // Lowering the worker count re-chunks the division, so it has to still reach
   // every row. The shape is picked so the bound genuinely binds rather than

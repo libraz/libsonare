@@ -24,9 +24,6 @@ void UpwardExpander::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   prepared_ = true;
   active_ = config_;
-  if (followers_.size() < kRealtimePreparedChannels) {
-    followers_.resize(kRealtimePreparedChannels);
-  }
   update_coefficients(active_);
   reset();
   // Re-publish so the audio thread observes the same snapshot that prepare()
@@ -47,10 +44,10 @@ void UpwardExpander::process(float* const* channels, int num_channels, int num_s
   // changes its current() value inside acquire(), and we already called it.
   const UpwardExpanderConfig& cfg = *adopt_snapshot_for_block();
 
-  ensure_followers(num_channels);
+  ensure_channel_capacity(num_channels);
 
   // Linked detection (mirrors UpwardCompressor): one detector envelope drives every channel.
-  auto& follower = followers_[0];
+  auto& follower = follower_;
   const int excluded_channel = detector_excluded_channel(num_channels);
   const float max_gain = apply_linked_gain(
       channels, num_channels, num_samples, excluded_channel, follower,
@@ -58,17 +55,15 @@ void UpwardExpander::process(float* const* channels, int num_channels, int num_s
       [](float acc, float applied_db) { return std::max(acc, applied_db); });
 
   // One float, once per block: the follower is recursive, so a non-finite level
-  // that reached it would otherwise outlive every later block. Only followers_[0]
-  // advances under linked detection, so it is the only cell to scrub.
+  // that reached it would otherwise outlive every later block. The
+  // single follower drives every channel, so it is the only cell to scrub.
   if (follower.discard_if_non_finite()) note_non_finite_discard();
 
   last_gain_db_ = max_gain;
 }
 
 void UpwardExpander::reset() {
-  for (auto& follower : followers_) {
-    follower.reset();
-  }
+  follower_.reset();
   last_gain_db_ = 0.0f;
 }
 
@@ -125,14 +120,11 @@ float UpwardExpander::gain_db(float input_db, const UpwardExpanderConfig& config
 }
 
 void UpwardExpander::update_coefficients(const UpwardExpanderConfig& config) {
-  for (auto& follower : followers_) {
-    follower.prepare(sample_rate_, config.attack_ms, config.release_ms);
-  }
+  follower_.prepare(sample_rate_, config.attack_ms, config.release_ms);
 }
 
-void UpwardExpander::ensure_followers(int num_channels) {
-  const auto target_size = static_cast<size_t>(num_channels);
-  if (followers_.size() >= target_size) {
+void UpwardExpander::ensure_channel_capacity(int num_channels) {
+  if (static_cast<size_t>(num_channels) <= kRealtimePreparedChannels) {
     return;
   }
 

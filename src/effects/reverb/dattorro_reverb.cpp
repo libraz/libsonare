@@ -16,7 +16,6 @@ namespace sonare::effects::reverb {
 
 using sonare::constants::kDefaultDawSampleRate;
 using sonare::constants::kHalfPi;
-using sonare::constants::kTwoPi;
 using sonare::constants::kTwoPiD;
 
 namespace {
@@ -209,7 +208,7 @@ float DattorroReverb::damping_coefficient(double corner_hz, double sample_rate) 
   // Solves |H(w_c)|^2 = 1/2 for y += a (x - y): with b = 1 - a and c = cos(w_c),
   // b^2 - (4 - 2c) b + 1 = 0, taking the root below one.
   const double fc = std::clamp(corner_hz, 0.0, 0.49 * sample_rate);
-  const double c = std::cos(kTwoPi * fc / sample_rate);
+  const double c = std::cos(kTwoPiD * fc / sample_rate);
   const double b = (2.0 - c) - std::sqrt((2.0 - c) * (2.0 - c) - 1.0);
   return static_cast<float>(1.0 - b);
 }
@@ -305,7 +304,7 @@ void DattorroReverb::prepare(double sample_rate, int) {
   decay_ap_r_.prepare(scale_len(2656.0, sr), kGainDiff);
   update_character_geometry();
 
-  lfo_inc_ = static_cast<float>(kTwoPi * config_.mod_rate_hz / sr);
+  lfo_inc_ = static_cast<float>(kTwoPiD * config_.mod_rate_hz / sr);
 
   reset();
 }
@@ -540,7 +539,7 @@ bool DattorroReverb::set_parameter_impl(unsigned int param_id, float value) {
     case 3:
       // Recompute the LFO increment in place; preserves the modulation phase.
       config_.mod_rate_hz = value;
-      lfo_inc_ = static_cast<float>(kTwoPi * config_.mod_rate_hz / sample_rate_);
+      lfo_inc_ = static_cast<float>(kTwoPiD * config_.mod_rate_hz / sample_rate_);
       return true;
     case 4: {
       const float requested = std::max(0.0f, value);

@@ -389,3 +389,17 @@ TEST_CASE("Dattorro keeps an accepted slow live LFO rate advancing",
   REQUIRE(slow_vs_stopped > 1.0e-5);
   REQUIRE(slow_vs_moving > 1.0e-4);
 }
+
+TEST_CASE("Dattorro damping coefficient follows the double-precision corner solution",
+          "[effects][dattorro][damping-precision]") {
+  using sonare::effects::reverb::DattorroReverb;
+  for (double rate : {44100.0, 48000.0}) {
+    for (int i = 1; i <= 120; ++i) {
+      const double corner = 37.0 * i + 0.3141;
+      const double fc = std::clamp(corner, 0.0, 0.49 * rate);
+      const double c = std::cos(sonare::constants::kTwoPiD * fc / rate);
+      const double b = (2.0 - c) - std::sqrt((2.0 - c) * (2.0 - c) - 1.0);
+      CHECK(DattorroReverb::damping_coefficient(corner, rate) == static_cast<float>(1.0 - b));
+    }
+  }
+}

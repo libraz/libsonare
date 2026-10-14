@@ -57,10 +57,10 @@ class Expander : public rt::RtConfigLifecycle<Expander, ExpanderConfig> {
 
  private:
   static float gain_reduction_db(float input_db, const ExpanderConfig& config);
-  void ensure_followers(int num_channels);
+  void ensure_channel_capacity(int num_channels);
   /// @brief Recomputes scalar derived coefficients (envelope follower
   ///        attack/release) from @p config. RT-safe: scalar math only, no
-  ///        allocation (envelope followers are preallocated in prepare()).
+  ///        allocation (the envelope follower is a member).
   /// @details Called from prepare() and — via @ref adopt_snapshot_for_block —
   ///          from the audio thread when a new configuration snapshot is
   ///          adopted between blocks.
@@ -68,7 +68,7 @@ class Expander : public rt::RtConfigLifecycle<Expander, ExpanderConfig> {
 
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   bool prepared_ = false;
-  std::vector<sonare::rt::EnvelopeFollower> followers_;
+  sonare::rt::EnvelopeFollower follower_;
   float last_gain_reduction_db_ = 0.0f;
 };
 

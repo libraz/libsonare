@@ -157,11 +157,7 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
 
   MeterSnapshot next;
   next.gain_reduction_db = gain_reduction_db_.load(std::memory_order_relaxed);
-  double sum_l = 0.0;
-  double sum_r = 0.0;
-  double sum_lr = 0.0;
-  double mid_energy = 0.0;
-  double side_energy = 0.0;
+  std::array<double, 2> stereo_sum_square{};
 
   // Per-plane peak/RMS up to the surround width. Stereo stays bit-identical
   // (meters == 2); a 5.1/7.1 bus now fills planes 2..N-1 too.
@@ -179,6 +175,7 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
       peak = std::max(peak, std::abs(sample));
       sum_square += static_cast<double>(sample) * sample;
     }
+    if (ch < 2) stereo_sum_square[static_cast<size_t>(ch)] = sum_square;
     sample_peaks[static_cast<size_t>(ch)] = peak;
     next.peak_db[static_cast<size_t>(ch)] = linear_to_db(peak);
     next.rms_db[static_cast<size_t>(ch)] =
@@ -237,12 +234,16 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
   }
 
   if (num_channels >= 2 && channels[0] != nullptr && channels[1] != nullptr) {
+    // L/R energies come from the per-plane pass above, accumulated exactly as here.
+    const double sum_l = stereo_sum_square[0];
+    const double sum_r = stereo_sum_square[1];
+    double sum_lr = 0.0;
+    double mid_energy = 0.0;
+    double side_energy = 0.0;
     double side_sq_sum = 0.0;
     for (int i = 0; i < num_samples; ++i) {
       const double left = channels[0][i];
       const double right = channels[1][i];
-      sum_l += left * left;
-      sum_r += right * right;
       sum_lr += left * right;
 
       const double mono = 0.5 * (left + right);

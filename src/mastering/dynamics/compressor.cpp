@@ -147,33 +147,15 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
     // not, leaving the two paths inconsistent).
     float peak_lin = 0.0f;
     float power_sum = 0.0f;
-    if (excluded_channel < 0) {
-      for (int ch = 0; ch < num_channels; ++ch) {
-        float s = channels[ch][i];
-        if (hpf_admitted[static_cast<size_t>(ch)]) {
-          const auto idx = static_cast<size_t>(ch);
-          const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
-          hpf_x1_[idx] = s;
-          hpf_y1_[idx] = y;
-          s = y;
-        }
-        peak_lin = std::max(peak_lin, std::abs(s));
-        power_sum += s * s;
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (ch == excluded_channel) continue;
+      float s = channels[ch][i];
+      if (hpf_admitted[static_cast<size_t>(ch)]) {
+        const auto idx = static_cast<size_t>(ch);
+        s = rt::onepole_highpass_step(hpf_b0_, hpf_a1_, hpf_x1_[idx], hpf_y1_[idx], s);
       }
-    } else {
-      for (int ch = 0; ch < num_channels; ++ch) {
-        if (ch == excluded_channel) continue;
-        float s = channels[ch][i];
-        if (hpf_admitted[static_cast<size_t>(ch)]) {
-          const auto idx = static_cast<size_t>(ch);
-          const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
-          hpf_x1_[idx] = s;
-          hpf_y1_[idx] = y;
-          s = y;
-        }
-        peak_lin = std::max(peak_lin, std::abs(s));
-        power_sum += s * s;
-      }
+      peak_lin = std::max(peak_lin, std::abs(s));
+      power_sum += s * s;
     }
     const float power_lin = power_sum * inv_channels;
 

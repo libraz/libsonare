@@ -346,7 +346,11 @@ MixAssistantResult suggest_scene(const std::vector<TrackProfile>& profiles, cons
   require_finite_config(config);
   require_unique_profile_ids(profiles);
 
-  MixProfile effective_mix = mix;
+  // The result's own mix is the working copy every decision below reads, so the profile is
+  // copied once and the const input is never touched.
+  MixAssistantResult result;
+  MixProfile& effective_mix = result.mix;
+  effective_mix = mix;
   if (!mix.source_strip_ids.empty()) {
     SONARE_CHECK_MSG(mix.track_count == static_cast<int>(profiles.size()),
                      ErrorCode::InvalidParameter,
@@ -395,9 +399,7 @@ MixAssistantResult suggest_scene(const std::vector<TrackProfile>& profiles, cons
     }
   }
 
-  MixAssistantResult result;
   result.tracks = profiles;
-  result.mix = effective_mix;
   if (profiles.empty() || !any_usable(profiles)) {
     return result;
   }

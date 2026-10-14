@@ -7,6 +7,7 @@
 #include <cmath>
 #include <vector>
 
+#include "support/alloc_guard.h"
 #include "util/json_reader.h"
 
 using namespace sonare;
@@ -92,4 +93,21 @@ TEST_CASE("nn_filter matches librosa mean output", "[librosa][decompose]") {
   // nn_filter is deterministic: given the same k-NN selection it should match
   // librosa to float precision.
   REQUIRE(rel_err < 1e-5);
+}
+
+TEST_CASE("nn_filter allocates one selector list per frame and nothing else per frame",
+          "[librosa][decompose][nn-filter-workspace]") {
+  constexpr int kFeatures = 6;
+  constexpr int kFrames = 200;
+  std::vector<float> S(static_cast<size_t>(kFeatures) * kFrames);
+  for (size_t i = 0; i < S.size(); ++i)
+    S[i] = 1.0f + 0.5f * std::sin(0.37f * static_cast<float>(i));
+
+  sonare::test::AllocationGuard guard;
+  const auto out = nn_filter(S.data(), kFeatures, kFrames, "mean", /*k=*/3, /*width=*/1);
+  const size_t allocations = guard.count();
+
+  REQUIRE(out.size() == S.size());
+  // One list per frame plus a fixed handful of buffers; a per-frame scratch vector would double it.
+  REQUIRE(allocations < static_cast<size_t>(kFrames) + 32);
 }

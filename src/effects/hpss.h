@@ -43,6 +43,18 @@ inline constexpr std::size_t kMaxHpssScratchBytes = 64u * 1024u * 1024u;
 int median_filter_worker_count(int total, int kernel_size, int staged_column_length,
                                int host_concurrency);
 
+/// @brief Output cells one median-filter worker must have to be worth launching.
+/// @details Starting a thread costs tens of microseconds, so a worker is only added while each
+///          still has this many cells to filter; shorter inputs run on fewer workers or inline.
+inline constexpr long long kMinMedianCellsPerWorker = 1 << 15;
+
+/// @brief Caps a worker count so every worker has at least @ref kMinMedianCellsPerWorker cells.
+/// @param workers Count from @ref median_filter_worker_count.
+/// @param total Rows or columns divided across the workers.
+/// @param line_length Cells in one row or column.
+/// @return At least 1, and never above @p workers.
+int median_filter_workers_for_work(int workers, int total, int line_length);
+
 /// @brief Configuration for HPSS algorithm.
 /// @details HPSS separates audio into harmonic (tonal) and percussive (transient)
 ///          components using median filtering. Horizontal filtering enhances

@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -528,6 +529,49 @@ TEST_CASE("Crossover FIR linear-phase mode recombines to delayed input", "[maste
 
   REQUIRE(output.num_bands() == 3);
   REQUIRE(max_error < 0.00001f);
+}
+
+TEST_CASE("Crossover FIR history walk keeps tap order across the ring wrap",
+          "[mastering][multiband][fir-ring]") {
+  constexpr int kKernel = 65;
+  constexpr int kLength = 8 * kKernel + 11;
+  CrossoverConfig config{{1000.0f}, CrossoverSlope::LR4, CrossoverMode::FirLinearPhase, kKernel};
+  Crossover one_shot(config);
+  Crossover chunked(config);
+  one_shot.prepare(48000.0, kLength);
+  chunked.prepare(48000.0, kLength);
+
+  std::vector<float> impulse(kLength, 0.0f);
+  impulse[0] = 1.0f;
+  auto whole_input = impulse;
+  float* whole_channels[] = {whole_input.data()};
+  const auto whole = one_shot.split(whole_channels, 1, kLength);
+
+  // The low band's impulse response is the symmetric kernel, so a tap read from the wrong ring
+  // slot breaks the mirror around the centre.
+  const auto& low = whole.bands[0][0];
+  for (int i = 0; i < kKernel; ++i) {
+    REQUIRE(low[static_cast<size_t>(i)] ==
+            Catch::Approx(low[static_cast<size_t>(kKernel - 1 - i)]).margin(1.0e-6));
+  }
+
+  // Block boundaries that fall at every ring position leave the output unchanged.
+  std::vector<float> pieces;
+  auto input = impulse;
+  int offset = 0;
+  for (int chunk : {1, 7, 64, 65, 66, 3, 130}) {
+    float* channels[] = {input.data() + offset};
+    const auto part = chunked.split(channels, 1, chunk);
+    pieces.insert(pieces.end(), part.bands[0][0].begin(), part.bands[0][0].end());
+    offset += chunk;
+  }
+  float* rest[] = {input.data() + offset};
+  const auto tail = chunked.split(rest, 1, kLength - offset);
+  pieces.insert(pieces.end(), tail.bands[0][0].begin(), tail.bands[0][0].end());
+  REQUIRE(pieces.size() == low.size());
+  for (size_t i = 0; i < pieces.size(); ++i) {
+    REQUIRE(pieces[i] == low[i]);
+  }
 }
 
 TEST_CASE("Crossover streaming output matches single block processing", "[mastering][multiband]") {

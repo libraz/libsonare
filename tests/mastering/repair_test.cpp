@@ -22,6 +22,7 @@
 #include "mastering/repair/denoise_internal.h"
 #include "mastering/repair/dereverb_classical.h"
 #include "mastering/repair/trim_silence.h"
+#include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
@@ -1866,6 +1867,25 @@ double shift_spread(const std::vector<float>& samples, const Repair& repair, siz
 }
 
 }  // namespace
+
+TEST_CASE("Decrackle wavelet cycle spinning allocates once however many spins it averages",
+          "[mastering][repair][decrackle-workspace]") {
+  const DecrackleConfig wavelet{0.02f, DecrackleMode::WaveletShrinkage, 4};
+  std::vector<float> input(2001);
+  for (size_t i = 0; i < input.size(); ++i) {
+    input[i] = 0.3f * std::sin(0.05f * static_cast<float>(i)) + ((i % 97) == 0 ? 0.5f : 0.0f);
+  }
+  const auto allocations_for = [&](int shifts) {
+    sonare::test::AllocationGuard guard;
+    const auto out = repair_detail::wavelet_shrink_spun(input, wavelet, shifts);
+    const size_t count = guard.count();
+    REQUIRE(out.size() == input.size());
+    return count;
+  };
+  const size_t one_spin = allocations_for(1);
+  REQUIRE(allocations_for(repair_detail::kCycleSpinShifts) == one_spin);
+  REQUIRE(allocations_for(64) == one_spin);
+}
 
 TEST_CASE("Decrackle wavelet cycle spinning leaves no artefact at the buffer ends",
           "[mastering][repair]") {

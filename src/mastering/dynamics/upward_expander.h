@@ -61,17 +61,17 @@ class UpwardExpander : public rt::RtConfigLifecycle<UpwardExpander, UpwardExpand
  private:
   static void validate_config(const UpwardExpanderConfig& config);
   static float gain_db(float input_db, const UpwardExpanderConfig& config);
-  /// @brief Recomputes scalar derived coefficients (envelope followers) from
+  /// @brief Recomputes scalar derived coefficients (envelope follower) from
   ///        @p config. RT-safe: scalar math only, no allocation.
   /// @details Called from prepare() and — via @ref adopt_snapshot_for_block —
   ///          from the audio thread when a new configuration snapshot is
   ///          adopted between blocks.
   void update_coefficients(const UpwardExpanderConfig& config);
-  void ensure_followers(int num_channels);
+  void ensure_channel_capacity(int num_channels);
 
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   bool prepared_ = false;
-  std::vector<sonare::rt::EnvelopeFollower> followers_;
+  sonare::rt::EnvelopeFollower follower_;
   float last_gain_db_ = 0.0f;
 };
 

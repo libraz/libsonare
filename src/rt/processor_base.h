@@ -18,6 +18,15 @@
 
 namespace sonare::rt {
 
+/// @brief One step of the key/sidechain one-pole high-pass `y = b0 * (s - x1) + a1 * y1`.
+/// @details Stores @p s and the result back into the two taps and returns the result.
+inline float onepole_highpass_step(float b0, float a1, float& x1, float& y1, float s) noexcept {
+  const float y = b0 * (s - x1) + a1 * y1;
+  x1 = s;
+  y1 = y;
+  return y;
+}
+
 /// @brief Maps a processor's JSON-key parameter name to the integer @c param_id
 ///        accepted by @c set_parameter / @c parameter_is_realtime_safe.
 /// @details The construction surface (scene JSON, mastering params) addresses

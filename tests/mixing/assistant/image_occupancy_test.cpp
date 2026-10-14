@@ -252,6 +252,45 @@ TEST_CASE("Raw suggest_scene keeps a complete polarity-inverted stereo track mea
   CHECK_THAT(result.mix.mono_risks[0].correlation, WithinAbs(-1.0f, 1e-3f));
 }
 
+TEST_CASE("suggest_scene leaves a cached mix untouched and returns an independent working copy",
+          "[mixing][assistant][mix-profile-copy]") {
+  const std::vector<float> left = tone(kMidToneHz, 0.5f);
+  const std::vector<float> right = tone(kMidToneHz, -0.5f);
+  const std::vector<TrackInput> tracks = {make_track("flipped", left, &right)};
+
+  sonare::mixing::assistant::MixAssistantConfig measured;
+  measured.enable_structure = false;
+  measured.enable_gain = false;
+  measured.enable_balance = false;
+  measured.enable_eq = false;
+  measured.enable_dynamics = false;
+  measured.enable_image = true;
+  const auto first = sonare::mixing::assistant::suggest_scene(tracks, measured);
+  REQUIRE(first.mix.mono_risks.size() == 1);
+  REQUIRE_FALSE(first.mix.image.histogram.empty());
+
+  const sonare::mixing::assistant::MixProfile cached = first.mix;
+  auto image_off = measured;
+  image_off.enable_image = false;
+  auto result = sonare::mixing::assistant::suggest_scene(first.tracks, cached, image_off);
+
+  // The input and its cache are exactly as they were handed in.
+  CHECK(cached.mono_risks.size() == first.mix.mono_risks.size());
+  CHECK(cached.cached_mono_risks.empty());
+  CHECK(cached.image.histogram == first.mix.image.histogram);
+  // The returned mix is the re-projection: image dropped, measurements parked in the cache.
+  CHECK(result.mix.image.histogram.empty());
+  CHECK(result.mix.mono_risks.empty());
+  CHECK(result.mix.cached_mono_risks.size() == 1);
+
+  // It owns its storage: editing it cannot reach the input, and a second call is unaffected.
+  result.mix.cached_mono_risks.clear();
+  result.mix.analysis_input_trim_db.assign(5, 1.0f);
+  CHECK(cached.analysis_input_trim_db == first.mix.analysis_input_trim_db);
+  const auto again = sonare::mixing::assistant::suggest_scene(first.tracks, cached, image_off);
+  CHECK(again.mix.cached_mono_risks.size() == 1);
+}
+
 TEST_CASE("A track that is wide only in the low end raises the low-end flag",
           "[mixing][assistant]") {
   std::vector<float> left = tone(kLowToneHz, 0.5f);

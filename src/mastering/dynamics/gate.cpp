@@ -79,38 +79,20 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
       hpf_y1_[ch] = 0.0f;
     });
   }
+  const float range_gain = db_to_linear(cfg.range_db);
   last_gain_reduction_db_ = 0.0f;
   for (int i = 0; i < num_samples; ++i) {
     float detector = 0.0f;
-    if (excluded_channel < 0) {
-      for (int ch = 0; ch < num_channels; ++ch) {
-        if (channels[ch] == nullptr)
-          throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
-        float s = channels[ch][i];
-        if (hpf_admitted[static_cast<size_t>(ch)]) {
-          const auto idx = static_cast<size_t>(ch);
-          const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
-          hpf_x1_[idx] = s;
-          hpf_y1_[idx] = y;
-          s = y;
-        }
-        detector = std::max(detector, std::abs(s));
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (ch == excluded_channel) continue;
+      if (channels[ch] == nullptr)
+        throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
+      float s = channels[ch][i];
+      if (hpf_admitted[static_cast<size_t>(ch)]) {
+        const auto idx = static_cast<size_t>(ch);
+        s = rt::onepole_highpass_step(hpf_b0_, hpf_a1_, hpf_x1_[idx], hpf_y1_[idx], s);
       }
-    } else {
-      for (int ch = 0; ch < num_channels; ++ch) {
-        if (ch == excluded_channel) continue;
-        if (channels[ch] == nullptr)
-          throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
-        float s = channels[ch][i];
-        if (hpf_admitted[static_cast<size_t>(ch)]) {
-          const auto idx = static_cast<size_t>(ch);
-          const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
-          hpf_x1_[idx] = s;
-          hpf_y1_[idx] = y;
-          s = y;
-        }
-        detector = std::max(detector, std::abs(s));
-      }
+      detector = std::max(detector, std::abs(s));
     }
     const float level_db = linear_to_db(detector);
     if (level_db >= cfg.threshold_db) {
@@ -128,7 +110,7 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
     // open target of 0 dB starting from range_db never converges cleanly (and
     // db_to_linear(-inf) underflows for a fully-closed range), producing an
     // unnatural opening. range_db == -inf maps to a linear floor of 0.
-    const float target_gain = open ? 1.0f : db_to_linear(cfg.range_db);
+    const float target_gain = open ? 1.0f : range_gain;
     const float c = target_gain > gain_ ? attack : release;
     gain_ = c * gain_ + (1.0f - c) * target_gain;
     const float gain = gain_;

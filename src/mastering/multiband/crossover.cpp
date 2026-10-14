@@ -597,11 +597,15 @@ float Crossover::process_fir_lowpass(float sample, int split_index, int channel)
   double output = 0.0;
   const size_t size = history.size();
   const auto& kernel = fir_kernels_[static_cast<size_t>(split_index)];
-  for (size_t tap = 0; tap < size; ++tap) {
-    const size_t history_index = (write_index + size - tap) % size;
-    output += static_cast<double>(kernel[tap]) * history[history_index];
+  // Newest sample first: taps up to write_index walk down to index 0, the rest wrap to the end.
+  size_t tap = 0;
+  for (; tap <= write_index; ++tap) {
+    output += static_cast<double>(kernel[tap]) * history[write_index - tap];
   }
-  write_index = (write_index + 1) % size;
+  for (; tap < size; ++tap) {
+    output += static_cast<double>(kernel[tap]) * history[size + write_index - tap];
+  }
+  write_index = write_index + 1 == size ? 0 : write_index + 1;
   return static_cast<float>(output);
 }
 
@@ -609,9 +613,8 @@ float Crossover::process_fir_delay(float sample, int channel) {
   auto& history = fir_delay_history_[static_cast<size_t>(channel)];
   auto& write_index = fir_delay_index_[static_cast<size_t>(channel)];
   history[write_index] = sample;
-  const float output = history[(write_index + 1) % history.size()];
-  write_index = (write_index + 1) % history.size();
-  return output;
+  write_index = write_index + 1 == history.size() ? 0 : write_index + 1;
+  return history[write_index];
 }
 
 void Crossover::rebuild_state(int num_channels) {

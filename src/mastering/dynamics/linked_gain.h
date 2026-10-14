@@ -7,6 +7,18 @@
 
 namespace sonare::mastering::dynamics {
 
+/// @brief Loudest magnitude at @p sample across the channels, leaving out @p excluded_channel.
+/// @details A negative @p excluded_channel excludes nothing.
+inline float linked_peak(const float* const* channels, int num_channels, int sample,
+                         int excluded_channel) {
+  float peak = 0.0f;
+  for (int ch = 0; ch < num_channels; ++ch) {
+    if (ch == excluded_channel) continue;
+    peak = std::max(peak, std::abs(channels[ch][sample]));
+  }
+  return peak;
+}
+
 /**
  * @brief Applies one linked gain to every channel from a single loudest-channel envelope.
  *
@@ -23,17 +35,7 @@ float apply_linked_gain(float* const* channels, int num_channels, int num_sample
                         int excluded_channel, Follower& follower, GainLaw law, Fold fold) {
   float extreme_db = 0.0f;
   for (int i = 0; i < num_samples; ++i) {
-    float linked_level = 0.0f;
-    if (excluded_channel < 0) {
-      for (int ch = 0; ch < num_channels; ++ch) {
-        linked_level = std::max(linked_level, std::abs(channels[ch][i]));
-      }
-    } else {
-      for (int ch = 0; ch < num_channels; ++ch) {
-        if (ch == excluded_channel) continue;
-        linked_level = std::max(linked_level, std::abs(channels[ch][i]));
-      }
-    }
+    const float linked_level = linked_peak(channels, num_channels, i, excluded_channel);
     const float envelope = follower.process(linked_level);
     const float gain_db = law(linear_to_db(envelope));
     const float gain = db_to_linear(gain_db);
