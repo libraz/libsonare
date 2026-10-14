@@ -13,6 +13,7 @@
 /// the implementation is not).
 
 #include <memory>
+#include <vector>
 
 #include "host/audio_device.h"
 #include "host/midi_io.h"
@@ -59,6 +60,19 @@ class CoreAudioDevice final : public AudioDevice {
   /// zero capacity, or a name the device does not publish; @p out is left
   /// untouched in that case.
   static bool output_device_name(size_t index, char* out, size_t capacity);
+
+  /// One output device as a single enumeration saw it. `name` is empty when the
+  /// device publishes none.
+  struct OutputDevice {
+    uint32_t id = 0;
+    char name[128] = {};
+  };
+
+  /// CONTROL thread: every output device, in the order the index accessors use,
+  /// read from one enumeration so ids and names describe the same device set.
+  /// The snapshot is a point-in-time view; hotplug is picked up by calling
+  /// again, and open_device() still resolves its id against the live system.
+  static std::vector<OutputDevice> output_devices();
   bool start() override;
   void stop() noexcept override;
   void close() noexcept override;

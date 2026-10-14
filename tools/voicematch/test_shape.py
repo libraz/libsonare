@@ -35,6 +35,7 @@ from shape.bed import Bed
 from shape.density import (
     RAYLEIGH_CV,
     band_snr_db,
+    band_snr_dbs,
     diffuse_floor,
     envelope_diffuseness,
     modal_density,
@@ -1445,6 +1446,114 @@ def test_prompt_late_sees_a_top_that_belongs_to_the_strike_alone():
     assert high.any()
     # The piece whose top belongs to the strike reads further positive up there.
     assert fv[high].mean() > ev[high].mean() + 3.0
+
+
+def _count_rfft(monkeypatch):
+    """Route np.fft.rfft through a counter and return the count holder."""
+    calls = []
+    real = np.fft.rfft
+
+    def counting(*args, **kwargs):
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(np.fft, "rfft", counting)
+    return calls
+
+
+def _reference_band_snr(sig, band, window, floor_window, sr):
+    """One band against one floor, transforming both windows for this band alone."""
+
+    def p(win):
+        x = np.asarray(sig[int(win[0] * sr) : int(win[1] * sr)], dtype=np.float64)
+        if len(x) < 256:
+            return 0.0
+        S = np.fft.rfft(x)
+        fr = np.fft.rfftfreq(len(x), 1.0 / sr)
+        m = (fr >= band[0]) & (fr < band[1])
+        return float(np.sum(np.abs(S[m]) ** 2)) / len(x) ** 2
+
+    a, b = p(window), p(floor_window)
+    return float("inf") if a <= 0.0 or b <= 0.0 else 10 * np.log10(a / b)
+
+
+def test_band_snr_for_many_bands_transforms_each_window_once(monkeypatch):
+    sr = 48000
+    sig = _field(40, band=(80, 6000), seconds=2.0, sr=sr, seed=4)
+    window, floor = (0.2, 0.5), (1.5, 1.9)
+    bands = struck.STRUCK_BANDS
+    expected = [_reference_band_snr(sig, b, window, floor, sr) for b in bands]
+    calls = _count_rfft(monkeypatch)
+    got = band_snr_dbs(sig, bands, window=window, floor_window=floor, sr=sr)
+    assert len(calls) == 2
+    assert got == expected
+
+
+def test_prompt_late_transforms_each_window_once_and_reads_the_same_levels(monkeypatch):
+    sr = 48000
+    t = np.arange(int(1.2 * sr)) / sr
+    sig = _field(60, band=(80, 7000), seconds=1.2, sr=sr, seed=6) * np.exp(-3.0 * t)
+    body, late = (0.0, 0.1), (0.1, 0.7)
+
+    def reference_db(band, window):
+        a, b = int(window[0] * sr), int(window[1] * sr)
+        seg = sig[max(0, a) : min(len(sig), b)]
+        n = 1
+        while n < len(seg):
+            n <<= 1
+        S = np.abs(np.fft.rfft(seg * np.hanning(len(seg)), n)) ** 2
+        f = np.fft.rfftfreq(n, 1.0 / sr)
+        m = (f >= band[0]) & (f < band[1])
+        return 10.0 * np.log10(max(float(S[m].sum()), 1e-30)) if m.any() else -400.0
+
+    bands = struck.STRUCK_BANDS
+    b_db = np.array([reference_db(b, body) for b in bands])
+    l_db = np.array([reference_db(b, late) for b in bands])
+    b_tot = 10.0 * np.log10(max(float(np.sum(10.0 ** (b_db / 10.0))), 1e-30))
+    l_tot = 10.0 * np.log10(max(float(np.sum(10.0 ** (l_db / 10.0))), 1e-30))
+    want = np.zeros(len(bands))
+    want_alive = np.zeros(len(bands), dtype=bool)
+    for i in range(len(bands)):
+        if b_db[i] < b_tot - struck.DEAD_DB:
+            continue
+        want[i] = (b_db[i] - b_tot) - max(l_db[i] - l_tot, -struck.DEAD_DB)
+        want_alive[i] = True
+
+    calls = _count_rfft(monkeypatch)
+    got, alive = struck.prompt_late(sig, body, late, sr)
+    assert len(calls) == 2
+    assert np.array_equal(got, want) and np.array_equal(alive, want_alive)
+
+
+def test_mode_count_hands_back_the_snr_it_gated_on():
+    sr = 48000
+    t = np.arange(int(3.0 * sr)) / sr
+    sig = _field(48, band=(300, 6000), seconds=3.0, sr=sr, seed=8) * np.exp(-6.907755 * t / 1.0)
+    _body, late = struck.windows(sig, sr)
+    floor = struck.floor_window(sig, sr)
+    assert floor is not None
+    win = struck.texture_window(late)
+    values, usable, snr = struck.mode_count_snr(sig, late, sr, floor=floor)
+    for i, band in enumerate(struck.STRUCK_BANDS):
+        assert snr[i] == _reference_band_snr(sig, band, win, floor, sr)
+        assert usable[i] == (np.isfinite(snr[i]) and snr[i] >= struck.STRUCK_SNR_DB)
+    plain = struck.mode_count(sig, late, sr, floor=floor)
+    assert np.array_equal(plain[0], values) and np.array_equal(plain[1], usable)
+    assert np.isnan(struck.mode_count_snr(np.zeros(sr), (0.0, 0.5), sr)[2]).all()
+
+
+def test_decay_marks_can_be_shared_between_windows_and_floor(monkeypatch):
+    sr = 48000
+    sig = np.concatenate([_hit(0.4, seconds=1.0), np.zeros(sr)])
+    marks = struck.decay_marks(sig, sr)
+    assert struck.windows(sig, sr, marks) == struck.windows(sig, sr)
+    assert struck.floor_window(sig, sr, marks=marks) == struck.floor_window(sig, sr)
+    calls = []
+    real = struck.rms_envelope
+    monkeypatch.setattr(struck, "rms_envelope", lambda *a, **k: calls.append(1) or real(*a, **k))
+    struck.windows(sig, sr, marks)
+    struck.floor_window(sig, sr, marks=marks)
+    assert calls == []
 
 
 def test_a_struck_capture_is_scored_on_different_terms_than_a_played_one():

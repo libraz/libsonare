@@ -46,7 +46,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .density import DENSITY_BANDS, band_snr_db, modal_density
+from .density import DENSITY_BANDS, band_snr_dbs, modal_density
 
 #: Octave bands the prompt/late split is read in. The same grid `density` counts
 #: in, so a piece that reads sparse and a piece that reads dull are reported
@@ -115,7 +115,7 @@ def decay_marks(sig: np.ndarray, sr: int = 48000, hop_ms: float = 2.0):
     return first_below(-20.0), first_below(-60.0)
 
 
-def windows(sig: np.ndarray, sr: int = 48000):
+def windows(sig: np.ndarray, sr: int = 48000, marks=None):
     """This piece's body and aftersound windows, from its own decay.
 
     The body runs from the strike to 20 dB down and the aftersound from there to
@@ -123,15 +123,16 @@ def windows(sig: np.ndarray, sr: int = 48000):
     without either being told how long it is. A piece too short to fill the
     second window gets both windows over what it has rather than a window past
     its end, since a window past the end measures the floor and reports it as
-    the piece.
+    the piece. `marks` is a `decay_marks` result already taken for this signal,
+    so a caller that needs the windows and a floor reads the envelope once.
     """
-    t20, t60 = decay_marks(sig, sr)
+    t20, t60 = decay_marks(sig, sr) if marks is None else marks
     body = (0.0, max(MIN_WINDOW_S, t20))
     late = (body[1], max(body[1] + MIN_WINDOW_S, t60))
     return body, late
 
 
-def floor_window(sig: np.ndarray, sr: int = 48000, margin_s: float = 0.05):
+def floor_window(sig: np.ndarray, sr: int = 48000, margin_s: float = 0.05, marks=None):
     """Where this recording's own floor can be read, or None if nowhere.
 
     Everything downstream of `band_snr_db` needs a stretch of the same recording
@@ -146,7 +147,8 @@ def floor_window(sig: np.ndarray, sr: int = 48000, margin_s: float = 0.05):
     So the window is the stretch between the piece's own t60 and the end of what
     was actually recorded, found as the last sample that is not exactly zero.
     None when that leaves too little to transform, which the caller must report
-    rather than score.
+    rather than score. `marks` is a `decay_marks` result already taken for this
+    signal.
     """
     x = np.asarray(sig, dtype=np.float64)
     if x.ndim > 1:
@@ -155,7 +157,7 @@ def floor_window(sig: np.ndarray, sr: int = 48000, margin_s: float = 0.05):
     if not live.size:
         return None
     end = (int(live[-1]) + 1) / sr
-    _, t60 = decay_marks(x, sr)
+    _, t60 = decay_marks(x, sr) if marks is None else marks
     start = min(t60 + margin_s, end)
     if end - start < 4 * MIN_WINDOW_S:
         return None
@@ -179,6 +181,32 @@ def texture_window(late, span_s: float = DENSITY_SPAN_S):
     return (start, end)
 
 
+def mode_count_snr(sig: np.ndarray, late, sr: int = 48000, bands=STRUCK_BANDS, floor=None):
+    """`mode_count` plus the signal-to-floor figure each band was gated on.
+
+    Returns (count, usable, snr_db). `snr_db` is NaN for every band when no
+    floor could be read. A caller that needs the gate's own evidence takes it
+    from here rather than measuring the same window against the same floor again.
+    """
+    out = np.zeros(len(bands))
+    ok = np.zeros(len(bands), dtype=bool)
+    snr_db = np.full(len(bands), np.nan)
+    if floor is None:
+        floor = floor_window(sig, sr)
+    if floor is None:
+        return out, ok, snr_db
+    win = texture_window(late)
+    counts = modal_density(sig, 0, window=win, sr=sr, bands=tuple(bands), notch=False)
+    snr_db[:] = band_snr_dbs(sig, bands, window=win, floor_window=floor, sr=sr)
+    for i, band in enumerate(bands):
+        snr = snr_db[i]
+        if not np.isfinite(snr) or snr < STRUCK_SNR_DB:
+            continue
+        out[i] = float(counts[tuple(band)][0])
+        ok[i] = True
+    return out, ok, snr_db
+
+
 def mode_count(sig: np.ndarray, late, sr: int = 48000, bands=STRUCK_BANDS, floor=None):
     """Per band: resonances counted in the aftersound, and whether it was read.
 
@@ -193,41 +221,30 @@ def mode_count(sig: np.ndarray, late, sr: int = 48000, bands=STRUCK_BANDS, floor
     resolvable as separate things", not "thirty modes", and two pieces both up
     at the ceiling are not thereby the same.
     """
-    out = np.zeros(len(bands))
-    ok = np.zeros(len(bands), dtype=bool)
-    if floor is None:
-        floor = floor_window(sig, sr)
-    if floor is None:
-        return out, ok
-    win = texture_window(late)
-    counts = modal_density(sig, 0, window=win, sr=sr, bands=tuple(bands), notch=False)
-    for i, band in enumerate(bands):
-        snr = band_snr_db(sig, band, window=win, floor_window=floor, sr=sr)
-        if not np.isfinite(snr) or snr < STRUCK_SNR_DB:
-            continue
-        out[i] = float(counts[tuple(band)][0])
-        ok[i] = True
+    out, ok, _ = mode_count_snr(sig, late, sr, bands, floor)
     return out, ok
 
 
-def _band_db(sig: np.ndarray, band, window, sr: int) -> float:
-    """RMS level of one band over one window, in dB."""
+def _band_dbs(sig: np.ndarray, bands, window, sr: int) -> np.ndarray:
+    """RMS level of each band over one window, in dB, from a single transform."""
+    out = np.full(len(bands), -400.0)
     x = np.asarray(sig, dtype=np.float64)
     if x.ndim > 1:
         x = x.mean(axis=1)
     a, b = int(window[0] * sr), int(window[1] * sr)
     seg = x[max(0, a) : min(len(x), b)]
     if len(seg) < 64:
-        return -400.0
+        return out
     n = 1
     while n < len(seg):
         n <<= 1
     S = np.abs(np.fft.rfft(seg * np.hanning(len(seg)), n)) ** 2
     f = np.fft.rfftfreq(n, 1.0 / sr)
-    m = (f >= band[0]) & (f < band[1])
-    if not m.any():
-        return -400.0
-    return 10.0 * np.log10(max(float(S[m].sum()), 1e-30))
+    for i, band in enumerate(bands):
+        m = (f >= band[0]) & (f < band[1])
+        if m.any():
+            out[i] = 10.0 * np.log10(max(float(S[m].sum()), 1e-30))
+    return out
 
 
 def prompt_late(sig: np.ndarray, body, late, sr: int = 48000, bands=STRUCK_BANDS):
@@ -255,8 +272,8 @@ def prompt_late(sig: np.ndarray, body, late, sr: int = 48000, bands=STRUCK_BANDS
     """
     out = np.zeros(len(bands))
     alive = np.zeros(len(bands), dtype=bool)
-    b_db = np.array([_band_db(sig, b, body, sr) for b in bands])
-    l_db = np.array([_band_db(sig, b, late, sr) for b in bands])
+    b_db = _band_dbs(sig, bands, body, sr)
+    l_db = _band_dbs(sig, bands, late, sr)
     b_tot = 10.0 * np.log10(max(float(np.sum(10.0 ** (b_db / 10.0))), 1e-30))
     l_tot = 10.0 * np.log10(max(float(np.sum(10.0 ** (l_db / 10.0))), 1e-30))
     for i in range(len(bands)):

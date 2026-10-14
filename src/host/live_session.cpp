@@ -25,6 +25,18 @@ bool LiveSession::audio_output_info(size_t index, LiveDeviceInfo* out) noexcept 
   return backends::CoreAudioDevice::output_device_name(index, out->name, sizeof(out->name));
 }
 
+void LiveSession::audio_outputs(std::vector<LiveDeviceInfo>* out) {
+  if (out == nullptr) return;
+  static_assert(
+      sizeof(LiveDeviceInfo::name) == sizeof(backends::CoreAudioDevice::OutputDevice::name),
+      "device name buffers must match");
+  const auto devices = backends::CoreAudioDevice::output_devices();
+  out->assign(devices.size(), LiveDeviceInfo{});
+  for (size_t i = 0; i < devices.size(); ++i) {
+    std::memcpy((*out)[i].name, devices[i].name, sizeof((*out)[i].name));
+  }
+}
+
 bool LiveSession::midi_input_info(size_t index, LiveDeviceInfo* out) noexcept {
   if (out == nullptr) return false;
   return backends::CoreMidiInput::source_name(index, out->name, sizeof(out->name));

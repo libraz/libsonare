@@ -13,7 +13,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
 #include <limits>
+#include <string>
 #include <thread>
+#include <vector>
 
 #include "engine/realtime_engine.h"
 
@@ -83,6 +85,25 @@ TEST_CASE("LiveSession refuses an index past the device list", "[host][live]") {
   config.audio_output_index = audio_outputs + 1;
   REQUIRE(session.open(&engine, config) == LiveOpenResult::kInvalidArgument);
   REQUIRE_FALSE(session.is_running());
+}
+
+TEST_CASE("LiveSession lists audio outputs from one enumeration", "[host][live]") {
+  // The bulk list is the index accessors read together: same order, same
+  // names, an unnamed device as an empty string at its own position.
+  std::vector<LiveDeviceInfo> listed;
+  LiveSession::audio_outputs(&listed);
+  LiveSession::audio_outputs(nullptr);
+
+  const size_t count = LiveSession::audio_output_count();
+  REQUIRE(listed.size() == count);
+  for (size_t i = 0; i < listed.size(); ++i) {
+    LiveDeviceInfo single;
+    if (LiveSession::audio_output_info(i, &single)) {
+      REQUIRE(std::string(listed[i].name) == single.name);
+    } else {
+      REQUIRE(listed[i].name[0] == '\0');
+    }
+  }
 }
 
 TEST_CASE("LiveSession enumerates the machine's devices", "[host][live][.]") {

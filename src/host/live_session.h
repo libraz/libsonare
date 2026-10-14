@@ -24,6 +24,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 #include "host/audio_device.h"
 #include "host/backends/coreaudio/coreaudio_device.h"
@@ -78,6 +79,13 @@ class LiveSession final {
   /// index or a device that publishes no name, leaving @p out untouched.
   static bool audio_output_info(size_t index, LiveDeviceInfo* out) noexcept;
   static bool midi_input_info(size_t index, LiveDeviceInfo* out) noexcept;
+
+  /// CONTROL thread: replaces @p out with every audio output, in index order,
+  /// from one enumeration. A device that publishes no name has an empty name.
+  /// Prefer this to count-then-info when listing: each of those calls
+  /// enumerates the system again. The list is a snapshot; re-read it on a
+  /// hotplug notification or before presenting a choice.
+  static void audio_outputs(std::vector<LiveDeviceInfo>* out);
 
   /// Both device fields are indices into the lists the four accessors above
   /// describe, not opaque handles: the MIDI seam is index-addressed already,

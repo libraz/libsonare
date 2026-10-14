@@ -251,6 +251,35 @@ def bell_score(spectro, signals, notes, velocity, threshold: float = 0.6, **kw):
     return float(np.mean(frac >= threshold))
 
 
+def band_snr_dbs(sig, bands, window=(2.5, 6.0), floor_window=(9.0, 10.0), sr=48000):
+    """`band_snr_db` for several bands, transforming each window once.
+
+    Returns one value per band, in order. The window and the floor are each
+    transformed a single time however many bands are asked about.
+    """
+
+    def spectrum(win):
+        x = np.asarray(sig[int(win[0] * sr) : int(win[1] * sr)], dtype=np.float64)
+        if len(x) < 256:
+            return None
+        S = np.fft.rfft(x)
+        return np.abs(S) ** 2, np.fft.rfftfreq(len(x), 1.0 / sr), len(x)
+
+    def power(spec, band):
+        if spec is None:
+            return 0.0
+        pw, fr, n = spec
+        m = (fr >= band[0]) & (fr < band[1])
+        return float(np.sum(pw[m])) / n**2
+
+    sig_spec, floor_spec = spectrum(window), spectrum(floor_window)
+    out = []
+    for band in bands:
+        a, b = power(sig_spec, band), power(floor_spec, band)
+        out.append(float("inf") if a <= 0.0 or b <= 0.0 else 10 * np.log10(a / b))
+    return out
+
+
 def band_snr_db(sig, band, window=(2.5, 6.0), floor_window=(9.0, 10.0), sr=48000):
     """How far a band stands over the same recording's own floor in that band.
 
@@ -268,20 +297,7 @@ def band_snr_db(sig, band, window=(2.5, 6.0), floor_window=(9.0, 10.0), sr=48000
     not the floor under a soft one, and a single figure for the corpus would
     understate it exactly where it does the most damage.
     """
-
-    def p(win):
-        x = np.asarray(sig[int(win[0] * sr) : int(win[1] * sr)], dtype=np.float64)
-        if len(x) < 256:
-            return 0.0
-        S = np.fft.rfft(x)
-        fr = np.fft.rfftfreq(len(x), 1.0 / sr)
-        m = (fr >= band[0]) & (fr < band[1])
-        return float(np.sum(np.abs(S[m]) ** 2)) / len(x) ** 2
-
-    a, b = p(window), p(floor_window)
-    if a <= 0.0 or b <= 0.0:
-        return float("inf")
-    return 10 * np.log10(a / b)
+    return band_snr_dbs(sig, (band,), window, floor_window, sr)[0]
 
 
 def diffuse_floor(band, window=(2.5, 6.0), sr=48000, seed=20240517):

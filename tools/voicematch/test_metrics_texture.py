@@ -13,6 +13,7 @@ from loss import percussion_terms
 from loss_weights import TERM_UNITS
 from metrics_hit import analyze_hit
 from metrics_texture import TEXTURE_BINS, analyze_texture
+from shape import struck
 from smf import Note
 from toneclass import default_weights
 
@@ -224,3 +225,19 @@ def test_band_ceiling_marks_unrecorded_texture_cells_invalid():
     assert sum(cut["modal_density_valid"]) < sum(full["modal_density_valid"])
     assert all(not cut["modal_density_valid"][i] for i in range(4, TEXTURE_BINS))
     assert all(not cut["prompt_late_valid"][i] for i in range(4, TEXTURE_BINS))
+
+
+def test_texture_reads_one_decay_envelope_and_a_handful_of_spectra(monkeypatch):
+    envelopes = []
+    spectra = []
+    real_envelope = struck.rms_envelope
+    real_rfft = np.fft.rfft
+    monkeypatch.setattr(
+        struck, "rms_envelope", lambda *a, **k: envelopes.append(1) or real_envelope(*a, **k)
+    )
+    monkeypatch.setattr(np.fft, "rfft", lambda *a, **k: spectra.append(1) or real_rfft(*a, **k))
+    row = analyze_texture(_texture_signal(dense=True), SR)
+    assert any(row["modal_density_valid"]) and any(row["prompt_late_valid"])
+    assert len(envelopes) == 1
+    # Count window, floor, strike and aftersound: one transform each, whatever the band count.
+    assert len(spectra) <= 6

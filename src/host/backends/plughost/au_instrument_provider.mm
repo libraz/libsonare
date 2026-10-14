@@ -277,12 +277,13 @@ class AuMidiInstrument final : public midi::MidiInstrument, public AuInstrumentT
     sample_rate_ = sample_rate;
     max_block_ = max_block_size;
     // Scratch backing for channels the host does not supply, so process() never
-    // allocates. One row per possible channel, each max_block_size long.
-    scratch_.assign(kMaxChannels * static_cast<size_t>(max_block_size), 0.0f);
+    // allocates. One row per negotiated channel, each max_block_size long.
+    scratch_.assign(detail::au_scratch_floats(detail::kAuNegotiatedChannels, max_block_size), 0.0f);
     auto frames = static_cast<UInt32>(max_block_size);
     if (api_->set_property(unit_, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global,
                            0, &frames, sizeof(frames)) != noErr ||
-        !set_planar_float_format(*api_, unit_, kAudioUnitScope_Output, sample_rate_, 2) ||
+        !set_planar_float_format(*api_, unit_, kAudioUnitScope_Output, sample_rate_,
+                                 detail::kAuNegotiatedChannels) ||
         api_->initialize(unit_) != noErr) {
       throw SonareException(ErrorCode::InvalidState, "failed to prepare Audio Unit instrument");
     }
@@ -290,7 +291,7 @@ class AuMidiInstrument final : public midi::MidiInstrument, public AuInstrumentT
     // The MidiInstrument::prepare seam carries no channel count, so default to
     // stereo here. process() adapts mismatched host buffers without changing AU
     // properties on the audio thread.
-    output_channels_ = 2;
+    output_channels_ = detail::kAuNegotiatedChannels;
     latency_ = query_latency_samples(*api_, unit_, sample_rate_);
     parameters_.load(*api_, unit_);
     position_ = 0;
@@ -469,8 +470,8 @@ class AuEffectProcessor final : public rt::ProcessorBase {
     sample_rate_ = sample_rate;
     max_block_ = max_block_size;
     // Scratch backing for channels the host does not supply, so process() never
-    // allocates. One row per possible channel, each max_block_size long.
-    scratch_.assign(kMaxChannels * static_cast<size_t>(max_block_size), 0.0f);
+    // allocates. One row per negotiated channel, each max_block_size long.
+    scratch_.assign(detail::au_scratch_floats(detail::kAuNegotiatedChannels, max_block_size), 0.0f);
     auto frames = static_cast<UInt32>(max_block_size);
     if (api_->set_property(unit_, kAudioUnitProperty_MaximumFramesPerSlice, kAudioUnitScope_Global,
                            0, &frames, sizeof(frames)) != noErr) {
@@ -485,15 +486,17 @@ class AuEffectProcessor final : public rt::ProcessorBase {
     cb.inputProcRefCon = this;
     if (api_->set_property(unit_, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, 0,
                            &cb, sizeof(cb)) != noErr ||
-        !set_planar_float_format(*api_, unit_, kAudioUnitScope_Input, sample_rate_, 2) ||
-        !set_planar_float_format(*api_, unit_, kAudioUnitScope_Output, sample_rate_, 2) ||
+        !set_planar_float_format(*api_, unit_, kAudioUnitScope_Input, sample_rate_,
+                                 detail::kAuNegotiatedChannels) ||
+        !set_planar_float_format(*api_, unit_, kAudioUnitScope_Output, sample_rate_,
+                                 detail::kAuNegotiatedChannels) ||
         api_->initialize(unit_) != noErr) {
       throw SonareException(ErrorCode::InvalidState, "failed to prepare Audio Unit effect");
     }
     initialized_ = true;
     // ProcessorBase::prepare carries no channel count, so negotiate stereo once
     // on this control-thread seam and adapt mismatched process buffers safely.
-    channels_ = 2;
+    channels_ = detail::kAuNegotiatedChannels;
     latency_ = query_latency_samples(*api_, unit_, sample_rate_);
     parameters_.load(*api_, unit_);
     position_ = 0;

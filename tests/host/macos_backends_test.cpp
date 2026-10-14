@@ -376,6 +376,15 @@ TEST_CASE("AU effect input callback never reads past the current block's host pl
   REQUIRE(result.input_beyond_request_untouched);
 }
 
+TEST_CASE("AU adapters size scratch from the negotiated channel count", "[host][au]") {
+  // Scratch backs planes the host leaves out; the AU is negotiated at stereo, so
+  // one row per negotiated channel is all process() can reach.
+  namespace detail = sonare::host::backends::detail;
+  REQUIRE(detail::kAuNegotiatedChannels == 2);
+  REQUIRE(detail::au_scratch_floats(detail::kAuNegotiatedChannels, 512) == 2u * 512u);
+  REQUIRE(detail::au_scratch_floats(1, 128) == 128u);
+}
+
 TEST_CASE("AU effect input supplies each timestamped pull from its own offset", "[host][au]") {
   const auto result = sonare::host::backends::detail::run_au_effect_split_pull_probe();
   REQUIRE(result.ran);

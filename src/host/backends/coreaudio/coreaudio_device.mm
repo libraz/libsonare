@@ -226,13 +226,7 @@ struct CoreAudioDevice::Impl {
                                  : 0.0;
     view.time.input_xruns = callback_xruns;
 
-    // Engine rendering mixes into its output planes. Clear the active scratch
-    // span first so a callback that only calls engine.process() never carries
-    // samples from the previous CoreAudio callback into this block.
-    for (int channel = 0; channel < num_out; ++channel) {
-      std::fill(output_ptrs[static_cast<size_t>(channel)],
-                output_ptrs[static_cast<size_t>(channel)] + frame_plan.render_frames, 0.0f);
-    }
+    // The callback owns clearing its planes (AudioDeviceCallback::render).
     callback->render(view);
 
     // Interleave the planar engine output back into CoreAudio's buffers.
@@ -280,6 +274,18 @@ bool CoreAudioDevice::output_device_name(size_t index, char* out, size_t capacit
   const std::vector<AudioObjectID> devices = enumerate_output_devices();
   if (index >= devices.size()) return false;
   return copy_device_name(devices[index], out, capacity);
+}
+
+std::vector<CoreAudioDevice::OutputDevice> CoreAudioDevice::output_devices() {
+  const std::vector<AudioObjectID> devices = enumerate_output_devices();
+  std::vector<OutputDevice> snapshot(devices.size());
+  for (size_t i = 0; i < devices.size(); ++i) {
+    snapshot[i].id = static_cast<uint32_t>(devices[i]);
+    if (!copy_device_name(devices[i], snapshot[i].name, sizeof(snapshot[i].name))) {
+      snapshot[i].name[0] = '\0';
+    }
+  }
+  return snapshot;
 }
 
 bool CoreAudioDevice::open(const AudioStreamConfig& config, AudioDeviceCallback* callback) {

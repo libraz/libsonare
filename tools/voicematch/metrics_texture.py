@@ -25,7 +25,6 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from shape.density import band_snr_db
 from shape.struck import (
     DENSITY_BANDS,
     DENSITY_CLIP,
@@ -33,8 +32,9 @@ from shape.struck import (
     MIN_WINDOW_S,
     PROMPT_CLIP,
     STRUCK_SNR_DB,
+    decay_marks,
     floor_window,
-    mode_count,
+    mode_count_snr,
     prompt_late,
     texture_window,
     windows,
@@ -281,7 +281,7 @@ def analyze_evolution(
 
 
 def _texture_windows(
-    signal: np.ndarray, sr: int
+    signal: np.ndarray, sr: int, marks: tuple[float, float]
 ) -> tuple[tuple[float, float], tuple[float, float]] | None:
     """Get finite, in-recording body and late windows from the struck estimator.
 
@@ -291,7 +291,7 @@ def _texture_windows(
     Reject the pair when either window is not actually recorded.
     """
     length_s = len(signal) / float(sr)
-    body, late = windows(signal, sr)
+    body, late = windows(signal, sr, marks)
     # Late colour on the density span keeps FFT resolution comparable across t60s.
     late = texture_window(late, span_s=DENSITY_SPAN_S)
     body_start, body_end = body
@@ -328,19 +328,20 @@ def analyze_texture(
     active = _active_indices(max_band_hz)
     if not active:
         return empty
-    pair = _texture_windows(x, sr)
+    # One decay envelope serves the body/late windows and the floor search.
+    marks = decay_marks(x, sr)
+    pair = _texture_windows(x, sr, marks)
     if pair is None:
         return empty
     body, late = pair
 
     # `mode_count` refuses without a post-release floor; pass it once rather than per band.
-    floor = floor_window(x, sr)
+    floor = floor_window(x, sr, marks=marks)
     if floor is not None:
         bands = tuple(TEXTURE_BANDS[i] for i in active)
-        density, density_ok = mode_count(x, late, sr, bands=bands, floor=floor)
-        for i, value, ok in zip(active, density, density_ok):
+        density, density_ok, density_snr = mode_count_snr(x, late, sr, bands=bands, floor=floor)
+        for i, value, ok, snr in zip(active, density, density_ok, density_snr):
             # Enforce the SNR gate here even if the estimator ever counts an under-floor band.
-            snr = band_snr_db(x, TEXTURE_BANDS[i], window=late, floor_window=floor, sr=sr)
             valid = bool(ok and np.isfinite(value) and np.isfinite(snr) and snr >= STRUCK_SNR_DB)
             if valid:
                 empty["modal_density"][i] = round(float(value), 3)

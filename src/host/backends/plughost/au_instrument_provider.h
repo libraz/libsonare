@@ -15,6 +15,7 @@
 /// the OSType (e.g. "61756d75:..." ). `enumerate` fills descriptors for the
 /// MusicDevice / effect AUs installed on the system.
 
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <vector>
@@ -45,6 +46,16 @@ class AuInstrumentTelemetry {
 };
 
 namespace detail {
+
+/// Channel count both AU adapters negotiate in prepare().
+constexpr int kAuNegotiatedChannels = 2;
+
+/// Floats of scratch prepare() reserves for planes the host did not supply: one
+/// row of @p max_block_size per negotiated channel, so process() never needs
+/// more and never resizes.
+constexpr size_t au_scratch_floats(int negotiated_channels, int max_block_size) noexcept {
+  return static_cast<size_t>(negotiated_channels) * static_cast<size_t>(max_block_size);
+}
 
 /// Deterministic result from the fake-AudioUnit render-path call spy.
 struct AuProcessCallSpyResult {

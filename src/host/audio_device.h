@@ -135,8 +135,9 @@ class AudioDeviceCallback {
   /// AUDIO thread: render one device buffer. MUST be allocation-free,
   /// lock-free and I/O-free. The callee fills `buffers.outputs` for
   /// `buffers.num_frames` frames, optionally reading `buffers.inputs`.
-  /// Engine renderers mix into their supplied output planes, so a callback that
-  /// has no upstream input must zero those planes before calling the engine.
+  /// Engine renderers mix into their supplied output planes, and the planes
+  /// arrive holding the previous block, so the callback must zero them before
+  /// calling the engine; a backend does not clear them on its behalf.
   virtual void render(const AudioBufferView& buffers) noexcept = 0;
 
   /// CONTROL thread: called once when the stream closes; no render() follows.
