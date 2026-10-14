@@ -11,12 +11,15 @@
 
 namespace sonare::editing::voice_changer {
 
+/// Largest grain, in samples, a retune accepts or an automatic grain resolves to.
+constexpr int kMaxRetuneGrainSize = 8192;
+
 struct StreamingRetuneConfig {
   float semitones = 0.0f;
   float mix = 1.0f;
-  int grain_size = 0;  ///< 0 = derive ~46 ms grain from sample rate in prepare().
-                       ///< Structural: only applied by prepare(); set_config()
-                       ///< keeps the effective (already-prepared) grain size.
+  int grain_size = 0;  ///< 0 = derive ~46 ms grain from sample rate in prepare(), capped at
+                       ///< @ref kMaxRetuneGrainSize. Structural: only applied by prepare();
+                       ///< once prepared, config() reports the effective grain size.
 };
 
 /// @brief Low-latency streaming pitch shifter with cross-block continuity.

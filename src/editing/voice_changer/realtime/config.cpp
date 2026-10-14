@@ -237,7 +237,10 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* err
   }
   if (!require_number(retune, "semitones", -24.0, 24.0, "dsp.retune", error)) return false;
   if (!require_number(retune, "mix", 0.0, 1.0, "dsp.retune", error)) return false;
-  if (!require_number(retune, "grainSize", 0.0, 8192.0, "dsp.retune", error, true)) return false;
+  if (!require_number(retune, "grainSize", 0.0, static_cast<double>(kMaxRetuneGrainSize),
+                      "dsp.retune", error, true)) {
+    return false;
+  }
 
   const auto& formant = *dsp.find("formant");
   if (!has_allowed_keys(formant, {"factor", "amount", "body", "brightness", "nasal", "mode"},
@@ -504,7 +507,7 @@ RealtimeVoiceChangerConfig normalize_realtime_voice_changer_config(
   // Upper bound must agree with validate_dsp_section() so the POD set_config
   // path (which bypasses JSON validation) cannot allocate a runaway grain
   // buffer in StreamingRetune::prepare().
-  c.retune.grain_size = std::clamp(c.retune.grain_size, 0, 8192);
+  c.retune.grain_size = std::clamp(c.retune.grain_size, 0, kMaxRetuneGrainSize);
   c.formant.factor = std::clamp(c.formant.factor, kFormantFactorMin, kFormantFactorMax);
   c.formant.amount = std::clamp(c.formant.amount, 0.0f, 1.0f);
   c.formant.body = std::clamp(c.formant.body, -1.0f, 1.0f);

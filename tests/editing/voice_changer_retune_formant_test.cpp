@@ -731,3 +731,75 @@ TEST_CASE("RealtimeVoiceChanger applies a retune grain requested after prepare",
   changer.prepare(48000.0, 256, 1);
   REQUIRE(changer.config().retune.grain_size == 512);
 }
+
+TEST_CASE("StreamingRetune config reports the grain in use after prepare", "[voice_changer]") {
+  // Automatic grain: config() carries the resolved value, not the 0 that asked for it.
+  StreamingRetune automatic;
+  automatic.prepare(48000.0, 256);
+  REQUIRE(automatic.config().grain_size == automatic.grain_size());
+  REQUIRE(automatic.config().grain_size == automatic.latency_samples());
+
+  // An explicit request is reported as rounded to the multiple of four it runs at.
+  StreamingRetune odd({0.0f, 1.0f, 513});
+  odd.prepare(48000.0, 256);
+  REQUIRE(odd.grain_size() == 516);
+  REQUIRE(odd.config().grain_size == 516);
+  REQUIRE(odd.latency_samples() == 516);
+
+  // Handing the reported config back is not a new request.
+  odd.set_config(odd.config());
+  REQUIRE(odd.config().grain_size == odd.grain_size());
+  odd.prepare(96000.0, 256);
+  REQUIRE(odd.grain_size() == 516);
+
+  // The automatic grain still follows the rate after the reported value was handed back.
+  automatic.set_config(automatic.config());
+  const int at_48k = automatic.grain_size();
+  automatic.prepare(96000.0, 256);
+  REQUIRE(automatic.grain_size() > at_48k);
+  REQUIRE(automatic.config().grain_size == automatic.grain_size());
+  REQUIRE(automatic.config().grain_size == automatic.latency_samples());
+
+  // A deferred structural request survives a prepare-less config round trip.
+  automatic.set_config({0.0f, 1.0f, 512});
+  REQUIRE(automatic.config().grain_size == automatic.grain_size());
+  automatic.prepare(96000.0, 256);
+  REQUIRE(automatic.grain_size() == 512);
+  REQUIRE(automatic.config().grain_size == 512);
+}
+
+TEST_CASE("StreamingRetune bounds the automatic grain to the largest accepted grain",
+          "[voice_changer]") {
+  for (const double rate : {44100.0, 96000.0, 176400.0, 192000.0}) {
+    CAPTURE(rate);
+    StreamingRetune retune;
+    retune.prepare(rate, 256);
+    REQUIRE(retune.grain_size() <= kMaxRetuneGrainSize);
+    REQUIRE(retune.grain_size() % 4 == 0);
+    if (rate >= 176400.0) REQUIRE(retune.grain_size() == kMaxRetuneGrainSize);
+  }
+}
+
+TEST_CASE("RealtimeVoiceChanger config JSON round-trips the effective grain and latency",
+          "[voice_changer]") {
+  for (const double rate : {48000.0, 96000.0, 176400.0, 192000.0}) {
+    for (const int requested : {0, 513}) {
+      CAPTURE(rate, requested);
+      RealtimeVoiceChangerConfig config;
+      config.retune.grain_size = requested;
+      RealtimeVoiceChanger first(config);
+      first.prepare(rate, 256, 1);
+      const int grain = first.config().retune.grain_size;
+      REQUIRE(grain > 0);
+      REQUIRE(grain <= kMaxRetuneGrainSize);
+
+      const std::string json = realtime_voice_changer_config_to_json(first.config());
+      REQUIRE(json.find("\"grainSize\":" + std::to_string(grain)) != std::string::npos);
+
+      RealtimeVoiceChanger second(realtime_voice_changer_config_from_json(json));
+      second.prepare(rate, 256, 1);
+      REQUIRE(second.config().retune.grain_size == grain);
+      REQUIRE(second.latency_samples() == first.latency_samples());
+    }
+  }
+}

@@ -19,7 +19,6 @@ using sonare::constants::kTwoPi;
 namespace {
 constexpr double kDefaultGrainSeconds = 2048.0 / 44100.0;
 constexpr float kMaxSemitones = 24.0f;  // Clamp shift range to +/- 2 octaves.
-constexpr int kMaxGrainSize = 8192;
 // Source delay the coherent read may drift through before it is re-anchored: the
 // longest a transient can be re-read late, against how often a jump is audible.
 constexpr int kWrapRoomGrains = 2;
@@ -31,14 +30,14 @@ StreamingRetuneConfig sanitize_config(StreamingRetuneConfig config) noexcept {
                          ? std::clamp(config.semitones, -kMaxSemitones, kMaxSemitones)
                          : 0.0f;
   config.mix = std::isfinite(config.mix) ? std::clamp(config.mix, 0.0f, 1.0f) : 1.0f;
-  config.grain_size = std::clamp(config.grain_size, 0, kMaxGrainSize);
+  config.grain_size = std::clamp(config.grain_size, 0, kMaxRetuneGrainSize);
   return config;
 }
 
 int resolve_grain_size(int requested, double sample_rate) noexcept {
   const int derived =
       requested > 0 ? requested : static_cast<int>(std::lround(sample_rate * kDefaultGrainSeconds));
-  const int grain = std::max(4, derived);
+  const int grain = std::clamp(derived, 4, kMaxRetuneGrainSize);
   return grain + ((4 - grain % 4) % 4);
 }
 }  // namespace
@@ -63,6 +62,8 @@ void StreamingRetune::prepare(double sample_rate, int max_block_size) {
   max_block_size_ = max_block_size;
 
   grain_size_ = resolve_grain_size(requested_grain_size_, sample_rate_);
+  // config() reports the grain in use; the request stays in requested_grain_size_.
+  config_.grain_size = grain_size_;
   hop_a_ = grain_size_ / 4;
   wrap_room_ = kWrapRoomGrains * grain_size_;
   // The ring holds the widest grain source span, the whole wrap room behind it, and the
@@ -122,8 +123,11 @@ void StreamingRetune::reset() {
 void StreamingRetune::set_config(const StreamingRetuneConfig& config) {
   config_ = sanitize_config(config);
   // Record the request BEFORE the effective-value overwrite below lands on the
-  // same field, so the next prepare() resolves what the caller asked for.
-  requested_grain_size_ = config_.grain_size;
+  // same field, so the next prepare() resolves what the caller asked for. Handing back the
+  // effective grain (as config() reports it) is not a new request and leaves the old one standing.
+  if (grain_size_ == 0 || config_.grain_size != grain_size_) {
+    requested_grain_size_ = config_.grain_size;
+  }
   // grain_size is a structural parameter fixed at prepare() time: changing it
   // would reallocate the grain/ring buffers, which is forbidden here because
   // set_config runs on the audio thread via RealtimeVoiceChanger snapshot

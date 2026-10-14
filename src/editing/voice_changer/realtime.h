@@ -125,9 +125,12 @@ struct RealtimeVoiceChangerConfig {
   /// @brief How @ref StreamingFormantConfig::factor acts. Fixed when the chain is prepared.
   /// @details Relative (the default) leaves the factor to the formant colour stage, after the
   ///          retune. Absolute puts a formant warp ahead of the retune that lands the formants at
-  ///          factor times the input's, whatever the retune does; the colour stage then runs at
-  ///          its neutral factor and keeps body, brightness and nasal. The warp adds one analysis
-  ///          frame of latency, and @ref StreamingFormantConfig::amount is ignored in this mode.
+  ///          factor times the input's, whatever the retune does. Below a retune mix of one it
+  ///          undoes only the wet share of the shift: the warp divides by the pitch ratio raised to
+  ///          the mix, so mix 0 warps by the factor alone and mix 1 by the full ratio. The colour
+  ///          stage then runs at its neutral factor and keeps body, brightness and nasal. The warp
+  ///          adds one analysis frame of latency, and @ref StreamingFormantConfig::amount is
+  ///          ignored in this mode.
   ///          The warp it needs, factor / 2^(semitones / 12), must lie in [kFormantFactorMin,
   ///          kFormantFactorMax]: @ref validate_realtime_voice_changer_config refuses a
   ///          configuration outside that, and the running chain clamps it.

@@ -533,6 +533,100 @@ TEST_CASE("The realtime chain in absolute mode places the formants at input time
   CHECK(chain_centroid_ratio(48000, 4.0f, 1.0f, FormantMode::Relative) > 1.1);
 }
 
+namespace {
+
+// Welch-averaged power of a segment inside [low_hz, high_hz], in dB.
+double band_power_db(const std::vector<float>& segment, int sample_rate, double low_hz,
+                     double high_hz) {
+  constexpr int kSize = 4096;
+  sonare::FFT fft(kSize);
+  std::vector<float> frame(kSize);
+  std::vector<std::complex<float>> spectrum(static_cast<size_t>(fft.n_bins()));
+  double total = 0.0;
+  for (size_t pos = 0; pos + kSize <= segment.size(); pos += kSize / 2) {
+    for (int i = 0; i < kSize; ++i) {
+      const float w = 0.5f - 0.5f * std::cos(sonare::constants::kTwoPi * static_cast<float>(i) /
+                                             static_cast<float>(kSize));
+      frame[static_cast<size_t>(i)] = segment[pos + static_cast<size_t>(i)] * w;
+    }
+    fft.forward(frame.data(), spectrum.data());
+    for (size_t k = 0; k < spectrum.size(); ++k) {
+      const double hz = static_cast<double>(k) * sample_rate / kSize;
+      if (hz >= low_hz && hz <= high_hz) total += std::norm(spectrum[k]);
+    }
+  }
+  return 10.0 * std::log10(total + 1.0e-20);
+}
+
+// Band powers of the chain's settled output, read past its latency.
+std::array<double, 2> settled_band_powers(const RealtimeVoiceChangerConfig& cfg, int sample_rate,
+                                          int block) {
+  const std::vector<float> input = three_formant_vowel(125.0, sample_rate, sample_rate);
+  RealtimeVoiceChanger chain(cfg);
+  chain.prepare(sample_rate, 512, 1);
+  std::vector<float> output(input.size());
+  // Irregular partition: block, block / 3 + 1, block, ...
+  size_t pos = 0;
+  bool short_block = false;
+  while (pos < input.size()) {
+    const size_t want =
+        short_block ? static_cast<size_t>(block / 3 + 1) : static_cast<size_t>(block);
+    const int n = static_cast<int>(std::min(want, input.size() - pos));
+    chain.process_block(input.data() + pos, output.data() + pos, n);
+    pos += static_cast<size_t>(n);
+    short_block = !short_block;
+  }
+  const size_t start = static_cast<size_t>(sample_rate) / 3 + chain.latency_samples();
+  const size_t len = static_cast<size_t>(sample_rate) / 3;
+  const std::vector<float> segment(output.begin() + static_cast<std::ptrdiff_t>(start),
+                                   output.begin() + static_cast<std::ptrdiff_t>(start + len));
+  return {band_power_db(segment, sample_rate, 300.0, 600.0),
+          band_power_db(segment, sample_rate, 1000.0, 1500.0)};
+}
+
+}  // namespace
+
+TEST_CASE("Absolute formant mode at retune mix 0 leaves the timbre to the factor, not the shift",
+          "[voice_changer][formant_mode][realtime]") {
+  // At mix 0 the retune passes its aligned dry path, so there is no pitch shift to compensate:
+  // the shift setting must not move the warp. Both runs differ only in semitones.
+  constexpr double kBandToleranceDb = 0.5;
+  for (const int sample_rate : {44100, 48000, 96000}) {
+    for (const float factor : {1.0f, 1.2f}) {
+      for (const int block : {128, 311}) {
+        CAPTURE(sample_rate, factor, block);
+        RealtimeVoiceChangerConfig shifted = bare_chain_config(7.0f, factor, FormantMode::Absolute);
+        RealtimeVoiceChangerConfig unshifted =
+            bare_chain_config(0.0f, factor, FormantMode::Absolute);
+        shifted.retune.mix = 0.0f;
+        unshifted.retune.mix = 0.0f;
+        const auto a = settled_band_powers(shifted, sample_rate, block);
+        const auto b = settled_band_powers(unshifted, sample_rate, block);
+        CHECK_THAT(a[0], WithinAbs(b[0], kBandToleranceDb));
+        CHECK_THAT(a[1], WithinAbs(b[1], kBandToleranceDb));
+      }
+    }
+  }
+}
+
+TEST_CASE("Absolute formant mode compensates the full shift at mix 1 and none in relative mode",
+          "[voice_changer][formant_mode][realtime]") {
+  constexpr int sample_rate = 48000;
+  // Mix 1: the absolute chain puts the formants where the factor says whatever the shift.
+  const double at_zero = chain_centroid_ratio(sample_rate, 0.0f, 1.0f, FormantMode::Absolute);
+  const double at_seven = chain_centroid_ratio(sample_rate, 7.0f, 1.0f, FormantMode::Absolute);
+  CHECK_THAT(at_seven, WithinRel(at_zero, 0.05));
+  // Relative mode ignores the mix for the colour stage, so a shift at mix 0 changes nothing.
+  RealtimeVoiceChangerConfig a = bare_chain_config(7.0f, 1.0f, FormantMode::Relative);
+  RealtimeVoiceChangerConfig b = bare_chain_config(0.0f, 1.0f, FormantMode::Relative);
+  a.retune.mix = 0.0f;
+  b.retune.mix = 0.0f;
+  const auto pa = settled_band_powers(a, sample_rate, 128);
+  const auto pb = settled_band_powers(b, sample_rate, 128);
+  CHECK_THAT(pa[0], WithinAbs(pb[0], 0.5));
+  CHECK_THAT(pa[1], WithinAbs(pb[1], 0.5));
+}
+
 TEST_CASE("The realtime chain in absolute mode leaves the pitch to the retune",
           "[voice_changer][formant_mode][realtime]") {
   constexpr int sample_rate = 48000;

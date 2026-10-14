@@ -1026,3 +1026,76 @@ TEST_CASE("The POD config refuses an unreachable warp, a bad mode and a bad layo
   REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) == SONARE_OK);
   sonare_realtime_voice_changer_destroy(handle);
 }
+
+TEST_CASE("sonare_streaming_retune config grain matches the grain in use",
+          "[voice_changer][capi]") {
+  SonareStreamingRetune* retune = sonare_streaming_retune_create(0.0f, 1.0f, 513);
+  REQUIRE(retune != nullptr);
+  REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 256) == SONARE_OK);
+
+  auto check_consistent = [&](int expected) {
+    int grain = -1;
+    int latency = -1;
+    int reported = -1;
+    REQUIRE(sonare_streaming_retune_grain_size(retune, &grain) == SONARE_OK);
+    REQUIRE(sonare_streaming_retune_latency_samples(retune, &latency) == SONARE_OK);
+    REQUIRE(sonare_streaming_retune_config(retune, nullptr, nullptr, &reported) == SONARE_OK);
+    REQUIRE(grain == expected);
+    REQUIRE(reported == grain);
+    REQUIRE(latency == grain);
+  };
+  check_consistent(516);
+  REQUIRE(sonare_streaming_retune_set_config(retune, 0.0f, 1.0f, 516) == SONARE_OK);
+  check_consistent(516);
+  sonare_streaming_retune_destroy(retune);
+
+  // Automatic: the reported grain tracks the rate after a re-prepare.
+  retune = sonare_streaming_retune_create(0.0f, 1.0f, 0);
+  REQUIRE(retune != nullptr);
+  REQUIRE(sonare_streaming_retune_prepare(retune, 48000.0, 256) == SONARE_OK);
+  check_consistent(2232);
+  REQUIRE(sonare_streaming_retune_prepare(retune, 96000.0, 256) == SONARE_OK);
+  int grain = 0;
+  REQUIRE(sonare_streaming_retune_grain_size(retune, &grain) == SONARE_OK);
+  REQUIRE(grain > 2232);
+  check_consistent(grain);
+  sonare_streaming_retune_destroy(retune);
+}
+
+TEST_CASE("Realtime voice changer config JSON round-trips grain and latency at every rate",
+          "[voice_changer][c-api]") {
+  for (const int rate : {48000, 96000, 176400, 192000}) {
+    CAPTURE(rate);
+    SonareRealtimeVoiceChanger* first = nullptr;
+    REQUIRE(sonare_realtime_voice_changer_create_json("bright-idol", rate, 256, 1, &first) ==
+            SONARE_OK);
+    SonareRealtimeVoiceChangerConfig pod{};
+    REQUIRE(sonare_realtime_voice_changer_get_config(first, &pod) == SONARE_OK);
+    int latency = 0;
+    REQUIRE(sonare_realtime_voice_changer_latency_samples(first, &latency) == SONARE_OK);
+    REQUIRE(pod.retune_grain_size > 0);
+    REQUIRE(pod.retune_grain_size <= 8192);
+
+    // The serialized document carries the same grain get_config reports.
+    char* json = nullptr;
+    REQUIRE(sonare_realtime_voice_changer_config_json(first, &json) == SONARE_OK);
+    const std::string document(json);
+    sonare_free_string(json);
+    REQUIRE(sonare::util::json::parse(document)["dsp"]["retune"]["grainSize"].as_int() ==
+            pod.retune_grain_size);
+
+    // Recreating from it at the same rate lands on the same grain and latency.
+    SonareRealtimeVoiceChanger* second = nullptr;
+    REQUIRE(sonare_realtime_voice_changer_create_json(document.c_str(), rate, 256, 1, &second) ==
+            SONARE_OK);
+    SonareRealtimeVoiceChangerConfig pod2{};
+    REQUIRE(sonare_realtime_voice_changer_get_config(second, &pod2) == SONARE_OK);
+    int latency2 = 0;
+    REQUIRE(sonare_realtime_voice_changer_latency_samples(second, &latency2) == SONARE_OK);
+    REQUIRE(pod2.retune_grain_size == pod.retune_grain_size);
+    REQUIRE(latency2 == latency);
+
+    sonare_realtime_voice_changer_destroy(first);
+    sonare_realtime_voice_changer_destroy(second);
+  }
+}
