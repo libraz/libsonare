@@ -1,7 +1,9 @@
 #include "mastering/dynamics/gate.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <utility>
 
@@ -34,6 +36,7 @@ void Gate::prepare(double sample_rate, int max_block_size) {
   prepared_ = true;
   hpf_x1_.assign(kRealtimePreparedChannels, 0.0f);
   hpf_y1_.assign(kRealtimePreparedChannels, 0.0f);
+  hpf_channel_gates_.assign(kRealtimePreparedChannels, rt::StageGate{});
   reset();
   // Re-publish so the audio thread observes the same snapshot that prepare()
   // already applied; adopt_snapshot_for_block() skips the redundant
@@ -46,7 +49,8 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
   ensure_prepared(prepared_, "Gate");
   if (!validate_process_buffers(channels, num_channels, num_samples)) return;
   if (static_cast<size_t>(num_channels) > hpf_x1_.size() ||
-      static_cast<size_t>(num_channels) > hpf_y1_.size()) {
+      static_cast<size_t>(num_channels) > hpf_y1_.size() ||
+      static_cast<size_t>(num_channels) > hpf_channel_gates_.size()) {
     throw SonareException(ErrorCode::InvalidParameter, "num_channels exceeds prepared Gate state");
   }
 
@@ -54,12 +58,27 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
   // pointer is stable for the entire per-sample loop — RtPublisher only
   // changes its current() value inside acquire(), and we already called it.
   const GateConfig& cfg = *adopt_snapshot_for_block();
+  const bool key_hpf_enabled = key_hpf_gate_.admit(cfg.key_hpf_hz > 0.0f, [this] {
+    std::fill(hpf_x1_.begin(), hpf_x1_.end(), 0.0f);
+    std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
+  });
 
   const float attack = time_to_coefficient(sample_rate_, cfg.attack_ms);
   const float release = time_to_coefficient(sample_rate_, cfg.release_ms);
-  const int hold_samples =
-      static_cast<int>(sample_rate_ * static_cast<double>(cfg.hold_ms) * 0.001);
+  const double hold_samples_value = sample_rate_ * static_cast<double>(cfg.hold_ms) * 0.001;
+  const int hold_samples = hold_samples_value > static_cast<double>(std::numeric_limits<int>::max())
+                               ? std::numeric_limits<int>::max()
+                               : static_cast<int>(hold_samples_value);
   const int excluded_channel = detector_excluded_channel(num_channels);
+  std::array<bool, kRealtimePreparedChannels> hpf_admitted{};
+  for (size_t ch = 0; ch < hpf_channel_gates_.size(); ++ch) {
+    const bool active = key_hpf_enabled && ch < static_cast<size_t>(num_channels) &&
+                        static_cast<int>(ch) != excluded_channel;
+    hpf_admitted[ch] = hpf_channel_gates_[ch].admit(active, [this, ch] {
+      hpf_x1_[ch] = 0.0f;
+      hpf_y1_[ch] = 0.0f;
+    });
+  }
   last_gain_reduction_db_ = 0.0f;
   for (int i = 0; i < num_samples; ++i) {
     float detector = 0.0f;
@@ -68,7 +87,7 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
         if (channels[ch] == nullptr)
           throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
         float s = channels[ch][i];
-        if (cfg.key_hpf_hz > 0.0f) {
+        if (hpf_admitted[static_cast<size_t>(ch)]) {
           const auto idx = static_cast<size_t>(ch);
           const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
           hpf_x1_[idx] = s;
@@ -83,7 +102,7 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
         if (channels[ch] == nullptr)
           throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
         float s = channels[ch][i];
-        if (cfg.key_hpf_hz > 0.0f) {
+        if (hpf_admitted[static_cast<size_t>(ch)]) {
           const auto idx = static_cast<size_t>(ch);
           const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
           hpf_x1_[idx] = s;
@@ -123,9 +142,9 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
   // Never seen to fire: no sample drove this cell non-finite. The detector folds
   // with std::max, which drops a NaN, and an infinity reads as a level at or over
   // the threshold, which opens the gate onto a finite target -- so the smoother
-  // only ever sees finite input. A configuration route is open (range_db is not
-  // checked for finiteness) but that is a validation question and nothing here
-  // covers it. A measured absence on the signals tried, not a proof of one.
+  // only ever sees finite input. Configuration validation requires every scalar
+  // to be finite except for the intentional range_db == -inf floor. A measured
+  // absence on the signals tried, not a proof of one.
   bool discarded = discard_if_non_finite(gain_, 1.0f);
   // The two taps of a one-pole section are meaningful only together. This pair
   // does strand: a non-finite tap makes the detector read silence from then on,
@@ -143,6 +162,8 @@ void Gate::reset() {
   last_gain_reduction_db_ = 0.0f;
   hold_samples_remaining_ = 0;
   gate_open_ = false;
+  key_hpf_gate_.close();
+  for (auto& gate : hpf_channel_gates_) gate.close();
   std::fill(hpf_x1_.begin(), hpf_x1_.end(), 0.0f);
   std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
 }
@@ -174,9 +195,13 @@ std::vector<rt::ParamDescriptor> Gate::parameter_descriptors() const {
 }
 
 void Gate::validate_config(const GateConfig& config) {
-  if (config.attack_ms < 0.0f || config.release_ms < 0.0f || config.range_db > 0.0f ||
-      config.hold_ms < 0.0f || config.key_hpf_hz < 0.0f ||
-      config.close_threshold_db > config.threshold_db) {
+  const bool negative_infinity_range = config.range_db == -std::numeric_limits<float>::infinity();
+  if (!std::isfinite(config.threshold_db) || !std::isfinite(config.attack_ms) ||
+      !std::isfinite(config.release_ms) || !std::isfinite(config.hold_ms) ||
+      !std::isfinite(config.close_threshold_db) || !std::isfinite(config.key_hpf_hz) ||
+      (!std::isfinite(config.range_db) && !negative_infinity_range) || config.attack_ms < 0.0f ||
+      config.release_ms < 0.0f || config.range_db > 0.0f || config.hold_ms < 0.0f ||
+      config.key_hpf_hz < 0.0f || config.close_threshold_db > config.threshold_db) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid gate configuration");
   }
 }

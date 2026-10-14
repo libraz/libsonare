@@ -64,6 +64,10 @@ void Flanger::process(float* const* channels, int num_channels, int num_samples)
     return;
   }
   rt::ScopedNoDenormals no_denormals;
+  for (size_t ch = 0; ch < pre_filters_.size(); ++ch) {
+    PreFilter& pre_filter = pre_filters_[ch];
+    pre_filter_gates_[ch].admit(pre_filter.active(), [&pre_filter] { pre_filter.reset(); });
+  }
   float* left = channels[0];
   float* right = num_channels > 1 && channels[1] != nullptr ? channels[1] : channels[0];
   const bool stereo = right != left;
@@ -139,6 +143,7 @@ void Flanger::discard_non_finite() noexcept {
   // The section in front of the line holds a sample of its own, and a poisoned
   // one would re-contaminate the line the moment the next block arrived.
   for (auto& pre_filter : pre_filters_) pre_filter.reset();
+  for (auto& gate : pre_filter_gates_) gate.close();
   // Counted on the flag, not on the cell: the cell holds the block's last sample
   // and is often finite again while the line the reset above wiped still carried
   // the poison.
@@ -176,7 +181,9 @@ bool Flanger::set_parameter_impl(unsigned int param_id, float value) {
       for (auto& pre_filter : pre_filters_) {
         const float carried = pre_filter.state();
         pre_filter.prepare(config_.pre_filter_mode, config_.pre_filter_hz, sample_rate_);
-        pre_filter.set_state(carried);
+        if (pre_filter.active()) {
+          pre_filter.set_state(carried);
+        }
       }
       return true;
     }
@@ -197,7 +204,9 @@ bool Flanger::set_parameter_impl(unsigned int param_id, float value) {
       for (auto& pre_filter : pre_filters_) {
         const float carried = pre_filter.state();
         pre_filter.prepare(config_.pre_filter_mode, config_.pre_filter_hz, sample_rate_);
-        pre_filter.set_state(carried);
+        if (pre_filter.active()) {
+          pre_filter.set_state(carried);
+        }
       }
       return true;
     }
@@ -234,6 +243,7 @@ void Flanger::reset() {
   for (auto& pre_filter : pre_filters_) {
     pre_filter.reset();
   }
+  for (auto& gate : pre_filter_gates_) gate.close();
   lfos_[0].reset(0.0);
   lfos_[1].reset(static_cast<double>(config_.phase_deg) / kDegreesPerTurn);
   step_phase_ = 1.0;

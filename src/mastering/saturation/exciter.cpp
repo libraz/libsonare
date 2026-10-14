@@ -48,6 +48,7 @@ void Exciter::prepare(double sample_rate, int max_block_size) {
   bandpass_.assign(dynamics::kRealtimePreparedChannels, bandpass_coeffs_);
   allpass_.assign(dynamics::kRealtimePreparedChannels, allpass_coeffs_);
   even_dc_.assign(dynamics::kRealtimePreparedChannels, 0.0f);
+  plane_gates_.assign(dynamics::kRealtimePreparedChannels, rt::StageGate{});
   // Preallocate the Oversample4x scratch, per-channel streaming state, and the
   // dry/aligned delays so the audio-thread process() path never allocates.
   band_scratch_.assign(static_cast<size_t>(max_block_size_), 0.0f);
@@ -68,10 +69,21 @@ void Exciter::process(float* const* channels, int num_channels, int num_samples)
   ensure_prepared(prepared_, "Exciter");
   if (!validate_process_buffers(channels, num_channels, num_samples)) return;
   ensure_state(num_channels);
+  std::array<bool, dynamics::kRealtimePreparedChannels> admitted{};
+  for (size_t ch = 0; ch < plane_gates_.size(); ++ch) {
+    admitted[ch] = plane_gates_[ch].admit(ch < static_cast<size_t>(num_channels), [this, ch] {
+      bandpass_[ch].reset();
+      allpass_[ch].reset();
+      even_dc_[ch] = 0.0f;
+      harmonic_oversampler_.reset_streaming(&harmonic_oversampler_states_[ch]);
+      paths_.reset_channel(ch);
+    });
+  }
   const float drive = db_to_linear(config_.drive_db);
   if (config_.aliasing != sonare::rt::AliasingControl::Oversample4x) {
     bool discarded = false;
     for (int ch = 0; ch < num_channels; ++ch) {
+      if (!admitted[static_cast<size_t>(ch)]) continue;
       auto& bandpass = bandpass_[static_cast<size_t>(ch)];
       auto& allpass = allpass_[static_cast<size_t>(ch)];
       float even_dc = even_dc_[static_cast<size_t>(ch)];
@@ -111,6 +123,7 @@ void Exciter::process(float* const* channels, int num_channels, int num_samples)
   }
   bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
+    if (!admitted[static_cast<size_t>(ch)]) continue;
     auto& bandpass = bandpass_[static_cast<size_t>(ch)];
     auto& allpass = allpass_[static_cast<size_t>(ch)];
     for (int i = 0; i < num_samples; ++i) {
@@ -152,6 +165,7 @@ void Exciter::process(float* const* channels, int num_channels, int num_samples)
 }
 
 void Exciter::reset() {
+  for (auto& gate : plane_gates_) gate.close();
   for (auto& filter : bandpass_) filter.reset();
   for (auto& filter : allpass_) filter.reset();
   std::fill(even_dc_.begin(), even_dc_.end(), 0.0f);
@@ -196,8 +210,9 @@ void Exciter::validate_config(const ExciterConfig& config) {
 }
 
 void Exciter::compute_coeffs() {
-  const float cutoff =
-      std::clamp(config_.frequency_hz, 10.0f, static_cast<float>(sample_rate_ * 0.49));
+  const float upper = static_cast<float>(sample_rate_ * 0.49);
+  const float lower = std::min(10.0f, upper);
+  const float cutoff = std::clamp(config_.frequency_hz, lower, upper);
   const float w0 = static_cast<float>(2.0 * kPiD * cutoff / sample_rate_);
   const auto coeffs = rt::rbj_bandpass(w0, config_.q);
   bandpass_coeffs_.c = coeffs;
@@ -265,24 +280,13 @@ void Exciter::update_coeff_preserving_state() {
 }
 
 void Exciter::ensure_state(int num_channels) {
-  // prepare() preallocates kRealtimePreparedChannels filters so the audio path
-  // never resizes. Only grow (control thread) if a caller exceeds it, and use
-  // resize (not assign) so a stereo->mono->stereo reconfigure keeps each
-  // existing channel's filter state instead of wiping every channel.
-  if (bandpass_.size() < static_cast<size_t>(num_channels)) {
-    bandpass_.resize(static_cast<size_t>(num_channels), bandpass_coeffs_);
-    allpass_.resize(static_cast<size_t>(num_channels), allpass_coeffs_);
-    even_dc_.resize(static_cast<size_t>(num_channels), 0.0f);
+  // Keep process() within the channel capacity allocated by prepare().
+  const size_t channels = static_cast<size_t>(num_channels);
+  if (bandpass_.size() < channels || allpass_.size() < channels || even_dc_.size() < channels ||
+      harmonic_oversampler_states_.size() < channels || paths_.num_channels() < channels) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels exceeds prepared Exciter state");
   }
-  if (harmonic_oversampler_states_.size() < static_cast<size_t>(num_channels)) {
-    const size_t old_size = harmonic_oversampler_states_.size();
-    harmonic_oversampler_states_.resize(static_cast<size_t>(num_channels));
-    for (size_t i = old_size; i < harmonic_oversampler_states_.size(); ++i) {
-      harmonic_oversampler_.prepare_streaming(&harmonic_oversampler_states_[i],
-                                              static_cast<size_t>(max_block_size_));
-    }
-  }
-  paths_.ensure_channels(static_cast<size_t>(num_channels));
 }
 
 void Exciter::declare_path_latencies() {

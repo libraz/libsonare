@@ -263,22 +263,41 @@ void StereoDelay::discard_non_finite() noexcept {
 }
 
 int StereoDelay::tail_samples() const noexcept {
-  if (std::clamp(config_.dry_wet, 0.0f, 1.0f) <= 0.0f) return 0;
   const double to_samples = 0.001 * sample_rate_;
+  const double wet = std::max(static_cast<double>(std::clamp(config_.dry_wet, 0.0f, 1.0f)),
+                              std::clamp(smoothed_dry_wet_, 0.0, 1.0));
+  if (!(wet > 0.0)) return 0;
+  const double current_delay = std::max(delay_samples_[0], delay_samples_[1]);
+  const double target_delay = config_delay_samples(
+      std::max(config_.delay_time_l_ms, config_.delay_time_r_ms), sample_rate_);
+  const double current_tap = std::max(tap_samples_[0], tap_samples_[1]);
+  const double target_tap =
+      config_delay_samples(std::max(config_.tap3_ms, config_.tap4_ms), sample_rate_);
   const double line =
-      std::clamp(std::max(config_.delay_time_l_ms, config_.delay_time_r_ms) + config_.mod_depth_ms,
-                 0.0f, kMaxDelayMs) *
+      std::clamp(std::max(current_delay, target_delay) / to_samples + config_.mod_depth_ms, 0.0,
+                 static_cast<double>(kMaxDelayMs)) *
           to_samples +
       modulation::kDelayReadStencilSamples;
   // Each pass reads the longer line, then the one-sample feedback cell and the damping ring.
   rt::TailBudget damping;
   if (damping_gain_ > 0.0f) damping.decay(1.0 - damping_gain_);
   rt::TailBudget loop;
-  loop.delay(line).recirculation(line + 1.0 + damping.samples(), clamp_feedback(config_.feedback));
+  const double feedback = std::max(std::abs(static_cast<double>(clamp_feedback(config_.feedback))),
+                                   std::abs(smoothed_feedback_));
+  const float level_l = db_to_linear(config_.tap1_level_db);
+  const float level_r = db_to_linear(config_.tap2_level_db);
+  const common::MixGains target_mix = common::mix_gains(config_.mix_law, static_cast<float>(wet));
+  const common::MixGains applied_mix =
+      common::mix_gains(config_.mix_law, static_cast<float>(smoothed_dry_wet_));
+  const double heard_scale =
+      std::max(1.0, std::max(std::abs(static_cast<double>(target_mix.wet)),
+                             std::abs(static_cast<double>(applied_mix.wet))) *
+                        std::max(static_cast<double>(level_l), static_cast<double>(level_r)));
+  loop.delay(line).recirculation(line + 1.0 + damping.samples(), feedback, heard_scale);
   // The feed-forward taps ring once, at their own time.
   rt::TailBudget taps;
-  taps.delay(std::clamp(std::max(config_.tap3_ms, config_.tap4_ms) + config_.mod_depth_ms, 0.0f,
-                        kMaxDelayMs) *
+  taps.delay(std::clamp(std::max(current_tap, target_tap) / to_samples + config_.mod_depth_ms, 0.0,
+                        static_cast<double>(kMaxDelayMs)) *
                  to_samples +
              modulation::kDelayReadStencilSamples);
   return loop.alongside(taps).samples();

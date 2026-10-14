@@ -29,6 +29,7 @@
 #include "core/audio.h"
 #include "effects/reverb/convolution_reverb.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 #include "rt/tail_budget.h"
 
 namespace sonare::effects::acoustic {
@@ -172,6 +173,7 @@ class RoomMorphProcessor : public rt::ProcessorBase {
   sonare::acoustic::ReceiverLayout layout_ = sonare::acoustic::ReceiverLayout::MonoAndPair;
   reverb::ConvolutionReverb reverb_{};
   SuppressorState suppressor_{};
+  rt::StageGate suppressor_gate_;
   std::vector<Diagnostic> diagnostics_;
 
   // One-pole coefficients computed from the sample rate in prepare().

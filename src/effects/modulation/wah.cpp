@@ -44,6 +44,10 @@ void Wah::process(float* const* channels, int num_channels, int num_samples) {
   // planes only, so planes beyond the pair pass through dry (see the registry's
   // stereoPairOnly classification).
   const int active = std::min(num_channels, static_cast<int>(filters_.size()));
+  for (size_t ch = 0; ch < filters_.size(); ++ch) {
+    filter_gates_[ch].admit(static_cast<int>(ch) < active && channels[ch] != nullptr,
+                            [this, ch] { filters_[ch].reset(); });
+  }
   for (int i = 0; i < num_samples; ++i) {
     // LFO in [-1, 1] -> a [0, 1] sweep position -> centre frequency.
     const float sweep = 0.5f * (lfo_.process() + 1.0f);
@@ -56,15 +60,17 @@ void Wah::process(float* const* channels, int num_channels, int num_samples) {
   }
   bool discarded = false;
   for (auto& filter : filters_) discarded |= filter.discard_non_finite();
-  if (discarded) note_non_finite_discard();
+  if (discarded) {
+    for (auto& gate : filter_gates_) gate.close();
+    note_non_finite_discard();
+  }
 }
 
 int Wah::tail_samples() const noexcept {
   rt::TailBudget tail;
-  // The sweep's lowest corner rings longest at a given resonance.
+  // Near Nyquist the upper sweep endpoint can have the longer ring.
   if (std::clamp(config_.dry_wet, 0.0f, 1.0f) > 0.0f) {
-    tail = SvfBandpass::ring(std::min(config_.min_hz, config_.max_hz), config_.resonance,
-                             sample_rate_);
+    tail = SvfBandpass::ring_range(config_.min_hz, config_.max_hz, config_.resonance, sample_rate_);
   }
   return tail.samples();
 }
@@ -74,6 +80,7 @@ void Wah::reset() {
   for (auto& filter : filters_) {
     filter.reset();
   }
+  for (auto& gate : filter_gates_) gate.close();
 }
 
 bool Wah::set_parameter_impl(unsigned int param_id, float value) {

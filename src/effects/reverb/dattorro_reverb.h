@@ -184,8 +184,8 @@ class DattorroReverb : public rt::ProcessorBase {
   size_t tap_r_l1_ = 0, tap_r_apl_ = 0, tap_r_l2_ = 0;
 
   // Modulation.
-  float lfo_phase_l_ = 0.0f;
-  float lfo_phase_r_ = 0.0f;
+  double lfo_phase_l_ = 0.0;
+  double lfo_phase_r_ = 0.0;
   float lfo_inc_ = 0.0f;
   float mod_depth_ = 0.0f;
 };

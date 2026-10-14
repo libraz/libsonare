@@ -21,6 +21,7 @@
 #include "rt/nonlinearities.h"
 #include "rt/parallel_paths.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 #include "util/constants.h"
 
 namespace sonare::effects::filter {
@@ -84,6 +85,7 @@ class VowelFilter : public rt::ProcessorBase {
   std::array<Triple, kVowelBandCount> target_for(float vowel) const noexcept;
   void update_bank();
   void update_glide_coefficient();
+  void reset_plane(size_t plane) noexcept;
 
   VowelFilterConfig config_{};
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
@@ -98,7 +100,8 @@ class VowelFilter : public rt::ProcessorBase {
   std::array<rt::Adaa1<rt::TanhNonlinearity>, kPlanes> adaa_;
   std::array<bool, kPlanes> adaa_primed_{};
   std::array<float, kPlanes> previous_in_{};  ///< last input, for the drive-off average.
-  rt::ParallelPaths paths_;                   ///< path 0 dry, path 1 wet.
+  std::array<rt::StageGate, kPlanes> plane_gates_;
+  rt::ParallelPaths paths_;  ///< path 0 dry, path 1 wet.
 };
 
 }  // namespace sonare::effects::filter

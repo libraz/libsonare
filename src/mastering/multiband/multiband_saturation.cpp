@@ -53,6 +53,18 @@ std::unique_ptr<rt::ProcessorBase> make_processor(const SaturationBandConfig& ba
   return std::make_unique<saturation::SoftClipper>(cfg);
 }
 
+bool update_processor_controls(rt::ProcessorBase& processor, SaturationType type,
+                               const SaturationBandConfig& previous,
+                               const SaturationBandConfig& next) {
+  const unsigned int drive_param = type == SaturationType::Exciter ? 1u : 0u;
+  if (previous.drive_db != next.drive_db && !processor.set_parameter(drive_param, next.drive_db)) {
+    return false;
+  }
+  if (previous.mix == next.mix || type == SaturationType::Tape) return true;
+  const unsigned int mix_param = type == SaturationType::SoftClip ? 1u : 2u;
+  return processor.set_parameter(mix_param, next.mix);
+}
+
 }  // namespace
 
 MultibandSaturation::MultibandSaturation(MultibandSaturationConfig config)
@@ -203,11 +215,15 @@ void MultibandSaturation::set_config(const MultibandSaturationConfig& config) {
             crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
         }
         if (processors_.size() == config_.bands.size()) {
-          // Only a band whose own settings changed is rebuilt; the others keep
-          // their saturator, oversampler and filter history.
           for (size_t band = 0; band < processors_.size(); ++band) {
-            if (config_.bands[band] == diff.held().bands[band]) continue;
-            processors_[band] = make_processor(config_.bands[band]);
+            const auto& previous_band = diff.held().bands[band];
+            const auto& next_band = config_.bands[band];
+            if (previous_band.type == next_band.type &&
+                update_processor_controls(*processors_[band], next_band.type, previous_band,
+                                          next_band)) {
+              continue;
+            }
+            processors_[band] = make_processor(next_band);
             band_gates_[band].close();
             if (prepared_) {
               processors_[band]->prepare(sample_rate_, max_block_size_, max_working_channels_);

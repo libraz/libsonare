@@ -62,8 +62,10 @@ void Phaser::process(float* const* channels, int num_channels, int num_samples) 
   }
   rt::ScopedNoDenormals no_denormals;
   float* left = channels[0];
-  float* right = num_channels > 1 && channels[1] != nullptr ? channels[1] : channels[0];
-  const bool stereo = right != left;
+  float* right = num_channels > 1 && channels[1] != nullptr ? channels[1] : nullptr;
+  const bool stereo = right != nullptr && right != left;
+  channel_gates_[0].admit(true, [this] { reset_channel(0); });
+  channel_gates_[1].admit(stereo, [this] { reset_channel(1); });
   // Block-rate dry/wet + modulation depth: smoothed across blocks by the engine
   // parameter slot smoother, not per-sample (see Chorus::process for the rationale).
   const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
@@ -82,14 +84,10 @@ void Phaser::process(float* const* channels, int num_channels, int num_samples) 
   const float top_hz = depth >= 1.0f ? max_hz : min_hz * std::pow(max_hz / min_hz, depth);
   for (int i = 0; i < num_samples; ++i) {
     const float coeff_l = sweep_coeff(lfos_[0].process(), min_hz, top_hz);
+    const float coeff_r = sweep_coeff(lfos_[1].process(), min_hz, top_hz);
     const float in_l = left[i];
     left[i] = dry * in_l + wet * process_channel(in_l, 0, coeff_l, feedback);
     if (stereo) {
-      // Only advance the channel-1 LFO and allpass state for genuine stereo
-      // input so a mono buffer is not written twice and channel-1 state is left
-      // untouched. The quarter-cycle offset between the two oscillators is what
-      // keeps the notches from tracking each other across the pair.
-      const float coeff_r = sweep_coeff(lfos_[1].process(), min_hz, top_hz);
       const float in_r = right[i];
       right[i] = dry * in_r + wet * process_channel(in_r, 1, coeff_r, feedback);
     }
@@ -114,6 +112,7 @@ void Phaser::discard_non_finite() noexcept {
       loop_return_[ch] = 0.0f;
       loop_highpass_in_[ch] = 0.0f;
       loop_highpass_out_[ch] = 0.0f;
+      channel_gates_[ch].close();
       discarded = true;
     }
   }
@@ -194,6 +193,15 @@ void Phaser::reset() {
   loop_highpass_out_.fill(0.0f);
   lfos_[0].reset(0.0);
   lfos_[1].reset(0.25);
+  for (auto& gate : channel_gates_) gate.close();
+}
+
+void Phaser::reset_channel(size_t channel) noexcept {
+  std::fill(x1_[channel].begin(), x1_[channel].end(), 0.0f);
+  std::fill(y1_[channel].begin(), y1_[channel].end(), 0.0f);
+  loop_return_[channel] = 0.0f;
+  loop_highpass_in_[channel] = 0.0f;
+  loop_highpass_out_[channel] = 0.0f;
 }
 
 float Phaser::sweep_coeff(float lfo_value, float min_hz, float top_hz) const noexcept {

@@ -26,8 +26,9 @@ class SoftClipper : public rt::ProcessorBase {
   void set_config(const SoftClipperConfig& config);
   const SoftClipperConfig& config() const { return config_; }
 
-  // Automatable parameters (RT-safe, no allocation, no state reset). Both are
-  // read per sample in process_sample() with no precomputed coefficients:
+  // Automatable parameters (RT-safe, no allocation, no state reset). Process
+  // derives their segment scalars once; the nonlinear curve and ADAA state
+  // still update per sample:
   //   0 = drive_db
   //   1 = mix (clamped to [0, 1])
   // ceiling is NOT automatable: it normalizes the ADAA input, so changing it

@@ -366,7 +366,7 @@ TEST_CASE("Modulation/delay inserts read their JSON params",
   REQUIRE(make_insert("effects.modulation.ringModulator",
                       R"({"shape":2,"phaseDeg":90,"stereoSpread":0.5})") != nullptr);
   REQUIRE(make_insert("stereo.autoPan", R"({"shape":3})") != nullptr);
-  REQUIRE(make_insert("stereo.stereoBalance", R"({"balance":0.3,"law":1})") != nullptr);
+  REQUIRE(make_insert("stereo.stereoBalance", R"({"balance":0.3,"law":1,"gain":0.75})") != nullptr);
   REQUIRE(
       make_insert(
           "stereo.binaural",

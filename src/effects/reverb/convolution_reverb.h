@@ -4,6 +4,7 @@
 /// @brief Non-RT IR-loadable FFT partitioned convolution reverb.
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -84,7 +85,8 @@ class ConvolutionReverb : public rt::ProcessorBase {
   /// The mono IR is normalized exactly as load_ir_unit_energy() does. The pair is scaled by
   /// one common factor so (E_left + E_right) / 2 == 1. process() with one channel runs the
   /// mono IR; with two or more channels the first two run left/right. Each path keeps its own
-  /// state, so changing the channel count mid-stream switches path and cuts the tail.
+  /// state, so changing the channel count mid-stream switches path and cuts the tail;
+  /// a switched-away path is cleared before it can resume.
   /// load_ir() / load_ir_unit_energy() discard the pair. Throws ErrorCode::InvalidParameter
   /// when any of the three is empty or silent.
   void load_ir_set_unit_energy(const std::vector<float>& mono, const std::vector<float>& left,
@@ -116,6 +118,8 @@ class ConvolutionReverb : public rt::ProcessorBase {
   void suppress_default_ir_synthesis() noexcept { explicit_ir_ = true; }
 
  private:
+  static constexpr int kMaxChannels = 2;
+
   void rebuild_convolvers();
   std::size_t max_ir_length() const noexcept {
     return std::max({ir_.size(), ir_left_.size(), ir_right_.size()});
@@ -124,6 +128,11 @@ class ConvolutionReverb : public rt::ProcessorBase {
   void process_channel(rt::PartitionedConvolver& convolver, std::vector<float>& in_block,
                        std::vector<float>& out_block, int& fill, float* data, int num_samples,
                        float dry, float wet);
+  // Clear one bank/plane when its StageGate admits it after an inactive interval.
+  void reset_bank_plane(std::vector<std::unique_ptr<rt::PartitionedConvolver>>& convolvers,
+                        std::vector<std::vector<float>>& input_blocks,
+                        std::vector<std::vector<float>>& output_blocks, std::vector<int>& fills,
+                        int plane);
   // Synthesize a decaying-noise IR from config_ at the prepared sample rate.
   // Used only when no explicit IR was supplied via load_ir().
   void synthesize_default_ir(double sample_rate);
@@ -154,6 +163,7 @@ class ConvolutionReverb : public rt::ProcessorBase {
   std::vector<std::vector<float>> block_input_;
   std::vector<std::vector<float>> block_output_;
   std::vector<int> fill_count_;
+  std::array<rt::StageGate, kMaxChannels> mono_gates_{};
 
   // Left/right IR pair and its dedicated convolvers/buffers (empty when no pair is loaded).
   std::vector<float> ir_left_;
@@ -162,6 +172,7 @@ class ConvolutionReverb : public rt::ProcessorBase {
   std::vector<std::vector<float>> pair_input_;
   std::vector<std::vector<float>> pair_output_;
   std::vector<int> pair_fill_;
+  std::array<rt::StageGate, kMaxChannels> pair_gates_{};
   rt::StageGate stage_;
 };
 

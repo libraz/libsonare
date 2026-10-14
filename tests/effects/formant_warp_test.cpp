@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "core/window.h"
 #include "support/alloc_guard.h"
 #include "util/constants.h"
 
@@ -36,6 +37,12 @@ TEST_CASE("FormantWarp allocations do not grow with the analysis frame count",
   const sonare::FormantWarp warp(config);
   const sonare::Audio short_input = voiced_tone(1, 48000);
   const sonare::Audio long_input = voiced_tone(3, 48000);
+
+  // The production stream obtains its periodic Hann from the thread-local cache during prepare.
+  // Warm that shared entry before either guarded call so the comparison counts only the work done
+  // by each otherwise-identical stream setup.
+  (void)sonare::get_window_cached(sonare::WindowType::Hann, sonare::formant_warp_frame_size(48000),
+                                  true);
 
   auto allocations = [&](const sonare::Audio& input) {
     sonare::test::AllocationGuard guard;
@@ -85,6 +92,24 @@ TEST_CASE("FormantWarpStream frame and order follow the rate", "[effects][forman
   CHECK(sonare::formant_warp_lpc_order(48000) == 50);
   CHECK(sonare::formant_warp_lpc_order(22050) == 24);
   CHECK(sonare::formant_warp_frame_size(48000) == prepared_stream(48000, 1.2f).latency_samples());
+}
+
+TEST_CASE("FormantWarp periodic Hann keeps quarter-hop squared COLA", "[effects][formant]") {
+  for (const int frame_size : {940, 1024}) {
+    const auto window = sonare::get_window_cached(sonare::WindowType::Hann, frame_size, true);
+    const int hop = frame_size / 4;
+    float max_error = 0.0f;
+    for (int i = 0; i < hop; ++i) {
+      float squared_sum = 0.0f;
+      for (int offset = 0; offset < 4; ++offset) {
+        const float value = (*window)[static_cast<size_t>(i + offset * hop)];
+        squared_sum += value * value;
+      }
+      max_error = std::max(max_error, std::abs(squared_sum - 1.5f));
+    }
+    CAPTURE(frame_size, max_error);
+    CHECK(max_error <= 1.0e-5f);
+  }
 }
 
 TEST_CASE("FormantWarpStream at unity is the input through its delay, bit for bit",

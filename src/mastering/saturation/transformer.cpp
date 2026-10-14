@@ -15,6 +15,31 @@ namespace sonare::mastering::saturation {
 
 using sonare::discard_group_if_non_finite;
 
+namespace {
+
+struct TransformerScalars {
+  float drive = 0.0f;
+  float bias_field = 0.0f;
+  float mix = 0.0f;
+  float sample_rate = 0.0f;
+};
+
+TransformerScalars make_scalars(const TransformerConfig& config, double sample_rate) {
+  return {db_to_linear(config.drive_db), 0.08f * config.asymmetry, config.mix,
+          static_cast<float>(sample_rate)};
+}
+
+float process_sample_with_scalars(const common::JilesAtherton& hysteresis,
+                                  common::JilesAthertonState& state, float input,
+                                  const TransformerScalars& scalars) {
+  const float wet =
+      hysteresis.process(state, input * scalars.drive + scalars.bias_field, scalars.sample_rate) -
+      scalars.bias_field;
+  return input * (1.0f - scalars.mix) + wet * scalars.mix;
+}
+
+}  // namespace
+
 Transformer::Transformer(TransformerConfig config)
     : transformer_config_(config), hysteresis_(make_ja_config(config)) {
   validate_config(transformer_config_);
@@ -35,6 +60,7 @@ void Transformer::process(float* const* channels, int num_channels, int num_samp
   ensure_prepared(prepared_, "Transformer");
   if (!validate_process_buffers(channels, num_channels, num_samples)) return;
   ensure_state(num_channels);
+  const TransformerScalars scalars = make_scalars(transformer_config_, sample_rate_);
 
   bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
@@ -42,7 +68,7 @@ void Transformer::process(float* const* channels, int num_channels, int num_samp
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     auto& state = states_[static_cast<size_t>(ch)];
     for (int i = 0; i < num_samples; ++i) {
-      channels[ch][i] = process_sample(state, channels[ch][i]);
+      channels[ch][i] = process_sample_with_scalars(hysteresis_, state, channels[ch][i], scalars);
     }
     // Two floats per channel, once per block. The integrator takes its field
     // step from previous_field and advances magnetization from its own value, so
@@ -59,9 +85,38 @@ void Transformer::reset() {
   }
 }
 
+int Transformer::tail_samples() const noexcept {
+  if (!(transformer_config_.mix > 0.0f)) return 0;
+  if (transformer_config_.asymmetry != 0.0f) return rt::TailBudget::kUnbounded;
+
+  const common::JilesAthertonConfig& ja = hysteresis_.config();
+  const float coupling =
+      ja.mean_field_coupling * ja.saturation_magnetization / (3.0f * ja.anhysteretic_shape);
+  if (!(ja.viscosity_time_constant_s > 0.0f) || !(sample_rate_ > 0.0) ||
+      !std::isfinite(sample_rate_) || !(coupling < 1.0f)) {
+    return rt::TailBudget::kUnbounded;
+  }
+
+  // Match the float relaxation arithmetic in JilesAtherton::process().
+  const float rate = static_cast<float>(sample_rate_);
+  const float relax_rate = 1.0f - std::exp(-1.0f / (ja.viscosity_time_constant_s * rate));
+  const float relax_pole = 1.0f - relax_rate * (1.0f - coupling);
+  if (!(relax_pole > 0.0f)) return 1;
+  if (!(relax_pole < 1.0f) || !std::isfinite(relax_pole)) {
+    return rt::TailBudget::kUnbounded;
+  }
+
+  // The output bound includes magnetization scale and one field-transition sample.
+  const double scale = 2.4 * static_cast<double>(ja.saturation_magnetization) *
+                       static_cast<double>(transformer_config_.mix);
+  rt::TailBudget tail;
+  tail.delay(1.0).decay(static_cast<double>(relax_pole), scale);
+  return tail.samples();
+}
+
 void Transformer::set_config(const TransformerConfig& config) {
   validate_config(config);
-  // The magnetics read their constants per sample; the hysteresis state carries over.
+  // The magnetics receive segment-derived scalars; the hysteresis state carries over.
   rt::apply_config_diff(transformer_config_, config,
                         [this](const rt::ConfigDiff<TransformerConfig>&) {
                           hysteresis_.set_config(make_ja_config(transformer_config_));
@@ -113,20 +168,15 @@ common::JilesAthertonConfig Transformer::make_ja_config(const TransformerConfig&
 }
 
 float Transformer::process_sample(common::JilesAthertonState& state, float input) const {
-  const float drive = db_to_linear(transformer_config_.drive_db);
-  const float bias_field = 0.08f * transformer_config_.asymmetry;
-  const float wet =
-      hysteresis_.process(state, input * drive + bias_field, static_cast<float>(sample_rate_)) -
-      bias_field;
-  const float mix = transformer_config_.mix;
-  return input * (1.0f - mix) + wet * mix;
+  return process_sample_with_scalars(hysteresis_, state, input,
+                                     make_scalars(transformer_config_, sample_rate_));
 }
 
 void Transformer::ensure_state(int num_channels) {
-  // prepare() preallocates kRealtimePreparedChannels; only grow (control thread)
-  // if a caller exceeds it, preserving existing channels' hysteresis state.
-  if (states_.size() < static_cast<size_t>(num_channels)) {
-    states_.resize(static_cast<size_t>(num_channels), common::JilesAthertonState{});
+  // Keep process() within the channel capacity allocated by prepare().
+  if (static_cast<size_t>(num_channels) > states_.size()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels exceeds prepared Transformer state");
   }
 }
 

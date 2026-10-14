@@ -19,6 +19,7 @@
 #include "util/phase.h"
 
 using namespace sonare;
+using sonare::constants::kTwoPi;
 using sonare::constants::kTwoPiD;
 
 namespace {
@@ -82,6 +83,54 @@ TEST_CASE("phase vocoder reproduces analysis phases at rate 1", "[phase_vocoder]
         CHECK(phase_error(std::arg(value), phases[static_cast<size_t>(frame)]) < 1e-5);
       }
     }
+  }
+}
+
+TEST_CASE("instantaneous frequency wraps a seam and matches synthesis accumulation",
+          "[phase_vocoder][synthesis]") {
+  constexpr int n_fft = 16;
+  constexpr int hop_length = 4;
+  constexpr int sample_rate = 16000;
+  constexpr int n_bins = n_fft / 2 + 1;
+  const float time_step = static_cast<float>(hop_length) / static_cast<float>(sample_rate);
+
+  std::vector<float> previous_phase(static_cast<size_t>(n_bins));
+  std::vector<float> current_phase(static_cast<size_t>(n_bins));
+  std::vector<float> next_phase(static_cast<size_t>(n_bins));
+  std::vector<std::complex<float>> frame0(static_cast<size_t>(n_bins));
+  std::vector<std::complex<float>> frame1(static_cast<size_t>(n_bins));
+  std::vector<std::complex<float>> frame2(static_cast<size_t>(n_bins));
+  for (int bin = 0; bin < n_bins; ++bin) {
+    previous_phase[static_cast<size_t>(bin)] = bin == 0 ? 3.0f : 0.15f * bin;
+    current_phase[static_cast<size_t>(bin)] =
+        bin == 0 ? -3.0f : previous_phase[static_cast<size_t>(bin)] + 0.2f;
+    next_phase[static_cast<size_t>(bin)] = current_phase[static_cast<size_t>(bin)] + 0.15f;
+    frame0[static_cast<size_t>(bin)] = std::polar(1.0f, previous_phase[static_cast<size_t>(bin)]);
+    frame1[static_cast<size_t>(bin)] = std::polar(1.0f, current_phase[static_cast<size_t>(bin)]);
+    frame2[static_cast<size_t>(bin)] = std::polar(1.0f, next_phase[static_cast<size_t>(bin)]);
+  }
+  for (int bin = 0; bin < n_bins; ++bin) {
+    previous_phase[static_cast<size_t>(bin)] = std::arg(frame0[static_cast<size_t>(bin)]);
+    current_phase[static_cast<size_t>(bin)] = std::arg(frame1[static_cast<size_t>(bin)]);
+  }
+
+  const std::vector<float> frequencies = compute_instantaneous_frequency(
+      current_phase.data(), previous_phase.data(), n_bins, hop_length, sample_rate);
+  const float seam_phase = std::remainder(-6.0f, kTwoPi);
+  const float seam_expected = seam_phase / (kTwoPi * time_step);
+  CHECK(frequencies[0] == seam_expected);
+
+  PhaseVocoderSynthesizer synthesizer(n_fft, hop_length, sample_rate, WindowType::Hann, n_fft,
+                                      false);
+  synthesizer.next_frame(frame0.data(), frame1.data(), 0.0f);
+  synthesizer.next_frame(frame1.data(), frame2.data(), 0.0f);
+  for (int bin = 0; bin < n_bins; ++bin) {
+    const double expected =
+        phase::wrap(static_cast<double>(std::arg(frame0[static_cast<size_t>(bin)])) +
+                    kTwoPiD * static_cast<double>(frequencies[static_cast<size_t>(bin)]) *
+                        (static_cast<double>(hop_length) / static_cast<double>(sample_rate)));
+    INFO("bin " << bin);
+    CHECK(synthesizer.synthesis_phase()[bin] == expected);
   }
 }
 

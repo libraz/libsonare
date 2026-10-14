@@ -42,6 +42,17 @@ class SvfBandpass {
     return tail;
   }
 
+  /// @brief Conservative ring bound for a swept section between two corners.
+  ///
+  /// The pole radius is not monotonic in the cutoff: it decreases toward the
+  /// middle of the TPT range and rises again near Nyquist.  Both endpoints are
+  /// therefore part of the bound, even when the caller supplies them reversed.
+  static rt::TailBudget ring_range(float first_hz, float second_hz, float q,
+                                   double sample_rate) noexcept {
+    rt::TailBudget tail = ring(first_hz, q, sample_rate);
+    return tail.alongside(ring(second_hz, q, sample_rate));
+  }
+
   void prepare(double sample_rate) noexcept {
     sample_rate_ = sample_rate > 0.0 ? sample_rate : sonare::constants::kDefaultDawSampleRate;
     reset();

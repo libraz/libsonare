@@ -22,6 +22,7 @@
 #include "effects/modulation/lfo.h"
 #include "effects/modulation/mod_delay_line.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 #include "util/constants.h"
 
 namespace sonare::effects::modulation {
@@ -63,6 +64,7 @@ class PreFilter {
   float state() const noexcept { return state_; }
   void set_state(float value) noexcept { state_ = value; }
   float pole() const noexcept { return pole_; }
+  bool active() const noexcept { return mode_ != PreFilterMode::kOff; }
 
  private:
   PreFilterMode mode_ = PreFilterMode::kOff;
@@ -107,7 +109,7 @@ class Chorus : public rt::ProcessorBase {
   //   4 = pre_filter_hz (re-derives the pole in place; the filter keeps its state)
   //   5 = feedback (clamped to +-common::kMaxFeedback in process(); the sign is carried)
   //   6 = phase_deg (clamped to [0, 180]; re-phases the right LFO in place)
-  //   7 = pre_filter_mode (0 off, 1 low-pass, 2 high-pass; the filter keeps its state)
+  //   7 = pre_filter_mode (0 off, 1 low-pass, 2 high-pass; Off clears filter history)
   //   8 = interpolation (0 linear, 1 Lagrange3)
   //   9 = mix_law (a whole number naming a law, refused otherwise)
   bool set_parameter_impl(unsigned int param_id, float value) override;
@@ -126,6 +128,7 @@ class Chorus : public rt::ProcessorBase {
   /// [L, R] pre-filter sections. One per channel, never shared with another
   /// instance: what the measurement calls one section is one design.
   std::array<PreFilter, 2> pre_filters_;
+  std::array<rt::StageGate, 2> pre_filter_gates_;
   /// [L, R] low-pass sections in the feedback return; their state is the return.
   std::array<PreFilter, 2> feedback_filters_;
   // Each feedback filter's last output. Read rather than the filter's state, which

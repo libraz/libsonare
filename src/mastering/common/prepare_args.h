@@ -7,6 +7,7 @@
 
 #include "mastering/dynamics/channel_limits.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering {
 
@@ -14,8 +15,9 @@ namespace sonare::mastering {
  * @brief Validates the common prepare() rate and block-size arguments.
  */
 inline void validate_prepare_args(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0)) {
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
+  int rounded_sample_rate = 0;
+  if (!numeric::checked_round_cast(sample_rate, &rounded_sample_rate) || rounded_sample_rate <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must round to a positive int");
   }
   if (max_block_size < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");

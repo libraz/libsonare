@@ -143,6 +143,7 @@ class BitCrusher : public rt::ProcessorBase {
 
  private:
   static void validate_config(const BitCrusherConfig& config);
+  enum LpfIndex : size_t { kRadioLpf, kWpLpf, kDiscLpf, kHumLpf, kLpfCount };
   /// @brief Derives the per-sample phase increment from @c config_.hold_hz and
   ///        the prepared rate. The rate is what the null is fixed against.
   void update_hold_increment() noexcept;
@@ -150,7 +151,7 @@ class BitCrusher : public rt::ProcessorBase {
   ///        corners and the prepared rate.
   void update_coefficients() noexcept;
   /// @brief Fills @c noise_ with the summed noise sources for @p count frames.
-  void render_noise(int count) noexcept;
+  void render_noise(int count, const std::array<bool, kLpfCount>& lpf_admitted) noexcept;
   /// @brief Returns this channel's cells to rest when a non-finite value has
   ///        reached them (see util/non_finite_state.h). Called once per block.
   /// @return true when any cell was discarded.
@@ -167,7 +168,6 @@ class BitCrusher : public rt::ProcessorBase {
   /// Generators, one seed each. The white/pink source is two generators of which
   /// one is drawn; the four low-passes belong to the sources, not the generators.
   enum SourceIndex : size_t { kRadio, kWhite, kPink, kDisc, kHum, kSourceCount };
-  enum LpfIndex : size_t { kRadioLpf, kWpLpf, kDiscLpf, kHumLpf, kLpfCount };
   /// One TPT integrator step of a low-pass with gain @p g (see update_coefficients()).
   static float lowpass_tick(double g, float x, float& state) noexcept;
   /// TPT gain tan(pi fc / sr) / (1 + tan(pi fc / sr)) for a corner in hertz, or
@@ -191,6 +191,7 @@ class BitCrusher : public rt::ProcessorBase {
   std::vector<float> post_state_;
   rt::StageGate pre_filter_gate_;
   rt::StageGate post_filter_gate_;
+  std::array<rt::StageGate, kLpfCount> lpf_gates_;
   std::vector<float> held_;
   std::vector<int> counters_;
   /// Per-channel hold phase, in periods of the hold rate. Carries no audio --

@@ -102,8 +102,10 @@ std::vector<rt::ParamDescriptor> UpwardExpander::parameter_descriptors() const {
 }
 
 void UpwardExpander::validate_config(const UpwardExpanderConfig& config) {
-  if (!(config.ratio >= 1.0f) || config.range_db < 0.0f || config.attack_ms < 0.0f ||
-      config.release_ms < 0.0f) {
+  if (!std::isfinite(config.threshold_db) || !std::isfinite(config.ratio) ||
+      !std::isfinite(config.attack_ms) || !std::isfinite(config.release_ms) ||
+      !std::isfinite(config.range_db) || !(config.ratio >= 1.0f) || config.range_db < 0.0f ||
+      config.attack_ms < 0.0f || config.release_ms < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid upward expander configuration");
   }
   if (!numeric::finite(db_to_linear(config.range_db))) {

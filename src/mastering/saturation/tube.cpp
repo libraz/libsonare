@@ -31,6 +31,54 @@ constexpr float kPlateClipShaping = 2.5f;
 using triode::kPlateVoltageV;
 using triode::plate_current_ma;
 
+struct TubeModelScalars {
+  float drive = 0.0f;
+  float grid_bias_v = 0.0f;
+  float idle_current_ma = 0.0f;
+  float harmonic_drive = 0.0f;
+};
+
+struct TubeProcessScalars {
+  TubeModelScalars model;
+  float miller_alpha = 0.0f;
+  float mix = 0.0f;
+};
+
+TubeModelScalars make_model_scalars(const TubeConfig& config) {
+  const float drive = db_to_linear(config.drive_db);
+  const float grid_bias_v = config.bias_v + config.bias * 2.0f;
+  const float idle_current_ma = plate_current_ma(grid_bias_v, kPlateVoltageV);
+  return {drive, grid_bias_v, idle_current_ma, config.harmonic_drive};
+}
+
+float miller_alpha(float drive, double sample_rate) {
+  const float upper = static_cast<float>(sample_rate * 0.45);
+  const float lower = std::min(2500.0f, upper);
+  const float cutoff = std::clamp(22000.0f / (1.0f + 0.08f * drive), lower, upper);
+  return rt::one_pole_lowpass_alpha_matched(cutoff, sample_rate);
+}
+
+TubeProcessScalars make_process_scalars(const TubeConfig& config, double sample_rate) {
+  const TubeModelScalars model = make_model_scalars(config);
+  return {model, miller_alpha(model.drive, sample_rate), config.mix};
+}
+
+float process_model_with_scalars(float sample, const TubeModelScalars& scalars) {
+  const float grid_signal_v = sample * scalars.drive * kGridDriveScaleV;
+  const float current_delta =
+      plate_current_ma(scalars.grid_bias_v + grid_signal_v, kPlateVoltageV) -
+      scalars.idle_current_ma;
+  const float clipped = std::tanh(current_delta * kPlateClipShaping);
+  return scalars.harmonic_drive * clipped + (1.0f - scalars.harmonic_drive) * current_delta;
+}
+
+float apply_miller_filter_with_alpha(std::vector<float>& miller_state, int channel, float sample,
+                                     float coeff) {
+  auto& state = miller_state[static_cast<size_t>(channel)];
+  state += coeff * (sample - state);
+  return state;
+}
+
 }  // namespace
 
 Tube::Tube(TubeConfig config) : tube_config_(config) {
@@ -42,7 +90,8 @@ Tube::Tube(TubeConfig config) : tube_config_(config) {
 void Tube::set_config(const TubeConfig& config) {
   validate_config(config);
   rt::apply_config_diff(tube_config_, config, [this](const rt::ConfigDiff<TubeConfig>& diff) {
-    // Only the oversampling factor sizes state; the model reads the rest per sample.
+    // Only the oversampling factor sizes state; process derives the other
+    // configuration scalars at each automation segment.
     if (!diff.changed(&TubeConfig::oversample_factor)) return;
     oversampler_.set_factor(tube_config_.oversample_factor);
     declare_path_latencies();
@@ -101,10 +150,13 @@ void Tube::process(float* const* channels, int num_channels, int num_samples) {
 
   bool discarded = false;
   if (tube_config_.oversample_factor == 1) {
+    const TubeProcessScalars scalars = make_process_scalars(tube_config_, sample_rate_);
     for (int ch = 0; ch < num_channels; ++ch) {
       for (int i = 0; i < num_samples; ++i) {
-        const float wet = apply_miller_filter(ch, process_model(channels[ch][i], tube_config_));
-        channels[ch][i] = channels[ch][i] * (1.0f - tube_config_.mix) + wet * tube_config_.mix;
+        const float wet = apply_miller_filter_with_alpha(
+            miller_state_, ch, process_model_with_scalars(channels[ch][i], scalars.model),
+            scalars.miller_alpha);
+        channels[ch][i] = channels[ch][i] * (1.0f - scalars.mix) + wet * scalars.mix;
       }
       // One float per channel, once per block: the Miller low-pass is the only
       // cell that recirculates its own output.
@@ -123,22 +175,24 @@ void Tube::process(float* const* channels, int num_channels, int num_samples) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "num_samples exceeds prepared Tube oversampling scratch");
   }
+  const TubeProcessScalars scalars = make_process_scalars(tube_config_, sample_rate_);
   for (int ch = 0; ch < num_channels; ++ch) {
     const float* input = channels[ch];
     auto& oversampler_state = oversampler_states_[static_cast<size_t>(ch)];
     oversampler_.upsample_to_streaming(input, static_cast<size_t>(num_samples), up_scratch_.data(),
                                        up_scratch_.size(), &oversampler_state);
     for (size_t i = 0; i < os_samples; ++i) {
-      up_scratch_[i] = process_model(up_scratch_[i], tube_config_);
+      up_scratch_[i] = process_model_with_scalars(up_scratch_[i], scalars.model);
     }
     oversampler_.downsample_to_streaming(up_scratch_.data(), os_samples, down_scratch_.data(),
                                          down_scratch_.size(), &oversampler_state);
     for (int i = 0; i < num_samples; ++i) {
-      const float wet =
-          paths_.align(1, static_cast<size_t>(ch),
-                       apply_miller_filter(ch, down_scratch_[static_cast<size_t>(i)]));
+      const float wet = paths_.align(
+          1, static_cast<size_t>(ch),
+          apply_miller_filter_with_alpha(miller_state_, ch, down_scratch_[static_cast<size_t>(i)],
+                                         scalars.miller_alpha));
       const float dry = paths_.align(0, static_cast<size_t>(ch), input[i]);
-      channels[ch][i] = dry * (1.0f - tube_config_.mix) + wet * tube_config_.mix;
+      channels[ch][i] = dry * (1.0f - scalars.mix) + wet * scalars.mix;
     }
     discarded |= sonare::discard_if_non_finite(miller_state_[static_cast<size_t>(ch)], 0.0f);
   }
@@ -156,14 +210,7 @@ void Tube::reset() {
 }
 
 float Tube::process_model(float sample, const TubeConfig& config) {
-  const float drive = db_to_linear(config.drive_db);
-  const float grid_bias_v = config.bias_v + config.bias * 2.0f;
-  const float grid_signal_v = sample * drive * kGridDriveScaleV;
-  const float plate_v = kPlateVoltageV;
-  const float idle = plate_current_ma(grid_bias_v, plate_v);
-  const float current_delta = plate_current_ma(grid_bias_v + grid_signal_v, plate_v) - idle;
-  const float clipped = std::tanh(current_delta * kPlateClipShaping);
-  return config.harmonic_drive * clipped + (1.0f - config.harmonic_drive) * current_delta;
+  return process_model_with_scalars(sample, make_model_scalars(config));
 }
 
 bool Tube::set_parameter_impl(unsigned int param_id, float value) {
@@ -223,10 +270,7 @@ int Tube::tail_samples() const noexcept {
   if (tube_config_.oversample_factor > 1) {
     tail.delay(oversampler_.streaming_round_trip_latency_samples());
   }
-  const float drive = db_to_linear(tube_config_.drive_db);
-  const float cutoff = std::clamp(22000.0f / (1.0f + 0.08f * drive), 2500.0f,
-                                  static_cast<float>(sample_rate_ * 0.45));
-  tail.decay(1.0 - rt::one_pole_lowpass_alpha_matched(cutoff, sample_rate_));
+  tail.decay(1.0 - miller_alpha(db_to_linear(tube_config_.drive_db), sample_rate_));
   return tail.samples();
 }
 
@@ -234,13 +278,8 @@ float Tube::apply_miller_filter(int channel, float sample) {
   // Dempwolf/Zoelzer DAFx-11 section 5.6 lists 12AX7 parasitic capacitances
   // (Cak=0.9 pF, Cgk=2.3 pF, Cag=2.4 pF). We approximate their Miller effect
   // as a drive-dependent one-pole low-pass in the audio output path.
-  const float drive = db_to_linear(tube_config_.drive_db);
-  const float cutoff = std::clamp(22000.0f / (1.0f + 0.08f * drive), 2500.0f,
-                                  static_cast<float>(sample_rate_ * 0.45));
-  const float coeff = rt::one_pole_lowpass_alpha_matched(cutoff, sample_rate_);
-  auto& state = miller_state_[static_cast<size_t>(channel)];
-  state += coeff * (sample - state);
-  return state;
+  const float coeff = miller_alpha(db_to_linear(tube_config_.drive_db), sample_rate_);
+  return apply_miller_filter_with_alpha(miller_state_, channel, sample, coeff);
 }
 
 }  // namespace sonare::mastering::saturation

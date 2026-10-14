@@ -19,7 +19,11 @@
 #include "mastering/saturation/tube.h"
 #include "mastering/saturation/waveshaper.h"
 #include "rt/oversampler.h"
+#include "rt/tail_budget.h"
 #include "support/audio_fixtures.h"
+#if defined(SONARE_WITH_MIXING)
+#include "support/alloc_guard.h"
+#endif
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
@@ -29,6 +33,7 @@ namespace {
 using sonare::test::generate_sine_samples;
 using sonare::test::peak_abs;
 using sonare::test::process;
+using sonare::test::process_stereo;
 using sonare::test::rms_tail;
 
 float projected_amplitude(const std::vector<float>& samples, float frequency_hz, int sample_rate,
@@ -138,6 +143,65 @@ float dafx19_reference_ja_process(LegacyJaState& state,
                        1.2f * config.saturation_magnetization);
   state.H_prev = field;
   return state.M;
+}
+
+template <typename Processor>
+void require_overcapacity_rejection_preserves_state() {
+  constexpr int kSampleRate = 48000;
+  constexpr int kBlockSize = 32;
+  constexpr int kChannels = 65;
+
+  Processor subject;
+  Processor twin;
+  subject.prepare(kSampleRate, kBlockSize);
+  twin.prepare(kSampleRate, kBlockSize);
+
+  auto subject_warm_left = generate_sine_samples(220.0f, kSampleRate, kBlockSize, 0.2f);
+  auto subject_warm_right = generate_sine_samples(700.0f, kSampleRate, kBlockSize, -0.15f);
+  auto twin_warm_left = subject_warm_left;
+  auto twin_warm_right = subject_warm_right;
+  process_stereo(subject, subject_warm_left, subject_warm_right);
+  process_stereo(twin, twin_warm_left, twin_warm_right);
+  REQUIRE(subject_warm_left == twin_warm_left);
+  REQUIRE(subject_warm_right == twin_warm_right);
+
+  std::vector<std::vector<float>> zero_frame(static_cast<size_t>(kChannels), std::vector<float>(1));
+  for (int channel = 0; channel < kChannels; ++channel) {
+    zero_frame[static_cast<size_t>(channel)][0] = 0.01f * static_cast<float>(channel + 1);
+  }
+  const auto zero_frame_before = zero_frame;
+  std::vector<float*> zero_frame_channels;
+  zero_frame_channels.reserve(static_cast<size_t>(kChannels));
+  for (auto& channel : zero_frame) zero_frame_channels.push_back(channel.data());
+  subject.process(zero_frame_channels.data(), kChannels, 0);
+  REQUIRE(zero_frame == zero_frame_before);
+
+  std::vector<std::vector<float>> rejected(static_cast<size_t>(kChannels), std::vector<float>(1));
+  for (int channel = 0; channel < kChannels; ++channel) {
+    rejected[static_cast<size_t>(channel)][0] = -0.02f * static_cast<float>(channel + 1);
+  }
+  const auto rejected_before = rejected;
+  std::vector<float*> rejected_channels;
+  rejected_channels.reserve(static_cast<size_t>(kChannels));
+  for (auto& channel : rejected) rejected_channels.push_back(channel.data());
+
+  sonare::ErrorCode error = sonare::ErrorCode::Ok;
+  try {
+    subject.process(rejected_channels.data(), kChannels, 1);
+  } catch (const sonare::SonareException& exception) {
+    error = exception.code();
+  }
+  REQUIRE(error == sonare::ErrorCode::InvalidParameter);
+  REQUIRE(rejected == rejected_before);
+
+  auto subject_continuation_left = generate_sine_samples(330.0f, kSampleRate, kBlockSize, 0.3f);
+  auto subject_continuation_right = generate_sine_samples(1100.0f, kSampleRate, kBlockSize, -0.25f);
+  auto twin_continuation_left = subject_continuation_left;
+  auto twin_continuation_right = subject_continuation_right;
+  process_stereo(subject, subject_continuation_left, subject_continuation_right);
+  process_stereo(twin, twin_continuation_left, twin_continuation_right);
+  REQUIRE(subject_continuation_left == twin_continuation_left);
+  REQUIRE(subject_continuation_right == twin_continuation_right);
 }
 
 }  // namespace
@@ -548,6 +612,29 @@ TEST_CASE("Tube supports bounded offline mono and stereo scratch capacity",
   REQUIRE_THROWS_AS(tube.prepare(48000.0, 256, 65), sonare::SonareException);
 }
 
+TEST_CASE("Saturation processors keep rate-dependent cutoffs ordered at low rates",
+          "[mastering][saturation]") {
+  auto check_low_rate = [](auto& processor, double sample_rate) {
+    processor.prepare(sample_rate, 32);
+    std::vector<float> block(32, 0.25f);
+    REQUIRE_NOTHROW(process(processor, block));
+    REQUIRE(std::all_of(block.begin(), block.end(),
+                        [](float sample) { return std::isfinite(sample); }));
+    const int tail = processor.tail_samples();
+    REQUIRE(tail >= 0);
+    REQUIRE(tail < sonare::rt::TailBudget::kUnbounded);
+  };
+
+  Tube tube;
+  check_low_rate(tube, 4000.0);
+
+  Tape tape;
+  check_low_rate(tape, 10.0);
+
+  Exciter exciter;
+  check_low_rate(exciter, 10.0);
+}
+
 TEST_CASE("Tube exposes voltage-domain bias control", "[mastering][saturation]") {
   Tube cold({18.0f, 0.0f, 1.0f, 1, -2.2f});
   Tube hot({18.0f, 0.0f, 1.0f, 1, -0.9f});
@@ -739,6 +826,11 @@ TEST_CASE("Transformer uses stateful Jiles-Atherton hysteresis", "[mastering][sa
   REQUIRE_THAT(repeated.back(), WithinAbs(first.back(), 0.000001f));
 }
 
+TEST_CASE("Transformer rejects channels beyond prepared capacity before writing samples",
+          "[mastering][saturation]") {
+  require_overcapacity_rejection_preserves_state<Transformer>();
+}
+
 TEST_CASE("BitCrusher quantizes and holds samples", "[mastering][saturation]") {
   std::vector<float> signal = {0.1f, 0.2f, 0.3f, 0.4f};
   BitCrusher crusher({4, 2, 1.0f});
@@ -915,6 +1007,42 @@ TEST_CASE("Exciter set_config preserves filter history", "[mastering][saturation
 
   REQUIRE_THAT(after_config[0], WithinAbs(1.0f, 0.1f));
 }
+
+TEST_CASE("Exciter rejects channels beyond prepared capacity before writing samples",
+          "[mastering][saturation]") {
+  require_overcapacity_rejection_preserves_state<Exciter>();
+}
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("Prepared saturation processors keep channel changes allocation-free",
+          "[mastering][saturation]") {
+  Transformer transformer;
+  Exciter exciter;
+  transformer.prepare(48000.0, 16);
+  exciter.prepare(48000.0, 16);
+
+  std::vector<float> transformer_left(16, 0.1f);
+  std::vector<float> transformer_right(16, -0.1f);
+  float* transformer_mono[] = {transformer_left.data()};
+  float* transformer_stereo[] = {transformer_left.data(), transformer_right.data()};
+
+  std::vector<float> exciter_left(16, 0.1f);
+  std::vector<float> exciter_right(16, -0.1f);
+  float* exciter_mono[] = {exciter_left.data()};
+  float* exciter_stereo[] = {exciter_left.data(), exciter_right.data()};
+
+  std::size_t allocations = 0;
+  {
+    sonare::test::AllocationGuard guard;
+    transformer.process(transformer_mono, 1, 16);
+    transformer.process(transformer_stereo, 2, 16);
+    exciter.process(exciter_mono, 1, 16);
+    exciter.process(exciter_stereo, 2, 16);
+    allocations = guard.count();
+  }
+  REQUIRE(allocations == 0);
+}
+#endif
 
 TEST_CASE("Exciter Oversample4x suppresses high-tone alias products", "[mastering][saturation]") {
   for (const int sample_rate : {44100, 48000}) {
@@ -1251,6 +1379,69 @@ TEST_CASE("Re-applying a saturation config keeps its running state", "[mastering
   exciter.aliasing = sonare::rt::AliasingControl::Oversample4x;
   CHECK(reapply_divergence<Exciter>(exciter) == 0.0f);
   CHECK(reapply_divergence<MultibandExciter>(MultibandExciterConfig{}) == 0.0f);
+}
+
+namespace {
+
+template <typename Processor, typename Factory>
+void require_segment_scalar_update_changes_output(Factory&& factory, unsigned int parameter_id,
+                                                  float value) {
+  Processor changed = factory();
+  Processor control = factory();
+  changed.prepare(48000.0, 128);
+  control.prepare(48000.0, 128);
+
+  auto warm_changed = generate_sine_samples(730.0f, 48000, 64, 0.65f);
+  auto warm_control = warm_changed;
+  process(changed, warm_changed);
+  process(control, warm_control);
+  REQUIRE(warm_changed == warm_control);
+  REQUIRE(changed.set_parameter(parameter_id, value));
+
+  auto probe_changed = generate_sine_samples(1270.0f, 48000, 64, 0.65f);
+  auto probe_control = probe_changed;
+  process(changed, probe_changed);
+  process(control, probe_control);
+  REQUIRE(std::all_of(probe_changed.begin(), probe_changed.end(),
+                      [](float sample) { return std::isfinite(sample); }));
+  REQUIRE(sonare::test::max_abs_difference(probe_changed, probe_control) > 1.0e-5f);
+}
+
+}  // namespace
+
+TEST_CASE("Saturation automation derives changed scalars per process segment",
+          "[mastering][saturation][automation]") {
+  using sonare::rt::AliasingControl;
+
+  // Drive plus one other hoisted scalar per processor, so neither is read from a stale copy.
+  for (const int factor : {1, 4}) {
+    const auto tube = [factor] { return Tube(TubeConfig{12.0f, 0.25f, 1.0f, factor}); };
+    require_segment_scalar_update_changes_output<Tube>(tube, 0, 24.0f);
+    require_segment_scalar_update_changes_output<Tube>(tube, 2, 0.3f);
+    const auto tape = [factor] {
+      TapeConfig config;
+      config.oversample_factor = factor;
+      return Tape(config);
+    };
+    require_segment_scalar_update_changes_output<Tape>(tape, 0, 18.0f);
+    require_segment_scalar_update_changes_output<Tape>(tape, 3, -6.0f);
+  }
+
+  for (const AliasingControl aliasing :
+       {AliasingControl::None, AliasingControl::Adaa1, AliasingControl::Oversample4x}) {
+    const auto waveshaper = [aliasing] {
+      return Waveshaper({6.0f, 1.0f, 0.0f, 0.0f, WaveshaperCurve::Tanh, aliasing});
+    };
+    require_segment_scalar_update_changes_output<Waveshaper>(waveshaper, 0, 18.0f);
+    require_segment_scalar_update_changes_output<Waveshaper>(waveshaper, 2, -6.0f);
+    const auto soft_clipper = [aliasing] { return SoftClipper({6.0f, 1.0f, 1.0f, aliasing}); };
+    require_segment_scalar_update_changes_output<SoftClipper>(soft_clipper, 0, 18.0f);
+    require_segment_scalar_update_changes_output<SoftClipper>(soft_clipper, 1, 0.3f);
+  }
+
+  const auto transformer = [] { return Transformer({6.0f, 0.2f, 1.0f}); };
+  require_segment_scalar_update_changes_output<Transformer>(transformer, 0, 18.0f);
+  require_segment_scalar_update_changes_output<Transformer>(transformer, 2, 0.3f);
 }
 
 TEST_CASE("the reported latency of each hard clipper aliasing mode is the one documented",

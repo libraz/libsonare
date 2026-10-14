@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
@@ -17,6 +18,59 @@ namespace sonare::mastering::saturation {
 namespace {
 
 using sonare::constants::kPi;
+
+struct WaveshaperScalars {
+  float drive = 0.0f;
+  float output_gain = 0.0f;
+  float bias = 0.0f;
+  float mix = 0.0f;
+  WaveshaperCurve curve = WaveshaperCurve::Tanh;
+  sonare::rt::AliasingControl aliasing = sonare::rt::AliasingControl::None;
+};
+
+WaveshaperScalars make_scalars(const WaveshaperConfig& config) {
+  return {Waveshaper::db_to_linear(config.drive_db),
+          Waveshaper::db_to_linear(config.output_gain_db),
+          config.bias,
+          config.mix,
+          config.curve,
+          config.aliasing};
+}
+
+template <typename Curve>
+float shape_with_scalars(float sample, const WaveshaperScalars& scalars, Curve&& curve) {
+  const float driven = sample * scalars.drive + scalars.bias;
+  const float wet = curve(driven) * scalars.output_gain;
+  return sample * (1.0f - scalars.mix) + wet * scalars.mix;
+}
+
+template <typename Curve>
+float shape_sample_with_scalars(
+    float sample, int channel, const WaveshaperScalars& scalars,
+    std::vector<sonare::rt::Adaa1<sonare::rt::TanhNonlinearity>>& tanh_adaa,
+    std::vector<sonare::rt::Adaa1<sonare::rt::ArctanNonlinearity>>& arctan_adaa,
+    sonare::rt::ParallelPaths& paths, Curve&& curve) {
+  if (scalars.aliasing != sonare::rt::AliasingControl::Adaa1 ||
+      scalars.curve == WaveshaperCurve::Asymmetric) {
+    return shape_with_scalars(sample, scalars, std::forward<Curve>(curve));
+  }
+
+  const float driven = sample * scalars.drive + scalars.bias;
+  float wet = driven;
+  switch (scalars.curve) {
+    case WaveshaperCurve::Tanh:
+      wet = tanh_adaa[static_cast<size_t>(channel)].process(driven);
+      break;
+    case WaveshaperCurve::Arctan:
+      wet = (2.0f / kPi) * arctan_adaa[static_cast<size_t>(channel)].process(driven);
+      break;
+    case WaveshaperCurve::Asymmetric:
+      break;
+  }
+  wet *= scalars.output_gain;
+  const auto ch = static_cast<size_t>(channel);
+  return paths.align(0, ch, sample) * (1.0f - scalars.mix) + paths.align(1, ch, wet) * scalars.mix;
+}
 
 }  // namespace
 
@@ -57,24 +111,26 @@ void Waveshaper::process(float* const* channels, int num_channels, int num_sampl
   }
   ensure_state(num_channels);
 
+  const WaveshaperScalars scalars = make_scalars(config_);
   if (config_.aliasing != sonare::rt::AliasingControl::Oversample4x) {
-    detail::process_direct(channels, num_channels, num_samples,
-                           [this](float x, int ch) { return shape_sample(x, ch); });
+    detail::process_direct(channels, num_channels, num_samples, [this, &scalars](float x, int ch) {
+      return shape_sample_with_scalars(
+          x, ch, scalars, tanh_adaa_, arctan_adaa_, paths_,
+          [curve = scalars.curve](float driven) { return apply_curve(driven, curve); });
+    });
     return;
   }
 
   // Oversampled path: curve + drive + bias run at the oversampled rate; output gain and the
   // dry/wet mix run at the base rate after downsampling, matching shape()'s split.
-  const float drive = db_to_linear(config_.drive_db);
-  const float output_gain = db_to_linear(config_.output_gain_db);
   detail::process_oversampled(
       channels, num_channels, num_samples, kOversampleFactor, oversampler_, oversampler_states_,
-      paths_, up_scratch_, down_scratch_, config_.mix, "Waveshaper",
+      paths_, up_scratch_, down_scratch_, scalars.mix, "Waveshaper",
       [&](float x) {
-        const float driven = x * drive + config_.bias;
-        return apply_curve(driven, config_.curve);
+        const float driven = x * scalars.drive + scalars.bias;
+        return apply_curve(driven, scalars.curve);
       },
-      [output_gain](float wet) { return wet * output_gain; });
+      [output_gain = scalars.output_gain](float wet) { return wet * output_gain; });
 }
 
 void Waveshaper::reset() {
@@ -89,7 +145,7 @@ void Waveshaper::set_config(const WaveshaperConfig& config) {
   rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<WaveshaperConfig>& diff) {
     declare_path_latencies();
     // The antiderivative state belongs to one curve and bias, and a different
-    // aliasing path starts from silence; every other field is read per sample.
+    // aliasing path starts from silence; other scalars are derived per segment.
     if (diff.changed(&WaveshaperConfig::curve, &WaveshaperConfig::aliasing,
                      &WaveshaperConfig::bias)) {
       reset();
@@ -211,27 +267,10 @@ float Waveshaper::shape_sample(float sample, int channel) {
   // front by validate_config(), so it can never reach this point; the
   // Asymmetric branch below remains only as defensive direct evaluation for any
   // future non-Adaa1 aliasing mode that is not separately handled.
-  if (config_.aliasing != sonare::rt::AliasingControl::Adaa1 ||
-      config_.curve == WaveshaperCurve::Asymmetric) {
-    return shape(sample, config_);
-  }
-
-  const float driven = sample * db_to_linear(config_.drive_db) + config_.bias;
-  float wet = driven;
-  switch (config_.curve) {
-    case WaveshaperCurve::Tanh:
-      wet = tanh_adaa_[static_cast<size_t>(channel)].process(driven);
-      break;
-    case WaveshaperCurve::Arctan:
-      wet = (2.0f / kPi) * arctan_adaa_[static_cast<size_t>(channel)].process(driven);
-      break;
-    case WaveshaperCurve::Asymmetric:
-      break;
-  }
-  wet *= db_to_linear(config_.output_gain_db);
-  const auto ch = static_cast<size_t>(channel);
-  return paths_.align(0, ch, sample) * (1.0f - config_.mix) +
-         paths_.align(1, ch, wet) * config_.mix;
+  const WaveshaperScalars scalars = make_scalars(config_);
+  return shape_sample_with_scalars(
+      sample, channel, scalars, tanh_adaa_, arctan_adaa_, paths_,
+      [this](float driven) { return apply_curve(driven, config_.curve); });
 }
 
 }  // namespace sonare::mastering::saturation

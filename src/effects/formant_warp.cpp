@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "core/fft.h"
+#include "core/window.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -14,22 +15,11 @@ namespace sonare {
 
 using sonare::constants::kEpsilon;
 using sonare::constants::kSpectrumEpsilon;
-using sonare::constants::kTwoPi;
 
 namespace {
 
 constexpr int kFrameRateReference = 48000;
 constexpr float kUnityTolerance = 1.0e-6f;
-
-// Periodic Hann window (good COLA at 75% overlap).
-std::vector<float> make_hann(int size) {
-  std::vector<float> w(static_cast<size_t>(size));
-  for (int i = 0; i < size; ++i) {
-    w[static_cast<size_t>(i)] =
-        0.5f - 0.5f * std::cos(kTwoPi * static_cast<float>(i) / static_cast<float>(size));
-  }
-  return w;
-}
 
 }  // namespace
 
@@ -66,7 +56,8 @@ void FormantWarpStream::prepare(int frame_size, int lpc_order) {
   const size_t n_bins = static_cast<size_t>(n_fft / 2 + 1);
   fft_ = std::make_unique<FFT>(n_fft);
   fft_->prepare(true, true, false);
-  hann_ = make_hann(frame_size);
+  const auto hann_window = get_window_cached(WindowType::Hann, frame_size, true);
+  hann_.assign(hann_window->begin(), hann_window->end());
   ring_.assign(static_cast<size_t>(frame_size), 0.0f);
   acc_.assign(static_cast<size_t>(2 * frame_size), 0.0f);
   norm_.assign(static_cast<size_t>(2 * frame_size), 0.0f);

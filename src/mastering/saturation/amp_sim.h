@@ -24,7 +24,11 @@
 ///
 /// Determinism: stateful filters only, no RNG or clock. RT contract: prepare()
 /// allocates the filter chains, delay lines, cab-IR history and oversampler
-/// scratch; process() and set_parameter() are allocation-free.
+/// scratch; process() and set_parameter() are allocation-free within the
+/// prepared channel envelope. If process() receives more channels than
+/// prepare() reserved, AmpSim intentionally grows its per-channel state;
+/// callers that require allocation-free processing must prepare for the
+/// maximum channel count they will pass.
 
 #include <algorithm>
 #include <vector>

@@ -12,6 +12,34 @@
 
 namespace sonare::mastering::saturation {
 
+namespace {
+
+struct SoftClipperScalars {
+  float drive = 0.0f;
+  float ceiling = 1.0f;
+  float mix = 0.0f;
+  bool adaa = false;
+};
+
+SoftClipperScalars make_scalars(const SoftClipperConfig& config) {
+  return {Waveshaper::db_to_linear(config.drive_db), config.ceiling, config.mix,
+          config.aliasing == sonare::rt::AliasingControl::Adaa1};
+}
+
+float process_sample_with_scalars(
+    float sample, int channel, const SoftClipperScalars& scalars,
+    std::vector<sonare::rt::Adaa1<sonare::rt::TanhNonlinearity>>& tanh_adaa,
+    sonare::rt::ParallelPaths& paths) {
+  const float normalized = sample * scalars.drive / scalars.ceiling;
+  const float wet =
+      scalars.ceiling * (scalars.adaa ? tanh_adaa[static_cast<size_t>(channel)].process(normalized)
+                                      : std::tanh(normalized));
+  const auto ch = static_cast<size_t>(channel);
+  return paths.align(0, ch, sample) * (1.0f - scalars.mix) + paths.align(1, ch, wet) * scalars.mix;
+}
+
+}  // namespace
+
 SoftClipper::SoftClipper(SoftClipperConfig config) : config_(config) {
   validate_config(config_);
   declare_path_latencies();
@@ -44,18 +72,19 @@ void SoftClipper::process(float* const* channels, int num_channels, int num_samp
   ensure_prepared(prepared_, "SoftClipper");
   if (!validate_process_buffers(channels, num_channels, num_samples)) return;
   ensure_state(num_channels);
+  const SoftClipperScalars scalars = make_scalars(config_);
   if (config_.aliasing != sonare::rt::AliasingControl::Oversample4x) {
-    detail::process_direct(channels, num_channels, num_samples,
-                           [this](float x, int ch) { return process_sample(x, ch); });
+    detail::process_direct(channels, num_channels, num_samples, [this, &scalars](float x, int ch) {
+      return process_sample_with_scalars(x, ch, scalars, tanh_adaa_, paths_);
+    });
     return;
   }
 
   // Oversampled path runs on the preallocated scratch from prepare().
-  const float drive = Waveshaper::db_to_linear(config_.drive_db);
   detail::process_oversampled(
       channels, num_channels, num_samples, kOversampleFactor, oversampler_, oversampler_states_,
-      paths_, up_scratch_, down_scratch_, config_.mix, "SoftClipper",
-      [&](float x) { return config_.ceiling * std::tanh(x * drive / config_.ceiling); },
+      paths_, up_scratch_, down_scratch_, scalars.mix, "SoftClipper",
+      [&](float x) { return scalars.ceiling * std::tanh(x * scalars.drive / scalars.ceiling); },
       [](float wet) { return wet; });
 }
 
@@ -70,7 +99,7 @@ void SoftClipper::set_config(const SoftClipperConfig& config) {
   rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<SoftClipperConfig>& diff) {
     declare_path_latencies();
     // The antiderivative state is relative to the ceiling, and a different
-    // aliasing path starts from silence; every other field is read per sample.
+    // aliasing path starts from silence; other scalars are derived per segment.
     if (diff.changed(&SoftClipperConfig::ceiling, &SoftClipperConfig::aliasing)) reset();
   });
 }
@@ -144,15 +173,7 @@ int SoftClipper::latency_samples() const noexcept { return paths_.latency_sample
 int SoftClipper::latency_samples_q8() const noexcept { return paths_.latency_samples_q8(); }
 
 float SoftClipper::process_sample(float sample, int channel) {
-  const float drive = Waveshaper::db_to_linear(config_.drive_db);
-  const float normalized = sample * drive / config_.ceiling;
-  const float wet =
-      config_.ceiling * (config_.aliasing == sonare::rt::AliasingControl::Adaa1
-                             ? tanh_adaa_[static_cast<size_t>(channel)].process(normalized)
-                             : std::tanh(normalized));
-  const auto ch = static_cast<size_t>(channel);
-  return paths_.align(0, ch, sample) * (1.0f - config_.mix) +
-         paths_.align(1, ch, wet) * config_.mix;
+  return process_sample_with_scalars(sample, channel, make_scalars(config_), tanh_adaa_, paths_);
 }
 
 }  // namespace sonare::mastering::saturation

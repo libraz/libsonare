@@ -10,6 +10,7 @@
 
 #include "mastering/api/internal_processor_runner.h"
 #include "mastering/common/loudness_measure.h"
+#include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/master.h"
 #include "mastering/repair/declick.h"
@@ -82,6 +83,21 @@ TEST_CASE("Mastering umbrella header exposes representative modules", "[masterin
   REQUIRE(eq.sample_rate() == 48000.0);
   REQUIRE(compressor.config().ratio == 2.0f);
   REQUIRE(maximizer.config().ceiling_db == -1.0f);
+}
+
+TEST_CASE("Common prepare validation accepts only representable rounded sample rates",
+          "[mastering][validation]") {
+  using sonare::mastering::validate_prepare_args;
+
+  REQUIRE_NOTHROW(validate_prepare_args(1000.0, 64));
+  REQUIRE_NOTHROW(validate_prepare_args(static_cast<double>(std::numeric_limits<int>::max()), 64));
+
+  for (const double invalid_rate :
+       {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(), 0.4,
+        static_cast<double>(std::numeric_limits<int>::max()) + 1.0}) {
+    CAPTURE(invalid_rate);
+    REQUIRE_THROWS(validate_prepare_args(invalid_rate, 64));
+  }
 }
 
 // There is no mastering::common::* alias layer over rt::*: rt primitives are

@@ -99,6 +99,11 @@ std::vector<rt::ParamDescriptor> Expander::parameter_descriptors() const {
 }
 
 void Expander::validate_config(const ExpanderConfig& config) {
+  if (!std::isfinite(config.threshold_db) || !std::isfinite(config.ratio) ||
+      !std::isfinite(config.attack_ms) || !std::isfinite(config.release_ms) ||
+      !std::isfinite(config.range_db)) {
+    throw SonareException(ErrorCode::InvalidParameter, "invalid expander configuration");
+  }
   if (!(config.ratio >= 1.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "expander ratio must be at least 1");
   }

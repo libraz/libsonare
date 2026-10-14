@@ -12,8 +12,6 @@ namespace sonare::effects::reverb {
 using constants::kDefaultDawSampleRate;
 
 namespace {
-// The library targets mono/stereo only; preallocate engines for two channels.
-constexpr int kMaxChannels = 2;
 // FFT partition size used by the per-channel convolvers. A power of two keeps
 // the underlying real FFT efficient while bounding the block buffering latency.
 constexpr int kPartitionSize = 256;
@@ -31,6 +29,35 @@ inline std::uint32_t xorshift32(std::uint32_t& state) {
   state ^= state >> 17;
   state ^= state << 5;
   return state;
+}
+
+std::vector<float> checked_ir(const float* samples, int count) {
+  if (count < 0 || (count > 0 && samples == nullptr)) {
+    throw SonareException(ErrorCode::InvalidParameter, "invalid impulse response");
+  }
+  if (count == 0) return {};
+  for (int i = 0; i < count; ++i) {
+    if (!std::isfinite(samples[i])) {
+      throw SonareException(ErrorCode::InvalidParameter, "impulse response must be finite");
+    }
+  }
+  return {samples, samples + count};
+}
+
+double ir_energy(const std::vector<float>& samples) {
+  double energy = 0.0;
+  for (float sample : samples) energy += static_cast<double>(sample) * sample;
+  return energy;
+}
+
+void scale_ir(std::vector<float>& samples, double energy) {
+  const double root = std::sqrt(energy);
+  const float norm = 1.0f / static_cast<float>(root);
+  if (std::isfinite(norm) && norm > 0.0f) {
+    for (float& sample : samples) sample *= norm;
+  } else {
+    for (float& sample : samples) sample = static_cast<float>(sample / root);
+  }
 }
 }  // namespace
 
@@ -81,6 +108,8 @@ void ConvolutionReverb::rebuild_convolvers() {
   if (partition_size_ <= 0) {
     return;
   }
+  for (auto& gate : mono_gates_) gate.close();
+  for (auto& gate : pair_gates_) gate.close();
   for (auto& convolver : convolvers_) {
     if (!convolver) {
       convolver = std::make_unique<rt::PartitionedConvolver>(
@@ -109,6 +138,20 @@ void ConvolutionReverb::rebuild_convolvers() {
   pair_fill_.assign(2, 0);
 }
 
+void ConvolutionReverb::reset_bank_plane(
+    std::vector<std::unique_ptr<rt::PartitionedConvolver>>& convolvers,
+    std::vector<std::vector<float>>& input_blocks, std::vector<std::vector<float>>& output_blocks,
+    std::vector<int>& fills, int plane) {
+  if (plane < 0) return;
+  const size_t index = static_cast<size_t>(plane);
+  if (index < convolvers.size() && convolvers[index]) convolvers[index]->reset();
+  if (index < input_blocks.size())
+    std::fill(input_blocks[index].begin(), input_blocks[index].end(), 0.0f);
+  if (index < output_blocks.size())
+    std::fill(output_blocks[index].begin(), output_blocks[index].end(), 0.0f);
+  if (index < fills.size()) fills[index] = 0;
+}
+
 void ConvolutionReverb::process(float* const* channels, int num_channels, int num_samples) {
   rt::ScopedNoDenormals no_denormals;
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
@@ -127,6 +170,23 @@ void ConvolutionReverb::process(float* const* channels, int num_channels, int nu
   const float dry = 1.0f - wet;
   // A loaded pair serves stereo; one channel always runs the mono IR.
   const bool use_pair = !pair_convolvers_.empty() && channels_to_process >= 2;
+
+  // Clear FFT and staging history when a skipped bank/plane resumes.
+  for (int ch = 0; ch < kMaxChannels; ++ch) {
+    const bool base_active = !use_pair && ch < channels_to_process && channels[ch] != nullptr &&
+                             static_cast<size_t>(ch) < convolvers_.size() && convolvers_[ch];
+    mono_gates_[static_cast<size_t>(ch)].admit(base_active, [this, ch] {
+      reset_bank_plane(convolvers_, block_input_, block_output_, fill_count_, ch);
+    });
+
+    const bool pair_active = use_pair && ch < channels_to_process && channels[ch] != nullptr &&
+                             static_cast<size_t>(ch) < pair_convolvers_.size() &&
+                             pair_convolvers_[ch];
+    pair_gates_[static_cast<size_t>(ch)].admit(pair_active, [this, ch] {
+      reset_bank_plane(pair_convolvers_, pair_input_, pair_output_, pair_fill_, ch);
+    });
+  }
+
   for (int ch = 0; ch < channels_to_process; ++ch) {
     const size_t idx = static_cast<size_t>(ch);
     if (use_pair) {
@@ -164,31 +224,17 @@ void ConvolutionReverb::process_channel(rt::PartitionedConvolver& convolver,
 }
 
 void ConvolutionReverb::reset() {
-  for (auto& convolver : convolvers_) {
-    if (convolver) {
-      convolver->reset();
-    }
+  for (int ch = 0; ch < kMaxChannels; ++ch) {
+    reset_bank_plane(convolvers_, block_input_, block_output_, fill_count_, ch);
+    reset_bank_plane(pair_convolvers_, pair_input_, pair_output_, pair_fill_, ch);
+    mono_gates_[static_cast<size_t>(ch)].close();
+    pair_gates_[static_cast<size_t>(ch)].close();
   }
-  for (auto& block : block_input_) {
-    std::fill(block.begin(), block.end(), 0.0f);
-  }
-  for (auto& block : block_output_) {
-    std::fill(block.begin(), block.end(), 0.0f);
-  }
-  std::fill(fill_count_.begin(), fill_count_.end(), 0);
-  for (auto& convolver : pair_convolvers_) {
-    if (convolver) convolver->reset();
-  }
-  for (auto& block : pair_input_) std::fill(block.begin(), block.end(), 0.0f);
-  for (auto& block : pair_output_) std::fill(block.begin(), block.end(), 0.0f);
-  std::fill(pair_fill_.begin(), pair_fill_.end(), 0);
 }
 
 void ConvolutionReverb::store_ir(const float* impulse_response, int num_samples) {
-  if (num_samples < 0 || (num_samples > 0 && impulse_response == nullptr)) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid impulse response");
-  }
-  ir_.assign(impulse_response, impulse_response + num_samples);
+  auto proposed = checked_ir(impulse_response, num_samples);
+  ir_.swap(proposed);
   ir_left_.clear();
   ir_right_.clear();
   // An explicit IR overrides the algorithmic default synthesis in prepare().
@@ -196,11 +242,9 @@ void ConvolutionReverb::store_ir(const float* impulse_response, int num_samples)
 }
 
 bool ConvolutionReverb::normalize_ir_unit_energy() {
-  double energy = 0.0;
-  for (float sample : ir_) energy += static_cast<double>(sample) * static_cast<double>(sample);
+  const double energy = ir_energy(ir_);
   if (!(energy > 0.0)) return false;
-  const float norm = 1.0f / static_cast<float>(std::sqrt(energy));
-  for (float& sample : ir_) sample *= norm;
+  scale_ir(ir_, energy);
   return true;
 }
 
@@ -216,36 +260,41 @@ void ConvolutionReverb::load_ir(const std::vector<float>& impulse_response) {
 }
 
 void ConvolutionReverb::load_ir_unit_energy(const float* impulse_response, int num_samples) {
-  store_ir(impulse_response, num_samples);
-  if (!normalize_ir_unit_energy()) {
+  auto proposed = checked_ir(impulse_response, num_samples);
+  const double energy = ir_energy(proposed);
+  if (!(energy > 0.0)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "impulse response carries no energy; nothing to normalize");
   }
+  scale_ir(proposed, energy);
+  ir_.swap(proposed);
+  ir_left_.clear();
+  ir_right_.clear();
+  explicit_ir_ = true;
   rebuild_convolvers();
 }
 
 void ConvolutionReverb::load_ir_set_unit_energy(const std::vector<float>& mono,
                                                 const std::vector<float>& left,
                                                 const std::vector<float>& right) {
-  auto energy_of = [](const std::vector<float>& v) {
-    double e = 0.0;
-    for (float x : v) e += static_cast<double>(x) * static_cast<double>(x);
-    return e;
-  };
-  const double e_left = energy_of(left);
-  const double e_right = energy_of(right);
-  if (mono.empty() || left.empty() || right.empty() || !(energy_of(mono) > 0.0) ||
-      !(e_left > 0.0) || !(e_right > 0.0)) {
+  auto proposed_mono = checked_ir(mono.data(), static_cast<int>(mono.size()));
+  auto proposed_left = checked_ir(left.data(), static_cast<int>(left.size()));
+  auto proposed_right = checked_ir(right.data(), static_cast<int>(right.size()));
+  const double e_mono = ir_energy(proposed_mono);
+  const double e_left = ir_energy(proposed_left);
+  const double e_right = ir_energy(proposed_right);
+  if (mono.empty() || left.empty() || right.empty() || !(e_mono > 0.0) || !(e_left > 0.0) ||
+      !(e_right > 0.0)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "impulse response set needs three non-empty IRs with energy");
   }
-  store_ir(mono.data(), static_cast<int>(mono.size()));
-  normalize_ir_unit_energy();
-  const float scale = 1.0f / static_cast<float>(std::sqrt(0.5 * (e_left + e_right)));
-  ir_left_ = left;
-  ir_right_ = right;
-  for (float& x : ir_left_) x *= scale;
-  for (float& x : ir_right_) x *= scale;
+  scale_ir(proposed_mono, e_mono);
+  scale_ir(proposed_left, 0.5 * (e_left + e_right));
+  scale_ir(proposed_right, 0.5 * (e_left + e_right));
+  ir_.swap(proposed_mono);
+  ir_left_.swap(proposed_left);
+  ir_right_.swap(proposed_right);
+  explicit_ir_ = true;
   rebuild_convolvers();
 }
 

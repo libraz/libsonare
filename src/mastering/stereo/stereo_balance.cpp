@@ -7,6 +7,7 @@
 #include "rt/pan_law.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mastering::stereo {
 
@@ -43,8 +44,9 @@ void StereoBalance::process(float* const* channels, int num_channels, int num_sa
     return;
   }
 
-  const bool law_changed =
-      config_.law != target_law_.law || config_.constant_power != target_law_.constant_power;
+  const bool law_changed = config_.law != target_law_.law ||
+                           config_.constant_power != target_law_.constant_power ||
+                           config_.gain != target_law_.gain;
   if (!primed_) {
     position_ = target_position_ = config_.balance;
     target_law_ = config_;
@@ -115,18 +117,26 @@ bool StereoBalance::set_parameter_impl(unsigned int param_id, float value) {
       }
       config_.law = static_cast<StereoBalanceLaw>(static_cast<int>(value));
       return true;
+    case 2:
+      if (!sonare::numeric::finite(value) || value < 0.0f) return false;
+      config_.gain = value;
+      return true;
     default:
       return false;
   }
 }
 
 std::vector<rt::ParamDescriptor> StereoBalance::parameter_descriptors() const {
-  return {{"balance", 0}, {"law", 1}};
+  return {{"balance", 0}, {"law", 1}, {"gain", 2}};
 }
 
 void StereoBalance::validate_config(const StereoBalanceConfig& config) {
   if (config.balance < -1.0f || config.balance > 1.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "stereo balance must be in [-1, 1]");
+  }
+  if (!sonare::numeric::finite(config.gain) || config.gain < 0.0f) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "stereo balance gain must be finite and non-negative");
   }
 }
 
@@ -143,6 +153,8 @@ void StereoBalance::gains(const StereoBalanceConfig& config, float& left, float&
           : compute_pan_gains(config.balance, PanLaw::Linear0dB, PanNormalization::NearUnity);
   left = g.left;
   right = g.right;
+  left *= config.gain;
+  right *= config.gain;
 }
 
 }  // namespace sonare::mastering::stereo

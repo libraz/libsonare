@@ -11,6 +11,7 @@
 #include "rt/processor_base.h"
 #include "rt/rt_config_lifecycle.h"
 #include "rt/rt_publisher.h"
+#include "rt/stage_gate.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::dynamics {
@@ -62,8 +63,6 @@ class ParallelComp : public rt::RtConfigLifecycle<ParallelComp, ParallelCompConf
  private:
   static void validate_config(const ParallelCompConfig& config);
   static float gain_reduction_db(float input_db, const ParallelCompConfig& config);
-  float limit_output_sample(float sample, size_t channel_index, float ceiling,
-                            const ParallelCompConfig& config) noexcept;
   void ensure_followers(int num_channels);
   /// @brief Recomputes scalar derived coefficients (envelope follower
   ///        attack/release) from @p config. RT-safe: scalar math only, no
@@ -74,6 +73,7 @@ class ParallelComp : public rt::RtConfigLifecycle<ParallelComp, ParallelCompConf
   bool prepared_ = false;
   std::vector<sonare::rt::EnvelopeFollower> followers_;
   std::vector<float> limiter_gains_;
+  rt::StageGate output_limiter_gate_;
   bool last_linked_detection_ = true;
   float last_gain_reduction_db_ = 0.0f;
 };

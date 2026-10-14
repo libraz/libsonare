@@ -137,6 +137,7 @@ void RoomMorphProcessor::prepare(double sample_rate, int max_block_size) {
   gain_smooth_ = one_pole_coef(0.020f, sr);
 
   suppressor_ = SuppressorState{};
+  suppressor_gate_.close();
 }
 
 void RoomMorphProcessor::process(float* const* channels, int num_channels, int num_samples) {
@@ -158,6 +159,7 @@ void RoomMorphProcessor::process(float* const* channels, int num_channels, int n
     if (channels[ch] != nullptr) active[num_active++] = channels[ch];
   }
   if (max_cut > 0.0f && num_active > 0) {
+    suppressor_gate_.admit(true, [this] { suppressor_ = SuppressorState{}; });
     SuppressorState& st = suppressor_;
     for (int i = 0; i < num_samples; ++i) {
       float a = 0.0f;
@@ -188,8 +190,15 @@ void RoomMorphProcessor::process(float* const* channels, int num_channels, int n
     // smoothed gain at unity, which is this expander's bypass.
     discarded |= discard_group_if_non_finite(st.env, st.peak);
     discarded |= discard_if_non_finite(st.gain, 1.0f);
+  } else {
+    suppressor_ = SuppressorState{};
+    suppressor_gate_.close();
   }
-  if (discarded) note_non_finite_discard();
+  if (discarded) {
+    suppressor_ = SuppressorState{};
+    suppressor_gate_.close();
+    note_non_finite_discard();
+  }
 
   // Step 2: add the target room. ConvolutionReverb mixes the (suppressed) dry
   // with the target-room convolution, delay-aligned, allocation-free.
@@ -199,6 +208,7 @@ void RoomMorphProcessor::process(float* const* channels, int num_channels, int n
 void RoomMorphProcessor::reset() {
   reverb_.reset();
   suppressor_ = SuppressorState{};
+  suppressor_gate_.close();
 }
 
 bool RoomMorphProcessor::set_parameter_impl(unsigned int param_id, float value) {

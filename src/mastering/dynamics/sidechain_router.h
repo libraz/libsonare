@@ -91,7 +91,8 @@ class SidechainRouter : public rt::RtConfigLifecycle<SidechainRouter, SidechainR
   ///          per source channel per sample, the detector is never
   ///          double-filtered across output channels.
   float detector_sample(float* const* channels, int num_channels, int sample,
-                        const SidechainRouterConfig& cfg);
+                        const SidechainRouterConfig& cfg, bool use_external, int excluded_channel,
+                        const bool* hpf_admitted);
   /// @brief Recomputes scalar derived coefficients (envelope follower attack/
   ///        release and the sidechain HPF) from @p config. RT-safe: scalar
   ///        math only, no allocation. Does NOT resize lookahead buffers — those
@@ -120,6 +121,11 @@ class SidechainRouter : public rt::RtConfigLifecycle<SidechainRouter, SidechainR
   std::vector<float> hpf_y1_;
   float hpf_b0_ = 1.0f;
   float hpf_a1_ = 0.0f;
+  rt::StageGate sidechain_hpf_gate_;
+  std::vector<rt::StageGate> hpf_channel_gates_;
+  // The key and the bus share the HPF state, so a change of detector source restarts it.
+  rt::StageGate key_source_gate_;
+  rt::StageGate internal_source_gate_;
   float last_gain_reduction_db_ = 0.0f;
   rt::StageGate listen_gate_;
   rt::StageGate duck_gate_;

@@ -8,6 +8,7 @@
 #include "mastering/eq/parametric.h"
 #include "mixing/alignment_delay.h"
 #include "mixing/api/scene.h"
+#include "mixing/api/scene_json_detail.h"
 #include "mixing/pan_law.h"
 #include "mixing/panner.h"
 #include "mixing/stereo_width.h"
@@ -720,7 +721,9 @@ JsonValue connection_to_value(const Connection& connection) {
 
 }  // namespace
 
-std::string scene_to_json(const Scene& scene) {
+namespace detail {
+
+sonare::util::json::Value scene_to_value(const Scene& scene) {
   sonare::util::json::Object root;
   util::json::put(root, "version", scene.version);
 
@@ -746,7 +749,13 @@ std::string scene_to_json(const Scene& scene) {
   }
   util::json::put(root, "connections", std::move(connections));
 
-  return sonare::util::json::dump(JsonValue(std::move(root)));
+  return sonare::util::json::Value(std::move(root));
+}
+
+}  // namespace detail
+
+std::string scene_to_json(const Scene& scene) {
+  return sonare::util::json::dump(detail::scene_to_value(scene));
 }
 
 const std::vector<std::string>& scene_schema_paths() {

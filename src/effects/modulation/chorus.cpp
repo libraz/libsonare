@@ -73,6 +73,10 @@ void Chorus::process(float* const* channels, int num_channels, int num_samples) 
     return;
   }
   rt::ScopedNoDenormals no_denormals;
+  for (size_t ch = 0; ch < pre_filters_.size(); ++ch) {
+    PreFilter& pre_filter = pre_filters_[ch];
+    pre_filter_gates_[ch].admit(pre_filter.active(), [&pre_filter] { pre_filter.reset(); });
+  }
   float* left = channels[0];
   float* right = num_channels > 1 && channels[1] != nullptr ? channels[1] : channels[0];
   const bool stereo = right != left;
@@ -142,6 +146,7 @@ void Chorus::discard_non_finite() noexcept {
     return;
   }
   for (auto& pre_filter : pre_filters_) pre_filter.reset();
+  for (auto& gate : pre_filter_gates_) gate.close();
   for (auto& filter : feedback_filters_) filter.reset();
   feedback_.fill(0.0f);
   for (auto& delay : delays_) delay.reset();
@@ -175,7 +180,9 @@ bool Chorus::set_parameter_impl(unsigned int param_id, float value) {
       for (auto& pre_filter : pre_filters_) {
         const float carried = pre_filter.state();
         pre_filter.prepare(config_.pre_filter_mode, config_.pre_filter_hz, sample_rate_);
-        pre_filter.set_state(carried);
+        if (pre_filter.active()) {
+          pre_filter.set_state(carried);
+        }
       }
       return true;
     }
@@ -196,7 +203,9 @@ bool Chorus::set_parameter_impl(unsigned int param_id, float value) {
       for (auto& pre_filter : pre_filters_) {
         const float carried = pre_filter.state();
         pre_filter.prepare(config_.pre_filter_mode, config_.pre_filter_hz, sample_rate_);
-        pre_filter.set_state(carried);
+        if (pre_filter.active()) {
+          pre_filter.set_state(carried);
+        }
       }
       return true;
     }
@@ -233,6 +242,7 @@ void Chorus::reset() {
   for (auto& pre_filter : pre_filters_) {
     pre_filter.reset();
   }
+  for (auto& gate : pre_filter_gates_) gate.close();
   for (auto& filter : feedback_filters_) {
     filter.reset();
   }

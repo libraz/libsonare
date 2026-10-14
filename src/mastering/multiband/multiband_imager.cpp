@@ -214,9 +214,14 @@ void MultibandImager::validate_config(const MultibandImagerConfig& config) {
                           "multiband imager band count must match crossover");
   }
   for (const auto& band : config.bands) {
-    if (!std::isfinite(band.width) || band.width < 0.0f || band.decorrelation_amount < 0.0f ||
+    if (!std::isfinite(band.width) || band.width < 0.0f) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "imager width must be finite and non-negative");
+    }
+    if (!std::isfinite(band.decorrelation_amount) || band.decorrelation_amount < 0.0f ||
         band.decorrelation_amount > 1.0f) {
-      throw SonareException(ErrorCode::InvalidParameter, "imager width must be non-negative");
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "imager decorrelation amount must be finite in [0, 1]");
     }
   }
   // The crossover and every band are checked here, so set_config() refuses

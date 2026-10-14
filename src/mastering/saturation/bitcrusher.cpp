@@ -93,6 +93,16 @@ void BitCrusher::process(float* const* channels, int num_channels, int num_sampl
       pre_gain_ > 0.0, [this] { std::fill(pre_state_.begin(), pre_state_.end(), 0.0f); });
   const bool postfilter = post_filter_gate_.admit(
       post_gain_ > 0.0, [this] { std::fill(post_state_.begin(), post_state_.end(), 0.0f); });
+  const float radio_level = config_.radio_noise_level * config_.noise_detune;
+  const std::array<bool, kLpfCount> lpf_admitted = {
+      lpf_gates_[kRadioLpf].admit(radio_level > 0.0f && lpf_gain_[kRadioLpf] > 0.0,
+                                  [this] { lpf_state_[kRadioLpf] = 0.0f; }),
+      lpf_gates_[kWpLpf].admit(config_.wp_noise_level > 0.0f && lpf_gain_[kWpLpf] > 0.0,
+                               [this] { lpf_state_[kWpLpf] = 0.0f; }),
+      lpf_gates_[kDiscLpf].admit(config_.disc_noise_level > 0.0f && lpf_gain_[kDiscLpf] > 0.0,
+                                 [this] { lpf_state_[kDiscLpf] = 0.0f; }),
+      lpf_gates_[kHumLpf].admit(config_.hum_level > 0.0f && lpf_gain_[kHumLpf] > 0.0,
+                                [this] { lpf_state_[kHumLpf] = 0.0f; })};
   const bool highpass = config_.filter_type == BitCrusherFilterType::kHighpass;
   const effects::common::MixGains mix =
       effects::common::mix_gains(config_.mix_law, std::clamp(config_.mix, 0.0f, 1.0f));
@@ -109,7 +119,7 @@ void BitCrusher::process(float* const* channels, int num_channels, int num_sampl
   const int span = static_cast<int>(noise_.size());
   for (int start = 0; start < num_samples; start += span) {
     const int count = std::min(span, num_samples - start);
-    if (noisy) render_noise(count);
+    if (noisy) render_noise(count, lpf_admitted);
     for (int ch = 0; ch < num_channels; ++ch) {
       const size_t c = static_cast<size_t>(ch);
       float* const data = channels[ch] + start;
@@ -177,6 +187,7 @@ void BitCrusher::reset() {
   std::fill(pre_state_.begin(), pre_state_.end(), 0.0f);
   std::fill(post_state_.begin(), post_state_.end(), 0.0f);
   std::fill(std::begin(lpf_state_), std::end(lpf_state_), 0.0f);
+  for (auto& gate : lpf_gates_) gate.close();
   for (size_t k = 0; k < kSourceCount; ++k) {
     sources_[k] = NoiseSource{};
     sources_[k].rng = kNoiseSeed ^ kNoiseAux[k];
@@ -371,7 +382,7 @@ void BitCrusher::update_coefficients() noexcept {
   hum_step_ = static_cast<double>(config_.hum_hz) / rate;
 }
 
-void BitCrusher::render_noise(int count) noexcept {
+void BitCrusher::render_noise(int count, const std::array<bool, kLpfCount>& lpf_admitted) noexcept {
   const float radio_level = config_.radio_noise_level * config_.noise_detune;
   for (int i = 0; i < count; ++i) {
     float sum = 0.0f;
@@ -380,8 +391,7 @@ void BitCrusher::render_noise(int count) noexcept {
       g.mem[0] =
           (1.0 - radio_shape_pole_) * noise_word(xorshift32(g.rng)) + radio_shape_pole_ * g.mem[0];
       float v = static_cast<float>(g.mem[0]);
-      if (lpf_gain_[kRadioLpf] > 0.0)
-        v = lowpass_tick(lpf_gain_[kRadioLpf], v, lpf_state_[kRadioLpf]);
+      if (lpf_admitted[kRadioLpf]) v = lowpass_tick(lpf_gain_[kRadioLpf], v, lpf_state_[kRadioLpf]);
       sum += v * radio_level;
     }
     if (config_.wp_noise_level > 0.0f) {
@@ -395,7 +405,7 @@ void BitCrusher::render_noise(int count) noexcept {
         raw = noise_word(xorshift32(sources_[kWhite].rng));
       }
       float v = static_cast<float>(raw);
-      if (lpf_gain_[kWpLpf] > 0.0) v = lowpass_tick(lpf_gain_[kWpLpf], v, lpf_state_[kWpLpf]);
+      if (lpf_admitted[kWpLpf]) v = lowpass_tick(lpf_gain_[kWpLpf], v, lpf_state_[kWpLpf]);
       sum += v * config_.wp_noise_level;
     }
     if (config_.disc_noise_level > 0.0f) {
@@ -404,7 +414,7 @@ void BitCrusher::render_noise(int count) noexcept {
       float v = static_cast<double>(u) < disc_chance_
                     ? static_cast<float>(noise_word(xorshift32(g.rng)))
                     : 0.0f;
-      if (lpf_gain_[kDiscLpf] > 0.0) v = lowpass_tick(lpf_gain_[kDiscLpf], v, lpf_state_[kDiscLpf]);
+      if (lpf_admitted[kDiscLpf]) v = lowpass_tick(lpf_gain_[kDiscLpf], v, lpf_state_[kDiscLpf]);
       sum += v * config_.disc_noise_level;
     }
     if (config_.hum_level > 0.0f) {
@@ -415,7 +425,7 @@ void BitCrusher::render_noise(int count) noexcept {
           kHumNorm);
       g.mem[0] += hum_step_;
       g.mem[0] -= std::floor(g.mem[0]);
-      if (lpf_gain_[kHumLpf] > 0.0) v = lowpass_tick(lpf_gain_[kHumLpf], v, lpf_state_[kHumLpf]);
+      if (lpf_admitted[kHumLpf]) v = lowpass_tick(lpf_gain_[kHumLpf], v, lpf_state_[kHumLpf]);
       sum += v * config_.hum_level;
     }
     noise_[static_cast<size_t>(i)] = sum;

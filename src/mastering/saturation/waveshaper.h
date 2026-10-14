@@ -40,8 +40,9 @@ class Waveshaper : public rt::ProcessorBase {
   void set_config(const WaveshaperConfig& config);
   const WaveshaperConfig& config() const { return config_; }
 
-  // Automatable parameters (RT-safe, no allocation, no state reset). All are
-  // read per sample by shape()/shape_sample() with no precomputed coefficients:
+  // Automatable parameters (RT-safe, no allocation, no state reset). Process
+  // derives their segment scalars once; the curve and ADAA state still update
+  // per sample:
   //   0 = drive_db
   //   1 = mix (clamped to [0, 1])
   //   2 = output_gain_db

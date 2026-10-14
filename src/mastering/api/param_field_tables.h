@@ -1135,7 +1135,8 @@ inline double field_as_double(Enum value) {
 #define SONARE_FIELDS_STEREO_BALANCE(X)     \
   X("balance", balance, kNone)              \
   X("constantPower", constant_power, kNone) \
-  X("law", law, kNone)
+  X("law", law, kNone)                      \
+  X("gain", gain, display_range(kNone, 0, 2))
 
 // --- Utility ---
 

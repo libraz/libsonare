@@ -33,10 +33,9 @@ class Tube : public rt::ProcessorBase {
   void set_config(const TubeConfig& config);
   const TubeConfig& tube_config() const { return tube_config_; }
 
-  // Automatable parameters (RT-safe, no allocation, no state reset). All are
-  // read per sample in process_model()/apply_miller_filter() with no
-  // precomputed coefficients (the Miller-filter cutoff is derived from drive_db
-  // each sample):
+  // Automatable parameters (RT-safe, no allocation, no state reset). Process
+  // derives their segment scalars once; the input-dependent triode current and
+  // Miller state still update per sample:
   //   0 = drive_db
   //   1 = bias
   //   2 = mix (clamped to [0, 1])

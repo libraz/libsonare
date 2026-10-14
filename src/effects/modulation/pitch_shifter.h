@@ -86,9 +86,20 @@ class PitchShifter : public rt::ProcessorBase {
   float read_tap_lagrange3(int channel, float delay) const noexcept;
   void update_grain() noexcept;
   void update_pre_delay_samples() noexcept;
+  void reset_channel(int channel) noexcept;
 
   /// Gains the configured mix law assigns to @p wet, clamped to [0, 1].
   common::MixGains law_gains(float wet) const noexcept;
+
+  /// Largest ratio of a voice that currently contributes to the shifted path.
+  /// A zero-gain voice is treated as unity because it does not need anti-aliasing.
+  float sounding_max_ratio() const noexcept;
+
+  /// Rebuilds the anti-alias coefficients for the current sounding voice set.
+  void refresh_anti_alias() noexcept;
+
+  /// Bounds one voice's interpolation, including the fixed-delay integer case.
+  float voice_interpolation_peak(float ratio, float delay) const noexcept;
 
   /// Derives the anti-alias corner, in hertz, from the larger sounding ratio and
   /// rebuilds the low-pass sections when it moved. A ratio of 1 or less leaves
@@ -100,8 +111,8 @@ class PitchShifter : public rt::ProcessorBase {
   float max_pre_delay_ms_ = 0.0f;  ///< largest pre-delay the prepared delay line holds.
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int grain_ = 2048;     ///< grain length in samples: two of config_.window_ms.
-  float phase_ = 0.0f;   ///< voice 1 tap-1 delay position in [0, grain_).
-  float phase2_ = 0.0f;  ///< the same for voice 2.
+  double phase_ = 0.0;   ///< voice 1 tap-1 delay position in [0, grain_).
+  double phase2_ = 0.0;  ///< the same for voice 2.
   std::array<float, 2> pre_delay_samples_{{0.0f, 0.0f}};
   std::array<float, 2> feedback_state_{{0.0f, 0.0f}};  ///< last shifted sum, per channel.
   std::array<std::vector<float>, 2> buffers_;
@@ -111,10 +122,12 @@ class PitchShifter : public rt::ProcessorBase {
   /// [channel][section]: two Butterworth sections make one Linkwitz-Riley 4.
   std::array<std::array<rt::BiquadState, 2>, 2> anti_alias_;
   rt::StageGate anti_alias_gate_;
+  std::array<rt::StageGate, 2> layout_gates_;
   /// The dry/wet pair applied to the audio, in both the voice path and the unity shortcut;
   /// a change of dry/wet or law only retargets it.
   rt::GainPairGlide mix_glide_;
   rt::GainPairGlide::Pair mix_target_{};
+  int mix_ramp_samples_ = 1;  ///< Prepared 5 ms dry/wet glide length.
   bool mix_primed_ = false;
 };
 

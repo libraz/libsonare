@@ -75,6 +75,7 @@ void Compressor::prepare(double sample_rate, int max_block_size) {
   update_coefficients(active_);
   hpf_x1_.assign(kRealtimePreparedChannels, 0.0f);
   hpf_y1_.assign(kRealtimePreparedChannels, 0.0f);
+  hpf_channel_gates_.assign(kRealtimePreparedChannels, rt::StageGate{});
   reset();
   // Re-publish so the audio thread observes the same snapshot that prepare()
   // already applied; adopt_snapshot_for_block() skips the redundant
@@ -95,8 +96,14 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
   const CompressorConfig& cfg = *adopt_snapshot_for_block();
   const float makeup_db = compute_makeup_db(cfg);
 
+  const bool sidechain_hpf_enabled = sidechain_hpf_gate_.admit(cfg.sidechain_hpf_enabled, [this] {
+    std::fill(hpf_x1_.begin(), hpf_x1_.end(), 0.0f);
+    std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
+  });
+
   if (static_cast<size_t>(num_channels) > hpf_x1_.size() ||
-      static_cast<size_t>(num_channels) > hpf_y1_.size()) {
+      static_cast<size_t>(num_channels) > hpf_y1_.size() ||
+      static_cast<size_t>(num_channels) > hpf_channel_gates_.size()) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "num_channels exceeds prepared Compressor state");
   }
@@ -112,6 +119,15 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
   detector_mode_initialized_ = true;
 
   const int excluded_channel = detector_excluded_channel(num_channels);
+  std::array<bool, kRealtimePreparedChannels> hpf_admitted{};
+  for (size_t ch = 0; ch < hpf_channel_gates_.size(); ++ch) {
+    const bool active = sidechain_hpf_enabled && ch < static_cast<size_t>(num_channels) &&
+                        static_cast<int>(ch) != excluded_channel;
+    hpf_admitted[ch] = hpf_channel_gates_[ch].admit(active, [this, ch] {
+      hpf_x1_[ch] = 0.0f;
+      hpf_y1_[ch] = 0.0f;
+    });
+  }
   // Excluding the only channel of a mono buffer leaves no detector signal at
   // all, and the public setter accepts that combination. Divide by one rather
   // than by zero: both sums stay at zero, the detected level floors, and the
@@ -134,7 +150,7 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
     if (excluded_channel < 0) {
       for (int ch = 0; ch < num_channels; ++ch) {
         float s = channels[ch][i];
-        if (cfg.sidechain_hpf_enabled) {
+        if (hpf_admitted[static_cast<size_t>(ch)]) {
           const auto idx = static_cast<size_t>(ch);
           const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
           hpf_x1_[idx] = s;
@@ -148,7 +164,7 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
       for (int ch = 0; ch < num_channels; ++ch) {
         if (ch == excluded_channel) continue;
         float s = channels[ch][i];
-        if (cfg.sidechain_hpf_enabled) {
+        if (hpf_admitted[static_cast<size_t>(ch)]) {
           const auto idx = static_cast<size_t>(ch);
           const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
           hpf_x1_[idx] = s;
@@ -231,6 +247,8 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
 void Compressor::reset() {
   rms_state_ = 0.0f;
   detector_mode_initialized_ = false;
+  sidechain_hpf_gate_.close();
+  for (auto& gate : hpf_channel_gates_) gate.close();
   std::fill(hpf_x1_.begin(), hpf_x1_.end(), 0.0f);
   std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
   pdr_state_db_ = 0.0f;

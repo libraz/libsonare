@@ -22,7 +22,9 @@ namespace sonare {
 /// @param zi Optional initial state. If unset, uses the librosa-compatible
 ///        reflect-padding default `2*x[0] - x[1]`.
 /// @return Filtered signal of the same length.
-/// @throw sonare::SonareException if x is null and n > 0.
+/// @throw sonare::SonareException if x is null and n > 0, or if `coef` or an
+///        engaged `zi` is non-finite. Empty input is still valid when the
+///        parameters are valid.
 std::vector<float> preemphasis(const float* x, std::size_t n, float coef = 0.97f,
                                std::optional<float> zi = std::nullopt);
 std::vector<float> preemphasis(const std::vector<float>& x, float coef = 0.97f,
@@ -33,6 +35,9 @@ std::vector<float> preemphasis(const std::vector<float>& x, float coef = 0.97f,
 ///          - y[0] = x[0] + zi
 ///          - y[n] = x[n] + coef * y[n-1]   (n >= 1)
 ///          When zi is unset, defaults to 2*x[0] - x[1] (librosa parity).
+/// @throw sonare::SonareException if x is null and n > 0, or if `coef` or an
+///        engaged `zi` is non-finite. Empty input is still valid when the
+///        parameters are valid.
 std::vector<float> deemphasis(const float* x, std::size_t n, float coef = 0.97f,
                               std::optional<float> zi = std::nullopt);
 std::vector<float> deemphasis(const std::vector<float>& x, float coef = 0.97f,

@@ -58,7 +58,10 @@ void Imager::process(float* const* channels, int num_channels, int num_samples) 
   if (!validate_process_buffers(channels, num_channels, num_samples)) {
     return;
   }
-  if (num_channels < 2) {
+  const bool stereo_active = stereo_gate_.admit(num_channels >= 2, [this] {
+    for (auto& stage : allpass_) stage.reset();
+  });
+  if (!stereo_active) {
     return;
   }
 
@@ -105,6 +108,7 @@ int Imager::tail_samples() const noexcept {
 }
 
 void Imager::reset() {
+  stereo_gate_.close();
   for (auto& stage : allpass_) {
     stage.reset();
   }

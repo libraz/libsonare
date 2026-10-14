@@ -4,6 +4,7 @@
 #include "effects/preemphasis.h"
 
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -36,6 +37,12 @@ std::vector<float> preemphasis(const float* x, std::size_t n, float coef, std::o
     throw SonareException(ErrorCode::InvalidParameter,
                           "preemphasis: null input with non-zero length");
   }
+  if (!numeric::finite(coef)) {
+    throw SonareException(ErrorCode::InvalidParameter, "preemphasis: coef must be finite");
+  }
+  if (zi.has_value() && !numeric::finite(*zi)) {
+    throw SonareException(ErrorCode::InvalidParameter, "preemphasis: zi must be finite");
+  }
   std::vector<float> y(n);
   if (n == 0) return y;
   const float z = zi.has_value() ? *zi : default_zi_pre(x, n);
@@ -54,6 +61,12 @@ std::vector<float> deemphasis(const float* x, std::size_t n, float coef, std::op
   if (n > 0 && x == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "deemphasis: null input with non-zero length");
+  }
+  if (!numeric::finite(coef)) {
+    throw SonareException(ErrorCode::InvalidParameter, "deemphasis: coef must be finite");
+  }
+  if (zi.has_value() && !numeric::finite(*zi)) {
+    throw SonareException(ErrorCode::InvalidParameter, "deemphasis: zi must be finite");
   }
   std::vector<float> y(n);
   if (n == 0) return y;

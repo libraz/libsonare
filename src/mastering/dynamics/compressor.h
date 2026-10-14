@@ -12,6 +12,7 @@
 #include "rt/processor_base.h"
 #include "rt/rt_config_lifecycle.h"
 #include "rt/rt_publisher.h"
+#include "rt/stage_gate.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::dynamics {
@@ -117,6 +118,8 @@ class Compressor : public rt::RtConfigLifecycle<Compressor, CompressorConfig> {
   bool detector_mode_initialized_ = false;
   float hpf_b0_ = 1.0f;
   float hpf_a1_ = 0.0f;
+  rt::StageGate sidechain_hpf_gate_;
+  std::vector<rt::StageGate> hpf_channel_gates_;
   // Per-channel sidechain HPF state, sized to the channel count on first
   // process() so stereo channels do not share (and corrupt) filter memory.
   std::vector<float> hpf_x1_;

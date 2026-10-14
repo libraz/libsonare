@@ -22,6 +22,8 @@ struct StereoBalanceConfig {
   bool constant_power = true;
   /// `kRawConstantPower` overrides `constant_power`.
   StereoBalanceLaw law = StereoBalanceLaw::kNormalized;
+  /// Linear multiplier applied to both gains after the selected law.
+  float gain = 1.0f;
 };
 
 /// A change of the balance is glided over a fixed 5 ms so a control moved
@@ -45,8 +47,9 @@ class StereoBalance : public rt::ProcessorBase {
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = balance (clamped to [-1, 1])
   //   1 = law (StereoBalanceLaw; a fractional or unnamed value is refused)
+  //   2 = gain (finite, non-negative linear pair multiplier)
   bool set_parameter_impl(unsigned int param_id, float value) override;
-  // Automatable parameters: 0=balance, 1=law
+  // Automatable parameters: 0=balance, 1=law, 2=gain
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:

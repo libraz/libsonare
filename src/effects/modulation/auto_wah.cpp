@@ -53,6 +53,10 @@ void AutoWah::process(float* const* channels, int num_channels, int num_samples)
   // Stereo-pair processor: only two per-plane filters exist, so planes beyond
   // the pair pass through dry (see the registry's stereoPairOnly classification).
   const int active = std::min(num_channels, static_cast<int>(filters_.size()));
+  for (size_t ch = 0; ch < filters_.size(); ++ch) {
+    filter_gates_[ch].admit(static_cast<int>(ch) < active && channels[ch] != nullptr,
+                            [this, ch] { filters_[ch].reset(); });
+  }
   for (int i = 0; i < num_samples; ++i) {
     // Rectified peak across the active channels drives one shared envelope.
     float peak = 0.0f;
@@ -83,15 +87,17 @@ void AutoWah::discard_non_finite() noexcept {
   // from anything else would be a filter position no input asked for.
   bool discarded = discard_if_non_finite(envelope_, 0.0f);
   for (auto& filter : filters_) discarded |= filter.discard_non_finite();
-  if (discarded) note_non_finite_discard();
+  if (discarded) {
+    for (auto& gate : filter_gates_) gate.close();
+    note_non_finite_discard();
+  }
 }
 
 int AutoWah::tail_samples() const noexcept {
   rt::TailBudget tail;
-  // The sweep's lowest corner rings longest at a given resonance.
+  // Near Nyquist the upper sweep endpoint can have the longer ring.
   if (std::clamp(config_.dry_wet, 0.0f, 1.0f) > 0.0f) {
-    tail = SvfBandpass::ring(std::min(config_.min_hz, config_.max_hz), config_.resonance,
-                             sample_rate_);
+    tail = SvfBandpass::ring_range(config_.min_hz, config_.max_hz, config_.resonance, sample_rate_);
   }
   return tail.samples();
 }
@@ -102,6 +108,7 @@ void AutoWah::reset() {
   for (auto& filter : filters_) {
     filter.reset();
   }
+  for (auto& gate : filter_gates_) gate.close();
 }
 
 bool AutoWah::set_parameter_impl(unsigned int param_id, float value) {

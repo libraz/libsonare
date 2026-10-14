@@ -1,6 +1,7 @@
 #include "mastering/dynamics/sidechain_router.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <memory>
 #include <utility>
@@ -41,6 +42,7 @@ void SidechainRouter::prepare(double sample_rate, int max_block_size) {
   }
   hpf_x1_.assign(kRealtimePreparedChannels, 0.0f);
   hpf_y1_.assign(kRealtimePreparedChannels, 0.0f);
+  hpf_channel_gates_.assign(kRealtimePreparedChannels, rt::StageGate{});
   active_ = config_;
   update_coefficients(active_);
   reset();
@@ -81,13 +83,40 @@ void SidechainRouter::process(float* const* channels, int num_channels, int num_
     clear_lines();
   });
 
+  const bool use_external =
+      sidechain_channels_ != nullptr && sidechain_num_channels_ > 0 && sidechain_num_samples_ > 0;
+  const int source_channels = use_external ? sidechain_num_channels_ : num_channels;
+  // An external key owns its own channel layout, so only the bus's internal
+  // detector excludes its LFE plane. Applying the bus plane index to an
+  // unrelated key would silently discard a valid sidechain channel.
+  const int excluded_channel = use_external ? -1 : detector_excluded_channel(num_channels);
+  auto restart_hpf = [this] {
+    for (auto& gate : hpf_channel_gates_) gate.close();
+  };
+  key_source_gate_.admit(use_external, restart_hpf);
+  internal_source_gate_.admit(!use_external, restart_hpf);
+  const bool sidechain_hpf_enabled = sidechain_hpf_gate_.admit(cfg.sidechain_hpf_enabled, [this] {
+    std::fill(hpf_x1_.begin(), hpf_x1_.end(), 0.0f);
+    std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
+  });
+  std::array<bool, kRealtimePreparedChannels> hpf_admitted{};
+  for (size_t ch = 0; ch < hpf_channel_gates_.size(); ++ch) {
+    const bool active = sidechain_hpf_enabled && ch < static_cast<size_t>(source_channels) &&
+                        static_cast<int>(ch) != excluded_channel;
+    hpf_admitted[ch] = hpf_channel_gates_[ch].admit(active, [this, ch] {
+      hpf_x1_[ch] = 0.0f;
+      hpf_y1_[ch] = 0.0f;
+    });
+  }
+
   float max_reduction = 0.0f;
   // Sample-major loop with a single linked detector and a single shared
   // envelope follower: every output channel receives the same gain (preserves
   // the stereo image) and the sidechain HPF runs exactly once per source
   // channel per sample (no double-filtering across output channels).
   for (int i = 0; i < num_samples; ++i) {
-    const float detector = detector_sample(channels, num_channels, i, cfg);
+    const float detector = detector_sample(channels, num_channels, i, cfg, use_external,
+                                           excluded_channel, hpf_admitted.data());
     if (listening) {
       for (int ch = 0; ch < num_channels; ++ch) {
         channels[ch][i] = lookahead_samples_ > 0
@@ -125,6 +154,10 @@ void SidechainRouter::reset() {
   for (auto& lookahead : lookahead_) {
     lookahead.reset();
   }
+  sidechain_hpf_gate_.close();
+  for (auto& gate : hpf_channel_gates_) gate.close();
+  key_source_gate_.close();
+  internal_source_gate_.close();
   std::fill(hpf_x1_.begin(), hpf_x1_.end(), 0.0f);
   std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
   last_gain_reduction_db_ = 0.0f;
@@ -239,20 +272,14 @@ void SidechainRouter::ensure_capacity(int num_channels) const {
 }
 
 float SidechainRouter::detector_sample(float* const* channels, int num_channels, int sample,
-                                       const SidechainRouterConfig& cfg) {
-  // Choose the detector source: the external sidechain when set, otherwise the
-  // main channels (self / internal detection). The sidechain HPF is honored in
-  // both modes.
-  const bool use_external =
-      sidechain_channels_ != nullptr && sidechain_num_channels_ > 0 && sidechain_num_samples_ > 0;
+                                       const SidechainRouterConfig& cfg, bool use_external,
+                                       int excluded_channel, const bool* hpf_admitted) {
+  // The detector source is the external sidechain when set, otherwise the main
+  // channels (self / internal detection). The sidechain HPF is honored in both.
   if (use_external && sample >= sidechain_num_samples_) {
     return 0.0f;
   }
   const int source_channels = use_external ? sidechain_num_channels_ : num_channels;
-  // An external key owns its own channel layout, so only the bus's internal
-  // detector excludes its LFE plane. Applying the bus plane index to an
-  // unrelated key would silently discard a valid sidechain channel.
-  const int excluded_channel = use_external ? -1 : detector_excluded_channel(num_channels);
 
   // Fold the source down to a single linked detector value, applying the
   // per-channel HPF once per source channel per sample. Because the one-pole
@@ -265,7 +292,7 @@ float SidechainRouter::detector_sample(float* const* channels, int num_channels,
   if (excluded_channel < 0) {
     for (int ch = 0; ch < source_channels; ++ch) {
       float s = use_external ? sidechain_channels_[ch][sample] : channels[ch][sample];
-      if (cfg.sidechain_hpf_enabled) {
+      if (hpf_admitted[ch]) {
         const auto idx = static_cast<size_t>(ch);
         const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
         hpf_x1_[idx] = s;
@@ -284,7 +311,7 @@ float SidechainRouter::detector_sample(float* const* channels, int num_channels,
     for (int ch = 0; ch < source_channels; ++ch) {
       if (ch == excluded_channel) continue;
       float s = use_external ? sidechain_channels_[ch][sample] : channels[ch][sample];
-      if (cfg.sidechain_hpf_enabled) {
+      if (hpf_admitted[ch]) {
         const auto idx = static_cast<size_t>(ch);
         const float y = hpf_b0_ * (s - hpf_x1_[idx]) + hpf_a1_ * hpf_y1_[idx];
         hpf_x1_[idx] = s;

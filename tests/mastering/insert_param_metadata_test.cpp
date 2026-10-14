@@ -673,6 +673,14 @@ TEST_CASE("measured bounds reproduce the validation they were measured through",
   // midpoint between the last accepted and first rejected setting.
   REQUIRE(find_param(param_info("stereo.stereoBalance"), "balance")->find("min")->as_number() ==
           -1.0);
+  const json::Array balance = param_info("stereo.stereoBalance");
+  const json::Value* gain = find_param(balance, "gain");
+  REQUIRE(gain != nullptr);
+  REQUIRE(field(*gain, "min").as_number() == 0.0);
+  REQUIRE(field(*gain, "max").is_null());
+  REQUIRE(field(*gain, "uiMin").as_number() == 0.0);
+  REQUIRE(field(*gain, "uiMax").as_number() == 2.0);
+  REQUIRE(make_insert("stereo.stereoBalance", R"({"gain":3.0})") != nullptr);
   const json::Array bitcrusher = param_info("saturation.bitcrusher");
   REQUIRE(find_param(bitcrusher, "bitDepth")->find("min")->as_number() == 2.0);
   REQUIRE(find_param(bitcrusher, "bitDepth")->find("max")->as_number() == 24.0);

@@ -28,6 +28,7 @@
 #include "effects/modulation/svf_bandpass.h"
 #include "rt/biquad_design.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 #include "util/constants.h"
 
 namespace sonare::effects::modulation {
@@ -157,6 +158,11 @@ class Rotary : public rt::ProcessorBase {
   float advance_rotor(double& rate, float target, float undershoot) const noexcept;
 
   void process_geometric(float* const* channels, int active, int num_samples) noexcept;
+  void reset_classic_plane(size_t plane) noexcept;
+  void reset_geometric_plane(size_t plane) noexcept;
+  void reset_geometric_shared() noexcept;
+  void reset_classic_model() noexcept;
+  void reset_geometric_model() noexcept;
   void reset_geometric() noexcept;
   /// Microphone azimuths, in radians, from the current stereo spread.
   void place_mics() noexcept;
@@ -176,6 +182,11 @@ class Rotary : public rt::ProcessorBase {
   std::array<Lfo, 2> drum_lfo_;
   std::array<ModDelayLine, 2> horn_delay_;
   std::array<ModDelayLine, 2> drum_delay_;
+  rt::StageGate classic_model_gate_;
+  rt::StageGate geometric_model_gate_;
+  rt::StageGate geometric_shared_gate_;
+  std::array<rt::StageGate, 2> classic_plane_gates_;
+  std::array<rt::StageGate, 2> geometric_plane_gates_;
 
   // Geometric model. The horn feed is mono, so both delay lines of a pair carry the same
   // signal and are read at each microphone's own distance.

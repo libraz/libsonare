@@ -19,6 +19,7 @@
 #include "effects/modulation/lfo.h"
 #include "effects/modulation/mod_delay_line.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 #include "util/constants.h"
 
 namespace sonare::effects::modulation {
@@ -64,7 +65,7 @@ class Flanger : public rt::ProcessorBase {
   //   5 = pre_filter_hz (re-derives the pole in place; the filter keeps its state)
   //   6 = phase_deg (clamped to [0, 180]; re-phases the right LFO in place)
   //   7 = step_rate_hz (clamped to >= 0; 0 = continuous LFO)
-  //   8 = pre_filter_mode (0 off, 1 low-pass, 2 high-pass; the filter keeps its state)
+  //   8 = pre_filter_mode (0 off, 1 low-pass, 2 high-pass; Off clears filter history)
   //   9 = interpolation (0 linear, 1 Lagrange3)
   //  10 = mix_law (a whole number naming a law, refused otherwise)
   bool set_parameter_impl(unsigned int param_id, float value) override;
@@ -83,6 +84,7 @@ class Flanger : public rt::ProcessorBase {
   /// [L, R] pre-filter sections. One per channel, never shared with another
   /// instance: what the measurement calls one section is one design.
   std::array<PreFilter, 2> pre_filters_;
+  std::array<rt::StageGate, 2> pre_filter_gates_;
   std::array<float, 2> feedback_{{0.0f, 0.0f}};
   /// Position within the current hold in turns of the step rate, and the held
   /// [L, R] LFO values. A position of 1 or more latches on the next sample.

@@ -25,6 +25,26 @@ constexpr float kAlpha = 1.6e-3f;  // inter-domain mean-field coupling
 constexpr float kC = 0.4f;         // reversibility ratio in [0, 1]
 constexpr int kPreparedChannels = 2;
 
+struct TapeScalars {
+  float drive = 0.0f;
+  float output_gain = 0.0f;
+  float bias_field = 0.0f;
+  float ja_rate = 0.0f;
+  float gap_loss = 0.0f;
+};
+
+TapeScalars make_scalars(const TapeConfig& config, double sample_rate) {
+  return {db_to_linear(config.drive_db), db_to_linear(config.output_gain_db), config.bias * 0.1f,
+          static_cast<float>(sample_rate * std::max(1, config.oversample_factor)), config.gap_loss};
+}
+
+float process_sample_with_scalars(const common::JilesAtherton& hysteresis,
+                                  common::JilesAthertonState& state, float input,
+                                  const TapeScalars& scalars) {
+  const float field = input * scalars.drive + scalars.bias_field;
+  return hysteresis.process(state, field, scalars.ja_rate) * scalars.output_gain;
+}
+
 }  // namespace
 
 Tape::Tape(TapeConfig config) : config_(config), hysteresis_(make_ja_config(config_)) {
@@ -65,14 +85,15 @@ void Tape::process(float* const* channels, int num_channels, int num_samples) {
 
   if (config_.oversample_factor <= 1) {
     bool discarded = false;
+    const TapeScalars scalars = make_scalars(config_, sample_rate_);
     for (int ch = 0; ch < num_channels; ++ch) {
       auto& state = states_[static_cast<size_t>(ch)];
       for (int i = 0; i < num_samples; ++i) {
-        float y = process_sample(state, channels[ch][i]);
+        float y = process_sample_with_scalars(hysteresis_, state, channels[ch][i], scalars);
         y += head_bump_[static_cast<size_t>(ch)].process(y);
         auto& gap = gap_state_[static_cast<size_t>(ch)];
         gap += gap_loss_coeff_ * (y - gap);
-        channels[ch][i] = y * (1.0f - config_.gap_loss) + gap * config_.gap_loss;
+        channels[ch][i] = y * (1.0f - scalars.gap_loss) + gap * scalars.gap_loss;
       }
       discarded |= discard_non_finite_state(static_cast<size_t>(ch));
     }
@@ -90,6 +111,7 @@ void Tape::process(float* const* channels, int num_channels, int num_samples) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "num_samples exceeds prepared Tape oversampling scratch");
   }
+  const TapeScalars scalars = make_scalars(config_, sample_rate_);
   bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
     auto& state = states_[static_cast<size_t>(ch)];
@@ -97,7 +119,7 @@ void Tape::process(float* const* channels, int num_channels, int num_samples) {
     oversampler_.upsample_to_streaming(channels[ch], static_cast<size_t>(num_samples),
                                        up_scratch_.data(), up_scratch_.size(), &oversampler_state);
     for (size_t i = 0; i < os_samples; ++i) {
-      up_scratch_[i] = process_sample(state, up_scratch_[i]);
+      up_scratch_[i] = process_sample_with_scalars(hysteresis_, state, up_scratch_[i], scalars);
     }
     oversampler_.downsample_to_streaming(up_scratch_.data(), os_samples, down_scratch_.data(),
                                          down_scratch_.size(), &oversampler_state);
@@ -106,7 +128,7 @@ void Tape::process(float* const* channels, int num_channels, int num_samples) {
       y += head_bump_[static_cast<size_t>(ch)].process(y);
       auto& gap = gap_state_[static_cast<size_t>(ch)];
       gap += gap_loss_coeff_ * (y - gap);
-      channels[ch][i] = y * (1.0f - config_.gap_loss) + gap * config_.gap_loss;
+      channels[ch][i] = y * (1.0f - scalars.gap_loss) + gap * scalars.gap_loss;
     }
     discarded |= discard_non_finite_state(static_cast<size_t>(ch));
   }
@@ -233,13 +255,8 @@ common::JilesAthertonConfig Tape::make_ja_config(const TapeConfig& config) {
 }
 
 float Tape::process_sample(common::JilesAthertonState& state, float input) const {
-  const float drive = db_to_linear(config_.drive_db);
-  const float H = input * drive + config_.bias * 0.1f;
-  // The J-A core is stepped at the oversampled rate, so hand it that rate and
-  // not the base rate; held-field relaxation then runs in wall-clock time
-  // regardless of oversample_factor.
-  const float ja_rate = static_cast<float>(sample_rate_ * std::max(1, config_.oversample_factor));
-  return hysteresis_.process(state, H, ja_rate) * db_to_linear(config_.output_gain_db);
+  return process_sample_with_scalars(hysteresis_, state, input,
+                                     make_scalars(config_, sample_rate_));
 }
 
 void Tape::ensure_state(int num_channels) {
@@ -251,8 +268,9 @@ void Tape::ensure_state(int num_channels) {
 
 void Tape::update_filters(double sample_rate) {
   const float speed_scale = 15.0f / std::max(config_.speed_ips, 1.0f);
-  const float frequency =
-      std::clamp(80.0f * speed_scale, 20.0f, static_cast<float>(sample_rate * 0.45));
+  const float head_upper = static_cast<float>(sample_rate * 0.45);
+  const float head_lower = std::min(20.0f, head_upper);
+  const float frequency = std::clamp(80.0f * speed_scale, head_lower, head_upper);
   const float gain = db_to_linear(config_.head_bump_db) - 1.0f;
   const float q = 1.0f;
   const float w0 = static_cast<float>(kTwoPiD * frequency / sample_rate);
@@ -269,8 +287,9 @@ void Tape::update_filters(double sample_rate) {
     filter.z1 = z1;
     filter.z2 = z2;
   }
-  const float gap_cutoff = std::clamp(18000.0f * config_.speed_ips / 15.0f, 1000.0f,
-                                      static_cast<float>(sample_rate * 0.45));
+  const float gap_upper = static_cast<float>(sample_rate * 0.45);
+  const float gap_lower = std::min(1000.0f, gap_upper);
+  const float gap_cutoff = std::clamp(18000.0f * config_.speed_ips / 15.0f, gap_lower, gap_upper);
   gap_loss_coeff_ = static_cast<float>(1.0 - std::exp(-kTwoPiD * gap_cutoff / sample_rate));
 }
 

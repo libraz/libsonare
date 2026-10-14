@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <complex>
 #include <limits>
@@ -1284,13 +1285,35 @@ TEST_CASE("MultibandImager validates configuration", "[mastering][multiband]") {
 
   config.crossover = {{1000.0f}, CrossoverSlope::LR4, CrossoverMode::LinkwitzRiley};
   config.bands = {{1.0f, true}, {-1.0f, true}};
-  REQUIRE_THROWS(MultibandImager(config));
+  REQUIRE_THROWS_WITH(MultibandImager(config), "imager width must be finite and non-negative");
 
   config.bands = {{1.0f, true}, {std::numeric_limits<float>::quiet_NaN(), true}};
-  REQUIRE_THROWS(MultibandImager(config));
+  REQUIRE_THROWS_WITH(MultibandImager(config), "imager width must be finite and non-negative");
 
   config.bands = {{1.0f, true}, {1.0f, true, 1.1f}};
-  REQUIRE_THROWS(MultibandImager(config));
+  REQUIRE_THROWS_WITH(MultibandImager(config),
+                      "imager decorrelation amount must be finite in [0, 1]");
+}
+
+TEST_CASE("MultibandImager rejects non-finite decorrelation and preserves its configuration",
+          "[mastering][multiband][validation]") {
+  MultibandImagerConfig baseline;
+  MultibandImager imager(baseline);
+  const auto original = imager.config();
+
+  for (const float value :
+       {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+        -std::numeric_limits<float>::infinity()}) {
+    auto invalid = original;
+    invalid.bands.front().decorrelation_amount = value;
+    REQUIRE_THROWS(imager.set_config(invalid));
+    CHECK(imager.config().bands.size() == original.bands.size());
+    CHECK(imager.config().bands.front().width == original.bands.front().width);
+    CHECK(imager.config().bands.front().decorrelation_amount ==
+          original.bands.front().decorrelation_amount);
+    CHECK(imager.config().bands.front().enabled == original.bands.front().enabled);
+    CHECK(imager.config().bands.front().preserve_energy == original.bands.front().preserve_energy);
+  }
 }
 
 TEST_CASE("MultibandImager publishes band-prefixed descriptors for every band",
@@ -1523,6 +1546,55 @@ TEST_CASE("Changing one multiband band leaves the other bands' processors alone"
   const auto touched = render(true);
   // The high band rebuilt from silence and still sees only the split's leakage.
   REQUIRE(sonare::test::max_abs_difference(control, touched) < 1.0e-3f);
+}
+
+TEST_CASE("MultibandSaturation output gain keeps same-band history",
+          "[mastering][multiband][config-history][boundary]") {
+  for (const int sample_rate : {44100, 48000, 96000}) {
+    for (const SaturationType type : {SaturationType::Tube, SaturationType::Tape}) {
+      for (const float mix : {0.0f, 1.0f}) {
+        const auto render = [&](bool use_config) {
+          MultibandSaturationConfig config;
+          config.crossover.cutoffs_hz.clear();
+          config.bands = {{6.0f, mix, 0.0f, true, type}};
+          auto changed = config;
+          changed.bands[0].output_gain_db = -6.0f;
+          MultibandSaturation processor(config);
+          processor.prepare(static_cast<double>(sample_rate), 256, 1);
+          std::vector<float> output;
+          for (int block = 0; block < 40; ++block) {
+            if (block == 24) {
+              if (use_config) {
+                processor.set_config(changed);
+              } else {
+                REQUIRE(processor.set_parameter(2, -6.0f));
+              }
+            }
+            std::vector<float> samples(256);
+            for (int i = 0; i < 256; ++i) {
+              const int sample = block * 256 + i;
+              samples[static_cast<size_t>(i)] =
+                  0.2f * static_cast<float>(std::sin(kTwoPiD * 1000.0 * sample / sample_rate)) +
+                  0.05f * static_cast<float>(std::cos(kTwoPiD * 137.0 * sample / sample_rate));
+            }
+            float* channels[] = {samples.data()};
+            processor.process(channels, 1, 256);
+            if (block >= 24) output.insert(output.end(), samples.begin(), samples.end());
+          }
+          return output;
+        };
+
+        const auto config_path = render(true);
+        const auto scalar_path = render(false);
+        const float peak =
+            *std::max_element(scalar_path.begin(), scalar_path.end(),
+                              [](float a, float b) { return std::abs(a) < std::abs(b); });
+        CAPTURE(sample_rate, type == SaturationType::Tape ? "tape" : "tube", mix);
+        REQUIRE(std::abs(peak) > 1.0e-3f);
+        REQUIRE(sonare::test::max_abs_difference(config_path, scalar_path) < 1.0e-6f);
+      }
+    }
+  }
 }
 
 TEMPLATE_TEST_CASE("A multiband dynamics processor leaves the excluded plane out of every band",

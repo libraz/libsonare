@@ -2445,6 +2445,63 @@ TEST_CASE("the power stage keeps its ADAA delay whether or not it is engaged",
   }
 }
 
+TEST_CASE("the power stage discards old ADAA history across a disabled interval",
+          "[mastering][saturation][amp]") {
+  using sonare::mastering::saturation::AmpTopology;
+
+  constexpr int kBlock = 256;
+  AmpSimConfig low_config;
+  low_config.cab = false;
+  low_config.drive = 0.7f;
+  low_config.power = 0.2f;
+  low_config.topology = AmpTopology::kVoiced;
+  AmpSimConfig high_config = low_config;
+  high_config.power = 0.8f;
+
+  AmpSim low{low_config};
+  AmpSim high{high_config};
+  low.prepare(kRate, kBlock);
+  high.prepare(kRate, kBlock);
+
+  auto process_blocks = [](AmpSim& amp, std::vector<float>& buffer) {
+    for (size_t offset = 0; offset < buffer.size(); offset += kBlock) {
+      const int count = static_cast<int>(std::min<size_t>(kBlock, buffer.size() - offset));
+      float* channel[1] = {buffer.data() + offset};
+      amp.process(channel, 1, count);
+    }
+  };
+
+  const std::vector<float> prehistory = sine(220.0, 0.6f, kBlock * 4);
+  std::vector<float> low_history = prehistory;
+  std::vector<float> high_history = prehistory;
+  process_blocks(low, low_history);
+  process_blocks(high, high_history);
+  // The two different active powers deliberately leave different ADAA
+  // histories. This proves the fixture would detect a history leak.
+  REQUIRE(low_history != high_history);
+
+  REQUIRE(low.set_parameter(6, 0.0f));
+  REQUIRE(high.set_parameter(6, 0.0f));
+  const std::vector<float> disabled_input = sine(330.0, 0.2f, kBlock * 2);
+  std::vector<float> low_disabled = disabled_input;
+  std::vector<float> high_disabled = disabled_input;
+  process_blocks(low, low_disabled);
+  process_blocks(high, high_disabled);
+  REQUIRE(low_disabled == high_disabled);
+
+  REQUIRE(low.set_parameter(6, 0.6f));
+  REQUIRE(high.set_parameter(6, 0.6f));
+  const std::vector<float> resume_input = sine(110.0, 0.35f, kBlock * 2);
+  std::vector<float> low_resume = resume_input;
+  std::vector<float> high_resume = resume_input;
+  process_blocks(low, low_resume);
+  process_blocks(high, high_resume);
+  REQUIRE(!low_resume.empty());
+  CAPTURE(low_resume.front(), high_resume.front());
+  REQUIRE(low_resume.front() == high_resume.front());
+  REQUIRE(low_resume == high_resume);
+}
+
 namespace {
 
 /// @brief Streams @p input through an already prepared @p amp in 512-sample mono blocks.

@@ -703,7 +703,8 @@ void AmpSim::process(float* const* channels, int num_channels, int num_samples) 
   ensure_prepared(prepared_, "AmpSim");
   if (!validate_process_buffers(channels, num_channels, num_samples)) return;
   if (chains_.size() < static_cast<size_t>(num_channels)) {
-    // Control-thread growth only, mirroring Tube::ensure_state.
+    // Growing beyond the prepared channel envelope allocates per-channel state;
+    // callers must perform such growth off the audio thread.
     chains_.assign(static_cast<size_t>(num_channels), ChannelChain{});
     power_adaa_.assign(static_cast<size_t>(num_channels), rt::Adaa1<rt::PushPullNonlinearity>{});
     // The fresh chains carry no delay lines or IR history; without this the
@@ -1024,6 +1025,9 @@ void AmpSim::reset() {
 
 void AmpSim::rest_disabled_stages() noexcept {
   const bool power_off = config_.power <= 0.0f;
+  if (power_off) {
+    for (auto& adaa : power_adaa_) adaa.reset();
+  }
   for (ChannelChain& chain : chains_) {
     // The feedback loop and the supply envelope both hang off the power stage,
     // so a power knob automated to zero silences them too and freezes their
@@ -1068,9 +1072,17 @@ bool AmpSim::set_parameter_impl(unsigned int param_id, float value) {
       if (!numeric::finite(sonare::db_to_linear(value))) return false;
       config_.level_db = value;
       break;
-    case 6:
+    case 6: {
+      const bool was_power_off = config_.power <= 0.0f;
       config_.power = std::clamp(value, 0.0f, 1.0f);
+      if (was_power_off && config_.power > 0.0f) {
+        const float gain = power_stage_gain(config_.power, power_drive_scale_);
+        for (size_t ch = 0; ch < power_adaa_.size(); ++ch) {
+          power_adaa_[ch].reset(gain * chains_[ch].power_prev);
+        }
+      }
       break;
+    }
     case 7:
       config_.sag = std::clamp(value, 0.0f, 1.0f);
       break;

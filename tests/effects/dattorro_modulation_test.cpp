@@ -313,3 +313,79 @@ TEST_CASE("Tank modulation survives a rate above the sample rate", "[effects][re
     }
   }
 }
+
+TEST_CASE("Dattorro keeps an accepted slow live LFO rate advancing",
+          "[effects][reverb][dattorro][boundary]") {
+  constexpr double sample_rate = 96000.0;
+  constexpr int block_size = 512;
+  constexpr int prime_samples = 134400;
+  constexpr int continuation_samples = 576000;
+
+  DattorroReverbConfig config;
+  config.dry_wet = 1.0f;
+  config.decay = 0.6f;
+  config.mod_rate_hz = 0.5f;
+  config.mod_depth_samples = 24.0f;
+  DattorroReverb slow(config);
+  DattorroReverb stopped(config);
+  DattorroReverb moving(config);
+  slow.prepare(sample_rate, block_size);
+  stopped.prepare(sample_rate, block_size);
+  moving.prepare(sample_rate, block_size);
+
+  auto render = [&](DattorroReverb& reverb, int offset, int length, std::vector<float>& left,
+                    std::vector<float>& right) {
+    left.assign(static_cast<std::size_t>(length), 0.0f);
+    right.assign(static_cast<std::size_t>(length), 0.0f);
+    for (int i = 0; i < length; ++i) {
+      const double t = static_cast<double>(offset + i) / sample_rate;
+      left[static_cast<std::size_t>(i)] = static_cast<float>(0.23 * std::sin(kTwoPiD * 443.0 * t) +
+                                                             0.11 * std::cos(kTwoPiD * 1009.0 * t));
+      right[static_cast<std::size_t>(i)] = static_cast<float>(0.19 * std::sin(kTwoPiD * 701.0 * t));
+    }
+    for (int offset_in_block = 0; offset_in_block < length;) {
+      const int count = std::min(block_size, length - offset_in_block);
+      float* channels[] = {left.data() + offset_in_block, right.data() + offset_in_block};
+      reverb.process(channels, 2, count);
+      offset_in_block += count;
+    }
+  };
+
+  std::vector<float> left;
+  std::vector<float> right;
+  render(slow, 0, prime_samples, left, right);
+  render(stopped, 0, prime_samples, left, right);
+  render(moving, 0, prime_samples, left, right);
+  REQUIRE(slow.set_parameter(3, 0.003f));
+  REQUIRE(stopped.set_parameter(3, 0.0f));
+  REQUIRE(moving.set_parameter(3, 0.25f));
+
+  std::vector<float> slow_left;
+  std::vector<float> slow_right;
+  std::vector<float> stopped_left;
+  std::vector<float> stopped_right;
+  std::vector<float> moving_left;
+  std::vector<float> moving_right;
+  render(slow, prime_samples, continuation_samples, slow_left, slow_right);
+  render(stopped, prime_samples, continuation_samples, stopped_left, stopped_right);
+  render(moving, prime_samples, continuation_samples, moving_left, moving_right);
+
+  double slow_vs_stopped = 0.0;
+  double slow_vs_moving = 0.0;
+  for (int i = 0; i < continuation_samples; ++i) {
+    const std::size_t index = static_cast<std::size_t>(i);
+    REQUIRE(std::isfinite(slow_left[index]));
+    REQUIRE(std::isfinite(slow_right[index]));
+    slow_vs_stopped = std::max(
+        slow_vs_stopped, static_cast<double>(std::abs(slow_left[index] - stopped_left[index])));
+    slow_vs_stopped = std::max(
+        slow_vs_stopped, static_cast<double>(std::abs(slow_right[index] - stopped_right[index])));
+    slow_vs_moving = std::max(slow_vs_moving,
+                              static_cast<double>(std::abs(slow_left[index] - moving_left[index])));
+    slow_vs_moving = std::max(
+        slow_vs_moving, static_cast<double>(std::abs(slow_right[index] - moving_right[index])));
+  }
+  CAPTURE(slow_vs_stopped, slow_vs_moving);
+  REQUIRE(slow_vs_stopped > 1.0e-5);
+  REQUIRE(slow_vs_moving > 1.0e-4);
+}

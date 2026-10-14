@@ -21,6 +21,7 @@
 
 #include "effects/modulation/lfo.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 #include "util/constants.h"
 
 namespace sonare::effects::modulation {
@@ -76,6 +77,7 @@ class Phaser : public rt::ProcessorBase {
   /// oscillator's [-1, 1] output onto the sweep from @p min_hz to @p top_hz.
   float sweep_coeff(float lfo_value, float min_hz, float top_hz) const noexcept;
   float process_channel(float input, int channel, float coeff, float feedback);
+  void reset_channel(size_t channel) noexcept;
 
   /// Returns the allpass sections and the feedback loop's cells to rest once a
   /// non-finite value has reached them, once per block (see
@@ -94,6 +96,7 @@ class Phaser : public rt::ProcessorBase {
   std::array<float, 2> loop_return_{{0.0f, 0.0f}};
   std::array<float, 2> loop_highpass_in_{{0.0f, 0.0f}};
   std::array<float, 2> loop_highpass_out_{{0.0f, 0.0f}};
+  std::array<rt::StageGate, 2> channel_gates_;
   /// Pole radius of the return path's high-pass, derived in prepare() from its
   /// corner in hertz. Never configured and never carried across a rate: it is
   /// exponential in the corner over the rate, so a stored value would move the

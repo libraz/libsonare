@@ -1,6 +1,7 @@
 #include "metering/stereo.h"
 
 #include <algorithm>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -897,6 +898,42 @@ TEST_CASE("Constant-power balance keeps its power while it glides", "[mastering]
   const float end_power = left.back() * left.back() + right.back() * right.back();
   REQUIRE_THAT(end_power, WithinAbs(settled_power, 1e-4));
   REQUIRE_THAT(mid_power, WithinAbs(settled_power, 1e-3));
+}
+
+TEST_CASE("Stereo balance gain scales both laws without a parameter step",
+          "[mastering][stereo][boundary]") {
+  for (const double rate : {48000.0, 96000.0}) {
+    for (const bool raw : {false, true}) {
+      StereoBalanceConfig config;
+      config.gain = 0.75f;
+      config.law = raw ? StereoBalanceLaw::kRawConstantPower : StereoBalanceLaw::kNormalized;
+      StereoBalance balance(config);
+      balance.prepare(rate, 4096);
+      std::vector<float> left(4096, 1.0f);
+      std::vector<float> right(4096, 1.0f);
+      process_stereo(balance, left, right);
+      const float center_pair = raw ? std::sqrt(0.5f) : 1.0f;
+      const float settled_gain = 0.75f * center_pair;
+      CAPTURE(rate, raw);
+      REQUIRE(left.back() == Catch::Approx(settled_gain).margin(1e-6f));
+      REQUIRE(right.back() == Catch::Approx(settled_gain).margin(1e-6f));
+      REQUIRE_FALSE(balance.set_parameter(2, -1.0f));
+      REQUIRE_FALSE(balance.set_parameter(2, std::numeric_limits<float>::quiet_NaN()));
+      REQUIRE(balance.set_parameter(2, 0.5f));
+      const float previous_left = left.back();
+      const float previous_right = right.back();
+      std::fill(left.begin(), left.end(), 1.0f);
+      std::fill(right.begin(), right.end(), 1.0f);
+      process_stereo(balance, left, right);
+      const int ramp = static_cast<int>(std::lround(0.005 * rate));
+      const float step_bound = 1.0f / static_cast<float>(ramp);
+      REQUIRE(std::abs(left.front() - previous_left) <= step_bound);
+      REQUIRE(std::abs(right.front() - previous_right) <= step_bound);
+      const float final_gain = 0.5f * center_pair;
+      REQUIRE(left.back() == Catch::Approx(final_gain).margin(1e-5f));
+      REQUIRE(right.back() == Catch::Approx(final_gain).margin(1e-5f));
+    }
+  }
 }
 
 TEST_CASE("A law change interrupted mid-glide continues from the gains in force",

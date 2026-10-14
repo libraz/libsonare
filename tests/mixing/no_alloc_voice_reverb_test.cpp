@@ -3,6 +3,148 @@
 
 #include "no_alloc_test_helpers.h"
 
+#ifdef SONARE_WITH_FX
+#include <utility>
+
+#include "effects/filter/vowel_filter.h"
+#include "effects/modulation/auto_wah.h"
+#include "effects/modulation/chorus.h"
+#include "effects/modulation/flanger.h"
+#include "effects/modulation/phaser.h"
+#include "effects/modulation/pitch_shifter.h"
+#include "effects/modulation/rotary.h"
+#include "effects/modulation/wah.h"
+
+namespace {
+template <typename Processor>
+void require_allocation_free_layout_reentry(Processor& processor) {
+  constexpr int kBlock = 128;
+  processor.prepare(48000.0, kBlock);
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left.fill(0.03f);
+  right.fill(0.05f);
+  float* channels[] = {left.data(), right.data()};
+  processor.process(channels, 2, kBlock);
+  std::size_t allocations = 0;
+  {
+    AllocationGuard guard;
+    processor.process(channels, 1, kBlock);
+    processor.process(channels, 2, kBlock);
+    processor.reset();
+    processor.process(channels, 2, kBlock);
+    allocations = guard.count();
+  }
+  REQUIRE(allocations == 0);
+}
+
+template <typename Processor>
+void require_allocation_free_stage_reentry(Processor& processor, unsigned int parameter) {
+  constexpr int kBlock = 128;
+  processor.prepare(48000.0, kBlock);
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* channels[] = {left.data(), right.data()};
+  processor.process(channels, 2, kBlock);
+  std::size_t allocations = 0;
+  bool accepted = true;
+  {
+    AllocationGuard guard;
+    accepted &= processor.set_parameter(parameter, 0.0f);
+    processor.process(channels, 2, kBlock);
+    accepted &= processor.set_parameter(parameter, 1.0f);
+    processor.process(channels, 2, kBlock);
+    accepted &= processor.set_parameter(parameter, 0.0f);
+    processor.process(channels, 2, kBlock);
+    allocations = guard.count();
+  }
+  REQUIRE(accepted);
+  REQUIRE(allocations == 0);
+}
+}  // namespace
+
+TEST_CASE("Modulation and vowel layout reentry performs no heap allocation",
+          "[effects][rt][boundary]") {
+  using namespace sonare::effects::modulation;
+  Chorus chorus;
+  Flanger flanger;
+  Phaser phaser;
+  Rotary rotary;
+  Wah wah;
+  AutoWah auto_wah;
+  sonare::effects::filter::VowelFilter vowel;
+  PitchShifterConfig pitch_config;
+  pitch_config.semitones = 7.0f;
+  pitch_config.anti_alias = true;
+  PitchShifter pitch(pitch_config);
+  require_allocation_free_layout_reentry(chorus);
+  require_allocation_free_layout_reentry(flanger);
+  require_allocation_free_layout_reentry(phaser);
+  require_allocation_free_layout_reentry(rotary);
+  require_allocation_free_layout_reentry(wah);
+  require_allocation_free_layout_reentry(auto_wah);
+  require_allocation_free_layout_reentry(vowel);
+  require_allocation_free_layout_reentry(pitch);
+}
+
+TEST_CASE("Prefilter and rotary model reentry performs no heap allocation",
+          "[effects][rt][boundary]") {
+  using namespace sonare::effects::modulation;
+  ChorusConfig chorus_config;
+  chorus_config.pre_filter_hz = 100.0f;
+  chorus_config.pre_filter_mode = PreFilterMode::kLowPass;
+  Chorus chorus(chorus_config);
+  FlangerConfig flanger_config;
+  flanger_config.pre_filter_hz = 100.0f;
+  flanger_config.pre_filter_mode = PreFilterMode::kLowPass;
+  Flanger flanger(flanger_config);
+  Rotary rotary;
+  require_allocation_free_stage_reentry(chorus, 7);
+  require_allocation_free_stage_reentry(flanger, 8);
+  require_allocation_free_stage_reentry(rotary, 13);
+}
+
+TEST_CASE("PitchShifter parameter updates perform no heap allocation after prepare",
+          "[effects][rt]") {
+  constexpr int kBlock = 128;
+  sonare::effects::modulation::PitchShifterConfig config;
+  config.semitones = 7.0f;
+  config.anti_alias = true;
+  sonare::effects::modulation::PitchShifter shifter(config);
+  shifter.prepare(48000.0, kBlock);
+
+  std::array<float, kBlock> buffer{};
+  buffer.fill(0.05f);
+  float* channels[] = {buffer.data()};
+  shifter.process(channels, 1, kBlock);
+
+  const std::array<std::pair<unsigned int, float>, 10> controls{{
+      {0, 11.0f},
+      {2, 25.0f},
+      {4, 7.0f},
+      {5, -25.0f},
+      {6, 1.0f},
+      {9, 1.0f},
+      {11, 0.0f},
+      {11, 1.0f},
+      {1, 0.0f},
+      {1, 1.0f},
+  }};
+  bool accepted = true;
+  std::size_t allocations = 0;
+  {
+    AllocationGuard guard;
+    for (const auto& control : controls) {
+      accepted &= shifter.set_parameter(control.first, control.second);
+      shifter.process(channels, 1, kBlock);
+    }
+    allocations = guard.count();
+  }
+  REQUIRE(accepted);
+  REQUIRE(allocations == 0);
+}
+#endif
+
 #ifdef SONARE_WITH_VOICE_CHANGER
 #include <sonare/sonare_c.h>
 
@@ -186,6 +328,8 @@ TEST_CASE("RoomReverb process performs no heap allocation after prepare",
   reverb.process(channels, 2, kBlock);
 
   AllocationGuard guard;
+  reverb.process(channels, 2, kBlock);
+  reverb.process(channels, 1, kBlock);
   reverb.process(channels, 2, kBlock);
   REQUIRE(guard.count() == 0);
 }

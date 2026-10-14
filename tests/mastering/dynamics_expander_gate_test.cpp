@@ -1,6 +1,8 @@
 /// @file dynamics_expander_gate_test.cpp
 /// @brief Expander, gate, upward dynamics, and de-esser tests.
 
+#include <array>
+
 #include "dynamics_test_helpers.h"
 
 TEST_CASE("Expander reduces signal below threshold and preserves louder signal",
@@ -61,6 +63,58 @@ TEST_CASE("Gate validates configuration", "[mastering][dynamics]") {
   REQUIRE_THROWS(Gate({-40.0f, -1.0f, 100.0f, -80.0f}));
   REQUIRE_THROWS(Gate({-40.0f, 1.0f, -100.0f, -80.0f}));
   REQUIRE_THROWS(Gate({-40.0f, 1.0f, 100.0f, 1.0f}));
+}
+
+TEST_CASE("Gate rejects non-finite configuration fields but preserves negative infinity range",
+          "[mastering][dynamics][validation]") {
+  const GateConfig baseline{-40.0f, 1.0f, 100.0f, -80.0f, 10.0f, -45.0f, 120.0f};
+  Gate gate(baseline);
+  const std::array<float GateConfig::*, 6> finite_fields = {
+      &GateConfig::threshold_db, &GateConfig::attack_ms,          &GateConfig::release_ms,
+      &GateConfig::hold_ms,      &GateConfig::close_threshold_db, &GateConfig::key_hpf_hz};
+  const std::array<float, 3> non_finite_values = {std::numeric_limits<float>::quiet_NaN(),
+                                                  std::numeric_limits<float>::infinity(),
+                                                  -std::numeric_limits<float>::infinity()};
+
+  for (const auto field : finite_fields) {
+    for (const float value : non_finite_values) {
+      auto invalid = baseline;
+      invalid.*field = value;
+      REQUIRE_THROWS(gate.set_config(invalid));
+      CHECK(gate.config().threshold_db == baseline.threshold_db);
+      CHECK(gate.config().attack_ms == baseline.attack_ms);
+      CHECK(gate.config().release_ms == baseline.release_ms);
+      CHECK(gate.config().range_db == baseline.range_db);
+      CHECK(gate.config().hold_ms == baseline.hold_ms);
+      CHECK(gate.config().close_threshold_db == baseline.close_threshold_db);
+      CHECK(gate.config().key_hpf_hz == baseline.key_hpf_hz);
+    }
+  }
+
+  for (const float value :
+       {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
+    auto invalid = baseline;
+    invalid.range_db = value;
+    REQUIRE_THROWS(gate.set_config(invalid));
+    CHECK(gate.config().range_db == baseline.range_db);
+  }
+
+  auto open_floor = baseline;
+  open_floor.range_db = -std::numeric_limits<float>::infinity();
+  REQUIRE_NOTHROW(gate.set_config(open_floor));
+  CHECK(gate.config().range_db == -std::numeric_limits<float>::infinity());
+}
+
+TEST_CASE("Gate saturates an oversized hold duration before converting to samples",
+          "[mastering][dynamics][validation]") {
+  Gate gate({-30.0f, 0.0f, 0.0f, -80.0f, std::numeric_limits<float>::max(), -35.0f, 0.0f});
+  gate.prepare(48000.0, 16);
+
+  std::vector<float> samples = {1.0f, 0.0f, 0.0f};
+  float* channels[] = {samples.data()};
+  REQUIRE_NOTHROW(gate.process(channels, 1, static_cast<int>(samples.size())));
+  REQUIRE(std::all_of(samples.begin(), samples.end(),
+                      [](float value) { return std::isfinite(value); }));
 }
 
 TEST_CASE("UpwardCompressor raises quiet signal below threshold", "[mastering][dynamics]") {
@@ -156,6 +210,78 @@ TEST_CASE("UpwardExpander validates configuration", "[mastering][dynamics]") {
   REQUIRE_THROWS(UpwardExpander({-24.0f, 0.5f, 10.0f, 100.0f, 12.0f}));
   REQUIRE_THROWS(UpwardExpander({-24.0f, 2.0f, -1.0f, 100.0f, 12.0f}));
   REQUIRE_THROWS(UpwardExpander({-24.0f, 2.0f, 10.0f, 100.0f, -1.0f}));
+}
+
+TEST_CASE(
+    "Dynamics configurations reject non-finite fields without changing the control-thread mirror",
+    "[mastering][dynamics][validation]") {
+  const std::array<float, 3> non_finite_values = {std::numeric_limits<float>::quiet_NaN(),
+                                                  std::numeric_limits<float>::infinity(),
+                                                  -std::numeric_limits<float>::infinity()};
+
+  const ExpanderConfig expander_baseline{-40.0f, 2.0f, 5.0f, 100.0f, -40.0f};
+  Expander expander(expander_baseline);
+  const std::array<float ExpanderConfig::*, 5> expander_fields = {
+      &ExpanderConfig::threshold_db, &ExpanderConfig::ratio, &ExpanderConfig::attack_ms,
+      &ExpanderConfig::release_ms, &ExpanderConfig::range_db};
+  for (const auto field : expander_fields) {
+    for (const float value : non_finite_values) {
+      auto invalid = expander_baseline;
+      invalid.*field = value;
+      REQUIRE_THROWS(expander.set_config(invalid));
+      CHECK(expander.config().threshold_db == expander_baseline.threshold_db);
+      CHECK(expander.config().ratio == expander_baseline.ratio);
+      CHECK(expander.config().attack_ms == expander_baseline.attack_ms);
+      CHECK(expander.config().release_ms == expander_baseline.release_ms);
+      CHECK(expander.config().range_db == expander_baseline.range_db);
+    }
+  }
+
+  const UpwardCompressorConfig compressor_baseline{-24.0f, 2.0f, 10.0f, 100.0f, 12.0f};
+  UpwardCompressor compressor(compressor_baseline);
+  const std::array<float UpwardCompressorConfig::*, 5> compressor_fields = {
+      &UpwardCompressorConfig::threshold_db, &UpwardCompressorConfig::ratio,
+      &UpwardCompressorConfig::attack_ms, &UpwardCompressorConfig::release_ms,
+      &UpwardCompressorConfig::range_db};
+  for (const auto field : compressor_fields) {
+    for (const float value : non_finite_values) {
+      auto invalid = compressor_baseline;
+      invalid.*field = value;
+      REQUIRE_THROWS(compressor.set_config(invalid));
+      CHECK(compressor.config().threshold_db == compressor_baseline.threshold_db);
+      CHECK(compressor.config().ratio == compressor_baseline.ratio);
+      CHECK(compressor.config().attack_ms == compressor_baseline.attack_ms);
+      CHECK(compressor.config().release_ms == compressor_baseline.release_ms);
+      CHECK(compressor.config().range_db == compressor_baseline.range_db);
+    }
+  }
+  auto huge_compressor_range = compressor_baseline;
+  huge_compressor_range.range_db = std::numeric_limits<float>::max();
+  REQUIRE_THROWS(compressor.set_config(huge_compressor_range));
+  CHECK(compressor.config().range_db == compressor_baseline.range_db);
+
+  const UpwardExpanderConfig expander_up_baseline{-24.0f, 1.5f, 5.0f, 80.0f, 12.0f};
+  UpwardExpander upward_expander(expander_up_baseline);
+  const std::array<float UpwardExpanderConfig::*, 5> upward_expander_fields = {
+      &UpwardExpanderConfig::threshold_db, &UpwardExpanderConfig::ratio,
+      &UpwardExpanderConfig::attack_ms, &UpwardExpanderConfig::release_ms,
+      &UpwardExpanderConfig::range_db};
+  for (const auto field : upward_expander_fields) {
+    for (const float value : non_finite_values) {
+      auto invalid = expander_up_baseline;
+      invalid.*field = value;
+      REQUIRE_THROWS(upward_expander.set_config(invalid));
+      CHECK(upward_expander.config().threshold_db == expander_up_baseline.threshold_db);
+      CHECK(upward_expander.config().ratio == expander_up_baseline.ratio);
+      CHECK(upward_expander.config().attack_ms == expander_up_baseline.attack_ms);
+      CHECK(upward_expander.config().release_ms == expander_up_baseline.release_ms);
+      CHECK(upward_expander.config().range_db == expander_up_baseline.range_db);
+    }
+  }
+  auto huge_expander_range = expander_up_baseline;
+  huge_expander_range.range_db = std::numeric_limits<float>::max();
+  REQUIRE_THROWS(upward_expander.set_config(huge_expander_range));
+  CHECK(upward_expander.config().range_db == expander_up_baseline.range_db);
 }
 
 TEST_CASE("UpwardExpander preserves existing channel state when channel count grows",

@@ -112,15 +112,21 @@ int VowelFilter::tail_samples() const noexcept {
 }
 
 void VowelFilter::reset() {
-  for (auto& plane : bands_) {
-    for (auto& band : plane) band.reset();
+  for (size_t plane = 0; plane < bands_.size(); ++plane) {
+    reset_plane(plane);
+    plane_gates_[plane].close();
   }
-  for (auto& adaa : adaa_) adaa.reset();
-  adaa_primed_.fill(false);
-  previous_in_.fill(0.0f);
   paths_.reset();
   snap_ = true;
   countdown_ = 0;
+}
+
+void VowelFilter::reset_plane(size_t plane) noexcept {
+  for (auto& band : bands_[plane]) band.reset();
+  adaa_[plane].reset();
+  adaa_primed_[plane] = false;
+  previous_in_[plane] = 0.0f;
+  paths_.reset_channel(plane);
 }
 
 void VowelFilter::update_glide_coefficient() {
@@ -179,6 +185,10 @@ void VowelFilter::process(float* const* channels, int num_channels, int num_samp
   const bool drive_on = config_.drive_on;
   const float post = 1.0f / std::tanh(drive_gain_);
   const int active = std::min(num_channels, kPlanes);
+  for (size_t plane = 0; plane < bands_.size(); ++plane) {
+    plane_gates_[plane].admit(static_cast<int>(plane) < active && channels[plane] != nullptr,
+                              [this, plane] { reset_plane(plane); });
+  }
   for (int i = 0; i < num_samples; ++i) {
     if (countdown_ == 0) {
       update_bank();

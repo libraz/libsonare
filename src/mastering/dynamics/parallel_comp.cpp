@@ -13,6 +13,39 @@
 
 namespace sonare::mastering::dynamics {
 
+namespace {
+
+struct LimiterReleaseCache {
+  float coefficient = 0.0f;
+  bool ready = false;
+};
+
+float update_limiter_sample(float sample, float& gain, float ceiling,
+                            const ParallelCompConfig& config, double sample_rate,
+                            LimiterReleaseCache& release_cache) noexcept {
+  if (!(ceiling > 0.0f)) return sample;
+  const float magnitude = std::abs(sample);
+  // Attack is instant; recovery toward the gain this sample needs follows the
+  // release whether or not the sample is still over the ceiling.
+  const float target = magnitude > ceiling ? ceiling / magnitude : 1.0f;
+  if (target <= gain) {
+    gain = target;
+  } else if (config.release_ms <= 0.0f) {
+    gain = target;
+  } else {
+    if (!release_cache.ready) {
+      release_cache.coefficient =
+          std::exp(-1.0f / (0.001f * config.release_ms * static_cast<float>(sample_rate)));
+      release_cache.ready = true;
+    }
+    gain = target - (target - gain) * release_cache.coefficient;
+    if (gain > target) gain = target;
+  }
+  return sample * gain;
+}
+
+}  // namespace
+
 // The configuration lifecycle (validate + seed active_ + publish the initial
 // snapshot) is handled by RtConfigLifecycle's constructor.
 ParallelComp::ParallelComp(ParallelCompConfig config) : ConfigBase(std::move(config)) {}
@@ -50,6 +83,9 @@ void ParallelComp::process(float* const* channels, int num_channels, int num_sam
   // pointer is stable for the entire per-sample loop — RtPublisher only
   // changes its current() value inside acquire(), and we already called it.
   const ParallelCompConfig& cfg = *adopt_snapshot_for_block();
+  const bool output_limiter = output_limiter_gate_.admit(cfg.output_limiter, [this] {
+    std::fill(limiter_gains_.begin(), limiter_gains_.end(), 1.0f);
+  });
 
   if (cfg.linked_detection != last_linked_detection_) {
     if (cfg.linked_detection) {
@@ -70,8 +106,9 @@ void ParallelComp::process(float* const* channels, int num_channels, int num_sam
     last_linked_detection_ = cfg.linked_detection;
   }
 
-  float max_reduction = 0.0f;
   const float ceiling = db_to_linear(cfg.output_ceiling_db);
+  LimiterReleaseCache release_cache;
+  float max_reduction = 0.0f;
   bool discarded = false;
   if (cfg.linked_detection) {
     const int excluded_channel = detector_excluded_channel(num_channels);
@@ -89,18 +126,20 @@ void ParallelComp::process(float* const* channels, int num_channels, int num_sam
       }
       const float level = followers_[0].process(linked_level);
       const float reduction_db = gain_reduction_db(linear_to_db(level), cfg);
+      const float gain = db_to_linear(reduction_db + cfg.makeup_gain_db);
       float output_peak = 0.0f;
       for (int ch = 0; ch < num_channels; ++ch) {
         const float dry = channels[ch][i];
-        const float compressed = dry * db_to_linear(reduction_db + cfg.makeup_gain_db);
+        const float compressed = dry * gain;
         const float out = dry * (1.0f - cfg.mix) + compressed * cfg.mix;
         output_peak = std::max(output_peak, std::abs(out));
         channels[ch][i] = out;
       }
-      if (cfg.output_limiter) {
+      if (output_limiter) {
         // Protect every output plane with the same gain, including planes
         // excluded from the compressor detector.
-        limit_output_sample(output_peak, 0, ceiling, cfg);
+        update_limiter_sample(output_peak, limiter_gains_[0], ceiling, cfg, sample_rate_,
+                              release_cache);
         for (int ch = 0; ch < num_channels; ++ch) {
           channels[ch][i] *= limiter_gains_[0];
         }
@@ -121,8 +160,9 @@ void ParallelComp::process(float* const* channels, int num_channels, int num_sam
         const float reduction_db = gain_reduction_db(linear_to_db(level), cfg);
         const float compressed = dry * db_to_linear(reduction_db + cfg.makeup_gain_db);
         float out = dry * (1.0f - cfg.mix) + compressed * cfg.mix;
-        if (cfg.output_limiter) {
-          out = limit_output_sample(out, static_cast<size_t>(ch), ceiling, cfg);
+        if (output_limiter) {
+          out = update_limiter_sample(out, limiter_gains_[static_cast<size_t>(ch)], ceiling, cfg,
+                                      sample_rate_, release_cache);
         }
         channels[ch][i] = out;
         max_reduction = std::min(max_reduction, reduction_db);
@@ -141,6 +181,7 @@ void ParallelComp::reset() {
     follower.reset();
   }
   std::fill(limiter_gains_.begin(), limiter_gains_.end(), 1.0f);
+  output_limiter_gate_.close();
   last_linked_detection_ = active_.linked_detection;
   last_gain_reduction_db_ = 0.0f;
 }
@@ -207,29 +248,6 @@ float ParallelComp::gain_reduction_db(float input_db, const ParallelCompConfig& 
 
   const float over_db = input_db - config.threshold_db;
   return -over_db * (1.0f - 1.0f / config.ratio);
-}
-
-float ParallelComp::limit_output_sample(float sample, size_t channel_index, float ceiling,
-                                        const ParallelCompConfig& config) noexcept {
-  if (channel_index >= limiter_gains_.size() || !(ceiling > 0.0f)) {
-    return sample;
-  }
-  float& gain = limiter_gains_[channel_index];
-  const float magnitude = std::abs(sample);
-  // Attack is instant; recovery toward the gain this sample needs follows the
-  // release whether or not the sample is still over the ceiling.
-  const float target = magnitude > ceiling ? ceiling / magnitude : 1.0f;
-  if (target <= gain) {
-    gain = target;
-  } else if (config.release_ms <= 0.0f) {
-    gain = target;
-  } else {
-    const float coeff =
-        std::exp(-1.0f / (0.001f * config.release_ms * static_cast<float>(sample_rate_)));
-    gain = target - (target - gain) * coeff;
-    if (gain > target) gain = target;
-  }
-  return sample * gain;
 }
 
 void ParallelComp::ensure_followers(int num_channels) {

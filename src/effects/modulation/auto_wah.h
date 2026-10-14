@@ -10,6 +10,7 @@
 #include "effects/modulation/svf_bandpass.h"
 #include "effects/modulation/wah.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 #include "util/constants.h"
 
 namespace sonare::effects::modulation {
@@ -80,6 +81,7 @@ class AutoWah : public rt::ProcessorBase {
   float envelope_ = 0.0f;
   Lfo lfo_;
   std::array<SvfBandpass, 2> filters_;
+  std::array<rt::StageGate, 2> filter_gates_;
 };
 
 }  // namespace sonare::effects::modulation

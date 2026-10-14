@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 
 namespace sonare::mastering::stereo {
 
@@ -51,6 +52,7 @@ class Imager : public rt::ProcessorBase {
   ImagerConfig config_{};
   bool prepared_ = false;
   Allpass allpass_[4];
+  rt::StageGate stereo_gate_;
 };
 
 }  // namespace sonare::mastering::stereo

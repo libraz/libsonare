@@ -17,6 +17,7 @@ namespace sonare::effects::reverb {
 using sonare::constants::kDefaultDawSampleRate;
 using sonare::constants::kHalfPi;
 using sonare::constants::kTwoPi;
+using sonare::constants::kTwoPiD;
 
 namespace {
 
@@ -86,10 +87,10 @@ float smoothing_coefficient(double ms, double sr) {
 // let the phase grow without limit - and sin() loses argument precision long
 // before the accumulator overflows. The range test keeps the common case at one
 // comparison; fmod folds the rest in a single step rather than looping.
-inline float wrap_lfo_phase(float phase) noexcept {
-  if (phase >= 0.0f && phase < kTwoPi) return phase;
-  phase = std::fmod(phase, kTwoPi);
-  return phase < 0.0f ? phase + kTwoPi : phase;
+inline double wrap_lfo_phase(double phase) noexcept {
+  if (phase >= 0.0 && phase < kTwoPiD) return phase;
+  phase = std::fmod(phase, kTwoPiD);
+  return phase < 0.0 ? phase + kTwoPiD : phase;
 }
 
 }  // namespace
@@ -365,8 +366,10 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
     const float prev_tail_r = tail_r_;
 
     // LFO offsets for the two modulated tank allpasses.
-    const float mod_l = mod_depth_ * std::sin(lfo_phase_l_);
-    const float mod_r = mod_depth_ * std::sin(lfo_phase_r_);
+    const float mod_l =
+        static_cast<float>(static_cast<double>(mod_depth_) * std::sin(lfo_phase_l_));
+    const float mod_r =
+        static_cast<float>(static_cast<double>(mod_depth_) * std::sin(lfo_phase_r_));
     lfo_phase_l_ += lfo_inc_;
     lfo_phase_r_ += lfo_inc_;
     // Wrap in both directions, and for any magnitude: a negative mod_rate gives

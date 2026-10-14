@@ -125,9 +125,28 @@ void Rotary::process(float* const* channels, int num_channels, int num_samples) 
   // stereoPairOnly classification).
   const int active = std::min(num_channels, 2);
   if (config_.model == RotaryModel::kGeometric) {
+    classic_model_gate_.close();
+    geometric_model_gate_.admit(true, [this] {
+      geometric_shared_gate_.close();
+      for (auto& gate : geometric_plane_gates_) gate.close();
+    });
+    geometric_shared_gate_.admit(true, [this] { reset_geometric_shared(); });
+    for (size_t ch = 0; ch < geometric_plane_gates_.size(); ++ch) {
+      geometric_plane_gates_[ch].admit(static_cast<int>(ch) < active && channels[ch] != nullptr,
+                                       [this, ch] { reset_geometric_plane(ch); });
+    }
     process_geometric(channels, active, num_samples);
     discard_non_finite();
     return;
+  }
+  geometric_model_gate_.close();
+  geometric_shared_gate_.close();
+  classic_model_gate_.admit(true, [this] {
+    for (auto& gate : classic_plane_gates_) gate.close();
+  });
+  for (size_t ch = 0; ch < classic_plane_gates_.size(); ++ch) {
+    classic_plane_gates_[ch].admit(static_cast<int>(ch) < active && channels[ch] != nullptr,
+                                   [this, ch] { reset_classic_plane(ch); });
   }
   for (int i = 0; i < num_samples; ++i) {
     const float horn_rate = advance_rotor(horn_rate_, horn_target, config_.undershoot_hz);
@@ -136,6 +155,12 @@ void Rotary::process(float* const* channels, int num_channels, int num_samples) 
       horn_lfo_[ch].set_rate_hz(horn_rate);
       drum_lfo_[ch].set_rate_hz(drum_rate);
     }
+    std::array<float, 2> horn_mod{};
+    std::array<float, 2> drum_mod{};
+    for (int ch = 0; ch < 2; ++ch) {
+      horn_mod[ch] = horn_lfo_[ch].process();
+      drum_mod[ch] = drum_lfo_[ch].process();
+    }
     for (int ch = 0; ch < active; ++ch) {
       if (channels[ch] == nullptr) continue;
       const float in = channels[ch][i];
@@ -143,18 +168,16 @@ void Rotary::process(float* const* channels, int num_channels, int num_samples) 
       lp_state_[ch] = in + lp_coeff_ * (lp_state_[ch] - in);
       const float drum_in = lp_state_[ch];
       const float horn_in = in - drum_in;
-      const float horn_mod = horn_lfo_[ch].process();
-      const float drum_mod = drum_lfo_[ch].process();
-      const float horn_delay = (base + swing * horn_mod) * ms_to_samp;
-      const float drum_delay = (base + 0.7f * swing * drum_mod) * ms_to_samp;
+      const float horn_delay = (base + swing * horn_mod[ch]) * ms_to_samp;
+      const float drum_delay = (base + 0.7f * swing * drum_mod[ch]) * ms_to_samp;
       // Tremolo attenuates from unity rather than swinging around it. The LFO
       // spans [-1, 1], so a gain of 1 + depth * mod would peak at 1 + depth --
       // at the default depth that is +3.5 dB of makeup nobody asked for, and it
       // scales with the depth control. Mapping the LFO to [1 - depth, 1] keeps
       // the same modulation shape and leaves the loudest point at unity.
-      const float horn_gain = 1.0f - trem * 0.5f * (1.0f - horn_mod);
+      const float horn_gain = 1.0f - trem * 0.5f * (1.0f - horn_mod[ch]);
       // The bass rotor's tremolo is shallower (the drum baffle throws less).
-      const float drum_gain = 1.0f - 0.6f * trem * 0.5f * (1.0f - drum_mod);
+      const float drum_gain = 1.0f - 0.6f * trem * 0.5f * (1.0f - drum_mod[ch]);
       const float horn = horn_delay_[ch].process(horn_in, horn_delay) * horn_gain * horn_level;
       const float drum = drum_delay_[ch].process(drum_in, drum_delay) * drum_gain * drum_level;
       channels[ch][i] = dry * in + wet * (horn + drum);
@@ -235,7 +258,16 @@ void Rotary::discard_non_finite() noexcept {
     discarded |= horn_lp_[stage].discard_non_finite();
   }
   discarded |= discard_group_if_non_finite(horn_peak_.z1, horn_peak_.z2);
-  if (discarded) note_non_finite_discard();
+  if (discarded) {
+    reset_classic_model();
+    reset_geometric_model();
+    classic_model_gate_.close();
+    geometric_model_gate_.close();
+    geometric_shared_gate_.close();
+    for (auto& gate : classic_plane_gates_) gate.close();
+    for (auto& gate : geometric_plane_gates_) gate.close();
+    note_non_finite_discard();
+  }
 }
 
 void Rotary::place_mics() noexcept {
@@ -249,15 +281,39 @@ void Rotary::place_mics() noexcept {
   }
 }
 
-void Rotary::reset_geometric() noexcept {
+void Rotary::reset_classic_plane(size_t plane) noexcept {
+  lp_state_[plane] = 0.0f;
+  horn_delay_[plane].reset();
+  drum_delay_[plane].reset();
+}
+
+void Rotary::reset_geometric_plane(size_t plane) noexcept {
+  horn_delay_[plane].reset();
+  drum_delay_[plane].reset();
+  horn_lp_[plane].reset();
+}
+
+void Rotary::reset_geometric_shared() noexcept {
   for (int stage = 0; stage < 2; ++stage) {
     xover_lp_[stage].reset();
     xover_hp_[stage].reset();
     baffle_lp_[stage].reset();
     baffle_hp_[stage].reset();
-    horn_lp_[stage].reset();
   }
   horn_peak_.reset();
+}
+
+void Rotary::reset_classic_model() noexcept {
+  for (size_t plane = 0; plane < lp_state_.size(); ++plane) reset_classic_plane(plane);
+}
+
+void Rotary::reset_geometric_model() noexcept {
+  reset_geometric_shared();
+  for (size_t plane = 0; plane < horn_lp_.size(); ++plane) reset_geometric_plane(plane);
+}
+
+void Rotary::reset_geometric() noexcept {
+  reset_geometric_model();
   place_mics();
 }
 
@@ -279,7 +335,7 @@ int Rotary::tail_samples() const noexcept {
 }
 
 void Rotary::reset() {
-  lp_state_ = {0.0f, 0.0f};
+  reset_classic_model();
   // A rotor comes back up to speed rather than spinning from rest, so no glide is in flight here.
   horn_rate_ = horn_target_hz();
   drum_rate_ = drum_target_hz();
@@ -296,6 +352,11 @@ void Rotary::reset() {
     drum_delay_[ch].reset();
   }
   reset_geometric();
+  classic_model_gate_.close();
+  geometric_model_gate_.close();
+  geometric_shared_gate_.close();
+  for (auto& gate : classic_plane_gates_) gate.close();
+  for (auto& gate : geometric_plane_gates_) gate.close();
 }
 
 bool Rotary::set_parameter_impl(unsigned int param_id, float value) {

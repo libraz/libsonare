@@ -4,6 +4,7 @@
 
 #include "mastering/common/hysteresis_ja.h"
 #include "rt/processor_base.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::saturation {
@@ -20,13 +21,14 @@ class Transformer : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int tail_samples() const noexcept override;
   void set_config(const TransformerConfig& config);
   const TransformerConfig& transformer_config() const { return transformer_config_; }
 
   // Automatable parameters (RT-safe, no allocation, no audio-state reset):
-  //   0 = drive_db (read per sample)
+  //   0 = drive_db (derived once per process segment)
   //   1 = asymmetry (clamped to [-1, 1]; sets bias and updates J-A coercivity)
-  //   2 = mix (clamped to [0, 1]; read per sample)
+  //   2 = mix (clamped to [0, 1]; derived once per process segment)
   // The J-A config update only touches coefficients; the per-channel
   // magnetization state in states_ is preserved.
   bool set_parameter_impl(unsigned int param_id, float value) override;

@@ -101,7 +101,7 @@ constexpr float kPresenceCentroidHz = 249.200775f;
 constexpr float kBinauralRms = 0.19003509f;
 constexpr float kBinauralCentroidHz = 246.194824f;
 
-constexpr float kDattorroRms = 0.119705729f;
+constexpr float kDattorroRms = 0.119705305f;
 constexpr float kDattorroCentroidHz = 273.524597f;
 
 void require_pinned(const Scalars& s, float expected_rms, float expected_centroid_hz) {

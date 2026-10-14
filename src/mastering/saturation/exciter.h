@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <vector>
 
 #include "rt/adaa.h"
@@ -8,6 +9,7 @@
 #include "rt/oversampler.h"
 #include "rt/parallel_paths.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::saturation {
@@ -79,6 +81,7 @@ class Exciter : public rt::ProcessorBase {
   std::vector<Biquad> bandpass_;
   std::vector<Biquad> allpass_;
   std::vector<float> even_dc_;
+  std::vector<rt::StageGate> plane_gates_;
 
   // Oversample4x support: the bandpass/allpass filters stay at the base rate
   // (they are linear and do not generate harmonics), but the squaring/tanh

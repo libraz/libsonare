@@ -9,6 +9,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -74,8 +75,8 @@ TrimResult trim(const float* x, std::size_t n, float top_db, int frame_length, i
     throw SonareException(ErrorCode::InvalidParameter,
                           "trim: frame_length and hop_length must be > 0");
   }
-  if (top_db <= 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter, "trim: top_db must be > 0");
+  if (!numeric::finite_positive(top_db)) {
+    throw SonareException(ErrorCode::InvalidParameter, "trim: top_db must be finite and > 0");
   }
   TrimResult result{{}, 0, 0};
   const auto rms = centered_rms(x, n, frame_length, hop_length);
@@ -120,8 +121,8 @@ SplitReport split_with_report(const float* x, std::size_t n, float top_db, int f
     throw SonareException(ErrorCode::InvalidParameter,
                           "split: frame_length and hop_length must be > 0");
   }
-  if (top_db <= 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter, "split: top_db must be > 0");
+  if (!numeric::finite_positive(top_db)) {
+    throw SonareException(ErrorCode::InvalidParameter, "split: top_db must be finite and > 0");
   }
   std::vector<std::pair<int, int>> intervals;
   const auto rms = centered_rms(x, n, frame_length, hop_length);

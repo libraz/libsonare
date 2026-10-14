@@ -23,6 +23,15 @@ using sonare::constants::kTwoPiD;
 
 namespace {
 
+float instantaneous_frequency_for_bin(float current_phase, float previous_phase, int bin, int n_fft,
+                                      int sample_rate, float time_step) noexcept {
+  const float bin_freq =
+      static_cast<float>(bin) * static_cast<float>(sample_rate) / static_cast<float>(n_fft);
+  const float expected_advance = kTwoPi * bin_freq * time_step;
+  const float phase_diff = phase::wrap(current_phase - previous_phase - expected_advance);
+  return bin_freq + phase_diff / (kTwoPi * time_step);
+}
+
 int checked_output_frames(int n_bins, int input_frames, const TimeStretchMap& map) {
   SONARE_CHECK(n_bins > 0 && input_frames > 0, ErrorCode::InvalidParameter);
   const size_t output_frames = static_cast<size_t>(map.output_frame_count(input_frames));
@@ -128,11 +137,8 @@ void PhaseVocoderSynthesizer::next_frame(const std::complex<float>* frame0,
     const float phase0 = std::arg(frame0[k]);
     const float phase1 = std::arg(frame1[k]);
     analysis_phase_[bin] = phase0 + frac * phase::wrap(phase1 - phase0);
-    const float bin_freq =
-        static_cast<float>(k) * static_cast<float>(sample_rate_) / static_cast<float>(n_fft_);
-    const float expected_advance = kTwoPi * bin_freq * time_step;
-    const float phase_diff = phase::wrap(phase1 - phase0 - expected_advance);
-    inst_freq_[bin] = bin_freq + phase_diff / (kTwoPi * time_step);
+    inst_freq_[bin] =
+        instantaneous_frequency_for_bin(phase1, phase0, k, n_fft_, sample_rate_, time_step);
   }
 
   if (first_frame_) {
@@ -163,19 +169,8 @@ std::vector<float> compute_instantaneous_frequency(const float* phase, const flo
   const int n_fft = (n_bins - 1) * 2;
 
   for (int k = 0; k < n_bins; ++k) {
-    /// Expected phase advance based on bin frequency
-    float bin_freq =
-        static_cast<float>(k) * static_cast<float>(sample_rate) / static_cast<float>(n_fft);
-    float expected_phase_advance = kTwoPi * bin_freq * time_step;
-
-    /// Actual phase difference
-    float phase_diff = phase[k] - prev_phase[k];
-
-    /// Phase deviation from expected
-    float phase_deviation = phase::wrap(phase_diff - expected_phase_advance);
-
-    /// Instantaneous frequency
-    inst_freq[k] = bin_freq + phase_deviation / (kTwoPi * time_step);
+    inst_freq[k] =
+        instantaneous_frequency_for_bin(phase[k], prev_phase[k], k, n_fft, sample_rate, time_step);
   }
 
   return inst_freq;
