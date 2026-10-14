@@ -392,6 +392,8 @@ class MidiSequencer {
   uint64_t next_midi_fx_generation_ = 1;  // control-thread only
   std::unique_ptr<RuntimeStorage> runtime_storage_;
   size_t pending_fx_count_ = 0;
+  // Bumped by every erase_pending, so a drain can tell whether a dispatch removed anything.
+  uint32_t pending_erase_epoch_ = 0;
   std::atomic<uint32_t> midi_fx_pending_overflow_count_{0};
 };
 

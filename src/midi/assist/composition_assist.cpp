@@ -544,6 +544,8 @@ bool commands_apply_cleanly(arrangement::Project* scratch,
                             arrangement::MidiContentStore* scratch_store,
                             const std::vector<arrangement::EditCommandPtr>& commands,
                             const AssistScope& scope) {
+  // An empty sequence changes nothing, so the candidate copies would only be swapped back.
+  if (commands.empty()) return true;
   try {
     arrangement::Project candidate = *scratch;
     arrangement::MidiContentStore candidate_store = *scratch_store;

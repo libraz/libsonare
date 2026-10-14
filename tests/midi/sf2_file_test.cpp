@@ -446,6 +446,50 @@ TEST_CASE("Sf2File global zones supply defaults without becoming layers", "[midi
   REQUIRE(sf2.find_preset(0, 5) == 0);
 }
 
+TEST_CASE("Sf2File preset index agrees with a linear scan and keeps the first duplicate",
+          "[midi][sf2]") {
+  Sf2Builder b;
+  std::vector<float> pcm(32, 0.5f);
+  const int sid = b.add_sample("s", pcm, 22050, 60, 0, 32);
+  Sf2Builder::ZoneSpec zone;
+  zone.target = sid;
+  const int inst = b.add_instrument("i", {zone});
+  Sf2Builder::ZoneSpec pz;
+  pz.target = inst;
+
+  // Out-of-order addresses with repeats of (0, 3), (128, 0) and (5, 127).
+  const std::vector<std::pair<int, int>> addresses = {{5, 127}, {0, 3}, {128, 0}, {0, 0}, {0, 3},
+                                                      {5, 127}, {1, 9}, {128, 0}, {0, 3}};
+  for (size_t i = 0; i < addresses.size(); ++i) {
+    b.add_preset("p" + std::to_string(i), static_cast<uint16_t>(addresses[i].first),
+                 static_cast<uint16_t>(addresses[i].second), {pz});
+  }
+  const auto bytes = b.build();
+  Sf2File sf2;
+  std::string error;
+  REQUIRE(sf2.parse(bytes.data(), bytes.size(), &error));
+  REQUIRE(sf2.presets().size() == addresses.size());
+
+  for (uint16_t bank = 0; bank < 130; ++bank) {
+    for (uint16_t program = 0; program < 128; ++program) {
+      int expected = -1;
+      for (size_t i = 0; i < sf2.presets().size(); ++i) {
+        if (sf2.presets()[i].bank == bank && sf2.presets()[i].program == program) {
+          expected = static_cast<int>(i);
+          break;
+        }
+      }
+      REQUIRE(sf2.find_preset(bank, program) == expected);
+    }
+  }
+  REQUIRE(sf2.find_preset(0, 3) == 1);
+  REQUIRE(sf2.find_preset(128, 0) == 2);
+  REQUIRE(sf2.find_preset(5, 127) == 0);
+
+  sf2.clear();
+  REQUIRE(sf2.find_preset(0, 3) == -1);
+}
+
 TEST_CASE("Sf2File reads sample and instrument indices at and above 32768 as unsigned",
           "[midi][sf2]") {
   // The sampleID / instrument amounts are WORDs; a signed read turns an index

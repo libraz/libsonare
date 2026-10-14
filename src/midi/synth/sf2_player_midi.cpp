@@ -12,6 +12,7 @@
 #include "midi/per_note_state.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_layer.h"
+#include "midi/synth/pitch.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 #include "util/constants.h"
@@ -111,15 +112,6 @@ constexpr uint8_t kRcFineTuning = 1;
 constexpr uint8_t kRcCoarseTuning = 2;
 constexpr uint8_t kRcPerNoteBendSensitivity = 7;
 
-/// The pitch offset from the sample's zone key, in cents. Exactly 0 while the voice sounds at its
-/// zone key with no per-note pitch, so a MIDI 1.0 render is untouched.
-float per_note_cents(const Sf2PerNoteVoice& state, const ComposedPitch& pitch) noexcept {
-  const double semitones =
-      static_cast<double>(static_cast<int>(state.binding.note) - static_cast<int>(state.zone_key)) +
-      pitch.per_note_semitones;
-  return semitones == 0.0 ? 0.0f : static_cast<float>(semitones * kCentsPerSemitone);
-}
-
 }  // namespace
 
 void Sf2Player::bind_per_note(Sf2PerNoteVoice& state, uint8_t channel, uint8_t note,
@@ -200,8 +192,7 @@ Sf2Player::Portamento Sf2Player::take_portamento(uint8_t channel, uint8_t note) 
   porta.cents = static_cast<float>(source - key) * kCentsPerSemitone;
   // Same one-pole sizing as the NativeSynth voice's glide: the pitch lands
   // within ~5% of the target in glide_ms.
-  porta.coeff =
-      static_cast<float>(std::exp(-3.0 / (static_cast<double>(glide_ms) * 0.001 * sample_rate_)));
+  porta.coeff = glide_coefficient(glide_ms, sample_rate_);
   return porta;
 }
 

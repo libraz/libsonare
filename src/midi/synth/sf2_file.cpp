@@ -234,15 +234,41 @@ const Sf2Gen* Sf2Zone::find_gen(uint16_t oper) const noexcept {
   return found;
 }
 
-int Sf2File::find_preset(uint16_t bank, uint16_t program) const noexcept {
+namespace {
+
+uint32_t preset_address(uint16_t bank, uint16_t program) noexcept {
+  return (static_cast<uint32_t>(bank) << 16) | program;
+}
+
+}  // namespace
+
+void Sf2File::index_presets() {
+  preset_addresses_.clear();
+  preset_addresses_.reserve(presets_.size());
   for (size_t i = 0; i < presets_.size(); ++i) {
-    if (presets_[i].bank == bank && presets_[i].program == program) return static_cast<int>(i);
+    preset_addresses_.emplace_back(preset_address(presets_[i].bank, presets_[i].program),
+                                   static_cast<int>(i));
   }
-  return -1;
+  // Ordering by (address, index) puts the first record of a duplicated address first.
+  std::sort(preset_addresses_.begin(), preset_addresses_.end());
+  preset_addresses_.erase(std::unique(preset_addresses_.begin(), preset_addresses_.end(),
+                                      [](const PresetAddress& a, const PresetAddress& b) {
+                                        return a.first == b.first;
+                                      }),
+                          preset_addresses_.end());
+}
+
+int Sf2File::find_preset(uint16_t bank, uint16_t program) const noexcept {
+  const auto it = std::lower_bound(
+      preset_addresses_.begin(), preset_addresses_.end(), preset_address(bank, program),
+      [](const PresetAddress& entry, uint32_t address) { return entry.first < address; });
+  if (it == preset_addresses_.end() || it->first != preset_address(bank, program)) return -1;
+  return it->second;
 }
 
 void Sf2File::clear() {
   presets_.clear();
+  preset_addresses_.clear();
   instruments_.clear();
   samples_.clear();
   sample_pool_.clear();
@@ -542,6 +568,7 @@ bool Sf2File::parse(const uint8_t* data, size_t size, std::string* error) {
     presets_.push_back(std::move(out));
   }
 
+  index_presets();
   return true;
 }
 

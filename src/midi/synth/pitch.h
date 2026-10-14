@@ -24,4 +24,10 @@ inline float note_to_hz(uint8_t note) noexcept {
   return note_to_hz(static_cast<float>(note & 0x7Fu));
 }
 
+/// @brief One-pole coefficient that lands a glide within ~5% of its target in @p glide_ms.
+inline float glide_coefficient(float glide_ms, double sample_rate) noexcept {
+  const double sr = sample_rate > 0.0 ? sample_rate : constants::kDefaultDawSampleRate;
+  return static_cast<float>(std::exp(-3.0 / (glide_ms * 0.001 * sr)));
+}
+
 }  // namespace sonare::midi::synth

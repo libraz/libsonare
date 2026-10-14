@@ -131,6 +131,15 @@ void MidiSequencer::set_midi_clips(std::vector<MidiClipSchedule> clips) {
       event.ump.group = ump_group_from_word0(event.ump.words[0]);
     }
   }
+  // The schedule walk binary-searches each clip by frame, so an unordered list must not reach it.
+  for (MidiClipSchedule& clip : clips) {
+    const auto by_frame = [](const MidiEvent& a, const MidiEvent& b) noexcept {
+      return a.render_frame < b.render_frame;
+    };
+    if (!std::is_sorted(clip.events.begin(), clip.events.end(), by_frame)) {
+      std::stable_sort(clip.events.begin(), clip.events.end(), by_frame);
+    }
+  }
   MidiSysExPayloadError payload_error = MidiSysExPayloadError::kNone;
   if (!own_sysex_payloads(clips, &payload_error)) {
     throw SonareException(payload_error == MidiSysExPayloadError::kOutOfMemory
@@ -507,10 +516,10 @@ void ReleaseSet::add(uint8_t route, uint32_t destination_id, const MidiEvent& ev
 
 void MidiSequencer::erase_pending(size_t index) noexcept {
   if (runtime_storage_ == nullptr || index >= pending_fx_count_) return;
-  for (size_t i = index + 1; i < pending_fx_count_; ++i) {
-    runtime_storage_->pending_fx[i - 1] = runtime_storage_->pending_fx[i];
-  }
+  auto* events = runtime_storage_->pending_fx.data();
+  std::copy(events + index + 1, events + pending_fx_count_, events + index);
   --pending_fx_count_;
+  ++pending_erase_epoch_;
 }
 
 void MidiSequencer::clear_pending_for_destination(uint32_t destination_id) noexcept {
@@ -738,11 +747,12 @@ void MidiSequencer::dispatch_due(const SequencerClock& clock) noexcept {
       }
       // Remove before dispatch, since a channel-mode reset may clear other pending slots.
       erase_pending(i);
+      const uint32_t epoch = pending_erase_epoch_;
       MidiEvent event = pending.event;
       event.render_frame = std::max(event.render_frame, now);
       dispatch_transformed(pending.destination_id, event, pending.from_clip, pending.clip_id);
-      // The dispatch may have shifted the queue; restart so no same-rank event is skipped.
-      i = 0;
+      // Entries before i are unchanged unless the dispatch erased some (appends land at the end).
+      if (pending_erase_epoch_ != epoch) i = 0;
     }
   };
 
@@ -763,10 +773,11 @@ void MidiSequencer::dispatch_due(const SequencerClock& clock) noexcept {
             continue;
           }
           erase_pending(i);
+          const uint32_t epoch = pending_erase_epoch_;
           MidiEvent event = pending.event;
           event.render_frame = now;
           dispatch_transformed(pending.destination_id, event, pending.from_clip, pending.clip_id);
-          i = 0;
+          if (pending_erase_epoch_ != epoch) i = 0;
         }
       }
     }

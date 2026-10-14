@@ -300,6 +300,99 @@ TEST_CASE("TptSvf stays bounded under audio-rate cutoff modulation", "[midi][syn
   REQUIRE(peak < 16.0f);  // resonant boost is fine; divergence is not
 }
 
+TEST_CASE("TptSvf designs coefficients only when the clamped setting changes", "[midi][synth]") {
+  TptSvf cached;
+  cached.prepare(kSampleRate);
+  const unsigned base = cached.design_count();
+
+  // A filter that sees the same setting through a fresh design matches bit for bit.
+  TptSvf reference_a;
+  reference_a.prepare(kSampleRate);
+  for (int i = 0; i < 256; ++i) {
+    const float x = static_cast<float>(std::sin(kTwoPi * 330.0 * i / kSampleRate));
+    cached.set(1500.0f, 4.0f);
+    reference_a.set(1500.0f, 4.0f);
+    const auto a = cached.process(x);
+    const auto b = reference_a.process(x);
+    REQUIRE(a.lp == b.lp);
+    REQUIRE(a.bp == b.bp);
+    REQUIRE(a.hp == b.hp);
+  }
+  REQUIRE(cached.design_count() == base + 1);
+
+  // Values clamping to the stored setting do not redesign.
+  cached.set(1500.0f, 4.0f);
+  REQUIRE(cached.design_count() == base + 1);
+  TptSvf clamped;
+  clamped.prepare(kSampleRate);
+  clamped.set(1.0f, 0.1f);
+  const unsigned clamped_designs = clamped.design_count();
+  clamped.set(5.0f, 0.2f);
+  REQUIRE(clamped.design_count() == clamped_designs);
+
+  // A changed sample applies new coefficients from that sample.
+  TptSvf stepped;
+  stepped.prepare(kSampleRate);
+  stepped.set(1500.0f, 4.0f);
+  stepped.set(300.0f, 4.0f);
+  TptSvf direct;
+  direct.prepare(kSampleRate);
+  direct.set(300.0f, 4.0f);
+  REQUIRE(stepped.design_count() == direct.design_count() + 1);
+  REQUIRE(stepped.process(1.0f).lp == direct.process(1.0f).lp);
+
+  // Re-preparing at another rate invalidates the cache.
+  TptSvf reprepared;
+  reprepared.prepare(kSampleRate);
+  reprepared.set(8000.0f, 2.0f);
+  reprepared.prepare(22050.0);
+  TptSvf at_new_rate;
+  at_new_rate.prepare(22050.0);
+  at_new_rate.set(8000.0f, 2.0f);
+  for (int i = 0; i < 64; ++i) {
+    const float x = (i % 7) * 0.1f - 0.3f;
+    const auto a = reprepared.process(x);
+    const auto b = at_new_rate.process(x);
+    REQUIRE(a.lp == b.lp);
+    REQUIRE(a.hp == b.hp);
+  }
+}
+
+TEST_CASE("per_note_cents composes zone key, binding and per-note pitch in one place",
+          "[midi][synth]") {
+  sonare::midi::synth::Sf2PerNoteVoice state;
+  state.binding.bind(0, 64);
+  state.zone_key = 60;
+  sonare::midi::ComposedPitch pitch;
+
+  // A binding key above the zone key shifts by whole semitones.
+  REQUIRE(sonare::midi::synth::per_note_cents(state, pitch) == 400.0f);
+  // A per-note share adds to it.
+  pitch.per_note_semitones = 0.25;
+  REQUIRE(sonare::midi::synth::per_note_cents(state, pitch) == 425.0f);
+  // Exactly the zone key with no per-note pitch is exactly zero (MIDI 1.0 stays untouched).
+  state.zone_key = 64;
+  pitch.per_note_semitones = 0.0;
+  REQUIRE(sonare::midi::synth::per_note_cents(state, pitch) == 0.0f);
+  // A differing zone key below the binding is negative.
+  state.zone_key = 67;
+  REQUIRE(sonare::midi::synth::per_note_cents(state, pitch) == -300.0f);
+}
+
+TEST_CASE("glide_coefficient sizes the one-pole to land within 5% in the glide time",
+          "[midi][synth]") {
+  using sonare::midi::synth::glide_coefficient;
+  // After glide_ms worth of samples the offset has decayed by exp(-3).
+  const float coeff = glide_coefficient(100.0f, 48000.0);
+  REQUIRE(coeff == static_cast<float>(std::exp(-3.0 / (100.0 * 0.001 * 48000.0))));
+  REQUIRE(std::pow(static_cast<double>(coeff), 4800.0) == Approx(std::exp(-3.0)).epsilon(1e-3));
+  // A non-positive rate reads as the default rate; a zero glide time lands at once.
+  REQUIRE(glide_coefficient(100.0f, 0.0) == coeff);
+  REQUIRE(glide_coefficient(0.0f, 48000.0) == 0.0f);
+  // A longer glide decays more slowly.
+  REQUIRE(glide_coefficient(2000.0f, 48000.0) > coeff);
+}
+
 TEST_CASE("read_sample_linear tracks a sine within linear-interp error", "[midi][synth]") {
   // A 256-sample sine table read at fractional positions stays within the
   // textbook linear-interpolation error bound for this oversampling.

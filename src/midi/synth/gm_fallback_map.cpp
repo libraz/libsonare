@@ -1332,7 +1332,7 @@ void observe_fallback_tail(FallbackTailBounds& bounds, const NativeSynthPatch& p
         if (perc.num_modes > 0 && perc.shimmer > 0.0f) {
           bounds.percussion.max_shimmer_attack_ms = std::max(
               bounds.percussion.max_shimmer_attack_ms, std::max(1.0f, perc.shimmer_attack_ms));
-          bounds.percussion.shimmer_filter.observe(perc.shimmer_cutoff_hz, 0.7f);
+          bounds.percussion.shimmer_filter.observe(perc.shimmer_cutoff_hz, kShimmerFilterQ);
           if (perc.noise_air_hz > 0.0f) {
             bounds.percussion.shimmer_air.observe(perc.noise_air_hz, constants::kInvSqrt2);
           }

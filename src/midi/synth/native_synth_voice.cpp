@@ -5,6 +5,7 @@
 
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/pitch.h"
 #include "midi/synth/voice_random.h"
 #include "util/dsp_primitives.h"
 #include "util/numeric_validation.h"
@@ -197,12 +198,6 @@ float drift_depth(float drift_cents, float seed) noexcept { return drift_cents *
 
 float pan_scatter_units(float stereo_spread, float scatter) noexcept {
   return 500.0f * stereo_spread * scatter;
-}
-
-/// One-pole sized so the pitch lands within ~5% in glide_ms.
-float glide_coefficient(float glide_ms, double sample_rate) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
-  return static_cast<float>(std::exp(-3.0 / (glide_ms * 0.001 * sr)));
 }
 
 float law_fade_step(double sample_rate) noexcept {

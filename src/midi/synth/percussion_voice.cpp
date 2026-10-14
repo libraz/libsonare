@@ -343,7 +343,7 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
                                                    0.001f * static_cast<float>(sr)));
   shimmer_index_ = 0;
   shimmer_filter_.prepare(sr);
-  shimmer_filter_.set(params.shimmer_cutoff_hz, 0.7f);
+  shimmer_filter_.set(params.shimmer_cutoff_hz, kShimmerFilterQ);
   shimmer_filter_.reset();
 
   // Stochastic particle excitation (PhISEM). Off when beans == 0 (bit-identical
@@ -662,7 +662,7 @@ float PercussionVoiceCore::ring_bound_s(const PercussionPatchParams& params,
     const float follower_radius = 1.0f - attack_coeff;
     rt::TailBudget follower;
     follower.decay(static_cast<double>(follower_radius));
-    rt::TailBudget shimmer_filter = TptSvf::ring(params.shimmer_cutoff_hz, 0.7f, rate);
+    rt::TailBudget shimmer_filter = TptSvf::ring(params.shimmer_cutoff_hz, kShimmerFilterQ, rate);
     double shimmer_s = static_cast<double>(mode_t60) * t60_to_floor + tail_seconds(follower) +
                        tail_seconds(shimmer_filter);
     if (params.noise_air_hz > 0.0f) {

@@ -11,8 +11,9 @@
 /// resonance, which is why it is the toolkit's modulated-cutoff filter.
 /// Reference: Zavalishin, "The Art of VA Filter Design" (TPT SVF).
 ///
-/// RT contract: all methods are allocation-free; set() recomputes the three
-/// coefficients with one tan() and may be called per-sample.
+/// RT contract: all methods are allocation-free; set() may be called per-sample
+/// and designs the three coefficients (one tan()) only when the clamped cutoff
+/// or Q differs from the last design at the current rate.
 
 #include <algorithm>
 #include <cmath>
@@ -59,6 +60,7 @@ class TptSvf {
 
   void prepare(double sample_rate) noexcept {
     sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+    designed_ = false;
     set(cutoff_hz_, q_);
     reset();
   }
@@ -66,8 +68,13 @@ class TptSvf {
   /// Set cutoff (Hz, clamped to [10, 0.49 * sample_rate]) and resonance Q
   /// (clamped to [0.5, 100]; Q > ~20 approaches self-oscillation).
   void set(float cutoff_hz, float q) noexcept {
-    cutoff_hz_ = std::clamp(cutoff_hz, 10.0f, static_cast<float>(0.49 * sample_rate_));
-    q_ = std::clamp(q, 0.5f, 100.0f);
+    const float cutoff = std::clamp(cutoff_hz, 10.0f, static_cast<float>(0.49 * sample_rate_));
+    const float clamped_q = std::clamp(q, 0.5f, 100.0f);
+    if (designed_ && cutoff == cutoff_hz_ && clamped_q == q_) return;
+    cutoff_hz_ = cutoff;
+    q_ = clamped_q;
+    designed_ = true;
+    ++design_count_;
     const float g = std::tan(constants::kPi * cutoff_hz_ / static_cast<float>(sample_rate_));
     k_ = 1.0f / q_;
     a1_ = 1.0f / (1.0f + g * (g + k_));
@@ -77,6 +84,8 @@ class TptSvf {
 
   float cutoff_hz() const noexcept { return cutoff_hz_; }
   float q() const noexcept { return q_; }
+  /// Number of coefficient designs performed since construction.
+  unsigned design_count() const noexcept { return design_count_; }
 
   void reset() noexcept {
     ic1_ = 0.0f;
@@ -107,6 +116,8 @@ class TptSvf {
   float a3_ = 0.0f;
   float ic1_ = 0.0f;
   float ic2_ = 0.0f;
+  bool designed_ = false;
+  unsigned design_count_ = 0;
 };
 
 }  // namespace sonare::midi::synth

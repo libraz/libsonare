@@ -41,6 +41,10 @@ namespace sonare::midi::synth {
 inline constexpr int kMaxPercussionModes = 12;
 inline constexpr int kMaxShellModes = 4;
 
+/// Resonance of the shimmer band's state-variable filter, shared by the voice and
+/// the patch bounds that size its tail.
+inline constexpr float kShimmerFilterQ = 0.7f;
+
 /// Percussion section of a NativeSynthPatch (used when mode == kPercussion).
 struct PercussionPatchParams {
   /// GM kit mode: instead of playing this single kit piece on every key,

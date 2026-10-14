@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "midi/control_value.h"
@@ -177,14 +178,19 @@ class Sf2File {
   /// Float PCM pool ([-1,1]); Sf2Sample::start/end index into this.
   const std::vector<float>& sample_pool() const noexcept { return sample_pool_; }
 
-  /// Index of the preset at (bank, program), or -1.
+  /// Index of the first preset at (bank, program), or -1.
   int find_preset(uint16_t bank, uint16_t program) const noexcept;
 
   bool empty() const noexcept { return presets_.empty(); }
   void clear();
 
  private:
+  /// (bank << 16 | program, preset index) sorted by address, one entry per address.
+  using PresetAddress = std::pair<uint32_t, int>;
+  void index_presets();
+
   std::vector<Sf2Preset> presets_;
+  std::vector<PresetAddress> preset_addresses_;
   std::vector<Sf2Instrument> instruments_;
   std::vector<Sf2Sample> samples_;
   std::vector<float> sample_pool_;

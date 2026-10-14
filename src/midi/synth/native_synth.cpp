@@ -39,15 +39,6 @@ constexpr uint8_t kRpncPitch725 = 3;
 using native_synth_detail::excitation_axis_mask;
 using native_synth_detail::excitation_value;
 
-/// The pitch offset from the key the engine was started on, in cents. Exactly 0 while the key
-/// carries no per-note pitch, so a MIDI 1.0 render is untouched.
-float per_note_cents(const Sf2PerNoteVoice& state, const ComposedPitch& pitch) noexcept {
-  const double semitones =
-      pitch.per_note_semitones +
-      static_cast<double>(static_cast<int>(state.binding.note) - static_cast<int>(state.zone_key));
-  return semitones == 0.0 ? 0.0f : static_cast<float>(semitones * constants::kCentsPerSemitone);
-}
-
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -1931,24 +1922,30 @@ void NativeSynth::process_impl(float* const* channels,
       const int i = offset + c;
       float mix_l = 0.0f;
       float mix_r = 0.0f;
-      // Per-sample, per-part pipe count: a release ending mid-block must stop loading its chest.
-      std::array<int, 16> organ_demand{};
-      for (const NativeSynthVoice& active_voice : pool_) {
-        if (!active_voice.active || active_voice.patch == nullptr ||
-            active_voice.patch->mode != SynthEngineMode::kPipeOrgan) {
-          continue;
-        }
-        const size_t organ_part = static_cast<size_t>(active_voice.channel & 0x0Fu);
-        // Counting pipes keeps the sag order-independent; a zero-level rank adds none.
-        organ_demand[organ_part] += active_voice.pipe_organ.sounding_pipe_count();
-      }
       // The default state is unity, so non-organ voices never inherit an organ's wind.
       std::array<OrganWindSupply::State, 16> wind_state{};
       const OrganWindSupply::State unity_wind{};
+      bool any_wind = false;
       for (size_t part = 0; part < wind_state.size(); ++part) {
-        if (organ_part_params_[part].armed && part_wind_[part].active()) {
-          // Zero demand lets pressure recover while this part is silent.
-          wind_state[part] = part_wind_[part].process(organ_demand[part]);
+        any_wind = any_wind || (organ_part_params_[part].armed && part_wind_[part].active());
+      }
+      if (any_wind) {
+        // Per-sample, per-part pipe count: a release ending mid-block must stop loading its chest.
+        std::array<int, 16> organ_demand{};
+        for (const NativeSynthVoice& active_voice : pool_) {
+          if (!active_voice.active || active_voice.patch == nullptr ||
+              active_voice.patch->mode != SynthEngineMode::kPipeOrgan) {
+            continue;
+          }
+          const size_t organ_part = static_cast<size_t>(active_voice.channel & 0x0Fu);
+          // Counting pipes keeps the sag order-independent; a zero-level rank adds none.
+          organ_demand[organ_part] += active_voice.pipe_organ.sounding_pipe_count();
+        }
+        for (size_t part = 0; part < wind_state.size(); ++part) {
+          if (organ_part_params_[part].armed && part_wind_[part].active()) {
+            // Zero demand lets pressure recover while this part is silent.
+            wind_state[part] = part_wind_[part].process(organ_demand[part]);
+          }
         }
       }
       // Piano voices are summed apart from the rest: the body below attenuates

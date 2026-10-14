@@ -1422,6 +1422,78 @@ TEST_CASE("MidiSequencer rescans pending events after a channel reset removes a 
   REQUIRE(sink.events.size() == 2);
 }
 
+TEST_CASE("MidiSequencer drains a large same-frame pending burst in insertion order",
+          "[midi][sequencer]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain fx;
+  sonare::midi::QuantizeConfig quantize;
+  quantize.enabled = true;
+  quantize.grid_frames = 100;
+  quantize.strength = 1.0f;
+  fx.set_quantize(quantize);
+  REQUIRE(seq.set_midi_fx(9, fx));
+  seq.acquire_midi_fx(DeviceFrame{0});
+
+  // Forty note-ons on two channels (frames 60..99, sorted) quantize to frame 100 and wait
+  // together. A channel-0 reset at frame 99 cancels that channel's share; the rest drain in order.
+  MidiClipSchedule clip;
+  clip.id = 1209;
+  clip.track_id = 93;
+  clip.destination_id = 9;
+  constexpr int kBurst = 40;
+  for (int i = 0; i < kBurst; ++i) {
+    clip.events.push_back({60 + i, sonare::midi::make_midi1_note_on(0, static_cast<uint8_t>(i % 2),
+                                                                    static_cast<uint8_t>(i), 100)});
+  }
+  clip.events.push_back({99, sonare::midi::make_midi1_control_change(0, 0, 120, 0)});
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  seq.process_block(SequencerClock::aligned(0), 256);
+
+  REQUIRE(sink.events.size() == 1 + kBurst / 2);
+  REQUIRE(sink.events[0].event.render_frame == 99);
+  REQUIRE(sink.events[0].event.ump.note_number() == 120);
+  for (int k = 0; k < kBurst / 2; ++k) {
+    const auto& captured = sink.events[static_cast<size_t>(1 + k)];
+    REQUIRE(captured.event.render_frame == 100);
+    REQUIRE(captured.event.ump.channel() == 1);
+    REQUIRE(captured.event.ump.note_number() == 2 * k + 1);
+  }
+}
+
+TEST_CASE("MidiSequencer plays a clip published with unordered events in frame order",
+          "[midi][sequencer]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiClipSchedule clip;
+  clip.id = 1210;
+  clip.destination_id = 9;
+  clip.events = {
+      {200, sonare::midi::make_midi1_control_change(0, 0, 3, 0)},
+      {100, sonare::midi::make_midi1_control_change(0, 0, 1, 0)},
+      {150, sonare::midi::make_midi1_control_change(0, 0, 2, 0)},
+      {60, sonare::midi::make_midi1_control_change(0, 0, 4, 0)},
+  };
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  seq.process_block(SequencerClock::aligned(0), 300);
+
+  REQUIRE(sink.events.size() == 4);
+  const int64_t expected_frames[] = {60, 100, 150, 200};
+  const int expected_controllers[] = {4, 1, 2, 3};
+  for (size_t i = 0; i < 4; ++i) {
+    REQUIRE(sink.events[i].event.render_frame == expected_frames[i]);
+    REQUIRE(sink.events[i].event.ump.note_number() == expected_controllers[i]);
+  }
+}
+
 TEST_CASE("MidiSequencer ranks a pending note-on after a one-shot clip-end release", "[midi]") {
   MidiSequencer seq;
   CapturingSink sink;

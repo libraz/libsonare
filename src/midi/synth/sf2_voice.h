@@ -326,6 +326,15 @@ struct Sf2PerNoteVoice {
   float baked_gs_tuning_cents = 0.0f;
 };
 
+/// The pitch offset of a per-note voice from the key its engine was started on, in cents. Exactly 0
+/// while the key carries no per-note pitch, so a MIDI 1.0 render is untouched.
+inline float per_note_cents(const Sf2PerNoteVoice& state, const ComposedPitch& pitch) noexcept {
+  const double semitones =
+      pitch.per_note_semitones +
+      static_cast<double>(static_cast<int>(state.binding.note) - static_cast<int>(state.zone_key));
+  return semitones == 0.0 ? 0.0f : static_cast<float>(semitones * constants::kCentsPerSemitone);
+}
+
 /// One playing SF2 voice (lives in a VoicePool inside Sf2Player).
 struct Sf2Voice : VoiceState {
   SampleReader reader;
