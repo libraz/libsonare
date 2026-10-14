@@ -298,6 +298,14 @@ TEST_CASE("NativeSynth enum names are supplied by the C project ABI", "[project]
                                  "resonance-q", "vibrato-depth-cents", "filter-env-depth",
                                  "lfo1-rate-scale", "excitation-force", "excitation-position",
                                  "excitation-brightness", "spectrum-morph"});
+  CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_LOOP_MODE)) ==
+        std::vector<std::string>{"default", "none", "continuous", "key-down"});
+  CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_KEY_TRACK)) ==
+        std::vector<std::string>{"default", "on", "off"});
+  CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_RETRIGGER)) ==
+        std::vector<std::string>{"default", "free", "note"});
+  CHECK(std::string(sonare_synth_enum_names(SONARE_SYNTH_ENUM_RETRIGGER + 1)) == "");
+  CHECK(std::string(sonare_synth_enum_names(-1)) == "");
   CHECK(sonare_synth_builtin_waveform_from_name("sine") == SONARE_SYNTH_WAVEFORM_SINE);
   CHECK(sonare_synth_builtin_waveform_from_name("saw") == SONARE_SYNTH_WAVEFORM_SAW);
   CHECK(sonare_synth_builtin_waveform_from_name("sawtooth") == SONARE_SYNTH_WAVEFORM_SAW);

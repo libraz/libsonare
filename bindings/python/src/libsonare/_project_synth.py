@@ -63,8 +63,6 @@ _SYNTH_ENGINE_MODES = {
 }
 # Sample-engine overrides (SonareSampleLoopMode / SonareSampleKeyTrack). Both
 # reserve "default" = 0, which keeps whatever the bank recorded for the sample.
-# They are not part of SYNTH_ENUM_TABLES: sonare_synth_enum_names has no kind
-# for them, and that table's contract is "the names the C ABI supplies".
 _SAMPLE_LOOP_MODES = {
     "default": 0,
     "none": 1,
@@ -76,8 +74,7 @@ _SAMPLE_KEY_TRACKS = {
     "on": 1,
     "off": 2,
 }
-# SonareSynthRetrigger; "default" = 0 keeps the base patch's mode. Outside
-# SYNTH_ENUM_TABLES for the same reason as the two tables above.
+# SonareSynthRetrigger; "default" = 0 keeps the base patch's mode.
 _SYNTH_RETRIGGERS = {
     "default": 0,
     "free": 1,
@@ -216,6 +213,9 @@ SYNTH_ENUM_TABLES = {
     "articulations": tuple(_ARTICULATIONS),
     "mpe_dimensions": tuple(_MPE_DIMENSIONS),
     "note_trackings": tuple(_NOTE_TRACKINGS),
+    "sample_loop_modes": tuple(_SAMPLE_LOOP_MODES),
+    "sample_key_tracks": tuple(_SAMPLE_KEY_TRACKS),
+    "retriggers": tuple(_SYNTH_RETRIGGERS),
 }
 _SYNTH_ENUM_KINDS = {
     "engine_modes": 0,
@@ -231,6 +231,9 @@ _SYNTH_ENUM_KINDS = {
     "articulations": 10,
     "mpe_dimensions": 11,
     "note_trackings": 12,
+    "sample_loop_modes": 13,
+    "sample_key_tracks": 14,
+    "retriggers": 15,
 }
 
 

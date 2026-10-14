@@ -40,33 +40,19 @@ bool ReadEngineBuiltinSynthConfig(Napi::Env env, const Napi::Object& obj,
   return !env.IsExceptionPending();
 }
 
-// Controller-profile enum spellings, shared with the Python and WASM facades.
-// The static_asserts catch a widened C enum; the spellings themselves are pinned
-// against the C name tables by the enum-table export.
-constexpr const char* kControllerInputs[] = {"control-change", "channel-pressure", "poly-pressure",
-                                             "pitch-bend", "velocity"};
-constexpr const char* kControllerAxes[] = {"none",  "excitation", "position",    "brightness",
-                                           "morph", "loudness",   "pitch-cents", "vibrato-depth"};
-static_assert(std::size(kControllerInputs) == SONARE_CONTROLLER_INPUT_COUNT,
-              "Node ControllerInput table drifted from C");
-static_assert(std::size(kControllerAxes) == SONARE_CONTROLLER_AXIS_COUNT,
-              "Node ControllerAxis table drifted from C");
+// Controller-profile spellings: the C ABI's own tables.
+constexpr const auto& kControllerInputs = sonare::c_api::synth_names::kControllerInputs;
+constexpr const auto& kControllerAxes = sonare::c_api::synth_names::kControllerAxes;
 
 // Part-rig mode spellings, shared with the Python and WASM facades.
 constexpr const char* kPartRigModes[] = {"bank", "none", "chain"};
 static_assert(std::size(kPartRigModes) == 3 && SONARE_PART_RIG_CHAIN == 2,
               "Node part-rig mode table drifted from C");
 
-// Articulation spellings, shared with the Python and WASM facades.
-constexpr const char* kArticulations[] = {"poly", "mono-retrigger", "mono-legato"};
-static_assert(std::size(kArticulations) == SONARE_ARTICULATION_COUNT,
-              "Node Articulation table drifted from C");
-constexpr const char* kMpeDimensions[] = {"bend", "pressure", "timbre"};
-static_assert(std::size(kMpeDimensions) == SONARE_MPE_DIMENSION_COUNT,
-              "MPE dimension names out of step with the C enum");
-constexpr const char* kNoteTrackings[] = {"last", "lowest", "highest", "all"};
-static_assert(std::size(kNoteTrackings) == SONARE_NOTE_TRACKING_COUNT,
-              "note tracking names out of step with the C enum");
+// Articulation, MPE dimension and note-tracking spellings: the C ABI's own tables.
+constexpr const auto& kArticulations = sonare::c_api::synth_names::kArticulations;
+constexpr const auto& kMpeDimensions = sonare::c_api::synth_names::kMpeDimensions;
+constexpr const auto& kNoteTrackings = sonare::c_api::synth_names::kNoteTrackings;
 
 bool ReadControllerBinding(Napi::Env env, const Napi::Value& value, SonareControllerBinding* out) {
   if (!value.IsObject()) {

@@ -1850,6 +1850,9 @@ export interface WasmSynthEnumTables {
   articulations: string[];
   mpeDimensions: string[];
   noteTrackings: string[];
+  sampleLoopModes: string[];
+  sampleKeyTracks: string[];
+  retriggers: string[];
 }
 
 export interface SonareModule {

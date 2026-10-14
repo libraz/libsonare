@@ -120,6 +120,9 @@ EXPECTED_SYNTH_ENUM_TABLES = {
         "highest",
         "all",
     ),
+    "sample_loop_modes": ("default", "none", "continuous", "key-down"),
+    "sample_key_tracks": ("default", "on", "off"),
+    "retriggers": ("default", "free", "note"),
 }
 
 
@@ -235,6 +238,51 @@ def test_synth_patch_enum_tables_round_trip_all_names_and_ordinals() -> None:
         )
         assert by_name.mod_routings[0].destination == name
         assert by_ordinal.mod_routings[0].destination == name
+
+
+def test_every_python_enum_table_matches_the_c_abi_kind() -> None:
+    """Each name-to-ordinal map Python resolves through spells the C ABI's table for its kind."""
+    import ctypes
+
+    from libsonare import _project_synth as synth
+    from libsonare._runtime import _get_lib
+
+    lib = _get_lib()
+
+    def c_names(kind: int) -> tuple[str, ...]:
+        raw = lib.sonare_synth_enum_names(ctypes.c_int(kind))
+        return tuple(raw.decode("utf-8").split("\n")) if raw else ()
+
+    ordinal_maps = {
+        "engine_modes": synth._SYNTH_ENGINE_MODES,
+        "waveforms": synth._SYNTH_OSC_WAVEFORMS,
+        "filter_models": synth._SYNTH_FILTER_MODELS,
+        "filter_outputs": synth._SYNTH_FILTER_OUTPUTS,
+        "body_types": synth._SYNTH_BODY_TYPES,
+        "mod_sources": synth._SYNTH_MOD_SOURCES,
+        "mod_destinations": synth._SYNTH_MOD_DESTINATIONS,
+        "controller_inputs": synth._CONTROLLER_INPUTS,
+        "controller_axes": synth._CONTROLLER_AXES,
+        "articulations": synth._ARTICULATIONS,
+        "mpe_dimensions": synth._MPE_DIMENSIONS,
+        "note_trackings": synth._NOTE_TRACKINGS,
+        "sample_loop_modes": synth._SAMPLE_LOOP_MODES,
+        "sample_key_tracks": synth._SAMPLE_KEY_TRACKS,
+        "retriggers": synth._SYNTH_RETRIGGERS,
+    }
+    assert set(ordinal_maps) | {"builtin_waveforms"} == set(synth._SYNTH_ENUM_KINDS)
+    for key, table in ordinal_maps.items():
+        names = c_names(synth._SYNTH_ENUM_KINDS[key])
+        assert names, key
+        assert table == {name: ordinal for ordinal, name in enumerate(names)}, key
+    # The built-in waveform list carries "sawtooth" beside "saw", so it maps names, not positions.
+    builtin = c_names(synth._SYNTH_ENUM_KINDS["builtin_waveforms"])
+    assert tuple(synth._BUILTIN_SYNTH_WAVEFORMS) == builtin
+    for name, ordinal in synth._BUILTIN_SYNTH_WAVEFORMS.items():
+        assert lib.sonare_synth_builtin_waveform_from_name(name.encode()) == ordinal, name
+    # Input-only spellings are accepted but never listed.
+    assert synth._SYNTH_FILTER_MODEL_INPUT == {**synth._SYNTH_FILTER_MODELS, "moog-ladder": 2}
+    assert "moog-ladder" not in c_names(synth._SYNTH_ENUM_KINDS["filter_models"])
 
 
 def _header_struct_version() -> int:

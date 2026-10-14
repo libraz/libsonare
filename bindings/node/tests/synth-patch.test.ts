@@ -8,6 +8,8 @@ import {
   NOTE_TRACKINGS,
   Project,
   RealtimeEngine,
+  SAMPLE_KEY_TRACKS,
+  SAMPLE_LOOP_MODES,
   SYNTH_BODY_TYPES,
   SYNTH_ENGINE_MODES,
   SYNTH_FILTER_MODELS,
@@ -150,6 +152,9 @@ describe('NativeSynth preset catalog', () => {
       articulations: [...ARTICULATIONS],
       mpeDimensions: [...MPE_DIMENSIONS],
       noteTrackings: [...NOTE_TRACKINGS],
+      sampleLoopModes: [...SAMPLE_LOOP_MODES],
+      sampleKeyTracks: [...SAMPLE_KEY_TRACKS],
+      retriggers: [...SYNTH_RETRIGGERS],
     });
 
     for (const [ordinal, name] of SYNTH_ENGINE_MODES.entries()) {

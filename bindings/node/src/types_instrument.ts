@@ -291,6 +291,9 @@ export interface SynthEnumTables {
   articulations: string[];
   mpeDimensions: string[];
   noteTrackings: string[];
+  sampleLoopModes: string[];
+  sampleKeyTracks: string[];
+  retriggers: string[];
 }
 
 /** NativeSynth engine selector ({@link SynthPatch}; `'default'` keeps the base patch's). */

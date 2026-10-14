@@ -573,6 +573,12 @@ Napi::Value SynthEnumTables(const Napi::CallbackInfo& info) {
           SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_MPE_DIMENSION)));
   out.Set("noteTrackings",
           SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_NOTE_TRACKING)));
+  out.Set("sampleLoopModes",
+          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_LOOP_MODE)));
+  out.Set("sampleKeyTracks",
+          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_KEY_TRACK)));
+  out.Set("retriggers",
+          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_RETRIGGER)));
   return out;
   SONARE_NODE_CATCH(env)
 }

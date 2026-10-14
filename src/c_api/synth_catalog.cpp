@@ -16,25 +16,13 @@
 #include "c_api/project_internal.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
+#include "c_api/synth_enum_names.h"
 #include "c_api/synth_patch_common.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_layer.h"
 #include "midi/synth/patch_tuning.h"
 #include "midi/synth/synth_presets.h"
 #include "util/number_format.h"
-
-namespace {
-
-/// Entries in one of the newline-separated tables below.
-constexpr int name_count(const char* names) {
-  int count = *names == '\0' ? 0 : 1;
-  for (const char* p = names; *p != '\0'; ++p) {
-    if (*p == '\n') ++count;
-  }
-  return count;
-}
-
-}  // namespace
 #endif
 
 const char* sonare_synth_preset_names(void) {
@@ -55,93 +43,21 @@ const char* sonare_synth_preset_names(void) {
 
 const char* sonare_synth_enum_names(int kind) {
 #if defined(SONARE_WITH_ARRANGEMENT)
-  // These tables are the only place a surface learns an enum value's name, and
-  // nothing compares them against the enums for you: a value added without a
-  // name here reaches a binding as a short list rather than as a build failure.
-  // Hence the counts below, one per table that has a count macro to check
-  // against.
-  constexpr const char* kEngineModes =
-      "default\nsubtractive\nfm\nkarplus-strong\nmodal\nadditive\npercussion\npiano\npipe-organ\n"
-      "bowed-string\nreed\nbrass\nflute\nplucked-string\nvocal\nfree-reed\nharpsichord\n"
-      "sample";
-  constexpr const char* kWaveforms = "default\nsine\nsaw\nsquare\ntriangle\nnoise";
-  constexpr const char* kFilterModels = "default\nsvf\ntransistor-ladder\ndiode-ladder\nsallen-key";
-  constexpr const char* kFilterOutputs = "default\nlowpass\nbandpass\nhighpass";
-  constexpr const char* kBodyTypes = "default\nnone\nguitar\nviolin\nwood-tube\nbrass-bell\nvocal";
-  constexpr const char* kModSources =
-      "none\namp-env\nfilter-env\nlfo1\nlfo2\nvelocity\nkey-track\nmod-wheel\nrandom\n"
-      "breath\naftertouch\nexpression-cc\npitch-bend";
-  constexpr const char* kModDestinations =
-      "none\npitch-cents\ncutoff-cents\namp-gain\npan-units\nresonance-q\n"
-      "vibrato-depth-cents\nfilter-env-depth\nlfo1-rate-scale\n"
-      "excitation-force\nexcitation-position\nexcitation-brightness\nspectrum-morph";
-  // No count macro applies: this table names the BuiltinSynth waveforms and
-  // carries "sawtooth" as a second spelling of "saw", so its entry count is
-  // deliberately one more than the enum's.
-  constexpr const char* kBuiltinWaveforms = "sine\nsaw\nsawtooth\nsquare\ntriangle";
-  constexpr const char* kControllerInputs =
-      "control-change\nchannel-pressure\npoly-pressure\npitch-bend\nvelocity";
-  constexpr const char* kControllerAxes =
-      "none\nexcitation\nposition\nbrightness\nmorph\nloudness\npitch-cents\nvibrato-depth";
-  constexpr const char* kArticulations = "poly\nmono-retrigger\nmono-legato";
-  constexpr const char* kMpeDimensions = "bend\npressure\ntimbre";
-  constexpr const char* kNoteTrackings = "last\nlowest\nhighest\nall";
-
-  static_assert(name_count(kEngineModes) == SONARE_SYNTH_ENGINE_MODE_COUNT,
-                "engine mode names out of step with the enum");
-  static_assert(name_count(kWaveforms) == SONARE_SYNTH_OSC_WAVEFORM_COUNT,
-                "oscillator waveform names out of step with the enum");
-  static_assert(name_count(kFilterModels) == SONARE_SYNTH_FILTER_MODEL_COUNT,
-                "filter model names out of step with the enum");
-  static_assert(name_count(kFilterOutputs) == SONARE_SYNTH_FILTER_OUTPUT_COUNT,
-                "filter output names out of step with the enum");
-  static_assert(name_count(kBodyTypes) == SONARE_SYNTH_BODY_TYPE_COUNT,
-                "body type names out of step with the enum");
-  static_assert(name_count(kModSources) == SONARE_SYNTH_MOD_SOURCE_COUNT,
-                "mod source names out of step with the enum");
-  static_assert(name_count(kModDestinations) == SONARE_SYNTH_MOD_DESTINATION_COUNT,
-                "mod destination names out of step with the enum");
-  static_assert(name_count(kControllerInputs) == SONARE_CONTROLLER_INPUT_COUNT,
-                "controller input names out of step with the enum");
-  static_assert(name_count(kControllerAxes) == SONARE_CONTROLLER_AXIS_COUNT,
-                "controller axis names out of step with the enum");
-  static_assert(name_count(kArticulations) == SONARE_ARTICULATION_COUNT,
-                "articulation names out of step with the enum");
-  static_assert(name_count(kMpeDimensions) == SONARE_MPE_DIMENSION_COUNT,
-                "MPE dimension names out of step with the enum");
-  static_assert(name_count(kNoteTrackings) == SONARE_NOTE_TRACKING_COUNT,
-                "note tracking names out of step with the enum");
-
-  switch (kind) {
-    case SONARE_SYNTH_ENUM_ENGINE_MODE:
-      return kEngineModes;
-    case SONARE_SYNTH_ENUM_OSC_WAVEFORM:
-      return kWaveforms;
-    case SONARE_SYNTH_ENUM_FILTER_MODEL:
-      return kFilterModels;
-    case SONARE_SYNTH_ENUM_FILTER_OUTPUT:
-      return kFilterOutputs;
-    case SONARE_SYNTH_ENUM_BODY_TYPE:
-      return kBodyTypes;
-    case SONARE_SYNTH_ENUM_MOD_SOURCE:
-      return kModSources;
-    case SONARE_SYNTH_ENUM_MOD_DESTINATION:
-      return kModDestinations;
-    case SONARE_SYNTH_ENUM_CONTROLLER_INPUT:
-      return kControllerInputs;
-    case SONARE_SYNTH_ENUM_CONTROLLER_AXIS:
-      return kControllerAxes;
-    case SONARE_SYNTH_ENUM_ARTICULATION:
-      return kArticulations;
-    case SONARE_SYNTH_ENUM_MPE_DIMENSION:
-      return kMpeDimensions;
-    case SONARE_SYNTH_ENUM_NOTE_TRACKING:
-      return kNoteTrackings;
-    case SONARE_SYNTH_ENUM_BUILTIN_WAVEFORM:
-      return kBuiltinWaveforms;
-    default:
-      return "";
-  }
+  namespace names = sonare::c_api::synth_names;
+  static const std::vector<std::string> kJoined = [] {
+    std::vector<std::string> joined;
+    for (const names::NameTable& table : names::kTablesByKind) {
+      std::string text;
+      for (size_t i = 0; i < table.count; ++i) {
+        if (i > 0) text += '\n';
+        text += table.names[i];
+      }
+      joined.push_back(std::move(text));
+    }
+    return joined;
+  }();
+  if (kind < 0 || static_cast<size_t>(kind) >= kJoined.size()) return "";
+  return kJoined[static_cast<size_t>(kind)].c_str();
 #else
   (void)kind;
   return "";

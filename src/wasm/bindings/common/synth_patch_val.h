@@ -17,88 +17,28 @@
 #include <string>
 #include <vector>
 
+#include "c_api/synth_enum_names.h"
 #include "wasm/bindings/common/common.h"
 
 namespace sonare_wasm_synth {
 
-inline constexpr const char* kEngineModes[] = {
-    "default",    "subtractive",    "fm",         "karplus-strong", "modal",       "additive",
-    "percussion", "piano",          "pipe-organ", "bowed-string",   "reed",        "brass",
-    "flute",      "plucked-string", "vocal",      "free-reed",      "harpsichord", "sample"};
-// SonareSampleLoopMode, the patch's per-voice override. Distinct from the
-// SoundFont sampleModes value a SonareSampleDesc carries: the two number their
-// members differently and only the desc describes the recording itself.
-inline constexpr const char* kSampleLoopModes[] = {"default", "none", "continuous", "key-down"};
-inline constexpr const char* kSampleKeyTracks[] = {"default", "on", "off"};
-inline constexpr const char* kWaveforms[] = {"default", "sine",     "saw",
-                                             "square",  "triangle", "noise"};
-inline constexpr const char* kFilterModels[] = {"default", "svf", "transistor-ladder",
-                                                "diode-ladder", "sallen-key"};
-inline constexpr const char* kFilterOutputs[] = {"default", "lowpass", "bandpass", "highpass"};
-inline constexpr const char* kBodyTypes[] = {"default",   "none",       "guitar", "violin",
-                                             "wood-tube", "brass-bell", "vocal"};
-inline constexpr const char* kRetriggers[] = {"default", "free", "note"};
-inline constexpr const char* kModSources[] = {
-    "none",      "amp-env", "filter-env", "lfo1",       "lfo2",          "velocity",  "key-track",
-    "mod-wheel", "random",  "breath",     "aftertouch", "expression-cc", "pitch-bend"};
-inline constexpr const char* kModDestinations[] = {"none",
-                                                   "pitch-cents",
-                                                   "cutoff-cents",
-                                                   "amp-gain",
-                                                   "pan-units",
-                                                   "resonance-q",
-                                                   "vibrato-depth-cents",
-                                                   "filter-env-depth",
-                                                   "lfo1-rate-scale",
-                                                   "excitation-force",
-                                                   "excitation-position",
-                                                   "excitation-brightness",
-                                                   "spectrum-morph"};
-// Controller-profile spellings. Not synth-patch fields: they live beside the
-// tables above because this is the surface's one place an ordinal meets a name.
-inline constexpr const char* kControllerInputs[] = {"control-change", "channel-pressure",
-                                                    "poly-pressure", "pitch-bend", "velocity"};
-inline constexpr const char* kControllerAxes[] = {"none",        "excitation",   "position",
-                                                  "brightness",  "morph",        "loudness",
-                                                  "pitch-cents", "vibrato-depth"};
-// What a channel does with an overlapping note-on. Also not a synth-patch
-// field, and here for the same reason as the two tables above.
-inline constexpr const char* kArticulations[] = {"poly", "mono-retrigger", "mono-legato"};
-// The per-note dimensions MPE carries, and which note a channel-addressed value
-// of one belongs to. Neither is a synth-patch field either.
-inline constexpr const char* kMpeDimensions[] = {"bend", "pressure", "timbre"};
-inline constexpr const char* kNoteTrackings[] = {"last", "lowest", "highest", "all"};
-
-static_assert(std::size(kEngineModes) == SONARE_SYNTH_ENGINE_MODE_COUNT,
-              "WASM SynthEngineMode table drifted from C");
-static_assert(std::size(kSampleLoopModes) == SONARE_SAMPLE_LOOP_MODE_COUNT,
-              "WASM SampleLoopMode table drifted from C");
-static_assert(std::size(kSampleKeyTracks) == SONARE_SAMPLE_KEY_TRACK_COUNT,
-              "WASM SampleKeyTrack table drifted from C");
-static_assert(std::size(kWaveforms) == SONARE_SYNTH_OSC_WAVEFORM_COUNT,
-              "WASM SynthOscWaveform table drifted from C");
-static_assert(std::size(kFilterModels) == SONARE_SYNTH_FILTER_MODEL_COUNT,
-              "WASM SynthFilterModel table drifted from C");
-static_assert(std::size(kFilterOutputs) == SONARE_SYNTH_FILTER_OUTPUT_COUNT,
-              "WASM SynthFilterOutput table drifted from C");
-static_assert(std::size(kBodyTypes) == SONARE_SYNTH_BODY_TYPE_COUNT,
-              "WASM SynthBodyType table drifted from C");
-static_assert(std::size(kRetriggers) == SONARE_SYNTH_RETRIGGER_COUNT,
-              "WASM SynthRetrigger table drifted from C");
-static_assert(std::size(kModSources) == SONARE_SYNTH_MOD_SOURCE_COUNT,
-              "WASM SynthModSource table drifted from C");
-static_assert(std::size(kModDestinations) == SONARE_SYNTH_MOD_DESTINATION_COUNT,
-              "WASM SynthModDestination table drifted from C");
-static_assert(std::size(kControllerInputs) == SONARE_CONTROLLER_INPUT_COUNT,
-              "WASM ControllerInput table drifted from C");
-static_assert(std::size(kControllerAxes) == SONARE_CONTROLLER_AXIS_COUNT,
-              "WASM ControllerAxis table drifted from C");
-static_assert(std::size(kArticulations) == SONARE_ARTICULATION_COUNT,
-              "WASM Articulation table drifted from C");
-static_assert(std::size(kMpeDimensions) == SONARE_MPE_DIMENSION_COUNT,
-              "WASM MpeDimension table drifted from C");
-static_assert(std::size(kNoteTrackings) == SONARE_NOTE_TRACKING_COUNT,
-              "WASM NoteTracking table drifted from C");
+// The spellings are the C ABI's own tables; these names keep the call sites short.
+namespace synth_names = sonare::c_api::synth_names;
+inline constexpr const auto& kEngineModes = synth_names::kEngineModes;
+inline constexpr const auto& kSampleLoopModes = synth_names::kSampleLoopModes;
+inline constexpr const auto& kSampleKeyTracks = synth_names::kSampleKeyTracks;
+inline constexpr const auto& kWaveforms = synth_names::kWaveforms;
+inline constexpr const auto& kFilterModels = synth_names::kFilterModels;
+inline constexpr const auto& kFilterOutputs = synth_names::kFilterOutputs;
+inline constexpr const auto& kBodyTypes = synth_names::kBodyTypes;
+inline constexpr const auto& kRetriggers = synth_names::kRetriggers;
+inline constexpr const auto& kModSources = synth_names::kModSources;
+inline constexpr const auto& kModDestinations = synth_names::kModDestinations;
+inline constexpr const auto& kControllerInputs = synth_names::kControllerInputs;
+inline constexpr const auto& kControllerAxes = synth_names::kControllerAxes;
+inline constexpr const auto& kArticulations = synth_names::kArticulations;
+inline constexpr const auto& kMpeDimensions = synth_names::kMpeDimensions;
+inline constexpr const auto& kNoteTrackings = synth_names::kNoteTrackings;
 
 inline emscripten::val synthEnumTablesToVal() {
   using emscripten::val;
@@ -136,6 +76,11 @@ inline emscripten::val synthEnumTablesToVal() {
   out.set("articulations", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_ARTICULATION)));
   out.set("mpeDimensions", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_MPE_DIMENSION)));
   out.set("noteTrackings", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_NOTE_TRACKING)));
+  out.set("sampleLoopModes",
+          array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_LOOP_MODE)));
+  out.set("sampleKeyTracks",
+          array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_KEY_TRACK)));
+  out.set("retriggers", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_RETRIGGER)));
   return out;
 }
 
@@ -156,9 +101,8 @@ inline int enumFromVal(emscripten::val value, const char* const* names, int coun
     for (int i = 0; i < count; ++i) {
       if (name == names[i]) return i;
     }
-    // Input-only: "moog-ladder" is the pre-rename spelling of "transistor-ladder".
-    if (names == kFilterModels && name == "moog-ladder")
-      return SONARE_SYNTH_FILTER_TRANSISTOR_LADDER;
+    const int alias = synth_names::input_alias(names, name);
+    if (alias >= 0) return alias;
     throw WasmRangeError(std::string("Unknown ") + what + " name: '" + name + "'");
   }
   // Reject non-number, non-string values (e.g. a boolean) instead of coercing

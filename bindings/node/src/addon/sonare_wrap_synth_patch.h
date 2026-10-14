@@ -10,61 +10,23 @@
 #include <string>
 #include <vector>
 
+#include "c_api/synth_enum_names.h"
 #include "sonare_wrap_options.h"
 
 namespace sonare_node {
 
-inline constexpr const char* kSynthEngineModes[] = {
-    "default",    "subtractive",    "fm",         "karplus-strong", "modal",       "additive",
-    "percussion", "piano",          "pipe-organ", "bowed-string",   "reed",        "brass",
-    "flute",      "plucked-string", "vocal",      "free-reed",      "harpsichord", "sample"};
-inline constexpr const char* kSampleLoopModes[] = {"default", "none", "continuous", "key-down"};
-inline constexpr const char* kSampleKeyTracks[] = {"default", "on", "off"};
-inline constexpr const char* kSynthWaveforms[] = {"default", "sine",     "saw",
-                                                  "square",  "triangle", "noise"};
-inline constexpr const char* kSynthFilterModels[] = {"default", "svf", "transistor-ladder",
-                                                     "diode-ladder", "sallen-key"};
-inline constexpr const char* kSynthFilterOutputs[] = {"default", "lowpass", "bandpass", "highpass"};
-inline constexpr const char* kSynthBodyTypes[] = {"default",   "none",       "guitar", "violin",
-                                                  "wood-tube", "brass-bell", "vocal"};
-inline constexpr const char* kSynthRetriggers[] = {"default", "free", "note"};
-inline constexpr const char* kSynthModSources[] = {
-    "none",      "amp-env", "filter-env", "lfo1",       "lfo2",          "velocity",  "key-track",
-    "mod-wheel", "random",  "breath",     "aftertouch", "expression-cc", "pitch-bend"};
-inline constexpr const char* kSynthModDestinations[] = {"none",
-                                                        "pitch-cents",
-                                                        "cutoff-cents",
-                                                        "amp-gain",
-                                                        "pan-units",
-                                                        "resonance-q",
-                                                        "vibrato-depth-cents",
-                                                        "filter-env-depth",
-                                                        "lfo1-rate-scale",
-                                                        "excitation-force",
-                                                        "excitation-position",
-                                                        "excitation-brightness",
-                                                        "spectrum-morph"};
-
-static_assert(std::size(kSynthEngineModes) == SONARE_SYNTH_ENGINE_MODE_COUNT,
-              "Node SynthEngineMode table drifted from C");
-static_assert(std::size(kSampleLoopModes) == SONARE_SAMPLE_LOOP_MODE_COUNT,
-              "Node SampleLoopMode table drifted from C");
-static_assert(std::size(kSampleKeyTracks) == SONARE_SAMPLE_KEY_TRACK_COUNT,
-              "Node SampleKeyTrack table drifted from C");
-static_assert(std::size(kSynthWaveforms) == SONARE_SYNTH_OSC_WAVEFORM_COUNT,
-              "Node SynthOscWaveform table drifted from C");
-static_assert(std::size(kSynthFilterModels) == SONARE_SYNTH_FILTER_MODEL_COUNT,
-              "Node SynthFilterModel table drifted from C");
-static_assert(std::size(kSynthFilterOutputs) == SONARE_SYNTH_FILTER_OUTPUT_COUNT,
-              "Node SynthFilterOutput table drifted from C");
-static_assert(std::size(kSynthBodyTypes) == SONARE_SYNTH_BODY_TYPE_COUNT,
-              "Node SynthBodyType table drifted from C");
-static_assert(std::size(kSynthRetriggers) == SONARE_SYNTH_RETRIGGER_COUNT,
-              "Node SynthRetrigger table drifted from C");
-static_assert(std::size(kSynthModSources) == SONARE_SYNTH_MOD_SOURCE_COUNT,
-              "Node SynthModSource table drifted from C");
-static_assert(std::size(kSynthModDestinations) == SONARE_SYNTH_MOD_DESTINATION_COUNT,
-              "Node SynthModDestination table drifted from C");
+// The spellings are the C ABI's own tables; these names keep the call sites short.
+namespace synth_names = sonare::c_api::synth_names;
+inline constexpr const auto& kSynthEngineModes = synth_names::kEngineModes;
+inline constexpr const auto& kSampleLoopModes = synth_names::kSampleLoopModes;
+inline constexpr const auto& kSampleKeyTracks = synth_names::kSampleKeyTracks;
+inline constexpr const auto& kSynthWaveforms = synth_names::kWaveforms;
+inline constexpr const auto& kSynthFilterModels = synth_names::kFilterModels;
+inline constexpr const auto& kSynthFilterOutputs = synth_names::kFilterOutputs;
+inline constexpr const auto& kSynthBodyTypes = synth_names::kBodyTypes;
+inline constexpr const auto& kSynthRetriggers = synth_names::kRetriggers;
+inline constexpr const auto& kSynthModSources = synth_names::kModSources;
+inline constexpr const auto& kSynthModDestinations = synth_names::kModDestinations;
 
 // SonareSynthPatch enum-name maps (shared by the project bounce and realtime
 // engine TUs; the names agree with the Python / WASM facades). 0 / "default"
@@ -73,10 +35,7 @@ inline int SynthEnumFromName(const std::string& name, const char* const* names, 
   for (int i = 0; i < count; ++i) {
     if (name == names[i]) return i;
   }
-  // Input-only: "moog-ladder" is the pre-rename spelling of "transistor-ladder".
-  if (names == kSynthFilterModels && name == "moog-ladder")
-    return SONARE_SYNTH_FILTER_TRANSISTOR_LADDER;
-  return -1;
+  return synth_names::input_alias(names, name);
 }
 
 // Resolves an enum value that accepts the C ordinal or a name. Returns false

@@ -200,7 +200,13 @@ typedef enum SONARE_ENUM_BASE {
   /// The per-note dimensions MPE carries (@ref SonareMpeDimension).
   SONARE_SYNTH_ENUM_MPE_DIMENSION = 11,
   /// Which note a channel-addressed value belongs to (@ref SonareNoteTracking).
-  SONARE_SYNTH_ENUM_NOTE_TRACKING = 12
+  SONARE_SYNTH_ENUM_NOTE_TRACKING = 12,
+  /// The patch's override of a sample's looping (@ref SonareSampleLoopMode).
+  SONARE_SYNTH_ENUM_SAMPLE_LOOP_MODE = 13,
+  /// The patch's override of a sample's key tracking (@ref SonareSampleKeyTrack).
+  SONARE_SYNTH_ENUM_SAMPLE_KEY_TRACK = 14,
+  /// How a voice's start phases and random streams restart (@ref SonareSynthRetrigger).
+  SONARE_SYNTH_ENUM_RETRIGGER = 15
 } SonareSynthEnumKind;
 
 /// @brief Returns the canonical names for one synth enum separated by '\n'.
