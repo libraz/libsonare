@@ -6,8 +6,11 @@
  * the package's exports, so a new audio one-shot without the preflight fails here.
  */
 
-import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { beforeAll, describe, expect, it } from 'vitest';
 import * as sonare from '../src/index.js';
+import * as nodeValidation from '../src/validation.js';
 
 const SR = 44100;
 const N = 22050;
@@ -582,5 +585,223 @@ describe('wrong-typed arguments are TypeErrors that name the argument', () => {
 
   it('Mixer.fromSceneJson refuses a non-string scene as a TypeError', () => {
     expect(() => sonare.Mixer.fromSceneJson(null as never, SR, 512)).toThrow(TypeError);
+  });
+});
+
+/**
+ * The runtime-independent validators exist once per package, because the Node
+ * and WASM packages compile separately from their own `src/`. One boundary
+ * corpus runs through both copies and each answer -- the value returned, or the
+ * error class, message and code -- must be identical. A validator that both
+ * packages export and the corpus does not drive fails the closure check, so a
+ * new duplicate cannot be added without joining the corpus.
+ */
+describe('Node and WASM validators answer one boundary corpus identically', () => {
+  // Request-object key checking reads each package's own declared request
+  // shapes, which stay surface-local by design.
+  const SURFACE_LOCAL = new Set(['optionsBag', 'requestObject']);
+  const f32 = (...values: number[]): Float32Array => Float32Array.from(values);
+  const fn = 'probe';
+
+  const CORPUS: Record<string, unknown[][]> = {
+    assertSamples: [
+      [fn, f32(), true],
+      [fn, f32(1, Number.NaN), true],
+      [fn, f32(Number.NaN), false],
+      [fn, [1, Number.POSITIVE_INFINITY], true, 'left'],
+      [fn, f32(1, 2), true],
+    ],
+    assertSamplesInWindow: [
+      [fn, f32(0, Number.NaN, 0, 0), true, 0, 1],
+      [fn, f32(0, Number.NaN, 0, 0), true, 0, 2],
+      [fn, f32(0, Number.NaN, 0, 0), true, 1.5, 1],
+      [fn, f32(0, Number.NaN, 0, 0), true, -3, 10],
+      [fn, f32(0, Number.NaN), false, 0, 2],
+      [fn, f32(), true, 0, 1],
+    ],
+    assertFiniteScalar: [
+      [fn, Number.NaN, 'gain'],
+      [fn, Number.NEGATIVE_INFINITY, 'gain'],
+      [fn, -1, 'gain'],
+    ],
+    assertSampleRate: [
+      [fn, '44100'],
+      [fn, 44100.5],
+      [fn, 7999],
+      [fn, 8000],
+      [fn, 384000],
+      [fn, 384001],
+      [fn, Number.NaN, 'targetSampleRate'],
+    ],
+    assertAudioInput: [
+      [fn, [1, 2], 44100],
+      [fn, f32(1), 44100.5],
+      [fn, f32(), 44100],
+      [fn, f32(Number.NaN), 44100, { validate: false }],
+      [fn, f32(Number.NaN), 44100, {}, 'reference'],
+      [fn, f32(1), 44100],
+    ],
+    assertAudioSamples: [
+      [fn, null],
+      [fn, f32(Number.NaN), {}, 'left'],
+      [fn, f32(1)],
+    ],
+    assertAudioChannels: [
+      [fn, 'x', 44100],
+      [fn, [], 44100],
+      [fn, [f32(1), f32()], 44100],
+      [fn, [f32(1)], 44100.5],
+      [fn, [f32(1), f32(2)], 44100],
+    ],
+    assertInt32: [
+      [fn, 2 ** 31, 'kernel'],
+      [fn, -(2 ** 31), 'kernel'],
+      [fn, 2 ** 31 - 1, 'kernel'],
+      [fn, 1.5, 'kernel'],
+      [fn, Number.NaN, 'kernel'],
+    ],
+    assertHpssKernels: [
+      [fn, 31, 31],
+      [fn, 2 ** 32 + 1, 31],
+      [fn, 31, 0.5],
+    ],
+    assertPositiveInteger: [
+      [fn, 0, 'hopLength'],
+      [fn, -1, 'hopLength'],
+      [fn, 1.5, 'hopLength'],
+      [fn, 2 ** 31, 'hopLength'],
+      [fn, 1, 'hopLength'],
+    ],
+    assertIntegerValue: [
+      [fn, '3', 'count'],
+      [fn, 3.5, 'count'],
+      [fn, 3, 'count'],
+    ],
+    assertEvenIntegerAtLeast: [
+      [fn, 3, 'nFft', 4, 2 ** 30],
+      [fn, 5, 'nFft', 4, 2 ** 30],
+      [fn, 2 ** 31, 'nFft', 4, 2 ** 30],
+      [fn, 4.5, 'nFft', 4, 2 ** 30],
+      [fn, 8, 'nFft', 4, 2 ** 30],
+    ],
+    assertBoundedInteger: [
+      [fn, 5, 'mode', 0, 4],
+      [fn, -1, 'mode', 0, 4],
+      [fn, 2.5, 'mode', 0, 4],
+      [fn, 2, 'mode', 0, 4],
+    ],
+    assertU7: [
+      [fn, 128, 'note'],
+      [fn, -1, 'note'],
+      [fn, 0.5, 'note'],
+      [fn, 127, 'note'],
+    ],
+    assertNibble: [
+      [fn, 16, 'channel'],
+      [fn, -1, 'channel'],
+      [fn, 15, 'channel'],
+    ],
+    assertU32: [
+      [fn, 2 ** 32, 'id'],
+      [fn, -1, 'id'],
+      [fn, 1.5, 'id'],
+      [fn, 2 ** 32 - 1, 'id'],
+    ],
+    assertInterleavedSamples: [
+      [fn, f32(1, 2, 3), 2, true],
+      [fn, f32(1, 2), 2.5, true],
+      [fn, [1, 2], 2, true],
+      [fn, f32(Number.NaN, 1), 2, true],
+      [fn, f32(Number.NaN, 1), 2, false],
+      [fn, f32(), 1, true],
+      [fn, f32(1, 2), 2, true],
+    ],
+    secondsToSampleCount: [
+      [fn, '1', 48000, 'startSec'],
+      [fn, Number.NaN, 48000, 'startSec'],
+      [fn, 1e300, 48000, 'startSec'],
+      [fn, 0.5, 48000, 'startSec'],
+      [fn, -0.25, 44100, 'offsetSec'],
+    ],
+    resolveSampleBound: [
+      [fn, 5, 0.1, 48000, 'start', 'startSec'],
+      [fn, undefined, undefined, 48000, 'start', 'startSec'],
+      [fn, null, 0.5, 48000, 'start', 'startSec'],
+      [fn, -1, undefined, 48000, 'start', 'startSec'],
+      [fn, -1, undefined, 48000, 'offset', 'offsetSec', 'signed'],
+      [fn, undefined, -0.5, 48000, 'start', 'startSec'],
+      [fn, Number.NaN, undefined, 48000, 'start', 'startSec'],
+      [fn, 'x', undefined, 48000, 'start', 'startSec'],
+      [fn, 12, undefined, 48000, 'start', 'startSec'],
+    ],
+    resolveOptionalNonNegative: [
+      [fn, undefined, 'gamma'],
+      [fn, null, 'gamma'],
+      [fn, '1', 'gamma'],
+      [fn, -1, 'gamma'],
+      [fn, Number.NaN, 'gamma'],
+      [fn, 0, 'gamma'],
+      [fn, 2.5, 'gamma'],
+    ],
+    resolveRenderFrame: [
+      [fn, undefined],
+      [fn, null],
+      [fn, -1],
+      [fn, '5'],
+      [fn, Number.POSITIVE_INFINITY],
+      [fn, 5],
+    ],
+  };
+
+  type Answer = { value: unknown } | { error: string; message: string; code: unknown };
+
+  const answer = (validator: unknown, args: unknown[]): Answer => {
+    try {
+      return { value: (validator as (...a: unknown[]) => unknown)(...args) };
+    } catch (error) {
+      const e = error as Error & { code?: unknown };
+      return { error: e.constructor.name, message: e.message, code: e.code };
+    }
+  };
+
+  const node = nodeValidation as unknown as Record<string, unknown>;
+  // Loaded through a computed path so this package's typecheck does not pull in the WASM sources.
+  const wasmValidationPath = fileURLToPath(
+    new URL('../../wasm/src/validation.ts', import.meta.url),
+  );
+  let wasm: Record<string, unknown> = {};
+  let shared: string[] = [];
+  beforeAll(async () => {
+    wasm = (await import(/* @vite-ignore */ wasmValidationPath)) as Record<string, unknown>;
+    shared = Object.keys(node).filter((name) => name in wasm);
+  });
+
+  it('drives every validator both packages export', () => {
+    expect(typeof wasm.assertSamples).toBe('function');
+    const functions = shared.filter((name) => typeof node[name] === 'function');
+    const uncovered = functions.filter((name) => !SURFACE_LOCAL.has(name) && !(name in CORPUS));
+    expect(uncovered).toEqual([]);
+  });
+
+  it('keeps the FFT option resolver byte-identical, since it calls only these validators', () => {
+    const source = (pkg: string): string =>
+      readFileSync(new URL(`../../${pkg}/src/_fft_options.ts`, import.meta.url), 'utf8');
+    expect(source('wasm')).toBe(source('node'));
+  });
+
+  it('shares the same bounds', () => {
+    for (const name of shared.filter((key) => typeof node[key] === 'number')) {
+      expect(wasm[name], name).toBe(node[name]);
+    }
+  });
+
+  it.each(Object.entries(CORPUS))('%s answers the same on both surfaces', (name, cases) => {
+    expect(typeof node[name], name).toBe('function');
+    expect(typeof wasm[name], name).toBe('function');
+    for (const args of cases) {
+      expect(answer(wasm[name], args), `${name}(${String(args.slice(1))})`).toEqual(
+        answer(node[name], args),
+      );
+    }
   });
 });

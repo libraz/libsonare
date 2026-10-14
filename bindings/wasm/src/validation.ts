@@ -355,7 +355,7 @@ export function assertEvenIntegerAtLeast(
     throw new RangeError(`${fnName}: ${argName} must be an integer in [${min}, ${max}]`);
   }
   if (value % 2 !== 0) {
-    throw new RangeError(`${fnName}: ${argName} must be an even integer`);
+    throw new RangeError(`${fnName}: ${argName} must be an even integer >= ${min}`);
   }
 }
 
@@ -437,7 +437,7 @@ export function assertInterleavedSamples(
   channels: number,
   validate: boolean,
 ): void {
-  assertSamples(fnName, samples, validate);
+  assertAudioSamples(fnName, samples, { validate });
   assertPositiveInteger(fnName, channels, 'channels');
   if (samples.length % channels !== 0) {
     throw new RangeError(`${fnName}: samples length must be a multiple of channels`);

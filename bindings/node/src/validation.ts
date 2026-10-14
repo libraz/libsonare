@@ -587,7 +587,10 @@ export function resolveOptionalNonNegative(
   if (typeof value !== 'number') {
     throw new TypeError(`${fnName}: ${argName} must be a number`);
   }
-  assertNonNegativeScalar(fnName, value, argName);
+  assertFiniteScalar(fnName, value, argName);
+  if (value < 0) {
+    throw new RangeError(`${fnName}: ${argName} must not be negative (omit it for the default)`);
+  }
   return value;
 }
 
