@@ -711,6 +711,107 @@ TEST_CASE("Clip command round-trips", "[arrangement]") {
   }
 }
 
+TEST_CASE("clip commands reject non-finite PPQ before mutation", "[arrangement]") {
+  const std::vector<double> invalid = {
+      std::numeric_limits<double>::quiet_NaN(),
+      std::numeric_limits<double>::infinity(),
+      -std::numeric_limits<double>::infinity(),
+  };
+
+  const auto check_rejected = [](auto make_command) {
+    Fixture f;
+    MidiContentStore store;
+    store.events[f.midi_clip] = {{0.5, 0x12345678u, 0x9abcdef0u, 0}};
+    store.sysex_payloads[77] = {0xf0, 0x7f, 0xf7};
+    const Project before = f.project;
+    const MidiContentStore store_before = store;
+    const ClipId next_clip_id = f.project.next_clip_id();
+    const TrackId next_track_id = f.project.next_track_id();
+    const SourceId next_source_id = f.project.next_source_id();
+    const uint32_t next_marker_id = f.project.next_marker_id();
+
+    EditCommandPtr command = make_command(f);
+    REQUIRE(command != nullptr);
+    CHECK_FALSE(command->apply(f.project, store));
+    CHECK(project_equal(f.project, before));
+    CHECK(f.project.next_clip_id() == next_clip_id);
+    CHECK(f.project.next_track_id() == next_track_id);
+    CHECK(f.project.next_source_id() == next_source_id);
+    CHECK(f.project.next_marker_id() == next_marker_id);
+    CHECK(store == store_before);
+  };
+
+  for (const double value : invalid) {
+    CAPTURE(value);
+    check_rejected([value](Fixture& f) -> EditCommandPtr {
+      return std::make_unique<TrimClip>(f.audio_clip, value, 960.0);
+    });
+    check_rejected([value](Fixture& f) -> EditCommandPtr {
+      return std::make_unique<TrimClip>(f.audio_clip, 0.0, value);
+    });
+    check_rejected([value](Fixture& f) -> EditCommandPtr {
+      return std::make_unique<MoveClip>(f.audio_clip, value);
+    });
+    check_rejected([value](Fixture& f) -> EditCommandPtr {
+      return std::make_unique<DuplicateClip>(f.audio_clip, value);
+    });
+    check_rejected([value](Fixture& f) -> EditCommandPtr {
+      return std::make_unique<SetClipLoop>(f.audio_clip, LoopMode::kLoop, value);
+    });
+  }
+
+  SECTION("SetClipLoop preserves finite negative length while inactive") {
+    Fixture f;
+    MidiContentStore store;
+    REQUIRE(SetClipLoop(f.audio_clip, LoopMode::kOff, -10.0).apply(f.project, store));
+    REQUIRE(f.project.find_clip(f.audio_clip) != nullptr);
+    CHECK(f.project.find_clip(f.audio_clip)->loop_length_ppq == -10.0);
+  }
+}
+
+TEST_CASE("TrimClip rejects non-finite derived PPQ offsets atomically", "[arrangement]") {
+  const double largest_finite = std::numeric_limits<double>::max();
+  Fixture f;
+  EditHistory history{f.project};
+  history.midi_content().events[f.midi_clip] = {{0.5, 0x12345678u, 0x9abcdef0u, 0}};
+  history.midi_content().sysex_payloads[77] = {0xf0, 0x7f, 0xf7};
+
+  EditClip* clip = history.project().find_clip_mutable(f.midi_clip);
+  REQUIRE(clip != nullptr);
+  clip->source_offset_ppq = largest_finite;
+  const Project before = history.project();
+  const MidiContentStore store_before = history.midi_content();
+  const ClipId next_clip_id = history.project().next_clip_id();
+  const TrackId next_track_id = history.project().next_track_id();
+  const SourceId next_source_id = history.project().next_source_id();
+  const uint32_t next_marker_id = history.project().next_marker_id();
+
+  // The inputs are finite, but source_offset + (new_start - old_start)
+  // overflows. The command must fail before the derived offset reaches the
+  // live project or the history stack.
+  CHECK_FALSE(history.apply(std::make_unique<TrimClip>(f.midi_clip, largest_finite, 960.0)));
+  CHECK(project_equal(history.project(), before));
+  CHECK(history.midi_content() == store_before);
+  CHECK(history.project().next_clip_id() == next_clip_id);
+  CHECK(history.project().next_track_id() == next_track_id);
+  CHECK(history.project().next_source_id() == next_source_id);
+  CHECK(history.project().next_marker_id() == next_marker_id);
+  CHECK(history.undo_depth() == 0);
+  CHECK(history.redo_depth() == 0);
+
+  // A large finite position remains valid when the derived offset also stays
+  // finite; no arbitrary PPQ ceiling is imposed by the command.
+  Fixture accepted_fixture;
+  EditHistory accepted{std::move(accepted_fixture.project)};
+  REQUIRE(accepted.apply(
+      std::make_unique<TrimClip>(accepted_fixture.midi_clip, largest_finite, 960.0)));
+  const EditClip* accepted_clip = accepted.project().find_clip(accepted_fixture.midi_clip);
+  REQUIRE(accepted_clip != nullptr);
+  CHECK(accepted_clip->start_ppq == largest_finite);
+  CHECK(accepted_clip->source_offset_ppq == largest_finite);
+  CHECK(accepted.undo_depth() == 1);
+}
+
 TEST_CASE("SetClipSource retargets one clip without replacing the shared source", "[arrangement]") {
   Fixture f;
   MidiContentStore store;
@@ -2689,11 +2790,9 @@ TEST_CASE("Comp render geometry survives undo redo and JSON, while real loop gap
   loop.takes = {{1, source_id, 0.0, "take"}};
   loop.active_take_id = 1;
   loop.comp_segments = {{0.0, 1.0, 1, 0.0}, {2.0, 4.0, 1, 0.0}};
-  const ClipId loop_id = gap_project.add_clip(loop);
-  REQUIRE(loop_id != 0);
-  MidiContentStore midi;
+  // A looping clip whose comp lane leaves a gap is refused at insertion, as on load.
   const Project gap_before = gap_project;
-  REQUIRE_FALSE(TrimClip(loop_id, 0.0, 4.0).apply(gap_project, midi));
+  CHECK(gap_project.add_clip(loop) == 0);
   CHECK(project_equal(gap_project, gap_before));
 }
 

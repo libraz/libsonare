@@ -7,6 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -377,6 +378,198 @@ TEST_CASE("invalid project: clip source kind must match track kind", "[arrangeme
     if (d.code == arr::Diagnostic::Code::kSourceKindMismatch) found = true;
   }
   REQUIRE(found);
+}
+
+TEST_CASE("compiler rejects non-finite PPQ for audio and MIDI clips", "[arrangement]") {
+  const std::array<double, 3> invalid = {
+      std::numeric_limits<double>::quiet_NaN(),
+      std::numeric_limits<double>::infinity(),
+      -std::numeric_limits<double>::infinity(),
+  };
+  const auto require_invalid_ppq = [](const arr::CompileResult& result, arr::ClipId clip_id) {
+    REQUIRE(result.has_errors());
+    REQUIRE_FALSE(result.timeline.has_value());
+    REQUIRE(std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
+                        [clip_id](const auto& diagnostic) {
+                          return diagnostic.code == arr::Diagnostic::Code::kInvalidPpq &&
+                                 diagnostic.severity == arr::Diagnostic::Severity::kError &&
+                                 diagnostic.target_id == clip_id;
+                        }));
+  };
+
+  const auto compile_invalid_audio = [&](auto mutate) {
+    Fixture fixture = make_fixture(128);
+    arr::EditClip* clip = fixture.project.find_clip_mutable(fixture.clip_id);
+    REQUIRE(clip != nullptr);
+    mutate(clip);
+    require_invalid_ppq(arr::compile(fixture.project, fixture.midi, fixture.audio),
+                        fixture.clip_id);
+  };
+  const auto compile_invalid_midi = [&](auto mutate) {
+    arr::Project project;
+    project.set_sample_rate(kProjectSr);
+    project.set_tempo_segments({{0.0, 120.0, 0.0}});
+    const arr::SourceId source = project.add_midi_source(arr::MidiSourceRef{});
+    arr::Track track;
+    track.kind = arr::Track::Kind::kMidi;
+    const arr::TrackId track_id = project.add_track(track);
+    arr::EditClip clip;
+    clip.track_id = track_id;
+    clip.source_id = source;
+    clip.length_ppq = 2.0;
+    const arr::ClipId clip_id = project.add_clip(clip);
+    REQUIRE(clip_id != 0);
+    arr::EditClip* mutable_clip = project.find_clip_mutable(clip_id);
+    REQUIRE(mutable_clip != nullptr);
+    mutate(mutable_clip);
+    require_invalid_ppq(arr::compile(project, arr::MidiContentStore{}, arr::AudioContentStore{}),
+                        clip_id);
+  };
+
+  for (const double value : invalid) {
+    compile_invalid_audio([value](arr::EditClip* clip) { clip->start_ppq = value; });
+    compile_invalid_audio([value](arr::EditClip* clip) { clip->length_ppq = value; });
+    compile_invalid_audio([value](arr::EditClip* clip) { clip->source_offset_ppq = value; });
+    compile_invalid_audio([value](arr::EditClip* clip) { clip->loop_length_ppq = value; });
+
+    compile_invalid_midi([value](arr::EditClip* clip) { clip->start_ppq = value; });
+    compile_invalid_midi([value](arr::EditClip* clip) { clip->length_ppq = value; });
+    compile_invalid_midi([value](arr::EditClip* clip) { clip->source_offset_ppq = value; });
+    compile_invalid_midi([value](arr::EditClip* clip) { clip->loop_length_ppq = value; });
+
+    compile_invalid_audio([value](arr::EditClip* clip) {
+      clip->loop_mode = arr::LoopMode::kLoop;
+      clip->loop_length_ppq = value;
+    });
+    compile_invalid_midi([value](arr::EditClip* clip) {
+      clip->loop_mode = arr::LoopMode::kLoop;
+      clip->loop_length_ppq = value;
+    });
+  }
+
+  compile_invalid_audio([](arr::EditClip* clip) {
+    clip->loop_mode = arr::LoopMode::kLoop;
+    clip->loop_length_ppq = -1.0;
+  });
+  compile_invalid_midi([](arr::EditClip* clip) {
+    clip->loop_mode = arr::LoopMode::kLoop;
+    clip->loop_length_ppq = -1.0;
+  });
+}
+
+TEST_CASE("compiler preserves finite PPQ boundaries and exact schedules", "[arrangement]") {
+  SECTION("audio signed zero and whole-clip loop") {
+    Fixture fixture = make_fixture(128);
+    arr::EditClip* clip = fixture.project.find_clip_mutable(fixture.clip_id);
+    REQUIRE(clip != nullptr);
+    clip->start_ppq = -0.0;
+    clip->source_offset_ppq = -0.0;
+    clip->loop_mode = arr::LoopMode::kLoop;
+    clip->loop_length_ppq = 0.0;
+
+    const arr::CompileResult result = arr::compile(fixture.project, fixture.midi, fixture.audio);
+    REQUIRE_FALSE(result.has_errors());
+    REQUIRE(result.timeline.has_value());
+    REQUIRE(result.timeline->audio_clips.size() == 1);
+    const auto& schedule = result.timeline->audio_clips.front();
+    // The existing audio-part calculation adds +0 to the raw -0 clip onset.
+    CHECK_FALSE(std::signbit(schedule.start_ppq));
+    CHECK(schedule.start_sample == 0);
+    CHECK(schedule.length_samples == 48000);
+    CHECK(schedule.loop_length_samples == 48000);
+  }
+
+  SECTION("MIDI signed zero and whole-clip loop") {
+    arr::Project project;
+    project.set_sample_rate(kProjectSr);
+    project.set_tempo_segments({{0.0, 120.0, 0.0}});
+    const arr::SourceId source = project.add_midi_source(arr::MidiSourceRef{});
+    arr::Track track;
+    track.kind = arr::Track::Kind::kMidi;
+    const arr::TrackId track_id = project.add_track(track);
+    arr::EditClip clip;
+    clip.track_id = track_id;
+    clip.source_id = source;
+    clip.start_ppq = -0.0;
+    clip.length_ppq = 2.0;
+    clip.source_offset_ppq = -0.0;
+    clip.loop_mode = arr::LoopMode::kLoop;
+    clip.loop_length_ppq = 0.0;
+    const arr::ClipId clip_id = project.add_clip(clip);
+    REQUIRE(clip_id != 0);
+
+    arr::MidiContentStore midi;
+    const auto on = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+    const auto off = sonare::midi::make_midi1_note_off(0, 0, 60, 0);
+    midi.events[clip_id] = {{0.0, on.words[0], 0}, {1.0, off.words[0], 0}};
+
+    const arr::CompileResult result = arr::compile(project, midi, arr::AudioContentStore{});
+    REQUIRE_FALSE(result.has_errors());
+    REQUIRE(result.timeline.has_value());
+    REQUIRE(result.timeline->midi_clips.size() == 1);
+    const auto& schedule = result.timeline->midi_clips.front();
+    CHECK(std::signbit(schedule.start_ppq));
+    CHECK(schedule.start_sample == 0);
+    CHECK(schedule.length_samples == 48000);
+    CHECK(schedule.loop_length_samples == 48000);
+    REQUIRE(schedule.events.size() == 2);
+    CHECK(schedule.events[0].render_frame == 0);
+    CHECK(schedule.events[1].render_frame == 24000);
+  }
+
+  SECTION("inactive finite negative loop length remains compilable") {
+    Fixture audio = make_fixture(128);
+    arr::EditClip* audio_clip = audio.project.find_clip_mutable(audio.clip_id);
+    REQUIRE(audio_clip != nullptr);
+    audio_clip->loop_length_ppq = -10.0;
+    const arr::CompileResult audio_result = arr::compile(audio.project, audio.midi, audio.audio);
+    REQUIRE_FALSE(audio_result.has_errors());
+    REQUIRE(audio_result.timeline.has_value());
+
+    arr::Project midi_project;
+    midi_project.set_sample_rate(kProjectSr);
+    midi_project.set_tempo_segments({{0.0, 120.0, 0.0}});
+    const arr::SourceId source = midi_project.add_midi_source(arr::MidiSourceRef{});
+    arr::Track track;
+    track.kind = arr::Track::Kind::kMidi;
+    const arr::TrackId track_id = midi_project.add_track(track);
+    arr::EditClip midi_clip;
+    midi_clip.track_id = track_id;
+    midi_clip.source_id = source;
+    midi_clip.length_ppq = 2.0;
+    midi_clip.loop_length_ppq = -10.0;
+    REQUIRE(midi_project.add_clip(midi_clip) != 0);
+    const arr::CompileResult midi_result =
+        arr::compile(midi_project, arr::MidiContentStore{}, arr::AudioContentStore{});
+    REQUIRE_FALSE(midi_result.has_errors());
+    REQUIRE(midi_result.timeline.has_value());
+  }
+
+  SECTION("very large finite MIDI start saturates sample position") {
+    arr::Project project;
+    project.set_sample_rate(kProjectSr);
+    project.set_tempo_segments({{0.0, 120.0, 0.0}});
+    const arr::SourceId source = project.add_midi_source(arr::MidiSourceRef{});
+    arr::Track track;
+    track.kind = arr::Track::Kind::kMidi;
+    const arr::TrackId track_id = project.add_track(track);
+    arr::EditClip clip;
+    clip.track_id = track_id;
+    clip.source_id = source;
+    clip.start_ppq = std::numeric_limits<double>::max();
+    clip.length_ppq = 2.0;
+    const arr::ClipId clip_id = project.add_clip(clip);
+    REQUIRE(clip_id != 0);
+
+    const arr::CompileResult result =
+        arr::compile(project, arr::MidiContentStore{}, arr::AudioContentStore{});
+    REQUIRE_FALSE(result.has_errors());
+    REQUIRE(result.timeline.has_value());
+    REQUIRE(result.timeline->midi_clips.size() == 1);
+    const auto& schedule = result.timeline->midi_clips.front();
+    CHECK(schedule.start_sample == std::numeric_limits<int64_t>::max());
+    CHECK(schedule.length_samples == 0);
+  }
 }
 
 TEST_CASE("invalid project: negative tempo returns an error and no timeline", "[arrangement]") {

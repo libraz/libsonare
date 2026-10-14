@@ -2,24 +2,39 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <optional>
 #include <string>
-#include <tuple>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include "arrangement/edit_command_internal.h"
 #include "arrangement/edit_source.h"
 #include "arrangement/harmonic_timeline.h"
 #include "automation/automation_lane.h"
 #include "mixing/api/scene.h"
 #include "serialize/project_serializer_internal.h"
+#include "serialize/project_serializer_private.h"
 #include "serialize/serialized_enum_bounds.h"
 #include "transport/tempo_map.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+
+namespace sonare::arrangement::detail {
+
+// The serializer is the only code that needs to normalize a loaded track's
+// private lane vector. Keeping this access in the decoder TU avoids adding a
+// mutable range to the installed Project API or changing Project's layout.
+struct ProjectSerializerAccess {
+  static std::vector<Track>& tracks(Project& project) noexcept { return project.tracks_; }
+};
+
+}  // namespace sonare::arrangement::detail
 
 namespace sonare::serialize {
 
@@ -338,17 +353,29 @@ void annotation_from_json(const Value& v, arrangement::ProjectAnnotation* a) {
   }
 }
 
-// Returns false (with the sidecar left untouched) when the payload base64 is
-// malformed; the caller records a diagnostic. module_id / schema_version are
-// preserved verbatim even for unregistered modules / unknown schema versions.
-bool sidecar_from_json(const Value& v, arrangement::AssistSidecar* out, size_t max_payload_bytes) {
+void sidecar_fields_from_json(const Value& v, arrangement::AssistSidecar* out) {
   out->module_id = str_or(v, "module_id", "");
   out->schema_version = uint_or(v, "schema_version", 0);
   out->target_track_id = uint_or(v, "target_track_id", 0);
   out->region_start_ppq = num_or(v, "region_start_ppq", 0.0);
   out->region_end_ppq = num_or(v, "region_end_ppq", 0.0);
-  const std::string b64 = str_or(v, "payload_b64", "");
-  return base64_decode(b64, &out->payload, max_payload_bytes);
+}
+
+bool sidecar_from_borrowed_payload(const std::string& encoded_payload,
+                                   arrangement::AssistSidecar* out, size_t max_payload_bytes) {
+  return base64_decode(encoded_payload, &out->payload, max_payload_bytes);
+}
+
+// Metadata is assigned before payload decoding, preserving the installed
+// helper's field-by-field mutation and metadata-first error precedence. A
+// malformed payload therefore leaves the decoded metadata in place while the
+// caller records the failed decode.
+bool sidecar_from_json(const Value& v, arrangement::AssistSidecar* out, size_t max_payload_bytes) {
+  sidecar_fields_from_json(v, out);
+  static const std::string kEmptyPayload;
+  const std::string* payload = strict_string_field(v, "payload_b64");
+  return sidecar_from_borrowed_payload(payload != nullptr ? *payload : kEmptyPayload, out,
+                                       max_payload_bytes);
 }
 
 mixing::api::Scene scene_from_value(const Value& v, BoundedDiagnostics* diagnostics) {
@@ -417,10 +444,39 @@ bool valid_entity_id(uint32_t id) noexcept {
 // Identity a sidecar is addressed by. SetAssistSidecar overwrites an existing
 // entry with this key rather than appending, and RemoveAssistSidecarInternal
 // erases the first match, so two entries sharing it make the second unreachable.
-using SidecarKey = std::tuple<std::string, arrangement::TrackId, double, double>;
+struct SidecarKey {
+  std::string module_id;
+  arrangement::TrackId target_track_id = 0;
+  double region_start_ppq = 0.0;
+  double region_end_ppq = 0.0;
 
-SidecarKey sidecar_key(const arrangement::AssistSidecar& s) {
-  return {s.module_id, s.target_track_id, s.region_start_ppq, s.region_end_ppq};
+  bool operator==(const SidecarKey& other) const noexcept {
+    return module_id == other.module_id && target_track_id == other.target_track_id &&
+           region_start_ppq == other.region_start_ppq && region_end_ppq == other.region_end_ppq;
+  }
+};
+
+double canonical_hash_zero(double value) noexcept { return value == 0.0 ? 0.0 : value; }
+
+struct SidecarKeyHash {
+  static void combine(size_t* seed, size_t value) noexcept {
+    // The constant is the conventional boost-style mixer; the exact value is
+    // irrelevant, but combining all fields keeps unrelated identities apart.
+    *seed ^= value + static_cast<size_t>(0x9e3779b9U) + (*seed << 6) + (*seed >> 2);
+  }
+
+  size_t operator()(const SidecarKey& key) const noexcept {
+    size_t seed = std::hash<std::string>{}(key.module_id);
+    combine(&seed, std::hash<arrangement::TrackId>{}(key.target_track_id));
+    combine(&seed, std::hash<double>{}(canonical_hash_zero(key.region_start_ppq)));
+    combine(&seed, std::hash<double>{}(canonical_hash_zero(key.region_end_ppq)));
+    return seed;
+  }
+};
+
+SidecarKey sidecar_key(const arrangement::AssistSidecar& sidecar) {
+  return {sidecar.module_id, sidecar.target_track_id, sidecar.region_start_ppq,
+          sidecar.region_end_ppq};
 }
 
 }  // namespace
@@ -498,12 +554,14 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(
       return InvariantViolation{"invalid_clip_fade_ppq",
                                 label + "fade lengths must be finite and non-negative"};
     }
-    // A loop length of 0 is the documented "loop the whole clip" request, so
-    // only negatives and non-finite values are out of contract.
-    if (!valid_position_ppq(c.loop_length_ppq) || !valid_position_ppq(c.loop_crossfade_ppq)) {
-      return InvariantViolation{
-          "invalid_clip_loop_ppq",
-          label + "loop_length_ppq and loop_crossfade_ppq must be finite and non-negative"};
+    // Loop length is finite; under LOOP it is non-negative and 0 loops the whole clip.
+    if (!std::isfinite(c.loop_length_ppq) ||
+        (c.loop_mode == arrangement::LoopMode::kLoop && !valid_position_ppq(c.loop_length_ppq)) ||
+        !valid_position_ppq(c.loop_crossfade_ppq)) {
+      return InvariantViolation{"invalid_clip_loop_ppq",
+                                label +
+                                    "loop_length_ppq must be finite (and non-negative when "
+                                    "looping) and loop_crossfade_ppq finite and non-negative"};
     }
     if (c.loop_anchor.has_value() &&
         !(std::isfinite(c.loop_anchor->period_seconds) && c.loop_anchor->period_seconds > 0.0 &&
@@ -529,6 +587,13 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(
                                       " source_offset_seconds must be finite and non-negative"};
       }
     }
+    if (!arrangement::detail::valid_clip_take_structure(*project, c, c.takes, c.active_take_id)) {
+      return InvariantViolation{
+          "invalid_clip_take_structure",
+          label +
+              "takes must have unique non-zero ids, a valid active_take_id, and no takes on a "
+              "MIDI track"};
+    }
     for (const arrangement::ClipCompSegment& segment : c.comp_segments) {
       if (!valid_position_ppq(segment.start_ppq) || !valid_length_ppq(segment.end_ppq) ||
           !(segment.end_ppq > segment.start_ppq)) {
@@ -536,6 +601,16 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(
             "invalid_clip_comp_segment_ppq",
             label + "comp segment bounds must be finite with 0 <= start_ppq < end_ppq"};
       }
+    }
+    if (!arrangement::detail::valid_comp_segments(c.takes, c.comp_segments, c.length_ppq) ||
+        (arrangement::detail::clip_is_on_midi_track(*project, c) && !c.comp_segments.empty()) ||
+        (c.loop_mode == arrangement::LoopMode::kLoop &&
+         arrangement::detail::comp_segments_split_clip(c.comp_segments, c.length_ppq))) {
+      return InvariantViolation{
+          "invalid_clip_comp_segments",
+          label +
+              "comp segments must reference known takes, be ordered within the clip, have "
+              "valid crossfades, and be compatible with MIDI tracks and looping"};
     }
     if (!arrangement::valid_clip_render_parts(c)) {
       return InvariantViolation{
@@ -593,18 +668,16 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(
   // address a lane by its target id alone, so a duplicate is unaddressable.
   // Typed mixer targets have one slot per kind on a track; opaque lanes do not
   // participate in that typed-target uniqueness rule.
-  std::vector<arrangement::TrackId> track_ids;
-  track_ids.reserve(project->tracks().size());
-  for (const arrangement::Track& track : project->tracks()) track_ids.push_back(track.id);
-  for (const arrangement::TrackId track_id : track_ids) {
-    arrangement::Track* track = project->find_track_mutable(track_id);
-    if (track == nullptr) continue;
+  for (arrangement::Track& track : arrangement::detail::ProjectSerializerAccess::tracks(*project)) {
+    const arrangement::TrackId track_id = track.id;
     std::vector<automation::AutomationLane> kept;
     std::vector<size_t> kept_order;
-    kept.reserve(track->automation_lanes.size());
-    kept_order.reserve(track->automation_lanes.size());
-    for (size_t source_index = 0; source_index < track->automation_lanes.size(); ++source_index) {
-      automation::AutomationLane& lane = track->automation_lanes[source_index];
+    kept.reserve(track.automation_lanes.size());
+    kept_order.reserve(track.automation_lanes.size());
+    std::unordered_map<uint32_t, size_t> first_lane_by_target;
+    first_lane_by_target.reserve(track.automation_lanes.size());
+    for (size_t source_index = 0; source_index < track.automation_lanes.size(); ++source_index) {
+      automation::AutomationLane& lane = track.automation_lanes[source_index];
       const uint32_t target = lane.target_param_id();
       if (target == 0) {
         // Target id 0 predates the non-zero requirement, so documents carrying
@@ -624,13 +697,10 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(
                                   "track " + std::to_string(track_id) +
                                       " contains an automation lane with an invalid target kind"};
       }
-      const auto existing = std::find_if(kept.begin(), kept.end(),
-                                         [target](const automation::AutomationLane& candidate) {
-                                           return candidate.target_param_id() == target;
-                                         });
-      if (existing != kept.end()) {
-        const size_t existing_index = static_cast<size_t>(std::distance(kept.begin(), existing));
-        *existing = std::move(lane);  // Last writer wins, in the first slot.
+      const auto existing = first_lane_by_target.find(target);
+      if (existing != first_lane_by_target.end()) {
+        const size_t existing_index = existing->second;
+        kept[existing_index] = std::move(lane);  // Last writer wins, in the first slot.
         kept_order[existing_index] = source_index;
         if (diagnostics != nullptr) {
           diagnostics->warn("duplicate_automation_lane",
@@ -640,6 +710,7 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(
         }
         continue;
       }
+      first_lane_by_target.emplace(target, kept.size());
       kept.push_back(std::move(lane));
       kept_order.push_back(source_index);
     }
@@ -648,6 +719,11 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(
     std::vector<size_t> normalized_order;
     normalized.reserve(kept.size());
     normalized_order.reserve(kept.size());
+    constexpr size_t kAutomationTargetKindSlotCount =
+        static_cast<size_t>(kMaxSerializedOrdinal<automation::AutomationTargetKind>) + 1;
+    constexpr size_t kNoAutomationTargetKindSlot = std::numeric_limits<size_t>::max();
+    std::array<size_t, kAutomationTargetKindSlotCount> typed_lane_slots;
+    typed_lane_slots.fill(kNoAutomationTargetKindSlot);
     for (size_t kept_index = 0; kept_index < kept.size(); ++kept_index) {
       automation::AutomationLane& lane = kept[kept_index];
       if (lane.target_kind() == automation::AutomationTargetKind::kOpaque) {
@@ -655,30 +731,28 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(
         normalized_order.push_back(kept_order[kept_index]);
         continue;
       }
-      const auto existing = std::find_if(normalized.begin(), normalized.end(),
-                                         [&lane](const automation::AutomationLane& candidate) {
-                                           return candidate.target_kind() == lane.target_kind();
-                                         });
-      if (existing != normalized.end()) {
-        const size_t existing_index =
-            static_cast<size_t>(std::distance(normalized.begin(), existing));
+      const automation::AutomationTargetKind kind = lane.target_kind();
+      const size_t kind_slot = static_cast<size_t>(kind);
+      const size_t existing_index = typed_lane_slots[kind_slot];
+      if (existing_index != kNoAutomationTargetKindSlot) {
         if (kept_order[kept_index] > normalized_order[existing_index]) {
-          *existing = std::move(lane);  // Last writer wins, in the first slot.
+          normalized[existing_index] = std::move(lane);  // Last writer wins, in the first slot.
           normalized_order[existing_index] = kept_order[kept_index];
         }
         if (diagnostics != nullptr) {
           diagnostics->warn("duplicate_automation_target_kind",
                             "track " + std::to_string(track_id) +
                                 " carries more than one automation lane for target kind " +
-                                std::to_string(static_cast<uint32_t>(existing->target_kind())) +
+                                std::to_string(static_cast<uint32_t>(kind)) +
                                 "; kept the last one");
         }
         continue;
       }
+      typed_lane_slots[kind_slot] = normalized.size();
       normalized.push_back(std::move(lane));
       normalized_order.push_back(kept_order[kept_index]);
     }
-    track->automation_lanes = std::move(normalized);
+    track.automation_lanes = std::move(normalized);
   }
 
   // ---- Assist sidecar field invariants -------------------------------------
@@ -708,22 +782,22 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(
   std::vector<arrangement::AssistSidecar>& sidecars = project->assist_sidecars_mutable();
   std::vector<arrangement::AssistSidecar> kept_sidecars;
   kept_sidecars.reserve(sidecars.size());
+  std::unordered_map<SidecarKey, size_t, SidecarKeyHash> first_sidecar_by_identity;
+  first_sidecar_by_identity.reserve(sidecars.size());
   for (arrangement::AssistSidecar& sidecar : sidecars) {
-    const SidecarKey key = sidecar_key(sidecar);
-    const auto existing = std::find_if(kept_sidecars.begin(), kept_sidecars.end(),
-                                       [&key](const arrangement::AssistSidecar& candidate) {
-                                         return sidecar_key(candidate) == key;
-                                       });
-    if (existing != kept_sidecars.end()) {
-      *existing = std::move(sidecar);
+    SidecarKey key = sidecar_key(sidecar);
+    const auto existing = first_sidecar_by_identity.find(key);
+    if (existing != first_sidecar_by_identity.end()) {
+      kept_sidecars[existing->second] = std::move(sidecar);
       if (diagnostics != nullptr) {
         diagnostics->warn("duplicate_assist_sidecar",
-                          "assist sidecar \"" + std::get<0>(key) +
+                          "assist sidecar \"" + key.module_id +
                               "\" is present more than once "
                               "for the same target scope; kept the last one");
       }
       continue;
     }
+    first_sidecar_by_identity.emplace(std::move(key), kept_sidecars.size());
     kept_sidecars.push_back(std::move(sidecar));
   }
   sidecars = std::move(kept_sidecars);

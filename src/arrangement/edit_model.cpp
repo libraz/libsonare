@@ -9,6 +9,9 @@
 #include <type_traits>
 #include <utility>
 
+#include "arrangement/edit_command_internal.h"
+#include "util/numeric_validation.h"
+
 namespace sonare::arrangement {
 
 namespace {
@@ -178,14 +181,15 @@ ClipId Project::add_clip(EditClip clip) {
     return 0;
   }
   // PPQ range validation.
-  if (!(clip.length_ppq > 0.0) || clip.start_ppq < 0.0 || clip.source_offset_ppq < 0.0 ||
+  if (!numeric::finite_positive(clip.length_ppq) || !numeric::finite_non_negative(clip.start_ppq) ||
+      !numeric::finite_non_negative(clip.source_offset_ppq) ||
       (clip.source_offset_seconds.has_value() &&
        !(std::isfinite(*clip.source_offset_seconds) && *clip.source_offset_seconds >= 0.0))) {
     return 0;
   }
-  // Loop policy validation. Under LOOP, 0 is allowed and means "loop the entire
-  // clip"; only negatives and NaN are rejected.
-  if (clip.loop_mode == LoopMode::kLoop && !(clip.loop_length_ppq >= 0.0)) {
+  // Loop length is finite in every mode; under LOOP it is non-negative and 0 loops the whole clip.
+  if (!numeric::finite(clip.loop_length_ppq) ||
+      (clip.loop_mode == LoopMode::kLoop && !numeric::finite_non_negative(clip.loop_length_ppq))) {
     return 0;
   }
   if (clip.loop_anchor.has_value()) {
@@ -195,12 +199,13 @@ ClipId Project::add_clip(EditClip clip) {
       return 0;
     }
   }
-  for (const ClipTake& take : clip.takes) {
-    if (take.id == 0 || !std::isfinite(take.source_offset_ppq) || take.source_offset_ppq < 0.0 ||
-        (take.source_offset_seconds.has_value() &&
-         !(std::isfinite(*take.source_offset_seconds) && *take.source_offset_seconds >= 0.0))) {
-      return 0;
-    }
+  // Take and comp structure follow the same rule the edit commands and the loader apply.
+  if (!detail::valid_clip_take_structure(*this, clip, clip.takes, clip.active_take_id) ||
+      !detail::valid_comp_segments(clip.takes, clip.comp_segments, clip.length_ppq) ||
+      (detail::clip_is_on_midi_track(*this, clip) && !clip.comp_segments.empty()) ||
+      (clip.loop_mode == LoopMode::kLoop &&
+       detail::comp_segments_split_clip(clip.comp_segments, clip.length_ppq))) {
+    return 0;
   }
   if (!valid_clip_render_parts(clip)) return 0;
   // Overlap policy.

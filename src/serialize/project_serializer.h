@@ -20,9 +20,10 @@
 /// even for unregistered modules and unknown schema versions — the core never
 /// interprets those bytes and carries binary ones as deterministic base64.
 ///
-/// The mixer @ref sonare::mixing::api::Scene is embedded through
-/// @c scene_to_json / @c scene_from_json, which exist in mixing-OFF builds too,
-/// so every build uses one scene walker and one key order.
+/// The mixer @ref sonare::mixing::api::Scene is embedded through its canonical
+/// hidden JSON @c Value builder and decoded through @c scene_from_value, which
+/// exist in mixing-OFF builds too, so every build uses one scene walker and one
+/// key order without a text round trip on the normal save path.
 ///
 /// ERRORS. Malformed input never crashes or reads out of bounds:
 /// @ref project_from_json returns a @ref DeserializeResult carrying diagnostics

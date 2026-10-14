@@ -67,6 +67,15 @@ bool clip_matches_track_kind(const Project& project, const EditClip& clip,
   return false;
 }
 
+bool valid_clip_ppq(const EditClip& clip) noexcept {
+  if (!numeric::finite_positive(clip.length_ppq) || !numeric::finite_non_negative(clip.start_ppq) ||
+      !numeric::finite_non_negative(clip.source_offset_ppq) ||
+      !numeric::finite(clip.loop_length_ppq)) {
+    return false;
+  }
+  return clip.loop_mode != LoopMode::kLoop || numeric::finite_non_negative(clip.loop_length_ppq);
+}
+
 // True when at least one track is soloed (then non-soloed tracks are silent).
 bool any_track_soloed(const Project& project) noexcept {
   for (const Track& track : project.tracks()) {
@@ -772,10 +781,10 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
                  !(std::isfinite(*take.source_offset_seconds) &&
                    *take.source_offset_seconds >= 0.0);
         });
-    if (clip.length_ppq <= 0.0 || clip.start_ppq < 0.0 || clip.source_offset_ppq < 0.0 ||
-        invalid_physical_offset || invalid_loop_anchor || invalid_take_physical_offset) {
+    if (!valid_clip_ppq(clip) || invalid_physical_offset || invalid_loop_anchor ||
+        invalid_take_physical_offset) {
       add_diag(&result, Diagnostic::Code::kInvalidPpq, Diagnostic::Severity::kError, clip.id,
-               "clip has non-positive length or negative start/offset PPQ");
+               "clip has non-finite or invalid length, start/offset, or loop PPQ");
       continue;
     }
     if (!valid_comp_segments(clip)) {
@@ -1182,9 +1191,9 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
     if (source_kind(*src) != SourceKind::kMidi) {
       continue;
     }
-    if (clip.length_ppq <= 0.0 || clip.start_ppq < 0.0 || clip.source_offset_ppq < 0.0) {
+    if (!valid_clip_ppq(clip)) {
       add_diag(&result, Diagnostic::Code::kInvalidPpq, Diagnostic::Severity::kError, clip.id,
-               "MIDI clip has non-positive length or negative start/offset PPQ");
+               "MIDI clip has non-finite or invalid length, start/offset, or loop PPQ");
       continue;
     }
     // A muted (or non-soloed-while-soloing) track emits no notes. Only the

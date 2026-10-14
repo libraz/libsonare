@@ -1,17 +1,13 @@
 #pragma once
 
 /// @file project_serializer_internal.h
-/// @brief Internal (non-public) declarations shared across the project
-///        serializer translation units. NOT a public header: it is not under
-///        include/sonare/ and is included by bare/relative quote only from the
-///        sibling project_serializer*.cpp TUs that compile into sonare_serialize.
+/// @brief Declarations shared across the project serializer translation units.
 ///
 /// The encode/decode walker bodies are split across sibling TUs; this header
 /// declares the small read helpers and the per-struct walkers once so every TU
-/// (including the public-entry driver) sees the same declarations. The helpers
-/// have external linkage within sonare::serialize::detail (a static library, no
-/// public symbol export) instead of the prior anonymous-namespace internal
-/// linkage; behaviour is unchanged.
+/// (including the public-entry driver) sees the same declarations. It is
+/// installed with the C++ header tree but is not a supported API. Borrowing
+/// implementation seams live in the non-installed project_serializer_private.h.
 
 #include <cstddef>
 #include <cstdint>
@@ -41,7 +37,6 @@ using json::Value;
 // ===========================================================================
 
 std::string base64_encode(const std::vector<uint8_t>& bytes);
-uint8_t base64_value(char c);
 bool base64_decode(const std::string& text, std::vector<uint8_t>* out,
                    size_t max_output_bytes = std::numeric_limits<size_t>::max());
 

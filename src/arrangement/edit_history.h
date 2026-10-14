@@ -25,14 +25,31 @@ namespace sonare::arrangement {
 /// is not owned by EditHistory (for example decoded PCM in an AudioContentStore
 /// owned by a C API wrapper). EditHistory calls this when apply() returned
 /// false or threw after a sidecar may have changed, and when a later commit
-/// step fails. Implementations MUST be allocation-free and noexcept so they
-/// can restore that sidecar while the value-owned Project snapshot is swapped
-/// back. The operation must be safe after a command has already rolled itself
-/// back.
+/// step fails. Preview code may also call it after a successful apply before
+/// discarding the candidate. A hook restores the most recent invocation, is
+/// idempotent after a command has already rolled itself back, and leaves the
+/// forward command replayable. Implementations MUST be allocation-free and
+/// noexcept so they can restore that sidecar while the value-owned Project
+/// snapshot is swapped back.
 class EditCommandRollback {
  public:
   virtual ~EditCommandRollback() = default;
   virtual void rollback_apply(Project& project, MidiContentStore& store) noexcept = 0;
+};
+
+/// Optional stable metadata for rollback-capable commands with external audio
+/// or warp side effects. Answers are conservative and replay-stable: they must
+/// be valid before apply(), after a successful apply, after rollback, and on
+/// the inverse command. Returning false promises that the command cannot affect
+/// that id; returning true may over-approximate its effects. Deriving from the
+/// rollback seam prevents a partial-scope command from opting into metadata
+/// without also providing a reversible side effect.
+class EditCommandExternalEffects : public EditCommandRollback {
+ public:
+  ~EditCommandExternalEffects() override = default;
+
+  virtual bool affects_audio_source(SourceId source_id) const noexcept = 0;
+  virtual bool affects_warp_source(WarpRefId warp_id) const noexcept = 0;
 };
 
 /// Undo/redo manager around a Project + MidiContentStore.

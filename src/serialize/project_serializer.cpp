@@ -14,11 +14,13 @@
 #include <unordered_set>
 #include <vector>
 
+#include "arrangement/edit_command_internal.h"
 #include "arrangement/edit_source.h"
 #include "core/audio.h"
 #include "mastering/api/legacy_insert_params.h"
 #include "mixing/api/scene.h"
 #include "serialize/project_serializer_internal.h"
+#include "serialize/project_serializer_private.h"
 #include "serialize/serialized_enum_bounds.h"
 #include "transport/tempo_map.h"
 #include "util/exception.h"
@@ -495,11 +497,11 @@ DeserializeResult project_from_json(const std::string& json_text) {
     }
     if (max_source_id > 0) project.ensure_next_source_id(max_source_id);
 
-    // Per-entry decode warnings (malformed clips / MIDI events, duplicate
-    // automation lanes) are bounded by a shared sink so a hostile document
-    // cannot make diagnostic reporting a far larger allocation than the input;
-    // finalized just before the successful return. Fatal errors bypass this and
-    // abort the load directly.
+    // Per-entry decode warnings, malformed warp/key entries, and normalization
+    // warnings share one bounded sink so a hostile document cannot make
+    // diagnostic reporting a far larger allocation than the input; finalize it
+    // just before the successful return. Fatal errors bypass this and abort the
+    // load directly.
     BoundedDiagnostics decode_diagnostics(&result.diagnostics);
 
     // Tracks.
@@ -563,10 +565,9 @@ DeserializeResult project_from_json(const std::string& json_text) {
         arrangement::WarpMapRef map = warp_map_from_json(wv);
         const uint32_t map_id = map.id;
         if (!project.set_warp_map(std::move(map))) {
-          result.diagnostics.push_back(
-              {DiagnosticSeverity::kWarning, "invalid_warp_map",
-               "warp map " + std::to_string(map_id) +
-                   " has an invalid id or malformed anchors and was dropped"});
+          decode_diagnostics.warn("invalid_warp_map",
+                                  "warp map " + std::to_string(map_id) +
+                                      " has an invalid id or malformed anchors and was dropped");
         } else {
           warp_ids.insert(map_id);
         }
@@ -653,6 +654,27 @@ DeserializeResult project_from_json(const std::string& json_text) {
                                        std::to_string(c.track_id) + " kind");
         }
       }
+      for (const arrangement::ClipTake& take : c.takes) {
+        const arrangement::SourceId take_source_id =
+            take.source_id == 0 ? c.source_id : take.source_id;
+        const auto take_source_it = source_index.find(take_source_id);
+        const arrangement::ClipSource* take_source =
+            take_source_it == source_index.end() ? nullptr : take_source_it->second;
+        if (take_source == nullptr) {
+          emit_referential_warning("dangling_clip_take_source",
+                                   "clip " + std::to_string(c.id) + " take " +
+                                       std::to_string(take.id) + " references missing source " +
+                                       std::to_string(take_source_id));
+        }
+        if (take_source != nullptr && track != nullptr &&
+            !arrangement::detail::track_kind_accepts_source_kind(
+                track->kind, arrangement::source_kind(*take_source))) {
+          emit_referential_warning(
+              "clip_take_source_kind_mismatch",
+              "clip " + std::to_string(c.id) + " take " + std::to_string(take.id) +
+                  " source kind does not match track " + std::to_string(c.track_id) + " kind");
+        }
+      }
     }
     if (suppressed_referential_diagnostics > 0) {
       result.diagnostics.push_back(
@@ -701,8 +723,8 @@ DeserializeResult project_from_json(const std::string& json_text) {
     if (max_marker_id > 0) project.ensure_next_marker_id(max_marker_id);
 
     // Annotation.
-    if (const auto* av = object_at(root, "annotation")) {
-      annotation_from_json(Value(*av), &project.annotation());
+    if (const auto* av = root.find("annotation"); av != nullptr && av->is_object()) {
+      annotation_from_json(*av, &project.annotation());
     }
 
     // Mixer scene.
@@ -710,21 +732,26 @@ DeserializeResult project_from_json(const std::string& json_text) {
       project.scene() = scene_from_value(*sv, &decode_diagnostics);
     }
 
-    // Assist sidecars (lossless, even for unregistered modules).
+    // Assist sidecars (lossless, even for unregistered modules). The payload
+    // string is borrowed from the admitted root until decode completes; this
+    // keeps the loader's payload-first limit/error order without copying it.
     std::size_t decoded_payload_bytes = 0;
     if (const auto* arr = array_at(root, "assist_sidecars")) {
       for (const auto& sv : *arr) {
         if (!sv.is_object()) continue;
-        const std::string encoded_payload = str_or(sv, "payload_b64", "");
+        static const std::string kEmptyPayload;
+        const std::string* encoded_payload = strict_string_field(sv, "payload_b64");
+        const std::string& payload = encoded_payload != nullptr ? *encoded_payload : kEmptyPayload;
         const std::size_t remaining_payload_bytes =
             import_limits.max_decoded_payload_bytes - decoded_payload_bytes;
-        if (base64_decoded_upper_bound(encoded_payload) > remaining_payload_bytes) {
+        if (base64_decoded_upper_bound(payload) > remaining_payload_bytes) {
           result.diagnostics.push_back({DiagnosticSeverity::kError, "resource_limit_exceeded",
                                         "project decoded payload limit exceeded"});
           return result;
         }
         arrangement::AssistSidecar sidecar;
-        if (!sidecar_from_json(sv, &sidecar, remaining_payload_bytes)) {
+        sidecar_fields_from_json(sv, &sidecar);
+        if (!sidecar_from_borrowed_payload(payload, &sidecar, remaining_payload_bytes)) {
           result.diagnostics.push_back({DiagnosticSeverity::kError, "invalid_sidecar_payload",
                                         "assist sidecar payload base64 is malformed"});
           return result;
@@ -749,9 +776,9 @@ DeserializeResult project_from_json(const std::string& json_text) {
             if (!payload_value.is_string()) continue;
             arrangement::ClipId handle = 0;
             if (!parse_uint32_key(handle_key, &handle)) {
-              result.diagnostics.push_back({DiagnosticSeverity::kWarning, "invalid_sysex_handle",
-                                            "MIDI SysEx payload handle key \"" + handle_key +
-                                                "\" is outside uint32 range; entry ignored"});
+              decode_diagnostics.warn("invalid_sysex_handle",
+                                      "MIDI SysEx payload handle key \"" + handle_key +
+                                          "\" is outside uint32 range; entry ignored");
               continue;
             }
             const std::size_t remaining_payload_bytes =
@@ -781,9 +808,9 @@ DeserializeResult project_from_json(const std::string& json_text) {
         if (!value.is_array()) continue;
         arrangement::ClipId clip_id = 0;
         if (!parse_uint32_key(key, &clip_id)) {
-          result.diagnostics.push_back(
-              {DiagnosticSeverity::kWarning, "invalid_midi_content_key",
-               "MIDI content clip key \"" + key + "\" is outside uint32 range; entry ignored"});
+          decode_diagnostics.warn(
+              "invalid_midi_content_key",
+              "MIDI content clip key \"" + key + "\" is outside uint32 range; entry ignored");
           continue;
         }
         arrangement::MidiClipEventList events;

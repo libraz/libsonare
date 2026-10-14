@@ -10,6 +10,7 @@
 #include "arrangement/edit_command.h"
 #include "arrangement/edit_command_internal.h"
 #include "arrangement/vocal_edit_sidecar.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::arrangement {
 namespace {
@@ -236,7 +237,7 @@ bool TrimClip::apply(Project& project, MidiContentStore& /*store*/) {
   if (current->warp_ref_id != 0) {
     return false;
   }
-  if (!(new_length_ppq_ > 0.0) || new_start_ppq_ < 0.0) {
+  if (!numeric::finite_positive(new_length_ppq_) || !numeric::finite_non_negative(new_start_ppq_)) {
     return false;
   }
   const double old_start = current->start_ppq;
@@ -260,9 +261,13 @@ bool TrimClip::apply(Project& project, MidiContentStore& /*store*/) {
     // Materialized audio offsets are physical: the seconds shift below decides
     // legality, and the PPQ mirrors (stale after a move across a tempo change)
     // follow without vetoing it.
-    new_offset = std::max(0.0, new_offset + delta);
+    const double shifted_offset = new_offset + delta;
+    if (!numeric::finite(shifted_offset)) return false;
+    new_offset = std::max(0.0, shifted_offset);
     for (ClipTake& take : next.takes) {
-      take.source_offset_ppq = std::max(0.0, take.source_offset_ppq + delta);
+      const double shifted_take_offset = take.source_offset_ppq + delta;
+      if (!numeric::finite(shifted_take_offset)) return false;
+      take.source_offset_ppq = std::max(0.0, shifted_take_offset);
     }
   } else if (!preserve_loop_source_offsets) {
     new_offset += delta;
@@ -272,6 +277,16 @@ bool TrimClip::apply(Project& project, MidiContentStore& /*store*/) {
     if (!detail::shift_take_offsets(&next.takes, delta)) {
       return false;
     }
+  }
+  // The model validates raw PPQ values at insertion, but this derived state
+  // can still overflow when a finite trim delta is added to a finite source
+  // offset. Keep the command atomic and preserve the finite PPQ invariant
+  // before any later derived geometry is prepared or the live clip is changed.
+  if (!numeric::finite_non_negative(new_offset) ||
+      std::any_of(next.takes.begin(), next.takes.end(), [](const ClipTake& take) {
+        return !numeric::finite_non_negative(take.source_offset_ppq);
+      })) {
+    return false;
   }
   std::vector<ClipCompSegment> shifted_segments =
       detail::shifted_clamped_comp_segments(next.comp_segments, -delta, new_length_ppq_);
@@ -346,7 +361,7 @@ bool MoveClip::apply(Project& project, MidiContentStore& /*store*/) {
   if (current == nullptr) {
     return false;
   }
-  if (new_start_ppq_ < 0.0) {
+  if (!numeric::finite_non_negative(new_start_ppq_)) {
     return false;
   }
   if (new_track_id_ != 0 && !project.has_track(new_track_id_)) {
@@ -400,13 +415,13 @@ bool DuplicateClip::apply(Project& project, MidiContentStore& store) {
   if (src == nullptr) {
     return false;
   }
+  if (!numeric::finite_non_negative(new_start_ppq_)) {
+    return false;
+  }
   EditClip copy = *src;
   if (!detail::materialize_audio_source_offsets(project, &copy)) return false;
   copy.id = 0;
   copy.start_ppq = new_start_ppq_;
-  if (copy.start_ppq < 0.0) {
-    return false;
-  }
   if (new_clip_id_ != 0) {
     copy.id = new_clip_id_;
     if (!detail::clip_can_be_inserted(project, copy) || !project.insert_clip_raw(copy)) {
@@ -479,10 +494,10 @@ bool SetClipLoop::apply(Project& project, MidiContentStore& /*store*/) {
   if (c == nullptr) {
     return false;
   }
-  // Under LOOP, loop_length_ppq_ of 0 means "loop the entire clip"; reject only
-  // negatives/NaN (and a comp lane that splits the clip, which loops cannot mix).
-  if (mode_ == LoopMode::kLoop &&
-      (!(loop_length_ppq_ >= 0.0) ||
+  // Loop length is finite in every mode; under LOOP it is non-negative and 0 loops the whole clip.
+  if (!numeric::finite(loop_length_ppq_) ||
+      (mode_ == LoopMode::kLoop && !numeric::finite_non_negative(loop_length_ppq_)) ||
+      (mode_ == LoopMode::kLoop &&
        detail::comp_segments_split_clip(c->comp_segments, c->length_ppq))) {
     return false;
   }

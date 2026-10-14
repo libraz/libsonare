@@ -3,6 +3,7 @@
 
 #include "arrangement/edit_model.h"
 
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <limits>
 #include <set>
@@ -216,6 +217,47 @@ TEST_CASE("Clip PPQ range validation", "[arrangement]") {
     CHECK(p.add_clip(c) == 0);
   }
 
+  SECTION("non-finite start, length, and source offset are rejected") {
+    const std::array<double, 3> invalid = {
+        std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::infinity(),
+        -std::numeric_limits<double>::infinity(),
+    };
+    for (const double value : invalid) {
+      EditClip start = base();
+      start.start_ppq = value;
+      CHECK(p.add_clip(start) == 0);
+
+      EditClip length = base();
+      length.length_ppq = value;
+      CHECK(p.add_clip(length) == 0);
+
+      EditClip offset = base();
+      offset.source_offset_ppq = value;
+      CHECK(p.add_clip(offset) == 0);
+    }
+    CHECK(p.clips().empty());
+    CHECK(p.next_clip_id() == 1);
+  }
+
+  SECTION("loop length is finite in every mode") {
+    const std::array<double, 3> invalid = {
+        std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::infinity(),
+        -std::numeric_limits<double>::infinity(),
+    };
+    for (const double value : invalid) {
+      EditClip c = base();
+      c.loop_length_ppq = value;
+      CHECK(p.add_clip(c) == 0);
+
+      c.loop_mode = LoopMode::kLoop;
+      CHECK(p.add_clip(c) == 0);
+    }
+    CHECK(p.clips().empty());
+    CHECK(p.next_clip_id() == 1);
+  }
+
   SECTION("looping accepts zero (whole-clip) and positive loop length but rejects negatives") {
     EditClip c = base();
     c.loop_mode = LoopMode::kLoop;
@@ -228,6 +270,96 @@ TEST_CASE("Clip PPQ range validation", "[arrangement]") {
     c.loop_length_ppq = 240.0;
     CHECK(p.add_clip(c) != 0);
   }
+
+  SECTION("inactive finite negative loop length is preserved") {
+    EditClip c = base();
+    c.loop_length_ppq = -10.0;
+    const ClipId id = p.add_clip(c);
+    REQUIRE(id != 0);
+    REQUIRE(p.find_clip(id) != nullptr);
+    CHECK(p.find_clip(id)->loop_length_ppq == -10.0);
+  }
+
+  SECTION("signed zero start and source offset remain valid") {
+    EditClip c = base();
+    c.start_ppq = -0.0;
+    c.source_offset_ppq = -0.0;
+    c.loop_mode = LoopMode::kLoop;
+    c.loop_length_ppq = 0.0;
+    const ClipId id = p.add_clip(c);
+    REQUIRE(id != 0);
+    REQUIRE(p.find_clip(id) != nullptr);
+    CHECK(std::signbit(p.find_clip(id)->start_ppq));
+    CHECK(std::signbit(p.find_clip(id)->source_offset_ppq));
+    CHECK(p.find_clip(id)->loop_length_ppq == 0.0);
+  }
+}
+
+TEST_CASE("Clip add refuses malformed takes and comp segments", "[arrangement]") {
+  Project p;
+  const auto track_source = make_audio_track(p);
+  MidiSourceRef midi;
+  midi.name = "lead";
+  const SourceId midi_sid = p.add_midi_source(midi);
+  Track mt;
+  mt.kind = Track::Kind::kMidi;
+  const TrackId midi_tid = p.add_track(mt);
+
+  auto audio = [&] {
+    EditClip c;
+    c.track_id = track_source.first;
+    c.source_id = track_source.second;
+    c.length_ppq = 480.0;
+    c.takes.resize(2);
+    c.takes[0].id = 1;
+    c.takes[1].id = 2;
+    c.active_take_id = 1;
+    return c;
+  };
+
+  SECTION("duplicate take ids") {
+    EditClip c = audio();
+    c.takes[1].id = 1;
+    CHECK(p.add_clip(c) == 0);
+  }
+  SECTION("active take missing from the takes") {
+    EditClip c = audio();
+    c.active_take_id = 3;
+    CHECK(p.add_clip(c) == 0);
+  }
+  SECTION("takes on a MIDI track") {
+    EditClip c = audio();
+    c.track_id = midi_tid;
+    c.source_id = midi_sid;
+    CHECK(p.add_clip(c) == 0);
+    c.takes.clear();
+    CHECK(p.add_clip(c) == 0);
+  }
+  SECTION("overlapping comp segments") {
+    EditClip c = audio();
+    c.comp_segments = {ClipCompSegment{0.0, 240.0, 1, 0.0}, ClipCompSegment{200.0, 480.0, 2, 0.0}};
+    CHECK(p.add_clip(c) == 0);
+  }
+  SECTION("comp segments on a MIDI track") {
+    EditClip c;
+    c.track_id = midi_tid;
+    c.source_id = midi_sid;
+    c.length_ppq = 480.0;
+    c.comp_segments = {ClipCompSegment{0.0, 480.0, 0, 0.0}};
+    CHECK(p.add_clip(c) == 0);
+  }
+  SECTION("comp segments that split a looping clip") {
+    EditClip c = audio();
+    c.loop_mode = LoopMode::kLoop;
+    c.comp_segments = {ClipCompSegment{0.0, 240.0, 1, 0.0}, ClipCompSegment{240.0, 480.0, 2, 0.0}};
+    CHECK(p.add_clip(c) == 0);
+  }
+  CHECK(p.clips().empty());
+
+  EditClip valid = audio();
+  valid.comp_segments = {ClipCompSegment{0.0, 240.0, 1, 0.0},
+                         ClipCompSegment{240.0, 480.0, 2, 0.0}};
+  CHECK(p.add_clip(valid) != 0);
 }
 
 TEST_CASE("Clip overlap policy on the same track", "[arrangement]") {

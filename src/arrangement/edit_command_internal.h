@@ -9,13 +9,15 @@
 /// per-domain edit_command_*.cpp files can share a single definition.
 ///
 /// The comp-segment well-formedness rule (@ref take_id_exists, @ref
-/// valid_comp_segments) is shared with edit_compiler.cpp as well: a segment list
-/// an edit command accepts must be one the compiler accepts, so the two paths
-/// cannot be allowed to carry separate copies of the rule.
+/// valid_comp_segments) is shared with edit_compiler.cpp and the project
+/// serializer as well: a segment list an edit command accepts must be one the
+/// compiler and loader accept, so the paths cannot carry separate copies of the
+/// rule.
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <unordered_set>
 #include <utility>
 
 #include "arrangement/edit_command.h"
@@ -87,29 +89,38 @@ inline bool clip_is_on_midi_track(const Project& project, const EditClip& clip) 
   return track != nullptr && track->kind == Track::Kind::kMidi;
 }
 
-inline bool valid_clip_takes(const Project& project, const EditClip& clip,
-                             const std::vector<ClipTake>& takes, TakeId active_take_id) {
+inline bool valid_clip_take_structure(const Project& project, const EditClip& clip,
+                                      const std::vector<ClipTake>& takes, TakeId active_take_id) {
   if (clip_is_on_midi_track(project, clip) && (!takes.empty() || active_take_id != 0)) {
     return false;
   }
-  std::vector<TakeId> ids;
+
+  std::unordered_set<TakeId> ids;
   ids.reserve(takes.size());
   for (const ClipTake& take : takes) {
-    if (take.id == 0 || take.source_offset_ppq < 0.0 || !std::isfinite(take.source_offset_ppq) ||
+    if (take.id == 0 || !std::isfinite(take.source_offset_ppq) || take.source_offset_ppq < 0.0 ||
         (take.source_offset_seconds.has_value() &&
          !(std::isfinite(*take.source_offset_seconds) && *take.source_offset_seconds >= 0.0))) {
       return false;
     }
-    if (std::find(ids.begin(), ids.end(), take.id) != ids.end()) {
+    if (!ids.insert(take.id).second) {
       return false;
     }
-    ids.push_back(take.id);
+  }
+  return take_id_exists(takes, active_take_id);
+}
+
+inline bool valid_clip_takes(const Project& project, const EditClip& clip,
+                             const std::vector<ClipTake>& takes, TakeId active_take_id) {
+  if (!valid_clip_take_structure(project, clip, takes, active_take_id)) return false;
+
+  for (const ClipTake& take : takes) {
     const SourceId source_id = take.source_id == 0 ? clip.source_id : take.source_id;
     if (!source_matches_track_kind(project, clip.track_id, source_id)) {
       return false;
     }
   }
-  return take_id_exists(takes, active_take_id);
+  return true;
 }
 
 /// Builds the control-thread tempo map used by source-offset materialization.

@@ -38,6 +38,10 @@
 
 namespace sonare::arrangement {
 
+namespace detail {
+struct ProjectSerializerAccess;
+}
+
 /// ABI / schema version of the arrangement project struct layout. Bumped when
 /// the model.s field layout changes in a way that affects serialization.
 inline constexpr uint32_t kProjectVersion = 2;
@@ -585,8 +589,12 @@ class Project {
   ///  - clip.track_id references an existing track,
   ///  - clip.source_id references an existing source,
   ///  - length_ppq > 0 and start_ppq >= 0 and source_offset_ppq >= 0,
-  ///  - loop_length_ppq >= 0 when loop_mode == kLoop (0 = loop the entire
-  ///    clip),
+  ///  - loop_length_ppq is finite, and >= 0 when loop_mode == kLoop (0 = loop
+  ///    the entire clip),
+  ///  - takes have unique non-zero ids, active_take_id names one of them (or
+  ///    is 0), and a MIDI-track clip carries no takes,
+  ///  - comp segments are ordered, reference known takes, are absent on a MIDI
+  ///    track, and cover the whole clip as one segment when looping,
   ///  - no overlap with an existing clip on the same track when the overlap
   ///    policy is kDisallow.
   /// The id field of the argument is ignored; a fresh id is allocated.
@@ -728,6 +736,9 @@ class Project {
   bool remove_part_rig(uint32_t destination_id, uint8_t part);
 
  private:
+  // The project serializer's private seam; consumers must not define this struct.
+  friend struct detail::ProjectSerializerAccess;
+
   // Default project sample rate. 48 kHz is the conventional DAW production rate
   // (the librosa analysis default of 22.05 kHz is lo-fi for arrangement render).
   double sample_rate_ = 48000.0;

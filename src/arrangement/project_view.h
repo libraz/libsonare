@@ -87,6 +87,9 @@ class ProjectView {
 
   // ---- MIDI content ---------------------------------------------------------
 
+  /// @brief The complete read-only MIDI content store, including SysEx payloads.
+  const MidiContentStore& midi_content() const noexcept { return midi_; }
+
   /// @brief Returns a read-only view of clip `clip_id`'s MIDI events, or nullptr
   ///        when the clip has no event list in the store.
   const MidiClipEventList* clip_events(ClipId clip_id) const noexcept {

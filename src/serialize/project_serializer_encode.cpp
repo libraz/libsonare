@@ -9,6 +9,7 @@
 #include "arrangement/harmonic_timeline.h"
 #include "automation/automation_lane.h"
 #include "mixing/api/scene.h"
+#include "mixing/api/scene_json_detail.h"
 #include "serialize/project_serializer_internal.h"
 #include "transport/tempo_map.h"
 
@@ -346,8 +347,36 @@ Value midi_content_to_json(const arrangement::MidiContentStore& midi) {
   return o;
 }
 
+namespace {
+
+// The scene params bag is admitted on its own before it is attached to the
+// scene object. That standalone depth can fit while the surrounding scene
+// wrappers put it over the parser's limit. Such a scene takes the dump/parse
+// path so it fails with the same parser error a standalone scene dump gives;
+// ordinary scenes stay as one in-memory Value.
+bool exceeds_default_json_depth(const Value& value, std::size_t depth) {
+  if (depth > json::kDefaultMaxDepth) return true;
+  if (value.is_array()) {
+    for (const auto& child : value.as_array()) {
+      if (exceeds_default_json_depth(child, depth + 1)) return true;
+    }
+  } else if (value.is_object()) {
+    for (const auto& [key, child] : value.as_object()) {
+      (void)key;
+      if (exceeds_default_json_depth(child, depth + 1)) return true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
+
 Value scene_to_value(const mixing::api::Scene& scene) {
-  return json::parse(mixing::api::scene_to_json(scene));
+  Value value = mixing::api::detail::scene_to_value(scene);
+  if (exceeds_default_json_depth(value, 0)) {
+    return json::parse(json::dump(value));
+  }
+  return value;
 }
 
 }  // namespace detail

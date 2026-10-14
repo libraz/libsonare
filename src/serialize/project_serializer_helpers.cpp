@@ -9,6 +9,7 @@
 
 #include "serialize/project_serializer.h"
 #include "serialize/project_serializer_internal.h"
+#include "serialize/project_serializer_private.h"
 #include "util/base64.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
@@ -56,11 +57,6 @@ std::string base64_encode(const std::vector<uint8_t>& bytes) {
   }
   return out;
 }
-
-// Base64 decode is shared with the mastering IR loader (see util/base64.h);
-// these thin wrappers satisfy the internal-header declarations while keeping a
-// single decoder implementation.
-uint8_t base64_value(char c) { return sonare::base64_char_value(c); }
 
 bool base64_decode(const std::string& text, std::vector<uint8_t>* out, size_t max_output_bytes) {
   return sonare::base64_decode(text, out, max_output_bytes);
@@ -130,14 +126,19 @@ bool parse_uint32_key(const std::string& key, uint32_t* out) {
   return true;
 }
 
-std::string str_or(const Value& obj, const char* key, const std::string& fallback) {
+const std::string* strict_string_field(const Value& obj, const char* key) {
   const auto* v = obj.find(key);
-  if (!v) return fallback;
+  if (!v) return nullptr;
   if (!v->is_string()) {
     throw SonareException(ErrorCode::InvalidFormat,
                           "string field must be a string: " + std::string(key));
   }
-  return v->as_string();
+  return &v->as_string();
+}
+
+std::string str_or(const Value& obj, const char* key, const std::string& fallback) {
+  const std::string* value = strict_string_field(obj, key);
+  return value != nullptr ? *value : fallback;
 }
 
 bool bool_or(const Value& obj, const char* key, bool fallback) {
