@@ -13,24 +13,37 @@ namespace sonare::arrangement {
 
 namespace detail {
 
-void prune_unreferenced_sysex_payloads(MidiContentStore* store) {
+void collect_sysex_handles(const MidiClipEventList& events, std::vector<uint32_t>* handles) {
+  for (const MidiClipEvent& event : events) {
+    if (event.sysex_handle != 0) handles->push_back(event.sysex_handle);
+  }
+}
+
+void prune_sysex_payloads(MidiContentStore* store, std::vector<uint32_t> candidates,
+                          const MidiClipEventList* changed) {
   if (store->sysex_payloads.empty()) return;
-  // One pass over the events collects every referenced handle; handle 0 is always kept.
-  std::vector<uint32_t> referenced;
-  for (const auto& [clip_id, events] : store->events) {
-    (void)clip_id;
+  // Handle 0 is always kept; only candidates that hold a payload can be pruned.
+  candidates.erase(std::remove_if(candidates.begin(), candidates.end(),
+                                  [&](uint32_t handle) {
+                                    return handle == 0 || store->sysex_payloads.count(handle) == 0;
+                                  }),
+                   candidates.end());
+  std::sort(candidates.begin(), candidates.end());
+  candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
+
+  const auto mark_referenced = [&candidates](const MidiClipEventList& events) {
     for (const MidiClipEvent& event : events) {
-      if (event.sysex_handle != 0) referenced.push_back(event.sysex_handle);
+      if (event.sysex_handle == 0) continue;
+      const auto it = std::lower_bound(candidates.begin(), candidates.end(), event.sysex_handle);
+      if (it != candidates.end() && *it == event.sysex_handle) candidates.erase(it);
+      if (candidates.empty()) return;
     }
+  };
+  if (changed != nullptr) mark_referenced(*changed);
+  for (auto it = store->events.begin(); !candidates.empty() && it != store->events.end(); ++it) {
+    mark_referenced(it->second);
   }
-  std::sort(referenced.begin(), referenced.end());
-  for (auto it = store->sysex_payloads.begin(); it != store->sysex_payloads.end();) {
-    if (it->first == 0 || std::binary_search(referenced.begin(), referenced.end(), it->first)) {
-      ++it;
-    } else {
-      it = store->sysex_payloads.erase(it);
-    }
-  }
+  for (uint32_t handle : candidates) store->sysex_payloads.erase(handle);
 }
 
 std::map<uint32_t, std::vector<uint8_t>> payloads_for_events(const MidiContentStore& store,
@@ -56,23 +69,46 @@ bool ReplaceMidiClipEvents::apply(Project& project, MidiContentStore& store) {
   if (!project.has_clip(clip_id_)) {
     return false;
   }
+  std::vector<uint32_t> released;
   for (const auto& [handle, payload] : sysex_payloads_) {
     store.sysex_payloads[handle] = payload;
+    released.push_back(handle);
   }
-  store.events[clip_id_] = events_;
-  detail::prune_unreferenced_sysex_payloads(&store);
+  if (erase_entry_) {
+    const auto entry = store.events.find(clip_id_);
+    if (entry != store.events.end()) {
+      detail::collect_sysex_handles(entry->second, &released);
+      store.events.erase(entry);
+    }
+    detail::prune_sysex_payloads(&store, std::move(released));
+    return true;
+  }
+  MidiClipEventList& slot = store.events[clip_id_];
+  detail::collect_sysex_handles(slot, &released);
+  slot = events_;
+  detail::prune_sysex_payloads(&store, std::move(released), &slot);
   return true;
 }
 
 EditCommandPtr ReplaceMidiClipEvents::invert(const Project& /*before*/,
                                              const MidiContentStore& store_before) const {
+  return inverse_from(store_before);
+}
+
+EditCommandPtr ReplaceMidiClipEvents::invert_before_apply(const Project& /*live*/,
+                                                          const MidiContentStore& store) const {
+  return inverse_from(store);
+}
+
+EditCommandPtr ReplaceMidiClipEvents::inverse_from(const MidiContentStore& store) const {
   MidiClipEventList prior;
-  const auto it = store_before.events.find(clip_id_);
-  if (it != store_before.events.end()) {
+  const auto it = store.events.find(clip_id_);
+  if (it != store.events.end()) {
     prior = it->second;
   }
-  auto payloads = detail::payloads_for_events(store_before, prior);
-  return std::make_unique<ReplaceMidiClipEvents>(clip_id_, std::move(prior), std::move(payloads));
+  auto payloads = detail::payloads_for_events(store, prior);
+  return std::make_unique<ReplaceMidiClipEvents>(clip_id_, std::move(prior), std::move(payloads),
+                                                 it == store.events.end());
 }
 
 bool PatchMidiClip::apply(Project& project, MidiContentStore& store) {
@@ -80,15 +116,17 @@ bool PatchMidiClip::apply(Project& project, MidiContentStore& store) {
     return false;
   }
   MidiClipEventList& list = store.events[patch_.clip_id];
+  std::vector<uint32_t> released;
   // Remove first (by value match), then add.
   for (const MidiClipEvent& rm : patch_.remove) {
     const auto it = std::find(list.begin(), list.end(), rm);
     if (it != list.end()) {
+      if (it->sysex_handle != 0) released.push_back(it->sysex_handle);
       list.erase(it);
     }
   }
   list.insert(list.end(), patch_.add.begin(), patch_.add.end());
-  detail::prune_unreferenced_sysex_payloads(&store);
+  detail::prune_sysex_payloads(&store, std::move(released), &list);
   return true;
 }
 
@@ -102,8 +140,8 @@ EditCommandPtr PatchMidiClip::invert(const Project& /*before*/,
     prior = it->second;
   }
   auto payloads = detail::payloads_for_events(store_before, prior);
-  return std::make_unique<ReplaceMidiClipEvents>(patch_.clip_id, std::move(prior),
-                                                 std::move(payloads));
+  return std::make_unique<ReplaceMidiClipEvents>(
+      patch_.clip_id, std::move(prior), std::move(payloads), it == store_before.events.end());
 }
 
 // ===========================================================================

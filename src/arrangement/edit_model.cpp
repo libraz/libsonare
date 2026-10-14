@@ -480,6 +480,73 @@ std::pair<ClipSource, bool> Project::remove_source(SourceId id) {
   return {ClipSource{}, false};
 }
 
+Project Project::snapshot_members(ProjectMemberMask mask) const {
+  using namespace project_member;
+  Project copy;
+  if (mask & kScalars) {
+    copy.sample_rate_ = sample_rate_;
+    copy.project_version_ = project_version_;
+    copy.overlap_policy_ = overlap_policy_;
+  }
+  if (mask & kTempo) copy.tempo_segments_ = tempo_segments_;
+  if (mask & kTimeSignatures) copy.time_signatures_ = time_signatures_;
+  if (mask & kSources) {
+    copy.sources_ = sources_;
+    copy.next_source_id_ = next_source_id_;
+  }
+  if (mask & kTracks) {
+    copy.tracks_ = tracks_;
+    copy.next_track_id_ = next_track_id_;
+  }
+  if (mask & kClips) {
+    copy.clips_ = clips_;
+    copy.next_clip_id_ = next_clip_id_;
+  }
+  if (mask & kMarkers) {
+    copy.markers_ = markers_;
+    copy.next_marker_id_ = next_marker_id_;
+  }
+  if (mask & kAnnotation) copy.annotation_ = annotation_;
+  if (mask & kScene) copy.scene_ = scene_;
+  if (mask & kAssistSidecars) copy.assist_sidecars_ = assist_sidecars_;
+  if (mask & kWarpMaps) copy.warp_maps_ = warp_maps_;
+  if (mask & kPartRigs) copy.part_rigs_ = part_rigs_;
+  return copy;
+}
+
+void Project::swap_members(Project& other, ProjectMemberMask mask) noexcept {
+  using namespace project_member;
+  using std::swap;
+  if (mask & kScalars) {
+    swap(sample_rate_, other.sample_rate_);
+    swap(project_version_, other.project_version_);
+    swap(overlap_policy_, other.overlap_policy_);
+  }
+  if (mask & kTempo) swap(tempo_segments_, other.tempo_segments_);
+  if (mask & kTimeSignatures) swap(time_signatures_, other.time_signatures_);
+  if (mask & kSources) {
+    swap(sources_, other.sources_);
+    swap(next_source_id_, other.next_source_id_);
+  }
+  if (mask & kTracks) {
+    swap(tracks_, other.tracks_);
+    swap(next_track_id_, other.next_track_id_);
+  }
+  if (mask & kClips) {
+    swap(clips_, other.clips_);
+    swap(next_clip_id_, other.next_clip_id_);
+  }
+  if (mask & kMarkers) {
+    swap(markers_, other.markers_);
+    swap(next_marker_id_, other.next_marker_id_);
+  }
+  if (mask & kAnnotation) swap(annotation_, other.annotation_);
+  if (mask & kScene) swap(scene_, other.scene_);
+  if (mask & kAssistSidecars) swap(assist_sidecars_, other.assist_sidecars_);
+  if (mask & kWarpMaps) swap(warp_maps_, other.warp_maps_);
+  if (mask & kPartRigs) swap(part_rigs_, other.part_rigs_);
+}
+
 void Project::ensure_next_source_id(SourceId id) noexcept {
   ensure_next_entity_id(id, next_source_id_);
 }

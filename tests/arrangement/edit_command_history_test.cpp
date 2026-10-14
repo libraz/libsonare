@@ -9,10 +9,14 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstdint>
+#include <functional>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <memory>
 #include <new>
+#include <set>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -739,7 +743,6 @@ TEST_CASE("RemoveClip keeps SysEx payloads another clip still references", "[arr
   store.sysex_payloads[0] = {0xF0, 0x7D, 0x00, 0xF7};
   store.sysex_payloads[31] = {0xF0, 0x7D, 0x31, 0xF7};
   store.sysex_payloads[32] = {0xF0, 0x7D, 0x32, 0xF7};
-  store.sysex_payloads[33] = {0xF0, 0x7D, 0x33, 0xF7};
   const MidiContentStore initial = store;
   const auto handles = [&history]() {
     std::vector<uint32_t> out;
@@ -751,7 +754,7 @@ TEST_CASE("RemoveClip keeps SysEx payloads another clip still references", "[arr
   };
 
   REQUIRE(history.apply(std::make_unique<RemoveClip>(f.midi_clip)));
-  // 31 is still referenced by the second clip; 32 lost its last reference; 33 had none.
+  // 31 is still referenced by the second clip; 32 lost its last reference.
   CHECK(handles() == std::vector<uint32_t>{0, 31});
   const MidiContentStore after_first = history.midi_content();
 
@@ -3025,4 +3028,682 @@ TEST_CASE("Loop enabling rejects a whole cache that selects a different take", "
 
   REQUIRE_FALSE(SetClipLoop(clip.id, LoopMode::kLoop, 0.0).apply(project, midi));
   CHECK(clip_equal(*project.find_clip(clip.id), before));
+}
+
+// ---------------------------------------------------------------------------
+// Member-scoped snapshots: commands that narrow affected_members() must leave
+// every other Project group untouched, and EditHistory must still restore the
+// full state on undo and on every failure path.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+namespace pm = sonare::arrangement::project_member;
+
+// Serializes the groups outside `mask` (and the id counters, which the
+// serializer omits) so "untouched" is compared on the persisted form.
+std::string outside_state(const Project& project, ProjectMemberMask mask) {
+  const Project rest = project.snapshot_members(pm::kAll & ~mask);
+  std::string state = sonare::serialize::project_to_json(rest, MidiContentStore{});
+  if ((mask & pm::kSources) == 0) state += "|s" + std::to_string(project.next_source_id());
+  if ((mask & pm::kTracks) == 0) state += "|t" + std::to_string(project.next_track_id());
+  if ((mask & pm::kClips) == 0) state += "|c" + std::to_string(project.next_clip_id());
+  if ((mask & pm::kMarkers) == 0) state += "|m" + std::to_string(project.next_marker_id());
+  return state;
+}
+
+std::string persisted_state(const EditHistory& history) {
+  return sonare::serialize::project_to_json(history.project(), history.midi_content());
+}
+
+// Persisted form plus the id counters: failure paths restore both, whereas an
+// undo keeps allocated ids reserved.
+std::string full_state(const EditHistory& history) {
+  return outside_state(history.project(), 0) + persisted_state(history);
+}
+
+// Fixture plus content in every group a masked command could wrongly disturb.
+struct PopulatedFixture : Fixture {
+  PopulatedFixture() {
+    for (int i = 0; i < 3; ++i) {
+      project.add_marker(100.0 * (i + 1), "marker " + std::to_string(i));
+    }
+    sonare::transport::TempoSegment tempo;
+    tempo.bpm = 97.0;
+    project.set_tempo_segments({tempo});
+    sonare::transport::TimeSignatureSegment sig;
+    sig.time_sig.numerator = 3;
+    project.set_time_signatures({sig});
+    AssistSidecar sidecar;
+    sidecar.module_id = "populated";
+    sidecar.payload = {1, 2, 3};
+    project.add_assist_sidecar(sidecar);
+    project.annotation().tempo_confidence = 0.5f;
+    project.annotation().sections.push_back({0.0, 480.0, "intro"});
+    project.set_sample_rate(44100.0);
+  }
+};
+
+struct MaskedCase {
+  const char* name;
+  std::function<EditCommandPtr(const Fixture&)> make;
+  ProjectMemberMask mask;
+};
+
+std::vector<MaskedCase> masked_cases() {
+  return {
+      {"AddTrack",
+       [](const Fixture&) {
+         Track track;
+         track.name = "added";
+         track.kind = Track::Kind::kMidi;
+         return std::make_unique<AddTrack>(track);
+       },
+       pm::kTracks},
+      {"AddClip",
+       [](const Fixture& f) {
+         EditClip clip;
+         clip.track_id = f.midi_track;
+         clip.source_id = f.midi_source;
+         clip.start_ppq = 4000.0;
+         clip.length_ppq = 480.0;
+         return std::make_unique<AddClip>(clip);
+       },
+       pm::kClips},
+      {"AttachMidiSource",
+       [](const Fixture&) {
+         MidiSourceRef ref;
+         ref.name = "attached";
+         return std::make_unique<AttachMidiSource>(ref);
+       },
+       pm::kSources},
+      {"SetMarker",
+       [](const Fixture&) { return std::make_unique<SetMarker>(0, 321.0, "new marker"); },
+       pm::kMarkers},
+      {"SetMarker replacing",
+       [](const Fixture&) { return std::make_unique<SetMarker>(1, 5.0, "renamed"); }, pm::kMarkers},
+      {"SetTempoSegment",
+       [](const Fixture&) {
+         sonare::transport::TempoSegment tempo;
+         tempo.bpm = 143.0;
+         return std::make_unique<SetTempoSegment>(std::vector{tempo});
+       },
+       pm::kTempo},
+      {"SetTimeSignatureSegment",
+       [](const Fixture&) {
+         sonare::transport::TimeSignatureSegment sig;
+         sig.time_sig.numerator = 7;
+         sig.time_sig.denominator = 8;
+         return std::make_unique<SetTimeSignatureSegment>(std::vector{sig});
+       },
+       pm::kTimeSignatures},
+      {"ReplaceMidiClipEvents",
+       [](const Fixture& f) {
+         MidiClipEventList events(1);
+         events[0].ppq = 10.0;
+         events[0].data0 = 0x40903C00;
+         events[0].data1 = 0x80000000;
+         return std::make_unique<ReplaceMidiClipEvents>(f.midi_clip, std::move(events));
+       },
+       0},
+  };
+}
+
+// A narrow-mask command that mutates before it fails, so rollback has real
+// partial state to remove.
+class MarkerThenFailCommand final : public EditCommand {
+ public:
+  explicit MarkerThenFailCommand(bool throw_bad_alloc) : throw_bad_alloc_(throw_bad_alloc) {}
+
+  bool apply(Project& project, MidiContentStore&) override {
+    project.add_marker(1.0, "partial");
+    if (throw_bad_alloc_) throw std::bad_alloc();
+    return false;
+  }
+  EditCommandPtr invert(const Project&, const MidiContentStore&) const override { return nullptr; }
+  const char* type_name() const noexcept override { return "MarkerThenFailCommand"; }
+  size_t retained_bytes() const noexcept override { return sizeof(*this); }
+  bool mutates_midi_store() const noexcept override { return false; }
+  ProjectMemberMask affected_members() const noexcept override { return pm::kMarkers; }
+
+ private:
+  bool throw_bad_alloc_;
+};
+
+std::vector<EditCommandPtr> import_shaped_commands(uint32_t first_marker_id, int markers,
+                                                   bool with_track = true,
+                                                   const std::string& marker_name = "m") {
+  std::vector<EditCommandPtr> commands;
+  sonare::transport::TempoSegment tempo;
+  tempo.bpm = 90.0;
+  commands.push_back(std::make_unique<SetTempoSegment>(std::vector{tempo}));
+  for (int i = 0; i < markers; ++i) {
+    commands.push_back(std::make_unique<SetMarker>(first_marker_id + static_cast<uint32_t>(i),
+                                                   10.0 * i, marker_name));
+  }
+  if (with_track) {
+    Track track;
+    track.name = "imported";
+    track.kind = Track::Kind::kMidi;
+    commands.push_back(std::make_unique<AddTrack>(track));
+  }
+  return commands;
+}
+
+// Markers plus `count` source/track/clip/events groups issued with explicit ids, the
+// way the SMF import path issues them.
+std::vector<EditCommandPtr> mixed_import_commands(const Project& project, int count,
+                                                  const std::string& marker_name) {
+  std::vector<EditCommandPtr> commands =
+      import_shaped_commands(project.next_marker_id(), count, false, marker_name);
+  for (int i = 0; i < count; ++i) {
+    const SourceId source_id = project.next_source_id() + static_cast<SourceId>(i);
+    const TrackId track_id = project.next_track_id() + static_cast<TrackId>(i);
+    const ClipId clip_id = project.next_clip_id() + static_cast<ClipId>(i);
+    auto attach = std::make_unique<AttachMidiSource>(MidiSourceRef{});
+    attach->reseed_id(source_id);
+    commands.push_back(std::move(attach));
+    Track track;
+    track.name = "imported";
+    track.kind = Track::Kind::kMidi;
+    auto add_track = std::make_unique<AddTrack>(track);
+    add_track->reseed_id(track_id);
+    commands.push_back(std::move(add_track));
+    EditClip clip;
+    clip.track_id = track_id;
+    clip.source_id = source_id;
+    clip.length_ppq = 480.0;
+    auto add_clip = std::make_unique<AddClip>(clip);
+    add_clip->reseed_id(clip_id);
+    commands.push_back(std::move(add_clip));
+    MidiClipEventList events(50);
+    for (size_t e = 0; e < events.size(); ++e) {
+      events[e].ppq = static_cast<double>(e);
+      events[e].data0 = 0x40903C00;
+      events[e].data1 = 0x80000000;
+    }
+    // One SysEx event per clip, each with its own handle and payload.
+    const uint32_t handle = 1000 + static_cast<uint32_t>(i);
+    events[0].sysex_handle = handle;
+    std::map<uint32_t, std::vector<uint8_t>> payloads;
+    payloads[handle] = {0xF0, static_cast<uint8_t>(i & 0x7F), 0xF7};
+    commands.push_back(
+        std::make_unique<ReplaceMidiClipEvents>(clip_id, std::move(events), std::move(payloads)));
+  }
+  return commands;
+}
+
+}  // namespace
+
+TEST_CASE("commands with a narrowed member mask leave every other group untouched",
+          "[arrangement][history][member_mask]") {
+  for (const MaskedCase& masked : masked_cases()) {
+    DYNAMIC_SECTION(masked.name) {
+      PopulatedFixture f;
+      EditHistory history(f.project);
+      auto command = masked.make(f);
+      CHECK(command->affected_members() == masked.mask);
+
+      const std::string before_full = persisted_state(history);
+      const std::string before_outside = outside_state(history.project(), masked.mask);
+      REQUIRE(history.apply(std::move(command)));
+      const std::string after_full = persisted_state(history);
+      CHECK(outside_state(history.project(), masked.mask) == before_outside);
+      CHECK(after_full != before_full);
+
+      REQUIRE(history.undo());
+      CHECK(persisted_state(history) == before_full);
+      REQUIRE(history.redo());
+      CHECK(persisted_state(history) == after_full);
+      REQUIRE(history.undo());
+      CHECK(persisted_state(history) == before_full);
+    }
+  }
+}
+
+TEST_CASE("a group reports the union of its children's member masks",
+          "[arrangement][history][member_mask]") {
+  PopulatedFixture f;
+  EditHistory history(f.project);
+  auto commands = import_shaped_commands(history.project().next_marker_id(), 2);
+  ProjectMemberMask expected = 0;
+  for (const auto& command : commands) expected |= command->affected_members();
+  CHECK(expected == (pm::kTempo | pm::kMarkers | pm::kTracks));
+
+  // The transaction's undo and redo run through the group, whose mask must cover
+  // every child for the round trip to restore them.
+  const std::string before = persisted_state(history);
+  REQUIRE(history.apply_transaction(std::move(commands)));
+  const std::string after = persisted_state(history);
+  CHECK(after != before);
+  REQUIRE(history.undo());
+  CHECK(persisted_state(history) == before);
+  REQUIRE(history.redo());
+  CHECK(persisted_state(history) == after);
+}
+
+TEST_CASE("a transaction that fails part way restores every group",
+          "[arrangement][history][member_mask][exception_safety]") {
+  for (const bool throw_bad_alloc : {false, true}) {
+    for (size_t fail_at = 0; fail_at <= 4; ++fail_at) {
+      DYNAMIC_SECTION((throw_bad_alloc ? "throw" : "false") << " at " << fail_at) {
+        PopulatedFixture f;
+        EditHistory history(f.project);
+        const std::string before = full_state(history);
+
+        std::vector<EditCommandPtr> commands =
+            import_shaped_commands(history.project().next_marker_id(), 3);
+        commands.insert(commands.begin() + static_cast<std::ptrdiff_t>(fail_at),
+                        std::make_unique<MarkerThenFailCommand>(throw_bad_alloc));
+        if (throw_bad_alloc) {
+          CHECK_THROWS_AS(history.apply_transaction(std::move(commands)), std::bad_alloc);
+        } else {
+          CHECK_FALSE(history.apply_transaction(std::move(commands)));
+        }
+        CHECK(full_state(history) == before);
+        CHECK(history.undo_depth() == 0);
+      }
+    }
+  }
+}
+
+TEST_CASE("a rejected masked command restores the groups it changed",
+          "[arrangement][history][member_mask][exception_safety]") {
+  for (const bool throw_bad_alloc : {false, true}) {
+    PopulatedFixture f;
+    EditHistory history(f.project);
+    const std::string before = full_state(history);
+    if (throw_bad_alloc) {
+      CHECK_THROWS_AS(history.apply(std::make_unique<MarkerThenFailCommand>(true)), std::bad_alloc);
+    } else {
+      CHECK_FALSE(history.apply(std::make_unique<MarkerThenFailCommand>(false)));
+    }
+    CHECK(full_state(history) == before);
+    CHECK(history.undo_depth() == 0);
+  }
+
+  PopulatedFixture f;
+  EditHistory history(f.project);
+  const std::string before = full_state(history);
+  CHECK_FALSE(history.apply(
+      std::make_unique<SetMarker>(std::numeric_limits<uint32_t>::max(), 1.0, "reserved id")));
+  EditClip orphan;
+  orphan.track_id = 9999;
+  orphan.source_id = f.audio_source;
+  orphan.length_ppq = 10.0;
+  CHECK_FALSE(history.apply(std::make_unique<AddClip>(orphan)));
+  CHECK(full_state(history) == before);
+}
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("a transaction leaves the project unchanged whichever allocation fails",
+          "[arrangement][history][member_mask][exception_safety]") {
+  size_t failures = 0;
+  bool succeeded = false;
+  for (size_t allocation = 1; allocation < 400 && !succeeded; ++allocation) {
+    PopulatedFixture f;
+    EditHistory history(f.project);
+    const std::string before = full_state(history);
+    auto commands = import_shaped_commands(history.project().next_marker_id(), 3);
+    bool threw = false;
+    {
+      sonare::test::AllocationFailureAtGuard guard(allocation);
+      try {
+        succeeded = history.apply_transaction(std::move(commands));
+      } catch (const std::bad_alloc&) {
+        threw = true;
+      }
+    }
+    if (threw) {
+      ++failures;
+      CHECK(full_state(history) == before);
+      CHECK(history.undo_depth() == 0);
+    }
+  }
+  CHECK(failures > 0);
+  CHECK(succeeded);
+}
+
+TEST_CASE("an import-shaped transaction copies only the groups its commands change",
+          "[arrangement][history][member_mask][cost]") {
+  const std::string long_name(40, 'x');
+  const auto count_allocations = [&](int existing_tracks, int count, bool mixed) {
+    PopulatedFixture f;
+    for (int i = 0; i < existing_tracks; ++i) {
+      Track track;
+      track.name = "a track name long enough to leave the small-string buffer";
+      track.kind = Track::Kind::kAudio;
+      REQUIRE(f.project.add_track(track) != 0);
+    }
+    EditHistory history(f.project);
+    auto commands =
+        mixed ? mixed_import_commands(history.project(), count, long_name)
+              : import_shaped_commands(history.project().next_marker_id(), count, false, long_name);
+    sonare::test::AllocationGuard guard;
+    REQUIRE(history.apply_transaction(std::move(commands)));
+    return static_cast<double>(guard.count());
+  };
+
+  // The untouched tracks are never cloned, so the count does not follow them.
+  // Whole-project snapshots per command would scale it with the track count.
+  const double few_tracks = count_allocations(10, 40, false);
+  const double many_tracks = count_allocations(160, 40, false);
+  CHECK(many_tracks < few_tracks * 1.25);
+
+  // Markers, sources, tracks and clips are issued as one transaction. No later
+  // command snapshots a group it replaces, so the count is linear in K; a
+  // per-command copy of the growing marker, track or clip list would make it
+  // quadratic (the long marker names make each marker copy allocate too).
+  const double k = count_allocations(10, 40, true);
+  const double two_k = count_allocations(10, 80, true);
+  CHECK(two_k < k * 2.5);
+}
+#endif
+
+TEST_CASE("an inverse built before apply equals the inverse built from the snapshot",
+          "[arrangement][history][member_mask]") {
+  struct Case {
+    const char* name;
+    std::function<EditCommandPtr(const Fixture&)> make;
+    bool provided;
+    bool seed_events = false;
+  };
+  const auto replace_events = [](const Fixture& f) {
+    MidiClipEventList events(2);
+    events[0].ppq = 10.0;
+    events[0].data0 = 0x40903C00;
+    events[0].data1 = 0x80000000;
+    events[1].ppq = 20.0;
+    events[1].data0 = 0x40803C00;
+    return std::make_unique<ReplaceMidiClipEvents>(f.midi_clip, std::move(events));
+  };
+  const std::vector<Case> cases = {
+      {"SetMarker replacing",
+       [](const Fixture&) { return std::make_unique<SetMarker>(2, 7.0, "replaced"); }, true},
+      {"SetMarker fresh explicit id",
+       [](const Fixture&) { return std::make_unique<SetMarker>(50, 7.0, "fresh"); }, true},
+      {"SetMarker fresh allocated id",
+       [](const Fixture&) { return std::make_unique<SetMarker>(0, 7.0, "n"); }, false},
+      {"SetTempoSegment",
+       [](const Fixture&) {
+         sonare::transport::TempoSegment tempo;
+         tempo.bpm = 133.0;
+         return std::make_unique<SetTempoSegment>(std::vector{tempo});
+       },
+       true},
+      {"SetTimeSignatureSegment",
+       [](const Fixture&) {
+         sonare::transport::TimeSignatureSegment sig;
+         sig.time_sig.numerator = 5;
+         return std::make_unique<SetTimeSignatureSegment>(std::vector{sig});
+       },
+       true},
+      {"ReplaceMidiClipEvents on a clip with events", replace_events, true, true},
+      {"ReplaceMidiClipEvents on a clip without events", replace_events, true, false},
+  };
+  for (const Case& test_case : cases) {
+    DYNAMIC_SECTION(test_case.name) {
+      PopulatedFixture f;
+      MidiContentStore before_store;
+      if (test_case.seed_events) {
+        MidiClipEventList seeded(1);
+        seeded[0].ppq = 5.0;
+        seeded[0].data0 = 0x40903E00;
+        seeded[0].data1 = 0x80000000;
+        before_store.events[f.midi_clip] = seeded;
+      }
+      const Project before = f.project;
+      auto command = test_case.make(f);
+      EditCommandPtr early = command->invert_before_apply(before, before_store);
+      CHECK((early != nullptr) == test_case.provided);
+
+      Project after = before;
+      MidiContentStore after_store = before_store;
+      REQUIRE(command->apply(after, after_store));
+      EditCommandPtr late = command->invert(before, before_store);
+      REQUIRE(late != nullptr);
+      if (early == nullptr) continue;
+
+      CHECK(std::string(early->type_name()) == std::string(late->type_name()));
+      Project undone_early = after;
+      Project undone_late = after;
+      MidiContentStore store_early = after_store;
+      MidiContentStore store_late = after_store;
+      REQUIRE(early->apply(undone_early, store_early));
+      REQUIRE(late->apply(undone_late, store_late));
+      const std::string expected = sonare::serialize::project_to_json(before, before_store);
+      CHECK(sonare::serialize::project_to_json(undone_early, store_early) == expected);
+      CHECK(sonare::serialize::project_to_json(undone_late, store_late) == expected);
+    }
+  }
+}
+
+TEST_CASE("commands that declare an inverse independent of the snapshot build the same inverse",
+          "[arrangement][history][member_mask]") {
+  PopulatedFixture f;
+  const Project before = f.project;
+  const MidiContentStore store;
+  std::vector<EditCommandPtr> commands;
+  Track track;
+  track.name = "independent";
+  commands.push_back(std::make_unique<AddTrack>(track));
+  EditClip clip;
+  clip.track_id = f.midi_track;
+  clip.source_id = f.midi_source;
+  clip.start_ppq = 4000.0;
+  clip.length_ppq = 480.0;
+  commands.push_back(std::make_unique<AddClip>(clip));
+  commands.push_back(std::make_unique<AttachMidiSource>(MidiSourceRef{}));
+
+  for (auto& command : commands) {
+    DYNAMIC_SECTION(command->type_name()) {
+      CHECK(command->invert_reads_members() == 0);
+      if (std::string(command->type_name()) == "AddClip") {
+        CHECK_FALSE(command->invert_reads_store());
+      }
+      Project after = before;
+      MidiContentStore scratch;
+      REQUIRE(command->apply(after, scratch));
+      // The inverse must not depend on what `before` holds.
+      EditCommandPtr with_before = command->invert(before, store);
+      EditCommandPtr with_empty = command->invert(Project{}, store);
+      REQUIRE(with_before != nullptr);
+      REQUIRE(with_empty != nullptr);
+      Project undone_a = after;
+      Project undone_b = after;
+      MidiContentStore store_a;
+      MidiContentStore store_b;
+      REQUIRE(with_before->apply(undone_a, store_a));
+      REQUIRE(with_empty->apply(undone_b, store_b));
+      CHECK(sonare::serialize::project_to_json(undone_a, store_a) ==
+            sonare::serialize::project_to_json(undone_b, store_b));
+    }
+  }
+}
+
+namespace {
+
+// Reference for the pruning contract: the handles some event still references.
+std::set<uint32_t> referenced_sysex_handles(const MidiContentStore& store) {
+  std::set<uint32_t> handles;
+  for (const auto& [clip_id, events] : store.events) {
+    (void)clip_id;
+    for (const MidiClipEvent& event : events) {
+      if (event.sysex_handle != 0) handles.insert(event.sysex_handle);
+    }
+  }
+  return handles;
+}
+
+std::set<uint32_t> payload_handles(const MidiContentStore& store) {
+  std::set<uint32_t> handles;
+  for (const auto& [handle, payload] : store.sysex_payloads) {
+    (void)payload;
+    handles.insert(handle);
+  }
+  return handles;
+}
+
+}  // namespace
+
+TEST_CASE("SysEx pruning keeps exactly the referenced payloads over a random edit sequence",
+          "[arrangement][history][sysex_prune]") {
+  uint64_t rng = 0x9E3779B97F4A7C15ull;
+  const auto next = [&rng](uint32_t bound) {
+    rng = rng * 6364136223846793005ull + 1442695040888963407ull;
+    return static_cast<uint32_t>((rng >> 33) % bound);
+  };
+
+  Project project;
+  Track track;
+  track.kind = Track::Kind::kMidi;
+  const TrackId first_track = project.add_track(track);
+  const TrackId second_track = project.add_track(track);
+  const SourceId source = project.add_midi_source(MidiSourceRef{});
+  std::vector<ClipId> clips;
+  for (int i = 0; i < 4; ++i) {
+    EditClip clip;
+    clip.track_id = i < 2 ? first_track : second_track;
+    clip.source_id = source;
+    clip.start_ppq = 1000.0 * i;
+    clip.length_ppq = 480.0;
+    clips.push_back(project.add_clip(clip));
+    REQUIRE(clips.back() != 0);
+  }
+  EditHistory history(project);
+
+  const auto make_events = [&](std::map<uint32_t, std::vector<uint8_t>>* payloads) {
+    MidiClipEventList events(1 + next(6));
+    for (size_t e = 0; e < events.size(); ++e) {
+      events[e].ppq = static_cast<double>(e);
+      events[e].data0 = 0x40903C00;
+      events[e].data1 = 0x80000000;
+      if (next(2) == 0) {
+        const uint32_t handle = 1 + next(6);
+        events[e].sysex_handle = handle;
+        (*payloads)[handle] = {0xF0, static_cast<uint8_t>(handle), static_cast<uint8_t>(next(100)),
+                               0xF7};
+      }
+    }
+    return events;
+  };
+
+  for (int step = 0; step < 300; ++step) {
+    const uint32_t action = next(10);
+    const ClipId clip = clips[next(static_cast<uint32_t>(clips.size()))];
+    if (action < 4) {
+      std::map<uint32_t, std::vector<uint8_t>> payloads;
+      MidiClipEventList events = make_events(&payloads);
+      history.apply(
+          std::make_unique<ReplaceMidiClipEvents>(clip, std::move(events), std::move(payloads)));
+    } else if (action < 6) {
+      MidiClipPatch patch;
+      patch.clip_id = clip;
+      const auto it = history.midi_content().events.find(clip);
+      if (it != history.midi_content().events.end() && !it->second.empty()) {
+        patch.remove.push_back(it->second[next(static_cast<uint32_t>(it->second.size()))]);
+      }
+      MidiClipEvent added;
+      added.ppq = 99.0;
+      added.data0 = 0x40903C00;
+      added.data1 = 0x80000000;
+      const auto present = payload_handles(history.midi_content());
+      if (!present.empty() && next(2) == 0) {
+        auto pick = present.begin();
+        std::advance(pick, next(static_cast<uint32_t>(present.size())));
+        added.sysex_handle = *pick;
+      }
+      patch.add.push_back(added);
+      history.apply(std::make_unique<PatchMidiClip>(patch));
+    } else if (action == 6) {
+      history.apply(std::make_unique<RemoveClip>(clip));
+    } else if (action == 7) {
+      history.apply(std::make_unique<RemoveTrack>(next(2) == 0 ? first_track : second_track));
+    } else if (action == 8) {
+      history.undo();
+    } else {
+      history.redo();
+    }
+    INFO("step " << step << " action " << action);
+    REQUIRE(payload_handles(history.midi_content()) ==
+            referenced_sysex_handles(history.midi_content()));
+    // The whole-store prune is the contract the incremental one must match.
+    MidiContentStore full = history.midi_content();
+    full.prune_unreferenced_sysex_payloads();
+    REQUIRE(full == history.midi_content());
+  }
+}
+
+TEST_CASE("loading a project drops SysEx payloads no event references",
+          "[arrangement][history][sysex_prune][serialize]") {
+  Fixture f;
+  MidiContentStore store;
+  MidiClipEventList events(2);
+  events[0].ppq = 0.0;
+  events[0].data0 = 0x40903C00;
+  events[0].data1 = 0x80000000;
+  events[1].ppq = 10.0;
+  events[1].data0 = 0x40803C00;
+  events[1].sysex_handle = 3;
+  store.events[f.midi_clip] = events;
+  store.sysex_payloads[3] = {0xF0, 0x01, 0xF7};
+  store.sysex_payloads[9] = {0xF0, 0x02, 0xF7};  // referenced by nothing
+
+  const std::string json = sonare::serialize::project_to_json(f.project, store);
+  const auto loaded = sonare::serialize::project_from_json(json);
+  REQUIRE(loaded.project.has_value());
+  CHECK(payload_handles(loaded.midi) == std::set<uint32_t>{3});
+}
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("replacing a clip's events does not rescan the store for SysEx references",
+          "[arrangement][history][sysex_prune][cost]") {
+  const auto count_allocations = [](int other_clips) {
+    PopulatedFixture f;
+    MidiContentStore store;
+    for (int i = 0; i < other_clips; ++i) {
+      MidiClipEventList events(3);
+      events[1].sysex_handle = 100 + static_cast<uint32_t>(i);
+      store.events[1000 + static_cast<ClipId>(i)] = std::move(events);
+      store.sysex_payloads[100 + static_cast<uint32_t>(i)] = {0xF0, 0xF7};
+    }
+    MidiClipEventList events(3);
+    events[0].sysex_handle = 7;
+    std::map<uint32_t, std::vector<uint8_t>> payloads;
+    payloads[7] = {0xF0, 0x01, 0xF7};
+    ReplaceMidiClipEvents command(f.midi_clip, std::move(events), std::move(payloads));
+    sonare::test::AllocationGuard guard;
+    REQUIRE(command.apply(f.project, store));
+    return guard.count();
+  };
+  // A rescan builds a vector over every referencing event in the store, whose
+  // growth allocates more as the store grows.
+  CHECK(count_allocations(1600) <= count_allocations(100));
+}
+#endif
+
+TEST_CASE("undoing an event replacement restores the absence of a store entry",
+          "[arrangement][history][member_mask]") {
+  Fixture f;
+  EditHistory history(f.project);
+  const ClipId clip = f.midi_clip;
+  REQUIRE(history.midi_content().events.find(clip) == history.midi_content().events.end());
+  const std::string before = persisted_state(history);
+
+  MidiClipEventList events(1);
+  events[0].ppq = 3.0;
+  events[0].data0 = 0x40903C00;
+  events[0].data1 = 0x80000000;
+  REQUIRE(history.apply(std::make_unique<ReplaceMidiClipEvents>(clip, std::move(events))));
+  const std::string after = persisted_state(history);
+  CHECK(after != before);
+
+  REQUIRE(history.undo());
+  CHECK(persisted_state(history) == before);
+  CHECK(history.midi_content().events.find(clip) == history.midi_content().events.end());
+  REQUIRE(history.redo());
+  CHECK(persisted_state(history) == after);
+  REQUIRE(history.undo());
+  CHECK(persisted_state(history) == before);
+  CHECK(history.midi_content().events.find(clip) == history.midi_content().events.end());
 }

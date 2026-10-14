@@ -75,6 +75,14 @@ class EditCommandGroup final : public EditCommand, public EditCommandRollback {
     return total;
   }
 
+  ProjectMemberMask affected_members() const noexcept override {
+    ProjectMemberMask mask = 0;
+    for (const auto& command : commands_) {
+      if (command != nullptr) mask |= command->affected_members();
+    }
+    return mask;
+  }
+
   bool mutates_midi_store() const noexcept override {
     // The group mutates the store iff any child does; an empty group cannot.
     for (const auto& command : commands_) {
@@ -144,13 +152,39 @@ void rollback_command(EditCommand* command, Project& project, MidiContentStore& 
   if (rollback != nullptr) rollback->rollback_apply(project, store);
 }
 
-void swap_project_snapshot(Project& project, Project& snapshot) noexcept {
-  // Project is composed solely of standard-library value containers with the
-  // default allocator. Their swaps are non-allocating and noexcept; keeping
-  // the snapshot mutable avoids a copy assignment (and its possible throw) on
-  // an exception path.
-  std::swap(project, snapshot);
-}
+// Pre-state of the Project groups a command may modify. Groups outside the mask
+// are untouched by the command, so the live project already holds their
+// pre-state. The member swaps are non-allocating and noexcept, which keeps
+// restoring on an exception path free of a throwing copy assignment. Between
+// calls the snapshot always holds the pre-state of its groups.
+class MemberSnapshot {
+ public:
+  MemberSnapshot(const Project& live, ProjectMemberMask mask)
+      : saved_(live.snapshot_members(mask)), mask_(mask) {}
+
+  void restore(Project& live) noexcept { live.swap_members(saved_, mask_); }
+
+  // Builds the inverse while `live` temporarily shows the pre-state of `mask`
+  // (a subset of the snapshot's groups); the post-state is swapped back out even
+  // when invert() throws.
+  EditCommandPtr invert(const EditCommand& command, Project& live,
+                        const MidiContentStore& store_before, ProjectMemberMask mask) {
+    live.swap_members(saved_, mask);
+    const SwapBack swap_back{live, saved_, mask};
+    return command.invert(live, store_before);
+  }
+
+ private:
+  struct SwapBack {
+    Project& live;
+    Project& saved;
+    ProjectMemberMask mask;
+    ~SwapBack() { live.swap_members(saved, mask); }
+  };
+
+  Project saved_;
+  ProjectMemberMask mask_;
+};
 
 void swap_store_snapshot(MidiContentStore& store, MidiContentStore& snapshot) noexcept {
   std::swap(store, snapshot);
@@ -252,12 +286,12 @@ bool EditHistory::apply(EditCommandPtr command) {
   if (command == nullptr) {
     return false;
   }
-  // Snapshot the pre-apply state so the inverse can capture prior values. The
-  // Project and MidiContentStore are value types, so the copy is a deep clone.
-  // Skip cloning the (potentially large) MIDI store for commands that provably
-  // cannot mutate it; store_before then aliases the live store, which apply()
-  // leaves untouched.
-  Project before = project_;
+  // Snapshot the pre-apply state so the inverse can capture prior values. Only
+  // the Project groups the command may modify are cloned, and the (potentially
+  // large) MIDI store is skipped for commands that provably cannot mutate it;
+  // store_before then aliases the live store, which apply() leaves untouched.
+  const ProjectMemberMask mask = command->affected_members();
+  MemberSnapshot before(project_, mask);
   const bool clone_store = command->mutates_midi_store();
   MidiContentStore store_copy;
   if (clone_store) {
@@ -276,20 +310,20 @@ bool EditHistory::apply(EditCommandPtr command) {
       // external sidecar and change it before returning false.
       rollback_command(command.get(), project_, midi_content_);
       undo_stack_.pop_back();
-      swap_project_snapshot(project_, before);
+      before.restore(project_);
       if (clone_store) {
         swap_store_snapshot(midi_content_, store_copy);
       }
       return false;
     }
 
-    EditCommandPtr inverse = command->invert(before, store_before);
+    EditCommandPtr inverse = before.invert(*command, project_, store_before, mask);
     if (inverse == nullptr) {
       // No inverse means the command is not safely undoable; reject it without
       // leaving a sidecar ahead of the history.
       rollback_command(command.get(), project_, midi_content_);
       undo_stack_.pop_back();
-      swap_project_snapshot(project_, before);
+      before.restore(project_);
       if (clone_store) {
         swap_store_snapshot(midi_content_, store_copy);
       }
@@ -308,7 +342,7 @@ bool EditHistory::apply(EditCommandPtr command) {
     // without allocating; value stores are then restored with noexcept swaps.
     rollback_command(command.get(), project_, midi_content_);
     undo_stack_.pop_back();
-    swap_project_snapshot(project_, before);
+    before.restore(project_);
     if (clone_store) {
       swap_store_snapshot(midi_content_, store_copy);
     }
@@ -332,7 +366,11 @@ bool EditHistory::apply_transaction(std::vector<EditCommandPtr> commands) {
     }
   }
 
-  Project transaction_before = project_;
+  ProjectMemberMask transaction_mask = 0;
+  for (const auto& command : commands) {
+    if (command != nullptr) transaction_mask |= command->affected_members();
+  }
+  MemberSnapshot transaction_before(project_, transaction_mask);
   MidiContentStore transaction_store_before;
   if (batch_mutates_store) {
     transaction_store_before = midi_content_;
@@ -360,7 +398,7 @@ bool EditHistory::apply_transaction(std::vector<EditCommandPtr> commands) {
   EditCommand* active_command = nullptr;
 
   const auto restore_snapshots = [&]() noexcept {
-    swap_project_snapshot(project_, transaction_before);
+    transaction_before.restore(project_);
     if (batch_mutates_store) {
       swap_store_snapshot(midi_content_, transaction_store_before);
     }
@@ -386,19 +424,28 @@ bool EditHistory::apply_transaction(std::vector<EditCommandPtr> commands) {
         return false;
       }
 
-      // The first command's pre-state is the transaction snapshot itself.
+      // A command that can build its inverse from the live project needs no
+      // snapshot. Otherwise the first command's pre-state is the transaction
+      // snapshot itself, and later ones snapshot only the groups invert() reads.
       const bool first = index == 0;
-      std::optional<Project> before_copy;
-      if (!first) before_copy.emplace(project_);
-      const Project& before = first ? transaction_before : *before_copy;
+      EditCommandPtr early_inverse = command->invert_before_apply(project_, midi_content_);
+      const ProjectMemberMask invert_mask =
+          command->invert_reads_members() & command->affected_members();
+      std::optional<MemberSnapshot> before_copy;
+      if (early_inverse == nullptr && !first && invert_mask != 0) {
+        before_copy.emplace(project_, invert_mask);
+      }
       const bool clone_store = command->mutates_midi_store();
+      const bool copy_store =
+          clone_store && !first && early_inverse == nullptr && command->invert_reads_store();
       MidiContentStore store_copy;
-      if (clone_store && !first) {
+      if (copy_store) {
         store_copy = midi_content_;
       }
-      const MidiContentStore& store_before = !clone_store ? midi_content_
-                                             : first      ? transaction_store_before
-                                                          : store_copy;
+      // A command that never reads store_before sees the live store instead.
+      const MidiContentStore& store_before = copy_store               ? store_copy
+                                             : (clone_store && first) ? transaction_store_before
+                                                                      : midi_content_;
       active_command = command.get();
       if (!command->apply(project_, midi_content_)) {
         // A false result does not prove that the current command left its
@@ -413,7 +460,14 @@ bool EditHistory::apply_transaction(std::vector<EditCommandPtr> commands) {
 
       EditCommandPtr undo;
       try {
-        undo = command->invert(before, store_before);
+        if (early_inverse != nullptr) {
+          undo = std::move(early_inverse);
+        } else if (invert_mask == 0) {
+          undo = command->invert(project_, store_before);
+        } else {
+          MemberSnapshot& before = first ? transaction_before : *before_copy;
+          undo = before.invert(*command, project_, store_before, invert_mask);
+        }
       } catch (...) {
         // This command has no captured inverse yet, so use its direct
         // sidecar rollback seam before reverting earlier commands.
@@ -472,8 +526,8 @@ bool EditHistory::undo() {
 
   // Snapshot before applying the inverse so we can build a fresh inverse-of-the
   // -inverse, keeping redo exact even for commands whose inverse differs by id.
-  Project before = project_;
   Entry& entry = undo_stack_.back();
+  MemberSnapshot before(project_, entry.inverse->affected_members());
   const bool clone_store = entry.inverse->mutates_midi_store();
   MidiContentStore store_copy;
   if (clone_store) {
@@ -489,7 +543,7 @@ bool EditHistory::undo() {
       // Should not happen for a well-formed entry; restore and report failure.
       rollback_command(entry.inverse.get(), project_, midi_content_);
       redo_stack_.pop_back();
-      swap_project_snapshot(project_, before);
+      before.restore(project_);
       if (clone_store) {
         swap_store_snapshot(midi_content_, store_copy);
       }
@@ -505,7 +559,7 @@ bool EditHistory::undo() {
   } catch (...) {
     rollback_command(entry.inverse.get(), project_, midi_content_);
     redo_stack_.pop_back();
-    swap_project_snapshot(project_, before);
+    before.restore(project_);
     if (clone_store) {
       swap_store_snapshot(midi_content_, store_copy);
     }
@@ -519,7 +573,8 @@ bool EditHistory::redo() {
   }
 
   Entry& entry = redo_stack_.back();
-  Project before = project_;
+  const ProjectMemberMask mask = entry.forward->affected_members();
+  MemberSnapshot before(project_, mask);
   const bool clone_store = entry.forward->mutates_midi_store();
   MidiContentStore store_copy;
   if (clone_store) {
@@ -536,7 +591,7 @@ bool EditHistory::redo() {
     if (!entry.forward->apply(project_, midi_content_)) {
       rollback_command(entry.forward.get(), project_, midi_content_);
       undo_stack_.pop_back();
-      swap_project_snapshot(project_, before);
+      before.restore(project_);
       if (clone_store) {
         swap_store_snapshot(midi_content_, store_copy);
       }
@@ -550,7 +605,7 @@ bool EditHistory::redo() {
     // EditCommandGroup deliberately has no standalone invert(): its exact
     // inverse is already retained in the entry.  Preserve that established
     // redo convention while replacing inverses for ordinary stateful commands.
-    EditCommandPtr inverse = entry.forward->invert(before, store_before);
+    EditCommandPtr inverse = before.invert(*entry.forward, project_, store_before, mask);
     pending.forward = std::move(entry.forward);
     pending.inverse = inverse != nullptr ? std::move(inverse) : std::move(entry.inverse);
     redo_stack_.pop_back();
@@ -560,7 +615,7 @@ bool EditHistory::redo() {
   } catch (...) {
     rollback_command(entry.forward.get(), project_, midi_content_);
     undo_stack_.pop_back();
-    swap_project_snapshot(project_, before);
+    before.restore(project_);
     if (clone_store) {
       swap_store_snapshot(midi_content_, store_copy);
     }

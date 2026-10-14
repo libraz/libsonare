@@ -38,7 +38,7 @@ using json::Value;
 
 using namespace detail;
 
-constexpr const char* kPartRigModeNames[] = {"bank", "none", "chain"};
+using midi::kPartRigModeNames;
 
 Value part_rig_to_json(const arrangement::ProjectPartRig& entry) {
   Object o;
@@ -836,6 +836,9 @@ DeserializeResult project_from_json(const std::string& json_text) {
           {DiagnosticSeverity::kError, violation->code, violation->message});
       return result;
     }
+
+    // The edit commands prune incrementally, so a loaded store must start pruned.
+    result.midi.prune_unreferenced_sysex_payloads();
 
     decode_diagnostics.finalize();
     result.project = std::move(project);

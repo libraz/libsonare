@@ -25,7 +25,17 @@
 namespace sonare::arrangement {
 namespace detail {
 
-void prune_unreferenced_sysex_payloads(MidiContentStore* store);
+/// Appends the non-zero SysEx handles carried by `events`.
+void collect_sysex_handles(const MidiClipEventList& events, std::vector<uint32_t>* handles);
+
+/// Erases the payloads among `candidates` that no event references any more.
+/// `candidates` are the handles an edit released or supplied; the store is
+/// pruned after every mutation, so no other payload can have become
+/// unreferenced. `changed`, when given, is the list the edit just wrote and is
+/// checked first, so a scan of the whole store happens only for a handle that
+/// the edit dropped from it.
+void prune_sysex_payloads(MidiContentStore* store, std::vector<uint32_t> candidates,
+                          const MidiClipEventList* changed = nullptr);
 std::map<uint32_t, std::vector<uint8_t>> payloads_for_events(const MidiContentStore& store,
                                                              const MidiClipEventList& events);
 

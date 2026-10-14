@@ -30,6 +30,7 @@
 /// ReplaceMidiClipEvents / PatchMidiClip. The per-clip lists live in a side map
 /// so the EditClip struct identity is unchanged.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -85,6 +86,28 @@ struct MidiContentStore {
   bool operator==(const MidiContentStore& o) const {
     return events == o.events && sysex_payloads == o.sysex_payloads;
   }
+
+  /// Erases every payload that no event references (handle 0 is always kept).
+  /// Whole-store scan: run it where a store is built from outside data, which
+  /// establishes the invariant the edit commands' incremental pruning relies on.
+  void prune_unreferenced_sysex_payloads() {
+    if (sysex_payloads.empty()) return;
+    std::vector<uint32_t> referenced;
+    for (const auto& [clip_id, list] : events) {
+      (void)clip_id;
+      for (const MidiClipEvent& event : list) {
+        if (event.sysex_handle != 0) referenced.push_back(event.sysex_handle);
+      }
+    }
+    std::sort(referenced.begin(), referenced.end());
+    for (auto it = sysex_payloads.begin(); it != sysex_payloads.end();) {
+      if (it->first == 0 || std::binary_search(referenced.begin(), referenced.end(), it->first)) {
+        ++it;
+      } else {
+        it = sysex_payloads.erase(it);
+      }
+    }
+  }
 };
 
 // ===========================================================================
@@ -121,6 +144,32 @@ class EditCommand {
   /// the safe choice; leave it for any command that names its store parameter.
   virtual bool mutates_midi_store() const noexcept { return true; }
 
+  /// The Project member groups apply() may modify. EditHistory snapshots and
+  /// restores only these groups, and a read-only invert() sees the live values of
+  /// every other group as its pre-state. Override to narrow ONLY when the list is
+  /// exact for apply(); the default (every group) is always safe.
+  virtual ProjectMemberMask affected_members() const noexcept { return project_member::kAll; }
+
+  /// The Project member groups invert() reads from its `before` argument. Groups
+  /// outside affected_members() never need a snapshot, so EditHistory clones only
+  /// the intersection. Narrow ONLY when invert() reads nothing else from `before`.
+  virtual ProjectMemberMask invert_reads_members() const noexcept { return affected_members(); }
+
+  /// Whether invert() reads its `store_before` argument. Commands whose invert()
+  /// ignores it return false so a transaction need not clone the MIDI store for
+  /// them.
+  virtual bool invert_reads_store() const noexcept { return mutates_midi_store(); }
+
+  /// Optional: builds the inverse from the live project and store BEFORE apply()
+  /// runs, reading only the entity apply() will replace, so no snapshot is
+  /// needed. Must equal what invert(before, ...) returns for the same pre-state.
+  /// Returns nullptr when it cannot (the default), and EditHistory takes the
+  /// snapshot path.
+  virtual std::unique_ptr<EditCommand> invert_before_apply(
+      const Project& /*live*/, const MidiContentStore& /*store*/) const {
+    return nullptr;
+  }
+
   /// Conservative retained allocation footprint of this command. This is
   /// intentionally dynamic (capacities are read on every call) and noexcept
   /// so history trimming remains allocation-free.
@@ -143,6 +192,8 @@ class AddTrack final : public EditCommand {
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "AddTrack"; }
   std::size_t retained_bytes() const noexcept override;
+  ProjectMemberMask affected_members() const noexcept override { return project_member::kTracks; }
+  ProjectMemberMask invert_reads_members() const noexcept override { return 0; }
   bool mutates_midi_store() const noexcept override { return false; }
 
   TrackId allocated_id() const noexcept { return allocated_id_; }
@@ -318,6 +369,9 @@ class AddClip final : public EditCommand {
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "AddClip"; }
   std::size_t retained_bytes() const noexcept override;
+  ProjectMemberMask affected_members() const noexcept override { return project_member::kClips; }
+  ProjectMemberMask invert_reads_members() const noexcept override { return 0; }
+  bool invert_reads_store() const noexcept override { return false; }
 
   ClipId allocated_id() const noexcept { return allocated_id_; }
 
@@ -685,6 +739,8 @@ class AttachMidiSource final : public EditCommand {
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "AttachMidiSource"; }
   std::size_t retained_bytes() const noexcept override;
+  ProjectMemberMask affected_members() const noexcept override { return project_member::kSources; }
+  ProjectMemberMask invert_reads_members() const noexcept override { return 0; }
   bool mutates_midi_store() const noexcept override { return false; }
 
   SourceId allocated_id() const noexcept { return allocated_id_; }
@@ -794,11 +850,16 @@ class SetMarker final : public EditCommand {
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetMarker"; }
   std::size_t retained_bytes() const noexcept override;
+  ProjectMemberMask affected_members() const noexcept override { return project_member::kMarkers; }
+  EditCommandPtr invert_before_apply(const Project& live,
+                                     const MidiContentStore& store) const override;
   bool mutates_midi_store() const noexcept override { return false; }
 
   uint32_t allocated_id() const noexcept { return allocated_id_; }
 
  private:
+  EditCommandPtr inverse_from(const Project& state) const;
+
   uint32_t id_;
   double ppq_;
   std::string name_;
@@ -835,6 +896,9 @@ class SetTempoSegment final : public EditCommand {
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetTempoSegment"; }
   std::size_t retained_bytes() const noexcept override;
+  ProjectMemberMask affected_members() const noexcept override { return project_member::kTempo; }
+  EditCommandPtr invert_before_apply(const Project& live,
+                                     const MidiContentStore& store) const override;
   bool mutates_midi_store() const noexcept override { return false; }
 
  private:
@@ -851,6 +915,11 @@ class SetTimeSignatureSegment final : public EditCommand {
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "SetTimeSignatureSegment"; }
   std::size_t retained_bytes() const noexcept override;
+  ProjectMemberMask affected_members() const noexcept override {
+    return project_member::kTimeSignatures;
+  }
+  EditCommandPtr invert_before_apply(const Project& live,
+                                     const MidiContentStore& store) const override;
   bool mutates_midi_store() const noexcept override { return false; }
 
  private:
@@ -938,19 +1007,31 @@ class ReplaceMidiClipEvents final : public EditCommand {
  public:
   ReplaceMidiClipEvents(ClipId clip_id, MidiClipEventList events)
       : clip_id_(clip_id), events_(std::move(events)) {}
+  /// `erase_entry` removes the clip's store entry instead of writing `events`
+  /// (which is then empty); an inverse uses it to restore a clip that had none.
   ReplaceMidiClipEvents(ClipId clip_id, MidiClipEventList events,
-                        std::map<uint32_t, std::vector<uint8_t>> sysex_payloads)
-      : clip_id_(clip_id), events_(std::move(events)), sysex_payloads_(std::move(sysex_payloads)) {}
+                        std::map<uint32_t, std::vector<uint8_t>> sysex_payloads,
+                        bool erase_entry = false)
+      : clip_id_(clip_id),
+        events_(std::move(events)),
+        sysex_payloads_(std::move(sysex_payloads)),
+        erase_entry_(erase_entry) {}
 
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
   const char* type_name() const noexcept override { return "ReplaceMidiClipEvents"; }
   std::size_t retained_bytes() const noexcept override;
+  ProjectMemberMask affected_members() const noexcept override { return 0; }
+  EditCommandPtr invert_before_apply(const Project& live,
+                                     const MidiContentStore& store) const override;
 
  private:
+  EditCommandPtr inverse_from(const MidiContentStore& store) const;
+
   ClipId clip_id_;
   MidiClipEventList events_;
   std::map<uint32_t, std::vector<uint8_t>> sysex_payloads_;
+  bool erase_entry_ = false;
 };
 
 /// A minimal patch description for MIDI content. Represents inserting and

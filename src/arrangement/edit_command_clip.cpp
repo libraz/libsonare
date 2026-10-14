@@ -66,8 +66,13 @@ bool RemoveClip::apply(Project& project, MidiContentStore& store) {
   const bool ok = project.remove_clip(id_).second;
   if (ok) {
     vocal_sidecar::remove_clip_sidecars(&project, id_);
-    store.events.erase(id_);
-    detail::prune_unreferenced_sysex_payloads(&store);
+    std::vector<uint32_t> released;
+    const auto events = store.events.find(id_);
+    if (events != store.events.end()) {
+      detail::collect_sysex_handles(events->second, &released);
+      store.events.erase(events);
+    }
+    detail::prune_sysex_payloads(&store, std::move(released));
   }
   return ok;
 }

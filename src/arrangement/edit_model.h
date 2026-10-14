@@ -520,6 +520,36 @@ enum class OverlapPolicy : uint32_t {
 };
 
 // ===========================================================================
+// Project member groups
+// ===========================================================================
+
+/// Bitmask over the independently replaceable groups of Project state. Each id
+/// counter travels with the entity list it allocates for, so every member
+/// belongs to exactly one group.
+using ProjectMemberMask = uint32_t;
+
+namespace project_member {
+/// sample rate, project version and overlap policy.
+inline constexpr ProjectMemberMask kScalars = 1u << 0;
+inline constexpr ProjectMemberMask kTempo = 1u << 1;
+inline constexpr ProjectMemberMask kTimeSignatures = 1u << 2;
+/// sources and the next source id.
+inline constexpr ProjectMemberMask kSources = 1u << 3;
+/// tracks and the next track id.
+inline constexpr ProjectMemberMask kTracks = 1u << 4;
+/// clips and the next clip id.
+inline constexpr ProjectMemberMask kClips = 1u << 5;
+/// markers and the next marker id.
+inline constexpr ProjectMemberMask kMarkers = 1u << 6;
+inline constexpr ProjectMemberMask kAnnotation = 1u << 7;
+inline constexpr ProjectMemberMask kScene = 1u << 8;
+inline constexpr ProjectMemberMask kAssistSidecars = 1u << 9;
+inline constexpr ProjectMemberMask kWarpMaps = 1u << 10;
+inline constexpr ProjectMemberMask kPartRigs = 1u << 11;
+inline constexpr ProjectMemberMask kAll = (1u << 12) - 1u;
+}  // namespace project_member
+
+// ===========================================================================
 // Project
 // ===========================================================================
 
@@ -647,6 +677,15 @@ class Project {
   /// Entries in canonical (destination_id, part) order.
   const std::vector<ProjectPartRig>& part_rigs() const noexcept { return part_rigs_; }
   const ProjectPartRig* find_part_rig(uint32_t destination_id, uint8_t part) const noexcept;
+
+  // ---- Member groups --------------------------------------------------------
+
+  /// Returns a Project whose `mask` groups are copies of this project's and
+  /// whose other groups are default-constructed.
+  Project snapshot_members(ProjectMemberMask mask) const;
+
+  /// Swaps the `mask` groups with `other`'s. Non-allocating and non-throwing.
+  void swap_members(Project& other, ProjectMemberMask mask) noexcept;
 
   // ---- Low-level mutation helpers (used by EditCommand; not for general use) -
   //

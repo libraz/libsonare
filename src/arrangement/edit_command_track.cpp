@@ -46,14 +46,19 @@ bool RemoveTrack::apply(Project& project, MidiContentStore& store) {
       clip_ids.push_back(clip.id);
     }
   }
+  std::vector<uint32_t> released;
   for (ClipId clip_id : clip_ids) {
     if (!project.remove_clip(clip_id).second) {
       return false;
     }
     vocal_sidecar::remove_clip_sidecars(&project, clip_id);
-    store.events.erase(clip_id);
+    const auto events = store.events.find(clip_id);
+    if (events != store.events.end()) {
+      detail::collect_sysex_handles(events->second, &released);
+      store.events.erase(events);
+    }
   }
-  detail::prune_unreferenced_sysex_payloads(&store);
+  detail::prune_sysex_payloads(&store, std::move(released));
   return project.remove_track(id_).second;
 }
 

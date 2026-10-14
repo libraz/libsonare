@@ -175,8 +175,19 @@ bool SetMarker::apply(Project& project, MidiContentStore& /*store*/) {
 
 EditCommandPtr SetMarker::invert(const Project& before,
                                  const MidiContentStore& /*store_before*/) const {
+  return inverse_from(before);
+}
+
+EditCommandPtr SetMarker::invert_before_apply(const Project& live,
+                                              const MidiContentStore& /*store*/) const {
+  // A fresh allocation has no target id until apply() runs.
+  if (id_ == 0 && allocated_id_ == 0) return nullptr;
+  return inverse_from(live);
+}
+
+EditCommandPtr SetMarker::inverse_from(const Project& state) const {
   const uint32_t target = id_ != 0 ? id_ : allocated_id_;
-  for (const ProjectMarker& m : before.markers()) {
+  for (const ProjectMarker& m : state.markers()) {
     if (m.id == target) {
       // Marker existed before: restore prior ppq/name/kind.
       return std::make_unique<SetMarker>(target, m.ppq, m.name, m.kind, m.key_fifths, m.key_minor);
@@ -206,6 +217,11 @@ EditCommandPtr SetTempoSegment::invert(const Project& before,
   return std::make_unique<SetTempoSegment>(before.tempo_segments());
 }
 
+EditCommandPtr SetTempoSegment::invert_before_apply(const Project& live,
+                                                    const MidiContentStore& /*store*/) const {
+  return std::make_unique<SetTempoSegment>(live.tempo_segments());
+}
+
 bool SetTimeSignatureSegment::apply(Project& project, MidiContentStore& /*store*/) {
   project.set_time_signatures(segments_);
   return true;
@@ -214,6 +230,11 @@ bool SetTimeSignatureSegment::apply(Project& project, MidiContentStore& /*store*
 EditCommandPtr SetTimeSignatureSegment::invert(const Project& before,
                                                const MidiContentStore& /*store_before*/) const {
   return std::make_unique<SetTimeSignatureSegment>(before.time_signatures());
+}
+
+EditCommandPtr SetTimeSignatureSegment::invert_before_apply(
+    const Project& live, const MidiContentStore& /*store*/) const {
+  return std::make_unique<SetTimeSignatureSegment>(live.time_signatures());
 }
 
 bool SetHarmonySegment::apply(Project& project, MidiContentStore& /*store*/) {
