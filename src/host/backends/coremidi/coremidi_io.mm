@@ -123,8 +123,12 @@ struct CoreMidiInput::Impl {
     std::array<StagedSysEx, kSysExStageDepth> stage{};
     std::atomic<size_t> stage_write{0};
     std::atomic<size_t> stage_read{0};
+    // Control-thread copy target for a drained slot, reserved up front so the
+    // noexcept drain never allocates.
+    std::vector<uint8_t> drain_scratch;
 
     void reserve() {
+      drain_scratch.reserve(kMaxInputSysExBytes);
       for (auto& assembly : assemblies) assembly.bytes.reserve(kMaxInputSysExBytes);
       for (auto& staged : stage) staged.bytes.reserve(kMaxInputSysExBytes);
     }
@@ -138,6 +142,7 @@ struct CoreMidiInput::Impl {
         staged.handle = 0;
         staged.bytes.clear();  // keep reserved capacity for reuse
       }
+      drain_scratch.clear();
       stage_write.store(0, std::memory_order_relaxed);
       stage_read.store(0, std::memory_order_relaxed);
     }
@@ -282,17 +287,12 @@ struct CoreMidiInput::Impl {
   // the ring, so the store — and its allocation — stays entirely on this
   // thread and the producer never waits on a store operation.
   void commit_staged_sysex(SysExReassembler& reassembler) noexcept {
-    // sysex_store() calls this unconditionally on every call for both
-    // reassemblers, so bail out before paying the 64 KB scratch allocation
-    // below when nothing is staged (the common case — most polls find an
-    // empty ring).
+    // Called on every poll for both reassemblers; most find an empty ring.
     if (reassembler.stage_read.load(std::memory_order_relaxed) ==
         reassembler.stage_write.load(std::memory_order_acquire)) {
       return;
     }
-    // Reserve drain scratch before the loop so copies remain allocation-free.
-    std::vector<uint8_t> bytes;
-    bytes.reserve(kMaxInputSysExBytes);
+    std::vector<uint8_t>& bytes = reassembler.drain_scratch;
     for (;;) {
       const size_t read = reassembler.stage_read.load(std::memory_order_relaxed);
       const size_t write = reassembler.stage_write.load(std::memory_order_acquire);
