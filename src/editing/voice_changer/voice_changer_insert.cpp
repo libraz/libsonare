@@ -2,19 +2,15 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 #include <string>
 
+#include "util/db.h"
 #include "util/exception.h"
 
 namespace sonare::editing::voice_changer {
 namespace {
 
 constexpr int kMaxChannels = 2;
-
-// The reverb's combs decay 60 dB per time_ms, but the first echo arrives after up to 0.47 of it
-// and is the strongest, so falling 60 dB below the loudest echo takes up to 1.47 decay times.
-constexpr double kReverbTailPerDecay = 1.5;
 
 // X(key, member): the automatable fields, in descriptor id order. The keys are the flat
 // parameter names the preset JSON and the C POD already use.
@@ -127,12 +123,15 @@ void VoiceChangerInsert::reset() { changer_.reset(); }
 int VoiceChangerInsert::latency_samples() const noexcept { return changer_.latency_samples(); }
 
 int VoiceChangerInsert::tail_samples() const noexcept {
-  if (!(config_.wet_mix > 0.0f) || !(config_.reverb.mix > 0.0f)) return 0;
-  const double samples = std::ceil(static_cast<double>(config_.reverb.time_ms) * 0.001 *
-                                   kReverbTailPerDecay * sample_rate_);
-  return samples >= static_cast<double>(std::numeric_limits<int>::max())
-             ? std::numeric_limits<int>::max()
-             : static_cast<int>(samples);
+  if (!(config_.wet_mix > 0.0f)) return 0;
+  // The reverb is the only stage with memory that outlives its input; the retune and formant
+  // buffers are reported as latency. Its output is scaled by the wet mix, the compressor makeup
+  // ahead of it and the output gain after it.
+  const double output_gain = db_to_linear(static_cast<double>(config_.output_gain_db));
+  const double makeup =
+      db_to_linear(static_cast<double>(std::max(0.0f, config_.compressor.makeup_gain_db)));
+  const double scale = static_cast<double>(config_.wet_mix) * output_gain * makeup;
+  return StreamingReverb::tail(config_.reverb, sample_rate_, prepared_channels_, scale).samples();
 }
 
 float VoiceChangerInsert::last_gain_reduction_db() const {

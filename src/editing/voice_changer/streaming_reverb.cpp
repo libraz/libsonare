@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "rt/biquad_design.h"
+#include "rt/tail_budget.h"
 #include "util/db.h"
 
 namespace sonare::editing::voice_changer {
@@ -15,7 +16,7 @@ void StreamingReverb::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
 
   // Comb buffers sized for kMaxTimeMs so set_config() never needs to resize.
-  const std::size_t max_comb = static_cast<std::size_t>(sample_rate_ * (kMaxTimeMs * 0.001) + 8);
+  const std::size_t max_comb = comb_capacity(sample_rate_);
   for (auto& buf : comb_buf_) {
     buf.assign(max_comb, 0.0f);
   }
@@ -50,17 +51,21 @@ void StreamingReverb::reset() noexcept {
   allpass_g_.reset(allpass_g_.target());
 }
 
-void StreamingReverb::set_config(const StreamingReverbConfig& config, int channel_index) {
-  config_ = config;
+std::size_t StreamingReverb::comb_capacity(double sample_rate) {
+  return static_cast<std::size_t>(sample_rate * (kMaxTimeMs * 0.001) + 8);
+}
 
-  const double time_sec = std::max(0.04, static_cast<double>(config_.time_ms) / 1000.0);
+std::array<StreamingReverb::CombTap, StreamingReverb::kNumCombs> StreamingReverb::comb_taps(
+    const StreamingReverbConfig& config, double sample_rate, std::size_t max_delay,
+    int channel_index) {
+  const double time_sec = std::max(0.04, static_cast<double>(config.time_ms) / 1000.0);
 
   // Derive a per-channel seed by XORing with a 32-bit golden-ratio constant
   // scaled by the channel index. Without this, stereo channels would share
   // the exact same comb delays / feedbacks / allpass coefficient, producing a
   // fully mono (L=R) reverb tail from any non-pan-spread source.
   static constexpr std::uint32_t kChannelSeedSalt = 0x9E3779B9u;
-  const std::uint32_t useed = static_cast<std::uint32_t>(config_.seed) ^
+  const std::uint32_t useed = static_cast<std::uint32_t>(config.seed) ^
                               (kChannelSeedSalt * static_cast<std::uint32_t>(channel_index));
 
   // Map seed to a small jitter in [-0.05, +0.05] of the base ratios.
@@ -71,27 +76,74 @@ void StreamingReverb::set_config(const StreamingReverbConfig& config, int channe
       0.61 + 0.1 * jitter_b,
   };
 
-  const std::size_t cap = comb_buf_[0].size();
-  if (cap < 4) return;  // prepare() not run yet; nothing to apply.
-  const std::size_t max_delay = cap - 2;
+  std::array<CombTap, kNumCombs> taps{};
   for (std::size_t i = 0; i < kNumCombs; ++i) {
     const double tap_seconds = time_sec * ratios[i];
-    std::size_t delay_samples = static_cast<std::size_t>(tap_seconds * sample_rate_);
+    std::size_t delay_samples = static_cast<std::size_t>(tap_seconds * sample_rate);
     delay_samples = std::clamp<std::size_t>(delay_samples, 16u, max_delay);
-    comb_delay_[i].set_target(static_cast<float>(delay_samples));
     // Feedback gain chosen so each comb decays by ~60 dB in roughly time_ms.
     const double db_per_sec = -60.0 / time_sec;
-    const double db_per_loop = db_per_sec * (static_cast<double>(delay_samples) / sample_rate_);
-    const float feedback = std::clamp(static_cast<float>(db_to_linear(db_per_loop)), 0.0f, 0.97f);
-    comb_fb_[i].set_target(feedback);
+    const double db_per_loop = db_per_sec * (static_cast<double>(delay_samples) / sample_rate);
+    taps[i].delay_samples = static_cast<float>(delay_samples);
+    taps[i].feedback = std::clamp(static_cast<float>(db_to_linear(db_per_loop)), 0.0f, 0.97f);
   }
+  return taps;
+}
+
+float StreamingReverb::damping_cutoff_hz(const StreamingReverbConfig& config) {
   // Damping: damping=0 -> ~12 kHz LP (bright), damping=1 -> ~1 kHz LP (dark).
-  const float damping_hz = 1000.0f + (1.0f - std::clamp(config_.damping, 0.0f, 1.0f)) * 11000.0f;
-  damping_alpha_.set_target(rt::one_pole_lowpass_alpha_matched(damping_hz, sample_rate_));
+  return 1000.0f + (1.0f - std::clamp(config.damping, 0.0f, 1.0f)) * 11000.0f;
+}
+
+float StreamingReverb::allpass_gain(const StreamingReverbConfig& config, int channel_index) {
+  static constexpr std::uint32_t kChannelSeedSalt = 0x9E3779B9u;
+  const std::uint32_t useed = static_cast<std::uint32_t>(config.seed) ^
+                              (kChannelSeedSalt * static_cast<std::uint32_t>(channel_index));
   // Allpass gain sign is seed-bit-dependent so different seeds yield distinct
   // phase responses on otherwise identical settings.
-  allpass_g_.set_target((useed & 0x1u) ? 0.7f : -0.7f);
+  return (useed & 0x1u) ? 0.7f : -0.7f;
+}
+
+void StreamingReverb::set_config(const StreamingReverbConfig& config, int channel_index) {
+  config_ = config;
+
+  const std::size_t cap = comb_buf_[0].size();
+  if (cap < 4) return;  // prepare() not run yet; nothing to apply.
+  const auto taps = comb_taps(config_, sample_rate_, cap - 2, channel_index);
+  for (std::size_t i = 0; i < kNumCombs; ++i) {
+    comb_delay_[i].set_target(taps[i].delay_samples);
+    comb_fb_[i].set_target(taps[i].feedback);
+  }
+  damping_alpha_.set_target(
+      rt::one_pole_lowpass_alpha_matched(damping_cutoff_hz(config_), sample_rate_));
+  allpass_g_.set_target(allpass_gain(config_, channel_index));
   mix_.set_target(std::clamp(config_.mix, 0.0f, 1.0f));
+}
+
+rt::TailBudget StreamingReverb::tail(const StreamingReverbConfig& config, double sample_rate,
+                                     int num_channels, double output_scale) {
+  rt::TailBudget budget;
+  const double mix = std::clamp(config.mix, 0.0f, 1.0f);
+  if (!(mix > 0.0) || !(sample_rate > 0.0)) return budget;
+
+  const std::size_t max_delay = comb_capacity(sample_rate) - 2;
+  const double damping_alpha =
+      rt::one_pole_lowpass_alpha_matched(damping_cutoff_hz(config), sample_rate);
+  // The damping cell delays every pass by its group delay and rings on after the last echo.
+  const double damping_lag = (1.0 - damping_alpha) / std::max(damping_alpha, 1.0e-6);
+  for (int ch = 0; ch < std::max(1, num_channels); ++ch) {
+    // The two comb outputs are averaged, so either alone is at most the full level; the
+    // diffusion allpass then spreads an echo over a kernel of at most (1+|g|)/(1-|g|).
+    const double g = std::abs(static_cast<double>(allpass_gain(config, ch)));
+    const double scale = mix * output_scale * (1.0 + g) / (1.0 - g);
+    for (const CombTap& tap : comb_taps(config, sample_rate, max_delay, ch)) {
+      const double loop = static_cast<double>(tap.delay_samples) + damping_lag + 1.0;
+      rt::TailBudget comb;
+      comb.delay(loop).recirculation(loop, tap.feedback, scale).decay(1.0 - damping_alpha, scale);
+      budget.alongside(comb);
+    }
+  }
+  return budget;
 }
 
 float StreamingReverb::process_sample(float input) noexcept {

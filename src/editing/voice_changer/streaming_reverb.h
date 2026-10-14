@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "rt/param_smoother.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::editing::voice_changer {
 
@@ -78,6 +79,13 @@ class StreamingReverb {
   /// @brief Processes a contiguous block sample-by-sample.
   void process_block(const float* input, float* output, int num_samples) noexcept;
 
+  /// @brief How long the wet path rings after its input goes silent.
+  /// @param output_scale Linear gain applied downstream of the reverb.
+  /// @param num_channels Channels sharing @p config, each with its own seed-derived taps.
+  /// @return A zero tail when `config.mix <= 0`.
+  static rt::TailBudget tail(const StreamingReverbConfig& config, double sample_rate,
+                             int num_channels, double output_scale = 1.0);
+
   /// @brief Returns the tank to rest when a non-finite value has reached it
   ///        (see util/non_finite_state.h).
   /// @details Bounded more weakly than a filter's history taps, and the reason is
@@ -95,6 +103,17 @@ class StreamingReverb {
 
  private:
   static constexpr int kNumCombs = 2;
+
+  struct CombTap {
+    float delay_samples;
+    float feedback;
+  };
+  static std::size_t comb_capacity(double sample_rate);
+  static std::array<CombTap, kNumCombs> comb_taps(const StreamingReverbConfig& config,
+                                                  double sample_rate, std::size_t max_delay,
+                                                  int channel_index);
+  static float damping_cutoff_hz(const StreamingReverbConfig& config);
+  static float allpass_gain(const StreamingReverbConfig& config, int channel_index);
 
   StreamingReverbConfig config_{};
   double sample_rate_ = 0.0;
