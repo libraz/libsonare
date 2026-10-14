@@ -540,7 +540,7 @@ void EqualizerProcessor::set_sidechain(const float* const* channels, int num_cha
   if (num_channels < 0 || num_samples < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "sidechain dimensions must be non-negative");
   }
-  if (num_channels == 0 || num_samples == 0) {
+  if (num_channels == 0) {
     clear_sidechain();
     return;
   }

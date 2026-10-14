@@ -92,7 +92,9 @@ class DynamicEq : public rt::ProcessorBase {
   // 7=sidechainFreqHz, 8=attackMs, 9=releaseMs, 10=detectorDelayMs, each offset by
   // kParamsPerBand*b and keyed "bandB.<field>" to match the construction JSON.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
-  /// Borrows sidechain buffers until the next set/clear/process call.
+  /// Borrows sidechain buffers until the next set/clear/process call. A key with
+  /// channels but fewer samples than the block (including zero) stays bound and
+  /// reads as silence past its end; only zero channels unbinds it.
   void set_sidechain(const float* const* channels, int num_channels, int num_samples) override;
   void clear_sidechain() override;
 
@@ -184,14 +186,16 @@ class DynamicEq : public rt::ProcessorBase {
 
   static void validate_index(size_t index);
   // @p excluded_channel (-1 for none) contributes to neither sum nor count.
+  // Only the first @p readable_samples positions (negative = all) are read; the rest of the
+  // block is silence, so a key shorter than the block is zero-padded.
   static float detector_db(const float* const* channels, int num_channels, int num_samples,
-                           int excluded_channel);
+                           int excluded_channel, int readable_samples = -1);
   // Updates band `index`'s persistent detector against the supplied sidechain
   // and returns the block's detector level in dB. Stateful: advances the
   // bandpass filters, envelope and detector-delay ring so the result is
   // continuous across blocks.
   float band_detector_db(const float* const* channels, int num_channels, int num_samples,
-                         int excluded_channel, size_t index);
+                         int excluded_channel, size_t index, int readable_samples = -1);
   void ensure_detector(size_t index, int num_channels);
   // Applies the recursive-cell rule to the detector and gain state that survives
   // a block. O(bands x channels) and independent of block size, so the

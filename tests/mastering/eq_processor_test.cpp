@@ -455,9 +455,12 @@ TEST_CASE("EqualizerProcessor validates and clears external sidechain buffers", 
   const float* bad_key[] = {left.data(), nullptr};
   REQUIRE_THROWS(eq.set_sidechain(bad_key, 2, 128));
 
-  REQUIRE_NOTHROW(eq.set_sidechain(stereo_key, 2, 64));
+  // A key longer than the block is refused; a shorter one is zero-padded.
+  REQUIRE_NOTHROW(eq.set_sidechain(stereo_key, 2, 256));
   float* audio[] = {left.data(), right.data()};
   REQUIRE_THROWS(eq.process(audio, 2, 128));
+  REQUIRE_NOTHROW(eq.set_sidechain(stereo_key, 2, 64));
+  REQUIRE_NOTHROW(eq.process(audio, 2, 128));
 
   // A sidechain wider than the prepared max_channels (2) is rejected on the
   // control thread, so the audio-thread detector path never reallocates.
@@ -946,4 +949,47 @@ TEST_CASE("EqualizerProcessor treats every channel of a wide block alike or refu
       REQUIRE(planes[1] == planes[0]);
     }
   }
+}
+
+TEST_CASE("EqualizerProcessor exhausted external key stays bound and reads as silence",
+          "[mastering][eq]") {
+  constexpr int sample_rate = 48000;
+  EqualizerProcessor eq({1});
+  eq.prepare(sample_rate, 4096);
+  EqBand band{EqBandType::Peak, 1000.0f, 0.0f, 2.0f, true};
+  band.dyn.enabled = true;
+  band.dyn.external_sidechain = true;
+  band.dyn.threshold_db = -32.0f;
+  band.dyn.ratio = 4.0f;
+  band.dyn.range_db = -12.0f;
+  band.dyn.attack_ms = 0.0f;
+  band.dyn.release_ms = 10.0f;
+  eq.set_band(0, band);
+
+  const std::vector<float> silence(1024, 0.0f);
+  const float* key_channels[] = {silence.data()};
+
+  // Bound with zero samples: the loud program is not used as its own detector.
+  auto loud = sine(1000.0f, sample_rate, 1024, 0.8f);
+  eq.set_sidechain(key_channels, 1, 0);
+  process(eq, loud);
+  const float exhausted_db = eq.last_band_detector_db(0);
+  const float exhausted_gain = eq.last_applied_gain_db(0);
+
+  // A key shorter than the block is the same silence, zero-padded.
+  eq.reset();
+  loud = sine(1000.0f, sample_rate, 1024, 0.8f);
+  eq.set_sidechain(key_channels, 1, 1024);
+  process(eq, loud);
+  REQUIRE_THAT(eq.last_band_detector_db(0), WithinAbs(exhausted_db, 1.0e-4f));
+
+  // Unbinding (no channels) falls back to the main signal.
+  eq.reset();
+  loud = sine(1000.0f, sample_rate, 1024, 0.8f);
+  eq.set_sidechain(nullptr, 0, 0);
+  process(eq, loud);
+  REQUIRE(exhausted_db < -60.0f);
+  REQUIRE_THAT(exhausted_gain, WithinAbs(0.0f, 0.0001f));
+  REQUIRE(eq.last_band_detector_db(0) > -32.0f);
+  REQUIRE(eq.last_applied_gain_db(0) < -3.0f);
 }

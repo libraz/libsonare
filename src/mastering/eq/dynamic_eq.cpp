@@ -69,16 +69,19 @@ void DynamicEq::process(float* const* channels, int num_channels, int num_sample
                                               : const_cast<const float* const*>(channels);
   const int detector_num_channels =
       sidechain_channels_ != nullptr ? sidechain_num_channels_ : num_channels;
+  // A key shorter than the block reads as zero-padded; the detector still advances on silence.
+  const int readable = sidechain_channels_ != nullptr ? sidechain_num_samples_ : num_samples;
   // The host's excluded plane (an LFE) is left out of the main-input detector;
   // an external key is the caller's own choice of channels and keeps them all.
   const int excluded =
       sidechain_channels_ != nullptr ? -1 : detector_excluded_channel(num_channels);
-  last_detector_db_ = detector_db(detector_channels, detector_num_channels, num_samples, excluded);
+  last_detector_db_ =
+      detector_db(detector_channels, detector_num_channels, num_samples, excluded, readable);
   for (size_t i = 0; i < kMaxBands; ++i) {
-    last_band_detector_db_[i] =
-        admit_band(i)
-            ? band_detector_db(detector_channels, detector_num_channels, num_samples, excluded, i)
-            : kFloorDb;
+    last_band_detector_db_[i] = admit_band(i)
+                                    ? band_detector_db(detector_channels, detector_num_channels,
+                                                       num_samples, excluded, i, readable)
+                                    : kFloorDb;
   }
   // Before the reading reaches a gain target, so a poisoned detector cannot hand
   // a non-finite gain to a band.
@@ -245,7 +248,7 @@ void DynamicEq::set_sidechain(const float* const* channels, int num_channels, in
   if (num_channels < 0 || num_samples < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "sidechain dimensions must be non-negative");
   }
-  if (num_channels == 0 || num_samples == 0) {
+  if (num_channels == 0) {
     clear_sidechain();
     return;
   }
@@ -367,8 +370,9 @@ void DynamicEq::validate_band(const DynamicEqBand& band) {
 }
 
 float DynamicEq::detector_db(const float* const* channels, int num_channels, int num_samples,
-                             int excluded_channel) {
-  return broadband_detector_db(channels, num_channels, num_samples, excluded_channel);
+                             int excluded_channel, int readable_samples) {
+  return broadband_detector_db(channels, num_channels, num_samples, excluded_channel,
+                               readable_samples);
 }
 
 void DynamicEq::ensure_detector(size_t index, int num_channels) {
@@ -459,11 +463,13 @@ void DynamicEq::ensure_detector(size_t index, int num_channels) {
 }
 
 float DynamicEq::band_detector_db(const float* const* channels, int num_channels, int num_samples,
-                                  int excluded_channel, size_t index) {
+                                  int excluded_channel, size_t index, int readable_samples) {
   if (num_samples <= 0 || num_channels <= 0) return kFloorDb;
   ensure_detector(index, num_channels);
   DetectorState& state = detectors_[index];
   const int look = state.detector_delay_samples;
+  const int readable =
+      (readable_samples < 0 || readable_samples > num_samples) ? num_samples : readable_samples;
 
   // Detector-history continuity fix (NOT true zero-latency lookahead). The
   // bandpass filters and envelope follower are persistent across blocks, and a
@@ -503,11 +509,11 @@ float DynamicEq::band_detector_db(const float* const* channels, int num_channels
         // slot. This delays each input by exactly `look` samples, giving the
         // continuous stream described above.
         const float oldest = dc.look_ring[dc.look_pos];
-        dc.look_ring[dc.look_pos] = channels[ch][i];
+        dc.look_ring[dc.look_pos] = i < readable ? channels[ch][i] : 0.0f;
         dc.look_pos = (dc.look_pos + 1) % dc.look_size;
         step(oldest);
       } else {
-        step(channels[ch][i]);
+        step(i < readable ? channels[ch][i] : 0.0f);
       }
     }
   }
@@ -559,9 +565,9 @@ void DynamicEq::rebuild(int /*num_samples*/) {
 
 void DynamicEq::validate_sidechain(int expected_samples) const {
   if (sidechain_channels_ == nullptr) return;
-  if (sidechain_num_samples_ != expected_samples) {
+  if (sidechain_num_samples_ > expected_samples) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "sidechain length must match process block length");
+                          "sidechain length must not exceed process block length");
   }
 }
 

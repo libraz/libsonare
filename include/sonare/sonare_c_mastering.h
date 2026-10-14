@@ -1047,9 +1047,10 @@ int sonare_eq_latency_samples(const SonareEq* eq);
 ///   Realtime-safe.
 SonareError sonare_eq_non_finite_discard_count(const SonareEq* eq, uint32_t* out_count);
 /// @brief Sets an external detector sidechain for dynamic bands.
-/// @details The supplied planar block must have the same @p num_samples as the
-/// next @ref sonare_eq_process call. It is used only by bands with
-/// @c externalSidechain enabled.
+/// @details @p num_samples must not exceed the next @ref sonare_eq_process
+/// block; a shorter key (including zero samples) stays bound and reads as
+/// silence past its end. A zero @p num_channels clears the key. It is used only
+/// by bands with @c externalSidechain enabled.
 ///
 /// BORROWED, NOT COPIED. The @p channels pointer array and every buffer it
 /// names must outlive the next @ref sonare_eq_process call and must not be

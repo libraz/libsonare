@@ -93,16 +93,19 @@ inline void run_insert_chain(std::vector<std::unique_ptr<rt::ProcessorBase>>& in
   for (size_t local = 0; local < inserts.size(); ++local) {
     const size_t index = first_insert_index + local;
     const InsertSidechain* key = index < sidechains.size() ? &sidechains[index] : nullptr;
-    if (key != nullptr && key->num_channels > 0 && key->num_samples > sidechain_offset) {
+    if (key != nullptr && key->num_channels > 0 && key->num_samples > 0) {
       // Clip the key length to whatever is available rather than discarding a
       // short block; dropping the key would make a sidechain compressor lose its
-      // detector input for the block and click.
+      // detector input for the block and click. A segment that starts at or past
+      // the key's end stays bound with zero samples left (silence on the same key),
+      // so an unrelated automation split cannot flip detection to the main signal.
       const int rows = std::min(key->num_channels, max_forward_rows);
-      const int remaining = key->num_samples - sidechain_offset;
+      const int shift = std::min(sidechain_offset, key->num_samples);
+      const int remaining = key->num_samples - shift;
       for (int ch = 0; ch < rows; ++ch) {
         shifted_scratch[ch] = key->channels[static_cast<size_t>(ch)] == nullptr
                                   ? nullptr
-                                  : key->channels[static_cast<size_t>(ch)] + sidechain_offset;
+                                  : key->channels[static_cast<size_t>(ch)] + shift;
       }
       inserts[local]->set_sidechain(shifted_scratch, rows, std::min(num_samples, remaining));
     } else if (key != nullptr && key->managed) {

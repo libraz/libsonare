@@ -79,6 +79,40 @@ TEST_CASE("DynamicEq supports external sidechain for dynamic bands", "[mastering
   REQUIRE(rms_tail(program, 4096) / before < 0.7f);
 }
 
+TEST_CASE("DynamicEq exhausted external key stays bound and reads as silence", "[mastering][eq]") {
+  constexpr int sample_rate = 48000;
+  auto make = [] {
+    auto eq = std::make_unique<DynamicEq>();
+    eq->prepare(sample_rate, 1024);
+    eq->set_band(0, {EqBandType::Peak, 1000.0f, 0.0f, 2.0f, -24.0f, 4.0f, -9.0f, true});
+    return eq;
+  };
+  const std::vector<float> silence(1024, 0.0f);
+  const float* key_channels[] = {silence.data()};
+
+  auto bound = make();
+  auto program = sine(1000.0f, sample_rate, 1024, 0.8f);
+  bound->set_sidechain(key_channels, 1, 0);
+  process(*bound, program);
+  REQUIRE(bound->last_band_detector_db(0) < -60.0f);
+  REQUIRE_THAT(bound->last_applied_gain_db(0), WithinAbs(0.0f, 0.0001f));
+
+  auto padded = make();
+  program = sine(1000.0f, sample_rate, 1024, 0.8f);
+  padded->set_sidechain(key_channels, 1, 1024);
+  process(*padded, program);
+  REQUIRE_THAT(bound->last_band_detector_db(0),
+               WithinAbs(padded->last_band_detector_db(0), 1.0e-4f));
+
+  // No channels unbinds the key and detection falls back to the main signal.
+  auto cleared = make();
+  program = sine(1000.0f, sample_rate, 1024, 0.8f);
+  cleared->set_sidechain(nullptr, 0, 0);
+  process(*cleared, program);
+  REQUIRE(cleared->last_band_detector_db(0) > -24.0f);
+  REQUIRE(cleared->last_applied_gain_db(0) < -3.0f);
+}
+
 TEST_CASE("DynamicEq supports tunable sidechain frequency and timing", "[mastering][eq]") {
   constexpr int sample_rate = 48000;
   DynamicEq eq;

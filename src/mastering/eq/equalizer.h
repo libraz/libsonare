@@ -68,7 +68,9 @@ class EqualizerProcessor : public rt::ProcessorBase {
   void clear_band(size_t index);
   void clear();
   /// Borrows sidechain buffers until the next process/clear call. Dynamic bands
-  /// opt into this key via DynamicParams::external_sidechain.
+  /// opt into this key via DynamicParams::external_sidechain. A key with channels
+  /// but fewer samples than the block (including zero) stays bound and reads as
+  /// silence past its end; only zero channels unbinds it.
   void set_sidechain(const float* const* channels, int num_channels, int num_samples) override;
   void clear_sidechain() override;
 
@@ -140,7 +142,7 @@ class EqualizerProcessor : public rt::ProcessorBase {
                                         PhaseMode global_phase);
   static void validate_dynamic_params(const DynamicParams& dyn);
   static float detector_db(const float* const* channels, int num_channels, int num_samples,
-                           int excluded_channel);
+                           int excluded_channel, int readable_samples = -1);
   // Per-band, per-channel detector filter and envelope state that persists across
   // process() blocks. Allocating fresh state per block (the previous behaviour)
   // re-rang the bandpass filter and reset the envelope at every block boundary,
@@ -171,7 +173,7 @@ class EqualizerProcessor : public rt::ProcessorBase {
   // @p excluded_channel (-1 for none) contributes to neither sum nor count.
   float band_detector_db(size_t band_index, const float* const* channels, int num_channels,
                          int num_samples, int excluded_channel, double sample_rate,
-                         const EqBand& band);
+                         const EqBand& band, int readable_samples = -1);
   static float rms_db(const float* const* channels, int num_channels, int num_samples) noexcept;
   static float dynamic_gain_delta(const EqBand& band, float detector_db, float threshold_db);
   void update_dynamic_state(const float* const* channels, int num_channels, int num_samples);

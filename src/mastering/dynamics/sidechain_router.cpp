@@ -84,8 +84,9 @@ void SidechainRouter::process(float* const* channels, int num_channels, int num_
     clear_lines();
   });
 
-  const bool use_external =
-      sidechain_channels_ != nullptr && sidechain_num_channels_ > 0 && sidechain_num_samples_ > 0;
+  // Bound is decided by the binding, not the remaining length: an exhausted key
+  // (zero samples left) stays external and reads as silence.
+  const bool use_external = sidechain_channels_ != nullptr && sidechain_num_channels_ > 0;
   const int source_channels = use_external ? sidechain_num_channels_ : num_channels;
   // An external key owns its own channel layout, so only the bus's internal
   // detector excludes its LFE plane. Applying the bus plane index to an
@@ -169,7 +170,7 @@ void SidechainRouter::set_sidechain(const float* const* channels, int num_channe
   if (num_channels < 0 || num_samples < 0) {
     throw SonareException(ErrorCode::InvalidParameter, "sidechain dimensions must be non-negative");
   }
-  if (num_channels == 0 || num_samples == 0) {
+  if (num_channels == 0) {
     clear_sidechain();
     return;
   }

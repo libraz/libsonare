@@ -258,3 +258,32 @@ TEST_CASE("Sidechain inserts leave the bed alone under a silent key at threshold
   const auto keyed = run(0.5f);
   CHECK(*std::min_element(keyed.begin(), keyed.end()) < kBed * 0.9f);
 }
+
+TEST_CASE("SidechainRouter an exhausted key stays bound and reads as silence",
+          "[mastering][dynamics][boundary]") {
+  const SidechainRouterConfig config = ducking_config();
+  const std::vector<float> silence(kBlock, 0.0f);
+  const float* key_channels[] = {silence.data()};
+
+  auto run = [&](int key_samples, bool clear) {
+    SidechainRouter router(config);
+    router.prepare(kRate, kBlock);
+    if (clear) {
+      router.clear_sidechain();
+    } else {
+      router.set_sidechain(key_channels, 1, key_samples);
+    }
+    std::vector<float> bed(kBlock, kBed);
+    float* channels[] = {bed.data()};
+    router.process(channels, 1, kBlock);
+    return bed;
+  };
+
+  const auto exhausted = run(0, false);
+  const auto padded = run(kBlock, false);
+  CHECK(max_difference(exhausted, padded) < kBed * 1.0e-5f);
+  // A key with no channels unbinds: the bed is then detected against itself and ducks.
+  const auto cleared = run(0, true);
+  CHECK(*std::min_element(cleared.begin(), cleared.end()) < kBed * 0.9f);
+  CHECK(*std::min_element(exhausted.begin(), exhausted.end()) > kBed * 0.99f);
+}

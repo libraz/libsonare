@@ -15,15 +15,19 @@ namespace sonare::mastering::eq {
 ///          The accumulation is double-precision and the sample count is floored
 ///          at 1 to avoid a divide-by-zero on an empty block. Shared by the
 ///          static parametric EQ (dynamic bands) and the dedicated dynamic EQ so
-///          their broadband detector reads identically.
+///          their broadband detector reads identically. Only the first
+///          @p readable_samples positions are read (negative = all); the rest of
+///          the block counts as silence, so a short external key is zero-padded.
 inline float broadband_detector_db(const float* const* channels, int num_channels, int num_samples,
-                                   int excluded_channel) {
+                                   int excluded_channel, int readable_samples = -1) {
+  const int readable =
+      (readable_samples < 0 || readable_samples > num_samples) ? num_samples : readable_samples;
   double sum = 0.0;
   int counted = 0;
   for (int ch = 0; ch < num_channels; ++ch) {
     if (ch == excluded_channel) continue;
     ++counted;
-    for (int i = 0; i < num_samples; ++i) {
+    for (int i = 0; i < readable; ++i) {
       const double sample = channels[ch][i];
       sum += sample * sample;
     }

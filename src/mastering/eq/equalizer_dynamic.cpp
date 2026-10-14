@@ -14,13 +14,15 @@ namespace sonare::mastering::eq {
 using sonare::constants::kFloorDb;
 
 float EqualizerProcessor::detector_db(const float* const* channels, int num_channels,
-                                      int num_samples, int excluded_channel) {
-  return broadband_detector_db(channels, num_channels, num_samples, excluded_channel);
+                                      int num_samples, int excluded_channel, int readable_samples) {
+  return broadband_detector_db(channels, num_channels, num_samples, excluded_channel,
+                               readable_samples);
 }
 
 float EqualizerProcessor::band_detector_db(size_t band_index, const float* const* channels,
                                            int num_channels, int num_samples, int excluded_channel,
-                                           double sample_rate, const EqBand& band) {
+                                           double sample_rate, const EqBand& band,
+                                           int readable_samples) {
   if (num_samples <= 0 || num_channels <= 0) return kFloorDb;
 
   // Shared bandpass coefficients for this band's detector. Each channel keeps its
@@ -37,6 +39,9 @@ float EqualizerProcessor::band_detector_db(size_t band_index, const float* const
   const double b2 = coeffs.b2;
   const double a1 = coeffs.a1;
   const double a2 = coeffs.a2;
+
+  const int readable =
+      (readable_samples < 0 || readable_samples > num_samples) ? num_samples : readable_samples;
 
   const double attack = sonare::time_to_attack_release_rate(sample_rate, band.dyn.attack_ms);
   const double release = sonare::time_to_attack_release_rate(sample_rate, band.dyn.release_ms);
@@ -89,10 +94,10 @@ float EqualizerProcessor::band_detector_db(size_t band_index, const float* const
       float input;
       if (look > 0) {
         input = s.look_ring[s.look_pos];
-        s.look_ring[s.look_pos] = channels[ch][i];
+        s.look_ring[s.look_pos] = i < readable ? channels[ch][i] : 0.0f;
         s.look_pos = (s.look_pos + 1) % look;
       } else {
-        input = channels[ch][i];
+        input = i < readable ? channels[ch][i] : 0.0f;
       }
       const double stage_a = biquad(input, s.filter_a_z1, s.filter_a_z2);
       const double rectified = std::abs(biquad(stage_a, s.filter_b_z1, s.filter_b_z2));
@@ -148,9 +153,9 @@ void EqualizerProcessor::update_dynamic_state(const float* const* channels, int 
       const bool use_external = band.dyn.external_sidechain && sidechain_channels_ != nullptr;
       const float* const* detector_channels = use_external ? sidechain_channels_ : channels;
       const int detector_num_channels = use_external ? sidechain_num_channels_ : num_channels;
-      last_band_detector_db_[i] =
-          band_detector_db(i, detector_channels, detector_num_channels, num_samples,
-                           use_external ? -1 : excluded, sample_rate_, band);
+      last_band_detector_db_[i] = band_detector_db(
+          i, detector_channels, detector_num_channels, num_samples, use_external ? -1 : excluded,
+          sample_rate_, band, use_external ? sidechain_num_samples_ : num_samples);
       if (band.dyn.auto_threshold) {
         const float target = last_band_detector_db_[i] - 6.0f;
         if (auto_threshold_db_[i] <= kFloorDb + 1.0f) {
@@ -173,9 +178,9 @@ void EqualizerProcessor::validate_sidechain(int expected_samples) const {
   if (sidechain_channels_ == nullptr) {
     return;
   }
-  if (sidechain_num_samples_ != expected_samples) {
+  if (sidechain_num_samples_ > expected_samples) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "sidechain length must match process block length");
+                          "sidechain length must not exceed process block length");
   }
 }
 

@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <catch2/generators/catch_generators.hpp>
 #include <limits>
 
 #if defined(SONARE_WITH_FX)
@@ -2388,4 +2389,109 @@ TEST_CASE("ChannelStrip EQ switched back on starts from rest", "[mixing][eq]") {
     REQUIRE(left[i] == 0.0f);
     REQUIRE(right[i] == 0.0f);
   }
+}
+
+namespace {
+
+// Renders one 512-frame block of a constant bed through a strip holding a ducking
+// SidechainRouter insert keyed by a managed key. `supplied` is the key length
+// handed to the strip, `event_at` the position of a 0 dB -> 0 dB fader event that
+// splits the block (-1 for none), `cleared` unbinds the key instead.
+std::vector<float> run_strip_short_key(bool post_fader, bool key_listen, int supplied,
+                                       int prefix_frames, int event_at, bool cleared) {
+  constexpr int kBlockFrames = 512;
+  sonare::mastering::dynamics::SidechainRouterConfig config;
+  config.threshold_db = -30.0f;
+  config.ratio = 10.0f;
+  config.attack_ms = 0.0f;
+  config.release_ms = 0.0f;
+  config.range_db = 60.0f;
+  config.sidechain_hpf_enabled = true;
+  config.sidechain_hpf_hz = 80.0f;
+  config.key_listen = key_listen;
+
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  auto router = std::make_unique<sonare::mastering::dynamics::SidechainRouter>(config);
+  if (post_fader) {
+    strip.add_post_insert(std::move(router));
+  } else {
+    strip.add_pre_insert(std::move(router));
+  }
+  strip.prepare(48000.0, kBlockFrames);
+
+  std::vector<float> key(static_cast<size_t>(std::max(supplied, 1)), 0.0f);
+  for (int i = 0; i < std::min(prefix_frames, supplied); ++i) {
+    key[static_cast<size_t>(i)] =
+        0.6f * std::sin(kTwoPi * 997.0f * static_cast<float>(i) / 48000.0f);
+  }
+  const float* key_channels[] = {key.data()};
+  if (cleared) {
+    strip.set_insert_sidechain(0, nullptr, 0, 0);
+  } else {
+    strip.set_insert_sidechain(0, key_channels, 1, supplied);
+  }
+  if (event_at >= 0) {
+    REQUIRE(strip.schedule_fader_automation(event_at, 0.0f));
+  }
+
+  std::vector<float> left(kBlockFrames, 0.5f);
+  std::vector<float> right(kBlockFrames, 0.5f);
+  float* channels[] = {left.data(), right.data()};
+  strip.process(channels, 2, kBlockFrames);
+  return left;
+}
+
+float max_abs_difference(const std::vector<float>& a, const std::vector<float>& b) {
+  REQUIRE(a.size() == b.size());
+  float worst = 0.0f;
+  for (size_t i = 0; i < a.size(); ++i) worst = std::max(worst, std::abs(a[i] - b[i]));
+  return worst;
+}
+
+}  // namespace
+
+TEST_CASE("ChannelStrip short external key is invariant under automation segmentation",
+          "[mixing][sidechain]") {
+  const bool post_fader = GENERATE(false, true);
+  const bool key_listen = GENERATE(false, true);
+  const int key_frames = GENERATE(128, 256);
+  const int prefix_frames = GENERATE(0, 48);
+  CAPTURE(post_fader, key_listen, key_frames, prefix_frames);
+
+  const auto unsplit =
+      run_strip_short_key(post_fader, key_listen, key_frames, prefix_frames, -1, false);
+  const auto padded = run_strip_short_key(post_fader, key_listen, 512, prefix_frames, -1, false);
+  CHECK(max_abs_difference(unsplit, padded) < 1.0e-5f);
+
+  // Before, at and after the key end, plus the 256 event of the report.
+  for (const int event_at : {64, 100, key_frames, key_frames + 72, 256, 300}) {
+    CAPTURE(event_at);
+    const auto split =
+        run_strip_short_key(post_fader, key_listen, key_frames, prefix_frames, event_at, false);
+    CHECK(max_abs_difference(split, unsplit) < 1.0e-5f);
+    const auto padded_split =
+        run_strip_short_key(post_fader, key_listen, 512, prefix_frames, event_at, false);
+    CHECK(max_abs_difference(split, padded_split) < 1.0e-5f);
+  }
+}
+
+TEST_CASE("ChannelStrip full-length external key is unaffected by a splitting event",
+          "[mixing][sidechain]") {
+  const bool post_fader = GENERATE(false, true);
+  const auto unsplit = run_strip_short_key(post_fader, false, 512, 48, -1, false);
+  const auto split = run_strip_short_key(post_fader, false, 512, 48, 256, false);
+  CHECK(max_abs_difference(split, unsplit) < 1.0e-5f);
+}
+
+TEST_CASE("ChannelStrip cleared insert key still falls back to internal detection",
+          "[mixing][sidechain]") {
+  const bool post_fader = GENERATE(false, true);
+  const auto cleared = run_strip_short_key(post_fader, false, 128, 0, -1, true);
+  const auto cleared_split = run_strip_short_key(post_fader, false, 128, 0, 256, true);
+  const auto silent_key = run_strip_short_key(post_fader, false, 128, 0, -1, false);
+  CHECK(max_abs_difference(cleared, cleared_split) < 1.0e-5f);
+  // The 0.5 bed sits above the -30 dB threshold, so the main signal ducks itself;
+  // a silent bound key leaves it untouched.
+  CHECK(*std::min_element(cleared.begin(), cleared.end()) < 0.5f * 0.7f);
+  CHECK(*std::min_element(silent_key.begin(), silent_key.end()) > 0.5f * 0.99f);
 }

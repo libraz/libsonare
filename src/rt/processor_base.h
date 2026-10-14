@@ -244,7 +244,9 @@ class ProcessorBase {
   // Optional external detector/key input for processors that support
   // sidechain operation. Buffers are borrowed until the processor consumes or
   // clears them; default implementation is a no-op for processors without a
-  // sidechain detector.
+  // sidechain detector. A key with channels but fewer samples than the block
+  // (including zero) stays bound and reads as silence past its end; only a
+  // zero channel count (or clear_sidechain()) unbinds it.
   virtual void set_sidechain(const float* const* channels, int num_channels, int num_samples) {
     (void)channels;
     (void)num_channels;
