@@ -24,6 +24,7 @@
 ### New
 
 - `stereo.stereoBalance` takes a `gain` parameter (linear, at least 0, default 1), applied to both channels after the balance law.
+- `synthEnumTables()` (Python `synth_enum_tables()`) and the C `sonare_synth_enum_names` cover the sample loop modes, sample key tracks and retrigger modes (`SONARE_SYNTH_ENUM_SAMPLE_LOOP_MODE`, `SAMPLE_KEY_TRACK`, `RETRIGGER`).
 
 ### Behaviour changes
 
@@ -38,6 +39,9 @@
 - A closed Python `PlaybackRenderer` or `PlaybackLoudnessMeter` raises `InvalidState` instead of `InvalidParameter`.
 - Python raises `TypeError` instead of `SonareValueError` when a numeric argument or field receives a non-number, such as a string or a bool; a fractional, non-finite or out-of-range number is still `SonareValueError`.
 - On WASM, a method called on a deleted handle throws `SonareError` with code `InvalidState`, as on Node and Python, instead of embind's generic error.
+- The plate reverb (`effects.reverb.plate`) and the GS effect reverb compute their modulation rate and damping coefficient in double precision throughout, so their output changes slightly.
+- A vocal-edit render of a sub-range renders only the notes whose source or destination touches the range, and its processed ranges, cache counters, unit total and diagnostics describe those notes rather than the whole song.
+- Node and WASM validators give the same refusal for the same value: an odd value where an even one is required names the minimum on both, a negative optional count says to omit it on both, and WASM interleaved-sample inputs must be a `Float32Array` as on Node.
 - `countInEndSample` (Python `count_in_end_sample`, C `sonare_engine_count_in_end_sample`) counts from the start of the bar containing the start sample, so a mid-bar start gets a short first bar, and every counted bar has the length of the time signature in effect at the start; the realtime engine's count-in uses the same rule.
 - A smoothed parameter change the realtime engine starts in the middle of a block advances at its 64-frame control period whatever the host block size.
 - In C++, `AutomationEngine::bind`, `unbind` and `clear` are no longer `noexcept`; they wait until the audio thread has stopped reading the previous target table.
@@ -48,6 +52,8 @@
 - The built-in chord generator and harmonizer place notes correctly in clips with a non-zero start or source offset. The harmonizer covers both of two overlapping same-pitch notes, and a chord decision reports `accepted: false` when every voice was rejected.
 - Assist commands that change a track outside the scope (its gain, mute, solo, pan or automation, or a clip's warp, takes, comp or loop crossfade) are discarded.
 - Realtime automation keeps every distinct breakpoint in a block when many lanes share a breakpoint time.
+- In C++, a MIDI clip published to the realtime engine or sequencer with events out of frame order is played in frame order instead of stalling the audio thread; the C ABI, WASM and project paths already sorted their events.
+- In C++, `compile_pitch_plan` refuses the malformed pitch targets a vocal-edit session refuses (a centre target carrying curve points, an unset target carrying a value).
 - WASM meter, scope, spectrum and telemetry readers never return a record mixing two writes, and never skip a record that was published while they read.
 - WASM live input stops the microphone tracks it acquired if setup fails. The offline worker client and OPFS clip pages settle a request whose message could not be posted. Worklet `destroy()` disconnects and settles pending requests even if notifying the processor fails.
 - On macOS, opening an explicitly chosen output device fails if the device cannot be bound, instead of playing on the default device.
