@@ -471,6 +471,80 @@ TEST_CASE("MeterProcessor streaming true peak matches the whole-signal reading",
   }
 }
 
+TEST_CASE("MeterProcessor flush reads the whole pending window at any prepared capacity",
+          "[mixing]") {
+  // The reconstruction runs a group delay behind the input; a block capacity shorter than that
+  // delay must still drain all of it at the end of the signal.
+  constexpr int kSampleRate = 48000;
+  std::vector<float> signal = {0.9f, 0.9f};
+  const float offline_db =
+      sonare::linear_to_db(sonare::metering::true_peak(signal.data(), signal.size(), 4));
+  REQUIRE(offline_db > 0.5f);
+
+  for (const int capacity : {1, 4, 6, 128}) {
+    sonare::mixing::MeterConfig config;
+    config.measure_lufs = false;
+    config.measure_true_peak = true;
+    config.true_peak_oversample = 4;
+    sonare::mixing::MeterProcessor meter(config);
+    meter.prepare(static_cast<double>(kSampleRate), capacity);
+    std::vector<float> block = signal;
+    float max_tp_db = sonare::constants::kFloorDb;
+    for (size_t offset = 0; offset < block.size(); offset += static_cast<size_t>(capacity)) {
+      const int n = std::min(capacity, static_cast<int>(block.size() - offset));
+      float* channels[] = {block.data() + offset};
+      meter.process(channels, 1, n);
+      max_tp_db = std::max(max_tp_db, meter.snapshot().max_true_peak_db);
+    }
+    meter.flush_true_peak();
+    max_tp_db = std::max(max_tp_db, meter.snapshot().max_true_peak_db);
+    INFO("capacity " << capacity << ", offline " << offline_db << ", live " << max_tp_db);
+    CHECK_THAT(max_tp_db, WithinAbs(offline_db, 0.01f));
+  }
+}
+
+TEST_CASE("MeterProcessor starts a new true-peak signal after flush", "[mixing]") {
+  // A later process() is a new signal: it must not read the flushed one's FIR sidelobes.
+  constexpr int kSampleRate = 48000;
+  constexpr int kBlock = 128;
+  sonare::mixing::MeterConfig config;
+  config.measure_lufs = false;
+  config.measure_true_peak = true;
+  config.true_peak_oversample = 4;
+
+  std::vector<float> quiet(static_cast<size_t>(kBlock));
+  for (int i = 0; i < kBlock; ++i) {
+    quiet[static_cast<size_t>(i)] =
+        0.001f *
+        static_cast<float>(std::cos(2.0 * sonare::constants::kPiD * 1000.0 * i / kSampleRate));
+  }
+  const auto read_after = [&](sonare::mixing::MeterProcessor& meter, std::vector<float> next) {
+    float* channels[] = {next.data()};
+    meter.process(channels, 1, kBlock);
+    return meter.snapshot();
+  };
+
+  for (const float sign : {1.0f, -1.0f}) {
+    for (const bool silent : {true, false}) {
+      CAPTURE(sign, silent);
+      const std::vector<float> next = silent ? std::vector<float>(kBlock, 0.0f) : quiet;
+      sonare::mixing::MeterProcessor fresh(config);
+      fresh.prepare(static_cast<double>(kSampleRate), kBlock);
+      const sonare::mixing::MeterSnapshot expected = read_after(fresh, next);
+
+      sonare::mixing::MeterProcessor meter(config);
+      meter.prepare(static_cast<double>(kSampleRate), kBlock);
+      std::vector<float> previous = {0.9f * sign, 0.9f * sign};
+      float* channels[] = {previous.data()};
+      meter.process(channels, 1, 2);
+      meter.flush_true_peak();
+      const sonare::mixing::MeterSnapshot after = read_after(meter, next);
+      CHECK(after.max_true_peak_db == expected.max_true_peak_db);
+      CHECK(after.true_peak_db[0] == expected.true_peak_db[0]);
+    }
+  }
+}
+
 TEST_CASE("GoniometerBuffer hands a concurrent reader whole points in range", "[mixing]") {
   // Each point is written as (v, -v); a torn or raced point would break the pair.
   sonare::mixing::GoniometerBuffer<64> buffer;

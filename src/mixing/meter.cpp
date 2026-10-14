@@ -360,33 +360,38 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
 
 void MeterProcessor::flush_true_peak() noexcept {
   if (!config_.measure_true_peak || true_peak_channels_ <= 0) return;
-  const int pending = std::min(true_peak_filter_.latency_samples(), max_block_size_);
-  if (pending <= 0) return;
-  for (int ch = 0; ch < true_peak_channels_; ++ch) {
-    const size_t c = static_cast<size_t>(ch);
-    true_peak_in_ptrs_[c] = true_peak_zero_in_.data();
-    true_peak_out_ptrs_[c] = true_peak_oversampled_[c].data();
-  }
-  true_peak_filter_.upsample_with_history_delayed(
-      true_peak_in_ptrs_.data(), true_peak_out_ptrs_.data(), true_peak_channels_, pending);
   MeterSnapshot next = snapshot_.load();
-  const size_t oversampled =
-      static_cast<size_t>(pending) * static_cast<size_t>(true_peak_filter_.factor());
   float max_true_peak = db_to_linear(next.max_true_peak_db);
-  for (int ch = 0; ch < true_peak_channels_; ++ch) {
-    const size_t c = static_cast<size_t>(ch);
-    if (!true_peak_live_[c]) continue;
-    float peak = 0.0f;
-    for (size_t i = 0; i < oversampled; ++i) {
-      peak = std::max(peak, std::abs(true_peak_oversampled_[c][i]));
+  // The pending window can be longer than one prepared block, so drain it in block-sized chunks.
+  for (int remaining = true_peak_filter_.latency_samples(); remaining > 0;) {
+    const int chunk = std::min(remaining, max_block_size_);
+    remaining -= chunk;
+    for (int ch = 0; ch < true_peak_channels_; ++ch) {
+      const size_t c = static_cast<size_t>(ch);
+      true_peak_in_ptrs_[c] = true_peak_zero_in_.data();
+      true_peak_out_ptrs_[c] = true_peak_oversampled_[c].data();
     }
-    if (c < next.true_peak_db.size()) {
-      next.true_peak_db[c] = std::max(next.true_peak_db[c], linear_to_db(peak));
+    true_peak_filter_.upsample_with_history_delayed(
+        true_peak_in_ptrs_.data(), true_peak_out_ptrs_.data(), true_peak_channels_, chunk);
+    const size_t oversampled =
+        static_cast<size_t>(chunk) * static_cast<size_t>(true_peak_filter_.factor());
+    for (int ch = 0; ch < true_peak_channels_; ++ch) {
+      const size_t c = static_cast<size_t>(ch);
+      if (!true_peak_live_[c]) continue;
+      float peak = 0.0f;
+      for (size_t i = 0; i < oversampled; ++i) {
+        peak = std::max(peak, std::abs(true_peak_oversampled_[c][i]));
+      }
+      if (c < next.true_peak_db.size()) {
+        next.true_peak_db[c] = std::max(next.true_peak_db[c], linear_to_db(peak));
+      }
+      max_true_peak = std::max(max_true_peak, peak);
     }
-    max_true_peak = std::max(max_true_peak, peak);
   }
   next.max_true_peak_db = linear_to_db(max_true_peak);
   publish(next);
+  // The next process() starts a new signal, so the reconstruction must not read this one's taps.
+  true_peak_filter_.reset();
   true_peak_channels_ = 0;
 }
 
