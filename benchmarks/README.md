@@ -69,6 +69,8 @@ rye run --pyproject benchmarks/pyproject.toml python benchmarks/run_bench.py
 on different hardware and the relative gaps stay stable; absolute times scale
 with the machine.
 
+`run_bench.py` refuses to merge unless `results_cpp.json` carries an `input` block that matches the file the librosa side timed (byte count, CRC-32, decoded length and rate, resampled rate, and resampled length within two samples). `results.json` keeps each side's hardware, load and timing source under `measurement`.
+
 ### Do not publish a run from a busy machine
 
 `sonare_bench` records the one-minute load average before and after the run and

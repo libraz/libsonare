@@ -4,6 +4,7 @@
 // numbers reflect raw native execution time. Output is JSON on stdout so the
 // driver script can stitch it together with the Python results.
 
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -78,6 +79,40 @@ sonare::Audio load_fixture(const std::string& path) {
 #endif
 }
 
+// CRC-32 (IEEE) and byte count of the fixture file, matching zlib.crc32 on the Python side.
+// The merge step compares them to prove both halves timed the same recording.
+struct FileFingerprint {
+  uint32_t crc32 = 0;
+  uint64_t bytes = 0;
+};
+
+FileFingerprint fingerprint_file(const std::string& path) {
+  std::ifstream file(path, std::ios::binary);
+  if (!file) {
+    throw std::runtime_error("cannot open fixture: " + path);
+  }
+  uint32_t table[256];
+  for (uint32_t i = 0; i < 256; ++i) {
+    uint32_t c = i;
+    for (int k = 0; k < 8; ++k) c = (c & 1u) ? (0xEDB88320u ^ (c >> 1)) : (c >> 1);
+    table[i] = c;
+  }
+  FileFingerprint result;
+  uint32_t crc = 0xFFFFFFFFu;
+  std::vector<char> buffer(1 << 16);
+  while (file) {
+    file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+    const std::streamsize got = file.gcount();
+    for (std::streamsize i = 0; i < got; ++i) {
+      const uint8_t byte = static_cast<uint8_t>(buffer[static_cast<size_t>(i)]);
+      crc = table[(crc ^ byte) & 0xFFu] ^ (crc >> 8);
+    }
+    result.bytes += static_cast<uint64_t>(got);
+  }
+  result.crc32 = crc ^ 0xFFFFFFFFu;
+  return result;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -89,6 +124,7 @@ int main(int argc, char** argv) {
   const std::string out_path = argc >= 3 ? argv[2] : "";
 
   auto audio = load_fixture(wav_path);
+  const FileFingerprint fixture_fingerprint = fingerprint_file(wav_path);
   auto resampled = sonare::resample(audio, kResampledSr);
 
   std::fprintf(stderr, "fixture: %s (%.2fs @ %d Hz -> resampled %d Hz, %zu samples)\n",
@@ -233,6 +269,13 @@ int main(int argc, char** argv) {
     std::fprintf(fp, "  \"duration_sec\": %.3f,\n", audio.duration());
     std::fprintf(fp, "  \"source_sample_rate\": %d,\n", audio.sample_rate());
     std::fprintf(fp, "  \"resampled_sample_rate\": %d,\n", kResampledSr);
+    std::fprintf(fp,
+                 "  \"input\": {\"file_bytes\": %llu, \"file_crc32\": %u, \"source_samples\": %zu, "
+                 "\"source_sample_rate\": %d, \"resampled_samples\": %zu, "
+                 "\"resampled_sample_rate\": %d},\n",
+                 static_cast<unsigned long long>(fixture_fingerprint.bytes),
+                 fixture_fingerprint.crc32, audio.size(), audio.sample_rate(), resampled.size(),
+                 kResampledSr);
     std::fprintf(fp, "  \"runs_per_case\": %d,\n", kRuns);
     std::fprintf(fp, "  \"hardware_threads\": %u,\n", hardware_threads);
     std::fprintf(fp, "  \"load_average_before\": %.2f,\n", load_before);

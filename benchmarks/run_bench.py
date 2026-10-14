@@ -24,10 +24,12 @@ import shutil
 import statistics
 import subprocess
 import time
+import zlib
 from collections.abc import Callable
 from pathlib import Path
 
 import librosa
+import soundfile
 
 FIXTURE = Path(__file__).parent / "fixtures" / "bench_73s_44100.wav"
 CPP_RESULTS = Path(__file__).parent / "results_cpp.json"
@@ -46,6 +48,46 @@ def _load_average() -> float:
         return os.getloadavg()[0]
     except (OSError, AttributeError):
         return -1.0
+
+
+# The two resamplers may differ by a sample at the tail; anything wider means a
+# different input or a different rate.
+RESAMPLED_LENGTH_TOLERANCE = 2
+
+
+def _fixture_input(resampled_samples: int) -> dict[str, int]:
+    """Describes the input this process actually timed, in sonare_bench's `input` shape."""
+    raw = FIXTURE.read_bytes()
+    info = soundfile.info(str(FIXTURE))
+    return {
+        "file_bytes": len(raw),
+        "file_crc32": zlib.crc32(raw),
+        "source_samples": info.frames,
+        "source_sample_rate": info.samplerate,
+        "resampled_samples": resampled_samples,
+        "resampled_sample_rate": RESAMPLED_SR,
+    }
+
+
+def verify_same_input(cpp_input: dict | None, python_input: dict[str, int]) -> None:
+    """Refuses to merge results unless both halves timed the same recording."""
+    if not isinstance(cpp_input, dict):
+        raise SystemExit(
+            f"{CPP_RESULTS} has no `input` block; re-run sonare_bench to regenerate it"
+        )
+    mismatches: list[str] = []
+    for key, expected in python_input.items():
+        actual = cpp_input.get(key)
+        if key == "resampled_samples":
+            if not isinstance(actual, int) or abs(actual - expected) > RESAMPLED_LENGTH_TOLERANCE:
+                mismatches.append(f"{key}: sonare_bench={actual} librosa side={expected}")
+        elif actual != expected:
+            mismatches.append(f"{key}: sonare_bench={actual} librosa side={expected}")
+    if mismatches:
+        raise SystemExit(
+            "sonare_bench and the librosa side did not use the same input:\n  "
+            + "\n  ".join(mismatches)
+        )
 
 
 def _bench(fn: Callable[[], object], runs: int = RUNS) -> float:
@@ -68,11 +110,13 @@ def main() -> None:
         )
 
     cpp = json.loads(CPP_RESULTS.read_text())
+    cpp_cached = {row["feature"]: row["libsonare_ms"] for row in cpp["per_feature_cached"]}
     libsonare_full_ms = cpp["full_analysis_ms"]
     libsonare_per_feature = {row["feature"]: row["libsonare_ms"]
                              for row in cpp["per_feature_standalone"]}
 
     y, _ = librosa.load(str(FIXTURE), sr=RESAMPLED_SR, mono=True)
+    verify_same_input(cpp.get("input"), _fixture_input(len(y)))
     print(f"fixture: {FIXTURE.name} (resampled to {RESAMPLED_SR} Hz, {len(y)} samples)")
     print(f"runs per case: {RUNS}")
 
@@ -114,6 +158,10 @@ def main() -> None:
             "feature": label,
             "librosa_ms": round(los_ms, 2),
             "libsonare_ms": round(lib_ms, 2),
+            **(
+                {"libsonare_cached_ms": round(cpp_cached[label], 2)}
+                if label in cpp_cached else {}
+            ),
             "speedup": round(speedup, 2),
         })
         print(f"{label:<20s} {los_ms:>14.2f} {lib_ms:>16.2f} {speedup:>9.2f}x")
@@ -158,8 +206,28 @@ def main() -> None:
         "hardware_threads": hardware_threads,
         "load_average_before": round(load_before, 2),
         "load_average_after": round(_load_average(), 2),
+        "input": cpp["input"],
+        "measurement": {
+            "librosa": {
+                "hardware_threads": hardware_threads,
+                "load_average_before": round(load_before, 2),
+                "load_average_after": round(_load_average(), 2),
+                "runs_per_case": RUNS,
+                "timing_source": "time.perf_counter (Python call)",
+            },
+            "libsonare": {
+                "hardware_threads": cpp["hardware_threads"],
+                "load_average_before": cpp["load_average_before"],
+                "load_average_after": cpp["load_average_after"],
+                "runs_per_case": cpp["runs_per_case"],
+                "timing_source": cpp["timing_source"],
+            },
+        },
         "full_analysis": {
             "libsonare_ms": round(libsonare_full_ms, 2),
+            "libsonare_with_cancel_callback_ms": round(
+                cpp["full_analysis_with_cancel_callback_ms"], 2
+            ),
             "bpm_detector_comprehensive_ms": (
                 round(bpm_detector_ms, 2) if bpm_detector_ms is not None else None
             ),
