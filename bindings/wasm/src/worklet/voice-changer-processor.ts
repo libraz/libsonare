@@ -1,5 +1,10 @@
 import { RealtimeVoiceChanger } from '../index.js';
-import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types.js';
+import {
+  copyPlanesToOutput,
+  leadingSamples,
+  type WorkletInput,
+  type WorkletOutput,
+} from './audio_types.js';
 import { isRealtimeVoiceChangerMessage, requireChannelCount } from './guards.js';
 import type {
   SonareRealtimeVoiceChangerMessage,
@@ -97,7 +102,7 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
       const frames = this.ensureMonoCapacity(requestedFrames);
       const source = input?.[0];
       if (source) {
-        this.monoInput.set(source.subarray(0, frames));
+        this.monoInput.set(leadingSamples(source, frames));
       } else {
         this.monoInput.fill(0, 0, frames);
       }
@@ -125,7 +130,7 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
         continue;
       }
       if (src) {
-        dst.set(src.subarray(0, frames));
+        dst.set(leadingSamples(src, frames));
       } else {
         dst.fill(0, 0, frames);
       }

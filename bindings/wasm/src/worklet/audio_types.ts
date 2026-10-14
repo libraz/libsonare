@@ -2,6 +2,15 @@ export type WorkletInput = readonly (readonly Float32Array[])[];
 export type WorkletOutput = Float32Array[][];
 
 /**
+ * The first `count` samples of `source`, as `source.subarray(0, count)` reads
+ * them, but without creating a view when nothing is cut off. Every full-quantum
+ * copy in the worklets goes through here so the common case allocates nothing.
+ */
+export function leadingSamples(source: Float32Array, count: number): Float32Array {
+  return source.length <= count ? source : source.subarray(0, count);
+}
+
+/**
  * Copies one plane per output channel. Shared by every worklet output — the
  * engine's program and cue buses and the voice changer — so they cannot drift
  * in their padding behaviour. Allocation-free.
@@ -31,7 +40,7 @@ export function copyPlanesToOutput(
     let copied = 0;
     if (source) {
       copied = Math.min(target.length, frames, source.length);
-      target.set(source.subarray(0, copied));
+      target.set(leadingSamples(source, copied));
     }
     if (copied < target.length) {
       target.fill(0, copied);

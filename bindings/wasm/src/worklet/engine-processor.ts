@@ -103,7 +103,6 @@ function wireRenderFrame(frame: number | bigint | undefined): number | undefined
  * Backed by the `sonare.wasm` embind facade.
  */
 export class SonareRealtimeEngineWorkletProcessor {
-  private static warnedChannelScratchOverflow = false;
   readonly sampleRate: number;
   readonly blockSize: number;
   readonly channelCount: number;
@@ -286,6 +285,8 @@ export class SonareRealtimeEngineWorkletProcessor {
       return true;
     }
     const frames = firstOutput.length;
+    // A quantum larger than the pre-allocated scratch renders silence and still
+    // publishes telemetry; it is never clamped and never reallocates.
     if (frames > this.blockSize) {
       for (const channel of output ?? []) {
         channel.fill(0);
@@ -295,23 +296,6 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
 
     this.drainCommands();
-
-    // Clamp `frames` to the pre-allocated scratch capacity. The earlier
-    // `frames > this.blockSize` branch already returns early, so this is
-    // defensive — but we warn once if it ever fires so the contract violation
-    // is visible.
-    let usableFrames = frames;
-    if (usableFrames > this.blockSize) {
-      if (!SonareRealtimeEngineWorkletProcessor.warnedChannelScratchOverflow) {
-        SonareRealtimeEngineWorkletProcessor.warnedChannelScratchOverflow = true;
-        // biome-ignore lint/suspicious/noConsole: realtime-safety diagnostic.
-        console.warn(
-          `SonareRealtimeEngineWorkletProcessor: requested ${usableFrames} frames ` +
-            `exceeds pre-allocated capacity ${this.blockSize}; clamping.`,
-        );
-      }
-      usableFrames = this.blockSize;
-    }
 
     // Defend against WASM linear-memory growth detaching the cached heap views:
     // if any view's backing ArrayBuffer has been detached (byteLength === 0),
@@ -330,10 +314,10 @@ export class SonareRealtimeEngineWorkletProcessor {
     for (let ch = 0; ch < this.channelCount; ch++) {
       const dst = this.channelBuffers[ch];
       const source = input?.[ch];
-      if (source && source.length === usableFrames) {
-        dst.set(source.subarray(0, usableFrames));
+      if (source && source.length === frames) {
+        dst.set(source);
       } else {
-        dst.fill(0, 0, usableFrames);
+        dst.fill(0, 0, frames);
       }
     }
 
@@ -341,19 +325,19 @@ export class SonareRealtimeEngineWorkletProcessor {
     // monitor variant keeps the cue bus out of the program planes so it can go
     // to its own output; the plain call folds it in, as it always has.
     if (this.cueOutput) {
-      this.engine.processPreparedWithMonitor(usableFrames);
+      this.engine.processPreparedWithMonitor(frames);
     } else {
-      this.engine.processPrepared(usableFrames);
+      this.engine.processPrepared(frames);
     }
 
-    copyPlanesToOutput(output, this.channelBuffers, usableFrames);
+    copyPlanesToOutput(output, this.channelBuffers, frames);
     if (this.cueOutput) {
       const cue = outputs[1];
       if (cue) {
-        copyPlanesToOutput(cue, this.monitorBuffers, usableFrames);
+        copyPlanesToOutput(cue, this.monitorBuffers, frames);
       }
     }
-    this.publishClipPageRequests(usableFrames);
+    this.publishClipPageRequests(frames);
     this.publishTelemetry();
     this.publishMeters();
     this.publishScope();

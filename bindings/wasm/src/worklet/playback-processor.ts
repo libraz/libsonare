@@ -1,7 +1,12 @@
 import { HrtfSet, PlaybackRenderer } from '../index.js';
 import type { PlaybackRendererConfig } from '../public_types_playback.js';
 import type { WasmPlaybackRenderer } from '../sonare.js';
-import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types.js';
+import {
+  copyPlanesToOutput,
+  leadingSamples,
+  type WorkletInput,
+  type WorkletOutput,
+} from './audio_types.js';
 import { initializeEmbindInWorklet, isEmbindReady } from './embind-init.js';
 import { isPlaybackMessage, requireIntegerOption, resolveContextSampleRate } from './guards.js';
 import type {
@@ -162,7 +167,7 @@ export class SonarePlaybackWorkletProcessor {
         const source = input[ch];
         const plane = this.inputPlanes[ch];
         const copied = Math.min(frames, source.length);
-        plane.set(copied === source.length ? source : source.subarray(0, copied));
+        plane.set(leadingSamples(source, copied));
         if (copied < frames) {
           plane.fill(0, copied, frames);
         }

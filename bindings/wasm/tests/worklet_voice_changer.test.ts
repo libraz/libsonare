@@ -1,5 +1,6 @@
 import type { RealtimeVoiceChangerPodConfig } from '../src/public_types';
 import {
+  countFloat32Subarrays,
   describe,
   expect,
   it,
@@ -365,6 +366,29 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
       } finally {
         (globalThis as { Float32Array: typeof Float32Array }).Float32Array = original;
         processor.destroy();
+      }
+    });
+
+    it('creates no subarray view for a full render quantum in either mode', () => {
+      const blockSize = 128;
+      for (const channelCount of [1, 2]) {
+        const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
+          preset: 'neutral-monitor',
+          sampleRate: 48000,
+          blockSize,
+          channelCount,
+        });
+        try {
+          const input = Array.from({ length: channelCount }, () => new Float32Array(blockSize));
+          const output = [new Float32Array(blockSize), new Float32Array(blockSize)];
+          const quantum = (): void => {
+            processor.process([input], [output]);
+          };
+          quantum();
+          expect(countFloat32Subarrays(quantum)).toBe(0);
+        } finally {
+          processor.destroy();
+        }
       }
     });
 

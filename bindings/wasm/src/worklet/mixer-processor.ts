@@ -1,6 +1,6 @@
 import type { MixerRealtimeBuffer } from '../index.js';
 import { Mixer } from '../index.js';
-import type { WorkletInput, WorkletOutput } from './audio_types.js';
+import { leadingSamples, type WorkletInput, type WorkletOutput } from './audio_types.js';
 import { initializeEmbindInWorklet, isEmbindReady } from './embind-init.js';
 import { isWorkletMessage, requireIntegerOption } from './guards.js';
 import type {
@@ -142,18 +142,22 @@ export class SonareWorkletProcessor {
     // processing min(frames, blockSize) and zero-filling any remainder.
     const usable = Math.min(frames, this.blockSize);
 
-    for (let strip = 0; strip < this.realtime.leftInputs.length; strip++) {
+    // Each getter re-checks the native topology and heap, and nothing can change
+    // either within one callback, so the views are read once into locals.
+    const leftInputs = this.realtime.leftInputs;
+    const rightInputs = this.realtime.rightInputs;
+    for (let strip = 0; strip < leftInputs.length; strip++) {
       const input = inputs[strip];
       const left = input?.[0];
       const right = input?.[1];
-      const leftTarget = this.realtime.leftInputs[strip];
-      const rightTarget = this.realtime.rightInputs[strip];
+      const leftTarget = leftInputs[strip];
+      const rightTarget = rightInputs[strip];
       if (left && left.length >= usable) {
-        leftTarget.set(left.subarray(0, usable));
+        leftTarget.set(leadingSamples(left, usable));
         if (right && right.length >= usable) {
-          rightTarget.set(right.subarray(0, usable));
+          rightTarget.set(leadingSamples(right, usable));
         } else {
-          rightTarget.set(left.subarray(0, usable));
+          rightTarget.set(leadingSamples(left, usable));
         }
       } else {
         leftTarget.fill(0);
@@ -162,26 +166,18 @@ export class SonareWorkletProcessor {
     }
 
     this.realtime.process(usable);
-    if (usable === frames) {
-      leftOut.set(this.realtime.outLeft.subarray(0, usable));
-      if (rightOut) {
-        rightOut.set(this.realtime.outRight.subarray(0, usable));
-      }
-    } else {
-      // frames > blockSize: fill the produced part and zero the remaining tail.
-      leftOut.fill(0);
-      leftOut.set(this.realtime.outLeft.subarray(0, usable));
-      if (rightOut) {
-        rightOut.fill(0);
-        rightOut.set(this.realtime.outRight.subarray(0, usable));
-      }
+    const mixedLeft = leadingSamples(this.realtime.outLeft, usable);
+    const mixedRight = leadingSamples(this.realtime.outRight, usable);
+    if (usable !== frames) {
+      // frames > blockSize: zero the tail the mixer did not produce.
+      leftOut.fill(0, usable);
+      rightOut?.fill(0, usable);
     }
+    leftOut.set(mixedLeft);
+    rightOut?.set(mixedRight);
     this.processedFrames += usable;
     this.publishMeter();
-    this.publishSpectrum(
-      this.realtime.outLeft.subarray(0, usable),
-      this.realtime.outRight.subarray(0, usable),
-    );
+    this.publishSpectrum(mixedLeft, mixedRight);
     return true;
   }
 

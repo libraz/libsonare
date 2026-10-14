@@ -146,3 +146,27 @@ export function setupWorklet(): void {
     await initWorklet();
   });
 }
+
+/**
+ * Runs `body` and returns how many `Float32Array` views `subarray` created
+ * meanwhile. A full render quantum should create none.
+ */
+export function countFloat32Subarrays(body: () => void): number {
+  const typedArrayPrototype = Object.getPrototypeOf(Float32Array.prototype) as {
+    subarray: (this: unknown, ...args: unknown[]) => unknown;
+  };
+  const original = typedArrayPrototype.subarray;
+  let count = 0;
+  typedArrayPrototype.subarray = function (this: unknown, ...args: unknown[]) {
+    if (this instanceof Float32Array) {
+      count++;
+    }
+    return original.apply(this, args);
+  };
+  try {
+    body();
+  } finally {
+    typedArrayPrototype.subarray = original;
+  }
+  return count;
+}

@@ -14,6 +14,7 @@ import type {
   SonareEngineTelemetryRecord,
 } from '../src/worklet/protocol';
 import {
+  countFloat32Subarrays,
   createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,
   createSonareEngineTelemetryRingBuffer,
@@ -1081,6 +1082,74 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         expect(internals.channelBuffers[1].length).toBe(shortFrames);
         expect(out[1][shortFrames - 1]).not.toBe(0);
         expect(out[1].subarray(shortFrames).every((sample) => sample === 0)).toBe(true);
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('renders an oversize quantum as silence without clamping or advancing', () => {
+      const blockSize = 128;
+      const clipFrames = blockSize * 4;
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize,
+        channelCount: 2,
+      });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        const engine = (
+          processor as unknown as {
+            engine: {
+              setClips: (clips: unknown[]) => void;
+              setTrackLanes: (lanes: unknown[]) => void;
+              play: (sampleTime?: number) => void;
+            };
+          }
+        ).engine;
+        engine.setClips([
+          {
+            id: 1,
+            trackId: 10,
+            channels: [new Float32Array(clipFrames).fill(1), new Float32Array(clipFrames).fill(1)],
+            startPpq: 0,
+            lengthSamples: clipFrames,
+          },
+        ]);
+        engine.setTrackLanes([10]);
+        engine.play();
+        const oversize = [
+          new Float32Array(blockSize * 2).fill(0.5),
+          new Float32Array(blockSize * 2).fill(0.5),
+        ];
+        expect(processor.process([[]], [oversize])).toBe(true);
+        expect(oversize.every((channel) => channel.every((sample) => sample === 0))).toBe(true);
+        expect(warn).not.toHaveBeenCalled();
+
+        // The refused quantum rendered nothing, so the next one still starts the clip.
+        const out = [new Float32Array(blockSize), new Float32Array(blockSize)];
+        expect(processor.process([[]], [out])).toBe(true);
+        expect(out[0].at(-1)).not.toBe(0);
+      } finally {
+        warn.mockRestore();
+        processor.destroy();
+      }
+    });
+
+    it('creates no subarray view for a full render quantum', () => {
+      const blockSize = 128;
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize,
+        channelCount: 2,
+      });
+      try {
+        const input = [new Float32Array(blockSize).fill(0.25), new Float32Array(blockSize)];
+        const out = [new Float32Array(blockSize), new Float32Array(blockSize)];
+        const quantum = (): void => {
+          processor.process([input], [out]);
+        };
+        quantum();
+        expect(countFloat32Subarrays(quantum)).toBe(0);
       } finally {
         processor.destroy();
       }

@@ -3,6 +3,7 @@ import {
   SONARE_SPECTRUM_RING_PROTOCOL_VERSION,
 } from '../dist/worklet.js';
 import {
+  countFloat32Subarrays,
   createSonareMeterRingBuffer,
   createSonareSpectrumRingBuffer,
   describe,
@@ -73,6 +74,73 @@ describe('SonareWorkletProcessor', () => {
       expect(processor.process([[vocalL, vocalR]], [[outL, outR]])).toBe(true);
       expect(outL.length).toBe(blockSize);
       expect(outR.length).toBe(blockSize);
+    } finally {
+      processor.destroy();
+    }
+  });
+
+  it('reads the realtime views once per callback whatever the strip count', () => {
+    const sampleRate = 48000;
+    const blockSize = 128;
+    const checksPerCallback = (preset: string, strips: number): number => {
+      const processor = new SonareWorkletProcessor({
+        sceneJson: mixingScenePresetJson(preset),
+        sampleRate,
+        blockSize,
+      });
+      try {
+        const mixer = (processor as unknown as { mixer: Mixer }).mixer;
+        expect(mixer.stripCount()).toBe(strips);
+        const realStripCount = mixer.stripCount;
+        let checks = 0;
+        mixer.stripCount = function (this: Mixer) {
+          checks++;
+          return realStripCount.call(this);
+        };
+        const inputs = Array.from({ length: strips }, () => [
+          new Float32Array(blockSize),
+          new Float32Array(blockSize),
+        ]);
+        processor.process(inputs, [[new Float32Array(blockSize), new Float32Array(blockSize)]]);
+        return checks;
+      } finally {
+        processor.destroy();
+      }
+    };
+    const twoStrips = checksPerCallback('vocalReverbSend', 2);
+    const threeStrips = checksPerCallback('commentaryDucking', 3);
+    expect(threeStrips).toBe(twoStrips);
+    // Input planes, process and the two outputs: one topology check each.
+    expect(twoStrips).toBeLessThanOrEqual(5);
+  });
+
+  it('creates no subarray view for a full render quantum', () => {
+    const sampleRate = 48000;
+    const blockSize = 128;
+    const processor = new SonareWorkletProcessor({
+      sceneJson: mixingScenePresetJson('vocalReverbSend'),
+      sampleRate,
+      blockSize,
+    });
+    try {
+      const vocalL = new Float32Array(blockSize);
+      const vocalR = new Float32Array(blockSize);
+      vocalL[0] = 1.0;
+      vocalR[0] = 1.0;
+      const outL = new Float32Array(blockSize);
+      const outR = new Float32Array(blockSize);
+      const quantum = (): void => {
+        processor.process(
+          [
+            [vocalL, vocalR],
+            [new Float32Array(blockSize), new Float32Array(blockSize)],
+          ],
+          [[outL, outR]],
+        );
+      };
+      quantum();
+      expect(countFloat32Subarrays(quantum)).toBe(0);
+      expect(outL.some((sample) => sample !== 0)).toBe(true);
     } finally {
       processor.destroy();
     }
