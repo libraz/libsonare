@@ -125,11 +125,11 @@ constexpr NameTable name_table(const char* const (&names)[N]) {
 
 /// The table @ref sonare_synth_enum_names serves for each SonareSynthEnumKind, in kind order.
 inline constexpr NameTable kTablesByKind[] = {
-    name_table(kEngineModes),      name_table(kWaveforms),        name_table(kFilterModels),
-    name_table(kFilterOutputs),    name_table(kBodyTypes),        name_table(kModSources),
-    name_table(kModDestinations),  name_table(kBuiltinWaveforms), name_table(kControllerInputs),
-    name_table(kControllerAxes),   name_table(kArticulations),    name_table(kMpeDimensions),
-    name_table(kNoteTrackings),    name_table(kSampleLoopModes),  name_table(kSampleKeyTracks),
+    name_table(kEngineModes),     name_table(kWaveforms),        name_table(kFilterModels),
+    name_table(kFilterOutputs),   name_table(kBodyTypes),        name_table(kModSources),
+    name_table(kModDestinations), name_table(kBuiltinWaveforms), name_table(kControllerInputs),
+    name_table(kControllerAxes),  name_table(kArticulations),    name_table(kMpeDimensions),
+    name_table(kNoteTrackings),   name_table(kSampleLoopModes),  name_table(kSampleKeyTracks),
     name_table(kRetriggers),
 };
 
