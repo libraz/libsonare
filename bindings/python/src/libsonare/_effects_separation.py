@@ -244,7 +244,8 @@ def decompose_stems(
         count = component_count.value
         per = component_length.value
         flat = _from_c_float_array(out, count * per)
-        components = [np.array(flat[i * per : (i + 1) * per]) for i in range(count)]
+        # Non-overlapping views of one owned copy, as the linked form returns.
+        components = [flat[i * per : (i + 1) * per] for i in range(count)]
         w = _from_c_float_array(out_w, out_w_length.value)
         h = _from_c_float_array(out_h, out_h_length.value)
         n_bins = n_fft // 2 + 1

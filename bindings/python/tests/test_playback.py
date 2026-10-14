@@ -89,6 +89,25 @@ def test_process_planar_renders_finite_output_of_the_right_shape() -> None:
         assert np.isfinite(out).all()
 
 
+def test_process_planar_allocates_the_output_once() -> None:
+    import tracemalloc
+
+    frames = 16384
+    with PlaybackRenderer(_speakers_5_1(), max_block_size=frames) as renderer:
+        planes = np.zeros((2, frames), dtype=np.float32)
+        renderer.process_planar(planes)
+        tracemalloc.start()
+        try:
+            out = renderer.process_planar(planes)
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+        assert out.shape == (6, frames)
+        assert out.flags.c_contiguous and out.flags.owndata
+        # One output-sized buffer plus marshalling, not a staging copy and a stack beside it.
+        assert peak < 2 * out.nbytes
+
+
 def test_process_planar_switches_auto_input_layout() -> None:
     with PlaybackRenderer(_speakers_5_1(), max_block_size=BLOCK) as renderer:
         assert renderer.input_channels() == 2

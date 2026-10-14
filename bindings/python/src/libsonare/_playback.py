@@ -298,10 +298,11 @@ class PlaybackRenderer:
         handle = self._require_handle()
         in_arrays, in_ptrs, frames = _planar_channel_arrays(planes, subject="planes")
         out_channels = self.output_channels()
-        out_arrays = [(ctypes.c_float * frames)() for _ in range(out_channels)]
-        out_ptr_type = ctypes.POINTER(ctypes.c_float) * out_channels
-        out_ptrs = out_ptr_type(
-            *[ctypes.cast(array, ctypes.POINTER(ctypes.c_float)) for array in out_arrays]
+        # The renderer writes each plane straight into its row of the returned array.
+        out = np.zeros((out_channels, frames), dtype=np.float32)
+        row_ptr = ctypes.POINTER(ctypes.c_float)
+        out_ptrs = (row_ptr * out_channels)(
+            *[out[row].ctypes.data_as(row_ptr) for row in range(out_channels)]
         )
         _check_realtime(
             self._lib.sonare_playback_renderer_process_planar(
@@ -313,9 +314,7 @@ class PlaybackRenderer:
                 _to_c_int(frames, "frames"),
             )
         )
-        return np.stack(
-            [np.frombuffer(array, dtype=np.float32, count=frames).copy() for array in out_arrays]
-        )
+        return out
 
     def process_interleaved(
         self, samples: Sequence[float] | list[float] | np.ndarray, in_channels: int

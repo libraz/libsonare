@@ -46,6 +46,18 @@ def test_one_channel_matches_decompose_stems_bit_for_bit() -> None:
     assert linked["sample_rate"] == mono["sample_rate"] == SR
 
 
+def test_mono_components_are_disjoint_views_of_one_owned_copy() -> None:
+    x = _tone(440.0, 0.3)
+    res = libsonare.decompose_stems(x, SR, n_components=2, n_fft=1024, hop_length=256, n_iter=20)
+    first, second = res["components"]
+    assert first.base is not None
+    assert first.base is second.base
+    assert not np.shares_memory(first, second)
+    before = second.copy()
+    first[:] = 7.0
+    np.testing.assert_array_equal(second, before)
+
+
 def test_two_channels_reconstruct_and_carry_the_channel_axis() -> None:
     left = _tone(440.0, 0.4)
     right = _tone(440.0, 0.4, phase=0.3)
