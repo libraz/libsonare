@@ -13,13 +13,16 @@
 
 namespace sonare {
 
-using sonare::constants::kEpsilon;
 using sonare::constants::kSpectrumEpsilon;
 
 namespace {
 
 constexpr int kFrameRateReference = 48000;
 constexpr float kUnityTolerance = 1.0e-6f;
+/// Mean-square frame level below which a frame counts as silent.
+constexpr double kSilentFrameEnergy = 1.0e-20;
+/// Prediction error, relative to the frame energy, at which the recursion stops adding order.
+constexpr double kMinRelativeError = 1.0e-9;
 
 }  // namespace
 
@@ -147,33 +150,30 @@ void FormantWarpStream::process_frame() noexcept {
   }
   std::fill(levinson_a_.begin(), levinson_a_.end(), 0.0);
   levinson_a_[0] = 1.0;
-  double error = lags_[0];
-  if (error <= 1.0e-20) {
-    error = 0.0;
-  } else {
-    for (size_t i = 1; i <= order; ++i) {
-      double acc = lags_[i];
-      for (size_t j = 1; j < i; ++j) acc += levinson_a_[j] * lags_[i - j];
-      const double reflection = -acc / error;
-      levinson_next_ = levinson_a_;
-      for (size_t j = 1; j < i; ++j) {
-        levinson_next_[j] = levinson_a_[j] + reflection * levinson_a_[i - j];
-      }
-      levinson_next_[i] = reflection;
-      levinson_a_.swap(levinson_next_);
-      error *= 1.0 - reflection * reflection;
-      if (error <= 1.0e-20) {
-        error = 0.0;
-        break;
-      }
-    }
-  }
-
-  // A silent or non-finite frame passes unwarped; !(x >= y) also catches a NaN.
-  const float variance = static_cast<float>(error);
-  if (!(variance >= kEpsilon)) {
+  // A silent or non-finite frame passes unwarped; !(x > y) also catches a NaN.
+  const double energy = lags_[0];
+  if (!(energy > kSilentFrameEnergy) || !std::isfinite(energy)) {
     accumulate_unwarped();
     return;
+  }
+  // Levinson-Durbin, stopped on prediction error relative to the frame energy so an
+  // amplitude-scaled frame takes the same path.
+  const double error_floor = kMinRelativeError * energy;
+  double error = energy;
+  for (size_t i = 1; i <= order; ++i) {
+    double acc = lags_[i];
+    for (size_t j = 1; j < i; ++j) acc += levinson_a_[j] * lags_[i - j];
+    const double reflection = -acc / error;
+    const double next_error = error * (1.0 - reflection * reflection);
+    // A frame this order already predicts keeps the predictor it has.
+    if (!(next_error > error_floor)) break;
+    levinson_next_ = levinson_a_;
+    for (size_t j = 1; j < i; ++j) {
+      levinson_next_[j] = levinson_a_[j] + reflection * levinson_a_[i - j];
+    }
+    levinson_next_[i] = reflection;
+    levinson_a_.swap(levinson_next_);
+    error = next_error;
   }
   for (size_t k = 0; k <= order; ++k) ar_[k] = static_cast<float>(levinson_a_[k]);
 

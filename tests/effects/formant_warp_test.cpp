@@ -236,3 +236,79 @@ TEST_CASE("FormantWarp is the streaming stage over the whole buffer", "[effects]
                        streamed.begin() + static_cast<std::ptrdiff_t>(latency)));
   }
 }
+
+namespace {
+
+/// A 173 Hz voiced harmonic series under one formant near 900 Hz, peak-normalised to 1.
+std::vector<float> formant_voiced_shape(size_t samples, int sample_rate) {
+  std::vector<double> shape(samples, 0.0);
+  for (int h = 1; 173.0 * h < sample_rate / 2.0; ++h) {
+    const double f = 173.0 * h;
+    const double envelope = 1.0 / (1.0 + std::pow((f - 900.0) / 600.0, 2.0)) / h;
+    for (size_t i = 0; i < samples; ++i) {
+      shape[i] += envelope * std::sin(sonare::constants::kTwoPiD * f * static_cast<double>(i) /
+                                      static_cast<double>(sample_rate));
+    }
+  }
+  double peak = 0.0;
+  for (const double v : shape) peak = std::max(peak, std::abs(v));
+  std::vector<float> out(samples);
+  for (size_t i = 0; i < samples; ++i) out[i] = static_cast<float>(shape[i] / peak);
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("FormantWarp warps quiet voiced input like loud input", "[effects][formant]") {
+  // Amplitude scaling must carry the warp with it: a quiet but energetic voiced frame
+  // is predictable, so its absolute LPC error is tiny, and that alone must not pass it
+  // through unwarped.
+  constexpr int kRate = 48000;
+  constexpr size_t kSamples = 24000;
+  constexpr size_t kEdge = 2048;
+  const std::vector<float> shape = formant_voiced_shape(kSamples, kRate);
+  const auto warped = [&](float factor, float amp) {
+    std::vector<float> input(shape);
+    for (float& v : input) v *= amp;
+    const sonare::Audio out = sonare::FormantWarp({factor, 12, 1.0f})
+                                  .process(sonare::Audio::from_vector(std::move(input), kRate));
+    REQUIRE(out.size() == kSamples);
+    std::vector<double> normalised(kSamples);
+    for (size_t i = 0; i < kSamples; ++i) {
+      REQUIRE(std::isfinite(out[i]));
+      normalised[i] = static_cast<double>(out[i]) / amp;
+    }
+    return normalised;
+  };
+  const auto relative_rms = [&](const std::vector<double>& a, const std::vector<double>& b) {
+    double diff = 0.0;
+    double ref = 0.0;
+    for (size_t i = kEdge; i < kSamples - kEdge; ++i) {
+      diff += (a[i] - b[i]) * (a[i] - b[i]);
+      ref += b[i] * b[i];
+    }
+    return std::sqrt(diff / ref);
+  };
+  std::vector<double> dry(kSamples);
+  for (size_t i = 0; i < kSamples; ++i) dry[i] = shape[i];
+
+  for (const float factor : {0.55f, 1.3f, 1.65f}) {
+    CAPTURE(factor);
+    const std::vector<double> loud = warped(factor, 0.2f);
+    // The loud render is a real warp, not the input.
+    CHECK(relative_rms(loud, dry) > 0.05);
+    for (const float amp : {0.05f, 0.0125f}) {
+      CAPTURE(amp);
+      CHECK(relative_rms(warped(factor, amp), loud) < 0.02);
+    }
+  }
+
+  // Unity and exact silence stay identities.
+  const std::vector<double> unity = warped(1.0f, 0.0125f);
+  CHECK(relative_rms(unity, dry) < 1.0e-6);
+  std::vector<float> silence(kSamples, 0.0f);
+  const sonare::Audio silent =
+      sonare::FormantWarp({1.3f, 12, 1.0f}).process(sonare::Audio::from_vector(silence, kRate));
+  CHECK(
+      std::all_of(silent.data(), silent.data() + silent.size(), [](float v) { return v == 0.0f; }));
+}
