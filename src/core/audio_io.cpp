@@ -309,25 +309,59 @@ std::vector<uint8_t> read_file(const std::string& path, size_t max_size = 0) {
 
 namespace {
 
-/// Whether @p data starts with an MPEG audio frame header: 11-bit sync and no
-/// reserved version, layer, bitrate or sample-rate field. Raw ADTS AAC shares
-/// the sync word but carries layer 0, so it does not pass.
-bool is_mpeg_audio_frame_header(const uint8_t* data, size_t size) {
-  if (size < 4 || data[0] != 0xFF || (data[1] & 0xE0) != 0xE0) return false;
-  const int version = (data[1] >> 3) & 0x03;
-  const int layer = (data[1] >> 1) & 0x03;
-  const int bitrate_index = (data[2] >> 4) & 0x0F;
-  const int rate_index = (data[2] >> 2) & 0x03;
-  return version != 1 && layer != 0 && bitrate_index != 15 && rate_index != 3;
+/// Bytes past any ID3v2 tags searched for the first MPEG frame when junk precedes it.
+constexpr size_t kMpegSyncSearchBytes = 64u * 1024u;
+
+/// Frames a header found past junk must chain into, as minimp3's own resync demands.
+constexpr int kMpegJunkChainFrames = 2;
+
+/// Bytes of an MPEG audio frame header.
+constexpr size_t kMpegHeaderBytes = HDR_SIZE;
+
+/// Most samples per channel one input byte decodes to outside free format: a
+/// 24-byte MPEG-2 Layer III frame (8 kbps, 24 kHz) carries 576.
+constexpr uint64_t kMaxMpegSamplesPerInputByte = 24;
+
+/// Whether the bytes of @p tag (without its terminator) sit at data[offset].
+/// Every container signature this file sniffs is matched here.
+template <size_t N>
+bool has_tag_at(const uint8_t* data, size_t size, size_t offset, const char (&tag)[N]) {
+  constexpr size_t kTagBytes = N - 1;
+  return offset <= size && size - offset >= kTagBytes &&
+         std::memcmp(data + offset, tag, kTagBytes) == 0;
 }
 
-/// Whether the stream behind any ID3v2 tags and zero padding is MPEG audio.
-/// A buffer ending before that stream stays MP3 so minimp3 reports it.
-bool id3_tagged_stream_is_mpeg(const uint8_t* data, size_t size) {
+/// Whether @p data starts with an MPEG audio frame header minimp3 accepts. Raw
+/// ADTS AAC shares the sync word but carries layer 0, so it does not pass.
+bool is_mpeg_audio_frame_header(const uint8_t* data, size_t size) {
+  return size >= kMpegHeaderBytes && hdr_valid(data) != 0;
+}
+
+/// Whether the frame at @p data is followed by kMpegJunkChainFrames frames of the
+/// same stream; the buffer ending after at least one of them also counts.
+bool mpeg_frame_chains(const uint8_t* data, size_t size) {
+  size_t pos = 0;
+  for (int matched = 0; matched < kMpegJunkChainFrames; ++matched) {
+    // Free format leaves the length unknown, so it cannot be chained.
+    const int frame_bytes = hdr_frame_bytes(data + pos, 0);
+    if (frame_bytes <= 0) return false;
+    pos += static_cast<size_t>(frame_bytes + hdr_padding(data + pos));
+    if (pos > size || size - pos < kMpegHeaderBytes) return matched > 0;
+    if (!hdr_compare(data, data + pos)) return false;
+  }
+  return true;
+}
+
+/// Whether the buffer carries an MPEG audio stream the built-in decoder resyncs
+/// onto: ID3v2 tags and zero padding are skipped, a header at the stream start
+/// is taken alone, and one further in must chain so a stray sync word in junk
+/// or a foreign stream does not count. A buffer ending inside the tags stays
+/// MP3 so minimp3 reports it.
+bool contains_mpeg_audio_stream(const uint8_t* data, size_t size) {
   constexpr size_t kId3HeaderBytes = 10;
   size_t pos = 0;
-  while (size - pos >= kId3HeaderBytes && data[pos] == 'I' && data[pos + 1] == 'D' &&
-         data[pos + 2] == '3') {
+  bool tagged = false;
+  while (size - pos >= kId3HeaderBytes && has_tag_at(data, size, pos, "ID3")) {
     // Syncsafe 28-bit body size, plus a 10-byte footer when flag 0x10 is set.
     const size_t body = (static_cast<size_t>(data[pos + 6] & 0x7F) << 21) |
                         (static_cast<size_t>(data[pos + 7] & 0x7F) << 14) |
@@ -336,10 +370,20 @@ bool id3_tagged_stream_is_mpeg(const uint8_t* data, size_t size) {
     const size_t footer = (data[pos + 5] & 0x10) != 0 ? kId3HeaderBytes : 0;
     if (body + footer > size - pos - kId3HeaderBytes) return true;
     pos += kId3HeaderBytes + body + footer;
+    tagged = true;
   }
   while (pos < size && data[pos] == 0) ++pos;
-  if (size - pos < 4) return true;
-  return is_mpeg_audio_frame_header(data + pos, size - pos);
+  if (tagged && size - pos < kMpegHeaderBytes) return true;
+  if (is_mpeg_audio_frame_header(data + pos, size - pos)) return true;
+
+  const size_t end = size - pos > kMpegSyncSearchBytes ? pos + kMpegSyncSearchBytes : size;
+  for (size_t at = pos + 1; at + kMpegHeaderBytes <= end; ++at) {
+    if (is_mpeg_audio_frame_header(data + at, size - at) &&
+        mpeg_frame_chains(data + at, size - at)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 }  // namespace
@@ -349,23 +393,15 @@ AudioFormat detect_format(const uint8_t* data, size_t size) {
     return AudioFormat::Unknown;
   }
 
-  // WAV: "RIFF....WAVE"
-  if (data[0] == 'R' && data[1] == 'I' && data[2] == 'F' && data[3] == 'F' && data[8] == 'W' &&
-      data[9] == 'A' && data[10] == 'V' && data[11] == 'E') {
+  // WAV: "RIFF....WAVE" at offset 0, where dr_wav expects it.
+  if (has_tag_at(data, size, 0, "RIFF") && has_tag_at(data, size, 8, "WAVE")) {
     return AudioFormat::WAV;
   }
 
-  // MP3: a valid MPEG audio frame header, or ID3v2 tags in front of one. A sync
-  // word or tag alone is not a codec claim: ADTS AAC and tagged FLAC/AAC carry
-  // them too and belong to FFmpeg, as a RIFF carrying a foreign codec does.
-  if (is_mpeg_audio_frame_header(data, size)) {
-    return AudioFormat::MP3;
-  }
-  if (data[0] == 'I' && data[1] == 'D' && data[2] == '3') {
-    return id3_tagged_stream_is_mpeg(data, size) ? AudioFormat::MP3 : AudioFormat::Unknown;
-  }
-
-  return AudioFormat::Unknown;
+  // MP3: a decodable MPEG audio stream, wherever it starts. A sync word or tag
+  // alone is not a codec claim: ADTS AAC and tagged FLAC/AAC carry them too and
+  // belong to FFmpeg, as a RIFF carrying a foreign codec does.
+  return contains_mpeg_audio_stream(data, size) ? AudioFormat::MP3 : AudioFormat::Unknown;
 }
 
 namespace {
@@ -400,7 +436,7 @@ bool built_in_wav_decoder_supports(const uint8_t* data, size_t size) {
   while (offset + kChunkHeaderBytes <= size) {
     const uint32_t chunk_size = read_u32(offset + 4);
     const size_t body = offset + kChunkHeaderBytes;
-    if (std::memcmp(data + offset, "fmt ", 4) == 0) {
+    if (has_tag_at(data, size, offset, "fmt ")) {
       if (chunk_size < 2 || body + 2 > size) return true;
       uint16_t format_tag = read_u16(body);
       if (format_tag == DR_WAVE_FORMAT_EXTENSIBLE) {
@@ -420,10 +456,10 @@ bool built_in_wav_decoder_supports(const uint8_t* data, size_t size) {
           return false;
       }
     }
-    // Chunk bodies are word-aligned, so an odd size carries a pad byte.
-    const size_t advance = kChunkHeaderBytes + chunk_size + (chunk_size & 1u);
-    if (advance <= kChunkHeaderBytes) return true;  // zero-sized chunk: stop walking
-    offset += advance;
+    // Odd bodies carry a pad byte; an empty chunk still advances by its header.
+    const uint64_t advance = uint64_t{kChunkHeaderBytes} + chunk_size + (chunk_size & 1u);
+    if (advance > size - offset) return true;
+    offset += static_cast<size_t>(advance);
   }
   return true;
 }
@@ -445,6 +481,11 @@ void append_optional_retained(Append&& append, bool defer_errors, bool& enabled,
     retained_samples.clear();
     enabled = false;
   }
+}
+
+/// Returns capacity beyond twice the size of @p samples to the allocator.
+void release_excess_capacity(std::vector<float>& samples) {
+  if (samples.capacity() / 2 > samples.size()) samples.shrink_to_fit();
 }
 
 bool builtin_retains_channels(RetainChannels retention, int channels) {
@@ -565,13 +606,21 @@ DecodedInputData decode_builtin_mp3(const uint8_t* data, size_t size, RetainChan
   result.sample_rate = sample_rate;
   result.source_channels = channels;
   result.retained_channels = keep_channels ? channels : 0;
+  // A Xing/Info frame count is a header claim with nothing behind it, so the
+  // reservation is also capped by the frames the input bytes can hold.
+  const uint64_t reserve_frames =
+      std::min(declared_samples / static_cast<uint64_t>(channels),
+               static_cast<uint64_t>(size) * kMaxMpegSamplesPerInputByte);
   if (include_mono) {
-    result.mono.reserve(static_cast<size_t>(declared_samples / static_cast<uint64_t>(channels)));
+    result.mono.reserve(static_cast<size_t>(reserve_frames));
   }
   bool retain_enabled = keep_channels;
   if (retain_enabled) {
     append_optional_retained(
-        [&] { result.interleaved.reserve(static_cast<size_t>(declared_samples)); },
+        [&] {
+          result.interleaved.reserve(
+              static_cast<size_t>(reserve_frames * static_cast<uint64_t>(channels)));
+        },
         defer_retained_errors, retain_enabled, result.retained_error, result.interleaved);
   }
 
@@ -600,7 +649,6 @@ DecodedInputData decode_builtin_mp3(const uint8_t* data, size_t size, RetainChan
     if (retain_enabled) {
       append_optional_retained(
           [&] {
-            result.interleaved.reserve(next_total);
             result.interleaved.insert(result.interleaved.end(), normalized.begin(),
                                       normalized.end());
           },
@@ -615,6 +663,13 @@ DecodedInputData decode_builtin_mp3(const uint8_t* data, size_t size, RetainChan
                    "No audio samples in MP3 data");
   SONARE_CHECK_MSG(include_mono || !result.interleaved.empty(), ErrorCode::DecodeFailed,
                    "No audio samples in MP3 data");
+  // Only an overstated frame count leaves the reservation well above the decoded size.
+  release_excess_capacity(result.mono);
+  if (retain_enabled) {
+    append_optional_retained([&] { release_excess_capacity(result.interleaved); },
+                             defer_retained_errors, retain_enabled, result.retained_error,
+                             result.interleaved);
+  }
   if (!keep_channels) result.retained_channels = 0;
   return result;
 }

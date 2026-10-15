@@ -54,7 +54,11 @@ struct AudioLoadOptions {
 /// @brief Default audio load options.
 inline const AudioLoadOptions kDefaultLoadOptions{};
 
-/// @brief Detects audio format from buffer header.
+/// @brief Detects audio format from buffer contents.
+/// @details WAV needs "RIFF....WAVE" at offset 0. MP3 is reported for an MPEG
+///          audio stream behind any ID3v2 tags, zero padding or leading junk
+///          (searched within the first 64 KiB); a header found past junk must
+///          chain into following frames to count.
 /// @param data Pointer to audio data
 /// @param size Size of data in bytes
 /// @return Detected audio format

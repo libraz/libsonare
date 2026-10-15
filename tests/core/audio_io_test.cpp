@@ -18,6 +18,7 @@
 #include <string>
 #include <thread>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include "core/audio_io_detail.h"
@@ -311,6 +312,97 @@ std::vector<float> interleave(const std::vector<std::vector<float>>& planes, siz
   return interleaved;
 }
 
+/// @brief Bytes of one MPEG-1 Layer III frame at 128 kbps / 48 kHz without padding.
+constexpr size_t kSilentMp3FrameBytes = 384;
+
+/// @brief Samples one MPEG-1 Layer III frame decodes to per channel.
+constexpr size_t kMp3FrameSamples = 1152;
+
+/// @brief A mono MPEG-1 Layer III frame (128 kbps, 48 kHz) whose zeroed side info
+///        and main data decode to silence.
+std::vector<uint8_t> silent_mp3_frame() {
+  std::vector<uint8_t> frame(kSilentMp3FrameBytes, 0);
+  frame[0] = 0xFF;
+  frame[1] = 0xFB;  // MPEG-1, Layer III, no CRC
+  frame[2] = 0x94;  // bitrate index 9 (128 kbps), sample-rate index 1 (48 kHz)
+  frame[3] = 0xC0;  // mono
+  return frame;
+}
+
+/// @brief @p frames consecutive silent MP3 frames.
+std::vector<uint8_t> silent_mp3_stream(size_t frames) {
+  std::vector<uint8_t> out;
+  const std::vector<uint8_t> frame = silent_mp3_frame();
+  for (size_t i = 0; i < frames; ++i) out.insert(out.end(), frame.begin(), frame.end());
+  return out;
+}
+
+/// @brief An ID3v2.4 tag whose syncsafe size declares @p body_bytes of body.
+std::vector<uint8_t> id3_tag(size_t body_bytes) {
+  std::vector<uint8_t> tag = {'I', 'D', '3', 0x04, 0x00, 0x00};
+  for (int shift = 21; shift >= 0; shift -= 7) {
+    tag.push_back(static_cast<uint8_t>((body_bytes >> shift) & 0x7Fu));
+  }
+  tag.resize(tag.size() + body_bytes, 'T');
+  return tag;
+}
+
+/// @brief @p prefix followed by @p stream.
+std::vector<uint8_t> prefixed(std::vector<uint8_t> prefix, const std::vector<uint8_t>& stream) {
+  prefix.insert(prefix.end(), stream.begin(), stream.end());
+  return prefix;
+}
+
+/// @brief Inserts an empty `JUNK` chunk between the RIFF header and the first chunk.
+std::vector<uint8_t> with_empty_chunk_before_fmt(const std::vector<uint8_t>& wav) {
+  constexpr size_t kRiffHeaderBytes = 12;
+  std::vector<uint8_t> out(wav.begin(), wav.begin() + kRiffHeaderBytes);
+  out.insert(out.end(), {'J', 'U', 'N', 'K', 0, 0, 0, 0});
+  out.insert(out.end(), wav.begin() + kRiffHeaderBytes, wav.end());
+  const uint32_t riff_size = static_cast<uint32_t>(out.size() - 8);
+  for (int i = 0; i < 4; ++i) out[4 + i] = static_cast<uint8_t>((riff_size >> (8 * i)) & 0xFFu);
+  return out;
+}
+
+/// @brief A RIFF/WAVE carrying @p frames silent MP3 frames as WAVE_FORMAT_MPEGLAYER3 (0x0055).
+std::vector<uint8_t> mp3_in_wav(size_t frames) {
+  const std::vector<uint8_t> stream = silent_mp3_stream(frames);
+  std::vector<uint8_t> out;
+  const auto push_u16 = [&out](uint16_t value) {
+    out.push_back(static_cast<uint8_t>(value & 0xFFu));
+    out.push_back(static_cast<uint8_t>((value >> 8) & 0xFFu));
+  };
+  const auto push_u32 = [&out](uint32_t value) {
+    for (int shift = 0; shift < 32; shift += 8) {
+      out.push_back(static_cast<uint8_t>((value >> shift) & 0xFFu));
+    }
+  };
+  const auto push_tag = [&out](const char* tag) {
+    for (int i = 0; i < 4; ++i) out.push_back(static_cast<uint8_t>(tag[i]));
+  };
+  push_tag("RIFF");
+  push_u32(static_cast<uint32_t>(4 + 8 + 30 + 8 + stream.size()));
+  push_tag("WAVE");
+  push_tag("fmt ");
+  push_u32(30u);
+  push_u16(0x0055u);  // WAVE_FORMAT_MPEGLAYER3
+  push_u16(1u);       // mono
+  push_u32(48000u);
+  push_u32(16000u);  // 128 kbps
+  push_u16(1u);      // block align
+  push_u16(0u);      // bits per sample
+  push_u16(12u);     // MPEGLAYER3WAVEFORMAT extension
+  push_u16(1u);      // MPEGLAYER3_ID_MPEG
+  push_u32(2u);      // MPEGLAYER3_FLAG_PADDING_OFF
+  push_u16(static_cast<uint16_t>(kSilentMp3FrameBytes));
+  push_u16(1u);  // frames per block
+  push_u16(0u);  // codec delay
+  push_tag("data");
+  push_u32(static_cast<uint32_t>(stream.size()));
+  out.insert(out.end(), stream.begin(), stream.end());
+  return out;
+}
+
 using sonare::test::generate_sine;
 
 }  // namespace
@@ -373,6 +465,143 @@ TEST_CASE("detect_format unknown", "[audio_io]") {
 TEST_CASE("detect_format too small", "[audio_io]") {
   std::vector<uint8_t> small = {0x00, 0x01, 0x02};
   REQUIRE(detect_format(small.data(), small.size()) == AudioFormat::Unknown);
+}
+
+TEST_CASE("detect_format finds an MPEG stream behind leading junk or zero bytes", "[audio_io]") {
+  // minimp3 resyncs past whatever precedes the first frame, so routing must too:
+  // a short ID3 size, stray bytes or zero padding cannot strand a decodable MP3.
+  const std::vector<uint8_t> clean = silent_mp3_stream(8);
+  const std::vector<uint8_t> junk = {0x12, 0x34, 0x56, 0x78};
+  const std::vector<std::pair<const char*, std::vector<uint8_t>>> variants = {
+      {"ID3 + junk", prefixed(prefixed(id3_tag(16), junk), clean)},
+      {"ID3 + zero padding", prefixed(prefixed(id3_tag(16), std::vector<uint8_t>(32, 0)), clean)},
+      {"junk only", prefixed(junk, clean)},
+      {"zero prefix", prefixed(std::vector<uint8_t>(64, 0), clean)},
+  };
+
+  auto [clean_samples, clean_rate] = load_buffer(clean.data(), clean.size());
+  REQUIRE(clean_rate == 48000);
+  REQUIRE(!clean_samples.empty());
+  for (const auto& [name, bytes] : variants) {
+    CAPTURE(name);
+    CHECK(detect_format(bytes.data(), bytes.size()) == AudioFormat::MP3);
+    // The built-in decoder, not an FFmpeg fallback, is what a default build has.
+    auto [samples, sample_rate] = load_buffer_mp3(bytes.data(), bytes.size());
+    CHECK(sample_rate == clean_rate);
+    CHECK(samples.size() == clean_samples.size());
+    auto [routed, routed_rate] = load_buffer(bytes.data(), bytes.size());
+    CHECK(routed_rate == clean_rate);
+    CHECK(routed.size() == clean_samples.size());
+  }
+}
+
+TEST_CASE("detect_format does not take a stray sync word past junk for an MPEG stream",
+          "[audio_io]") {
+  SECTION("a lone header that no following frame confirms") {
+    std::vector<uint8_t> bytes = {0x01, 0x02, 0x03, 0x04};
+    const std::vector<uint8_t> frame = silent_mp3_frame();
+    bytes.insert(bytes.end(), frame.begin(), frame.begin() + 4);
+    bytes.resize(bytes.size() + 2 * kSilentMp3FrameBytes, 0x55);
+    CHECK(detect_format(bytes.data(), bytes.size()) == AudioFormat::Unknown);
+  }
+  SECTION("raw ADTS AAC behind junk") {
+    std::vector<uint8_t> bytes = {0x01, 0x02, 0x03};
+    for (int i = 0; i < 8; ++i) {
+      bytes.insert(bytes.end(), {0xFF, 0xF1, 0x50, 0x80, 0x02, 0x1F, 0xFC, 0, 0, 0, 0, 0});
+    }
+    CHECK(detect_format(bytes.data(), bytes.size()) == AudioFormat::Unknown);
+  }
+  SECTION("FLAC behind an ID3 tag and junk") {
+    const std::vector<uint8_t> flac = {'f', 'L', 'a', 'C', 0, 0, 0, 0x22, 0xFF, 0xF8, 0x69, 0x08};
+    const std::vector<uint8_t> bytes = prefixed(prefixed(id3_tag(4), {0x01, 0x02}), flac);
+    CHECK(detect_format(bytes.data(), bytes.size()) == AudioFormat::Unknown);
+  }
+}
+
+TEST_CASE("an empty chunk before fmt does not hide the WAV codec from routing", "[audio_io]") {
+  SECTION("PCM still decodes through the built-in decoder") {
+    constexpr int sr = 22050;
+    const std::vector<float> tone = generate_sine(256, 440.0f, sr, 0.5f);
+    const std::vector<uint8_t> plain = create_wav_buffer(tone.data(), tone.size(), sr);
+    const std::vector<uint8_t> padded = with_empty_chunk_before_fmt(plain);
+    REQUIRE(detect_format(padded.data(), padded.size()) == AudioFormat::WAV);
+    auto [expected, expected_rate] = load_buffer(plain.data(), plain.size());
+    auto [samples, sample_rate] = load_buffer(padded.data(), padded.size());
+    CHECK(sample_rate == expected_rate);
+    CHECK(samples == expected);
+  }
+  SECTION("MPEG Layer-3 in RIFF reaches the codec path") {
+    const std::vector<uint8_t> padded = with_empty_chunk_before_fmt(mp3_in_wav(8));
+    REQUIRE(detect_format(padded.data(), padded.size()) == AudioFormat::WAV);
+#ifdef SONARE_WITH_FFMPEG
+    auto [samples, sample_rate] = load_buffer(padded.data(), padded.size());
+    CHECK(sample_rate == 48000);
+    CHECK(!samples.empty());
+    // The channel probe follows the same routing decision as the loader.
+    const std::filesystem::path path = scratch_dir() / "mp3_in_wav_empty_chunk.wav";
+    {
+      std::ofstream out(path, std::ios::binary);
+      REQUIRE(out.is_open());
+      out.write(reinterpret_cast<const char*>(padded.data()),
+                static_cast<std::streamsize>(padded.size()));
+    }
+    CHECK(audio_channel_count(path.string()) == 1);
+    std::filesystem::remove_all(path.parent_path());
+#else
+    REQUIRE_THROWS_AS(load_buffer(padded.data(), padded.size()), SonareException);
+#endif
+  }
+}
+
+TEST_CASE("MP3 loaders size their buffers from the input, not a Xing frame count", "[audio_io]") {
+  // A Xing tag claiming 400000 frames passes the offline limit (460.8M samples)
+  // while the buffer carries two frames: reserving for the claim would commit
+  // about 1.8 GB per vector for 2304 decoded samples.
+  std::vector<uint8_t> xing = silent_mp3_frame();
+  constexpr size_t kSideInfoBytes = 17;  // MPEG-1 mono
+  const size_t tag = 4 + kSideInfoBytes;
+  const uint32_t declared_frames = 400000;
+  // "Xing", flags with FRAMES_FLAG set, then the big-endian frame count.
+  const char kXingTag[] = "Xing";
+  std::copy(kXingTag, kXingTag + 4, xing.begin() + static_cast<std::ptrdiff_t>(tag));
+  xing[tag + 7] = 0x01;
+  for (size_t i = 0; i < 4; ++i) {
+    xing[tag + 8 + i] = static_cast<uint8_t>(declared_frames >> (24 - 8 * i));
+  }
+  const std::vector<uint8_t> bytes = prefixed(xing, silent_mp3_stream(2));
+  REQUIRE(static_cast<uint64_t>(declared_frames) * kMp3FrameSamples <=
+          resource::kMaxOfflineAudioSamples);
+  // Far above anything the input can decode to, far below what the claim asks for.
+  constexpr size_t kAllocationCeilingBytes = 16u * 1024u * 1024u;
+
+  SECTION("mono") {
+    std::vector<float> samples;
+    int sample_rate = 0;
+    {
+      sonare::test::AllocationFailureGuard guard(kAllocationCeilingBytes);
+      std::tie(samples, sample_rate) = load_buffer_mp3(bytes.data(), bytes.size());
+    }
+    CAPTURE(samples.size(), samples.capacity());
+    REQUIRE(sample_rate == 48000);
+    REQUIRE(!samples.empty());
+    REQUIRE(samples.size() <= 2 * kMp3FrameSamples);
+    REQUIRE(samples.capacity() <= 2 * samples.size());
+  }
+  SECTION("interleaved") {
+    std::vector<float> interleaved;
+    int sample_rate = 0;
+    int channels = 0;
+    {
+      sonare::test::AllocationFailureGuard guard(kAllocationCeilingBytes);
+      std::tie(interleaved, sample_rate, channels) =
+          load_buffer_interleaved(bytes.data(), bytes.size());
+    }
+    CAPTURE(interleaved.size(), interleaved.capacity());
+    REQUIRE(sample_rate == 48000);
+    REQUIRE(channels == 1);
+    REQUIRE(!interleaved.empty());
+    REQUIRE(interleaved.capacity() <= 2 * interleaved.size());
+  }
 }
 
 TEST_CASE("load_buffer_wav float32", "[audio_io]") {
