@@ -80,7 +80,7 @@ describe('track lane automation ids (WASM)', () => {
       const fader10 = engine.resolveTrackLaneAutomationId(10, 'faderDb');
       expect(fader10).toBeGreaterThan(0);
       expect(engine.resolveTrackLaneAutomationId(10, 'pan')).not.toBe(fader10);
-      expect(engine.resolveTrackLaneAutomationId(30, 'faderDb')).toBe(-1);
+      expect(() => engine.resolveTrackLaneAutomationId(30, 'faderDb')).toThrow(RangeError);
 
       engine.setTrackLanes([{ trackId: 20 }, { trackId: 10 }]);
       expect(engine.resolveTrackLaneAutomationId(10, 'faderDb')).toBe(fader10);

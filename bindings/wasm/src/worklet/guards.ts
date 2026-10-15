@@ -18,6 +18,8 @@ import type {
 import {
   isRecord,
   SONARE_SCOPE_DEFAULT_BANDS,
+  SONARE_SCOPE_MAX_BANDS,
+  SONARE_SCOPE_MAX_POINTS,
   type SonareEngineCommandRecord,
   type SonareEngineTelemetryRecord,
   type SonareWorkletMeterSnapshot,
@@ -394,8 +396,7 @@ export function isMeterSnapshot(value: unknown): value is SonareWorkletMeterSnap
   );
 }
 
-export const SONARE_SCOPE_MAX_BANDS = 64;
-export const SONARE_SCOPE_MAX_POINTS = 32;
+export { SONARE_SCOPE_MAX_BANDS, SONARE_SCOPE_MAX_POINTS };
 
 function isPlainFloat32Array(
   value: unknown,
@@ -507,12 +508,16 @@ export function requireIntegerOption(
   return resolved;
 }
 
-/** Resolves scope bands and applies the native tap's fixed 64-band ceiling. */
+/** Resolves scope bands, refusing a count past the native tap's fixed 64-band ceiling. */
 export function resolveScopeBandCount(
   value: number | undefined,
   fallback = SONARE_SCOPE_DEFAULT_BANDS,
 ): number {
-  return Math.min(requireIntegerOption(value, fallback, 'scopeBands', 1), SONARE_SCOPE_MAX_BANDS);
+  const bands = requireIntegerOption(value, fallback, 'scopeBands', 1);
+  if (bands > SONARE_SCOPE_MAX_BANDS) {
+    throw new RangeError(`scopeBands must be an integer in [1, ${SONARE_SCOPE_MAX_BANDS}]`);
+  }
+  return bands;
 }
 
 /** As {@link requireIntegerOption}, for a field whose domain admits either sign. */

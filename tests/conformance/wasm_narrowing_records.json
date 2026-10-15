@@ -1,8 +1,8 @@
 {
   "floor": {
-    "files": 10,
+    "files": 6,
     "containers": 411,
-    "narrowings": 13,
+    "narrowings": 10,
     "readers": 29
   },
   "shapes": [
@@ -10,21 +10,9 @@
       "name": "array_length",
       "receiver_pattern": "\\[\"length\"\\]$",
       "reason": "An array's own length, not a caller-supplied number. A JS array cannot be longer than the safe-integer range, so the read has nothing to saturate; the budget on that length is the array-length guard's, which the shared wasmArrayLikeLength applies."
-    },
-    {
-      "name": "array_element",
-      "receiver_pattern": "\\[[^\"\\]]+\\]$",
-      "reason": "An element read from an array whose length was taken first, indexed by the loop counter. The value is a caller-supplied number like any other, but the receiver is the element rather than a named option, so it carries no field name a range error could report; the element's own domain is checked where the struct it fills is validated."
     }
   ],
-  "narrowings": [
-    {
-      "file": "bindings/project/project_arrange.cpp",
-      "receiver": "mode_val",
-      "type": "int",
-      "reason": "An enum ordinal range-checked against the warp-mode bounds before the cast is used, so a saturated value is refused by name."
-    }
-  ],
+  "narrowings": [],
   "readers": [
     {
       "file": "bindings/analysis/quick.cpp",

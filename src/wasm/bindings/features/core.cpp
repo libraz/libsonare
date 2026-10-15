@@ -340,11 +340,9 @@ val js_vector_normalize(val values, const val& norm_type_val, const val& thresho
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
   std::vector<float> data = float32ArrayToVector(values);
   validateFiniteVector(data, "vectorNormalize");
-  NormType norm = NormType::Inf;
-  if (norm_type == 1) norm = NormType::L1;
-  if (norm_type == 2) norm = NormType::L2;
-  if (norm_type == 3) norm = NormType::Power;
-  return vectorToFloat32Array(normalize(data, norm, threshold));
+  requireOrdinalInRange(norm_type, static_cast<int>(NormType::Inf),
+                        static_cast<int>(NormType::Power), "normType");
+  return vectorToFloat32Array(normalize(data, static_cast<NormType>(norm_type), threshold));
 }
 
 val js_pcen(val values, const val& n_bins_val, const val& n_frames_val, val options) {

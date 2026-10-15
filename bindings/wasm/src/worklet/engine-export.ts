@@ -174,9 +174,12 @@ export async function renderOffline(
   request: number | SonareRenderOfflineRequest,
 ): Promise<Float32Array[]> {
   const numeric = typeof request === 'number';
-  const frames = numeric
-    ? Math.max(0, Math.floor(request))
-    : requireIntegerOption(request.totalFrames, Number.NaN, 'totalFrames', 0);
+  const frames = requireIntegerOption(
+    numeric ? request : request.totalFrames,
+    Number.NaN,
+    'totalFrames',
+    0,
+  );
   const blockSize = resolveBlockSize(ctx, numeric ? undefined : request.blockSize);
   const finalize = numeric ? true : (request.finalize ?? true);
   const continuing = ctx.session.chunkOrigin !== undefined;

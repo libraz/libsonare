@@ -1,3 +1,4 @@
+import { releasedHandleError } from './_handle_guard.js';
 import { ErrorCode, SonareError } from './errors.js';
 
 /**
@@ -42,7 +43,7 @@ export class OwnerEpoch {
   /** Throws `InvalidState` unless `token` still names the live owner. */
   assertCurrent(token: number): void {
     if (this.ended) {
-      throw new SonareError(ErrorCode.InvalidState, 'InvalidState', `${this.ownerName} is closed.`);
+      throw releasedHandleError(this.ownerName, 'is closed.');
     }
     if (token !== this.generation) {
       throw new SonareError(

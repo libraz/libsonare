@@ -1,4 +1,4 @@
-import { ErrorCode, SonareError } from './errors.js';
+import { releasedHandleError } from './_handle_guard.js';
 import {
   createOpfsClipPageProvider,
   type OpfsClipPageProviderBinding,
@@ -6,6 +6,7 @@ import {
 } from './opfs_clip_pages.js';
 import { OwnerEpoch } from './owner_epoch.js';
 import type { ClipPageProvider, ClipPageRequest, RealtimeEngine } from './realtime_engine.js';
+import { assertNonNegativeInteger, assertPositiveInteger } from './validation.js';
 
 /**
  * Minimal engine surface the streamer drives. {@link RealtimeEngine} satisfies
@@ -97,9 +98,13 @@ export class ClipPageStreamer {
   constructor(engine: ClipPageStreamerEngine, options: ClipPageStreamerOptions = {}) {
     this.engine = engine;
     streamerEpochs.set(this, this.epoch);
-    this.readAheadPages = Math.max(0, Math.floor(options.readAheadPages ?? 2));
-    this.retainBehindPages = Math.max(0, Math.floor(options.retainBehindPages ?? 1));
-    this.maxRequestsPerPump = Math.max(1, Math.floor(options.maxRequestsPerPump ?? 256));
+    // Refused rather than floored or clamped, so the streamer runs with what was asked for.
+    this.readAheadPages = options.readAheadPages ?? 2;
+    this.retainBehindPages = options.retainBehindPages ?? 1;
+    this.maxRequestsPerPump = options.maxRequestsPerPump ?? 256;
+    assertNonNegativeInteger('ClipPageStreamer', this.readAheadPages, 'readAheadPages');
+    assertNonNegativeInteger('ClipPageStreamer', this.retainBehindPages, 'retainBehindPages');
+    assertPositiveInteger('ClipPageStreamer', this.maxRequestsPerPump, 'maxRequestsPerPump');
   }
 
   /**
@@ -110,7 +115,7 @@ export class ClipPageStreamer {
    */
   addSource(source: ClipPageStreamSource, initialResidentPages: Iterable<number> = []): void {
     if (this.epoch.closed) {
-      throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'ClipPageStreamer is closed.');
+      throw releasedHandleError('ClipPageStreamer', 'is closed.');
     }
     if (source.pageFrames <= 0 || source.numSamples <= 0) {
       throw new Error('pageFrames and numSamples must be positive');
@@ -362,7 +367,7 @@ export async function attachOpfsClipStream(
   const { clipId, primePages = 1, ...providerOptions } = options;
   const epoch = streamerEpochs.get(streamer);
   if (!epoch || epoch.closed) {
-    throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'ClipPageStreamer is closed.');
+    throw releasedHandleError('ClipPageStreamer', 'is closed.');
   }
   const token = epoch.current();
   const binding = createOpfsClipPageProvider(engine, providerOptions);

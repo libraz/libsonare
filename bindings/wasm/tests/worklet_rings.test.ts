@@ -1314,4 +1314,50 @@ describe('Sonare worklet ring buffers', () => {
       expect(Atomics.load(ring.slotStates, 0)).toBe(0);
     });
   });
+
+  describe('ring dimensions are refused, never floored or clamped', () => {
+    const creators: Array<[string, (value: unknown) => unknown]> = [
+      ['meter', (v) => createSonareMeterRingBuffer(v as number)],
+      ['spectrum capacity', (v) => createSonareSpectrumRingBuffer(v as number, 4)],
+      ['spectrum bands', (v) => createSonareSpectrumRingBuffer(2, v as number)],
+      ['scope capacity', (v) => createSonareScopeRingBuffer(v as number, 4, 3)],
+      ['scope bands', (v) => createSonareScopeRingBuffer(2, v as number, 3)],
+      ['command', (v) => createSonareEngineCommandRingBuffer(v as number)],
+      ['telemetry', (v) => createSonareEngineTelemetryRingBuffer(v as number)],
+      ['clip page request', (v) => createSonareClipPageRequestRingBuffer(v as number)],
+      ['external MIDI', (v) => createSonareExternalMidiRingBuffer(v as number)],
+      ['meter bytes', (v) => sonareMeterRingBufferByteLength(v as number)],
+      ['spectrum bytes', (v) => sonareSpectrumRingBufferByteLength(v as number, 4)],
+      ['scope bytes', (v) => sonareScopeRingBufferByteLength(v as number, 4, 3)],
+      ['command bytes', (v) => sonareEngineCommandRingBufferByteLength(v as number)],
+      ['telemetry bytes', (v) => sonareEngineTelemetryRingBufferByteLength(v as number)],
+      ['clip page bytes', (v) => sonareClipPageRequestRingBufferByteLength(v as number)],
+      ['external MIDI bytes', (v) => sonareExternalMidiRingBufferByteLength(v as number)],
+    ];
+
+    for (const [name, create] of creators) {
+      it(`${name}: refuses a fractional, zero, negative or non-finite value and a non-number`, () => {
+        // The control: a legal value is accepted as given.
+        expect(() => create(2)).not.toThrow();
+        for (const value of [1.5, 0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+          expect(() => create(value)).toThrow(RangeError);
+        }
+        expect(() => create('2')).toThrow(TypeError);
+      });
+    }
+
+    it('keeps a legal capacity exactly instead of rounding it', () => {
+      expect(createSonareEngineCommandRingBuffer(3).capacity).toBe(3);
+      expect(sonareEngineCommandRingBufferByteLength(3)).toBe(
+        SONARE_ENGINE_RING_HEADER_INTS * 4 + 3 * SONARE_ENGINE_COMMAND_RECORD_BYTES,
+      );
+    });
+
+    it('refuses scope bands and points past the native tap ceiling', () => {
+      expect(() => createSonareScopeRingBuffer(2, 64, 32)).not.toThrow();
+      expect(() => createSonareScopeRingBuffer(2, 65, 3)).toThrow(RangeError);
+      expect(() => createSonareScopeRingBuffer(2, 4, 33)).toThrow(RangeError);
+      expect(() => sonareScopeRingBufferByteLength(2, 65, 3)).toThrow(RangeError);
+    });
+  });
 });

@@ -84,6 +84,8 @@ void RealtimeEngineWasm::applyCommandsDueNowPreservingFuture() {
 void RealtimeEngineWasm::flushControlCommands() { engine_.flush_control_commands(); }
 
 void RealtimeEngineWasm::seekSample(int64_t timeline_sample, const val& render_frame_val) {
+  // A negative position is refused, not clamped onto the timeline start.
+  if (timeline_sample < 0) throw WasmRangeError("seekSample: timelineSample must be non-negative");
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kTransportSeekSample;
   command.sample_time = renderFrameFromVal(render_frame_val);
@@ -350,6 +352,8 @@ val RealtimeEngineWasm::metronome() const {
 
 int64_t RealtimeEngineWasm::countInEndSample(int64_t start_sample, const val& bars_val) const {
   const int bars = checkedIntFromVal(bars_val, "bars");
+  if (start_sample < 0) throw WasmRangeError("countInEndSample: startSample must be non-negative");
+  // bars <= 0 counts nothing and answers start_sample, as the core and the C ABI do.
   return engine_.count_in_end_sample(start_sample, bars);
 }
 

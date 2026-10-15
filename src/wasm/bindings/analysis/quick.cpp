@@ -895,8 +895,11 @@ sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
   // option bag builds the same room on every surface. Reading the val is the
   // only part that is WASM's.
   WallMaterialRequest request;
-  request.has_preset = sonare::acoustic::material_preset_from_selector(
-      intProperty(opts, "materialPreset", 0), &request.preset);
+  const int material_preset = intProperty(opts, "materialPreset", 0);
+  requireOrdinalInRange(material_preset, 0,
+                        static_cast<int>(kMaterialPresetSelectorNames.size()) - 1,
+                        "materialPreset");
+  request.has_preset = material_preset_from_selector(material_preset, &request.preset);
   if (hasProperty(opts, "bandAbsorption")) {
     request.absorption_bands = float32ArrayToVector(opts["bandAbsorption"]);
   }
@@ -1085,17 +1088,10 @@ val js_estimate_room(val samples, const val& sample_rate_val, val opts) {
   config.acoustic.noise_floor_margin_db =
       sonare::ZeroIsDefault(floatProperty(opts, "noiseFloorMarginDb", 0.0f))
           .or_default(config.acoustic.noise_floor_margin_db);
-  switch (intProperty(opts, "mode", 0)) {
-    case 1:
-      config.acoustic.mode = sonare::AcousticConfig::Mode::Blind;
-      break;
-    case 2:
-      config.acoustic.mode = sonare::AcousticConfig::Mode::ImpulseResponse;
-      break;
-    default:
-      config.acoustic.mode = sonare::AcousticConfig::Mode::Auto;
-      break;
-  }
+  const int mode = intProperty(opts, "mode", 0);
+  requireOrdinalInRange(
+      mode, 0, static_cast<int>(sonare::acoustic::kAcousticModeSelectorNames.size()) - 1, "mode");
+  config.acoustic.mode = static_cast<sonare::AcousticConfig::Mode>(mode);
 
   const sonare::RoomEstimate est = sonare::estimate_room(audio, config);
   // Absorption (from the inverse problem) and RT60 (from the decay fit) are

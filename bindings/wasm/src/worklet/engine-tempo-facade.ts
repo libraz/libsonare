@@ -119,15 +119,8 @@ export function setLoop(
   endPpq: number,
   enabled = true,
 ): boolean {
-  // Transport precision contract: the SAB command record carries exactly one
-  // Float64 lane (argFloat) and one Int64 lane (argInt). startPpq travels in
-  // argFloat with full double precision, matching the offline engine; endPpq
-  // is carried as micro-PPQ (round(endPpq * 1e6)) in the integer lane and
-  // divided back by 1e6 on the consumer. Loop ENDS are therefore snapped to
-  // the nearest 1e-6 PPQ over the realtime transport (max 5e-7 PPQ drift),
-  // while loop STARTS and the offline path stay exact. This is intentional:
-  // the record has no second free Float64 lane, and a micro-PPQ grid on the
-  // loop end is well below audible/sample-accurate resolution at any tempo.
+  // Both bounds travel as full doubles (argFloat and argFloat2), so the live
+  // loop is bit-identical to the offline one.
   return commitCommand(
     ctx,
     {
@@ -135,7 +128,7 @@ export function setLoop(
       targetId: enabled ? 1 : 0,
       sampleTime: -1,
       argFloat: startPpq,
-      argInt: Math.round(endPpq * 1_000_000),
+      argFloat2: endPpq,
     },
     (offline) => offline.setLoop(startPpq, endPpq, enabled),
   );

@@ -288,19 +288,21 @@ void RealtimeEngineWasm::setSynthInstrument(const val& destination_id_val, val p
 
 // Resolves a hosted instrument's continuous parameter (JSON-key name, e.g.
 // "cutoffHz") to the reserved instrument-automation id passed to
-// setAutomationLane / setParameter. Returns -1 when the destination has no
-// bound instrument, the instrument exposes no automatable parameters, or the
-// key is unknown. Like the insert resolvers, the id is returned as a double so
-// the full 32-bit unsigned reserved id survives the JS boundary.
+// setAutomationLane / setParameter. A destination with no bound instrument, an
+// instrument exposing no automatable parameters, or an unknown key is a RangeError. Like the insert
+// resolvers, the id is returned as a double so the full 32-bit unsigned reserved id survives the JS
+// boundary.
 double RealtimeEngineWasm::resolveInstrumentAutomationId(const val& destination_id_val,
                                                          const std::string& param_name) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
-  return static_cast<double>(engine_.resolve_instrument_automation_id(destination_id, param_name));
+  return resolvedAutomationId(engine_.resolve_instrument_automation_id(destination_id, param_name),
+                              param_name);
 #else
   (void)destination_id_val;
   (void)param_name;
-  return -1.0;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "arrangement support is not compiled in");
 #endif
 }
 

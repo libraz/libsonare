@@ -1,4 +1,5 @@
 import { sidechainSourceKindCode } from '../codes.js';
+import { ErrorCode, SonareError } from '../errors.js';
 import type {
   EngineBus,
   EngineTrackLane,
@@ -62,7 +63,8 @@ export interface EngineMixerContext {
     insertBaseResets?: StripJsonTarget[],
     oneShotInsertParamOverrides?: InsertParamOverride[],
   ): void;
-  sendSmoothedParam(paramId: number, value: number): boolean;
+  /** Commits a smoothed parameter edit; `commitCache` runs only once the edit is accepted. */
+  sendSmoothedParam(paramId: number, value: number, commitCache?: () => void): boolean;
   getMasterStripJson(): string | undefined;
   cacheMasterStripJson(sceneJson: string): void;
 }
@@ -81,6 +83,30 @@ function isSceneObject(value: unknown): value is SceneObject {
 
 function hasOwn(object: SceneObject, key: string): boolean {
   return Object.getOwnPropertyDescriptor(object, key) !== undefined;
+}
+
+function sceneFormatError(message: string): SonareError {
+  return new SonareError(ErrorCode.InvalidFormat, 'InvalidFormat', message);
+}
+
+/**
+ * Reads a scene container the way the core scene reader does: absent is empty,
+ * and a present non-array or a non-object element is refused rather than skipped.
+ */
+function sceneObjectArray(owner: SceneObject, key: string, path: string): SceneObject[] {
+  if (!hasOwn(owner, key)) {
+    return [];
+  }
+  const value = owner[key];
+  if (!Array.isArray(value)) {
+    throw sceneFormatError(`${path} must be an array`);
+  }
+  value.forEach((entry, index) => {
+    if (!isSceneObject(entry)) {
+      throw sceneFormatError(`${path}[${index}] must be an object`);
+    }
+  });
+  return value as SceneObject[];
 }
 
 /** Canonicalizes JSON objects without changing array order or string contents. */
@@ -148,14 +174,13 @@ function insertSignature(insert: unknown): string {
  * buses retain their scene order.
  */
 export function decodedInsertSignature(sceneJson: string, target: StripJsonTarget): string {
-  const scene = JSON.parse(sceneJson) as {
-    strips?: unknown[];
-    buses?: unknown[];
-  };
-  const entries = target.kind === 'bus' ? scene.buses : scene.strips;
-  const strip = Array.isArray(entries) ? entries.find(isSceneObject) : undefined;
-  const object = isSceneObject(strip) ? strip : {};
-  const inserts = Array.isArray(object.inserts) ? object.inserts.filter(isSceneObject) : [];
+  const scene: unknown = JSON.parse(sceneJson);
+  if (!isSceneObject(scene)) {
+    throw sceneFormatError('scene must be an object');
+  }
+  const key = target.kind === 'bus' ? 'buses' : 'strips';
+  const strip = sceneObjectArray(scene, key, key)[0] ?? {};
+  const inserts = sceneObjectArray(strip, 'inserts', `${key}[0].inserts`);
   const ordered =
     target.kind === 'bus'
       ? inserts
@@ -171,31 +196,36 @@ function constructionValue(
   target: StripJsonTarget,
   override: InsertParamOverride,
 ): number | undefined {
-  let parameterId = -1;
-  switch (target.kind) {
-    case 'track':
-      parameterId = engine.resolveTrackInsertAutomationId(
-        target.trackId,
-        override.insertIndex,
-        override.paramName,
-      );
-      break;
-    case 'bus':
-      parameterId = engine.resolveBusInsertAutomationId(
-        target.busId,
-        override.insertIndex,
-        override.paramName,
-      );
-      break;
-    case 'master':
-      parameterId = engine.resolveMasterInsertAutomationId(
-        override.insertIndex,
-        override.paramName,
-      );
-      break;
-  }
-  if (parameterId < 0) {
-    return undefined;
+  let parameterId: number;
+  try {
+    switch (target.kind) {
+      case 'track':
+        parameterId = engine.resolveTrackInsertAutomationId(
+          target.trackId,
+          override.insertIndex,
+          override.paramName,
+        );
+        break;
+      case 'bus':
+        parameterId = engine.resolveBusInsertAutomationId(
+          target.busId,
+          override.insertIndex,
+          override.paramName,
+        );
+        break;
+      case 'master':
+        parameterId = engine.resolveMasterInsertAutomationId(
+          override.insertIndex,
+          override.paramName,
+        );
+        break;
+    }
+  } catch (error) {
+    // The overridden insert no longer resolves, so there is nothing to restore.
+    if (error instanceof RangeError) {
+      return undefined;
+    }
+    throw error;
   }
   return engine.insertParameterConstructedValue(parameterId);
 }
@@ -918,10 +948,15 @@ export function setTrackBuses(ctx: EngineMixerContext, buses: EngineBus[]): void
 
 export function setBusGain(ctx: EngineMixerContext, busId: number, db: number): boolean {
   const busIndex = ctx.ensureBus(busId);
-  ctx.buses[busIndex] = { ...ctx.buses[busIndex], busId, gainDb: db };
   // The reserved smoothed parameter updates both engines. Rebuilding the bus
   // topology for every fader tick would reset insert slots and their tails.
-  return ctx.sendSmoothedParam(ctx.offlineEngine.resolveBusAutomationId(busId, 'faderDb'), db);
+  return ctx.sendSmoothedParam(
+    ctx.offlineEngine.resolveBusAutomationId(busId, 'faderDb'),
+    db,
+    () => {
+      ctx.buses[busIndex] = { ...ctx.buses[busIndex], busId, gainDb: db };
+    },
+  );
 }
 
 /** Control-side state a strip-scene replacement reads and updates. */

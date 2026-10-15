@@ -376,4 +376,53 @@ describe('WASM vocal edit facade', () => {
       session.dispose();
     }
   });
+
+  it('refuses an omitted source-span, split or edit destination position by name', () => {
+    const session = createVocalEditSession({ samples: tone(SAMPLE_RATE), sampleRate: SAMPLE_RATE });
+    try {
+      const draft = session.beginEdit();
+      const generation = draft.token().generation;
+      const apply = (operation: Record<string, unknown>) =>
+        draft.apply({
+          expectedGeneration: draft.token().generation,
+          operations: [operation as unknown as VocalEditOperation],
+        });
+      const span = {
+        kind: 'setSourceSpan',
+        noteId: 1,
+        sourceStartSample: 0,
+        sourceEndSample: 100,
+        destinationStartSample: 0,
+        destinationLengthSamples: 100,
+      };
+      for (const field of [
+        'sourceStartSample',
+        'sourceEndSample',
+        'destinationStartSample',
+        'destinationLengthSamples',
+      ] as const) {
+        const { [field]: _omitted, ...withoutField } = span;
+        expect(() => apply(withoutField)).toThrow(TypeError);
+        expect(() => apply(withoutField)).toThrow(new RegExp(field));
+      }
+      expect(() => apply({ kind: 'split', noteId: 1 })).toThrow(TypeError);
+      expect(() => apply({ kind: 'split', noteId: 1 })).toThrow(/sourceSample/);
+      const edit = {
+        pitch: { target: { mode: 'none' } },
+        destinationStartSample: 0,
+        destinationLengthSamples: 100,
+      };
+      for (const field of ['destinationStartSample', 'destinationLengthSamples'] as const) {
+        const { [field]: _omitted, ...withoutField } = edit;
+        const run = () => apply({ kind: 'setEdit', noteId: 1, edit: withoutField });
+        expect(run).toThrow(TypeError);
+        expect(run).toThrow(new RegExp(`edit\\.${field}`));
+      }
+      // The refused operations left the draft generation where it was.
+      expect(draft.token().generation).toBe(generation);
+      draft.cancel();
+    } finally {
+      session.dispose();
+    }
+  });
 });

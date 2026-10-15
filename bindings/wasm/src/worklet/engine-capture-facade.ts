@@ -88,6 +88,7 @@ export function capturedAudio(ctx: EngineCaptureContext): Promise<Float32Array[]
 }
 
 export async function resetCapture(ctx: EngineCaptureContext): Promise<void> {
-  ctx.offlineEngine.resetCapture();
+  // The live reset is confirmed first, so a refused or failed request leaves the offline recording.
   await ctx.realtimeNode.requestCaptureReset();
+  ctx.offlineEngine.resetCapture();
 }

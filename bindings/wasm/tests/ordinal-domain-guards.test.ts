@@ -34,11 +34,15 @@ import {
   detectOnsets,
   extractPercussiveEvents,
   init,
+  Mixer,
   masteringDynamicsCompressor,
+  mixingScenePresetJson,
   RealtimeEngine,
   type SynthModRouting,
   tempogram,
 } from '../dist/index.js';
+import { init as initSource } from '../src/index';
+import { getSonareModule } from '../src/module_state';
 import { expectRefusalOf } from './_helpers';
 
 beforeAll(async () => {
@@ -445,6 +449,87 @@ describe('the tempogram mode refuses an ordinal that is not whole', () => {
   it('still refuses an ordinal outside the set', () => {
     for (const value of [99, -1]) {
       expectRefusalNaming('tempogram mode', () => run(value));
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Module-level ordinals the facades resolve from names
+// ---------------------------------------------------------------------------
+
+describe('module ordinals past their set are refused, not mapped to a default', () => {
+  // getSonareModule reads the src module singleton, which the dist init() does not set.
+  beforeAll(async () => {
+    await initSource();
+  });
+
+  const impulse = (): Float32Array => {
+    const samples = new Float32Array(48000);
+    samples[0] = 1;
+    return samples;
+  };
+
+  it('vectorNormalize normType: 0..3 differ, 4 and -1 are refused', () => {
+    const native = getSonareModule();
+    const values = new Float32Array([1, -2, 3]);
+    const outputs = [0, 1, 2, 3].map((norm) => Array.from(native.vectorNormalize(values, norm, 0)));
+    expect(new Set(outputs.map((out) => out.join(','))).size).toBe(4);
+    for (const norm of [4, 5, -1]) {
+      expectRefusalNaming('normType', () => native.vectorNormalize(values, norm, 0));
+    }
+  });
+
+  it('synthesizeRir materialPreset: past glass is refused instead of falling back to absorption', () => {
+    const synthesizeRir = getSonareModule().synthesizeRir;
+    if (!synthesizeRir) {
+      throw new Error('this build has no acoustic simulation');
+    }
+    const room = { lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 };
+    expect(synthesizeRir({ ...room, materialPreset: 5 } as never).rir.length).toBeGreaterThan(0);
+    for (const preset of [6, 99, -1]) {
+      expectRefusalNaming('materialPreset', () =>
+        synthesizeRir({ ...room, materialPreset: preset } as never),
+      );
+    }
+  });
+
+  it('estimateRoom mode: past impulse_response is refused instead of reading as auto', () => {
+    const estimateRoom = getSonareModule().estimateRoom;
+    if (!estimateRoom) {
+      throw new Error('this build has no acoustic simulation');
+    }
+    for (const mode of [3, 99, -1]) {
+      expectRefusalNaming('mode', () => estimateRoom(impulse(), 48000, { mode } as never));
+    }
+  });
+});
+
+describe('telemetry scratch readers refuse an index past their record instead of reading 0', () => {
+  it('RealtimeEngine meter and scope scratch', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      // The control: the last per-plane field reads without throwing.
+      expect(() => engine.meterScratchValue(43)).not.toThrow();
+      for (const field of [44, 1000]) {
+        expect(() => engine.meterScratchValue(field)).toThrow(RangeError);
+      }
+      expect(() => engine.scopeScratchBand(1_000_000)).toThrow(RangeError);
+      expect(() => engine.scopeScratchPointLeft(1_000_000)).toThrow(RangeError);
+      expect(() => engine.scopeScratchPointRight(1_000_000)).toThrow(RangeError);
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('Mixer meter scratch', () => {
+    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 128);
+    try {
+      expect(() => mixer.meterScratchValue(6)).not.toThrow();
+      for (const field of [7, -1]) {
+        expect(() => mixer.meterScratchValue(field)).toThrow(RangeError);
+      }
+    } finally {
+      mixer.delete();
     }
   });
 });

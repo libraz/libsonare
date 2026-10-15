@@ -709,4 +709,21 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
       client.dispose();
     }
   });
+
+  it('rejects a request still pending at dispose with InvalidState, like a new call', async () => {
+    const client = new VocalEditWorkerClient({ worker: new FakeWorker() });
+    const pending = client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
+    client.dispose();
+    await expect(pending).rejects.toSatisfy(
+      (error: unknown) =>
+        isSonareError(error) && error.code === 7 && /disposed/.test(error.message),
+    );
+    let refused: unknown;
+    try {
+      client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
+    } catch (error) {
+      refused = error;
+    }
+    expect(isSonareError(refused) && refused.code === 7).toBe(true);
+  });
 });

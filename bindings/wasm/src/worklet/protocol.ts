@@ -94,6 +94,8 @@ export const SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS = 5;
 /** Scope band and goniometer point counts used when a caller supplies none. */
 export const SONARE_SCOPE_DEFAULT_BANDS = 48;
 export const SONARE_SCOPE_DEFAULT_MAX_POINTS = 32;
+export const SONARE_SCOPE_MAX_BANDS = 64;
+export const SONARE_SCOPE_MAX_POINTS = 32;
 
 /** Base for splitting a frame index into two exactly-representable Float32 lanes. */
 const SONARE_FRAME_LANE_BASE = 0x1000000; // 2^24
@@ -115,7 +117,9 @@ export function decodeFrame(lo: number, hi: number): number {
   return hi * SONARE_FRAME_LANE_BASE + lo;
 }
 export const SONARE_ENGINE_RING_HEADER_INTS = 5;
-export const SONARE_ENGINE_COMMAND_RECORD_BYTES = 32;
+export const SONARE_ENGINE_COMMAND_RECORD_BYTES = 40;
+/** Highest PPQ the public transport accepts; mirrors the core's `kMaxPublicPpq`. */
+export const SONARE_MAX_PUBLIC_PPQ = 1e12;
 export const SONARE_ENGINE_TELEMETRY_RECORD_BYTES = 48;
 export const SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION = 1;
 // Engine telemetry uses header [writeIndex, protocolVersion, capacity,
@@ -296,6 +300,17 @@ export interface SonareEngineCommandRecord {
   sampleTime?: number | bigint;
   argFloat?: number;
   argInt?: number | bigint;
+  /**
+   * A second full-precision double, carried in the 8-byte lane `argInt` uses by
+   * the command types that need one (`SetLoop`, for its end PPQ); those types
+   * carry no `argInt`.
+   */
+  argFloat2?: number;
+  /**
+   * Set by the node on the SAB ring: the sequence number of the last control
+   * sync posted before this command, which the worklet applies first.
+   */
+  syncSequence?: number;
 }
 
 export interface SonareEngineTelemetryRecord {
@@ -524,6 +539,26 @@ function overwriteRingByteLength(
   return headerBytes + capacity * recordBytes + capacity * Int32Array.BYTES_PER_ELEMENT;
 }
 
+/**
+ * A ring dimension a caller passes when creating or sizing a ring: refused when
+ * it is not a number (TypeError) or not a whole number in [minimum, maximum]
+ * (RangeError), never floored or clamped into one.
+ */
+function requireRingDimension(
+  value: unknown,
+  name: string,
+  minimum: number,
+  maximum = Number.MAX_SAFE_INTEGER,
+): number {
+  if (typeof value !== 'number') {
+    throw new TypeError(`${name} must be a number`);
+  }
+  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
+    throw new RangeError(`${name} must be an integer in [${minimum}, ${maximum}]`);
+  }
+  return value;
+}
+
 function requirePositiveCapacity(
   existingCapacity: number,
   fallbackCapacity: number | undefined,
@@ -666,7 +701,7 @@ function makeOverwriteSlotStates(
 }
 
 export function sonareMeterRingBufferByteLength(capacity: number): number {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
+  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
   return overwriteRingByteLength(
     SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
     SONARE_METER_RING_RECORD_FLOATS * Float32Array.BYTES_PER_ELEMENT,
@@ -675,7 +710,7 @@ export function sonareMeterRingBufferByteLength(capacity: number): number {
 }
 
 export function createSonareMeterRingBuffer(capacity = 128): SonareMeterRingBuffer {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
+  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
   const sharedBuffer = new SharedArrayBuffer(sonareMeterRingBufferByteLength(clampedCapacity));
   const headerBytes = SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   const recordBytes = SONARE_METER_RING_RECORD_FLOATS * Float32Array.BYTES_PER_ELEMENT;
@@ -796,8 +831,8 @@ export function readSonareMeterRingBuffer(
 }
 
 export function sonareSpectrumRingBufferByteLength(capacity: number, bands = 16): number {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
-  const clampedBands = Math.max(1, Math.floor(bands));
+  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
+  const clampedBands = requireRingDimension(bands, 'bands', 1);
   // Record layout: [frameLo, frameHi, bandCount, band0, band1, ...]. frame is
   // split across two Float32 lanes for exact reconstruction beyond 2^24.
   return overwriteRingByteLength(
@@ -811,8 +846,8 @@ export function createSonareSpectrumRingBuffer(
   capacity = 128,
   bands = 16,
 ): SonareSpectrumRingBuffer {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
-  const clampedBands = Math.max(1, Math.floor(bands));
+  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
+  const clampedBands = requireRingDimension(bands, 'bands', 1);
   const sharedBuffer = new SharedArrayBuffer(
     sonareSpectrumRingBufferByteLength(clampedCapacity, clampedBands),
   );
@@ -919,9 +954,9 @@ export function sonareScopeRingBufferByteLength(
   bands = SONARE_SCOPE_DEFAULT_BANDS,
   maxPoints = SONARE_SCOPE_DEFAULT_MAX_POINTS,
 ): number {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
-  const clampedBands = Math.max(1, Math.floor(bands));
-  const clampedPoints = Math.max(0, Math.floor(maxPoints));
+  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
+  const clampedBands = requireRingDimension(bands, 'bands', 1, SONARE_SCOPE_MAX_BANDS);
+  const clampedPoints = requireRingDimension(maxPoints, 'maxPoints', 0, SONARE_SCOPE_MAX_POINTS);
   return overwriteRingByteLength(
     SONARE_SCOPE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
     sonareScopeRingRecordFloats(clampedBands, clampedPoints) * Float32Array.BYTES_PER_ELEMENT,
@@ -934,9 +969,9 @@ export function createSonareScopeRingBuffer(
   bands = SONARE_SCOPE_DEFAULT_BANDS,
   maxPoints = SONARE_SCOPE_DEFAULT_MAX_POINTS,
 ): SonareScopeRingBuffer {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
-  const clampedBands = Math.max(1, Math.floor(bands));
-  const clampedPoints = Math.max(0, Math.floor(maxPoints));
+  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
+  const clampedBands = requireRingDimension(bands, 'bands', 1, SONARE_SCOPE_MAX_BANDS);
+  const clampedPoints = requireRingDimension(maxPoints, 'maxPoints', 0, SONARE_SCOPE_MAX_POINTS);
   const sharedBuffer = new SharedArrayBuffer(
     sonareScopeRingBufferByteLength(clampedCapacity, clampedBands, clampedPoints),
   );
@@ -1117,7 +1152,7 @@ export function scopeRingFromSharedBuffer(
 }
 
 export function sonareEngineCommandRingBufferByteLength(capacity: number): number {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
+  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
   return (
     SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
     clampedCapacity * SONARE_ENGINE_COMMAND_RECORD_BYTES
@@ -1125,7 +1160,7 @@ export function sonareEngineCommandRingBufferByteLength(capacity: number): numbe
 }
 
 export function sonareEngineTelemetryRingBufferByteLength(capacity: number): number {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
+  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
   return (
     overwriteRingByteLength(
       SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
@@ -1136,7 +1171,7 @@ export function sonareEngineTelemetryRingBufferByteLength(capacity: number): num
 }
 
 export function sonareClipPageRequestRingBufferByteLength(capacity: number): number {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
+  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
   return (
     SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
     clampedCapacity * SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S * Uint32Array.BYTES_PER_ELEMENT
@@ -1144,7 +1179,7 @@ export function sonareClipPageRequestRingBufferByteLength(capacity: number): num
 }
 
 export function sonareExternalMidiRingBufferByteLength(capacity: number): number {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
+  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
   return (
     SONARE_EXTERNAL_MIDI_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
     clampedCapacity * SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S * Uint32Array.BYTES_PER_ELEMENT
@@ -1158,7 +1193,11 @@ export function externalMidiRingFromSharedBuffer(
   const headerBytes = SONARE_EXTERNAL_MIDI_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   const header = new Int32Array(sharedBuffer, 0, SONARE_EXTERNAL_MIDI_RING_HEADER_INTS);
   const existingCapacity = Atomics.load(header, 2);
-  const capacity = Math.max(1, Math.floor(existingCapacity || fallbackCapacity || 1));
+  const capacity = requirePositiveCapacity(
+    existingCapacity,
+    fallbackCapacity,
+    'externalMidiRingCapacity',
+  );
   if (sharedBuffer.byteLength < sonareExternalMidiRingBufferByteLength(capacity)) {
     throw new Error('externalMidiSharedBuffer is too small for the requested ring capacity.');
   }
@@ -1176,7 +1215,7 @@ export function externalMidiRingFromSharedBuffer(
 }
 
 export function createSonareExternalMidiRingBuffer(capacity = 256): SonareExternalMidiRingBuffer {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
+  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
   const sharedBuffer = new SharedArrayBuffer(
     sonareExternalMidiRingBufferByteLength(clampedCapacity),
   );
@@ -1274,7 +1313,7 @@ export function readSonareExternalMidiRingBuffer(
 export function createSonareClipPageRequestRingBuffer(
   capacity = 128,
 ): SonareClipPageRequestRingBuffer {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
+  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
   const sharedBuffer = new SharedArrayBuffer(
     sonareClipPageRequestRingBufferByteLength(clampedCapacity),
   );
@@ -1348,7 +1387,7 @@ export function readSonareClipPageRequestRingBuffer(
 }
 
 export function createSonareEngineCommandRingBuffer(capacity = 128): SonareEngineCommandRingBuffer {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
+  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
   const sharedBuffer = new SharedArrayBuffer(
     sonareEngineCommandRingBufferByteLength(clampedCapacity),
   );
@@ -1363,7 +1402,7 @@ export function createSonareEngineCommandRingBuffer(capacity = 128): SonareEngin
 export function createSonareEngineTelemetryRingBuffer(
   capacity = 128,
 ): SonareEngineTelemetryRingBuffer {
-  const clampedCapacity = Math.max(1, Math.floor(capacity));
+  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
   const sharedBuffer = new SharedArrayBuffer(
     sonareEngineTelemetryRingBufferByteLength(clampedCapacity),
   );
@@ -1736,7 +1775,11 @@ export function engineRingFromSharedBuffer(
   const headerBytes = SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   const header = new Int32Array(sharedBuffer, 0, SONARE_ENGINE_RING_HEADER_INTS);
   const existingCapacity = Atomics.load(header, 2);
-  const capacity = Math.max(1, Math.floor(existingCapacity || fallbackCapacity || 1));
+  const capacity = requirePositiveCapacity(
+    existingCapacity,
+    fallbackCapacity,
+    'commandRingCapacity',
+  );
   const minBytes = headerBytes + capacity * recordBytes;
   if (sharedBuffer.byteLength < minBytes) {
     throw new Error('engine SharedArrayBuffer is too small for the requested ring capacity.');
@@ -1865,7 +1908,11 @@ export function clipPageRequestRingFromSharedBuffer(
   const headerBytes = SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   const header = new Int32Array(sharedBuffer, 0, SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS);
   const existingCapacity = Atomics.load(header, 2);
-  const capacity = Math.max(1, Math.floor(existingCapacity || fallbackCapacity || 1));
+  const capacity = requirePositiveCapacity(
+    existingCapacity,
+    fallbackCapacity,
+    'clipPageRequestRingCapacity',
+  );
   const minBytes = sonareClipPageRequestRingBufferByteLength(capacity);
   if (sharedBuffer.byteLength < minBytes) {
     throw new Error('clipPageRequestSharedBuffer is too small for the requested ring capacity.');
@@ -1950,17 +1997,31 @@ function writeEngineCommandRecord(
   // 4-byte pad) so PPQ scalars carried here keep full double precision over the
   // SAB transport, matching the engine's double-precision seek/loop contract.
   view.setFloat64(offset + 16, command.argFloat ?? 0, true);
-  writeInt64Words(view, offset + 24, toSafeInteger(command.argInt, 0));
+  if (command.type === SonareEngineCommandType.SetLoop) {
+    view.setFloat64(offset + 24, command.argFloat2 ?? 0, true);
+  } else {
+    writeInt64Words(view, offset + 24, toSafeInteger(command.argInt, 0));
+  }
+  view.setUint32(offset + 32, toUint32Slot(command.syncSequence, 0, 'syncSequence'), true);
+  view.setUint32(offset + 36, 0, true);
 }
 
 function readEngineCommandRecord(view: DataView, offset: number): SonareEngineCommandRecord {
-  return {
-    type: view.getUint32(offset, true),
+  const type = view.getUint32(offset, true);
+  const record: SonareEngineCommandRecord = {
+    type,
     targetId: view.getUint32(offset + 4, true),
     sampleTime: readInt64Words(view, offset + 8),
     argFloat: view.getFloat64(offset + 16, true),
-    argInt: readInt64Words(view, offset + 24),
   };
+  // The shared 8-byte lane holds a double only for the command types that write one there.
+  if (type === SonareEngineCommandType.SetLoop) {
+    record.argFloat2 = view.getFloat64(offset + 24, true);
+  } else {
+    record.argInt = readInt64Words(view, offset + 24);
+  }
+  record.syncSequence = view.getUint32(offset + 32, true);
+  return record;
 }
 
 function writePreparedEngineTelemetryRecord(

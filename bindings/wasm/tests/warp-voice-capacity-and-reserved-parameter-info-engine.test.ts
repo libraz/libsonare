@@ -52,6 +52,9 @@ describe('Sonare WASM Module', () => {
         engine.setSynthInstrument('saw-lead', 1);
         const id = engine.resolveInstrumentAutomationId(1, 'cutoffHz');
         expect(id).toBeGreaterThanOrEqual(0);
+        // An unknown name or an unbound destination is a RangeError, never -1.
+        expect(() => engine.resolveInstrumentAutomationId(1, 'noSuchParam')).toThrow(RangeError);
+        expect(() => engine.resolveInstrumentAutomationId(9, 'cutoffHz')).toThrow(RangeError);
 
         // Reads the built-in patch default, not whatever 'saw-lead' loaded --
         // the control thread cannot read the audio thread's live patch.

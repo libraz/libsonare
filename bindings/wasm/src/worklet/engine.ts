@@ -1,9 +1,9 @@
+import { releasedHandleError } from '../_handle_guard.js';
 import {
   ClipPageStreamer,
   type ClipPageStreamerRequest,
   type OpfsClipStreamOptions,
 } from '../clip_page_streamer.js';
-import { ErrorCode, SonareError } from '../errors.js';
 import type {
   EngineAutomationPoint,
   EngineBounceOptions,
@@ -67,7 +67,7 @@ import * as strips from './engine-strips.js';
 import { resolveParamId, resolveTargetId } from './engine-sync.js';
 import type { EngineTempoContext } from './engine-tempo-facade.js';
 import * as tempo from './engine-tempo-facade.js';
-import { resolveContextSampleRate } from './guards.js';
+import { requireChannelCount, resolveContextSampleRate } from './guards.js';
 import type {
   SonareEngineSyncCaptureMessage,
   SonareEngineSyncMessage,
@@ -189,7 +189,7 @@ export class SonareEngine {
       sampleRate: this.sampleRate,
       realtimeNode: this.realtimeNode,
       offlineEngine: this.offlineEngine,
-      hasCommandRoom: () => this.realtimeNode.hasCommandRoom(),
+      canSend: (command) => this.realtimeNode.canSendCommand(command),
       sendCommand: (command) => this.sendMirroredCommand(command),
       setTempo: (bpm) => this.setTempo(bpm),
       setTempoSegments: (segments) => this.setTempoSegments(segments),
@@ -203,9 +203,9 @@ export class SonareEngine {
   ): Promise<SonareEngine> {
     const sampleRate = resolveContextSampleRate(options.sampleRate, context, 'SonareEngine.create');
     const blockSize = options.offlineBlockSize ?? options.blockSize ?? 128;
-    const channelCount = Math.max(
-      1,
-      Math.floor(options.offlineChannelCount ?? options.channelCount ?? 2),
+    const channelCount = requireChannelCount(
+      options.offlineChannelCount ?? options.channelCount,
+      2,
     );
     const realtimeNode = await SonareRealtimeEngineNode.create(context, options);
     try {
@@ -360,7 +360,8 @@ export class SonareEngine {
    * @param target Track id (declares a mixer lane on first use).
    * @param insertIndex Index into the strip's combined insert sequence.
    * @param paramName Processor JSON-key parameter name.
-   * @returns Reserved insert-automation id, or -1 when strip/insert/key unknown.
+   * @returns Reserved insert-automation id.
+   * @throws RangeError when the strip, insert or key is unknown.
    */
   resolveTrackInsertAutomationId(
     target: string | number,
@@ -373,10 +374,8 @@ export class SonareEngine {
       insertIndex,
       paramName,
     );
-    if (id >= 0) {
-      const trackId = this.trackLaneIds[this.ensureTrackLane(target)];
-      this.rememberInsertAutomationId({ kind: 'track', trackId }, id);
-    }
+    const trackId = this.trackLaneIds[this.ensureTrackLane(target)];
+    this.rememberInsertAutomationId({ kind: 'track', trackId }, id);
     return id;
   }
 
@@ -386,7 +385,8 @@ export class SonareEngine {
    *
    * @param insertIndex Index into the master strip's insert sequence.
    * @param paramName Processor JSON-key parameter name.
-   * @returns Reserved insert-automation id, or -1 when insert/key unknown.
+   * @returns Reserved insert-automation id.
+   * @throws RangeError when the insert or key is unknown.
    */
   resolveMasterInsertAutomationId(insertIndex: number, paramName: string): number {
     const id = parameter.resolveMasterInsertAutomationId(
@@ -394,9 +394,7 @@ export class SonareEngine {
       insertIndex,
       paramName,
     );
-    if (id >= 0) {
-      this.rememberInsertAutomationId({ kind: 'master' }, id);
-    }
+    this.rememberInsertAutomationId({ kind: 'master' }, id);
     return id;
   }
 
@@ -408,7 +406,8 @@ export class SonareEngine {
    * @param busId Bus id (declares the mixer bus on first use).
    * @param insertIndex Index into the bus strip's insert sequence.
    * @param paramName Processor JSON-key parameter name.
-   * @returns Reserved insert-automation id, or -1 when bus/insert/key unknown.
+   * @returns Reserved insert-automation id.
+   * @throws RangeError when the bus, insert or key is unknown.
    */
   resolveBusInsertAutomationId(busId: number, insertIndex: number, paramName: string): number {
     const id = parameter.resolveBusInsertAutomationId(
@@ -417,9 +416,7 @@ export class SonareEngine {
       insertIndex,
       paramName,
     );
-    if (id >= 0) {
-      this.rememberInsertAutomationId({ kind: 'bus', busId }, id);
-    }
+    this.rememberInsertAutomationId({ kind: 'bus', busId }, id);
     return id;
   }
 
@@ -431,7 +428,8 @@ export class SonareEngine {
    *
    * @param destinationId MIDI destination the instrument is bound to.
    * @param paramName Instrument JSON-key parameter name (e.g. `cutoffHz`).
-   * @returns Reserved instrument-automation id, or -1 when destination/key unknown.
+   * @returns Reserved instrument-automation id.
+   * @throws RangeError when the destination or key is unknown.
    */
   resolveInstrumentAutomationId(destinationId: number, paramName: string): number {
     return parameter.resolveInstrumentAutomationId(this.parameterContext, destinationId, paramName);
@@ -483,19 +481,19 @@ export class SonareEngine {
   }
 
   setStripGain(target: string | number, db: number): boolean {
-    const sent = this.sendSmoothedParam(this.automationParamId(target, 'faderDb'), db);
-    if (sent && target === 'master') {
-      strips.cacheMasterStripScalar(this.stripContext, 'faderDb', db);
-    }
-    return sent;
+    return this.sendSmoothedParam(this.automationParamId(target, 'faderDb'), db, () => {
+      if (target === 'master') {
+        strips.cacheMasterStripScalar(this.stripContext, 'faderDb', db);
+      }
+    });
   }
 
   setStripPan(target: string | number, pan: number): boolean {
-    const sent = this.sendSmoothedParam(this.automationParamId(target, 'pan'), pan);
-    if (sent && target === 'master') {
-      strips.cacheMasterStripScalar(this.stripContext, 'pan', pan);
-    }
-    return sent;
+    return this.sendSmoothedParam(this.automationParamId(target, 'pan'), pan, () => {
+      if (target === 'master') {
+        strips.cacheMasterStripScalar(this.stripContext, 'pan', pan);
+      }
+    });
   }
 
   /** Resets the master's integrated loudness accumulator in both engine mirrors. */
@@ -866,7 +864,7 @@ export class SonareEngine {
     options: OpfsClipStreamOptions,
   ): Promise<{ binding: OpfsClipPageProviderBinding; provider: ClipPageProvider }> {
     if (this.epoch.closed) {
-      throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'SonareEngine is destroyed.');
+      throw releasedHandleError('SonareEngine', 'is destroyed.');
     }
     const { clipId, primePages = 1, ...providerOptions } = options;
     if ([...this.workletPageProviderClipIds.values()].some((entry) => entry.clipId === clipId)) {
@@ -967,7 +965,7 @@ export class SonareEngine {
    */
   setClipPagePrefetchFrames(frames: number): void {
     if (this.epoch.closed) {
-      throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'SonareEngine is destroyed.');
+      throw releasedHandleError('SonareEngine', 'is destroyed.');
     }
     if (!Number.isFinite(frames) || frames < 0) {
       throw new Error('clip page prefetch frames must be a finite value >= 0.');
@@ -990,7 +988,7 @@ export class SonareEngine {
    */
   setWarpVoiceCapacity(voices: number): void {
     if (this.epoch.closed) {
-      throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'SonareEngine is destroyed.');
+      throw releasedHandleError('SonareEngine', 'is destroyed.');
     }
     commitSync(
       this.commitContext,
@@ -1753,14 +1751,11 @@ export class SonareEngine {
   // Sync messages use a string `type` so the worklet's message handler routes
   // them to receiveSync() (numeric `type` is reserved for SonareEngineCommandRecord).
   private postSync(message: SonareEngineSyncMessage, transfer?: Transferable[]): void {
+    // Teardown callbacks (a closing clip stream) still post while destroy runs; they are moot.
     if (this.epoch.closed) {
       return;
     }
-    if (transfer && transfer.length > 0) {
-      this.realtimeNode.node.port.postMessage(message, transfer);
-    } else {
-      this.realtimeNode.node.port.postMessage(message);
-    }
+    this.realtimeNode.postSync(message, transfer);
   }
 
   // The control-only mirror applies due commands immediately while preserving
@@ -1804,7 +1799,8 @@ export class SonareEngine {
         this.syncMixer(insertBaseResets, oneShotInsertParamOverrides),
       clearInsertAutomationLanes: (target, forgetResolvedIds) =>
         this.clearInsertAutomationLanes(target, forgetResolvedIds),
-      sendSmoothedParam: (paramId, value) => this.sendSmoothedParam(paramId, value),
+      sendSmoothedParam: (paramId, value, commitCache) =>
+        this.sendSmoothedParam(paramId, value, commitCache),
       getMasterStripJson: () => this.masterStripJson,
       cacheMasterStripJson: (sceneJson) => {
         this.masterStripJson = sceneJson;
@@ -1850,7 +1846,7 @@ export class SonareEngine {
       offlineEngine: this.offlineEngine,
       realtimeNode: this.realtimeNode,
       sendCommand: (command) => this.sendMirroredCommand(command),
-      hasCommandRoom: () => this.realtimeNode.hasCommandRoom(),
+      canSend: (command) => this.realtimeNode.canSendCommand(command),
       offlineChannelCount: this.offlineChannelCount,
       postSync: (message) => this.postSync(message),
       getCaptureConfig: () => this.captureConfig,
@@ -1868,7 +1864,7 @@ export class SonareEngine {
     return {
       offlineEngine: this.offlineEngine,
       sendCommand: (command) => this.sendMirroredCommand(command),
-      hasCommandRoom: () => this.realtimeNode.hasCommandRoom(),
+      canSend: (command) => this.realtimeNode.canSendCommand(command),
       postSync: (message) => this.postSync(message),
       automationLanes: this.automationLanes,
       trackLaneIds: this.trackLaneIds,
@@ -1886,7 +1882,7 @@ export class SonareEngine {
       offlineEngine: this.offlineEngine,
       realtimeNode: this.realtimeNode,
       sendCommand: (command) => this.sendMirroredCommand(command),
-      hasCommandRoom: () => this.realtimeNode.hasCommandRoom(),
+      canSend: (command) => this.realtimeNode.canSendCommand(command),
       postSync: (message) => this.postSync(message),
       getTempoBpm: () => this.tempoBpm,
       setTempoBpm: (bpm) => {
@@ -1960,14 +1956,14 @@ export class SonareEngine {
       },
       postSync: (message) => this.postSync(message),
       sendCommand: (command) => this.sendMirroredCommand(command),
-      hasCommandRoom: () => this.realtimeNode.hasCommandRoom(),
+      canSend: (command) => this.realtimeNode.canSendCommand(command),
       setLoop: (startPpq, endPpq, enabled) => this.setLoop(startPpq, endPpq, enabled),
     };
   }
 
   // Mirrors a smoothed parameter into the offline engine and pushes a
   // sample-accurate smoothed-param command to the realtime runtime.
-  private sendSmoothedParam(paramId: number, value: number): boolean {
+  private sendSmoothedParam(paramId: number, value: number, commitCache?: () => void): boolean {
     return commitCommand(
       this.commitContext,
       {
@@ -1977,6 +1973,7 @@ export class SonareEngine {
         argFloat: value,
       },
       (offline) => offline.setParameter(paramId, value),
+      commitCache,
     );
   }
 
@@ -1984,7 +1981,7 @@ export class SonareEngine {
   private get commitContext(): EngineCommitContext {
     return {
       offlineEngine: this.offlineEngine,
-      hasCommandRoom: () => this.realtimeNode.hasCommandRoom(),
+      canSend: (command) => this.realtimeNode.canSendCommand(command),
       sendCommand: (command) => this.sendMirroredCommand(command),
     };
   }

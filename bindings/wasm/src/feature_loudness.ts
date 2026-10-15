@@ -4,7 +4,7 @@
  */
 
 import { getSonareModule } from './module_state.js';
-import type { WasmLufsResult, WasmLufsSeriesResult } from './sonare.js';
+import type { LufsResult, LufsSeriesResult } from './public_types.js';
 import type { ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
@@ -43,19 +43,19 @@ export interface Ebur128LoudnessRangeRequest extends ValidateOptions {
  * audio, and K-weighting is sample-rate dependent, so a wrong rate yields wrong
  * loudness.
  */
-export function lufsInterleaved(request: LufsInterleavedRequest): WasmLufsResult;
+export function lufsInterleaved(request: LufsInterleavedRequest): LufsResult;
 export function lufsInterleaved(
   samples: Float32Array,
   channels: number,
   sampleRate?: number,
   options?: ValidateOptions,
-): WasmLufsResult;
+): LufsResult;
 export function lufsInterleaved(
   samples: Float32Array | LufsInterleavedRequest,
   channels = 0,
   sampleRate = 22050,
   options: ValidateOptions = {},
-): WasmLufsResult {
+): LufsResult {
   optionsBag('lufsInterleaved', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('lufsInterleaved', samples);
@@ -93,19 +93,19 @@ export function lufsInterleaved(
  * });
  * ```
  */
-export function lufsSeriesInterleaved(request: LufsSeriesInterleavedRequest): WasmLufsSeriesResult;
+export function lufsSeriesInterleaved(request: LufsSeriesInterleavedRequest): LufsSeriesResult;
 export function lufsSeriesInterleaved(
   samples: Float32Array,
   channels: number,
   sampleRate?: number,
   options?: ValidateOptions,
-): WasmLufsSeriesResult;
+): LufsSeriesResult;
 export function lufsSeriesInterleaved(
   samples: Float32Array | LufsSeriesInterleavedRequest,
   channels = 0,
   sampleRate = 22050,
   options: ValidateOptions = {},
-): WasmLufsSeriesResult {
+): LufsSeriesResult {
   optionsBag('lufsSeriesInterleaved', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('lufsSeriesInterleaved', samples);

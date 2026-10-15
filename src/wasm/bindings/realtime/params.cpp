@@ -20,6 +20,14 @@ sonare::automation::CurveType automationCurveFromInt(int curve) {
 
 int automationCurveToInt(sonare::automation::CurveType curve) { return static_cast<int>(curve); }
 
+double resolvedAutomationId(int64_t id, const std::string& param_name) {
+  if (id < 0) {
+    throw WasmRangeError("paramName '" + param_name +
+                         "' does not resolve to an automation id for this target");
+  }
+  return static_cast<double>(id);
+}
+
 void RealtimeEngineWasm::addParameter(val info) {
   const uint32_t id = uintProperty(info, "id", 0);
   if (id == 0) {

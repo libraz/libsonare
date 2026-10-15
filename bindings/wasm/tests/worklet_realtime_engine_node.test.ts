@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { vi } from 'vitest';
+import { ErrorCode } from '../src/errors';
 import { ENGINE_SYNC_MESSAGE_TYPES } from '../src/worklet/guards';
 import {
   describe,
@@ -17,6 +18,11 @@ import {
   setupWorklet,
   writeSonareEngineTelemetryRingBuffer,
 } from './_worklet_helpers';
+
+/** The offline mirror's read side the commit tests inspect. */
+type RealtimeEngineLike = {
+  getTransportState(): { loopStartPpq: number; loopEndPpq: number; samplePosition: number };
+};
 
 /** The engine `SonareEngine.create` accepts as its offline mirror. */
 type OfflineEngineOption = NonNullable<
@@ -76,7 +82,9 @@ describe('SonareRealtimeEngineNode', () => {
       // A handler the host kept from before destroy cannot revive the node.
       handler?.({ data: { type: 'ready', runtimeTarget: 'embind' } } as MessageEvent<unknown>);
       await expect(node.ready).rejects.toMatchObject({ codeName: 'InvalidState' });
-      expect(node.sendCommand({ type: SonareEngineCommandType.TransportPlay })).toBe(false);
+      expect(() => node.sendCommand({ type: SonareEngineCommandType.TransportPlay })).toThrow(
+        expect.objectContaining({ code: ErrorCode.InvalidState }),
+      );
     });
 
     it('keeps a node that became ready resolved when it is destroyed', async () => {
@@ -500,6 +508,7 @@ describe('SonareRealtimeEngineNode', () => {
         sampleTime: 256,
         argFloat: 0,
         argInt: 1,
+        syncSequence: 0,
       });
       // 18..25 are intentionally not part of the worklet command vocabulary.
       expect(node.sendCommand({ type: 18, sampleTime: -1 })).toBe(false);
@@ -532,6 +541,44 @@ describe('SonareRealtimeEngineNode', () => {
           node.sendCommand({ type: SonareEngineCommandType.TransportSeekSample, targetId }),
         ).toBe(false);
       }
+      expect(popSonareEngineCommandRingBuffer(commandRing)).toBeNull();
+      // A 64-bit lane the record writer would refuse by throwing answers false instead.
+      expect(
+        node.sendCommand({ type: SonareEngineCommandType.TransportSeekSample, argInt: 2n ** 60n }),
+      ).toBe(false);
+      expect(
+        node.sendCommand({ type: SonareEngineCommandType.TransportSeekSample, argInt: 2n ** 40n }),
+      ).toBe(true);
+      expect(popSonareEngineCommandRingBuffer(commandRing)).toMatchObject({ argInt: 2 ** 40 });
+      // The live engine refuses a negative position and a PPQ outside [0, 1e12].
+      expect(node.seekSample(-1)).toBe(false);
+      for (const ppq of [-1, 2e12, Number.NaN]) {
+        expect(node.seekPpq(ppq)).toBe(false);
+      }
+      expect(node.seekPpq(1e12)).toBe(true);
+      expect(popSonareEngineCommandRingBuffer(commandRing)).toMatchObject({ argFloat: 1e12 });
+      // A punch window carries whole samples; a fractional or inverted one is refused.
+      for (const [inSample, outSample] of [
+        [0, 4.5],
+        [-1, 4],
+        [8, 4],
+      ]) {
+        expect(
+          node.sendCommand({
+            type: SonareEngineCommandType.Punch,
+            sampleTime: -1,
+            argInt: inSample,
+            argFloat: outSample,
+          }),
+        ).toBe(false);
+      }
+      // A ring command names the last sync posted before it, which the worklet applies first.
+      expect(node.play()).toBe(true);
+      expect(popSonareEngineCommandRingBuffer(commandRing)).toMatchObject({ syncSequence: 0 });
+      node.postSync({ type: 'syncMarkers', markers: [] });
+      expect(posted.at(-1)).toMatchObject({ type: 'syncMarkers', syncSequence: 1 });
+      expect(node.play()).toBe(true);
+      expect(popSonareEngineCommandRingBuffer(commandRing)).toMatchObject({ syncSequence: 1 });
       expect(popSonareEngineCommandRingBuffer(commandRing)).toBeNull();
 
       writeSonareEngineTelemetryRingBuffer(telemetryRing, {
@@ -868,6 +915,25 @@ describe('SonareRealtimeEngineNode', () => {
           ?.scopeSharedBuffer,
       ).toBeInstanceOf(SharedArrayBuffer);
       on.destroy();
+    });
+
+    it('refuses scopeBands past the 64-band ceiling instead of clamping it', async () => {
+      const create = (scopeBands: number) =>
+        SonareRealtimeEngineNode.create(fakeContext(), {
+          moduleUrl: 'sonare-worklet.js',
+          scopeIntervalFrames: 128,
+          scopeBands,
+          nodeFactory: () =>
+            ({
+              port: { postMessage: () => undefined, onmessage: undefined },
+              disconnect: () => undefined,
+            }) as unknown as AudioWorkletNode,
+        });
+      await expect(create(65)).rejects.toThrow(RangeError);
+      await expect(create(0)).rejects.toThrow(RangeError);
+      const atCeiling = await create(64);
+      expect(atCeiling.scopeRing?.bands).toBe(64);
+      atCeiling.destroy();
     });
 
     it('falls back to postMessage commands when requested', async () => {
@@ -3166,7 +3232,7 @@ describe('SonareRealtimeEngineNode', () => {
           expect.objectContaining({
             type: SonareEngineCommandType.SetLoop,
             argFloat: 1,
-            argInt: 3_000_000,
+            argFloat2: 3,
           }),
           expect.objectContaining({ type: 'transportRequest', op: 'state' }),
         ]),
@@ -3493,10 +3559,131 @@ describe('SonareRealtimeEngineNode', () => {
       engine.destroy();
       expect(disconnected).toEqual([true]);
       expect(posted.at(-1)).toMatchObject({ type: 'destroy' });
-      expect(engine.transport.play()).toBe(false);
+      expect(() => engine.transport.play()).toThrow(
+        expect.objectContaining({ code: ErrorCode.InvalidState }),
+      );
       await engine.suspend();
       await engine.resume();
       expect(lifecycle).toEqual(['suspend', 'resume']);
+    });
+
+    it('reports a destroyed node as InvalidState on every command and request family', async () => {
+      const posted: unknown[] = [];
+      const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
+      });
+      const invalidState = expect.objectContaining({
+        name: 'SonareError',
+        code: ErrorCode.InvalidState,
+      });
+      // Requests still pending when destroy runs.
+      const pending = [
+        node.requestCaptureStatus(),
+        node.requestTransportState(),
+        node.pollInsertGainReduction(0),
+      ];
+      node.destroy();
+      for (const request of pending) {
+        await expect(request).rejects.toEqual(invalidState);
+      }
+      for (const call of [
+        () => node.play(),
+        () => node.stop(),
+        () => node.seekSample(0),
+        () => node.seekPpq(0),
+        () => node.seekPpq(-1),
+        () => node.resetProcessorState(),
+        () => node.sendCommand({ type: SonareEngineCommandType.TransportPlay }),
+        () => node.canSendCommand({ type: SonareEngineCommandType.TransportPlay }),
+        () => node.postSync({ type: 'syncMarkers', markers: [] }),
+      ]) {
+        expect(call).toThrow(invalidState);
+      }
+      for (const request of [
+        () => node.requestCaptureStatus(),
+        () => node.requestCapturedAudio(),
+        () => node.requestCaptureReset(),
+        () => node.requestTransportState(),
+        () => node.pollInsertGainReduction(0),
+      ]) {
+        await expect(request()).rejects.toEqual(invalidState);
+      }
+    });
+
+    it('commits a control edit to the offline mirror only when the live engine takes it', async () => {
+      const posted: unknown[] = [];
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
+      });
+      const offline = (engine as unknown as { offlineEngine: RealtimeEngineLike }).offlineEngine;
+      try {
+        // Both bounds reach the live command as the exact doubles the mirror receives.
+        expect(engine.setLoop(0, 4 / 3)).toBe(true);
+        expect(posted.at(-1)).toMatchObject({ argFloat: 0, argFloat2: 4 / 3 });
+        expect(offline.getTransportState().loopEndPpq).toBeCloseTo(4 / 3, 12);
+        expect(engine.setLoop(0, 1e10)).toBe(true);
+        expect(posted.at(-1)).toMatchObject({ argFloat2: 1e10 });
+        // A loop end the live engine refuses changes neither engine.
+        posted.length = 0;
+        expect(engine.setLoop(0, 2e12)).toBe(false);
+        expect(posted).toEqual([]);
+        expect(offline.getTransportState().loopEndPpq).toBeCloseTo(1e10, 0);
+
+        // A refused seek in seconds changes neither engine.
+        engine.transport.seekSeconds(1);
+        const position = offline.getTransportState().samplePosition;
+        expect(position).toBe(48000);
+        for (const seconds of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+          expect(() => engine.transport.seekSeconds(seconds)).toThrow(RangeError);
+        }
+        expect(offline.getTransportState().samplePosition).toBe(position);
+
+        // A refused bus gain leaves the cached bus, so a later mixer sync does not replay it.
+        expect(engine.setBusGain(1, -6)).toBe(true);
+        expect(engine.setBusGain(1, Number.NaN)).toBe(false);
+        posted.length = 0;
+        engine.setTrackLanes([7]);
+        const mixer = posted
+          .filter((message) => (message as { type?: unknown }).type === 'syncMixer')
+          .at(-1) as { buses?: Array<{ busId: number; gainDb?: number }> } | undefined;
+        expect(mixer?.buses?.find((bus) => bus.busId === 1)?.gainDb).toBe(-6);
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it('keeps the offline recording when the live capture reset is refused', async () => {
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => {
+              if ((message as { type?: unknown }).type === 'captureRequest') {
+                throw new Error('port closed');
+              }
+            },
+            onmessage: undefined,
+          }),
+      });
+      const offline = (engine as unknown as { offlineEngine: { resetCapture: () => void } })
+        .offlineEngine;
+      const reset = vi.spyOn(offline, 'resetCapture');
+      try {
+        await expect(engine.resetCapture()).rejects.toThrow('port closed');
+        expect(reset).not.toHaveBeenCalled();
+      } finally {
+        engine.destroy();
+      }
     });
   });
 });

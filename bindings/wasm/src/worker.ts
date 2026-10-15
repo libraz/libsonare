@@ -7,6 +7,7 @@
  * make ownership and `delete()` semantics unsound.
  */
 
+import { failurePayload } from './_failure_payload.js';
 import './lifetime.js';
 import { ErrorCode, SonareError } from './errors.js';
 import { init } from './index.js';
@@ -74,18 +75,7 @@ function transferableBuffers(value: unknown, seen = new Set<object>()): Transfer
 }
 
 function errorMessage(error: unknown): OfflineWorkerErrorMessage['error'] {
-  if (error instanceof SonareError) {
-    return {
-      name: error.name,
-      message: error.message,
-      code: error.code,
-      codeName: error.codeName,
-    };
-  }
-  if (error instanceof Error) {
-    return { name: error.name, message: error.message };
-  }
-  return { name: 'Error', message: String(error) };
+  return failurePayload(error);
 }
 
 function cancelledError(): SonareError {

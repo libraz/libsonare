@@ -257,27 +257,36 @@ describe('insert automation ids (WASM)', () => {
         }
       }
     };
+    // An unresolvable name throws RangeError on both engines; a resolved one must match by id.
+    const outcome = (resolve: () => number): number | 'refused' => {
+      try {
+        return resolve();
+      } catch (error) {
+        expect(error).toBeInstanceOf(RangeError);
+        return 'refused';
+      }
+    };
     const expectSameIds = () => {
       let resolved = 0;
       for (const slot of [0, 1]) {
         for (const key of ['levelDb', 'thresholdDb']) {
           const pairs = [
             ...[7, 8].map((track) => [
-              offline.resolveTrackInsertAutomationId(track, slot, key),
-              liveEngine.resolveTrackInsertAutomationId(track, slot, key),
+              outcome(() => offline.resolveTrackInsertAutomationId(track, slot, key)),
+              outcome(() => liveEngine.resolveTrackInsertAutomationId(track, slot, key)),
             ]),
             ...[100, 200].map((bus) => [
-              offline.resolveBusInsertAutomationId(bus, slot, key),
-              liveEngine.resolveBusInsertAutomationId(bus, slot, key),
+              outcome(() => offline.resolveBusInsertAutomationId(bus, slot, key)),
+              outcome(() => liveEngine.resolveBusInsertAutomationId(bus, slot, key)),
             ]),
             [
-              offline.resolveMasterInsertAutomationId(slot, key),
-              liveEngine.resolveMasterInsertAutomationId(slot, key),
+              outcome(() => offline.resolveMasterInsertAutomationId(slot, key)),
+              outcome(() => liveEngine.resolveMasterInsertAutomationId(slot, key)),
             ],
           ];
           for (const [mirror, worklet] of pairs) {
             expect(worklet).toBe(mirror);
-            if (mirror > 0) {
+            if (mirror !== 'refused') {
               resolved += 1;
             }
           }

@@ -1,3 +1,4 @@
+import { releasedHandleError } from './_handle_guard.js';
 import { ErrorCode, SonareError } from './errors.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -186,11 +187,7 @@ function module(): VocalWasmModule {
 
 function requireHandle(handle: number, subject: string): void {
   if (!Number.isSafeInteger(handle) || handle <= 0) {
-    throw new SonareError(
-      ErrorCode.InvalidState,
-      'InvalidState',
-      `${subject} has already been disposed`,
-    );
+    throw releasedHandleError(subject, 'has already been disposed');
   }
 }
 
@@ -273,6 +270,30 @@ function resolveRange(
   return { startSample, endSample };
 }
 
+/** Resolves one operation position, refusing an omitted one by name rather than reading it as 0. */
+function requiredOperationBound(
+  at: string,
+  sample: number | undefined,
+  sec: number | undefined,
+  sampleRate: number,
+  sampleName: string,
+  secName: string,
+): number {
+  const fn = 'VocalEditDraft.apply';
+  const value = resolveSampleBound(
+    fn,
+    sample,
+    sec,
+    sampleRate,
+    `${at}.${sampleName}`,
+    `${at}.${secName}`,
+  );
+  if (value === undefined) {
+    throw new TypeError(`${fn}: ${at}.${sampleName} or ${at}.${secName} is required`);
+  }
+  return value;
+}
+
 /**
  * Fold the seconds spellings of an operation's sample positions into the sample
  * fields the core reads. Operations that carry no seconds field pass through.
@@ -281,7 +302,6 @@ function resolveOperationTimes(
   operations: readonly VocalEditOperation[],
   sampleRate: number,
 ): readonly VocalEditOperation[] {
-  const fn = 'VocalEditDraft.apply';
   return operations.map((operation, index) => {
     const at = `operations[${index}]`;
     if (operation?.kind === 'setSourceSpan') {
@@ -292,8 +312,7 @@ function resolveOperationTimes(
         sec: number | undefined,
         sampleName: string,
         secName: string,
-      ) =>
-        resolveSampleBound(fn, sample, sec, sampleRate, `${at}.${sampleName}`, `${at}.${secName}`);
+      ) => requiredOperationBound(at, sample, sec, sampleRate, sampleName, secName);
       return {
         ...rest,
         sourceStartSample: bound(
@@ -326,13 +345,13 @@ function resolveOperationTimes(
       const { sourceSec, ...rest } = operation;
       return {
         ...rest,
-        sourceSample: resolveSampleBound(
-          fn,
+        sourceSample: requiredOperationBound(
+          at,
           rest.sourceSample,
           sourceSec,
           sampleRate,
-          `${at}.sourceSample`,
-          `${at}.sourceSec`,
+          'sourceSample',
+          'sourceSec',
         ),
       } as VocalEditOperation;
     }
@@ -601,11 +620,7 @@ export class VocalEditSession {
 
   private native(): number {
     if (this.disposed) {
-      throw new SonareError(
-        ErrorCode.InvalidState,
-        'InvalidState',
-        'session has already been disposed',
-      );
+      throw releasedHandleError('session', 'has already been disposed');
     }
     requireHandle(this.handle, 'session');
     return this.handle;
@@ -734,11 +749,7 @@ export class VocalEditDraft {
 
   private native(): number {
     if (this.disposed) {
-      throw new SonareError(
-        ErrorCode.InvalidState,
-        'InvalidState',
-        'draft has already been disposed',
-      );
+      throw releasedHandleError('draft', 'has already been disposed');
     }
     requireHandle(this.handle, 'draft');
     return this.handle;
@@ -858,11 +869,7 @@ export class VocalRenderSnapshot {
 
   private native(): number {
     if (this.disposed) {
-      throw new SonareError(
-        ErrorCode.InvalidState,
-        'InvalidState',
-        'snapshot has already been disposed',
-      );
+      throw releasedHandleError('snapshot', 'has already been disposed');
     }
     requireHandle(this.handle, 'snapshot');
     return this.handle;
@@ -974,11 +981,7 @@ export class VocalRenderJob {
 
   private native(): number {
     if (this.disposed) {
-      throw new SonareError(
-        ErrorCode.InvalidState,
-        'InvalidState',
-        'render job has already been disposed',
-      );
+      throw releasedHandleError('render job', 'has already been disposed');
     }
     requireHandle(this.handle, 'render job');
     return this.handle;

@@ -49,6 +49,10 @@ void RealtimeEngineWasm::setCapturePunch(int64_t start_sample, int64_t end_sampl
   if (start_sample < 0 || end_sample < start_sample) {
     throw WasmRangeError("capture punch range must satisfy 0 <= start <= end");
   }
+  // An enabled empty window would read as "no punch" and record everything.
+  if (enabled && end_sample == start_sample) {
+    throw WasmRangeError("an enabled capture punch window must satisfy start < end");
+  }
   engine_.set_capture_punch(start_sample, end_sample, enabled);
 }
 void RealtimeEngineWasm::setCaptureSource(val source) {

@@ -1,3 +1,4 @@
+import { releasedHandleError } from './_handle_guard.js';
 import './lifetime.js';
 import { init } from './index.js';
 import type {
@@ -757,7 +758,7 @@ export function installVocalEditWorkerEndpoint(
     if (active) {
       active.cancelled = true;
     }
-    rejectQueuedCommands(endpoint, session, new Error('Vocal session disposed'));
+    rejectQueuedCommands(endpoint, session, releasedHandleError('Vocal session', 'disposed'));
     session.released = (async (): Promise<void> => {
       while (session.draining) {
         await nextMacrotask();

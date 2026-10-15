@@ -8,15 +8,19 @@ import type { SonareEngineCommandRecord } from './protocol.js';
  * edit leaves the mirror, the caches and the worklet exactly as they were.
  *
  * A command edit is refused (returns false) before anything changes when the
- * live engine has no room for the command; the offline engine then validates
- * and applies it, and the command is queued last. A sync edit lets the offline
- * engine validate first; the caches and the posted message follow only if it
- * accepted.
+ * live engine would not take the command — a record outside the wire domain,
+ * or no room for it; the offline engine then validates and applies it, and the
+ * command is queued last. A destroyed engine throws `InvalidState` instead. A
+ * sync edit lets the offline engine validate first; the caches and the posted
+ * message follow only if it accepted.
  */
 export interface EngineCommitContext {
   readonly offlineEngine: RealtimeEngine;
-  /** Whether the live engine could queue one more command now; queues nothing. */
-  hasCommandRoom(): boolean;
+  /**
+   * Whether the live engine would accept `command` now; queues nothing.
+   * @throws SonareError `InvalidState` once the engine is destroyed.
+   */
+  canSend(command: SonareEngineCommandRecord): boolean;
   /** Queues `command` live, then applies due commands on the offline mirror. */
   sendCommand(command: SonareEngineCommandRecord): boolean;
 }
@@ -28,12 +32,12 @@ export function commitCommand(
   applyOffline: (offline: RealtimeEngine) => void,
   commitCache?: () => void,
 ): boolean {
-  if (!ctx.hasCommandRoom()) {
+  if (!ctx.canSend(command)) {
     return false;
   }
   applyOffline(ctx.offlineEngine);
   commitCache?.();
-  // The main thread is the only producer, so the room checked above is still there.
+  // The main thread is the only producer, so what was checked above still holds.
   return ctx.sendCommand(command);
 }
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ErrorCode } from '../src/errors';
 import type { RealtimeEngine } from '../src/index';
 import { SonareEngine } from '../src/worklet/engine';
 import {
@@ -190,16 +191,44 @@ describe('strip state retention', () => {
     );
   });
 
-  it('matches scene_from_json by ignoring non-object strip and insert entries', () => {
-    const withNoise = JSON.stringify({
-      version: 1,
-      strips: [null, { id: 'track-10', inserts: [null, { processor: 'delay' }, []] }],
-      buses: [],
-      connections: [],
-    });
-    expect(decodedInsertSignature(withNoise, trackTarget)).toBe(
-      decodedInsertSignature(scene([{ processor: 'delay' }]), trackTarget),
-    );
+  it('refuses non-object entries and wrong-typed containers as scene_from_json does', () => {
+    const document = (strips: unknown) =>
+      JSON.stringify({ version: 1, strips, buses: [], connections: [] });
+    const refusals: [unknown, RegExp][] = [
+      [
+        [null, { id: 'track-10', inserts: [{ processor: 'delay' }] }],
+        /strips\[0\] must be an object/,
+      ],
+      [
+        [{ id: 'track-10', inserts: [null, { processor: 'delay' }] }],
+        /inserts\[0\] must be an object/,
+      ],
+      [
+        [{ id: 'track-10', inserts: [{ processor: 'delay' }, []] }],
+        /inserts\[1\] must be an object/,
+      ],
+      [[{ id: 'track-10', inserts: { processor: 'delay' } }], /inserts must be an array/],
+      [[{ id: 'track-10', inserts: null }], /inserts must be an array/],
+      [{ id: 'track-10' }, /strips must be an array/],
+    ];
+    for (const [strips, message] of refusals) {
+      let caught: unknown;
+      try {
+        decodedInsertSignature(document(strips), trackTarget);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toMatchObject({ code: ErrorCode.InvalidFormat, codeName: 'InvalidFormat' });
+      expect((caught as Error).message).toMatch(message);
+    }
+    // Absent containers are empty, as in the core reader.
+    expect(decodedInsertSignature(document([{ id: 'track-10' }]), trackTarget)).toBe('[]');
+    expect(
+      decodedInsertSignature(
+        JSON.stringify({ version: 1, buses: [], connections: [] }),
+        trackTarget,
+      ),
+    ).toBe('[]');
   });
 
   it('does not settle active insert ramps during a scalar mixer sync', () => {

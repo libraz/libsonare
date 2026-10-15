@@ -45,7 +45,7 @@ val ProjectWasm::importExternalStems(val request) {
     const uint32_t layout = checkedUintFromVal(stem["layout"], "layout");
     const size_t channels = channel_count(layout);
     const val source_planes = stem["planarSamples"];
-    if (channels == 0 || source_planes["length"].as<size_t>() != channels) {
+    if (channels == 0 || wasmArrayLikeLength(source_planes, "planarSamples") != channels) {
       throw WasmRangeError("planarSamples must match mono or stereo layout");
     }
     names.push_back(stem["name"].as<std::string>());

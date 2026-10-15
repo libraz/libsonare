@@ -1,10 +1,11 @@
-import { RealtimeEngine } from '../dist/index.js';
+import { ErrorCode, RealtimeEngine, SonareError } from '../dist/index.js';
 import type { SonareWorkletMeterSnapshot } from '../src/worklet/protocol';
 import {
   createSonareMeterRingBuffer,
   describe,
   expect,
   it,
+  SonareRealtimeEngineNode,
   SonareRealtimeEngineWorkletProcessor,
   setupWorklet,
 } from './_worklet_helpers';
@@ -185,7 +186,74 @@ describe('insert gain reduction query', () => {
         ok: false,
       });
       expect((posted.at(-1) as { error?: string }).error).toEqual(expect.any(String));
+      expect(posted.at(-1)).toMatchObject({ failure: { name: 'RangeError' } });
     } finally {
+      processor.destroy();
+    }
+  });
+
+  it('keeps a library failure coded across the port on every request path', async () => {
+    const posted: unknown[] = [];
+    const processor = new SonareRealtimeEngineWorkletProcessor(
+      { sampleRate: 48000, blockSize: BLOCK, channelCount: 2 },
+      { postMessage: (message) => posted.push(message) },
+    );
+    const port: {
+      postMessage: (message: unknown) => void;
+      onmessage?: ((event: MessageEvent<unknown>) => void) | null;
+    } = {
+      // Route each request into the processor and its reply back, as the port would.
+      postMessage: (message) => {
+        const request = message as { type: string };
+        if (request.type === 'insertGainReductionRequest') {
+          processor.receiveInsertGainReductionRequest(message as never);
+        } else if (request.type === 'transportRequest') {
+          processor.receiveTransportRequest(message as never);
+        } else if (request.type === 'captureRequest') {
+          processor.receiveCaptureRequest(message as never);
+        } else {
+          return;
+        }
+        port.onmessage?.({ data: posted.at(-1) } as MessageEvent<unknown>);
+      },
+    };
+    const node = await SonareRealtimeEngineNode.create(
+      { sampleRate: 48000, audioWorklet: { addModule: () => Promise.resolve() } } as never,
+      {
+        mode: 'postMessage',
+        nodeFactory: () => {
+          queueMicrotask(() =>
+            port.onmessage?.({ data: { type: 'ready', runtimeTarget: 'embind' } } as never),
+          );
+          return { port, disconnect: () => undefined } as unknown as AudioWorkletNode;
+        },
+      },
+    );
+    try {
+      await node.ready;
+      const engine = (processor as unknown as { engine: Record<string, unknown> }).engine;
+      const notSupported = () => {
+        throw new SonareError(ErrorCode.NotSupported, 'NotSupported', 'not compiled in');
+      };
+      // An argument refusal keeps its class.
+      await expect(node.pollInsertGainReduction(41)).rejects.toBeInstanceOf(RangeError);
+      engine.meterTargetInsertGainReduction = notSupported;
+      engine.getTransportState = notSupported;
+      engine.captureStatus = notSupported;
+      for (const request of [
+        () => node.pollInsertGainReduction(LANE_TARGET),
+        () => node.requestTransportState(),
+        () => node.requestCaptureStatus(),
+      ]) {
+        await expect(request()).rejects.toMatchObject({
+          name: 'SonareError',
+          code: ErrorCode.NotSupported,
+          codeName: 'NotSupported',
+          message: 'not compiled in',
+        });
+      }
+    } finally {
+      node.destroy();
       processor.destroy();
     }
   });

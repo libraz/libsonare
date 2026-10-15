@@ -1,4 +1,5 @@
-import { ErrorCode, SonareError } from './errors.js';
+import { releasedHandleError } from './_handle_guard.js';
+import { SonareError } from './errors.js';
 import type {
   VocalAnalysis,
   VocalApplyRequest,
@@ -348,7 +349,7 @@ export class VocalEditWorkerClient {
     }
     for (const [, pending] of pendingEntries) {
       pending.abortListener && pending.signal?.removeEventListener('abort', pending.abortListener);
-      pending.reject(new Error('VocalEditWorkerClient was disposed'));
+      pending.reject(releasedHandleError('VocalEditWorkerClient', 'was disposed'));
     }
     this.pending.clear();
     this.sessions.clear();
@@ -473,11 +474,7 @@ export class VocalEditWorkerClient {
     session?: VocalEditWorkerSession,
   ): VocalEditWorkerTask<{ result: T; token?: VocalStateToken }> {
     if (this.closed) {
-      throw new SonareError(
-        ErrorCode.InvalidState,
-        'InvalidState',
-        'VocalEditWorkerClient was disposed',
-      );
+      throw releasedHandleError('VocalEditWorkerClient', 'was disposed');
     }
     const id = this.nextId++;
     const transfers: Transferable[] = [];
@@ -833,11 +830,7 @@ export class VocalEditWorkerSession {
 
   private requireAlive(): void {
     if (this.disposed) {
-      throw new SonareError(
-        ErrorCode.InvalidState,
-        'InvalidState',
-        'vocal Worker session has already been disposed',
-      );
+      throw releasedHandleError('vocal Worker session', 'has already been disposed');
     }
   }
 }

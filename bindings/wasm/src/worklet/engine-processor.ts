@@ -1,3 +1,4 @@
+import { failurePayload } from '../_failure_payload.js';
 import type { EngineClip } from '../index.js';
 import { RealtimeEngine } from '../index.js';
 import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types.js';
@@ -110,6 +111,10 @@ export class SonareRealtimeEngineWorkletProcessor {
   private engine: RealtimeEngine;
   private closed = false;
   private commandRing?: SonareEngineCommandRingBuffer;
+  /** Sequence number of the last control sync received; SAB commands wait for theirs. */
+  private syncSequence = 0;
+  /** A ring command popped ahead of the sync it follows, applied once that sync arrives. */
+  private heldCommand: SonareEngineCommandRecord | undefined;
   private telemetryRing?: SonareEngineTelemetryRingBuffer;
   private meterRing?: SharedMeterRingWriter;
   private scopeRing?: SharedScopeRingWriter;
@@ -382,7 +387,18 @@ export class SonareRealtimeEngineWorkletProcessor {
         type: 'syncError',
         syncType: message.type,
         message: error instanceof Error ? error.message : String(error),
+        failure: failurePayload(error),
       });
+    } finally {
+      // A refused sync still counts: the commands posted after it must not wait forever.
+      this.noteSyncSequence((message as { syncSequence?: unknown }).syncSequence);
+    }
+  }
+
+  /** Records the sequence number a posted sync carried; a sync without one changes nothing. */
+  noteSyncSequence(sequence: unknown): void {
+    if (typeof sequence === 'number' && Number.isInteger(sequence) && sequence >= 0) {
+      this.syncSequence = sequence >>> 0;
     }
   }
 
@@ -576,7 +592,9 @@ export class SonareRealtimeEngineWorkletProcessor {
         // the normal 64-per-render budget cannot enter native after the strip
         // replacement has invalidated its target.
         if (this.commandRing) {
-          this.drainCommands(pendingSonareEngineCommandCount(this.commandRing));
+          this.drainCommands(
+            pendingSonareEngineCommandCount(this.commandRing) + (this.heldCommand ? 1 : 0),
+          );
         }
         // Complete earlier immediate edits in message order. Scheduled
         // commands remain queued for their render frame.
@@ -995,6 +1013,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         requestId: message.requestId,
         ok: false,
         error: error instanceof Error ? error.message : String(error),
+        failure: failurePayload(error),
       } satisfies SonareEngineCaptureResponseMessageInternal);
     }
   }
@@ -1016,6 +1035,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         requestId: message.requestId,
         ok: false,
         error: error instanceof Error ? error.message : String(error),
+        failure: failurePayload(error),
       } satisfies SonareEngineTransportResponseMessage);
     }
   }
@@ -1037,6 +1057,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         requestId: message.requestId,
         ok: false,
         error: error instanceof Error ? error.message : String(error),
+        failure: failurePayload(error),
       } satisfies SonareEngineInsertGainReductionResponseMessage);
     }
   }
@@ -1054,10 +1075,16 @@ export class SonareRealtimeEngineWorkletProcessor {
       return;
     }
     for (let i = 0; i < limit; i++) {
-      const command = popSonareEngineCommandRingBuffer(this.commandRing);
+      const command = this.heldCommand ?? popSonareEngineCommandRingBuffer(this.commandRing);
       if (!command) {
         return;
       }
+      // Serial-number order, so the comparison survives the uint32 sequence wrapping.
+      if ((((command.syncSequence ?? 0) - this.syncSequence) | 0) > 0) {
+        this.heldCommand = command;
+        return;
+      }
+      this.heldCommand = undefined;
       this.safeApplyCommand(command);
     }
   }
@@ -1114,22 +1141,24 @@ export class SonareRealtimeEngineWorkletProcessor {
       case SonareEngineCommandType.SetLoop:
         this.engine.setLoop(
           Number(command.argFloat ?? 0),
-          Number(command.argInt ?? 0) / 1_000_000,
+          Number(command.argFloat2 ?? 0),
           command.targetId !== 0,
         );
         break;
       case SonareEngineCommandType.ArmRecord:
         this.engine.armCapture(Boolean(command.argInt));
         break;
-      case SonareEngineCommandType.Punch:
+      case SonareEngineCommandType.Punch: {
         // Both endpoints already arrive as samples (see SonareEngine.punch);
-        // do NOT re-scale by sampleRate.
-        this.engine.setCapturePunch(
-          Number(command.argInt ?? 0),
-          Math.max(0, Math.round(Number(command.argFloat ?? 0))),
-          true,
-        );
+        // do NOT re-scale by sampleRate. A fractional or negative out point is
+        // refused (reported as InvalidCommand telemetry), never rounded.
+        const outSample = Number(command.argFloat ?? 0);
+        if (!Number.isSafeInteger(outSample) || outSample < 0) {
+          throw new RangeError('Punch out sample must be a non-negative integer');
+        }
+        this.engine.setCapturePunch(Number(command.argInt ?? 0), outSample, true);
         break;
+      }
       case SonareEngineCommandType.SetMetronome:
         // Metronome config (beatGain/accentGain/clickSamples/clickSeconds) is
         // delivered out-of-band via the 'syncMetronome' message so it carries

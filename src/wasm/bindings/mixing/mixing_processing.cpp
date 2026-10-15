@@ -237,7 +237,9 @@ bool MixerWasm::latchMeterSnapshot() {
 }
 
 float MixerWasm::meterScratchValue(const val& field) const {
-  switch (checkedIntFromVal(field, "field")) {
+  const int index = checkedIntFromVal(field, "field");
+  requireOrdinalInRange(index, 0, 6, "field");
+  switch (index) {
     case 0:
       return meter_scratch_.peak_db[0];
     case 1:
@@ -250,10 +252,8 @@ float MixerWasm::meterScratchValue(const val& field) const {
       return meter_scratch_.correlation;
     case 5:
       return meter_scratch_.true_peak_db[0];
-    case 6:
-      return meter_scratch_.true_peak_db[1];
     default:
-      return 0.0f;
+      return meter_scratch_.true_peak_db[1];
   }
 }
 

@@ -491,7 +491,7 @@ val js_waveform_peak_pyramid(val samples, const val& channels_val, val js_levels
   const size_t n = wasmArrayLikeLength(js_levels, "waveformPeakPyramid levels");
   levels.reserve(n);
   for (size_t i = 0; i < n; ++i) {
-    levels.push_back(js_levels[i].as<size_t>());
+    levels.push_back(checkedUintFromVal(js_levels[i], "waveformPeakPyramid levels[i]"));
   }
   // Reject a length that is not a whole number of interleaved frames instead of
   // silently dropping a trailing partial frame (matches the Node/Python facades,

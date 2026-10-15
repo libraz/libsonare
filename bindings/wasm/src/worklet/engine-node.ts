@@ -1,3 +1,5 @@
+import { failureFromPayload, isFailurePayload } from '../_failure_payload.js';
+import { assertHandleLive, releasedHandleError } from '../_handle_guard.js';
 import { ErrorCode, SonareError } from '../errors.js';
 import type { EngineCaptureStatus, EngineTransportState } from '../index.js';
 import { engineCapabilities } from '../index.js';
@@ -24,6 +26,7 @@ import type {
   SonareEngineCaptureResponseMessageInternal,
   SonareEngineClipPageRequestMessage,
   SonareEngineSyncErrorMessage,
+  SonareEngineSyncMessage,
   SonareEngineTransportResponseMessage,
   SonareRealtimeEngineNodeCapabilities,
   SonareRealtimeEngineNodeOptions,
@@ -45,6 +48,7 @@ import {
   readSonareExternalMidiRingBuffer,
   readSonareMeterRingBuffer,
   readSonareScopeRingBuffer,
+  SONARE_MAX_PUBLIC_PPQ,
   type SonareClipPageRequestRingBuffer,
   type SonareEngineCommandRecord,
   type SonareEngineCommandRingBuffer,
@@ -59,11 +63,18 @@ import {
   sonareEngineCommandRingHasRoom,
 } from './protocol.js';
 
+// The record writer stores 64-bit lanes as safe integers, so a bigint past that range is refused.
 function isFiniteInteger(value: number | bigint | undefined): boolean {
   if (value === undefined) {
     return true;
   }
-  return typeof value === 'bigint' || (Number.isFinite(value) && Number.isSafeInteger(value));
+  return Number.isSafeInteger(typeof value === 'bigint' ? Number(value) : value);
+}
+
+function isPublicPpq(value: number | undefined): boolean {
+  return (
+    value !== undefined && Number.isFinite(value) && value >= 0 && value <= SONARE_MAX_PUBLIC_PPQ
+  );
 }
 
 function isTrackMonitorMode(value: number | bigint | undefined): boolean {
@@ -93,10 +104,35 @@ function isValidCommandRecord(command: SonareEngineCommandRecord): boolean {
     (command.argFloat === undefined || Number.isFinite(command.argFloat)) &&
     isFiniteInteger(command.argInt) &&
     isFiniteInteger(command.sampleTime) &&
+    (command.syncSequence === undefined || isUint32Slot(command.syncSequence)) &&
     // A track-monitor command cannot infer a lane: its target is required.
     (type !== SonareEngineCommandType.SetTrackMonitorMode ||
-      (isUint32Slot(command.targetId) && isTrackMonitorMode(command.argInt)))
+      (isUint32Slot(command.targetId) && isTrackMonitorMode(command.argInt))) &&
+    // The live engine refuses a negative position and a PPQ outside the public range.
+    (type !== SonareEngineCommandType.TransportSeekSample || Number(command.argInt ?? 0) >= 0) &&
+    (type !== SonareEngineCommandType.TransportSeekPpq || isPublicPpq(command.argFloat)) &&
+    // A punch window carries whole samples: in in argInt, out in argFloat, 0 <= in <= out.
+    (type !== SonareEngineCommandType.Punch ||
+      (Number(command.argInt ?? 0) >= 0 &&
+        Number.isSafeInteger(command.argFloat ?? 0) &&
+        (command.argFloat ?? 0) >= Number(command.argInt ?? 0))) &&
+    (type !== SonareEngineCommandType.SetLoop ||
+      (command.argInt === undefined &&
+        isPublicPpq(command.argFloat) &&
+        isPublicPpq(command.argFloat2)))
   );
+}
+
+/** Rebuilds the error a worklet reply described, keeping a SonareError's code and class. */
+function workletFailure(
+  data: { failure?: unknown; error?: unknown; message?: unknown },
+  fallback = 'AudioWorklet request failed',
+  messageKey: 'error' | 'message' = 'error',
+): Error {
+  if (isFailurePayload(data.failure)) {
+    return failureFromPayload(data.failure);
+  }
+  return new Error(String(data[messageKey] ?? fallback));
 }
 
 const AUDIO_WORKLET_RENDER_QUANTUM = 128;
@@ -162,6 +198,8 @@ export class SonareRealtimeEngineNode {
   private resolveReady!: () => void;
   private rejectReady!: (reason?: unknown) => void;
   private readonly epoch = new OwnerEpoch('Realtime engine node');
+  /** Sequence number of the last sync posted; SAB ring commands carry it. */
+  private syncSequence = 0;
 
   private constructor(
     node: AudioWorkletNode,
@@ -193,11 +231,7 @@ export class SonareRealtimeEngineNode {
     this.ready.catch(() => undefined);
     this.epoch.onClose(() =>
       this.rejectReady(
-        new SonareError(
-          ErrorCode.InvalidState,
-          'InvalidState',
-          'Realtime engine node was destroyed before it became ready.',
-        ),
+        releasedHandleError('Realtime engine node', 'was destroyed before it became ready.'),
       ),
     );
     this.node.port.onmessage = (event: MessageEvent<unknown>) => {
@@ -219,7 +253,7 @@ export class SonareRealtimeEngineNode {
           } else if (event.data.ok) {
             pending.resolve(event.data);
           } else {
-            pending.reject(new Error(event.data.error));
+            pending.reject(workletFailure(event.data));
           }
         }
       } else if (isEngineTransportResponseMessage(event.data)) {
@@ -229,7 +263,7 @@ export class SonareRealtimeEngineNode {
           if (event.data.ok) {
             pending.resolve(event.data);
           } else {
-            pending.reject(new Error(event.data.error ?? 'Transport request failed'));
+            pending.reject(workletFailure(event.data, 'Transport request failed'));
           }
         }
       } else if (isEngineInsertGainReductionResponseMessage(event.data)) {
@@ -239,7 +273,7 @@ export class SonareRealtimeEngineNode {
           if (event.data.ok && Array.isArray(event.data.values)) {
             pending.resolve(event.data.values);
           } else {
-            pending.reject(new Error(event.data.error ?? 'Insert gain reduction request failed'));
+            pending.reject(workletFailure(event.data, 'Insert gain reduction request failed'));
           }
         }
       } else if (isEngineTelemetryRecord(event.data)) {
@@ -257,6 +291,7 @@ export class SonareRealtimeEngineNode {
           type: 'syncError',
           syncType: String(event.data.syncType),
           message: String(event.data.message ?? 'AudioWorklet sync failed'),
+          ...(isFailurePayload(event.data.failure) ? { failure: event.data.failure } : {}),
         };
         for (const listener of this.syncErrorListeners) {
           listener(syncError);
@@ -264,7 +299,7 @@ export class SonareRealtimeEngineNode {
       } else if (isRecord(event.data) && event.data.type === 'ready') {
         this.resolveReady();
       } else if (isRecord(event.data) && event.data.type === 'error') {
-        this.rejectReady(new Error(String(event.data.message ?? 'AudioWorklet error')));
+        this.rejectReady(workletFailure(event.data, 'AudioWorklet error', 'message'));
       }
     };
   }
@@ -509,7 +544,8 @@ export class SonareRealtimeEngineNode {
 
   seekPpq(ppq: number, sampleTime?: number): boolean {
     const frame = resolveRenderFrame('seekPpq', sampleTime);
-    if (!Number.isFinite(ppq) || !Number.isSafeInteger(frame)) {
+    if (!isPublicPpq(ppq) || !Number.isSafeInteger(frame)) {
+      this.assertOpen();
       return false;
     }
     return this.sendCommand({
@@ -519,22 +555,59 @@ export class SonareRealtimeEngineNode {
     });
   }
 
-  /** Whether the node could queue one more well-formed command now; queues nothing. */
-  hasCommandRoom(): boolean {
+  /**
+   * Whether the node would queue `command` now: a well-formed record and room
+   * for it. Queues nothing.
+   * @throws SonareError `InvalidState` once the node is destroyed.
+   */
+  canSendCommand(command: SonareEngineCommandRecord): boolean {
+    this.assertOpen();
     return (
-      !this.epoch.closed && (!this.commandRing || sonareEngineCommandRingHasRoom(this.commandRing))
+      isValidCommandRecord(command) &&
+      (!this.commandRing || sonareEngineCommandRingHasRoom(this.commandRing))
     );
   }
 
+  /**
+   * Queues `command` live; false when the record is malformed or the ring is full.
+   * @throws SonareError `InvalidState` once the node is destroyed.
+   */
   sendCommand(command: SonareEngineCommandRecord): boolean {
-    if (this.epoch.closed || !isValidCommandRecord(command)) {
+    this.assertOpen();
+    if (!isValidCommandRecord(command)) {
       return false;
     }
     if (this.commandRing) {
-      return pushSonareEngineCommandRingBuffer(this.commandRing, command);
+      // The ring and the port are unordered, so the record names the last sync it follows.
+      return pushSonareEngineCommandRingBuffer(this.commandRing, {
+        ...command,
+        syncSequence: this.syncSequence,
+      });
     }
     this.node.port.postMessage(command);
     return true;
+  }
+
+  /**
+   * Posts a control-plane sync to the worklet. On the SAB ring a later command
+   * is held on the audio thread until this sync has been applied, so it always
+   * observes it; over the port, message order already guarantees that.
+   * @throws SonareError `InvalidState` once the node is destroyed.
+   */
+  postSync(message: SonareEngineSyncMessage, transfer?: Transferable[]): void {
+    this.assertOpen();
+    const syncSequence = (this.syncSequence + 1) >>> 0;
+    const posted = this.commandRing ? { ...message, syncSequence } : message;
+    if (transfer && transfer.length > 0) {
+      this.node.port.postMessage(posted, transfer);
+    } else {
+      this.node.port.postMessage(posted);
+    }
+    this.syncSequence = syncSequence;
+  }
+
+  private assertOpen(): void {
+    assertHandleLive(this.epoch.closed, 'Realtime engine node');
   }
 
   requestCaptureStatus(): Promise<EngineCaptureStatus> {
@@ -731,15 +804,15 @@ export class SonareRealtimeEngineNode {
     }
     this.node.disconnect();
     for (const pending of this.captureRequests.values()) {
-      pending.reject(new Error('Realtime engine node is destroyed.'));
+      pending.reject(releasedHandleError('Realtime engine node', 'is destroyed.'));
     }
     this.captureRequests.clear();
     for (const pending of this.transportRequests.values()) {
-      pending.reject(new Error('Realtime engine node is destroyed.'));
+      pending.reject(releasedHandleError('Realtime engine node', 'is destroyed.'));
     }
     this.transportRequests.clear();
     for (const pending of this.insertGainReductionRequests.values()) {
-      pending.reject(new Error('Realtime engine node is destroyed.'));
+      pending.reject(releasedHandleError('Realtime engine node', 'is destroyed.'));
     }
     this.insertGainReductionRequests.clear();
     this.telemetryListeners.clear();
@@ -822,7 +895,7 @@ export class SonareRealtimeEngineNode {
    */
   pollInsertGainReduction(targetId: number): Promise<number[]> {
     if (this.epoch.closed) {
-      return Promise.reject(new Error('Realtime engine node is destroyed.'));
+      return Promise.reject(releasedHandleError('Realtime engine node', 'is destroyed.'));
     }
     const requestId = this.insertGainReductionRequestId++;
     let rejectRequest!: (reason?: unknown) => void;
@@ -849,7 +922,7 @@ export class SonareRealtimeEngineNode {
     op: SonareEngineCaptureRequestMessage['op'],
   ): Promise<SonareEngineCaptureResponseMessageInternal> {
     if (this.epoch.closed) {
-      return Promise.reject(new Error('Realtime engine node is destroyed.'));
+      return Promise.reject(releasedHandleError('Realtime engine node', 'is destroyed.'));
     }
     const requestId = this.captureRequestId++;
     let rejectRequest!: (reason?: unknown) => void;
@@ -868,7 +941,7 @@ export class SonareRealtimeEngineNode {
 
   private sendTransportRequest(): Promise<SonareEngineTransportResponseMessage> {
     if (this.epoch.closed) {
-      return Promise.reject(new Error('Realtime engine node is destroyed.'));
+      return Promise.reject(releasedHandleError('Realtime engine node', 'is destroyed.'));
     }
     const requestId = this.transportRequestId++;
     const promise = new Promise<SonareEngineTransportResponseMessage>((resolve, reject) => {

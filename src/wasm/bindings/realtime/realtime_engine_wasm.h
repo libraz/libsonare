@@ -36,6 +36,9 @@ class WasmClipPageProvider;
 // shared with the C ABI and other bindings; conversion is a direct cast.
 sonare::automation::CurveType automationCurveFromInt(int curve);
 int automationCurveToInt(sonare::automation::CurveType curve);
+// Returns a resolved automation id as a double (the full uint32 range survives
+// the JS boundary); an unresolvable target or name is a RangeError, never -1.
+double resolvedAutomationId(int64_t id, const std::string& param_name);
 
 class RealtimeEngineWasm {
  public:

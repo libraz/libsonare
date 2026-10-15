@@ -1,3 +1,4 @@
+import { failurePayload } from '../_failure_payload.js';
 import type { WorkletInput, WorkletOutput } from './audio_types.js';
 import { initializeEmbindInWorklet } from './embind-init.js';
 import { SonareRealtimeEngineWorkletProcessor } from './engine-processor.js';
@@ -93,6 +94,7 @@ export function registerSonareRealtimeEngineWorkletProcessor(
           syncType: data.type,
           message: `Unrecognized worklet sync message: ${data.type}`,
         });
+        bridge.noteSyncSequence(data.syncSequence);
       }
     }
 
@@ -128,6 +130,7 @@ export function registerSonareRealtimeEngineWorkletProcessor(
         port?.postMessage?.({
           type: 'error',
           message: error instanceof Error ? error.message : String(error),
+          failure: failurePayload(error),
         });
       }
     }

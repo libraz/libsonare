@@ -648,6 +648,18 @@ describe('v1.2 feature additions (WASM)', () => {
       ).toThrow(RangeError);
     });
 
+    it('voiceChange refuses factors 0, -2, 10 and NaN as RangeError in both formant modes', () => {
+      for (const formantMode of ['relative', 'absolute'] as const) {
+        // The control: an in-range factor is accepted in this mode.
+        expect(voiceChange(signal, SR, { formantFactor: 1.1, formantMode }).length).toBe(
+          signal.length,
+        );
+        for (const formantFactor of [0, -2, 10, Number.NaN]) {
+          expect(() => voiceChange(signal, SR, { formantFactor, formantMode })).toThrow(RangeError);
+        }
+      }
+    });
+
     it('voiceChange preserves length and level', () => {
       const out = voiceChange(signal, SR, { pitchSemitones: 2, formantFactor: 1.1 });
       expect(out).toBeInstanceOf(Float32Array);

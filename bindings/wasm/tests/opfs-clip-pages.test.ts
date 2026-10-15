@@ -217,6 +217,29 @@ describe('createOpfsClipPageProvider', () => {
     }
   });
 
+  it('rejects a pending read and a later supplyPage with InvalidState once closed', async () => {
+    const engine = new RealtimeEngine(48000, 8);
+    const worker = new DeferredClipPageWorker();
+    const binding = createOpfsClipPageProvider(engine, {
+      path: 'clips/closing.f32',
+      numChannels: 1,
+      numSamples: 8,
+      pageFrames: 4,
+      worker: worker as never,
+    });
+    const invalidState = expect.objectContaining({ name: 'SonareError', code: 7 });
+    try {
+      const pending = binding.supplyPage(0);
+      await settle();
+      binding.close();
+      await expect(pending).rejects.toEqual(invalidState);
+      await expect(binding.supplyPage(1)).rejects.toEqual(invalidState);
+    } finally {
+      binding.close();
+      engine.destroy();
+    }
+  });
+
   it('refuses an offline render that would read a page no one supplied', async () => {
     const engine = new RealtimeEngine(48000, 8);
     const worker = new FakeClipPageWorker();

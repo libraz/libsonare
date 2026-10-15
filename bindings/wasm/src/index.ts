@@ -34,9 +34,15 @@ import type {
 } from './public_types.js';
 import type {
   SonareModule,
+  WasmCyclicTempogramResult,
   WasmDecomposeResult,
+  WasmFourierTempogramResult,
+  WasmFrameResult,
   WasmHpssWithResidualResult,
   WasmMatrix2dResult,
+  WasmNnlsChromaResult,
+  WasmTempogramResult,
+  WasmTrimResult,
 } from './sonare.js';
 
 export { EXPECTED_ABI_VERSION } from './abi.js';
@@ -516,6 +522,7 @@ export type {
   MeteringStereoRequest,
   MeteringTruePeakRequest,
   PhaseScopeReport,
+  ScopeOptions,
   SpectrumOptions,
   SpectrumReport,
   VectorscopeReport,
@@ -614,17 +621,21 @@ export type {
   ProjectClipTake,
   ProjectCompileResult,
   ProjectCompileTimelineResult,
+  ProjectDeserializeResult,
   ProjectFadeCurve,
   ProjectKeySegment,
   ProjectLoopMode,
   ProjectLoopRecordingDesc,
   ProjectLoopRecordingResult,
   ProjectMarker,
+  ProjectMidiCcBinding,
   ProjectMidiClipResult,
   ProjectMidiEvent,
   ProjectMidiFxBakeRequest,
   ProjectMidiFxBakeResult,
   ProjectMidiFxPreviewRequest,
+  ProjectMidiRouteConfig,
+  ProjectMidiRouteResult,
   ProjectNotePairValidation,
   ProjectSource,
   ProjectTempoCandidate,
@@ -812,6 +823,7 @@ export type {
   MelodyResult,
   MelPowerResult,
   MelSpectrogramResult,
+  MeterEstimate,
   MeterTap,
   MfccResult,
   MixAnalysisBand,
@@ -841,6 +853,7 @@ export type {
   NoteEdit,
   NoteEditInput,
   NoteExtractorOptions,
+  NoteMoveOptions,
   NoteObject,
   NoteObjectInput,
   NoteSegment,
@@ -849,6 +862,7 @@ export type {
   NoteTarget,
   NoteTargetAssignResult,
   NoteTargetUnmatchedPolicy,
+  OnsetStrengthMultiResult,
   PairAnalysis,
   PairAnalysisResultMap,
   PairProcessor,
@@ -860,6 +874,7 @@ export type {
   PercussiveEventEdit,
   PercussiveEventEditInput,
   PercussiveEventInput,
+  PiptrackResult,
   PitchClassName,
   PitchCorrectOptions,
   PitchDecompositionResult,
@@ -884,6 +899,7 @@ export type {
   PolyphonicRenderOptions,
   RealtimeVoiceChangerConfigInput,
   RealtimeVoiceChangerPodConfig,
+  ReassignedSpectrogramResult,
   RenderPlaybackRequest,
   RenderPlaybackResult,
   ReverbDetection,
@@ -926,6 +942,7 @@ export type {
   StreamingMasteringChainConfig,
   StreamingPlatform,
   StreamingRetuneConfig,
+  SurroundPan,
   TempogramMode,
   Timbre,
   TimeSignature,
@@ -964,7 +981,9 @@ export type {
   DynamicsResult,
   EstimateMeterRequest,
   EstimateRoomRequest,
+  MusicAnalyzeOptions,
   MusicAnalyzeRequest,
+  OnsetDetectOptions,
   RhythmAnalysisResult,
   RoomGeometryEstimate,
   RoomGeometryFromEstimateRequest,
@@ -1021,6 +1040,7 @@ export type {
   EngineMidiClipSchedule,
   EngineMidiEvent,
   EngineParameterInfo,
+  EngineProcessWithMonitorResult,
   EngineScopeTelemetry,
   EngineTelemetry,
   EngineTempoSegment,
@@ -1096,6 +1116,7 @@ export type {
   VocalEditWorker,
   VocalEditWorkerCallOptions,
   VocalEditWorkerClientOptions,
+  VocalEditWorkerReadOptions,
   VocalEditWorkerTransferOptions,
 } from './vocal_edit_worker_client.js';
 export {
@@ -1109,6 +1130,7 @@ export type {
   BindWebMidiOptions,
   WebMidiBinding,
   WebMidiCcBinding,
+  WebMidiEngine,
   WebMidiInputInfo,
 } from './web_midi.js';
 export { bindWebMidi, isWebMidiAvailable } from './web_midi.js';
@@ -1126,6 +1148,19 @@ export type Matrix2dResult = WasmMatrix2dResult;
 export type DecomposeResult = WasmDecomposeResult;
 /** Harmonic / percussive / residual signals from {@link hpssWithResidual}. */
 export type HpssWithResidualResult = WasmHpssWithResidualResult;
+/** Tempogram frames from {@link tempogram}. */
+export type TempogramResult = WasmTempogramResult;
+/** Cyclic tempogram from {@link cyclicTempogram}. */
+export type CyclicTempogramResult = WasmCyclicTempogramResult;
+/** Fourier tempogram from {@link fourierTempogram}. */
+export type FourierTempogramResult = WasmFourierTempogramResult;
+/** Framed signal from {@link frameSignal}. */
+export type FrameResult = WasmFrameResult;
+/** NNLS chroma from {@link nnlsChroma}. */
+export type NnlsChromaResult = WasmNnlsChromaResult;
+/** Trimmed signal and its bounds from {@link trimSilence}. */
+export type TrimResult = WasmTrimResult;
+export type { SonareModule };
 
 // ============================================================================
 // Module State

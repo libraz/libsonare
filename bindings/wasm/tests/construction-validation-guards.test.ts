@@ -32,6 +32,8 @@ import {
   spectralEdit,
   waveformPeakPyramid,
 } from '../dist/index.js';
+import { init as initSource } from '../src/index';
+import { getSonareModule } from '../src/module_state';
 import { expectRefusalOf } from './_helpers';
 
 const SR = 22050;
@@ -903,5 +905,80 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     // `Array.prototype.map` refuses to allocate past the engine's own
     // array-length ceiling before -1 or 1.5 could reach the native reader.
     expectRangeRefusal(() => detectKeyCandidates(samples, SR, { modes: hugeArray() as never }));
+  });
+});
+
+describe('element readers refuse a wrong-typed or out-of-domain element instead of narrowing it', () => {
+  // getSonareModule reads the src module singleton, which the dist init() does not set.
+  beforeAll(async () => {
+    await initSource();
+  });
+
+  it('waveformPeakPyramid reads every level through the checked reader', () => {
+    const native = getSonareModule();
+    const samples = new Float32Array(4096);
+    samples[100] = 0.5;
+    // The control: two legal level lists answer one report per level.
+    expect(native.waveformPeakPyramid(samples, 1, [512, 1024]).length).toBe(2);
+    expect(native.waveformPeakPyramid(samples, 1, [512]).length).toBe(1);
+    for (const level of [-1, 1.5, Number.NaN, '512']) {
+      expect(() =>
+        native.waveformPeakPyramid(samples, 1, [level] as unknown as number[]),
+      ).toThrow();
+    }
+  });
+
+  it('setClipWarpMode refuses a non-number, non-string or fractional mode and keeps the clip', () => {
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      const trackId = project.addTrack({ kind: 'audio', name: 'lead' });
+      const clipId = project.addClip({
+        trackId,
+        startPpq: 0,
+        lengthPpq: 4,
+        audio: new Float32Array(480).fill(0.25),
+        audioChannels: 1,
+        audioSampleRate: 48000,
+      });
+      const off = project.toJson();
+      project.setClipWarpMode(clipId, 'tempo-sync');
+      const tempoSync = project.toJson();
+      expect(tempoSync).not.toBe(off);
+      for (const mode of [null, undefined, {}, true, Number.NaN, 1.5]) {
+        expect(() => project.setClipWarpMode(clipId, mode as never)).toThrow();
+        expect(project.toJson()).toBe(tempoSync);
+      }
+      project.setClipWarpMode(clipId, 3 as never);
+      expect(project.toJson()).not.toBe(tempoSync);
+      // The native reader refuses the same values when driven directly.
+      const native = (
+        project as unknown as { native: { setClipWarpMode: (...a: unknown[]) => void } }
+      ).native;
+      for (const mode of [null, {}, true, Number.NaN, 1.5]) {
+        expect(() => native.setClipWarpMode(clipId, mode)).toThrow();
+      }
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('annotateChords refuses an extensions field that is not an array of bytes', () => {
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      const chord = (extensions: unknown) => [
+        { startPpq: 0, endPpq: 1, rootPc: 0, quality: 0, extensions },
+      ];
+      project.annotateChords(chord([7, 9]) as never);
+      const accepted = project.toJson();
+      expect(JSON.parse(accepted).annotation.chords[0].extensions).toEqual([7, 9]);
+      for (const extensions of [[256], [-1], [1.5], ['7'], 'x', 7]) {
+        expect(() => project.annotateChords(chord(extensions) as never)).toThrow();
+        expect(project.toJson()).toBe(accepted);
+      }
+    } finally {
+      project.destroy();
+    }
   });
 });

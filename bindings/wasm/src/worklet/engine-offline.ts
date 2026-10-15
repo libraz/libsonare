@@ -4,6 +4,7 @@ import type {
   EngineTrackLane,
   RealtimeEngine,
 } from '../index.js';
+import { secondsToSampleCount } from '../validation.js';
 import { commitCommand, type EngineCommitContext } from './engine-commit.js';
 import { requireChannelCount, requireInteger, requireIntegerOption } from './guards.js';
 import type { SonareEngineSyncCaptureMessage, SonareEngineTransportFacade } from './messages.js';
@@ -96,7 +97,16 @@ export function buildTransportFacade(ctx: EngineTransportContext): SonareEngineT
         (offline) => offline.seekPpq(ppq, sampleTime),
       ),
     seekSeconds: (seconds, sampleTime) => {
-      const timelineSample = Math.max(0, Math.round(seconds * ctx.sampleRate));
+      // A negative position is refused, never clamped onto the start.
+      if (seconds < 0) {
+        throw new RangeError('seekSeconds: seconds must be non-negative');
+      }
+      const timelineSample = secondsToSampleCount(
+        'seekSeconds',
+        seconds,
+        ctx.sampleRate,
+        'seconds',
+      );
       return commitCommand(
         ctx,
         {

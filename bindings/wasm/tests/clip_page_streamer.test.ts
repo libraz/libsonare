@@ -311,4 +311,17 @@ describe('ClipPageStreamer', () => {
     expect(a.closed).toBe(true);
     expect(b.closed).toBe(true);
   });
+
+  it('refuses a fractional, negative or non-finite window option instead of flooring it', () => {
+    const engine = fakeEngine([]);
+    for (const options of [
+      { readAheadPages: 1.5 },
+      { readAheadPages: -1 },
+      { retainBehindPages: Number.NaN },
+      { maxRequestsPerPump: 0 },
+      { maxRequestsPerPump: 2.5 },
+    ]) {
+      expect(() => new ClipPageStreamer(engine, options)).toThrow(RangeError);
+    }
+  });
 });

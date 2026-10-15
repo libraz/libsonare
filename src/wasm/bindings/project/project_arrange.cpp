@@ -187,7 +187,7 @@ void ProjectWasm::setClipWarpMode(const val& clip_id_val, val mode_val) {
       throw WasmRangeError("unknown warp mode");
     }
   } else {
-    const int mode_int = mode_val.as<int>();
+    const int mode_int = checkedIntFromVal(mode_val, "warp mode");
     if (mode_int < SONARE_PROJECT_WARP_MODE_OFF ||
         mode_int > SONARE_PROJECT_WARP_MODE_TIME_STRETCH) {
       throw WasmRangeError("unknown warp mode");

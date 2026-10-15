@@ -29,7 +29,7 @@ describe('realtime engine scope postMessage transport', () => {
       {
         mode: 'postMessage',
         scopeIntervalFrames: 256,
-        scopeBands: 80,
+        scopeBands: 48,
         nodeFactory: (_context, _name, options) => {
           capturedOptions = options;
           port = {
@@ -44,7 +44,7 @@ describe('realtime engine scope postMessage transport', () => {
       expect(node.scopeRing).toBeUndefined();
       expect(capturedOptions?.processorOptions).toMatchObject({
         scopeIntervalFrames: 256,
-        scopeBands: 64,
+        scopeBands: 48,
       });
 
       const seen: SonareWorkletScopeSnapshot[] = [];

@@ -299,6 +299,81 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       }
     });
 
+    it('refuses a raw Punch record with a fractional out sample instead of rounding it', () => {
+      const blockSize = 128;
+      const telemetryRing = createSonareEngineTelemetryRingBuffer(8);
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize,
+        channelCount: 2,
+        telemetrySharedBuffer: telemetryRing.sharedBuffer,
+      });
+      const engine = (processor as unknown as { engine: RealtimeEngine }).engine;
+      try {
+        processor.receiveCommand({
+          type: SonareEngineCommandType.Punch,
+          sampleTime: -1,
+          argInt: 0,
+          argFloat: 4.5,
+        });
+        expect(engine.captureStatus().punchEnabled).toBe(false);
+        const telemetry = readSonareEngineTelemetryRingBuffer(telemetryRing).telemetry;
+        expect(telemetry.at(-1)).toMatchObject({
+          type: SonareEngineTelemetryType.Error,
+          error: SonareEngineTelemetryError.InvalidCommand,
+          value: SonareEngineCommandType.Punch,
+        });
+        // The control: whole samples are applied.
+        processor.receiveCommand({
+          type: SonareEngineCommandType.Punch,
+          sampleTime: -1,
+          argInt: 0,
+          argFloat: 4,
+        });
+        expect(engine.captureStatus().punchEnabled).toBe(true);
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('holds a SAB command until the sync posted before it has been applied', () => {
+      const blockSize = 128;
+      const commandRing = createSonareEngineCommandRingBuffer(8);
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize,
+        channelCount: 2,
+        commandSharedBuffer: commandRing.sharedBuffer,
+      });
+      const engine = (processor as unknown as { engine: RealtimeEngine }).engine;
+      const outL = new Float32Array(blockSize);
+      const outR = new Float32Array(blockSize);
+      try {
+        // The main thread posted sync 1 (the markers), then queued a seek that resolves a
+        // marker from it; the ring drains first, as it can when the port message is late.
+        expect(
+          pushSonareEngineCommandRingBuffer(commandRing, {
+            type: SonareEngineCommandType.SeekMarker,
+            targetId: 5,
+            sampleTime: -1,
+            syncSequence: 1,
+          }),
+        ).toBe(true);
+        processor.process([[]], [[outL, outR]]);
+        processor.process([[]], [[outL, outR]]);
+        expect(engine.getTransportState().samplePosition).toBe(0);
+        processor.receiveSync({
+          type: 'syncMarkers',
+          markers: [{ id: 5, ppq: 2, name: 'chorus' }],
+          syncSequence: 1,
+        } as SonareEngineSyncMessage);
+        processor.process([[]], [[outL, outR]]);
+        expect(engine.getTransportState().samplePosition).toBe(engine.sampleAtPpq(2));
+      } finally {
+        processor.destroy();
+      }
+    });
+
     it('keeps a public telemetry publication coherent across 65 held-reader writes', () => {
       const ring = createSonareEngineTelemetryRingBuffer(1);
       // A viewer must accept a newly-created, unacknowledged ring as empty.

@@ -278,6 +278,51 @@ describe('engine punch-in window', () => {
       engine.destroy();
     }
   });
+
+  it('refuses an enabled empty window, which would otherwise record every frame', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      engine.setCapturePunch(100, 200);
+      expect(() => engine.setCapturePunch(48000, 48000)).toThrow(RangeError);
+      expect(() => engine.setCapturePunch({ startSample: 48000, endSample: 48000 })).toThrow(
+        RangeError,
+      );
+      // The refused window left the previous one in force.
+      expect(engine.captureStatus().punchEnabled).toBe(true);
+      engine.setCapturePunch(48000, 48000, false);
+      expect(engine.captureStatus().punchEnabled).toBe(false);
+    } finally {
+      engine.destroy();
+    }
+  });
+});
+
+describe('engine transport positions', () => {
+  it('seekSample refuses a negative position instead of clamping it to the start', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      engine.seekSample(480);
+      engine.process([new Float32Array(128)]);
+      const before = engine.getTransportState().samplePosition;
+      expect(() => engine.seekSample(-1)).toThrow(RangeError);
+      engine.process([new Float32Array(128)]);
+      expect(engine.getTransportState().samplePosition).toBe(before);
+      expect(before).toBe(480);
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('countInEndSample answers the start for bars <= 0 and refuses a negative start', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      expect(engine.countInEndSample(4800, 0)).toBe(4800);
+      expect(engine.countInEndSample(4800, -3)).toBe(4800);
+      expect(() => engine.countInEndSample(-1, 1)).toThrow(RangeError);
+    } finally {
+      engine.destroy();
+    }
+  });
 });
 
 describe('absent is omission and -1 is refused', () => {

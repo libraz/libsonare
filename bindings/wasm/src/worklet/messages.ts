@@ -1,3 +1,4 @@
+import type { SonareFailurePayload } from '../_failure_payload.js';
 import type {
   EngineAutomationPoint,
   EngineBus,
@@ -370,6 +371,8 @@ export interface SonareWorkletExternalMidiMessage {
 /** A control-plane sync message that the worklet rejected without crashing. */
 export interface SonareEngineSyncErrorMessage {
   type: 'syncError';
+  /** The refusal's class, message and any SonareError code, as raised on the audio thread. */
+  failure?: SonareFailurePayload;
   /**
    * Discriminant of the rejected sync. Usually a known member, but a
    * `sync`-prefixed type this build does not recognize is reported here too
@@ -1015,6 +1018,8 @@ export interface SonareEngineCaptureResponseMessage {
   status?: EngineCaptureStatus;
   channels?: Float32Array[] | number[][];
   error?: string;
+  /** The failure's class, message and any SonareError code, when `ok` is false. */
+  failure?: SonareFailurePayload;
 }
 
 interface SonareEngineCaptureStatusResponseMessageInternal {
@@ -1042,6 +1047,7 @@ interface SonareEngineCaptureErrorResponseMessageInternal {
   requestId: number;
   ok: false;
   error: string;
+  failure: SonareFailurePayload;
 }
 
 /** Strict wire response type used only by the worklet implementation. */
@@ -1063,6 +1069,8 @@ export interface SonareEngineTransportResponseMessage {
   ok: boolean;
   state?: EngineTransportState;
   error?: string;
+  /** The failure's class, message and any SonareError code, when `ok` is false. */
+  failure?: SonareFailurePayload;
 }
 
 /** Asks the worklet for one target's per-insert gain reduction (any meter delivery mode). */
@@ -1079,4 +1087,6 @@ export interface SonareEngineInsertGainReductionResponseMessage {
   ok: boolean;
   values?: number[];
   error?: string;
+  /** The failure's class, message and any SonareError code, when `ok` is false. */
+  failure?: SonareFailurePayload;
 }

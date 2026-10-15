@@ -1,3 +1,4 @@
+import { failurePayload } from '../_failure_payload.js';
 import type { MixerRealtimeBuffer } from '../index.js';
 import { Mixer } from '../index.js';
 import { leadingSamples, type WorkletInput, type WorkletOutput } from './audio_types.js';
@@ -190,7 +191,8 @@ export class SonareWorkletProcessor {
       return;
     }
     if (message.type === 'setMeterInterval') {
-      const frames = Math.max(0, Math.floor(message.frames));
+      // The constructor option's domain; a bad value is refused before any state changes.
+      const frames = requireIntegerOption(message.frames, Number.NaN, 'setMeterInterval frames', 0);
       // Toggling metering also toggles the mixer's meter, so a disabled meter
       // costs nothing per block. Re-enabling restarts it: the filter history and
       // the published snapshot are from before the gap, and carrying them
@@ -451,12 +453,24 @@ export function registerSonareWorkletProcessor(name = 'sonare-worklet-processor'
       super();
       const port = this.port;
       const processorOptions = options?.processorOptions ?? { sceneJson: '' };
+      // A refused message leaves the processor as it was and is reported, not dropped.
+      const deliver = (bridge: SonareWorkletProcessor, message: SonareWorkletMessage) => {
+        try {
+          bridge.receiveMessage(message);
+        } catch (error) {
+          port?.postMessage?.({
+            type: 'error',
+            message: error instanceof Error ? error.message : String(error),
+            failure: failurePayload(error),
+          });
+        }
+      };
       const start = () => {
         this.bridge = new SonareWorkletProcessor(processorOptions, {
           postMessage: (message) => port?.postMessage?.(message),
         });
         for (const message of this.pendingMessages.splice(0)) {
-          this.bridge.receiveMessage(message);
+          deliver(this.bridge, message);
         }
       };
       if (isEmbindReady()) {
@@ -473,6 +487,7 @@ export function registerSonareWorkletProcessor(name = 'sonare-worklet-processor'
             port?.postMessage?.({
               type: 'error',
               message: error instanceof Error ? error.message : String(error),
+              failure: failurePayload(error),
             });
           });
       }
@@ -481,7 +496,7 @@ export function registerSonareWorkletProcessor(name = 'sonare-worklet-processor'
           return;
         }
         if (this.bridge) {
-          this.bridge.receiveMessage(event.data);
+          deliver(this.bridge, event.data);
         } else if (this.pendingMessages.length < 1024) {
           this.pendingMessages.push(event.data);
         }

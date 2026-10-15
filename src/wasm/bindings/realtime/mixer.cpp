@@ -9,6 +9,7 @@
 #include "mixing/api/scene.h"
 #include "mixing/pan_law.h"
 #include "realtime_engine_wasm.h"
+#include "util/json.h"
 
 namespace {
 
@@ -42,6 +43,20 @@ std::vector<sonare::engine::TrackLaneConfig::Send> readSends(const val& sends) {
                    boolProperty(send, "enabled", true), timing});
   }
   return out;
+}
+
+// Parses a strip scene fragment as sonare_engine_set_*_strip_json does: only a
+// syntactic JSON failure becomes InvalidFormat; a coded semantic refusal keeps its code.
+sonare::mixing::api::Scene parseStripScene(const std::string& scene_json) {
+  std::vector<std::string> unknown_keys;
+  sonare::mixing::api::Scene scene;
+  try {
+    scene = sonare::mixing::api::scene_from_json(scene_json, &unknown_keys);
+  } catch (const sonare::util::json::JsonError& e) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, e.what());
+  }
+  sonare::mixing::api::refuse_unknown_strip_keys(unknown_keys);
+  return scene;
 }
 
 std::vector<sonare::engine::TrackLaneConfig::Send> readOptionalSends(const val& owner) {
@@ -310,14 +325,7 @@ void RealtimeEngineWasm::setMasterSidechain(const val& insert_index_val, const v
 void RealtimeEngineWasm::setBusStripJson(const val& bus_id_val, const std::string& scene_json) {
   const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
 #if defined(SONARE_WITH_MIXING)
-  sonare::mixing::api::Scene scene;
-  std::vector<std::string> unknown_keys;
-  try {
-    scene = sonare::mixing::api::scene_from_json(scene_json, &unknown_keys);
-  } catch (const std::exception& e) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, e.what());
-  }
-  sonare::mixing::api::refuse_unknown_strip_keys(unknown_keys);
+  const sonare::mixing::api::Scene scene = parseStripScene(scene_json);
   if (bus_id == 0 || scene.buses.empty() || !engine_.set_bus_strip(bus_id, scene.buses.front())) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid bus strip spec");
   }
@@ -335,14 +343,7 @@ void RealtimeEngineWasm::setTrackStripJson(const val& track_id_val, const std::s
   if (track_id == 0) {
     throw WasmRangeError("track id must be non-zero");
   }
-  sonare::mixing::api::Scene scene;
-  std::vector<std::string> unknown_keys;
-  try {
-    scene = sonare::mixing::api::scene_from_json(scene_json, &unknown_keys);
-  } catch (const std::exception& e) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, e.what());
-  }
-  sonare::mixing::api::refuse_unknown_strip_keys(unknown_keys);
+  const sonare::mixing::api::Scene scene = parseStripScene(scene_json);
   if (scene.strips.empty() || !engine_.set_track_strip(track_id, scene.strips.front())) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid track strip spec");
   }
@@ -417,14 +418,7 @@ void RealtimeEngineWasm::setTrackStripInsertBypassed(const val& track_id_val,
 
 void RealtimeEngineWasm::setMasterStripJson(const std::string& scene_json) {
 #if defined(SONARE_WITH_MIXING)
-  sonare::mixing::api::Scene scene;
-  std::vector<std::string> unknown_keys;
-  try {
-    scene = sonare::mixing::api::scene_from_json(scene_json, &unknown_keys);
-  } catch (const std::exception& e) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, e.what());
-  }
-  sonare::mixing::api::refuse_unknown_strip_keys(unknown_keys);
+  const sonare::mixing::api::Scene scene = parseStripScene(scene_json);
   if (scene.strips.empty() || !engine_.set_master_strip(scene.strips.front())) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid master strip spec");
   }
@@ -714,8 +708,8 @@ void RealtimeEngineWasm::restoreBusStripInsertParamByName(const val& bus_id_val,
 }
 
 // Resolves a track-lane / master / bus insert parameter (JSON-key name) to the
-// reserved insert-automation id passed to setAutomationLane. Returns -1 when the
-// strip, insert, or key is unknown. The id is returned as a double so the full
+// reserved insert-automation id passed to setAutomationLane. An unknown strip,
+// insert, or key is a RangeError. The id is returned as a double so the full
 // 32-bit unsigned reserved id (which exceeds the signed-int range) survives the
 // JS boundary; the caller passes it back to setAutomationLane.
 double RealtimeEngineWasm::resolveTrackInsertAutomationId(const val& track_id_val,
@@ -724,13 +718,14 @@ double RealtimeEngineWasm::resolveTrackInsertAutomationId(const val& track_id_va
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
 #if defined(SONARE_WITH_MIXING)
-  return static_cast<double>(
-      engine_.resolve_track_insert_automation_id(track_id, insert_index, param_name));
+  return resolvedAutomationId(
+      engine_.resolve_track_insert_automation_id(track_id, insert_index, param_name), param_name);
 #else
   (void)track_id;
   (void)insert_index;
   (void)param_name;
-  return -1.0;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -738,20 +733,23 @@ double RealtimeEngineWasm::resolveTrackLaneAutomationId(const val& track_id_val,
                                                         const std::string& param_name) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
 #if defined(SONARE_WITH_MIXING)
-  return static_cast<double>(engine_.resolve_track_lane_automation_id(track_id, param_name));
+  return resolvedAutomationId(engine_.resolve_track_lane_automation_id(track_id, param_name),
+                              param_name);
 #else
   (void)track_id;
   (void)param_name;
-  return -1.0;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
 double RealtimeEngineWasm::resolveMasterAutomationId(const std::string& param_name) {
 #if defined(SONARE_WITH_MIXING)
-  return static_cast<double>(engine_.resolve_master_automation_id(param_name));
+  return resolvedAutomationId(engine_.resolve_master_automation_id(param_name), param_name);
 #else
   (void)param_name;
-  return -1.0;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -759,11 +757,12 @@ double RealtimeEngineWasm::resolveBusAutomationId(const val& bus_id_val,
                                                   const std::string& param_name) {
   const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
 #if defined(SONARE_WITH_MIXING)
-  return static_cast<double>(engine_.resolve_bus_automation_id(bus_id, param_name));
+  return resolvedAutomationId(engine_.resolve_bus_automation_id(bus_id, param_name), param_name);
 #else
   (void)bus_id;
   (void)param_name;
-  return -1.0;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -771,11 +770,13 @@ double RealtimeEngineWasm::resolveMasterInsertAutomationId(const val& insert_ind
                                                            const std::string& param_name) {
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
 #if defined(SONARE_WITH_MIXING)
-  return static_cast<double>(engine_.resolve_master_insert_automation_id(insert_index, param_name));
+  return resolvedAutomationId(engine_.resolve_master_insert_automation_id(insert_index, param_name),
+                              param_name);
 #else
   (void)insert_index;
   (void)param_name;
-  return -1.0;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 
@@ -785,13 +786,14 @@ double RealtimeEngineWasm::resolveBusInsertAutomationId(const val& bus_id_val,
   const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
 #if defined(SONARE_WITH_MIXING)
-  return static_cast<double>(
-      engine_.resolve_bus_insert_automation_id(bus_id, insert_index, param_name));
+  return resolvedAutomationId(
+      engine_.resolve_bus_insert_automation_id(bus_id, insert_index, param_name), param_name);
 #else
   (void)bus_id;
   (void)insert_index;
   (void)param_name;
-  return -1.0;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
 #endif
 }
 

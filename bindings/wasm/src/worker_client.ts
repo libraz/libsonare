@@ -1,4 +1,6 @@
-import { ErrorCode, SonareError } from './errors.js';
+import { failureFromPayload } from './_failure_payload.js';
+import { releasedHandleError } from './_handle_guard.js';
+import { ErrorCode } from './errors.js';
 import type { MasterAudioRequest, MasterAudioStereoRequest } from './mastering_chain.js';
 import type {
   DetectChordsRequest,
@@ -141,23 +143,7 @@ function cancellationFlag(): Int32Array | undefined {
 function workerError(
   message: Extract<OfflineWorkerResponseMessage, { type: 'sonare:offline-error' }>,
 ): Error {
-  if (message.error.code !== undefined) {
-    return new SonareError(
-      message.error.code,
-      message.error.codeName ?? 'Unknown',
-      message.error.message,
-    );
-  }
-  // An argument refusal crosses the worker as its native class, so a caller's
-  // `instanceof RangeError` / `TypeError` holds on both sides.
-  const error =
-    message.error.name === 'RangeError'
-      ? new RangeError(message.error.message)
-      : message.error.name === 'TypeError'
-        ? new TypeError(message.error.message)
-        : new Error(message.error.message);
-  error.name = message.error.name;
-  return error;
+  return failureFromPayload(message.error);
 }
 
 /**
@@ -263,7 +249,7 @@ export class OfflineWorkerClient {
       this.worker.off?.('error', this.onNodeError);
     }
     for (const { reject } of this.pending.values()) {
-      reject(new Error('OfflineWorkerClient was disposed'));
+      reject(releasedHandleError('OfflineWorkerClient', 'was disposed'));
     }
     this.pending.clear();
     if (this.ownsWorker) {
@@ -277,11 +263,7 @@ export class OfflineWorkerClient {
     options: OfflineWorkerCallOptions = {},
   ): OfflineWorkerTask<T> {
     if (this.closed) {
-      throw new SonareError(
-        ErrorCode.InvalidState,
-        'InvalidState',
-        'OfflineWorkerClient was disposed',
-      );
+      throw releasedHandleError('OfflineWorkerClient', 'was disposed');
     }
     const id = this.nextId++;
     const transfers: Transferable[] = [];

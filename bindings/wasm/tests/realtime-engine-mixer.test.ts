@@ -791,4 +791,45 @@ describe('Sonare WASM Module', () => {
       engine.destroy();
     });
   });
+
+  describe('strip JSON error codes', () => {
+    const scene = (kind: 'strips' | 'buses', id: string, slot: string): string =>
+      JSON.stringify({
+        version: 1,
+        strips: kind === 'strips' ? [{ id, inserts: [{ slot, processor: 'utility.gain' }] }] : [],
+        buses: kind === 'buses' ? [{ id, inserts: [{ slot, processor: 'utility.gain' }] }] : [],
+        connections: [],
+      });
+    const codeOf = (fn: () => void): number | undefined => {
+      try {
+        fn();
+      } catch (error) {
+        return isSonareError(error) ? error.code : -1;
+      }
+      return undefined;
+    };
+
+    it('keeps the scene reader code for a well-formed document, as the C ABI does', () => {
+      const engine = new RealtimeEngine(48000, 256);
+      try {
+        engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
+        engine.setTrackLanes([{ trackId: 10 }]);
+        expect(codeOf(() => engine.setBusStripJson(1, scene('buses', '1', 'sideways')))).toBe(
+          ErrorCode.InvalidParameter,
+        );
+        expect(codeOf(() => engine.setTrackStripJson(10, scene('strips', 't', 'sideways')))).toBe(
+          ErrorCode.InvalidParameter,
+        );
+        expect(codeOf(() => engine.setMasterStripJson(scene('strips', 'm', 'sideways')))).toBe(
+          ErrorCode.InvalidParameter,
+        );
+        // A non-object element is a structural failure the reader codes InvalidFormat.
+        const nonObject = JSON.stringify({ version: 1, strips: [7], buses: [], connections: [] });
+        expect(codeOf(() => engine.setMasterStripJson(nonObject))).toBe(ErrorCode.InvalidFormat);
+        expect(codeOf(() => engine.setMasterStripJson('{'))).toBe(ErrorCode.InvalidFormat);
+      } finally {
+        engine.destroy();
+      }
+    });
+  });
 });

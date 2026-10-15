@@ -268,4 +268,47 @@ describe('mixer worklet true-peak metering', () => {
       processor.destroy();
     }
   });
+
+  it('refuses a bad setMeterInterval value and keeps the previous interval', () => {
+    const loud = interSamplePeakSine(BLOCK, 0.9);
+    const meters: unknown[] = [];
+    const processor = new SonareWorkletProcessor(
+      {
+        sceneJson: mixingScenePresetJson('vocalReverbSend'),
+        sampleRate: SR,
+        blockSize: BLOCK,
+        meterIntervalFrames: 0,
+      },
+      { onMeter: (meter) => meters.push({ ...meter }) },
+    );
+    const run = (blocks: number) => {
+      for (let block = 0; block < blocks; block++) {
+        processor.process([[loud, loud]], [[new Float32Array(BLOCK), new Float32Array(BLOCK)]]);
+      }
+    };
+    const bad = [Number.NaN, -1, 1.5, Number.POSITIVE_INFINITY, undefined, '256'];
+    try {
+      for (const frames of bad) {
+        expect(() =>
+          processor.receiveMessage({ type: 'setMeterInterval', frames: frames as number }),
+        ).toThrow(RangeError);
+      }
+      // The meter stayed off: a NaN interval used to publish every quantum.
+      run(4);
+      expect(meters).toHaveLength(0);
+
+      processor.receiveMessage({ type: 'setMeterInterval', frames: BLOCK * 4 });
+      run(8);
+      expect(meters).toHaveLength(2);
+      for (const frames of bad) {
+        expect(() =>
+          processor.receiveMessage({ type: 'setMeterInterval', frames: frames as number }),
+        ).toThrow(RangeError);
+      }
+      run(8);
+      expect(meters).toHaveLength(4);
+    } finally {
+      processor.destroy();
+    }
+  });
 });

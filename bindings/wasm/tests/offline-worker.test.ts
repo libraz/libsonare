@@ -334,4 +334,54 @@ describe('OfflineWorkerClient', () => {
     expect(worker.calls).toHaveLength(1);
     client.dispose();
   });
+
+  it('rejects a request still pending at dispose with InvalidState, like a new call', async () => {
+    const worker = new ThrowingWorker(() => undefined);
+    const client = clientWith(worker as unknown as LoopbackWorker);
+    const task = client.detectBpm({ samples: new Float32Array([0, 0]) }, { copy: true });
+    client.dispose();
+    await expect(task.result).rejects.toSatisfy(
+      (error: unknown) => isSonareError(error) && error.code === ErrorCode.InvalidState,
+    );
+    let refused: unknown;
+    try {
+      client.detectBpm({ samples: new Float32Array([0, 0]) }, { copy: true });
+    } catch (error) {
+      refused = error;
+    }
+    expect(isSonareError(refused) && refused.code === ErrorCode.InvalidState).toBe(true);
+  });
+
+  it('keeps the SonareError code and the argument-refusal class a worker reports', async () => {
+    let worker!: ThrowingWorker;
+    const responses: OfflineWorkerResponseMessage[] = [
+      {
+        type: 'sonare:offline-error',
+        id: 1,
+        error: { name: 'SonareError', message: 'no ffmpeg', code: 6, codeName: 'NotSupported' },
+      },
+      { type: 'sonare:offline-error', id: 2, error: { name: 'RangeError', message: 'bad rate' } },
+    ];
+    worker = new ThrowingWorker(() => {
+      const response = responses.shift();
+      if (response) {
+        queueMicrotask(() => worker.sendResponse(response));
+      }
+    });
+    const client = clientWith(worker as unknown as LoopbackWorker);
+    try {
+      const samples = () => ({ samples: new Float32Array([0, 0]) });
+      await expect(client.detectBpm(samples(), { copy: true }).result).rejects.toSatisfy(
+        (error: unknown) =>
+          isSonareError(error) &&
+          error.code === ErrorCode.NotSupported &&
+          error.message === 'no ffmpeg',
+      );
+      await expect(client.detectBpm(samples(), { copy: true }).result).rejects.toBeInstanceOf(
+        RangeError,
+      );
+    } finally {
+      client.dispose();
+    }
+  });
 });

@@ -6,6 +6,7 @@
 
 import './lifetime.js';
 
+export type { SonareFailurePayload } from './_failure_payload.js';
 export type { OpfsClipStream, OpfsClipStreamOptions } from './clip_page_streamer.js';
 export { attachOpfsClipStream } from './clip_page_streamer.js';
 // With code-splitting disabled, the worklet bundle carries its own copy of the
@@ -20,6 +21,7 @@ export { StreamingMasteringChain } from './streaming_processors.js';
 export { SonareEngine } from './worklet/engine.js';
 export type { SonareRenderOfflineRequest } from './worklet/engine-export.js';
 export { SonareRealtimeEngineNode } from './worklet/engine-node.js';
+export type { CaptureOptions } from './worklet/engine-offline.js';
 export type { SonareEngineOptions } from './worklet/engine-options.js';
 export { SonareRealtimeEngineWorkletProcessor } from './worklet/engine-processor.js';
 export { registerSonareRealtimeEngineWorkletProcessor } from './worklet/engine-register.js';
@@ -35,6 +37,7 @@ export type {
   SonareEngineSyncCaptureMessage,
   SonareEngineSyncClipsDeltaMessage,
   SonareEngineSyncClipsMessage,
+  SonareEngineSyncErrorMessage,
   SonareEngineSyncLoadSoundFontMessage,
   SonareEngineSyncMarkersMessage,
   SonareEngineSyncMasterStripEqBandMessage,
@@ -80,11 +83,14 @@ export type {
   SonareStreamAnalyzerRecycleMessage,
   SonareStreamAnalyzerWorkletProcessorOptions,
   SonareWorkletDestroyMessage,
+  SonareWorkletExternalMidiEvent,
   SonareWorkletMessage,
   SonareWorkletProcessorOptions,
   SonareWorkletScheduleInsertAutomationMessage,
   SonareWorkletSetMeterIntervalMessage,
   SonareWorkletTransportMessage,
+  WorkletPort,
+  WorkletTransport,
 } from './worklet/messages.js';
 export {
   registerSonareWorkletProcessor,
@@ -119,6 +125,8 @@ export {
   readSonareMeterRingBuffer,
   readSonareScopeRingBuffer,
   readSonareSpectrumRingBuffer,
+  type SharedClipPageRequestRingWriter,
+  type SharedExternalMidiRingWriter,
   SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS,
   SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S,
   SONARE_ENGINE_COMMAND_RECORD_BYTES,

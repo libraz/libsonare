@@ -136,7 +136,8 @@ export function busAutomationParamId(ctx: EngineParameterContext, busId: number)
  * @param target Track id (declares a mixer lane on first use).
  * @param insertIndex Index into the strip's combined insert sequence.
  * @param paramName Processor JSON-key parameter name.
- * @returns Reserved insert-automation id, or -1 when strip/insert/key unknown.
+ * @returns Reserved insert-automation id.
+ * @throws RangeError when the strip, insert or key is unknown.
  */
 export function resolveTrackInsertAutomationId(
   ctx: EngineParameterContext,
@@ -158,7 +159,8 @@ export function resolveTrackInsertAutomationId(
  *
  * @param insertIndex Index into the master strip's insert sequence.
  * @param paramName Processor JSON-key parameter name.
- * @returns Reserved insert-automation id, or -1 when insert/key unknown.
+ * @returns Reserved insert-automation id.
+ * @throws RangeError when the insert or key is unknown.
  */
 export function resolveMasterInsertAutomationId(
   ctx: EngineParameterContext,
@@ -176,7 +178,8 @@ export function resolveMasterInsertAutomationId(
  * @param busId Bus id (declares the mixer bus on first use).
  * @param insertIndex Index into the bus strip's insert sequence.
  * @param paramName Processor JSON-key parameter name.
- * @returns Reserved insert-automation id, or -1 when bus/insert/key unknown.
+ * @returns Reserved insert-automation id.
+ * @throws RangeError when the bus, insert or key is unknown.
  */
 export function resolveBusInsertAutomationId(
   ctx: EngineParameterContext,
@@ -195,12 +198,13 @@ export function resolveBusInsertAutomationId(
  *
  * The instrument must already be bound on the offline engine for the
  * destination (the worklet mirrors every instrument sync onto it), otherwise
- * the resolve returns -1. Both engines number the id when the instrument is
+ * the resolve throws RangeError. Both engines number the id when the instrument is
  * bound, so the worklet engine applies it without resolving.
  *
  * @param destinationId MIDI destination the instrument is bound to.
  * @param paramName Instrument JSON-key parameter name (e.g. `cutoffHz`).
- * @returns Reserved instrument-automation id, or -1 when destination/key unknown.
+ * @returns Reserved instrument-automation id.
+ * @throws RangeError when the destination or key is unknown.
  */
 export function resolveInstrumentAutomationId(
   ctx: EngineParameterContext,

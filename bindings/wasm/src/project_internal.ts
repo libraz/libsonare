@@ -1,3 +1,4 @@
+import { releasedHandleError } from './_handle_guard.js';
 import { projectAutomationCurveCode, resolveEnumOrdinal } from './codes.js';
 import { ErrorCode, SonareError } from './errors.js';
 import type {
@@ -148,7 +149,7 @@ export function normalizeSynthInstrument(patch: unknown): NativeSynthBinding | s
   if ((sampleBank as unknown as { released: boolean }).released) {
     // The id outlives the handle, so without this the native registry would be
     // the only thing that notices — and with a different error class than Node.
-    throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'sampleBank is destroyed');
+    throw releasedHandleError('sampleBank', 'is destroyed');
   }
   return { ...rest, sampleBankId: sampleBank.nativeId };
 }
@@ -645,9 +646,9 @@ export function projectAutomationTargetKindValue(kind: ProjectAutomationTargetKi
   );
 }
 
-export function projectWarpModeValue(mode: ProjectWarpMode | undefined): number {
+export function projectWarpModeValue(mode: ProjectWarpMode): number {
   return resolveEnumOrdinal(
-    mode ?? 'off',
+    mode,
     { off: 0, repitch: 1, 'tempo-sync': 2, 'time-stretch': 3 },
     'project warp mode',
   );

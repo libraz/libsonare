@@ -21,7 +21,8 @@ export interface VoiceChangeOptions extends ValidateOptions {
    * How `formantFactor` relates to the pitch shift. Default `'relative'`.
    *
    * - `'relative'`: `formantFactor` is the warp applied after the pitch shift, so the
-   *   formants end up at `formantFactor * 2^(pitchSemitones / 12)` of the input's.
+   *   formants end up at `formantFactor * 2^(pitchSemitones / 12)` of the input's. A factor
+   *   outside [0.55, 1.65] throws a `RangeError`; it is never clamped.
    * - `'absolute'`: `formantFactor` is the formant shift relative to the input (1 keeps
    *   the formants where they were); the warp applied is
    *   `formantFactor / 2^(pitchSemitones / 12)`. A request whose warp falls outside
@@ -72,12 +73,9 @@ export function voiceChange(
       formantMode,
     );
   } catch (error) {
-    // An unreachable absolute request or an unknown mode is an argument refusal, so it is a
-    // RangeError like every other out-of-domain argument rather than a coded library failure.
-    if (
-      formantMode !== 'relative' &&
-      (error as { code?: unknown }).code === ErrorCode.InvalidParameter
-    ) {
+    // voiceChange's InvalidParameter is always an argument refusal (an out-of-range factor in
+    // either formant mode, or an unknown mode), so it is a RangeError in every mode.
+    if ((error as { code?: unknown }).code === ErrorCode.InvalidParameter) {
       throw new RangeError((error as Error).message);
     }
     throw error;

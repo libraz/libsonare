@@ -232,8 +232,9 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
       doubleProperty(pitch, "transposeSemitones", result.transpose_semitones);
   result.drift_scale = doubleProperty(pitch, "driftScale", result.drift_scale);
   result.vibrato_scale = doubleProperty(pitch, "vibratoScale", result.vibrato_scale);
-  result.destination_start_sample = int64Property(object, "destinationStartSample", 0);
-  result.destination_length_samples = int64Property(object, "destinationLengthSamples", 0);
+  result.destination_start_sample = requireInt64Property(object, "destinationStartSample", "edit");
+  result.destination_length_samples =
+      requireInt64Property(object, "destinationLengthSamples", "edit");
   result.gain_db = doubleProperty(object, "gainDb", 0.0);
   const val muted = property(object, "muted");
   if (!absent(muted)) {
@@ -310,14 +311,17 @@ SonareVocalOperation operationFromVal(const val& object, OperationStorage* stora
   } else if (kind == "setSourceSpan") {
     result.kind = SONARE_VOCAL_SET_SOURCE_SPAN;
     result.note_id = nonZeroId(checkedUintFromVal(property(object, "noteId"), "noteId"), "noteId");
-    result.source_start_sample = int64Property(object, "sourceStartSample", 0);
-    result.source_end_sample = int64Property(object, "sourceEndSample", 0);
-    result.destination_start_sample = int64Property(object, "destinationStartSample", 0);
-    result.destination_length_samples = int64Property(object, "destinationLengthSamples", 0);
+    // An omitted position is refused by name, never read as sample 0.
+    result.source_start_sample = requireInt64Property(object, "sourceStartSample", "operation");
+    result.source_end_sample = requireInt64Property(object, "sourceEndSample", "operation");
+    result.destination_start_sample =
+        requireInt64Property(object, "destinationStartSample", "operation");
+    result.destination_length_samples =
+        requireInt64Property(object, "destinationLengthSamples", "operation");
   } else if (kind == "split") {
     result.kind = SONARE_VOCAL_SPLIT;
     result.note_id = nonZeroId(checkedUintFromVal(property(object, "noteId"), "noteId"), "noteId");
-    result.cut_source_sample = int64Property(object, "sourceSample", 0);
+    result.cut_source_sample = requireInt64Property(object, "sourceSample", "operation");
   } else if (kind == "merge") {
     result.kind = SONARE_VOCAL_MERGE;
     storage->ids = idArray(property(object, "noteIds"), "noteIds");

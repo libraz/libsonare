@@ -103,7 +103,7 @@ describe('master limiter ceiling (real WASM engine)', () => {
     try {
       engine.setTrackLanes([{ trackId: TRACK_ID }]);
       engine.setMasterStripJson(masterLimiterScene);
-      expect(engine.resolveMasterInsertAutomationId(0, 'lookaheadMs')).toBe(-1);
+      expect(() => engine.resolveMasterInsertAutomationId(0, 'lookaheadMs')).toThrow(RangeError);
       expect(() => engine.setMasterStripInsertParamByName(0, 'lookaheadMs', 1)).toThrow();
     } finally {
       engine.destroy();

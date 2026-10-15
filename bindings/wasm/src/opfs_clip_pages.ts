@@ -1,3 +1,4 @@
+import { releasedHandleError } from './_handle_guard.js';
 import { ErrorCode, SonareError } from './errors.js';
 import type { ClipPageProvider, ClipPageRequest, RealtimeEngine } from './realtime_engine.js';
 
@@ -257,7 +258,7 @@ export function createOpfsClipPageProvider(
 
   const supplyPage = (pageIndex: number): Promise<boolean> => {
     if (closed) {
-      return Promise.reject(new Error('OpfsClipPageProvider is closed'));
+      return Promise.reject(releasedHandleError('OpfsClipPageProvider', 'is closed'));
     }
     const requestId = allocateOpfsWorkerRequestId();
     const promise = new Promise<boolean>((resolve, reject) => {
@@ -269,7 +270,7 @@ export function createOpfsClipPageProvider(
         if (closed) {
           const entry = pending.get(requestId);
           pending.delete(requestId);
-          entry?.reject(new Error('OpfsClipPageProvider is closed'));
+          entry?.reject(releasedHandleError('OpfsClipPageProvider', 'is closed'));
           return;
         }
         try {
@@ -330,7 +331,7 @@ export function createOpfsClipPageProvider(
       }
       worker.removeEventListener('message', onMessage as EventListener);
       for (const entry of pending.values()) {
-        entry.reject(new Error('OpfsClipPageProvider is closed'));
+        entry.reject(releasedHandleError('OpfsClipPageProvider', 'is closed'));
       }
       pending.clear();
       provider.destroy();

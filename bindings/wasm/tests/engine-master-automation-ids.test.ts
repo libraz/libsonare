@@ -26,7 +26,7 @@ describe('master automation ids (WASM)', () => {
       ids.forEach((id, index) => {
         expect(engine.parameterInfo(id).name).toBe(names[index]);
       });
-      expect(engine.resolveMasterAutomationId('gain' as 'faderDb')).toBe(-1);
+      expect(() => engine.resolveMasterAutomationId('gain' as 'faderDb')).toThrow(RangeError);
     } finally {
       engine.destroy();
     }

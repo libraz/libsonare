@@ -166,7 +166,7 @@ float RealtimeEngineWasm::meterScratchValue(const val& field_val) const {
       constexpr int kPlaneBase = 12;
       constexpr int kPlanes = static_cast<int>(sonare::mixing::kMaxMeterChannels);
       const int rel = field - kPlaneBase;
-      if (rel < 0 || rel >= 4 * kPlanes) return 0.0f;
+      if (rel < 0 || rel >= 4 * kPlanes) throw WasmRangeError("field is out of range");
       const size_t plane = static_cast<size_t>(rel % kPlanes);
       switch (rel / kPlanes) {
         case 0:
@@ -307,23 +307,23 @@ uint32_t RealtimeEngineWasm::scopeScratchBandCount() const {
 }
 float RealtimeEngineWasm::scopeScratchBand(const val& index_val) const {
   const uint32_t index = checkedUintFromVal(index_val, "index");
-  return index < scope_telemetry_scratch_.bands.size() ? scope_telemetry_scratch_.bands[index]
-                                                       : 0.0f;
+  if (index >= scope_telemetry_scratch_.bands.size()) throw WasmRangeError("index is out of range");
+  return scope_telemetry_scratch_.bands[index];
 }
 uint32_t RealtimeEngineWasm::scopeScratchPointCount() const {
   return scope_telemetry_scratch_.point_count;
 }
 float RealtimeEngineWasm::scopeScratchPointLeft(const val& index_val) const {
   const uint32_t index = checkedUintFromVal(index_val, "index");
-  return index < scope_telemetry_scratch_.points.size()
-             ? scope_telemetry_scratch_.points[index].left
-             : 0.0f;
+  if (index >= scope_telemetry_scratch_.points.size())
+    throw WasmRangeError("index is out of range");
+  return scope_telemetry_scratch_.points[index].left;
 }
 float RealtimeEngineWasm::scopeScratchPointRight(const val& index_val) const {
   const uint32_t index = checkedUintFromVal(index_val, "index");
-  return index < scope_telemetry_scratch_.points.size()
-             ? scope_telemetry_scratch_.points[index].right
-             : 0.0f;
+  if (index >= scope_telemetry_scratch_.points.size())
+    throw WasmRangeError("index is out of range");
+  return scope_telemetry_scratch_.points[index].right;
 }
 
 void registerRealtimeEngineTelemetry(class_<RealtimeEngineWasm>& cls) {

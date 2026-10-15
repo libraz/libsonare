@@ -182,30 +182,28 @@ export interface VocalSetEditOperation {
   edit: VocalNoteEdit;
 }
 
+/** A required position spelled in samples (`S`) or in seconds (`T`), exactly one of the two. */
+export type VocalSampleOrSec<S extends string, T extends string> =
+  | ({ [K in S]: number } & { [K in T]?: never })
+  | ({ [K in T]: number } & { [K in S]?: never });
+
 /**
- * Each of the four positions is given in samples or in seconds (rounded to the
- * nearest sample at the session's rate), one spelling each.
+ * Each of the four positions is required and given in samples or in seconds
+ * (rounded to the nearest sample at the session's rate), one spelling each.
  */
-export interface VocalSetSourceSpanOperation {
+export type VocalSetSourceSpanOperation = {
   kind: 'setSourceSpan';
   noteId: number;
-  sourceStartSample?: number;
-  sourceStartSec?: number;
-  sourceEndSample?: number;
-  sourceEndSec?: number;
-  destinationStartSample?: number;
-  destinationStartSec?: number;
-  destinationLengthSamples?: number;
-  destinationLengthSec?: number;
-}
+} & VocalSampleOrSec<'sourceStartSample', 'sourceStartSec'> &
+  VocalSampleOrSec<'sourceEndSample', 'sourceEndSec'> &
+  VocalSampleOrSec<'destinationStartSample', 'destinationStartSec'> &
+  VocalSampleOrSec<'destinationLengthSamples', 'destinationLengthSec'>;
 
-/** The cut position is `sourceSample` or `sourceSec`, not both. */
-export interface VocalSplitOperation {
+/** The cut position is required: `sourceSample` or `sourceSec`, not both. */
+export type VocalSplitOperation = {
   kind: 'split';
   noteId: number;
-  sourceSample?: number;
-  sourceSec?: number;
-}
+} & VocalSampleOrSec<'sourceSample', 'sourceSec'>;
 
 export interface VocalMergeOperation {
   kind: 'merge';

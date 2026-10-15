@@ -8,7 +8,6 @@ exports[`WASM binding sources budget every caller-supplied array length > has no
   "mixing/mixing_processing.cpp left_channels["length"].as<int>() #1",
   "mixing/mixing_processing.cpp right["length"].as<int>() #1",
   "mixing/mixing_processing.cpp right_channels["length"].as<int>() #1",
-  "project/project_external_stems.cpp source_planes["length"].as<size_t>() #1",
   "realtime/clips.cpp channels_val["length"].as<int>() #1",
   "realtime/transport.cpp segments["length"].as<unsigned>() #1",
   "realtime/transport.cpp segments["length"].as<unsigned>() #2",
