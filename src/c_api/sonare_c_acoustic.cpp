@@ -256,11 +256,12 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   const RirSynthResult res = synthesize_rir(room, placement, sample_rate, rc);
   out->has_error = has_error(res.diagnostics) ? 1 : 0;
   publish_rir_diagnostics(res.diagnostics);
-  out->length = res.rir.size();
   if (!res.rir.empty()) {
-    out->rir = new float[res.rir.size()];
-    std::memcpy(out->rir, res.rir.data(), res.rir.size() * sizeof(float));
+    std::unique_ptr<float[]> rir(new float[res.rir.size()]);
+    std::memcpy(rir.get(), res.rir.data(), res.rir.size() * sizeof(float));
+    out->rir = rir.release();
   }
+  out->length = res.rir.size();
   return SONARE_OK;
   SONARE_C_CATCH
 #else

@@ -343,8 +343,11 @@ NoteArtifactResult render_note(const VocalRenderSnapshotData& snapshot, const Vo
     if (!sonare::formant_factor_in_range(factor)) {
       invalid("formant.shift_semitones", "requested formant shift is outside renderer capability");
     }
+    // Frame and LPC order follow the rate (FormantWarpConfig defaults).
+    sonare::FormantWarpConfig warp_config;
+    warp_config.factor = factor;
     const Audio warped =
-        sonare::FormantWarp({factor, 12, 1.0f})
+        sonare::FormantWarp(warp_config)
             .process(Audio::from_vector(std::move(rendered), snapshot.source.sample_rate()));
     rendered.assign(warped.begin(), warped.end());
     if (rendered.size() != checked_size(artifact.destination_range.length(), "destination"))

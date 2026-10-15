@@ -60,11 +60,13 @@ SonareError fill_clipping_result(const metering::ClippingResult& result,
 
 SonareError fill_dynamic_range_result(const metering::DynamicRangeResult& result,
                                       SonareDynamicRangeResult* out) {
-  out->dynamic_range_db = result.dynamic_range_db;
-  out->low_percentile_db = result.low_percentile_db;
-  out->high_percentile_db = result.high_percentile_db;
-  out->window_count = result.window_rms_db.size();
-  out->window_rms_db = copy_vector(result.window_rms_db);
+  sonare_c_detail::StagedOutput<SonareDynamicRangeResult, &sonare_free_dynamic_range_result> staged;
+  staged->dynamic_range_db = result.dynamic_range_db;
+  staged->low_percentile_db = result.low_percentile_db;
+  staged->high_percentile_db = result.high_percentile_db;
+  staged->window_count = result.window_rms_db.size();
+  staged->window_rms_db = copy_vector(result.window_rms_db);
+  staged.publish(out);
   return SONARE_OK;
 }
 
@@ -382,14 +384,17 @@ bool decode_spectrum_config(int n_fft, int apply_octave_smoothing, int octave_fr
 
 SonareError fill_spectrum_result(const metering::SpectrumResult& result,
                                  SonareSpectrumResult* out) {
-  out->n_fft = result.n_fft;
-  out->sample_rate = result.sample_rate;
-  out->bin_count = result.frequencies.size();
-  if (out->bin_count == 0) return SONARE_OK;
-  out->frequencies = copy_vector(result.frequencies);
-  out->magnitude = copy_vector(result.magnitude);
-  out->power = copy_vector(result.power);
-  out->db = copy_vector(result.db);
+  sonare_c_detail::StagedOutput<SonareSpectrumResult, &sonare_free_spectrum_result> staged;
+  staged->n_fft = result.n_fft;
+  staged->sample_rate = result.sample_rate;
+  staged->bin_count = result.frequencies.size();
+  if (staged->bin_count != 0) {
+    staged->frequencies = copy_vector(result.frequencies);
+    staged->magnitude = copy_vector(result.magnitude);
+    staged->power = copy_vector(result.power);
+    staged->db = copy_vector(result.db);
+  }
+  staged.publish(out);
   return SONARE_OK;
 }
 

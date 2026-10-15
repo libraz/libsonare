@@ -90,9 +90,7 @@ Audio VoiceChanger::process(const Audio& audio) const {
 
   if (config_.formant_mode == FormantMode::Absolute) {
     // The envelope is estimated on the unshifted voice and the pitch shift then carries it to
-    // the requested factor. The LPC order follows the rate: 12 only resolves formants near 22 kHz.
-    formant_config.lpc_order = 0;
-    formant_config.frame_in_time = true;
+    // the requested factor.
     const Audio warped =
         std::abs(warp_factor - 1.0f) < 1.0e-6f ? audio : FormantWarp(formant_config).process(audio);
     return shifts ? pitch_shift(warped, config_.pitch_semitones, pitch_config) : warped;

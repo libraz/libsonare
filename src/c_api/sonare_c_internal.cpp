@@ -43,6 +43,11 @@ void set_last_error(SonareError code, const char* msg) noexcept {
   }
 }
 
+void set_last_error_static(SonareError code, const char* msg) noexcept {
+  last_error_code_storage() = code;
+  last_error_fallback_storage() = msg;
+}
+
 void clear_last_error() noexcept {
   last_error_code_storage() = SONARE_OK;
   last_error_storage().clear();

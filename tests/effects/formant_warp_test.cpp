@@ -4,9 +4,11 @@
 #include "effects/formant_warp.h"
 
 #include <algorithm>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 #include "core/audio.h"
@@ -335,4 +337,87 @@ TEST_CASE("FormantWarp keeps the level of a pure tone at any amplitude", "[effec
     }
     CHECK(std::abs(10.0 * std::log10(out_energy / in_energy)) < 1.5);
   }
+}
+
+TEST_CASE("FormantWarp defaults scale frame and LPC order with the rate", "[effects][formant]") {
+  for (const int sample_rate : {44100, 48000}) {
+    CAPTURE(sample_rate);
+    const std::vector<float> samples = excited_tone(static_cast<size_t>(sample_rate), sample_rate);
+    sonare::FormantWarpConfig config;
+    config.factor = 1.2f;
+    const sonare::Audio defaulted =
+        sonare::FormantWarp(config).process(sonare::Audio::from_vector(samples, sample_rate));
+
+    sonare::FormantWarpStream stream = prepared_stream(sample_rate, 1.2f);
+    const size_t latency = static_cast<size_t>(stream.latency_samples());
+    std::vector<float> padded = samples;
+    padded.resize(samples.size() + latency, 0.0f);
+    std::vector<float> streamed(padded.size());
+    stream.process(padded.data(), streamed.data(), static_cast<int>(padded.size()));
+    REQUIRE(std::equal(defaulted.data(), defaulted.data() + defaulted.size(),
+                       streamed.begin() + static_cast<std::ptrdiff_t>(latency)));
+  }
+}
+
+namespace {
+
+/// Power-weighted mean frequency of @p x over [lo_hz, hi_hz], from a Hann-windowed DFT.
+double band_centroid_hz(const float* x, size_t n, int sample_rate, double lo_hz, double hi_hz) {
+  double weighted = 0.0;
+  double total = 0.0;
+  for (double f = lo_hz; f <= hi_hz; f += 10.0) {
+    double re = 0.0;
+    double im = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+      const double w = 0.5 - 0.5 * std::cos(sonare::constants::kTwoPiD * static_cast<double>(i) /
+                                            static_cast<double>(n));
+      const double phase = sonare::constants::kTwoPiD * f * static_cast<double>(i) /
+                           static_cast<double>(sample_rate);
+      re += w * x[i] * std::cos(phase);
+      im -= w * x[i] * std::sin(phase);
+    }
+    const double power = re * re + im * im;
+    weighted += f * power;
+    total += power;
+  }
+  return weighted / total;
+}
+
+}  // namespace
+
+TEST_CASE("FormantWarp moves a voiced envelope by the same ratio at 44100 and 48000 Hz",
+          "[effects][formant]") {
+  // A noise floor keeps the predictor off its exact-fit bypass, which a noise-free harmonic series
+  // hits.
+  constexpr size_t kSeconds = 1;
+  constexpr float kFactor = 1.3f;
+  double ratios[2] = {0.0, 0.0};
+  int index = 0;
+  for (const int sample_rate : {44100, 48000}) {
+    CAPTURE(sample_rate);
+    const size_t n = kSeconds * static_cast<size_t>(sample_rate);
+    std::vector<float> input = formant_voiced_shape(n, sample_rate);
+    uint32_t state = 2463534242u;
+    for (float& v : input) {
+      state = state * 1664525u + 1013904223u;
+      v += 0.01f * (static_cast<float>(state >> 8) / 16777216.0f - 0.5f);
+    }
+    sonare::FormantWarpConfig config;
+    config.factor = kFactor;
+    const sonare::Audio out =
+        sonare::FormantWarp(config).process(sonare::Audio::from_vector(input, sample_rate));
+    REQUIRE(out.size() == n);
+
+    // Stay clear of the first and last frames, which the overlap-add has not filled.
+    const size_t edge = 4096;
+    const size_t span = 16384;
+    const double before = band_centroid_hz(input.data() + edge, span, sample_rate, 200.0, 4000.0);
+    const double after = band_centroid_hz(out.data() + edge, span, sample_rate, 200.0, 4000.0);
+    ratios[index++] = after / before;
+  }
+  CAPTURE(ratios[0], ratios[1]);
+  // Both are a real upward warp, and the two rates agree on how far.
+  CHECK(ratios[0] > 1.05);
+  CHECK(ratios[1] > 1.05);
+  CHECK(ratios[0] == Catch::Approx(ratios[1]).epsilon(0.05));
 }

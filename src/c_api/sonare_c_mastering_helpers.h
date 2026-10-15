@@ -128,15 +128,16 @@ inline SonareError validate_stereo_audio_params(const float* left, const float* 
 }
 
 // Copy a stereo pair into two freshly allocated arrays and release them to the
-// caller. Both arrays are allocated before either output pointer is written.
+// caller. Both arrays are allocated before the pointers or the length are written.
 inline void copy_stereo_channels(const float* left, const float* right, size_t length,
-                                 float** out_left, float** out_right) {
+                                 float** out_left, float** out_right, size_t* out_length) {
   std::unique_ptr<float[]> left_out(new float[length]);
   std::unique_ptr<float[]> right_out(new float[length]);
   std::memcpy(left_out.get(), left, length * sizeof(float));
   std::memcpy(right_out.get(), right, length * sizeof(float));
   *out_left = sonare_c_detail::release_array(left_out);
   *out_right = sonare_c_detail::release_array(right_out);
+  *out_length = length;
 }
 
 // Define a chain result before any validation return, so a rejected call hands
@@ -255,39 +256,45 @@ inline void free_chain_metrics(ChainResultT* out) {
 
 inline void fill_mono_chain_result(const sonare::mastering::api::MonoChainResult& result,
                                    SonareMasteringChainResult* out) {
-  out->length = result.samples.size();
-  out->sample_rate = result.sample_rate;
-  out->input_lufs = result.input_lufs;
-  out->output_lufs = result.output_lufs;
-  out->applied_gain_db = result.applied_gain_db;
+  sonare_c_detail::StagedOutput<SonareMasteringChainResult, &sonare_free_mastering_chain_result>
+      staged;
+  staged->length = result.samples.size();
+  staged->sample_rate = result.sample_rate;
+  staged->input_lufs = result.input_lufs;
+  staged->output_lufs = result.output_lufs;
+  staged->applied_gain_db = result.applied_gain_db;
 
-  if (out->length > 0) {
-    std::unique_ptr<float[]> processed(new float[out->length]);
-    std::memcpy(processed.get(), result.samples.data(), out->length * sizeof(float));
-    out->samples = sonare_c_detail::release_array(processed);
+  if (staged->length > 0) {
+    std::unique_ptr<float[]> processed(new float[staged->length]);
+    std::memcpy(processed.get(), result.samples.data(), staged->length * sizeof(float));
+    staged->samples = sonare_c_detail::release_array(processed);
   }
-  out->stages = copy_stage_array(result.stages);
-  out->stages_count = result.stages.size();
-  out->non_finite_substitution_count = result.non_finite_substitution_count;
-  set_chain_metrics(result, out);
+  staged->stages = copy_stage_array(result.stages);
+  staged->stages_count = result.stages.size();
+  staged->non_finite_substitution_count = result.non_finite_substitution_count;
+  set_chain_metrics(result, &staged.value());
+  staged.publish(out);
 }
 
 inline void fill_stereo_chain_result(const sonare::mastering::api::StereoChainResult& result,
                                      SonareMasteringChainStereoResult* out) {
-  out->length = result.left.size();
-  out->sample_rate = result.sample_rate;
-  out->input_lufs = result.input_lufs;
-  out->output_lufs = result.output_lufs;
-  out->applied_gain_db = result.applied_gain_db;
+  sonare_c_detail::StagedOutput<SonareMasteringChainStereoResult,
+                                &sonare_free_mastering_chain_stereo_result>
+      staged;
+  staged->sample_rate = result.sample_rate;
+  staged->input_lufs = result.input_lufs;
+  staged->output_lufs = result.output_lufs;
+  staged->applied_gain_db = result.applied_gain_db;
 
-  if (out->length > 0) {
-    copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
-                         &out->right);
+  if (!result.left.empty()) {
+    copy_stereo_channels(result.left.data(), result.right.data(), result.left.size(), &staged->left,
+                         &staged->right, &staged->length);
   }
-  out->stages = copy_stage_array(result.stages);
-  out->stages_count = result.stages.size();
-  out->non_finite_substitution_count = result.non_finite_substitution_count;
-  set_chain_metrics(result, out);
+  staged->stages = copy_stage_array(result.stages);
+  staged->stages_count = result.stages.size();
+  staged->non_finite_substitution_count = result.non_finite_substitution_count;
+  set_chain_metrics(result, &staged.value());
+  staged.publish(out);
 }
 
 inline SonareError process_mastering_chain_mono(sonare::mastering::api::MasteringChain& chain,

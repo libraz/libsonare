@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <limits>
@@ -13,10 +14,13 @@
 #include "analysis/analysis_json.h"
 #include "analysis/meter_analyzer.h"
 #include "core/audio_io.h"
+#include "effects/pitch_shift.h"
+#include "mastering/api/insert_factory.h"
 #include "sonare_c_test_helpers.h"
 #include "support/alloc_guard.h"
 #include "support/schema_paths.h"
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/json.h"
 
 namespace {
@@ -494,6 +498,8 @@ TEST_CASE("C pitch shift rejects an unsupported shifted rate before allocating",
     REQUIRE(allocations == 0);
     REQUIRE(out == nullptr);
     REQUIRE(out_length == 0);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()) == sonare::kPitchShiftPlanError);
   }
 }
 
@@ -2151,5 +2157,208 @@ TEST_CASE("C CQT and key entry points reject a non-finite frequency", "[c_api][v
       REQUIRE(candidates == nullptr);
       REQUIRE(count == 0);
     }
+  }
+}
+
+TEST_CASE("C result emitters publish nothing when an allocation fails",
+          "[c_api][resource_limit][staged_output]") {
+  constexpr int rate = 22050;
+  std::vector<float> tone(rate / 2);
+  std::vector<float> decay(rate / 2);
+  uint32_t state = 12345u;
+  for (size_t i = 0; i < tone.size(); ++i) {
+    tone[i] =
+        0.4f * std::sin(2.0f * sonare::constants::kPi * 440.0f * static_cast<float>(i) / rate);
+    state = state * 1664525u + 1013904223u;
+    const float noise = static_cast<float>(state >> 8) / static_cast<float>(1u << 24) - 0.5f;
+    decay[i] = noise * std::exp(-6.0f * static_cast<float>(i) / static_cast<float>(decay.size()));
+  }
+
+  // Fails the nth allocation of one call for n = 1, 2, ...; every failing run must hand back
+  // an all-NULL, all-zero result, and at least one run must actually fail.
+  const auto sweep = [](auto call, auto is_clear, auto release) {
+    size_t failures = 0;
+    for (size_t nth = 1; nth <= 400; ++nth) {
+      SonareError error = SONARE_OK;
+      {
+        sonare::test::AllocationFailureAtGuard guard(nth);
+        error = call();
+      }
+      if (error == SONARE_OK) {
+        release();
+        break;
+      }
+      ++failures;
+      CAPTURE(nth);
+      REQUIRE(is_clear());
+      release();
+    }
+    REQUIRE(failures > 0);
+  };
+
+  SECTION("bpm") {
+    SonareBpmAnalysisResult r{};
+    sweep(
+        [&] {
+          return sonare_analyze_bpm(tone.data(), tone.size(), rate, 60.0f, 200.0f, 120.0f, 1024,
+                                    256, 4, &r);
+        },
+        [&] {
+          return r.candidates == nullptr && r.candidate_count == 0 &&
+                 r.autocorrelation == nullptr && r.autocorrelation_count == 0 &&
+                 r.tempogram == nullptr && r.tempogram_count == 0;
+        },
+        [&] { sonare_free_bpm_analysis_result(&r); });
+  }
+
+  SECTION("rhythm") {
+    SonareRhythmResult r{};
+    sweep(
+        [&] {
+          return sonare_analyze_rhythm(tone.data(), tone.size(), rate, 60.0f, 200.0f, 120.0f, 1024,
+                                       256, &r);
+        },
+        [&] { return r.beat_intervals == nullptr && r.beat_interval_count == 0; },
+        [&] { sonare_free_rhythm_result(&r); });
+  }
+
+  SECTION("timbre") {
+    SonareTimbreResult r{};
+    sweep(
+        [&] {
+          return sonare_analyze_timbre(tone.data(), tone.size(), rate, 1024, 256, 40, 13, 0.1f, &r);
+        },
+        [&] {
+          return r.spectral_centroid == nullptr && r.spectral_centroid_count == 0 &&
+                 r.spectral_flatness == nullptr && r.spectral_flatness_count == 0 &&
+                 r.spectral_rolloff == nullptr && r.spectral_rolloff_count == 0 &&
+                 r.timbre_over_time == nullptr && r.timbre_over_time_count == 0;
+        },
+        [&] { sonare_free_timbre_result(&r); });
+  }
+
+  SECTION("spectrum") {
+    SonareSpectrumResult r{};
+    sweep(
+        [&] {
+          return sonare_metering_spectrum(tone.data(), tone.size(), rate, 1024, 0, 0, 0.0f, 0.0f,
+                                          &r);
+        },
+        [&] {
+          return r.frequencies == nullptr && r.magnitude == nullptr && r.power == nullptr &&
+                 r.db == nullptr && r.bin_count == 0;
+        },
+        [&] { sonare_free_spectrum_result(&r); });
+  }
+
+  SECTION("acoustic bands") {
+    SonareAcousticResult r{};
+    sweep([&] { return sonare_analyze_impulse_response(decay.data(), decay.size(), rate, 6, &r); },
+          [&] {
+            return r.rt60_bands == nullptr && r.edt_bands == nullptr && r.c50_bands == nullptr &&
+                   r.c80_bands == nullptr && r.band_count == 0;
+          },
+          [&] { sonare_free_acoustic_result(&r); });
+  }
+
+  SECTION("mastering chain tail allocations") {
+    // The chain allocates far more than the sweep above reaches, and the output copies come last,
+    // so fail each of the final allocations of a successful call.
+    const std::vector<float> body(4096, 0.1f);
+    const auto run_mono = [&](SonareMasteringChainResult* r) {
+      return sonare_mastering_chain(body.data(), body.size(), 48000, nullptr, 0, r);
+    };
+    const auto run_stereo = [&](SonareMasteringChainStereoResult* r) {
+      return sonare_mastering_chain_stereo(body.data(), body.data(), body.size(), 48000, nullptr, 0,
+                                           r);
+    };
+    const auto count_allocations = [](auto call) {
+      size_t count = 0;
+      {
+        sonare::test::AllocationGuard guard;
+        REQUIRE(call() == SONARE_OK);
+        count = guard.count();
+      }
+      return count;
+    };
+    SonareMasteringChainResult mono{};
+    const size_t mono_total = count_allocations([&] { return run_mono(&mono); });
+    sonare_free_mastering_chain_result(&mono);
+    SonareMasteringChainStereoResult stereo{};
+    const size_t stereo_total = count_allocations([&] { return run_stereo(&stereo); });
+    sonare_free_mastering_chain_stereo_result(&stereo);
+    REQUIRE(mono_total > 16);
+    REQUIRE(stereo_total > 16);
+
+    size_t failures = 0;
+    for (size_t back = 0; back < 16; ++back) {
+      SonareMasteringChainResult m{};
+      SonareError error = SONARE_OK;
+      {
+        sonare::test::AllocationFailureAtGuard guard(mono_total - back);
+        error = run_mono(&m);
+      }
+      if (error != SONARE_OK) {
+        ++failures;
+        CAPTURE(back);
+        REQUIRE(m.samples == nullptr);
+        REQUIRE(m.length == 0);
+        REQUIRE(m.stages == nullptr);
+        REQUIRE(m.stages_count == 0);
+        REQUIRE(m.stage_gain_reduction_stages == nullptr);
+        REQUIRE(m.stage_gain_reduction_values == nullptr);
+        REQUIRE(m.stage_gain_reductions_count == 0);
+      }
+      sonare_free_mastering_chain_result(&m);
+
+      SonareMasteringChainStereoResult st{};
+      {
+        sonare::test::AllocationFailureAtGuard guard(stereo_total - back);
+        error = run_stereo(&st);
+      }
+      if (error != SONARE_OK) {
+        ++failures;
+        CAPTURE(back);
+        REQUIRE(st.left == nullptr);
+        REQUIRE(st.right == nullptr);
+        REQUIRE(st.length == 0);
+        REQUIRE(st.stages == nullptr);
+        REQUIRE(st.stages_count == 0);
+        REQUIRE(st.stage_gain_reduction_stages == nullptr);
+        REQUIRE(st.stage_gain_reduction_values == nullptr);
+        REQUIRE(st.stage_gain_reductions_count == 0);
+      }
+      sonare_free_mastering_chain_stereo_result(&st);
+    }
+    REQUIRE(failures > 0);
+  }
+
+  SECTION("stereo normalize") {
+    SonareNormalizeStereoResult r{};
+    sweep(
+        [&] {
+          return sonare_normalize_stereo(tone.data(), tone.data(), tone.size(), rate, -3.0f, &r);
+        },
+        [&] { return r.left == nullptr && r.right == nullptr && r.length == 0; },
+        [&] {
+          sonare_free_floats(r.left);
+          sonare_free_floats(r.right);
+          r = {};
+        });
+  }
+}
+
+TEST_CASE("room insert refuses an unknown materialPreset instead of ignoring it",
+          "[insert_factory][acoustic]") {
+  using sonare::mastering::api::make_insert;
+  for (const char* preset : {"6", "-1", "99"}) {
+    CAPTURE(preset);
+    const std::string params = std::string(R"({"materialPreset":)") + preset + "}";
+    REQUIRE_THROWS_AS(make_insert("effects.acoustic.roomMorph", params), sonare::SonareException);
+  }
+  for (const char* preset : {"0", "1", "5"}) {
+    CAPTURE(preset);
+    const std::string params = std::string(R"({"materialPreset":)") + preset + "}";
+    REQUIRE_NOTHROW(make_insert("effects.acoustic.roomMorph", params));
   }
 }

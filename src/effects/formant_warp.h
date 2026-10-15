@@ -41,12 +41,13 @@ inline constexpr int kFormantWarpFrameAt48k = 1024;
 
 struct FormantWarpConfig {
   float factor = 1.0f;
-  int lpc_order = 12;
+  /// Explicit LPC order, or 0 for formant_warp_lpc_order() at the input rate.
+  int lpc_order = 0;
   float amount = 1.0f;
-  /// False keeps the frame at kFormantWarpFrameAt48k samples at every rate. True
-  /// defines it in time instead: that many samples at 48 kHz, rescaled to the
-  /// input rate and rounded to a multiple of four.
-  bool frame_in_time = false;
+  /// True defines the frame in time: kFormantWarpFrameAt48k samples at 48 kHz,
+  /// rescaled to the input rate and rounded to a multiple of four. False keeps
+  /// it at that many samples at every rate.
+  bool frame_in_time = true;
 };
 
 /// @brief Factor the warp actually applies, after the range clamp and the

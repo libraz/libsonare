@@ -40,24 +40,26 @@ static_assert(offsetof(SonareKey, mode) == 4, "SonareKey::mode moved");
 static_assert(offsetof(SonareKey, confidence) == 8, "SonareKey::confidence moved");
 
 void fill_acoustic_result(const AcousticParameters& params, SonareAcousticResult* out) {
-  out->rt60 = params.rt60;
-  out->edt = params.edt;
-  out->c50 = params.c50;
-  out->c80 = params.c80;
-  out->d50 = params.d50;
-  out->band_count = params.rt60_bands.size();
-  out->rt60_bands = copy_float_vector_padded(params.rt60_bands, out->band_count);
-  out->edt_bands = copy_float_vector_padded(params.edt_bands, out->band_count);
+  sonare_c_detail::StagedOutput<SonareAcousticResult, &sonare_free_acoustic_result> staged;
+  staged->rt60 = params.rt60;
+  staged->edt = params.edt;
+  staged->c50 = params.c50;
+  staged->c80 = params.c80;
+  staged->d50 = params.d50;
+  staged->band_count = params.rt60_bands.size();
+  staged->rt60_bands = copy_float_vector_padded(params.rt60_bands, staged->band_count);
+  staged->edt_bands = copy_float_vector_padded(params.edt_bands, staged->band_count);
   // Clarity bands are not computed in blind mode; expose null (rather than a
   // NaN-filled array) so callers can distinguish "not computed" from "invalid".
-  out->c50_bands = params.c50_bands.empty()
-                       ? nullptr
-                       : copy_float_vector_padded(params.c50_bands, out->band_count);
-  out->c80_bands = params.c80_bands.empty()
-                       ? nullptr
-                       : copy_float_vector_padded(params.c80_bands, out->band_count);
-  out->confidence = params.confidence;
-  out->is_blind = params.is_blind ? 1 : 0;
+  staged->c50_bands = params.c50_bands.empty()
+                          ? nullptr
+                          : copy_float_vector_padded(params.c50_bands, staged->band_count);
+  staged->c80_bands = params.c80_bands.empty()
+                          ? nullptr
+                          : copy_float_vector_padded(params.c80_bands, staged->band_count);
+  staged->confidence = params.confidence;
+  staged->is_blind = params.is_blind ? 1 : 0;
+  staged.publish(out);
 }
 
 bool from_c_pitch_class(SonarePitchClass pitch, PitchClass* out) {

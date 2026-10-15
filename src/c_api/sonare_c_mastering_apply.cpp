@@ -174,7 +174,6 @@ SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, 
   SONARE_C_TRY
   auto result = sonare::mastering::api::apply_named_processor_stereo(
       processor_name, left, right, length, sample_rate, to_params(params, param_count));
-  out->length = result.left.size();
   out->sample_rate = result.sample_rate;
   out->input_lufs = result.input_lufs;
   out->output_lufs = result.output_lufs;
@@ -182,8 +181,8 @@ SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, 
   out->latency_samples = result.latency_samples;
   out->loudness_target_limited = result.loudness_target_limited ? 1 : 0;
   out->non_finite_substitution_count = result.non_finite_substitution_count;
-  copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
-                       &out->right);
+  copy_stereo_channels(result.left.data(), result.right.data(), result.left.size(), &out->left,
+                       &out->right, &out->length);
   return SONARE_OK;
   SONARE_C_CATCH
 }

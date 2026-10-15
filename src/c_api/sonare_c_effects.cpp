@@ -206,6 +206,7 @@ SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sampl
 
   PitchShiftPlan plan;
   if (!make_pitch_shift_plan(length, sample_rate, semitones, &plan)) {
+    set_last_error_static(SONARE_ERROR_INVALID_PARAMETER, kPitchShiftPlanError);
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
@@ -265,10 +266,9 @@ SonareError run_normalize_stereo(const float* left, const float* right, size_t l
   SONARE_C_TRY
   const auto result = normalize_pair(Audio::from_buffer(left, length, sample_rate),
                                      Audio::from_buffer(right, length, sample_rate));
-  out->length = result.left.size();
   out->applied_gain_db = result.applied_gain_db;
-  copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
-                       &out->right);
+  copy_stereo_channels(result.left.data(), result.right.data(), result.left.size(), &out->left,
+                       &out->right, &out->length);
   return SONARE_OK;
   SONARE_C_CATCH
 }

@@ -93,6 +93,11 @@ const char* last_error_message() noexcept;
 /// @details @p code is the SonareError the failing call returns, or would have
 ///          returned had it not reported failure through a NULL handle.
 void set_last_error(SonareError code, const char* msg) noexcept;
+/// @brief Records @p code with @p msg, a string with static storage duration.
+/// @details Never allocates: the message is read through the fallback pointer
+///          instead of being copied, so a refusal made before any buffer exists
+///          can still carry its reason.
+void set_last_error_static(SonareError code, const char* msg) noexcept;
 /// @brief Clears the thread-local detailed-error message and its code.
 /// @details Called at the entry of every public C-ABI call (via SONARE_C_TRY and
 ///          the run_offline / run_mono_offline helpers) so a message recorded by

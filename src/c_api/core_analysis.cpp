@@ -78,27 +78,29 @@ SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_r
     config.hop_length = hop_length;
 
     BpmAnalyzer analyzer(audio, config);
-    out->bpm = analyzer.bpm();
-    out->confidence = analyzer.confidence();
+    StagedOutput<SonareBpmAnalysisResult, &sonare_free_bpm_analysis_result> staged;
+    staged->bpm = analyzer.bpm();
+    staged->confidence = analyzer.confidence();
 
     std::vector<BpmCandidate> candidates = analyzer.candidates(max_candidates);
-    out->candidate_count = candidates.size();
+    staged->candidate_count = candidates.size();
     if (!candidates.empty()) {
       std::unique_ptr<SonareBpmCandidate[]> cands(new SonareBpmCandidate[candidates.size()]);
       for (size_t i = 0; i < candidates.size(); ++i) {
         cands[i].bpm = candidates[i].bpm;
         cands[i].confidence = candidates[i].confidence;
       }
-      out->candidates = release_array(cands);
+      staged->candidates = release_array(cands);
     }
 
     const std::vector<float>& autocorr = analyzer.autocorrelation();
-    out->autocorrelation_count = autocorr.size();
-    out->autocorrelation = copy_vector(autocorr);
+    staged->autocorrelation_count = autocorr.size();
+    staged->autocorrelation = copy_vector(autocorr);
 
     const std::vector<float>& tempogram = analyzer.tempogram();
-    out->tempogram_count = tempogram.size();
-    out->tempogram = copy_vector(tempogram);
+    staged->tempogram_count = tempogram.size();
+    staged->tempogram = copy_vector(tempogram);
+    staged.publish(out);
     return SONARE_OK;
   });
 }
@@ -196,18 +198,20 @@ SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sampl
 
     RhythmAnalyzer analyzer(audio, config);
     RhythmFeatures features = analyzer.features();
-    out->bpm = analyzer.bpm();
-    out->time_signature.numerator = features.time_signature.numerator;
-    out->time_signature.denominator = features.time_signature.denominator;
-    out->time_signature.confidence = features.time_signature.confidence;
-    out->groove_type = to_c_groove_type(features.groove_type);
-    out->syncopation = features.syncopation;
-    out->pattern_regularity = features.pattern_regularity;
-    out->tempo_stability = features.tempo_stability;
+    StagedOutput<SonareRhythmResult, &sonare_free_rhythm_result> staged;
+    staged->bpm = analyzer.bpm();
+    staged->time_signature.numerator = features.time_signature.numerator;
+    staged->time_signature.denominator = features.time_signature.denominator;
+    staged->time_signature.confidence = features.time_signature.confidence;
+    staged->groove_type = to_c_groove_type(features.groove_type);
+    staged->syncopation = features.syncopation;
+    staged->pattern_regularity = features.pattern_regularity;
+    staged->tempo_stability = features.tempo_stability;
 
     const std::vector<float>& intervals = analyzer.beat_intervals();
-    out->beat_interval_count = intervals.size();
-    out->beat_intervals = copy_vector(intervals);
+    staged->beat_interval_count = intervals.size();
+    staged->beat_intervals = copy_vector(intervals);
+    staged.publish(out);
     return SONARE_OK;
   });
 }
@@ -291,26 +295,27 @@ SonareError sonare_analyze_timbre(const float* samples, size_t length, int sampl
 
     TimbreAnalyzer analyzer(audio, config);
     const Timbre& timbre = analyzer.timbre();
-    out->brightness = timbre.brightness;
-    out->warmth = timbre.warmth;
-    out->density = timbre.density;
-    out->roughness = timbre.roughness;
-    out->complexity = timbre.complexity;
+    StagedOutput<SonareTimbreResult, &sonare_free_timbre_result> staged;
+    staged->brightness = timbre.brightness;
+    staged->warmth = timbre.warmth;
+    staged->density = timbre.density;
+    staged->roughness = timbre.roughness;
+    staged->complexity = timbre.complexity;
 
     const std::vector<float>& centroid = analyzer.spectral_centroid();
-    out->spectral_centroid_count = centroid.size();
-    out->spectral_centroid = copy_vector(centroid);
+    staged->spectral_centroid_count = centroid.size();
+    staged->spectral_centroid = copy_vector(centroid);
 
     const std::vector<float>& flatness = analyzer.spectral_flatness();
-    out->spectral_flatness_count = flatness.size();
-    out->spectral_flatness = copy_vector(flatness);
+    staged->spectral_flatness_count = flatness.size();
+    staged->spectral_flatness = copy_vector(flatness);
 
     const std::vector<float>& rolloff = analyzer.spectral_rolloff();
-    out->spectral_rolloff_count = rolloff.size();
-    out->spectral_rolloff = copy_vector(rolloff);
+    staged->spectral_rolloff_count = rolloff.size();
+    staged->spectral_rolloff = copy_vector(rolloff);
 
     const std::vector<Timbre>& over_time = analyzer.timbre_over_time();
-    out->timbre_over_time_count = over_time.size();
+    staged->timbre_over_time_count = over_time.size();
     if (!over_time.empty()) {
       std::unique_ptr<SonareTimbreFrame[]> frames(new SonareTimbreFrame[over_time.size()]);
       for (size_t i = 0; i < over_time.size(); ++i) {
@@ -320,8 +325,9 @@ SonareError sonare_analyze_timbre(const float* samples, size_t length, int sampl
         frames[i].roughness = over_time[i].roughness;
         frames[i].complexity = over_time[i].complexity;
       }
-      out->timbre_over_time = release_array(frames);
+      staged->timbre_over_time = release_array(frames);
     }
+    staged.publish(out);
     return SONARE_OK;
   });
 }

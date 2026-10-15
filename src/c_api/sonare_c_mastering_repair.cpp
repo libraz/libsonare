@@ -420,9 +420,8 @@ SonareError run_stereo(const float* left, const float* right, size_t length, int
 /// Copy a stereo core result's channels into @p out and record the length.
 template <typename StereoResult, typename CResult>
 void fill_stereo_channels(const StereoResult& result, CResult* out) {
-  out->length = result.left.size();
-  copy_stereo_channels(result.left.data(), result.right.data(), out->length, &out->left,
-                       &out->right);
+  copy_stereo_channels(result.left.data(), result.right.data(), result.left.size(), &out->left,
+                       &out->right, &out->length);
 }
 
 }  // namespace

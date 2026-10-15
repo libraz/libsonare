@@ -663,8 +663,12 @@ sonare::acoustic::ShoeboxRoom acoustic_room_from_json(const detail::ParamMap& pa
   // — including rejecting an out-of-range scalar absorption rather than
   // clamping it, which is the one place these two used to disagree.
   WallMaterialRequest request;
-  request.has_preset =
-      material_preset_from_selector(detail::i(params, "materialPreset", 0, kNone), &request.preset);
+  const int material_preset = detail::i(params, "materialPreset", 0, kNone);
+  request.has_preset = material_preset_from_selector(material_preset, &request.preset);
+  if (material_preset != 0 && !request.has_preset) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "materialPreset must be 0 (none) or a preset from 1 to 5");
+  }
   request.absorption = f(params, "absorption", 0.2f, kNone);
   if (json_root != nullptr) {
     request.absorption_bands =

@@ -269,7 +269,7 @@ TEST_CASE("Absolute mode warps the unshifted voice by the factor over the pitch 
   REQUIRE(a.size() == expected.size());
   REQUIRE(std::equal(a.data(), a.data() + a.size(), expected.data()));
 
-  // Relative stays the default: the warp follows the shift, with the fixed LPC order.
+  // Relative stays the default: the warp follows the shift, with the rate-scaled frame and order.
   VoiceChangerConfig defaults;
   defaults.pitch_semitones = 3.0f;
   defaults.formant_factor = 1.1f;
@@ -278,8 +278,9 @@ TEST_CASE("Absolute mode warps the unshifted voice by the factor over the pitch 
   const sonare::Audio d = VoiceChanger(defaults).process(audio);
   const sonare::Audio e = VoiceChanger(explicit_relative).process(audio);
   const sonare::Audio shifted = sonare::pitch_shift(audio, 3.0f, sonare::PitchShiftConfig{});
-  const sonare::Audio relative_expected =
-      FormantWarp(FormantWarpConfig{1.1f, 12, 1.0f}).process(shifted);
+  FormantWarpConfig relative_config;
+  relative_config.factor = 1.1f;
+  const sonare::Audio relative_expected = FormantWarp(relative_config).process(shifted);
   REQUIRE(std::equal(d.data(), d.data() + d.size(), e.data()));
   REQUIRE(std::equal(d.data(), d.data() + d.size(), relative_expected.data()));
 }
