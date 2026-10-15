@@ -60,7 +60,7 @@ class FrontEnd {
 
   /// Latency in frames; equal across the front ends of one renderer.
   int latency() const noexcept;
-  /// Frames of silent input after which the output has decayed below -60 dB:
+  /// Frames of silent input after which the output has decayed below rt::kTailFloor:
   /// latency, plus N when an upmix is present, plus the slowest stateful
   /// stage's decay.
   int drain_frames() const noexcept;

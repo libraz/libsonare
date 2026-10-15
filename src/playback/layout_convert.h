@@ -68,7 +68,7 @@ class LayoutConverter {
   /// Adds `channel_count(source)` planes into the bus planes (accumulates).
   void process(const float* const* source, float* const* bus, int frames) noexcept;
   void reset() noexcept;
-  /// Frames for the fold-down filter to decay to -60 dB (0 without fold-down).
+  /// Frames for the fold-down filter to decay below rt::kTailFloor (0 without fold-down).
   int decay_frames() const noexcept;
 
  private:

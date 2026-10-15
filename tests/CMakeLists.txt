@@ -604,6 +604,7 @@ if(BUILD_PLAYBACK)
     playback/sample_rate_test.cpp
     playback/speaker_stage_test.cpp
     playback/upmix_test.cpp
+    playback/decay_horizon_test.cpp
   )
   target_link_libraries(sonare_tests PRIVATE sonare_playback)
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_PLAYBACK=1)
@@ -756,6 +757,7 @@ if(BUILD_ARRANGEMENT)
     midi/sysex_framing_test.cpp
     midi/midi_fx_test.cpp
     midi/midi_fx_nan_config_test.cpp
+    midi/sequencer_stop_order_test.cpp
     midi/channel_voice_predicate_test.cpp
     midi/program_map_test.cpp
     midi/gm_gs_resolution_test.cpp

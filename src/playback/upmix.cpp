@@ -9,6 +9,7 @@
 #include "core/fft.h"
 #include "core/window.h"
 #include "mastering/multiband/crossover.h"
+#include "playback/impulse_tail.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -31,12 +32,8 @@ constexpr std::array<double, kAllpassStages> kAllpassMsLeft{4.1, 6.3, 9.7, 13.1}
 constexpr std::array<double, kAllpassStages> kAllpassMsRight{4.7, 5.9, 10.3, 12.7};
 /// Pll + Prr below this is silence: phi = 1 (no ambience).
 constexpr double kPowerFloor = static_cast<double>(kEpsilon) * kEpsilon;
-/// -60 dB in energy: the remaining-tail fraction at the decay horizon.
-constexpr double kDecayEnergyThreshold = 1e-6;
 /// Measurement window a drain is checked over; the horizon clears it entirely.
 constexpr double kDecayWindowMs = 5.0;
-/// Longest impulse response simulated when measuring a decay, in seconds.
-constexpr double kDecaySimulationSeconds = 2.0;
 
 // STFT output streams, in the order the frame loop writes them.
 enum Stream { kFrontL, kFrontR, kCentre, kAmbL, kAmbR, kAnti, kStreamCount };
@@ -114,20 +111,6 @@ struct Delay {
     return y;
   }
 };
-
-/// First index T at which the energy remaining in h[T..] is -60 dB of the
-/// total: what sustained input leaves behind T frames after it stops.
-int decay_length(const std::vector<float>& h) {
-  double total = 0.0;
-  for (float v : h) total += static_cast<double>(v) * v;
-  const double threshold = total * kDecayEnergyThreshold;
-  double tail = 0.0;
-  for (int i = static_cast<int>(h.size()) - 1; i >= 0; --i) {
-    tail += static_cast<double>(h[static_cast<size_t>(i)]) * h[static_cast<size_t>(i)];
-    if (tail > threshold) return i + 1;
-  }
-  return 0;
-}
 
 mastering::multiband::CrossoverConfig lfe_crossover_config() {
   mastering::multiband::CrossoverConfig config;
@@ -441,30 +424,18 @@ void Upmixer::prepare(double sample_rate, int max_block_size, ChannelLayout outp
   m.ramp_len = ms_to_frames(kRampMs, sample_rate);
 
   // Decay horizons, measured on the prepared filters' impulse responses.
-  const auto sim_len = static_cast<size_t>(kDecaySimulationSeconds * sample_rate);
+  const auto sim_len = static_cast<size_t>(kImpulseProbeSeconds * sample_rate);
   std::vector<float> h(sim_len, 0.0f);
   int chain_decay = 0;
   for (const auto* ms : {&kAllpassMsLeft, &kAllpassMsRight}) {
     AllpassChain chain;
     chain.prepare(*ms, sample_rate);
     for (size_t i = 0; i < sim_len; ++i) h[i] = chain.process(i == 0 ? 1.0f : 0.0f);
-    chain_decay = std::max(chain_decay, decay_length(h));
+    chain_decay = std::max(chain_decay, impulse_tail_frames(h));
   }
-  mastering::multiband::Crossover probe(lfe_crossover_config());
-  probe.prepare(sample_rate, m.max_block, 1);
-  mastering::multiband::CrossoverScratch probe_scratch;
-  probe.prepare_scratch(probe_scratch, 1, m.max_block);
-  std::fill(h.begin(), h.end(), 0.0f);
-  h[0] = 1.0f;
-  std::vector<float> lfe_h(sim_len, 0.0f);
-  for (size_t start = 0; start < sim_len; start += blk) {
-    const int count = static_cast<int>(std::min(blk, sim_len - start));
-    float* ptr = h.data() + start;
-    probe.split_into(&ptr, 1, count, probe_scratch);
-    std::copy(probe_scratch.band_channels[0][0], probe_scratch.band_channels[0][0] + count,
-              lfe_h.begin() + static_cast<std::ptrdiff_t>(start));
-  }
-  m.decay = std::max(chain_decay + ambience_delay, decay_length(lfe_h)) +
+  const std::vector<float> lfe_h =
+      crossover_low_band_impulse(lfe_crossover_config(), sample_rate, m.max_block);
+  m.decay = std::max(chain_decay + ambience_delay, impulse_tail_frames(lfe_h)) +
             ms_to_frames(kDecayWindowMs, sample_rate);
 
   m.clear();

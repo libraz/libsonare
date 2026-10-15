@@ -9,6 +9,7 @@
 
 #include "mastering/multiband/crossover.h"
 #include "mixing/downmix.h"
+#include "playback/impulse_tail.h"
 #include "rt/gain_pair_glide.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -18,10 +19,6 @@ namespace sonare::playback {
 namespace {
 
 constexpr float kLfeCutoffHz = 120.0f;
-/// -60 dB in amplitude: the decay horizon reported by decay_frames().
-constexpr float kDecayThreshold = 1e-3f;
-/// Longest fold-down impulse response simulated when measuring the decay.
-constexpr double kDecaySimulationSeconds = 2.0;
 
 // Canonical WAVE_FORMAT_EXTENSIBLE plane indices (SpeakerRole enum order).
 constexpr int kPlaneL = static_cast<int>(SpeakerRole::L);
@@ -39,17 +36,6 @@ mastering::multiband::CrossoverConfig fold_crossover_config() {
   config.slope = mastering::multiband::CrossoverSlope::LR4;
   config.mode = mastering::multiband::CrossoverMode::LinkwitzRiley;
   return config;
-}
-
-/// Last index at which |h| exceeds -60 dB of its peak, plus one.
-int decay_length(const std::vector<float>& h) {
-  float peak = 0.0f;
-  for (float v : h) peak = std::max(peak, std::abs(v));
-  const float threshold = peak * kDecayThreshold;
-  for (int i = static_cast<int>(h.size()) - 1; i >= 0; --i) {
-    if (std::abs(h[static_cast<size_t>(i)]) > threshold) return i + 1;
-  }
-  return 0;
 }
 
 }  // namespace
@@ -198,23 +184,8 @@ void LayoutConverter::prepare(double sample_rate, int max_block_size, ChannelLay
   // Decay horizon, measured on the prepared filter's own impulse response.
   m.decay = 0;
   if (m.fold_needed) {
-    mastering::multiband::Crossover probe(fold_crossover_config());
-    probe.prepare(sample_rate, max_block_size, 1);
-    mastering::multiband::CrossoverScratch probe_scratch;
-    probe.prepare_scratch(probe_scratch, 1, max_block_size);
-    const auto sim_len = static_cast<size_t>(kDecaySimulationSeconds * sample_rate);
-    std::vector<float> h(sim_len, 0.0f);
-    h[0] = 1.0f;
-    std::vector<float> response(sim_len, 0.0f);
-    for (size_t start = 0; start < sim_len; start += static_cast<size_t>(max_block_size)) {
-      const int count =
-          static_cast<int>(std::min(static_cast<size_t>(max_block_size), sim_len - start));
-      float* ptr = h.data() + start;
-      probe.split_into(&ptr, 1, count, probe_scratch);
-      std::copy(probe_scratch.band_channels[0][0], probe_scratch.band_channels[0][0] + count,
-                response.begin() + static_cast<std::ptrdiff_t>(start));
-    }
-    m.decay = decay_length(response);
+    m.decay = impulse_tail_frames(
+        crossover_low_band_impulse(fold_crossover_config(), sample_rate, max_block_size));
   }
 }
 

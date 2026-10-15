@@ -53,7 +53,7 @@ class Upmixer {
   /// Always `upmix_latency_frames(sample_rate)`.
   int latency_samples() const noexcept;
   /// Frames for the ambience all-pass chain, its delay and the LFE filter to
-  /// decay to -60 dB once the input is silent (excluding the latency).
+  /// decay below rt::kTailFloor once the input is silent (excluding the latency).
   int decay_frames() const noexcept;
   ChannelLayout output_layout() const noexcept;
 
