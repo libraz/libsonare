@@ -12,17 +12,18 @@
 namespace sonare::editing::voice_changer {
 
 /// @brief Adapts @ref RealtimeVoiceChanger to @c rt::ProcessorBase for mixer strips and chains.
-/// @details Mono and stereo. Unlike the low-level class, which clamps, construction refuses a
-///          configuration with any out-of-domain or non-finite field (InvalidParameter naming
-///          the key), so the published parameter bounds are real. Realtime automation clamps.
+/// @details Mono and stereo. Construction refuses a configuration with any out-of-domain
+///          or non-finite field (InvalidParameter naming the key), so the published parameter
+///          bounds are real. Automation refuses an out-of-range value the same way, by returning
+///          false and leaving the configuration unchanged.
 ///
 ///          The retune grain size, the reverb seed, the formant mode and the inter-sample-peak
 ///          limiter switch are construction-time only: the grain size, the formant mode and the
 ///          switch change the reported latency, and a delay compensated by a host must not move
 ///          while it runs. In absolute formant mode (@c formantMode, @c relative or @c absolute)
 ///          @c formantAmount is ignored; construction refuses a @c formantFactor the warp cannot
-///          reach at the configured @c retuneSemitones, and automation clamps the warp to its
-///          range. Every other numeric field
+///          reach at the configured @c retuneSemitones, and automation refuses a value that
+///          would leave the warp out of reach. Every other numeric field
 ///          is an automatable parameter (see @ref parameter_descriptors).
 ///
 ///          Latency is one retune grain plus, in absolute formant mode, one warp frame plus, when

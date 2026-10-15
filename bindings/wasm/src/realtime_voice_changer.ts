@@ -1,4 +1,5 @@
 import { assertHandleLive } from './_handle_guard.js';
+import { ErrorCode } from './errors.js';
 import { getSonareModule } from './module_state.js';
 import type {
   RealtimeVoiceChangerConfigInput,
@@ -6,6 +7,21 @@ import type {
   VoicePresetId,
 } from './public_types.js';
 import { assertString } from './validation.js';
+
+/**
+ * The core refuses an out-of-range or non-finite field, an unreachable absolute formant warp and
+ * a live formant-mode change with a coded library failure; at this facade they are argument
+ * refusals, so they are a RangeError like every other out-of-domain argument.
+ */
+function configRefusal(error: unknown): unknown {
+  if (
+    (error as { code?: unknown }).code === ErrorCode.InvalidParameter &&
+    /formant (mode|factor)|out of range|must be finite/.test((error as Error).message)
+  ) {
+    return new RangeError((error as Error).message);
+  }
+  return error;
+}
 
 /**
  * Zero-copy realtime buffer pair for {@link RealtimeVoiceChanger} mono
@@ -88,9 +104,13 @@ export class RealtimeVoiceChanger {
   ) {
     requirePodFormantMode(config);
     const module = getSonareModule();
-    this.changerHandle = module.createRealtimeVoiceChanger(
-      config as Record<string, unknown> | string,
-    );
+    try {
+      this.changerHandle = module.createRealtimeVoiceChanger(
+        config as Record<string, unknown> | string,
+      );
+    } catch (error) {
+      throw configRefusal(error);
+    }
     if (sampleRate !== undefined) {
       // `prepare` rejects a non-positive sample rate, a negative block size and
       // a channel count outside [1, 2]. The handle is already allocated by
@@ -122,16 +142,27 @@ export class RealtimeVoiceChanger {
     // The shared native parser recognizes the flat POD produced by
     // realtimeVoiceChangerPresetConfig, so bindings never duplicate its 36-field mapping.
     requirePodFormantMode(config);
-    this.changer.setConfig(config as Record<string, unknown> | string);
+    try {
+      this.changer.setConfig(config as Record<string, unknown> | string);
+    } catch (error) {
+      throw configRefusal(error);
+    }
   }
 
   /**
    * Apply a flat, pre-normalized config without JSON serialization. Intended
    * for AudioWorklet control messages whose sender prepared the POD on the
    * main thread.
+   *
+   * A non-finite or out-of-range field throws, naming the field and its range,
+   * and the previous configuration stays in effect; nothing is clamped.
    */
   setPodConfig(config: RealtimeVoiceChangerPodConfig): void {
-    this.changer.setPodConfig(config);
+    try {
+      this.changer.setPodConfig(config);
+    } catch (error) {
+      throw configRefusal(error);
+    }
   }
 
   configJson(): string {

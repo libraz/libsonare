@@ -52,7 +52,9 @@ export interface RealtimeVoiceChangerOptions {
 /**
  * Flat (normalized) realtime-voice-changer configuration, mirroring the
  * `SonareRealtimeVoiceChangerConfig` POD returned by
- * `realtimeVoiceChangerPresetConfig`.
+ * `realtimeVoiceChangerPresetConfig`. A field outside its documented range makes
+ * `setConfig` and the constructor throw a `RangeError` naming the field and its
+ * range; nothing is clamped.
  */
 export interface RealtimeVoiceChangerConfig {
   inputGainDb: number;

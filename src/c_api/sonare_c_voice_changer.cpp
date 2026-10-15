@@ -355,9 +355,7 @@ SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChange
   SONARE_C_TRY
   editing::voice_changer::RealtimeVoiceChangerConfig cfg;
   if (config) {
-    // Mirror the JSON entry path: reject NaN/Inf early (would propagate into
-    // filter coefficients) rather than relying on normalize() alone. Range
-    // sanitization still happens inside set_config().
+    // Mirror the JSON entry path: refuse NaN/Inf and out-of-range fields.
     editing::voice_changer::RealtimeVoiceChangerConfig normalized;
     std::string error;
     if (!vc_pod_is_valid(*config, &error) ||

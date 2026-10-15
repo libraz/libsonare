@@ -246,8 +246,9 @@ class RealtimeVoiceChanger:
     def set_config_pod(self, config: RealtimeVoiceChangerConfig) -> None:
         """Realtime-safe configuration update via the flat POD path.
 
-        Equivalent to :meth:`set_config` but skips the JSON round-trip. The C
-        side still clamps out-of-range values rather than rejecting them.
+        Equivalent to :meth:`set_config` but skips the JSON round-trip. A
+        non-finite or out-of-range field raises ``SonareValueError`` naming the
+        field and its range, and the previous configuration stays in effect.
         """
         if not hasattr(self._lib, "sonare_realtime_voice_changer_set_config"):
             raise _not_supported(
@@ -522,9 +523,9 @@ class RealtimeVoiceChangerConfig:
     every field is seeded from the built-in ``neutral-monitor`` preset (fetched
     from the library once and cached), so a default-constructed instance is a
     usable neutral voice rather than a bypassed-gate / flat-EQ configuration.
-    Values are normalised on the C side after
-    :func:`RealtimeVoiceChanger.set_config_pod`, so out-of-range entries are
-    clamped rather than rejected.
+    An out-of-range entry is refused by
+    :func:`RealtimeVoiceChanger.set_config_pod` and at creation with a
+    ``SonareValueError``; nothing is clamped.
 
     ``formant_mode`` is ``"relative"`` (default) or ``"absolute"`` and is fixed
     when the changer is created: :func:`RealtimeVoiceChanger.set_config_pod`

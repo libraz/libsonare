@@ -263,3 +263,17 @@ def test_unreachable_absolute_warp_is_refused_with_the_reachable_range() -> None
     unreachable = dataclasses.replace(base, formant_mode="absolute", retune_semitones=-9.0)
     with pytest.raises(ValueError, match=r"\[0\.55, 0\.9811\]"):
         libsonare.RealtimeVoiceChanger(48000, _flat(unreachable))
+
+
+def test_out_of_range_field_is_refused_and_the_previous_config_kept() -> None:
+    base = libsonare.realtime_voice_changer_preset_config("neutral-monitor")
+    with libsonare.RealtimeVoiceChanger(48000, _flat(base)) as changer:
+        before = changer.config_pod()
+        factor_range = r"formant\.factor out of range \[0\.55, 1\.65\]"
+        with pytest.raises(SonareValueError, match=factor_range):
+            changer.set_config_pod(dataclasses.replace(base, formant_factor=3.0))
+        with pytest.raises(SonareValueError, match=r"limiter\.ceilingDb out of range"):
+            changer.set_config_pod(dataclasses.replace(base, limiter_ceiling_db=0.5))
+        assert changer.config_pod() == before
+    with pytest.raises(SonareValueError, match="out of range"):
+        libsonare.RealtimeVoiceChanger(48000, _flat(dataclasses.replace(base, formant_factor=3.0)))

@@ -22,7 +22,7 @@ TEST_CASE("RealtimeVoiceChanger silent input produces silence with aggressive ga
   cfg.compressor = {0.0f, 1.0f, 5.0f, 50.0f, 0.0f};
   cfg.deesser = {7000.0f, -6.0f, 1.0f, 0.0f};
   cfg.reverb.mix = 0.0f;
-  cfg.limiter.ceiling_db = 0.0f;
+  cfg.limiter.ceiling_db = -1.0f;
 
   RealtimeVoiceChanger changer(cfg);
   changer.prepare(sample_rate, block, 1);
@@ -245,8 +245,7 @@ TEST_CASE(
   constexpr int block = 128;
   constexpr int race_blocks = 4000;
   constexpr int settle_blocks = 64;  // >> the 10 ms output-gain smoother ramp.
-  // Distinctive final value: -36 dB is the normalizer's clamp floor
-  // (realtime/config.cpp: std::clamp(output_gain_db, -36.0f, 12.0f)), well
+  // Distinctive final value: -36 dB is the lowest accepted output gain, well
   // below the -3/-9 dB values used during the race, so a dropped final
   // update is unambiguous in the rendered peak level.
   constexpr float kFinalOutputGainDb = -36.0f;
@@ -462,11 +461,11 @@ TEST_CASE("RealtimeVoiceChanger resets ISP lookahead across a dry interval",
   config.retune = {0.0f, 0.0f, 0};
   config.formant = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
   config.eq = {20.0f, 0.0f, 0.0f, 0.0f};
-  config.gate = {-120.0f, 1.0f, 1.0f, 0.0f};
-  config.compressor = {0.0f, 1.0f, 1.0f, 1.0f, 0.0f};
-  config.deesser = {7000.0f, 0.0f, 1.0f, 0.0f};
+  config.gate = {-90.0f, 1.0f, 5.0f, 0.0f};
+  config.compressor = {0.0f, 1.0f, 1.0f, 5.0f, 0.0f};
+  config.deesser = {7000.0f, -6.0f, 1.0f, 0.0f};
   config.reverb.mix = 0.0f;
-  config.limiter = {0.0f, 1.0f, true, 0.0f};
+  config.limiter = {-1.0f, 1.0f, true, 0.0f};
 
   RealtimeVoiceChanger changer(config);
   changer.prepare(sample_rate, block_size, 1);

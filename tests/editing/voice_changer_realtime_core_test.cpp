@@ -357,17 +357,22 @@ TEST_CASE("RealtimeVoiceChanger set_config does not reallocate after prepare", "
   }
 }
 
-TEST_CASE("RealtimeVoiceChanger constructor normalizes and derives gains", "[voice_changer]") {
-  RealtimeVoiceChangerConfig config;
-  config.input_gain_db = 99.0f;    // out of range, must clamp
-  config.output_gain_db = -99.0f;  // out of range, must clamp
-  config.wet_mix = 2.5f;           // out of range, must clamp
-  RealtimeVoiceChanger changer(config);
-  REQUIRE(changer.config().input_gain_db <= 24.0f);
-  REQUIRE(changer.config().output_gain_db >= -36.0f);
-  REQUIRE(changer.config().wet_mix == 1.0f);
-  // Process should be valid only after prepare; but constructor must have
-  // propagated normalization into config_ already (visible via config()).
+TEST_CASE("RealtimeVoiceChanger constructor refuses out-of-range gains and mix",
+          "[voice_changer]") {
+  for (const auto mutate : {+[](RealtimeVoiceChangerConfig& c) { c.input_gain_db = 99.0f; },
+                            +[](RealtimeVoiceChangerConfig& c) { c.output_gain_db = -99.0f; },
+                            +[](RealtimeVoiceChangerConfig& c) { c.wet_mix = 2.5f; }}) {
+    RealtimeVoiceChangerConfig config;
+    mutate(config);
+    REQUIRE_THROWS_AS(RealtimeVoiceChanger(config), sonare::SonareException);
+  }
+  RealtimeVoiceChangerConfig edge;
+  edge.input_gain_db = 24.0f;
+  edge.output_gain_db = -36.0f;
+  edge.wet_mix = 1.0f;
+  RealtimeVoiceChanger changer(edge);
+  REQUIRE(changer.config().input_gain_db == 24.0f);
+  REQUIRE(changer.config().output_gain_db == -36.0f);
 }
 
 TEST_CASE("RealtimeVoiceChanger preset JSON exposes human-readable names", "[voice_changer]") {
@@ -487,15 +492,90 @@ TEST_CASE("validate_realtime_voice_changer_config rejects non-finite values",
   REQUIRE(error.find("formant.factor") != std::string::npos);
 }
 
-TEST_CASE("validate_realtime_voice_changer_config accepts finite out-of-range values and clamps",
+TEST_CASE("validate_realtime_voice_changer_config refuses finite out-of-range values",
           "[voice_changer][validate]") {
   RealtimeVoiceChangerConfig config;
   config.retune.semitones = 1000.0f;  // Way out of range but finite.
   std::string error;
   RealtimeVoiceChangerConfig normalized;
+  REQUIRE_FALSE(validate_realtime_voice_changer_config(config, &normalized, &error));
+  REQUIRE(error == "retune.semitones out of range [-24, 24], got 1000");
+
+  config = {};
+  config.formant.factor = 3.0f;
+  REQUIRE_FALSE(validate_realtime_voice_changer_config(config, &normalized, &error));
+  REQUIRE(error == "formant.factor out of range [0.55, 1.65], got 3");
+
+  config = {};
+  config.limiter.isp_ceiling_dbtp = 0.5f;
+  REQUIRE_FALSE(validate_realtime_voice_changer_config(config, &normalized, &error));
+  REQUIRE(error.find("limiter.ispCeilingDbtp out of range [-12, 0]") != std::string::npos);
+
+  config = {};
+  config.retune.grain_size = 100000;
+  REQUIRE_FALSE(validate_realtime_voice_changer_config(config, &normalized, &error));
+  REQUIRE(error.find("retune.grainSize out of range") != std::string::npos);
+
+  config = {};
+  config.formant_mode = static_cast<FormantMode>(7);
+  REQUIRE_FALSE(validate_realtime_voice_changer_config(config, &normalized, &error));
+}
+
+TEST_CASE("validate_realtime_voice_changer_config accepts the range edges unchanged",
+          "[voice_changer][validate]") {
+  RealtimeVoiceChangerConfig config;
+  config.retune.semitones = 24.0f;
+  config.formant.factor = 0.55f;
+  config.reverb.mix = 0.45f;
+  config.limiter.ceiling_db = -12.0f;
+  config.limiter.isp_ceiling_dbtp = 0.0f;
+  std::string error;
+  RealtimeVoiceChangerConfig normalized;
   REQUIRE(validate_realtime_voice_changer_config(config, &normalized, &error));
   REQUIRE(error.empty());
   REQUIRE(normalized.retune.semitones == 24.0f);
+  REQUIRE(normalized.formant.factor == 0.55f);
+  REQUIRE(normalized.reverb.mix == 0.45f);
+  REQUIRE(realtime_voice_changer_config_to_json(normalized) ==
+          realtime_voice_changer_config_to_json(config));
+}
+
+TEST_CASE("RealtimeVoiceChanger constructor and set_config refuse an out-of-range field",
+          "[voice_changer][validate]") {
+  RealtimeVoiceChangerConfig bad;
+  bad.formant.factor = 3.0f;
+  REQUIRE_THROWS_AS(RealtimeVoiceChanger(bad), sonare::SonareException);
+
+  RealtimeVoiceChangerConfig good;
+  good.retune.semitones = 5.0f;
+  RealtimeVoiceChanger changer(good);
+  changer.prepare(48000, 128, 1);
+  REQUIRE_THROWS_AS(changer.set_config(bad), sonare::SonareException);
+  REQUIRE(changer.config().retune.semitones == 5.0f);
+  REQUIRE(changer.config().formant.factor == 1.0f);
+}
+
+TEST_CASE("realtime_voice_changer_config_from_input refuses an out-of-range flat POD",
+          "[voice_changer][validate]") {
+  RealtimeVoiceChangerConfig parsed;
+  std::string error;
+  // A flat POD built from the neutral preset with one field pushed out of range.
+  const std::string flat = R"({"inputGainDb":0,"outputGainDb":0,"wetMix":1,"retuneSemitones":0,
+    "retuneMix":1,"retuneGrainSize":0,"formantFactor":3,"formantAmount":1,"formantBody":0,
+    "formantBrightness":0,"formantNasal":0,"eqHighpassHz":80,"eqBodyDb":0,"eqPresenceDb":1,
+    "eqAirDb":0,"gateThresholdDb":-55,"gateAttackMs":2,"gateReleaseMs":100,"gateRangeDb":18,
+    "compressorThresholdDb":-22,"compressorRatio":2.5,"compressorAttackMs":6,
+    "compressorReleaseMs":90,"compressorMakeupGainDb":1,"deesserFrequencyHz":7200,
+    "deesserThresholdDb":-28,"deesserRatio":4,"deesserRangeDb":8,"reverbMix":0.04,
+    "reverbTimeMs":320,"reverbDamping":0.55,"reverbSeed":0,"limiterCeilingDb":-1,
+    "limiterReleaseMs":50,"limiterEnableIspLimiter":true,"limiterIspCeilingDbtp":-1})";
+  REQUIRE_FALSE(realtime_voice_changer_config_from_input(flat, &parsed, &error));
+  REQUIRE(error == "formant.factor out of range [0.55, 1.65], got 3");
+
+  std::string in_range = flat;
+  in_range.replace(in_range.find("\"formantFactor\":3"), 17, "\"formantFactor\":1");
+  REQUIRE(realtime_voice_changer_config_from_input(in_range, &parsed, &error));
+  REQUIRE(parsed.formant.factor == 1.0f);
 }
 
 TEST_CASE("RealtimeVoiceChanger multi-channel process is a silent no-op without prepare",
@@ -922,7 +1002,7 @@ TEST_CASE("RealtimeVoiceChanger output EQ controls are invariant to caller chunk
   initial.compressor = {0.0f, 1.0f, 5.0f, 50.0f, 0.0f};
   initial.deesser = {7000.0f, -6.0f, 1.0f, 0.0f};
   initial.reverb.mix = 0.0f;
-  initial.limiter = {0.0f, 50.0f, false, -1.0f};
+  initial.limiter = {-1.0f, 50.0f, false, -1.0f};
   RealtimeVoiceChangerConfig updated = initial;
   updated.eq = {30.0f, 8.0f, -7.0f, 6.0f};
 

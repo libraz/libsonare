@@ -792,9 +792,14 @@ TEST_CASE("Validation refuses an unreachable absolute warp and names the formant
   config.formant_mode = FormantMode::Relative;
   REQUIRE(validate_realtime_voice_changer_config(config, &normalized, &error));
 
-  // The running chain clamps instead of refusing.
-  RealtimeVoiceChanger chain(bare_chain_config(-9.0f, 1.0f, FormantMode::Absolute));
+  // Construction and a live update refuse it too, and the live chain keeps its configuration.
+  REQUIRE_THROWS_AS(RealtimeVoiceChanger(bare_chain_config(-9.0f, 1.0f, FormantMode::Absolute)),
+                    sonare::SonareException);
+  RealtimeVoiceChanger chain(bare_chain_config(0.0f, 1.0f, FormantMode::Absolute));
   chain.prepare(48000, 128, 1);
+  REQUIRE_THROWS_AS(chain.set_config(bare_chain_config(-9.0f, 1.0f, FormantMode::Absolute)),
+                    sonare::SonareException);
+  REQUIRE(chain.config().retune.semitones == 0.0f);
   std::vector<float> noise(4096, 0.1f);
   REQUIRE_NOTHROW(run_chain(chain, noise));
 }

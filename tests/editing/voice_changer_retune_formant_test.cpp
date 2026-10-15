@@ -262,12 +262,12 @@ TEST_CASE("RealtimeVoiceChanger aligns whole-chain dry and wet impulse peaks", "
     config.wet_mix = wet_mix;
     config.retune = {0.0f, 1.0f, grain};
     config.formant = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-    config.eq = {1.0f, 0.0f, 0.0f, 0.0f};
-    config.gate = {-120.0f, 1.0f, 50.0f, 0.0f};
+    config.eq = {20.0f, 0.0f, 0.0f, 0.0f};
+    config.gate = {-90.0f, 1.0f, 50.0f, 0.0f};
     config.compressor = {0.0f, 1.0f, 1.0f, 50.0f, 0.0f};
     config.deesser = {7000.0f, -6.0f, 1.0f, 0.0f};
     config.reverb.mix = 0.0f;
-    config.limiter = {0.0f, 50.0f, false, -1.0f};
+    config.limiter = {-1.0f, 50.0f, false, -1.0f};
     RealtimeVoiceChanger changer(config);
     changer.prepare(sample_rate, block, 1);
     std::vector<float> output(total, 0.0f);

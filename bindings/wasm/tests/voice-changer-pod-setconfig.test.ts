@@ -194,6 +194,32 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
     ).toThrow(/limited by formantFactor's \[0\.55, 1\.65\]/);
   });
 
+  it('refuses an out-of-range field instead of clamping it and keeps the previous config', () => {
+    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    if (!pod) {
+      return;
+    }
+    const changer = new RealtimeVoiceChanger(pod);
+    try {
+      const before = changer.configJson();
+      expect(() => changer.setConfig({ ...pod, formantFactor: 3.0 })).toThrow(RangeError);
+      expect(() => changer.setConfig({ ...pod, formantFactor: 3.0 })).toThrow(
+        /formant\.factor out of range \[0\.55, 1\.65\], got 3/,
+      );
+      expect(() => changer.setPodConfig({ ...pod, limiterCeilingDb: 0.5 })).toThrow(RangeError);
+      expect(() => changer.setPodConfig({ ...pod, limiterCeilingDb: 0.5 })).toThrow(
+        /limiter\.ceilingDb out of range/,
+      );
+      expect(changer.configJson()).toBe(before);
+    } finally {
+      changer.delete();
+    }
+    expect(() => new RealtimeVoiceChanger({ ...pod, formantFactor: 3.0 })).toThrow(RangeError);
+    expect(() => new RealtimeVoiceChanger({ ...pod, formantFactor: 3.0 })).toThrow(
+      /formant\.factor out of range/,
+    );
+  });
+
   it('requires formantMode on a flat POD in the constructor and in setConfig', () => {
     const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
     if (!pod) {

@@ -1027,6 +1027,41 @@ TEST_CASE("The POD config refuses an unreachable warp, a bad mode and a bad layo
   sonare_realtime_voice_changer_destroy(handle);
 }
 
+TEST_CASE("The POD config refuses an out-of-range field and keeps the previous config",
+          "[voice_changer][c-api]") {
+  SonareRealtimeVoiceChangerConfig config{};
+  REQUIRE(sonare_realtime_voice_changer_config_default(&config) == SONARE_OK);
+  SonareRealtimeVoiceChanger* handle = nullptr;
+  REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) == SONARE_OK);
+
+  SonareRealtimeVoiceChangerConfig before{};
+  REQUIRE(sonare_realtime_voice_changer_get_config(handle, &before) == SONARE_OK);
+
+  SonareRealtimeVoiceChangerConfig bad = config;
+  bad.formant_factor = 3.0f;
+  CHECK(sonare_realtime_voice_changer_set_config(handle, &bad) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) ==
+        "formant.factor out of range [0.55, 1.65], got 3");
+  bad = config;
+  bad.limiter_ceiling_db = 0.5f;
+  CHECK(sonare_realtime_voice_changer_set_config(handle, &bad) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK_THAT(std::string(sonare_last_error_message()),
+             Catch::Matchers::ContainsSubstring("limiter.ceilingDb out of range"));
+
+  SonareRealtimeVoiceChangerConfig after{};
+  REQUIRE(sonare_realtime_voice_changer_get_config(handle, &after) == SONARE_OK);
+  CHECK(after.formant_factor == before.formant_factor);
+  CHECK(after.limiter_ceiling_db == before.limiter_ceiling_db);
+  sonare_realtime_voice_changer_destroy(handle);
+
+  SonareRealtimeVoiceChanger* refused = nullptr;
+  bad = config;
+  bad.formant_factor = 3.0f;
+  CHECK(sonare_realtime_voice_changer_create(&bad, 48000, 128, 1, &refused) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(refused == nullptr);
+}
+
 TEST_CASE("sonare_streaming_retune config grain matches the grain in use",
           "[voice_changer][capi]") {
   SonareStreamingRetune* retune = sonare_streaming_retune_create(0.0f, 1.0f, 513);

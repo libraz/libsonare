@@ -17,7 +17,7 @@ TEST_CASE("RealtimeVoiceChanger compressor reduces RMS above threshold",
     cfg.retune = {0.0f, 0.0f, 0};
     cfg.formant = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
     cfg.eq = {30.0f, 0.0f, 0.0f, 0.0f};
-    cfg.gate = {-120.0f, 1.0f, 50.0f, 0.0f};  // gate open: threshold far below signal
+    cfg.gate = {-90.0f, 1.0f, 50.0f, 0.0f};  // gate open: threshold far below signal
     cfg.compressor.ratio = ratio;
     cfg.compressor.threshold_db = threshold_db;
     cfg.compressor.attack_ms = 1.0f;
@@ -25,7 +25,7 @@ TEST_CASE("RealtimeVoiceChanger compressor reduces RMS above threshold",
     cfg.compressor.makeup_gain_db = 0.0f;
     cfg.deesser = {7000.0f, -6.0f, 1.0f, 0.0f};  // ratio=1 => no deessing
     cfg.reverb.mix = 0.0f;
-    cfg.limiter.ceiling_db = 0.0f;
+    cfg.limiter.ceiling_db = -1.0f;
     return cfg;
   };
 
@@ -97,7 +97,7 @@ TEST_CASE("RealtimeVoiceChanger gate attenuates signal below threshold",
     cfg.compressor = {0.0f, 1.0f, 5.0f, 50.0f, 0.0f};  // ratio=1 => no compression
     cfg.deesser = {7000.0f, -6.0f, 1.0f, 0.0f};
     cfg.reverb.mix = 0.0f;
-    cfg.limiter.ceiling_db = 0.0f;
+    cfg.limiter.ceiling_db = -1.0f;
     return cfg;
   };
 
@@ -200,11 +200,11 @@ TEST_CASE("RealtimeVoiceChanger HPF removes DC from constant input", "[voice_cha
   cfg.eq.body_db = 0.0f;
   cfg.eq.presence_db = 0.0f;
   cfg.eq.air_db = 0.0f;
-  cfg.gate = {-120.0f, 1.0f, 50.0f, 0.0f};  // gate open
+  cfg.gate = {-90.0f, 1.0f, 50.0f, 0.0f};  // gate open
   cfg.compressor = {0.0f, 1.0f, 5.0f, 50.0f, 0.0f};
   cfg.deesser = {7000.0f, -6.0f, 1.0f, 0.0f};
   cfg.reverb.mix = 0.0f;
-  cfg.limiter.ceiling_db = 0.0f;
+  cfg.limiter.ceiling_db = -1.0f;
 
   RealtimeVoiceChanger changer(cfg);
   changer.prepare(sample_rate, block, 1);
@@ -406,15 +406,15 @@ TEST_CASE("RealtimeVoiceChanger latency_samples matches observed impulse delay",
   cfg.wet_mix = 1.0f;
   cfg.retune = {0.0f, 1.0f, 0};  // 0 semitones, fully wet, auto grain
   cfg.formant = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-  cfg.eq.highpass_hz = 1.0f;  // very low HPF to not remove the impulse noticeably
+  cfg.eq.highpass_hz = 20.0f;  // very low HPF to not remove the impulse noticeably
   cfg.eq.body_db = 0.0f;
   cfg.eq.presence_db = 0.0f;
   cfg.eq.air_db = 0.0f;
-  cfg.gate = {-120.0f, 1.0f, 50.0f, 0.0f};
+  cfg.gate = {-90.0f, 1.0f, 50.0f, 0.0f};
   cfg.compressor = {0.0f, 1.0f, 1.0f, 50.0f, 0.0f};
   cfg.deesser = {7000.0f, -6.0f, 1.0f, 0.0f};
   cfg.reverb.mix = 0.0f;
-  cfg.limiter.ceiling_db = 0.0f;
+  cfg.limiter.ceiling_db = -1.0f;
 
   RealtimeVoiceChanger changer(cfg);
   changer.prepare(sample_rate, block, 1);

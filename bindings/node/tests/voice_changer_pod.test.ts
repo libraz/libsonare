@@ -69,6 +69,27 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
     absolute.destroy();
   });
 
+  it('refuses an out-of-range field instead of clamping it and keeps the previous config', () => {
+    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, preset: pod });
+    try {
+      const before = vc.configJson();
+      expect(() => vc.setConfig({ ...pod, formantFactor: 3.0 })).toThrow(RangeError);
+      expect(() => vc.setConfig({ ...pod, formantFactor: 3.0 })).toThrow(
+        /formant\.factor out of range \[0\.55, 1\.65\], got 3/,
+      );
+      expect(() => vc.setConfig({ ...pod, limiterCeilingDb: 0.5 })).toThrow(
+        /limiter\.ceilingDb out of range/,
+      );
+      expect(vc.configJson()).toBe(before);
+    } finally {
+      vc.destroy();
+    }
+    expect(
+      () => new RealtimeVoiceChanger({ sampleRate: 48000, preset: { ...pod, formantFactor: 3.0 } }),
+    ).toThrow(RangeError);
+  });
+
   it('refuses an unreachable absolute warp and names the formant factor range', () => {
     const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
     const unreachable = { ...pod, formantMode: 'absolute' as const, retuneSemitones: -9 };

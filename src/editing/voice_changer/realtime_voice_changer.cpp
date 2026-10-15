@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 #include "editing/voice_changer/realtime.h"
 #include "util/constants.h"
@@ -40,10 +41,18 @@ rt::BiquadCoeffs air_shelf(double sample_rate, float gain_db) {
   return rt::rbj_high_shelf(rt::frequency_to_w0(9500.0f, sample_rate), 0.75f, gain_db);
 }
 
+// Returns @p config when it is valid; the failure text is built only on the refusing path.
+const RealtimeVoiceChangerConfig& checked_config(const RealtimeVoiceChangerConfig& config) {
+  if (validate_realtime_voice_changer_config(config, nullptr, nullptr)) return config;
+  std::string error;
+  validate_realtime_voice_changer_config(config, nullptr, &error);
+  throw SonareException(ErrorCode::InvalidParameter, error);
+}
+
 }  // namespace
 
 RealtimeVoiceChanger::RealtimeVoiceChanger(RealtimeVoiceChangerConfig config)
-    : config_(normalize_realtime_voice_changer_config(config)) {
+    : config_(checked_config(config)) {
   // The constructed config IS the first request; nothing has resolved a grain
   // yet, so config_ still carries what the caller asked for.
   requested_retune_grain_size_ = config_.retune.grain_size;
@@ -116,21 +125,21 @@ void RealtimeVoiceChanger::reset_channels() {
 }
 
 void RealtimeVoiceChanger::set_config(const RealtimeVoiceChangerConfig& config) {
-  // Writer side: normalize, update the visible mirror used by config(), and
+  // Writer side: validate, update the visible mirror used by config(), and
   // hand the value off to the audio thread via the lock-free seqlock cell.
   // We deliberately DO NOT touch derived scalars or per-channel BiquadState
   // here — those are written by the audio
   // thread inside adopt_snapshot_for_block() so set_config() can race safely
   // with process_block(). Storing into config_cell_ and bumping
-  // config_version_ never allocates, locks, or throws, so this whole function
-  // is realtime-safe to call from the audio thread itself (see the class doc
-  // comment on set_config for why WASM needs that).
-  const RealtimeVoiceChangerConfig normalized = normalize_realtime_voice_changer_config(config);
-  if (!channels_.empty() && normalized.formant_mode != prepared_formant_mode_) {
+  // config_version_ never allocates or locks, so this whole function is
+  // realtime-safe to call from the audio thread itself (see the class doc
+  // comment on set_config for why WASM needs that); the refusal paths throw.
+  const RealtimeVoiceChangerConfig& accepted = checked_config(config);
+  if (!channels_.empty() && accepted.formant_mode != prepared_formant_mode_) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "formant mode is fixed at prepare(); it cannot change on a live chain");
   }
-  config_ = normalized;
+  config_ = accepted;
   // Record the request before the effective-value mirror below lands on the
   // same field; prepare() seeds the retune stages from this, not from config_.
   // A grain equal to the effective one is config() read back, not a new request.

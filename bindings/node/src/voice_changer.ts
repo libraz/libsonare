@@ -10,14 +10,14 @@ import type { ValidateOptions } from './validation.js';
 import { assertAudioInput, optionsBag, requestObject } from './validation.js';
 
 /**
- * The core refuses an unreachable absolute formant warp and a live formant-mode change with a
- * coded library failure; at this facade they are argument refusals, so they are a RangeError
- * like every other out-of-domain argument.
+ * The core refuses an out-of-range or non-finite field, an unreachable absolute formant warp and
+ * a live formant-mode change with a coded library failure; at this facade they are argument
+ * refusals, so they are a RangeError like every other out-of-domain argument.
  */
-function formantConfigRefusal(error: unknown): unknown {
+function configRefusal(error: unknown): unknown {
   if (
     (error as { code?: unknown }).code === ErrorCode.InvalidParameter &&
-    /formant (mode|factor)/.test((error as Error).message)
+    /formant (mode|factor)|out of range|must be finite/.test((error as Error).message)
   ) {
     return new RangeError((error as Error).message);
   }
@@ -51,7 +51,7 @@ export class RealtimeVoiceChanger {
     try {
       this.native = new addon.RealtimeVoiceChanger(options.preset ?? 'neutral-monitor');
     } catch (error) {
-      throw formantConfigRefusal(error);
+      throw configRefusal(error);
     }
     try {
       this.native.prepare(options.sampleRate, options.maxBlockSize ?? 128, options.channels ?? 1);
@@ -75,7 +75,7 @@ export class RealtimeVoiceChanger {
     try {
       this.native.setConfig(config);
     } catch (error) {
-      throw formantConfigRefusal(error);
+      throw configRefusal(error);
     }
   }
 

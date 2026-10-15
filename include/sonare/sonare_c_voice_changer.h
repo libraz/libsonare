@@ -42,9 +42,9 @@ extern "C" {
 ///        for C callers that want to avoid the JSON round-trip.
 /// @details Field ordering follows the nested C++ struct (top-level →
 ///          retune → formant → eq → gate → compressor → deesser → reverb →
-///          limiter). Values pass through @c normalize_realtime_voice_changer_config
-///          before being applied, so out-of-range entries are clamped rather than
-///          rejected (matching the JSON entry point).
+///          limiter). A non-finite or out-of-range entry is refused with
+///          @c SONARE_ERROR_INVALID_PARAMETER (the message names the field, its range and the
+///          value) and the handle keeps its previous configuration, as the JSON entry points do.
 typedef struct {
   /// @brief Layout version; 0 and 1 both select this layout, anything else is refused.
   int32_t struct_version;

@@ -151,6 +151,101 @@ using sonare::util::json::schema::require_key;
 using sonare::util::json::schema::require_number;
 using sonare::util::json::schema::require_string;
 
+struct Range {
+  double lo;
+  double hi;
+};
+
+// The accepted ranges: the one definition behind validation, normalization and the preset schema.
+constexpr Range kUnit{0.0, 1.0};
+constexpr Range kBipolar{-1.0, 1.0};
+constexpr Range kInputGainDb{-24.0, 24.0};
+constexpr Range kOutputGainDb{-36.0, 12.0};
+constexpr Range kSemitones{-24.0, 24.0};
+constexpr Range kGrainSize{0.0, static_cast<double>(kMaxRetuneGrainSize)};
+constexpr Range kFormantFactor{0.55, 1.65};
+constexpr Range kHighpassHz{static_cast<double>(kVoiceHighpassMinHz), 300.0};
+constexpr Range kEqGainDb{-static_cast<double>(kVoiceEqGainLimitDb),
+                          static_cast<double>(kVoiceEqGainLimitDb)};
+constexpr Range kGateThresholdDb{-90.0, -12.0};
+constexpr Range kGateAttackMs{0.05, 100.0};
+constexpr Range kGateReleaseMs{5.0, 1000.0};
+constexpr Range kGateRangeDb{0.0, 80.0};
+constexpr Range kCompThresholdDb{-60.0, 0.0};
+constexpr Range kCompRatio{1.0, 20.0};
+constexpr Range kCompAttackMs{0.05, 200.0};
+constexpr Range kCompReleaseMs{5.0, 2000.0};
+constexpr Range kMakeupGainDb{-12.0, 12.0};
+constexpr Range kDeessFrequencyHz{3000.0, 12000.0};
+constexpr Range kDeessThresholdDb{-60.0, -6.0};
+constexpr Range kDeessRatio{1.0, 20.0};
+constexpr Range kDeessRangeDb{0.0, 24.0};
+constexpr Range kReverbMix{0.0, 0.45};
+constexpr Range kReverbTimeMs{40.0, static_cast<double>(RealtimeVoiceChanger::kMaxReverbTimeMs)};
+// True-peak headroom: the sample-domain ceiling stays one dB below full scale.
+constexpr Range kLimiterCeilingDb{-12.0, -1.0};
+constexpr Range kLimiterReleaseMs{1.0, 500.0};
+// The ISP stage detects peaks at 4x oversampling, so its ceiling may reach 0 dBTP.
+constexpr Range kIspCeilingDbtp{-12.0, 0.0};
+constexpr Range kReverbSeed{-2147483648.0, 2147483647.0};
+
+/// Calls @p v(path, field, range, fallback) for every float field; fallback replaces a non-finite
+/// one.
+template <class Config, class Visit>
+void visit_scalar_fields(Config& c, Visit&& v) {
+  v("inputGainDb", c.input_gain_db, kInputGainDb, 0.0f);
+  v("outputGainDb", c.output_gain_db, kOutputGainDb, 0.0f);
+  v("wetMix", c.wet_mix, kUnit, 1.0f);
+  v("retune.semitones", c.retune.semitones, kSemitones, 0.0f);
+  v("retune.mix", c.retune.mix, kUnit, 1.0f);
+  v("formant.factor", c.formant.factor, kFormantFactor, 1.0f);
+  v("formant.amount", c.formant.amount, kUnit, 1.0f);
+  v("formant.body", c.formant.body, kBipolar, 0.0f);
+  v("formant.brightness", c.formant.brightness, kBipolar, 0.0f);
+  v("formant.nasal", c.formant.nasal, kBipolar, 0.0f);
+  v("eq.highpassHz", c.eq.highpass_hz, kHighpassHz, 80.0f);
+  v("eq.bodyDb", c.eq.body_db, kEqGainDb, 0.0f);
+  v("eq.presenceDb", c.eq.presence_db, kEqGainDb, 0.0f);
+  v("eq.airDb", c.eq.air_db, kEqGainDb, 0.0f);
+  v("gate.thresholdDb", c.gate.threshold_db, kGateThresholdDb, -55.0f);
+  v("gate.attackMs", c.gate.attack_ms, kGateAttackMs, 2.0f);
+  v("gate.releaseMs", c.gate.release_ms, kGateReleaseMs, 100.0f);
+  v("gate.rangeDb", c.gate.range_db, kGateRangeDb, 18.0f);
+  v("compressor.thresholdDb", c.compressor.threshold_db, kCompThresholdDb, -22.0f);
+  v("compressor.ratio", c.compressor.ratio, kCompRatio, 2.5f);
+  v("compressor.attackMs", c.compressor.attack_ms, kCompAttackMs, 6.0f);
+  v("compressor.releaseMs", c.compressor.release_ms, kCompReleaseMs, 90.0f);
+  v("compressor.makeupGainDb", c.compressor.makeup_gain_db, kMakeupGainDb, 1.0f);
+  v("deesser.frequencyHz", c.deesser.frequency_hz, kDeessFrequencyHz, 7200.0f);
+  v("deesser.thresholdDb", c.deesser.threshold_db, kDeessThresholdDb, -28.0f);
+  v("deesser.ratio", c.deesser.ratio, kDeessRatio, 4.0f);
+  v("deesser.rangeDb", c.deesser.range_db, kDeessRangeDb, 8.0f);
+  v("reverb.mix", c.reverb.mix, kReverbMix, 0.04f);
+  v("reverb.timeMs", c.reverb.time_ms, kReverbTimeMs, 320.0f);
+  v("reverb.damping", c.reverb.damping, kUnit, 0.55f);
+  v("limiter.ceilingDb", c.limiter.ceiling_db, kLimiterCeilingDb, -1.0f);
+  v("limiter.releaseMs", c.limiter.release_ms, kLimiterReleaseMs, 50.0f);
+  v("limiter.ispCeilingDbtp", c.limiter.isp_ceiling_dbtp, kIspCeilingDbtp, -1.0f);
+}
+
+/// Forces @p input into range (non-finite fields take their default); only preset construction and
+/// the tolerant JSON entry point may clamp.
+RealtimeVoiceChangerConfig normalize_config(const RealtimeVoiceChangerConfig& input) {
+  RealtimeVoiceChangerConfig c = input;
+  visit_scalar_fields(c, [](const char*, float& v, const Range& r, float fallback) {
+    if (!std::isfinite(v)) v = fallback;
+    v = std::clamp(v, static_cast<float>(r.lo), static_cast<float>(r.hi));
+  });
+  c.retune.grain_size = std::clamp(c.retune.grain_size, 0, kMaxRetuneGrainSize);
+  if (c.formant_mode != FormantMode::Absolute) c.formant_mode = FormantMode::Relative;
+  return c;
+}
+
+bool require_in(const sonare::util::json::Value& object, const char* key, const Range& range,
+                const char* path, std::string* error, bool integer = false) {
+  return require_number(object, key, range.lo, range.hi, path, error, integer);
+}
+
 /// Verifies the preset id matches the schema regex `^[a-z0-9][a-z0-9._-]*$` and
 /// is within the 1..96 length bound. Kept inline because @c require_string in
 /// util/json_schema.h is intentionally regex-free — only this one field needs
@@ -220,13 +315,13 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* err
        {"retune", "formant", "eq", "gate", "compressor", "deesser", "reverb", "limiter"}) {
     if (!require_key(dsp, key, "dsp", error)) return false;
   }
-  if (dsp.find("inputGainDb") && !require_number(dsp, "inputGainDb", -24.0, 24.0, "dsp", error)) {
+  if (dsp.find("inputGainDb") && !require_in(dsp, "inputGainDb", kInputGainDb, "dsp", error)) {
     return false;
   }
-  if (dsp.find("outputGainDb") && !require_number(dsp, "outputGainDb", -36.0, 12.0, "dsp", error)) {
+  if (dsp.find("outputGainDb") && !require_in(dsp, "outputGainDb", kOutputGainDb, "dsp", error)) {
     return false;
   }
-  if (dsp.find("wetMix") && !require_number(dsp, "wetMix", 0.0, 1.0, "dsp", error)) return false;
+  if (dsp.find("wetMix") && !require_in(dsp, "wetMix", kUnit, "dsp", error)) return false;
 
   const auto& retune = *dsp.find("retune");
   if (!has_allowed_keys(retune, {"semitones", "mix", "grainSize"}, "dsp.retune", error)) {
@@ -235,10 +330,9 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* err
   for (const char* key : {"semitones", "mix", "grainSize"}) {
     if (!require_key(retune, key, "dsp.retune", error)) return false;
   }
-  if (!require_number(retune, "semitones", -24.0, 24.0, "dsp.retune", error)) return false;
-  if (!require_number(retune, "mix", 0.0, 1.0, "dsp.retune", error)) return false;
-  if (!require_number(retune, "grainSize", 0.0, static_cast<double>(kMaxRetuneGrainSize),
-                      "dsp.retune", error, true)) {
+  if (!require_in(retune, "semitones", kSemitones, "dsp.retune", error)) return false;
+  if (!require_in(retune, "mix", kUnit, "dsp.retune", error)) return false;
+  if (!require_in(retune, "grainSize", kGrainSize, "dsp.retune", error, true)) {
     return false;
   }
 
@@ -250,11 +344,11 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* err
   for (const char* key : {"factor", "amount", "body", "brightness", "nasal"}) {
     if (!require_key(formant, key, "dsp.formant", error)) return false;
   }
-  if (!require_number(formant, "factor", 0.55, 1.65, "dsp.formant", error)) return false;
-  if (!require_number(formant, "amount", 0.0, 1.0, "dsp.formant", error)) return false;
-  if (!require_number(formant, "body", -1.0, 1.0, "dsp.formant", error)) return false;
-  if (!require_number(formant, "brightness", -1.0, 1.0, "dsp.formant", error)) return false;
-  if (!require_number(formant, "nasal", -1.0, 1.0, "dsp.formant", error)) return false;
+  if (!require_in(formant, "factor", kFormantFactor, "dsp.formant", error)) return false;
+  if (!require_in(formant, "amount", kUnit, "dsp.formant", error)) return false;
+  if (!require_in(formant, "body", kBipolar, "dsp.formant", error)) return false;
+  if (!require_in(formant, "brightness", kBipolar, "dsp.formant", error)) return false;
+  if (!require_in(formant, "nasal", kBipolar, "dsp.formant", error)) return false;
   if (const auto* mode = formant.find("mode")) {
     if (!mode->is_string() ||
         (mode->as_string() != "relative" && mode->as_string() != "absolute")) {
@@ -270,10 +364,10 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* err
   for (const char* key : {"highpassHz", "bodyDb", "presenceDb", "airDb"}) {
     if (!require_key(eq, key, "dsp.eq", error)) return false;
   }
-  if (!require_number(eq, "highpassHz", 20.0, 300.0, "dsp.eq", error)) return false;
-  if (!require_number(eq, "bodyDb", -12.0, 12.0, "dsp.eq", error)) return false;
-  if (!require_number(eq, "presenceDb", -12.0, 12.0, "dsp.eq", error)) return false;
-  if (!require_number(eq, "airDb", -12.0, 12.0, "dsp.eq", error)) return false;
+  if (!require_in(eq, "highpassHz", kHighpassHz, "dsp.eq", error)) return false;
+  if (!require_in(eq, "bodyDb", kEqGainDb, "dsp.eq", error)) return false;
+  if (!require_in(eq, "presenceDb", kEqGainDb, "dsp.eq", error)) return false;
+  if (!require_in(eq, "airDb", kEqGainDb, "dsp.eq", error)) return false;
 
   const auto& gate = *dsp.find("gate");
   if (!has_allowed_keys(gate, {"thresholdDb", "attackMs", "releaseMs", "rangeDb"}, "dsp.gate",
@@ -283,10 +377,10 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* err
   for (const char* key : {"thresholdDb", "attackMs", "releaseMs", "rangeDb"}) {
     if (!require_key(gate, key, "dsp.gate", error)) return false;
   }
-  if (!require_number(gate, "thresholdDb", -90.0, -12.0, "dsp.gate", error)) return false;
-  if (!require_number(gate, "attackMs", 0.05, 100.0, "dsp.gate", error)) return false;
-  if (!require_number(gate, "releaseMs", 5.0, 1000.0, "dsp.gate", error)) return false;
-  if (!require_number(gate, "rangeDb", 0.0, 80.0, "dsp.gate", error)) return false;
+  if (!require_in(gate, "thresholdDb", kGateThresholdDb, "dsp.gate", error)) return false;
+  if (!require_in(gate, "attackMs", kGateAttackMs, "dsp.gate", error)) return false;
+  if (!require_in(gate, "releaseMs", kGateReleaseMs, "dsp.gate", error)) return false;
+  if (!require_in(gate, "rangeDb", kGateRangeDb, "dsp.gate", error)) return false;
 
   const auto& compressor = *dsp.find("compressor");
   if (!has_allowed_keys(compressor,
@@ -297,15 +391,15 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* err
   for (const char* key : {"thresholdDb", "ratio", "attackMs", "releaseMs", "makeupGainDb"}) {
     if (!require_key(compressor, key, "dsp.compressor", error)) return false;
   }
-  if (!require_number(compressor, "thresholdDb", -60.0, 0.0, "dsp.compressor", error)) {
+  if (!require_in(compressor, "thresholdDb", kCompThresholdDb, "dsp.compressor", error)) {
     return false;
   }
-  if (!require_number(compressor, "ratio", 1.0, 20.0, "dsp.compressor", error)) return false;
-  if (!require_number(compressor, "attackMs", 0.05, 200.0, "dsp.compressor", error)) return false;
-  if (!require_number(compressor, "releaseMs", 5.0, 2000.0, "dsp.compressor", error)) {
+  if (!require_in(compressor, "ratio", kCompRatio, "dsp.compressor", error)) return false;
+  if (!require_in(compressor, "attackMs", kCompAttackMs, "dsp.compressor", error)) return false;
+  if (!require_in(compressor, "releaseMs", kCompReleaseMs, "dsp.compressor", error)) {
     return false;
   }
-  if (!require_number(compressor, "makeupGainDb", -12.0, 12.0, "dsp.compressor", error)) {
+  if (!require_in(compressor, "makeupGainDb", kMakeupGainDb, "dsp.compressor", error)) {
     return false;
   }
 
@@ -317,12 +411,12 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* err
   for (const char* key : {"frequencyHz", "thresholdDb", "ratio", "rangeDb"}) {
     if (!require_key(deesser, key, "dsp.deesser", error)) return false;
   }
-  if (!require_number(deesser, "frequencyHz", 3000.0, 12000.0, "dsp.deesser", error)) {
+  if (!require_in(deesser, "frequencyHz", kDeessFrequencyHz, "dsp.deesser", error)) {
     return false;
   }
-  if (!require_number(deesser, "thresholdDb", -60.0, -6.0, "dsp.deesser", error)) return false;
-  if (!require_number(deesser, "ratio", 1.0, 20.0, "dsp.deesser", error)) return false;
-  if (!require_number(deesser, "rangeDb", 0.0, 24.0, "dsp.deesser", error)) return false;
+  if (!require_in(deesser, "thresholdDb", kDeessThresholdDb, "dsp.deesser", error)) return false;
+  if (!require_in(deesser, "ratio", kDeessRatio, "dsp.deesser", error)) return false;
+  if (!require_in(deesser, "rangeDb", kDeessRangeDb, "dsp.deesser", error)) return false;
 
   const auto& reverb = *dsp.find("reverb");
   if (!has_allowed_keys(reverb, {"mix", "timeMs", "damping", "seed"}, "dsp.reverb", error)) {
@@ -331,14 +425,12 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* err
   for (const char* key : {"mix", "timeMs", "damping", "seed"}) {
     if (!require_key(reverb, key, "dsp.reverb", error)) return false;
   }
-  if (!require_number(reverb, "mix", 0.0, 0.45, "dsp.reverb", error)) return false;
-  if (!require_number(reverb, "timeMs", 40.0,
-                      static_cast<double>(RealtimeVoiceChanger::kMaxReverbTimeMs), "dsp.reverb",
-                      error)) {
+  if (!require_in(reverb, "mix", kReverbMix, "dsp.reverb", error)) return false;
+  if (!require_in(reverb, "timeMs", kReverbTimeMs, "dsp.reverb", error)) {
     return false;
   }
-  if (!require_number(reverb, "damping", 0.0, 1.0, "dsp.reverb", error)) return false;
-  if (!require_number(reverb, "seed", -2147483648.0, 2147483647.0, "dsp.reverb", error, true)) {
+  if (!require_in(reverb, "damping", kUnit, "dsp.reverb", error)) return false;
+  if (!require_in(reverb, "seed", kReverbSeed, "dsp.reverb", error, true)) {
     return false;
   }
 
@@ -357,8 +449,8 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* err
   // so the upper bound is -1.0 dBFS (one full dB of inter-sample headroom)
   // rather than -0.3 dBFS. Builds that opt in to a 4x-oversampled TP detector
   // can later relax this.
-  if (!require_number(limiter, "ceilingDb", -12.0, -1.0, "dsp.limiter", error)) return false;
-  if (!require_number(limiter, "releaseMs", 1.0, 500.0, "dsp.limiter", error)) return false;
+  if (!require_in(limiter, "ceilingDb", kLimiterCeilingDb, "dsp.limiter", error)) return false;
+  if (!require_in(limiter, "releaseMs", kLimiterReleaseMs, "dsp.limiter", error)) return false;
   if (const auto* isp = limiter.find("enableIspLimiter")) {
     if (!isp->is_bool()) {
       if (error) *error = "field must be a boolean: dsp.limiter.enableIspLimiter";
@@ -369,7 +461,7 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* err
   // may legitimately reach 0.0 dBTP (no extra headroom needed) unlike the
   // sample-domain ceilingDb above.
   if (limiter.find("ispCeilingDbtp") != nullptr) {
-    if (!require_number(limiter, "ispCeilingDbtp", -12.0, 0.0, "dsp.limiter", error)) return false;
+    if (!require_in(limiter, "ispCeilingDbtp", kIspCeilingDbtp, "dsp.limiter", error)) return false;
   }
   return true;
 }
@@ -392,8 +484,8 @@ bool apply_macro_section(const sonare::util::json::Value& macros,
     return true;
   };
 
-  if (!optional_number("pitch", -24.0, 24.0, &config->retune.semitones) ||
-      !optional_number("formant", 0.55, 1.65, &config->formant.factor)) {
+  if (!optional_number("pitch", kSemitones.lo, kSemitones.hi, &config->retune.semitones) ||
+      !optional_number("formant", kFormantFactor.lo, kFormantFactor.hi, &config->formant.factor)) {
     return false;
   }
   if (const auto* value = macros.find("brightness")) {
@@ -424,149 +516,46 @@ bool apply_macro_section(const sonare::util::json::Value& macros,
   return true;
 }
 
-bool config_is_finite(const RealtimeVoiceChangerConfig& c, std::string* error) {
-  auto check = [&](const char* name, float v) -> bool {
-    if (std::isfinite(v)) return true;
-    if (error) *error = std::string("config field is not finite: ") + name;
-    return false;
-  };
-  return check("inputGainDb", c.input_gain_db) && check("outputGainDb", c.output_gain_db) &&
-         check("wetMix", c.wet_mix) && check("retune.semitones", c.retune.semitones) &&
-         check("retune.mix", c.retune.mix) && check("formant.factor", c.formant.factor) &&
-         check("formant.amount", c.formant.amount) && check("formant.body", c.formant.body) &&
-         check("formant.brightness", c.formant.brightness) &&
-         check("formant.nasal", c.formant.nasal) && check("eq.highpassHz", c.eq.highpass_hz) &&
-         check("eq.bodyDb", c.eq.body_db) && check("eq.presenceDb", c.eq.presence_db) &&
-         check("eq.airDb", c.eq.air_db) && check("gate.thresholdDb", c.gate.threshold_db) &&
-         check("gate.attackMs", c.gate.attack_ms) && check("gate.releaseMs", c.gate.release_ms) &&
-         check("gate.rangeDb", c.gate.range_db) &&
-         check("compressor.thresholdDb", c.compressor.threshold_db) &&
-         check("compressor.ratio", c.compressor.ratio) &&
-         check("compressor.attackMs", c.compressor.attack_ms) &&
-         check("compressor.releaseMs", c.compressor.release_ms) &&
-         check("compressor.makeupGainDb", c.compressor.makeup_gain_db) &&
-         check("deesser.frequencyHz", c.deesser.frequency_hz) &&
-         check("deesser.thresholdDb", c.deesser.threshold_db) &&
-         check("deesser.ratio", c.deesser.ratio) && check("deesser.rangeDb", c.deesser.range_db) &&
-         check("reverb.mix", c.reverb.mix) && check("reverb.timeMs", c.reverb.time_ms) &&
-         check("reverb.damping", c.reverb.damping) &&
-         check("limiter.ceilingDb", c.limiter.ceiling_db) &&
-         check("limiter.releaseMs", c.limiter.release_ms) &&
-         check("limiter.ispCeilingDbtp", c.limiter.isp_ceiling_dbtp);
-}
-
 }  // namespace
-
-RealtimeVoiceChangerConfig normalize_realtime_voice_changer_config(
-    const RealtimeVoiceChangerConfig& input) {
-  RealtimeVoiceChangerConfig c = input;
-  // Replace any non-finite (NaN/Inf) value with a safe default before clamping
-  // so std::clamp does not propagate NaN.
-  auto sanitize = [](float& v, float fallback) {
-    if (!std::isfinite(v)) v = fallback;
-  };
-  sanitize(c.input_gain_db, 0.0f);
-  sanitize(c.output_gain_db, 0.0f);
-  sanitize(c.wet_mix, 1.0f);
-  sanitize(c.retune.semitones, 0.0f);
-  sanitize(c.retune.mix, 1.0f);
-  sanitize(c.formant.factor, 1.0f);
-  sanitize(c.formant.amount, 1.0f);
-  sanitize(c.formant.body, 0.0f);
-  sanitize(c.formant.brightness, 0.0f);
-  sanitize(c.formant.nasal, 0.0f);
-  sanitize(c.eq.highpass_hz, 80.0f);
-  sanitize(c.eq.body_db, 0.0f);
-  sanitize(c.eq.presence_db, 0.0f);
-  sanitize(c.eq.air_db, 0.0f);
-  sanitize(c.gate.threshold_db, -55.0f);
-  sanitize(c.gate.attack_ms, 2.0f);
-  sanitize(c.gate.release_ms, 100.0f);
-  sanitize(c.gate.range_db, 18.0f);
-  sanitize(c.compressor.threshold_db, -22.0f);
-  sanitize(c.compressor.ratio, 2.5f);
-  sanitize(c.compressor.attack_ms, 6.0f);
-  sanitize(c.compressor.release_ms, 90.0f);
-  sanitize(c.compressor.makeup_gain_db, 1.0f);
-  sanitize(c.deesser.frequency_hz, 7200.0f);
-  sanitize(c.deesser.threshold_db, -28.0f);
-  sanitize(c.deesser.ratio, 4.0f);
-  sanitize(c.deesser.range_db, 8.0f);
-  sanitize(c.reverb.mix, 0.04f);
-  sanitize(c.reverb.time_ms, 320.0f);
-  sanitize(c.reverb.damping, 0.55f);
-  sanitize(c.limiter.ceiling_db, -1.0f);
-  sanitize(c.limiter.isp_ceiling_dbtp, -1.0f);
-  sanitize(c.limiter.release_ms, 50.0f);
-
-  c.input_gain_db = std::clamp(c.input_gain_db, -24.0f, 24.0f);
-  c.output_gain_db = std::clamp(c.output_gain_db, -36.0f, 12.0f);
-  c.wet_mix = std::clamp(c.wet_mix, 0.0f, 1.0f);
-  c.retune.semitones = std::clamp(c.retune.semitones, -24.0f, 24.0f);
-  c.retune.mix = std::clamp(c.retune.mix, 0.0f, 1.0f);
-  // Upper bound must agree with validate_dsp_section() so the POD set_config
-  // path (which bypasses JSON validation) cannot allocate a runaway grain
-  // buffer in StreamingRetune::prepare().
-  c.retune.grain_size = std::clamp(c.retune.grain_size, 0, kMaxRetuneGrainSize);
-  c.formant.factor = std::clamp(c.formant.factor, kFormantFactorMin, kFormantFactorMax);
-  c.formant.amount = std::clamp(c.formant.amount, 0.0f, 1.0f);
-  c.formant.body = std::clamp(c.formant.body, -1.0f, 1.0f);
-  c.formant.brightness = std::clamp(c.formant.brightness, -1.0f, 1.0f);
-  c.formant.nasal = std::clamp(c.formant.nasal, -1.0f, 1.0f);
-  if (c.formant_mode != FormantMode::Absolute) c.formant_mode = FormantMode::Relative;
-  c.eq.highpass_hz = std::clamp(c.eq.highpass_hz, kVoiceHighpassMinHz, 300.0f);
-  c.eq.body_db = std::clamp(c.eq.body_db, -kVoiceEqGainLimitDb, kVoiceEqGainLimitDb);
-  c.eq.presence_db = std::clamp(c.eq.presence_db, -kVoiceEqGainLimitDb, kVoiceEqGainLimitDb);
-  c.eq.air_db = std::clamp(c.eq.air_db, -kVoiceEqGainLimitDb, kVoiceEqGainLimitDb);
-  c.gate.threshold_db = std::clamp(c.gate.threshold_db, -90.0f, -12.0f);
-  c.gate.attack_ms = std::clamp(c.gate.attack_ms, 0.05f, 100.0f);
-  c.gate.release_ms = std::clamp(c.gate.release_ms, 5.0f, 1000.0f);
-  c.gate.range_db = std::clamp(c.gate.range_db, 0.0f, 80.0f);
-  c.compressor.threshold_db = std::clamp(c.compressor.threshold_db, -60.0f, 0.0f);
-  c.compressor.ratio = std::clamp(c.compressor.ratio, 1.0f, 20.0f);
-  c.compressor.attack_ms = std::clamp(c.compressor.attack_ms, 0.05f, 200.0f);
-  c.compressor.release_ms = std::clamp(c.compressor.release_ms, 5.0f, 2000.0f);
-  c.compressor.makeup_gain_db = std::clamp(c.compressor.makeup_gain_db, -12.0f, 12.0f);
-  c.deesser.frequency_hz = std::clamp(c.deesser.frequency_hz, 3000.0f, 12000.0f);
-  c.deesser.threshold_db = std::clamp(c.deesser.threshold_db, -60.0f, -6.0f);
-  c.deesser.ratio = std::clamp(c.deesser.ratio, 1.0f, 20.0f);
-  c.deesser.range_db = std::clamp(c.deesser.range_db, 0.0f, 24.0f);
-  c.reverb.mix = std::clamp(c.reverb.mix, 0.0f, 0.45f);
-  c.reverb.time_ms = std::clamp(c.reverb.time_ms, 40.0f, RealtimeVoiceChanger::kMaxReverbTimeMs);
-  c.reverb.damping = std::clamp(c.reverb.damping, 0.0f, 1.0f);
-  // See validate_dsp_section for the -1.0 dBFS ceiling rationale (inter-sample
-  // headroom for a sample-domain limiter without 4x oversampling).
-  c.limiter.ceiling_db = std::clamp(c.limiter.ceiling_db, -12.0f, -1.0f);
-  // Bounds match validate_dsp_section's [-12, 0] dBTP for the ISP limiter.
-  c.limiter.isp_ceiling_dbtp = std::clamp(c.limiter.isp_ceiling_dbtp, -12.0f, 0.0f);
-  c.limiter.release_ms = std::clamp(c.limiter.release_ms, 1.0f, 500.0f);
-  return c;
-}
 
 bool validate_realtime_voice_changer_config(const RealtimeVoiceChangerConfig& config,
                                             RealtimeVoiceChangerConfig* normalized,
                                             std::string* error) {
   if (error) error->clear();
-  std::string local_error;
-  if (!config_is_finite(config, &local_error)) {
-    if (error) *error = local_error;
-    if (normalized) *normalized = {};
-    return false;
-  }
-  if (config.formant_mode != FormantMode::Relative &&
+  bool ok = true;
+  // The success path builds no strings: text is composed only once a field fails.
+  visit_scalar_fields(config, [&](const char* name, const float& v, const Range&, float) {
+    if (!ok || std::isfinite(v)) return;
+    ok = false;
+    if (error) *error = std::string("config field is not finite: ") + name;
+  });
+  if (ok && config.formant_mode != FormantMode::Relative &&
       config.formant_mode != FormantMode::Absolute) {
+    ok = false;
     if (error) *error = "formant mode must be 'relative' or 'absolute'";
-    if (normalized) *normalized = {};
-    return false;
   }
-  const RealtimeVoiceChangerConfig accepted = normalize_realtime_voice_changer_config(config);
-  if (!formant_warp_is_reachable(accepted, &local_error)) {
-    if (error) *error = local_error;
-    if (normalized) *normalized = {};
-    return false;
+  visit_scalar_fields(config, [&](const char* name, const float& v, const Range& r, float) {
+    if (!ok || (v >= static_cast<float>(r.lo) && v <= static_cast<float>(r.hi))) return;
+    ok = false;
+    if (error) {
+      char text[160];
+      std::snprintf(text, sizeof(text), "%s out of range [%.6g, %.6g], got %.6g", name, r.lo, r.hi,
+                    static_cast<double>(v));
+      *error = text;
+    }
+  });
+  if (ok && (config.retune.grain_size < 0 || config.retune.grain_size > kMaxRetuneGrainSize)) {
+    ok = false;
+    if (error) {
+      char text[160];
+      std::snprintf(text, sizeof(text), "retune.grainSize out of range [0, %d], got %d",
+                    kMaxRetuneGrainSize, config.retune.grain_size);
+      *error = text;
+    }
   }
-  if (normalized) *normalized = accepted;
-  return true;
+  if (ok && !formant_warp_is_reachable(config, error)) ok = false;
+  if (normalized) *normalized = ok ? config : RealtimeVoiceChangerConfig{};
+  return ok;
 }
 
 bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::string* error) {
@@ -676,7 +665,7 @@ RealtimeVoiceChangerConfig realtime_voice_changer_preset(VoiceCharacterPreset pr
       c.reverb = {0.13f, 820.0f, 0.9f, 19};
       break;
   }
-  return normalize_realtime_voice_changer_config(c);
+  return normalize_config(c);
 }
 
 const char* realtime_voice_changer_preset_id(VoiceCharacterPreset preset) noexcept {
@@ -699,7 +688,10 @@ std::vector<std::string> realtime_voice_changer_preset_names() {
   return out;
 }
 
-RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_view text) {
+namespace {
+
+// Parses without range handling; callers decide between clamping and refusing.
+RealtimeVoiceChangerConfig parse_config_json(std::string_view text) {
   const std::string input = trim_copy(text);
   if (input.empty()) return realtime_voice_changer_preset(VoiceCharacterPreset::NeutralMonitor);
   if (input.front() != '{')
@@ -718,7 +710,7 @@ RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_v
     if (!apply_macro_section(*macros, &c, &error)) {
       throw SonareException(ErrorCode::InvalidParameter, error);
     }
-    return normalize_realtime_voice_changer_config(c);
+    return c;
   }
   const auto& object = (dsp && dsp->is_object()) ? *dsp : root;
   c.input_gain_db = object_number(object, "inputGainDb", c.input_gain_db);
@@ -767,7 +759,7 @@ RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_v
         object_bool(object, "limiterEnableIspLimiter", c.limiter.enable_isp_limiter);
     c.limiter.isp_ceiling_dbtp =
         object_number(object, "limiterIspCeilingDbtp", c.limiter.isp_ceiling_dbtp);
-    return normalize_realtime_voice_changer_config(c);
+    return c;
   }
 
   if (const auto* v = object.find("retune")) {
@@ -821,11 +813,17 @@ RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_v
         object_bool(*v, "enableIspLimiter", c.limiter.enable_isp_limiter);
     c.limiter.isp_ceiling_dbtp = object_number(*v, "ispCeilingDbtp", c.limiter.isp_ceiling_dbtp);
   }
-  return normalize_realtime_voice_changer_config(c);
+  return c;
+}
+
+}  // namespace
+
+RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_view text) {
+  return normalize_config(parse_config_json(text));
 }
 
 std::string realtime_voice_changer_config_to_json(const RealtimeVoiceChangerConfig& config) {
-  const auto c = normalize_realtime_voice_changer_config(config);
+  const auto c = normalize_config(config);
   std::string out;
   // A normalized config is also a valid, saveable custom preset. Include the
   // metadata required by the strict preset validator so callers can validate
@@ -1059,9 +1057,19 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
           return false;
         }
       }
+      for (const auto& [key, value] : root.as_object()) {
+        if (!value.is_number()) continue;
+        const double n = value.as_number();
+        const bool is_int_key = key == "retuneGrainSize" || key == "reverbSeed";
+        const bool fits = is_int_key ? (n >= kReverbSeed.lo && n <= kReverbSeed.hi)
+                                     : std::fabs(n) <= std::numeric_limits<float>::max();
+        if (!fits) {
+          if (error) *error = "flat voice changer POD field is out of range: $." + key;
+          return false;
+        }
+      }
       RealtimeVoiceChangerConfig normalized;
-      if (!validate_realtime_voice_changer_config(realtime_voice_changer_config_from_json(input),
-                                                  &normalized, error)) {
+      if (!validate_realtime_voice_changer_config(parse_config_json(input), &normalized, error)) {
         return false;
       }
       *config = normalized;

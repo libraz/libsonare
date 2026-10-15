@@ -1,6 +1,6 @@
 /// @file voice_changer_insert_test.cpp
 /// @brief The voice changer as a streaming insert: equivalence with the low-level class, the
-///        published descriptors, construction-time refusal and realtime clamping.
+///        published descriptors, construction-time refusal and refused automation.
 
 #include "editing/voice_changer/voice_changer_insert.h"
 
@@ -260,8 +260,9 @@ TEST_CASE("voice.changer factory refuses a published bound's far side",
   }
 }
 
-TEST_CASE("voice.changer realtime parameters reach the field a key names and clamp",
-          "[voice_changer][insert]") {
+TEST_CASE(
+    "voice.changer realtime parameters reach the field a key names and refuse out-of-range values",
+    "[voice_changer][insert]") {
   for (const json::Value& param : catalog_params()) {
     if (param.find("id")->is_null()) continue;
     const std::string name = param.find("name")->as_string();
@@ -317,9 +318,10 @@ TEST_CASE("voice.changer realtime parameters reach the field a key names and cla
     CHECK(a.limiter.release_ms == b.limiter.release_ms);
     CHECK(a.limiter.isp_ceiling_dbtp == b.limiter.isp_ceiling_dbtp);
 
-    // Past either bound the automation path clamps instead of refusing.
-    REQUIRE(automated.set_parameter(id, static_cast<float>(max + 10.0 * (max - min))));
-    REQUIRE(automated.set_parameter(id, static_cast<float>(min - 10.0 * (max - min))));
+    // Past either bound the automation path refuses and leaves the configuration alone.
+    CHECK_FALSE(automated.set_parameter(id, static_cast<float>(max + 10.0 * (max - min))));
+    CHECK_FALSE(automated.set_parameter(id, static_cast<float>(min - 10.0 * (max - min))));
+    CHECK(automated.config().formant.factor == b.formant.factor);
     CHECK_FALSE(automated.set_parameter(id, std::numeric_limits<float>::quiet_NaN()));
   }
   VoiceChangerInsert insert;
@@ -327,14 +329,35 @@ TEST_CASE("voice.changer realtime parameters reach the field a key names and cla
       insert.set_parameter(static_cast<unsigned int>(insert.parameter_descriptors().size()), 0.0f));
 }
 
-TEST_CASE("voice.changer automation clamps to the accepted edge", "[voice_changer][insert]") {
+TEST_CASE("voice.changer automation refuses an out-of-range value and keeps the config",
+          "[voice_changer][insert]") {
   VoiceChangerInsert insert;
-  insert.set_parameter(descriptor_id(insert, "retuneSemitones"), 99.0f);
-  CHECK(insert.config().retune.semitones == 24.0f);
-  insert.set_parameter(descriptor_id(insert, "formantFactor"), 0.0f);
-  CHECK(insert.config().formant.factor == 0.55f);
-  insert.set_parameter(descriptor_id(insert, "limiterCeilingDb"), 5.0f);
+  const unsigned int semitones_id = descriptor_id(insert, "retuneSemitones");
+  const unsigned int factor_id = descriptor_id(insert, "formantFactor");
+  const unsigned int ceiling_id = descriptor_id(insert, "limiterCeilingDb");
+  CHECK_FALSE(insert.set_parameter(semitones_id, 99.0f));
+  CHECK(insert.config().retune.semitones == 0.0f);
+  CHECK_FALSE(insert.set_parameter(factor_id, 3.0f));
+  CHECK(insert.config().formant.factor == 1.0f);
+  CHECK_FALSE(insert.set_parameter(ceiling_id, 0.5f));
   CHECK(insert.config().limiter.ceiling_db == -1.0f);
+  // The edge itself is accepted.
+  CHECK(insert.set_parameter(semitones_id, 24.0f));
+  CHECK(insert.config().retune.semitones == 24.0f);
+}
+
+TEST_CASE("voice.changer insert construction names the out-of-range field",
+          "[voice_changer][insert]") {
+  RealtimeVoiceChangerConfig config;
+  config.formant.factor = 3.0f;
+  try {
+    VoiceChangerInsert insert(config);
+    FAIL("expected a refusal");
+  } catch (const SonareException& e) {
+    CHECK(e.code() == ErrorCode::InvalidParameter);
+    CHECK(std::string(e.what()) ==
+          "voice.changer: formant.factor out of range [0.55, 1.65], got 3");
+  }
 }
 
 TEST_CASE("voice.changer automation takes effect on the audio", "[voice_changer][insert]") {
@@ -718,7 +741,7 @@ TEST_CASE("voice.changer takes its formant mode at construction only", "[voice_c
   CHECK(built->latency_samples() == warped.latency_samples());
 }
 
-TEST_CASE("voice.changer refuses an unreachable absolute warp and clamps it under automation",
+TEST_CASE("voice.changer refuses an unreachable absolute warp at construction and under automation",
           "[voice_changer][insert]") {
   RealtimeVoiceChangerConfig config;
   config.formant_mode = sonare::editing::voice_changer::FormantMode::Absolute;
@@ -732,18 +755,19 @@ TEST_CASE("voice.changer refuses an unreachable absolute warp and clamps it unde
     CHECK(std::string(e.what()).find("[0.55, 0.9811]") != std::string::npos);
   }
 
-  // Automation takes the same insert past the edge and the audio stays finite.
+  // Automation past the edge is refused, the warp stays reachable and the audio stays finite.
   config.retune.semitones = 0.0f;
   VoiceChangerInsert insert(config);
   insert.prepare(kRate, kBlock, 1);
   const unsigned int semitones_id = descriptor_id(insert, "retuneSemitones");
   std::vector<float> signal = tone(kBlock * 30, 0.3f, 0);
   for (int pos = 0; pos < static_cast<int>(signal.size()); pos += kBlock) {
-    if (pos == kBlock * 4) REQUIRE(insert.set_parameter(semitones_id, -20.0f));
+    if (pos == kBlock * 4) REQUIRE_FALSE(insert.set_parameter(semitones_id, -20.0f));
     float* plane = signal.data() + pos;
     insert.process(&plane, 1, kBlock);
   }
   for (const float v : signal) REQUIRE(std::isfinite(v));
+  CHECK(insert.config().retune.semitones == 0.0f);
 }
 
 TEST_CASE("voice.changer insert gain reduction ignores the make-up ramp",

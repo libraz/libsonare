@@ -1,7 +1,6 @@
 #include "editing/voice_changer/voice_changer_insert.h"
 
 #include <algorithm>
-#include <cmath>
 #include <string>
 
 #include "util/exception.h"
@@ -52,24 +51,10 @@ constexpr int kMaxChannels = 2;
 constexpr unsigned int kParamCount = 0 SONARE_VOICE_CHANGER_INSERT_PARAMS(SONARE_COUNT_PARAM);
 #undef SONARE_COUNT_PARAM
 
-[[noreturn]] void refuse(const char* key) {
-  throw SonareException(ErrorCode::InvalidParameter,
-                        std::string("voice.changer: ") + key + " is out of range");
-}
-
-// The class's own normalization is the one definition of the accepted ranges; a field it would
-// change is out of range.
 const RealtimeVoiceChangerConfig& validated(const RealtimeVoiceChangerConfig& config) {
-  const RealtimeVoiceChangerConfig accepted = normalize_realtime_voice_changer_config(config);
-#define SONARE_CHECK_PARAM(key, member) \
-  if (!std::isfinite(config.member) || config.member != accepted.member) refuse(key);
-  SONARE_VOICE_CHANGER_INSERT_PARAMS(SONARE_CHECK_PARAM)
-#undef SONARE_CHECK_PARAM
-  if (config.retune.grain_size != accepted.retune.grain_size) refuse("retuneGrainSize");
-  if (config.formant_mode != accepted.formant_mode) refuse("formantMode");
-  std::string reach;
-  if (!formant_warp_is_reachable(accepted, &reach)) {
-    throw SonareException(ErrorCode::InvalidParameter, "voice.changer: " + reach);
+  std::string error;
+  if (!validate_realtime_voice_changer_config(config, nullptr, &error)) {
+    throw SonareException(ErrorCode::InvalidParameter, "voice.changer: " + error);
   }
   return config;
 }
@@ -143,15 +128,16 @@ std::vector<rt::ParamDescriptor> VoiceChangerInsert::parameter_descriptors() con
 bool VoiceChangerInsert::set_parameter_impl(unsigned int param_id, float value) {
   unsigned int id = 0;
   bool found = false;
+  RealtimeVoiceChangerConfig candidate = config_;
 #define SONARE_APPLY_PARAM(key, member) \
   if (id++ == param_id) {               \
-    config_.member = value;             \
+    candidate.member = value;           \
     found = true;                       \
   }
   SONARE_VOICE_CHANGER_INSERT_PARAMS(SONARE_APPLY_PARAM)
 #undef SONARE_APPLY_PARAM
-  if (!found) return false;
-  config_ = normalize_realtime_voice_changer_config(config_);
+  if (!found || !validate_realtime_voice_changer_config(candidate, nullptr, nullptr)) return false;
+  config_ = candidate;
   changer_.set_config(config_);
   return true;
 }

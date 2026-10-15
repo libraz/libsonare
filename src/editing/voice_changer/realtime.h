@@ -122,8 +122,8 @@ struct LimiterConfig {
 struct RealtimeVoiceChangerConfig {
   float input_gain_db = 0.0f;
   float output_gain_db = 0.0f;
-  /// @brief Overall dry/wet ratio of the whole processing chain, clamped to
-  ///        [0, 1]. 1.0 = full processed signal.
+  /// @brief Overall dry/wet ratio of the whole processing chain, in [0, 1].
+  ///        1.0 = full processed signal.
   /// @note The 0.45 cap that applies inside the reverb stage is @ref
   ///       ReverbConfig::mix's, not this field's; see streaming_reverb.h.
   float wet_mix = 1.0f;
@@ -140,7 +140,7 @@ struct RealtimeVoiceChangerConfig {
   ///          ignored in this mode.
   ///          The warp it needs, factor / 2^(semitones / 12), must lie in [kFormantFactorMin,
   ///          kFormantFactorMax]: @ref validate_realtime_voice_changer_config refuses a
-  ///          configuration outside that, and the running chain clamps it.
+  ///          configuration outside that.
   FormantMode formant_mode = FormantMode::Relative;
   CharacterEqConfig eq;
   VoiceGateConfig gate;
@@ -169,10 +169,12 @@ class RealtimeVoiceChanger {
   ///          live processor safely, use @ref set_config instead.
   void reset();
   /// @brief Publishes a new configuration to the realtime processing chain.
-  /// @throws SonareException InvalidParameter when the chain is prepared and @p config changes
-  ///         @ref RealtimeVoiceChangerConfig::formant_mode, which is fixed at prepare().
+  /// @throws SonareException InvalidParameter when @ref validate_realtime_voice_changer_config
+  ///         refuses @p config (the previous configuration stays in effect), or when the chain is
+  ///         prepared and @p config changes @ref RealtimeVoiceChangerConfig::formant_mode, which is
+  ///         fixed at prepare().
   /// @details Safe to call concurrently with @ref process_block on the same
-  ///          instance: the configuration is normalized and stored into a
+  ///          instance: the validated configuration is stored into a
   ///          lock-free single-writer/single-reader cell (see @c
   ///          rt::SeqlockCell), and the audio thread atomically adopts it at
   ///          the start of the next block via @ref process_block. Derived
@@ -475,13 +477,12 @@ std::vector<std::string> realtime_voice_changer_preset_names();
 ///          the formant factors reachable at the configuration's semitones.
 bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::string* error);
 
-RealtimeVoiceChangerConfig normalize_realtime_voice_changer_config(
-    const RealtimeVoiceChangerConfig& config);
-/// @brief Validates a configuration for finite values and structural ranges.
-/// @details Returns false (with @p error populated) if any field is NaN, ±Inf,
-///          or grossly out of range. Out-of-range but finite values are still
-///          accepted and clamped via @ref normalize_realtime_voice_changer_config
-///          into @p normalized so existing tolerant entry points keep working.
+/// @brief Validates a configuration: every field finite and inside its documented range.
+/// @details Returns false (with @p error naming the field, its range and the value, e.g.
+///          "formant.factor out of range [0.55, 1.65], got 3") for a non-finite or out-of-range
+///          field, an unknown formant mode, or an unreachable absolute formant warp. Nothing is
+///          clamped. On success @p normalized equals @p config; on failure it is default
+///          constructed. Allocates only when it fails and @p error is non-null.
 bool validate_realtime_voice_changer_config(const RealtimeVoiceChangerConfig& config,
                                             RealtimeVoiceChangerConfig* normalized,
                                             std::string* error);
