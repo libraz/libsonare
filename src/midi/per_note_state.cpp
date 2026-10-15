@@ -19,7 +19,8 @@ double per_note_bend_units(Bend32 bend) noexcept {
 }
 
 float channel_bend_cents(Bend32 bend, float range_cents) noexcept {
-  return (bend.f14() - 8192.0f) / 8192.0f * range_cents;
+  return (bend.f14() - static_cast<float>(kBend14Center)) / static_cast<float>(kBend14Center) *
+         range_cents;
 }
 
 ComposedPitch compose_note_pitch(const NotePitchRequest& req) noexcept {

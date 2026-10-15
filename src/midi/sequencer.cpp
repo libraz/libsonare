@@ -7,6 +7,7 @@
 #include <memory>
 #include <utility>
 
+#include "midi/control_value.h"
 #include "midi/ump.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -856,7 +857,6 @@ void MidiSequencer::emit_controller_reset(uint32_t destination_id, uint8_t group
   static constexpr uint8_t kDamperPedal = 64;
   static constexpr uint8_t kResetAllControllers = 121;
   static constexpr uint8_t kAllNotesOff = 123;
-  static constexpr uint16_t kPitchBendCenter = 8192;
   MidiEvent ev;
   ev.render_frame = render_frame.value;
   ev.ump = make_midi1_control_change(group, channel, kDamperPedal, 0);
@@ -865,7 +865,7 @@ void MidiSequencer::emit_controller_reset(uint32_t destination_id, uint8_t group
   dispatch(destination_id, ev);
   ev.ump = make_midi1_control_change(group, channel, kAllNotesOff, 0);
   dispatch(destination_id, ev);
-  ev.ump = make_midi1_pitch_bend(group, channel, kPitchBendCenter);
+  ev.ump = make_midi1_pitch_bend(group, channel, kBend14Center);
   dispatch(destination_id, ev);
 }
 

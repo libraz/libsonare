@@ -4,13 +4,14 @@
 #include <iterator>
 
 #include "midi/channel_voice_decode.h"
+#include "midi/control_value.h"
 
 namespace sonare::midi {
 namespace {
 
 // Full-scale values of the 7- and 14-bit scales every protocol width is read on.
 constexpr float kControllerMax = 127.0f;
-constexpr float kBendMax = 16383.0f;
+constexpr float kBendMax = static_cast<float>(kValue14Max);
 
 constexpr uint8_t kBreathCc = 2;
 constexpr uint8_t kTimbreCc = 74;

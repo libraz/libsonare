@@ -3,6 +3,7 @@
 #include <cmath>
 #include <limits>
 
+#include "midi/control_value.h"
 #include "midi/tick_conversion.h"
 #include "util/numeric_validation.h"
 
@@ -82,7 +83,7 @@ uint16_t ppq_to_spp_beats(double ppq) noexcept {
   // One sixteenth note = kSppBeatToPpq quarter notes -> SPP beat units.
   const double beats = ppq / kSppBeatToPpq;
   const double truncated = std::floor(beats);
-  if (truncated >= 16383.0) {
+  if (truncated >= static_cast<double>(kValue14Max)) {
     return 0x3FFFu;
   }
   return static_cast<uint16_t>(truncated);

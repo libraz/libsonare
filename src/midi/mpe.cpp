@@ -11,7 +11,7 @@ namespace {
 /// own and is kept rather than tidied: a receiver that normalizes by 8192
 /// instead lands a full-scale bend a fraction of a cent short of the semitone
 /// count the sender computed from the same table.
-constexpr float kBendCentre = 8192.0f;
+constexpr float kBendCentre = static_cast<float>(kBend14Center);
 constexpr float kBendScale = 8191.0f;
 
 constexpr uint8_t kMaxCc = 127;

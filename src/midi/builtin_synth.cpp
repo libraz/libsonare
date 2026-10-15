@@ -249,7 +249,8 @@ void BuiltinSynth::pitch_bend(uint8_t channel, Bend32 bend) noexcept {
   if (!prepared_) return;
   const uint8_t ch = static_cast<uint8_t>(channel & 0x0Fu);
   // 14-bit scale, center 8192 -> [-1, +1] -> semitones; f14() keeps a MIDI 2.0 bend's fraction.
-  const float norm = (bend.f14() - 8192.0f) / 8192.0f;
+  const float norm =
+      (bend.f14() - static_cast<float>(kBend14Center)) / static_cast<float>(kBend14Center);
   channel_bend_semitones_[ch] = clampf(norm, -1.0f, 1.0f) * kPitchBendRangeSemitones;
   mpe_.track_bend(ch, bend);
   refresh_channel_expression(ch);

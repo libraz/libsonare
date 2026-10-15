@@ -21,6 +21,10 @@
 
 namespace sonare::midi {
 
+/// MIDI 1.0 14-bit pitch-bend centre and the largest 14-bit value.
+inline constexpr uint16_t kBend14Center = 8192;
+inline constexpr uint16_t kValue14Max = 16383;
+
 namespace control_value_detail {
 
 /// Inverse of a monotone upscale `up` on [0, max_value]: exact at every upscale point, linear
@@ -133,7 +137,7 @@ struct Bend32 {
 
   float f14() const noexcept {
     return static_cast<float>(control_value_detail::inverse_upscale(
-        raw, 18u, 16383u,
+        raw, 18u, uint32_t{kValue14Max},
         [](uint32_t v) { return scale_bend_14_to_32(static_cast<uint16_t>(v)); }));
   }
 };

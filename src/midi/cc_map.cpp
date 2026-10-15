@@ -7,7 +7,7 @@ namespace sonare::midi {
 namespace {
 
 constexpr float kCc7BitMax = 127.0f;
-constexpr float kCc14BitMax = 16383.0f;
+constexpr float kCc14BitMax = static_cast<float>(kValue14Max);
 constexpr uint8_t kDataEntryMsb = 6;
 constexpr uint8_t kDataEntryLsb = 38;
 constexpr uint8_t kNrpnLsb = 98;

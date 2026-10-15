@@ -12,6 +12,8 @@
 
 #include <cstdint>
 
+#include "midi/control_value.h"
+
 namespace sonare::midi {
 
 /// @brief Message for a word sequence RealtimeEngine::is_pushable_midi_ump refuses.
@@ -21,7 +23,7 @@ namespace live_push_detail {
 
 inline constexpr int64_t kMaxNibble = 15;
 inline constexpr int64_t kMax7 = 127;
-inline constexpr int64_t kMax14 = 16383;
+inline constexpr int64_t kMax14 = kValue14Max;
 
 constexpr bool in_range(int64_t value, int64_t max_value) noexcept {
   return value >= 0 && value <= max_value;
