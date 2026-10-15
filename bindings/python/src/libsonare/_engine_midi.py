@@ -36,6 +36,7 @@ from ._runtime import (
     ErrorCode,
     SonareValueError,
     _check,
+    _check_argument,
     _get_lib,
     _resolve_render_frame,
     _to_c_float,
@@ -374,7 +375,7 @@ class _EngineMidiMixin:
             )
         )
 
-    def resolve_instrument_automation_id(self, param_name: str, destination_id: int = 0) -> int:
+    def resolve_instrument_automation_id(self, destination_id: int, param_name: str) -> int:
         """Resolve a hosted instrument's continuous parameter to its automation id.
 
         The returned id drives :meth:`set_automation_lane`,
@@ -404,15 +405,16 @@ class _EngineMidiMixin:
         patches are unaffected; parameters apply to NativeSynth's own patch
         only.
 
-        Raises :class:`SonareError` when the destination has no bound
-        instrument, the instrument exposes no automatable parameters, or the
-        name is unknown.
+        Takes ``(destination_id, param_name)`` positionally, like the other
+        ``resolve_*_automation_id`` methods. Raises :class:`SonareValueError`
+        when the destination has no bound instrument, the instrument exposes
+        no automatable parameters, or the name is unknown.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_resolve_instrument_automation_id"):
             raise _not_supported("libsonare was built without live-MIDI support")
         out_id = ctypes.c_uint32()
-        _check(
+        _check_argument(
             lib.sonare_engine_resolve_instrument_automation_id(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),

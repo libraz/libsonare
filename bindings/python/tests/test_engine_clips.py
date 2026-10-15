@@ -38,7 +38,7 @@ def test_process_accepts_planar_channels_as_a_2d_ndarray() -> None:
     from_lists = _process_through_clip(nested, 4)
     from_array = _process_through_clip(planar, 4)
 
-    assert from_array == from_lists
+    assert np.array_equal(from_array, from_lists)
     # The clip mixed into channel 0, so this compares a render, not the input.
     assert from_lists[0] != pytest.approx(nested[0])
     assert np.array_equal(planar, np.array(nested, dtype=np.float32))
@@ -105,7 +105,7 @@ def test_set_clips_accepts_planar_channels_as_a_2d_ndarray() -> None:
             engine.play()
             return engine.process([[0.0] * 4])
 
-    assert rendered(np.array(nested, dtype=np.float32)) == rendered(nested)
+    assert np.array_equal(rendered(np.array(nested, dtype=np.float32)), rendered(nested))
     assert rendered(nested)[0] == pytest.approx(nested[0])
 
 
@@ -120,7 +120,7 @@ def test_clip_page_provider_supply_accepts_a_2d_ndarray_page() -> None:
         provider.supply(1, page * 2.0)
         engine.set_clips([EngineClip(id=403, channels=None, start_ppq=0.0, page_provider=provider)])
         engine.play()
-        assert engine.process([[0.0] * 8])[0] == [1.0, 2.0, 3.0, 4.0, 2.0, 4.0, 6.0, 8.0]
+        assert engine.process([[0.0] * 8])[0].tolist() == [1.0, 2.0, 3.0, 4.0, 2.0, 4.0, 6.0, 8.0]
 
 
 def test_engine_streams_paged_clip_provider_and_drains_requests() -> None:
@@ -141,7 +141,7 @@ def test_engine_streams_paged_clip_provider_and_drains_requests() -> None:
         )
         engine.play()
         first = engine.process([[0.0] * 8])
-        assert first[0] == [1.0, 2.0, 3.0, 4.0, 0.0, 0.0, 0.0, 0.0]
+        assert first[0].tolist() == [1.0, 2.0, 3.0, 4.0, 0.0, 0.0, 0.0, 0.0]
 
         request = engine.pop_clip_page_request()
         assert request is not None
@@ -158,7 +158,7 @@ def test_engine_streams_paged_clip_provider_and_drains_requests() -> None:
         provider.supply(1, [[5.0, 6.0, 7.0, 8.0]])
         engine.seek_sample(0)
         second = engine.process([[0.0] * 8])
-        assert second[0] == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+        assert second[0].tolist() == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
 
 
 def test_engine_feeds_paged_clips_from_raw_float32_files(tmp_path) -> None:
@@ -182,7 +182,7 @@ def test_engine_feeds_paged_clips_from_raw_float32_files(tmp_path) -> None:
         )
         engine.play()
         first = engine.process([[0.0] * 8])
-        assert first[0] == [1.0, 2.0, 3.0, 4.0, 0.0, 0.0, 0.0, 0.0]
+        assert first[0].tolist() == [1.0, 2.0, 3.0, 4.0, 0.0, 0.0, 0.0, 0.0]
 
         request = engine.pop_clip_page_request()
         assert request is not None
@@ -191,7 +191,7 @@ def test_engine_feeds_paged_clips_from_raw_float32_files(tmp_path) -> None:
         assert provider.supply_request(request) is True
         engine.seek_sample(0)
         second = engine.process([[0.0] * 8])
-        assert second[0] == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+        assert second[0].tolist() == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
 
 
 def test_clip_page_provider_failed_construction_does_not_emit_del_noise(capsys) -> None:

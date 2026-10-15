@@ -11,6 +11,7 @@ from ._ffi_types_core import (
     SonareKeyCandidate,
     SonareOnsetDetectConfig,
 )
+from ._narrowing import _narrow_double
 from ._runtime import (
     SonareValueError,
     _check,
@@ -308,12 +309,12 @@ def detect_onsets(
         config = SonareOnsetDetectConfig(
             n_fft=n_fft,
             hop_length=hop_length,
-            threshold=float(threshold),
+            threshold=_narrow_double(threshold, "threshold"),
             pre_max=pre_max,
             post_max=post_max,
             pre_avg=pre_avg,
             post_avg=post_avg,
-            delta=float(delta),
+            delta=_narrow_double(delta, "delta"),
             wait=wait,
             backtrack=int(backtrack),
             backtrack_range=backtrack_range,

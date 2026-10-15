@@ -60,6 +60,7 @@ from ._runtime import (
     _check,
     _get_lib,
     _guard_buffer,
+    _narrow_double,
     _narrow_float,
     _narrow_int,
     _to_c_float_array,
@@ -275,7 +276,7 @@ def align_take_to_reference(
     try:
         _check(rc)
         anchors = [
-            (float(out_anchors[i].warp_sample), float(out_anchors[i].source_sample))
+            (out_anchors[i].warp_sample, out_anchors[i].source_sample)
             for i in range(out_count.value)
         ]
     finally:
@@ -284,7 +285,7 @@ def align_take_to_reference(
         if out_anchors:
             lib.sonare_free_warp_anchors(out_anchors)
     return anchors, TakeAlignment(
-        mean_residual_frames=float(out_alignment.mean_residual_frames),
+        mean_residual_frames=out_alignment.mean_residual_frames,
         reference_frames=int(out_alignment.reference_frames),
         take_frames=int(out_alignment.take_frames),
     )
@@ -404,7 +405,9 @@ class _ProjectEditMixin:
         The change is applied through the edit history, so it is undoable.
         """
         _check(
-            _get_lib().sonare_project_set_sample_rate(self._require_handle(), float(sample_rate))
+            _get_lib().sonare_project_set_sample_rate(
+                self._require_handle(), _narrow_double(sample_rate, "sample_rate")
+            )
         )
 
     def unresolved_audio_source_ids(self) -> list[int]:
@@ -553,10 +556,10 @@ class _ProjectEditMixin:
         desc = SonareProjectClipDesc(
             track_id=track_id,
             is_midi=1 if is_midi else 0,
-            start_ppq=float(start_ppq),
-            length_ppq=float(length_ppq),
-            source_offset_ppq=float(source_offset_ppq),
-            gain=float(gain),
+            start_ppq=_narrow_double(start_ppq, "start_ppq"),
+            length_ppq=_narrow_double(length_ppq, "length_ppq"),
+            source_offset_ppq=_narrow_double(source_offset_ppq, "source_offset_ppq"),
+            gain=_narrow_double(gain, "gain"),
             audio_interleaved=c_audio,
             audio_frames=audio_frames,
             audio_channels=channels if audio is not None else 0,
@@ -698,8 +701,8 @@ class _ProjectEditMixin:
         desc = SonareProjectLoopRecordingDesc(
             track_id=track_id,
             flags=flags,
-            start_ppq=float(start_ppq),
-            loop_length_ppq=float(loop_length_ppq),
+            start_ppq=_narrow_double(start_ppq, "start_ppq"),
+            loop_length_ppq=_narrow_double(loop_length_ppq, "loop_length_ppq"),
             audio_interleaved=backing,
             audio_frames=frames,
             audio_channels=channels,
@@ -730,8 +733,8 @@ class _ProjectEditMixin:
         _check(
             _get_lib().sonare_project_add_midi_clip(
                 self._require_handle(),
-                float(start_ppq),
-                float(length_ppq),
+                _narrow_double(start_ppq, "start_ppq"),
+                _narrow_double(length_ppq, "length_ppq"),
                 ctypes.byref(out_track),
                 ctypes.byref(out_clip),
             )
@@ -745,7 +748,7 @@ class _ProjectEditMixin:
             _get_lib().sonare_project_split_clip(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
-                float(split_ppq),
+                _narrow_double(split_ppq, "split_ppq"),
                 ctypes.byref(out_id),
             )
         )
@@ -757,8 +760,8 @@ class _ProjectEditMixin:
             _get_lib().sonare_project_trim_clip(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
-                float(new_start_ppq),
-                float(new_length_ppq),
+                _narrow_double(new_start_ppq, "new_start_ppq"),
+                _narrow_double(new_length_ppq, "new_length_ppq"),
             )
         )
 
@@ -768,7 +771,7 @@ class _ProjectEditMixin:
             _get_lib().sonare_project_move_clip(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
-                float(new_start_ppq),
+                _narrow_double(new_start_ppq, "new_start_ppq"),
                 _to_c_uint32(new_track_id, "new_track_id"),
             )
         )
@@ -817,9 +820,7 @@ class _ProjectEditMixin:
             if isinstance(item, Mapping):
                 take_id = item.get("id", 0)
                 source_id = item.get("source_id", item.get("sourceId", 0))
-                source_offset = float(
-                    item.get("source_offset_ppq", item.get("sourceOffsetPpq", 0.0))
-                )
+                source_offset = item.get("source_offset_ppq", item.get("sourceOffsetPpq", 0.0))
                 name = item.get("name", "")
             else:
                 take_id, source_id, source_offset, name = cast(tuple[int, int, float, str], item)
@@ -832,7 +833,9 @@ class _ProjectEditMixin:
             c_takes[i].source_id = _narrow_int(
                 source_id, f"set_clip_takes: takes[{i}].source_id", 0, _UINT32_MAX
             )
-            c_takes[i].source_offset_ppq = float(source_offset)
+            c_takes[i].source_offset_ppq = _narrow_double(
+                source_offset, f"set_clip_takes: takes[{i}].source_offset_ppq"
+            )
             if name:
                 encoded = _utf8_arg(str(name), "name")
                 name_backing.append(encoded)
@@ -865,10 +868,10 @@ class _ProjectEditMixin:
         c_segments = (SonareProjectClipCompSegment * len(segment_items))()
         for i, item in enumerate(segment_items):
             if isinstance(item, Mapping):
-                start_ppq = float(item.get("start_ppq", item.get("startPpq", 0.0)))
-                end_ppq = float(item.get("end_ppq", item.get("endPpq", 0.0)))
+                start_ppq = item.get("start_ppq", item.get("startPpq", 0.0))
+                end_ppq = item.get("end_ppq", item.get("endPpq", 0.0))
                 take_id = item.get("take_id", item.get("takeId", 0))
-                crossfade_ppq = float(item.get("crossfade_ppq", item.get("crossfadePpq", 0.0)))
+                crossfade_ppq = item.get("crossfade_ppq", item.get("crossfadePpq", 0.0))
             elif len(item) == 4:
                 start_ppq, end_ppq, take_id, crossfade_ppq = cast(
                     tuple[float, float, int, float], item
@@ -876,15 +879,21 @@ class _ProjectEditMixin:
             else:
                 start_ppq, end_ppq, take_id = cast(tuple[float, float, int], item)
                 crossfade_ppq = 0.0
-            c_segments[i].start_ppq = float(start_ppq)
-            c_segments[i].end_ppq = float(end_ppq)
+            c_segments[i].start_ppq = _narrow_double(
+                start_ppq, f"set_clip_comp_segments: segments[{i}].start_ppq"
+            )
+            c_segments[i].end_ppq = _narrow_double(
+                end_ppq, f"set_clip_comp_segments: segments[{i}].end_ppq"
+            )
             # Narrowed rather than coerced: int(0.5) is the 0 this field reads as
             # "fall back to the base/active take", so a fractional take id would
             # select that fallback and report success.
             c_segments[i].take_id = _narrow_int(
                 take_id, f"set_clip_comp_segments: segments[{i}].take_id", 0, _UINT32_MAX
             )
-            c_segments[i].crossfade_ppq = float(crossfade_ppq)
+            c_segments[i].crossfade_ppq = _narrow_double(
+                crossfade_ppq, f"set_clip_comp_segments: segments[{i}].crossfade_ppq"
+            )
         _check(
             _get_lib().sonare_project_set_clip_comp_segments(
                 self._require_handle(),
@@ -904,8 +913,12 @@ class _ProjectEditMixin:
         count = len(anchors)
         c_anchors = (SonareProjectWarpAnchor * count)()
         for i, (warp_sample, source_sample) in enumerate(anchors):
-            c_anchors[i].warp_sample = float(warp_sample)
-            c_anchors[i].source_sample = float(source_sample)
+            c_anchors[i].warp_sample = _narrow_double(
+                warp_sample, f"set_warp_map: anchors[{i}].warp_sample"
+            )
+            c_anchors[i].source_sample = _narrow_double(
+                source_sample, f"set_warp_map: anchors[{i}].source_sample"
+            )
         encoded_name = _utf8_arg(name, "name") if name else None
         desc = SonareProjectWarpMapDesc(
             # Passed unconverted so the struct's own narrowing sees the caller's
@@ -1160,8 +1173,8 @@ class _ProjectEditMixin:
         is a :data:`FADE_CURVE_*` ordinal or name (``"linear"`` / ``"equal-power"``
         / ``"exponential"`` / ``"logarithmic"``).
         """
-        fin = float(fade_in_length_ppq)
-        fout = float(fade_out_length_ppq)
+        fin = _narrow_double(fade_in_length_ppq, "fade_in_length_ppq")
+        fout = _narrow_double(fade_out_length_ppq, "fade_out_length_ppq")
         if not math.isfinite(fin) or fin < 0.0:
             raise SonareValueError("fade_in_length_ppq must be a finite number >= 0")
         if not math.isfinite(fout) or fout < 0.0:
@@ -1194,8 +1207,8 @@ class _ProjectEditMixin:
         to the clip's pre-roll and half the loop.
         """
         mode = _loop_mode_value(loop_mode)
-        length = float(loop_length_ppq)
-        crossfade = float(loop_crossfade_ppq)
+        length = _narrow_double(loop_length_ppq, "loop_length_ppq")
+        crossfade = _narrow_double(loop_crossfade_ppq, "loop_crossfade_ppq")
         if not math.isfinite(length) or length < 0.0:
             raise SonareValueError("loop_length_ppq must be a finite number >= 0")
         if not math.isfinite(crossfade) or crossfade < 0.0:
@@ -1227,7 +1240,7 @@ class _ProjectEditMixin:
             _get_lib().sonare_project_duplicate_clip(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
-                float(new_start_ppq),
+                _narrow_double(new_start_ppq, "new_start_ppq"),
                 ctypes.byref(out_id),
             )
         )

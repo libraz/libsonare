@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, cast
 from ._engine_conversions import _band_json_arg
 from ._errors import _unknown_error
 from ._ffi import SonareSurroundPan
+from ._narrowing import _narrow_double
 from ._runtime import (
     _UINT32_MAX,
     PanLawInput,
@@ -18,6 +19,7 @@ from ._runtime import (
     SonareEngineTrackLane,
     SonareEngineTrackSend,
     _check,
+    _check_argument,
     _get_lib,
     _narrow_int,
     _pan_law_value,
@@ -61,11 +63,8 @@ def _marshal_sends(sends: Sequence[Mapping[str, object]]) -> ctypes.Array[Sonare
         send_array[send_index].bus_id = cast(
             int, send["bus_id"] if "bus_id" in send else send["busId"]
         )
-        send_array[send_index].level_db = float(
-            cast(
-                float,
-                send["level_db"] if "level_db" in send else send.get("levelDb", 0.0),
-            )
+        send_array[send_index].level_db = _narrow_double(
+            send["level_db"] if "level_db" in send else send.get("levelDb", 0.0), "level_db"
         )
         send_array[send_index].enabled = 1 if bool(send.get("enabled", True)) else 0
         # Default to post-fader so callers that omit the timing key keep the
@@ -285,8 +284,8 @@ class _EngineMixingMixin:
             # Assigned unconverted so the struct's own narrowing sees the caller
             # value; int() would truncate a fraction past it.
             raw[i].bus_id = cast(int, bus["bus_id"] if "bus_id" in bus else bus["busId"])
-            raw[i].gain_db = float(
-                cast(float, bus["gain_db"] if "gain_db" in bus else bus.get("gainDb", 0.0))
+            raw[i].gain_db = _narrow_double(
+                bus["gain_db"] if "gain_db" in bus else bus.get("gainDb", 0.0), "gain_db"
             )
             # ctypes zero-inits channel_layout to 0 (mono); default to stereo
             # (ChannelLayout.STEREO) unless the caller specifies it.
@@ -306,11 +305,9 @@ class _EngineMixingMixin:
                     send_array[send_index].bus_id = cast(
                         int, send["bus_id"] if "bus_id" in send else send["busId"]
                     )
-                    send_array[send_index].level_db = float(
-                        cast(
-                            float,
-                            send["level_db"] if "level_db" in send else send.get("levelDb", 0.0),
-                        )
+                    send_array[send_index].level_db = _narrow_double(
+                        send["level_db"] if "level_db" in send else send.get("levelDb", 0.0),
+                        "level_db",
                     )
                     send_array[send_index].enabled = 1 if bool(send.get("enabled", True)) else 0
                     # Default to post-fader so callers that omit the timing key
@@ -796,7 +793,7 @@ class _EngineMixingMixin:
 
         The returned id drives :meth:`set_automation_lane`,
         :meth:`set_parameter`, or :meth:`set_parameter_smoothed` exactly like a
-        :meth:`resolve_track_lane_automation_id` id. Raises :class:`SonareError`
+        :meth:`resolve_track_lane_automation_id` id. Raises :class:`SonareValueError`
         if the track, insert, or name is unknown.
 
         This trio is how a mastering processor gets time-varying automation:
@@ -822,7 +819,7 @@ class _EngineMixingMixin:
         that would take the engine past its 8192 insert-id entries is refused.
         """
         out_id = ctypes.c_uint32()
-        _check(
+        _check_argument(
             _get_lib().sonare_engine_resolve_track_insert_automation_id(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -840,11 +837,11 @@ class _EngineMixingMixin:
         :meth:`resolve_track_insert_automation_id`: the id names the track, not
         its lane position, so it keeps driving that track across
         :meth:`set_track_lanes` reorders and applies nothing once the track is
-        removed. Raises :class:`SonareError` if the track has no lane or the name
+        removed. Raises :class:`SonareValueError` if the track has no lane or the name
         is neither.
         """
         out_id = ctypes.c_uint32()
-        _check(
+        _check_argument(
             _get_lib().sonare_engine_resolve_track_lane_automation_id(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -861,11 +858,11 @@ class _EngineMixingMixin:
         :meth:`resolve_track_insert_automation_id`: the id names the bus, not its
         position in the bus list, so it keeps driving that bus across
         :meth:`set_track_buses` reorders and the removal of other buses, and
-        applies nothing once the bus is removed. Raises :class:`SonareError` if
+        applies nothing once the bus is removed. Raises :class:`SonareValueError` if
         the bus is not configured or the name is not ``"faderDb"``.
         """
         out_id = ctypes.c_uint32()
-        _check(
+        _check_argument(
             _get_lib().sonare_engine_resolve_bus_automation_id(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
@@ -879,11 +876,11 @@ class _EngineMixingMixin:
         """Resolve the master strip's fader, pan or width to its reserved automation id.
 
         ``param_name`` is ``"faderDb"``, ``"pan"`` or ``"width"``. The master strip always
-        exists, so the id never goes stale. Raises :class:`SonareError` if the name is none
+        exists, so the id never goes stale. Raises :class:`SonareValueError` if the name is none
         of the three.
         """
         out_id = ctypes.c_uint32()
-        _check(
+        _check_argument(
             _get_lib().sonare_engine_resolve_master_automation_id(
                 self._require_handle(),
                 _utf8_arg(param_name, "param_name"),
@@ -898,7 +895,7 @@ class _EngineMixingMixin:
         Master-strip counterpart of :meth:`resolve_track_insert_automation_id`.
         """
         out_id = ctypes.c_uint32()
-        _check(
+        _check_argument(
             _get_lib().sonare_engine_resolve_master_insert_automation_id(
                 self._require_handle(),
                 _to_c_uint(insert_index, "insert_index"),
@@ -917,7 +914,7 @@ class _EngineMixingMixin:
         ``bus_id`` must carry a strip configured via :meth:`set_bus_strip_json`.
         """
         out_id = ctypes.c_uint32()
-        _check(
+        _check_argument(
             _get_lib().sonare_engine_resolve_bus_insert_automation_id(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),

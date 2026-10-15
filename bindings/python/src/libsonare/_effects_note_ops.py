@@ -387,7 +387,7 @@ def render_notes(
         voiced_array = _optional_note_voiced(
             "render_notes", voiced, f0_supplied=True, n_frames=n_frames
         )
-        c_frame_rate = float(frame_rate)
+        c_frame_rate = _narrow_double(frame_rate, "frame_rate")
     elif voiced is not None:
         _optional_note_voiced("render_notes", voiced, f0_supplied=False, n_frames=0)
 

@@ -21,6 +21,7 @@ from ._ffi import (
     SonareReverbDetection,
     SonareRoomEstimate,
 )
+from ._narrowing import _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -76,14 +77,14 @@ def mastering_repair_dereverb_classical(
     if hop_length_value <= 0 or hop_length_value > n_fft_value // 2:
         raise SonareValueError("hop_length must be in (0, n_fft // 2]")
     config = SonareDereverbClassicalConfig(  # noqa: F405
-        threshold=float(threshold),
-        attenuation=float(attenuation),
+        threshold=_narrow_double(threshold, "threshold"),
+        attenuation=_narrow_double(attenuation, "attenuation"),
         n_fft=n_fft_value,
         hop_length=hop_length_value,
-        t60_sec=float(t60_sec),
-        late_delay_ms=float(late_delay_ms),
-        over_subtraction=float(over_subtraction),
-        spectral_floor=float(spectral_floor),
+        t60_sec=_narrow_double(t60_sec, "t60_sec"),
+        late_delay_ms=_narrow_double(late_delay_ms, "late_delay_ms"),
+        over_subtraction=_narrow_double(over_subtraction, "over_subtraction"),
+        spectral_floor=_narrow_double(spectral_floor, "spectral_floor"),
         wpe_enabled=1 if wpe_enabled else 0,
         wpe_iterations=_narrow_int(
             wpe_iterations,
@@ -94,7 +95,7 @@ def mastering_repair_dereverb_classical(
         wpe_taps=_narrow_int(
             wpe_taps, "mastering_repair_dereverb_classical: wpe_taps", _C_INT_MIN, _C_INT_MAX
         ),
-        wpe_strength=float(wpe_strength),
+        wpe_strength=_narrow_double(wpe_strength, "wpe_strength"),
     )
     return _run_repair(
         _get_lib().sonare_mastering_repair_dereverb_classical, samples, sample_rate, config
@@ -186,14 +187,14 @@ def mastering_repair_detect_reverb(
     if hop_length_value <= 0 or hop_length_value > n_fft_value // 2:
         raise SonareValueError("hop_length must be in (0, n_fft // 2]")
     config = SonareDereverbClassicalConfig(  # noqa: F405
-        threshold=float(threshold),
-        attenuation=float(attenuation),
+        threshold=_narrow_double(threshold, "threshold"),
+        attenuation=_narrow_double(attenuation, "attenuation"),
         n_fft=n_fft_value,
         hop_length=hop_length_value,
-        t60_sec=float(t60_sec),
-        late_delay_ms=float(late_delay_ms),
-        over_subtraction=float(over_subtraction),
-        spectral_floor=float(spectral_floor),
+        t60_sec=_narrow_double(t60_sec, "t60_sec"),
+        late_delay_ms=_narrow_double(late_delay_ms, "late_delay_ms"),
+        over_subtraction=_narrow_double(over_subtraction, "over_subtraction"),
+        spectral_floor=_narrow_double(spectral_floor, "spectral_floor"),
         wpe_enabled=1 if wpe_enabled else 0,
         wpe_iterations=_narrow_int(
             wpe_iterations, "mastering_repair_detect_reverb: wpe_iterations", _C_INT_MIN, _C_INT_MAX
@@ -201,7 +202,7 @@ def mastering_repair_detect_reverb(
         wpe_taps=_narrow_int(
             wpe_taps, "mastering_repair_detect_reverb: wpe_taps", _C_INT_MIN, _C_INT_MAX
         ),
-        wpe_strength=float(wpe_strength),
+        wpe_strength=_narrow_double(wpe_strength, "wpe_strength"),
     )
     return _extract_reverb_detection(
         _run_detection(
@@ -305,14 +306,14 @@ def mastering_repair_dereverb_classical_stereo(
     if left_length != right_length:
         raise SonareValueError("left and right channel lengths must match")
     config = SonareDereverbClassicalConfig(  # noqa: F405
-        threshold=float(threshold),
-        attenuation=float(attenuation),
+        threshold=_narrow_double(threshold, "threshold"),
+        attenuation=_narrow_double(attenuation, "attenuation"),
         n_fft=n_fft_value,
         hop_length=hop_length_value,
-        t60_sec=float(t60_sec),
-        late_delay_ms=float(late_delay_ms),
-        over_subtraction=float(over_subtraction),
-        spectral_floor=float(spectral_floor),
+        t60_sec=_narrow_double(t60_sec, "t60_sec"),
+        late_delay_ms=_narrow_double(late_delay_ms, "late_delay_ms"),
+        over_subtraction=_narrow_double(over_subtraction, "over_subtraction"),
+        spectral_floor=_narrow_double(spectral_floor, "spectral_floor"),
         wpe_enabled=1 if wpe_enabled else 0,
         wpe_iterations=_narrow_int(
             wpe_iterations,
@@ -326,7 +327,7 @@ def mastering_repair_dereverb_classical_stereo(
             _C_INT_MIN,
             _C_INT_MAX,
         ),
-        wpe_strength=float(wpe_strength),
+        wpe_strength=_narrow_double(wpe_strength, "wpe_strength"),
     )
     out = SonareDereverbStereoResult()  # noqa: F405
     rc = lib.sonare_mastering_repair_dereverb_classical_stereo(
@@ -453,14 +454,14 @@ def mastering_repair_dereverb_classical_linked(
     planes = _linked_channel_planes("mastering_repair_dereverb_classical_linked", channels)
     arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
     config = SonareDereverbClassicalConfig(  # noqa: F405
-        threshold=float(threshold),
-        attenuation=float(attenuation),
+        threshold=_narrow_double(threshold, "threshold"),
+        attenuation=_narrow_double(attenuation, "attenuation"),
         n_fft=n_fft_value,
         hop_length=hop_length_value,
-        t60_sec=float(t60_sec),
-        late_delay_ms=float(late_delay_ms),
-        over_subtraction=float(over_subtraction),
-        spectral_floor=float(spectral_floor),
+        t60_sec=_narrow_double(t60_sec, "t60_sec"),
+        late_delay_ms=_narrow_double(late_delay_ms, "late_delay_ms"),
+        over_subtraction=_narrow_double(over_subtraction, "over_subtraction"),
+        spectral_floor=_narrow_double(spectral_floor, "spectral_floor"),
         wpe_enabled=1 if wpe_enabled else 0,
         wpe_iterations=_narrow_int(
             wpe_iterations,
@@ -474,7 +475,7 @@ def mastering_repair_dereverb_classical_linked(
             _C_INT_MIN,
             _C_INT_MAX,
         ),
-        wpe_strength=float(wpe_strength),
+        wpe_strength=_narrow_double(wpe_strength, "wpe_strength"),
     )
     out_buffers, out_ptrs = _linked_output_planes(len(arrays), frame_count)
     report = SonareDereverbReport()  # noqa: F405
@@ -579,8 +580,8 @@ def mastering_repair_dereverb_config_for_room(
         band_count=band_count,
     )
     config = SonareDereverbClassicalConfig(  # noqa: F405
-        threshold=float(threshold),
-        attenuation=float(attenuation),
+        threshold=_narrow_double(threshold, "threshold"),
+        attenuation=_narrow_double(attenuation, "attenuation"),
         # Integrality alone: this entry rewrites two fields and takes the rest
         # literally, so it carries none of the dereverb call's own domains.
         n_fft=_narrow_int(
@@ -592,10 +593,10 @@ def mastering_repair_dereverb_config_for_room(
             _C_INT_MIN,
             _C_INT_MAX,
         ),
-        t60_sec=float(t60_sec),
-        late_delay_ms=float(late_delay_ms),
-        over_subtraction=float(over_subtraction),
-        spectral_floor=float(spectral_floor),
+        t60_sec=_narrow_double(t60_sec, "t60_sec"),
+        late_delay_ms=_narrow_double(late_delay_ms, "late_delay_ms"),
+        over_subtraction=_narrow_double(over_subtraction, "over_subtraction"),
+        spectral_floor=_narrow_double(spectral_floor, "spectral_floor"),
         wpe_enabled=1 if wpe_enabled else 0,
         wpe_iterations=_narrow_int(
             wpe_iterations,
@@ -609,22 +610,22 @@ def mastering_repair_dereverb_config_for_room(
             _C_INT_MIN,
             _C_INT_MAX,
         ),
-        wpe_strength=float(wpe_strength),
+        wpe_strength=_narrow_double(wpe_strength, "wpe_strength"),
     )
     _check(
         getattr(lib, symbol)(ctypes.byref(c_estimate), ctypes.byref(config)),
     )
     return DereverbClassicalConfig(
-        threshold=float(config.threshold),
-        attenuation=float(config.attenuation),
+        threshold=_narrow_double(config.threshold, "config.threshold"),
+        attenuation=_narrow_double(config.attenuation, "config.attenuation"),
         n_fft=int(config.n_fft),
         hop_length=int(config.hop_length),
-        t60_sec=float(config.t60_sec),
-        late_delay_ms=float(config.late_delay_ms),
-        over_subtraction=float(config.over_subtraction),
-        spectral_floor=float(config.spectral_floor),
+        t60_sec=_narrow_double(config.t60_sec, "config.t60_sec"),
+        late_delay_ms=_narrow_double(config.late_delay_ms, "config.late_delay_ms"),
+        over_subtraction=_narrow_double(config.over_subtraction, "config.over_subtraction"),
+        spectral_floor=_narrow_double(config.spectral_floor, "config.spectral_floor"),
         wpe_enabled=bool(config.wpe_enabled),
         wpe_iterations=int(config.wpe_iterations),
         wpe_taps=int(config.wpe_taps),
-        wpe_strength=float(config.wpe_strength),
+        wpe_strength=_narrow_double(config.wpe_strength, "config.wpe_strength"),
     )

@@ -19,6 +19,7 @@ from ._ffi import (
     SonareMasteringResult,
     SonareMasteringStereoResult,
 )
+from ._narrowing import _narrow_double
 from ._runtime import (
     SonareValueError,
     _check,
@@ -618,7 +619,7 @@ def _flatten_chain_value(value: Any, full_key: str, flat: dict[str, float]) -> N
     elif isinstance(value, str):
         flat[full_key] = _enum_value(None, full_key, value)
     else:
-        flat[full_key] = float(value)
+        flat[full_key] = _narrow_double(value, full_key)
 
 
 def _chain_params(config: dict[str, Any] | None) -> tuple[Any, int]:

@@ -660,3 +660,36 @@ def test_pitch_frames_cli_reports_the_contour_with_null_for_unvoiced_frames() ->
             for value, flag in zip(payload["f0"], payload["voiced_flag"], strict=True)
             if not flag
         )
+
+
+def test_note_stretch_omitted_offset_resolves_to_the_input_length(
+    monkeypatch, capsys, tmp_path
+) -> None:
+    import argparse
+
+    import libsonare
+    from libsonare import _cli_note_edit
+
+    seen: dict[str, object] = {}
+
+    def fake_stretch(samples, **kwargs):
+        seen.update(kwargs)
+        return list(samples)
+
+    monkeypatch.setattr(libsonare, "note_stretch", fake_stretch)
+    monkeypatch.setattr(_cli_note_edit, "_load_audio", lambda _path: ([0.0] * 1000, 22050))
+    args = argparse.Namespace(
+        file="in.wav",
+        output=str(tmp_path / "out.wav"),
+        json=True,
+        onset=100,
+        offset=None,
+        ratio=1.5,
+    )
+    _cli_note_edit.cmd_note_stretch(args)
+    assert seen["offset_sample"] == 1000
+    assert json.loads(capsys.readouterr().out.strip().splitlines()[-1])["offset_sample"] == 1000
+
+    args.offset = 400
+    _cli_note_edit.cmd_note_stretch(args)
+    assert seen["offset_sample"] == 400

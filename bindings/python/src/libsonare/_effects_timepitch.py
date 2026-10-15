@@ -13,6 +13,7 @@ from ._ffi import (
     SonareKey,
     SonarePitchCorrectionConfig,
 )
+from ._narrowing import _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -312,7 +313,7 @@ def pitch_correct_timevarying(
     config.target_mode = (
         SONARE_PITCH_TARGET_SCALE if mode == "scale" else SONARE_PITCH_TARGET_FIXED_MIDI
     )
-    config.target_midi = float(target_midi)
+    config.target_midi = _narrow_double(target_midi, "target_midi")
     # Narrowed rather than coerced: int() takes 3.7 as 3, a root and a degree set
     # the caller never asked for.
     config.scale_root = _narrow_int(
@@ -325,15 +326,19 @@ def pitch_correct_timevarying(
             scale_mode_mask, "pitch_correct_timevarying: scale_mode_mask", 0, _UINT32_MAX
         )
     if reference_midi is not None:
-        config.scale_reference_midi = float(reference_midi)
+        config.scale_reference_midi = _narrow_double(reference_midi, "reference_midi")
     if retune_amount is not None:
-        config.retune_amount = float(retune_amount)
+        config.retune_amount = _narrow_double(retune_amount, "retune_amount")
     if max_correction_semitones is not None:
-        config.max_correction_semitones = float(max_correction_semitones)
+        config.max_correction_semitones = _narrow_double(
+            max_correction_semitones, "max_correction_semitones"
+        )
     if retune_speed_ms is not None:
-        config.retune_speed_ms = float(retune_speed_ms)
+        config.retune_speed_ms = _narrow_double(retune_speed_ms, "retune_speed_ms")
     if vibrato_threshold_cents is not None:
-        config.vibrato_threshold_cents = float(vibrato_threshold_cents)
+        config.vibrato_threshold_cents = _narrow_double(
+            vibrato_threshold_cents, "vibrato_threshold_cents"
+        )
 
     c_array, length = _to_c_float_array(samples)
     f0_array, n_frames = _to_c_float_array(f0_hz, arg_name="f0_hz")
@@ -430,15 +435,19 @@ def auto_tune(
     config = SonarePitchCorrectionConfig()
     _check(lib.sonare_pitch_correction_config_default(ctypes.byref(config)))
     if strength is not None:
-        config.retune_amount = float(strength)
+        config.retune_amount = _narrow_double(strength, "strength")
     if reference_midi is not None:
-        config.scale_reference_midi = float(reference_midi)
+        config.scale_reference_midi = _narrow_double(reference_midi, "reference_midi")
     if max_correction_semitones is not None:
-        config.max_correction_semitones = float(max_correction_semitones)
+        config.max_correction_semitones = _narrow_double(
+            max_correction_semitones, "max_correction_semitones"
+        )
     if retune_speed_ms is not None:
-        config.retune_speed_ms = float(retune_speed_ms)
+        config.retune_speed_ms = _narrow_double(retune_speed_ms, "retune_speed_ms")
     if vibrato_threshold_cents is not None:
-        config.vibrato_threshold_cents = float(vibrato_threshold_cents)
+        config.vibrato_threshold_cents = _narrow_double(
+            vibrato_threshold_cents, "vibrato_threshold_cents"
+        )
 
     c_array, length = _to_c_float_array(samples)
     used = SonareKey()

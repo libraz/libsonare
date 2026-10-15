@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import IntEnum
 
+import numpy as np
+
 from ._types_analysis import (
     TimeSignature,
 )
@@ -366,7 +368,7 @@ class EngineBounceOptions:
 class EngineBounceResult:
     """Interleaved offline export result from the realtime engine."""
 
-    interleaved: list[float]
+    interleaved: np.ndarray
     frames: int
     num_channels: int
     sample_rate: int

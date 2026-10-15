@@ -11,6 +11,7 @@ from ._cli_common import (
     _MAX_PROJECT_OR_MIDI_BYTES,
     EXIT_INVALID_PARAMETER,
     PITCH_NAMES,
+    _audio_array,
     _emit_effect_result,
     _legacy_exit_codes,
     _read_bounded,
@@ -119,11 +120,13 @@ def cmd_note_stretch(args: argparse.Namespace) -> int:
     from . import note_stretch
 
     samples, sr = _load_audio(args.file)
+    # An omitted --offset means the end of the buffer, as for note-move.
+    offset = len(samples) if args.offset is None else args.offset
     result = note_stretch(
         samples,
         sample_rate=sr,
         onset_sample=args.onset,
-        offset_sample=args.offset,
+        offset_sample=offset,
         stretch_ratio=args.ratio,
     )
 
@@ -133,7 +136,7 @@ def cmd_note_stretch(args: argparse.Namespace) -> int:
         sr,
         extra={
             "onset_sample": args.onset,
-            "offset_sample": args.offset,
+            "offset_sample": offset,
             "ratio": args.ratio,
         },
         label="Note stretch",
@@ -220,7 +223,7 @@ def cmd_tune_to_midi(args: argparse.Namespace) -> int:
 
     return _emit_effect_result(
         args,
-        [[float(value) for value in rendered]],
+        [_audio_array(rendered)],
         sr,
         # Zero assigned is a legitimate answer -- a reference that does not line up
         # with the take -- so it is reported rather than raised.
@@ -503,7 +506,7 @@ def cmd_polyphonic_render(args: argparse.Namespace) -> int:
                     touched.append(index)
             for index in touched:
                 analysis.set_note_edit(index, edits[index])
-        result = [float(value) for value in analysis.render()]
+        result = _audio_array(analysis.render())
 
     return _emit_effect_result(
         args,
@@ -644,7 +647,10 @@ def register_note_edit_parsers(
         "--onset", type=int, default=0, help="Start sample index of the note region"
     )
     note_stretch_p.add_argument(
-        "--offset", type=int, default=0, help="End sample index of the note region"
+        "--offset",
+        type=int,
+        default=None,
+        help="End sample index of the note region (default: end of the input)",
     )
     note_stretch_p.add_argument(
         "--ratio",

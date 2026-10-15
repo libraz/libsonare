@@ -348,7 +348,9 @@ def _load_audio_from_facade(path: str) -> tuple[list[float], int]:
     return cli._load_audio(path)
 
 
-def _resample(samples: list[float], source_rate: int, target_rate: int) -> list[float]:
+def _resample(
+    samples: Sequence[float] | np.ndarray, source_rate: int, target_rate: int
+) -> np.ndarray:
     """Resample mono samples with the native anti-aliased resampler.
 
     Routes through the C-ABI ``resample`` (r8brain) so the CLI matches the C++
@@ -358,18 +360,20 @@ def _resample(samples: list[float], source_rate: int, target_rate: int) -> list[
     """
     if source_rate <= 0 or target_rate <= 0:
         raise ValueError("sample rates must be positive")
+    buffer = _audio_array(samples)
     if source_rate == target_rate:
-        return list(samples)
-    if len(samples) == 0:
-        return []
+        return buffer.copy()
+    if buffer.size == 0:
+        return buffer
 
-    from . import resample as _native_resample
+    from ._conversions import _resample_float32
 
     try:
-        return _native_resample(list(samples), src_sr=source_rate, target_sr=target_rate)
+        return _resample_float32(buffer, source_rate, target_rate)
     except OSError:
         # Shared library missing/unloadable: degrade to linear interpolation.
-        return _resample_linear(samples, source_rate, target_rate)
+        # Interpolated in double, as the list-based fallback always was.
+        return _audio_array(_resample_linear(buffer.astype(np.float64), source_rate, target_rate))
 
 
 def _resample_linear(samples: list[float], source_rate: int, target_rate: int) -> list[float]:
@@ -755,7 +759,7 @@ def _write_wav_stereo_frames(
 
 
 def _write_wav(
-    path: str, samples: list[float], sample_rate: int, bits_per_sample: int = 16
+    path: str, samples: Sequence[float] | np.ndarray, sample_rate: int, bits_per_sample: int = 16
 ) -> None:
     """Write mono 16- or 24-bit PCM WAV using only the Python standard library.
 
@@ -775,8 +779,8 @@ def _write_wav(
 
 def _write_wav_stereo(
     path: str,
-    left: list[float],
-    right: list[float],
+    left: Sequence[float] | np.ndarray,
+    right: Sequence[float] | np.ndarray,
     sample_rate: int,
     bits_per_sample: int = 16,
 ) -> None:
@@ -817,7 +821,10 @@ def _load_channels_or_downmix(path: str) -> tuple[list[list[float]], int]:
 
 
 def _write_channel_output(
-    path: str, channels: list[list[float]], sample_rate: int, bits_per_sample: int = 16
+    path: str,
+    channels: Sequence[Sequence[float] | np.ndarray],
+    sample_rate: int,
+    bits_per_sample: int = 16,
 ) -> None:
     """Write however many channels an operation produced."""
     if len(channels) == 2:
@@ -955,7 +962,7 @@ def _read_bounded(path: str, max_bytes: int) -> bytes:
 
 def _emit_effect_result(
     args: argparse.Namespace,
-    channels: list[list[float]],
+    channels: Sequence[Sequence[float] | np.ndarray],
     sr: int,
     *,
     extra: dict[str, object] | None = None,
@@ -1102,10 +1109,16 @@ def _parse_json_list(raw: str, path: str) -> list[dict[str, Any]]:
     return cast(list[dict[str, Any]], loaded)
 
 
-def _float_sequence(value: object) -> list[float]:
-    if hasattr(value, "tolist"):
-        value = cast(Any, value).tolist()
-    return [float(sample) for sample in cast(Any, value)]
+def _audio_array(value: object) -> np.ndarray:
+    """Convert a whole-buffer result to float32 in one bulk pass, without boxing samples."""
+    return np.asarray(value, dtype=np.float32)
+
+
+def _mean_abs(values: Sequence[float] | np.ndarray) -> float:
+    """Mean absolute amplitude, accumulated in double; 0.0 for an empty buffer."""
+    if len(values) == 0:
+        return 0.0
+    return float(np.mean(np.abs(np.asarray(values)), dtype=np.float64))
 
 
 def _load_voice_preset_pack(path: str, preset_id: str) -> dict[str, Any]:

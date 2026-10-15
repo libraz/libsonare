@@ -16,9 +16,9 @@ from collections.abc import Mapping, Sequence
 
 import numpy as np
 
-from ._errors import _invalid_state, _not_supported
+from ._errors import _not_supported, _require_open
 from ._ffi_types_mastering_project import SonareSampleDesc, SonareSampleZoneDesc
-from ._narrowing import _is_number
+from ._narrowing import _is_number, _narrow_double
 from ._runtime import (
     _UINT8_MAX,
     _UINT32_MAX,
@@ -344,7 +344,7 @@ def _unsigned(value: int, name: str, limit: int) -> int:
 
 
 def _finite(value: float, name: str) -> float:
-    v = float(value)
+    v = _narrow_double(value, name)
     if not np.isfinite(v):
         raise SonareValueError(f"{name} must be a finite number")
     return v
@@ -416,9 +416,7 @@ class SampleBank:
             self.close()
 
     def _require_handle(self) -> ctypes.c_void_p:
-        if self._handle is None:
-            raise _invalid_state("SampleBank is closed")
-        return self._handle
+        return _require_open(self._handle, "SampleBank")
 
     # -- content ------------------------------------------------------------
 

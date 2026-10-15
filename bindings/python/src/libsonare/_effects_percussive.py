@@ -15,6 +15,7 @@ from ._ffi import (
     SonarePercussiveEventsResult,
     SonarePercussiveRenderConfig,
 )
+from ._narrowing import _narrow_double
 from ._runtime import (
     SonareValueError,
     _check,
@@ -221,7 +222,7 @@ def _percussive_events_to_c(
                 f"render_percussive_events: events[{i}].edit.time_offset_samples",
                 f"render_percussive_events: events[{i}].edit.time_offset_sec",
             ),
-            gain_db=float(event.edit.gain_db),
+            gain_db=_narrow_double(event.edit.gain_db, "event.edit.gain_db"),
             muted=1 if event.edit.muted else 0,
         )
     return c_events, count
@@ -339,11 +340,15 @@ def extract_percussive_events(
             if onset_wait is None
             else _validate_c_int_field("extract_percussive_events", onset_wait, "onset_wait")
         ),
-        onset_delta=0.0 if onset_delta is None else float(onset_delta),
-        max_event_ms=0.0 if max_event_ms is None else float(max_event_ms),
+        onset_delta=0.0 if onset_delta is None else _narrow_double(onset_delta, "onset_delta"),
+        max_event_ms=0.0 if max_event_ms is None else _narrow_double(max_event_ms, "max_event_ms"),
         # 0 is this field's own meaning as well as its default, so it is passed
         # through rather than read as "leave the default".
-        min_percussive_ratio=(0.0 if min_percussive_ratio is None else float(min_percussive_ratio)),
+        min_percussive_ratio=(
+            0.0
+            if min_percussive_ratio is None
+            else _narrow_double(min_percussive_ratio, "min_percussive_ratio")
+        ),
     )
     out = SonarePercussiveEventsResult()
     rc = lib.sonare_extract_percussive_events(
@@ -449,7 +454,7 @@ def render_percussive_events(
             hpss_kernel_harmonic,
             hpss_kernel_percussive,
         ),
-        fade_ms=0.0 if fade_ms is None else float(fade_ms),
+        fade_ms=0.0 if fade_ms is None else _narrow_double(fade_ms, "fade_ms"),
     )
     with _out_float_array(lib) as (out, out_length):
         _check(

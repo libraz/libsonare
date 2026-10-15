@@ -315,8 +315,8 @@ class VocalSetNoteSourceSpan:
     note_id: int
     source_start_sample: int | None
     source_end_sample: int | None
-    destination_start_sample: int
-    destination_length_samples: int
+    destination_start_sample: int | None
+    destination_length_samples: int | None
     source_start_sec: float | None
     source_end_sec: float | None
     destination_start_sec: float | None
@@ -326,8 +326,8 @@ class VocalSetNoteSourceSpan:
         note_id: int,
         source_start_sample: int | None = ...,
         source_end_sample: int | None = ...,
-        destination_start_sample: int = ...,
-        destination_length_samples: int = ...,
+        destination_start_sample: int | None = ...,
+        destination_length_samples: int | None = ...,
         source_start_sec: float | None = ...,
         source_end_sec: float | None = ...,
         destination_start_sec: float | None = ...,

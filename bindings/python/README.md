@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libsonare/blob/main/LICENSE)
 [![Docs](https://img.shields.io/badge/docs-libsonare.libraz.net-2563eb)](https://libsonare.libraz.net)
 
-**Turn audio into data and back, from Python.** Analyze songs (BPM, key, chords, loudness), master and mix to broadcast loudness, and render MIDI through built-in instruments — a fast C++ core whose only Python dependency is NumPy 2.4.6 or later. Mastering ships 95 named DSP processors implemented against published references; analysis defaults match librosa where the two overlap. Apache-2.0, no model weights.
+**Turn audio into data and back, from Python.** Analyze songs (BPM, key, chords, loudness), master and mix to broadcast loudness, and render MIDI through built-in instruments — a fast C++ core whose only Python dependency is NumPy 2.0.2 or later. Mastering ships 95 named DSP processors implemented against published references; analysis defaults match librosa where the two overlap. Apache-2.0, no model weights.
 
 **Guides, API reference and CLI docs: [libsonare.libraz.net](https://libsonare.libraz.net)**
 

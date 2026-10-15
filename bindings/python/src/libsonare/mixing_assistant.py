@@ -21,6 +21,7 @@ import numpy as np
 
 from ._errors import _not_supported
 from ._mastering_offline import _mastering_params
+from ._narrowing import _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -232,7 +233,7 @@ def _assistant_params(
         if isinstance(value, bool):
             params[_PARAM_KEYS[name]] = value
             continue
-        number = float(value)
+        number = _narrow_double(value, f"{fn_name}: {name}")
         if not np.isfinite(number):
             raise SonareValueError(f"{fn_name}: {name} must be a finite number")
         params[_PARAM_KEYS[name]] = number

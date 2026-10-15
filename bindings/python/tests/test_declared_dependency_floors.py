@@ -85,3 +85,11 @@ def test_numpy_floor_shares_a_major_with_the_pinned_version() -> None:
 def test_the_running_numpy_satisfies_the_declared_floor() -> None:
     """The environment proving the package works must itself meet the claim."""
     assert _release(np.__version__) >= _declared_floor("numpy")
+
+
+def test_readme_numpy_floor_matches_the_declared_floor() -> None:
+    """The README states the same numpy floor pyproject.toml declares."""
+    text = (PACKAGE_ROOT / "README.md").read_text(encoding="utf-8")
+    match = re.search(r"NumPy ([0-9][0-9.]*) or later", text)
+    assert match is not None, "README.md states no NumPy floor"
+    assert _release(match.group(1)) == _declared_floor("numpy")

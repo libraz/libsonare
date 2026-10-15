@@ -17,6 +17,7 @@ from ._ffi import (
     SonareStreamingPlatform,
 )
 from ._mastering_offline import _assistant_params, _mastering_params
+from ._narrowing import _narrow_double
 from ._runtime import (
     SonareValueError,
     _check,
@@ -442,8 +443,12 @@ def _streaming_platforms(
         *[
             SonareStreamingPlatform(
                 name=platform_buffers[index],
-                target_lufs=float(platform.get("targetLufs", platform.get("target_lufs", -14.0))),
-                ceiling_db=float(platform.get("ceilingDb", platform.get("ceiling_db", -1.0))),
+                target_lufs=_narrow_double(
+                    platform.get("targetLufs", platform.get("target_lufs", -14.0)), "targetLufs"
+                ),
+                ceiling_db=_narrow_double(
+                    platform.get("ceilingDb", platform.get("ceiling_db", -1.0)), "ceilingDb"
+                ),
             )
             for index, platform in enumerate(platforms)
         ]

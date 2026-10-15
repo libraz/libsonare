@@ -8,7 +8,7 @@ import ctypes
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Self
 
-from ._errors import _invalid_state
+from ._errors import _invalid_state, _require_open
 from ._facade import rebind_facade_exports as _rebind_facade_exports
 from ._project_edit import TakeAlignment as TakeAlignment
 from ._project_edit import _ProjectEditMixin
@@ -125,9 +125,7 @@ class ProjectTimeline:
             self.close()
 
     def _require_handle(self) -> ctypes.c_void_p:
-        if self._handle is None:
-            raise _invalid_state("ProjectTimeline is closed")
-        return self._handle
+        return _require_open(self._handle, "ProjectTimeline")
 
 
 class Project(

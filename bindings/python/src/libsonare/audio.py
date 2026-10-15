@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from ._effects_repair_common import _linked_channel_planes
-from ._errors import SonareValueError, _invalid_state, _not_supported, _unknown_error
+from ._errors import SonareValueError, _not_supported, _require_open, _unknown_error
 from ._runtime import (
     _check,
     _float_array_result,
@@ -494,9 +494,7 @@ class Audio:
         fires while every C accessor reached through that handle silently
         returns a neutral value.
         """
-        if not self._handle:
-            raise _invalid_state("Audio is closed")
-        return self._handle
+        return _require_open(self._handle, "Audio")
 
     @property
     def data(self) -> np.ndarray:

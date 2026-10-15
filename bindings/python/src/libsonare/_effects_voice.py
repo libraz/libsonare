@@ -12,7 +12,7 @@ from typing import Any, cast
 
 import numpy as np
 
-from ._errors import ErrorCode, SonareError, _not_supported
+from ._errors import _not_supported, _require_open
 from ._ffi import (
     SONARE_OK,
     SONARE_VC_PRESET_BRIGHT_IDOL,
@@ -30,6 +30,7 @@ from ._runtime import (
     SonareValueError,
     _as_float32_buffer,
     _check,
+    _check_argument,
     _check_realtime,
     _float_array_result,
     _from_c_float_array,
@@ -78,10 +79,10 @@ def voice_change(
 
     Raises:
         SonareValueError: ``formant_mode`` is not ``"relative"`` or
-            ``"absolute"``, or an absolute request needs a warp outside
+            ``"absolute"``, a relative ``formant_factor`` is non-finite or
+            outside [0.55, 1.65], or an absolute request needs a warp outside
             [0.55, 1.65]. The message names the reachable ``formant_factor``
-            range for the given ``pitch_semitones``; the request is refused,
-            not clamped.
+            range; the request is refused, not clamped.
     """
     _validate_samples("voice_change", samples, validate=True)
     if not isinstance(formant_mode, str) or formant_mode not in _FORMANT_MODES:
@@ -105,28 +106,9 @@ def voice_change(
             ctypes.byref(out),
             ctypes.byref(out_length),
         )
-        try:
-            _check(rc)
-        except SonareError as exc:
-            # An unreachable absolute request is an argument refusal, not a library failure.
-            if formant_mode == "absolute" and exc.code == int(ErrorCode.INVALID_PARAMETER):
-                raise SonareValueError(str(exc).split("] ", 1)[-1]) from exc
-            raise
+        # A refused factor is an argument refusal in either formant mode.
+        _check_argument(rc)
         return _float_array_result(out, out_length.value)
-
-
-def _check_voice_config(rc: int) -> None:
-    """Like :func:`_check`, but a refused configuration is an argument refusal.
-
-    The core refuses an out-of-reach absolute formant warp and a live formant-mode change
-    with INVALID_PARAMETER and a message naming the cause.
-    """
-    try:
-        _check(rc)
-    except SonareError as exc:
-        if exc.code == int(ErrorCode.INVALID_PARAMETER):
-            raise SonareValueError(str(exc).split("] ", 1)[-1]) from exc
-        raise
 
 
 def _voice_config_to_json(preset: str | Mapping[str, object]) -> bytes:
@@ -162,7 +144,7 @@ class RealtimeVoiceChanger:
             _to_c_int(channels, "channels"),
             ctypes.byref(self._handle),
         )
-        _check_voice_config(rc)
+        _check_argument(rc)
 
     def close(self) -> None:
         if self._handle:
@@ -179,20 +161,23 @@ class RealtimeVoiceChanger:
         with contextlib.suppress(Exception):
             self.close()
 
+    def _require_handle(self) -> ctypes.c_void_p:
+        return _require_open(self._handle, "RealtimeVoiceChanger")
+
     def reset(self) -> None:
-        rc = self._lib.sonare_realtime_voice_changer_reset(self._handle)
+        rc = self._lib.sonare_realtime_voice_changer_reset(self._require_handle())
         _check(rc)
 
     def set_config(self, preset: str | Mapping[str, object]) -> None:
         rc = self._lib.sonare_realtime_voice_changer_set_config_json(
-            self._handle, _voice_config_to_json(preset)
+            self._require_handle(), _voice_config_to_json(preset)
         )
-        _check_voice_config(rc)
+        _check_argument(rc)
 
     def latency_samples(self) -> int:
         out = ctypes.c_int()
         rc = self._lib.sonare_realtime_voice_changer_latency_samples(
-            self._handle, ctypes.byref(out)
+            self._require_handle(), ctypes.byref(out)
         )
         _check_realtime(rc)
         return int(out.value)
@@ -216,7 +201,7 @@ class RealtimeVoiceChanger:
         """
         out = ctypes.c_uint32()
         rc = self._lib.sonare_realtime_voice_changer_non_finite_discard_count(
-            self._handle, ctypes.byref(out)
+            self._require_handle(), ctypes.byref(out)
         )
         _check_realtime(rc)
         return int(out.value)
@@ -228,7 +213,9 @@ class RealtimeVoiceChanger:
         configuration into a different language binding.
         """
         out = ctypes.c_char_p()
-        rc = self._lib.sonare_realtime_voice_changer_config_json(self._handle, ctypes.byref(out))
+        rc = self._lib.sonare_realtime_voice_changer_config_json(
+            self._require_handle(), ctypes.byref(out)
+        )
         _check(rc)
         try:
             if not out:
@@ -250,7 +237,9 @@ class RealtimeVoiceChanger:
                 "rebuild the shared library."
             )
         pod = SonareRealtimeVoiceChangerConfig()
-        rc = self._lib.sonare_realtime_voice_changer_get_config(self._handle, ctypes.byref(pod))
+        rc = self._lib.sonare_realtime_voice_changer_get_config(
+            self._require_handle(), ctypes.byref(pod)
+        )
         _check(rc)
         return RealtimeVoiceChangerConfig.from_pod(pod)
 
@@ -266,8 +255,10 @@ class RealtimeVoiceChanger:
                 "rebuild the shared library."
             )
         pod = config.to_pod()
-        rc = self._lib.sonare_realtime_voice_changer_set_config(self._handle, ctypes.byref(pod))
-        _check_voice_config(rc)
+        rc = self._lib.sonare_realtime_voice_changer_set_config(
+            self._require_handle(), ctypes.byref(pod)
+        )
+        _check_argument(rc)
 
     def process_mono(self, samples: Sequence[float] | list[float] | np.ndarray) -> np.ndarray:
         """Process a mono buffer block-by-block and return the result as ndarray.
@@ -298,7 +289,7 @@ class RealtimeVoiceChanger:
             c_in = (ctypes.c_float * length).from_buffer(in_block)
             c_out = (ctypes.c_float * length).from_buffer(out_block)
             rc = self._lib.sonare_realtime_voice_changer_process_mono(
-                self._handle, c_in, c_out, _to_c_size_t(length, "length")
+                self._require_handle(), c_in, c_out, _to_c_size_t(length, "length")
             )
             _check_realtime(rc)
         return out_buf
@@ -336,7 +327,7 @@ class RealtimeVoiceChanger:
             c_in = (ctypes.c_float * (block_frames * ch)).from_buffer(in_block)
             c_out = (ctypes.c_float * (block_frames * ch)).from_buffer(out_block)
             rc = self._lib.sonare_realtime_voice_changer_process_interleaved(
-                self._handle,
+                self._require_handle(),
                 c_in,
                 c_out,
                 _to_c_size_t(block_frames, "block_frames"),
@@ -373,7 +364,7 @@ class RealtimeVoiceChanger:
             c_left = (ctypes.c_float * length).from_buffer(l_block)
             c_right = (ctypes.c_float * length).from_buffer(r_block)
             rc = self._lib.sonare_realtime_voice_changer_process_planar_stereo(
-                self._handle, c_left, c_right, _to_c_size_t(length, "length")
+                self._require_handle(), c_left, c_right, _to_c_size_t(length, "length")
             )
             _check_realtime(rc)
         return out_left, out_right
@@ -757,11 +748,14 @@ class StreamingRetune:
         with contextlib.suppress(Exception):
             self.close()
 
+    def _require_handle(self) -> ctypes.c_void_p:
+        return _require_open(self._handle, "StreamingRetune")
+
     def prepare(self, sample_rate: float, max_block_size: int) -> None:
         """Allocate native state for ``sample_rate`` and resolve the grain size."""
         _check(
             self._lib.sonare_streaming_retune_prepare(
-                self._handle,
+                self._require_handle(),
                 _to_c_double(sample_rate, "sample_rate"),
                 _to_c_int(max_block_size, "max_block_size"),
             )
@@ -769,7 +763,7 @@ class StreamingRetune:
 
     def reset(self) -> None:
         """Clear grain / overlap-add state without changing the config."""
-        _check(self._lib.sonare_streaming_retune_reset(self._handle))
+        _check(self._lib.sonare_streaming_retune_reset(self._require_handle()))
 
     def set_config(
         self,
@@ -796,7 +790,7 @@ class StreamingRetune:
         )
         _check(
             self._lib.sonare_streaming_retune_set_config(
-                self._handle,
+                self._require_handle(),
                 _to_c_float(current["semitones"] if semitones is None else semitones, "semitones"),
                 _to_c_float(current["mix"] if mix is None else mix, "mix"),
                 _to_c_int(requested_grain_size, "requested_grain_size"),
@@ -811,7 +805,7 @@ class StreamingRetune:
         grain_size = ctypes.c_int()
         _check(
             self._lib.sonare_streaming_retune_config(
-                self._handle,
+                self._require_handle(),
                 ctypes.byref(semitones),
                 ctypes.byref(mix),
                 ctypes.byref(grain_size),
@@ -826,13 +820,19 @@ class StreamingRetune:
     def grain_size(self) -> int:
         """Resolved grain length in samples; 0 before :meth:`prepare`."""
         out = ctypes.c_int()
-        _check(self._lib.sonare_streaming_retune_grain_size(self._handle, ctypes.byref(out)))
+        _check(
+            self._lib.sonare_streaming_retune_grain_size(self._require_handle(), ctypes.byref(out))
+        )
         return int(out.value)
 
     def latency_samples(self) -> int:
         """Fixed overlap-add latency in samples (one grain); 0 before prepare."""
         out = ctypes.c_int()
-        _check(self._lib.sonare_streaming_retune_latency_samples(self._handle, ctypes.byref(out)))
+        _check(
+            self._lib.sonare_streaming_retune_latency_samples(
+                self._require_handle(), ctypes.byref(out)
+            )
+        )
         return int(out.value)
 
     def process_mono(self, samples: Sequence[float]) -> list[float]:
@@ -844,7 +844,7 @@ class StreamingRetune:
         buffer = np.array(_as_float32_buffer(samples), dtype=np.float32, copy=True, order="C")
         _check(
             self._lib.sonare_streaming_retune_process_mono(
-                self._handle,
+                self._require_handle(),
                 buffer.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
                 ctypes.c_size_t(len(buffer)),
             )

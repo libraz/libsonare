@@ -18,7 +18,7 @@ from typing import Any, cast
 
 import numpy as np
 
-from ._errors import _invalid_state, _not_supported
+from ._errors import _not_supported, _require_open
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -114,9 +114,7 @@ class HrtfSet:
         the caller's own, with nothing to say so. Falsiness, not ``is None``,
         matching :meth:`Audio._require_handle`.
         """
-        if not self._handle:
-            raise _invalid_state("HrtfSet is closed")
-        return self._handle
+        return _require_open(self._handle, "HrtfSet")
 
     def close(self) -> None:
         if self._handle:
@@ -187,9 +185,7 @@ class PlaybackRenderer:
 
     def _require_handle(self) -> ctypes.c_void_p:
         """Return the live renderer handle, or reject a closed renderer."""
-        if not self._handle:
-            raise _invalid_state("PlaybackRenderer is closed")
-        return self._handle
+        return _require_open(self._handle, "PlaybackRenderer")
 
     def reset(self) -> None:
         """Clear DSP state (filters, FIFOs, DRC, convolution history, pending drains).
@@ -488,9 +484,7 @@ class PlaybackLoudnessMeter:
 
     def _require_handle(self) -> ctypes.c_void_p:
         """Return the live meter handle, or reject a closed meter."""
-        if not self._handle:
-            raise _invalid_state("PlaybackLoudnessMeter is closed")
-        return self._handle
+        return _require_open(self._handle, "PlaybackLoudnessMeter")
 
     def push_interleaved(self, samples: Sequence[float] | list[float] | np.ndarray) -> None:
         """Feed interleaved frames of any length."""

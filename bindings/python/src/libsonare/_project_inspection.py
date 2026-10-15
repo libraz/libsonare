@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, cast, overload
 
 import numpy as np
 
+from ._narrowing import _narrow_double
 from ._project_model import *  # noqa: F403
 from ._project_synth import (
     SYNTH_ENUM_TABLES as SYNTH_ENUM_TABLES,
@@ -70,7 +71,7 @@ class _ProjectInspectionMixin:
             # caller's value; int() would truncate a fraction past it.
             options.tempo_update_interval_beats = tempo_update_interval_beats
         if ramp_threshold is not None:
-            options.ramp_threshold = float(ramp_threshold)
+            options.ramp_threshold = _narrow_double(ramp_threshold, "ramp_threshold")
         if include_octave_candidates is not None:
             options.include_octave_candidates = 1 if include_octave_candidates else 0
         return options
@@ -206,8 +207,8 @@ class _ProjectInspectionMixin:
         _check(
             _get_lib().sonare_project_snap_to_grid_ex(
                 self._require_handle(),
-                float(ppq),
-                float(strength),
+                _narrow_double(ppq, "ppq"),
+                _narrow_double(strength, "strength"),
                 _to_c_int(division, "division"),
                 ctypes.byref(out_ppq),
             )
@@ -234,8 +235,8 @@ class _ProjectInspectionMixin:
                     raise SonareValueError(
                         f"keys[{i}] must contain (start_ppq, end_ppq, tonic_pc, mode)"
                     )
-                c_keys[i].start_ppq = float(seq[0])
-                c_keys[i].end_ppq = float(seq[1])
+                c_keys[i].start_ppq = _narrow_double(seq[0], "seq[0]")
+                c_keys[i].end_ppq = _narrow_double(seq[1], "seq[1]")
                 # Assigned unconverted so the struct's own narrowing sees each
                 # caller value; int() would truncate a fraction past it.
                 c_keys[i].tonic_pc = seq[2]
@@ -285,8 +286,8 @@ class _ProjectInspectionMixin:
                     _utf8_arg(roman, "roman") if isinstance(roman, str) and roman else None
                 )
                 backing.append(roman_bytes)
-                c_chords[i].start_ppq = float(cast(float, c["start_ppq"]))
-                c_chords[i].end_ppq = float(cast(float, c["end_ppq"]))
+                c_chords[i].start_ppq = _narrow_double(c["start_ppq"], "start_ppq")
+                c_chords[i].end_ppq = _narrow_double(c["end_ppq"], "end_ppq")
                 # Assigned unconverted so the struct's own narrowing sees each
                 # caller value; int() would truncate a fraction past it.
                 c_chords[i].root_pc = c.get("root_pc", 255)
@@ -372,8 +373,8 @@ class _ProjectInspectionMixin:
                 _utf8_arg(module_id, "module_id"),
                 _to_c_uint32(schema_version, "schema_version"),
                 _to_c_uint32(target_track_id, "target_track_id"),
-                float(region_start_ppq),
-                float(region_end_ppq),
+                _narrow_double(region_start_ppq, "region_start_ppq"),
+                _narrow_double(region_end_ppq, "region_end_ppq"),
                 buf,
                 ctypes.c_size_t(len(raw)),
             )
@@ -447,7 +448,7 @@ class _ProjectInspectionMixin:
             _get_lib().sonare_project_set_marker(
                 self._require_handle(),
                 _to_c_uint32(marker_id, "marker_id"),
-                float(ppq),
+                _narrow_double(ppq, "ppq"),
                 _utf8_arg(name, "name") if name is not None else None,
                 ctypes.byref(out_id),
             )
@@ -468,7 +469,7 @@ class _ProjectInspectionMixin:
         raw.kind = marker.kind
         raw.key_fifths = marker.key_fifths
         raw.key_minor = 1 if marker.key_minor else 0
-        raw.ppq = float(marker.ppq)
+        raw.ppq = _narrow_double(marker.ppq, "marker.ppq")
         out_id = ctypes.c_uint32()
         _check(
             _get_lib().sonare_project_set_marker_ex_name(
@@ -651,16 +652,16 @@ class _ProjectInspectionMixin:
         c_segments = (SonareProjectTempoSegment * count)()
         for i, seg in enumerate(rows):
             if isinstance(seg, Mapping):
-                start_ppq = float(seg["start_ppq"])
-                bpm = float(seg["bpm"])
-                end_bpm = float(seg.get("end_bpm", 0.0))
+                start_ppq = _narrow_double(seg["start_ppq"], "start_ppq")
+                bpm = _narrow_double(seg["bpm"], "bpm")
+                end_bpm = _narrow_double(seg.get("end_bpm", 0.0), "end_bpm")
             else:
                 tup = tuple(seg)
                 if len(tup) < 2:
                     raise SonareValueError(f"segments[{i}] must contain (start_ppq, bpm)")
-                start_ppq = float(tup[0])
-                bpm = float(tup[1])
-                end_bpm = float(tup[3]) if len(tup) >= 4 else 0.0
+                start_ppq = _narrow_double(tup[0], "tup[0]")
+                bpm = _narrow_double(tup[1], "tup[1]")
+                end_bpm = _narrow_double(tup[3], "tup[3]") if len(tup) >= 4 else 0.0
             c_segments[i].start_ppq = start_ppq
             c_segments[i].bpm = bpm
             c_segments[i].end_bpm = end_bpm
@@ -687,7 +688,7 @@ class _ProjectInspectionMixin:
             numerator: object
             denominator: object
             if isinstance(seg, Mapping):
-                start_ppq = float(seg["start_ppq"])
+                start_ppq = _narrow_double(seg["start_ppq"], "start_ppq")
                 numerator = seg["numerator"]
                 denominator = seg["denominator"]
             else:
@@ -696,7 +697,7 @@ class _ProjectInspectionMixin:
                     raise SonareValueError(
                         f"segments[{i}] must contain (start_ppq, numerator, denominator)"
                     )
-                start_ppq = float(tup[0])
+                start_ppq = _narrow_double(tup[0], "tup[0]")
                 # Left unconverted so the struct's own narrowing below sees each
                 # caller value; int() would truncate a fraction past it.
                 numerator = tup[1]

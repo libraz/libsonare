@@ -59,7 +59,7 @@ from ._engine_midi import _EngineMidiMixin
 from ._engine_mixing import _EngineMixingMixin
 from ._engine_pages import ClipPageProvider as ClipPageProvider
 from ._engine_pages import FileClipPageProvider as FileClipPageProvider
-from ._errors import ErrorCode, SonareError, _invalid_state, _not_supported
+from ._errors import ErrorCode, SonareError, _not_supported, _require_open
 from ._facade import rebind_facade_exports as _rebind_facade_exports
 from ._ffi_types_core import (
     SonareAutomationPoint,
@@ -75,6 +75,7 @@ from ._ffi_types_mastering_project import (
     SonareProjectTempoSegment,
     SonareProjectTimeSignatureSegment,
 )
+from ._narrowing import _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -184,9 +185,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         self.close()
 
     def _require_handle(self) -> ctypes.c_void_p:
-        if self._handle is None:
-            raise _invalid_state("RealtimeEngine is closed")
-        return self._handle
+        return _require_open(self._handle, "RealtimeEngine")
 
     def apply_project_timeline(self, timeline: ProjectTimeline) -> None:
         """Install a compiled project timeline into this stopped engine.
@@ -239,14 +238,14 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         _check(
             prepare_with_channels(
                 self._require_handle(),
-                float(sample_rate),
+                _narrow_double(sample_rate, "sample_rate"),
                 _to_c_int(max_block_size, "max_block_size"),
                 _to_c_size_t(command_capacity, "command_capacity"),
                 _to_c_size_t(telemetry_capacity, "telemetry_capacity"),
                 *(() if not supports_max_channels else (_to_c_int(max_channels, "max_channels"),)),
             )
         )
-        self._sample_rate = float(sample_rate)
+        self._sample_rate = _narrow_double(sample_rate, "sample_rate")
 
     def play(self, render_frame: int | None = None) -> None:
         _check(
@@ -387,14 +386,16 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         _check(
             _get_lib().sonare_engine_seek_ppq(
                 self._require_handle(),
-                float(ppq),
+                _narrow_double(ppq, "ppq"),
                 _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 
     def set_tempo(self, bpm: float) -> None:
         """Set a finite tempo in the range ``(0, 100000]`` BPM."""
-        _check(_get_lib().sonare_engine_set_tempo(self._require_handle(), float(bpm)))
+        _check(
+            _get_lib().sonare_engine_set_tempo(self._require_handle(), _narrow_double(bpm, "bpm"))
+        )
 
     def set_time_signature(self, numerator: int, denominator: int) -> None:
         _check(
@@ -421,16 +422,16 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         c_segments = (SonareProjectTempoSegment * count)() if count else None
         for i, seg in enumerate(rows):
             if isinstance(seg, Mapping):
-                start_ppq = float(seg["start_ppq"])
-                bpm = float(seg["bpm"])
-                end_bpm = float(seg.get("end_bpm", 0.0))
+                start_ppq = _narrow_double(seg["start_ppq"], "start_ppq")
+                bpm = _narrow_double(seg["bpm"], "bpm")
+                end_bpm = _narrow_double(seg.get("end_bpm", 0.0), "end_bpm")
             else:
                 tup = tuple(seg)
                 if len(tup) < 2:
                     raise SonareValueError(f"segments[{i}] must contain (start_ppq, bpm)")
-                start_ppq = float(tup[0])
-                bpm = float(tup[1])
-                end_bpm = float(tup[3]) if len(tup) >= 4 else 0.0
+                start_ppq = _narrow_double(tup[0], "tup[0]")
+                bpm = _narrow_double(tup[1], "tup[1]")
+                end_bpm = _narrow_double(tup[3], "tup[3]") if len(tup) >= 4 else 0.0
             c_segments[i].start_ppq = start_ppq
             c_segments[i].bpm = bpm
             c_segments[i].end_bpm = end_bpm
@@ -458,7 +459,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         # which the core's positive-signature check then accepts as written.
         for i, seg in enumerate(rows):
             if isinstance(seg, Mapping):
-                start_ppq = float(seg["start_ppq"])
+                start_ppq = _narrow_double(seg["start_ppq"], "start_ppq")
                 numerator = seg["numerator"]
                 denominator = seg["denominator"]
             else:
@@ -467,7 +468,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                     raise SonareValueError(
                         f"segments[{i}] must contain (start_ppq, numerator, denominator)"
                     )
-                start_ppq = float(tup[0])
+                start_ppq = _narrow_double(tup[0], "tup[0]")
                 numerator = tup[1]
                 denominator = tup[2]
             c_segments[i].start_ppq = start_ppq
@@ -486,7 +487,9 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             raise _not_supported("libsonare was built without sampleAtPpq support")
         out = ctypes.c_int64()
         _check(
-            lib.sonare_engine_sample_at_ppq(self._require_handle(), float(ppq), ctypes.byref(out))
+            lib.sonare_engine_sample_at_ppq(
+                self._require_handle(), _narrow_double(ppq, "ppq"), ctypes.byref(out)
+            )
         )
         return int(out.value)
 
@@ -499,7 +502,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """
         _check(
             _get_lib().sonare_engine_set_loop(
-                self._require_handle(), float(start_ppq), float(end_ppq), 1 if enabled else 0
+                self._require_handle(),
+                _narrow_double(start_ppq, "start_ppq"),
+                _narrow_double(end_ppq, "end_ppq"),
+                1 if enabled else 0,
             )
         )
 
@@ -567,8 +573,8 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         raw_points = (SonareAutomationPoint * len(points))(
             *[
                 SonareAutomationPoint(
-                    float(point.ppq),
-                    float(point.value),
+                    _narrow_double(point.ppq, "point.ppq"),
+                    _narrow_double(point.value, "point.value"),
                     int(AutomationCurve(point.curve_to_next)),
                 )
                 for point in points
@@ -879,14 +885,14 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 clip.id,
                 clip.track_id,
                 clip.start_sample,
-                float(clip.start_ppq),
+                _narrow_double(clip.start_ppq, "clip.start_ppq"),
                 clip.length_samples,
                 1 if clip.loop else 0,
                 clip.loop_length_samples,
                 clip.track_id if clip.destination_id is None else clip.destination_id,
                 raw_events,
                 len(clip.events),
-                float(clip.gain),
+                _narrow_double(clip.gain, "clip.gain"),
                 clip.fade_in_samples,
                 clip.fade_out_samples,
             )

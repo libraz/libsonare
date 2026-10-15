@@ -8,13 +8,17 @@ import sys
 from collections.abc import Iterable
 from typing import Any, Literal, cast
 
+import numpy as np
+
 from ._cli_common import (
     EXIT_INVALID_PARAMETER,
     _apply_voice_sets,
+    _audio_array,
     _emit_effect_result,
     _legacy_exit_codes,
     _load_channels_or_downmix,
     _load_voice_preset_pack,
+    _mean_abs,
     _resample,
     _strict_json_dumps,
     _write_wav,
@@ -101,9 +105,9 @@ def cmd_hpss(args: argparse.Namespace) -> int:
             hop_length=hop_length,
             hard_mask=hard_mask,
         )
-        harmonic = [float(value) for value in cast(Iterable[float], separated["harmonic"])]
-        percussive = [float(value) for value in cast(Iterable[float], separated["percussive"])]
-        residual = [float(value) for value in cast(Iterable[float], separated["residual"])]
+        harmonic = _audio_array(separated["harmonic"])
+        percussive = _audio_array(separated["percussive"])
+        residual = _audio_array(separated["residual"])
         output_sr = int(cast(int, separated.get("sampleRate", sr)))
     else:
         result = hpss(
@@ -115,13 +119,10 @@ def cmd_hpss(args: argparse.Namespace) -> int:
             hop_length=hop_length,
             hard_mask=hard_mask,
         )
-        harmonic = [float(value) for value in result.harmonic]
-        percussive = [float(value) for value in result.percussive]
-        residual = []
+        harmonic = _audio_array(result.harmonic)
+        percussive = _audio_array(result.percussive)
+        residual = _audio_array([])
         output_sr = int(result.sample_rate)
-
-    def _mean_abs(values: list[float]) -> float:
-        return sum(abs(value) for value in values) / len(values) if values else 0.0
 
     h_energy = _mean_abs(harmonic)
     p_energy = _mean_abs(percussive)
@@ -158,7 +159,7 @@ def cmd_hpss(args: argparse.Namespace) -> int:
             payload["harmonic_mean_abs"] = round(h_energy, 6)
         if modes != ["harmonic_only"]:
             payload["percussive_mean_abs"] = round(p_energy, 6)
-        if residual:
+        if residual.size:
             payload["residual_mean_abs"] = round(_mean_abs(residual), 6)
         if harmonic_path:
             payload["harmonic"] = harmonic_path
@@ -171,7 +172,7 @@ def cmd_hpss(args: argparse.Namespace) -> int:
         print(f"  HPSS: {len(harmonic)} samples")
         print(f"  Harmonic energy:   {h_energy:.6f}")
         print(f"  Percussive energy: {p_energy:.6f}")
-        if residual:
+        if residual.size:
             print(f"  Residual energy:   {_mean_abs(residual):.6f}")
         paths = [path for path in (harmonic_path, percussive_path, residual_path) if path]
         if paths:
@@ -203,8 +204,7 @@ def cmd_decompose_stems(args: argparse.Namespace) -> int:
         mask_power=args.mask_power,
     )
     components = [
-        [float(value) for value in component]
-        for component in cast(Iterable[Iterable[float]], result["components"])
+        _audio_array(component) for component in cast(Iterable[Any], result["components"])
     ]
     output_sr = int(cast(int, result["sample_rate"]))
 
@@ -214,9 +214,6 @@ def cmd_decompose_stems(args: argparse.Namespace) -> int:
     paths = [f"{base}_component{index}.wav" for index in range(1, len(components) + 1)]
     for path, component in zip(paths, components, strict=True):
         _write_wav(path, component, output_sr)
-
-    def _mean_abs(values: list[float]) -> float:
-        return sum(abs(value) for value in values) / len(values) if values else 0.0
 
     energies = [round(_mean_abs(component), 6) for component in components]
     if args.json:
@@ -573,10 +570,7 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
         # sample rate, so it must not be a hard-coded preset constant.
         with RealtimeVoiceChanger(sr, preset, max_block_size=128, channels=1) as changer:
             latency_samples = max(int(changer.latency_samples()), 0)
-        result = [
-            float(sample)
-            for sample in voice_change_realtime(samples, sample_rate=sr, preset=preset)
-        ]
+        result = _audio_array(voice_change_realtime(samples, sample_rate=sr, preset=preset))
         mode_metadata: dict[str, object] = {}
         if preset_id and not preset_json and not preset_pack:
             mode_metadata["preset"] = preset_id
@@ -597,9 +591,9 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
     # Spectral pitch/formant processing can differ by one sample at a frame
     # boundary.  The CLI contract is sample-preserving for both modes; trim a
     # longer result and zero-pad a shorter one before writing/serializing.
-    result = [float(sample) for sample in result[:input_length]]
+    result = _audio_array(result)[:input_length]
     if len(result) < input_length:
-        result.extend([0.0] * (input_length - len(result)))
+        result = np.pad(result, (0, input_length - len(result)))
 
     return _emit_effect_result(
         args,

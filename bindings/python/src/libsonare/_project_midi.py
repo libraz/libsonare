@@ -9,13 +9,15 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-# The transcription config is built once for the whole binding: this method and
-# the free `transcribe` take the same keyword options, and two builders would be
-# two chances for their domains to part company.
 from ._effects_note_model import (
     _transcribe_config,
     _transcribe_sample_rate,
 )
+
+# The transcription config is built once for the whole binding: this method and
+# the free `transcribe` take the same keyword options, and two builders would be
+# two chances for their domains to part company.
+from ._narrowing import _narrow_double
 from ._project_model import *  # noqa: F403
 from ._project_model import (
     _cc_binding_from_c,
@@ -875,7 +877,7 @@ class _ProjectMidiMixin:
         out_count = ctypes.c_size_t()
         _check(
             lib.sonare_midi_bank_program(
-                float(ppq),
+                _narrow_double(ppq, "ppq"),
                 _to_c_uint8(group, "group"),
                 _to_c_uint8(channel, "channel"),
                 _to_c_int(bank_msb, "bank_msb"),

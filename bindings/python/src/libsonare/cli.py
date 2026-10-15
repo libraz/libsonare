@@ -60,13 +60,13 @@ from ._cli_common import (
     _atomic_write_bytes as _atomic_write_bytes,
 )
 from ._cli_common import (
+    _audio_array as _audio_array,
+)
+from ._cli_common import (
     _emit_effect_result as _emit_effect_result,
 )
 from ._cli_common import (
     _exit_code_for as _exit_code_for,
-)
-from ._cli_common import (
-    _float_sequence as _float_sequence,
 )
 from ._cli_common import (
     _format_time as _format_time,

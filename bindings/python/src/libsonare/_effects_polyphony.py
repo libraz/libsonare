@@ -23,7 +23,8 @@ from ._effects_note_model import (
     _NOTE_STRUCT_VERSION,
     _note_set_index,
 )
-from ._errors import _invalid_state
+from ._errors import _require_open
+from ._narrowing import _narrow_double
 from ._runtime import _unsupported_effect_symbol
 
 if TYPE_CHECKING:
@@ -70,16 +71,16 @@ def _count_field(name: str, value: int | None) -> int:
     return 0 if value is None else _validate_c_int_field("PolyphonicAnalysis", value, name)
 
 
-def _value_field(value: float | None) -> float:
+def _value_field(value: float | None, name: str) -> float:
     """Same sentinel for the float fields, which 0 never means literally."""
-    return 0.0 if value is None else float(value)
+    return 0.0 if value is None else _narrow_double(value, name)
 
 
 def _reattack_field(value: float | None) -> float:
     """``None`` and 0 are off (C 0); anything else must be finite and above 1."""
     if value is None:
         return 0.0
-    number = float(value)
+    number = _narrow_double(value, "reattack_ratio")
     if number == 0.0:
         return 0.0
     if not math.isfinite(number) or number <= 1.0:
@@ -291,41 +292,47 @@ class PolyphonicAnalysis:
             n_fft=_count_field("n_fft", n_fft),
             hop_length=_count_field("hop_length", hop_length),
             win_length=_count_field("win_length", win_length),
-            cent_ref_hz=_value_field(cent_ref_hz),
-            cents_per_bin=_value_field(cents_per_bin),
-            cent_max_hz=_value_field(cent_max_hz),
+            cent_ref_hz=_value_field(cent_ref_hz, "cent_ref_hz"),
+            cents_per_bin=_value_field(cents_per_bin, "cents_per_bin"),
+            cent_max_hz=_value_field(cent_max_hz, "cent_max_hz"),
             tonality_off=1 if tonality_off else 0,
             salience_harmonics=_count_field("salience_harmonics", salience_harmonics),
-            f0_min_hz=_value_field(f0_min_hz),
-            f0_max_hz=_value_field(f0_max_hz),
-            salience_alpha_hz=_value_field(salience_alpha_hz),
-            salience_beta_hz=_value_field(salience_beta_hz),
-            salience_inharmonicity=_value_field(salience_inharmonicity),
+            f0_min_hz=_value_field(f0_min_hz, "f0_min_hz"),
+            f0_max_hz=_value_field(f0_max_hz, "f0_max_hz"),
+            salience_alpha_hz=_value_field(salience_alpha_hz, "salience_alpha_hz"),
+            salience_beta_hz=_value_field(salience_beta_hz, "salience_beta_hz"),
+            salience_inharmonicity=_value_field(salience_inharmonicity, "salience_inharmonicity"),
             max_polyphony=_count_field("max_polyphony", max_polyphony),
-            min_frame_peak_ratio=_value_field(min_frame_peak_ratio),
-            min_separation_cents=_value_field(min_separation_cents),
-            subtraction_factor=_value_field(subtraction_factor),
-            max_jump_cents=_value_field(max_jump_cents),
-            min_ridge_peak_ratio=_value_field(min_ridge_peak_ratio),
-            min_ridge_duration_ms=_value_field(min_ridge_duration_ms),
+            min_frame_peak_ratio=_value_field(min_frame_peak_ratio, "min_frame_peak_ratio"),
+            min_separation_cents=_value_field(min_separation_cents, "min_separation_cents"),
+            subtraction_factor=_value_field(subtraction_factor, "subtraction_factor"),
+            max_jump_cents=_value_field(max_jump_cents, "max_jump_cents"),
+            min_ridge_peak_ratio=_value_field(min_ridge_peak_ratio, "min_ridge_peak_ratio"),
+            min_ridge_duration_ms=_value_field(min_ridge_duration_ms, "min_ridge_duration_ms"),
             mask_harmonics=_count_field("mask_harmonics", mask_harmonics),
-            claim_lobes=_value_field(claim_lobes),
-            inharmonicity=_value_field(inharmonicity),
+            claim_lobes=_value_field(claim_lobes, "claim_lobes"),
+            inharmonicity=_value_field(inharmonicity, "inharmonicity"),
             estimate_inharmonicity=1 if estimate_inharmonicity else 0,
             inharmonicity_min_partials=_count_field(
                 "inharmonicity_min_partials", inharmonicity_min_partials
             ),
-            inharmonicity_max_residual_bins=_value_field(inharmonicity_max_residual_bins),
-            inharmonicity_max_stretch=_value_field(inharmonicity_max_stretch),
+            inharmonicity_max_residual_bins=_value_field(
+                inharmonicity_max_residual_bins, "inharmonicity_max_residual_bins"
+            ),
+            inharmonicity_max_stretch=_value_field(
+                inharmonicity_max_stretch, "inharmonicity_max_stretch"
+            ),
             window_frames=_count_field("window_frames", window_frames),
-            min_partial_separation=_value_field(min_partial_separation),
-            max_fit_residual=_value_field(max_fit_residual),
-            max_weight_modulus=_value_field(max_weight_modulus),
-            max_refine_hz=_value_field(max_refine_hz),
-            f0_tolerance_cents=_value_field(f0_tolerance_cents),
-            segmentation_threshold_cents=_value_field(segmentation_threshold_cents),
-            min_note_ms=_value_field(min_note_ms),
-            reference_hz=_value_field(reference_hz),
+            min_partial_separation=_value_field(min_partial_separation, "min_partial_separation"),
+            max_fit_residual=_value_field(max_fit_residual, "max_fit_residual"),
+            max_weight_modulus=_value_field(max_weight_modulus, "max_weight_modulus"),
+            max_refine_hz=_value_field(max_refine_hz, "max_refine_hz"),
+            f0_tolerance_cents=_value_field(f0_tolerance_cents, "f0_tolerance_cents"),
+            segmentation_threshold_cents=_value_field(
+                segmentation_threshold_cents, "segmentation_threshold_cents"
+            ),
+            min_note_ms=_value_field(min_note_ms, "min_note_ms"),
+            reference_hz=_value_field(reference_hz, "reference_hz"),
             reattack_ratio=_reattack_field(reattack_ratio),
         )
 
@@ -389,9 +396,7 @@ class PolyphonicAnalysis:
         self.close()
 
     def _require_handle(self) -> ctypes.c_void_p:
-        if self._handle is None:
-            raise _invalid_state("PolyphonicAnalysis is closed")
-        return self._handle
+        return _require_open(self._handle, "PolyphonicAnalysis")
 
     # -- what the analysis found -------------------------------------------
 
@@ -615,12 +620,18 @@ class PolyphonicAnalysis:
                 "set_note_edit: edit.time_offset_samples",
                 "set_note_edit: edit.time_offset_sec",
             ),
-            pitch_shift_semitones=float(edit.pitch_shift_semitones),
-            gain_db=float(edit.gain_db),
-            time_stretch_ratio=float(edit.time_stretch_ratio),
-            formant_shift_semitones=float(edit.formant_shift_semitones),
-            vibrato_depth_change=float(edit.vibrato_depth_change),
-            drift_change=float(edit.drift_change),
+            pitch_shift_semitones=_narrow_double(
+                edit.pitch_shift_semitones, "edit.pitch_shift_semitones"
+            ),
+            gain_db=_narrow_double(edit.gain_db, "edit.gain_db"),
+            time_stretch_ratio=_narrow_double(edit.time_stretch_ratio, "edit.time_stretch_ratio"),
+            formant_shift_semitones=_narrow_double(
+                edit.formant_shift_semitones, "edit.formant_shift_semitones"
+            ),
+            vibrato_depth_change=_narrow_double(
+                edit.vibrato_depth_change, "edit.vibrato_depth_change"
+            ),
+            drift_change=_narrow_double(edit.drift_change, "edit.drift_change"),
             muted=1 if edit.muted else 0,
         )
         _check(

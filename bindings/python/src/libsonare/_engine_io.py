@@ -39,6 +39,7 @@ from ._ffi_types_core import (
     SonareMeterTelemetryRecordWideV2,
     SonareScopeTelemetryRecord,
 )
+from ._narrowing import _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -72,6 +73,11 @@ from ._runtime import (
     _to_c_uint,
     _validate_c_int_field,
 )
+
+
+def _plane_arrays(arrays: Sequence[Any], frame_count: int) -> list[np.ndarray]:
+    """View each ctypes plane as a float32 ndarray that keeps the plane alive."""
+    return [np.frombuffer(array, dtype=np.float32, count=frame_count) for array in arrays]
 
 
 class _EngineIoMixin:
@@ -226,7 +232,7 @@ class _EngineIoMixin:
         )
         return int(out.value)
 
-    def process(self, channels: Sequence[Sequence[float]]) -> list[list[float]]:
+    def process(self, channels: Sequence[Sequence[float]]) -> list[np.ndarray]:
         """Render one block and return the processed channel copies.
 
         Input channel buffers are never modified: the engine renders over
@@ -242,13 +248,11 @@ class _EngineIoMixin:
                 _to_c_int(frame_count, "frame_count"),
             )
         )
-        return [
-            np.frombuffer(array, dtype=np.float32, count=frame_count).tolist() for array in arrays
-        ]
+        return _plane_arrays(arrays, frame_count)
 
     def process_with_monitor(
         self, channels: Sequence[Sequence[float]]
-    ) -> tuple[list[list[float]], list[list[float]]]:
+    ) -> tuple[list[np.ndarray], list[np.ndarray]]:
         arrays, ptrs, frame_count = self._channel_arrays(channels)
         # `(c_float * N)()` already zero-initialises; the previous
         # `*([0.0] * N)` built a throwaway Python list and varargs-marshalled it.
@@ -265,14 +269,7 @@ class _EngineIoMixin:
                 _to_c_int(frame_count, "frame_count"),
             )
         )
-        output = [
-            np.frombuffer(array, dtype=np.float32, count=frame_count).tolist() for array in arrays
-        ]
-        monitor = [
-            np.frombuffer(array, dtype=np.float32, count=frame_count).tolist()
-            for array in monitor_arrays
-        ]
-        return output, monitor
+        return _plane_arrays(arrays, frame_count), _plane_arrays(monitor_arrays, frame_count)
 
     def render_offline(
         self,
@@ -280,7 +277,7 @@ class _EngineIoMixin:
         *,
         block_size: int = 128,
         finalize: bool = True,
-    ) -> list[list[float]]:
+    ) -> list[np.ndarray]:
         """Render one offline span from the current transport position.
 
         ``finalize`` says whether this call ends the timeline. True (the
@@ -311,9 +308,7 @@ class _EngineIoMixin:
                 1 if finalize else 0,
             )
         )
-        return [
-            np.frombuffer(array, dtype=np.float32, count=frame_count).tolist() for array in arrays
-        ]
+        return _plane_arrays(arrays, frame_count)
 
     def finish_offline_render(self) -> None:
         """End a chunked offline render.
@@ -373,7 +368,7 @@ class _EngineIoMixin:
         raw_options.target_sample_rate = options.target_sample_rate
         raw_options.source_sample_rate = options.source_sample_rate
         raw_options.normalize_lufs = 1 if options.normalize_lufs else 0
-        raw_options.target_lufs = float(options.target_lufs)
+        raw_options.target_lufs = _narrow_double(options.target_lufs, "options.target_lufs")
         raw_options.dither = options.dither
         # Same narrowing as the fields above, worded against this entry point:
         # int(0.5) is the 0 this field reads as "keep the default 16", so a
@@ -389,9 +384,7 @@ class _EngineIoMixin:
             )
         )
         try:
-            interleaved = _from_c_float_array(
-                raw_result.interleaved, int(raw_result.sample_count)
-            ).tolist()
+            interleaved = _from_c_float_array(raw_result.interleaved, int(raw_result.sample_count))
         finally:
             if raw_result.interleaved:
                 lib.sonare_free_bounce_result(ctypes.byref(raw_result))
@@ -420,8 +413,8 @@ class _EngineIoMixin:
         raw_options.block_size = options.block_size
         raw_options.num_channels = options.num_channels
         raw_options.clip_id = options.clip_id
-        raw_options.start_ppq = float(options.start_ppq)
-        raw_options.gain = float(options.gain)
+        raw_options.start_ppq = _narrow_double(options.start_ppq, "options.start_ppq")
+        raw_options.gain = _narrow_double(options.gain, "options.gain")
         raw_result = SonareEngineFreezeResult()
         _check(
             _get_lib().sonare_engine_freeze_offline(

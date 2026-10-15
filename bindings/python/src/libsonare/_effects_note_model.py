@@ -17,7 +17,7 @@ from ._ffi import (
     SonareTranscribeConfig,
     SonareTranscribeResult,
 )
-from ._narrowing import _is_number
+from ._narrowing import _is_number, _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -546,7 +546,7 @@ def _notes_to_c(
         c_notes[i].frame_end = _narrow_int(
             note.frame_end, f"{fn_name}: notes[{i}].frame_end", _C_INT_MIN, _C_INT_MAX
         )
-        c_notes[i].median_hz = float(note.median_hz)
+        c_notes[i].median_hz = _narrow_double(note.median_hz, "note.median_hz")
         c_notes[i].edit = SonareNoteEdit(
             # Narrowed rather than coerced: int(0.5) is 0, which is this field's
             # identity, so a sub-sample shift would render unmoved and report
@@ -562,12 +562,20 @@ def _notes_to_c(
             ),
             envelope_offset=envelope_offset,
             envelope_count=int(curve.size),
-            pitch_shift_semitones=float(note.edit.pitch_shift_semitones),
-            gain_db=float(note.edit.gain_db),
-            time_stretch_ratio=float(note.edit.time_stretch_ratio),
-            formant_shift_semitones=float(note.edit.formant_shift_semitones),
-            vibrato_depth_change=float(note.edit.vibrato_depth_change),
-            drift_change=float(note.edit.drift_change),
+            pitch_shift_semitones=_narrow_double(
+                note.edit.pitch_shift_semitones, "note.edit.pitch_shift_semitones"
+            ),
+            gain_db=_narrow_double(note.edit.gain_db, "note.edit.gain_db"),
+            time_stretch_ratio=_narrow_double(
+                note.edit.time_stretch_ratio, "note.edit.time_stretch_ratio"
+            ),
+            formant_shift_semitones=_narrow_double(
+                note.edit.formant_shift_semitones, "note.edit.formant_shift_semitones"
+            ),
+            vibrato_depth_change=_narrow_double(
+                note.edit.vibrato_depth_change, "note.edit.vibrato_depth_change"
+            ),
+            drift_change=_narrow_double(note.edit.drift_change, "note.edit.drift_change"),
             muted=1 if note.edit.muted else 0,
         )
         envelope_offset += int(curve.size)

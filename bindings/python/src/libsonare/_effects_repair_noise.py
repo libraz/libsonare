@@ -33,6 +33,7 @@ from ._ffi import (
     SonareHumDetection,
     SonareNoiseDetection,
 )
+from ._narrowing import _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -170,11 +171,13 @@ def mastering_repair_denoise_classical(
         noise_estimator=_coerce_denoise_estimator(noise_estimator),
         n_fft=n_fft_value,
         hop_length=hop_length_value,
-        dd_alpha=float(dd_alpha),
-        reduction_db=float(reduction_db),
-        over_subtraction=float(over_subtraction),
-        spectral_floor=float(spectral_floor),
-        noise_estimation_quantile=float(noise_estimation_quantile),
+        dd_alpha=_narrow_double(dd_alpha, "dd_alpha"),
+        reduction_db=_narrow_double(reduction_db, "reduction_db"),
+        over_subtraction=_narrow_double(over_subtraction, "over_subtraction"),
+        spectral_floor=_narrow_double(spectral_floor, "spectral_floor"),
+        noise_estimation_quantile=_narrow_double(
+            noise_estimation_quantile, "noise_estimation_quantile"
+        ),
         speech_presence_gain=1 if speech_presence_gain else 0,
         gain_smoothing=1 if gain_smoothing else 0,
     )
@@ -272,11 +275,13 @@ def mastering_repair_detect_noise_floor(
         noise_estimator=_coerce_denoise_estimator(noise_estimator),
         n_fft=n_fft_value,
         hop_length=hop_length_value,
-        dd_alpha=float(dd_alpha),
-        reduction_db=float(reduction_db),
-        over_subtraction=float(over_subtraction),
-        spectral_floor=float(spectral_floor),
-        noise_estimation_quantile=float(noise_estimation_quantile),
+        dd_alpha=_narrow_double(dd_alpha, "dd_alpha"),
+        reduction_db=_narrow_double(reduction_db, "reduction_db"),
+        over_subtraction=_narrow_double(over_subtraction, "over_subtraction"),
+        spectral_floor=_narrow_double(spectral_floor, "spectral_floor"),
+        noise_estimation_quantile=_narrow_double(
+            noise_estimation_quantile, "noise_estimation_quantile"
+        ),
         speech_presence_gain=1 if speech_presence_gain else 0,
         gain_smoothing=1 if gain_smoothing else 0,
     )
@@ -452,11 +457,13 @@ def mastering_repair_denoise_classical_stereo(
         noise_estimator=_coerce_denoise_estimator(noise_estimator),
         n_fft=n_fft_value,
         hop_length=hop_length_value,
-        dd_alpha=float(dd_alpha),
-        reduction_db=float(reduction_db),
-        over_subtraction=float(over_subtraction),
-        spectral_floor=float(spectral_floor),
-        noise_estimation_quantile=float(noise_estimation_quantile),
+        dd_alpha=_narrow_double(dd_alpha, "dd_alpha"),
+        reduction_db=_narrow_double(reduction_db, "reduction_db"),
+        over_subtraction=_narrow_double(over_subtraction, "over_subtraction"),
+        spectral_floor=_narrow_double(spectral_floor, "spectral_floor"),
+        noise_estimation_quantile=_narrow_double(
+            noise_estimation_quantile, "noise_estimation_quantile"
+        ),
         speech_presence_gain=1 if speech_presence_gain else 0,
         gain_smoothing=1 if gain_smoothing else 0,
     )
@@ -594,11 +601,13 @@ def mastering_repair_denoise_classical_linked(
         noise_estimator=_coerce_denoise_estimator(noise_estimator),
         n_fft=n_fft_value,
         hop_length=hop_length_value,
-        dd_alpha=float(dd_alpha),
-        reduction_db=float(reduction_db),
-        over_subtraction=float(over_subtraction),
-        spectral_floor=float(spectral_floor),
-        noise_estimation_quantile=float(noise_estimation_quantile),
+        dd_alpha=_narrow_double(dd_alpha, "dd_alpha"),
+        reduction_db=_narrow_double(reduction_db, "reduction_db"),
+        over_subtraction=_narrow_double(over_subtraction, "over_subtraction"),
+        spectral_floor=_narrow_double(spectral_floor, "spectral_floor"),
+        noise_estimation_quantile=_narrow_double(
+            noise_estimation_quantile, "noise_estimation_quantile"
+        ),
         speech_presence_gain=1 if speech_presence_gain else 0,
         gain_smoothing=1 if gain_smoothing else 0,
     )
@@ -660,19 +669,19 @@ def mastering_repair_dehum(
             ``SONARE_DEHUM_MODE_*`` is also accepted.
     """
     config = SonareDehumConfig(  # noqa: F405
-        fundamental_hz=float(fundamental_hz),
+        fundamental_hz=_narrow_double(fundamental_hz, "fundamental_hz"),
         # Narrowed rather than coerced: int() takes 4.7 as 4, a notch count nobody asked for.
         harmonics=_narrow_int(
             harmonics, "mastering_repair_dehum: harmonics", _C_INT_MIN, _C_INT_MAX
         ),
-        q=float(q),
+        q=_narrow_double(q, "q"),
         adaptive=1 if adaptive else 0,
-        search_range_hz=float(search_range_hz),
-        adaptation=float(adaptation),
+        search_range_hz=_narrow_double(search_range_hz, "search_range_hz"),
+        adaptation=_narrow_double(adaptation, "adaptation"),
         frame_size=_narrow_int(
             frame_size, "mastering_repair_dehum: frame_size", _C_INT_MIN, _C_INT_MAX
         ),
-        pll_bandwidth=float(pll_bandwidth),
+        pll_bandwidth=_narrow_double(pll_bandwidth, "pll_bandwidth"),
         mode=_coerce_dehum_mode(mode),
     )
     return _run_repair(_get_lib().sonare_mastering_repair_dehum, samples, sample_rate, config)
@@ -746,18 +755,18 @@ def mastering_repair_detect_hum(
         SonareError: If the C call rejects the request.
     """
     config = SonareDehumConfig(  # noqa: F405
-        fundamental_hz=float(fundamental_hz),
+        fundamental_hz=_narrow_double(fundamental_hz, "fundamental_hz"),
         harmonics=_narrow_int(
             harmonics, "mastering_repair_detect_hum: harmonics", _C_INT_MIN, _C_INT_MAX
         ),
-        q=float(q),
+        q=_narrow_double(q, "q"),
         adaptive=1 if adaptive else 0,
-        search_range_hz=float(search_range_hz),
-        adaptation=float(adaptation),
+        search_range_hz=_narrow_double(search_range_hz, "search_range_hz"),
+        adaptation=_narrow_double(adaptation, "adaptation"),
         frame_size=_narrow_int(
             frame_size, "mastering_repair_detect_hum: frame_size", _C_INT_MIN, _C_INT_MAX
         ),
-        pll_bandwidth=float(pll_bandwidth),
+        pll_bandwidth=_narrow_double(pll_bandwidth, "pll_bandwidth"),
         mode=_coerce_dehum_mode(mode),
     )
     return _extract_hum_detection(
@@ -834,18 +843,18 @@ def mastering_repair_dehum_stereo(
     if left_length != right_length:
         raise SonareValueError("left and right channel lengths must match")
     config = SonareDehumConfig(  # noqa: F405
-        fundamental_hz=float(fundamental_hz),
+        fundamental_hz=_narrow_double(fundamental_hz, "fundamental_hz"),
         harmonics=_narrow_int(
             harmonics, "mastering_repair_dehum_stereo: harmonics", _C_INT_MIN, _C_INT_MAX
         ),
-        q=float(q),
+        q=_narrow_double(q, "q"),
         adaptive=1 if adaptive else 0,
-        search_range_hz=float(search_range_hz),
-        adaptation=float(adaptation),
+        search_range_hz=_narrow_double(search_range_hz, "search_range_hz"),
+        adaptation=_narrow_double(adaptation, "adaptation"),
         frame_size=_narrow_int(
             frame_size, "mastering_repair_dehum_stereo: frame_size", _C_INT_MIN, _C_INT_MAX
         ),
-        pll_bandwidth=float(pll_bandwidth),
+        pll_bandwidth=_narrow_double(pll_bandwidth, "pll_bandwidth"),
         mode=_coerce_dehum_mode(mode),
     )
     out = SonareDehumStereoResult()  # noqa: F405

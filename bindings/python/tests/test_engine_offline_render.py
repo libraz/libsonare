@@ -65,8 +65,8 @@ def test_realtime_engine_offline_render_matches_process() -> None:
         offline.play()
         rendered = offline.render_offline([left, right], block_size=128)
 
-    assert rendered[0] == rt_left
-    assert rendered[1] == rt_right
+    assert np.array_equal(rendered[0], rt_left)
+    assert np.array_equal(rendered[1], rt_right)
 
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as bounce_engine:
         bounce_engine.play()

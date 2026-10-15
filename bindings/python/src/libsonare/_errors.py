@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from enum import IntEnum
+from typing import TypeVar
+
+_Handle = TypeVar("_Handle")
 
 
 class ErrorCode(IntEnum):
@@ -86,6 +89,16 @@ def _not_supported(message: str) -> SonareError:
 def _invalid_state(message: str) -> SonareError:
     """Build the error for a call the object's current state refuses (e.g. closed)."""
     return SonareError(int(ErrorCode.INVALID_STATE), message)
+
+
+def _require_open(handle: _Handle | None, owner: str) -> _Handle:
+    """Return ``handle`` if the object is open, else raise the coded InvalidState error.
+
+    The one closed-handle guard: a closed object holds ``None``, a NULL ``c_void_p`` or ``0``.
+    """
+    if not handle:
+        raise _invalid_state(f"{owner} is closed")
+    return handle
 
 
 def _unknown_error(message: str) -> SonareError:

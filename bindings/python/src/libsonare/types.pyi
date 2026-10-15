@@ -2415,7 +2415,7 @@ class EngineBounceOptions:
     ) -> None: ...
 
 class EngineBounceResult:
-    interleaved: list[float]
+    interleaved: np.ndarray
     frames: int
     num_channels: int
     sample_rate: int

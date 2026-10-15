@@ -601,18 +601,21 @@ def test_resample_uses_native_antialiased_resampler(monkeypatch) -> None:
 
 def test_resample_falls_back_to_linear_without_native_lib(monkeypatch) -> None:
     """When the native library cannot load, cmd_resample degrades to linear."""
-    import libsonare
-    from libsonare import cli
+    import numpy as np
+
+    from libsonare import _conversions, cli
 
     samples = _generate_sine(440, 44100, 0.02)
 
     def _raise_os_error(*_args, **_kwargs):
         raise OSError("libsonare shared library not found")
 
-    monkeypatch.setattr(libsonare, "resample", _raise_os_error)
+    monkeypatch.setattr(_conversions, "_resample_float32", _raise_os_error)
 
     result = cli._resample(samples, 44100, 48000)
-    assert result == cli._resample_linear(samples, 44100, 48000)
+    expected = np.asarray(cli._resample_linear(samples, 44100, 48000), dtype=np.float32)
+    assert result.dtype == np.float32
+    assert np.allclose(result, expected, rtol=0.0, atol=1e-6)
 
 
 def test_rir_and_morph_missing_output_raise_value_error() -> None:

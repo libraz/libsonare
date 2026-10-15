@@ -86,6 +86,20 @@ def _check(rc: int) -> None:
         raise _generic_error(rc)
 
 
+def _check_argument(rc: int) -> None:
+    """Like :func:`_check`, but a refused argument (InvalidParameter) is a ``SonareValueError``.
+
+    For calls whose only InvalidParameter cause is a caller-supplied value, such as an unknown
+    name or an out-of-range factor.
+    """
+    try:
+        _check(rc)
+    except SonareError as exc:
+        if exc.code == int(ErrorCode.INVALID_PARAMETER):
+            raise SonareValueError(str(exc).split("] ", 1)[-1]) from exc
+        raise
+
+
 def _last_error(default_code: int, fallback_message: str) -> SonareError:
     """Build the thread-local error left by a C call that returned a null handle.
 
@@ -459,12 +473,14 @@ def _planar_channel_arrays(
     arrays: list[ctypes.Array[ctypes.c_float]] = []
     frame_count = -1
     for channel in channels:
-        buf = np.array(
-            _as_float32_buffer(channel, arg_name=subject),
-            dtype=np.float32,
-            copy=True,
-            order="C",
-        )
+        buf = _as_float32_buffer(channel, arg_name=subject)
+        # A list/tuple is already converted into a fresh array, as is an ndarray cast from
+        # another dtype; anything else may still alias the caller's memory.
+        if not (
+            isinstance(channel, (list, tuple))
+            or (isinstance(channel, np.ndarray) and not np.shares_memory(buf, channel))
+        ):
+            buf = np.array(buf, dtype=np.float32, copy=True, order="C")
         if frame_count < 0:
             # The frame count comes from the first coerced plane, so the rank
             # check runs before anything reads a length off a non-buffer.

@@ -15,9 +15,12 @@ import os
 import sys
 from typing import Any
 
+import numpy as np
+
 from ._cli_common import (
     _atomic_wav_writer,
     _atomic_write_bytes,
+    _audio_array,
     _json_key_to_snake_case,
     _load_channels_or_downmix,
     _parse_kv_params,
@@ -162,7 +165,7 @@ def cmd_mixing_preset(args: argparse.Namespace) -> int:
     return 0
 
 
-def _load_strip_pair(path: str, sample_rate: int) -> tuple[list[float], list[float]]:
+def _load_strip_pair(path: str, sample_rate: int) -> tuple[np.ndarray, np.ndarray]:
     """Load one file as the stereo pair a mixer strip processes.
 
     A strip is stereo, so a mono file is carried on both sides and a stereo one
@@ -172,9 +175,9 @@ def _load_strip_pair(path: str, sample_rate: int) -> tuple[list[float], list[flo
     says so.
     """
     planes, in_sr = _load_channels_or_downmix(path)
-    left = list(planes[0])
+    left = np.array(planes[0], dtype=np.float32)
     if len(planes) == 2:
-        right = list(planes[1])
+        right = np.array(planes[1], dtype=np.float32)
         if in_sr != sample_rate:
             left = _resample(left, in_sr, sample_rate)
             right = _resample(right, in_sr, sample_rate)
@@ -184,12 +187,12 @@ def _load_strip_pair(path: str, sample_rate: int) -> tuple[list[float], list[flo
     # they share the one resampling result; stereo resamples each side independently.
     if in_sr != sample_rate:
         left = _resample(left, in_sr, sample_rate)
-    return left, list(left)
+    return left, left.copy()
 
 
 def _mix_strip_channels(
     entries: list[str], strip_ids: list[str], sample_rate: int
-) -> tuple[list[list[float]], list[list[float]], int]:
+) -> tuple[list[np.ndarray], list[np.ndarray], int]:
     """Resolve ``--input`` entries onto the scene's strips, in strip order.
 
     Two spellings normalize here so the rest of the command sees one shape.
@@ -209,8 +212,8 @@ def _mix_strip_channels(
     shorter than the longest are padded rather than the set being truncated to
     the shortest, which would delete a part that only enters late in the song.
     """
-    resolved: dict[int, tuple[list[float], list[float]]] = {}
-    positional: list[tuple[list[float], list[float]]] = []
+    resolved: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+    positional: list[tuple[np.ndarray, np.ndarray]] = []
     addressed = False
     index_of = {strip_id: index for index, strip_id in enumerate(strip_ids)}
 
@@ -257,11 +260,11 @@ def _mix_strip_channels(
 
     length = max((len(pair[0]) for pair in resolved.values()), default=0)
 
-    def _padded(side: int) -> list[list[float]]:
-        out: list[list[float]] = []
+    def _padded(side: int) -> list[np.ndarray]:
+        out: list[np.ndarray] = []
         for index in range(len(strip_ids)):
-            buffer = resolved[index][side] if index in resolved else []
-            out.append(buffer + [0.0] * (length - len(buffer)))
+            buffer = resolved[index][side] if index in resolved else _audio_array([])
+            out.append(np.pad(_audio_array(buffer), (0, length - len(buffer))))
         return out
 
     return _padded(0), _padded(1), length
@@ -428,8 +431,8 @@ def cmd_mix_strip(args: argparse.Namespace) -> int:
 
     width = float(getattr(args, "width", 1.0))
     planes, sample_rate = _load_channels_or_downmix(args.file)
-    left = list(planes[0])
-    right = list(planes[1]) if len(planes) == 2 else list(left)
+    left = np.array(planes[0], dtype=np.float32)
+    right = np.array(planes[1], dtype=np.float32) if len(planes) == 2 else left.copy()
     if len(planes) != 2 and width != 1.0:
         raise ValueError("--width requires a stereo input")
 

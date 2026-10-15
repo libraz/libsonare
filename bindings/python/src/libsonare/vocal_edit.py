@@ -21,7 +21,7 @@ from typing import Any, Self, SupportsFloat, TypeAlias, cast
 import numpy as np
 from numpy.typing import NDArray
 
-from ._errors import SonareError, SonareValueError, _unknown_error
+from ._errors import SonareError, SonareValueError, _invalid_state, _unknown_error
 from ._ffi_types_vocal import (
     SONARE_VOCAL_EDIT_API_VERSION,
     VOCAL_MAX_SAMPLE_RATE,
@@ -490,17 +490,17 @@ class VocalSetNoteSourceSpan:
     """Set a note's source span and its destination placement.
 
     Each position is given in samples or in seconds (``*_sec``, rounded to the
-    nearest sample at the session's rate), one spelling per position. The source
-    bounds have no default; ``destination_start_sample`` and
-    ``destination_length_samples`` read 0 as unset, so giving a ``*_sec`` beside
-    a non-zero sample value is the refused case.
+    nearest sample at the session's rate), one spelling per position. Every
+    position is required and has no default: an omitted one is refused by name,
+    and 0 is the sample position 0. Giving both spellings of one position is
+    refused.
     """
 
     note_id: int
     source_start_sample: int | None = None
     source_end_sample: int | None = None
-    destination_start_sample: int = 0
-    destination_length_samples: int = 0
+    destination_start_sample: int | None = None
+    destination_length_samples: int | None = None
     source_start_sec: float | None = None
     source_end_sec: float | None = None
     destination_start_sec: float | None = None
@@ -726,26 +726,15 @@ def _operation_position(
     sample_rate: int,
     sample_name: str,
     sec_name: str,
-    *,
-    zero_is_unset: bool = False,
-    required: bool = True,
 ) -> int:
-    """Resolve one operation position from samples or seconds.
+    """Resolve one required operation position from samples or seconds.
 
-    ``zero_is_unset`` is for the destination fields whose sample default is 0:
-    only a non-zero sample value counts as giving the sample spelling.
+    Absence is ``None``; a real 0 is the sample position 0.
     """
-    given = sample_value
-    if zero_is_unset and sample_value == 0:
-        given = None
-    resolved = _resolve_sample_bound(given, sec_value, sample_rate, sample_name, sec_name)
-    if resolved is not None:
-        return resolved
-    if sample_value is None:
-        if required:
-            raise SonareValueError(f"{operation_name} needs {sample_name} or {sec_name}")
-        return 0
-    return _int64(sample_value, sample_name)
+    resolved = _resolve_sample_bound(sample_value, sec_value, sample_rate, sample_name, sec_name)
+    if resolved is None:
+        raise SonareValueError(f"{operation_name} needs {sample_name} or {sec_name}")
+    return resolved
 
 
 def _operation_to_c(
@@ -785,8 +774,6 @@ def _operation_to_c(
             sample_rate,
             "destination_start_sample",
             "destination_start_sec",
-            zero_is_unset=True,
-            required=False,
         )
         raw.destination_length_samples = _operation_position(
             "VocalSetNoteSourceSpan",
@@ -795,8 +782,6 @@ def _operation_to_c(
             sample_rate,
             "destination_length_samples",
             "destination_length_sec",
-            zero_is_unset=True,
-            required=False,
         )
     elif isinstance(operation, VocalSplitNote):
         raw.kind = int(VocalOperationKind.SPLIT)
@@ -1034,7 +1019,7 @@ class _HandleOwner:
 
     def _require_handle(self) -> ctypes.c_void_p:
         if not self._handle or not self._handle.value or getattr(self, "_close_pending", False):
-            raise SonareError(7, f"{type(self).__name__} is closed")
+            raise _invalid_state(f"{type(self).__name__} is closed")
         return self._handle
 
     def close(self) -> None:

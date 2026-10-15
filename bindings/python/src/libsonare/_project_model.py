@@ -73,6 +73,7 @@ from ._ffi_types_mastering_project import (
     SONARE_SYNTH_PATCH_MOD_ROUTINGS,
     SONARE_SYNTH_PRESET_NAME_MAX,
 )
+from ._narrowing import _narrow_double
 from ._project_synth import (
     _SAMPLE_KEY_TRACKS,
     _SAMPLE_LOOP_MODES,
@@ -960,7 +961,7 @@ class SynthPatch:
                 destination=_synth_enum_value(
                     routing.destination, _SYNTH_MOD_DESTINATIONS, "mod destination"
                 ),
-                depth=float(routing.depth),
+                depth=_narrow_double(routing.depth, "routing.depth"),
             )
         _set_float("gain", SONARE_SYNTH_FIELD_GAIN, self.gain)
         _set_int("polyphony", SONARE_SYNTH_FIELD_POLYPHONY, self.polyphony)
@@ -994,11 +995,11 @@ class SynthPatch:
                     raise TypeError("engine_params keys must be strings")
                 keys.append(_utf8_arg(key, "engine_params key"))
             params = (SonareSynthEngineParam * len(keys))()
-            for i, (raw_key, value) in enumerate(
-                zip(keys, self.engine_params.values(), strict=True)
+            for i, (raw_key, (param_name, value)) in enumerate(
+                zip(keys, self.engine_params.items(), strict=True)
             ):
                 params[i].key = raw_key
-                params[i].value = float(value)
+                params[i].value = _narrow_double(value, f"engine_params[{param_name!r}]")
             c.engine_params = ctypes.cast(params, ctypes.POINTER(SonareSynthEngineParam))
             c.engine_param_count = len(keys)
             c._keepalive = (keys, params)

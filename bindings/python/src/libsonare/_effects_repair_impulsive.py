@@ -25,6 +25,7 @@ from ._ffi import (
     SonareDecrackleConfig,
     SonareDecrackleStereoResult,
 )
+from ._narrowing import _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -112,11 +113,11 @@ def mastering_repair_declick(
     length = int(in_buf.shape[0])
     c_array = in_buf.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
     config = SonareDeclickConfig(  # noqa: F405
-        threshold=float(threshold),
-        neighbor_ratio=float(neighbor_ratio),
+        threshold=_narrow_double(threshold, "threshold"),
+        neighbor_ratio=_narrow_double(neighbor_ratio, "neighbor_ratio"),
         max_click_samples=max_click_value,
         lpc_order=lpc_order_value,
-        residual_ratio=float(residual_ratio),
+        residual_ratio=_narrow_double(residual_ratio, "residual_ratio"),
     )
     with _out_float_array(lib) as (out, out_length):
         rc = lib.sonare_mastering_repair_declick(
@@ -197,11 +198,11 @@ def mastering_repair_detect_clicks(
     if max_click_value <= 0:
         raise SonareValueError("max_click_samples must be positive")
     config = SonareDeclickConfig(  # noqa: F405
-        threshold=float(threshold),
-        neighbor_ratio=float(neighbor_ratio),
+        threshold=_narrow_double(threshold, "threshold"),
+        neighbor_ratio=_narrow_double(neighbor_ratio, "neighbor_ratio"),
         max_click_samples=max_click_value,
         lpc_order=lpc_order_value,
-        residual_ratio=float(residual_ratio),
+        residual_ratio=_narrow_double(residual_ratio, "residual_ratio"),
     )
     return _extract_click_detection(
         _run_detection(
@@ -277,11 +278,11 @@ def mastering_repair_declick_stereo(
     if left_length != right_length:
         raise SonareValueError("left and right channel lengths must match")
     config = SonareDeclickConfig(  # noqa: F405
-        threshold=float(threshold),
-        neighbor_ratio=float(neighbor_ratio),
+        threshold=_narrow_double(threshold, "threshold"),
+        neighbor_ratio=_narrow_double(neighbor_ratio, "neighbor_ratio"),
         max_click_samples=max_click_value,
         lpc_order=lpc_order_value,
-        residual_ratio=float(residual_ratio),
+        residual_ratio=_narrow_double(residual_ratio, "residual_ratio"),
     )
     out = SonareDeclickStereoResult()  # noqa: F405
     rc = lib.sonare_mastering_repair_declick_stereo(
@@ -336,14 +337,14 @@ def mastering_repair_declip(
     """
     # Narrowed rather than coerced: int() takes 2.7 as 2, an iteration count nobody asked for.
     config = SonareDeclipConfig(  # noqa: F405
-        clip_threshold=float(clip_threshold),
+        clip_threshold=_narrow_double(clip_threshold, "clip_threshold"),
         lpc_order=_narrow_int(
             lpc_order, "mastering_repair_declip: lpc_order", _C_INT_MIN, _C_INT_MAX
         ),
         iterations=_narrow_int(
             iterations, "mastering_repair_declip: iterations", _C_INT_MIN, _C_INT_MAX
         ),
-        lpc_blend=float(lpc_blend),
+        lpc_blend=_narrow_double(lpc_blend, "lpc_blend"),
     )
     return _run_repair(_get_lib().sonare_mastering_repair_declip, samples, sample_rate, config)
 
@@ -427,14 +428,14 @@ def mastering_repair_detect_clipping(
         SonareError: If the C call rejects the request.
     """
     config = SonareDeclipConfig(  # noqa: F405
-        clip_threshold=float(clip_threshold),
+        clip_threshold=_narrow_double(clip_threshold, "clip_threshold"),
         lpc_order=_narrow_int(
             lpc_order, "mastering_repair_detect_clipping: lpc_order", _C_INT_MIN, _C_INT_MAX
         ),
         iterations=_narrow_int(
             iterations, "mastering_repair_detect_clipping: iterations", _C_INT_MIN, _C_INT_MAX
         ),
-        lpc_blend=float(lpc_blend),
+        lpc_blend=_narrow_double(lpc_blend, "lpc_blend"),
     )
     return _extract_clip_detection(
         _run_detection(
@@ -498,14 +499,14 @@ def mastering_repair_declip_stereo(
     if left_length != right_length:
         raise SonareValueError("left and right channel lengths must match")
     config = SonareDeclipConfig(  # noqa: F405
-        clip_threshold=float(clip_threshold),
+        clip_threshold=_narrow_double(clip_threshold, "clip_threshold"),
         lpc_order=_narrow_int(
             lpc_order, "mastering_repair_declip_stereo: lpc_order", _C_INT_MIN, _C_INT_MAX
         ),
         iterations=_narrow_int(
             iterations, "mastering_repair_declip_stereo: iterations", _C_INT_MIN, _C_INT_MAX
         ),
-        lpc_blend=float(lpc_blend),
+        lpc_blend=_narrow_double(lpc_blend, "lpc_blend"),
     )
     out = SonareDeclipStereoResult()  # noqa: F405
     rc = lib.sonare_mastering_repair_declip_stereo(
@@ -548,7 +549,7 @@ def mastering_repair_decrackle(
 ) -> np.ndarray:
     """Offline crackle suppressor (median or wavelet-shrinkage)."""
     config = SonareDecrackleConfig(  # noqa: F405
-        threshold=float(threshold),
+        threshold=_narrow_double(threshold, "threshold"),
         mode=_coerce_decrackle_mode(mode),
         # Narrowed rather than coerced: int() takes 4.7 as 4, a depth nobody asked for.
         levels=_narrow_int(levels, "mastering_repair_decrackle: levels", _C_INT_MIN, _C_INT_MAX),
@@ -605,7 +606,7 @@ def mastering_repair_detect_crackle(
         SonareError: If the C call rejects the request.
     """
     config = SonareDecrackleConfig(  # noqa: F405
-        threshold=float(threshold),
+        threshold=_narrow_double(threshold, "threshold"),
         mode=_coerce_decrackle_mode(mode),
         levels=_narrow_int(
             levels, "mastering_repair_detect_crackle: levels", _C_INT_MIN, _C_INT_MAX
@@ -672,7 +673,7 @@ def mastering_repair_decrackle_stereo(
     if left_length != right_length:
         raise SonareValueError("left and right channel lengths must match")
     config = SonareDecrackleConfig(  # noqa: F405
-        threshold=float(threshold),
+        threshold=_narrow_double(threshold, "threshold"),
         mode=_coerce_decrackle_mode(mode),
         levels=_narrow_int(
             levels, "mastering_repair_decrackle_stereo: levels", _C_INT_MIN, _C_INT_MAX

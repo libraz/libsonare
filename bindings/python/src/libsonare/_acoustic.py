@@ -16,6 +16,7 @@ import math
 from collections.abc import Sequence
 
 from ._errors import ErrorCode, SonareError, SonareValueError, _not_supported
+from ._narrowing import _narrow_double
 from ._runtime import (
     SonareRirSynthConfig,
     SonareRirSynthResult,
@@ -413,18 +414,22 @@ def room_geometry_from_estimate(
     config = SonareRirSynthConfig()
     _check(lib.sonare_room_geometry_from_estimate(ctypes.byref(c_estimate), ctypes.byref(config)))
     geometry: RoomGeometry = {
-        "length_m": float(config.length_m),
-        "width_m": float(config.width_m),
-        "height_m": float(config.height_m),
-        "source": (float(config.source_x), float(config.source_y), float(config.source_z)),
+        "length_m": _narrow_double(config.length_m, "config.length_m"),
+        "width_m": _narrow_double(config.width_m, "config.width_m"),
+        "height_m": _narrow_double(config.height_m, "config.height_m"),
+        "source": (
+            _narrow_double(config.source_x, "config.source_x"),
+            _narrow_double(config.source_y, "config.source_y"),
+            _narrow_double(config.source_z, "config.source_z"),
+        ),
         "listener": (
-            float(config.listener_x),
-            float(config.listener_y),
-            float(config.listener_z),
+            _narrow_double(config.listener_x, "config.listener_x"),
+            _narrow_double(config.listener_y, "config.listener_y"),
+            _narrow_double(config.listener_z, "config.listener_z"),
         ),
     }
     if any(math.isfinite(band) for band in estimate.band_absorption):
-        geometry["absorption"] = float(config.absorption)
+        geometry["absorption"] = _narrow_double(config.absorption, "config.absorption")
     if config.absorption_band_count > 0:
         geometry["band_absorption"] = _optional_float_array_result(
             config.absorption_bands, config.absorption_band_count
@@ -662,7 +667,7 @@ def room_morph_stereo(
     if receiver_spacing_m is None:
         spacing = 0.0
     else:
-        spacing = float(receiver_spacing_m)
+        spacing = _narrow_double(receiver_spacing_m, "receiver_spacing_m")
         if not math.isfinite(spacing) or not 0.0 < spacing <= 4.0:
             raise SonareValueError(
                 f"receiver_spacing_m must be finite and in (0, 4], got {receiver_spacing_m!r}"

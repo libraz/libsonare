@@ -10,6 +10,7 @@ import numpy as np
 from ._effects_repair_common import _linked_channel_planes
 from ._errors import _not_supported
 from ._ffi import SonareDecomposeStemsConfig, SonareHpssResult
+from ._narrowing import _narrow_double
 from ._runtime import (
     _DEFAULT_EFFECT_HOP_LENGTH,
     _DEFAULT_EFFECT_N_FFT,
@@ -215,9 +216,9 @@ def decompose_stems(
         n_fft=n_fft,
         hop_length=hop_length,
         n_iter=n_iter,
-        beta=float(beta),
+        beta=_narrow_double(beta, "beta"),
         init=_utf8_arg(init, "init") if init else None,
-        mask_power=float(mask_power),
+        mask_power=_narrow_double(mask_power, "mask_power"),
     )
     c_array, length = _to_c_float_array(samples)
     component_count = ctypes.c_size_t()
@@ -329,9 +330,9 @@ def decompose_stems_linked(
         n_fft=n_fft,
         hop_length=hop_length,
         n_iter=n_iter,
-        beta=float(beta),
+        beta=_narrow_double(beta, "beta"),
         init=_utf8_arg(init, "init") if init else None,
-        mask_power=float(mask_power),
+        mask_power=_narrow_double(mask_power, "mask_power"),
     )
     channel_count = len(arrays)
     component_count = ctypes.c_size_t()

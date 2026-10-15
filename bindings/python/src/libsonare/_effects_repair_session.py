@@ -14,6 +14,7 @@ import numpy as np
 from ._cancellation import CancellationState, make_cancel_trampoline
 from ._effects_repair_common import _linked_channel_planes, _linked_output_planes
 from ._ffi import SonareMasteringProgressCallback
+from ._narrowing import _narrow_double
 from ._runtime import (
     _check,
     _get_lib,
@@ -78,7 +79,10 @@ def _progress_trampoline(
     def _trampoline(progress: float, stage_cstr: bytes | None, _user_data: int) -> None:
         # Never propagate a Python exception into C.
         with contextlib.suppress(Exception):
-            on_progress(float(progress), stage_cstr.decode("utf-8") if stage_cstr else "")
+            on_progress(
+                _narrow_double(progress, "progress"),
+                stage_cstr.decode("utf-8") if stage_cstr else "",
+            )
 
     return SonareMasteringProgressCallback(_trampoline)
 

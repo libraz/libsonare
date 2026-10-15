@@ -24,6 +24,7 @@ from ._ffi import (
     SonareRhythmResult,
     SonareTimbreResult,
 )
+from ._narrowing import _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -738,7 +739,7 @@ def analyze_impulse_response(
             "analyze_impulse_response: n_octave_bands must be a non-negative integer"
         )
     try:
-        decay_db = float(min_decay_db)
+        decay_db = _narrow_double(min_decay_db, "min_decay_db")
         decay_db_c = ctypes.c_float(decay_db).value
     except (TypeError, ValueError, OverflowError) as exc:
         raise SonareValueError(

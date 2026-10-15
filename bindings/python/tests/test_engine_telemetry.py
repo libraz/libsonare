@@ -295,7 +295,7 @@ def test_realtime_engine_reports_oversized_channel_telemetry() -> None:
 
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128, max_channels=2) as engine:
         output = engine.process([[0.0] * 8, [0.0] * 8, [0.0] * 8])
-        assert output == [[0.0] * 8, [0.0] * 8, [0.0] * 8]
+        assert [plane.tolist() for plane in output] == [[0.0] * 8, [0.0] * 8, [0.0] * 8]
 
         oversized = [
             record

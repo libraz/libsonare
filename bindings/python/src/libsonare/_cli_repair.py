@@ -7,9 +7,11 @@ import json
 import math
 from typing import TYPE_CHECKING, Any, cast
 
+import numpy as np
+
 from ._cli_common import (
+    _audio_array,
     _chain_params_config,
-    _float_sequence,
     _load_channels_or_downmix,
     _strict_json_dumps,
     _write_channel_output,
@@ -47,9 +49,9 @@ def cmd_declip(args: argparse.Namespace) -> int:
         # other's unclipped extent. Declipping the channels separately cannot
         # see that and is what the mono loader used to force.
         stereo = mastering_repair_declip_stereo(planes[0], planes[1], sample_rate=sr, **knobs)
-        rendered = [_float_sequence(stereo.left), _float_sequence(stereo.right)]
+        rendered = [_audio_array(stereo.left), _audio_array(stereo.right)]
     else:
-        rendered = [_float_sequence(mastering_repair_declip(planes[0], sample_rate=sr, **knobs))]
+        rendered = [_audio_array(mastering_repair_declip(planes[0], sample_rate=sr, **knobs))]
     repaired = rendered[0]
 
     if args.output:
@@ -156,11 +158,12 @@ def _fit_repair_output_to_full_scale(samples: Any) -> tuple[Any, float]:
     """
     # A non-finite sample would make every comparison false and leave the peak
     # at 0, so the scale is skipped rather than turned into a NaN gain.
-    peak = max((abs(float(v)) for v in samples if math.isfinite(v)), default=0.0)
+    buffer = np.asarray(samples, dtype=np.float64)
+    peak = float(np.max(np.abs(buffer[np.isfinite(buffer)]), initial=0.0))
     if peak <= 1.0:
         return samples, 0.0
     gain = 1.0 / peak
-    return [float(v) * gain for v in samples], 20.0 * math.log10(gain)
+    return buffer * gain, 20.0 * math.log10(gain)
 
 
 def _repair_detection_report(defects: dict[str, Any]) -> dict[str, object]:

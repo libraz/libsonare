@@ -7,6 +7,7 @@ import json
 import operator
 from collections.abc import Mapping, Sequence
 
+from ._narrowing import _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -150,7 +151,7 @@ def _marker_to_c(marker: EngineMarker) -> SonareEngineMarker:
     raw.kind = marker.kind
     raw.key_fifths = marker.key_fifths
     raw.key_minor = 1 if marker.key_minor else 0
-    raw.ppq = float(marker.ppq)
+    raw.ppq = _narrow_double(marker.ppq, "marker.ppq")
     raw.name = _fixed_bytes(marker.name, 64, "name")
     return raw
 
@@ -169,15 +170,15 @@ def _marker_from_c(raw: SonareEngineMarker) -> EngineMarker:
 def _metronome_to_c(config: EngineMetronomeConfig) -> SonareEngineMetronomeConfig:
     raw = SonareEngineMetronomeConfig()
     raw.enabled = int(config.enabled)
-    raw.beat_gain = float(config.beat_gain)
-    raw.accent_gain = float(config.accent_gain)
+    raw.beat_gain = _narrow_double(config.beat_gain, "config.beat_gain")
+    raw.accent_gain = _narrow_double(config.accent_gain, "config.accent_gain")
     # Narrowed rather than coerced: int(0.5) is the 0 this field reads as "derive
     # the length from click_seconds", so a fractional length would run at the
     # derived one and report success.
     raw.click_samples = _validate_c_int_field(
         "set_metronome", config.click_samples, "click_samples"
     )
-    raw.click_seconds = float(config.click_seconds)
+    raw.click_seconds = _narrow_double(config.click_seconds, "config.click_seconds")
     return raw
 
 
@@ -221,11 +222,11 @@ def _clips_to_c(
             raw.channels = None
             raw.num_channels = 0
             raw.num_samples = 0
-            raw.start_ppq = float(clip.start_ppq)
+            raw.start_ppq = _narrow_double(clip.start_ppq, "clip.start_ppq")
             raw.clip_offset_samples = clip.clip_offset_samples
             raw.length_samples = clip.length_samples if clip.length_samples is not None else 0
             raw.loop = 1 if clip.loop else 0
-            raw.gain = float(clip.gain)
+            raw.gain = _narrow_double(clip.gain, "clip.gain")
             raw.fade_in_samples = clip.fade_in_samples
             raw.fade_out_samples = clip.fade_out_samples
             raw.warp_mode = _warp_mode_value(clip.warp_mode)
@@ -233,8 +234,8 @@ def _clips_to_c(
             if clip.warp_anchors:
                 anchor_array = (SonareEngineWarpAnchor * len(clip.warp_anchors))()
                 for i, (warp_sample, source_sample) in enumerate(clip.warp_anchors):
-                    anchor_array[i].warp_sample = float(warp_sample)
-                    anchor_array[i].source_sample = float(source_sample)
+                    anchor_array[i].warp_sample = _narrow_double(warp_sample, "warp_sample")
+                    anchor_array[i].source_sample = _narrow_double(source_sample, "source_sample")
                 raw.warp_anchors = ctypes.cast(anchor_array, ctypes.c_void_p)
                 raw.warp_anchor_count = len(clip.warp_anchors)
                 warp_arrays.append(anchor_array)
@@ -249,19 +250,19 @@ def _clips_to_c(
         raw.channels = ctypes.cast(ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float)))
         raw.num_channels = len(arrays)
         raw.num_samples = num_samples
-        raw.start_ppq = float(clip.start_ppq)
+        raw.start_ppq = _narrow_double(clip.start_ppq, "clip.start_ppq")
         raw.clip_offset_samples = clip.clip_offset_samples
         raw.length_samples = clip.length_samples if clip.length_samples is not None else num_samples
         raw.loop = 1 if clip.loop else 0
-        raw.gain = float(clip.gain)
+        raw.gain = _narrow_double(clip.gain, "clip.gain")
         raw.fade_in_samples = clip.fade_in_samples
         raw.fade_out_samples = clip.fade_out_samples
         raw.warp_mode = _warp_mode_value(clip.warp_mode)
         if clip.warp_anchors:
             anchor_array = (SonareEngineWarpAnchor * len(clip.warp_anchors))()
             for i, (warp_sample, source_sample) in enumerate(clip.warp_anchors):
-                anchor_array[i].warp_sample = float(warp_sample)
-                anchor_array[i].source_sample = float(source_sample)
+                anchor_array[i].warp_sample = _narrow_double(warp_sample, "warp_sample")
+                anchor_array[i].source_sample = _narrow_double(source_sample, "source_sample")
             raw.warp_anchors = ctypes.cast(anchor_array, ctypes.c_void_p)
             raw.warp_anchor_count = len(clip.warp_anchors)
             warp_arrays.append(anchor_array)
@@ -281,7 +282,7 @@ def _graph_node_to_c(node: EngineGraphNode) -> SonareEngineGraphNode:
     raw = SonareEngineGraphNode()
     raw.id = _fixed_bytes(node.id, 64, "id")
     raw.type = int(EngineGraphNodeType(node.type))
-    raw.gain_db = float(node.gain_db)
+    raw.gain_db = _narrow_double(node.gain_db, "node.gain_db")
     # Narrowed rather than coerced: int(0.5) is the 0 this field reads as "take
     # the spec's channel count", so a fractional port count would build the node
     # at that count and report success.

@@ -10,7 +10,7 @@ from typing import BinaryIO
 
 import numpy as np
 
-from ._errors import _invalid_state
+from ._errors import _invalid_state, _require_open
 from ._runtime import (
     _INT64_MAX,
     _INT64_MIN,
@@ -63,9 +63,7 @@ class ClipPageProvider:
         self.close()
 
     def _require_handle(self) -> ctypes.c_void_p:
-        if self._handle is None:
-            raise _invalid_state("ClipPageProvider is closed")
-        return self._handle
+        return _require_open(self._handle, "ClipPageProvider")
 
     def supply(self, page_index: int, channels: Sequence[Sequence[float]]) -> None:
         arrays, ptrs, frames = _planar_channel_arrays(channels)

@@ -14,6 +14,7 @@ from ._ffi import (
     SonareSpectralEditConfig,
     SonareSpectralRegionOp,
 )
+from ._narrowing import _narrow_double
 from ._runtime import (
     SonareValueError,
     _check,
@@ -197,9 +198,9 @@ def spectral_edit(
             c_ops[i] = SonareSpectralRegionOp(
                 start_sample=0 if start_sample is None else start_sample,
                 end_sample=length if end_sample is None else end_sample,
-                low_hz=float(op.low_hz),
-                high_hz=float(op.high_hz),
-                gain_db=float(op.gain_db),
+                low_hz=_narrow_double(op.low_hz, "op.low_hz"),
+                high_hz=_narrow_double(op.high_hz, "op.high_hz"),
+                gain_db=_narrow_double(op.gain_db, "op.gain_db"),
                 mode=_coerce_spectral_edit_mode(op.mode),
             )
 

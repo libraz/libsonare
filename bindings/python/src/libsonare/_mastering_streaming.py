@@ -9,7 +9,7 @@ import math
 from collections.abc import Sequence
 from typing import Any
 
-from ._errors import _invalid_state, _not_supported
+from ._errors import _invalid_state, _not_supported, _require_open
 from ._ffi import (
     SonareEqSnapshot,
     SonareStreamingLoudnessGain,
@@ -381,9 +381,11 @@ class StreamingMasteringChain:
     @property
     def latency_samples(self) -> int:
         """Total reported latency in samples across all active processors."""
-        if self._handle is None or not self._handle:
-            return 0
-        return int(self._lib.sonare_streaming_mastering_chain_latency_samples(self._handle))
+        return int(
+            self._lib.sonare_streaming_mastering_chain_latency_samples(
+                _require_open(self._handle, "StreamingMasteringChain")
+            )
+        )
 
     def non_finite_substitution_count(self) -> int:
         """Return the non-finite samples this chain's stages replaced.
@@ -453,8 +455,7 @@ class StreamingMasteringChain:
         happens in :meth:`prepare` — stereo-only stages depend on the channel
         count — so this returns an empty list until :meth:`prepare` is called.
         """
-        if self._handle is None or not self._handle:
-            return []
+        self._ensure_open()
         if not hasattr(self._lib, "sonare_streaming_mastering_chain_stage_names"):
             return []
         raw = self._lib.sonare_streaming_mastering_chain_stage_names(self._handle)
@@ -478,8 +479,7 @@ class StreamingMasteringChain:
             self.close()
 
     def _ensure_open(self) -> None:
-        if self._handle is None or not self._handle:
-            raise _invalid_state("StreamingMasteringChain is closed")
+        _require_open(self._handle, "StreamingMasteringChain")
 
     def _ensure_flush_ready(self) -> None:
         self._ensure_open()
@@ -854,5 +854,4 @@ class StreamingEqualizer:
             self.close()
 
     def _ensure_open(self) -> None:
-        if self._handle is None or not self._handle:
-            raise _invalid_state("StreamingEqualizer is closed")
+        _require_open(self._handle, "StreamingEqualizer")

@@ -16,6 +16,7 @@ from ._ffi import (
     SonareGateConfig,
     SonareTransientShaperConfig,
 )
+from ._narrowing import _narrow_double
 from ._runtime import (
     _check,
     _from_c_float_array,
@@ -122,18 +123,18 @@ def mastering_dynamics_compressor(
         ``numpy.ndarray`` of ``float32`` with ``shape == samples.shape``.
     """
     config = SonareCompressorConfig(
-        threshold_db=float(threshold_db),
-        ratio=float(ratio),
-        attack_ms=float(attack_ms),
-        release_ms=float(release_ms),
-        knee_db=float(knee_db),
-        makeup_gain_db=float(makeup_gain_db),
+        threshold_db=_narrow_double(threshold_db, "threshold_db"),
+        ratio=_narrow_double(ratio, "ratio"),
+        attack_ms=_narrow_double(attack_ms, "attack_ms"),
+        release_ms=_narrow_double(release_ms, "release_ms"),
+        knee_db=_narrow_double(knee_db, "knee_db"),
+        makeup_gain_db=_narrow_double(makeup_gain_db, "makeup_gain_db"),
         auto_makeup=1 if auto_makeup else 0,
         detector=_coerce_compressor_detector(detector),
         sidechain_hpf_enabled=1 if sidechain_hpf_enabled else 0,
-        sidechain_hpf_hz=float(sidechain_hpf_hz),
-        pdr_time_ms=float(pdr_time_ms),
-        pdr_release_scale=float(pdr_release_scale),
+        sidechain_hpf_hz=_narrow_double(sidechain_hpf_hz, "sidechain_hpf_hz"),
+        pdr_time_ms=_narrow_double(pdr_time_ms, "pdr_time_ms"),
+        pdr_release_scale=_narrow_double(pdr_release_scale, "pdr_release_scale"),
     )
     return _run_dynamics(
         _get_lib().sonare_mastering_dynamics_compressor,
@@ -177,13 +178,13 @@ def mastering_dynamics_gate(
         Tuple of ``(output ndarray, latency_samples)``.
     """
     config = SonareGateConfig(
-        threshold_db=float(threshold_db),
-        attack_ms=float(attack_ms),
-        release_ms=float(release_ms),
-        range_db=float(range_db),
-        hold_ms=float(hold_ms),
-        close_threshold_db=float(close_threshold_db),
-        key_hpf_hz=float(key_hpf_hz),
+        threshold_db=_narrow_double(threshold_db, "threshold_db"),
+        attack_ms=_narrow_double(attack_ms, "attack_ms"),
+        release_ms=_narrow_double(release_ms, "release_ms"),
+        range_db=_narrow_double(range_db, "range_db"),
+        hold_ms=_narrow_double(hold_ms, "hold_ms"),
+        close_threshold_db=_narrow_double(close_threshold_db, "close_threshold_db"),
+        key_hpf_hz=_narrow_double(key_hpf_hz, "key_hpf_hz"),
     )
     return _run_dynamics(
         _get_lib().sonare_mastering_dynamics_gate,
@@ -232,16 +233,16 @@ def mastering_dynamics_transient_shaper(
         Tuple of ``(output ndarray, latency_samples)``.
     """
     config = SonareTransientShaperConfig(
-        attack_gain_db=float(attack_gain_db),
-        sustain_gain_db=float(sustain_gain_db),
-        fast_attack_ms=float(fast_attack_ms),
-        fast_release_ms=float(fast_release_ms),
-        slow_attack_ms=float(slow_attack_ms),
-        slow_release_ms=float(slow_release_ms),
-        sensitivity=float(sensitivity),
-        max_gain_db=float(max_gain_db),
-        gain_smoothing_ms=float(gain_smoothing_ms),
-        lookahead_ms=float(lookahead_ms),
+        attack_gain_db=_narrow_double(attack_gain_db, "attack_gain_db"),
+        sustain_gain_db=_narrow_double(sustain_gain_db, "sustain_gain_db"),
+        fast_attack_ms=_narrow_double(fast_attack_ms, "fast_attack_ms"),
+        fast_release_ms=_narrow_double(fast_release_ms, "fast_release_ms"),
+        slow_attack_ms=_narrow_double(slow_attack_ms, "slow_attack_ms"),
+        slow_release_ms=_narrow_double(slow_release_ms, "slow_release_ms"),
+        sensitivity=_narrow_double(sensitivity, "sensitivity"),
+        max_gain_db=_narrow_double(max_gain_db, "max_gain_db"),
+        gain_smoothing_ms=_narrow_double(gain_smoothing_ms, "gain_smoothing_ms"),
+        lookahead_ms=_narrow_double(lookahead_ms, "lookahead_ms"),
     )
     return _run_dynamics(
         _get_lib().sonare_mastering_dynamics_transient_shaper,

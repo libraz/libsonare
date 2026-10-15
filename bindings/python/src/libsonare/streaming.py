@@ -9,7 +9,8 @@ from typing import Any, cast
 import numpy as np
 
 from ._analysis_detection import _QUALITY_NAMES, _UNKNOWN_QUALITY_ORDINAL
-from ._errors import _invalid_state, _not_supported
+from ._errors import _not_supported, _require_open
+from ._narrowing import _narrow_double
 from ._runtime import (
     QuantizeConfig,
     SonareStreamConfig,
@@ -49,11 +50,11 @@ def _quantize_config_to_c(
     if config is None:
         return None
     raw = SonareStreamQuantizeConfig()
-    raw.mel_db_min = float(config.mel_db_min)
-    raw.mel_db_max = float(config.mel_db_max)
-    raw.onset_max = float(config.onset_max)
-    raw.rms_max = float(config.rms_max)
-    raw.centroid_max = float(config.centroid_max)
+    raw.mel_db_min = _narrow_double(config.mel_db_min, "config.mel_db_min")
+    raw.mel_db_max = _narrow_double(config.mel_db_max, "config.mel_db_max")
+    raw.onset_max = _narrow_double(config.onset_max, "config.onset_max")
+    raw.rms_max = _narrow_double(config.rms_max, "config.rms_max")
+    raw.centroid_max = _narrow_double(config.centroid_max, "config.centroid_max")
     return raw
 
 
@@ -94,9 +95,9 @@ class StreamAnalyzer:
             raw.n_fft = config.n_fft
             raw.hop_length = config.hop_length
             raw.n_mels = config.n_mels
-            raw.fmin = float(config.fmin)
-            raw.fmax = float(config.fmax)
-            raw.tuning_ref_hz = float(config.tuning_ref_hz)
+            raw.fmin = _narrow_double(config.fmin, "config.fmin")
+            raw.fmax = _narrow_double(config.fmax, "config.fmax")
+            raw.tuning_ref_hz = _narrow_double(config.tuning_ref_hz, "config.tuning_ref_hz")
             # The flags are the exception: that guard refuses a bool, so the 0/1 is
             # spelled out here.
             raw.compute_magnitude = int(config.compute_magnitude)
@@ -108,8 +109,12 @@ class StreamAnalyzer:
             raw.magnitude_downsample = config.magnitude_downsample
             raw.max_pending_frames = config.max_pending_frames
             raw.max_progression_entries = config.max_progression_entries
-            raw.key_update_interval_sec = float(config.key_update_interval_sec)
-            raw.bpm_update_interval_sec = float(config.bpm_update_interval_sec)
+            raw.key_update_interval_sec = _narrow_double(
+                config.key_update_interval_sec, "config.key_update_interval_sec"
+            )
+            raw.bpm_update_interval_sec = _narrow_double(
+                config.bpm_update_interval_sec, "config.bpm_update_interval_sec"
+            )
             raw.window = config.window
             raw.output_format = config.output_format
         handle = ctypes.c_void_p()
@@ -140,9 +145,7 @@ class StreamAnalyzer:
         self.close()
 
     def _require_handle(self) -> ctypes.c_void_p:
-        if self._handle is None:
-            raise _invalid_state("StreamAnalyzer is closed")
-        return self._handle
+        return _require_open(self._handle, "StreamAnalyzer")
 
     def process(self, samples: Sequence[float] | list[float]) -> None:
         """Feed an audio chunk (cumulative offset tracked internally).

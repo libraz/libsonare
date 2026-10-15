@@ -6,7 +6,7 @@ import ctypes
 import typing
 from collections.abc import Sequence
 
-from ._errors import _invalid_state, _not_supported
+from ._errors import _not_supported, _require_open
 from ._ffi import SonareMixGoniometerPoint, SonareSurroundPan
 from ._runtime import (
     _C_INT_MAX,
@@ -659,6 +659,7 @@ class Mixer:
 
     def bus_meter(self, bus_id: str) -> MixMeterSnapshot:
         """Read the post-insert meter for a compiled bus, including master."""
+        self._require()
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_bus_meter"):
             raise _not_supported("libsonare was built without bus meter support")
@@ -1038,8 +1039,7 @@ class Mixer:
         self.close()
 
     def _require(self) -> None:
-        if self._handle is None:
-            raise _invalid_state("Mixer has been closed")
+        _require_open(self._handle, "Mixer")
 
 
 def mix_stereo(

@@ -6,9 +6,12 @@ import ctypes
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
+
+import numpy as np
 
 from ._ffi import SonareSilenceCommonReport
+from ._narrowing import _narrow_double
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -18,6 +21,7 @@ from ._runtime import (
     _call_float_transform,
     _check,
     _float_array_result,
+    _from_c_float_array,
     _get_lib,
     _guard_buffer,
     _int_array_result,
@@ -791,7 +795,7 @@ def tempogram_ratio(
         # positive: a NaN reaches an undefined float-to-int cast in the core
         # and an infinity silently degenerates to the DC lag. The list is a
         # handful of tempo ratios, so a plain scan costs nothing.
-        factor_values = [float(value) for value in factors]
+        factor_values = [_narrow_double(value, "factors") for value in factors]
         for index, factor in enumerate(factor_values):
             if not math.isfinite(factor) or factor <= 0.0:
                 raise SonareValueError(
@@ -839,7 +843,7 @@ def nnls_chroma(
     if (stft_blend_n_fft_value & 1) != 0:
         raise SonareValueError("nnls_chroma: stft_blend_n_fft must be an even integer")
     try:
-        blend_weight = float(stft_blend_weight)
+        blend_weight = _narrow_double(stft_blend_weight, "stft_blend_weight")
         blend_weight_c = ctypes.c_float(blend_weight).value
     except (TypeError, ValueError, OverflowError) as exc:
         raise SonareValueError("nnls_chroma: stft_blend_weight must be finite in [0, 1]") from exc
@@ -896,6 +900,25 @@ def nnls_chroma(
         return (int(n_frames.value), _float_array_result(out, out_length.value))
 
 
+def _resample_float32(
+    samples: Sequence[float] | np.ndarray, src_sr: int, target_sr: int
+) -> np.ndarray:
+    """Resample to a float32 ndarray; :func:`resample` is the list-returning public form."""
+    lib = _get_lib()
+    c_array, length = _to_c_float_array(samples)
+    with _out_float_array(lib) as (out, out_length):
+        rc = lib.sonare_resample(
+            c_array,
+            _to_c_size_t(length, "length"),
+            _to_c_int(src_sr, "src_sr"),
+            _to_c_int(target_sr, "target_sr"),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
+        )
+        _check(rc)
+        return _from_c_float_array(out, out_length.value)
+
+
 @_guard_buffer("samples")
 def resample(
     samples: Sequence[float] | list[float],
@@ -912,16 +935,4 @@ def resample(
     Returns:
         List of resampled audio samples.
     """
-    lib = _get_lib()
-    c_array, length = _to_c_float_array(samples)
-    with _out_float_array(lib) as (out, out_length):
-        rc = lib.sonare_resample(
-            c_array,
-            _to_c_size_t(length, "length"),
-            _to_c_int(src_sr, "src_sr"),
-            _to_c_int(target_sr, "target_sr"),
-            ctypes.byref(out),
-            ctypes.byref(out_length),
-        )
-        _check(rc)
-        return _float_array_result(out, out_length.value)
+    return cast(list[float], _resample_float32(samples, src_sr, target_sr).tolist())
