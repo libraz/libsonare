@@ -32,8 +32,7 @@ double beat_length_ppq(const SnapGrid& grid) noexcept {
 }
 
 double bar_length_ppq(const SnapGrid& grid) noexcept {
-  const int num = std::max(grid.time_sig.numerator, 1);
-  return static_cast<double>(num) * beat_length_ppq(grid);
+  return transport::bar_length_ppq(grid.time_sig);
 }
 
 double snap_to_beat(const SnapGrid& grid, double ppq, double strength) noexcept {

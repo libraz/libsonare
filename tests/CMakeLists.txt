@@ -762,6 +762,7 @@ if(BUILD_ARRANGEMENT)
     midi/program_map_test.cpp
     midi/gm_gs_resolution_test.cpp
     midi/midi_routing_test.cpp
+    mir/grid_snap_bar_length_test.cpp
     mir/mir_tempo_grid_test.cpp
     mir/mir_warp_test.cpp
     mir/mir_key_chord_onset_test.cpp
