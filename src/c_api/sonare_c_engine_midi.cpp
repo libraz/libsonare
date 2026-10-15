@@ -277,6 +277,7 @@ SonareError sonare_engine_set_synth_instrument_with_bank(SonareRealtimeEngine* e
 SonareError sonare_engine_set_synth_instrument(SonareRealtimeEngine* engine,
                                                uint32_t destination_id,
                                                const SonareSynthPatch* patch) {
+  SONARE_C_API_ENTRY;
   return sonare_engine_set_synth_instrument_with_bank(engine, destination_id, patch, nullptr);
 }
 
@@ -1038,6 +1039,7 @@ SonareError sonare_engine_push_midi_ump(SonareRealtimeEngine* engine, uint32_t d
                                         const uint32_t* words, size_t word_count,
                                         int64_t render_frame) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
@@ -1058,11 +1060,13 @@ SonareError sonare_engine_push_midi_ump(SonareRealtimeEngine* engine, uint32_t d
   }
   return SONARE_ERROR_INVALID_STATE;
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_push_midi_input_ump(SonareRealtimeEngine* engine, const uint32_t* words,
                                               size_t word_count, int64_t offset_in_block_samples) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)words;
@@ -1080,6 +1084,7 @@ SonareError sonare_engine_push_midi_input_ump(SonareRealtimeEngine* engine, cons
   ump.group = midi::ump_group_from_word0(words[0]);
   return push_midi_input_event(engine, kFunction, ump, offset_in_block_samples);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_push_midi_program(SonareRealtimeEngine* engine, uint32_t destination_id,

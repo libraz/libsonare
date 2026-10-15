@@ -158,6 +158,8 @@ SonareError sonare_mixing_assistant_suggest_scene_json(
 }
 
 const char* sonare_mixing_assistant_source_class_names(void) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
   // thread_local rather than plain static: join_names writes into the storage
   // and returns a borrowed pointer into it, so two threads sharing one buffer
@@ -167,9 +169,12 @@ const char* sonare_mixing_assistant_source_class_names(void) {
 #else
   return "";
 #endif
+  SONARE_C_CATCH_RETURN("")
 }
 
 int sonare_mixing_assistant_source_class_from_name(const char* name) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
   if (name == nullptr) return -1;
   const std::string key(name);
@@ -179,7 +184,8 @@ int sonare_mixing_assistant_source_class_from_name(const char* name) {
   }
   return -1;
 #else
-  (void)name;
+  static_cast<void>(name);
   return -1;
 #endif
+  SONARE_C_CATCH_RETURN(-1)
 }

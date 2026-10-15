@@ -279,13 +279,13 @@ SonareError sonare_engine_set_tempo_segments(SonareRealtimeEngine* engine,
                                              const SonareProjectTempoSegment* segments,
                                              size_t segment_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!engine || (segment_count > 0 && !segments) || segment_count > kMaxBufferSize) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   std::vector<transport::TempoSegment> out;
   // The staging vector is sized from a caller-supplied count, so its allocation
   // has to sit inside the try or a bad_alloc crosses the extern "C" boundary.
-  SONARE_C_TRY
   out.reserve(segment_count);
   for (size_t i = 0; i < segment_count; ++i) {
     const SonareProjectTempoSegment& in = segments[i];
@@ -309,13 +309,13 @@ SonareError sonare_engine_set_time_signature_segments(
     SonareRealtimeEngine* engine, const SonareProjectTimeSignatureSegment* segments,
     size_t segment_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!engine || (segment_count > 0 && !segments) || segment_count > kMaxBufferSize) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   std::vector<transport::TimeSignatureSegment> out;
   // Same reason as sonare_engine_set_tempo_segments: a caller-sized allocation
   // must not throw outside the try.
-  SONARE_C_TRY
   out.reserve(segment_count);
   for (size_t i = 0; i < segment_count; ++i) {
     const SonareProjectTimeSignatureSegment& in = segments[i];
@@ -397,6 +397,7 @@ SonareError sonare_engine_add_parameter(SonareRealtimeEngine* engine,
 
 SonareError sonare_engine_clear_parameters(SonareRealtimeEngine* engine) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
   // Clear the registry first (it holds raw pointers into parameter_strings),
   // then release the backing strings so no dangling pointer ever exists.
@@ -404,6 +405,7 @@ SonareError sonare_engine_clear_parameters(SonareRealtimeEngine* engine) {
   engine->parameter_strings.clear();
   publish_parameter_metadata(engine);
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_parameter_count(SonareRealtimeEngine* engine, size_t* out_count) {
@@ -416,6 +418,7 @@ SonareError sonare_engine_parameter_count(SonareRealtimeEngine* engine, size_t* 
 SonareError sonare_engine_parameter_info_by_index(SonareRealtimeEngine* engine, size_t index,
                                                   SonareParameterInfo* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!engine || !out) return SONARE_ERROR_INVALID_PARAMETER;
   automation::ParameterInfo info{};
   if (!engine->parameters.parameter_info_by_index(index, &info)) {
@@ -423,11 +426,13 @@ SonareError sonare_engine_parameter_info_by_index(SonareRealtimeEngine* engine, 
   }
   fill_c_parameter(info, out);
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_parameter_info(SonareRealtimeEngine* engine, uint32_t id,
                                          SonareParameterInfo* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!engine || !out) return SONARE_ERROR_INVALID_PARAMETER;
   automation::ParameterInfo info{};
   if (engine->parameters.parameter_info(id, &info)) {
@@ -442,6 +447,7 @@ SonareError sonare_engine_parameter_info(SonareRealtimeEngine* engine, uint32_t 
   }
 #endif
   return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_set_automation_lane(SonareRealtimeEngine* engine, uint32_t param_id,
@@ -556,6 +562,7 @@ SonareError sonare_engine_marker_count(SonareRealtimeEngine* engine, size_t* out
 SonareError sonare_engine_marker_by_index(SonareRealtimeEngine* engine, size_t index,
                                           SonareEngineMarker* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!engine || !out) return SONARE_ERROR_INVALID_PARAMETER;
   transport::Marker marker{};
   if (!engine->engine.marker_by_index(index, &marker)) {
@@ -563,11 +570,13 @@ SonareError sonare_engine_marker_by_index(SonareRealtimeEngine* engine, size_t i
   }
   fill_c_marker(marker, out);
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_marker(SonareRealtimeEngine* engine, uint32_t id,
                                  SonareEngineMarker* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!engine || !out) return SONARE_ERROR_INVALID_PARAMETER;
   transport::Marker marker{};
   if (!engine->engine.marker_by_id(id, &marker)) {
@@ -575,6 +584,7 @@ SonareError sonare_engine_marker(SonareRealtimeEngine* engine, uint32_t id,
   }
   fill_c_marker(marker, out);
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_seek_marker(SonareRealtimeEngine* engine, uint32_t marker_id,
@@ -768,7 +778,9 @@ SonareError sonare_engine_graph_latency_samples_q8(SonareRealtimeEngine* engine,
 
 SonareError sonare_engine_tail_samples(SonareRealtimeEngine* engine, int* out_tail_samples) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!engine || !out_tail_samples) return SONARE_ERROR_INVALID_PARAMETER;
   *out_tail_samples = engine->engine.tail_samples();
   return SONARE_OK;
+  SONARE_C_CATCH
 }

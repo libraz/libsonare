@@ -814,6 +814,7 @@ SonareError sonare_split_note(const float* samples, size_t length, int sample_ra
                               const float* envelopes, size_t envelope_count, size_t index,
                               int32_t frame, SonareNoteObjectsResult* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   // Refused and cleared before the gate, so the stub below leaves it defined too.
   if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   clear_note_objects_result(*out);
@@ -833,6 +834,7 @@ SonareError sonare_split_note(const float* samples, size_t length, int sample_ra
                               frame_rate, config, notes, note_count, envelopes, envelope_count,
                               index, frame, out);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_merge_notes(const float* samples, size_t length, int sample_rate,
@@ -843,6 +845,7 @@ SonareError sonare_merge_notes(const float* samples, size_t length, int sample_r
                                const float* envelopes, size_t envelope_count, size_t first,
                                size_t last, SonareNoteObjectsResult* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   // Refused and cleared before the gate, so the stub below leaves it defined too.
   if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   clear_note_objects_result(*out);
@@ -862,6 +865,7 @@ SonareError sonare_merge_notes(const float* samples, size_t length, int sample_r
                               frame_rate, config, notes, note_count, envelopes, envelope_count,
                               first, last, out);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_note_target_assign_config_default(SonareNoteTargetAssignConfig* config) {
@@ -1016,6 +1020,7 @@ SonareError sonare_render_percussive_events(const float* samples, size_t length,
                                             const SonarePercussiveRenderConfig* config, float** out,
                                             size_t* out_length) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   if (events == nullptr && count != 0) return SONARE_ERROR_INVALID_PARAMETER;
 
@@ -1052,6 +1057,7 @@ SonareError sonare_render_percussive_events(const float* samples, size_t length,
         editing::event_model::render_percussive_events(audio, core_events, render_config);
     return copy_audio_result(result, out, out_length);
   });
+  SONARE_C_CATCH
 }
 
 SonareError sonare_note_move(const float* samples, size_t length, int sample_rate, int onset_sample,

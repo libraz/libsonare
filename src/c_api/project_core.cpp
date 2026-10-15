@@ -220,6 +220,7 @@ SonareError sonare_project_unresolved_audio_source_by_index(const SonareProject*
 SonareError sonare_project_set_sample_rate(SonareProject* project, double sample_rate) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (!project) return SONARE_ERROR_INVALID_PARAMETER;
   if (!sonare::is_supported_sample_rate(sample_rate)) {
     // Name the rule, read from the constants the predicate checks, so a facade can
@@ -230,7 +231,6 @@ SonareError sonare_project_set_sample_rate(SonareProject* project, double sample
     set_last_error(SONARE_ERROR_INVALID_PARAMETER, message.c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   // Through the history like every other setter. Set directly on the Project it
   // owns, this was the one piece of public project state undo could not reach:
   // addTrack() then setSampleRate(96000) then undo() removed the track and left
@@ -286,40 +286,48 @@ SonareError project_count(const SonareProject* project, size_t* out_count, Count
 
 SonareError sonare_project_track_count(const SonareProject* project, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   return project_count(project, out_count, [](const arr::Project& p) { return p.tracks().size(); });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_project_clip_count(const SonareProject* project, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   return project_count(project, out_count, [](const arr::Project& p) { return p.clips().size(); });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_project_source_count(const SonareProject* project, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   return project_count(project, out_count,
                        [](const arr::Project& p) { return p.sources().size(); });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_project_marker_count(const SonareProject* project, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   return project_count(project, out_count,
                        [](const arr::Project& p) { return p.markers().size(); });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_project_marker_by_index(const SonareProject* project, size_t index,
@@ -442,6 +450,7 @@ SonareError sonare_project_clip_by_index(const SonareProject* project, size_t in
 SonareError sonare_project_source_by_index(const SonareProject* project, size_t index,
                                            SonareProjectSource* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || !out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
@@ -462,6 +471,7 @@ SonareError sonare_project_source_by_index(const SonareProject* project, size_t 
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(project, index, out);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_project_get_audio_source_metadata(const SonareProject* project,
@@ -537,22 +547,26 @@ SonareError sonare_project_marker_name_by_index(const SonareProject* project, si
 
 SonareError sonare_project_tempo_segment_count(const SonareProject* project, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   return project_count(project, out_count,
                        [](const arr::Project& p) { return p.tempo_segments().size(); });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_project_time_signature_count(const SonareProject* project, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   return project_count(project, out_count,
                        [](const arr::Project& p) { return p.time_signatures().size(); });
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project, out_count);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_project_compile(SonareProject* project, SonareProjectCompileResult* out) {

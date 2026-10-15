@@ -444,6 +444,7 @@ SonareError sonare_mastering_repair_declick_stereo(const float* left, const floa
                                                    const SonareDeclickConfig* config,
                                                    SonareDeclickStereoResult* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   return run_stereo(left, right, length, sample_rate, out, [&](const Audio& l, const Audio& r) {
     const auto result =
         sonare::mastering::repair::declick_stereo(l, r, to_cpp_declick_config(config));
@@ -451,6 +452,7 @@ SonareError sonare_mastering_repair_declick_stereo(const float* left, const floa
     out->right_report = to_c_declick_report(result.right_report);
     fill_stereo_channels(result, out);
   });
+  SONARE_C_CATCH
 }
 
 SonareError sonare_mastering_repair_detect_clicks(const float* samples, size_t length,
@@ -483,6 +485,7 @@ SonareError sonare_mastering_repair_denoise_classical_stereo(
     const float* left, const float* right, size_t length, int sample_rate,
     const SonareDenoiseClassicalConfig* config, SonareDenoiseStereoResult* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   // Mirrors the mono entry's pre-check so the two agree on which configs they
   // reject before the core ever sees them.
   return run_stereo(denoise_config_valid(config), left, right, length, sample_rate, out,
@@ -492,6 +495,7 @@ SonareError sonare_mastering_repair_denoise_classical_stereo(
                       out->report = to_c_denoise_report(result.report);
                       fill_stereo_channels(result, out);
                     });
+  SONARE_C_CATCH
 }
 
 SonareError sonare_mastering_repair_denoise_classical_linked(
@@ -559,6 +563,7 @@ SonareError sonare_mastering_repair_declip_stereo(const float* left, const float
                                                   const SonareDeclipConfig* config,
                                                   SonareDeclipStereoResult* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   return run_stereo(left, right, length, sample_rate, out, [&](const Audio& l, const Audio& r) {
     const auto result =
         sonare::mastering::repair::declip_stereo(l, r, to_cpp_declip_config(config));
@@ -566,6 +571,7 @@ SonareError sonare_mastering_repair_declip_stereo(const float* left, const float
     out->right_report = to_c_declip_report(result.right_report);
     fill_stereo_channels(result, out);
   });
+  SONARE_C_CATCH
 }
 
 SonareError sonare_mastering_repair_detect_clipping(const float* samples, size_t length,
@@ -596,6 +602,7 @@ SonareError sonare_mastering_repair_decrackle_stereo(const float* left, const fl
                                                      const SonareDecrackleConfig* config,
                                                      SonareDecrackleStereoResult* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   return run_stereo(left, right, length, sample_rate, out, [&](const Audio& l, const Audio& r) {
     const auto result =
         sonare::mastering::repair::decrackle_stereo(l, r, to_cpp_decrackle_config(config));
@@ -603,6 +610,7 @@ SonareError sonare_mastering_repair_decrackle_stereo(const float* left, const fl
     out->right_report = to_c_decrackle_report(result.right_report);
     fill_stereo_channels(result, out);
   });
+  SONARE_C_CATCH
 }
 
 SonareError sonare_mastering_repair_detect_crackle(const float* samples, size_t length,
@@ -633,12 +641,14 @@ SonareError sonare_mastering_repair_dehum_stereo(const float* left, const float*
                                                  const SonareDehumConfig* config,
                                                  SonareDehumStereoResult* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   return run_stereo(left, right, length, sample_rate, out, [&](const Audio& l, const Audio& r) {
     const auto result = sonare::mastering::repair::dehum_stereo(l, r, to_cpp_dehum_config(config));
     out->left_report = to_c_dehum_report(result.left_report);
     out->right_report = to_c_dehum_report(result.right_report);
     fill_stereo_channels(result, out);
   });
+  SONARE_C_CATCH
 }
 
 SonareError sonare_mastering_repair_detect_hum(const float* samples, size_t length, int sample_rate,
@@ -670,6 +680,7 @@ SonareError sonare_mastering_repair_dereverb_classical_stereo(
     const float* left, const float* right, size_t length, int sample_rate,
     const SonareDereverbClassicalConfig* config, SonareDereverbStereoResult* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   // Mirrors the mono entry's pre-check, which bounds hop_length by n_fft where
   // the denoise pair only requires it positive.
   return run_stereo(dereverb_config_valid(config), left, right, length, sample_rate, out,
@@ -679,6 +690,7 @@ SonareError sonare_mastering_repair_dereverb_classical_stereo(
                       out->report = to_c_dereverb_report(result.report);
                       fill_stereo_channels(result, out);
                     });
+  SONARE_C_CATCH
 }
 
 SonareError sonare_mastering_repair_dereverb_classical_linked(
@@ -729,6 +741,7 @@ SonareError sonare_mastering_repair_trim_silence_stereo(const float* left, const
                                                         const SonareTrimSilenceConfig* config,
                                                         SonareTrimSilenceStereoResult* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   return run_stereo(left, right, length, sample_rate, out, [&](const Audio& l, const Audio& r) {
     const auto result =
         sonare::mastering::repair::trim_silence_stereo(l, r, to_cpp_trim_silence_config(config));
@@ -740,6 +753,7 @@ SonareError sonare_mastering_repair_trim_silence_stereo(const float* left, const
     // the empty-result policy the mono entries take through copy_audio_result.
     if (!result.left.empty()) fill_stereo_channels(result, out);
   });
+  SONARE_C_CATCH
 }
 
 SonareError sonare_mastering_repair_detect_trim_range(const float* samples, size_t length,

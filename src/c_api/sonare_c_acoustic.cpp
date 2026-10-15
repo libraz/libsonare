@@ -129,6 +129,7 @@ const char* sonare_acoustic_mode_name(int mode) {
 SonareError sonare_room_geometry_from_estimate(const SonareRoomEstimate* estimate,
                                                SonareRirSynthConfig* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!estimate || !out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = SonareRirSynthConfig{};
   if (!sonare::acoustic::estimated_dimensions_measured(estimate->length_m, estimate->width_m,
@@ -157,6 +158,7 @@ SonareError sonare_room_geometry_from_estimate(const SonareRoomEstimate* estimat
   out->listener_y = placement.listener.y;
   out->listener_z = placement.listener.z;
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample_rate,

@@ -294,6 +294,8 @@ SonareError run_assist(SonareProject* project, const char* request_json, bool ap
 #endif
 
 const char* sonare_assist_module_ids(void) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_ASSIST)
   static thread_local std::string ids;
   ids = std::string(kGeneratorId) + "\n" + kHarmonizerId;
@@ -301,6 +303,7 @@ const char* sonare_assist_module_ids(void) {
 #else
   return nullptr;
 #endif
+  SONARE_C_CATCH_RETURN("")
 }
 
 SonareError sonare_project_assist_preview_json(const SonareProject* project,

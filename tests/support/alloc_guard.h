@@ -86,6 +86,41 @@ class AllocationFailureAtGuard {
   AllocationFailureAtGuard& operator=(const AllocationFailureAtGuard&) = delete;
 };
 
+// Live-block balance for leak checks around one call: an allocation observed
+// while armed adds one, a release subtracts one, so a call that frees everything
+// it took leaves the balance at zero.
+inline std::atomic<bool> g_track_live_blocks{false};
+inline std::atomic<long long> g_live_blocks{0};
+
+inline void note_live_allocation() noexcept {
+  if (g_track_live_blocks.load(std::memory_order_relaxed)) {
+    g_live_blocks.fetch_add(1, std::memory_order_relaxed);
+  }
+}
+
+inline void note_live_release(const void* ptr) noexcept {
+  if (ptr != nullptr && g_track_live_blocks.load(std::memory_order_relaxed)) {
+    g_live_blocks.fetch_sub(1, std::memory_order_relaxed);
+  }
+}
+
+/// Scoped guard: zeroes and arms the live-block balance; balance() reports the
+/// blocks allocated and not yet released while armed. A release of a block
+/// taken before arming also counts, so warm up anything that frees on first
+/// use before constructing the guard.
+class LiveBlockGuard {
+ public:
+  LiveBlockGuard() {
+    g_live_blocks.store(0, std::memory_order_relaxed);
+    g_track_live_blocks.store(true, std::memory_order_relaxed);
+  }
+  ~LiveBlockGuard() { g_track_live_blocks.store(false, std::memory_order_relaxed); }
+  long long balance() const noexcept { return g_live_blocks.load(std::memory_order_relaxed); }
+
+  LiveBlockGuard(const LiveBlockGuard&) = delete;
+  LiveBlockGuard& operator=(const LiveBlockGuard&) = delete;
+};
+
 /// Scoped guard: zeroes and arms the global allocation counter on construction,
 /// disarms on destruction. count() reports allocations observed while armed.
 class AllocationGuard {

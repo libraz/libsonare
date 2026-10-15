@@ -122,12 +122,14 @@ SonareError sonare_chroma(const float* samples, size_t length, int sample_rate, 
 
 SonareError sonare_chroma_cens(const float* samples, size_t length, int sample_rate, int hop_length,
                                int n_chroma, SonareChromaResult* out) {
+  SONARE_C_API_ENTRY;
   return sonare_chroma_cens_ex(samples, length, sample_rate, hop_length, n_chroma, 36, out);
 }
 
 SonareError sonare_chroma_cens_ex(const float* samples, size_t length, int sample_rate,
                                   int hop_length, int n_chroma, int bins_per_octave,
                                   SonareChromaResult* out) {
+  SONARE_C_API_ENTRY;
   return run_chroma_cqt_family<ChromaCensConfig>(
       samples, length, sample_rate, hop_length, n_chroma, bins_per_octave, out,
       [](const Audio& audio, const ChromaCensConfig& config) {
@@ -137,12 +139,14 @@ SonareError sonare_chroma_cens_ex(const float* samples, size_t length, int sampl
 
 SonareError sonare_chroma_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
                               int n_chroma, SonareChromaResult* out) {
+  SONARE_C_API_ENTRY;
   return sonare_chroma_cqt_ex(samples, length, sample_rate, hop_length, n_chroma, 36, out);
 }
 
 SonareError sonare_chroma_cqt_ex(const float* samples, size_t length, int sample_rate,
                                  int hop_length, int n_chroma, int bins_per_octave,
                                  SonareChromaResult* out) {
+  SONARE_C_API_ENTRY;
   return run_chroma_cqt_family<ChromaCqtConfig>(
       samples, length, sample_rate, hop_length, n_chroma, bins_per_octave, out,
       [](const Audio& audio, const ChromaCqtConfig& config) { return chroma_cqt(audio, config); });

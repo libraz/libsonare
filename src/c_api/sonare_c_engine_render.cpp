@@ -176,6 +176,7 @@ SonareError sonare_engine_render_offline_ex(SonareRealtimeEngine* engine, float*
 
 SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* const* out,
                                          int num_channels, int64_t total_frames, int block_size) {
+  SONARE_C_API_ENTRY;
   return sonare_engine_render_offline_ex(engine, out, num_channels, total_frames, block_size, 1);
 }
 

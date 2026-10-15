@@ -150,13 +150,13 @@ SonareError sonare_project_set_tempo_segments(SonareProject* project,
                                               size_t segment_count) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (!project || (segment_count > 0 && !segments) || segment_count > kMaxBufferSize) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   std::vector<sonare::transport::TempoSegment> out;
   // The staging vector is sized from a caller-supplied count, so its allocation
   // has to sit inside the try or a bad_alloc crosses the extern "C" boundary.
-  SONARE_C_TRY
   out.reserve(segment_count);
   double previous_start_ppq = -1.0;
   for (size_t i = 0; i < segment_count; ++i) {
@@ -194,13 +194,13 @@ SonareError sonare_project_set_time_signatures(SonareProject* project,
                                                size_t segment_count) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (!project || (segment_count > 0 && !segments) || segment_count > kMaxBufferSize) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   std::vector<sonare::transport::TimeSignatureSegment> out;
   // Same reason as sonare_project_set_tempo_segments: a caller-sized allocation
   // must not throw outside the try.
-  SONARE_C_TRY
   out.reserve(segment_count);
   double previous_start_ppq = -1.0;
   for (size_t i = 0; i < segment_count; ++i) {
@@ -383,13 +383,13 @@ SonareError sonare_project_set_warp_map(SonareProject* project,
                                         const SonareProjectWarpMapDesc* desc) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (!project || !desc || desc->id == 0 || desc->anchor_count < 2 || !desc->anchors ||
       desc->anchor_count > kMaxBufferSize) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   std::vector<arr::WarpAnchorRef> anchors;
   // Same reason as the two segment setters: anchor_count is caller-supplied.
-  SONARE_C_TRY
   anchors.reserve(desc->anchor_count);
   for (size_t i = 0; i < desc->anchor_count; ++i) {
     const SonareProjectWarpAnchor& in = desc->anchors[i];
@@ -629,6 +629,7 @@ SonareError sonare_project_edit_automation_lane(SonareProject* project, uint32_t
                                                 const SonareAutomationLaneDesc* desc) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (!project || track_id == 0 || target_param_id == 0 || !desc) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -640,7 +641,6 @@ SonareError sonare_project_edit_automation_lane(SonareProject* project, uint32_t
   if (found == track->automation_lanes.end()) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   sonare::automation::AutomationLane lane;
   const SonareError err = automation_lane_from_desc(desc, &lane);
   if (err != SONARE_OK) return err;
@@ -664,6 +664,7 @@ SonareError sonare_project_edit_automation_lane_ex(SonareProject* project, uint3
                                                    const SonareAutomationLaneDescEx* desc) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (!project || track_id == 0 || target_param_id == 0 || !desc) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -673,7 +674,6 @@ SonareError sonare_project_edit_automation_lane_ex(SonareProject* project, uint3
       track->automation_lanes.begin(), track->automation_lanes.end(),
       [target_param_id](const auto& lane) { return lane.target_param_id() == target_param_id; });
   if (found == track->automation_lanes.end()) return SONARE_ERROR_INVALID_PARAMETER;
-  SONARE_C_TRY
   sonare::automation::AutomationLane lane;
   const SonareError err = automation_lane_from_desc_ex(desc, &lane);
   if (err != SONARE_OK) return err;
@@ -692,6 +692,7 @@ SonareError sonare_project_remove_automation_lane(SonareProject* project, uint32
                                                   uint32_t target_param_id) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
   if (!project || track_id == 0 || target_param_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
   const arr::Track* track = project->history.project().find_track(track_id);
   if (track == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
@@ -701,7 +702,6 @@ SonareError sonare_project_remove_automation_lane(SonareProject* project, uint32
   if (found == track->automation_lanes.end()) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   auto command = std::make_unique<arr::RemoveAutomationLane>(track_id, target_param_id);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   return SONARE_OK;

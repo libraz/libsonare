@@ -188,6 +188,7 @@ SonareError sonare_master_audio_with_progress(const char* preset_name, const flo
                                               size_t override_count,
                                               SonareMasteringProgressCallback callback,
                                               void* user_data, SonareMasteringChainResult* out) {
+  SONARE_C_API_ENTRY;
   return sonare_master_audio_with_progress_ex(preset_name, samples, length, sample_rate, overrides,
                                               override_count, callback, user_data, out, nullptr,
                                               nullptr);
@@ -198,6 +199,7 @@ SonareError sonare_master_audio_stereo_with_progress(
     const SonareMasteringParam* overrides, size_t override_count,
     SonareMasteringProgressCallback callback, void* user_data,
     SonareMasteringChainStereoResult* out) {
+  SONARE_C_API_ENTRY;
   return sonare_master_audio_stereo_with_progress_ex(preset_name, left, right, length, sample_rate,
                                                      overrides, override_count, callback, user_data,
                                                      out, nullptr, nullptr);

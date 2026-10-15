@@ -417,6 +417,7 @@ SonareError sonare_metering_spectrum_frame(const float* samples, size_t length, 
                                            int apply_octave_smoothing, int octave_fraction,
                                            float db_ref, float db_amin, SonareSpectrumResult* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   std::memset(out, 0, sizeof(*out));
   metering::SpectrumConfig cfg;
@@ -447,6 +448,7 @@ SonareError sonare_metering_spectrum_frame(const float* samples, size_t length, 
     return run_prevalidated_offline(&kZeroSample, 1, sample_rate, run_frame);
   }
   return run_prevalidated_offline(samples + start, count, sample_rate, run_frame);
+  SONARE_C_CATCH
 }
 
 void sonare_free_spectrum_result(SonareSpectrumResult* result) {
@@ -660,6 +662,7 @@ SonareError sonare_waveform_peak_pyramid(const float* samples, size_t frames, in
                                          const size_t* samples_per_bucket_levels,
                                          size_t level_count, SonareWaveformPeakPyramidResult* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!out || !samples_per_bucket_levels || level_count == 0) return SONARE_ERROR_INVALID_PARAMETER;
   std::memset(out, 0, sizeof(*out));
   SonareError err = validate_interleaved_audio(samples, frames, channels);
@@ -668,7 +671,6 @@ SonareError sonare_waveform_peak_pyramid(const float* samples, size_t frames, in
   for (size_t level : levels) {
     if (level == 0) return SONARE_ERROR_INVALID_PARAMETER;
   }
-  SONARE_C_TRY
   const auto pyramid = metering::waveform_peak_pyramid(samples, frames, channels, levels);
   WaveformPyramidLevels c_levels(pyramid.size());
   for (size_t i = 0; i < pyramid.size(); ++i) {
@@ -791,6 +793,7 @@ SonareError sonare_scale_pitch_class_enabled(int root, uint16_t mode_mask, int p
 
 SonareError sonare_scale_mask_for_mode(int root, SonareMode mode, uint16_t* out_mask) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!out_mask) return SONARE_ERROR_INVALID_PARAMETER;
   *out_mask = 0;
   if (root < SONARE_PITCH_C || root > SONARE_PITCH_B || mode < SONARE_MODE_MAJOR ||
@@ -799,4 +802,5 @@ SonareError sonare_scale_mask_for_mode(int root, SonareMode mode, uint16_t* out_
   }
   *out_mask = scale_mask_for_mode(static_cast<Mode>(mode));
   return SONARE_OK;
+  SONARE_C_CATCH
 }

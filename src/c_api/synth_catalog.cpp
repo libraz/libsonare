@@ -26,6 +26,8 @@
 #endif
 
 const char* sonare_synth_preset_names(void) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   static const std::string kNames = [] {
     std::string names;
@@ -39,9 +41,12 @@ const char* sonare_synth_preset_names(void) {
 #else
   return "";
 #endif
+  SONARE_C_CATCH_RETURN("")
 }
 
 const char* sonare_synth_enum_names(int kind) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   namespace names = sonare::c_api::synth_names;
   static const std::vector<std::string> kJoined = [] {
@@ -59,9 +64,10 @@ const char* sonare_synth_enum_names(int kind) {
   if (kind < 0 || static_cast<size_t>(kind) >= kJoined.size()) return "";
   return kJoined[static_cast<size_t>(kind)].c_str();
 #else
-  (void)kind;
+  static_cast<void>(kind);
   return "";
 #endif
+  SONARE_C_CATCH_RETURN("")
 }
 
 int sonare_synth_builtin_waveform_from_name(const char* name) {
@@ -295,6 +301,7 @@ std::string synth_patch_param_info_json() {
 #endif
 
 const char* sonare_synth_engine_param_info(int engine_mode) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
   // Argument-dependent: recomputed into a thread-local on every call.
@@ -332,6 +339,7 @@ const char* sonare_synth_engine_param_info(int engine_mode) {
 }
 
 const char* sonare_synth_patch_param_info(void) {
+  SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   SONARE_C_TRY
   static const std::string kInfo = synth_patch_param_info_json();

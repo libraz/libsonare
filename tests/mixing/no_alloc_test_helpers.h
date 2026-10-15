@@ -59,6 +59,8 @@ namespace {
 using sonare::test::allocation_should_fail;
 using sonare::test::AllocationGuard;
 using sonare::test::note_allocation;
+using sonare::test::note_live_allocation;
+using sonare::test::note_live_release;
 
 [[maybe_unused]] void* allocate_bytes(std::size_t size) {
   note_allocation();
@@ -66,6 +68,7 @@ using sonare::test::note_allocation;
     throw std::bad_alloc();
   }
   if (void* ptr = std::malloc(size == 0 ? 1 : size)) {
+    note_live_allocation();
     return ptr;
   }
   throw std::bad_alloc();
@@ -81,6 +84,7 @@ using sonare::test::note_allocation;
 #if defined(_WIN32)
   ptr = _aligned_malloc(actual_size, alignment);
   if (ptr != nullptr) {
+    note_live_allocation();
     return ptr;
   }
 #else
@@ -88,16 +92,23 @@ using sonare::test::note_allocation;
     ptr = nullptr;
   }
   if (ptr != nullptr) {
+    note_live_allocation();
     return ptr;
   }
 #endif
   throw std::bad_alloc();
 }
 
+[[maybe_unused]] void release_bytes(void* ptr) noexcept {
+  note_live_release(ptr);
+  std::free(ptr);
+}
+
 // Aligned allocations must be released with the matching deallocator: on Windows
 // _aligned_malloc memory requires _aligned_free, whereas posix_memalign memory is
 // freed with std::free.
 [[maybe_unused]] void aligned_free(void* ptr) noexcept {
+  note_live_release(ptr);
 #if defined(_WIN32)
   _aligned_free(ptr);
 #else

@@ -94,6 +94,8 @@ sonare::midi::NoteTracking* note_tracking_field(sonare::midi::ControllerProfile*
 #endif
 
 const char* sonare_controller_profile_names(void) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   static const std::string kNames = [] {
     std::string names;
@@ -109,6 +111,7 @@ const char* sonare_controller_profile_names(void) {
 #else
   return "";
 #endif
+  SONARE_C_CATCH_RETURN("")
 }
 
 SonareError sonare_engine_set_controller_profile(SonareRealtimeEngine* engine,

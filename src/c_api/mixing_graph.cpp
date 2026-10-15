@@ -299,6 +299,7 @@ class BusNode final : public sonare::rt::ProcessorBase {
 SonareError sonare_mixer_bus_meter(SonareMixer* mixer, const char* bus_id,
                                    SonareMixMeterSnapshot* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!mixer || !bus_id || bus_id[0] == '\0' || !out) return SONARE_ERROR_INVALID_PARAMETER;
   if (mixer->compiled_dirty) return SONARE_ERROR_INVALID_STATE;
   sonare::graph::Node* node = mixer->graph.node(bus_id);
@@ -307,6 +308,7 @@ SonareError sonare_mixer_bus_meter(SonareMixer* mixer, const char* bus_id,
   if (!bus) return SONARE_ERROR_INVALID_PARAMETER;
   sonare_c_mixing_detail::copy_meter_snapshot(bus->meter_snapshot(), out);
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_mixer_bus_non_finite_discard_count(const SonareMixer* mixer, const char* bus_id,

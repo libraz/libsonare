@@ -65,6 +65,7 @@ SonareError sonare_cqt_to_audio_checked(const float* magnitude, size_t input_len
 SonareError sonare_cqt_to_audio(const float* magnitude, int n_bins, int n_frames, int sample_rate,
                                 int hop_length, float fmin, int bins_per_octave, int n_iter,
                                 float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
   return sonare_cqt_to_audio_checked(magnitude, inverse_input_length(n_bins, n_frames), n_bins,
                                      n_frames, sample_rate, hop_length, fmin, bins_per_octave,
                                      n_iter, out, out_length);
@@ -99,6 +100,7 @@ SonareError sonare_vqt_to_audio_checked(const float* magnitude, size_t input_len
 SonareError sonare_vqt_to_audio(const float* magnitude, int n_bins, int n_frames, int sample_rate,
                                 int hop_length, float fmin, int bins_per_octave, float gamma,
                                 int n_iter, float** out, size_t* out_length) {
+  SONARE_C_API_ENTRY;
   return sonare_vqt_to_audio_checked(magnitude, inverse_input_length(n_bins, n_frames), n_bins,
                                      n_frames, sample_rate, hop_length, fmin, bins_per_octave,
                                      gamma, n_iter, out, out_length);

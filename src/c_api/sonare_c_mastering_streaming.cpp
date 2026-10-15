@@ -300,188 +300,192 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
         "streaming mastering chain: params must not be null when param_count is non-zero");
     return nullptr;
   }
-  try {
-    auto cpp_params = to_params(params, param_count);
-    auto config = sonare::mastering::api::parse_streaming_chain_config_params(cpp_params.data(),
-                                                                              cpp_params.size());
-    std::unique_ptr<sonare::mastering::api::StreamingMasteringChain> chain;
-    if (std::isnan(loudness_static_gain_db)) {
-      // Reproduce the throw-on-loudness behaviour of the non-_ex create.
-      chain = std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config));
-    } else {
-      sonare::mastering::api::StreamingMasteringChainOptions options;
-      options.loudness_static_gain_db = loudness_static_gain_db;
-      options.loudness_static_gain_peak_db = loudness_static_gain_peak_db;
-      chain = std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config),
-                                                                                options);
-    }
-    auto* handle = new SonareStreamingMasteringChain;
-    handle->chain = std::move(chain);
-    return handle;
-    SONARE_C_CATCH_RETURN(nullptr)
+  SONARE_C_TRY
+  auto cpp_params = to_params(params, param_count);
+  auto config = sonare::mastering::api::parse_streaming_chain_config_params(cpp_params.data(),
+                                                                            cpp_params.size());
+  std::unique_ptr<sonare::mastering::api::StreamingMasteringChain> chain;
+  if (std::isnan(loudness_static_gain_db)) {
+    // Reproduce the throw-on-loudness behaviour of the non-_ex create.
+    chain = std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config));
+  } else {
+    sonare::mastering::api::StreamingMasteringChainOptions options;
+    options.loudness_static_gain_db = loudness_static_gain_db;
+    options.loudness_static_gain_peak_db = loudness_static_gain_peak_db;
+    chain = std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config),
+                                                                              options);
   }
+  auto* handle = new SonareStreamingMasteringChain;
+  handle->chain = std::move(chain);
+  return handle;
+  SONARE_C_CATCH_RETURN(nullptr)
+}
 
-  SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create(
-      const SonareMasteringParam* params, size_t param_count) {
-    return sonare_streaming_mastering_chain_create_ex(params, param_count,
-                                                      std::numeric_limits<float>::quiet_NaN(),
-                                                      std::numeric_limits<float>::quiet_NaN());
+SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create(
+    const SonareMasteringParam* params, size_t param_count) {
+  SONARE_C_API_ENTRY;
+  return sonare_streaming_mastering_chain_create_ex(params, param_count,
+                                                    std::numeric_limits<float>::quiet_NaN(),
+                                                    std::numeric_limits<float>::quiet_NaN());
+}
+
+SonareError sonare_streaming_mastering_chain_prepare(SonareStreamingMasteringChain* handle,
+                                                     int sample_rate, int max_block_size,
+                                                     int num_channels) {
+  SONARE_C_API_ENTRY;
+  if (!handle || !handle->chain) return SONARE_ERROR_INVALID_PARAMETER;
+  if (sample_rate <= 0 || max_block_size <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  handle->chain->prepare(static_cast<double>(sample_rate), max_block_size, num_channels);
+  handle->max_block_size = max_block_size;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_streaming_mastering_chain_process_mono(SonareStreamingMasteringChain* handle,
+                                                          float* samples, size_t num_samples) {
+  SONARE_C_API_ENTRY;
+  if (!handle || !handle->chain || (!samples && num_samples > 0)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
-
-  SonareError sonare_streaming_mastering_chain_prepare(SonareStreamingMasteringChain * handle,
-                                                       int sample_rate, int max_block_size,
-                                                       int num_channels) {
-    SONARE_C_API_ENTRY;
-    if (!handle || !handle->chain) return SONARE_ERROR_INVALID_PARAMETER;
-    if (sample_rate <= 0 || max_block_size <= 0) return SONARE_ERROR_INVALID_PARAMETER;
-    SONARE_C_TRY
-    handle->chain->prepare(static_cast<double>(sample_rate), max_block_size, num_channels);
-    handle->max_block_size = max_block_size;
-    return SONARE_OK;
-    SONARE_C_CATCH
+  if (num_samples == 0) return SONARE_OK;
+  if (const SonareError bounds =
+          sonare_c_detail::check_streaming_block_bounds(handle->max_block_size, num_samples);
+      bounds != SONARE_OK) {
+    return bounds;
   }
-
-  SonareError sonare_streaming_mastering_chain_process_mono(SonareStreamingMasteringChain * handle,
-                                                            float* samples, size_t num_samples) {
-    SONARE_C_API_ENTRY;
-    if (!handle || !handle->chain || (!samples && num_samples > 0)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    if (num_samples == 0) return SONARE_OK;
-    if (const SonareError bounds =
-            sonare_c_detail::check_streaming_block_bounds(handle->max_block_size, num_samples);
-        bounds != SONARE_OK) {
-      return bounds;
-    }
-    if (!sonare::numeric::all_finite(samples, num_samples)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    SONARE_C_TRY
-    float* channels[] = {samples};
-    handle->chain->process_block(channels, 1, static_cast<int>(num_samples));
-    return SONARE_OK;
-    SONARE_C_CATCH
+  if (!sonare::numeric::all_finite(samples, num_samples)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
+  SONARE_C_TRY
+  float* channels[] = {samples};
+  handle->chain->process_block(channels, 1, static_cast<int>(num_samples));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
 
-  SonareError sonare_streaming_mastering_chain_process_stereo(
-      SonareStreamingMasteringChain * handle, float* left, float* right, size_t num_samples) {
-    SONARE_C_API_ENTRY;
-    if (!handle || !handle->chain || (!left && num_samples > 0) || (!right && num_samples > 0)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    if (num_samples == 0) return SONARE_OK;
-    if (const SonareError bounds =
-            sonare_c_detail::check_streaming_block_bounds(handle->max_block_size, num_samples);
-        bounds != SONARE_OK) {
-      return bounds;
-    }
-    if (!sonare::numeric::all_finite(left, num_samples) ||
-        !sonare::numeric::all_finite(right, num_samples)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    SONARE_C_TRY
-    float* channels[] = {left, right};
-    handle->chain->process_block(channels, 2, static_cast<int>(num_samples));
-    return SONARE_OK;
-    SONARE_C_CATCH
+SonareError sonare_streaming_mastering_chain_process_stereo(SonareStreamingMasteringChain* handle,
+                                                            float* left, float* right,
+                                                            size_t num_samples) {
+  SONARE_C_API_ENTRY;
+  if (!handle || !handle->chain || (!left && num_samples > 0) || (!right && num_samples > 0)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
+  if (num_samples == 0) return SONARE_OK;
+  if (const SonareError bounds =
+          sonare_c_detail::check_streaming_block_bounds(handle->max_block_size, num_samples);
+      bounds != SONARE_OK) {
+    return bounds;
+  }
+  if (!sonare::numeric::all_finite(left, num_samples) ||
+      !sonare::numeric::all_finite(right, num_samples)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  float* channels[] = {left, right};
+  handle->chain->process_block(channels, 2, static_cast<int>(num_samples));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
 
-  SonareError sonare_streaming_mastering_chain_flush_mono(SonareStreamingMasteringChain * handle,
-                                                          float* samples, size_t capacity,
+SonareError sonare_streaming_mastering_chain_flush_mono(SonareStreamingMasteringChain* handle,
+                                                        float* samples, size_t capacity,
+                                                        size_t* samples_written) {
+  SONARE_C_API_ENTRY;
+  if (!handle || !handle->chain || !samples_written || (!samples && capacity > 0) ||
+      capacity > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  *samples_written = 0;
+  SONARE_C_TRY
+  float* channels[] = {samples};
+  const int written = handle->chain->flush(channels, 1, static_cast<int>(capacity));
+  *samples_written = static_cast<size_t>(written);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_streaming_mastering_chain_flush_stereo(SonareStreamingMasteringChain* handle,
+                                                          float* left, float* right,
+                                                          size_t capacity,
                                                           size_t* samples_written) {
-    SONARE_C_API_ENTRY;
-    if (!handle || !handle->chain || !samples_written || (!samples && capacity > 0) ||
-        capacity > static_cast<size_t>(std::numeric_limits<int>::max())) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    *samples_written = 0;
-    SONARE_C_TRY
-    float* channels[] = {samples};
-    const int written = handle->chain->flush(channels, 1, static_cast<int>(capacity));
-    *samples_written = static_cast<size_t>(written);
-    return SONARE_OK;
-    SONARE_C_CATCH
+  SONARE_C_API_ENTRY;
+  if (!handle || !handle->chain || !samples_written || (!left && capacity > 0) ||
+      (!right && capacity > 0) || capacity > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
+  *samples_written = 0;
+  SONARE_C_TRY
+  float* channels[] = {left, right};
+  const int written = handle->chain->flush(channels, 2, static_cast<int>(capacity));
+  *samples_written = static_cast<size_t>(written);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
 
-  SonareError sonare_streaming_mastering_chain_flush_stereo(
-      SonareStreamingMasteringChain * handle, float* left, float* right, size_t capacity,
-      size_t* samples_written) {
-    SONARE_C_API_ENTRY;
-    if (!handle || !handle->chain || !samples_written || (!left && capacity > 0) ||
-        (!right && capacity > 0) ||
-        capacity > static_cast<size_t>(std::numeric_limits<int>::max())) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    *samples_written = 0;
-    SONARE_C_TRY
-    float* channels[] = {left, right};
-    const int written = handle->chain->flush(channels, 2, static_cast<int>(capacity));
-    *samples_written = static_cast<size_t>(written);
-    return SONARE_OK;
-    SONARE_C_CATCH
-  }
+SonareError sonare_streaming_mastering_chain_reset(SonareStreamingMasteringChain* handle) {
+  SONARE_C_API_ENTRY;
+  if (!handle || !handle->chain) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  handle->chain->reset();
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
 
-  SonareError sonare_streaming_mastering_chain_reset(SonareStreamingMasteringChain * handle) {
-    SONARE_C_API_ENTRY;
-    if (!handle || !handle->chain) return SONARE_ERROR_INVALID_PARAMETER;
-    SONARE_C_TRY
-    handle->chain->reset();
-    return SONARE_OK;
-    SONARE_C_CATCH
+SonareError sonare_streaming_mastering_chain_set_parameter(SonareStreamingMasteringChain* handle,
+                                                           const char* key, double value) {
+  SONARE_C_API_ENTRY;
+  if (!handle || !handle->chain || !key) return SONARE_ERROR_INVALID_PARAMETER;
+  // Argument errors win over the unprepared-state error the core would raise first.
+  if (*key == '\0' || !std::isfinite(value) ||
+      std::fabs(value) > static_cast<double>(std::numeric_limits<float>::max())) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
+  SONARE_C_TRY
+  handle->chain->set_parameter(key, value);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
 
-  SonareError sonare_streaming_mastering_chain_set_parameter(SonareStreamingMasteringChain * handle,
-                                                             const char* key, double value) {
-    SONARE_C_API_ENTRY;
-    if (!handle || !handle->chain || !key) return SONARE_ERROR_INVALID_PARAMETER;
-    // Argument errors win over the unprepared-state error the core would raise first.
-    if (*key == '\0' || !std::isfinite(value) ||
-        std::fabs(value) > static_cast<double>(std::numeric_limits<float>::max())) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    SONARE_C_TRY
-    handle->chain->set_parameter(key, value);
-    return SONARE_OK;
-    SONARE_C_CATCH
-  }
+int sonare_streaming_mastering_chain_latency_samples(const SonareStreamingMasteringChain* handle) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
+  if (!handle || !handle->chain) return 0;
+  return handle->chain->latency_samples();
+  SONARE_C_CATCH_RETURN(0)
+}
 
-  int sonare_streaming_mastering_chain_latency_samples(
-      const SonareStreamingMasteringChain* handle) {
-    if (!handle || !handle->chain) return 0;
-    return handle->chain->latency_samples();
-  }
+const char* sonare_streaming_mastering_chain_stage_names(
+    const SonareStreamingMasteringChain* handle) {
+  SONARE_C_TRY
+  // Depends on the handle (and its prepare state), so it cannot use a
+  // program-lifetime cache: recompute into a thread-local each call (valid
+  // until the next call on the same thread, like sonare_mastering_insert_param_names).
+  static thread_local std::string names;
+  names.clear();
+  if (!handle || !handle->chain) return names.c_str();
+  return join_names(handle->chain->stage_names(), names);
+  SONARE_C_CATCH_RETURN(nullptr)
+}
 
-  const char* sonare_streaming_mastering_chain_stage_names(
-      const SonareStreamingMasteringChain* handle) {
-    SONARE_C_TRY
-    // Depends on the handle (and its prepare state), so it cannot use a
-    // program-lifetime cache: recompute into a thread-local each call (valid
-    // until the next call on the same thread, like sonare_mastering_insert_param_names).
-    static thread_local std::string names;
-    names.clear();
-    if (!handle || !handle->chain) return names.c_str();
-    return join_names(handle->chain->stage_names(), names);
-    SONARE_C_CATCH_RETURN(nullptr)
-  }
+SonareError sonare_streaming_mastering_chain_non_finite_substitution_count(
+    const SonareStreamingMasteringChain* handle, uint32_t* out_count) {
+  SONARE_C_API_ENTRY;
+  if (!handle || !handle->chain || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_count = handle->chain->non_finite_substitution_count();
+  return SONARE_OK;
+}
 
-  SonareError sonare_streaming_mastering_chain_non_finite_substitution_count(
-      const SonareStreamingMasteringChain* handle, uint32_t* out_count) {
-    SONARE_C_API_ENTRY;
-    if (!handle || !handle->chain || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
-    *out_count = handle->chain->non_finite_substitution_count();
-    return SONARE_OK;
-  }
+SonareError sonare_streaming_mastering_chain_non_finite_discard_count(
+    const SonareStreamingMasteringChain* handle, uint32_t* out_count) {
+  // A single relaxed atomic load, so it is safe to poll from the audio thread
+  // alongside the process entries; it touches no diagnostic string.
+  SONARE_C_RT_API_ENTRY;
+  if (!handle || !handle->chain || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_count = handle->chain->non_finite_discard_count();
+  return SONARE_OK;
+}
 
-  SonareError sonare_streaming_mastering_chain_non_finite_discard_count(
-      const SonareStreamingMasteringChain* handle, uint32_t* out_count) {
-    // A single relaxed atomic load, so it is safe to poll from the audio thread
-    // alongside the process entries; it touches no diagnostic string.
-    SONARE_C_RT_API_ENTRY;
-    if (!handle || !handle->chain || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
-    *out_count = handle->chain->non_finite_discard_count();
-    return SONARE_OK;
-  }
-
-  void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain * handle) {
-    delete handle;
-  }
+void sonare_streaming_mastering_chain_destroy(SonareStreamingMasteringChain* handle) {
+  delete handle;
+}

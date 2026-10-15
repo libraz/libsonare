@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <memory>
 
 #include "analysis/analysis_json.h"
 #include "analysis/meter_analyzer.h"
@@ -164,19 +165,20 @@ SonareError sonare_detect_key_candidates_with_extended_options(
 
     const auto candidates =
         quick::detect_key_candidates(audio.data(), audio.size(), audio.sample_rate(), config);
-    *out_count = candidates.size();
     if (candidates.empty()) {
       return SONARE_OK;
     }
 
-    auto* out = new SonareKeyCandidate[candidates.size()];
+    // The count is published with the array, never ahead of an allocation that can throw.
+    std::unique_ptr<SonareKeyCandidate[]> out(new SonareKeyCandidate[candidates.size()]);
     for (size_t i = 0; i < candidates.size(); ++i) {
       out[i].key.root = static_cast<SonarePitchClass>(candidates[i].key.root);
       out[i].key.mode = static_cast<SonareMode>(candidates[i].key.mode);
       out[i].key.confidence = candidates[i].key.confidence;
       out[i].correlation = candidates[i].correlation;
     }
-    *out_candidates = out;
+    *out_candidates = out.release();
+    *out_count = candidates.size();
     return SONARE_OK;
   });
 }
@@ -362,6 +364,7 @@ MusicAnalyzerConfig music_analyzer_config_from_options(const SonareMusicAnalyzeO
 
 SonareError sonare_analyze_json_ex(const float* samples, size_t length, int sample_rate,
                                    const SonareMusicAnalyzeOptions* options, char** out_json) {
+  SONARE_C_API_ENTRY;
   return sonare_analyze_json_ex_with_progress(samples, length, sample_rate, options, nullptr,
                                               nullptr, out_json, nullptr, nullptr);
 }
@@ -494,6 +497,7 @@ SonareError sonare_analyze_json(const float* samples, size_t length, int sample_
 SonareError sonare_analyze_json_with_progress(const float* samples, size_t length, int sample_rate,
                                               SonareAnalyzeProgressCallback callback,
                                               void* user_data, char** out_json) {
+  SONARE_C_API_ENTRY;
   return sonare_analyze_json_with_progress_ex(samples, length, sample_rate, callback, user_data,
                                               out_json, nullptr, nullptr);
 }

@@ -616,6 +616,7 @@ SonareError sonare_spectral_edit(const float* samples, size_t length, int sample
                                  const SonareSpectralRegionOp* ops, size_t n_ops, float** out,
                                  size_t* out_length) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   // ops may be NULL iff there are no ops (identity transform).
   if (ops == nullptr && n_ops != 0) return SONARE_ERROR_INVALID_PARAMETER;
@@ -647,4 +648,5 @@ SonareError sonare_spectral_edit(const float* samples, size_t length, int sample
                           [&](const Audio& audio) -> Audio {
                             return spectral_edit(audio, core_config, core_ops.data(), n_ops);
                           });
+  SONARE_C_CATCH
 }

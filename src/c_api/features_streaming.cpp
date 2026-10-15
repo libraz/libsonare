@@ -48,26 +48,6 @@ SonareStreamPatternScore* copy_pattern_scores(const std::vector<std::pair<std::s
   return release_array(buf);
 }
 
-template <typename Buffer, typename Frames>
-void copy_stream_frame_arrays(const Buffer& buffer, Frames* out) {
-  out->n_frames = static_cast<int>(buffer.n_frames);
-  out->n_mels = buffer.n_mels;
-  out->timestamps = copy_vector(buffer.timestamps);
-  out->mel = copy_vector(buffer.mel);
-  out->chroma = copy_vector(buffer.chroma);
-  out->onset_strength = copy_vector(buffer.onset_strength);
-  out->rms_energy = copy_vector(buffer.rms_energy);
-  out->spectral_centroid = copy_vector(buffer.spectral_centroid);
-  out->spectral_flatness = copy_vector(buffer.spectral_flatness);
-  if constexpr (std::is_same_v<std::remove_cv_t<Buffer>, FrameBuffer>) {
-    out->chord_root = copy_vector(buffer.chord_root);
-    out->chord_quality = copy_vector(buffer.chord_quality);
-    out->chord_confidence = copy_vector(buffer.chord_confidence);
-  }
-  out->feature_flags = buffer.feature_flags;
-  out->n_chroma = buffer.n_chroma;
-}
-
 template <typename Frames>
 void free_stream_frame_arrays(Frames* frames) {
   if (!frames) return;
@@ -84,6 +64,28 @@ void free_stream_frame_arrays(Frames* frames) {
     delete[] frames->chord_confidence;
   }
   *frames = {};
+}
+
+template <typename Buffer, typename Frames>
+void copy_stream_frame_arrays(const Buffer& buffer, Frames* out) {
+  sonare_c_detail::StagedOutput<Frames, &free_stream_frame_arrays<Frames>> staged;
+  staged->n_frames = static_cast<int>(buffer.n_frames);
+  staged->n_mels = buffer.n_mels;
+  staged->timestamps = copy_vector(buffer.timestamps);
+  staged->mel = copy_vector(buffer.mel);
+  staged->chroma = copy_vector(buffer.chroma);
+  staged->onset_strength = copy_vector(buffer.onset_strength);
+  staged->rms_energy = copy_vector(buffer.rms_energy);
+  staged->spectral_centroid = copy_vector(buffer.spectral_centroid);
+  staged->spectral_flatness = copy_vector(buffer.spectral_flatness);
+  if constexpr (std::is_same_v<std::remove_cv_t<Buffer>, FrameBuffer>) {
+    staged->chord_root = copy_vector(buffer.chord_root);
+    staged->chord_quality = copy_vector(buffer.chord_quality);
+    staged->chord_confidence = copy_vector(buffer.chord_confidence);
+  }
+  staged->feature_flags = buffer.feature_flags;
+  staged->n_chroma = buffer.n_chroma;
+  staged.publish(out);
 }
 
 }  // namespace
@@ -336,41 +338,43 @@ SonareError sonare_stream_analyzer_stats(SonareStreamAnalyzer* analyzer, SonareS
 
   SONARE_C_TRY
   AnalyzerStats s = analyzer->analyzer->stats();
-  out->total_frames = s.total_frames;
-  out->total_samples = s.total_samples;
-  out->duration_seconds = s.duration_seconds;
-  out->pending_frames = s.pending_frames;
-  out->dropped_output_frames = s.dropped_output_frames;
-  out->bpm = s.estimate.bpm;
-  out->bpm_confidence = s.estimate.bpm_confidence;
-  out->bpm_candidate_count = s.estimate.bpm_candidate_count;
-  out->key = s.estimate.key;
-  out->key_minor = s.estimate.key_minor ? 1 : 0;
-  out->key_confidence = s.estimate.key_confidence;
-  out->chord_root = s.estimate.chord_root;
-  out->chord_quality = s.estimate.chord_quality;
-  out->chord_confidence = s.estimate.chord_confidence;
-  out->chord_start_time = s.estimate.chord_start_time;
-  out->current_bar = s.estimate.current_bar;
-  out->bar_duration = s.estimate.bar_duration;
-  out->chord_progression_count = s.estimate.chord_progression.size();
-  out->chord_progression = copy_chord_changes(s.estimate.chord_progression);
-  out->bar_chord_progression_count = s.estimate.bar_chord_progression.size();
-  out->bar_chord_progression = copy_bar_chords(s.estimate.bar_chord_progression);
-  out->pattern_length = s.estimate.pattern_length;
-  out->voted_pattern_count = s.estimate.voted_pattern.size();
-  out->voted_pattern = copy_bar_chords(s.estimate.voted_pattern);
-  copy_text(out->detected_pattern_name, sizeof(out->detected_pattern_name),
+  sonare_c_detail::StagedOutput<SonareStreamStats, &sonare_free_stream_stats> staged;
+  staged->total_frames = s.total_frames;
+  staged->total_samples = s.total_samples;
+  staged->duration_seconds = s.duration_seconds;
+  staged->pending_frames = s.pending_frames;
+  staged->dropped_output_frames = s.dropped_output_frames;
+  staged->bpm = s.estimate.bpm;
+  staged->bpm_confidence = s.estimate.bpm_confidence;
+  staged->bpm_candidate_count = s.estimate.bpm_candidate_count;
+  staged->key = s.estimate.key;
+  staged->key_minor = s.estimate.key_minor ? 1 : 0;
+  staged->key_confidence = s.estimate.key_confidence;
+  staged->chord_root = s.estimate.chord_root;
+  staged->chord_quality = s.estimate.chord_quality;
+  staged->chord_confidence = s.estimate.chord_confidence;
+  staged->chord_start_time = s.estimate.chord_start_time;
+  staged->current_bar = s.estimate.current_bar;
+  staged->bar_duration = s.estimate.bar_duration;
+  staged->chord_progression_count = s.estimate.chord_progression.size();
+  staged->chord_progression = copy_chord_changes(s.estimate.chord_progression);
+  staged->bar_chord_progression_count = s.estimate.bar_chord_progression.size();
+  staged->bar_chord_progression = copy_bar_chords(s.estimate.bar_chord_progression);
+  staged->pattern_length = s.estimate.pattern_length;
+  staged->voted_pattern_count = s.estimate.voted_pattern.size();
+  staged->voted_pattern = copy_bar_chords(s.estimate.voted_pattern);
+  copy_text(staged->detected_pattern_name, sizeof(staged->detected_pattern_name),
             s.estimate.detected_pattern_name.c_str());
-  out->detected_pattern_score = s.estimate.detected_pattern_score;
-  out->all_pattern_scores_count = s.estimate.all_pattern_scores.size();
-  out->all_pattern_scores = copy_pattern_scores(s.estimate.all_pattern_scores);
-  out->accumulated_seconds = s.estimate.accumulated_seconds;
-  out->used_frames = s.estimate.used_frames;
-  out->updated = s.estimate.updated ? 1 : 0;
-  out->dropped_chord_progression_entries = s.dropped_chord_progression_entries;
-  out->dropped_bar_progression_entries = s.dropped_bar_progression_entries;
-  out->non_finite_discard_blocks = s.non_finite_discard_blocks;
+  staged->detected_pattern_score = s.estimate.detected_pattern_score;
+  staged->all_pattern_scores_count = s.estimate.all_pattern_scores.size();
+  staged->all_pattern_scores = copy_pattern_scores(s.estimate.all_pattern_scores);
+  staged->accumulated_seconds = s.estimate.accumulated_seconds;
+  staged->used_frames = s.estimate.used_frames;
+  staged->updated = s.estimate.updated ? 1 : 0;
+  staged->dropped_chord_progression_entries = s.dropped_chord_progression_entries;
+  staged->dropped_bar_progression_entries = s.dropped_bar_progression_entries;
+  staged->non_finite_discard_blocks = s.non_finite_discard_blocks;
+  staged.publish(out);
   return SONARE_OK;
   SONARE_C_CATCH
 }

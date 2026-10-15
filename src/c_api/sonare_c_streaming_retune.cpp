@@ -66,9 +66,9 @@ SonareStreamingRetune* sonare_streaming_retune_create(float semitones, float mix
   config.semitones = semitones;
   config.mix = mix;
   config.grain_size = grain_size;
-  auto* handle = new SonareStreamingRetune;
+  auto handle = std::make_unique<SonareStreamingRetune>();
   handle->retune = std::make_unique<StreamingRetune>(config);
-  return handle;
+  return handle.release();
   SONARE_C_CATCH_RETURN(nullptr)
 #else
   (void)semitones;
@@ -149,6 +149,7 @@ SonareError sonare_streaming_retune_set_config(SonareStreamingRetune* retune, fl
 SonareError sonare_streaming_retune_config(SonareStreamingRetune* retune, float* out_semitones,
                                            float* out_mix, int* out_grain_size) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (out_semitones) *out_semitones = 0.0f;
   if (out_mix) *out_mix = 0.0f;
@@ -165,11 +166,13 @@ SonareError sonare_streaming_retune_config(SonareStreamingRetune* retune, float*
   if (out_grain_size) *out_grain_size = 0;
   SONARE_C_STUB_NOT_SUPPORTED(retune, out_semitones, out_mix, out_grain_size);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_streaming_retune_process_mono(SonareStreamingRetune* retune, float* samples,
                                                  size_t num_samples) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!retune || !retune->retune || (!samples && num_samples > 0)) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -193,6 +196,7 @@ SonareError sonare_streaming_retune_process_mono(SonareStreamingRetune* retune, 
 #else
   SONARE_C_STUB_NOT_SUPPORTED(retune, samples, num_samples);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_streaming_retune_grain_size(SonareStreamingRetune* retune, int* out_grain_size) {
@@ -210,6 +214,7 @@ SonareError sonare_streaming_retune_grain_size(SonareStreamingRetune* retune, in
 SonareError sonare_streaming_retune_latency_samples(SonareStreamingRetune* retune,
                                                     int* out_latency_samples) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_VOICE_CHANGER)
   if (!retune || !retune->retune || !out_latency_samples) return SONARE_ERROR_INVALID_PARAMETER;
   *out_latency_samples = retune->retune->latency_samples();
@@ -218,6 +223,7 @@ SonareError sonare_streaming_retune_latency_samples(SonareStreamingRetune* retun
   if (out_latency_samples) *out_latency_samples = 0;
   SONARE_C_STUB_NOT_SUPPORTED(retune, out_latency_samples);
 #endif
+  SONARE_C_CATCH
 }
 
 }  // extern "C"

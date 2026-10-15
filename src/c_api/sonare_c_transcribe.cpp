@@ -313,7 +313,6 @@ SonareError sonare_project_transcribe_to_clip(SonareProject* project, uint32_t c
       read_config(config, &core_config, &group, &channel, &reference_auto);
   if (config_error != SONARE_OK) return config_error;
 
-  std::vector<SonareMidiEventPod> events;
   SONARE_C_TRY
   const sonare::Audio audio = sonare::Audio::from_buffer(samples, length, sample_rate);
   // The project's own map, not a second detection: a project whose tempo was
@@ -323,9 +322,8 @@ SonareError sonare_project_transcribe_to_clip(SonareProject* project, uint32_t c
   // Note values are read at the tempo the clip starts on.
   core_config.tempo_bpm = static_cast<float>(map.bpm_at_sample(0));
   resolve_reference(audio, reference_auto, &core_config);
-  events =
+  const std::vector<SonareMidiEventPod> events =
       build_events(ntm::transcribe_notes(audio, core_config), map, sample_rate, group, channel);
-  SONARE_C_CATCH
 
   // Committed through the public setter so the clip validation, the undo entry
   // and the content-store bookkeeping are the same ones a hand-built event list
@@ -335,6 +333,7 @@ SonareError sonare_project_transcribe_to_clip(SonareProject* project, uint32_t c
   if (error != SONARE_OK) return error;
   if (out_note_count) *out_note_count = events.size() / 2u;
   return SONARE_OK;
+  SONARE_C_CATCH
 #else
   if (out_note_count) *out_note_count = 0;
   SONARE_C_STUB_NOT_SUPPORTED(project, clip_id, samples, length, sample_rate, config,

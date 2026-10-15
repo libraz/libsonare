@@ -323,6 +323,7 @@ SonareError sonare_estimate_tuning(const float* samples, size_t length, int samp
 
 SonareError sonare_tuning_to_reference_hz(float tuning, float a4, float* out_hz) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!out_hz) return SONARE_ERROR_INVALID_PARAMETER;
   *out_hz = 0.0f;
   if (!std::isfinite(tuning) || !numeric::finite_positive(a4)) {
@@ -332,10 +333,12 @@ SonareError sonare_tuning_to_reference_hz(float tuning, float a4, float* out_hz)
   if (!numeric::finite_positive(hz)) return SONARE_ERROR_INVALID_PARAMETER;
   *out_hz = hz;
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_reference_hz_to_tuning(float hz, float a4, float* out_tuning) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!out_tuning) return SONARE_ERROR_INVALID_PARAMETER;
   *out_tuning = 0.0f;
   if (!numeric::finite_positive(hz) || !numeric::finite_positive(a4)) {
@@ -343,6 +346,7 @@ SonareError sonare_reference_hz_to_tuning(float hz, float a4, float* out_tuning)
   }
   *out_tuning = reference_hz_to_tuning(hz, a4);
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_piptrack(const float* samples, size_t length, int sample_rate, int n_fft,

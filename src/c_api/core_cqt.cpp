@@ -30,6 +30,7 @@ SonareError run_cqt_family(const float* samples, size_t length, int sample_rate,
 
 SonareError sonare_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
                        float fmin, int n_bins, int bins_per_octave, SonareCqtResult* out) {
+  SONARE_C_API_ENTRY;
   return run_cqt_family(
       samples, length, sample_rate, hop_length, fmin, n_bins, bins_per_octave, out,
       [](const Audio& audio, const CqtConfig& config) { return cqt(audio, config); });
@@ -37,6 +38,7 @@ SonareError sonare_cqt(const float* samples, size_t length, int sample_rate, int
 
 SonareError sonare_pseudo_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
                               float fmin, int n_bins, int bins_per_octave, SonareCqtResult* out) {
+  SONARE_C_API_ENTRY;
   return run_cqt_family(
       samples, length, sample_rate, hop_length, fmin, n_bins, bins_per_octave, out,
       [](const Audio& audio, const CqtConfig& config) { return pseudo_cqt(audio, config); });
@@ -44,6 +46,7 @@ SonareError sonare_pseudo_cqt(const float* samples, size_t length, int sample_ra
 
 SonareError sonare_hybrid_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
                               float fmin, int n_bins, int bins_per_octave, SonareCqtResult* out) {
+  SONARE_C_API_ENTRY;
   return run_cqt_family(
       samples, length, sample_rate, hop_length, fmin, n_bins, bins_per_octave, out,
       [](const Audio& audio, const CqtConfig& config) { return hybrid_cqt(audio, config); });

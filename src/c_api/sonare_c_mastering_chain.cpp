@@ -111,6 +111,7 @@ SonareError sonare_mastering_chain_with_progress(const float* samples, size_t le
                                                  size_t param_count,
                                                  SonareMasteringProgressCallback callback,
                                                  void* user_data, SonareMasteringChainResult* out) {
+  SONARE_C_API_ENTRY;
   return sonare_mastering_chain_with_progress_ex(samples, length, sample_rate, params, param_count,
                                                  callback, user_data, out, nullptr, nullptr);
 }
@@ -122,6 +123,7 @@ SonareError sonare_mastering_chain_stereo_with_progress(const float* left, const
                                                         SonareMasteringProgressCallback callback,
                                                         void* user_data,
                                                         SonareMasteringChainStereoResult* out) {
+  SONARE_C_API_ENTRY;
   return sonare_mastering_chain_stereo_with_progress_ex(left, right, length, sample_rate, params,
                                                         param_count, callback, user_data, out,
                                                         nullptr, nullptr);

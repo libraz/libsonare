@@ -11,6 +11,7 @@
 
 SonareError sonare_project_auto_tempo(SonareProject* project, const float* audio, size_t len,
                                       int sample_rate, float* out_bpm) {
+  SONARE_C_API_ENTRY;
   return sonare_project_auto_tempo_ex(project, audio, len, sample_rate, 0, 0, out_bpm);
 }
 
@@ -220,6 +221,7 @@ SonareError sonare_project_auto_tempo_ex(SonareProject* project, const float* au
 
 SonareError sonare_project_snap_to_grid(const SonareProject* project, double ppq, double strength,
                                         double* out_ppq) {
+  SONARE_C_API_ENTRY;
   return sonare_project_snap_to_grid_ex(project, ppq, strength, 1, out_ppq);
 }
 
@@ -406,6 +408,7 @@ SonareError sonare_chord_symbol_from_analysis(SonarePitchClass root, SonareChord
 
 SonareError sonare_key_mode_from_analysis(SonareMode mode, uint32_t* out_mode) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_mode) *out_mode = static_cast<uint32_t>(arr::KeyMode::kUnknown);
   const int mode_value = static_cast<int>(mode);
@@ -421,6 +424,7 @@ SonareError sonare_key_mode_from_analysis(SonareMode mode, uint32_t* out_mode) {
   if (out_mode) *out_mode = {};
   SONARE_C_STUB_NOT_SUPPORTED(mode, out_mode);
 #endif
+  SONARE_C_CATCH
 }
 
 // ============================================================================
@@ -432,6 +436,7 @@ SonareError sonare_align_take_to_reference(const float* reference, size_t refere
                                            const SonareTakeAlignConfig* config,
                                            SonareProjectWarpAnchor** out_anchors, size_t* out_count,
                                            SonareTakeAlignment* out_alignment) {
+  SONARE_C_API_ENTRY;
   return sonare_align_take_to_reference_ex(reference, reference_len, sample_rate, take, take_len,
                                            sample_rate, config, out_anchors, out_count,
                                            out_alignment);

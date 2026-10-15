@@ -102,6 +102,7 @@ void sonare_playback_renderer_destroy(SonarePlaybackRenderer* renderer) {
 
 SonareError sonare_playback_renderer_reset(SonarePlaybackRenderer* renderer) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_PLAYBACK)
   if (!renderer) return SONARE_ERROR_INVALID_PARAMETER;
   renderer->renderer->reset();
@@ -109,6 +110,7 @@ SonareError sonare_playback_renderer_reset(SonarePlaybackRenderer* renderer) {
 #else
   SONARE_C_STUB_NOT_SUPPORTED(renderer);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_playback_renderer_set_config_json(SonarePlaybackRenderer* renderer,
@@ -214,6 +216,7 @@ SonareError sonare_playback_renderer_process_interleaved(SonarePlaybackRenderer*
 SonareError sonare_playback_renderer_latency_samples(const SonarePlaybackRenderer* renderer,
                                                      int* out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (out) *out = 0;
 #if defined(SONARE_WITH_PLAYBACK)
   if (!renderer || !out) return SONARE_ERROR_INVALID_PARAMETER;
@@ -222,6 +225,7 @@ SonareError sonare_playback_renderer_latency_samples(const SonarePlaybackRendere
 #else
   SONARE_C_STUB_NOT_SUPPORTED(renderer, out);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_playback_renderer_diagnostics_json(const SonarePlaybackRenderer* renderer,

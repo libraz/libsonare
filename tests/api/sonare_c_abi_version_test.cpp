@@ -1,11 +1,15 @@
 /// @file sonare_c_abi_version_test.cpp
 /// @brief Aggregate C-ABI version accessor, length-checked inverse transforms,
-///        and the uniform non-finite input policy for the compat transforms.
+///        the uniform non-finite input policy for the compat transforms, and the
+///        shared entry guard (cleared error, no escaping exception, nothing
+///        published or leaked by a failed call).
 
 #include <sonare/sonare_c.h>
 
+#include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <limits>
 #include <new>
 #include <stdexcept>
 #include <string>
@@ -14,6 +18,7 @@
 
 #include "c_api/sonare_c_error_mapping.h"
 #include "c_api/sonare_c_internal.h"
+#include "util/constants.h"
 #ifdef SONARE_WITH_MIXING
 #include "support/alloc_guard.h"
 #endif
@@ -333,3 +338,356 @@ TEST_CASE("compat transforms reject non-finite input uniformly", "[c_api][abi]")
                                  &out_len) == SONARE_OK);
   sonare_free_floats(out);
 }
+
+#ifdef SONARE_WITH_MIXING
+namespace {
+
+// Leaves the calling thread's diagnostic string with room for any message a
+// failed call records, so a live-block balance counts only what the call owns.
+void reserve_error_storage() {
+  const std::string room(512, 'x');
+  sonare_c_detail::set_last_error(SONARE_ERROR_UNKNOWN, room.c_str());
+  sonare_c_detail::clear_last_error();
+}
+
+void set_stale_error() {
+  sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_FORMAT, "stale error from an earlier call");
+}
+
+bool stale_error_visible() {
+  return sonare_last_error_code() == SONARE_ERROR_INVALID_FORMAT ||
+         std::string(sonare_last_error_message()).find("stale") != std::string::npos;
+}
+
+// Allocation attempts one call makes, counted by arming a failure it never reaches.
+template <typename Call>
+size_t allocation_attempts(Call&& call) {
+  sonare::test::AllocationFailureAtGuard never(std::numeric_limits<size_t>::max());
+  call();
+  return sonare::test::g_allocation_attempts.load(std::memory_order_relaxed);
+}
+
+std::vector<float> sine(size_t length, int sample_rate, float hz) {
+  std::vector<float> samples(length);
+  for (size_t i = 0; i < length; ++i) {
+    samples[i] = 0.5f * std::sin(sonare::constants::kTwoPi * hz * static_cast<float>(i) /
+                                 static_cast<float>(sample_rate));
+  }
+  return samples;
+}
+
+}  // namespace
+
+TEST_CASE("C entry points clear a stale error before their validation returns",
+          "[c_api][abi][entry_guard]") {
+  size_t count = 7;
+  set_stale_error();
+  REQUIRE(sonare_sample_bank_add_sample(nullptr, nullptr, 0, nullptr, nullptr) != SONARE_OK);
+  CHECK_FALSE(stale_error_visible());
+
+  set_stale_error();
+  REQUIRE(sonare_sample_bank_add_zone(nullptr, 0, nullptr) != SONARE_OK);
+  CHECK_FALSE(stale_error_visible());
+
+  set_stale_error();
+  REQUIRE(sonare_sample_bank_sample_count(nullptr, &count) != SONARE_OK);
+  CHECK_FALSE(stale_error_visible());
+
+  set_stale_error();
+  REQUIRE(sonare_sample_bank_set_count(nullptr, &count) != SONARE_OK);
+  CHECK_FALSE(stale_error_visible());
+
+  set_stale_error();
+  REQUIRE(sonare_mixing_assistant_source_class_from_name(nullptr) == -1);
+  CHECK_FALSE(stale_error_visible());
+
+  // Failing, then succeeding: the success leaves nothing of the failure behind.
+  REQUIRE(sonare_mixer_create(0, 0) == nullptr);
+  REQUIRE(sonare_last_error_code() != SONARE_OK);
+  REQUIRE(std::string(sonare_last_error_message()).size() > 0);
+  const std::vector<float> samples(256, 0.0f);
+  SonareAudio* audio = nullptr;
+  REQUIRE(sonare_audio_from_buffer(samples.data(), samples.size(), 22050, &audio) == SONARE_OK);
+  CHECK(sonare_last_error_code() == SONARE_OK);
+  CHECK(std::string(sonare_last_error_message()).empty());
+  sonare_audio_free(audio);
+}
+
+#ifdef SONARE_WITH_VOICE_CHANGER
+TEST_CASE("sonare_streaming_retune_create leaves nothing behind when construction throws",
+          "[c_api][abi][entry_guard]") {
+  reserve_error_storage();
+  sonare_streaming_retune_destroy(sonare_streaming_retune_create(5.0f, 1.0f, 0));
+  const size_t attempts = allocation_attempts(
+      [] { sonare_streaming_retune_destroy(sonare_streaming_retune_create(5.0f, 1.0f, 0)); });
+  // The handle and the processor it owns, at least.
+  REQUIRE(attempts >= 2);
+
+  size_t refused = 0;
+  for (size_t nth = 1; nth <= attempts; ++nth) {
+    SonareStreamingRetune* retune = nullptr;
+    SonareError code = SONARE_OK;
+    long long balance = 0;
+    {
+      sonare::test::LiveBlockGuard live;
+      {
+        sonare::test::AllocationFailureAtGuard fail(nth);
+        retune = sonare_streaming_retune_create(5.0f, 1.0f, 0);
+      }
+      code = sonare_last_error_code();
+      sonare_streaming_retune_destroy(retune);
+      balance = live.balance();
+    }
+    CAPTURE(nth, code, balance);
+    if (retune == nullptr) {
+      ++refused;
+      CHECK(code == SONARE_ERROR_OUT_OF_MEMORY);
+    }
+    CHECK(balance == 0);
+  }
+  REQUIRE(refused > 0);
+}
+#endif
+
+TEST_CASE("sonare_chord_functions refuses an oversized count and survives allocation failure",
+          "[c_api][abi][entry_guard]") {
+  const SonareChord chords[3] = {
+      {SONARE_PITCH_C, SONARE_CHORD_MAJOR, 0.0f, 1.0f, 1.0f, SONARE_PITCH_C},
+      {SONARE_PITCH_G, SONARE_CHORD_MAJOR, 1.0f, 2.0f, 1.0f, SONARE_PITCH_G},
+      {SONARE_PITCH_A, SONARE_CHORD_MINOR, 2.0f, 3.0f, 1.0f, SONARE_PITCH_A},
+  };
+  SonareStringArray roman{};
+  SonareStringArray functions{};
+  REQUIRE(sonare_chord_functions(chords, std::numeric_limits<size_t>::max() / 2, SONARE_PITCH_C,
+                                 SONARE_MODE_MAJOR, &roman,
+                                 &functions) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(roman.items == nullptr);
+  REQUIRE(roman.count == 0);
+  REQUIRE(functions.items == nullptr);
+  REQUIRE(functions.count == 0);
+
+  reserve_error_storage();
+  const auto label = [&] {
+    return sonare_chord_functions(chords, 3, SONARE_PITCH_C, SONARE_MODE_MAJOR, &roman, &functions);
+  };
+  REQUIRE(label() == SONARE_OK);
+  sonare_free_string_array(&roman);
+  sonare_free_string_array(&functions);
+  const size_t attempts = allocation_attempts([&] {
+    if (label() == SONARE_OK) {
+      sonare_free_string_array(&roman);
+      sonare_free_string_array(&functions);
+    }
+  });
+  REQUIRE(attempts > 0);
+
+  for (size_t nth = 1; nth <= attempts; ++nth) {
+    SonareError code = SONARE_OK;
+    SonareStringArray failed_roman{};
+    SonareStringArray failed_functions{};
+    long long balance = 0;
+    {
+      sonare::test::LiveBlockGuard live;
+      {
+        sonare::test::AllocationFailureAtGuard fail(nth);
+        code = label();
+      }
+      failed_roman = roman;
+      failed_functions = functions;
+      if (code == SONARE_OK) {
+        sonare_free_string_array(&roman);
+        sonare_free_string_array(&functions);
+      }
+      balance = live.balance();
+    }
+    CAPTURE(nth, code, balance);
+    CHECK(code == SONARE_ERROR_OUT_OF_MEMORY);
+    CHECK(failed_roman.items == nullptr);
+    CHECK(failed_roman.count == 0);
+    CHECK(failed_functions.items == nullptr);
+    CHECK(failed_functions.count == 0);
+    CHECK(balance == 0);
+  }
+}
+
+TEST_CASE("sonare_detect_key_candidates publishes its count only with the array",
+          "[c_api][abi][entry_guard]") {
+  const std::vector<float> samples = sine(22050, 22050, 261.63f);
+  SonareKeyCandidate* candidates = nullptr;
+  size_t count = 0;
+  const auto detect = [&] {
+    return sonare_detect_key_candidates(samples.data(), samples.size(), 22050, 4096, 512, 0, 0,
+                                        0.0f, &candidates, &count);
+  };
+  REQUIRE(detect() == SONARE_OK);
+  REQUIRE(count > 0);
+  sonare_free_key_candidates(candidates);
+
+  reserve_error_storage();
+  const size_t attempts = allocation_attempts([&] {
+    if (detect() == SONARE_OK) sonare_free_key_candidates(candidates);
+  });
+  REQUIRE(attempts > 0);
+
+  // The candidate array is the last allocation the call makes.
+  SonareError code = SONARE_OK;
+  long long balance = 0;
+  {
+    sonare::test::LiveBlockGuard live;
+    {
+      sonare::test::AllocationFailureAtGuard fail(attempts);
+      code = detect();
+    }
+    balance = live.balance();
+  }
+  CAPTURE(attempts, code, balance);
+  REQUIRE(code == SONARE_ERROR_OUT_OF_MEMORY);
+  CHECK(candidates == nullptr);
+  CHECK(count == 0);
+  CHECK(balance == 0);
+}
+
+TEST_CASE("sonare_lufs_series_interleaved publishes neither series when a copy fails",
+          "[c_api][abi][entry_guard]") {
+  const int sample_rate = 48000;
+  const std::vector<float> mono = sine(static_cast<size_t>(sample_rate) * 4, sample_rate, 440.0f);
+  std::vector<float> stereo(mono.size() * 2);
+  for (size_t i = 0; i < mono.size(); ++i) {
+    stereo[2 * i] = mono[i];
+    stereo[2 * i + 1] = mono[i];
+  }
+  float* momentary = nullptr;
+  size_t momentary_length = 0;
+  float* short_term = nullptr;
+  size_t short_term_length = 0;
+  const auto measure = [&] {
+    return sonare_lufs_series_interleaved(stereo.data(), mono.size(), 2, sample_rate, &momentary,
+                                          &momentary_length, &short_term, &short_term_length);
+  };
+  REQUIRE(measure() == SONARE_OK);
+  REQUIRE(momentary_length > 0);
+  REQUIRE(short_term_length > 0);
+  sonare_free_floats(momentary);
+  sonare_free_floats(short_term);
+
+  reserve_error_storage();
+  const size_t attempts = allocation_attempts([&] {
+    if (measure() == SONARE_OK) {
+      sonare_free_floats(momentary);
+      sonare_free_floats(short_term);
+    }
+  });
+  REQUIRE(attempts >= 2);
+
+  // The last two allocations are the two series copies.
+  for (size_t nth = attempts - 1; nth <= attempts; ++nth) {
+    SonareError code = SONARE_OK;
+    long long balance = 0;
+    {
+      sonare::test::LiveBlockGuard live;
+      {
+        sonare::test::AllocationFailureAtGuard fail(nth);
+        code = measure();
+      }
+      balance = live.balance();
+    }
+    CAPTURE(nth, code, balance);
+    REQUIRE(code == SONARE_ERROR_OUT_OF_MEMORY);
+    CHECK(momentary == nullptr);
+    CHECK(momentary_length == 0);
+    CHECK(short_term == nullptr);
+    CHECK(short_term_length == 0);
+    CHECK(balance == 0);
+  }
+}
+
+TEST_CASE("sonare_stream_analyzer_read_frames publishes no array when a copy fails",
+          "[c_api][abi][entry_guard]") {
+  SonareStreamConfig config = {};
+  REQUIRE(sonare_stream_analyzer_config_default(&config) == SONARE_OK);
+  config.sample_rate = 8000;
+  config.n_fft = 32;
+  config.hop_length = 32;
+  config.n_mels = 8;
+  SonareStreamAnalyzer* analyzer = nullptr;
+  REQUIRE(sonare_stream_analyzer_create(&config, &analyzer) == SONARE_OK);
+  const std::vector<float> samples = sine(32 * 64, 8000, 440.0f);
+  REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) == SONARE_OK);
+
+  SonareStreamFrames frames{};
+  REQUIRE(sonare_stream_analyzer_read_frames(analyzer, 1, &frames) == SONARE_OK);
+  REQUIRE(frames.n_frames == 1);
+  sonare_free_stream_frames(&frames);
+
+  reserve_error_storage();
+  const size_t attempts = allocation_attempts([&] {
+    if (sonare_stream_analyzer_read_frames(analyzer, 1, &frames) == SONARE_OK) {
+      sonare_free_stream_frames(&frames);
+    }
+  });
+  REQUIRE(attempts >= 2);
+
+  // Each read consumes one frame; fail each of the trailing copies in turn.
+  size_t refused = 0;
+  for (size_t back = 0; back < 4 && back < attempts; ++back) {
+    SonareError code = SONARE_OK;
+    SonareStreamFrames failed{};
+    long long balance = 0;
+    {
+      sonare::test::LiveBlockGuard live;
+      {
+        sonare::test::AllocationFailureAtGuard fail(attempts - back);
+        code = sonare_stream_analyzer_read_frames(analyzer, 1, &frames);
+      }
+      failed = frames;
+      if (code == SONARE_OK) sonare_free_stream_frames(&frames);
+      balance = live.balance();
+    }
+    CAPTURE(back, code, balance);
+    if (code != SONARE_OK) {
+      ++refused;
+      CHECK(failed.n_frames == 0);
+      CHECK(failed.timestamps == nullptr);
+      CHECK(failed.mel == nullptr);
+      CHECK(failed.chroma == nullptr);
+      CHECK(failed.onset_strength == nullptr);
+      CHECK(failed.rms_energy == nullptr);
+      CHECK(failed.spectral_centroid == nullptr);
+      CHECK(failed.spectral_flatness == nullptr);
+      CHECK(failed.chord_root == nullptr);
+      CHECK(failed.chord_quality == nullptr);
+      CHECK(failed.chord_confidence == nullptr);
+    }
+    CHECK(balance == 0);
+  }
+  REQUIRE(refused > 0);
+  sonare_stream_analyzer_destroy(analyzer);
+}
+
+TEST_CASE("Thread-local name getters return their sentinel when allocation fails",
+          "[c_api][abi][entry_guard]") {
+  REQUIRE(std::string(sonare_mixing_scene_preset_names()).size() > 0);
+  reserve_error_storage();
+  const size_t attempts = allocation_attempts([] { (void)sonare_mixing_scene_preset_names(); });
+  REQUIRE(attempts > 0);
+  for (size_t nth = 1; nth <= attempts; ++nth) {
+    const char* names = nullptr;
+    SonareError code = SONARE_OK;
+    long long balance = 0;
+    {
+      sonare::test::LiveBlockGuard live;
+      {
+        sonare::test::AllocationFailureAtGuard fail(nth);
+        names = sonare_mixing_scene_preset_names();
+      }
+      code = sonare_last_error_code();
+      balance = live.balance();
+    }
+    CAPTURE(nth, code, balance);
+    REQUIRE(names != nullptr);
+    CHECK(std::string(names).empty());
+    CHECK(code == SONARE_ERROR_OUT_OF_MEMORY);
+    CHECK(balance == 0);
+  }
+}
+#endif

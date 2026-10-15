@@ -48,183 +48,191 @@ SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
                    "EQ: sample_rate must be positive and max_block_size non-negative");
     return nullptr;
   }
-  try {
-    auto handle = std::make_unique<SonareEq>();
-    handle->sample_rate = sample_rate;
-    handle->max_block_size = max_block_size;
-    handle->processor.prepare(sample_rate, max_block_size);
-    return handle.release();
-    SONARE_C_CATCH_RETURN(nullptr)
+  SONARE_C_TRY
+  auto handle = std::make_unique<SonareEq>();
+  handle->sample_rate = sample_rate;
+  handle->max_block_size = max_block_size;
+  handle->processor.prepare(sample_rate, max_block_size);
+  return handle.release();
+  SONARE_C_CATCH_RETURN(nullptr)
+}
+
+void sonare_eq_destroy(SonareEq* eq) { delete eq; }
+
+SonareError sonare_eq_set_band(SonareEq* eq, int index, const char* band_json) {
+  SONARE_C_API_ENTRY;
+  if (!eq || !band_json || index < 0 || index >= static_cast<int>(SONARE_EQ_MAX_BANDS)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
+  SONARE_C_TRY
+  eq->processor.set_band(static_cast<size_t>(index), sonare::c_api::parse_eq_band_json(band_json));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
 
-  void sonare_eq_destroy(SonareEq * eq) { delete eq; }
-
-  SonareError sonare_eq_set_band(SonareEq * eq, int index, const char* band_json) {
-    SONARE_C_API_ENTRY;
-    if (!eq || !band_json || index < 0 || index >= static_cast<int>(SONARE_EQ_MAX_BANDS)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    SONARE_C_TRY
-    eq->processor.set_band(static_cast<size_t>(index),
-                           sonare::c_api::parse_eq_band_json(band_json));
-    return SONARE_OK;
-    SONARE_C_CATCH
+void sonare_eq_clear(SonareEq* eq) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
+  if (eq) {
+    eq->processor.clear();
   }
+  SONARE_C_CATCH_VOID
+}
 
-  void sonare_eq_clear(SonareEq * eq) {
-    if (eq) {
-      eq->processor.clear();
-    }
+SonareError sonare_eq_set_phase_mode(SonareEq* eq, int mode) {
+  SONARE_C_API_ENTRY;
+  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  eq->processor.set_phase_mode(parse_phase(mode));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_eq_match(SonareEq* eq, const float* source, const float* reference,
+                            size_t length, int sample_rate, int max_bands) {
+  SONARE_C_API_ENTRY;
+  return sonare_eq_match_ex(eq, source, length, sample_rate, reference, length, sample_rate,
+                            max_bands);
+}
+
+SonareError sonare_eq_match_ex(SonareEq* eq, const float* source, size_t source_length,
+                               int sample_rate, const float* reference, size_t reference_length,
+                               int reference_sample_rate, int max_bands) {
+  SONARE_C_API_ENTRY;
+  if (!eq || max_bands <= 0 || max_bands > static_cast<int>(SONARE_EQ_MAX_BANDS)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
+  SonareError err = validate_audio_params(source, source_length, sample_rate);
+  if (err != SONARE_OK) return err;
+  err = validate_audio_params(reference, reference_length, reference_sample_rate);
+  if (err != SONARE_OK) return err;
 
-  SonareError sonare_eq_set_phase_mode(SonareEq * eq, int mode) {
-    SONARE_C_API_ENTRY;
-    if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
-    SONARE_C_TRY
-    eq->processor.set_phase_mode(parse_phase(mode));
-    return SONARE_OK;
-    SONARE_C_CATCH
+  SONARE_C_TRY
+  sonare::mastering::match::MatchEqConfig config;
+  config.max_bands = static_cast<size_t>(max_bands);
+  sonare::mastering::match::configure_equalizer_from_audio(
+      eq->processor, Audio::from_buffer(source, source_length, sample_rate),
+      Audio::from_buffer(reference, reference_length, reference_sample_rate), config);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+void sonare_eq_set_auto_gain(SonareEq* eq, int enabled) {
+  if (eq) {
+    eq->processor.set_auto_gain_enabled(enabled != 0);
   }
+}
 
-  SonareError sonare_eq_match(SonareEq * eq, const float* source, const float* reference,
-                              size_t length, int sample_rate, int max_bands) {
-    SONARE_C_API_ENTRY;
-    return sonare_eq_match_ex(eq, source, length, sample_rate, reference, length, sample_rate,
-                              max_bands);
+float sonare_eq_last_auto_gain_db(const SonareEq* eq) {
+  return eq ? eq->processor.last_auto_gain_db() : 0.0f;
+}
+
+SonareError sonare_eq_set_gain_scale(SonareEq* eq, float scale) {
+  SONARE_C_API_ENTRY;
+  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  eq->processor.set_gain_scale(scale);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_eq_set_output_gain_db(SonareEq* eq, float gain_db) {
+  SONARE_C_API_ENTRY;
+  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  eq->processor.set_output_gain_db(gain_db);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_eq_set_output_pan(SonareEq* eq, float pan) {
+  SONARE_C_API_ENTRY;
+  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  eq->processor.set_output_pan(pan);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+int sonare_eq_latency_samples(const SonareEq* eq) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
+  return eq ? eq->processor.latency_samples() : 0;
+  SONARE_C_CATCH_RETURN(0)
+}
+
+SonareError sonare_eq_non_finite_discard_count(const SonareEq* eq, uint32_t* out_count) {
+  // A single relaxed atomic load, so it is safe to poll from the audio thread
+  // alongside process(); it touches no diagnostic string.
+  SONARE_C_RT_API_ENTRY;
+  if (!eq || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_count = eq->processor.non_finite_discard_count();
+  return SONARE_OK;
+}
+
+SonareError sonare_eq_set_sidechain(SonareEq* eq, const float* const* channels, int num_channels,
+                                    int num_samples) {
+  SONARE_C_API_ENTRY;
+  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  eq->processor.set_sidechain(channels, num_channels, num_samples);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+void sonare_eq_clear_sidechain(SonareEq* eq) {
+  SONARE_C_API_ENTRY;
+  SONARE_C_TRY
+  if (eq) {
+    eq->processor.clear_sidechain();
   }
+  SONARE_C_CATCH_VOID
+}
 
-  SonareError sonare_eq_match_ex(SonareEq * eq, const float* source, size_t source_length,
-                                 int sample_rate, const float* reference, size_t reference_length,
-                                 int reference_sample_rate, int max_bands) {
-    SONARE_C_API_ENTRY;
-    if (!eq || max_bands <= 0 || max_bands > static_cast<int>(SONARE_EQ_MAX_BANDS)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    SonareError err = validate_audio_params(source, source_length, sample_rate);
-    if (err != SONARE_OK) return err;
-    err = validate_audio_params(reference, reference_length, reference_sample_rate);
-    if (err != SONARE_OK) return err;
+SonareError sonare_eq_process(SonareEq* eq, float* const* channels, int num_channels,
+                              int num_samples) {
+  SONARE_C_API_ENTRY;
+  if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  eq->processor.process(channels, num_channels, num_samples);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
 
-    SONARE_C_TRY
-    sonare::mastering::match::MatchEqConfig config;
-    config.max_bands = static_cast<size_t>(max_bands);
-    sonare::mastering::match::configure_equalizer_from_audio(
-        eq->processor, Audio::from_buffer(source, source_length, sample_rate),
-        Audio::from_buffer(reference, reference_length, reference_sample_rate), config);
-    return SONARE_OK;
-    SONARE_C_CATCH
+SonareError sonare_eq_magnitude_response(const SonareEq* eq, int placement,
+                                         const float* frequencies_hz, size_t count, float* out_db) {
+  SONARE_C_API_ENTRY;
+  if (!eq || (count > 0 && (!frequencies_hz || !out_db))) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
+  SONARE_C_TRY
+  eq->processor.magnitude_response_db(parse_placement(placement), frequencies_hz, count, out_db);
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
 
-  void sonare_eq_set_auto_gain(SonareEq * eq, int enabled) {
-    if (eq) {
-      eq->processor.set_auto_gain_enabled(enabled != 0);
-    }
+SonareError sonare_eq_spectrum(const SonareEq* eq, SonareEqSnapshot* out) {
+  SONARE_C_API_ENTRY;
+  if (!eq || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  const auto snapshot = eq->processor.spectrum_snapshot();
+  *out = {};
+  out->pre_count = snapshot.pre_count;
+  out->post_count = snapshot.post_count;
+  out->last_auto_gain_db = eq->processor.last_auto_gain_db();
+  out->seq = snapshot.seq;
+  for (size_t i = 0; i < SONARE_EQ_SPECTRUM_STREAM_CAPACITY; ++i) {
+    out->pre_left[i] = snapshot.pre[i].left;
+    out->pre_right[i] = snapshot.pre[i].right;
+    out->post_left[i] = snapshot.post[i].left;
+    out->post_right[i] = snapshot.post[i].right;
   }
-
-  float sonare_eq_last_auto_gain_db(const SonareEq* eq) {
-    return eq ? eq->processor.last_auto_gain_db() : 0.0f;
+  for (size_t i = 0; i < SONARE_EQ_MAX_BANDS; ++i) {
+    out->band_gain_db[i] = snapshot.band_gain_db[i];
   }
-
-  SonareError sonare_eq_set_gain_scale(SonareEq * eq, float scale) {
-    SONARE_C_API_ENTRY;
-    if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
-    SONARE_C_TRY
-    eq->processor.set_gain_scale(scale);
-    return SONARE_OK;
-    SONARE_C_CATCH
+  for (size_t i = 0; i < SONARE_EQ_SPECTRUM_PROFILE_BANDS; ++i) {
+    out->profile_db[i] = snapshot.profile_db[i];
   }
-
-  SonareError sonare_eq_set_output_gain_db(SonareEq * eq, float gain_db) {
-    SONARE_C_API_ENTRY;
-    if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
-    SONARE_C_TRY
-    eq->processor.set_output_gain_db(gain_db);
-    return SONARE_OK;
-    SONARE_C_CATCH
-  }
-
-  SonareError sonare_eq_set_output_pan(SonareEq * eq, float pan) {
-    SONARE_C_API_ENTRY;
-    if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
-    SONARE_C_TRY
-    eq->processor.set_output_pan(pan);
-    return SONARE_OK;
-    SONARE_C_CATCH
-  }
-
-  int sonare_eq_latency_samples(const SonareEq* eq) {
-    return eq ? eq->processor.latency_samples() : 0;
-  }
-
-  SonareError sonare_eq_non_finite_discard_count(const SonareEq* eq, uint32_t* out_count) {
-    // A single relaxed atomic load, so it is safe to poll from the audio thread
-    // alongside process(); it touches no diagnostic string.
-    SONARE_C_RT_API_ENTRY;
-    if (!eq || !out_count) return SONARE_ERROR_INVALID_PARAMETER;
-    *out_count = eq->processor.non_finite_discard_count();
-    return SONARE_OK;
-  }
-
-  SonareError sonare_eq_set_sidechain(SonareEq * eq, const float* const* channels, int num_channels,
-                                      int num_samples) {
-    SONARE_C_API_ENTRY;
-    if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
-    SONARE_C_TRY
-    eq->processor.set_sidechain(channels, num_channels, num_samples);
-    return SONARE_OK;
-    SONARE_C_CATCH
-  }
-
-  void sonare_eq_clear_sidechain(SonareEq * eq) {
-    if (eq) {
-      eq->processor.clear_sidechain();
-    }
-  }
-
-  SonareError sonare_eq_process(SonareEq * eq, float* const* channels, int num_channels,
-                                int num_samples) {
-    SONARE_C_API_ENTRY;
-    if (!eq) return SONARE_ERROR_INVALID_PARAMETER;
-    SONARE_C_TRY
-    eq->processor.process(channels, num_channels, num_samples);
-    return SONARE_OK;
-    SONARE_C_CATCH
-  }
-
-  SonareError sonare_eq_magnitude_response(
-      const SonareEq* eq, int placement, const float* frequencies_hz, size_t count, float* out_db) {
-    SONARE_C_API_ENTRY;
-    if (!eq || (count > 0 && (!frequencies_hz || !out_db))) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    SONARE_C_TRY
-    eq->processor.magnitude_response_db(parse_placement(placement), frequencies_hz, count, out_db);
-    return SONARE_OK;
-    SONARE_C_CATCH
-  }
-
-  SonareError sonare_eq_spectrum(const SonareEq* eq, SonareEqSnapshot* out) {
-    SONARE_C_API_ENTRY;
-    if (!eq || !out) return SONARE_ERROR_INVALID_PARAMETER;
-    SONARE_C_TRY
-    const auto snapshot = eq->processor.spectrum_snapshot();
-    *out = {};
-    out->pre_count = snapshot.pre_count;
-    out->post_count = snapshot.post_count;
-    out->last_auto_gain_db = eq->processor.last_auto_gain_db();
-    out->seq = snapshot.seq;
-    for (size_t i = 0; i < SONARE_EQ_SPECTRUM_STREAM_CAPACITY; ++i) {
-      out->pre_left[i] = snapshot.pre[i].left;
-      out->pre_right[i] = snapshot.pre[i].right;
-      out->post_left[i] = snapshot.post[i].left;
-      out->post_right[i] = snapshot.post[i].right;
-    }
-    for (size_t i = 0; i < SONARE_EQ_MAX_BANDS; ++i) {
-      out->band_gain_db[i] = snapshot.band_gain_db[i];
-    }
-    for (size_t i = 0; i < SONARE_EQ_SPECTRUM_PROFILE_BANDS; ++i) {
-      out->profile_db[i] = snapshot.profile_db[i];
-    }
-    return SONARE_OK;
-    SONARE_C_CATCH
-  }
+  return SONARE_OK;
+  SONARE_C_CATCH
+}

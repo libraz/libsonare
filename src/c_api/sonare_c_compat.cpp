@@ -196,6 +196,7 @@ SonareError sonare_split_silence_common(const float* const* signals, size_t sign
                                         const size_t* lengths, float top_db, int frame_length,
                                         int hop_length, int** out_intervals,
                                         size_t* out_interval_count) {
+  SONARE_C_API_ENTRY;
   return sonare_split_silence_common_ex(signals, signal_count, lengths, top_db, frame_length,
                                         hop_length, out_intervals, out_interval_count, nullptr);
 }
@@ -206,6 +207,7 @@ SonareError sonare_split_silence_common_ex(const float* const* signals, size_t s
                                            size_t* out_interval_count,
                                            SonareSilenceCommonReport* out_report) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   // Before the validation rather than after it: a rejected call left the report
   // holding whatever the caller's stack did, and a zeroed one is the honest
   // answer for a call that measured nothing.
@@ -235,7 +237,6 @@ SonareError sonare_split_silence_common_ex(const float* const* signals, size_t s
       return SONARE_ERROR_INVALID_PARAMETER;
     }
   }
-  SONARE_C_TRY
   // The union rule and its report live in the core because the WebAssembly
   // binding needs them too and calls the core directly, never this layer.
   const CommonSplitReport report =
@@ -561,13 +562,17 @@ SonareError sonare_lufs_series_interleaved(const float* samples, size_t frames, 
   metering::lufs_interleaved(samples, frames, channels, sample_rate, {},
                              out_momentary ? &momentary : nullptr,
                              out_short_term ? &short_term : nullptr);
+  // Both copies are made before either pair is published, so a failed second
+  // copy cannot leave the first series behind an error return.
+  std::unique_ptr<float[]> momentary_copy(copy_vector(momentary));
+  std::unique_ptr<float[]> short_term_copy(copy_vector(short_term));
   if (out_momentary) {
+    *out_momentary = momentary_copy.release();
     *out_momentary_length = momentary.size();
-    *out_momentary = copy_vector(momentary);
   }
   if (out_short_term) {
+    *out_short_term = short_term_copy.release();
     *out_short_term_length = short_term.size();
-    *out_short_term = copy_vector(short_term);
   }
   return SONARE_OK;
   SONARE_C_CATCH

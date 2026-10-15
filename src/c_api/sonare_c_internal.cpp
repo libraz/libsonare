@@ -18,12 +18,12 @@ const char*& last_error_fallback_storage() noexcept {
 
 }  // namespace
 
-std::string& last_error_storage() {
+std::string& last_error_storage() noexcept {
   static thread_local std::string storage;
   return storage;
 }
 
-SonareError& last_error_code_storage() {
+SonareError& last_error_code_storage() noexcept {
   static thread_local SonareError code = SONARE_OK;
   return code;
 }
@@ -49,14 +49,14 @@ void clear_last_error() noexcept {
   last_error_fallback_storage() = nullptr;
 }
 
-std::string& last_warning_storage() {
+std::string& last_warning_storage() noexcept {
   static thread_local std::string storage;
   return storage;
 }
 
 void set_last_warning(const char* msg) { last_warning_storage().assign(msg != nullptr ? msg : ""); }
 
-std::vector<sonare::Diagnostic>& last_diagnostics_storage() {
+std::vector<sonare::Diagnostic>& last_diagnostics_storage() noexcept {
   static thread_local std::vector<sonare::Diagnostic> storage;
   return storage;
 }
@@ -65,7 +65,7 @@ void set_last_diagnostics(const std::vector<sonare::Diagnostic>& diagnostics) {
   last_diagnostics_storage() = diagnostics;
 }
 
-void clear_last_warning() {
+void clear_last_warning() noexcept {
   last_warning_storage().clear();
   last_diagnostics_storage().clear();
 }
@@ -91,7 +91,7 @@ SonareError record_current_exception() noexcept {
   }
 }
 
-SonareError validate_audio_params(const float* samples, size_t length, int sample_rate) {
+SonareError validate_audio_params(const float* samples, size_t length, int sample_rate) noexcept {
   clear_last_error();
   // Delegate to the shared core policy so the C ABI and the WASM bindings (which
   // bypass this translation unit) enforce identical empty/range/finite rules.
@@ -99,17 +99,21 @@ SonareError validate_audio_params(const float* samples, size_t length, int sampl
     sonare::validate_offline_audio_input(samples, length, sample_rate);
   } catch (const SonareException& e) {
     return map_sonare_exception(e);
+  } catch (...) {
+    return record_current_exception();
   }
   return SONARE_OK;
 }
 
 SonareError validate_audio_params_window(const float* samples, size_t length, int sample_rate,
-                                         size_t scan_offset, size_t scan_count) {
+                                         size_t scan_offset, size_t scan_count) noexcept {
   clear_last_error();
   try {
     sonare::validate_offline_audio_window(samples, length, sample_rate, scan_offset, scan_count);
   } catch (const SonareException& e) {
     return map_sonare_exception(e);
+  } catch (...) {
+    return record_current_exception();
   }
   return SONARE_OK;
 }

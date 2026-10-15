@@ -873,7 +873,9 @@ conformance:
 	python3 -m unittest tests/conformance/test_c_api_header_self_contained.py
 	python3 -m unittest tests/conformance/test_c_api_feature_off_compile.py
 	python3 -m unittest tests/conformance/test_c_api_type_home.py
+	python3 -m unittest tests/conformance/test_c_api_entry_guard.py
 	python3 tests/conformance/check_c_api_out_param_init.py --floor 250
+	python3 tests/conformance/check_c_api_entry_guard.py --floor 900
 	python3 tests/conformance/check_c_api_pointer_contracts.py --floor 250
 	python3 tests/conformance/check_c_api_header_self_contained.py --floor 20
 	python3 tests/conformance/check_c_api_type_home.py --floor 150
@@ -900,7 +902,7 @@ conformance:
 	fi
 
 # C-ABI contract scans, kept as named targets for running one on its own;
-# `conformance` runs all four, plus the self-tests that carry the non-vacuity
+# `conformance` runs all five, plus the self-tests that carry the non-vacuity
 # break each is calibrated against.
 #
 # The floors are the point of the invocation: each scan reports nothing when its
@@ -911,6 +913,9 @@ check-c-api-out-param-init:
 
 check-c-api-pointer-contracts:
 	python3 tests/conformance/check_c_api_pointer_contracts.py --floor 250
+
+check-c-api-entry-guard:
+	python3 tests/conformance/check_c_api_entry_guard.py --floor 900
 
 # Compiles each public header as a TU's only include, in C and in C++. No build
 # tree: it drives the compiler on a probe file, so it costs about a second.

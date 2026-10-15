@@ -8,6 +8,7 @@
 
 SonareError sonare_project_fade_curve_from_name(const char* name, uint32_t* out_curve) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (name == nullptr || out_curve == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
 
   std::string normalized;
@@ -27,6 +28,7 @@ SonareError sonare_project_fade_curve_from_name(const char* name, uint32_t* out_
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 #if defined(SONARE_WITH_ARRANGEMENT)

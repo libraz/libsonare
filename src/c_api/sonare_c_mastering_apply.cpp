@@ -509,6 +509,7 @@ const char* sonare_mastering_insert_param_info_at_rate(const char* name, int sam
 SonareError sonare_mastering_insert_timing(const char* name, const char* params, int sample_rate,
                                            int* out_latency_samples, int* out_tail_samples) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (out_latency_samples == nullptr || out_tail_samples == nullptr) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "out_latency_samples and out_tail_samples are required");
@@ -522,7 +523,6 @@ SonareError sonare_mastering_insert_timing(const char* name, const char* params,
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
-  SONARE_C_TRY
   const auto timing = sonare::mastering::api::insert_timing(
       name != nullptr ? name : "", params != nullptr ? params : "{}", sample_rate);
   *out_latency_samples = timing.latency_samples;

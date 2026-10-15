@@ -476,12 +476,13 @@ SonareError sonare_chord_functions(const SonareChord* chords, size_t count,
                                    SonarePitchClass key_root, SonareMode key_mode,
                                    SonareStringArray* roman, SonareStringArray* functions) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!roman || !functions) return SONARE_ERROR_INVALID_PARAMETER;
   roman->items = nullptr;
   roman->count = 0;
   functions->items = nullptr;
   functions->count = 0;
-  if (count > 0 && !chords) return SONARE_ERROR_INVALID_PARAMETER;
+  if ((count > 0 && !chords) || count > kMaxBufferSize) return SONARE_ERROR_INVALID_PARAMETER;
   const int key_root_value = static_cast<int>(key_root);
   const int key_mode_value = static_cast<int>(key_mode);
   if (key_root_value < static_cast<int>(PitchClass::C) ||
@@ -507,6 +508,7 @@ SonareError sonare_chord_functions(const SonareChord* chords, size_t count,
   }
   label_chords(input, from_c_pitch_class(key_root), from_c_mode(key_mode), roman, functions);
   return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_analyze_sections(const float* samples, size_t length, int sample_rate, int n_fft,

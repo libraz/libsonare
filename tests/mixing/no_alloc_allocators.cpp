@@ -25,13 +25,13 @@ void* operator new[](std::size_t size, const std::nothrow_t&) noexcept {
     return nullptr;
   }
 }
-void operator delete(void* ptr) noexcept { std::free(ptr); }
-void operator delete[](void* ptr) noexcept { std::free(ptr); }
-void operator delete(void* ptr, std::size_t) noexcept { std::free(ptr); }
-void operator delete[](void* ptr, std::size_t) noexcept { std::free(ptr); }
+void operator delete(void* ptr) noexcept { release_bytes(ptr); }
+void operator delete[](void* ptr) noexcept { release_bytes(ptr); }
+void operator delete(void* ptr, std::size_t) noexcept { release_bytes(ptr); }
+void operator delete[](void* ptr, std::size_t) noexcept { release_bytes(ptr); }
 void operator delete(void* ptr, std::align_val_t) noexcept { aligned_free(ptr); }
 void operator delete[](void* ptr, std::align_val_t) noexcept { aligned_free(ptr); }
 void operator delete(void* ptr, std::size_t, std::align_val_t) noexcept { aligned_free(ptr); }
 void operator delete[](void* ptr, std::size_t, std::align_val_t) noexcept { aligned_free(ptr); }
-void operator delete(void* ptr, const std::nothrow_t&) noexcept { std::free(ptr); }
-void operator delete[](void* ptr, const std::nothrow_t&) noexcept { std::free(ptr); }
+void operator delete(void* ptr, const std::nothrow_t&) noexcept { release_bytes(ptr); }
+void operator delete[](void* ptr, const std::nothrow_t&) noexcept { release_bytes(ptr); }

@@ -65,8 +65,8 @@ SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
   (void)lane_count;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  std::vector<engine::TrackLaneConfig> configs;
   SONARE_C_TRY
+  std::vector<engine::TrackLaneConfig> configs;
   configs.reserve(lane_count);
   for (size_t i = 0; i < lane_count; ++i) {
     if (lanes[i].send_count > 0 && lanes[i].sends == nullptr) {
@@ -195,6 +195,7 @@ SonareError sonare_engine_set_bus_sidechain(SonareRealtimeEngine* engine, uint32
                                             unsigned int insert_index, int source_kind,
                                             uint32_t source_id) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!engine || bus_id == 0) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_MIXING)
   (void)insert_index;
@@ -208,12 +209,14 @@ SonareError sonare_engine_set_bus_sidechain(SonareRealtimeEngine* engine, uint32
              ? SONARE_OK
              : SONARE_ERROR_INVALID_PARAMETER;
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_set_master_sidechain(SonareRealtimeEngine* engine,
                                                unsigned int insert_index, int source_kind,
                                                uint32_t source_id) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_MIXING)
   (void)insert_index;
@@ -227,6 +230,7 @@ SonareError sonare_engine_set_master_sidechain(SonareRealtimeEngine* engine,
              ? SONARE_OK
              : SONARE_ERROR_INVALID_PARAMETER;
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_engine_set_track_buses(SonareRealtimeEngine* engine,
@@ -238,8 +242,8 @@ SonareError sonare_engine_set_track_buses(SonareRealtimeEngine* engine,
   (void)bus_count;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  std::vector<engine::TrackBusConfig> configs;
   SONARE_C_TRY
+  std::vector<engine::TrackBusConfig> configs;
   configs.reserve(bus_count);
   for (size_t i = 0; i < bus_count; ++i) {
     if (buses[i].send_count > 0 && buses[i].sends == nullptr) {

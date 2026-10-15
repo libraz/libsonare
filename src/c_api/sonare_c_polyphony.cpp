@@ -163,6 +163,7 @@ SonareError sonare_polyphonic_analyze(const float* samples, size_t length, int s
                                       const SonarePolyphonicConfig* config,
                                       SonarePolyphonicAnalysis** out) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_PITCH_EDITOR)
   if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out = nullptr;
@@ -181,6 +182,7 @@ SonareError sonare_polyphonic_analyze(const float* samples, size_t length, int s
   if (out) *out = {};
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, config, out);
 #endif
+  SONARE_C_CATCH
 }
 
 void sonare_polyphonic_analysis_destroy(SonarePolyphonicAnalysis* analysis) { delete analysis; }
@@ -201,6 +203,7 @@ SonareError sonare_polyphonic_note_count(const SonarePolyphonicAnalysis* analysi
 SonareError sonare_polyphonic_frame_count(const SonarePolyphonicAnalysis* analysis,
                                           int32_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_PITCH_EDITOR)
   if (analysis == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_count = static_cast<int32_t>(analysis->analysis.spectrum.n_frames());
@@ -209,6 +212,7 @@ SonareError sonare_polyphonic_frame_count(const SonarePolyphonicAnalysis* analys
   if (out_count) *out_count = {};
   SONARE_C_STUB_NOT_SUPPORTED(analysis, out_count);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_polyphonic_notes(const SonarePolyphonicAnalysis* analysis, SonareNoteObject* out,
@@ -284,6 +288,7 @@ SonareError sonare_polyphonic_polyphony(const SonarePolyphonicAnalysis* analysis
 SonareError sonare_polyphonic_note_f0(const SonarePolyphonicAnalysis* analysis, size_t note,
                                       float* out, size_t capacity, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_PITCH_EDITOR)
   const SonareError error = check_note(analysis, note, out_count);
   if (error != SONARE_OK) return error;
@@ -291,11 +296,13 @@ SonareError sonare_polyphonic_note_f0(const SonarePolyphonicAnalysis* analysis, 
 #else
   SONARE_C_STUB_NOT_SUPPORTED(analysis, note, out, capacity, out_count);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_polyphonic_note_amplitude(const SonarePolyphonicAnalysis* analysis, size_t note,
                                              float* out, size_t capacity, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_PITCH_EDITOR)
   const SonareError error = check_note(analysis, note, out_count);
   if (error != SONARE_OK) return error;
@@ -303,11 +310,13 @@ SonareError sonare_polyphonic_note_amplitude(const SonarePolyphonicAnalysis* ana
 #else
   SONARE_C_STUB_NOT_SUPPORTED(analysis, note, out, capacity, out_count);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_polyphonic_note_salience(const SonarePolyphonicAnalysis* analysis, size_t note,
                                             float* out, size_t capacity, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_PITCH_EDITOR)
   const SonareError error = check_note(analysis, note, out_count);
   if (error != SONARE_OK) return error;
@@ -336,11 +345,13 @@ SonareError sonare_polyphonic_note_salience(const SonarePolyphonicAnalysis* anal
 #else
   SONARE_C_STUB_NOT_SUPPORTED(analysis, note, out, capacity, out_count);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_polyphonic_note_envelope(const SonarePolyphonicAnalysis* analysis, size_t note,
                                             float* out, size_t capacity, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_PITCH_EDITOR)
   const SonareError error = check_note(analysis, note, out_count);
   if (error != SONARE_OK) return error;
@@ -349,11 +360,13 @@ SonareError sonare_polyphonic_note_envelope(const SonarePolyphonicAnalysis* anal
 #else
   SONARE_C_STUB_NOT_SUPPORTED(analysis, note, out, capacity, out_count);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_polyphonic_note_inharmonicity(const SonarePolyphonicAnalysis* analysis,
                                                  float* out, size_t capacity, size_t* out_count) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_PITCH_EDITOR)
   if (analysis == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_count = 0;
@@ -368,6 +381,7 @@ SonareError sonare_polyphonic_note_inharmonicity(const SonarePolyphonicAnalysis*
   if (out_count) *out_count = {};
   SONARE_C_STUB_NOT_SUPPORTED(analysis, out, capacity, out_count);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_polyphonic_render(const SonarePolyphonicAnalysis* analysis,

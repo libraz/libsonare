@@ -80,9 +80,9 @@ inline SonareError check_streaming_block_bounds(int max_block_size, size_t num_s
 // the run_*_offline helpers so the wording never drifts between them.
 constexpr const char* kUnknownExceptionMessage = "Unknown C++ exception (non-std::exception type)";
 
-std::string& last_error_storage();
+std::string& last_error_storage() noexcept;
 /// @brief Thread-local code recorded beside the detailed-error message.
-SonareError& last_error_code_storage();
+SonareError& last_error_code_storage() noexcept;
 /// @brief Returns the thread-local detailed-error message without throwing.
 /// @details A static fallback is returned when storing a new diagnostic failed,
 ///          so a caught exception cannot escape while its error code is being
@@ -101,7 +101,7 @@ void clear_last_error() noexcept;
 /// @brief Thread-local non-fatal diagnostic channel, separate from the error
 /// message. Surfaced by @ref sonare_last_warning_message on a SUCCESS return
 /// (e.g. a scene loaded fine but some insert params were silently ignored).
-std::string& last_warning_storage();
+std::string& last_warning_storage() noexcept;
 void set_last_warning(const char* msg);
 /// @brief Clears the thread-local warning message AND the structured diagnostic
 /// list below. Called at the entry of the C-ABI calls that may record either, so
@@ -110,11 +110,11 @@ void set_last_warning(const char* msg);
 ///          publisher of the structured list also writes the flattened string,
 ///          so a per-channel clear would let a call that records only the string
 ///          leave the previous call's structured entries readable beside it.
-void clear_last_warning();
+void clear_last_warning() noexcept;
 /// @brief Thread-local structured form of the warning channel: the diagnostics a
 /// call published, each keeping its code, message and severity. Surfaced by
 /// @ref sonare_last_diagnostic_count and its accessors.
-std::vector<sonare::Diagnostic>& last_diagnostics_storage();
+std::vector<sonare::Diagnostic>& last_diagnostics_storage() noexcept;
 /// @brief Publishes @p diagnostics on the structured channel, replacing whatever
 /// the previous call left there. Callers also write the flattened warning string
 /// (and the first Error to the error channel) so the two channels describe the
@@ -147,7 +147,7 @@ SonareError record_current_exception() noexcept;
 ///          (sonare_audio_from_buffer) and use the handle-based analysis entry
 ///          points (sonare_audio_* in sonare_c_types.h), which validate the
 ///          buffer at construction time and never re-scan per analysis.
-SonareError validate_audio_params(const float* samples, size_t length, int sample_rate);
+SonareError validate_audio_params(const float* samples, size_t length, int sample_rate) noexcept;
 
 /// @brief validate_audio_params for an entry point that reads one window of the buffer.
 /// @details Same policy, except that the non-finite scan covers only
@@ -156,7 +156,7 @@ SonareError validate_audio_params(const float* samples, size_t length, int sampl
 ///          per-frame entry point polled over a long buffer that is the difference
 ///          between O(window) and O(length) per call.
 SonareError validate_audio_params_window(const float* samples, size_t length, int sample_rate,
-                                         size_t scan_offset, size_t scan_count);
+                                         size_t scan_offset, size_t scan_count) noexcept;
 SonareGrooveType to_c_groove_type(const std::string& groove);
 SonareChordQuality to_c_chord_quality(ChordQuality quality);
 
@@ -205,6 +205,35 @@ template <typename T>
 T* release_array(std::unique_ptr<T[]>& ptr) {
   return ptr.release();
 }
+
+/// @brief Holds a C result struct while it is filled, releasing it through
+///        @p Release on any exit that does not publish it.
+/// @details A throw between two array copies would otherwise leave the caller's
+///          struct holding the first arrays beside an error code it treats as
+///          "nothing to free". The caller's struct is written once, by publish().
+template <typename T, void (*Release)(T*)>
+class StagedOutput {
+ public:
+  StagedOutput() noexcept = default;
+  StagedOutput(const StagedOutput&) = delete;
+  StagedOutput& operator=(const StagedOutput&) = delete;
+  ~StagedOutput() {
+    if (!published_) Release(&value_);
+  }
+
+  T* operator->() noexcept { return &value_; }
+  T& value() noexcept { return value_; }
+
+  /// @brief Hands every array in the staged struct to @p out.
+  void publish(T* out) noexcept {
+    *out = value_;
+    published_ = true;
+  }
+
+ private:
+  T value_{};
+  bool published_ = false;
+};
 
 /// @brief Copies a vector into a freshly heap-allocated array owned by the
 ///        caller (freed via the matching sonare_free_* entry point).
@@ -312,82 +341,6 @@ inline const char* join_names(const std::vector<std::string>& values, std::strin
   return storage.c_str();
 }
 
-/// @brief Runs an Audio → Audio DSP function against a mono C buffer and
-///        marshals the result back out through @p out / @p out_length.
-/// @details Centralises the validate → from_buffer → process → memcpy → catch
-///          boilerplate that every offline effects wrapper performed
-///          inline. The supplied callable receives the wrapped Audio and must
-///          return an Audio whose samples are copied into a fresh
-///          heap-allocated array owned by the caller (freed via the existing
-///          sonare_free_floats entry point).
-/// @param samples       Caller-owned input buffer (validated for null / NaN /
-///                      Inf / sample_rate by validate_audio_params).
-/// @param length        Number of samples in @p samples.
-/// @param sample_rate   Sample rate; validated against [kMinSampleRate,
-///                      kMaxSampleRate].
-/// @param out           Receives the freshly allocated output array.
-/// @param out_length    Receives the output array length.
-/// @param process       Callable taking a const Audio& and returning an Audio.
-template <typename Fn>
-SonareError run_mono_offline(const float* samples, size_t length, int sample_rate, float** out,
-                             size_t* out_length, Fn process) {
-  // Clear any stale detailed-error message from an earlier call so a validation
-  // early-return (which records no message) cannot leak an unrelated one.
-  clear_last_error();
-  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = nullptr;
-  *out_length = 0;
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  try {
-    Audio audio = Audio::from_buffer(samples, length, sample_rate);
-    Audio result = process(audio);
-    // Empty-result policy lives in copy_audio_result: size()==0 -> (*out=nullptr,
-    // *out_length=0), matching the analysis emitters' (null, 0) convention.
-    return copy_audio_result(result, out, out_length);
-  } catch (...) {
-    return record_current_exception();
-  }
-}
-
-/// @brief Runs an offline analysis body against an already-validated buffer.
-/// @details Shares run_offline's Audio::from_buffer -> body -> catch chain but
-///          skips validate_audio_params, for a caller that has already validated
-///          the span it passes here -- re-validating would repeat that scan.
-template <typename Fn>
-SonareError run_prevalidated_offline(const float* samples, size_t length, int sample_rate,
-                                     Fn body) {
-  try {
-    Audio audio = Audio::from_buffer(samples, length, sample_rate);
-    return body(audio);
-  } catch (...) {
-    return record_current_exception();
-  }
-}
-
-/// @brief Runs an offline analysis body against a validated mono C buffer.
-/// @details Folds the validate_audio_params -> Audio::from_buffer -> try/catch
-///          boilerplate shared by every offline analysis/feature wrapper. The
-///          body receives the constructed Audio and returns the SonareError to
-///          propagate (normally SONARE_OK). Per-function out-pointer null checks,
-///          extra parameter validation, and out-struct zero-initialization must
-///          still happen at the call site BEFORE invoking this (they early-return
-///          without constructing an Audio). @p body must return SonareError.
-template <typename Fn>
-SonareError run_offline(const float* samples, size_t length, int sample_rate, Fn body) {
-  // Clear any stale detailed-error message from an earlier call (see
-  // run_mono_offline for the rationale / the sonare_last_error_message contract).
-  clear_last_error();
-  SonareError err = validate_audio_params(samples, length, sample_rate);
-  if (err != SONARE_OK) return err;
-  try {
-    Audio audio = Audio::from_buffer(samples, length, sample_rate);
-    return body(audio);
-  } catch (...) {
-    return record_current_exception();
-  }
-}
-
 }  // namespace sonare_c_detail
 
 // Stubs out a C API function body when an optional module is not compiled in:
@@ -407,6 +360,8 @@ SonareError run_offline(const float* samples, size_t length, int sample_rate, Fn
 // cannot expose detail from an unrelated previous call. The read-only error and
 // warning accessors are deliberately excluded: reading a diagnostic must not
 // destroy it. SONARE_C_TRY also clears defensively for legacy/helper entry paths.
+// tests/conformance/check_c_api_entry_guard.py holds every exported entry to this
+// family: cleared on entry, and everything that can throw inside SONARE_C_TRY.
 #define SONARE_C_API_ENTRY sonare_c_detail::clear_last_error()
 
 // The two realtime engine process functions deliberately do not touch the
@@ -441,3 +396,77 @@ SonareError run_offline(const float* samples, size_t length, int sample_rate, Fn
     (void)sonare_c_detail::record_current_exception(); \
     return (retval);                                   \
   }
+
+// Catch companion for void C-ABI entry points: records the exception and returns.
+#define SONARE_C_CATCH_VOID                            \
+  }                                                    \
+  catch (...) {                                        \
+    (void)sonare_c_detail::record_current_exception(); \
+    return;                                            \
+  }
+
+namespace sonare_c_detail {
+
+/// @brief Runs an Audio → Audio DSP function against a mono C buffer and
+///        marshals the result back out through @p out / @p out_length.
+/// @details Centralises the validate → from_buffer → process → copy chain that
+///          every offline effects wrapper shares, inside the entry guard. The
+///          callable receives the wrapped Audio and returns an Audio whose samples
+///          are copied into a fresh array the caller frees with sonare_free_floats.
+/// @param samples       Caller-owned input buffer (validated for null / NaN /
+///                      Inf / sample_rate by validate_audio_params).
+/// @param length        Number of samples in @p samples.
+/// @param sample_rate   Sample rate; validated against [kMinSampleRate,
+///                      kMaxSampleRate].
+/// @param out           Receives the freshly allocated output array.
+/// @param out_length    Receives the output array length.
+/// @param process       Callable taking a const Audio& and returning an Audio.
+template <typename Fn>
+SonareError run_mono_offline(const float* samples, size_t length, int sample_rate, float** out,
+                             size_t* out_length, Fn process) {
+  SONARE_C_TRY
+  if (!out || !out_length) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = nullptr;
+  *out_length = 0;
+  const SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  Audio result = process(audio);
+  // Empty-result policy lives in copy_audio_result: size()==0 -> (*out=nullptr,
+  // *out_length=0), matching the analysis emitters' (null, 0) convention.
+  return copy_audio_result(result, out, out_length);
+  SONARE_C_CATCH
+}
+
+/// @brief Runs an offline analysis body against an already-validated buffer.
+/// @details Shares run_offline's Audio::from_buffer -> body chain but skips
+///          validate_audio_params, for a caller that has already validated the
+///          span it passes here -- re-validating would repeat that scan.
+template <typename Fn>
+SonareError run_prevalidated_offline(const float* samples, size_t length, int sample_rate,
+                                     Fn body) {
+  SONARE_C_TRY
+  Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  return body(audio);
+  SONARE_C_CATCH
+}
+
+/// @brief Runs an offline analysis body against a validated mono C buffer.
+/// @details Folds the validate_audio_params -> Audio::from_buffer chain shared by
+///          every offline analysis/feature wrapper into the entry guard. The body
+///          receives the constructed Audio and returns the SonareError to
+///          propagate (normally SONARE_OK). Per-function out-pointer null checks,
+///          extra parameter validation, and out-struct zero-initialization must
+///          still happen at the call site BEFORE invoking this (they early-return
+///          without constructing an Audio). @p body must return SonareError.
+template <typename Fn>
+SonareError run_offline(const float* samples, size_t length, int sample_rate, Fn body) {
+  SONARE_C_TRY
+  const SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  Audio audio = Audio::from_buffer(samples, length, sample_rate);
+  return body(audio);
+  SONARE_C_CATCH
+}
+
+}  // namespace sonare_c_detail

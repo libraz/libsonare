@@ -165,23 +165,26 @@ void fill_compile_result_from_diagnostics(const std::vector<arr::Diagnostic>& di
   if (out == nullptr) return;
   *out = {};
   out->has_timeline = has_timeline ? 1 : 0;
-  out->diagnostic_count = diagnostics.size();
   if (diagnostics.empty()) return;
 
-  out->diagnostics = new SonareProjectDiagnostic[diagnostics.size()];
+  // Staged until the joined message is copied too, so a throw publishes nothing.
+  std::unique_ptr<SonareProjectDiagnostic[]> rows(new SonareProjectDiagnostic[diagnostics.size()]);
   std::string joined;
   for (size_t i = 0; i < diagnostics.size(); ++i) {
     const arr::Diagnostic& d = diagnostics[i];
-    out->diagnostics[i].code = static_cast<uint32_t>(d.code);
-    out->diagnostics[i].severity = static_cast<uint32_t>(d.severity);
-    out->diagnostics[i].target_id = d.target_id;
+    rows[i].code = static_cast<uint32_t>(d.code);
+    rows[i].severity = static_cast<uint32_t>(d.severity);
+    rows[i].target_id = d.target_id;
     if (i > 0) joined += '\n';
     std::string message = d.message;
     std::replace(message.begin(), message.end(), '\n', ' ');
     std::replace(message.begin(), message.end(), '\r', ' ');
     joined += message;
   }
-  out->messages = copy_string(joined);
+  std::unique_ptr<char[]> messages(copy_string(joined));
+  out->diagnostics = rows.release();
+  out->messages = messages.release();
+  out->diagnostic_count = diagnostics.size();
 }
 
 bool valid_midi_event_pod(const SonareMidiEventPod& event) noexcept {

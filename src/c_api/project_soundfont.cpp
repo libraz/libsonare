@@ -144,6 +144,7 @@ SonareError sonare_project_load_soundfont(SonareProject* project, const uint8_t*
 
 SonareError sonare_project_clear_soundfont(SonareProject* project) {
   SONARE_C_API_ENTRY;
+  SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project) return SONARE_ERROR_INVALID_PARAMETER;
   project->soundfont.reset();
@@ -151,6 +152,7 @@ SonareError sonare_project_clear_soundfont(SonareProject* project) {
 #else
   SONARE_C_STUB_NOT_SUPPORTED(project);
 #endif
+  SONARE_C_CATCH
 }
 
 SonareError sonare_project_soundfont_preset_count(SonareProject* project, size_t* out_count) {

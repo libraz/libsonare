@@ -119,6 +119,7 @@ This is what a change looks like by the time it is merged. The maintainer checks
 - When a C struct changes, update its `ctypes.Structure` mirror, run `make abi-layout`, and commit the regenerated snapshot in the same change.
 - When adding a translation unit under `src/c_api/`, copy the source-list rows of its closest existing sibling.
 - After moving a C-ABI translation unit between library targets, check `nm -gU` on the built shared library.
+- Open every exported C function with `SONARE_C_API_ENTRY` and put everything that can throw inside `SONARE_C_TRY` / `SONARE_C_CATCH*`; write out-params only after every allocation has succeeded. `make conformance` runs the entry-guard scan.
 - Document the lifecycle of every pointer in a public header in its own doc comment: who frees it, which `sonare_free_*` releases it, or what ends the library's retention of a caller's buffer.
 
 ### WASM
@@ -226,6 +227,7 @@ Nothing in this section asks anything of you; read it when a checklist item or a
 - The Python loader takes `SONARE_LIB_PATH`, then `build/lib`, then the package-adjacent copy. `conftest.py` refuses to start when the resolved in-tree library is older than the newest file under `src/` (outside `src/wasm/`) and `include/`, since a rebuild-less edit keeps the same ABI version. A library outside the checkout is not judged; `SONARE_ALLOW_STALE_LIB=1` opts out. `tests/conformance/test_playback_cli.py` takes `sonare-cli` from the same build unless `SONARE_NATIVE_CLI` names one.
 - Moving a C-ABI translation unit between library targets can remove an export from the shared library while everything builds and passes; it surfaces later as a `dlsym` failure in the parity run.
 - A conformance gate enforces the pointer-lifecycle doc comments.
+- An exception crossing the C boundary is undefined behaviour, and a last error left from an earlier call is read as this call's failure. `tests/conformance/check_c_api_entry_guard.py` classifies every exported name; the arithmetic-only converters it exempts are listed in the script, and the audio-thread process entries use `SONARE_C_RT_API_ENTRY` because touching the thread-local diagnostics can allocate.
 
 ### WASM
 
