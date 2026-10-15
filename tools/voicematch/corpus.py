@@ -284,6 +284,10 @@ def _config_paths(config: str):
         rooted = Path(REPO_ROOT) / path
         if rooted.exists():
             yield rooted
+        # A capture run from inside the harness directory recorded the path from there.
+        local = Path(__file__).resolve().parent / path
+        if local.exists():
+            yield local
 
 
 def in_declared_grid(cfg: dict):

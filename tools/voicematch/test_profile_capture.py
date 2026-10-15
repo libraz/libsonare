@@ -653,6 +653,8 @@ def test_the_definition_a_manifest_names_is_found_from_any_directory(monkeypatch
     monkeypatch.chdir(tmp_path)
     assert not Path(relative).exists()
     assert [p.name for p in _config_paths(relative)] == ["drums.json"]
+    # One recorded from inside the harness directory is found too.
+    assert [p.name for p in _config_paths("capture/drums.json")] == ["drums.json"]
     assert list(_config_paths("")) == []
 
 
