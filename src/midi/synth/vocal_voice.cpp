@@ -161,11 +161,7 @@ void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, u
                  : 0.0f;
 
   // Level contour.
-  level_ = 0.0f;
-  level_target_ = 1.0f;
-  releasing_ = false;
-  attack_coeff_ = ramp_coeff(params.attack_ms, sr);
-  release_coeff_ = ramp_coeff(params.release_ms, sr);
+  level_.start(params.attack_ms, params.release_ms, sr);
 
   const float vel01 = velocity.f7() / 127.0f;
   output_scale_ = kOutputScale * (kVelFloor + (1.0f - kVelFloor) * vel01);
@@ -226,8 +222,7 @@ float VocalVoiceCore::render(float pitch_ratio) noexcept {
   if (excitation_live_) advance_excitation();
 
   // Level contour: one-pole ramp toward 1 while singing, 0 once released.
-  const float coeff = releasing_ ? release_coeff_ : attack_coeff_;
-  level_ += coeff * (level_target_ - level_);
+  level_.advance();
 
   // Voice-local vibrato: a small multiplicative wobble on the pitch. Depth 0
   // skips the LFO entirely so an unmodulated note renders bit-identically.
@@ -264,18 +259,13 @@ float VocalVoiceCore::render(float pitch_ratio) noexcept {
     sum += form_gain_[i] * y;
   }
 
-  return sum * level_ * output_scale_;
+  return sum * level_.level * output_scale_;
 }
 
-void VocalVoiceCore::release() noexcept {
-  releasing_ = true;
-  level_target_ = 0.0f;
-}
+void VocalVoiceCore::release() noexcept { level_.release(); }
 
 void VocalVoiceCore::kill() noexcept {
-  level_ = 0.0f;
-  level_target_ = 0.0f;
-  releasing_ = true;
+  level_.kill();
   phase_ = 0.0f;
   tilt_state_ = 0.0f;
   vib_phase_ = 0.0f;

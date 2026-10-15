@@ -117,8 +117,6 @@ LoopBudget BowedStringVoiceCore::configure(const BowedStringPatchParams& params,
   noise_ = VoiceRandomSequence(seed);
   killed_ = false;
   drive_index_ = 0;
-  releasing_ = false;
-  bow_level_ = 0.0f;
   lp_state_ = 0.0f;
   neck_out_ = 0.0f;
   bridge_out_ = 0.0f;
@@ -219,14 +217,9 @@ LoopBudget BowedStringVoiceCore::configure(const BowedStringPatchParams& params,
     drive_index_ = static_cast<uint64_t>(prefill_span);
   }
 
-  // Bow velocity contour.
-  attack_coeff_ = ramp_coeff(params.attack_ms, sr);
-  release_coeff_ = ramp_coeff(params.release_ms, sr);
-  // 0 = one-pole ramp (ZeroIsSentinel); else a constant-acceleration linear rate.
-  bow_accel_rate_ = params.bow_accel_ms > 0.0f
-                        ? 1.0f / std::max(1.0f, static_cast<float>(params.bow_accel_ms) * 0.001f *
-                                                    static_cast<float>(sr))
-                        : 0.0f;
+  // Bow velocity contour: bow_accel_ms 0 = one-pole ramp (ZeroIsSentinel); else a
+  // constant-acceleration linear attack.
+  bow_.start(params.attack_ms, params.release_ms, sr, params.bow_accel_ms);
 
   // Rosin jitter is a per-sample draw voiced at kLossVoicedSr, feeding the
   // resonant string loop -> carries the noise law's gain.
@@ -323,17 +316,10 @@ float BowedStringVoiceCore::render_internal(float pitch_ratio) noexcept {
 
   // Bow velocity: ramp the bow speed toward the target (1 while bowing, 0 once
   // the bow lifts), then scale to the model's velocity units.
-  const float target = releasing_ ? 0.0f : 1.0f;
-  if (!releasing_ && bow_accel_rate_ > 0.0f) {
-    // Constant-acceleration ramp: linear, not the one-pole's peak-at-t=0 decay.
-    bow_level_ = std::min(1.0f, bow_level_ + bow_accel_rate_);
-  } else {
-    const float coeff = releasing_ ? release_coeff_ : attack_coeff_;
-    bow_level_ += coeff * (target - bow_level_);
-  }
-  float bow_v = max_bow_velocity_ * bow_level_;
+  const float bow_level = bow_.advance();
+  float bow_v = max_bow_velocity_ * bow_level;
   if (rosin_level_ > 0.0f) {
-    bow_v += max_bow_velocity_ * bow_level_ * rosin_level_ * noise_.bipolar_at(drive_index_);
+    bow_v += max_bow_velocity_ * bow_level * rosin_level_ * noise_.bipolar_at(drive_index_);
   }
 
   // Reflections from the previous delay-line outputs. Bridge: one-pole loss
@@ -471,12 +457,12 @@ float BowedStringVoiceCore::elasto_plastic_injection(float dv) noexcept {
   return dv * bow_coeff;
 }
 
-void BowedStringVoiceCore::release() noexcept { releasing_ = true; }
+void BowedStringVoiceCore::release() noexcept { bow_.release(); }
 
 void BowedStringVoiceCore::kill() noexcept {
   killed_ = true;
   decimator_.reset();
-  bow_level_ = 0.0f;
+  bow_.kill();
   lp_state_ = 0.0f;
   neck_out_ = 0.0f;
   bridge_out_ = 0.0f;
@@ -487,7 +473,6 @@ void BowedStringVoiceCore::kill() noexcept {
     m.y1 = 0.0f;
     m.y2 = 0.0f;
   }
-  releasing_ = true;
 }
 
 }  // namespace sonare::midi::synth

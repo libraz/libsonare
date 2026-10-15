@@ -115,9 +115,6 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   sample_rate_ = sr;
   noise_ = VoiceRandomSequence(seed);
   drive_index_ = 1;
-  releasing_ = false;
-  level_ = 0.0f;
-  level_target_ = 1.0f;
   body_state_ = 0.0f;
 
   base_freq_hz_ = note_to_hz(note);
@@ -194,8 +191,7 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   radiation_history_ready_ = false;
 
   // Contour + textures.
-  attack_coeff_ = ramp_coeff(params.attack_ms, sr);
-  release_coeff_ = ramp_coeff(params.release_ms, sr);
+  bellows_.start(params.attack_ms, params.release_ms, sr);
   // A per-sample draw voiced at kLossVoicedSr, so it carries the noise law's gain.
   breath_noise_ =
       std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathNoiseDepth * noise_gain_at_rate(sr);
@@ -275,8 +271,7 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
   if (excitation_live_) advance_excitation();
 
   // Bellows contour: one-pole ramp toward 1 while blowing, 0 once released.
-  const float coeff = releasing_ ? release_coeff_ : attack_coeff_;
-  level_ += coeff * (level_target_ - level_);
+  bellows_.advance();
 
   if (!radiation_history_ready_) {
     const float effective_frequency = base_freq_hz_ * ratio;
@@ -382,24 +377,19 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
   // Reed-plate / cavity radiation: one-pole roll-off.
   body_state_ += body_alpha_ * (tongue - body_state_);
 
-  return body_state_ * level_ * output_scale_;
+  return body_state_ * bellows_.level * output_scale_;
 }
 
-void FreeReedVoiceCore::release() noexcept {
-  releasing_ = true;
-  level_target_ = 0.0f;
-}
+void FreeReedVoiceCore::release() noexcept { bellows_.release(); }
 
 void FreeReedVoiceCore::kill() noexcept {
-  level_ = 0.0f;
-  level_target_ = 0.0f;
+  bellows_.kill();
   body_state_ = 0.0f;
   phase_a_ = 0.0f;
   phase_b_ = 0.0f;
   prev_flow_ = 0.0f;
   prev_flow_b_ = 0.0f;
   radiation_history_ready_ = false;
-  releasing_ = true;
 }
 
 }  // namespace sonare::midi::synth

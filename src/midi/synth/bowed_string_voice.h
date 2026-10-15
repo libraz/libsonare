@@ -34,6 +34,7 @@
 
 #include "midi/control_value.h"
 #include "midi/synth/excitation_axes.h"
+#include "midi/synth/player_trajectory.h"
 #include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 
@@ -319,16 +320,10 @@ class BowedStringVoiceCore {
   float bow_slope_ = 3.0f;
   float bow_offset_ = 0.0f;
 
-  // Bow velocity contour: a one-pole ramp of the bow speed in [0,1].
+  // Bow velocity contour: the bow speed in [0,1], a one-pole ramp or, with
+  // bow_accel_ms, a constant-acceleration attack.
   float max_bow_velocity_ = 0.1f;
-  float bow_level_ = 0.0f;
-  float attack_coeff_ = 0.0f;
-  float release_coeff_ = 0.0f;
-  // Per-sample linear-ramp rate for bow_accel_ms (ZeroIsSentinel: 0 keeps the
-  // one-pole attack_coeff_ ramp above; render() only takes this branch on the
-  // attack, never on release).
-  float bow_accel_rate_ = 0.0f;
-  bool releasing_ = false;
+  OnsetContour bow_;
 
   // Live-control smoothing: the render ramps the current bow speed / slope /
   // position toward these targets, so a moving CC never zippers. base_bow_-

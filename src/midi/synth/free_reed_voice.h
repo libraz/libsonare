@@ -192,13 +192,8 @@ class FreeReedVoiceCore {
   float body_alpha_ = 1.0f;
   float body_state_ = 0.0f;
 
-  // Bellows level contour: a one-pole ramp toward the target (1 while blowing,
-  // 0 once released).
-  float level_target_ = 1.0f;
-  float level_ = 0.0f;
-  float attack_coeff_ = 0.0f;
-  float release_coeff_ = 0.0f;
-  bool releasing_ = false;
+  // Bellows level contour: a one-pole ramp toward 1 while blowing, 0 once released.
+  OnsetContour bellows_;
 
   // Breath/air noise.
   float breath_noise_ = 0.0f;

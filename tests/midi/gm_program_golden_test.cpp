@@ -222,11 +222,11 @@ bool reed_is_beating(const NativeSynthPatch& patch) noexcept {
 
 /// A patch field that gates a code path inside an engine. One representative per
 /// engine covers whichever side its lowest program happens to sit on, so an
-/// engine listed here takes two -- `reed.closing_pressure` chooses the Bernoulli
-/// valve over the linearised table, and the lowest reed program is on the table
-/// side, so a change to the valve would have moved no gesture row at all. An
-/// engine absent from here claims its programs differ only in values the same
-/// code reads; a gate added without a row goes unmeasured under every gesture.
+/// engine listed here takes one more row per selector -- `reed.closing_pressure` chooses the
+/// Bernoulli valve over the linearised table, and the lowest reed program is on the table side, so
+/// a change to the valve would have moved no gesture row at all. An engine absent from here claims
+/// its programs differ only in values the same code reads; a gate added without a row goes
+/// unmeasured under every gesture.
 struct PathSelector {
   SynthEngineMode mode;
   /// Suffixed onto the engine's own label to name the row.
@@ -251,26 +251,29 @@ std::vector<EngineRow> engine_representatives() {
   std::vector<EngineRow> out;
   for (int ordinal = 0; ordinal <= kSynthEngineModeMax; ++ordinal) {
     const auto mode = static_cast<SynthEngineMode>(ordinal);
-    const PathSelector* selector = nullptr;
+    std::vector<const PathSelector*> selectors;
     for (const PathSelector& candidate : kPathSelectors) {
-      if (candidate.mode == mode) selector = &candidate;
+      if (candidate.mode == mode) selectors.push_back(&candidate);
     }
+    // The base row is the lowest program no selector of the engine picks; each
+    // selector then takes the lowest program it picks, in table order.
     int base = -1;
-    int gated = -1;
+    std::vector<int> gated(selectors.size(), -1);
     for (int program = 0; program < kProgramCount; ++program) {
       const NativeSynthPatch& patch = gm_fallback_patch(0, static_cast<uint8_t>(program));
       if (patch.mode != mode) continue;
-      const bool gates = selector != nullptr && selector->selects(patch);
-      if (gates) {
-        if (gated < 0) gated = program;
-      } else if (base < 0) {
-        base = program;
+      bool picked = false;
+      for (size_t i = 0; i < selectors.size(); ++i) {
+        if (!selectors[i]->selects(patch)) continue;
+        picked = true;
+        if (gated[i] < 0) gated[i] = program;
       }
-      if (base >= 0 && (selector == nullptr || gated >= 0)) break;
+      if (!picked && base < 0) base = program;
     }
     if (base >= 0) out.push_back({mode, base, engine_label(mode)});
-    if (gated >= 0) {
-      out.push_back({mode, gated, std::string(engine_label(mode)) + '-' + selector->label});
+    for (size_t i = 0; i < selectors.size(); ++i) {
+      if (gated[i] < 0) continue;
+      out.push_back({mode, gated[i], std::string(engine_label(mode)) + '-' + selectors[i]->label});
     }
   }
   return out;

@@ -66,7 +66,7 @@ struct WindBore {
 
   /// The injection a bore takes: the @p passive part (a reflection, contractive on its own) plus
   /// the @p active part (a valve, a jet or a pump, whose gain can exceed 1) scaled by @p gate, the
-  /// breath's BreathContour::gate(). Every energy source reaches advance() through here, so with
+  /// breath's OnsetContour::gate(). Every energy source reaches advance() through here, so with
   /// the gate at zero the loop is passive and rings down by its loss alone.
   static float injection(float passive, float active, float gate) noexcept {
     return passive + gate * active;

@@ -344,7 +344,7 @@ class PipeOrganVoiceCore {
 
   // Breath contour shared by every rank (the wind gate): ramps to 1 on note-on,
   // to 0 on release; each rank's steady breath is scaled by this.
-  BreathContour breath_{};
+  OnsetContour breath_{};
   /// Wind-hiss depth on the jet drive, the voiced depth at the noise law's gain.
   float turb_gain_ = 0.0f;
 

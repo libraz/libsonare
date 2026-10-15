@@ -160,13 +160,8 @@ class VocalVoiceCore {
   float ctrl_coeff_ = 0.0f;
   bool excitation_live_ = false;
 
-  // Level contour: a one-pole ramp toward the target (1 while singing, 0 once
-  // released).
-  float level_target_ = 1.0f;
-  float level_ = 0.0f;
-  float attack_coeff_ = 0.0f;
-  float release_coeff_ = 0.0f;
-  bool releasing_ = false;
+  // Level contour: a one-pole ramp toward 1 while singing, 0 once released.
+  OnsetContour level_;
 
   // Voice-local vibrato LFO. depth_ == 0 -> skipped (bit-identical).
   float vib_depth_ = 0.0f;

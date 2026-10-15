@@ -275,7 +275,7 @@ class FluteVoiceCore {
   // (1 while blowing, 0 once released). breath_target_ is the steady mouth
   // pressure (live-smoothed toward breath_ctrl_target_).
   float breath_target_ = 0.55f;
-  BreathContour breath_{};
+  OnsetContour breath_{};
   bool killed_ = true;
 
   // Live-control smoothing: the render ramps breath_target_ / lp_alpha_ toward
