@@ -71,12 +71,6 @@
     },
     {
       "file": "src/c_api/mixing_strip.cpp",
-      "value": "true_peak_oversample",
-      "measured": "no",
-      "reason": "Strip meter oversample; core response not driven. Same field as the converted mastering path, so it is the next one to move."
-    },
-    {
-      "file": "src/c_api/mixing_strip.cpp",
       "value": "pan->distance",
       "measured": "no",
       "reason": "Surround pan distance; core response to a negative or non-finite distance not driven."
