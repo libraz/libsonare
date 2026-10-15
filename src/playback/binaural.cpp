@@ -22,7 +22,6 @@
 
 namespace sonare::playback {
 
-using sonare::constants::kDegreesPerTurn;
 using sonare::constants::kDegToRad;
 using sonare::constants::kHalfPi;
 using sonare::constants::kPi;
@@ -151,12 +150,6 @@ struct LateEar {
   std::vector<float> head;  ///< direct-FIR taps, indexed by lag
   int head_begin = 0;       ///< first nonzero lag of @p head
 };
-
-float wrap_degrees(float deg) noexcept {
-  float wrapped = std::fmod(deg, kDegreesPerTurn);
-  if (wrapped < 0.0f) wrapped += kDegreesPerTurn;
-  return wrapped;
-}
 
 void fir(const EarFilter& filter, const float* block, float* out, int frames) noexcept {
   const float* c = filter.coeffs.data();
@@ -521,7 +514,7 @@ void BinauralRenderer::prepare(double sample_rate, int max_block_size, const Hrt
         const float beta = static_cast<float>(
             std::sqrt(beta_power / static_cast<double>(image.reflection.size())));
         const acoustic::Vec3 arrival = image.position - listener;
-        const float azimuth = wrap_degrees(std::atan2(arrival.y, arrival.x) * kRadToDeg);
+        const float azimuth = wrap_azimuth_deg(std::atan2(arrival.y, arrival.x) * kRadToDeg);
         const float position = azimuth / kReflectionRingStepDeg;
         const int lower = static_cast<int>(std::floor(position));
         const float frac = position - static_cast<float>(lower);

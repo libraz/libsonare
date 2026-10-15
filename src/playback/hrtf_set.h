@@ -7,12 +7,21 @@
 /// Azimuth wraps around; elevation outside the grid is clamped to the nearest
 /// row. The set is immutable once built, so one set may back several renderers.
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 
 #include "playback/shrf_format.h"
+#include "util/constants.h"
 
 namespace sonare::playback {
+
+/// Azimuth folded onto one turn, measured from 0 (a tiny negative input rounds up to 360).
+inline float wrap_azimuth_deg(float degrees) noexcept {
+  float wrapped = std::fmod(degrees, ::sonare::constants::kDegreesPerTurn);
+  if (wrapped < 0.0f) wrapped += ::sonare::constants::kDegreesPerTurn;
+  return wrapped;
+}
 
 class HrtfSet {
  public:
