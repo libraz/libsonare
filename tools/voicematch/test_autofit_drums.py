@@ -620,3 +620,32 @@ def test_a_family_field_with_no_line_is_appended_to_its_block():
     written = next(i for i, ln in enumerate(lines) if "t[0].drift_cents = 2.5f;" in ln)
     first = next(i for i, ln in enumerate(lines) if ln.strip().startswith("t[0]."))
     assert first < written < next(i for i, ln in enumerate(lines) if "return t;" in ln)
+
+
+def test_a_field_an_instrument_is_pinned_by_or_the_bank_never_ships_is_not_offered():
+    """Each exclusion is a C++ invariant; the same field on another patch stays fittable."""
+    cat = Catalogue(
+        defaults={
+            "bag_pipe.reed.vel_to_breath": 0.0,
+            "bag_pipe.reed.breath": 0.7,
+            "clarinet.reed.vel_to_breath": 0.4,
+            "marimba.modal.num_modes": 3.0,
+            "marimba.modal.modes1.ratio": 4.0,
+            "marimba.modal.modes1.decay_scale": 1.0,
+            "violin.bowed_string.attack_noise": 0.0,
+            "violin.bowed_string.bow_force": 0.55,
+            "d056.percussion.mode_ratios1": 1.44,
+            "d056.percussion.noise_gain": 1.0,
+        },
+        programs={(109, 0): "bag_pipe", (71, 0): "clarinet", (12, 0): "marimba", (40, 0): "violin"},
+        bounds={},
+    )
+
+    def offered(program, **kw):
+        return {e["tunable"] for e in auto_spec(program, cat, **kw)}
+
+    assert offered(109) == {"bag_pipe.reed.breath"}
+    assert "clarinet.reed.vel_to_breath" in offered(71)
+    assert offered(12) == {"marimba.modal.modes1.decay_scale"}
+    assert offered(40) == {"violin.bowed_string.bow_force"}
+    assert offered(0, drum_note=56) == {"d056.percussion.noise_gain"}

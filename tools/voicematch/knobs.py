@@ -14,6 +14,7 @@ only where there is not.
 
 from __future__ import annotations
 
+import fnmatch
 import json
 import re
 import sys
@@ -469,9 +470,30 @@ MODE_RATIO_SPAN = 2.0
 MODE_RATIO_RANGE = (0.2, 8.0)
 
 
-def _offered(field: str) -> bool:
-    """Whether `--spec auto` puts this patch field in front of a search."""
-    return field not in UNIDENTIFIABLE_FIELDS and not field.startswith(STRUCTURAL_FIELD_PREFIXES)
+#: Engine fields a search is never given on any patch: mechanisms the bank does
+#: not ship, which a C++ test holds at 0 on every bowed voice. A fit offered them
+#: turns one on wherever it lowers a term, and the bank then ships it unjudged.
+UNSHIPPED_FIELDS = frozenset({"bowed_string.attack_noise", "bowed_string.bow_accel_ms"})
+
+#: Patch fields fixed by what one instrument is, each held by a C++ test, so a
+#: fit is not given them. Keys are fnmatch patterns; the value is the invariant.
+PINNED_KEYS = {
+    "bag_pipe.reed.vel_to_breath": "the bag, not the player, sets the pressure",
+    "electric_grand.amp_env.attack_ms": "programs 0-3 keep the grand's onset peak",
+    "marimba.modal.num_modes": "a marimba bar is tuned 1:4:10 over three modes",
+    "marimba.modal.modes*.ratio": "a marimba bar is tuned 1:4:10 over three modes",
+    "d056.percussion.mode_ratios*": "the cowbell's two partials are 587 and 845 Hz",
+}
+
+
+def _offered(key: str) -> bool:
+    """Whether `--spec auto` puts this patch field (`patch.section.field`) before a search."""
+    field = key.rsplit(".", 1)[-1]
+    if field in UNIDENTIFIABLE_FIELDS or field.startswith(STRUCTURAL_FIELD_PREFIXES):
+        return False
+    if key.partition(".")[2] in UNSHIPPED_FIELDS:
+        return False
+    return not any(fnmatch.fnmatchcase(key, pattern) for pattern in PINNED_KEYS)
 
 
 def auto_spec(
@@ -525,9 +547,7 @@ def auto_spec(
                 f"the library did not report a patch for program {program}; "
                 f"rebuild with BUILD_TUNING=ON so the catalogue is written"
             )
-    patch_keys = sorted(
-        k for k in defaults if k.startswith(key + ".") and _offered(k.rsplit(".", 1)[-1])
-    )
+    patch_keys = sorted(k for k in defaults if k.startswith(key + ".") and _offered(k))
     if not patch_keys:
         raise ValueError(f"no patch fields under {key!r} in the catalogue")
 
