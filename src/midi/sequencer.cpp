@@ -921,9 +921,6 @@ void MidiSequencer::all_notes_off_for_destination(uint32_t destination_id,
   // single instrument is swapped or cleared on its destination, leaving notes on
   // other destinations untouched). Swap-remove keeps the table compact; iterate
   // by index and re-check the same slot after a swap. No allocation.
-  // Reset this destination's channels first while the table is still intact,
-  // then release its notes (lift damper / recenter bend before the offs).
-  emit_active_controller_resets(/*single_destination=*/true, destination_id, render_frame);
   size_t i = 0;
   while (i < active_count_) {
     if (active_[i].destination_id != destination_id) {
@@ -941,6 +938,8 @@ void MidiSequencer::all_notes_off_for_destination(uint32_t destination_id,
     --active_count_;
     dispatch(destination_id, off);
   }
+  // Controller reset after the note-offs, in the same order as all_notes_off().
+  emit_active_controller_resets(/*single_destination=*/true, destination_id, render_frame);
   clear_pending_for_destination(destination_id);
   if (DestinationFx* fx = find_midi_fx(destination_id); fx != nullptr) {
     fx->chain.clear_note_tracking();
