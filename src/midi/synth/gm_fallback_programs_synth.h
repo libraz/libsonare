@@ -53,6 +53,9 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_square.cutoff_hz = 4200.0f;
   o.lead_square.mod_matrix.routes[0] = {ModSource::kModWheel, ModDestination::kPitchCents, 35.0f};
   o.lead_square.gain = 0.60f;
+  o.lead_square.amp_env.attack_ms = 14.9858f;
+  o.lead_square.amp_env.decay_ms = 599.43f;
+  o.lead_square.amp_env.release_ms = 50.0475f;
 
   // Sawtooth (GM 81): the shared lead itself, opened up — the saw is what the
   // stack was written around.
@@ -60,6 +63,9 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_saw.drive = 0.2f;
   o.lead_saw.cutoff_hz = 4000.0f;
   o.lead_saw.gain = 0.61f;
+  o.lead_saw.amp_env.attack_ms = 14.9858f;
+  o.lead_saw.amp_env.decay_ms = 122.416f;
+  o.lead_saw.amp_env.release_ms = 91.8123f;
 
   // Calliope (GM 82): a steam whistle rank. One pure triangle in a tube, no
   // stack and no drive, with the deep vibrato a whistle organ has from its
@@ -69,14 +75,21 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_calliope.unison = 1;
   o.lead_calliope.detune_cents = 0.0f;
   o.lead_calliope.drive = 0.0f;
-  o.lead_calliope.cutoff_hz = 2600.0f;
-  o.lead_calliope.env_to_cutoff_cents = 600.0f;
+  o.lead_calliope.cutoff_hz = 4247.8f;
+  o.lead_calliope.env_to_cutoff_cents = 200.19f;
   o.lead_calliope.amp_env = fallback_env(35.0f, 200.0f, 0.9f, 180.0f);
   o.lead_calliope.lfo_rate_hz = 6.0f;
   o.lead_calliope.lfo_to_pitch_cents = 22.0f;
   o.lead_calliope.body = BodyType::kWoodTube;
-  o.lead_calliope.body_mix = 0.25f;
+  o.lead_calliope.body_mix = 0.463525f;
   o.lead_calliope.gain = 0.59f;
+  o.lead_calliope.amp_env.attack_ms = 104.9f;
+  o.lead_calliope.amp_env.decay_ms = 326.754f;
+  o.lead_calliope.amp_env.release_ms = 60.057f;
+  o.lead_calliope.amp_env.sustain = 0.541641f;
+  o.lead_calliope.filter_env.decay_ms = 116.778f;
+  o.lead_calliope.filter_env.release_ms = 449.573f;
+  o.lead_calliope.filter_env.sustain = 0.212461f;
 
   // Chiff (GM 83): the attack transient is the whole program. A wide filter
   // envelope that collapses in 60 ms puts the breath edge on the onset and
@@ -96,6 +109,8 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_chiff.env_to_cutoff_cents = 3900.0f;
   o.lead_chiff.resonance_q = 1.8f;
   o.lead_chiff.gain = 0.62f;
+  o.lead_chiff.amp_env.attack_ms = 8.16884f;
+  o.lead_chiff.amp_env.release_ms = 91.8123f;
 
   // Charang (GM 84): the hard, guitar-edged lead. The diode ladder saturates
   // asymmetrically, so the drive is where the character sits and the cutoff
@@ -108,6 +123,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_charang.resonance_q = 2.0f;
   o.lead_charang.cutoff_hz = 2600.0f;
   o.lead_charang.gain = 0.96f;
+  o.lead_charang.amp_env.release_ms = 91.8123f;
 
   // Voice (GM 85): a sung lead. The vocal formant bank is the model; the
   // oscillator behind it only has to be rich enough to feed the formants.
@@ -145,6 +161,8 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_bass_lead.env_to_cutoff_cents = 2400.0f;
   o.lead_bass_lead.key_track = 0.4f;
   o.lead_bass_lead.gain = 0.63f;
+  o.lead_bass_lead.amp_env.attack_ms = 8.16884f;
+  o.lead_bass_lead.amp_env.release_ms = 91.8123f;
 
   // Synth Strings (GM 50, 51). Both hold a note that swells and falls by about
   // 10 dB, and the two differ in what that motion is made of: the second's rate
@@ -173,6 +191,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   // one rack at one setting, so the 1.7 dB this sits above its sibling is the
   // instrument, while what they share against the bank is the rack's output.
   o.synth_strings_1.gain = 0.53f;
+  o.synth_strings_1.amp_env.decay_ms = 1798.29f;
 
   // Synth Strings 2 (GM 51): darker, faster to speak, and twice as wide. The
   // width is the whole of its movement, so it takes no amplitude LFO.
@@ -206,9 +225,12 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   // Warm (GM 89): the shared pad taken down and slowed. Nothing else — warm is
   // the absence of edge, not the presence of anything.
   o.pad_warm = pad;
-  o.pad_warm.cutoff_hz = 1800.0f;
+  o.pad_warm.cutoff_hz = 1101.75f;
   o.pad_warm.amp_env = fallback_env(620.0f, 800.0f, 0.85f, 1100.0f);
   o.pad_warm.gain = 0.47f;
+  o.pad_warm.amp_env.decay_ms = 2397.72f;
+  o.pad_warm.amp_env.release_ms = 673.29f;
+  o.pad_warm.amp_env.sustain = 0.751722f;
 
   // Polysynth (GM 90): a pad you can still play chords on, so the attack comes
   // back inside a tenth of a second and the stack is wide and bright.
@@ -221,6 +243,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.pad_polysynth.filter_env = fallback_env(20.0f, 900.0f, 0.5f, 600.0f);
   o.pad_polysynth.env_to_cutoff_cents = 1500.0f;
   o.pad_polysynth.gain = 0.77f;
+  o.pad_polysynth.amp_env.attack_ms = 147.039f;
 
   // Choir (GM 91): the same formant bank the vocal lead uses, over the pad's
   // envelope instead of the lead's.
@@ -246,6 +269,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.pad_bowed.body = BodyType::kViolin;
   o.pad_bowed.body_mix = 0.35f;
   o.pad_bowed.gain = 0.34f;
+  o.pad_bowed.amp_env.attack_ms = 550.874f;
 
   // Metallic (GM 93): a narrow resonant band on a square is how a subtractive
   // synth makes metal — the state-variable filter is the only model here with
@@ -284,6 +308,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.pad_sweep.lfo2_rate_hz = 0.3f;
   o.pad_sweep.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kCutoffCents, 2600.0f};
   o.pad_sweep.gain = 0.38f;
+  o.pad_sweep.amp_env.attack_ms = 244.833f;
 
   // --- Synth effects (GM 96-103) -------------------------------------------
   // Sample-like GM gestures use the closest source, envelope, filter and modulation available.
@@ -324,6 +349,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_crystal.filter_env = fallback_env(1.0f, 900.0f, 0.0f, 300.0f);
   o.fx_crystal.env_to_cutoff_cents = 1800.0f;
   o.fx_crystal.gain = 0.58f;
+  o.fx_crystal.amp_env.attack_ms = 2.99715f;
 
   // FX 4 Atmosphere: wide drift supplies the motion possible in a one-note voice.
   o.fx_atmosphere = fx;
@@ -349,16 +375,16 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_brightness.detune_cents = 9.34699f;
   o.fx_brightness.amp_env = fallback_env(4.0f, 550.0f, 0.35f, 260.0f);
   o.fx_brightness.filter_output = SynthFilterOutput::kHighpass;
-  o.fx_brightness.cutoff_hz = 76.5675f;
+  o.fx_brightness.cutoff_hz = 47.7515f;
   o.fx_brightness.resonance_q = 0.841841f;
   o.fx_brightness.filter_env = fallback_env(1.0f, 180.0f, 0.0f, 150.0f);
   o.fx_brightness.env_to_cutoff_cents = 127.403f;
   o.fx_brightness.drive = 0.362055f;
   o.fx_brightness.gain = 0.5f;
-  o.fx_brightness.amp_env.attack_ms = 0.605543f;
-  o.fx_brightness.amp_env.decay_ms = 188.751f;
+  o.fx_brightness.amp_env.attack_ms = 0.20204f;
+  o.fx_brightness.amp_env.decay_ms = 565.715f;
   o.fx_brightness.amp_env.release_ms = 734.285f;
-  o.fx_brightness.amp_env.sustain = 0.108119f;
+  o.fx_brightness.amp_env.sustain = 0.143557f;
   o.fx_brightness.filter_env.attack_ms = 0.305805f;
   o.fx_brightness.filter_env.decay_ms = 21.64f;
 
@@ -517,11 +543,12 @@ SONARE_TUNED_CONSTEXPR void configure_synth_bass_and_brass_programs(ProgramOverr
   o.synth_bass_2.amp_env = fallback_env(16.7184f, 0.0f, 1.0f, 36.9329f);
   o.synth_bass_2.filter_env = fallback_env(120.0f, 400.0f, 1.0f, 150.0f);
   o.synth_bass_2.gain = 0.731f;
-  o.synth_bass_2.amp_env.attack_ms = 3.43138f;
-  o.synth_bass_2.amp_env.release_ms = 19.9631f;
+  o.synth_bass_2.amp_env.attack_ms = 5.60608f;
+  o.synth_bass_2.amp_env.release_ms = 32.6151f;
   o.synth_bass_2.filter_env.attack_ms = 45.369f;
   o.synth_bass_2.filter_env.release_ms = 354.786f;
   o.synth_bass_2.filter_env.sustain = 0.619768f;
+  o.synth_bass_2.amp_env.sustain = 0.618034f;
 
   // Synth Brass 1 (GM 62): the family stack with the feedback operator off, and
   // the fit put it there on its own, against the range floor. It is the wider
@@ -537,6 +564,9 @@ SONARE_TUNED_CONSTEXPR void configure_synth_bass_and_brass_programs(ProgramOverr
   o.synth_brass_1.cutoff_hz = 16316.9f;
   o.synth_brass_1.amp_env = fallback_env(40.0f, 200.0f, 0.85f, 60.0f);
   o.synth_brass_1.stereo_spread = 0.6f;
+  o.synth_brass_1.amp_env.decay_ms = 599.43f;
+  o.synth_brass_1.amp_env.release_ms = 36.7249f;
+  o.synth_brass_1.amp_env.sustain = 0.503444f;
 
   // Synth Brass 2 (GM 63): darker in the harmonics (h3 sits 8 to 12 dB under
   // brass 1's), narrower (width 0.23 to 0.51) and slower to let go (120 to 170
@@ -551,6 +581,7 @@ SONARE_TUNED_CONSTEXPR void configure_synth_bass_and_brass_programs(ProgramOverr
   o.synth_brass_2.cutoff_hz = 1078.64f;
   o.synth_brass_2.amp_env = fallback_env(40.0f, 200.0f, 0.85f, 150.0f);
   o.synth_brass_2.stereo_spread = 0.3f;
+  o.synth_brass_2.amp_env.decay_ms = 66.73f;
 }
 
 }  // namespace sonare::midi::synth::detail

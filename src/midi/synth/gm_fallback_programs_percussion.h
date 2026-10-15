@@ -40,6 +40,7 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   tk.percussion.noise_cutoff_hz = 2500.0f;
   tk.percussion.noise_output = SynthFilterOutput::kBandpass;
   tk.gain = 1.18f;
+  tk.amp_env.attack_ms = 0.306041f;
 
   // Agogo (GM 113): a two-tone metal bell, and the second program here that is
   // not a membrane. Both GM sources measured put its loudest line at twice the
@@ -56,7 +57,7 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   // reference has: its partials lose about 12 dB per octave of ABSOLUTE
   // frequency, so the same bell struck an octave up comes out 3.5 dB quieter
   // with its bright partial 13 dB down. One corner reproduces both.
-  ag.cutoff_hz = 1800.0f;
+  ag.cutoff_hz = 2940.78f;
   ag.modal.num_modes = 8;
   // Two modes on the sounded note, because its fall is two-stage and one
   // resonator is one exponential: a fast part carries the first 0.2 s at about
@@ -79,6 +80,9 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   ag.modal.vel_to_brightness = 0.42f;
   ag.modal.release_damp_s = 1.22f;  // a struck bell is not damped by the key
   ag.gain = 0.62f;
+  ag.amp_env.attack_ms = 0.166825f;
+  ag.amp_env.release_ms = 1798.29f;
+  ag.amp_env.sustain = 0.809017f;
 
   // Steel Drums (GM 114): a tuned pan, and the one program here that is not a
   // membrane. A pan note is tuned so its octave and twelfth are true and the
@@ -113,13 +117,14 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   // The modal core radiates about 8 dB hotter than the membrane one did for the
   // same gain, so this is set from the reference's own peak rather than kept.
   sd.gain = 0.52f;
-  sd.amp_env.attack_ms = 0.030005f;
+  sd.amp_env.attack_ms = 0.0490216f;
+  sd.amp_env.release_ms = 133.46f;
 
   // Woodblock (GM 115): a single high-Q wood resonance with a short stick click.
   NativeSynthPatch& wb = o.woodblock;
   wb.mode = SynthEngineMode::kPercussion;
   wb.amp_env = fallback_env(0.3f, 100.0f, 0.0f, 40.0f);
-  wb.cutoff_hz = 5582.96f;
+  wb.cutoff_hz = 10591.1f;
   wb.percussion.num_modes = 1;
   wb.percussion.mode_ratios = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
   wb.percussion.base_freq_hz = 0.0f;
@@ -131,9 +136,9 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   wb.percussion.noise_output = SynthFilterOutput::kBandpass;
   wb.gain = 0.6f;
   wb.amp_env.attack_ms = 0.039043f;
-  wb.amp_env.decay_ms = 30.0073f;
-  wb.amp_env.release_ms = 704.853f;
-  wb.amp_env.sustain = 0.35353f;
+  wb.amp_env.decay_ms = 49.025f;
+  wb.amp_env.release_ms = 2112.55f;
+  wb.amp_env.sustain = 0.527511f;
   wb.percussion.mode_ratios[0] = 2.77762f;
   wb.percussion.noise_q = 1.52151f;
   wb.percussion.plate_hf_ratio = 0.278273f;
@@ -141,6 +146,8 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   wb.percussion.plate_t60_s = 8.16114f;
   wb.percussion.tone_direct = 0.23688f;
   wb.resonance_q = 3.36119f;
+  wb.drive = 0.381966f;
+  wb.percussion.mode_decay_exp = 0.763932f;
 
   // Taiko (GM 116): a large struck membrane — the full Rayleigh mode set, a
   // strong strike pitch drop and a low shell boom.
@@ -165,9 +172,9 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   ti.percussion.shell_t60_s = {0.14f, 0.0f, 0.0f, 0.0f};
   ti.percussion.shell_weight = {1.0f, 0.0f, 0.0f, 0.0f};
   ti.gain = 1.1f;
-  ti.amp_env.attack_ms = 0.0415506f;
-  ti.amp_env.decay_ms = 687.96f;
-  ti.amp_env.release_ms = 11471.0f;
+  ti.amp_env.attack_ms = 0.0678843f;
+  ti.amp_env.decay_ms = 2061.92f;
+  ti.amp_env.release_ms = 9777.52f;
   ti.amp_env.sustain = 0.26644f;
   ti.percussion.contact = 0.0f;
   ti.percussion.contact_ms = 0.761066f;
@@ -208,6 +215,8 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   mt.percussion.shell_t60_s = {0.12f, 0.06f, 0.0f, 0.0f};
   mt.percussion.shell_weight = {1.0f, 0.4f, 0.0f, 0.0f};
   mt.gain = 1.0f;
+  mt.amp_env.attack_ms = 0.166825f;
+  mt.amp_env.release_ms = 449.573f;
 
   // Synth Drum (GM 118): a synthetic decaying-sine tom (the TR-808 recipe) —
   // one membrane mode, a strong pitch drop, little noise.
@@ -245,7 +254,7 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   rc.percussion.num_modes = 2;
   rc.percussion.mode_ratios = {1.0f, 1.34f, 1.72f, 2.15f, 0.0f, 0.0f};
   rc.percussion.base_freq_hz = 3600.0f;  // unpitched crash body
-  rc.percussion.mode_decay_s = 2.33456f;
+  rc.percussion.mode_decay_s = 3.81413f;
   rc.percussion.tone_gain = 1.56376f;
   rc.percussion.noise_gain = 3.57332f;
   rc.percussion.noise_decay_ms = 13114.9f;  // outlasts the attack swell
@@ -255,11 +264,11 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   rc.percussion.shimmer_attack_ms = 172.315f;
   rc.percussion.shimmer_cutoff_hz = 530.586f;
   rc.gain = 0.5f;
-  rc.amp_env.attack_ms = 420.044f;
-  rc.amp_env.release_ms = 630.421f;
+  rc.amp_env.attack_ms = 140.148f;
+  rc.amp_env.release_ms = 210.34f;
   rc.percussion.contact_ms = 0.0507509f;
   rc.percussion.mode_ratios[0] = 1.1172f;
-  rc.percussion.mode_ratios[1] = 44.9033f;
+  rc.percussion.mode_ratios[1] = 2.55874f;
   rc.percussion.mode_ratios[2] = 1.25982f;
   rc.percussion.mode_ratios[3] = 41.3911f;
   rc.percussion.noise_q = 0.628894f;
@@ -273,6 +282,8 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   rc.percussion.shell_weight[3] = 1.52081f;
   rc.percussion.tone_direct = 0.854284f;
   rc.resonance_q = 0.765824f;
+  rc.amp_env.sustain = 0.618034f;
+  rc.percussion.mode_decay_exp = 0.236068f;
 }
 
 }  // namespace sonare::midi::synth::detail

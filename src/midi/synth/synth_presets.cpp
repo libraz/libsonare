@@ -324,15 +324,17 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       float brassiness;
       float cuivre_dynamics;
       float bore_nonlinearity;
+      float dynamic_lip;
     };
-    constexpr BellGroup kTrumpetBell{2400.0f, 2326.85f, 0.9f, 0.5019f, 0.715476f, 0.705098f};
-    constexpr BellGroup kTromboneBell{978.041f,  1499.65f,  0.151585f,
-                                      0.998735f, 0.390501f, 0.497671f};
-    constexpr BellGroup kTubaBell{1200.0f, 427.454f, 0.726019f, 0.286475f, 0.232962f, 0.0288505f};
-    constexpr BellGroup kMutedTrumpetBell{526.781f,  772.341f,  0.9f,
-                                          0.226005f, 0.771946f, 0.475425f};
-    constexpr BellGroup kFrenchHornBell{1600.0f,   821.625f,  0.725162f,
-                                        0.339631f, 0.586918f, 0.0348697f};
+    constexpr BellGroup kTrumpetBell{2400.0f, 2326.85f, 0.9f, 0.5019f, 0.715476f, 0.705098f, 0.25f};
+    constexpr BellGroup kTromboneBell{978.041f,  2450.08f,  0.153818f, 0.998735f,
+                                      0.340141f, 0.381076f, 0.177051f};
+    constexpr BellGroup kTubaBell{1200.0f,   1281.14f,  0.726019f, 0.286475f,
+                                  0.232962f, 0.326848f, 0.25f};
+    constexpr BellGroup kMutedTrumpetBell{526.781f,  772.341f,  0.9f, 0.226005f,
+                                          0.771946f, 0.475425f, 0.25f};
+    constexpr BellGroup kFrenchHornBell{1600.0f,   821.625f, 0.704038f, 0.773387f,
+                                        0.170501f, 0.54057f, 0.177051f};
 
     auto brass = [&](const char* name, bool conical, float lip_tension, float lip_damping,
                      float brightness, float damping, float attack_ms, float release_ms,
@@ -366,7 +368,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       // A mute is an object over the bell's mouth, so it is a per-row property
       // rather than part of the bell group a row inherits from its twin.
       patch.brass.mute = mute;
-      patch.brass.dynamic_lip = 0.25f;
+      patch.brass.dynamic_lip = bell.dynamic_lip;
       // The trumpet-family bells carry the body resonator on top; large-bore and
       // mellow brass radiate through the flare alone.
       if (bell_mix > 0.0f) {

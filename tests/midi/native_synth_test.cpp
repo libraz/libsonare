@@ -3823,6 +3823,10 @@ double excitation_tail_centroid(const NativeSynthPatch& patch, const ControllerP
   if (move) synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, cc, value)));
   render(synth, 12000);
   if (reset) synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 121, 0)));
+  // Half a second for the excitation to settle before the window: a bowed string's stick-slip
+  // regime re-locks over a few hundred milliseconds after its position jumps back, and that
+  // transient is not the base the reset restores.
+  render(synth, 24000);
   return sonare::test::spectral_centroid(render(synth, 24000).left, 12000);
 }
 

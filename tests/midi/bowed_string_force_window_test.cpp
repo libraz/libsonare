@@ -428,15 +428,15 @@ TEST_CASE("the bow-force window sweep reads the patch it says it does",
   // Every field the sweep holds rather than drives. A moved patch value is told
   // apart from a moved engine here, the same way the control hashes do it.
   const BowedStringPatchParams& v = violin_params();
-  CHECK(v.bow_speed == 0.630748f);
-  CHECK(v.vel_to_speed == 0.6f);
+  CHECK(v.bow_speed == 0.689765f);
+  CHECK(v.vel_to_speed == 0.312461f);
   CHECK(v.brightness == 0.47f);
   CHECK(v.damping == 0.0822536f);
-  CHECK(v.attack_ms == 47.142f);
-  CHECK(v.release_ms == 165.23f);
+  CHECK(v.attack_ms == 36.8818f);
+  CHECK(v.release_ms == 269.948f);
   CHECK(v.rosin == 0.1f);
-  CHECK(v.stribeck == 0.7f);
-  CHECK(v.sympathetic == 0.08f);
+  CHECK(v.stribeck == 0.811146f);
+  CHECK(v.sympathetic == 0.35846f);
   // The onset mechanisms are still at their identity defaults, so this sweep
   // measures the engine as it stands rather than one already changed.
   CHECK(v.attack_noise == 0.0f);
