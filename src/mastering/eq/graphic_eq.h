@@ -29,6 +29,7 @@ class GraphicEq : public rt::ProcessorBase {
   void set_gain_for_frequency(float frequency_hz, float gain_db);
   void clear();
   /// @brief Sets one Q for every band; 0 restores the gain-derived per-band Q.
+  /// @throws SonareException (InvalidParameter) for a negative or non-finite Q.
   /// @details Redesigns the band filters in place (no allocation, state kept).
   void set_q(float q);
 

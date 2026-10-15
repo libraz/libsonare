@@ -5,6 +5,7 @@
 #include <limits>
 
 #include "mastering/common/prepare_args.h"
+#include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -23,7 +24,6 @@ namespace {
 constexpr float kMs = 1.0f;        // saturation magnetization
 constexpr float kAlpha = 1.6e-3f;  // inter-domain mean-field coupling
 constexpr float kC = 0.4f;         // reversibility ratio in [0, 1]
-constexpr int kPreparedChannels = 2;
 
 struct TapeScalars {
   float drive = 0.0f;
@@ -53,7 +53,13 @@ Tape::Tape(TapeConfig config) : config_(config), hysteresis_(make_ja_config(conf
 }
 
 void Tape::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  // Realtime callers use the two-argument ProcessorBase API and may switch
+  // between any supported channel count without an allocation in process().
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void Tape::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "Tape");
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   update_filters(sample_rate_);
@@ -66,10 +72,10 @@ void Tape::prepare(double sample_rate, int max_block_size) {
                          static_cast<size_t>(std::max(1, config_.oversample_factor));
   up_scratch_.assign(scratch, 0.0f);
   down_scratch_.assign(static_cast<size_t>(std::max(0, max_block_size_)), 0.0f);
-  states_.assign(static_cast<size_t>(kPreparedChannels), common::JilesAthertonState{});
-  head_bump_.assign(static_cast<size_t>(kPreparedChannels), head_bump_coeffs_);
-  gap_state_.assign(static_cast<size_t>(kPreparedChannels), 0.0f);
-  oversampler_states_.resize(static_cast<size_t>(kPreparedChannels));
+  states_.assign(static_cast<size_t>(max_channels), common::JilesAthertonState{});
+  head_bump_.assign(static_cast<size_t>(max_channels), head_bump_coeffs_);
+  gap_state_.assign(static_cast<size_t>(max_channels), 0.0f);
+  oversampler_states_.resize(static_cast<size_t>(max_channels));
   for (auto& state : oversampler_states_) {
     oversampler_.prepare_streaming(&state, static_cast<size_t>(std::max(0, max_block_size_)));
   }

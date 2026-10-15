@@ -30,6 +30,7 @@
 - Loading a project or a mixer scene refuses a container or array element of the wrong type, naming its path, instead of reading it as empty or skipping it.
 - Mastering processors (clippers, waveshaper, bitcrusher, amp sim, tube, tape, transformer, exciter, de-esser, air band, presence enhancer) refuse a block with more channels than `prepare()` was given, instead of growing state on the audio thread; the DC blocker refuses channels it was not prepared for.
 - AdaptiveRelease, SoftKneeMax and Maximizer configurations refuse a non-finite value in any field.
+- The graphic EQ (`eq.graphic`) refuses a negative or non-finite `q` instead of reading it as 0, the gain-derived default; realtime automation of `q` reports the value as not applied.
 - Python refuses a numeric argument of the wrong type (`TypeError`) or a non-finite one (`SonareValueError`), naming the argument. Node `StreamingEqualizer` refuses a fractional, NaN or oversized `maxBlockSize` or slope.
 - WASM refuses ring dimensions, `scopeBands` above 64, a fractional Punch range, negative or NaN `seekSeconds`, out-of-range bigint commands (`sendCommand` returns `false`), bad `setMeterInterval` messages, and malformed `waveformPeakPyramid` levels, `setClipWarpMode` values and chord extensions, instead of rounding, clamping or ignoring them.
 - Vocal-edit operations refuse an omitted sample position on Node, WASM and Python instead of reading it as sample 0; an explicit 0 is position 0.
@@ -92,6 +93,7 @@
 - A convolution reverb refuses an impulse response containing NaN or infinity, and one that refuses an IR keeps its previous IR and engine.
 - Rebinding realtime automation while the engine plays never applies one target's lane to another target, and published tempo maps, markers and automation targets are not freed while the audio thread still reads them, however many publishes it falls behind.
 - The multiband expander and limiter count the non-finite audio their bands recover from in their diagnostics counters.
+- Tape saturation prepared without a channel count processes any channel count up to the realtime maximum, instead of refusing blocks wider than stereo.
 - The mixing meter measures true peak over the whole of a block longer than its prepared maximum, instead of only its head.
 - A project whose clip loop is off keeps a negative loop length through save and load, as the editing commands allow.
 - `sonare-cli mastering --report`, `mastering-suggest --config-out` and `suggest-mix --scene-out` write through a temporary file and replace the destination only on success, so a failed write leaves an existing file intact and exits 12; on Windows, project export replaces an existing file.

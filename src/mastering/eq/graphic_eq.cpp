@@ -24,6 +24,8 @@ constexpr float kMaxQ = 7.5f;
 // Gain magnitude (dB) at which the Q curve reaches kMaxQ.
 constexpr float kMaxGainForQ = 12.0f;
 
+bool valid_q(float q) { return std::isfinite(q) && q >= 0.0f; }
+
 }  // namespace
 
 void GraphicEq::prepare(double sample_rate, int max_block_size) {
@@ -69,6 +71,7 @@ void GraphicEq::set_gain_db(size_t index, float gain_db) {
 
 bool GraphicEq::set_parameter_impl(unsigned int param_id, float value) {
   if (param_id == kNumBands) {
+    if (!valid_q(value)) return false;
     set_q(value);
     return true;
   }
@@ -94,8 +97,11 @@ std::vector<rt::ParamDescriptor> GraphicEq::parameter_descriptors() const {
 }
 
 void GraphicEq::set_q(float q) {
-  // A non-finite or negative Q falls back to the gain-derived default.
-  q_ = std::isfinite(q) && q > 0.0f ? q : 0.0f;
+  if (!valid_q(q)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "graphic EQ q must be finite and non-negative (0 = gain-derived)");
+  }
+  q_ = q;
   for (size_t i = 0; i < kNumBands; ++i) {
     rebuild_band(i);
   }

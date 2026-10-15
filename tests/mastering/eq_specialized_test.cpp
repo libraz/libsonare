@@ -511,6 +511,30 @@ TEST_CASE("GraphicEq leaves a band unchanged when a gain is refused", "[masterin
   REQUIRE(max_abs_difference(reference, after) == 0.0f);
 }
 
+TEST_CASE("GraphicEq refuses a negative or non-finite q and keeps the installed one",
+          "[mastering][eq]") {
+  constexpr int sample_rate = 48000;
+  GraphicEq eq;
+  eq.prepare(sample_rate, 1024);
+  eq.set_gain_db(17, 6.0f);
+  eq.set_q(2.0f);
+  auto reference = sine(1000.0f, sample_rate, 8192);
+  process(eq, reference);
+
+  for (const float refused :
+       {-1.0f, std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
+    CAPTURE(refused);
+    REQUIRE_THROWS_AS(eq.set_q(refused), sonare::SonareException);
+    REQUIRE_FALSE(eq.set_parameter(GraphicEq::kNumBands, refused));
+  }
+
+  eq.reset();
+  auto after = sine(1000.0f, sample_rate, 8192);
+  process(eq, after);
+  REQUIRE(max_abs_difference(reference, after) == 0.0f);
+  REQUIRE_NOTHROW(eq.set_q(0.0f));
+}
+
 TEST_CASE("GraphicEq boosts selected band more than distant bands", "[mastering][eq]") {
   constexpr int sample_rate = 48000;
   GraphicEq eq;

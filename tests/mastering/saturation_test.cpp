@@ -757,6 +757,45 @@ TEST_CASE("Tape keeps channel state when switching from mono to stereo",
   REQUIRE(std::abs(left_probe[0]) > 0.01f);
 }
 
+TEST_CASE("Tape two-argument prepare holds state for every realtime channel count",
+          "[mastering][saturation]") {
+  for (const int factor : {1, 2}) {
+    CAPTURE(factor);
+    TapeConfig config;
+    config.drive_db = 6.0f;
+    config.oversample_factor = factor;
+    Tape tape(config);
+    tape.prepare(48000.0, 256);
+
+    constexpr int kChannels = 6;
+    std::vector<std::vector<float>> buffers(kChannels, std::vector<float>(256));
+    for (auto& buffer : buffers) {
+      for (size_t i = 0; i < buffer.size(); ++i) {
+        buffer[i] = 0.5f * std::sin(static_cast<float>(i) * 0.05f);
+      }
+    }
+    std::vector<float*> channels;
+    for (auto& buffer : buffers) channels.push_back(buffer.data());
+    REQUIRE_NOTHROW(tape.process(channels.data(), kChannels, 256));
+    // Each channel carries its own state, so identical inputs stay identical.
+    for (int ch = 1; ch < kChannels; ++ch) {
+      REQUIRE(buffers[static_cast<size_t>(ch)] == buffers[0]);
+    }
+  }
+}
+
+TEST_CASE("Tape three-argument prepare bounds the channel count", "[mastering][saturation]") {
+  Tape tape;
+  REQUIRE_THROWS_AS(tape.prepare(48000.0, 256, 0), sonare::SonareException);
+  REQUIRE_THROWS_AS(tape.prepare(48000.0, 256, 65), sonare::SonareException);
+  tape.prepare(48000.0, 256, 1);
+  std::vector<float> left(256, 0.25f);
+  std::vector<float> right(256, 0.25f);
+  float* stereo[] = {left.data(), right.data()};
+  REQUIRE_THROWS_AS(tape.process(stereo, 2, 256), sonare::SonareException);
+  REQUIRE_NOTHROW(tape.process(stereo, 1, 256));
+}
+
 TEST_CASE("Shared Jiles-Atherton engine matches DAFx-19 reference equation",
           "[mastering][saturation]") {
   namespace common = sonare::mastering::common;
