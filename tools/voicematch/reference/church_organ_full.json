@@ -1,7 +1,7 @@
 {
  "id": "church_organ_full",
  "label": "Church Org.3, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-09-19T16:35:37+00:00",
+ "measured_utc": "2026-10-15T10:11:50+00:00",
  "capture": {
   "program": 19,
   "params": [],
@@ -92,6 +92,7 @@
    "held_peak_dbfs": -10.84,
    "onset_ms": 5.99,
    "attack_ms": 259.4,
+   "attack_hf_db": -29.38,
    "decay_span_s": 4.819,
    "decay_db_s": -0.03,
    "decay_early_db_s": 0.28,
@@ -108,7 +109,7 @@
     0.41
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 164.6,
+   "damper_release_ms": 169.6,
    "damper_capped": true,
    "centroid_hz": 301.8,
    "tnr_db": 6.8
@@ -171,6 +172,7 @@
    "held_peak_dbfs": -11.73,
    "onset_ms": 0.0,
    "attack_ms": 234.5,
+   "attack_hf_db": -24.13,
    "decay_span_s": 4.714,
    "decay_db_s": -0.27,
    "decay_early_db_s": -0.03,
@@ -251,6 +253,7 @@
    "held_peak_dbfs": -10.96,
    "onset_ms": 0.0,
    "attack_ms": 199.6,
+   "attack_hf_db": -26.93,
    "decay_span_s": 4.899,
    "decay_db_s": -0.16,
    "decay_early_db_s": 0.18,
@@ -331,6 +334,7 @@
    "held_peak_dbfs": -11.59,
    "onset_ms": 0.0,
    "attack_ms": 144.7,
+   "attack_hf_db": -23.69,
    "decay_span_s": 4.864,
    "decay_db_s": -0.15,
    "decay_early_db_s": 0.25,
@@ -411,6 +415,7 @@
    "held_peak_dbfs": -11.67,
    "onset_ms": 0.0,
    "attack_ms": 89.8,
+   "attack_hf_db": -19.91,
    "decay_span_s": 4.809,
    "decay_db_s": -0.27,
    "decay_early_db_s": 0.14,
@@ -491,6 +496,7 @@
    "held_peak_dbfs": -11.44,
    "onset_ms": 0.0,
    "attack_ms": 169.6,
+   "attack_hf_db": -15.96,
    "decay_span_s": 4.904,
    "decay_db_s": -0.21,
    "decay_early_db_s": 0.11,
@@ -571,6 +577,7 @@
    "held_peak_dbfs": -10.93,
    "onset_ms": 0.0,
    "attack_ms": 129.7,
+   "attack_hf_db": -21.29,
    "decay_span_s": 4.904,
    "decay_db_s": -0.26,
    "decay_early_db_s": 0.17,
@@ -651,6 +658,7 @@
    "held_peak_dbfs": -10.88,
    "onset_ms": 0.0,
    "attack_ms": 119.7,
+   "attack_hf_db": -14.85,
    "decay_span_s": 4.879,
    "decay_db_s": -0.32,
    "decay_early_db_s": 0.07,
@@ -727,6 +735,7 @@
    "held_peak_dbfs": -12.29,
    "onset_ms": 0.0,
    "attack_ms": 169.6,
+   "attack_hf_db": -5.75,
    "decay_span_s": 4.959,
    "decay_db_s": -0.42,
    "decay_early_db_s": 0.01,
@@ -791,6 +800,7 @@
    "held_peak_dbfs": -12.39,
    "onset_ms": 0.0,
    "attack_ms": 59.9,
+   "attack_hf_db": -10.89,
    "decay_span_s": 5.078,
    "decay_db_s": -0.45,
    "decay_early_db_s": -0.08,
@@ -847,6 +857,7 @@
    "held_peak_dbfs": -13.33,
    "onset_ms": 0.0,
    "attack_ms": 59.9,
+   "attack_hf_db": -5.38,
    "decay_span_s": 5.073,
    "decay_db_s": -0.46,
    "decay_early_db_s": -0.04,
@@ -1002,7 +1013,7 @@
    },
    "damper_release_ms": {
     "36": {
-     "100": 164.6
+     "100": 169.6
     },
     "42": {
      "100": 169.6

@@ -40,23 +40,23 @@
       "slot_channel": 6
     }
   ],
-  "_dimensions": "The slot is a struck tuned membrane. What it is judged on is the fall, read off a gate cut to the fall's own length. `stretch` is not among the dimensions a modal voice is judged on at all - a bar or a membrane has no series equal temperament predicts - so it is the class that drops it rather than this file.",
+  "_dimensions": "The slot is a struck tuned membrane. What it is judged on is the fall, read off a gate cut to the fall's own length. `stretch`, `balance`, `partial_tilt` and `tnr` are not among the dimensions a modal voice is judged on at all - each reads the n*f0 ladder, and a bar or a membrane has no such series - so it is the class that drops them rather than this file, and `dimensions_na` records what each would read on this reference.",
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, so anything not gated here has to be argued here.",
   "dimensions_na": {
     "tnr": "a struck membrane's partials are not a harmonic series, so the measurement counts them as noise by construction: only 0.004 of this slot's energy falls on the played key's series, which is the instrument rather than a defect",
-    "damper": "the gate is set to this slot's own fall, so the key lifts on a note already 60 dB down - there is nothing left for a damper to stop, and what the measurement would read is the length of the sample rather than how the instrument is silenced"
+    "damper": "the gate is set to this slot's own fall, so the key lifts on a note already 60 dB down - there is nothing left for a damper to stop, and what the measurement would read is the length of the sample rather than how the instrument is silenced",
+    "partial_tilt": "a ladder ruler, which the modal class does not judge on: it compares decay rates fitted in the h5-h8 and h1-h2 bins, so it times a mode only while one sits within the ladder's window. On this reference a measured mode sits on h5-h8 on 5 of 30 rows in the 0.12-1.62 s window, and a model mode a quarter tone off its slot has its rate read off the fundamental's skirt and the floor instead",
+    "balance": "a ladder ruler, which the modal class does not judge on: it averages h2-h6 against h1, so it reads a mode only where one coincides with an integer multiple. On this reference a measured mode sits on h2-h6 on 25 of 30 rows in the 0.12-1.62 s window, and a model mode a quarter tone off its slot reads as missing rather than mistuned; `modes` reads every mode where it is"
   },
   "dimensions": [
     "decay",
     "aftersound",
     "doubling",
-    "partial_tilt",
     "body",
     "attack",
     "attack_hf",
     "attack_hf_swing",
     "stereo",
-    "balance",
     "centroid_pct",
     "vel_range",
     "register"

@@ -41,24 +41,24 @@
       "slot_channel": 9
     }
   ],
-  "_dimensions": "The slot is a struck metal bar with a resonator. `decay` and its two stages are what a struck voice lives on, since everything after the strike is a fall, and they are read off a gate long enough to contain one. `stretch` is not among the dimensions a modal voice is judged on at all - a bar has no series equal temperament predicts - so it is the class that drops it rather than this file.",
-  "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a modal voice is every melodic dimension except `stretch`, so anything not gated here has to be argued here.",
+  "_dimensions": "The slot is a struck metal bar with a resonator. `decay` and its two stages are what a struck voice lives on, since everything after the strike is a fall, and they are read off a gate long enough to contain one. `stretch`, `balance`, `partial_tilt` and `tnr` are not among the dimensions a modal voice is judged on at all - each reads the n*f0 ladder, and a bar has no such series - so it is the class that drops them rather than this file, and `dimensions_na` records what each would read on this reference.",
+  "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a modal voice is every melodic dimension except the four ladder rulers `stretch`, `balance`, `partial_tilt` and `tnr`, so anything not gated here has to be argued here.",
   "dimensions_na": {
     "stereo": "the slot renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing",
-    "balance": "the model's modes are a free-free bar's - 1.00, 2.75, 5.40 and 8.93 times the played note at note 72 - so the harmonic ladder h2-h6 reads its own silence, and the reference answers only because its noise bed fills h2 at 63.4 dB under h1. `modes` is the ruler a bar has, which is why the class weights carry no `harm` term for it"
+    "balance": "the model's modes are a free-free bar's - 1.00, 2.75, 5.40 and 8.93 times the played note at note 72 - so the harmonic ladder h2-h6 reads its own silence, and the reference answers only because its noise bed fills h2 at 63.4 dB under h1. `modes` is the ruler a bar has, which is why the class weights carry no `harm` term for it",
+    "partial_tilt": "a ladder ruler, which the modal class does not judge on: it compares decay rates fitted in the h5-h8 and h1-h2 bins, so it times a mode only while one sits within the ladder's window. On this reference a measured mode sits on h5-h8 on 26 of 35 rows in the 0.12-1.62 s window, and a model mode a quarter tone off its slot has its rate read off the fundamental's skirt and the floor instead",
+    "tnr": "a ladder ruler, which the modal class does not judge on: its +/-2 % n*f0 mask files a mode as tone or noise by whether it lands on an integer multiple. On this reference the median row has 1 of its 4 measured modes in the 0.12-1.62 s window off that mask, carrying -33 dB of the measured mode power, and a model mode a few per cent from an integer multiple crosses to the noise side; `modes` prices that as a mistuning"
   },
   "dimensions": [
     "decay",
     "aftersound",
     "doubling",
-    "partial_tilt",
     "body",
     "attack",
     "attack_hf",
     "attack_hf_swing",
     "damper",
     "centroid_pct",
-    "tnr",
     "vel_range",
     "register"
   ],

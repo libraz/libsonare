@@ -1,7 +1,7 @@
 {
  "id": "orchestra_hit",
  "label": "Orchestra Hit, sampled, close and dry",
- "measured_utc": "2026-09-04T15:08:49+00:00",
+ "measured_utc": "2026-10-15T10:08:41+00:00",
  "capture": {
   "program": 55,
   "params": [],
@@ -90,7 +90,9 @@
    "peak_dbfs": -28.07,
    "rms_dbfs": -44.15,
    "held_peak_dbfs": -32.25,
+   "onset_ms": 0.0,
    "attack_ms": 15.0,
+   "attack_hf_db": -32.64,
    "decay_span_s": 1.31,
    "decay_db_s": -38.09,
    "decay_early_db_s": -17.42,
@@ -109,8 +111,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 271.5,
    "tnr_db": -3.85,
-   "stereo_width": 0.0,
-   "attack_hf_db": -32.64
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -169,7 +170,9 @@
    "peak_dbfs": -21.5,
    "rms_dbfs": -37.56,
    "held_peak_dbfs": -25.67,
+   "onset_ms": 0.0,
    "attack_ms": 15.0,
+   "attack_hf_db": -26.35,
    "decay_span_s": 1.31,
    "decay_db_s": -38.13,
    "decay_early_db_s": -17.45,
@@ -188,8 +191,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 287.1,
    "tnr_db": -3.87,
-   "stereo_width": 0.0,
-   "attack_hf_db": -26.35
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -248,7 +250,9 @@
    "peak_dbfs": -16.3,
    "rms_dbfs": -32.36,
    "held_peak_dbfs": -20.47,
+   "onset_ms": 0.0,
    "attack_ms": 15.0,
+   "attack_hf_db": -24.19,
    "decay_span_s": 1.31,
    "decay_db_s": -38.14,
    "decay_early_db_s": -17.46,
@@ -267,8 +271,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 291.0,
    "tnr_db": -3.89,
-   "stereo_width": -0.0,
-   "attack_hf_db": -24.19
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -327,7 +330,9 @@
    "peak_dbfs": -12.16,
    "rms_dbfs": -28.23,
    "held_peak_dbfs": -16.34,
+   "onset_ms": 0.0,
    "attack_ms": 15.0,
+   "attack_hf_db": -23.98,
    "decay_span_s": 1.31,
    "decay_db_s": -38.13,
    "decay_early_db_s": -17.46,
@@ -346,8 +351,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 291.5,
    "tnr_db": -3.89,
-   "stereo_width": 0.0,
-   "attack_hf_db": -23.98
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -406,7 +410,9 @@
    "peak_dbfs": -8.88,
    "rms_dbfs": -24.96,
    "held_peak_dbfs": -13.06,
+   "onset_ms": 0.0,
    "attack_ms": 15.0,
+   "attack_hf_db": -24.03,
    "decay_span_s": 1.31,
    "decay_db_s": -38.13,
    "decay_early_db_s": -17.45,
@@ -425,8 +431,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 291.6,
    "tnr_db": -3.89,
-   "stereo_width": 0.0,
-   "attack_hf_db": -24.03
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -485,7 +490,9 @@
    "peak_dbfs": -28.13,
    "rms_dbfs": -45.24,
    "held_peak_dbfs": -32.0,
+   "onset_ms": 0.0,
    "attack_ms": 10.0,
+   "attack_hf_db": -29.45,
    "decay_span_s": 1.06,
    "decay_db_s": -39.29,
    "decay_early_db_s": -15.74,
@@ -504,8 +511,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 328.0,
    "tnr_db": -3.19,
-   "stereo_width": -0.0,
-   "attack_hf_db": -29.45
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -564,7 +570,9 @@
    "peak_dbfs": -21.46,
    "rms_dbfs": -38.62,
    "held_peak_dbfs": -25.43,
+   "onset_ms": 0.0,
    "attack_ms": 10.0,
+   "attack_hf_db": -23.48,
    "decay_span_s": 1.06,
    "decay_db_s": -39.38,
    "decay_early_db_s": -15.84,
@@ -583,8 +591,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 358.2,
    "tnr_db": -3.12,
-   "stereo_width": 0.0,
-   "attack_hf_db": -23.48
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -643,7 +650,9 @@
    "peak_dbfs": -16.27,
    "rms_dbfs": -33.41,
    "held_peak_dbfs": -20.24,
+   "onset_ms": 0.0,
    "attack_ms": 10.0,
+   "attack_hf_db": -21.23,
    "decay_span_s": 1.06,
    "decay_db_s": -39.41,
    "decay_early_db_s": -15.95,
@@ -662,8 +671,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 367.0,
    "tnr_db": -3.26,
-   "stereo_width": -0.0,
-   "attack_hf_db": -21.23
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -722,7 +730,9 @@
    "peak_dbfs": -12.13,
    "rms_dbfs": -29.27,
    "held_peak_dbfs": -16.1,
+   "onset_ms": 0.0,
    "attack_ms": 10.0,
+   "attack_hf_db": -20.94,
    "decay_span_s": 1.06,
    "decay_db_s": -39.41,
    "decay_early_db_s": -15.95,
@@ -741,8 +751,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 368.7,
    "tnr_db": -3.27,
-   "stereo_width": 0.0,
-   "attack_hf_db": -20.94
+   "stereo_width": -0.0
   },
   {
    "timbre": "gm056",
@@ -801,7 +810,9 @@
    "peak_dbfs": -8.87,
    "rms_dbfs": -26.0,
    "held_peak_dbfs": -12.83,
+   "onset_ms": 0.0,
    "attack_ms": 10.0,
+   "attack_hf_db": -20.98,
    "decay_span_s": 1.06,
    "decay_db_s": -39.41,
    "decay_early_db_s": -15.95,
@@ -820,8 +831,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 369.0,
    "tnr_db": -3.27,
-   "stereo_width": 0.0,
-   "attack_hf_db": -20.98
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -880,7 +890,9 @@
    "peak_dbfs": -28.35,
    "rms_dbfs": -46.64,
    "held_peak_dbfs": -33.37,
+   "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -27.19,
    "decay_span_s": 0.765,
    "decay_db_s": -42.37,
    "decay_early_db_s": -23.33,
@@ -899,8 +911,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 395.5,
    "tnr_db": -3.42,
-   "stereo_width": -0.0,
-   "attack_hf_db": -27.19
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -959,7 +970,9 @@
    "peak_dbfs": -21.51,
    "rms_dbfs": -39.97,
    "held_peak_dbfs": -26.79,
+   "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -21.01,
    "decay_span_s": 0.765,
    "decay_db_s": -42.61,
    "decay_early_db_s": -23.52,
@@ -978,8 +991,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 451.9,
    "tnr_db": -3.27,
-   "stereo_width": 0.0,
-   "attack_hf_db": -21.01
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -1038,7 +1050,9 @@
    "peak_dbfs": -16.25,
    "rms_dbfs": -34.73,
    "held_peak_dbfs": -21.59,
+   "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -18.66,
    "decay_span_s": 0.765,
    "decay_db_s": -42.7,
    "decay_early_db_s": -23.62,
@@ -1057,8 +1071,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 474.5,
    "tnr_db": -3.28,
-   "stereo_width": 0.0,
-   "attack_hf_db": -18.66
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -1117,7 +1130,9 @@
    "peak_dbfs": -12.13,
    "rms_dbfs": -30.59,
    "held_peak_dbfs": -17.46,
+   "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -18.35,
    "decay_span_s": 0.765,
    "decay_db_s": -42.72,
    "decay_early_db_s": -23.64,
@@ -1136,8 +1151,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 479.2,
    "tnr_db": -3.29,
-   "stereo_width": 0.0,
-   "attack_hf_db": -18.35
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -1196,7 +1210,9 @@
    "peak_dbfs": -8.89,
    "rms_dbfs": -27.32,
    "held_peak_dbfs": -14.19,
+   "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -18.4,
    "decay_span_s": 0.765,
    "decay_db_s": -42.72,
    "decay_early_db_s": -23.64,
@@ -1215,8 +1231,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 480.1,
    "tnr_db": -3.3,
-   "stereo_width": 0.0,
-   "attack_hf_db": -18.4
+   "stereo_width": -0.0
   },
   {
    "timbre": "gm056",
@@ -1275,7 +1290,9 @@
    "peak_dbfs": -28.7,
    "rms_dbfs": -48.22,
    "held_peak_dbfs": -34.24,
+   "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -21.8,
    "decay_span_s": 0.545,
    "decay_db_s": -56.87,
    "decay_early_db_s": -31.55,
@@ -1294,8 +1311,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 465.9,
    "tnr_db": -4.28,
-   "stereo_width": 0.0,
-   "attack_hf_db": -21.8
+   "stereo_width": -0.0
   },
   {
    "timbre": "gm056",
@@ -1354,7 +1370,9 @@
    "peak_dbfs": -21.73,
    "rms_dbfs": -41.48,
    "held_peak_dbfs": -27.63,
+   "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -15.73,
    "decay_span_s": 0.545,
    "decay_db_s": -57.32,
    "decay_early_db_s": -31.84,
@@ -1373,8 +1391,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 563.8,
    "tnr_db": -3.96,
-   "stereo_width": 0.0,
-   "attack_hf_db": -15.73
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -1433,7 +1450,9 @@
    "peak_dbfs": -16.34,
    "rms_dbfs": -36.2,
    "held_peak_dbfs": -22.4,
+   "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -13.18,
    "decay_span_s": 0.545,
    "decay_db_s": -57.55,
    "decay_early_db_s": -32.06,
@@ -1452,8 +1471,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 617.2,
    "tnr_db": -3.88,
-   "stereo_width": 0.0,
-   "attack_hf_db": -13.18
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -1512,7 +1530,9 @@
    "peak_dbfs": -12.21,
    "rms_dbfs": -32.05,
    "held_peak_dbfs": -18.25,
+   "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -12.77,
    "decay_span_s": 0.545,
    "decay_db_s": -57.64,
    "decay_early_db_s": -32.15,
@@ -1531,8 +1551,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 632.7,
    "tnr_db": -3.9,
-   "stereo_width": 0.0,
-   "attack_hf_db": -12.77
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -1591,7 +1610,9 @@
    "peak_dbfs": -8.92,
    "rms_dbfs": -28.78,
    "held_peak_dbfs": -14.98,
+   "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -12.83,
    "decay_span_s": 0.545,
    "decay_db_s": -57.65,
    "decay_early_db_s": -32.16,
@@ -1610,8 +1631,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 635.9,
    "tnr_db": -3.9,
-   "stereo_width": 0.0,
-   "attack_hf_db": -12.83
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -1670,7 +1690,9 @@
    "peak_dbfs": -28.69,
    "rms_dbfs": -49.85,
    "held_peak_dbfs": -34.68,
+   "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -18.7,
    "decay_span_s": 0.39,
    "decay_db_s": -80.28,
    "decay_early_db_s": -44.6,
@@ -1689,8 +1711,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 532.0,
    "tnr_db": -4.79,
-   "stereo_width": 0.0,
-   "attack_hf_db": -18.7
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -1749,7 +1770,9 @@
    "peak_dbfs": -21.99,
    "rms_dbfs": -43.07,
    "held_peak_dbfs": -28.02,
+   "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -13.01,
    "decay_span_s": 0.39,
    "decay_db_s": -80.84,
    "decay_early_db_s": -44.8,
@@ -1768,8 +1791,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 670.6,
    "tnr_db": -4.31,
-   "stereo_width": -0.0,
-   "attack_hf_db": -13.01
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -1828,7 +1850,9 @@
    "peak_dbfs": -16.39,
    "rms_dbfs": -37.74,
    "held_peak_dbfs": -22.76,
+   "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -11.03,
    "decay_span_s": 0.39,
    "decay_db_s": -81.25,
    "decay_early_db_s": -45.09,
@@ -1847,8 +1871,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 774.0,
    "tnr_db": -4.1,
-   "stereo_width": 0.0,
-   "attack_hf_db": -11.03
+   "stereo_width": -0.0
   },
   {
    "timbre": "gm056",
@@ -1907,7 +1930,9 @@
    "peak_dbfs": -12.04,
    "rms_dbfs": -33.55,
    "held_peak_dbfs": -18.59,
+   "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -10.82,
    "decay_span_s": 0.39,
    "decay_db_s": -81.45,
    "decay_early_db_s": -45.3,
@@ -1926,8 +1951,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 822.2,
    "tnr_db": -4.08,
-   "stereo_width": -0.0,
-   "attack_hf_db": -10.82
+   "stereo_width": 0.0
   },
   {
    "timbre": "gm056",
@@ -1986,7 +2010,9 @@
    "peak_dbfs": -8.87,
    "rms_dbfs": -30.27,
    "held_peak_dbfs": -15.32,
+   "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -10.88,
    "decay_span_s": 0.39,
    "decay_db_s": -81.5,
    "decay_early_db_s": -45.37,
@@ -2005,8 +2031,7 @@
    "decayed_before_note_off": true,
    "centroid_hz": 830.8,
    "tnr_db": -4.09,
-   "stereo_width": 0.0,
-   "attack_hf_db": -10.88
+   "stereo_width": 0.0
   }
  ],
  "summary": {

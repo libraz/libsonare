@@ -45,21 +45,21 @@
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, so anything not gated here has to be argued here.",
   "dimensions_na": {
     "stereo": "the slot renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing",
-    "damper": "the gate is set to this slot's own fall, so the key lifts on a note already 60 dB down - there is nothing left for a damper to stop, and what the measurement would read is the length of the sample rather than how the instrument is silenced"
+    "damper": "the gate is set to this slot's own fall, so the key lifts on a note already 60 dB down - there is nothing left for a damper to stop, and what the measurement would read is the length of the sample rather than how the instrument is silenced",
+    "stretch": "a ladder ruler, which the modal class does not judge on: the stiffness fit behind it was reliable on 0 of 35 rows of this reference, and the fundamental's tuning it carries is what `modes` already prices in absolute cents",
+    "partial_tilt": "a ladder ruler, which the modal class does not judge on: it compares decay rates fitted in the h5-h8 and h1-h2 bins, so it times a mode only while one sits within the ladder's window. On this reference a measured mode sits on h5-h8 on 0 of 35 rows in the 0.12-1.62 s window, and a model mode a quarter tone off its slot has its rate read off the fundamental's skirt and the floor instead",
+    "balance": "a ladder ruler, which the modal class does not judge on: it averages h2-h6 against h1, so it reads a mode only where one coincides with an integer multiple. On this reference a measured mode sits on h2-h6 on 35 of 35 rows in the 0.12-1.62 s window, and a model mode a quarter tone off its slot reads as missing rather than mistuned; `modes` reads every mode where it is",
+    "tnr": "a ladder ruler, which the modal class does not judge on: its +/-2 % n*f0 mask files a mode as tone or noise by whether it lands on an integer multiple. On this reference the median row has 0 of its 2 measured modes in the 0.12-1.62 s window off that mask, and a model mode a few per cent from an integer multiple crosses to the noise side; `modes` prices that as a mistuning"
   },
   "dimensions": [
-    "stretch",
     "decay",
     "aftersound",
     "doubling",
-    "partial_tilt",
     "body",
     "attack",
     "attack_hf",
     "attack_hf_swing",
-    "balance",
     "centroid_pct",
-    "tnr",
     "vel_range",
     "register"
   ],

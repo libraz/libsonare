@@ -1,11 +1,13 @@
 {
   "id": "electric_piano_2",
-  "label": "Electric piano, reed, sampled, close and dry",
+  "label": "Electric piano, FM, sampled, close and dry",
   "program": 5,
   "takes": "sustained",
   "audition_title": "libsonare electric piano 2 vs the sampled reference",
   "_rig": "No shared filter in this rack: above 2 kHz this slot sits 5.2 dB RMS from the clavinet and 6.3 from the dulcimer, in among the unamplified siblings rather than apart from them, and falls at 15.2 dB per octave. Its 6 dB of 1.6 Hz amplitude modulation is in phase across two channels 20 dB apart, so it is a tremolo inside the instrument rather than a rotor, which turns away from one mic as it faces the other. So there is no evidence of a rig here, which is not evidence of none: a single-sided measurement can show a rig present and cannot show one absent, and this rack publishes no amplifier stage to switch off, so no A/B is available from it. The answer stays unclassified rather than becoming a `none` nothing earned. `profile.py rig --against clavi,vibraphone,dulcimer` is the measurement.",
-  "rig": "unclassified",
+  "_rig_class": "Classified from the instrument's structure: an FM electric piano is a digital generator whose output is a line signal, with any amplifier an external stage after it; the measurement recorded above finds no cabinet and no rotor, so nothing contradicts reading this recording as that signal, and its tremolo is in phase across the channels, which is the instrument's own.",
+  "rig": "none",
+  "rig_evidence": "inferred",
   "_notes": "Every sixth semitone from 36 to 84, the compass a keyboard voice is probed on here, because the compass is the point of a keyboard and a physical model diverges most at the ends of it. Both ends were rendered before the grid was written and both speak, the peaks running 0.187, 0.187, 0.162 at 36, 60 and 84.",
   "notes": [
     36,
@@ -45,7 +47,7 @@
       "slot_channel": 6
     }
   ],
-  "_dimensions": "The slot is a struck metal reed read by a pickup. A struck string is measured on everything its class names - it has a free decay, a two-stage fall, a damper and a dynamic range, and the stiff-string ladder means something - so `decay` and its two stages carry the weight here, read off a gate long enough to contain a fall.",
+  "_dimensions": "The slot is an FM electric piano: its spectrum carries the 1:14 sidebands of the FM tone (13x and 15x at -10 to -50 dB) and its envelope is a struck decay. A struck string is measured on everything its class names - it has a free decay, a two-stage fall, a damper and a dynamic range, and the stiff-string ladder means something - so `decay` and its two stages carry the weight here, read off a gate long enough to contain a fall.",
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a struck string is every melodic dimension, so anything not gated here has to be argued here.",
   "dimensions_na": {
     "stereo": "the slot renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing"

@@ -19,14 +19,6 @@
       "p90": 1.585,
       "rows": 5
     },
-    "tnr": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 26.5,
-      "abs_median": 26.5,
-      "p90": 27.822,
-      "rows": 5
-    },
     "attack": {
       "floor": 40.0,
       "floor_from": "guess",
@@ -65,22 +57,6 @@
       "median": 87.0,
       "abs_median": 87.0,
       "p90": 94.595,
-      "rows": 5
-    },
-    "balance": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 19.053,
-      "abs_median": 23.624,
-      "p90": 26.837,
-      "rows": 5
-    },
-    "partial_tilt": {
-      "floor": 3.0,
-      "floor_from": "guess",
-      "median": 3.0,
-      "abs_median": 3.0,
-      "p90": 3.0,
       "rows": 5
     },
     "centroid_pct": {

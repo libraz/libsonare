@@ -1,7 +1,7 @@
 {
  "id": "drums_module_mid",
  "label": "Standard kit, the drums that ring for a sixth of a second, read out of a module's own recordings",
- "measured_utc": "2026-09-25T20:32:13+00:00",
+ "measured_utc": "2026-10-15T08:16:50+00:00",
  "capture": {
   "program": 0,
   "params": [],
@@ -89,6 +89,7 @@
    "flatness_db": -40.4,
    "stereo_width": null,
    "tilt_rise_db": -26.29,
+   "tilt_strike_db": 8.01,
    "modal_hz": [
     47.53,
     61.43,
@@ -135,6 +136,153 @@
    "tone_lowest_hz": 47.53,
    "pitch_drop_ratio": 2.1429,
    "pitch_drop_ms": 15.0,
+   "modal_density": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "modal_density_valid": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "prompt_late_db": [
+    -1.036,
+    15.827,
+    8.684,
+    5.475,
+    10.257,
+    13.974,
+    13.296
+   ],
+   "prompt_late_valid": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "evolution_db": [
+    [
+     0.0,
+     0.0,
+     0.0,
+     -21.216,
+     -29.387,
+     -18.784,
+     -9.799,
+     -9.121
+    ],
+    [
+     0.0,
+     0.797,
+     -11.347,
+     -29.191,
+     -41.0,
+     -35.898,
+     -27.173,
+     -32.236
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "evolution_valid": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   ],
+   "evolution_measured": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   ],
+   "window_flatness_db": [
+    -2.74,
+    -5.31,
+    0.0
+   ],
+   "window_flatness_valid": [
+    true,
+    true,
+    false
+   ],
+   "window_flatness_measured": [
+    true,
+    true,
+    false
+   ],
    "peak_dbfs": -11.54
   },
   {
@@ -190,6 +338,7 @@
    "flatness_db": -49.24,
    "stereo_width": null,
    "tilt_rise_db": -22.46,
+   "tilt_strike_db": 0.64,
    "modal_hz": [
     69.02,
     106.16,
@@ -236,6 +385,153 @@
    "tone_lowest_hz": 69.02,
    "pitch_drop_ratio": 1.5517,
    "pitch_drop_ms": 15.0,
+   "modal_density": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "modal_density_valid": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "prompt_late_db": [
+    0.492,
+    -8.585,
+    0.605,
+    -0.466,
+    4.344,
+    4.72,
+    -3.712
+   ],
+   "prompt_late_valid": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "evolution_db": [
+    [
+     0.0,
+     0.0,
+     0.0,
+     -16.237,
+     -21.718,
+     -14.7,
+     -6.976,
+     -5.116
+    ],
+    [
+     0.0,
+     0.452,
+     -10.326,
+     -23.311,
+     -38.933,
+     -34.7,
+     -31.693,
+     -40.309
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "evolution_valid": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   ],
+   "evolution_measured": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   ],
+   "window_flatness_db": [
+    -4.14,
+    -6.67,
+    0.0
+   ],
+   "window_flatness_valid": [
+    true,
+    true,
+    false
+   ],
+   "window_flatness_measured": [
+    true,
+    true,
+    false
+   ],
    "peak_dbfs": -9.08
   },
   {
@@ -291,6 +587,7 @@
    "flatness_db": -14.9,
    "stereo_width": null,
    "tilt_rise_db": 11.24,
+   "tilt_strike_db": 2.41,
    "modal_hz": [
     175.89,
     186.0,
@@ -337,6 +634,153 @@
    "tone_lowest_hz": 175.89,
    "pitch_drop_ratio": 0.8,
    "pitch_drop_ms": null,
+   "modal_density": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "modal_density_valid": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "prompt_late_db": [
+    4.612,
+    -1.28,
+    0.704,
+    4.298,
+    0.635,
+    0.786,
+    3.001
+   ],
+   "prompt_late_valid": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "evolution_db": [
+    [
+     0.0,
+     0.0,
+     0.0,
+     3.487,
+     0.894,
+     0.086,
+     0.603,
+     -0.901
+    ],
+    [
+     0.0,
+     -31.76,
+     0.504,
+     -4.839,
+     -12.201,
+     -15.109,
+     -10.985,
+     -7.054
+    ],
+    [
+     -53.947,
+     -37.119,
+     -7.634,
+     -13.912,
+     -22.212,
+     -21.622,
+     -17.577,
+     -16.775
+    ]
+   ],
+   "evolution_valid": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   ],
+   "evolution_measured": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   ],
+   "window_flatness_db": [
+    -3.62,
+    -3.07,
+    -3.08
+   ],
+   "window_flatness_valid": [
+    true,
+    true,
+    true
+   ],
+   "window_flatness_measured": [
+    true,
+    true,
+    true
+   ],
    "peak_dbfs": -4.04
   },
   {
@@ -392,6 +836,7 @@
    "flatness_db": -12.53,
    "stereo_width": null,
    "tilt_rise_db": 8.4,
+   "tilt_strike_db": 23.36,
    "modal_hz": [
     545.03,
     618.65,
@@ -438,6 +883,153 @@
    "tone_lowest_hz": 545.03,
    "pitch_drop_ratio": 1.2,
    "pitch_drop_ms": 5.0,
+   "modal_density": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "modal_density_valid": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "prompt_late_db": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "prompt_late_valid": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "evolution_db": [
+    [
+     0.0,
+     0.0,
+     0.0,
+     -26.439,
+     2.336,
+     4.256,
+     0.879,
+     -5.014
+    ],
+    [
+     0.0,
+     -36.046,
+     -29.349,
+     -18.652,
+     -3.736,
+     3.681,
+     -0.038,
+     -2.009
+    ],
+    [
+     -61.735,
+     -44.786,
+     -37.458,
+     -26.958,
+     -13.955,
+     -14.56,
+     -23.849,
+     -30.524
+    ]
+   ],
+   "evolution_valid": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   ],
+   "evolution_measured": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   ],
+   "window_flatness_db": [
+    -6.44,
+    -5.51,
+    -11.82
+   ],
+   "window_flatness_valid": [
+    true,
+    true,
+    true
+   ],
+   "window_flatness_measured": [
+    true,
+    true,
+    true
+   ],
    "peak_dbfs": -8.3
   },
   {
@@ -493,6 +1085,7 @@
    "flatness_db": -10.68,
    "stereo_width": null,
    "tilt_rise_db": 20.62,
+   "tilt_strike_db": 3.91,
    "modal_hz": [
     179.87,
     218.82,
@@ -539,6 +1132,153 @@
    "tone_lowest_hz": 179.87,
    "pitch_drop_ratio": 1.0,
    "pitch_drop_ms": null,
+   "modal_density": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "modal_density_valid": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "prompt_late_db": [
+    8.651,
+    1.903,
+    -1.233,
+    2.903,
+    -0.882,
+    -3.722,
+    -5.497
+   ],
+   "prompt_late_valid": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "evolution_db": [
+    [
+     0.0,
+     0.0,
+     0.0,
+     -3.772,
+     0.163,
+     -5.773,
+     3.314,
+     -7.195
+    ],
+    [
+     0.0,
+     -30.993,
+     1.26,
+     -12.534,
+     -19.83,
+     -17.885,
+     -10.169,
+     -8.722
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "evolution_valid": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   ],
+   "evolution_measured": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   ],
+   "window_flatness_db": [
+    -6.5,
+    -2.58,
+    0.0
+   ],
+   "window_flatness_valid": [
+    true,
+    true,
+    false
+   ],
+   "window_flatness_measured": [
+    true,
+    true,
+    false
+   ],
    "peak_dbfs": -8.07
   },
   {
@@ -594,6 +1334,7 @@
    "flatness_db": -15.65,
    "stereo_width": null,
    "tilt_rise_db": 8.23,
+   "tilt_strike_db": 29.12,
    "modal_hz": [
     5001.58,
     5844.75,
@@ -640,6 +1381,153 @@
    "tone_lowest_hz": 5001.58,
    "pitch_drop_ratio": 1.0,
    "pitch_drop_ms": null,
+   "modal_density": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "modal_density_valid": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "prompt_late_db": [
+    6.793,
+    -2.11,
+    -1.899,
+    -3.771,
+    -1.408,
+    -10.749,
+    0.326
+   ],
+   "prompt_late_valid": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "evolution_db": [
+    [
+     0.0,
+     0.0,
+     0.0,
+     -38.118,
+     -37.782,
+     -25.177,
+     -14.303,
+     0.893
+    ],
+    [
+     0.0,
+     -44.47,
+     -46.443,
+     -44.994,
+     -43.078,
+     -35.617,
+     -23.99,
+     -2.928
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "evolution_valid": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   ],
+   "evolution_measured": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   ],
+   "window_flatness_db": [
+    -8.11,
+    -13.69,
+    0.0
+   ],
+   "window_flatness_valid": [
+    true,
+    true,
+    false
+   ],
+   "window_flatness_measured": [
+    true,
+    true,
+    false
+   ],
    "peak_dbfs": -9.99
   },
   {
@@ -695,6 +1583,7 @@
    "flatness_db": -43.79,
    "stereo_width": null,
    "tilt_rise_db": -0.61,
+   "tilt_strike_db": 4.6,
    "modal_hz": [
     167.84,
     182.1,
@@ -741,6 +1630,153 @@
    "tone_lowest_hz": 167.84,
    "pitch_drop_ratio": 1.0,
    "pitch_drop_ms": null,
+   "modal_density": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "modal_density_valid": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "prompt_late_db": [
+    22.474,
+    -0.048,
+    5.632,
+    18.967,
+    20.188,
+    19.109,
+    18.96
+   ],
+   "prompt_late_valid": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "evolution_db": [
+    [
+     0.0,
+     0.0,
+     0.0,
+     -3.678,
+     -16.715,
+     -16.101,
+     -8.665,
+     -6.771
+    ],
+    [
+     0.0,
+     -28.805,
+     4.62,
+     -8.949,
+     -22.831,
+     -30.327,
+     -27.691,
+     -27.889
+    ],
+    [
+     -55.627,
+     -53.488,
+     -7.785,
+     -29.336,
+     -42.866,
+     -56.467,
+     -54.54,
+     -55.724
+    ]
+   ],
+   "evolution_valid": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   ],
+   "evolution_measured": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   ],
+   "window_flatness_db": [
+    -2.37,
+    -4.39,
+    -4.77
+   ],
+   "window_flatness_valid": [
+    true,
+    true,
+    true
+   ],
+   "window_flatness_measured": [
+    true,
+    true,
+    true
+   ],
    "peak_dbfs": -12.77
   },
   {
@@ -796,6 +1832,7 @@
    "flatness_db": -25.38,
    "stereo_width": null,
    "tilt_rise_db": 3.27,
+   "tilt_strike_db": 13.76,
    "modal_hz": [
     225.3,
     448.1,
@@ -842,6 +1879,153 @@
    "tone_lowest_hz": 225.3,
    "pitch_drop_ratio": 1.1,
    "pitch_drop_ms": 5.0,
+   "modal_density": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "modal_density_valid": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "prompt_late_db": [
+    -2.392,
+    11.772,
+    5.666,
+    -2.569,
+    5.623,
+    16.58,
+    23.733
+   ],
+   "prompt_late_valid": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "evolution_db": [
+    [
+     0.0,
+     0.0,
+     0.0,
+     -5.133,
+     5.837,
+     1.085,
+     -1.67,
+     3.189
+    ],
+    [
+     0.0,
+     -41.495,
+     -7.786,
+     -6.911,
+     -0.954,
+     -3.923,
+     -7.667,
+     -11.63
+    ],
+    [
+     -66.516,
+     -42.391,
+     -27.894,
+     -12.546,
+     -6.117,
+     -10.638,
+     -18.457,
+     -23.913
+    ]
+   ],
+   "evolution_valid": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   ],
+   "evolution_measured": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   ],
+   "window_flatness_db": [
+    -3.83,
+    -7.47,
+    -12.24
+   ],
+   "window_flatness_valid": [
+    true,
+    true,
+    true
+   ],
+   "window_flatness_measured": [
+    true,
+    true,
+    true
+   ],
    "peak_dbfs": -9.72
   },
   {
@@ -897,6 +2081,7 @@
    "flatness_db": -36.93,
    "stereo_width": null,
    "tilt_rise_db": 0.87,
+   "tilt_strike_db": 38.75,
    "modal_hz": [
     1906.58,
     2007.05,
@@ -943,6 +2128,153 @@
    "tone_lowest_hz": 1906.58,
    "pitch_drop_ratio": 1.0667,
    "pitch_drop_ms": 5.0,
+   "modal_density": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "modal_density_valid": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "prompt_late_db": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "prompt_late_valid": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "evolution_db": [
+    [
+     0.0,
+     0.0,
+     0.0,
+     -64.146,
+     -63.155,
+     -26.762,
+     -5.533,
+     -18.547
+    ],
+    [
+     0.0,
+     -82.314,
+     -66.979,
+     -67.067,
+     -62.537,
+     -7.862,
+     -1.6,
+     -15.316
+    ],
+    [
+     -75.769,
+     -72.532,
+     -75.328,
+     -71.013,
+     -63.768,
+     -9.274,
+     -0.5,
+     -16.429
+    ]
+   ],
+   "evolution_valid": [
+    [
+     false,
+     false,
+     false,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     false,
+     false,
+     false,
+     false,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     false,
+     false,
+     false,
+     false,
+     true,
+     true,
+     true
+    ]
+   ],
+   "evolution_measured": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   ],
+   "window_flatness_db": [
+    -23.58,
+    -26.82,
+    -48.54
+   ],
+   "window_flatness_valid": [
+    true,
+    true,
+    true
+   ],
+   "window_flatness_measured": [
+    true,
+    true,
+    true
+   ],
    "peak_dbfs": -25.48
   },
   {
@@ -998,6 +2330,7 @@
    "flatness_db": -8.83,
    "stereo_width": null,
    "tilt_rise_db": 9.8,
+   "tilt_strike_db": 40.19,
    "modal_hz": [
     1940.39,
     2100.61,
@@ -1044,6 +2377,153 @@
    "tone_lowest_hz": 1940.39,
    "pitch_drop_ratio": 0.6792,
    "pitch_drop_ms": null,
+   "modal_density": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "modal_density_valid": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "prompt_late_db": [
+    -6.294,
+    -2.761,
+    0.103,
+    -0.657,
+    6.183,
+    3.619,
+    -2.308
+   ],
+   "prompt_late_valid": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "evolution_db": [
+    [
+     0.0,
+     0.0,
+     0.0,
+     -30.443,
+     -18.317,
+     -7.926,
+     -0.163,
+     0.751
+    ],
+    [
+     0.0,
+     -52.336,
+     -54.882,
+     -45.775,
+     -41.805,
+     -12.972,
+     -8.585,
+     -11.42
+    ],
+    [
+     -60.316,
+     -50.597,
+     -47.686,
+     -34.561,
+     -34.768,
+     -14.432,
+     -6.025,
+     -5.255
+    ]
+   ],
+   "evolution_valid": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   ],
+   "evolution_measured": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   ],
+   "window_flatness_db": [
+    -3.38,
+    -4.26,
+    -3.16
+   ],
+   "window_flatness_valid": [
+    true,
+    true,
+    true
+   ],
+   "window_flatness_measured": [
+    true,
+    true,
+    true
+   ],
    "peak_dbfs": -17.36
   },
   {
@@ -1099,6 +2579,7 @@
    "flatness_db": -43.87,
    "stereo_width": null,
    "tilt_rise_db": 5.87,
+   "tilt_strike_db": 2.79,
    "modal_hz": [
     645.17,
     665.06,
@@ -1145,6 +2626,153 @@
    "tone_lowest_hz": 645.17,
    "pitch_drop_ratio": 0.931,
    "pitch_drop_ms": null,
+   "modal_density": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "modal_density_valid": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "prompt_late_db": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "prompt_late_valid": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "evolution_db": [
+    [
+     0.0,
+     0.0,
+     0.0,
+     -40.204,
+     -14.037,
+     -18.921,
+     -34.079,
+     -43.281
+    ],
+    [
+     0.0,
+     -63.351,
+     -53.133,
+     -36.694,
+     -0.515,
+     -13.628,
+     -22.003,
+     -33.499
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ]
+   ],
+   "evolution_valid": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   ],
+   "evolution_measured": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   ],
+   "window_flatness_db": [
+    -19.89,
+    -19.9,
+    0.0
+   ],
+   "window_flatness_valid": [
+    true,
+    true,
+    false
+   ],
+   "window_flatness_measured": [
+    true,
+    true,
+    false
+   ],
    "peak_dbfs": -16.58
   },
   {
@@ -1200,6 +2828,7 @@
    "flatness_db": -44.95,
    "stereo_width": null,
    "tilt_rise_db": 11.17,
+   "tilt_strike_db": -22.2,
    "modal_hz": [
     151.3,
     187.36,
@@ -1246,6 +2875,153 @@
    "tone_lowest_hz": 151.3,
    "pitch_drop_ratio": 0.871,
    "pitch_drop_ms": null,
+   "modal_density": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "modal_density_valid": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "prompt_late_db": [
+    -8.4,
+    9.618,
+    -1.671,
+    -0.023,
+    3.765,
+    11.367,
+    11.028
+   ],
+   "prompt_late_valid": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "evolution_db": [
+    [
+     0.0,
+     0.0,
+     0.0,
+     -12.789,
+     -14.623,
+     -28.353,
+     -40.625,
+     -46.383
+    ],
+    [
+     0.0,
+     -44.462,
+     -2.371,
+     -0.791,
+     -0.163,
+     -16.241,
+     -26.347,
+     -35.311
+    ],
+    [
+     -55.476,
+     -41.804,
+     -18.926,
+     -10.616,
+     -2.091,
+     -19.888,
+     -28.303,
+     -39.31
+    ]
+   ],
+   "evolution_valid": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   ],
+   "evolution_measured": [
+    [
+     false,
+     false,
+     false,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     false,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ],
+    [
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true,
+     true
+    ]
+   ],
+   "window_flatness_db": [
+    -12.9,
+    -15.89,
+    -17.08
+   ],
+   "window_flatness_valid": [
+    true,
+    true,
+    true
+   ],
+   "window_flatness_measured": [
+    true,
+    true,
+    true
+   ],
    "peak_dbfs": -16.44
   }
  ],

@@ -36,25 +36,25 @@
       "label": "Vib.w, module recording"
     }
   ],
-  "_dimensions": "Coverage is read against `toneclass.canonical_dimensions`, which for program 11 is 12 dimensions. The three below are what this source cannot carry, each argued from what the font sets rather than from its being a font.",
+  "_dimensions": "Coverage is read against `toneclass.canonical_dimensions`, which for program 11 is 12 dimensions. The three below are what this source cannot carry, each argued from what the font sets rather than from its being a font. The ladder rulers listed after them are the modal class's exclusions rather than the source's.",
   "_dimensions_register": "`register` is gated here and excused on the sibling marimba variation, and the difference is measured rather than assumed. The font sets no `initialAttenuation` anywhere, so what one recording's peak is against the next is what the module puts out. Over this grid that fall is 4.81 dB and strictly monotonic from note 54 to note 78; the marimba's is 1.95 dB and changes direction three times, which is the headroom each recording was normalised into rather than a bar getting quieter as it rises.",
   "dimensions_na": {
     "vel_range": "the font declares no velocity layers at all - `velRange` is set on none of its zones, so it holds one recording per note at a velocity it does not state. A grid asking for more than one would write that recording into every row of the axis a dynamics fit reads",
     "stereo": "the recordings are mono (`sampleType` 1) and the font sets no `pan`, so the image is absent by construction rather than by voicing. This one costs more here than on the siblings: the `w` in Vib.w is the width, so the one thing that separates this variation from its capital is the thing the recording cannot hold. What is left to fit is the tone under it",
     "damper": "a recording ends where it was cut and carries no note-off, so there is no key lift for a release to be read from",
-    "attack_hf_swing": "this reference holds one velocity (100) per note, so there is no softest-to-hardest change to measure -- the same fact vel_range is excused for"
+    "attack_hf_swing": "this reference holds one velocity (100) per note, so there is no softest-to-hardest change to measure -- the same fact vel_range is excused for",
+    "partial_tilt": "a ladder ruler, which the modal class does not judge on: it compares decay rates fitted in the h5-h8 and h1-h2 bins, so it times a mode only while one sits within the ladder's window. On this reference a measured mode sits on h5-h8 on 4 of 5 rows in the 0.12-1.62 s window, and a model mode a quarter tone off its slot has its rate read off the fundamental's skirt and the floor instead",
+    "balance": "a ladder ruler, which the modal class does not judge on: it averages h2-h6 against h1, so it reads a mode only where one coincides with an integer multiple. On this reference a measured mode sits on h2-h6 on 5 of 5 rows in the 0.12-1.62 s window, and a model mode a quarter tone off its slot reads as missing rather than mistuned; `modes` reads every mode where it is",
+    "tnr": "a ladder ruler, which the modal class does not judge on: its +/-2 % n*f0 mask files a mode as tone or noise by whether it lands on an integer multiple. On this reference the median row has 3 of its 10 measured modes in the 0.12-1.62 s window off that mask, carrying -31 dB of the measured mode power, and a model mode a few per cent from an integer multiple crosses to the noise side; `modes` prices that as a mistuning"
   },
   "dimensions": [
     "decay",
     "aftersound",
     "doubling",
-    "partial_tilt",
     "body",
     "attack",
     "attack_hf",
-    "balance",
     "centroid_pct",
-    "tnr",
     "register"
   ],
   "rig": "none",

@@ -41,8 +41,9 @@
       "slot_channel": 8
     }
   ],
-  "_dimensions": "13 of the 15 a modal voice can be judged on. `decay` carries this one: what the program is, past the first fifty milliseconds, is a fall, and the fall changes by a factor of three across the two octaves the grid covers.",
+  "_dimensions": "14 of the 16 its class can be judged on. `stretch` is gated because the reference's fundamental holds its tuning to within 3 cents across the five velocities of every note, on a stiffness fit reliable on 25 of 25 rows. `decay` carries this one: what the program is, past the first fifty milliseconds, is a fall, and the fall changes by a factor of three across the two octaves the grid covers.",
   "dimensions": [
+    "stretch",
     "decay",
     "aftersound",
     "doubling",
@@ -57,7 +58,7 @@
     "vel_range",
     "register"
   ],
-  "_class": "It is only loosely pitched, and the figure is worth recording because it is unusual for a voice the class calls modal: 15 to 30 per cent of its energy falls within two per cent of the harmonics of the key played, against 99.8 per cent for the trumpet on the neighbouring slot. That is what a whole orchestra striking a chord together sounds like rather than a defect, and `tnr` is kept because measuring how little of it is tonal is the point.",
+  "_class": "It is only loosely pitched, and the figure is worth recording because it is unusual for a voice the class calls struck-string: 15 to 30 per cent of its energy falls within two per cent of the harmonics of the key played, against 99.8 per cent for the trumpet on the neighbouring slot. That is what a whole orchestra striking a chord together sounds like rather than a defect, and `tnr` is kept because measuring how little of it is tonal is the point.",
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap.",
   "dimensions_na": {
     "stereo": "the slot renders dual mono: the two channels are bit-identical sample for sample, so the width is zero by construction rather than by voicing",

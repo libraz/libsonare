@@ -41,8 +41,9 @@
       "slot_channel": 16
     }
   ],
-  "_dimensions": "13 of the 15 a modal voice can be judged on. `tnr` is kept and earns it: this is a strongly pitched drum, carrying 93 to 98 per cent of its energy within two per cent of the harmonics of the note struck, which is what a tuned kettle does and what separates it from every other percussion voice in the bank.",
+  "_dimensions": "14 of the 16 its class can be judged on. `stretch` is gated because the reference's fundamental holds its tuning to within 0.4 cents across the five velocities of every note, on a stiffness fit reliable on 25 of 25 rows. The class is struck-string rather than modal, and `tnr` earns its place: this is a strongly pitched drum, carrying 93 to 98 per cent of its energy within two per cent of the harmonics of the note struck, which is what a tuned kettle does and what separates it from every other percussion voice in the bank.",
   "dimensions": [
+    "stretch",
     "decay",
     "aftersound",
     "doubling",
