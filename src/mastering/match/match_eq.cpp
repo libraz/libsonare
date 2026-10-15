@@ -16,6 +16,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
+#include "util/math_utils.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::mastering::match {
@@ -56,8 +57,6 @@ float interpolate_db(const ReferenceSpectrum& spectrum, float frequency_hz) {
   }
   return spectrum.db[index - 1] + (spectrum.db[index] - spectrum.db[index - 1]) * t;
 }
-
-bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
 
 float db_to_gain(float db) { return db_to_linear(db); }
 

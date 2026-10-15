@@ -30,6 +30,7 @@
 #include "metering/waveform.h"
 #include "sonare_c_internal.h"
 #include "sonare_c_mastering_helpers.h"
+#include "util/math_utils.h"
 #include "util/zero_is_default.h"
 
 using namespace sonare;
@@ -37,8 +38,6 @@ using namespace sonare_c_detail;
 using sonare_c_mastering_detail::validate_stereo_audio_params;
 
 namespace {
-
-bool is_power_of_two(int v) { return v > 0 && (v & (v - 1)) == 0; }
 
 SonareError fill_clipping_result(const metering::ClippingResult& result,
                                  SonareClippingResult* out) {

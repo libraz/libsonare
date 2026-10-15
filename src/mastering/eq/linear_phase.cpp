@@ -14,6 +14,7 @@
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 namespace sonare::mastering::eq {
 
@@ -21,8 +22,6 @@ namespace {
 
 using detail::cut_order;
 using detail::is_cut_band;
-
-bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
 
 // Partition the convolver uses when the config leaves partition_size unset.
 // PartitionedConvolver transforms 2 * partition_size points per block, so

@@ -10,6 +10,7 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 namespace sonare {
 
@@ -17,9 +18,6 @@ static_assert(kSpectralEditMaxNFft <= kMaxStftNFft,
               "the shared STFT backstop must stay above this entry's domain bound");
 
 namespace {
-
-/// @brief True if n is a power of two and >= 2.
-bool is_power_of_two(int n) { return n >= 2 && (n & (n - 1)) == 0; }
 
 /// @brief Resolved bin/frame window for one region op (inclusive on both edges).
 struct RegionWindow {

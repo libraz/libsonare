@@ -20,6 +20,7 @@
 #include "sonare_c_internal.h"
 #include "sonare_c_mastering_helpers.h"
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -374,8 +375,6 @@ SonareError run_linked(const float* const* channels, size_t channel_count, size_
   return SONARE_OK;
   SONARE_C_CATCH
 }
-
-bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
 
 /// Config pre-check shared by every denoise entry point (mono, stereo, linked).
 bool denoise_config_valid(const SonareDenoiseClassicalConfig* config) {

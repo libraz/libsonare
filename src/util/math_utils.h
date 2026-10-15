@@ -223,6 +223,9 @@ double percentile_sorted(const std::vector<float>& sorted, double percentile);
 /// @return Percentile value (0 if empty)
 float percentile(const float* data, size_t size, float p);
 
+/// @brief True when @p n is a positive power of two.
+inline constexpr bool is_power_of_two(int n) noexcept { return n > 0 && (n & (n - 1)) == 0; }
+
 /// @brief Returns the smallest power of 2 greater than or equal to n.
 /// @param n Input value
 /// @return Smallest power of 2 >= n (returns 1 if n <= 0)
