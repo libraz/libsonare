@@ -3707,3 +3707,51 @@ TEST_CASE("undoing an event replacement restores the absence of a store entry",
   CHECK(persisted_state(history) == before);
   CHECK(history.midi_content().events.find(clip) == history.midi_content().events.end());
 }
+
+TEST_CASE("undo restores a removed marker, sidecar or warp map at its original index",
+          "[arrangement]") {
+  Fixture f;
+  for (int i = 0; i < 3; ++i) {
+    REQUIRE(f.project.add_marker(480.0 * i, "m" + std::to_string(i)) != 0);
+    AssistSidecar sidecar;
+    sidecar.module_id = "module-" + std::to_string(i);
+    sidecar.payload = {static_cast<uint8_t>(i)};
+    f.project.assist_sidecars_mutable().push_back(sidecar);
+    WarpMapRef map;
+    map.id = static_cast<WarpRefId>(70 + i);
+    map.name = "warp " + std::to_string(i);
+    map.anchors = {{0.0, 0.0}, {48000.0, 44100.0 + i}};
+    REQUIRE(f.project.set_warp_map(map));
+  }
+  REQUIRE(f.project.assist_sidecars().size() == 3);
+  REQUIRE(f.project.warp_maps().size() == 3);
+  const Project before = f.project;
+
+  EditCommandPtr remove_middle;
+  SECTION("marker") {
+    remove_middle = std::make_unique<RemoveMarkerInternal>(before.markers()[1].id);
+  }
+  SECTION("assist sidecar") {
+    remove_middle = std::make_unique<RemoveAssistSidecarInternal>(before.assist_sidecars()[1]);
+  }
+  SECTION("warp map") { remove_middle = std::make_unique<RemoveWarpMap>(before.warp_maps()[1].id); }
+
+  EditHistory history(before);
+  const std::string before_json =
+      sonare::serialize::project_to_json(history.project(), history.midi_content());
+  REQUIRE(history.apply(std::move(remove_middle)));
+  const Project after = history.project();
+  const std::string after_json =
+      sonare::serialize::project_to_json(history.project(), history.midi_content());
+  REQUIRE(after_json != before_json);
+
+  REQUIRE(history.undo());
+  CHECK(project_equal(history.project(), before));
+  CHECK(sonare::serialize::project_to_json(history.project(), history.midi_content()) ==
+        before_json);
+
+  REQUIRE(history.redo());
+  CHECK(project_equal(history.project(), after));
+  CHECK(sonare::serialize::project_to_json(history.project(), history.midi_content()) ==
+        after_json);
+}

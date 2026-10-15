@@ -168,7 +168,9 @@ bool SetMarker::apply(Project& project, MidiContentStore& /*store*/) {
   m.kind = kind_;
   m.key_fifths = key_fifths_;
   m.key_minor = key_minor_;
-  project.markers_mutable().push_back(std::move(m));
+  std::vector<ProjectMarker>& markers = project.markers_mutable();
+  const size_t at = std::min(restore_index_, markers.size());
+  markers.insert(markers.begin() + static_cast<std::ptrdiff_t>(at), std::move(m));
   project.ensure_next_marker_id(target);
   return true;
 }

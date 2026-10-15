@@ -61,8 +61,8 @@ TEST_CASE("malformed and garbage input never crashes and yields diagnostics", "[
       "42",                                               // top-level number
       "null",                                             // top-level null
       "true",                                             // top-level bool
-      "{\"version\": 1, \"sample_rate\": \"x\"}",         // wrong-typed scalar (tolerated)
-      "{\"version\": 1, \"tracks\": \"notarray\"}",       // wrong-typed array (tolerated)
+      "{\"version\": 1, \"sample_rate\": \"x\"}",         // wrong-typed scalar
+      "{\"version\": 1, \"tracks\": \"notarray\"}",       // wrong-typed array
       "{\"version\": 1, \"clips\": [\"notobject\", 5]}",  // bad array elements
       // Sidecar with malformed base64 payload => diagnostic, not crash.
       "{\"version\": 1, \"assist_sidecars\": [{\"module_id\": \"m\", "
@@ -75,8 +75,8 @@ TEST_CASE("malformed and garbage input never crashes and yields diagnostics", "[
   for (const auto& input : bad_inputs) {
     INFO("input: " << input);
     auto result = safe_parse(input);
-    // Either it failed to produce a project, or (for tolerated wrong-typed
-    // optional fields) it produced one with no errors — but it must never crash.
+    // Either it failed to produce a project, or it produced one with no errors --
+    // but it must never crash.
     if (!result.ok()) {
       CHECK_FALSE(result.diagnostics.empty());
     }

@@ -682,9 +682,14 @@ class RestoreWarpMap final : public EditCommand {
   std::size_t retained_bytes() const noexcept override;
   bool mutates_midi_store() const noexcept override { return false; }
 
+  /// Pre-seeds the position at which the removed map is restored, so undoing a
+  /// RemoveWarpMap keeps warp-map ordering (and thus the saved bytes) stable.
+  void reseed_index(size_t index) noexcept { restore_index_ = index; }
+
  private:
   WarpMapRef map_;
   std::vector<ClipId> clip_ids_;
+  size_t restore_index_ = Project::kAppend;
 };
 
 class SetClipSource final : public EditCommand {
@@ -857,6 +862,10 @@ class SetMarker final : public EditCommand {
 
   uint32_t allocated_id() const noexcept { return allocated_id_; }
 
+  /// Pre-seeds the position at which a missing marker is restored, so undoing a
+  /// marker removal keeps marker ordering (and thus the saved bytes) stable.
+  void reseed_index(size_t index) noexcept { restore_index_ = index; }
+
  private:
   EditCommandPtr inverse_from(const Project& state) const;
 
@@ -867,6 +876,7 @@ class SetMarker final : public EditCommand {
   int8_t key_fifths_;
   bool key_minor_;
   uint32_t allocated_id_ = 0;
+  size_t restore_index_ = Project::kAppend;
 };
 
 /// Replaces the whole project annotation block (key/chord/section/onset streams
@@ -1082,8 +1092,13 @@ class SetAssistSidecar final : public EditCommand {
   std::size_t retained_bytes() const noexcept override;
   bool mutates_midi_store() const noexcept override { return false; }
 
+  /// Pre-seeds the position at which a missing sidecar is inserted, so undoing a
+  /// sidecar removal keeps sidecar ordering (and thus the saved bytes) stable.
+  void reseed_index(size_t index) noexcept { restore_index_ = index; }
+
  private:
   AssistSidecar sidecar_;
+  size_t restore_index_ = Project::kAppend;
 };
 
 // ===========================================================================

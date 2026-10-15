@@ -1345,22 +1345,34 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
   // ---- Overlap policy ------------------------------------------------------
   if (config.enforce_overlap_policy && project.overlap_policy() == OverlapPolicy::kDisallow) {
     for (const auto& track : project.tracks()) {
-      // Gather clip spans on this track (PPQ) for an O(n^2) pairwise check;
-      // clip counts per track are small and this stays deterministic.
       std::vector<const EditClip*> on_track;
       for (const auto& clip : project.clips()) {
         if (clip.track_id == track.id && clip.length_ppq > 0.0) on_track.push_back(&clip);
       }
-      for (size_t i = 0; i < on_track.size(); ++i) {
-        for (size_t j = i + 1; j < on_track.size(); ++j) {
-          const EditClip* a = on_track[i];
-          const EditClip* b = on_track[j];
-          const bool overlap = a->start_ppq < b->end_ppq() && b->start_ppq < a->end_ppq();
-          if (overlap) {
-            add_diag(&result, Diagnostic::Code::kClipOverlap, Diagnostic::Severity::kError, a->id,
-                     "clip overlaps another clip on the same track under kDisallow policy");
-          }
+      // A start-sorted sweep flags each clip overlapping any other: it overlaps an
+      // earlier-starting clip iff it starts before their running max end, and a
+      // later-starting one iff its sorted successor starts before its own end.
+      std::vector<size_t> order(on_track.size());
+      for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+      std::stable_sort(order.begin(), order.end(), [&](size_t l, size_t r) {
+        return on_track[l]->start_ppq < on_track[r]->start_ppq;
+      });
+      std::vector<bool> overlaps(on_track.size(), false);
+      double max_end = -std::numeric_limits<double>::infinity();
+      for (size_t k = 0; k < order.size(); ++k) {
+        const EditClip* clip = on_track[order[k]];
+        if (clip->start_ppq < max_end) overlaps[order[k]] = true;
+        if (k + 1 < order.size() && on_track[order[k + 1]]->start_ppq < clip->end_ppq()) {
+          overlaps[order[k]] = true;
         }
+        max_end = std::max(max_end, clip->end_ppq());
+      }
+      // One diagnostic per offending clip, in project order.
+      for (size_t i = 0; i < on_track.size(); ++i) {
+        if (!overlaps[i]) continue;
+        add_diag(&result, Diagnostic::Code::kClipOverlap, Diagnostic::Severity::kError,
+                 on_track[i]->id,
+                 "clip overlaps another clip on the same track under kDisallow policy");
       }
     }
   }

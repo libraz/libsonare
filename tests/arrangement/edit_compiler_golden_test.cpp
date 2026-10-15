@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "arrangement/edit_command.h"
@@ -690,6 +691,85 @@ TEST_CASE("invalid project: overlapping clips under kDisallow returns an error",
     if (d.code == arr::Diagnostic::Code::kClipOverlap) found = true;
   }
   REQUIRE(found);
+}
+
+TEST_CASE("kDisallow overlap diagnostics are one per offending clip", "[arrangement]") {
+  struct Span {
+    double start;
+    double length;
+  };
+  // Returns the per-clip overlap diagnostics and the clips added, in add order.
+  auto compile_spans = [](const std::vector<Span>& spans) {
+    arr::Project project;
+    project.set_sample_rate(kProjectSr);
+    project.set_overlap_policy(arr::OverlapPolicy::kAllow);
+    project.set_tempo_segments({{0.0, 120.0, 0.0}});
+    sonare::arrangement::AudioSourceRef ref;
+    ref.sample_rate_hint = kProjectSr;
+    const arr::SourceId sid = project.add_audio_source(ref);
+    const arr::TrackId tid = project.add_track(arr::Track{});
+    std::vector<arr::ClipId> ids;
+    for (const Span& span : spans) {
+      arr::EditClip clip;
+      clip.track_id = tid;
+      clip.source_id = sid;
+      clip.start_ppq = span.start;
+      clip.length_ppq = span.length;
+      ids.push_back(project.add_clip(clip));
+    }
+    arr::MidiContentStore midi;
+    arr::AudioContentStore audio;
+    arr::AudioSourceSamples samples;
+    samples.sample_rate = kProjectSr;
+    samples.channels.push_back(
+        sonare::test::generate_sine_samples(220.0f, static_cast<int>(kProjectSr), 48000, 0.25f));
+    audio.sources.emplace(sid, std::move(samples));
+    project.set_overlap_policy(arr::OverlapPolicy::kDisallow);
+    const arr::CompileResult r = arr::compile(project, midi, audio);
+    std::vector<uint32_t> flagged;
+    for (const auto& d : r.diagnostics) {
+      if (d.code == arr::Diagnostic::Code::kClipOverlap) flagged.push_back(d.target_id);
+    }
+    return std::make_pair(flagged, ids);
+  };
+
+  SECTION("N stacked clips yield at most N diagnostics, each clip once") {
+    constexpr size_t kStacked = 64;
+    const std::vector<Span> spans(kStacked, Span{0.0, 4.0});
+    auto [flagged, ids] = compile_spans(spans);
+    REQUIRE(flagged.size() == kStacked);
+    std::sort(flagged.begin(), flagged.end());
+    CHECK(std::adjacent_find(flagged.begin(), flagged.end()) == flagged.end());
+    std::sort(ids.begin(), ids.end());
+    CHECK(flagged == ids);
+  }
+
+  SECTION("the offending set equals the pairwise definition") {
+    // Nested, chained, touching (half-open, not overlapping) and isolated spans, out of order.
+    const std::vector<Span> spans = {{10.0, 2.0}, {0.0, 8.0},  {2.0, 1.0},  {12.0, 1.0},
+                                     {7.0, 2.0},  {20.0, 1.0}, {21.0, 3.0}, {22.0, 0.5}};
+    auto [flagged, ids] = compile_spans(spans);
+    std::vector<uint32_t> expected;
+    for (size_t i = 0; i < spans.size(); ++i) {
+      for (size_t j = 0; j < spans.size(); ++j) {
+        if (i == j) continue;
+        const Span& a = spans[i];
+        const Span& b = spans[j];
+        if (a.start < b.start + b.length && b.start < a.start + a.length) {
+          expected.push_back(ids[i]);
+          break;
+        }
+      }
+    }
+    std::sort(flagged.begin(), flagged.end());
+    std::sort(expected.begin(), expected.end());
+    REQUIRE_FALSE(expected.empty());
+    CHECK(flagged == expected);
+  }
+
+  SECTION("a non-overlapping track reports no overlap") {
+    CHECK(compile_spans({{0.0, 4.0}, {4.0, 4.0}, {8.0, 1.0}}).first.empty());
+  }
 }
 
 TEST_CASE("MIDI compile trims events outside the EditClip length", "[arrangement]") {

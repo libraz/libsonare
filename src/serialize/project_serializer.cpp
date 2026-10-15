@@ -411,11 +411,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
     if (const auto* arr = array_at(root, "tempo_segments")) {
       size_t index = 0;
       for (const auto& sv : *arr) {
-        if (!sv.is_object()) {
-          ++index;
-          continue;
-        }
-        transport::TempoSegment s = tempo_segment_from_json(sv);
+        transport::TempoSegment s = tempo_segment_from_json(object_element(sv, "tempo_segments"));
         if (!std::isfinite(s.start_ppq)) {
           result.diagnostics.push_back(
               {DiagnosticSeverity::kError, "invalid_tempo_start_ppq",
@@ -449,11 +445,8 @@ DeserializeResult project_from_json(const std::string& json_text) {
     if (const auto* arr = array_at(root, "time_signatures")) {
       size_t index = 0;
       for (const auto& sv : *arr) {
-        if (!sv.is_object()) {
-          ++index;
-          continue;
-        }
-        transport::TimeSignatureSegment s = time_signature_from_json(sv);
+        transport::TimeSignatureSegment s =
+            time_signature_from_json(object_element(sv, "time_signatures"));
         if (!std::isfinite(s.start_ppq)) {
           result.diagnostics.push_back(
               {DiagnosticSeverity::kError, "invalid_time_signature_start_ppq",
@@ -480,8 +473,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
     std::unordered_set<arrangement::SourceId> source_ids;
     if (const auto* arr = array_at(root, "sources")) {
       for (const auto& sv : *arr) {
-        if (!sv.is_object()) continue;
-        arrangement::ClipSource src = source_from_json(sv);
+        arrangement::ClipSource src = source_from_json(object_element(sv, "sources"));
         const arrangement::SourceId sid = arrangement::source_id(src);
         if (invalid_entity_id(sid)) {
           reject_entity_id("source", sid, false);
@@ -509,8 +501,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
     std::unordered_set<arrangement::TrackId> track_ids;
     if (const auto* arr = array_at(root, "tracks")) {
       for (const auto& tv : *arr) {
-        if (!tv.is_object()) continue;
-        arrangement::Track t = track_from_json(tv, schema_version);
+        arrangement::Track t = track_from_json(object_element(tv, "tracks"), schema_version);
         if (invalid_entity_id(t.id)) {
           reject_entity_id("track", t.id, false);
           return result;
@@ -532,8 +523,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
     std::unordered_set<arrangement::ClipId> clip_ids;
     if (const auto* arr = array_at(root, "clips")) {
       for (const auto& cv : *arr) {
-        if (!cv.is_object()) continue;
-        arrangement::EditClip c = clip_from_json(cv, schema_version);
+        arrangement::EditClip c = clip_from_json(object_element(cv, "clips"), schema_version);
         if (invalid_entity_id(c.id)) {
           reject_entity_id("clip", c.id, false);
           return result;
@@ -561,8 +551,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
     std::unordered_set<arrangement::WarpRefId> warp_ids;
     if (const auto* arr = array_at(root, "warp_maps")) {
       for (const auto& wv : *arr) {
-        if (!wv.is_object()) continue;
-        arrangement::WarpMapRef map = warp_map_from_json(wv);
+        arrangement::WarpMapRef map = warp_map_from_json(object_element(wv, "warp_maps"));
         const uint32_t map_id = map.id;
         if (!project.set_warp_map(std::move(map))) {
           decode_diagnostics.warn("invalid_warp_map",
@@ -579,8 +568,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
     if (schema_version >= SONARE_PROJECT_SCHEMA_VERSION_PART_RIGS) {
       if (const auto* arr = array_at(root, "part_rigs")) {
         for (const auto& rv : *arr) {
-          if (!rv.is_object()) continue;
-          const auto entry = part_rig_from_json(rv);
+          const auto entry = part_rig_from_json(object_element(rv, "part_rigs"));
           if (!entry || !project.set_part_rig(*entry)) {
             decode_diagnostics.warn("invalid_part_rig",
                                     "a part rig entry has an invalid part, mode or inserts "
@@ -687,8 +675,8 @@ DeserializeResult project_from_json(const std::string& json_text) {
     uint32_t max_marker_id = 0;
     std::unordered_set<uint32_t> marker_ids;
     if (const auto* arr = array_at(root, "markers")) {
-      for (const auto& mv : *arr) {
-        if (!mv.is_object()) continue;
+      for (const auto& element : *arr) {
+        const Value& mv = object_element(element, "markers");
         arrangement::ProjectMarker m;
         m.id = uint_or(mv, "id", 0);
         m.ppq = num_or(mv, "ppq", 0.0);
@@ -723,12 +711,12 @@ DeserializeResult project_from_json(const std::string& json_text) {
     if (max_marker_id > 0) project.ensure_next_marker_id(max_marker_id);
 
     // Annotation.
-    if (const auto* av = root.find("annotation"); av != nullptr && av->is_object()) {
+    if (const auto* av = object_value_at(root, "annotation")) {
       annotation_from_json(*av, &project.annotation());
     }
 
     // Mixer scene.
-    if (const auto* sv = root.find("scene"); sv != nullptr && sv->is_object()) {
+    if (const auto* sv = object_value_at(root, "scene")) {
       project.scene() = scene_from_value(*sv, &decode_diagnostics);
     }
 
@@ -737,8 +725,8 @@ DeserializeResult project_from_json(const std::string& json_text) {
     // keeps the loader's payload-first limit/error order without copying it.
     std::size_t decoded_payload_bytes = 0;
     if (const auto* arr = array_at(root, "assist_sidecars")) {
-      for (const auto& sv : *arr) {
-        if (!sv.is_object()) continue;
+      for (const auto& element : *arr) {
+        const Value& sv = object_element(element, "assist_sidecars");
         static const std::string kEmptyPayload;
         const std::string* encoded_payload = strict_string_field(sv, "payload_b64");
         const std::string& payload = encoded_payload != nullptr ? *encoded_payload : kEmptyPayload;
@@ -771,9 +759,15 @@ DeserializeResult project_from_json(const std::string& json_text) {
     if (const auto* mc = object_at(root, "midi_content")) {
       for (const auto& [key, value] : *mc) {
         if (key == "__sysex_payloads") {
-          if (!value.is_object()) continue;
+          if (!value.is_object()) {
+            throw SonareException(ErrorCode::InvalidFormat,
+                                  "MIDI SysEx payload table must be an object");
+          }
           for (const auto& [handle_key, payload_value] : value.as_object()) {
-            if (!payload_value.is_string()) continue;
+            if (!payload_value.is_string()) {
+              throw SonareException(ErrorCode::InvalidFormat,
+                                    "MIDI SysEx payload must be a base64 string");
+            }
             arrangement::ClipId handle = 0;
             if (!parse_uint32_key(handle_key, &handle)) {
               decode_diagnostics.warn("invalid_sysex_handle",
@@ -805,7 +799,10 @@ DeserializeResult project_from_json(const std::string& json_text) {
           }
           continue;
         }
-        if (!value.is_array()) continue;
+        if (!value.is_array()) {
+          throw SonareException(ErrorCode::InvalidFormat,
+                                "MIDI content entry must be an array of events");
+        }
         arrangement::ClipId clip_id = 0;
         if (!parse_uint32_key(key, &clip_id)) {
           decode_diagnostics.warn(
@@ -814,8 +811,8 @@ DeserializeResult project_from_json(const std::string& json_text) {
           continue;
         }
         arrangement::MidiClipEventList events;
-        for (const auto& ev : value.as_array()) {
-          if (!ev.is_object()) continue;
+        for (const auto& element : value.as_array()) {
+          const Value& ev = object_element(element, "midi_content");
           arrangement::MidiClipEvent e;
           e.ppq = num_or(ev, "ppq", 0.0);
           e.data0 = midi_word_or_warn(ev, "data0", clip_id, &decode_diagnostics);

@@ -107,8 +107,12 @@ std::string str_or(const Value& obj, const char* key, const std::string& fallbac
 bool bool_or(const Value& obj, const char* key, bool fallback);
 uint32_t midi_word_or_warn(const Value& obj, const char* key, uint32_t clip_id,
                            BoundedDiagnostics* diagnostics);
+// Container readers: NULL when absent, InvalidFormat when present with the wrong type.
 const Array* array_at(const Value& obj, const char* key);
+const Value* object_value_at(const Value& obj, const char* key);
 const Object* object_at(const Value& obj, const char* key);
+/// Returns @p element, or throws InvalidFormat naming @p array_key when it is not an object.
+const Value& object_element(const Value& element, const char* array_key);
 bool schema_version_supported(uint32_t version);
 
 // ===========================================================================
@@ -164,10 +168,12 @@ struct InvariantViolation {
 /// @param midi The MIDI content store decoded alongside @p project, or NULL when
 ///        there is none. Clip events live there rather than on the project, so
 ///        passing it is what keeps their positions inside the same accepted
-///        value set as everything the project itself carries.
-std::optional<InvariantViolation> enforce_edit_api_invariants(
-    arrangement::Project* project, const arrangement::MidiContentStore* midi,
-    BoundedDiagnostics* diagnostics);
+///        value set as everything the project itself carries. Event lists keyed
+///        by no live clip, and events whose SysEx handle has no payload, are
+///        dropped with a warning each.
+std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Project* project,
+                                                              arrangement::MidiContentStore* midi,
+                                                              BoundedDiagnostics* diagnostics);
 arrangement::ClipFade fade_from_json(const Value& v);
 arrangement::ClipTake take_from_json(const Value& v, uint32_t schema_version);
 arrangement::ClipCompSegment comp_segment_from_json(const Value& v);

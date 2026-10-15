@@ -1652,7 +1652,9 @@ TEST_CASE("out-of-range MIDI data word is clamped with a warning, not silently z
           "[serialize]") {
   // data0 below zero clamps to 0; data1 above uint32 max clamps to 0xFFFFFFFF.
   const std::string in =
-      "{\"version\": 1, \"midi_content\": {\"3\": [{\"ppq\": 0.0, \"data0\": -1.0, "
+      "{\"version\": 1, \"sources\": [{\"id\": 1, \"kind\": 0}], \"tracks\": [{\"id\": 1}], "
+      "\"clips\": [{\"id\": 3, \"track_id\": 1, \"source_id\": 1, \"length_ppq\": 1}], "
+      "\"midi_content\": {\"3\": [{\"ppq\": 0.0, \"data0\": -1.0, "
       "\"data1\": 5000000000.0}]}}";
   auto result = project_from_json(in);
   REQUIRE(result.ok());
@@ -2324,44 +2326,111 @@ TEST_CASE("serializer borrowed helpers preserve direct ABI controls", "[serializ
         "string field must be a string: payload_b64");
 }
 
-TEST_CASE("annotation absent and non-object values remain ignored", "[serialize]") {
-  for (const char* document : {R"({"version":1})", R"({"version":1,"annotation":[]})",
-                               R"({"version":1,"annotation":null})"}) {
+TEST_CASE("an absent annotation loads empty and a non-object one is refused", "[serialize]") {
+  const auto absent = project_from_json(R"({"version":1})");
+  REQUIRE(absent.ok());
+  CHECK(absent.project->annotation().keys.empty());
+  CHECK(absent.project->annotation().chords.empty());
+  CHECK(absent.project->annotation().sections.empty());
+  CHECK(absent.project->annotation().onsets.empty());
+
+  for (const char* document :
+       {R"({"version":1,"annotation":[]})", R"({"version":1,"annotation":null})"}) {
+    INFO(document);
     const auto result = project_from_json(document);
-    REQUIRE(result.ok());
-    CHECK(result.project->annotation().keys.empty());
-    CHECK(result.project->annotation().chords.empty());
-    CHECK(result.project->annotation().sections.empty());
-    CHECK(result.project->annotation().onsets.empty());
+    REQUIRE_FALSE(result.ok());
+    REQUIRE_FALSE(result.diagnostics.empty());
+    CHECK(result.diagnostics.back().code == "invalid_format");
   }
 }
 
-TEST_CASE("scene arrays materialize only their object elements", "[serialize]") {
+TEST_CASE("a wrong-typed container or array element is refused, never loaded empty",
+          "[serialize]") {
+  const char* const documents[] = {
+      // Top-level containers of the wrong JSON type.
+      R"({"version":1,"clips":{}})",
+      R"({"version":1,"tracks":"x"})",
+      R"({"version":1,"sources":7})",
+      R"({"version":1,"markers":null})",
+      R"({"version":1,"warp_maps":{}})",
+      R"({"version":1,"assist_sidecars":true})",
+      R"({"version":1,"tempo_segments":{}})",
+      R"({"version":1,"time_signatures":"4/4"})",
+      R"({"version":1,"midi_content":[]})",
+      R"({"version":1,"scene":[]})",
+      // Nested containers.
+      R"({"version":1,"tracks":[{"id":1,"automation_lanes":{}}]})",
+      R"({"version":1,"tracks":[{"id":1,"automation_lanes":[{"target_param_id":7,"points":7}]}]})",
+      R"({"version":1,"clips":[{"id":1,"takes":"x"}]})",
+      R"({"version":1,"clips":[{"id":1,"fade_in":[]}]})",
+      R"({"version":1,"annotation":{"chords":{}}})",
+      R"({"version":1,"midi_content":{"1":{}}})",
+      R"({"version":1,"midi_content":{"__sysex_payloads":[]}})",
+      R"({"version":1,"midi_content":{"__sysex_payloads":{"1":5}}})",
+      // Array elements that are not objects.
+      R"({"version":1,"clips":["notobject",5]})",
+      R"({"version":1,"tracks":[null]})",
+      R"({"version":1,"sources":[1]})",
+      R"({"version":1,"markers":[[]]})",
+      R"({"version":1,"warp_maps":["w"]})",
+      R"({"version":1,"assist_sidecars":[false]})",
+      R"({"version":1,"tempo_segments":[120]})",
+      R"({"version":1,"tracks":[{"id":1,"automation_lanes":[3]}]})",
+      R"({"version":1,"warp_maps":[{"id":1,"anchors":[0,1]}]})",
+      R"({"version":1,"annotation":{"sections":["verse"]}})",
+      R"({"version":1,"annotation":{"chords":[{"extensions":["9"]}]}})",
+      R"({"version":1,"midi_content":{"1":[null]}})",
+  };
+  for (const char* document : documents) {
+    INFO(document);
+    const auto result = project_from_json(document);
+    REQUIRE_FALSE(result.ok());
+    REQUIRE_FALSE(result.diagnostics.empty());
+    CHECK(result.diagnostics.back().code == "invalid_format");
+  }
+
+  // Absent containers still take their defaults.
+  const auto absent = project_from_json(R"({"version":1,"tracks":[{"id":1}]})");
+  REQUIRE(absent.ok());
+  REQUIRE(absent.project->tracks().size() == 1);
+  CHECK(absent.project->tracks()[0].automation_lanes.empty());
+  CHECK(absent.project->clips().empty());
+}
+
+TEST_CASE("a scene array with a non-object element is refused, never thinned", "[serialize]") {
   // The scene walker is reached both standalone (scene_from_json) and embedded
-  // in a project document; both must count entities the same way.
-  const std::string scene_json =
-      R"({"version":1,"strips":[null,1,"x",{"id":"a","inserts":[null,{"processor":"gain"}],)"
-      R"("sends":[3,{"id":"s","destinationBusId":"bus"}]}],)"
-      R"("buses":[null,{"id":"bus","inserts":["x"]}],)"
-      R"("vcaGroups":[false,{"id":"v"}],"connections":[null,{"source":"a","destination":"bus"}]})";
+  // in a project document; both must refuse the same malformed element.
+  const char* const scenes[] = {
+      R"({"version":1,"strips":[null,{"id":"a"}]})",
+      R"({"version":1,"strips":[{"id":"a","inserts":[1,{"processor":"gain"}]}]})",
+      R"({"version":1,"strips":[{"id":"a","sends":[3,{"id":"s","destinationBusId":"bus"}]}],)"
+      R"("buses":[{"id":"bus"}]})",
+      R"({"version":1,"buses":["x",{"id":"bus"}]})",
+      R"({"version":1,"buses":[{"id":"bus","inserts":["x"]}]})",
+      R"({"version":1,"vcaGroups":[false,{"id":"v"}]})",
+      R"({"version":1,"strips":[{"id":"a"}],"buses":[{"id":"bus"}],)"
+      R"("connections":[null,{"source":"a","destination":"bus"}]})",
+  };
+  for (const char* scene_json : scenes) {
+    INFO(scene_json);
+    CHECK_THROWS(mixing::api::scene_from_json(scene_json));
+    const auto loaded =
+        project_from_json(std::string(R"({"version":1,"scene":)") + scene_json + "}");
+    REQUIRE_FALSE(loaded.ok());
+    REQUIRE_FALSE(loaded.diagnostics.empty());
+    CHECK(loaded.diagnostics.back().code == "invalid_format");
+  }
 
-  const mixing::api::Scene scene = mixing::api::scene_from_json(scene_json);
-  REQUIRE(scene.strips.size() == 1);
-  REQUIRE(scene.strips.front().id == "a");
-  REQUIRE(scene.strips.front().inserts.size() == 1);
-  REQUIRE(scene.strips.front().inserts.front().processor_name == "gain");
-  REQUIRE(scene.strips.front().sends.size() == 1);
-  REQUIRE(scene.strips.front().sends.front().id == "s");
-  REQUIRE(scene.buses.size() == 1);
-  REQUIRE(scene.buses.front().inserts.empty());
-  REQUIRE(scene.vca_groups.size() == 1);
-  REQUIRE(scene.connections.size() == 1);
-
-  // Same document embedded in a project: identical entity counts, and a
-  // save/load cycle does not accumulate ghost entities.
-  const auto loaded = project_from_json(R"({"version":1,"scene":)" + scene_json + "}");
+  // A scene of object elements loads with every entity and survives a save/load cycle.
+  const std::string clean =
+      R"({"version":1,"strips":[{"id":"a","inserts":[{"processor":"gain"}],)"
+      R"("sends":[{"id":"s","destinationBusId":"bus"}]}],"buses":[{"id":"bus"}],)"
+      R"("vcaGroups":[{"id":"v"}],"connections":[{"source":"a","destination":"bus"}]})";
+  const auto loaded = project_from_json(R"({"version":1,"scene":)" + clean + "}");
   REQUIRE(loaded.ok());
   REQUIRE(loaded.project->scene().strips.size() == 1);
+  REQUIRE(loaded.project->scene().strips.front().inserts.size() == 1);
+  REQUIRE(loaded.project->scene().strips.front().sends.size() == 1);
   REQUIRE(loaded.project->scene().buses.size() == 1);
   REQUIRE(loaded.project->scene().vca_groups.size() == 1);
   REQUIRE(loaded.project->scene().connections.size() == 1);
@@ -2509,9 +2578,10 @@ TEST_CASE("a loaded position is never one the C ABI setters would reject", "[ser
   // Zero is a legal position; only negatives are rejected.
   const auto ok =
       project_from_json(R"({"version":1,"tempo_segments":[{"start_ppq":0.0,"bpm":120.0}],)"
-                        R"("markers":[{"id":1,"ppq":0.0}],)"
+                        R"("markers":[{"id":1,"ppq":0.0}],"sources":[{"id":1,"kind":0}],)"
                         R"("tracks":[{"id":1,"automation_lanes":[)"
                         R"({"target_param_id":7,"points":[{"ppq":0.0,"value":0.5}]}]}],)"
+                        R"("clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":1}],)"
                         R"("midi_content":{"1":[{"ppq":0.0,"data0":546323556,"data1":0}]}})");
   REQUIRE(ok.ok());
   REQUIRE_FALSE(ok.has_error());
@@ -2898,4 +2968,51 @@ TEST_CASE("try_project_to_json clears output at every persistence budget boundar
                   [](auto& limits, size_t value) { limits.max_string_bytes = value; });
   expect_rejected("decoded payload bytes", shape.decoded_payload_bytes,
                   [](auto& limits, size_t value) { limits.max_decoded_payload_bytes = value; });
+}
+
+TEST_CASE("orphan MIDI event lists and dangling SysEx handles are dropped on load", "[serialize]") {
+  // Key "2" is the id the loader's clip counter hands out next.
+  const auto result =
+      project_from_json(R"({"version":1,"sources":[{"id":1,"kind":1,"name":""}],)"
+                        R"("tracks":[{"id":1,"kind":1}],)"
+                        R"("clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":4}],)"
+                        R"("midi_content":{"1":[{"ppq":0.0,"data0":546323556,"data1":0},)"
+                        R"({"ppq":0.5,"data0":0,"data1":0,"sysex_handle":7},)"
+                        R"({"ppq":1.0,"data0":0,"data1":0,"sysex_handle":9}],)"
+                        R"("2":[{"ppq":0.0,"data0":546323556,"data1":0}],)"
+                        R"("__sysex_payloads":{"7":"AQI="}}})");
+  REQUIRE(result.ok());
+  int orphan_warnings = 0;
+  int dangling_warnings = 0;
+  for (const auto& d : result.diagnostics) {
+    if (d.code == "dropped_orphan_midi_events") ++orphan_warnings;
+    if (d.code == "dropped_dangling_sysex_event") ++dangling_warnings;
+  }
+  CHECK(orphan_warnings == 1);
+  CHECK(dangling_warnings == 1);
+
+  // Every retained key names a live clip and every retained handle resolves.
+  for (const auto& [clip_id, events] : result.midi.events) {
+    CHECK(result.project->has_clip(clip_id));
+    for (const MidiClipEvent& event : events) {
+      if (event.sysex_handle == 0) continue;
+      CHECK(result.midi.sysex_payloads.count(event.sysex_handle) == 1);
+    }
+  }
+  REQUIRE(result.midi.events.count(1) == 1);
+  CHECK(result.midi.events.at(1).size() == 2);
+  CHECK(result.midi.events.count(2) == 0);
+
+  // A freshly added clip starts with no events.
+  Project project = *result.project;
+  MidiContentStore midi = result.midi;
+  EditClip clip;
+  clip.track_id = 1;
+  clip.source_id = 1;
+  clip.start_ppq = 8.0;
+  clip.length_ppq = 4.0;
+  AddClip add(clip);
+  REQUIRE(add.apply(project, midi));
+  CHECK(add.allocated_id() == 2);
+  CHECK(midi.events.count(add.allocated_id()) == 0);
 }

@@ -648,19 +648,30 @@ bool RemoveWarpMap::apply(Project& project, MidiContentStore& /*store*/) {
 
 EditCommandPtr RemoveWarpMap::invert(const Project& before,
                                      const MidiContentStore& /*store_before*/) const {
-  const WarpMapRef* prior = before.find_warp_map(id_);
-  if (prior == nullptr) {
+  const std::vector<WarpMapRef>& maps = before.warp_maps();
+  const auto prior =
+      std::find_if(maps.begin(), maps.end(), [&](const WarpMapRef& m) { return m.id == id_; });
+  if (prior == maps.end()) {
     return nullptr;
   }
   std::vector<ClipId> clip_ids;
   for (const EditClip& clip : before.clips()) {
     if (clip.warp_ref_id == id_) clip_ids.push_back(clip.id);
   }
-  return std::make_unique<RestoreWarpMap>(*prior, std::move(clip_ids));
+  auto cmd = std::make_unique<RestoreWarpMap>(*prior, std::move(clip_ids));
+  cmd->reseed_index(static_cast<size_t>(prior - maps.begin()));
+  return cmd;
 }
 
 bool RestoreWarpMap::apply(Project& project, MidiContentStore& /*store*/) {
+  const bool existed = project.has_warp_map(map_.id);
   if (!project.set_warp_map(map_)) return false;
+  std::vector<WarpMapRef>& maps = project.warp_maps_mutable();
+  // set_warp_map appends a new map; move it back to the position it was removed from.
+  if (!existed && restore_index_ < maps.size() - 1) {
+    std::rotate(maps.begin() + static_cast<std::ptrdiff_t>(restore_index_), maps.end() - 1,
+                maps.end());
+  }
   for (const ClipId id : clip_ids_) {
     EditClip* clip = project.find_clip_mutable(id);
     if (clip == nullptr) return false;

@@ -170,7 +170,8 @@ bool SetAssistSidecar::apply(Project& project, MidiContentStore& /*store*/) {
   if (idx != static_cast<size_t>(-1)) {
     sidecars[idx] = sidecar_;
   } else {
-    sidecars.push_back(sidecar_);
+    const size_t at = std::min(restore_index_, sidecars.size());
+    sidecars.insert(sidecars.begin() + static_cast<std::ptrdiff_t>(at), sidecar_);
   }
   return true;
 }
@@ -228,12 +229,16 @@ bool RemoveMarkerInternal::apply(Project& project, MidiContentStore& /*store*/) 
 
 EditCommandPtr RemoveMarkerInternal::invert(const Project& before,
                                             const MidiContentStore& /*store_before*/) const {
-  for (const ProjectMarker& m : before.markers()) {
+  const std::vector<ProjectMarker>& markers = before.markers();
+  for (size_t i = 0; i < markers.size(); ++i) {
+    const ProjectMarker& m = markers[i];
     if (m.id == id_) {
       // Restore every field, not just ppq/name: dropping kind/key_fifths/
       // key_minor would resurrect a key-signature marker as a plain marker and
       // corrupt the key map on undo.
-      return std::make_unique<SetMarker>(id_, m.ppq, m.name, m.kind, m.key_fifths, m.key_minor);
+      auto cmd = std::make_unique<SetMarker>(id_, m.ppq, m.name, m.kind, m.key_fifths, m.key_minor);
+      cmd->reseed_index(i);
+      return cmd;
     }
   }
   return nullptr;
@@ -271,7 +276,9 @@ EditCommandPtr RemoveAssistSidecarInternal::invert(const Project& before,
   if (idx == static_cast<size_t>(-1)) {
     return nullptr;
   }
-  return std::make_unique<SetAssistSidecar>(sidecars[idx]);
+  auto cmd = std::make_unique<SetAssistSidecar>(sidecars[idx]);
+  cmd->reseed_index(idx);
+  return cmd;
 }
 
 bool UnsplitClip::apply(Project& project, MidiContentStore& store) {

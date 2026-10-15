@@ -66,9 +66,10 @@ bool base64_decode(const std::string& text, std::vector<uint8_t>* out, size_t ma
 // Small read helpers. Forward compatibility covers UNKNOWN fields and ABSENT
 // known fields: an absent field falls back to the default. A field that is
 // present but carries the wrong JSON type is malformed input and is rejected
-// with InvalidFormat, uniformly for every scalar type -- substituting a default
-// there would let `"sample_rate": "96000"` render the whole project at the
-// default rate with no diagnostic.
+// with InvalidFormat, uniformly for scalars, arrays, objects and array elements
+// -- substituting a default there would let `"sample_rate": "96000"` render the
+// whole project at the default rate, or `"clips": {}` load an empty arrangement
+// that the next save writes over the user's file.
 // ===========================================================================
 
 double num_or(const Value& obj, const char* key, double fallback) {
@@ -184,12 +185,35 @@ uint32_t midi_word_or_warn(const Value& obj, const char* key, uint32_t clip_id,
 
 const Array* array_at(const Value& obj, const char* key) {
   const auto* v = obj.find(key);
-  return (v && v->is_array()) ? &v->as_array() : nullptr;
+  if (!v) return nullptr;
+  if (!v->is_array()) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          "array field must be an array: " + std::string(key));
+  }
+  return &v->as_array();
+}
+
+const Value* object_value_at(const Value& obj, const char* key) {
+  const auto* v = obj.find(key);
+  if (!v) return nullptr;
+  if (!v->is_object()) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          "object field must be an object: " + std::string(key));
+  }
+  return v;
 }
 
 const Object* object_at(const Value& obj, const char* key) {
-  const auto* v = obj.find(key);
-  return (v && v->is_object()) ? &v->as_object() : nullptr;
+  const Value* v = object_value_at(obj, key);
+  return v != nullptr ? &v->as_object() : nullptr;
+}
+
+const Value& object_element(const Value& element, const char* array_key) {
+  if (!element.is_object()) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          "array element must be an object: " + std::string(array_key));
+  }
+  return element;
 }
 
 // ===========================================================================

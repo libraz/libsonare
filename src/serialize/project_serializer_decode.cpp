@@ -115,8 +115,8 @@ automation::AutomationLane automation_lane_from_json(const Value& v, uint32_t sc
   automation::AutomationLane lane(uint_or(v, "target_param_id", 0), target_kind);
   std::vector<automation::Breakpoint> points;
   if (const auto* arr = array_at(v, "points")) {
-    for (const auto& pv : *arr) {
-      if (!pv.is_object()) continue;
+    for (const auto& element : *arr) {
+      const Value& pv = object_element(element, "points");
       automation::Breakpoint bp;
       bp.ppq = num_or(pv, "ppq", 0.0);
       bp.value = float_or(pv, "value", 0.0f, "tracks[].automation_lanes[].points[].value");
@@ -144,9 +144,8 @@ arrangement::Track track_from_json(const Value& v, uint32_t schema_version) {
     // Decoded verbatim; the one-lane-per-target invariant is enforced for the
     // whole model by enforce_edit_api_invariants().
     for (const auto& lv : *arr) {
-      if (lv.is_object()) {
-        t.automation_lanes.push_back(automation_lane_from_json(lv, schema_version));
-      }
+      t.automation_lanes.push_back(
+          automation_lane_from_json(object_element(lv, "automation_lanes"), schema_version));
     }
   }
   return t;
@@ -232,19 +231,20 @@ arrangement::EditClip clip_from_json(const Value& v, uint32_t schema_version) {
   c.warp_mode = enum_or(v, "warp_mode", arrangement::WarpMode::kOff);
   if (const auto* arr = array_at(v, "takes")) {
     for (const auto& tv : *arr) {
-      if (tv.is_object()) c.takes.push_back(take_from_json(tv, schema_version));
+      c.takes.push_back(take_from_json(object_element(tv, "takes"), schema_version));
     }
   }
   c.active_take_id = uint_or(v, "active_take_id", 0);
   if (const auto* arr = array_at(v, "comp_segments")) {
     for (const auto& sv : *arr) {
-      if (sv.is_object()) c.comp_segments.push_back(comp_segment_from_json(sv));
+      c.comp_segments.push_back(comp_segment_from_json(object_element(sv, "comp_segments")));
     }
   }
   if (schema_version >= SONARE_PROJECT_SCHEMA_VERSION_COMP_RENDER_PARTS) {
     if (const auto* arr = array_at(v, "comp_render_parts")) {
       for (const auto& pv : *arr) {
-        if (pv.is_object()) c.comp_render_parts.push_back(comp_render_part_from_json(pv));
+        c.comp_render_parts.push_back(
+            comp_render_part_from_json(object_element(pv, "comp_render_parts")));
       }
     }
   }
@@ -256,8 +256,8 @@ arrangement::WarpMapRef warp_map_from_json(const Value& v) {
   map.id = uint_or(v, "id", 0);
   map.name = str_or(v, "name", "");
   if (const auto* arr = array_at(v, "anchors")) {
-    for (const auto& av : *arr) {
-      if (!av.is_object()) continue;
+    for (const auto& element : *arr) {
+      const Value& av = object_element(element, "anchors");
       arrangement::WarpAnchorRef anchor;
       anchor.warp_sample = num_or(av, "warp_sample", 0.0);
       anchor.source_sample = num_or(av, "source_sample", 0.0);
@@ -296,7 +296,9 @@ arrangement::ChordSymbol chord_from_json(const Value& v) {
   c.quality = enum_or(v, "quality", arrangement::ChordQuality::kUnknown);
   if (const auto* arr = array_at(v, "extensions")) {
     for (const auto& ev : *arr) {
-      if (!ev.is_number()) continue;
+      if (!ev.is_number()) {
+        throw SonareException(ErrorCode::InvalidFormat, "chord extension must be a number");
+      }
       uint8_t extension = 0;
       if (!numeric::checked_integral_cast(ev.as_number(), &extension)) {
         throw SonareException(ErrorCode::InvalidFormat,
@@ -324,17 +326,17 @@ void annotation_from_json(const Value& v, arrangement::ProjectAnnotation* a) {
   a->tempo_confidence = float_or(v, "tempo_confidence", 0.0f, "annotation.tempo_confidence");
   if (const auto* arr = array_at(v, "keys")) {
     for (const auto& kv : *arr) {
-      if (kv.is_object()) a->keys.push_back(key_segment_from_json(kv));
+      a->keys.push_back(key_segment_from_json(object_element(kv, "keys")));
     }
   }
   if (const auto* arr = array_at(v, "chords")) {
     for (const auto& cv : *arr) {
-      if (cv.is_object()) a->chords.push_back(chord_from_json(cv));
+      a->chords.push_back(chord_from_json(object_element(cv, "chords")));
     }
   }
   if (const auto* arr = array_at(v, "sections")) {
-    for (const auto& sv : *arr) {
-      if (!sv.is_object()) continue;
+    for (const auto& element : *arr) {
+      const Value& sv = object_element(element, "sections");
       arrangement::SectionSegment s;
       s.start_ppq = num_or(sv, "start_ppq", 0.0);
       s.end_ppq = num_or(sv, "end_ppq", 0.0);
@@ -343,8 +345,8 @@ void annotation_from_json(const Value& v, arrangement::ProjectAnnotation* a) {
     }
   }
   if (const auto* arr = array_at(v, "onsets")) {
-    for (const auto& ov : *arr) {
-      if (!ov.is_object()) continue;
+    for (const auto& element : *arr) {
+      const Value& ov = object_element(element, "onsets");
       arrangement::OnsetMarker on;
       on.ppq = num_or(ov, "ppq", 0.0);
       on.confidence = float_or(ov, "confidence", 0.0f, "annotation.onsets[].confidence");
@@ -481,9 +483,9 @@ SidecarKey sidecar_key(const arrangement::AssistSidecar& sidecar) {
 
 }  // namespace
 
-std::optional<InvariantViolation> enforce_edit_api_invariants(
-    arrangement::Project* project, const arrangement::MidiContentStore* midi,
-    BoundedDiagnostics* diagnostics) {
+std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Project* project,
+                                                              arrangement::MidiContentStore* midi,
+                                                              BoundedDiagnostics* diagnostics) {
   if (project == nullptr) return std::nullopt;
 
   // ---- Positions are non-negative ------------------------------------------
@@ -660,6 +662,37 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(
                   " carries an event whose ppq is outside the range the edit API accepts"};
         }
       }
+    }
+    // The edit API keys events only by a live clip and erases them with it, so an
+    // orphan list would otherwise become the content of the clip next given its id.
+    for (auto it = midi->events.begin(); it != midi->events.end();) {
+      if (project->has_clip(it->first)) {
+        ++it;
+        continue;
+      }
+      if (diagnostics != nullptr) {
+        diagnostics->warn("dropped_orphan_midi_events",
+                          "MIDI content for clip " + std::to_string(it->first) +
+                              " names no clip in the project; event list dropped");
+      }
+      it = midi->events.erase(it);
+    }
+    for (auto& entry : midi->events) {
+      const arrangement::ClipId clip_id = entry.first;
+      arrangement::MidiClipEventList& events = entry.second;
+      const auto dangling = [&](const arrangement::MidiClipEvent& event) {
+        if (event.sysex_handle == 0 || midi->sysex_payloads.count(event.sysex_handle) != 0) {
+          return false;
+        }
+        if (diagnostics != nullptr) {
+          diagnostics->warn(
+              "dropped_dangling_sysex_event",
+              "MIDI clip " + std::to_string(clip_id) + " carries an event whose SysEx handle " +
+                  std::to_string(event.sysex_handle) + " has no payload; event dropped");
+        }
+        return true;
+      };
+      events.erase(std::remove_if(events.begin(), events.end(), dangling), events.end());
     }
   }
 
