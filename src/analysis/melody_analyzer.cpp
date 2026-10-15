@@ -28,8 +28,7 @@ MelodyAnalyzer::MelodyAnalyzer(const Audio& audio, const MelodyConfig& config)
   // frame_length is samples at kAnalysisSampleRate; convert to the input rate.
   int frame_size = config.frame_length;
   if (frame_size > 0) {
-    frame_size = std::max(2, static_cast<int>(std::lround(static_cast<double>(frame_size) * sr_ /
-                                                          kAnalysisSampleRate)));
+    frame_size = window_length_at_rate(frame_size, sr_);
   }
 
   if (config.use_pyin) {

@@ -246,9 +246,9 @@ class MixerWasm {
   // engine's meter telemetry publishes from: its true peak is an inter-sample
   // peak taken after oversampling (ITU-R BS.1770-4 Annex 2 requires at least
   // 4x), which is a different quantity from the sample peak and the one a
-  // ceiling decision depends on. @p true_peak_oversample must be 0 (= 4x) or a
-  // power of two in [1, 16]; the core raises anything below 4x to the standard's
-  // minimum.
+  // ceiling decision depends on. @p true_peak_oversample must be 4 or 8 (the
+  // realtime meter's set, sonare::mixing::is_realtime_true_peak_oversample);
+  // anything else throws a RangeError.
   //
   // Enabling resets the meter, so a reading never mixes audio from before a
   // period when metering was off. Re-enabling at the same factor does not
@@ -285,6 +285,8 @@ class MixerWasm {
   // Drains delayed/tail audio by processing a zero-input block of num_samples
   // frames. Returns { left, right, sampleRate } mirroring processStereo.
   val drainTailStereo(double num_samples);
+  // Ends the signal for every strip, bus and master-output meter: folds each
+  // pending true-peak group delay into its snapshot; a later block starts anew.
   void flushMeters();
 
   // Converts a C-ABI mix-meter snapshot to the JS meter object (same shape as

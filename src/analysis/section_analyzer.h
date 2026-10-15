@@ -32,8 +32,8 @@ struct Section {
 
 /// @brief Configuration for section analysis.
 struct SectionConfig {
-  int n_fft = 2048;      ///< FFT size
-  int hop_length = 512;  ///< Hop length
+  int n_fft = 2048;      ///< Window length in samples at 22050 Hz, rescaled to the analysis rate
+  int hop_length = 512;  ///< Hop length in samples at the analysis rate
   /// Minimum section duration in seconds. Of the detected boundaries, the
   /// subset with the largest total novelty strength whose sections all reach
   /// this floor is kept, so a boundary between two sections at or above it is

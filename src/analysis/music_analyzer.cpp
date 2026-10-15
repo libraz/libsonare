@@ -83,6 +83,8 @@ MusicAnalyzer::MusicAnalyzer(const Audio& audio, const MusicAnalyzerConfig& conf
   // Downsample to 22050 Hz for spectral analysis if sample rate is higher
   analysis_audio_ = analysis_rate_audio(audio_);
   analysis_sr_ = analysis_audio_.sample_rate();
+  // A lower input keeps its rate, so the window is rescaled to it.
+  analysis_stft_ = stft_config_at_rate(config_->n_fft, config_->hop_length, analysis_sr_);
   tuning_ = config_->auto_tuning ? measure_tuning(analysis_audio_) : config_->tuning;
 }
 
@@ -299,8 +301,8 @@ BoundaryDetector& MusicAnalyzer::boundary_detector() {
 
 const Spectrogram& MusicAnalyzer::spectrogram() {
   std::call_once(spectrogram_once_, [this]() {
-    spectrogram_ = std::make_unique<Spectrogram>(Spectrogram::compute(
-        analysis_audio_, make_stft_config(config_->n_fft, config_->hop_length)));
+    spectrogram_ =
+        std::make_unique<Spectrogram>(Spectrogram::compute(analysis_audio_, analysis_stft_));
   });
   return *spectrogram_;
 }
@@ -444,9 +446,8 @@ const std::vector<float>& MusicAnalyzer::onset_strength() {
     // Internal analysis pipeline opts into detrend explicitly (the public
     // OnsetConfig default is detrend=false to match librosa).
     onset_config.detrend = true;
-    onset_strength_ =
-        center_onset_strength(compute_onset_strength(mel_spectrogram(), onset_config),
-                              config_->n_fft, config_->hop_length, onset_config.center);
+    onset_strength_ = center_onset_strength(compute_onset_strength(mel_spectrogram(), onset_config),
+                                            analysis_stft_, onset_config.center);
   });
   return onset_strength_;
 }
@@ -564,6 +565,8 @@ std::optional<AnalysisResult> MusicAnalyzer::analyze_impl() {
 
   // Refine key using chord progression analysis
   result.key = refine_key_with_chords(chroma_key, result.chords);
+  // Whichever key the chords settle on, it reports its chroma posterior like detect_key does.
+  result.key.confidence = key_posterior(key_analyzer().all_candidates(), result.key);
   result.chord_roman_numerals.reserve(result.chords.size());
   for (const Chord& chord : result.chords) {
     result.chord_roman_numerals.push_back(

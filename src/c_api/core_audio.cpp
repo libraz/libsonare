@@ -64,11 +64,11 @@ SonareError downmix_planar(const float* channels, size_t frames, int channel_cou
                            float** out_samples) {
   if (out_samples == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_samples = nullptr;
-  if (channels == nullptr || frames == 0 || channel_count <= 0 || target_layout < 0 ||
-      !is_valid_channel_layout(static_cast<uint8_t>(target_layout))) {
+  ChannelLayout to{};
+  if (channels == nullptr || frames == 0 || channel_count <= 0 ||
+      !ordinal_to_enum(target_layout, 0, kMaxChannelLayoutValue, &to)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  const auto to = static_cast<ChannelLayout>(target_layout);
   const size_t in_channels = static_cast<size_t>(channel_count);
   const size_t out_channels = static_cast<size_t>(sonare::channel_count(to));
   // The same rule the decoders apply: counts outside the speaker model fold to

@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <functional>
 #include <vector>
 
+#include "analysis/analysis_evidence.h"
 #include "analysis/analysis_rate.h"
 #include "core/spectrum.h"
 #include "feature/chroma.h"
@@ -39,7 +41,8 @@ constexpr float kUniformRepetitionFraction = 0.85f;
 /// function. Below this the classifier reports the segment without naming it
 /// rather than committing to a reading it cannot support.
 constexpr float kMinLabelConfidence = 0.55f;
-/// @brief Energy below which a section is treated as low-energy (Intro/Outro/Instrumental).
+/// @brief Fraction of the body reference (low_energy_reference) below which a first or last
+/// section is low-energy (Intro/Outro).
 constexpr float kLowEnergyThreshold = 0.35f;
 /// @brief How far below the loudest repeated section a repeated section may sit and still
 /// count as a Chorus. Deliberately narrower than kLowEnergyThreshold so that genuinely
@@ -56,16 +59,37 @@ constexpr float kVocalBandHighHz = 3400.0f;
 /// @brief The one chroma geometry every pass in this analyzer shares.
 /// @details Both the STFT the analyzer computes and the filterbank the chroma applies come
 ///          from this, so the framing the descriptors read cannot drift from the framing they
-///          were built with.
-ChromaConfig section_chroma_config(const SectionConfig& config) {
+///          were built with. The window is `n_fft` at 22050 Hz rescaled to @p sample_rate.
+ChromaConfig section_chroma_config(const SectionConfig& config, int sample_rate) {
+  const RateWindow window = window_at_rate(config.n_fft, sample_rate);
   ChromaConfig chroma_config;
-  chroma_config.n_fft = config.n_fft;
+  chroma_config.n_fft = window.n_fft;
+  chroma_config.win_length = window.win_length;
   chroma_config.hop_length = config.hop_length;
   chroma_config.tuning = config.tuning;
   return chroma_config;
 }
 
 Audio section_analysis_audio(const Audio& audio) { return analysis_rate_audio(audio); }
+
+/// @brief RMS frame length of the energy curve: the analysis window at @p sample_rate.
+int section_rms_frame_length(const SectionConfig& config, int sample_rate) {
+  return section_chroma_config(config, sample_rate).to_stft_config().actual_win_length();
+}
+
+/// @brief Energy every section is judged quiet against, for the Intro/Outro test.
+/// @details A body reference: the loudest section is set aside once there are enough sections
+///          for the rest to stand as the body, so one dominant chorus cannot make an ordinary
+///          first or last section read as quiet. With fewer, or when nothing else is audible,
+///          nothing is set aside.
+float low_energy_reference(const std::vector<float>& energies) {
+  constexpr size_t kMinSectionsToSetAside = 4;
+  std::vector<float> sorted = energies;
+  std::sort(sorted.begin(), sorted.end(), std::greater<float>());
+  if (sorted.empty()) return 0.0f;
+  const bool set_aside = sorted.size() >= kMinSectionsToSetAside && has_evidence(sorted[1]);
+  return set_aside ? sorted[1] : sorted[0];
+}
 
 void add_fallback_section(std::vector<Section>& sections, float audio_duration) {
   if (!sections.empty() || audio_duration <= 0.0f) {
@@ -161,10 +185,11 @@ SectionAnalyzer::SectionAnalyzer(const Audio& audio, const std::vector<float>& b
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
   // Compute RMS energy curve
-  energy_curve_ = rms_energy(audio_, config_.n_fft, config_.hop_length);
+  energy_curve_ = rms_energy(audio_, section_rms_frame_length(config_, sr_), config_.hop_length);
 
   // One STFT for the whole pass: the merge and the descriptors both read it.
-  build_sections(Spectrogram::compute(audio_, section_chroma_config(config_).to_stft_config()));
+  build_sections(
+      Spectrogram::compute(audio_, section_chroma_config(config_, sr_).to_stft_config()));
 }
 
 SectionAnalyzer::SectionAnalyzer(const Audio& audio, const std::vector<float>& boundaries,
@@ -183,17 +208,17 @@ SectionAnalyzer::SectionAnalyzer(const Audio& audio, const std::vector<Boundary>
   // audio_ is the analysis-rate signal, which is what the caller's STFT has to
   // have been taken over -- a spectrogram of the native-rate input fails here
   // rather than mapping section spans onto frames of a different hop duration.
-  validate_reused_geometry(spec, section_chroma_config(config_).to_stft_config(),
+  validate_reused_geometry(spec, section_chroma_config(config_, sr_).to_stft_config(),
                            audio_.sample_rate(), audio_.size());
   set_boundaries(boundaries);
 
-  energy_curve_ = rms_energy(audio_, config_.n_fft, config_.hop_length);
+  energy_curve_ = rms_energy(audio_, section_rms_frame_length(config_, sr_), config_.hop_length);
   build_sections(spec);
 }
 
 void SectionAnalyzer::analyze() {
   // Compute RMS energy curve
-  energy_curve_ = rms_energy(audio_, config_.n_fft, config_.hop_length);
+  energy_curve_ = rms_energy(audio_, section_rms_frame_length(config_, sr_), config_.hop_length);
 
   // Detect boundaries using BoundaryDetector
   BoundaryConfig boundary_config;
@@ -210,7 +235,8 @@ void SectionAnalyzer::analyze() {
   set_boundaries(detector.boundaries());
 
   // One STFT for the whole pass: the merge and the descriptors both read it.
-  build_sections(Spectrogram::compute(audio_, section_chroma_config(config_).to_stft_config()));
+  build_sections(
+      Spectrogram::compute(audio_, section_chroma_config(config_, sr_).to_stft_config()));
 }
 
 void SectionAnalyzer::build_sections(const Spectrogram& spec) {
@@ -335,8 +361,8 @@ std::vector<std::array<float, 12>> SectionAnalyzer::section_mean_chromas(
     return chromas;
   }
 
-  const Chroma chroma =
-      Chroma::from_spectrogram(spec, sr_, section_chroma_config(config_).to_chroma_filter_config());
+  const Chroma chroma = Chroma::from_spectrogram(
+      spec, sr_, section_chroma_config(config_, sr_).to_chroma_filter_config());
   const float hop_duration = static_cast<float>(hop_length_) / static_cast<float>(sr_);
 
   for (size_t s = 0; s < sections_.size(); ++s) {
@@ -430,8 +456,8 @@ std::vector<SectionAnalyzer::SectionDescriptor> SectionAnalyzer::build_descripto
     return descriptors;
   }
 
-  const Chroma chroma =
-      Chroma::from_spectrogram(spec, sr_, section_chroma_config(config_).to_chroma_filter_config());
+  const Chroma chroma = Chroma::from_spectrogram(
+      spec, sr_, section_chroma_config(config_, sr_).to_chroma_filter_config());
 
   const int n_bins = spec.n_bins();
   const int n_spec_frames = spec.n_frames();
@@ -445,7 +471,7 @@ std::vector<SectionAnalyzer::SectionDescriptor> SectionAnalyzer::build_descripto
   }
 
   const float hop_duration = static_cast<float>(hop_length_) / static_cast<float>(sr_);
-  const float bin_hz = static_cast<float>(sr_) / static_cast<float>(config_.n_fft);
+  const float bin_hz = static_cast<float>(sr_) / static_cast<float>(spec.n_fft());
   const int vocal_low_bin =
       std::clamp(static_cast<int>(std::floor(kVocalBandLowHz / bin_hz)), 0, n_bins - 1);
   const int vocal_high_bin =
@@ -533,15 +559,28 @@ void SectionAnalyzer::classify_sections(const Spectrogram& spec) {
 
   const int n_sections = static_cast<int>(sections_.size());
 
-  // Normalize energy levels to [0, 1].
+  // A track with no audible section carries nothing to classify.
+  std::vector<float> raw_energy;
+  raw_energy.reserve(sections_.size());
   float max_energy = 0.0f;
   for (const auto& section : sections_) {
+    raw_energy.push_back(section.energy_level);
     max_energy = std::max(max_energy, section.energy_level);
   }
-  if (max_energy > kEpsilon) {
+  if (!has_evidence(max_energy)) {
     for (auto& section : sections_) {
-      section.energy_level /= max_energy;
+      section.energy_level = 0.0f;
+      section.type = SectionType::Unknown;
+      section.confidence = 0.0f;
     }
+    descriptors_ = build_descriptors(spec);
+    return;
+  }
+  const float quiet_reference = low_energy_reference(raw_energy);
+
+  // Normalize energy levels to [0, 1].
+  for (auto& section : sections_) {
+    section.energy_level /= max_energy;
   }
 
   // Build chroma / energy / vocal descriptors and the self-similarity matrix. The descriptors
@@ -600,7 +639,8 @@ void SectionAnalyzer::classify_sections(const Spectrogram& spec) {
     const bool is_first = (i == 0);
     const bool is_last = (i == n_sections - 1);
     const bool is_repeated = repetition_is_informative && repeat_count[i] >= 1;
-    const bool is_low_energy = desc.energy < kLowEnergyThreshold;
+    const float quiet_level = raw_energy[static_cast<size_t>(i)] / quiet_reference;
+    const bool is_low_energy = quiet_level < kLowEnergyThreshold;
     const bool low_vocal = desc.vocal_likelihood < kInstrumentalVocalThreshold;
 
     SectionType type;
@@ -608,10 +648,10 @@ void SectionAnalyzer::classify_sections(const Spectrogram& spec) {
 
     if (is_first && is_low_energy) {
       type = SectionType::Intro;
-      confidence = 0.6f + 0.3f * (1.0f - desc.energy);
+      confidence = 0.6f + 0.3f * (1.0f - quiet_level);
     } else if (is_last && is_low_energy) {
       type = SectionType::Outro;
-      confidence = 0.6f + 0.3f * (1.0f - desc.energy);
+      confidence = 0.6f + 0.3f * (1.0f - quiet_level);
     } else if (is_repeated && desc.energy >= best_repeat_energy - kChorusEnergyMargin &&
                !low_vocal) {
       // Repeated, high-energy, vocal section => Chorus. Confidence reflects how

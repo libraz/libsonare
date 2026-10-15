@@ -35,14 +35,24 @@ using sonare_c_detail::run_offline;
 namespace {
 
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
-// Map a SONARE_REVERB_MODEL_* selector onto sonare::acoustic::ReverbModel.
-// SONARE_REVERB_MODEL_DEFAULT (0, the zero-initialized value) and any unknown
-// selector resolve to the C++ library default (Eyring), so a {}-zeroed config
-// matches the C++ struct defaults and the high-level bindings' preferEyring
-// default; only an explicit SABINE selects Sabine.
-sonare::acoustic::ReverbModel reverb_model_from_int(int selector) {
-  using sonare::acoustic::ReverbModel;
-  return selector == SONARE_REVERB_MODEL_SABINE ? ReverbModel::Sabine : ReverbModel::Eyring;
+static_assert(static_cast<int>(sonare::acoustic::ReverbModel::Sabine) + 1 ==
+                      SONARE_REVERB_MODEL_SABINE &&
+                  SONARE_REVERB_MODEL_EYRING == SONARE_REVERB_MODEL_SABINE + 1,
+              "SONARE_REVERB_MODEL_* must sit one above sonare::acoustic::ReverbModel");
+
+// SONARE_REVERB_MODEL_DEFAULT (0) leaves @p model at the library default, so a
+// {}-zeroed config matches the C++ struct defaults; SABINE / EYRING name a
+// model. False for any other selector, which the caller refuses.
+bool late_model_from_c(int selector, sonare::acoustic::ReverbModel* model) {
+  return selector == SONARE_REVERB_MODEL_DEFAULT ||
+         sonare_c_detail::ordinal_to_enum(selector, SONARE_REVERB_MODEL_SABINE,
+                                          SONARE_REVERB_MODEL_EYRING, model, 1);
+}
+
+// The material selector set make_room maps; anything else is refused.
+bool valid_material_preset(int selector) {
+  return sonare_c_detail::valid_c_enum(selector, SONARE_MATERIAL_PRESET_NONE,
+                                       SONARE_MATERIAL_PRESET_GLASS);
 }
 
 // Build a uniform shoebox whose single wall material is chosen by precedence:
@@ -102,6 +112,13 @@ void publish_rir_diagnostics(const std::vector<sonare::Diagnostic>& diagnostics)
   // not in the text at all.
   sonare_c_detail::set_last_diagnostics(diagnostics);
 }
+
+static_assert(static_cast<int>(sonare::AcousticConfig::Mode::Auto) == SONARE_ACOUSTIC_MODE_AUTO &&
+                  static_cast<int>(sonare::AcousticConfig::Mode::Blind) ==
+                      SONARE_ACOUSTIC_MODE_BLIND &&
+                  static_cast<int>(sonare::AcousticConfig::Mode::ImpulseResponse) ==
+                      SONARE_ACOUSTIC_MODE_IMPULSE_RESPONSE,
+              "SONARE_ACOUSTIC_MODE_* must mirror AcousticConfig::Mode");
 #endif
 
 static_assert(SONARE_MATERIAL_PRESET_GLASS + 1 ==
@@ -191,7 +208,12 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
       config->absorption_band_count > sonare::acoustic::kMaxMaterialBands ||
       config->scattering_band_count > sonare::acoustic::kMaxMaterialBands ||
       (config->absorption_band_count > 0 && config->absorption_bands == nullptr) ||
-      (config->scattering_band_count > 0 && config->scattering_bands == nullptr)) {
+      (config->scattering_band_count > 0 && config->scattering_bands == nullptr) ||
+      !valid_material_preset(config->material_preset)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  sonare::acoustic::RirSynthConfig rc;
+  if (!late_model_from_c(config->late_model, &rc.late_model)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   for (size_t i = 0; i < config->absorption_band_count; ++i) {
@@ -208,9 +230,7 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
                 config->scattering_band_count, config->material_preset);
   const SourceListener placement{{config->source_x, config->source_y, config->source_z},
                                  {config->listener_x, config->listener_y, config->listener_z}};
-  RirSynthConfig rc;
   rc.ism_order = config->ism_order < 0 ? 0 : config->ism_order;
-  rc.late_model = reverb_model_from_int(config->late_model);
   // seed == 0 means "keep the library default" (1), so a zero-initialized POD
   // produces the same deterministic RIR as the C++/Node/Python/WASM defaults
   // instead of silently seeding with 0.
@@ -263,6 +283,11 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
   if (!config) return SONARE_ERROR_INVALID_PARAMETER;
+  sonare::AcousticConfig::Mode mode = sonare::AcousticConfig::Mode::Auto;
+  if (!sonare_c_detail::ordinal_to_enum(config->mode, SONARE_ACOUSTIC_MODE_AUTO,
+                                        SONARE_ACOUSTIC_MODE_IMPULSE_RESPONSE, &mode)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     sonare::RoomEstimateConfig cfg;
@@ -283,17 +308,7 @@ SonareError sonare_estimate_room(const float* samples, size_t length, int sample
         sonare::ZeroIsDefault(config->min_decay_db).or_default(cfg.acoustic.min_decay_db);
     cfg.acoustic.noise_floor_margin_db = sonare::ZeroIsDefault(config->noise_floor_margin_db)
                                              .or_default(cfg.acoustic.noise_floor_margin_db);
-    switch (config->mode) {
-      case SONARE_ACOUSTIC_MODE_BLIND:
-        cfg.acoustic.mode = sonare::AcousticConfig::Mode::Blind;
-        break;
-      case SONARE_ACOUSTIC_MODE_IMPULSE_RESPONSE:
-        cfg.acoustic.mode = sonare::AcousticConfig::Mode::ImpulseResponse;
-        break;
-      default:
-        cfg.acoustic.mode = sonare::AcousticConfig::Mode::Auto;
-        break;
-    }
+    cfg.acoustic.mode = mode;
 
     const sonare::RoomEstimate est = sonare::estimate_room(audio, cfg);
     SonareRoomEstimate staged{};
@@ -349,9 +364,12 @@ bool room_morph_config_is_valid(const SonareRoomMorphConfig& config) {
       config.absorption_band_count > sonare::acoustic::kMaxMaterialBands ||
       config.scattering_band_count > sonare::acoustic::kMaxMaterialBands ||
       (config.absorption_band_count > 0 && config.absorption_bands == nullptr) ||
-      (config.scattering_band_count > 0 && config.scattering_bands == nullptr)) {
+      (config.scattering_band_count > 0 && config.scattering_bands == nullptr) ||
+      !valid_material_preset(config.material_preset)) {
     return false;
   }
+  sonare::acoustic::ReverbModel late_model{};
+  if (!late_model_from_c(config.late_model, &late_model)) return false;
   for (size_t i = 0; i < config.absorption_band_count; ++i) {
     if (!unit(config.absorption_bands[i])) return false;
   }
@@ -376,7 +394,8 @@ sonare::effects::acoustic::RoomMorphConfig room_morph_config_from(
   // seed == 0 keeps the library default (1); see synthesize_rir above.
   if (config.seed != 0) cfg.seed = config.seed;
   cfg.max_seconds = config.max_seconds;
-  cfg.late_model = reverb_model_from_int(config.late_model);
+  // room_morph_config_is_valid admitted the selector; 0 keeps the library default.
+  (void)late_model_from_c(config.late_model, &cfg.late_model);
   cfg.mixing_time_ms = config.mixing_time_ms;  // 0 = auto (~sqrt(V) ms)
   // crossfade_ms == 0 preserves the C++ default (a true zero crossfade is
   // not a useful setting), matching the RIR-synth ABI convention. Any

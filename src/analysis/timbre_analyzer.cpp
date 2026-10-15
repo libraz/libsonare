@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "analysis/analysis_evidence.h"
 #include "analysis/analysis_rate.h"
 #include "core/spectrum.h"
 #include "feature/mel_spectrogram.h"
@@ -10,6 +11,7 @@
 #include "feature/spectral.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -21,9 +23,17 @@ namespace {
 /// @details Centroids at or above this frequency are perceived as maximally bright;
 ///          ~8 kHz approximates the upper edge of musically relevant brightness.
 constexpr float kBrightnessCentroidRefHz = 8000.0f;
-/// @brief Frame lag used for the spectral flux behind roughness.
-/// @details One hop: roughness tracks the change between adjacent analysis frames.
-constexpr int kRoughnessFluxLag = 1;
+/// @brief Time span of the spectral flux behind roughness, in seconds.
+/// @details One default hop (512 samples) at the 22050 Hz analysis rate, so the default analysis
+///          keeps comparing adjacent frames while a different rate or hop compares the same span.
+constexpr double kRoughnessFluxLagSec =
+    static_cast<double>(constants::kDefaultHopLength) / constants::kDefaultSampleRate;
+
+/// @brief Roughness flux lag in frames for @p hop_length samples at @p sample_rate, at least 1.
+int roughness_flux_lag(int sample_rate, int hop_length) {
+  const double frames = kRoughnessFluxLagSec * sample_rate / hop_length;
+  return std::max(1, static_cast<int>(std::lround(std::min(frames, 1.0e6))));
+}
 
 /// Frames per magnitude tile. Bounded so the descriptors read magnitude without a
 /// full [n_bins x n_frames] buffer, which for a full track is tens of megabytes
@@ -46,8 +56,9 @@ constexpr float kWarmthCutoffHz = 500.0f;
 }  // namespace
 
 TimbreAnalyzer::TimbreAnalyzer(const Audio& audio, const TimbreConfig& config)
-    : n_frames_(0), sr_(audio.sample_rate()), config_(config) {
+    : n_frames_(0), sr_(audio.sample_rate()), hop_length_(config.hop_length), config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  validate_window_sec(config.window_sec);
 
   // Compute spectrogram once and derive the mel spectrogram from it so the
   // STFT pass is not repeated inside MelSpectrogram::compute.
@@ -65,8 +76,14 @@ TimbreAnalyzer::TimbreAnalyzer(const Audio& audio, const TimbreConfig& config)
 
 TimbreAnalyzer::TimbreAnalyzer(const Spectrogram& spec, const MelSpectrogram& mel_spec,
                                const TimbreConfig& config)
-    : n_frames_(0), sr_(spec.sample_rate()), config_(config) {
+    : n_frames_(0), sr_(spec.sample_rate()), hop_length_(spec.hop_length()), config_(config) {
+  validate_window_sec(config.window_sec);
   init_from_features(spec, mel_spec);
+}
+
+void TimbreAnalyzer::validate_window_sec(float window_sec) {
+  SONARE_CHECK_MSG(numeric::finite_positive(window_sec), ErrorCode::InvalidParameter,
+                   "TimbreConfig: windowSec must be finite and positive");
 }
 
 void TimbreAnalyzer::init_from_features(const Spectrogram& spec, const MelSpectrogram& mel_spec) {
@@ -92,7 +109,8 @@ void TimbreAnalyzer::init_from_features(const Spectrogram& spec, const MelSpectr
   spectral_rolloff_.clear();
   relative_flux_.clear();
   low_band_ratio_.assign(static_cast<size_t>(n_frames_), 0.0f);
-  std::vector<float> frame_l1(static_cast<size_t>(n_frames_), 0.0f);
+  frame_l1_.assign(static_cast<size_t>(n_frames_), 0.0f);
+  const int flux_lag = roughness_flux_lag(sr_, std::max(1, hop_length_));
 
   // All five descriptors read magnitude once, so they run together on one tile
   // before it advances: the tile loop is outside and the consumers inside, which
@@ -102,14 +120,13 @@ void TimbreAnalyzer::init_from_features(const Spectrogram& spec, const MelSpectr
   //
   // Every descriptor here is elementwise across frames with its own per-frame
   // accumulator, and the low-band pass reduces over bins within one frame, which
-  // the frame axis does not touch. kRoughnessFluxLag frames of overlap cover the
+  // the frame axis does not touch. flux_lag frames of overlap cover the
   // one descriptor that reads two frames; its zero prefix is positional, so
   // without the overlap a zero would appear at every tile boundary rather than
   // only at the start.
   int emitted = 0;
   spec.for_each_magnitude_tile(
-      kMagnitudeTileFrames, kRoughnessFluxLag,
-      [&](const float* tile, int tile_frames, int discard) {
+      kMagnitudeTileFrames, flux_lag, [&](const float* tile, int tile_frames, int discard) {
         const auto append = [discard](std::vector<float>& dst, const std::vector<float>& src) {
           dst.insert(dst.end(), src.begin() + discard, src.end());
         };
@@ -118,7 +135,7 @@ void TimbreAnalyzer::init_from_features(const Spectrogram& spec, const MelSpectr
         append(spectral_flatness_, sonare::spectral_flatness(tile, n_bins, tile_frames));
         append(spectral_rolloff_,
                sonare::spectral_rolloff(tile, n_bins, tile_frames, sr_, n_fft, 0.85f));
-        append(relative_flux_, sonare::spectral_flux(tile, n_bins, tile_frames, kRoughnessFluxLag));
+        append(relative_flux_, sonare::spectral_flux(tile, n_bins, tile_frames, flux_lag));
 
         // The per-frame low-frequency energy ratio, so warmth comes from actual
         // low-band energy rather than a linear inverse of brightness, plus each
@@ -137,7 +154,7 @@ void TimbreAnalyzer::init_from_features(const Spectrogram& spec, const MelSpectr
           }
           const size_t out = static_cast<size_t>(emitted + f - discard);
           low_band_ratio_[out] = total > 0.0 ? static_cast<float>(low / total) : 0.0f;
-          frame_l1[out] = static_cast<float>(l1);
+          frame_l1_[out] = static_cast<float>(l1);
         }
         emitted += tile_frames - discard;
       });
@@ -151,12 +168,12 @@ void TimbreAnalyzer::init_from_features(const Spectrogram& spec, const MelSpectr
   const int flux_frames = std::min(static_cast<int>(relative_flux_.size()), n_frames_);
   for (int f = 0; f < flux_frames; ++f) {
     float& flux = relative_flux_[static_cast<size_t>(f)];
-    if (f < kRoughnessFluxLag) {
+    if (f < flux_lag) {
       flux = 0.0f;
       continue;
     }
     const float denom =
-        frame_l1[static_cast<size_t>(f)] + frame_l1[static_cast<size_t>(f - kRoughnessFluxLag)];
+        frame_l1_[static_cast<size_t>(f)] + frame_l1_[static_cast<size_t>(f - flux_lag)];
     flux = denom > kEpsilon ? flux / denom : 0.0f;
   }
 
@@ -189,9 +206,10 @@ void TimbreAnalyzer::analyze() {
   // Compute overall timbre
   compute_overall_timbre();
 
-  // Compute timbre over time
-  int window_frames = static_cast<int>(config_.window_sec * sr_ / config_.hop_length);
-  window_frames = std::max(1, window_frames);
+  // Compute timbre over time; sized in double and bounded by the frame count before the cast.
+  const double frames = static_cast<double>(config_.window_sec) * sr_ / std::max(1, hop_length_);
+  const int window_frames =
+      frames >= n_frames_ ? std::max(1, n_frames_) : std::max(1, static_cast<int>(frames));
 
   timbre_over_time_.clear();
   for (int start = 0; start < n_frames_; start += window_frames) {
@@ -244,16 +262,20 @@ Timbre TimbreAnalyzer::compute_window_timbre(int start_frame, int end_frame) con
   }
   t.warmth = std::min(1.0f, low_ratio_sum / count);
 
-  // Density: based on spectral flatness
-  // Higher flatness = more noise-like = denser
+  // Density: spectral flatness (noise-like = denser) over frames with energy only; a silent
+  // frame's flatness is 1 by definition and would read as maximal density.
   float flatness_sum = 0.0f;
+  int flatness_count = 0;
   for (int f = start_frame; f < end_frame; ++f) {
-    if (f < static_cast<int>(spectral_flatness_.size())) {
+    if (f < static_cast<int>(spectral_flatness_.size()) && f < static_cast<int>(frame_l1_.size()) &&
+        has_evidence(frame_l1_[f])) {
       flatness_sum += spectral_flatness_[f];
+      ++flatness_count;
     }
   }
-  float avg_flatness = flatness_sum / count;
-  t.density = std::min(1.0f, avg_flatness * 2.0f);
+  t.density = flatness_count > 0
+                  ? std::min(1.0f, flatness_sum / static_cast<float>(flatness_count) * 2.0f)
+                  : 0.0f;
 
   // Roughness: based on relative spectral flux
   // Larger relative change between adjacent frames = rougher. The ratio is already

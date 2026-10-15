@@ -10,6 +10,7 @@
 
 #include "automation/automation_lane.h"
 #include "automation/parameter.h"
+#include "c_api/c_ordinal.h"
 #include "core/audio.h"
 #include "core/diagnostic.h"
 #include "engine/realtime_engine.h"
@@ -168,7 +169,7 @@ SonareChordQuality to_c_chord_quality(ChordQuality quality);
 ///          silently becomes Hann is indistinguishable from a caller who asked
 ///          for Hann.
 inline bool valid_window(int value) {
-  return value >= SONARE_WINDOW_HANN && value <= SONARE_WINDOW_RECTANGULAR;
+  return valid_c_enum(value, SONARE_WINDOW_HANN, SONARE_WINDOW_RECTANGULAR);
 }
 
 /// @brief Maps an ordinal that passed @ref valid_window onto the core enum.
@@ -178,7 +179,7 @@ inline bool valid_window(int value) {
 ///          ordinal @ref valid_window accepts and exists only to satisfy the
 ///          compiler on a value cast in from outside the enum's range.
 inline sonare::WindowType to_window_type(int value) {
-  switch (static_cast<SonareWindowType>(value)) {
+  switch (admitted_ordinal_to_enum<SonareWindowType>(value)) {
     case SONARE_WINDOW_HANN:
       return sonare::WindowType::Hann;
     case SONARE_WINDOW_HAMMING:

@@ -763,6 +763,15 @@ Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords) {
 
 }  // namespace
 
+float key_posterior(const std::vector<KeyCandidate>& candidates, const Key& key) {
+  for (const KeyCandidate& candidate : candidates) {
+    if (candidate.key.root == key.root && candidate.key.mode == key.mode) {
+      return candidate.key.confidence;
+    }
+  }
+  return 0.0f;
+}
+
 Key refine_key_with_chords(const Key& chroma_key, const std::vector<Chord>& all_chords) {
   const std::vector<Chord> chords = recognized_chords(all_chords);
   if (chords.empty()) {

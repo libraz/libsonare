@@ -251,7 +251,7 @@ def test_pitch_shift() -> None:
     result = pitch_shift(tone, sample_rate=22050, semitones=2.0)
     assert len(result) > 0
     with pytest.raises(libsonare.SonareError):
-        pitch_shift([0.0] * 4, sample_rate=48000, semitones=48.0)
+        pitch_shift([0.0] * 4, sample_rate=48000, semitones=-120.0)
 
 
 def test_normalize() -> None:
@@ -366,9 +366,18 @@ def test_librosa_segment_operations_are_public() -> None:
     assert (cross.rows, cross.cols, len(cross.values)) == (3, 3, 9)
     recurrence = recurrence_matrix(data, 2, 3)
     assert (recurrence.rows, recurrence.cols, len(recurrence.values)) == (3, 3, 9)
-    lag = recurrence_to_lag(recurrence.values, 3, pad=True)
-    assert (lag.rows, lag.cols, len(lag.values)) == (3, 5, 15)
-    assert len(lag_to_recurrence(lag.values, 3, 5).values) == 9
+    lag = recurrence_to_lag(recurrence.values, 3)
+    assert (lag.rows, lag.cols, len(lag.values)) == (6, 3, 18)
+    assert len(lag_to_recurrence(lag.values, 3, 6).values) == 9
+    # librosa 0.11.0 recurrence_to_lag on rec[r][c] = 4r + c (pad defaults to True).
+    padded = recurrence_to_lag([float(i) for i in range(16)], 4)
+    assert (padded.rows, padded.cols) == (8, 4)
+    # fmt: off
+    assert list(padded.values) == [
+        0, 5, 10, 15, 4, 9, 14, 0, 8, 13, 0, 0, 12, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 2, 7, 0, 1, 6, 11,
+    ]
+    # fmt: on
     assert subsegment(data, 2, 3, [0, 3])[0] == 0
     assert len(agglomerative(data, 2, 3, 2)) == 3
     assert len(path_enhance(recurrence.values, 3, 1).values) == 9

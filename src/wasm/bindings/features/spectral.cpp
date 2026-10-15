@@ -263,13 +263,13 @@ val js_segment_recurrence_to_lag(val recurrence, const val& n_val, bool pad) {
   const int n = checkedIntFromVal(n_val, "n");
   std::vector<float> values =
       load_segment_matrix("segmentRecurrenceToLag", recurrence, n, n, "recurrence");
-  return segment_matrix_result(recurrence_to_lag(values.data(), n, pad), n, pad ? 2 * n - 1 : n);
+  return segment_matrix_result(recurrence_to_lag(values.data(), n, pad), pad ? 2 * n : n, n);
 }
 
 val js_segment_lag_to_recurrence(val lag, const val& rows_val, const val& lags_val) {
   const int rows = checkedIntFromVal(rows_val, "rows");
   const int lags = checkedIntFromVal(lags_val, "lags");
-  std::vector<float> values = load_segment_matrix("segmentLagToRecurrence", lag, rows, lags, "lag");
+  std::vector<float> values = load_segment_matrix("segmentLagToRecurrence", lag, lags, rows, "lag");
   return segment_matrix_result(lag_to_recurrence(values.data(), rows, lags), rows, rows);
 }
 

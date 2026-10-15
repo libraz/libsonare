@@ -16,7 +16,7 @@ struct Dynamics {
   float rms_db = 0.0f;             ///< RMS level in dB
   float crest_factor = 0.0f;       ///< Peak to RMS ratio
   float loudness_range_db = 0.0f;  ///< Loudness range (LRA) in dB
-  bool is_compressed = false;      ///< True if audio appears heavily compressed
+  bool is_compressed = false;      ///< True if audio appears heavily compressed; false for silence
 };
 
 /// @brief Loudness curve over time.
@@ -27,7 +27,7 @@ struct LoudnessCurve {
 
 /// @brief Configuration for dynamics analysis.
 struct DynamicsConfig {
-  float window_sec = 0.4f;             ///< Window size for RMS calculation in seconds
+  float window_sec = 0.4f;             ///< RMS window in seconds; finite and positive
   int hop_length = 512;                ///< Hop length for loudness curve
   float compression_threshold = 6.0f;  ///< Dynamic range below this suggests compression
 };
@@ -38,6 +38,8 @@ class DynamicsAnalyzer {
   /// @brief Constructs dynamics analyzer from audio.
   /// @param audio Input audio
   /// @param config Dynamics configuration
+  /// @throws SonareException(InvalidParameter) if @p audio is empty or `window_sec` is not
+  ///         finite and positive.
   explicit DynamicsAnalyzer(const Audio& audio, const DynamicsConfig& config = DynamicsConfig());
 
   /// @brief Returns dynamics analysis results.

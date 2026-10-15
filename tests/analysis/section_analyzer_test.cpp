@@ -949,3 +949,48 @@ TEST_CASE("a short loud event inside a section leaves its energy level with its 
     CHECK(std::fabs(s.energy_level - loud->energy_level) <= 0.02f);
   }
 }
+
+TEST_CASE("SectionAnalyzer gives silence no classification", "[section_analyzer][evidence]") {
+  for (size_t n : {static_cast<size_t>(22050 * 12), static_cast<size_t>(1)}) {
+    INFO("samples " << n);
+    const Audio silence = Audio::from_vector(std::vector<float>(n, 0.0f), 22050);
+    const SectionAnalyzer analyzer(silence);
+    REQUIRE_FALSE(analyzer.sections().empty());
+    for (const Section& section : analyzer.sections()) {
+      CHECK(section.type == SectionType::Unknown);
+      CHECK(section.confidence == 0.0f);
+      CHECK(section.energy_level == 0.0f);
+    }
+  }
+}
+
+TEST_CASE("SectionAnalyzer judges Intro and Outro against the body, not the loudest section",
+          "[section_analyzer]") {
+  constexpr int kSr = 22050;
+  constexpr float kSectionSec = 4.5f;
+  // One pitch class per section keeps the chroma of every pair apart.
+  const std::vector<float> tones = {261.63f, 329.63f, 392.0f, 440.0f, 293.66f};
+  const auto render = [&](const std::vector<float>& amplitudes) {
+    const size_t per = static_cast<size_t>(kSectionSec * kSr);
+    std::vector<float> samples(per * amplitudes.size(), 0.0f);
+    for (size_t s = 0; s < amplitudes.size(); ++s) {
+      for (size_t i = 0; i < per; ++i) {
+        samples[s * per + i] =
+            amplitudes[s] * std::sin(constants::kTwoPi * tones[s] * static_cast<float>(i) / kSr);
+      }
+    }
+    return Audio::from_vector(std::move(samples), kSr);
+  };
+  std::vector<float> boundaries;
+  for (int s = 1; s < 5; ++s) boundaries.push_back(kSectionSec * static_cast<float>(s));
+
+  // A final chorus ten times louder than an even body: first and last stay ordinary.
+  const SectionAnalyzer loud_end(render({0.1f, 0.1f, 0.1f, 0.1f, 1.0f}), boundaries);
+  REQUIRE(loud_end.sections().size() == 5u);
+  CHECK(loud_end.sections().front().type != SectionType::Intro);
+
+  // A first section genuinely quieter than the body is still an Intro.
+  const SectionAnalyzer quiet_start(render({0.01f, 0.1f, 0.1f, 0.1f, 1.0f}), boundaries);
+  REQUIRE(quiet_start.sections().size() == 5u);
+  CHECK(quiet_start.sections().front().type == SectionType::Intro);
+}

@@ -164,13 +164,16 @@ BoundaryDetector::BoundaryDetector(const MelSpectrogram& mel, const Chroma& chro
 }
 
 void BoundaryDetector::compute_features() {
+  const RateWindow window = window_at_rate(config_.n_fft, sr_);
+
   // Compute MFCC features
   std::vector<float> mfcc_features;
   int mfcc_frames = 0;
 
   if (config_.use_mfcc) {
     MelConfig mel_config;
-    mel_config.n_fft = config_.n_fft;
+    mel_config.n_fft = window.n_fft;
+    mel_config.win_length = window.win_length;
     mel_config.hop_length = config_.hop_length;
     mel_config.n_mels = constants::kDefaultNMels;
 
@@ -194,7 +197,8 @@ void BoundaryDetector::compute_features() {
 
   if (config_.use_chroma) {
     ChromaConfig chroma_config;
-    chroma_config.n_fft = config_.n_fft;
+    chroma_config.n_fft = window.n_fft;
+    chroma_config.win_length = window.win_length;
     chroma_config.hop_length = config_.hop_length;
     // The flatten loop below reads config_.n_chroma bins per frame, so the
     // chromagram has to be computed with that bin count and not the default.

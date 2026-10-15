@@ -42,8 +42,10 @@ using namespace sonare;
 using namespace sonare_c_detail;
 
 void fill_acoustic_result(const AcousticParameters& params, SonareAcousticResult* out);
-PitchClass from_c_pitch_class(SonarePitchClass pitch);
-Mode from_c_mode(SonareMode mode);
+/// Converts a caller's pitch class; false (and @p out untouched) outside C..B.
+[[nodiscard]] bool from_c_pitch_class(SonarePitchClass pitch, PitchClass* out);
+/// Converts a caller's mode; false (and @p out untouched) outside Major..Locrian.
+[[nodiscard]] bool from_c_mode(SonareMode mode, Mode* out);
 bool fill_key_profile(SonareKeyProfileType profile_type, KeyConfig* config);
 bool fill_key_modes(const SonareMode* modes, size_t mode_count, KeyConfig* config);
 void fill_chord_result(const std::vector<Chord>& chords, float tuning,

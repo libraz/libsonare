@@ -645,3 +645,30 @@ TEST_CASE("time signature and tempo of the same content agree across input sampl
     CHECK(bpm_dev <= 0.02f);
   }
 }
+
+TEST_CASE("RhythmAnalyzer reports no regularity for silence", "[rhythm_analyzer][evidence]") {
+  const Audio silence = Audio::from_vector(std::vector<float>(22050 * 4, 0.0f), 22050);
+  RhythmAnalyzer analyzer(silence);
+  CHECK(analyzer.pattern_regularity() == 0.0f);
+  CHECK(analyzer.tempo_stability() == 0.0f);
+}
+
+TEST_CASE("rhythm_regularity derives both measures from the intervals it is given",
+          "[rhythm_analyzer][evidence]") {
+  const RhythmRegularity none = rhythm_regularity({});
+  CHECK(none.pattern_regularity == 0.0f);
+  CHECK(none.tempo_stability == 0.0f);
+
+  // One interval has no spread to measure a tempo change from.
+  CHECK(rhythm_regularity({0.5f}).tempo_stability == 0.0f);
+
+  const RhythmRegularity steady = rhythm_regularity({0.5f, 0.5f, 0.5f});
+  CHECK_THAT(steady.pattern_regularity, WithinAbs(1.0f, 1e-6f));
+  CHECK_THAT(steady.tempo_stability, WithinAbs(1.0f, 1e-6f));
+
+  // Three uneven intervals: stability is measured, so it falls with the regularity.
+  const RhythmRegularity uneven = rhythm_regularity({0.5f, 0.6f, 0.4f});
+  CHECK(uneven.pattern_regularity < 1.0f);
+  CHECK(uneven.tempo_stability < 1.0f);
+  CHECK(uneven.tempo_stability < uneven.pattern_regularity);
+}

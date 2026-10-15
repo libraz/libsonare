@@ -19,6 +19,7 @@
 #include "editing/note_model/note_renderer.h"
 #include "editing/note_model/note_split_merge.h"
 #include "editing/note_model/note_target.h"
+#include "editing/note_model/note_transcriber.h"
 #include "editing/note_model/seam_crossfade.h"
 #include "editing/pitch_editor/f0_provider.h"
 #include "effects/formant_warp.h"
@@ -2654,6 +2655,9 @@ TEST_CASE("render_notes chained stretch, shift and formant edits equal the stage
   const sonare::Audio shifted = sonare::pitch_shift(source, 2.0f, shift_config);
   sonare::FormantWarpConfig warp_config;
   warp_config.factor = std::pow(2.0f, -1.0f / sonare::constants::kSemitonesPerOctave);
+  // The renderer analyses with the rate-derived frame and LPC order.
+  warp_config.lpc_order = 0;
+  warp_config.frame_in_time = true;
   const sonare::Audio expected = sonare::FormantWarp(warp_config).process(shifted);
 
   REQUIRE(expected.size() > 0);
@@ -2747,5 +2751,99 @@ TEST_CASE("extract_notes reads a non-finite voiced frame as unvoiced", "[note_mo
     }
     REQUIRE_THAT(note.median_hz, WithinRel(440.0f, 1.0e-4f));
     REQUIRE(note.f0_stability == 1.0f);
+  }
+}
+
+namespace {
+
+/// Harmonics of 150 Hz shaped by one resonance at 800 Hz plus a breath-noise floor, at
+/// @p sample_rate, one second long. Without the noise the rate-scaled LPC order predicts the
+/// lines almost exactly, and the warp passes such a frame through as having no envelope.
+sonare::Audio vowel(int sample_rate) {
+  std::vector<float> samples(static_cast<size_t>(sample_rate), 0.0f);
+  uint32_t seed = 12345;
+  for (float& sample : samples) {
+    seed = seed * 1103515245u + 12345u;
+    sample = 0.005f * (static_cast<float>(seed >> 16) / 32768.0f - 1.0f);
+  }
+  for (int k = 1; k * 150 < 4000; ++k) {
+    const double f = 150.0 * k;
+    const double shape = 1.0 / std::sqrt(1.0 + std::pow((f - 800.0) / 200.0, 2.0));
+    for (size_t i = 0; i < samples.size(); ++i) {
+      samples[i] += static_cast<float>(
+          0.05 * shape *
+          std::sin(sonare::constants::kTwoPiD * f * static_cast<double>(i) / sample_rate));
+    }
+  }
+  return sonare::Audio::from_vector(std::move(samples), sample_rate);
+}
+
+/// Amplitude-weighted mean of the 150 Hz harmonics up to 4 kHz over [lo, hi) samples.
+double harmonic_centroid(const sonare::Audio& audio, size_t lo, size_t hi) {
+  double weighted = 0.0;
+  double total = 0.0;
+  for (int k = 1; k * 150 < 4000; ++k) {
+    const double f = 150.0 * k;
+    std::complex<double> sum(0.0, 0.0);
+    for (size_t i = lo; i < hi; ++i) {
+      sum += static_cast<double>(audio[i]) *
+             std::polar(1.0, -sonare::constants::kTwoPiD * f * static_cast<double>(i) /
+                                 audio.sample_rate());
+    }
+    weighted += f * std::abs(sum);
+    total += std::abs(sum);
+  }
+  return weighted / total;
+}
+
+}  // namespace
+
+TEST_CASE("render_notes moves formants by the same ratio at 44.1 and 48 kHz", "[note_model]") {
+  double ratios[2] = {};
+  int index = 0;
+  for (int sr : {44100, 48000}) {
+    const sonare::Audio audio = vowel(sr);
+    NoteObject note;
+    note.onset_sample = sr / 10;
+    note.offset_sample = sr - sr / 10;
+    note.edit.formant_shift_semitones = 3.0f;
+    const sonare::Audio rendered = render_notes(audio, {note});
+    const size_t lo = static_cast<size_t>(sr) * 3 / 10;
+    const size_t hi = static_cast<size_t>(sr) * 7 / 10;
+    ratios[index++] = harmonic_centroid(rendered, lo, hi) / harmonic_centroid(audio, lo, hi);
+  }
+  INFO("44.1 kHz ratio " << ratios[0] << ", 48 kHz ratio " << ratios[1]);
+  // The edit raises the formant, and does so alike at both rates.
+  CHECK(ratios[0] > 1.03);
+  CHECK(std::abs(ratios[1] / ratios[0] - 1.0) <= 0.01);
+}
+
+TEST_CASE("transcribe_notes holds its pitch frame as a duration across input rates",
+          "[note_model][note_transcriber]") {
+  // D2 then F2, 0.6 s each with two overtones: the 65-100 Hz floor of a sung line.
+  const auto line = [](int sr) {
+    std::vector<float> samples(static_cast<size_t>(sr * 1.4), 0.0f);
+    const double notes[] = {73.42, 87.31};
+    for (int n = 0; n < 2; ++n) {
+      const size_t begin = static_cast<size_t>(sr * (0.1 + 0.65 * n));
+      const size_t end = begin + static_cast<size_t>(sr * 0.6);
+      for (size_t i = begin; i < end; ++i) {
+        const double t = static_cast<double>(i - begin) / sr;
+        double v = 0.0;
+        for (int h = 1; h <= 3; ++h)
+          v += std::sin(sonare::constants::kTwoPiD * notes[n] * h * t) / h;
+        samples[i] = static_cast<float>(0.3 * v);
+      }
+    }
+    return sonare::Audio::from_vector(std::move(samples), sr);
+  };
+  for (int sr : {44100, 96000, 192000}) {
+    DYNAMIC_SECTION("sr " << sr) {
+      std::vector<TranscribedNote> notes;
+      REQUIRE_NOTHROW(notes = transcribe_notes(line(sr)));
+      std::vector<int> numbers;
+      for (const TranscribedNote& note : notes) numbers.push_back(note.note);
+      CHECK(numbers == std::vector<int>{38, 41});
+    }
   }
 }

@@ -84,6 +84,7 @@ export interface SegmentRecurrenceMatrixRequest {
 export interface SegmentRecurrenceToLagRequest {
   recurrence: Float32Array;
   n: number;
+  /** Zero-pad so negative lags stay apart: a `2n × n` result (default true, as librosa). */
   pad?: boolean;
 }
 
@@ -579,7 +580,7 @@ export function segmentRecurrenceMatrix(request: SegmentRecurrenceMatrixRequest)
   );
 }
 
-/** Convert an `n × n` recurrence matrix to a lag matrix. */
+/** Convert an `n × n` recurrence matrix to a lag-by-time matrix, as librosa does. */
 export function segmentRecurrenceToLag(request: SegmentRecurrenceToLagRequest): SegmentMatrix {
   requestObject('segmentRecurrenceToLag', request, 'request', true);
   validateSegmentMatrix(
@@ -589,17 +590,13 @@ export function segmentRecurrenceToLag(request: SegmentRecurrenceToLagRequest): 
     request.n,
     'recurrence',
   );
-  return requireModule().segmentRecurrenceToLag(
-    request.recurrence,
-    request.n,
-    request.pad ?? false,
-  );
+  return requireModule().segmentRecurrenceToLag(request.recurrence, request.n, request.pad ?? true);
 }
 
-/** Convert a lag matrix back to an `n × n` recurrence matrix. */
+/** Convert a `lags × rows` lag matrix (lags = rows, or 2 × rows padded) to a recurrence. */
 export function segmentLagToRecurrence(request: SegmentLagToRecurrenceRequest): SegmentMatrix {
   requestObject('segmentLagToRecurrence', request, 'request', true);
-  validateSegmentMatrix('segmentLagToRecurrence', request.lag, request.rows, request.lags, 'lag');
+  validateSegmentMatrix('segmentLagToRecurrence', request.lag, request.lags, request.rows, 'lag');
   return requireModule().segmentLagToRecurrence(request.lag, request.rows, request.lags);
 }
 

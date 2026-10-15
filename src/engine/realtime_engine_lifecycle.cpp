@@ -223,7 +223,7 @@ bool RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
   meter_tap_.prepare(sample_rate, max_block_size_, 0,
                      telemetry_capacity *
                          (TrackMixerRuntime::kMaxTrackLanes + TrackMixerRuntime::kMaxBusLanes + 2),
-                     mixing::MeterConfig{true, true, 4});
+                     mixing::kPublishedMeterConfig);
   // Spectrum/vectorscope snapshots are interval-gated, so a shallower per-target
   // ring depth than the meter tap suffices.
   scope_tap_.prepare(sample_rate, max_block_size_,

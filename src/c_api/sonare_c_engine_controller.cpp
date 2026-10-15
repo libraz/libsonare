@@ -148,12 +148,14 @@ SonareError sonare_engine_bind_controller(SonareRealtimeEngine* engine, uint32_t
   // works and listens to the wrong thing. Named one at a time because the field
   // is the whole diagnosis, and because the code alone cannot carry it -- it is
   // the same INVALID_PARAMETER an unbound destination returns.
-  if (binding->input >= SONARE_CONTROLLER_INPUT_COUNT) {
+  sonare::midi::ControllerInput input{};
+  if (!ordinal_to_enum(binding->input, 0, SONARE_CONTROLLER_INPUT_COUNT - 1, &input)) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "controller binding: input is not one of SonareControllerInput");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  if (binding->axis >= SONARE_CONTROLLER_AXIS_COUNT) {
+  sonare::midi::ControllerAxis axis{};
+  if (!ordinal_to_enum(binding->axis, 0, SONARE_CONTROLLER_AXIS_COUNT - 1, &axis)) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
                    "controller binding: axis is not one of SonareControllerAxis");
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -169,9 +171,9 @@ SonareError sonare_engine_bind_controller(SonareRealtimeEngine* engine, uint32_t
   if (status != SONARE_OK) return status;
 
   sonare::midi::ControllerBinding entry;
-  entry.input = static_cast<sonare::midi::ControllerInput>(binding->input);
+  entry.input = input;
   entry.index = binding->index;
-  entry.axis = static_cast<sonare::midi::ControllerAxis>(binding->axis);
+  entry.axis = axis;
   // A non-finite range or curve would reach the audio thread and stay there, so
   // it is refused here rather than substituted: a mapping silently replaced by
   // a default is a mapping the caller believes it installed.
@@ -284,9 +286,8 @@ SonareError sonare_engine_set_controller_note_tracking(SonareRealtimeEngine* eng
   if (dimension < 0 || dimension >= SONARE_MPE_DIMENSION_COUNT) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  if (tracking < 0 || tracking >= SONARE_NOTE_TRACKING_COUNT) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  // Refused in every build, so garbage is not reported as a missing feature.
+  if (!valid_c_enum(tracking, SONARE_NOTE_TRACKING_COUNT)) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
   return SONARE_ERROR_NOT_SUPPORTED;
@@ -295,7 +296,8 @@ SonareError sonare_engine_set_controller_note_tracking(SonareRealtimeEngine* eng
   sonare::midi::ControllerProfile profile;
   const SonareError status = profile_of(engine, destination_id, &profile);
   if (status != SONARE_OK) return status;
-  *note_tracking_field(&profile, dimension) = static_cast<sonare::midi::NoteTracking>(tracking);
+  *note_tracking_field(&profile, dimension) =
+      admitted_ordinal_to_enum<sonare::midi::NoteTracking>(tracking);
   return install(engine, destination_id, profile);
   SONARE_C_CATCH
 #endif

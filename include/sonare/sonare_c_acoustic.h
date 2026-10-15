@@ -24,6 +24,7 @@
 /// (RirSynthConfig::late_model / RoomMorphConfig::late_model) and every
 /// high-level binding's preferEyring=true default. SABINE/EYRING select a model
 /// explicitly. Mirrors sonare::acoustic::ReverbModel for the explicit values.
+/// Any other value is refused with SONARE_ERROR_INVALID_PARAMETER.
 #define SONARE_REVERB_MODEL_DEFAULT 0
 #define SONARE_REVERB_MODEL_SABINE 1
 #define SONARE_REVERB_MODEL_EYRING 2
@@ -32,7 +33,8 @@
 /// (SonareRirSynthConfig::material_preset / SonareRoomMorphConfig::material_preset).
 /// Mirrors sonare::acoustic::MaterialPreset. SONARE_MATERIAL_PRESET_NONE is 0 so a
 /// zero-initialized config leaves the preset unused (back-compat): the per-band
-/// array or scalar absorption then applies.
+/// array or scalar absorption then applies. Any other value is refused with
+/// SONARE_ERROR_INVALID_PARAMETER.
 #define SONARE_MATERIAL_PRESET_NONE 0
 #define SONARE_MATERIAL_PRESET_CONCRETE 1
 #define SONARE_MATERIAL_PRESET_WOOD 2
@@ -41,7 +43,8 @@
 #define SONARE_MATERIAL_PRESET_GLASS 5
 
 /// Blind/IR acoustic-analyzer routing mode for room estimation
-/// (SonareRoomEstimateConfig::mode). Mirrors AcousticConfig::Mode.
+/// (SonareRoomEstimateConfig::mode). Mirrors AcousticConfig::Mode. Any other
+/// value is refused with SONARE_ERROR_INVALID_PARAMETER.
 #define SONARE_ACOUSTIC_MODE_AUTO 0
 #define SONARE_ACOUSTIC_MODE_BLIND 1
 #define SONARE_ACOUSTIC_MODE_IMPULSE_RESPONSE 2

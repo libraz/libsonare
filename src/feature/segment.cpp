@@ -296,23 +296,19 @@ std::vector<float> recurrence_matrix(const float* data, int rows, int cols, int 
 
 std::vector<float> recurrence_to_lag(const float* rec, int n, bool pad) {
   if (rec == nullptr || n <= 0) return {};
-  int n_lags = pad ? (2 * n - 1) : n;
-  // The output is indexed with the int expression `i * n_lags + col`; reject a
+  const int n_lags = pad ? 2 * n : n;
+  // The output is indexed with the int expression `lag * n + i`; reject a
   // size whose element count would overflow int (UB) before iterating.
   if (static_cast<int64_t>(n) * static_cast<int64_t>(n_lags) >
       static_cast<int64_t>(std::numeric_limits<int>::max())) {
     throw SonareException(ErrorCode::InvalidParameter, "recurrence_to_lag: matrix too large");
   }
-  std::vector<float> out(static_cast<size_t>(n) * n_lags, 0.0f);
-  int offset = pad ? (n - 1) : 0;
-  for (int i = 0; i < n; ++i) {
-    for (int j = 0; j < n; ++j) {
-      int lag = j - i;
-      int col = lag + offset;
-      if (!pad) {
-        if (lag < 0) col = lag + n;  // librosa wraps for non-padded.
-      }
-      if (col >= 0 && col < n_lags) out[i * n_lags + col] = rec[i * n + j];
+  // Column i is column i of the (zero-padded) recurrence rolled up by i rows.
+  std::vector<float> out(static_cast<size_t>(n_lags) * n, 0.0f);
+  for (int lag = 0; lag < n_lags; ++lag) {
+    for (int i = 0; i < n; ++i) {
+      const int row = (lag + i) % n_lags;
+      if (row < n) out[lag * n + i] = rec[row * n + i];
     }
   }
   return out;
@@ -320,18 +316,17 @@ std::vector<float> recurrence_to_lag(const float* rec, int n, bool pad) {
 
 std::vector<float> lag_to_recurrence(const float* lag, int n_rows, int n_lags) {
   if (lag == nullptr || n_rows <= 0 || n_lags <= 0) return {};
-  // The two layouts recurrence_to_lag writes: unpadded (n columns, wrapped) and
-  // padded (2n - 1 columns, lag -(n-1) at column 0).
-  const bool padded = n_lags == 2 * n_rows - 1 && n_lags != n_rows;
-  if (!padded && n_lags != n_rows) {
+  // The two layouts recurrence_to_lag writes: unpadded (n lag rows, wrapped) and
+  // padded (2n lag rows, negative lags wrapped into the lower half).
+  if (n_lags != n_rows && n_lags != 2 * n_rows) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "lag_to_recurrence: n_lags must be n_rows or 2 * n_rows - 1");
+                          "lag_to_recurrence: n_lags must be n_rows or 2 * n_rows");
   }
   std::vector<float> out(static_cast<size_t>(n_rows) * n_rows, 0.0f);
-  for (int i = 0; i < n_rows; ++i) {
-    for (int col = 0; col < n_lags; ++col) {
-      const int j = padded ? i + col - (n_rows - 1) : (i + col) % n_rows;
-      if (j >= 0 && j < n_rows) out[i * n_rows + j] = lag[i * n_lags + col];
+  for (int row = 0; row < n_rows; ++row) {
+    for (int i = 0; i < n_rows; ++i) {
+      const int l = ((row - i) % n_lags + n_lags) % n_lags;
+      out[row * n_rows + i] = lag[l * n_rows + i];
     }
   }
   return out;

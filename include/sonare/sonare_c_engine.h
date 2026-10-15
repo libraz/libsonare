@@ -120,6 +120,8 @@ SonareError sonare_engine_prepare_with_channels(SonareRealtimeEngine* engine, do
                                                 size_t telemetry_capacity, int max_channels);
 SonareError sonare_engine_play(SonareRealtimeEngine* engine, int64_t render_frame);
 SonareError sonare_engine_stop(SonareRealtimeEngine* engine, int64_t render_frame);
+/// @brief Queues a playhead move to @p timeline_sample.
+/// @return @ref SONARE_ERROR_INVALID_PARAMETER for a negative @p timeline_sample.
 SonareError sonare_engine_seek_sample(SonareRealtimeEngine* engine, int64_t timeline_sample,
                                       int64_t render_frame);
 SonareError sonare_engine_seek_ppq(SonareRealtimeEngine* engine, double ppq, int64_t render_frame);
@@ -300,6 +302,7 @@ SonareError sonare_engine_metronome(SonareRealtimeEngine* engine, SonareEngineMe
 ///          mid-bar start gets a short first bar. Every counted bar has the length of the time
 ///          signature in effect at @p start_sample; tempo changes apply through the tempo map.
 ///          Writes @p start_sample when @p bars <= 0.
+/// @return @ref SONARE_ERROR_INVALID_PARAMETER for a negative @p start_sample.
 SonareError sonare_engine_count_in_end_sample(SonareRealtimeEngine* engine, int64_t start_sample,
                                               int bars, int64_t* out_sample);
 SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEngineClip* clips,
@@ -809,6 +812,10 @@ SonareError sonare_engine_clip_page_prefetch_frames(SonareRealtimeEngine* engine
 SonareError sonare_engine_set_capture_buffer(SonareRealtimeEngine* engine,
                                              const SonareEngineCaptureBuffer* buffer);
 SonareError sonare_engine_arm_capture(SonareRealtimeEngine* engine, int armed);
+/// @brief Sets the half-open capture punch window [@p start_sample, @p end_sample).
+/// @return @ref SONARE_ERROR_INVALID_PARAMETER for a negative @p start_sample, an
+///         @p end_sample before it, or an enabled window with no frames in it
+///         (@p end_sample == @p start_sample).
 SonareError sonare_engine_set_capture_punch(SonareRealtimeEngine* engine, int64_t start_sample,
                                             int64_t end_sample, int enabled);
 SonareError sonare_engine_set_capture_source(SonareRealtimeEngine* engine,

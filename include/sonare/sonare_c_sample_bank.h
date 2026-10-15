@@ -37,8 +37,10 @@ typedef struct {
   uint32_t loop_start; /* frame offsets inside this sample */
   uint32_t loop_end;
   /* SoundFont sampleModes, the same values an SF2 zone carries: 0 = no loop,
-     1 = continuous, 3 = loop while the key is held. This is the sample's own
-     looping; SonareSynthPatch.sample_loop overrides it per patch. */
+     1 = continuous, 3 = loop while the key is held, and 2, which the SoundFont
+     spec defines as unused and read as no loop. Any other value is refused
+     with SONARE_ERROR_INVALID_PARAMETER. This is the sample's own looping;
+     SonareSynthPatch.sample_loop overrides it per patch. */
   int loop_mode;
 } SonareSampleDesc;
 

@@ -1367,3 +1367,28 @@ TEST_CASE("pre and de-emphasis C entry points validate parameters and clear outp
   REQUIRE(empty_out == nullptr);
   REQUIRE(empty_length == 0);
 }
+
+TEST_CASE("sonare_vector_normalize refuses a norm_type outside 0..3", "[c_api][features]") {
+  const std::vector<float> values = {3.0f, -4.0f};
+  for (int norm_type : {-1, 4, 5}) {
+    CAPTURE(norm_type);
+    float* out = reinterpret_cast<float*>(&norm_type);
+    size_t out_length = 99;
+    REQUIRE(sonare_vector_normalize(values.data(), values.size(), norm_type, 0.0f, &out,
+                                    &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
+  }
+  // Each documented ordinal selects its own norm: max-abs 4, L1 7, L2 5, power 25.
+  const float expected_first[] = {3.0f / 4.0f, 3.0f / 7.0f, 3.0f / 5.0f, 3.0f / 25.0f};
+  for (int norm_type = 0; norm_type <= 3; ++norm_type) {
+    CAPTURE(norm_type);
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_vector_normalize(values.data(), values.size(), norm_type, 0.0f, &out,
+                                    &out_length) == SONARE_OK);
+    REQUIRE(out_length == values.size());
+    REQUIRE(std::abs(out[0] - expected_first[norm_type]) <= 1e-6f);
+    sonare_free_floats(out);
+  }
+}

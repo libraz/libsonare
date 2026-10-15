@@ -191,17 +191,13 @@ void MixerWasm::configureMeter(bool enabled, const val& true_peak_oversample) {
     meter_active_ = false;
     return;
   }
-  // Same acceptance as the offline meteringTruePeakDb entry point; the core
-  // resolves the request to a factor its realtime filter implements and raises
-  // anything below the BS.1770-4 4x minimum.
-  const int requested = checkedIntFromVal(true_peak_oversample, "truePeakOversample");
-  const int factor = requested == 0 ? 4 : requested;
-  if (factor < 1 || factor > 16 || (factor & (factor - 1)) != 0) {
-    throw WasmRangeError("meter oversample must be 0 or a power of two from 1 to 16");
+  // The realtime meter's rule, shared with scene metering and the strip config.
+  const int factor = checkedIntFromVal(true_peak_oversample, "truePeakOversample");
+  if (!sonare::mixing::is_realtime_true_peak_oversample(factor)) {
+    throw WasmRangeError("meter truePeakOversample must be in {4, 8}");
   }
   if (!meter_.has_value() || meter_oversample_ != factor) {
-    sonare::mixing::MeterConfig config;
-    config.measure_true_peak = true;
+    sonare::mixing::MeterConfig config = sonare::mixing::kPublishedMeterConfig;
     config.true_peak_oversample = factor;
     // LUFS stays off: the caller reports it as unavailable rather than paying
     // for the K-weighting filters, and a floor value would read as silence.
@@ -310,8 +306,9 @@ val MixerWasm::drainTailStereo(double num_samples) {
   return out;
 }
 
-// Folds every strip and bus meter's pending true-peak group delay into its
-// snapshot at the end of a signal; mirrors sonare_mixer_flush_meters.
+// Folds every strip, bus and master-output meter's pending true-peak group delay
+// into its snapshot at the end of a signal; extends sonare_mixer_flush_meters
+// with the binding-owned master meter.
 void MixerWasm::flushMeters() {
   const SonareError err = sonare_mixer_flush_meters(mixer_);
   if (err != SONARE_OK) {
@@ -319,6 +316,7 @@ void MixerWasm::flushMeters() {
         sonare::ErrorCode::InvalidState,
         std::string("mixer meter flush failed: ") + sonare_error_message(err));
   }
+  if (meter_.has_value()) meter_->flush_true_peak();
 }
 
 void registerMixerProcessing(class_<MixerWasm>& cls) {

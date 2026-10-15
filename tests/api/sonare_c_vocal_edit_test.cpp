@@ -513,3 +513,63 @@ TEST_CASE("vocal C restore options carry runtime limits and validate their heade
   sonare_vocal_free_state_bytes(&state);
 }
 #endif
+
+#if defined(SONARE_WITH_PITCH_EDITOR)
+TEST_CASE("vocal C operations refuse a mode ordinal outside its enum", "[vocal_c_api]") {
+  VocalFixture f;
+  auto s = f.create();
+  SonareVocalNotesResult notes;
+  sonare_vocal_notes_result_init(&notes);
+  REQUIRE(sonare_vocal_session_notes(s.get(), &notes) == SONARE_OK);
+  REQUIRE(notes.note_count == 1);
+  const auto id = notes.notes[0].id;
+  // The edit borrows the result's arrays, so the result outlives every operation below.
+  const auto edit = notes.notes[0].edit;
+  SonareVocalEditDraft* raw = nullptr;
+  REQUIRE(sonare_vocal_session_begin_edit(s.get(), 0, &raw) == SONARE_OK);
+  std::unique_ptr<SonareVocalEditDraft, decltype(&sonare_vocal_draft_destroy)> draft(
+      raw, sonare_vocal_draft_destroy);
+  SonareVocalStateToken before{};
+  REQUIRE(sonare_vocal_draft_token(raw, &before) == SONARE_OK);
+
+  const auto expect_refused = [&](const SonareVocalOperation& operation, const char* field) {
+    CAPTURE(field);
+    SonareVocalEditResult result;
+    sonare_vocal_edit_result_init(&result);
+    CHECK(sonare_vocal_draft_apply(raw, before.generation, &operation, 1, &result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    SonareVocalErrorDetail detail;
+    sonare_vocal_error_detail_init(&detail);
+    sonare_vocal_last_error_detail(&detail);
+    CHECK(detail.reason == SONARE_VOCAL_REASON_INVALID_INPUT);
+    CHECK(std::strcmp(detail.field, field) == 0);
+    SonareVocalStateToken after{};
+    REQUIRE(sonare_vocal_draft_token(raw, &after) == SONARE_OK);
+    CHECK(after.generation == before.generation);
+  };
+  const auto set_edit = [&] {
+    SonareVocalOperation operation;
+    sonare_vocal_operation_init(&operation);
+    operation.kind = SONARE_VOCAL_SET_EDIT;
+    operation.note_id = id;
+    operation.edit = edit;
+    return operation;
+  };
+
+  SonareVocalOperation target = set_edit();
+  target.edit.target_mode = SONARE_VOCAL_TARGET_CURVE + 1;
+  expect_refused(target, "target_mode");
+  SonareVocalOperation formant = set_edit();
+  formant.edit.formant_mode = SONARE_VOCAL_FORMANT_SHIFT + 1;
+  expect_refused(formant, "formant_mode");
+  SonareVocalOperation merge;
+  sonare_vocal_operation_init(&merge);
+  merge.kind = SONARE_VOCAL_MERGE;
+  merge.note_ids = &id;
+  merge.note_id_count = 1;
+  merge.merge_policy = SONARE_VOCAL_MERGE_RESET + 1;
+  expect_refused(merge, "merge_policy");
+  draft.reset();
+  sonare_vocal_free_notes(&notes);
+}
+#endif

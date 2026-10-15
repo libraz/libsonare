@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "analysis/analysis_evidence.h"
 #include "metering/lufs.h"
 #include "util/constants.h"
 #include "util/db.h"
@@ -24,6 +25,8 @@ constexpr float kCompressedCrestFactorDb = 8.0f;
 DynamicsAnalyzer::DynamicsAnalyzer(const Audio& audio, const DynamicsConfig& config)
     : config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(numeric::finite_positive(config.window_sec), ErrorCode::InvalidParameter,
+                   "DynamicsConfig: windowSec must be finite and positive");
   analyze(audio);
 }
 
@@ -56,9 +59,9 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
   dynamics_.crest_factor = dynamics_.peak_db - dynamics_.rms_db;
 
   // Compute loudness curve using prefix sum for O(n) complexity.
-  // Floor the window to at least one sample: a tiny window_sec or sample_rate
-  // would otherwise truncate to zero and produce a 0/0 NaN in the per-window RMS.
-  int window_samples = std::max(1, static_cast<int>(config_.window_sec * sr));
+  // Sized in double and compared with the buffer before any cast; floored at one sample so a
+  // tiny window cannot produce a 0/0 NaN in the per-window RMS.
+  const double requested_window = std::floor(static_cast<double>(config_.window_sec) * sr);
   int hop_length = std::max(1, config_.hop_length);
 
   // When the configured window is longer than the whole signal (short one-shots,
@@ -68,9 +71,12 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
   // forcing dynamic_range_db to 0 and is_compressed to true regardless of the
   // true crest factor. Long-audio inputs keep the configured window untouched, so
   // their per-window RMS values are byte-identical.
-  if (window_samples > static_cast<int>(n_samples)) {
+  int window_samples = 1;
+  if (requested_window > static_cast<double>(n_samples)) {
     window_samples = std::max(1, static_cast<int>(n_samples) / 4);
     hop_length = std::min(hop_length, std::max(1, window_samples / 2));
+  } else {
+    window_samples = std::max(1, static_cast<int>(requested_window));
   }
 
   // Build prefix sum of squared samples: prefix_sum[i] = sum(data[0..i-1]^2)
@@ -125,10 +131,10 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
   // short-term loudness (3 s windows, 100 ms hops, absolute + relative gating).
   dynamics_.loudness_range_db = metering::ebur128_loudness_range(audio);
 
-  // Determine if compressed
-  // Low dynamic range and low crest factor suggest compression
-  dynamics_.is_compressed = (dynamics_.dynamic_range_db < config_.compression_threshold) ||
-                            (dynamics_.crest_factor < kCompressedCrestFactorDb);
+  // Low dynamic range and low crest factor suggest compression; silence has no level to judge.
+  dynamics_.is_compressed =
+      has_evidence(peak) && ((dynamics_.dynamic_range_db < config_.compression_threshold) ||
+                             (dynamics_.crest_factor < kCompressedCrestFactorDb));
 }
 
 std::vector<int> DynamicsAnalyzer::loudness_histogram(int n_bins, float min_db,

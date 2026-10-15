@@ -7,30 +7,33 @@
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/exception.h"
+#include "util/non_finite_sample.h"
 #include "util/non_finite_state.h"
 
 namespace sonare::mixing {
 
 using sonare::discard_group_if_non_finite;
+using sonare::resolve_non_finite;
+using sonare::SampleDestination;
 using sonare::constants::kEpsilon;
 using sonare::constants::kFloorDb;
 
 namespace {
-// Map a requested true-peak oversample factor to one the realtime polyphase
-// TruePeakFilter implements (2, 4, 8). The offline metering::true_peak path
-// additionally supports 16x, but the RT filter has no 16x design, so 16 is
-// resolved to 8 (the highest RT-compliant factor) instead of silently
-// substituting a mislabeled filter. Factors below the BS.1770-4 4x minimum that
-// the RT filter does not support (1, 3) are raised to 4; an explicit 2x request
-// is honored (it previously fell through to 4x). Use the offline
-// metering::true_peak when a genuine 16x measurement is required.
-int resolve_true_peak_oversample(int requested) noexcept {
-  if (requested >= 16) return 8;
-  if (requested >= 8) return 8;
-  if (requested == 2) return 2;
-  return 4;
+// What a sample contributes to every reading: a non-finite one counts as silence,
+// reported once per block by the per-plane pass in process().
+float metered(float sample) noexcept {
+  (void)resolve_non_finite(SampleDestination::kBoundedResult, sample);
+  return sample;
 }
 }  // namespace
+
+void validate_realtime_meter_config(const MeterConfig& config) {
+  if (!is_realtime_true_peak_oversample(config.true_peak_oversample)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "meter truePeakOversample must be in {4, 8} (BS.1770-4 minimum is 4x)");
+  }
+}
 
 float mono_compat_width_from_energy(double mid_energy, double side_energy) noexcept {
   if (mid_energy > static_cast<double>(kEpsilon)) {
@@ -53,14 +56,11 @@ float MeterProcessor::energy_to_lufs(double energy) const noexcept {
 }
 
 void MeterProcessor::prepare(double sample_rate, int max_block_size) {
+  validate_realtime_meter_config(config_);
   sample_rate_ = sample_rate;
   max_block_size_ = std::max(0, max_block_size);
   if (config_.measure_true_peak) {
-    // Resolve the requested factor to one the RT TruePeakFilter implements.
-    // See resolve_true_peak_oversample(): 16x is offline-only and clamps to 8x
-    // here, 2x is honored, and unsupported low factors are raised to the
-    // BS.1770-4 4x minimum.
-    const int oversample = resolve_true_peak_oversample(config_.true_peak_oversample);
+    const int oversample = config_.true_peak_oversample;
     true_peak_filter_ = rt::TruePeakFilter(kTruePeakChannels, oversample);
     // Pre-size the filter's cross-block history + scratch so the per-block
     // upsample path is allocation-free, and preallocate our own oversampled
@@ -70,6 +70,9 @@ void MeterProcessor::prepare(double sample_rate, int max_block_size) {
         static_cast<size_t>(max_block_size_) * static_cast<size_t>(oversample);
     for (auto& buffer : true_peak_oversampled_) buffer.assign(oversampled_capacity, 0.0f);
     true_peak_zero_in_.assign(static_cast<size_t>(max_block_size_), 0.0f);
+    for (auto& buffer : true_peak_finite_in_) {
+      buffer.assign(static_cast<size_t>(max_block_size_), 0.0f);
+    }
   }
 
   if (config_.measure_lufs && sample_rate_ > 0.0) {
@@ -164,17 +167,23 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
   const int meters = std::min(num_channels, kMaxMeterChannels);
   next.channel_count = meters;
   std::array<float, kMaxMeterChannels> sample_peaks{};
+  std::array<bool, kMaxMeterChannels> plane_non_finite{};
+  bool any_non_finite = false;
   for (int ch = 0; ch < meters; ++ch) {
     if (channels[ch] == nullptr) {
       continue;
     }
     float peak = 0.0f;
     double sum_square = 0.0;
+    bool non_finite = false;
     for (int i = 0; i < num_samples; ++i) {
-      const float sample = channels[ch][i];
+      float sample = channels[ch][i];
+      non_finite |= resolve_non_finite(SampleDestination::kBoundedResult, sample);
       peak = std::max(peak, std::abs(sample));
       sum_square += static_cast<double>(sample) * sample;
     }
+    plane_non_finite[static_cast<size_t>(ch)] = non_finite;
+    any_non_finite |= non_finite;
     if (ch < 2) stereo_sum_square[static_cast<size_t>(ch)] = sum_square;
     sample_peaks[static_cast<size_t>(ch)] = peak;
     next.peak_db[static_cast<size_t>(ch)] = linear_to_db(peak);
@@ -208,8 +217,17 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
       for (int ch = 0; ch < tp_channels; ++ch) {
         // A null meter channel is fed silence so the filter's positional history
         // stays aligned to each channel slot (the upsampler rejects null inputs).
-        true_peak_in_ptrs_[static_cast<size_t>(ch)] =
-            channels[ch] != nullptr ? channels[ch] + offset : true_peak_zero_in_.data();
+        const size_t c = static_cast<size_t>(ch);
+        if (channels[ch] == nullptr) {
+          true_peak_in_ptrs_[c] = true_peak_zero_in_.data();
+        } else if (plane_non_finite[c]) {
+          // The reconstruction reads the same silence-for-non-finite samples as the other readings.
+          float* finite_in = true_peak_finite_in_[c].data();
+          for (int i = 0; i < chunk; ++i) finite_in[i] = metered(channels[ch][offset + i]);
+          true_peak_in_ptrs_[c] = finite_in;
+        } else {
+          true_peak_in_ptrs_[c] = channels[ch] + offset;
+        }
       }
       true_peak_filter_.upsample_with_history_delayed(
           true_peak_in_ptrs_.data(), true_peak_out_ptrs_.data(), tp_channels, chunk);
@@ -242,8 +260,8 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
     double side_energy = 0.0;
     double side_sq_sum = 0.0;
     for (int i = 0; i < num_samples; ++i) {
-      const double left = channels[0][i];
-      const double right = channels[1][i];
+      const double left = metered(channels[0][i]);
+      const double right = metered(channels[1][i]);
       sum_lr += left * right;
 
       const double mono = 0.5 * (left + right);
@@ -278,7 +296,7 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
       double combined = 0.0;
       for (int ch = 0; ch < lufs_channels; ++ch) {
         if (channels[ch] == nullptr) continue;
-        const double y = filter_sample(ch, static_cast<double>(channels[ch][i]));
+        const double y = filter_sample(ch, static_cast<double>(metered(channels[ch][i])));
         combined += metering::bs1770_channel_weight(ch, lufs_channels) * y * y;
       }
 
@@ -355,6 +373,7 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
     next.integrated_lufs = integrated_lufs_;
   }
 
+  if (any_non_finite) note_non_finite_discard();
   publish(next);
 }
 

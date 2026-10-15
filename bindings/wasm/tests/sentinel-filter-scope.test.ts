@@ -89,6 +89,12 @@ const REMOVED_FILTERS: ReadonlyArray<{
       'The deterministic late-tail seed, whose 0 keeps the library default. The asymmetry was the sharp part: a seed past the uint32 range threw while a negative one was substituted, inside the function whose own comment says a silent default is what made the earlier gap invisible.',
   },
   {
+    file: 'src/c_api/mixing_strip.cpp',
+    fields: ['true_peak_oversample'],
+    reason:
+      "A strip meter's true-peak oversample factor, where 0 selects the default (4). The meter implements only 4 and 8, so the entry refuses every other factor and 0 is the one value the sentinel has to recognise.",
+  },
+  {
     file: 'src/wasm/bindings/mastering/chain.cpp',
     fields: ['true_peak_oversample', 'release_ms'],
     reason:
@@ -177,12 +183,6 @@ const REFUSED_OPTION_FIELDS: ReadonlyArray<{
     file: 'src/c_api/features_spectral_pitch.cpp',
     field: 'voiced_threshold',
     reason: 'Voicing probability threshold; 0 keeps the core default, outside [0,1] is refused.',
-  },
-  {
-    file: 'src/c_api/mixing_strip.cpp',
-    field: 'true_peak_oversample',
-    reason:
-      'True-peak oversampling factor; the C ABI documents 0 as the default (4) and refuses a factor outside [0, 16].',
   },
   {
     file: 'src/c_api/sonare_c_daw.cpp',

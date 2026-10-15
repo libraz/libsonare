@@ -334,7 +334,7 @@ describe('Mixer runtime controls (WASM)', () => {
       });
     }
 
-    it("reports the EQ discard immediately and the meters' one block later", () => {
+    it('reports the EQ and meter discards on the poisoned block and nothing after it', () => {
       const mixer = Mixer.fromSceneJson(highGainEqScene(), SR, BLOCK);
       try {
         mixer.compile();
@@ -356,28 +356,20 @@ describe('Mixer runtime controls (WASM)', () => {
         // lets it through -- but multiplied by the band's boosted coefficient
         // it overflows float32 range inside the biquad recursion, corrupting
         // the filter's own state without the input itself ever being NaN or
-        // infinite. The overflowed (now infinite) samples continue on to the
-        // strip's own pre/post meters downstream in this same block. The EQ
-        // checks its own state at the end of its process call, so its share
-        // of the count rises on this block.
+        // infinite. The EQ discards its state and the strip's meters count the
+        // overflowed samples as silence, all within this block; the strip
+        // folds its members into one bump per block.
         const poisoned = clean.slice();
         poisoned[100] = 1e35;
         mixer.processStereo([poisoned], [poisoned]);
         const afterPoisonedBlock = mixer.stripNonFiniteDiscardCount(0);
-        expect(afterPoisonedBlock).toBeGreaterThan(0);
+        expect(afterPoisonedBlock).toBe(1);
 
-        // A meter checks its own loudness state at the TOP of a block, before
-        // consuming that block's samples -- so the corruption it absorbed
-        // above is only detected (and counted) once the NEXT block runs, even
-        // though that block carries no new poison of its own.
+        // No member carried the poison into its state, so clean blocks add nothing.
         mixer.processStereo([clean], [clean]);
-        const afterFollowingBlock = mixer.stripNonFiniteDiscardCount(0);
-        expect(afterFollowingBlock).toBeGreaterThan(afterPoisonedBlock);
-
-        // A further clean block adds nothing more: both the EQ and the
-        // meters have now fully recovered.
+        expect(mixer.stripNonFiniteDiscardCount(0)).toBe(afterPoisonedBlock);
         mixer.processStereo([clean], [clean]);
-        expect(mixer.stripNonFiniteDiscardCount(0)).toBe(afterFollowingBlock);
+        expect(mixer.stripNonFiniteDiscardCount(0)).toBe(afterPoisonedBlock);
       } finally {
         mixer.delete();
       }
@@ -392,7 +384,7 @@ describe('Mixer runtime controls (WASM)', () => {
       }
     });
 
-    it('reports a bus discard for its own meter one block after an upstream overflow reaches it', () => {
+    it('reports a bus discard for its own meter on the block an upstream overflow reaches it', () => {
       // 'src' has no explicit connection but auto-routes to 'master' (see the
       // asymmetric-strip fixture above); 'master' itself owns no insert, so
       // only its post-insert meter is in play.
@@ -411,21 +403,18 @@ describe('Mixer runtime controls (WASM)', () => {
 
         // Same poison as the strip case: the strip's boosted EQ band
         // overflows to infinity and that signal reaches the master bus this
-        // same block. The bus owns no insert of its own, so nothing on it
-        // discards yet -- only its meter absorbed the corruption, and a
-        // meter's own check runs at the top of its NEXT process call.
+        // same block. The bus owns no insert of its own, so the count is its
+        // meter's, which counts the non-finite samples as silence on arrival.
         const poisoned = clean.slice();
         poisoned[100] = 1e35;
         mixer.processStereo([poisoned], [poisoned]);
-        expect(mixer.busNonFiniteDiscardCount('master')).toBe(0);
+        expect(mixer.busNonFiniteDiscardCount('master')).toBe(1);
 
+        // Nothing was carried into the meter's state, so clean blocks add nothing.
         mixer.processStereo([clean], [clean]);
-        const afterFollowingBlock = mixer.busNonFiniteDiscardCount('master');
-        expect(afterFollowingBlock).toBeGreaterThan(0);
-
-        // One more clean block adds nothing further: the meter has recovered.
+        expect(mixer.busNonFiniteDiscardCount('master')).toBe(1);
         mixer.processStereo([clean], [clean]);
-        expect(mixer.busNonFiniteDiscardCount('master')).toBe(afterFollowingBlock);
+        expect(mixer.busNonFiniteDiscardCount('master')).toBe(1);
       } finally {
         mixer.delete();
       }
@@ -469,7 +458,7 @@ describe('Mixer runtime controls (WASM)', () => {
         // these as a successful add.
         expect(() => mixer.addStrip('late-arrival')).toThrow(/duplicate strip id/);
         expect(() => mixer.addStrip('over-sampled', { truePeakOversample: 32 })).toThrow(
-          /truePeakOversample must be in \[0, 16\]/,
+          /truePeakOversample must be in \{0, 4, 8\}/,
         );
         // A wrong-typed metering field is refused by name rather than substituted.
         expect(() => mixer.addStrip('wrong-type', { lufs: 'yes' as unknown as boolean })).toThrow(
@@ -732,6 +721,54 @@ describe('Mixer runtime controls (WASM)', () => {
     const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 256);
     try {
       expect(() => mixer.flushMeters()).not.toThrow();
+    } finally {
+      mixer.delete();
+    }
+  });
+
+  it("folds the master-output meter's pending true peak into its snapshot on flushMeters", () => {
+    const block = 256;
+    const mixer = Mixer.fromSceneJson(
+      JSON.stringify({ version: 1, strips: [{ id: 'a' }] }),
+      48000,
+      block,
+    );
+    try {
+      mixer.configureMeter(true, 4);
+      const realtime = mixer.createRealtimeBuffer();
+      realtime.leftInputs[0].fill(0);
+      realtime.rightInputs[0].fill(0);
+      // The peak sits inside the reconstruction's group delay, so only a flush reads it.
+      realtime.leftInputs[0].set([0.9, 0.9, -0.9], block - 3);
+      realtime.rightInputs[0].set([0.9, 0.9, -0.9], block - 3);
+      realtime.process();
+      const offlineDb = meteringTruePeakDb(new Float32Array(realtime.outLeft), 48000);
+      expect(offlineDb).toBeGreaterThan(-1);
+
+      const before = mixer.meterSnapshot();
+      expect(before.truePeakDbL).toBeLessThan(offlineDb - 0.01);
+
+      mixer.flushMeters();
+      const after = mixer.meterSnapshot();
+      expect(Math.abs(after.truePeakDbL - offlineDb)).toBeLessThan(1e-3);
+      expect(after.truePeakDbL).toBeGreaterThanOrEqual(after.peakDbL);
+    } finally {
+      mixer.delete();
+    }
+  });
+
+  it('accepts exactly 4x and 8x for the master-output meter', () => {
+    const mixer = Mixer.fromSceneJson(
+      JSON.stringify({ version: 1, strips: [{ id: 'a' }] }),
+      48000,
+      256,
+    );
+    try {
+      expect(() => mixer.configureMeter(true, 4)).not.toThrow();
+      expect(() => mixer.configureMeter(true, 8)).not.toThrow();
+      for (const factor of [0, 1, 2, 3, 5, 16]) {
+        expect(() => mixer.configureMeter(true, factor)).toThrow(/truePeakOversample/);
+      }
     } finally {
       mixer.delete();
     }

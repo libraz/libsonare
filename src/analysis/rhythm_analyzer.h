@@ -36,8 +36,8 @@ struct RhythmFeatures {
   TimeSignature time_signature;  ///< Detected time signature
   float syncopation;             ///< Syncopation level [0, 1]
   std::string groove_type;       ///< Groove type (straight, shuffle, swing)
-  float pattern_regularity;      ///< How regular the rhythm pattern is [0, 1]
-  float tempo_stability;         ///< Tempo stability over time [0, 1]
+  float pattern_regularity;      ///< Rhythm regularity [0, 1]; 0 with no beat interval
+  float tempo_stability;         ///< Tempo stability over time [0, 1]; 0 below two beat intervals
 };
 
 /// @brief Configuration for rhythm analysis.
@@ -55,6 +55,17 @@ struct RhythmConfig {
   std::vector<int> meter_candidate_numerators = {3, 4, 6};
   int meter_denominator = 4;  ///< Beat unit handed to the meter estimator
 };
+
+/// @brief Regularity measures derived from a run of beat intervals.
+struct RhythmRegularity {
+  float pattern_regularity = 0.0f;  ///< 1 - 2 * interval CV, clamped at 0; 0 with no interval
+  float tempo_stability = 0.0f;     ///< 1 - 5 * local-tempo CV, clamped at 0; 0 below two intervals
+};
+
+/// @brief Computes @ref RhythmRegularity from beat intervals in seconds.
+/// @details Both fields stay 0 when the intervals carry no evidence (none, or a non-positive
+///          mean), so silence never reads as a perfectly regular rhythm.
+RhythmRegularity rhythm_regularity(const std::vector<float>& intervals);
 
 /// @brief Rhythm analyzer for detecting musical rhythm characteristics.
 /// @details Analyzes beat patterns to detect time signature, groove type,

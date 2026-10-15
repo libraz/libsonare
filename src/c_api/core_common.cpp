@@ -60,20 +60,13 @@ void fill_acoustic_result(const AcousticParameters& params, SonareAcousticResult
   out->is_blind = params.is_blind ? 1 : 0;
 }
 
-PitchClass from_c_pitch_class(SonarePitchClass pitch) {
-  const int value = static_cast<int>(pitch);
-  if (value < static_cast<int>(PitchClass::C) || value > static_cast<int>(PitchClass::B)) {
-    return PitchClass::C;
-  }
-  return static_cast<PitchClass>(value);
+bool from_c_pitch_class(SonarePitchClass pitch, PitchClass* out) {
+  return ordinal_to_enum(pitch, static_cast<int>(PitchClass::C), static_cast<int>(PitchClass::B),
+                         out);
 }
 
-Mode from_c_mode(SonareMode mode) {
-  const int value = static_cast<int>(mode);
-  if (value < static_cast<int>(Mode::Major) || value > static_cast<int>(Mode::Locrian)) {
-    return Mode::Major;
-  }
-  return static_cast<Mode>(value);
+bool from_c_mode(SonareMode mode, Mode* out) {
+  return ordinal_to_enum(mode, static_cast<int>(Mode::Major), static_cast<int>(Mode::Locrian), out);
 }
 
 bool fill_key_profile(SonareKeyProfileType profile_type, KeyConfig* config) {
@@ -117,11 +110,9 @@ bool fill_key_modes(const SonareMode* modes, size_t mode_count, KeyConfig* confi
   config->modes.clear();
   config->modes.reserve(mode_count);
   for (size_t i = 0; i < mode_count; ++i) {
-    const int value = static_cast<int>(modes[i]);
-    if (value < static_cast<int>(Mode::Major) || value > static_cast<int>(Mode::Locrian)) {
-      return false;
-    }
-    config->modes.push_back(static_cast<Mode>(value));
+    Mode mode = Mode::Major;
+    if (!from_c_mode(modes[i], &mode)) return false;
+    config->modes.push_back(mode);
   }
   return true;
 }

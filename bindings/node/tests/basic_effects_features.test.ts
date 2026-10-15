@@ -119,9 +119,21 @@ describe('effects', () => {
     const recurrence = segmentRecurrenceMatrix({ data, rows: 2, cols: 3 });
     expect(recurrence.values).toHaveLength(9);
     const lag = segmentRecurrenceToLag({ recurrence: recurrence.values, n: 3, pad: true });
-    expect(lag.rows).toBe(3);
-    expect(lag.cols).toBe(5);
-    expect(segmentLagToRecurrence({ lag: lag.values, rows: 3, lags: 5 }).values).toHaveLength(9);
+    expect(lag.rows).toBe(6);
+    expect(lag.cols).toBe(3);
+    expect(segmentLagToRecurrence({ lag: lag.values, rows: 3, lags: 6 }).values).toHaveLength(9);
+    // librosa 0.11.0 recurrence_to_lag on rec[r][c] = 4r + c: pad defaults to true, lag-by-time.
+    const asymmetric = Float32Array.from({ length: 16 }, (_, i) => i);
+    const padded = segmentRecurrenceToLag({ recurrence: asymmetric, n: 4 });
+    expect(padded.rows).toBe(8);
+    expect(padded.cols).toBe(4);
+    expect(Array.from(padded.values)).toEqual([
+      0, 5, 10, 15, 4, 9, 14, 0, 8, 13, 0, 0, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 2, 7, 0, 1,
+      6, 11,
+    ]);
+    expect(
+      Array.from(segmentLagToRecurrence({ lag: padded.values, rows: 4, lags: 8 }).values),
+    ).toEqual(Array.from(asymmetric));
     expect(
       segmentSubsegment({ data, rows: 2, cols: 3, boundaries: new Int32Array([0, 3]) })[0],
     ).toBe(0);
@@ -205,7 +217,7 @@ describe('effects', () => {
   });
 
   it('pitchShift rejects an unsupported effective rate before processing input', () => {
-    expect(() => pitchShift(new Float32Array(4), 48000, 48)).toThrow();
+    expect(() => pitchShift(new Float32Array(4), 48000, -120)).toThrow();
     expect(pitchShift(tone, SR, 0)).toBeInstanceOf(Float32Array);
   });
 

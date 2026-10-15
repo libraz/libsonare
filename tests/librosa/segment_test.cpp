@@ -149,3 +149,23 @@ TEST_CASE("recurrence_matrix connectivity never takes the excluded band as neigh
     }
   }
 }
+
+TEST_CASE("recurrence_to_lag matches librosa's default and lag-by-time layout",
+          "[librosa][segment]") {
+  // rec[r][c] = 4r + c, asymmetric so a transposed layout cannot pass. The expected matrices are
+  // librosa 0.11.0's recurrence_to_lag(rec) and recurrence_to_lag(rec, pad=False).
+  constexpr int kN = 4;
+  std::vector<float> rec(kN * kN);
+  for (int i = 0; i < kN * kN; ++i) rec[static_cast<size_t>(i)] = static_cast<float>(i);
+
+  const std::vector<float> padded = {0, 5, 10, 15, 4, 9, 14, 0, 8, 13, 0, 0, 12, 0, 0, 0,
+                                     0, 0, 0,  0,  0, 0, 0,  3, 0, 0,  2, 7, 0,  1, 6, 11};
+  const std::vector<float> wrapped = {0, 5, 10, 15, 4, 9, 14, 3, 8, 13, 2, 7, 12, 1, 6, 11};
+
+  const auto lag_default = recurrence_to_lag(rec.data(), kN);
+  CHECK(lag_default == padded);  // pad=true is the default, shape (2n, n)
+  CHECK(recurrence_to_lag(rec.data(), kN, false) == wrapped);
+
+  CHECK(lag_to_recurrence(padded.data(), kN, 2 * kN) == rec);
+  CHECK(lag_to_recurrence(wrapped.data(), kN, kN) == rec);
+}

@@ -47,16 +47,20 @@ std::vector<float> recurrence_matrix(const float* data, int rows, int cols, int 
                                      const std::string& metric = "euclidean",
                                      const std::string& mode = "connectivity");
 
-/// @brief Converts a recurrence matrix to a lag matrix.
-/// @details Row i, lag j corresponds to recurrence[i, i + j] (modulo n).
+/// @brief Converts a recurrence matrix to a lag matrix (librosa.segment.recurrence_to_lag,
+///        axis=-1).
+/// @details Lag-by-time: `lag[l, i] = rec[(i + l) mod n_lags, i]`, the recurrence first
+///          zero-padded to 2n rows when @p pad. Padded, rows 0..n-1 hold lags 0..n-1 and row
+///          2n - k holds lag -k; unpadded, the lags wrap modulo n.
 /// @param rec Recurrence matrix [n x n] row-major.
 /// @param n Matrix dimension.
-/// @param pad If true, pad with zeros so lag spans [-(n-1), n-1].
-std::vector<float> recurrence_to_lag(const float* rec, int n, bool pad = false);
+/// @param pad Pad with zeros so positive and negative lags stay apart (librosa default).
+/// @return Row-major lag matrix [2n x n] when @p pad, else [n x n].
+std::vector<float> recurrence_to_lag(const float* rec, int n, bool pad = true);
 
-/// @brief Inverse of @ref recurrence_to_lag.
-/// @param n_lags n_rows for the unpadded (wrapped) layout, 2 * n_rows - 1 for the
-///        padded one.
+/// @brief Inverse of @ref recurrence_to_lag (librosa.segment.lag_to_recurrence).
+/// @param lag Lag matrix [n_lags x n_rows] row-major.
+/// @param n_lags n_rows for the unpadded (wrapped) layout, 2 * n_rows for the padded one.
 /// @throw sonare::SonareException (InvalidParameter) for any other @p n_lags.
 std::vector<float> lag_to_recurrence(const float* lag, int n_rows, int n_lags);
 

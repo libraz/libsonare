@@ -49,6 +49,8 @@ TEST_CASE("recurrence_to_lag / lag_to_recurrence shapes", "[util][segment]") {
   REQUIRE(lag.size() == 9);
   auto roundtrip = lag_to_recurrence(lag.data(), 3, 3);
   REQUIRE(roundtrip.size() == 9);
+  // The default pads, as librosa does: 2n lag rows by n frames.
+  REQUIRE(recurrence_to_lag(R.data(), 3).size() == 18);
 }
 
 TEST_CASE("subsegment refines boundaries", "[util][segment]") {
@@ -269,12 +271,13 @@ TEST_CASE("lag_to_recurrence inverts recurrence_to_lag with and without padding"
     for (const bool pad : {false, true}) {
       INFO("n " << n << " pad " << pad);
       const auto lag = recurrence_to_lag(rec.data(), n, pad);
-      const int n_lags = pad ? 2 * n - 1 : n;
+      const int n_lags = pad ? 2 * n : n;
       REQUIRE(lag.size() == static_cast<size_t>(n) * n_lags);
       REQUIRE(lag_to_recurrence(lag.data(), n, n_lags) == rec);
     }
   }
-  // A lag width that is neither n nor 2n - 1 names no layout.
-  const std::vector<float> lag(4 * 5, 1.0f);
+  // A lag height that is neither n nor 2n names no layout, 2n - 1 included.
+  const std::vector<float> lag(4 * 7, 1.0f);
+  REQUIRE_THROWS_AS(lag_to_recurrence(lag.data(), 4, 7), SonareException);
   REQUIRE_THROWS_AS(lag_to_recurrence(lag.data(), 4, 5), SonareException);
 }

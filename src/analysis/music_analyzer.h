@@ -138,7 +138,7 @@ struct AnalysisResult {
 
 /// @brief Configuration for music analysis.
 struct MusicAnalyzerConfig {
-  int n_fft = 2048;                  ///< FFT size
+  int n_fft = 2048;                  ///< Window in samples at 22050 Hz, rescaled to analysis rate
   int hop_length = 512;              ///< Hop length
   float bpm_min = 60.0f;             ///< Minimum BPM
   float bpm_max = 200.0f;            ///< Maximum BPM
@@ -325,8 +325,9 @@ class MusicAnalyzer {
   void precompute_features();
 
   Audio audio_;
-  Audio analysis_audio_;  ///< Downsampled audio for spectral analysis (22050 Hz)
-  int analysis_sr_;       ///< Sample rate of analysis_audio_
+  Audio analysis_audio_;      ///< Downsampled audio for spectral analysis (22050 Hz)
+  int analysis_sr_;           ///< Sample rate of analysis_audio_
+  StftConfig analysis_stft_;  ///< STFT geometry at analysis_sr_, window rescaled from 22050 Hz
   Validated<MusicAnalyzerConfig> config_;
   float tuning_ = 0.0f;  ///< Configured, or measured when config_->auto_tuning
   ProgressCallback progress_callback_;

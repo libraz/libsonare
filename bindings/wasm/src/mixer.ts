@@ -56,8 +56,8 @@ export interface StripMeteringOptions {
   /** Inter-sample (true) peak measurement. Default `true`. */
   truePeak?: boolean;
   /**
-   * Requested true-peak oversampling factor in `[0, 16]`; the meter resolves 2
-   * to 2x, 8..16 to 8x, and any other value to 4x. `0` selects the library default (4x).
+   * True-peak oversampling factor: `4` (the ITU-R BS.1770-4 minimum) or `8`.
+   * Omitted selects 4x; any other value is refused.
    */
   truePeakOversample?: number;
 }
@@ -282,7 +282,7 @@ export class Mixer {
    * when metering was off.
    *
    * @param enabled - Whether to meter the master output.
-   * @param truePeakOversample - 0 (= 4x) or a power of two in [1, 16].
+   * @param truePeakOversample - `4` or `8`; any other value throws a RangeError.
    */
   configureMeter(enabled: boolean, truePeakOversample = 4): void {
     this.mixer.configureMeter(enabled, truePeakOversample);
@@ -376,7 +376,7 @@ export class Mixer {
    * about 1.4 MB per strip at 48 kHz). Marks the routing graph dirty; call
    * {@link compile} (or {@link processStereo}) to rebuild.
    *
-   * @throws If the id is already taken, or `truePeakOversample` is outside `[0, 16]`
+   * @throws If the id is already taken, or `truePeakOversample` is neither 4 nor 8
    */
   addStrip(id: string, metering: StripMeteringOptions = {}): void {
     this.mixer.addStrip(id, metering);
@@ -814,10 +814,11 @@ export class Mixer {
   }
 
   /**
-   * Marks the end of the signal for every strip and bus meter. The true-peak
-   * reading runs one reconstruction-filter group delay behind the block; this
-   * reads that pending stretch against silence and folds it into the
-   * snapshots, so `truePeakDb` covers the whole signal. Call it after the last
+   * Marks the end of the signal for every strip, bus and master-output meter
+   * (see {@link configureMeter}). The true-peak reading runs one
+   * reconstruction-filter group delay behind the block; this reads that pending
+   * stretch against silence and folds it into the snapshots, so `truePeakDb`
+   * covers the whole signal. Call it after the last
    * block of an offline render; a later process call starts a new signal.
    */
   flushMeters(): void {

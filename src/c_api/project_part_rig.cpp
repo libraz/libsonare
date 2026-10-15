@@ -38,11 +38,10 @@ SonareError sonare_project_set_part_rig(SonareProject* project, uint32_t destina
                                         uint8_t part, int mode, const char* inserts_json) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || mode < SONARE_PART_RIG_BANK || mode > SONARE_PART_RIG_CHAIN) {
+  midi::PartRig rig;
+  if (!project || !ordinal_to_enum(mode, SONARE_PART_RIG_BANK, SONARE_PART_RIG_CHAIN, &rig.mode)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  midi::PartRig rig;
-  rig.mode = static_cast<midi::PartRigMode>(mode);
   if ((rig.mode == midi::PartRigMode::kChain) != (inserts_json != nullptr)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }

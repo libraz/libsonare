@@ -171,11 +171,13 @@ SonareError sonare_project_import_external_stems(SonareProject* project,
   size_t total_samples = 0;
   for (size_t i = 0; i < request->stem_count; ++i) {
     const SonareExternalStemDesc& desc = request->stems[i];
-    const size_t channels = channel_count(desc.layout);
+    sonare::arrangement::ExternalSeparatedStemLayout layout{};
     if (desc.name == nullptr || desc.planar_samples == nullptr || desc.frame_count <= 0 ||
-        channels == 0) {
+        !ordinal_to_enum(desc.layout, SONARE_EXTERNAL_STEM_MONO, SONARE_EXTERNAL_STEM_STEREO,
+                         &layout)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
+    const size_t channels = channel_count(desc.layout);
     const size_t frames = static_cast<size_t>(desc.frame_count);
     if (frames > sonare::resource::kMaxOfflineAudioSamples / channels ||
         total_samples > sonare::resource::kMaxOfflineAudioSamples - frames * channels) {
@@ -184,7 +186,7 @@ SonareError sonare_project_import_external_stems(SonareProject* project,
     sonare::arrangement::ExternalSeparatedStem stem;
     stem.name = desc.name;
     if (desc.role != nullptr) stem.role = std::string(desc.role);
-    stem.layout = static_cast<sonare::arrangement::ExternalSeparatedStemLayout>(desc.layout);
+    stem.layout = layout;
     stem.start_frame = desc.start_frame;
     stem.planar_samples.reserve(channels);
     for (size_t channel = 0; channel < channels; ++channel) {

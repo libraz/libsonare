@@ -195,7 +195,8 @@ SonareError sonare_engine_stop(SonareRealtimeEngine* engine, int64_t render_fram
 SonareError sonare_engine_seek_sample(SonareRealtimeEngine* engine, int64_t timeline_sample,
                                       int64_t render_frame) {
   SONARE_C_API_ENTRY;
-  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  // A negative position is refused, not clamped onto the timeline start.
+  if (!engine || timeline_sample < 0) return SONARE_ERROR_INVALID_PARAMETER;
   rt::Command command{};
   command.type = rt::CommandType::kTransportSeekSample;
   command.sample_time = render_frame;
@@ -366,7 +367,7 @@ SonareError sonare_engine_add_parameter(SonareRealtimeEngine* engine,
   }
   // Reject an out-of-range default curve ordinal instead of silently clamping,
   // matching the automation-lane path and the other surfaces.
-  if (info->default_curve < 0 || info->default_curve > 3) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!valid_c_enum(info->default_curve, 0, 3)) return SONARE_ERROR_INVALID_PARAMETER;
   if (sonare::engine::RealtimeEngine::parameter_target_reserved(info->id)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -634,8 +635,8 @@ SonareError sonare_engine_metronome(SonareRealtimeEngine* engine,
 SonareError sonare_engine_count_in_end_sample(SonareRealtimeEngine* engine, int64_t start_sample,
                                               int bars, int64_t* out_sample) {
   SONARE_C_API_ENTRY;
-  if (!engine || !out_sample || start_sample < 0 || bars <= 0)
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (!engine || !out_sample || start_sample < 0) return SONARE_ERROR_INVALID_PARAMETER;
+  // bars <= 0 counts nothing and answers start_sample, as the core does.
   *out_sample = engine->engine.count_in_end_sample(start_sample, bars);
   return SONARE_OK;
 }

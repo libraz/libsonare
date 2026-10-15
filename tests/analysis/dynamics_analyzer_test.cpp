@@ -349,3 +349,46 @@ TEST_CASE("the dynamics analyzer refuses audio it cannot measure", "[dynamics_an
     REQUIRE(d.peak_db > d.rms_db);
   }
 }
+
+TEST_CASE("DynamicsAnalyzer does not call silence compressed", "[dynamics_analyzer][evidence]") {
+  const Audio silence = Audio::from_vector(std::vector<float>(22050 * 2, 0.0f), 22050);
+  DynamicsAnalyzer analyzer(silence);
+  CHECK_FALSE(analyzer.is_compressed());
+  CHECK(analyzer.crest_factor() == 0.0f);
+  CHECK(analyzer.dynamic_range_db() == 0.0f);
+
+  // A non-silent flat signal is still read as compressed.
+  const Audio flat = Audio::from_vector(std::vector<float>(22050 * 2, 0.5f), 22050);
+  CHECK(DynamicsAnalyzer(flat).is_compressed());
+}
+
+TEST_CASE("DynamicsAnalyzer bounds an oversize window before converting it",
+          "[dynamics_analyzer]") {
+  std::vector<float> samples(22050 * 2);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    samples[i] = 0.5f * std::sin(constants::kTwoPi * 440.0f * static_cast<float>(i) / 22050.0f) *
+                 (i < samples.size() / 2 ? 1.0f : 0.1f);
+  }
+  const Audio audio = Audio::from_vector(samples, 22050);
+
+  // Any window past the buffer takes the same quarter-buffer fallback.
+  DynamicsConfig longer;
+  longer.window_sec = 10.0f;
+  const DynamicsAnalyzer reference(audio, longer);
+  for (float window_sec : {1.0e6f, 3.0e38f, std::numeric_limits<float>::max()}) {
+    DynamicsConfig config;
+    config.window_sec = window_sec;
+    const DynamicsAnalyzer analyzer(audio, config);
+    INFO("window_sec " << window_sec);
+    CHECK(analyzer.loudness_curve().rms_db == reference.loudness_curve().rms_db);
+    CHECK(analyzer.dynamic_range_db() == reference.dynamic_range_db());
+  }
+
+  for (float window_sec : {0.0f, -1.0f, std::numeric_limits<float>::quiet_NaN(),
+                           std::numeric_limits<float>::infinity()}) {
+    DynamicsConfig config;
+    config.window_sec = window_sec;
+    INFO("window_sec " << window_sec);
+    CHECK_THROWS_AS(DynamicsAnalyzer(audio, config), SonareException);
+  }
+}

@@ -321,7 +321,7 @@ TEST_CASE("Absolute mode refuses a factor the warp cannot reach and names the ra
   config.formant_factor = 1.0f;
   REQUIRE_THROWS_AS(VoiceChanger(config).process(audio), sonare::SonareException);
 
-  // The same request is accepted in relative mode, where the factor is clamped instead.
+  // The same request is accepted in relative mode, where factor 1 is itself the warp.
   config.formant_mode = FormantMode::Relative;
   REQUIRE_NOTHROW(VoiceChanger(config).process(audio));
 
@@ -329,6 +329,48 @@ TEST_CASE("Absolute mode refuses a factor the warp cannot reach and names the ra
   config.pitch_semitones = 0.0f;
   config.formant_factor = std::numeric_limits<float>::quiet_NaN();
   REQUIRE_THROWS_AS(VoiceChanger(config).process(audio), sonare::SonareException);
+}
+
+TEST_CASE("Both formant modes refuse a factor outside the warp's range instead of clamping it",
+          "[voice_changer][formant_mode]") {
+  constexpr int sample_rate = 22050;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(sine(220.0f, sample_rate, 4096), sample_rate);
+
+  for (const FormantMode mode : {FormantMode::Relative, FormantMode::Absolute}) {
+    VoiceChangerConfig config;
+    config.formant_mode = mode;
+    for (const float factor : {0.0f, -2.0f, 10.0f, std::numeric_limits<float>::quiet_NaN(),
+                               std::numeric_limits<float>::infinity(), 0.5f, 1.7f}) {
+      CAPTURE(formant_mode_name(mode), factor);
+      config.formant_factor = factor;
+      try {
+        (void)VoiceChanger(config).process(audio);
+        FAIL("expected a refusal");
+      } catch (const sonare::SonareException& e) {
+        REQUIRE(e.code() == sonare::ErrorCode::InvalidParameter);
+        REQUIRE_THAT(std::string(e.what()), ContainsSubstring("formant factor"));
+      }
+    }
+    // The range's own ends are applied, not refused.
+    for (const float factor : {sonare::kFormantFactorMin, sonare::kFormantFactorMax}) {
+      CAPTURE(formant_mode_name(mode), factor);
+      config.formant_factor = factor;
+      REQUIRE(VoiceChanger(config).process(audio).size() == audio.size());
+    }
+  }
+
+  // The C ABI's positional call is relative mode and inherits the refusal.
+  const std::vector<float> samples(audio.data(), audio.data() + audio.size());
+  for (const float factor : {0.0f, -2.0f, 10.0f, std::numeric_limits<float>::quiet_NaN()}) {
+    CAPTURE(factor);
+    float* out = nullptr;
+    size_t out_length = 0;
+    REQUIRE(sonare_voice_change(samples.data(), samples.size(), sample_rate, 3.0f, factor, &out,
+                                &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
+  }
 }
 
 TEST_CASE("Formant mode names parse and print", "[voice_changer][formant_mode]") {

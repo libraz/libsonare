@@ -26,6 +26,17 @@ struct PitchShiftPlan {
   std::size_t stretched_samples = 0;
 };
 
+/// Refusal message for a failed plan, shared by every caller that reports one.
+inline constexpr const char* kPitchShiftPlanError =
+    "pitch_shift: needs non-empty input, a finite positive ratio, a shifted rate "
+    "sample_rate * ratio from 1000 Hz to INT_MAX, and a stretched intermediate within the "
+    "audio buffer limit";
+
+/// @brief Validates a pitch shift by @p ratio without allocating.
+/// @details Refuses empty or oversized input, a non-finite or non-positive ratio, a
+///          shifted rate round(sample_rate * ratio) below 1000 Hz or beyond INT_MAX,
+///          and a stretched intermediate past kMaxAudioBufferSize. There is no
+///          other upper bound on the sample rate or the upward ratio.
 bool make_pitch_shift_ratio_plan(std::size_t input_samples, int sample_rate, float ratio,
                                  PitchShiftPlan* out) noexcept;
 bool make_pitch_shift_plan(std::size_t input_samples, int sample_rate, float semitones,

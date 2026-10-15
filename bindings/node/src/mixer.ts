@@ -167,8 +167,8 @@ export interface StripMeteringOptions {
   /** Inter-sample (true) peak measurement. Default `true`. */
   truePeak?: boolean;
   /**
-   * Requested true-peak oversampling factor in `[0, 16]`; the meter resolves 2
-   * to 2x, 8..16 to 8x, and any other value to 4x. `0` selects the library default (4x).
+   * True-peak oversampling factor: 4 or 8. `0` selects the library default (4x);
+   * any other value is refused.
    */
   truePeakOversample?: number;
 }
@@ -311,7 +311,7 @@ export class Mixer {
    *
    * Marks the routing graph dirty; call {@link compile} (or process) to rebuild.
    *
-   * @throws If the id is already taken, or `truePeakOversample` is outside `[0, 16]`
+   * @throws If the id is already taken, or `truePeakOversample` is not 0 (default), 4 or 8
    */
   addStrip(id: string, metering?: StripMeteringOptions): void {
     this.native.addStrip(id, metering);

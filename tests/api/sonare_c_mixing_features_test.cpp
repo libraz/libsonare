@@ -4,6 +4,13 @@
 #include "sonare_c_test_helpers.h"
 
 #if defined(SONARE_WITH_MIXING)
+#include <cstring>
+#include <vector>
+
+#include "c_api/mixing_internal.h"
+#endif
+
+#if defined(SONARE_WITH_MIXING)
 TEST_CASE("sonare_strip_schedule_send_automation error mapping", "[c_api][mixing]") {
   SonareMixer* mixer = sonare_mixer_create(48000, 512);
   REQUIRE(mixer != nullptr);
@@ -54,6 +61,38 @@ TEST_CASE("sonare_mixer_compile success leaves last_error empty for unpatched ex
   REQUIRE(sonare_mixer_compile(mixer) == SONARE_OK);
   REQUIRE(std::string(sonare_last_error_message()) == "");
 
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("sonare_mixer_process_stereo leaves the caller's output untouched when compile fails",
+          "[c_api][mixing]") {
+  constexpr size_t kBlock = 64;
+  SonareMixer* mixer = sonare_mixer_create(48000, static_cast<int>(kBlock));
+  REQUIRE(mixer != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "src") != nullptr);
+  std::vector<float> input(kBlock, 0.25f);
+  const float* in[] = {input.data()};
+  std::vector<float> left(kBlock, 0.0f);
+  std::vector<float> right(kBlock, 0.0f);
+  REQUIRE(sonare_mixer_process_stereo(mixer, in, in, 1, left.data(), right.data(), kBlock) ==
+          SONARE_OK);
+
+  // A 5.1 render width over the implicit stereo master makes the lazy compile throw.
+  sonare_c_mixing_detail::set_output_channels(mixer, 6);
+  for (size_t i = 0; i < kBlock; ++i) {
+    left[i] = 0.5f + static_cast<float>(i);
+    right[i] = -0.5f - static_cast<float>(i);
+  }
+  const std::vector<float> left_before = left;
+  const std::vector<float> right_before = right;
+  REQUIRE(sonare_mixer_process_stereo(mixer, in, in, 1, left.data(), right.data(), kBlock) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::memcmp(left.data(), left_before.data(), kBlock * sizeof(float)) == 0);
+  REQUIRE(std::memcmp(right.data(), right_before.data(), kBlock * sizeof(float)) == 0);
+  REQUIRE(sonare_mixer_drain_tail_stereo(mixer, left.data(), right.data(), kBlock) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::memcmp(left.data(), left_before.data(), kBlock * sizeof(float)) == 0);
+  REQUIRE(std::memcmp(right.data(), right_before.data(), kBlock * sizeof(float)) == 0);
   sonare_mixer_destroy(mixer);
 }
 #endif  // defined(SONARE_WITH_MIXING)
@@ -306,11 +345,12 @@ TEST_CASE("segment C APIs return owned matrices and index vectors", "[c_api][fea
   SonareSegmentMatrix lag{};
   REQUIRE(sonare_segment_recurrence_to_lag(recurrence.values, recurrence.rows, 1, &lag) ==
           SONARE_OK);
-  REQUIRE(lag.rows == 3);
-  REQUIRE(lag.cols == 5);
+  // Lag-by-time, padded: 2n lag rows by n frames.
+  REQUIRE(lag.rows == 6);
+  REQUIRE(lag.cols == 3);
 
   SonareSegmentMatrix restored{};
-  REQUIRE(sonare_segment_lag_to_recurrence(lag.values, lag.rows, lag.cols, &restored) == SONARE_OK);
+  REQUIRE(sonare_segment_lag_to_recurrence(lag.values, lag.cols, lag.rows, &restored) == SONARE_OK);
   REQUIRE(restored.rows == 3);
   REQUIRE(restored.cols == 3);
   sonare_free_segment_matrix(&restored);

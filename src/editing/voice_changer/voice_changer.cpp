@@ -49,10 +49,19 @@ Audio VoiceChanger::process(const Audio& audio) const {
 
   // The warp factor is resolved, and an unreachable absolute request refused, before the
   // pitch shift is paid for.
+  SONARE_CHECK_MSG(std::isfinite(config_.formant_factor), ErrorCode::InvalidParameter,
+                   "formant factor must be finite");
   float warp_factor = config_.formant_factor;
+  if (config_.formant_mode == FormantMode::Relative &&
+      !formant_factor_in_range(config_.formant_factor)) {
+    char text[160];
+    std::snprintf(text, sizeof(text),
+                  "relative formant mode: formant factor must be in [%.2f, %.2f], got %.4g",
+                  static_cast<double>(kFormantFactorMin), static_cast<double>(kFormantFactorMax),
+                  static_cast<double>(config_.formant_factor));
+    throw SonareException(ErrorCode::InvalidParameter, text);
+  }
   if (config_.formant_mode == FormantMode::Absolute) {
-    SONARE_CHECK_MSG(std::isfinite(config_.formant_factor), ErrorCode::InvalidParameter,
-                     "formant factor must be finite");
     double lo = 0.0;
     double hi = 0.0;
     reachable_formant_factor_range(config_.pitch_semitones, &lo, &hi);

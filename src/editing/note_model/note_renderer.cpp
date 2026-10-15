@@ -331,6 +331,9 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
       FormantWarpConfig warp_config;
       // The warp takes a frequency ratio for what the edit states in semitones.
       warp_config.factor = std::pow(2.0f, note.edit.formant_shift_semitones / kSemitonesPerOctave);
+      // Frame and LPC order follow the rate, so one edit moves formants alike at every rate.
+      warp_config.lpc_order = 0;
+      warp_config.frame_in_time = true;
       staged = FormantWarp(warp_config).process(staged);
     }
     std::vector<float> segment(staged.begin(), staged.end());

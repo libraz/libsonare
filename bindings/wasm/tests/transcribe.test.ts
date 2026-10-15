@@ -8,9 +8,9 @@
  * chain is monophonic, and a positive claim about WHICH notes came back needs
  * notes that are unambiguous to the ear as well as to the detector.
  *
- * The note numbers, the shared-tick pair and the reference shift below are the
- * library's own measured answers for that fixture, not values read off a run of
- * this file after the fact.
+ * The note numbers and the reference shift below are the library's own measured
+ * answers for that fixture, not values read off a run of this file after the
+ * fact. The shared-tick pair comes from a separate legato fixture built for it.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -87,6 +87,25 @@ function maxSimultaneous(result: ReturnType<typeof transcribe>): number {
   return most;
 }
 
+/**
+ * C4, E4, G4 as plain sines of `noteSeconds` each, back to back with 5 ms raised-cosine edges:
+ * the legato construction the C-ABI transcribe test pins. Each note's offset is the next one's
+ * onset, so the two land on one tick at every input rate.
+ */
+function legato(): Float32Array {
+  const n = Math.round(sampleRate * noteSeconds);
+  const edge = 0.005 * sampleRate;
+  const out = new Float32Array(n * toneHz.length);
+  toneHz.forEach((hz, note) => {
+    for (let i = 0; i < n; i++) {
+      const ramp = Math.min(1, i / edge, (n - 1 - i) / edge);
+      const envelope = 0.5 - 0.5 * Math.cos(Math.PI * ramp);
+      out[note * n + i] = 0.5 * envelope * Math.sin((2 * Math.PI * hz * i) / sampleRate);
+    }
+  });
+  return out;
+}
+
 function melody(): Float32Array {
   const parts = toneHz.map((hz) => richTone(hz, noteSeconds));
   const out = new Float32Array(parts.reduce((total, part) => total + part.length, 0));
@@ -161,13 +180,17 @@ describe('WASM transcribe', () => {
 
     // A note-off sharing a tick with the next note's on has to come first, or a
     // consumer playing the events in order starts a legato repeat of the same
-    // pitch and immediately stops it. The pair below is what makes the check
-    // mean anything: without one, every ordering passes.
-    const sharedTicks = decoded.filter((event, i) => i > 0 && event.ppq === decoded[i - 1].ppq);
+    // pitch and immediately stops it. The legato fixture supplies the pairs that
+    // make the check mean anything: without one, every ordering passes.
+    const joined = transcribe({ samples: legato(), sampleRate, tempoBpm: 120 }).events.map(decode);
+    expect(joined.filter((event) => event.status === NOTE_ON).map((event) => event.note)).toEqual(
+      expectedNotes,
+    );
+    const sharedTicks = joined.filter((event, i) => i > 0 && event.ppq === joined[i - 1].ppq);
     expect(sharedTicks.length).toBeGreaterThan(0);
     for (const event of sharedTicks) {
       expect(event.status).toBe(NOTE_ON);
-      expect(decoded[decoded.indexOf(event) - 1].status).toBe(NOTE_OFF);
+      expect(joined[joined.indexOf(event) - 1].status).toBe(NOTE_OFF);
     }
 
     // Every note-on is closed before the next one opens.

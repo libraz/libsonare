@@ -474,22 +474,27 @@ TEST_CASE("sonare_audio_file_channel_count reports source channels", "[c_api][au
 }
 #endif
 
-TEST_CASE("C pitch shift rejects unsupported expansion before allocating",
+TEST_CASE("C pitch shift rejects an unsupported shifted rate before allocating",
           "[c_api][pitch_shift][resource_limit]") {
   const float samples[4] = {0.0f, 0.25f, -0.25f, 0.0f};
-  float* out = nullptr;
-  size_t out_length = 0;
-  SonareError error = SONARE_OK;
-  size_t allocations = 999;
-  {
-    sonare::test::AllocationGuard guard;
-    error = sonare_pitch_shift(samples, 4, 48000, 48.0f, &out, &out_length);
-    allocations = guard.count();
+  // -120 st puts the shifted rate near 47 Hz, under the 1000 Hz floor; +400 st puts it past
+  // INT_MAX. Both are refused by the plan, before any buffer is made.
+  for (const float semitones : {-120.0f, 400.0f}) {
+    CAPTURE(semitones);
+    float* out = nullptr;
+    size_t out_length = 0;
+    SonareError error = SONARE_OK;
+    size_t allocations = 999;
+    {
+      sonare::test::AllocationGuard guard;
+      error = sonare_pitch_shift(samples, 4, 48000, semitones, &out, &out_length);
+      allocations = guard.count();
+    }
+    REQUIRE(error == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(allocations == 0);
+    REQUIRE(out == nullptr);
+    REQUIRE(out_length == 0);
   }
-  REQUIRE(error == SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(allocations == 0);
-  REQUIRE(out == nullptr);
-  REQUIRE(out_length == 0);
 }
 
 TEST_CASE("C VQT accepts NaN auto gamma and rejects infinity", "[c_api][vqt]") {

@@ -368,11 +368,11 @@ bool valid_next_id(uint32_t id) noexcept {
 SonareError clip_fade_from_desc(const SonareProjectClipFade* desc, arr::ClipFade* out) {
   if (desc == nullptr || out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   if (!finite_non_negative(desc->length_ppq)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (desc->curve > static_cast<uint32_t>(arr::FadeCurve::kLogarithmic)) {
+  if (!ordinal_to_enum(desc->curve, 0, static_cast<int>(arr::FadeCurve::kLogarithmic),
+                       &out->curve)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   out->length_ppq = desc->length_ppq;
-  out->curve = static_cast<arr::FadeCurve>(desc->curve);
   return SONARE_OK;
 }
 
@@ -1018,8 +1018,9 @@ SonareError sonare_project_set_clip_loop(SonareProject* project, uint32_t clip_i
                                          double loop_length_ppq, double loop_crossfade_ppq) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || clip_id == 0 || loop_mode < SONARE_LOOP_MODE_OFF ||
-      loop_mode > SONARE_LOOP_MODE_LOOP) {
+  arr::LoopMode mode{};
+  if (!project || clip_id == 0 ||
+      !ordinal_to_enum(loop_mode, SONARE_LOOP_MODE_OFF, SONARE_LOOP_MODE_LOOP, &mode)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // Under LOOP, a length of 0 means "loop the entire clip" (resolved from the
@@ -1034,8 +1035,8 @@ SonareError sonare_project_set_clip_loop(SonareProject* project, uint32_t clip_i
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
-  auto command = std::make_unique<arr::SetClipLoop>(clip_id, static_cast<arr::LoopMode>(loop_mode),
-                                                    loop_length_ppq, loop_crossfade_ppq);
+  auto command =
+      std::make_unique<arr::SetClipLoop>(clip_id, mode, loop_length_ppq, loop_crossfade_ppq);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   return SONARE_OK;
   SONARE_C_CATCH

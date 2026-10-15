@@ -570,7 +570,8 @@ typedef struct {
                       voice starts. */
   float depth;     /* destination units at full source deflection; see
                       `destination` above for the per-destination unit and
-                      clamp */
+                      clamp. Non-finite or beyond +-9600 is refused. An
+                      ordinal outside either list above is refused too. */
 } SonareSynthModRouting;
 
 #define SONARE_SYNTH_PATCH_MOD_ROUTINGS 8

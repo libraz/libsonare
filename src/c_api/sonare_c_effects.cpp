@@ -633,15 +633,15 @@ SonareError sonare_spectral_edit(const float* samples, size_t length, int sample
 
   std::vector<SpectralRegionOp> core_ops(n_ops);
   for (size_t i = 0; i < n_ops; ++i) {
-    if (ops[i].mode < SONARE_SPECTRAL_EDIT_MODE_GAIN ||
-        ops[i].mode > SONARE_SPECTRAL_EDIT_MODE_HEAL)
+    if (!ordinal_to_enum(ops[i].mode, SONARE_SPECTRAL_EDIT_MODE_GAIN,
+                         SONARE_SPECTRAL_EDIT_MODE_HEAL, &core_ops[i].mode)) {
       return SONARE_ERROR_INVALID_PARAMETER;
+    }
     core_ops[i].start_sample = ops[i].start_sample;
     core_ops[i].end_sample = ops[i].end_sample;
     core_ops[i].low_hz = ops[i].low_hz;
     core_ops[i].high_hz = ops[i].high_hz;
     core_ops[i].gain_db = ops[i].gain_db;
-    core_ops[i].mode = static_cast<SpectralEditMode>(ops[i].mode);
   }
 
   return run_mono_offline(samples, length, sample_rate, out, out_length,

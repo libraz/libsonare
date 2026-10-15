@@ -33,6 +33,13 @@ std::vector<float> compute_onset_strength(const MelSpectrogram& mel_spec,
 std::vector<float> center_onset_strength(std::vector<float> onset_env, int n_fft, int hop_length,
                                          bool center);
 
+/// @brief Aligns an onset envelope with the frame times of the STFT @p geometry produced it.
+/// @details The shift follows the window: the default window (`win_length` 0) floors half of
+///          `n_fft` to frames as the integer overload does; an explicit, rate-converted window
+///          rounds half of `win_length`.
+std::vector<float> center_onset_strength(std::vector<float> onset_env, const StftConfig& geometry,
+                                         bool center);
+
 /// @brief Computes onset strength envelope from audio.
 /// @param audio Input audio
 /// @param mel_config Mel spectrogram configuration

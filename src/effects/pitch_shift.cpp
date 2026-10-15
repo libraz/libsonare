@@ -24,10 +24,10 @@ bool make_pitch_shift_ratio_plan(std::size_t input_samples, int sample_rate, flo
 
   const long double effective_sr_wide =
       std::round(static_cast<long double>(sample_rate) * static_cast<long double>(ratio));
+  // The resampler takes any positive rate; the ceiling is only the int the rate is carried in.
   constexpr int kMinEffectiveSr = 1000;
-  constexpr int kMaxEffectiveSr = 192000;
   if (!std::isfinite(effective_sr_wide) || effective_sr_wide < kMinEffectiveSr ||
-      effective_sr_wide > kMaxEffectiveSr) {
+      effective_sr_wide > static_cast<long double>(INT_MAX)) {
     return false;
   }
 
@@ -62,15 +62,15 @@ Audio resample_pitch_shifted(const Audio& stretched, const PitchShiftPlan& plan,
 
 Audio pitch_shift(const Audio& audio, float semitones, const PitchShiftConfig& config) {
   PitchShiftPlan plan;
-  SONARE_CHECK(make_pitch_shift_plan(audio.size(), audio.sample_rate(), semitones, &plan),
-               ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(make_pitch_shift_plan(audio.size(), audio.sample_rate(), semitones, &plan),
+                   ErrorCode::InvalidParameter, kPitchShiftPlanError);
   return pitch_shift_ratio(audio, plan.ratio, config);
 }
 
 Audio pitch_shift_ratio(const Audio& audio, float ratio, const PitchShiftConfig& config) {
   PitchShiftPlan plan;
-  SONARE_CHECK(make_pitch_shift_ratio_plan(audio.size(), audio.sample_rate(), ratio, &plan),
-               ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(make_pitch_shift_ratio_plan(audio.size(), audio.sample_rate(), ratio, &plan),
+                   ErrorCode::InvalidParameter, kPitchShiftPlanError);
 
   if (config.backend == StretchBackend::NativeSpectral) {
     return native_spectral_pitch_shift_ratio(audio, ratio, config.n_fft, config.hop_length);
@@ -93,9 +93,7 @@ Audio pitch_shift_ratio(const Audio& audio, float ratio, const PitchShiftConfig&
 
   /// Step 2: Resample the stretched signal (treated as if sampled at sr*ratio)
   /// back to the original sample rate. Length: (N*ratio) * sr/(sr*ratio) = N,
-  /// up to the rounding the helper trims away. An effective rate outside the
-  /// resampler's range was refused by the plan rather than clamped, which
-  /// would change the ratio.
+  /// up to the rounding the helper trims away.
   return resample_pitch_shifted(stretched, plan, audio);
 }
 

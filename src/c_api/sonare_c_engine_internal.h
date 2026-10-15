@@ -152,18 +152,9 @@ static_assert(static_cast<int>(sonare::automation::CurveType::Hold) == 2,
 static_assert(static_cast<int>(sonare::automation::CurveType::SCurve) == 3,
               "automation::CurveType::SCurve must be ordinal 3");
 
+/// For an ordinal the caller has already admitted (0..3).
 inline sonare::automation::CurveType curve_from_int(int curve) {
-  switch (curve) {
-    case 1:
-      return sonare::automation::CurveType::Exponential;
-    case 2:
-      return sonare::automation::CurveType::Hold;
-    case 3:
-      return sonare::automation::CurveType::SCurve;
-    case 0:
-    default:
-      return sonare::automation::CurveType::Linear;
-  }
+  return sonare_c_detail::admitted_ordinal_to_enum<sonare::automation::CurveType>(curve);
 }
 
 inline int curve_to_int(sonare::automation::CurveType curve) { return static_cast<int>(curve); }

@@ -272,6 +272,15 @@ inline bool render_timeline(const arr::CompiledTimeline& timeline,
   return true;
 }
 
+// Reads @p hosted's latency and release tail for an offline bounce. With @p replay
+// the timeline's events for its destination are fed to it first, so a tail that
+// follows control events is the one this arrangement asks for. Returns false when
+// the replay refuses an event. Every exit, a refusal or an exception included,
+// leaves a replayed instrument in its reset() state.
+bool probe_hosted_latency_tail(const arr::CompiledTimeline& timeline,
+                               const HostedInstrument& hosted, bool replay, int* out_latency,
+                               int* out_tail);
+
 }  // namespace sonare_c_bounce_detail
 
 #endif  // SONARE_WITH_ARRANGEMENT

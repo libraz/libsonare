@@ -213,6 +213,22 @@ float DattorroReverb::damping_coefficient(double corner_hz, double sample_rate) 
   return static_cast<float>(1.0 - b);
 }
 
+double DattorroReverb::damping_corner_hz(double coefficient, double sample_rate) noexcept {
+  // |H(w)|^2 = 1/2 for y += a (x - y) gives cos(w) = (1 + b^2 - 2a^2) / (2b), b = 1 - a.
+  const double b = 1.0 - coefficient;
+  if (!(b > 0.0)) return 0.49 * sample_rate;
+  const double c = (1.0 + b * b - 2.0 * coefficient * coefficient) / (2.0 * b);
+  return std::acos(std::clamp(c, -1.0, 1.0)) * sample_rate / kTwoPiD;
+}
+
+void DattorroReverb::update_damping_coefficient() noexcept {
+  const double corner_hz = config_.damping_hz > 0.0f
+                               ? static_cast<double>(config_.damping_hz)
+                               : damping_corner_hz(std::clamp(config_.damping, 0.0f, 1.0f) * 0.4f,
+                                                   kDampingReferenceSampleRate);
+  damp_d_ = damping_coefficient(corner_hz, sample_rate_);
+}
+
 DattorroReverb::DattorroReverb(DattorroReverbConfig config) : config_(config) {
   if (!std::isfinite(config_.pre_delay_samples)) config_.pre_delay_samples = 0.0f;
   if (!std::isfinite(config_.mod_depth_samples)) config_.mod_depth_samples = 0.0f;
@@ -305,6 +321,7 @@ void DattorroReverb::prepare(double sample_rate, int) {
   update_character_geometry();
 
   lfo_inc_ = static_cast<float>(kTwoPiD * config_.mod_rate_hz / sr);
+  update_damping_coefficient();
 
   reset();
 }
@@ -321,9 +338,7 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
   float* right = stereo ? channels[1] : channels[0];
 
   const float decay = std::clamp(config_.decay, 0.0f, 0.98f);
-  const float damp_d = config_.damping_hz > 0.0f
-                           ? damping_coefficient(config_.damping_hz, sample_rate_)
-                           : std::clamp(config_.damping, 0.0f, 1.0f) * 0.4f;
+  const float damp_d = damp_d_;
   // Block-rate dry/wet: smoothed across blocks by the engine parameter slot
   // smoother, not per-sample (see Chorus::process for the rationale).
   const common::MixGains mix =
@@ -530,8 +545,8 @@ bool DattorroReverb::set_parameter_impl(unsigned int param_id, float value) {
       config_.decay = value;
       return true;
     case 1:
-      // process() clamps damping to [0, 1] and maps it to the one-pole coeff.
       config_.damping = value;
+      update_damping_coefficient();
       return true;
     case 2:
       config_.dry_wet = value;
@@ -556,6 +571,7 @@ bool DattorroReverb::set_parameter_impl(unsigned int param_id, float value) {
     }
     case 5:
       config_.damping_hz = std::max(0.0f, value);
+      update_damping_coefficient();
       return true;
     case 6:
       config_.gate_threshold_db = value;

@@ -30,8 +30,10 @@ inline constexpr int kDattorroMaxCharacter = 6;
 inline constexpr float kDattorroGateOffDb = sonare::constants::kFloorDb;
 
 struct DattorroReverbConfig {
-  float decay = 0.5f;              ///< Tank feedback / tail length, clamped to [0, 0.98].
-  float damping = 0.5f;            ///< HF damping, mapped to one-pole d = damping * 0.4.
+  float decay = 0.5f;  ///< Tank feedback / tail length, clamped to [0, 0.98].
+  /// HF damping, [0, 1]: the one-pole d = damping * 0.4 at kDampingReferenceSampleRate. Held as
+  /// that filter's half-power corner in Hz, so the corner stays put at every working rate.
+  float damping = 0.5f;
   float dry_wet = 0.35f;           ///< Wet mix amount, [0, 1].
   float mod_rate_hz = 0.5f;        ///< Tank allpass modulation rate.
   float mod_depth_samples = 6.0f;  ///< Modulation depth (reference rate 29761 Hz), at most 672.
@@ -61,6 +63,9 @@ class DattorroReverb : public rt::ProcessorBase {
   /// Pre-delay / modulation depth in DattorroReverbConfig are expressed at this
   /// rate and rescaled to the working sample rate in prepare().
   static constexpr double kReferenceSampleRate = 29761.0;
+  /// Rate at which `damping` states its coefficient: the default working rate, at which the
+  /// tank was voiced and its decay measured.
+  static constexpr double kDampingReferenceSampleRate = sonare::constants::kDefaultDawSampleRate;
 
   explicit DattorroReverb(DattorroReverbConfig config = {});
 
@@ -71,7 +76,7 @@ class DattorroReverb : public rt::ProcessorBase {
 
   // Automatable parameters:
   //   0 = decay (clamped to [0, 0.98] in process())
-  //   1 = damping (clamped to [0, 1] in process())
+  //   1 = damping (clamped to [0, 1]; rebuilds the coefficient at the working rate)
   //   2 = dry_wet (clamped to [0, 1] in process())
   //   3 = mod_rate_hz (recomputes the LFO increment in place)
   //   4 = mod_depth_samples, [0, 672] reference samples (the shorter modulated allpass);
@@ -88,6 +93,10 @@ class DattorroReverb : public rt::ProcessorBase {
   /// @brief One-pole coefficient `a` of `y += a * (x - y)` whose response is 3 dB down at
   ///        @p corner_hz when running at @p sample_rate.
   static float damping_coefficient(double corner_hz, double sample_rate) noexcept;
+
+  /// @brief Half-power corner in Hz of the one-pole coefficient @p coefficient at @p sample_rate;
+  ///        the inverse of @ref damping_coefficient.
+  static double damping_corner_hz(double coefficient, double sample_rate) noexcept;
 
  private:
   /// @brief Schroeder allpass: out = -g*in + buf[read]; buf[write] = in + g*out.
@@ -135,6 +144,8 @@ class DattorroReverb : public rt::ProcessorBase {
     float read_at(size_t offset) const;
   };
 
+  /// Builds the tank damping coefficient for the working rate from `damping` / `damping_hz`.
+  void update_damping_coefficient() noexcept;
   /// Applies the current pre-delay in the already allocated ring.
   void update_pre_delay_length() noexcept;
   /// Applies the current character's line lengths and output taps.
@@ -147,6 +158,7 @@ class DattorroReverb : public rt::ProcessorBase {
 
   DattorroReverbConfig config_{};
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
+  float damp_d_ = 0.2f;            ///< Tank one-pole coefficient at sample_rate_.
   float max_pre_delay_ms_ = 0.0f;  ///< largest pre-delay the prepared ring holds.
 
   // Stage 1 input diffusion.

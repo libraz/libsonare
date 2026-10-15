@@ -37,15 +37,11 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
     REQUIRE(f.good());
   }
 
-  SECTION("voice-change reports the formant factor the warp applied") {
-    // The warp resolves its factor into [0.55, 1.65] and 100 lands on the
-    // ceiling, so echoing the request made two invocations that produce
-    // byte-identical audio read as different settings.
+  SECTION("voice-change refuses a relative formant factor outside the warp's range") {
     auto [code, output] = exec_command(CLI + " voice-change --formant-factor 100 " + TEST_WAV +
                                        " -o " + TEST_OUT + " --json -q");
-    REQUIRE(code == 0);
-    REQUIRE_THAT(output, ContainsSubstring("\"formant_factor\": 1.64"));
-    REQUIRE_THAT(output, !ContainsSubstring("\"formant_factor\": 100"));
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("formant factor must be in [0.55, 1.65]"));
   }
 
   SECTION("voice-change preset rejects simple knob conflicts") {

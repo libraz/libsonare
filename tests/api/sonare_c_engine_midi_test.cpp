@@ -2,9 +2,15 @@
 /// @brief Engine C ABI MIDI input, built-in instrument and per-note dimensions.
 
 #include <functional>
+#include <string>
+#include <vector>
 
 #include "midi/ump.h"
 #include "sonare_c_engine_test_helpers.h"
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+#include "c_api/synth_patch_common.h"
+#endif
 
 TEST_CASE("sonare_engine MIDI CC binding drives engine parameter", "[c_api][engine]") {
   SonareRealtimeEngine* engine = nullptr;
@@ -1483,5 +1489,127 @@ TEST_CASE("sonare_engine input-source pushes report a full queue as out of memor
     CHECK(refused == SONARE_ERROR_OUT_OF_MEMORY);
     sonare_engine_destroy(engine);
   }
+}
+#endif
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("synth patch refuses an unknown routing ordinal, a bad depth or an unknown sample enum",
+          "[c_api][engine][synth_patch]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 32, 16) == SONARE_OK);
+
+  const auto base = [] {
+    SonareSynthPatch patch{};
+    patch.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+    patch.num_mod_routings = 1;
+    patch.mod_routings[0] = {1, 1, 100.0f};
+    return patch;
+  };
+  const auto refused = [&](const SonareSynthPatch& patch) {
+    sonare::midi::synth::NativeSynthConfig cfg;
+    const char* error = nullptr;
+    CHECK_FALSE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
+    CHECK(error != nullptr);
+    CHECK(sonare_engine_set_synth_instrument(engine, 1, &patch) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()).size() > 0);
+  };
+
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  for (int source : {-1, SONARE_SYNTH_MOD_SOURCE_COUNT, 99}) {
+    CAPTURE(source);
+    SonareSynthPatch patch = base();
+    patch.mod_routings[0].source = source;
+    refused(patch);
+  }
+  for (int destination : {-1, SONARE_SYNTH_MOD_DESTINATION_COUNT, 99}) {
+    CAPTURE(destination);
+    SonareSynthPatch patch = base();
+    patch.mod_routings[0].destination = destination;
+    refused(patch);
+  }
+  for (float depth : {nan, inf, -inf, 9601.0f, -9601.0f}) {
+    CAPTURE(depth);
+    SonareSynthPatch patch = base();
+    patch.mod_routings[0].depth = depth;
+    refused(patch);
+  }
+  // Refused whichever engine the patch selects, not only when the sample engine reads them.
+  for (int engine_mode : {SONARE_SYNTH_ENGINE_DEFAULT, SONARE_SYNTH_ENGINE_SAMPLE}) {
+    for (int value : {-1, SONARE_SAMPLE_LOOP_MODE_COUNT}) {
+      CAPTURE(engine_mode, value);
+      SonareSynthPatch patch = base();
+      patch.engine_mode = engine_mode;
+      patch.sample_loop = value;
+      refused(patch);
+    }
+    for (int value : {-1, SONARE_SAMPLE_KEY_TRACK_COUNT}) {
+      CAPTURE(engine_mode, value);
+      SonareSynthPatch patch = base();
+      patch.engine_mode = engine_mode;
+      patch.sample_key_track = value;
+      refused(patch);
+    }
+  }
+
+  // The edges of every range are applied exactly as given.
+  SonareSynthPatch patch = base();
+  patch.num_mod_routings = 2;
+  patch.mod_routings[0] = {SONARE_SYNTH_MOD_SOURCE_COUNT - 1,
+                           SONARE_SYNTH_MOD_DESTINATION_COUNT - 1, 9600.0f};
+  patch.mod_routings[1] = {1, 1, -9600.0f};
+  sonare::midi::synth::NativeSynthConfig cfg;
+  const char* error = nullptr;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
+  const auto& routes = cfg.patch.mod_matrix.routes;
+  CHECK(static_cast<int>(routes[0].source) == SONARE_SYNTH_MOD_SOURCE_COUNT - 1);
+  CHECK(static_cast<int>(routes[0].destination) == SONARE_SYNTH_MOD_DESTINATION_COUNT - 1);
+  CHECK(routes[0].depth == 9600.0f);
+  CHECK(static_cast<int>(routes[1].source) == 1);
+  CHECK(routes[1].depth == -9600.0f);
+  REQUIRE(sonare_engine_set_synth_instrument(engine, 1, &patch) == SONARE_OK);
+
+  SonareSynthPatch sample = base();
+  sample.engine_mode = SONARE_SYNTH_ENGINE_SAMPLE;
+  sample.sample_loop = SONARE_SAMPLE_LOOP_KEY_DOWN;
+  sample.sample_key_track = SONARE_SAMPLE_KEY_TRACK_OFF;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(sample, &cfg, &error));
+  CHECK(cfg.patch.sample.loop_override == 3);
+  CHECK_FALSE(cfg.patch.sample.key_track);
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_sample_bank_add_sample refuses a loop_mode outside SoundFont sampleModes",
+          "[c_api][sample_bank]") {
+  SonareSampleBank* bank = sonare_sample_bank_create();
+  REQUIRE(bank != nullptr);
+  const std::vector<float> pcm(4096, 0.25f);
+  size_t count = 0;
+  for (int loop_mode : {-1, 4, 7}) {
+    CAPTURE(loop_mode);
+    SonareSampleDesc desc{};
+    desc.loop_start = 100;
+    desc.loop_end = 2000;
+    desc.loop_mode = loop_mode;
+    uint32_t index = 77;
+    REQUIRE(sonare_sample_bank_add_sample(bank, pcm.data(), pcm.size(), &desc, &index) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_sample_bank_sample_count(bank, &count) == SONARE_OK);
+    REQUIRE(count == 0);
+  }
+  for (int loop_mode : {0, 1, 2, 3}) {
+    CAPTURE(loop_mode);
+    SonareSampleDesc desc{};
+    desc.loop_start = 100;
+    desc.loop_end = 2000;
+    desc.loop_mode = loop_mode;
+    uint32_t index = 0;
+    REQUIRE(sonare_sample_bank_add_sample(bank, pcm.data(), pcm.size(), &desc, &index) ==
+            SONARE_OK);
+  }
+  REQUIRE(sonare_sample_bank_sample_count(bank, &count) == SONARE_OK);
+  REQUIRE(count == 4);
+  sonare_sample_bank_destroy(bank);
 }
 #endif

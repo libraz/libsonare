@@ -9,6 +9,7 @@
 #include "mixing/alignment_delay.h"
 #include "mixing/api/scene.h"
 #include "mixing/api/scene_json_detail.h"
+#include "mixing/meter.h"
 #include "mixing/pan_law.h"
 #include "mixing/panner.h"
 #include "mixing/stereo_width.h"
@@ -214,24 +215,27 @@ Insert insert_from_value(const JsonValue& object, const std::string& path,
   return insert;
 }
 
-// Every entity array walker below ignores non-object elements. A scalar or null
-// carries no fields, so materializing one would synthesize a default entity with
-// an empty id that the caller never wrote -- and a save/load cycle would then
-// persist it. Skipping keeps the entity count equal to the number of
-// object-typed elements, order preserved, on every scene-decoding path.
+// Every entity array walker below refuses a present container that is not an array and a
+// non-object element (InvalidFormat, named by its path), as the project document's containers
+// do; callers pass only present keys, so an absent one keeps its empty default.
 template <typename T>
 std::vector<T> array_from_value(const JsonValue& array, const std::string& path,
                                 std::vector<std::string>* warnings,
                                 T (*parse)(const JsonValue&, const std::string&,
                                            std::vector<std::string>*)) {
+  if (!array.is_array()) {
+    throw SonareException(ErrorCode::InvalidFormat, path + " must be an array");
+  }
   std::vector<T> out;
-  if (!array.is_array()) return out;
   out.reserve(array.as_array().size());
   size_t index = 0;
   for (const auto& entry : array.as_array()) {
     const size_t position = index++;
-    if (!entry.is_object()) continue;
-    out.push_back(parse(entry, path + "[" + std::to_string(position) + "]", warnings));
+    const std::string element_path = path + "[" + std::to_string(position) + "]";
+    if (!entry.is_object()) {
+      throw SonareException(ErrorCode::InvalidFormat, element_path + " must be an object");
+    }
+    out.push_back(parse(entry, element_path, warnings));
   }
   return out;
 }
@@ -390,12 +394,10 @@ Strip strip_from_value(const JsonValue& object, const std::string& path,
     strip.metering.true_peak = bool_or(*metering, "truePeak", strip.metering.true_peak);
     strip.metering.true_peak_oversample =
         int_or(*metering, "truePeakOversample", strip.metering.true_peak_oversample);
-    // A count, so it is rejected rather than clamped, like panMode / panLaw /
-    // channelDelaySamples above. Inside the range the meter resolves 2 -> 2x,
-    // 8..16 -> 8x and any other value -> 4x.
-    if (strip.metering.true_peak_oversample < 1 || strip.metering.true_peak_oversample > 16) {
+    // The realtime meter's own rule, so a scene never stores a factor it cannot run.
+    if (!is_realtime_true_peak_oversample(strip.metering.true_peak_oversample)) {
       throw SonareException(ErrorCode::InvalidFormat,
-                            "metering.truePeakOversample must be in [1, 16]");
+                            "metering.truePeakOversample must be in {4, 8}");
     }
   }
   if (const auto* inserts = object.find("inserts")) {

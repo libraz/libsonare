@@ -69,8 +69,7 @@ struct ChannelStripConfig {
   /// choosing: at 48 kHz a full meter is ~646 KB and a strip carries two, while
   /// dropping LUFS takes one meter to ~83 KB and enable_metering = false takes
   /// the whole strip from ~1.4 MB to ~145 KB.
-  MeterConfig meter{/*measure_lufs=*/true, /*measure_true_peak=*/true,
-                    /*true_peak_oversample=*/4};
+  MeterConfig meter = kPublishedMeterConfig;
   /// Mono pan gain measured against the law's centre energy, so a centred mono
   /// strip is unity under every law (PannerProcessor::set_mono_pan_centre_unity).
   /// The engine sets it on the strips it creates; a host-built strip keeps the
@@ -538,8 +537,7 @@ class ChannelStrip : public rt::ProcessorBase {
   size_t insert_gain_reduction_count_ = 0;
   // Fixed at construction; see ChannelStripConfig::meter for why there is no
   // setter.
-  MeterConfig meter_config_{/*measure_lufs=*/true, /*measure_true_peak=*/true,
-                            /*true_peak_oversample=*/4};
+  MeterConfig meter_config_ = kPublishedMeterConfig;
   std::optional<MeterProcessor> pre_meter_;
   std::optional<MeterProcessor> post_meter_;
   GoniometerBuffer<kGoniometerCapacity> goniometer_;

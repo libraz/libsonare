@@ -748,9 +748,15 @@ SonareError sonare_segment_cross_similarity(const float* x, int x_rows, int x_co
 SonareError sonare_segment_recurrence_matrix(const float* data, int rows, int cols, int k,
                                              int width, int sym, const char* metric,
                                              const char* mode, SonareSegmentMatrix* out);
+/// @brief Lag matrix of an n x n recurrence matrix (librosa.segment.recurrence_to_lag).
+/// @details Lag-by-time: `lag[l][i] = rec[(i + l) mod n_lags][i]`, with the recurrence zero-padded
+/// to 2n rows when @p pad is 1, so the result is 2n x n (rows n..2n-1 hold the negative lags);
+/// with @p pad 0 it is n x n and the lags wrap. @p pad must be 0 or 1.
 /// @param out Receives a heap-owned matrix; free with sonare_free_segment_matrix.
 SonareError sonare_segment_recurrence_to_lag(const float* recurrence, int n, int pad,
                                              SonareSegmentMatrix* out);
+/// @brief Inverse of sonare_segment_recurrence_to_lag: @p lag is n_lags x n_rows with
+/// @p n_lags equal to n_rows (unpadded) or 2 * n_rows (padded); any other value is refused.
 /// @param out Receives a heap-owned matrix; free with sonare_free_segment_matrix.
 SonareError sonare_segment_lag_to_recurrence(const float* lag, int n_rows, int n_lags,
                                              SonareSegmentMatrix* out);
@@ -1110,7 +1116,9 @@ SonareError sonare_peak_pick(const float* values, size_t length, int pre_max, in
 ///   rather than scaled (librosa's @c fill=None). There is no usable range
 ///   independent of the caller's data; read one off the norm your own input
 ///   produces. Values at or below @c 1e-10 are raised to that floor, so passing
-///   0 means "normalize everything that is not numerically zero".
+///   0 means "normalize everything that is not numerically zero". @p norm_type
+///   is 0 (max-abs), 1 (L1), 2 (L2) or 3 (power); any other value is refused
+///   with SONARE_ERROR_INVALID_PARAMETER.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_vector_normalize(const float* values, size_t length, int norm_type,
                                     float threshold, float** out, size_t* out_length);

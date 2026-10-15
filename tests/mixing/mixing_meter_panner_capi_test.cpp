@@ -2,10 +2,12 @@
 /// @brief Mixing meter, panner, and C API tests.
 
 #include <catch2/catch_approx.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cstdint>
 
 #include "c_api/mixing_internal.h"
 #include "mixing_test_helpers.h"
+#include "util/constants.h"
 
 TEST_CASE("Const3dB pan law preserves stereo power", "[mixing]") {
   for (float pan : {-1.0f, -0.5f, 0.0f, 0.5f, 1.0f}) {
@@ -400,7 +402,7 @@ TEST_CASE("Mixing C API reports the state a strip discarded after a non-finite s
   sonare_mixer_destroy(mixer);
 }
 
-TEST_CASE("A strip's discard count reaches a meter that lost its loudness window",
+TEST_CASE("A strip's discard count reaches a meter that met a non-finite sample",
           "[mixing][capi][non_finite]") {
   SonareMixer* mixer = sonare_mixer_create(48000, 64);
   REQUIRE(mixer != nullptr);
@@ -430,18 +432,18 @@ TEST_CASE("A strip's discard count reaches a meter that lost its loudness window
   right[4] = std::numeric_limits<float>::quiet_NaN();
   strip->strip.process(channels, 2, kBlock);
 
-  // The meter inspects its loudness state at the top of the block, so the block
-  // that poisons it is not the block that returns it; one more is needed before
-  // the count can have moved.
+  // The meters count the non-finite sample (as silence) in the block it arrives.
+  REQUIRE(sonare_strip_non_finite_discard_count(strip, &count) == SONARE_OK);
+  REQUIRE(count == 1u);
+  // The EQ stayed out of it, so the strip's count moved for the meters alone.
+  REQUIRE(strip->strip.eq().non_finite_discard_count() == 0u);
+
+  // Nothing was carried into the meters' state, so a clean block adds nothing.
   left[4] = 0.25f;
   right[4] = 0.25f;
   strip->strip.process(channels, 2, kBlock);
   REQUIRE(sonare_strip_non_finite_discard_count(strip, &count) == SONARE_OK);
   REQUIRE(count == 1u);
-  // The EQ stayed out of it, so the strip's count moved for the meter alone. A
-  // meter whose window is gone reports the floor, which is the reading a
-  // genuinely silent strip gives, so without this the loss is unobservable.
-  REQUIRE(strip->strip.eq().non_finite_discard_count() == 0u);
 
   sonare_mixer_destroy(mixer);
 }
@@ -491,15 +493,15 @@ TEST_CASE("Mixing C API reports the state a bus discarded after a non-finite sam
   left[4] = std::numeric_limits<float>::quiet_NaN();
   right[4] = std::numeric_limits<float>::quiet_NaN();
   fx->process(channels, 2, kBlock);
-  // The bus meter inspects its loudness state at the top of the block, so the
-  // block that poisons it is not the block that returns it.
+  // The bus meter counts the non-finite sample (as silence) in the block it arrives. An aux bus a
+  // send destination names carries no inserts, so this count is the meter's alone.
+  REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "verb", &count) == SONARE_OK);
+  REQUIRE(count == 1u);
   left[4] = 0.25f;
   right[4] = 0.25f;
   fx->process(channels, 2, kBlock);
   REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "verb", &count) == SONARE_OK);
-  // An aux bus a send destination names carries no inserts, so this count is
-  // the meter's alone -- the reading it would otherwise lose silently, since a
-  // meter without its window reports the floor a silent bus reports.
+  // Nothing was carried into the meter's state, so a clean block adds nothing.
   REQUIRE(count == 1u);
 
   sonare_mixer_destroy(mixer);
@@ -571,6 +573,13 @@ TEST_CASE("Mixing C API builds strips with a configurable meter", "[mixing][capi
   REQUIRE(silent != nullptr);
   // An out-of-range factor is refused rather than silently resolved.
   REQUIRE(sonare_mixer_add_strip_ex(mixer, "bad", 1, 1, 1, 99) == nullptr);
+  // In-range factors the realtime meter does not implement are refused too, not resolved to one.
+  for (int factor : {1, 2, 3, 5, 16}) {
+    INFO("factor " << factor);
+    REQUIRE(sonare_mixer_add_strip_ex(mixer, "bad", 1, 1, 1, factor) == nullptr);
+    REQUIRE_THAT(std::string(sonare_last_error_message()),
+                 Catch::Matchers::ContainsSubstring("{0, 4, 8}"));
+  }
 
   std::array<float, 512> block{};
   for (std::size_t i = 0; i < block.size(); ++i) {
@@ -903,13 +912,59 @@ TEST_CASE("Mixing C API one-shot true peak reads the signal's last samples once 
   SonareMixMeterSnapshot before{};
   REQUIRE(sonare_strip_meter(strip, &before) == SONARE_OK);
   REQUIRE(before.true_peak_db_l < offline_db - 0.01f);
+  SonareMixMeterSnapshot master_before{};
+  REQUIRE(sonare_mixer_bus_meter(mixer, "master", &master_before) == SONARE_OK);
+  REQUIRE(master_before.true_peak_db_l < offline_db - 0.01f);
 
   REQUIRE(sonare_mixer_flush_meters(mixer) == SONARE_OK);
   SonareMixMeterSnapshot after{};
   REQUIRE(sonare_strip_meter(strip, &after) == SONARE_OK);
   REQUIRE_THAT(after.true_peak_db_l, WithinAbs(offline_db, 1.0e-4));
   REQUIRE_THAT(after.max_true_peak_db, WithinAbs(offline_db, 1.0e-4));
+  // The master bus meter publishes the same quantity and is flushed with the strips.
+  SonareMixMeterSnapshot master_after{};
+  REQUIRE(sonare_mixer_bus_meter(mixer, "master", &master_after) == SONARE_OK);
+  REQUIRE_THAT(master_after.true_peak_db_l, WithinAbs(offline_db, 1.0e-4));
+  REQUIRE_THAT(master_after.max_true_peak_db, WithinAbs(offline_db, 1.0e-4));
 
   REQUIRE(sonare_mixer_flush_meters(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("Mixing C API bus meters read an inter-sample over above the sample peak",
+          "[mixing][capi][meter]") {
+  // A quarter-rate sine sampled 45 degrees off its crest: every sample sits at 0.5 / sqrt(2),
+  // while the waveform between them reaches 0.5, about +3 dB over the sample peak.
+  for (const int sample_rate : {44100, 48000}) {
+    CAPTURE(sample_rate);
+    constexpr size_t kLength = 1024;
+    std::array<float, kLength> left{};
+    std::array<float, kLength> right{};
+    for (size_t i = 0; i < kLength; ++i) {
+      left[i] = 0.5f * std::sin(sonare::constants::kHalfPi * static_cast<float>(i) +
+                                0.5f * sonare::constants::kHalfPi);
+    }
+    SonareMixer* mixer = sonare_mixer_create(sample_rate, static_cast<int>(kLength));
+    REQUIRE(mixer != nullptr);
+    SonareStrip* strip = sonare_mixer_add_strip(mixer, "a");
+    REQUIRE(strip != nullptr);
+    REQUIRE(sonare_strip_set_pan(strip, 0.0f, SONARE_PAN_MODE_BALANCE) == SONARE_OK);
+    const float* inputs_l[] = {left.data()};
+    const float* inputs_r[] = {right.data()};
+    std::array<float, kLength> out_l{};
+    std::array<float, kLength> out_r{};
+    REQUIRE(sonare_mixer_process_stereo(mixer, inputs_l, inputs_r, 1, out_l.data(), out_r.data(),
+                                        kLength) == SONARE_OK);
+    REQUIRE(sonare_mixer_flush_meters(mixer) == SONARE_OK);
+
+    SonareMixMeterSnapshot master{};
+    REQUIRE(sonare_mixer_bus_meter(mixer, "master", &master) == SONARE_OK);
+    INFO("peak " << master.peak_db_l << " dB, true peak " << master.true_peak_db_l << " dB");
+    REQUIRE(master.peak_db_l > -10.0f);
+    REQUIRE(master.true_peak_db_l >= master.peak_db_l);
+    REQUIRE(master.max_true_peak_db >= master.peak_db_l);
+    // The reconstruction must actually find the over, not merely tie the sample peak.
+    REQUIRE(master.true_peak_db_l > master.peak_db_l + 2.0f);
+    sonare_mixer_destroy(mixer);
+  }
 }

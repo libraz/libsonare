@@ -15,7 +15,8 @@ namespace sonare::editing::voice_changer {
 /// How @ref VoiceChangerConfig::formant_factor relates to the pitch shift.
 enum class FormantMode : int32_t {
   /// The factor is the warp applied after the pitch shift, so the formants end up
-  /// at the factor times the shift's own ratio.
+  /// at the factor times the shift's own ratio. The factor must lie in
+  /// [kFormantFactorMin, kFormantFactorMax]; anything else is refused, not clamped.
   Relative = 0,
   /// The factor is the formant shift relative to the input: the warp applied is
   /// the factor divided by the pitch ratio 2^(semitones/12), so 1 keeps the

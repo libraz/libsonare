@@ -796,11 +796,12 @@ SonareError sonare_scale_mask_for_mode(int root, SonareMode mode, uint16_t* out_
   SONARE_C_TRY
   if (!out_mask) return SONARE_ERROR_INVALID_PARAMETER;
   *out_mask = 0;
-  if (root < SONARE_PITCH_C || root > SONARE_PITCH_B || mode < SONARE_MODE_MAJOR ||
-      mode > SONARE_MODE_LOCRIAN) {
+  Mode core_mode = Mode::Major;
+  if (!valid_c_enum(root, SONARE_PITCH_C, SONARE_PITCH_B) ||
+      !ordinal_to_enum(mode, SONARE_MODE_MAJOR, SONARE_MODE_LOCRIAN, &core_mode)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  *out_mask = scale_mask_for_mode(static_cast<Mode>(mode));
+  *out_mask = scale_mask_for_mode(core_mode);
   return SONARE_OK;
   SONARE_C_CATCH
 }

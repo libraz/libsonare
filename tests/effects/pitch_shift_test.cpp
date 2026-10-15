@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <string>
 #include <vector>
 
 #include "util/constants.h"
@@ -94,30 +95,38 @@ TEST_CASE("pitch_shift_ratio basic", "[pitch_shift]") {
   REQUIRE(shifted.sample_rate() == audio.sample_rate());
 }
 
-TEST_CASE("pitch_shift_ratio rejects out-of-range ratios", "[pitch_shift]") {
-  // A ratio whose effective sample rate exceeds the resampler range used to be
-  // silently clamped (wrong pitch); it must now throw instead.
+TEST_CASE("pitch_shift_ratio refuses only the shifted-rate floor and the int ceiling",
+          "[pitch_shift]") {
   Audio audio = create_test_audio(440.0f, 22050, 0.25f);
   PitchShiftConfig config;
   config.n_fft = 1024;
   config.hop_length = 256;
 
-  // 22050 * 20 = 441000 Hz effective rate -> out of the supported range.
-  REQUIRE_THROWS_AS(pitch_shift_ratio(audio, 20.0f, config), sonare::SonareException);
-  // A moderate ratio (within ~+/-2 octaves) is still accepted.
-  REQUIRE_NOTHROW(pitch_shift_ratio(audio, 2.0f, config));
+  // 22050 * 0.04 = 882 Hz shifted rate, below the 1000 Hz floor: refused with a reason.
+  try {
+    (void)pitch_shift_ratio(audio, 0.04f, config);
+    FAIL("expected a refusal");
+  } catch (const SonareException& e) {
+    REQUIRE(e.code() == ErrorCode::InvalidParameter);
+    REQUIRE(std::string(e.what()).find("pitch_shift") != std::string::npos);
+  }
+  // 22050 * 20 = 441000 Hz is a valid rate for the resampler, so it is applied.
+  REQUIRE(pitch_shift_ratio(audio, 20.0f, config).size() == audio.size());
 }
 
 TEST_CASE("pitch shift preflight checks effective rate and expansion boundaries",
           "[pitch_shift][resource_limit]") {
   PitchShiftPlan plan;
 
-  // 48 kHz * 4 (+24 semitones) is the supported effective-rate ceiling.
   REQUIRE(make_pitch_shift_plan(1024, 48000, 24.0f, &plan));
   REQUIRE(plan.ratio == 4.0f);
   REQUIRE(plan.effective_sample_rate == 192000);
   REQUIRE(plan.stretched_samples == 4096);
-  REQUIRE_FALSE(make_pitch_shift_plan(1024, 48000, 48.0f, &plan));
+  // There is no 192 kHz ceiling: four octaves up at 48 kHz shifts through 768 kHz.
+  REQUIRE(make_pitch_shift_plan(1024, 48000, 48.0f, &plan));
+  REQUIRE(plan.effective_sample_rate == 768000);
+  // The shifted rate must still fit the int the resampler takes.
+  REQUIRE_FALSE(make_pitch_shift_ratio_plan(1024, 48000, 1.0e6f, &plan));
 
   // At ratio 4, 125,000,000 input samples project to the exact 500,000,000
   // sample ceiling. One more input sample must fail without materialising it.
@@ -126,6 +135,52 @@ TEST_CASE("pitch shift preflight checks effective rate and expansion boundaries"
   REQUIRE_FALSE(make_pitch_shift_ratio_plan(125'000'001, 48000, 4.0f, &plan));
   REQUIRE(make_pitch_shift_ratio_plan(kMaxAudioBufferSize, 48000, 0.5f, &plan));
   REQUIRE_FALSE(make_pitch_shift_ratio_plan(kMaxAudioBufferSize + 1, 48000, 0.5f, &plan));
+}
+
+namespace {
+
+/// @brief Mean period of the upward zero crossings in the middle half, as a frequency.
+double middle_frequency(const Audio& audio) {
+  const std::size_t begin = audio.size() / 4;
+  const std::size_t end = audio.size() * 3 / 4;
+  double first = -1.0;
+  double last = -1.0;
+  int periods = -1;
+  for (std::size_t i = begin; i + 1 < end; ++i) {
+    const float a = audio[i];
+    const float b = audio[i + 1];
+    if (a < 0.0f && b >= 0.0f) {
+      const double t = static_cast<double>(i) + static_cast<double>(a / (a - b));
+      if (first < 0.0) first = t;
+      last = t;
+      ++periods;
+    }
+  }
+  if (periods <= 0) return 0.0;
+  return static_cast<double>(audio.sample_rate()) * periods / (last - first);
+}
+
+}  // namespace
+
+TEST_CASE("pitch_shift applies upward and downward shifts at high sample rates", "[pitch_shift]") {
+  constexpr float kSourceHz = 3000.0f;
+  struct Case {
+    int sample_rate;
+    float semitones;
+  };
+  for (const Case c :
+       {Case{44100, 12.0f}, Case{48000, 12.0f}, Case{96000, 12.0f}, Case{96000, 13.0f},
+        Case{192000, 12.0f}, Case{192000, 1.0f}, Case{384000, 12.0f}, Case{384000, -1.0f}}) {
+    CAPTURE(c.sample_rate, c.semitones);
+    const Audio audio = create_test_audio(kSourceHz, c.sample_rate, 0.25f);
+    const Audio shifted = pitch_shift(audio, c.semitones);
+    REQUIRE(shifted.size() == audio.size());
+    REQUIRE(shifted.sample_rate() == c.sample_rate);
+    const double expected =
+        kSourceHz *
+        std::pow(2.0, c.semitones / static_cast<double>(constants::kSemitonesPerOctave));
+    REQUIRE_THAT(middle_frequency(shifted), WithinRel(expected, 0.01));
+  }
 }
 
 TEST_CASE("pitch_shift native spectral backend preserves duration", "[pitch_shift]") {

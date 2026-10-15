@@ -125,9 +125,14 @@ def recurrence_matrix(
 def recurrence_to_lag(
     recurrence: Sequence[float] | list[float],
     n: int,
-    pad: bool = False,
+    pad: bool = True,
 ) -> SegmentMatrix:
-    """Convert an ``n × n`` recurrence matrix to a lag matrix."""
+    """Convert an ``n × n`` recurrence matrix to a lag-by-time matrix.
+
+    Matches ``librosa.segment.recurrence_to_lag``: ``lag[l, i] = rec[(i + l) % n_lags, i]``
+    with ``n_lags = 2n`` when ``pad`` (negative lags wrapped into the lower half) and ``n``
+    otherwise.
+    """
     c_recurrence, _ = _segment_input("recurrence_to_lag", recurrence, n, n, arg_name="recurrence")
     lib = _get_lib()
     out = SonareSegmentMatrix()
@@ -144,7 +149,10 @@ def lag_to_recurrence(
     n_rows: int,
     n_lags: int,
 ) -> SegmentMatrix:
-    """Convert a lag matrix back to an ``n_rows × n_rows`` recurrence matrix."""
+    """Convert an ``n_lags × n_rows`` lag matrix back to an ``n_rows × n_rows`` recurrence.
+
+    ``n_lags`` is ``n_rows`` for the unpadded layout and ``2 * n_rows`` for the padded one.
+    """
     c_lag, _ = _segment_input("lag_to_recurrence", lag, n_rows, n_lags, arg_name="lag")
     lib = _get_lib()
     out = SonareSegmentMatrix()

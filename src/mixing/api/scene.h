@@ -80,8 +80,7 @@ struct StripMetering {
   bool enabled = true;
   bool lufs = true;
   bool true_peak = true;
-  // Requested true-peak oversample factor. The realtime meter resolves it as
-  // 2 -> 2x, 8..16 -> 8x, and any other value (0, 1, 3..7) -> 4x.
+  // True-peak oversample factor: 4 or 8 (mixing::is_realtime_true_peak_oversample).
   int true_peak_oversample = 4;
 };
 

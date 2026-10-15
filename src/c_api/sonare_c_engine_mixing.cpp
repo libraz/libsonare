@@ -72,7 +72,9 @@ SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
     if (lanes[i].send_count > 0 && lanes[i].sends == nullptr) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
-    if (!is_valid_channel_layout(lanes[i].source_channel_layout)) {
+    ChannelLayout source_layout{};
+    if (!ordinal_to_enum(lanes[i].source_channel_layout, 0, kMaxChannelLayoutValue,
+                         &source_layout)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     if (lanes[i].source_channel_layout != SONARE_CHANNEL_LAYOUT_STEREO) {
@@ -82,7 +84,7 @@ SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
     }
     engine::TrackLaneConfig lane{lanes[i].track_id};
     lane.output_bus_id = lanes[i].output_bus_id;
-    lane.source_layout = static_cast<ChannelLayout>(lanes[i].source_channel_layout);
+    lane.source_layout = source_layout;
     lane.sends.reserve(lanes[i].send_count);
     for (size_t send_index = 0; send_index < lanes[i].send_count; ++send_index) {
       const SonareEngineTrackSend& send = lanes[i].sends[send_index];
@@ -249,13 +251,12 @@ SonareError sonare_engine_set_track_buses(SonareRealtimeEngine* engine,
     if (buses[i].send_count > 0 && buses[i].sends == nullptr) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
-    if (!is_valid_channel_layout(buses[i].channel_layout)) {
+    engine::TrackBusConfig bus;
+    if (!ordinal_to_enum(buses[i].channel_layout, 0, kMaxChannelLayoutValue, &bus.layout)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
-    engine::TrackBusConfig bus;
     bus.bus_id = buses[i].bus_id;
     bus.gain_db = buses[i].gain_db;
-    bus.layout = static_cast<ChannelLayout>(buses[i].channel_layout);
     bus.output_bus_id = buses[i].output_bus_id;
     bus.sends.reserve(buses[i].send_count);
     for (size_t send_index = 0; send_index < buses[i].send_count; ++send_index) {

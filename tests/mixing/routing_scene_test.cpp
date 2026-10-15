@@ -13,6 +13,7 @@
 #include "mastering/eq/eq_band.h"
 #include "mixing/api/presets.h"
 #include "mixing/api/scene.h"
+#include "mixing/meter.h"
 #include "util/exception.h"
 #include "util/json.h"
 
@@ -660,12 +661,61 @@ TEST_CASE("Scene metering round-trips and omits at the default", "[mixing][routi
   plain.strips.push_back(only);
   CHECK(sonare::mixing::api::scene_to_json(plain).find("metering") == std::string::npos);
 
-  // The oversample factor is a count, so it is rejected like the enums.
+  // The scene accepts exactly the factors the realtime meter runs, the rule configureMeter shares.
   using Catch::Matchers::ContainsSubstring;
-  REQUIRE_THROWS_WITH(
-      sonare::mixing::api::scene_from_json(
-          R"({"version":1,"strips":[{"id":"a","metering":{"truePeakOversample":0}}]})"),
-      ContainsSubstring("truePeakOversample"));
+  for (int factor = -1; factor <= 17; ++factor) {
+    CAPTURE(factor);
+    const std::string json =
+        R"({"version":1,"strips":[{"id":"a","metering":{"truePeakOversample":)" +
+        std::to_string(factor) + "}}]}";
+    if (sonare::mixing::is_realtime_true_peak_oversample(factor)) {
+      const auto parsed = sonare::mixing::api::scene_from_json(json);
+      CHECK(parsed.strips[0].metering.true_peak_oversample == factor);
+    } else {
+      REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(json),
+                          ContainsSubstring("truePeakOversample"));
+    }
+  }
+}
+
+TEST_CASE("Scene arrays refuse a wrong-typed container or element with InvalidFormat",
+          "[mixing][routing]") {
+  using Catch::Matchers::ContainsSubstring;
+  struct Case {
+    const char* json;
+    const char* path;
+  };
+  const Case cases[] = {
+      {R"({"version":1,"strips":[{"id":"a"},3]})", "strips[1]"},
+      {R"({"version":1,"strips":[{"id":"a","inserts":[null]}]})", "inserts[0]"},
+      {R"({"version":1,"strips":[{"id":"a","sends":["x"]}]})", "sends[0]"},
+      {R"({"version":1,"buses":[true]})", "buses[0]"},
+      {R"({"version":1,"buses":[{"id":"m","role":"master","inserts":[[]]}]})", "inserts[0]"},
+      {R"({"version":1,"vcaGroups":[1]})", "vcaGroups[0]"},
+      {R"({"version":1,"connections":[null]})", "connections[0]"},
+      // A present container of the wrong type is refused rather than read as empty.
+      {R"({"version":1,"strips":{}})", "strips must be an array"},
+      {R"({"version":1,"strips":[{"id":"a","inserts":"x"}]})", "inserts must be an array"},
+      {R"({"version":1,"strips":[{"id":"a","sends":3}]})", "sends must be an array"},
+      {R"({"version":1,"buses":null})", "buses must be an array"},
+      {R"({"version":1,"buses":[{"id":"m","role":"master","inserts":{}}]})",
+       "inserts must be an array"},
+      {R"({"version":1,"vcaGroups":true})", "vcaGroups must be an array"},
+      {R"({"version":1,"connections":"a"})", "connections must be an array"},
+  };
+  for (const auto& c : cases) {
+    CAPTURE(c.json);
+    try {
+      (void)sonare::mixing::api::scene_from_json(c.json);
+      FAIL("a non-object scene array element was accepted");
+    } catch (const sonare::SonareException& e) {
+      CHECK(e.code() == sonare::ErrorCode::InvalidFormat);
+      CHECK_THAT(std::string(e.what()), ContainsSubstring(c.path));
+    }
+  }
+  // Control: object elements parse, and an absent container still defaults to empty.
+  CHECK_NOTHROW(sonare::mixing::api::scene_from_json(R"({"version":1,"strips":[{"id":"a"}]})"));
+  CHECK(sonare::mixing::api::scene_from_json(R"({"version":1})").strips.empty());
 }
 
 TEST_CASE("Scene bus trim/width/polarity round-trip and omit at defaults", "[mixing][routing]") {
@@ -1104,10 +1154,13 @@ TEST_CASE("Scene load reports each unknown key by its path", "[mixing][routing][
 
 TEST_CASE("Scene load reports the original array index and escapes control characters",
           "[mixing][routing][warning]") {
-  const auto skipped =
-      scene_key_warnings(R"({"version":1,"strips":[1,null,{"id":"a"},"x",{"id":"b","bogus":1}]})");
-  REQUIRE(skipped.size() == 1);
-  CHECK(skipped[0] == "unknown scene key 'strips[4].bogus'");
+  const auto indexed =
+      scene_key_warnings(R"({"version":1,"strips":[{"id":"a"},{"id":"b"},{"id":"c","bogus":1}]})");
+  REQUIRE(indexed.size() == 1);
+  CHECK(indexed[0] == "unknown scene key 'strips[2].bogus'");
+  // A non-object element is refused, so no warning can be indexed past one.
+  CHECK_THROWS_AS(scene_key_warnings(R"({"version":1,"strips":[1,{"id":"b","bogus":1}]})"),
+                  sonare::SonareException);
 
   const auto forged = scene_key_warnings(
       "{\"version\":1,\"strips\":[{\"id\":\"a\",\"x\\nunknown scene key 'strips[9].fake'\":1}]}");

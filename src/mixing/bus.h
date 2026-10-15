@@ -163,7 +163,7 @@ class BusProcessor : public rt::ProcessorBase {
   // at eight planes here, and the rows are allocated once in prepare().
   std::array<std::vector<float>, kMaxBusScratchChannels> bypass_scratch_;
   std::array<float*, kMaxBusScratchChannels> bypass_scratch_channels_{};
-  MeterProcessor meter_{};
+  MeterProcessor meter_{kPublishedMeterConfig};
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
 };

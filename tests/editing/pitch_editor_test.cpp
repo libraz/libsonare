@@ -15,6 +15,7 @@
 
 #include "core/audio.h"
 #include "core/convert.h"
+#include "editing/pitch_editor/auto_tune.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -2211,4 +2212,50 @@ TEST_CASE("PitchCorrector time-varying correction names the offending frame", "[
     message = error.what();
   }
   CHECK(message.find("f0Hz[5]") != std::string::npos);
+}
+
+TEST_CASE("auto_tune holds its pitch frame as a duration across input rates",
+          "[pitch_editor][auto_tune]") {
+  // 225 Hz with a 5 Hz, 10-cent vibrato: 39 cents above A3, which C major corrects to 220 Hz.
+  const auto take = [](int sr) {
+    std::vector<float> samples(static_cast<size_t>(sr * 2), 0.0f);
+    double phase = 0.0;
+    for (size_t i = 0; i < samples.size(); ++i) {
+      const double t = static_cast<double>(i) / sr;
+      const double hz =
+          225.0 * std::pow(2.0, 10.0 / 1200.0 * std::sin(sonare::constants::kTwoPiD * 5.0 * t));
+      phase += sonare::constants::kTwoPiD * hz / sr;
+      samples[i] = static_cast<float>(0.4 * std::sin(phase));
+    }
+    return sonare::Audio::from_vector(std::move(samples), sr);
+  };
+  // Mean frequency over the middle second from rising zero crossings.
+  const auto mean_hz = [](const sonare::Audio& audio) {
+    const int sr = audio.sample_rate();
+    const size_t lo = static_cast<size_t>(sr / 2);
+    const size_t hi = static_cast<size_t>(sr * 3 / 2);
+    size_t first = 0;
+    size_t last = 0;
+    int crossings = 0;
+    for (size_t i = lo + 1; i < hi; ++i) {
+      if (audio[i - 1] < 0.0f && audio[i] >= 0.0f) {
+        if (crossings == 0) first = i;
+        last = i;
+        ++crossings;
+      }
+    }
+    REQUIRE(crossings > 2);
+    return static_cast<double>(crossings - 1) * sr / static_cast<double>(last - first);
+  };
+
+  const sonare::Key c_major{sonare::PitchClass::C, sonare::Mode::Major, 0.0f};
+  double reference = 0.0;
+  for (int sr : {44100, 96000, 192000}) {
+    INFO("sr " << sr);
+    const double hz = mean_hz(auto_tune(take(sr), c_major).audio);
+    INFO("corrected " << hz << " Hz");
+    CHECK(std::abs(hz / 220.0 - 1.0) <= 0.015);
+    if (reference == 0.0) reference = hz;
+    CHECK(std::abs(hz / reference - 1.0) <= 0.01);
+  }
 }

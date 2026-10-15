@@ -89,18 +89,10 @@ SonareError validate_interleaved_lufs_input(const float* samples, size_t frames,
   return SONARE_OK;
 }
 
-NormType c_norm_type(int norm_type) {
-  switch (norm_type) {
-    case 1:
-      return NormType::L1;
-    case 2:
-      return NormType::L2;
-    case 3:
-      return NormType::Power;
-    default:
-      return NormType::Inf;
-  }
-}
+// norm_type is the NormType ordinal itself: 0 max-abs, 1 L1, 2 L2, 3 power.
+static_assert(static_cast<int>(NormType::Inf) == 0 && static_cast<int>(NormType::L1) == 1 &&
+                  static_cast<int>(NormType::L2) == 2 && static_cast<int>(NormType::Power) == 3,
+              "sonare_vector_normalize's norm_type ordinals must match NormType");
 
 }  // namespace
 
@@ -308,9 +300,13 @@ SonareError sonare_peak_pick(const float* values, size_t length, int pre_max, in
 SonareError sonare_vector_normalize(const float* values, size_t length, int norm_type,
                                     float threshold, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
-  return transform_buffer(values, length, out, out_length, [&] {
-    return normalize(values, length, c_norm_type(norm_type), threshold);
-  });
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  NormType norm = NormType::Inf;
+  if (!ordinal_to_enum(norm_type, 0, static_cast<int>(NormType::Power), &norm)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return transform_buffer(values, length, out, out_length,
+                          [&] { return normalize(values, length, norm, threshold); });
 }
 
 SonareError sonare_pcen(const float* values, int n_bins, int n_frames, int sample_rate,

@@ -45,19 +45,28 @@ struct RateWindow {
   int n_fft;
 };
 
+/// @brief Converts a window of @p samples_at_reference_rate samples at @p reference_rate to
+///        samples at @p sample_rate, rounded and at least 2.
+/// @details For a frame that needs no FFT length of its own (a YIN frame, say); an STFT window
+///          goes through @ref window_at_rate. Throws above @ref kMaxStftNFft.
+inline int window_length_at_rate(int samples_at_reference_rate, int sample_rate,
+                                 int reference_rate = kAnalysisSampleRate) {
+  SONARE_CHECK(samples_at_reference_rate > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(reference_rate > 0, ErrorCode::InvalidParameter);
+  const double scaled = static_cast<double>(samples_at_reference_rate) *
+                        static_cast<double>(sample_rate) / reference_rate;
+  SONARE_CHECK(scaled <= static_cast<double>(kMaxStftNFft), ErrorCode::InvalidParameter);
+  return std::max(2, static_cast<int>(std::lround(scaled)));
+}
+
 /// @brief Converts @p n_fft_at_reference_rate to the window and FFT length for @p sample_rate.
 /// @details The window is a time quantity in samples at @p reference_rate. Factor 1 returns
 ///          `{0, n_fft}` unchanged. Throws if the FFT length exceeds @ref kMaxStftNFft.
 inline RateWindow window_at_rate(int n_fft_at_reference_rate, int sample_rate,
                                  int reference_rate = kAnalysisSampleRate) {
-  SONARE_CHECK(n_fft_at_reference_rate > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(reference_rate > 0, ErrorCode::InvalidParameter);
+  const int win = window_length_at_rate(n_fft_at_reference_rate, sample_rate, reference_rate);
   if (sample_rate == reference_rate) return {0, n_fft_at_reference_rate};
-  const double scaled = static_cast<double>(n_fft_at_reference_rate) *
-                        static_cast<double>(sample_rate) / reference_rate;
-  SONARE_CHECK(scaled <= static_cast<double>(kMaxStftNFft), ErrorCode::InvalidParameter);
-  const int win = std::max(2, static_cast<int>(std::lround(scaled)));
   const int fft = fast_fft_length(win);
   SONARE_CHECK(fft <= kMaxStftNFft, ErrorCode::InvalidParameter);
   return {win, fft};

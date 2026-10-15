@@ -60,7 +60,7 @@ struct BpmCandidate {
 
 /// @brief BPM histogram bin with vote count.
 struct BpmHistogramBin {
-  float bpm_center;  ///< Center BPM of the bin
+  float bpm_center;  ///< Vote-weighted mean of the tempos that landed in the bin
   int votes;         ///< Number of votes (tempo candidates in this bin)
 };
 

@@ -8,6 +8,7 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <cmath>
 #include <cstddef>
+#include <new>
 #include <utility>
 #include <vector>
 
@@ -733,6 +734,83 @@ TEST_CASE("project bounce gathers timeline events with one reservation",
     const size_t clip = 2 * (i % (kClips / 2)) + 1;
     CHECK(second[i].destination_id == 2u);
     CHECK(second[i].event == &timeline.midi_clips[clip].events[i / (kClips / 2)]);
+  }
+}
+
+namespace {
+
+// Tracks whether replayed events are still held, and fails the replay on request.
+class ReplayProbeInstrument final : public sonare::midi::MidiInstrument {
+ public:
+  enum class Failure { kNone, kRefuse, kThrow };
+  explicit ReplayProbeInstrument(Failure failure) : failure_(failure) {}
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {
+    holds_replayed_events = false;
+    ++resets;
+  }
+  void on_event(uint32_t, const sonare::midi::MidiEvent&) noexcept override {
+    holds_replayed_events = true;
+  }
+  bool tail_follows_events() const noexcept override { return true; }
+  bool materialize_tail_probe() override {
+    if (failure_ == Failure::kRefuse) return false;
+    if (failure_ == Failure::kThrow) throw std::bad_alloc();
+    return true;
+  }
+  int tail_samples() const noexcept override { return 480; }
+
+  bool holds_replayed_events = false;
+  int resets = 0;
+
+ private:
+  Failure failure_;
+};
+
+}  // namespace
+
+TEST_CASE("bounce probe leaves a replayed instrument reset on every exit",
+          "[c_api][engine][bounce]") {
+  namespace bounce = sonare_c_bounce_detail;
+  using Failure = ReplayProbeInstrument::Failure;
+  sonare::arrangement::CompiledTimeline timeline;
+  sonare::midi::MidiClipSchedule clip;
+  clip.destination_id = 3;
+  sonare::midi::MidiEvent event;
+  event.ump = sonare::midi::make_midi1_note_on(0, 0, 60, 100);
+  clip.events.push_back(event);
+  timeline.midi_clips.push_back(std::move(clip));
+
+  int latency = -1;
+  int tail = -1;
+  SECTION("a replay that succeeds") {
+    ReplayProbeInstrument instrument(Failure::kNone);
+    REQUIRE(bounce::probe_hosted_latency_tail(timeline, {3, &instrument}, true, &latency, &tail));
+    CHECK(tail == 480);
+    CHECK(latency == 0);
+    CHECK_FALSE(instrument.holds_replayed_events);
+  }
+  SECTION("a replay the instrument refuses") {
+    ReplayProbeInstrument instrument(Failure::kRefuse);
+    REQUIRE_FALSE(
+        bounce::probe_hosted_latency_tail(timeline, {3, &instrument}, true, &latency, &tail));
+    CHECK(instrument.resets == 1);
+    CHECK_FALSE(instrument.holds_replayed_events);
+  }
+  SECTION("a replay that throws") {
+    ReplayProbeInstrument instrument(Failure::kThrow);
+    REQUIRE_THROWS_AS(
+        bounce::probe_hosted_latency_tail(timeline, {3, &instrument}, true, &latency, &tail),
+        std::bad_alloc);
+    CHECK(instrument.resets == 1);
+    CHECK_FALSE(instrument.holds_replayed_events);
+  }
+  SECTION("no replay touches nothing") {
+    ReplayProbeInstrument instrument(Failure::kRefuse);
+    REQUIRE(bounce::probe_hosted_latency_tail(timeline, {3, &instrument}, false, &latency, &tail));
+    CHECK(instrument.resets == 0);
+    CHECK(tail == 480);
   }
 }
 #endif

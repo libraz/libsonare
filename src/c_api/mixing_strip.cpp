@@ -2,6 +2,7 @@
 
 #include "c_api/mixing_internal.h"
 #include "mixing/alignment_delay.h"
+#include "mixing/meter.h"
 
 using namespace sonare_c_mixing_detail;
 
@@ -35,9 +36,10 @@ SonareStrip* sonare_mixer_add_strip_ex(SonareMixer* mixer, const char* id, int e
                                     "mixer: handle and strip id are required");
     return nullptr;
   }
-  if (true_peak_oversample < 0 || true_peak_oversample > 16) {
+  if (true_peak_oversample != 0 &&
+      !sonare::mixing::is_realtime_true_peak_oversample(true_peak_oversample)) {
     sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                                    "mixer: truePeakOversample must be in [0, 16]");
+                                    "mixer: truePeakOversample must be in {0, 4, 8} (0 selects 4)");
     return nullptr;
   }
   SONARE_C_TRY
@@ -54,7 +56,7 @@ SonareStrip* sonare_mixer_add_strip_ex(SonareMixer* mixer, const char* id, int e
   config.meter.measure_true_peak = measure_true_peak != 0;
   // Zero is the "use the default" sentinel, matching the rest of the C ABI.
   config.meter.true_peak_oversample =
-      true_peak_oversample > 0 ? true_peak_oversample : config.meter.true_peak_oversample;
+      true_peak_oversample != 0 ? true_peak_oversample : config.meter.true_peak_oversample;
   auto strip = std::make_unique<SonareStrip>(config);
   strip->id = strip_id;
   strip->scene_strip.id = strip->id;

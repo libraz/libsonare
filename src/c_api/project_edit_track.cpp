@@ -49,7 +49,9 @@ namespace {
 SonareError automation_lane_from_values(uint32_t target_param_id, uint32_t target_kind,
                                         const SonareAutomationPoint* point_data, size_t point_count,
                                         sonare::automation::AutomationLane* out) {
-  if (out == nullptr || target_param_id == 0 || target_kind > SONARE_AUTOMATION_TARGET_TRACK_PAN) {
+  sonare::automation::AutomationTargetKind kind{};
+  if (out == nullptr || target_param_id == 0 ||
+      !ordinal_to_enum(target_kind, 0, SONARE_AUTOMATION_TARGET_TRACK_PAN, &kind)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (point_count > 0 && point_data == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
@@ -61,18 +63,17 @@ SonareError automation_lane_from_values(uint32_t target_param_id, uint32_t targe
     if (!finite_non_negative(p.ppq) || !std::isfinite(p.value)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
-    if (p.curve_to_next < 0 || static_cast<uint32_t>(p.curve_to_next) >
-                                   static_cast<uint32_t>(sonare::AutomationCurve::SCurve)) {
+    sonare::automation::Breakpoint bp;
+    if (!ordinal_to_enum(p.curve_to_next, 0, static_cast<int>(sonare::AutomationCurve::SCurve),
+                         &bp.curve_to_next)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
-    sonare::automation::Breakpoint bp;
     bp.ppq = p.ppq;
     bp.value = p.value;
-    bp.curve_to_next = static_cast<sonare::AutomationCurve>(p.curve_to_next);
     breakpoints.push_back(bp);
   }
   out->set_target_param_id(target_param_id);
-  out->set_target_kind(static_cast<sonare::automation::AutomationTargetKind>(target_kind));
+  out->set_target_kind(kind);
   out->set_points(std::move(breakpoints));
   return SONARE_OK;
 }
@@ -106,12 +107,11 @@ SonareError sonare_project_add_track(SonareProject* project, const SonareProject
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_track_id) *out_track_id = 0;
   if (!project || !desc || !out_track_id) return SONARE_ERROR_INVALID_PARAMETER;
-  if (desc->kind < SONARE_TRACK_AUDIO || desc->kind > SONARE_TRACK_AUX) {
+  arr::Track track;
+  if (!ordinal_to_enum(desc->kind, SONARE_TRACK_AUDIO, SONARE_TRACK_AUX, &track.kind)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
-  arr::Track track;
-  track.kind = static_cast<arr::Track::Kind>(desc->kind);
   if (desc->name) track.name = desc->name;
   auto command = std::make_unique<arr::AddTrack>(std::move(track));
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
@@ -131,12 +131,12 @@ SonareError sonare_project_add_track(SonareProject* project, const SonareProject
 SonareError sonare_project_set_overlap_policy(SonareProject* project, uint32_t overlap_policy) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || overlap_policy > SONARE_PROJECT_OVERLAP_ALLOW) {
+  arr::OverlapPolicy policy{};
+  if (!project || !ordinal_to_enum(overlap_policy, 0, SONARE_PROJECT_OVERLAP_ALLOW, &policy)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
-  auto command =
-      std::make_unique<arr::SetOverlapPolicy>(static_cast<arr::OverlapPolicy>(overlap_policy));
+  auto command = std::make_unique<arr::SetOverlapPolicy>(policy);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   return SONARE_OK;
   SONARE_C_CATCH
@@ -367,10 +367,13 @@ SonareError sonare_project_set_track_kind(SonareProject* project, uint32_t track
                                           uint32_t kind) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || track_id == 0 || kind > SONARE_TRACK_AUX) return SONARE_ERROR_INVALID_PARAMETER;
+  arr::Track::Kind track_kind{};
+  if (!project || track_id == 0 || !ordinal_to_enum(kind, 0, SONARE_TRACK_AUX, &track_kind)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  auto command = std::make_unique<arr::SetTrackKind>(track_id, static_cast<arr::Track::Kind>(kind));
+  auto command = std::make_unique<arr::SetTrackKind>(track_id, track_kind);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
   return SONARE_OK;
   SONARE_C_CATCH

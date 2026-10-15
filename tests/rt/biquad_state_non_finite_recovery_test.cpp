@@ -589,7 +589,8 @@ TEST_CASE("the inter-sample-peak limiter reports the sample it substituted",
   REQUIRE_FALSE(limiter.discard_non_finite());
 }
 
-TEST_CASE("the mixer meter bounds a non-finite sample to its own block", "[mixing][meter]") {
+TEST_CASE("the mixer meter never publishes a non-finite reading for a non-finite sample",
+          "[mixing][meter]") {
   using sonare::mixing::MeterConfig;
   using sonare::mixing::MeterProcessor;
   using sonare::mixing::MeterSnapshot;
@@ -643,15 +644,9 @@ TEST_CASE("the mixer meter bounds a non-finite sample to its own block", "[mixin
     }
   }
   INFO("non-finite snapshots " << non_finite_blocks << ", last at " << last_non_finite);
-  REQUIRE(non_finite_blocks > 0);
-  REQUIRE(last_non_finite <= kMeterPoisonBlock);
+  // The meter counts a non-finite sample as silence, so no snapshot is ever non-finite.
+  REQUIRE(non_finite_blocks == 0);
 
-  // Bit-identity is not reachable here and its absence is not this defect. The
-  // momentary and short-term readings come from sliding sums, which cannot drop
-  // one term: the value subtracted when a sample leaves the window is the same
-  // non-finite value that was added. The window is therefore discarded whole and
-  // re-accumulated, and two sums over the same terms in a different order differ
-  // in their low bits for as long as they run.
   const MeterSnapshot& recovered = poisoned.back();
   REQUIRE(std::abs(recovered.momentary_lufs - settled.momentary_lufs) < 1.0e-3f);
   REQUIRE(std::abs(recovered.short_term_lufs - settled.short_term_lufs) < 1.0e-3f);

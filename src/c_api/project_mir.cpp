@@ -258,12 +258,12 @@ namespace {
 
 bool valid_pitch_class(uint32_t value) noexcept { return value <= 11u || value == 255u; }
 
-bool valid_key_mode(uint32_t value) noexcept {
-  return value <= static_cast<uint32_t>(arr::KeyMode::kLocrian);
+bool key_mode_from_c(uint32_t value, arr::KeyMode* out) noexcept {
+  return ordinal_to_enum(value, 0, static_cast<int>(arr::KeyMode::kLocrian), out);
 }
 
-bool valid_chord_quality(uint32_t value) noexcept {
-  return value <= static_cast<uint32_t>(arr::ChordQuality::kSuspended);
+bool chord_quality_from_c(uint32_t value, arr::ChordQuality* out) noexcept {
+  return ordinal_to_enum(value, 0, static_cast<int>(arr::ChordQuality::kSuspended), out);
 }
 
 bool valid_ppq_span(double start, double end) noexcept {
@@ -286,15 +286,14 @@ SonareError sonare_project_annotate_keys(SonareProject* project,
   annotation.keys.reserve(count);
   for (size_t i = 0; i < count; ++i) {
     const SonareProjectKeySegment& in = keys[i];
+    arr::KeySegment out;
     if (!valid_ppq_span(in.start_ppq, in.end_ppq) || !valid_pitch_class(in.tonic_pc) ||
-        !valid_key_mode(in.mode)) {
+        !key_mode_from_c(in.mode, &out.mode)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
-    arr::KeySegment out;
     out.start_ppq = in.start_ppq;
     out.end_ppq = in.end_ppq;
     out.tonic_pc = static_cast<uint8_t>(in.tonic_pc);
-    out.mode = static_cast<arr::KeyMode>(in.mode);
     annotation.keys.push_back(out);
   }
   auto command = std::make_unique<arr::SetAnnotation>(std::move(annotation));
@@ -318,16 +317,15 @@ SonareError sonare_project_annotate_chords(SonareProject* project,
   out.reserve(count);
   for (size_t i = 0; i < count; ++i) {
     const SonareProjectChordSymbol& in = chords[i];
+    arr::ChordSymbol chord;
     if (!valid_ppq_span(in.start_ppq, in.end_ppq) || !valid_pitch_class(in.root_pc) ||
-        !valid_chord_quality(in.quality) || !valid_pitch_class(in.slash_bass_pc) ||
+        !chord_quality_from_c(in.quality, &chord.quality) || !valid_pitch_class(in.slash_bass_pc) ||
         (in.extension_count > 0 && !in.extensions) || in.extension_count > 32) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
-    arr::ChordSymbol chord;
     chord.start_ppq = in.start_ppq;
     chord.end_ppq = in.end_ppq;
     chord.root_pc = static_cast<uint8_t>(in.root_pc);
-    chord.quality = static_cast<arr::ChordQuality>(in.quality);
     chord.slash_bass_pc = static_cast<uint8_t>(in.slash_bass_pc);
     chord.modulation_boundary = in.modulation_boundary != 0;
     if (in.extension_count > 0) {
@@ -348,8 +346,8 @@ SonareError sonare_project_annotate_chords(SonareProject* project,
 }
 
 #if defined(SONARE_WITH_ARRANGEMENT)
-// The analysis ordinals are cast straight onto the core enums below, so the
-// range checks in front of those casts are only sound while the two agree.
+// The analysis ordinals convert onto the core enums ordinal for ordinal below,
+// so the range checks in those conversions are only sound while the two agree.
 static_assert(SONARE_CHORD_QUALITY_COUNT == sonare::kChordQualityCount,
               "SonareChordQuality count drift");
 static_assert(static_cast<int>(sonare::ChordQuality::Dominant7s9) == SONARE_CHORD_DOMINANT7_SHARP9,
@@ -374,26 +372,22 @@ SonareError sonare_chord_symbol_from_analysis(SonarePitchClass root, SonareChord
       (extension_capacity > 0 && !out_extensions)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  const int root_value = static_cast<int>(root);
-  const int quality_value = static_cast<int>(quality);
-  const int bass_value = static_cast<int>(bass);
-  if (root_value < SONARE_PITCH_C || root_value > SONARE_PITCH_B || bass_value < SONARE_PITCH_C ||
-      bass_value > SONARE_PITCH_B || quality_value < 0 ||
-      quality_value >= SONARE_CHORD_QUALITY_COUNT) {
+  sonare::ChordQuality core_quality = sonare::ChordQuality::Major;
+  if (!valid_c_enum(root, SONARE_PITCH_C, SONARE_PITCH_B) ||
+      !valid_c_enum(bass, SONARE_PITCH_C, SONARE_PITCH_B) ||
+      !ordinal_to_enum(quality, 0, SONARE_CHORD_QUALITY_COUNT - 1, &core_quality)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
-  const sonare::mir::MappedQuality mapped =
-      sonare::mir::map_chord_quality(static_cast<sonare::ChordQuality>(quality_value));
+  const sonare::mir::MappedQuality mapped = sonare::mir::map_chord_quality(core_quality);
   *out_extension_count = mapped.extensions.size();
   if (mapped.extensions.size() > extension_capacity) return SONARE_ERROR_INVALID_PARAMETER;
   std::copy(mapped.extensions.begin(), mapped.extensions.end(), out_extensions);
   // Root kept even for an unknown quality, and a bass equal to the root is no
   // slash bass: both are the rules build_harmonic_timeline applies.
-  *out_root_pc = static_cast<uint32_t>(root_value);
+  *out_root_pc = static_cast<uint32_t>(root);
   *out_quality = static_cast<uint32_t>(mapped.quality);
-  *out_slash_bass_pc =
-      bass_value == root_value ? arr::kUnknownPitchClass : static_cast<uint32_t>(bass_value);
+  *out_slash_bass_pc = bass == root ? arr::kUnknownPitchClass : static_cast<uint32_t>(bass);
   return SONARE_OK;
   SONARE_C_CATCH
 #else
@@ -411,14 +405,13 @@ SonareError sonare_key_mode_from_analysis(SonareMode mode, uint32_t* out_mode) {
   SONARE_C_TRY
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_mode) *out_mode = static_cast<uint32_t>(arr::KeyMode::kUnknown);
-  const int mode_value = static_cast<int>(mode);
   // The core maps an out-of-range mode to unknown without a word, so the
   // refusal has to happen here.
-  if (!out_mode || mode_value < SONARE_MODE_MAJOR || mode_value > SONARE_MODE_LOCRIAN) {
+  sonare::Mode core_mode = sonare::Mode::Major;
+  if (!out_mode || !ordinal_to_enum(mode, SONARE_MODE_MAJOR, SONARE_MODE_LOCRIAN, &core_mode)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  *out_mode =
-      static_cast<uint32_t>(sonare::mir::map_key_mode(static_cast<sonare::Mode>(mode_value)));
+  *out_mode = static_cast<uint32_t>(sonare::mir::map_key_mode(core_mode));
   return SONARE_OK;
 #else
   if (out_mode) *out_mode = {};

@@ -15,8 +15,8 @@ namespace sonare {
 struct Timbre {
   float brightness;  ///< Spectral brightness [0, 1] (high = bright/harsh)
   float warmth;      ///< Spectral warmth [0, 1] (high = warm/full)
-  float density;     ///< Spectral density [0, 1] (high = rich/complex)
-  float roughness;   ///< Spectral roughness [0, 1] (high = rough/harsh)
+  float density;     ///< Spectral density [0, 1] (high = rich/complex); 0 without spectral energy
+  float roughness;   ///< Spectral flux over ~23 ms, [0, 1] (high = rough/harsh)
   float complexity;  ///< Harmonic complexity [0, 1] (high = complex)
 };
 
@@ -26,7 +26,7 @@ struct TimbreConfig {
   int hop_length = 512;     ///< Hop length in input samples
   int n_mels = 128;         ///< Number of mel bands
   int n_mfcc = 13;          ///< Number of MFCC coefficients
-  float window_sec = 0.5f;  ///< Window size for time-varying analysis
+  float window_sec = 0.5f;  ///< Window for time-varying analysis in seconds; finite and positive
 };
 
 /// @brief Timbre analyzer for extracting sound characteristics.
@@ -37,6 +37,12 @@ class TimbreAnalyzer {
   /// @brief Constructs timbre analyzer from audio.
   /// @param audio Input audio
   /// @param config Timbre analysis configuration
+  /// @details Analyses at the input rate: `n_fft` is rescaled from 22050 Hz, the hop is in input
+  ///          samples. @ref MusicAnalyzer instead reads the spectrogram of its 22050 Hz analysis
+  ///          signal; brightness and roughness agree between the two, density follows the band
+  ///          each one covers.
+  /// @throws SonareException(InvalidParameter) if @p audio is empty or `window_sec` is not
+  ///         finite and positive.
   explicit TimbreAnalyzer(const Audio& audio, const TimbreConfig& config = TimbreConfig());
 
   /// @brief Constructs timbre analyzer from pre-computed features.
@@ -78,6 +84,7 @@ class TimbreAnalyzer {
   const std::vector<float>& spectral_rolloff() const { return spectral_rolloff_; }
 
  private:
+  static void validate_window_sec(float window_sec);
   void init_from_features(const Spectrogram& spec, const MelSpectrogram& mel_spec);
   void analyze();
   void compute_overall_timbre();
@@ -91,11 +98,13 @@ class TimbreAnalyzer {
   /// @brief Per-frame spectral flux normalized by the L1 magnitude of the compared frames
   std::vector<float> relative_flux_;
   std::vector<float> low_band_ratio_;  ///< Per-frame fraction of energy below the warmth cutoff
+  std::vector<float> frame_l1_;        ///< Per-frame L1 magnitude norm
   std::vector<float> mfcc_;  ///< Per-frame MFCC matrix, row-major [n_mfcc_ * mfcc_frames_]
   int n_mfcc_ = 0;           ///< Number of MFCC coefficients in mfcc_
   int mfcc_frames_ = 0;      ///< Number of frames in mfcc_
   int n_frames_;
   int sr_;
+  int hop_length_;  ///< Hop of the spectrogram analysed, in its own samples
   TimbreConfig config_;
 };
 

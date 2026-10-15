@@ -1020,3 +1020,110 @@ TEST_CASE("sonare_engine_prepare refuses a fractional sample rate", "[c_api][eng
   REQUIRE(state.sample_rate == 44100.0);
   sonare_engine_destroy(engine);
 }
+
+TEST_CASE("sonare_engine transport refuses a negative position and never moves the playhead",
+          "[c_api][engine]") {
+  constexpr int kFrames = 64;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kFrames, 16, 16) == SONARE_OK);
+  std::array<float, kFrames> left{};
+  std::array<float, kFrames> right{};
+  float* io[] = {left.data(), right.data()};
+  const auto position = [&] {
+    SonareTransportState state{};
+    REQUIRE(sonare_engine_get_transport_state(engine, &state) == SONARE_OK);
+    return state.sample_position;
+  };
+
+  REQUIRE(sonare_engine_seek_sample(engine, 4800, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_process(engine, io, 2, kFrames) == SONARE_OK);
+  const int64_t before = position();
+  REQUIRE(before == 4800);
+  for (int64_t negative : {int64_t{-1}, int64_t{-48000}, std::numeric_limits<int64_t>::min()}) {
+    CAPTURE(negative);
+    REQUIRE(sonare_engine_seek_sample(engine, negative, -1) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_engine_process(engine, io, 2, kFrames) == SONARE_OK);
+    REQUIRE(position() == before);
+  }
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_count_in_end_sample answers start_sample for a count of no bars",
+          "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 8, 8) == SONARE_OK);
+  for (int bars : {0, -1, -4}) {
+    for (int64_t start : {int64_t{0}, int64_t{12345}}) {
+      CAPTURE(bars, start);
+      int64_t end = -7;
+      REQUIRE(sonare_engine_count_in_end_sample(engine, start, bars, &end) == SONARE_OK);
+      REQUIRE(end == start);
+    }
+  }
+  int64_t end = 0;
+  REQUIRE(sonare_engine_count_in_end_sample(engine, 0, 1, &end) == SONARE_OK);
+  REQUIRE(end > 0);
+  REQUIRE(sonare_engine_count_in_end_sample(engine, -1, 0, &end) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_count_in_end_sample(engine, -1, 2, &end) == SONARE_ERROR_INVALID_PARAMETER);
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_set_capture_punch refuses an enabled empty window",
+          "[c_api][engine][capture]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 8, 8) == SONARE_OK);
+  SonareEngineCaptureStatus status{};
+
+  REQUIRE(sonare_engine_set_capture_punch(engine, 64, 128, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_capture_status(engine, &status) == SONARE_OK);
+  REQUIRE(status.punch_enabled == 1);
+
+  // Refused rather than stored as "punch off", which would record the whole timeline.
+  REQUIRE(sonare_engine_set_capture_punch(engine, 256, 256, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_capture_status(engine, &status) == SONARE_OK);
+  REQUIRE(status.punch_enabled == 1);
+
+  // An empty window that is not enabled is simply "punch off".
+  REQUIRE(sonare_engine_set_capture_punch(engine, 256, 256, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_capture_status(engine, &status) == SONARE_OK);
+  REQUIRE(status.punch_enabled == 0);
+  sonare_engine_destroy(engine);
+}
+
+#if defined(SONARE_WITH_GRAPH)
+TEST_CASE("sonare_engine_set_graph refuses a connection mix outside 0 and 1", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 8, 8) == SONARE_OK);
+  SonareEngineGraphNode nodes[2]{};
+  std::strncpy(nodes[0].id, "in", sizeof(nodes[0].id) - 1);
+  std::strncpy(nodes[1].id, "out", sizeof(nodes[1].id) - 1);
+  nodes[0].num_ports = 1;
+  nodes[1].num_ports = 1;
+  SonareEngineGraphConnection connection{};
+  std::strncpy(connection.source_node, "in", sizeof(connection.source_node) - 1);
+  std::strncpy(connection.dest_node, "out", sizeof(connection.dest_node) - 1);
+  SonareEngineGraphSpec spec{};
+  spec.nodes = nodes;
+  spec.node_count = 2;
+  spec.connections = &connection;
+  spec.connection_count = 1;
+  std::strncpy(spec.input_node, "in", sizeof(spec.input_node) - 1);
+  std::strncpy(spec.output_node, "out", sizeof(spec.output_node) - 1);
+  spec.num_channels = 1;
+  for (int mix : {-1, 2, 7}) {
+    CAPTURE(mix);
+    connection.mix = mix;
+    REQUIRE(sonare_engine_set_graph(engine, &spec) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+  for (int mix : {0, 1}) {
+    CAPTURE(mix);
+    connection.mix = mix;
+    REQUIRE(sonare_engine_set_graph(engine, &spec) == SONARE_OK);
+  }
+  sonare_engine_destroy(engine);
+}
+#endif

@@ -330,10 +330,6 @@ namespace {
 
 const char* view_to_cstr(std::string_view value) { return value.empty() ? nullptr : value.data(); }
 
-bool valid_cc_binding_kind(uint8_t kind) noexcept {
-  return kind <= static_cast<uint8_t>(SONARE_MIDI_CC_NRPN);
-}
-
 sonare::midi::Ump ump_from_pod(const SonareMidiEventPod& pod) noexcept {
   sonare::midi::Ump out{};
   out.words[0] = pod.data0;
@@ -344,20 +340,19 @@ sonare::midi::Ump ump_from_pod(const SonareMidiEventPod& pod) noexcept {
 }
 
 bool binding_from_c(const SonareMidiCcBinding& src, sonare::midi::CcBinding* out) noexcept {
+  sonare::midi::CcBinding binding{};
   if (out == nullptr || src.cc_number > 127 || src.param_id == 0 ||
-      !valid_cc_binding_kind(src.kind) ||
+      !ordinal_to_enum(src.kind, 0, SONARE_MIDI_CC_NRPN, &binding.kind) ||
       (src.channel != sonare::midi::kCcAnyChannel && src.channel > 15) ||
       !std::isfinite(src.min_value) || !std::isfinite(src.max_value) ||
       src.max_value < src.min_value) {
     return false;
   }
-  sonare::midi::CcBinding binding{};
   binding.cc_number = src.cc_number;
   binding.channel = src.channel;
   binding.param_id = src.param_id;
   binding.min_value = src.min_value;
   binding.max_value = src.max_value;
-  binding.kind = static_cast<sonare::midi::CcBindingKind>(src.kind);
   binding.cc_lsb_number = src.cc_lsb_number;
   binding.selector_msb = src.selector_msb;
   binding.selector_lsb = src.selector_lsb;

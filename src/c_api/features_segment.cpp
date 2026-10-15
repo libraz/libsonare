@@ -74,7 +74,7 @@ SonareError sonare_segment_recurrence_to_lag(const float* recurrence, int n, int
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
-  return fill_matrix(recurrence_to_lag(recurrence, n, pad != 0), n, pad ? 2 * n - 1 : n, out);
+  return fill_matrix(recurrence_to_lag(recurrence, n, pad != 0), pad ? 2 * n : n, n, out);
   SONARE_C_CATCH
 }
 
@@ -83,7 +83,7 @@ SonareError sonare_segment_lag_to_recurrence(const float* lag, int n_rows, int n
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
-  if (!valid_matrix(lag, n_rows, n_lags)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!valid_matrix(lag, n_lags, n_rows)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   return fill_matrix(lag_to_recurrence(lag, n_rows, n_lags), n_rows, n_rows, out);
   SONARE_C_CATCH

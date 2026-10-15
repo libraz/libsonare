@@ -100,15 +100,19 @@ std::vector<float> compute_onset_strength(const Audio& audio, const MelConfig& m
   aligned_mel_config.center = onset_config.center;
   MelSpectrogram mel_spec = MelSpectrogram::compute(audio, aligned_mel_config);
   std::vector<float> onset_env = compute_onset_strength(mel_spec, onset_config);
+  return center_onset_strength(std::move(onset_env), aligned_mel_config.to_stft_config(),
+                               onset_config.center);
+}
 
+std::vector<float> center_onset_strength(std::vector<float> onset_env, const StftConfig& geometry,
+                                         bool center) {
   // Centering follows the window, not the zero-padded FFT length. An explicit
   // (rate-converted) window rounds the half-window to frames; the default keeps floor.
-  const int win_length = aligned_mel_config.win_length;
-  const int hop_length = aligned_mel_config.hop_length;
-  if (win_length <= 0 || !onset_config.center || onset_env.empty() || hop_length <= 0) {
-    return center_onset_strength(std::move(onset_env),
-                                 aligned_mel_config.to_stft_config().actual_win_length(),
-                                 hop_length, onset_config.center);
+  const int win_length = geometry.win_length;
+  const int hop_length = geometry.hop_length;
+  if (win_length <= 0 || !center || onset_env.empty() || hop_length <= 0) {
+    return center_onset_strength(std::move(onset_env), geometry.actual_win_length(), hop_length,
+                                 center);
   }
   const int frame_offset = static_cast<int>(
       std::lround(static_cast<double>(win_length) / (2.0 * static_cast<double>(hop_length))));

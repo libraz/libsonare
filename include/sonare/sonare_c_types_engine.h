@@ -535,7 +535,8 @@ typedef struct {
      compiled graph always sums edges into a shared destination port in an
      order-independent way (the first edge into a port overwrites, every later
      edge adds), regardless of this value. Retained for API compatibility and to
-     express intent; multiple edges into one port are always summed. */
+     express intent; multiple edges into one port are always summed. Any other
+     value is refused with SONARE_ERROR_INVALID_PARAMETER. */
   int mix;
 } SonareEngineGraphConnection;
 

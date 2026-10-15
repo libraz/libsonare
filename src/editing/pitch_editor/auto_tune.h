@@ -18,8 +18,9 @@ struct AutoTuneResult {
 };
 
 /// @brief Snaps the voiced pitch of a monophonic recording to a key's scale.
-/// @details Pitch is tracked with pYIN at its default 2048-sample frame and
-///          512-sample hop. The scale comes from @ref scale_mask_for_mode of the
+/// @details Pitch is tracked with pYIN: its default 2048-sample frame held as a
+///          duration at 22050 Hz and converted to the input rate, and a 512-sample
+///          hop in input samples. The scale comes from @ref scale_mask_for_mode of the
 ///          key's mode, rooted at the key's root; @p config supplies the
 ///          correction knobs and its @c scale.root / @c scale.mode_mask are
 ///          overwritten.

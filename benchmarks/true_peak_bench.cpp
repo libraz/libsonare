@@ -6,11 +6,11 @@
 /// polyphase TruePeakFilter, which is the single most expensive loop in a
 /// metered block. Three things are measured:
 ///
-///  1. MeterProcessor::process() with true peak off vs on (2x / 4x / 8x), which
+///  1. MeterProcessor::process() with true peak off vs on (4x / 8x), which
 ///     is the cost a host actually pays, stated as a share of the real-time
 ///     budget for the block. The engine's master meter runs the 4x variant
 ///     (MeterConfig::true_peak_oversample defaults to 4), so that is the row to
-///     read for the shipped configuration; 2x and 8x are there for comparison.
+///     read for the shipped configuration; 8x is there for comparison.
 ///     Two percentages are reported per row and they answer different
 ///     questions - see the legend printed above the meter table.
 ///  2. TruePeakFilter::upsample_with_history() in isolation, which is where
@@ -216,9 +216,6 @@ int main(int argc, char** argv) {
 
   MeterConfig off{};
   off.measure_true_peak = false;
-  MeterConfig tp2{};
-  tp2.measure_true_peak = true;
-  tp2.true_peak_oversample = 2;
   MeterConfig tp4{};
   tp4.measure_true_peak = true;
   tp4.true_peak_oversample = 4;
@@ -226,7 +223,7 @@ int main(int argc, char** argv) {
   tp8.measure_true_peak = true;
   tp8.true_peak_oversample = 8;
   const std::vector<Variant> variants{
-      {"lufs_only", off}, {"true_peak_2x", tp2}, {"true_peak_4x", tp4}, {"true_peak_8x", tp8}};
+      {"lufs_only", off}, {"true_peak_4x", tp4}, {"true_peak_8x", tp8}};
 
   std::printf(
       "# meter,channels,block,variant,p50_us,p95_us,p50_pct_realtime,delta_pct_realtime,"

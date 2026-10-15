@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "analysis/beat_analyzer.h"
+#include "support/rate_material.h"
 #include "support/section_form.h"
 #include "util/constants.h"
 
@@ -895,5 +896,58 @@ TEST_CASE("MusicAnalyzer reads a rest on every bar as meter evidence",
     CAPTURE(beats_per_bar, result.time_signature.numerator, result.rhythm.time_signature.numerator);
     CHECK(result.time_signature.numerator == beats_per_bar);
     CHECK(result.rhythm.time_signature.numerator == beats_per_bar);
+  }
+}
+
+TEST_CASE("MusicAnalyzer below 22050 Hz rescales its window like the direct beat detector",
+          "[music_analyzer][analysis_rate]") {
+  constexpr int kLowRate = 16000;
+  const Audio low = create_test_audio(kLowRate);
+  MusicAnalyzerConfig config;
+  MusicAnalyzer analyzer(low, config);
+  const std::vector<float> beats = analyzer.beat_times();
+
+  BeatConfig direct_config;
+  direct_config.bpm_min = config.bpm_min;
+  direct_config.bpm_max = config.bpm_max;
+  direct_config.start_bpm = config.start_bpm;
+  direct_config.n_fft = config.n_fft;
+  direct_config.hop_length = config.hop_length;
+  const std::vector<float> direct = detect_beats(low, direct_config);
+  REQUIRE(beats.size() == direct.size());
+  for (size_t i = 0; i < direct.size(); ++i) {
+    CHECK(beats[i] == Catch::Approx(direct[i]).margin(1e-6));
+  }
+
+  // The same grid as the analysis-rate input, within one 16 kHz hop.
+  MusicAnalyzer reference(create_test_audio(22050), config);
+  const std::vector<float> reference_beats = reference.beat_times();
+  REQUIRE(beats.size() >= 4u);
+  REQUIRE(reference_beats.size() >= 4u);
+  const double hop_sec = static_cast<double>(config.hop_length) / kLowRate;
+  CHECK(std::abs(beats.front() - reference_beats.front()) <= hop_sec);
+  const double interval = (beats.back() - beats.front()) / static_cast<double>(beats.size() - 1);
+  const double reference_interval = (reference_beats.back() - reference_beats.front()) /
+                                    static_cast<double>(reference_beats.size() - 1);
+  CHECK(std::abs(interval / reference_interval - 1.0) <= 0.02);
+}
+
+TEST_CASE("MusicAnalyzer analyze publishes the chroma posterior of the chosen key",
+          "[music_analyzer][key_analyzer]") {
+  std::vector<float> noise(22050 * 5);
+  std::mt19937 rng(7);
+  std::uniform_real_distribution<float> dist(-0.3f, 0.3f);
+  for (float& v : noise) v = dist(rng);
+
+  const Audio progression =
+      sonare::test::make_rate_material(sonare::test::RateMaterial::TriadTurnaround, 22050);
+  for (const Audio& audio : {progression, Audio::from_vector(std::move(noise), 22050)}) {
+    MusicAnalyzer analyzer(audio);
+    const AnalysisResult result = analyzer.analyze();
+    const float posterior = key_posterior(analyzer.key_analyzer().all_candidates(), result.key);
+    INFO("key " << result.key.to_string() << " confidence " << result.key.confidence);
+    CHECK(result.key.confidence == posterior);
+    CHECK(result.key.confidence >= 0.0f);
+    CHECK(result.key.confidence < 1.0f);
   }
 }

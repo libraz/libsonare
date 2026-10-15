@@ -18,7 +18,10 @@ AutoTuneResult auto_tune(const Audio& audio, const std::optional<Key>& key,
   config.scale.root = static_cast<int>(used.root);
   config.scale.mode_mask = scale_mask_for_mode(used.mode);
 
-  PyinF0Provider provider;
+  PitchConfig pitch_config;
+  // The pYIN frame is the librosa default at 22050 Hz, held as a duration.
+  pitch_config.frame_length = window_length_at_rate(pitch_config.frame_length, audio.sample_rate());
+  PyinF0Provider provider(pitch_config);
   const F0Track track = provider.detect(audio);
   Audio corrected = PitchCorrector(config).correct_to_scale_timevarying(audio, track);
   return {std::move(corrected), used};

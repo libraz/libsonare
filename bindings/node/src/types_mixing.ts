@@ -374,7 +374,7 @@ export interface MixSceneStrip {
     enabled: boolean;
     lufs: boolean;
     truePeak: boolean;
-    /** Requested factor; the meter resolves 2 to 2x, 8..16 to 8x, and any other value (0, 1, 3..7) to 4x. */
+    /** Oversampling factor: 4 or 8; any other value is refused. */
     truePeakOversample: number;
   };
   inserts: MixSceneInsert[];

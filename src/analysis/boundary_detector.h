@@ -56,7 +56,7 @@ int boundary_ssm_frames(int n_frames, int kernel_size);
 
 /// @brief Configuration for boundary detection.
 struct BoundaryConfig {
-  int n_fft = 2048;      ///< FFT size
+  int n_fft = 2048;      ///< Window length in samples at 22050 Hz, rescaled to the analysis rate
   int hop_length = 512;  ///< Hop length
   int kernel_size = 64;  ///< Checkerboard kernel size in frames
   /// Relative novelty threshold: a peak must reach this fraction of the largest

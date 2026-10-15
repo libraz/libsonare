@@ -5,6 +5,7 @@
 #include <numeric>
 #include <utility>
 
+#include "analysis/analysis_evidence.h"
 #include "analysis/meter_analyzer.h"
 #include "analysis/onset_analyzer.h"
 #include "util/constants.h"
@@ -299,65 +300,68 @@ void RhythmAnalyzer::compute_syncopation() {
   features_.syncopation = std::clamp(mean_excess / expected, 0.0f, 1.0f);
 }
 
-void RhythmAnalyzer::compute_regularity() {
-  features_.pattern_regularity = 1.0f;
-  features_.tempo_stability = 1.0f;
-
-  if (beat_intervals_.empty()) {
-    return;
+RhythmRegularity rhythm_regularity(const std::vector<float>& intervals) {
+  RhythmRegularity out;
+  if (intervals.empty()) {
+    return out;
   }
 
   // Compute mean and standard deviation of beat intervals
   float mean_interval = 0.0f;
-  for (float interval : beat_intervals_) {
+  for (float interval : intervals) {
     mean_interval += interval;
   }
-  mean_interval /= static_cast<float>(beat_intervals_.size());
+  mean_interval /= static_cast<float>(intervals.size());
+  if (!has_evidence(mean_interval)) {
+    return out;
+  }
 
   float variance = 0.0f;
-  for (float interval : beat_intervals_) {
+  for (float interval : intervals) {
     float diff = interval - mean_interval;
     variance += diff * diff;
   }
-  variance /= static_cast<float>(beat_intervals_.size());
+  variance /= static_cast<float>(intervals.size());
   float std_dev = std::sqrt(variance);
 
-  // Coefficient of variation (lower = more regular)
-  float cv = (mean_interval > 0.0f) ? std_dev / mean_interval : 1.0f;
+  // Coefficient of variation (lower = more regular), mapped to a regularity score in [0, 1].
+  const float cv = std_dev / mean_interval;
+  out.pattern_regularity = std::max(0.0f, 1.0f - cv * 2.0f);
 
-  // Convert to regularity score (inverse of cv, clamped to [0, 1])
-  features_.pattern_regularity = std::max(0.0f, 1.0f - cv * 2.0f);
-
-  // Tempo stability: analyze local tempo changes
-  if (beat_intervals_.size() >= 4) {
-    std::vector<float> local_tempos;
-    local_tempos.reserve(beat_intervals_.size());
-
-    for (float interval : beat_intervals_) {
-      if (interval > 0.0f) {
-        local_tempos.push_back(60.0f / interval);
-      }
-    }
-
-    if (local_tempos.size() >= 2) {
-      float tempo_mean = 0.0f;
-      for (float t : local_tempos) {
-        tempo_mean += t;
-      }
-      tempo_mean /= static_cast<float>(local_tempos.size());
-
-      float tempo_var = 0.0f;
-      for (float t : local_tempos) {
-        float diff = t - tempo_mean;
-        tempo_var += diff * diff;
-      }
-      tempo_var /= static_cast<float>(local_tempos.size());
-      float tempo_std = std::sqrt(tempo_var);
-
-      float tempo_cv = (tempo_mean > 0.0f) ? tempo_std / tempo_mean : 1.0f;
-      features_.tempo_stability = std::max(0.0f, 1.0f - tempo_cv * 5.0f);
+  // Tempo stability: spread of the local tempos, measurable from two intervals on.
+  std::vector<float> local_tempos;
+  local_tempos.reserve(intervals.size());
+  for (float interval : intervals) {
+    if (interval > 0.0f) {
+      local_tempos.push_back(60.0f / interval);
     }
   }
+
+  if (local_tempos.size() >= 2) {
+    float tempo_mean = 0.0f;
+    for (float t : local_tempos) {
+      tempo_mean += t;
+    }
+    tempo_mean /= static_cast<float>(local_tempos.size());
+
+    float tempo_var = 0.0f;
+    for (float t : local_tempos) {
+      float diff = t - tempo_mean;
+      tempo_var += diff * diff;
+    }
+    tempo_var /= static_cast<float>(local_tempos.size());
+    float tempo_std = std::sqrt(tempo_var);
+
+    float tempo_cv = (tempo_mean > 0.0f) ? tempo_std / tempo_mean : 1.0f;
+    out.tempo_stability = std::max(0.0f, 1.0f - tempo_cv * 5.0f);
+  }
+  return out;
+}
+
+void RhythmAnalyzer::compute_regularity() {
+  const RhythmRegularity regularity = rhythm_regularity(beat_intervals_);
+  features_.pattern_regularity = regularity.pattern_regularity;
+  features_.tempo_stability = regularity.tempo_stability;
 }
 
 }  // namespace sonare

@@ -20,14 +20,12 @@ bool valid_chord_detection_options(const SonareChordDetectionOptions& options) {
   }
   // Reject out-of-range enum-like fields instead of silently mapping them to a
   // default (chroma_method only documents 0 = STFT, 1 = NNLS). When key context
-  // is enabled, also require an in-range key_root / key_mode rather than letting
-  // from_c_pitch_class / from_c_mode silently clamp garbage to C / Major.
+  // is enabled, also require an in-range key_root / key_mode.
   if (options.chroma_method != 0 && options.chroma_method != 1) return false;
   if (options.use_key_context != 0) {
-    const int root = static_cast<int>(options.key_root);
-    const int mode = static_cast<int>(options.key_mode);
-    if (root < static_cast<int>(PitchClass::C) || root > static_cast<int>(PitchClass::B) ||
-        mode < static_cast<int>(Mode::Major) || mode > static_cast<int>(Mode::Locrian)) {
+    PitchClass root = PitchClass::C;
+    Mode mode = Mode::Major;
+    if (!from_c_pitch_class(options.key_root, &root) || !from_c_mode(options.key_mode, &mode)) {
       return false;
     }
   }
@@ -46,8 +44,11 @@ ChordConfig chord_config_from_options(const SonareChordDetectionOptions& options
   config.use_hmm = options.use_hmm != 0;
   config.hmm_beam_width = options.hmm_beam_width;
   config.use_key_context = options.use_key_context != 0;
-  config.key_root = from_c_pitch_class(options.key_root);
-  config.key_mode = from_c_mode(options.key_mode);
+  // valid_chord_detection_options admitted the key whenever key context reads it.
+  if (config.use_key_context && (!from_c_pitch_class(options.key_root, &config.key_root) ||
+                                 !from_c_mode(options.key_mode, &config.key_mode))) {
+    throw SonareException(ErrorCode::InvalidParameter, "chord key context is out of range");
+  }
   config.detect_inversions = options.detect_inversions != 0;
   config.chroma_method = options.chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
   config.tuning = options.tuning;
@@ -445,15 +446,11 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
   functions->count = 0;
   if (!options) return SONARE_ERROR_INVALID_PARAMETER;
   if (!valid_chord_detection_options(*options)) return SONARE_ERROR_INVALID_PARAMETER;
-  // The analysis key drives the Roman-numeral labelling; reject out-of-range
-  // enum-like values rather than silently clamping them to C / Major.
-  {
-    const int root = static_cast<int>(key_root);
-    const int mode = static_cast<int>(key_mode);
-    if (root < static_cast<int>(PitchClass::C) || root > static_cast<int>(PitchClass::B) ||
-        mode < static_cast<int>(Mode::Major) || mode > static_cast<int>(Mode::Locrian)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
+  // The analysis key drives the Roman-numeral labelling.
+  PitchClass label_root = PitchClass::C;
+  Mode label_mode = Mode::Major;
+  if (!from_c_pitch_class(key_root, &label_root) || !from_c_mode(key_mode, &label_mode)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -462,8 +459,7 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
     ChordAnalyzer analyzer(audio, config);
     fill_chord_result(analyzer.chords(), analyzer.tuning(), chords);
     try {
-      label_chords(analyzer.chords(), from_c_pitch_class(key_root), from_c_mode(key_mode), roman,
-                   functions);
+      label_chords(analyzer.chords(), label_root, label_mode, roman, functions);
     } catch (...) {
       sonare_free_chord_analysis_result(chords);
       throw;
@@ -483,30 +479,23 @@ SonareError sonare_chord_functions(const SonareChord* chords, size_t count,
   functions->items = nullptr;
   functions->count = 0;
   if ((count > 0 && !chords) || count > kMaxBufferSize) return SONARE_ERROR_INVALID_PARAMETER;
-  const int key_root_value = static_cast<int>(key_root);
-  const int key_mode_value = static_cast<int>(key_mode);
-  if (key_root_value < static_cast<int>(PitchClass::C) ||
-      key_root_value > static_cast<int>(PitchClass::B) ||
-      key_mode_value < static_cast<int>(Mode::Major) ||
-      key_mode_value > static_cast<int>(Mode::Locrian)) {
+  PitchClass label_root = PitchClass::C;
+  Mode label_mode = Mode::Major;
+  if (!from_c_pitch_class(key_root, &label_root) || !from_c_mode(key_mode, &label_mode)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   std::vector<Chord> input;
   input.reserve(count);
   for (size_t i = 0; i < count; ++i) {
-    const int root = static_cast<int>(chords[i].root);
-    const int quality = static_cast<int>(chords[i].quality);
-    if (root < static_cast<int>(PitchClass::C) || root > static_cast<int>(PitchClass::B) ||
-        quality < 0 || quality >= SONARE_CHORD_QUALITY_COUNT) {
+    Chord chord{};
+    if (!from_c_pitch_class(chords[i].root, &chord.root) ||
+        !ordinal_to_enum(chords[i].quality, 0, SONARE_CHORD_QUALITY_COUNT - 1, &chord.quality)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
-    Chord chord{};
-    chord.root = static_cast<PitchClass>(root);
-    chord.quality = static_cast<ChordQuality>(quality);
     chord.bass = chord.root;
     input.push_back(chord);
   }
-  label_chords(input, from_c_pitch_class(key_root), from_c_mode(key_mode), roman, functions);
+  label_chords(input, label_root, label_mode, roman, functions);
   return SONARE_OK;
   SONARE_C_CATCH
 }

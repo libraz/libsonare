@@ -126,6 +126,8 @@ ChannelStrip::ChannelStrip(ChannelStripConfig config)
       metering_enabled_(config.enable_metering),
       meter_config_(config.meter),
       eq_position_(config.eq_position) {
+  // Refused here even with metering off, so one factor rule holds for every strip config.
+  validate_realtime_meter_config(meter_config_);
   panner_.set_mono_pan_centre_unity(config.mono_pan_centre_unity);
   // Pre-reserve the vectors that the audio thread iterates while the control
   // thread may concurrently push_back into. The audio thread iterates

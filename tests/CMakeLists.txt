@@ -468,6 +468,7 @@ if(BUILD_FX)
     effects/modulation/wah_test.cpp
     effects/modulation/pitch_shifter_test.cpp
     effects/reverb/convolution_reverb_test.cpp
+    effects/reverb/dattorro_reverb_test.cpp
   )
   target_sources(sonare_tests PRIVATE effects/modulator_shapes_test.cpp)
   target_sources(sonare_tests PRIVATE effects/mod_delay_interp_test.cpp)

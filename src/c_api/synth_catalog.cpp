@@ -313,7 +313,8 @@ const char* sonare_synth_engine_param_info(int engine_mode) {
   }
   info = "[]";
   if (engine_mode == SONARE_SYNTH_ENGINE_DEFAULT) return info.c_str();
-  const auto mode = static_cast<sonare::midi::synth::SynthEngineMode>(engine_mode - 1);
+  const auto mode = sonare_c_detail::admitted_ordinal_to_enum<sonare::midi::synth::SynthEngineMode>(
+      engine_mode, 1);
   const char* base_name = sonare::midi::synth::base_preset_name(mode);
   if (base_name == nullptr) return info.c_str();
   const sonare::midi::synth::SynthPreset* base = sonare::midi::synth::find_synth_preset(base_name);

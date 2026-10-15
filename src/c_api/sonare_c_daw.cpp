@@ -431,9 +431,9 @@ static_assert(static_cast<int>(editing::note_model::UnmatchedTargetPolicy::Neare
 SonareError resolve_note_target_config(const SonareNoteTargetAssignConfig* config,
                                        editing::note_model::NoteTargetAssignConfig& out) {
   if (config == nullptr) return SONARE_OK;
-  if (config->unmatched_policy != SONARE_NOTE_TARGET_UNMATCHED_LEAVE &&
-      config->unmatched_policy != SONARE_NOTE_TARGET_UNMATCHED_MUTE &&
-      config->unmatched_policy != SONARE_NOTE_TARGET_UNMATCHED_NEAREST) {
+  editing::note_model::UnmatchedTargetPolicy policy{};
+  if (!ordinal_to_enum(config->unmatched_policy, SONARE_NOTE_TARGET_UNMATCHED_LEAVE,
+                       SONARE_NOTE_TARGET_UNMATCHED_NEAREST, &policy)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (!std::isfinite(config->min_overlap_ratio) || config->min_overlap_ratio < 0.0f ||
@@ -441,8 +441,7 @@ SonareError resolve_note_target_config(const SonareNoteTargetAssignConfig* confi
       config->max_correction_semitones < 0.0f) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  out.unmatched_policy =
-      static_cast<editing::note_model::UnmatchedTargetPolicy>(config->unmatched_policy);
+  out.unmatched_policy = policy;
   out.min_overlap_ratio = config->min_overlap_ratio;
   out.max_correction_semitones = config->max_correction_semitones;
   return SONARE_OK;
@@ -594,19 +593,19 @@ SonareError sonare_auto_tune(const float* samples, size_t length, int sample_rat
   *out_key = SonareKey{};
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (key && (key->root < SONARE_PITCH_C || key->root > SONARE_PITCH_B ||
-              key->mode < SONARE_MODE_MAJOR || key->mode > SONARE_MODE_LOCRIAN)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  std::optional<Key> named;
+  if (key) {
+    named = Key{PitchClass::C, Mode::Major, 1.0f};
+    if (!ordinal_to_enum(key->root, SONARE_PITCH_C, SONARE_PITCH_B, &named->root) ||
+        !ordinal_to_enum(key->mode, SONARE_MODE_MAJOR, SONARE_MODE_LOCRIAN, &named->mode)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
   }
   editing::pitch_editor::PitchCorrectionConfig core_config{};
   if (config && !apply_correction_knobs(*config, core_config)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 
-  std::optional<Key> named;
-  if (key) {
-    named = Key{static_cast<PitchClass>(key->root), static_cast<Mode>(key->mode), 1.0f};
-  }
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     const editing::pitch_editor::AutoTuneResult result =
         editing::pitch_editor::auto_tune(audio, named, core_config);

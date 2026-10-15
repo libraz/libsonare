@@ -4,8 +4,11 @@
 #include <catch2/catch_approx.hpp>
 #include <cstdint>
 
+#include "mixing/channel_strip.h"
+#include "mixing/meter.h"
 #include "mixing_test_helpers.h"
 #include "rt/processor_base.h"
+#include "util/exception.h"
 
 #if defined(__SSE__) || defined(__x86_64__) || defined(_M_X64) || defined(_M_IX86)
 #include <xmmintrin.h>
@@ -622,20 +625,113 @@ TEST_CASE("ChannelStrip segmented pre and post meters integrate the same window"
   REQUIRE_THAT(post.peak_db[0], WithinAbs(pre.peak_db[0], 0.01f));
 }
 
-TEST_CASE("MeterProcessor resolves every requested true-peak oversample to its documented factor",
+TEST_CASE("MeterProcessor runs 4x and 8x true peak and refuses every other oversample request",
           "[mixing][meter]") {
-  for (int requested = 0; requested <= 16; ++requested) {
+  for (int requested = -1; requested <= 17; ++requested) {
     CAPTURE(requested);
-    int expected = 4;
-    if (requested == 2) expected = 2;
-    if (requested >= 8) expected = 8;
+    for (const bool measure_true_peak : {true, false}) {
+      sonare::mixing::MeterConfig config;
+      config.measure_true_peak = measure_true_peak;
+      config.true_peak_oversample = requested;
+      sonare::mixing::MeterProcessor meter(config);
+      if (requested == 4 || requested == 8) {
+        REQUIRE(sonare::mixing::is_realtime_true_peak_oversample(requested));
+        meter.prepare(48000.0, 256);
+        if (measure_true_peak) REQUIRE(meter.true_peak_oversample_factor() == requested);
+      } else {
+        REQUIRE_FALSE(sonare::mixing::is_realtime_true_peak_oversample(requested));
+        try {
+          meter.prepare(48000.0, 256);
+          FAIL("prepare accepted an oversample factor the meter cannot run");
+        } catch (const sonare::SonareException& e) {
+          REQUIRE(e.code() == sonare::ErrorCode::InvalidParameter);
+        }
+      }
+    }
+  }
+}
 
-    sonare::mixing::MeterConfig config;
-    config.measure_true_peak = true;
-    config.true_peak_oversample = requested;
-    sonare::mixing::MeterProcessor meter(config);
-    meter.prepare(48000.0, 256);
-    REQUIRE(meter.true_peak_oversample_factor() == expected);
+TEST_CASE("ChannelStrip refuses an unsupported meter oversample even with metering off",
+          "[mixing][meter]") {
+  for (const bool enable_metering : {true, false}) {
+    CAPTURE(enable_metering);
+    sonare::mixing::ChannelStripConfig config;
+    config.enable_metering = enable_metering;
+    config.meter.true_peak_oversample = 2;
+    try {
+      sonare::mixing::ChannelStrip strip(config);
+      FAIL("ChannelStrip accepted a 2x meter oversample");
+    } catch (const sonare::SonareException& e) {
+      REQUIRE(e.code() == sonare::ErrorCode::InvalidParameter);
+    }
+  }
+}
+
+TEST_CASE("MeterProcessor counts a non-finite sample as silence in every published field",
+          "[mixing][meter][non_finite]") {
+  // Windows fill first (3 s short-term) so the loudness fields are live when the poison lands.
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 4800;
+  constexpr int kWarmBlocks = 31;
+  constexpr size_t kPoisonIndex = 1000;
+  const auto run = [&](float poison) {
+    sonare::mixing::MeterProcessor meter(sonare::mixing::kPublishedMeterConfig);
+    meter.prepare(kSr, kBlock);
+    std::vector<float> left(kBlock);
+    std::vector<float> right(kBlock);
+    for (int b = 0; b <= kWarmBlocks; ++b) {
+      for (int i = 0; i < kBlock; ++i) {
+        const float t = static_cast<float>(b * kBlock + i) / static_cast<float>(kSr);
+        left[static_cast<size_t>(i)] = 0.5f * std::sin(sonare::constants::kTwoPi * 997.0f * t);
+        right[static_cast<size_t>(i)] = 0.4f * std::sin(sonare::constants::kTwoPi * 613.0f * t);
+      }
+      if (b == kWarmBlocks) {
+        left[kPoisonIndex] = poison;
+        right[kPoisonIndex] = poison;
+      }
+      float* channels[] = {left.data(), right.data()};
+      meter.process(channels, 2, kBlock);
+    }
+    return std::make_pair(meter.snapshot(), meter.non_finite_discard_count());
+  };
+
+  const auto [control, control_discards] = run(0.0f);
+  REQUIRE(control_discards == 0u);
+  // Non-vacuity: every loudness window reports before the poisoned block is compared.
+  REQUIRE(control.short_term_lufs > sonare::constants::kFloorDb);
+  REQUIRE(control.integrated_lufs > sonare::constants::kFloorDb);
+  REQUIRE(control.max_true_peak_db > sonare::constants::kFloorDb);
+
+  for (const float poison :
+       {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity(),
+        -std::numeric_limits<float>::infinity()}) {
+    CAPTURE(poison);
+    const auto [snap, discards] = run(poison);
+    REQUIRE(discards == 1u);
+    const float db_fields[] = {snap.peak_db[0],       snap.peak_db[1],      snap.rms_db[0],
+                               snap.rms_db[1],        snap.true_peak_db[0], snap.true_peak_db[1],
+                               snap.max_true_peak_db, snap.momentary_lufs,  snap.short_term_lufs,
+                               snap.integrated_lufs};
+    for (const float value : db_fields) {
+      REQUIRE(std::isfinite(value));
+      REQUIRE(value >= sonare::constants::kFloorDb);
+    }
+    for (const float value : {snap.correlation, snap.mono_compat_peak, snap.mono_compat_width,
+                              snap.mono_compat_side_rms}) {
+      REQUIRE(std::isfinite(value));
+    }
+    // Peak, RMS, true peak, mono-compat and loudness all counted the same silent sample.
+    REQUIRE(snap.peak_db == control.peak_db);
+    REQUIRE(snap.rms_db == control.rms_db);
+    REQUIRE(snap.true_peak_db == control.true_peak_db);
+    REQUIRE(snap.max_true_peak_db == control.max_true_peak_db);
+    REQUIRE(snap.momentary_lufs == control.momentary_lufs);
+    REQUIRE(snap.short_term_lufs == control.short_term_lufs);
+    REQUIRE(snap.integrated_lufs == control.integrated_lufs);
+    REQUIRE(snap.correlation == control.correlation);
+    REQUIRE(snap.mono_compat_peak == control.mono_compat_peak);
+    REQUIRE(snap.mono_compat_side_rms == control.mono_compat_side_rms);
+    REQUIRE(snap.mono_compat_width == control.mono_compat_width);
   }
 }
 

@@ -290,6 +290,10 @@ void sonare_vocal_free_state_bytes(SonareVocalStateBytes* v) {
 #define VOCAL_SUPPORTED_BODY(...) __VA_ARGS__
 #define VOCAL_ACTION(...) return invoke([&] { VOCAL_SUPPORTED_BODY(__VA_ARGS__); })
 namespace {
+static_assert(static_cast<int>(vocal::PitchTargetMode::kCurve) == SONARE_VOCAL_TARGET_CURVE &&
+                  static_cast<int>(vocal::FormantMode::kShift) == SONARE_VOCAL_FORMANT_SHIFT &&
+                  static_cast<int>(vocal::MergeMode::kResetEdits) == SONARE_VOCAL_MERGE_RESET,
+              "SonareVocal* ordinals must mirror the vocal edit enums");
 SonareVocalStateToken map_token(const vocal::VocalStateToken& v) {
   return {v.epoch, v.committed_revision, v.draft_id, v.draft_generation, 0, 1};
 }
@@ -309,7 +313,11 @@ vocal::VocalNoteEdit import_edit(const SonareVocalNoteEdit& v) {
     throw vocal::VocalEditException(vocal::VocalReason::kInvalidInput, "muted must be boolean",
                                     "muted");
   vocal::VocalNoteEdit e;
-  e.pitch.target.mode = static_cast<vocal::PitchTargetMode>(v.target_mode);
+  if (!sonare_c_detail::ordinal_to_enum(v.target_mode, SONARE_VOCAL_TARGET_NONE,
+                                        SONARE_VOCAL_TARGET_CURVE, &e.pitch.target.mode)) {
+    throw vocal::VocalEditException(vocal::VocalReason::kInvalidInput, "unknown pitch target mode",
+                                    "target_mode");
+  }
   e.pitch.target.center_midi = v.target_midi;
   checked_count(v.target_points, v.target_point_count, "target_points");
   for (uint64_t i = 0; i < v.target_point_count; ++i)
@@ -324,7 +332,11 @@ vocal::VocalNoteEdit import_edit(const SonareVocalNoteEdit& v) {
   e.destination_length_samples = v.destination_length_samples;
   e.gain_db = v.gain_db;
   e.muted = v.muted != 0;
-  e.formant.mode = static_cast<vocal::FormantMode>(v.formant_mode);
+  if (!sonare_c_detail::ordinal_to_enum(v.formant_mode, SONARE_VOCAL_FORMANT_PRESERVE,
+                                        SONARE_VOCAL_FORMANT_SHIFT, &e.formant.mode)) {
+    throw vocal::VocalEditException(vocal::VocalReason::kInvalidInput, "unknown formant mode",
+                                    "formant_mode");
+  }
   e.formant.shift_semitones = v.formant_shift_semitones;
   e.amplitude_envelope =
       copy_input(v.amplitude_envelope, v.amplitude_envelope_count, "amplitude_envelope");
@@ -352,9 +364,15 @@ vocal::Operation import_operation(const SonareVocalOperation& v) {
                                         v.destination_length_samples};
     case SONARE_VOCAL_SPLIT:
       return vocal::SplitNoteOp{v.note_id, v.cut_source_sample};
-    case SONARE_VOCAL_MERGE:
-      return vocal::MergeNotesOp{copy_input(v.note_ids, v.note_id_count, "note_ids"),
-                                 static_cast<vocal::MergeMode>(v.merge_policy)};
+    case SONARE_VOCAL_MERGE: {
+      vocal::MergeMode merge = vocal::MergeMode::kPreserveEdits;
+      if (!sonare_c_detail::ordinal_to_enum(v.merge_policy, SONARE_VOCAL_MERGE_PRESERVE,
+                                            SONARE_VOCAL_MERGE_RESET, &merge)) {
+        throw vocal::VocalEditException(vocal::VocalReason::kInvalidInput, "unknown merge policy",
+                                        "merge_policy");
+      }
+      return vocal::MergeNotesOp{copy_input(v.note_ids, v.note_id_count, "note_ids"), merge};
+    }
     case SONARE_VOCAL_SET_TRANSITION:
       return vocal::SetTransitionOp{import_transition(v.transition)};
     case SONARE_VOCAL_REMOVE_TRANSITION:

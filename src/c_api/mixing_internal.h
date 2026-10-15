@@ -117,11 +117,7 @@ inline bool parse_automation_curve(int curve, sonare::mixing::AutomationCurveTyp
   if (!out) {
     return false;
   }
-  if (curve < 0 || curve > 3) {
-    return false;
-  }
-  *out = static_cast<sonare::mixing::AutomationCurveType>(curve);
-  return true;
+  return sonare_c_detail::ordinal_to_enum(curve, 0, 3, out);
 }
 
 inline sonare::mixing::PanMode to_pan_mode(int mode) {

@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "analysis/music_analyzer.h"
+#include "core/resample.h"
 #include "support/rate_material.h"
 #include "util/constants.h"
 
@@ -473,6 +475,82 @@ TEST_CASE("TimbreAnalyzer centroid and rolloff are invariant to the input rate",
                        << ref_rolloff);
       CHECK(std::abs(centroid / ref_centroid - 1.0f) <= 0.05f);
       CHECK(std::abs(rolloff / ref_rolloff - 1.0f) <= 0.05f);
+    }
+  }
+}
+
+TEST_CASE("TimbreAnalyzer reports no density for silence", "[timbre_analyzer][evidence]") {
+  const Audio silence = Audio::from_vector(std::vector<float>(22050 * 2, 0.0f), 22050);
+  TimbreAnalyzer analyzer(silence);
+  CHECK(analyzer.density() == 0.0f);
+  for (const Timbre& t : analyzer.timbre_over_time()) CHECK(t.density == 0.0f);
+
+  // Silence between two noise passages: the window inside the gap reports no density while
+  // the noise windows keep theirs.
+  const Audio noise = create_noise(22050, 1.5f);
+  std::vector<float> samples(noise.begin(), noise.end());
+  samples.insert(samples.end(), static_cast<size_t>(22050 * 1.5f), 0.0f);
+  samples.insert(samples.end(), noise.begin(), noise.end());
+  TimbreConfig config;
+  config.window_sec = 0.5f;
+  TimbreAnalyzer gapped(Audio::from_vector(std::move(samples), 22050), config);
+  const std::vector<Timbre>& windows = gapped.timbre_over_time();
+  // 21 frames of 512 samples per window; window 4 spans 1.95-2.41 s, inside the 1.5-3.0 s gap.
+  REQUIRE(windows.size() > 5u);
+  CHECK(windows[0].density > 0.3f);
+  CHECK(windows[4].density == 0.0f);
+  CHECK(windows.back().density > 0.3f);
+}
+
+namespace {
+
+/// Tremolo tone plus low-passed noise, synthesized at 22050 Hz and resampled to @p sr so every
+/// rate carries the same band-limited content.
+Audio tremolo_tone_and_noise(int sr) {
+  constexpr int kBase = 22050;
+  std::vector<float> samples(static_cast<size_t>(kBase * 4));
+  unsigned int seed = 12345;
+  float noise_state = 0.0f;
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / kBase;
+    const float tremolo = 0.6f + 0.4f * std::sin(constants::kTwoPi * 5.0f * t);
+    float tone = 0.0f;
+    for (int h = 1; h <= 3; ++h) {
+      tone += std::pow(0.5f, static_cast<float>(h - 1)) *
+              std::sin(constants::kTwoPi * 440.0f * static_cast<float>(h) * t);
+    }
+    seed = seed * 1103515245 + 12345;
+    const float white = static_cast<float>(seed % 65536) / 32768.0f - 1.0f;
+    noise_state += 0.3f * (white - noise_state);
+    samples[i] = 0.2f * tremolo * tone + 0.05f * noise_state;
+  }
+  Audio base = Audio::from_vector(std::move(samples), kBase);
+  return sr == kBase ? base : resample(base, sr);
+}
+
+}  // namespace
+
+TEST_CASE("TimbreAnalyzer brightness and roughness agree across rates and with analyze()",
+          "[analysis_rate][timbre_analyzer]") {
+  const Audio ref_audio = tremolo_tone_and_noise(22050);
+  const Timbre ref = TimbreAnalyzer(ref_audio).timbre();
+  // Not agreeing by being degenerate: the tremolo moves the spectrum frame to frame.
+  REQUIRE(ref.roughness > 0.05f);
+  REQUIRE(ref.brightness > 0.01f);
+
+  for (int sr : {22050, 44100, 48000}) {
+    DYNAMIC_SECTION("sr " << sr) {
+      const Audio audio = tremolo_tone_and_noise(sr);
+      const Timbre standalone = TimbreAnalyzer(audio).timbre();
+      MusicAnalyzer music(audio);
+      const Timbre routed = music.timbre_analyzer().timbre();
+      INFO("brightness " << standalone.brightness << " / " << routed.brightness << " vs "
+                         << ref.brightness << ", roughness " << standalone.roughness << " / "
+                         << routed.roughness << " vs " << ref.roughness);
+      CHECK(std::abs(standalone.brightness / ref.brightness - 1.0f) <= 0.05f);
+      CHECK(std::abs(routed.brightness / ref.brightness - 1.0f) <= 0.05f);
+      CHECK(std::abs(standalone.roughness / ref.roughness - 1.0f) <= 0.10f);
+      CHECK(std::abs(routed.roughness / ref.roughness - 1.0f) <= 0.10f);
     }
   }
 }

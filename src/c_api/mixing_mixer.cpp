@@ -895,10 +895,6 @@ SonareError process_planar(SonareMixer* mixer, const float* const* input_left,
   }
 
   SONARE_C_TRY
-  for (int ch = 0; ch < out_channels; ++ch) {
-    std::fill(output[ch], output[ch] + num_samples, 0.0f);
-  }
-
   // Lazy compile: rebuild the routing graph if topology changed since the last
   // process/compile. Acceptable to allocate here (offline/block convenience entry).
   if (mixer->compiled_dirty) {
@@ -916,6 +912,10 @@ SonareError process_planar(SonareMixer* mixer, const float* const* input_left,
   mixer->graph.process_block(n);
   mixer->timeline_sample_pos += static_cast<int64_t>(num_samples);
 
+  // The caller's buffers are written only once compile and processing have succeeded.
+  for (int ch = 0; ch < out_channels; ++ch) {
+    std::fill(output[ch], output[ch] + num_samples, 0.0f);
+  }
   const int planes = std::min(out_channels, mixer->output_channels);
   for (int ch = 0; ch < planes; ++ch) {
     const float* master = mixer->graph.output(mixer->master_id, ch);

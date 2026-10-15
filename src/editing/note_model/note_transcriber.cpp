@@ -6,6 +6,7 @@
 #include <functional>
 #include <vector>
 
+#include "analysis/analysis_rate.h"
 #include "editing/note_model/note_extractor.h"
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/pitch_editor/note_segmenter.h"
@@ -191,6 +192,8 @@ float peak_rms(const NoteObject& note) noexcept {
 
 std::vector<NoteObject> monophonic_notes(const Audio& audio, const TranscribeConfig& config) {
   PitchConfig pitch_config;
+  // The pYIN frame is the librosa default at 22050 Hz, held as a duration.
+  pitch_config.frame_length = window_length_at_rate(pitch_config.frame_length, audio.sample_rate());
   pitch_config.fmin = config.fmin;
   pitch_config.fmax = config.fmax;
   pitch_config.center = true;

@@ -88,13 +88,30 @@ struct MeterConfig {
   /// @brief When false, all LUFS work is skipped and LUFS fields stay at the floor.
   bool measure_lufs = true;
   bool measure_true_peak = false;
-  /// @brief Requested true-peak oversample factor. The realtime meter implements
-  /// 2x, 4x, and 8x: 2 selects 2x, 8..16 select 8x (16x is offline-only; use offline
-  /// metering::true_peak for true 16x), and every other value (0, 1, 3..7) selects the
-  /// BS.1770-4 4x minimum.
+  /// @brief True-peak oversample factor: 4 (the BS.1770-4 minimum) or 8. Any other
+  /// value is refused by prepare() (see is_realtime_true_peak_oversample); 16x is
+  /// offline-only, through metering::true_peak.
   int true_peak_oversample = 4;
   float mono_compat_correlation_threshold = 0.0f;
 };
+
+/// @brief Whether the realtime meter runs @p factor: 4x (the BS.1770-4 minimum) or 8x.
+///        The one rule every entry point that accepts a meter oversample request applies.
+constexpr bool is_realtime_true_peak_oversample(int factor) noexcept {
+  return factor == 4 || factor == 8;
+}
+
+/// @brief Refuses a MeterConfig the realtime meter cannot run.
+/// @throws SonareException (InvalidParameter) for an oversample factor outside
+///         is_realtime_true_peak_oversample.
+void validate_realtime_meter_config(const MeterConfig& config);
+
+/// @brief The configuration every meter the mixer publishes (strip, bus, master) is
+///        built from: LUFS plus true peak at 4x.
+inline constexpr MeterConfig kPublishedMeterConfig{/*measure_lufs=*/true,
+                                                   /*measure_true_peak=*/true,
+                                                   /*true_peak_oversample=*/4,
+                                                   /*mono_compat_correlation_threshold=*/0.0f};
 
 class MeterProcessor : public rt::ProcessorBase {
  public:
@@ -119,7 +136,7 @@ class MeterProcessor : public rt::ProcessorBase {
   ///        starts a new signal. A meter that has not measured true peak is left as is.
   void flush_true_peak() noexcept;
 
-  /// @brief Oversample factor (2, 4 or 8) the true-peak filter runs at once prepared.
+  /// @brief Oversample factor (4 or 8) the true-peak filter runs at once prepared.
   int true_peak_oversample_factor() const noexcept { return true_peak_filter_.factor(); }
 
  private:
@@ -148,6 +165,8 @@ class MeterProcessor : public rt::ProcessorBase {
   // Silent stand-in fed to the upsampler for a null meter channel so the
   // filter's positional cross-block history stays aligned to each channel slot.
   std::vector<float> true_peak_zero_in_{};
+  // Silence-for-non-finite copy of a plane chunk that carried a non-finite sample.
+  std::array<std::vector<float>, kTruePeakChannels> true_peak_finite_in_{};
   int max_block_size_ = 0;
 
   // Seqlock cell publishing the most recent snapshot. The reader (snapshot())

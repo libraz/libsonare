@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_ACOUSTIC_SIM)
@@ -1353,4 +1354,104 @@ TEST_CASE("sonare acoustic C API stereo morph refuses invalid arguments", "[c_ap
         SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &cfg, nullptr) ==
         SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("sonare acoustic C API refuses a selector outside its documented set",
+          "[c_api][acoustic]") {
+  std::vector<float> input(2000, 0.0f);
+  input[0] = 1.0f;
+  SonareRoomMorphConfig morph{};
+  morph.length_m = 7.0f;
+  morph.width_m = 5.0f;
+  morph.height_m = 3.0f;
+  morph.source_x = 1.5f;
+  morph.source_y = 1.0f;
+  morph.source_z = 1.2f;
+  morph.listener_x = 5.0f;
+  morph.listener_y = 4.0f;
+  morph.listener_z = 1.7f;
+  morph.absorption = 0.3f;
+  morph.wet = 1.0f;
+  morph.max_seconds = 0.1f;
+  morph.ism_order = 2;
+
+  const auto rir_result = [](const SonareRirSynthConfig& cfg) {
+    SonareRirSynthResult result{};
+    const SonareError err = sonare_synthesize_rir(&cfg, 48000, &result);
+    const bool wrote = result.rir != nullptr;
+    sonare_free_rir_synth_result(&result);
+    return std::make_pair(err, wrote);
+  };
+  const auto morph_result = [&](const SonareRoomMorphConfig& cfg) {
+    float* out = nullptr;
+    size_t out_length = 0;
+    const SonareError err =
+        sonare_room_morph(input.data(), input.size(), 48000, &cfg, &out, &out_length);
+    const bool wrote = out != nullptr;
+    sonare_free_floats(out);
+    SonareRoomMorphStereoResult stereo{};
+    const SonareError stereo_err =
+        sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &cfg, &stereo);
+    const bool stereo_wrote = stereo.left != nullptr;
+    sonare_free_room_morph_stereo_result(&stereo);
+    REQUIRE(stereo_err == err);
+    return std::make_pair(err, wrote || stereo_wrote);
+  };
+
+  for (int late_model : {-1, 3, 7}) {
+    CAPTURE(late_model);
+    SonareRirSynthConfig cfg = valid_rir_config();
+    cfg.late_model = late_model;
+    REQUIRE(rir_result(cfg) == std::make_pair(SONARE_ERROR_INVALID_PARAMETER, false));
+    SonareRoomMorphConfig m = morph;
+    m.late_model = late_model;
+    REQUIRE(morph_result(m) == std::make_pair(SONARE_ERROR_INVALID_PARAMETER, false));
+  }
+  for (int late_model :
+       {SONARE_REVERB_MODEL_DEFAULT, SONARE_REVERB_MODEL_SABINE, SONARE_REVERB_MODEL_EYRING}) {
+    CAPTURE(late_model);
+    SonareRirSynthConfig cfg = valid_rir_config();
+    cfg.late_model = late_model;
+    REQUIRE(rir_result(cfg) == std::make_pair(SONARE_OK, true));
+    SonareRoomMorphConfig m = morph;
+    m.late_model = late_model;
+    REQUIRE(morph_result(m) == std::make_pair(SONARE_OK, true));
+  }
+
+  for (int preset : {-1, SONARE_MATERIAL_PRESET_GLASS + 1, 99}) {
+    CAPTURE(preset);
+    SonareRirSynthConfig cfg = valid_rir_config();
+    cfg.material_preset = preset;
+    REQUIRE(rir_result(cfg) == std::make_pair(SONARE_ERROR_INVALID_PARAMETER, false));
+    SonareRoomMorphConfig m = morph;
+    m.material_preset = preset;
+    REQUIRE(morph_result(m) == std::make_pair(SONARE_ERROR_INVALID_PARAMETER, false));
+  }
+  for (int preset = SONARE_MATERIAL_PRESET_NONE; preset <= SONARE_MATERIAL_PRESET_GLASS; ++preset) {
+    CAPTURE(preset);
+    SonareRirSynthConfig cfg = valid_rir_config();
+    cfg.material_preset = preset;
+    REQUIRE(rir_result(cfg) == std::make_pair(SONARE_OK, true));
+  }
+
+  // The estimator's routing mode is refused the same way, before any analysis.
+  SonareRirSynthConfig source = valid_rir_config();
+  source.max_seconds = 0.5f;
+  SonareRirSynthResult rir{};
+  REQUIRE(sonare_synthesize_rir(&source, 48000, &rir) == SONARE_OK);
+  for (int mode : {-1, SONARE_ACOUSTIC_MODE_IMPULSE_RESPONSE + 1}) {
+    CAPTURE(mode);
+    SonareRoomEstimateConfig estimate_cfg = valid_estimate_config();
+    estimate_cfg.mode = mode;
+    SonareRoomEstimate estimate{};
+    REQUIRE(sonare_estimate_room(rir.rir, rir.length, 48000, &estimate_cfg, &estimate) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(estimate.absorption_bands == nullptr);
+    REQUIRE(estimate.band_count == 0);
+  }
+  SonareRoomEstimateConfig estimate_cfg = valid_estimate_config();
+  SonareRoomEstimate estimate{};
+  REQUIRE(sonare_estimate_room(rir.rir, rir.length, 48000, &estimate_cfg, &estimate) == SONARE_OK);
+  sonare_free_room_estimate(&estimate);
+  sonare_free_rir_synth_result(&rir);
 }

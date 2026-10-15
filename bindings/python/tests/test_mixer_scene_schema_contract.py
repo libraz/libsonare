@@ -154,7 +154,6 @@ _BOUNDED = [
     (("strips", 0, "panMode"), 2, "panMode enum is out of range"),
     (("strips", 0, "panLaw"), 3, "panLaw enum is out of range"),
     (("strips", 0, "channelDelaySamples"), 192000, "channelDelaySamples must be in"),
-    (("strips", 0, "metering", "truePeakOversample"), 16, "truePeakOversample must be in"),
 ]
 
 
@@ -196,3 +195,22 @@ def test_the_schema_and_the_loader_agree_on_where_each_bound_sits(
     assert any("over the maximum" in finding for finding in findings), findings
     with pytest.raises(RuntimeError):
         libsonare.Mixer.from_scene_json(json.dumps(scene))
+
+
+@pytest.mark.parametrize("factor", [4, 8, 0, 1, 2, 3, 5, 16])
+def test_the_schema_and_the_loader_agree_on_the_true_peak_oversample_set(factor: int) -> None:
+    """truePeakOversample is a set, not a range: both arms admit exactly {4, 8}.
+
+    0 is refused by both, because a scene states a factor or omits the field; the
+    "0 selects the default" convention belongs to the C ABI's positional argument.
+    """
+    scene = _preset_scene("vocalReverbSend")
+    _place(scene, ("strips", 0, "metering", "truePeakOversample"), factor)
+    findings = _findings(scene)
+    if factor in (4, 8):
+        assert findings == []
+        libsonare.Mixer.from_scene_json(json.dumps(scene)).close()
+    else:
+        assert any("is outside [4, 8]" in finding for finding in findings), findings
+        with pytest.raises(RuntimeError):
+            libsonare.Mixer.from_scene_json(json.dumps(scene))

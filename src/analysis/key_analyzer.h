@@ -170,10 +170,15 @@ Key estimate_key_from_chords(const std::vector<struct Chord>& chords);
 /// @param chroma_key Key from chroma analysis, carrying the posterior confidence
 /// @param chords Detected chords
 /// @return Refined key estimate. The confidence it carries is whichever of the
-///         two inputs won, so it is on that input's scale.
+///         two inputs won, so it is on that input's scale; a caller publishing the
+///         key restates it through @ref key_posterior, as MusicAnalyzer::analyze does.
 /// @warning The two inputs measure different things — a posterior over key
 ///          candidates against a diatonic-coverage share — and this arbitrates
 ///          between them with fixed thresholds rather than a common scale.
 Key refine_key_with_chords(const Key& chroma_key, const std::vector<struct Chord>& chords);
+
+/// @brief Softmax posterior of @p key among @p candidates (matched on root and mode).
+/// @return That candidate's confidence, or 0 when @p key was not among the scored candidates.
+float key_posterior(const std::vector<KeyCandidate>& candidates, const Key& key);
 
 }  // namespace sonare

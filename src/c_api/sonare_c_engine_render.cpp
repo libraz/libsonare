@@ -48,18 +48,12 @@ std::vector<std::vector<float>> resample_channels(const std::vector<std::vector<
 }
 
 #if defined(SONARE_WITH_MASTERING)
+static_assert(static_cast<int>(mastering::final::DitherType::NoiseShaped) == 3,
+              "SonareEngineBounceOptions::dither ordinals must mirror DitherType");
+
+// For an ordinal the option check has already admitted.
 mastering::final::DitherType dither_type_from_int(int value) {
-  switch (value) {
-    case 1:
-      return mastering::final::DitherType::Rpdf;
-    case 2:
-      return mastering::final::DitherType::Tpdf;
-    case 3:
-      return mastering::final::DitherType::NoiseShaped;
-    case 0:
-    default:
-      return mastering::final::DitherType::None;
-  }
+  return admitted_ordinal_to_enum<mastering::final::DitherType>(value);
 }
 #endif
 
@@ -241,7 +235,7 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
   // Reject an out-of-range dither type instead of silently mapping it to None,
   // which would return SONARE_OK with undithered audio and no way to tell that
   // the request was ignored (same policy as the analysis options' chroma_method).
-  if (options->dither < 0 || options->dither > 3) {
+  if (!valid_c_enum(options->dither, 0, 3)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // Every option-derived refusal precedes the render, which consumes engine state.

@@ -858,9 +858,10 @@ SonareError sonare_render_percussive_events(const float* samples, size_t length,
                                             size_t* out_length);
 
 /// @param pitch_semitones Transpose in semitones; 0 leaves the pitch alone.
-/// @param formant_factor Formant warp applied after the pitch shift (relative mode); 1 applies
-///        no warp, so the formants follow the pitch. See @ref sonare_voice_change_ex for the
-///        mode that keeps them.
+/// @param formant_factor Formant warp applied after the pitch shift (relative mode), in
+///        [0.55, 1.65]; 1 applies no warp, so the formants follow the pitch. A factor outside
+///        that range is SONARE_ERROR_INVALID_PARAMETER rather than clamped. See
+///        @ref sonare_voice_change_ex for the mode that keeps them.
 /// @note Both must be finite; neither has a spelling of "unspecified". This call
 ///       assigns them into the config unchecked and the core refuses a
 ///       non-finite one, so either comes back as SONARE_ERROR_INVALID_PARAMETER
@@ -894,11 +895,12 @@ typedef struct {
 } SonareVoiceChangeConfig;
 
 /// @brief @ref sonare_voice_change with a choice of formant mode.
-/// @param config Required. A @c formant_mode outside @ref SonareFormantMode, or an
-///        absolute-mode request whose warp (the factor divided by 2^(semitones/12)) falls
-///        outside [0.55, 1.65], is SONARE_ERROR_INVALID_PARAMETER; for the latter
-///        sonare_last_error_message() names the reachable formant-factor range for the
-///        given semitones. The request is refused rather than clamped.
+/// @param config Required. A @c formant_mode outside @ref SonareFormantMode, a
+///        relative-mode factor outside [0.55, 1.65], or an absolute-mode request whose warp (the
+///        factor divided by 2^(semitones/12)) falls outside [0.55, 1.65], is
+///        SONARE_ERROR_INVALID_PARAMETER; for the latter sonare_last_error_message() names the
+///        reachable formant-factor range for the given semitones. The request is refused rather
+///        than clamped.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_voice_change_ex(const float* samples, size_t length, int sample_rate,
                                    const SonareVoiceChangeConfig* config, float** out,

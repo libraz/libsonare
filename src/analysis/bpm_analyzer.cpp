@@ -27,11 +27,13 @@ std::vector<BpmHistogramBin> build_bpm_histogram(const std::vector<float>& candi
 
   /// Build histogram
   std::vector<int> hist(n_bins, 0);
+  std::vector<double> bpm_sum(n_bins, 0.0);
   for (float bpm : candidates) {
     if (bpm >= bpm_min && bpm <= bpm_max) {
       int bin_idx = static_cast<int>((bpm - bpm_min) / bin_width);
       bin_idx = std::clamp(bin_idx, 0, n_bins - 1);
       hist[bin_idx]++;
+      bpm_sum[bin_idx] += bpm;
     }
   }
 
@@ -40,7 +42,8 @@ std::vector<BpmHistogramBin> build_bpm_histogram(const std::vector<float>& candi
   result.reserve(n_bins);
   for (int i = 0; i < n_bins; ++i) {
     if (hist[i] > 0) {
-      result.push_back({bpm_min + i * bin_width, hist[i]});
+      // A bin reports the mean of the tempos it holds, not its lower edge.
+      result.push_back({static_cast<float>(bpm_sum[i] / hist[i]), hist[i]});
     }
   }
 
@@ -465,6 +468,7 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
   const int n_hist_bins =
       static_cast<int>((config_.bpm_max - config_.bpm_min) / bpm_constants::kBinWidth) + 1;
   std::vector<int> tempo_hist(n_hist_bins > 0 ? static_cast<size_t>(n_hist_bins) : 0u, 0);
+  std::vector<double> tempo_hist_bpm_sum(tempo_hist.size(), 0.0);
   int lag_min = bpm_to_lag(config_.bpm_max, sr, hop_length);
   int lag_max_inner = bpm_to_lag(config_.bpm_min, sr, hop_length);
   lag_min = std::max(1, lag_min);
@@ -487,17 +491,21 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
           int bin_idx = static_cast<int>((bpm - config_.bpm_min) / bpm_constants::kBinWidth);
           bin_idx = std::clamp(bin_idx, 0, static_cast<int>(tempo_hist.size()) - 1);
           tempo_hist[static_cast<size_t>(bin_idx)] += weight;
+          tempo_hist_bpm_sum[static_cast<size_t>(bin_idx)] += static_cast<double>(bpm) * weight;
         }
       }
     }
   }
 
+  // A bin reports the vote-weighted mean of the refined tempos in it, not its lower edge.
+  const auto bin_bpm = [&](size_t i) {
+    return static_cast<float>(tempo_hist_bpm_sum[i] / static_cast<double>(tempo_hist[i]));
+  };
   std::vector<BpmHistogramBin> histogram;
   histogram.reserve(tempo_hist.size());
   for (size_t i = 0; i < tempo_hist.size(); ++i) {
     if (tempo_hist[i] > 0) {
-      histogram.push_back(
-          {config_.bpm_min + static_cast<float>(i) * bpm_constants::kBinWidth, tempo_hist[i]});
+      histogram.push_back({bin_bpm(i), tempo_hist[i]});
     }
   }
   std::sort(histogram.begin(), histogram.end(),
@@ -560,12 +568,12 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
     const int chosen_bin =
         std::clamp(static_cast<int>((bpm_ - config_.bpm_min) / bpm_constants::kBinWidth), 0,
                    static_cast<int>(tempo_hist.size()) - 1);
-    const float chosen_center =
-        config_.bpm_min + static_cast<float>(chosen_bin) * bpm_constants::kBinWidth;
+    const size_t chosen_index = static_cast<size_t>(chosen_bin);
+    const bool chosen_has_votes = tempo_hist[chosen_index] > 0;
     candidates_.clear();
-    candidates_.push_back({bpm_, vote_share(tempo_hist[static_cast<size_t>(chosen_bin)])});
+    candidates_.push_back({bpm_, vote_share(tempo_hist[chosen_index])});
     for (const auto& bin : top_bins) {
-      if (bin.bpm_center == chosen_center) continue;
+      if (chosen_has_votes && bin.bpm_center == bin_bpm(chosen_index)) continue;
       candidates_.push_back({bin.bpm_center, vote_share(bin.votes)});
     }
   }

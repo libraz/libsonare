@@ -23,6 +23,10 @@ using namespace sonare_c_engine_detail;
 #if defined(SONARE_WITH_GRAPH)
 namespace {
 
+static_assert(static_cast<int>(graph::Connection::Mix::Replace) == 0 &&
+                  static_cast<int>(graph::Connection::Mix::Add) == 1,
+              "SonareEngineGraphConnection::mix ordinals must mirror graph::Connection::Mix");
+
 std::unique_ptr<rt::ProcessorBase> make_graph_processor(const SonareEngineGraphNode& node) {
   switch (node.type) {
     case 0:
@@ -62,7 +66,9 @@ SonareError sonare_engine_arm_capture(SonareRealtimeEngine* engine, int armed) {
 SonareError sonare_engine_set_capture_punch(SonareRealtimeEngine* engine, int64_t start_sample,
                                             int64_t end_sample, int enabled) {
   SONARE_C_API_ENTRY;
-  if (!engine || start_sample < 0 || end_sample < start_sample) {
+  // An enabled empty window would read as "no punch" and record everything.
+  if (!engine || start_sample < 0 || end_sample < start_sample ||
+      (enabled != 0 && end_sample == start_sample)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   engine->engine.set_capture_punch(start_sample, end_sample, enabled != 0);
@@ -153,9 +159,8 @@ SonareError sonare_engine_set_graph(SonareRealtimeEngine* engine,
     graph_connection.source_port = connection.source_port;
     graph_connection.dest_node = fixed_text(connection.dest_node, sizeof(connection.dest_node));
     graph_connection.dest_port = connection.dest_port;
-    graph_connection.mix =
-        connection.mix == 0 ? graph::Connection::Mix::Replace : graph::Connection::Mix::Add;
-    if (!graph->connect(std::move(graph_connection))) {
+    if (!ordinal_to_enum(connection.mix, 0, 1, &graph_connection.mix) ||
+        !graph->connect(std::move(graph_connection))) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
   }

@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/c_ordinal.h"
 #include "midi/builtin_synth.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/patch_tuning.h"
@@ -32,7 +33,10 @@ namespace sonare_c_detail {
 template <typename C>
 inline sonare::midi::BuiltinSynthConfig builtin_synth_config_from_c(const C& c) {
   sonare::midi::BuiltinSynthConfig cfg;
-  cfg.waveform = static_cast<sonare::midi::SynthWaveform>(c.waveform);
+  if (!ordinal_to_enum(c.waveform, 0, SONARE_SYNTH_WAVEFORM_COUNT - 1, &cfg.waveform)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "waveform is not a SONARE_SYNTH_WAVEFORM_* value");
+  }
   // clamp_synth_config reads a non-positive or non-finite field as "use the
   // built-in default" and reports nothing, so a request that reached it came
   // back as a successful call at a level the caller never chose. Refused here,
@@ -165,26 +169,6 @@ static_assert(static_cast<int>(sonare::midi::synth::ModSource::kPitchBend) + 1 =
 static_assert(static_cast<int>(sonare::midi::synth::ModDestination::kSpectrumMorph) + 1 ==
               SONARE_SYNTH_MOD_DESTINATION_COUNT);
 
-inline sonare::midi::synth::ModSource mod_source_from_c(int value) noexcept {
-  using sonare::midi::synth::ModSource;
-  if (value < static_cast<int>(ModSource::kNone) ||
-      value > static_cast<int>(ModSource::kPitchBend)) {
-    return ModSource::kNone;
-  }
-  return static_cast<ModSource>(value);
-}
-
-inline sonare::midi::synth::ModDestination mod_destination_from_c(int value) noexcept {
-  using sonare::midi::synth::ModDestination;
-  if (value < static_cast<int>(ModDestination::kNone) ||
-      value > static_cast<int>(ModDestination::kSpectrumMorph)) {
-    return ModDestination::kNone;
-  }
-  return static_cast<ModDestination>(value);
-}
-
-inline bool valid_c_enum(int value, int count) noexcept { return value >= 0 && value < count; }
-
 /// The built-in synth's oscillator waveform ordinal, shared by the project
 /// bounce and realtime-engine entry points so the two cannot answer differently
 /// for the same value. Unlike the surrounding numeric fields there is no
@@ -248,6 +232,16 @@ inline const SynthPatchSampleBounds& synth_patch_sample_bounds() {
                                   high.sample.start_offset01};
   }();
   return bounds;
+}
+
+/// The mod-route depth bound, read back from the patch clamp's extreme.
+inline float synth_patch_mod_depth_limit() {
+  static const float limit = [] {
+    sonare::midi::synth::NativeSynthPatch p = sonare::midi::synth::NativeSynthConfig{}.patch;
+    p.mod_matrix.routes[0].depth = std::numeric_limits<float>::max();
+    return sonare::midi::synth::clamp_synth_patch(p).mod_matrix.routes[0].depth;
+  }();
+  return limit;
 }
 
 /// Copies the engine section @p mode reads from @p from into @p to, leaving
@@ -322,16 +316,16 @@ inline void copy_engine_section(const sonare::midi::synth::NativeSynthPatch& fro
 /// read. Returns false (and sets @p out_error, valid until the next refusal on
 /// this thread) for an unsupported struct_version, an unknown preset name, a
 /// refused engine param, a bounded numeric field that is non-finite or outside
-/// the range sonare_synth_patch_param_info() publishes for it, or more mod
-/// routings than the matrix holds; nothing is clamped silently at that step.
+/// the range sonare_synth_patch_param_info() publishes for it, an enum ordinal
+/// outside its set, a mod routing with an unknown source or destination or a
+/// depth that is non-finite or beyond the patch clamp, or more mod routings
+/// than the matrix holds; nothing is clamped silently at that step.
 inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
                                       sonare::midi::synth::NativeSynthConfig* out,
                                       const char** out_error) {
   using sonare::midi::synth::BodyType;
   using sonare::midi::synth::find_synth_preset;
   using sonare::midi::synth::kMaxModRoutes;
-  using sonare::midi::synth::ModDestination;
-  using sonare::midi::synth::ModSource;
   using sonare::midi::synth::NativeSynthConfig;
   using ParamId = sonare::midi::synth::NativeSynthParamId;
   using sonare::midi::synth::SynthEngineMode;
@@ -386,6 +380,15 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     if (out_error) *out_error = "invalid synth retrigger";
     return false;
   }
+  // A pre-3 struct ends before the sample block; any engine refuses an unknown ordinal there.
+  if (c.struct_version >= 3 && !valid_c_enum(c.sample_loop, SONARE_SAMPLE_LOOP_MODE_COUNT)) {
+    if (out_error) *out_error = "invalid synth sample_loop";
+    return false;
+  }
+  if (c.struct_version >= 3 && !valid_c_enum(c.sample_key_track, SONARE_SAMPLE_KEY_TRACK_COUNT)) {
+    if (out_error) *out_error = "invalid synth sample_key_track";
+    return false;
+  }
   // A pre-8 struct ends before the engine params, so its tail is not read.
   const size_t engine_param_count = c.struct_version >= 8 ? c.engine_param_count : 0u;
   if (engine_param_count > 0 && c.engine_params == nullptr) {
@@ -407,7 +410,7 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   }
   sonare::midi::synth::NativeSynthPatch& p = cfg.patch;
 
-  if (c.engine_mode > 0) p.mode = static_cast<SynthEngineMode>(c.engine_mode - 1);
+  if (c.engine_mode > 0) p.mode = admitted_ordinal_to_enum<SynthEngineMode>(c.engine_mode, 1);
   // An engine whose section the named preset does not carry takes its base
   // preset's; the wrapper fields stay the named preset's (or the init patch's).
   if (named == nullptr || named->config.patch.mode != p.mode) {
@@ -417,7 +420,7 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     }
   }
   // Oscillator section.
-  if (c.waveform > 0) p.waveform = static_cast<VaWaveform>(c.waveform - 1);
+  if (c.waveform > 0) p.waveform = admitted_ordinal_to_enum<VaWaveform>(c.waveform, 1);
   if (set(SONARE_SYNTH_FIELD_UNISON) || c.unison != 0) {
     if (!synth_patch_field_in_range("unison", static_cast<float>(c.unison), 1.0f,
                                     static_cast<float>(sonare::midi::synth::kMaxUnisonOscs),
@@ -434,8 +437,12 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     return false;
   }
   // Filter section.
-  if (c.filter_model > 0) p.filter_model = static_cast<SynthFilterModel>(c.filter_model - 1);
-  if (c.filter_output > 0) p.filter_output = static_cast<SynthFilterOutput>(c.filter_output - 1);
+  if (c.filter_model > 0) {
+    p.filter_model = admitted_ordinal_to_enum<SynthFilterModel>(c.filter_model, 1);
+  }
+  if (c.filter_output > 0) {
+    p.filter_output = admitted_ordinal_to_enum<SynthFilterOutput>(c.filter_output, 1);
+  }
   if (!take(set(SONARE_SYNTH_FIELD_CUTOFF_HZ), ParamId::kCutoffHz, c.cutoff_hz, &p.cutoff_hz) ||
       !take(set(SONARE_SYNTH_FIELD_RESONANCE_Q), ParamId::kResonanceQ, c.resonance_q,
             &p.resonance_q) ||
@@ -476,7 +483,7 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     return false;
   }
   // Realism polish.
-  if (c.body > 0) p.body = static_cast<BodyType>(c.body - 1);
+  if (c.body > 0) p.body = admitted_ordinal_to_enum<BodyType>(c.body, 1);
   if (!take(set(SONARE_SYNTH_FIELD_BODY_MIX), ParamId::kBodyMix, c.body_mix, &p.body_mix) ||
       !take(set(SONARE_SYNTH_FIELD_STEREO_SPREAD), ParamId::kStereoSpread, c.stereo_spread,
             &p.stereo_spread)) {
@@ -493,13 +500,23 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     const int count = c.num_mod_routings;
     for (int i = 0; i < count; ++i) {
       const SonareSynthModRouting& r = c.mod_routings[i];
+      auto& route = p.mod_matrix.routes[static_cast<size_t>(i)];
       // Refused like ControllerBinding's axis none: a caller mistake, not an empty slot.
       if (r.source == 0 || r.destination == 0) {
         if (out_error) *out_error = "mod routing refused: source and destination must not be none";
         return false;
       }
-      p.mod_matrix.routes[static_cast<size_t>(i)] = {
-          mod_source_from_c(r.source), mod_destination_from_c(r.destination), r.depth};
+      if (!ordinal_to_enum(r.source, 1, SONARE_SYNTH_MOD_SOURCE_COUNT - 1, &route.source) ||
+          !ordinal_to_enum(r.destination, 1, SONARE_SYNTH_MOD_DESTINATION_COUNT - 1,
+                           &route.destination)) {
+        if (out_error) *out_error = "mod routing refused: unknown source or destination ordinal";
+        return false;
+      }
+      const float depth_limit = synth_patch_mod_depth_limit();
+      if (!synth_patch_field_in_range("modDepth", r.depth, -depth_limit, depth_limit, out_error)) {
+        return false;
+      }
+      route.depth = r.depth;
     }
   }
   // Voice pool / bus.
@@ -533,7 +550,7 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
             c.pitch_offset_cents, &p.pitch_offset_cents)) {
     return false;
   }
-  if (retrigger > 0) p.retrigger = static_cast<SynthRetrigger>(retrigger - 1);
+  if (retrigger > 0) p.retrigger = admitted_ordinal_to_enum<SynthRetrigger>(retrigger, 1);
   if (c.struct_version >= 9) {
     if (!take(set2(SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ), ParamId::kDriftRateHz, c.drift_rate_hz,
               &p.drift_rate_hz) ||
@@ -579,7 +596,10 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
       }
       p.sample.start_offset01 = c.sample_start_offset;
     }
-    switch (c.sample_loop) {
+    // The override holds the SoundFont sampleModes value, so the C ordinal is mapped.
+    switch (admitted_ordinal_to_enum<SonareSampleLoopMode>(c.sample_loop)) {
+      case SONARE_SAMPLE_LOOP_DEFAULT:
+        break;
       case SONARE_SAMPLE_LOOP_NONE:
         p.sample.loop_override = 0;
         break;
@@ -588,8 +608,6 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
         break;
       case SONARE_SAMPLE_LOOP_KEY_DOWN:
         p.sample.loop_override = 3;
-        break;
-      default:
         break;
     }
     if (c.sample_key_track == SONARE_SAMPLE_KEY_TRACK_ON) p.sample.key_track = true;

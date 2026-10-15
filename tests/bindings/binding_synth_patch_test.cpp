@@ -1433,29 +1433,22 @@ TEST_CASE("the patch pitch offset reaches both of the engine pitch sources",
   sonare_project_destroy(project);
 }
 
-TEST_CASE("synth patch mod routing ordinals are clamped at the C ABI boundary",
+TEST_CASE("synth patch mod routing ordinals outside the enum are refused at the C ABI boundary",
           "[project][synth_patch]") {
-  SonareSynthPatch patch{};
-  patch.num_mod_routings = 4;
-  patch.mod_routings[0] = {-1, 1 /*pitchCents*/, 100.0f};
-  patch.mod_routings[1] = {99, 2 /*cutoffCents*/, 100.0f};
-  patch.mod_routings[2] = {3 /*lfo1*/, -1, 100.0f};
-  patch.mod_routings[3] = {4 /*lfo2*/, 99, 100.0f};
-
-  sonare::midi::synth::NativeSynthConfig cfg;
-  const char* error = nullptr;
-  REQUIRE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
-  REQUIRE(error == nullptr);
-
-  const auto& routes = cfg.patch.mod_matrix.routes;
-  REQUIRE(routes[0].source == sonare::midi::synth::ModSource::kNone);
-  REQUIRE(routes[0].destination == sonare::midi::synth::ModDestination::kPitchCents);
-  REQUIRE(routes[1].source == sonare::midi::synth::ModSource::kNone);
-  REQUIRE(routes[1].destination == sonare::midi::synth::ModDestination::kCutoffCents);
-  REQUIRE(routes[2].source == sonare::midi::synth::ModSource::kLfo1);
-  REQUIRE(routes[2].destination == sonare::midi::synth::ModDestination::kNone);
-  REQUIRE(routes[3].source == sonare::midi::synth::ModSource::kLfo2);
-  REQUIRE(routes[3].destination == sonare::midi::synth::ModDestination::kNone);
+  const SonareSynthModRouting bad[] = {{-1, 1 /*pitchCents*/, 100.0f},
+                                       {99, 2 /*cutoffCents*/, 100.0f},
+                                       {3 /*lfo1*/, -1, 100.0f},
+                                       {4 /*lfo2*/, 99, 100.0f}};
+  for (const SonareSynthModRouting& routing : bad) {
+    CAPTURE(routing.source, routing.destination);
+    SonareSynthPatch patch{};
+    patch.num_mod_routings = 1;
+    patch.mod_routings[0] = routing;
+    sonare::midi::synth::NativeSynthConfig cfg;
+    const char* error = nullptr;
+    REQUIRE_FALSE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
+    REQUIRE(error != nullptr);
+  }
 }
 
 TEST_CASE("the drum-kit preset plays the GM drum map on any key", "[project][synth_patch]") {
@@ -1560,17 +1553,49 @@ TEST_CASE("sonare_engine synth instrument renders live MIDI input", "[c_api][syn
 }
 
 TEST_CASE("every mod source ordinal survives the C conversion", "[project][synth_patch]") {
-  // The clamp in mod_source_from_c is the one place a new ordinal can be lost
-  // without anything going red: a value past its upper bound comes back as
-  // kNone, so the route is silently disabled and the render is merely quiet.
-  // Walking the whole domain is what catches an upper bound left behind.
-  using sonare::midi::synth::ModSource;
-  for (int ordinal = 0; ordinal < SONARE_SYNTH_MOD_SOURCE_COUNT; ++ordinal) {
+  // A conversion whose upper bound lags the enum would lose the newest source;
+  // walking the whole domain catches that, and the ends of it must be refused.
+  const auto convert = [](int source, sonare::midi::synth::NativeSynthConfig* cfg) {
+    SonareSynthPatch patch{};
+    patch.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+    patch.num_mod_routings = 1;
+    patch.mod_routings[0] = {source, 1, 1.0f};
+    const char* error = nullptr;
+    const bool ok = sonare_c_detail::synth_config_from_patch_c(patch, cfg, &error);
+    REQUIRE(ok == (error == nullptr));
+    return ok;
+  };
+  for (int ordinal = 1; ordinal < SONARE_SYNTH_MOD_SOURCE_COUNT; ++ordinal) {
     CAPTURE(ordinal);
-    REQUIRE(static_cast<int>(sonare_c_detail::mod_source_from_c(ordinal)) == ordinal);
+    sonare::midi::synth::NativeSynthConfig cfg;
+    REQUIRE(convert(ordinal, &cfg));
+    REQUIRE(static_cast<int>(cfg.patch.mod_matrix.routes[0].source) == ordinal);
   }
-  REQUIRE(sonare_c_detail::mod_source_from_c(SONARE_SYNTH_MOD_SOURCE_COUNT) == ModSource::kNone);
-  REQUIRE(sonare_c_detail::mod_source_from_c(-1) == ModSource::kNone);
+  sonare::midi::synth::NativeSynthConfig cfg;
+  REQUIRE_FALSE(convert(SONARE_SYNTH_MOD_SOURCE_COUNT, &cfg));
+  REQUIRE_FALSE(convert(-1, &cfg));
+}
+
+TEST_CASE("every mod destination ordinal survives the C conversion", "[project][synth_patch]") {
+  const auto convert = [](int destination, sonare::midi::synth::NativeSynthConfig* cfg) {
+    SonareSynthPatch patch{};
+    patch.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+    patch.num_mod_routings = 1;
+    patch.mod_routings[0] = {1, destination, 1.0f};
+    const char* error = nullptr;
+    const bool ok = sonare_c_detail::synth_config_from_patch_c(patch, cfg, &error);
+    REQUIRE(ok == (error == nullptr));
+    return ok;
+  };
+  for (int ordinal = 1; ordinal < SONARE_SYNTH_MOD_DESTINATION_COUNT; ++ordinal) {
+    CAPTURE(ordinal);
+    sonare::midi::synth::NativeSynthConfig cfg;
+    REQUIRE(convert(ordinal, &cfg));
+    REQUIRE(static_cast<int>(cfg.patch.mod_matrix.routes[0].destination) == ordinal);
+  }
+  sonare::midi::synth::NativeSynthConfig cfg;
+  REQUIRE_FALSE(convert(SONARE_SYNTH_MOD_DESTINATION_COUNT, &cfg));
+  REQUIRE_FALSE(convert(-1, &cfg));
 }
 
 #endif  // SONARE_WITH_ARRANGEMENT

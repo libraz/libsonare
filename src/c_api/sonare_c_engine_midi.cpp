@@ -412,7 +412,7 @@ SonareError sonare_engine_set_articulation(SonareRealtimeEngine* engine, uint32_
   // absent. An out-of-range mode is not clamped: kPoly substituted for a
   // misspelled kMonoLegato plays every note and slurs none of them, which the
   // caller cannot tell from a request that took.
-  if (!engine || channel > 15 || articulation < 0 || articulation >= SONARE_ARTICULATION_COUNT) {
+  if (!engine || channel > 15 || !valid_c_enum(articulation, SONARE_ARTICULATION_COUNT)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
@@ -422,8 +422,8 @@ SonareError sonare_engine_set_articulation(SonareRealtimeEngine* engine, uint32_
   SONARE_C_TRY
   sonare::midi::MidiInstrument* instrument = engine->engine.midi_instrument(destination_id);
   if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  if (instrument->set_articulation(channel,
-                                   static_cast<sonare::midi::ArticulationMode>(articulation))) {
+  if (instrument->set_articulation(
+          channel, admitted_ordinal_to_enum<sonare::midi::ArticulationMode>(articulation))) {
     return SONARE_OK;
   }
   set_last_error(SONARE_ERROR_NOT_SUPPORTED,
@@ -489,7 +489,7 @@ SonareError sonare_engine_set_part_rig(SonareRealtimeEngine* engine, uint32_t de
   // Shape is checked against the C surface alone, so garbage is refused in every
   // build rather than being told the feature is absent. 2 is the chain mode.
   constexpr int kChainMode = 2;
-  if (!engine || mode < 0 || mode > kChainMode || (part >= 16 && part != 0xFF) ||
+  if (!engine || !valid_c_enum(mode, 0, kChainMode) || (part >= 16 && part != 0xFF) ||
       (mode == kChainMode) != (inserts_json != nullptr)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -500,7 +500,7 @@ SonareError sonare_engine_set_part_rig(SonareRealtimeEngine* engine, uint32_t de
 #else
   SONARE_C_TRY
   sonare::midi::PartRig rig;
-  rig.mode = static_cast<sonare::midi::PartRigMode>(mode);
+  rig.mode = admitted_ordinal_to_enum<sonare::midi::PartRigMode>(mode);
   if (inserts_json != nullptr) {
     const SonareError parsed = parse_part_rig_inserts(inserts_json, &rig.stages);
     if (parsed != SONARE_OK) return parsed;
@@ -553,7 +553,7 @@ SonareError sonare_engine_bind_midi_cc_binding(SonareRealtimeEngine* engine,
   // would make this whole function unbuildable without it and would turn a
   // rejected argument into NOT_SUPPORTED.
   if (!engine || !binding || binding->cc_number > 127 || binding->param_id == 0 ||
-      binding->kind > SONARE_MIDI_CC_NRPN ||
+      !valid_c_enum(binding->kind, 0, SONARE_MIDI_CC_NRPN) ||
       (binding->channel != SONARE_MIDI_CC_ANY_CHANNEL && binding->channel > 15) ||
       !std::isfinite(binding->min_value) || !std::isfinite(binding->max_value) ||
       binding->max_value < binding->min_value ||
@@ -572,7 +572,7 @@ SonareError sonare_engine_bind_midi_cc_binding(SonareRealtimeEngine* engine,
   sonare::midi::CcBinding native{};
   native.cc_number = binding->cc_number;
   native.channel = binding->channel;
-  native.kind = static_cast<sonare::midi::CcBindingKind>(binding->kind);
+  native.kind = admitted_ordinal_to_enum<sonare::midi::CcBindingKind>(binding->kind);
   native.cc_lsb_number = binding->cc_lsb_number;
   native.selector_msb = binding->selector_msb;
   native.selector_lsb = binding->selector_lsb;

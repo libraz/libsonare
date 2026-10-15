@@ -128,7 +128,7 @@ Napi::Value SonareWrap::SegmentRecurrenceToLag(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 1, "n", 0, &n)) return env.Undefined();
   if (!SegmentMatrixInput(env, "segmentRecurrenceToLag", recurrence, n, n)) return env.Undefined();
   bool pad{};
-  if (!OptionalBoolArg(env, info, 2, "pad", false, &pad)) return env.Undefined();
+  if (!OptionalBoolArg(env, info, 2, "pad", true, &pad)) return env.Undefined();
   SonareSegmentMatrix result{};
   const SonareError err =
       sonare_segment_recurrence_to_lag(recurrence.Data(), n, pad ? 1 : 0, &result);
@@ -146,7 +146,7 @@ Napi::Value SonareWrap::SegmentLagToRecurrence(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 1, "rows", 0, &rows)) return env.Undefined();
   int lags{};
   if (!OptionalIntArg(env, info, 2, "lags", 0, &lags)) return env.Undefined();
-  if (!SegmentMatrixInput(env, "segmentLagToRecurrence", lag, rows, lags)) return env.Undefined();
+  if (!SegmentMatrixInput(env, "segmentLagToRecurrence", lag, lags, rows)) return env.Undefined();
   SonareSegmentMatrix result{};
   const SonareError err = sonare_segment_lag_to_recurrence(lag.Data(), rows, lags, &result);
   if (err != SONARE_OK) return CheckCResult(env, err);

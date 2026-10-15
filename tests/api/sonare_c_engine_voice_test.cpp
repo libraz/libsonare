@@ -49,14 +49,11 @@ TEST_CASE("sonare_daw_editing_c_api_smoke", "[c_api]") {
 
   out = nullptr;
   out_length = 0;
+  // A relative formant factor outside the warp's [0.55, 1.65] range is refused, not clamped.
   REQUIRE(sonare_voice_change(samples.data(), samples.size(), 22050, 0.0f, 9.0f, &out,
-                              &out_length) == SONARE_OK);
-  REQUIRE(out != nullptr);
-  REQUIRE(out_length == samples.size());
-  for (size_t i = 0; i < out_length; ++i) {
-    REQUIRE(std::isfinite(out[i]));
-  }
-  sonare_free_floats(out);
+                              &out_length) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(out == nullptr);
+  REQUIRE(out_length == 0);
 
   // Time-varying correction: a caller-supplied per-frame F0 contour (here a
   // constant 440 Hz track) corrected toward MIDI 70.

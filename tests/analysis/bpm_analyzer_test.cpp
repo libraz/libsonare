@@ -428,3 +428,26 @@ TEST_CASE("BPM of the same content agrees across input sample rates",
     CHECK(bpm_dev <= 0.02f);
   }
 }
+
+TEST_CASE("build_bpm_histogram reports the tempos in a bin, not its lower edge", "[bpm_analyzer]") {
+  const auto histogram = build_bpm_histogram({62.3f, 62.4f, 69.7f}, 60.0f, 200.0f, 0.5f);
+  REQUIRE(histogram.size() == 2u);
+  CHECK(histogram[0].votes == 2);
+  CHECK_THAT(histogram[0].bpm_center, WithinAbs(62.35f, 1e-4f));
+  CHECK_THAT(histogram[1].bpm_center, WithinAbs(69.7f, 1e-4f));
+}
+
+TEST_CASE("BpmAnalyzer does not snap slow tempos to the histogram grid", "[bpm_analyzer]") {
+  // 62.3 and 69.7 sit 0.3 and 0.2 BPM above a 0.5 BPM bin edge, so an edge read back as the tempo
+  // misses it by more than the refined lag estimate does.
+  for (float tempo : {62.3f, 69.7f, 77.1f}) {
+    DYNAMIC_SECTION("tempo " << tempo) {
+      BpmAnalyzer analyzer(create_click_track(tempo, 22050, 30.0f));
+      const float bpm = analyzer.bpm();
+      const float multiple = std::round(bpm / tempo);
+      INFO("bpm " << bpm);
+      REQUIRE((multiple == 1.0f || multiple == 2.0f));
+      CHECK(std::abs(bpm - multiple * tempo) <= 0.15f * multiple);
+    }
+  }
+}

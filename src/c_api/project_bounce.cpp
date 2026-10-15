@@ -239,13 +239,12 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
         return SONARE_ERROR_INVALID_PARAMETER;  // more instruments than the rack holds
       }
       const bool replay = opts.total_frames <= 0 && hosted.instrument->tail_follows_events();
-      if (replay && !replay_destination_events(*compiled.timeline, hosted)) {
+      int latency = 0;
+      int tail = 0;
+      if (!probe_hosted_latency_tail(*compiled.timeline, hosted, replay, &latency, &tail) ||
+          latency < 0 || tail < 0) {
         return SONARE_ERROR_INVALID_PARAMETER;
       }
-      const int latency = hosted.instrument->latency_samples();
-      const int tail = hosted.instrument->tail_samples();
-      if (replay) hosted.instrument->reset();
-      if (latency < 0 || tail < 0) return SONARE_ERROR_INVALID_PARAMETER;
       unbounded_tail |= tail == std::numeric_limits<int>::max();
       instrument_tail = std::max<int64_t>(instrument_tail, static_cast<int64_t>(tail));
     }
@@ -438,7 +437,48 @@ bool apply_project_part_rigs(const SonareProject* project, uint32_t destination_
   return true;
 }
 
+// Resets a replayed instrument on every exit from the probe. The normal path
+// resets through reset_now() so a failure there still reaches the caller.
+class ReplayResetGuard {
+ public:
+  explicit ReplayResetGuard(sonare::midi::MidiInstrument* instrument) noexcept
+      : instrument_(instrument) {}
+  ReplayResetGuard(const ReplayResetGuard&) = delete;
+  ReplayResetGuard& operator=(const ReplayResetGuard&) = delete;
+  ~ReplayResetGuard() {
+    if (instrument_ == nullptr) return;
+    // Already leaving with a refusal or an exception; that one is what the caller sees.
+    try {
+      instrument_->reset();
+    } catch (...) {
+    }
+  }
+  void reset_now() {
+    sonare::midi::MidiInstrument* instrument = instrument_;
+    instrument_ = nullptr;
+    if (instrument != nullptr) instrument->reset();
+  }
+
+ private:
+  sonare::midi::MidiInstrument* instrument_;
+};
+
 }  // namespace
+
+namespace sonare_c_bounce_detail {
+
+bool probe_hosted_latency_tail(const arr::CompiledTimeline& timeline,
+                               const HostedInstrument& hosted, bool replay, int* out_latency,
+                               int* out_tail) {
+  ReplayResetGuard guard(replay ? hosted.instrument : nullptr);
+  if (replay && !replay_destination_events(timeline, hosted)) return false;
+  *out_latency = hosted.instrument->latency_samples();
+  *out_tail = hosted.instrument->tail_samples();
+  guard.reset_now();
+  return true;
+}
+
+}  // namespace sonare_c_bounce_detail
 #endif
 
 SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBounceOptions* options,

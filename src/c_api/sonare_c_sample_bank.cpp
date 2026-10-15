@@ -42,7 +42,9 @@ SonareError sonare_sample_bank_add_sample(SonareSampleBank* bank, const float* d
                                           uint32_t* out_index) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (bank == nullptr || data == nullptr || n_frames == 0 || desc == nullptr) {
+  // loop_mode is a SoundFont sampleModes value, 0..3; 2 is the spec's "unused, no loop".
+  if (bank == nullptr || data == nullptr || n_frames == 0 || desc == nullptr ||
+      !sonare_c_detail::valid_c_enum(desc->loop_mode, 0, 3)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
