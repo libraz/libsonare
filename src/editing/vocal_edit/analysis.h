@@ -3,13 +3,21 @@
 /// @file analysis.h
 /// @brief Validation, digesting and note extraction for vocal sessions.
 
+#include <cmath>
 #include <vector>
 
 #include "core/audio.h"
 #include "editing/vocal_edit/types.h"
 #include "feature/pitch.h"
+#include "util/constants.h"
 
 namespace sonare::editing::vocal_edit {
+
+/// @brief Fractional MIDI note number of @p hz (A4 = 440 Hz reference).
+inline double midi_from_hz(double hz) {
+  return sonare::constants::kMidiA4 +
+         sonare::constants::kSemitonesPerOctave * std::log2(hz / sonare::constants::kA4Hz);
+}
 
 struct VocalAnalysisOptions {
   PitchConfig pitch{};

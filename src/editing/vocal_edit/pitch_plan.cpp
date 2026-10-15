@@ -9,22 +9,18 @@
 
 #include "editing/note_model/note_object.h"
 #include "editing/note_model/pitch_decomposition.h"
+#include "editing/vocal_edit/analysis.h"
 #include "util/constants.h"
 
 namespace sonare::editing::vocal_edit {
 
-using sonare::constants::kA4Hz;
 using sonare::constants::kCentsPerSemitone;
-using sonare::constants::kMidiA4;
-using sonare::constants::kSemitonesPerOctave;
 
 namespace {
 
 [[noreturn]] void invalid(const std::string& field, const std::string& message) {
   throw VocalEditException(VocalReason::kInvalidInput, message, field);
 }
-
-double hz_to_midi(double hz) { return kMidiA4 + kSemitonesPerOctave * std::log2(hz / kA4Hz); }
 
 }  // namespace
 
@@ -199,7 +195,7 @@ CompiledPitchPlan compile_pitch_plan_at_rate(const VocalAnalysisData& analysis,
       continue;
     }
 
-    const double measured = hz_to_midi(static_cast<double>(analysis.f0_hz[index]));
+    const double measured = midi_from_hz(static_cast<double>(analysis.f0_hz[index]));
     const double drift = drift_cents[offset] / kCentsPerSemitone;
     const double vibrato = vibrato_cents[offset] / kCentsPerSemitone;
     const double base = note.centre_midi + note.edit.pitch.drift_scale * drift +

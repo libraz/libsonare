@@ -83,8 +83,6 @@ bool usable_frame(const VocalAnalysisData& analysis, size_t frame) {
          std::isfinite(analysis.f0_hz[frame]);
 }
 
-double hz_to_midi(double hz) { return kMidiA4 + kSemitonesPerOctave * std::log2(hz / kA4Hz); }
-
 double median_of_sorted(const std::vector<double>& sorted) {
   const size_t n = sorted.size();
   return n % 2 == 1 ? sorted[n / 2] : 0.5 * (sorted[n / 2 - 1] + sorted[n / 2]);
@@ -291,7 +289,7 @@ VocalNote measure_from_contour(const VocalAnalysisData& analysis, VocalNoteId id
   std::vector<double> midi;
   for (uint32_t frame = frame_start; frame < frame_end; ++frame) {
     if (usable_frame(analysis, static_cast<size_t>(frame))) {
-      midi.push_back(hz_to_midi(refined_f0[static_cast<size_t>(frame - frame_start)]));
+      midi.push_back(midi_from_hz(refined_f0[static_cast<size_t>(frame - frame_start)]));
     }
   }
   VocalNote note;
