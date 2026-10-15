@@ -94,7 +94,7 @@ CONSTANTS: dict[str, Constant] = {
     "max_meter_numerators": Constant("src/analysis/meter_analyzer.h", "kMaxMeterCandidateNumerators"),
     "max_meter_numerator": Constant("src/analysis/meter_analyzer.h", "kMaxMeterCandidateNumerator"),
     "max_meter_denominator": Constant("src/analysis/meter_analyzer.h", "kMaxMeterDenominator"),
-    "max_grain_size": Constant("src/editing/voice_changer/streaming_retune.cpp", "kMaxGrainSize"),
+    "max_grain_size": Constant("src/editing/voice_changer/streaming_retune.h", "kMaxRetuneGrainSize"),
     "max_retune_semitones": Constant("src/editing/voice_changer/streaming_retune.cpp", "kMaxSemitones"),
     "max_metronome_click_samples": Constant("src/engine/metronome.h", "kMaxMetronomeClickSamples"),
     "max_salience_harmonics": Constant("src/editing/polyphony/f0_salience.h", "kMaxSalienceHarmonics"),
