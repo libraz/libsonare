@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare::mixing {
 
@@ -20,9 +21,14 @@ PannerProcessor::PannerProcessor(PannerConfig config)
     : smoothing_ms_(std::isfinite(config.smoothing_ms) && config.smoothing_ms >= 0.0f
                         ? config.smoothing_ms
                         : 5.0f),
-      pan_(std::isfinite(config.pan) ? std::clamp(config.pan, -1.0f, 1.0f) : 0.0f),
+      pan_(config.pan),
       pan_law_(config.pan_law),
-      pan_mode_(config.mode) {}
+      pan_mode_(config.mode) {
+  if (!pan_in_range(config.pan)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "PannerConfig.pan must be finite and within [-1, 1]");
+  }
+}
 
 void PannerProcessor::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
@@ -135,15 +141,17 @@ void PannerProcessor::reset() {
   dual_right_smoother_.reset(dual_pan_right_.load(std::memory_order_relaxed));
 }
 
-void PannerProcessor::set_pan(float pan) noexcept {
-  if (!std::isfinite(pan)) return;
-  pan_.store(clamp_pan(pan), std::memory_order_relaxed);
+bool PannerProcessor::set_pan(float pan) noexcept {
+  if (!pan_in_range(pan)) return false;
+  pan_.store(pan, std::memory_order_relaxed);
+  return true;
 }
 
-void PannerProcessor::set_dual_pan(float left_pan, float right_pan) noexcept {
-  if (!std::isfinite(left_pan) || !std::isfinite(right_pan)) return;
-  dual_pan_left_.store(clamp_pan(left_pan), std::memory_order_relaxed);
-  dual_pan_right_.store(clamp_pan(right_pan), std::memory_order_relaxed);
+bool PannerProcessor::set_dual_pan(float left_pan, float right_pan) noexcept {
+  if (!pan_in_range(left_pan) || !pan_in_range(right_pan)) return false;
+  dual_pan_left_.store(left_pan, std::memory_order_relaxed);
+  dual_pan_right_.store(right_pan, std::memory_order_relaxed);
+  return true;
 }
 
 void PannerProcessor::copy_state_from(const PannerProcessor& other) noexcept {

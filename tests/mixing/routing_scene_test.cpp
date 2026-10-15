@@ -548,17 +548,18 @@ TEST_CASE("Scene surround pan round-trips and omits at the default", "[mixing][r
 }
 
 // The scene document is the read-back mechanism a host actually uses, so a
-// value that comes out of it has to be the value the mix is running. The enums
-// and counts above are rejected when out of range; the continuous quantities
-// are clamped instead, through the same helpers the processors clamp with, so
-// neither can echo a request the runtime silently overrode.
-TEST_CASE("Scene clamps out-of-range scalars to what the runtime uses", "[mixing][routing]") {
+// value that comes out of it has to be the value the mix is running. Pan and
+// width outside their domains are refused with the field named; the surround
+// parameters are still clamped through the helper the processor uses.
+TEST_CASE("Scene refuses out-of-domain pan and width and clamps surround scalars",
+          "[mixing][routing]") {
+  using Catch::Matchers::ContainsSubstring;
   const auto scene = sonare::mixing::api::scene_from_json(
-      R"({"version":1,"strips":[{"id":"a","pan":1.5,"width":4.0,"dualPanLeft":-9.0,)"
-      R"("dualPanRight":9.0,"surroundPan":{"azimuth":5000.0,"divergence":9.0,"lfe":-3.0}}]})");
+      R"({"version":1,"strips":[{"id":"a","pan":-1.0,"width":2.0,"dualPanLeft":-1.0,)"
+      R"("dualPanRight":1.0,"surroundPan":{"azimuth":5000.0,"divergence":9.0,"lfe":-3.0}}]})");
   REQUIRE(scene.strips.size() == 1);
   const auto& strip = scene.strips[0];
-  CHECK(strip.pan == 1.0f);
+  CHECK(strip.pan == -1.0f);
   CHECK(strip.width == 2.0f);
   CHECK(strip.dual_pan_left == -1.0f);
   CHECK(strip.dual_pan_right == 1.0f);
@@ -566,64 +567,57 @@ TEST_CASE("Scene clamps out-of-range scalars to what the runtime uses", "[mixing
   CHECK(strip.surround_pan.divergence == 1.0f);
   CHECK(strip.surround_pan.lfe == 0.0f);
 
-  // ...and those are exactly the values a strip stores for the same input, so
-  // the scene is reporting the mix rather than the request.
   sonare::mixing::ChannelStrip live;
   live.prepare(48000.0, 512);
-  live.set_pan(1.5f);
-  live.set_width(4.0f);
-  live.set_dual_pan(-9.0f, 9.0f);
   live.set_surround_pan_params({5000.0f, 0.0f, 9.0f, -3.0f, 1.0f});
   const auto params = live.surround_pan_params();
-  CHECK(strip.pan == live.pan());
-  CHECK(strip.width == live.width());
-  CHECK(strip.dual_pan_left == live.dual_pan_left());
-  CHECK(strip.dual_pan_right == live.dual_pan_right());
   CHECK(strip.surround_pan.azimuth == params.azimuth);
   CHECK(strip.surround_pan.divergence == params.divergence);
   CHECK(strip.surround_pan.lfe == params.lfe);
 
-  // The clamped values survive a round-trip unchanged (they are already legal).
   const auto restored =
       sonare::mixing::api::scene_from_json(sonare::mixing::api::scene_to_json(scene));
-  CHECK(restored.strips[0].pan == 1.0f);
+  CHECK(restored.strips[0].pan == -1.0f);
   CHECK(restored.strips[0].width == 2.0f);
-  CHECK(restored.strips[0].surround_pan.azimuth == 180.0f);
+
+  const auto load = [](const char* fields) {
+    return sonare::mixing::api::scene_from_json(
+        std::string(R"({"version":1,"strips":[{"id":"a",)") + fields + "}]}");
+  };
+  REQUIRE_THROWS_WITH(load(R"("pan":1.5)"), ContainsSubstring("scene.strips[].pan"));
+  REQUIRE_THROWS_WITH(load(R"("pan":-1.5)"), ContainsSubstring("[-1, 1]"));
+  REQUIRE_THROWS_WITH(load(R"("width":4.0)"), ContainsSubstring("scene.strips[].width"));
+  REQUIRE_THROWS_WITH(load(R"("width":-0.5)"), ContainsSubstring("[0, 2]"));
+  REQUIRE_THROWS_WITH(load(R"("dualPanLeft":-9.0)"), ContainsSubstring("dualPanLeft"));
+  REQUIRE_THROWS_WITH(load(R"("dualPanRight":9.0)"), ContainsSubstring("dualPanRight"));
+  // A non-finite number never reaches the range check: the JSON parser refuses it.
+  REQUIRE_THROWS(load(R"("pan":1e999)"));
 }
 
-// A bus carries a width too, through a StereoWidthProcessor that clamps exactly
-// as the strip's does, so the scene walker owed it the same treatment. It did
-// not have it: the parsed struct kept the raw request and scene_to_json echoed a
-// width the bus was not running.
-TEST_CASE("Scene clamps a bus width to what the bus runs", "[mixing][routing]") {
+// A bus carries a width too, through a StereoWidthProcessor that refuses a
+// factor outside [0, 2], so the scene walker refuses the same values.
+TEST_CASE("Scene refuses an out-of-domain bus width", "[mixing][routing]") {
+  using Catch::Matchers::ContainsSubstring;
+  REQUIRE_THROWS_WITH(
+      sonare::mixing::api::scene_from_json(R"({"version":1,"buses":[{"id":"wide","width":4.0}]})"),
+      ContainsSubstring("scene.buses[].width"));
+  REQUIRE_THROWS_WITH(sonare::mixing::api::scene_from_json(
+                          R"({"version":1,"buses":[{"id":"narrow","width":-1.0}]})"),
+                      ContainsSubstring("[0, 2]"));
+
+  // The bounds themselves and a value inside the range are carried through exactly.
   const auto scene = sonare::mixing::api::scene_from_json(
-      R"({"version":1,"buses":[{"id":"wide","width":4.0},{"id":"narrow","width":-1.0}]})");
-  REQUIRE(scene.buses.size() == 2);
-  CHECK(scene.buses[0].width == 2.0f);
-  CHECK(scene.buses[1].width == 0.0f);
+      R"({"version":1,"buses":[{"id":"lo","width":0.0},{"id":"hi","width":2.0},)"
+      R"({"id":"shaped","width":1.5}]})");
+  REQUIRE(scene.buses.size() == 3);
+  CHECK(scene.buses[0].width == 0.0f);
+  CHECK(scene.buses[1].width == 2.0f);
+  CHECK(scene.buses[2].width == 1.5f);
 
-  // ...and those are the values the processor the bus owns stores for the same
-  // input, which is what makes the scene a report of the mix rather than of the
-  // request.
+  // What the scene accepts is what the processor stores.
   sonare::mixing::StereoWidthProcessor live;
-  live.set_width(4.0f);
-  CHECK(scene.buses[0].width == live.width());
-  live.set_width(-1.0f);
+  REQUIRE(live.set_width(2.0f));
   CHECK(scene.buses[1].width == live.width());
-
-  // Legal already, so the round-trip does not move them again.
-  const auto restored =
-      sonare::mixing::api::scene_from_json(sonare::mixing::api::scene_to_json(scene));
-  REQUIRE(restored.buses.size() == 2);
-  CHECK(restored.buses[0].width == 2.0f);
-  CHECK(restored.buses[1].width == 0.0f);
-
-  // A width inside the range is still carried through untouched, so the clamp
-  // cannot be satisfied by always returning a bound.
-  const auto inside = sonare::mixing::api::scene_from_json(
-      R"({"version":1,"buses":[{"id":"shaped","width":1.5}]})");
-  REQUIRE(inside.buses.size() == 1);
-  CHECK(inside.buses[0].width == 1.5f);
 }
 
 // A strip's meters size their buffers when the strip is built, so the scene is
@@ -1456,13 +1450,23 @@ TEST_CASE("Scene bus pan round-trips and omits at the default", "[mixing][routin
   CHECK(sonare::mixing::api::scene_to_json(plain_scene).find("\"pan\"") == std::string::npos);
 }
 
-TEST_CASE("Scene clamps bus pan and dual pan to what the panner runs", "[mixing][routing]") {
-  const auto scene = sonare::mixing::api::scene_from_json(
-      R"({"version":1,"buses":[{"id":"b","pan":1.5,"dualPanLeft":-9.0,"dualPanRight":9.0}]})");
-  REQUIRE(scene.buses.size() == 1);
-  CHECK(scene.buses[0].pan == 1.0f);
-  CHECK(scene.buses[0].dual_pan_left == -1.0f);
-  CHECK(scene.buses[0].dual_pan_right == 1.0f);
+TEST_CASE("Scene refuses out-of-domain bus pan and dual pan", "[mixing][routing]") {
+  using Catch::Matchers::ContainsSubstring;
+  const auto load = [](const char* fields) {
+    return sonare::mixing::api::scene_from_json(std::string(R"({"version":1,"buses":[{"id":"b",)") +
+                                                fields + "}]}");
+  };
+  REQUIRE_THROWS_WITH(load(R"("pan":1.5)"), ContainsSubstring("scene.buses[].pan"));
+  REQUIRE_THROWS_WITH(load(R"("dualPanLeft":-9.0)"),
+                      ContainsSubstring("scene.buses[].dualPanLeft"));
+  REQUIRE_THROWS_WITH(load(R"("dualPanRight":9.0)"),
+                      ContainsSubstring("scene.buses[].dualPanRight"));
+
+  const auto edge = load(R"("pan":-1.0,"dualPanLeft":-1.0,"dualPanRight":1.0)");
+  REQUIRE(edge.buses.size() == 1);
+  CHECK(edge.buses[0].pan == -1.0f);
+  CHECK(edge.buses[0].dual_pan_left == -1.0f);
+  CHECK(edge.buses[0].dual_pan_right == 1.0f);
 }
 
 TEST_CASE("Scene rejects an out-of-range bus panMode/panLaw", "[mixing][routing]") {

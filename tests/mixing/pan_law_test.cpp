@@ -7,12 +7,16 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
+#include <limits>
 #include <utility>
 #include <vector>
 
 #include "mixing/panner.h"
+#include "mixing/stereo_width.h"
 #include "rt/param_smoother.h"
+#include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
 using sonare::mixing::compute_pan_gains;
@@ -426,4 +430,45 @@ TEST_CASE("panner is the at-rest identity again once a glide back to centre has 
   float* planes[2] = {left.data(), right.data()};
   panner.process(planes, 2, 96000);
   REQUIRE(panner.at_rest_identity());
+}
+
+TEST_CASE("panner and width refuse values outside their domains", "[mixing][pan]") {
+  constexpr float kNaN = std::numeric_limits<float>::quiet_NaN();
+  constexpr float kInf = std::numeric_limits<float>::infinity();
+  using sonare::SonareException;
+  using sonare::mixing::StereoWidthProcessor;
+
+  for (const float bad : {1.5f, -1.5f, kNaN, kInf, std::nextafter(1.0f, 2.0f)}) {
+    INFO("pan " << bad);
+    CHECK_THROWS_AS(PannerProcessor(PannerConfig{bad}), SonareException);
+  }
+  CHECK_THROWS_WITH(PannerProcessor(PannerConfig{2.0f}), Catch::Matchers::ContainsSubstring("pan"));
+  CHECK(PannerProcessor(PannerConfig{-1.0f}).pan() == -1.0f);
+  CHECK(PannerProcessor(PannerConfig{1.0f}).pan() == 1.0f);
+
+  PannerProcessor panner(PannerConfig{0.25f});
+  CHECK_FALSE(panner.set_pan(1.5f));
+  CHECK_FALSE(panner.set_pan(kNaN));
+  CHECK(panner.pan() == 0.25f);
+  CHECK(panner.set_pan(-1.0f));
+  CHECK(panner.pan() == -1.0f);
+  CHECK(panner.set_dual_pan(-0.5f, 0.5f));
+  CHECK_FALSE(panner.set_dual_pan(-9.0f, 0.5f));
+  CHECK_FALSE(panner.set_dual_pan(-0.5f, kInf));
+  CHECK(panner.dual_pan_left() == -0.5f);
+  CHECK(panner.dual_pan_right() == 0.5f);
+
+  for (const float bad : {2.5f, -0.5f, kNaN, kInf, std::nextafter(2.0f, 3.0f)}) {
+    INFO("width " << bad);
+    CHECK_THROWS_AS(StereoWidthProcessor(bad), SonareException);
+  }
+  CHECK(StereoWidthProcessor(0.0f).width() == 0.0f);
+  CHECK(StereoWidthProcessor(2.0f).width() == 2.0f);
+  StereoWidthProcessor width(1.5f);
+  CHECK_FALSE(width.set_width(3.0f));
+  CHECK_FALSE(width.set_width(-0.1f));
+  CHECK_FALSE(width.set_width(kNaN));
+  CHECK(width.width() == 1.5f);
+  CHECK(width.set_width(2.0f));
+  CHECK(width.width() == 2.0f);
 }

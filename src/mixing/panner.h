@@ -3,8 +3,8 @@
 /// @file panner.h
 /// @brief Stereo panner with selectable pan laws.
 
-#include <algorithm>
 #include <atomic>
+#include <cmath>
 
 #include "mixing/pan_law.h"
 #include "rt/param_smoother.h"
@@ -13,12 +13,14 @@
 
 namespace sonare::mixing {
 
-/// @brief The pan position the panner will actually store for @p pan.
-/// @details Every writer that also caches the value it passed - the C ABI
-///          setters and the scene walker, which both echo their cache back to
-///          the caller - resolves it through here, so a read-back can never
-///          report a position the processor is not using.
-inline float clamp_pan(float pan) noexcept { return std::clamp(pan, -1.0f, 1.0f); }
+/// Documented pan domain; a position outside it is refused, never clamped.
+inline constexpr float kPanMin = -1.0f;
+inline constexpr float kPanMax = 1.0f;
+
+/// @brief True for a finite pan position inside [kPanMin, kPanMax].
+inline bool pan_in_range(float pan) noexcept {
+  return std::isfinite(pan) && pan >= kPanMin && pan <= kPanMax;
+}
 
 enum class PanMode {
   Balance,
@@ -35,13 +37,15 @@ struct PannerConfig {
 
 class PannerProcessor : public rt::ProcessorBase {
  public:
+  /// @throws SonareException (InvalidParameter) when config.pan is outside [-1, 1] or non-finite.
   explicit PannerProcessor(PannerConfig config = {});
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
 
-  void set_pan(float pan) noexcept;
+  /// @return false, leaving the position unchanged, when @p pan is outside [-1, 1] or non-finite.
+  bool set_pan(float pan) noexcept;
   float pan() const noexcept { return pan_.load(std::memory_order_relaxed); }
 
   void set_pan_law(PanLaw law) noexcept { pan_law_.store(law, std::memory_order_relaxed); }
@@ -50,7 +54,9 @@ class PannerProcessor : public rt::ProcessorBase {
   void set_pan_mode(PanMode mode) noexcept { pan_mode_.store(mode, std::memory_order_relaxed); }
   PanMode pan_mode() const noexcept { return pan_mode_.load(std::memory_order_relaxed); }
 
-  void set_dual_pan(float left_pan, float right_pan) noexcept;
+  /// @return false, leaving both positions unchanged, when either is outside [-1, 1] or
+  ///         non-finite.
+  bool set_dual_pan(float left_pan, float right_pan) noexcept;
   float dual_pan_left() const noexcept { return dual_pan_left_.load(std::memory_order_relaxed); }
   float dual_pan_right() const noexcept { return dual_pan_right_.load(std::memory_order_relaxed); }
 

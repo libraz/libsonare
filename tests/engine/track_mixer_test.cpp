@@ -3832,6 +3832,71 @@ TEST_CASE("TrackMixerRuntime bus fader automation refuses values outside the fad
   REQUIRE_FALSE(mixer.set_bus_gain_db(2, 0.0f));
 }
 
+TEST_CASE("TrackMixerRuntime lane fader and pan refuse values outside their domains",
+          "[engine][track_mixer][automation]") {
+  constexpr float kFloor = sonare::constants::kFloorDb;
+  constexpr float kCeiling = TrackMixerRuntime::kMaxGainDb;
+  constexpr float kNaN = std::numeric_limits<float>::quiet_NaN();
+  const auto run = [&](bool offer_refused) {
+    sonare::mixing::ChannelStrip strip;
+    TrackMixerRuntime mixer;
+    mixer.prepare(48000.0, kBusBlock);
+    REQUIRE(mixer.set_track_lanes({TrackLaneConfig{10}}));
+    REQUIRE(mixer.bind_track_strip(10, &strip));
+    REQUIRE(mixer.set_lane_parameter(0, TrackMixerRuntime::kFaderDb, -6.0f));
+    REQUIRE(mixer.set_lane_parameter(0, TrackMixerRuntime::kPan, 0.5f));
+    if (offer_refused) {
+      for (const float refused :
+           {std::nextafter(kCeiling, 1000.0f), std::nextafter(kFloor, -1000.0f), 60.0f, kNaN}) {
+        INFO("refused fader " << refused);
+        REQUIRE_FALSE(mixer.set_lane_parameter(0, TrackMixerRuntime::kFaderDb, refused));
+        REQUIRE_FALSE(mixer.set_track_parameter(10, TrackMixerRuntime::kFaderDb, refused));
+      }
+      for (const float refused : {std::nextafter(1.0f, 2.0f), std::nextafter(-1.0f, -2.0f), 3.0f,
+                                  kNaN, std::numeric_limits<float>::infinity()}) {
+        INFO("refused pan " << refused);
+        REQUIRE_FALSE(mixer.set_lane_parameter(0, TrackMixerRuntime::kPan, refused));
+        REQUIRE_FALSE(mixer.set_track_pan(10, refused));
+        REQUIRE_FALSE(mixer.set_track_dual_pan(10, refused, 0.0f));
+      }
+    }
+    mixer.settle_smoothers();
+    StereoRender out;
+    render_tones(mixer, {10}, 1, 0, out);
+    return out;
+  };
+  const StereoRender control = run(false);
+  const StereoRender offered = run(true);
+  REQUIRE(max_abs_difference(offered.left, control.left) == 0.0f);
+  REQUIRE(max_abs_difference(offered.right, control.right) == 0.0f);
+
+  sonare::mixing::ChannelStrip strip;
+  TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBusBlock);
+  REQUIRE(mixer.set_track_lanes({TrackLaneConfig{10}}));
+  REQUIRE(mixer.bind_track_strip(10, &strip));
+  REQUIRE(mixer.set_lane_parameter(0, TrackMixerRuntime::kFaderDb, kCeiling));
+  REQUIRE(mixer.set_lane_parameter(0, TrackMixerRuntime::kFaderDb, kFloor));
+  REQUIRE(mixer.set_lane_parameter(0, TrackMixerRuntime::kPan, -1.0f));
+  REQUIRE(mixer.set_lane_parameter(0, TrackMixerRuntime::kPan, 1.0f));
+  REQUIRE(mixer.set_track_pan(10, -1.0f));
+  REQUIRE(mixer.set_track_dual_pan(10, -1.0f, 1.0f));
+}
+
+TEST_CASE("TrackMixerRuntime bus pan and dual pan refuse values outside [-1, 1]",
+          "[engine][track_mixer]") {
+  TrackMixerRuntime mixer;
+  configure_bus_rig(mixer, plain_bus("1"));
+  REQUIRE(mixer.set_bus_pan(1, 0.25f));
+  REQUIRE_FALSE(mixer.set_bus_pan(1, 1.5f));
+  REQUIRE_FALSE(mixer.set_bus_pan(1, -1.5f));
+  REQUIRE_FALSE(mixer.set_bus_dual_pan(1, -9.0f, 0.0f));
+  REQUIRE_FALSE(mixer.set_bus_dual_pan(1, 0.0f, 9.0f));
+  REQUIRE(mixer.set_bus_pan(1, -1.0f));
+  REQUIRE(mixer.set_bus_pan(1, 1.0f));
+  REQUIRE(mixer.set_bus_dual_pan(1, -1.0f, 1.0f));
+}
+
 TEST_CASE("TrackMixerRuntime carries bus input PDC history by bus identity on reorder",
           "[engine][track_mixer][pdc]") {
   constexpr int kBlock = 64;

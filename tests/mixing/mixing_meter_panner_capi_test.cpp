@@ -678,6 +678,30 @@ TEST_CASE("Mixing C API round-trips mixer scene JSON", "[mixing][capi]") {
   sonare_mixer_destroy(restored);
 }
 
+TEST_CASE("Mixing C API refuses pan and width outside their domains and keeps the strip",
+          "[mixing][capi]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 8);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "vocal");
+  REQUIRE(strip != nullptr);
+  REQUIRE(sonare_strip_set_pan(strip, -1.0f, SONARE_PAN_MODE_BALANCE) == SONARE_OK);
+  REQUIRE(sonare_strip_set_width(strip, 2.0f) == SONARE_OK);
+  char* json = nullptr;
+  REQUIRE(sonare_mixer_to_scene_json(mixer, &json) == SONARE_OK);
+  const std::string before(json);
+  sonare_free_string(json);
+
+  REQUIRE(sonare_strip_set_pan(strip, 1.5f, SONARE_PAN_MODE_KEEP) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_strip_set_width(strip, 2.5f) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_strip_set_width(strip, -0.5f) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_strip_set_dual_pan(strip, -1.0f, 1.25f) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mixer_to_scene_json(mixer, &json) == SONARE_OK);
+  CHECK(std::string(json) == before);
+  sonare_free_string(json);
+  sonare_mixer_destroy(mixer);
+}
+
 TEST_CASE("Mixing C API removes a strip send", "[mixing][capi]") {
   SonareMixer* mixer = sonare_mixer_create(48000, 8);
   REQUIRE(mixer != nullptr);

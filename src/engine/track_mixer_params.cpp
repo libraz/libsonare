@@ -10,8 +10,6 @@
 
 namespace sonare::engine {
 
-using sonare::constants::kFloorDb;
-
 namespace {
 
 template <typename Bus>
@@ -66,12 +64,12 @@ bool TrackMixerRuntime::set_lane_parameter(size_t lane_index, unsigned int param
   LaneState& lane = lane_states_[lane_index];
   switch (param_id) {
     case kFaderDb:
-      if (!std::isfinite(value)) return false;
-      lane.fader_gain.set_target(db_to_linear(std::clamp(value, kFloorDb, kMaxGainDb)));
+      if (!gain_db_in_range(value)) return false;
+      lane.fader_gain.set_target(db_to_linear(value));
       return true;
     case kPan:
-      if (!std::isfinite(value)) return false;
-      lane.pan.set_target(std::clamp(value, -1.0f, 1.0f));
+      if (!mixing::pan_in_range(value)) return false;
+      lane.pan.set_target(value);
       return true;
     // Width is deliberately not part of the arrangement typed-target
     // contract.  It remains available through the standalone mixer API, but
@@ -553,7 +551,7 @@ mixing::ChannelStrip* TrackMixerRuntime::lane_strip_for_track(uint32_t track_id)
 }
 
 bool TrackMixerRuntime::set_track_pan(uint32_t track_id, float pan) noexcept {
-  if (!std::isfinite(pan)) return false;
+  if (!mixing::pan_in_range(pan)) return false;
   mixing::ChannelStrip* strip = lane_strip_for_track(track_id);
   if (!strip) return false;
   strip->set_pan(pan);
@@ -576,7 +574,7 @@ bool TrackMixerRuntime::set_track_pan_mode(uint32_t track_id, mixing::PanMode mo
 
 bool TrackMixerRuntime::set_track_dual_pan(uint32_t track_id, float left_pan,
                                            float right_pan) noexcept {
-  if (!std::isfinite(left_pan) || !std::isfinite(right_pan)) return false;
+  if (!mixing::pan_in_range(left_pan) || !mixing::pan_in_range(right_pan)) return false;
   mixing::ChannelStrip* strip = lane_strip_for_track(track_id);
   if (!strip) return false;
   strip->set_dual_pan(left_pan, right_pan);
@@ -624,12 +622,11 @@ bool TrackMixerRuntime::set_track_channel_delay_samples(uint32_t track_id,
 }
 
 bool TrackMixerRuntime::set_bus_pan(uint32_t bus_id, float pan) noexcept {
-  if (!std::isfinite(pan)) return false;
+  if (!mixing::pan_in_range(pan)) return false;
   BusState* state = pannable_bus_state_for(bus_id);
   if (!state) return false;
-  const float clamped = mixing::clamp_pan(pan);
-  state->panner.set_pan(clamped);
-  state->spec.pan = clamped;
+  state->panner.set_pan(pan);
+  state->spec.pan = pan;
   return true;
 }
 
@@ -651,14 +648,12 @@ bool TrackMixerRuntime::set_bus_pan_mode(uint32_t bus_id, mixing::PanMode mode) 
 
 bool TrackMixerRuntime::set_bus_dual_pan(uint32_t bus_id, float left_pan,
                                          float right_pan) noexcept {
-  if (!std::isfinite(left_pan) || !std::isfinite(right_pan)) return false;
+  if (!mixing::pan_in_range(left_pan) || !mixing::pan_in_range(right_pan)) return false;
   BusState* state = pannable_bus_state_for(bus_id);
   if (!state) return false;
-  const float left = mixing::clamp_pan(left_pan);
-  const float right = mixing::clamp_pan(right_pan);
-  state->panner.set_dual_pan(left, right);
-  state->spec.dual_pan_left = left;
-  state->spec.dual_pan_right = right;
+  state->panner.set_dual_pan(left_pan, right_pan);
+  state->spec.dual_pan_left = left_pan;
+  state->spec.dual_pan_right = right_pan;
   return true;
 }
 

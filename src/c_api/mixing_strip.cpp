@@ -104,7 +104,7 @@ SonareError sonare_strip_set_input_trim_db(SonareStrip* strip, float db) {
 
 SonareError sonare_strip_set_pan(SonareStrip* strip, float pan, int pan_mode) {
   SONARE_C_API_ENTRY;
-  if (!strip || !finite(pan)) {
+  if (!strip || !sonare::mixing::pan_in_range(pan)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
@@ -122,28 +122,25 @@ SonareError sonare_strip_set_pan(SonareStrip* strip, float pan, int pan_mode) {
     strip->scene_strip.pan_mode = pan_mode;
   }
   strip->strip.set_pan(pan);
-  // Clamp the cached scene pan to the processor's valid range so save/reload is
-  // faithful, matching set_dual_pan (which already clamps) and the live panner.
-  strip->scene_strip.pan = sonare::mixing::clamp_pan(pan);
+  strip->scene_strip.pan = pan;
   return SONARE_OK;
   SONARE_C_CATCH
 }
 
 SonareError sonare_strip_set_dual_pan(SonareStrip* strip, float left_pan, float right_pan) {
   SONARE_C_API_ENTRY;
-  if (!strip || !finite(left_pan) || !finite(right_pan)) {
+  if (!strip || !sonare::mixing::pan_in_range(left_pan) ||
+      !sonare::mixing::pan_in_range(right_pan)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
   strip->strip.set_pan_mode(sonare::mixing::PanMode::DualPan);
   strip->strip.set_dual_pan(left_pan, right_pan);
-  // Cache the nominal pan from the clamped L/R so the scene round-trips the same
-  // value sonare_mixer_to_scene_json will export for a DualPan strip.
-  strip->scene_strip.pan =
-      0.5f * (sonare::mixing::clamp_pan(left_pan) + sonare::mixing::clamp_pan(right_pan));
+  // The nominal pan round-trips the value sonare_mixer_to_scene_json exports for a DualPan strip.
+  strip->scene_strip.pan = 0.5f * (left_pan + right_pan);
   strip->scene_strip.pan_mode = SONARE_PAN_MODE_DUAL_PAN;
-  strip->scene_strip.dual_pan_left = sonare::mixing::clamp_pan(left_pan);
-  strip->scene_strip.dual_pan_right = sonare::mixing::clamp_pan(right_pan);
+  strip->scene_strip.dual_pan_left = left_pan;
+  strip->scene_strip.dual_pan_right = right_pan;
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -183,14 +180,12 @@ SonareError sonare_strip_set_surround_pan(SonareStrip* strip, const SonareSurrou
 
 SonareError sonare_strip_set_width(SonareStrip* strip, float width) {
   SONARE_C_API_ENTRY;
-  if (!strip || !finite(width)) {
+  if (!strip || !sonare::mixing::width_in_range(width)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
   strip->strip.set_width(width);
-  // Cache the clamped width so save/reload is faithful, matching set_pan
-  // and set_dual_pan (which already clamp) and the live width processor.
-  strip->scene_strip.width = sonare::mixing::clamp_width(width);
+  strip->scene_strip.width = width;
   return SONARE_OK;
   SONARE_C_CATCH
 }

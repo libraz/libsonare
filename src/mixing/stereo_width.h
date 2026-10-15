@@ -3,8 +3,8 @@
 /// @file stereo_width.h
 /// @brief Mid/side stereo width processor.
 
-#include <algorithm>
 #include <atomic>
+#include <cmath>
 
 #include "rt/param_smoother.h"
 #include "rt/processor_base.h"
@@ -12,20 +12,23 @@
 
 namespace sonare::mixing {
 
-/// @brief The width factor the processor will actually store for @p width.
-/// @details Shared with the C ABI setter and the scene walker for the same
-///          reason as @ref clamp_pan: a cached copy that is echoed back must be
-///          the value the processor is using.
-inline float clamp_width(float width) noexcept { return std::clamp(width, 0.0f, 2.0f); }
+/// Documented width domain; a factor outside it is refused, never clamped.
+inline constexpr float kWidthMin = 0.0f;
+inline constexpr float kWidthMax = 2.0f;
 
-/// @note The width factor is clamped to the range [0, 2] everywhere it is set
-///       (constructor and @ref set_width): 0 collapses to mono, 1 preserves the
-///       original image, 2 is the maximum widening. Values outside [0, 2] are
-///       clamped, NOT honored — a request of 3 or 4 behaves as 2.
+/// @brief True for a finite width factor inside [kWidthMin, kWidthMax].
+inline bool width_in_range(float width) noexcept {
+  return std::isfinite(width) && width >= kWidthMin && width <= kWidthMax;
+}
+
+/// @note The width factor is in [0, 2]: 0 collapses to mono, 1 preserves the original image,
+///       2 is the maximum widening. A value outside [0, 2] is refused by the constructor
+///       (SonareException) and by @ref set_width (returns false).
 class StereoWidthProcessor : public rt::ProcessorBase {
  public:
   /// @brief Constructs the processor.
-  /// @param width Initial width factor, clamped to [0, 2] (see class note).
+  /// @param width Initial width factor in [0, 2].
+  /// @throws SonareException (InvalidParameter) when @p width is outside [0, 2] or non-finite.
   /// @param smoothing_ms Parameter-smoothing time constant in milliseconds.
   explicit StereoWidthProcessor(float width = 1.0f, float smoothing_ms = 5.0f);
 
@@ -34,11 +37,12 @@ class StereoWidthProcessor : public rt::ProcessorBase {
   void reset() override;
 
   /// @brief Sets the stereo width factor.
-  /// @param width Width in the range [0, 2]; values are clamped. 0 collapses to
+  /// @param width Width in the range [0, 2]. 0 collapses to
   /// mono, 1 preserves the original stereo image, and 2 is the maximum widening.
   /// The mid (mono/center) component is preserved at all widths; only the side
   /// component is scaled by @p width, so a centered or mono source keeps its level.
-  void set_width(float width) noexcept;
+  /// @return false, leaving the width unchanged, when @p width is outside [0, 2] or non-finite.
+  bool set_width(float width) noexcept;
 
   /// @brief Copies the in-flight DSP state from another width processor.
   /// @details The source and destination must be control-quiescent: neither may

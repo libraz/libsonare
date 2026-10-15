@@ -151,8 +151,10 @@ SonareError sonare_strip_set_input_trim_db(SonareStrip* strip, float db);
 SonareError sonare_strip_set_fader_db(SonareStrip* strip, float db);
 // Sets the strip's pan position. pan_mode < 0 (SONARE_PAN_MODE_KEEP) keeps the
 // strip's current pan mode (only the pan position changes); otherwise it selects
-// the mode: 0 = Balance, 1 = StereoPan, 2 = DualPan.
+// the mode: 0 = Balance, 1 = StereoPan, 2 = DualPan. A pan outside [-1, 1] is refused
+// with SONARE_ERROR_INVALID_PARAMETER and leaves the strip unchanged.
 SonareError sonare_strip_set_pan(SonareStrip* strip, float pan, int pan_mode);
+// Both pans must lie in [-1, 1]; otherwise SONARE_ERROR_INVALID_PARAMETER, strip unchanged.
 SonareError sonare_strip_set_dual_pan(SonareStrip* strip, float left_pan, float right_pan);
 // Sets the strip's surround pan position (used when the strip feeds a >2-channel
 // bus). Returns SONARE_ERROR_INVALID_PARAMETER if strip or pan is NULL. The
@@ -160,6 +162,7 @@ SonareError sonare_strip_set_dual_pan(SonareStrip* strip, float left_pan, float 
 // mixer renders this strip's lane into a destination with more than two
 // channels; the stereo-only mixer block entry points ignore them.
 SonareError sonare_strip_set_surround_pan(SonareStrip* strip, const SonareSurroundPan* pan);
+// A width outside [0, 2] is refused with SONARE_ERROR_INVALID_PARAMETER, strip unchanged.
 SonareError sonare_strip_set_width(SonareStrip* strip, float width);
 SonareError sonare_strip_set_muted(SonareStrip* strip, int muted);
 // Sets the strip's solo state. Solo changes take effect on the next process

@@ -220,7 +220,7 @@
           "default": 0
         },
         "width": {
-          "description": "Stereo width: 0 is mono, 1 is unchanged, 2 is doubled. The mixer clamps to [0, 2] on construction, so a scene it emitted is always inside this range and a value outside it would be silently narrowed rather than honoured. Requires a stereo source.",
+          "description": "Stereo width: 0 is mono, 1 is unchanged, 2 is doubled. The loader rejects a value outside [0, 2] rather than clamping it. Requires a stereo source.",
           "type": "number",
           "minimum": 0,
           "maximum": 2,
@@ -313,7 +313,7 @@
         },
         "inputTrimDb": { "type": "number", "default": 0 },
         "width": {
-          "description": "Stereo width of the bus, clamped to [0, 2] the way a strip's is.",
+          "description": "Stereo width of the bus, in [0, 2]; rejected outside it the way a strip's is.",
           "type": "number",
           "minimum": 0,
           "maximum": 2,

@@ -1059,7 +1059,7 @@ bool RealtimeEngine::describe_reserved_parameter(uint32_t id,
       out->default_value = 0.0f;
       break;
     case TrackMixerRuntime::kPan:
-      // PannerProcessor::set_pan's clamp_pan.
+      // mixing::pan_in_range.
       out->name = "pan";
       out->unit = "";
       out->min_value = -1.0f;
@@ -1067,7 +1067,7 @@ bool RealtimeEngine::describe_reserved_parameter(uint32_t id,
       out->default_value = 0.0f;
       break;
     case TrackMixerRuntime::kWidth:
-      // StereoWidthProcessor::set_width's clamp_width.
+      // mixing::width_in_range.
       out->name = "width";
       out->unit = "";
       out->min_value = 0.0f;

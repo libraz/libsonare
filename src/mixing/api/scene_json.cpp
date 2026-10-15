@@ -133,6 +133,23 @@ float number_or_legacy(const JsonValue& object, const char* key, const char* leg
   return converted;
 }
 
+// Pan and width are refused outside their documented domains, naming the field.
+float checked_pan(float value, const char* field_path) {
+  if (!pan_in_range(value)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(field_path) + " must be within [-1, 1]");
+  }
+  return value;
+}
+
+float checked_width(float value, const char* field_path) {
+  if (!width_in_range(value)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(field_path) + " must be within [0, 2]");
+  }
+  return value;
+}
+
 int int_or_legacy(const JsonValue& object, const char* key, const char* legacy_key, int fallback) {
   const auto* value = value_or_legacy(object, key, legacy_key);
   if (!value || !value->is_number()) return fallback;
@@ -330,15 +347,11 @@ Strip strip_from_value(const JsonValue& object, const std::string& path,
       number_or_legacy(object, "faderDb", "fader_db", strip.fader_db, "scene.strips[].faderDb");
   strip.vca_offset_db = number_or_legacy(object, "vcaOffsetDb", "vca_offset_db",
                                          strip.vca_offset_db, "scene.strips[].vcaOffsetDb");
-  // Continuous quantities are clamped to the range the runtime stores them in,
-  // through the same helper the processors use. The enums and counts below are
-  // rejected instead: a value that names one of a fixed set of choices has no
-  // nearest legal neighbour, while a position or a width does. Either way the
-  // scene that comes back out is the scene that is running - echoing a pan of
-  // 1.5 while the panner uses 1.0 made the round-trip a report of the request
-  // rather than of the mix.
-  strip.pan = clamp_pan(number_or(object, "pan", strip.pan, "scene.strips[].pan"));
-  strip.width = clamp_width(number_or(object, "width", strip.width, "scene.strips[].width"));
+  // Pan and width outside their domains are refused, like the enums and counts below.
+  strip.pan =
+      checked_pan(number_or(object, "pan", strip.pan, "scene.strips[].pan"), "scene.strips[].pan");
+  strip.width = checked_width(number_or(object, "width", strip.width, "scene.strips[].width"),
+                              "scene.strips[].width");
   strip.muted = bool_or(object, "muted", strip.muted);
   strip.soloed = bool_or(object, "soloed", strip.soloed);
   strip.solo_safe = bool_or_legacy(object, "soloSafe", "solo_safe", strip.solo_safe);
@@ -348,11 +361,14 @@ Strip strip_from_value(const JsonValue& object, const std::string& path,
   if (strip.pan_mode < 0 || strip.pan_mode > 2) {
     throw SonareException(ErrorCode::InvalidFormat, "panMode enum is out of range");
   }
-  strip.dual_pan_left = clamp_pan(number_or_legacy(
-      object, "dualPanLeft", "dual_pan_left", strip.dual_pan_left, "scene.strips[].dualPanLeft"));
+  strip.dual_pan_left =
+      checked_pan(number_or_legacy(object, "dualPanLeft", "dual_pan_left", strip.dual_pan_left,
+                                   "scene.strips[].dualPanLeft"),
+                  "scene.strips[].dualPanLeft");
   strip.dual_pan_right =
-      clamp_pan(number_or_legacy(object, "dualPanRight", "dual_pan_right", strip.dual_pan_right,
-                                 "scene.strips[].dualPanRight"));
+      checked_pan(number_or_legacy(object, "dualPanRight", "dual_pan_right", strip.dual_pan_right,
+                                   "scene.strips[].dualPanRight"),
+                  "scene.strips[].dualPanRight");
   strip.polarity_invert_left = bool_or_legacy(object, "polarityInvertLeft", "polarity_invert_left",
                                               strip.polarity_invert_left);
   strip.polarity_invert_right = bool_or_legacy(
@@ -427,25 +443,27 @@ Bus bus_from_value(const JsonValue& object, const std::string& path,
   bus.layout = channel_layout_or(object, "layout", bus.layout);
   bus.input_trim_db = number_or_legacy(object, "inputTrimDb", "input_trim_db", bus.input_trim_db,
                                        "scene.buses[].inputTrimDb");
-  // Through the same clamp as scene.strips[].width above, and for the same
-  // reason: BusNode owns a StereoWidthProcessor, which clamps to [0, 2] on
-  // construction and on set_width, so storing the raw request made the
-  // round-trip report a width the bus is not running.
-  bus.width = clamp_width(number_or(object, "width", bus.width, "scene.buses[].width"));
+  // Same domain as scene.strips[].width above.
+  bus.width = checked_width(number_or(object, "width", bus.width, "scene.buses[].width"),
+                            "scene.buses[].width");
   bus.polarity_invert_left = bool_or_legacy(object, "polarityInvertLeft", "polarity_invert_left",
                                             bus.polarity_invert_left);
   bus.polarity_invert_right = bool_or_legacy(object, "polarityInvertRight", "polarity_invert_right",
                                              bus.polarity_invert_right);
-  // Pan: same field names, ranges and clamp/reject split as Strip's above.
-  bus.pan = clamp_pan(number_or(object, "pan", bus.pan, "scene.buses[].pan"));
+  // Pan: same field names and ranges as Strip's above.
+  bus.pan =
+      checked_pan(number_or(object, "pan", bus.pan, "scene.buses[].pan"), "scene.buses[].pan");
   bus.pan_mode = int_or_legacy(object, "panMode", "pan_mode", bus.pan_mode);
   if (bus.pan_mode < 0 || bus.pan_mode > 2) {
     throw SonareException(ErrorCode::InvalidFormat, "panMode enum is out of range");
   }
-  bus.dual_pan_left = clamp_pan(number_or_legacy(object, "dualPanLeft", "dual_pan_left",
-                                                 bus.dual_pan_left, "scene.buses[].dualPanLeft"));
-  bus.dual_pan_right = clamp_pan(number_or_legacy(
-      object, "dualPanRight", "dual_pan_right", bus.dual_pan_right, "scene.buses[].dualPanRight"));
+  bus.dual_pan_left = checked_pan(number_or_legacy(object, "dualPanLeft", "dual_pan_left",
+                                                   bus.dual_pan_left, "scene.buses[].dualPanLeft"),
+                                  "scene.buses[].dualPanLeft");
+  bus.dual_pan_right =
+      checked_pan(number_or_legacy(object, "dualPanRight", "dual_pan_right", bus.dual_pan_right,
+                                   "scene.buses[].dualPanRight"),
+                  "scene.buses[].dualPanRight");
   bus.pan_law = int_or_legacy(object, "panLaw", "pan_law", bus.pan_law);
   if (bus.pan_law < 0 || bus.pan_law >= kPanLawCount) {
     throw SonareException(ErrorCode::InvalidFormat, "panLaw enum is out of range");
