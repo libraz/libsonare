@@ -6,6 +6,7 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/math_utils.h"
+#include "util/non_finite_sample.h"
 
 namespace sonare::engine {
 
@@ -27,6 +28,15 @@ void capture_input_peak_db(float* const* channels, int num_channels, int num_sam
 }
 
 using constants::kFloorDb;
+
+namespace {
+// What a sample contributes to a lightweight reading: a non-finite one counts as
+// silence, the same policy as the full meter.
+float metered(float sample) noexcept {
+  (void)resolve_non_finite(SampleDestination::kBoundedResult, sample);
+  return sample;
+}
+}  // namespace
 
 void MeterTelemetryTap::prepare(double sample_rate, int max_block_size, uint32_t target_id,
                                 size_t telemetry_capacity, const mixing::MeterConfig& config) {
@@ -113,7 +123,7 @@ void MeterTelemetryTap::process_lightweight(float* const* channels, int num_chan
     const float* channel = channels[ch];
     if (!channel) continue;
     for (int i = 0; i < num_frames; ++i) {
-      const float value = channel[i];
+      const float value = metered(channel[i]);
       peak[static_cast<size_t>(ch)] = std::max(peak[static_cast<size_t>(ch)], std::abs(value));
       sum_sq[static_cast<size_t>(ch)] += static_cast<double>(value) * static_cast<double>(value);
     }
@@ -128,7 +138,8 @@ void MeterTelemetryTap::process_lightweight(float* const* channels, int num_chan
   if (num_channels >= 2 && channels[0] && channels[1]) {
     double cross = 0.0;
     for (int i = 0; i < num_frames; ++i) {
-      cross += static_cast<double>(channels[0][i]) * static_cast<double>(channels[1][i]);
+      cross += static_cast<double>(metered(channels[0][i])) *
+               static_cast<double>(metered(channels[1][i]));
     }
     const double denom = std::sqrt(sum_sq[0] * sum_sq[1]);
     if (denom > 0.0) {

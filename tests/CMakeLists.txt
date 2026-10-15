@@ -343,6 +343,7 @@ endif()
 if(BUILD_MIXING)
   target_sources(sonare_tests PRIVATE
     engine/meter_telemetry_test.cpp
+    engine/meter_telemetry_nonfinite_test.cpp
     engine/scope_telemetry_test.cpp
     engine/mixing_runtime_test.cpp
     engine/monitor_runtime_test.cpp
