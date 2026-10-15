@@ -8,6 +8,7 @@
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
+#include "util/db.h"
 
 namespace sonare::effects::filter {
 
@@ -61,7 +62,6 @@ constexpr VowelTable kTable = make_table();
 constexpr int kSubBlock = 16;
 // Pre-gain at drive = 1, in dB.
 constexpr float kDriveMaxDb = 36.0f;
-constexpr float kDbPerAmplitudeDecade = 20.0f;
 
 float clamp_finite(float value, float lo, float hi, float fallback) noexcept {
   return std::isfinite(value) ? std::clamp(value, lo, hi) : fallback;
@@ -80,7 +80,7 @@ VowelFilter::VowelFilter(VowelFilterConfig config) : config_(config) {
   config_.accel_ms = clamp_finite(config_.accel_ms, 0.0f, 1.0e6f, defaults.accel_ms);
   config_.drive = clamp_finite(config_.drive, 0.0f, 1.0f, defaults.drive);
   config_.dry_wet = clamp_finite(config_.dry_wet, 0.0f, 1.0f, defaults.dry_wet);
-  drive_gain_ = std::pow(10.0f, config_.drive * kDriveMaxDb / kDbPerAmplitudeDecade);
+  drive_gain_ = db_to_linear(config_.drive * kDriveMaxDb);
   paths_.set_path_latencies_q8({0, rt::kAdaa1LatencySamplesQ8});
   paths_.ensure_channels(kPlanes);
 }
@@ -98,7 +98,7 @@ int VowelFilter::tail_samples() const noexcept {
   if (!(std::clamp(config_.dry_wet, 0.0f, 1.0f) > 0.0f)) return 0;
   // The bank glides between table vowels, so take each band's longest ring over the table; the
   // bands run in parallel after the saturator's one remembered sample.
-  const float amp = std::pow(10.0f, kFitPeakingDb / (2.0f * kDbPerAmplitudeDecade));
+  const float amp = db_to_linear(kFitPeakingDb / 2.0f);
   rt::TailBudget bank;
   for (int vowel = 0; vowel < kVowelCount; ++vowel) {
     for (const Triple& band : target_for(static_cast<float>(vowel))) {
@@ -151,9 +151,9 @@ std::array<VowelFilter::Triple, kVowelBandCount> VowelFilter::target_for(
 
 void VowelFilter::update_bank() {
   const auto target = target_for(config_.vowel);
-  const float amp = std::pow(10.0f, kFitPeakingDb / (2.0f * kDbPerAmplitudeDecade));
+  const float amp = db_to_linear(kFitPeakingDb / 2.0f);
   const float lift = amp * amp - 1.0f;
-  const float constant = std::pow(10.0f, kFitConstantDb / kDbPerAmplitudeDecade);
+  const float constant = db_to_linear(kFitConstantDb);
   float weight_sum = kFitDirectWeight;
   for (int b = 0; b < kVowelBandCount; ++b) {
     const auto i = static_cast<size_t>(b);
@@ -239,7 +239,7 @@ bool VowelFilter::set_parameter_impl(unsigned int param_id, float value) {
       return true;
     case 2:
       config_.drive = std::clamp(value, 0.0f, 1.0f);
-      drive_gain_ = std::pow(10.0f, config_.drive * kDriveMaxDb / kDbPerAmplitudeDecade);
+      drive_gain_ = db_to_linear(config_.drive * kDriveMaxDb);
       return true;
     case 3:
       if (!mastering::common::valid_switch_value(value)) return false;
