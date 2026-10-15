@@ -755,6 +755,8 @@ if(BUILD_ARRANGEMENT)
     midi/smf_parser_robustness_test.cpp
     midi/sysex_framing_test.cpp
     midi/midi_fx_test.cpp
+    midi/midi_fx_nan_config_test.cpp
+    midi/channel_voice_predicate_test.cpp
     midi/program_map_test.cpp
     midi/gm_gs_resolution_test.cpp
     midi/midi_routing_test.cpp

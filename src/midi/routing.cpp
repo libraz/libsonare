@@ -3,14 +3,6 @@
 namespace sonare::midi {
 namespace {
 
-// A channel-voice UMP carries a meaningful channel nibble; other message types
-// (utility, system, data/SysEx handles) do not and bypass the channel filter
-// and channel remap.
-bool is_channel_voice(const Ump& ump) noexcept {
-  const UmpMessageType type = ump.message_type();
-  return type == UmpMessageType::kMidi1ChannelVoice || type == UmpMessageType::kMidi2ChannelVoice;
-}
-
 bool is_note_addressed_control(const Ump& ump) noexcept {
   if (!is_channel_voice(ump)) return false;
   const uint8_t status = ump.status_nibble();

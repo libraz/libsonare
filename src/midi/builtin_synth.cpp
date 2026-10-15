@@ -98,7 +98,7 @@ BuiltinSynth::BuiltinSynth(const BuiltinSynthConfig& config) noexcept
 }
 
 void BuiltinSynth::prepare(double sample_rate, int /*max_block_size*/) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : constants::kDefaultDawSampleRate;
   attack_inc_ = stage_increment(config_.attack_ms, sample_rate_);
   decay_inc_ = stage_increment(config_.decay_ms, sample_rate_);
   release_inc_ = stage_increment(config_.release_ms, sample_rate_);

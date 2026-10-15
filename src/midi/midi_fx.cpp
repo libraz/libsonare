@@ -71,6 +71,7 @@ int clamp_velocity16_on(int velocity) noexcept {
 }
 
 float clamp01(float v) noexcept {
+  if (!std::isfinite(v)) return 0.0f;
   if (v < 0.0f) return 0.0f;
   if (v > 1.0f) return 1.0f;
   return v;
@@ -129,11 +130,6 @@ int64_t nearest_quantized_frame(int64_t frame, int64_t grid,
     }
   }
   return best;
-}
-
-bool is_midi_channel_voice(const Ump& ump) noexcept {
-  const UmpMessageType mt = ump.message_type();
-  return mt == UmpMessageType::kMidi1ChannelVoice || mt == UmpMessageType::kMidi2ChannelVoice;
 }
 
 bool is_midi2_note_addressed_form(const Ump& ump) noexcept {
@@ -228,15 +224,6 @@ Ump make_note(const Ump& src, bool note_on, uint8_t note, Velocity16 velocity) n
   return make_midi1_note_off(src.group, src.channel(), note, velocity7);
 }
 
-/// Rewrites the note a poly-pressure message addresses, preserving its pressure
-/// payload. The note number lives in word[0] bits 8..14 for both protocols, so
-/// the field is patched in place (same rewrite as the drum-map remap).
-Ump make_poly_pressure_preserving_value(const Ump& src, uint8_t note) noexcept {
-  Ump out = src;
-  out.words[0] = (out.words[0] & ~(0x7Fu << 8u)) | (static_cast<uint32_t>(note & 0x7Fu) << 8u);
-  return out;
-}
-
 }  // namespace
 
 void MidiFxChain::push_or_overflow(const MidiEvent& ev, MidiFxBuffer* out) noexcept {
@@ -280,7 +267,7 @@ void MidiFxChain::clear_note_tracking(uint8_t group, uint8_t channel, uint8_t no
 
 void MidiFxChain::clear_pending_note_tracking(const MidiEvent& event, bool from_clip,
                                               uint32_t clip_id) noexcept {
-  if (!is_midi_channel_voice(event.ump) || !event.ump.is_note_on()) return;
+  if (!is_channel_voice(event.ump) || !event.ump.is_note_on()) return;
 
   size_t match = active_note_timing_count_;
   uint64_t earliest = UINT64_MAX;
@@ -357,7 +344,7 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
       push_or_overflow(ev, out);
       continue;
     }
-    const bool channel_voice = is_midi_channel_voice(ev.ump);
+    const bool channel_voice = is_channel_voice(ev.ump);
     const bool note_on = channel_voice && ev.ump.is_note_on();
     const bool note_off = channel_voice && ev.ump.is_note_off();
     const uint8_t source_note = ev.ump.note_number();
@@ -367,12 +354,9 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
     // ---- 1. Transpose (every note-addressed channel-voice message) ----
     // Every note-addressed message shifts by the same amount: aftertouch left on
     // the source note number would address a note the shifted voice never played.
-    if (transpose_.enabled && (note_on || note_off || note_addressed)) {
+    if (transpose_.enabled && (note_on || note_off || note_addressed || poly_pressure)) {
       const int shifted = clamp_note(static_cast<int>(ev.ump.note_number()) + transpose_.semitones);
       ev.ump = with_note_number(ev.ump, static_cast<uint8_t>(shifted));
-    } else if (transpose_.enabled && poly_pressure) {
-      const int shifted = clamp_note(static_cast<int>(ev.ump.note_number()) + transpose_.semitones);
-      ev.ump = make_poly_pressure_preserving_value(ev.ump, static_cast<uint8_t>(shifted));
     }
 
     // ---- 2. Velocity curve (note-on only) ----
@@ -464,7 +448,7 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
             shaped.render_frame += jitter;
           }
         }
-        if (humanize_.velocity_amount > 0 && is_midi_channel_voice(shaped.ump) &&
+        if (humanize_.velocity_amount > 0 && is_channel_voice(shaped.ump) &&
             shaped.ump.is_note_on()) {
           // velocity_amount is expressed in 7-bit velocity units. MIDI 2.0 notes
           // are jittered in the full 16-bit domain (no 7-bit round-trip) so the

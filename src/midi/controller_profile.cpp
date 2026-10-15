@@ -15,11 +15,6 @@ constexpr float kBendMax = 16383.0f;
 constexpr uint8_t kBreathCc = 2;
 constexpr uint8_t kTimbreCc = 74;
 
-bool is_midi_channel_voice(const Ump& ump) noexcept {
-  return ump.message_type() == UmpMessageType::kMidi1ChannelVoice ||
-         ump.message_type() == UmpMessageType::kMidi2ChannelVoice;
-}
-
 /// CC74 reaches both spellings of the second axis. They never coexist — a bowed
 /// string has no bell and nothing else has a contact point — so one gesture
 /// filling both is unambiguous rather than a guess.
@@ -81,7 +76,7 @@ constexpr PresetEntry kPresets[] = {
 }  // namespace
 
 bool controller_input_of(const Ump& ump, ControllerInputValue* out) noexcept {
-  if (out == nullptr || !is_midi_channel_voice(ump)) return false;
+  if (out == nullptr || !is_channel_voice(ump)) return false;
   ChannelVoiceEvent ev;
   if (!decode_channel_voice(ump, &ev)) return false;
   ControllerInputValue value{};

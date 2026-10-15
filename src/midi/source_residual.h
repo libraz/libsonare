@@ -30,6 +30,7 @@
 #include <cstdint>
 
 #include "midi/instrument.h"
+#include "util/constants.h"
 
 namespace sonare::midi {
 
@@ -55,7 +56,7 @@ class SourceResidualSplitter {
   /// CONTROL thread: sets the smoothing time constant and the sample rate the
   /// caller will render at. Call once from prepare().
   void configure(double sample_rate, float tau_seconds) noexcept {
-    sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+    sample_rate_ = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
     tau_seconds_ = tau_seconds > 0.0f ? tau_seconds : 0.5f;
   }
 
@@ -212,7 +213,7 @@ class SourceResidualSplitter {
   std::array<float, kMaxResidualSources> weights_{};
   std::array<float, kMaxResidualSources> chunk_energy_{};
   size_t slot_count_ = 0;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = ::sonare::constants::kDefaultDawSampleRate;
   float tau_seconds_ = 0.5f;
 };
 

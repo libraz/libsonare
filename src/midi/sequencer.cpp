@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "midi/ump.h"
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 
@@ -15,13 +16,8 @@ namespace sonare::midi {
 
 namespace {
 
-bool is_midi_channel_voice(const Ump& ump) noexcept {
-  return ump.message_type() == UmpMessageType::kMidi1ChannelVoice ||
-         ump.message_type() == UmpMessageType::kMidi2ChannelVoice;
-}
-
 bool is_channel_mode_reset(const Ump& ump) noexcept {
-  if (!is_midi_channel_voice(ump) ||
+  if (!is_channel_voice(ump) ||
       ump.status_nibble() != static_cast<uint8_t>(UmpStatus::kControlChange)) {
     return false;
   }
@@ -88,7 +84,7 @@ void MidiSequencer::prepare(double sample_rate) {
     auto next_storage = std::make_unique<RuntimeStorage>();
     runtime_storage_ = std::move(next_storage);
   }
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : constants::kDefaultDawSampleRate;
   reset();
 }
 
@@ -406,7 +402,7 @@ void MidiSequencer::clear_active_notes_for_channel(uint32_t destination_id, uint
 
 void MidiSequencer::clear_note_tracking_for_event(uint32_t destination_id, const MidiEvent& event,
                                                   bool from_clip, uint32_t clip_id) noexcept {
-  if (!is_midi_channel_voice(event.ump) || (!event.ump.is_note_on() && !event.ump.is_note_off())) {
+  if (!is_channel_voice(event.ump) || (!event.ump.is_note_on() && !event.ump.is_note_off())) {
     return;
   }
   DestinationFx* fx = find_midi_fx(destination_id);
@@ -431,7 +427,7 @@ void MidiSequencer::clear_pending_note_events_for_channel(uint32_t destination_i
     const PendingFxEvent& pending = runtime_storage_->pending_fx[i];
     if (pending.dead || pending.destination_id != destination_id ||
         pending.event.ump.group != group || pending.event.ump.channel() != channel ||
-        !is_midi_channel_voice(pending.event.ump) ||
+        !is_channel_voice(pending.event.ump) ||
         (!pending.event.ump.is_note_on() && !pending.event.ump.is_note_off())) {
       ++i;
       continue;
@@ -452,7 +448,7 @@ void MidiSequencer::retire_channel_mode_reset(uint32_t destination_id, uint8_t g
 
 void MidiSequencer::dispatch_transformed(uint32_t destination_id, const MidiEvent& event,
                                          bool from_clip, uint32_t clip_id) noexcept {
-  const bool channel_voice = is_midi_channel_voice(event.ump);
+  const bool channel_voice = is_channel_voice(event.ump);
   const bool semantic_note_off = channel_voice && event.ump.is_note_off();
   bool inserted_channel_state = false;
   if (channel_voice && !semantic_note_off &&

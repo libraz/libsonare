@@ -515,6 +515,12 @@ struct Midi1MessageList {
 /// of its value. Forms with no MIDI 1.0 counterpart (D.2.8) produce count == 0.
 Midi1MessageList midi2_to_midi1_messages(const Ump& ump) noexcept;
 
+/// True for a MIDI 1.0 or MIDI 2.0 channel-voice message (the types that carry a channel nibble).
+inline bool is_channel_voice(const Ump& ump) noexcept {
+  const UmpMessageType type = ump.message_type();
+  return type == UmpMessageType::kMidi1ChannelVoice || type == UmpMessageType::kMidi2ChannelVoice;
+}
+
 /// True for a MIDI 2.0 Registered or Assignable (channel) Controller: the RPN /
 /// NRPN forms, which carry a 32-bit value like a Control Change but address it
 /// by (bank, index), and which midi2_to_midi1_messages() lowers to four messages.
