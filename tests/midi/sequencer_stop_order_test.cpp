@@ -47,8 +47,7 @@ std::vector<Ump> stop_events(bool destination_stop) {
 
 }  // namespace
 
-TEST_CASE("Global and destination stops release a held note before lifting the damper",
-          "[midi]") {
+TEST_CASE("Global and destination stops release a held note before lifting the damper", "[midi]") {
   const std::vector<Ump> global = stop_events(false);
   const std::vector<Ump> destination = stop_events(true);
 
