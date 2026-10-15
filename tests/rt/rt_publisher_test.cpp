@@ -4,6 +4,7 @@
 #include <array>
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <cstdint>
 #include <memory>
 #include <thread>
@@ -113,7 +114,7 @@ TEST_CASE("RtPublisher acquire adopts the newest of several pending publishes", 
   REQUIRE(publisher.current() != nullptr);
   REQUIRE(publisher.current()->value == 3);
 
-  // The two superseded snapshots were moved into the retire ring. They are
+  // The two superseded snapshots stay in their hand-off slots. They are
   // freed on the control thread when the next publish reclaims retired slots.
   REQUIRE(publisher.publish(make_snapshot(4)));
   REQUIRE(CountedSnapshot::destroyed.load() == 2);
@@ -142,15 +143,56 @@ TEST_CASE("RtPublisher never lets a pending snapshot override a newer ring publi
   for (int value = 1; value <= 70; ++value) {
     REQUIRE(publisher.publish(std::make_shared<const int>(value)));
   }
+  // One acquire reaches the coalesced value without another publish to unblock it.
   publisher.acquire();
   REQUIRE(publisher.current() != nullptr);
+  REQUIRE(*publisher.current() == 70);
+  for (int block = 0; block < 4; ++block) {
+    publisher.acquire();
+    REQUIRE(*publisher.current() == 70);
+  }
 
-  // A newer publication must remain newer than the coalesced value even when
-  // the consumer has only retired part of the ring so far.
+  // A later publication through the ring is newer than the coalesced value.
   REQUIRE(publisher.publish(std::make_shared<const int>(71)));
   publisher.acquire();
   REQUIRE(publisher.current() != nullptr);
   REQUIRE(*publisher.current() == 71);
+}
+
+TEST_CASE("RtPublisher adopts the last snapshot of any burst without a further publish",
+          "[rt][publisher]") {
+  using Publisher = sonare::rt::RtPublisher<CountedSnapshot>;
+  // Just past the ring plus the pending slot, and well past twice the ring.
+  const uint64_t burst = GENERATE(static_cast<uint64_t>(Publisher::kCapacity + 6),
+                                  static_cast<uint64_t>(3 * Publisher::kCapacity + 5));
+  CountedSnapshot::live.store(0);
+  CountedSnapshot::destroyed.store(0);
+  Publisher publisher;
+
+  REQUIRE(publisher.publish(make_snapshot(0)));
+  publisher.acquire();
+  for (uint64_t value = 1; value <= burst; ++value) {
+    REQUIRE(publisher.publish(make_snapshot(value)));
+  }
+  REQUIRE(publisher.control_current()->value == burst);
+
+  // No further publish: the audio thread alone must reach the newest snapshot
+  // and stay there, and it must not free anything while doing so.
+  const int destroyed_before_acquire = CountedSnapshot::destroyed.load();
+  for (int block = 0; block < 4; ++block) {
+    publisher.acquire();
+    REQUIRE(publisher.current() != nullptr);
+    REQUIRE(publisher.current() == publisher.control_current().get());
+    REQUIRE(publisher.current()->value == burst);
+  }
+  REQUIRE(CountedSnapshot::destroyed.load() == destroyed_before_acquire);
+
+  // The next control-thread publish frees every intermediate the burst left
+  // behind: only the adopted snapshot and the new one remain.
+  REQUIRE(publisher.publish(make_snapshot(burst + 1)));
+  REQUIRE(CountedSnapshot::live.load() - CountedSnapshot::destroyed.load() == 2);
+  publisher.acquire();
+  REQUIRE(publisher.current()->value == burst + 1);
 }
 
 TEST_CASE("RtPublisher quiescent acquire drains a full ring before pending", "[rt][publisher]") {
@@ -181,6 +223,7 @@ TEST_CASE("RtPublisher concurrent publish/acquire is torn-read and leak free", "
   sonare::rt::RtPublisher<CountedSnapshot> publisher;
   std::atomic<bool> producer_done{false};
   std::atomic<bool> torn{false};
+  std::atomic<bool> went_backwards{false};
 
   // Control thread: publish a stream of distinct snapshots.
   std::thread producer([&] {
@@ -193,13 +236,19 @@ TEST_CASE("RtPublisher concurrent publish/acquire is torn-read and leak free", "
   });
 
   // Audio thread: continuously acquire and read the current snapshot, checking
-  // that the value and its mirror copy always agree (no torn read).
+  // that the value and its mirror copy always agree (no torn read) and that it
+  // never adopts an older snapshot after a newer one.
   std::thread consumer([&] {
+    uint64_t last_value = 0;
     while (true) {
       publisher.acquire();
       const CountedSnapshot* snapshot = publisher.current();
       if (snapshot && snapshot->value != snapshot->mirror) {
         torn.store(true, std::memory_order_relaxed);
+      }
+      if (snapshot) {
+        if (snapshot->value < last_value) went_backwards.store(true, std::memory_order_relaxed);
+        last_value = snapshot->value;
       }
       if (producer_done.load(std::memory_order_acquire)) {
         // One final drain so the last published snapshot is adopted.
@@ -213,9 +262,11 @@ TEST_CASE("RtPublisher concurrent publish/acquire is torn-read and leak free", "
   consumer.join();
 
   REQUIRE_FALSE(torn.load(std::memory_order_relaxed));
+  REQUIRE_FALSE(went_backwards.load(std::memory_order_relaxed));
+  REQUIRE(publisher.current()->value == static_cast<uint64_t>(kIterations));
 
-  // After the consumer stopped, retired snapshots remain parked in the retire
-  // ring until the control thread reclaims them on the next publish. Publishing
+  // After the consumer stopped, retired snapshots remain in the hand-off slots
+  // until the control thread reclaims them on the next publish. Publishing
   // once more drains everything except the snapshot the audio thread still
   // owns (current_) and the control thread's own control_current_.
   REQUIRE(publisher.publish(make_snapshot(0)));
@@ -335,64 +386,57 @@ TEST_CASE(
   REQUIRE(publisher.current() != nullptr);
   REQUIRE(publisher.current()->value == kBurst);
 
-  // Nothing was ever freed on this (the calling / "audio") thread: every
-  // superseded snapshot is either still held live, parked in the retire ring,
-  // or -- for the one snapshot the retire ring had no room left for -- parked
-  // in the publisher's own deferred-retire slot. A further publish()/acquire()
-  // round trip (letting the control thread reclaim, then draining once more)
-  // must still behave normally.
+  // Every superseded snapshot is left in a hand-off slot, not freed here. A
+  // further publish()/acquire() round trip (letting the control thread
+  // reclaim, then draining once more) must still behave normally.
   REQUIRE(publisher.publish(make_snapshot(kBurst + 1)));
   publisher.acquire([](const CountedSnapshot*, const CountedSnapshot*) {});
   REQUIRE(publisher.current()->value == kBurst + 1);
 }
 
-TEST_CASE(
-    "RtPublisher callback acquire adopts nothing while a deferred retire is "
-    "still stuck",
-    "[rt][publisher]") {
-  // Reach the same "retire ring full, one snapshot deferred" state as the
-  // burst test above, then call acquire() again with nothing new published.
-  // The deferred snapshot must survive untouched (not overwritten/destroyed)
-  // and nothing must be adopted, since a stuck deferral means the retire ring
-  // still has no room to retire whatever this call might otherwise adopt.
+TEST_CASE("RtPublisher callback acquire reaches the end of a long burst without a further publish",
+          "[rt][publisher]") {
+  using Publisher = sonare::rt::RtPublisher<CountedSnapshot>;
+  CountedSnapshot::live.store(0);
   CountedSnapshot::destroyed.store(0);
-  sonare::rt::RtPublisher<CountedSnapshot> publisher;
+  Publisher publisher;
 
   REQUIRE(publisher.publish(make_snapshot(0)));
   publisher.acquire([](const CountedSnapshot*, const CountedSnapshot*) {});
 
-  constexpr size_t kBurst = sonare::rt::RtPublisher<CountedSnapshot>::kCapacity + 1;
-  for (size_t i = 1; i <= kBurst; ++i) {
-    REQUIRE(publisher.publish(make_snapshot(static_cast<uint64_t>(i))));
+  constexpr uint64_t kBurst = 3 * Publisher::kCapacity + 5;
+  for (uint64_t value = 1; value <= kBurst; ++value) {
+    REQUIRE(publisher.publish(make_snapshot(value)));
   }
-  int call_count = 0;
-  publisher.acquire([&](const CountedSnapshot*, const CountedSnapshot*) { ++call_count; });
-  REQUIRE(call_count == 1);
-  REQUIRE(publisher.current()->value == kBurst);
-  // Snapshot 0 could not be retired this call (the ring was exactly full) and
-  // is now the deferred one; nothing has been destroyed yet.
-  REQUIRE(CountedSnapshot::destroyed.load() == 0);
+  const int destroyed_before_acquire = CountedSnapshot::destroyed.load();
 
-  // A further call, with nothing new published, must not touch current() nor
-  // destroy the still-deferred snapshot.
-  publisher.acquire([&](const CountedSnapshot*, const CountedSnapshot*) { ++call_count; });
-  REQUIRE(call_count == 1);  // the callback did not fire again.
-  REQUIRE(publisher.current()->value == kBurst);
-  REQUIRE(CountedSnapshot::destroyed.load() == 0);
+  int call_count = 0;
+  uint64_t seen_previous = kBurst;
+  for (int block = 0; block < 4; ++block) {
+    publisher.acquire([&](const CountedSnapshot* previous, const CountedSnapshot* next) {
+      ++call_count;
+      REQUIRE(previous != nullptr);
+      seen_previous = previous->value;
+      REQUIRE(next != nullptr);
+      REQUIRE(next->value == kBurst);
+    });
+    REQUIRE(publisher.current() == publisher.control_current().get());
+  }
+  REQUIRE(call_count == 1);
+  REQUIRE(seen_previous == 0);
+  REQUIRE(CountedSnapshot::destroyed.load() == destroyed_before_acquire);
+
+  // The control thread frees the previous snapshot and every skipped one.
+  REQUIRE(publisher.publish(make_snapshot(kBurst + 1)));
+  REQUIRE(CountedSnapshot::live.load() - CountedSnapshot::destroyed.load() == 2);
 }
 
 TEST_CASE("RtPublisher callback acquire never destroys a snapshot on the consuming thread",
           "[rt][publisher]") {
-  // Regression stress test for a fixed hazard: if flush_deferred_retire() at
-  // the top of a call found the retire ring still full (deferred_retire_
-  // still occupied) while this call would otherwise still adopt something
-  // new, retiring the held-back `previous` snapshot at the end could ALSO
-  // fail and overwrite deferred_retire_ -- destroying the OLDER deferred
-  // snapshot right there, on this (the consuming/"audio") thread. The fix
-  // makes the whole call a no-op whenever a deferral is still stuck, so
-  // nothing is ever freed here. Real thread contention is what can put the
-  // retire ring in that state between two acquire() calls, so this runs
-  // concurrently rather than relying on a single-threaded sequence.
+  // The held-back `previous` snapshot and every skipped one must reach the
+  // control thread to be freed, never the consuming ("audio") thread. Real
+  // contention is what interleaves a reclaim with a callback in flight, so
+  // this runs concurrently rather than as a single-threaded sequence.
   ThreadTaggedSnapshot::destroyed_on_consumer_thread.store(false);
 
   sonare::rt::RtPublisher<ThreadTaggedSnapshot> publisher;

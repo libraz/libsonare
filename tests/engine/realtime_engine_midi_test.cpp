@@ -957,9 +957,8 @@ TEST_CASE("RealtimeEngine adopts a pending rebind after an exactly full clip rin
 
   engine.set_midi_clips(make_schedule(0));
   engine.midi_sequencer().acquire_midi_clips();
-  // Leave the exactly full hand-off ring unacquired. The rebind publication
-  // then occupies the pending slot, which a single ordinary acquire cannot
-  // adopt after it fills the retire ring with all 64 older snapshots.
+  // Leave the exactly full hand-off ring unacquired so the rebind publication
+  // lands in the pending slot behind 64 older snapshots.
   for (uint32_t id = 1; id <= sonare::rt::RtPublisher<int>::kCapacity; ++id) {
     engine.set_midi_clips(make_schedule(id));
   }
