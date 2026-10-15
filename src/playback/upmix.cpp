@@ -141,7 +141,7 @@ mastering::multiband::CrossoverConfig lfe_crossover_config() {
 
 struct Upmixer::Impl {
   ChannelLayout output = ChannelLayout::FivePointOne;
-  double sample_rate = 48000.0;
+  double sample_rate = constants::kDefaultDawSampleRate;
   int max_block = 0;
   int n = 0;
   int hop = 0;

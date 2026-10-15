@@ -55,6 +55,9 @@ struct TimeSignature {
   int denominator = 4;
 };
 
+/// Length of one bar of `sig` in quarter-note PPQ; numerator and denominator clamp to at least 1.
+double bar_length_ppq(TimeSignature sig) noexcept;
+
 struct TimeSignatureSegment {
   double start_ppq = 0.0;
   TimeSignature time_sig{};

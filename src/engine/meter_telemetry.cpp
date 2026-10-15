@@ -222,7 +222,7 @@ void MeterTelemetryTap::stage(MeterTelemetryRecord record, int num_frames) noexc
       const size_t c = static_cast<size_t>(ch);
       staged.peak_db[c] = std::max(staged.peak_db[c], record.peak_db[c]);
       staged.true_peak_db[c] = std::max(staged.true_peak_db[c], record.true_peak_db[c]);
-      const double mean_square = std::pow(10.0, static_cast<double>(record.rms_db[c]) / 10.0);
+      const double mean_square = db_to_power_scalar(static_cast<double>(record.rms_db[c]));
       energy.sum_sq[c] += mean_square * static_cast<double>(frames);
     }
     energy.frames += frames;
@@ -255,8 +255,8 @@ void MeterTelemetryTap::stage(MeterTelemetryRecord record, int num_frames) noexc
     StagedEnergy energy{};
     for (int ch = 0; ch < channel_count; ++ch) {
       const size_t c = static_cast<size_t>(ch);
-      energy.sum_sq[c] = std::pow(10.0, static_cast<double>(record.rms_db[c]) / 10.0) *
-                         static_cast<double>(frames);
+      energy.sum_sq[c] =
+          db_to_power_scalar(static_cast<double>(record.rms_db[c])) * static_cast<double>(frames);
     }
     energy.frames = frames;
     staged_energy_[staged_count_] = energy;

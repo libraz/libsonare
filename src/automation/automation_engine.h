@@ -15,6 +15,7 @@
 #include "rt/rt_publisher.h"
 #include "transport/tempo_map.h"
 #include "transport/transport_state.h"
+#include "util/constants.h"
 
 namespace sonare::automation {
 
@@ -175,7 +176,7 @@ class AutomationEngine {
                 : (param_id & engine_param_id_mask_) == engine_param_id_match_);
   }
 
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = ::sonare::constants::kDefaultDawSampleRate;
   const transport::TempoMap* tempo_map_ = nullptr;
   // Engine-parameter router state. Plain members by design: written once at
   // prepare time (see set_engine_param_router), read on the audio thread.

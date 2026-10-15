@@ -5,6 +5,7 @@
 #include <limits>
 #include <memory>
 
+#include "transport/musical_time.h"
 #include "util/constants.h"
 #include "util/numeric_validation.h"
 
@@ -83,12 +84,6 @@ double segment_ppq_at_samples(const TempoSegment& segment, double sample_rate, d
   const double slope = (end_bpm - bpm0) / (segment.end_ppq - segment.start_ppq);
   // bpm(p) - bpm0 = bpm0 * expm1(s * slope / (sr*60)); p = start_ppq + that / slope.
   return segment.start_ppq + bpm0 * std::expm1(s * slope / (sample_rate * 60.0)) / slope;
-}
-
-double bar_length_ppq(TimeSignature sig) noexcept {
-  const int numerator = std::max(sig.numerator, 1);
-  const int denominator = std::max(sig.denominator, 1);
-  return static_cast<double>(numerator) * 4.0 / static_cast<double>(denominator);
 }
 
 // Saturating double -> int64 conversion. double(INT64_MAX) is 2^63, so a bare
@@ -174,6 +169,12 @@ std::vector<TimeSignatureSegment> normalize_time_signatures(
 }
 
 }  // namespace
+
+double bar_length_ppq(TimeSignature sig) noexcept {
+  const int numerator = std::max(sig.numerator, 1);
+  const int denominator = std::max(sig.denominator, 1);
+  return static_cast<double>(numerator) * 4.0 / static_cast<double>(denominator);
+}
 
 void sort_by_start(std::vector<TempoSegment>* segments) { stable_sort_by_start(segments); }
 
@@ -283,7 +284,7 @@ BarBeat TempoMap::ppq_to_bar_beat(double ppq) const noexcept {
   const size_t sig_index = time_signature_index_for_ppq(sigs, ppq);
   const TimeSignature sig = sigs[sig_index].time_sig;
   const double start = bar_start_ppq_in(sigs, ppq);
-  const double beat_len = 4.0 / static_cast<double>(std::max(sig.denominator, 1));
+  const double beat_len = note_length_ppq(sig.denominator);
   const double offset = std::max(0.0, ppq - start);
   const int beat_index = static_cast<int>(std::floor(offset / beat_len));
 

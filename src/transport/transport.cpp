@@ -17,7 +17,7 @@ const TempoMap& fallback_tempo_map() noexcept {
   // static initialization.
   static TempoMap map;
   static const bool prepared = [] {
-    map.prepare(48000.0);
+    map.prepare(constants::kDefaultDawSampleRate);
     return true;
   }();
   (void)prepared;

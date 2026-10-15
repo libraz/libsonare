@@ -4,6 +4,7 @@
 #include <cmath>
 #include <memory>
 
+#include "util/constants.h"
 #include "util/insertion_sort.h"
 
 namespace sonare::automation {
@@ -58,7 +59,7 @@ void AutomationBoundaryList::sort_unique() noexcept {
 }
 
 void AutomationEngine::prepare(double sample_rate, const transport::TempoMap* tempo_map) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : constants::kDefaultDawSampleRate;
   tempo_map_ = tempo_map;
 }
 

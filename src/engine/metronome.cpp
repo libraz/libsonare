@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "transport/musical_time.h"
 #include "util/constants.h"
 #include "util/numeric_validation.h"
 
@@ -84,7 +85,7 @@ void Metronome::collect_events(int64_t block_start_sample, int num_frames, Metro
   // active segment.
   {
     const transport::TimeSignature sig = tempo_map_->time_signature_at_ppq(ppq);
-    const double beat_len = 4.0 / static_cast<double>(std::max(sig.denominator, 1));
+    const double beat_len = transport::note_length_ppq(sig.denominator);
     const double bar_start = tempo_map_->bar_start_ppq(ppq);
     const double beats_from_bar = std::ceil((ppq - bar_start) / beat_len - kPpqEpsilon);
     ppq = bar_start + beats_from_bar * beat_len;
@@ -93,8 +94,7 @@ void Metronome::collect_events(int64_t block_start_sample, int num_frames, Metro
   const int64_t guard_limit = num_frames + lookback + 64;
   for (int guard = 0; ppq <= hi + kPpqEpsilon && guard < guard_limit; ++guard) {
     const transport::TimeSignature sig = tempo_map_->time_signature_at_ppq(ppq);
-    const double beat_len =
-        std::max(4.0 / static_cast<double>(std::max(sig.denominator, 1)), kPpqEpsilon);
+    const double beat_len = std::max(transport::note_length_ppq(sig.denominator), kPpqEpsilon);
     const int64_t sample = tempo_map_->ppq_to_sample(ppq);
     if (sample >= window_start_sample && sample < block_end_sample) {
       const transport::BarBeat beat = tempo_map_->ppq_to_bar_beat(ppq);
@@ -178,8 +178,7 @@ int64_t Metronome::count_in_end_sample(const transport::TempoMap& map, int64_t s
   const double start_ppq = map.sample_to_ppq(start_sample);
   const double bar_start = map.bar_start_ppq(start_ppq);
   const transport::TimeSignature sig = map.time_signature_at_ppq(start_ppq);
-  const double bar_len = static_cast<double>(std::max(sig.numerator, 1)) * 4.0 /
-                         static_cast<double>(std::max(sig.denominator, 1));
+  const double bar_len = transport::bar_length_ppq(sig);
   return map.ppq_to_sample(bar_start + bar_len * static_cast<double>(bars));
 }
 

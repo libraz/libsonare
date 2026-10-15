@@ -579,3 +579,14 @@ TEST_CASE("TempoMap keeps the last time signature supplied at a duplicate start"
   REQUIRE(at.numerator == 7);
   REQUIRE(at.denominator == 8);
 }
+
+TEST_CASE("bar_length_ppq follows the signature", "[transport]") {
+  using sonare::transport::bar_length_ppq;
+  using sonare::transport::TimeSignature;
+  REQUIRE_THAT(bar_length_ppq(TimeSignature{4, 4}), WithinAbs(4.0, 1e-12));
+  REQUIRE_THAT(bar_length_ppq(TimeSignature{3, 4}), WithinAbs(3.0, 1e-12));
+  REQUIRE_THAT(bar_length_ppq(TimeSignature{6, 8}), WithinAbs(3.0, 1e-12));
+  REQUIRE_THAT(bar_length_ppq(TimeSignature{7, 16}), WithinAbs(1.75, 1e-12));
+  // Zero numerator and denominator clamp to 1, giving 1 * 4 / 1.
+  REQUIRE_THAT(bar_length_ppq(TimeSignature{0, 0}), WithinAbs(4.0, 1e-12));
+}

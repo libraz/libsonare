@@ -18,7 +18,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <utility>
 #include <vector>
 
@@ -111,19 +110,6 @@ class ChannelDelay {
   /// so both values commit as one replacement.
   bool set_prepared_channels(int channels) noexcept { return configure(channels, delay_q8_); }
 
-  /// Compatibility spelling for integer/fractional delay updates. The update
-  /// still uses configure(), so inactive and superseded lane storage is
-  /// reclaimed on every successful change.
-  bool set_delay_q8(int delay_q8) noexcept { return configure(prepared_channels_, delay_q8); }
-
-  /// Convenience: set an integer-sample delay (delay_q8 = samples << 8).
-  bool set_delay(int delay_samples) noexcept {
-    if (delay_samples <= 0) return set_delay_q8(0);
-    constexpr int kMaxIntegerDelay = std::numeric_limits<int>::max() >> 8;
-    const int bounded = std::min(delay_samples, kMaxIntegerDelay);
-    return set_delay_q8(bounded << 8);
-  }
-
   /// AUDIO thread: zero every lane's history (flush stale audio on a transport
   /// discontinuity such as stop/seek/loop). Allocation-free.
   void reset() noexcept {
@@ -159,7 +145,6 @@ class ChannelDelay {
     return total;
   }
   size_t reserved_samples() const noexcept { return capacity(); }
-  size_t storage_capacity() const noexcept { return capacity(); }
 
   /// CONTROL thread: exchange two fully prepared banks without allocating.
   /// Used by the engine to commit a complete PDC configuration only after all
