@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "midi/synth/gs_classic/graph_engine.h"
+#include "util/db.h"
 
 namespace sonare::midi::synth::gs_classic {
 
@@ -13,8 +14,6 @@ constexpr double kMsPerSecond = 1000.0;
 constexpr double kDbPerAmplitudeDecade = 20.0;
 constexpr double kDbPerPowerDecade = 10.0;
 constexpr uint8_t kShaperCurveMask = 0x0F;
-
-double db_to_amplitude(double db) noexcept { return std::pow(10.0, db / kDbPerAmplitudeDecade); }
 
 /// A one-pole coefficient reaching 1 - 1/e of a step in `ms`.
 double pole_of(double ms) noexcept {
@@ -34,7 +33,7 @@ void gs_classic_render_shaper(const GsClassicRenderContext& ctx, const GsClassic
   const double* x = ctx.input(node, 0);
   double* y = ctx.output(node);
   for (std::size_t i = a; i < b; ++i) {
-    const double v = db_to_amplitude(ctx.value(node, 0, i)) * x[i];
+    const double v = db_to_linear(ctx.value(node, 0, i)) * x[i];
     switch (curve) {
       case GsClassicShaperCurve::kTanh:
         y[i] = std::tanh(v);
@@ -128,7 +127,7 @@ void gs_classic_render_gain_computer(const GsClassicRenderContext& ctx, const Gs
       const double into = over + knee / 2.0;
       reduction = slope * (into * into) / (2.0 * knee);
     }
-    y[i] = db_to_amplitude(reduction);
+    y[i] = db_to_linear(reduction);
   }
 }
 

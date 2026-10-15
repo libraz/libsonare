@@ -9,6 +9,7 @@
 
 #include "midi/synth/gs_classic/graph_engine.h"
 #include "util/constants.h"
+#include "util/db.h"
 
 namespace sonare::midi::synth::gs_classic {
 
@@ -40,7 +41,6 @@ void put(double* rows, std::size_t r, const GsClassicBiquad& q) noexcept {
 
 /// A gain this close to 0 dB designs the unity row, as the reference designer does.
 constexpr double kFlatDb = 1e-9;
-constexpr double kDbPerAmplitudeDecade = 20.0;
 constexpr double kDbPerShelfAmplitudeDecade = 40.0;
 
 constexpr GsClassicBiquad kUnity{1.0, 0.0, 0.0, 0.0, 0.0};
@@ -51,10 +51,8 @@ GsClassicBiquad normalized(double b0, double b1, double b2, double a0, double a1
   return {b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0};
 }
 
-double db_to_amplitude(double db) noexcept { return std::pow(10.0, db / kDbPerAmplitudeDecade); }
-
 GsClassicBiquad first_order_shelf(GsClassicSide side, double corner_hz, double gain_db) noexcept {
-  const double g = db_to_amplitude(gain_db);
+  const double g = db_to_linear(gain_db);
   if (std::fabs(gain_db) < kFlatDb) return kUnity;
   double k = std::tan(kPiD * corner_hz / kGsClassicSampleRateHz);
   k = side == GsClassicSide::kLow ? k / std::sqrt(g) : k * std::sqrt(g);
@@ -114,8 +112,8 @@ GsClassicBiquad gained(const GsClassicSection& s, const GsClassicSectionValues& 
 GsClassicBiquad reached_by_mix(const GsClassicBiquad& at_full, double gain_db, double towards_db,
                                bool mirrored) noexcept {
   if (std::fabs(gain_db) < kFlatDb) return kUnity;
-  const double wanted = db_to_amplitude(mirrored ? -gain_db : gain_db);
-  const double mix = (wanted - 1.0) / (db_to_amplitude(towards_db) - 1.0);
+  const double wanted = db_to_linear(mirrored ? -gain_db : gain_db);
+  const double mix = (wanted - 1.0) / (db_to_linear(towards_db) - 1.0);
   const double num[3] = {at_full.b0, at_full.b1, at_full.b2};
   const double den[3] = {1.0, at_full.a1, at_full.a2};
   double blended[3];

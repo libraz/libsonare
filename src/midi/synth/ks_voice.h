@@ -25,6 +25,7 @@
 #include "midi/control_value.h"
 #include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -39,7 +40,7 @@ inline constexpr int kKsDispersionStages = 2;
 /// Returns the per-LINE delay-buffer capacity (in samples): one string
 /// polarization span. attach() carves the slab into spans of this size.
 inline int ks_buffer_capacity(double sample_rate) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
   return static_cast<int>(sr / kKsMinFundamentalHz) + 8;
 }
 

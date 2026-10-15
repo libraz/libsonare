@@ -46,6 +46,7 @@
 #include "midi/synth/wind_breath.h"
 #include "rt/adaa.h"
 #include "rt/nonlinearities.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -58,7 +59,7 @@ inline constexpr float kBrassMinFundamentalHz = 20.0f;
 /// lowest fundamental (the brass bore is a full-period positive-feedback comb;
 /// sizing for the whole period leaves bend-down headroom).
 inline int brass_buffer_capacity(double sample_rate) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
   return static_cast<int>(sr / kBrassMinFundamentalHz) + 8;
 }
 

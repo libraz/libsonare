@@ -5,6 +5,7 @@
 
 #include "midi/synth/pitch.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/numeric_validation.h"
 #include "util/tunable.h"
@@ -355,7 +356,7 @@ LoopBudget HarpsichordVoiceCore::configure(const HarpsichordPatchParams& params,
     narrowest = narrowest > 0.0f ? std::min(narrowest, room) : room;
   }
   if (narrowest > 0.0f) edge_w_ = std::min(edge_w_, 0.95f * narrowest);
-  pluck_amp_ = std::pow(10.0f, plectrum_release_db(params, velocity) / 20.0f);
+  pluck_amp_ = db_to_linear(plectrum_release_db(params, velocity));
   pluck_image_ = std::clamp(params.end_reflection, 0.0f, 1.0f);
   pluck_pos_ = 0;
   exc_prev_ = 0.0f;
@@ -445,10 +446,10 @@ LoopBudget HarpsichordVoiceCore::configure(const HarpsichordPatchParams& params,
   // so a patch that does not ask for one renders exactly as it did before.
   // The lowpass-of-a-highpass is a two-pole cascade, not the single pole
   // onepole_noise_rate_gain solves exactly -> the PSD-in-a-fixed-band form.
-  diffuse_level_ = params.board_diffuse_db <= kDiffuseOffDb
-                       ? 0.0f
-                       : std::pow(10.0f, std::min(0.0f, params.board_diffuse_db) / 20.0f) *
-                             noise_gain_at_rate(sr);
+  diffuse_level_ =
+      params.board_diffuse_db <= kDiffuseOffDb
+          ? 0.0f
+          : db_to_linear(std::min(0.0f, params.board_diffuse_db)) * noise_gain_at_rate(sr);
   diffuse_env_ = 0.0f;
   diffuse_lp_ = 0.0f;
   diffuse_top_ = 0.0f;

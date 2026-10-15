@@ -38,6 +38,7 @@
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_bore.h"
 #include "midi/synth/wind_breath.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -55,7 +56,7 @@ inline constexpr float kPipeMinFundamentalHz = 16.0f;
 /// headroom (the stopped pipe's bore is half this; the jet span reuses the same
 /// capacity — its convection delay is always shorter than the bore).
 inline int pipe_organ_buffer_capacity(double sample_rate) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
   return static_cast<int>(sr / kPipeMinFundamentalHz) + 8;
 }
 

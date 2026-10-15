@@ -59,7 +59,7 @@ class TptSvf {
   }
 
   void prepare(double sample_rate) noexcept {
-    sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+    sample_rate_ = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
     designed_ = false;
     set(cutoff_hz_, q_);
     reset();

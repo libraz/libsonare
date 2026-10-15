@@ -66,7 +66,7 @@ class BodyResonator {
   /// bypasses it so every existing caller stays bit-identical.
   void start_specs(const Spec* specs, int count, double sample_rate, float mix,
                    float corpus_tilt_hz = 0.0f) noexcept {
-    const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+    const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
     mix_ = std::clamp(mix, 0.0f, 1.0f);
     num_modes_ = 0;
     configure_tilt(sr, corpus_tilt_hz);
@@ -95,7 +95,8 @@ class BodyResonator {
     if (type == BodyType::kNone) {
       mix_ = std::clamp(mix, 0.0f, 1.0f);
       num_modes_ = 0;
-      configure_tilt(sample_rate > 0.0 ? sample_rate : 48000.0, corpus_tilt_hz);
+      configure_tilt(sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate,
+                     corpus_tilt_hz);
       return;
     }
     std::array<Spec, kMaxModes> specs{};
@@ -147,7 +148,8 @@ class BodyResonator {
   /// body tail and make a carried note sound like a new strike.
   void retune(BodyType type, double sample_rate, float note_hz) noexcept {
     if (type != BodyType::kWoodTube || (num_modes_ <= 0 && mix_ <= 0.0f)) return;
-    const float sr = static_cast<float>(sample_rate > 0.0 ? sample_rate : 48000.0);
+    const float sr = static_cast<float>(
+        sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate);
     const float fundamental = std::max(20.0f, note_hz);
     const std::array<Spec, 2> specs = wood_tube_specs(fundamental);
     const int old_count = num_modes_;

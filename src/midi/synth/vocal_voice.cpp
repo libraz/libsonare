@@ -7,6 +7,7 @@
 #include "midi/synth/string_loop.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/tunable.h"
 
 namespace sonare::midi::synth {
@@ -136,7 +137,7 @@ void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, u
     const float open_db = (bright - 0.5f) * kBrightFormantSpanDb *
                           (static_cast<float>(i) / static_cast<float>(kVocalFormants - 1));
     form_amp_db_[i] = fm.amp_db;
-    form_gain_[i] = std::pow(10.0f, (fm.amp_db + open_db) / 20.0f);
+    form_gain_[i] = db_to_linear(fm.amp_db + open_db);
     form_z1_[i] = 0.0f;
     form_z2_[i] = 0.0f;
   }
@@ -199,7 +200,7 @@ void VocalVoiceCore::apply_excitation() noexcept {
   for (int i = 0; i < num_formants_; ++i) {
     const float open_db = (bright01_ - 0.5f) * kBrightFormantSpanDb *
                           (static_cast<float>(i) / static_cast<float>(kVocalFormants - 1));
-    form_gain_[i] = std::pow(10.0f, (form_amp_db_[i] + open_db) / 20.0f);
+    form_gain_[i] = db_to_linear(form_amp_db_[i] + open_db);
   }
 }
 

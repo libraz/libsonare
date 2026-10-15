@@ -199,7 +199,7 @@ struct Sf2ChannelMod {
 class Sf2Lfo {
  public:
   void start(double sample_rate, float delay_seconds, float freq_hz) noexcept {
-    const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+    const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
     delay_samples_ = delay_seconds > 0.0f ? static_cast<int64_t>(delay_seconds * sr) : 0;
     inc_ = freq_hz > 0.0f ? static_cast<float>(freq_hz / sr) : 0.0f;
     phase_ = 0.0;
@@ -210,7 +210,7 @@ class Sf2Lfo {
   /// <= 0 freezes it at once during the delay or at an exact zero crossing, and
   /// otherwise runs on to the next output-zero point (0 or 0.5) before resting.
   void set_frequency(double sample_rate, float freq_hz) noexcept {
-    const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+    const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
     if (freq_hz > 0.0f) {
       inc_ = static_cast<float>(freq_hz / sr);
       settling_ = false;

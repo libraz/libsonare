@@ -1,12 +1,8 @@
-#include <cmath>
-
 #include "midi/synth/native_synth.h"
-#include "util/constants.h"
+#include "midi/synth/pitch.h"
 
 namespace sonare::midi::synth {
 
-float synth_note_to_hz(float note) noexcept {
-  return constants::kA4Hz * std::exp2((note - constants::kMidiA4) / constants::kSemitonesPerOctave);
-}
+float synth_note_to_hz(float note) noexcept { return note_to_hz(note); }
 
 }  // namespace sonare::midi::synth

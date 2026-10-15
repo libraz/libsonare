@@ -6,6 +6,7 @@
 #include "midi/synth/pitch.h"
 #include "midi/synth/wind_breath.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/tunable.h"
 
 namespace sonare::midi::synth {
@@ -22,7 +23,7 @@ constexpr std::array<float, kAdditivePartials> kDrawbarRatios = {0.5f, 1.5f, 1.0
 float drawbar_gain(float level) noexcept {
   const float stops = std::clamp(level, 0.0f, 8.0f);
   if (stops <= 0.0f) return 0.0f;
-  return std::pow(10.0f, (stops - 8.0f) * 3.0f / 20.0f);
+  return db_to_linear((stops - 8.0f) * 3.0f);
 }
 
 // Live-control smoothing time (ms) for the morph position: the same ramp the

@@ -60,7 +60,7 @@ float filter_resonance01_from_q(float q) noexcept {
 // ---------------------------------------------------------------------------
 
 void TransistorLadderFilter::prepare(double sample_rate) noexcept {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
   last_cutoff_ = -1.0f;
   last_resonance_ = -1.0f;
   reset();
@@ -118,7 +118,7 @@ void TransistorLadderFilter::settle(float x) noexcept {
 // ---------------------------------------------------------------------------
 
 void DiodeLadderFilter::prepare(double sample_rate) noexcept {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
   last_cutoff_ = -1.0f;
   last_resonance_ = -1.0f;
   reset();
@@ -275,7 +275,7 @@ void DiodeLadderFilter::settle(float x) noexcept {
 // ---------------------------------------------------------------------------
 
 void Korg35Filter::prepare(double sample_rate) noexcept {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
   last_cutoff_ = -1.0f;
   last_resonance_ = -1.0f;
   reset();

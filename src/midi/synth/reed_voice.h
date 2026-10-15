@@ -42,6 +42,7 @@
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_bore.h"
 #include "midi/synth/wind_breath.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -54,7 +55,7 @@ inline constexpr float kReedMinFundamentalHz = 20.0f;
 /// lowest fundamental (the cylinder uses half this; sizing for the whole period
 /// leaves room for the conical (full-period) bore and bend-down headroom).
 inline int reed_buffer_capacity(double sample_rate) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
   return static_cast<int>(sr / kReedMinFundamentalHz) + 8;
 }
 

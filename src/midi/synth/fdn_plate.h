@@ -107,7 +107,8 @@ class FdnPlate {
   void start(double sample_rate, float low_hz, float t60_s, float hf_ratio, float air_hz,
              float cascade = 0.0f, float cascade_hz = 0.0f, float floor_hz = 0.0f,
              float cascade_drop_db = 0.0f, float strike_level = 1.0f) noexcept {
-    const float sr = static_cast<float>(sample_rate > 0.0 ? sample_rate : 48000.0);
+    const float sr = static_cast<float>(
+        sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate);
     active_ = t60_s > 0.0f;
     cascade_ = active_ ? std::max(0.0f, cascade) / sr : 0.0f;
     energy_ = 0.0f;

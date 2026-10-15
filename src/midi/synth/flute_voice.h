@@ -33,6 +33,7 @@
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_bore.h"
 #include "midi/synth/wind_breath.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -51,7 +52,7 @@ inline constexpr float kFluteBoreLengthPeriods = 1.0f;
 /// lowest fundamental (the 40 Hz floor folds in the bend-down headroom). The jet span reuses the
 /// same size (its delay is jet_ratio * bore, always shorter).
 inline int flute_buffer_capacity(double sample_rate) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
   return static_cast<int>(kFluteBoreLengthPeriods * sr / kFluteMinFundamentalHz) + 8;
 }
 

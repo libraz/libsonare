@@ -147,7 +147,9 @@ constexpr uint32_t kCaseApDelays6k[8] = {11, 13, 17, 19, 23, 29, 31, 37};
 }  // namespace
 
 void PianoResonanceBank::prepare(double sample_rate) noexcept {
-  const float sr = sample_rate > 0.0 ? static_cast<float>(sample_rate) : 48000.0f;
+  const float sr = sample_rate > 0.0
+                       ? static_cast<float>(sample_rate)
+                       : static_cast<float>(::sonare::constants::kDefaultDawSampleRate);
   for (Mode& m : modes_) m = Mode{};
   int n = 0;
   // Permanently undamped treble: one ungated mode per semitone, stretched like the played strings
@@ -214,7 +216,9 @@ void PianoResonanceBank::prepare(double sample_rate) noexcept {
 
 void PianoResonanceBank::prepare_custom(double sample_rate, const float* freqs, int count,
                                         float ring_t60_s, float out_gain) noexcept {
-  const float sr = sample_rate > 0.0 ? static_cast<float>(sample_rate) : 48000.0f;
+  const float sr = sample_rate > 0.0
+                       ? static_cast<float>(sample_rate)
+                       : static_cast<float>(::sonare::constants::kDefaultDawSampleRate);
   const int n = std::min(count, kResonanceModes);
   // No "undamped treble" split for this path: every mode goes through gate_,
   // so a plucked-string caller's sustain-pedal state reaches every string in
@@ -300,7 +304,9 @@ float PianoResonanceBank::process(float bridge_in, bool damper_open) noexcept {
 }
 
 void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
-  const float sr = sample_rate > 0.0 ? static_cast<float>(sample_rate) : 48000.0f;
+  const float sr = sample_rate > 0.0
+                       ? static_cast<float>(sample_rate)
+                       : static_cast<float>(::sonare::constants::kDefaultDawSampleRate);
   out_gain_ = std::clamp(mix, 0.0f, 1.0f);
   // Two Schroeder allpasses stand in for the board's dense mode lattice; sized in ms, with
   // incommensurate lengths to avoid a combined echo.
