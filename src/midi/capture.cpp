@@ -6,10 +6,16 @@
 #include <utility>
 #include <vector>
 
+#include "midi/note_fx_shared.h"
 #include "util/insertion_sort.h"
 
 namespace sonare::midi {
 namespace {
+
+using fx_shared::bounded_groove_steps;
+using fx_shared::clamp01;
+using fx_shared::clamp_groove_offset;
+using fx_shared::groove_index;
 
 struct CapturedEvent {
   MidiEvent event;
@@ -45,33 +51,6 @@ bool safe_grid_line(double line, int64_t* out_line) noexcept {
   }
   *out_line = static_cast<int64_t>(line);
   return true;
-}
-
-double clamp01(double v) noexcept {
-  if (!std::isfinite(v)) return 0.0;
-  if (v < 0.0) return 0.0;
-  if (v > 1.0) return 1.0;
-  return v;
-}
-
-double clamp_groove_offset(double v) noexcept {
-  if (!std::isfinite(v)) return 0.0;
-  if (v < -1.0) return -1.0;
-  if (v > 1.0) return 1.0;
-  return v;
-}
-
-size_t bounded_groove_steps(const CaptureQuantize& quantize) noexcept {
-  return quantize.groove_steps > CaptureQuantize::kMaxGrooveSteps ? CaptureQuantize::kMaxGrooveSteps
-                                                                  : quantize.groove_steps;
-}
-
-size_t groove_index(int64_t line, size_t steps) noexcept {
-  if (steps == 0) return 0;
-  const int64_t s = static_cast<int64_t>(steps);
-  int64_t idx = line % s;
-  if (idx < 0) idx += s;
-  return static_cast<size_t>(idx);
 }
 
 double swung_grid_ppq(double line, double grid_ppq, const CaptureQuantize& quantize) noexcept {

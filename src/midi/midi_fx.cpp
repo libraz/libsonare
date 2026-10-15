@@ -2,14 +2,21 @@
 
 #include <cmath>
 #include <cstdint>
-#include <limits>
 
 #include "midi/control_value.h"
 #include "midi/midi_clip.h"
+#include "midi/note_fx_shared.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::midi {
 namespace {
+
+using fx_shared::bounded_groove_steps;
+using fx_shared::clamp01;
+using fx_shared::clamp_groove_offset;
+using fx_shared::groove_index;
+using fx_shared::retune_note_event;
+using fx_shared::with_note_number;
 
 // ---------------------------------------------------------------------------
 // Deterministic PRNG: SplitMix64.
@@ -70,33 +77,6 @@ int clamp_velocity16_on(int velocity) noexcept {
   return velocity;
 }
 
-float clamp01(float v) noexcept {
-  if (!std::isfinite(v)) return 0.0f;
-  if (v < 0.0f) return 0.0f;
-  if (v > 1.0f) return 1.0f;
-  return v;
-}
-
-float clamp_groove_offset(float v) noexcept {
-  if (!std::isfinite(v)) return 0.0f;
-  if (v < -1.0f) return -1.0f;
-  if (v > 1.0f) return 1.0f;
-  return v;
-}
-
-size_t bounded_groove_steps(const QuantizeConfig& config) noexcept {
-  return config.groove_steps > QuantizeConfig::kMaxGrooveSteps ? QuantizeConfig::kMaxGrooveSteps
-                                                               : config.groove_steps;
-}
-
-size_t groove_index(int64_t line, size_t steps) noexcept {
-  if (steps == 0) return 0;
-  const int64_t s = static_cast<int64_t>(steps);
-  int64_t idx = line % s;
-  if (idx < 0) idx += s;
-  return static_cast<size_t>(idx);
-}
-
 int64_t swung_grid_frame(int64_t line, int64_t grid, const QuantizeConfig& config) noexcept {
   int64_t frame = line * grid;
   const float swing = clamp01(config.swing);
@@ -139,45 +119,6 @@ bool is_midi2_note_addressed_form(const Ump& ump) noexcept {
          status == static_cast<uint8_t>(UmpStatus::kAssignablePerNoteController) ||
          status == static_cast<uint8_t>(UmpStatus::kPerNotePitchBend) ||
          status == static_cast<uint8_t>(UmpStatus::kPerNoteManagement);
-}
-
-/// Patches the note address while preserving every other field of a channel
-/// voice message. Absolute-pitch payloads are adjusted later, once a fan-out
-/// stage has produced the final note and its complete source-to-target delta is
-/// known.
-Ump with_note_number(const Ump& src, uint8_t note) noexcept {
-  Ump out = src;
-  out.words[0] = (out.words[0] & ~(0x7Fu << 8u)) | (static_cast<uint32_t>(note & 0x7Fu) << 8u);
-  return out;
-}
-
-/// Retunes one note-addressed event to @p note. The delta is measured from the
-/// original source key, so chord and arpeggiator branches can update absolute
-/// pitch attributes for each generated voice. A value outside the wire format
-/// is rejected, matching LayeredInstrument::retune's derived-event contract.
-bool retune_note_addressed(const Ump& src, uint8_t note, int64_t delta, Ump* out) noexcept {
-  if (out == nullptr) return false;
-  Ump copy = with_note_number(src, note);
-  if (copy.message_type() == UmpMessageType::kMidi2ChannelVoice) {
-    const uint8_t status = copy.status_nibble();
-    if (status == static_cast<uint8_t>(UmpStatus::kNoteOn) && note_attribute_type(copy) == 3u) {
-      const int64_t pitch =
-          static_cast<int64_t>(note_attribute_data(src)) + delta * (int64_t{1} << 9);
-      if (pitch < 0 || pitch > static_cast<int64_t>(std::numeric_limits<uint16_t>::max())) {
-        return false;
-      }
-      copy.words[1] = (copy.words[1] & ~uint32_t{0xFFFFu}) | static_cast<uint32_t>(pitch);
-    } else if (status == static_cast<uint8_t>(UmpStatus::kRegisteredPerNoteController) &&
-               (src.words[0] & 0xFFu) == 3u) {
-      const int64_t pitch = static_cast<int64_t>(src.words[1]) + delta * (int64_t{1} << 25);
-      if (pitch < 0 || pitch > static_cast<int64_t>(std::numeric_limits<uint32_t>::max())) {
-        return false;
-      }
-      copy.words[1] = static_cast<uint32_t>(pitch);
-    }
-  }
-  *out = copy;
-  return true;
 }
 
 bool is_poly_pressure_form(const Ump& ump) noexcept {
@@ -265,10 +206,9 @@ void MidiFxChain::clear_note_tracking(uint8_t group, uint8_t channel, uint8_t no
   active_note_timing_count_ = write;
 }
 
-void MidiFxChain::clear_pending_note_tracking(const MidiEvent& event, bool from_clip,
-                                              uint32_t clip_id) noexcept {
-  if (!is_channel_voice(event.ump) || !event.ump.is_note_on()) return;
-
+size_t MidiFxChain::find_earliest_note_timing(const MidiEvent& event, bool from_clip,
+                                              uint32_t clip_id,
+                                              const int64_t* shaped_on_frame) const noexcept {
   size_t match = active_note_timing_count_;
   uint64_t earliest = UINT64_MAX;
   for (size_t i = 0; i < active_note_timing_count_; ++i) {
@@ -276,11 +216,21 @@ void MidiFxChain::clear_pending_note_tracking(const MidiEvent& event, bool from_
     if (timing.group == event.ump.group && timing.channel == event.ump.channel() &&
         timing.note == event.ump.note_number() && timing.source_track_id == event.source_track_id &&
         timing.from_clip == from_clip && timing.clip_id == clip_id &&
-        timing.shaped_on_frame == event.render_frame && timing.order < earliest) {
+        (shaped_on_frame == nullptr || timing.shaped_on_frame == *shaped_on_frame) &&
+        timing.order < earliest) {
       match = i;
       earliest = timing.order;
     }
   }
+  return match;
+}
+
+void MidiFxChain::clear_pending_note_tracking(const MidiEvent& event, bool from_clip,
+                                              uint32_t clip_id) noexcept {
+  if (!is_channel_voice(event.ump) || !event.ump.is_note_on()) return;
+
+  const int64_t shaped_on_frame = event.render_frame;
+  const size_t match = find_earliest_note_timing(event, from_clip, clip_id, &shaped_on_frame);
   if (match == active_note_timing_count_) return;
   active_note_timings_[match] = active_note_timings_[active_note_timing_count_ - 1];
   --active_note_timing_count_;
@@ -308,17 +258,7 @@ void MidiFxChain::push_note_timing(const MidiEvent& event, int64_t frame_shift,
 bool MidiFxChain::pop_note_timing(const MidiEvent& event, bool from_clip, uint32_t clip_id,
                                   ActiveNoteTiming* out) noexcept {
   if (out == nullptr) return false;
-  size_t match = active_note_timing_count_;
-  uint64_t earliest = UINT64_MAX;
-  for (size_t i = 0; i < active_note_timing_count_; ++i) {
-    const ActiveNoteTiming& timing = active_note_timings_[i];
-    if (timing.group == event.ump.group && timing.channel == event.ump.channel() &&
-        timing.note == event.ump.note_number() && timing.source_track_id == event.source_track_id &&
-        timing.from_clip == from_clip && timing.clip_id == clip_id && timing.order < earliest) {
-      match = i;
-      earliest = timing.order;
-    }
-  }
+  const size_t match = find_earliest_note_timing(event, from_clip, clip_id, nullptr);
   if (match == active_note_timing_count_) return false;
   *out = active_note_timings_[match];
   active_note_timings_[match] = active_note_timings_[active_note_timing_count_ - 1];
@@ -497,9 +437,9 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
           on_ev.source_track_id = ev.source_track_id;
           // Preserve the source velocity at its native resolution (full 16-bit
           // for MIDI 2.0) instead of round-tripping through 7 bits.
-          if (!retune_note_addressed(
-                  ev.ump, static_cast<uint8_t>(arp_note),
-                  static_cast<int64_t>(arp_note) - static_cast<int64_t>(source_note), &on_ev.ump)) {
+          if (!retune_note_event(ev.ump, static_cast<uint8_t>(arp_note),
+                                 static_cast<int64_t>(arp_note) - static_cast<int64_t>(source_note),
+                                 &on_ev.ump)) {
             // A generated voice whose absolute pitch cannot be represented has
             // no matching gate to release, so discard the complete gate pair.
             continue;
@@ -527,9 +467,9 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
       // Non-arpeggiated note-addressed path: emit each chord/single note.
       for (size_t n = 0; n < note_count; ++n) {
         MidiEvent note_ev = ev;
-        if (!retune_note_addressed(
-                ev.ump, notes[n],
-                static_cast<int64_t>(notes[n]) - static_cast<int64_t>(source_note), &note_ev.ump)) {
+        if (!retune_note_event(ev.ump, notes[n],
+                               static_cast<int64_t>(notes[n]) - static_cast<int64_t>(source_note),
+                               &note_ev.ump)) {
           continue;
         }
         shape_and_push(note_ev, input_ordinal);

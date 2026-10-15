@@ -242,6 +242,10 @@ class MidiFxChain {
   void clear_note_timings() noexcept;
   void push_note_timing(const MidiEvent& event, int64_t frame_shift, int64_t shaped_on_frame,
                         bool from_clip, uint32_t clip_id) noexcept;
+  /// Index of the oldest tracked note matching @p event, or the tracked count when none
+  /// does. A non-null @p shaped_on_frame also requires that shaped note-on frame.
+  size_t find_earliest_note_timing(const MidiEvent& event, bool from_clip, uint32_t clip_id,
+                                   const int64_t* shaped_on_frame) const noexcept;
   bool pop_note_timing(const MidiEvent& event, bool from_clip, uint32_t clip_id,
                        ActiveNoteTiming* out) noexcept;
 

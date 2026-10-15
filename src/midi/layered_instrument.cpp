@@ -3,10 +3,10 @@
 #include <algorithm>
 #include <array>
 #include <cstdlib>
-#include <limits>
 #include <new>
 
 #include "midi/channel_voice_decode.h"
+#include "midi/note_fx_shared.h"
 #include "midi/source_residual.h"
 #include "midi/ump.h"
 #include "rt/pan_law.h"
@@ -105,26 +105,7 @@ bool LayeredInstrument::covers(const Layer& layer, uint8_t note, uint8_t velocit
 }
 
 bool LayeredInstrument::retune(const Ump& ump, uint8_t note, int transpose, Ump* out) noexcept {
-  if (out == nullptr) return false;
-  Ump copy = ump;
-  copy.words[0] = (copy.words[0] & ~(0x7Fu << 8)) | (static_cast<uint32_t>(note & 0x7Fu) << 8);
-
-  if (copy.message_type() == UmpMessageType::kMidi2ChannelVoice) {
-    const uint8_t status = copy.status_nibble();
-    if (status == 0x9u && note_attribute_type(copy) == 3u) {
-      const int64_t pitch =
-          static_cast<int64_t>(note_attribute_data(copy)) + static_cast<int64_t>(transpose) * 512;
-      if (pitch < 0 || pitch > std::numeric_limits<uint16_t>::max()) return false;
-      copy.words[1] = (copy.words[1] & ~uint32_t{0xFFFFu}) | static_cast<uint32_t>(pitch);
-    } else if (status == 0x0u && (copy.words[0] & 0xFFu) == 3u) {
-      const int64_t pitch = static_cast<int64_t>(copy.words[1]) +
-                            static_cast<int64_t>(transpose) * (int64_t{1} << 25);
-      if (pitch < 0 || pitch > std::numeric_limits<uint32_t>::max()) return false;
-      copy.words[1] = static_cast<uint32_t>(pitch);
-    }
-  }
-  *out = copy;
-  return true;
+  return fx_shared::retune_note_event(ump, note, static_cast<int64_t>(transpose), out);
 }
 
 bool LayeredInstrument::send_note(size_t layer_index, const MidiEvent& event, uint8_t note,
