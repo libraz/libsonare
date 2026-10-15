@@ -45,6 +45,7 @@ from boundary import (
 )
 from capture import (
     RIG_BAKED,
+    RIG_NONE,
     RIG_UNCLASSIFIED,
     RIG_VALUES,
     ROOM_UNCLASSIFIED,
@@ -398,9 +399,10 @@ def _rig(manifest: dict) -> str:
     """
     import json
 
-    if "rig" in manifest:
-        value = manifest.get("rig")
-        return str(value) if value in RIG_VALUES else RIG_UNCLASSIFIED
+    # A manifest's `unclassified` is a question left open when the take was rendered,
+    # not a fact about it, so a later answer in the config stands.
+    if manifest.get("rig") in (RIG_NONE, RIG_BAKED):
+        return str(manifest["rig"])
     # Through `_config_paths`, because every corpus rendered before the field
     # existed can only be answered from its config, and a manifest records that
     # path repo-relative. Resolving it against the working directory instead
@@ -423,7 +425,7 @@ def _rig_evidence(manifest: dict) -> str:
     """
     import json
 
-    if "rig_evidence" in manifest:
+    if "rig_evidence" in manifest and manifest.get("rig") in (RIG_NONE, RIG_BAKED):
         return rig_evidence(manifest)
     for candidate in _config_paths(manifest.get("config", "")):
         try:

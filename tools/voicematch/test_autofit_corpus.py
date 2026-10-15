@@ -488,6 +488,24 @@ def test_a_corpus_carries_what_its_capture_answered_about_a_rig(tmp_path):
     assert load_corpus(_write_corpus(tmp_path / "typo", rig="DI")).rig == RIG_UNCLASSIFIED
 
 
+def test_a_rig_answered_after_the_take_was_rendered_is_read_from_the_capture(tmp_path):
+    """A manifest's `unclassified` is a question left open, so the config's answer stands."""
+    import json
+
+    config = tmp_path / "capture.json"
+    config.write_text(json.dumps({"id": "mini", "rig": RIG_NONE, "rig_evidence": "inferred"}))
+    manifest = _write_corpus(tmp_path / "c", rig=RIG_UNCLASSIFIED) / "manifest.json"
+    header = json.loads(manifest.read_text())
+    header["config"] = str(config)
+    manifest.write_text(json.dumps(header))
+    answered = load_corpus(manifest)
+    assert (answered.rig, answered.rig_evidence) == (RIG_NONE, "inferred")
+    # A rig the manifest recorded is what was played, and no later edit overrides it.
+    header["rig"] = RIG_BAKED
+    manifest.write_text(json.dumps(header))
+    assert load_corpus(manifest).rig == RIG_BAKED
+
+
 def test_a_row_the_capture_definition_no_longer_asks_for_is_scored_by_no_reader(tmp_path):
     """The mute rows the DI guitar keeps as data must reach neither a fit nor a gate.
 
