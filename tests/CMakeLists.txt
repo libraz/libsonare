@@ -60,6 +60,7 @@ add_executable(sonare_tests
   core/window_test.cpp
   core/fft_test.cpp
   core/audio_io_test.cpp
+  core/audio_io_ffmpeg_test.cpp
   core/audio_test.cpp
   core/resample_test.cpp
   core/spectrum_test.cpp

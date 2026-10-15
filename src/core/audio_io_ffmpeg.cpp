@@ -261,6 +261,14 @@ int set_mono_downmix_matrix(SwrContext* swr, const AVChannelLayout& in_layout) {
 // Core decode loop shared between file- and memory-based entry points.
 // ---------------------------------------------------------------------------
 
+/// @brief Whether a send/receive error belongs to one packet rather than to the decode.
+/// @details Decoders report damaged data with codec-private codes as well as
+///          AVERROR_INVALIDDATA, so every failure except allocation is per-packet;
+///          a stream in which nothing decodes still fails after the loop.
+bool is_skippable_decode_error(int err) {
+  return err < 0 && err != AVERROR(EAGAIN) && err != AVERROR_EOF && err != AVERROR(ENOMEM);
+}
+
 /// @brief Decodes the first audio stream of @p format_ctx into float32.
 /// @param retention Select whether source-order channels are retained alongside
 ///        the mandatory mono fold.
@@ -344,6 +352,9 @@ DecodedInputData decode_first_audio_stream(AVFormatContext* format_ctx, RetainCh
 
   std::vector<float> mono_samples;
   std::vector<float> retained_samples;
+  // A corrupt packet or frame is skipped; the decode fails only when no frame decodes at all.
+  size_t corrupt_skipped = 0;
+  size_t decoded_frames = 0;
 
   auto append_swr_flush = [&](SwrContext* context, int output_channels,
                               std::vector<float>& output) {
@@ -498,11 +509,16 @@ DecodedInputData decode_first_audio_stream(AVFormatContext* format_ctx, RetainCh
       if (recv_ret == AVERROR(EAGAIN) || recv_ret == AVERROR_EOF) {
         return recv_ret;
       }
+      if (is_skippable_decode_error(recv_ret)) {
+        ++corrupt_skipped;
+        continue;
+      }
       if (recv_ret < 0) {
         SONARE_CHECK_MSG(false, ErrorCode::DecodeFailed,
                          "FFmpeg: avcodec_receive_frame failed: " + ff_err(recv_ret));
       }
 
+      ++decoded_frames;
       configure_swr_for_frame();
       const auto append_frame = [&](SwrContext* context, int output_channels,
                                     std::vector<float>& output, bool optional) {
@@ -577,7 +593,14 @@ DecodedInputData decode_first_audio_stream(AVFormatContext* format_ctx, RetainCh
 
     if (packet->stream_index == stream_index) {
       int send_ret = avcodec_send_packet(codec_ctx.get(), packet.get());
-      if (send_ret < 0 && send_ret != AVERROR(EAGAIN)) {
+      // A full decoder is drained and the same packet resent rather than dropped.
+      if (send_ret == AVERROR(EAGAIN)) {
+        drain_decoder();
+        send_ret = avcodec_send_packet(codec_ctx.get(), packet.get());
+      }
+      if (is_skippable_decode_error(send_ret)) {
+        ++corrupt_skipped;
+      } else if (send_ret < 0) {
         av_packet_unref(packet.get());
         SONARE_CHECK_MSG(false, ErrorCode::DecodeFailed,
                          "FFmpeg: avcodec_send_packet failed: " + ff_err(send_ret));
@@ -592,6 +615,10 @@ DecodedInputData decode_first_audio_stream(AVFormatContext* format_ctx, RetainCh
   SONARE_CHECK_MSG(ret >= 0 || ret == AVERROR_EOF, ErrorCode::DecodeFailed,
                    "FFmpeg: flushing decoder failed: " + ff_err(ret));
   drain_decoder();
+
+  SONARE_CHECK_MSG(decoded_frames > 0, ErrorCode::DecodeFailed,
+                   "FFmpeg: no decodable audio frame (" + std::to_string(corrupt_skipped) +
+                       " corrupt packets skipped)");
 
   if (include_mono) append_swr_flush(mono_swr.get(), 1, mono_samples);
   if (retained_swr != nullptr && retain_enabled && !retained_error) {
@@ -636,8 +663,30 @@ struct MemoryInput {
   AVFormatContextPtr format_ctx;
 };
 
+struct AVDictionaryDeleter {
+  void operator()(AVDictionary* dict) const { av_dict_free(&dict); }
+};
+using AVDictionaryPtr = std::unique_ptr<AVDictionary, AVDictionaryDeleter>;
+
+/// @brief Demuxers that read their streams from their own bytes: audio formats and the A/V
+///        containers that carry audio. Playlist, concat, image-sequence and manifest demuxers
+///        open further inputs named by the data, so none is listed.
+constexpr const char* kAudioDemuxerAllowlist =
+    "aac,ac3,adx,aiff,amr,amrnb,amrwb,ape,asf,ast,au,avi,caf,dsf,dts,dtshd,eac3,flac,flv,gsm,iff,"
+    "ircam,loas,matroska,mlp,mov,mp3,mpc,mpc8,mpeg,mpegts,nistsphere,nut,ogg,qoa,rm,shn,sox,tak,"
+    "truehd,tta,voc,w64,wav,wv,xwma";
+
+/// @brief io_open callback that refuses every secondary input a demuxer asks for.
+int refuse_secondary_input(AVFormatContext* /*s*/, AVIOContext** /*pb*/, const char* /*url*/,
+                           int /*flags*/, AVDictionary** /*options*/) {
+  return AVERROR(EPERM);
+}
+
 /// @brief Opens @p data as an AVFormat input over custom memory AVIO.
-/// @throws SonareException on an empty buffer, an allocation failure, or an unreadable container.
+/// @details The only input libavformat may read is the caller's buffer: the demuxer must be on
+///          @ref kAudioDemuxerAllowlist, no protocol is whitelisted, and io_open refuses.
+/// @throws SonareException on an empty buffer, an allocation failure, an unreadable container,
+///         or a container outside the allowlist (DecodeFailed).
 MemoryInput open_memory_input(const uint8_t* data, size_t size) {
   SONARE_CHECK_MSG(data != nullptr && size > 0, ErrorCode::InvalidParameter,
                    "FFmpeg: empty input buffer");
@@ -666,16 +715,27 @@ MemoryInput open_memory_input(const uint8_t* data, size_t size) {
                    "FFmpeg: avformat_alloc_context returned null");
   fmt_raw->pb = input.avio.get();
   fmt_raw->flags |= AVFMT_FLAG_CUSTOM_IO;
+  fmt_raw->io_open = &refuse_secondary_input;
 
   input.format_ctx.reset(fmt_raw);
 
-  int ret = avformat_open_input(&fmt_raw, /*url=*/nullptr, /*fmt=*/nullptr, /*options=*/nullptr);
+  AVDictionary* options_raw = nullptr;
+  int ret = av_dict_set(&options_raw, "format_whitelist", kAudioDemuxerAllowlist, 0);
+  if (ret >= 0) ret = av_dict_set(&options_raw, "protocol_whitelist", "", 0);
+  AVDictionaryPtr options(options_raw);
+  SONARE_CHECK_MSG(ret >= 0, ErrorCode::OutOfMemory, "FFmpeg: av_dict_set failed: " + ff_err(ret));
+
+  options_raw = options.release();
+  ret = avformat_open_input(&fmt_raw, /*url=*/nullptr, /*fmt=*/nullptr, &options_raw);
+  options.reset(options_raw);
   if (ret < 0) {
     // On failure libavformat already freed the context; release ours to avoid
     // a double-free in the destructor.
     (void)input.format_ctx.release();
     SONARE_CHECK_MSG(false, ErrorCode::DecodeFailed,
-                     "FFmpeg: avformat_open_input failed: " + ff_err(ret));
+                     "FFmpeg: avformat_open_input failed (unreadable input, or a container "
+                     "outside the audio demuxer allowlist): " +
+                         ff_err(ret));
   }
   // After success fmt_raw is unchanged but is now owned by format_ctx.
   return input;
