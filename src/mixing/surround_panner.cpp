@@ -9,6 +9,8 @@
 namespace sonare::mixing {
 
 using constants::kDefaultDawSampleRate;
+using constants::kDegreesPerHalfTurn;
+using constants::kDegreesPerTurn;
 
 namespace {
 
@@ -60,15 +62,15 @@ SurroundPanGains compute_surround_pan_gains(const SurroundPanParams& params, Cha
   // Point-source gains: constant-power crossfade between the two adjacent
   // speakers bracketing the target azimuth (rear arc wraps last -> first).
   std::array<float, kMaxSurroundPlanes> point{};
-  const float a = std::clamp(params.azimuth, -180.0f, 180.0f);
+  const float a = std::clamp(params.azimuth, -kDegreesPerHalfTurn, kDegreesPerHalfTurn);
   int lo_idx = ring_size - 1;
   int hi_idx = 0;
   float t = 0.0f;
   if (a <= ring[0].azimuth || a >= ring[ring_size - 1].azimuth) {
     // Rear arc: from the right-most speaker around the back to the left-most.
     const float lo_az = ring[ring_size - 1].azimuth;
-    const float hi_az = ring[0].azimuth + 360.0f;
-    const float pos = a >= lo_az ? a : a + 360.0f;
+    const float hi_az = ring[0].azimuth + kDegreesPerTurn;
+    const float pos = a >= lo_az ? a : a + kDegreesPerTurn;
     t = (pos - lo_az) / (hi_az - lo_az);
   } else {
     for (int i = 0; i + 1 < ring_size; ++i) {
@@ -147,7 +149,9 @@ SurroundPannerProcessor::SurroundPannerProcessor(ChannelLayout layout, SurroundP
 namespace {
 
 // Wraps degrees into [-180, 180].
-float wrap_degrees(float deg) noexcept { return deg - 360.0f * std::round(deg / 360.0f); }
+float wrap_degrees(float deg) noexcept {
+  return deg - kDegreesPerTurn * std::round(deg / kDegreesPerTurn);
+}
 
 }  // namespace
 
@@ -172,10 +176,11 @@ void SurroundPanGlide::set_target(const SurroundPanParams& params) noexcept {
   // state is its current value, so this is seamless), then aim along the shorter arc.
   const float from = wrap_degrees(azimuth_.current());
   float arc = wrap_degrees(params.azimuth - from);
-  if (std::abs(arc) == 180.0f) {
+  if (std::abs(arc) == kDegreesPerHalfTurn) {
     // Exactly opposite: both arcs are equal, so go the way whose midpoint is behind.
-    arc = std::abs(wrap_degrees(from + 90.0f)) >= std::abs(wrap_degrees(from - 90.0f)) ? 180.0f
-                                                                                       : -180.0f;
+    arc = std::abs(wrap_degrees(from + 90.0f)) >= std::abs(wrap_degrees(from - 90.0f))
+              ? kDegreesPerHalfTurn
+              : -kDegreesPerHalfTurn;
   }
   azimuth_.reset(from);
   azimuth_.set_target(from + arc);

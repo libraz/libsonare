@@ -22,15 +22,15 @@
 
 namespace sonare::playback {
 
+using sonare::constants::kDegreesPerTurn;
+using sonare::constants::kDegToRad;
 using sonare::constants::kHalfPi;
 using sonare::constants::kPi;
+using sonare::constants::kRadToDeg;
 using sonare::constants::kSoundSpeedMps;
 
 namespace {
 
-constexpr float kDegToRad = kPi / 180.0f;
-constexpr float kRadToDeg = 180.0f / kPi;
-constexpr float kFullCircleDeg = 360.0f;
 constexpr float kMsPerSecond = 1000.0f;
 constexpr int kLatePartition = kLateTailPartition;
 static_assert((kLatePartition & (kLatePartition - 1)) == 0, "head history is masked");
@@ -153,8 +153,8 @@ struct LateEar {
 };
 
 float wrap_degrees(float deg) noexcept {
-  float wrapped = std::fmod(deg, kFullCircleDeg);
-  if (wrapped < 0.0f) wrapped += kFullCircleDeg;
+  float wrapped = std::fmod(deg, kDegreesPerTurn);
+  if (wrapped < 0.0f) wrapped += kDegreesPerTurn;
   return wrapped;
 }
 

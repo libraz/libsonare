@@ -3,9 +3,12 @@
 #include <cmath>
 #include <cstring>
 
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare::playback {
+
+using constants::kDegreesPerTurnD;
 
 namespace {
 
@@ -92,9 +95,10 @@ ShrfData parse_shrf(const uint8_t* data, size_t size) {
 
   const double azimuth_span =
       static_cast<double>(header.n_az) * static_cast<double>(header.az_step_deg);
-  SONARE_CHECK_MSG(std::abs(azimuth_span - 360.0) <= static_cast<double>(kShrfAzimuthSpanTolerance),
-                   ErrorCode::InvalidParameter,
-                   "SHRF n_az * az_step must span 360 degrees, got " + util::to_text(azimuth_span));
+  SONARE_CHECK_MSG(
+      std::abs(azimuth_span - kDegreesPerTurnD) <= static_cast<double>(kShrfAzimuthSpanTolerance),
+      ErrorCode::InvalidParameter,
+      "SHRF n_az * az_step must span 360 degrees, got " + util::to_text(azimuth_span));
 
   SONARE_CHECK_MSG(header.scale > 0.0f, ErrorCode::InvalidParameter,
                    "SHRF scale must be positive, got " + util::to_text(header.scale));

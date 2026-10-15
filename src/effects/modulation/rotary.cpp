@@ -275,7 +275,7 @@ void Rotary::place_mics() noexcept {
   const float spread_deg = geo::kMicSpreadDeg * config_.stereo_spread;
   const float deg[2] = {geo::kMicCentreDeg - spread_deg, geo::kMicCentreDeg + spread_deg};
   for (int ch = 0; ch < 2; ++ch) {
-    mic_rad_[ch] = deg[ch] * ::sonare::constants::kPi / 180.0f;
+    mic_rad_[ch] = deg[ch] * ::sonare::constants::kPi / ::sonare::constants::kDegreesPerHalfTurn;
     mic_cos_[ch] = std::cos(mic_rad_[ch]);
     mic_sin_[ch] = std::sin(mic_rad_[ch]);
   }

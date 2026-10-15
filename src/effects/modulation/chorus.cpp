@@ -11,6 +11,7 @@
 namespace sonare::effects::modulation {
 
 using constants::kDefaultDawSampleRate;
+using constants::kDegreesPerTurnD;
 
 using common::kMaxFeedback;
 using common::kMaxModulationPreDelayMs;
@@ -26,7 +27,6 @@ constexpr float kMaxChorusDepthMs = 50.0f;
 // Corner of the low-pass in the feedback return.
 constexpr float kFeedbackCornerHz = 6000.0f;
 constexpr float kMaxPhaseDeg = 180.0f;
-constexpr double kDegreesPerTurn = 360.0;
 constexpr unsigned int kPreFilterModeCount = 3;
 }  // namespace
 
@@ -191,7 +191,7 @@ bool Chorus::set_parameter_impl(unsigned int param_id, float value) {
       return true;
     case 6:
       config_.phase_deg = std::clamp(value, 0.0f, kMaxPhaseDeg);
-      lfos_[1].reset(lfos_[0].phase() + static_cast<double>(config_.phase_deg) / kDegreesPerTurn);
+      lfos_[1].reset(lfos_[0].phase() + static_cast<double>(config_.phase_deg) / kDegreesPerTurnD);
       return true;
     case 7: {
       // An unnamed mode is refused rather than rounded onto a neighbour.
@@ -248,7 +248,7 @@ void Chorus::reset() {
   }
   feedback_.fill(0.0f);
   lfos_[0].reset(0.0);
-  lfos_[1].reset(static_cast<double>(config_.phase_deg) / kDegreesPerTurn);
+  lfos_[1].reset(static_cast<double>(config_.phase_deg) / kDegreesPerTurnD);
 }
 
 }  // namespace sonare::effects::modulation

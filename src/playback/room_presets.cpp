@@ -7,11 +7,10 @@
 
 namespace sonare::playback {
 
-using sonare::constants::kPi;
+using sonare::constants::kDegToRad;
 
 namespace {
 
-constexpr float kDegToRad = kPi / 180.0f;
 /// A nominal speaker that would land on or behind a wall is pulled this far
 /// inside it, so its first image never coincides with the source.
 constexpr float kSpeakerWallMarginM = 0.25f;

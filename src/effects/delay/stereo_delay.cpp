@@ -14,6 +14,7 @@
 namespace sonare::effects::delay {
 
 using constants::kDefaultDawSampleRate;
+using constants::kDegreesPerTurnD;
 
 using common::kLevelFloorDb;
 using common::kMaxFeedback;
@@ -141,7 +142,7 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
   const common::MixLaw mix_law = config_.mix_law;
   const bool modulated = config_.mod_depth_ms > 0.0f;
   const double phase_step = static_cast<double>(config_.mod_rate_hz) / sample_rate_;
-  const double phase_offset = static_cast<double>(config_.mod_phase_deg) / 360.0;
+  const double phase_offset = static_cast<double>(config_.mod_phase_deg) / kDegreesPerTurnD;
   const float depth_samples = config_.mod_depth_ms * 0.001f * static_cast<float>(sample_rate_);
 
   float* left = channels[0];

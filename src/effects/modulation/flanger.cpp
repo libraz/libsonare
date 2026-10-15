@@ -12,6 +12,7 @@
 namespace sonare::effects::modulation {
 
 using constants::kDefaultDawSampleRate;
+using constants::kDegreesPerTurnD;
 
 using common::kMaxFeedback;
 using common::kMaxModulationPreDelayMs;
@@ -23,7 +24,6 @@ constexpr float kMaxFlangerDepthMs = 100.0f;
 // flanger range even for tiny configured delays.
 constexpr float kMinDelayBufferMs = 100.0f;  // 100 ms
 constexpr float kMaxPhaseDeg = 180.0f;
-constexpr double kDegreesPerTurn = 360.0;
 constexpr unsigned int kPreFilterModeCount = 3;
 
 }  // namespace
@@ -189,7 +189,7 @@ bool Flanger::set_parameter_impl(unsigned int param_id, float value) {
     }
     case 6:
       config_.phase_deg = std::clamp(value, 0.0f, kMaxPhaseDeg);
-      lfos_[1].reset(lfos_[0].phase() + static_cast<double>(config_.phase_deg) / kDegreesPerTurn);
+      lfos_[1].reset(lfos_[0].phase() + static_cast<double>(config_.phase_deg) / kDegreesPerTurnD);
       return true;
     case 7:
       config_.step_rate_hz = std::max(0.0f, value);
@@ -245,7 +245,7 @@ void Flanger::reset() {
   }
   for (auto& gate : pre_filter_gates_) gate.close();
   lfos_[0].reset(0.0);
-  lfos_[1].reset(static_cast<double>(config_.phase_deg) / kDegreesPerTurn);
+  lfos_[1].reset(static_cast<double>(config_.phase_deg) / kDegreesPerTurnD);
   step_phase_ = 1.0;
   held_ = {0.0f, 0.0f};
   feedback_ = {0.0f, 0.0f};

@@ -24,12 +24,12 @@ namespace ring {
 }  // namespace ring
 
 using sonare::constants::kButterworthQ;
+using sonare::constants::kDegreesPerHalfTurn;
+using sonare::constants::kDegreesPerTurn;
 using sonare::constants::kTwoPi;
 using sonare::constants::kTwoPiD;
 
 constexpr int kHalfRing = ring::kRingAzimuths / 2;
-constexpr float kFullTurnDeg = 360.0f;
-constexpr float kHalfTurnDeg = 180.0f;
 constexpr float kMaxTurnRateHz = 10.0f;
 // Glide of an azimuth change and fade of an output change, in seconds.
 constexpr double kGlideSeconds = 0.020;
@@ -49,14 +49,14 @@ constexpr int kCancellerDesignOversampling = 32;
 constexpr float kDelayQ8 = 256.0f;
 
 float wrap_signed_deg(float degrees) noexcept {
-  float wrapped = std::fmod(degrees + kHalfTurnDeg, kFullTurnDeg);
-  if (wrapped < 0.0f) wrapped += kFullTurnDeg;
-  return wrapped - kHalfTurnDeg;
+  float wrapped = std::fmod(degrees + kDegreesPerHalfTurn, kDegreesPerTurn);
+  if (wrapped < 0.0f) wrapped += kDegreesPerTurn;
+  return wrapped - kDegreesPerHalfTurn;
 }
 
 double wrap_turn_deg(double degrees) noexcept {
-  double wrapped = std::fmod(degrees, static_cast<double>(kFullTurnDeg));
-  return wrapped < 0.0 ? wrapped + kFullTurnDeg : wrapped;
+  double wrapped = std::fmod(degrees, static_cast<double>(kDegreesPerTurn));
+  return wrapped < 0.0 ? wrapped + kDegreesPerTurn : wrapped;
 }
 
 size_t next_power_of_two(size_t value) {
@@ -238,7 +238,7 @@ int BinauralPanner::tail_samples() const noexcept {
 
 void BinauralPanner::advance_position() noexcept {
   if (config_.auto_turn) {
-    const double step = kFullTurnDeg * config_.turn_rate_hz / sample_rate_;
+    const double step = kDegreesPerTurn * config_.turn_rate_hz / sample_rate_;
     position_deg_ = wrap_turn_deg(position_deg_ + (config_.clockwise ? step : -step));
   } else if (ramp_remaining_ > 0) {
     position_deg_ = --ramp_remaining_ == 0 ? wrap_turn_deg(ramp_target_deg_)

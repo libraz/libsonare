@@ -7,8 +7,11 @@
 
 #include "core/resample.h"
 #include "playback/default_hrtf.h"
+#include "util/constants.h"
 
 namespace sonare::playback {
+
+using constants::kDegreesPerTurn;
 
 HrtfSet::HrtfSet(ShrfData data) : data_(std::move(data)) {}
 
@@ -95,8 +98,8 @@ void HrtfSet::interpolate(float azimuth_deg, float elevation_deg, float* left, f
   const float az_step = data_.header.az_step_deg;
 
   // Azimuth wraps around the full circle covered by the n_az columns.
-  float wrapped_az = std::fmod(azimuth_deg, 360.0f);
-  if (wrapped_az < 0.0f) wrapped_az += 360.0f;
+  float wrapped_az = std::fmod(azimuth_deg, kDegreesPerTurn);
+  if (wrapped_az < 0.0f) wrapped_az += kDegreesPerTurn;
   const float az_units = wrapped_az / az_step;
   const float az_floor = std::floor(az_units);
   int az_low = static_cast<int>(az_floor) % n_az;

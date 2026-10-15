@@ -32,6 +32,15 @@ inline constexpr float kLog10Of2 = 0.30102999566398119521f;
 inline constexpr double kLog10Of2D = 0.30102999566398119521;
 
 // ============================================================
+// Angles
+// ============================================================
+inline constexpr float kDegreesPerTurn = 360.0f;
+inline constexpr double kDegreesPerTurnD = 360.0;
+inline constexpr float kDegreesPerHalfTurn = 180.0f;
+inline constexpr float kDegToRad = kPi / kDegreesPerHalfTurn;
+inline constexpr float kRadToDeg = kDegreesPerHalfTurn / kPi;
+
+// ============================================================
 // Audio / DSP
 // ============================================================
 inline constexpr float kEpsilon = 1e-10f;         ///< Generic near-zero epsilon

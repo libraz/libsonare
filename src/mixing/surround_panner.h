@@ -39,7 +39,8 @@ struct SurroundPanParams {
 ///          through unclamped, matching the render path.
 inline SurroundPanParams clamp_surround_pan_params(const SurroundPanParams& params) noexcept {
   SurroundPanParams out = params;
-  out.azimuth = std::clamp(params.azimuth, -180.0f, 180.0f);
+  out.azimuth = std::clamp(params.azimuth, -sonare::constants::kDegreesPerHalfTurn,
+                           sonare::constants::kDegreesPerHalfTurn);
   out.divergence = std::clamp(params.divergence, 0.0f, 1.0f);
   out.lfe = std::clamp(params.lfe, 0.0f, 1.0f);
   return out;

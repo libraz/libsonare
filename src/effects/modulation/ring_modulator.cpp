@@ -9,10 +9,10 @@
 namespace sonare::effects::modulation {
 
 using constants::kDefaultDawSampleRate;
+using constants::kDegreesPerTurnD;
 
 namespace {
 
-constexpr double kDegreesPerTurn = 360.0;
 constexpr float kMaxPhaseDeg = 360.0f;
 constexpr double kAntiphaseTurns = 0.5;
 
@@ -42,7 +42,7 @@ void RingModulator::process(float* const* channels, int num_channels, int num_sa
   const LfoShape shape = config_.shape;
   // Right carrier's lead over the left, in turns; zero keeps one shared carrier.
   const double offset =
-      static_cast<double>(config_.phase_deg) / kDegreesPerTurn +
+      static_cast<double>(config_.phase_deg) / kDegreesPerTurnD +
       kAntiphaseTurns * static_cast<double>(std::clamp(config_.stereo_spread, 0.0f, 1.0f));
   double phase = phase_;
   for (int i = 0; i < num_samples; ++i) {
