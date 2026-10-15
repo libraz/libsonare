@@ -243,39 +243,18 @@ void StreamAnalyzer::emit_frame(const float* frame_start, size_t frame_sample_of
 }
 
 void StreamAnalyzer::append_onset(float value) {
-  if (onset_accumulator_size_ < onset_accumulator_.size()) {
-    const size_t index =
-        (onset_accumulator_start_ + onset_accumulator_size_) % onset_accumulator_.size();
-    onset_accumulator_[index] = value;
-    ++onset_accumulator_size_;
-    return;
-  }
-  onset_accumulator_[onset_accumulator_start_] = value;
-  onset_accumulator_start_ = (onset_accumulator_start_ + 1) % onset_accumulator_.size();
+  ring_append(onset_accumulator_, onset_accumulator_start_, onset_accumulator_size_, value);
 }
 
 void StreamAnalyzer::append_recent_chroma(const std::array<float, 12>& chroma) {
-  if (chroma_history_size_ < chroma_history_.size()) {
-    const size_t index = (chroma_history_start_ + chroma_history_size_) % chroma_history_.size();
-    chroma_history_[index] = chroma;
-    ++chroma_history_size_;
-    return;
-  }
-  chroma_history_[chroma_history_start_] = chroma;
-  chroma_history_start_ = (chroma_history_start_ + 1) % chroma_history_.size();
+  ring_append(chroma_history_, chroma_history_start_, chroma_history_size_, chroma);
 }
 
 void StreamAnalyzer::append_full_chroma(const std::array<float, 12>& chroma) {
-  if (full_chroma_history_size_ < full_chroma_history_.size()) {
-    const size_t index =
-        (full_chroma_history_start_ + full_chroma_history_size_) % full_chroma_history_.size();
-    full_chroma_history_[index] = chroma;
-    ++full_chroma_history_size_;
-    return;
+  if (ring_append(full_chroma_history_, full_chroma_history_start_, full_chroma_history_size_,
+                  chroma)) {
+    ++full_chroma_history_offset_;
   }
-  full_chroma_history_[full_chroma_history_start_] = chroma;
-  full_chroma_history_start_ = (full_chroma_history_start_ + 1) % full_chroma_history_.size();
-  ++full_chroma_history_offset_;
 }
 
 std::array<float, 12> StreamAnalyzer::median_recent_chroma() {

@@ -16,6 +16,13 @@ namespace sonare::streaming_detail {
 
 using sonare::constants::kEpsilon;
 
+ChromaFilterConfig make_chroma_config(float tuning_ref_hz) {
+  ChromaFilterConfig config;
+  config.n_chroma = 12;
+  config.tuning = constants::kSemitonesPerOctave * std::log2(tuning_ref_hz / constants::kA4Hz);
+  return config;
+}
+
 std::vector<float> compute_bin_frequencies(int n_bins, int sr, int n_fft) {
   return util::bin_frequencies(n_bins, sr, n_fft);
 }

@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "filters/chroma.h"
 #include "util/constants.h"
 
 namespace sonare::streaming_detail {
@@ -28,6 +29,26 @@ constexpr int floor_mod(int value, int modulus) {
   const int remainder = value % modulus;
   return remainder < 0 ? remainder + modulus : remainder;
 }
+
+/// @brief Appends to a fixed-capacity ring, overwriting the oldest element once full.
+/// @param ring Storage; its size() is the capacity.
+/// @param start Index of the oldest element.
+/// @param size Number of live elements.
+/// @return true when the oldest element was overwritten.
+template <typename Ring, typename T>
+bool ring_append(Ring& ring, size_t& start, size_t& size, const T& value) {
+  if (size < ring.size()) {
+    ring[(start + size) % ring.size()] = value;
+    ++size;
+    return false;
+  }
+  ring[start] = value;
+  start = (start + 1) % ring.size();
+  return true;
+}
+
+/// @brief Chroma filterbank config for a tuning reference (tuning = 12 * log2(ref / 440)).
+ChromaFilterConfig make_chroma_config(float tuning_ref_hz);
 
 /// @brief Result of one progressive tempo estimate.
 struct TempoEstimate {

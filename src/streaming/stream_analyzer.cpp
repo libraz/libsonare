@@ -197,12 +197,7 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
 
   /// Pre-compute chroma filterbank (use internal sample rate)
   if (config_.compute_chroma) {
-    ChromaFilterConfig chroma_config;
-    chroma_config.n_chroma = 12;
-    /// Convert tuning_ref_hz to semitone offset: tuning = 12 * log2(ref/440)
-    /// Positive tuning means audio is sharp, so we subtract to correct
-    chroma_config.tuning =
-        constants::kSemitonesPerOctave * std::log2(config_.tuning_ref_hz / constants::kA4Hz);
+    const ChromaFilterConfig chroma_config = make_chroma_config(config_.tuning_ref_hz);
     chroma_filterbank_ =
         create_chroma_filterbank(internal_sample_rate_, fft_length_, chroma_config);
 
