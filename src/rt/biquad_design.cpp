@@ -463,6 +463,12 @@ float one_pole_lowpass_alpha_matched(float frequency_hz, double sample_rate) {
   return std::clamp(1.0f - std::exp(exponent), 0.0f, 1.0f);
 }
 
+double one_pole_lowpass_alpha_matched_d(double frequency_hz, double sample_rate) {
+  if (!(frequency_hz > 0.0)) return 0.0;
+  if (!(sample_rate > 0.0)) return 1.0;
+  return std::clamp(1.0 - std::exp(-kTwoPiD * frequency_hz / sample_rate), 0.0, 1.0);
+}
+
 float one_pole_alpha_from_time_ms(float time_ms, double sample_rate) {
   if (!(sample_rate > 0.0)) return 1.0f;
   // 0.05 ms floor matches the legacy voice_changer::coeff_ms behavior so the

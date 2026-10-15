@@ -126,6 +126,9 @@ float one_pole_lowpass_alpha(float frequency_hz, double sample_rate);
 /// @details Returns a clamped coefficient in `[0, 1]`.
 float one_pole_lowpass_alpha_matched(float frequency_hz, double sample_rate);
 
+/// @brief Double-precision @ref one_pole_lowpass_alpha_matched.
+double one_pole_lowpass_alpha_matched_d(double frequency_hz, double sample_rate);
+
 /// @brief Time-constant parameterization of @ref one_pole_lowpass_alpha_matched.
 /// @details Returns `1 - exp(-1 / (tau * sample_rate))` where
 ///          `tau = max(0.05, time_ms) * 0.001`. The 0.05 ms floor guards

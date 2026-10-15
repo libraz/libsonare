@@ -8,6 +8,7 @@
 #include "mastering/dynamics/channel_limits.h"
 #include "mastering/saturation/amp_physics.h"
 #include "mastering/saturation/triode.h"
+#include "rt/biquad_design.h"
 #include "rt/fractional_delay.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
@@ -653,8 +654,7 @@ void AmpSim::design_chain() {
                           0.0f, 1.0f);
   // Transformer low-band extractor: a ~120 Hz one-pole corner.
   constexpr float kXfCornerHz = 120.0f;
-  xf_alpha_ = std::clamp(1.0f - std::exp(-kTwoPi * kXfCornerHz / static_cast<float>(sample_rate_)),
-                         0.0f, 1.0f);
+  xf_alpha_ = rt::one_pole_lowpass_alpha_matched(kXfCornerHz, sample_rate_);
   // NFB feedback path: a wide mid-band band-pass (0 dB peak), so the midrange is
   // fed back hard (tight, flat) and the extremes escape the loop (the top and
   // bottom "open up").
@@ -670,13 +670,11 @@ void AmpSim::design_chain() {
   // Cone-excursion extractor: a ~90 Hz one-pole corner, so the proxy follows the
   // band that actually moves the cone.
   constexpr float kConeCornerHz = 90.0f;
-  cone_alpha_ = std::clamp(
-      1.0f - std::exp(-kTwoPi * kConeCornerHz / static_cast<float>(sample_rate_)), 0.0f, 1.0f);
+  cone_alpha_ = rt::one_pole_lowpass_alpha_matched(kConeCornerHz, sample_rate_);
   // Offset tracker for the cone's rectified term: slow enough to leave the
   // lowest musical fundamentals alone.
   constexpr float kConeDcCornerHz = 5.0f;
-  cone_dc_alpha_ = std::clamp(
-      1.0f - std::exp(-kTwoPi * kConeDcCornerHz / static_cast<float>(sample_rate_)), 0.0f, 1.0f);
+  cone_dc_alpha_ = rt::one_pole_lowpass_alpha_matched(kConeDcCornerHz, sample_rate_);
   // Doppler: the modulation swings over the full base delay in each direction,
   // so 1.0 reaches +-kDopplerBaseSamples.
   doppler_mod_q8_ = static_cast<int>(std::lround(config_.doppler * kDopplerBaseSamples * 256.0f));

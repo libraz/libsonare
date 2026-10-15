@@ -24,7 +24,7 @@ using sonare::constants::kPiD;
 constexpr double kEvenDcCutoffHz = 20.0;
 
 float even_dc_coefficient_for_rate(double sample_rate) {
-  return static_cast<float>(1.0 - std::exp(-2.0 * kPiD * kEvenDcCutoffHz / sample_rate));
+  return static_cast<float>(rt::one_pole_lowpass_alpha_matched_d(kEvenDcCutoffHz, sample_rate));
 }
 
 }  // namespace

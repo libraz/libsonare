@@ -294,7 +294,8 @@ void Tape::update_filters(double sample_rate) {
   const float gap_upper = static_cast<float>(sample_rate * 0.45);
   const float gap_lower = std::min(1000.0f, gap_upper);
   const float gap_cutoff = std::clamp(18000.0f * config_.speed_ips / 15.0f, gap_lower, gap_upper);
-  gap_loss_coeff_ = static_cast<float>(1.0 - std::exp(-kTwoPiD * gap_cutoff / sample_rate));
+  gap_loss_coeff_ =
+      static_cast<float>(rt::one_pole_lowpass_alpha_matched_d(gap_cutoff, sample_rate));
 }
 
 }  // namespace sonare::mastering::saturation

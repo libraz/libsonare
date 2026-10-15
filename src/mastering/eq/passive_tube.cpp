@@ -18,8 +18,6 @@ namespace sonare::mastering::eq {
 using sonare::discard_if_non_finite;
 using sonare::mastering::dynamics::kRealtimePreparedChannels;
 
-using sonare::constants::kTwoPiD;
-
 namespace {
 
 // One-pole low-pass smoothing coefficient: alpha = 1 - exp(-2*pi*f/fs).
@@ -33,7 +31,7 @@ float one_pole_alpha(float frequency_hz, double sample_rate) {
   const double max_frequency = sample_rate * 0.49;
   const double clamped =
       std::clamp(static_cast<double>(frequency_hz), 1.0, std::max(max_frequency, 1.0));
-  return static_cast<float>(1.0 - std::exp(-kTwoPiD * clamped / sample_rate));
+  return static_cast<float>(sonare::rt::one_pole_lowpass_alpha_matched_d(clamped, sample_rate));
 }
 
 }  // namespace
