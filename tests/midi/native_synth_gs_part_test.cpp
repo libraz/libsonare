@@ -568,3 +568,62 @@ TEST_CASE("a system reset clears the voices sounding before it", "[midi][synth][
   }
   CHECK(after_reset == expected);
 }
+
+TEST_CASE("a refused NRPN selection leaves no RPN for its data entry to land on",
+          "[midi][synth][native-gs]") {
+  // RPN 0/0 data entry @p range, optionally followed by a refused NRPN 01 08 = 0x50, then a full
+  // upward bend so the pitch-bend sensitivity is audible.
+  const auto bend_after = [](const std::vector<uint8_t>& refuse, uint8_t range, bool nrpn) {
+    return render_probe([&](NativeSynth& s) {
+      send_sysex(s, refuse);
+      send_cc(s, 0, 101, 0);
+      send_cc(s, 0, 100, 0);
+      send_cc(s, 0, 6, range);
+      if (nrpn) send_nrpn(s, 0x08, 0x50);
+      s.on_event(0, event(sonare::midi::make_midi1_pitch_bend(0, 0, 0x3FFF)));
+    });
+  };
+  // The probe hears the bend range, so a data entry landing on RPN 0/0 would show.
+  REQUIRE_FALSE(same(bend_after(kGmSystemOn, 2, false), bend_after(kGmSystemOn, 0x50, false)));
+  const std::vector<uint8_t> rx_nrpn_off = dt1(kPart1Block, kRxNrpnLo, 0);
+  for (const std::vector<uint8_t>* refuse : {&kGmSystemOn, &rx_nrpn_off}) {
+    CAPTURE(refuse == &kGmSystemOn);
+    CHECK(same(bend_after(*refuse, 2, true), bend_after(*refuse, 2, false)));
+  }
+}
+
+namespace {
+
+/// Rhythm-part kick (note 36) after @p history, one system reset, then @p after, in GM
+/// program mode with the rhythm part on Hip Hop, an SC-88Pro kit the SC-55 map plays as Standard.
+std::vector<float> kick_after(const std::vector<uint8_t>& reset,
+                              const std::function<void(NativeSynth&)>& history,
+                              const std::function<void(NativeSynth&)>& after) {
+  NativeSynth synth(gm_reset_config());
+  synth.prepare(kRate, kBlock);
+  history(synth);
+  send_sysex(synth, reset);
+  after(synth);
+  synth.on_event(0, event(sonare::midi::make_midi1_program_change(0, 9, 9)));
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 9, 36, 110)));
+  const auto block = render_stereo(synth, 8192);
+  std::vector<float> out = block.left;
+  out.insert(out.end(), block.right.begin(), block.right.end());
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("a system reset returns the CC#32 tone map to its power-on value",
+          "[midi][synth][native-gs]") {
+  const auto nothing = [](NativeSynth&) {};
+  const auto sc55_map = [](NativeSynth& s) { send_cc(s, 9, 32, 1); };
+  for (const std::vector<uint8_t>* reset : {&kGsReset, &kGmSystemOn}) {
+    CAPTURE(reset == &kGsReset);
+    const std::vector<float> fresh = kick_after(*reset, nothing, nothing);
+    REQUIRE(*std::max_element(fresh.begin(), fresh.end()) > 1.0e-3f);
+    // The SC-55 map picks a different kit at this program, so a surviving map would be heard.
+    REQUIRE(kick_after(*reset, nothing, sc55_map) != fresh);
+    CHECK(kick_after(*reset, sc55_map, nothing) == fresh);
+  }
+}

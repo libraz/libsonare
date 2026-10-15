@@ -404,7 +404,11 @@ class ClipPlayer final : public rt::ProcessorBase {
     std::vector<ClipSchedule> clips;
     // Indices into clips ordered by track id, schedule order within one track.
     std::vector<size_t> by_track;
+    // True when start_ppq placed every schedule, so a later tempo map re-derives its start.
+    bool starts_from_ppq = false;
   };
+  /// The sample @p clip starts at under the tempo map the audio thread holds for this block.
+  int64_t live_start_sample(const ClipSet& set, const ClipSchedule& clip) const noexcept;
   mutable rt::RtPublisher<ClipSet> clips_;
   // Published by set_clips() on the control thread; read lock-free by
   // clip_count() so host polling never races the audio thread's acquire().

@@ -168,6 +168,7 @@ void ClipPlayer::set_clips(std::vector<ClipSchedule> clips,
   std::stable_sort(set->by_track.begin(), set->by_track.end(),
                    [&clips](size_t a, size_t b) { return clips[a].track_id < clips[b].track_id; });
   set->clips = std::move(clips);
+  set->starts_from_ppq = map != nullptr;
   const size_t count = set->clips.size();
   if (clips_.publish(std::shared_ptr<const ClipSet>(std::move(set)))) {
     clip_count_.store(count, std::memory_order_relaxed);
@@ -239,7 +240,7 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
 
   const int64_t block_end =
       numeric::saturating_add(timeline_sample, static_cast<int64_t>(num_samples));
-  const auto render_clip = [&](const ClipSchedule& clip) noexcept {
+  const auto render_placed = [&](const ClipSchedule& clip) noexcept {
     if (source_channel_count(clip) <= 0 || source_sample_count(clip) <= 0 ||
         clip.length_samples <= 0) {
       return;
@@ -308,6 +309,19 @@ void ClipPlayer::process_filtered_at(uint32_t track_id, const uint32_t* track_id
     // page is queued before the requests for the pages still to come.
     prefetch_pages(clip, block_end);
   };
+  const auto render_clip = [&](const ClipSchedule& scheduled) noexcept {
+    const int64_t start_sample = live_start_sample(*clips, scheduled);
+    if (start_sample == scheduled.start_sample) {
+      render_placed(scheduled);
+      return;
+    }
+    const int64_t clip_end = numeric::saturating_add(start_sample, scheduled.length_samples);
+    if (block_end <= start_sample || timeline_sample >= clip_end) return;
+    // The tempo map moved since set_clips; a stack copy (no allocation) carries the live start.
+    ClipSchedule placed = scheduled;
+    placed.start_sample = start_sample;
+    render_placed(placed);
+  };
 
   const std::vector<ClipSchedule>& schedules = clips->clips;
   if (filter_mode == TrackFilterMode::kOnlyTrack) {
@@ -344,8 +358,8 @@ void ClipPlayer::collect_boundaries(int64_t block_start_sample, int num_frames,
   const ClipSet* clips = clips_.current();
   if (!clips) return;
   for (const ClipSchedule& clip : clips->clips) {
-    const int64_t start = clip.start_sample;
-    const int64_t end = numeric::saturating_add(clip.start_sample, clip.length_samples);
+    const int64_t start = live_start_sample(*clips, clip);
+    const int64_t end = numeric::saturating_add(start, clip.length_samples);
     if (start > block_start_sample && start <= block_end) {
       out->add(static_cast<int>(start - block_start_sample));
     }
@@ -354,6 +368,11 @@ void ClipPlayer::collect_boundaries(int64_t block_start_sample, int num_frames,
     }
   }
   out->sort_unique();
+}
+
+int64_t ClipPlayer::live_start_sample(const ClipSet& set, const ClipSchedule& clip) const noexcept {
+  return set.starts_from_ppq && tempo_map_ ? tempo_map_->ppq_to_sample(clip.start_ppq)
+                                           : clip.start_sample;
 }
 
 size_t ClipPlayer::clip_count() const noexcept {

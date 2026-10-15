@@ -1434,11 +1434,13 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, Control32 
     case 67:
       st.una_corda = value >= 64;  // soft pedal (affects notes struck while held)
       break;
+    // The selection moves whatever Rx.NRPN says; the switch gates data entry (case 6), so a
+    // refused NRPN cannot leave the previous RPN selected for the next data entry.
     case 98:
-      if (st.rx_nrpn) st.params.select_nrpn_lsb(value);
+      st.params.select_nrpn_lsb(value);
       break;
     case 99:
-      if (st.rx_nrpn) st.params.select_nrpn_msb(value);
+      st.params.select_nrpn_msb(value);
       break;
     case 100:
       st.params.select_rpn_lsb(value);
@@ -1612,28 +1614,22 @@ void NativeSynth::apply_part_sysex(const uint8_t* data, size_t size) noexcept {
   if (gs_sysex_resets(msg.kind)) {
     // GM System On closes NRPN reception, the NRPNs being Roland's; GS Reset reopens it.
     const bool gm = msg.kind != GsSysExKind::kGsReset;
-    uint16_t rig_dirty = 0;
     for (uint8_t ch = 0; ch < 16; ++ch) {
       // A reset silences the pre-reset voices and returns the part to its power-on state --
       // program, bank variation, volume, pan, expression and the rest of the controllers -- in
-      // place. What the host configured (articulation) and what no reset touches (the tone map,
-      // carried by the bank LSB) are kept.
+      // place, the CC#32 tone map (40 4x 00) included. What the host configured (articulation)
+      // is kept.
       all_sound_off(ch);
       ChannelState& st = channels_[ch];
       const ArticulationMode articulation = st.articulation;
-      const uint8_t bank_lsb = st.bank_lsb;
-      const bool was_drums = st.drums;
       st = ChannelState{};
       st.articulation = articulation;
-      st.bank_lsb = bank_lsb;
       st.rx_nrpn = !gm;
       st.drums = ch == kDrumChannelIndex;
-      if (was_drums != st.drums) rig_dirty |= static_cast<uint16_t>(1u << ch);
     }
     refresh_all_channel_mods();
-    for (uint8_t ch = 0; ch < 16; ++ch) {
-      if ((rig_dirty & (uint16_t{1} << ch)) != 0) refresh_part_rig(ch);
-    }
+    // Program and bank returned to power-on, so every part's rig binding is re-derived.
+    for (uint8_t ch = 0; ch < 16; ++ch) refresh_part_rig(ch);
     return;
   }
   uint16_t rig_dirty = 0;

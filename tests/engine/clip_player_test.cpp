@@ -1685,3 +1685,93 @@ TEST_CASE("ClipPlayer retains an anchored loop longer than the trimmed clip",
   player.process_at(output, 1, 3, 0);
   REQUIRE(rendered == expected);
 }
+
+namespace {
+
+/// First timeline sample in [from, to) at which a player renders a non-zero sample, or -1.
+int64_t rendered_onset(sonare::engine::ClipPlayer& player, int64_t from, int64_t to) {
+  constexpr int kBlock = 256;
+  std::array<float, kBlock> out_l{};
+  float* out[] = {out_l.data()};
+  for (int64_t block = from; block < to; block += kBlock) {
+    out_l.fill(0.0f);
+    player.acquire_clips();
+    player.process_at(out, 1, kBlock, block);
+    for (int i = 0; i < kBlock; ++i) {
+      if (out_l[static_cast<size_t>(i)] != 0.0f) return block + i;
+    }
+  }
+  return -1;
+}
+
+}  // namespace
+
+TEST_CASE("an audio clip's onset follows a tempo change made after its clips were set",
+          "[engine][clip_player]") {
+  constexpr double kStartPpq = 4.0;
+  std::vector<float> source(4096, 1.0f);
+  const float* channels[] = {source.data()};
+  const auto make_clip = [&] {
+    return sonare::engine::ClipSchedule{
+        1,         {channels, 1, static_cast<int64_t>(source.size())},
+        kStartPpq, 0,
+        0,         static_cast<int64_t>(source.size()),
+        false,     1.0f,
+        0,         0};
+  };
+  for (const double rate : {44100.0, 48000.0}) {
+    CAPTURE(rate);
+    sonare::transport::TempoMap before;
+    before.prepare(rate);
+    before.set_segments({{0.0, 120.0, 0.0}});
+    sonare::transport::TempoMap after;
+    after.prepare(rate);
+    after.set_segments({{0.0, 90.0, 0.0}});
+    const int64_t old_onset = before.ppq_to_sample(kStartPpq);
+    const int64_t new_onset = after.ppq_to_sample(kStartPpq);
+    REQUIRE(new_onset > old_onset);
+    const int64_t from = old_onset - 1024;
+    const int64_t to = new_onset + 1024;
+
+    SECTION("the player adopts a different map, as the engine does on a tempo publish") {
+      sonare::engine::ClipPlayer player;
+      player.prepare(rate, 256);
+      player.set_tempo_map(&before);
+      player.set_clips({make_clip()}, &before);
+      player.set_tempo_map(&after);
+      CHECK(rendered_onset(player, from, to) == new_onset);
+    }
+    SECTION("the bound map's segments are replaced in place") {
+      sonare::transport::TempoMap map;
+      map.prepare(rate);
+      map.set_segments({{0.0, 120.0, 0.0}});
+      sonare::engine::ClipPlayer player;
+      player.prepare(rate, 256);
+      player.set_tempo_map(&map);
+      player.set_clips({make_clip()});
+      map.set_segments({{0.0, 90.0, 0.0}});
+      CHECK(rendered_onset(player, from, to) == new_onset);
+    }
+    SECTION("the tempo change arriving first gives the same onset") {
+      sonare::engine::ClipPlayer player;
+      player.prepare(rate, 256);
+      player.set_tempo_map(&after);
+      player.set_clips({make_clip()}, &after);
+      CHECK(rendered_onset(player, from, to) == new_onset);
+    }
+    SECTION("clip boundaries are reported at the live onset") {
+      sonare::engine::ClipPlayer player;
+      player.prepare(rate, 256);
+      player.set_tempo_map(&before);
+      player.set_clips({make_clip()}, &before);
+      player.set_tempo_map(&after);
+      player.acquire_clips();
+      sonare::engine::ClipBoundaryList boundaries;
+      player.collect_boundaries(new_onset - 100, 256, &boundaries);
+      REQUIRE(boundaries.size == 1);
+      CHECK(boundaries.offsets[0] == 100);
+      player.collect_boundaries(old_onset - 100, 256, &boundaries);
+      CHECK(boundaries.size == 0);
+    }
+  }
+}
