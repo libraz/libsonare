@@ -47,7 +47,6 @@ numpy==2.4.6
 packaging==26.3
     # via lazy-loader
     # via pooch
-    # via wheel
 platformdirs==4.11.9
     # via pooch
 pooch==1.9.0
@@ -72,4 +71,3 @@ typing-extensions==4.16.0
     # via soundfile
 urllib3==2.8.0
     # via requests
-wheel==0.48.0

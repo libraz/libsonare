@@ -25,6 +25,9 @@ GOLDEN_BUILD_DIR := build-golden
 ACCURACY_REPORT_JSON ?= $(CURDIR)/build-optional-fixtures/accuracy-report.json
 INSTALL_PREFIX_DIR := $(CURDIR)/build-install-prefix
 RYE ?= rye
+# librosa build test-librosa-live checks against; defaults to upstream main.
+# Point it at a local checkout to test unreleased changes offline.
+LIBROSA_SOURCE ?= git+https://github.com/librosa/librosa.git@main
 CMAKE ?= cmake
 # Compile workers for every target that builds into a private -B directory.
 # An explicit --parallel outranks CMAKE_BUILD_PARALLEL_LEVEL, so honour that
@@ -168,7 +171,7 @@ accuracy-report:
 test-librosa-live: build
 	$(RYE) sync --pyproject tests/librosa/pyproject.toml
 	$(RYE) run --pyproject tests/librosa/pyproject.toml python -m ensurepip --upgrade
-	$(RYE) run --pyproject tests/librosa/pyproject.toml python -m pip install --no-build-isolation ../librosa
+	$(RYE) run --pyproject tests/librosa/pyproject.toml python -m pip install $(LIBROSA_SOURCE)
 	$(RYE) run --pyproject tests/librosa/pyproject.toml python tests/librosa/run_live_reference_check.py --build-dir $(BUILD_DIR)
 
 clean:
