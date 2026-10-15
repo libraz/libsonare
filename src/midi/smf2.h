@@ -32,6 +32,7 @@
 #include <vector>
 
 #include "midi/midi_clip.h"
+#include "midi/smf.h"
 #include "midi/ump.h"
 #include "transport/tempo_map.h"
 #include "util/resource_limits.h"
@@ -126,7 +127,7 @@ inline constexpr uint64_t kMaxExportTick = 1ull << 32u;
 struct Smf2ExportOptions {
   /// Delta Clockstamp ticks per quarter note written as DCTPQ (and used to
   /// quantize PPQ event positions to integer ticks). Defaults to 480.
-  uint16_t ticks_per_quarter = 480;
+  uint16_t ticks_per_quarter = kDefaultTicksPerQuarter;
   /// Optional payload store used to serialize UMP SysEx handles back to UMP
   /// SysEx7 data messages, or SysEx8 when the body holds a byte above 7F. When
   /// null, SysEx-handle events are skipped (and counted in skipped_events).

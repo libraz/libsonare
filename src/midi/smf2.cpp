@@ -47,12 +47,6 @@ constexpr size_t kMaxClipNameBytes = 384u;
 // Set Time Signature reserves denominator exponent 0 for a non-standard denominator.
 constexpr uint8_t kMinClipFileTimeSignatureExponent = 1;
 
-// SysEx7 (MT=0x3) packet status (high nibble of word[0] byte 1).
-constexpr uint8_t kSysex7Complete = 0x0u;
-constexpr uint8_t kSysex7Start = 0x1u;
-constexpr uint8_t kSysex7Continue = 0x2u;
-constexpr uint8_t kSysex7End = 0x3u;
-
 // Tempo is encoded as 10-nanosecond units per quarter note: BPM = 60s / QN, and
 // QN(ns) = tempo * 10, so BPM = 60e9 / (tempo*10) = 6e9 / tempo. This is a Flex
 // Data domain constant, not a universal numeric constant.
@@ -110,7 +104,6 @@ class WordReader {
 
   // Advances `count` already-consumed bytes for the header check.
   void advance(size_t count) noexcept { pos_ = std::min(size_, pos_ + count); }
-  size_t pos() const noexcept { return pos_; }
 
  private:
   const uint8_t* data_ = nullptr;
@@ -967,38 +960,20 @@ struct SeqItem {
 };
 
 bool emit_sysex7(std::vector<SeqItem>* items, uint64_t tick, const SysExBody& body, uint8_t group) {
-  const size_t total = body.size;
-  if (total == 0) return false;
-  size_t offset = 0;
-  bool first = true;
-  do {
-    const size_t chunk = std::min<size_t>(6u, total - offset);
-    uint8_t status;
-    if (total <= 6u) {
-      status = kSysex7Complete;
-    } else if (first) {
-      status = kSysex7Start;
-    } else if (offset + chunk >= total) {
-      status = kSysex7End;
-    } else {
-      status = kSysex7Continue;
+  if (body.size == 0) return false;
+  SysEx7Packetizer packetizer(body.data, body.size, group);
+  std::array<Ump, 16> batch;
+  for (size_t n; (n = packetizer.read(batch.data(), batch.size())) != 0;) {
+    for (size_t i = 0; i < n; ++i) {
+      SeqItem item;
+      item.tick = tick;
+      item.order = 2;
+      item.words[0] = batch[i].words[0];
+      item.words[1] = batch[i].words[1];
+      item.word_count = 2;
+      items->push_back(item);
     }
-    std::array<uint8_t, 6> bytes{};
-    for (size_t i = 0; i < chunk; ++i) bytes[i] = body.data[offset + i];
-    SeqItem item;
-    item.tick = tick;
-    item.order = 2;
-    item.words[0] = (kMtData64 << 28) | (static_cast<uint32_t>(group & 0x0Fu) << 24) |
-                    (static_cast<uint32_t>(status) << 20) | (static_cast<uint32_t>(chunk) << 16) |
-                    (static_cast<uint32_t>(bytes[0]) << 8) | static_cast<uint32_t>(bytes[1]);
-    item.words[1] = (static_cast<uint32_t>(bytes[2]) << 24) |
-                    (static_cast<uint32_t>(bytes[3]) << 16) |
-                    (static_cast<uint32_t>(bytes[4]) << 8) | static_cast<uint32_t>(bytes[5]);
-    item.word_count = 2;
-    items->push_back(item);
-    offset += chunk;
-    first = false;
-  } while (offset < total);
+  }
   return true;
 }
 
@@ -1006,19 +981,9 @@ bool emit_sysex8(std::vector<SeqItem>* items, uint64_t tick, const SysExBody& bo
   const size_t total = body.size;
   if (total == 0) return false;
   size_t offset = 0;
-  bool first = true;
   do {
     const size_t chunk = std::min<size_t>(13u, total - offset);
-    uint8_t status;
-    if (total <= 13u) {
-      status = kSysex7Complete;
-    } else if (first) {
-      status = kSysex7Start;
-    } else if (offset + chunk >= total) {
-      status = kSysex7End;
-    } else {
-      status = kSysex7Continue;
-    }
+    const uint8_t status = sysex_packet_status(offset / 13u, (total + 12u) / 13u);
     std::array<uint8_t, 13> bytes{};
     for (size_t i = 0; i < chunk; ++i) bytes[i] = body.data[offset + i];
     SeqItem item;
@@ -1041,7 +1006,6 @@ bool emit_sysex8(std::vector<SeqItem>* items, uint64_t tick, const SysExBody& bo
     item.word_count = 4;
     items->push_back(item);
     offset += chunk;
-    first = false;
   } while (offset < total);
   return true;
 }
@@ -1053,7 +1017,8 @@ Smf2ExportResult export_clip_file(
     const std::vector<transport::TimeSignatureSegment>& time_signatures,
     const Smf2ExportOptions& options) {
   Smf2ExportResult result;
-  const uint16_t dctpq = options.ticks_per_quarter == 0 ? 480u : options.ticks_per_quarter;
+  const uint16_t dctpq =
+      options.ticks_per_quarter == 0 ? kDefaultTicksPerQuarter : options.ticks_per_quarter;
 
   std::vector<uint8_t>& out = result.bytes;
   out.insert(out.end(), kFileHeader, kFileHeader + sizeof(kFileHeader));
@@ -1151,9 +1116,7 @@ Smf2ExportResult export_clip_file(
       result.bytes.clear();
       return result;
     }
-    item.word_count = ev.ump.word_count > 0
-                          ? ev.ump.word_count
-                          : ump_word_count_for_message_type(static_cast<uint8_t>(mt));
+    item.word_count = ev.ump.word_count > 0 ? ev.ump.word_count : canonical_count;
     for (int w = 0; w < item.word_count && w < 4; ++w)
       item.words[static_cast<size_t>(w)] = ev.ump.words[w];
     items.push_back(item);

@@ -211,6 +211,16 @@ void put_tag(std::vector<uint8_t>* out, const uint8_t (&tag)[4]) {
 // cost of landing early; export counts each one in clamped_delta_events.
 constexpr uint32_t kMaxVlq = 0x0FFFFFFFu;
 
+struct ClampedDelta {
+  uint32_t delta;
+  bool clamped;
+};
+
+ClampedDelta clamp_delta(int64_t delta_ticks) noexcept {
+  const bool clamped = delta_ticks > static_cast<int64_t>(kMaxVlq);
+  return {static_cast<uint32_t>(clamped ? kMaxVlq : delta_ticks), clamped};
+}
+
 void put_vlq(std::vector<uint8_t>* out, uint32_t value) {
   // A 5th byte would carry a continuation bit the reader rejects, making the
   // stream unreadable to this library and to spec-compliant DAWs.
@@ -918,7 +928,8 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
                            const std::vector<std::string>& clip_names,
                            const SmfExportOptions& options) {
   SmfExportResult result;
-  const uint16_t ppqn = options.ticks_per_quarter != 0 ? options.ticks_per_quarter : 480;
+  const uint16_t ppqn =
+      options.ticks_per_quarter != 0 ? options.ticks_per_quarter : kDefaultTicksPerQuarter;
 
   // Bit 15 of the division field selects SMPTE timing, so PPQN must fit 15 bits.
   if (ppqn > 0x7FFFu) {
@@ -984,9 +995,9 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
     int64_t prev_tick = 0;
     for (const auto& item : items) {
       const int64_t delta_ticks = std::max<int64_t>(0, item.tick - prev_tick);
-      const bool clamped = delta_ticks > static_cast<int64_t>(kMaxVlq);
-      if (clamped) ++result.clamped_delta_events;
-      const uint32_t delta = static_cast<uint32_t>(clamped ? kMaxVlq : delta_ticks);
+      const ClampedDelta cd = clamp_delta(delta_ticks);
+      if (cd.clamped) ++result.clamped_delta_events;
+      const uint32_t delta = cd.delta;
       // Advance by what was encoded, not by the item's own tick: the stream sits
       // where the delta put it, so a later item measured from anywhere else
       // would land off by the amount the clamp ate.
@@ -1086,9 +1097,9 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
           continue;
         }
         const int64_t delta_ticks = std::max<int64_t>(0, tick - prev_tick);
-        const bool clamped = delta_ticks > static_cast<int64_t>(kMaxVlq);
-        if (clamped) ++result.clamped_delta_events;
-        const uint32_t delta = static_cast<uint32_t>(clamped ? kMaxVlq : delta_ticks);
+        const ClampedDelta cd = clamp_delta(delta_ticks);
+        if (cd.clamped) ++result.clamped_delta_events;
+        const uint32_t delta = cd.delta;
         prev_tick += static_cast<int64_t>(delta);
         put_sysex(&body, delta, sysex);
         continue;
@@ -1104,8 +1115,9 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
         continue;  // Unresolved SysEx / dropped 2.0-only messages are not emitted.
       }
       const int64_t delta_ticks = std::max<int64_t>(0, tick - prev_tick);
-      const bool clamped = delta_ticks > static_cast<int64_t>(kMaxVlq);
-      uint32_t delta = static_cast<uint32_t>(clamped ? kMaxVlq : delta_ticks);
+      const ClampedDelta cd = clamp_delta(delta_ticks);
+      const bool clamped = cd.clamped;
+      uint32_t delta = cd.delta;
       const int64_t landed_tick = prev_tick + static_cast<int64_t>(delta);
       // Whether this event put anything in the track. prev_tick has to stay on
       // the last event actually written, because the delta below spans from

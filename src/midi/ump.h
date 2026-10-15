@@ -264,6 +264,19 @@ inline uint16_t note_attribute_data(const Ump& ump) noexcept {
 /// length for diagnostics only.
 Ump make_sysex_handle(uint8_t group, SysExHandle handle) noexcept;
 
+/// SysEx7 / SysEx8 packet status nibble (word[0] bits 20..23).
+inline constexpr uint8_t kSysex7Complete = 0x0u;
+inline constexpr uint8_t kSysex7Start = 0x1u;
+inline constexpr uint8_t kSysex7Continue = 0x2u;
+inline constexpr uint8_t kSysex7End = 0x3u;
+
+/// Status nibble of packet @p index (0-based) in a stream of @p count packets.
+inline constexpr uint8_t sysex_packet_status(size_t index, size_t count) noexcept {
+  if (count == 1u) return kSysex7Complete;
+  if (index == 0u) return kSysex7Start;
+  return index + 1u == count ? kSysex7End : kSysex7Continue;
+}
+
 /// Stateful, allocation-free SysEx7 packetizer. Unlike the one-shot helper
 /// below, read() may be called repeatedly with a bounded scratch buffer, so
 /// control-thread backends can stream arbitrarily long payloads across

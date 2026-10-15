@@ -48,6 +48,9 @@
 
 namespace sonare::midi {
 
+/// Default export resolution (ticks per quarter note) for SMF and SMF2 clip files.
+inline constexpr uint16_t kDefaultTicksPerQuarter = 480;
+
 /// Status of an SMF import / export operation.
 enum class SmfStatus : uint8_t {
   kOk = 0,
@@ -167,7 +170,7 @@ struct SmfExportOptions {
   /// event positions to integer ticks). Defaults to the common 480 PPQN. A
   /// nonzero value above 0x7FFF is rejected because the SMF non-SMPTE division
   /// field is a positive 15-bit PPQN value.
-  uint16_t ticks_per_quarter = 480;
+  uint16_t ticks_per_quarter = kDefaultTicksPerQuarter;
   /// Optional payload store used to serialize UMP SysEx handles back to SMF.
   /// Only payloads with optional outer F0/F7 framing and 7-bit inner bytes are
   /// emitted; unresolved or non-SysEx7-representable handles are skipped and

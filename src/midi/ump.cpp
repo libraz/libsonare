@@ -278,27 +278,13 @@ size_t SysEx7Packetizer::read(Ump* out, size_t cap) noexcept {
   const size_t total = end_ - begin_;
   const size_t to_write = std::min(cap, packet_count_ - packet_position_);
 
-  constexpr uint8_t kSysex7Complete = 0x0u;
-  constexpr uint8_t kSysex7Start = 0x1u;
-  constexpr uint8_t kSysex7Continue = 0x2u;
-  constexpr uint8_t kSysex7End = 0x3u;
-
   const uint32_t group_bits = static_cast<uint32_t>(group_) << 24u;
   size_t produced = 0;
   while (produced < to_write) {
     const size_t packet_index = packet_position_;
     const size_t offset = packet_index * 6u;
     const size_t chunk = std::min<size_t>(6u, total - offset);
-    uint8_t status;
-    if (packet_count_ == 1u) {
-      status = kSysex7Complete;
-    } else if (packet_index == 0u) {
-      status = kSysex7Start;
-    } else if (packet_index + 1u == packet_count_) {
-      status = kSysex7End;
-    } else {
-      status = kSysex7Continue;
-    }
+    const uint8_t status = sysex_packet_status(packet_index, packet_count_);
     std::array<uint8_t, 6> bytes{};
     for (size_t i = 0; i < chunk; ++i) bytes[i] = data_[begin_ + offset + i];
 
@@ -499,7 +485,6 @@ size_t midi1_bytes_to_ump(const uint8_t* bytes, size_t len, uint8_t group, uint8
   }
   size_t pos = 0;
   uint8_t status = bytes[0];
-  size_t consumed_status = 0;
   if (status & 0x80u) {
     // System messages (0xF0..0xFF) are not channel-voice; do not handle here.
     if ((status & 0xF0u) == 0xF0u) {
@@ -509,7 +494,6 @@ size_t midi1_bytes_to_ump(const uint8_t* bytes, size_t len, uint8_t group, uint8
       *running_status = status;
     }
     pos = 1;
-    consumed_status = 1;
   } else {
     // Running status: reuse the last status byte.
     if (running_status == nullptr || (*running_status & 0x80u) == 0) {
@@ -517,7 +501,6 @@ size_t midi1_bytes_to_ump(const uint8_t* bytes, size_t len, uint8_t group, uint8
     }
     status = *running_status;
   }
-  (void)consumed_status;
 
   const uint8_t status_nibble = static_cast<uint8_t>((status >> 4u) & 0x0Fu);
   const uint8_t channel = static_cast<uint8_t>(status & 0x0Fu);
