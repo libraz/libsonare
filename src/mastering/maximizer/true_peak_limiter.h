@@ -74,7 +74,7 @@ class TruePeakOutputGuard {
   int latency_samples() const noexcept { return latency_; }
   /// @brief Bounds @p channels in place; returns the smallest gain it applied.
   /// @param excluded_channel Channel left out of the linked detection (still
-  ///        scaled), or negative for none.
+  ///        scaled by it, then bounded by its own reading), or negative for none.
   float process(float* const* channels, int num_channels, int num_samples, int excluded_channel,
                 float ceiling);
 

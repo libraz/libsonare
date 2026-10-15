@@ -487,23 +487,8 @@ float BitCrusher::dither_noise(int channel) {
 }
 
 void BitCrusher::ensure_state(int num_channels) {
-  // prepare() preallocates kRealtimePreparedChannels; only grow (control thread)
-  // if a caller exceeds it, preserving existing channel state instead of wiping
-  // every channel. Seed the newly added channels' dither RNG to match reset().
-  const auto n = static_cast<size_t>(num_channels);
-  if (held_.size() < n) {
-    const size_t old = held_.size();
-    held_.resize(n, 0.0f);
-    pre_state_.resize(n, 0.0f);
-    post_state_.resize(n, 0.0f);
-    counters_.resize(n, 0);
-    hold_phase_.resize(n, kLatchNextSample);
-    rng_state_.resize(n, 0);
-    error_history_.resize(n, {});
-    for (size_t ch = old; ch < n; ++ch) {
-      rng_state_[ch] = config_.dither_seed + static_cast<uint32_t>(ch * 747796405u);
-    }
-  }
+  // prepare() sizes every per-channel vector together.
+  require_prepared_channels(num_channels, held_.size(), "BitCrusher");
 }
 
 }  // namespace sonare::mastering::saturation

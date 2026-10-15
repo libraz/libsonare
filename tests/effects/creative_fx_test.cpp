@@ -19,7 +19,9 @@
 #include "effects/reverb/dattorro_reverb.h"
 #include "effects/reverb/fdn_reverb.h"
 #include "effects/reverb/velvet_reverb.h"
+#include "mastering/dynamics/channel_limits.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using Catch::Matchers::WithinAbs;
 
@@ -351,6 +353,39 @@ TEST_CASE("DcBlocker attenuates sustained DC", "[fx]") {
   blocker.process(channels, 1, static_cast<int>(mono.size()));
 
   REQUIRE(std::abs(mono.back()) < 0.01f);
+}
+
+TEST_CASE("DcBlocker refuses channels it was not prepared for", "[fx]") {
+  using sonare::effects::common::DcBlocker;
+  constexpr int kWide =
+      static_cast<int>(sonare::mastering::dynamics::kRealtimePreparedChannels) + 1;
+  std::vector<std::vector<float>> planes(kWide, std::vector<float>(64, 0.5f));
+  const auto before = planes;
+  std::vector<float*> channels;
+  for (auto& plane : planes) channels.push_back(plane.data());
+
+  DcBlocker unprepared;
+  sonare::ErrorCode error = sonare::ErrorCode::Ok;
+  try {
+    unprepared.process(channels.data(), 1, 64);
+  } catch (const sonare::SonareException& exception) {
+    error = exception.code();
+  }
+  CHECK(error == sonare::ErrorCode::InvalidState);
+
+  DcBlocker blocker;
+  blocker.prepare(48000.0, 64);
+  error = sonare::ErrorCode::Ok;
+  try {
+    blocker.process(channels.data(), kWide, 64);
+  } catch (const sonare::SonareException& exception) {
+    error = exception.code();
+  }
+  CHECK(error == sonare::ErrorCode::InvalidParameter);
+  // Refused whole: not even the planes within capacity were filtered.
+  CHECK(planes == before);
+  CHECK_THROWS_AS(blocker.process_sample(kWide - 1, 0.5f), sonare::SonareException);
+  CHECK_THROWS_AS(blocker.process_sample(-1, 0.5f), sonare::SonareException);
 }
 
 TEST_CASE("FdnReverb produces a decaying tail and damps highs", "[fx]") {

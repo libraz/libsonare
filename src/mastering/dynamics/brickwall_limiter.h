@@ -86,7 +86,7 @@ class BrickwallLimiter : public rt::RtConfigLifecycle<BrickwallLimiter, Brickwal
   // the audio callback. The control-thread mirror (config_) is kept in sync so
   // config() reads back the automated state; only the snapshot publish (the
   // allocation) is dropped.
-  //   0 = ceiling_db
+  //   0 = ceiling_db (clamped to <= 0)
   //   1 = release_ms (clamped to >= 0)
   // lookahead_ms is omitted because changing it resizes the lookahead buffers.
   // Automatable parameters: 0=ceilingDb, 1=releaseMs

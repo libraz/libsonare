@@ -173,11 +173,7 @@ float Transformer::process_sample(common::JilesAthertonState& state, float input
 }
 
 void Transformer::ensure_state(int num_channels) {
-  // Keep process() within the channel capacity allocated by prepare().
-  if (static_cast<size_t>(num_channels) > states_.size()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels exceeds prepared Transformer state");
-  }
+  require_prepared_channels(num_channels, states_.size(), "Transformer");
 }
 
 }  // namespace sonare::mastering::saturation

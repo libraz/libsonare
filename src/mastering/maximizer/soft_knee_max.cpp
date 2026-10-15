@@ -117,7 +117,8 @@ void SoftKneeMax::validate_config(const SoftKneeMaxConfig& config) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "soft knee maximizer ceiling must be finite and <= 0");
   }
-  if (config.knee_db < 0.0f || config.release_ms < 0.0f) {
+  if (!std::isfinite(config.knee_db) || !std::isfinite(config.release_ms) ||
+      config.knee_db < 0.0f || config.release_ms < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid soft knee maximizer configuration");
   }
   if (!numeric::finite(db_to_linear(config.input_gain_db))) {

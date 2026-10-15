@@ -94,9 +94,10 @@ void Maximizer::validate_config(const MaximizerConfig& config) {
   if (!common::valid_ceiling_db(config.ceiling_db)) {
     throw SonareException(ErrorCode::InvalidParameter, "maximizer ceiling must be finite and <= 0");
   }
-  if (config.lookahead_ms < 0.0f || config.release_ms < 0.0f) {
+  if (!std::isfinite(config.lookahead_ms) || !std::isfinite(config.release_ms) ||
+      config.lookahead_ms < 0.0f || config.release_ms < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "maximizer timing values must be non-negative");
+                          "maximizer timing values must be finite and non-negative");
   }
   if (!numeric::finite(db_to_linear(config.input_gain_db))) {
     throw SonareException(ErrorCode::InvalidParameter,

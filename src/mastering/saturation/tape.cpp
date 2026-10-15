@@ -260,10 +260,8 @@ float Tape::process_sample(common::JilesAthertonState& state, float input) const
 }
 
 void Tape::ensure_state(int num_channels) {
-  if (static_cast<size_t>(num_channels) > states_.size() ||
-      static_cast<size_t>(num_channels) > oversampler_states_.size()) {
-    throw SonareException(ErrorCode::InvalidParameter, "num_channels exceeds prepared Tape state");
-  }
+  require_prepared_channels(num_channels, std::min(states_.size(), oversampler_states_.size()),
+                            "Tape");
 }
 
 void Tape::update_filters(double sample_rate) {

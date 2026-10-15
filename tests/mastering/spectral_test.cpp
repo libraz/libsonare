@@ -5,12 +5,14 @@
 #include <memory>
 #include <vector>
 
+#include "mastering/dynamics/channel_limits.h"
 #include "mastering/spectral/air_band.h"
 #include "mastering/spectral/low_end_focus.h"
 #include "mastering/spectral/presence_enhancer.h"
 #include "mastering/spectral/spectral_shaper.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using namespace sonare::mastering::spectral;
 
@@ -310,29 +312,58 @@ TEST_CASE("AirBand preserves existing channel state when channel count grows",
   REQUIRE(max_abs_difference(actual_left, expected_left) < 1.0e-6f);
 }
 
-TEST_CASE("AirBand supports a bounded offline channel capacity and still grows on demand",
+TEST_CASE("AirBand and PresenceEnhancer refuse a block wider than prepared",
           "[mastering][spectral]") {
-  // An offline mastering caller that knows it is mono/stereo bounds AirBand's
-  // per-channel scratch (envelope_/harmonic_oversampler_states_/etc.) to that
-  // count via the 3-argument prepare() overload instead of always reserving
-  // the 64-channel realtime capacity. A stream wider than the bound must
-  // still work: AirBand grows on demand (matching the pre-existing
-  // ensure_state grow contract exercised above) rather than throwing.
+  // A wider block is a caller error: process() neither allocates nor resets the
+  // channels already running, and leaves the refused block as it was.
   REQUIRE_THROWS(AirBand({0.4f}).prepare(48000.0, 256, 0));
   REQUIRE_THROWS(AirBand({0.4f}).prepare(48000.0, 256, 65));  // one past the 64-channel ceiling
 
+  const auto check_refusal = [](auto& subject, auto& twin, int prepared) {
+    auto warm_left = generate_sine_samples(9000.0f, 48000, 256, 0.3f);
+    auto warm_right = generate_sine_samples(5000.0f, 48000, 256, 0.2f);
+    auto twin_left = warm_left;
+    auto twin_right = warm_right;
+    process_stereo(subject, warm_left, warm_right);
+    process_stereo(twin, twin_left, twin_right);
+
+    std::vector<std::vector<float>> wide(static_cast<size_t>(prepared + 1),
+                                         std::vector<float>(256, 0.1f));
+    const auto wide_before = wide;
+    std::vector<float*> pointers;
+    for (auto& plane : wide) pointers.push_back(plane.data());
+    sonare::ErrorCode error = sonare::ErrorCode::Ok;
+    try {
+      subject.process(pointers.data(), prepared + 1, 256);
+    } catch (const sonare::SonareException& exception) {
+      error = exception.code();
+    }
+    CHECK(error == sonare::ErrorCode::InvalidParameter);
+    CHECK(wide == wide_before);
+
+    auto next_left = generate_sine_samples(12000.0f, 48000, 256, 0.3f);
+    auto next_right = next_left;
+    auto twin_next_left = next_left;
+    auto twin_next_right = next_left;
+    process_stereo(subject, next_left, next_right);
+    process_stereo(twin, twin_next_left, twin_next_right);
+    CHECK(next_left == twin_next_left);
+    CHECK(next_right == twin_next_right);
+  };
+
   AirBand air({0.4f});
+  AirBand air_twin({0.4f});
   air.prepare(48000.0, 256, 2);
+  air_twin.prepare(48000.0, 256, 2);
+  check_refusal(air, air_twin, 2);
 
-  std::vector<float> left(256, 0.1f);
-  std::vector<float> right(256, -0.1f);
-  float* stereo[] = {left.data(), right.data()};
-  REQUIRE_NOTHROW(air.process(stereo, 2, 256));
-
-  std::vector<float> third(256, 0.1f);
-  float* surround[] = {left.data(), right.data(), third.data()};
-  REQUIRE_NOTHROW(air.process(surround, 3, 256));
-  for (float sample : third) REQUIRE(std::isfinite(sample));
+  constexpr int kRealtime =
+      static_cast<int>(sonare::mastering::dynamics::kRealtimePreparedChannels);
+  PresenceEnhancer presence({0.4f, 4.0f, 3000.0f, 1.2f});
+  PresenceEnhancer presence_twin({0.4f, 4.0f, 3000.0f, 1.2f});
+  presence.prepare(48000.0, 256);
+  presence_twin.prepare(48000.0, 256);
+  check_refusal(presence, presence_twin, kRealtime);
 }
 
 TEST_CASE("AirBand harmonic response is stable across sample rates", "[mastering][spectral]") {

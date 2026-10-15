@@ -187,6 +187,10 @@ void require_overcapacity_rejection_preserves_state() {
 
   sonare::ErrorCode error = sonare::ErrorCode::Ok;
   try {
+#if defined(SONARE_WITH_MIXING)
+    // Growing per-channel state takes a block this large; the refusal's message does not.
+    sonare::test::AllocationFailureGuard no_growth(256);
+#endif
     subject.process(rejected_channels.data(), kChannels, 1);
   } catch (const sonare::SonareException& exception) {
     error = exception.code();
@@ -610,6 +614,16 @@ TEST_CASE("Tube supports bounded offline mono and stereo scratch capacity",
   REQUIRE_THROWS_AS(tube.process(too_many_channels, 3, 1), sonare::SonareException);
   REQUIRE_THROWS_AS(tube.prepare(48000.0, 256, 0), sonare::SonareException);
   REQUIRE_THROWS_AS(tube.prepare(48000.0, 256, 65), sonare::SonareException);
+}
+
+TEST_CASE("Saturation processors refuse a block wider than prepared before touching state",
+          "[mastering][saturation]") {
+  require_overcapacity_rejection_preserves_state<SoftClipper>();
+  require_overcapacity_rejection_preserves_state<HardClipper>();
+  require_overcapacity_rejection_preserves_state<Waveshaper>();
+  require_overcapacity_rejection_preserves_state<BitCrusher>();
+  require_overcapacity_rejection_preserves_state<Tube>();
+  require_overcapacity_rejection_preserves_state<Tape>();
 }
 
 TEST_CASE("Saturation processors keep rate-dependent cutoffs ordered at low rates",

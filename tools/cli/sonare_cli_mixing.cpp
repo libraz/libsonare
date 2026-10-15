@@ -129,6 +129,17 @@ void split_track_entry(const std::string& entry, std::string* id, std::string* p
   if (path->empty()) throw std::invalid_argument("--input requires a file path: " + entry);
 }
 
+/// Hold one decoded plane to the offline-input policy, reported in decoder terms
+/// as every other decoded input is: an unusable rate is a malformed container,
+/// any other refusal (a non-finite sample included) a failed decode.
+void require_decoded_plane(const std::vector<float>& plane, int sample_rate) {
+  if (const char* problem = offline_audio_input_problem(plane.data(), plane.size(), sample_rate)) {
+    throw SonareException(
+        is_supported_sample_rate(sample_rate) ? ErrorCode::DecodeFailed : ErrorCode::InvalidFormat,
+        problem);
+  }
+}
+
 /// Decode one entry at its own rate, keeping a two-channel file as a pair.
 ///
 /// The image domain is the one part of the assistant that reads both channels --
@@ -137,7 +148,8 @@ void split_track_entry(const std::string& entry, std::string* id, std::string* p
 /// A mono file stays mono rather than being duplicated across both sides, which
 /// would reach the same domain as a stereo track of zero width. One codec pass
 /// yields both the pair and the mono fold; the fold is kept only on request.
-/// The caller validates the samples, so a tempo read stays ahead of the config.
+/// Every returned channel, the fold included, passes the offline-input policy
+/// here, so no measurement (the tempo read included) sees an unchecked sample.
 AssistantTrack decode_assistant_track(const std::string& entry, bool keep_mono_fold) {
   AssistantTrack track;
   std::string path;
@@ -161,6 +173,9 @@ AssistantTrack decode_assistant_track(const std::string& entry, bool keep_mono_f
     track.left = std::move(decoded.mono);
   }
   track.sample_rate = decoded.sample_rate;
+  require_decoded_plane(track.left, track.sample_rate);
+  if (!track.right.empty()) require_decoded_plane(track.right, track.sample_rate);
+  if (!track.mono_fold.empty()) require_decoded_plane(track.mono_fold, track.sample_rate);
   return track;
 }
 
@@ -240,8 +255,6 @@ int cmd_suggest_mix(const CliArgs& args, const Audio&) {
     } else {
       storage.push_back(decode_assistant_track(entry, false));
     }
-    const AssistantTrack& track = storage.back();
-    validate_offline_audio_input(track.left.data(), track.left.size(), track.sample_rate);
   }
 
   std::vector<mixing::assistant::TrackInput> inputs;

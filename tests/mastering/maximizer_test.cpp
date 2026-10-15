@@ -8,6 +8,7 @@
 #include <limits>
 #include <random>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "mastering/api/internal_processor_runner.h"
@@ -721,6 +722,115 @@ TEST_CASE("AdaptiveRelease limits peaks and adapts release", "[mastering][maximi
   process(limiter, burst);
   REQUIRE(limiter.current_crest_factor() > 5.0f);
   REQUIRE(limiter.current_release_ms() < 60.0f);
+}
+
+TEST_CASE("Maximizer-family configs refuse a non-finite value in every field",
+          "[mastering][maximizer]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  const auto refuses = [](const auto& build, const auto& set) {
+    sonare::ErrorCode built = sonare::ErrorCode::Ok;
+    try {
+      build();
+    } catch (const sonare::SonareException& exception) {
+      built = exception.code();
+    }
+    CHECK(built == sonare::ErrorCode::InvalidParameter);
+    sonare::ErrorCode updated = sonare::ErrorCode::Ok;
+    try {
+      set();
+    } catch (const sonare::SonareException& exception) {
+      updated = exception.code();
+    }
+    CHECK(updated == sonare::ErrorCode::InvalidParameter);
+  };
+
+  using AdaptiveField = float AdaptiveReleaseConfig::*;
+  for (const AdaptiveField field :
+       {&AdaptiveReleaseConfig::ceiling_db, &AdaptiveReleaseConfig::lookahead_ms,
+        &AdaptiveReleaseConfig::min_release_ms, &AdaptiveReleaseConfig::max_release_ms,
+        &AdaptiveReleaseConfig::crest_window_ms, &AdaptiveReleaseConfig::crest_low,
+        &AdaptiveReleaseConfig::crest_high, &AdaptiveReleaseConfig::release_smoothing_ms}) {
+    for (const float bad : {nan, inf}) {
+      AdaptiveReleaseConfig config;
+      config.*field = bad;
+      AdaptiveRelease live({});
+      refuses([&] { (void)AdaptiveRelease{config}; }, [&] { live.set_config(config); });
+      CHECK(live.config().max_release_ms == AdaptiveReleaseConfig{}.max_release_ms);
+    }
+  }
+  using SoftKneeField = float SoftKneeMaxConfig::*;
+  for (const SoftKneeField field :
+       {&SoftKneeMaxConfig::input_gain_db, &SoftKneeMaxConfig::ceiling_db,
+        &SoftKneeMaxConfig::knee_db, &SoftKneeMaxConfig::release_ms}) {
+    for (const float bad : {nan, inf}) {
+      SoftKneeMaxConfig config;
+      config.*field = bad;
+      SoftKneeMax live({});
+      refuses([&] { (void)SoftKneeMax{config}; }, [&] { live.set_config(config); });
+    }
+  }
+  using MaximizerField = float MaximizerConfig::*;
+  for (const MaximizerField field :
+       {&MaximizerConfig::input_gain_db, &MaximizerConfig::ceiling_db,
+        &MaximizerConfig::lookahead_ms, &MaximizerConfig::release_ms}) {
+    for (const float bad : {nan, inf}) {
+      MaximizerConfig config;
+      config.*field = bad;
+      Maximizer live({});
+      refuses([&] { (void)Maximizer{config}; }, [&] { live.set_config(config); });
+    }
+  }
+
+  // Live automation never sees a non-finite value on any of the three.
+  AdaptiveRelease adaptive({});
+  SoftKneeMax soft_knee({});
+  Maximizer maximizer({});
+  for (unsigned int id = 0; id < 8; ++id) {
+    CHECK_FALSE(adaptive.set_parameter(id, nan));
+    CHECK_FALSE(soft_knee.set_parameter(id, nan));
+    CHECK_FALSE(maximizer.set_parameter(id, nan));
+  }
+}
+
+TEST_CASE("AdaptiveRelease sizes itself and its inner limiter by the prepared channel count",
+          "[mastering][maximizer]") {
+  const AdaptiveReleaseConfig config{-6.0f, 0.0f, 10.0f, 120.0f};
+  constexpr int kBlock = 512;
+  for (const int rate : {44100, 48000}) {
+    CAPTURE(rate);
+    const auto left_in = generate_sine_samples(220.0f, rate, kBlock * 8, 1.0f);
+    const auto right_in = generate_sine_samples(330.0f, rate, kBlock * 8, 0.8f);
+    const auto render = [&](AdaptiveRelease& processor) {
+      std::vector<float> left = left_in;
+      std::vector<float> right = right_in;
+      for (int offset = 0; offset < static_cast<int>(left.size()); offset += kBlock) {
+        float* block[] = {left.data() + offset, right.data() + offset};
+        processor.process(block, 2, kBlock);
+      }
+      return std::make_pair(left, right);
+    };
+
+    AdaptiveRelease realtime(config);
+    realtime.prepare(rate, kBlock);
+    AdaptiveRelease stereo(config);
+    stereo.prepare(rate, kBlock, 2);
+    CHECK(render(stereo) == render(realtime));
+
+    // A third channel is outside the stereo bound, for the chunk pointers and the limiter alike.
+    std::vector<std::vector<float>> wide(3, std::vector<float>(kBlock, 0.5f));
+    const auto wide_before = wide;
+    float* wide_block[] = {wide[0].data(), wide[1].data(), wide[2].data()};
+    sonare::ErrorCode error = sonare::ErrorCode::Ok;
+    try {
+      stereo.process(wide_block, 3, kBlock);
+    } catch (const sonare::SonareException& exception) {
+      error = exception.code();
+    }
+    CHECK(error == sonare::ErrorCode::InvalidParameter);
+    CHECK(wide == wide_before);
+    CHECK_NOTHROW(realtime.process(wide_block, 3, kBlock));
+  }
 }
 
 namespace {

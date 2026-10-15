@@ -255,13 +255,9 @@ void Tube::validate_config(const TubeConfig& config) {
 }
 
 void Tube::ensure_state(int num_channels) {
-  // prepare() preallocates max_working_channels_ states so the common audio
-  // path never resizes. A wider stream must be prepared before audio processing.
-  if (miller_state_.size() < static_cast<size_t>(num_channels) ||
-      oversampler_states_.size() < static_cast<size_t>(num_channels) ||
-      paths_.num_channels() < static_cast<size_t>(num_channels)) {
-    throw SonareException(ErrorCode::InvalidParameter, "num_channels exceeds prepared Tube state");
-  }
+  require_prepared_channels(
+      num_channels,
+      std::min({miller_state_.size(), oversampler_states_.size(), paths_.num_channels()}), "Tube");
 }
 
 int Tube::tail_samples() const noexcept {

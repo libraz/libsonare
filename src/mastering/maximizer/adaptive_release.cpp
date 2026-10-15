@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <initializer_list>
 #include <limits>
 
 #include "mastering/common/parameter_domain.h"
@@ -44,7 +45,12 @@ AdaptiveRelease::AdaptiveRelease(AdaptiveReleaseConfig config)
 }
 
 void AdaptiveRelease::prepare(double sample_rate, int max_block_size) {
-  validate_prepare_args(sample_rate, max_block_size);
+  // Realtime callers may switch among every supported channel count without an allocation.
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void AdaptiveRelease::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "AdaptiveRelease");
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   current_release_ms_ = lowest_release_ms();
@@ -54,12 +60,10 @@ void AdaptiveRelease::prepare(double sample_rate, int max_block_size) {
   control_phase_ = 0;
   last_gain_reduction_db_ = 0.0f;
   update_envelope_coefficients();
-  // The two-argument prepare() below leaves the inner limiter at the realtime
-  // channel capacity, so the chunk pointer array is sized to match it once here
-  // rather than on the audio thread.
-  chunk_channels_.assign(dynamics::kRealtimePreparedChannels, nullptr);
+  // The chunk pointers and the inner limiter share one channel bound.
+  chunk_channels_.assign(static_cast<size_t>(max_channels), nullptr);
   configure_limiter();
-  limiter_.prepare(sample_rate_, max_block_size_);
+  limiter_.prepare(sample_rate_, max_block_size_, max_channels);
   prepared_ = true;
 }
 
@@ -199,6 +203,14 @@ bool AdaptiveRelease::parameter_is_realtime_safe(unsigned int param_id) const no
 }
 
 void AdaptiveRelease::validate_config(const AdaptiveReleaseConfig& config) {
+  for (const float value :
+       {config.lookahead_ms, config.min_release_ms, config.max_release_ms, config.crest_window_ms,
+        config.crest_low, config.crest_high, config.release_smoothing_ms}) {
+    if (!std::isfinite(value)) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "adaptive release configuration values must be finite");
+    }
+  }
   if (!common::valid_ceiling_db(config.ceiling_db) || config.lookahead_ms < 0.0f ||
       config.min_release_ms < 0.0f || config.max_release_ms < config.min_release_ms ||
       config.crest_window_ms <= 0.0f || config.crest_low <= 0.0f ||

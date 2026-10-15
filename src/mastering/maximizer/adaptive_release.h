@@ -36,6 +36,8 @@ class AdaptiveRelease : public rt::ProcessorBase {
  public:
   explicit AdaptiveRelease(AdaptiveReleaseConfig config = {});
   void prepare(double sample_rate, int max_block_size) override;
+  /// @brief Sizes the chunk pointers and the inner limiter for @p max_channels.
+  void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   void set_config(const AdaptiveReleaseConfig& config);

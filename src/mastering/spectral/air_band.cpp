@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
@@ -297,63 +298,8 @@ void AirBand::validate_config(const AirBandConfig& config) {
 }
 
 void AirBand::ensure_state(int num_channels) {
-  // prepare() preallocates max_working_channels_; only grow (control thread)
-  // if a caller exceeds it. Growing preserves existing channels' filter state
-  // and seeds the new ones; a narrower block is left untouched (no churn).
-  const auto target_size = static_cast<size_t>(num_channels);
-  if (envelope_.size() < target_size || shelf_gain_db_.size() < target_size ||
-      band_rms_sq_.size() < target_size || harmonic_rms_sq_.size() < target_size ||
-      harmonic_gain_.size() < target_size || shelf_control_samples_.size() < target_size ||
-      shelf_.size() < target_size || detector_.size() < target_size ||
-      harmonic_filter_.size() < target_size || harmonic_oversampler_states_.size() < target_size ||
-      paths_.num_channels() < target_size) {
-    const size_t old_envelope_size = envelope_.size();
-    const size_t old_shelf_gain_size = shelf_gain_db_.size();
-    const size_t old_band_rms_size = band_rms_sq_.size();
-    const size_t old_harmonic_rms_size = harmonic_rms_sq_.size();
-    const size_t old_harmonic_gain_size = harmonic_gain_.size();
-    const size_t old_shelf_control_size = shelf_control_samples_.size();
-    const size_t old_shelf_size = shelf_.size();
-    const size_t old_detector_size = detector_.size();
-    const size_t old_harmonic_filter_size = harmonic_filter_.size();
-    const size_t old_oversampler_state_size = harmonic_oversampler_states_.size();
-    envelope_.resize(target_size, 0.0f);
-    shelf_gain_db_.resize(target_size, 0.0f);
-    band_rms_sq_.resize(target_size, 0.0f);
-    harmonic_rms_sq_.resize(target_size, 0.0f);
-    harmonic_gain_.resize(target_size, 0.0f);
-    shelf_control_samples_.resize(target_size, 0);
-    shelf_.resize(target_size);
-    detector_.resize(target_size);
-    harmonic_filter_.resize(target_size);
-    harmonic_oversampler_states_.resize(target_size);
-    for (size_t i = old_envelope_size; i < target_size; ++i) {
-      envelope_[i] = 0.0f;
-    }
-    for (size_t i = old_shelf_gain_size; i < target_size; ++i) {
-      shelf_gain_db_[i] = 0.0f;
-    }
-    for (size_t i = old_band_rms_size; i < target_size; ++i) band_rms_sq_[i] = 0.0f;
-    for (size_t i = old_harmonic_rms_size; i < target_size; ++i) harmonic_rms_sq_[i] = 0.0f;
-    for (size_t i = old_harmonic_gain_size; i < target_size; ++i) harmonic_gain_[i] = 0.0f;
-    for (size_t i = old_shelf_control_size; i < target_size; ++i) shelf_control_samples_[i] = 0;
-    for (size_t i = old_shelf_size; i < target_size; ++i) {
-      shelf_[i] = make_high_shelf(config_.shelf_frequency_hz, sample_rate_, 0.0f);
-    }
-    for (size_t i = old_detector_size; i < target_size; ++i) {
-      detector_[i] = make_highpass(config_.shelf_frequency_hz, sample_rate_,
-                                   sonare::constants::kButterworthQD);
-    }
-    for (size_t i = old_harmonic_filter_size; i < target_size; ++i) {
-      harmonic_filter_[i] = make_highpass(config_.shelf_frequency_hz, sample_rate_,
-                                          sonare::constants::kButterworthQD);
-    }
-    for (size_t i = old_oversampler_state_size; i < target_size; ++i) {
-      harmonic_oversampler_.prepare_streaming(&harmonic_oversampler_states_[i],
-                                              static_cast<size_t>(max_block_size_));
-    }
-    paths_.ensure_channels(target_size);
-  }
+  // prepare() sizes every per-channel vector to max_working_channels_.
+  require_prepared_channels(num_channels, static_cast<size_t>(max_working_channels_), "AirBand");
 }
 
 void AirBand::rebuild_filters(int num_channels) {

@@ -1210,3 +1210,76 @@ TEST_CASE("CLI suggest-mix tempo auto measures what the bpm command measures", "
   std::remove(input.c_str());
 }
 #endif
+
+#if defined(SONARE_WITH_MIXING_ASSISTANT)
+TEST_CASE("CLI suggest-mix refuses a non-finite sample on either channel alike", "[cli][mixing]") {
+  constexpr uint32_t kRate = 22050;
+  constexpr size_t kFrames = kRate;
+  // IEEE-float stereo, so a NaN survives the round trip to the decoder.
+  const auto write_stereo_float_wav = [](const std::string& path,
+                                         const std::vector<float>& interleaved) {
+    std::vector<uint8_t> out;
+    const auto push_u16 = [&out](uint16_t value) {
+      out.push_back(static_cast<uint8_t>(value & 0xFFu));
+      out.push_back(static_cast<uint8_t>((value >> 8) & 0xFFu));
+    };
+    const auto push_u32 = [&out](uint32_t value) {
+      for (int shift = 0; shift < 32; shift += 8) {
+        out.push_back(static_cast<uint8_t>((value >> shift) & 0xFFu));
+      }
+    };
+    const auto push_tag = [&out](const char* tag) {
+      for (int i = 0; i < 4; ++i) out.push_back(static_cast<uint8_t>(tag[i]));
+    };
+    const auto data_bytes = static_cast<uint32_t>(interleaved.size() * sizeof(float));
+    push_tag("RIFF");
+    push_u32(36u + data_bytes);
+    push_tag("WAVE");
+    push_tag("fmt ");
+    push_u32(16u);
+    push_u16(3u);
+    push_u16(2u);
+    push_u32(kRate);
+    push_u32(kRate * 8u);
+    push_u16(8u);
+    push_u16(32u);
+    push_tag("data");
+    push_u32(data_bytes);
+    for (const float sample : interleaved) {
+      uint32_t bits = 0;
+      std::memcpy(&bits, &sample, sizeof(bits));
+      push_u32(bits);
+    }
+    std::ofstream file(path, std::ios::binary);
+    file.write(reinterpret_cast<const char*>(out.data()), static_cast<std::streamsize>(out.size()));
+  };
+
+  std::vector<float> tone(kFrames * 2);
+  for (size_t frame = 0; frame < kFrames; ++frame) {
+    const float value = 0.5f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) *
+                                        220.0f * static_cast<float>(frame) / kRate);
+    tone[2 * frame] = value;
+    tone[2 * frame + 1] = 0.5f * value;
+  }
+  const auto run = [&](const std::vector<float>& interleaved, const std::string& extra) {
+    const std::string path = unique_temp_path("_suggest_policy.wav");
+    write_stereo_float_wav(path, interleaved);
+    auto [code, output] = exec_command(CLI + " suggest-mix --input " + path + " --json -q" + extra);
+    std::remove(path.c_str());
+    CAPTURE(output);
+    return code;
+  };
+  std::vector<float> left_poisoned = tone;
+  left_poisoned[2 * 100] = std::numeric_limits<float>::quiet_NaN();
+  std::vector<float> right_poisoned = tone;
+  right_poisoned[2 * 100 + 1] = std::numeric_limits<float>::quiet_NaN();
+
+  REQUIRE(run(tone, "") == 0);
+  for (const std::string& extra : {std::string(), std::string(" --tempo-bpm auto")}) {
+    CAPTURE(extra);
+    // DecodeFailed, as the bpm command and the Python CLI report a non-finite decode.
+    CHECK(run(left_poisoned, extra) == 6);
+    CHECK(run(right_poisoned, extra) == 6);
+  }
+}
+#endif

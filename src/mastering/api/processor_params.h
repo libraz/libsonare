@@ -1100,6 +1100,7 @@ inline void configure_graphic(eq::GraphicEq& p, const ParamMap& params) {
     const float gain_db = f(params, key.c_str(), 0.0f, kDb);
     if (params.find(key) != params.end()) p.set_gain_db(index, gain_db);
   }
+  p.set_q(f(params, "q", 0.0f, kNone));
 }
 
 inline void configure_mid_side(eq::MidSideEq& p, const ParamMap& params) {

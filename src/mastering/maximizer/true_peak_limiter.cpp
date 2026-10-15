@@ -86,32 +86,44 @@ float TruePeakOutputGuard::process(float* const* channels, int num_channels, int
         if (ch == excluded_channel) continue;
         linked = std::max(linked, std::abs(work_[static_cast<size_t>(ch)][s]));
       }
-      if (!(linked > ceiling)) continue;
-      const float gain = ceiling / linked;
-      for (int ch = 0; ch < num_channels; ++ch) work_[static_cast<size_t>(ch)][s] *= gain;
-      min_gain = std::min(min_gain, gain);
-    }
-  }
-  // Scales position k's stencil, channel-linked, when it reads over the ceiling.
-  const auto correct = [&](size_t k) {
-    float linked = 0.0f;
-    for (int ch = 0; ch < num_channels; ++ch) {
-      if (ch == excluded_channel) continue;
-      const float* data = work_[static_cast<size_t>(ch)].data();
-      linked = std::max(linked, std::abs(data[k]));
-      for (int phase = 0; phase < fir_->phases; ++phase) {
-        linked = std::max(linked, std::abs(sonare::rt::interpolate_polyphase_sample(data, length, k,
-                                                                                    phase, *fir_)));
+      if (linked > ceiling) {
+        const float gain = ceiling / linked;
+        for (int ch = 0; ch < num_channels; ++ch) work_[static_cast<size_t>(ch)][s] *= gain;
+        min_gain = std::min(min_gain, gain);
+      }
+      if (excluded_channel >= 0) {
+        float& sample = work_[static_cast<size_t>(excluded_channel)][s];
+        if (std::abs(sample) > ceiling) sample *= ceiling / std::abs(sample);
       }
     }
-    if (!(linked > ceiling)) return false;
-    const float gain = ceiling / linked;
+  }
+  // Scales position k's stencil when it reads over the ceiling: channel-linked over the
+  // detected planes, and on the excluded plane by its own reading alone.
+  const auto correct_planes = [&](size_t k, bool excluded_plane) {
+    float peak = 0.0f;
     for (int ch = 0; ch < num_channels; ++ch) {
+      if ((ch == excluded_channel) != excluded_plane) continue;
+      const float* data = work_[static_cast<size_t>(ch)].data();
+      peak = std::max(peak, std::abs(data[k]));
+      for (int phase = 0; phase < fir_->phases; ++phase) {
+        peak = std::max(peak, std::abs(sonare::rt::interpolate_polyphase_sample(data, length, k,
+                                                                                phase, *fir_)));
+      }
+    }
+    if (!(peak > ceiling)) return false;
+    const float gain = ceiling / peak;
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (excluded_plane && ch != excluded_channel) continue;
       float* data = work_[static_cast<size_t>(ch)].data();
       for (size_t s = k - lookbehind; s <= k + half; ++s) data[s] *= gain;
     }
-    min_gain = std::min(min_gain, gain);
+    if (!excluded_plane) min_gain = std::min(min_gain, gain);
     return true;
+  };
+  const auto correct = [&](size_t k) {
+    bool corrected = correct_planes(k, false);
+    if (excluded_channel >= 0) corrected |= correct_planes(k, true);
+    return corrected;
   };
   for (size_t k = first; k <= last; ++k) {
     if (!correct(k)) continue;
@@ -214,6 +226,7 @@ void TruePeakLimiter::process(float* const* channels, int num_channels, int num_
     throw SonareException(ErrorCode::InvalidParameter,
                           "num_samples exceeds prepared max_block_size");
   if (!validate_process_buffers(channels, num_channels, num_samples)) return;
+  prepare_buffers(num_channels);
 
   // Before the upsampler and the detector read the block, not after: a
   // non-finite sample left in place spreads across the reconstruction stencil,
@@ -234,7 +247,6 @@ void TruePeakLimiter::process(float* const* channels, int num_channels, int num_
 }
 
 void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels, int num_samples) {
-  prepare_buffers(num_channels);
   if (config_.apply_gain_at_input_rate) {
     process_polyphase_detect_only(channels, num_channels, num_samples);
     return;
@@ -278,6 +290,11 @@ void TruePeakLimiter::process_polyphase(float* const* channels, int num_channels
         limited_oversampled_buffers_[static_cast<size_t>(ch)][os] *= hard_gain;
       }
       min_gain = std::min(min_gain, gain * hard_gain);
+    }
+    // The excluded plane is left out of the linked gain, so it is bounded by its own peak.
+    if (excluded_channel >= 0) {
+      float& sample = limited_oversampled_buffers_[static_cast<size_t>(excluded_channel)][os];
+      if (std::abs(sample) > ceiling) sample *= ceiling / std::abs(sample);
     }
   }
 

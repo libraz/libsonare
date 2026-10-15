@@ -1561,38 +1561,50 @@ TEST_CASE("the push-pull power nonlinearity reduces exactly to a symmetric tanh 
   }
 }
 
-TEST_CASE("the circuit head survives more channels than prepare() sized for",
+TEST_CASE("amp-sim refuses a block wider than prepared, leaving block and state untouched",
           "[mastering][saturation][amp]") {
-  // process() grows its per-channel state when a caller hands over more channels
-  // than prepare() expected. The circuit head's resampler state is indexed by the
-  // same channel index as that state, so it has to grow with it -- otherwise this
-  // reads past the end, which is silent until it is not.
-  constexpr int kChannels =
-      static_cast<int>(sonare::mastering::dynamics::kRealtimePreparedChannels) + 6;
   constexpr int kBlock = 128;
+  constexpr int kPrepared = 2;
+  for (const AmpTopology topology : {AmpTopology::kCircuit, AmpTopology::kVoiced}) {
+    CAPTURE(static_cast<int>(topology));
+    AmpSimConfig config;
+    config.topology = topology;
+    config.preamp_stages = 2;
+    config.drive = 0.6f;
+    AmpSim subject{config};
+    AmpSim twin{config};
+    subject.prepare(kRate, kBlock, kPrepared);
+    twin.prepare(kRate, kBlock, kPrepared);
 
-  AmpSimConfig config;
-  config.topology = AmpTopology::kCircuit;
-  config.preamp_stages = 2;
-  config.drive = 0.6f;
-  AmpSim amp{config};
-  amp.prepare(kRate, kBlock);
+    std::vector<float> warm_a = sine(220.0, 0.3f, kBlock);
+    std::vector<float> warm_b = warm_a;
+    float* subject_warm[] = {warm_a.data()};
+    float* twin_warm[] = {warm_b.data()};
+    subject.process(subject_warm, 1, kBlock);
+    twin.process(twin_warm, 1, kBlock);
 
-  std::vector<std::vector<float>> buffers(static_cast<size_t>(kChannels));
-  std::vector<float*> pointers(static_cast<size_t>(kChannels));
-  for (int ch = 0; ch < kChannels; ++ch) {
-    buffers[static_cast<size_t>(ch)] = sine(220.0 + 5.0 * ch, 0.3f, kBlock);
-    pointers[static_cast<size_t>(ch)] = buffers[static_cast<size_t>(ch)].data();
-  }
-  REQUIRE_NOTHROW(amp.process(pointers.data(), kChannels, kBlock));
-  for (int ch = 0; ch < kChannels; ++ch) {
-    for (float sample : buffers[static_cast<size_t>(ch)]) {
-      REQUIRE(std::isfinite(sample));
+    std::vector<std::vector<float>> wide(kPrepared + 1, sine(330.0, 0.3f, kBlock));
+    const auto wide_before = wide;
+    float* wide_channels[] = {wide[0].data(), wide[1].data(), wide[2].data()};
+    sonare::ErrorCode error = sonare::ErrorCode::Ok;
+    try {
+      subject.process(wide_channels, kPrepared + 1, kBlock);
+    } catch (const sonare::SonareException& exception) {
+      error = exception.code();
     }
+    CHECK(error == sonare::ErrorCode::InvalidParameter);
+    CHECK(wide == wide_before);
+    CHECK(subject.prepared_channels() == kPrepared);
+
+    // The refused call reset nothing: the running chain continues exactly as its twin's.
+    std::vector<float> next_a = sine(440.0, 0.3f, kBlock);
+    std::vector<float> next_b = next_a;
+    float* subject_next[] = {next_a.data()};
+    float* twin_next[] = {next_b.data()};
+    subject.process(subject_next, 1, kBlock);
+    twin.process(twin_next, 1, kBlock);
+    CHECK(next_a == next_b);
   }
-  // The highest channel must actually have been processed, not left as input.
-  const std::vector<float>& last = buffers[static_cast<size_t>(kChannels - 1)];
-  CHECK(rms_of(last) > 0.0);
 }
 
 namespace {
@@ -2141,18 +2153,15 @@ TEST_CASE("prepare reserves per-channel state for the channels it was told about
   }
   CHECK(wide_buf == narrow_buf);
 
-  // A caller that hands over more channels than it prepared for still works:
-  // process() grows, exactly as it does under the two-argument form.
+  // More channels than prepared is a caller error, not a reason to allocate in process().
   std::vector<float> left = input;
   std::vector<float> right = input;
-  AmpSim grown{config};
-  grown.load_cab_ir(ir);
-  grown.prepare(kRate, 1024, 1);
-  for (size_t off = 0; off < input.size(); off += 1024) {
-    float* block[2] = {left.data() + off, right.data() + off};
-    REQUIRE_NOTHROW(grown.process(block, 2, 1024));
-  }
-  CHECK(grown.prepared_channels() >= 2);
+  AmpSim narrow_only{config};
+  narrow_only.load_cab_ir(ir);
+  narrow_only.prepare(kRate, 1024, 1);
+  float* block[2] = {left.data(), right.data()};
+  CHECK_THROWS_AS(narrow_only.process(block, 2, 1024), sonare::SonareException);
+  CHECK(narrow_only.prepared_channels() == 1);
 
   // The realtime cap is still the ceiling: asking past it is a caller error
   // rather than a silent over-allocation.

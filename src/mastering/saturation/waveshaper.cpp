@@ -229,20 +229,10 @@ void Waveshaper::validate_config(const WaveshaperConfig& config) {
 }
 
 void Waveshaper::ensure_state(int num_channels) {
-  // prepare() preallocates kRealtimePreparedChannels; only grow (control thread)
-  // if a caller exceeds it, preserving existing channels' state.
-  if (tanh_adaa_.size() < static_cast<size_t>(num_channels)) {
-    tanh_adaa_.resize(static_cast<size_t>(num_channels));
-    arctan_adaa_.resize(static_cast<size_t>(num_channels));
-  }
-  if (oversampler_states_.size() < static_cast<size_t>(num_channels)) {
-    const size_t old_size = oversampler_states_.size();
-    oversampler_states_.resize(static_cast<size_t>(num_channels));
-    for (size_t i = old_size; i < oversampler_states_.size(); ++i) {
-      oversampler_.prepare_streaming(&oversampler_states_[i], static_cast<size_t>(max_block_size_));
-    }
-  }
-  paths_.ensure_channels(static_cast<size_t>(num_channels));
+  require_prepared_channels(num_channels,
+                            std::min({tanh_adaa_.size(), arctan_adaa_.size(),
+                                      oversampler_states_.size(), paths_.num_channels()}),
+                            "Waveshaper");
 }
 
 void Waveshaper::declare_path_latencies() {

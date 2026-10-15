@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/adaa.h"
 #include "rt/biquad_design.h"
@@ -216,28 +217,10 @@ void PresenceEnhancer::validate_config(const PresenceEnhancerConfig& config) {
 }
 
 void PresenceEnhancer::ensure_state(int num_channels) {
-  // prepare() preallocates kRealtimePreparedChannels; only grow (control thread)
-  // if a caller exceeds it, preserving existing channels' filter state.
-  const auto target_size = static_cast<size_t>(num_channels);
-  if (bandpass_.size() < target_size) {
-    const size_t old_size = bandpass_.size();
-    bandpass_.resize(target_size);
-    for (size_t i = old_size; i < target_size; ++i) {
-      bandpass_[i] = make_bandpass(config_.center_frequency_hz, sample_rate_, config_.q);
-    }
-  }
-  if (harmonic_oversampler_states_.size() < target_size) {
-    const size_t old_size = harmonic_oversampler_states_.size();
-    harmonic_oversampler_states_.resize(target_size);
-    for (size_t i = old_size; i < target_size; ++i) {
-      harmonic_oversampler_.prepare_streaming(&harmonic_oversampler_states_[i],
-                                              static_cast<size_t>(max_block_size_));
-    }
-  }
-  if (harmonic_adaa_.size() < target_size) {
-    harmonic_adaa_.resize(target_size);
-  }
-  paths_.ensure_channels(target_size);
+  require_prepared_channels(num_channels,
+                            std::min({bandpass_.size(), harmonic_adaa_.size(),
+                                      harmonic_oversampler_states_.size(), paths_.num_channels()}),
+                            "PresenceEnhancer");
 }
 
 void PresenceEnhancer::declare_path_latencies() {

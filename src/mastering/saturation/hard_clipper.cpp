@@ -155,17 +155,10 @@ void HardClipper::validate_config(const HardClipperConfig& config) {
 }
 
 void HardClipper::ensure_state(int num_channels) {
-  // prepare() preallocates kRealtimePreparedChannels; only grow (control thread)
-  // if a caller exceeds it, preserving existing channels' ADAA history.
-  for (size_t i = hard_clip_adaa_.size(); i < static_cast<size_t>(num_channels); ++i) {
-    hard_clip_adaa_.emplace_back(sonare::rt::HardClipNonlinearity{config_.ceiling});
-    hard_clip_adaa2_.emplace_back(sonare::rt::HardClipNonlinearity{config_.ceiling});
-  }
-  for (size_t i = oversampler_states_.size(); i < static_cast<size_t>(num_channels); ++i) {
-    oversampler_states_.emplace_back();
-    oversampler_.prepare_streaming(&oversampler_states_.back(),
-                                   static_cast<size_t>(max_block_size_));
-  }
+  require_prepared_channels(
+      num_channels,
+      std::min({hard_clip_adaa_.size(), hard_clip_adaa2_.size(), oversampler_states_.size()}),
+      "HardClipper");
 }
 
 int HardClipper::tail_samples() const noexcept {

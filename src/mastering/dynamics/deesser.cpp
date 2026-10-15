@@ -169,13 +169,8 @@ float DeEsser::gain_reduction_db(float input_db, const DeEsserConfig& config) {
 }
 
 void DeEsser::ensure_state(int num_channels) {
-  const auto target_size = static_cast<size_t>(num_channels);
-  if (followers_.size() >= target_size && bandpass_.size() >= target_size &&
-      bandpass2_.size() >= target_size) {
-    return;
-  }
-
-  throw SonareException(ErrorCode::InvalidParameter, "num_channels exceeds prepared DeEsser state");
+  require_prepared_channels(
+      num_channels, std::min({followers_.size(), bandpass_.size(), bandpass2_.size()}), "DeEsser");
 }
 
 void DeEsser::update_coefficients(const DeEsserConfig& config) {

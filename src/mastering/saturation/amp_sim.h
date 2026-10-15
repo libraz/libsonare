@@ -453,8 +453,7 @@ class AmpSim : public rt::ProcessorBase {
   /// Recomputes every biquad design + gains from config_ (scalar math only).
   void design_chain();
   /// Sizes the per-channel delay lines from the current design. Allocates, so
-  /// it runs on the control thread only (prepare, and the channel-count growth
-  /// path that mirrors Tube::ensure_state).
+  /// it runs on the control thread only.
   void allocate_delay_lines();
   /// Sizes the oversampling scratch and @p num_channels resampler states for the
   /// circuit head. Allocates; control thread only, and never called under

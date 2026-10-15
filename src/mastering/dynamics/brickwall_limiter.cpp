@@ -155,7 +155,8 @@ bool BrickwallLimiter::apply_parameter(BrickwallLimiterConfig& config, unsigned 
                                        float value) {
   switch (param_id) {
     case 0:
-      config.ceiling_db = value;
+      // Live ceilings clamp to the 0 dBFS bound construction enforces, as on the maximizers.
+      config.ceiling_db = std::min(0.0f, value);
       break;
     case 1:
       config.release_ms = std::max(0.0f, value);

@@ -35,6 +35,7 @@
 #include "mastering/saturation/amp_sim.h"
 #include "mastering/utility/gain.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/json.h"
@@ -2048,4 +2049,53 @@ TEST_CASE("renamed amp choices and presets resolve from their former names",
     REQUIRE(name != "britStack");
     REQUIRE(std::string(sat::amp_preset_to_string(sat::amp_preset_from_string(name))) == name);
   }
+}
+
+TEST_CASE("eq.graphic q reaches the DSP on the offline path exactly as on the insert",
+          "[mastering][insert_factory]") {
+  constexpr int kRate = 48000;
+  constexpr int kLength = 8192;
+  // A 125 Hz probe sits two thirds of an octave below the boosted 200 Hz band:
+  // the gain-derived Q at +9 dB (about 6.4) barely reaches it, a broad Q of 0.7 does.
+  std::vector<float> input(kLength);
+  for (int i = 0; i < kLength; ++i) {
+    input[static_cast<size_t>(i)] =
+        0.25f * std::sin(sonare::constants::kTwoPi * 125.0f * static_cast<float>(i) / kRate);
+  }
+  const std::vector<sonare::mastering::api::Param> with_q = {{"band10GainDb", 9.0}, {"q", 0.7}};
+  const std::vector<sonare::mastering::api::Param> without_q = {{"band10GainDb", 9.0}};
+
+  const auto offline = sonare::mastering::api::apply_named_processor("eq.graphic", input.data(),
+                                                                     input.size(), kRate, with_q);
+  const auto offline_default_q = sonare::mastering::api::apply_named_processor(
+      "eq.graphic", input.data(), input.size(), kRate, without_q);
+
+  auto insert = sonare::mastering::api::make_insert_from_params("eq.graphic", with_q);
+  REQUIRE(insert != nullptr);
+  insert->prepare(kRate, kLength);
+  std::vector<float> realtime = input;
+  float* channel = realtime.data();
+  insert->process(&channel, 1, kLength);
+
+  REQUIRE(offline.samples.size() == realtime.size());
+  float insert_difference = 0.0f;
+  for (size_t i = 0; i < realtime.size(); ++i) {
+    insert_difference = std::max(insert_difference, std::abs(offline.samples[i] - realtime[i]));
+  }
+  // Same filter on the same samples; the slack covers block partitioning only.
+  CHECK(insert_difference < 1.0e-5f);
+
+  // Steady-state level at the probe, past the filters' settling.
+  const auto level_db = [](const std::vector<float>& samples) {
+    double energy = 0.0;
+    for (size_t i = samples.size() / 2; i < samples.size(); ++i) {
+      energy += static_cast<double>(samples[i]) * samples[i];
+    }
+    return 10.0 * std::log10(energy / static_cast<double>(samples.size() - samples.size() / 2));
+  };
+  const double broad_db = level_db(offline.samples);
+  const double default_db = level_db(offline_default_q.samples);
+  CAPTURE(broad_db, default_db);
+  // Q changes the curve, so a builder that dropped it would read as the default.
+  CHECK(broad_db - default_db > 2.0);
 }

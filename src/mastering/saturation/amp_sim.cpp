@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "core/resample.h"
+#include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "mastering/saturation/amp_physics.h"
 #include "mastering/saturation/triode.h"
@@ -351,10 +352,7 @@ void AmpSim::allocate_circuit_scratch(int num_channels) {
   const size_t base = static_cast<size_t>(max_block_size_);
   up_scratch_.assign(base * static_cast<size_t>(kCircuitOversample), 0.0f);
   down_scratch_.assign(base, 0.0f);
-  // Sized to the channel count actually in play, not to a fixed cap: process()
-  // grows chains_ past the prepared count when a caller hands over more channels
-  // than prepare() expected, and the resampler state is indexed by the same
-  // channel index, so it has to grow with it.
+  // Sized to the prepared channel count, the same bound chains_ carries.
   oversampler_states_.resize(static_cast<size_t>(std::max(num_channels, 1)));
   for (auto& state : oversampler_states_) {
     oversampler_.prepare_streaming(&state, base);
@@ -702,26 +700,7 @@ void AmpSim::process(float* const* channels, int num_channels, int num_samples) 
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "AmpSim");
   if (!validate_process_buffers(channels, num_channels, num_samples)) return;
-  if (chains_.size() < static_cast<size_t>(num_channels)) {
-    // Growing beyond the prepared channel envelope allocates per-channel state;
-    // callers must perform such growth off the audio thread.
-    chains_.assign(static_cast<size_t>(num_channels), ChannelChain{});
-    power_adaa_.assign(static_cast<size_t>(num_channels), rt::Adaa1<rt::PushPullNonlinearity>{});
-    // The fresh chains carry no delay lines or IR history; without this the
-    // mic/Doppler/cab-IR stages would read an empty buffer on the added
-    // channels.
-    allocate_delay_lines();
-    allocate_cab_ir_history();
-    if (config_.topology == AmpTopology::kCircuit) {
-      allocate_circuit_scratch(num_channels);
-    } else {
-      // The voiced head's drive stage owns its own per-channel state and rejects
-      // a block wider than it was prepared for, so it has to grow with us. This
-      // path already restarts every AmpSim chain, so re-preparing the tube costs
-      // no continuity that was not already lost.
-      tube_.prepare(sample_rate_, max_block_size_, num_channels);
-    }
-  }
+  require_prepared_channels(num_channels, chains_.size(), "AmpSim");
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");

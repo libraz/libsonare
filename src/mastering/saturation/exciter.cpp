@@ -280,13 +280,10 @@ void Exciter::update_coeff_preserving_state() {
 }
 
 void Exciter::ensure_state(int num_channels) {
-  // Keep process() within the channel capacity allocated by prepare().
-  const size_t channels = static_cast<size_t>(num_channels);
-  if (bandpass_.size() < channels || allpass_.size() < channels || even_dc_.size() < channels ||
-      harmonic_oversampler_states_.size() < channels || paths_.num_channels() < channels) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels exceeds prepared Exciter state");
-  }
+  require_prepared_channels(num_channels,
+                            std::min({bandpass_.size(), allpass_.size(), even_dc_.size(),
+                                      harmonic_oversampler_states_.size(), paths_.num_channels()}),
+                            "Exciter");
 }
 
 void Exciter::declare_path_latencies() {

@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/non_finite_state.h"
 
 namespace sonare::effects::common {
@@ -20,10 +22,7 @@ void DcBlocker::prepare(double sample_rate, int) {
         std::exp(-sonare::constants::kTwoPi * cutoff_hz_ / static_cast<float>(sample_rate));
     set_pole(pole);
   }
-  // Preallocate per-channel state up front so the audio-thread process() path
-  // never resizes (which would malloc). Blocks wider than the prepared state are
-  // clamped in process() and never trigger an allocation. Mirrors the dynamics
-  // processors (limiter.cpp).
+  // The only allocation: process() refuses a block wider than this state.
   x1_.assign(kRealtimePreparedChannels, 0.0f);
   y1_.assign(kRealtimePreparedChannels, 0.0f);
   reset();
@@ -33,18 +32,9 @@ void DcBlocker::process(float* const* channels, int num_channels, int num_sample
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
     return;
   }
-  // Lazily preallocate when process() is reached without a prior prepare() (e.g.
-  // a default-constructed instance used directly). This single allocation never
-  // recurs on the audio thread because subsequent blocks are clamped to the
-  // prepared width.
-  if (x1_.empty()) {
-    x1_.assign(kRealtimePreparedChannels, 0.0f);
-    y1_.assign(kRealtimePreparedChannels, 0.0f);
-  }
-  // Never allocate on the audio thread: clamp to the preallocated state width
-  // rather than resizing for wider blocks.
-  const int channel_count = std::min(num_channels, static_cast<int>(x1_.size()));
-  for (int ch = 0; ch < channel_count; ++ch) {
+  ensure_prepared(!x1_.empty(), "DcBlocker");
+  sonare::mastering::require_prepared_channels(num_channels, x1_.size(), "DcBlocker");
+  for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) {
       continue;
     }
@@ -75,15 +65,9 @@ bool DcBlocker::discard_non_finite() noexcept {
 }
 
 float DcBlocker::process_sample(int channel, float sample) {
-  if (channel < 0) {
-    return sample;
-  }
-  if (x1_.empty()) {
-    x1_.assign(kRealtimePreparedChannels, 0.0f);
-    y1_.assign(kRealtimePreparedChannels, 0.0f);
-  }
-  if (channel >= static_cast<int>(x1_.size())) {
-    return sample;
+  ensure_prepared(!x1_.empty(), "DcBlocker");
+  if (channel < 0 || channel >= static_cast<int>(x1_.size())) {
+    throw SonareException(ErrorCode::InvalidParameter, "channel exceeds prepared DcBlocker state");
   }
   const size_t index = static_cast<size_t>(channel);
   const float y = sample - x1_[index] + pole_ * y1_[index];

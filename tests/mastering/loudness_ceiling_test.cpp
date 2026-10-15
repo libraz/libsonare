@@ -12,6 +12,7 @@
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "mastering/common/loudness_measure.h"
+#include "mastering/maximizer/loudness_optimize.h"
 #include "util/constants.h"
 
 namespace api = sonare::mastering::api;
@@ -257,4 +258,25 @@ TEST_CASE("loudness stages land on the target when the gain moves blocks across 
   CHECK(named.applied_gain_db > kTargetLufs - named.input_lufs + 1.0f);
   CHECK(std::abs(named.output_lufs - kTargetLufs) <= 0.05f);
   CHECK_FALSE(named.loudness_target_limited);
+
+  sonare::mastering::maximizer::LoudnessOptimizeConfig helper_config;
+  helper_config.target_lufs = kTargetLufs;
+  const auto helper = sonare::mastering::maximizer::loudness_optimize(
+      sonare::Audio::from_buffer(samples.data(), samples.size(), kRate), helper_config);
+  CAPTURE(helper.input_lufs, helper.output_lufs, helper.applied_gain_db);
+  CHECK(std::abs(helper.output_lufs - kTargetLufs) <= 0.05f);
+  CHECK_FALSE(helper.loudness_target_limited);
+
+  const auto named_mono =
+      api::apply_named_processor("maximizer.loudnessOptimize", samples.data(), samples.size(),
+                                 kRate, {{"targetLufs", kTargetLufs}});
+  CAPTURE(named_mono.output_lufs, named_mono.applied_gain_db);
+  CHECK(std::abs(named_mono.output_lufs - kTargetLufs) <= 0.05f);
+
+  // One input, one requested gain on every entry point; the stereo pair of one
+  // signal measures +3 dB louder, so its gain sits 3 dB lower.
+  const float pair_offset_db = 10.0f * std::log10(2.0f);
+  CHECK_THAT(helper.applied_gain_db, WithinAbs(mono.applied_gain_db, 0.01));
+  CHECK_THAT(named_mono.applied_gain_db, WithinAbs(mono.applied_gain_db, 0.01));
+  CHECK_THAT(helper.applied_gain_db - pair_offset_db, WithinAbs(named.applied_gain_db, 0.05));
 }

@@ -1,6 +1,5 @@
 #include "mastering/maximizer/loudness_optimize.h"
 
-#include <algorithm>
 #include <cmath>
 #include <utility>
 #include <vector>
@@ -12,7 +11,6 @@
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "util/db.h"
 #include "util/exception.h"
-#include "util/numeric_validation.h"
 #include "util/zero_is_default.h"
 
 namespace sonare::mastering::maximizer {
@@ -43,26 +41,13 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
       validate_loudness_params(config.target_lufs, config.ceiling_db, config.release_ms,
                                config.max_limiter_gain_reduction_db, config.true_peak_oversample);
 
-  const float input_lufs = common::measure_lufs(audio);
-  const float requested_gain_db =
-      std::isfinite(input_lufs) ? config.target_lufs - input_lufs : 0.0f;
-  float gain_db = requested_gain_db;
+  // The re-gated solve the chain and the stereo named processor use, so every
+  // entry point requests the same gain for the same input.
   const float peak_db = common::measure_true_peak_dbtp(audio, config.true_peak_oversample);
-  if (std::isfinite(peak_db)) {
-    // Headroom toward the ceiling estimated from the true (inter-sample) peak,
-    // plus the depth the limiter below is allowed to be driven to. Clamping at
-    // the bare headroom instead would leave a peak-normalized input (headroom
-    // ~0 dB) at its input loudness whatever target was asked for, and give the
-    // limiter nothing to do; the limiter is what makes the target reachable.
-    gain_db = std::min(gain_db, (config.ceiling_db - peak_db) +
-                                    std::max(config.max_limiter_gain_reduction_db, 0.0f));
-  }
-
-  const float gain = db_to_linear(gain_db);
-  if (!numeric::finite(gain)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "loudness target must produce a finite linear gain");
-  }
+  const api::detail::LoudnessStageGain stage = api::detail::loudness_stage_gain(
+      audio.data(), audio.size(), 1, audio.sample_rate(), config.target_lufs, config.ceiling_db,
+      peak_db, config.max_limiter_gain_reduction_db);
+  const float gain = db_to_linear(stage.applied_db);
   std::vector<float> samples(audio.data(), audio.data() + audio.size());
   for (auto& sample : samples) {
     sample *= gain;
@@ -81,14 +66,12 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
 
   LoudnessOptimizeResult result;
   result.audio = Audio::from_vector(std::move(samples), audio.sample_rate());
-  result.input_lufs = input_lufs;
+  result.input_lufs = stage.measured_lufs;
   result.output_lufs = common::measure_lufs(result.audio);
   result.applied_gain_db = linear_to_db(gain);
   result.non_finite_substitution_count = limiter.non_finite_substitution_count();
-  result.loudness_target_limited =
-      std::isfinite(input_lufs) &&
-      api::detail::loudness_target_was_limited(requested_gain_db, gain_db, config.target_lufs,
-                                               result.output_lufs);
+  result.loudness_target_limited = api::detail::loudness_target_was_limited(
+      stage.requested_db, stage.applied_db, config.target_lufs, result.output_lufs);
   result.latency_samples = limiter.latency_samples();
   return result;
 }
