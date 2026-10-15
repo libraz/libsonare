@@ -54,7 +54,7 @@ bool ranges_overlap(const Sf2Zone& lhs, const Sf2Zone& rhs) noexcept {
 }
 
 int64_t instrument_release_timecents(const Sf2Zone* global, const Sf2Zone& local) noexcept {
-  int64_t release = -12000;
+  int64_t release = kMinTimecents;
   const auto apply = [&release](const Sf2Zone& zone) noexcept {
     for (const Sf2Gen& gen : zone.gens) {
       if (gen.oper == kGenReleaseVolEnv) release = gen.amount;
@@ -228,7 +228,7 @@ void Sf2Player::set_soundfont(std::shared_ptr<const Sf2File> soundfont) {
   pool_.reset();
   soundfont_ = std::move(soundfont);
   // Longest release over reachable (preset zone, instrument zone) pairs, not independent maxima.
-  max_release_timecents_ = -12000;
+  max_release_timecents_ = kMinTimecents;
   if (soundfont_ != nullptr) {
     for (size_t preset_index = 0; preset_index < soundfont_->presets().size(); ++preset_index) {
       const Sf2Preset& preset = soundfont_->presets()[preset_index];

@@ -96,7 +96,11 @@ struct Sf2GenSpec {
 /// The contract row for @p oper (operators at or above Sf2GenSet::kNumGens read as reserved).
 const Sf2GenSpec& sf2_gen_spec(uint16_t oper) noexcept;
 
-/// SF2 timecents -> seconds (2^(tc/1200)); tc <= -12000 is ~1 ms or less.
+/// SF2 minimum envelope/LFO time in timecents (about 1 ms; the spec default for delay through
+/// release).
+inline constexpr int32_t kMinTimecents = -12000;
+
+/// SF2 timecents -> seconds (2^(tc/1200)); tc <= kMinTimecents is ~1 ms or less.
 float timecents_to_seconds(int32_t timecents) noexcept;
 /// SF2 centibels (attenuation) -> linear gain (10^(-cb/200)).
 float centibels_to_gain(float centibels) noexcept;

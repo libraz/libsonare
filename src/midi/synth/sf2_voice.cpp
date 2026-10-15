@@ -39,24 +39,24 @@ constexpr Sf2GenSpec kGenSpecs[Sf2GenSet::kNumGens] = {
     {18, 0, kAbsolute, kReserved},  // unused2
     {19, 0, kAbsolute, kReserved},  // unused3
     {20, 0, kAbsolute, kReserved},  // unused4
-    {kGenDelayModLfo, -12000, kAdditive, kVoice},
+    {kGenDelayModLfo, kMinTimecents, kAdditive, kVoice},
     {kGenFreqModLfo, 0, kAdditive, kVoice},
-    {kGenDelayVibLfo, -12000, kAdditive, kVoice},
+    {kGenDelayVibLfo, kMinTimecents, kAdditive, kVoice},
     {kGenFreqVibLfo, 0, kAdditive, kVoice},
-    {kGenDelayModEnv, -12000, kAdditive, kVoice},
-    {kGenAttackModEnv, -12000, kAdditive, kVoice},
-    {kGenHoldModEnv, -12000, kAdditive, kVoice},
-    {kGenDecayModEnv, -12000, kAdditive, kVoice},
+    {kGenDelayModEnv, kMinTimecents, kAdditive, kVoice},
+    {kGenAttackModEnv, kMinTimecents, kAdditive, kVoice},
+    {kGenHoldModEnv, kMinTimecents, kAdditive, kVoice},
+    {kGenDecayModEnv, kMinTimecents, kAdditive, kVoice},
     {kGenSustainModEnv, 0, kAdditive, kVoice},
-    {kGenReleaseModEnv, -12000, kAdditive, kVoice},
+    {kGenReleaseModEnv, kMinTimecents, kAdditive, kVoice},
     {kGenKeynumToModEnvHold, 0, kAdditive, kVoice},
     {kGenKeynumToModEnvDecay, 0, kAdditive, kVoice},
-    {kGenDelayVolEnv, -12000, kAdditive, kVoice},
-    {kGenAttackVolEnv, -12000, kAdditive, kVoice},
-    {kGenHoldVolEnv, -12000, kAdditive, kVoice},
-    {kGenDecayVolEnv, -12000, kAdditive, kVoice},
+    {kGenDelayVolEnv, kMinTimecents, kAdditive, kVoice},
+    {kGenAttackVolEnv, kMinTimecents, kAdditive, kVoice},
+    {kGenHoldVolEnv, kMinTimecents, kAdditive, kVoice},
+    {kGenDecayVolEnv, kMinTimecents, kAdditive, kVoice},
     {kGenSustainVolEnv, 0, kAdditive, kVoice},
-    {kGenReleaseVolEnv, -12000, kAdditive, kVoice},
+    {kGenReleaseVolEnv, kMinTimecents, kAdditive, kVoice},
     {kGenKeynumToVolEnvHold, 0, kAdditive, kVoice},
     {kGenKeynumToVolEnvDecay, 0, kAdditive, kVoice},
     {kGenInstrument, 0, kAbsolute, kZoneLink},
@@ -119,10 +119,11 @@ DahdsrConfig envelope_from_gens(const Sf2GenSet& gens, const EnvelopeOps& ops, i
   const int32_t hold_tc = gens.get(ops.hold) + gens.get(ops.keynum_to_hold) * key_steps;
   const int32_t decay_tc = gens.get(ops.decay) + gens.get(ops.keynum_to_decay) * key_steps;
   DahdsrConfig cfg;
-  cfg.delay_ms =
-      gens.get(ops.delay) <= -12000 ? 0.0f : 1000.0f * timecents_to_seconds(gens.get(ops.delay));
+  cfg.delay_ms = gens.get(ops.delay) <= kMinTimecents
+                     ? 0.0f
+                     : 1000.0f * timecents_to_seconds(gens.get(ops.delay));
   cfg.attack_ms = 1000.0f * timecents_to_seconds(gens.get(ops.attack));
-  cfg.hold_ms = hold_tc <= -12000 ? 0.0f : 1000.0f * timecents_to_seconds(hold_tc);
+  cfg.hold_ms = hold_tc <= kMinTimecents ? 0.0f : 1000.0f * timecents_to_seconds(hold_tc);
   cfg.decay_ms = 1000.0f * timecents_to_seconds(decay_tc);
   if (ops.sustain_is_centibels) {
     cfg.sustain = centibels_to_gain(static_cast<float>(gens.get(ops.sustain)));
@@ -154,8 +155,8 @@ void Sf2GenSet::add_relative(const Sf2Zone& zone) noexcept {
 }
 
 float timecents_to_seconds(int32_t timecents) noexcept {
-  // Spec floor: -12000 tc is 1 ms; treat anything at/below as instantaneous-ish.
-  if (timecents <= -12000) return 0.001f;
+  // Spec floor: the minimum timecents is 1 ms; treat anything at/below as instantaneous-ish.
+  if (timecents <= kMinTimecents) return 0.001f;
   return std::exp2(static_cast<float>(timecents) / 1200.0f);
 }
 
@@ -254,14 +255,16 @@ Sf2VoiceParams resolve_voice_params(const Sf2GenSet& gens, const Sf2Sample& samp
   p.filter_q = std::max(constants::kButterworthQ, std::pow(10.0f, q_cb / 200.0f));
 
   // --- LFOs ---
-  p.mod_lfo_delay_s =
-      gens.get(kGenDelayModLfo) <= -12000 ? 0.0f : timecents_to_seconds(gens.get(kGenDelayModLfo));
+  p.mod_lfo_delay_s = gens.get(kGenDelayModLfo) <= kMinTimecents
+                          ? 0.0f
+                          : timecents_to_seconds(gens.get(kGenDelayModLfo));
   p.mod_lfo_freq_hz = abs_cents_to_hz(static_cast<float>(gens.get(kGenFreqModLfo)));
   p.mod_lfo_to_pitch = static_cast<float>(gens.get(kGenModLfoToPitch));
   p.mod_lfo_to_filter_fc = static_cast<float>(gens.get(kGenModLfoToFilterFc));
   p.mod_lfo_to_volume_cb = static_cast<float>(gens.get(kGenModLfoToVolume));
-  p.vib_lfo_delay_s =
-      gens.get(kGenDelayVibLfo) <= -12000 ? 0.0f : timecents_to_seconds(gens.get(kGenDelayVibLfo));
+  p.vib_lfo_delay_s = gens.get(kGenDelayVibLfo) <= kMinTimecents
+                          ? 0.0f
+                          : timecents_to_seconds(gens.get(kGenDelayVibLfo));
   p.vib_lfo_freq_hz = abs_cents_to_hz(static_cast<float>(gens.get(kGenFreqVibLfo)));
   p.vib_lfo_to_pitch = static_cast<float>(gens.get(kGenVibLfoToPitch));
 

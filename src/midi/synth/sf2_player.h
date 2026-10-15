@@ -44,6 +44,7 @@
 
 #include "midi/channel_voice_decode.h"
 #include "midi/control_value.h"
+#include "midi/controller_numbers.h"
 #include "midi/instrument.h"
 #include "midi/per_note_state.h"
 #include "midi/source_residual.h"
@@ -441,7 +442,7 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
     Control32 channel_pressure = Control32::from_raw(0);
     /// CC1 / CC2 CONTROLLER NUMBER (40 1x 1F/20): which MIDI controller drives
     /// each assignable source of the controller-destination block.
-    std::array<uint8_t, 2> assignable_cc{{0x10, 0x11}};
+    std::array<uint8_t, 2> assignable_cc{{cc::kGeneralPurpose1, cc::kGeneralPurpose2}};
     // --- portamento (CC5 time / CC65 switch / CC84 control) ---
     /// CC5, mapped to a glide time by portamento_time_ms(). GS power-on is 0,
     /// which is no glide however the note-on was armed.
@@ -728,7 +729,7 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   /// Speculative prepare/build work never raises this value.
   std::unique_ptr<std::atomic<int>> prepared_part_fx_tail_ = std::make_unique<std::atomic<int>>(0);
   /// Longest release timecents found in the soundfont (set_soundfont scan).
-  int32_t max_release_timecents_ = -12000;
+  int32_t max_release_timecents_ = kMinTimecents;
   /// Mix-bus DC blocker state (config_.dc_block): pole and per-leg histories.
   float dc_r_ = 0.0f;
   std::array<float, 2> dc_x1_{};
