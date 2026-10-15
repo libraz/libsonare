@@ -113,13 +113,14 @@ TEST_CASE("chorus feedback returns the wet signal at rates where its low-pass si
   }
 }
 
-TEST_CASE("chorus feedback is clamped and automatable in place", "[chorus-feedback]") {
+TEST_CASE("chorus feedback is bounded and automatable in place", "[chorus-feedback]") {
   Chorus chorus(still_chorus(0.0f));
   chorus.prepare(kRate, kFftLength);
   REQUIRE(chorus.parameter_is_realtime_safe(5));
   REQUIRE(chorus.set_parameter(5, 0.7f));
-  // Far past the limit must still be a stable loop, not a runaway.
-  REQUIRE(chorus.set_parameter(5, 40.0f));
+  // Past the limit is refused; the limit itself is a stable loop, not a runaway.
+  REQUIRE_FALSE(chorus.set_parameter(5, 40.0f));
+  REQUIRE(chorus.set_parameter(5, 0.98f));
   std::vector<float> impulse = sonare::test::generate_impulse(kFftLength);
   sonare::test::process(chorus, impulse);
   CHECK(sonare::test::peak_abs(impulse) < 100.0f);

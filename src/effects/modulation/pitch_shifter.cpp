@@ -2,11 +2,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 #include "effects/common/control_ranges.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare::effects::modulation {
 
@@ -20,19 +22,13 @@ namespace {
 // window apart splice once each per grain, so a grain is two windows.
 constexpr double kWindowsPerGrain = 2.0;
 
-// Window bounds. The floor keeps the window positive (prepare()'s own 64-sample
-// floor takes over below it); the ceiling bounds a configured window.
+// The delay line is prepared for the top of the window and pre-delay domains, so a live
+// change anywhere in the domain is applied without reallocating.
 constexpr float kMinWindowMs = 0.5f;
 constexpr float kMaxWindowMs = 1000.0f;
 constexpr float kMaxPreDelayMs = 1000.0f;
-
-// Live ceilings: the largest values the GS EFX bindings can request (the splice
-// window table in gs_efx_tables.h tops at 128 ms, the pre-delay ladder at the
-// shared pre-delay ceiling). prepare() sizes the delay line for max(live
-// ceiling, configured value).
-constexpr float kLiveMaxWindowMs = 128.0f;
-constexpr float kLiveMaxPreDelayMs = common::kMaxModulationPreDelayMs;
 constexpr float kMaxCents = 100.0f;
+constexpr float kMaxSemitones = 24.0f;
 constexpr float kCentsPerSemitone = 100.0f;
 // The four Lagrange3 weights have maximum absolute sum 1.25 at a half-sample.
 constexpr float kLagrange3Peak = 1.25f;
@@ -77,32 +73,60 @@ float semitone_ratio(float semitones, float cents) noexcept {
   return std::exp2((semitones + cents / kCentsPerSemitone) / 12.0f);
 }
 
-float finite_or_zero(float value) noexcept { return delay_param_acceptable(value) ? value : 0.0f; }
-
 /// True for exactly 0 or 1, the two values a switch accepts.
 bool is_switch_value(float value) noexcept { return value == 0.0f || value == 1.0f; }
+
+/// One validated field: its automation id and the closed interval a value must lie in.
+struct FieldDomain {
+  const char* name;
+  float PitchShifterConfig::*member;
+  unsigned int param_id;
+  float lo;
+  float hi;
+};
+
+// The single definition of each field's domain, shared by validate_config and live automation.
+constexpr FieldDomain kFields[] = {
+    {"semitones", &PitchShifterConfig::semitones, 0, -kMaxSemitones, kMaxSemitones},
+    {"dryWet", &PitchShifterConfig::dry_wet, 1, 0.0f, 1.0f},
+    {"cents", &PitchShifterConfig::cents, 2, -kMaxCents, kMaxCents},
+    {"pan", &PitchShifterConfig::pan, 3, -1.0f, 1.0f},
+    {"semitones2", &PitchShifterConfig::semitones2, 4, -kMaxSemitones, kMaxSemitones},
+    {"cents2", &PitchShifterConfig::cents2, 5, -kMaxCents, kMaxCents},
+    {"level2", &PitchShifterConfig::level2, 6, 0.0f, 1.0f},
+    {"pan2", &PitchShifterConfig::pan2, 7, -1.0f, 1.0f},
+    {"feedback", &PitchShifterConfig::feedback, 8, -kMaxFeedback, kMaxFeedback},
+    {"windowMs", &PitchShifterConfig::window_ms, 12, kMinWindowMs, kMaxWindowMs},
+    {"preDelayMs", &PitchShifterConfig::pre_delay_ms, 13, 0.0f, kMaxPreDelayMs},
+    {"preDelay2Ms", &PitchShifterConfig::pre_delay2_ms, 14, 0.0f, kMaxPreDelayMs},
+};
+
+bool in_domain(const FieldDomain& field, float value) noexcept {
+  return std::isfinite(value) && value >= field.lo && value <= field.hi;
+}
+
+const FieldDomain* find_field(unsigned int param_id) noexcept {
+  for (const FieldDomain& field : kFields) {
+    if (field.param_id == param_id) return &field;
+  }
+  return nullptr;
+}
 
 }  // namespace
 
 PitchShifter::PitchShifter(PitchShifterConfig config) : config_(config) {
-  config_.semitones = std::clamp(config_.semitones, -24.0f, 24.0f);
-  config_.cents = std::clamp(finite_or_zero(config_.cents), -kMaxCents, kMaxCents);
-  config_.pan = std::clamp(finite_or_zero(config_.pan), -1.0f, 1.0f);
-  config_.semitones2 = std::clamp(finite_or_zero(config_.semitones2), -24.0f, 24.0f);
-  config_.cents2 = std::clamp(finite_or_zero(config_.cents2), -kMaxCents, kMaxCents);
-  config_.level2 = std::clamp(finite_or_zero(config_.level2), 0.0f, 1.0f);
-  config_.pan2 = std::clamp(finite_or_zero(config_.pan2), -1.0f, 1.0f);
-  config_.pre_delay_ms = std::clamp(finite_or_zero(config_.pre_delay_ms), 0.0f, kMaxPreDelayMs);
-  config_.pre_delay2_ms = std::clamp(finite_or_zero(config_.pre_delay2_ms), 0.0f, kMaxPreDelayMs);
-  config_.feedback = std::clamp(finite_or_zero(config_.feedback), -kMaxFeedback, kMaxFeedback);
-  // Rejected before the clamp below: std::clamp leaves NaN intact and the
-  // window sizes an allocation (see delay_param_acceptable).
-  if (!delay_param_acceptable(config_.window_ms)) {
-    config_.window_ms = kDefaultWindowMs;
+  validate_config(config_);
+}
+
+void PitchShifter::validate_config(const PitchShifterConfig& config) {
+  for (const FieldDomain& field : kFields) {
+    const float value = config.*field.member;
+    if (in_domain(field, value)) continue;
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string("pitch shifter: ") + field.name + " out of range [" +
+                              util::to_text(field.lo) + ", " + util::to_text(field.hi) + "], got " +
+                              util::to_text(value));
   }
-  config_.window_ms = std::clamp(config_.window_ms, kMinWindowMs, kMaxWindowMs);
-  max_window_ms_ = std::max(kLiveMaxWindowMs, config_.window_ms);
-  max_pre_delay_ms_ = std::max({kLiveMaxPreDelayMs, config_.pre_delay_ms, config_.pre_delay2_ms});
 }
 
 void PitchShifter::update_grain() noexcept {
@@ -134,8 +158,8 @@ void PitchShifter::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   mix_ramp_samples_ = std::max(1, static_cast<int>(std::lround(kMixGlideSeconds * sample_rate_)));
   const int max_grain =
-      std::max(64, static_cast<int>(sample_rate_ * kWindowsPerGrain * max_window_ms_ * 0.001));
-  const int max_pre = static_cast<int>(std::ceil(max_pre_delay_ms_ * 0.001 * sample_rate_));
+      std::max(64, static_cast<int>(sample_rate_ * kWindowsPerGrain * kMaxWindowMs * 0.001));
+  const int max_pre = static_cast<int>(std::ceil(kMaxPreDelayMs * 0.001 * sample_rate_));
   const size_t len = static_cast<size_t>(max_grain + max_pre + 4);
   for (auto& buffer : buffers_) {
     buffer.assign(len, 0.0f);
@@ -432,41 +456,41 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
 }
 
 bool PitchShifter::set_parameter_impl(unsigned int param_id, float value) {
-  // Reject before the clamp below: std::clamp leaves NaN intact and `semitones`
-  // drives the read-tap phase (see delay_param_acceptable).
-  if (!delay_param_acceptable(value)) return false;
+  // Every numeric field is refused outside its domain; NaN fails the interval test.
+  const FieldDomain* field = find_field(param_id);
+  if (field != nullptr && !in_domain(*field, value)) return false;
   switch (param_id) {
     case 0:
-      config_.semitones = std::clamp(value, -24.0f, 24.0f);
+      config_.semitones = value;
       refresh_anti_alias();
       return true;
     case 1:
       config_.dry_wet = value;
       return true;
     case 2:
-      config_.cents = std::clamp(value, -kMaxCents, kMaxCents);
+      config_.cents = value;
       refresh_anti_alias();
       return true;
     case 3:
-      config_.pan = std::clamp(value, -1.0f, 1.0f);
+      config_.pan = value;
       return true;
     case 4:
-      config_.semitones2 = std::clamp(value, -24.0f, 24.0f);
+      config_.semitones2 = value;
       refresh_anti_alias();
       return true;
     case 5:
-      config_.cents2 = std::clamp(value, -kMaxCents, kMaxCents);
+      config_.cents2 = value;
       refresh_anti_alias();
       return true;
     case 6:
-      config_.level2 = std::clamp(value, 0.0f, 1.0f);
+      config_.level2 = value;
       refresh_anti_alias();
       return true;
     case 7:
-      config_.pan2 = std::clamp(value, -1.0f, 1.0f);
+      config_.pan2 = value;
       return true;
     case 8:
-      config_.feedback = std::clamp(value, -kMaxFeedback, kMaxFeedback);
+      config_.feedback = value;
       return true;
     case 9:
       if (!common::mix_law_from_value(value, &config_.mix_law)) return false;
@@ -482,15 +506,15 @@ bool PitchShifter::set_parameter_impl(unsigned int param_id, float value) {
       refresh_anti_alias();
       return true;
     case 12:
-      config_.window_ms = std::clamp(value, kMinWindowMs, max_window_ms_);
+      config_.window_ms = value;
       update_grain();
       return true;
     case 13:
-      config_.pre_delay_ms = std::clamp(value, 0.0f, max_pre_delay_ms_);
+      config_.pre_delay_ms = value;
       update_pre_delay_samples();
       return true;
     case 14:
-      config_.pre_delay2_ms = std::clamp(value, 0.0f, max_pre_delay_ms_);
+      config_.pre_delay2_ms = value;
       update_pre_delay_samples();
       return true;
     default:

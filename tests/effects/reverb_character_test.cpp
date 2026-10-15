@@ -13,6 +13,7 @@
 #include "effects/reverb/dattorro_reverb.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace {
 
@@ -114,12 +115,11 @@ TEST_CASE("each character gives its own stable tail", "[reverb-character]") {
     previous_early = early;
   }
 
-  // An out-of-range value falls back to the nearest set rather than reaching a table off its end.
+  // An out-of-range set is refused rather than reaching a table off its end.
   config.character = 99;
-  const Render clamped = impulse_response(config, 0.5);
-  config.character = kDattorroMaxCharacter;
-  const Render top = impulse_response(config, 0.5);
-  REQUIRE(clamped.left == top.left);
+  REQUIRE_THROWS_AS(DattorroReverb(config), sonare::SonareException);
+  config.character = -1;
+  REQUIRE_THROWS_AS(DattorroReverb(config), sonare::SonareException);
 }
 
 TEST_CASE("the defaults leave the tank as it was", "[reverb-character]") {

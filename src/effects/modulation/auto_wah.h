@@ -23,16 +23,16 @@ enum class AutoWahDirection {
 inline constexpr int kAutoWahDirectionCount = 2;
 
 struct AutoWahConfig {
-  float sensitivity = 1.0f;   ///< how far the envelope pushes the cutoff up.
-  float min_hz = 300.0f;      ///< resting (silent) centre frequency.
-  float max_hz = 2500.0f;     ///< fully-open centre frequency.
-  float resonance = 4.0f;     ///< bandpass Q.
-  float attack_ms = 8.0f;     ///< envelope rise time.
-  float release_ms = 120.0f;  ///< envelope fall time.
-  float dry_wet = 1.0f;
-  /// Rate of the LFO added to the envelope's sweep position.
+  float sensitivity = 1.0f;   ///< how far the envelope pushes the cutoff up; refused below 0.
+  float min_hz = 300.0f;      ///< resting (silent) centre frequency; refused below kWahMinSweepHz.
+  float max_hz = 2500.0f;     ///< fully-open centre frequency; refused below kWahMinSweepHz.
+  float resonance = 4.0f;     ///< bandpass Q; refused below kWahMinResonance.
+  float attack_ms = 8.0f;     ///< envelope rise time; refused below 0.
+  float release_ms = 120.0f;  ///< envelope fall time; refused below 0.
+  float dry_wet = 1.0f;       ///< refused outside [0, 1].
+  /// Rate of the LFO added to the envelope's sweep position; refused below 0.
   float lfo_rate_hz = 1.0f;
-  /// Peak of the LFO's contribution to the sweep position (0..1); 0 turns the LFO off.
+  /// Peak of the LFO's contribution to the sweep position, refused outside [0, 1]; 0 turns it off.
   float lfo_depth = 0.0f;
   WahFilterType filter_type = WahFilterType::kBandpass;
   AutoWahDirection direction = AutoWahDirection::kUp;
@@ -44,7 +44,11 @@ struct AutoWahConfig {
 /// channels so the sweep is stereo-coherent.
 class AutoWah : public rt::ProcessorBase {
  public:
+  /// Throws InvalidParameter when a field lies outside the domain documented on
+  /// AutoWahConfig, or is not finite.
   explicit AutoWah(AutoWahConfig config = {});
+
+  static void validate_config(const AutoWahConfig& config);
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
@@ -52,13 +56,13 @@ class AutoWah : public rt::ProcessorBase {
   int tail_samples() const noexcept override;
 
   // Automatable parameters (RT-safe, in-place scalar updates):
-  //   0 = sensitivity
-  //   1 = min_hz
-  //   2 = max_hz
-  //   3 = resonance
-  //   4 = dry_wet
-  //   5 = lfo_rate_hz (clamped to >= 0; updates the LFO in place)
-  //   6 = lfo_depth (clamped to [0, 1])
+  //   0 = sensitivity (refused below 0)
+  //   1 = min_hz (refused below kWahMinSweepHz)
+  //   2 = max_hz (refused below kWahMinSweepHz)
+  //   3 = resonance (refused below kWahMinResonance)
+  //   4 = dry_wet (refused outside [0, 1])
+  //   5 = lfo_rate_hz (refused below 0; updates the LFO in place)
+  //   6 = lfo_depth (refused outside [0, 1])
   //   7 = filter_type (WahFilterType; a fractional or unnamed value is refused)
   //   8 = direction (AutoWahDirection; same refusal)
   //   9 = sweep_law (WahSweepLaw; same refusal)

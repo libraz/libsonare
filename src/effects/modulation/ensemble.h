@@ -38,8 +38,8 @@ struct EnsembleConfig {
   /// the rate_fast_hz / rate_slow_hz ratio; 0 leaves the two rates independent.
   float rate_hz = 0.0f;
   /// Per-voice spread: voice i of N is offset by an evenly spaced value from
-  /// -dev to +dev. Pre-delay in ms (clamped to [0, 20]), depth as a fraction of
-  /// the voice's depth (clamped to [-1, 1]), pan in [-1, 1] balance units.
+  /// -dev to +dev. Pre-delay in ms (refused outside [0, 20]), depth as a fraction of
+  /// the voice's depth (refused outside [-1, 1]), pan in balance units (refused outside [0, 1]).
   float pre_delay_dev_ms = 0.0f;
   float depth_dev = 0.0f;
   float pan_dev = 0.0f;
@@ -51,7 +51,11 @@ struct EnsembleConfig {
 
 class Ensemble : public rt::ProcessorBase {
  public:
+  /// Throws InvalidParameter when a field lies outside its domain (listed per
+  /// parameter below, rate_hz and both LFO rates >= 0), or is not finite.
   explicit Ensemble(EnsembleConfig config = {});
+
+  static void validate_config(const EnsembleConfig& config);
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
@@ -59,18 +63,18 @@ class Ensemble : public rt::ProcessorBase {
   int tail_samples() const noexcept override;
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
-  //   0 = rate_slow_hz   (>= 0)
-  //   1 = rate_fast_hz   (>= 0)
-  //   2 = depth_slow_ms  (clamped to [0, 10])
-  //   3 = depth_fast_ms  (clamped to [0, 10])
-  //   4 = center_delay_ms (clamped to [0, common::kMaxModulationPreDelayMs])
-  //   5 = tone_hz        (clamped to [500, 20000])
-  //   6 = dry_wet        (clamped to [0, 1])
-  //   7 = rate_hz        (>= 0; 0 = independent slow/fast rates)
-  //   8 = pre_delay_dev_ms (clamped to [0, 20]; every voice stays inside the
+  //   0 = rate_slow_hz   (refused below 0)
+  //   1 = rate_fast_hz   (refused below 0)
+  //   2 = depth_slow_ms  (refused outside [0, 10])
+  //   3 = depth_fast_ms  (refused outside [0, 10])
+  //   4 = center_delay_ms (refused outside [0, common::kMaxModulationPreDelayMs])
+  //   5 = tone_hz        (refused outside [500, 20000])
+  //   6 = dry_wet        (refused outside [0, 1])
+  //   7 = rate_hz        (refused below 0; 0 = independent slow/fast rates)
+  //   8 = pre_delay_dev_ms (refused outside [0, 20]; every voice stays inside the
   //                        delay line prepare() sized)
-  //   9 = depth_dev      (clamped to [-1, 1])
-  //  10 = pan_dev        (clamped to [0, 1])
+  //   9 = depth_dev      (refused outside [-1, 1])
+  //  10 = pan_dev        (refused outside [0, 1])
   //  11 = interpolation  (0 linear, 1 Lagrange3)
   //  12 = mix_law        (a whole number naming a law, refused otherwise)
   bool set_parameter_impl(unsigned int param_id, float value) override;

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "effects/common/field_domain.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -20,7 +21,7 @@ constexpr float kT60Drop = 1000.0f;
 // Bound the synthesized IR so prepare() stays cheap and the convolver does not
 // allocate a pathologically long partition chain for absurd decaySec values.
 constexpr float kMaxDecaySeconds = ConvolutionReverbConfig::kMaxDecaySeconds;
-constexpr float kMaxPreDelaySeconds = 1.0f;
+constexpr float kMaxPreDelayMs = 1000.0f;
 
 // xorshift32: a tiny deterministic PRNG so the synthesized IR is reproducible
 // across platforms without pulling in <random> state.
@@ -61,10 +62,18 @@ void scale_ir(std::vector<float>& samples, double energy) {
 }
 }  // namespace
 
+void ConvolutionReverb::validate_config(const ConvolutionReverbConfig& config) {
+  common::require_in_domain("ConvolutionReverb", "decay_sec", config.decay_sec, 0.0f,
+                            kMaxDecaySeconds);
+  common::require_in_domain("ConvolutionReverb", "pre_delay_ms", config.pre_delay_ms, 0.0f,
+                            kMaxPreDelayMs);
+  common::require_in_domain("ConvolutionReverb", "dry_wet", config.dry_wet, 0.0f, 1.0f);
+}
+
 void ConvolutionReverb::synthesize_default_ir(double sample_rate) {
   const double sr = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
-  const float decay_sec = std::clamp(config_.decay_sec, 0.0f, kMaxDecaySeconds);
-  const float pre_delay_sec = std::clamp(config_.pre_delay_ms / 1000.0f, 0.0f, kMaxPreDelaySeconds);
+  const float decay_sec = config_.decay_sec;
+  const float pre_delay_sec = config_.pre_delay_ms / 1000.0f;
   const int pre_delay_samples = static_cast<int>(std::lround(pre_delay_sec * sr));
   // Effective T60 tail length; floor it so we always synthesize a usable IR.
   const float rt60 = std::max(0.05f, decay_sec);
@@ -166,7 +175,7 @@ void ConvolutionReverb::process(float* const* channels, int num_channels, int nu
   const int channels_to_process = std::min(num_channels, kMaxChannels);
   // Block-rate dry/wet: smoothed across blocks by the engine parameter slot
   // smoother, not per-sample (see Chorus::process for the rationale).
-  const float wet = std::clamp(dry_wet_, 0.0f, 1.0f);
+  const float wet = dry_wet_;
   const float dry = 1.0f - wet;
   // A loaded pair serves stereo; one channel always runs the mono IR.
   const bool use_pair = !pair_convolvers_.empty() && channels_to_process >= 2;
@@ -301,7 +310,7 @@ void ConvolutionReverb::load_ir_set_unit_energy(const std::vector<float>& mono,
 bool ConvolutionReverb::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      // process() clamps dry_wet to [0, 1]; store the raw target.
+      if (!common::in_domain(value, 0.0f, 1.0f)) return false;
       dry_wet_ = value;
       return true;
     default:

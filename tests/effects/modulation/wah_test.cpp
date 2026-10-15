@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <vector>
 
+#include "effects/modulation/domain_cases.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
 
@@ -283,4 +284,17 @@ TEST_CASE("wah drops inactive right-plane history on mono re-entry", "[boundary]
     REQUIRE(lifecycle_difference(subject.left, control.left) <= 2.0e-5f);
     REQUIRE(lifecycle_difference(subject.right, control.right) <= 2.0e-5f);
   }
+}
+
+TEST_CASE("wah refuses a config field outside its domain", "[effects][modulation][wah][domain]") {
+  namespace domain = sonare::test::modulation_domain;
+  using Row = domain::DomainRow<WahConfig>;
+  const Row rows[] = {
+      {"rate_hz", 0, &WahConfig::rate_hz, 0.0f, domain::kInf},
+      {"min_hz", 1, &WahConfig::min_hz, 10.0f, domain::kInf},
+      {"max_hz", 2, &WahConfig::max_hz, 10.0f, domain::kInf},
+      {"resonance", 3, &WahConfig::resonance, 0.5f, domain::kInf},
+      {"dry_wet", 4, &WahConfig::dry_wet, 0.0f, 1.0f},
+  };
+  for (const Row& row : rows) domain::check_row<Wah>("wah", WahConfig{}, row);
 }

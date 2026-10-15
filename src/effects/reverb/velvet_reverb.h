@@ -26,10 +26,10 @@ struct VelvetReverbConfig {
   static constexpr int kMaxTapCount = 65536;
 
   /// @brief Scales reverb_time_s: effective T60 = reverb_time_s * (0.5 + decay).
-  float decay = 0.45f;
-  float dry_wet = 0.3f;
-  float reverb_time_s = 1.5f;  ///< Base T60 in seconds, clamped to kMaxReverbTimeSeconds.
-  float density_hz = 2000.0f;  ///< Velvet pulse density, clamped to [1000, 3000].
+  float decay = 0.45f;         ///< [0, 1].
+  float dry_wet = 0.3f;        ///< [0, 1].
+  float reverb_time_s = 1.5f;  ///< Base T60 in seconds, [0.05, kMaxReverbTimeSeconds].
+  float density_hz = 2000.0f;  ///< Velvet pulse density, [1000, 3000].
   bool enable_shelf = true;    ///< Post one-pole high-shelf HF damping at 6 kHz.
 };
 
@@ -38,7 +38,11 @@ class VelvetReverb : public rt::ProcessorBase {
   /// The initial segment stays direct so the hybrid reconstruction preserves
   /// zero algorithmic latency. All later taps are evaluated by FFT partitions.
   static constexpr int kEarlyPartitionSamples = 256;
+  /// @throws SonareException(InvalidParameter) naming the first field outside its domain.
   explicit VelvetReverb(VelvetReverbConfig config = {});
+
+  /// Refuses a non-finite field or one outside the domain stated on the config field.
+  static void validate_config(const VelvetReverbConfig& config);
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
@@ -46,13 +50,14 @@ class VelvetReverb : public rt::ProcessorBase {
   int tail_samples() const noexcept override;
 
   // Shape parameters (index order matches sibling reverbs):
-  //   0 = decay
-  //   1 = reverb_time_s
-  //   2 = dry_wet (clamped to [0, 1] in process())
-  //   3 = density_hz
+  //   0 = decay ([0, 1])
+  //   1 = reverb_time_s ([0.05, kMaxReverbTimeSeconds])
+  //   2 = dry_wet ([0, 1])
+  //   3 = density_hz ([1000, 3000])
+  // Values outside a range are refused.
   // Note: decay, reverb_time_s and density_hz are NOT lock-free / RT-safe;
   // changing any of them rebuilds the velvet-noise tap tables and ring buffers
-  // (offline reconfiguration). dry_wet is RT-safe and only read in process().
+  // (offline reconfiguration). dry_wet is RT-safe.
   bool set_parameter_impl(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;

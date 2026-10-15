@@ -221,11 +221,13 @@ TEST_CASE("phaser: depth sweeps from minHz to minHz * (maxHz / minHz)^depth",
   REQUIRE(max_diff(run(slow, tone_pair()).left, run(fast, tone_pair()).left) < 1e-6);
 }
 
-TEST_CASE("phaser: depth is realtime and clamped", "[modulator-shapes]") {
+TEST_CASE("phaser: depth is realtime and refused outside [0, 1]", "[modulator-shapes]") {
   Phaser p;
   REQUIRE(p.parameter_is_realtime_safe(5));
-  REQUIRE(p.set_parameter(5, 2.0f));
-  REQUIRE(p.set_parameter(5, -1.0f));
+  REQUIRE(p.set_parameter(5, 0.0f));
+  REQUIRE(p.set_parameter(5, 1.0f));
+  REQUIRE_FALSE(p.set_parameter(5, 2.0f));
+  REQUIRE_FALSE(p.set_parameter(5, -1.0f));
   REQUIRE_FALSE(p.set_parameter(6, 0.0f));
 }
 

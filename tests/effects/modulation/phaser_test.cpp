@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <vector>
 
+#include "effects/modulation/domain_cases.h"
 #include "util/constants.h"
 
 namespace {
@@ -137,5 +138,34 @@ TEST_CASE("phaser advances both LFOs and clears the returning right plane", "[bo
     REQUIRE(peak(reset.right) <= 1.0e-5f);
     REQUIRE(difference(subject.left, continuous.left) <= 2.0e-5f);
     REQUIRE(difference(subject.right, continuous.right) <= 2.0e-5f);
+  }
+}
+
+TEST_CASE("phaser refuses a config field outside its domain",
+          "[effects][modulation][phaser][domain]") {
+  namespace domain = sonare::test::modulation_domain;
+  using Row = domain::DomainRow<PhaserConfig>;
+  const Row rows[] = {
+      {"rate_hz", 0, &PhaserConfig::rate_hz, 0.0f, domain::kInf},
+      {"min_hz", 1, &PhaserConfig::min_hz, 1.0f, domain::kInf},
+      {"max_hz", 2, &PhaserConfig::max_hz, 1.0f, domain::kInf},
+      {"dry_wet", 3, &PhaserConfig::dry_wet, 0.0f, 1.0f},
+      {"feedback", 4, &PhaserConfig::feedback, -0.98f, 0.98f},
+      {"depth", 5, &PhaserConfig::depth, 0.0f, 1.0f},
+  };
+  for (const Row& row : rows) domain::check_row<Phaser>("phaser", PhaserConfig{}, row);
+}
+
+TEST_CASE("phaser refuses a stage count outside [1, 12]", "[effects][modulation][phaser][domain]") {
+  namespace domain = sonare::test::modulation_domain;
+  for (const int stages : {1, 12}) {
+    PhaserConfig config;
+    config.stages = stages;
+    CHECK_NOTHROW(Phaser(config));
+  }
+  for (const int stages : {-1, 0, 13, 1000}) {
+    PhaserConfig config;
+    config.stages = stages;
+    domain::require_refused<Phaser>("phaser", "stages", config, static_cast<float>(stages));
   }
 }

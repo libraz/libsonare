@@ -2,9 +2,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <string>
 
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace sonare::effects::modulation {
 
@@ -15,13 +18,51 @@ namespace {
 
 constexpr float kMaxPhaseDeg = 360.0f;
 constexpr double kAntiphaseTurns = 0.5;
+constexpr float kInf = std::numeric_limits<float>::infinity();
+
+/// One validated field: its automation id and the closed interval a value must lie in.
+struct FieldDomain {
+  const char* name;
+  float RingModulatorConfig::*member;
+  unsigned int param_id;
+  float lo;
+  float hi;
+};
+
+// The single definition of each field's domain, shared by validate_config and live automation.
+constexpr FieldDomain kFields[] = {
+    {"carrierHz", &RingModulatorConfig::carrier_hz, 0, 0.0f, kInf},
+    {"dryWet", &RingModulatorConfig::dry_wet, 1, 0.0f, 1.0f},
+    {"phaseDeg", &RingModulatorConfig::phase_deg, 3, 0.0f, kMaxPhaseDeg},
+    {"stereoSpread", &RingModulatorConfig::stereo_spread, 4, 0.0f, 1.0f},
+};
+
+bool in_domain(const FieldDomain& field, float value) noexcept {
+  return std::isfinite(value) && value >= field.lo && value <= field.hi;
+}
+
+const FieldDomain* find_field(unsigned int param_id) noexcept {
+  for (const FieldDomain& field : kFields) {
+    if (field.param_id == param_id) return &field;
+  }
+  return nullptr;
+}
 
 }  // namespace
 
 RingModulator::RingModulator(RingModulatorConfig config) : config_(config) {
-  config_.carrier_hz = std::max(0.0f, config_.carrier_hz);
-  config_.phase_deg = std::clamp(config_.phase_deg, 0.0f, kMaxPhaseDeg);
-  config_.stereo_spread = std::clamp(config_.stereo_spread, 0.0f, 1.0f);
+  validate_config(config_);
+}
+
+void RingModulator::validate_config(const RingModulatorConfig& config) {
+  for (const FieldDomain& field : kFields) {
+    const float value = config.*field.member;
+    if (in_domain(field, value)) continue;
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string("ring modulator: ") + field.name + " out of range [" +
+                              util::to_text(field.lo) + ", " + util::to_text(field.hi) + "], got " +
+                              util::to_text(value));
+  }
 }
 
 void RingModulator::prepare(double sample_rate, int) {
@@ -62,9 +103,11 @@ void RingModulator::process(float* const* channels, int num_channels, int num_sa
 void RingModulator::reset() { phase_ = 0.0; }
 
 bool RingModulator::set_parameter_impl(unsigned int param_id, float value) {
+  const FieldDomain* field = find_field(param_id);
+  if (field != nullptr && !in_domain(*field, value)) return false;
   switch (param_id) {
     case 0:
-      config_.carrier_hz = std::max(0.0f, value);
+      config_.carrier_hz = value;
       return true;
     case 1:
       config_.dry_wet = value;
@@ -78,10 +121,10 @@ bool RingModulator::set_parameter_impl(unsigned int param_id, float value) {
       config_.shape = static_cast<LfoShape>(static_cast<int>(value));
       return true;
     case 3:
-      config_.phase_deg = std::clamp(value, 0.0f, kMaxPhaseDeg);
+      config_.phase_deg = value;
       return true;
     case 4:
-      config_.stereo_spread = std::clamp(value, 0.0f, 1.0f);
+      config_.stereo_spread = value;
       return true;
     case 5:
       return common::mix_law_from_value(value, &config_.mix_law);

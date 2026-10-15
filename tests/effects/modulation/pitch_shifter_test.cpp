@@ -7,11 +7,15 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
+#include <limits>
+#include <string>
 #include <vector>
 
+#include "effects/common/control_ranges.h"
 #include "effects/common/mix_law.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace {
 
@@ -600,4 +604,128 @@ TEST_CASE("pitch shifter re-prepared at a new rate rebuilds its anti-alias secti
   const std::vector<float> fresh_output = render_impulse(fresh, length, 0.3f);
   require_finite(reprepared_output);
   REQUIRE(max_difference(reprepared_output, fresh_output) == 0.0f);
+}
+
+namespace {
+
+using sonare::ErrorCode;
+using sonare::SonareException;
+
+constexpr float kInf = std::numeric_limits<float>::infinity();
+constexpr float kNaN = std::numeric_limits<float>::quiet_NaN();
+constexpr int kDomainBlock = 2048;
+constexpr double kDomainRate = 48000.0;
+
+/// One numeric field of PitchShifterConfig with its automation id and closed domain.
+struct DomainRow {
+  const char* name;
+  float PitchShifterConfig::*member;
+  unsigned int id;
+  float lo;
+  float hi;
+};
+
+const DomainRow kDomainRows[] = {
+    {"semitones", &PitchShifterConfig::semitones, 0, -24.0f, 24.0f},
+    {"dryWet", &PitchShifterConfig::dry_wet, 1, 0.0f, 1.0f},
+    {"cents", &PitchShifterConfig::cents, 2, -100.0f, 100.0f},
+    {"pan", &PitchShifterConfig::pan, 3, -1.0f, 1.0f},
+    {"semitones2", &PitchShifterConfig::semitones2, 4, -24.0f, 24.0f},
+    {"cents2", &PitchShifterConfig::cents2, 5, -100.0f, 100.0f},
+    {"level2", &PitchShifterConfig::level2, 6, 0.0f, 1.0f},
+    {"pan2", &PitchShifterConfig::pan2, 7, -1.0f, 1.0f},
+    {"feedback", &PitchShifterConfig::feedback, 8, -sonare::effects::common::kMaxFeedback,
+     sonare::effects::common::kMaxFeedback},
+    {"windowMs", &PitchShifterConfig::window_ms, 12, 0.5f, 1000.0f},
+    {"preDelayMs", &PitchShifterConfig::pre_delay_ms, 13, 0.0f, 1000.0f},
+    {"preDelay2Ms", &PitchShifterConfig::pre_delay2_ms, 14, 0.0f, 1000.0f},
+};
+
+std::vector<float> domain_refused(const DomainRow& row) {
+  return {kNaN, kInf, -kInf, std::nextafter(row.lo, -kInf), std::nextafter(row.hi, kInf)};
+}
+
+PitchShifterConfig domain_base() {
+  PitchShifterConfig config;
+  config.semitones = 5.0f;
+  config.semitones2 = -3.0f;
+  config.level2 = 0.5f;
+  config.dry_wet = 0.8f;
+  return config;
+}
+
+std::vector<float> domain_render(PitchShifter& shifter) {
+  std::vector<float> out;
+  for (int block = 0; block < 4; ++block) {
+    std::vector<float> left(static_cast<std::size_t>(kDomainBlock));
+    std::vector<float> right(static_cast<std::size_t>(kDomainBlock));
+    for (int i = 0; i < kDomainBlock; ++i) {
+      const float t = static_cast<float>(block * kDomainBlock + i);
+      left[static_cast<std::size_t>(i)] = 0.4f * std::sin(0.05f * t) + 0.1f * std::sin(0.31f * t);
+      right[static_cast<std::size_t>(i)] = 0.3f * std::sin(0.07f * t + 1.0f);
+    }
+    float* channels[] = {left.data(), right.data()};
+    shifter.process(channels, 2, kDomainBlock);
+    out.insert(out.end(), left.begin(), left.end());
+    out.insert(out.end(), right.begin(), right.end());
+  }
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("PitchShifter construction refuses a value outside a field's domain", "[effects]") {
+  for (const DomainRow& row : kDomainRows) {
+    for (const float bad : domain_refused(row)) {
+      CAPTURE(row.name, bad);
+      PitchShifterConfig config;
+      config.*row.member = bad;
+      try {
+        PitchShifter shifter(config);
+        FAIL("construction accepted " << row.name);
+      } catch (const SonareException& error) {
+        CHECK(error.code() == ErrorCode::InvalidParameter);
+        CHECK(std::string(error.what()).find(row.name) != std::string::npos);
+      }
+      CHECK_THROWS_AS(PitchShifter::validate_config(config), SonareException);
+    }
+    for (const float good : {row.lo, row.hi}) {
+      CAPTURE(row.name, good);
+      PitchShifterConfig config;
+      config.*row.member = good;
+      CHECK_NOTHROW(PitchShifter::validate_config(config));
+      CHECK_NOTHROW(PitchShifter(config));
+    }
+  }
+}
+
+TEST_CASE("PitchShifter live automation refuses an out-of-domain value and changes nothing",
+          "[effects]") {
+  for (const DomainRow& row : kDomainRows) {
+    for (const float bad : domain_refused(row)) {
+      CAPTURE(row.name, bad);
+      PitchShifter touched(domain_base());
+      touched.prepare(kDomainRate, kDomainBlock);
+      CHECK_FALSE(touched.set_parameter(row.id, bad));
+      PitchShifter untouched(domain_base());
+      untouched.prepare(kDomainRate, kDomainBlock);
+      CHECK(domain_render(touched) == domain_render(untouched));
+    }
+  }
+}
+
+TEST_CASE("PitchShifter live automation applies a value on a bound exactly", "[effects]") {
+  for (const DomainRow& row : kDomainRows) {
+    for (const float good : {row.lo, row.hi}) {
+      CAPTURE(row.name, good);
+      PitchShifter live(domain_base());
+      live.prepare(kDomainRate, kDomainBlock);
+      REQUIRE(live.set_parameter(row.id, good));
+      PitchShifterConfig config = domain_base();
+      config.*row.member = good;
+      PitchShifter constructed(config);
+      constructed.prepare(kDomainRate, kDomainBlock);
+      CHECK(domain_render(live) == domain_render(constructed));
+    }
+  }
 }

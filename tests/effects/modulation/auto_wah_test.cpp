@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <vector>
 
+#include "effects/modulation/domain_cases.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
 
@@ -280,4 +281,24 @@ TEST_CASE("auto-wah drops inactive right-plane history on mono re-entry", "[boun
     REQUIRE(lifecycle_difference(subject.left, control.left) <= 2.0e-5f);
     REQUIRE(lifecycle_difference(subject.right, control.right) <= 2.0e-5f);
   }
+}
+
+TEST_CASE("auto-wah refuses a config field outside its domain",
+          "[effects][modulation][auto_wah][domain]") {
+  namespace domain = sonare::test::modulation_domain;
+  using Row = domain::DomainRow<AutoWahConfig>;
+  AutoWahConfig base;
+  base.lfo_depth = 0.5f;  // audible, so the LFO rate is observable
+  const Row rows[] = {
+      {"sensitivity", 0, &AutoWahConfig::sensitivity, 0.0f, domain::kInf},
+      {"min_hz", 1, &AutoWahConfig::min_hz, 10.0f, domain::kInf},
+      {"max_hz", 2, &AutoWahConfig::max_hz, 10.0f, domain::kInf},
+      {"resonance", 3, &AutoWahConfig::resonance, 0.5f, domain::kInf},
+      {"dry_wet", 4, &AutoWahConfig::dry_wet, 0.0f, 1.0f},
+      {"lfo_rate_hz", 5, &AutoWahConfig::lfo_rate_hz, 0.0f, domain::kInf},
+      {"lfo_depth", 6, &AutoWahConfig::lfo_depth, 0.0f, 1.0f},
+      {"attack_ms", domain::kConstructionOnly, &AutoWahConfig::attack_ms, 0.0f, domain::kInf},
+      {"release_ms", domain::kConstructionOnly, &AutoWahConfig::release_ms, 0.0f, domain::kInf},
+  };
+  for (const Row& row : rows) domain::check_row<AutoWah>("auto_wah", base, row);
 }

@@ -67,7 +67,7 @@ struct RotaryConfig {
   /// Treble horn rotor target rate. The two rotors are independent; the drum's
   /// default is 0.74 of this one's, which is the ratio the pair has always run
   /// at, but nothing holds them to it once either is set.
-  float rate_hz = 6.0f;
+  float rate_hz = 6.0f;  ///< rates, times and undershoots are finite and >= 0; depth_ms <= 20.
   float drum_rate_hz = 4.44f;  ///< bass drum rotor target rate.
   /// Peak doppler delay swing. The modulated delay is centred on this value
   /// rather than on zero, so the effect carries a mean delay of `depth_ms` -
@@ -81,7 +81,7 @@ struct RotaryConfig {
   /// L/R anti-phase amount [0, 1]: the right rotor's LFO phase offset and the mic
   /// angles; a live change shifts that phase by the delta, keeping rotor state.
   float stereo_spread = 1.0f;
-  float dry_wet = 1.0f;
+  float dry_wet = 1.0f;  ///< [0, 1].
   /// How long a rotor takes to close the gap to a new target rate, one time
   /// constant per direction. Seconds rather than a per-sample coefficient, so
   /// the glide keeps its duration at every sample rate. Zero: arrive at once.
@@ -99,7 +99,7 @@ struct RotaryConfig {
   /// Speed switch: 0 slow, 1 fast (a value from 0.5 up is fast). Each rotor's target is then its
   /// slow or fast rate and `rate_hz` / `drum_rate_hz` are not read. Below zero the switch is off.
   float speed = -1.0f;
-  float horn_level_db = 0.0f;  ///< horn rotor output level.
+  float horn_level_db = 0.0f;  ///< horn rotor output level; finite, with a finite linear gain.
   float drum_level_db = 0.0f;  ///< drum rotor output level.
   /// How the delay lines read between samples; see DelayInterpolation.
   DelayInterpolation interpolation = DelayInterpolation::kLinear;
@@ -116,14 +116,19 @@ struct RotaryConfig {
 /// characteristic swirling stereo image.
 class Rotary : public rt::ProcessorBase {
  public:
+  /// Throws SonareException(InvalidParameter) naming the first field outside its domain.
   explicit Rotary(RotaryConfig config = {});
+
+  /// Refuses a non-finite field and any field outside its documented domain.
+  static void validate_config(const RotaryConfig& config);
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   int tail_samples() const noexcept override;
 
-  // Automatable parameters (RT-safe, in-place scalar updates):
+  // Automatable parameters (RT-safe, in-place scalar updates). A value outside a field's domain
+  // (the same one validate_config enforces) is refused and changes nothing:
   //   0 = rate_hz (the horn rotor's target; it glides there)
   //   1 = depth_ms
   //   2 = tremolo

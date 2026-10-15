@@ -55,6 +55,7 @@ struct StereoDelayConfig {
   bool invert_r = false;
   /// Sine modulation of every delay time. Depth zero is off; the right side and tap 4 lag by
   /// `mod_phase_deg`. A modulated time is clamped to [0, 4 s].
+  /// Every field is refused outside the domain `validate_config` states.
   float mod_rate_hz = 0.0f;
   float mod_depth_ms = 0.0f;
   float mod_phase_deg = 0.0f;
@@ -69,24 +70,28 @@ struct StereoDelayConfig {
 
 class StereoDelay : public rt::ProcessorBase {
  public:
+  /// @throws SonareException(InvalidParameter) naming the first field outside its domain.
   explicit StereoDelay(StereoDelayConfig config = {});
+
+  /// Refuses a config with a non-finite field or one outside the domain stated beside it.
+  static void validate_config(const StereoDelayConfig& config);
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   int tail_samples() const noexcept override;
 
-  void set_config(const StereoDelayConfig& config) noexcept;
+  /// @throws SonareException(InvalidParameter) on a refused config; the held config is kept.
+  void set_config(const StereoDelayConfig& config);
   const StereoDelayConfig& config() const noexcept { return config_; }
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = delay_time_l_ms
   //   1 = delay_time_r_ms
-  //   2 = feedback (clamped to +-common::kMaxFeedback, the sign carried; smoothed in process())
-  //   3 = ping_pong (clamped to [0, 1], smoothed in process())
-  //   4 = dry_wet (clamped to [0, 1], smoothed in process())
-  //   5 = damping_hz (corner in Hz, <= 0 bypasses; rebuilds one coefficient)
-  //   6/7 = tap3_ms/tap4_ms, 8..11 = tap1..4_level_db, 12/13 = tap3/4_pan
+  //   2 = feedback (refused outside +-common::kMaxFeedback, the sign carried; smoothed in
+  //   process()) 3 = ping_pong (refused outside [0, 1], smoothed in process()) 4 = dry_wet (refused
+  //   outside [0, 1], smoothed in process()) 5 = damping_hz (corner in Hz, >= 0, 0 bypasses;
+  //   rebuilds one coefficient) 6/7 = tap3_ms/tap4_ms, 8..11 = tap1..4_level_db, 12/13 = tap3/4_pan
   //   14/15 = invert_l/r, 16..18 = mod_rate_hz/depth_ms/phase_deg, 19 = glide_ms
   //   20 = cross_mode, 21 = mix_law, 22 = interpolation (0 linear, 1 Lagrange3)
   bool set_parameter_impl(unsigned int param_id, float value) override;

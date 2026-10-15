@@ -21,8 +21,7 @@ TEST_CASE("Dattorro refuses modulation depth that cannot be represented by its b
   using sonare::effects::reverb::DattorroReverbConfig;
   DattorroReverbConfig config;
   config.mod_depth_samples = std::numeric_limits<float>::max();
-  DattorroReverb oversized(config);
-  CHECK_THROWS_AS(oversized.prepare(48000.0, 512), sonare::SonareException);
+  CHECK_THROWS_AS(DattorroReverb(config), sonare::SonareException);
   DattorroReverb normal;
   normal.prepare(48000.0, 512);
   CHECK_FALSE(normal.set_parameter(4, std::numeric_limits<float>::max()));
@@ -37,8 +36,7 @@ TEST_CASE("Dattorro modulation depth is bounded by the shorter modulated allpass
     INFO("depth=" << depth);
     DattorroReverbConfig config;
     config.mod_depth_samples = depth;
-    DattorroReverb oversized(config);
-    CHECK_THROWS_AS(oversized.prepare(48000.0, 512), sonare::SonareException);
+    CHECK_THROWS_AS(DattorroReverb(config), sonare::SonareException);
     DattorroReverb live;
     live.prepare(48000.0, 512);
     CHECK_FALSE(live.set_parameter(4, depth));
@@ -158,26 +156,17 @@ double sideband_fraction(const std::vector<float>& window, double tone_hz, doubl
 
 }  // namespace
 
-TEST_CASE("Dattorro construction clamps negative modulation depth like automation",
+TEST_CASE("Dattorro construction refuses negative or non-finite modulation depth like automation",
           "[effects][dattorro][depth-validation]") {
-  DattorroReverbConfig zero;
-  zero.mod_depth_samples = 0.0f;
-  zero.dry_wet = 1.0f;
-  std::vector<float> impulse(16384, 0.0f);
-  impulse[0] = 1.0f;
-  const auto expected = run_stereo(zero, impulse, 0);
+  DattorroReverb live;
+  live.prepare(48000.0, 512);
   for (float depth :
        {-1.0f, std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
     INFO("depth=" << depth);
-    auto invalid = zero;
+    DattorroReverbConfig invalid;
     invalid.mod_depth_samples = depth;
-    const auto actual = run_stereo(invalid, impulse, 0);
-    float max_difference = 0.0f;
-    for (size_t i = 0; i < expected.size(); ++i) {
-      REQUIRE(std::isfinite(actual[i]));
-      max_difference = std::max(max_difference, std::abs(actual[i] - expected[i]));
-    }
-    CHECK(max_difference == 0.0f);
+    CHECK_THROWS_AS(DattorroReverb(invalid), sonare::SonareException);
+    CHECK_FALSE(live.set_parameter(4, depth));
   }
 }
 

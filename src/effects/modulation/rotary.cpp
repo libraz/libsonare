@@ -2,12 +2,15 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <string>
 
 #include "rt/param_smoother.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/db.h"
+#include "util/exception.h"
 #include "util/non_finite_state.h"
 
 namespace sonare::effects::modulation {
@@ -25,28 +28,67 @@ double glide_coeff(float tau_s, double sample_rate) noexcept {
   return -std::expm1(-1.0 / (static_cast<double>(tau_s) * sample_rate));
 }
 
+/// One validated field: its automation id and the closed interval a value must lie in.
+struct FieldDomain {
+  const char* name;
+  float RotaryConfig::*member;
+  unsigned int param_id;
+  float lo;
+  float hi;
+  bool gain_db;  ///< true: any value whose linear gain is finite.
+};
+
+constexpr float kInf = std::numeric_limits<float>::infinity();
+
+// The single definition of each field's domain, shared by validate_config and live automation.
+constexpr FieldDomain kFields[] = {
+    {"rateHz", &RotaryConfig::rate_hz, 0, 0.0f, kInf, false},
+    {"depthMs", &RotaryConfig::depth_ms, 1, 0.0f, kMaxDepthMs, false},
+    {"tremolo", &RotaryConfig::tremolo, 2, 0.0f, 1.0f, false},
+    {"dryWet", &RotaryConfig::dry_wet, 3, 0.0f, 1.0f, false},
+    {"drumRateHz", &RotaryConfig::drum_rate_hz, 4, 0.0f, kInf, false},
+    {"hornSlowHz", &RotaryConfig::horn_slow_hz, 5, 0.0f, kInf, false},
+    {"hornFastHz", &RotaryConfig::horn_fast_hz, 6, 0.0f, kInf, false},
+    {"drumSlowHz", &RotaryConfig::drum_slow_hz, 7, 0.0f, kInf, false},
+    {"drumFastHz", &RotaryConfig::drum_fast_hz, 8, 0.0f, kInf, false},
+    {"speed", &RotaryConfig::speed, 9, -1.0f, 1.0f, false},
+    {"hornLevelDb", &RotaryConfig::horn_level_db, 10, -kInf, kInf, true},
+    {"drumLevelDb", &RotaryConfig::drum_level_db, 11, -kInf, kInf, true},
+    {"stereoSpread", &RotaryConfig::stereo_spread, 14, 0.0f, 1.0f, false},
+    {"accelTauS", &RotaryConfig::accel_tau_s, 15, 0.0f, kInf, false},
+    {"decelTauS", &RotaryConfig::decel_tau_s, 16, 0.0f, kInf, false},
+    {"undershootHz", &RotaryConfig::undershoot_hz, 17, 0.0f, kInf, false},
+    {"drumUndershootHz", &RotaryConfig::drum_undershoot_hz, 18, 0.0f, kInf, false},
+};
+
+bool in_domain(const FieldDomain& field, float value) noexcept {
+  if (!std::isfinite(value)) return false;
+  if (field.gain_db) return std::isfinite(db_to_linear(value));
+  return value >= field.lo && value <= field.hi;
+}
+
+const FieldDomain* find_field(unsigned int param_id) noexcept {
+  for (const FieldDomain& field : kFields) {
+    if (field.param_id == param_id) return &field;
+  }
+  return nullptr;
+}
+
 }  // namespace
 
-Rotary::Rotary(RotaryConfig config) : config_(config) {
-  config_.rate_hz = std::max(0.0f, config_.rate_hz);
-  config_.drum_rate_hz = std::max(0.0f, config_.drum_rate_hz);
-  config_.depth_ms = std::clamp(config_.depth_ms, 0.0f, kMaxDepthMs);
-  config_.tremolo = std::clamp(config_.tremolo, 0.0f, 1.0f);
-  if (!std::isfinite(config_.stereo_spread)) config_.stereo_spread = 1.0f;
-  config_.stereo_spread = std::clamp(config_.stereo_spread, 0.0f, 1.0f);
-  if (!std::isfinite(config_.accel_tau_s)) config_.accel_tau_s = 0.0f;
-  if (!std::isfinite(config_.decel_tau_s)) config_.decel_tau_s = 0.0f;
-  if (!std::isfinite(config_.undershoot_hz)) config_.undershoot_hz = 0.0f;
-  if (!std::isfinite(config_.drum_undershoot_hz)) config_.drum_undershoot_hz = 0.0f;
-  config_.accel_tau_s = std::max(0.0f, config_.accel_tau_s);
-  config_.decel_tau_s = std::max(0.0f, config_.decel_tau_s);
-  config_.undershoot_hz = std::max(0.0f, config_.undershoot_hz);
-  config_.drum_undershoot_hz = std::max(0.0f, config_.drum_undershoot_hz);
-  config_.horn_slow_hz = std::max(0.0f, config_.horn_slow_hz);
-  config_.horn_fast_hz = std::max(0.0f, config_.horn_fast_hz);
-  config_.drum_slow_hz = std::max(0.0f, config_.drum_slow_hz);
-  config_.drum_fast_hz = std::max(0.0f, config_.drum_fast_hz);
-  config_.speed = std::clamp(config_.speed, -1.0f, 1.0f);
+Rotary::Rotary(RotaryConfig config) : config_(config) { validate_config(config_); }
+
+void Rotary::validate_config(const RotaryConfig& config) {
+  for (const FieldDomain& field : kFields) {
+    const float value = config.*field.member;
+    if (in_domain(field, value)) continue;
+    const std::string bounds =
+        field.gain_db ? "(finite linear gain required)"
+                      : "[" + util::to_text(field.lo) + ", " + util::to_text(field.hi) + "]";
+    throw SonareException(ErrorCode::InvalidParameter, std::string("rotary: ") + field.name +
+                                                           " out of range " + bounds + ", got " +
+                                                           util::to_text(value));
+  }
 }
 
 float Rotary::horn_target_hz() const noexcept {
@@ -360,36 +402,38 @@ void Rotary::reset() {
 }
 
 bool Rotary::set_parameter_impl(unsigned int param_id, float value) {
+  const FieldDomain* field = find_field(param_id);
+  if (field != nullptr && !in_domain(*field, value)) return false;
   switch (param_id) {
     case 0:
-      config_.rate_hz = std::max(0.0f, value);
+      config_.rate_hz = value;
       return true;
     case 1:
-      config_.depth_ms = std::clamp(value, 0.0f, kMaxDepthMs);
+      config_.depth_ms = value;
       return true;
     case 2:
-      config_.tremolo = std::clamp(value, 0.0f, 1.0f);
+      config_.tremolo = value;
       return true;
     case 3:
       config_.dry_wet = value;
       return true;
     case 4:
-      config_.drum_rate_hz = std::max(0.0f, value);
+      config_.drum_rate_hz = value;
       return true;
     case 5:
-      config_.horn_slow_hz = std::max(0.0f, value);
+      config_.horn_slow_hz = value;
       return true;
     case 6:
-      config_.horn_fast_hz = std::max(0.0f, value);
+      config_.horn_fast_hz = value;
       return true;
     case 7:
-      config_.drum_slow_hz = std::max(0.0f, value);
+      config_.drum_slow_hz = value;
       return true;
     case 8:
-      config_.drum_fast_hz = std::max(0.0f, value);
+      config_.drum_fast_hz = value;
       return true;
     case 9:
-      config_.speed = std::clamp(value, -1.0f, 1.0f);
+      config_.speed = value;
       return true;
     case 10:
       config_.horn_level_db = value;
@@ -421,7 +465,7 @@ bool Rotary::set_parameter_impl(unsigned int param_id, float value) {
     }
     case 14: {
       const float old_spread = config_.stereo_spread;
-      config_.stereo_spread = std::clamp(value, 0.0f, 1.0f);
+      config_.stereo_spread = value;
       if (prepared_) {
         // Shift the right LFO by the spread delta rather than resetting it.
         const double phase_delta = 0.5 * static_cast<double>(config_.stereo_spread - old_spread);
@@ -432,18 +476,18 @@ bool Rotary::set_parameter_impl(unsigned int param_id, float value) {
       return true;
     }
     case 15:
-      config_.accel_tau_s = std::max(0.0f, value);
+      config_.accel_tau_s = value;
       accel_coeff_ = glide_coeff(config_.accel_tau_s, sample_rate_);
       return true;
     case 16:
-      config_.decel_tau_s = std::max(0.0f, value);
+      config_.decel_tau_s = value;
       decel_coeff_ = glide_coeff(config_.decel_tau_s, sample_rate_);
       return true;
     case 17:
-      config_.undershoot_hz = std::max(0.0f, value);
+      config_.undershoot_hz = value;
       return true;
     case 18:
-      config_.drum_undershoot_hz = std::max(0.0f, value);
+      config_.drum_undershoot_hz = value;
       return true;
     default:
       return false;

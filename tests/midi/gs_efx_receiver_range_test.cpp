@@ -35,6 +35,7 @@
 #include "midi/synth/gs_layer.h"
 #include "rt/processor_base.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace {
 
@@ -263,29 +264,42 @@ TEST_CASE("the pitch shifter takes the whole translated feedback range", "[gs][g
       0x0161, 2, "effects.modulation.pitchShifter");
 }
 
-TEST_CASE("feedback past the shared limit stops at it on every receiver", "[gs][gs-efx][effects]") {
+TEST_CASE("feedback past the shared limit is refused and the limit is reached on every receiver",
+          "[gs][gs-efx][effects]") {
   using sonare::effects::common::kMaxFeedback;
   constexpr float kFarPast = 40.0f;
-  fx::ChorusConfig chorus;
-  chorus.rate_hz = 0.0f;
-  chorus.depth_ms = 0.0f;
-  chorus.center_delay_ms = kLoopMs;
-  chorus.dry_wet = 1.0f;
-  chorus.feedback = kFarPast;
-  fx::FlangerConfig flanger;
-  flanger.rate_hz = 0.0f;
-  flanger.depth_ms = 0.0f;
-  flanger.center_delay_ms = kLoopMs;
-  flanger.dry_wet = 1.0f;
-  flanger.feedback = kFarPast;
-  fx::PitchShifterConfig shifter;
-  shifter.dry_wet = 1.0f;
-  shifter.pre_delay_ms = kLoopMs;
-  shifter.feedback = kFarPast;
+  const auto chorus = [](float feedback) {
+    fx::ChorusConfig config;
+    config.rate_hz = 0.0f;
+    config.depth_ms = 0.0f;
+    config.center_delay_ms = kLoopMs;
+    config.dry_wet = 1.0f;
+    config.feedback = feedback;
+    return config;
+  };
+  const auto flanger = [](float feedback) {
+    fx::FlangerConfig config;
+    config.rate_hz = 0.0f;
+    config.depth_ms = 0.0f;
+    config.center_delay_ms = kLoopMs;
+    config.dry_wet = 1.0f;
+    config.feedback = feedback;
+    return config;
+  };
+  const auto shifter = [](float feedback) {
+    fx::PitchShifterConfig config;
+    config.dry_wet = 1.0f;
+    config.pre_delay_ms = kLoopMs;
+    config.feedback = feedback;
+    return config;
+  };
+  CHECK_THROWS_AS(fx::Chorus(chorus(kFarPast)), sonare::SonareException);
+  CHECK_THROWS_AS(fx::Flanger(flanger(kFarPast)), sonare::SonareException);
+  CHECK_THROWS_AS(fx::PitchShifter(shifter(kFarPast)), sonare::SonareException);
   std::vector<std::unique_ptr<sonare::rt::ProcessorBase>> procs;
-  procs.push_back(std::make_unique<fx::Chorus>(chorus));
-  procs.push_back(std::make_unique<fx::Flanger>(flanger));
-  procs.push_back(std::make_unique<fx::PitchShifter>(shifter));
+  procs.push_back(std::make_unique<fx::Chorus>(chorus(kMaxFeedback)));
+  procs.push_back(std::make_unique<fx::Flanger>(flanger(kMaxFeedback)));
+  procs.push_back(std::make_unique<fx::PitchShifter>(shifter(kMaxFeedback)));
   for (const auto& proc : procs) {
     proc->prepare(48000.0, kBlock);
     const std::vector<float> x = impulse_response(*proc, 8192);

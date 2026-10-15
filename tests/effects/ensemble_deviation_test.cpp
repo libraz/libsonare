@@ -267,10 +267,12 @@ TEST_CASE("Ensemble deviation keys are realtime and reject non-finite values",
   CHECK_FALSE(processor.parameter_is_realtime_safe(13));
   CHECK_FALSE(processor.set_parameter(13, 0.0f));
 
-  // A deviation far past its range is clamped to what prepare() sized and
-  // still renders finite audio.
-  processor.set_parameter(8, 1000.0f);
-  processor.set_parameter(9, 100.0f);
+  // A deviation past its range is refused, and the top of each range renders
+  // finite audio inside what prepare() sized.
+  CHECK_FALSE(processor.set_parameter(8, 1000.0f));
+  CHECK_FALSE(processor.set_parameter(9, 100.0f));
+  CHECK(processor.set_parameter(8, 20.0f));
+  CHECK(processor.set_parameter(9, 1.0f));
   std::vector<float> left(4800, 0.5f);
   std::vector<float> right = left;
   sonare::test::process_stereo(processor, left, right);

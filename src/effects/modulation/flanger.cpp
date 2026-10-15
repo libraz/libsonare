@@ -4,12 +4,19 @@
 #include <cmath>
 
 #include "effects/common/control_ranges.h"
+#include "effects/common/field_domain.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/non_finite_state.h"
 
 namespace sonare::effects::modulation {
+
+using common::FieldRange;
+using common::in_domain;
+using common::kAnyFinite;
+using common::kNoUpperBound;
+using common::require_in_domain;
 
 using constants::kDefaultDawSampleRate;
 using constants::kDegreesPerTurnD;
@@ -23,21 +30,36 @@ constexpr float kMaxFlangerDepthMs = 100.0f;
 // Minimum delay-buffer length so the buffer is never smaller than a typical
 // flanger range even for tiny configured delays.
 constexpr float kMinDelayBufferMs = 100.0f;  // 100 ms
-constexpr float kMaxPhaseDeg = 180.0f;
 constexpr unsigned int kPreFilterModeCount = 3;
+
+// Field domains shared by validate_config and live automation.
+constexpr FieldRange kRateHz{0.0f, kNoUpperBound};
+constexpr FieldRange kDepthMs{0.0f, kMaxFlangerDepthMs};
+constexpr FieldRange kCenterDelayMs{0.0f, kMaxModulationPreDelayMs};
+constexpr FieldRange kFeedback{-kMaxFeedback, kMaxFeedback};
+constexpr FieldRange kDryWet{0.0f, 1.0f};
+constexpr FieldRange kPhaseDeg{0.0f, 180.0f};
+constexpr FieldRange kStepRateHz{0.0f, kNoUpperBound};
 
 }  // namespace
 
-Flanger::Flanger(FlangerConfig config) : config_(config) {
-  config_.center_delay_ms = std::clamp(config_.center_delay_ms, 0.0f, kMaxModulationPreDelayMs);
-  config_.depth_ms = std::clamp(config_.depth_ms, 0.0f, kMaxFlangerDepthMs);
-  config_.phase_deg = std::clamp(config_.phase_deg, 0.0f, kMaxPhaseDeg);
+Flanger::Flanger(FlangerConfig config) : config_(config) { validate_config(config_); }
+
+void Flanger::validate_config(const FlangerConfig& config) {
+  require_in_domain("flanger", "rate_hz", config.rate_hz, kRateHz);
+  require_in_domain("flanger", "depth_ms", config.depth_ms, kDepthMs);
+  require_in_domain("flanger", "center_delay_ms", config.center_delay_ms, kCenterDelayMs);
+  require_in_domain("flanger", "feedback", config.feedback, kFeedback);
+  require_in_domain("flanger", "dry_wet", config.dry_wet, kDryWet);
+  require_in_domain("flanger", "pre_filter_hz", config.pre_filter_hz, kAnyFinite);
+  require_in_domain("flanger", "phase_deg", config.phase_deg, kPhaseDeg);
+  require_in_domain("flanger", "step_rate_hz", config.step_rate_hz, kStepRateHz);
 }
 
 void Flanger::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   // Size the buffer for the maximum AUTOMATABLE modulated delay, not just the
-  // initial config: set_parameter clamps center and depth, so the LFO peak can
+  // initial config: the center and depth domains are bounded, so the LFO peak can
   // reach the sum of both ceilings. Sizing to the initial config would let later
   // automation exceed the buffer and be silently truncated by the delay-line
   // read clamp. The floor keeps a sane minimum. (The read clamp still prevents
@@ -73,14 +95,12 @@ void Flanger::process(float* const* channels, int num_channels, int num_samples)
   const bool stereo = right != left;
   // Block-rate dry/wet + modulation depth: smoothed across blocks by the engine
   // parameter slot smoother, not per-sample (see Chorus::process for the rationale).
-  const common::MixGains mix =
-      common::mix_gains(config_.mix_law, std::clamp(config_.dry_wet, 0.0f, 1.0f));
+  const common::MixGains mix = common::mix_gains(config_.mix_law, config_.dry_wet);
   const float wet = mix.wet;
   const float dry = mix.dry;
-  const float fb = std::clamp(config_.feedback, -kMaxFeedback, kMaxFeedback);
+  const float fb = config_.feedback;
   // Derived from the rate in hertz each block, so the hold survives a rate change.
-  const double step_per_sample =
-      static_cast<double>(std::max(0.0f, config_.step_rate_hz)) / sample_rate_;
+  const double step_per_sample = static_cast<double>(config_.step_rate_hz) / sample_rate_;
   if (step_per_sample <= 0.0) step_phase_ = 1.0;
   for (int i = 0; i < num_samples; ++i) {
     const float in_l = left[i];
@@ -121,15 +141,12 @@ void Flanger::process(float* const* channels, int num_channels, int num_samples)
 }
 
 int Flanger::tail_samples() const noexcept {
-  const common::MixGains mix =
-      common::mix_gains(config_.mix_law, std::clamp(config_.dry_wet, 0.0f, 1.0f));
+  const common::MixGains mix = common::mix_gains(config_.mix_law, config_.dry_wet);
   if (!(mix.wet > 0.0f)) return 0;
   const double longest = (config_.center_delay_ms + config_.depth_ms) * 0.001 * sample_rate_ +
                          kDelayReadStencilSamples;
   rt::TailBudget tail;
-  tail.decay(pre_filters_[0].pole())
-      .delay(longest)
-      .recirculation(longest, std::clamp(config_.feedback, -kMaxFeedback, kMaxFeedback));
+  tail.decay(pre_filters_[0].pole()).delay(longest).recirculation(longest, config_.feedback);
   return tail.samples();
 }
 
@@ -151,27 +168,31 @@ void Flanger::discard_non_finite() noexcept {
 }
 
 bool Flanger::set_parameter_impl(unsigned int param_id, float value) {
-  // Reject before the clamps below: std::clamp leaves NaN intact and the delay
-  // ids feed the fractional read index (see delay_param_acceptable).
+  // A value outside a field's domain is refused with no state change; non-finite
+  // values never reach the delay read index (see delay_param_acceptable).
   if (!delay_param_acceptable(value)) return false;
   switch (param_id) {
     case 0:
-      config_.rate_hz = std::max(0.0f, value);
+      if (!in_domain(value, kRateHz)) return false;
+      config_.rate_hz = value;
       // Updates the LFO increment in place; preserves oscillator phase.
       lfos_[0].set_rate_hz(config_.rate_hz);
       lfos_[1].set_rate_hz(config_.rate_hz);
       return true;
     case 1:
-      config_.depth_ms = std::clamp(value, 0.0f, kMaxFlangerDepthMs);
+      if (!in_domain(value, kDepthMs)) return false;
+      config_.depth_ms = value;
       return true;
     case 2:
-      config_.center_delay_ms = std::clamp(value, 0.0f, kMaxModulationPreDelayMs);
+      if (!in_domain(value, kCenterDelayMs)) return false;
+      config_.center_delay_ms = value;
       return true;
     case 3:
-      // process() clamps feedback to +-kMaxFeedback; store the raw target.
+      if (!in_domain(value, kFeedback)) return false;
       config_.feedback = value;
       return true;
     case 4:
+      if (!in_domain(value, kDryWet)) return false;
       config_.dry_wet = value;
       return true;
     case 5: {
@@ -188,11 +209,13 @@ bool Flanger::set_parameter_impl(unsigned int param_id, float value) {
       return true;
     }
     case 6:
-      config_.phase_deg = std::clamp(value, 0.0f, kMaxPhaseDeg);
+      if (!in_domain(value, kPhaseDeg)) return false;
+      config_.phase_deg = value;
       lfos_[1].reset(lfos_[0].phase() + static_cast<double>(config_.phase_deg) / kDegreesPerTurnD);
       return true;
     case 7:
-      config_.step_rate_hz = std::max(0.0f, value);
+      if (!in_domain(value, kStepRateHz)) return false;
+      config_.step_rate_hz = value;
       return true;
     case 8: {
       // An unnamed mode is refused rather than rounded onto a neighbour.
@@ -225,7 +248,7 @@ bool Flanger::set_parameter_impl(unsigned int param_id, float value) {
 
 bool Flanger::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   // Every automatable id performs an in-place scalar/coefficient update; the
-  // delay lines are pre-sized to the clamped range at prepare(), so no id
+  // delay lines are pre-sized to the accepted range at prepare(), so no id
   // allocates or resets audio state. Unknown ids are rejected by set_parameter.
   return param_id <= 10;
 }

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "effects/common/field_domain.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
@@ -10,12 +11,33 @@
 
 namespace sonare::effects::modulation {
 
+using common::FieldRange;
+using common::in_domain;
+using common::kNoUpperBound;
+using common::require_in_domain;
+
 using constants::kDefaultDawSampleRate;
 
-AutoWah::AutoWah(AutoWahConfig config) : config_(config) {
-  config_.resonance = std::max(0.5f, config_.resonance);
-  config_.lfo_rate_hz = std::max(0.0f, config_.lfo_rate_hz);
-  config_.lfo_depth = std::clamp(config_.lfo_depth, 0.0f, 1.0f);
+namespace {
+// Field domains shared by validate_config and live automation.
+constexpr FieldRange kNonNegative{0.0f, kNoUpperBound};
+constexpr FieldRange kSweepHz{kWahMinSweepHz, kNoUpperBound};
+constexpr FieldRange kResonance{kWahMinResonance, kNoUpperBound};
+constexpr FieldRange kUnit{0.0f, 1.0f};
+}  // namespace
+
+AutoWah::AutoWah(AutoWahConfig config) : config_(config) { validate_config(config_); }
+
+void AutoWah::validate_config(const AutoWahConfig& config) {
+  require_in_domain("auto_wah", "sensitivity", config.sensitivity, kNonNegative);
+  require_in_domain("auto_wah", "min_hz", config.min_hz, kSweepHz);
+  require_in_domain("auto_wah", "max_hz", config.max_hz, kSweepHz);
+  require_in_domain("auto_wah", "resonance", config.resonance, kResonance);
+  require_in_domain("auto_wah", "attack_ms", config.attack_ms, kNonNegative);
+  require_in_domain("auto_wah", "release_ms", config.release_ms, kNonNegative);
+  require_in_domain("auto_wah", "dry_wet", config.dry_wet, kUnit);
+  require_in_domain("auto_wah", "lfo_rate_hz", config.lfo_rate_hz, kNonNegative);
+  require_in_domain("auto_wah", "lfo_depth", config.lfo_depth, kUnit);
 }
 
 void AutoWah::prepare(double sample_rate, int) {
@@ -39,13 +61,13 @@ void AutoWah::process(float* const* channels, int num_channels, int num_samples)
     return;
   }
   rt::ScopedNoDenormals no_denormals;
-  const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
+  const float wet = config_.dry_wet;
   const float dry = 1.0f - wet;
   const float max_cutoff = SvfBandpass::max_cutoff_hz(sample_rate_);
-  const float lo = std::clamp(std::min(config_.min_hz, config_.max_hz), 10.0f, max_cutoff);
+  const float lo = std::clamp(std::min(config_.min_hz, config_.max_hz), kWahMinSweepHz, max_cutoff);
   const float hi = std::clamp(std::max(config_.min_hz, config_.max_hz), lo, max_cutoff);
-  const float q = std::max(0.5f, config_.resonance);
-  const float sens = std::max(0.0f, config_.sensitivity);
+  const float q = config_.resonance;
+  const float sens = config_.sensitivity;
   const float lfo_depth = config_.lfo_depth;
   const bool lowpass = config_.filter_type == WahFilterType::kLowpass;
   const bool down = config_.direction == AutoWahDirection::kDown;
@@ -96,7 +118,7 @@ void AutoWah::discard_non_finite() noexcept {
 int AutoWah::tail_samples() const noexcept {
   rt::TailBudget tail;
   // Near Nyquist the upper sweep endpoint can have the longer ring.
-  if (std::clamp(config_.dry_wet, 0.0f, 1.0f) > 0.0f) {
+  if (config_.dry_wet > 0.0f) {
     tail = SvfBandpass::ring_range(config_.min_hz, config_.max_hz, config_.resonance, sample_rate_);
   }
   return tail.samples();
@@ -114,26 +136,33 @@ void AutoWah::reset() {
 bool AutoWah::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
+      if (!in_domain(value, kNonNegative)) return false;
       config_.sensitivity = value;
       return true;
     case 1:
+      if (!in_domain(value, kSweepHz)) return false;
       config_.min_hz = value;
       return true;
     case 2:
+      if (!in_domain(value, kSweepHz)) return false;
       config_.max_hz = value;
       return true;
     case 3:
-      config_.resonance = std::max(0.5f, value);
+      if (!in_domain(value, kResonance)) return false;
+      config_.resonance = value;
       return true;
     case 4:
+      if (!in_domain(value, kUnit)) return false;
       config_.dry_wet = value;
       return true;
     case 5:
-      config_.lfo_rate_hz = std::max(0.0f, value);
+      if (!in_domain(value, kNonNegative)) return false;
+      config_.lfo_rate_hz = value;
       lfo_.set_rate_hz(config_.lfo_rate_hz);
       return true;
     case 6:
-      config_.lfo_depth = std::clamp(value, 0.0f, 1.0f);
+      if (!in_domain(value, kUnit)) return false;
+      config_.lfo_depth = value;
       return true;
     case 7:
     case 8:

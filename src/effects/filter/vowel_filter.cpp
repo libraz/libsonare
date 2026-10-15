@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "effects/common/field_domain.h"
 #include "mastering/common/parameter_domain.h"
 #include "rt/param_smoother.h"
 #include "rt/scoped_no_denormals.h"
@@ -63,9 +64,9 @@ constexpr int kSubBlock = 16;
 // Pre-gain at drive = 1, in dB.
 constexpr float kDriveMaxDb = 36.0f;
 
-float clamp_finite(float value, float lo, float hi, float fallback) noexcept {
-  return std::isfinite(value) ? std::clamp(value, lo, hi) : fallback;
-}
+// Field domains read by the constructor and by live automation.
+constexpr float kVowelMax = static_cast<float>(kVowelCount - 1);
+constexpr float kMaxAccelMs = 1.0e6f;
 
 }  // namespace
 
@@ -73,13 +74,14 @@ float vowel_table_hz(int vowel, int band) noexcept {
   return kTable.hz[std::clamp(vowel, 0, kVowelCount - 1)][std::clamp(band, 0, kVowelBandCount - 1)];
 }
 
-VowelFilter::VowelFilter(VowelFilterConfig config) : config_(config) {
-  const VowelFilterConfig defaults;
-  config_.vowel =
-      clamp_finite(config_.vowel, 0.0f, static_cast<float>(kVowelCount - 1), defaults.vowel);
-  config_.accel_ms = clamp_finite(config_.accel_ms, 0.0f, 1.0e6f, defaults.accel_ms);
-  config_.drive = clamp_finite(config_.drive, 0.0f, 1.0f, defaults.drive);
-  config_.dry_wet = clamp_finite(config_.dry_wet, 0.0f, 1.0f, defaults.dry_wet);
+void VowelFilter::validate_config(const VowelFilterConfig& config) {
+  common::require_in_domain("VowelFilter", "vowel", config.vowel, 0.0f, kVowelMax);
+  common::require_in_domain("VowelFilter", "accel_ms", config.accel_ms, 0.0f, kMaxAccelMs);
+  common::require_in_domain("VowelFilter", "drive", config.drive, 0.0f, 1.0f);
+  common::require_in_domain("VowelFilter", "dry_wet", config.dry_wet, 0.0f, 1.0f);
+}
+
+VowelFilter::VowelFilter(VowelFilterConfig config) : config_((validate_config(config), config)) {
   drive_gain_ = db_to_linear(config_.drive * kDriveMaxDb);
   paths_.set_path_latencies_q8({0, rt::kAdaa1LatencySamplesQ8});
   paths_.ensure_channels(kPlanes);
@@ -95,7 +97,7 @@ void VowelFilter::prepare(double sample_rate, int) {
 }
 
 int VowelFilter::tail_samples() const noexcept {
-  if (!(std::clamp(config_.dry_wet, 0.0f, 1.0f) > 0.0f)) return 0;
+  if (!(config_.dry_wet > 0.0f)) return 0;
   // The bank glides between table vowels, so take each band's longest ring over the table; the
   // bands run in parallel after the saturator's one remembered sample.
   const float amp = db_to_linear(kFitPeakingDb / 2.0f);
@@ -180,7 +182,7 @@ void VowelFilter::update_bank() {
 void VowelFilter::process(float* const* channels, int num_channels, int num_samples) {
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) return;
   rt::ScopedNoDenormals no_denormals;
-  const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
+  const float wet = config_.dry_wet;
   const float dry = 1.0f - wet;
   const bool drive_on = config_.drive_on;
   const float post = 1.0f / std::tanh(drive_gain_);
@@ -231,14 +233,17 @@ void VowelFilter::process(float* const* channels, int num_channels, int num_samp
 bool VowelFilter::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      config_.vowel = std::clamp(value, 0.0f, static_cast<float>(kVowelCount - 1));
+      if (!common::in_domain(value, 0.0f, kVowelMax)) return false;
+      config_.vowel = value;
       return true;
     case 1:
-      config_.accel_ms = std::clamp(value, 0.0f, 1.0e6f);
+      if (!common::in_domain(value, 0.0f, kMaxAccelMs)) return false;
+      config_.accel_ms = value;
       update_glide_coefficient();
       return true;
     case 2:
-      config_.drive = std::clamp(value, 0.0f, 1.0f);
+      if (!common::in_domain(value, 0.0f, 1.0f)) return false;
+      config_.drive = value;
       drive_gain_ = db_to_linear(config_.drive * kDriveMaxDb);
       return true;
     case 3:
@@ -246,7 +251,8 @@ bool VowelFilter::set_parameter_impl(unsigned int param_id, float value) {
       config_.drive_on = value == 1.0f;
       return true;
     case 4:
-      config_.dry_wet = std::clamp(value, 0.0f, 1.0f);
+      if (!common::in_domain(value, 0.0f, 1.0f)) return false;
+      config_.dry_wet = value;
       return true;
     default:
       return false;

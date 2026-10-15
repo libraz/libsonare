@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 
+#include "effects/common/field_domain.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
@@ -15,7 +16,17 @@ using constants::kDefaultDawSampleRate;
 
 using sonare::constants::kEpsilon;
 
-FdnReverb::FdnReverb(FdnReverbConfig config) : config_(config) {}
+namespace {
+constexpr float kMaxDecay = 1.5f;  // T60_lf of 15 s.
+}  // namespace
+
+void FdnReverb::validate_config(const FdnReverbConfig& config) {
+  common::require_in_domain("FdnReverb", "decay", config.decay, 0.0f, kMaxDecay);
+  common::require_in_domain("FdnReverb", "hf_damping", config.hf_damping, 0.0f, 1.0f);
+  common::require_in_domain("FdnReverb", "dry_wet", config.dry_wet, 0.0f, 1.0f);
+}
+
+FdnReverb::FdnReverb(FdnReverbConfig config) : config_((validate_config(config), config)) {}
 
 void FdnReverb::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
@@ -37,8 +48,8 @@ void FdnReverb::prepare(double sample_rate, int max_block_size) {
 
 void FdnReverb::update_absorption() {
   // Per-line absorption: derive one-pole coefficients from LF/HF T60 targets.
-  const float t60_lf = std::max(0.01f, std::clamp(config_.decay, 0.0f, 1.5f) * 10.0f);
-  const float hf_damping = std::clamp(config_.hf_damping, 0.0f, 1.0f);
+  const float t60_lf = std::max(0.01f, config_.decay * 10.0f);
+  const float hf_damping = config_.hf_damping;
   const float t60_hf = t60_lf * (1.0f - 0.9f * hf_damping);
   const float sr = static_cast<float>(sample_rate_);
   for (size_t i = 0; i < delays_.size(); ++i) {
@@ -63,7 +74,7 @@ void FdnReverb::process(float* const* channels, int num_channels, int num_sample
   float* right = stereo ? channels[1] : channels[0];
   // Block-rate dry/wet: smoothed across blocks by the engine parameter slot
   // smoother, not per-sample (see Chorus::process for the rationale).
-  const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
+  const float wet = config_.dry_wet;
   const float dry = 1.0f - wet;
 
   for (int i = 0; i < num_samples; ++i) {
@@ -165,7 +176,7 @@ double FdnReverb::decay_to_floor_seconds() const noexcept {
 }
 
 int FdnReverb::tail_samples() const noexcept {
-  if (std::clamp(config_.dry_wet, 0.0f, 1.0f) <= 0.0f) return 0;
+  if (config_.dry_wet <= 0.0f) return 0;
   // The first reflection leaves the longest line before any decay is heard. The DC blocker then
   // rings on the net area of the echoes (at most one unit per line), its step response (1 - pole)
   // p^n, which a short loop leaves standing after the field itself has gone.
@@ -178,7 +189,7 @@ int FdnReverb::tail_samples() const noexcept {
     tail.seconds(decay_s, sample_rate_);
   } else {
     // Unprepared (no absorption yet) or a loop that does not decay: the DC T60 bounds either.
-    const float t60_lf = std::max(0.01f, std::clamp(config_.decay, 0.0f, 1.5f) * 10.0f);
+    const float t60_lf = std::max(0.01f, config_.decay * 10.0f);
     tail.t60(t60_lf, sample_rate_);
   }
   const double ring = std::log(rt::kTailFloor / (kBlockerArea * (1.0 - pole))) / std::log(pole);
@@ -192,15 +203,18 @@ bool FdnReverb::set_parameter_impl(unsigned int param_id, float value) {
   // prepare() when not yet prepared. Matches the Dattorro/Velvet reverbs.
   switch (param_id) {
     case 0:
+      if (!common::in_domain(value, 0.0f, kMaxDecay)) return false;
       config_.decay = value;
       // Recompute absorption coefficients in place; preserves filter/delay state.
       if (prepared_) update_absorption();
       return true;
     case 1:
+      if (!common::in_domain(value, 0.0f, 1.0f)) return false;
       config_.hf_damping = value;
       if (prepared_) update_absorption();
       return true;
     case 2:
+      if (!common::in_domain(value, 0.0f, 1.0f)) return false;
       config_.dry_wet = value;
       return true;
     default:

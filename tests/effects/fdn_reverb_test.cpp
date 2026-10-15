@@ -6,9 +6,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
+#include <string>
 #include <vector>
 
 #include "support/audio_fixtures.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -127,5 +130,79 @@ TEST_CASE("FdnReverb dry_wet=0 preserves dry signal without DC blocking", "[reve
                  WithinAbs(expected_left[static_cast<size_t>(i)], 0.0f));
     REQUIRE_THAT(right[static_cast<size_t>(i)],
                  WithinAbs(expected_right[static_cast<size_t>(i)], 0.0f));
+  }
+}
+
+namespace {
+
+struct FdnDomainRow {
+  const char* name;
+  float FdnReverbConfig::*member;
+  unsigned int id;
+  float lo;
+  float hi;
+};
+
+const FdnDomainRow kFdnRows[] = {
+    {"decay", &FdnReverbConfig::decay, 0, 0.0f, 1.5f},
+    {"hf_damping", &FdnReverbConfig::hf_damping, 1, 0.0f, 1.0f},
+    {"dry_wet", &FdnReverbConfig::dry_wet, 2, 0.0f, 1.0f},
+};
+
+std::vector<float> fdn_refused(const FdnDomainRow& row) {
+  const float inf = std::numeric_limits<float>::infinity();
+  return {std::nextafter(row.lo, -inf), std::nextafter(row.hi, inf),
+          std::numeric_limits<float>::quiet_NaN(), inf, -inf};
+}
+
+std::vector<float> fdn_render(FdnReverb& reverb) {
+  reverb.prepare(48000.0, 256);
+  std::vector<float> samples = sonare::test::generate_impulse(2048);
+  float* channels[] = {samples.data()};
+  reverb.process(channels, 1, static_cast<int>(samples.size()));
+  return samples;
+}
+
+}  // namespace
+
+TEST_CASE("FdnReverb construction refuses a field outside its domain", "[effects][reverb]") {
+  for (const FdnDomainRow& row : kFdnRows) {
+    for (const float value : fdn_refused(row)) {
+      CAPTURE(row.name, value);
+      FdnReverbConfig config;
+      config.*row.member = value;
+      try {
+        FdnReverb subject(config);
+        FAIL("constructed with " << row.name << " out of range");
+      } catch (const SonareException& error) {
+        CHECK(error.code() == ErrorCode::InvalidParameter);
+        CHECK(std::string(error.what())
+                  .find(std::string("FdnReverb: ") + row.name + " out of range") !=
+              std::string::npos);
+      }
+    }
+  }
+}
+
+TEST_CASE("FdnReverb live automation refuses outside the domain and applies a bound exactly",
+          "[effects][reverb]") {
+  for (const FdnDomainRow& row : kFdnRows) {
+    FdnReverb untouched;
+    const std::vector<float> expected = fdn_render(untouched);
+    for (const float value : fdn_refused(row)) {
+      CAPTURE(row.name, value);
+      FdnReverb subject;
+      CHECK_FALSE(subject.set_parameter(row.id, value));
+      CHECK(fdn_render(subject) == expected);
+    }
+    for (const float bound : {row.lo, row.hi}) {
+      CAPTURE(row.name, bound);
+      FdnReverbConfig config;
+      config.*row.member = bound;
+      FdnReverb built(config);
+      FdnReverb automated;
+      REQUIRE(automated.set_parameter(row.id, bound));
+      CHECK(fdn_render(automated) == fdn_render(built));
+    }
   }
 }

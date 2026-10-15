@@ -21,25 +21,22 @@ namespace sonare::effects::modulation {
 constexpr float kDefaultWindowMs = 22.5f;
 
 struct PitchShifterConfig {
-  float semitones = 0.0f;  ///< shift amount; +12 = one octave up.
-  float dry_wet = 1.0f;
+  float semitones = 0.0f;  ///< shift amount in [-24, 24]; +12 = one octave up.
+  float dry_wet = 1.0f;    ///< [0, 1].
   /// Distance the read-out drifts between splices, in milliseconds, and the
-  /// distance the two taps sit apart in the delay line. A live change clamps to
-  /// the larger of the configured value and the GS EFX ceiling. The output repeats once
-  /// per window of drift, so its beat period is `window_ms / |ratio - 1|`.
+  /// distance the two taps sit apart in the delay line, in [0.5, 1000]. The output
+  /// repeats once per window of drift, so its beat period is `window_ms / |ratio - 1|`.
   float window_ms = kDefaultWindowMs;
   float cents = 0.0f;  ///< voice 1 fine offset added to `semitones`, in [-100, 100].
   /// Voice 1 balance, -1 left to +1 right; 0 leaves both sides at unity.
   float pan = 0.0f;
-  float semitones2 = 0.0f;  ///< voice 2 shift, clamped to [-24, 24].
+  float semitones2 = 0.0f;  ///< voice 2 shift, in [-24, 24].
   float cents2 = 0.0f;      ///< voice 2 fine offset, in [-100, 100].
   float level2 = 0.0f;  ///< voice 2 gain in [0, 1]; 0 switches it off. Under the two-ramp mix law,
                         ///< the voices' balance.
   float pan2 = 0.0f;    ///< voice 2 balance, as `pan`.
-  /// Delay of each voice's read-out ahead of the shifter, in milliseconds. The
-  /// delay line is prepared for the larger of the configured value and the GS
-  /// EFX ceiling, so a live change clamps to that instead of reallocating;
-  /// reported latency does not include them.
+  /// Delay of each voice's read-out ahead of the shifter, in milliseconds, each in
+  /// [0, 1000]; reported latency does not include them.
   float pre_delay_ms = 0.0f;
   float pre_delay2_ms = 0.0f;
   /// Fraction of the shifted sum written back into the delay line, within +-common::kMaxFeedback.
@@ -64,15 +61,20 @@ struct PitchShifterConfig {
 /// spectral pitch shifting lives in effects/pitch_shift.h).
 class PitchShifter : public rt::ProcessorBase {
  public:
+  /// Throws SonareException(InvalidParameter) naming the first field outside its domain.
   explicit PitchShifter(PitchShifterConfig config = {});
+
+  /// Refuses a non-finite field and any field outside its documented domain.
+  static void validate_config(const PitchShifterConfig& config);
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   int tail_samples() const noexcept override;
 
-  // Automatable parameters (RT-safe, in-place scalar updates):
-  //   0 = semitones (clamped to [-24, 24]), 1 = dry_wet, 2 = cents, 3 = pan,
+  // Automatable parameters (RT-safe, in-place scalar updates). A numeric value outside its
+  // field's domain (the one validate_config enforces) is refused and changes nothing:
+  //   0 = semitones, 1 = dry_wet, 2 = cents, 3 = pan,
   //   4 = semitones2, 5 = cents2, 6 = level2, 7 = pan2, 8 = feedback,
   //   9 = mix_law (a whole number naming a law, refused otherwise)
   //   10 = interpolation (0 linear, 1 Lagrange3), 11 = anti_alias (0 or 1)
@@ -107,8 +109,6 @@ class PitchShifter : public rt::ProcessorBase {
   void update_anti_alias(float max_ratio) noexcept;
 
   PitchShifterConfig config_{};
-  float max_window_ms_ = 0.0f;     ///< largest window the prepared delay line holds.
-  float max_pre_delay_ms_ = 0.0f;  ///< largest pre-delay the prepared delay line holds.
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int grain_ = 2048;     ///< grain length in samples: two of config_.window_ms.
   double phase_ = 0.0;   ///< voice 1 tap-1 delay position in [0, grain_).

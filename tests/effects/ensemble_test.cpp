@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "core/fft.h"
+#include "effects/modulation/domain_cases.h"
 #include "support/audio_fixtures.h"
 #ifdef SONARE_WITH_MASTERING
 #include "mastering/api/insert_factory.h"
@@ -153,3 +154,23 @@ TEST_CASE("effects.modulation.ensemble builds through the insert factory",
   REQUIRE(dynamic_cast<Ensemble*>(processor.get()) != nullptr);
 }
 #endif
+
+TEST_CASE("ensemble refuses a config field outside its domain",
+          "[effects][modulation][ensemble][domain]") {
+  namespace domain = sonare::test::modulation_domain;
+  using Row = domain::DomainRow<EnsembleConfig>;
+  const Row rows[] = {
+      {"rate_slow_hz", 0, &EnsembleConfig::rate_slow_hz, 0.0f, domain::kInf},
+      {"rate_fast_hz", 1, &EnsembleConfig::rate_fast_hz, 0.0f, domain::kInf},
+      {"depth_slow_ms", 2, &EnsembleConfig::depth_slow_ms, 0.0f, 10.0f},
+      {"depth_fast_ms", 3, &EnsembleConfig::depth_fast_ms, 0.0f, 10.0f},
+      {"center_delay_ms", 4, &EnsembleConfig::center_delay_ms, 0.0f, 100.0f},
+      {"tone_hz", 5, &EnsembleConfig::tone_hz, 500.0f, 20000.0f},
+      {"dry_wet", 6, &EnsembleConfig::dry_wet, 0.0f, 1.0f},
+      {"rate_hz", 7, &EnsembleConfig::rate_hz, 0.0f, domain::kInf},
+      {"pre_delay_dev_ms", 8, &EnsembleConfig::pre_delay_dev_ms, 0.0f, 20.0f},
+      {"depth_dev", 9, &EnsembleConfig::depth_dev, -1.0f, 1.0f},
+      {"pan_dev", 10, &EnsembleConfig::pan_dev, 0.0f, 1.0f},
+  };
+  for (const Row& row : rows) domain::check_row<Ensemble>("ensemble", EnsembleConfig{}, row);
+}

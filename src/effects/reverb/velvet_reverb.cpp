@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "effects/common/field_domain.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
@@ -19,12 +20,13 @@ constexpr float kShelfCutoffHz = 6000.0f;
 constexpr float kShelfHighGain = 0.5f;
 constexpr float kT60Drop = 1000.0f;  // 60 dB amplitude ratio for T60.
 
-float bounded_reverb_time(float value) {
-  return std::clamp(value, 0.05f, VelvetReverbConfig::kMaxReverbTimeSeconds);
-}
+// Field domains read by validate_config and by live automation.
+constexpr float kMinReverbTimeSeconds = 0.05f;
+constexpr float kMinDensityHz = 1000.0f;
+constexpr float kMaxDensityHz = 3000.0f;
 
 float effective_rt60(const VelvetReverbConfig& config) {
-  return bounded_reverb_time(config.reverb_time_s) * (0.5f + std::clamp(config.decay, 0.0f, 1.0f));
+  return config.reverb_time_s * (0.5f + config.decay);
 }
 
 /// Avalanching 32-bit integer hash. A bare LCG step of the pulse index would
@@ -69,7 +71,17 @@ float VelvetReverb::Ring::read_at(int offset) const {
 
 // --- VelvetReverb ----------------------------------------------------------
 
-VelvetReverb::VelvetReverb(VelvetReverbConfig config) : config_(config) {}
+void VelvetReverb::validate_config(const VelvetReverbConfig& config) {
+  common::require_in_domain("VelvetReverb", "decay", config.decay, 0.0f, 1.0f);
+  common::require_in_domain("VelvetReverb", "dry_wet", config.dry_wet, 0.0f, 1.0f);
+  common::require_in_domain("VelvetReverb", "reverb_time_s", config.reverb_time_s,
+                            kMinReverbTimeSeconds, VelvetReverbConfig::kMaxReverbTimeSeconds);
+  common::require_in_domain("VelvetReverb", "density_hz", config.density_hz, kMinDensityHz,
+                            kMaxDensityHz);
+}
+
+VelvetReverb::VelvetReverb(VelvetReverbConfig config)
+    : config_((validate_config(config), config)) {}
 
 void VelvetReverb::build_table(std::vector<Tap>& taps, std::uint32_t seed_offset, int grid_ls,
                                int n_seg, int num_pulses, float decay_rate, double sr) const {
@@ -95,7 +107,7 @@ void VelvetReverb::prepare(double sample_rate, int max_block_size) {
   max_block_size_ = max_block_size;
   prepared_ = true;
 
-  const float rho = std::clamp(config_.density_hz, 1000.0f, 3000.0f);
+  const float rho = config_.density_hz;
   // decay scales the base reverb time around its nominal value.
   const float rt60 = effective_rt60(config_);
   const int n_seg = std::max(2, static_cast<int>(std::lround(rt60 * sr)));
@@ -164,7 +176,7 @@ void VelvetReverb::process(float* const* channels, int num_channels, int num_sam
 
   // Block-rate dry/wet: smoothed across blocks by the engine parameter slot
   // smoother, not per-sample (see Chorus::process for the rationale).
-  const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
+  const float wet = config_.dry_wet;
   const float dry = 1.0f - wet;
   const bool stereo = right != left;
 
@@ -224,7 +236,7 @@ void VelvetReverb::discard_non_finite() noexcept {
 }
 
 int VelvetReverb::tail_samples() const noexcept {
-  if (std::clamp(config_.dry_wet, 0.0f, 1.0f) <= 0.0f) return 0;
+  if (config_.dry_wet <= 0.0f) return 0;
   // The velvet-noise taps span one effective T60 (the same rt60 the tap tables
   // are built for in prepare()), then the DC blocker rings out.
   rt::TailBudget tail;
@@ -235,19 +247,26 @@ int VelvetReverb::tail_samples() const noexcept {
 bool VelvetReverb::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      // Rebuilds tap tables / ring buffers (not RT-safe). prepare() clamps.
+      // Rebuilds tap tables / ring buffers (not RT-safe).
+      if (!common::in_domain(value, 0.0f, 1.0f)) return false;
       config_.decay = value;
       if (prepared_) prepare(sample_rate_, max_block_size_);
       return true;
     case 1:
+      if (!common::in_domain(value, kMinReverbTimeSeconds,
+                             VelvetReverbConfig::kMaxReverbTimeSeconds)) {
+        return false;
+      }
       config_.reverb_time_s = value;
       if (prepared_) prepare(sample_rate_, max_block_size_);
       return true;
     case 2:
-      // RT-safe: only read in process(), where it is clamped to [0, 1].
+      // RT-safe: only read in process().
+      if (!common::in_domain(value, 0.0f, 1.0f)) return false;
       config_.dry_wet = value;
       return true;
     case 3:
+      if (!common::in_domain(value, kMinDensityHz, kMaxDensityHz)) return false;
       config_.density_hz = value;
       if (prepared_) prepare(sample_rate_, max_block_size_);
       return true;

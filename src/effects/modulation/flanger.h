@@ -28,7 +28,7 @@ struct FlangerConfig {
   float rate_hz = 0.25f;
   float depth_ms = 2.0f;
   float center_delay_ms = 3.0f;
-  /// Gain of the loop around the delay, clamped to +-common::kMaxFeedback in process(). Negative
+  /// Gain of the loop around the delay, refused outside +-common::kMaxFeedback. Negative
   /// values invert the loop's return, which moves the teeth by half a spacing.
   float feedback = 0.3f;
   float dry_wet = 0.5f;
@@ -36,7 +36,7 @@ struct FlangerConfig {
   /// engages it; a non-positive corner is out of domain and leaves it off.
   float pre_filter_hz = 0.0f;
   PreFilterMode pre_filter_mode = PreFilterMode::kOff;
-  /// Phase of the right LFO ahead of the left, in degrees, clamped to [0, 180].
+  /// Phase of the right LFO ahead of the left, in degrees, refused outside [0, 180].
   float phase_deg = 180.0f;
   /// Rate at which the LFO output is sampled and held, in hertz; zero leaves the
   /// LFO continuous.
@@ -49,7 +49,13 @@ struct FlangerConfig {
 
 class Flanger : public rt::ProcessorBase {
  public:
+  /// Throws InvalidParameter when a field lies outside its domain: rate_hz and
+  /// step_rate_hz >= 0, depth_ms in [0, 100], center_delay_ms in
+  /// [0, common::kMaxModulationPreDelayMs], feedback in +-common::kMaxFeedback,
+  /// dry_wet in [0, 1], phase_deg in [0, 180], and every value finite.
   explicit Flanger(FlangerConfig config = {});
+
+  static void validate_config(const FlangerConfig& config);
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
@@ -57,14 +63,14 @@ class Flanger : public rt::ProcessorBase {
   int tail_samples() const noexcept override;
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
-  //   0 = rate_hz (clamped to >= 0; updates both LFOs in place)
-  //   1 = depth_ms
-  //   2 = center_delay_ms
-  //   3 = feedback (clamped to +-common::kMaxFeedback in process(); the sign is carried)
-  //   4 = dry_wet
+  //   0 = rate_hz (refused below 0; updates both LFOs in place)
+  //   1 = depth_ms (refused outside [0, 100])
+  //   2 = center_delay_ms (refused outside [0, common::kMaxModulationPreDelayMs])
+  //   3 = feedback (refused outside +-common::kMaxFeedback; the sign is carried)
+  //   4 = dry_wet (refused outside [0, 1])
   //   5 = pre_filter_hz (re-derives the pole in place; the filter keeps its state)
-  //   6 = phase_deg (clamped to [0, 180]; re-phases the right LFO in place)
-  //   7 = step_rate_hz (clamped to >= 0; 0 = continuous LFO)
+  //   6 = phase_deg (refused outside [0, 180]; re-phases the right LFO in place)
+  //   7 = step_rate_hz (refused below 0; 0 = continuous LFO)
   //   8 = pre_filter_mode (0 off, 1 low-pass, 2 high-pass; Off clears filter history)
   //   9 = interpolation (0 linear, 1 Lagrange3)
   //  10 = mix_law (a whole number naming a law, refused otherwise)

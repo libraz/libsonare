@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "util/exception.h"
@@ -446,5 +447,88 @@ TEST_CASE("ConvolutionReverb normalizes finite IR amplitude boundaries",
     process_mono(reverb, output);
     CHECK(finite(output));
     CHECK(std::abs(peak(output) - 0.5) < 1.0e-6);
+  }
+}
+
+namespace {
+
+struct ConvolutionDomainRow {
+  const char* name;
+  float ConvolutionReverbConfig::*member;
+  float lo;
+  float hi;
+};
+
+const ConvolutionDomainRow kConvolutionRows[] = {
+    {"decay_sec", &ConvolutionReverbConfig::decay_sec, 0.0f,
+     ConvolutionReverbConfig::kMaxDecaySeconds},
+    {"pre_delay_ms", &ConvolutionReverbConfig::pre_delay_ms, 0.0f, 1000.0f},
+    {"dry_wet", &ConvolutionReverbConfig::dry_wet, 0.0f, 1.0f},
+};
+
+std::vector<float> convolution_refused(const ConvolutionDomainRow& row) {
+  const float inf = std::numeric_limits<float>::infinity();
+  return {std::nextafter(row.lo, -inf), std::nextafter(row.hi, inf),
+          std::numeric_limits<float>::quiet_NaN(), inf, -inf};
+}
+
+std::vector<float> convolution_render(ConvolutionReverb& reverb) {
+  reverb.prepare(kSampleRate, kPrepareBlock);
+  std::vector<float> samples(2048, 0.0f);
+  samples[0] = 1.0f;
+  process_mono(reverb, samples);
+  return samples;
+}
+
+}  // namespace
+
+TEST_CASE("ConvolutionReverb construction refuses a field outside its domain",
+          "[effects][reverb][convolution]") {
+  for (const ConvolutionDomainRow& row : kConvolutionRows) {
+    for (const float value : convolution_refused(row)) {
+      CAPTURE(row.name, value);
+      ConvolutionReverbConfig config;
+      config.*row.member = value;
+      try {
+        ConvolutionReverb subject(config);
+        FAIL("constructed with " << row.name << " out of range");
+      } catch (const sonare::SonareException& error) {
+        CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+        CHECK(std::string(error.what())
+                  .find(std::string("ConvolutionReverb: ") + row.name + " out of range") !=
+              std::string::npos);
+      }
+    }
+  }
+  for (const ConvolutionDomainRow& row : kConvolutionRows) {
+    for (const float bound : {row.lo, row.hi}) {
+      CAPTURE(row.name, bound);
+      ConvolutionReverbConfig config;
+      config.*row.member = bound;
+      CHECK_NOTHROW(ConvolutionReverb(config));
+    }
+  }
+}
+
+TEST_CASE("ConvolutionReverb live dry_wet refuses outside [0, 1] and applies a bound exactly",
+          "[effects][reverb][convolution]") {
+  ConvolutionReverb untouched{ConvolutionReverbConfig{}};
+  const std::vector<float> expected = convolution_render(untouched);
+  const float inf = std::numeric_limits<float>::infinity();
+  for (const float value : {std::nextafter(0.0f, -inf), std::nextafter(1.0f, inf),
+                            std::numeric_limits<float>::quiet_NaN(), inf, -inf}) {
+    CAPTURE(value);
+    ConvolutionReverb subject{ConvolutionReverbConfig{}};
+    CHECK_FALSE(subject.set_parameter(0, value));
+    CHECK(convolution_render(subject) == expected);
+  }
+  for (const float bound : {0.0f, 1.0f}) {
+    CAPTURE(bound);
+    ConvolutionReverbConfig config;
+    config.dry_wet = bound;
+    ConvolutionReverb built(config);
+    ConvolutionReverb automated{ConvolutionReverbConfig{}};
+    REQUIRE(automated.set_parameter(0, bound));
+    CHECK(convolution_render(automated) == convolution_render(built));
   }
 }

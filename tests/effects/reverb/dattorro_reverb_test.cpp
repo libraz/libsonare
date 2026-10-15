@@ -6,7 +6,11 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <limits>
+#include <string>
 #include <vector>
+
+#include "util/exception.h"
 
 using sonare::effects::reverb::DattorroReverb;
 using sonare::effects::reverb::DattorroReverbConfig;
@@ -89,4 +93,153 @@ TEST_CASE("Dattorro damping automation rebuilds the coefficient at the working r
   float* channels[2] = {left.data(), right.data()};
   reverb.process(channels, 2, static_cast<int>(left.size()));
   CHECK(left == direct);
+}
+
+namespace {
+
+constexpr float kInf = std::numeric_limits<float>::infinity();
+
+struct DattorroDomainRow {
+  const char* name;
+  float DattorroReverbConfig::*member;
+  unsigned int id;  ///< live parameter id carrying the same quantity and unit.
+  float lo;
+  float hi;
+  float inside_lo;  ///< accepted values: the bound, or a representative value when unbounded.
+  float inside_hi;
+};
+
+const DattorroDomainRow kDattorroRows[] = {
+    {"decay", &DattorroReverbConfig::decay, 0, 0.0f, 0.98f, 0.0f, 0.98f},
+    {"damping", &DattorroReverbConfig::damping, 1, 0.0f, 1.0f, 0.0f, 1.0f},
+    {"dry_wet", &DattorroReverbConfig::dry_wet, 2, 0.0f, 1.0f, 0.0f, 1.0f},
+    {"mod_rate_hz", &DattorroReverbConfig::mod_rate_hz, 3, -kInf, kInf, -2.0f, 2.0f},
+    {"mod_depth_samples", &DattorroReverbConfig::mod_depth_samples, 4, 0.0f, 672.0f, 0.0f, 672.0f},
+    {"damping_hz", &DattorroReverbConfig::damping_hz, 5, 0.0f, kInf, 0.0f, 5000.0f},
+    {"gate_threshold_db", &DattorroReverbConfig::gate_threshold_db, 6, -kInf, kInf, -90.0f, 0.0f},
+    {"gate_hold_ms", &DattorroReverbConfig::gate_hold_ms, 7, 0.0f, 1.0e6f, 0.0f, 1.0e6f},
+};
+
+/// Values outside the row's domain: just past each finite bound, plus the non-finite ones.
+std::vector<float> dattorro_refused(const DattorroDomainRow& row) {
+  std::vector<float> values{std::numeric_limits<float>::quiet_NaN(), kInf, -kInf};
+  if (std::isfinite(row.lo)) values.push_back(std::nextafter(row.lo, -kInf));
+  if (std::isfinite(row.hi)) values.push_back(std::nextafter(row.hi, kInf));
+  return values;
+}
+
+std::vector<float> dattorro_render(DattorroReverb& reverb) {
+  reverb.prepare(48000.0, 256);
+  std::vector<float> left(2048, 0.0f);
+  std::vector<float> right(2048, 0.0f);
+  left[0] = right[0] = 1.0f;
+  float* channels[] = {left.data(), right.data()};
+  reverb.process(channels, 2, 2048);
+  left.insert(left.end(), right.begin(), right.end());
+  return left;
+}
+
+void require_dattorro_refusal(const DattorroReverbConfig& config, const std::string& field) {
+  try {
+    DattorroReverb subject(config);
+    FAIL("constructed with " << field << " out of range");
+  } catch (const sonare::SonareException& error) {
+    CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    CHECK(std::string(error.what()).find("DattorroReverb: " + field + " out of range") !=
+          std::string::npos);
+  }
+}
+
+constexpr float kDattorroPreDelayMax = 4000.0f * 29761.0f / 1000.0f;
+
+}  // namespace
+
+TEST_CASE("DattorroReverb construction refuses a field outside its domain", "[effects][reverb]") {
+  for (const DattorroDomainRow& row : kDattorroRows) {
+    for (const float value : dattorro_refused(row)) {
+      CAPTURE(row.name, value);
+      DattorroReverbConfig config;
+      config.*row.member = value;
+      require_dattorro_refusal(config, row.name);
+    }
+  }
+  for (const float value : {-1.0f, std::numeric_limits<float>::quiet_NaN(), kInf,
+                            std::nextafter(kDattorroPreDelayMax, kInf)}) {
+    CAPTURE(value);
+    DattorroReverbConfig config;
+    config.pre_delay_samples = value;
+    require_dattorro_refusal(config, "pre_delay_samples");
+  }
+  for (const int value : {-1, 7}) {
+    CAPTURE(value);
+    DattorroReverbConfig config;
+    config.character = value;
+    require_dattorro_refusal(config, "character");
+  }
+}
+
+TEST_CASE("DattorroReverb live automation refuses outside the domain and applies a bound exactly",
+          "[effects][reverb]") {
+  for (const DattorroDomainRow& row : kDattorroRows) {
+    DattorroReverb untouched;
+    const std::vector<float> expected = dattorro_render(untouched);
+    for (const float value : dattorro_refused(row)) {
+      CAPTURE(row.name, value);
+      DattorroReverb subject;
+      CHECK_FALSE(subject.set_parameter(row.id, value));
+      CHECK(dattorro_render(subject) == expected);
+    }
+    for (const float value : {row.inside_lo, row.inside_hi}) {
+      CAPTURE(row.name, value);
+      DattorroReverbConfig config;
+      config.*row.member = value;
+      DattorroReverb built(config);
+      DattorroReverb automated;
+      REQUIRE(automated.set_parameter(row.id, value));
+      CHECK(dattorro_render(automated) == dattorro_render(built));
+    }
+  }
+}
+
+TEST_CASE("DattorroReverb live pre-delay and character stay inside what was prepared",
+          "[effects][reverb]") {
+  DattorroReverb untouched;
+  const std::vector<float> expected = dattorro_render(untouched);
+  // The pre-delay ring holds the larger of 127 ms and the configured pre-delay.
+  for (const float ms : {-1.0f, 127.5f, std::numeric_limits<float>::quiet_NaN(), kInf}) {
+    CAPTURE(ms);
+    DattorroReverb subject;
+    CHECK_FALSE(subject.set_parameter(9, ms));
+    CHECK(dattorro_render(subject) == expected);
+  }
+  for (const float ms : {0.0f, 127.0f}) {
+    CAPTURE(ms);
+    DattorroReverbConfig config;
+    config.pre_delay_samples = ms * 29761.0f / 1000.0f;
+    DattorroReverb built(config);
+    DattorroReverb automated;
+    REQUIRE(automated.set_parameter(9, ms));
+    CHECK(dattorro_render(automated) == dattorro_render(built));
+  }
+  DattorroReverbConfig long_pre_delay;
+  long_pre_delay.pre_delay_samples = 200.0f * 29761.0f / 1000.0f;
+  DattorroReverb roomy(long_pre_delay);
+  CHECK(roomy.set_parameter(9, 190.0f));
+  CHECK_FALSE(roomy.set_parameter(9, 201.0f));
+
+  for (const float value : {-1.0f, 7.0f, 1.5f, std::numeric_limits<float>::quiet_NaN()}) {
+    CAPTURE(value);
+    DattorroReverb subject;
+    CHECK_FALSE(subject.set_parameter(10, value));
+    CHECK(dattorro_render(subject) == expected);
+  }
+  for (const int character : {0, 6}) {
+    CAPTURE(character);
+    DattorroReverbConfig config;
+    config.character = character;
+    DattorroReverb built(config);
+    DattorroReverb automated;
+    REQUIRE(automated.set_parameter(10, static_cast<float>(character)));
+    CHECK(dattorro_render(automated) == dattorro_render(built));
+  }
 }

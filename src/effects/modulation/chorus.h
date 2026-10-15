@@ -82,9 +82,9 @@ struct ChorusConfig {
   float pre_filter_hz = 0.0f;
   PreFilterMode pre_filter_mode = PreFilterMode::kOff;
   /// Gain of the return from the delay's output, through a one-pole low-pass at
-  /// 6 kHz, to its input. Clamped to +-common::kMaxFeedback in process(); zero leaves the path out.
+  /// 6 kHz, to its input. Refused outside +-common::kMaxFeedback; zero leaves the path out.
   float feedback = 0.0f;
-  /// Phase of the right LFO ahead of the left, in degrees, clamped to [0, 180].
+  /// Phase of the right LFO ahead of the left, in degrees, refused outside [0, 180].
   float phase_deg = 90.0f;
   /// How the delay lines read between samples; see DelayInterpolation.
   DelayInterpolation interpolation = DelayInterpolation::kLinear;
@@ -94,7 +94,13 @@ struct ChorusConfig {
 
 class Chorus : public rt::ProcessorBase {
  public:
+  /// Throws InvalidParameter when a field lies outside its domain: rate_hz >= 0,
+  /// depth_ms in [0, 50], center_delay_ms in [0, common::kMaxModulationPreDelayMs],
+  /// dry_wet in [0, 1], feedback in +-common::kMaxFeedback, phase_deg in [0, 180],
+  /// and every value finite.
   explicit Chorus(ChorusConfig config = {});
+
+  static void validate_config(const ChorusConfig& config);
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
@@ -102,13 +108,13 @@ class Chorus : public rt::ProcessorBase {
   int tail_samples() const noexcept override;
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
-  //   0 = rate_hz (clamped to >= 0; updates both LFOs in place)
-  //   1 = depth_ms
-  //   2 = center_delay_ms
-  //   3 = dry_wet
+  //   0 = rate_hz (refused below 0; updates both LFOs in place)
+  //   1 = depth_ms (refused outside [0, 50])
+  //   2 = center_delay_ms (refused outside [0, common::kMaxModulationPreDelayMs])
+  //   3 = dry_wet (refused outside [0, 1])
   //   4 = pre_filter_hz (re-derives the pole in place; the filter keeps its state)
-  //   5 = feedback (clamped to +-common::kMaxFeedback in process(); the sign is carried)
-  //   6 = phase_deg (clamped to [0, 180]; re-phases the right LFO in place)
+  //   5 = feedback (refused outside +-common::kMaxFeedback; the sign is carried)
+  //   6 = phase_deg (refused outside [0, 180]; re-phases the right LFO in place)
   //   7 = pre_filter_mode (0 off, 1 low-pass, 2 high-pass; Off clears filter history)
   //   8 = interpolation (0 linear, 1 Lagrange3)
   //   9 = mix_law (a whole number naming a law, refused otherwise)

@@ -4,6 +4,8 @@
 #include <array>
 #include <cmath>
 
+#include "effects/common/control_ranges.h"
+#include "effects/common/field_domain.h"
 #include "rt/param_smoother.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
@@ -28,17 +30,18 @@ constexpr double kRefRate = DattorroReverb::kReferenceSampleRate;
 constexpr double kModAllpassLeftRefLength = 672.0;
 constexpr double kModAllpassRightRefLength = 908.0;
 
-bool scale_modulation_depth(float requested, double rate, float* scaled) noexcept {
-  if (!(requested >= 0.0f) || static_cast<double>(requested) > kModAllpassLeftRefLength) {
-    return false;
-  }
-  *scaled = static_cast<float>(static_cast<double>(requested) * rate / kRefRate);
-  return true;
+float scale_modulation_depth(float requested, double rate) noexcept {
+  return static_cast<float>(static_cast<double>(requested) * rate / kRefRate);
 }
 // Live pre-delay ceiling: the GS system reverb PREDELAY conversion reaches 127 ms
 // (gs_reverb_predelay_ms) and the EFX pre-delay ladder 100 ms. prepare() sizes the
 // ring for max(ceiling, configured value), so the realtime setter never grows it.
 constexpr float kLiveMaxPreDelayMs = 127.0f;
+// Longest configured pre-delay: it sizes the ring at prepare(), so it needs a bound.
+constexpr float kMaxConfiguredPreDelayMs = 4000.0f;
+constexpr float kMaxGateHoldMs = 1.0e6f;  // keeps the hold in samples inside int.
+constexpr float kMaxDecay = common::kMaxFeedback;
+constexpr float kInf = common::kNoUpperBound;
 
 size_t scale_len(double ref_samples, double sr) {
   const double scaled = ref_samples * sr / kRefRate;
@@ -68,8 +71,6 @@ constexpr std::array<double, 4> max_character_ratios() {
   return max_ratio;
 }
 constexpr std::array<double, 4> kMaxCharacterRatios = max_character_ratios();
-
-int clamp_character(int character) { return std::clamp(character, 0, kDattorroMaxCharacter); }
 
 // Gate time constants: the peak detector's fall, and the gain's approach to its target.
 constexpr double kGateDetectorReleaseMs = 5.0;
@@ -222,18 +223,33 @@ double DattorroReverb::damping_corner_hz(double coefficient, double sample_rate)
 }
 
 void DattorroReverb::update_damping_coefficient() noexcept {
-  const double corner_hz = config_.damping_hz > 0.0f
-                               ? static_cast<double>(config_.damping_hz)
-                               : damping_corner_hz(std::clamp(config_.damping, 0.0f, 1.0f) * 0.4f,
-                                                   kDampingReferenceSampleRate);
+  const double corner_hz =
+      config_.damping_hz > 0.0f
+          ? static_cast<double>(config_.damping_hz)
+          : damping_corner_hz(config_.damping * 0.4f, kDampingReferenceSampleRate);
   damp_d_ = damping_coefficient(corner_hz, sample_rate_);
 }
 
-DattorroReverb::DattorroReverb(DattorroReverbConfig config) : config_(config) {
-  if (!std::isfinite(config_.pre_delay_samples)) config_.pre_delay_samples = 0.0f;
-  if (!std::isfinite(config_.mod_depth_samples)) config_.mod_depth_samples = 0.0f;
-  config_.mod_depth_samples = std::max(0.0f, config_.mod_depth_samples);
-  config_.character = clamp_character(config_.character);
+void DattorroReverb::validate_config(const DattorroReverbConfig& config) {
+  const char* const name = "DattorroReverb";
+  const float pre_delay_max = kMaxConfiguredPreDelayMs * static_cast<float>(kRefRate) / 1000.0f;
+  common::require_in_domain(name, "decay", config.decay, 0.0f, kMaxDecay);
+  common::require_in_domain(name, "damping", config.damping, 0.0f, 1.0f);
+  common::require_in_domain(name, "dry_wet", config.dry_wet, 0.0f, 1.0f);
+  common::require_in_domain(name, "mod_rate_hz", config.mod_rate_hz, -kInf, kInf);
+  common::require_in_domain(name, "mod_depth_samples", config.mod_depth_samples, 0.0f,
+                            static_cast<float>(kModAllpassLeftRefLength));
+  common::require_in_domain(name, "pre_delay_samples", config.pre_delay_samples, 0.0f,
+                            pre_delay_max);
+  common::require_in_domain(name, "damping_hz", config.damping_hz, 0.0f, kInf);
+  common::require_in_domain(name, "gate_threshold_db", config.gate_threshold_db, -kInf, kInf);
+  common::require_in_domain(name, "gate_hold_ms", config.gate_hold_ms, 0.0f, kMaxGateHoldMs);
+  common::require_in_domain(name, "character", static_cast<float>(config.character), 0.0f,
+                            static_cast<float>(kDattorroMaxCharacter));
+}
+
+DattorroReverb::DattorroReverb(DattorroReverbConfig config)
+    : config_((validate_config(config), config)) {
   max_pre_delay_ms_ = std::max(kLiveMaxPreDelayMs,
                                static_cast<float>(config_.pre_delay_samples * 1000.0 / kRefRate));
 }
@@ -254,7 +270,7 @@ void DattorroReverb::update_character_geometry() noexcept {
     return;
   }
 
-  const double* ratio = kCharacterRatios[clamp_character(config_.character)];
+  const double* ratio = kCharacterRatios[config_.character];
   const auto set_length = [this](TapDelay& delay, double ref_samples, double ratio_value) {
     const size_t requested = scale_len(ref_samples * ratio_value, sample_rate_);
     delay.length = std::min(requested, delay.cap - 1);
@@ -284,15 +300,11 @@ void DattorroReverb::update_character_geometry() noexcept {
 
 void DattorroReverb::prepare(double sample_rate, int) {
   const double sr = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
-  float depth = 0.0f;
-  if (!scale_modulation_depth(config_.mod_depth_samples, sr, &depth)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "modulation depth exceeds the modulated allpass length");
-  }
+  const float depth = scale_modulation_depth(config_.mod_depth_samples, sr);
   sample_rate_ = sr;
 
   // Stage 1: pre-delay + four series input-diffusion allpasses.
-  const double requested_pre = std::max(0.0, static_cast<double>(config_.pre_delay_samples));
+  const double requested_pre = static_cast<double>(config_.pre_delay_samples);
   const double max_pre_samples = static_cast<double>(max_pre_delay_ms_) * kRefRate / 1000.0;
   const size_t max_pre = scale_len(std::max(max_pre_samples, requested_pre), sr);
   pre_delay_buf_.assign(max_pre, 0.0f);
@@ -337,19 +349,17 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
   // one output write is performed below so the left result is not clobbered.
   float* right = stereo ? channels[1] : channels[0];
 
-  const float decay = std::clamp(config_.decay, 0.0f, 0.98f);
+  const float decay = config_.decay;
   const float damp_d = damp_d_;
   // Block-rate dry/wet: smoothed across blocks by the engine parameter slot
   // smoother, not per-sample (see Chorus::process for the rationale).
-  const common::MixGains mix =
-      common::mix_gains(config_.mix_law, std::clamp(config_.dry_wet, 0.0f, 1.0f));
+  const common::MixGains mix = common::mix_gains(config_.mix_law, config_.dry_wet);
   const float wet = mix.wet;
   const float dry = mix.dry;
 
   const bool gate_on = config_.gate_threshold_db > kDattorroGateOffDb;
   const float gate_threshold = gate_on ? db_to_linear(config_.gate_threshold_db) : 0.0f;
-  const int gate_hold =
-      static_cast<int>(std::lround(std::max(0.0f, config_.gate_hold_ms) * sample_rate_ / 1000.0));
+  const int gate_hold = static_cast<int>(std::lround(config_.gate_hold_ms * sample_rate_ / 1000.0));
   const int gate_ramp = std::max(1, gate_hold);
   const float detector_release = 1.0f - smoothing_coefficient(kGateDetectorReleaseMs, sample_rate_);
   const float gate_smoothing = smoothing_coefficient(kGateSmoothingMs, sample_rate_);
@@ -505,10 +515,10 @@ void DattorroReverb::reset_gate() noexcept {
 }
 
 int DattorroReverb::tail_samples() const noexcept {
-  if (std::clamp(config_.dry_wet, 0.0f, 1.0f) <= 0.0f) return 0;
-  const double decay = std::clamp(static_cast<double>(config_.decay), 0.0, 0.98);
+  if (config_.dry_wet <= 0.0f) return 0;
+  const double decay = static_cast<double>(config_.decay);
   const double rate = sample_rate_ / kRefRate;
-  const double* ratio = kCharacterRatios[clamp_character(config_.character)];
+  const double* ratio = kCharacterRatios[config_.character];
 
   // The front end is lossless allpasses (four input diffusers, the modulated tank allpass): their
   // cascade rings no longer than its longest member, so they are budgeted alongside each other.
@@ -533,7 +543,7 @@ int DattorroReverb::tail_samples() const noexcept {
         rt::TailBudget().delay(tank_loop * std::log(rt::kTailFloor) / (4.0 * std::log(decay))));
   }
   rt::TailBudget tail;
-  tail.delay(std::max(0.0, static_cast<double>(config_.pre_delay_samples)) * rate);
+  tail.delay(static_cast<double>(config_.pre_delay_samples) * rate);
   tail.then(diffusion).then(tank);
   return tail.samples();
 }
@@ -541,27 +551,30 @@ int DattorroReverb::tail_samples() const noexcept {
 bool DattorroReverb::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      // process() clamps decay to [0, 0.98]; store the raw target.
+      if (!common::in_domain(value, 0.0f, kMaxDecay)) return false;
       config_.decay = value;
       return true;
     case 1:
+      if (!common::in_domain(value, 0.0f, 1.0f)) return false;
       config_.damping = value;
       update_damping_coefficient();
       return true;
     case 2:
+      if (!common::in_domain(value, 0.0f, 1.0f)) return false;
       config_.dry_wet = value;
       return true;
     case 3:
       // Recompute the LFO increment in place; preserves the modulation phase.
+      if (!common::in_domain(value, -kInf, kInf)) return false;
       config_.mod_rate_hz = value;
       lfo_inc_ = static_cast<float>(kTwoPiD * config_.mod_rate_hz / sample_rate_);
       return true;
     case 4: {
-      const float requested = std::max(0.0f, value);
-      float depth = 0.0f;
-      if (!scale_modulation_depth(requested, sample_rate_, &depth)) return false;
-      config_.mod_depth_samples = requested;
-      mod_depth_ = depth;
+      if (!common::in_domain(value, 0.0f, static_cast<float>(kModAllpassLeftRefLength))) {
+        return false;
+      }
+      config_.mod_depth_samples = value;
+      mod_depth_ = scale_modulation_depth(value, sample_rate_);
       {
         const size_t max_depth = static_cast<size_t>(std::lround(mod_depth_)) + 1;
         mod_ap_l_.ensure_capacity(max_depth);
@@ -570,14 +583,17 @@ bool DattorroReverb::set_parameter_impl(unsigned int param_id, float value) {
       return true;
     }
     case 5:
-      config_.damping_hz = std::max(0.0f, value);
+      if (!common::in_domain(value, 0.0f, kInf)) return false;
+      config_.damping_hz = value;
       update_damping_coefficient();
       return true;
     case 6:
+      if (!common::in_domain(value, -kInf, kInf)) return false;
       config_.gate_threshold_db = value;
       return true;
     case 7:
-      config_.gate_hold_ms = std::max(0.0f, value);
+      if (!common::in_domain(value, 0.0f, kMaxGateHoldMs)) return false;
+      config_.gate_hold_ms = value;
       return true;
     case 8:
       // An unnamed type is refused rather than rounded onto a neighbour.
@@ -588,8 +604,9 @@ bool DattorroReverb::set_parameter_impl(unsigned int param_id, float value) {
       config_.gate_type = static_cast<DattorroGateType>(static_cast<int>(value));
       return true;
     case 9:
-      config_.pre_delay_samples =
-          std::clamp(value, 0.0f, max_pre_delay_ms_) * static_cast<float>(kRefRate) / 1000.0f;
+      // The ring holds max_pre_delay_ms_; a longer pre-delay is refused.
+      if (!common::in_domain(value, 0.0f, max_pre_delay_ms_)) return false;
+      config_.pre_delay_samples = value * static_cast<float>(kRefRate) / 1000.0f;
       update_pre_delay_length();
       return true;
     case 10:

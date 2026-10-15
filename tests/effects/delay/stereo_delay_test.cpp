@@ -8,9 +8,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
+#include <limits>
+#include <string>
 #include <vector>
 
+#include "effects/common/control_ranges.h"
 #include "rt/tail_budget.h"
+#include "util/exception.h"
 
 namespace {
 
@@ -189,4 +193,126 @@ TEST_CASE("StereoDelay finite feed-forward tap remains finite-support after gain
   process_stereo(subject, left, right);
   REQUIRE(declared_tail > 0);
   REQUIRE(peak_after(left, right, declared_tail) == 0.0f);
+}
+
+namespace {
+
+struct DomainRow {
+  const char* name;
+  float StereoDelayConfig::*member;
+  unsigned int id;
+  float lo;
+  float hi;  ///< infinity when the field has no upper limit.
+};
+
+const DomainRow kDomainRows[] = {
+    {"delay_time_l_ms", &StereoDelayConfig::delay_time_l_ms, 0, 0.0f, 4000.0f},
+    {"delay_time_r_ms", &StereoDelayConfig::delay_time_r_ms, 1, 0.0f, 4000.0f},
+    {"feedback", &StereoDelayConfig::feedback, 2, -sonare::effects::common::kMaxFeedback,
+     sonare::effects::common::kMaxFeedback},
+    {"ping_pong", &StereoDelayConfig::ping_pong, 3, 0.0f, 1.0f},
+    {"dry_wet", &StereoDelayConfig::dry_wet, 4, 0.0f, 1.0f},
+    {"damping_hz", &StereoDelayConfig::damping_hz, 5, 0.0f, std::numeric_limits<float>::infinity()},
+    {"tap3_ms", &StereoDelayConfig::tap3_ms, 6, 0.0f, 4000.0f},
+    {"tap4_ms", &StereoDelayConfig::tap4_ms, 7, 0.0f, 4000.0f},
+    {"tap1_level_db", &StereoDelayConfig::tap1_level_db, 8, -120.0f, 40.0f},
+    {"tap2_level_db", &StereoDelayConfig::tap2_level_db, 9, -120.0f, 40.0f},
+    {"tap3_level_db", &StereoDelayConfig::tap3_level_db, 10, -120.0f, 40.0f},
+    {"tap4_level_db", &StereoDelayConfig::tap4_level_db, 11, -120.0f, 40.0f},
+    {"tap3_pan", &StereoDelayConfig::tap3_pan, 12, -1.0f, 1.0f},
+    {"tap4_pan", &StereoDelayConfig::tap4_pan, 13, -1.0f, 1.0f},
+    {"mod_rate_hz", &StereoDelayConfig::mod_rate_hz, 16, 0.0f, 100.0f},
+    {"mod_depth_ms", &StereoDelayConfig::mod_depth_ms, 17, 0.0f, 4000.0f},
+    {"mod_phase_deg", &StereoDelayConfig::mod_phase_deg, 18, 0.0f, 360.0f},
+    {"glide_ms", &StereoDelayConfig::glide_ms, 19, 0.0f, 10000.0f},
+};
+
+/// The values just outside the domain, plus the non-finite ones.
+std::vector<float> refused_values(const DomainRow& row) {
+  const float inf = std::numeric_limits<float>::infinity();
+  std::vector<float> values{std::nextafter(row.lo, -inf), std::numeric_limits<float>::quiet_NaN(),
+                            inf, -inf};
+  if (std::isfinite(row.hi)) values.push_back(std::nextafter(row.hi, inf));
+  return values;
+}
+
+void require_invalid_parameter(const StereoDelayConfig& config, const std::string& field) {
+  try {
+    StereoDelay subject(config);
+    FAIL("constructed with " << field << " out of range");
+  } catch (const sonare::SonareException& error) {
+    CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    CHECK(std::string(error.what()).find("StereoDelay: " + field + " out of range") !=
+          std::string::npos);
+  }
+}
+
+}  // namespace
+
+TEST_CASE("StereoDelay construction refuses a field outside its domain", "[effects][delay]") {
+  for (const DomainRow& row : kDomainRows) {
+    for (const float value : refused_values(row)) {
+      CAPTURE(row.name, value);
+      StereoDelayConfig config;
+      config.*row.member = value;
+      require_invalid_parameter(config, row.name);
+    }
+  }
+}
+
+TEST_CASE("StereoDelay construction accepts a field on its bound", "[effects][delay]") {
+  for (const DomainRow& row : kDomainRows) {
+    for (const float value : {row.lo, std::isfinite(row.hi) ? row.hi : 1.0e6f}) {
+      CAPTURE(row.name, value);
+      StereoDelayConfig config;
+      config.*row.member = value;
+      StereoDelay subject(config);
+      CHECK(subject.config().*row.member == value);
+    }
+  }
+}
+
+TEST_CASE("StereoDelay set_config refuses a bad config and keeps the previous one",
+          "[effects][delay]") {
+  StereoDelayConfig held;
+  held.delay_time_l_ms = 120.0f;
+  held.feedback = 0.3f;
+  held.dry_wet = 0.6f;
+  StereoDelay subject(held);
+  for (const DomainRow& row : kDomainRows) {
+    for (const float value : refused_values(row)) {
+      CAPTURE(row.name, value);
+      StereoDelayConfig next = held;
+      next.*row.member = value;
+      CHECK_THROWS_AS(subject.set_config(next), sonare::SonareException);
+      for (const DomainRow& other : kDomainRows) {
+        CHECK(subject.config().*other.member == held.*other.member);
+      }
+    }
+  }
+  StereoDelayConfig good = held;
+  good.feedback = -0.5f;
+  CHECK_NOTHROW(subject.set_config(good));
+  CHECK(subject.config().feedback == -0.5f);
+}
+
+TEST_CASE("StereoDelay live automation refuses outside the domain and applies a bound exactly",
+          "[effects][delay]") {
+  for (const DomainRow& row : kDomainRows) {
+    StereoDelayConfig initial;
+    StereoDelay subject(initial);
+    subject.prepare(48000.0, 256);
+    for (const float value : refused_values(row)) {
+      CAPTURE(row.name, value);
+      CHECK_FALSE(subject.set_parameter(row.id, value));
+      for (const DomainRow& other : kDomainRows) {
+        CHECK(subject.config().*other.member == initial.*other.member);
+      }
+    }
+    for (const float value : {row.lo, std::isfinite(row.hi) ? row.hi : 1.0e6f}) {
+      CAPTURE(row.name, value);
+      REQUIRE(subject.set_parameter(row.id, value));
+      CHECK(subject.config().*row.member == value);
+    }
+  }
 }

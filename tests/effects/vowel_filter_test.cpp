@@ -8,6 +8,7 @@
 #include <cmath>
 #include <complex>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
@@ -15,6 +16,7 @@
 #include "rt/nonlinearities.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 TEST_CASE("vowel drive switch accepts only boolean automation values", "[effects][vowel][switch]") {
   sonare::effects::filter::VowelFilter filter;
@@ -394,4 +396,79 @@ TEST_CASE("Vowel filter: recovers after a non-finite sample", "[vowel-filter]") 
   sonare::test::process(filter, after);
   for (const float x : after) REQUIRE(std::isfinite(x));
   CHECK(filter.non_finite_discard_count() > 0);
+}
+
+namespace {
+
+struct VowelDomainRow {
+  const char* name;
+  float VowelFilterConfig::*member;
+  unsigned int id;
+  float lo;
+  float hi;
+};
+
+const VowelDomainRow kVowelDomainRows[] = {
+    {"vowel", &VowelFilterConfig::vowel, 0, 0.0f, 4.0f},
+    {"accel_ms", &VowelFilterConfig::accel_ms, 1, 0.0f, 1.0e6f},
+    {"drive", &VowelFilterConfig::drive, 2, 0.0f, 1.0f},
+    {"dry_wet", &VowelFilterConfig::dry_wet, 4, 0.0f, 1.0f},
+};
+
+std::vector<float> vowel_refused_values(const VowelDomainRow& row) {
+  const float inf = std::numeric_limits<float>::infinity();
+  return {std::nextafter(row.lo, -inf), std::nextafter(row.hi, inf),
+          std::numeric_limits<float>::quiet_NaN(), inf, -inf};
+}
+
+std::vector<float> vowel_render(VowelFilter& filter) {
+  filter.prepare(kRate, 512);
+  std::vector<float> signal =
+      sonare::test::generate_sine(512, 300.0f, static_cast<int>(kRate), 0.4f);
+  sonare::test::process(filter, signal);
+  return signal;
+}
+
+}  // namespace
+
+TEST_CASE("VowelFilter construction refuses a field outside its domain", "[effects][vowel]") {
+  for (const VowelDomainRow& row : kVowelDomainRows) {
+    for (const float value : vowel_refused_values(row)) {
+      CAPTURE(row.name, value);
+      VowelFilterConfig config;
+      config.*row.member = value;
+      try {
+        VowelFilter subject(config);
+        FAIL("constructed with " << row.name << " out of range");
+      } catch (const sonare::SonareException& error) {
+        CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+        CHECK(std::string(error.what())
+                  .find(std::string("VowelFilter: ") + row.name + " out of range") !=
+              std::string::npos);
+      }
+    }
+  }
+}
+
+TEST_CASE("VowelFilter live automation refuses outside the domain and applies a bound exactly",
+          "[effects][vowel]") {
+  for (const VowelDomainRow& row : kVowelDomainRows) {
+    VowelFilter untouched;
+    const std::vector<float> expected = vowel_render(untouched);
+    for (const float value : vowel_refused_values(row)) {
+      CAPTURE(row.name, value);
+      VowelFilter subject;
+      CHECK_FALSE(subject.set_parameter(row.id, value));
+      CHECK(vowel_render(subject) == expected);
+    }
+    for (const float bound : {row.lo, row.hi}) {
+      CAPTURE(row.name, bound);
+      VowelFilterConfig config;
+      config.*row.member = bound;
+      VowelFilter built(config);
+      VowelFilter automated;
+      REQUIRE(automated.set_parameter(row.id, bound));
+      CHECK(vowel_render(automated) == vowel_render(built));
+    }
+  }
 }

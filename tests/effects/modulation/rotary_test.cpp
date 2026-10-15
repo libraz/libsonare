@@ -8,9 +8,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
+#include <limits>
+#include <string>
 #include <vector>
 
 #include "util/constants.h"
+#include "util/exception.h"
 
 namespace {
 
@@ -223,4 +226,157 @@ TEST_CASE("rotary Classic and Geometric clear the returning right plane", "[boun
       }
     }
   }
+}
+
+namespace {
+
+using sonare::ErrorCode;
+using sonare::SonareException;
+
+constexpr float kInf = std::numeric_limits<float>::infinity();
+constexpr float kNaN = std::numeric_limits<float>::quiet_NaN();
+constexpr int kDomainBlock = 2048;
+
+/// One numeric field of RotaryConfig with its automation id and closed domain.
+struct DomainRow {
+  const char* name;
+  float RotaryConfig::*member;
+  unsigned int id;
+  float lo;
+  float hi;
+  float base_speed;  ///< the speed switch the base configuration needs for the field to be audible.
+  bool step_fast;    ///< switch to fast between the two blocks so a glide field is exercised.
+  bool gain_db;      ///< domain is "finite linear gain" rather than an interval.
+};
+
+const DomainRow kDomainRows[] = {
+    {"rateHz", &RotaryConfig::rate_hz, 0, 0.0f, kInf, -1.0f, false, false},
+    {"depthMs", &RotaryConfig::depth_ms, 1, 0.0f, 20.0f, -1.0f, false, false},
+    {"tremolo", &RotaryConfig::tremolo, 2, 0.0f, 1.0f, -1.0f, false, false},
+    {"dryWet", &RotaryConfig::dry_wet, 3, 0.0f, 1.0f, -1.0f, false, false},
+    {"drumRateHz", &RotaryConfig::drum_rate_hz, 4, 0.0f, kInf, -1.0f, false, false},
+    {"hornSlowHz", &RotaryConfig::horn_slow_hz, 5, 0.0f, kInf, 0.0f, false, false},
+    {"hornFastHz", &RotaryConfig::horn_fast_hz, 6, 0.0f, kInf, 1.0f, false, false},
+    {"drumSlowHz", &RotaryConfig::drum_slow_hz, 7, 0.0f, kInf, 0.0f, false, false},
+    {"drumFastHz", &RotaryConfig::drum_fast_hz, 8, 0.0f, kInf, 1.0f, false, false},
+    {"speed", &RotaryConfig::speed, 9, -1.0f, 1.0f, -1.0f, false, false},
+    {"hornLevelDb", &RotaryConfig::horn_level_db, 10, -kInf, kInf, -1.0f, false, true},
+    {"drumLevelDb", &RotaryConfig::drum_level_db, 11, -kInf, kInf, -1.0f, false, true},
+    {"stereoSpread", &RotaryConfig::stereo_spread, 14, 0.0f, 1.0f, -1.0f, false, false},
+    {"accelTauS", &RotaryConfig::accel_tau_s, 15, 0.0f, kInf, 0.0f, true, false},
+    {"decelTauS", &RotaryConfig::decel_tau_s, 16, 0.0f, kInf, 0.0f, true, false},
+    {"undershootHz", &RotaryConfig::undershoot_hz, 17, 0.0f, kInf, 0.0f, true, false},
+    {"drumUndershootHz", &RotaryConfig::drum_undershoot_hz, 18, 0.0f, kInf, 0.0f, true, false},
+};
+
+std::vector<float> domain_refused(const DomainRow& row) {
+  std::vector<float> values{kNaN, kInf, -kInf};
+  if (row.gain_db) {
+    values.push_back(1000.0f);  // finite, but its linear gain overflows a float.
+    return values;
+  }
+  if (std::isfinite(row.lo)) values.push_back(std::nextafter(row.lo, -kInf));
+  if (std::isfinite(row.hi)) values.push_back(std::nextafter(row.hi, kInf));
+  return values;
+}
+
+std::vector<float> domain_accepted(const DomainRow& row) {
+  if (row.gain_db) return {-120.0f, 6.0f};
+  return {row.lo, std::isfinite(row.hi) ? row.hi : 2.0f};
+}
+
+RotaryConfig domain_base(const DomainRow& row) {
+  RotaryConfig value;
+  value.speed = row.base_speed;
+  return value;
+}
+
+/// Renders two blocks of a fixed stereo signal; between them, optionally steps the speed switch.
+std::vector<float> domain_render(Rotary& rotary, bool step_fast) {
+  std::vector<float> out;
+  for (int block = 0; block < 2; ++block) {
+    std::vector<float> left(static_cast<std::size_t>(kDomainBlock));
+    std::vector<float> right(static_cast<std::size_t>(kDomainBlock));
+    for (int i = 0; i < kDomainBlock; ++i) {
+      const float t = static_cast<float>(block * kDomainBlock + i);
+      left[static_cast<std::size_t>(i)] = 0.4f * std::sin(0.05f * t) + 0.1f * std::sin(0.31f * t);
+      right[static_cast<std::size_t>(i)] = 0.3f * std::sin(0.07f * t + 1.0f);
+    }
+    float* channels[] = {left.data(), right.data()};
+    rotary.process(channels, 2, kDomainBlock);
+    out.insert(out.end(), left.begin(), left.end());
+    out.insert(out.end(), right.begin(), right.end());
+    if (block == 0 && step_fast) REQUIRE(rotary.set_parameter(9, 1.0f));
+  }
+  return out;
+}
+
+void require_refused_with_field(const RotaryConfig& config, const char* field) {
+  try {
+    Rotary rotary(config);
+    FAIL("construction accepted " << field);
+  } catch (const SonareException& error) {
+    CHECK(error.code() == ErrorCode::InvalidParameter);
+    CHECK(std::string(error.what()).find(field) != std::string::npos);
+  }
+}
+
+}  // namespace
+
+TEST_CASE("Rotary construction refuses a value outside a field's domain", "[effects]") {
+  for (const DomainRow& row : kDomainRows) {
+    for (const float bad : domain_refused(row)) {
+      CAPTURE(row.name, bad);
+      RotaryConfig config;
+      config.*row.member = bad;
+      require_refused_with_field(config, row.name);
+      CHECK_THROWS_AS(Rotary::validate_config(config), SonareException);
+    }
+    for (const float good : domain_accepted(row)) {
+      CAPTURE(row.name, good);
+      RotaryConfig config;
+      config.*row.member = good;
+      CHECK_NOTHROW(Rotary::validate_config(config));
+      CHECK_NOTHROW(Rotary(config));
+    }
+  }
+}
+
+TEST_CASE("Rotary live automation refuses an out-of-domain value and changes nothing",
+          "[effects]") {
+  for (const DomainRow& row : kDomainRows) {
+    for (const float bad : domain_refused(row)) {
+      CAPTURE(row.name, bad);
+      Rotary touched(domain_base(row));
+      touched.prepare(48000.0, kDomainBlock);
+      CHECK_FALSE(touched.set_parameter(row.id, bad));
+      Rotary untouched(domain_base(row));
+      untouched.prepare(48000.0, kDomainBlock);
+      CHECK(domain_render(touched, row.step_fast) == domain_render(untouched, row.step_fast));
+    }
+  }
+}
+
+TEST_CASE("Rotary live automation applies a value on a bound exactly", "[effects]") {
+  for (const DomainRow& row : kDomainRows) {
+    for (const float good : domain_accepted(row)) {
+      CAPTURE(row.name, good);
+      Rotary live(domain_base(row));
+      REQUIRE(live.set_parameter(row.id, good));
+      live.prepare(48000.0, kDomainBlock);
+      RotaryConfig config = domain_base(row);
+      config.*row.member = good;
+      Rotary constructed(config);
+      constructed.prepare(48000.0, kDomainBlock);
+      CHECK(domain_render(live, row.step_fast) == domain_render(constructed, row.step_fast));
+    }
+  }
+}
+
+TEST_CASE("Rotary live rate reaches the rotor", "[effects]") {
+  Rotary rotary;
+  rotary.prepare(48000.0, kDomainBlock);
+  REQUIRE(rotary.set_parameter(0, 3.0f));
+  domain_render(rotary, false);
+  CHECK(rotary.horn_rate_hz() == 3.0f);
 }

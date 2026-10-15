@@ -10,6 +10,8 @@
 #include <cstddef>
 #include <vector>
 
+#include "effects/modulation/domain_cases.h"
+
 namespace {
 
 using sonare::effects::modulation::Chorus;
@@ -124,4 +126,20 @@ TEST_CASE("chorus pre-filter re-entry drops stale charge at 48 and 96 kHz", "[bo
     REQUIRE(difference(subject.left, continuous.left) <= 2.0e-5f);
     REQUIRE(difference(subject.right, continuous.right) <= 2.0e-5f);
   }
+}
+
+TEST_CASE("chorus refuses a config field outside its domain",
+          "[effects][modulation][chorus][domain]") {
+  namespace domain = sonare::test::modulation_domain;
+  using Row = domain::DomainRow<ChorusConfig>;
+  const Row rows[] = {
+      {"rate_hz", 0, &ChorusConfig::rate_hz, 0.0f, domain::kInf},
+      {"depth_ms", 1, &ChorusConfig::depth_ms, 0.0f, 50.0f},
+      {"center_delay_ms", 2, &ChorusConfig::center_delay_ms, 0.0f, 100.0f},
+      {"dry_wet", 3, &ChorusConfig::dry_wet, 0.0f, 1.0f},
+      {"pre_filter_hz", 4, &ChorusConfig::pre_filter_hz, -domain::kInf, domain::kInf},
+      {"feedback", 5, &ChorusConfig::feedback, -0.98f, 0.98f},
+      {"phase_deg", 6, &ChorusConfig::phase_deg, 0.0f, 180.0f},
+  };
+  for (const Row& row : rows) domain::check_row<Chorus>("chorus", ChorusConfig{}, row);
 }

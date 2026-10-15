@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "effects/common/control_ranges.h"
+#include "effects/common/field_domain.h"
 #include "rt/param_smoother.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
@@ -29,54 +30,65 @@ constexpr float kMaxModRateHz = 100.0f;
 constexpr float kMaxGlideMs = 10000.0f;
 constexpr float kMaxLevelDb = 40.0f;
 
-float clamp_feedback(float feedback) noexcept {
-  return std::clamp(feedback, -kMaxFeedback, kMaxFeedback);
+/// One ranged field: its automation id, name and closed domain.
+struct FieldDomain {
+  unsigned int id;
+  const char* name;
+  float StereoDelayConfig::*member;
+  float lo;
+  float hi;
+};
+
+// The domain of every ranged field, read by validate_config and by live automation.
+// A damping corner of 0 bypasses the filter; it has no upper limit (the pole stays computable).
+const FieldDomain kFieldDomains[] = {
+    {0, "delay_time_l_ms", &StereoDelayConfig::delay_time_l_ms, 0.0f, kMaxDelayMs},
+    {1, "delay_time_r_ms", &StereoDelayConfig::delay_time_r_ms, 0.0f, kMaxDelayMs},
+    {2, "feedback", &StereoDelayConfig::feedback, -kMaxFeedback, kMaxFeedback},
+    {3, "ping_pong", &StereoDelayConfig::ping_pong, 0.0f, 1.0f},
+    {4, "dry_wet", &StereoDelayConfig::dry_wet, 0.0f, 1.0f},
+    {5, "damping_hz", &StereoDelayConfig::damping_hz, 0.0f, common::kNoUpperBound},
+    {6, "tap3_ms", &StereoDelayConfig::tap3_ms, 0.0f, kMaxDelayMs},
+    {7, "tap4_ms", &StereoDelayConfig::tap4_ms, 0.0f, kMaxDelayMs},
+    {8, "tap1_level_db", &StereoDelayConfig::tap1_level_db, kLevelFloorDb, kMaxLevelDb},
+    {9, "tap2_level_db", &StereoDelayConfig::tap2_level_db, kLevelFloorDb, kMaxLevelDb},
+    {10, "tap3_level_db", &StereoDelayConfig::tap3_level_db, kLevelFloorDb, kMaxLevelDb},
+    {11, "tap4_level_db", &StereoDelayConfig::tap4_level_db, kLevelFloorDb, kMaxLevelDb},
+    {12, "tap3_pan", &StereoDelayConfig::tap3_pan, -1.0f, 1.0f},
+    {13, "tap4_pan", &StereoDelayConfig::tap4_pan, -1.0f, 1.0f},
+    {16, "mod_rate_hz", &StereoDelayConfig::mod_rate_hz, 0.0f, kMaxModRateHz},
+    {17, "mod_depth_ms", &StereoDelayConfig::mod_depth_ms, 0.0f, kMaxDelayMs},
+    {18, "mod_phase_deg", &StereoDelayConfig::mod_phase_deg, 0.0f, 360.0f},
+    {19, "glide_ms", &StereoDelayConfig::glide_ms, 0.0f, kMaxGlideMs},
+};
+
+const FieldDomain* find_domain(unsigned int param_id) noexcept {
+  for (const FieldDomain& domain : kFieldDomains) {
+    if (domain.id == param_id) return &domain;
+  }
+  return nullptr;
 }
 
 float config_delay_samples(float delay_ms, double sample_rate) noexcept {
-  return std::clamp(delay_ms, 0.0f, kMaxDelayMs) * 0.001f * static_cast<float>(sample_rate);
-}
-
-/// A non-finite value falls back to `fallback`; the rest is clamped.
-float finite_clamp(float value, float lo, float hi, float fallback) noexcept {
-  return std::isfinite(value) ? std::clamp(value, lo, hi) : fallback;
+  return delay_ms * 0.001f * static_cast<float>(sample_rate);
 }
 
 /// Left and right gains of a constant-power pan, -1 left to +1 right.
 std::array<float, 2> pan_gains(float pan) noexcept {
-  const double angle = (static_cast<double>(std::clamp(pan, -1.0f, 1.0f)) + 1.0) * kPiD * 0.25;
+  const double angle = (static_cast<double>(pan) + 1.0) * kPiD * 0.25;
   return {static_cast<float>(std::cos(angle)), static_cast<float>(std::sin(angle))};
-}
-
-StereoDelayConfig sanitize_config(StereoDelayConfig config) noexcept {
-  config.delay_time_l_ms = std::clamp(config.delay_time_l_ms, 0.0f, kMaxDelayMs);
-  config.delay_time_r_ms = std::clamp(config.delay_time_r_ms, 0.0f, kMaxDelayMs);
-  config.feedback = clamp_feedback(config.feedback);
-  config.ping_pong = std::clamp(config.ping_pong, 0.0f, 1.0f);
-  config.dry_wet = std::clamp(config.dry_wet, 0.0f, 1.0f);
-  // std::clamp leaves NaN intact and an infinite corner has no pole, so both
-  // fall back to the bypass rather than reaching the exp() below.
-  if (!std::isfinite(config.damping_hz) || config.damping_hz <= 0.0f) {
-    config.damping_hz = 0.0f;
-  }
-  config.tap3_ms = finite_clamp(config.tap3_ms, 0.0f, kMaxDelayMs, 0.0f);
-  config.tap4_ms = finite_clamp(config.tap4_ms, 0.0f, kMaxDelayMs, 0.0f);
-  config.tap1_level_db = finite_clamp(config.tap1_level_db, kLevelFloorDb, kMaxLevelDb, 0.0f);
-  config.tap2_level_db = finite_clamp(config.tap2_level_db, kLevelFloorDb, kMaxLevelDb, 0.0f);
-  config.tap3_level_db = finite_clamp(config.tap3_level_db, kLevelFloorDb, kMaxLevelDb, 0.0f);
-  config.tap4_level_db = finite_clamp(config.tap4_level_db, kLevelFloorDb, kMaxLevelDb, 0.0f);
-  config.tap3_pan = finite_clamp(config.tap3_pan, -1.0f, 1.0f, 0.0f);
-  config.tap4_pan = finite_clamp(config.tap4_pan, -1.0f, 1.0f, 0.0f);
-  config.mod_rate_hz = finite_clamp(config.mod_rate_hz, 0.0f, kMaxModRateHz, 0.0f);
-  config.mod_depth_ms = finite_clamp(config.mod_depth_ms, 0.0f, kMaxDelayMs, 0.0f);
-  config.mod_phase_deg = finite_clamp(config.mod_phase_deg, 0.0f, 360.0f, 0.0f);
-  config.glide_ms = finite_clamp(config.glide_ms, 0.0f, kMaxGlideMs, 0.0f);
-  return config;
 }
 
 }  // namespace
 
-StereoDelay::StereoDelay(StereoDelayConfig config) : config_(sanitize_config(config)) {
+void StereoDelay::validate_config(const StereoDelayConfig& config) {
+  for (const FieldDomain& domain : kFieldDomains) {
+    common::require_in_domain("StereoDelay", domain.name, config.*domain.member, domain.lo,
+                              domain.hi);
+  }
+}
+
+StereoDelay::StereoDelay(StereoDelayConfig config) : config_((validate_config(config), config)) {
   update_damping();
 }
 
@@ -113,9 +125,9 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
     return;
   }
   rt::ScopedNoDenormals no_denormals;
-  const float target_wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
-  const float target_feedback = clamp_feedback(config_.feedback);
-  const float target_ping_pong = std::clamp(config_.ping_pong, 0.0f, 1.0f);
+  const float target_wet = config_.dry_wet;
+  const float target_feedback = config_.feedback;
+  const float target_ping_pong = config_.ping_pong;
   const std::array<float, 2> target_delay_samples{
       config_delay_samples(config_.delay_time_l_ms, sample_rate_),
       config_delay_samples(config_.delay_time_r_ms, sample_rate_)};
@@ -254,19 +266,16 @@ void StereoDelay::discard_non_finite() noexcept {
   }
   // A smoother rests at its target, not at zero: zero would mute the mix and
   // drop the feedback for a smoothing time nobody asked for.
-  discarded |= discard_if_non_finite(smoothed_feedback_,
-                                     static_cast<double>(clamp_feedback(config_.feedback)));
-  discarded |= discard_if_non_finite(smoothed_dry_wet_,
-                                     static_cast<double>(std::clamp(config_.dry_wet, 0.0f, 1.0f)));
-  discarded |= discard_if_non_finite(
-      smoothed_ping_pong_, static_cast<double>(std::clamp(config_.ping_pong, 0.0f, 1.0f)));
+  discarded |= discard_if_non_finite(smoothed_feedback_, static_cast<double>(config_.feedback));
+  discarded |= discard_if_non_finite(smoothed_dry_wet_, static_cast<double>(config_.dry_wet));
+  discarded |= discard_if_non_finite(smoothed_ping_pong_, static_cast<double>(config_.ping_pong));
   if (discarded) note_non_finite_discard();
 }
 
 int StereoDelay::tail_samples() const noexcept {
   const double to_samples = 0.001 * sample_rate_;
-  const double wet = std::max(static_cast<double>(std::clamp(config_.dry_wet, 0.0f, 1.0f)),
-                              std::clamp(smoothed_dry_wet_, 0.0, 1.0));
+  const double wet =
+      std::max(static_cast<double>(config_.dry_wet), std::clamp(smoothed_dry_wet_, 0.0, 1.0));
   if (!(wet > 0.0)) return 0;
   const double current_delay = std::max(delay_samples_[0], delay_samples_[1]);
   const double target_delay = config_delay_samples(
@@ -283,8 +292,8 @@ int StereoDelay::tail_samples() const noexcept {
   rt::TailBudget damping;
   if (damping_gain_ > 0.0f) damping.decay(1.0 - damping_gain_);
   rt::TailBudget loop;
-  const double feedback = std::max(std::abs(static_cast<double>(clamp_feedback(config_.feedback))),
-                                   std::abs(smoothed_feedback_));
+  const double feedback =
+      std::max(std::abs(static_cast<double>(config_.feedback)), std::abs(smoothed_feedback_));
   const float level_l = db_to_linear(config_.tap1_level_db);
   const float level_r = db_to_linear(config_.tap2_level_db);
   const common::MixGains target_mix = common::mix_gains(config_.mix_law, static_cast<float>(wet));
@@ -319,95 +328,38 @@ void StereoDelay::reset() {
   feedback_state_ = {0.0f, 0.0f};
   damping_state_ = {0.0f, 0.0f};
   feedback_non_finite_ = false;
-  smoothed_feedback_ = clamp_feedback(config_.feedback);
-  smoothed_dry_wet_ = std::clamp(config_.dry_wet, 0.0f, 1.0f);
-  smoothed_ping_pong_ = std::clamp(config_.ping_pong, 0.0f, 1.0f);
+  smoothed_feedback_ = config_.feedback;
+  smoothed_dry_wet_ = config_.dry_wet;
+  smoothed_ping_pong_ = config_.ping_pong;
 }
 
-void StereoDelay::set_config(const StereoDelayConfig& config) noexcept {
+void StereoDelay::set_config(const StereoDelayConfig& config) {
+  validate_config(config);
   // Times, feedback and mix are smoothed per sample; damping and interpolation
   // are refreshed in place, so the delay lines keep their contents.
-  rt::apply_config_diff(config_, sanitize_config(config),
-                        [this](const rt::ConfigDiff<StereoDelayConfig>& diff) {
-                          if (diff.changed(&StereoDelayConfig::damping_hz)) update_damping();
-                          if (diff.changed(&StereoDelayConfig::interpolation)) {
-                            apply_interpolation();
-                          }
-                        });
+  rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<StereoDelayConfig>& diff) {
+    if (diff.changed(&StereoDelayConfig::damping_hz)) update_damping();
+    if (diff.changed(&StereoDelayConfig::interpolation)) {
+      apply_interpolation();
+    }
+  });
 }
 
 bool StereoDelay::set_parameter_impl(unsigned int param_id, float value) {
-  // Reject before the clamps below: std::clamp leaves NaN intact and the delay
-  // ids feed the fractional read index (see delay_param_acceptable).
-  if (!modulation::delay_param_acceptable(value)) return false;
+  if (const FieldDomain* domain = find_domain(param_id)) {
+    if (!common::in_domain(value, domain->lo, domain->hi)) return false;
+    config_.*domain->member = value;
+    // The corner is stored and the pole rebuilt here; a corner of 0 reaches the branch that
+    // skips the filter, which a gain of one would not match bit for bit.
+    if (param_id == 5) update_damping();
+    return true;
+  }
   switch (param_id) {
-    case 0:
-      // process() smooths delay-time automation before it reaches the
-      // fractional read taps; the lines are sized for up to 4 s.
-      config_.delay_time_l_ms = std::clamp(value, 0.0f, kMaxDelayMs);
-      return true;
-    case 1:
-      config_.delay_time_r_ms = std::clamp(value, 0.0f, kMaxDelayMs);
-      return true;
-    case 2:
-      config_.feedback = clamp_feedback(value);
-      return true;
-    case 3:
-      // process() clamps ping_pong to [0, 1] and smooths it; store the raw
-      // target.
-      config_.ping_pong = value;
-      return true;
-    case 4:
-      config_.dry_wet = std::clamp(value, 0.0f, 1.0f);
-      return true;
-    case 5:
-      // The corner is stored and the pole rebuilt here, the fourth live path
-      // into it. A non-positive corner has to reach the branch that skips the
-      // filter, not a gain of one, which is not bit-identical to a bypass.
-      config_.damping_hz = value > 0.0f ? value : 0.0f;
-      update_damping();
-      return true;
-    case 6:
-      config_.tap3_ms = std::clamp(value, 0.0f, kMaxDelayMs);
-      return true;
-    case 7:
-      config_.tap4_ms = std::clamp(value, 0.0f, kMaxDelayMs);
-      return true;
-    case 8:
-      config_.tap1_level_db = std::clamp(value, kLevelFloorDb, kMaxLevelDb);
-      return true;
-    case 9:
-      config_.tap2_level_db = std::clamp(value, kLevelFloorDb, kMaxLevelDb);
-      return true;
-    case 10:
-      config_.tap3_level_db = std::clamp(value, kLevelFloorDb, kMaxLevelDb);
-      return true;
-    case 11:
-      config_.tap4_level_db = std::clamp(value, kLevelFloorDb, kMaxLevelDb);
-      return true;
-    case 12:
-      config_.tap3_pan = std::clamp(value, -1.0f, 1.0f);
-      return true;
-    case 13:
-      config_.tap4_pan = std::clamp(value, -1.0f, 1.0f);
-      return true;
     case 14:
     case 15:
       // A switch takes exactly 0 or 1.
       if (value != 0.0f && value != 1.0f) return false;
       (param_id == 14 ? config_.invert_l : config_.invert_r) = value == 1.0f;
-      return true;
-    case 16:
-      config_.mod_rate_hz = std::clamp(value, 0.0f, kMaxModRateHz);
-      return true;
-    case 17:
-      config_.mod_depth_ms = std::clamp(value, 0.0f, kMaxDelayMs);
-      return true;
-    case 18:
-      config_.mod_phase_deg = std::clamp(value, 0.0f, 360.0f);
-      return true;
-    case 19:
-      config_.glide_ms = std::clamp(value, 0.0f, kMaxGlideMs);
       return true;
     case 20:
       // An unnamed mode is refused rather than rounded onto a neighbour.

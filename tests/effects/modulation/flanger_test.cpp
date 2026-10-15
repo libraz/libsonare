@@ -9,6 +9,8 @@
 #include <cstddef>
 #include <vector>
 
+#include "effects/modulation/domain_cases.h"
+
 namespace {
 
 using sonare::effects::modulation::Flanger;
@@ -112,4 +114,21 @@ TEST_CASE("flanger pre-filter re-entry drops stale charge at 48 and 96 kHz", "[b
     REQUIRE(peak(reset) <= 1.0e-5f);
     REQUIRE(difference(subject, continuous) <= 2.0e-5f);
   }
+}
+
+TEST_CASE("flanger refuses a config field outside its domain",
+          "[effects][modulation][flanger][domain]") {
+  namespace domain = sonare::test::modulation_domain;
+  using Row = domain::DomainRow<FlangerConfig>;
+  const Row rows[] = {
+      {"rate_hz", 0, &FlangerConfig::rate_hz, 0.0f, domain::kInf},
+      {"depth_ms", 1, &FlangerConfig::depth_ms, 0.0f, 100.0f},
+      {"center_delay_ms", 2, &FlangerConfig::center_delay_ms, 0.0f, 100.0f},
+      {"feedback", 3, &FlangerConfig::feedback, -0.98f, 0.98f},
+      {"dry_wet", 4, &FlangerConfig::dry_wet, 0.0f, 1.0f},
+      {"pre_filter_hz", 5, &FlangerConfig::pre_filter_hz, -domain::kInf, domain::kInf},
+      {"phase_deg", 6, &FlangerConfig::phase_deg, 0.0f, 180.0f},
+      {"step_rate_hz", 7, &FlangerConfig::step_rate_hz, 0.0f, domain::kInf},
+  };
+  for (const Row& row : rows) domain::check_row<Flanger>("flanger", FlangerConfig{}, row);
 }

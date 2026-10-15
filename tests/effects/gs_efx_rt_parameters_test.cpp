@@ -190,7 +190,7 @@ TEST_CASE("GS-bound setters preserve construction rendering", "[fx][gs][automati
     REQUIRE(sonare::test::max_abs_difference(expected, actual) < 1.0e-6f);
     REQUIRE_FALSE(automated.set_parameter(10, 1.5f));
     REQUIRE_FALSE(automated.set_parameter(10, 7.0f));
-    REQUIRE(automated.set_parameter(9, -1.0f));
+    REQUIRE_FALSE(automated.set_parameter(9, -1.0f));
     REQUIRE_FALSE(automated.set_parameter(9, std::numeric_limits<float>::quiet_NaN()));
   }
 
@@ -213,8 +213,8 @@ TEST_CASE("GS-bound setters preserve construction rendering", "[fx][gs][automati
     const auto expected = render_stereo(constructed, impulse, impulse);
     const auto actual = process_stereo(automated, impulse, impulse);
     REQUIRE(sonare::test::max_abs_difference(expected, actual) < 1.0e-6f);
-    REQUIRE(automated.set_parameter(12, 0.0f));
-    REQUIRE(automated.set_parameter(13, -1.0f));
+    REQUIRE_FALSE(automated.set_parameter(12, 0.0f));
+    REQUIRE_FALSE(automated.set_parameter(13, -1.0f));
     REQUIRE_FALSE(automated.set_parameter(14, std::numeric_limits<float>::infinity()));
   }
 
@@ -236,8 +236,8 @@ TEST_CASE("GS-bound setters preserve construction rendering", "[fx][gs][automati
     const auto expected = render_stereo(constructed, impulse, impulse);
     const auto actual = process_stereo(automated, impulse, impulse);
     REQUIRE(sonare::test::max_abs_difference(expected, actual) < 1.0e-5f);
-    REQUIRE(automated.set_parameter(14, -1.0f));
-    REQUIRE(automated.set_parameter(17, -1.0f));
+    REQUIRE_FALSE(automated.set_parameter(14, -1.0f));
+    REQUIRE_FALSE(automated.set_parameter(17, -1.0f));
     REQUIRE_FALSE(automated.set_parameter(18, std::numeric_limits<float>::quiet_NaN()));
   }
 

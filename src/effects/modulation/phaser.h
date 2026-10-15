@@ -36,10 +36,11 @@ struct PhaserConfig {
   float rate_hz = 0.4f;
   float min_hz = 300.0f;
   float max_hz = 1600.0f;
+  /// Allpass section count, refused outside [1, 12].
   int stages = 4;
   float dry_wet = 0.5f;
-  /// Gain of the feedback loop closed around the cascade, clamped to +-common::kMaxFeedback in
-  /// process(). Zero leaves the loop open and the cascade is then feed-forward.
+  /// Gain of the feedback loop closed around the cascade, refused outside +-common::kMaxFeedback.
+  /// Zero leaves the loop open and the cascade is then feed-forward.
   float feedback = 0.0f;
   PhaserMixMode mix_mode = PhaserMixMode::kCrossfade;
   /// 0-1: the sweep runs from `min_hz` up to min_hz * (max_hz / min_hz)^depth, so
@@ -49,7 +50,12 @@ struct PhaserConfig {
 
 class Phaser : public rt::ProcessorBase {
  public:
+  /// Throws InvalidParameter when a field lies outside its domain: rate_hz >= 0,
+  /// min_hz and max_hz >= 1, stages in [1, 12], dry_wet in [0, 1], feedback in
+  /// +-common::kMaxFeedback, depth in [0, 1], and every value finite.
   explicit Phaser(PhaserConfig config = {});
+
+  static void validate_config(const PhaserConfig& config);
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
@@ -57,14 +63,14 @@ class Phaser : public rt::ProcessorBase {
   int tail_samples() const noexcept override;
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
-  //   0 = rate_hz (clamped to >= 0; updates the LFO in place)
-  //   1 = min_hz (sweep bound; stored as written)
-  //   2 = max_hz (sweep bound; stored as written)
+  //   0 = rate_hz (refused below 0; updates the LFO in place)
+  //   1 = min_hz (sweep bound; refused below 1; stored as written)
+  //   2 = max_hz (sweep bound; refused below 1; stored as written)
   //   The lower/upper roles of 1 and 2 are resolved at use (min/max of the pair),
   //   so the state after a set of writes does not depend on their order.
-  //   3 = dry_wet
-  //   4 = feedback (clamped to +-common::kMaxFeedback in process())
-  //   5 = depth (clamped to [0, 1])
+  //   3 = dry_wet (refused outside [0, 1])
+  //   4 = feedback (refused outside +-common::kMaxFeedback)
+  //   5 = depth (refused outside [0, 1])
   // Note: `stages` is not automatable; changing it reallocates the allpass
   // state and requires prepare(). `mix_mode` is not automatable either: it
   // selects a structure rather than scaling one.

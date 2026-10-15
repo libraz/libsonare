@@ -26,16 +26,15 @@ namespace sonare::effects::reverb {
 struct ConvolutionReverbConfig {
   /// Upper bound on the synthesized IR length so prepare() stays cheap and the
   /// convolver never allocates an unbounded partition set. Requests above this
-  /// resolve to the ceiling. Shared with the insert factory so an out-of-range
-  /// {decaySec} is clamped at construction rather than silently at prepare().
+  /// are refused by validate_config. Shared with the insert factory, which resolves an
+  /// out-of-range {decaySec} to the ceiling before construction.
   static constexpr float kMaxDecaySeconds = 12.0f;
   /// Approximate RT60 tail length in seconds (matched to FDN/velvet, where
-  /// decaySec maps to the ~T60 reverberation time). Clamped to
-  /// [0, kMaxDecaySeconds].
+  /// decaySec maps to the ~T60 reverberation time). [0, kMaxDecaySeconds].
   float decay_sec = 1.5f;
-  /// Pre-delay before the synthesized tail begins, in milliseconds.
+  /// Pre-delay before the synthesized tail begins, in milliseconds, [0, 1000].
   float pre_delay_ms = 0.0f;
-  /// Dry/wet mix. 1.0 = fully wet (convolution only); 0.0 = dry passthrough.
+  /// Dry/wet mix, [0, 1]. 1.0 = fully wet (convolution only); 0.0 = dry passthrough.
   float dry_wet = 0.35f;
   /// Deterministic seed for the decaying-noise IR (so output is reproducible).
   std::uint32_t seed = 0x5151ABCDu;
@@ -53,9 +52,14 @@ struct ConvolutionReverbConfig {
 class ConvolutionReverb : public rt::ProcessorBase {
  public:
   ConvolutionReverb() = default;
-  explicit ConvolutionReverb(ConvolutionReverbConfig config) : config_(config) {
+  /// @throws SonareException(InvalidParameter) naming the first field outside its domain.
+  explicit ConvolutionReverb(ConvolutionReverbConfig config)
+      : config_((validate_config(config), config)) {
     dry_wet_ = config.dry_wet;
   }
+
+  /// Refuses a non-finite field or one outside the domain stated on the config field.
+  static void validate_config(const ConvolutionReverbConfig& config);
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
@@ -93,7 +97,7 @@ class ConvolutionReverb : public rt::ProcessorBase {
                                const std::vector<float>& right);
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
-  //   0 = dry_wet (clamped to [0, 1] in process())
+  //   0 = dry_wet (refused outside [0, 1])
   bool set_parameter_impl(unsigned int param_id, float value) override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
@@ -108,7 +112,7 @@ class ConvolutionReverb : public rt::ProcessorBase {
   /// dry-only configuration has processing latency but no audible decay tail.
   int tail_samples() const noexcept override {
     rt::TailBudget tail;
-    if (std::clamp(dry_wet_, 0.0f, 1.0f) > 0.0f) tail.delay(static_cast<double>(max_ir_length()));
+    if (dry_wet_ > 0.0f) tail.delay(static_cast<double>(max_ir_length()));
     return tail.samples();
   }
   int ir_size() const noexcept { return static_cast<int>(max_ir_length()); }

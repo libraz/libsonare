@@ -3,7 +3,7 @@
 ///
 /// A negative loop gain inverts every pass, so the echoes alternate in polarity
 /// and mirror the positive loop's echo for echo. Read off the impulse response
-/// rather than off the stored field, since a clamp at zero leaves a stored
+/// rather than off the stored field, since a floor at zero leaves a stored
 /// negative value looking fine while the loop it names is open.
 
 #include <catch2/catch_test_macros.hpp>
@@ -13,6 +13,7 @@
 
 #include "effects/common/control_ranges.h"
 #include "effects/delay/stereo_delay.h"
+#include "util/exception.h"
 
 namespace {
 
@@ -75,15 +76,19 @@ TEST_CASE("a negative stereo-delay feedback inverts every pass", "[effects][dela
   }
 }
 
-TEST_CASE("the stereo-delay feedback clamps symmetrically on every path",
+TEST_CASE("the stereo-delay feedback is refused outside +-kMaxFeedback on every path",
           "[effects][delay][stereo]") {
-  StereoDelay built(looped(-2.0f));
-  CHECK(built.config().feedback == -kMaxFeedback);
+  CHECK_THROWS_AS(StereoDelay(looped(-2.0f)), sonare::SonareException);
+  CHECK_THROWS_AS(StereoDelay(looped(2.0f)), sonare::SonareException);
+  CHECK_NOTHROW(StereoDelay(looped(-kMaxFeedback)));
 
-  StereoDelay automated(looped(0.0f));
-  REQUIRE(automated.set_parameter(2, -2.0f));
+  StereoDelay automated(looped(0.25f));
+  CHECK_FALSE(automated.set_parameter(2, -2.0f));
+  CHECK_FALSE(automated.set_parameter(2, 2.0f));
+  CHECK(automated.config().feedback == 0.25f);
+  REQUIRE(automated.set_parameter(2, -kMaxFeedback));
   CHECK(automated.config().feedback == -kMaxFeedback);
-  REQUIRE(automated.set_parameter(2, 2.0f));
+  REQUIRE(automated.set_parameter(2, kMaxFeedback));
   CHECK(automated.config().feedback == kMaxFeedback);
 }
 

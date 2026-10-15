@@ -30,15 +30,15 @@ inline constexpr int kDattorroMaxCharacter = 6;
 inline constexpr float kDattorroGateOffDb = sonare::constants::kFloorDb;
 
 struct DattorroReverbConfig {
-  float decay = 0.5f;  ///< Tank feedback / tail length, clamped to [0, 0.98].
+  float decay = 0.5f;  ///< Tank feedback / tail length, [0, 0.98].
   /// HF damping, [0, 1]: the one-pole d = damping * 0.4 at kDampingReferenceSampleRate. Held as
   /// that filter's half-power corner in Hz, so the corner stays put at every working rate.
   float damping = 0.5f;
   float dry_wet = 0.35f;           ///< Wet mix amount, [0, 1].
   float mod_rate_hz = 0.5f;        ///< Tank allpass modulation rate.
-  float mod_depth_samples = 6.0f;  ///< Modulation depth (reference rate 29761 Hz), at most 672.
-  /// Input pre-delay (at reference rate 29761 Hz). The ring holds the larger of this and
-  /// the GS ceiling; a live change clamps to that size.
+  float mod_depth_samples = 6.0f;  ///< Modulation depth (reference rate 29761 Hz), [0, 672].
+  /// Input pre-delay (at reference rate 29761 Hz), [0, 4000 ms]. The ring holds the larger of
+  /// this and the GS ceiling; a live change beyond that size is refused.
   float pre_delay_samples = 0.0f;
   /// Corner of the tank's one-pole damping low-pass, in Hz, built at the working
   /// rate. Above 0 it replaces `damping`; 0 keeps `damping`.
@@ -67,7 +67,11 @@ class DattorroReverb : public rt::ProcessorBase {
   /// tank was voiced and its decay measured.
   static constexpr double kDampingReferenceSampleRate = sonare::constants::kDefaultDawSampleRate;
 
+  /// @throws SonareException(InvalidParameter) naming the first field outside its domain.
   explicit DattorroReverb(DattorroReverbConfig config = {});
+
+  /// Refuses a non-finite field or one outside the domain stated on the config field.
+  static void validate_config(const DattorroReverbConfig& config);
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
@@ -75,16 +79,17 @@ class DattorroReverb : public rt::ProcessorBase {
   int tail_samples() const noexcept override;
 
   // Automatable parameters:
-  //   0 = decay (clamped to [0, 0.98] in process())
-  //   1 = damping (clamped to [0, 1]; rebuilds the coefficient at the working rate)
-  //   2 = dry_wet (clamped to [0, 1] in process())
-  //   3 = mod_rate_hz (recomputes the LFO increment in place)
+  //   0 = decay (refused outside [0, 0.98])
+  //   1 = damping (refused outside [0, 1]; rebuilds the coefficient at the working rate)
+  //   2 = dry_wet (refused outside [0, 1])
+  //   3 = mod_rate_hz (finite; recomputes the LFO increment in place)
   //   4 = mod_depth_samples, [0, 672] reference samples (the shorter modulated allpass);
   //       refused outside it. May grow the modulated allpass buffers when the requested
   //       depth exceeds the prepared guard
-  //   5 = damping_hz (0 restores `damping`), 6 = gate_threshold_db,
-  //   7 = gate_hold_ms, 8 = gate_type (a whole number naming a type, refused otherwise)
-  //   9 = pre_delay_ms, 10 = character (a whole number naming a tank set)
+  //   5 = damping_hz (>= 0; 0 restores `damping`), 6 = gate_threshold_db (finite),
+  //   7 = gate_hold_ms ([0, 1e6]), 8 = gate_type (a whole number naming a type, refused otherwise)
+  //   9 = pre_delay_ms (refused above the larger of 127 and the configured pre-delay),
+  //   10 = character (a whole number naming a tank set)
   //   11 = mix_law (a whole number naming a law, refused otherwise)
   bool set_parameter_impl(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;

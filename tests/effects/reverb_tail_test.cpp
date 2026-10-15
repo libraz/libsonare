@@ -8,6 +8,8 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <cmath>
 #include <complex>
+#include <limits>
+#include <string>
 #include <vector>
 
 #include "core/fft.h"
@@ -56,6 +58,7 @@
 #include "rt/processor_base.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using sonare::effects::delay::StereoDelay;
 using sonare::effects::delay::StereoDelayConfig;
@@ -398,16 +401,16 @@ TEST_CASE("VelvetReverb impulse response has no comb from a periodic tap table",
   }
 }
 
-TEST_CASE("VelvetReverb bounds excessive reverb time and tap work", "[effects][reverb][velvet]") {
+TEST_CASE("VelvetReverb bounds the longest reverb time and tap work", "[effects][reverb][velvet]") {
   VelvetReverbConfig config;
-  config.reverb_time_s = 40.0f;
+  config.reverb_time_s = VelvetReverbConfig::kMaxReverbTimeSeconds;
   config.decay = 1.0f;
   config.density_hz = 3000.0f;
   VelvetReverb reverb(config);
   reverb.prepare(48000.0, 512);
 
-  // 12 s base time × the maximum 1.5 decay factor, rather than the requested 40 s,
-  // followed by the 20 Hz DC blocker's ring (under 100 ms).
+  // 12 s base time × the maximum 1.5 decay factor, followed by the 20 Hz DC blocker's ring (under
+  // 100 ms).
   REQUIRE(reverb.tail_samples() <= 18 * 48000 + 48000 / 10);
 
   std::vector<float> samples(512, 0.0f);
@@ -437,9 +440,9 @@ TEST_CASE("VelvetReverb decays smoothly across the whole tail it declares",
     config.reverb_time_s = 8.0f / (0.5f + 0.45f);
     config.density_hz = 2000.0f;
   }
-  SECTION("reverb time above the ceiling") {
+  SECTION("reverb time at the ceiling") {
     config.decay = 1.0f;
-    config.reverb_time_s = 40.0f;  // clamped to the 12 s base, i.e. an 18 s T60
+    config.reverb_time_s = 12.0f;  // the 12 s base, i.e. an 18 s T60
     config.density_hz = 3000.0f;
   }
 
@@ -938,5 +941,82 @@ TEST_CASE("ConvolutionReverb IR set: empty or silent members are rejected",
     CHECK_THROWS_AS(reverb.load_ir_set_unit_energy(b, ir, ir), sonare::SonareException);
     CHECK_THROWS_AS(reverb.load_ir_set_unit_energy(ir, b, ir), sonare::SonareException);
     CHECK_THROWS_AS(reverb.load_ir_set_unit_energy(ir, ir, b), sonare::SonareException);
+  }
+}
+
+namespace {
+
+struct VelvetDomainRow {
+  const char* name;
+  float VelvetReverbConfig::*member;
+  unsigned int id;
+  float lo;
+  float hi;
+};
+
+const VelvetDomainRow kVelvetRows[] = {
+    {"decay", &VelvetReverbConfig::decay, 0, 0.0f, 1.0f},
+    {"reverb_time_s", &VelvetReverbConfig::reverb_time_s, 1, 0.05f,
+     VelvetReverbConfig::kMaxReverbTimeSeconds},
+    {"dry_wet", &VelvetReverbConfig::dry_wet, 2, 0.0f, 1.0f},
+    {"density_hz", &VelvetReverbConfig::density_hz, 3, 1000.0f, 3000.0f},
+};
+
+std::vector<float> velvet_refused(const VelvetDomainRow& row) {
+  const float inf = std::numeric_limits<float>::infinity();
+  return {std::nextafter(row.lo, -inf), std::nextafter(row.hi, inf),
+          std::numeric_limits<float>::quiet_NaN(), inf, -inf};
+}
+
+std::vector<float> velvet_render(VelvetReverb& reverb) {
+  reverb.prepare(16000.0, 256);
+  std::vector<float> samples(2048, 0.0f);
+  samples[0] = 1.0f;
+  float* channels[] = {samples.data()};
+  reverb.process(channels, 1, static_cast<int>(samples.size()));
+  return samples;
+}
+
+}  // namespace
+
+TEST_CASE("VelvetReverb construction refuses a field outside its domain", "[effects][reverb]") {
+  for (const VelvetDomainRow& row : kVelvetRows) {
+    for (const float value : velvet_refused(row)) {
+      CAPTURE(row.name, value);
+      VelvetReverbConfig config;
+      config.*row.member = value;
+      try {
+        VelvetReverb subject(config);
+        FAIL("constructed with " << row.name << " out of range");
+      } catch (const sonare::SonareException& error) {
+        CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+        CHECK(std::string(error.what())
+                  .find(std::string("VelvetReverb: ") + row.name + " out of range") !=
+              std::string::npos);
+      }
+    }
+  }
+}
+
+TEST_CASE("VelvetReverb live automation refuses outside the domain and applies a bound exactly",
+          "[effects][reverb]") {
+  for (const VelvetDomainRow& row : kVelvetRows) {
+    VelvetReverb untouched;
+    const std::vector<float> expected = velvet_render(untouched);
+    for (const float value : velvet_refused(row)) {
+      CAPTURE(row.name, value);
+      VelvetReverb subject;
+      CHECK_FALSE(subject.set_parameter(row.id, value));
+      CHECK(velvet_render(subject) == expected);
+    }
+    for (const float bound : {row.lo, row.hi}) {
+      CAPTURE(row.name, bound);
+      VelvetReverbConfig config;
+      config.*row.member = bound;
+      VelvetReverb built(config);
+      VelvetReverb automated;
+      REQUIRE(automated.set_parameter(row.id, bound));
+      CHECK(velvet_render(automated) == velvet_render(built));
+    }
   }
 }

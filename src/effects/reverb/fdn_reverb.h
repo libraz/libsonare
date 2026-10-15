@@ -14,14 +14,18 @@
 namespace sonare::effects::reverb {
 
 struct FdnReverbConfig {
-  float decay = 0.55f;      ///< T60_lf = max(0.01, decay*10) seconds.
+  float decay = 0.55f;      ///< T60_lf = max(0.01, decay*10) seconds, [0, 1.5].
   float hf_damping = 0.5f;  ///< HF decay shortening, [0, 1].
-  float dry_wet = 0.35f;
+  float dry_wet = 0.35f;    ///< [0, 1].
 };
 
 class FdnReverb : public rt::ProcessorBase {
  public:
+  /// @throws SonareException(InvalidParameter) naming the first field outside its domain.
   explicit FdnReverb(FdnReverbConfig config = {});
+
+  /// Refuses a non-finite field or one outside the domain stated on the config field.
+  static void validate_config(const FdnReverbConfig& config);
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
@@ -29,9 +33,10 @@ class FdnReverb : public rt::ProcessorBase {
   int tail_samples() const noexcept override;
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
-  //   0 = decay (recomputes per-line absorption coefficients in place)
-  //   1 = hf_damping (recomputes per-line absorption coefficients in place)
-  //   2 = dry_wet (clamped to [0, 1] in process())
+  //   0 = decay ([0, 1.5]; recomputes per-line absorption coefficients in place)
+  //   1 = hf_damping ([0, 1]; recomputes per-line absorption coefficients in place)
+  //   2 = dry_wet ([0, 1])
+  // Values outside a range are refused.
   bool set_parameter_impl(unsigned int param_id, float value) override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

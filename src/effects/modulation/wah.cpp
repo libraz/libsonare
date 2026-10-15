@@ -3,16 +3,35 @@
 #include <algorithm>
 #include <cmath>
 
+#include "effects/common/field_domain.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 
 namespace sonare::effects::modulation {
 
+using common::FieldRange;
+using common::in_domain;
+using common::kNoUpperBound;
+using common::require_in_domain;
+
 using constants::kDefaultDawSampleRate;
 
-Wah::Wah(WahConfig config) : config_(config) {
-  config_.rate_hz = std::max(0.0f, config_.rate_hz);
-  config_.resonance = std::max(0.5f, config_.resonance);
+namespace {
+// Field domains shared by validate_config and live automation.
+constexpr FieldRange kRateHz{0.0f, kNoUpperBound};
+constexpr FieldRange kSweepHz{kWahMinSweepHz, kNoUpperBound};
+constexpr FieldRange kResonance{kWahMinResonance, kNoUpperBound};
+constexpr FieldRange kDryWet{0.0f, 1.0f};
+}  // namespace
+
+Wah::Wah(WahConfig config) : config_(config) { validate_config(config_); }
+
+void Wah::validate_config(const WahConfig& config) {
+  require_in_domain("wah", "rate_hz", config.rate_hz, kRateHz);
+  require_in_domain("wah", "min_hz", config.min_hz, kSweepHz);
+  require_in_domain("wah", "max_hz", config.max_hz, kSweepHz);
+  require_in_domain("wah", "resonance", config.resonance, kResonance);
+  require_in_domain("wah", "dry_wet", config.dry_wet, kDryWet);
 }
 
 void Wah::prepare(double sample_rate, int) {
@@ -30,14 +49,14 @@ void Wah::process(float* const* channels, int num_channels, int num_samples) {
     return;
   }
   rt::ScopedNoDenormals no_denormals;
-  const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
+  const float wet = config_.dry_wet;
   const float dry = 1.0f - wet;
   // The sweep range is the filter's own cutoff ceiling, so it never claims a frequency the
   // filter would silently reduce.
   const float max_cutoff = SvfBandpass::max_cutoff_hz(sample_rate_);
-  const float lo = std::clamp(std::min(config_.min_hz, config_.max_hz), 10.0f, max_cutoff);
+  const float lo = std::clamp(std::min(config_.min_hz, config_.max_hz), kWahMinSweepHz, max_cutoff);
   const float hi = std::clamp(std::max(config_.min_hz, config_.max_hz), lo, max_cutoff);
-  const float q = std::max(0.5f, config_.resonance);
+  const float q = config_.resonance;
   const bool lowpass = config_.filter_type == WahFilterType::kLowpass;
   const WahSweepLaw law = config_.sweep_law;
   // Stereo-pair processor: one bandpass filter per plane is allocated for two
@@ -69,7 +88,7 @@ void Wah::process(float* const* channels, int num_channels, int num_samples) {
 int Wah::tail_samples() const noexcept {
   rt::TailBudget tail;
   // Near Nyquist the upper sweep endpoint can have the longer ring.
-  if (std::clamp(config_.dry_wet, 0.0f, 1.0f) > 0.0f) {
+  if (config_.dry_wet > 0.0f) {
     tail = SvfBandpass::ring_range(config_.min_hz, config_.max_hz, config_.resonance, sample_rate_);
   }
   return tail.samples();
@@ -86,19 +105,24 @@ void Wah::reset() {
 bool Wah::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      config_.rate_hz = std::max(0.0f, value);
+      if (!in_domain(value, kRateHz)) return false;
+      config_.rate_hz = value;
       lfo_.set_rate_hz(config_.rate_hz);
       return true;
     case 1:
+      if (!in_domain(value, kSweepHz)) return false;
       config_.min_hz = value;
       return true;
     case 2:
+      if (!in_domain(value, kSweepHz)) return false;
       config_.max_hz = value;
       return true;
     case 3:
-      config_.resonance = std::max(0.5f, value);
+      if (!in_domain(value, kResonance)) return false;
+      config_.resonance = value;
       return true;
     case 4:
+      if (!in_domain(value, kDryWet)) return false;
       config_.dry_wet = value;
       return true;
     case 5:

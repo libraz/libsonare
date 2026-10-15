@@ -4,12 +4,18 @@
 #include <cmath>
 
 #include "effects/common/control_ranges.h"
+#include "effects/common/field_domain.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/non_finite_state.h"
 
 namespace sonare::effects::modulation {
+
+using common::FieldRange;
+using common::in_domain;
+using common::kNoUpperBound;
+using common::require_in_domain;
 
 using constants::kDefaultDawSampleRate;
 
@@ -25,6 +31,15 @@ namespace {
 // consistent with that reading rather than a resolved value.
 constexpr double kLoopHighpassHz = 20.0;
 
+// Field domains shared by validate_config and live automation. The sweep bounds
+// are further limited to the prepared rate's Nyquist guard inside process().
+constexpr FieldRange kRateHz{0.0f, kNoUpperBound};
+constexpr FieldRange kSweepHz{1.0f, kNoUpperBound};
+constexpr FieldRange kStages{1.0f, 12.0f};
+constexpr FieldRange kDryWet{0.0f, 1.0f};
+constexpr FieldRange kFeedback{-kMaxFeedback, kMaxFeedback};
+constexpr FieldRange kDepth{0.0f, 1.0f};
+
 // A cascade of allpass sections passes every frequency at unit gain, so a loop
 // closed around it is stable while its gain stays under one (kMaxFeedback).
 
@@ -38,11 +53,21 @@ float max_sweep_hz(double sample_rate) noexcept {
 
 }  // namespace
 
-Phaser::Phaser(PhaserConfig config) : config_(config) {}
+Phaser::Phaser(PhaserConfig config) : config_(config) { validate_config(config_); }
+
+void Phaser::validate_config(const PhaserConfig& config) {
+  require_in_domain("phaser", "rate_hz", config.rate_hz, kRateHz);
+  require_in_domain("phaser", "min_hz", config.min_hz, kSweepHz);
+  require_in_domain("phaser", "max_hz", config.max_hz, kSweepHz);
+  require_in_domain("phaser", "stages", static_cast<float>(config.stages), kStages);
+  require_in_domain("phaser", "dry_wet", config.dry_wet, kDryWet);
+  require_in_domain("phaser", "feedback", config.feedback, kFeedback);
+  require_in_domain("phaser", "depth", config.depth, kDepth);
+}
 
 void Phaser::prepare(double sample_rate, int) {
   sample_rate_ = effective_sample_rate(sample_rate);
-  const int stages = std::clamp(config_.stages, 1, 12);
+  const int stages = config_.stages;
   for (int ch = 0; ch < 2; ++ch) {
     x1_[static_cast<size_t>(ch)].assign(static_cast<size_t>(stages), 0.0f);
     y1_[static_cast<size_t>(ch)].assign(static_cast<size_t>(stages), 0.0f);
@@ -68,17 +93,17 @@ void Phaser::process(float* const* channels, int num_channels, int num_samples) 
   channel_gates_[1].admit(stereo, [this] { reset_channel(1); });
   // Block-rate dry/wet + modulation depth: smoothed across blocks by the engine
   // parameter slot smoother, not per-sample (see Chorus::process for the rationale).
-  const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
+  const float wet = config_.dry_wet;
   // A sum holds the dry signal at unity and lets the pair reach twice the input
   // where they arrive in phase; a crossfade splits one unit between them.
   const float dry = config_.mix_mode == PhaserMixMode::kDrySum ? 1.0f : 1.0f - wet;
-  const float feedback = std::clamp(config_.feedback, -kMaxFeedback, kMaxFeedback);
+  const float feedback = config_.feedback;
   // Top of the sweep for this block; a full depth is max_hz itself, not its pow() image.
-  const float depth = std::clamp(config_.depth, 0.0f, 1.0f);
+  const float depth = config_.depth;
   // Bounds stay in hertz across rate changes; only this block's copies meet Nyquist.
   const float sweep_limit = max_sweep_hz(sample_rate_);
-  const float effective_min_hz = std::clamp(config_.min_hz, 1.0f, sweep_limit);
-  const float effective_max_hz = std::clamp(config_.max_hz, 1.0f, sweep_limit);
+  const float effective_min_hz = std::clamp(config_.min_hz, kSweepHz.lo, sweep_limit);
+  const float effective_max_hz = std::clamp(config_.max_hz, kSweepHz.lo, sweep_limit);
   const float min_hz = std::min(effective_min_hz, effective_max_hz);
   const float max_hz = std::max(effective_min_hz, effective_max_hz);
   const float top_hz = depth >= 1.0f ? max_hz : min_hz * std::pow(max_hz / min_hz, depth);
@@ -124,7 +149,8 @@ void Phaser::discard_non_finite() noexcept {
 bool Phaser::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      config_.rate_hz = std::max(0.0f, value);
+      if (!in_domain(value, kRateHz)) return false;
+      config_.rate_hz = value;
       // Updates the LFO increment in place; preserves oscillator phase, so the
       // L/R offset survives a rate change.
       lfos_[0].set_rate_hz(config_.rate_hz);
@@ -132,20 +158,24 @@ bool Phaser::set_parameter_impl(unsigned int param_id, float value) {
       return true;
     case 1:
       // Stored in hertz as written; process() bounds and orders the pair per block.
+      if (!in_domain(value, kSweepHz)) return false;
       config_.min_hz = value;
       return true;
     case 2:
+      if (!in_domain(value, kSweepHz)) return false;
       config_.max_hz = value;
       return true;
     case 3:
+      if (!in_domain(value, kDryWet)) return false;
       config_.dry_wet = value;
       return true;
     case 4:
-      // process() clamps feedback to +-kMaxFeedback; store the raw target.
+      if (!in_domain(value, kFeedback)) return false;
       config_.feedback = value;
       return true;
     case 5:
-      config_.depth = std::clamp(value, 0.0f, 1.0f);
+      if (!in_domain(value, kDepth)) return false;
+      config_.depth = value;
       return true;
     default:
       return false;
@@ -164,20 +194,18 @@ std::vector<rt::ParamDescriptor> Phaser::parameter_descriptors() const {
 }
 
 int Phaser::tail_samples() const noexcept {
-  if (!(std::clamp(config_.dry_wet, 0.0f, 1.0f) > 0.0f)) return 0;
+  if (!(config_.dry_wet > 0.0f)) return 0;
   // The sweep's lowest corner gives the slowest allpass pole; the cascade then
   // recirculates through the one-sample loop and its 20 Hz high-pass.
   const float sweep_limit = max_sweep_hz(sample_rate_);
-  const double low_hz = std::min(std::clamp(config_.min_hz, 1.0f, sweep_limit),
-                                 std::clamp(config_.max_hz, 1.0f, sweep_limit));
+  const double low_hz = std::min(std::clamp(config_.min_hz, kSweepHz.lo, sweep_limit),
+                                 std::clamp(config_.max_hz, kSweepHz.lo, sweep_limit));
   const double t = std::tan(kPiD * low_hz / sample_rate_);
   const double pole = (1.0 - t) / (1.0 + t);
   rt::TailBudget cascade;
-  for (int stage = 0; stage < std::clamp(config_.stages, 1, 12); ++stage) cascade.decay(pole);
+  for (int stage = 0; stage < config_.stages; ++stage) cascade.decay(pole);
   rt::TailBudget tail = cascade;
-  tail.recirculation(cascade.samples() + 1.0,
-                     std::clamp(config_.feedback, -kMaxFeedback, kMaxFeedback))
-      .decay(loop_highpass_pole_);
+  tail.recirculation(cascade.samples() + 1.0, config_.feedback).decay(loop_highpass_pole_);
   return tail.samples();
 }
 

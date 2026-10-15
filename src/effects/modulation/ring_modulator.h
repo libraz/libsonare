@@ -32,18 +32,23 @@ struct RingModulatorConfig {
 /// image coherent.
 class RingModulator : public rt::ProcessorBase {
  public:
+  /// Throws SonareException(InvalidParameter) naming the first field outside its domain.
   explicit RingModulator(RingModulatorConfig config = {});
+
+  /// Refuses a non-finite field and any field outside its documented domain.
+  static void validate_config(const RingModulatorConfig& config);
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
 
-  // Automatable parameters (RT-safe, in-place scalar updates):
-  //   0 = carrier_hz (clamped to >= 0)
-  //   1 = dry_wet (clamped to [0, 1] in process())
+  // Automatable parameters (RT-safe, in-place scalar updates). A numeric value outside its
+  // field's domain (the one validate_config enforces) is refused and changes nothing:
+  //   0 = carrier_hz (finite, >= 0)
+  //   1 = dry_wet ([0, 1])
   //   2 = shape (LfoShape; a fractional or unnamed value is refused)
-  //   3 = phase_deg (clamped to [0, 360])
-  //   4 = stereo_spread (clamped to [0, 1])
+  //   3 = phase_deg ([0, 360])
+  //   4 = stereo_spread ([0, 1])
   //   5 = mix_law (a whole number naming a law, refused otherwise)
   bool set_parameter_impl(unsigned int param_id, float value) override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;

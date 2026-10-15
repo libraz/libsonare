@@ -46,7 +46,12 @@ struct VowelFilterConfig {
 /// unfiltered and without the half-sample delay.
 class VowelFilter : public rt::ProcessorBase {
  public:
+  /// @throws SonareException(InvalidParameter) naming the first field outside its domain.
   explicit VowelFilter(VowelFilterConfig config = {});
+
+  /// Refuses a non-finite field or one outside vowel [0, 4], accel_ms [0, 1e6], drive and
+  /// dry_wet [0, 1].
+  static void validate_config(const VowelFilterConfig& config);
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
@@ -57,11 +62,11 @@ class VowelFilter : public rt::ProcessorBase {
   int latency_samples() const noexcept override { return paths_.latency_samples(); }
 
   // Automatable parameters (RT-safe, in-place scalar updates):
-  //   0 = vowel (clamped to [0, 4])
-  //   1 = accel_ms (>= 0; rebuilds the glide coefficient)
-  //   2 = drive (clamped to [0, 1])
+  //   0 = vowel (refused outside [0, 4])
+  //   1 = accel_ms (refused outside [0, 1e6]; rebuilds the glide coefficient)
+  //   2 = drive (refused outside [0, 1])
   //   3 = drive_on (0 or 1)
-  //   4 = dry_wet (clamped to [0, 1])
+  //   4 = dry_wet (refused outside [0, 1])
   bool set_parameter_impl(unsigned int param_id, float value) override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
