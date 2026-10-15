@@ -9,7 +9,7 @@
 /// segment. Each is this same skeleton at a different period, brightness and
 /// t60, and each used to be written out again field by field inside whichever
 /// core needed it. This is that skeleton once, for the cores that share it
-/// (ks_voice.h and harpsichord_voice.h).
+/// (ks_voice.h, harpsichord_voice.h and plucked_string_voice.h).
 ///
 /// What the loop deliberately does NOT own is anything that happens *inside* it
 /// for one instrument only: the in-loop dispersion allpass, the fret-slap
@@ -283,6 +283,175 @@ inline StringLoopFilter solve_string_loop_filter(float omega0, float omega_ref, 
   return out;
 }
 
+/// Peak |H| of the loss one-pole over the band: DC for a lowpass pole, Nyquist
+/// for a negative one.
+inline float onepole_peak_magnitude(float a) noexcept {
+  return std::max(onepole_magnitude(a, 0.0f), onepole_magnitude(a, constants::kPi));
+}
+
+/// A loss filter solved from decay targets quoted at named frequencies, in the
+/// form StringLoop::configure_filter() takes, plus the factor the damper's gain
+/// takes so the solved pole is not counted into it twice.
+struct QuotedStringLoopFilter {
+  float a = 0.0f;
+  float g = 0.0f;
+  bool has_pole2 = false;
+  float a2 = 0.0f;
+  float g2 = 1.0f;
+  float release_scale = 1.0f;
+};
+
+/// solve_string_loop_filter() for a string whose damping is quoted at
+/// @p omega_ref (gain @p g_ref per traversal) and, when @p g_mid > 0 and
+/// @p omega_mid sits between the fundamental and the reference, at a mid
+/// anchor too: one pole then carries fundamental-to-mid and a cascaded second
+/// supplies the residual loss at the reference, its ring bounded against the
+/// cascade's combined DC gain. All gains are per traversal and already repaid.
+inline QuotedStringLoopFilter solve_quoted_loop_filter(float omega0, float omega_ref, float g0,
+                                                       float g_ref, float omega_mid,
+                                                       float g_mid) noexcept {
+  QuotedStringLoopFilter out;
+  if (g_mid > 0.0f && omega_mid > omega0 * 1.5f && omega_mid < omega_ref) {
+    // Stage A carries fundamental-to-mid; stage B supplies the residual loss at the quote
+    // frequency.
+    const StringLoopFilter stage_a = solve_string_loop_filter(omega0, omega_mid, g0, g_mid);
+    const float stage_a_at_ref = stage_a.g * onepole_magnitude(stage_a.a, omega_ref);
+    const float residual =
+        stage_a_at_ref > 1.0e-8f ? std::min(1.0f, g_ref / stage_a_at_ref) : g_ref;
+    // Stage B's own tilt, ring-bounded against the cascade's combined DC gain.
+    float b_a = 0.0f;
+    const float ratio_b = residual > 0.0f ? 1.0f / residual : 1.0f;
+    if (ratio_b > 1.000001f) {
+      b_a = solve_tilt_pole(omega0, omega_ref, ratio_b);
+      const float g_max = sub_fundamental_gain_cap(g0);
+      if (stage_a.g >= g_max) {
+        b_a = std::min(b_a, 0.0f);
+      } else {
+        const float mag_floor_b = stage_a.g / g_max;
+        b_a = std::min(b_a,
+                       mag_floor_b < 0.999999f ? solve_tilt_pole(omega0, 0.0f, mag_floor_b) : 0.0f);
+      }
+    }
+    out.a = stage_a.a;
+    out.g = stage_a.g;
+    out.a2 = b_a;
+    // Stage A holds the fundamental, so B is unity there; the cascade peak stays under the
+    // single-loop ring cap.
+    const float b_at_fundamental = onepole_magnitude(b_a, omega0);
+    const float aggregate_peak =
+        stage_a.g * onepole_peak_magnitude(stage_a.a) * onepole_peak_magnitude(b_a);
+    const float aggregate_gain_cap =
+        aggregate_peak > 1.0e-8f ? sub_fundamental_gain_cap(g0) / aggregate_peak : 1.0f;
+    out.g2 = std::min(1.0f / std::max(1.0e-6f, b_at_fundamental), aggregate_gain_cap);
+    out.has_pole2 = true;
+    out.release_scale = g0 > 0.0f ? (out.g * out.g2) / g0 : 1.0f;
+    return out;
+  }
+  const StringLoopFilter solved = solve_string_loop_filter(omega0, omega_ref, g0, g_ref);
+  // The damper is broadband, so its gain takes the compensation the
+  // fundamental's did; otherwise the pole is counted into it twice.
+  out.release_scale = g0 > 0.0f ? solved.g / g0 : 1.0f;
+  out.a = solved.a;
+  out.g = solved.g;
+  return out;
+}
+
+/// A short lowpassed noise burst decaying about 35 dB over its length, added to
+/// a voice's output independently of its loop: a pick's contact click or a
+/// damper's thump. The caller draws the noise, so each burst keeps its own
+/// seeded stream. amount 0 still runs the burst and adds nothing.
+struct NoiseBurst {
+  float amount = 0.0f;
+  float lp = 0.0f;
+  float env = 0.0f;
+  float alpha = 1.0f;
+  float decay = 0.0f;
+  int len = 0;
+  int pos = 0;
+
+  /// Sizes the burst for @p sample_rate; it starts armed only if @p armed.
+  void configure(float level, float length_ms, float cutoff_hz, double sample_rate,
+                 bool armed) noexcept {
+    amount = level * onepole_noise_rate_gain(cutoff_hz, sample_rate);
+    len = std::max(1, static_cast<int>(length_ms * 0.001f * static_cast<float>(sample_rate)));
+    pos = armed ? 0 : len;
+    lp = 0.0f;
+    env = armed ? 1.0f : 0.0f;
+    alpha = std::clamp(
+        1.0f - std::exp(-constants::kTwoPi * cutoff_hz / static_cast<float>(sample_rate)), 0.01f,
+        1.0f);
+    decay = std::exp(-4.0f / static_cast<float>(len));
+  }
+  void arm() noexcept {
+    pos = 0;
+    lp = 0.0f;
+    env = 1.0f;
+  }
+  bool active() const noexcept { return pos < len; }
+  /// Adds the next sample, made from the caller's draw @p noise, into @p result.
+  void add_to(float& result, float noise) noexcept {
+    lp += alpha * (noise - lp);
+    result += amount * env * lp;
+    env *= decay;
+    ++pos;
+  }
+};
+
+/// |r + z^-R| at a frequency where the comb's own phase omega*R is @p theta:
+/// the ripple a loss filter of Valimaki et al. 2004 adds to a string's decay
+/// rates, so they fall non-monotonically up the series rather than along one
+/// pole's slope.
+inline float ripple_magnitude(float r, float theta) noexcept {
+  return std::sqrt(std::max(0.0f, 1.0f + 2.0f * r * std::cos(theta) + r * r));
+}
+
+/// Phase delay in samples of r + z^-R at @p omega, continuous in R: R less
+/// the phase the depth adds, so it never wraps however long the comb is.
+inline float ripple_phase_delay(float r, float ripple_len, float omega) noexcept {
+  const float theta = omega * ripple_len;
+  return ripple_len -
+         std::atan2(r * std::sin(theta), 1.0f + r * std::cos(theta)) / std::max(omega, 1.0e-6f);
+}
+
+/// solve_string_loop_filter() for a loop that also carries the ripple comb
+/// r + z^-R (@p ripple_len = R samples): the pole and its gain are solved for
+/// the two targets with the comb's magnitude at each divided out, so the
+/// fundamental keeps the decay it asked for. The comb lifts the loop by up to
+/// 1 + r, so the depth is shrunk until that peak sits under the same ring bound
+/// the pole is held to; the depth actually used is returned.
+struct RippledStringLoopFilter {
+  StringLoopFilter filter;
+  float r = 0.0f;
+};
+inline RippledStringLoopFilter solve_rippled_loop_filter(float omega0, float omega_ref, float g0,
+                                                         float g_ref, float r,
+                                                         float ripple_len) noexcept {
+  const auto solve = [&](float depth) noexcept {
+    return solve_string_loop_filter(omega0, omega_ref,
+                                    g0 / ripple_magnitude(depth, omega0 * ripple_len),
+                                    g_ref / ripple_magnitude(depth, omega_ref * ripple_len));
+  };
+  const auto peak = [&](const StringLoopFilter& f, float depth) noexcept {
+    return f.g * onepole_peak_magnitude(f.a) * (1.0f + std::fabs(depth));
+  };
+  const float cap = sub_fundamental_gain_cap(g0);
+  RippledStringLoopFilter out{solve(r), r};
+  if (peak(out.filter, r) <= cap) return out;
+  float lo = 0.0f;
+  float hi = 1.0f;
+  for (int i = 0; i < 24; ++i) {
+    const float mid = 0.5f * (lo + hi);
+    if (peak(solve(r * mid), r * mid) <= cap) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  out.r = r * lo;
+  out.filter = solve(out.r);
+  return out;
+}
+
 /// What a delay-line loop of a requested period realises, and what the read costs.
 struct LoopBudget {
   /// Delay actually read from the line: the requested period less the delay carried outside it,
@@ -538,6 +707,12 @@ struct StringLoop {
   float gain = 0.0f;
   float release_gain = 0.0f;
 
+  /// The ripple comb r + z^-R after the loss filter (r == 0 skips it, and the
+  /// loop is bit-identical to the form without it). configure_filter() clears
+  /// it; set_ripple() engages it.
+  float ripple_r = 0.0f;
+  float ripple_len = 0.0f;
+
   /// Sets the loop up for a note. @p a is the loss filter's feedback coefficient
   /// (the filter is y += (1-a)(x-y), so a == 0 is transparent and larger a is
   /// darker). @p capacity is the span length available in the slab.
@@ -577,11 +752,22 @@ struct StringLoop {
     loop_comp = 1.0f + comp;
     gain = g * g2;  // g2 == 1.0f by default, an exact IEEE754 no-op
     release_gain = release_g;
+    ripple_r = 0.0f;
+    ripple_len = 0.0f;
     size = capacity;
     if (buffer != nullptr) {
       std::fill(buffer, buffer + static_cast<size_t>(std::max(0, size)), 0.0f);
     }
     active_ = buffer != nullptr && size >= 5;
+  }
+
+  /// Engages the ripple comb after configure_filter(): depth @p r, @p len samples
+  /// long at ratio 1. Its whole phase delay at the fundamental joins loop_comp,
+  /// so the line shortens by about @p len and the note keeps its pitch.
+  void set_ripple(float r, float len) noexcept {
+    ripple_r = r;
+    ripple_len = len;
+    if (r != 0.0f) loop_comp += ripple_phase_delay(r, len, constants::kTwoPi / period);
   }
 
   /// Leaves the loop silent and skipped: a call site gates on gain or on its own
@@ -624,8 +810,18 @@ struct StringLoop {
     if (loop2_active) lp_state2 += alpha2 * (lp_state - lp_state2);
   }
 
-  /// advance() then commit(), for a loop with nothing shaped inside it.
+  /// advance() then commit(), for a loop with nothing shaped inside it but the
+  /// ripple comb, whose delayed tap is the same line read R further back.
   float process(float input, float ratio) noexcept {
+    if (ripple_r != 0.0f && active_) {
+      const float tap_delay =
+          std::min(effective_delay(ratio) + ripple_len / ratio, static_cast<float>(size - 4));
+      const float tap = rt::lagrange3_read(buffer, static_cast<size_t>(size), write,
+                                           static_cast<int>(tap_delay * 256.0f));
+      const float out = advance(input, ratio);
+      commit(ripple_r * out + tap);
+      return out;
+    }
     const float out = advance(input, ratio);
     commit(out);
     return out;
@@ -635,6 +831,13 @@ struct StringLoop {
   float feedback() const noexcept {
     if (!active_) return 0.0f;
     return gain * (loop2_active ? lp_state2 : lp_state);
+  }
+
+  /// @p input plus feedback() as one expression, so the multiply-add contracts
+  /// the way a loop written out inline does and its render stays bit-identical.
+  float add_feedback(float input) const noexcept {
+    if (!active_) return input;
+    return input + gain * (loop2_active ? lp_state2 : lp_state);
   }
 
   /// Note-off: re-target the decay to the damped t60. Never lengthens a decay
@@ -652,5 +855,37 @@ struct StringLoop {
  private:
   bool active_ = false;
 };
+
+/// The largest gain one traversal of @p loop applies at any frequency.
+inline float string_loop_peak_gain(const StringLoop& loop) noexcept {
+  const float second = loop.loop2_active ? onepole_peak_magnitude(1.0f - loop.alpha2) : 1.0f;
+  const float peak = loop.gain * onepole_peak_magnitude(1.0f - loop.alpha) * second;
+  return loop.ripple_r != 0.0f ? peak * (1.0f + std::fabs(loop.ripple_r)) : peak;
+}
+
+/// The largest bridge coupling two string planes may exchange through their
+/// first poles' states. The coupled pair is a 2x2 system whose entries are
+/// bounded at every frequency by [[g1, eps*c2], [eps*c1, g2]] -- g a plane's
+/// peak traversal gain, c the peak of the first pole the coupling taps -- so
+/// holding that majorant's spectral radius, mean + sqrt(halfdiff^2 +
+/// eps^2*c1*c2), under 0.999 keeps the pair inside the unit circle.
+inline float bridge_coupling_limit(const StringLoop& a, const StringLoop& b) noexcept {
+  constexpr float kLambdaMax = 0.999f;
+  // The peak, not the decay target: a tilted loop's gain in front of the
+  // pole rings its sub-fundamental band above the fundamental's target.
+  const float g1 = string_loop_peak_gain(a);
+  const float g2 = string_loop_peak_gain(b);
+  const float c1c2 =
+      onepole_peak_magnitude(1.0f - a.alpha) * onepole_peak_magnitude(1.0f - b.alpha);
+  const float mean = 0.5f * (g1 + g2);
+  const float half_diff = 0.5f * (g1 - g2);
+  const float room = kLambdaMax - mean;
+  float eps_max = 0.0f;
+  if (room > 0.0f) {
+    const float r2 = room * room - half_diff * half_diff;
+    if (r2 > 0.0f) eps_max = std::sqrt(r2 / c1c2);
+  }
+  return eps_max;
+}
 
 }  // namespace sonare::midi::synth

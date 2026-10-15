@@ -63,7 +63,7 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.honky_tonk_wide = o.honky_tonk;
   o.honky_tonk_wide.stereo_spread = 0.55f;
 
-  // --- Electric piano (capital: programs 4-5, one FM voice) ----------------
+  // --- Electric piano (capitals: program 4 tine, program 5 FM) ---------------
   // Detuned EP 1 / 2: two tine assemblies a few cents apart. The beat between
   // them is the effect, so it is voiced as per-voice pitch drift plus a stereo
   // spread that puts the two halves either side, not as a static offset (which
@@ -73,8 +73,10 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.e_piano_detuned_1.drift_rate_hz = 0.45f;
   o.e_piano_detuned_1.stereo_spread = 0.4f;
   o.e_piano_detuned_1.fm.ops[2].detune_cents = 6.0f;  // the tine pair, not the body
-  o.e_piano_detuned_2 = o.e_piano_detuned_1;
+  o.e_piano_detuned_2 = o.e_piano_2;
   o.e_piano_detuned_2.drift_cents = 7.0f;
+  o.e_piano_detuned_2.drift_rate_hz = 0.45f;
+  o.e_piano_detuned_2.stereo_spread = 0.4f;
   o.e_piano_detuned_2.fm.ops[2].detune_cents = 9.0f;
 
   // E.Piano 1v / 2v: the velocity-switched mix. A Rhodes bar bites into a
@@ -84,8 +86,10 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.e_piano_velocity_1.fm.ops[3].vel_to_level = 1.0f;
   o.e_piano_velocity_1.fm.ops[1].vel_to_level = 0.85f;
   o.e_piano_velocity_1.vel_to_cutoff_cents = 2400.0f;
-  o.e_piano_velocity_2 = o.e_piano_velocity_1;
+  o.e_piano_velocity_2 = o.e_piano_2;
   o.e_piano_velocity_2.fm.ops[3].vel_to_level = 0.9f;
+  o.e_piano_velocity_2.fm.ops[1].vel_to_level = 0.85f;
+  o.e_piano_velocity_2.vel_to_cutoff_cents = 2400.0f;
 
   // 60's E.Piano: the reed piano rather than the tine one. A struck steel reed
   // has no long-ringing tine ping over it, so the "ping" operator drops back

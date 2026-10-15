@@ -48,12 +48,13 @@ inline int harpsichord_buffer_capacity(double sample_rate) noexcept {
 
 /// Per-voice delay-SLAB capacity (samples) the host must allocate: the two 8'
 /// unison choirs at the full period, the 4' choir an octave up (half the
-/// period), and the behind-the-bridge segment, which is a few percent of a
-/// speaking length and gets an eighth of a span. Every span is reserved whether
-/// or not the registration draws its stop, so attach() stays allocation-free.
+/// period), the behind-the-bridge segment, which is a few percent of a speaking
+/// length and gets an eighth of a span, and a second polarisation for each
+/// choir. Every span is reserved whether or not the registration draws its stop,
+/// so attach() stays allocation-free.
 inline int harpsichord_slab_capacity(double sample_rate) noexcept {
   const int full = harpsichord_buffer_capacity(sample_rate);
-  return 2 * full + full / 2 + full / 8;
+  return 2 * (2 * full + full / 2) + full / 8;
 }
 
 /// Where a note's HF decay is quoted: @p requested_hz kept clear of the
@@ -156,6 +157,32 @@ struct HarpsichordPatchParams {
   float unison_detune_cents = 3.5f;
   /// Residual mistuning of the 4' choir against the octave, in cents.
   float octave_detune_cents = 2.0f;
+  /// Ripple in the loss filter (Valimaki, Penttinen, Knif, Laurson & Erkut
+  /// 2004): a short comb r + z^-R after the loss pole, so the partials' decay
+  /// rates rise and fall up the series instead of following one pole's slope.
+  /// Its depth is stated as a share of the loop's loss per traversal at the
+  /// fundamental, r = share * (1 - g0): an absolute r acts against a loss of
+  /// about 1e-3, so its effect swung with t60 and pitch and clipped at the ring
+  /// bound by r = 0.002. Over [0, 0.4] each partial's loss moves by up to about
+  /// twice the share of its own, short of that bound. The loss filter is solved
+  /// with the comb, so the fundamental keeps its t60. 0 = off, bit-identical.
+  float ripple_loss_share = 0.0f;
+  /// The comb's length R as a share of the loop's period, rounded to whole
+  /// samples: partial k lands at phase 2.pi.k.ratio of the ripple.
+  float ripple_ratio = 0.5f;
+  /// A second polarisation for every drawn choir string (Perng, Smith & Rossing
+  /// 2010-11): the plectrum moves the string in two planes, and the plane
+  /// parallel to the board reaches it only through the bridge, so it is heard
+  /// as it trades energy with the vertical one -- a beat and a two-stage decay.
+  /// The coupling is a share in [0,1] of the largest exchange the two planes can
+  /// take and stay stable. 0 = off -> the second planes are skipped and the
+  /// render is bit-identical.
+  float pol_coupling = 0.0f;
+  /// The second plane's mistuning against the first, in cents.
+  float pol_detune_cents = 1.0f;
+  /// The second plane's t60 as a share of the first's, at the fundamental and at
+  /// the damping reference alike.
+  float pol_t60_ratio = 0.55f;
 
   // --- Behind the bridge --------------------------------------------------
   /// The string between the bridge and the hitch pin, in millimetres. It is
@@ -304,6 +331,10 @@ class HarpsichordVoiceCore {
     float dc_trim = 0.0f;
     /// Whether the damper reaches this choir at note-off.
     bool damped = true;
+    /// The string's second plane and the bridge exchange with it (0 = off, and
+    /// the plane is skipped).
+    StringLoop pol;
+    float pol_couple = 0.0f;
   };
 
   float* slab_ = nullptr;

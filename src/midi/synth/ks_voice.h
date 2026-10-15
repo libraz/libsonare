@@ -311,25 +311,12 @@ class KsVoiceCore {
   float oct_couple_ = 0.0f;  // 0 = off; 4' line mix into the output
   float oct_exc_ = 0.0f;     // pluck injection into the 4' line
 
-  // Key-off / damper noise burst. keyoff_amount_ == 0 -> never triggered, output
-  // bit-identical. release() arms it (keyoff_pos_ = 0); render() adds a short
-  // lowpassed, decaying noise burst for keyoff_len_ samples.
-  float keyoff_amount_ = 0.0f;
-  int keyoff_pos_ = 0;
-  int keyoff_len_ = 0;
-  float keyoff_lp_ = 0.0f;
-  float keyoff_alpha_ = 1.0f;
-  float keyoff_decay_ = 0.0f;
-  float keyoff_env_ = 0.0f;
+  // Key-off / damper noise burst. amount == 0 -> never triggered, output
+  // bit-identical. release() arms it; render() adds it until it runs out.
+  NoiseBurst keyoff_;
 
   // Pick/finger contact-noise burst, armed at start() (bit-identical when off).
-  float pick_amount_ = 0.0f;
-  int pick_pos_ = 0;
-  int pick_len_ = 0;
-  float pick_lp_ = 0.0f;
-  float pick_alpha_ = 1.0f;
-  float pick_decay_ = 0.0f;
-  float pick_env_ = 0.0f;
+  NoiseBurst pick_;
 };
 
 }  // namespace sonare::midi::synth

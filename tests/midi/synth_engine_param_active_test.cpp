@@ -463,6 +463,12 @@ TEST_CASE("engine param gates match the render on brass and bowed string", "[mid
   require_gates_measured({SynthEngineMode::kBrass, SynthEngineMode::kBowedString});
 }
 
+// The plucked string's mid anchor is the second pole of its quoted loss solve, so it acts only
+// once hfDecayS opens that solve.
+TEST_CASE("engine param gates match the render on the plucked string", "[midi][synth]") {
+  require_gates_measured({SynthEngineMode::kPluckedString});
+}
+
 TEST_CASE("engine param gates match the render on every engine", "[.][slow][midi][synth]") {
   const std::vector<SynthEngineMode> modes = engine_modes();
   REQUIRE(modes.size() > 2);

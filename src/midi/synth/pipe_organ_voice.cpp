@@ -147,15 +147,9 @@ SONARE_TUNABLE(kPeakBase, 4.0f);
 SONARE_TUNABLE(kPeakTilt, -0.05f);
 SONARE_TUNABLE(kPeakRefHz, 261.63f);
 
-// Per-pipe tuning error (cents, peak): every (rank, note) pair is its own
-// physical pipe, hand-tuned within a few cents of true. The slow inter-rank
-// beating this creates IS the living chorus of a real plenum — ranks locked to
-// exact harmonic ratios fuse into one static, synthetic-sounding tone. The
-// span tapers above kDetuneTaperRefHz: a constant cents error makes the beat
-// rate grow with frequency, and the treble partials' 6-8 Hz near-total AM
-// reads as the note crackling — real tuners also land the small pipes much
-// closer to true because their beats are the most audible.
-SONARE_TUNABLE(kPipeDetuneCents, 4.0f);
+// Where the per-pipe tuning error (pipe_organ.pipe_detune_cents) starts to
+// taper: a constant cents error makes the beat rate grow with frequency, and
+// the treble partials' 6-8 Hz near-total AM reads as the note crackling.
 SONARE_TUNABLE(kDetuneTaperRefHz, 261.63f);
 
 // Jet turbulence: the air jet is turbulent, so the labium hisses continuously
@@ -328,7 +322,7 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
     // Per-pipe tuning error: a few cents, fixed per (rank, note) — the slow
     // inter-rank beating of a real chorus.
     const float detune_span =
-        kPipeDetuneCents / (1.0f + std::max(0.0f, std::log2(f0 / kDetuneTaperRefHz)));
+        params.pipe_detune_cents / (1.0f + std::max(0.0f, std::log2(f0 / kDetuneTaperRefHz)));
     const float detune =
         std::exp2(detune_span * pipe_tuning_error(note, r) * (1.0f / kCentsPerOctave));
     // No trim: with the DC-blocker lead compensated below, the jet locks the loop on its own

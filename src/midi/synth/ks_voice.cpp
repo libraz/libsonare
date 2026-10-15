@@ -82,18 +82,6 @@ SONARE_TUNABLE(kKsMidQuoteHz, 1000.0f);
 /// break at the fourth partial and drops it from 18 dB/s to 68.
 SONARE_TUNABLE(kKsMuteDecayRatio, 3.8f);
 
-/// Peak |H| of the loss one-pole over the band: DC for a lowpass pole, Nyquist
-/// for a negative one.
-float onepole_peak_gain(float a) noexcept {
-  return std::max(onepole_magnitude(a, 0.0f), onepole_magnitude(a, kPi));
-}
-
-/// The largest gain one traversal of @p loop applies at any frequency.
-float loop_peak_gain(const StringLoop& loop) noexcept {
-  const float second = loop.loop2_active ? onepole_peak_gain(1.0f - loop.alpha2) : 1.0f;
-  return loop.gain * onepole_peak_gain(1.0f - loop.alpha) * second;
-}
-
 }  // namespace
 
 void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t note,
@@ -148,56 +136,17 @@ LoopBudget KsVoiceCore::configure(const KsPatchParams& params, double sr, uint8_
     const float quote_w = mute > 0.0f ? std::min(mute * w0, 0.9f * kPi) : fixed_quote_w;
     const float quote_t60 = mute > 0.0f ? t60_s / kKsMuteDecayRatio : hf_t60_s;
     if ((hf_t60_s > 0.0f || mute > 0.0f) && quote_w > w0 * 1.5f) {
-      const float g0 = g;
       const float g_ref = string_loop_gain_for(period, sr, quote_t60) * repay;
       const float mid_w = kTwoPi * kKsMidQuoteHz / static_cast<float>(sr);
-      bool has_pole2 = false;
-      float a2 = 0.0f, g2 = 1.0f;
-      if (mute <= 0.0f && mid_t60_s > 0.0f && mid_w > w0 * 1.5f && mid_w < quote_w) {
-        // Stage A carries fundamental-to-mid; stage B supplies the residual loss at the quote
-        // frequency.
-        const StringLoopFilter stage_a = solve_string_loop_filter(
-            w0, mid_w, g0, string_loop_gain_for(period, sr, mid_t60_s) * repay);
-        const float stage_a_at_ref = stage_a.g * onepole_magnitude(stage_a.a, quote_w);
-        const float residual =
-            stage_a_at_ref > 1.0e-8f ? std::min(1.0f, g_ref / stage_a_at_ref) : g_ref;
-        // Stage B's own tilt, ring-bounded against the cascade's combined DC gain.
-        float b_a = 0.0f;
-        const float ratio_b = residual > 0.0f ? 1.0f / residual : 1.0f;
-        if (ratio_b > 1.000001f) {
-          b_a = solve_tilt_pole(w0, quote_w, ratio_b);
-          const float g_max = sub_fundamental_gain_cap(g0);
-          if (stage_a.g >= g_max) {
-            b_a = std::min(b_a, 0.0f);
-          } else {
-            const float mag_floor_b = stage_a.g / g_max;
-            b_a = std::min(b_a,
-                           mag_floor_b < 0.999999f ? solve_tilt_pole(w0, 0.0f, mag_floor_b) : 0.0f);
-          }
-        }
-        a = stage_a.a;
-        g = stage_a.g;
-        a2 = b_a;
-        // Stage A holds the fundamental, so B is unity there; the cascade peak stays under the
-        // single-loop ring cap.
-        const float b_at_fundamental = onepole_magnitude(b_a, w0);
-        const float aggregate_peak =
-            stage_a.g * onepole_peak_gain(stage_a.a) * onepole_peak_gain(b_a);
-        const float aggregate_gain_cap =
-            aggregate_peak > 1.0e-8f ? sub_fundamental_gain_cap(g0) / aggregate_peak : 1.0f;
-        g2 = std::min(1.0f / std::max(1.0e-6f, b_at_fundamental), aggregate_gain_cap);
-        has_pole2 = true;
-        release_g = std::min(0.9999f, release_g * (g0 > 0.0f ? (g * g2) / g0 : 1.0f));
-      } else {
-        const StringLoopFilter solved = solve_string_loop_filter(w0, quote_w, g0, g_ref);
-        // The damper is broadband, so its gain takes the compensation the
-        // fundamental's did; otherwise the pole is counted into it twice.
-        release_g = std::min(0.9999f, release_g * (g0 > 0.0f ? solved.g / g0 : 1.0f));
-        a = solved.a;
-        g = solved.g;
-      }
-      loop.configure_filter(span, capacity_, period, a, g, release_g, has_pole2, a2, g2);
-      return a;
+      const float g_mid = mute <= 0.0f && mid_t60_s > 0.0f
+                              ? string_loop_gain_for(period, sr, mid_t60_s) * repay
+                              : 0.0f;
+      const QuotedStringLoopFilter solved =
+          solve_quoted_loop_filter(w0, quote_w, g, g_ref, mid_w, g_mid);
+      release_g = std::min(0.9999f, release_g * solved.release_scale);
+      loop.configure_filter(span, capacity_, period, solved.a, solved.g, release_g,
+                            solved.has_pole2, solved.a2, solved.g2);
+      return solved.a;
     }
     loop.configure_filter(span, capacity_, period, a, g, release_g);
     return a;
@@ -326,30 +275,11 @@ LoopBudget KsVoiceCore::configure(const KsPatchParams& params, double sr, uint8_
     pol_exc_ = 0.6f;  // the pluck grips the vertical plane; the horizontal weakly
     pol_couple_ = polarization;
 
-    // Bridge coupling (off unless body_coupling > 0). The two loops close a
-    // 2x2 system once they exchange energy through the bridge. Its entries are
-    // bounded at every frequency by [[g1, eps*c2], [eps*c1, g2]] -- g the plane's
-    // peak traversal gain, c the peak of the first pole the coupling taps -- so
-    // keeping that majorant's spectral radius, mean + sqrt(halfdiff^2 +
-    // eps^2*c1*c2), under kLambdaMax holds the loop inside the unit circle.
+    // Bridge coupling (off unless body_coupling > 0): a share of the largest
+    // exchange the two planes can take and stay inside the unit circle.
     const float bc = std::clamp(params.body_coupling, 0.0f, 1.0f);
     if (bc > 0.0f) {
-      constexpr float kLambdaMax = 0.999f;
-      // The peak, not the decay target: a tilted loop's gain in front of the
-      // pole rings its sub-fundamental band above the fundamental's target.
-      const float g1 = loop_peak_gain(string_);
-      const float g2 = loop_peak_gain(pol_);
-      const float c1c2 =
-          onepole_peak_gain(1.0f - string_.alpha) * onepole_peak_gain(1.0f - pol_.alpha);
-      const float mean = 0.5f * (g1 + g2);
-      const float half_diff = 0.5f * (g1 - g2);
-      const float room = kLambdaMax - mean;
-      float eps_max = 0.0f;
-      if (room > 0.0f) {
-        const float r2 = room * room - half_diff * half_diff;
-        if (r2 > 0.0f) eps_max = std::sqrt(r2 / c1c2);
-      }
-      couple_gain_ = bc * eps_max;
+      couple_gain_ = bc * bridge_coupling_limit(string_, pol_);
     } else {
       couple_gain_ = 0.0f;
     }
@@ -380,26 +310,12 @@ LoopBudget KsVoiceCore::configure(const KsPatchParams& params, double sr, uint8_
   // bit-identical). Precompute the burst length and its lowpass corner; the burst
   // itself is triggered at note-off. A single one-pole lowpass straight to the
   // mix -> the exact per-pole correction, not the PSD approximation.
-  keyoff_amount_ =
-      std::clamp(params.keyoff_noise, 0.0f, 1.0f) * onepole_noise_rate_gain(kKsKeyoffCutoffHz, sr);
-  keyoff_len_ = std::max(1, static_cast<int>(kKsKeyoffMs * 0.001f * static_cast<float>(sr)));
-  keyoff_pos_ = keyoff_len_;  // inactive until release()
-  keyoff_lp_ = 0.0f;
-  keyoff_env_ = 0.0f;
-  keyoff_alpha_ = std::clamp(1.0f - std::exp(-kTwoPi * kKsKeyoffCutoffHz / static_cast<float>(sr)),
-                             0.01f, 1.0f);
-  keyoff_decay_ = std::exp(-4.0f / static_cast<float>(keyoff_len_));  // ~-35 dB over the burst
+  keyoff_.configure(std::clamp(params.keyoff_noise, 0.0f, 1.0f), kKsKeyoffMs, kKsKeyoffCutoffHz, sr,
+                    false);  // inactive until release()
 
   // Pick/finger contact click, armed at note-on; 0 disables it (bit-identical).
-  pick_amount_ = std::clamp(params.pick_noise, 0.0f, 1.0f) * vel01 *
-                 onepole_noise_rate_gain(kKsPickNoiseCutoffHz, sr);
-  pick_len_ = std::max(1, static_cast<int>(kKsPickNoiseMs * 0.001f * static_cast<float>(sr)));
-  pick_pos_ = 0;
-  pick_lp_ = 0.0f;
-  pick_env_ = 1.0f;
-  pick_alpha_ = std::clamp(1.0f - std::exp(-kTwoPi * kKsPickNoiseCutoffHz / static_cast<float>(sr)),
-                           0.01f, 1.0f);
-  pick_decay_ = std::exp(-4.0f / static_cast<float>(pick_len_));  // ~-35 dB over the burst
+  pick_.configure(std::clamp(params.pick_noise, 0.0f, 1.0f) * vel01, kKsPickNoiseMs,
+                  kKsPickNoiseCutoffHz, sr, true);
 
   // Every loop in use is read at one sample or more and long enough to hold its pitch.
   LoopBudget budget = loop_budget(loop_period, string_.loop_comp, 1.0f, sr);
@@ -531,23 +447,15 @@ float KsVoiceCore::render_internal(float pitch_ratio) noexcept {
     result += oct_couple_ * oct_.process(oct_in, ratio);
   }
 
-  if (keyoff_pos_ < keyoff_len_) {
-    // Key-off damper thump: a short lowpassed, decaying noise burst armed at
-    // note-off (skipped entirely when keyoff_amount_ == 0 -> bit-identical).
-    const float nz = noise_.bipolar_at(kKeyoffNoiseIndexBase + static_cast<uint64_t>(keyoff_pos_));
-    keyoff_lp_ += keyoff_alpha_ * (nz - keyoff_lp_);
-    result += keyoff_amount_ * keyoff_env_ * keyoff_lp_;
-    keyoff_env_ *= keyoff_decay_;
-    ++keyoff_pos_;
+  if (keyoff_.active()) {
+    // Key-off damper thump, armed at note-off (never armed when its amount is 0).
+    keyoff_.add_to(result,
+                   noise_.bipolar_at(kKeyoffNoiseIndexBase + static_cast<uint64_t>(keyoff_.pos)));
   }
 
-  if (pick_pos_ < pick_len_) {
-    // Short lowpassed noise burst added to the output, independent of the loop.
-    const float nz = noise_.bipolar_at(kPickNoiseIndexBase + static_cast<uint64_t>(pick_pos_));
-    pick_lp_ += pick_alpha_ * (nz - pick_lp_);
-    result += pick_amount_ * pick_env_ * pick_lp_;
-    pick_env_ *= pick_decay_;
-    ++pick_pos_;
+  if (pick_.active()) {
+    // Pick contact click, added to the output independently of the loop.
+    pick_.add_to(result, noise_.bipolar_at(kPickNoiseIndexBase + static_cast<uint64_t>(pick_.pos)));
   }
 
   if (pickup_depth_ != 0.0f) {
@@ -567,11 +475,7 @@ void KsVoiceCore::release() noexcept {
   if (pol_couple_ > 0.0f) pol_.release();
   if (oct_couple_ > 0.0f) oct_.release();
   // Arm the key-off damper thump (no-op when the burst is disabled).
-  if (keyoff_amount_ > 0.0f) {
-    keyoff_pos_ = 0;
-    keyoff_lp_ = 0.0f;
-    keyoff_env_ = 1.0f;
-  }
+  if (keyoff_.amount > 0.0f) keyoff_.arm();
 }
 
 void KsVoiceCore::kill() noexcept {
@@ -581,8 +485,8 @@ void KsVoiceCore::kill() noexcept {
   string_.kill();
   pol_.kill();
   oct_.kill();
-  keyoff_pos_ = keyoff_len_;
-  pick_pos_ = pick_len_;
+  keyoff_.pos = keyoff_.len;
+  pick_.pos = pick_.len;
 }
 
 }  // namespace sonare::midi::synth

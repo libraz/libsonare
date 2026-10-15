@@ -248,8 +248,11 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   piece.cutoff_hz = 20000.0f;
 
   // Fixed-pitch membrane (conga/bongo/timbale/surdo): unlike the key-tracked
-  // toms, GM pins one head frequency per key.
-  auto make_membrane = [&](float base_hz, float decay_s, float drop, float shell_hz, float gain) {
+  // toms, GM pins one head frequency per key. A non-zero `mallet_ms` reads each
+  // mode's share of the strike off the contact force's spectrum, with the toms'
+  // velocity exponent; 0 keeps the mode-number law.
+  auto make_membrane = [&](float base_hz, float decay_s, float drop, float shell_hz, float gain,
+                           float mallet_ms = 0.0f) {
     NativeSynthPatch p = piece;
     p.amp_env = fallback_env(0.5f, decay_s * 1000.0f + 120.0f, 0.0f, 40.0f);
     p.percussion.num_modes = 5;
@@ -268,6 +271,10 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
       p.percussion.shell_freq_hz = {shell_hz, 0.0f, 0.0f, 0.0f};
       p.percussion.shell_t60_s = {0.06f, 0.0f, 0.0f, 0.0f};
       p.percussion.shell_weight = {1.0f, 0.0f, 0.0f, 0.0f};
+    }
+    if (mallet_ms > 0.0f) {
+      p.percussion.mallet_ms = mallet_ms;
+      p.percussion.mallet_vel_exp = 0.33f;
     }
     p.gain = gain;
     return p;
@@ -292,9 +299,11 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   };
 
   // Struck metal idiophone (cowbell/agogo/triangle/bells): sparse inharmonic
-  // high-Q modes with a longer ring and only a trace of strike noise.
+  // high-Q modes with a longer ring and only a trace of strike noise. A non-zero
+  // `mallet_ms` takes the contact-force law with the Hertzian mallet-on-bar
+  // exponent 0.2 (Chaigne & Doutaut 1997); 0 keeps the mode-number law.
   auto make_metal = [&](float base_hz, std::array<float, kMaxPercussionModes> ratios, int nmodes,
-                        float decay_s, float gain) {
+                        float decay_s, float gain, float mallet_ms = 0.0f) {
     NativeSynthPatch p = piece;
     p.amp_env = fallback_env(0.3f, decay_s * 1000.0f + 60.0f, 0.0f, 30.0f);
     p.percussion.num_modes = nmodes;
@@ -306,6 +315,10 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
     p.percussion.noise_decay_ms = 8.0f;
     p.percussion.noise_cutoff_hz = base_hz * 3.0f;
     p.percussion.noise_output = SynthFilterOutput::kBandpass;
+    if (mallet_ms > 0.0f) {
+      p.percussion.mallet_ms = mallet_ms;
+      p.percussion.mallet_vel_exp = 0.2f;
+    }
     p.gain = gain;
     return p;
   };
@@ -425,6 +438,10 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // re-voicing and the piece was heard as it stands.
   t[35].percussion.wire_buzz = 1.5f;
   t[35].percussion.wire_threshold = 0.25f;
+  // Felt beater: the contact law took the reference's velocity range from 3.8 dB
+  // off to 2.5 on velocities no fit saw, with the kit's gates unchanged.
+  t[35].percussion.mallet_ms = 6.0f;
+  t[35].percussion.mallet_vel_exp = 0.317f;
   t[36] = d.kick;
   t[36].gain = 5.891f;
   // -318 dB/s measured against -509 modelled in every matched octave: the
@@ -867,6 +884,11 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[76].percussion.plate_t60_s = 0.218749f;
   t[76].percussion.tone_direct = 0.847765f;
   t[76].gain = 0.4939f;
+  // A fit with the contact law free beat one holding the mode-number law on the
+  // reference's velocity range it never trained on (3.0 dB off against 3.4) and on
+  // the kit's gates (one bound over, 1.77 against two, 1.83).
+  t[76].percussion.mallet_ms = 0.2972f;
+  t[76].percussion.mallet_vel_exp = 0.6667f;
   t[77] = make_wood(800.0f, 0.0f, 0.07f, 0.6f);  // Low Wood Block
   t[77].amp_env.attack_ms = 0.15605f;
   t[77].amp_env.decay_ms = 16.8591f;
@@ -900,7 +922,11 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[56] = make_metal(587.0f, {1.0f, 1.44f, 0.0f, 0.0f, 0.0f, 0.0f}, 2, 0.25f,
                      0.5f);  // Cowbell (587/845 Hz)
   t[56].gain = 1.6652f;
-  t[67] = make_metal(1200.0f, {1.0f, 2.7f, 0.0f, 0.0f, 0.0f, 0.0f}, 2, 0.25f, 0.45f);  // High Agogo
+  // The contact law took the reference's velocity range from 1.0 dB off to 0.1 on
+  // velocities no fit saw, with the kit's gates unchanged.
+  t[67] = make_metal(1200.0f, {1.0f, 2.7f, 0.0f, 0.0f, 0.0f, 0.0f}, 2, 0.25f, 0.45f,
+                     0.4f);  // High Agogo
+  t[67].percussion.mallet_vel_exp = 0.2566f;
   t[67].gain = 0.6823f;
   t[68] = make_metal(900.0f, {1.0f, 2.7f, 0.0f, 0.0f, 0.0f, 0.0f}, 2, 0.30f, 0.45f);  // Low Agogo
   t[68].amp_env.attack_ms = 0.299523f;

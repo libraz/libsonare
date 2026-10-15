@@ -419,9 +419,10 @@ const NativeSynthPatch& gm_fallback_patch(uint16_t bank, uint8_t program, GsTone
       return program_overrides().electric_grand;
     case 3:  // Honky-tonk Piano (unisons pulled apart until they beat)
       return program_overrides().honky_tonk;
-    case 4:  // Electric Piano 1
-    case 5:  // Electric Piano 2
+    case 4:  // Electric Piano 1 (tine)
       return program_overrides().e_piano;
+    case 5:  // Electric Piano 2 (FM)
+      return program_overrides().e_piano_2;
     case 6:  // Harpsichord (plucked string, KS physical) — the plain 8'
       return program_overrides().harpsichord;
     case 7:  // Clavi (struck string + pickup — FM stand-in for now)

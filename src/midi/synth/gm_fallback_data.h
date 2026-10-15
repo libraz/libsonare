@@ -21,7 +21,8 @@ struct ProgramOverrides {
   NativeSynthPatch bright_piano;        // program 1 (the grand voiced hard)
   NativeSynthPatch electric_grand;      // program 2 (short strings, piezo, no board)
   NativeSynthPatch honky_tonk;          // program 3 (beating unisons)
-  NativeSynthPatch e_piano;             // programs 4-5 (Electric Piano 1/2)
+  NativeSynthPatch e_piano;             // program 4 (Electric Piano 1, tine)
+  NativeSynthPatch e_piano_2;           // program 5 (Electric Piano 2, FM)
   NativeSynthPatch harpsichord;         // program 6 bank 0 (Harpsichord 8', KS)
   NativeSynthPatch harpsichord_octave;  // program 6 bank 1 (octave mix, 8'+4')
   NativeSynthPatch harpsichord_wide;    // program 6 bank 2 (wide)
@@ -203,6 +204,7 @@ struct ProgramOverrides {
   X(electric_grand)                   \
   X(honky_tonk)                       \
   X(e_piano)                          \
+  X(e_piano_2)                        \
   X(harpsichord)                      \
   X(harpsichord_octave)               \
   X(harpsichord_wide)                 \

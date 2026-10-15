@@ -1505,6 +1505,13 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.modal.vel_to_brightness, 0.6f), 0.0f, 1.0f);
   p.modal.release_damp_s =
       std::clamp(patch_clamp_detail::sanitize(p.modal.release_damp_s, 0.15f), 0.01f, 10.0f);
+  p.modal.mallet_ms =
+      std::clamp(patch_clamp_detail::sanitize(p.modal.mallet_ms, 0.0f), 0.0f, 50.0f);
+  p.modal.mallet_vel_exp =
+      std::clamp(patch_clamp_detail::sanitize(p.modal.mallet_vel_exp, 0.0f), 0.0f, 1.0f);
+  p.modal.contact = std::clamp(patch_clamp_detail::sanitize(p.modal.contact, 0.0f), 0.0f, 16.0f);
+  p.modal.contact_ms =
+      std::clamp(patch_clamp_detail::sanitize(p.modal.contact_ms, 0.5f), 0.02f, 20.0f);
   for (float& level : p.additive.drawbars)
     level = std::clamp(patch_clamp_detail::sanitize(level, 0.0f), 0.0f, 8.0f);
   for (float& level : p.additive.drawbars_b)
@@ -1699,6 +1706,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.piano.release_damp_s, 0.1f), 0.01f, 10.0f);
   p.pipe_organ.brightness =
       std::clamp(patch_clamp_detail::sanitize(p.pipe_organ.brightness, 0.5f), 0.0f, 1.0f);
+  p.pipe_organ.pipe_detune_cents =
+      std::clamp(patch_clamp_detail::sanitize(p.pipe_organ.pipe_detune_cents, 4.0f), 0.0f, 30.0f);
   p.pipe_organ.tone_decay_s =
       std::clamp(patch_clamp_detail::sanitize(p.pipe_organ.tone_decay_s, 4.0f), 0.05f, 60.0f);
   p.pipe_organ.breath =
@@ -1771,6 +1780,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.reed.reed_opening, 0.5f), 0.0f, 1.0f);
   p.reed.brightness = std::clamp(patch_clamp_detail::sanitize(p.reed.brightness, 0.5f), 0.0f, 1.0f);
   p.reed.damping = std::clamp(patch_clamp_detail::sanitize(p.reed.damping, 0.4f), 0.0f, 1.0f);
+  p.reed.bell_radiation_hz =
+      std::clamp(patch_clamp_detail::sanitize(p.reed.bell_radiation_hz, 0.0f), 0.0f, 8000.0f);
   p.reed.attack_ms =
       std::clamp(patch_clamp_detail::sanitize(p.reed.attack_ms, 40.0f), 1.0f, 2000.0f);
   p.reed.release_ms =
@@ -1877,6 +1888,14 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       patch_clamp_detail::sanitize(p.plucked_string.vel_to_brightness, 0.6f), 0.0f, 1.0f);
   p.plucked_string.release_damp_s = std::clamp(
       patch_clamp_detail::sanitize(p.plucked_string.release_damp_s, 0.12f), 0.01f, 10.0f);
+  p.plucked_string.hf_decay_s =
+      std::clamp(patch_clamp_detail::sanitize(p.plucked_string.hf_decay_s, 0.0f), 0.0f, 60.0f);
+  p.plucked_string.mid_decay_s =
+      std::clamp(patch_clamp_detail::sanitize(p.plucked_string.mid_decay_s, 0.0f), 0.0f, 60.0f);
+  p.plucked_string.inharmonicity_b =
+      std::clamp(patch_clamp_detail::sanitize(p.plucked_string.inharmonicity_b, 0.0f), 0.0f, 0.01f);
+  p.plucked_string.pick_noise =
+      std::clamp(patch_clamp_detail::sanitize(p.plucked_string.pick_noise, 0.0f), 0.0f, 1.0f);
   p.plucked_string.buzz =
       std::clamp(patch_clamp_detail::sanitize(p.plucked_string.buzz, 0.0f), 0.0f, 1.0f);
   p.vocal.vowel = std::clamp(p.vocal.vowel, 0, kVocalVowels - 1);
@@ -1945,6 +1964,16 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       patch_clamp_detail::sanitize(p.harpsichord.unison_detune_cents, 3.5f), -50.0f, 50.0f);
   p.harpsichord.octave_detune_cents = std::clamp(
       patch_clamp_detail::sanitize(p.harpsichord.octave_detune_cents, 2.0f), -50.0f, 50.0f);
+  p.harpsichord.ripple_loss_share =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.ripple_loss_share, 0.0f), 0.0f, 0.4f);
+  p.harpsichord.ripple_ratio =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.ripple_ratio, 0.5f), 0.05f, 0.95f);
+  p.harpsichord.pol_coupling =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.pol_coupling, 0.0f), 0.0f, 1.0f);
+  p.harpsichord.pol_detune_cents =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.pol_detune_cents, 1.0f), -50.0f, 50.0f);
+  p.harpsichord.pol_t60_ratio =
+      std::clamp(patch_clamp_detail::sanitize(p.harpsichord.pol_t60_ratio, 0.55f), 0.05f, 2.0f);
   p.harpsichord.rear_segment_mm =
       std::clamp(patch_clamp_detail::sanitize(p.harpsichord.rear_segment_mm, 0.0f), 0.0f, 400.0f);
   p.harpsichord.rear_coupling =

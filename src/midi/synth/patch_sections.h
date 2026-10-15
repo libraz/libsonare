@@ -103,6 +103,10 @@ constexpr ModalPatchParams blank_modal() noexcept {
   z.strike_brightness = 0.0f;
   z.vel_to_brightness = 0.0f;
   z.release_damp_s = 0.0f;
+  z.mallet_ms = 0.0f;
+  z.mallet_vel_exp = 0.0f;
+  z.contact = 0.0f;
+  z.contact_ms = 0.0f;
   return z;
 }
 
@@ -210,6 +214,7 @@ constexpr PipeOrganPatchParams blank_pipe_organ() noexcept {
   PipeOrganPatchParams z{};
   z.stopped = false;
   z.brightness = 0.0f;
+  z.pipe_detune_cents = 0.0f;
   z.tone_decay_s = 0.0f;
   z.breath = 0.0f;
   z.chiff = 0.0f;
@@ -258,6 +263,7 @@ constexpr ReedPatchParams blank_reed() noexcept {
   z.conical = false;
   z.brightness = 0.0f;
   z.damping = 0.0f;
+  z.bell_radiation_hz = 0.0f;
   z.attack_ms = 0.0f;
   z.release_ms = 0.0f;
   z.breath_noise = 0.0f;
@@ -333,6 +339,10 @@ constexpr PluckedStringPatchParams blank_plucked_string() noexcept {
   z.exc_brightness = 0.0f;
   z.vel_to_brightness = 0.0f;
   z.release_damp_s = 0.0f;
+  z.hf_decay_s = 0.0f;
+  z.mid_decay_s = 0.0f;
+  z.inharmonicity_b = 0.0f;
+  z.pick_noise = 0.0f;
   z.buzz = 0.0f;
   return z;
 }
@@ -385,6 +395,11 @@ constexpr HarpsichordPatchParams blank_harpsichord() noexcept {
   z.damping_ref_hz = 0.0f;
   z.unison_detune_cents = 0.0f;
   z.octave_detune_cents = 0.0f;
+  z.ripple_loss_share = 0.0f;
+  z.ripple_ratio = 0.0f;
+  z.pol_coupling = 0.0f;
+  z.pol_detune_cents = 0.0f;
+  z.pol_t60_ratio = 0.0f;
   z.rear_segment_mm = 0.0f;
   z.rear_coupling = 0.0f;
   z.rear_decay_s = 0.0f;

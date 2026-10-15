@@ -53,6 +53,13 @@ SONARE_TUNABLE(kLossCeil, 0.999f);
 // input to the frequency-referenced law below, never applied to the render
 // pole directly (a pole is a count of samples, not a brightness value).
 SONARE_TUNABLE(kBellPoleSpan, 0.7f);
+// Share of the radiation highpass's loss at the fundamental given back (exponent,
+// 1 = all of it), seeded at the brass engine's 0.35.
+SONARE_TUNABLE(kBellRadiationNorm, 0.35f);
+// Flat make-up for what radiating costs: a 1 kHz corner took the held RMS of the
+// ten reed programs down a median 3.75 dB (1.9 at 500 Hz, 6.6 at 2 kHz), which
+// this restores. Loudness only; the patch gain carries the rest.
+SONARE_TUNABLE(kBellRadiationMakeup, 1.54f);
 
 // Live-control smoothing time (ms): the per-sample ramp of breath / brightness
 // toward their CC targets — fast enough to feel immediate, slow enough to never
@@ -287,6 +294,7 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
   // brightness is, so it is recomposed from excite_.bright01_base/bright_mod01
   // inside refresh_excitation_targets() itself.
   excite_.bright01_base = std::clamp(params.brightness, 0.0f, 1.0f);
+  f0_ = f0;
   loss_gain_ship_ = std::clamp(kLossBase - kLossSpan * std::clamp(params.damping, 0.0f, 1.0f),
                                kLossFloor, kLossCeil);
   // Both axes are derived here and nowhere else. A note-on copy of the mapping
@@ -355,6 +363,17 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
   chiff_level_ = std::clamp(params.chiff, 0.0f, 1.0f) * kChiffDepth * noise_gain;
   chiff_coeff_ = ramp_coeff(params.chiff_ms, sr);
   output_scale_ = kOutputScale;
+
+  // Bell radiation highpass, normalised at the fundamental so the tilt is the
+  // only thing it changes.
+  rad_state_ = 0.0f;
+  rad_alpha_ = 0.0f;
+  rad_ratio_ = 1.0f;
+  rad_scale_ = 1.0f;
+  if (params.bell_radiation_hz > 0.0f) {
+    rad_alpha_ = 1.0f - std::exp(-kTwoPi * std::min(params.bell_radiation_hz, 0.45f * srf) / srf);
+    refresh_radiation_scale();
+  }
 
   // Prompt speech: pre-fill the bore with a low-level seeded noise burst (the
   // Karplus-Strong trick) so the reed locks onto a resonating column quickly
@@ -575,11 +594,31 @@ float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
   // does, WITHOUT feeding the loop (so it cannot detune or destabilise the
   // resonance — the practical bounded form of the apex integrator, in place of
   // the lossless pole-on-circle case Smith's TIIR filters would bound).
+  float out = bore_.out;
   if (throat_gain_ > 0.0f) {
     throat_state_ += (1.0f - throat_pole_) * (bore_.out - throat_state_);
-    return output_scale_ * (bore_.out + throat_gain_ * throat_state_);
+    out = bore_.out + throat_gain_ * throat_state_;
   }
-  return output_scale_ * bore_.out;
+  // Bell radiation (gated): outside the loop, after the throat term because that
+  // term recovers the bore's pressure, which is what reaches the bell. The makeup
+  // is normalized at the sounding fundamental, so it follows the live ratio.
+  if (rad_alpha_ > 0.0f) {
+    if (ratio != rad_ratio_) {
+      rad_ratio_ = ratio;
+      refresh_radiation_scale();
+    }
+    rad_state_ += rad_alpha_ * (out - rad_state_);
+    out = rad_scale_ * (out - rad_state_);
+  }
+  return output_scale_ * out;
+}
+
+void ReedVoiceCore::refresh_radiation_scale() noexcept {
+  const float pole = 1.0f - rad_alpha_;
+  const float w0 = kTwoPi * f0_ * rad_ratio_ / static_cast<float>(sample_rate_);
+  const float num = pole * 2.0f * std::fabs(std::sin(0.5f * w0));
+  const float den = std::sqrt(1.0f - 2.0f * pole * std::cos(w0) + pole * pole);
+  rad_scale_ = kBellRadiationMakeup * std::pow(den / std::max(num, 1.0e-6f), kBellRadiationNorm);
 }
 
 float ReedVoiceCore::reed_resonator(float dp) noexcept {
@@ -664,6 +703,7 @@ void ReedVoiceCore::kill() noexcept {
   reg_lp_state_ = 0.0f;
   throat_state_ = 0.0f;
   hole_refl_ = 0.0f;
+  rad_state_ = 0.0f;
   breath_.releasing = true;
 }
 

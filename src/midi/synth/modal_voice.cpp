@@ -42,6 +42,15 @@ void ModalVoiceCore::start(const ModalPatchParams& params, double sample_rate, u
   const double t60 =
       std::max(0.01, static_cast<double>(params.decay_s)) * std::exp2(stretch * octaves_below_a4);
 
+  // The mallet's contact time, shortening as the strike hardens; 0 keeps the
+  // hardness curve in the mode index.
+  const double tau_s =
+      params.mallet_ms > 0.0f
+          ? 0.001 * static_cast<double>(params.mallet_ms) *
+                std::pow(static_cast<double>(std::max(vel01, 1.0f / 127.0f)),
+                         -static_cast<double>(std::max(0.0f, params.mallet_vel_exp)))
+          : 0.0;
+
   VoiceRandomSequence scatter(seed);
   num_modes_ = std::clamp(params.num_modes, 0, kMaxModalModes);
   for (int k = 0; k < num_modes_; ++k) {
@@ -54,7 +63,8 @@ void ModalVoiceCore::start(const ModalPatchParams& params, double sample_rate, u
     mode.r = radius_for(sample_rate_, t60 * std::max(0.01, static_cast<double>(src.decay_scale)));
     // Mallet curve: soft strikes excite the fundamental only; the seeded
     // +-10% scatter keeps repeated strikes from sounding machine-identical.
-    const float mallet = std::exp(-(1.0f - hardness) * 1.5f * static_cast<float>(k));
+    const float mallet = tau_s > 0.0 ? contact_spectrum(static_cast<float>(freq * tau_s))
+                                     : std::exp(-(1.0f - hardness) * 1.5f * static_cast<float>(k));
     const float jitter = 1.0f + 0.1f * scatter.bipolar_at(static_cast<uint64_t>(k));
     // Preserve the strike weight; quadrature initialization applies sin(w).
     const float excitation = std::max(0.0f, src.gain) * mallet * jitter;
@@ -69,6 +79,8 @@ void ModalVoiceCore::start(const ModalPatchParams& params, double sample_rate, u
   release_r_ = radius_for(sample_rate_, std::max(0.01, static_cast<double>(params.release_damp_s)));
   cached_ratio_ = 0.0f;  // force coefficient derivation on the first render
   excite_ = true;
+  contact_.configure(std::max(0.0f, params.contact) * vel01,
+                     contact_pulse_samples(params.contact_ms, sample_rate_));
 }
 
 void ModalVoiceCore::refresh_coefficients(float pitch_ratio) noexcept {
@@ -146,6 +158,7 @@ void ModalVoiceCore::kill() noexcept {
   }
   excite_ = false;
   num_modes_ = 0;
+  contact_.stop();
 }
 
 }  // namespace sonare::midi::synth

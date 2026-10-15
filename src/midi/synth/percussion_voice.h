@@ -27,6 +27,7 @@
 
 #include "midi/control_value.h"
 #include "midi/synth/body_resonator.h"
+#include "midi/synth/contact_force.h"
 #include "midi/synth/fdn_plate.h"
 #include "midi/synth/filter_models.h"
 #include "midi/synth/svf.h"
@@ -411,15 +412,7 @@ class PercussionVoiceCore {
   /// than summed into it: it reaches the listener without passing through the
   /// voice's drive, filter or amplitude envelope, and each of those three
   /// swallows it. Call once per sample, alongside render().
-  float next_contact() noexcept {
-    if (contact_i_ >= contact_len_) return 0.0f;
-    // Spanning [0, 1] inclusive, so the pulse both starts and ends on a zero.
-    // Dividing by the length instead leaves the last sample short of the
-    // period and the step it ends on is a click with energy to Nyquist, which
-    // lands nowhere near the contact time it is supposed to be voiced at.
-    const float p = static_cast<float>(contact_i_++) / static_cast<float>(contact_len_ - 1);
-    return contact_ * std::sin(sonare::constants::kTwoPi * p);
-  }
+  float next_contact() noexcept { return contact_.next(); }
   /// Whether the piece has stopped radiating and its slot can be reclaimed.
   ///
   /// A one-shot piece never takes a note-off, so a patch whose amplitude
@@ -509,12 +502,9 @@ class PercussionVoiceCore {
 
   BodyResonator shell_;
 
-  // Direct contact radiation: one period of a sine over the contact time,
-  // counted out in samples so the shape costs a sine per sample for a few dozen
-  // samples and nothing at all thereafter.
-  float contact_ = 0.0f;
-  int contact_i_ = 0;
-  int contact_len_ = 0;
+  // Direct contact radiation, counted out in samples so the shape costs a sine
+  // per sample for a few dozen samples and nothing at all thereafter.
+  ContactPulse contact_;
 
   // Dense inharmonic plate, driven by the summed strike. Its delay lines are
   // the largest member of the voice, so it is the one layer whose cost is

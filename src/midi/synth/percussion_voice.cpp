@@ -6,6 +6,7 @@
 #include <limits>
 
 #include "midi/synth/bessel.h"
+#include "midi/synth/contact_force.h"
 #include "midi/synth/pitch.h"
 #include "midi/synth/string_loop.h"
 #include "util/constants.h"
@@ -77,18 +78,6 @@ constexpr float kStrikeBandEdge = 0.95f;
 
 /// Floor under sin(w) so a start frequency at the band edge cannot divide by zero.
 constexpr float kMinSinW = 1.0e-6f;
-
-/// Magnitude spectrum of a raised-cosine contact force of duration tau, read at
-/// x = f * tau and normalised to unity at DC: |sinc(x) / (1 - x^2)|.
-float contact_spectrum(float x) noexcept {
-  const float ax = std::abs(x);
-  if (ax < 1.0e-6f) return 1.0f;
-  // sinc and the denominator go to zero together at x = 1, where the limit is
-  // 1/2 and the quotient is two cancellations divided by each other.
-  if (std::abs(ax - 1.0f) < 1.0e-3f) return 0.5f;
-  const float s = std::sin(kPi * ax) / (kPi * ax);
-  return std::abs(s / (1.0f - ax * ax));
-}
 
 /// Piston-equivalent area fraction 2 J_1(alpha) / alpha of an axisymmetric mode
 /// — the share of its displacement that moves air, and so what the cavity's
@@ -306,15 +295,8 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
   // Direct contact radiation. Harder strikes press harder, so the level takes
   // the velocity; the contact time is the patch's, since what shortens it with
   // velocity is a fifth-root and worth less than the octave the knob spans.
-  contact_ = std::max(0.0f, params.contact) * vel01;
-  contact_i_ = 0;
-  contact_len_ = 0;
-  // One more sample than the period: the pulse spans [0, 1] inclusive, so the
-  // period it voices is contact_len_ - 1 samples and the knob keeps its unit.
-  const float contact_period =
-      std::max(0.001f, params.contact_ms) * 0.001f * static_cast<float>(sr);
-  const int contact_samples = std::max(2, 1 + static_cast<int>(std::lround(contact_period)));
-  if (contact_ > 0.0f) contact_len_ = contact_samples;
+  const int contact_samples = contact_pulse_samples(params.contact_ms, sr);
+  contact_.configure(std::max(0.0f, params.contact) * vel01, contact_samples);
   plate_contact_ = plate_gain_ > 0.0f ? std::max(0.0f, params.plate_contact) * vel01 : 0.0f;
   plate_contact_i_ = 0;
   plate_contact_len_ = plate_contact_ > 0.0f ? contact_samples : 0;
@@ -722,9 +704,7 @@ void PercussionVoiceCore::kill() noexcept {
   plate_contact_len_ = 0;
   plate_contact_i_ = 0;
   tone_direct_ = 1.0f;
-  contact_ = 0.0f;
-  contact_len_ = 0;
-  contact_i_ = 0;
+  contact_.stop();
   wire_buzz_ = 0.0f;
   wire_env_ = 0.0f;
   wire_filter_.reset();

@@ -645,7 +645,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   common *= drum_pitch_ratio;
 
   float sample = 0.0f;
-  // Percussion only; summed past the envelope at the foot of this function.
+  // Percussion and modal; summed past the envelope at the foot of this function.
   float contact = 0.0f;
   if (patch->mode == SynthEngineMode::kFm) {
     sample = fm.render(common);
@@ -659,6 +659,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     sample = ks.render(common);
   } else if (patch->mode == SynthEngineMode::kModal) {
     sample = modal.render(common);
+    contact = modal.next_contact();
   } else if (patch->mode == SynthEngineMode::kAdditive) {
     sample = additive.render(common);
   } else if (patch->mode == SynthEngineMode::kPercussion) {

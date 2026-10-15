@@ -285,6 +285,10 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.tenor_sax.reed.vel_to_breath = 0.605556f;
   o.tenor_sax.resonance_q = 0.550554f;
   o.tenor_sax.stereo_spread = 0.0f;
+  // Radiation corner a fit chose with it free: held-out loss 7.70 units against
+  // 10.22 for the same budget held at 0. On these values alone it takes gate excess
+  // 13.45 -> 12.40 and centroid/f0 error 0.42 -> 0.29 octave.
+  o.tenor_sax.reed.bell_radiation_hz = 687.285f;
   o.baritone_sax = reed(true, 0.60f, 0.50f, 0.5f, 0.40f, 26.0f, 120.0f, 0.78f, 0.40f, 0.2849f);
   // Fitted inside the valve's oscillating band; the worst of 35 captured notes
   // holds within 1.5 dB/s of its reference.

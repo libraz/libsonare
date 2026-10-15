@@ -27,6 +27,7 @@
 #include <cstdint>
 
 #include "midi/control_value.h"
+#include "midi/synth/contact_force.h"
 
 namespace sonare::midi::synth {
 
@@ -57,6 +58,21 @@ struct ModalPatchParams {
   float vel_to_brightness = 0.6f;
   /// Damped t60 in seconds applied at note-off (hand/pedal damp).
   float release_damp_s = 0.15f;
+  /// Contact time of the mallet at full velocity (ms). Above 0 each mode's share
+  /// of the strike is the contact force's spectrum at its frequency,
+  /// W(f_k * tau) (Chaigne & Doutaut, JASA 101, 1997), in place of the hardness
+  /// curve in the mode's index — which also retires @c strike_brightness and
+  /// @c vel_to_brightness, the curve's two inputs. 0 = that curve, bit-identical.
+  float mallet_ms = 0.0f;
+  /// How far the contact shortens as the strike hardens: tau = mallet_ms *
+  /// vel01 ^ -mallet_vel_exp. 0.2 is the Hertzian mallet-on-bar result.
+  float mallet_vel_exp = 0.0f;
+  /// Level of the mallet's direct contact radiation, a pulse outside the
+  /// envelope that the slow resonators cannot supply in the first milliseconds.
+  /// Scaled by velocity. 0 = off, bit-identical.
+  float contact = 0.0f;
+  /// Contact time of that pulse (ms): its energy peaks at 1 / contact_ms.
+  float contact_ms = 0.5f;
 };
 
 /// Per-voice modal state, embedded in NativeSynthVoice.
@@ -71,6 +87,9 @@ class ModalVoiceCore {
   void release() noexcept;
   /// Immediate silence.
   void kill() noexcept;
+  /// The direct contact radiation for this sample, outside render() so the
+  /// voice's drive, filter and envelope do not swallow it. Once per sample.
+  float next_contact() noexcept { return contact_.next(); }
 
  private:
   void refresh_coefficients(float pitch_ratio) noexcept;
@@ -94,6 +113,7 @@ class ModalVoiceCore {
   /// Per-sample damp radius cap installed by release().
   double release_r_ = 1.0;
   bool excite_ = false;
+  ContactPulse contact_;
 };
 
 }  // namespace sonare::midi::synth

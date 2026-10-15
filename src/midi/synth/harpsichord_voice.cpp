@@ -101,6 +101,10 @@ constexpr uint64_t kJackNoiseBase = 1ull << 20;
 /// start far enough above the bursts' to never reach them.
 constexpr uint64_t kDiffuseNoiseBase = 1ull << 24;
 
+/// How much of the pluck the second polarisation takes: the share the
+/// Karplus-Strong core gives its horizontal plane.
+SONARE_TUNABLE(kPolPluckShare, 0.6f);
+
 /// The speaking length of a string in millimetres.
 ///
 /// Only the behind-the-bridge segment needs this: that segment's length is set
@@ -248,42 +252,84 @@ LoopBudget HarpsichordVoiceCore::configure(const HarpsichordPatchParams& params,
   const float detune_8b = cents_to_ratio(std::clamp(params.unison_detune_cents, -50.0f, 50.0f));
   const float detune_4 = cents_to_ratio(std::clamp(params.octave_detune_cents, -50.0f, 50.0f));
 
-  // Voice one choir: solve its loss filter against the two decay targets at ITS
+  const float ripple_share = std::clamp(params.ripple_loss_share, 0.0f, 0.4f);
+  const float ripple_ratio = std::clamp(params.ripple_ratio, 0.05f, 0.95f);
+  // Solve one string plane's loss filter against the two decay targets at ITS
   // period, then hand the solved (a, g) straight to the loop.
+  // Returns the delay the ripple comb adds to the loop (0 without one).
+  auto voice_loop = [&](StringLoop& loop, float* span, int span_capacity, float loop_period,
+                        float loop_t60) noexcept -> float {
+    const float g_plain = string_loop_gain_for(loop_period, sr, loop_t60);
+    const float g_ref_plain = string_loop_gain_for(loop_period, sr, loop_t60 * hf);
+    // The read's magnitude at the fundamental is paid from the targets before the filter is
+    // solved, and the unboosted solve only supplies the pole that sets the delay left to the line.
+    const float repay = interpolation_repayment(
+        g_plain, loop_period,
+        solve_string_loop_filter(kTwoPi / loop_period, omega_ref, g_plain, g_ref_plain).a);
+    const float g0 = g_plain * repay;
+    const float g_ref = g_ref_plain * repay;
+    StringLoopFilter filter = solve_string_loop_filter(kTwoPi / loop_period, omega_ref, g0, g_ref);
+    float depth = 0.0f;
+    float ripple_len = 0.0f;
+    if (ripple_share > 0.0f) {
+      // The ripple comb is solved with the pole rather than laid over it, so the
+      // fundamental keeps its decay. Its length is whole samples of the loop, and
+      // its delay comes out of the line, so it stops short of what the line holds.
+      const float line_room =
+          loop_period - 4.0f - onepole_group_delay_samples(filter.a, kTwoPi / loop_period);
+      ripple_len = std::min(std::round(ripple_ratio * loop_period), std::floor(line_room));
+      if (ripple_len >= 1.0f) {
+        const RippledStringLoopFilter rippled = solve_rippled_loop_filter(
+            kTwoPi / loop_period, omega_ref, g0, g_ref, ripple_share * (1.0f - g0), ripple_len);
+        filter = rippled.filter;
+        depth = rippled.r;
+      }
+    }
+    // The damper is broadband, so its per-traversal gain is compensated by the
+    // same factor the fundamental's was; otherwise the pole's own attenuation
+    // would be counted into the damping a second time.
+    const float compensation = g_plain > 0.0f ? filter.g / g_plain : 1.0f;
+    const float release_g =
+        std::min(0.9999f, string_loop_gain_for(loop_period, sr, damper_t60) * compensation);
+    loop.configure_filter(span, span_capacity, loop_period, filter.a, filter.g, release_g);
+    if (depth <= 0.0f) return 0.0f;
+    const float before = loop.loop_comp;
+    loop.set_ripple(depth, ripple_len);
+    return loop.loop_comp - before;
+  };
+
+  // Voice one choir: its string, and the string's second plane when one is asked for.
+  const float pol_couple = std::clamp(params.pol_coupling, 0.0f, 1.0f);
+  const float pol_detune = cents_to_ratio(std::clamp(params.pol_detune_cents, -50.0f, 50.0f));
+  const float pol_t60 = std::clamp(params.pol_t60_ratio, 0.05f, 2.0f);
   auto voice_choir = [&](Choir& choir, float* span, int span_capacity, float choir_period,
-                         bool drawn, float pluck_fraction, bool damped) noexcept {
+                         bool drawn, float pluck_fraction, bool damped, float* pol_span) noexcept {
     if (!drawn || slab_ == nullptr) {
       choir.loop.disable();
+      choir.pol.disable();
+      choir.pol_couple = 0.0f;
       choir.level = 0.0f;
       choir.n_eff = 0.0f;
       choir.duty = 0.0f;
       choir.damped = true;
       return;
     }
-    const float g_plain = string_loop_gain_for(choir_period, sr, t60);
-    const float g_ref_plain = string_loop_gain_for(choir_period, sr, t60 * hf);
-    // The read's magnitude at the fundamental is paid from the targets before the filter is
-    // solved, and the unboosted solve only supplies the pole that sets the delay left to the line.
-    const float repay = interpolation_repayment(
-        g_plain, choir_period,
-        solve_string_loop_filter(kTwoPi / choir_period, omega_ref, g_plain, g_ref_plain).a);
-    const float g0 = g_plain * repay;
-    const float g_ref = g_ref_plain * repay;
-    const StringLoopFilter filter =
-        solve_string_loop_filter(kTwoPi / choir_period, omega_ref, g0, g_ref);
-    // The damper is broadband, so its per-traversal gain is compensated by the
-    // same factor the fundamental's was; otherwise the pole's own attenuation
-    // would be counted into the damping a second time.
-    const float compensation = g_plain > 0.0f ? filter.g / g_plain : 1.0f;
-    const float release_g =
-        std::min(0.9999f, string_loop_gain_for(choir_period, sr, damper_t60) * compensation);
-    choir.loop.configure_filter(span, span_capacity, choir_period, filter.a, filter.g, release_g);
+    const float ripple_delay = voice_loop(choir.loop, span, span_capacity, choir_period, t60);
+    choir.pol_couple = 0.0f;
+    choir.pol.disable();
+    if (pol_couple > 0.0f && pol_span != nullptr) {
+      voice_loop(choir.pol, pol_span, span_capacity, choir_period / pol_detune, t60 * pol_t60);
+      // The damper grips both planes at once.
+      choir.pol.release_gain = choir.loop.release_gain;
+      choir.pol_couple = pol_couple * bridge_coupling_limit(choir.loop, choir.pol);
+    }
     choir.level = 1.0f;
     // The span one period of bridge force is laid down over is the loop's own,
     // which is shorter than the ideal period by the feedback path and the loss
     // filter's phase delay. Laying it over the ideal one instead leaves the wave
     // meeting itself a sample or two early on the first wrap, which is a click.
-    choir.n_eff = std::max(4.0f, choir_period - choir.loop.loop_comp);
+    // The ripple's comb delay is part of that circulation, so it does not shorten it.
+    choir.n_eff = std::max(4.0f, choir_period - (choir.loop.loop_comp - ripple_delay));
     choir.duty = std::clamp(pluck_fraction, 0.02f, 0.5f) * choir.n_eff;
     choir.inject_len = static_cast<int>(choir.n_eff);
     choir.damped = damped;
@@ -294,13 +340,18 @@ LoopBudget HarpsichordVoiceCore::configure(const HarpsichordPatchParams& params,
   float* span_8b = slab_ != nullptr ? slab_ + full : nullptr;
   float* span_4 = slab_ != nullptr ? slab_ + 2 * full : nullptr;
   float* span_rear = slab_ != nullptr ? slab_ + 2 * full + full / 2 : nullptr;
+  float* pol_base = slab_ != nullptr ? span_rear + full / 8 : nullptr;
+  float* pol_8a = pol_base;
+  float* pol_8b = pol_base != nullptr ? pol_base + full : nullptr;
+  float* pol_4 = pol_base != nullptr ? pol_base + 2 * full : nullptr;
 
-  voice_choir(eight_a_, span_8a, full, period, params.eight_a, params.pluck_8a, true);
-  voice_choir(eight_b_, span_8b, full, period * detune_8b, params.eight_b, params.pluck_8b, true);
+  voice_choir(eight_a_, span_8a, full, period, params.eight_a, params.pluck_8a, true, pol_8a);
+  voice_choir(eight_b_, span_8b, full, period * detune_8b, params.eight_b, params.pluck_8b, true,
+              pol_8b);
   // The top of the 4' choir carries no dampers on a real instrument, so above
   // the break those strings go on sounding after the key is released.
   voice_choir(four_, span_4, full / 2, 0.5f * period * detune_4, params.four, params.pluck_4,
-              (note & 0x7Fu) < params.undamped_from_note);
+              (note & 0x7Fu) < params.undamped_from_note, pol_4);
   has_undamped_tail_ = four_.level > 0.0f && !four_.damped;
 
   // The string behind the bridge. Its length is fixed by the case while the
@@ -509,24 +560,38 @@ float HarpsichordVoiceCore::render_internal(float pitch_ratio) noexcept {
     return pluck_amp_ * (bridge_force(k, beta, choir.duty, pluck_image_, edge_w_) - choir.dc_trim);
   };
 
+  // One choir's string: the vertical plane drives the bridge, and the plane
+  // parallel to the board, when there is one, is heard only through what it
+  // trades with the vertical one there.
+  auto sound = [&](Choir& choir, float e) noexcept -> float {
+    if (choir.pol_couple <= 0.0f) return choir.loop.process(e + choir.loop.feedback(), ratio);
+    float fb = choir.loop.feedback();
+    fb += choir.pol_couple * choir.pol.lp_state;
+    const float out = choir.loop.process(e + fb, ratio);
+    float pol_in = kPolPluckShare * e + choir.pol.feedback();
+    pol_in += choir.pol_couple * choir.loop.lp_state;
+    choir.pol.process(pol_in, ratio);
+    return out;
+  };
+
   float bridge = 0.0f;
   float bridge_exc = 0.0f;
   if (eight_a_.level > 0.0f) {
     const float e = excite(eight_a_);
     bridge_exc += e;
-    bridge += eight_a_.loop.process(e + eight_a_.loop.feedback(), ratio);
+    bridge += sound(eight_a_, e);
   }
   if (eight_b_.level > 0.0f) {
     const float e = excite(eight_b_);
     bridge_exc += e;
-    bridge += eight_b_.loop.process(e + eight_b_.loop.feedback(), ratio);
+    bridge += sound(eight_b_, e);
   }
   if (four_.level > 0.0f) {
     // The 4' choir sounds an octave up, so its own loop runs at half the period;
     // the shared pitch factor still applies to it.
     const float e = excite(four_);
     bridge_exc += e;
-    bridge += four_.loop.process(e + four_.loop.feedback(), ratio);
+    bridge += sound(four_, e);
   }
 
   // What crosses the bridge is the force's transient, not the force: the
@@ -622,9 +687,11 @@ void HarpsichordVoiceCore::release() noexcept {
   released_ = true;
   // The felt reaches whichever choirs have dampers. The 4' top has none, and the
   // string behind the bridge never had any.
-  if (eight_a_.damped) eight_a_.loop.release();
-  if (eight_b_.damped) eight_b_.loop.release();
-  if (four_.damped) four_.loop.release();
+  for (Choir* c : {&eight_a_, &eight_b_, &four_}) {
+    if (!c->damped) continue;
+    c->loop.release();
+    if (c->pol_couple > 0.0f) c->pol.release();
+  }
   if (jack_amount_ > 0.0f) {
     jack_pos_ = 0;
     jack_lp_ = 0.0f;
@@ -645,9 +712,10 @@ void HarpsichordVoiceCore::kill() noexcept {
     s.y1 = 0.0f;
   }
   for (rt::BiquadState& s : hp_) s.reset();
-  eight_a_.loop.kill();
-  eight_b_.loop.kill();
-  four_.loop.kill();
+  for (Choir* c : {&eight_a_, &eight_b_, &four_}) {
+    c->loop.kill();
+    c->pol.kill();
+  }
   rear_.kill();
   chiff_pos_ = chiff_len_;
   jack_pos_ = jack_len_;

@@ -110,6 +110,10 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   ep.fm.ops[3].key_rate_scale = 0.6f;
   ep.gain = 0.6f;
 
+  // Electric Piano 2 is the FM tone rather than the tine one, so it is its own
+  // patch, starting from the same voice and fitted against its own reference.
+  o.e_piano_2 = o.e_piano;
+
   // FM clavi / harpsichord: bright high-ratio pluck with a fast index decay.
   //
   // The carrier and the VCA carry the ring and move together; the modulator's
@@ -154,6 +158,11 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   gl.modal.decay_stretch = 0.27f;
   gl.modal.strike_brightness = 0.85f;
   gl.amp_env.release_ms = 600.0f;
+  // The mallet's direct radiation: a fit with it free beat one holding it at 0
+  // on held-out notes (12.65 against 12.68) and on the gate; alone on these values
+  // it takes the held-out notes 14.69 -> 14.69 with the gate unchanged.
+  gl.modal.contact = 0.7639f;
+  gl.modal.contact_ms = 0.5f;
 
   NativeSynthPatch& vb = o.vibraphone;
   vb = bar;
@@ -165,6 +174,11 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   vb.modal.decay_stretch = 0.4f;
   vb.modal.strike_brightness = 0.75f;
   vb.amp_env.release_ms = 700.0f;
+  // The mallet's direct radiation: a fit with it free beat one holding it at 0
+  // on held-out notes (9.94 against 10.74) and on the gate; alone on these values
+  // it takes the held-out notes 13.63 -> 13.24 with the gate unchanged.
+  vb.modal.contact = 1.0279f;
+  vb.modal.contact_ms = 2.4359f;
   // The motor-driven rotating vanes: the defining vibraphone tremolo.
   vb.lfo2_rate_hz = 4.5f;
   vb.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kAmpGain, 0.35f};
@@ -212,6 +226,11 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   ce.modal.decay_stretch = 0.53f;
   ce.modal.strike_brightness = 0.6f;
   ce.amp_env.release_ms = 500.0f;
+  // The hammer's direct radiation: a fit with it free beat one holding it at 0
+  // on held-out notes (13.02 against 13.76) and on the gate; alone on these values
+  // it takes the held-out notes 15.50 -> 15.34 with the gate unchanged.
+  ce.modal.contact = 1.1598f;
+  ce.modal.contact_ms = 1.6859f;
   ce.body = BodyType::kWoodTube;
   ce.body_mix = 0.2f;
   ce.gain = 0.6f;
@@ -649,6 +668,10 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.koto.plucked_string.decay_s = 3.0f;
   o.koto.plucked_string.pick_position = 0.22f;
   o.koto.gain = 0.85f;
+  // B is the reference's own, median over notes 52-72. The 4 kHz ring is a fit's
+  // with it free against one holding it off: held-out loss 8.09 against 8.42 units.
+  o.koto.plucked_string.inharmonicity_b = 1.5e-6f;
+  o.koto.plucked_string.hf_decay_s = 0.773278f;
 
   // Kalimba (GM 108): a plucked steel tine over a wooden box. A tine is a
   // clamped-free cantilever, so its partials are the 1 : 6.27 : 17.5 series the

@@ -23,8 +23,9 @@
 /// approximation, not a true apex junction.
 ///
 /// The delay buffer is not owned here — the host attaches one bore span per
-/// voice slot before start(), and bell/formant voicing is the shared
-/// BodyResonator, so the core emits raw bore pressure. Unconditionally stable:
+/// voice slot before start(). The core emits raw bore pressure unless
+/// @c bell_radiation_hz names the bell's radiation corner, in which case it
+/// emits what the bell radiates. Unconditionally stable:
 /// both valves are bounded (the table to [-1,1], the flow by an opening that
 /// closes to zero) and the bell loss gain is < 1.
 ///
@@ -95,6 +96,15 @@ struct ReedPatchParams {
   /// sharply pitched tone; high = a more damped, quicker-speaking tone. The
   /// breath replenishes the loss either way (the note is sustained).
   float damping = 0.4f;
+  /// Bell radiation corner (Hz): above 0 the core emits the radiated field — a
+  /// one-pole highpass at this frequency on the bore pressure, normalised so the
+  /// fundamental keeps its level — instead of the bore pressure. Output-side
+  /// only, unlike brass's @c bell_cutoff_hz: a one-pole loop lowpass at a
+  /// lattice-cutoff corner pulled the pitch 5-15 cents and broke registers,
+  /// where the bell's own loop filter stays as voiced. With @c cone_growth on,
+  /// the throat term shapes the bore pressure before it radiates. 0 = off ->
+  /// the render is bit-identical.
+  float bell_radiation_hz = 0.0f;
   /// Breath rise on note-on (ms): the reed takes a few periods to lock into
   /// oscillation, so the mouth pressure ramps in rather than stepping.
   float attack_ms = 40.0f;
@@ -215,7 +225,8 @@ struct ReedPatchParams {
 
 /// Per-voice reed-woodwind state, embedded in NativeSynthVoice. The voice's
 /// amplitude envelope / filter / mod matrix and the shared BodyResonator wrap
-/// around this core; render() returns the raw bore pressure.
+/// around this core; render() returns the raw bore pressure, or the radiated
+/// field when the patch names a bell radiation corner.
 class ReedVoiceCore {
  public:
   /// CONTROL-thread wiring (or audio-thread pointer assignment before start()):
@@ -281,6 +292,8 @@ class ReedVoiceCore {
   void refresh_excitation_targets() noexcept;
   // Re-solves bore_.comp from the pole lp_alpha_ now holds.
   void retune_loop_comp() noexcept;
+  // Recomputes the radiation gain for the pole rad_alpha_ holds and the sounding pitch.
+  void refresh_radiation_scale() noexcept;
 
   // Bore delay line (host-owned): the travelling-wave air column. period is
   // the loop period (samples); comp the delay not carried in the line
@@ -325,6 +338,14 @@ class ReedVoiceCore {
   float dc_x1_ = 0.0f;
   float dc_y1_ = 0.0f;
   float dc_r_ = 0.0f;
+
+  // Bell radiation highpass (gated on rad_alpha_ > 0) and its fundamental makeup.
+  float f0_ = 0.0f;
+  float rad_alpha_ = 0.0f;
+  float rad_state_ = 0.0f;
+  float rad_scale_ = 1.0f;
+  // Pitch ratio rad_scale_ was normalized at.
+  float rad_ratio_ = 1.0f;
 
   // Reed table (memoryless valve): coeff = clamp(offset + slope*dp, -1, 1).
   // offset = the reed rest opening, slope < 0 = the reed stiffness.

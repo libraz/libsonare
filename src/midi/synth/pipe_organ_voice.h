@@ -142,6 +142,11 @@ struct PipeOrganPatchParams {
   /// (footage <= 1) are untouched, only the upperwork thins. 0 disables it
   /// (every rank keeps its full level — a bit-identical bypass).
   float keytrack = 0.0f;
+  /// Per-pipe tuning error at and below C4, in cents (peak): every (rank, note)
+  /// pair is its own pipe, hand-tuned within a few cents of true, and the slow
+  /// inter-rank beating that leaves is the living chorus of a plenum. The span
+  /// tapers above C4, where a tuner lands the small pipes closer to true.
+  float pipe_detune_cents = 4.0f;
 
   /// Registration: number of ranks that sound together (0 = a single implicit
   /// 8' rank built from {stopped, brightness}; >0 uses ranks[0..rank_count)).

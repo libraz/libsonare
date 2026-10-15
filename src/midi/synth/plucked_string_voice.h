@@ -7,8 +7,8 @@
 ///        sawari) that the plain Karplus-Strong core (ks_voice.h) does not
 ///        model as a first-class element.
 ///
-/// The core is a fractional-delay string loop closed through a one-pole loss
-/// lowpass, the same travelling-wave skeleton as the KS core, plus a curved
+/// The core is the KS core's travelling-wave loop (string_loop.h) with the same
+/// loss solve, dispersion cascade and pick click, plus a curved
 /// bridge: at the string termination the displacement rides over a shallow
 /// curved surface, so on each loop the returning wave is passed through a soft
 /// one-sided limiter whose threshold the string amplitude periodically grazes.
@@ -52,6 +52,9 @@ inline int plucked_string_slab_capacity(double sample_rate) noexcept {
   return plucked_string_buffer_capacity(sample_rate);
 }
 
+/// First-order allpass stages realising @c inharmonicity_b inside the loop.
+inline constexpr int kPluckedDispersionStages = 2;
+
 /// Buzzing-bridge plucked-string section of a NativeSynthPatch (used when
 /// mode == kPluckedString).
 struct PluckedStringPatchParams {
@@ -72,6 +75,26 @@ struct PluckedStringPatchParams {
   float vel_to_brightness = 0.6f;
   /// Damped t60 in seconds applied at note-off (finger/palm mute).
   float release_damp_s = 0.12f;
+  /// t60 in seconds of the partials at a fixed 4 kHz, the string's own and the
+  /// air's loss quoted where they are measured: the loss filter is solved from
+  /// this and @c decay_s instead of from @c brightness, so the treble keeps its
+  /// partials rather than losing them to a pole crossed on every traversal. The
+  /// same two-target solve the Karplus-Strong core uses. 0 = off -> the
+  /// brightness pole and the render is bit-identical.
+  float hf_decay_s = 0.0f;
+  /// Optional mid-band anchor: t60 in seconds at 1 kHz, between the fundamental
+  /// and the 4 kHz quote, carried by a second cascaded loss pole. Only with
+  /// @c hf_decay_s > 0. 0 = off.
+  float mid_decay_s = 0.0f;
+  /// Inharmonicity coefficient B (f_n = n f0 sqrt(1 + B n^2)), the same at
+  /// every note: the captured sitar, shamisen and koto show no growth of B
+  /// across notes 48-72. Realised by the shared in-loop allpass cascade with its
+  /// phase delay folded into the tuning. 0 = a harmonic string, bit-identical.
+  float inharmonicity_b = 0.0f;
+  /// Pick / plectrum contact-click level in [0,1]: a short lowpassed noise
+  /// burst at note-on, scaled by velocity, outside the loop. 0 = off, render
+  /// bit-identical.
+  float pick_noise = 0.0f;
   /// Buzzing-bridge (jawari / sawari) intensity in [0,1]: how strongly the
   /// curved bridge limits and sprays the returning wave into high partials
   /// (0 = a clean plucked string, harp / koto; higher = the shimmering buzz of
@@ -120,20 +143,9 @@ class PluckedStringVoiceCore {
   bool killed_ = true;
   float* buffer_ = nullptr;
   int capacity_ = 0;
-  size_t write_index_ = 0;
 
   /// Ideal loop period (samples) at pitch_ratio == 1.
   float base_period_ = 0.0f;
-  /// Samples of loop delay NOT in the delay line (feedback path + loop-filter
-  /// phase delay at the fundamental).
-  float loop_comp_ = 1.0f;
-  /// One-pole loop lowpass y += alpha * (x - y) and its state.
-  float loop_alpha_ = 1.0f;
-  float lp_state_ = 0.0f;
-  /// Per-loop amplitude factor for the current t60 target.
-  float loop_gain_ = 0.0f;
-  /// Per-loop gain for the note-off damped t60 (precomputed at start).
-  float release_gain_ = 0.0f;
 
   /// Buzzing-bridge limiter threshold (0 = off -> loop path bit-identical). The
   /// returning wave past +/- this bound is softly saturated each loop.
@@ -151,6 +163,14 @@ class PluckedStringVoiceCore {
 
   /// Output trim bringing the raw string sample up to a musical voice level.
   float output_scale_ = 1.0f;
+
+  /// The string: delay line, loss filter and per-traversal gain.
+  StringLoop string_;
+  /// In-loop dispersion allpass coefficient (0 = off) and per-stage state.
+  float disp_a_ = 0.0f;
+  float disp_state_[kPluckedDispersionStages] = {};
+  /// Pick contact click, armed at start().
+  NoiseBurst pick_;
 };
 
 }  // namespace sonare::midi::synth

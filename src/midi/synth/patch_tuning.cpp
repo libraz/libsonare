@@ -349,6 +349,7 @@ void apply_pipe_organ(NativeSynthPatch& p, const Fields& f) {
   F(pipe_organ.reed);
   F(pipe_organ.radiation);
   F(pipe_organ.keytrack);
+  F(pipe_organ.pipe_detune_cents);
   F(pipe_organ.tremulant_rate_hz);
   F(pipe_organ.tremulant_depth);
   F(pipe_organ.wind_sag);
@@ -400,6 +401,7 @@ void apply_reed(NativeSynthPatch& p, const Fields& f) {
   F(reed.reed_opening);
   F(reed.brightness);
   F(reed.damping);
+  F(reed.bell_radiation_hz);
   F(reed.attack_ms);
   F(reed.release_ms);
   F(reed.breath_noise);
@@ -495,6 +497,10 @@ void apply_plucked_string(NativeSynthPatch& p, const Fields& f) {
   F(plucked_string.exc_brightness);
   F(plucked_string.vel_to_brightness);
   F(plucked_string.release_damp_s);
+  F(plucked_string.hf_decay_s);
+  F(plucked_string.mid_decay_s);
+  F(plucked_string.inharmonicity_b);
+  F(plucked_string.pick_noise);
   F(plucked_string.buzz);
 }
 
@@ -521,6 +527,11 @@ void apply_harpsichord(NativeSynthPatch& p, const Fields& f) {
   F(harpsichord.damping_ref_hz);
   F(harpsichord.unison_detune_cents);
   F(harpsichord.octave_detune_cents);
+  F(harpsichord.ripple_loss_share);
+  F(harpsichord.ripple_ratio);
+  F(harpsichord.pol_coupling);
+  F(harpsichord.pol_detune_cents);
+  F(harpsichord.pol_t60_ratio);
   F(harpsichord.rear_segment_mm);
   F(harpsichord.rear_coupling);
   F(harpsichord.rear_decay_s);
@@ -567,6 +578,10 @@ void apply_modal(NativeSynthPatch& p, const Fields& f) {
   F(modal.strike_brightness);
   F(modal.vel_to_brightness);
   F(modal.release_damp_s);
+  F(modal.mallet_ms);
+  F(modal.mallet_vel_exp);
+  F(modal.contact);
+  F(modal.contact_ms);
   for (int i = 0; i < kMaxModalModes; ++i) {
     ModalMode& m = p.modal.modes[static_cast<size_t>(i)];
     const std::string base = "modal.modes" + std::to_string(i) + '.';
@@ -844,6 +859,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"pipe_organ.reed", Unit::None},
     {"pipe_organ.radiation", Unit::None},
     {"pipe_organ.keytrack", Unit::None},
+    {"pipe_organ.pipe_detune_cents", Unit::Cents},
     {"pipe_organ.tremulant_rate_hz", Unit::Hz},
     {"pipe_organ.tremulant_depth", Unit::None},
     {"pipe_organ.wind_sag", Unit::None},
@@ -873,6 +889,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"reed.reed_opening", Unit::None},
     {"reed.brightness", Unit::None},
     {"reed.damping", Unit::None},
+    {"reed.bell_radiation_hz", Unit::Hz},
     {"reed.attack_ms", Unit::Ms},
     {"reed.release_ms", Unit::Ms},
     {"reed.breath_noise", Unit::None},
@@ -955,6 +972,10 @@ constexpr UnitRow kEngineUnits[] = {
     {"plucked_string.exc_brightness", Unit::None},
     {"plucked_string.vel_to_brightness", Unit::None},
     {"plucked_string.release_damp_s", Unit::Seconds},
+    {"plucked_string.hf_decay_s", Unit::Seconds},
+    {"plucked_string.mid_decay_s", Unit::Seconds},
+    {"plucked_string.inharmonicity_b", Unit::None},
+    {"plucked_string.pick_noise", Unit::None},
     {"plucked_string.buzz", Unit::None},
     {"harpsichord.eight_a", Unit::None},
     {"harpsichord.eight_b", Unit::None},
@@ -974,6 +995,11 @@ constexpr UnitRow kEngineUnits[] = {
     {"harpsichord.damping_ref_hz", Unit::Hz},
     {"harpsichord.unison_detune_cents", Unit::Cents},
     {"harpsichord.octave_detune_cents", Unit::Cents},
+    {"harpsichord.ripple_loss_share", Unit::Ratio},
+    {"harpsichord.ripple_ratio", Unit::Ratio},
+    {"harpsichord.pol_coupling", Unit::None},
+    {"harpsichord.pol_detune_cents", Unit::Cents},
+    {"harpsichord.pol_t60_ratio", Unit::Ratio},
     {"harpsichord.rear_segment_mm", Unit::Millimeters},
     {"harpsichord.rear_coupling", Unit::None},
     {"harpsichord.rear_decay_s", Unit::Seconds},
@@ -1010,6 +1036,10 @@ constexpr UnitRow kEngineUnits[] = {
     {"modal.strike_brightness", Unit::None},
     {"modal.vel_to_brightness", Unit::None},
     {"modal.release_damp_s", Unit::Seconds},
+    {"modal.mallet_ms", Unit::Ms},
+    {"modal.mallet_vel_exp", Unit::None},
+    {"modal.contact", Unit::None},
+    {"modal.contact_ms", Unit::Ms},
     {"additive.key_click", Unit::None},
     {"additive.click_decay_ms", Unit::Ms},
     {"additive.percussion_harmonic", Unit::None},
@@ -1320,6 +1350,13 @@ const GateRow kEngineGates[] = {
     {"reed.pressure_scale", [](const GateSite&) { return above("closingPressure", 0); }},
     // Brass: a bell cutoff takes the radiation corner from the reflection pole.
     {"brass.bell_radiation_hz", [](const GateSite&) { return equals("bellCutoffHz", 0); }},
+    // Modal: a mallet contact time replaces the hardness curve and its two inputs.
+    {"modal.strike_brightness", [](const GateSite&) { return equals("malletMs", 0); }},
+    {"modal.vel_to_brightness", [](const GateSite&) { return equals("malletMs", 0); }},
+    {"modal.mallet_vel_exp", [](const GateSite&) { return above("malletMs", 0); }},
+    {"modal.contact_ms", [](const GateSite&) { return above("contact", 0); }},
+    // Plucked string: the mid anchor is a second pole of the quoted loss solve.
+    {"plucked_string.mid_decay_s", [](const GateSite&) { return above("hfDecayS", 0); }},
     // Free reed: the slot flow replaces the shaped saw.
     {"free_reed.slot_return", [](const GateSite&) { return above("slotDuty", 0); }},
     {"free_reed.slot_gap", [](const GateSite&) { return above("slotDuty", 0); }},
@@ -1330,6 +1367,11 @@ const GateRow kEngineGates[] = {
     {"harpsichord.pluck_4", [](const GateSite&) { return is("four", true); }},
     {"harpsichord.octave_detune_cents", [](const GateSite&) { return is("four", true); }},
     {"harpsichord.undamped_from_note", [](const GateSite&) { return is("four", true); }},
+    // The ripple's length acts only with a depth, the second plane's tuning and
+    // decay only with a coupling.
+    {"harpsichord.ripple_ratio", [](const GateSite&) { return above("rippleLossShare", 0); }},
+    {"harpsichord.pol_detune_cents", [](const GateSite&) { return above("polCoupling", 0); }},
+    {"harpsichord.pol_t60_ratio", [](const GateSite&) { return above("polCoupling", 0); }},
     // Additive: the percussion harmonic.
     {"additive.percussion_decay_ms",
      [](const GateSite&) { return at_least("percussionHarmonic", 2); }},
