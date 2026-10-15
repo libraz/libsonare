@@ -9,6 +9,7 @@
 
 #include "mastering/multiband/crossover.h"
 #include "mixing/downmix.h"
+#include "playback/frame_time.h"
 #include "playback/impulse_tail.h"
 #include "rt/gain_pair_glide.h"
 #include "util/db.h"
@@ -178,8 +179,7 @@ void LayoutConverter::prepare(double sample_rate, int max_block_size, ChannelLay
   m.fold_filter.prepare(sample_rate, max_block_size, 1);
   m.fold_filter.prepare_scratch(m.fold_scratch, 1, max_block_size);
   m.fold_scaled.assign(static_cast<size_t>(max_block_size), 0.0f);
-  m.fold_glide_frames =
-      std::max(1, static_cast<int>(std::lround(kLfeFoldGlideMs * 0.001 * sample_rate)));
+  m.fold_glide_frames = ms_to_frames(kLfeFoldGlideMs, sample_rate);
 
   // Decay horizon, measured on the prepared filter's own impulse response.
   m.decay = 0;

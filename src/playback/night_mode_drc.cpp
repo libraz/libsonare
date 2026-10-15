@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "metering/bs1770_weighting.h"
+#include "playback/frame_time.h"
 #include "rt/biquad_design.h"
 #include "rt/delay_line.h"
 #include "rt/gain_pair_glide.h"
@@ -132,8 +133,7 @@ void NightModeDrc::prepare(double sample_rate, int max_block_size, ChannelLayout
 
   m.attack_coeff = time_to_coefficient(sample_rate, kNightModeAttackMs);
   m.release_coeff = time_to_coefficient(sample_rate, kNightModeReleaseMs);
-  m.unity_glide_frames =
-      std::max(1, static_cast<int>(std::lround(kNightModeUnityGlideMs * 0.001 * sample_rate)));
+  m.unity_glide_frames = ms_to_frames(kNightModeUnityGlideMs, sample_rate);
 
   reset();
 }

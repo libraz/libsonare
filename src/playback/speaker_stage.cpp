@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "mastering/multiband/crossover.h"
+#include "playback/frame_time.h"
 #include "rt/fractional_delay.h"
 #include "rt/gain_pair_glide.h"
 #include "util/constants.h"
@@ -88,8 +89,7 @@ void SpeakerStage::prepare(double sample_rate, int max_block_size, ChannelLayout
                            const BassManagementConfig& bass) {
   Impl& m = *impl_;
   m.layout = layout;
-  m.glide_frames =
-      std::max(1, static_cast<int>(std::lround(kSpeakerLevelGlideMs * 0.001 * sample_rate)));
+  m.glide_frames = ms_to_frames(kSpeakerLevelGlideMs, sample_rate);
   m.plane_count = channel_count(layout);
   m.lfe_plane = lfe_index(layout);
   m.bass = bass;

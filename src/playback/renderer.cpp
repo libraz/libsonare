@@ -7,6 +7,7 @@
 
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "playback/binaural.h"
+#include "playback/frame_time.h"
 #include "playback/front_end.h"
 #include "playback/layout_convert.h"
 #include "playback/speaker_stage.h"
@@ -31,7 +32,6 @@ constexpr int kMinSampleRate = 8000;
 constexpr int kMaxSampleRate = 384000;
 constexpr int kMaxBlockFrames = 65536;
 constexpr int kQ8 = 256;
-constexpr double kSecondsPerMs = 1e-3;
 constexpr int kLayoutCount = 4;
 /// Instances per input layout under `auto`: a truncated drain fades out on one
 /// while its layout becomes active again on the other.
@@ -389,8 +389,7 @@ PlaybackRenderer::PlaybackRenderer(const RendererConfig& config, const HrtfSet* 
     m.active = 0;
   }
   m.active_index.store(m.active, std::memory_order_relaxed);
-  m.fade_frames =
-      std::max(1, static_cast<int>(std::lround(kTruncatedDrainFadeMs * kSecondsPerMs * rate)));
+  m.fade_frames = ms_to_frames(kTruncatedDrainFadeMs, rate);
 
   // Planes.
   m.staging = make_planes(kMaxInputPlanes, max_block_size);
@@ -426,8 +425,7 @@ PlaybackRenderer::PlaybackRenderer(const RendererConfig& config, const HrtfSet* 
   const int limiter_latency = m.main_limiter.latency_samples();
   for (auto& delay : m.bypass) delay.prepare(static_cast<size_t>(limiter_latency));
   m.bypass_planes = make_planes(m.out_count, max_block_size);
-  m.limiter_switch_frames =
-      std::max(1, static_cast<int>(std::lround(kOutputLimiterSwitchMs * kSecondsPerMs * rate)));
+  m.limiter_switch_frames = ms_to_frames(kOutputLimiterSwitchMs, rate);
 
   // Latency: front end + distance compensation + limiter.
   const FrontEnd& fe = *m.front_ends[static_cast<size_t>(m.active)];

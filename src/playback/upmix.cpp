@@ -9,6 +9,7 @@
 #include "core/fft.h"
 #include "core/window.h"
 #include "mastering/multiband/crossover.h"
+#include "playback/frame_time.h"
 #include "playback/impulse_tail.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
@@ -21,7 +22,6 @@ using sonare::constants::kInvSqrt2;
 
 namespace {
 
-constexpr double kSecondsPerMs = 1e-3;
 constexpr float kStatsTimeConstantMs = 100.0f;
 constexpr float kRampMs = 20.0f;
 constexpr double kAmbienceDelayMs = 10.0;
@@ -47,10 +47,6 @@ constexpr int kPlaneLs = 4;
 constexpr int kPlaneRs = 5;
 constexpr int kPlaneLss = 6;
 constexpr int kPlaneRss = 7;
-
-int ms_to_frames(double ms, double sample_rate) {
-  return std::max(1, static_cast<int>(std::lround(ms * kSecondsPerMs * sample_rate)));
-}
 
 /// Schroeder all-pass `y = -g*v + v[n-d]`, `v = x + g*v[n-d]`.
 struct Allpass {
