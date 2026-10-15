@@ -64,10 +64,10 @@ class SidechainRouter : public rt::RtConfigLifecycle<SidechainRouter, SidechainR
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = threshold_db
-  //   1 = ratio (clamped to >= 1)
-  //   2 = attack_ms (clamped to >= 0)
-  //   3 = release_ms (clamped to >= 0)
-  //   4 = range_db (clamped to >= 0)
+  //   1 = ratio (refused unless >= 1)
+  //   2 = attack_ms (refused unless >= 0)
+  //   3 = release_ms (refused unless >= 0)
+  //   4 = range_db (refused unless >= 0)
   // lookahead_ms and the sidechain HPF settings are omitted because they resize
   // buffers or are gated by mode switches.
   // Automatable parameters: 0=thresholdDb, 1=ratio, 2=attackMs, 3=releaseMs, 4=rangeDb

@@ -254,13 +254,21 @@ void AirBand::set_config(const AirBandConfig& config) {
   });
 }
 
+namespace {
+constexpr bool amount_valid(float v) noexcept { return v >= 0.0f && v <= 1.0f; }
+constexpr bool shelf_frequency_valid(float v) noexcept { return v > 0.0f; }
+constexpr bool dynamic_range_valid(float v) noexcept { return !(v < 0.0f); }
+}  // namespace
+
 bool AirBand::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      config_.amount = std::clamp(value, 0.0f, 1.0f);
+      if (!amount_valid(value)) return false;
+      config_.amount = value;
       return true;
     case 1: {
-      config_.shelf_frequency_hz = std::max(value, 1.0e-3f);
+      if (!shelf_frequency_valid(value)) return false;
+      config_.shelf_frequency_hz = value;
       // Recompute the detector highpass coefficients in place, preserving its
       // filter state (z1/z2). The shelf is rebuilt per-sample in process().
       for (auto& filter : detector_) {
@@ -279,7 +287,8 @@ bool AirBand::set_parameter_impl(unsigned int param_id, float value) {
       config_.dynamic_threshold_db = value;
       return true;
     case 3:
-      config_.dynamic_range_db = std::max(0.0f, value);
+      if (!dynamic_range_valid(value)) return false;
+      config_.dynamic_range_db = value;
       return true;
     default:
       return false;
@@ -291,8 +300,8 @@ std::vector<rt::ParamDescriptor> AirBand::parameter_descriptors() const {
 }
 
 void AirBand::validate_config(const AirBandConfig& config) {
-  if (!(config.amount >= 0.0f && config.amount <= 1.0f) || !(config.shelf_frequency_hz > 0.0f) ||
-      config.dynamic_range_db < 0.0f) {
+  if (!amount_valid(config.amount) || !shelf_frequency_valid(config.shelf_frequency_hz) ||
+      !dynamic_range_valid(config.dynamic_range_db)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid air band configuration");
   }
 }

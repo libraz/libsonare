@@ -22,6 +22,11 @@ namespace {
 using sonare::discard_group_if_non_finite;
 using sonare::constants::kPiD;
 
+// Field domains shared by validate_config and live automation.
+bool valid_positive(float v) noexcept { return v > 0.0f; }
+bool valid_ratio(float v) noexcept { return v >= 1.0f; }
+bool valid_non_negative(float v) noexcept { return !(v < 0.0f); }
+
 }  // namespace
 
 // The configuration lifecycle (validate + seed active_ + publish the initial
@@ -118,27 +123,32 @@ void DeEsser::reset() {
 bool DeEsser::apply_parameter(DeEsserConfig& config, unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      // Keep frequency positive (validate_config invariant); update_coefficients
-      // clamps the effective cutoff to a valid range and preserves filter state.
-      config.frequency_hz = std::max(value, 1.0f);
+      // update_coefficients clamps the effective cutoff and preserves filter state.
+      if (!valid_positive(value)) return false;
+      config.frequency_hz = value;
       break;
     case 1:
       config.threshold_db = value;
       break;
     case 2:
-      config.ratio = std::max(1.0f, value);
+      if (!valid_ratio(value)) return false;
+      config.ratio = value;
       break;
     case 3:
-      config.attack_ms = std::max(0.0f, value);
+      if (!valid_non_negative(value)) return false;
+      config.attack_ms = value;
       break;
     case 4:
-      config.release_ms = std::max(0.0f, value);
+      if (!valid_non_negative(value)) return false;
+      config.release_ms = value;
       break;
     case 5:
-      config.range_db = std::max(0.0f, value);
+      if (!valid_non_negative(value)) return false;
+      config.range_db = value;
       break;
     case 6:
-      config.bandpass_q = std::max(1.0e-3f, value);
+      if (!valid_positive(value)) return false;
+      config.bandpass_q = value;
       break;
     default:
       return false;
@@ -152,8 +162,9 @@ std::vector<rt::ParamDescriptor> DeEsser::parameter_descriptors() const {
 }
 
 void DeEsser::validate_config(const DeEsserConfig& config) {
-  if (!(config.frequency_hz > 0.0f) || !(config.ratio >= 1.0f) || config.attack_ms < 0.0f ||
-      config.release_ms < 0.0f || config.range_db < 0.0f || !(config.bandpass_q > 0.0f)) {
+  if (!valid_positive(config.frequency_hz) || !valid_ratio(config.ratio) ||
+      !valid_non_negative(config.attack_ms) || !valid_non_negative(config.release_ms) ||
+      !valid_non_negative(config.range_db) || !valid_positive(config.bandpass_q)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid de-esser configuration");
   }
 }

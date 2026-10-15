@@ -1391,9 +1391,8 @@ std::vector<float> render_adaptive_release_after(const AdaptiveReleaseConfig& st
 
 }  // namespace
 
-TEST_CASE("AdaptiveRelease bound pairs resolve independently of write order",
+TEST_CASE("AdaptiveRelease bound pairs refuse a crossing write and accept the ordered one",
           "[mastering][maximizer][adaptive_release]") {
-  // Float-rounding scale of the program's peak; identical arithmetic is expected.
   constexpr float kTolerance = 1.0e-6f;
   const bool release_pair = GENERATE(true, false);
   const bool upward = GENERATE(true, false);
@@ -1417,12 +1416,17 @@ TEST_CASE("AdaptiveRelease bound pairs resolve independently of write order",
   const float low_value = release_pair ? target.min_release_ms : target.crest_low;
   const float high_value = release_pair ? target.max_release_ms : target.crest_high;
 
-  float release_low_first = 0.0f;
-  float release_high_first = 0.0f;
-  const auto low_first = render_adaptive_release_after(
-      start, {{low_id, low_value}, {high_id, high_value}}, &release_low_first);
-  const auto high_first = render_adaptive_release_after(
-      start, {{high_id, high_value}, {low_id, low_value}}, &release_high_first);
+  // Moving up, the upper bound has to go first; moving down, the lower one.
+  const std::vector<ParameterWrite> ordered =
+      upward ? std::vector<ParameterWrite>{{high_id, high_value}, {low_id, low_value}}
+             : std::vector<ParameterWrite>{{low_id, low_value}, {high_id, high_value}};
+  AdaptiveRelease refused(start);
+  CHECK_FALSE(refused.set_parameter(upward ? low_id : high_id, upward ? low_value : high_value));
+  CHECK(refused.config().min_release_ms == start.min_release_ms);
+  CHECK(refused.config().max_release_ms == start.max_release_ms);
+  CHECK(refused.config().crest_low == start.crest_low);
+  CHECK(refused.config().crest_high == start.crest_high);
+
   AdaptiveReleaseConfig written = start;
   if (release_pair) {
     written.min_release_ms = target.min_release_ms;
@@ -1431,135 +1435,123 @@ TEST_CASE("AdaptiveRelease bound pairs resolve independently of write order",
     written.crest_low = target.crest_low;
     written.crest_high = target.crest_high;
   }
-  const auto expected = render_adaptive_release_after(written, {});
-
-  CHECK_THAT(release_low_first, WithinAbs(release_high_first, kTolerance));
-  CHECK(max_abs_difference(low_first, high_first) <= kTolerance);
-  CHECK(max_abs_difference(low_first, expected) <= kTolerance);
-  CHECK(max_abs_difference(high_first, expected) <= kTolerance);
+  float release_ordered = 0.0f;
+  float release_expected = 0.0f;
+  const auto rendered = render_adaptive_release_after(start, ordered, &release_ordered);
+  const auto expected = render_adaptive_release_after(written, {}, &release_expected);
+  CHECK_THAT(release_ordered, WithinAbs(release_expected, kTolerance));
+  CHECK(max_abs_difference(rendered, expected) <= kTolerance);
 }
 
-TEST_CASE("AdaptiveRelease single bound change keeps the pair ordered",
+TEST_CASE("AdaptiveRelease live parameters refuse the values set_config refuses",
           "[mastering][maximizer][adaptive_release]") {
-  constexpr float kTolerance = 1.0e-6f;
   AdaptiveReleaseConfig start;
   start.min_release_ms = 10.0f;
   start.max_release_ms = 100.0f;
   start.crest_low = 2.0f;
   start.crest_high = 10.0f;
 
-  SECTION("min release written above max") {
-    AdaptiveReleaseConfig ordered = start;
-    ordered.min_release_ms = 100.0f;
-    ordered.max_release_ms = 300.0f;
-    CHECK(max_abs_difference(render_adaptive_release_after(start, {{1u, 300.0f}}),
-                             render_adaptive_release_after(ordered, {})) <= kTolerance);
-  }
-  SECTION("max release written below min") {
-    AdaptiveReleaseConfig ordered = start;
-    ordered.min_release_ms = 5.0f;
-    ordered.max_release_ms = 10.0f;
-    CHECK(max_abs_difference(render_adaptive_release_after(start, {{2u, 5.0f}}),
-                             render_adaptive_release_after(ordered, {})) <= kTolerance);
-  }
-  SECTION("crest low written above crest high") {
-    AdaptiveReleaseConfig ordered = start;
-    ordered.crest_low = 10.0f;
-    ordered.crest_high = 15.0f;
-    CHECK(max_abs_difference(render_adaptive_release_after(start, {{4u, 15.0f}}),
-                             render_adaptive_release_after(ordered, {})) <= kTolerance);
-  }
-  SECTION("crest high written below crest low") {
-    AdaptiveReleaseConfig ordered = start;
-    ordered.crest_low = 1.0f;
-    ordered.crest_high = 2.0f;
-    CHECK(max_abs_difference(render_adaptive_release_after(start, {{5u, 1.0f}}),
-                             render_adaptive_release_after(ordered, {})) <= kTolerance);
+  struct Row {
+    const char* name;
+    unsigned int id;
+    float refused;
+    float accepted;
+  };
+  const Row rows[] = {
+      {"ceiling above zero", 0u, 0.25f, 0.0f},       {"min release negative", 1u, -0.5f, 0.0f},
+      {"min release above max", 1u, 100.5f, 100.0f}, {"max release below min", 2u, 9.5f, 10.0f},
+      {"crest window zero", 3u, 0.0f, 1.0e-3f},      {"crest low zero", 4u, 0.0f, 1.0e-3f},
+      {"crest low above high", 4u, 10.5f, 10.0f},    {"crest high below low", 5u, 1.5f, 2.0f},
+      {"smoothing negative", 6u, -0.5f, 0.0f},
+  };
+  for (const bool prepared : {false, true}) {
+    for (const Row& row : rows) {
+      INFO(row.name << (prepared ? " (prepared)" : " (unprepared)"));
+      AdaptiveRelease processor(start);
+      if (prepared) processor.prepare(48000.0, 256);
+      CHECK_FALSE(processor.set_parameter(row.id, row.refused));
+      const auto& config = processor.config();
+      CHECK(config.ceiling_db == start.ceiling_db);
+      CHECK(config.min_release_ms == start.min_release_ms);
+      CHECK(config.max_release_ms == start.max_release_ms);
+      CHECK(config.crest_window_ms == start.crest_window_ms);
+      CHECK(config.crest_low == start.crest_low);
+      CHECK(config.crest_high == start.crest_high);
+      CHECK(config.release_smoothing_ms == start.release_smoothing_ms);
+
+      CHECK(processor.set_parameter(row.id, row.accepted));
+      const auto& applied = processor.config();
+      const float stored[] = {applied.ceiling_db,          applied.min_release_ms,
+                              applied.max_release_ms,      applied.crest_window_ms,
+                              applied.crest_low,           applied.crest_high,
+                              applied.release_smoothing_ms};
+      CHECK(stored[row.id] == row.accepted);
+    }
   }
 }
 
-TEST_CASE("AdaptiveRelease crossing endpoint automation keeps config round-trippable",
-          "[mastering][maximizer][adaptive_release]") {
-  SECTION("minimum release crosses maximum") {
-    AdaptiveRelease processor;
-    REQUIRE(processor.set_parameter(1, 300.0f));
-    const auto normalized = processor.config();
-    CHECK(normalized.min_release_ms == 250.0f);
-    CHECK(normalized.max_release_ms == 300.0f);
-    CHECK(normalized.min_release_ms <= normalized.max_release_ms);
-    CHECK_NOTHROW(processor.set_config(normalized));
-  }
+namespace {
 
-  SECTION("maximum release crosses minimum") {
-    AdaptiveRelease processor;
-    REQUIRE(processor.set_parameter(2, 5.0f));
-    const auto normalized = processor.config();
-    CHECK(normalized.min_release_ms == 5.0f);
-    CHECK(normalized.max_release_ms == 20.0f);
-    CHECK(normalized.min_release_ms <= normalized.max_release_ms);
-    CHECK_NOTHROW(processor.set_config(normalized));
-  }
+// A refused live value changes neither the configuration nor the rendered audio; the
+// value just inside the bound is stored exactly.
+template <typename Make, typename Read>
+void check_live_domain(const char* name, Make make, unsigned int id, float refused, float accepted,
+                       Read read) {
+  INFO(name);
+  auto processor = make();
+  auto pristine = make();
+  processor.prepare(48000.0, 2048);
+  pristine.prepare(48000.0, 2048);
+  const float before = read(processor);
+  CHECK_FALSE(processor.set_parameter(id, refused));
+  CHECK(read(processor) == before);
 
-  SECTION("low crest crosses high crest") {
-    AdaptiveRelease processor;
-    REQUIRE(processor.set_parameter(4, 15.0f));
-    const auto normalized = processor.config();
-    CHECK(normalized.crest_low == 10.0f);
-    CHECK(normalized.crest_high == 15.0f);
-    CHECK(normalized.crest_low <= normalized.crest_high);
-    CHECK_NOTHROW(processor.set_config(normalized));
-  }
+  auto left = generate_sine_samples(1000.0f, 48000, 2048, 0.9f);
+  auto right = left;
+  process(processor, left);
+  process(pristine, right);
+  CHECK(max_abs_difference(left, right) == 0.0f);
 
-  SECTION("high crest crosses low crest") {
-    AdaptiveRelease processor;
-    REQUIRE(processor.set_parameter(5, 1.0f));
-    const auto normalized = processor.config();
-    CHECK(normalized.crest_low == 1.0f);
-    CHECK(normalized.crest_high == 2.0f);
-    CHECK(normalized.crest_low <= normalized.crest_high);
-    CHECK_NOTHROW(processor.set_config(normalized));
-  }
+  CHECK(processor.set_parameter(id, accepted));
+  CHECK(read(processor) == accepted);
+}
 
-  SECTION("low crest written equal to high crest") {
-    AdaptiveRelease processor;
-    REQUIRE(processor.set_parameter(4, 10.0f));
-    const auto normalized = processor.config();
-    CHECK(normalized.crest_low == 10.0f);
-    CHECK(normalized.crest_high == 10.0f);
-    CHECK_NOTHROW(processor.set_config(normalized));
-  }
+}  // namespace
 
-  SECTION("both crests clamped to the same minimum") {
-    AdaptiveRelease processor;
-    REQUIRE(processor.set_parameter(4, 0.0f));
-    REQUIRE(processor.set_parameter(5, 0.0f));
-    const auto normalized = processor.config();
-    CHECK(normalized.crest_low == normalized.crest_high);
-    CHECK_NOTHROW(processor.set_config(normalized));
-  }
+TEST_CASE("Limiter family live parameters refuse out-of-domain values",
+          "[mastering][maximizer][live_domain]") {
+  const auto true_peak = [] { return TruePeakLimiter(); };
+  check_live_domain("TruePeakLimiter ceiling", true_peak, 0u, 0.125f, 0.0f,
+                    [](const TruePeakLimiter& p) { return p.config().ceiling_db; });
+  check_live_domain("TruePeakLimiter release", true_peak, 1u, -0.125f, 0.0f,
+                    [](const TruePeakLimiter& p) { return p.config().release_ms; });
 
-  SECTION("authored endpoints survive a second crossing write") {
-    AdaptiveReleaseConfig start;
-    start.min_release_ms = 10.0f;
-    start.max_release_ms = 100.0f;
-    start.crest_low = 2.0f;
-    start.crest_high = 10.0f;
-    AdaptiveRelease processor(start);
+  const auto maximizer = [] { return Maximizer(); };
+  check_live_domain("Maximizer ceiling", maximizer, 1u, 0.125f, 0.0f,
+                    [](const Maximizer& p) { return p.config().ceiling_db; });
+  check_live_domain("Maximizer release", maximizer, 2u, -0.125f, 0.0f,
+                    [](const Maximizer& p) { return p.config().release_ms; });
 
-    REQUIRE(processor.set_parameter(1, 300.0f));
-    REQUIRE(processor.set_parameter(2, 50.0f));
-    const auto release_config = processor.config();
-    CHECK(release_config.min_release_ms == 50.0f);
-    CHECK(release_config.max_release_ms == 300.0f);
-    CHECK_NOTHROW(processor.set_config(release_config));
+  const auto soft_knee = [] { return SoftKneeMax(); };
+  check_live_domain("SoftKneeMax ceiling", soft_knee, 1u, 0.125f, 0.0f,
+                    [](const SoftKneeMax& p) { return p.config().ceiling_db; });
+  check_live_domain("SoftKneeMax knee", soft_knee, 2u, -0.125f, 0.0f,
+                    [](const SoftKneeMax& p) { return p.config().knee_db; });
+  check_live_domain("SoftKneeMax release", soft_knee, 3u, -0.125f, 0.0f,
+                    [](const SoftKneeMax& p) { return p.config().release_ms; });
+}
 
-    REQUIRE(processor.set_parameter(4, 15.0f));
-    REQUIRE(processor.set_parameter(5, 5.0f));
-    const auto crest_config = processor.config();
-    CHECK(crest_config.crest_low == 5.0f);
-    CHECK(crest_config.crest_high == 15.0f);
-    CHECK_NOTHROW(processor.set_config(crest_config));
-  }
+TEST_CASE("AdaptiveRelease and SoftKneeMax refuse a ceiling before forwarding it",
+          "[mastering][maximizer][live_domain]") {
+  AdaptiveRelease adaptive;
+  adaptive.prepare(48000.0, 512);
+  CHECK_FALSE(adaptive.set_parameter(0, 3.0f));
+  CHECK(adaptive.config().ceiling_db <= 0.0f);
+
+  SoftKneeMax soft_knee;
+  soft_knee.prepare(48000.0, 512);
+  CHECK_FALSE(soft_knee.set_parameter(1, 3.0f));
+  CHECK(soft_knee.config().ceiling_db <= 0.0f);
 }
 
 TEST_CASE("TruePeakLimiter bounds queued output to a lowered ceiling", "[mastering][maximizer]") {

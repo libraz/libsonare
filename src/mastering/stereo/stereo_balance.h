@@ -45,7 +45,7 @@ class StereoBalance : public rt::ProcessorBase {
   const StereoBalanceConfig& config() const { return config_; }
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
-  //   0 = balance (clamped to [-1, 1])
+  //   0 = balance (refused unless in [-1, 1])
   //   1 = law (StereoBalanceLaw; a fractional or unnamed value is refused)
   //   2 = gain (finite, non-negative linear pair multiplier)
   bool set_parameter_impl(unsigned int param_id, float value) override;

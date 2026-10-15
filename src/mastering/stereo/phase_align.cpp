@@ -58,13 +58,16 @@ void PhaseAlign::set_config(const PhaseAlignConfig& config) {
   });
 }
 
+namespace {
+bool fraction_valid(float v) noexcept { return std::isfinite(v) && v >= 0.0f && v < 1.0f; }
+}  // namespace
+
 bool PhaseAlign::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      // Keep within [0, 1): the whole-sample delay (delay_samples_) is fixed, so
-      // the delay-line size is unchanged and process_delay() reads the new
-      // fraction directly without reallocating or clearing buffered samples.
-      config_.fractional_delay_samples = std::clamp(value, 0.0f, std::nextafter(1.0f, 0.0f));
+      // The whole-sample delay is fixed, so the delay line is neither resized nor cleared.
+      if (!fraction_valid(value)) return false;
+      config_.fractional_delay_samples = value;
       return true;
     default:
       return false;
@@ -76,8 +79,7 @@ std::vector<rt::ParamDescriptor> PhaseAlign::parameter_descriptors() const {
 }
 
 void PhaseAlign::validate_config(const PhaseAlignConfig& config) {
-  if (config.delay_samples < 0 || !std::isfinite(config.fractional_delay_samples) ||
-      config.fractional_delay_samples < 0.0f || config.fractional_delay_samples >= 1.0f) {
+  if (config.delay_samples < 0 || !fraction_valid(config.fractional_delay_samples)) {
     throw SonareException(ErrorCode::InvalidParameter, "phase align delay must be non-negative");
   }
 }

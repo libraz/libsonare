@@ -32,9 +32,9 @@ class HaasEnhancer : public rt::ProcessorBase {
   int delay_samples() const { return delay_samples_; }
 
   // Automatable parameters:
-  //   0 = delay_ms (clamped to [0, 1000]; reallocates the delay line and clears
+  //   0 = delay_ms (refused unless in [0, 1000]; reallocates the delay line and clears
   //       its state when prepared, so this id is NOT realtime-safe)
-  //   1 = mix (clamped to [0, 1], RT-safe, no state reset)
+  //   1 = mix (refused unless in [0, 1], RT-safe, no state reset)
   bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=delayMs, 1=mix
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;

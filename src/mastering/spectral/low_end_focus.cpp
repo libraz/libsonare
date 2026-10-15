@@ -113,19 +113,29 @@ void LowEndFocus::set_config(const LowEndFocusConfig& config) {
   rt::apply_config_diff(config_, config, [](const rt::ConfigDiff<LowEndFocusConfig>&) {});
 }
 
+namespace {
+constexpr bool cutoff_valid(float v) noexcept { return v > 0.0f; }
+constexpr bool width_valid(float v) noexcept { return v >= 0.0f && v <= 2.0f; }
+constexpr bool unit_valid(float v) noexcept { return v >= 0.0f && v <= 1.0f; }
+}  // namespace
+
 bool LowEndFocus::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      config_.cutoff_hz = std::max(value, 1.0e-3f);
+      if (!cutoff_valid(value)) return false;
+      config_.cutoff_hz = value;
       return true;
     case 1:
-      config_.width = std::clamp(value, 0.0f, 2.0f);
+      if (!width_valid(value)) return false;
+      config_.width = value;
       return true;
     case 2:
-      config_.subharmonic_amount = std::clamp(value, 0.0f, 1.0f);
+      if (!unit_valid(value)) return false;
+      config_.subharmonic_amount = value;
       return true;
     case 3:
-      config_.transient_tightness = std::clamp(value, 0.0f, 1.0f);
+      if (!unit_valid(value)) return false;
+      config_.transient_tightness = value;
       return true;
     default:
       return false;
@@ -137,9 +147,8 @@ std::vector<rt::ParamDescriptor> LowEndFocus::parameter_descriptors() const {
 }
 
 void LowEndFocus::validate_config(const LowEndFocusConfig& config) {
-  if (!(config.cutoff_hz > 0.0f) || !(config.width >= 0.0f && config.width <= 2.0f) ||
-      !(config.subharmonic_amount >= 0.0f && config.subharmonic_amount <= 1.0f) ||
-      !(config.transient_tightness >= 0.0f && config.transient_tightness <= 1.0f)) {
+  if (!cutoff_valid(config.cutoff_hz) || !width_valid(config.width) ||
+      !unit_valid(config.subharmonic_amount) || !unit_valid(config.transient_tightness)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid low end focus configuration");
   }
 }

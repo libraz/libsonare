@@ -256,12 +256,11 @@ TEST_CASE("BrickwallLimiter guarantees ceiling", "[mastering][dynamics]") {
   REQUIRE(limiter.hard_clip_count() == 0);
 }
 
-TEST_CASE("BrickwallLimiter live ceiling stays at or below 0 dBFS", "[mastering][dynamics]") {
+TEST_CASE("BrickwallLimiter refuses a live ceiling above 0 dBFS", "[mastering][dynamics]") {
   BrickwallLimiter limiter({-6.0f, 0.0f, 0.0f});
   limiter.prepare(48000.0, 512);
-  REQUIRE(limiter.set_parameter(0, 6.0f));
-  // Clamped to the bound construction enforces; config() reports what the DSP holds.
-  CHECK(limiter.config().ceiling_db == 0.0f);
+  REQUIRE_FALSE(limiter.set_parameter(0, 6.0f));
+  CHECK(limiter.config().ceiling_db == -6.0f);
   auto signal = generate_sine_samples(1000.0f, 48000, 512, 4.0f);
   process(limiter, signal);
   CHECK(peak_abs(signal) <= 1.0f);

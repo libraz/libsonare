@@ -25,15 +25,16 @@ class LowEndFocus : public rt::ProcessorBase {
   void reset() override;
   int tail_samples() const noexcept override;
   void set_config(const LowEndFocusConfig& config);
+  const LowEndFocusConfig& config() const { return config_; }
 
   // Automatable parameters (RT-safe: updates config in place; all coefficients
   // are derived from config every block in process(), so changes take effect on
   // the next block without resetting filter state). Ids follow the
   // LowEndFocusConfig declaration order:
-  //   0 = cutoff_hz (clamped to > 0)
-  //   1 = width (clamped to [0, 2])
-  //   2 = subharmonic_amount (clamped to [0, 1])
-  //   3 = transient_tightness (clamped to [0, 1])
+  //   0 = cutoff_hz (refused unless > 0)
+  //   1 = width (refused unless in [0, 2])
+  //   2 = subharmonic_amount (refused unless in [0, 1])
+  //   3 = transient_tightness (refused unless in [0, 1])
   bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=cutoffHz, 1=width, 2=subharmonicAmount, 3=transientTightness
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;

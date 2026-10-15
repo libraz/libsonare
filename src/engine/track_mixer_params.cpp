@@ -684,10 +684,10 @@ bool TrackMixerRuntime::set_bus_eq_band(uint32_t bus_id, size_t band_index,
 }
 
 bool TrackMixerRuntime::set_bus_gain_db(uint32_t bus_id, float gain_db) noexcept {
-  if (!std::isfinite(gain_db)) return false;
+  if (!gain_db_in_range(gain_db)) return false;
   BusState* state = bus_state_for(bus_id);
   if (!state) return false;
-  state->gain.set_target(db_to_linear(std::clamp(gain_db, kFloorDb, kMaxGainDb)));
+  state->gain.set_target(db_to_linear(gain_db));
   return true;
 }
 

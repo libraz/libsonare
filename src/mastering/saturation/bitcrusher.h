@@ -121,11 +121,11 @@ class BitCrusher : public rt::ProcessorBase {
   const BitCrusherConfig& config() const { return config_; }
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
-  //   0 = bit_depth (rounded and clamped to [2, 24]; quantization resolution)
-  //   1 = mix (clamped to [0, 1])
+  //   0 = bit_depth (rounded, refused unless in [2, 24]; quantization resolution)
+  //   1 = mix (refused unless in [0, 1])
   //   2 = hold_hz (re-derives the phase increment in place; the phase runs on)
-  //   3-6 = radio / wp / disc / hum noise level (clamped to [0, 1])
-  //   7 = noise_detune (clamped to [0, 1])
+  //   3-6 = radio / wp / disc / hum noise level (refused unless in [0, 1])
+  //   7 = noise_detune (refused unless in [0, 1])
   //   8-11 = noise_lpf_hz / wp / disc / hum (refused when negative or non-finite)
   //   12 = pre_filter_hz, 13 = post_filter_hz
   //   14 = hum_hz, 15 = wp_noise_pink, 16 = disc_type, 17 = filter_type, 18 = mono,

@@ -1,6 +1,5 @@
 #include "mastering/maximizer/maximizer.h"
 
-#include <algorithm>
 #include <cmath>
 
 #include "mastering/common/parameter_domain.h"
@@ -12,6 +11,11 @@
 #include "util/numeric_validation.h"
 
 namespace sonare::mastering::maximizer {
+namespace {
+
+bool valid_time_ms(float ms) noexcept { return std::isfinite(ms) && ms >= 0.0f; }
+
+}  // namespace
 
 Maximizer::Maximizer(MaximizerConfig config) : config_(config) { validate_config(config_); }
 
@@ -63,12 +67,14 @@ bool Maximizer::set_parameter_impl(unsigned int param_id, float value) {
       config_.input_gain_db = value;
       return true;
     case 1:
-      config_.ceiling_db = std::min(0.0f, value);
+      if (!common::valid_ceiling_db(value)) return false;
+      config_.ceiling_db = value;
       // In-place on the inner limiter: no snapshot publish, no allocation.
       if (prepared_) limiter_.set_parameter(0, config_.ceiling_db);
       return true;
     case 2:
-      config_.release_ms = std::max(0.0f, value);
+      if (!valid_time_ms(value)) return false;
+      config_.release_ms = value;
       // RT-safe in-place release coefficient update: recomputes the inner
       // limiter's release coefficient without publishing a snapshot (no
       // allocation), preserving the limiter audio state. Matches the
@@ -94,8 +100,7 @@ void Maximizer::validate_config(const MaximizerConfig& config) {
   if (!common::valid_ceiling_db(config.ceiling_db)) {
     throw SonareException(ErrorCode::InvalidParameter, "maximizer ceiling must be finite and <= 0");
   }
-  if (!std::isfinite(config.lookahead_ms) || !std::isfinite(config.release_ms) ||
-      config.lookahead_ms < 0.0f || config.release_ms < 0.0f) {
+  if (!valid_time_ms(config.lookahead_ms) || !valid_time_ms(config.release_ms)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "maximizer timing values must be finite and non-negative");
   }

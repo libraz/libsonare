@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -176,6 +177,11 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // Ceiling of every dB gain the mixer accepts (lane fader, bus fader, send
   // level); the floor is constants::kFloorDb. parameterInfo reports it too.
   static constexpr float kMaxGainDb = 24.0f;
+  /// True for a finite dB gain inside [kFloorDb, kMaxGainDb].
+  static bool gain_db_in_range(float gain_db) noexcept {
+    return std::isfinite(gain_db) && gain_db >= sonare::constants::kFloorDb &&
+           gain_db <= kMaxGainDb;
+  }
 
   // CONTROL-thread staging for the raw-clip PDC banks. The banks are carried
   // by LaneState in the live runtime, while this value owns a complete
@@ -451,7 +457,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   bool set_track_surround_pan(uint32_t track_id, const mixing::SurroundPanParams& params) noexcept;
   bool set_track_channel_delay_samples(uint32_t track_id, int delay_samples) noexcept;
   /// AUDIO thread (fader automation): glides @p bus_id's fader to @p gain_db,
-  /// clamped to the fader range. False for an unknown bus or a non-finite value.
+  /// refused outside [kFloorDb, kMaxGainDb]. False for an unknown bus or an out-of-range value.
   bool set_bus_gain_db(uint32_t bus_id, float gain_db) noexcept;
   // Applies a bus spec. Everything is validated before anything is applied. An
   // unchanged insert chain is kept (with its tails and insert automation);

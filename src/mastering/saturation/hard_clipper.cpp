@@ -25,6 +25,8 @@ inline float clamp_to_ceiling(float value, float ceiling, std::uint32_t& substit
   return std::clamp(value, -ceiling, ceiling);
 }
 
+bool valid_ceiling(float v) noexcept { return v > 0.0f; }
+
 }  // namespace
 
 HardClipper::HardClipper(HardClipperConfig config) : config_(config) { validate_config(config_); }
@@ -118,7 +120,8 @@ void HardClipper::set_config(const HardClipperConfig& config) {
 bool HardClipper::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0: {
-      const float ceiling = std::max(value, std::numeric_limits<float>::min());
+      if (!valid_ceiling(value)) return false;
+      const float ceiling = value;
       const bool changed = config_.ceiling != ceiling;
       config_.ceiling = ceiling;
       // None/Oversample4x modes read config_.ceiling per sample; nothing else
@@ -150,7 +153,7 @@ void HardClipper::rebuild_adaa() {
 }
 
 void HardClipper::validate_config(const HardClipperConfig& config) {
-  if (!(config.ceiling > 0.0f))
+  if (!valid_ceiling(config.ceiling))
     throw SonareException(ErrorCode::InvalidParameter, "hard clipper ceiling must be positive");
 }
 

@@ -21,6 +21,16 @@ namespace sonare::mastering::dynamics {
 using sonare::discard_group_if_non_finite;
 using sonare::discard_if_non_finite;
 
+namespace {
+
+// Field domains shared by validate_config and live automation.
+bool valid_time_ms(float v) noexcept { return std::isfinite(v) && v >= 0.0f; }
+bool valid_range_db(float v) noexcept {
+  return (std::isfinite(v) || v == -std::numeric_limits<float>::infinity()) && v <= 0.0f;
+}
+
+}  // namespace
+
 // The configuration lifecycle (validate + seed active_ + publish the initial
 // snapshot) is handled by RtConfigLifecycle's constructor.
 Gate::Gate(GateConfig config) : ConfigBase(std::move(config)) {}
@@ -154,18 +164,22 @@ void Gate::reset() {
 bool Gate::apply_parameter(GateConfig& config, unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
+      if (!std::isfinite(value)) return false;
       config.threshold_db = value;
-      // Keep the hysteresis invariant close_threshold_db <= threshold_db.
+      // close_threshold_db is not automatable, so it follows the threshold down.
       config.close_threshold_db = std::min(config.close_threshold_db, config.threshold_db);
       break;
     case 1:
-      config.attack_ms = std::max(0.0f, value);
+      if (!valid_time_ms(value)) return false;
+      config.attack_ms = value;
       break;
     case 2:
-      config.release_ms = std::max(0.0f, value);
+      if (!valid_time_ms(value)) return false;
+      config.release_ms = value;
       break;
     case 3:
-      config.range_db = std::min(0.0f, value);
+      if (!valid_range_db(value)) return false;
+      config.range_db = value;
       break;
     default:
       return false;
@@ -178,13 +192,12 @@ std::vector<rt::ParamDescriptor> Gate::parameter_descriptors() const {
 }
 
 void Gate::validate_config(const GateConfig& config) {
-  const bool negative_infinity_range = config.range_db == -std::numeric_limits<float>::infinity();
   if (!std::isfinite(config.threshold_db) || !std::isfinite(config.attack_ms) ||
       !std::isfinite(config.release_ms) || !std::isfinite(config.hold_ms) ||
       !std::isfinite(config.close_threshold_db) || !std::isfinite(config.key_hpf_hz) ||
-      (!std::isfinite(config.range_db) && !negative_infinity_range) || config.attack_ms < 0.0f ||
-      config.release_ms < 0.0f || config.range_db > 0.0f || config.hold_ms < 0.0f ||
-      config.key_hpf_hz < 0.0f || config.close_threshold_db > config.threshold_db) {
+      !valid_range_db(config.range_db) || !valid_time_ms(config.attack_ms) ||
+      !valid_time_ms(config.release_ms) || config.hold_ms < 0.0f || config.key_hpf_hz < 0.0f ||
+      config.close_threshold_db > config.threshold_db) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid gate configuration");
   }
 }

@@ -35,15 +35,15 @@ class PassiveTubeEq : public rt::ProcessorBase {
   // Automatable parameters (RT-safe: rebuild() recomputes the four EQ-band
   // biquad coefficients in place without resetting filter state; output drive
   // touches no biquad state). The component model enum is not automatable.
-  //   0 = lowFrequencyHz (clamped to > 0)
+  //   0 = lowFrequencyHz (refused unless > 0; limited below Nyquist)
   //   1 = lowBoost (clamped to [0, 10])
   //   2 = lowAttenuation (clamped to [0, 10])
-  //   3 = highBoostFrequencyHz (clamped to > 0)
+  //   3 = highBoostFrequencyHz (refused unless > 0; limited below Nyquist)
   //   4 = highBoost (clamped to [0, 10])
   //   5 = highBandwidth (clamped to [0, 1])
-  //   6 = highAttenuationFrequencyHz (clamped to > 0)
+  //   6 = highAttenuationFrequencyHz (refused unless > 0; limited below Nyquist)
   //   7 = highAttenuation (clamped to [0, 10])
-  //   8 = outputDrive (clamped to [0, 10])
+  //   8 = outputDrive (refused unless >= 0; limited to 10)
   bool set_parameter_impl(unsigned int param_id, float value) override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

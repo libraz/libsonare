@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <new>
 #include <utility>
@@ -22,6 +23,7 @@
 #include "rt/command.h"
 #include "rt/processor_base.h"
 #include "support/alloc_guard.h"
+#include "util/constants.h"
 
 namespace {
 
@@ -3791,6 +3793,43 @@ TEST_CASE("TrackMixerRuntime keeps active bus gain pan and width ramps across re
           1.0e-6f);
   REQUIRE(max_abs_difference(same_order_control.second.left, same_order_control.first.left) >
           1.0e-3f);
+}
+
+TEST_CASE("TrackMixerRuntime bus fader automation refuses values outside the fader range",
+          "[engine][track_mixer][automation]") {
+  constexpr float kFloor = sonare::constants::kFloorDb;
+  constexpr float kCeiling = TrackMixerRuntime::kMaxGainDb;
+  const auto run = [&](bool offer_refused) {
+    TrackMixerRuntime mixer;
+    mixer.prepare(48000.0, kBusBlock);
+    REQUIRE(mixer.set_buses({{1, -6.0f}}));
+    TrackLaneConfig lane{10};
+    lane.output_bus_id = 1;
+    REQUIRE(mixer.set_track_lanes({lane}));
+    mixer.settle_smoothers();
+    if (offer_refused) {
+      for (const float refused :
+           {std::nextafter(kCeiling, 1000.0f), std::nextafter(kFloor, -1000.0f), 60.0f,
+            std::numeric_limits<float>::quiet_NaN()}) {
+        INFO("refused " << refused);
+        REQUIRE_FALSE(mixer.set_bus_gain_db(1, refused));
+      }
+    }
+    StereoRender out;
+    render_tones(mixer, {10}, 1, 0, out);
+    return out;
+  };
+  const StereoRender control = run(false);
+  const StereoRender offered = run(true);
+  REQUIRE(max_abs_difference(offered.left, control.left) == 0.0f);
+  REQUIRE(max_abs_difference(offered.right, control.right) == 0.0f);
+
+  TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBusBlock);
+  REQUIRE(mixer.set_buses({{1, 0.0f}}));
+  REQUIRE(mixer.set_bus_gain_db(1, kCeiling));
+  REQUIRE(mixer.set_bus_gain_db(1, kFloor));
+  REQUIRE_FALSE(mixer.set_bus_gain_db(2, 0.0f));
 }
 
 TEST_CASE("TrackMixerRuntime carries bus input PDC history by bus identity on reorder",

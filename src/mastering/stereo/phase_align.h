@@ -31,7 +31,7 @@ class PhaseAlign : public rt::ProcessorBase {
                                       int max_abs_delay);
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
-  //   0 = fractional_delay_samples (clamped to [0, 1); the whole-sample delay
+  //   0 = fractional_delay_samples (refused unless in [0, 1); the whole-sample delay
   //       and therefore the delay-line size are unchanged, so the Lagrange
   //       interpolator simply reads the new fraction on the next sample)
   bool set_parameter_impl(unsigned int param_id, float value) override;

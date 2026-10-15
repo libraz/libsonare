@@ -26,6 +26,14 @@ bool same_routing(const EqBand& a, const EqBand& b) noexcept {
          a.slope_db_oct == b.slope_db_oct && a.dyn.enabled == b.dyn.enabled;
 }
 
+// A disabled band is never designed, so its frequency is not constrained. Before prepare()
+// the rate is unknown and only a positive frequency can be told apart.
+bool band_frequency_accepted(const EqBand& band, bool prepared, double sample_rate) noexcept {
+  if (!band.enabled) return true;
+  return prepared ? band_frequency_in_range(band.frequency_hz, sample_rate)
+                  : band.frequency_hz > 0.0f;
+}
+
 }  // namespace
 
 using sonare::discard_group_if_non_finite;
@@ -305,14 +313,15 @@ bool EqualizerProcessor::set_parameter_impl(unsigned int param_id, float value) 
   EqBand band = bands_[band_index];
   switch (param_id % 3u) {
     case 0:
-      band.frequency_hz =
-          std::clamp(value, 1.0e-3f, sonare::rt::max_design_frequency_hz(sample_rate_));
+      band.frequency_hz = value;
+      if (!band_frequency_accepted(band, prepared_, sample_rate_)) return false;
       break;
     case 1:
       band.gain_db = value;
       break;
     case 2:
-      band.q = std::max(value, 1.0e-6f);
+      if (band.enabled && !band_q_valid(value)) return false;
+      band.q = value;
       break;
     default:
       return false;
@@ -422,7 +431,7 @@ void EqualizerProcessor::validate_band(const EqBand& band) const {
   validate_supported_band(band, phase_mode_);
   // A band requested at a known rate is refused if the rate cannot carry it; one
   // stored before prepare() is resolved to that rate instead.
-  if (prepared_ && band.enabled && !(band.frequency_hz < static_cast<float>(sample_rate_ * 0.5))) {
+  if (!band_frequency_accepted(band, prepared_, sample_rate_)) {
     refuse_band_frequency(band.frequency_hz, sample_rate_);
   }
 }

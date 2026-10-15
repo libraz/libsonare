@@ -93,6 +93,11 @@ double soft_clip_integral(double u) {
          (s3 - s2) * h * table.slope[k + 1];
 }
 
+bool valid_gain_db(float v, float max_db) noexcept { return v >= 0.0f && v <= max_db; }
+bool valid_tone_hz(float v, float min_hz, float max_hz) noexcept {
+  return v >= min_hz && v <= max_hz;
+}
+
 }  // namespace
 
 float PedalSoftClipNonlinearity::apply(float x) const noexcept {
@@ -315,10 +320,12 @@ template <typename Core>
 bool Pedal<Core>::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      config_.gain_db = std::clamp(value, 0.0f, Core::kMaxGainDb);
+      if (!valid_gain_db(value, Core::kMaxGainDb)) return false;
+      config_.gain_db = value;
       return true;
     case 1:
-      config_.tone_hz = std::clamp(value, Core::kMinToneHz, Core::kMaxToneHz);
+      if (!valid_tone_hz(value, Core::kMinToneHz, Core::kMaxToneHz)) return false;
+      config_.tone_hz = value;
       return true;
     case 2:
       if (!numeric::finite(db_to_linear(value))) return false;
@@ -337,10 +344,10 @@ std::vector<rt::ParamDescriptor> Pedal<Core>::parameter_descriptors() const {
 template <typename Core>
 void Pedal<Core>::validate_config(const Config& config) {
   const std::string name = Core::kName;
-  if (!(config.gain_db >= 0.0f && config.gain_db <= Core::kMaxGainDb)) {
+  if (!valid_gain_db(config.gain_db, Core::kMaxGainDb)) {
     throw SonareException(ErrorCode::InvalidParameter, name + " gainDb is out of range");
   }
-  if (!(config.tone_hz >= Core::kMinToneHz && config.tone_hz <= Core::kMaxToneHz)) {
+  if (!valid_tone_hz(config.tone_hz, Core::kMinToneHz, Core::kMaxToneHz)) {
     throw SonareException(ErrorCode::InvalidParameter, name + " toneHz is out of range");
   }
   if (!numeric::finite(db_to_linear(config.level_db))) {

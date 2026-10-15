@@ -34,10 +34,10 @@ class PresenceEnhancer : public rt::ProcessorBase {
   // bandpass center/Q recompute the cached biquad coefficients in place,
   // preserving filter state). Ids follow the PresenceEnhancerConfig declaration
   // order:
-  //   0 = amount (clamped to [0, 1])
-  //   1 = drive (clamped to >= 0; 0 adds no harmonics)
-  //   2 = center_frequency_hz (clamped to > 0; recomputes bandpass coefficients)
-  //   3 = q (clamped to > 0; recomputes bandpass coefficients)
+  //   0 = amount (refused unless in [0, 1])
+  //   1 = drive (refused unless >= 0; 0 adds no harmonics)
+  //   2 = center_frequency_hz (refused unless > 0; recomputes bandpass coefficients)
+  //   3 = q (refused unless > 0; recomputes bandpass coefficients)
   // aliasing is an enum (not exposed): None, Adaa1 or Oversample4x.
   bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=amount, 1=drive, 2=centerFrequencyHz, 3=q

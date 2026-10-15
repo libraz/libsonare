@@ -50,11 +50,11 @@ class MultibandExciter : public rt::ProcessorBase {
   // Per-band block layout with kBandStride params per band: band b occupies
   // ids [b * kBandStride, b * kBandStride + kBandStride). Within each band the
   // ids forward directly to Exciter::set_parameter:
-  //   +0 = frequency_hz (clamped positive; recomputes the band filters)
+  //   +0 = frequency_hz (refused unless positive; recomputes the band filters)
   //   +1 = drive_db
-  //   +2 = amount (clamped to >= 0)
-  //   +3 = q (clamped positive; recomputes the band filters)
-  //   +4 = even_odd_mix (clamped to [0, 1])
+  //   +2 = amount (refused unless >= 0)
+  //   +3 = q (refused unless positive; recomputes the band filters)
+  //   +4 = even_odd_mix (refused outside [0, 1])
   // The kept config_ mirror stays consistent so config() reflects automation.
   // Crossover cutoff frequencies are not automatable here: changing them
   // requires rebuilding the crossover filters and would reset audio state.

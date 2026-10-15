@@ -1,6 +1,5 @@
 #include "mastering/eq/tilt.h"
 
-#include <algorithm>
 #include <cstdint>
 
 #include "mastering/common/prepare_args.h"
@@ -9,6 +8,11 @@
 #include "util/exception.h"
 
 namespace sonare::mastering::eq {
+namespace {
+
+bool valid_pivot_hz(float pivot_hz) noexcept { return pivot_hz > 0.0f; }
+
+}  // namespace
 
 void TiltEq::prepare(double sample_rate, int max_block_size) {
   validate_prepare_args(sample_rate, max_block_size);
@@ -37,7 +41,7 @@ void TiltEq::set_tilt_db(float tilt_db) {
 }
 
 void TiltEq::set_pivot_hz(float pivot_hz) {
-  if (!(pivot_hz > 0.0f)) {
+  if (!valid_pivot_hz(pivot_hz)) {
     throw SonareException(ErrorCode::InvalidParameter, "pivot_hz must be positive");
   }
   pivot_hz_ = pivot_hz;
@@ -52,7 +56,8 @@ bool TiltEq::set_parameter_impl(unsigned int param_id, float value) {
       tilt_db_ = value;
       break;
     case 1:
-      pivot_hz_ = std::clamp(value, 1.0e-3f, rt::max_design_frequency_hz(sample_rate_));
+      if (!valid_pivot_hz(value)) return false;
+      pivot_hz_ = value;
       break;
     default:
       return false;

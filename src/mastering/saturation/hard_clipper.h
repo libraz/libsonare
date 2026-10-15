@@ -35,7 +35,7 @@ class HardClipper : public rt::ProcessorBase {
   const HardClipperConfig& config() const { return config_; }
 
   // Automatable parameters (RT-safe, no allocation):
-  //   0 = ceiling (clamped to > 0)
+  //   0 = ceiling (refused unless > 0)
   // In the None and Oversample4x aliasing modes the ceiling is read per
   // sample, so the change is applied with no state reset. In the Adaa1/Adaa2
   // modes the ceiling is baked into the ADAA nonlinearity objects, which

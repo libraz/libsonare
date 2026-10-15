@@ -56,10 +56,10 @@ class BinauralPanner : public rt::ProcessorBase {
   // Automatable parameters (RT-safe, in-place scalar updates):
   //   0 = azimuth_deg (wrapped to [-180, 180); glides over 20 ms)
   //   1 = auto_turn (0 or 1)
-  //   2 = turn_rate_hz (clamped to [0, 10])
+  //   2 = turn_rate_hz (refused unless in [0, 10])
   //   3 = clockwise (0 or 1)
   //   4 = output (0 speakers, 1 phones; a fractional or unnamed value is refused; fades over 20 ms)
-  //   5 = dry_wet (clamped to [0, 1])
+  //   5 = dry_wet (refused unless in [0, 1])
   bool set_parameter_impl(unsigned int param_id, float value) override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

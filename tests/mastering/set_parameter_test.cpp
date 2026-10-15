@@ -167,13 +167,29 @@ std::string ActivationJson(const std::string& name) {
   return "{}";
 }
 
+// Live setters refuse what their config refuses, so an id counts as present
+// when any of these values is accepted.
+constexpr std::array<float, 3> kProbeValues = {1.0f, 0.5f, 0.0f};
+
+bool AcceptsAnyProbe(ProcessorBase& processor, unsigned int id) {
+  float constructed = 0.0f;
+  if (processor.constructed_parameter_value(id, &constructed) &&
+      processor.set_parameter(id, constructed)) {
+    return true;
+  }
+  for (const float value : kProbeValues) {
+    if (processor.set_parameter(id, value)) return true;
+  }
+  return false;
+}
+
 // Probes param ids 0,1,2,... until set_parameter rejects one, returning the
 // count N of accepted ids.
 unsigned int CountParameters(const std::string& name) {
   auto processor = MakePrepared(name);
   REQUIRE(processor != nullptr);
   unsigned int count = 0;
-  while (count < kMaxProbedParams && processor->set_parameter(count, 1.0f)) {
+  while (count < kMaxProbedParams && AcceptsAnyProbe(*processor, count)) {
     ++count;
   }
   REQUIRE(count < kMaxProbedParams);
@@ -211,16 +227,15 @@ std::vector<unsigned int> DiscoverParameterIds(const std::string& name) {
   return ids;
 }
 
-// GS EFX bytes are unsigned 7-bit values, and some typed slots have a shorter
-// printed state list. Keep perturbations in the wire domain and retain only
-// values accepted by the selected type's realtime setter.
+// Live setters refuse out-of-domain values, so retain only the candidates the
+// parameter accepts. GS EFX bytes stay in the unsigned 7-bit wire domain.
 std::vector<float> ParameterPerturbations(const std::string& name, unsigned int id) {
-  if (name != kGsEfxName) return {1.0f, 12.0f, -1.0f, -12.0f};
-
-  constexpr std::array<float, 4> kGsValues = {0.0f, 1.0f, 64.0f, 127.0f};
+  const std::vector<float> candidates =
+      name == kGsEfxName ? std::vector<float>{0.0f, 1.0f, 64.0f, 127.0f}
+                         : std::vector<float>{1.0f, 12.0f, -1.0f, -12.0f, 0.5f, 0.1f, 0.0f};
   const std::string activation = ActivationJson(name);
   std::vector<float> accepted;
-  for (const float value : kGsValues) {
+  for (const float value : candidates) {
     auto probe = MakePrepared(name, activation);
     REQUIRE(probe != nullptr);
     if (probe->set_parameter(id, value)) accepted.push_back(value);
@@ -280,9 +295,9 @@ TEST_CASE("All factory inserts expose set_parameter contract",
 
       bool observed_change = false;
       // Bidirectional dB-scale magnitudes. Negative values are essential for
-      // threshold/ceiling parameters: a positive ceiling clamps to 0 dB (the
-      // default) and never engages, whereas a -12 dB ceiling limits the
-      // ~-10 dBFS noise stimulus and produces an observable change.
+      // threshold/ceiling parameters: a positive ceiling is refused, whereas a
+      // -12 dB ceiling limits the ~-10 dBFS noise stimulus and produces an
+      // observable change.
       for (const unsigned int id : parameter_ids) {
         if (observed_change) break;
         for (const float value : ParameterPerturbations(name, id)) {

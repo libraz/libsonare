@@ -42,32 +42,29 @@ void DuckingProcessor::set_config(const DuckingConfig& config) {
 }
 
 bool DuckingProcessor::set_parameter_impl(unsigned int param_id, float value) {
+  // Parameters map 1:1 to the router, whose domain checks decide acceptance;
+  // config_ is only updated once the router has applied the value.
+  if (!router_.set_parameter(param_id, value)) return false;
   switch (param_id) {
     case 0:
       config_.threshold_db = value;
       break;
     case 1:
-      config_.ratio = std::max(1.0f, value);
-      value = config_.ratio;
+      config_.ratio = value;
       break;
     case 2:
-      config_.attack_ms = std::max(0.0f, value);
-      value = config_.attack_ms;
+      config_.attack_ms = value;
       break;
     case 3:
-      config_.release_ms = std::max(0.0f, value);
-      value = config_.release_ms;
+      config_.release_ms = value;
       break;
     case 4:
-      config_.range_db = std::max(0.0f, value);
-      value = config_.range_db;
+      config_.range_db = value;
       break;
     default:
       return false;
   }
-  // Ducking parameters map 1:1 to the inner router; forward the clamped value so
-  // the router recomputes only the affected coefficients without resetting state.
-  return router_.set_parameter(param_id, value);
+  return true;
 }
 
 std::vector<rt::ParamDescriptor> DuckingProcessor::parameter_descriptors() const {

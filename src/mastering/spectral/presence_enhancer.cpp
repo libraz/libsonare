@@ -170,20 +170,31 @@ void PresenceEnhancer::reset() {
   for (auto& adaa : harmonic_adaa_) adaa.reset();
 }
 
+namespace {
+constexpr bool amount_valid(float v) noexcept { return v >= 0.0f && v <= 1.0f; }
+bool drive_valid(float v) noexcept { return v >= 0.0f && std::isfinite(v); }
+constexpr bool center_valid(float v) noexcept { return v > 0.0f; }
+constexpr bool q_valid(float v) noexcept { return v > 0.0f; }
+}  // namespace
+
 bool PresenceEnhancer::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      config_.amount = std::clamp(value, 0.0f, 1.0f);
+      if (!amount_valid(value)) return false;
+      config_.amount = value;
       return true;
     case 1:
-      config_.drive = std::max(value, 0.0f);
+      if (!drive_valid(value)) return false;
+      config_.drive = value;
       return true;
     case 2:
     case 3: {
       if (param_id == 2) {
-        config_.center_frequency_hz = std::max(value, 1.0e-3f);
+        if (!center_valid(value)) return false;
+        config_.center_frequency_hz = value;
       } else {
-        config_.q = std::max(value, 1.0e-6f);
+        if (!q_valid(value)) return false;
+        config_.q = value;
       }
       // Recompute the cached bandpass coefficients in place, preserving each
       // channel's filter state (z1/z2).
@@ -203,9 +214,8 @@ std::vector<rt::ParamDescriptor> PresenceEnhancer::parameter_descriptors() const
 }
 
 void PresenceEnhancer::validate_config(const PresenceEnhancerConfig& config) {
-  if (!(config.amount >= 0.0f && config.amount <= 1.0f) ||
-      !(config.drive >= 0.0f && std::isfinite(config.drive)) ||
-      !(config.center_frequency_hz > 0.0f) || !(config.q > 0.0f)) {
+  if (!amount_valid(config.amount) || !drive_valid(config.drive) ||
+      !center_valid(config.center_frequency_hz) || !q_valid(config.q)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid presence enhancer configuration");
   }
   // Adaa2 is not implemented: reject it instead of silently behaving like None.

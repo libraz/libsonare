@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "mastering/stereo/auto_pan.h"
+#include "mastering/stereo/binaural_panner.h"
 #include "mastering/stereo/haas_enhancer.h"
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mid_side.h"
@@ -1051,4 +1052,94 @@ TEST_CASE("Delay routing-unrelated updates preserve the buffered tail",
   // Same side re-applied: the tail written just before the update still emerges.
   REQUIRE(side_change_peak<PhaseAlign>(pa, true, false) > 0.01f);
   REQUIRE(side_change_peak<HaasEnhancer>(haas, true, false) > 0.01f);
+}
+
+namespace {
+
+/// Applies each refused value to a fresh processor (it must return false and leave the config as
+/// it was) and each accepted value (it must land unclamped).
+template <typename Processor, typename Get>
+void check_live_domain(Get get, unsigned int id, const std::vector<float>& refused,
+                       const std::vector<float>& accepted) {
+  for (const float value : refused) {
+    INFO("param " << id << " refused " << value);
+    Processor processor;
+    processor.prepare(48000.0, 256);
+    const float before = get(processor);
+    CHECK_FALSE(processor.set_parameter(id, value));
+    CHECK(get(processor) == before);
+  }
+  for (const float value : accepted) {
+    INFO("param " << id << " accepted " << value);
+    Processor processor;
+    processor.prepare(48000.0, 256);
+    REQUIRE(processor.set_parameter(id, value));
+    CHECK(get(processor) == value);
+  }
+}
+
+float below(float v) { return std::nextafter(v, -std::numeric_limits<float>::infinity()); }
+float above(float v) { return std::nextafter(v, std::numeric_limits<float>::infinity()); }
+
+}  // namespace
+
+TEST_CASE("AutoPan live parameters refuse exactly what the config refuses", "[mastering][stereo]") {
+  using P = AutoPan;
+  check_live_domain<P>([](P& p) { return p.config().rate_hz; }, 0, {below(0.0f), -1.0f},
+                       {0.0f, 20.0f});
+  check_live_domain<P>([](P& p) { return p.config().depth; }, 1, {below(0.0f), above(1.0f)},
+                       {0.0f, 1.0f, below(1.0f)});
+}
+
+TEST_CASE("BinauralPanner live parameters refuse exactly what the config refuses",
+          "[mastering][stereo]") {
+  using P = BinauralPanner;
+  check_live_domain<P>([](P& p) { return p.config().turn_rate_hz; }, 2,
+                       {below(0.0f), above(10.0f), 11.0f}, {0.0f, 10.0f, below(10.0f)});
+  check_live_domain<P>([](P& p) { return p.config().dry_wet; }, 5, {below(0.0f), above(1.0f)},
+                       {0.0f, 1.0f, below(1.0f)});
+}
+
+TEST_CASE("HaasEnhancer live parameters refuse exactly what the config refuses",
+          "[mastering][stereo]") {
+  using P = HaasEnhancer;
+  check_live_domain<P>([](P& p) { return p.config().delay_ms; }, 0,
+                       {below(0.0f), above(1000.0f), 1001.0f}, {0.0f, 1000.0f, below(1000.0f)});
+  check_live_domain<P>([](P& p) { return p.config().mix; }, 1, {below(0.0f), above(1.0f)},
+                       {0.0f, 1.0f, below(1.0f)});
+}
+
+TEST_CASE("Imager live parameters refuse exactly what the config refuses", "[mastering][stereo]") {
+  using P = Imager;
+  check_live_domain<P>([](P& p) { return p.config().width; }, 0, {below(0.0f), -1.0f},
+                       {0.0f, 4.0f});
+  // A gain whose linear value overflows a float is refused.
+  check_live_domain<P>([](P& p) { return p.config().output_gain_db; }, 1, {1000.0f},
+                       {-24.0f, 24.0f});
+  check_live_domain<P>([](P& p) { return p.config().decorrelation_amount; }, 2,
+                       {below(0.0f), above(1.0f)}, {0.0f, 1.0f, below(1.0f)});
+}
+
+TEST_CASE("MonoMaker live parameters refuse exactly what the config refuses",
+          "[mastering][stereo]") {
+  using P = MonoMaker;
+  check_live_domain<P>([](P& p) { return p.config().amount; }, 0, {below(0.0f), above(1.0f)},
+                       {0.0f, 1.0f, below(1.0f)});
+  check_live_domain<P>([](P& p) { return p.config().frequency_hz; }, 1, {0.0f, -1.0f},
+                       {1.0e-3f, 500.0f});
+}
+
+TEST_CASE("PhaseAlign live fraction refuses exactly what the config refuses",
+          "[mastering][stereo]") {
+  using P = PhaseAlign;
+  check_live_domain<P>([](P& p) { return p.config().fractional_delay_samples; }, 0,
+                       {below(0.0f), 1.0f, 1.5f}, {0.0f, 0.5f, below(1.0f)});
+}
+
+TEST_CASE("StereoBalance live parameters refuse exactly what the config refuses",
+          "[mastering][stereo]") {
+  using P = StereoBalance;
+  check_live_domain<P>([](P& p) { return p.config().balance; }, 0,
+                       {above(1.0f), below(-1.0f), -1.5f, 2.0f}, {-1.0f, 1.0f, 0.3f, below(1.0f)});
+  check_live_domain<P>([](P& p) { return p.config().gain; }, 2, {below(0.0f), -1.0f}, {0.0f, 2.0f});
 }

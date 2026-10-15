@@ -71,11 +71,18 @@ void HaasEnhancer::set_config(const HaasEnhancerConfig& config) {
   });
 }
 
+namespace {
+constexpr float kMaxDelayMs = 1000.0f;
+
+bool delay_valid(float v) noexcept { return std::isfinite(v) && v >= 0.0f && v <= kMaxDelayMs; }
+bool mix_valid(float v) noexcept { return std::isfinite(v) && v >= 0.0f && v <= 1.0f; }
+}  // namespace
+
 bool HaasEnhancer::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      if (value > 1000.0f) return false;
-      config_.delay_ms = std::max(0.0f, value);
+      if (!delay_valid(value)) return false;
+      config_.delay_ms = value;
       // Changing the delay length requires resizing the delay line, which
       // reallocates and clears the buffered samples.
       if (prepared_) {
@@ -83,7 +90,8 @@ bool HaasEnhancer::set_parameter_impl(unsigned int param_id, float value) {
       }
       return true;
     case 1:
-      config_.mix = std::clamp(value, 0.0f, 1.0f);
+      if (!mix_valid(value)) return false;
+      config_.mix = value;
       return true;
     default:
       return false;
@@ -100,9 +108,7 @@ bool HaasEnhancer::parameter_is_realtime_safe(unsigned int param_id) const noexc
 }
 
 void HaasEnhancer::validate_config(const HaasEnhancerConfig& config) {
-  constexpr float kMaxDelayMs = 1000.0f;
-  if (!std::isfinite(config.delay_ms) || config.delay_ms < 0.0f || config.delay_ms > kMaxDelayMs ||
-      !std::isfinite(config.mix) || config.mix < 0.0f || config.mix > 1.0f) {
+  if (!delay_valid(config.delay_ms) || !mix_valid(config.mix)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid Haas enhancer configuration");
   }
 }

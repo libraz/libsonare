@@ -34,6 +34,11 @@ float one_pole_alpha(float frequency_hz, double sample_rate) {
   return static_cast<float>(sonare::rt::one_pole_lowpass_alpha_matched_d(clamped, sample_rate));
 }
 
+bool valid_frequency_hz(float frequency_hz) noexcept { return frequency_hz > 0.0f; }
+
+constexpr float kMaxOutputDrive = 10.0f;
+bool valid_output_drive(float drive) noexcept { return drive >= 0.0f; }
+
 }  // namespace
 
 void PassiveTubeEq::prepare(double sample_rate, int max_block_size) {
@@ -130,11 +135,11 @@ void PassiveTubeEq::set_component_model(PassiveTubeComponentModel model) {
 }
 
 void PassiveTubeEq::set_output_drive(float drive) {
-  if (drive < 0.0f) {
+  if (!valid_output_drive(drive)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "Passive tube EQ output drive must be non-negative");
   }
-  output_drive_ = std::min(drive, 10.0f);
+  output_drive_ = std::min(drive, kMaxOutputDrive);
 }
 
 void PassiveTubeEq::clear() {
@@ -174,14 +179,16 @@ void PassiveTubeEq::rebuild() {
 }
 
 bool PassiveTubeEq::set_parameter_impl(unsigned int param_id, float value) {
-  // Keep frequencies inside the design domain. Band 1 derives its center as
-  // low_frequency_hz * 1.45, so the low frequency is clamped against the ceiling / 1.45.
+  // A frequency the setters refuse is refused here; one above the design ceiling is kept
+  // inside it. Band 1 derives its center as low_frequency_hz * 1.45, so the low frequency
+  // is limited to the ceiling / 1.45.
   const float ceiling = sonare::rt::max_design_frequency_hz(sample_rate_);
   const float low_freq_max = std::max(ceiling / 1.45f, 1.0e-3f);
   const float high_freq_max = std::max(ceiling, 1.0e-3f);
   switch (param_id) {
     case 0:
-      low_frequency_hz_ = std::clamp(value, 1.0e-3f, low_freq_max);
+      if (!valid_frequency_hz(value)) return false;
+      low_frequency_hz_ = std::min(value, low_freq_max);
       update_component_coefficients();
       break;
     case 1:
@@ -191,7 +198,8 @@ bool PassiveTubeEq::set_parameter_impl(unsigned int param_id, float value) {
       low_attenuation_ = clamp_amount(value);
       break;
     case 3:
-      high_boost_frequency_hz_ = std::clamp(value, 1.0e-3f, high_freq_max);
+      if (!valid_frequency_hz(value)) return false;
+      high_boost_frequency_hz_ = std::min(value, high_freq_max);
       break;
     case 4:
       high_boost_ = clamp_amount(value);
@@ -200,7 +208,8 @@ bool PassiveTubeEq::set_parameter_impl(unsigned int param_id, float value) {
       high_bandwidth_ = std::clamp(value, 0.0f, 1.0f);
       break;
     case 6:
-      high_attenuation_frequency_hz_ = std::clamp(value, 1.0e-3f, high_freq_max);
+      if (!valid_frequency_hz(value)) return false;
+      high_attenuation_frequency_hz_ = std::min(value, high_freq_max);
       update_component_coefficients();
       break;
     case 7:
@@ -208,7 +217,8 @@ bool PassiveTubeEq::set_parameter_impl(unsigned int param_id, float value) {
       break;
     case 8:
       // Output drive affects only the waveshaper; no biquad rebuild needed.
-      output_drive_ = std::clamp(value, 0.0f, 10.0f);
+      if (!valid_output_drive(value)) return false;
+      output_drive_ = std::min(value, kMaxOutputDrive);
       return true;
     default:
       return false;
@@ -232,7 +242,7 @@ std::vector<rt::ParamDescriptor> PassiveTubeEq::parameter_descriptors() const {
 float PassiveTubeEq::clamp_amount(float amount) { return std::clamp(amount, 0.0f, 10.0f); }
 
 float PassiveTubeEq::validate_frequency(float frequency_hz) {
-  if (!(frequency_hz > 0.0f)) {
+  if (!valid_frequency_hz(frequency_hz)) {
     throw SonareException(ErrorCode::InvalidParameter, "frequency_hz must be positive");
   }
   return frequency_hz;

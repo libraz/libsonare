@@ -12,6 +12,7 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
@@ -342,16 +343,22 @@ TEST_CASE("pedal controls are realtime parameters and refuse values outside thei
     CAPTURE(circuit.name);
     auto processor = build(circuit.name, "{}", 48000.0);
     const auto descriptors = processor->parameter_descriptors();
-    for (const char* key : {"gainDb", "toneHz", "levelDb"}) {
+    for (const auto& entry :
+         {std::pair<const char*, float>{"gainDb", 6.0f}, {"toneHz", 1000.0f}, {"levelDb", 6.0f}}) {
+      const char* key = entry.first;
+      const float value = entry.second;
       CAPTURE(key);
       const auto it = std::find_if(descriptors.begin(), descriptors.end(),
                                    [&](const auto& d) { return d.key == key; });
       REQUIRE(it != descriptors.end());
       CHECK(processor->parameter_is_realtime_safe(it->id));
-      CHECK(processor->set_parameter(it->id, 6.0f));
+      CHECK(processor->set_parameter(it->id, value));
     }
-    // Gain past its range is clamped into it rather than refused.
-    CHECK(processor->set_parameter(descriptors.front().id, 1000.0f));
+    const auto tone = std::find_if(descriptors.begin(), descriptors.end(),
+                                   [](const auto& d) { return d.key == "toneHz"; });
+    CHECK_FALSE(processor->set_parameter(tone->id, 6.0f));
+    // Gain past its range is refused rather than clamped into it.
+    CHECK_FALSE(processor->set_parameter(descriptors.front().id, 1000.0f));
     CHECK_THROWS(make_insert(circuit.name, R"({"gainDb":-1})"));
     CHECK_THROWS(make_insert(circuit.name,
                              R"({"gainDb":)" + std::to_string(circuit.max_gain_db + 1.0) + "}"));

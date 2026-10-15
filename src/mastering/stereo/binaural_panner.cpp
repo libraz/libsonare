@@ -73,6 +73,11 @@ float dot(const float* a, const float* b, int n) noexcept {
 
 }  // namespace
 
+namespace {
+constexpr bool turn_rate_valid(float v) noexcept { return v >= 0.0f && v <= kMaxTurnRateHz; }
+constexpr bool dry_wet_valid(float v) noexcept { return v >= 0.0f && v <= 1.0f; }
+}  // namespace
+
 BinauralPanner::BinauralPanner(BinauralPannerConfig config) : config_(config) {
   validate_config(config_);
   config_.azimuth_deg = wrap_signed_deg(config_.azimuth_deg);
@@ -82,10 +87,10 @@ void BinauralPanner::validate_config(const BinauralPannerConfig& config) {
   if (!std::isfinite(config.azimuth_deg)) {
     throw SonareException(ErrorCode::InvalidParameter, "binaural azimuthDeg must be finite");
   }
-  if (!(config.turn_rate_hz >= 0.0f && config.turn_rate_hz <= kMaxTurnRateHz)) {
+  if (!turn_rate_valid(config.turn_rate_hz)) {
     throw SonareException(ErrorCode::InvalidParameter, "binaural turnRateHz must be in [0, 10]");
   }
-  if (!(config.dry_wet >= 0.0f && config.dry_wet <= 1.0f)) {
+  if (!dry_wet_valid(config.dry_wet)) {
     throw SonareException(ErrorCode::InvalidParameter, "binaural dryWet must be in [0, 1]");
   }
   const int output = static_cast<int>(config.output);
@@ -393,7 +398,8 @@ bool BinauralPanner::set_parameter_impl(unsigned int param_id, float value) {
       config_.auto_turn = value != 0.0f;
       return true;
     case 2:
-      config_.turn_rate_hz = std::clamp(value, 0.0f, kMaxTurnRateHz);
+      if (!turn_rate_valid(value)) return false;
+      config_.turn_rate_hz = value;
       return true;
     case 3:
       config_.clockwise = value != 0.0f;
@@ -407,7 +413,8 @@ bool BinauralPanner::set_parameter_impl(unsigned int param_id, float value) {
       config_.output = static_cast<BinauralOutput>(static_cast<int>(value));
       return true;
     case 5:
-      config_.dry_wet = std::clamp(value, 0.0f, 1.0f);
+      if (!dry_wet_valid(value)) return false;
+      config_.dry_wet = value;
       return true;
     default:
       return false;

@@ -38,6 +38,8 @@ float process_sample_with_scalars(
   return paths.align(0, ch, sample) * (1.0f - scalars.mix) + paths.align(1, ch, wet) * scalars.mix;
 }
 
+bool valid_mix(float v) noexcept { return v >= 0.0f && v <= 1.0f; }
+
 }  // namespace
 
 SoftClipper::SoftClipper(SoftClipperConfig config) : config_(config) {
@@ -111,7 +113,8 @@ bool SoftClipper::set_parameter_impl(unsigned int param_id, float value) {
       config_.drive_db = value;
       return true;
     case 1:
-      config_.mix = std::clamp(value, 0.0f, 1.0f);
+      if (!valid_mix(value)) return false;
+      config_.mix = value;
       return true;
     default:
       return false;
@@ -123,7 +126,7 @@ std::vector<rt::ParamDescriptor> SoftClipper::parameter_descriptors() const {
 }
 
 void SoftClipper::validate_config(const SoftClipperConfig& config) {
-  if (!(config.ceiling > 0.0f) || config.mix < 0.0f || config.mix > 1.0f) {
+  if (!(config.ceiling > 0.0f) || !valid_mix(config.mix)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid soft clipper configuration");
   }
   if (!numeric::finite(Waveshaper::db_to_linear(config.drive_db))) {

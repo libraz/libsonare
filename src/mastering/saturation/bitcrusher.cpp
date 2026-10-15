@@ -54,6 +54,9 @@ double noise_word(uint32_t u) noexcept {
   return static_cast<double>(static_cast<int16_t>(static_cast<uint16_t>(u >> 16))) / 32768.0;
 }
 
+bool valid_bit_depth(int depth) noexcept {
+  return depth >= kBitCrusherMinBitDepth && depth <= kBitCrusherMaxBitDepth;
+}
 bool valid_hz(float hz) noexcept { return std::isfinite(hz) && hz >= 0.0f; }
 bool valid_level(float level) noexcept {
   return std::isfinite(level) && level >= 0.0f && level <= 1.0f;
@@ -212,13 +215,17 @@ void BitCrusher::set_config(const BitCrusherConfig& config) {
 
 bool BitCrusher::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
-    case 0:
-      // Match validate_config's [2, 24] integer range for bit_depth.
-      config_.bit_depth = std::clamp(static_cast<int>(std::lround(value)), kBitCrusherMinBitDepth,
-                                     kBitCrusherMaxBitDepth);
+    case 0: {
+      // The value is rounded to the integer field, then held to the validator's range.
+      if (!(value > -2.0e9f && value < 2.0e9f)) return false;
+      const int depth = static_cast<int>(std::lround(value));
+      if (!valid_bit_depth(depth)) return false;
+      config_.bit_depth = depth;
       return true;
+    }
     case 1:
-      config_.mix = std::clamp(value, 0.0f, 1.0f);
+      if (!valid_level(value)) return false;
+      config_.mix = value;
       return true;
     case 2:
       // Refused rather than clamped: a rate the increment cannot be derived from
@@ -240,7 +247,8 @@ bool BitCrusher::set_parameter_impl(unsigned int param_id, float value) {
                      : param_id == 5 ? config_.disc_noise_level
                      : param_id == 6 ? config_.hum_level
                                      : config_.noise_detune;
-      level = std::clamp(value, 0.0f, 1.0f);
+      if (!valid_level(value)) return false;
+      level = value;
       return true;
     }
     case 8:
@@ -323,9 +331,8 @@ std::vector<rt::ParamDescriptor> BitCrusher::parameter_descriptors() const {
 }
 
 void BitCrusher::validate_config(const BitCrusherConfig& config) {
-  if (config.bit_depth < kBitCrusherMinBitDepth || config.bit_depth > kBitCrusherMaxBitDepth ||
-      config.downsample_factor < 1 || config.mix < 0.0f || config.mix > 1.0f ||
-      !std::isfinite(config.hold_hz) || config.hold_hz < 0.0f ||
+  if (!valid_bit_depth(config.bit_depth) || config.downsample_factor < 1 ||
+      !valid_level(config.mix) || !std::isfinite(config.hold_hz) || config.hold_hz < 0.0f ||
       !valid_level(config.radio_noise_level) || !valid_level(config.wp_noise_level) ||
       !valid_level(config.disc_noise_level) || !valid_level(config.hum_level) ||
       !valid_level(config.noise_detune) || static_cast<int>(config.disc_type) < 0 ||

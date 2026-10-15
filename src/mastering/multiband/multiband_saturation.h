@@ -82,7 +82,7 @@ class MultibandSaturation : public rt::ProcessorBase {
   // Per-band block layout with kBandStride params per band: band b occupies
   // ids [b * kBandStride, b * kBandStride + kBandStride):
   //   +0 = drive_db
-  //   +1 = mix (clamped to [0, 1])
+  //   +1 = mix (refused unless in [0, 1])
   //   +2 = output_gain_db
   // The underlying saturation processor's drive/mix are updated in place; the
   // band output gain is applied post-processing. Crossover cutoffs, the

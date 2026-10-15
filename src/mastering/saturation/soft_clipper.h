@@ -30,7 +30,7 @@ class SoftClipper : public rt::ProcessorBase {
   // derives their segment scalars once; the nonlinear curve and ADAA state
   // still update per sample:
   //   0 = drive_db
-  //   1 = mix (clamped to [0, 1])
+  //   1 = mix (refused unless in [0, 1])
   // ceiling is NOT automatable: it normalizes the ADAA input, so changing it
   // would require clearing the antiderivative history. aliasing is an enum.
   bool set_parameter_impl(unsigned int param_id, float value) override;

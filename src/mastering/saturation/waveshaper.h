@@ -44,7 +44,7 @@ class Waveshaper : public rt::ProcessorBase {
   // derives their segment scalars once; the curve and ADAA state still update
   // per sample:
   //   0 = drive_db
-  //   1 = mix (clamped to [0, 1])
+  //   1 = mix (refused unless in [0, 1])
   //   2 = output_gain_db
   // bias is NOT automatable: it shifts the ADAA operating point, which would
   // require clearing the antiderivative history. curve/aliasing are enums.

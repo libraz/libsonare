@@ -20,8 +20,13 @@ namespace {
 using sonare::discard_group_if_non_finite;
 using sonare::discard_if_non_finite;
 
-// Lowest corner either band edge may take, so the one-pole alpha stays positive.
-constexpr float kMinCornerHz = 1.0e-3f;
+constexpr bool threshold_valid(float v) noexcept { return v >= 0.0f; }
+constexpr bool amount_valid(float v) noexcept { return v >= 0.0f && v <= 1.0f; }
+constexpr bool corner_pair_valid(float low, float high) noexcept {
+  return low > 0.0f && high > low;
+}
+constexpr bool time_valid(float v) noexcept { return !(v < 0.0f); }
+constexpr bool range_valid(float v) noexcept { return !(v < 0.0f); }
 
 }  // namespace
 
@@ -138,20 +143,24 @@ void SpectralShaper::set_config(const SpectralShaperConfig& config) {
 bool SpectralShaper::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      config_.threshold = std::max(0.0f, value);
+      if (!threshold_valid(value)) return false;
+      config_.threshold = value;
       return true;
     case 1:
-      config_.amount = std::clamp(value, 0.0f, 1.0f);
+      if (!amount_valid(value)) return false;
+      config_.amount = value;
       return true;
     case 2:
-      // Stored as written; process() orders the pair so write order never matters.
-      config_.frequency_hz = std::max(value, kMinCornerHz);
+      if (!corner_pair_valid(value, config_.high_frequency_hz)) return false;
+      config_.frequency_hz = value;
       return true;
     case 3:
-      config_.high_frequency_hz = std::max(value, kMinCornerHz);
+      if (!corner_pair_valid(config_.frequency_hz, value)) return false;
+      config_.high_frequency_hz = value;
       return true;
     case 4:
-      config_.attack_ms = std::max(0.0f, value);
+      if (!time_valid(value)) return false;
+      config_.attack_ms = value;
       // Re-prepare the envelope followers in place; preserves envelope state.
       if (prepared_) {
         for (auto& envelope : envelopes_) {
@@ -160,7 +169,8 @@ bool SpectralShaper::set_parameter_impl(unsigned int param_id, float value) {
       }
       return true;
     case 5:
-      config_.release_ms = std::max(0.0f, value);
+      if (!time_valid(value)) return false;
+      config_.release_ms = value;
       if (prepared_) {
         for (auto& envelope : envelopes_) {
           envelope.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
@@ -168,7 +178,8 @@ bool SpectralShaper::set_parameter_impl(unsigned int param_id, float value) {
       }
       return true;
     case 6:
-      config_.range_db = std::max(0.0f, value);
+      if (!range_valid(value)) return false;
+      config_.range_db = value;
       return true;
     default:
       return false;
@@ -181,9 +192,10 @@ std::vector<rt::ParamDescriptor> SpectralShaper::parameter_descriptors() const {
 }
 
 void SpectralShaper::validate_config(const SpectralShaperConfig& config) {
-  if (!(config.threshold >= 0.0f) || !(config.amount >= 0.0f && config.amount <= 1.0f) ||
-      !(config.frequency_hz > 0.0f) || !(config.high_frequency_hz > config.frequency_hz) ||
-      config.attack_ms < 0.0f || config.release_ms < 0.0f || config.range_db < 0.0f) {
+  if (!threshold_valid(config.threshold) || !amount_valid(config.amount) ||
+      !corner_pair_valid(config.frequency_hz, config.high_frequency_hz) ||
+      !time_valid(config.attack_ms) || !time_valid(config.release_ms) ||
+      !range_valid(config.range_db)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid spectral shaper configuration");
   }
 }

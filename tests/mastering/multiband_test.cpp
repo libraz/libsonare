@@ -1743,3 +1743,52 @@ TEST_CASE("Multiband imager decorrelation switched back in starts from rest",
               imager, [&] { set_decorrelation(0.0f); }, [&] { set_decorrelation(0.8f); }) <
           1.0e-7f);
 }
+
+TEST_CASE("Multiband imager live parameters refuse out-of-domain values",
+          "[mastering][multiband][live_domain]") {
+  MultibandImagerConfig config;
+  for (auto& band : config.bands) {
+    band.width = 1.25f;
+    band.decorrelation_amount = 0.5f;
+  }
+  struct Row {
+    unsigned int field;
+    float refused;
+    float accepted;
+  };
+  const Row rows[] = {
+      {0, -0.0625f, 0.0f}, {1, -0.0625f, 0.0f}, {1, 1.0625f, 1.0f}, {0, 4.0f, 4.0f}};
+  for (const Row& row : rows) {
+    INFO("field " << row.field << " refused " << row.refused);
+    MultibandImager imager(config);
+    imager.prepare(48000.0, 512);
+    if (row.refused != row.accepted) {
+      REQUIRE_FALSE(imager.set_parameter(row.field, row.refused));
+      REQUIRE(imager.config().bands[0].width == 1.25f);
+      REQUIRE(imager.config().bands[0].decorrelation_amount == 0.5f);
+    }
+    REQUIRE(imager.set_parameter(row.field, row.accepted));
+    const auto& band = imager.config().bands[0];
+    REQUIRE((row.field == 0 ? band.width : band.decorrelation_amount) == row.accepted);
+  }
+}
+
+TEST_CASE("Multiband saturation mix refuses out-of-domain values for every algorithm",
+          "[mastering][multiband][live_domain]") {
+  for (const SaturationType type : {SaturationType::SoftClip, SaturationType::Tube,
+                                    SaturationType::Exciter, SaturationType::Tape}) {
+    INFO("type " << static_cast<int>(type));
+    MultibandSaturationConfig config;
+    config.bands.front() = {6.0f, 0.5f, 0.0f, true, type};
+    MultibandSaturation saturation(config);
+    saturation.prepare(48000.0, 512);
+    for (const float refused : {-0.0625f, 1.0625f}) {
+      REQUIRE_FALSE(saturation.set_parameter(1, refused));
+      REQUIRE(saturation.config().bands.front().mix == 0.5f);
+    }
+    for (const float accepted : {0.0f, 1.0f}) {
+      REQUIRE(saturation.set_parameter(1, accepted));
+      REQUIRE(saturation.config().bands.front().mix == accepted);
+    }
+  }
+}

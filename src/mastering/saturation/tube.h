@@ -38,9 +38,9 @@ class Tube : public rt::ProcessorBase {
   // Miller state still update per sample:
   //   0 = drive_db
   //   1 = bias
-  //   2 = mix (clamped to [0, 1])
+  //   2 = mix (refused unless in [0, 1])
   //   3 = bias_v (must stay finite)
-  //   4 = harmonic_drive (clamped to [0, 1])
+  //   4 = harmonic_drive (refused unless in [0, 1])
   // oversample_factor is a discrete mode and is not exposed.
   bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=driveDb, 1=bias, 2=mix, 3=biasV, 4=harmonicDrive.

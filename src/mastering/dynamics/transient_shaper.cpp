@@ -20,6 +20,12 @@ using sonare::discard_if_non_finite;
 
 constexpr float kEnvelopeFloor = 1.0e-6f;
 
+// Field domains shared by validate_config and live automation.
+bool valid_non_negative(float v) noexcept { return !(v < 0.0f); }
+bool valid_max_gain_db(float v) noexcept {
+  return valid_non_negative(v) && numeric::finite(db_to_linear(v));
+}
+
 }  // namespace
 
 // The configuration lifecycle (validate + seed active_ + publish the initial
@@ -134,28 +140,34 @@ bool TransientShaper::apply_parameter(TransientShaperConfig& config, unsigned in
       config.sustain_gain_db = value;
       break;
     case 2:
-      config.fast_attack_ms = std::max(0.0f, value);
+      if (!valid_non_negative(value)) return false;
+      config.fast_attack_ms = value;
       break;
     case 3:
-      config.fast_release_ms = std::max(0.0f, value);
+      if (!valid_non_negative(value)) return false;
+      config.fast_release_ms = value;
       break;
     case 4:
-      config.slow_attack_ms = std::max(0.0f, value);
+      if (!valid_non_negative(value)) return false;
+      config.slow_attack_ms = value;
       break;
     case 5:
-      config.slow_release_ms = std::max(0.0f, value);
+      if (!valid_non_negative(value)) return false;
+      config.slow_release_ms = value;
       break;
     case 6:
-      config.sensitivity = std::max(0.0f, value);
+      if (!valid_non_negative(value)) return false;
+      config.sensitivity = value;
       break;
     case 7:
-      if (!numeric::finite(db_to_linear(value))) return false;
-      config.max_gain_db = std::max(0.0f, value);
+      if (!valid_max_gain_db(value)) return false;
+      config.max_gain_db = value;
       break;
     case 8:
       // Recompute the cached smoother coefficient in place; preserves the
       // running gain state. RT-safe (no allocation).
-      config.gain_smoothing_ms = std::max(0.0f, value);
+      if (!valid_non_negative(value)) return false;
+      config.gain_smoothing_ms = value;
       break;
     default:
       return false;
@@ -170,12 +182,13 @@ std::vector<rt::ParamDescriptor> TransientShaper::parameter_descriptors() const 
 }
 
 void TransientShaper::validate_config(const TransientShaperConfig& config) {
-  if (config.fast_attack_ms < 0.0f || config.fast_release_ms < 0.0f ||
-      config.slow_attack_ms < 0.0f || config.slow_release_ms < 0.0f || config.sensitivity < 0.0f ||
-      config.max_gain_db < 0.0f || config.gain_smoothing_ms < 0.0f || config.lookahead_ms < 0.0f) {
+  if (!valid_non_negative(config.fast_attack_ms) || !valid_non_negative(config.fast_release_ms) ||
+      !valid_non_negative(config.slow_attack_ms) || !valid_non_negative(config.slow_release_ms) ||
+      !valid_non_negative(config.sensitivity) || !valid_non_negative(config.max_gain_db) ||
+      !valid_non_negative(config.gain_smoothing_ms) || !valid_non_negative(config.lookahead_ms)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid transient shaper configuration");
   }
-  if (!numeric::finite(db_to_linear(config.max_gain_db))) {
+  if (!valid_max_gain_db(config.max_gain_db)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "transient shaper max gain must produce a finite linear gain");
   }

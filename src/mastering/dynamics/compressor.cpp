@@ -24,6 +24,12 @@ using sonare::discard_group_if_non_finite;
 using sonare::discard_if_non_finite;
 using sonare::constants::kFloorDb;
 
+// Field domains shared by validate_config and live automation.
+bool valid_ratio(float v) noexcept { return v >= 1.0f; }
+bool valid_non_negative(float v) noexcept { return !(v < 0.0f); }
+bool valid_positive(float v) noexcept { return !(v <= 0.0f); }
+bool valid_release_scale(float v) noexcept { return !(v < 1.0f); }
+
 constexpr float kRmsWindowMs = 10.0f;
 constexpr float kLogRmsWindowMs = 50.0f;
 
@@ -247,19 +253,23 @@ bool Compressor::apply_parameter(CompressorConfig& config, unsigned int param_id
       next.threshold_db = value;
       break;
     case 1:
-      next.ratio = std::max(1.0f, value);
+      if (!valid_ratio(value)) return false;
+      next.ratio = value;
       break;
     case 2:
-      next.attack_ms = std::max(0.0f, value);
+      if (!valid_non_negative(value)) return false;
+      next.attack_ms = value;
       break;
     case 3:
-      next.release_ms = std::max(0.0f, value);
+      if (!valid_non_negative(value)) return false;
+      next.release_ms = value;
       break;
     case 4:
       next.makeup_gain_db = value;
       break;
     case 5:
-      next.knee_db = std::max(0.0f, value);
+      if (!valid_non_negative(value)) return false;
+      next.knee_db = value;
       break;
     case 6:
       next.auto_makeup = value != 0.0f;
@@ -271,13 +281,16 @@ bool Compressor::apply_parameter(CompressorConfig& config, unsigned int param_id
       next.sidechain_hpf_enabled = value != 0.0f;
       break;
     case 9:
-      next.sidechain_hpf_hz = std::max(1.0f, value);
+      if (!valid_positive(value)) return false;
+      next.sidechain_hpf_hz = value;
       break;
     case 10:
-      next.pdr_time_ms = std::max(0.0f, value);
+      if (!valid_non_negative(value)) return false;
+      next.pdr_time_ms = value;
       break;
     case 11:
-      next.pdr_release_scale = std::max(1.0f, value);
+      if (!valid_release_scale(value)) return false;
+      next.pdr_release_scale = value;
       break;
     default:
       return false;
@@ -296,12 +309,12 @@ std::vector<rt::ParamDescriptor> Compressor::parameter_descriptors() const {
 }
 
 void Compressor::validate_config(const CompressorConfig& config) {
-  if (!(config.ratio >= 1.0f)) {
+  if (!valid_ratio(config.ratio)) {
     throw SonareException(ErrorCode::InvalidParameter, "compressor ratio must be at least 1");
   }
-  if (config.attack_ms < 0.0f || config.release_ms < 0.0f || config.knee_db < 0.0f ||
-      config.sidechain_hpf_hz <= 0.0f || config.pdr_time_ms < 0.0f ||
-      config.pdr_release_scale < 1.0f) {
+  if (!valid_non_negative(config.attack_ms) || !valid_non_negative(config.release_ms) ||
+      !valid_non_negative(config.knee_db) || !valid_positive(config.sidechain_hpf_hz) ||
+      !valid_non_negative(config.pdr_time_ms) || !valid_release_scale(config.pdr_release_scale)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "compressor timing and knee values must be non-negative");
   }

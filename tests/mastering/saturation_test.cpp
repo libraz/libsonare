@@ -13,6 +13,7 @@
 #include "mastering/saturation/exciter.h"
 #include "mastering/saturation/hard_clipper.h"
 #include "mastering/saturation/multiband_exciter.h"
+#include "mastering/saturation/pedal.h"
 #include "mastering/saturation/soft_clipper.h"
 #include "mastering/saturation/tape.h"
 #include "mastering/saturation/transformer.h"
@@ -949,10 +950,12 @@ TEST_CASE("BitCrusher refuses a one-bit word, which has no quantization levels",
   REQUIRE_THROWS_AS(BitCrusher({1, 1, 1.0f}), sonare::SonareException);
   REQUIRE_NOTHROW(BitCrusher({2, 1, 1.0f}));
 
-  // Automation below the range lands on the two-bit grid and stays finite.
+  // Automation below the range is refused and the word length is unchanged.
   BitCrusher crusher({12, 1, 1.0f});
   crusher.prepare(48000.0, 64);
-  REQUIRE(crusher.set_parameter(0, 1.0f));
+  REQUIRE_FALSE(crusher.set_parameter(0, 1.0f));
+  REQUIRE(crusher.config().bit_depth == 12);
+  REQUIRE(crusher.set_parameter(0, 2.0f));
   REQUIRE(crusher.config().bit_depth == 2);
   std::vector<float> samples = {0.0f, 0.3f, -0.7f, 0.9f};
   process(crusher, samples);
@@ -1511,5 +1514,122 @@ TEST_CASE("the reported latency of each hard clipper aliasing mode is the one do
   CHECK(latency(sonare::rt::AliasingControl::Adaa2, 48000.0) == 1);
   for (const double sample_rate : {44100.0, 48000.0, 96000.0}) {
     CHECK(latency(sonare::rt::AliasingControl::Oversample4x, sample_rate) == 48);
+  }
+}
+
+namespace {
+
+template <typename Processor>
+struct LiveRow {
+  unsigned int id;
+  float (*get)(const Processor&);
+  float refused;
+  float accepted;
+};
+
+// A refused live value changes neither the configuration nor the audio; an
+// accepted value just inside the bound is applied exactly.
+template <typename Processor>
+void check_live_domain(const std::vector<LiveRow<Processor>>& rows) {
+  const auto input = generate_sine_samples(1000.0f, 48000, 512, 0.7f);
+  for (const auto& row : rows) {
+    CAPTURE(row.id, row.refused, row.accepted);
+    Processor refused_processor;
+    Processor untouched;
+    refused_processor.prepare(48000.0, 512);
+    untouched.prepare(48000.0, 512);
+    const float before = row.get(refused_processor);
+
+    CHECK_FALSE(refused_processor.set_parameter(row.id, row.refused));
+    CHECK(row.get(refused_processor) == before);
+    auto a = input;
+    auto b = input;
+    process(refused_processor, a);
+    process(untouched, b);
+    CHECK(a == b);
+
+    Processor applied;
+    applied.prepare(48000.0, 512);
+    CHECK(applied.set_parameter(row.id, row.accepted));
+    CHECK(row.get(applied) == row.accepted);
+  }
+}
+
+}  // namespace
+
+TEST_CASE("Saturation live parameters refuse exactly what the validator refuses",
+          "[mastering][saturation][live-domain]") {
+  SECTION("BitCrusher") {
+    using P = BitCrusher;
+    check_live_domain<P>(
+        {{0, [](const P& p) { return static_cast<float>(p.config().bit_depth); }, 1.0f, 2.0f},
+         {0, [](const P& p) { return static_cast<float>(p.config().bit_depth); }, 25.0f, 24.0f},
+         {1, [](const P& p) { return p.config().mix; }, 1.001f, 1.0f},
+         {1, [](const P& p) { return p.config().mix; }, -0.001f, 0.0f},
+         {3, [](const P& p) { return p.config().radio_noise_level; }, 1.001f, 1.0f},
+         {4, [](const P& p) { return p.config().wp_noise_level; }, -0.001f, 0.0f},
+         {5, [](const P& p) { return p.config().disc_noise_level; }, 1.001f, 1.0f},
+         {6, [](const P& p) { return p.config().hum_level; }, -0.001f, 0.0f},
+         {7, [](const P& p) { return p.config().noise_detune; }, 1.001f, 1.0f}});
+  }
+  SECTION("Exciter") {
+    using P = Exciter;
+    check_live_domain<P>({{0, [](const P& p) { return p.config().frequency_hz; }, 0.0f, 1.0e-3f},
+                          {2, [](const P& p) { return p.config().amount; }, -0.001f, 0.0f},
+                          {3, [](const P& p) { return p.config().q; }, 0.0f, 1.0e-3f},
+                          {4, [](const P& p) { return p.config().even_odd_mix; }, 1.001f, 1.0f},
+                          {4, [](const P& p) { return p.config().even_odd_mix; }, -0.001f, 0.0f}});
+  }
+  SECTION("HardClipper") {
+    using P = HardClipper;
+    check_live_domain<P>({{0, [](const P& p) { return p.config().ceiling; }, 0.0f, 1.0e-3f},
+                          {0, [](const P& p) { return p.config().ceiling; }, -1.0f, 2.0f}});
+  }
+  SECTION("SoftClipper") {
+    using P = SoftClipper;
+    check_live_domain<P>({{1, [](const P& p) { return p.config().mix; }, 1.001f, 1.0f},
+                          {1, [](const P& p) { return p.config().mix; }, -0.001f, 0.0f}});
+  }
+  SECTION("Tape") {
+    using P = Tape;
+    check_live_domain<P>({{1, [](const P& p) { return p.config().saturation; }, 1.001f, 1.0f},
+                          {2, [](const P& p) { return p.config().hysteresis; }, -0.001f, 0.0f},
+                          {4, [](const P& p) { return p.config().speed_ips; }, 0.0f, 1.0e-3f},
+                          {5, [](const P& p) { return p.config().head_bump_db; }, -0.001f, 0.0f},
+                          {7, [](const P& p) { return p.config().gap_loss; }, 1.001f, 1.0f}});
+  }
+  SECTION("Transformer") {
+    using P = Transformer;
+    check_live_domain<P>(
+        {{1, [](const P& p) { return p.transformer_config().asymmetry; }, 1.001f, 1.0f},
+         {1, [](const P& p) { return p.transformer_config().asymmetry; }, -1.001f, -1.0f},
+         {2, [](const P& p) { return p.transformer_config().mix; }, 1.001f, 1.0f},
+         {2, [](const P& p) { return p.transformer_config().mix; }, -0.001f, 0.0f}});
+  }
+  SECTION("Tube") {
+    using P = Tube;
+    check_live_domain<P>(
+        {{2, [](const P& p) { return p.tube_config().mix; }, 1.001f, 1.0f},
+         {2, [](const P& p) { return p.tube_config().mix; }, -0.001f, 0.0f},
+         {4, [](const P& p) { return p.tube_config().harmonic_drive; }, 1.001f, 1.0f},
+         {4, [](const P& p) { return p.tube_config().harmonic_drive; }, -0.001f, 0.0f}});
+  }
+  SECTION("Waveshaper") {
+    using P = Waveshaper;
+    check_live_domain<P>({{1, [](const P& p) { return p.config().mix; }, 1.001f, 1.0f},
+                          {1, [](const P& p) { return p.config().mix; }, -0.001f, 0.0f}});
+  }
+  SECTION("Overdrive") {
+    using P = Overdrive;
+    check_live_domain<P>({{0, [](const P& p) { return p.config().gain_db; }, -0.001f, 0.0f},
+                          {0, [](const P& p) { return p.config().gain_db; }, 41.001f, 41.0f},
+                          {1, [](const P& p) { return p.config().tone_hz; }, 499.0f, 500.0f},
+                          {1, [](const P& p) { return p.config().tone_hz; }, 8001.0f, 8000.0f}});
+  }
+  SECTION("Distortion") {
+    using P = Distortion;
+    check_live_domain<P>({{0, [](const P& p) { return p.config().gain_db; }, 60.01f, 60.0f},
+                          {1, [](const P& p) { return p.config().tone_hz; }, 474.0f, 475.0f},
+                          {1, [](const P& p) { return p.config().tone_hz; }, 20001.0f, 20000.0f}});
   }
 }

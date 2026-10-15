@@ -1,6 +1,5 @@
 #include "mastering/maximizer/soft_knee_max.h"
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
 
@@ -12,6 +11,11 @@
 #include "util/numeric_validation.h"
 
 namespace sonare::mastering::maximizer {
+namespace {
+
+bool valid_non_negative(float ms) noexcept { return std::isfinite(ms) && ms >= 0.0f; }
+
+}  // namespace
 
 SoftKneeMax::SoftKneeMax(SoftKneeMaxConfig config) : config_(config) { validate_config(config_); }
 
@@ -82,7 +86,8 @@ bool SoftKneeMax::set_parameter_impl(unsigned int param_id, float value) {
       config_.input_gain_db = value;
       return true;
     case 1:
-      config_.ceiling_db = std::min(0.0f, value);
+      if (!common::valid_ceiling_db(value)) return false;
+      config_.ceiling_db = value;
       // Routes to Maximizer ceiling (param 1), an in-place update.
       if (prepared_) {
         maximizer_.set_parameter(1, config_.ceiling_db);
@@ -90,10 +95,12 @@ bool SoftKneeMax::set_parameter_impl(unsigned int param_id, float value) {
       return true;
     case 2:
       // Soft-knee width applied per sample in process(); no coefficients.
-      config_.knee_db = std::max(0.0f, value);
+      if (!valid_non_negative(value)) return false;
+      config_.knee_db = value;
       return true;
     case 3:
-      config_.release_ms = std::max(0.0f, value);
+      if (!valid_non_negative(value)) return false;
+      config_.release_ms = value;
       // Routes to Maximizer release (param 2): in-place, preserves audio state.
       if (prepared_) {
         maximizer_.set_parameter(2, config_.release_ms);
@@ -117,8 +124,7 @@ void SoftKneeMax::validate_config(const SoftKneeMaxConfig& config) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "soft knee maximizer ceiling must be finite and <= 0");
   }
-  if (!std::isfinite(config.knee_db) || !std::isfinite(config.release_ms) ||
-      config.knee_db < 0.0f || config.release_ms < 0.0f) {
+  if (!valid_non_negative(config.knee_db) || !valid_non_negative(config.release_ms)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid soft knee maximizer configuration");
   }
   if (!numeric::finite(db_to_linear(config.input_gain_db))) {

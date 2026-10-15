@@ -81,13 +81,19 @@ void MonoMaker::set_config(const MonoMakerConfig& config) {
                         [this](const rt::ConfigDiff<MonoMakerConfig>&) { update_coefficient(); });
 }
 
+namespace {
+bool amount_valid(float v) noexcept { return std::isfinite(v) && v >= 0.0f && v <= 1.0f; }
+bool frequency_valid(float v) noexcept { return std::isfinite(v) && v > 0.0f; }
+}  // namespace
+
 bool MonoMaker::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      config_.amount = std::clamp(value, 0.0f, 1.0f);
+      if (!amount_valid(value)) return false;
+      config_.amount = value;
       return true;
     case 1:
-      if (value <= 0.0f) return false;
+      if (!frequency_valid(value)) return false;
       config_.frequency_hz = value;
       update_coefficient();
       return true;
@@ -101,10 +107,10 @@ std::vector<rt::ParamDescriptor> MonoMaker::parameter_descriptors() const {
 }
 
 void MonoMaker::validate_config(const MonoMakerConfig& config) {
-  if (!std::isfinite(config.amount) || config.amount < 0.0f || config.amount > 1.0f) {
+  if (!amount_valid(config.amount)) {
     throw SonareException(ErrorCode::InvalidParameter, "mono maker amount must be in [0, 1]");
   }
-  if (!std::isfinite(config.frequency_hz) || config.frequency_hz <= 0.0f) {
+  if (!frequency_valid(config.frequency_hz)) {
     throw SonareException(ErrorCode::InvalidParameter, "mono maker frequency_hz must be positive");
   }
 }

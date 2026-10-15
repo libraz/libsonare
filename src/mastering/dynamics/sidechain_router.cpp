@@ -17,6 +17,14 @@
 
 namespace sonare::mastering::dynamics {
 
+namespace {
+
+// Field domains shared by validate_config and live automation.
+bool valid_ratio(float v) noexcept { return std::isfinite(v) && v >= 1.0f; }
+bool valid_non_negative_ms(float v) noexcept { return std::isfinite(v) && v >= 0.0f; }
+
+}  // namespace
+
 // The configuration lifecycle (validate + seed active_ + publish the initial
 // snapshot) is handled by RtConfigLifecycle's constructor.
 SidechainRouter::SidechainRouter(SidechainRouterConfig config) : ConfigBase(std::move(config)) {}
@@ -209,16 +217,20 @@ bool SidechainRouter::apply_parameter(SidechainRouterConfig& config, unsigned in
       config.threshold_db = value;
       break;
     case 1:
-      config.ratio = std::max(1.0f, value);
+      if (!valid_ratio(value)) return false;
+      config.ratio = value;
       break;
     case 2:
-      config.attack_ms = std::max(0.0f, value);
+      if (!valid_non_negative_ms(value)) return false;
+      config.attack_ms = value;
       break;
     case 3:
-      config.release_ms = std::max(0.0f, value);
+      if (!valid_non_negative_ms(value)) return false;
+      config.release_ms = value;
       break;
     case 4:
-      config.range_db = std::max(0.0f, value);
+      if (!valid_non_negative_ms(value)) return false;
+      config.range_db = value;
       break;
     default:
       return false;
@@ -234,9 +246,9 @@ void SidechainRouter::validate_config(const SidechainRouterConfig& config) {
   if (!std::isfinite(config.threshold_db) || !std::isfinite(config.ratio) ||
       !std::isfinite(config.attack_ms) || !std::isfinite(config.release_ms) ||
       !std::isfinite(config.range_db) || !std::isfinite(config.lookahead_ms) ||
-      !std::isfinite(config.sidechain_hpf_hz) || !(config.ratio >= 1.0f) ||
-      config.attack_ms < 0.0f || config.release_ms < 0.0f || config.range_db < 0.0f ||
-      config.lookahead_ms < 0.0f ||
+      !std::isfinite(config.sidechain_hpf_hz) || !valid_ratio(config.ratio) ||
+      !valid_non_negative_ms(config.attack_ms) || !valid_non_negative_ms(config.release_ms) ||
+      !valid_non_negative_ms(config.range_db) || config.lookahead_ms < 0.0f ||
       (config.sidechain_hpf_enabled && config.sidechain_hpf_hz <= 0.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid sidechain router configuration");
   }

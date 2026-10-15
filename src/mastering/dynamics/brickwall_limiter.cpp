@@ -17,6 +17,13 @@
 
 namespace sonare::mastering::dynamics {
 
+namespace {
+
+// Field domain shared by validate_config and live automation.
+bool valid_time_ms(float v) noexcept { return std::isfinite(v) && v >= 0.0f; }
+
+}  // namespace
+
 // The configuration lifecycle (validate + seed active_ + publish the initial
 // snapshot) is handled by RtConfigLifecycle's constructor.
 BrickwallLimiter::BrickwallLimiter(BrickwallLimiterConfig config) : ConfigBase(std::move(config)) {}
@@ -155,11 +162,12 @@ bool BrickwallLimiter::apply_parameter(BrickwallLimiterConfig& config, unsigned 
                                        float value) {
   switch (param_id) {
     case 0:
-      // Live ceilings clamp to the 0 dBFS bound construction enforces, as on the maximizers.
-      config.ceiling_db = std::min(0.0f, value);
+      if (!common::valid_ceiling_db(value)) return false;
+      config.ceiling_db = value;
       break;
     case 1:
-      config.release_ms = std::max(0.0f, value);
+      if (!valid_time_ms(value)) return false;
+      config.release_ms = value;
       break;
     default:
       return false;
@@ -172,8 +180,8 @@ std::vector<rt::ParamDescriptor> BrickwallLimiter::parameter_descriptors() const
 }
 
 void BrickwallLimiter::validate_config(const BrickwallLimiterConfig& config) {
-  if (!common::valid_ceiling_db(config.ceiling_db) || !std::isfinite(config.lookahead_ms) ||
-      !std::isfinite(config.release_ms) || config.lookahead_ms < 0.0f || config.release_ms < 0.0f) {
+  if (!common::valid_ceiling_db(config.ceiling_db) || !valid_time_ms(config.lookahead_ms) ||
+      !valid_time_ms(config.release_ms)) {
     throw SonareException(
         ErrorCode::InvalidParameter,
         "brickwall limiter ceiling must be finite and <= 0, timing values finite and non-negative");

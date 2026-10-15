@@ -22,11 +22,16 @@ using sonare::discard_if_non_finite;
 
 namespace {
 
-// Smallest strictly-positive crest window / crest factor accepted by
-// validate_config; reused to clamp the matching automation parameters and to
-// floor the crest_high - crest_low span, which the release mapping keeps at least
+// Floor for the crest_high - crest_low span, which the release mapping keeps at least
 // this wide.
 constexpr float kMinPositiveCrest = 1.0e-4f;
+
+bool valid_time_ms(float ms) noexcept { return ms >= 0.0f; }
+bool valid_crest_window_ms(float ms) noexcept { return ms > 0.0f; }
+bool valid_release_pair(float min_ms, float max_ms) noexcept {
+  return valid_time_ms(min_ms) && max_ms >= min_ms;
+}
+bool valid_crest_pair(float low, float high) noexcept { return low > 0.0f && high >= low; }
 
 // Smoothed RMS below which the crest factor is reported as zero rather than
 // dividing by (near) silence.
@@ -158,34 +163,41 @@ void AdaptiveRelease::set_config(const AdaptiveReleaseConfig& config) {
 bool AdaptiveRelease::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      config_.ceiling_db = std::min(0.0f, value);
+      if (!common::valid_ceiling_db(value)) return false;
+      config_.ceiling_db = value;
       // Forward the ceiling to the inner true-peak limiter in place (param 0);
       // does not disturb the crest-factor / release smoothing state held here.
       if (prepared_) limiter_.set_parameter(0, config_.ceiling_db);
       return true;
     case 1:
       // Read directly by the per-sample release mapping; no recompute needed.
-      authored_min_release_ms_ = std::max(0.0f, value);
+      if (!valid_release_pair(value, config_.max_release_ms)) return false;
+      authored_min_release_ms_ = value;
       normalize_bound_pairs();
       return true;
     case 2:
-      authored_max_release_ms_ = std::max(0.0f, value);
+      if (!valid_release_pair(config_.min_release_ms, value)) return false;
+      authored_max_release_ms_ = value;
       normalize_bound_pairs();
       return true;
     case 3:
-      config_.crest_window_ms = std::max(kMinPositiveCrest, value);
+      if (!valid_crest_window_ms(value)) return false;
+      config_.crest_window_ms = value;
       update_envelope_coefficients();
       return true;
     case 4:
-      authored_crest_low_ = std::max(kMinPositiveCrest, value);
+      if (!valid_crest_pair(value, config_.crest_high)) return false;
+      authored_crest_low_ = value;
       normalize_bound_pairs();
       return true;
     case 5:
-      authored_crest_high_ = std::max(kMinPositiveCrest, value);
+      if (!valid_crest_pair(config_.crest_low, value)) return false;
+      authored_crest_high_ = value;
       normalize_bound_pairs();
       return true;
     case 6:
-      config_.release_smoothing_ms = std::max(0.0f, value);
+      if (!valid_time_ms(value)) return false;
+      config_.release_smoothing_ms = value;
       update_envelope_coefficients();
       return true;
     default:
@@ -212,9 +224,10 @@ void AdaptiveRelease::validate_config(const AdaptiveReleaseConfig& config) {
     }
   }
   if (!common::valid_ceiling_db(config.ceiling_db) || config.lookahead_ms < 0.0f ||
-      config.min_release_ms < 0.0f || config.max_release_ms < config.min_release_ms ||
-      config.crest_window_ms <= 0.0f || config.crest_low <= 0.0f ||
-      config.crest_high < config.crest_low || config.release_smoothing_ms < 0.0f) {
+      !valid_release_pair(config.min_release_ms, config.max_release_ms) ||
+      !valid_crest_window_ms(config.crest_window_ms) ||
+      !valid_crest_pair(config.crest_low, config.crest_high) ||
+      !valid_time_ms(config.release_smoothing_ms)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid adaptive release configuration");
   }
 }

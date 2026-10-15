@@ -324,7 +324,10 @@ TEST_CASE("the automation keys include the type ladder and refuse unknown values
   CHECK_FALSE(crusher.set_parameter(19, 20.0f));
   CHECK(crusher.set_parameter(3, 0.4f));
   CHECK(crusher.config().radio_noise_level == 0.4f);
-  CHECK(crusher.set_parameter(6, 3.0f));
+  const float hum_before = crusher.config().hum_level;
+  CHECK_FALSE(crusher.set_parameter(6, 3.0f));
+  CHECK(crusher.config().hum_level == hum_before);
+  CHECK(crusher.set_parameter(6, 1.0f));
   CHECK(crusher.config().hum_level == 1.0f);
   CHECK(crusher.set_parameter(12, 900.0f));
   CHECK(crusher.config().pre_filter_hz == 900.0f);

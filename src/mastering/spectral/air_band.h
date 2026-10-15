@@ -38,15 +38,16 @@ class AirBand : public rt::ProcessorBase {
     return tail.samples();
   }
   void set_config(const AirBandConfig& config);
+  const AirBandConfig& config() const { return config_; }
 
   // Automatable parameters (RT-safe: updates config in place; the shelf gain is
   // refreshed at a short control interval and coefficient-interpolated, so the
   // change takes effect on the next block without resetting filter/envelope state). Ids follow the
   // AirBandConfig declaration order:
-  //   0 = amount (clamped to [0, 1])
-  //   1 = shelf_frequency_hz (clamped to > 0; rebuilds the detector highpass)
+  //   0 = amount (refused unless in [0, 1])
+  //   1 = shelf_frequency_hz (refused unless > 0; rebuilds the detector highpass)
   //   2 = dynamic_threshold_db
-  //   3 = dynamic_range_db (clamped to >= 0)
+  //   3 = dynamic_range_db (refused unless >= 0)
   bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=amount, 1=shelfFrequencyHz, 2=dynamicThresholdDb, 3=dynamicRangeDb
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;

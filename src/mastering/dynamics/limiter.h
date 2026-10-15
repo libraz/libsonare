@@ -88,8 +88,8 @@ class Limiter : public rt::ProcessorBase {
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = threshold_db
-  //   1 = release_ms (clamped to >= 0)
-  //   2 = ratio (0 = brick-wall, otherwise clamped to >= 1)
+  //   1 = release_ms (refused unless >= 0)
+  //   2 = ratio (0 = brick-wall, otherwise refused unless >= 1)
   //   3 = post_gain_db
   // lookahead_ms is omitted because changing it resizes the lookahead buffers.
   bool set_parameter_impl(unsigned int param_id, float value) override;

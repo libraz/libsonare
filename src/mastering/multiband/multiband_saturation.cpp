@@ -65,6 +65,8 @@ bool update_processor_controls(rt::ProcessorBase& processor, SaturationType type
   return processor.set_parameter(mix_param, next.mix);
 }
 
+bool valid_mix(float mix) noexcept { return mix >= 0.0f && mix <= 1.0f; }
+
 }  // namespace
 
 MultibandSaturation::MultibandSaturation(MultibandSaturationConfig config)
@@ -259,18 +261,20 @@ bool MultibandSaturation::set_parameter_impl(unsigned int param_id, float value)
       band_config.drive_db = value;
       return true;
     case 1: {
-      band_config.mix = std::clamp(value, 0.0f, 1.0f);
+      if (!valid_mix(value)) return false;
       switch (band_config.type) {
         case SaturationType::SoftClip:
-          return processor.set_parameter(1u, band_config.mix);
+          if (!processor.set_parameter(1u, value)) return false;
+          break;
         case SaturationType::Tube:
-          return processor.set_parameter(2u, band_config.mix);
         case SaturationType::Exciter:
-          return processor.set_parameter(2u, band_config.mix);
+          if (!processor.set_parameter(2u, value)) return false;
+          break;
         case SaturationType::Tape:
           // Blended by process(), which reads band_config.mix per block.
-          return true;
+          break;
       }
+      band_config.mix = value;
       return true;
     }
     case 2:
@@ -298,7 +302,7 @@ void MultibandSaturation::validate_config(const MultibandSaturationConfig& confi
                           "multiband saturation band count must match crossover");
   }
   for (const auto& band : config.bands) {
-    if (band.mix < 0.0f || band.mix > 1.0f) {
+    if (!valid_mix(band.mix)) {
       throw SonareException(ErrorCode::InvalidParameter, "saturation mix must be in [0, 1]");
     }
     if (!numeric::finite(db_to_linear(band.drive_db)) ||

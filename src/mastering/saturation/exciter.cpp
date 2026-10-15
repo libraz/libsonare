@@ -27,6 +27,11 @@ float even_dc_coefficient_for_rate(double sample_rate) {
   return static_cast<float>(rt::one_pole_lowpass_alpha_matched_d(kEvenDcCutoffHz, sample_rate));
 }
 
+bool valid_frequency(float v) noexcept { return v > 0.0f; }
+bool valid_amount(float v) noexcept { return v >= 0.0f; }
+bool valid_q(float v) noexcept { return v > 0.0f; }
+bool valid_even_odd_mix(float v) noexcept { return v >= 0.0f && v <= 1.0f; }
+
 }  // namespace
 
 Exciter::Exciter(ExciterConfig config) : config_(config) {
@@ -191,8 +196,8 @@ void Exciter::set_config(const ExciterConfig& config) {
 }
 
 void Exciter::validate_config(const ExciterConfig& config) {
-  if (!(config.frequency_hz > 0.0f) || config.amount < 0.0f || !(config.q > 0.0f) ||
-      config.even_odd_mix < 0.0f || config.even_odd_mix > 1.0f) {
+  if (!valid_frequency(config.frequency_hz) || !valid_amount(config.amount) || !valid_q(config.q) ||
+      !valid_even_odd_mix(config.even_odd_mix)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid exciter configuration");
   }
   if (!numeric::finite(db_to_linear(config.drive_db))) {
@@ -240,7 +245,8 @@ void Exciter::update_coeff() {
 bool Exciter::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      config_.frequency_hz = std::max(value, std::numeric_limits<float>::min());
+      if (!valid_frequency(value)) return false;
+      config_.frequency_hz = value;
       if (prepared_) update_coeff_preserving_state();
       return true;
     case 1:
@@ -248,14 +254,17 @@ bool Exciter::set_parameter_impl(unsigned int param_id, float value) {
       config_.drive_db = value;
       return true;
     case 2:
-      config_.amount = std::max(0.0f, value);
+      if (!valid_amount(value)) return false;
+      config_.amount = value;
       return true;
     case 3:
-      config_.q = std::max(value, std::numeric_limits<float>::min());
+      if (!valid_q(value)) return false;
+      config_.q = value;
       if (prepared_) update_coeff_preserving_state();
       return true;
     case 4:
-      config_.even_odd_mix = std::clamp(value, 0.0f, 1.0f);
+      if (!valid_even_odd_mix(value)) return false;
+      config_.even_odd_mix = value;
       return true;
     default:
       return false;

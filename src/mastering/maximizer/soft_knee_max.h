@@ -40,9 +40,9 @@ class SoftKneeMax : public rt::ProcessorBase {
 
   // Parameters:
   //   0 = input_gain_db (applied per block, no coefficients)
-  //   1 = ceiling_db (clamped <= 0; realtime-safe, in-place via inner maximizer)
-  //   2 = knee_db (clamped >= 0; applied per block, no coefficients)
-  //   3 = release_ms (clamped >= 0; in-place via inner maximizer)
+  //   1 = ceiling_db (refused unless finite and <= 0; realtime-safe, in-place via inner maximizer)
+  //   2 = knee_db (refused unless >= 0; applied per block, no coefficients)
+  //   3 = release_ms (refused unless >= 0; in-place via inner maximizer)
   bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=inputGainDb, 1=ceilingDb, 2=kneeDb, 3=releaseMs
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;

@@ -79,6 +79,8 @@ float apply_miller_filter_with_alpha(std::vector<float>& miller_state, int chann
   return state;
 }
 
+bool valid_unit(float v) noexcept { return v >= 0.0f && v <= 1.0f; }
+
 }  // namespace
 
 Tube::Tube(TubeConfig config) : tube_config_(config) {
@@ -223,13 +225,15 @@ bool Tube::set_parameter_impl(unsigned int param_id, float value) {
       tube_config_.bias = value;
       return true;
     case 2:
-      tube_config_.mix = std::clamp(value, 0.0f, 1.0f);
+      if (!valid_unit(value)) return false;
+      tube_config_.mix = value;
       return true;
     case 3:
       tube_config_.bias_v = value;
       return true;
     case 4:
-      tube_config_.harmonic_drive = std::clamp(value, 0.0f, 1.0f);
+      if (!valid_unit(value)) return false;
+      tube_config_.harmonic_drive = value;
       return true;
     default:
       return false;
@@ -241,9 +245,8 @@ std::vector<rt::ParamDescriptor> Tube::parameter_descriptors() const {
 }
 
 void Tube::validate_config(const TubeConfig& config) {
-  if (config.mix < 0.0f || config.mix > 1.0f || !std::isfinite(config.bias_v) ||
-      !std::isfinite(config.bias) || config.harmonic_drive < 0.0f || config.harmonic_drive > 1.0f ||
-      config.oversample_factor < 1 ||
+  if (!valid_unit(config.mix) || !std::isfinite(config.bias_v) || !std::isfinite(config.bias) ||
+      !valid_unit(config.harmonic_drive) || config.oversample_factor < 1 ||
       (config.oversample_factor != 1 && config.oversample_factor != 2 &&
        config.oversample_factor != 4 && config.oversample_factor != 8)) {
     throw SonareException(ErrorCode::InvalidParameter, "tube mix must be in [0, 1]");

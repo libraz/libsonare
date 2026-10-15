@@ -129,8 +129,8 @@ class Pedal : public rt::ProcessorBase {
 
   // Automatable parameters (RT-safe, no allocation, no state reset). A changed
   // gain or tone rebuilds its coefficients at the start of the next block:
-  //   0 = gain_db (clamped to the core's range)
-  //   1 = tone_hz (clamped to the core's range)
+  //   0 = gain_db (refused unless within the core's range)
+  //   1 = tone_hz (refused unless within the core's range)
   //   2 = level_db (must produce a finite linear gain)
   bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=gainDb, 1=toneHz, 2=levelDb.

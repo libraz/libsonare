@@ -441,6 +441,17 @@ std::vector<float> render_stepped_tone(Processor& processor) {
 
 }  // namespace
 
+// Live setters refuse out-of-domain values, and id 0/1 name different fields per
+// processor, so apply the first candidate the field accepts.
+template <typename Processor>
+bool apply_first_accepted(Processor& processor, unsigned int id,
+                          std::initializer_list<float> candidates) {
+  for (const float value : candidates) {
+    if (processor.set_parameter(id, value)) return true;
+  }
+  return false;
+}
+
 // Every RtConfigLifecycle processor shares one automation path: a value set after
 // a pending set_config wins, and config() describes exactly what renders.
 TEMPLATE_TEST_CASE(
@@ -451,7 +462,7 @@ TEMPLATE_TEST_CASE(
   // A published configuration that differs from the constructed one, so a
   // snapshot adopted over the automation would render something else.
   TestType donor{Config{}};
-  REQUIRE(donor.set_parameter(1, -30.0f));
+  REQUIRE(apply_first_accepted(donor, 1, {-30.0f, 30.0f, 4.0f}));
   const Config published = donor.config();
 
   TestType automated{Config{}};
@@ -460,7 +471,7 @@ TEMPLATE_TEST_CASE(
   {
     // Adopting the pending snapshot on the automation path allocates nothing.
     sonare::test::AllocationGuard guard;
-    REQUIRE(automated.set_parameter(0, -10.0f));
+    REQUIRE(apply_first_accepted(automated, 0, {-10.0f, 1000.0f}));
     CHECK(guard.count() == 0);
   }
   const Config mirror = automated.config();
@@ -477,7 +488,7 @@ TEMPLATE_TEST_CASE(
   TestType from_published(published);
   from_published.prepare(48000.0, 2048);
   TestType stale_mirror{Config{}};
-  REQUIRE(stale_mirror.set_parameter(0, -10.0f));
+  REQUIRE(apply_first_accepted(stale_mirror, 0, {-10.0f, 1000.0f}));
   stale_mirror.prepare(48000.0, 2048);
   CHECK(render_stepped_tone(from_published) != render_stepped_tone(stale_mirror));
 }

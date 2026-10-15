@@ -120,17 +120,25 @@ void Imager::set_config(const ImagerConfig& config) {
   rt::apply_config_diff(config_, config, [](const rt::ConfigDiff<ImagerConfig>&) {});
 }
 
+namespace {
+bool width_valid(float v) noexcept { return std::isfinite(v) && v >= 0.0f; }
+constexpr bool decorrelation_valid(float v) noexcept { return !(v < 0.0f || v > 1.0f); }
+bool output_gain_valid(float db) noexcept { return numeric::finite(db_to_linear(db)); }
+}  // namespace
+
 bool Imager::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      config_.width = std::max(0.0f, value);
+      if (!width_valid(value)) return false;
+      config_.width = value;
       return true;
     case 1:
-      if (!numeric::finite(db_to_linear(value))) return false;
+      if (!output_gain_valid(value)) return false;
       config_.output_gain_db = value;
       return true;
     case 2:
-      config_.decorrelation_amount = std::clamp(value, 0.0f, 1.0f);
+      if (!decorrelation_valid(value)) return false;
+      config_.decorrelation_amount = value;
       return true;
     default:
       return false;
@@ -142,11 +150,10 @@ std::vector<rt::ParamDescriptor> Imager::parameter_descriptors() const {
 }
 
 void Imager::validate_config(const ImagerConfig& config) {
-  if (!std::isfinite(config.width) || config.width < 0.0f || config.decorrelation_amount < 0.0f ||
-      config.decorrelation_amount > 1.0f) {
+  if (!width_valid(config.width) || !decorrelation_valid(config.decorrelation_amount)) {
     throw SonareException(ErrorCode::InvalidParameter, "imager width must be non-negative");
   }
-  if (!numeric::finite(db_to_linear(config.output_gain_db))) {
+  if (!output_gain_valid(config.output_gain_db)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "imager output gain must produce a finite linear gain");
   }

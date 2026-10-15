@@ -57,8 +57,8 @@ class MultibandImager : public rt::ProcessorBase {
   // Automatable parameters (RT-safe, no allocation, no audio-state reset).
   // Per-band block layout with kBandStride params per band: band b occupies
   // ids [b * kBandStride, b * kBandStride + kBandStride):
-  //   +0 = width (clamped to >= 0)
-  //   +1 = decorrelation_amount (clamped to [0, 1])
+  //   +0 = width (refused unless finite and >= 0)
+  //   +1 = decorrelation_amount (refused unless in [0, 1])
   // The allpass decorrelation coefficients are fixed, so no coefficient
   // recompute is required. Crossover cutoffs and per-band enable/preserve_energy
   // switches are not automatable.

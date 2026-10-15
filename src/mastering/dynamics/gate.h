@@ -51,9 +51,9 @@ class Gate : public rt::RtConfigLifecycle<Gate, GateConfig> {
   // control-thread mirror (config_) is kept in sync so config() reads back the
   // automated state; only the snapshot publish (the allocation) is dropped.
   //   0 = threshold_db (close_threshold_db kept <= threshold_db)
-  //   1 = attack_ms (clamped to >= 0)
-  //   2 = release_ms (clamped to >= 0)
-  //   3 = range_db (clamped to <= 0)
+  //   1 = attack_ms (refused unless >= 0)
+  //   2 = release_ms (refused unless >= 0)
+  //   3 = range_db (refused unless <= 0)
   // Automatable parameters: 0=thresholdDb, 1=attackMs, 2=releaseMs, 3=rangeDb.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

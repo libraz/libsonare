@@ -72,6 +72,8 @@ float shape_sample_with_scalars(
   return paths.align(0, ch, sample) * (1.0f - scalars.mix) + paths.align(1, ch, wet) * scalars.mix;
 }
 
+bool valid_mix(float v) noexcept { return v >= 0.0f && v <= 1.0f; }
+
 }  // namespace
 
 Waveshaper::Waveshaper(WaveshaperConfig config) : config_(config) {
@@ -160,7 +162,8 @@ bool Waveshaper::set_parameter_impl(unsigned int param_id, float value) {
       config_.drive_db = value;
       return true;
     case 1:
-      config_.mix = std::clamp(value, 0.0f, 1.0f);
+      if (!valid_mix(value)) return false;
+      config_.mix = value;
       return true;
     case 2:
       if (!numeric::finite(db_to_linear(value))) return false;
@@ -196,7 +199,7 @@ float Waveshaper::shape(float sample, const WaveshaperConfig& config) {
 }
 
 void Waveshaper::validate_config(const WaveshaperConfig& config) {
-  if (config.mix < 0.0f || config.mix > 1.0f) {
+  if (!valid_mix(config.mix)) {
     throw SonareException(ErrorCode::InvalidParameter, "waveshaper mix must be in [0, 1]");
   }
   if (!numeric::finite(db_to_linear(config.drive_db)) ||

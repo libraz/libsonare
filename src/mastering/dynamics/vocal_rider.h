@@ -54,12 +54,12 @@ class VocalRider : public rt::RtConfigLifecycle<VocalRider, VocalRiderConfig> {
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = target_db
-  //   1 = max_boost_db (clamped to >= 0)
-  //   2 = max_cut_db (clamped to >= 0)
-  //   3 = attack_ms (clamped to >= 0)
-  //   4 = release_ms (clamped to >= 0)
+  //   1 = max_boost_db (refused unless >= 0)
+  //   2 = max_cut_db (refused unless >= 0)
+  //   3 = attack_ms (refused unless >= 0)
+  //   4 = release_ms (refused unless >= 0)
   //   5 = output_gain_db
-  //   6 = gain_smoothing_ms (clamped to >= 0)
+  //   6 = gain_smoothing_ms (refused unless >= 0)
   //   7 = noise_floor_db
   // Automatable parameters: 0=targetDb, 1=maxBoostDb, 2=maxCutDb, 3=attackMs,
   //   4=releaseMs, 5=outputGainDb, 6=gainSmoothingMs, 7=noiseFloorDb

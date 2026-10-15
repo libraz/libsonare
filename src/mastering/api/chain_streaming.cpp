@@ -13,7 +13,6 @@
 
 #include "mastering/api/audio_utils.h"
 #include "mastering/api/chain.h"
-#include "mastering/common/parameter_domain.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/deesser.h"
 #include "mastering/dynamics/transient_shaper.h"
@@ -185,12 +184,9 @@ bool same_stage_enablement(const MasteringChainConfig& left,
 }
 
 void validate_realtime_parameter_domain(const std::string& key, float value, double sample_rate) {
-  // Live setters clamp these instead of throwing; rejecting here keeps config()
-  // equal to what the DSP holds. Bounds mirror each processor's clamp.
-  if ((key == "maximizer.truePeakLimiter.ceilingDb" || key == "loudness.ceilingDb") &&
-      !common::valid_ceiling_db(value)) {
-    throw SonareException(ErrorCode::InvalidParameter, key + " must be finite and <= 0");
-  }
+  // Bounds that are tighter than, or depend on the prepared rate beyond, what the
+  // processor's own live setter refuses. Anything the processor refuses surfaces
+  // from its set_parameter.
   if (key == "dynamics.deesser.frequencyHz") {
     const float maximum = static_cast<float>(sample_rate * 0.49);
     if (value < 10.0f || value > maximum) {

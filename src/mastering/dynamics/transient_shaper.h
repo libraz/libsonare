@@ -63,13 +63,13 @@ class TransientShaper : public rt::RtConfigLifecycle<TransientShaper, TransientS
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = attack_gain_db
   //   1 = sustain_gain_db
-  //   2 = fast_attack_ms (clamped to >= 0)
-  //   3 = fast_release_ms (clamped to >= 0)
-  //   4 = slow_attack_ms (clamped to >= 0)
-  //   5 = slow_release_ms (clamped to >= 0)
-  //   6 = sensitivity (clamped to >= 0)
-  //   7 = max_gain_db (clamped to >= 0)
-  //   8 = gain_smoothing_ms (clamped to >= 0)
+  //   2 = fast_attack_ms (refused unless >= 0)
+  //   3 = fast_release_ms (refused unless >= 0)
+  //   4 = slow_attack_ms (refused unless >= 0)
+  //   5 = slow_release_ms (refused unless >= 0)
+  //   6 = sensitivity (refused unless >= 0)
+  //   7 = max_gain_db (refused unless >= 0)
+  //   8 = gain_smoothing_ms (refused unless >= 0)
   // lookahead_ms is omitted because changing it resizes the lookahead buffers.
   // Automatable parameters: 0=attackGainDb, 1=sustainGainDb, 2=fastAttackMs,
   //   3=fastReleaseMs, 4=slowAttackMs, 5=slowReleaseMs, 6=sensitivity,

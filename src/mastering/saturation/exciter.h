@@ -40,11 +40,11 @@ class Exciter : public rt::ProcessorBase {
   const ExciterConfig& config() const { return config_; }
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
-  //   0 = frequency_hz (clamped to > 0; recomputes biquad coeffs in place)
+  //   0 = frequency_hz (refused unless > 0; recomputes biquad coeffs in place)
   //   1 = drive_db (read per sample)
-  //   2 = amount (clamped to >= 0; read per sample)
-  //   3 = q (clamped to > 0; recomputes biquad coeffs in place)
-  //   4 = even_odd_mix (clamped to [0, 1]; read per sample)
+  //   2 = amount (refused unless >= 0; read per sample)
+  //   3 = q (refused unless > 0; recomputes biquad coeffs in place)
+  //   4 = even_odd_mix (refused unless in [0, 1]; read per sample)
   // Coefficient updates preserve the per-channel biquad delay state.
   // aliasing is an enum (not exposed).
   bool set_parameter_impl(unsigned int param_id, float value) override;

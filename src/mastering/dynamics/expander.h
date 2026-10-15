@@ -45,10 +45,10 @@ class Expander : public rt::RtConfigLifecycle<Expander, ExpanderConfig> {
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = threshold_db
-  //   1 = ratio (clamped to >= 1)
-  //   2 = attack_ms (clamped to >= 0)
-  //   3 = release_ms (clamped to >= 0)
-  //   4 = range_db (clamped to <= 0)
+  //   1 = ratio (refused unless >= 1)
+  //   2 = attack_ms (refused unless >= 0)
+  //   3 = release_ms (refused unless >= 0)
+  //   4 = range_db (refused unless <= 0)
   // Automatable parameters: 0=thresholdDb, 1=ratio, 2=attackMs, 3=releaseMs, 4=rangeDb
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

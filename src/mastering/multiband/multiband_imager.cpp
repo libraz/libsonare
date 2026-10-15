@@ -18,6 +18,15 @@ namespace sonare::mastering::multiband {
 
 using sonare::discard_group_if_non_finite;
 
+namespace {
+
+bool valid_width(float width) noexcept { return std::isfinite(width) && width >= 0.0f; }
+bool valid_decorrelation_amount(float amount) noexcept {
+  return std::isfinite(amount) && amount >= 0.0f && amount <= 1.0f;
+}
+
+}  // namespace
+
 constexpr float MultibandImager::kDecorrelationFrequenciesHz[];
 
 float MultibandImager::allpass_coefficient(float frequency_hz, double sample_rate) noexcept {
@@ -189,10 +198,12 @@ bool MultibandImager::set_parameter_impl(unsigned int param_id, float value) {
   auto& band_config = config_.bands[band];
   switch (param_id % kBandStride) {
     case 0:
-      band_config.width = std::max(0.0f, value);
+      if (!valid_width(value)) return false;
+      band_config.width = value;
       return true;
     case 1:
-      band_config.decorrelation_amount = std::clamp(value, 0.0f, 1.0f);
+      if (!valid_decorrelation_amount(value)) return false;
+      band_config.decorrelation_amount = value;
       return true;
     default:
       return false;
@@ -214,12 +225,11 @@ void MultibandImager::validate_config(const MultibandImagerConfig& config) {
                           "multiband imager band count must match crossover");
   }
   for (const auto& band : config.bands) {
-    if (!std::isfinite(band.width) || band.width < 0.0f) {
+    if (!valid_width(band.width)) {
       throw SonareException(ErrorCode::InvalidParameter,
                             "imager width must be finite and non-negative");
     }
-    if (!std::isfinite(band.decorrelation_amount) || band.decorrelation_amount < 0.0f ||
-        band.decorrelation_amount > 1.0f) {
+    if (!valid_decorrelation_amount(band.decorrelation_amount)) {
       throw SonareException(ErrorCode::InvalidParameter,
                             "imager decorrelation amount must be finite in [0, 1]");
     }

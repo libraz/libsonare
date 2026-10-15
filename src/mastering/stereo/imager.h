@@ -30,9 +30,9 @@ class Imager : public rt::ProcessorBase {
   const ImagerConfig& config() const { return config_; }
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
-  //   0 = width (clamped to >= 0)
+  //   0 = width (refused unless >= 0)
   //   1 = output_gain_db
-  //   2 = decorrelation_amount (clamped to [0, 1])
+  //   2 = decorrelation_amount (refused unless in [0, 1])
   bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=width, 1=outputGainDb, 2=decorrelationAmount
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;

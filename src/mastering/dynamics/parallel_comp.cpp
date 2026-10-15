@@ -17,6 +17,19 @@ namespace sonare::mastering::dynamics {
 
 namespace {
 
+// Field domains shared by validate_config and live automation.
+bool valid_ratio(float v) noexcept { return std::isfinite(v) && v >= 1.0f; }
+bool valid_time_ms(float v) noexcept { return std::isfinite(v) && v >= 0.0f; }
+bool valid_mix(float v) noexcept { return std::isfinite(v) && v >= 0.0f && v <= 1.0f; }
+bool valid_makeup_db(float v) noexcept {
+  return std::isfinite(v) && numeric::finite(db_to_linear(v));
+}
+bool valid_ceiling_db(float v) noexcept {
+  if (!std::isfinite(v)) return false;
+  const float linear = db_to_linear(v);
+  return numeric::finite(linear) && linear > 0.0f;
+}
+
 struct LimiterReleaseCache {
   float coefficient = 0.0f;
   bool ready = false;
@@ -184,23 +197,27 @@ bool ParallelComp::apply_parameter(ParallelCompConfig& config, unsigned int para
       config.threshold_db = value;
       break;
     case 1:
-      config.ratio = std::max(1.0f, value);
+      if (!valid_ratio(value)) return false;
+      config.ratio = value;
       break;
     case 2:
-      config.attack_ms = std::max(0.0f, value);
+      if (!valid_time_ms(value)) return false;
+      config.attack_ms = value;
       break;
     case 3:
-      config.release_ms = std::max(0.0f, value);
+      if (!valid_time_ms(value)) return false;
+      config.release_ms = value;
       break;
     case 4:
-      if (!numeric::finite(db_to_linear(value))) return false;
+      if (!valid_makeup_db(value)) return false;
       config.makeup_gain_db = value;
       break;
     case 5:
-      config.mix = std::clamp(value, 0.0f, 1.0f);
+      if (!valid_mix(value)) return false;
+      config.mix = value;
       break;
     case 6:
-      if (!numeric::finite(db_to_linear(value)) || !(db_to_linear(value) > 0.0f)) return false;
+      if (!valid_ceiling_db(value)) return false;
       config.output_ceiling_db = value;
       break;
     default:
@@ -218,16 +235,16 @@ void ParallelComp::validate_config(const ParallelCompConfig& config) {
   if (!std::isfinite(config.threshold_db) || !std::isfinite(config.ratio) ||
       !std::isfinite(config.attack_ms) || !std::isfinite(config.release_ms) ||
       !std::isfinite(config.mix) || !std::isfinite(config.makeup_gain_db) ||
-      !(config.ratio >= 1.0f) || config.attack_ms < 0.0f || config.release_ms < 0.0f ||
-      config.mix < 0.0f || config.mix > 1.0f || !std::isfinite(config.output_ceiling_db)) {
+      !valid_ratio(config.ratio) || !valid_time_ms(config.attack_ms) ||
+      !valid_time_ms(config.release_ms) || !valid_mix(config.mix) ||
+      !std::isfinite(config.output_ceiling_db)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid parallel compressor configuration");
   }
-  const float ceiling = db_to_linear(config.output_ceiling_db);
-  if (!numeric::finite(ceiling) || !(ceiling > 0.0f)) {
+  if (!valid_ceiling_db(config.output_ceiling_db)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "parallel compressor ceiling must produce a finite positive linear gain");
   }
-  if (!numeric::finite(db_to_linear(config.makeup_gain_db))) {
+  if (!valid_makeup_db(config.makeup_gain_db)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "parallel compressor makeup gain must produce a finite linear gain");
   }

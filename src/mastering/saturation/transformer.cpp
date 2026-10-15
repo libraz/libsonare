@@ -38,6 +38,9 @@ float process_sample_with_scalars(const common::JilesAtherton& hysteresis,
   return input * (1.0f - scalars.mix) + wet * scalars.mix;
 }
 
+bool valid_mix(float v) noexcept { return v >= 0.0f && v <= 1.0f; }
+bool valid_asymmetry(float v) noexcept { return v >= -1.0f && v <= 1.0f; }
+
 }  // namespace
 
 Transformer::Transformer(TransformerConfig config)
@@ -130,11 +133,13 @@ bool Transformer::set_parameter_impl(unsigned int param_id, float value) {
       transformer_config_.drive_db = value;
       return true;
     case 1:
-      transformer_config_.asymmetry = std::clamp(value, -1.0f, 1.0f);
+      if (!valid_asymmetry(value)) return false;
+      transformer_config_.asymmetry = value;
       hysteresis_.set_config(make_ja_config(transformer_config_));
       return true;
     case 2:
-      transformer_config_.mix = std::clamp(value, 0.0f, 1.0f);
+      if (!valid_mix(value)) return false;
+      transformer_config_.mix = value;
       return true;
     default:
       return false;
@@ -146,8 +151,7 @@ std::vector<rt::ParamDescriptor> Transformer::parameter_descriptors() const {
 }
 
 void Transformer::validate_config(const TransformerConfig& config) {
-  if (config.mix < 0.0f || config.mix > 1.0f || config.asymmetry < -1.0f ||
-      config.asymmetry > 1.0f) {
+  if (!valid_mix(config.mix) || !valid_asymmetry(config.asymmetry)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid transformer configuration");
   }
   if (!numeric::finite(db_to_linear(config.drive_db))) {

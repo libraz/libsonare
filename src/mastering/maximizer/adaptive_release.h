@@ -61,15 +61,13 @@ class AdaptiveRelease : public rt::ProcessorBase {
   // the per-sample adaptive-release mapping, so writing config_ is sufficient;
   // the two that set an envelope speed (3, 6) also refresh their cached
   // one-pole coefficient, which is plain arithmetic:
-  //   0 = ceiling_db (clamped <= 0; forwarded in-place to the inner limiter)
-  //   1 = min_release_ms (clamped to >= 0)
-  //   2 = max_release_ms (clamped to >= 0)
-  //   3 = crest_window_ms (clamped to a small positive minimum)
-  //   4 = crest_low (clamped to a small positive minimum)
-  //   5 = crest_high (clamped to a small positive minimum)
-  // Endpoint writes retain their authored values privately while config() keeps
-  // each pair ordered, so a crossing write remains round-trippable.
-  //   6 = release_smoothing_ms (clamped to >= 0)
+  //   0 = ceiling_db (refused unless finite and <= 0; forwarded in-place to the inner limiter)
+  //   1 = min_release_ms (refused unless >= 0 and <= max_release_ms)
+  //   2 = max_release_ms (refused unless >= min_release_ms)
+  //   3 = crest_window_ms (refused unless > 0)
+  //   4 = crest_low (refused unless > 0 and <= crest_high)
+  //   5 = crest_high (refused unless >= crest_low)
+  //   6 = release_smoothing_ms (refused unless >= 0)
   // lookahead_ms is NOT automatable (it resizes the inner lookahead buffers).
   bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=ceilingDb, 1=minReleaseMs, 2=maxReleaseMs,

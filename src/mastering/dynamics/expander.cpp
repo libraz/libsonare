@@ -13,6 +13,15 @@
 
 namespace sonare::mastering::dynamics {
 
+namespace {
+
+// Field domains shared by validate_config and live automation.
+bool valid_ratio(float v) noexcept { return std::isfinite(v) && v >= 1.0f; }
+bool valid_time_ms(float v) noexcept { return std::isfinite(v) && v >= 0.0f; }
+bool valid_range_db(float v) noexcept { return std::isfinite(v) && v <= 0.0f; }
+
+}  // namespace
+
 // The configuration lifecycle (validate + seed active_ + publish the initial
 // snapshot) is handled by RtConfigLifecycle's constructor.
 Expander::Expander(ExpanderConfig config) : ConfigBase(std::move(config)) {}
@@ -72,16 +81,20 @@ bool Expander::apply_parameter(ExpanderConfig& config, unsigned int param_id, fl
       config.threshold_db = value;
       break;
     case 1:
-      config.ratio = std::max(1.0f, value);
+      if (!valid_ratio(value)) return false;
+      config.ratio = value;
       break;
     case 2:
-      config.attack_ms = std::max(0.0f, value);
+      if (!valid_time_ms(value)) return false;
+      config.attack_ms = value;
       break;
     case 3:
-      config.release_ms = std::max(0.0f, value);
+      if (!valid_time_ms(value)) return false;
+      config.release_ms = value;
       break;
     case 4:
-      config.range_db = std::min(0.0f, value);
+      if (!valid_range_db(value)) return false;
+      config.range_db = value;
       break;
     default:
       return false;
@@ -99,10 +112,11 @@ void Expander::validate_config(const ExpanderConfig& config) {
       !std::isfinite(config.range_db)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid expander configuration");
   }
-  if (!(config.ratio >= 1.0f)) {
+  if (!valid_ratio(config.ratio)) {
     throw SonareException(ErrorCode::InvalidParameter, "expander ratio must be at least 1");
   }
-  if (config.attack_ms < 0.0f || config.release_ms < 0.0f || config.range_db > 0.0f) {
+  if (!valid_time_ms(config.attack_ms) || !valid_time_ms(config.release_ms) ||
+      !valid_range_db(config.range_db)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid expander configuration");
   }
 }

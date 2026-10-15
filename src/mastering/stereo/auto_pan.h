@@ -36,8 +36,8 @@ class AutoPan : public rt::ProcessorBase {
   const AutoPanConfig& config() const { return config_; }
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
-  //   0 = rate_hz (clamped to >= 0)
-  //   1 = depth (clamped to [0, 1])
+  //   0 = rate_hz (refused unless >= 0)
+  //   1 = depth (refused unless in [0, 1])
   //   2 = phase
   //   3 = shape (LfoShape; a fractional or unnamed value is refused)
   bool set_parameter_impl(unsigned int param_id, float value) override;

@@ -15,6 +15,13 @@
 
 namespace sonare::mastering::dynamics {
 
+namespace {
+
+// Field domain shared by validate_config and live automation.
+bool valid_time_ms(float v) noexcept { return std::isfinite(v) && v >= 0.0f; }
+
+}  // namespace
+
 Limiter::Limiter(LimiterConfig config)
     : config_(config), config_publisher_(std::make_unique<rt::RtPublisher<LimiterConfig>>()) {
   validate_config(config_);
@@ -215,7 +222,8 @@ bool Limiter::set_parameter_impl(unsigned int param_id, float value) {
       set_threshold_in_place(value);
       return true;
     case 1:
-      set_release_ms_in_place(std::max(0.0f, value));
+      if (!valid_time_ms(value)) return false;
+      set_release_ms_in_place(value);
       return true;
     case 2:
       // 0 is the brick-wall; anything else must be a finite ratio of at least 1.
@@ -236,8 +244,7 @@ std::vector<rt::ParamDescriptor> Limiter::parameter_descriptors() const {
 }
 
 void Limiter::validate_config(const LimiterConfig& config) {
-  if (!std::isfinite(config.lookahead_ms) || !std::isfinite(config.release_ms) ||
-      config.lookahead_ms < 0.0f || config.release_ms < 0.0f) {
+  if (!valid_time_ms(config.lookahead_ms) || !valid_time_ms(config.release_ms)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "limiter timing values must be finite and non-negative");
   }

@@ -52,13 +52,13 @@ class DeEsser : public rt::RtConfigLifecycle<DeEsser, DeEsserConfig> {
   float minimum_gain_reduction_db() const noexcept { return minimum_gain_reduction_db_; }
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
-  //   0 = frequency_hz (clamped to > 0)
+  //   0 = frequency_hz (refused unless > 0)
   //   1 = threshold_db
-  //   2 = ratio (clamped to >= 1)
-  //   3 = attack_ms (clamped to >= 0)
-  //   4 = release_ms (clamped to >= 0)
-  //   5 = range_db (clamped to >= 0)
-  //   6 = bandpass_q (clamped to > 0)
+  //   2 = ratio (refused unless >= 1)
+  //   3 = attack_ms (refused unless >= 0)
+  //   4 = release_ms (refused unless >= 0)
+  //   5 = range_db (refused unless >= 0)
+  //   6 = bandpass_q (refused unless > 0)
   // Automatable parameters: 0=frequencyHz, 1=thresholdDb, 2=ratio, 3=attackMs, 4=releaseMs,
   // 5=rangeDb, 6=bandpassQ
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;

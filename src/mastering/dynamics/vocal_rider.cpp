@@ -20,6 +20,12 @@ namespace {
 
 using sonare::discard_if_non_finite;
 
+// Field domains shared by validate_config and live automation.
+bool valid_non_negative(float v) noexcept { return !(v < 0.0f); }
+bool valid_peak_gain(float max_boost_db, float output_gain_db) noexcept {
+  return numeric::finite(db_to_linear(max_boost_db + output_gain_db));
+}
+
 }  // namespace
 
 // The configuration lifecycle (validate + seed active_ + publish the initial
@@ -155,28 +161,32 @@ bool VocalRider::apply_parameter(VocalRiderConfig& config, unsigned int param_id
       break;
     case 1:
       // The applied gain peaks at max boost plus output gain.
-      if (!numeric::finite(db_to_linear(std::max(0.0f, value) + config.output_gain_db))) {
+      if (!valid_non_negative(value) || !valid_peak_gain(value, config.output_gain_db)) {
         return false;
       }
-      config.max_boost_db = std::max(0.0f, value);
+      config.max_boost_db = value;
       break;
     case 2:
-      config.max_cut_db = std::max(0.0f, value);
+      if (!valid_non_negative(value)) return false;
+      config.max_cut_db = value;
       break;
     case 3:
-      config.attack_ms = std::max(0.0f, value);
+      if (!valid_non_negative(value)) return false;
+      config.attack_ms = value;
       break;
     case 4:
-      config.release_ms = std::max(0.0f, value);
+      if (!valid_non_negative(value)) return false;
+      config.release_ms = value;
       break;
     case 5:
-      if (!numeric::finite(db_to_linear(config.max_boost_db + value))) return false;
+      if (!valid_peak_gain(config.max_boost_db, value)) return false;
       config.output_gain_db = value;
       break;
     case 6:
       // The smoothing coefficient is derived per sample from this value, so a
       // plain update is RT-safe and preserves the running gain state.
-      config.gain_smoothing_ms = std::max(0.0f, value);
+      if (!valid_non_negative(value)) return false;
+      config.gain_smoothing_ms = value;
       break;
     case 7:
       config.noise_floor_db = value;
@@ -193,11 +203,12 @@ std::vector<rt::ParamDescriptor> VocalRider::parameter_descriptors() const {
 }
 
 void VocalRider::validate_config(const VocalRiderConfig& config) {
-  if (config.max_boost_db < 0.0f || config.max_cut_db < 0.0f || config.attack_ms < 0.0f ||
-      config.release_ms < 0.0f || config.gain_smoothing_ms < 0.0f) {
+  if (!valid_non_negative(config.max_boost_db) || !valid_non_negative(config.max_cut_db) ||
+      !valid_non_negative(config.attack_ms) || !valid_non_negative(config.release_ms) ||
+      !valid_non_negative(config.gain_smoothing_ms)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid vocal rider configuration");
   }
-  if (!numeric::finite(db_to_linear(config.max_boost_db + config.output_gain_db))) {
+  if (!valid_peak_gain(config.max_boost_db, config.output_gain_db)) {
     throw SonareException(
         ErrorCode::InvalidParameter,
         "vocal rider max boost plus output gain must produce a finite linear gain");

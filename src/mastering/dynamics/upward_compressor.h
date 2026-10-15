@@ -46,10 +46,10 @@ class UpwardCompressor : public rt::RtConfigLifecycle<UpwardCompressor, UpwardCo
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = threshold_db
-  //   1 = ratio (clamped to >= 1)
-  //   2 = attack_ms (clamped to >= 0)
-  //   3 = release_ms (clamped to >= 0)
-  //   4 = range_db (clamped to >= 0)
+  //   1 = ratio (refused unless >= 1)
+  //   2 = attack_ms (refused unless >= 0)
+  //   3 = release_ms (refused unless >= 0)
+  //   4 = range_db (refused unless >= 0)
   //
   // set_parameter mutates the control-thread mirror (config_) directly and is
   // declared RT-safe. It MUST NOT be called concurrently with set_config(); the

@@ -187,8 +187,8 @@ class TruePeakLimiter : public rt::ProcessorBase {
   int tail_samples() const noexcept override;
 
   // Parameters:
-  //   0 = ceiling_db (clamped <= 0; realtime-safe, in-place)
-  //   1 = release_ms (clamped >= 0; in-place time-constant recompute)
+  //   0 = ceiling_db (refused unless finite and <= 0; realtime-safe, in-place)
+  //   1 = release_ms (refused unless >= 0; in-place time-constant recompute)
   // lookahead_ms, oversample_factor and apply_gain_at_input_rate are NOT
   // automatable (they resize buffers or switch processing modes).
   bool set_parameter_impl(unsigned int param_id, float value) override;

@@ -30,7 +30,7 @@ class MonoMaker : public rt::ProcessorBase {
   const MonoMakerConfig& config() const { return config_; }
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
-  //   0 = amount (clamped to [0, 1])
+  //   0 = amount (refused unless in [0, 1])
   //   1 = crossover frequency in Hz
   bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=amount

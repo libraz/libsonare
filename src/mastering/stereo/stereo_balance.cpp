@@ -104,10 +104,16 @@ void StereoBalance::set_config(const StereoBalanceConfig& config) {
   rt::apply_config_diff(config_, config, [](const rt::ConfigDiff<StereoBalanceConfig>&) {});
 }
 
+namespace {
+constexpr bool balance_valid(float v) noexcept { return !(v < -1.0f || v > 1.0f); }
+bool gain_valid(float v) noexcept { return sonare::numeric::finite(v) && v >= 0.0f; }
+}  // namespace
+
 bool StereoBalance::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      config_.balance = std::clamp(value, -1.0f, 1.0f);
+      if (!balance_valid(value)) return false;
+      config_.balance = value;
       return true;
     case 1:
       // An unnamed value is refused rather than rounded onto a neighbour.
@@ -118,7 +124,7 @@ bool StereoBalance::set_parameter_impl(unsigned int param_id, float value) {
       config_.law = static_cast<StereoBalanceLaw>(static_cast<int>(value));
       return true;
     case 2:
-      if (!sonare::numeric::finite(value) || value < 0.0f) return false;
+      if (!gain_valid(value)) return false;
       config_.gain = value;
       return true;
     default:
@@ -131,10 +137,10 @@ std::vector<rt::ParamDescriptor> StereoBalance::parameter_descriptors() const {
 }
 
 void StereoBalance::validate_config(const StereoBalanceConfig& config) {
-  if (config.balance < -1.0f || config.balance > 1.0f) {
+  if (!balance_valid(config.balance)) {
     throw SonareException(ErrorCode::InvalidParameter, "stereo balance must be in [-1, 1]");
   }
-  if (!sonare::numeric::finite(config.gain) || config.gain < 0.0f) {
+  if (!gain_valid(config.gain)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "stereo balance gain must be finite and non-negative");
   }

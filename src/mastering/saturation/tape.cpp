@@ -45,6 +45,10 @@ float process_sample_with_scalars(const common::JilesAtherton& hysteresis,
   return hysteresis.process(state, field, scalars.ja_rate) * scalars.output_gain;
 }
 
+bool valid_unit(float v) noexcept { return v >= 0.0f && v <= 1.0f; }
+bool valid_speed_ips(float v) noexcept { return v > 0.0f; }
+bool valid_head_bump_db(float v) noexcept { return v >= 0.0f; }
+
 }  // namespace
 
 Tape::Tape(TapeConfig config) : config_(config), hysteresis_(make_ja_config(config_)) {
@@ -192,11 +196,13 @@ bool Tape::set_parameter_impl(unsigned int param_id, float value) {
       config_.drive_db = value;
       return true;
     case 1:
-      config_.saturation = std::clamp(value, 0.0f, 1.0f);
+      if (!valid_unit(value)) return false;
+      config_.saturation = value;
       hysteresis_.set_config(make_ja_config(config_));
       return true;
     case 2:
-      config_.hysteresis = std::clamp(value, 0.0f, 1.0f);
+      if (!valid_unit(value)) return false;
+      config_.hysteresis = value;
       hysteresis_.set_config(make_ja_config(config_));
       return true;
     case 3:
@@ -204,19 +210,21 @@ bool Tape::set_parameter_impl(unsigned int param_id, float value) {
       config_.output_gain_db = value;
       return true;
     case 4:
-      config_.speed_ips = std::max(value, std::numeric_limits<float>::min());
+      if (!valid_speed_ips(value)) return false;
+      config_.speed_ips = value;
       if (prepared_) update_filters(sample_rate_);
       return true;
     case 5:
-      if (!numeric::finite(db_to_linear(value))) return false;
-      config_.head_bump_db = std::max(0.0f, value);
+      if (!valid_head_bump_db(value) || !numeric::finite(db_to_linear(value))) return false;
+      config_.head_bump_db = value;
       if (prepared_) update_filters(sample_rate_);
       return true;
     case 6:
       config_.bias = value;
       return true;
     case 7:
-      config_.gap_loss = std::clamp(value, 0.0f, 1.0f);
+      if (!valid_unit(value)) return false;
+      config_.gap_loss = value;
       return true;
     default:
       return false;
@@ -229,9 +237,9 @@ std::vector<rt::ParamDescriptor> Tape::parameter_descriptors() const {
 }
 
 void Tape::validate_config(const TapeConfig& config) {
-  if (config.saturation < 0.0f || config.saturation > 1.0f || config.hysteresis < 0.0f ||
-      config.hysteresis > 1.0f || config.speed_ips <= 0.0f || config.head_bump_db < 0.0f ||
-      config.gap_loss < 0.0f || config.gap_loss > 1.0f) {
+  if (!valid_unit(config.saturation) || !valid_unit(config.hysteresis) ||
+      !valid_speed_ips(config.speed_ips) || !valid_head_bump_db(config.head_bump_db) ||
+      !valid_unit(config.gap_loss)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid tape configuration");
   }
   if (!numeric::finite(db_to_linear(config.drive_db)) ||

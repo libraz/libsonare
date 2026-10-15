@@ -5,6 +5,7 @@
 #include <limits>
 
 #include "mastering/dynamics/channel_limits.h"
+#include "mastering/eq/band_frequency.h"
 #include "mastering/eq/dynamic_detector.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
@@ -15,6 +16,16 @@
 #include "util/non_finite_state.h"
 
 namespace sonare::mastering::eq {
+
+namespace {
+
+bool valid_frequency_hz(float frequency_hz) noexcept { return frequency_hz > 0.0f; }
+bool valid_ratio(float ratio) noexcept { return ratio >= 1.0f; }
+bool valid_time_ms(float ms) noexcept { return ms >= 0.0f; }
+// -1 follows the band frequency; anything else must be a positive frequency.
+bool valid_sidechain_freq_hz(float hz) noexcept { return hz == -1.0f || hz > 0.0f; }
+
+}  // namespace
 
 using sonare::discard_group_if_non_finite;
 using sonare::discard_if_non_finite;
@@ -277,39 +288,45 @@ bool DynamicEq::set_parameter_impl(unsigned int param_id, float value) {
   DynamicEqBand& band = bands_[band_index];
   switch (param_id % kParamsPerBand) {
     case 0:
-      band.frequency_hz = std::clamp(value, 1.0e-3f, rt::max_design_frequency_hz(sample_rate_));
+      if (!valid_frequency_hz(value)) return false;
+      band.frequency_hz = value;
       break;
     case 1:
       band.static_gain_db = value;
       break;
     case 2:
-      band.q = std::max(value, 1.0e-6f);
+      if (!band_q_valid(value)) return false;
+      band.q = value;
       break;
     case 3:
       band.threshold_db = value;
       break;
     case 4:
-      band.ratio = std::max(1.0f, value);
+      if (!valid_ratio(value)) return false;
+      band.ratio = value;
       break;
     case 5:
       band.range_db = value;
       break;
     case 6:
-      band.sidechain_q = std::max(value, 1.0e-6f);
+      if (!band_q_valid(value)) return false;
+      band.sidechain_q = value;
       break;
     case 7:
-      // -1 (or any non-positive value) is the sentinel meaning "follow the band
-      // frequency"; positive values set an explicit sidechain frequency.
-      band.sidechain_freq_hz = value > 0.0f ? value : -1.0f;
+      if (!valid_sidechain_freq_hz(value)) return false;
+      band.sidechain_freq_hz = value;
       break;
     case 8:
-      band.attack_ms = std::max(0.0f, value);
+      if (!valid_time_ms(value)) return false;
+      band.attack_ms = value;
       break;
     case 9:
-      band.release_ms = std::max(0.0f, value);
+      if (!valid_time_ms(value)) return false;
+      band.release_ms = value;
       break;
     case 10:
-      band.detector_delay_ms = std::max(0.0f, value);
+      if (!valid_time_ms(value)) return false;
+      band.detector_delay_ms = value;
       break;
     default:
       return false;
@@ -352,18 +369,18 @@ void DynamicEq::validate_band(const DynamicEqBand& band) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "dynamic EQ band type does not support TiltShelf/FlatTilt");
   }
-  if (!(band.frequency_hz > 0.0f)) {
+  if (!valid_frequency_hz(band.frequency_hz)) {
     throw SonareException(ErrorCode::InvalidParameter, "frequency_hz must be positive");
   }
-  if (!(band.q > 0.0f)) {
+  if (!band_q_valid(band.q)) {
     throw SonareException(ErrorCode::InvalidParameter, "Q must be positive");
   }
-  if (!(band.ratio >= 1.0f)) {
+  if (!valid_ratio(band.ratio)) {
     throw SonareException(ErrorCode::InvalidParameter, "ratio must be at least 1");
   }
-  if (!(band.sidechain_q > 0.0f) || band.attack_ms < 0.0f || band.release_ms < 0.0f ||
-      band.detector_delay_ms < 0.0f ||
-      (band.sidechain_freq_hz != -1.0f && band.sidechain_freq_hz <= 0.0f)) {
+  if (!band_q_valid(band.sidechain_q) || !valid_time_ms(band.attack_ms) ||
+      !valid_time_ms(band.release_ms) || !valid_time_ms(band.detector_delay_ms) ||
+      !valid_sidechain_freq_hz(band.sidechain_freq_hz)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "invalid dynamic EQ sidechain configuration");
   }

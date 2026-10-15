@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -771,62 +772,105 @@ TEST_CASE("Spectral processors validate configuration and state", "[mastering][s
 
 namespace {
 
-// Renders a tone through a SpectralShaper whose band edges are written in the
-// given order after prepare().
-std::vector<float> render_shaper_after(const SpectralShaperConfig& start,
-                                       const std::vector<std::pair<unsigned int, float>>& writes) {
-  SpectralShaper shaper(start);
-  shaper.prepare(48000.0, 512);
-  for (const auto& [id, value] : writes) REQUIRE(shaper.set_parameter(id, value));
-  auto signal = generate_sine_samples(4000.0f, 48000, 512, 0.5f);
-  process(shaper, signal);
-  return signal;
+/// Applies each refused value to a fresh processor (it must return false and leave the config as
+/// it was) and each accepted value (it must land unclamped).
+template <typename Processor, typename Get>
+void check_live_domain(Get get, unsigned int id, const std::vector<float>& refused,
+                       const std::vector<float>& accepted) {
+  for (const float value : refused) {
+    INFO("param " << id << " refused " << value);
+    Processor processor;
+    processor.prepare(48000.0, 256);
+    const float before = get(processor);
+    CHECK_FALSE(processor.set_parameter(id, value));
+    CHECK(get(processor) == before);
+  }
+  for (const float value : accepted) {
+    INFO("param " << id << " accepted " << value);
+    Processor processor;
+    processor.prepare(48000.0, 256);
+    REQUIRE(processor.set_parameter(id, value));
+    CHECK(get(processor) == value);
+  }
 }
+
+float below(float v) { return std::nextafter(v, -std::numeric_limits<float>::infinity()); }
+float above(float v) { return std::nextafter(v, std::numeric_limits<float>::infinity()); }
 
 }  // namespace
 
-TEST_CASE("SpectralShaper band edges resolve independently of write order",
+TEST_CASE("AirBand live parameters refuse exactly what the config refuses",
           "[mastering][spectral]") {
-  // Same arithmetic on both paths, so only float rounding scale is allowed.
-  constexpr float kTolerance = 1.0e-6f;
-  const bool upward = GENERATE(true, false);
-  INFO((upward ? "upward" : "downward"));
-
-  const SpectralShaperConfig low{0.05f, 1.0f, 500.0f, 1000.0f, 0.0f, 0.0f, 24.0f};
-  const SpectralShaperConfig high{0.05f, 1.0f, 9000.0f, 12000.0f, 0.0f, 0.0f, 24.0f};
-  const SpectralShaperConfig& start = upward ? low : high;
-  const SpectralShaperConfig& target = upward ? high : low;
-
-  const auto frequency_first =
-      render_shaper_after(start, {{2u, target.frequency_hz}, {3u, target.high_frequency_hz}});
-  const auto high_first =
-      render_shaper_after(start, {{3u, target.high_frequency_hz}, {2u, target.frequency_hz}});
-  const auto expected = render_shaper_after(target, {});
-
-  CHECK(max_abs_difference(frequency_first, high_first) <= kTolerance);
-  CHECK(max_abs_difference(frequency_first, expected) <= kTolerance);
-  CHECK(max_abs_difference(high_first, expected) <= kTolerance);
+  using P = AirBand;
+  check_live_domain<P>([](P& p) { return p.config().amount; }, 0, {below(0.0f), above(1.0f), 2.0f},
+                       {0.0f, 1.0f, below(1.0f)});
+  check_live_domain<P>([](P& p) { return p.config().shelf_frequency_hz; }, 1, {0.0f, -1.0f},
+                       {1.0e-3f, 20000.0f});
+  check_live_domain<P>([](P& p) { return p.config().dynamic_threshold_db; }, 2, {},
+                       {-100.0f, 6.0f});
+  check_live_domain<P>([](P& p) { return p.config().dynamic_range_db; }, 3, {below(0.0f), -1.0f},
+                       {0.0f, 60.0f});
 }
 
-TEST_CASE("SpectralShaper single band edge change keeps the pair ordered",
+TEST_CASE("LowEndFocus live parameters refuse exactly what the config refuses",
           "[mastering][spectral]") {
-  constexpr float kTolerance = 1.0e-6f;
-  const SpectralShaperConfig start{0.05f, 1.0f, 500.0f, 8000.0f, 0.0f, 0.0f, 24.0f};
+  using P = LowEndFocus;
+  check_live_domain<P>([](P& p) { return p.config().cutoff_hz; }, 0, {0.0f, -1.0f},
+                       {1.0e-3f, 300.0f});
+  check_live_domain<P>([](P& p) { return p.config().width; }, 1, {below(0.0f), above(2.0f), 3.0f},
+                       {0.0f, 2.0f, below(2.0f)});
+  check_live_domain<P>([](P& p) { return p.config().subharmonic_amount; }, 2,
+                       {below(0.0f), above(1.0f)}, {0.0f, 1.0f, below(1.0f)});
+  check_live_domain<P>([](P& p) { return p.config().transient_tightness; }, 3,
+                       {below(0.0f), above(1.0f)}, {0.0f, 1.0f, below(1.0f)});
+}
 
-  SECTION("frequency written above the high edge") {
-    SpectralShaperConfig ordered = start;
-    ordered.frequency_hz = 8000.0f;
-    ordered.high_frequency_hz = 12000.0f;
-    CHECK(max_abs_difference(render_shaper_after(start, {{2u, 12000.0f}}),
-                             render_shaper_after(ordered, {})) <= kTolerance);
-  }
-  SECTION("high edge written below the frequency") {
-    SpectralShaperConfig ordered = start;
-    ordered.frequency_hz = 200.0f;
-    ordered.high_frequency_hz = 500.0f;
-    CHECK(max_abs_difference(render_shaper_after(start, {{3u, 200.0f}}),
-                             render_shaper_after(ordered, {})) <= kTolerance);
-  }
+TEST_CASE("PresenceEnhancer live parameters refuse exactly what the config refuses",
+          "[mastering][spectral]") {
+  using P = PresenceEnhancer;
+  check_live_domain<P>([](P& p) { return p.config().amount; }, 0, {below(0.0f), above(1.0f)},
+                       {0.0f, 1.0f, below(1.0f)});
+  check_live_domain<P>([](P& p) { return p.config().drive; }, 1, {below(0.0f), -1.0f},
+                       {0.0f, 8.0f});
+  check_live_domain<P>([](P& p) { return p.config().center_frequency_hz; }, 2, {0.0f, -1.0f},
+                       {1.0e-3f, 1000.0f});
+  check_live_domain<P>([](P& p) { return p.config().q; }, 3, {0.0f, -1.0f}, {1.0e-3f, 5.0f});
+}
+
+TEST_CASE("SpectralShaper live parameters refuse exactly what the config refuses",
+          "[mastering][spectral]") {
+  using P = SpectralShaper;
+  // Defaults: frequency 3000, high 6000.
+  check_live_domain<P>([](P& p) { return p.config().threshold; }, 0, {below(0.0f), -1.0f},
+                       {0.0f, 5.0f});
+  check_live_domain<P>([](P& p) { return p.config().amount; }, 1, {below(0.0f), above(1.0f)},
+                       {0.0f, 1.0f, below(1.0f)});
+  check_live_domain<P>([](P& p) { return p.config().frequency_hz; }, 2,
+                       {0.0f, -1.0f, 6000.0f, 7000.0f}, {1.0e-3f, below(6000.0f)});
+  check_live_domain<P>([](P& p) { return p.config().high_frequency_hz; }, 3,
+                       {0.0f, 2999.0f, 3000.0f}, {above(3000.0f), 20000.0f});
+  check_live_domain<P>([](P& p) { return p.config().attack_ms; }, 4, {below(0.0f), -1.0f},
+                       {0.0f, 500.0f});
+  check_live_domain<P>([](P& p) { return p.config().release_ms; }, 5, {below(0.0f), -1.0f},
+                       {0.0f, 500.0f});
+  check_live_domain<P>([](P& p) { return p.config().range_db; }, 6, {below(0.0f), -1.0f},
+                       {0.0f, 48.0f});
+}
+
+TEST_CASE("SpectralShaper band edges move in the order that keeps the pair ordered",
+          "[mastering][spectral]") {
+  SpectralShaper shaper(SpectralShaperConfig{0.05f, 1.0f, 500.0f, 1000.0f, 0.0f, 0.0f, 24.0f});
+  shaper.prepare(48000.0, 512);
+  REQUIRE_FALSE(shaper.set_parameter(2, 9000.0f));
+  REQUIRE(shaper.set_parameter(3, 12000.0f));
+  REQUIRE(shaper.set_parameter(2, 9000.0f));
+  CHECK(shaper.config().frequency_hz == 9000.0f);
+  CHECK(shaper.config().high_frequency_hz == 12000.0f);
+  REQUIRE_FALSE(shaper.set_parameter(3, 200.0f));
+  REQUIRE(shaper.set_parameter(2, 100.0f));
+  REQUIRE(shaper.set_parameter(3, 200.0f));
+  CHECK(shaper.config().frequency_hz == 100.0f);
+  CHECK(shaper.config().high_frequency_hz == 200.0f);
 }
 
 namespace {

@@ -64,17 +64,17 @@ class Compressor : public rt::RtConfigLifecycle<Compressor, CompressorConfig> {
 
   // Automatable parameters (control-thread; no audio-state reset):
   //   0 = threshold_db
-  //   1 = ratio (clamped to >= 1)
-  //   2 = attack_ms (clamped to >= 0)
-  //   3 = release_ms (clamped to >= 0)
+  //   1 = ratio (refused unless >= 1)
+  //   2 = attack_ms (refused unless >= 0)
+  //   3 = release_ms (refused unless >= 0)
   //   4 = makeup_gain_db
-  //   5 = knee_db (clamped to >= 0)
+  //   5 = knee_db (refused unless >= 0)
   //   6 = auto_makeup (value != 0)
   //   7 = detector (0=Peak, 1=Rms, 2=LogRms)
   //   8 = sidechain_hpf_enabled (value != 0)
-  //   9 = sidechain_hpf_hz (clamped to > 0)
-  //  10 = pdr_time_ms (clamped to >= 0)
-  //  11 = pdr_release_scale (clamped to >= 1)
+  //   9 = sidechain_hpf_hz (refused unless > 0)
+  //  10 = pdr_time_ms (refused unless >= 0)
+  //  11 = pdr_release_scale (refused unless >= 1)
   //
   // RT-safe: set_parameter updates the audio thread's live working config
   // (active_) in place and re-derives the scalar coefficients without publishing

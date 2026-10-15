@@ -37,6 +37,10 @@ namespace {
 constexpr float kFastAttackMs = 0.1f;
 constexpr float kSlowAttackMs = 1.0f;
 
+bool valid_release_ms(float release_ms) noexcept {
+  return std::isfinite(release_ms) && release_ms >= 0.0f;
+}
+
 }  // namespace
 
 void TruePeakOutputGuard::prepare(int factor, int max_channels, int max_block_size) {
@@ -478,7 +482,7 @@ void TruePeakLimiter::set_config(const TruePeakLimiterConfig& config) {
 }
 
 void TruePeakLimiter::set_release_ms(float release_ms) {
-  if (!std::isfinite(release_ms) || release_ms < 0.0f) {
+  if (!valid_release_ms(release_ms)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "true peak limiter release must be non-negative");
   }
@@ -502,14 +506,16 @@ void TruePeakLimiter::set_release_ms_in_place(float release_ms) noexcept {
 bool TruePeakLimiter::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      config_.ceiling_db = std::min(0.0f, value);
+      if (!common::valid_ceiling_db(value)) return false;
+      config_.ceiling_db = value;
       // Update the ceiling in place: set_config() would publish a snapshot and allocate per event.
       return limiter_.set_parameter(0, config_.ceiling_db);
     case 1:
       // In-place: recomputes time constants and forwards to inner limiter
       // without clearing lookahead or gain-envelope state. Must use the noexcept
-      // in-place setter (it clamps internally) so this RT-safe parameter never
-      // throws or re-prepares on the audio thread.
+      // in-place setter so this RT-safe parameter never throws or re-prepares on
+      // the audio thread.
+      if (!valid_release_ms(value)) return false;
       set_release_ms_in_place(value);
       return true;
     default:
@@ -527,7 +533,7 @@ bool TruePeakLimiter::parameter_is_realtime_safe(unsigned int param_id) const no
 
 void TruePeakLimiter::validate_config(const TruePeakLimiterConfig& config) {
   if (!common::valid_ceiling_db(config.ceiling_db) || !std::isfinite(config.lookahead_ms) ||
-      !std::isfinite(config.release_ms) || config.lookahead_ms < 0.0f || config.release_ms < 0.0f ||
+      !valid_release_ms(config.release_ms) || config.lookahead_ms < 0.0f ||
       (config.oversample_factor != 1 && config.oversample_factor != 2 &&
        config.oversample_factor != 4 && config.oversample_factor != 8 &&
        config.oversample_factor != 16)) {

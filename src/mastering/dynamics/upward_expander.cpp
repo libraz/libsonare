@@ -14,6 +14,17 @@
 
 namespace sonare::mastering::dynamics {
 
+namespace {
+
+// Field domains shared by validate_config and live automation.
+bool valid_ratio(float v) noexcept { return std::isfinite(v) && v >= 1.0f; }
+bool valid_time_ms(float v) noexcept { return std::isfinite(v) && v >= 0.0f; }
+bool valid_range_db(float v) noexcept {
+  return std::isfinite(v) && v >= 0.0f && numeric::finite(db_to_linear(v));
+}
+
+}  // namespace
+
 // The configuration lifecycle (validate + seed active_ + publish the initial
 // snapshot) is handled by RtConfigLifecycle's constructor.
 UpwardExpander::UpwardExpander(UpwardExpanderConfig config) : ConfigBase(std::move(config)) {}
@@ -74,17 +85,20 @@ bool UpwardExpander::apply_parameter(UpwardExpanderConfig& config, unsigned int 
       config.threshold_db = value;
       break;
     case 1:
-      config.ratio = std::max(1.0f, value);
+      if (!valid_ratio(value)) return false;
+      config.ratio = value;
       break;
     case 2:
-      config.attack_ms = std::max(0.0f, value);
+      if (!valid_time_ms(value)) return false;
+      config.attack_ms = value;
       break;
     case 3:
-      config.release_ms = std::max(0.0f, value);
+      if (!valid_time_ms(value)) return false;
+      config.release_ms = value;
       break;
     case 4:
-      if (!numeric::finite(db_to_linear(value))) return false;
-      config.range_db = std::max(0.0f, value);
+      if (!valid_range_db(value)) return false;
+      config.range_db = value;
       break;
     default:
       return false;
@@ -99,11 +113,12 @@ std::vector<rt::ParamDescriptor> UpwardExpander::parameter_descriptors() const {
 void UpwardExpander::validate_config(const UpwardExpanderConfig& config) {
   if (!std::isfinite(config.threshold_db) || !std::isfinite(config.ratio) ||
       !std::isfinite(config.attack_ms) || !std::isfinite(config.release_ms) ||
-      !std::isfinite(config.range_db) || !(config.ratio >= 1.0f) || config.range_db < 0.0f ||
-      config.attack_ms < 0.0f || config.release_ms < 0.0f) {
+      !std::isfinite(config.range_db) || !valid_ratio(config.ratio) ||
+      !valid_time_ms(config.attack_ms) || !valid_time_ms(config.release_ms) ||
+      config.range_db < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid upward expander configuration");
   }
-  if (!numeric::finite(db_to_linear(config.range_db))) {
+  if (!valid_range_db(config.range_db)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "upward expander range must produce a finite linear gain");
   }

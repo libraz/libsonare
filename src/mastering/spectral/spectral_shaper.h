@@ -26,6 +26,7 @@ class SpectralShaper : public rt::ProcessorBase {
   void reset() override;
   int tail_samples() const noexcept override;
   void set_config(const SpectralShaperConfig& config);
+  const SpectralShaperConfig& config() const { return config_; }
   float last_reduction_db() const { return last_reduction_db_; }
   float last_gain_reduction_db() const noexcept override { return last_reduction_db_; }
 
@@ -33,13 +34,13 @@ class SpectralShaper : public rt::ProcessorBase {
   // coefficients are derived in process(), and attack/release re-prepare the
   // envelope followers without resetting their state). Ids follow the
   // SpectralShaperConfig declaration order:
-  //   0 = threshold (clamped to >= 0)
-  //   1 = amount (clamped to [0, 1])
-  //   2 = frequency_hz (clamped to > 0; the pair is ordered at use)
-  //   3 = high_frequency_hz (clamped to > 0; the pair is ordered at use)
-  //   4 = attack_ms (clamped to >= 0; re-prepares envelope followers)
-  //   5 = release_ms (clamped to >= 0; re-prepares envelope followers)
-  //   6 = range_db (clamped to >= 0)
+  //   0 = threshold (refused unless >= 0)
+  //   1 = amount (refused unless in [0, 1])
+  //   2 = frequency_hz (refused unless > 0 and below high_frequency_hz)
+  //   3 = high_frequency_hz (refused unless above frequency_hz)
+  //   4 = attack_ms (refused unless >= 0; re-prepares envelope followers)
+  //   5 = release_ms (refused unless >= 0; re-prepares envelope followers)
+  //   6 = range_db (refused unless >= 0)
   bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=threshold, 1=amount, 2=frequencyHz,
   //   3=highFrequencyHz, 4=attackMs, 5=releaseMs, 6=rangeDb

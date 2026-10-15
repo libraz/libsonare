@@ -72,17 +72,17 @@ class DynamicEq : public rt::ProcessorBase {
   // ParametricEq, preserving filter and envelope/smoothing state). Parameters
   // are laid out in per-band blocks of kParamsPerBand (= 11), so band `b`
   // occupies ids `kParamsPerBand*b .. kParamsPerBand*b + 10`:
-  //   +0  = frequency_hz       (clamped to (0, Nyquist))
+  //   +0  = frequency_hz       (refused unless > 0)
   //   +1  = static_gain_db
-  //   +2  = q                  (clamped to > 0)
+  //   +2  = q                  (refused unless > 0)
   //   +3  = threshold_db
-  //   +4  = ratio              (clamped to >= 1)
+  //   +4  = ratio              (refused unless >= 1)
   //   +5  = range_db           (signed: < 0 cuts, > 0 boosts)
-  //   +6  = sidechain_q        (clamped to > 0)
-  //   +7  = sidechain_freq_hz  (> 0 to set; -1 follows band frequency_hz)
-  //   +8  = attack_ms          (clamped to >= 0)
-  //   +9  = release_ms         (clamped to >= 0)
-  //   +10 = detector_delay_ms  (clamped to >= 0)
+  //   +6  = sidechain_q        (refused unless > 0)
+  //   +7  = sidechain_freq_hz  (> 0 to set; -1 follows band frequency_hz; else refused)
+  //   +8  = attack_ms          (refused unless >= 0)
+  //   +9  = release_ms         (refused unless >= 0)
+  //   +10 = detector_delay_ms  (refused unless >= 0)
   // Band type and the enabled flag are not automatable. A param change on a
   // DISABLED band updates config only and has no audible effect until the band
   // is enabled (via set_band). Ids for b >= kMaxBands are rejected (false).

@@ -27,8 +27,8 @@ class Transformer : public rt::ProcessorBase {
 
   // Automatable parameters (RT-safe, no allocation, no audio-state reset):
   //   0 = drive_db (derived once per process segment)
-  //   1 = asymmetry (clamped to [-1, 1]; sets bias and updates J-A coercivity)
-  //   2 = mix (clamped to [0, 1]; derived once per process segment)
+  //   1 = asymmetry (refused unless in [-1, 1]; sets bias and updates J-A coercivity)
+  //   2 = mix (refused unless in [0, 1]; derived once per process segment)
   // The J-A config update only touches coefficients; the per-channel
   // magnetization state in states_ is preserved.
   bool set_parameter_impl(unsigned int param_id, float value) override;

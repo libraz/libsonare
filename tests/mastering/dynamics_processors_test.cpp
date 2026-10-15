@@ -1181,3 +1181,155 @@ TEST_CASE("SidechainRouter key listen neither replays nor skews the main signal"
     REQUIRE(right[i] == 0.0f);
   }
 }
+
+namespace {
+
+template <typename Cfg>
+struct LiveDomainRow {
+  unsigned int id;
+  float Cfg::*field;
+  float refused;
+  float accepted;
+};
+
+// A refused live value changes neither the configuration nor the audio; an
+// accepted value just inside the bound is applied exactly.
+template <typename Processor, typename Cfg>
+void check_live_domain(const std::vector<LiveDomainRow<Cfg>>& rows,
+                       bool config_mirrors_live = true) {
+  const auto input = sonare::test::generate_sine_samples(1000.0f, 48000, 512, 0.7f);
+  for (const auto& row : rows) {
+    CAPTURE(row.id, row.refused, row.accepted);
+    Processor refused_processor;
+    Processor untouched;
+    refused_processor.prepare(48000.0, 512);
+    untouched.prepare(48000.0, 512);
+    const Cfg before = refused_processor.config();
+
+    CHECK_FALSE(refused_processor.set_parameter(row.id, row.refused));
+    if (config_mirrors_live) CHECK(refused_processor.config().*(row.field) == before.*(row.field));
+    auto a = input;
+    auto b = input;
+    sonare::test::process(refused_processor, a);
+    sonare::test::process(untouched, b);
+    CHECK(sonare::test::max_abs_difference(a, b) == 0.0f);
+
+    Processor applied;
+    applied.prepare(48000.0, 512);
+    CHECK(applied.set_parameter(row.id, row.accepted));
+    if (config_mirrors_live) CHECK(applied.config().*(row.field) == row.accepted);
+  }
+}
+
+}  // namespace
+
+TEST_CASE("Dynamics live parameters refuse exactly what the validator refuses",
+          "[mastering][dynamics][live-domain]") {
+  SECTION("Compressor") {
+    using C = CompressorConfig;
+    check_live_domain<Compressor, C>({{1, &C::ratio, 0.5f, 1.0f},
+                                      {2, &C::attack_ms, -1.0f, 0.0f},
+                                      {3, &C::release_ms, -1.0f, 0.0f},
+                                      {5, &C::knee_db, -1.0f, 0.0f},
+                                      {9, &C::sidechain_hpf_hz, 0.0f, 0.5f},
+                                      {10, &C::pdr_time_ms, -1.0f, 0.0f},
+                                      {11, &C::pdr_release_scale, 0.5f, 1.0f}});
+  }
+  SECTION("DeEsser") {
+    using C = DeEsserConfig;
+    check_live_domain<DeEsser, C>({{0, &C::frequency_hz, 0.0f, 0.5f},
+                                   {2, &C::ratio, 0.5f, 1.0f},
+                                   {3, &C::attack_ms, -1.0f, 0.0f},
+                                   {4, &C::release_ms, -1.0f, 0.0f},
+                                   {5, &C::range_db, -1.0f, 0.0f},
+                                   {6, &C::bandpass_q, 0.0f, 1.0e-4f}});
+  }
+  SECTION("Gate") {
+    using C = GateConfig;
+    check_live_domain<Gate, C>({{1, &C::attack_ms, -1.0f, 0.0f},
+                                {2, &C::release_ms, -1.0f, 0.0f},
+                                {3, &C::range_db, 1.0f, 0.0f},
+                                {3, &C::range_db, 0.001f, -0.001f}});
+  }
+  SECTION("Expander") {
+    using C = ExpanderConfig;
+    check_live_domain<Expander, C>({{1, &C::ratio, 0.5f, 1.0f},
+                                    {2, &C::attack_ms, -1.0f, 0.0f},
+                                    {3, &C::release_ms, -1.0f, 0.0f},
+                                    {4, &C::range_db, 1.0f, 0.0f}});
+  }
+  SECTION("UpwardCompressor") {
+    using C = UpwardCompressorConfig;
+    check_live_domain<UpwardCompressor, C>({{1, &C::ratio, 0.5f, 1.0f},
+                                            {2, &C::attack_ms, -1.0f, 0.0f},
+                                            {3, &C::release_ms, -1.0f, 0.0f},
+                                            {4, &C::range_db, -1.0f, 0.0f}});
+  }
+  SECTION("UpwardExpander") {
+    using C = UpwardExpanderConfig;
+    check_live_domain<UpwardExpander, C>({{1, &C::ratio, 0.5f, 1.0f},
+                                          {2, &C::attack_ms, -1.0f, 0.0f},
+                                          {3, &C::release_ms, -1.0f, 0.0f},
+                                          {4, &C::range_db, -1.0f, 0.0f}});
+  }
+  SECTION("ParallelComp") {
+    using C = ParallelCompConfig;
+    check_live_domain<ParallelComp, C>({{1, &C::ratio, 0.5f, 1.0f},
+                                        {2, &C::attack_ms, -1.0f, 0.0f},
+                                        {3, &C::release_ms, -1.0f, 0.0f},
+                                        {5, &C::mix, -0.1f, 0.0f},
+                                        {5, &C::mix, 1.1f, 1.0f}});
+  }
+  SECTION("BrickwallLimiter") {
+    using C = BrickwallLimiterConfig;
+    check_live_domain<BrickwallLimiter, C>(
+        {{0, &C::ceiling_db, 0.5f, 0.0f}, {1, &C::release_ms, -1.0f, 0.0f}});
+  }
+  SECTION("Limiter") {
+    // The in-place path leaves the config() mirror alone; the audio check still applies.
+    using C = LimiterConfig;
+    check_live_domain<Limiter, C>({{1, &C::release_ms, -1.0f, 0.0f}}, false);
+  }
+  SECTION("TransientShaper") {
+    using C = TransientShaperConfig;
+    check_live_domain<TransientShaper, C>({{2, &C::fast_attack_ms, -1.0f, 0.0f},
+                                           {3, &C::fast_release_ms, -1.0f, 0.0f},
+                                           {4, &C::slow_attack_ms, -1.0f, 0.0f},
+                                           {5, &C::slow_release_ms, -1.0f, 0.0f},
+                                           {6, &C::sensitivity, -1.0f, 0.0f},
+                                           {7, &C::max_gain_db, -1.0f, 0.0f},
+                                           {8, &C::gain_smoothing_ms, -1.0f, 0.0f}});
+  }
+  SECTION("VocalRider") {
+    using C = VocalRiderConfig;
+    check_live_domain<VocalRider, C>({{1, &C::max_boost_db, -1.0f, 0.0f},
+                                      {2, &C::max_cut_db, -1.0f, 0.0f},
+                                      {3, &C::attack_ms, -1.0f, 0.0f},
+                                      {4, &C::release_ms, -1.0f, 0.0f},
+                                      {6, &C::gain_smoothing_ms, -1.0f, 0.0f}});
+  }
+  SECTION("SidechainRouter") {
+    using C = SidechainRouterConfig;
+    check_live_domain<SidechainRouter, C>({{1, &C::ratio, 0.5f, 1.0f},
+                                           {2, &C::attack_ms, -1.0f, 0.0f},
+                                           {3, &C::release_ms, -1.0f, 0.0f},
+                                           {4, &C::range_db, -1.0f, 0.0f}});
+  }
+  SECTION("DuckingProcessor") {
+    using C = DuckingConfig;
+    check_live_domain<DuckingProcessor, C>({{1, &C::ratio, 0.5f, 1.0f},
+                                            {2, &C::attack_ms, -1.0f, 0.0f},
+                                            {3, &C::release_ms, -1.0f, 0.0f},
+                                            {4, &C::range_db, -1.0f, 0.0f}});
+  }
+}
+
+TEST_CASE("Gate threshold automation keeps the close threshold below it",
+          "[mastering][dynamics][live-domain]") {
+  Gate gate;
+  gate.prepare(48000.0, 512);
+  const float close = gate.config().close_threshold_db;
+  REQUIRE(gate.set_parameter(0, close - 10.0f));
+  CHECK(gate.config().threshold_db == close - 10.0f);
+  CHECK(gate.config().close_threshold_db == close - 10.0f);
+}

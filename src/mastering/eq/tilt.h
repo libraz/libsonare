@@ -30,7 +30,7 @@ class TiltEq : public rt::ProcessorBase {
   // Automatable parameters (RT-safe: recomputes the two shelf biquads in place
   // via update_bands(), preserves filter state):
   //   0 = tilt_db (positive boosts highs / cuts lows; signed)
-  //   1 = pivot_hz (clamped to (0 Hz, Nyquist))
+  //   1 = pivot_hz (refused unless > 0; kept below Nyquist by the design)
   bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=tiltDb, 1=pivotHz
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;

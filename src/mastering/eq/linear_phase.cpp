@@ -252,11 +252,10 @@ void LinearPhaseEq::prepare_channels(int num_channels) { ensure_channel_state(nu
 void LinearPhaseEq::set_band(size_t index, const EqBand& band) {
   validate_band_index(index);
   if (band.enabled) {
-    if (!(band.frequency_hz > 0.0f) ||
-        !(band.frequency_hz < static_cast<float>(sample_rate_ * 0.5))) {
+    if (!band_frequency_in_range(band.frequency_hz, sample_rate_)) {
       refuse_band_frequency(band.frequency_hz, sample_rate_);
     }
-    if (!(band.q > 0.0f)) {
+    if (!band_q_valid(band.q)) {
       throw SonareException(ErrorCode::InvalidParameter, "EQ band Q must be positive");
     }
   }
@@ -275,16 +274,15 @@ bool LinearPhaseEq::set_parameter_impl(unsigned int param_id, float value) {
   EqBand updated = bands_[band_index];
   switch (param_id % 3u) {
     case 0:
-      // Clamp to the open interval (0 Hz, Nyquist) so the kernel design path
-      // never throws.
-      updated.frequency_hz =
-          std::clamp(value, 1.0e-3f, static_cast<float>(sample_rate_ * 0.5) - 1.0e-3f);
+      if (updated.enabled && !band_frequency_in_range(value, sample_rate_)) return false;
+      updated.frequency_hz = value;
       break;
     case 1:
       updated.gain_db = value;
       break;
     case 2:
-      updated.q = std::max(value, 1.0e-6f);
+      if (updated.enabled && !band_q_valid(value)) return false;
+      updated.q = value;
       break;
     default:
       return false;
