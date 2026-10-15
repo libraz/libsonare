@@ -656,7 +656,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {int_value("onset", 0), int_value("offset"), int_value("target-onset", 0),
                  required_output()});
     add_command(commands, "note-stretch", true,
-                {int_value("onset", 0), int_value("offset", 0), number_value("ratio", 1.0),
+                {int_value("onset", 0), int_value("offset"), number_value("ratio", 1.0),
                  required_output()});
     add_command(commands, "polyphonic-notes", true, {});
     // The analysis settings a vocal-edit session takes at creation, spelled as

@@ -2096,7 +2096,7 @@
         {
           "name": "offset",
           "type": "integer",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -8795,7 +8795,7 @@
         {
           "name": "offset",
           "type": "integer",
-          "default": 0,
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -8863,6 +8863,25 @@
             "0",
             "--offset",
             "4410",
+            "--ratio",
+            "1.5",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "offset-omitted",
+          "argv": [
+            "note-stretch",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--onset",
+            "0",
             "--ratio",
             "1.5",
             "--json"

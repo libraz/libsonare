@@ -2,6 +2,7 @@
 
 #include <cmath>
 
+#include "analysis/analysis_rate.h"
 #include "c_api/sonare_c_error_mapping.h"
 #include "sonare_cli.h"
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
@@ -199,6 +200,8 @@ int cmd_pitch_correct_timevarying(const CliArgs& args, const Audio& audio) {
   // defaults, which is the track the Python CLI measures for the same command.
   PitchConfig pitch_config;
   pitch_config.hop_length = args.get_int("hop-length", 512);
+  // The pYIN frame is 2048 samples at 22050 Hz, held as a duration.
+  pitch_config.frame_length = window_length_at_rate(pitch_config.frame_length, audio.sample_rate());
   const editing::pitch_editor::F0Track track =
       editing::pitch_editor::PyinF0Provider(pitch_config).detect(audio);
 
@@ -270,7 +273,8 @@ int cmd_note_move(const CliArgs& args, const Audio& audio) {
 int cmd_note_stretch(const CliArgs& args, const Audio& audio) {
   editing::pitch_editor::NoteRegion region;
   region.onset_sample = args.get_int("onset", 0);
-  region.offset_sample = args.get_int("offset", 0);
+  region.offset_sample =
+      args.has("offset") ? args.get_int("offset", 0) : static_cast<int>(audio.size());
   const float ratio = args.get_float("ratio", 1.0f);
 
   editing::pitch_editor::NoteEditor editor;
@@ -688,8 +692,10 @@ int cmd_tune_to_midi(const CliArgs& args, const Audio& audio) {
 
   // The command advertises no analysis geometry, so the contour is pYIN at the
   // library's own defaults -- the track the Python CLI measures for it.
+  PitchConfig pitch_config;
+  pitch_config.frame_length = window_length_at_rate(pitch_config.frame_length, audio.sample_rate());
   const editing::pitch_editor::F0Track track =
-      editing::pitch_editor::PyinF0Provider().detect(audio);
+      editing::pitch_editor::PyinF0Provider(pitch_config).detect(audio);
   std::vector<editing::note_model::NoteObject> notes =
       editing::note_model::extract_notes(audio, track);
   const size_t assigned =
@@ -831,12 +837,6 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
     config.formant_mode = formant_mode;
     editing::voice_changer::VoiceChanger changer(config);
     result = changer.process(audio);
-    // Relative mode resolves the factor into the warp's range, and the changer leaves the
-    // dry/wet amount at its default, so this is the value the audio was made with. Absolute
-    // mode refuses an unreachable factor instead, so the requested one is what was applied.
-    if (formant_mode == editing::voice_changer::FormantMode::Relative) {
-      formant_factor = effective_formant_factor(formant_factor, FormantWarpConfig{}.amount);
-    }
   }
 
   // Pitch/formant processing uses spectral transforms whose boundary

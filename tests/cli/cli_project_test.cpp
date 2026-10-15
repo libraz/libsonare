@@ -26,6 +26,21 @@ TEST_CASE("CLI DAW editing commands", "[cli]") {
     REQUIRE(f.good());
   }
 
+  SECTION("note-stretch without --offset stretches to the end of the input") {
+    auto [code, output] = exec_command(CLI + " note-stretch --onset 100 --ratio 1.2 " + TEST_WAV +
+                                       " -o " + TEST_OUT + " --json -q");
+    REQUIRE(code == 0);
+    // 0.5 s at 22050 Hz is 11025 samples; the resolved bound is reported.
+    REQUIRE_THAT(output, ContainsSubstring("\"offset_sample\": 11025"));
+  }
+
+  SECTION("voice-change reports the requested factor") {
+    auto [code, output] = exec_command(CLI + " voice-change --formant-factor 1.5 " + TEST_WAV +
+                                       " -o " + TEST_OUT + " --json -q");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(output, ContainsSubstring("\"formant_factor\": 1.5"));
+  }
+
   SECTION("voice-change") {
     auto [code, output] = exec_command(CLI +
                                        " voice-change --pitch-semitones 5 --formant-factor "
@@ -957,4 +972,18 @@ TEST_CASE("CLI transcribe polyphony options reach the transcriber", "[cli][trans
 
   std::remove(chord.c_str());
   std::remove(out.c_str());
+}
+
+TEST_CASE("CLI pitch-correct-timevarying holds the pYIN frame as a duration",
+          "[cli][pitch-correct-timevarying]") {
+  for (const int rate : {44100, 48000, 192000}) {
+    create_test_wav(TEST_WAV, 0.5f, 220.0f, rate);
+    std::remove(TEST_OUT.c_str());
+    const auto [code, output] =
+        exec_command(CLI + " pitch-correct-timevarying " + TEST_WAV + " -o " + TEST_OUT + " -q");
+    INFO("sample rate " << rate << ": " << output);
+    REQUIRE(code == 0);
+    std::ifstream f(TEST_OUT);
+    REQUIRE(f.good());
+  }
 }
