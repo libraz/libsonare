@@ -66,6 +66,7 @@ Napi::Value DrainTelemetryInto(const Napi::CallbackInfo& info, SonareRealtimeEng
 Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (info.Length() <= 0 || !info[0].IsObject()) {
     Napi::TypeError::New(env, "expected a graph spec object").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -177,6 +178,7 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::GraphNodeCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   size_t count = 0;
   ThrowIfError(env, sonare_engine_graph_node_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -187,6 +189,7 @@ Napi::Value RealtimeEngineWrap::GraphNodeCount(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::GraphConnectionCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   size_t count = 0;
   ThrowIfError(env, sonare_engine_graph_connection_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -197,6 +200,7 @@ Napi::Value RealtimeEngineWrap::GraphConnectionCount(const Napi::CallbackInfo& i
 Napi::Value RealtimeEngineWrap::Process(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   ChannelBlock block = ReadChannels(info, 0);
   if (env.IsExceptionPending()) return env.Undefined();
   // Audio-thread entry point: its failure carries no detail message of its own,
@@ -213,6 +217,7 @@ Napi::Value RealtimeEngineWrap::Process(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::ProcessWithMonitor(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   ChannelBlock block = ReadChannels(info, 0);
   if (env.IsExceptionPending()) return env.Undefined();
 
@@ -241,6 +246,7 @@ Napi::Value RealtimeEngineWrap::ProcessWithMonitor(const Napi::CallbackInfo& inf
 Napi::Value RealtimeEngineWrap::RenderOffline(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   ChannelBlock block = ReadChannels(info, 0);
   if (env.IsExceptionPending()) return env.Undefined();
   int block_size = 128;
@@ -260,6 +266,7 @@ Napi::Value RealtimeEngineWrap::RenderOffline(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::FinishOfflineRender(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   ThrowIfError(env, sonare_engine_finish_offline_render(engine_));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -268,6 +275,7 @@ Napi::Value RealtimeEngineWrap::FinishOfflineRender(const Napi::CallbackInfo& in
 Napi::Value RealtimeEngineWrap::BounceOffline(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (info.Length() <= 0 || !info[0].IsObject()) {
     Napi::TypeError::New(env, "expected a bounce options object").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -312,6 +320,7 @@ Napi::Value RealtimeEngineWrap::BounceOffline(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::FreezeOffline(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (info.Length() <= 0 || !info[0].IsObject()) {
     Napi::TypeError::New(env, "expected a freeze options object").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -338,6 +347,7 @@ Napi::Value RealtimeEngineWrap::FreezeOffline(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::DrainTelemetry(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   return DrainTelemetryInto<SonareEngineTelemetry>(info, engine_, sonare_engine_drain_telemetry,
                                                    TelemetryToObject);
   SONARE_NODE_CATCH(env)
@@ -346,6 +356,7 @@ Napi::Value RealtimeEngineWrap::DrainTelemetry(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::DrainMeterTelemetry(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   return DrainTelemetryInto<SonareMeterTelemetryRecordV2>(
       info, engine_, sonare_engine_drain_meter_telemetry_v2, MeterTelemetryV2ToObject);
   SONARE_NODE_CATCH(env)
@@ -354,6 +365,7 @@ Napi::Value RealtimeEngineWrap::DrainMeterTelemetry(const Napi::CallbackInfo& in
 Napi::Value RealtimeEngineWrap::DrainMeterTelemetryWide(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   return DrainTelemetryInto<SonareMeterTelemetryRecordWideV2>(
       info, engine_, sonare_engine_drain_meter_telemetry_wide_v2, MeterTelemetryWideV2ToObject);
   SONARE_NODE_CATCH(env)
@@ -362,6 +374,7 @@ Napi::Value RealtimeEngineWrap::DrainMeterTelemetryWide(const Napi::CallbackInfo
 Napi::Value RealtimeEngineWrap::MeterTargetInsertGainReduction(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t target_id = 0;
   if (!RequiredUint32Arg(env, info, 0, "targetId", &target_id)) return env.Undefined();
   float db[SONARE_METER_MAX_INSERTS];
@@ -381,6 +394,7 @@ Napi::Value RealtimeEngineWrap::MeterTargetInsertGainReduction(const Napi::Callb
 Napi::Value RealtimeEngineWrap::ConfigureScopeTelemetry(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "configureScopeTelemetry expects (intervalFrames, bandCount) numbers")
         .ThrowAsJavaScriptException();
@@ -399,6 +413,7 @@ Napi::Value RealtimeEngineWrap::ConfigureScopeTelemetry(const Napi::CallbackInfo
 Napi::Value RealtimeEngineWrap::DrainScopeTelemetry(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   return DrainTelemetryInto<SonareScopeTelemetryRecord>(
       info, engine_, sonare_engine_drain_scope_telemetry, ScopeTelemetryToObject);
   SONARE_NODE_CATCH(env)

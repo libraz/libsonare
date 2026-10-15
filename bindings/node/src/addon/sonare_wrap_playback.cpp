@@ -109,7 +109,7 @@ bool HrtfSetWrap::ReadHandle(Napi::Env env, const Napi::Value& value, const Sona
   }
   HrtfSetWrap* wrap = HrtfSetWrap::Unwrap(value.As<Napi::Object>());
   if (wrap == nullptr || wrap->set_ == nullptr) {
-    Napi::TypeError::New(env, "hrtf is destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowHandleClosed(env, "HrtfSet");
     return false;
   }
   *out = wrap->set_;

@@ -126,8 +126,7 @@ sonare::mastering::eq::EqBand EqBandFromObject(const Napi::Object& object) {
   band.gain_db = static_cast<float>(DoubleProperty(object, "gainDb", band.gain_db));
   band.q = static_cast<float>(DoubleProperty(object, "q", band.q));
   band.enabled = BoolProperty(object, "enabled", band.enabled);
-  band.slope_db_oct =
-      static_cast<int>(std::lround(DoubleProperty(object, "slopeDbOct", band.slope_db_oct)));
+  band.slope_db_oct = IntProperty(object, "slopeDbOct", band.slope_db_oct);
   band.placement = ParsePlacement(StringProperty(object, "placement", "Stereo"));
   band.phase = ParseBandPhase(StringProperty(object, "phase", "Inherit"));
   band.soloed = BoolProperty(object, "soloed", band.soloed);
@@ -205,15 +204,10 @@ StreamingMasteringChainWrap::StreamingMasteringChainWrap(const Napi::CallbackInf
         config_object, "loudnessStaticGainPeakDb", options.loudness_static_gain_peak_db));
   }
 
-  try {
-    auto config =
-        sonare::mastering::api::parse_streaming_chain_config_params(params.data(), params.size());
-    chain_ = std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config),
-                                                                               options);
-  } catch (const std::exception& e) {
-    sonare_node::ThrowStdException(env, e);
-    return;
-  }
+  auto config =
+      sonare::mastering::api::parse_streaming_chain_config_params(params.data(), params.size());
+  chain_ =
+      std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config), options);
   SONARE_NODE_CATCH_VOID(env)
 }
 
@@ -233,11 +227,7 @@ Napi::Value StreamingMasteringChainWrap::Destroy(const Napi::CallbackInfo& info)
 
 Napi::Value StreamingMasteringChainWrap::Prepare(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!chain_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingMasteringChain is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, chain_, "StreamingMasteringChain");
   if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber()) {
     Napi::TypeError::New(env, "Expected (sampleRate, maxBlockSize, numChannels)")
         .ThrowAsJavaScriptException();
@@ -256,11 +246,7 @@ Napi::Value StreamingMasteringChainWrap::Prepare(const Napi::CallbackInfo& info)
 
 Napi::Value StreamingMasteringChainWrap::ProcessMono(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!chain_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingMasteringChain is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, chain_, "StreamingMasteringChain");
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected (Float32Array)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -280,11 +266,7 @@ Napi::Value StreamingMasteringChainWrap::ProcessMono(const Napi::CallbackInfo& i
 
 Napi::Value StreamingMasteringChainWrap::ProcessStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!chain_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingMasteringChain is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, chain_, "StreamingMasteringChain");
   if (info.Length() < 2 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1])) {
     Napi::TypeError::New(env, "Expected (leftFloat32Array, rightFloat32Array)")
         .ThrowAsJavaScriptException();
@@ -363,11 +345,7 @@ Napi::Value StreamingMasteringChainWrap::FlushStereo(const Napi::CallbackInfo& i
 
 Napi::Value StreamingMasteringChainWrap::Reset(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!chain_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingMasteringChain is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, chain_, "StreamingMasteringChain");
   SONARE_NODE_TRY
   chain_->reset();
   return env.Undefined();
@@ -376,11 +354,7 @@ Napi::Value StreamingMasteringChainWrap::Reset(const Napi::CallbackInfo& info) {
 
 Napi::Value StreamingMasteringChainWrap::SetParameter(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!chain_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingMasteringChain is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, chain_, "StreamingMasteringChain");
   if (info.Length() < 2 || !info[0].IsString()) {
     Napi::TypeError::New(env, "Expected (key, value)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -400,11 +374,7 @@ Napi::Value StreamingMasteringChainWrap::SetParameter(const Napi::CallbackInfo& 
 Napi::Value StreamingMasteringChainWrap::LatencySamples(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!chain_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingMasteringChain is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, chain_, "StreamingMasteringChain");
   return Napi::Number::New(env, chain_->latency_samples());
   SONARE_NODE_CATCH(env)
 }
@@ -412,11 +382,7 @@ Napi::Value StreamingMasteringChainWrap::LatencySamples(const Napi::CallbackInfo
 Napi::Value StreamingMasteringChainWrap::StageNames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!chain_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingMasteringChain is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, chain_, "StreamingMasteringChain");
   const auto& names = chain_->stage_names();
   Napi::Array out = Napi::Array::New(env, names.size());
   for (size_t i = 0; i < names.size(); ++i) {
@@ -430,11 +396,7 @@ Napi::Value StreamingMasteringChainWrap::NonFiniteSubstitutionCount(
     const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!chain_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingMasteringChain is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, chain_, "StreamingMasteringChain");
   return Napi::Number::New(env, chain_->non_finite_substitution_count());
   SONARE_NODE_CATCH(env)
 }
@@ -442,11 +404,7 @@ Napi::Value StreamingMasteringChainWrap::NonFiniteSubstitutionCount(
 Napi::Value StreamingMasteringChainWrap::NonFiniteDiscardCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!chain_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingMasteringChain is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, chain_, "StreamingMasteringChain");
   return Napi::Number::New(env, chain_->non_finite_discard_count());
   SONARE_NODE_CATCH(env)
 }
@@ -489,20 +447,14 @@ StreamingEqualizerWrap::StreamingEqualizerWrap(const Napi::CallbackInfo& info)
   if (info.Length() >= 1 && info[0].IsObject()) {
     Napi::Object config = info[0].As<Napi::Object>();
     sample_rate = DoubleProperty(config, "sampleRate", sample_rate);
-    max_block_size =
-        static_cast<int>(std::lround(DoubleProperty(config, "maxBlockSize", max_block_size)));
+    max_block_size = IntProperty(config, "maxBlockSize", max_block_size);
   }
 
-  try {
-    sonare::mastering::eq::EqualizerProcessorConfig eq_config;
-    eq_config.max_channels = 2;
-    eq_ = std::make_unique<sonare::mastering::eq::EqualizerProcessor>(eq_config);
-    eq_->prepare(sample_rate, max_block_size);
-    sample_rate_ = sample_rate;
-  } catch (const std::exception& e) {
-    sonare_node::ThrowStdException(env, e);
-    return;
-  }
+  sonare::mastering::eq::EqualizerProcessorConfig eq_config;
+  eq_config.max_channels = 2;
+  eq_ = std::make_unique<sonare::mastering::eq::EqualizerProcessor>(eq_config);
+  eq_->prepare(sample_rate, max_block_size);
+  sample_rate_ = sample_rate;
   SONARE_NODE_CATCH_VOID(env)
 }
 
@@ -524,11 +476,7 @@ Napi::Value StreamingEqualizerWrap::Destroy(const Napi::CallbackInfo& info) {
 Napi::Value StreamingEqualizerWrap::SetBand(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!eq_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingEqualizer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsObject()) {
     Napi::TypeError::New(env, "Expected (index, bandObject)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -545,11 +493,7 @@ Napi::Value StreamingEqualizerWrap::SetBand(const Napi::CallbackInfo& info) {
 
 Napi::Value StreamingEqualizerWrap::Clear(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!eq_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingEqualizer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   SONARE_NODE_TRY
   eq_->clear();
   return env.Undefined();
@@ -558,11 +502,7 @@ Napi::Value StreamingEqualizerWrap::Clear(const Napi::CallbackInfo& info) {
 
 Napi::Value StreamingEqualizerWrap::SetPhaseMode(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!eq_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingEqualizer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   if (info.Length() < 1 || !info[0].IsNumber()) {
     Napi::TypeError::New(env, "Expected (mode)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -577,78 +517,50 @@ Napi::Value StreamingEqualizerWrap::SetPhaseMode(const Napi::CallbackInfo& info)
 Napi::Value StreamingEqualizerWrap::SetAutoGain(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!eq_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingEqualizer is not initialized");
-    return env.Undefined();
-  }
-  if (info.Length() < 1 || !info[0].IsBoolean()) {
-    Napi::TypeError::New(env, "Expected (enabled)").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-  eq_->set_auto_gain_enabled(info[0].As<Napi::Boolean>().Value());
+  SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
+  bool enabled = false;
+  if (!RequiredBoolArg(env, info, 0, "enabled", &enabled)) return env.Undefined();
+  eq_->set_auto_gain_enabled(enabled);
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value StreamingEqualizerWrap::SetGainScale(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!eq_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingEqualizer is not initialized");
-    return env.Undefined();
-  }
-  if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (scale)").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   SONARE_NODE_TRY
-  eq_->set_gain_scale(static_cast<float>(info[0].As<Napi::Number>().DoubleValue()));
+  float value = 0.0f;
+  if (!RequiredFloatArg(env, info, 0, "scale", &value)) return env.Undefined();
+  eq_->set_gain_scale(value);
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value StreamingEqualizerWrap::SetOutputGainDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!eq_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingEqualizer is not initialized");
-    return env.Undefined();
-  }
-  if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (gainDb)").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   SONARE_NODE_TRY
-  eq_->set_output_gain_db(static_cast<float>(info[0].As<Napi::Number>().DoubleValue()));
+  float value = 0.0f;
+  if (!RequiredFloatArg(env, info, 0, "gainDb", &value)) return env.Undefined();
+  eq_->set_output_gain_db(value);
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value StreamingEqualizerWrap::SetOutputPan(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!eq_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingEqualizer is not initialized");
-    return env.Undefined();
-  }
-  if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (pan)").ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   SONARE_NODE_TRY
-  eq_->set_output_pan(static_cast<float>(info[0].As<Napi::Number>().DoubleValue()));
+  float value = 0.0f;
+  if (!RequiredFloatArg(env, info, 0, "pan", &value)) return env.Undefined();
+  eq_->set_output_pan(value);
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value StreamingEqualizerWrap::SetSidechainMono(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!eq_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingEqualizer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected (Float32Array)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -676,11 +588,7 @@ Napi::Value StreamingEqualizerWrap::SetSidechainMono(const Napi::CallbackInfo& i
 
 Napi::Value StreamingEqualizerWrap::SetSidechainStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!eq_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingEqualizer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   if (info.Length() < 2 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1])) {
     Napi::TypeError::New(env, "Expected (leftFloat32Array, rightFloat32Array)")
         .ThrowAsJavaScriptException();
@@ -725,11 +633,7 @@ void StreamingEqualizerWrap::ClearSidechainStorage() {
 Napi::Value StreamingEqualizerWrap::ClearSidechain(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!eq_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingEqualizer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   ClearSidechainStorage();
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -738,11 +642,7 @@ Napi::Value StreamingEqualizerWrap::ClearSidechain(const Napi::CallbackInfo& inf
 Napi::Value StreamingEqualizerWrap::LastAutoGainDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!eq_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingEqualizer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   return Napi::Number::New(env, eq_->last_auto_gain_db());
   SONARE_NODE_CATCH(env)
 }
@@ -750,11 +650,7 @@ Napi::Value StreamingEqualizerWrap::LastAutoGainDb(const Napi::CallbackInfo& inf
 Napi::Value StreamingEqualizerWrap::LatencySamples(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!eq_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingEqualizer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   return Napi::Number::New(env, eq_->latency_samples());
   SONARE_NODE_CATCH(env)
 }
@@ -762,22 +658,14 @@ Napi::Value StreamingEqualizerWrap::LatencySamples(const Napi::CallbackInfo& inf
 Napi::Value StreamingEqualizerWrap::NonFiniteDiscardCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!eq_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingEqualizer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   return Napi::Number::New(env, eq_->non_finite_discard_count());
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value StreamingEqualizerWrap::ProcessMono(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!eq_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingEqualizer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected (Float32Array)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -797,11 +685,7 @@ Napi::Value StreamingEqualizerWrap::ProcessMono(const Napi::CallbackInfo& info) 
 
 Napi::Value StreamingEqualizerWrap::ProcessStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!eq_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingEqualizer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   if (info.Length() < 2 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1])) {
     Napi::TypeError::New(env, "Expected (leftFloat32Array, rightFloat32Array)")
         .ThrowAsJavaScriptException();
@@ -833,11 +717,7 @@ Napi::Value StreamingEqualizerWrap::ProcessStereo(const Napi::CallbackInfo& info
 
 Napi::Value StreamingEqualizerWrap::MagnitudeResponse(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!eq_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingEqualizer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   if (info.Length() < 2 || !info[0].IsNumber() || !info[1].IsTypedArray()) {
     Napi::TypeError::New(env, "Expected (placement, frequenciesHz)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -855,11 +735,7 @@ Napi::Value StreamingEqualizerWrap::MagnitudeResponse(const Napi::CallbackInfo& 
 
 Napi::Value StreamingEqualizerWrap::Spectrum(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!eq_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingEqualizer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   SONARE_NODE_TRY
   sonare::mastering::eq::EqualizerSpectrumSnapshot snapshot = eq_->spectrum_snapshot();
 
@@ -900,11 +776,7 @@ Napi::Value StreamingEqualizerWrap::Spectrum(const Napi::CallbackInfo& info) {
 Napi::Value StreamingEqualizerWrap::Match(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (!eq_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "StreamingEqualizer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, eq_, "StreamingEqualizer");
   if (info.Length() < 2 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1])) {
     Napi::TypeError::New(env, "Expected (sourceFloat32Array, referenceFloat32Array, options?)")
         .ThrowAsJavaScriptException();
@@ -1028,6 +900,7 @@ Napi::Value StreamingRetuneWrap::Destroy(const Napi::CallbackInfo& info) {
 Napi::Value StreamingRetuneWrap::Prepare(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, retune_, "StreamingRetune");
   double sample_rate = 0.0;
   int max_block_size = 0;
   if (!OptionalDoubleArg(env, info, 0, "sampleRate", 0.0, &sample_rate) ||
@@ -1042,6 +915,7 @@ Napi::Value StreamingRetuneWrap::Prepare(const Napi::CallbackInfo& info) {
 Napi::Value StreamingRetuneWrap::Reset(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, retune_, "StreamingRetune");
   ThrowIfError(env, sonare_streaming_retune_reset(retune_));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -1050,6 +924,7 @@ Napi::Value StreamingRetuneWrap::Reset(const Napi::CallbackInfo& info) {
 Napi::Value StreamingRetuneWrap::SetConfig(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, retune_, "StreamingRetune");
   // Seed from the currently applied values so an options bag carrying only one
   // key leaves the others alone, matching every other setConfig on this surface.
   float semitones = 0.0f;
@@ -1075,6 +950,7 @@ Napi::Value StreamingRetuneWrap::SetConfig(const Napi::CallbackInfo& info) {
 Napi::Value StreamingRetuneWrap::Config(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, retune_, "StreamingRetune");
   float semitones = 0.0f;
   float mix = 0.0f;
   int grain_size = 0;
@@ -1091,6 +967,7 @@ Napi::Value StreamingRetuneWrap::Config(const Napi::CallbackInfo& info) {
 Napi::Value StreamingRetuneWrap::GrainSize(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, retune_, "StreamingRetune");
   int grain_size = 0;
   ThrowIfError(env, sonare_streaming_retune_grain_size(retune_, &grain_size));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -1101,6 +978,7 @@ Napi::Value StreamingRetuneWrap::GrainSize(const Napi::CallbackInfo& info) {
 Napi::Value StreamingRetuneWrap::LatencySamples(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, retune_, "StreamingRetune");
   int latency = 0;
   ThrowIfError(env, sonare_streaming_retune_latency_samples(retune_, &latency));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -1111,6 +989,7 @@ Napi::Value StreamingRetuneWrap::LatencySamples(const Napi::CallbackInfo& info) 
 Napi::Value StreamingRetuneWrap::ProcessMono(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, retune_, "StreamingRetune");
   if (!RequireFloat32Array(info, 0, "StreamingRetune.processMono expects a Float32Array")) {
     return env.Undefined();
   }

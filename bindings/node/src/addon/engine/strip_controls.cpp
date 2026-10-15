@@ -11,6 +11,7 @@ using namespace sonare_node::engine;
 Napi::Value RealtimeEngineWrap::SetBusStripJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t bus_id = 0;
   std::string scene_json;
   if (!OptionalUint32Arg(env, info, 0, "busId", 0, &bus_id) ||
@@ -25,6 +26,7 @@ Napi::Value RealtimeEngineWrap::SetBusStripJson(const Napi::CallbackInfo& info) 
 Napi::Value RealtimeEngineWrap::SetBusStripEqBandJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t bus_id = 0;
   int band_index = -1;
   std::string band_json;
@@ -42,6 +44,7 @@ Napi::Value RealtimeEngineWrap::SetBusStripEqBandJson(const Napi::CallbackInfo& 
 Napi::Value RealtimeEngineWrap::SetTrackStripJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   std::string scene_json;
   if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id) ||
@@ -56,6 +59,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripJson(const Napi::CallbackInfo& info
 Napi::Value RealtimeEngineWrap::SetTrackStripEqBandJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   int band_index = -1;
   std::string band_json;
@@ -73,6 +77,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripEqBandJson(const Napi::CallbackInfo
 Napi::Value RealtimeEngineWrap::SetTrackStripInsertBypassed(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   uint32_t insert_index = 0;
   bool bypassed = false;
@@ -93,6 +98,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripInsertBypassed(const Napi::Callback
 Napi::Value RealtimeEngineWrap::SetMasterStripJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   std::string scene_json;
   if (!OptionalStringArg(env, info, 0, "sceneJson", "", &scene_json)) return env.Undefined();
   ThrowIfError(env, sonare_engine_set_master_strip_json(engine_, scene_json.c_str()));
@@ -103,6 +109,7 @@ Napi::Value RealtimeEngineWrap::SetMasterStripJson(const Napi::CallbackInfo& inf
 Napi::Value RealtimeEngineWrap::SetMasterStripEqBandJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   int band_index = -1;
   std::string band_json;
   if (!OptionalIntArg(env, info, 0, "bandIndex", -1, &band_index) ||
@@ -118,6 +125,7 @@ Napi::Value RealtimeEngineWrap::SetMasterStripEqBandJson(const Napi::CallbackInf
 Napi::Value RealtimeEngineWrap::SetMasterStripInsertBypassed(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t insert_index = 0;
   bool bypassed = false;
   bool reset_on_bypass = false;
@@ -135,6 +143,7 @@ Napi::Value RealtimeEngineWrap::SetMasterStripInsertBypassed(const Napi::Callbac
 Napi::Value RealtimeEngineWrap::SetTrackStripInsertParamByName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   uint32_t insert_index = 0;
   std::string param_name;
@@ -154,6 +163,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripInsertParamByName(const Napi::Callb
 Napi::Value RealtimeEngineWrap::SetMasterStripInsertParamByName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t insert_index = 0;
   std::string param_name;
   float value = 0.0f;
@@ -171,6 +181,7 @@ Napi::Value RealtimeEngineWrap::SetMasterStripInsertParamByName(const Napi::Call
 Napi::Value RealtimeEngineWrap::SetBusStripInsertParamByName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t bus_id = 0;
   uint32_t insert_index = 0;
   std::string param_name;
@@ -191,6 +202,7 @@ Napi::Value RealtimeEngineWrap::ApplyTrackStripInsertParamByNameNow(
     const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   uint32_t insert_index = 0;
   std::string param_name;
@@ -212,6 +224,7 @@ Napi::Value RealtimeEngineWrap::ApplyTrackStripInsertParamByNameNow(
 Napi::Value RealtimeEngineWrap::RestoreTrackStripInsertParamByName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   uint32_t insert_index = 0;
   std::string param_name;
@@ -232,6 +245,7 @@ Napi::Value RealtimeEngineWrap::ApplyMasterStripInsertParamByNameNow(
     const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t insert_index = 0;
   std::string param_name;
   float value = 0.0f;
@@ -252,6 +266,7 @@ Napi::Value RealtimeEngineWrap::RestoreMasterStripInsertParamByName(
     const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t insert_index = 0;
   std::string param_name;
   float value = 0.0f;
@@ -269,6 +284,7 @@ Napi::Value RealtimeEngineWrap::RestoreMasterStripInsertParamByName(
 Napi::Value RealtimeEngineWrap::ApplyBusStripInsertParamByNameNow(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t bus_id = 0;
   uint32_t insert_index = 0;
   std::string param_name;
@@ -290,6 +306,7 @@ Napi::Value RealtimeEngineWrap::ApplyBusStripInsertParamByNameNow(const Napi::Ca
 Napi::Value RealtimeEngineWrap::RestoreBusStripInsertParamByName(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t bus_id = 0;
   uint32_t insert_index = 0;
   std::string param_name;
@@ -309,6 +326,7 @@ Napi::Value RealtimeEngineWrap::RestoreBusStripInsertParamByName(const Napi::Cal
 Napi::Value RealtimeEngineWrap::ClearTrackInsertParameterBases(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id)) {
     return env.Undefined();
@@ -321,6 +339,7 @@ Napi::Value RealtimeEngineWrap::ClearTrackInsertParameterBases(const Napi::Callb
 Napi::Value RealtimeEngineWrap::ClearMasterInsertParameterBases(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   ThrowIfError(env, sonare_engine_clear_master_insert_parameter_bases(engine_));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -329,6 +348,7 @@ Napi::Value RealtimeEngineWrap::ClearMasterInsertParameterBases(const Napi::Call
 Napi::Value RealtimeEngineWrap::ClearBusInsertParameterBases(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t bus_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "busId", 0, &bus_id)) {
     return env.Undefined();
@@ -341,6 +361,7 @@ Napi::Value RealtimeEngineWrap::ClearBusInsertParameterBases(const Napi::Callbac
 Napi::Value RealtimeEngineWrap::SetBusStripInsertBypassed(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t bus_id = 0;
   uint32_t insert_index = 0;
   bool bypassed = false;
@@ -357,9 +378,28 @@ Napi::Value RealtimeEngineWrap::SetBusStripInsertBypassed(const Napi::CallbackIn
   SONARE_NODE_CATCH(env)
 }
 
+namespace {
+
+// An unresolvable name is an argument refusal (RangeError), never an in-band -1.
+Napi::Value AutomationIdResult(Napi::Env env, SonareError err, uint32_t out_id,
+                               const std::string& param_name) {
+  if (err == SONARE_ERROR_INVALID_PARAMETER) {
+    Napi::RangeError::New(
+        env, "paramName '" + param_name + "' does not resolve to an automation id for this target")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  ThrowIfError(env, err);
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(out_id));
+}
+
+}  // namespace
+
 Napi::Value RealtimeEngineWrap::ResolveTrackInsertAutomationId(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   uint32_t insert_index = 0;
   std::string param_name;
@@ -371,18 +411,14 @@ Napi::Value RealtimeEngineWrap::ResolveTrackInsertAutomationId(const Napi::Callb
   uint32_t out_id = 0;
   const SonareError err = sonare_engine_resolve_track_insert_automation_id(
       engine_, track_id, insert_index, param_name.c_str(), &out_id);
-  if (err == SONARE_ERROR_INVALID_PARAMETER) {
-    return Napi::Number::New(env, -1.0);
-  }
-  ThrowIfError(env, err);
-  if (env.IsExceptionPending()) return env.Undefined();
-  return Napi::Number::New(env, static_cast<double>(out_id));
+  return AutomationIdResult(env, err, out_id, param_name);
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value RealtimeEngineWrap::ResolveTrackLaneAutomationId(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   std::string param_name;
   if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id) ||
@@ -392,18 +428,14 @@ Napi::Value RealtimeEngineWrap::ResolveTrackLaneAutomationId(const Napi::Callbac
   uint32_t out_id = 0;
   const SonareError err = sonare_engine_resolve_track_lane_automation_id(
       engine_, track_id, param_name.c_str(), &out_id);
-  if (err == SONARE_ERROR_INVALID_PARAMETER) {
-    return Napi::Number::New(env, -1.0);
-  }
-  ThrowIfError(env, err);
-  if (env.IsExceptionPending()) return env.Undefined();
-  return Napi::Number::New(env, static_cast<double>(out_id));
+  return AutomationIdResult(env, err, out_id, param_name);
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value RealtimeEngineWrap::ResolveBusAutomationId(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t bus_id = 0;
   std::string param_name;
   if (!OptionalUint32Arg(env, info, 0, "busId", 0, &bus_id) ||
@@ -413,18 +445,14 @@ Napi::Value RealtimeEngineWrap::ResolveBusAutomationId(const Napi::CallbackInfo&
   uint32_t out_id = 0;
   const SonareError err =
       sonare_engine_resolve_bus_automation_id(engine_, bus_id, param_name.c_str(), &out_id);
-  if (err == SONARE_ERROR_INVALID_PARAMETER) {
-    return Napi::Number::New(env, -1.0);
-  }
-  ThrowIfError(env, err);
-  if (env.IsExceptionPending()) return env.Undefined();
-  return Napi::Number::New(env, static_cast<double>(out_id));
+  return AutomationIdResult(env, err, out_id, param_name);
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value RealtimeEngineWrap::ResolveMasterAutomationId(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   std::string param_name;
   if (!OptionalStringArg(env, info, 0, "paramName", "", &param_name)) {
     return env.Undefined();
@@ -432,18 +460,14 @@ Napi::Value RealtimeEngineWrap::ResolveMasterAutomationId(const Napi::CallbackIn
   uint32_t out_id = 0;
   const SonareError err =
       sonare_engine_resolve_master_automation_id(engine_, param_name.c_str(), &out_id);
-  if (err == SONARE_ERROR_INVALID_PARAMETER) {
-    return Napi::Number::New(env, -1.0);
-  }
-  ThrowIfError(env, err);
-  if (env.IsExceptionPending()) return env.Undefined();
-  return Napi::Number::New(env, static_cast<double>(out_id));
+  return AutomationIdResult(env, err, out_id, param_name);
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value RealtimeEngineWrap::ResolveMasterInsertAutomationId(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t insert_index = 0;
   std::string param_name;
   if (!OptionalUint32Arg(env, info, 0, "insertIndex", 0, &insert_index) ||
@@ -453,18 +477,14 @@ Napi::Value RealtimeEngineWrap::ResolveMasterInsertAutomationId(const Napi::Call
   uint32_t out_id = 0;
   const SonareError err = sonare_engine_resolve_master_insert_automation_id(
       engine_, insert_index, param_name.c_str(), &out_id);
-  if (err == SONARE_ERROR_INVALID_PARAMETER) {
-    return Napi::Number::New(env, -1.0);
-  }
-  ThrowIfError(env, err);
-  if (env.IsExceptionPending()) return env.Undefined();
-  return Napi::Number::New(env, static_cast<double>(out_id));
+  return AutomationIdResult(env, err, out_id, param_name);
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value RealtimeEngineWrap::ResolveBusInsertAutomationId(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t bus_id = 0;
   uint32_t insert_index = 0;
   std::string param_name;
@@ -476,18 +496,14 @@ Napi::Value RealtimeEngineWrap::ResolveBusInsertAutomationId(const Napi::Callbac
   uint32_t out_id = 0;
   const SonareError err = sonare_engine_resolve_bus_insert_automation_id(
       engine_, bus_id, insert_index, param_name.c_str(), &out_id);
-  if (err == SONARE_ERROR_INVALID_PARAMETER) {
-    return Napi::Number::New(env, -1.0);
-  }
-  ThrowIfError(env, err);
-  if (env.IsExceptionPending()) return env.Undefined();
-  return Napi::Number::New(env, static_cast<double>(out_id));
+  return AutomationIdResult(env, err, out_id, param_name);
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value RealtimeEngineWrap::ResolveInstrumentAutomationId(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   std::string param_name;
   if (!OptionalUint32Arg(env, info, 0, "destinationId", 0, &destination_id) ||
@@ -497,18 +513,14 @@ Napi::Value RealtimeEngineWrap::ResolveInstrumentAutomationId(const Napi::Callba
   uint32_t out_id = 0;
   const SonareError err = sonare_engine_resolve_instrument_automation_id(
       engine_, destination_id, param_name.c_str(), &out_id);
-  if (err == SONARE_ERROR_INVALID_PARAMETER) {
-    return Napi::Number::New(env, -1.0);
-  }
-  ThrowIfError(env, err);
-  if (env.IsExceptionPending()) return env.Undefined();
-  return Napi::Number::New(env, static_cast<double>(out_id));
+  return AutomationIdResult(env, err, out_id, param_name);
   SONARE_NODE_CATCH(env)
 }
 
 Napi::Value RealtimeEngineWrap::SetTrackStripPan(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   float pan = 0.0f;
   if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id) ||
@@ -523,6 +535,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripPan(const Napi::CallbackInfo& info)
 Napi::Value RealtimeEngineWrap::SetTrackStripPanLaw(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   int pan_law = 0;
   if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id) ||
@@ -537,6 +550,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripPanLaw(const Napi::CallbackInfo& in
 Napi::Value RealtimeEngineWrap::SetTrackStripPanMode(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   int pan_mode = 0;
   if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id) ||
@@ -551,6 +565,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripPanMode(const Napi::CallbackInfo& i
 Napi::Value RealtimeEngineWrap::SetTrackStripDualPan(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   float left_pan = 0.0f;
   float right_pan = 0.0f;
@@ -567,6 +582,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripDualPan(const Napi::CallbackInfo& i
 Napi::Value RealtimeEngineWrap::SetTrackStripSurroundPan(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id)) {
     return env.Undefined();
@@ -591,6 +607,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripSurroundPan(const Napi::CallbackInf
 Napi::Value RealtimeEngineWrap::SetBusStripPan(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t bus_id = 0;
   float pan = 0.0f;
   if (!OptionalUint32Arg(env, info, 0, "busId", 0, &bus_id) ||
@@ -605,6 +622,7 @@ Napi::Value RealtimeEngineWrap::SetBusStripPan(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::SetBusStripPanLaw(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t bus_id = 0;
   int pan_law = 0;
   if (!OptionalUint32Arg(env, info, 0, "busId", 0, &bus_id) ||
@@ -619,6 +637,7 @@ Napi::Value RealtimeEngineWrap::SetBusStripPanLaw(const Napi::CallbackInfo& info
 Napi::Value RealtimeEngineWrap::SetBusStripPanMode(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t bus_id = 0;
   int pan_mode = 0;
   if (!OptionalUint32Arg(env, info, 0, "busId", 0, &bus_id) ||
@@ -633,6 +652,7 @@ Napi::Value RealtimeEngineWrap::SetBusStripPanMode(const Napi::CallbackInfo& inf
 Napi::Value RealtimeEngineWrap::SetBusStripDualPan(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t bus_id = 0;
   float left_pan = 0.0f;
   float right_pan = 0.0f;
@@ -649,6 +669,7 @@ Napi::Value RealtimeEngineWrap::SetBusStripDualPan(const Napi::CallbackInfo& inf
 Napi::Value RealtimeEngineWrap::SetTrackStripChannelDelaySamples(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t track_id = 0;
   int delay_samples = 0;
   if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id) ||

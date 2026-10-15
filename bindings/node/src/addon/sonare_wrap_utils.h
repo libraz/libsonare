@@ -40,6 +40,17 @@ void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix 
 ///        caught SonareException's what()).
 void ThrowSonareErrorMessage(Napi::Env env, SonareError err, const std::string& message);
 
+/// @brief The one closed-handle refusal: a coded SonareError InvalidState
+///        reading "<what> has been destroyed". Every released, destroyed or
+///        disposed handle, whether the receiver or an argument, reports through here.
+void ThrowHandleClosed(Napi::Env env, const char* what);
+
+/// @brief The one catch-chain translation: reports the in-flight exception as a
+///        JS error keyed on its cause (JS error as-is, SonareException by its own
+///        code, other std::exception by the shared mapping, anything else Unknown).
+///        Call only from inside a catch block.
+void ThrowCurrentException(Napi::Env env);
+
 /// @brief Throw the failure of the last C-ABI call that returned a null handle:
 ///        the code from sonare_last_error_code() with @p prefix + the recorded
 ///        detail as the message. @p fallback stands in when the code reads Ok.
@@ -293,41 +304,31 @@ std::vector<SonareMasteringParam> MasteringCParams(
 }  // namespace sonare_node
 
 #define SONARE_NODE_TRY try {
-#define SONARE_NODE_CATCH(env)                                                                \
-  }                                                                                           \
-  catch (const Napi::Error& e) {                                                              \
-    e.ThrowAsJavaScriptException();                                                           \
-    return env.Undefined();                                                                   \
-  }                                                                                           \
-  catch (const sonare::SonareException& e) {                                                  \
-    sonare_node::ThrowSonareErrorMessage(env, sonare_node::CErrorFromException(e), e.what()); \
-    return env.Undefined();                                                                   \
-  }                                                                                           \
-  catch (const std::exception& e) {                                                           \
-    sonare_node::ThrowStdException(env, e);                                                   \
-    return env.Undefined();                                                                   \
-  }                                                                                           \
-  catch (...) {                                                                               \
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_UNKNOWN, "Unknown error");         \
-    return env.Undefined();                                                                   \
+#define SONARE_NODE_CATCH(env)               \
+  }                                          \
+  catch (...) {                              \
+    sonare_node::ThrowCurrentException(env); \
+    return env.Undefined();                  \
   }
 
 // Void-returning sibling of SONARE_NODE_CATCH, for the entry points registered
-// as InstanceVoidMethod. Same arms, no return value: the pending JS exception is
-// what the caller sees.
-#define SONARE_NODE_CATCH_VOID(env)                                                           \
-  }                                                                                           \
-  catch (const Napi::Error& e) {                                                              \
-    e.ThrowAsJavaScriptException();                                                           \
-  }                                                                                           \
-  catch (const sonare::SonareException& e) {                                                  \
-    sonare_node::ThrowSonareErrorMessage(env, sonare_node::CErrorFromException(e), e.what()); \
-  }                                                                                           \
-  catch (const std::exception& e) {                                                           \
-    sonare_node::ThrowStdException(env, e);                                                   \
-  }                                                                                           \
-  catch (...) {                                                                               \
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_UNKNOWN, "Unknown error");         \
+// as InstanceVoidMethod: the pending JS exception is what the caller sees.
+#define SONARE_NODE_CATCH_VOID(env)          \
+  }                                          \
+  catch (...) {                              \
+    sonare_node::ThrowCurrentException(env); \
+  }
+
+// Closed-handle guard for a wrapper's native pointer; `what` names the class.
+#define SONARE_NODE_REQUIRE_OPEN(env, handle, what) \
+  if ((handle) == nullptr) {                        \
+    sonare_node::ThrowHandleClosed(env, what);      \
+    return env.Undefined();                         \
+  }
+#define SONARE_NODE_REQUIRE_OPEN_VOID(env, handle, what) \
+  if ((handle) == nullptr) {                             \
+    sonare_node::ThrowHandleClosed(env, what);           \
+    return;                                              \
   }
 
 #endif  // SONARE_NODE_SONARE_WRAP_UTILS_H_

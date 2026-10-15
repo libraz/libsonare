@@ -403,7 +403,9 @@ describe('addon positional-argument readers bail out before touching native stat
           connections: [],
         }),
       );
-      expect(engine.resolveTrackInsertAutomationId(TRACK_ID, 0, 'band0.gainDb')).toBe(-1);
+      expect(() => engine.resolveTrackInsertAutomationId(TRACK_ID, 0, 'band0.gainDb')).toThrow(
+        RangeError,
+      );
       expect(engineStateSnapshot(engine)).not.toBe(withInsert);
     });
   });

@@ -376,6 +376,7 @@ void RunBounceJob(void* arg) {
 Napi::Value ProjectWrap::Compile(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   SonareProjectCompileResult result{};
   ThrowIfError(env, sonare_project_compile(project_, &result));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -386,6 +387,7 @@ Napi::Value ProjectWrap::Compile(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::CompileTimeline(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   SonareProjectCompileResult result{};
   SonareProjectTimeline* timeline = nullptr;
   ThrowIfError(env, sonare_project_compile_timeline(project_, &result, &timeline));
@@ -400,6 +402,7 @@ Napi::Value ProjectWrap::CompileTimeline(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::LastBounceCompileResult(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   SonareProjectCompileResult result{};
   ThrowIfError(env, sonare_project_last_bounce_compile_result(project_, &result));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -410,6 +413,7 @@ Napi::Value ProjectWrap::LastBounceCompileResult(const Napi::CallbackInfo& info)
 Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   SonareProjectBounceOptions options{};
   if (info.Length() > 0 && info[0].IsObject()) {
     FillBounceOptions(info[0].As<Napi::Object>(), &options);
@@ -431,6 +435,7 @@ Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::BounceWithBuiltinInstruments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   // Argument order is instrument-first to match the WASM and Python bindings:
   //   bounceWithBuiltinInstruments(instruments, options?)
   SonareProjectBounceOptions options{};
@@ -480,6 +485,7 @@ Napi::Value ProjectWrap::BounceWithBuiltinInstruments(const Napi::CallbackInfo& 
 Napi::Value ProjectWrap::BounceWithInstruments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   SonareProjectBounceOptions options{};
   if (info.Length() > 1 && info[1].IsObject() && !info[1].IsArray()) {
     FillBounceOptions(info[1].As<Napi::Object>(), &options);
@@ -574,6 +580,7 @@ Napi::Value ProjectWrap::BounceWithInstruments(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::BounceWithSynthInstruments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   SonareProjectBounceOptions options{};
   if (info.Length() > 1 && info[1].IsObject() && !info[1].IsArray()) {
     FillBounceOptions(info[1].As<Napi::Object>(), &options);
@@ -630,6 +637,7 @@ Napi::Value ProjectWrap::BounceWithSynthInstruments(const Napi::CallbackInfo& in
 void ProjectWrap::LoadSoundFont(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN_VOID(env, project_, "Project");
   const uint8_t* bytes = nullptr;
   size_t len = 0;
   if (info.Length() > 0 && info[0].IsBuffer()) {
@@ -652,6 +660,7 @@ void ProjectWrap::LoadSoundFont(const Napi::CallbackInfo& info) {
 void ProjectWrap::ClearSoundFont(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN_VOID(env, project_, "Project");
   ThrowIfError(info.Env(), sonare_project_clear_soundfont(project_));
   SONARE_NODE_CATCH_VOID(env)
 }
@@ -659,6 +668,7 @@ void ProjectWrap::ClearSoundFont(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::SoundFontPresetCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   size_t out = 0;
   ThrowIfError(env, sonare_project_soundfont_preset_count(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -669,6 +679,7 @@ Napi::Value ProjectWrap::SoundFontPresetCount(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::SoundFontManifest(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   size_t total = 0;
   ThrowIfError(env, sonare_project_soundfont_manifest(project_, nullptr, 0, &total));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -696,6 +707,7 @@ Napi::Value ProjectWrap::SoundFontManifest(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::BounceWithSf2Instruments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   // Argument order is instrument-first to match bounceWithBuiltinInstruments:
   //   bounceWithSf2Instruments(instruments, options?)
   SonareProjectBounceOptions options{};

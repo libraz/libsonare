@@ -358,7 +358,7 @@ describe('PlaybackRenderer.renderOffline', () => {
     expect(Array.from(out)).toEqual(Array.from(expected.samples));
   });
 
-  it('refuses a mismatched channel count and non-finite input as a coded error', () => {
+  it('refuses a mismatched channel count as a coded error and non-finite input as a RangeError', () => {
     using renderer = new PlaybackRenderer({ config: unequalSpeakers, sampleRate: 48000 });
     let caught: unknown;
     try {
@@ -377,8 +377,8 @@ describe('PlaybackRenderer.renderOffline', () => {
     } catch (error) {
       caught = error;
     }
-    expect(isSonareError(caught)).toBe(true);
-    expect((caught as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+    // Non-finite samples are an argument refusal, not a library failure.
+    expect(caught).toBeInstanceOf(RangeError);
   });
 
   it('reports a destroyed handle as InvalidState', () => {

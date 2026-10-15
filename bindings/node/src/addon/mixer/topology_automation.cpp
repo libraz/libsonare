@@ -11,11 +11,7 @@ namespace sonare_node {
 Napi::Value MixerWrap::AddStrip(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 1 || !info[0].IsString()) {
     Napi::TypeError::New(env, "Expected (id: string, metering?: object)")
         .ThrowAsJavaScriptException();
@@ -53,11 +49,7 @@ Napi::Value MixerWrap::AddStrip(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::AddBus(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 1 || !info[0].IsString()) {
     Napi::TypeError::New(env, "Expected (id: string, role?: string)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -76,11 +68,7 @@ Napi::Value MixerWrap::AddBus(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::SetOutputBus(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 2 || !info[0].IsString() || !info[1].IsString()) {
     Napi::TypeError::New(env, "Expected (sourceId: string, busId: string)")
         .ThrowAsJavaScriptException();
@@ -100,11 +88,7 @@ Napi::Value MixerWrap::SetOutputBus(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::RemoveBus(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 1 || !info[0].IsString()) {
     Napi::TypeError::New(env, "Expected (id: string)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -121,11 +105,7 @@ Napi::Value MixerWrap::RemoveBus(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::BusCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   size_t count = 0;
   SonareError err = sonare_mixer_bus_count(mixer_, &count);
   if (err != SONARE_OK) {
@@ -139,11 +119,7 @@ Napi::Value MixerWrap::BusCount(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::AddVcaGroup(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 2 || !info[0].IsString() || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (id: string, gainDb: number, members?: string[])")
         .ThrowAsJavaScriptException();
@@ -184,11 +160,7 @@ Napi::Value MixerWrap::AddVcaGroup(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::RemoveVcaGroup(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 1 || !info[0].IsString()) {
     Napi::TypeError::New(env, "Expected (id: string)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -205,11 +177,7 @@ Napi::Value MixerWrap::RemoveVcaGroup(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::SetVcaGroupGainDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 2 || !info[0].IsString() || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (id: string, gainDb: number)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -227,11 +195,7 @@ Napi::Value MixerWrap::SetVcaGroupGainDb(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::SetVcaGroupMembers(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 2 || !info[0].IsString() || !info[1].IsArray()) {
     Napi::TypeError::New(env, "Expected (id: string, members: string[])")
         .ThrowAsJavaScriptException();
@@ -264,11 +228,7 @@ Napi::Value MixerWrap::SetVcaGroupMembers(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::VcaGroupCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   size_t count = 0;
   SonareError err = sonare_mixer_vca_group_count(mixer_, &count);
   if (err != SONARE_OK) {

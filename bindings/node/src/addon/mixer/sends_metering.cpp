@@ -275,11 +275,7 @@ Napi::Value MixerWrap::StripNonFiniteDiscardCount(const Napi::CallbackInfo& info
 Napi::Value MixerWrap::StripById(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 1 || !info[0].IsString()) {
     Napi::TypeError::New(env, "Expected (id: string)").ThrowAsJavaScriptException();
     return env.Undefined();

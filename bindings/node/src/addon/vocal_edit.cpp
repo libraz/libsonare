@@ -203,16 +203,12 @@ bool ReadVocalNoteEdit(Napi::Env env, const Napi::Value& value, SonareVocalNoteE
     return false;
   }
 
-  const Napi::Value destination_start = object.Get("destinationStartSample");
-  const Napi::Value destination_length = object.Get("destinationLengthSamples");
-  if (!destination_start.IsUndefined() && !destination_start.IsNull() &&
-      !RequiredSafeIntegerValue(env, destination_start, "edit.destinationStartSample",
-                                &out->destination_start_sample, 0)) {
-    return false;
-  }
-  if (!destination_length.IsUndefined() && !destination_length.IsNull() &&
-      !RequiredSafeIntegerValue(env, destination_length, "edit.destinationLengthSamples",
-                                &out->destination_length_samples, 0)) {
+  // The destination placement is required: an omitted position is never read as 0.
+  if (!RequiredSafeIntegerValue(env, object.Get("destinationStartSample"),
+                                "edit.destinationStartSample", &out->destination_start_sample, 0) ||
+      !RequiredSafeIntegerValue(env, object.Get("destinationLengthSamples"),
+                                "edit.destinationLengthSamples", &out->destination_length_samples,
+                                0)) {
     return false;
   }
   const Napi::Value gain = object.Get("gainDb");

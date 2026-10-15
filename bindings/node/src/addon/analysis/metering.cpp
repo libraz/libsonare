@@ -812,8 +812,7 @@ Napi::Value SonareWrap::PeakDbInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
   float out_db = 0.0f;
@@ -830,8 +829,7 @@ Napi::Value SonareWrap::RmsDbInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
   float out_db = 0.0f;
@@ -848,8 +846,7 @@ Napi::Value SonareWrap::DcOffsetInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
   float out_value = 0.0f;
@@ -866,8 +863,7 @@ Napi::Value SonareWrap::CrestFactorDbInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
   float out_db = 0.0f;
@@ -884,8 +880,7 @@ Napi::Value SonareWrap::SilenceRatioInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
   float threshold_db{};
@@ -910,8 +905,7 @@ Napi::Value SonareWrap::TruePeakDbInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
   int oversample{};
@@ -930,8 +924,7 @@ Napi::Value SonareWrap::DetectClippingInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
   float threshold = 0.999f;
@@ -980,8 +973,7 @@ Napi::Value SonareWrap::DynamicRangeInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
   float window_sec = 0.0f;
@@ -1022,8 +1014,7 @@ Napi::Value SonareWrap::SpectrumInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
   int n_fft = 0;
@@ -1054,8 +1045,7 @@ Napi::Value SonareWrap::SpectrumFrameInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
   int64_t frame_offset_arg = 0;
@@ -1090,8 +1080,7 @@ Napi::Value SonareWrap::Ebur128LoudnessRangeInstance(const Napi::CallbackInfo& i
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
   float out_lra = 0.0f;

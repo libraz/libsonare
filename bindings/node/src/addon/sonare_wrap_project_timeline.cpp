@@ -61,7 +61,7 @@ bool ProjectTimelineWrap::ReadHandle(Napi::Env env, const Napi::Value& value,
   }
   ProjectTimelineWrap* wrap = ProjectTimelineWrap::Unwrap(value.As<Napi::Object>());
   if (wrap == nullptr || wrap->timeline_ == nullptr) {
-    Napi::TypeError::New(env, "timeline is disposed").ThrowAsJavaScriptException();
+    sonare_node::ThrowHandleClosed(env, "ProjectTimeline");
     return false;
   }
   *out = wrap->timeline_;

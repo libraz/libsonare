@@ -226,10 +226,7 @@ void ProjectWrap::DestroyNative() noexcept {
 Napi::Value ProjectWrap::ToJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (project_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE, "Project is destroyed");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   char* json = nullptr;
   size_t len = 0;
   ThrowIfError(env, sonare_project_serialize(project_, &json, &len));
@@ -314,6 +311,7 @@ Napi::Value ProjectWrap::FromJsonWithDiagnostics(const Napi::CallbackInfo& info)
 Napi::Value ProjectWrap::SetSampleRate(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   double sample_rate = 0.0;
   if (!OptionalDoubleArg(env, info, 0, "sampleRate", 0.0, &sample_rate)) return env.Undefined();
   ThrowIfError(env, sonare_project_set_sample_rate(project_, sample_rate));
@@ -324,6 +322,7 @@ Napi::Value ProjectWrap::SetSampleRate(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::GetSampleRate(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   double out = 0.0;
   ThrowIfError(env, sonare_project_get_sample_rate(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -334,6 +333,7 @@ Napi::Value ProjectWrap::GetSampleRate(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::SetOverlapPolicy(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   uint32_t policy = 0;
   if (!OptionalUint32Arg(env, info, 0, "policy", 0, &policy)) return env.Undefined();
   ThrowIfError(env, sonare_project_set_overlap_policy(project_, policy));
@@ -344,6 +344,7 @@ Napi::Value ProjectWrap::SetOverlapPolicy(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::GetOverlapPolicy(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   uint32_t out = 0;
   ThrowIfError(env, sonare_project_get_overlap_policy(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -354,6 +355,7 @@ Napi::Value ProjectWrap::GetOverlapPolicy(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::SetMixerSceneJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   std::string scene;
   if (!OptionalStringArg(env, info, 0, "sceneJson", "", &scene)) return env.Undefined();
   ThrowIfError(env, sonare_project_set_mixer_scene_json(project_, scene.c_str()));
@@ -379,6 +381,7 @@ Napi::Value ProjectWrap::SetMixerSceneJson(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::SetMarker(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   uint32_t marker_id = 0;
   double ppq = 0.0;
   if (!OptionalUint32Arg(env, info, 0, "markerId", 0, &marker_id) ||
@@ -397,6 +400,7 @@ Napi::Value ProjectWrap::SetMarker(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::SetMarkerEx(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   if (info.Length() <= 0 || !info[0].IsObject()) {
     Napi::TypeError::New(env, "expected a marker object").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -419,6 +423,7 @@ Napi::Value ProjectWrap::SetMarkerEx(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::MarkerByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   size_t index = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectMarker marker{};
@@ -442,6 +447,7 @@ Napi::Value ProjectWrap::MarkerByIndex(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::TrackByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   size_t index = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectTrack track{};
@@ -463,6 +469,7 @@ Napi::Value ProjectWrap::TrackByIndex(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::ClipByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   size_t index = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectClip clip{};
@@ -486,6 +493,7 @@ Napi::Value ProjectWrap::ClipByIndex(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::SourceByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   size_t index = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectSource source{};
@@ -499,6 +507,7 @@ Napi::Value ProjectWrap::SourceByIndex(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::TempoSegmentByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   size_t index = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectTempoSegment seg{};
@@ -519,6 +528,7 @@ Napi::Value ProjectWrap::TempoSegmentByIndex(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::TimeSignatureByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   size_t index = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectTimeSignatureSegment seg{};
@@ -535,6 +545,7 @@ Napi::Value ProjectWrap::TimeSignatureByIndex(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::SetTempoSegments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   std::vector<SonareProjectTempoSegment> segments;
   if (info.Length() > 0 && info[0].IsArray()) {
     Napi::Array input = info[0].As<Napi::Array>();
@@ -566,6 +577,7 @@ Napi::Value ProjectWrap::SetTempoSegments(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::SetTimeSignatures(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   std::vector<SonareProjectTimeSignatureSegment> segments;
   if (info.Length() > 0 && info[0].IsArray()) {
     Napi::Array input = info[0].As<Napi::Array>();
@@ -597,6 +609,7 @@ Napi::Value ProjectWrap::SetTimeSignatures(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::TrackCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   size_t out = 0;
   ThrowIfError(env, sonare_project_track_count(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -607,6 +620,7 @@ Napi::Value ProjectWrap::TrackCount(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::ClipCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   size_t out = 0;
   ThrowIfError(env, sonare_project_clip_count(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -617,6 +631,7 @@ Napi::Value ProjectWrap::ClipCount(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::SourceCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   size_t out = 0;
   ThrowIfError(env, sonare_project_source_count(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -627,6 +642,7 @@ Napi::Value ProjectWrap::SourceCount(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::UnresolvedAudioSourceIds(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   size_t count = 0;
   ThrowIfError(env, sonare_project_unresolved_audio_source_count(project_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -644,6 +660,7 @@ Napi::Value ProjectWrap::UnresolvedAudioSourceIds(const Napi::CallbackInfo& info
 Napi::Value ProjectWrap::UnresolvedAudioSources(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   size_t count = 0;
   ThrowIfError(env, sonare_project_unresolved_audio_source_count(project_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -663,6 +680,7 @@ Napi::Value ProjectWrap::UnresolvedAudioSources(const Napi::CallbackInfo& info) 
 Napi::Value ProjectWrap::SetSourceAudio(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   if (info.Length() < 4 || !sonare_node::IsFloat32Array(info[1])) {
     Napi::TypeError::New(env,
                          "setSourceAudio expects (sourceId, Float32Array, channels, sampleRate)")
@@ -694,6 +712,7 @@ Napi::Value ProjectWrap::SetSourceAudio(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::TempoSegmentCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   size_t out = 0;
   ThrowIfError(env, sonare_project_tempo_segment_count(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -704,6 +723,7 @@ Napi::Value ProjectWrap::TempoSegmentCount(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::TimeSignatureCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   size_t out = 0;
   ThrowIfError(env, sonare_project_time_signature_count(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -714,6 +734,7 @@ Napi::Value ProjectWrap::TimeSignatureCount(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::MarkerCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   size_t out = 0;
   ThrowIfError(env, sonare_project_marker_count(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();

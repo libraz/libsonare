@@ -19,7 +19,7 @@ describe('master automation ids (Node)', () => {
         expect(engine.parameterInfo(id).name).toBe(['faderDb', 'pan', 'width'][index]);
         expect(() => engine.setParameterSmoothed(id, index === 0 ? -6 : 0.5)).not.toThrow();
       });
-      expect(engine.resolveMasterAutomationId('gain' as 'faderDb')).toBe(-1);
+      expect(() => engine.resolveMasterAutomationId('gain' as 'faderDb')).toThrow(RangeError);
     } finally {
       engine.destroy();
     }

@@ -84,6 +84,25 @@ void ThrowSonareErrorMessage(Napi::Env env, SonareError err, const std::string& 
   MakeSonareError(env, err, message).ThrowAsJavaScriptException();
 }
 
+void ThrowHandleClosed(Napi::Env env, const char* what) {
+  ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                          std::string(what) + " has been destroyed");
+}
+
+void ThrowCurrentException(Napi::Env env) {
+  try {
+    throw;
+  } catch (const Napi::Error& e) {
+    e.ThrowAsJavaScriptException();
+  } catch (const sonare::SonareException& e) {
+    ThrowSonareErrorMessage(env, CErrorFromException(e), e.what());
+  } catch (const std::exception& e) {
+    ThrowStdException(env, e);
+  } catch (...) {
+    ThrowSonareErrorMessage(env, SONARE_ERROR_UNKNOWN, "Unknown error");
+  }
+}
+
 void ThrowLastSonareError(Napi::Env env, const std::string& prefix, SonareError fallback) {
   SonareError code = sonare_last_error_code();
   if (code == SONARE_OK) code = fallback;
@@ -94,6 +113,10 @@ void ThrowLastSonareError(Napi::Env env, const std::string& prefix, SonareError 
 }
 
 void ThrowStdException(Napi::Env env, const std::exception& e) {
+  if (const auto* coded = dynamic_cast<const sonare::SonareException*>(&e)) {
+    ThrowSonareErrorMessage(env, CErrorFromException(*coded), e.what());
+    return;
+  }
   ThrowSonareErrorMessage(env, static_cast<SonareError>(sonare::error_code_for_std_exception(e)),
                           e.what());
 }

@@ -71,8 +71,8 @@ RealtimeVoiceChangerWrap::RealtimeVoiceChangerWrap(const Napi::CallbackInfo& inf
   try {
     changer_ = std::make_unique<sonare::editing::voice_changer::RealtimeVoiceChanger>();
     changer_->set_config(info.Length() >= 1 ? ConfigFromJs(info[0]) : ConfigFromJs(env.Null()));
-  } catch (const std::exception& e) {
-    sonare_node::ThrowStdException(env, e);
+  } catch (...) {
+    sonare_node::ThrowCurrentException(env);
   }
 }
 
@@ -80,8 +80,7 @@ RealtimeVoiceChangerWrap::~RealtimeVoiceChangerWrap() { ReleaseNative(); }
 
 bool RealtimeVoiceChangerWrap::EnsureAlive(Napi::Env env) const {
   if (changer_) return true;
-  sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                       "RealtimeVoiceChanger has been destroyed");
+  sonare_node::ThrowHandleClosed(env, "RealtimeVoiceChanger");
   return false;
 }
 

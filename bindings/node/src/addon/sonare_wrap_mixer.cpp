@@ -110,11 +110,7 @@ MixerWrap::~MixerWrap() {
 Napi::Value MixerWrap::Compile(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   SonareError err = sonare_mixer_compile(mixer_);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to compile mixer graph: ");
@@ -127,11 +123,7 @@ Napi::Value MixerWrap::Compile(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::ProcessStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsArray()) {
     Napi::TypeError::New(env,
                          "Expected (leftChannels: Float32Array[], rightChannels: Float32Array[])")
@@ -218,11 +210,7 @@ Napi::Value MixerWrap::ProcessStereo(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::TailSamples(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   int tail = 0;
   SonareError err = sonare_mixer_tail_samples(mixer_, &tail);
   if (err != SONARE_OK) {
@@ -236,11 +224,7 @@ Napi::Value MixerWrap::TailSamples(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::LatencySamples(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   int latency = 0;
   SonareError err = sonare_mixer_latency_samples(mixer_, &latency);
   if (err != SONARE_OK) {
@@ -254,11 +238,7 @@ Napi::Value MixerWrap::LatencySamples(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::FlushMeters(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   SonareError err = sonare_mixer_flush_meters(mixer_);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "mixer meter flush failed: ");
@@ -270,11 +250,7 @@ Napi::Value MixerWrap::FlushMeters(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::DrainTailStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 1 || !info[0].IsNumber()) {
     Napi::TypeError::New(env, "Expected (numSamples: number)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -313,11 +289,7 @@ Napi::Value MixerWrap::DrainTailStereo(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::StripCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   return Napi::Number::New(env, static_cast<double>(sonare_mixer_strip_count(mixer_)));
   SONARE_NODE_CATCH(env)
 }
@@ -349,11 +321,7 @@ Napi::Value MixerWrap::SceneWarnings(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::ScheduleInsertAutomation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 5 || !info[0].IsNumber() || !info[1].IsNumber() || !info[2].IsNumber() ||
       !info[3].IsNumber() || !info[4].IsNumber()) {
     Napi::TypeError::New(env,
@@ -390,11 +358,7 @@ Napi::Value MixerWrap::ScheduleInsertAutomation(const Napi::CallbackInfo& info) 
 Napi::Value MixerWrap::ToSceneJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   char* json = nullptr;
   SonareError err = sonare_mixer_to_scene_json(mixer_, &json);
   if (err != SONARE_OK || json == nullptr) {

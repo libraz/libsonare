@@ -46,8 +46,8 @@ describe('track lane automation ids (Node)', () => {
       const pan10 = engine.resolveTrackLaneAutomationId(10, 'pan');
       expect(fader10).toBeGreaterThan(0);
       expect(pan10).not.toBe(fader10);
-      expect(engine.resolveTrackLaneAutomationId(30, 'faderDb')).toBe(-1);
-      expect(engine.resolveTrackLaneAutomationId(10, 'width' as 'pan')).toBe(-1);
+      expect(() => engine.resolveTrackLaneAutomationId(30, 'faderDb')).toThrow(RangeError);
+      expect(() => engine.resolveTrackLaneAutomationId(10, 'width' as 'pan')).toThrow(RangeError);
 
       engine.setTrackLanes([20, 10]);
       expect(engine.resolveTrackLaneAutomationId(10, 'faderDb')).toBe(fader10);

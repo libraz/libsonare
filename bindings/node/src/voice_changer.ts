@@ -217,12 +217,9 @@ export function voiceChange(
       formantMode,
     );
   } catch (error) {
-    // An unreachable absolute request or an unknown mode is an argument refusal, so it is a
-    // RangeError like every other out-of-domain argument rather than a coded library failure.
-    if (
-      formantMode !== 'relative' &&
-      (error as { code?: unknown }).code === ErrorCode.InvalidParameter
-    ) {
+    // The core refuses only on an argument (non-finite, out-of-range factor, unreachable absolute
+    // request, unknown mode), so it is a RangeError in every formant mode.
+    if ((error as { code?: unknown }).code === ErrorCode.InvalidParameter) {
       throw new RangeError((error as Error).message);
     }
     throw error;

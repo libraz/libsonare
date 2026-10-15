@@ -530,15 +530,28 @@ export function withConfiguredEngine<T>(body: (engine: NativeEngine) => T): T {
  * Everything about the engine these entry points can move that the addon also
  * exposes a getter for. The strip readbacks are automation-id resolutions: a
  * strip rebuilt from the empty JSON string a failed read used to hand the C ABI
- * loses its insert, so the id collapses to the -1 sentinel.
+ * loses its insert, so the id stops resolving (null here).
  */
 export function engineStateSnapshot(engine: NativeEngine): string {
+  // An unresolvable id is a RangeError, recorded as null so the snapshot can still compare.
+  const idOrNull = (resolve: () => number): number | null => {
+    try {
+      return resolve();
+    } catch (error) {
+      if (error instanceof RangeError) {
+        return null;
+      }
+      throw error;
+    }
+  };
   return JSON.stringify({
     capture: engine.captureStatus(),
     prefetchFrames: engine.clipPagePrefetchFrames(),
-    trackInsertId: engine.resolveTrackInsertAutomationId(TRACK_ID, 0, 'band0.gainDb'),
-    busInsertId: engine.resolveBusInsertAutomationId(BUS_ID, 0, 'band0.gainDb'),
-    masterInsertId: engine.resolveMasterInsertAutomationId(0, 'band0.gainDb'),
+    trackInsertId: idOrNull(() =>
+      engine.resolveTrackInsertAutomationId(TRACK_ID, 0, 'band0.gainDb'),
+    ),
+    busInsertId: idOrNull(() => engine.resolveBusInsertAutomationId(BUS_ID, 0, 'band0.gainDb')),
+    masterInsertId: idOrNull(() => engine.resolveMasterInsertAutomationId(0, 'band0.gainDb')),
     clipCount: engine.clipCount(),
   });
 }

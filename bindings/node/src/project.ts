@@ -288,7 +288,7 @@ export class ProjectTimeline {
  *
  * @example
  * ```typescript
- * const project = new Project();
+ * const project = Project.create();
  * const track = project.addTrack({ kind: 'audio', name: 'lead' });
  * const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4 });
  * const json = project.toJson();

@@ -39,8 +39,7 @@ PlaybackLoudnessMeterWrap::~PlaybackLoudnessMeterWrap() {
 
 bool PlaybackLoudnessMeterWrap::EnsureAlive(Napi::Env env) const {
   if (meter_ != nullptr) return true;
-  sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                       "PlaybackLoudnessMeter has been destroyed");
+  sonare_node::ThrowHandleClosed(env, "PlaybackLoudnessMeter");
   return false;
 }
 

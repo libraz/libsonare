@@ -343,10 +343,7 @@ Napi::Object RehydrateItemToObject(Napi::Env env, const SonareProjectVocalRehydr
 Napi::Value ProjectWrap::ApplyVocalEdit(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (project_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE, "Project is destroyed");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   if (info.Length() != 1) {
     Napi::TypeError::New(env, "applyVocalEdit expects one request object")
         .ThrowAsJavaScriptException();
@@ -366,10 +363,7 @@ Napi::Value ProjectWrap::ApplyVocalEdit(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::GetVocalEditDependencies(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (project_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE, "Project is destroyed");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   if (info.Length() != 0) {
     Napi::TypeError::New(env, "getVocalEditDependencies expects no arguments")
         .ThrowAsJavaScriptException();
@@ -397,10 +391,7 @@ Napi::Value ProjectWrap::GetVocalEditDependencies(const Napi::CallbackInfo& info
 Napi::Value ProjectWrap::RehydrateVocalEdits(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (project_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE, "Project is destroyed");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   if (info.Length() < 1 || info.Length() > 2) {
     Napi::TypeError::New(env,
                          "rehydrateVocalEdits expects originals and an optional cancel callback")

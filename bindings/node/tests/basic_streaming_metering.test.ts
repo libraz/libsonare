@@ -695,10 +695,10 @@ describe('streaming handles signal use-after-destroy', () => {
     chain.prepare(48000, 64, 1);
     expect(chain.latencySamples()).toBeGreaterThan(0);
     chain.destroy();
-    expect(() => chain.latencySamples()).toThrow(/not initialized/);
-    expect(() => chain.stageNames()).toThrow(/not initialized/);
-    expect(() => chain.processMono(new Float32Array(64))).toThrow(/not initialized/);
-    expect(() => chain.reset()).toThrow(/not initialized/);
+    expect(() => chain.latencySamples()).toThrow(/destroyed/);
+    expect(() => chain.stageNames()).toThrow(/destroyed/);
+    expect(() => chain.processMono(new Float32Array(64))).toThrow(/destroyed/);
+    expect(() => chain.reset()).toThrow(/destroyed/);
     // A second destroy() stays a no-op.
     expect(() => chain.destroy()).not.toThrow();
   });
@@ -708,10 +708,10 @@ describe('streaming handles signal use-after-destroy', () => {
     eq.setBand(0, { type: 'Peak', frequencyHz: 1000, gainDb: 3, q: 1, enabled: true });
     expect(eq.lastAutoGainDb()).toBe(0);
     eq.destroy();
-    expect(() => eq.latencySamples()).toThrow(/not initialized/);
-    expect(() => eq.lastAutoGainDb()).toThrow(/not initialized/);
-    expect(() => eq.clearSidechain()).toThrow(/not initialized/);
-    expect(() => eq.processMono(new Float32Array(512))).toThrow(/not initialized/);
+    expect(() => eq.latencySamples()).toThrow(/destroyed/);
+    expect(() => eq.lastAutoGainDb()).toThrow(/destroyed/);
+    expect(() => eq.clearSidechain()).toThrow(/destroyed/);
+    expect(() => eq.processMono(new Float32Array(512))).toThrow(/destroyed/);
     expect(() => eq.destroy()).not.toThrow();
   });
 });

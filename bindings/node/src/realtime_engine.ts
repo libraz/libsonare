@@ -845,9 +845,9 @@ export class RealtimeEngine {
    * Resolves a track-lane insert parameter (by its JSON-key name) to the
    * reserved automation id that can then be driven with
    * {@link setAutomationLane}, {@link setParameter}, or
-   * {@link setParameterSmoothed}, exactly like a fader/pan id. Returns `-1`
-   * when the track, insert, or name is unknown. (The Python binding raises a
-   * `SonareError` for an unknown id where Node/WASM return the `-1` sentinel.)
+   * {@link setParameterSmoothed}, exactly like a fader/pan id. Throws a
+   * `RangeError` when the track, insert, or name is unknown, like every
+   * `resolve*AutomationId` on every surface.
    *
    * This trio is how a mastering processor gets time-varying automation: the
    * `eq.*`, `dynamics.*`, `saturation.*`, `spectral.*`, `stereo.*`,
@@ -859,7 +859,8 @@ export class RealtimeEngine {
    * entire signal by construction and do not run on the realtime path. The four realtime repair
    * inserts (`repair.decrackle`, `repair.dehum`, `repair.denoiseClassical`,
    * `repair.dereverbClassical`) load into a strip, but every one of their parameters is
-   * construction-only, so no automation id resolves (-1) and an edit needs a strip replacement.
+   * construction-only, so no automation id resolves (a `RangeError`) and an edit needs a strip
+   * replacement.
    *
    * Track, bus and master insert ids share one lifetime rule: an id names its
    * strip by identity and the kind of processor in its slot (for
@@ -869,6 +870,8 @@ export class RealtimeEngine {
    * applies nothing, its queued edits are dropped, and it is never reissued;
    * resolve again for the new processor. A change that would take the engine
    * past its 8192 insert-id entries is refused.
+   *
+   * @throws RangeError when the track, insert or parameter name does not resolve.
    */
   resolveTrackInsertAutomationId(trackId: number, insertIndex: number, paramName: string): number {
     return this.native.resolveTrackInsertAutomationId(trackId, insertIndex, paramName);
@@ -889,8 +892,8 @@ export class RealtimeEngine {
    * automation id. Same lifetime rule as {@link resolveTrackInsertAutomationId}:
    * the id names the track, not its lane position, so it keeps driving that
    * track across {@link setTrackLanes} reorders and applies nothing once the
-   * track is removed. Returns `-1` when the track has no lane or the name is
-   * neither.
+   * track is removed. Throws a `RangeError` when the track has no lane or the
+   * name is neither.
    */
   resolveTrackLaneAutomationId(trackId: number, paramName: 'faderDb' | 'pan'): number {
     return this.native.resolveTrackLaneAutomationId(trackId, paramName);
@@ -901,7 +904,7 @@ export class RealtimeEngine {
    * lifetime rule as {@link resolveTrackInsertAutomationId}: the id names the
    * bus, not its position in the bus list, so it keeps driving that bus across
    * {@link setTrackBuses} reorders and the removal of other buses, and applies
-   * nothing once the bus is removed. Returns `-1` when the bus is not
+   * nothing once the bus is removed. Throws a `RangeError` when the bus is not
    * configured or the name is not `'faderDb'`.
    */
   resolveBusAutomationId(busId: number, paramName: 'faderDb'): number {
@@ -912,7 +915,7 @@ export class RealtimeEngine {
    * Resolve the master strip's fader (`'faderDb'`), pan (`'pan'`) or width
    * (`'width'`) to its reserved automation id, usable with `setAutomationLane` /
    * `setParameter`. The master strip always exists, so the id never goes stale.
-   * Returns `-1` when the name is none of the three.
+   * Throws a `RangeError` when the name is none of the three.
    */
   resolveMasterAutomationId(paramName: 'faderDb' | 'pan' | 'width'): number {
     return this.native.resolveMasterAutomationId(paramName);
@@ -926,9 +929,10 @@ export class RealtimeEngine {
   /**
    * Resolves a hosted instrument's continuous parameter (by its JSON-key name)
    * to the reserved automation id, so an instrument parameter is driven at
-   * audio-block precision exactly like a strip insert. Returns `-1` when the
-   * destination has no bound instrument, the instrument exposes no automatable
-   * parameters, or the name is unknown.
+   * audio-block precision exactly like a strip insert. Throws a `RangeError` when
+   * the destination has no bound instrument, the instrument exposes no
+   * automatable parameters, or the name is unknown. Arguments are
+   * `(destinationId, paramName)`, as in the C ABI.
    *
    * For the NativeSynth ({@link setSynthInstrument}) the names are the
    * continuous `SynthPatch` fields: `gain`, `busDrive`, `cutoffHz`,
@@ -942,7 +946,7 @@ export class RealtimeEngine {
    *
    * Structural fields (`preset`, `engineMode`, `waveform`, `filterModel`,
    * `unison`, `polyphony`, `body`, `modRoutings`) are not automatable and
-   * return `-1`; rebind the instrument with a new patch instead.
+   * throw a `RangeError`; rebind the instrument with a new patch instead.
    *
    * All automatable parameters of a NativeSynth reach already-sounding voices
    * from the next processed block. Voices using GM program patches are

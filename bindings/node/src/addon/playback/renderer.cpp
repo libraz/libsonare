@@ -61,8 +61,7 @@ PlaybackRendererWrap::~PlaybackRendererWrap() {
 
 bool PlaybackRendererWrap::EnsureAlive(Napi::Env env) const {
   if (renderer_ != nullptr) return true;
-  sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                       "PlaybackRenderer has been destroyed");
+  sonare_node::ThrowHandleClosed(env, "PlaybackRenderer");
   return false;
 }
 

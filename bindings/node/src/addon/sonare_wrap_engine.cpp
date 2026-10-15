@@ -450,11 +450,7 @@ void RealtimeEngineWrap::ReleaseNativeResources() {
 Napi::Value RealtimeEngineWrap::Prepare(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (engine_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "RealtimeEngine is destroyed");
-    return env.Undefined();
-  }
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   // Both leading arguments are required: an absent one reads as undefined and is
   // rejected by the reader below, so it reaches the caller as a TypeError rather
   // than as a silent no-op.
@@ -480,6 +476,7 @@ Napi::Value RealtimeEngineWrap::Prepare(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::Play(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   int64_t deadline = -1;
   if (!OptionalInt64Arg(env, info, 0, "renderFrame", -1, &deadline)) return env.Undefined();
   ThrowIfError(env, sonare_engine_play(engine_, deadline));
@@ -490,6 +487,7 @@ Napi::Value RealtimeEngineWrap::Play(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::Stop(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   int64_t deadline = -1;
   if (!OptionalInt64Arg(env, info, 0, "renderFrame", -1, &deadline)) return env.Undefined();
   ThrowIfError(env, sonare_engine_stop(engine_, deadline));
@@ -500,6 +498,7 @@ Napi::Value RealtimeEngineWrap::Stop(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::SeekSample(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   int64_t sample = 0;
   int64_t deadline = -1;
   if (!OptionalInt64Arg(env, info, 0, "timelineSample", 0, &sample) ||
@@ -514,6 +513,7 @@ Napi::Value RealtimeEngineWrap::SeekSample(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::SettleParameters(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   ThrowIfError(env, sonare_engine_settle_parameters(engine_));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -522,6 +522,7 @@ Napi::Value RealtimeEngineWrap::SettleParameters(const Napi::CallbackInfo& info)
 Napi::Value RealtimeEngineWrap::FlushControlCommands(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   ThrowIfError(env, sonare_engine_flush_control_commands(engine_));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -530,6 +531,7 @@ Napi::Value RealtimeEngineWrap::FlushControlCommands(const Napi::CallbackInfo& i
 Napi::Value RealtimeEngineWrap::SettleInsertParameters(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   ThrowIfError(env, sonare_engine_settle_insert_parameters(engine_));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -539,6 +541,7 @@ Napi::Value RealtimeEngineWrap::ApplyCommandsDueNowPreservingFuture(
     const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   ThrowIfError(env, sonare_engine_apply_commands_due_now_preserving_future(engine_));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -547,6 +550,7 @@ Napi::Value RealtimeEngineWrap::ApplyCommandsDueNowPreservingFuture(
 Napi::Value RealtimeEngineWrap::SeekPpq(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   double ppq = 0.0;
   int64_t deadline = -1;
   if (!RequiredDoubleArg(env, info, 0, "ppq", &ppq) ||
@@ -561,6 +565,7 @@ Napi::Value RealtimeEngineWrap::SeekPpq(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::SetTempo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   double bpm = 0.0;
   if (!RequiredDoubleArg(env, info, 0, "bpm", &bpm)) return env.Undefined();
   ThrowIfError(env, sonare_engine_set_tempo(engine_, bpm));
@@ -571,6 +576,7 @@ Napi::Value RealtimeEngineWrap::SetTempo(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::SetTimeSignature(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   int numerator = 0;
   int denominator = 0;
   if (!RequiredIntArg(env, info, 0, "numerator", &numerator) ||
@@ -585,6 +591,7 @@ Napi::Value RealtimeEngineWrap::SetTimeSignature(const Napi::CallbackInfo& info)
 Napi::Value RealtimeEngineWrap::ResetMasterLoudnessMeter(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   int64_t render_frame = -1;
   if (!OptionalInt64Arg(env, info, 0, "renderFrame", -1, &render_frame)) {
     return env.Undefined();
@@ -597,6 +604,7 @@ Napi::Value RealtimeEngineWrap::ResetMasterLoudnessMeter(const Napi::CallbackInf
 Napi::Value RealtimeEngineWrap::PrimeOfflineParameters(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   int num_channels = 0;
   int block_size = 0;
   if (!RequiredIntArg(env, info, 0, "numChannels", &num_channels) ||
@@ -611,6 +619,7 @@ Napi::Value RealtimeEngineWrap::PrimeOfflineParameters(const Napi::CallbackInfo&
 Napi::Value RealtimeEngineWrap::ResetProcessorState(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   int64_t render_frame = -1;
   if (!OptionalInt64Arg(env, info, 0, "renderFrame", -1, &render_frame)) {
     return env.Undefined();
@@ -623,6 +632,7 @@ Napi::Value RealtimeEngineWrap::ResetProcessorState(const Napi::CallbackInfo& in
 Napi::Value RealtimeEngineWrap::TailSamples(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   int tail = 0;
   ThrowIfError(env, sonare_engine_tail_samples(engine_, &tail));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -633,6 +643,7 @@ Napi::Value RealtimeEngineWrap::TailSamples(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::GraphLatencySamplesQ8(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   int latency_q8 = 0;
   ThrowIfError(env, sonare_engine_graph_latency_samples_q8(engine_, &latency_q8));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -643,6 +654,7 @@ Napi::Value RealtimeEngineWrap::GraphLatencySamplesQ8(const Napi::CallbackInfo& 
 Napi::Value RealtimeEngineWrap::SetTempoSegments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   Napi::Array input;
   if (!RequiredArrayValue(env, info[0], "segments", &input)) return env.Undefined();
   std::vector<SonareProjectTempoSegment> segments;
@@ -671,6 +683,7 @@ Napi::Value RealtimeEngineWrap::SetTempoSegments(const Napi::CallbackInfo& info)
 Napi::Value RealtimeEngineWrap::SetTimeSignatureSegments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   Napi::Array input;
   if (!RequiredArrayValue(env, info[0], "segments", &input)) return env.Undefined();
   std::vector<SonareProjectTimeSignatureSegment> segments;
@@ -701,6 +714,7 @@ Napi::Value RealtimeEngineWrap::SetTimeSignatureSegments(const Napi::CallbackInf
 Napi::Value RealtimeEngineWrap::SampleAtPpq(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   double ppq = 0.0;
   if (!RequiredDoubleArg(env, info, 0, "ppq", &ppq)) return env.Undefined();
   int64_t sample = 0;
@@ -712,6 +726,7 @@ Napi::Value RealtimeEngineWrap::SampleAtPpq(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::SetLoop(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   double start_ppq = 0.0;
   double end_ppq = 0.0;
   bool enabled = true;
@@ -728,6 +743,7 @@ Napi::Value RealtimeEngineWrap::SetLoop(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::AddParameter(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   SonareParameterInfo parameter{};
   if (!ReadParameter(info, 0, &parameter)) return env.Undefined();
   ThrowIfError(env, sonare_engine_add_parameter(engine_, &parameter));
@@ -738,6 +754,7 @@ Napi::Value RealtimeEngineWrap::AddParameter(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::ParameterCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   size_t count = 0;
   ThrowIfError(env, sonare_engine_parameter_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -748,6 +765,7 @@ Napi::Value RealtimeEngineWrap::ParameterCount(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::ParameterInfoByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   size_t index = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareParameterInfo parameter{};
@@ -760,6 +778,7 @@ Napi::Value RealtimeEngineWrap::ParameterInfoByIndex(const Napi::CallbackInfo& i
 Napi::Value RealtimeEngineWrap::ParameterInfo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t id = 0;
   if (!RequiredUint32Arg(env, info, 0, "index", &id)) return env.Undefined();
   SonareParameterInfo parameter{};
@@ -772,6 +791,7 @@ Napi::Value RealtimeEngineWrap::ParameterInfo(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::SetAutomationLane(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (info.Length() <= 1 || !info[1].IsArray()) {
     Napi::TypeError::New(env, "expected an array of automation points")
         .ThrowAsJavaScriptException();
@@ -806,6 +826,7 @@ Napi::Value RealtimeEngineWrap::SetAutomationLane(const Napi::CallbackInfo& info
 Napi::Value RealtimeEngineWrap::AutomationLaneCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   size_t count = 0;
   ThrowIfError(env, sonare_engine_automation_lane_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -816,6 +837,7 @@ Napi::Value RealtimeEngineWrap::AutomationLaneCount(const Napi::CallbackInfo& in
 Napi::Value RealtimeEngineWrap::SetMarkers(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (info.Length() <= 0 || !info[0].IsArray()) {
     Napi::TypeError::New(env, "expected an array of markers").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -849,6 +871,7 @@ Napi::Value RealtimeEngineWrap::SetMarkers(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::MarkerCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   size_t count = 0;
   ThrowIfError(env, sonare_engine_marker_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -859,6 +882,7 @@ Napi::Value RealtimeEngineWrap::MarkerCount(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::MarkerByIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   size_t index = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareEngineMarker marker{};
@@ -871,6 +895,7 @@ Napi::Value RealtimeEngineWrap::MarkerByIndex(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::Marker(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t id = 0;
   if (!RequiredUint32Arg(env, info, 0, "id", &id)) return env.Undefined();
   SonareEngineMarker marker{};
@@ -883,6 +908,7 @@ Napi::Value RealtimeEngineWrap::Marker(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::SeekMarker(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t id = 0;
   int64_t deadline = -1;
   if (!RequiredUint32Arg(env, info, 0, "markerId", &id) ||
@@ -897,6 +923,7 @@ Napi::Value RealtimeEngineWrap::SeekMarker(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::SetLoopFromMarkers(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t start_id = 0;
   uint32_t end_id = 0;
   if (!RequiredUint32Arg(env, info, 0, "startMarkerId", &start_id) ||
@@ -911,6 +938,7 @@ Napi::Value RealtimeEngineWrap::SetLoopFromMarkers(const Napi::CallbackInfo& inf
 Napi::Value RealtimeEngineWrap::SetMetronome(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (info.Length() <= 0 || !info[0].IsObject()) {
     Napi::TypeError::New(env, "expected a metronome config object").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -931,6 +959,7 @@ Napi::Value RealtimeEngineWrap::SetMetronome(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::Metronome(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   SonareEngineMetronomeConfig config{};
   ThrowIfError(env, sonare_engine_metronome(engine_, &config));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -941,6 +970,7 @@ Napi::Value RealtimeEngineWrap::Metronome(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::CountInEndSample(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   int64_t start_sample = 0;
   int bars = 0;
   if (!RequiredInt64Arg(env, info, 0, "startSample", &start_sample) ||
@@ -957,6 +987,7 @@ Napi::Value RealtimeEngineWrap::CountInEndSample(const Napi::CallbackInfo& info)
 Napi::Value RealtimeEngineWrap::SetParameter(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t param_id = 0;
   float value = 0.0f;
   int64_t deadline = -1;
@@ -973,6 +1004,7 @@ Napi::Value RealtimeEngineWrap::SetParameter(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::InsertParameterConstructedValue(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t param_id = 0;
   if (!RequiredUint32Arg(env, info, 0, "paramId", &param_id)) return env.Undefined();
   float value = 0.0f;
@@ -985,6 +1017,7 @@ Napi::Value RealtimeEngineWrap::InsertParameterConstructedValue(const Napi::Call
 Napi::Value RealtimeEngineWrap::SetParameterSmoothed(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t param_id = 0;
   float value = 0.0f;
   int64_t deadline = -1;
@@ -1001,6 +1034,7 @@ Napi::Value RealtimeEngineWrap::SetParameterSmoothed(const Napi::CallbackInfo& i
 Napi::Value RealtimeEngineWrap::SetParamSmoothingMs(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   float smoothing_ms = 0.0f;
   if (!RequiredFloatArg(env, info, 0, "smoothingMs", &smoothing_ms)) return env.Undefined();
   ThrowIfError(env, sonare_engine_set_param_smoothing_ms(engine_, smoothing_ms));
@@ -1011,6 +1045,7 @@ Napi::Value RealtimeEngineWrap::SetParamSmoothingMs(const Napi::CallbackInfo& in
 Napi::Value RealtimeEngineWrap::SetSoloMute(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t lane_index = 0;
   bool solo = false;
   bool mute = false;
@@ -1030,6 +1065,7 @@ Napi::Value RealtimeEngineWrap::SetSoloMute(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::SetTrackMonitorMode(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t lane_index = 0;
   int mode_value = 0;
   int64_t deadline = -1;
@@ -1047,6 +1083,7 @@ Napi::Value RealtimeEngineWrap::SetTrackMonitorMode(const Napi::CallbackInfo& in
 Napi::Value RealtimeEngineWrap::ClearParameters(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   ThrowIfError(env, sonare_engine_clear_parameters(engine_));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -1055,6 +1092,7 @@ Napi::Value RealtimeEngineWrap::ClearParameters(const Napi::CallbackInfo& info) 
 Napi::Value RealtimeEngineWrap::SetMidiClips(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (info.Length() == 0 || !info[0].IsArray()) {
     Napi::TypeError::New(env, "setMidiClips expects an array of clip schedules")
         .ThrowAsJavaScriptException();
@@ -1101,6 +1139,7 @@ Napi::Value RealtimeEngineWrap::SetMidiClips(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::SetBuiltinInstrument(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "destinationId", 0, &destination_id)) return env.Undefined();
   SonareEngineBuiltinSynthConfig config{};
@@ -1124,6 +1163,7 @@ Napi::Value RealtimeEngineWrap::SetBuiltinInstrument(const Napi::CallbackInfo& i
 Napi::Value RealtimeEngineWrap::SetSynthInstrument(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   SonareSynthInstrumentBinding binding{};
   // Owns the engine-param keys the binding's patch borrows; alive across the C call.
   sonare_node::SynthPatchStorage patch_storage;
@@ -1157,6 +1197,7 @@ Napi::Value RealtimeEngineWrap::SetSynthInstrument(const Napi::CallbackInfo& inf
 Napi::Value RealtimeEngineWrap::LoadSoundFont(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   const uint8_t* bytes = nullptr;
   size_t len = 0;
   if (info.Length() > 0 && info[0].IsBuffer()) {
@@ -1180,6 +1221,7 @@ Napi::Value RealtimeEngineWrap::LoadSoundFont(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::SetSf2Instrument(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "destinationId", 0, &destination_id)) return env.Undefined();
   SonareEngineSf2InstrumentConfig config{};
@@ -1212,6 +1254,7 @@ Napi::Value RealtimeEngineWrap::SetSf2Instrument(const Napi::CallbackInfo& info)
 Napi::Value RealtimeEngineWrap::ClearMidiInstrument(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "destinationId", 0, &destination_id)) return env.Undefined();
   ThrowIfError(env, sonare_engine_clear_midi_instrument(engine_, destination_id));
@@ -1222,6 +1265,7 @@ Napi::Value RealtimeEngineWrap::ClearMidiInstrument(const Napi::CallbackInfo& in
 Napi::Value RealtimeEngineWrap::MidiInstrumentCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   size_t count = 0;
   ThrowIfError(env, sonare_engine_midi_instrument_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -1232,6 +1276,7 @@ Napi::Value RealtimeEngineWrap::MidiInstrumentCount(const Napi::CallbackInfo& in
 Napi::Value RealtimeEngineWrap::PushMidiNoteOn(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   uint8_t group = 0;
   uint8_t channel = 0;
@@ -1259,6 +1304,7 @@ Napi::Value RealtimeEngineWrap::PushMidiNoteOn(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::BindMidiCc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint8_t channel = 0;
   uint8_t controller = 0;
   uint32_t param_id = 0;
@@ -1280,6 +1326,7 @@ Napi::Value RealtimeEngineWrap::BindMidiCc(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::BindMidiCcBinding(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   if (info.Length() < 1 || !info[0].IsObject()) {
     Napi::TypeError::New(env, "Expected a MIDI CC binding object").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -1319,6 +1366,7 @@ Napi::Value RealtimeEngineWrap::BindMidiCcBinding(const Napi::CallbackInfo& info
 Napi::Value RealtimeEngineWrap::ClearMidiCcBindings(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   ThrowIfError(env, sonare_engine_clear_midi_cc_bindings(engine_));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -1327,6 +1375,7 @@ Napi::Value RealtimeEngineWrap::ClearMidiCcBindings(const Napi::CallbackInfo& in
 Napi::Value RealtimeEngineWrap::MidiCcBindingCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   size_t count = 0;
   ThrowIfError(env, sonare_engine_midi_cc_binding_count(engine_, &count));
   return Napi::Number::New(env, static_cast<double>(count));
@@ -1336,6 +1385,7 @@ Napi::Value RealtimeEngineWrap::MidiCcBindingCount(const Napi::CallbackInfo& inf
 Napi::Value RealtimeEngineWrap::SetControllerProfile(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id)) return env.Undefined();
   if (info.Length() < 2 || !info[1].IsString()) {
@@ -1352,6 +1402,7 @@ Napi::Value RealtimeEngineWrap::SetControllerProfile(const Napi::CallbackInfo& i
 Napi::Value RealtimeEngineWrap::BindController(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id)) return env.Undefined();
   SonareControllerBinding binding{};
@@ -1366,6 +1417,7 @@ Napi::Value RealtimeEngineWrap::BindController(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::ClearControllerBindings(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id)) return env.Undefined();
   ThrowIfError(env, sonare_engine_clear_controller_bindings(engine_, destination_id));
@@ -1376,6 +1428,7 @@ Napi::Value RealtimeEngineWrap::ClearControllerBindings(const Napi::CallbackInfo
 Napi::Value RealtimeEngineWrap::ControllerBindingCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id)) return env.Undefined();
   size_t count = 0;
@@ -1388,6 +1441,7 @@ Napi::Value RealtimeEngineWrap::ControllerBindingCount(const Napi::CallbackInfo&
 Napi::Value RealtimeEngineWrap::SetControllerVelocityMeaningful(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   bool meaningful = false;
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id) ||
@@ -1403,6 +1457,7 @@ Napi::Value RealtimeEngineWrap::SetControllerVelocityMeaningful(const Napi::Call
 Napi::Value RealtimeEngineWrap::ControllerVelocityMeaningful(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id)) return env.Undefined();
   int meaningful = 0;
@@ -1416,6 +1471,7 @@ Napi::Value RealtimeEngineWrap::ControllerVelocityMeaningful(const Napi::Callbac
 Napi::Value RealtimeEngineWrap::SetControllerNoteTracking(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id)) return env.Undefined();
   // Both are required rather than defaulted, for the reason the C ABI refuses
@@ -1442,6 +1498,7 @@ Napi::Value RealtimeEngineWrap::SetControllerNoteTracking(const Napi::CallbackIn
 Napi::Value RealtimeEngineWrap::ControllerNoteTracking(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id)) return env.Undefined();
   int dimension = SONARE_MPE_DIMENSION_BEND;
@@ -1460,6 +1517,7 @@ Napi::Value RealtimeEngineWrap::ControllerNoteTracking(const Napi::CallbackInfo&
 Napi::Value RealtimeEngineWrap::SetArticulation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   uint8_t channel = 0;
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id) ||
@@ -1483,6 +1541,7 @@ Napi::Value RealtimeEngineWrap::SetArticulation(const Napi::CallbackInfo& info) 
 Napi::Value RealtimeEngineWrap::SetPartRig(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   uint8_t part = 0;
   std::string inserts_json;
@@ -1505,6 +1564,7 @@ Napi::Value RealtimeEngineWrap::SetPartRig(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::Articulation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   uint8_t channel = 0;
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id) ||
@@ -1521,6 +1581,7 @@ Napi::Value RealtimeEngineWrap::Articulation(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::LegatoFallbackCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id)) return env.Undefined();
   uint32_t count = 0;
@@ -1533,6 +1594,7 @@ Napi::Value RealtimeEngineWrap::LegatoFallbackCount(const Napi::CallbackInfo& in
 Napi::Value RealtimeEngineWrap::SetMidiFx(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id)) return env.Undefined();
   std::string config;
@@ -1545,6 +1607,7 @@ Napi::Value RealtimeEngineWrap::SetMidiFx(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::ClearMidiFx(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "destinationId", 0, &destination_id)) return env.Undefined();
   ThrowIfError(env, sonare_engine_clear_midi_fx(engine_, destination_id));
@@ -1555,6 +1618,7 @@ Napi::Value RealtimeEngineWrap::ClearMidiFx(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::SetMidiInputSource(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "destinationId", 0, &destination_id)) return env.Undefined();
   ThrowIfError(env, sonare_engine_set_midi_input_source(engine_, destination_id));
@@ -1565,6 +1629,7 @@ Napi::Value RealtimeEngineWrap::SetMidiInputSource(const Napi::CallbackInfo& inf
 Napi::Value RealtimeEngineWrap::ClearMidiInputSource(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   ThrowIfError(env, sonare_engine_clear_midi_input_source(engine_));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -1573,6 +1638,7 @@ Napi::Value RealtimeEngineWrap::ClearMidiInputSource(const Napi::CallbackInfo& i
 Napi::Value RealtimeEngineWrap::MidiInputPendingCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   size_t count = 0;
   ThrowIfError(env, sonare_engine_midi_input_pending_count(engine_, &count));
   return Napi::Number::New(env, static_cast<double>(count));
@@ -1582,6 +1648,7 @@ Napi::Value RealtimeEngineWrap::MidiInputPendingCount(const Napi::CallbackInfo& 
 Napi::Value RealtimeEngineWrap::PushMidiInputNoteOn(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint8_t group = 0;
   uint8_t channel = 0;
   uint8_t note = 0;
@@ -1607,6 +1674,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputNoteOn(const Napi::CallbackInfo& in
 Napi::Value RealtimeEngineWrap::PushMidiInputNoteOff(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint8_t group = 0;
   uint8_t channel = 0;
   uint8_t note = 0;
@@ -1632,6 +1700,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputNoteOff(const Napi::CallbackInfo& i
 Napi::Value RealtimeEngineWrap::PushMidiInputCc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint8_t group = 0;
   uint8_t channel = 0;
   uint8_t controller = 0;
@@ -1657,6 +1726,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputCc(const Napi::CallbackInfo& info) 
 Napi::Value RealtimeEngineWrap::PushMidiInputPitchBend(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint8_t group = 0;
   uint8_t channel = 0;
   uint16_t bend14 = 0;
@@ -1680,6 +1750,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputPitchBend(const Napi::CallbackInfo&
 Napi::Value RealtimeEngineWrap::PushMidiInputChannelPressure(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint8_t group = 0;
   uint8_t channel = 0;
   uint8_t pressure = 0;
@@ -1703,6 +1774,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputChannelPressure(const Napi::Callbac
 Napi::Value RealtimeEngineWrap::PushMidiInputPolyPressure(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint8_t group = 0;
   uint8_t channel = 0;
   uint8_t note = 0;
@@ -1729,6 +1801,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputPolyPressure(const Napi::CallbackIn
 Napi::Value RealtimeEngineWrap::PushMidiNoteOff(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   uint8_t group = 0;
   uint8_t channel = 0;
@@ -1756,6 +1829,7 @@ Napi::Value RealtimeEngineWrap::PushMidiNoteOff(const Napi::CallbackInfo& info) 
 Napi::Value RealtimeEngineWrap::PushMidiCc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   uint8_t group = 0;
   uint8_t channel = 0;
@@ -1783,6 +1857,7 @@ Napi::Value RealtimeEngineWrap::PushMidiCc(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::PushMidiPitchBend(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   uint8_t group = 0;
   uint8_t channel = 0;
@@ -1808,6 +1883,7 @@ Napi::Value RealtimeEngineWrap::PushMidiPitchBend(const Napi::CallbackInfo& info
 Napi::Value RealtimeEngineWrap::PushMidiChannelPressure(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   uint8_t group = 0;
   uint8_t channel = 0;
@@ -1833,6 +1909,7 @@ Napi::Value RealtimeEngineWrap::PushMidiChannelPressure(const Napi::CallbackInfo
 Napi::Value RealtimeEngineWrap::PushMidiPolyPressure(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   uint8_t group = 0;
   uint8_t channel = 0;
@@ -1861,6 +1938,7 @@ Napi::Value RealtimeEngineWrap::PushMidiPolyPressure(const Napi::CallbackInfo& i
 Napi::Value RealtimeEngineWrap::PushMidiPanic(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   int64_t deadline = -1;
   if (!OptionalInt64Arg(env, info, 0, "renderFrame", -1, &deadline)) return env.Undefined();
   ThrowIfError(env, sonare_engine_push_midi_panic(engine_, deadline));
@@ -1871,6 +1949,7 @@ Napi::Value RealtimeEngineWrap::PushMidiPanic(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::PushMidiSysex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id)) return env.Undefined();
   const uint8_t* bytes = nullptr;
@@ -1937,6 +2016,7 @@ bool ReadUmpWords(Napi::Env env, const Napi::Value& value, const char* name,
 Napi::Value RealtimeEngineWrap::PushMidiUmp(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   std::array<uint32_t, kMaxUmpWords> words{};
   size_t count = 0;
@@ -1961,6 +2041,7 @@ Napi::Value RealtimeEngineWrap::PushMidiUmp(const Napi::CallbackInfo& info) {
 Napi::Value RealtimeEngineWrap::PushMidiInputUmp(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   std::array<uint32_t, kMaxUmpWords> words{};
   size_t count = 0;
   int64_t port_time = 0;
@@ -1982,6 +2063,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputUmp(const Napi::CallbackInfo& info)
 Napi::Value RealtimeEngineWrap::PushMidiProgram(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   uint8_t group = 0;
   uint8_t channel = 0;
@@ -2015,6 +2097,7 @@ Napi::Value RealtimeEngineWrap::PushMidiProgram(const Napi::CallbackInfo& info) 
 Napi::Value RealtimeEngineWrap::PushMidiInputProgram(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint8_t group = 0;
   uint8_t channel = 0;
   uint8_t program = 0;
@@ -2046,6 +2129,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputProgram(const Napi::CallbackInfo& i
 Napi::Value RealtimeEngineWrap::SetMidiDestinationExternal(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t destination_id = 0;
   bool external = false;
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id) ||
@@ -2061,6 +2145,7 @@ Napi::Value RealtimeEngineWrap::SetMidiDestinationExternal(const Napi::CallbackI
 Napi::Value RealtimeEngineWrap::SetExternalMidiClockEnabled(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   bool enabled = false;
   if (!RequiredBoolArg(env, info, 0, "enabled", &enabled)) return env.Undefined();
   ThrowIfError(env, sonare_engine_set_external_midi_clock_enabled(engine_, enabled ? 1 : 0));
@@ -2071,6 +2156,7 @@ Napi::Value RealtimeEngineWrap::SetExternalMidiClockEnabled(const Napi::Callback
 Napi::Value RealtimeEngineWrap::ExternalMidiDroppedCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t count = 0;
   ThrowIfError(env, sonare_engine_external_midi_dropped_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -2081,6 +2167,7 @@ Napi::Value RealtimeEngineWrap::ExternalMidiDroppedCount(const Napi::CallbackInf
 Napi::Value RealtimeEngineWrap::ClipPageRequestOverflowCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t count = 0;
   ThrowIfError(env, sonare_engine_clip_page_request_overflow_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -2091,6 +2178,7 @@ Napi::Value RealtimeEngineWrap::ClipPageRequestOverflowCount(const Napi::Callbac
 Napi::Value RealtimeEngineWrap::WarpStretchOverflowCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t count = 0;
   ThrowIfError(env, sonare_engine_warp_stretch_overflow_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -2101,11 +2189,15 @@ Napi::Value RealtimeEngineWrap::WarpStretchOverflowCount(const Napi::CallbackInf
 Napi::Value RealtimeEngineWrap::SetWarpVoiceCapacity(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  // RequiredUint32Arg refuses a non-integer, a negative value, or a missing
-  // one; the core rejects anything past SONARE_ENGINE_MAX_WARP_VOICES (64)
-  // via ThrowIfError.
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t voices = 0;
   if (!RequiredUint32Arg(env, info, 0, "voices", &voices)) return env.Undefined();
+  if (voices > SONARE_ENGINE_MAX_WARP_VOICES) {
+    Napi::RangeError::New(env, "voices must be an integer in [0, " +
+                                   std::to_string(SONARE_ENGINE_MAX_WARP_VOICES) + "]")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   ThrowIfError(env, sonare_engine_set_warp_voice_capacity(engine_, voices));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -2114,6 +2206,7 @@ Napi::Value RealtimeEngineWrap::SetWarpVoiceCapacity(const Napi::CallbackInfo& i
 Napi::Value RealtimeEngineWrap::WarpVoiceCapacity(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t voices = 0;
   ThrowIfError(env, sonare_engine_warp_voice_capacity(engine_, &voices));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -2135,6 +2228,7 @@ Napi::Value RealtimeEngineWrap::WarpVoiceCapacity(const Napi::CallbackInfo& info
 Napi::Value RealtimeEngineWrap::DrainExternalMidi(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   // The most MIDI-1 messages one queue record can lower to (a MIDI 2.0
   // registered / assignable controller's four RPN / NRPN messages), and hence
   // the smallest capacity the C ABI accepts.
@@ -2190,6 +2284,7 @@ Napi::Value RealtimeEngineWrap::DrainExternalMidi(const Napi::CallbackInfo& info
 Napi::Value RealtimeEngineWrap::GetTransportState(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   SonareTransportState state{};
   ThrowIfError(env, sonare_engine_get_transport_state(engine_, &state));
   if (env.IsExceptionPending()) return env.Undefined();

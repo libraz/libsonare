@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Project, ProjectTimeline, RealtimeEngine } from '../src/index.js';
+import { ErrorCode, Project, ProjectTimeline, RealtimeEngine } from '../src/index.js';
 
 const SAMPLE_RATE = 48000;
 const BLOCK_SIZE = 128;
@@ -147,7 +147,9 @@ describe('project timeline', () => {
     expect(timeline).not.toBeNull();
     timeline?.dispose();
     timeline?.dispose();
-    expect(() => engine.applyProjectTimeline(timeline as ProjectTimeline)).toThrow(/disposed/);
+    expect(() => engine.applyProjectTimeline(timeline as ProjectTimeline)).toThrow(
+      expect.objectContaining({ code: ErrorCode.InvalidState }),
+    );
     engine.destroy();
     project.destroy();
   });

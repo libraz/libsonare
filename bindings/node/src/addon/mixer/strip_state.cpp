@@ -9,8 +9,7 @@ namespace sonare_node {
 SonareStrip* MixerWrap::ResolveStrip(const Napi::CallbackInfo& info, const Napi::Value& ref) {
   Napi::Env env = info.Env();
   if (mixer_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Mixer is not initialized");
+    sonare_node::ThrowHandleClosed(env, "Mixer");
     return nullptr;
   }
   SonareStrip* strip = nullptr;

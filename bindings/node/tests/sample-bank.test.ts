@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  ErrorCode,
   Project,
   RealtimeEngine,
   SampleBank,
@@ -311,7 +312,9 @@ describe('bouncing a project through a sample patch', () => {
     bank.addSample(sampleSine(64));
     bank.addZone({ sampleIndex: 0 });
     bank.destroy();
-    expect(() => renderNote(bank, 60)).toThrow(TypeError);
+    expect(() => renderNote(bank, 60)).toThrow(
+      expect.objectContaining({ code: ErrorCode.InvalidState }),
+    );
   });
 
   it('binds the same bank to a realtime destination', () => {

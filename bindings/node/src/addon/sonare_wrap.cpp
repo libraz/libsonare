@@ -935,8 +935,7 @@ Napi::Value SonareWrap::GetData(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
 
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
 
@@ -956,8 +955,7 @@ Napi::Value SonareWrap::GetLength(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
 
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
 
@@ -970,8 +968,7 @@ Napi::Value SonareWrap::GetSampleRate(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
 
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
 
@@ -984,8 +981,7 @@ Napi::Value SonareWrap::GetDuration(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
 
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
 
@@ -997,8 +993,7 @@ Napi::Value SonareWrap::DetectBpmInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
 
@@ -1016,8 +1011,7 @@ Napi::Value SonareWrap::DetectBpmInstance(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::DetectKeyInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -1068,8 +1062,7 @@ Napi::Value SonareWrap::DetectKeyInstance(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::DetectKeyCandidatesInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -1127,8 +1120,7 @@ Napi::Value SonareWrap::DetectBeatsInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
 
@@ -1154,8 +1146,7 @@ Napi::Value SonareWrap::DetectDownbeatsInstance(const Napi::CallbackInfo& info) 
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
 
@@ -1181,8 +1172,7 @@ Napi::Value SonareWrap::DetectOnsetsInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
 
@@ -1208,8 +1198,7 @@ Napi::Value SonareWrap::AnalyzeInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "Audio has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "Audio");
     return env.Undefined();
   }
 

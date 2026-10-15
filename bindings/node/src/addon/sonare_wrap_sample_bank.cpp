@@ -114,7 +114,7 @@ bool SampleBankWrap::ReadHandle(Napi::Env env, const Napi::Value& value, SonareS
   }
   SampleBankWrap* wrap = SampleBankWrap::Unwrap(value.As<Napi::Object>());
   if (wrap == nullptr || wrap->bank_ == nullptr) {
-    Napi::TypeError::New(env, "sampleBank is destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowHandleClosed(env, "SampleBank");
     return false;
   }
   *out = wrap->bank_;
@@ -127,8 +127,7 @@ Napi::Value SampleBankWrap::AddSample(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (bank_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "SampleBank is destroyed");
+    sonare_node::ThrowHandleClosed(env, "SampleBank");
     return env.Undefined();
   }
   if (!sonare_node::RequireFloat32Array(info, 0,
@@ -165,8 +164,7 @@ Napi::Value SampleBankWrap::AddZone(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (bank_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "SampleBank is destroyed");
+    sonare_node::ThrowHandleClosed(env, "SampleBank");
     return env.Undefined();
   }
   uint32_t set_index = 0;
@@ -196,8 +194,7 @@ Napi::Value SampleBankWrap::SampleCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (bank_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "SampleBank is destroyed");
+    sonare_node::ThrowHandleClosed(env, "SampleBank");
     return env.Undefined();
   }
   size_t count = 0;
@@ -211,8 +208,7 @@ Napi::Value SampleBankWrap::SetCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (bank_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "SampleBank is destroyed");
+    sonare_node::ThrowHandleClosed(env, "SampleBank");
     return env.Undefined();
   }
   size_t count = 0;

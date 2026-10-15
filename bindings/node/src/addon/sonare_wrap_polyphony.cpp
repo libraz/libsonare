@@ -185,8 +185,7 @@ void PolyphonicAnalysisWrap::Release() {
 
 bool PolyphonicAnalysisWrap::RequireOpen(Napi::Env env) {
   if (analysis_ == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
-                                         "PolyphonicAnalysis has been destroyed");
+    sonare_node::ThrowHandleClosed(env, "PolyphonicAnalysis");
     return false;
   }
   return true;

@@ -465,4 +465,64 @@ describe('Node vocal edit facade', () => {
       session.dispose();
     }
   });
+
+  describe('an omitted operation position is refused by name, never read as 0', () => {
+    const refuse = (build: (note: { id: number }) => unknown, pattern: RegExp): void => {
+      const session = create();
+      try {
+        const note = session.notes().notes[0];
+        const draft = session.beginEdit();
+        const error = (() => {
+          try {
+            draft.apply({
+              expectedGeneration: draft.token().generation,
+              operations: [build(note)],
+            } as unknown as Parameters<typeof draft.apply>[0]);
+          } catch (caught) {
+            return caught as Error;
+          }
+          return undefined;
+        })();
+        expect(error).toBeInstanceOf(TypeError);
+        expect(error?.message).toMatch(pattern);
+        draft.cancel();
+      } finally {
+        session.dispose();
+      }
+    };
+
+    it('setSourceSpan without a destination position or length', () => {
+      refuse(
+        (note) => ({
+          kind: 'setSourceSpan',
+          noteId: note.id,
+          sourceStartSample: 0,
+          sourceEndSample: 100,
+          destinationLengthSamples: 100,
+        }),
+        /destinationStartSample/,
+      );
+      refuse(
+        (note) => ({
+          kind: 'setSourceSpan',
+          noteId: note.id,
+          sourceStartSample: 0,
+          sourceEndSample: 100,
+          destinationStartSample: 0,
+        }),
+        /destinationLengthSamples/,
+      );
+    });
+
+    it('split without a cut position', () => {
+      refuse((note) => ({ kind: 'split', noteId: note.id }), /sourceSample/);
+    });
+
+    it('setEdit without its destination placement', () => {
+      refuse((note) => {
+        const { destinationStartSample: _start, ...edit } = identityEdit();
+        return { kind: 'setEdit', noteId: note.id, edit };
+      }, /destinationStartSample/);
+    });
+  });
 });

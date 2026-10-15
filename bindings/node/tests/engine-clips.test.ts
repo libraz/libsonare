@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { RealtimeEngine } from '../src/index.js';
+import { ErrorCode, RealtimeEngine } from '../src/index.js';
 
 describe('RealtimeEngine native binding', () => {
   it('rejects clips without channels or a page provider without aborting', () => {
@@ -351,13 +351,14 @@ describe('RealtimeEngine native binding', () => {
       expect(engine.warpVoiceCapacity()).toBe(0);
 
       // Rejected values leave the previously accepted capacity (0) in place.
-      expect(() => engine.setWarpVoiceCapacity(65)).toThrow();
+      expect(() => engine.setWarpVoiceCapacity(65)).toThrow(RangeError);
+      expect(() => engine.setWarpVoiceCapacity(65)).toThrow(/voices/);
       expect(engine.warpVoiceCapacity()).toBe(0);
 
-      expect(() => engine.setWarpVoiceCapacity(-1)).toThrow();
+      expect(() => engine.setWarpVoiceCapacity(-1)).toThrow(RangeError);
       expect(engine.warpVoiceCapacity()).toBe(0);
 
-      expect(() => engine.setWarpVoiceCapacity(1.5)).toThrow();
+      expect(() => engine.setWarpVoiceCapacity(1.5)).toThrow(RangeError);
       expect(engine.warpVoiceCapacity()).toBe(0);
     } finally {
       engine.destroy();
@@ -405,8 +406,12 @@ describe('RealtimeEngine native binding', () => {
     reload.destroy();
 
     // The provider table is empty, so neither id resolves any more.
-    expect(() => engine.supplyClipPage(first.id, 0, page)).toThrow(TypeError);
-    expect(() => engine.supplyClipPage(third.id, 0, page)).toThrow(TypeError);
+    expect(() => engine.supplyClipPage(first.id, 0, page)).toThrow(
+      expect.objectContaining({ code: ErrorCode.InvalidState }),
+    );
+    expect(() => engine.supplyClipPage(third.id, 0, page)).toThrow(
+      expect.objectContaining({ code: ErrorCode.InvalidState }),
+    );
     // Idempotent: the facade's destroy() is guarded by its own disposed flag, so
     // reach past it to drive the native release a second time directly.
     const native = (engine as unknown as { native: { destroy(): void } }).native;

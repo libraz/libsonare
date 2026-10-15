@@ -146,4 +146,20 @@ describe('insert automation ids (Node)', () => {
       engine.destroy();
     }
   });
+
+  it('raises RangeError for an unknown parameter name, track or instrument destination', () => {
+    const engine = new RealtimeEngine(48000, 256);
+    try {
+      engine.setTrackLanes([10]);
+      engine.setTrackStripJson(10, insertScene('strips', 'track-10', ['utility.gain']));
+      expect(() => engine.resolveTrackInsertAutomationId(10, 0, 'noSuchParam')).toThrow(RangeError);
+      expect(() => engine.resolveTrackInsertAutomationId(10, 0, 'noSuchParam')).toThrow(
+        /noSuchParam/,
+      );
+      expect(() => engine.resolveMasterInsertAutomationId(0, 'noSuchParam')).toThrow(RangeError);
+      expect(() => engine.resolveInstrumentAutomationId(99, 'gain')).toThrow(RangeError);
+    } finally {
+      engine.destroy();
+    }
+  });
 });

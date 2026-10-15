@@ -508,6 +508,30 @@ function wrapVocalRenderJob(native: NativeJob): VocalRenderJob {
   return new VocalRenderJobHandle(native);
 }
 
+/** Resolves one operation position, refusing an omitted one by name rather than reading it as 0. */
+function requiredOperationBound(
+  at: string,
+  sample: number | undefined,
+  sec: number | undefined,
+  sampleRate: number,
+  sampleName: string,
+  secName: string,
+): number {
+  const fn = 'VocalEditDraft.apply';
+  const value = resolveSampleBound(
+    fn,
+    sample,
+    sec,
+    sampleRate,
+    `${at}.${sampleName}`,
+    `${at}.${secName}`,
+  );
+  if (value === undefined) {
+    throw new TypeError(`${fn}: ${at}.${sampleName} or ${at}.${secName} is required`);
+  }
+  return value;
+}
+
 /**
  * Fold the seconds spellings of an operation's sample positions into the sample
  * fields the addon reads. Operations that carry no seconds field pass through.
@@ -521,7 +545,6 @@ function resolveVocalOperationTimes(
   }
   return operations.map((operation, index) => {
     const at = `operations[${index}]`;
-    const fn = 'VocalEditDraft.apply';
     if (operation?.kind === 'setSourceSpan') {
       const { sourceStartSec, sourceEndSec, destinationStartSec, destinationLengthSec, ...rest } =
         operation;
@@ -530,8 +553,7 @@ function resolveVocalOperationTimes(
         sec: number | undefined,
         sampleName: string,
         secName: string,
-      ) =>
-        resolveSampleBound(fn, sample, sec, sampleRate, `${at}.${sampleName}`, `${at}.${secName}`);
+      ) => requiredOperationBound(at, sample, sec, sampleRate, sampleName, secName);
       return {
         ...rest,
         sourceStartSample: bound(
@@ -564,13 +586,13 @@ function resolveVocalOperationTimes(
       const { sourceSec, ...rest } = operation;
       return {
         ...rest,
-        sourceSample: resolveSampleBound(
-          fn,
+        sourceSample: requiredOperationBound(
+          at,
           rest.sourceSample,
           sourceSec,
           sampleRate,
-          `${at}.sourceSample`,
-          `${at}.sourceSec`,
+          'sourceSample',
+          'sourceSec',
         ),
       } as VocalEditOperation;
     }

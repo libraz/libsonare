@@ -1077,8 +1077,8 @@ describe('RealtimeEngine native binding', () => {
     engine.setBusStripInsertParamByName(1, 0, 'band0.gainDb', -3);
 
     // Unknown bus / insert / name resolve to -1.
-    expect(engine.resolveBusInsertAutomationId(9, 0, 'band0.gainDb')).toBe(-1);
-    expect(engine.resolveBusInsertAutomationId(1, 0, 'nope')).toBe(-1);
+    expect(() => engine.resolveBusInsertAutomationId(9, 0, 'band0.gainDb')).toThrow(RangeError);
+    expect(() => engine.resolveBusInsertAutomationId(1, 0, 'nope')).toThrow(RangeError);
 
     let badBusError: unknown;
     try {

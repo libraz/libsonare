@@ -47,8 +47,8 @@ describe('bus automation ids (Node)', () => {
       const fader200 = engine.resolveBusAutomationId(200, 'faderDb');
       expect(fader100).toBeGreaterThan(0);
       expect(fader200).not.toBe(fader100);
-      expect(engine.resolveBusAutomationId(300, 'faderDb')).toBe(-1);
-      expect(engine.resolveBusAutomationId(100, 'pan' as 'faderDb')).toBe(-1);
+      expect(() => engine.resolveBusAutomationId(300, 'faderDb')).toThrow(RangeError);
+      expect(() => engine.resolveBusAutomationId(100, 'pan' as 'faderDb')).toThrow(RangeError);
 
       engine.setTrackBuses([{ busId: 200 }, { busId: 100 }]);
       expect(engine.resolveBusAutomationId(200, 'faderDb')).toBe(fader200);

@@ -255,6 +255,7 @@ Napi::Value Transcribe(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::TranscribeToClip(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   Napi::Object request;
   if (!sonare_node::RequireRequestObject(env, "transcribeToClip", info, &request)) {
     return env.Undefined();

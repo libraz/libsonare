@@ -9,7 +9,7 @@ import {
   SonareError,
   synthPresetPatch,
 } from '../src/index.js';
-import { addonSourceText } from './_addon_sources.js';
+import { addonSources, addonSourceText } from './_addon_sources.js';
 
 describe('SonareError', () => {
   it('exposes an ErrorCode enum aligned with the C ABI', () => {
@@ -275,16 +275,29 @@ describe('the canonical exception map covers every core ErrorCode', () => {
  * bindings/wasm/tests/errors.test.ts for that half.
  */
 describe('SONARE_NODE_CATCH classifies a raw std::exception through the shared classifier', () => {
-  it('routes each catch macro through one classifying helper that calls the classifier once', () => {
+  it('routes each catch macro through the one translator, which classifies once', () => {
     const text = addonSourceText('sonare_wrap_utils.h');
     const nodeCatch = text.slice(text.indexOf('#define SONARE_NODE_CATCH('));
     const tryCatch = nodeCatch.slice(0, nodeCatch.indexOf('#define SONARE_NODE_CATCH_VOID('));
     const voidCatch = nodeCatch.slice(nodeCatch.indexOf('#define SONARE_NODE_CATCH_VOID('));
-    const hits = (s: string) => (s.match(/ThrowStdException/g) ?? []).length;
+    const hits = (s: string) => (s.match(/ThrowCurrentException/g) ?? []).length;
     expect(hits(tryCatch)).toBe(1);
     expect(hits(voidCatch)).toBe(1);
     const helper = addonSourceText('sonare_wrap_utils.cpp');
     expect((helper.match(/error_code_for_std_exception/g) ?? []).length).toBe(1);
+  });
+
+  it('no addon file outside the translator catches std::exception to re-derive a code', () => {
+    const offenders = addonSources()
+      .filter((source) => source.file !== 'sonare_wrap_utils.cpp')
+      .filter((source) =>
+        /catch\s*\(\s*const\s+(sonare::SonareException|std::exception)\s*&/.test(
+          source.text.replace(/\/\/.*$/gm, ''),
+        ),
+      )
+      .map((source) => source.file);
+    // The mastering worker's Execute() runs off the JS thread and records the code for OnOK.
+    expect(offenders).toEqual(['effects/mastering.cpp']);
   });
 
   it('no longer special-cases std::bad_alloc separately from other std::exception', () => {

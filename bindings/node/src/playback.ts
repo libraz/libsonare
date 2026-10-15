@@ -6,7 +6,7 @@ import type {
   RenderPlaybackRequest,
   RenderPlaybackResult,
 } from './types_playback.js';
-import { assertAudioInput, requestObject } from './validation.js';
+import { assertAudioInput, assertAudioSamples, requestObject } from './validation.js';
 
 type NativeHrtfSet = InstanceType<typeof addon.HrtfSet>;
 type NativePlaybackRenderer = InstanceType<typeof addon.PlaybackRenderer>;
@@ -23,8 +23,11 @@ function configJsonText(config: PlaybackRendererConfig | string): string {
  * handle accessor no caller wants.
  */
 function nativeHrtf(hrtf: HrtfSet | undefined): NativeHrtfSet | undefined {
-  if (hrtf === undefined) {
+  if (hrtf === undefined || hrtf === null) {
     return undefined;
+  }
+  if (!(hrtf instanceof HrtfSet)) {
+    throw new TypeError('hrtf must be an HrtfSet instance');
   }
   return (hrtf as unknown as { native: NativeHrtfSet }).native;
 }
@@ -116,8 +119,10 @@ export class PlaybackRenderer {
    * Renders a whole interleaved buffer offline. The renderer is reset first, so the result equals
    * {@link renderPlayback} for the same configuration, and {@link diagnostics} afterwards
    * describes this render. The result carries {@link outputChannels} interleaved channels.
+   * An empty or non-finite `samples` is refused with a `RangeError` naming `samples`.
    */
   renderOffline(samples: Float32Array, inChannels: number): Float32Array {
+    assertAudioSamples('renderOffline', samples);
     return this.native.renderOffline(samples, inChannels);
   }
 
@@ -251,7 +256,7 @@ export class PlaybackLoudnessMeter {
  * Offline one-shot playback render: builds a renderer internally, feeds the
  * whole signal through it, and removes the renderer's own latency from the
  * front of the result so the output aligns with the input.
- * An empty or non-finite `samples` is refused with an `InvalidParameter` error.
+ * An empty or non-finite `samples` is refused with a `RangeError` naming `samples`.
  */
 export function renderPlayback(request: RenderPlaybackRequest): RenderPlaybackResult {
   requestObject('renderPlayback', request, 'request', true);

@@ -263,7 +263,7 @@ describe('StreamingMasteringChain.setParameter', () => {
     const chain = new StreamingMasteringChain({ 'eq.tilt.enabled': true });
     chain.prepare(SR, 128, 1);
     chain.destroy();
-    expect(() => chain.setParameter('eq.tilt.tiltDb', 3)).toThrow(/not initialized/);
+    expect(() => chain.setParameter('eq.tilt.tiltDb', 3)).toThrow(/destroyed/);
   });
 
   it('preserves fractional sample rates accepted by prepare()', () => {
