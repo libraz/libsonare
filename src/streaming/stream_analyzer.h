@@ -514,6 +514,7 @@ class StreamAnalyzer {
   // Bar-synchronized chord tracking (requires stable BPM)
   static constexpr float kBpmConfidenceThreshold = 0.3f;  ///< Min BPM confidence for bar sync
   static constexpr int kBeatsPerBar = 4;                  ///< Beats per bar (4/4 time signature)
+  static constexpr int kVotedPatternBars = 4;             ///< Bars in the voted chord pattern
   bool bar_tracking_active_ = false;                      ///< True when BPM is stable enough
   float bar_duration_ = 0.0f;                             ///< Duration of one bar in seconds
   int current_bar_index_ = -1;                            ///< Current bar index (0-based)
@@ -545,7 +546,9 @@ class StreamAnalyzer {
 
   // Internal methods
   void compute_retroactive_bar_chords();
-  void compute_voted_pattern(int pattern_length = 4);
+  void compute_voted_pattern(int pattern_length = kVotedPatternBars);
+  /// Smoothed chord of the current frame: the per-frame cache when valid, else recomputed.
+  void current_frame_chord(int& root, int& quality, float& corr);
   void correct_voted_pattern_by_known_patterns();
   void detect_progression_pattern();
   template <typename Buffer, typename Quantizer>

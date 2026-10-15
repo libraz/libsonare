@@ -22,6 +22,49 @@ using namespace streaming_detail;
 /// Seconds over which progressive key/BPM confidence ramps to full.
 constexpr float kConfidenceRampSeconds = 30.0f;
 
+/// Minimum pattern match score for a progression pattern to be reported or applied.
+constexpr float kMinPatternScore = 0.75f;
+
+namespace {
+
+struct WinningChord {
+  int root;
+  int quality;
+  float confidence;
+};
+
+/// Picks the vote slot with the most votes (first on ties) and decodes it.
+WinningChord winning_chord(const std::array<int, StreamAnalyzer::kBarVoteSlots>& votes,
+                           int vote_count) {
+  int best_idx = 0;
+  int best_votes = votes[0];
+  for (int i = 1; i < StreamAnalyzer::kBarVoteSlots; ++i) {
+    if (votes[i] > best_votes) {
+      best_votes = votes[i];
+      best_idx = i;
+    }
+  }
+  const float confidence =
+      (vote_count > 0) ? static_cast<float>(best_votes) / static_cast<float>(vote_count) : 0.0f;
+  return {best_idx / kNumChordQualities, best_idx % kNumChordQualities, confidence};
+}
+
+}  // namespace
+
+void StreamAnalyzer::current_frame_chord(int& root, int& quality, float& corr) {
+  if (frame_chord_cache_valid_) {
+    root = frame_chord_root_;
+    quality = frame_chord_quality_;
+    corr = frame_chord_corr_;
+    return;
+  }
+  std::array<float, 12> smoothed_chroma = median_recent_chroma();
+  auto [best_chord, best_corr] = find_best_chord(smoothed_chroma.data(), chord_templates_);
+  root = static_cast<int>(best_chord.root);
+  quality = static_cast<int>(best_chord.quality);
+  corr = best_corr;
+}
+
 void StreamAnalyzer::append_chord_progression(const ChordChange& change) {
   auto& progression = current_estimate_.chord_progression;
   if (progression.size() < config_.max_progression_entries) {
@@ -122,17 +165,7 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
       int new_root;
       int new_quality;
       float chord_corr;
-      if (frame_chord_cache_valid_) {
-        new_root = frame_chord_root_;
-        new_quality = frame_chord_quality_;
-        chord_corr = frame_chord_corr_;
-      } else {
-        std::array<float, 12> smoothed_chroma = median_recent_chroma();
-        auto [best_chord, corr] = find_best_chord(smoothed_chroma.data(), chord_templates_);
-        new_root = static_cast<int>(best_chord.root);
-        new_quality = static_cast<int>(best_chord.quality);
-        chord_corr = corr;
-      }
+      current_frame_chord(new_root, new_quality, chord_corr);
       float new_confidence = reported_chord_confidence(chord_corr);
 
       /// Only update if confidence is above threshold
@@ -306,17 +339,7 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
     int root;
     int quality;
     float frame_corr;
-    if (frame_chord_cache_valid_) {
-      root = frame_chord_root_;
-      quality = frame_chord_quality_;
-      frame_corr = frame_chord_corr_;
-    } else {
-      std::array<float, 12> smoothed_chroma = median_recent_chroma();
-      auto [frame_chord, corr] = find_best_chord(smoothed_chroma.data(), chord_templates_);
-      root = static_cast<int>(frame_chord.root);
-      quality = static_cast<int>(frame_chord.quality);
-      frame_corr = corr;
-    }
+    current_frame_chord(root, quality, frame_corr);
 
     /// Only vote if confidence is above threshold
     if (has_chord_evidence(frame_corr)) {
@@ -335,31 +358,20 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
   if (current_time >= bar_start_time_ + bar_duration_) {
     /// Find chord with most votes
     if (bar_vote_count_ > 0) {
-      int best_idx = 0;
-      int best_votes = bar_chord_votes_[0];
-      for (int i = 1; i < StreamAnalyzer::kBarVoteSlots; ++i) {
-        if (bar_chord_votes_[i] > best_votes) {
-          best_votes = bar_chord_votes_[i];
-          best_idx = i;
-        }
-      }
-
-      int best_root = best_idx / kNumChordQualities;
-      int best_quality = best_idx % kNumChordQualities;
-      float confidence = static_cast<float>(best_votes) / static_cast<float>(bar_vote_count_);
+      const WinningChord best = winning_chord(bar_chord_votes_, bar_vote_count_);
 
       /// Add to bar chord progression
       BarChord bar_chord;
       bar_chord.bar_index = current_bar_index_;
-      bar_chord.root = best_root;
-      bar_chord.quality = best_quality;
+      bar_chord.root = best.root;
+      bar_chord.quality = best.quality;
       bar_chord.start_time = bar_start_time_;
-      bar_chord.confidence = confidence;
+      bar_chord.confidence = best.confidence;
       append_bar_progression(bar_chord);
 
-      /// Update voted pattern and detect progression periodically (every 4 bars)
-      if ((current_bar_index_ + 1) % 4 == 0) {
-        compute_voted_pattern(4);
+      /// Update voted pattern and detect progression periodically
+      if ((current_bar_index_ + 1) % kVotedPatternBars == 0) {
+        compute_voted_pattern(kVotedPatternBars);
         detect_progression_pattern();
       }
     }
@@ -453,27 +465,15 @@ void StreamAnalyzer::compute_retroactive_bar_chords() {
     /// A bar with no vote carries no chord, as in the live path
     if (vote_count == 0) continue;
 
-    /// Find best chord
-    int best_idx = 0;
-    int best_votes = votes[0];
-    for (int i = 1; i < StreamAnalyzer::kBarVoteSlots; ++i) {
-      if (votes[i] > best_votes) {
-        best_votes = votes[i];
-        best_idx = i;
-      }
-    }
-
-    int best_root = best_idx / kNumChordQualities;
-    int best_quality = best_idx % kNumChordQualities;
-    float confidence = (vote_count > 0) ? static_cast<float>(best_votes) / vote_count : 0.0f;
+    const WinningChord best = winning_chord(votes, vote_count);
 
     /// Create bar chord entry
     BarChord bc;
     bc.bar_index = bar;
-    bc.root = best_root;
-    bc.quality = best_quality;
+    bc.root = best.root;
+    bc.quality = best.quality;
     bc.start_time = history_start_sec + bar * bar_duration_;
-    bc.confidence = confidence;
+    bc.confidence = best.confidence;
     append_bar_progression(bc);
   }
 
@@ -482,7 +482,7 @@ void StreamAnalyzer::compute_retroactive_bar_chords() {
   bar_start_time_ = history_start_sec + retroactive_bars * bar_duration_;
 
   /// Compute voted pattern from all detected bars
-  compute_voted_pattern(4);
+  compute_voted_pattern(kVotedPatternBars);
 
   /// Detect best matching progression pattern
   detect_progression_pattern();
@@ -591,7 +591,7 @@ void StreamAnalyzer::seed_bar_progression_for_test(const std::vector<BarChord>& 
 
 void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
   auto& voted = current_estimate_.voted_pattern;
-  if (voted.size() < 4) return;
+  if (voted.size() < static_cast<size_t>(kVotedPatternBars)) return;
 
   /// Every known pattern is a set of scale degrees, so without a key there is
   /// nothing to resolve them against. The key is re-estimated on its own
@@ -684,7 +684,7 @@ void StreamAnalyzer::correct_voted_pattern_by_known_patterns() {
   }
 
   // Apply correction if we found a good match (at least 75% match score)
-  if (best_match_score >= 0.75f && !best_correction.empty()) {
+  if (best_match_score >= kMinPatternScore && !best_correction.empty()) {
     for (const auto& [pos, chord_idx] : best_correction) {
       /// chord_idx was encoded as expected_root * kNumChordQualities +
       /// expected_quality (see the corrections.emplace_back above), so it MUST
@@ -715,7 +715,7 @@ void StreamAnalyzer::detect_progression_pattern() {
   }
 
   const auto& bars = current_estimate_.bar_chord_progression;
-  if (bars.size() < 4) {
+  if (bars.size() < static_cast<size_t>(kVotedPatternBars)) {
     return;
   }
 
@@ -794,7 +794,6 @@ void StreamAnalyzer::detect_progression_pattern() {
 
   /// Only report pattern if score meets minimum threshold (75%)
   /// A low score means the pattern is a poor match, even if it's the "best" among patterns
-  constexpr float kMinPatternScore = 0.75f;
   if (best_score >= kMinPatternScore) {
     current_estimate_.detected_pattern_name.assign(best_pattern_name);
     current_estimate_.detected_pattern_score = best_score;
@@ -805,4 +804,3 @@ void StreamAnalyzer::detect_progression_pattern() {
 }
 
 }  // namespace sonare
-#include "util/numeric_validation.h"

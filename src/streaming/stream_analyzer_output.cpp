@@ -122,7 +122,7 @@ void StreamAnalyzer::prepare_output_frame(StreamFrame& frame) const {
 void StreamAnalyzer::prepare_progressive_estimate() {
   current_estimate_.chord_progression.reserve(config_.max_progression_entries);
   current_estimate_.bar_chord_progression.reserve(config_.max_progression_entries);
-  current_estimate_.voted_pattern.reserve(4);
+  current_estimate_.voted_pattern.reserve(kVotedPatternBars);
 
   // Bounds for everything the progression path touches on the audio thread,
   // taken from the pattern table itself so they stay correct when it changes.
@@ -157,7 +157,7 @@ void StreamAnalyzer::initialize_stats_publication() {
     auto& estimate = slot.storage.estimate;
     estimate.chord_progression.resize(config_.max_progression_entries);
     estimate.bar_chord_progression.resize(config_.max_progression_entries);
-    estimate.voted_pattern.resize(4);
+    estimate.voted_pattern.resize(kVotedPatternBars);
     estimate.all_pattern_scores.resize(pattern_count);
     estimate.detected_pattern_name.reserve(64);
     for (auto& score : estimate.all_pattern_scores) score.first.reserve(64);
