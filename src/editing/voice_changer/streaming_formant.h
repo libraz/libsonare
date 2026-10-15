@@ -9,6 +9,7 @@
 #include "rt/biquad_design.h"
 #include "rt/param_smoother.h"
 #include "rt/tail_budget.h"
+#include "util/constants.h"
 
 namespace sonare::editing::voice_changer {
 
@@ -59,11 +60,16 @@ class StreamingFormant {
   std::array<rt::BiquadState, 4> filters_{};
   float smoothed_factor_ = 1.0f;
   float filter_factor_ = 1.0f;
-  rt::ParamSmoother factor_smoother_{1.0f, 12.0f, 48000.0};
-  rt::ParamSmoother amount_smoother_{1.0f, 12.0f, 48000.0};
-  rt::ParamSmoother body_smoother_{0.0f, 12.0f, 48000.0};
-  rt::ParamSmoother brightness_smoother_{0.0f, 12.0f, 48000.0};
-  rt::ParamSmoother nasal_smoother_{0.0f, 12.0f, 48000.0};
+  rt::ParamSmoother factor_smoother_{1.0f, kParamSmoothingMs,
+                                     ::sonare::constants::kDefaultDawSampleRate};
+  rt::ParamSmoother amount_smoother_{1.0f, kParamSmoothingMs,
+                                     ::sonare::constants::kDefaultDawSampleRate};
+  rt::ParamSmoother body_smoother_{0.0f, kParamSmoothingMs,
+                                   ::sonare::constants::kDefaultDawSampleRate};
+  rt::ParamSmoother brightness_smoother_{0.0f, kParamSmoothingMs,
+                                         ::sonare::constants::kDefaultDawSampleRate};
+  rt::ParamSmoother nasal_smoother_{0.0f, kParamSmoothingMs,
+                                    ::sonare::constants::kDefaultDawSampleRate};
   float filter_body_ = 0.0f;
   float filter_brightness_ = 0.0f;
   float filter_nasal_ = 0.0f;

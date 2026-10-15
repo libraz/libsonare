@@ -24,6 +24,7 @@
 #include "rt/seqlock_cell.h"
 #include "rt/stage_gate.h"
 #include "rt/tail_budget.h"
+#include "util/constants.h"
 
 namespace sonare::editing::voice_changer {
 
@@ -299,30 +300,49 @@ class RealtimeVoiceChanger {
     float limiter_release_alpha = 1.0f;
     // Snapshot updates arrive between blocks, but level changes must remain
     // sample-continuous. Keep one equal smoother per channel for stereo.
-    rt::ParamSmoother input_gain{1.0f, 10.0f, 48000.0};
-    rt::ParamSmoother output_gain{1.0f, 10.0f, 48000.0};
-    rt::ParamSmoother wet_mix{1.0f, 10.0f, 48000.0};
+    rt::ParamSmoother input_gain{1.0f, 10.0f, ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother output_gain{1.0f, 10.0f, ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother wet_mix{1.0f, 10.0f, ::sonare::constants::kDefaultDawSampleRate};
     // Every live control update is a target change. Filter coefficients are
     // rebuilt from these smooth values at a short fixed cadence below.
-    rt::ParamSmoother eq_highpass_hz{80.0f, 12.0f, 48000.0};
-    rt::ParamSmoother eq_body_db{0.0f, 12.0f, 48000.0};
-    rt::ParamSmoother eq_presence_db{1.0f, 12.0f, 48000.0};
-    rt::ParamSmoother eq_air_db{0.0f, 12.0f, 48000.0};
-    rt::ParamSmoother gate_threshold_db{-55.0f, 12.0f, 48000.0};
-    rt::ParamSmoother gate_attack_ms{2.0f, 12.0f, 48000.0};
-    rt::ParamSmoother gate_release_ms{100.0f, 12.0f, 48000.0};
-    rt::ParamSmoother gate_range_db{18.0f, 12.0f, 48000.0};
-    rt::ParamSmoother comp_threshold_db{-22.0f, 12.0f, 48000.0};
-    rt::ParamSmoother comp_ratio{2.5f, 12.0f, 48000.0};
-    rt::ParamSmoother comp_attack_ms{6.0f, 12.0f, 48000.0};
-    rt::ParamSmoother comp_release_ms{90.0f, 12.0f, 48000.0};
-    rt::ParamSmoother comp_makeup_db{1.0f, 12.0f, 48000.0};
-    rt::ParamSmoother deess_frequency_hz{7200.0f, 12.0f, 48000.0};
-    rt::ParamSmoother deess_threshold_db{-28.0f, 12.0f, 48000.0};
-    rt::ParamSmoother deess_ratio{4.0f, 12.0f, 48000.0};
-    rt::ParamSmoother deess_range_db{8.0f, 12.0f, 48000.0};
-    rt::ParamSmoother limiter_ceiling_db{-1.0f, 12.0f, 48000.0};
-    rt::ParamSmoother limiter_release_ms{50.0f, 12.0f, 48000.0};
+    rt::ParamSmoother eq_highpass_hz{80.0f, kParamSmoothingMs,
+                                     ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother eq_body_db{0.0f, kParamSmoothingMs,
+                                 ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother eq_presence_db{1.0f, kParamSmoothingMs,
+                                     ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother eq_air_db{0.0f, kParamSmoothingMs,
+                                ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother gate_threshold_db{-55.0f, kParamSmoothingMs,
+                                        ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother gate_attack_ms{2.0f, kParamSmoothingMs,
+                                     ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother gate_release_ms{100.0f, kParamSmoothingMs,
+                                      ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother gate_range_db{18.0f, kParamSmoothingMs,
+                                    ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother comp_threshold_db{-22.0f, kParamSmoothingMs,
+                                        ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother comp_ratio{2.5f, kParamSmoothingMs,
+                                 ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother comp_attack_ms{6.0f, kParamSmoothingMs,
+                                     ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother comp_release_ms{90.0f, kParamSmoothingMs,
+                                      ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother comp_makeup_db{1.0f, kParamSmoothingMs,
+                                     ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother deess_frequency_hz{7200.0f, kParamSmoothingMs,
+                                         ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother deess_threshold_db{-28.0f, kParamSmoothingMs,
+                                         ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother deess_ratio{4.0f, kParamSmoothingMs,
+                                  ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother deess_range_db{8.0f, kParamSmoothingMs,
+                                     ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother limiter_ceiling_db{-1.0f, kParamSmoothingMs,
+                                         ::sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother limiter_release_ms{50.0f, kParamSmoothingMs,
+                                         ::sonare::constants::kDefaultDawSampleRate};
     float filter_highpass_hz = 80.0f;
     float filter_body_db = 0.0f;
     float filter_presence_db = 1.0f;

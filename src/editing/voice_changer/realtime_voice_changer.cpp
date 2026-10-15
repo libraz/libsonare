@@ -205,25 +205,25 @@ void RealtimeVoiceChanger::allocate_channel(ChannelState& state) {
   state.input_gain.prepare(sample_rate_, 10.0f);
   state.output_gain.prepare(sample_rate_, 10.0f);
   state.wet_mix.prepare(sample_rate_, kWetMixGlideMs);
-  state.eq_highpass_hz.prepare(sample_rate_, 12.0f);
-  state.eq_body_db.prepare(sample_rate_, 12.0f);
-  state.eq_presence_db.prepare(sample_rate_, 12.0f);
-  state.eq_air_db.prepare(sample_rate_, 12.0f);
-  state.gate_threshold_db.prepare(sample_rate_, 12.0f);
-  state.gate_attack_ms.prepare(sample_rate_, 12.0f);
-  state.gate_release_ms.prepare(sample_rate_, 12.0f);
-  state.gate_range_db.prepare(sample_rate_, 12.0f);
-  state.comp_threshold_db.prepare(sample_rate_, 12.0f);
-  state.comp_ratio.prepare(sample_rate_, 12.0f);
-  state.comp_attack_ms.prepare(sample_rate_, 12.0f);
-  state.comp_release_ms.prepare(sample_rate_, 12.0f);
-  state.comp_makeup_db.prepare(sample_rate_, 12.0f);
-  state.deess_frequency_hz.prepare(sample_rate_, 12.0f);
-  state.deess_threshold_db.prepare(sample_rate_, 12.0f);
-  state.deess_ratio.prepare(sample_rate_, 12.0f);
-  state.deess_range_db.prepare(sample_rate_, 12.0f);
-  state.limiter_ceiling_db.prepare(sample_rate_, 12.0f);
-  state.limiter_release_ms.prepare(sample_rate_, 12.0f);
+  state.eq_highpass_hz.prepare(sample_rate_, kParamSmoothingMs);
+  state.eq_body_db.prepare(sample_rate_, kParamSmoothingMs);
+  state.eq_presence_db.prepare(sample_rate_, kParamSmoothingMs);
+  state.eq_air_db.prepare(sample_rate_, kParamSmoothingMs);
+  state.gate_threshold_db.prepare(sample_rate_, kParamSmoothingMs);
+  state.gate_attack_ms.prepare(sample_rate_, kParamSmoothingMs);
+  state.gate_release_ms.prepare(sample_rate_, kParamSmoothingMs);
+  state.gate_range_db.prepare(sample_rate_, kParamSmoothingMs);
+  state.comp_threshold_db.prepare(sample_rate_, kParamSmoothingMs);
+  state.comp_ratio.prepare(sample_rate_, kParamSmoothingMs);
+  state.comp_attack_ms.prepare(sample_rate_, kParamSmoothingMs);
+  state.comp_release_ms.prepare(sample_rate_, kParamSmoothingMs);
+  state.comp_makeup_db.prepare(sample_rate_, kParamSmoothingMs);
+  state.deess_frequency_hz.prepare(sample_rate_, kParamSmoothingMs);
+  state.deess_threshold_db.prepare(sample_rate_, kParamSmoothingMs);
+  state.deess_ratio.prepare(sample_rate_, kParamSmoothingMs);
+  state.deess_range_db.prepare(sample_rate_, kParamSmoothingMs);
+  state.limiter_ceiling_db.prepare(sample_rate_, kParamSmoothingMs);
+  state.limiter_release_ms.prepare(sample_rate_, kParamSmoothingMs);
   // ISP limiter: prepared unconditionally so toggling
   // LimiterConfig::enable_isp_limiter at runtime never triggers an allocation
   // from the audio thread. Cost is small (one TruePeakFilter history vector +

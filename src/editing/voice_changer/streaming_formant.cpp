@@ -65,11 +65,11 @@ void StreamingFormant::prepare(double sample_rate, int max_block_size) {
   factor_alpha_ = rt::one_pole_lowpass_alpha_matched(60.0f, sample_rate_);
   smoothed_factor_ = effective_factor(config_);
   filter_factor_ = smoothed_factor_;
-  factor_smoother_.prepare(sample_rate_, 12.0f);
-  amount_smoother_.prepare(sample_rate_, 12.0f);
-  body_smoother_.prepare(sample_rate_, 12.0f);
-  brightness_smoother_.prepare(sample_rate_, 12.0f);
-  nasal_smoother_.prepare(sample_rate_, 12.0f);
+  factor_smoother_.prepare(sample_rate_, kParamSmoothingMs);
+  amount_smoother_.prepare(sample_rate_, kParamSmoothingMs);
+  body_smoother_.prepare(sample_rate_, kParamSmoothingMs);
+  brightness_smoother_.prepare(sample_rate_, kParamSmoothingMs);
+  nasal_smoother_.prepare(sample_rate_, kParamSmoothingMs);
   factor_smoother_.set_target(config_.factor);
   amount_smoother_.set_target(config_.amount);
   body_smoother_.set_target(config_.body);

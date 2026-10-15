@@ -7,8 +7,10 @@
 #include <cstdint>
 #include <vector>
 
+#include "editing/voice_changer/control_cadence.h"
 #include "rt/param_smoother.h"
 #include "rt/tail_budget.h"
+#include "util/constants.h"
 
 namespace sonare::editing::voice_changer {
 
@@ -108,8 +110,9 @@ class StreamingRetune {
   // Live set_config() updates targets only. Both controls are sampled while
   // rendering so consecutive snapshot adoptions cannot step the pitch ratio
   // or dry/wet blend at a block boundary.
-  rt::ParamSmoother semitones_smoother_{0.0f, 12.0f, 48000.0};
-  rt::ParamSmoother mix_smoother_{1.0f, 10.0f, 48000.0};
+  rt::ParamSmoother semitones_smoother_{0.0f, kParamSmoothingMs,
+                                        ::sonare::constants::kDefaultDawSampleRate};
+  rt::ParamSmoother mix_smoother_{1.0f, 10.0f, ::sonare::constants::kDefaultDawSampleRate};
 
   std::vector<float> window_;         ///< Precomputed Hann window (grain_size).
   std::vector<float> ring_buf_;       ///< History ring buffer (ring_cap).

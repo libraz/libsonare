@@ -89,7 +89,7 @@ void StreamingRetune::prepare(double sample_rate, int max_block_size) {
   norm_acc_.assign(accum_cap_, 0.0f);
   dry_delay_.assign(static_cast<std::size_t>(latency_samples()), 0.0f);
 
-  semitones_smoother_.prepare(sample_rate_, 12.0f);
+  semitones_smoother_.prepare(sample_rate_, kParamSmoothingMs);
   mix_smoother_.prepare(sample_rate_, 10.0f);
   semitones_smoother_.set_target(config_.semitones);
   mix_smoother_.set_target(config_.mix);

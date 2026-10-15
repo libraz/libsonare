@@ -33,6 +33,7 @@
 #include "rt/param_smoother.h"
 #include "rt/sliding_max.h"
 #include "rt/true_peak_filter.h"
+#include "util/constants.h"
 
 namespace sonare::editing::voice_changer {
 
@@ -120,8 +121,10 @@ class IspLimiter {
   float attack_alpha_ = 1.0f;
   float attack_remaining_ = 0.0f;
   float attack_compensation_denominator_ = 1.0f;
-  rt::ParamSmoother ceiling_dbtp_{-1.0f, 12.0f, 48000.0};
-  rt::ParamSmoother release_ms_{50.0f, 12.0f, 48000.0};
+  rt::ParamSmoother ceiling_dbtp_{-1.0f, kParamSmoothingMs,
+                                  ::sonare::constants::kDefaultDawSampleRate};
+  rt::ParamSmoother release_ms_{50.0f, kParamSmoothingMs,
+                                ::sonare::constants::kDefaultDawSampleRate};
   ControlCadence control_cadence_;
   float ceiling_linear_ = 1.0f;
   float release_alpha_ = 1.0f;

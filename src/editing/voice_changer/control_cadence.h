@@ -7,6 +7,9 @@
 
 namespace sonare::editing::voice_changer {
 
+/// @brief Smoothing time of every live-parameter smoother, in milliseconds.
+inline constexpr float kParamSmoothingMs = 12.0f;
+
 /// @brief Fires on sample 0 and every 32 absolute samples thereafter.
 ///
 /// The counter is stateful so a block boundary cannot move a control update.

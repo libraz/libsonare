@@ -68,8 +68,8 @@ void IspLimiter::prepare(double sample_rate, int max_block_size) {
   input_ptr_.assign(1, nullptr);
   output_ptr_.assign(1, nullptr);
 
-  ceiling_dbtp_.prepare(sample_rate_, 12.0f);
-  release_ms_.prepare(sample_rate_, 12.0f);
+  ceiling_dbtp_.prepare(sample_rate_, kParamSmoothingMs);
+  release_ms_.prepare(sample_rate_, kParamSmoothingMs);
   update_time_constants();
   prepared_ = true;
   // Reapply the stored config now that the smoothers have a real sample rate.
