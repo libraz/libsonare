@@ -7,6 +7,8 @@
 #include <unordered_set>
 #include <utility>
 
+#include "midi/controller_numbers.h"
+
 namespace sonare::midi {
 
 namespace {
@@ -42,8 +44,8 @@ int same_time_rank(const Ump& ump) noexcept {
     const auto status = static_cast<UmpStatus>(ump.status_nibble());
     if (status == UmpStatus::kControlChange) {
       const uint8_t controller = ump.note_number();
-      if (controller == 0) return 1;
-      if (controller == 32) return 2;
+      if (controller == cc::kBankSelectMsb) return 1;
+      if (controller == cc::kBankSelectLsb) return 2;
       return kGeneralRank;
     }
     if (status == UmpStatus::kProgramChange) return 3;

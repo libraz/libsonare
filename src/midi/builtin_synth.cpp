@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "midi/controller_numbers.h"
 #include "midi/synth/mod_matrix.h"
 #include "midi/synth/sf2_voice.h"
 #include "midi/ump.h"
@@ -392,19 +393,19 @@ void BuiltinSynth::control_change(uint8_t channel, uint8_t controller, Control32
   // mode messages and the parameter-number machinery read the 7-bit value.
   const uint8_t value7 = value.u7();
   switch (controller) {
-    case 7:  // Channel Volume.
+    case cc::kChannelVolume:
       channel_controls_[channel & 0x0Fu].volume = value;
       refresh_channel_controls(channel);
       break;
-    case 10:  // Pan.
+    case cc::kPan:
       channel_controls_[channel & 0x0Fu].pan = value;
       refresh_channel_controls(channel);
       break;
-    case 11:  // Expression.
+    case cc::kExpression:
       channel_controls_[channel & 0x0Fu].expression = value;
       refresh_channel_controls(channel);
       break;
-    case 6:  // Data Entry MSB, for the two parameter numbers below.
+    case cc::kDataEntryMsb:  // Data Entry MSB, for the two parameter numbers below.
       // RPN 00 06 is the MPE Configuration Message, which every MPE-compatible
       // device shall support (2.2.1). It is tried first because it is the one
       // that can turn the zone model on.
@@ -419,42 +420,43 @@ void BuiltinSynth::control_change(uint8_t channel, uint8_t controller, Control32
         }
       }
       break;
-    case 98:  // NRPN selection, so a later data entry is not read as an RPN.
+    case cc::kNrpnLsb:  // NRPN selection, so a later data entry is not read as an RPN.
       params_[channel & 0x0Fu].select_nrpn_lsb(value7);
       break;
-    case 99:
+    case cc::kNrpnMsb:
       params_[channel & 0x0Fu].select_nrpn_msb(value7);
       break;
-    case 100:
+    case cc::kRpnLsb:
       params_[channel & 0x0Fu].select_rpn_lsb(value7);
       params_[channel & 0x0Fu].deselect_on_rpn_null();
       break;
-    case 101:
+    case cc::kRpnMsb:
       params_[channel & 0x0Fu].select_rpn_msb(value7);
       params_[channel & 0x0Fu].deselect_on_rpn_null();
       break;
-    case 64:  // Damper/sustain pedal: >=64 holds released keys.
+    case cc::kDamperPedal:  // Damper/sustain pedal: >=64 holds released keys.
       sustain_pedal(channel, value7 >= 64);
       break;
-    case 120:  // All Sound Off — immediate silence.
+    case cc::kAllSoundOff:  // All Sound Off — immediate silence.
       all_sound_off(channel);
       break;
-    case 121:  // Reset All Controllers — damper, bend, pressure, expression.
+    case cc::kResetAllControllers:  // Damper, bend, pressure, expression.
       reset_all_controllers(channel);
       break;
-    case 123:  // All Notes Off — graceful release.
-    case 124:  // Omni Off / On also imply notes-off.
-    case 125:
+    case cc::kAllNotesOff:  // All Notes Off — graceful release.
+    case cc::kOmniModeOff:  // Omni Off / On also imply notes-off.
+    case cc::kOmniModeOn:
       all_notes_off(channel);
       break;
-    case 126:  // Mono / Poly mode, which also imply notes-off.
-    case 127:
+    case cc::kMonoModeOn:  // Mono / Poly mode, which also imply notes-off.
+    case cc::kPolyModeOn:
       // Prohibited on a manager channel, where they are ignored outright, and
       // on a member channel they select the zone's mode (2.2.4.3). Outside a
       // zone they keep the channel-mode meaning they have always had here,
       // which is why the all-notes-off stays below them.
       if (mpe_.ignores(channel, MpeIgnorable::kModeMessage)) break;
-      mpe_.apply_midi_mode(channel, controller == 126 ? MpeMidiMode::kMono : MpeMidiMode::kPoly);
+      mpe_.apply_midi_mode(channel,
+                           controller == cc::kMonoModeOn ? MpeMidiMode::kMono : MpeMidiMode::kPoly);
       all_notes_off(channel);
       break;
     default:

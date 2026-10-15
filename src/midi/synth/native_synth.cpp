@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "midi/builtin_synth.h"
+#include "midi/controller_numbers.h"
 #include "midi/synth/articulation.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_address_table.h"
@@ -434,7 +435,8 @@ void NativeSynth::refresh_channel_mod(uint8_t channel) noexcept {
   // arrives -- this is the arithmetic that was always here.
   const bool zoned = mpe_.role(ch) != MpeChannelRole::kUnassigned;
   mod.pitch_cents = zoned ? mpe_.bend_semitones(ch) * 100.0f
-                          : (st.pitch_bend.f14() - 8192.0f) / 8192.0f * st.bend_range_cents;
+                          : (st.pitch_bend.f14() - static_cast<float>(kBend14Center)) /
+                                static_cast<float>(kBend14Center) * st.bend_range_cents;
   mod.gain = sf2_cc_gain(st.volume) * sf2_cc_gain(st.expression);
   mod.mod_wheel01 = st.mod_wheel.f7() / 127.0f;
   mod.extra_vibrato_cents = st.mod_depth_cents * mod.mod_wheel01;
@@ -442,7 +444,8 @@ void NativeSynth::refresh_channel_mod(uint8_t channel) noexcept {
   mod.breath01 = st.breath.f7() / 127.0f;
   mod.aftertouch01 = (zoned ? mpe_.pressure(ch) : st.pressure.f7()) / 127.0f;
   mod.expression01 = st.expression.f7() / 127.0f;
-  mod.pitch_bend01 = (st.pitch_bend.f14() - 8192.0f) / 8192.0f;
+  mod.pitch_bend01 =
+      (st.pitch_bend.f14() - static_cast<float>(kBend14Center)) / static_cast<float>(kBend14Center);
   // The three axes that land on the channel rather than inside an engine. Each
   // is folded only when a binding has reached it, so a profile that names none
   // leaves this arithmetic untouched rather than multiplying by an identity.
@@ -1123,10 +1126,12 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   st.breath = Control32::from7(0);
   st.pressure = Control32::from7(0);
   for (const size_t controller :
-       {size_t{1}, size_t{2}, size_t{64}, size_t{65}, size_t{66}, size_t{67}}) {
+       {size_t{cc::kModulationWheel}, size_t{cc::kBreathController}, size_t{cc::kDamperPedal},
+        size_t{cc::kPortamentoOnOff}, size_t{cc::kSostenuto}, size_t{cc::kSoftPedal}}) {
     st.cc_position[controller] = Control32::from7(0);
   }
-  for (const size_t controller : {size_t{11}, size_t{98}, size_t{99}, size_t{100}, size_t{101}}) {
+  for (const size_t controller : {size_t{cc::kExpression}, size_t{cc::kNrpnLsb},
+                                  size_t{cc::kNrpnMsb}, size_t{cc::kRpnLsb}, size_t{cc::kRpnMsb}}) {
     st.cc_position[controller] = Control32::from7(gs_default_cc_positions()[controller]);
   }
   for (NativeSynthVoice& v : pool_) {
@@ -1355,7 +1360,7 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, Control32 
   const uint8_t value = control.u7();
   st.cc_position[controller & 0x7Fu] = control;
   switch (controller) {
-    case 0:
+    case cc::kBankSelectMsb:
       // Bank select is prohibited on a member channel in MIDI Mode 3 and
       // permitted in Mode 4 (Appendix E Table 5), where a controller gives each
       // string its own program.
@@ -1363,34 +1368,34 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, Control32 
       st.bank_msb = value;
       refresh_part_rig(ch);
       break;
-    case 1:
+    case cc::kModulationWheel:
       st.mod_wheel = control;
       refresh_channel_mod(ch);
       break;
-    case 7:
+    case cc::kChannelVolume:
       st.volume = control;
       refresh_channel_mod(ch);
       break;
-    case 10:
+    case cc::kPan:
       st.pan = control;
       refresh_channel_mod(ch);
       break;
-    case 2:
+    case cc::kBreathController:
       // The matrix source. Which axis CC2 additionally reaches, if any, is the
       // controller profile's to say and is applied before this switch runs.
       st.breath = control;
       refresh_channel_mod(ch);
       break;
-    case 11:
+    case cc::kExpression:
       st.expression = control;
       refresh_channel_mod(ch);  // every engine's loudness rides the expression VCA
       break;
-    case 32:
+    case cc::kBankSelectLsb:
       if (mpe_.ignores(ch, MpeIgnorable::kBankSelect)) break;
       st.bank_lsb = value;
       refresh_part_rig(ch);
       break;
-    case 6:
+    case cc::kDataEntryMsb:
       // RPN 00 06 is the MPE Configuration Message, which every MPE-compatible
       // device shall support (2.2.1). It is tried first because it is the one
       // that can turn the zone model on.
@@ -1404,18 +1409,18 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, Control32 
         if (gs_eg_times_differ(before, st.gs)) raise_tail();
       }
       break;
-    case 38:
+    case cc::kDataEntryLsb:
       if (st.params.selected_rpn(0, 0)) bend_range_lsb(ch, value);
       break;
     // TONE MODIFY 1-8 by controller: the storage 40 1x 30-37 and NRPN 01 xx write (docs/gs.md).
-    case 71:
-    case 72:
-    case 73:
+    case cc::kSoundController2:
+    case cc::kSoundController3:
+    case cc::kSoundController4:
     case kMpeTimbreCc:
-    case 75:
-    case 76:
-    case 77:
-    case 78: {
+    case cc::kSoundController6:
+    case cc::kSoundController7:
+    case cc::kSoundController8:
+    case cc::kSoundController9: {
       // Inside a zone CC74 is the timbre dimension (2.2.8), already tracked and profiled.
       if (controller == kMpeTimbreCc && mpe_.role(ch) != MpeChannelRole::kUnassigned) break;
       // A controller the profile routes to an axis is the profile's, not the alias's.
@@ -1425,54 +1430,55 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, Control32 
       if (gs_eg_times_differ(before, st.gs)) raise_tail();
       break;
     }
-    case 64:
+    case cc::kDamperPedal:
       sustain_cc(ch, control);
       break;
-    case 66:
+    case cc::kSostenuto:
       sostenuto_pedal(ch, value >= 64);
       break;
-    case 67:
+    case cc::kSoftPedal:
       st.una_corda = value >= 64;  // soft pedal (affects notes struck while held)
       break;
     // The selection moves whatever Rx.NRPN says; the switch gates data entry (case 6), so a
     // refused NRPN cannot leave the previous RPN selected for the next data entry.
-    case 98:
+    case cc::kNrpnLsb:
       st.params.select_nrpn_lsb(value);
       break;
-    case 99:
+    case cc::kNrpnMsb:
       st.params.select_nrpn_msb(value);
       break;
-    case 100:
+    case cc::kRpnLsb:
       st.params.select_rpn_lsb(value);
       st.params.deselect_on_rpn_null();
       break;
-    case 101:
+    case cc::kRpnMsb:
       st.params.select_rpn_msb(value);
       st.params.deselect_on_rpn_null();
       break;
-    case 120:
+    case cc::kAllSoundOff:
       all_sound_off(ch);
       break;
-    case 121:
+    case cc::kResetAllControllers:
       reset_controllers(ch);
       break;
-    case 123:
-    case 124:
-    case 125:
+    case cc::kAllNotesOff:
+    case cc::kOmniModeOff:
+    case cc::kOmniModeOn:
       all_notes_off(ch);
       break;
-    case 126:
-    case 127:
+    case cc::kMonoModeOn:
+    case cc::kPolyModeOn:
       // The two mode messages. Prohibited on a manager channel, where they are
       // ignored outright, and on a member channel they select the zone's mode
       // (2.2.4.3). Outside a zone they keep the channel-mode meaning they have
       // always had here, which is why the all-notes-off stays below them.
       if (mpe_.ignores(ch, MpeIgnorable::kModeMessage)) break;
       if (mpe_.role(ch) == MpeChannelRole::kUnassigned) {
-        st.articulation =
-            controller == 126 ? ArticulationMode::kMonoRetrigger : ArticulationMode::kPoly;
+        st.articulation = controller == cc::kMonoModeOn ? ArticulationMode::kMonoRetrigger
+                                                        : ArticulationMode::kPoly;
       }
-      mpe_.apply_midi_mode(ch, controller == 126 ? MpeMidiMode::kMono : MpeMidiMode::kPoly);
+      mpe_.apply_midi_mode(ch,
+                           controller == cc::kMonoModeOn ? MpeMidiMode::kMono : MpeMidiMode::kPoly);
       all_notes_off(ch);
       break;
     default:

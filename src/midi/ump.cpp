@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <limits>
 
+#include "midi/controller_numbers.h"
 #include "midi/sysex_framing.h"
 
 namespace sonare::midi {
@@ -720,32 +721,33 @@ Midi2MessageList Midi1ToMidi2Translator::translate(const Ump& ump) noexcept {
   }
 
   switch (d1) {
-    case 0:
+    case cc::kBankSelectMsb:
       ch.bank_msb = d2;
       ch.bank_valid = true;
       return out;
-    case 32:
+    case cc::kBankSelectLsb:
       ch.bank_lsb = d2;
       ch.bank_valid = true;
       return out;
-    case 6:
+    case cc::kDataEntryMsb:
       // A second CC 6 ends the message the first one started.
       if (ch.data_pending && selection_usable()) emit_data_entry(0);
       ch.data_msb = d2;
       ch.data_msb_valid = true;
       ch.data_pending = true;
       return out;
-    case 38:
+    case cc::kDataEntryLsb:
       if (ch.data_msb_valid && selection_usable()) emit_data_entry(d2);
       ch.data_pending = false;
       return out;
-    case 98:
-    case 99:
-    case 100:
-    case 101:
+    case cc::kNrpnLsb:
+    case cc::kNrpnMsb:
+    case cc::kRpnLsb:
+    case cc::kRpnMsb:
       // A new selector ends whatever message was still waiting for its LSB.
       if (ch.data_pending && selection_usable()) emit_data_entry(0);
-      select(/*nrpn=*/d1 <= 99, /*is_msb=*/d1 == 99 || d1 == 101, d2);
+      select(/*nrpn=*/d1 <= cc::kNrpnMsb,
+             /*is_msb=*/d1 == cc::kNrpnMsb || d1 == cc::kRpnMsb, d2);
       return out;
     default:
       emit(midi1_to_midi2(ump));

@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "midi/control_value.h"
+#include "midi/controller_numbers.h"
 #include "midi/ump.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -23,7 +24,8 @@ bool is_channel_mode_reset(const Ump& ump) noexcept {
     return false;
   }
   const uint8_t controller = ump.note_number();
-  return controller == 120 || (controller >= 123 && controller <= 127);
+  return controller == cc::kAllSoundOff ||
+         (controller >= cc::kAllNotesOff && controller <= cc::kPolyModeOn);
 }
 
 int64_t saturating_clip_end(const MidiClipSchedule& clip) noexcept {
@@ -497,8 +499,10 @@ bool is_release_message(const Ump& ump) noexcept {
   }
   if (status != static_cast<uint8_t>(UmpStatus::kControlChange)) return false;
   const uint8_t controller = ump.note_number();
-  return ((controller == 64 || controller == 66) && ump.data2_7bit() < 64) || controller == 120 ||
-         controller == 121 || controller == 123;
+  return ((controller == cc::kDamperPedal || controller == cc::kSostenuto) &&
+          ump.data2_7bit() < 64) ||
+         controller == cc::kAllSoundOff || controller == cc::kResetAllControllers ||
+         controller == cc::kAllNotesOff;
 }
 
 void ReleaseSet::add(uint8_t route, uint32_t destination_id, const MidiEvent& event) noexcept {
@@ -851,19 +855,16 @@ void MidiSequencer::process_block(const SequencerClock& clock, int num_frames) n
 
 void MidiSequencer::emit_controller_reset(uint32_t destination_id, uint8_t group, uint8_t channel,
                                           DeviceFrame render_frame) noexcept {
-  // Standard MIDI reset on a playback discontinuity. Channel-mode controllers
-  // 64 (damper), 121 (reset all controllers), 123 (all notes off) plus a
-  // pitch-bend recenter. Dispatched raw (not through MIDI FX) at render_frame.
-  static constexpr uint8_t kDamperPedal = 64;
-  static constexpr uint8_t kResetAllControllers = 121;
-  static constexpr uint8_t kAllNotesOff = 123;
+  // Standard MIDI reset on a playback discontinuity: damper off, reset all
+  // controllers, all notes off, plus a pitch-bend recenter. Dispatched raw (not through MIDI FX) at
+  // render_frame.
   MidiEvent ev;
   ev.render_frame = render_frame.value;
-  ev.ump = make_midi1_control_change(group, channel, kDamperPedal, 0);
+  ev.ump = make_midi1_control_change(group, channel, cc::kDamperPedal, 0);
   dispatch(destination_id, ev);
-  ev.ump = make_midi1_control_change(group, channel, kResetAllControllers, 0);
+  ev.ump = make_midi1_control_change(group, channel, cc::kResetAllControllers, 0);
   dispatch(destination_id, ev);
-  ev.ump = make_midi1_control_change(group, channel, kAllNotesOff, 0);
+  ev.ump = make_midi1_control_change(group, channel, cc::kAllNotesOff, 0);
   dispatch(destination_id, ev);
   ev.ump = make_midi1_pitch_bend(group, channel, kBend14Center);
   dispatch(destination_id, ev);

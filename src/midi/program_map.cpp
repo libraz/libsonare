@@ -2,6 +2,8 @@
 
 #include <cstddef>
 
+#include "midi/controller_numbers.h"
+
 namespace sonare::midi {
 namespace {
 
@@ -844,9 +846,9 @@ bool ProgramState::observe(const Ump& ump) noexcept {
     const uint8_t value = mt == UmpMessageType::kMidi2ChannelVoice
                               ? scale_cc_32_to_7(ump.words[1])
                               : static_cast<uint8_t>(ump.words[0] & 0x7Fu);
-    if (controller == 0) {
+    if (controller == cc::kBankSelectMsb) {
       pending_bank_msb = value;
-    } else if (controller == 32) {
+    } else if (controller == cc::kBankSelectLsb) {
       pending_bank_lsb = value;
     }
     return false;

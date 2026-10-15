@@ -23,6 +23,7 @@
 #include <cstdint>
 
 #include "midi/control_value.h"
+#include "midi/controller_numbers.h"
 #include "midi/note_tracking.h"
 
 namespace sonare::midi {
@@ -57,7 +58,7 @@ inline constexpr size_t kMpeDimensionCount = 3;
 
 /// The controller the third dimension is carried on (2.2.8). Which axis it
 /// reaches is a receiver's own decision; that it arrives here is not.
-inline constexpr uint8_t kMpeTimbreCc = 74;
+inline constexpr uint8_t kMpeTimbreCc = cc::kSoundController5;
 
 /// Mode 3 is what a receiver shall default to; Mode 4 makes each member channel
 /// monophonic and is optional -- "MPE Devices are not required to support MIDI

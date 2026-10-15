@@ -9,6 +9,7 @@
 
 #include "midi/builtin_synth.h"
 #include "midi/channel_voice_decode.h"
+#include "midi/controller_numbers.h"
 #include "midi/per_note_state.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_layer.h"
@@ -59,30 +60,30 @@ bool receives_message(uint32_t rx_switches, const Ump& u) noexcept {
 /// worth on arrival, so it belongs where the value is stored.
 GsRxSwitch rx_switch_for_controller(uint8_t controller) noexcept {
   switch (controller) {
-    case 0:
-    case 32:
+    case cc::kBankSelectMsb:
+    case cc::kBankSelectLsb:
       return GsRxSwitch::kBankSelect;
-    case 1:
+    case cc::kModulationWheel:
       return GsRxSwitch::kModulation;
-    case 7:
+    case cc::kChannelVolume:
       return GsRxSwitch::kVolume;
-    case 10:
+    case cc::kPan:
       return GsRxSwitch::kPanpot;
-    case 11:
+    case cc::kExpression:
       return GsRxSwitch::kExpression;
-    case 64:
+    case cc::kDamperPedal:
       return GsRxSwitch::kHold1;
-    case 65:
+    case cc::kPortamentoOnOff:
       return GsRxSwitch::kPortamento;
-    case 66:
+    case cc::kSostenuto:
       return GsRxSwitch::kSostenuto;
-    case 67:
+    case cc::kSoftPedal:
       return GsRxSwitch::kSoft;
-    case 98:
-    case 99:
+    case cc::kNrpnLsb:
+    case cc::kNrpnMsb:
       return GsRxSwitch::kNrpn;
-    case 100:
-    case 101:
+    case cc::kRpnLsb:
+    case cc::kRpnMsb:
       return GsRxSwitch::kRpn;
     default:
       return GsRxSwitch::kCount;
@@ -969,17 +970,17 @@ void Sf2Player::reset_controllers(uint8_t channel) noexcept {
   // performance controller, and is left alone.
   st.portamento = false;
   st.portamento_armed = false;
-  st.cc_position[1] = Control32::from7(0);
-  st.cc_position[2] = Control32::from7(0);
-  st.cc_position[11] = Control32::from7(gs_default_cc_positions()[11]);
-  st.cc_position[64] = Control32::from7(0);
-  st.cc_position[65] = Control32::from7(0);
-  st.cc_position[66] = Control32::from7(0);
-  st.cc_position[67] = Control32::from7(0);
-  st.cc_position[98] = Control32::from7(gs_default_cc_positions()[98]);
-  st.cc_position[99] = Control32::from7(gs_default_cc_positions()[99]);
-  st.cc_position[100] = Control32::from7(gs_default_cc_positions()[100]);
-  st.cc_position[101] = Control32::from7(gs_default_cc_positions()[101]);
+  st.cc_position[cc::kModulationWheel] = Control32::from7(0);
+  st.cc_position[cc::kBreathController] = Control32::from7(0);
+  st.cc_position[cc::kExpression] = Control32::from7(gs_default_cc_positions()[cc::kExpression]);
+  st.cc_position[cc::kDamperPedal] = Control32::from7(0);
+  st.cc_position[cc::kPortamentoOnOff] = Control32::from7(0);
+  st.cc_position[cc::kSostenuto] = Control32::from7(0);
+  st.cc_position[cc::kSoftPedal] = Control32::from7(0);
+  st.cc_position[cc::kNrpnLsb] = Control32::from7(gs_default_cc_positions()[cc::kNrpnLsb]);
+  st.cc_position[cc::kNrpnMsb] = Control32::from7(gs_default_cc_positions()[cc::kNrpnMsb]);
+  st.cc_position[cc::kRpnLsb] = Control32::from7(gs_default_cc_positions()[cc::kRpnLsb]);
+  st.cc_position[cc::kRpnMsb] = Control32::from7(gs_default_cc_positions()[cc::kRpnMsb]);
   refresh_channel_mod(ch);
 }
 
@@ -1000,20 +1001,20 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, Control32 va
   // named controller, all of them below 120. Leaving them through also keeps
   // CC126/127's alias onto 40 1x 13 unconditional, and keeps a panic able to
   // stop a note on a part that has stopped taking controllers.
-  if (controller < 120 && !st.receives(GsRxSwitch::kControlChange)) return;
+  if (controller < cc::kAllSoundOff && !st.receives(GsRxSwitch::kControlChange)) return;
   const GsRxSwitch gated = rx_switch_for_controller(controller);
   if (gated != GsRxSwitch::kCount && !st.receives(gated)) {
     // The parameter-number controllers still move the selection when their switch is off: the
     // switches gate what data entry applies, and a selection left stale would send the next data
     // entry to whichever parameter was chosen before.
-    if (controller == 98 || controller == 99) {
-      if (controller == 98) {
+    if (controller == cc::kNrpnLsb || controller == cc::kNrpnMsb) {
+      if (controller == cc::kNrpnLsb) {
         st.params.select_nrpn_lsb(value);
       } else {
         st.params.select_nrpn_msb(value);
       }
-    } else if (controller == 100 || controller == 101) {
-      if (controller == 100) {
+    } else if (controller == cc::kRpnLsb || controller == cc::kRpnMsb) {
+      if (controller == cc::kRpnLsb) {
         st.params.select_rpn_lsb(value);
       } else {
         st.params.select_rpn_msb(value);
@@ -1022,7 +1023,7 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, Control32 va
     }
     return;
   }
-  if (controller == 6 || controller == 38) {
+  if (controller == cc::kDataEntryMsb || controller == cc::kDataEntryLsb) {
     // Data entry carries whichever parameter number is selected, so the switch
     // that applies is the selection's. With neither selected the value reaches
     // nothing anyway, and RPN is the harmless attribution.
@@ -1041,7 +1042,7 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, Control32 va
     }
   }
   switch (controller) {
-    case 0:  // Bank select MSB (GS variation bank)
+    case cc::kBankSelectMsb:
       st.bank_msb = value;
       // The fallback ambience floor is keyed on (effective bank, program), so
       // a bank change moves it just like a program change does — and so is the
@@ -1049,7 +1050,7 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, Control32 va
       refresh_channel_mod(ch);
       refresh_part_rig(ch);
       break;
-    case 32:  // Bank select LSB
+    case cc::kBankSelectLsb:
       // RX BANK SELECT LSB off reads the byte as 00 rather than refusing it, so
       // a part whose map was moved goes back to the module's own rather than
       // staying where the last accepted message left it. The one switch in the
@@ -1058,17 +1059,17 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, Control32 va
       refresh_channel_mod(ch);
       refresh_part_rig(ch);
       break;
-    case 1:
+    case cc::kModulationWheel:
       st.mod_wheel = value32;
       refresh_channel_mod(ch);
       break;
-    case 2:
+    case cc::kBreathController:
       refresh_channel_mod(ch);
       break;
-    case 5:  // Portamento time
+    case cc::kPortamentoTime:
       st.portamento_time = value;
       break;
-    case 6:  // Data entry MSB -> active RPN or GS NRPN
+    case cc::kDataEntryMsb:  // Data entry MSB -> active RPN or GS NRPN
       if (st.params.selected_rpn(0, 0)) {
         st.bend_range_cents = 100.0f * static_cast<float>(value);
         refresh_channel_mod(ch);
@@ -1088,7 +1089,7 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, Control32 va
         apply_nrpn(ch, value);
       }
       break;
-    case 38:  // Data entry LSB
+    case cc::kDataEntryLsb:
       if (st.params.selected_rpn(0, 0)) {
         st.bend_range_cents =
             100.0f * std::floor(st.bend_range_cents / 100.0f) + static_cast<float>(value);
@@ -1099,99 +1100,99 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, Control32 va
       }
       // Master coarse tuning has no LSB: the manual defines it as MSB only.
       break;
-    case 7:
+    case cc::kChannelVolume:
       st.volume = value32;
       refresh_channel_mod(ch);
       break;
-    case 10:
+    case cc::kPan:
       st.pan = value32;
       refresh_channel_mod(ch);
       break;
-    case 11:
+    case cc::kExpression:
       st.expression = value32;
       refresh_channel_mod(ch);
       break;
-    case 91:
+    case cc::kEffects1Depth:
       st.reverb_send = value;
       refresh_channel_mod(ch);
       break;
-    case 93:
+    case cc::kEffects3Depth:
       st.chorus_send = value;
       refresh_channel_mod(ch);
       break;
-    case 94:  // GS delay send (no SF2 generator; channel-level only)
+    case cc::kEffects4Depth:
       st.delay_send = value;
       refresh_channel_mod(ch);
       break;
     // TONE MODIFY 1-8 by controller. The manual annotates each of the eight as
     // one parameter reachable three ways, so these land in the storage the
     // 40 1x 30-37 block and the 01 08/09/0A/20/21/63/64/66 NRPNs already write.
-    case 71:
-    case 72:
-    case 73:
-    case 74:
-    case 75:
-    case 76:
-    case 77:
-    case 78: {
+    case cc::kSoundController2:
+    case cc::kSoundController3:
+    case cc::kSoundController4:
+    case cc::kSoundController5:
+    case cc::kSoundController6:
+    case cc::kSoundController7:
+    case cc::kSoundController8:
+    case cc::kSoundController9: {
       const GsPartParams before = st.gs;
       gs_apply_tone_modify_cc(st.gs, controller, value);
       if (gs_eg_times_differ(before, st.gs)) raise_tail();
       break;
     }
-    case 98:  // NRPN LSB
+    case cc::kNrpnLsb:
       st.params.select_nrpn_lsb(value);
       break;
-    case 99:  // NRPN MSB
+    case cc::kNrpnMsb:
       st.params.select_nrpn_msb(value);
       break;
-    case 100:  // RPN LSB
+    case cc::kRpnLsb:
       st.params.select_rpn_lsb(value);
       st.params.deselect_on_rpn_null();
       break;
-    case 101:  // RPN MSB
+    case cc::kRpnMsb:
       st.params.select_rpn_msb(value);
       st.params.deselect_on_rpn_null();
       break;
-    case 64:
+    case cc::kDamperPedal:
       sustain_cc(ch, value);
       break;
-    case 65:  // Portamento on/off
+    case cc::kPortamentoOnOff:
       st.portamento = value >= 64;
       break;
-    case 66:
+    case cc::kSostenuto:
       sostenuto_pedal(ch, value >= 64);
       break;
-    case 67:
+    case cc::kSoftPedal:
       // Una corda: shifts the piano fallback action for notes STARTED while
       // down (the hammer strikes fewer strings); sample-playback voices keep
       // their recorded voicing.
       st.una_corda = value >= 64;
       break;
-    case 84:
+    case cc::kPortamentoControl:
       // Portamento control: the next note-on on this part glides from the
       // source note this message carries, once, whatever CC65 says.
       st.portamento_source = value & 0x7Fu;
       st.portamento_armed = true;
       break;
-    case 120:
+    case cc::kAllSoundOff:
       all_sound_off(ch);
       break;
-    case 121:
+    case cc::kResetAllControllers:
       reset_controllers(ch);
       break;
-    case 123:
-    case 124:
-    case 125:
+    case cc::kAllNotesOff:
+    case cc::kOmniModeOff:
+    case cc::kOmniModeOn:
       all_notes_off(ch);
       break;
-    case 126:
-    case 127:
+    case cc::kMonoModeOn:
+    case cc::kPolyModeOn:
       // Mono Mode On / Poly Mode On. Both are All Notes Off as well, which is
       // why they keep the case above's call. They write the one storage
       // location GS SysEx 40 1x 13 writes (docs/gs.md); CC126's data byte is a
       // voice count and any value of it still means mono.
-      st.mono_poly = controller == 126 ? kGsMonoPolyMono : kGsMonoPolyPoly;
+      st.mono_poly = controller == cc::kMonoModeOn ? kGsMonoPolyMono : kGsMonoPolyPoly;
       all_notes_off(ch);
       break;
     default:

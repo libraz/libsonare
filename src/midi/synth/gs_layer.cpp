@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "effects/common/mix_law.h"
+#include "midi/controller_numbers.h"
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/gs_efx_bindings.h"
 #include "midi/synth/gs_efx_convert.h"
@@ -220,10 +221,10 @@ void gs_apply_tone_modify(GsPartParams& gs, uint8_t index, uint8_t value) noexce
 }
 
 bool gs_apply_tone_modify_cc(GsPartParams& gs, uint8_t controller, uint8_t value) noexcept {
-  if (controller < 71 || controller > 78) return false;
+  if (controller < cc::kSoundController2 || controller > cc::kSoundController9) return false;
   // The eight controllers are contiguous but not in address order.
   static constexpr uint8_t kToneModifyIndex[8] = {3, 6, 4, 2, 5, 0, 1, 7};
-  gs_apply_tone_modify(gs, kToneModifyIndex[controller - 71u], value);
+  gs_apply_tone_modify(gs, kToneModifyIndex[controller - cc::kSoundController2], value);
   return true;
 }
 

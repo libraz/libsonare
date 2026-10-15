@@ -36,6 +36,7 @@
 #include <vector>
 
 #include "midi/control_value.h"
+#include "midi/controller_numbers.h"
 #include "midi/synth/channel_param_state.h"
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/gs_efx_convert.h"
@@ -218,13 +219,14 @@ struct GsDestinationSet {
 /// nobody has moved sits.
 constexpr std::array<uint8_t, 128> gs_default_cc_positions() noexcept {
   std::array<uint8_t, 128> p{};
-  p[7] = 100;   // CC7 volume
-  p[10] = 64;   // CC10 pan, centred
-  p[11] = 127;  // CC11 expression
-  p[98] = 127;  // CC98..101 NRPN/RPN selectors, null
-  p[99] = 127;
-  p[100] = 127;
-  p[101] = 127;
+  p[cc::kChannelVolume] = 100;
+  p[cc::kPan] = 64;  // centred
+  p[cc::kExpression] = 127;
+  // NRPN/RPN selectors, null
+  p[cc::kNrpnLsb] = 127;
+  p[cc::kNrpnMsb] = 127;
+  p[cc::kRpnLsb] = 127;
+  p[cc::kRpnMsb] = 127;
   return p;
 }
 

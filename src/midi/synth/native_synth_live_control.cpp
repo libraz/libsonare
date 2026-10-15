@@ -670,7 +670,9 @@ void NativeSynth::apply_resolved_input(const Ump& ump) noexcept {
 float NativeSynth::part_controller_position(int part, uint8_t source) const noexcept {
   // Read at full width, as refresh_channel_mod reads the same controllers.
   const ChannelState& st = channels_[static_cast<size_t>(part & 0x0F)];
-  if (source == kEfxSourceBend) return (st.pitch_bend.f14() - 8192.0f) / 8192.0f;
+  if (source == kEfxSourceBend)
+    return (st.pitch_bend.f14() - static_cast<float>(kBend14Center)) /
+           static_cast<float>(kBend14Center);
   if (source == kEfxSourceAftertouch) return st.pressure.f7() / 127.0f;
   return st.cc_position[source & 0x7Fu].f7() / 127.0f;
 }

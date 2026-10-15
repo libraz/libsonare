@@ -11,6 +11,8 @@
 #include <vector>
 
 #include "midi/builtin_synth.h"
+#include "midi/control_value.h"
+#include "midi/controller_numbers.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/gs_efx_bindings.h"
@@ -787,7 +789,9 @@ void Sf2Player::drain_direct_system_patch() noexcept {
 float Sf2Player::part_controller_position(int part, uint8_t source) const noexcept {
   // Read at full width, as refresh_channel_mod reads the same controllers.
   const ChannelState& st = channels_[static_cast<size_t>(part & 0x0F)];
-  if (source == kEfxSourceBend) return (st.pitch_bend.f14() - 8192.0f) / 8192.0f;
+  if (source == kEfxSourceBend)
+    return (st.pitch_bend.f14() - static_cast<float>(kBend14Center)) /
+           static_cast<float>(kBend14Center);
   if (source == kEfxSourceAftertouch) return st.channel_pressure.f7() / 127.0f;
   return st.cc_position[source & 0x7Fu].f7() / 127.0f;
 }
@@ -1576,10 +1580,11 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
   // The mod matrix's live sources. Filled here as well as in NativeSynth so the
   // same route reads the same controller whichever player owns the voice; poly
   // aftertouch has no position on this path, so the voice's own stays at rest.
-  mod.breath01 = st.cc_position[2].f7() / 127.0f;
+  mod.breath01 = st.cc_position[cc::kBreathController].f7() / 127.0f;
   mod.aftertouch01 = st.channel_pressure.f7() / 127.0f;
-  mod.expression01 = st.cc_position[11].f7() / 127.0f;
-  mod.pitch_bend01 = (st.pitch_bend.f14() - 8192.0f) / 8192.0f;
+  mod.expression01 = st.cc_position[cc::kExpression].f7() / 127.0f;
+  mod.pitch_bend01 =
+      (st.pitch_bend.f14() - static_cast<float>(kBend14Center)) / static_cast<float>(kBend14Center);
   // Where each controller source presently sits, in the block's own order. The
   // bend and polyphonic aftertouch have no position here and stay at rest, so
   // the sum below is over six terms and four of them can move.
