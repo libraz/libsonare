@@ -148,7 +148,7 @@ test-slow: build fixtures
 test-golden: fixtures
 	$(CMAKE) -B $(GOLDEN_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
 	$(CMAKE) --build $(GOLDEN_BUILD_DIR) $(BUILD_PARALLEL) --target sonare_tests
-	./$(GOLDEN_BUILD_DIR)/bin/sonare_tests "[golden]"
+	$(GOLDEN_BUILD_DIR)/bin/sonare_tests "[golden]"
 
 test-optional-fixtures:
 	$(CMAKE) -B $(OPTIONAL_FIXTURE_BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug -DSONARE_ENABLE_OPTIONAL_FIXTURE_TESTS=ON
