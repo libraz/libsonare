@@ -129,6 +129,24 @@ void AutomationEngine::publish_targets() {
   targets_.synchronize();
 }
 
+rt::ProcessorBase* AutomationEngine::realtime_target(const TargetTable* table,
+                                                     uint32_t param_id) noexcept {
+  if (registered_parameter_rejects_realtime(param_id)) {
+    non_realtime_safe_rejection_count_.fetch_add(1, std::memory_order_relaxed);
+    return nullptr;
+  }
+  rt::ProcessorBase* processor = target_for(table, param_id);
+  if (!processor) {
+    unknown_target_count_.fetch_add(1, std::memory_order_relaxed);
+    return nullptr;
+  }
+  if (!processor->parameter_is_realtime_safe(param_id)) {
+    non_realtime_safe_rejection_count_.fetch_add(1, std::memory_order_relaxed);
+    return nullptr;
+  }
+  return processor;
+}
+
 void AutomationEngine::apply(const transport::TransportState& state, int sub_block_offset,
                              int sub_block_len) noexcept {
   if (sub_block_len <= 0 || !tempo_map_ || !(sample_rate_ > 0.0)) return;
@@ -170,17 +188,8 @@ void AutomationEngine::apply(const transport::TransportState& state, int sub_blo
       }
       continue;
     }
-    if (registered_parameter_rejects_realtime(param_id)) {
-      non_realtime_safe_rejection_count_.fetch_add(1, std::memory_order_relaxed);
-      continue;
-    }
-    rt::ProcessorBase* processor = target_for(targets.get(), param_id);
+    rt::ProcessorBase* processor = realtime_target(targets.get(), param_id);
     if (!processor) {
-      unknown_target_count_.fetch_add(1, std::memory_order_relaxed);
-      continue;
-    }
-    if (!processor->parameter_is_realtime_safe(param_id)) {
-      non_realtime_safe_rejection_count_.fetch_add(1, std::memory_order_relaxed);
       continue;
     }
     const float value = lane.value_at(ppq);
@@ -206,18 +215,9 @@ bool AutomationEngine::set_parameter(uint32_t param_id, float value) noexcept {
     }
     return routed;
   }
-  if (registered_parameter_rejects_realtime(param_id)) {
-    non_realtime_safe_rejection_count_.fetch_add(1, std::memory_order_relaxed);
-    return false;
-  }
   const auto targets = targets_.read();
-  rt::ProcessorBase* processor = target_for(targets.get(), param_id);
+  rt::ProcessorBase* processor = realtime_target(targets.get(), param_id);
   if (!processor) {
-    unknown_target_count_.fetch_add(1, std::memory_order_relaxed);
-    return false;
-  }
-  if (!processor->parameter_is_realtime_safe(param_id)) {
-    non_realtime_safe_rejection_count_.fetch_add(1, std::memory_order_relaxed);
     return false;
   }
   processor->set_parameter(param_id, value);

@@ -160,6 +160,10 @@ class AutomationEngine {
   // Resolves @p param_id through the external resolver, then @p table (may be
   // null). The caller keeps the pin on @p table while it uses the result.
   rt::ProcessorBase* target_for(const TargetTable* table, uint32_t param_id) const noexcept;
+  // Non-engine gate shared by apply() and set_parameter(): registry rejection,
+  // lookup, then the processor's realtime-safety check. Counts each refusal and
+  // returns null; the caller's finite-value check stays its own.
+  rt::ProcessorBase* realtime_target(const TargetTable* table, uint32_t param_id) noexcept;
   // Publishes control_targets_ and waits for readers of the table it replaces.
   void publish_targets();
   bool registered_parameter_rejects_realtime(uint32_t param_id) const noexcept;
