@@ -52,6 +52,78 @@ MODAL_MERGE_CENTS = 50.0
 #: Highest frequency worth reporting a mode at. Above this a sampled reference
 #: is usually reporting its own capture bandwidth rather than the instrument.
 MODAL_MAX_HZ = 12000.0
+#: Lowest: below the audible floor a peak is offset drift or a modulation's own
+#: envelope (a sampled vibraphone shows one at its 4 Hz vane rate), not a mode.
+MODAL_MIN_HZ = 20.0
+#: An amplitude-modulated mode puts equal-level peaks at matching offsets either
+#: side of itself. A pair within this many dB of each other, closer than both
+#: limits below and this far under the peak between them, is a candidate.
+SIDEBAND_LEVEL_DB = 1.0
+SIDEBAND_UNDER_DB = 6.0
+#: Sidebands sit at harmonics of a sub-audio rate; measured on a 4.5 Hz vane
+#: they reach 40 Hz out. The relative limit keeps a membrane's 1 : 1.5 : 2 or a
+#: harmonic series, whose neighbours sit a third or more of the carrier away.
+SIDEBAND_MAX_HZ = 50.0
+SIDEBAND_MAX_RATIO = 0.25
+#: A sideband rides its carrier, so between the two halves of the window it
+#: falls as far as the carrier does; on a sampled kit 22 of 29 level-matched
+#: pairs fell 20-70 dB/s apart from theirs and are modes, not modulation.
+SIDEBAND_DECAY_DB = 3.0
+
+
+def half_spectra(seg: np.ndarray, sr: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Hann magnitude spectra of a window's two halves -> (freqs, first, second)."""
+    n = len(seg) // 2
+    win = np.hanning(n)
+    return (
+        np.fft.rfftfreq(n, 1.0 / sr),
+        np.abs(np.fft.rfft(seg[:n] * win)),
+        np.abs(np.fft.rfft(seg[n : 2 * n] * win)),
+    )
+
+
+def _sidebands(
+    cand: list[tuple[float, float]],
+    bin_hz: float,
+    halves: tuple[np.ndarray, np.ndarray, np.ndarray],
+) -> set[int]:
+    """Indices of candidates that are an AM sideband pair around a stronger one.
+
+    A pair counts only where the halves resolve it from its carrier (two of
+    their bins) and it fell between them by what the carrier fell.
+    """
+    hz = np.array([c[0] for c in cand])
+    db = np.array([c[1] for c in cand])
+    h_freqs, first, second = halves
+    h_bin = float(h_freqs[1] - h_freqs[0])
+
+    def fall(f: float) -> float:
+        near = np.abs(h_freqs - f) <= h_bin
+        return float(
+            20.0 * np.log10(max(second[near].max(), 1e-12) / max(first[near].max(), 1e-12))
+        )
+
+    out: set[int] = set()
+    for k in range(len(cand)):
+        limit = min(SIDEBAND_MAX_HZ, SIDEBAND_MAX_RATIO * hz[k])
+        near = np.abs(hz - hz[k])
+        weaker = db <= db[k] - SIDEBAND_UNDER_DB
+        lower = np.where((hz < hz[k]) & (near <= limit) & (near >= 2.0 * h_bin) & weaker)[0]
+        upper = np.where((hz > hz[k]) & (near <= limit + bin_hz) & weaker)[0]
+        carrier = None
+        for i in lower:
+            off = hz[k] - hz[i]
+            match = upper[
+                (np.abs(hz[upper] - hz[k] - off) <= bin_hz)
+                & (np.abs(db[upper] - db[i]) <= SIDEBAND_LEVEL_DB)
+            ]
+            if not match.size:
+                continue
+            carrier = fall(hz[k]) if carrier is None else carrier
+            for j in match:
+                if max(abs(fall(hz[i]) - carrier), abs(fall(hz[j]) - carrier)) <= SIDEBAND_DECAY_DB:
+                    out.update((int(i), int(j)))
+    return out
 
 
 def measure_modes(
@@ -60,6 +132,7 @@ def measure_modes(
     *,
     n_max: int = MODAL_MAX_MODES,
     floor_db: float = MODAL_FLOOR_DB,
+    halves: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None,
 ) -> list[tuple[float, float]]:
     """The strongest isolated partials of a spectrum -> [(hz, db rel strongest)].
 
@@ -71,6 +144,10 @@ def measure_modes(
     another render's by frequency and a level ordering would only have to be
     undone. Returns fewer than `n_max` freely — a woodblock has two modes and
     padding the list would invent ten.
+
+    `halves` (from `half_spectra` over the same window) lets an amplitude-
+    modulation sideband pair be told from two modes by its decay; without it
+    every peak is kept.
     """
     if len(freqs) < 8 or float(mag.max()) <= 0.0:
         return []
@@ -81,8 +158,9 @@ def measure_modes(
     baseline = np.convolve(db, kernel, mode="same")
     top = float(db.max())
     cand: list[tuple[float, float]] = []
+    lo = max(1, int(np.searchsorted(freqs, MODAL_MIN_HZ)))
     hi = min(len(freqs) - 1, int(np.searchsorted(freqs, MODAL_MAX_HZ)))
-    for i in range(1, hi):
+    for i in range(lo, hi):
         if db[i] < top - floor_db or db[i] - baseline[i] < MODAL_PROMINENCE_DB:
             continue
         if db[i] < db[i - 1] or db[i] < db[i + 1]:
@@ -93,6 +171,9 @@ def measure_modes(
         denom = a - 2 * b + c
         delta = float(np.clip(0.5 * (a - c) / denom, -0.5, 0.5)) if abs(denom) > 1e-12 else 0.0
         cand.append((float(freqs[i] + delta * bin_hz), float(b)))
+    if halves is not None:
+        drop = _sidebands(cand, bin_hz, halves)
+        cand = [c for k, c in enumerate(cand) if k not in drop]
     if not cand:
         return []
     # Merge anything within a quarter tone, keeping the louder, then keep the

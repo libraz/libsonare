@@ -60,6 +60,8 @@ TERM_UNITS = {
     # A decibel per 64 velocity steps: the attack band is read over 120 ms of
     # hammer transient, so its per-note wobble is wider than the held ladder's.
     "hfdyn": 1.0,
+    # The same per-64-velocity dB as `dyn`, read off the measured modes' upper share.
+    "modedyn": 0.5,
     # The third-octave profile's twenty-five bands at a dB each, and its eight
     # octave decay rates at a tenth of a doubling each.
     "mss": 0.01,
@@ -150,6 +152,7 @@ def cli_weights(args) -> dict[str, float]:
         # run; an explicit `--w-dyn` gets refused by the caller instead.
         weights.pop("dyn", None)
         weights.pop("hfdyn", None)
+        weights.pop("modedyn", None)
     if not getattr(args, "has_level_contrasts", True):
         weights.pop("level", None)
     group = set(measured_terms(percussive))
@@ -191,6 +194,7 @@ DROP_REASONS = {
     "kit": ("has_kit_groups", "the probe covers no whole family of the capture's"),
     "dyn": ("has_velocity_spread", "the probe sounds each pitch at one velocity"),
     "hfdyn": ("has_velocity_spread", "the probe sounds each pitch at one velocity"),
+    "modedyn": ("has_velocity_spread", "the probe sounds each pitch at one velocity"),
     "tail": ("has_tail_window", "no note is held long enough to reach the 2-6 s band"),
 }
 
@@ -261,6 +265,7 @@ TERM_COUNT_KEYS = {
     "stiff": "stiff_notes",
     "dyn": "dyn_groups",
     "hfdyn": "hfdyn_groups",
+    "modedyn": "modedyn_groups",
     "band": "band_bins",
     "bdecay": "bdecay_bins",
     "density": "density_bins",
@@ -296,7 +301,7 @@ TERM_EXPECTED_KEYS = {"level": "level_expected"}
 # charged. The other count-tracked terms are fixed-denominator aggregates:
 # their raw values already include the observed fraction and must not be
 # multiplied by it a second time.
-SURVIVOR_MEAN_TERMS = frozenset(("mod", "modes", "stiff", "dyn", "hfdyn", "lf", "kit"))
+SURVIVOR_MEAN_TERMS = frozenset(("mod", "modes", "stiff", "dyn", "hfdyn", "modedyn", "lf", "kit"))
 
 # Terms whose raw value already charges each missing reference cell at the cap
 # inside a fixed reference denominator, so the unmeasurable penalty would charge

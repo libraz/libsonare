@@ -47,6 +47,7 @@ from loss_dimensions import (
     MOD_VIB_CENTS_PER_UNIT,
     MOD_WIDTH_CAP,
     MOD_WIDTH_CENTS_PER_UNIT,
+    MODAL_UPPER_RATIO,
     MODE_CENTS_CAP,
     MODE_CENTS_PER_DB,
     MODE_DB_CAP,
@@ -70,6 +71,7 @@ from loss_dimensions import (
     _level_terms,
     _lf_balance_db,
     _mod_terms,
+    _modal_brightness,
     _modes_terms,
     _pair_modes,
     _perc_lf_terms,
@@ -763,6 +765,10 @@ def loss_terms(
     out["hfdyn"], hfdyn_groups = _dyn_terms(
         model_rows, oracle_rows_, read=_attack_hf_share, cap_db=HF_DELTA_CAP_DB, counts=hfdyn_counts
     )
+    modedyn_counts: dict[str, float] = {}
+    out["modedyn"], modedyn_groups = _dyn_terms(
+        model_rows, oracle_rows_, read=_modal_brightness, counts=modedyn_counts
+    )
     stiff_counts: dict[str, float] = {}
     out["stiff"], stiff_notes = _stiff_terms(model_rows, oracle_rows_, counts=stiff_counts)
     out.update(stiff_counts)
@@ -770,6 +776,7 @@ def loss_terms(
         return None
     out["dyn_groups"] = float(dyn_groups)
     out["hfdyn_groups"] = float(hfdyn_groups)
+    out["modedyn_groups"] = float(modedyn_groups)
     out["stiff_notes"] = float(stiff_notes)
     out["tnr_notes"] = float(tnr_notes)
     out["tnr_absent"] = float(tnr_absent)
@@ -786,6 +793,7 @@ def loss_terms(
     out.update(level_counts)
     out.update({f"dyn_{key}": value for key, value in dyn_counts.items()})
     out.update({f"hfdyn_{key}": value for key, value in hfdyn_counts.items()})
+    out.update({f"modedyn_{key}": value for key, value in modedyn_counts.items()})
     out["level_offset_db"] = offset
     out["comparable"] = 1.0
     return out

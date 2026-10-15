@@ -44,8 +44,9 @@ class ToneClass(str, Enum):
     def stringlike(self) -> bool:
         """Whether the stiff-string partial law describes this voice.
 
-        The harmonic ladder and the inharmonicity fit are only meaningful here;
-        `MODAL` needs the measured-partial path instead.
+        The harmonic ladder, the inharmonicity fit and the gate dimensions read
+        off them (`_LADDER_DIMENSIONS`) are only meaningful here; `MODAL` needs
+        the measured-partial path instead.
         """
         return self in (ToneClass.STRUCK_STRING, ToneClass.PLUCKED_STRING, ToneClass.SUSTAINED)
 
@@ -99,8 +100,11 @@ _PROGRAM_CLASS: dict[int, ToneClass] = {
     # 40-47 strings: bowed, except the three that are not.
     45: ToneClass.PLUCKED_STRING,  # pizzicato strings
     46: ToneClass.PLUCKED_STRING,  # orchestral harp
-    47: ToneClass.MODAL,  # timpani — a tuned kettledrum, 1 : 1.5 : 2 : 2.44
-    55: ToneClass.MODAL,  # orchestra hit
+    # Timpani and the orchestra hit are struck and fall freely, and their gates
+    # read the n·f0 ladder: timpani carries 93-98 % of its energy within 2 % of
+    # it, and the hit is a sampled chord rather than a bar.
+    47: ToneClass.STRUCK_STRING,  # timpani
+    55: ToneClass.STRUCK_STRING,  # orchestra hit
     # 104-111 ethnic: plucked, blown and struck in one family.
     104: ToneClass.PLUCKED_STRING,  # sitar
     105: ToneClass.PLUCKED_STRING,  # banjo
@@ -294,15 +298,13 @@ _CLASS_WEIGHTS: dict[ToneClass, dict[str, float]] = {
         "stiff": 0.5,
         "dyn": 1.0,
     },
-    # A bar, bell or membrane. `harm` is deliberately absent: the ladder it
-    # measures is not this instrument's series, and weighting it would score the
-    # difference between two noise floors. `modes` replaces it.
-    #
-    # `dyn` is absent for the same reason rather than by oversight: it is scored
-    # off `_brightness`, which on a pitched row reads the harmonic ladder, so
-    # weighting it here would bring back through the dynamics curve exactly the
-    # measurement dropping `harm` removed. The axis is real on a bar — a harder
-    # strike is brighter — and reaching it needs a brightness read off `modes`.
+    # A bar, bell or membrane. `harm`, `tnr` and `dyn` are deliberately absent:
+    # each reads the harmonic ladder, which is not this instrument's series, so
+    # weighting them would score the difference between two noise floors.
+    # `modes` replaces `harm`, and `modedyn` replaces `dyn` by reading the same
+    # velocity curve off the measured modes. `mod` prices a vibraphone's vanes
+    # and the beat of a degenerate mode pair, both of which sit on the
+    # fundamental `measure_modulation` tracks.
     ToneClass.MODAL: {
         "modes": 1.0,
         "env": 1.0,
@@ -310,6 +312,8 @@ _CLASS_WEIGHTS: dict[ToneClass, dict[str, float]] = {
         "slope": 1.0,
         "crest": 1.0,
         "hf": 0.5,
+        "mod": 1.0,
+        "modedyn": 1.0,
     },
     # Nothing has a pitch, so only the whole-render measures say anything —
     # which is also why `dyn` is not here: it is fitted per pitch, and this
@@ -430,6 +434,11 @@ def default_weights(
 # in the class happens to have been measured on it. A capture that cannot reach
 # one says so in its own `dimensions_na`, with a reason — an organ has no
 # velocity response, and that is a fact about flue pipes rather than a gap.
+#: Dimensions read off the n·f0 ladder: `stretch` fits it, `balance` averages
+#: h2-h6, `partial_tilt` compares h5-h8 with h1-h2, and `tnr` masks n·f0 as tone.
+#: A voice whose class is not `stringlike` has no ladder, so none of them apply.
+_LADDER_DIMENSIONS = ("stretch", "balance", "partial_tilt", "tnr")
+
 _MELODIC_ALL = (
     "stretch",  # cents_vs_et       — the ladder against equal temperament
     "decay",  # decay_db_s        — the free fall while the key is held
@@ -449,28 +458,36 @@ _MELODIC_ALL = (
     "register",  # held_peak_dbfs    — level against register
 )
 
+
+def _melodic(tone: ToneClass, drop: tuple[str, ...] = ()) -> tuple[str, ...]:
+    """`_MELODIC_ALL` less `drop`, and less the ladder rulers where `tone` has no ladder."""
+    return tuple(
+        d
+        for d in _MELODIC_ALL
+        if d not in drop and (tone.stringlike or d not in _LADDER_DIMENSIONS)
+    )
+
+
 CANONICAL_DIMENSIONS: dict[ToneClass, tuple[str, ...]] = {
     # A hammered or plucked string is measured on everything: it has a free
     # decay, a two-stage fall, a damper and a dynamic range, and the stiff-string
     # ladder is meaningful.
-    ToneClass.STRUCK_STRING: _MELODIC_ALL,
-    ToneClass.PLUCKED_STRING: _MELODIC_ALL,
+    ToneClass.STRUCK_STRING: _melodic(ToneClass.STRUCK_STRING),
+    ToneClass.PLUCKED_STRING: _melodic(ToneClass.PLUCKED_STRING),
     # Energy is fed continuously, so the three free-decay dimensions describe a
     # fall this voice does not have. The release still does — `damper` is how
     # the pipe or the bow stops, which is measurable and is where a sustained
     # voice most often gives itself away; `attack_hf` needs a broadband strike
     # neither a bow nor a reed has, and `partial_tilt` is a decay-rate split
     # over a tone that never stops being fed.
-    ToneClass.SUSTAINED: tuple(
-        d
-        for d in _MELODIC_ALL
-        if d
-        not in ("decay", "aftersound", "doubling", "attack_hf", "attack_hf_swing", "partial_tilt")
+    ToneClass.SUSTAINED: _melodic(
+        ToneClass.SUSTAINED,
+        ("decay", "aftersound", "doubling", "attack_hf", "attack_hf_swing", "partial_tilt"),
     ),
-    # A bar, bell or membrane has no series equal temperament predicts, so
-    # `stretch` measures the distance between two things that were never meant
-    # to agree.
-    ToneClass.MODAL: tuple(d for d in _MELODIC_ALL if d != "stretch"),
+    # A bar, bell or membrane puts its partials where no formula predicts, so
+    # every ladder ruler reads a mode off the ladder as noise or as nothing.
+    # `modes` and `modedyn` are what the fit reads instead.
+    ToneClass.MODAL: _melodic(ToneClass.MODAL),
     # No pitch, so every dimension resting on a partial or a fundamental drops.
     ToneClass.NOISE: ("attack", "stereo", "centroid_pct", "vel_range", "decay"),
 }

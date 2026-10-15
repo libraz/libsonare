@@ -551,6 +551,15 @@ def test_a_modal_voice_is_not_judged_against_equal_temperament():
     assert "stretch" not in canonical_dimensions(9)
 
 
+def test_a_modal_voice_is_not_judged_on_any_ladder_ruler_and_a_string_is():
+    """`stringlike` decides: every ruler that reads n*f0 drops where the class has no ladder."""
+    ladder = {"stretch", "balance", "partial_tilt", "tnr"}
+    for program in (8, 9, 11, 14, 108):
+        assert not ladder & set(canonical_dimensions(program)), program
+    assert ladder <= set(canonical_dimensions(0))
+    assert ladder <= set(canonical_dimensions(24))
+
+
 def test_a_kit_uses_the_percussion_vocabulary():
     """A band profile and no ladder, whatever the piece."""
     canon = canonical_dimensions(0, percussive=True)

@@ -99,9 +99,20 @@ def test_a_baked_guitar_is_refused_for_a_fit_before_anything_renders(tmp_path, w
     assert worker_calls == []
 
 
-def test_an_unclassified_guitar_is_refused_for_a_fit(tmp_path, worker_calls):
+def test_an_unclassified_guitar_is_refused_for_a_fit(tmp_path, worker_calls, monkeypatch):
+    # Every guitar capture in the tree answers the rig question, so the unanswered
+    # one is the jazz guitar's definition with its answer taken out.
+    cap = json.loads((CAPTURES / "jazz_guitar.json").read_text())
+    for key in ("rig", "rig_evidence"):
+        cap.pop(key, None)
+    cap["id"] = "unclassified_guitar"
+    captures = tmp_path / "capture"
+    captures.mkdir()
+    (captures / "unclassified_guitar.json").write_text(json.dumps(cap))
+    monkeypatch.setattr(shape_main, "CAPTURE_DIR", captures)
+    monkeypatch.setattr(sys.modules[__name__], "CAPTURES", captures)
     with pytest.raises(SystemExit, match="nothing says whether"):
-        _build(tmp_path, "jazz_guitar", fit=True)
+        _build(tmp_path, "unclassified_guitar", fit=True)
     assert worker_calls == []
 
 

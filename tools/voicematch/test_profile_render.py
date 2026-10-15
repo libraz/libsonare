@@ -889,6 +889,30 @@ def test_the_window_never_opens_inside_the_preroll():
         assert row["onset_ms"] == pytest.approx(0.0, abs=3.0)
 
 
+def test_a_damper_is_read_from_the_key_lift_whatever_the_onset_latency():
+    """The key lifts at the score's note-off, not at the sounding onset plus the gate.
+
+    A damper taking 50 dB off in 40 ms is read in about that from the key lift.
+    Read from the onset plus the gate, 25 ms of latency later, most of the drop
+    has already happened and the remaining 40 dB never arrives inside the tail.
+    """
+    sr = SR
+    preroll_s, gate_s, latency_s, tail_s = 0.1, 1.0, 0.025, 0.5
+    t = np.arange(int((preroll_s + gate_s + tail_s) * sr)) / sr
+    tone = sum(0.2 / k * np.sin(2 * np.pi * 440.0 * k * t) for k in (1, 2, 3, 4))
+    lift = preroll_s + gate_s
+    env = np.where(t < preroll_s + latency_s, 0.0, 1.0)
+    env = env * np.where(t < lift, 1.0, 10.0 ** (-2.5 * np.minimum(t - lift, 0.04) / 0.04))
+    x = (tone * env).astype(np.float32)
+
+    row = profile_module.measure_note(
+        np.stack([x] * 2, axis=1), sr, 69, preroll_s=preroll_s, gate_s=gate_s
+    )
+
+    assert row["damper_capped"] is False
+    assert row["damper_release_ms"] < 80.0
+
+
 def test_the_ladder_is_reported_against_its_fundamental_not_its_loudest_partial():
     """One ladder, one zero.
 

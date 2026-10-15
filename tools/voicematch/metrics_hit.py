@@ -16,7 +16,7 @@ from metrics_bands import (
     band_tilt_db,
 )
 from metrics_decay import _band_decay, _band_power
-from metrics_modal import measure_modes
+from metrics_modal import half_spectra, measure_modes
 from metrics_signal import (
     ONSET_FLOOR_DB,
     ONSET_HOP_MS,
@@ -301,13 +301,14 @@ def hit_tone(seg: np.ndarray, sr: int, *, max_band_hz: float | None = None) -> d
     n = min(len(seg), int(HIT_TONE_WINDOW_S * sr))
     if n < 512:
         return empty
-    freqs, mag = _spectrum(np.asarray(seg[:n], dtype=np.float64), sr)
+    window = np.asarray(seg[:n], dtype=np.float64)
+    freqs, mag = _spectrum(window, sr)
     # Flatness is read here rather than off the hit's whole spectrum because
     # this window is a fixed length and that one is not: a geometric mean moves
     # with the bin width, and two renders whose strikes land at different
     # moments would be compared at different resolutions.
     flatness = spectral_flatness_db(freqs, mag, max_band_hz)
-    modes = measure_modes(freqs, mag)
+    modes = measure_modes(freqs, mag, halves=half_spectra(window, sr))
     if not modes:
         return {**empty, "flatness_db": flatness}
     lowest = modes[0][0]

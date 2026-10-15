@@ -129,6 +129,7 @@ from profile_gate import (
     summarize_deltas,
     velocity_swing_deltas,
     write_gate_file,
+    write_summary_json,
 )
 from profile_measure import (
     BODY_MIN_F0_HZ,
@@ -773,6 +774,7 @@ def compare_percussion(
     write_gate: str,
     margin: float,
     corpus_dir: Path | None = None,
+    json_out: str = "",
 ) -> int:
     """Score the model against a captured kit, one instrument per note.
 
@@ -1063,6 +1065,10 @@ def compare_percussion(
 
     print_kit_relations(kit_rows, note_groups(cfg))
 
+    if json_out:
+        write_summary_json(
+            Path(json_out), summary, gate_path, timbre, profile.get("measured_utc", "")
+        )
     if gate_path:
         return check_gate(summary, Path(gate_path), timbre, profile.get("measured_utc", ""))
     if write_gate:
@@ -1283,6 +1289,7 @@ def compare(
     write_gate: str = "",
     margin: float = 1.25,
     corpus_dir: Path | None = None,
+    json_out: str = "",
 ) -> int:
     """Measure libsonare the same way and print the difference, dimension by dimension."""
     if not profile_path.exists():
@@ -1299,6 +1306,7 @@ def compare(
             write_gate=write_gate,
             margin=margin,
             corpus_dir=corpus_dir,
+            json_out=json_out,
         )
     cap = profile["capture"]
     preroll_s = cap["preroll_ms"] / 1000.0
@@ -1554,6 +1562,10 @@ def compare(
         "next round belongs."
     )
 
+    if json_out:
+        write_summary_json(
+            Path(json_out), summary, gate_path, timbre, profile.get("measured_utc", "")
+        )
     if gate_path:
         return check_gate(summary, Path(gate_path), timbre, profile.get("measured_utc", ""))
     if write_gate:
@@ -1968,6 +1980,12 @@ def main() -> int:
         "the same change as the behaviour that justifies the new numbers",
     )
     gate_group.add_argument(
+        "--json",
+        default="",
+        dest="json_out",
+        help="also write the summary and each bounded reading beside its limit to this JSON",
+    )
+    gate_group.add_argument(
         "--margin",
         type=float,
         default=1.25,
@@ -2079,6 +2097,7 @@ def main() -> int:
         write_gate=args.write_gate,
         margin=args.margin,
         corpus_dir=corpus_dir,
+        json_out=args.json_out,
     )
 
 

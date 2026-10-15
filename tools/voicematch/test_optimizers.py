@@ -204,7 +204,21 @@ def test_a_later_start_is_not_dragged_onto_the_running_best():
         return 1.0 if abs(values[0] - 0.05) > 0.02 else 0.0
 
     optimize(Recorder(flat), _knobs(1, start=0.5), _args(max_evals=60, per_knob_evals=4))
-    assert max(visited) - min(visited) > 0.5
+    # The first start never leaves its first golden-section bracket on a flat objective.
+    assert any(v < 0.38 or v > 0.62 for v in visited)
+
+
+def test_a_knob_the_objective_cannot_see_keeps_its_start_value():
+    """A tie is not an improvement: a dead knob must not move to the first probe point."""
+
+    def one_live_knob(values):
+        return (values[0] - 0.3) ** 2
+
+    knobs = _knobs(2, start=0.5)
+    current = [k.start_value for k in knobs]
+    optimizers._descend(Recorder(one_live_knob), knobs, _args(max_evals=40), current)
+    assert abs(current[0] - 0.3) < 0.05, "the live knob never moved, so this proves nothing"
+    assert current[1] == 0.5
 
 
 # --------------------------------------------------------------------------- #

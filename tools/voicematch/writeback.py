@@ -144,6 +144,10 @@ PROGRAM_TABLE_FILES = (
 # Where the per-drum-note voicing table is built.
 DRUM_TABLE_FILE = "src/midi/synth/gm_fallback_drums.cpp"
 
+# Where the `famN` family patches are built, as `t[N].<field> = ...;` lines.
+FAMILY_TABLE_FILE = "src/midi/synth/gm_fallback_families.h"
+FAMILY_PATCH_KEY = re.compile(r"fam(\d+)")
+
 # Where the tuning layer forms every indexed key, and therefore the only place
 # that knows which path elements are arrays.
 TUNING_LAYER_FILE = "src/midi/synth/patch_tuning.cpp"
@@ -254,19 +258,24 @@ def key_to_member_path(path: str) -> str:
 
 def patch_field_assignments(
     knobs: list[Knob], values: list[float]
-) -> tuple[dict[str, list[tuple[str, float]]], dict[int, list[tuple[str, float]]], list[str]]:
+) -> tuple[
+    dict[str, list[tuple[str, float]]],
+    dict[int, list[tuple[str, float]]],
+    dict[int, list[tuple[str, float]]],
+    list[str],
+]:
     """Group the fitted patch-field knobs by the patch they belong to.
 
-    Returns (assignments per `ProgramOverrides` member, assignments per drum
-    note, keys belonging to neither). A drum note has its own assignment site —
-    the drum table names each note as `t[38]` — so it is written back like a
-    program patch, just into a different file. What is left over is the family
-    patches (`fam3.`), which a loop builds from a table with no per-patch line to
-    update; their values are reported for the developer to place.
+    Returns (assignments per `ProgramOverrides` member, per drum note, per family
+    patch, keys belonging to none). A drum note and a family patch each have
+    their own table naming them as `t[N]`, so they are written back like a
+    program patch into a different file. What is left over is the switches,
+    which are reported for a person to place.
     """
     named = set(override_patch_names())
     per_patch: dict[str, list[tuple[str, float]]] = {}
     per_drum: dict[int, list[tuple[str, float]]] = {}
+    per_family: dict[int, list[tuple[str, float]]] = {}
     other: list[str] = []
     for knob, value in zip(knobs, values):
         if knob.tunable is None or knob.file is not None:
@@ -293,9 +302,13 @@ def patch_field_assignments(
             per_patch.setdefault(patch, []).append((key_to_member_path(path), value))
         elif drum is not None:
             per_drum.setdefault(int(drum.group(1)), []).append((key_to_member_path(path), value))
+        elif (family := FAMILY_PATCH_KEY.fullmatch(patch)) is not None:
+            per_family.setdefault(int(family.group(1)), []).append(
+                (key_to_member_path(path), value)
+            )
         else:
             other.append(knob.tunable)
-    return per_patch, per_drum, other
+    return per_patch, per_drum, per_family, other
 
 
 def _splice_field_lines(
@@ -510,4 +523,43 @@ def write_drum_fields(
             f"({', '.join(unplaced[:3])}...); reported only",
             file=sys.stderr,
         )
+    return {path: text} if text != original else {}
+
+
+def write_family_fields(
+    per_family: dict[int, list[tuple[str, float]]], base: dict[Path, str] | None = None
+) -> dict[Path, str]:
+    """Splice fitted family-patch values into the family table.
+
+    A family field is set as `t[N].<field> = <expr>;`. Where the expression is a
+    `SONARE_TUNABLE` constant the fitted value becomes that constant's default,
+    so the line keeps naming the calibration it carries; otherwise the line is
+    written like a drum note's, replacing a literal or appending to the block.
+    """
+    path = (REPO_ROOT / FAMILY_TABLE_FILE).resolve()
+    text = _current_text(path, base)
+    original = text
+    for family, fields in sorted(per_family.items()):
+        literal_fields = []
+        for field, value in fields:
+            member = re.escape(f"t[{family}].{field}")
+            line = re.search(rf"^[ \t]*{member}\s*=\s*(k\w+)\s*;", text, re.MULTILINE)
+            tunable = (
+                re.search(rf"SONARE_TUNABLE\({line.group(1)},\s*([^)]+)\)", text) if line else None
+            )
+            if tunable is None:
+                literal_fields.append((field, value))
+                continue
+            literal = (
+                f"{int(_lround(value))}"
+                if integer_field(_key_path(field))
+                else f"{format_value(value)}f"
+            )
+            text = text[: tunable.start(1)] + literal + text[tunable.end(1) :]
+        if literal_fields:
+            anchor = re.compile(rf"^[ \t]*t\[{family}\]\.[^\n]*$", re.MULTILINE)
+            if anchor.search(text) is None:
+                print(f"note: no t[{family}] block in {FAMILY_TABLE_FILE}", file=sys.stderr)
+                continue
+            text = _splice_field_lines(text, anchor, f"t[{family}].", literal_fields)
     return {path: text} if text != original else {}

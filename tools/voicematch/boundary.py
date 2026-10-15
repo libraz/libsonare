@@ -342,6 +342,13 @@ _UNSIGNABLE = (
 )
 
 
+def reference_boundary(reference: Reference, program: int) -> str:
+    """Which boundary a reference answers for a program, before any request is considered."""
+    if rig_capable(program):
+        return _BOUNDARY[(reference.rig, reference.rig_evidence in _GROUNDED)]
+    return BOUNDARY_RIGGED if reference.rig == RIG_BAKED else BOUNDARY_INSTRUMENT
+
+
 def assess(
     reference: Reference | None,
     scope: str,
@@ -370,12 +377,8 @@ def assess(
             ("no reference: fidelity is unavailable; a musical judgement is not assessed here",),
         )
 
-    if capable:
-        evidence = reference.rig_evidence
-        boundary = _BOUNDARY[(reference.rig, evidence in _GROUNDED)]
-    else:
-        evidence = EVIDENCE_NOT_APPLICABLE
-        boundary = BOUNDARY_RIGGED if reference.rig == RIG_BAKED else BOUNDARY_INSTRUMENT
+    evidence = reference.rig_evidence if capable else EVIDENCE_NOT_APPLICABLE
+    boundary = reference_boundary(reference, request.program)
     status, may_fit, may_sign_off, base_reason = _BASE[(boundary, scope)]
     if scope == SCOPE_PRODUCT:
         may_fit = False

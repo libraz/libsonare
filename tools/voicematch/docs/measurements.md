@@ -18,7 +18,7 @@ The measurement contract is the data emitted by [`metrics.py`](../metrics.py), [
 
 The independent profile axes are [`ToneClass`](../toneclass.py), [`ExcitationFamily`](../toneclass.py), and the keyboard interface. A `FitProfile` combines those axes; it does not infer one axis from another. The current classes are `sustained`, `struck-string`, `plucked-string`, `modal`, and `noise`; the excitation families are `bowed`, `plucked`, `hammered`, `struck-modal`, `percussion`, and `other`.
 
-Stringlike classes may use a harmonic ladder and stiffness; modal classes use measured modes found in the signal. A modal voice has no harmonic ladder requirement. `modal_hz` and `modal_db` describe measured partials, and the `modes` term matches those partials when the reference provides them.
+Stringlike classes may use a harmonic ladder and stiffness; modal classes use measured modes found in the signal. A modal voice has no harmonic ladder requirement. `modal_hz` and `modal_db` describe measured partials, and the `modes` term matches those partials when the reference provides them. `ToneClass.stringlike` also decides the gate: the four dimensions read off the n·f0 ladder (`stretch`, `balance`, `partial_tilt`, `tnr`) are canonical only for a stringlike class, so a modal capture neither asks for them nor holds a bound on them, and its `dimensions_na` records what each would read on that reference.
 
 Pitch and envelope windows are bounded by the analyzed note duration. `attack_ms` remains score anchored; fine attack and modulation fields are additional probes. A silent or non-comparable row is unscorable rather than a zero measurement.
 
@@ -48,8 +48,10 @@ The relative `-60 dB` threshold is a reference-domain eligibility rule, not a me
 | scope | current terms |
 | --- | --- |
 | shared | `env`, `mss`, `level`, `crest`, `dyn`, `modes` |
-| pitched | `harm`, `cents`, `tnr`, `mod`, `init`, `slope`, `tail`, `hf`, `lf`, `stiff`, `hfdyn` |
+| pitched | `harm`, `cents`, `tnr`, `mod`, `init`, `slope`, `tail`, `hf`, `lf`, `stiff`, `hfdyn`, `modedyn` |
 | percussion | `band`, `bdecay`, `tilt`, `bright`, `tonal`, `rise`, `strike`, `ring`, `lf`, `kit`, `density`, `prompt`, `evolve`, `diffuse` |
+
+`dyn`, `hfdyn` and `modedyn` share one reducer, a per-pitch slope of a brightness reading against velocity, and differ in the reading: `dyn` the held ladder's h4–h10, `hfdyn` the attack's 4–8 kHz share, `modedyn` the share of measured mode power at 1.75× the played note and above, floored at the mode detector's 55 dB. The modal class weights `modedyn` and `mod` in place of `dyn` and `tnr`; `mod` tracks the fundamental, so it reads a vibraphone's vanes and a beating pair at the fundamental, not a pair among the upper modes.
 
 The authoritative term definitions, caps, and reducers are in [`loss.py`](../loss.py), [`loss_dimensions.py`](../loss_dimensions.py), and [`loss_weights.py`](../loss_weights.py). Losses use fixed engineering units recorded by `TERM_UNITS`, not perceptual units: pitch is cents, spectral and level residuals are dB-like engineering quantities, envelope and decay terms retain their declared time/rate units, and texture terms retain their cell residual units. One quality unit means one declared engineering unit for the aggregate term; it does not mean perceptual equivalence.
 

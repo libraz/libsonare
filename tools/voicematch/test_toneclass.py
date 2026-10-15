@@ -72,7 +72,7 @@ def test_the_class_of_a_program_follows_the_instrument_not_the_family():
     assert tone_class(15) is ToneClass.STRUCK_STRING  # dulcimer, not a bar
     assert tone_class(40) is ToneClass.SUSTAINED  # violin
     assert tone_class(45) is ToneClass.PLUCKED_STRING  # pizzicato, not bowed
-    assert tone_class(47) is ToneClass.MODAL  # timpani
+    assert tone_class(47) is ToneClass.STRUCK_STRING  # timpani, measured on the ladder
     assert tone_class(116) is ToneClass.MODAL  # taiko
     assert tone_class(120) is ToneClass.NOISE  # sound effect
     assert tone_class(0, drum_note=38) is ToneClass.MODAL  # the kit, whatever the program
@@ -85,6 +85,44 @@ def test_a_modal_voice_is_never_weighted_on_the_harmonic_ladder():
     # And a string still is, because there the ladder is the right ruler.
     assert default_weights(40)["harm"] > 0.0
     assert default_weights(0)["harm"] > 0.0
+
+
+def test_a_modal_voice_reads_dynamics_and_movement_off_its_modes_not_its_ladder():
+    """`dyn` and `tnr` read the ladder; `modedyn` and `mod` are what a bar has instead."""
+    for program in (9, 11, 108):
+        weights = default_weights(program)
+        assert "dyn" not in weights and "tnr" not in weights, program
+        assert weights["modedyn"] > 0.0 and weights["mod"] > 0.0, program
+    # A string keeps the ladder's dynamics term and is not given the modal one.
+    assert "modedyn" not in default_weights(0)
+
+
+def test_every_modal_capture_is_gated_off_its_modes_rather_than_the_ladder():
+    """The class drops the ladder rulers, so no modal capture asks for one or holds a bound on one.
+
+    Each dropped ruler carries a measured reason in the capture's `dimensions_na`.
+    """
+    import json
+
+    from toneclass import _LADDER_DIMENSIONS
+
+    here = Path(__file__).resolve().parent
+    checked = 0
+    for path in sorted((here / "capture").glob("*.json")):
+        if path.name.endswith(".local.json"):
+            continue
+        cap = json.loads(path.read_text())
+        if cap.get("percussive") or "program" not in cap:
+            continue
+        if tone_class(int(cap["program"])) is not ToneClass.MODAL:
+            continue
+        checked += 1
+        assert not set(cap.get("dimensions") or ()) & set(_LADDER_DIMENSIONS), path.name
+        gate = here / "reference" / f"{cap['id']}_gate.json"
+        if gate.exists():
+            bounds = json.loads(gate.read_text()).get("bounds") or {}
+            assert not set(bounds) & set(_LADDER_DIMENSIONS), gate.name
+    assert checked >= 19
 
 
 def test_every_class_asks_for_the_envelope_shape_it_can_be_broken_on():
@@ -132,6 +170,44 @@ def test_a_bar_s_partials_are_found_where_they_are_rather_than_where_a_series_pr
     assert m.modal_db[0] == 0.0
     assert m.modal_db[1] > m.modal_db[2] > m.modal_db[3]
     assert -12.0 < m.modal_db[1] < -3.0
+
+
+def test_a_tremolo_s_sidebands_and_its_sub_audio_line_are_not_modes():
+    """A vane's AM puts equal-level peaks either side of each mode and a line at its rate."""
+    f0, ratios = 174.614, [1, 2.756, 5.404]
+    still = _modal(f0, ratios, [1, 0.3, 0.1], [3.0, 2.0, 1.5], seed=4)
+    t = np.arange(still.size) / SR
+    # A triangle LFO: odd harmonics, so sidebands run well past the merge window.
+    vane = 1.0 + 0.35 * (2.0 / np.pi) * np.arcsin(np.sin(2 * np.pi * 4.5 * t))
+    moving = still * vane + 0.02 * np.sin(2 * np.pi * 4.0 * t)
+    note = Note(53, 100, 0.0, 2.0)
+    a = analyze_note(still, SR, note, 3.5)
+    b = analyze_note(moving, SR, note, 3.5)
+    assert a.modal_ratio == pytest.approx(ratios, rel=0.003)
+    assert b.modal_ratio == pytest.approx(ratios, rel=0.003)
+
+
+def test_a_level_matched_pair_that_decays_on_its_own_is_kept_as_two_modes():
+    """Symmetric and level-matched in the average, but falling at its own rate: not AM."""
+    f0 = 200.0
+    ratios = [0.85, 1.0, 1.15]
+    y = _modal(f0, ratios, [0.05, 1.0, 0.05], [0.5, 0.06, 0.5], seconds=0.6, seed=6, noise=1e-6)
+    from metrics_modal import half_spectra, measure_modes
+    from metrics_signal import _spectrum
+
+    seg = y[: int(0.3 * SR)]
+    freqs, mag = _spectrum(seg, SR)
+    found = [hz for hz, _ in measure_modes(freqs, mag, halves=half_spectra(seg, SR))]
+    assert any(abs(hz - 170.0) < 2.0 for hz in found)
+    assert any(abs(hz - 230.0) < 2.0 for hz in found)
+
+
+def test_a_membrane_s_evenly_spaced_modes_are_not_taken_for_sidebands():
+    """1 : 1.5 : 2 is symmetric about its middle mode, and all three are modes."""
+    ratios = [1, 1.5, 2]
+    y = _modal(65.406, ratios, [0.2, 1, 0.2], [2.0, 2.0, 2.0], seed=5)
+    m = analyze_note(y, SR, Note(36, 100, 0.0, 2.0), 3.5)
+    assert m.modal_ratio[:3] == pytest.approx(ratios, rel=0.003)
 
 
 def test_the_harmonic_ladder_reports_that_it_found_nothing_on_a_bar():
@@ -219,6 +295,48 @@ def _vibrato(
     phase = 2 * np.pi * (f0 * t + (dev / (2 * np.pi * rate)) * np.sin(2 * np.pi * rate * t))
     am = 10.0 ** (0.5 * trem_db * np.sin(2 * np.pi * rate * t) / 20.0)
     return np.sin(phase) * am * np.exp(-t / 12.0)
+
+
+def _bar_rows(upper_law, *, seed: int = 0) -> list[dict]:
+    """A free-free bar at four velocities whose upper modes follow `upper_law(velocity)`."""
+    rows = []
+    for v in (32, 64, 96, 127):
+        level = upper_law(v)
+        y = _modal(
+            523.251, [1, 2.756, 5.404], [1, level, level / 2], [1.5, 1.0, 0.7], seed=seed + v
+        )
+        rows.append(analyze_note(y, SR, Note(72, v, 0.0, 2.0), 3.5).to_dict())
+    return rows
+
+
+def test_a_bar_s_velocity_curve_is_read_off_its_modes_where_the_ladder_sees_nothing():
+    """A harder strike brightens a bar by its upper modes, which sit off every ladder slot."""
+    from loss_dimensions import _brightness, _dyn_terms, _modal_brightness
+
+    ref = _bar_rows(lambda v: 0.05 * 10.0 ** (1.2 * (v - 32) / 95.0))
+    right = _bar_rows(lambda v: 0.05 * 10.0 ** (1.2 * (v - 32) / 95.0), seed=7)
+    flat = _bar_rows(lambda v: 0.05, seed=7)
+    match, groups = _dyn_terms(right, ref, read=_modal_brightness)
+    miss, _ = _dyn_terms(flat, ref, read=_modal_brightness)
+    assert groups == 1
+    assert match < 1.0
+    assert miss > 10.0 * max(match, 0.1)
+    # The ladder reads the floor between modes on both candidates and cannot tell them apart.
+    blind, _ = _dyn_terms(flat, ref, read=_brightness)
+    assert blind < miss / 4.0
+
+
+def test_a_bar_whose_upper_modes_fell_under_the_detector_reads_the_floor_not_nothing():
+    """A soft strike still puts a point on the curve, at the floor `measure_modes` stops at."""
+    from loss_dimensions import _modal_brightness
+    from metrics import MODAL_FLOOR_DB
+
+    assert _modal_brightness({"note": 72, "modal_hz": [523.3], "modal_db": [0.0]}) == pytest.approx(
+        -MODAL_FLOOR_DB
+    )
+    assert _modal_brightness({"note": 72, "modal_hz": [], "modal_db": []}) is None
+    half = _modal_brightness({"note": 72, "modal_hz": [523.3, 1442.0], "modal_db": [0.0, 0.0]})
+    assert half == pytest.approx(-3.0103, abs=1e-3)
 
 
 def test_a_vibrato_is_measured_where_nothing_else_could_say_it():

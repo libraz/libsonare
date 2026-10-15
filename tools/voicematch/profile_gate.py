@@ -455,6 +455,68 @@ def print_vanished_dimensions(
     )
 
 
+def gate_readings(summary: dict[str, dict], bounds: dict[str, dict]) -> list[dict]:
+    """Each bounded statistic's reading beside its limit, in the form `check_gate` compares.
+
+    `excess` is `(value - limit) / limit`, so readings in different units can be
+    summed; it is None where the limit is zero or the dimension was not measured.
+    """
+    out = []
+    for key, bound in bounds.items():
+        if not isinstance(bound, dict):
+            continue
+        row = summary.get(key)
+        for stat in RATCHETED_BOUND_KEYS:
+            limit = bound.get(stat)
+            if limit is None:
+                continue
+            if row is None:
+                out.append(
+                    {
+                        "key": key,
+                        "stat": stat,
+                        "value": None,
+                        "limit": limit,
+                        "over": True,
+                        "excess": None,
+                    }
+                )
+                continue
+            value = abs(row[stat]) if stat == "median" else row[stat]
+            excess = (value - limit) / limit if limit > 0 else None
+            out.append(
+                {
+                    "key": key,
+                    "stat": stat,
+                    "value": value,
+                    "limit": limit,
+                    "over": value > limit,
+                    "excess": excess,
+                }
+            )
+    return out
+
+
+def write_summary_json(
+    out_path: Path, summary: dict[str, dict], gate_path: str, timbre: str, measured_utc: str
+) -> None:
+    """Record a compare run's summary and its gate readings for a tool to read."""
+    gate = json.loads(Path(gate_path).read_text()) if gate_path and Path(gate_path).exists() else {}
+    record = {
+        "timbre": timbre,
+        "reference_measured_utc": measured_utc,
+        "summary": summary,
+        "gate": {
+            "path": gate_path,
+            "reference_measured_utc": gate.get("reference_measured_utc"),
+            "readings": gate_readings(summary, gate.get("bounds", {})),
+        }
+        if gate
+        else None,
+    }
+    out_path.write_text(json.dumps(record, indent=2, default=float) + "\n")
+
+
 def check_gate(
     summary: dict[str, dict], gate_path: Path, timbre: str, measured_utc: str = ""
 ) -> int:

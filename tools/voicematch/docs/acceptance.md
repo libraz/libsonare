@@ -26,7 +26,7 @@ The quality report and the relative optimizer loss are different views. The rela
 
 ## Regression gates
 
-`profile.py compare --gate` checks measured dimension residuals against recorded regression bounds. A passing regression gate may still have a large absolute residual. The bank's `fitted` stage additionally requires a current gate record, complete canonical coverage, and an existing reference/profile. Each canonical dimension must be bounded or explicitly excluded with a nonempty reason. Capture `dimensions_na` and gate `_excluded` supply exclusions; gate `_unbounded` dimensions remain open and keep coverage incomplete.
+`profile.py compare --gate` checks measured dimension residuals against recorded regression bounds. A passing regression gate may still have a large absolute residual. `--json <path>` also writes the summary and each bounded statistic beside its limit, with its excess over the limit as a fraction of it, for a tool to compare two runs. The bank's `fitted` stage additionally requires a current gate record, complete canonical coverage, and an existing reference/profile. Each canonical dimension must be bounded or explicitly excluded with a nonempty reason. Capture `dimensions_na` and gate `_excluded` supply exclusions; gate `_unbounded` dimensions remain open and keep coverage incomplete.
 
 Gate agreement compares multiple references with their spread when that comparison is possible. It is a diagnostic for disagreement, not a promotion rule. One reference therefore remains sufficient for target definition and fitting; it does not produce an agreement verdict.
 
@@ -57,6 +57,7 @@ Data goals are a report only. The `_goals_do_not_gate` policy keeps goals out of
 These labels summarize evidence; `fitted` does not imply absolute numerical target attainment.
 
 - A stage is a floor, not a score: an open write-back candidate is a badge and never a demotion.
+- The `fit` axis says whether the voice's patch was last fitted under the current objective fingerprint (`fits.json`, see [Fitting](fitting.md#refitting-the-bank)). It never moves a stage; a stale or unrecorded fit on a fittable voice is named as the next action ahead of listening, because a listener's time is the scarcer resource.
 - `untouched` needs the patch as well as the engine, because subtractive is both a deliberate choice for a synth lead and the default for every `famN` fallback.
 - `toneclass.canonical_dimensions` is the coverage denominator: the dimensions a class can be judged on, listed when the measurement means something for that excitation.
 - A spread the model has no axis for (such as two fingerings of one string instrument) is a tolerance to sit inside, never a target to close.

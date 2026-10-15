@@ -98,27 +98,13 @@ def winner_or_defaults(
         )
         _select(evaluator, start_values)
         return start_values
-    start_absent = getattr(evaluator, "start_tnr_absent", None)
-    best_absent = getattr(evaluator, "best_tnr_absent", None)
-    start_past = getattr(evaluator, "start_tnr_past_db", None)
-    best_past = getattr(evaluator, "best_tnr_past_db", None)
-    fell_silent = (
-        start_absent is not None and best_absent is not None and best_absent > start_absent
+    reading = _went_blind(
+        evaluator,
+        getattr(evaluator, "best_tnr_absent", None),
+        getattr(evaluator, "best_tnr_past_db", None),
     )
-    went_past = (
-        start_past is not None
-        and best_past is not None
-        and best_past - start_past > FLOOR_GUESSES["tnr"]
-    )
-    if fell_silent or went_past:
+    if reading is not None:
         evaluator.write_back_refusal = "objective_went_blind"
-        reading = (
-            f"falls silent on {best_absent:g} notes where the start point fell silent on "
-            f"{start_absent:g}"
-            if fell_silent
-            else f"sits a median {best_past:.2f} dB cleaner than the reference where the "
-            f"start point sat {start_past:.2f}"
-        )
         print(
             f"\nthe winner {reading} — keeping the defaults, since the one-sided `tnr` "
             f"term charges nothing for either and the fit collected it for leaving the "
@@ -128,6 +114,72 @@ def winner_or_defaults(
         _select(evaluator, start_values)
         return start_values
     _select(evaluator, best_values)
+    return best_values
+
+
+def _went_blind(evaluator, absent: float | None, past: float | None) -> str | None:
+    """How a candidate's `tnr` readings outgrew the start point's, or None if they did not."""
+
+    start_absent = getattr(evaluator, "start_tnr_absent", None)
+    start_past = getattr(evaluator, "start_tnr_past_db", None)
+    if start_absent is not None and absent is not None and absent > start_absent:
+        return f"falls silent on {absent:g} notes where the start point fell silent on {start_absent:g}"
+    if start_past is not None and past is not None and past - start_past > FLOOR_GUESSES["tnr"]:
+        return (
+            f"sits a median {past:.2f} dB cleaner than the reference where the start point "
+            f"sat {start_past:.2f}"
+        )
+    return None
+
+
+def short_of_blind(best_values: list[float], evaluator) -> list[float]:
+    """The furthest best-so-far point of the search the `tnr` guard admits.
+
+    The guard in `winner_or_defaults` refuses a winner that bought its loss by
+    walking past the reference, which used to discard the whole fit — and with
+    it every improvement the search made before it started walking. The path
+    holds each best-so-far point and the cache holds its terms, so the latest
+    point that stayed on the reference's side is found without a render. It
+    becomes the search winner, so the hold-out and the report score what is
+    written; the unconstrained winner is kept in `walked_back`.
+    """
+    evaluator.walked_back = None
+    path = getattr(evaluator, "path", None) or []
+    reading = _went_blind(
+        evaluator,
+        getattr(evaluator, "best_tnr_absent", None),
+        getattr(evaluator, "best_tnr_past_db", None),
+    )
+    if reading is None or not path:
+        return best_values
+    for eval_no, loss, _stage, values in reversed(path):
+        if loss >= 1.0:
+            break
+        terms = _terms_for(evaluator, values)
+        if terms is None or _went_blind(
+            evaluator, terms.get("tnr_absent"), terms.get("tnr_past_db")
+        ):
+            continue
+        evaluator.walked_back = {
+            "reading": reading,
+            "from_eval": path[-1][0],
+            "from_loss": path[-1][1],
+            "to_eval": eval_no,
+            "to_loss": loss,
+        }
+        print(
+            f"\nthe winner {reading} — walking back to eval #{eval_no} (loss {loss:.4f}), "
+            f"the furthest point of the search that stayed on the reference's side",
+            file=sys.stderr,
+        )
+        evaluator.best_values = list(values)
+        evaluator.best_loss = loss
+        evaluator.best_terms = dict(terms)
+        evaluator.best_level_offset_db = terms.get("level_offset_db")
+        evaluator.best_tnr_notes = terms.get("tnr_notes")
+        evaluator.best_tnr_absent = terms.get("tnr_absent")
+        evaluator.best_tnr_past_db = terms.get("tnr_past_db")
+        return list(values)
     return best_values
 
 

@@ -8,8 +8,10 @@ from statistics import median as median_offset
 import numpy as np
 from metrics import (
     MIN_PARTIALS_FOR_B,
+    MODAL_FLOOR_DB,
     N_HARMONICS,
     THIRD_OCTAVE_CENTERS,
+    midi_to_hz,
     stretch_cents,
 )
 from metrics_attack import ATTACK_BANDS_HZ
@@ -43,6 +45,7 @@ LOSS_TERMS = (
     "crest",
     "dyn",
     "hfdyn",
+    "modedyn",
     "mss",
     "band",
     "bdecay",
@@ -99,6 +102,7 @@ PITCHED_TERMS = (
     "lf",
     "stiff",
     "hfdyn",
+    "modedyn",
 ) + _SHARED_TERMS
 #: `modes` is shared because a drum has one too. A tom, a conga, a timbale, a
 #: woodblock and a cowbell all have a definite pitch, and the 1/3-octave band
@@ -307,6 +311,30 @@ def _brightness(row: dict) -> float | None:
     return None
 
 
+#: A measured mode this many times the played note's frequency or more counts
+#: as upper. Between the fifth and the octave, where no common bar, bell or
+#: membrane ratio lands, so a mode cannot flip sides on a few cents of tuning.
+MODAL_UPPER_RATIO = 1.75
+
+
+def _modal_brightness(row: dict) -> float | None:
+    """The upper modes' share of the measured mode power (dB), for a voice with no ladder.
+
+    `_brightness` reads h4-h10, which on a bar or a bell is the floor between
+    modes. This reads the modes `measure_modes` found instead, split at
+    `MODAL_UPPER_RATIO` times the played note. An upper set below the mode
+    detector's floor reads at that floor rather than as missing, so a soft note
+    whose upper modes fell under it still carries a point on the curve.
+    """
+    hz, db = row.get("modal_hz"), row.get("modal_db")
+    if not hz or not db or row.get("note") is None:
+        return None
+    split = MODAL_UPPER_RATIO * midi_to_hz(row["note"])
+    power = [10.0 ** (d / 10.0) for d in db]
+    upper = sum(p for h, p in zip(hz, power) if h >= split)
+    return 10.0 * math.log10(max(upper / sum(power), 10.0 ** (-MODAL_FLOOR_DB / 10.0)))
+
+
 def _attack_hf_share(row: dict) -> float | None:
     """The 4-8 kHz share of the first 120 ms: the first attack band's median over its slices.
 
@@ -441,7 +469,7 @@ def _modes_terms(
     on BOTH sides, which means the harmonic term returns a confident number made
     entirely of the difference between two noise floors. Measured on a
     synthesised celesta: ten of twelve bins at the floor and `harm` = 15.09.
-    That covers GM 8-14 and 47, 55, 112-118, plus every drum note with a
+    That covers GM 8-14, 108 and 112-118, plus every drum note with a
     definite pitch.
     """
     total = 0.0

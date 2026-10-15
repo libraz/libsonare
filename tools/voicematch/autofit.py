@@ -220,8 +220,9 @@ arguments, so no literal in it belongs to a named field — and is written as an
 explicit `o.<patch>.<field> = <value>f;` in the table source, which is the idiom
 that table already uses for its own exceptions. A drum note is written the same
 way into the drum table (`t[38].percussion.wire_buzz = ...f;`), which names every
-note directly. Family patches (`fam3.`) are built by a loop with no per-patch
-site, so their values are reported rather than written. See `writeback`.
+note directly, and a family patch into the family table (`t[0].` lines, or the
+`SONARE_TUNABLE` such a line names). Switch fields are reported rather than
+written. See `writeback`.
 
 Safety: the pristine text of every source-knob file is snapshotted at startup
 and restored in a `finally` block, so an exception or Ctrl-C never leaves the
@@ -270,7 +271,7 @@ from _repo import REPO_ROOT
 # importer reads this module by name and the tests patch attributes on it, so
 # the whole surface is re-exported here.
 # ruff: noqa: F401
-from autofit_report import report_pinned, winner_or_defaults
+from autofit_report import report_pinned, short_of_blind, winner_or_defaults
 from autofit_resolve import (
     _score,
     apply_spec_weights,
@@ -326,6 +327,7 @@ from metrics import (
     normalize_rms,
     to_mono,
 )
+from objective import objective_digest
 from optimizers import cma_es, optimize
 from patterns import DRUM_GATE_HELP, build_pattern, pattern_length
 from render_model import render_model
@@ -747,6 +749,9 @@ class Evaluator:
         # fit changes the weights between stages, so two losses are only
         # comparable within one of them.
         self.trajectory: list[tuple[float, float, str]] = []
+        # Every point the best-so-far moved to, in order, so a caller can pick the
+        # furthest one along the search that a check the loss does not see accepts.
+        self.path: list[tuple[int, float, str, list[float]]] = []
         self.best_loss = math.inf
         self.best_values: list[float] | None = None
         # Raw terms stay with their candidate so a fallback never pairs with the winner's loss.
@@ -1215,6 +1220,7 @@ class Evaluator:
         if loss < self.best_loss:
             self.best_loss = loss
             self.best_values = list(values)
+            self.path.append((len(self.trajectory) + int(fresh), loss, self.stage, list(values)))
             self.best_terms = None if terms is None else dict(terms)
             # Kept alongside the best values because nothing else can recover
             # it afterwards, and because it is the one number a fit can move
@@ -1694,7 +1700,7 @@ def repo_tree_state() -> tuple[str | None, list[str]]:
 
 
 def _fold_tree_provenance(out_path: str, head: str | None, dirty: list[str]) -> None:
-    """Add this run's src/ tree state to an --out artifact already written to disk.
+    """Add this run's src/ tree state and objective fingerprint to a written --out artifact.
 
     A post-write step rather than a field threaded through report.py's or
     diagnose.py's own record shape, so every --out path carries the same two
@@ -1705,6 +1711,7 @@ def _fold_tree_provenance(out_path: str, head: str | None, dirty: list[str]) -> 
     path = Path(out_path)
     record = json.loads(path.read_text())
     record["tree"] = {"head": head, "dirty_src": dirty}
+    record["objective"] = objective_digest()
     path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
 
 
@@ -1778,8 +1785,16 @@ def _fold_write_back_verdict(out_path: str, evaluator) -> None:
             "start": getattr(evaluator, "start_tnr_past_db", None),
             "best": getattr(evaluator, "best_tnr_past_db", None),
         },
+        "walked_back": getattr(evaluator, "walked_back", None),
     }
     path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
+
+
+#: The range a per-knob budget is held in. Below the floor a small spec gets fewer
+#: evaluations than one broad pass of probes needs; past the ceiling held-out loss
+#: was measured rising on an eighty-knob voice that plateaued at 400.
+PER_KNOB_BUDGET_FLOOR = 400
+PER_KNOB_BUDGET_CEILING = 2000
 
 
 def run(args, argv: list[str] | None = None) -> int:
@@ -1967,6 +1982,14 @@ def run(args, argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
 
+    if args.evals_per_knob:
+        asked = args.evals_per_knob * len(knobs)
+        args.max_evals = min(max(asked, PER_KNOB_BUDGET_FLOOR), PER_KNOB_BUDGET_CEILING)
+        print(
+            f"budget: {args.evals_per_knob} evaluations per knob, {args.max_evals} in all"
+            + ("" if asked == args.max_evals else f" (clamped from {asked})"),
+            file=sys.stderr,
+        )
     full_spec_budget_warning = (
         broad_budget_warning(args.max_evals, len(knobs)) if n_runtime and not n_source else None
     )
@@ -2072,7 +2095,7 @@ def run(args, argv: list[str] | None = None) -> int:
             restore(pristine, evaluator.written)
 
         if evaluator.best_values is not None:
-            best_values = evaluator.best_values
+            best_values = short_of_blind(evaluator.best_values, evaluator)
         # Before the report, because the hold-out decides which values the report
         # is about: it is scored on the winner and can then refuse it.
         validation_result = validate(
@@ -2246,6 +2269,14 @@ def main() -> int:
         dest="max_evals",
         help="total evaluations (default: 30; raise it well past this "
         "when the spec is runtime knobs only)",
+    )
+    parser.add_argument(
+        "--evals-per-knob",
+        type=int,
+        default=0,
+        dest="evals_per_knob",
+        help="set --max-evals to this many evaluations per resolved knob, for a spec whose "
+        "size is only known once --spec auto has read the catalogue",
     )
     parser.add_argument(
         "--optimizer",
@@ -2616,6 +2647,16 @@ def main() -> int:
         "force while the ring does not. Needs a probe with a velocity axis",
     )
     parser.add_argument(
+        "--w-modedyn",
+        type=float,
+        default=None,
+        dest="w_modedyn",
+        help="weight on the MODAL DYNAMICS CURVE: how the measured modes' share "
+        "above 1.75x the played note tracks velocity, fitted per pitch. "
+        "`--w-dyn` reads the harmonic ladder, which on a bar or a bell sits "
+        "between the modes. Needs a probe with a velocity axis",
+    )
+    parser.add_argument(
         "--w-level",
         type=float,
         default=None,
@@ -2687,7 +2728,7 @@ def main() -> int:
         "describes a stiff string and nothing else, so on a bar, a bell, "
         "a plate or a membrane every bin above the fundamental reads the "
         "render's own noise floor - on BOTH sides. That covers GM 8-14, "
-        "47, 55 and 112-118, and every drum note with a definite pitch. "
+        "108 and 112-118, and every drum note with a definite pitch. "
         "Weighted by default for those, and available for any voice",
     )
     parser.add_argument(

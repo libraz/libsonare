@@ -501,10 +501,11 @@ def test_the_report_states_how_far_the_winner_moved_the_level():
 
 def test_a_drum_field_is_routed_to_the_drum_table_not_reported_as_unplaceable():
     knobs = [_knob("d038.percussion.wire_buzz"), _knob("fam3.piano.brightness")]
-    per_patch, per_drum, other = patch_field_assignments(knobs, [0.9, 0.9])
+    per_patch, per_drum, per_family, other = patch_field_assignments(knobs, [0.9, 0.9])
     assert per_patch == {}
     assert per_drum == {38: [("percussion.wire_buzz", 0.9)]}
-    assert other == ["fam3.piano.brightness"]
+    assert per_family == {3: [("piano.brightness", 0.9)]}
+    assert other == []
 
 
 def test_a_fitted_drum_field_is_written_after_its_own_table_line():
@@ -541,7 +542,7 @@ def test_a_count_is_written_as_an_integer_and_a_switch_is_not_written_at_all():
         at("d035.one_shot", 1.0),  # a bool, and the fit's 0.885 is 1
         at("d035.percussion.shell_num_modes", 1.0),
     ]
-    per_patch, per_drum, other = patch_field_assignments(knobs, [3.94, 0.717, 0.885, 1.18])
+    per_patch, per_drum, _family, other = patch_field_assignments(knobs, [3.94, 0.717, 0.885, 1.18])
     assert per_patch == {}
     # The count rounds as `std::lround` did when it rendered; the two switches are
     # reported for a human to place; the second rounds back to where it started.
@@ -596,3 +597,26 @@ def test_a_labelled_assignment_is_replaced_rather_than_shadowed():
     text = write_drum_fields({49: [("gain", 0.6029)]}, {table: before})[table]
     assert text.count("t[49].gain") == 1
     assert "t[49].gain = 0.6029f;  // Crash 1" in text
+
+
+def test_a_family_field_set_from_a_tunable_rewrites_the_tunable():
+    """`t[0].piano.brightness = kPianoBrightness;` keeps naming its calibration."""
+    from writeback import FAMILY_TABLE_FILE, write_family_fields
+
+    edited = write_family_fields({0: [("piano.brightness", 0.123), ("piano.detune_cents", 9.5)]})
+    text = next(iter(edited.values()))
+    before = (REPO_ROOT / FAMILY_TABLE_FILE).read_text()
+    assert "SONARE_TUNABLE(kPianoBrightness, 0.123f);" in text
+    assert "t[0].piano.brightness = kPianoBrightness;" in text
+    assert text.count("t[0].piano.detune_cents") == before.count("t[0].piano.detune_cents")
+
+
+def test_a_family_field_with_no_line_is_appended_to_its_block():
+    from writeback import write_family_fields
+
+    edited = write_family_fields({0: [("drift_cents", 2.5)]})
+    text = next(iter(edited.values()))
+    lines = text.splitlines()
+    written = next(i for i, ln in enumerate(lines) if "t[0].drift_cents = 2.5f;" in ln)
+    first = next(i for i, ln in enumerate(lines) if ln.strip().startswith("t[0]."))
+    assert first < written < next(i for i, ln in enumerate(lines) if "return t;" in ln)

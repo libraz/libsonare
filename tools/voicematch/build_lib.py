@@ -49,7 +49,8 @@ def configure_build(build_dir: Path, cmake: str, *, tuning: bool) -> None:
         "CMAKE_BUILD_TYPE": "Release",
     }
     home = _cached_option(build_dir, "CMAKE_HOME_DIRECTORY")
-    if home is not None and Path(home) != REPO_ROOT:
+    # Resolved, because CMake records the path as given and /tmp is a symlink on macOS.
+    if home is not None and Path(home).resolve() != REPO_ROOT:
         raise RuntimeError(
             f"{build_dir} was configured for {home}, not {REPO_ROOT}; "
             f"pick a build dir belonging to this checkout"

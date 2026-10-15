@@ -611,10 +611,13 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *, preroll_s: float, gat
     # when the string had already stopped — a held C7 is 45 dB down long before
     # the key comes up, and "how fast the damper stopped it" then measures the
     # noise floor and reports it as a very fast damper.
+    # Read from the key lift, the score's note-off: `off` is the onset-anchored window end.
+    lift = int((preroll_s + gate_s) * sr)
     held_peak_db = float(env_db[peak_i])
-    off_db = float(_db(env[-1])) if env.size else -240.0
+    lift_i = min(int(np.searchsorted(t_env, (lift - on) / sr)), env.size - 1)
+    off_db = float(_db(env[lift_i])) if env.size else -240.0
     row["decayed_before_note_off"] = bool(off_db < held_peak_db - 45.0)
-    rel = mono[off:]
+    rel = mono[lift:]
     if rel.size > sr // 20 and not row["decayed_before_note_off"]:
         t_rel, env_rel = _rms_envelope(_above_fundamental(rel, sr, row["f0_hz"]), sr)
         start_db = float(_db(env_rel[0]))

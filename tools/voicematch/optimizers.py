@@ -346,7 +346,8 @@ def _descend(evaluator, knobs: list[Knob], args, current: list[float]) -> None:
                 return evaluator(trial)
 
             best_t, best_f = golden_section(objective, a, b, budget, tol)
-            if best_f <= f_current:
+            # Strict: on a tie a knob the objective cannot see would take the first probe.
+            if best_f < f_current:
                 current[i] = min(max(_from_opt(knob, best_t), knob.lo), knob.hi)
                 f_current = best_f
             widths[i] *= PASS_SHRINK

@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 
 import numpy as np
 from metrics_hit import HIT_ENVELOPE_HOP_MS, HIT_ENVELOPE_WIN_MS, _hit_onset
-from metrics_modal import modal_profile
+from metrics_modal import half_spectra, modal_profile
 from metrics_modulation import f0_width_cents, modulation_note
 from metrics_partials import estimate_inharmonicity_b, ladder_present, partial_hz
 from metrics_signal import (
@@ -285,7 +285,7 @@ def analyze_note(
             if a10.size and a90.size:
                 attack_fine_ms = max(0.0, (f_times[a90[0]] - f_times[a10[0]]) * 1000.0)
 
-    modal = modal_profile(freqs, mag, expected_f0)
+    modal = modal_profile(freqs, mag, expected_f0, halves=half_spectra(sustain, sr))
     movement = modulation_note(mono, sr, note, float(f0), onset=onset)
 
     return NoteMetrics(

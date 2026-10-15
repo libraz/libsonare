@@ -61,6 +61,7 @@ def _probe_args(**kwargs) -> argparse.Namespace:
         "w_stiff": None,
         "w_dyn": None,
         "w_hfdyn": None,
+        "w_modedyn": None,
         "w_modes": None,
         "w_mod": None,
         "w_kit": None,
@@ -110,6 +111,7 @@ def _fit_args(**kwargs) -> argparse.Namespace:
         "n_harm": 10,
         "percussive": False,
         "no_cache": True,
+        "evals_per_knob": None,
     }
     base.update(kwargs)
     return _probe_args(**base)

@@ -22,6 +22,7 @@ import json
 from dataclasses import replace
 
 import autofit
+import autofit_report
 import build_lib
 import eval_cache
 from autofit import Evaluator, winner_or_defaults
@@ -195,6 +196,50 @@ def test_a_winner_that_left_the_reference_behind_writes_nothing():
     assert winner_or_defaults(knobs, [0.9], ev((12.0, 12.9), (0.0, 0.0), 0.0, 0.0)) == [0.9]
     # A --raw-loss run leaves the anchors unset; the guard has nothing to read.
     assert winner_or_defaults(knobs, [0.9], ev((None, None), (None, None), None, None)) == [0.9]
+
+
+def test_a_winner_past_the_reference_walks_back_along_its_path():
+    """The guard keeps what the search gained before it started walking past.
+
+    Three best-so-far points: the start, one still on the reference's side, and
+    the winner 3.5 dB cleaner than it. The second is selected, becomes the search
+    winner so the hold-out scores it, and the unconstrained winner is recorded.
+    """
+    terms = {
+        (1.0,): {"tnr_absent": 0.0, "tnr_past_db": 0.0},
+        (0.6,): {"tnr_absent": 0.0, "tnr_past_db": 0.8},
+        (0.2,): {"tnr_absent": 0.0, "tnr_past_db": 3.5},
+    }
+    ev = argparse.Namespace(
+        start_tnr_absent=0.0,
+        start_tnr_past_db=0.0,
+        best_tnr_absent=0.0,
+        best_tnr_past_db=3.5,
+        best_values=[0.2],
+        best_loss=0.70,
+        path=[(1, 1.0, "", [1.0]), (40, 0.80, "", [0.6]), (300, 0.70, "", [0.2])],
+        terms_for=lambda v: terms.get(tuple(v)),
+    )
+    assert autofit_report.short_of_blind([0.2], ev) == [0.6]
+    assert ev.best_values == [0.6] and ev.best_loss == 0.80 and ev.best_tnr_past_db == 0.8
+    assert ev.walked_back["from_eval"] == 300 and ev.walked_back["to_eval"] == 40
+    knobs = [_reach_knob("a", 0.0, 1.0, 1.0)]
+    ev.normalize = True
+    assert winner_or_defaults(knobs, [0.6], ev) == [0.6]
+    assert ev.write_back_refusal is None
+
+    # Nothing on the path short of the start stayed on the reference's side: refused as before.
+    ev.path = [(1, 1.0, "", [1.0]), (300, 0.70, "", [0.2])]
+    ev.best_tnr_past_db, ev.best_values, ev.best_loss = 3.5, [0.2], 0.70
+    assert autofit_report.short_of_blind([0.2], ev) == [0.2]
+    assert ev.walked_back is None
+    assert winner_or_defaults(knobs, [0.2], ev) == [1.0]
+    assert ev.write_back_refusal == "objective_went_blind"
+
+    # A winner the guard admits is left alone.
+    ev.best_tnr_past_db = 0.5
+    assert autofit_report.short_of_blind([0.2], ev) == [0.2]
+    assert ev.walked_back is None
 
 
 def test_a_screen_that_moves_something_still_narrows_to_it():
@@ -704,6 +749,7 @@ def test_a_refusal_names_itself_in_the_out_artifact(tmp_path):
         "tnr_notes": {"start": 7.0, "best": 0.0},
         "tnr_absent": {"start": 0.0, "best": 0.0},
         "tnr_past_db": {"start": 2.0, "best": 30.0},
+        "walked_back": None,
     }
 
 

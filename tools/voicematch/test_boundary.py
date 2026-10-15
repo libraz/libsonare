@@ -288,8 +288,8 @@ def test_overdriven_guitar_is_product_only():
     assert forced.status == STATUS_UNVERIFIED and forced.may_fit and not forced.may_adopt
 
 
-def test_jazz_guitar_is_context_only():
-    ref = _capture("jazz_guitar")
+def test_an_unclassified_guitar_is_context_only():
+    ref = Reference.from_capture({"id": "unclassified_guitar", "program": 26})
     assert ref.rig == RIG_UNCLASSIFIED and ref.rig_evidence == EVIDENCE_UNKNOWN
     for scope, request in ((SCOPE_INSTRUMENT, _di(26)), (SCOPE_PRODUCT, _product(26))):
         a = assess(ref, scope, request, product_rig=True)

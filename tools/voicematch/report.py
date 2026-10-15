@@ -23,6 +23,7 @@ from writeback import (
     materialize,
     patch_field_assignments,
     write_drum_fields,
+    write_family_fields,
     write_patch_fields,
 )
 
@@ -367,11 +368,11 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
     overrides = tunable_overrides(knobs, best_values, changed_only=True)
     print(f"  SONARE_TUNING_OVERRIDES='{overrides}'" if overrides else "  (nothing moved)")
 
-    per_patch, per_drum, unnamed = patch_field_assignments(knobs, best_values)
+    per_patch, per_drum, per_family, unnamed = patch_field_assignments(knobs, best_values)
     if unnamed:
-        print("\n== family patch fields (no per-patch assignment site) ==")
-        print("  These are built by a loop over a table, so there is no line to update;")
-        print("  place them where that table is built, or keep them as overrides above.")
+        print("\n== fields reported, not written ==")
+        print("  A switch lands in a bucket rather than on a number, and a patch with no")
+        print("  table line has nowhere to go; set these by hand or keep the overrides above.")
         for key in sorted(unnamed):
             print(f"    {key}")
 
@@ -384,6 +385,8 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
         written.update(write_patch_fields(per_patch, edited))
     if per_drum:
         written.update(write_drum_fields(per_drum, {**edited, **written}))
+    if per_family:
+        written.update(write_family_fields(per_family, {**edited, **written}))
     for path, text in written.items():
         baseline.setdefault(path, path.read_text())
         edited[path] = text
@@ -439,6 +442,15 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
                 for k, b in zip(knobs, best_values)
             ],
             "overrides": overrides,
+            "path": [
+                {
+                    "eval": i,
+                    "loss": _finite(loss),
+                    "stage": stage,
+                    "values": [_finite(v) for v in vals],
+                }
+                for i, loss, stage, vals in getattr(evaluator, "path", [])
+            ],
             "validation": extra.get("validation"),
             "validation_partition": extra.get("validation_partition"),
             "room": extra.get("room"),

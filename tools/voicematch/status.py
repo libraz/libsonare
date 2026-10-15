@@ -66,9 +66,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import bank
+import boundary
 import catalogue as catalogue_mod
+import fits as fits_mod
 import signoff
 from _repo import REPO_ROOT
+from objective import objective_digest
 from toneclass import canonical_dimensions
 
 HERE = Path(__file__).resolve().parent
@@ -578,6 +581,10 @@ def next_action(axes: dict, stage: int, candidates: list[str]) -> str:
             f"{', '.join(unbounded)} — read the reason there, then either record a "
             f"bound that became measurable or fix what the model is missing"
         )
+    fit = axes.get("fit") or {}
+    if stage in (3, 4) and fit.get("fittable") and fit.get("state") != fits_mod.CURRENT:
+        when = "was never recorded" if fit["state"] == fits_mod.NONE else "predates it"
+        return f"refit under the current objective (the last fit {when}): refit.py"
     if stage == 3:
         listen = "listen to a take and record the verdict in signoff.json"
         if candidates:
@@ -624,6 +631,26 @@ def _last_step(axes: dict) -> str:
     return "settled"
 
 
+def fit_axis(voice, records: dict[str, dict], digest: str) -> dict:
+    """Whether the voice's patch was last fitted under the current objective.
+
+    A kit has no patch, so its units are the drum notes fitted against its captures.
+    `fittable` is whether any capture answers at the instrument's boundary, since a
+    fit against any other is refused and suggesting one would be an errand.
+    """
+    ids = {c.id for c in voice.captures}
+    if voice.kit:
+        units = sorted(u for u, e in records.items() if u.startswith("d") and e["capture"] in ids)
+    else:
+        units = [voice.patch] if voice.patch else []
+    fittable = any(
+        boundary.reference_boundary(boundary.Reference.from_capture(c.raw), voice.program)
+        == boundary.BOUNDARY_INSTRUMENT
+        for c in voice.captures
+    )
+    return {**fits_mod.axis(units, records, digest), "fittable": fittable}
+
+
 def build(catalogue) -> list[dict]:
     """One entry per bank voice, in program order with kits last."""
     pool = bank.captures()
@@ -634,6 +661,8 @@ def build(catalogue) -> list[dict]:
     _generation, unit_versions = signoff.bank_versions(BANK_VERSIONS)
     shared_gen = signoff.moved_generation(BANK_VERSIONS, {"shared"})
     drum_gen = signoff.moved_generation(BANK_VERSIONS, {"drum"})
+    fit_records = fits_mod.load()
+    digest = objective_digest()
     rows = []
     for v in voices:
         cap = v.capture
@@ -671,6 +700,7 @@ def build(catalogue) -> list[dict]:
                 scope=signoff.SCOPE_INSTRUMENT,
             ),
         }
+        axes["fit"] = fit_axis(v, fit_records, digest)
         stage = stage_for(axes)
         open_here = cands.get(v.slug, [])
         rows.append(
@@ -769,6 +799,14 @@ def render_table(rows: list[dict], *, every: bool, pol: dict, goal: str | None =
     unwritten = sum(len(r["open_candidates"]) for r in rows)
     if unwritten:
         print(f"  {unwritten} recorded calibration setting(s) not written back")
+    fit_states = [r["axes"]["fit"] for r in rows if r["axes"].get("fit", {}).get("fittable")]
+    if fit_states:
+        current = sum(f["state"] == fits_mod.CURRENT for f in fit_states)
+        stale = sum(f["state"] == fits_mod.STALE for f in fit_states)
+        print(
+            f"  fits under the current objective: {current} of {len(fit_states)} fittable "
+            f"voice(s); {stale} stale, {len(fit_states) - current - stale} never recorded"
+        )
     census = signoff_census(rows)
     if census["structure"] or census["music"]:
         print(
