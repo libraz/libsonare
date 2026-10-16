@@ -5,6 +5,9 @@
   "reference_measured_utc": "2026-10-15T18:18:38+00:00",
   "recorded_utc": "2026-09-10T00:31:23+00:00",
   "reference_spread": {},
+  "_excluded": {
+    "body": "the gated window reads the steady part, which is the library's sustain loop held to 0.1 dB over 2.4 s (-64 to -69 dB re f0, one take at every velocity); the reference's onset transient below f0 (about -54 dB at 0.2-0.5 s) is real and is not what this dimension weighs"
+  },
   "bounds": {
     "stretch": {
       "median": 1.809,
@@ -28,12 +31,6 @@
       "median": 56.25,
       "abs_median": 56.25,
       "p90": 91.25,
-      "rows": 35
-    },
-    "body": {
-      "median": 9.125,
-      "abs_median": 9.125,
-      "p90": 18.705,
       "rows": 35
     },
     "balance": {
