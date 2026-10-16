@@ -5095,7 +5095,7 @@
         "fit": {
           "state": "stale",
           "date": "2026-10-16",
-          "outcome": "adopted",
+          "outcome": "kept",
           "fittable": true
         }
       },
@@ -9789,7 +9789,7 @@
         "fit": {
           "state": "stale",
           "date": "2026-10-16",
-          "outcome": "adopted",
+          "outcome": "kept",
           "fittable": true
         }
       },

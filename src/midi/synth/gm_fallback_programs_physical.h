@@ -306,8 +306,8 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.tenor_sax.reed.closing_pressure = 1.26761f;
   o.tenor_sax.reed.flow_gain = 0.57712f;
   o.tenor_sax.cutoff_hz = 2827.72f;
-  o.tenor_sax.lfo_rate_hz = 23.7281f;
-  o.tenor_sax.lfo_to_pitch_cents = 0.382972f;
+  o.tenor_sax.lfo_rate_hz = 18.3065f;
+  o.tenor_sax.lfo_to_pitch_cents = 0.625687f;
   o.tenor_sax.reed.growl = 0.317241f;
   o.tenor_sax.reed.chiff = 0.531633f;
   o.tenor_sax.reed.breath_noise = 0.319254f;
@@ -315,7 +315,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.tenor_sax.amp_env.release_ms = 89.9691f;
   o.tenor_sax.amp_env.sustain = 0.833916f;
   o.tenor_sax.drift_rate_hz = 0.52401f;
-  o.tenor_sax.reed.attack_ms = 5.99128f;
+  o.tenor_sax.reed.attack_ms = 3.44883f;
   o.tenor_sax.reed.breath_pressure = 0.529918f;
   o.tenor_sax.reed.chiff_ms = 23.6422f;
   o.tenor_sax.reed.damping = 0.853888f;
@@ -328,9 +328,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // 13.45 -> 12.40 and centroid/f0 error 0.42 -> 0.29 octave.
   o.tenor_sax.reed.bell_radiation_hz = 687.285f;
   o.tenor_sax.amp_env.decay_ms = 20.019f;
-  o.tenor_sax.body_mix = 0.203018f;
-  o.tenor_sax.drift_cents = 0.500475f;
-  o.tenor_sax.drive = 0.381966f;
+  o.tenor_sax.body_mix = 0.36f;
+  o.tenor_sax.drift_cents = 1.5f;
+  o.tenor_sax.drive = 0.0f;
   o.baritone_sax = reed(true, 0.60f, 0.50f, 0.5f, 0.40f, 26.0f, 120.0f, 0.78f, 0.40f, 0.2849f);
   // Fitted inside the valve's oscillating band; the worst of 35 captured notes
   // holds within 1.5 dB/s of its reference.

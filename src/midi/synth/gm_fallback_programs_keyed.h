@@ -115,8 +115,8 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   ep.amp_env.release_ms = 83.4125f;
   ep.cutoff_hz = 13887.1f;
   ep.fm.ops[0].env.attack_ms = 0.612082f;
-  ep.fm.ops[0].env.decay_ms = 8508.71f;
-  ep.fm.ops[0].env.release_ms = 83.4125f;
+  ep.fm.ops[0].env.decay_ms = 9000.0f;
+  ep.fm.ops[0].env.release_ms = 250.0f;
 
   // Electric Piano 2 is the FM tone rather than the tine one, so it is its own
   // patch, starting from the same voice and fitted against its own reference.
@@ -406,7 +406,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // drops dispersion (nylon plain strings are not audibly inharmonic) and softens
   // the pluck to the flesh of a fingertip with a lighter tension bend.
   o.nylon_guitar = steel;
-  o.nylon_guitar.ks.brightness = 0.517933f;
+  o.nylon_guitar.ks.brightness = 0.72f;
   o.nylon_guitar.ks.exc_brightness = 0.325593f;
   o.nylon_guitar.ks.pick_position = 0.1313f;
   o.nylon_guitar.ks.decay_s = 8.11134f;
@@ -417,7 +417,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.nylon_guitar.amp_env.attack_ms = 0.839868f;
   o.nylon_guitar.amp_env.release_ms = 132.841f;
   o.nylon_guitar.amp_env.sustain = 0.465764f;
-  o.nylon_guitar.cutoff_hz = 11884.5f;
+  o.nylon_guitar.cutoff_hz = 8122.57f;
   o.nylon_guitar.ks.decay_stretch = 0.328695f;
   o.nylon_guitar.ks.release_damp_s = 0.0585365f;
   o.nylon_guitar.ks.vel_to_brightness = 0.829639f;
@@ -475,7 +475,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.clean_guitar.ks.hf_decay_s = 0.843f;
   o.clean_guitar.ks.mid_decay_s = 5.98f;
   o.clean_guitar.ks.decay_s = 9.85f;
-  o.clean_guitar.ks.decay_stretch = 0.398014f;
+  o.clean_guitar.ks.decay_stretch = 0.144f;
   o.clean_guitar.ks.exc_brightness = 0.407f;
   o.clean_guitar.ks.vel_to_brightness = 0.231f;
   // Against the direct reference at 0: held crest 2.59 -> 2.88 dB off and the
@@ -485,12 +485,12 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // Against the direct reference at 0.14: h2-h6 stack 12.9 -> -0.2 dB off,
   // tone-to-noise 15.1 -> 11.4 dB cleaner, register profile back inside its bound.
   o.clean_guitar.ks.pickup_pos = 0.35f;
-  o.clean_guitar.amp_env.attack_ms = 0.33365f;
-  o.clean_guitar.amp_env.release_ms = 749.288f;
-  o.clean_guitar.amp_env.sustain = 0.690983f;
-  o.clean_guitar.ks.body_coupling = 0.159017f;
-  o.clean_guitar.ks.brightness = 0.465248f;
-  o.clean_guitar.ks.dispersion = 0.494427f;
+  o.clean_guitar.amp_env.attack_ms = 1.0f;
+  o.clean_guitar.amp_env.release_ms = 250.0f;
+  o.clean_guitar.amp_env.sustain = 1.0f;
+  o.clean_guitar.ks.body_coupling = 0.2f;
+  o.clean_guitar.ks.brightness = 0.8f;
+  o.clean_guitar.ks.dispersion = 0.3f;
 
   // Palm mute: the same electric string with a hand on it. The mute is the whole
   // of the difference and it is not a shorter decay — a choked decay alone left
@@ -657,20 +657,20 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   NativeSynthPatch& si = o.sitar;
   si.mode = SynthEngineMode::kPluckedString;
   si.amp_env = fallback_env(0.0f, 0.0f, 1.0f, 200.0f);
-  si.cutoff_hz = 6771.44f;
-  si.plucked_string.buzz = 0.889994f;
+  si.cutoff_hz = 15735.0f;
+  si.plucked_string.buzz = 0.789254f;
   si.plucked_string.brightness = 0.817194f;
-  si.plucked_string.decay_s = 8.28267f;
-  si.plucked_string.pick_position = 0.0450441f;
+  si.plucked_string.decay_s = 5.06967f;
+  si.plucked_string.pick_position = 0.0554271f;
   si.gain = 0.8f;
-  si.amp_env.release_ms = 663.136f;
-  si.plucked_string.decay_stretch = 0.387363f;
-  si.plucked_string.exc_brightness = 0.950302f;
-  si.plucked_string.release_damp_s = 1.62821f;
-  si.plucked_string.vel_to_brightness = 0.0537392f;
-  si.resonance_q = 1.01952f;
-  si.amp_env.sustain = 0.690983f;
-  si.stereo_spread = 0.0809314f;
+  si.amp_env.release_ms = 125.636f;
+  si.plucked_string.decay_stretch = 0.0718769f;
+  si.plucked_string.exc_brightness = 0.887714f;
+  si.plucked_string.release_damp_s = 0.257539f;
+  si.plucked_string.vel_to_brightness = 0.282838f;
+  si.resonance_q = 0.866964f;
+  si.amp_env.sustain = 1.0f;
+  si.stereo_spread = 0.0f;
 
   // Banjo (GM 105): steel strings over a stretched head, picked near the bridge
   // with a metal fingerpick. The head is what makes it a banjo and not a bright
@@ -767,7 +767,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // as synthetic, and the grid loss does not see the difference.
   o.harpsichord.mode = SynthEngineMode::kHarpsichord;
   o.harpsichord.amp_env = fallback_env(1.0f, 0.0f, 1.0f, 250.0f);
-  o.harpsichord.cutoff_hz = 16640.6f;
+  o.harpsichord.cutoff_hz = 20000.0f;
   o.harpsichord.harpsichord.eight_a = true;
   o.harpsichord.harpsichord.decay_s = 11.6f;
   o.harpsichord.harpsichord.decay_stretch = 0.40f;
@@ -809,12 +809,12 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // own spread, from 7.1 times it with the field off.
   o.harpsichord.harpsichord.board_diffuse_db = -34.0f;
   o.harpsichord.body = BodyType::kGuitar;
-  o.harpsichord.body_mix = 0.611146f;
+  o.harpsichord.body_mix = 0.3f;
   o.harpsichord.gain = 0.30f;
   o.harpsichord.amp_env.attack_ms = 2.99715f;
   o.harpsichord.amp_env.release_ms = 749.288f;
-  o.harpsichord.amp_env.sustain = 0.618034f;
-  o.harpsichord.harpsichord.bass_foreshortening = 0.305573f;
+  o.harpsichord.amp_env.sustain = 0.690983f;
+  o.harpsichord.harpsichord.bass_foreshortening = 0.35f;
 
   // GS/GM2 harpsichord registration variations (program 6, bank select). Names
   // follow the GM2 melodic variation table (program_map.cpp): bank 1 octave mix,
@@ -1110,19 +1110,19 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   ch.amp_env = fallback_env(200.0f, 400.0f, 0.9f, 400.0f);
   ch.cutoff_hz = 20000.0f;
   ch.vocal.vowel = 0;  // /a/
-  ch.vocal.brightness = 0.412868f;
+  ch.vocal.brightness = 0.55f;
   ch.vocal.vibrato_depth = 0.30f;
-  ch.vocal.breath_noise = 0.236819f;
+  ch.vocal.breath_noise = 0.12f;
   ch.vocal.attack_ms = 200.0f;
   ch.vocal.release_ms = 400.0f;
-  ch.stereo_spread = 0.312461f;
+  ch.stereo_spread = 0.6f;
   ch.gain = 0.6f;
   ch.amp_env.attack_ms = 599.43f;
   ch.amp_env.decay_ms = 1198.86f;
   ch.amp_env.release_ms = 653.508f;
   ch.amp_env.sustain = 0.541641f;
-  ch.drive = 0.118034f;
-  ch.resonance_q = 0.722503f;
+  ch.drive = 0.0f;
+  ch.resonance_q = 0.707f;
 
   // Voice Oohs (GM 53): the same voice with a nearly closed mouth — the /u/
   // vowel, darker and more covered.

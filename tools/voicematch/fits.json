@@ -177,7 +177,8 @@
       "date": "2026-10-16",
       "capture": "electric_guitar_di",
       "timbre": "di",
-      "outcome": "adopted"
+      "outcome": "kept",
+      "reason": "no point of the search kept every gate its patch reaches (electric_guitar_di, muted_guitar)"
     },
     "concert_flute": {
       "objective": "0b559b72ad741fcd",
@@ -1016,7 +1017,8 @@
       "date": "2026-10-16",
       "capture": "sitar",
       "timbre": "gm105",
-      "outcome": "adopted"
+      "outcome": "kept",
+      "reason": "no point of the search kept every gate its patch reaches (sitar, shamisen, koto)"
     },
     "soprano_sax": {
       "objective": "0b559b72ad741fcd",

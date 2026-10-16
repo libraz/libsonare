@@ -574,6 +574,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[41].percussion.shell_weight[1] = 1.70147f;
   t[41].percussion.strike_theta = 0.0250092f;
   t[41].resonance_q = 2.03979f;
+  t[41].gain = 5.54476f;
   t[43] = tom_patch(kToms[1]);
   t[43].amp_env.attack_ms = 0.435895f;
   t[43].amp_env.sustain = 0.710042f;
@@ -601,114 +602,120 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[43].percussion.shell_weight[0] = 2.2918f;
   t[43].percussion.shell_weight[1] = 2.56622f;
   t[43].resonance_q = 1.51901f;
+  t[43].gain = 2.56842f;
   t[45] = tom_patch(kToms[2]);
-  t[45].amp_env.attack_ms = 0.423447f;
-  t[45].amp_env.sustain = 0.592008f;
+  t[45].amp_env.attack_ms = 0.485722f;
+  t[45].amp_env.sustain = 0.625f;
   t[45].cutoff_hz = 17235.4f;
-  t[45].percussion.contact = 0.911993f;
-  t[45].percussion.contact_ms = 0.139192f;
+  t[45].percussion.contact = 0.651877f;
+  t[45].percussion.contact_ms = 0.177273f;
   t[45].percussion.mallet_ms = 1.63513f;
-  t[45].percussion.mallet_vel_exp = 0.685292f;
-  t[45].percussion.mode_decay_exp = 0.159512f;
+  t[45].percussion.mallet_vel_exp = 0.76603f;
+  t[45].percussion.mode_decay_exp = 0.167608f;
   t[45].percussion.mode_ratios[1] = 1.46818f;
-  t[45].percussion.mode_ratios[2] = 1.85279f;
+  t[45].percussion.mode_ratios[2] = 1.77853f;
   t[45].percussion.mode_ratios[4] = 4.1021f;
-  t[45].percussion.mode_ratios[6] = 2.62493f;
-  t[45].percussion.mode_ratios[7] = 4.20761f;
+  t[45].percussion.mode_ratios[6] = 2.4687f;
+  t[45].percussion.mode_ratios[7] = 4.12242f;
   t[45].percussion.noise_gain = 0.61731f;
   t[45].percussion.noise_q = 1.49772f;
   t[45].percussion.pitch_drop = 0.67638f;
   t[45].percussion.shell_mix = 0.231277f;
   t[45].percussion.shell_t60_s[0] = 0.0734498f;
-  t[45].percussion.shell_t60_s[1] = 0.22253f;
+  t[45].percussion.shell_t60_s[1] = 0.179829f;
   t[45].percussion.shell_weight[0] = 2.09017f;
-  t[45].percussion.shell_weight[1] = 2.7572f;
+  t[45].percussion.shell_weight[1] = 2.3613f;
   t[45].resonance_q = 1.89887f;
+  t[45].gain = 3.34931f;
   t[47] = tom_patch(kToms[3]);
-  t[47].amp_env.attack_ms = 0.691815f;
-  t[47].amp_env.sustain = 0.651025f;
-  t[47].cutoff_hz = 16094.5f;
-  t[47].drive = 0.132788f;
+  t[47].amp_env.attack_ms = 1.04413f;
+  t[47].amp_env.sustain = 0.618034f;
+  t[47].cutoff_hz = 20000.0f;
+  t[47].drive = 0.118034f;
   t[47].percussion.air_spring = 1.10895f;
-  t[47].percussion.contact = 1.73405f;
-  t[47].percussion.contact_ms = 0.235609f;
-  t[47].percussion.mallet_ms = 2.14783f;
-  t[47].percussion.mallet_vel_exp = 0.667055f;
-  t[47].percussion.mode_decay_exp = 0.338011f;
+  t[47].percussion.contact = 1.06502f;
+  t[47].percussion.contact_ms = 0.293612f;
+  t[47].percussion.mallet_ms = 2.02f;
+  t[47].percussion.mallet_vel_exp = 0.634064f;
+  t[47].percussion.mode_decay_exp = 0.462179f;
   t[47].percussion.mode_ratios[1] = 1.35284f;
-  t[47].percussion.mode_ratios[2] = 2.94138f;
+  t[47].percussion.mode_ratios[2] = 3.07904f;
   t[47].percussion.mode_ratios[3] = 1.94897f;
-  t[47].percussion.mode_ratios[4] = 2.39519f;
-  t[47].percussion.mode_ratios[6] = 2.39275f;
-  t[47].percussion.mode_ratios[7] = 2.3785f;
-  t[47].percussion.noise_gain = 0.61731f;
-  t[47].percussion.noise_q = 2.18205f;
-  t[47].percussion.pitch_drop_ms = 36.0635f;
-  t[47].percussion.shell_mix = 0.371031f;
-  t[47].percussion.shell_t60_s[0] = 0.362126f;
-  t[47].percussion.shell_t60_s[1] = 0.328785f;
+  t[47].percussion.mode_ratios[4] = 2.25264f;
+  t[47].percussion.mode_ratios[6] = 2.18857f;
+  t[47].percussion.mode_ratios[7] = 2.42765f;
+  t[47].percussion.noise_gain = 0.616137f;
+  t[47].percussion.noise_q = 1.62692f;
+  t[47].percussion.pitch_drop_ms = 30.0f;
+  t[47].percussion.shell_mix = 0.290294f;
+  t[47].percussion.shell_t60_s[0] = 0.359658f;
+  t[47].percussion.shell_t60_s[1] = 0.179829f;
   t[47].percussion.shell_weight[0] = 2.2918f;
-  t[47].percussion.shell_weight[1] = 0.347845f;
-  t[47].percussion.strike_theta = 0.221314f;
-  t[47].resonance_q = 0.801075f;
+  t[47].percussion.shell_weight[1] = 0.566563f;
+  t[47].percussion.strike_theta = 0.118034f;
+  t[47].resonance_q = 0.707f;
+  t[47].gain = 1.9076f;
   t[48] = tom_patch(kToms[4]);
-  t[48].amp_env.attack_ms = 0.115536f;
-  t[48].amp_env.sustain = 0.710042f;
-  t[48].cutoff_hz = 10887.8f;
+  t[48].amp_env.attack_ms = 0.100723f;
+  t[48].amp_env.sustain = 0.779508f;
+  t[48].cutoff_hz = 10134.0f;
   t[48].drive = 0.140576f;
   t[48].percussion.air_spring = 0.604494f;
-  t[48].percussion.contact = 1.33257f;
-  t[48].percussion.contact_ms = 0.203711f;
-  t[48].percussion.mallet_vel_exp = 0.846767f;
-  t[48].percussion.mode_decay_exp = 0.052781f;
-  t[48].percussion.mode_decay_s = 0.733665f;
+  t[48].percussion.contact = 0.882926f;
+  t[48].percussion.contact_ms = 0.177273f;
+  t[48].percussion.mallet_vel_exp = 0.76603f;
+  t[48].percussion.mode_decay_exp = 0.167608f;
+  t[48].percussion.mode_decay_s = 0.69f;
   t[48].percussion.mode_ratios[1] = 1.72919f;
-  t[48].percussion.mode_ratios[2] = 2.17969f;
+  t[48].percussion.mode_ratios[2] = 2.13556f;
   t[48].percussion.mode_ratios[3] = 2.70353f;
-  t[48].percussion.mode_ratios[4] = 3.06151f;
-  t[48].percussion.mode_ratios[5] = 3.13562f;
-  t[48].percussion.mode_ratios[6] = 2.44777f;
+  t[48].percussion.mode_ratios[4] = 3.12478f;
+  t[48].percussion.mode_ratios[5] = 2.86153f;
+  t[48].percussion.mode_ratios[6] = 2.18857f;
   t[48].percussion.mode_ratios[7] = 4.12242f;
-  t[48].percussion.noise_cutoff_hz = 1254.67f;
+  t[48].percussion.noise_cutoff_hz = 1180.0f;
   t[48].percussion.noise_gain = 0.61731f;
-  t[48].percussion.noise_q = 1.51037f;
-  t[48].percussion.shell_mix = 0.257303f;
-  t[48].percussion.shell_t60_s[0] = 0.181112f;
-  t[48].percussion.shell_t60_s[1] = 0.297308f;
-  t[48].percussion.shell_weight[0] = 1.32295f;
-  t[48].percussion.shell_weight[1] = 2.20147f;
-  t[48].percussion.strike_theta = 0.248161f;
-  t[48].resonance_q = 0.658159f;
+  t[48].percussion.noise_q = 1.49772f;
+  t[48].percussion.shell_mix = 0.290294f;
+  t[48].percussion.shell_t60_s[0] = 0.12f;
+  t[48].percussion.shell_t60_s[1] = 0.297845f;
+  t[48].percussion.shell_weight[0] = 1.38197f;
+  t[48].percussion.shell_weight[1] = 2.0695f;
+  t[48].percussion.strike_theta = 0.281153f;
+  t[48].resonance_q = 0.707f;
   t[48].stereo_spread = 0.190983f;
+  t[48].percussion.num_modes = 7;
+  t[48].gain = 1.74685f;
   t[50] = tom_patch(kToms[5]);
   t[50].amp_env.attack_ms = 2.48205f;
-  t[50].amp_env.sustain = 0.863729f;
-  t[50].cutoff_hz = 7365.58f;
+  t[50].amp_env.sustain = 0.904508f;
+  t[50].cutoff_hz = 6689.62f;
   t[50].drive = 0.118034f;
   t[50].percussion.air_spring = 0.498494f;
-  t[50].percussion.contact = 1.73405f;
-  t[50].percussion.contact_ms = 0.177273f;
-  t[50].percussion.mallet_ms = 1.56558f;
-  t[50].percussion.mallet_vel_exp = 0.117297f;
-  t[50].percussion.mode_decay_exp = 0.159512f;
-  t[50].percussion.mode_ratios[1] = 1.76492f;
-  t[50].percussion.mode_ratios[2] = 2.00846f;
+  t[50].percussion.contact = 1.06502f;
+  t[50].percussion.contact_ms = 0.293612f;
+  t[50].percussion.mallet_ms = 1.77f;
+  t[50].percussion.mallet_vel_exp = 0.33f;
+  t[50].percussion.mode_decay_exp = 0.21f;
+  t[50].percussion.mode_ratios[1] = 1.87661f;
+  t[50].percussion.mode_ratios[2] = 2.13556f;
   t[50].percussion.mode_ratios[3] = 2.70353f;
-  t[50].percussion.mode_ratios[4] = 2.35806f;
-  t[50].percussion.mode_ratios[5] = 2.68815f;
-  t[50].percussion.mode_ratios[6] = 2.80455f;
-  t[50].percussion.mode_ratios[7] = 3.35988f;
-  t[50].percussion.noise_decay_ms = 28.2145f;
-  t[50].percussion.noise_q = 1.76191f;
-  t[50].percussion.pitch_drop = 0.498674f;
+  t[50].percussion.mode_ratios[4] = 2.25264f;
+  t[50].percussion.mode_ratios[5] = 2.91733f;
+  t[50].percussion.mode_ratios[6] = 2.67917f;
+  t[50].percussion.mode_ratios[7] = 3.50017f;
+  t[50].percussion.noise_decay_ms = 30.0f;
+  t[50].percussion.noise_q = 1.62692f;
+  t[50].percussion.pitch_drop = 0.379f;
   t[50].percussion.pitch_drop_ms = 15.302f;
-  t[50].percussion.shell_mix = 0.341523f;
-  t[50].percussion.shell_t60_s[0] = 0.0525006f;
-  t[50].percussion.shell_t60_s[1] = 0.0718808f;
-  t[50].percussion.shell_weight[0] = 1.11803f;
-  t[50].percussion.shell_weight[1] = 0.861648f;
-  t[50].percussion.strike_theta = 0.145704f;
-  t[50].resonance_q = 0.745735f;
+  t[50].percussion.shell_mix = 0.290294f;
+  t[50].percussion.shell_t60_s[0] = 0.0734498f;
+  t[50].percussion.shell_t60_s[1] = 0.0367249f;
+  t[50].percussion.shell_weight[0] = 1.0f;
+  t[50].percussion.shell_weight[1] = 0.916718f;
+  t[50].percussion.strike_theta = 0.118034f;
+  t[50].resonance_q = 0.707f;
+  t[50].gain = 1.36182f;
   // --- cymbals ---
   //
   // Seven keys, seven plates, one table. They cannot share a patch the way the
@@ -900,6 +907,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[49].percussion.wire_cutoff_hz = 3311.22f;
   t[49].resonance_q = 1.10288f;
   t[49].stereo_spread = 0.337703f;
+  t[49].gain = 0.266164f;
   t[57] = cymbal_patch(kCymbals[1]);
   // The stick rings the plate and its low band hands energy up until it is 10 dB
   // down: strike-to-body tilt change -20.9 -> -5.5 dB against the module, band shape
@@ -936,6 +944,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[51].percussion.tone_direct = 0.922746f;
   t[51].resonance_q = 0.658159f;
   t[51].stereo_spread = 0.154508f;
+  t[51].gain = 0.165267f;
   t[59] = cymbal_patch(kCymbals[3]);
   t[53] = cymbal_patch(kCymbals[4]);
   t[52] = cymbal_patch(kCymbals[5]);
@@ -963,7 +972,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // spacing. Open: tilt +12.3 -> +3.1 dB, band shape 12.7 -> 9.0 dB, centroid +7.7 -> +4.0%.
   t[46].percussion.noise_gain = 2.22492f;
   t[46].percussion.tone_gain = 0.25f;
-  t[46].gain = 0.1683f;
+  t[46].gain = 0.146583f;
   t[46].percussion.contact = 6.02484f;
   t[46].percussion.contact_ms = 0.170637f;
   t[46].percussion.plate_low_hz = 140.0f;
@@ -994,7 +1003,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // 15.4 -> 6.8 dB, centroid -14.5 -> -2.0%, tonality -6.2 -> -2.3 dB.
   t[42].percussion.noise_gain = 2.25149f;
   t[42].percussion.tone_gain = 0.145077f;
-  t[42].gain = 0.2701f;
+  t[42].gain = 0.184725f;
   t[42].percussion.contact = 0.216282f;
   t[42].percussion.contact_ms = 1.50399f;
   t[42].percussion.plate_contact = 1.4191f;
@@ -1030,7 +1039,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // longer contact drives the plate: tilt +23.4 -> -2.9 dB, band shape 16.8 -> 9.4 dB.
   t[44].percussion.noise_gain = 2.75016f;
   t[44].percussion.tone_gain = 0.19306f;
-  t[44].gain = 0.1167f;
+  t[44].gain = 0.15208f;
   t[44].percussion.contact = 1.14963f;
   t[44].percussion.contact_ms = 0.823679f;
   t[44].percussion.plate_contact = 0.676952f;
@@ -1111,6 +1120,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[53].percussion.tone_direct = 0.779508f;
   t[53].resonance_q = 0.837311f;
   t[53].stereo_spread = 0.473975f;
+  t[53].gain = 0.16194f;
 
   // --- snares ---
   // Both take the snare archetype here and are voiced below, where the drum's
@@ -1223,7 +1233,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
       make_metal(1500.0f, {1.0f, 2.8f, 5.4f, 0.0f, 0.0f, 0.0f}, 3, 0.3f, 0.4f);  // Metronome Bell
   t[56] = make_metal(587.0f, {1.0f, 1.44f, 0.0f, 0.0f, 0.0f, 0.0f}, 2, 0.25f,
                      0.5f);  // Cowbell (587/845 Hz)
-  t[56].gain = 1.6652f;
+  t[56].gain = 1.08759f;
   t[56].amp_env.attack_ms = 0.354235f;
   t[56].amp_env.decay_ms = 78.6096f;
   t[56].cutoff_hz = 11697.7f;
@@ -1323,6 +1333,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[80].percussion.noise_q = 0.905879f;
   t[80].resonance_q = 0.732763f;
   t[80].stereo_spread = 0.235246f;
+  t[80].gain = 1.33914f;
   t[81].percussion.exclusive_class = 3;
   // Not a strainer: a high-passed noise layer on a piece with no wires, and it
   // is the only thing here that fills the gaps between the four partials. What
@@ -1404,7 +1415,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[61].percussion.plate_t60_s = 0.306712f;
   t[61].percussion.tone_direct = 0.915486f;
   t[61].resonance_q = 1.1349f;
-  t[61].gain = 1.0607f;
+  t[61].gain = 0.759613f;
   t[61].percussion.mode_decay_exp = 0.185661f;
   // base_hz and the five ratios are read from the reference's measured
   // modal_hz/modal_ratio (drums_module_hit.json note 62): the old 220 Hz base
@@ -1448,7 +1459,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[62].percussion.plate_t60_s = 0.0499273f;
   t[62].percussion.tone_direct = 0.18932f;
   t[62].resonance_q = 2.51457f;
-  t[62].gain = 0.4184f;
+  t[62].gain = 0.497269f;
   t[63] = make_membrane(200.0f, 0.25f, 0.30f, 0.0f, 1.1847f);  // Open Hi Conga
   t[63].amp_env.attack_ms = 1.57572f;
   t[63].amp_env.decay_ms = 109.313f;
@@ -1478,7 +1489,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[63].percussion.plate_hf_ratio = 0.319414f;
   t[63].percussion.plate_low_hz = 140.0f;
   t[63].percussion.plate_t60_s = 0.395604f;
-  t[63].gain = 1.1392f;
+  t[63].gain = 0.992202f;
   // Not a strainer: a high-passed noise layer the fit reached for on a piece
   // with no wires, and it carries 5 dB of this conga's tonality. Converted to the
   // fractional threshold rather than deleted, because deleting it is a
@@ -1530,7 +1541,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[64].percussion.contact_ms = 0.129169f;
   t[64].percussion.plate_gain = 0.00894634f;
   t[64].resonance_q = 0.855344f;
-  t[64].gain = 1.2860f;
+  t[64].gain = 1.3622f;
   t[64].percussion.plate_hf_ratio = 0.250958f;
   t[64].percussion.plate_low_hz = 347.789f;
   t[64].percussion.plate_t60_s = 0.36498f;
@@ -1572,7 +1583,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[65].percussion.tone_direct = 0.907509f;
   t[65].resonance_q = 1.33548f;
   t[65].percussion.shell_num_modes = 2;
-  t[65].gain = 1.356f;
+  t[65].gain = 0.67961f;
   t[66] = make_membrane(200.0f, 0.26f, 0.20f, 550.0f, 0.70f);  // Low Timbale
   t[66].amp_env.attack_ms = 0.316485f;
   t[66].amp_env.decay_ms = 40.3508f;
@@ -1640,7 +1651,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[71].percussion.plate_t60_s = 0.141835f;
   t[71].resonance_q = 2.0616f;
   t[71].percussion.contact_ms = 0.215003f;
-  t[71].gain = 0.6823f;
+  t[71].gain = 0.415887f;
   t[72].percussion.exclusive_class = 4;
   t[72].amp_env.attack_ms = 51.0206f;
   // Zero sustain, as the acoustic snare above: a one-shot that sustains
@@ -1667,7 +1678,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[72].percussion.plate_t60_s = 9.06089f;
   t[72].resonance_q = 2.28507f;
   t[72].percussion.contact_ms = 0.0743891f;
-  t[72].gain = 0.0873f;
+  t[72].gain = 0.143223f;
   t[39] = clap;  // Hand Clap
 
   // --- radiated ceiling (mute group note) ---
@@ -1764,7 +1775,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[38].amp_env = fallback_env(0.5f, 600.0f, 0.0f, 80.0f);
   // Level against the module, corrected exactly since gain is linear in it; the
   // brighter voicing above read 0.71 dB loud at 1.3827.
-  t[38].gain = 1.2742f;  // Acoustic Snare
+  t[38].gain = 0.785665f;  // Acoustic Snare
   t[38].amp_env.attack_ms = 0.992917f;
   t[38].amp_env.decay_ms = 867.05f;
   t[38].percussion.mode_ratios[2] = 3.04825f;
@@ -1774,7 +1785,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[38].percussion.shell_weight[1] = 2.90983f;
   t[38].percussion.shell_weight[3] = 3.2918f;
   t[39].percussion.noise_air_hz = 1459.44f;
-  t[39].gain = 4.20f;  // Hand Clap
+  t[39].gain = 7.46877f;  // Hand Clap
   t[39].amp_env.attack_ms = 1.04815f;
   t[39].amp_env.decay_ms = 237.228f;
   t[39].amp_env.sustain = 0.00762793f;
@@ -1887,6 +1898,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[69].percussion.noise_cutoff_hz = 7492.88f;
   t[69].percussion.noise_decay_ms = 41.6328f;
   t[69].percussion.noise_q = 0.816884f;
+  t[69].gain = 0.430994f;
   t[70] = make_shaker(20.0f, 90.0f, 3200.0f, 1.5f, 0.2173f);  // Maracas
   t[82] = make_shaker(28.0f, 110.0f, 6000.0f, 1.0f, 0.5f);    // Shaker
   // Guiro (mute group 5): ratchet ridge train.
@@ -1932,7 +1944,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[78].percussion.plate_gain = 0.984924f;
   t[78].resonance_q = 1.64834f;
   t[78].stereo_spread = 0.283496f;
-  t[78].gain = 1.250f;
+  t[78].gain = 1.12696f;
   t[78].percussion.contact_ms = 0.62648f;
   t[78].percussion.noise_cutoff_hz = 2140.8f;
   t[78].percussion.noise_decay_ms = 1067.58f;
@@ -1957,7 +1969,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[79].percussion.phisem_sound_ms = 6.62807f;
   t[79].percussion.plate_gain = 0.0471479f;
   t[79].stereo_spread = 0.546511f;
-  t[79].gain = 0.804f;
+  t[79].gain = 0.989136f;
   t[79].percussion.contact_ms = 1.89666f;
   t[79].percussion.noise_cutoff_hz = 943.037f;
   t[79].percussion.noise_decay_ms = 449.573f;
@@ -1999,7 +2011,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[54].percussion.plate_t60_s = 3.12184f;
   t[54].resonance_q = 3.05997f;
   // Measured 10.9 dB quiet against the module; `level` is exact in `gain`.
-  t[54].gain = 0.7954f;
+  t[54].gain = 0.513553f;
   t[70].percussion.phisem_body_hz = 210.0f;  // Maracas
   t[70].percussion.phisem_body_q = 0.820548f;
   t[70].percussion.phisem_body_gain = 2.76066f;
