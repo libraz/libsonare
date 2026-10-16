@@ -1,7 +1,7 @@
 {
  "id": "fx_goblins",
  "label": "FX 6 (goblins), sampled, close and dry",
- "measured_utc": "2026-10-15T08:26:45+00:00",
+ "measured_utc": "2026-10-15T18:17:07+00:00",
  "capture": {
   "program": 101,
   "params": [],
@@ -177,6 +177,8 @@
    "onset_ms": 2.0,
    "attack_ms": 310.0,
    "attack_hf_db": -109.72,
+   "onset_overshoot_db": -25.41,
+   "onset_settle_ms": 68.0,
    "decay_span_s": 2.655,
    "decay_db_s": -1.03,
    "decay_early_db_s": -40.5,
@@ -1079,6 +1081,8 @@
    "onset_ms": 1.0,
    "attack_ms": 310.0,
    "attack_hf_db": -99.7,
+   "onset_overshoot_db": -25.64,
+   "onset_settle_ms": 62.5,
    "decay_span_s": 2.66,
    "decay_db_s": -1.06,
    "decay_early_db_s": -41.92,

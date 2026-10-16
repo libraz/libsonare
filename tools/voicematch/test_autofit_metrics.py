@@ -914,3 +914,113 @@ def test_the_tnr_term_reports_how_far_past_the_reference_it_let_the_model_go():
     assert past["tnr"] == 0.0 and past["tnr_notes"] == 0.0
     assert past["tnr_past_db"] == pytest.approx(20.0)
     assert loss_terms([row], [row], n_harm=10)["tnr_past_db"] == 0.0
+
+
+# --------------------------------------------------------------------------- #
+# The onset's shape on a held note
+# --------------------------------------------------------------------------- #
+def _held_with_onset(
+    overshoot_db: float,
+    settle_ms: float,
+    *,
+    vibrato: bool = False,
+    am: bool = False,
+    noise: bool = False,
+    decay_db_s: float = 0.0,
+    sr: int = 48000,
+) -> np.ndarray:
+    """A 440 Hz held tone: 5 ms rise, `overshoot_db` above sustain, inside 1 dB at `settle_ms`.
+
+    The overshoot falls linearly in dB, so it is over before the sustain window opens.
+    """
+    t = np.arange(int(1.2 * sr)) / sr
+    phase = 2 * np.pi * 440.0 * t
+    if vibrato:
+        phase += (440.0 * (2 ** (20 / 1200) - 1) / 5.5) * np.sin(2 * np.pi * 5.5 * t)
+    tone = sum(0.3 / k * np.sin(k * phase) for k in (1, 2, 3))
+    rise = 0.005
+    after = np.maximum(t - rise, 0.0)
+    if overshoot_db > 1.0:
+        span = settle_ms / 1000.0 / (1.0 - 1.0 / overshoot_db)
+        db = overshoot_db * np.maximum(1.0 - after / span, 0.0)
+    else:
+        db = np.full_like(t, overshoot_db)
+    db = db - decay_db_s * after
+    if am:
+        db = db + 0.5 * np.sin(2 * np.pi * 5.0 * t)
+    env = np.minimum(t / rise, 1.0) * 10.0 ** (db / 20.0)
+    y = tone * env
+    if noise:
+        y = y + 10.0 ** (-50.0 / 20.0) * np.random.default_rng(0).standard_normal(t.size)
+    return y
+
+
+@pytest.mark.parametrize("overshoot_db", [0.0, 2.0, 4.0, 6.0])
+@pytest.mark.parametrize("settle_ms", [20.0, 40.0, 80.0])
+@pytest.mark.parametrize("movement", ["still", "vibrato", "am", "noise"])
+def test_an_onset_overshoot_and_its_settle_are_recovered(overshoot_db, settle_ms, movement):
+    from metrics_note import onset_shape
+
+    y = _held_with_onset(
+        overshoot_db,
+        settle_ms,
+        vibrato=movement == "vibrato",
+        am=movement == "am",
+        noise=movement == "noise",
+    )
+    got = onset_shape(y, 48000, 0.0, 1.2, 440.0)
+    # The AM crest is part of the sustain's upper level, so it can hide up to its own depth.
+    tol_db = 0.75 if movement == "am" else 0.5
+    assert got["onset_overshoot_db"] == pytest.approx(overshoot_db, abs=tol_db)
+    if overshoot_db > 1.0 and movement == "am":
+        # The band widens by the tremolo's depth and the crests ride on the overshoot, so the
+        # settle lands where the overshoot is between 1 and 2 dB (1 +- the 0.5 dB depth + band).
+        span = settle_ms / (1.0 - 1.0 / overshoot_db)
+        early, late = (max(0.0, span * (1.0 - x / overshoot_db)) for x in (2.0, 1.0))
+        assert early - 6.0 <= got["onset_settle_ms"] <= late + 6.0
+    elif overshoot_db > 1.0:
+        assert got["onset_settle_ms"] == pytest.approx(settle_ms, abs=max(6.0, 0.2 * settle_ms))
+    else:
+        assert got["onset_settle_ms"] < 10.0
+
+
+@pytest.mark.parametrize("decay_db_s", [6.0, 20.0, 60.0])
+def test_a_decaying_note_has_no_onset_overshoot_rather_than_its_decay(decay_db_s):
+    """A struck note falls from its peak; that fall is not a breath overshoot."""
+    from metrics_note import onset_shape
+
+    y = _held_with_onset(0.0, 0.0, decay_db_s=decay_db_s)
+    assert onset_shape(y, 48000, 0.0, 1.2, 440.0) == {
+        "onset_overshoot_db": None,
+        "onset_settle_ms": None,
+    }
+
+
+def test_the_onset_velocity_term_reads_the_slope_against_log_velocity():
+    from loss_dimensions import _onsetvel_terms
+    from toneclass import default_weights
+
+    def rows(attack, overshoot):
+        return [
+            {
+                "note": 60,
+                "velocity": v,
+                "attack_fine_ms": attack(v),
+                "onset_overshoot_db": overshoot(v),
+            }
+            for v in (32, 64, 127)
+        ]
+
+    ref = rows(lambda v: 40.0 - 8.0 * np.log2(v), lambda v: 0.5 * np.log2(v))
+    same, groups = _onsetvel_terms(
+        rows(lambda v: 30.0 - 8.0 * np.log2(v), lambda v: 0.5 * np.log2(v) + 1), ref
+    )
+    flat, _ = _onsetvel_terms(rows(lambda v: 10.0, lambda v: 1.0), ref)
+    counts: dict[str, float] = {}
+    held_none, _ = _onsetvel_terms(rows(lambda v: 10.0, lambda v: None), ref, counts=counts)
+    assert groups == 1 and same == pytest.approx(0.0, abs=1e-9)
+    assert flat == pytest.approx(8.0 / 2.0 + 0.5, rel=1e-6)
+    assert counts["absent"] == 1.0 and held_none == pytest.approx(4.0 + 6.0, rel=1e-6)
+    one = [dict(r, velocity=100) for r in ref]
+    assert _onsetvel_terms(one, one) == (0.0, 0)
+    assert all("onsetvel" not in default_weights(p) for p in range(128))

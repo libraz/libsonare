@@ -2657,6 +2657,15 @@ def main() -> int:
         "between the modes. Needs a probe with a velocity axis",
     )
     parser.add_argument(
+        "--w-onsetvel",
+        type=float,
+        default=None,
+        dest="w_onsetvel",
+        help="weight on the ONSET VELOCITY CURVE: how the fine attack time and the "
+        "onset overshoot track log velocity, fitted per pitch. Needs a probe with "
+        "a velocity axis",
+    )
+    parser.add_argument(
         "--w-level",
         type=float,
         default=None,

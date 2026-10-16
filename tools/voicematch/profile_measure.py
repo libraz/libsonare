@@ -20,6 +20,7 @@ from metrics import (
     channel_width,
     fit_partial_series,
     midi_to_hz,
+    onset_shape,
     partial_hz,
     sound_onset_s,
     to_mono,
@@ -593,6 +594,14 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *, preroll_s: float, gat
     hf = attack_hf_share_db(mono, sr, note, onset_s)
     if hf is not None:
         row["attack_hf_db"] = hf
+    # Absent rather than null where the note is not held, as every unmeasured field here is.
+    row.update(
+        {
+            k: v
+            for k, v in onset_shape(mono, sr, onset_s, gate_s, row["f0_hz"]).items()
+            if v is not None
+        }
+    )
 
     tail = slice(origin_i, usable_decay_end(env_db, origin_i))
     # How much of the held note the two rates were fitted over. Both are slopes,

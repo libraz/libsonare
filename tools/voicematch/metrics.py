@@ -155,6 +155,7 @@ from metrics_note import (
     compare_note,
     level_of,
     note_onset,
+    onset_shape,
 )
 from metrics_partials import (
     HARMONIC_SHARE_TOLERANCE_CENTS,

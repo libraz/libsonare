@@ -46,6 +46,7 @@ LOSS_TERMS = (
     "dyn",
     "hfdyn",
     "modedyn",
+    "onsetvel",
     "mss",
     "band",
     "bdecay",
@@ -103,6 +104,7 @@ PITCHED_TERMS = (
     "stiff",
     "hfdyn",
     "modedyn",
+    "onsetvel",
 ) + _SHARED_TERMS
 #: `modes` is shared because a drum has one too. A tom, a conga, a timbale, a
 #: woodblock and a cowbell all have a definite pitch, and the 1/3-octave band
@@ -403,6 +405,75 @@ def _dyn_terms(
         used += 1
     if counts is not None:
         counts["capped"] = float(capped)
+    return (total / used if used else 0.0), used
+
+
+#: How the onset moves with force, per pitch: the slope of each reading against
+#: velocity doublings, charged in (unit, cap) per doubling. A model with no slope
+#: where the reference has one is charged the cap.
+ONSETVEL_FIELDS = (
+    ("attack_fine_ms", 2.0, 20.0),
+    ("onset_overshoot_db", 1.0, 6.0),
+)
+
+
+def _onsetvel_terms(
+    model_rows: list[dict], oracle_rows_: list[dict], *, counts: dict[str, float] | None = None
+) -> tuple[float, int]:
+    """How differently the attack time and the onset overshoot track velocity.
+
+    Same per-pitch grouping and velocity-spread floor as `_dyn_terms`; the
+    axis is log2 velocity, since a player's force is a ratio. Returns the mean
+    over pitches the reference gave a slope on, and how many those were.
+    """
+    groups: dict[int, list[int]] = {}
+    for i, r in enumerate(model_rows):
+        if r.get("note") is not None and r.get("velocity"):
+            groups.setdefault(r["note"], []).append(i)
+
+    def slope(rows: list[tuple[float, float]]) -> float | None:
+        vel = [v for v, _ in rows]
+        if len(rows) < 2 or max(vel) - min(vel) < DYN_MIN_VELOCITY_SPREAD:
+            return None
+        return float(np.polyfit(np.log2(vel), [x for _, x in rows], 1)[0])
+
+    total = 0.0
+    used = absent = capped = 0
+    for idx in groups.values():
+        cost = 0.0
+        scored = False
+        for field, unit, cap in ONSETVEL_FIELDS:
+            vel = [float(model_rows[i]["velocity"]) for i in idx]
+            so = slope(
+                [
+                    (v, oracle_rows_[i][field])
+                    for v, i in zip(vel, idx)
+                    if _finite_or_none(oracle_rows_[i].get(field)) is not None
+                ]
+            )
+            if so is None:
+                continue
+            scored = True
+            sm = slope(
+                [
+                    (v, model_rows[i][field])
+                    for v, i in zip(vel, idx)
+                    if _finite_or_none(model_rows[i].get(field)) is not None
+                ]
+            )
+            if sm is None:
+                absent += 1
+                cost += cap / unit
+                continue
+            delta = abs(sm - so)
+            capped += int(delta >= cap)
+            cost += min(delta, cap) / unit
+        if scored:
+            total += cost
+            used += 1
+    if counts is not None:
+        counts["capped"] = float(capped)
+        counts["absent"] = float(absent)
     return (total / used if used else 0.0), used
 
 

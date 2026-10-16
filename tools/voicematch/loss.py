@@ -73,6 +73,7 @@ from loss_dimensions import (
     _mod_terms,
     _modal_brightness,
     _modes_terms,
+    _onsetvel_terms,
     _pair_modes,
     _perc_lf_terms,
     _rows_comparable,
@@ -769,6 +770,10 @@ def loss_terms(
     out["modedyn"], modedyn_groups = _dyn_terms(
         model_rows, oracle_rows_, read=_modal_brightness, counts=modedyn_counts
     )
+    onsetvel_counts: dict[str, float] = {}
+    out["onsetvel"], onsetvel_groups = _onsetvel_terms(
+        model_rows, oracle_rows_, counts=onsetvel_counts
+    )
     stiff_counts: dict[str, float] = {}
     out["stiff"], stiff_notes = _stiff_terms(model_rows, oracle_rows_, counts=stiff_counts)
     out.update(stiff_counts)
@@ -777,6 +782,7 @@ def loss_terms(
     out["dyn_groups"] = float(dyn_groups)
     out["hfdyn_groups"] = float(hfdyn_groups)
     out["modedyn_groups"] = float(modedyn_groups)
+    out["onsetvel_groups"] = float(onsetvel_groups)
     out["stiff_notes"] = float(stiff_notes)
     out["tnr_notes"] = float(tnr_notes)
     out["tnr_absent"] = float(tnr_absent)
@@ -794,6 +800,7 @@ def loss_terms(
     out.update({f"dyn_{key}": value for key, value in dyn_counts.items()})
     out.update({f"hfdyn_{key}": value for key, value in hfdyn_counts.items()})
     out.update({f"modedyn_{key}": value for key, value in modedyn_counts.items()})
+    out.update({f"onsetvel_{key}": value for key, value in onsetvel_counts.items()})
     out["level_offset_db"] = offset
     out["comparable"] = 1.0
     return out

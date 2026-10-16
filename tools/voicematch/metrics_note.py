@@ -93,6 +93,10 @@ class NoteMetrics:
     #: so measured on the coarse grid a 0.5 ms rise and a 5 ms rise report the
     #: same number.
     attack_fine_ms: float
+    #: The onset's rise above the early sustain and how long it takes to come
+    #: back, from `onset_shape`. None where the note is not sustained.
+    onset_overshoot_db: float | None
+    onset_settle_ms: float | None
     #: How wide the fundamental is, in cents — one string or several. See
     #: `f0_width_cents`.
     f0_width_cents: float | None
@@ -106,6 +110,63 @@ class NoteMetrics:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+# --------------------------------------------------------------------------- #
+# The onset's shape on a sustained note
+# --------------------------------------------------------------------------- #
+#: Where the peak is looked for, and where the early sustain is read, in seconds
+#: from the onset. The level window starts after any breath or bow transient
+#: has settled and the slope window runs on past it to test that it is held.
+ONSET_PEAK_S = 0.15
+ONSET_SUSTAIN_S = (0.20, 0.40)
+ONSET_SLOPE_S = (0.20, 0.60)
+#: Steepest early-sustain slope that still counts as held. A struck or plucked
+#: note falls faster than this, and its decay would otherwise read as overshoot.
+ONSET_MAX_SLOPE_DB_S = 4.0
+#: The settle band: within this many dB of the early sustain, widened by the
+#: sustain's own tremolo depth so its crests do not read as still settling.
+ONSET_SETTLE_DB = 1.0
+#: The envelope window spans one period, so the waveform's own ripple is not
+#: read as an envelope; never shorter than the attack grid's window.
+ONSET_WINDOW_PERIODS = 1.0
+
+
+def onset_shape(mono: np.ndarray, sr: int, onset_s: float, note_dur: float, f0: float) -> dict:
+    """`onset_overshoot_db` and `onset_settle_ms` of one held note.
+
+    The overshoot is the envelope peak in the first `ONSET_PEAK_S` over the
+    early sustain's upper level (its 95th percentile), so a tremolo's crest is
+    not read as one. The settle is the time from that peak until the envelope
+    stays inside the settle band around the early sustain's median. Both are
+    None unless the early sustain is held (`ONSET_MAX_SLOPE_DB_S`).
+    """
+    out = {"onset_overshoot_db": None, "onset_settle_ms": None}
+    span = ONSET_SLOPE_S[1]
+    a = int(onset_s * sr)
+    if note_dur < span or f0 <= 0.0 or a + int(span * sr) > len(mono):
+        return out
+    win_ms = max(HIT_ENVELOPE_WIN_MS, 1000.0 * ONSET_WINDOW_PERIODS / f0)
+    t, env = _rms_envelope(mono[a : a + int(span * sr)], sr, HIT_ENVELOPE_HOP_MS, win_ms)
+    db = np.asarray(_db(np.maximum(env, 1e-12)), dtype=np.float64)
+    held = (t >= ONSET_SUSTAIN_S[0]) & (t < ONSET_SUSTAIN_S[1])
+    tested = (t >= ONSET_SLOPE_S[0]) & (t <= ONSET_SLOPE_S[1])
+    early = t < ONSET_PEAK_S
+    if held.sum() < 8 or tested.sum() < 8 or not early.any():
+        return out
+    if abs(float(np.polyfit(t[tested], db[tested], 1)[0])) > ONSET_MAX_SLOPE_DB_S:
+        return out
+    level = float(np.median(db[held]))
+    upper = float(np.percentile(db[held], 95))
+    band = ONSET_SETTLE_DB + float(np.percentile(np.abs(db[held] - level), 90))
+    peak_i = int(np.argmax(np.where(early, db, -np.inf)))
+    after = np.where((t >= t[peak_i]) & (t < ONSET_SUSTAIN_S[1]) & (np.abs(db - level) > band))[0]
+    settle = (
+        0.0 if after.size == 0 else float(t[after[-1]] - t[peak_i]) * 1000.0 + HIT_ENVELOPE_HOP_MS
+    )
+    out["onset_overshoot_db"] = round(float(db[peak_i]) - upper, 2)
+    out["onset_settle_ms"] = round(settle, 1)
+    return out
 
 
 def _under_peak_db(window: np.ndarray, note: np.ndarray) -> float:
@@ -285,6 +346,7 @@ def analyze_note(
             if a10.size and a90.size:
                 attack_fine_ms = max(0.0, (f_times[a90[0]] - f_times[a10[0]]) * 1000.0)
 
+    shape = onset_shape(mono, sr, at, note_dur, float(f0))
     modal = modal_profile(freqs, mag, expected_f0, halves=half_spectra(sustain, sr))
     movement = modulation_note(mono, sr, note, float(f0), onset=onset)
 
@@ -309,6 +371,7 @@ def analyze_note(
         modal_ratio=modal["modal_ratio"],
         ladder_partials=sum(ladder_present(harmonics_db)),
         attack_fine_ms=round(attack_fine_ms, 2),
+        **shape,
         f0_width_cents=f0_width_cents(freqs, mag, float(f0)),
         **movement,
     )
