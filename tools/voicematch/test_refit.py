@@ -284,3 +284,70 @@ def test_a_reweighed_round_the_fit_refuses_keeps_the_shipped_values(tmp_path, mo
         "weights": {"tail": 1.0},
         "refused": reason,
     }
+
+
+def _capture(cid, program, bank, *, drums=False, rig=None):
+    from types import SimpleNamespace
+
+    raw = {"id": cid} if rig is None else {"id": cid, "rig": rig}
+    return SimpleNamespace(id=cid, program=program, bank=bank, drums=drums, raw=raw)
+
+
+def test_a_capital_is_judged_by_every_gate_its_patch_reaches(tmp_path):
+    import json
+
+    import boundary
+    from refit import capital_gates
+
+    for cid in (
+        "harpsichord",
+        "harpsichord_alt",
+        "harpsichord_lsb",
+        "harpsichord_keyoff",
+        "harpsichord_baked",
+        "drums",
+    ):
+        (tmp_path / f"{cid}_gate.json").write_text(json.dumps({"timbre": f"t-{cid}"}))
+    rows = [
+        {"program": 6, "bank": 0, "kit": False, "patch": "harpsichord", "capture": "harpsichord"},
+        {"program": 6, "bank": 3, "kit": False, "patch": "harpsichord"},
+        {"program": 6, "bank": 24, "kit": False, "patch": "harpsichord_keyoff"},
+    ]
+    pool = [
+        _capture("harpsichord_alt", 6, 0),  # a second recording at the same address
+        _capture("harpsichord", 6, 0),
+        _capture("harpsichord_lsb", 6, 3),  # the patch's other bank address
+        _capture("harpsichord_keyoff", 6, 24),  # a variation: its own patch
+        _capture("harpsichord_baked", 6, 0, rig=boundary.RIG_BAKED),  # not at the instrument
+        _capture("drums", 6, 0, drums=True),
+        _capture("unwritten", 6, 0),  # no gate file
+    ]
+    gates = capital_gates(rows[0], rows, pool, tmp_path)
+    assert [g["capture"] for g in gates] == ["harpsichord", "harpsichord_alt", "harpsichord_lsb"]
+    assert gates[1]["timbre"] == "t-harpsichord_alt"
+
+
+def test_every_gate_a_capital_reaches_is_read_and_keyed_by_capture(tmp_path, monkeypatch):
+    import json
+
+    import refit
+
+    def fake_compare(voice, out, lib, overrides=""):
+        reading = {"key": "decay", "stat": "p90", "value": 1.0, "limit": 2.0, "over": False}
+        out.write_text(
+            json.dumps({"gate": {"readings": [dict(reading, capture=voice["capture"])]}})
+        )
+
+    monkeypatch.setattr(refit, "_compare", fake_compare)
+    voice = {
+        "slug": "p006-harpsichord",
+        "capture": "harpsichord",
+        "gates": [
+            {"capture": "harpsichord", "gate": "a_gate.json", "timbre": "t0"},
+            {"capture": "harpsichord_alt", "gate": "b_gate.json", "timbre": "t1"},
+        ],
+    }
+    out = tmp_path / "pre.json"
+    refit._compare_voice(voice, out, Path("lib"))
+    keys = [r["key"] for r in json.loads(out.read_text())["gate"]["readings"]]
+    assert keys == ["harpsichord:decay", "harpsichord_alt:decay"]

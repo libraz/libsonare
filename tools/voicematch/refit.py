@@ -21,6 +21,10 @@ bound, or moving a switch, is a trade, and `resolve` settles it by the furthest
 point along the search the gate accepts, refitting once with the broken
 dimensions weighed up when no point is.
 
+Each voice is judged by every gate its patch reaches: a capital by the gates of
+every capture resolving to its patch, a kit note by every kit gate, and readings
+are keyed `<capture>:<dimension>` in both.
+
 Variations derive from their capital's patch at table-build time, so `--banks
 capitals` (the default) refits capitals and a later `--banks variations` pass
 starts from what was adopted, and `--banks kits` fits each drum note of a kit
@@ -141,11 +145,46 @@ def plan_kits(rows: list[dict]) -> tuple[list[dict], list[dict]]:
     return todo, skipped
 
 
+def capital_gates(row: dict, rows: list[dict], pool: list, reference_dir: Path) -> list[dict]:
+    """Every gate a melodic voice's patch is read against, its own capture's first.
+
+    A patch answers every capture whose (program, bank) the library resolves to it —
+    an alternate recording at the same address, or the patch's second bank address —
+    so an adoption is judged against all of their gates, the way a kit note is judged
+    against every kit gate. The resolution is the status table's, which the library's
+    catalogue wrote. A capture whose reference is not at the instrument boundary
+    measures something else and judges nothing.
+    """
+    patch_of = {(r["program"], r["bank"]): r.get("patch") for r in rows if not r["kit"]}
+    own = row.get("capture")
+    found = []
+    for cap in pool:
+        if cap.drums or cap.program != row["program"]:
+            continue
+        if cap.bank != row["bank"] and patch_of.get((cap.program, cap.bank)) != row["patch"]:
+            continue
+        gate = reference_dir / f"{cap.id}_gate.json"
+        if not gate.exists():
+            continue
+        where = boundary.reference_boundary(boundary.Reference.from_capture(cap.raw), cap.program)
+        if where != boundary.BOUNDARY_INSTRUMENT:
+            continue
+        found.append(
+            {
+                "capture": cap.id,
+                "gate": str(gate),
+                "timbre": json.loads(gate.read_text())["timbre"],
+            }
+        )
+    return sorted(found, key=lambda g: g["capture"] != own)
+
+
 def plan(banks: str) -> tuple[list[dict], list[dict]]:
     """(voices to fit, voices skipped with the reason)."""
     rows = json.loads(STATUS.read_text())["voices"]
     if banks == "kits":
         return plan_kits(rows)
+    pool = bank.captures()
     todo, skipped, seen = [], [], set()
     for row in sorted(rows, key=lambda r: (r["bank"], r["program"])):
         want_capital = banks == "capitals"
@@ -195,6 +234,7 @@ def plan(banks: str) -> tuple[list[dict], list[dict]]:
                 "notes": train,
                 "validate_notes": held,
                 "velocities": _three(raw["velocities"]),
+                "gates": capital_gates(row, rows, pool, REFERENCE_DIR),
             }
         )
     return todo, skipped
@@ -227,7 +267,7 @@ def _compare(voice: dict, out: Path, lib: Path, overrides: str = "") -> None:
 
 
 def _compare_voice(voice: dict, out: Path, lib: Path, overrides: str = "") -> None:
-    """One voice's gate readings; a kit's are every kit gate's, keyed by capture."""
+    """One voice's gate readings over every gate its patch reaches, keyed by capture."""
     if "gates" not in voice:
         _compare(voice, out, lib, overrides)
         return
@@ -518,7 +558,7 @@ def reweighed(
 ) -> dict[str, float] | None:
     weights = dict(report.get("fit_profile", {}).get("weights") or {})
     table = PERCUSSION_GATE_TERMS if percussive else GATE_TERMS
-    # A kit's readings are keyed `<capture>:<dimension>`.
+    # Readings are keyed `<capture>:<dimension>`.
     dims = {d.split()[0].rpartition(":")[2] for d in newly}
     terms: set[str] = set()
     for d in dims:
