@@ -2666,6 +2666,15 @@ def main() -> int:
         "a velocity axis",
     )
     parser.add_argument(
+        "--w-onset",
+        type=float,
+        default=None,
+        dest="w_onset",
+        help="weight on the ONSET SHAPE: each cell's overshoot over the sustain (dB) "
+        "and its settle time (doublings), against the reference. Needs a capture "
+        "whose committed profile has an onset-eligible cell",
+    )
+    parser.add_argument(
         "--w-level",
         type=float,
         default=None,

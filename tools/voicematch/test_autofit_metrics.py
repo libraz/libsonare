@@ -17,6 +17,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import itertools
 import json
 import profile as profile_module
 
@@ -1063,3 +1064,53 @@ def test_the_onset_velocity_term_reads_the_slope_against_log_velocity():
     one = [dict(r, velocity=100) for r in ref]
     assert _onsetvel_terms(one, one) == (0.0, 0)
     assert all("onsetvel" not in default_weights(p) for p in range(128))
+
+
+def _onset_row(overshoot_db: float, settle_ms: float, **kw) -> dict:
+    from metrics_note import onset_shape
+
+    return {
+        "note": 69,
+        "velocity": 100,
+        **onset_shape(_held_with_onset(overshoot_db, settle_ms, **kw), 48000, 0.0, 1.2, 440.0),
+    }
+
+
+def test_the_onset_term_falls_as_the_candidate_reaches_the_reference_onset():
+    from loss_dimensions import _onset_terms
+
+    ref = [_onset_row(4.0, 60.0)]
+    by_overshoot = [_onset_terms([_onset_row(x, 60.0)], ref)[0] for x in (0.0, 2.0, 3.0, 4.0)]
+    by_settle = [_onset_terms([_onset_row(4.0, x)], ref)[0] for x in (10.0, 20.0, 40.0, 60.0)]
+    for walk in (by_overshoot, by_settle):
+        assert all(a > b for a, b in itertools.pairwise(walk))
+        assert walk[-1] < 0.2
+
+
+def test_an_onset_ineligible_cell_is_excluded_and_counted_by_side():
+    """Never a zero error: a decaying cell is left out and the side it fell on is counted."""
+    from loss_dimensions import _onset_terms
+
+    held, decaying = _onset_row(4.0, 60.0), _onset_row(0.0, 0.0, decay_db_s=20.0)
+    counts: dict[str, float] = {}
+    value, compared = _onset_terms([held, decaying, held], [decaying, held, held], counts=counts)
+    assert compared == 1 and value == pytest.approx(0.0, abs=1e-9)
+    assert counts == {"ref_ineligible": 1.0, "model_ineligible": 1.0}
+    assert _onset_terms([held], [decaying]) == (0.0, 0)
+
+
+def test_a_capture_with_no_onset_eligible_reference_cell_drops_the_onset_term():
+    from types import SimpleNamespace
+
+    from autofit_resolve import has_onset_reference
+    from loss_weights import cli_weights
+
+    def probe(note, velocity):
+        return SimpleNamespace(analysis_notes=[Note(note, velocity, 0.0, 2.0)])
+
+    assert has_onset_reference(SimpleNamespace(capture_id="trumpet", timbre="gm057"), probe(54, 32))
+    assert not has_onset_reference(
+        SimpleNamespace(capture_id="piano", timbre="grand-227"), probe(21, 24)
+    )
+    args = SimpleNamespace(program=56, has_onset_reference=False)
+    assert "onset" not in cli_weights(args)

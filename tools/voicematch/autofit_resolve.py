@@ -81,6 +81,27 @@ def _committed_band_edge(corpus: Corpus | None) -> float | None:
     return (profile.get("capture") or {}).get("band_edge_hz")
 
 
+def has_onset_reference(corpus: Corpus | None, pattern) -> bool:
+    """Whether the committed profile has an onset-eligible cell on this probe's grid.
+
+    True where there is no committed profile to ask: the term then reports its
+    own compared count rather than being dropped on a guess.
+    """
+    if corpus is None or not corpus.capture_id:
+        return True
+    path = HERE / "reference" / f"{corpus.capture_id}.json"
+    if not path.exists():
+        return True
+    cells = {(n.note, n.velocity) for n in pattern.analysis_notes}
+    return any(
+        r.get("timbre") == corpus.timbre
+        and (r.get("note"), r.get("velocity")) in cells
+        and "onset_overshoot_db" in r
+        and "onset_settle_ms" in r
+        for r in json.loads(path.read_text()).get("rows") or []
+    )
+
+
 def reference_band_edge(corpus: Corpus | None, rows: list[dict]) -> float | None:
     """The highest 1/3-octave band this fit may be scored over, in Hz.
 
@@ -265,6 +286,7 @@ def resolve_probe(args) -> None:
         velocities.setdefault(n.note, set()).add(n.velocity)
     args.has_velocity_spread = any(len(v) >= 2 for v in velocities.values())
     args.has_level_contrasts = len({(n.note, n.velocity) for n in pattern.analysis_notes}) >= 2
+    args.has_onset_reference = has_onset_reference(corpus, pattern)
     # Whether any note is held long enough for the aftersound band to have
     # frames in it. Same treatment for the fourth time, and this one is the
     # quietest of the four: `tail` reads a band that opens at 2.0 s, the default
@@ -310,6 +332,12 @@ def resolve_probe(args) -> None:
                 f"{args.pattern!r} sounds each note at a single velocity, so there is no "
                 f"curve to fit. Use --pattern velocity, a drum probe, or drop --w-{flag}."
             )
+    if getattr(args, "w_onset", None) and not args.has_onset_reference:
+        raise ValueError(
+            "--w-onset compares each cell's onset shape, and no cell of this probe is "
+            "onset-eligible in the committed reference, so there is nothing to compare. "
+            "Drop --w-onset."
+        )
     # The same again on the time axis, and the reason it is worth a refusal: an
     # unreachable `tail` is 0.0, which is also its best score, so a run
     # weighting it would report a perfect aftersound on every candidate.

@@ -47,6 +47,7 @@ LOSS_TERMS = (
     "hfdyn",
     "modedyn",
     "onsetvel",
+    "onset",
     "mss",
     "band",
     "bdecay",
@@ -105,6 +106,7 @@ PITCHED_TERMS = (
     "hfdyn",
     "modedyn",
     "onsetvel",
+    "onset",
 ) + _SHARED_TERMS
 #: `modes` is shared because a drum has one too. A tom, a conga, a timbale, a
 #: woodblock and a cowbell all have a definite pitch, and the 1/3-octave band
@@ -475,6 +477,43 @@ def _onsetvel_terms(
         counts["capped"] = float(capped)
         counts["absent"] = float(absent)
     return (total / used if used else 0.0), used
+
+
+#: The onset's own shape per cell: overshoot in dB, settle in doublings. The
+#: settle is offset by 10 ms, about the envelope window at the bottom of the
+#: compass, so a zero settle stays finite and a few ms at the floor count little.
+ONSET_SETTLE_OFFSET_MS = 10.0
+ONSET_OVERSHOOT_CAP_DB = 12.0
+ONSET_SETTLE_CAP_DOUBLINGS = 4.0
+
+
+def _onset_terms(
+    model_rows: list[dict], oracle_rows_: list[dict], *, counts: dict[str, float] | None = None
+) -> tuple[float, int]:
+    """How far each cell's onset overshoot and settle sit from the reference's.
+
+    A cell either side reads onset-ineligible is excluded, not scored at zero,
+    and counted by side; the compared count is what the coverage guard reads.
+    """
+    total = 0.0
+    compared = ref_out = model_out = 0
+    for m, o in zip(model_rows, oracle_rows_):
+        ov_o, st_o = (_finite_or_none(o.get(k)) for k in ("onset_overshoot_db", "onset_settle_ms"))
+        if ov_o is None or st_o is None:
+            ref_out += 1
+            continue
+        ov_m, st_m = (_finite_or_none(m.get(k)) for k in ("onset_overshoot_db", "onset_settle_ms"))
+        if ov_m is None or st_m is None:
+            model_out += 1
+            continue
+        settle = abs(math.log2((st_m + ONSET_SETTLE_OFFSET_MS) / (st_o + ONSET_SETTLE_OFFSET_MS)))
+        total += min(abs(ov_m - ov_o), ONSET_OVERSHOOT_CAP_DB)
+        total += min(settle, ONSET_SETTLE_CAP_DOUBLINGS)
+        compared += 1
+    if counts is not None:
+        counts["ref_ineligible"] = float(ref_out)
+        counts["model_ineligible"] = float(model_out)
+    return (total / compared if compared else 0.0), compared
 
 
 # --------------------------------------------------------------------------- #
