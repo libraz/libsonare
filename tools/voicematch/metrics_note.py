@@ -119,12 +119,15 @@ class NoteMetrics:
 #: from the onset. The level window starts after any breath or bow transient
 #: has settled and the slope window runs on past it to test that it is held.
 ONSET_PEAK_S = 0.15
-ONSET_SUSTAIN_S = (0.20, 0.40)
-ONSET_SLOPE_S = (0.20, 0.60)
-#: Steepest early-sustain slope that still counts as held. A struck or plucked
-#: note falls faster than this, and its decay would otherwise read as overshoot.
+#: Where the hold is tested, in order: the first window whose slope is held is
+#: the note's sustain, and its first half gives the level. A slow wind overshoot
+#: or a bowed swell is still moving through the first and held in the second.
+ONSET_HOLD_WINDOWS = ((0.20, 0.60), (0.60, 1.20))
+#: Steepest sustain slope that still counts as held. A struck or plucked note
+#: falls faster than this in every window, and its decay would otherwise read
+#: as overshoot.
 ONSET_MAX_SLOPE_DB_S = 4.0
-#: The settle band: within this many dB of the early sustain, widened by the
+#: The settle band: within this many dB of the sustain, widened by the
 #: sustain's own tremolo depth so its crests do not read as still settling.
 ONSET_SETTLE_DB = 1.0
 #: The envelope window spans one period, so the waveform's own ripple is not
@@ -136,31 +139,45 @@ def onset_shape(mono: np.ndarray, sr: int, onset_s: float, note_dur: float, f0: 
     """`onset_overshoot_db` and `onset_settle_ms` of one held note.
 
     The overshoot is the envelope peak in the first `ONSET_PEAK_S` over the
-    early sustain's upper level (its 95th percentile), so a tremolo's crest is
-    not read as one. The settle is the time from that peak until the envelope
-    stays inside the settle band around the early sustain's median. Both are
-    None unless the early sustain is held (`ONSET_MAX_SLOPE_DB_S`).
+    sustain's upper level (its 95th percentile), so a tremolo's crest is not
+    read as one; a swell into the sustain reads negative. The settle is the
+    time from that peak until the envelope stays inside the settle band around
+    the sustain's median. Both are None unless one of `ONSET_HOLD_WINDOWS` is
+    held (`ONSET_MAX_SLOPE_DB_S`).
     """
     out = {"onset_overshoot_db": None, "onset_settle_ms": None}
-    span = ONSET_SLOPE_S[1]
     a = int(onset_s * sr)
-    if note_dur < span or f0 <= 0.0 or a + int(span * sr) > len(mono):
+    avail = min(note_dur, (len(mono) - a) / sr)
+    if avail < ONSET_HOLD_WINDOWS[0][1] or f0 <= 0.0:
         return out
     win_ms = max(HIT_ENVELOPE_WIN_MS, 1000.0 * ONSET_WINDOW_PERIODS / f0)
+    span = min(avail, ONSET_HOLD_WINDOWS[-1][1])
     t, env = _rms_envelope(mono[a : a + int(span * sr)], sr, HIT_ENVELOPE_HOP_MS, win_ms)
     db = np.asarray(_db(np.maximum(env, 1e-12)), dtype=np.float64)
-    held = (t >= ONSET_SUSTAIN_S[0]) & (t < ONSET_SUSTAIN_S[1])
-    tested = (t >= ONSET_SLOPE_S[0]) & (t <= ONSET_SLOPE_S[1])
+    # A frame belongs to a window only if it lies inside it, so a longer envelope
+    # leaves the frames of an earlier window exactly as they were.
+    hop = max(1, int(sr * HIT_ENVELOPE_HOP_MS / 1000.0))
+    ends = np.arange(t.size) * hop + max(hop, int(sr * win_ms / 1000.0))
     early = t < ONSET_PEAK_S
-    if held.sum() < 8 or tested.sum() < 8 or not early.any():
+    hold = None
+    for lo, hi in ONSET_HOLD_WINDOWS:
+        if hi > avail:
+            break
+        tested = (t >= lo) & (ends <= int(hi * sr))
+        held = (t >= lo) & (t < (lo + hi) / 2.0)
+        if held.sum() < 8 or tested.sum() < 8:
+            break
+        if abs(float(np.polyfit(t[tested], db[tested], 1)[0])) <= ONSET_MAX_SLOPE_DB_S:
+            hold = (held, (lo + hi) / 2.0)
+            break
+    if hold is None or not early.any():
         return out
-    if abs(float(np.polyfit(t[tested], db[tested], 1)[0])) > ONSET_MAX_SLOPE_DB_S:
-        return out
+    held, settle_end = hold
     level = float(np.median(db[held]))
     upper = float(np.percentile(db[held], 95))
     band = ONSET_SETTLE_DB + float(np.percentile(np.abs(db[held] - level), 90))
     peak_i = int(np.argmax(np.where(early, db, -np.inf)))
-    after = np.where((t >= t[peak_i]) & (t < ONSET_SUSTAIN_S[1]) & (np.abs(db - level) > band))[0]
+    after = np.where((t >= t[peak_i]) & (t < settle_end) & (np.abs(db - level) > band))[0]
     settle = (
         0.0 if after.size == 0 else float(t[after[-1]] - t[peak_i]) * 1000.0 + HIT_ENVELOPE_HOP_MS
     )

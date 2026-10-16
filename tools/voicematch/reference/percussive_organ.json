@@ -1,7 +1,7 @@
 {
  "id": "percussive_organ",
  "label": "Drawbar organ with a percussion stop, sampled",
- "measured_utc": "2026-10-15T18:20:12+00:00",
+ "measured_utc": "2026-10-16T18:06:38+00:00",
  "capture": {
   "program": 17,
   "params": [],
@@ -679,6 +679,8 @@
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -66.49,
+   "onset_overshoot_db": 7.97,
+   "onset_settle_ms": 713.0,
    "decay_span_s": 2.985,
    "decay_db_s": -0.86,
    "decay_early_db_s": -19.91,

@@ -1,7 +1,7 @@
 {
  "id": "lead_bass_lead",
  "label": "Lead 8 (bass + lead), sampled, close and dry",
- "measured_utc": "2026-10-15T18:17:42+00:00",
+ "measured_utc": "2026-10-16T18:04:57+00:00",
  "capture": {
   "program": 87,
   "params": [],
@@ -2102,6 +2102,8 @@
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -21.86,
+   "onset_overshoot_db": 6.07,
+   "onset_settle_ms": 494.5,
    "decay_span_s": 2.985,
    "decay_db_s": -1.72,
    "decay_early_db_s": -9.72,

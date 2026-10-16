@@ -927,13 +927,18 @@ def _held_with_onset(
     am: bool = False,
     noise: bool = False,
     decay_db_s: float = 0.0,
+    flat_after_s: float | None = None,
+    swell_db: float = 0.0,
+    seconds: float = 1.2,
     sr: int = 48000,
 ) -> np.ndarray:
     """A 440 Hz held tone: 5 ms rise, `overshoot_db` above sustain, inside 1 dB at `settle_ms`.
 
-    The overshoot falls linearly in dB, so it is over before the sustain window opens.
+    The overshoot falls linearly in dB and is over by `settle_ms` scaled for the 1 dB band.
+    A `swell_db` instead starts that far under the sustain and rises to it at `settle_ms`.
+    A decay stops at `flat_after_s` when one is given.
     """
-    t = np.arange(int(1.2 * sr)) / sr
+    t = np.arange(int(seconds * sr)) / sr
     phase = 2 * np.pi * 440.0 * t
     if vibrato:
         phase += (440.0 * (2 ** (20 / 1200) - 1) / 5.5) * np.sin(2 * np.pi * 5.5 * t)
@@ -945,7 +950,10 @@ def _held_with_onset(
         db = overshoot_db * np.maximum(1.0 - after / span, 0.0)
     else:
         db = np.full_like(t, overshoot_db)
-    db = db - decay_db_s * after
+    if swell_db:
+        db = db - swell_db * np.maximum(1.0 - after / (settle_ms / 1000.0), 0.0)
+    fall = after if flat_after_s is None else np.minimum(after, flat_after_s)
+    db = db - decay_db_s * fall
     if am:
         db = db + 0.5 * np.sin(2 * np.pi * 5.0 * t)
     env = np.minimum(t / rise, 1.0) * 10.0 ** (db / 20.0)
@@ -991,6 +999,37 @@ def test_a_decaying_note_has_no_onset_overshoot_rather_than_its_decay(decay_db_s
 
     y = _held_with_onset(0.0, 0.0, decay_db_s=decay_db_s)
     assert onset_shape(y, 48000, 0.0, 1.2, 440.0) == {
+        "onset_overshoot_db": None,
+        "onset_settle_ms": None,
+    }
+
+
+@pytest.mark.parametrize("overshoot_db", [4.0, 6.0])
+@pytest.mark.parametrize("settle_ms", [300.0, 500.0])
+def test_a_slow_overshoot_is_measured_on_the_later_hold_window(overshoot_db, settle_ms):
+    """Still falling through 0.2-0.6 s, so the sustain is read on 0.6-1.2 s."""
+    from metrics_note import onset_shape
+
+    got = onset_shape(_held_with_onset(overshoot_db, settle_ms), 48000, 0.0, 1.2, 440.0)
+    assert got["onset_overshoot_db"] == pytest.approx(overshoot_db, abs=0.5)
+    assert got["onset_settle_ms"] == pytest.approx(settle_ms, abs=max(6.0, 0.1 * settle_ms))
+
+
+def test_a_swell_into_the_sustain_reads_as_a_negative_overshoot():
+    """10 dB under at the onset and level by 500 ms: the peak window sits 7 dB under."""
+    from metrics_note import onset_shape
+
+    got = onset_shape(_held_with_onset(0.0, 500.0, swell_db=10.0), 48000, 0.0, 1.2, 440.0)
+    assert got["onset_overshoot_db"] == pytest.approx(-10.0 * (1.0 - 0.145 / 0.5), abs=0.5)
+    assert got["onset_settle_ms"] == pytest.approx(450.0 - 150.0, abs=15.0)
+
+
+def test_a_decay_that_holds_only_after_the_last_window_stays_ineligible():
+    """Falling 8 dB/s until 1.3 s: neither hold window is held."""
+    from metrics_note import onset_shape
+
+    y = _held_with_onset(0.0, 0.0, decay_db_s=8.0, flat_after_s=1.3, seconds=2.0)
+    assert onset_shape(y, 48000, 0.0, 2.0, 440.0) == {
         "onset_overshoot_db": None,
         "onset_settle_ms": None,
     }

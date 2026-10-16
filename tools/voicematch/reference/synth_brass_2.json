@@ -1,7 +1,7 @@
 {
  "id": "synth_brass_2",
  "label": "Synth brass 2, sampled, close and dry",
- "measured_utc": "2026-10-15T09:59:29+00:00",
+ "measured_utc": "2026-10-16T18:07:47+00:00",
  "capture": {
   "program": 63,
   "params": [],
@@ -2883,6 +2883,8 @@
    "onset_ms": 0.0,
    "attack_ms": 340.0,
    "attack_hf_db": -45.85,
+   "onset_overshoot_db": -3.08,
+   "onset_settle_ms": 0.0,
    "decay_span_s": 2.63,
    "decay_db_s": 0.13,
    "decay_early_db_s": -35.97,

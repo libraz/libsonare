@@ -2,7 +2,7 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm068",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-15T08:31:35+00:00",
+  "reference_measured_utc": "2026-10-16T18:02:48+00:00",
   "recorded_utc": "2026-09-09T16:48:51+00:00",
   "_register_margin": "register reached a full 35-row verdict throughout the fdff77ef/16d89962 loop-loss regression and its fix, not a censored one: p90 was 3.43 dB before fdff77ef, rose to 5.40 against this file's 5.457 bound during the regression (fdff77ef's own commit message), and returned to 3.43 after 16d89962 (confirmed 2026-09-22 against the current dylib, all three stats and rows=35 unchanged). The note grid straddles the note-48 anchor and per-note the tilt runs -2.5 (n36) to +3.4 (n44) to -2.3 (n60), not a monotone -3.81/+1.17 ramp end to end - the shape genuinely stayed under the 1.25x margin, spending nearly all of it. This is a margin question, not a reader defect: no fix to the reader is needed.",
   "reference_spread": {},

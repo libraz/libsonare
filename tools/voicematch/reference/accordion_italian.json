@@ -1,7 +1,7 @@
 {
  "id": "accordion_italian",
  "label": "Accordion It, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-15T18:14:24+00:00",
+ "measured_utc": "2026-10-16T18:02:35+00:00",
  "capture": {
   "program": 21,
   "params": [],
@@ -170,6 +170,8 @@
    "onset_ms": 0.0,
    "attack_ms": 39.9,
    "attack_hf_db": -20.21,
+   "onset_overshoot_db": 1.4,
+   "onset_settle_ms": 19.0,
    "decay_span_s": 4.929,
    "decay_db_s": -0.18,
    "decay_early_db_s": -2.85,
@@ -249,6 +251,8 @@
    "onset_ms": 0.0,
    "attack_ms": 29.9,
    "attack_hf_db": -15.89,
+   "onset_overshoot_db": 4.26,
+   "onset_settle_ms": 28.4,
    "decay_span_s": 4.954,
    "decay_db_s": -0.22,
    "decay_early_db_s": -8.81,
