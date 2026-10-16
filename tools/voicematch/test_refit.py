@@ -322,9 +322,41 @@ def test_a_capital_is_judged_by_every_gate_its_patch_reaches(tmp_path):
         _capture("drums", 6, 0, drums=True),
         _capture("unwritten", 6, 0),  # no gate file
     ]
-    gates = capital_gates(rows[0], rows, pool, tmp_path)
+    gates = capital_gates(rows[0], rows, pool, tmp_path, copies={})
     assert [g["capture"] for g in gates] == ["harpsichord", "harpsichord_alt", "harpsichord_lsb"]
     assert gates[1]["timbre"] == "t-harpsichord_alt"
+
+
+def test_a_capital_is_judged_by_the_gates_of_the_patches_copied_from_it(tmp_path):
+    import json
+
+    from refit import capital_gates
+
+    for cid in ("sitar", "koto", "koto_wide", "harp"):
+        (tmp_path / f"{cid}_gate.json").write_text(json.dumps({"timbre": f"t-{cid}"}))
+    rows = [
+        {"program": 104, "bank": 0, "kit": False, "patch": "sitar", "capture": "sitar"},
+        {"program": 107, "bank": 0, "kit": False, "patch": "koto"},
+        {"program": 107, "bank": 8, "kit": False, "patch": "koto_wide"},
+        {"program": 46, "bank": 0, "kit": False, "patch": "harp"},
+    ]
+    pool = [
+        _capture("sitar", 104, 0),
+        _capture("koto", 107, 0),  # copied from the sitar
+        _capture("koto_wide", 107, 8),  # copied from the koto: reached through it
+        _capture("harp", 46, 0),  # its own patch
+    ]
+    copies = {"koto": "sitar", "koto_wide": "koto", "shamisen": "sitar"}
+    gates = capital_gates(rows[0], rows, pool, tmp_path, copies=copies)
+    assert [g["capture"] for g in gates] == ["sitar", "koto", "koto_wide"]
+
+
+def test_struct_copies_read_the_program_tables():
+    from writeback import struct_copies
+
+    copies = struct_copies()
+    assert copies["marimba_wide"] == "marimba"
+    assert copies["koto"] == "sitar"
 
 
 def test_every_gate_a_capital_reaches_is_read_and_keyed_by_capture(tmp_path, monkeypatch):

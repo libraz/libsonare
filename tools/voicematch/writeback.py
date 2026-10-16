@@ -141,6 +141,22 @@ PROGRAM_TABLE_FILES = (
     "src/midi/synth/gm_fallback_programs_variations.h",
 )
 
+#: A patch built as a copy of another, `o.<copy> = o.<source>;`, which then
+#: carries every value the source holds at that line, fitted ones included.
+_STRUCT_COPY = re.compile(r"^\s*o\.(\w+)\s*=\s*o\.(\w+);", re.MULTILINE)
+
+
+@functools.lru_cache(maxsize=1)
+def struct_copies() -> dict[str, str]:
+    """{copy: source} for every patch the program tables build by copying another."""
+    found: dict[str, str] = {}
+    for rel in PROGRAM_TABLE_FILES:
+        found.update(_STRUCT_COPY.findall((REPO_ROOT / rel).read_text()))
+    if not found:
+        raise ValueError("no struct-copied patches found in the program tables")
+    return found
+
+
 # Where the per-drum-note voicing table is built.
 DRUM_TABLE_FILE = "src/midi/synth/gm_fallback_drums.cpp"
 

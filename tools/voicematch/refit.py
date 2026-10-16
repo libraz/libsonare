@@ -55,6 +55,7 @@ from knobs import format_value
 from objective import objective_digest
 from writeback import (
     patch_field_assignments,
+    struct_copies,
     switch_field,
     write_drum_fields,
     write_family_fields,
@@ -145,23 +146,36 @@ def plan_kits(rows: list[dict]) -> tuple[list[dict], list[dict]]:
     return todo, skipped
 
 
-def capital_gates(row: dict, rows: list[dict], pool: list, reference_dir: Path) -> list[dict]:
+def capital_gates(
+    row: dict,
+    rows: list[dict],
+    pool: list,
+    reference_dir: Path,
+    copies: dict[str, str] | None = None,
+) -> list[dict]:
     """Every gate a melodic voice's patch is read against, its own capture's first.
 
     A patch answers every capture whose (program, bank) the library resolves to it —
     an alternate recording at the same address, or the patch's second bank address —
     so an adoption is judged against all of their gates, the way a kit note is judged
     against every kit gate. The resolution is the status table's, which the library's
-    catalogue wrote. A capture whose reference is not at the instrument boundary
-    measures something else and judges nothing.
+    catalogue wrote. A patch the program tables build as a copy of this one, at any
+    address, carries the fitted values too, so its captures judge as well. A capture
+    whose reference is not at the instrument boundary measures something else and
+    judges nothing.
     """
+    copies = struct_copies() if copies is None else copies
+    reached = {row["patch"]}
+    while grown := {c for c, src in copies.items() if src in reached} - reached:
+        reached |= grown
     patch_of = {(r["program"], r["bank"]): r.get("patch") for r in rows if not r["kit"]}
     own = row.get("capture")
     found = []
     for cap in pool:
-        if cap.drums or cap.program != row["program"]:
+        if cap.drums:
             continue
-        if cap.bank != row["bank"] and patch_of.get((cap.program, cap.bank)) != row["patch"]:
+        here = (cap.program, cap.bank) == (row["program"], row["bank"])
+        if not here and patch_of.get((cap.program, cap.bank)) not in reached:
             continue
         gate = reference_dir / f"{cap.id}_gate.json"
         if not gate.exists():
