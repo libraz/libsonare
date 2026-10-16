@@ -5,6 +5,9 @@
   "reference_measured_utc": "2026-10-16T18:08:45+00:00",
   "recorded_utc": "2026-09-09T16:50:30+00:00",
   "reference_spread": {},
+  "_excluded": {
+    "body": "below f0 the v32-80 take carries a broadband floor (spectral flatness -5 dB, rumble at 20-40 Hz, -38 to -47 dB re f0) that the v104/127 take does not (-69 dB), so the dimension reads which take was recorded rather than the instrument"
+  },
   "bounds": {
     "stretch": {
       "median": 6.638,
@@ -41,12 +44,6 @@
       "abs_median": 43.386,
       "p90": 81.363,
       "rows": 30
-    },
-    "body": {
-      "median": 23.038,
-      "abs_median": 23.038,
-      "p90": 29.234,
-      "rows": 10
     },
     "vel_range": {
       "median": 1.0,
