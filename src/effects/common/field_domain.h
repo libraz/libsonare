@@ -34,7 +34,7 @@ inline bool in_domain(float value, float lo, float hi) noexcept {
   return std::isfinite(value) && value >= lo && value <= hi;
 }
 
-/// Throws InvalidParameter naming @p processor and @p field when @p value is outside [@p lo, @p hi].
+/// Throws InvalidParameter naming @p processor and @p field unless @p value is in [@p lo, @p hi].
 inline void require_in_domain(const char* processor, const char* field, float value, float lo,
                               float hi) {
   if (in_domain(value, lo, hi)) return;
