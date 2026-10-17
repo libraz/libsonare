@@ -9,6 +9,14 @@
       "outcome": "kept",
       "reason": "no point of the search kept every bound (switch field moved: accordion.filter_output)"
     },
+    "accordion_italian": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "accordion_italian",
+      "timbre": "t0",
+      "outcome": "kept",
+      "reason": "no point of the search kept every bound (newly over its bound: accordion_italian:attack p90, accordion_italian:balance abs_median, accordion_italian:balance median, accordion_italian:stretch abs_median, accordion_italian:stretch median, accordion_italian:stretch p90)"
+    },
     "agogo": {
       "objective": "0b559b72ad741fcd",
       "date": "2026-10-16",
@@ -127,6 +135,21 @@
       "outcome": "kept",
       "reason": "no point of the search kept every bound (newly over its bound: aftersound abs_median, aftersound median, attack_hf median, attack_hf_swing abs_median, body p90, damper median, damper p90, decay abs_median, decay median, decay p90, doubling abs_median, doubling median, partial_tilt p90, vel_range abs_median, vel_range median, vel_range p90)"
     },
+    "bright_piano_wide": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "bright_piano_wide",
+      "timbre": "t0",
+      "outcome": "kept",
+      "reason": "write-back refused: fitted_to_the_probe"
+    },
+    "carillon": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "carillon",
+      "timbre": "t0",
+      "outcome": "adopted"
+    },
     "celesta": {
       "objective": "0b559b72ad741fcd",
       "date": "2026-10-16",
@@ -148,6 +171,13 @@
       "timbre": "gm053",
       "outcome": "adopted"
     },
+    "church_bell": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "church_bell",
+      "timbre": "t0",
+      "outcome": "adopted"
+    },
     "church_organ": {
       "objective": "0b559b72ad741fcd",
       "date": "2026-10-16",
@@ -155,6 +185,21 @@
       "timbre": "plenum-a",
       "outcome": "kept",
       "reason": "write-back refused: fitted_to_the_probe"
+    },
+    "church_organ_flutes": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "church_organ_flutes",
+      "timbre": "t0",
+      "outcome": "adopted"
+    },
+    "church_organ_full": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "church_organ_full",
+      "timbre": "t0",
+      "outcome": "kept",
+      "reason": "held-out notes did not improve (+0.0039)"
     },
     "clarinet": {
       "objective": "0b559b72ad741fcd",
@@ -537,10 +582,24 @@
       "timbre": "gm006",
       "outcome": "adopted"
     },
+    "e_piano_detuned_2": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "e_piano_detuned_2",
+      "timbre": "t0",
+      "outcome": "adopted"
+    },
     "electric_grand": {
       "objective": "0b559b72ad741fcd",
       "date": "2026-10-16",
       "capture": "electric_grand_module",
+      "timbre": "t0",
+      "outcome": "adopted"
+    },
+    "electric_grand_wide": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "electric_grand_wide",
       "timbre": "t0",
       "outcome": "adopted"
     },
@@ -671,6 +730,28 @@
       "timbre": "gm007",
       "outcome": "adopted"
     },
+    "harpsichord_keyoff": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "harpsichord_keyoff",
+      "timbre": "t0",
+      "outcome": "adopted"
+    },
+    "harpsichord_octave": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "harpsichord_octave",
+      "timbre": "t0",
+      "outcome": "adopted"
+    },
+    "harpsichord_wide": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "harpsichord_wide",
+      "timbre": "t0",
+      "outcome": "kept",
+      "reason": "no point of the search kept every bound (newly over its bound: harpsichord_wide:centroid_pct abs_median, harpsichord_wide:centroid_pct median, harpsichord_wide:partial_tilt abs_median, harpsichord_wide:tnr abs_median)"
+    },
     "honky_tonk": {
       "objective": "0b559b72ad741fcd",
       "date": "2026-10-16",
@@ -751,11 +832,26 @@
       "outcome": "kept",
       "reason": "no point of the search kept every bound (switch field moved: lead_voice.body)"
     },
+    "mandolin": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "mandolin",
+      "timbre": "t0",
+      "outcome": "kept",
+      "reason": "write-back refused: measurement_dropout"
+    },
     "marimba": {
       "objective": "cbe94c0cf2a3a80e",
       "date": "2026-10-17",
       "capture": "marimba",
       "timbre": "gm013",
+      "outcome": "adopted"
+    },
+    "marimba_wide": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "marimba_wide",
+      "timbre": "t0",
       "outcome": "adopted"
     },
     "melodic_tom": {
@@ -795,6 +891,14 @@
       "timbre": "gm025",
       "outcome": "adopted"
     },
+    "nylon_guitar_keyoff": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "nylon_guitar_keyoff",
+      "timbre": "t0",
+      "outcome": "kept",
+      "reason": "write-back refused: fitted_to_the_probe"
+    },
     "oboe": {
       "objective": "0b559b72ad741fcd",
       "date": "2026-10-16",
@@ -816,6 +920,13 @@
       "timbre": "gm056",
       "outcome": "kept",
       "reason": "held-out notes did not improve (-0.0001)"
+    },
+    "organ_sixties": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "organ_sixties",
+      "timbre": "t0",
+      "outcome": "adopted"
     },
     "pad_bowed": {
       "objective": "0b559b72ad741fcd",
@@ -890,6 +1001,14 @@
       "capture": "percussive_organ",
       "timbre": "gm018",
       "outcome": "adopted"
+    },
+    "piano_wide": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "piano_wide",
+      "timbre": "t0",
+      "outcome": "kept",
+      "reason": "write-back refused: fitted_to_the_probe"
     },
     "piccolo": {
       "objective": "0b559b72ad741fcd",
@@ -1187,11 +1306,34 @@
       "timbre": "gm015",
       "outcome": "adopted"
     },
+    "twelve_string_guitar": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "twelve_string_guitar",
+      "timbre": "t0",
+      "outcome": "kept",
+      "reason": "write-back refused: fitted_to_the_probe"
+    },
+    "ukulele": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "ukulele",
+      "timbre": "t0",
+      "outcome": "kept",
+      "reason": "no point of the search kept every bound (switch field moved: ukulele.body)"
+    },
     "vibraphone": {
       "objective": "0b559b72ad741fcd",
       "date": "2026-10-16",
       "capture": "vibraphone",
       "timbre": "gm012",
+      "outcome": "adopted"
+    },
+    "vibraphone_wide": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "vibraphone_wide",
+      "timbre": "t0",
       "outcome": "adopted"
     },
     "viola": {
@@ -1208,6 +1350,13 @@
       "timbre": "gm041",
       "outcome": "kept",
       "reason": "no point of the search kept every bound (switch field moved: violin.body)"
+    },
+    "violin_slow": {
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
+      "capture": "violin_slow",
+      "timbre": "t0",
+      "outcome": "adopted"
     },
     "voice_oohs": {
       "objective": "0b559b72ad741fcd",

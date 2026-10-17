@@ -826,6 +826,8 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.harpsichord_octave = o.harpsichord;
   o.harpsichord_octave.harpsichord.four = true;
   o.harpsichord_octave.harpsichord.undamped_from_note = 84;
+  o.harpsichord_octave.amp_env.attack_ms = 4.89665f;
+  o.harpsichord_octave.amp_env.release_ms = 1224.16f;
   // Bank 2 — wide: both 8' choirs drawn and spread across the stereo field. Two
   // unisons tuned by ear are what makes the chorus; one string cannot.
   o.harpsichord_wide = o.harpsichord;
@@ -834,6 +836,8 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // Bank 3 — with key off: the jack dropping back and the damper landing.
   o.harpsichord_keyoff = o.harpsichord;
   o.harpsichord_keyoff.harpsichord.jack_noise = 0.5f;
+  o.harpsichord_keyoff.amp_env.attack_ms = 1.8345f;
+  o.harpsichord_keyoff.amp_env.release_ms = 250.0f;
 
   // Drawbar Organ (GM 16): the tonewheel generator at 88 5642 000. A patch of
   // its own rather than the organ family's, which is what makes the
