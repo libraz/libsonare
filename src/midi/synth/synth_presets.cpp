@@ -332,8 +332,8 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
                                       0.340141f, 0.381076f, 0.177051f};
     constexpr BellGroup kTubaBell{1200.0f,   784.162f, 0.817288f, 0.541796f,
                                   0.691899f, 0.1f,     0.704915f};
-    constexpr BellGroup kMutedTrumpetBell{282.346f,  429.085f,  0.75647f, 0.719975f,
-                                          0.762261f, 0.284021f, 0.814383f};
+    constexpr BellGroup kMutedTrumpetBell{8913.36f,  429.085f,  0.674929f, 0.463131f,
+                                          0.837987f, 0.225004f, 0.606152f};
     constexpr BellGroup kFrenchHornBell{637.0f,    821.625f,  0.73703f, 0.606392f,
                                         0.414392f, 0.208044f, 0.293441f};
 
@@ -390,7 +390,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     // The mute is modelled, so the bore is voiced open like the trumpet it is:
     // a darkened brightness standing in for the mute darkens it a second time.
     brass("muted-trumpet", false, 0.58f, 0.35f, 0.72f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 1.581f,
-          kMutedTrumpetBell, 0.395877f);
+          kMutedTrumpetBell, 1.0f);
     // These three have no program and no reference, so each takes the class its
     // bell belongs to: cornet and flugelhorn are small B-flat bells, euphonium a
     // large low one. The bore flag cannot stand in — all three are conical.

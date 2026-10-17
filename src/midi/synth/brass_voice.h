@@ -194,11 +194,12 @@ struct BrassPatchParams {
   /// 0 = off -> the delay is constant and the render is bit-identical.
   float bore_nonlinearity = 0.0f;
 
-  /// Mute in [0,1]: a straight / cup / harmon mute over the bell reshapes its
-  /// radiation into a nasal, honky timbre with a strong upper formant and a
-  /// scooped low-mid (the muted-trumpet colour). Modelled as a gated output
-  /// formant/notch shaping of the radiated tone. 0 = off -> render is
-  /// bit-identical (the mute filter is skipped).
+  /// Mute in [0,1]: a straight mute in the bell radiates through two paths —
+  /// the mute cavity leaks the fundamentals below its Helmholtz resonance, the
+  /// annular gap round it passes the top as a high-pass — and their antiphase
+  /// sum is the hollow 1–2 kHz dip of the muted colour. The value mixes the
+  /// muted radiation against the open bell; 1 is the mute fully seated.
+  /// 0 = off -> render is bit-identical (the mute path is skipped).
   float mute = 0.0f;
 
   /// Half-valve in [0,1]: pressing a valve half-way (or a slide between
@@ -304,10 +305,15 @@ class BrassVoiceCore {
   };
   BellCoefficients bell_coefficients() const noexcept { return {lp_alpha_, rad_alpha_}; }
 
-  /// The mute formant's biquad numerator gain and denominator pair {b0, a1, a2}
-  /// as start() last built them for the running sample rate.
-  std::array<float, 3> mute_coefficients() const noexcept {
-    return {mute_peak_b0_, mute_peak_a1_, mute_peak_a2_};
+  /// The mute's two radiation paths as start() last built them for the running
+  /// rate: the cavity lowpass, the gap highpass and the gap's linear gain.
+  struct MuteCoefficients {
+    rt::BiquadCoeffs cavity;
+    rt::BiquadCoeffs gap;
+    float gap_gain;
+  };
+  MuteCoefficients mute_coefficients() const noexcept {
+    return {mute_cavity_.c, mute_gap_.c, mute_gap_gain_};
   }
   /// The fundamental makeup gain for the current radiation pole.
   float radiation_scale() const noexcept { return rad_scale_; }
@@ -486,16 +492,12 @@ class BrassVoiceCore {
   // harmonics so they do not fold back in the high register.
   rt::Adaa1<rt::TanhNonlinearity> cuivre_adaa_{};
 
-  // 4b: mute. mute_ == 0 -> skipped (bit-identical). A radiation-side formant
-  // (peak) + notch pair that reshapes the bell output into the nasal muted colour.
+  // 4b: mute. mute_ == 0 -> skipped (bit-identical). The cavity leak lowpass
+  // and the gap highpass the bell output radiates through, summed in antiphase.
   float mute_ = 0.0f;
-  float mute_peak_b0_ = 0.0f;
-  float mute_peak_a1_ = 0.0f;
-  float mute_peak_a2_ = 0.0f;
-  float mute_x1_ = 0.0f;
-  float mute_x2_ = 0.0f;
-  float mute_y1_ = 0.0f;
-  float mute_y2_ = 0.0f;
+  rt::BiquadState mute_cavity_{};
+  rt::BiquadState mute_gap_{};
+  float mute_gap_gain_ = 0.0f;
 
   // 4c: half-valve. half_valve_ == 0 -> skipped (bit-identical). Extra in-loop
   // loss (a stuffier, more damped bore) plus a small detune of the loop delay.

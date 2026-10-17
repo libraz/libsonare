@@ -49,7 +49,7 @@ using sonare::test::kFft;
 using sonare::test::kRate;
 using sonare::test::render_left;
 
-std::array<float, 3> brass_mute_coefficients(double sample_rate) {
+BrassVoiceCore::MuteCoefficients brass_mute_coefficients(double sample_rate) {
   BrassPatchParams params;
   params.mute = 1.0f;
   std::vector<float> bore(
@@ -147,35 +147,44 @@ NativeSynthPatch brass_base_patch() {
 
 }  // namespace
 
-TEST_CASE("brass mute formant keeps its center and damping in hertz",
-          "[midi][synth][brass][rate]") {
+/// The (corner Hz, Q) an RBJ lowpass or highpass biquad was designed at, read
+/// back from its denominator: a2 = (1 - alpha) / (1 + alpha), a1 = -2 cos(w0) / (1 + alpha).
+std::pair<double, double> rbj_corner(const sonare::rt::BiquadCoeffs& c, double sample_rate) {
+  const double a1 = c.a1;
+  const double a2 = c.a2;
+  const double alpha = (1.0 - a2) / (1.0 + a2);
+  const double w0 = std::acos(std::clamp(-a1 * (1.0 + alpha) / 2.0, -1.0, 1.0));
+  return {w0 * sample_rate / sonare::constants::kTwoPiD, std::sin(w0) / (2.0 * alpha)};
+}
+
+TEST_CASE("brass mute keeps its two radiation corners in hertz", "[midi][synth][brass][rate]") {
   // Probe the coefficients on an instantiated core after start(), so this
   // witnesses the actual mute branch rather than duplicating its design here.
-  // The pole radius is voiced at 48 kHz and must describe the same physical
-  // damping at every supported render rate.
-  constexpr double kFormantHz = 1800.0;
-  constexpr double kVoicedRadius = 0.90;
-  const double expected_damping_hz = -48000.0 * std::log(kVoicedRadius);
+  // Both paths are built from hertz and a Q at whatever rate the loop runs, so
+  // each must read back as the same physical corner at every supported rate.
+  constexpr double kCavityHz = 180.0;
+  constexpr double kCavityQ = 0.36;
+  constexpr double kGapHz = 3850.0;
+  constexpr double kGapQ = 1.06;
+  constexpr double kGapDb = -16.8;
 
   for (const double sample_rate : {24000.0, 44100.0, 48000.0, 96000.0}) {
-    const std::array<float, 3> coeff = brass_mute_coefficients(sample_rate);
-    const double radius = std::sqrt(std::max(0.0, -static_cast<double>(coeff[2])));
-    REQUIRE(radius > 0.0);
-    REQUIRE(radius < 1.0);
-    const double centre_hz =
-        std::acos(std::clamp(static_cast<double>(coeff[1]) / (2.0 * radius), -1.0, 1.0)) *
-        sample_rate / sonare::constants::kTwoPiD;
-    const double damping_hz = -sample_rate * std::log(radius);
+    const BrassVoiceCore::MuteCoefficients coeff = brass_mute_coefficients(sample_rate);
+    const auto [cavity_hz, cavity_q] = rbj_corner(coeff.cavity, sample_rate);
+    const auto [gap_hz, gap_q] = rbj_corner(coeff.gap, sample_rate);
 
     INFO("sample rate " << sample_rate);
-    CAPTURE(sample_rate, radius, centre_hz, damping_hz);
-    CHECK(std::fabs(centre_hz - kFormantHz) < 1.0);
-    CHECK(std::fabs(damping_hz - expected_damping_hz) < 2.0);
-    CHECK(std::fabs(static_cast<double>(coeff[0]) - (1.0 - radius)) < 1.0e-6);
-    if (sample_rate == 48000.0) {
-      CHECK(std::fabs(radius - kVoicedRadius) < 1.0e-6);
-      CHECK(std::fabs(static_cast<double>(coeff[0]) - (1.0 - kVoicedRadius)) < 1.0e-6);
-    }
+    CAPTURE(sample_rate, cavity_hz, cavity_q, gap_hz, gap_q, coeff.gap_gain);
+    CHECK(std::fabs(cavity_hz - kCavityHz) < 1.0);
+    CHECK(std::fabs(cavity_q - kCavityQ) < 0.01);
+    CHECK(std::fabs(gap_hz - kGapHz) < 2.0);
+    CHECK(std::fabs(gap_q - kGapQ) < 0.01);
+    CHECK(std::fabs(20.0 * std::log10(coeff.gap_gain) - kGapDb) < 0.01);
+    // A lowpass passes DC and a highpass blocks it: the two paths are the two kinds.
+    CHECK(std::fabs((coeff.cavity.b0 + coeff.cavity.b1 + coeff.cavity.b2) /
+                        (1.0 + coeff.cavity.a1 + coeff.cavity.a2) -
+                    1.0) < 1.0e-4);
+    CHECK(std::fabs(coeff.gap.b0 + coeff.gap.b1 + coeff.gap.b2) < 1.0e-6);
   }
 }
 
@@ -556,17 +565,35 @@ TEST_CASE("cuivre dynamics brightens ff over pp", "[midi][synth][brass]") {
   REQUIRE(c_dyn_ff / c_dyn_pp > c_stat_ff / c_stat_pp);  // the gate widens the contrast
 }
 
-TEST_CASE("mute makes the brass tone nasal", "[midi][synth][brass]") {
-  // A mute reshapes the bell radiation into a bright, nasal honk (a strong upper
-  // formant), lifting the centroid well above the open tone.
-  NativeSynthPatch open = brass_base_patch();
-  NativeSynthPatch muted = brass_base_patch();
+TEST_CASE("mute hollows the low-mid and passes the top", "[midi][synth][brass]") {
+  // A straight mute leaks the fundamentals through its cavity and radiates the
+  // top through the gap round it, so against the open bell the 1-2 kHz region
+  // drops and the top rises relative to it. Read on the GM trumpet, which has
+  // a top to pass; the centroid is not the claim, since a sampled muted trumpet
+  // sits below its open twin on it (the dip takes the open bell's loudest band).
+  NativeSynthPatch open = gm_fallback_patch(0, 56);
+  NativeSynthPatch muted = open;
   muted.brass.mute = 1.0f;
-  const std::vector<float> off = render_patch(open, 65, 110, 40000);
-  const std::vector<float> on = render_patch(muted, 65, 110, 40000);
+  const std::vector<float> off = render_patch(open, 62, 110, 40000);
+  const std::vector<float> on = render_patch(muted, 62, 110, 40000);
   REQUIRE(peak(on) < 4.0f);
   REQUIRE(std::isfinite(on.back()));
-  REQUIRE(spectral_centroid(on, 24000) > 1.2 * spectral_centroid(off, 24000));
+  const std::vector<double> ps_off = power_spectrum(off, 24000);
+  const std::vector<double> ps_on = power_spectrum(on, 24000);
+  const auto band_db = [](const std::vector<double>& ps, double lo_hz, double hi_hz) {
+    const int lo = std::max(1, static_cast<int>(lo_hz / kRate * kFft));
+    const int hi = std::min(static_cast<int>(ps.size()), static_cast<int>(hi_hz / kRate * kFft));
+    double acc = 0.0;
+    for (int b = lo; b < hi; ++b) acc += ps[static_cast<std::size_t>(b)];
+    return 10.0 * std::log10(acc + 1.0e-30);
+  };
+  const double dip_off = band_db(ps_off, 1000.0, 2000.0) - band_db(ps_off, 0.0, 500.0);
+  const double dip_on = band_db(ps_on, 1000.0, 2000.0) - band_db(ps_on, 0.0, 500.0);
+  const double top_off = band_db(ps_off, 3000.0, 6000.0) - band_db(ps_off, 1000.0, 2000.0);
+  const double top_on = band_db(ps_on, 3000.0, 6000.0) - band_db(ps_on, 1000.0, 2000.0);
+  CAPTURE(dip_off, dip_on, top_off, top_on);
+  REQUIRE(dip_on < dip_off - 10.0);
+  REQUIRE(top_on > top_off + 6.0);
 }
 
 TEST_CASE("brass bell body brightens the tone", "[midi][synth][brass]") {

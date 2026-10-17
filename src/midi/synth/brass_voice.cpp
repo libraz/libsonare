@@ -8,6 +8,7 @@
 #include "midi/synth/string_loop.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/tunable.h"
 
@@ -167,14 +168,19 @@ SONARE_TUNABLE(kCuivreMixMax, 0.85f);
 SONARE_TUNABLE(kCuivreEnvPeriods, 1.0f);
 
 // --- 4b mute (only when params.mute > 0) ---
-// Muted upper formant (Hz) and its resonance: the nasal honk of a straight/cup
-// mute. The formant peak is boosted and the direct low-mid scooped.
-SONARE_TUNABLE(kMuteFormantHz, 1800.0f);
-// Pole radius voiced at kLossVoicedSr; start() maps it to the running rate.
-SONARE_TUNABLE(kMuteFormantR, 0.90f);
-SONARE_TUNABLE(kMuteFormantGain, 3.5f);
-SONARE_TUNABLE(kMuteScoop, 0.45f);  // how much direct signal the mute removes
-SONARE_TUNABLE(kMuteMixMax, 0.9f);
+// A straight mute radiates through two paths in antiphase: the cavity leaks the
+// fundamentals below its Helmholtz resonance, which sits between the horn's
+// first two impedance peaks; the annular gap passes the top as a high-pass.
+SONARE_TUNABLE(kMuteCavityHz, 180.0f);
+// Fitted to the per-partial pairs `profile.py ratio` reads for the muted trumpet
+// capture against the open one; the gap corner and Q are what the fit pins,
+// the cavity Q trades against its gain.
+SONARE_TUNABLE(kMuteCavityQ, 0.36f);
+SONARE_TUNABLE(kMuteGapHz, 3850.0f);
+SONARE_TUNABLE(kMuteGapQ, 1.06f);
+// Gap passband relative to the cavity leak at DC. Only the difference is
+// measurable: the sampled library levels its muted and open takes alike.
+SONARE_TUNABLE(kMuteGapDb, -16.8f);
 
 // --- 4c half-valve (only when params.half_valve > 0) ---
 // Extra in-loop loss (a stuffier, more damped bore) and a small loop detune (the
@@ -383,16 +389,17 @@ LoopBudget BrassVoiceCore::configure(const BrassPatchParams& params, double sr, 
   cuivre_pow_out_ = 0.0f;
   cuivre_rad_state_ = 0.0f;
 
-  // 4b: mute — a radiation-side resonant formant + scoop. Off (0) -> skipped.
+  // 4b: mute — the cavity leak and the gap radiation, built in hertz at the
+  // loop rate. Off (0) -> skipped.
   mute_ = std::clamp(params.mute, 0.0f, 1.0f);
-  mute_x1_ = mute_x2_ = mute_y1_ = mute_y2_ = 0.0f;
+  mute_cavity_.reset();
+  mute_gap_.reset();
   if (mute_ > 0.0f) {
-    const float fm = std::min(kMuteFormantHz, 0.45f * srf);
-    const float wm = kTwoPi * fm / srf;
-    const float mute_r = loss_pole_at_rate(kMuteFormantR, sr);
-    mute_peak_a1_ = 2.0f * mute_r * std::cos(wm);
-    mute_peak_a2_ = -mute_r * mute_r;
-    mute_peak_b0_ = 1.0f - mute_r;
+    const float w_cavity = kTwoPi * std::min(kMuteCavityHz, 0.45f * srf) / srf;
+    const float w_gap = kTwoPi * std::min(kMuteGapHz, 0.45f * srf) / srf;
+    mute_cavity_.set(rt::rbj_lowpass(w_cavity, kMuteCavityQ));
+    mute_gap_.set(rt::rbj_highpass(w_gap, kMuteGapQ));
+    mute_gap_gain_ = db_to_linear(kMuteGapDb);
   }
 
   // 4c: half-valve — extra in-loop loss and a small loop detune. Off (0) ->
@@ -677,18 +684,11 @@ float BrassVoiceCore::render_internal(float pitch_ratio) noexcept {
     outp *= std::sqrt((cuivre_pow_in_ + 1.0e-18f) / (cuivre_pow_out_ + 1.0e-18f));
   }
 
-  // Mute (gated): a resonant upper formant plus a scoop of the direct low-mid,
-  // the nasal honk of a straight/cup mute on the bell.
+  // Mute (gated): the cavity leaks the fundamentals and the gap radiates the
+  // top; they arrive in antiphase, which is the dip between the two.
   if (mute_ > 0.0f) {
-    const float peak =
-        mute_peak_b0_ * (outp - mute_x2_) + mute_peak_a1_ * mute_y1_ + mute_peak_a2_ * mute_y2_;
-    mute_x2_ = mute_x1_;
-    mute_x1_ = outp;
-    mute_y2_ = mute_y1_;
-    mute_y1_ = peak;
-    const float muted = outp * (1.0f - kMuteScoop) + peak * kMuteFormantGain;
-    const float wet = mute_ * kMuteMixMax;
-    outp += wet * (muted - outp);
+    const float muted = mute_cavity_.process(outp) - mute_gap_gain_ * mute_gap_.process(outp);
+    outp += mute_ * (muted - outp);
   }
 
   return output_scale_ * outp;
@@ -820,10 +820,8 @@ void BrassVoiceCore::kill() noexcept {
   lip_x2_ = 0.0f;
   lip_z1_ = 0.0f;
   lip_z2_ = 0.0f;
-  mute_x1_ = 0.0f;
-  mute_x2_ = 0.0f;
-  mute_y1_ = 0.0f;
-  mute_y2_ = 0.0f;
+  mute_cavity_.reset();
+  mute_gap_.reset();
   lip2_x1_ = 0.0f;
   lip2_x2_ = 0.0f;
   lip2_z1_ = 0.0f;

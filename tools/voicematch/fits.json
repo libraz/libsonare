@@ -877,12 +877,11 @@
       "reason": "no point of the search kept every bound (newly over its bound: decay median, partial_tilt abs_median, partial_tilt median, vel_range abs_median, vel_range median, vel_range p90)"
     },
     "muted_trumpet": {
-      "objective": "0b559b72ad741fcd",
-      "date": "2026-10-16",
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
       "capture": "muted_trumpet",
       "timbre": "gm060",
-      "outcome": "kept",
-      "reason": "no point of the search kept every bound (newly over its bound: centroid_pct median, tnr abs_median, tnr median, tnr p90, vel_range median)"
+      "outcome": "adopted"
     },
     "nylon_guitar": {
       "objective": "0b559b72ad741fcd",

@@ -179,6 +179,7 @@ from profile_summary import (
     a4_offset_cents,
     band_db,
     partial_balance_db,
+    partial_ratio_by_band,
     partial_tilt_db_s,
     print_percussion_summary,
     print_summary,
@@ -1776,6 +1777,44 @@ def agree(
 # rig
 
 
+def ratio(cfg: dict, other: dict, *, timbre: str, against_timbre: str) -> int:
+    """Print this reference's partial levels over another's, by band.
+
+    Both sides come from the committed profiles, so no render is involved: the
+    answer is a property of the two captures, which is what lets a mute's or a
+    rig's transfer function be read off before anything is modelled.
+    """
+    sides = []
+    for c, t in ((cfg, timbre), (other, against_timbre)):
+        path = REFERENCE_DIR / f"{c['id']}.json"
+        if not path.exists():
+            print(f"no profile at {path} — run `profile.py measure` first")
+            return 2
+        profile = scored_profile(path, c)
+        t = t or next((x["id"] for x in c.get("timbres", []) if x.get("id")), "")
+        rows = [r for r in profile["rows"] if r["timbre"] == t]
+        if not rows:
+            print(f"{c['id']} has no timbre {t!r}")
+            return 2
+        sides.append((c["id"], t, rows))
+    bands = partial_ratio_by_band(sides[0][2], sides[1][2])
+    print(
+        f"{sides[0][0]}/{sides[0][1]} minus {sides[1][0]}/{sides[1][1]}, per partial, dB; "
+        f"the offset is the captures' own levels, the shape is the measurement"
+    )
+    print(f"{'band Hz':>12} {'n':>4} {'median':>8} {'q25':>8} {'q75':>8} {'re low':>8}")
+    for b in bands:
+        if b["n"] == 0:
+            print(f"{b['lo_hz']:>5.0f}-{b['hi_hz']:<6.0f} {0:>4}  (no shared partial)")
+            continue
+        re_low = "-" if b["re_low_db"] is None else f"{b['re_low_db']:+8.1f}"
+        print(
+            f"{b['lo_hz']:>5.0f}-{b['hi_hz']:<6.0f} {b['n']:>4} {b['median_db']:+8.1f} "
+            f"{b['q25_db']:+8.1f} {b['q75_db']:+8.1f} {re_low:>8}"
+        )
+    return 0
+
+
 def rig_evidence(cfg: dict, corpus_dir: Path, *, against: list[str], timbre: str) -> int:
     """Put the `rig` question to the reference itself, and say what the answer can be.
 
@@ -1888,6 +1927,14 @@ def main() -> int:
             ),
         ),
         (
+            "ratio",
+            (
+                "per band, how far this reference's partials sit above another "
+                "capture's over the cells both hold: the transfer function of "
+                "whatever separates two captures of one instrument"
+            ),
+        ),
+        (
             "room-match",
             (
                 "what libsonare's own CC91 send and GS tank would "
@@ -1917,6 +1964,16 @@ def main() -> int:
         "one filter, since they came through the same chain in the same session",
     )
     rig_group.add_argument("--timbre", default="", help="which captured timbre to measure")
+    ratio_group = sub.choices["ratio"]
+    ratio_group.add_argument(
+        "--against",
+        required=True,
+        help="capture id (or definition path) whose reference this one is read over",
+    )
+    ratio_group.add_argument("--timbre", default="", help="which timbre of this capture")
+    ratio_group.add_argument(
+        "--against-timbre", default="", dest="against_timbre", help="which timbre of the other"
+    )
     for name in ("compare", "agree", "dynamics"):
         p = sub.choices[name]
         p.add_argument("--timbre", default="", help="which captured timbre to compare against")
@@ -2022,6 +2079,13 @@ def main() -> int:
             else DEFAULT_REFERENCE_ARCHIVE,
             reference_dir=REFERENCE_DIR,
             every=bool(args.every),
+        )
+    if args.cmd == "ratio":
+        against = Path(args.against)
+        if not against.exists():
+            against = DEFAULT_CONFIG.parent / f"{args.against}.json"
+        return ratio(
+            cfg, load_config(against), timbre=args.timbre, against_timbre=args.against_timbre
         )
     if args.cmd == "rig":
         return rig_evidence(

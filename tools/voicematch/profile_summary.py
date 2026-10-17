@@ -344,3 +344,96 @@ def band_db(partials_db: list[float] | None, lo: int, hi: int) -> float | None:
     if not band:
         return None
     return float(np.mean(band) - ref)
+
+
+#: Bands the two-capture partial ratio is read in (Hz). The first holds the
+#: fundamentals of the grids this is used on; the rest climb by rough octaves.
+RATIO_BANDS_HZ = (
+    (0, 500),
+    (500, 1000),
+    (1000, 2000),
+    (2000, 3000),
+    (3000, 4000),
+    (4000, 6000),
+    (6000, 12000),
+)
+
+
+def fundamental_dbfs(row: dict) -> float | None:
+    """The fundamental's absolute level: the row's RMS less what its present partials add.
+
+    `partials_db` is relative to h1, so comparing two captures by frequency needs
+    h1 itself placed on the dBFS scale; the RMS is that scale, and the partials
+    the ladder found say what share of it h1 is. Floor bins are left out by the
+    same `ladder_present` rule the fit uses, since a bin the ladder found nothing
+    in carries the render's noise rather than a partial.
+    """
+    partials = row.get("partials_db")
+    rms = row.get("rms_dbfs")
+    if not partials or rms is None:
+        return None
+    acc = sum(10.0 ** (p / 10.0) for p, ok in zip(partials, ladder_present(partials)) if ok)
+    return float(rms - 10.0 * np.log10(acc)) if acc > 0.0 else None
+
+
+def partial_ratio_pairs(rows_a: list[dict], rows_b: list[dict]) -> list[tuple[float, float]]:
+    """(frequency Hz, A minus B dB) for every partial present on both sides of a shared cell.
+
+    Two captures of one instrument that differ by one thing -- a mute in the
+    bell, a rig after the pickup -- differ by a transfer function, and these
+    pairs are its samples from the committed profiles alone: each shared (note,
+    velocity) cell contributes one level difference per partial the ladder found
+    on both sides, at that partial's frequency. The absolute offset carries
+    whatever level each capture was taken at; the shape across frequency is the
+    measurement.
+    """
+    by_b = {(r["note"], r["velocity"]): r for r in rows_b}
+    pairs: list[tuple[float, float]] = []
+    for a in rows_a:
+        b = by_b.get((a["note"], a["velocity"]))
+        if b is None:
+            continue
+        anchor_a, anchor_b = fundamental_dbfs(a), fundamental_dbfs(b)
+        if anchor_a is None or anchor_b is None or not a.get("f0_hz"):
+            continue
+        pa, pb = a["partials_db"], b["partials_db"]
+        for i, (x, y) in enumerate(zip(ladder_present(pa), ladder_present(pb))):
+            if x and y:
+                pairs.append((a["f0_hz"] * (i + 1), (pa[i] + anchor_a) - (pb[i] + anchor_b)))
+    return pairs
+
+
+def partial_ratio_by_band(
+    rows_a: list[dict],
+    rows_b: list[dict],
+    *,
+    bands: tuple[tuple[float, float], ...] = RATIO_BANDS_HZ,
+) -> list[dict]:
+    """`partial_ratio_pairs` reduced per band: count, median, quartiles, and the
+    median against the first band's (`re_low_db`), which restates the shape
+    without the captures' own level offset."""
+    buckets: list[list[float]] = [[] for _ in bands]
+    for f, delta in partial_ratio_pairs(rows_a, rows_b):
+        for bucket, (lo, hi) in zip(buckets, bands):
+            if lo <= f < hi:
+                bucket.append(delta)
+                break
+    out = []
+    low = float(np.median(buckets[0])) if buckets[0] else None
+    for (lo, hi), bucket in zip(bands, buckets):
+        if not bucket:
+            out.append({"lo_hz": lo, "hi_hz": hi, "n": 0})
+            continue
+        med = float(np.median(bucket))
+        out.append(
+            {
+                "lo_hz": lo,
+                "hi_hz": hi,
+                "n": len(bucket),
+                "median_db": med,
+                "q25_db": float(np.percentile(bucket, 25)),
+                "q75_db": float(np.percentile(bucket, 75)),
+                "re_low_db": None if low is None else med - low,
+            }
+        )
+    return out
