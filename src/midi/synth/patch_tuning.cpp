@@ -473,6 +473,8 @@ void apply_flute(NativeSynthPatch& p, const Fields& f) {
   F(flute.jet_turbulence);
   F(flute.edge_hysteresis);
   F(flute.vortex);
+  I_TYPED(flute.jet_drive, 0, 1);
+  F(flute.jet_offset);
   F(flute.onset_breath_overshoot_db);
   F(flute.onset_breath_settle_ms);
   F(flute.onset_breath_overshoot_vel_db);
@@ -970,6 +972,8 @@ constexpr UnitRow kEngineUnits[] = {
     {"flute.jet_turbulence", Unit::None},
     {"flute.edge_hysteresis", Unit::None},
     {"flute.vortex", Unit::None},
+    {"flute.jet_drive", Unit::None},
+    {"flute.jet_offset", Unit::None},
     {"flute.onset_breath_overshoot_db", Unit::Db},
     {"flute.onset_breath_settle_ms", Unit::Ms},
     {"flute.onset_breath_overshoot_vel_db", Unit::Db},
@@ -1404,6 +1408,8 @@ const GateRow kEngineGates[] = {
      [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
     {"flute.onset_breath_overshoot_vel_db",
      [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
+    // Flute: the jet offset shapes the jet-drive source.
+    {"flute.jet_offset", [](const GateSite&) { return is("jetDrive", true); }},
     {"free_reed.onset_breath_settle_ms",
      [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
     {"free_reed.onset_breath_overshoot_vel_db",

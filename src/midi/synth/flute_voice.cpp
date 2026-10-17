@@ -16,6 +16,7 @@ namespace {
 
 using sonare::constants::kCentsPerOctave;
 using sonare::constants::kEpsilon;
+using sonare::constants::kPi;
 using sonare::constants::kTwoPi;
 
 // Mouth-pressure calibration. The exposed breath range lands the jet in its
@@ -91,6 +92,14 @@ SONARE_TUNABLE(kEvenPumpGain, 0.6f);
 // Even-pump DC follower corner (Hz): a slow lowpass that estimates the squared
 // signal's DC so subtracting it leaves the 2f0 (and higher even) content.
 SONARE_TUNABLE(kEvenPumpDcHz, 30.0f);
+
+// Jet-drive source gain G: the bore pressure the flow split's time difference
+// injects at the fundamental, per unit jet speed at full breath.
+SONARE_TUNABLE(kJetDriveGain, 3.0f);
+// Leak corner (Hz) of the jet displacement's integral of the acoustic flow.
+SONARE_TUNABLE(kJetDisplacementLeakHz, 10.0f);
+// Floor on the reference breath the jet delay is normalised to: one velocity step.
+constexpr float kJetBreathFloor = 1.0f / 127.0f;
 
 /// The jet function: the S-shaped saturating transfer of the air jet deflecting
 /// across the labium (Fabre-Hirschberg lumped model / STK JetTable), with an
@@ -183,12 +192,26 @@ LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, 
   even_hp_alpha_ =
       std::clamp(1.0f - std::exp(-kTwoPi * kEvenPumpDcHz / static_cast<float>(sr)), 0.0f, 1.0f);
 
+  // Jet-drive source. The breath B is blowing pressure, so Uj = sqrt(2P/rho) goes as sqrt(B) and
+  // the jet delay W/(kappa Uj), taken against the patch's own breath, is jet_ratio period
+  // sqrt(B_ref/B).
+  jet_drive_ = params.jet_drive;
+  jet_offset_ = std::clamp(params.jet_offset, 0.0f, 0.5f);
+  jet_speed_ref_ =
+      std::sqrt(std::max(std::clamp(params.breath_pressure, 0.0f, 1.0f), kJetBreathFloor));
+  jet_drive_norm_ = 1.0f / std::max(2.0f * std::sin(kPi * f0 / srf), 1.0e-6f);
+  jet_flow_z1_ = std::tanh(-jet_offset_);
+  jet_eta_ = 0.0f;
+  jet_eta_leak_ = std::exp(-kTwoPi * kJetDisplacementLeakHz / srf);
+
   retune_loop_comp();
   // The jet line is read at one sample or more as well, and it is the shorter of the two: its
-  // delay is the jet ratio of the period, all of it a duration.
-  const LoopBudget budget = worst_loop_budget(
-      loop_budget(bore_.period, bore_.comp, 1.0f, sr),
-      loop_budget(bore_.period, 0.0f, std::max(1.0f, 1.0f / jet_ratio_), sr, 0.0f));
+  // delay is the jet ratio of the period, all of it a duration. On the jet-drive path the
+  // shortest is at full breath.
+  const float jet_span = jet_drive_ ? jet_ratio_ * jet_speed_ref_ : jet_ratio_;
+  const LoopBudget budget =
+      worst_loop_budget(loop_budget(bore_.period, bore_.comp, 1.0f, sr),
+                        loop_budget(bore_.period, 0.0f, std::max(1.0f, 1.0f / jet_span), sr, 0.0f));
 
   // Both lines span the whole slab, because the line length is what bounds a
   // downward bend and the clamp enforcing it saturates silently -- a glide
@@ -274,6 +297,7 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
   // released), then the steady breath plus its turbulence and the onset chiff.
   breath_.advance();
   float breath = breath_target_ * breath_.level;
+  const float steady_breath = breath;
 
   // Voice-local vibrato: a slow pitch (and slight level) undulation. Skipped
   // entirely at zero depth so a vibrato-free note is bit-identical.
@@ -323,16 +347,38 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
 
   // Jet drive: the pressure difference across the flue drives the jet, which
   // convects (jet delay) and deflects across the labium (the cubic jet table).
-  float pd = breath - jet_ref * temp;
+  // On the jet-drive path the line carries the deflection alone: the mouth
+  // pressure's fluctuation and the returning bore pressure, not the mean breath.
+  float pd = (jet_drive_ ? breath - steady_breath : breath) - jet_ref * temp;
   if (vortex_ > 0.0f) {
     pd += vortex_ * 0.3f * breath_.level * breath_.level * noise_.bipolar_at(drive_index_ + 2u);
   }
   // A fraction of the PERIOD, not of the line: the line is short by a fixed sample count.
-  const float jet_delay =
-      std::clamp(jet_ratio_ * bore_.period / ratio, 1.0f, static_cast<float>(capacity_ - 4));
+  float jet_period = jet_ratio_ * bore_.period / ratio;
+  // The jet speed over its full-breath value. The contour level carries the onset overshoot,
+  // so the overshoot applies to the blowing pressure, as on the brass mouth.
+  float jet_speed = 0.0f;
+  if (jet_drive_) {
+    jet_speed =
+        std::sqrt(std::max(0.0f, (breath_target_ - kBreathBase) / kBreathSpan) * breath_.level);
+    jet_period *= jet_speed_ref_ / std::max(jet_speed, 1.0e-6f);
+  }
+  const float jet_delay = std::clamp(jet_period, 1.0f, static_cast<float>(capacity_ - 4));
+  jet_delay_ = jet_delay;
   const float pd_j = rt::lagrange3_fractional_delay(
       jet_, static_cast<size_t>(capacity_), jet_write_, static_cast<int>(jet_delay * 256.0f), pd);
-  const float jet_out = jet_table(pd_j);
+  float jet_out;
+  if (jet_drive_) {
+    // dQ/dt of the flow split Q ~ b Uj tanh((eta - y0)/b), eta in half-widths.
+    // The jet deflection is the displacement the acoustic flow imposes: its integral, unit gain at
+    // f0.
+    jet_eta_ = jet_eta_leak_ * jet_eta_ + pd_j / jet_drive_norm_;
+    const float flow = std::tanh(jet_eta_ - jet_offset_);
+    jet_out = kJetDriveGain * jet_speed * jet_drive_norm_ * (flow - jet_flow_z1_);
+    jet_flow_z1_ = flow;
+  } else {
+    jet_out = jet_table(pd_j);
+  }
 
   // DC-block the jet output, then drive the bore: jet flow plus the bore end
   // reflection.
@@ -348,22 +394,26 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
   // runaway. Strip its DC (a slow follower) and inject the 2f0 content into the
   // bore, whose octave resonance amplifies it — the open-flue-pipe octave that
   // voices above the odd partials.
-  const float rect = temp > 0.0f ? temp : 0.0f;
-  even_state_ += even_hp_alpha_ * (rect - even_state_);
-  // Bound the injected pump: the jet path self-limits through its cubic clamp and
-  // the direct end reflection is contractive (< 1), so bounding the pump too
-  // keeps the whole loop BIBO-stable even at maximum drive (bright, undamped, high
-  // reflection, high breath) — the pump is a colour, not an energy source.
-  float pump = even_gain_ * (rect - even_state_);
-  pump = pump < -1.5f ? -1.5f : (pump > 1.5f ? 1.5f : pump);
-  into_bore = WindBore::injection(into_bore, pump, gate);
+  // The jet-drive path takes its even harmonics from the jet offset instead.
+  if (!jet_drive_) {
+    const float rect = temp > 0.0f ? temp : 0.0f;
+    even_state_ += even_hp_alpha_ * (rect - even_state_);
+    // Bound the injected pump: the jet path self-limits through its cubic clamp and
+    // the direct end reflection is contractive (< 1), so bounding the pump too
+    // keeps the whole loop BIBO-stable even at maximum drive (bright, undamped, high
+    // reflection, high breath) — the pump is a colour, not an energy source.
+    float pump = even_gain_ * (rect - even_state_);
+    pump = pump < -1.5f ? -1.5f : (pump > 1.5f ? 1.5f : pump);
+    into_bore = WindBore::injection(into_bore, pump, gate);
+  }
   bore_.advance(into_bore, ratio);
   ++drive_index_;
 
   // The saturated jet holds its own amplitude, but the onset's extra mouth
   // pressure speeds the jet as sqrt(P), and the radiated flow follows the jet speed.
+  // The jet-drive source already scales with the jet speed.
   const float out = output_scale_ * vib_gain * bore_.out;
-  return breath_.overshoot > 0.0f ? out * std::sqrt(breath_.overshoot_ratio()) : out;
+  return breath_.overshoot > 0.0f && !jet_drive_ ? out * std::sqrt(breath_.overshoot_ratio()) : out;
 }
 
 void FluteVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {

@@ -139,6 +139,17 @@ struct FlutePatchParams {
   /// render is bit-identical.
   float vortex = 0.0f;
 
+  // --- jet-drive source (Verge et al. 1994; gated, off by default) ---
+  /// Replaces the cubic jet table and the even-harmonic pump with the jet-drive
+  /// source: the time difference of the flow split tanh((eta - y0)/b) at the
+  /// labium, scaled by the jet speed Uj ~ sqrt(P), with the jet's convection delay
+  /// going as 1/Uj so it shortens as the breath rises. false = off -> bit-identical.
+  bool jet_drive = false;
+  /// Jet centreline offset from the labium at rest, y0/b in jet half-widths
+  /// ([0, 0.5]): the flow-split asymmetry that voices the even harmonics on the
+  /// jet-drive path. Read only when jet_drive is on.
+  float jet_offset = 0.0f;
+
   /// Tongued-onset breath overshoot (dB of mouth pressure) at velocity 127: how
   /// far the mouth pressure stands above its held level as the tongue releases
   /// it, before it settles. The radiated overshoot is the jet's response to
@@ -183,6 +194,8 @@ class FluteVoiceCore {
   void kill() noexcept;
   /// The factor the loop runs at per host sample, settled at start(); 1 when no line is floored.
   int oversample() const noexcept { return decimator_.factor(); }
+  /// The jet line's delay at the last rendered sample, in samples at the loop's rate.
+  float jet_delay_samples() const noexcept { return jet_delay_; }
 
   // --- live continuous control (a flute is a continuous-control instrument; the
   // host drives these from MIDI CCs while the note sounds). Each sets a smoothing
@@ -244,6 +257,7 @@ class FluteVoiceCore {
   // loop at an integer multiple of the host rate, so the ratio holds at every
   // note below Nyquist.
   float jet_ratio_ = 0.4f;
+  float jet_delay_ = 0.0f;
   /// The played fundamental (Hz) and the sample rate, held for the pole
   /// mapping and for retune_loop_comp(), which follows the smoothed pole on
   /// every live brightness move (a CC74-live axis), not only at note-on.
@@ -348,6 +362,22 @@ class FluteVoiceCore {
   // 4d: discrete-vortex source. vortex_ == 0 -> skipped. A rougher, amplitude-
   // gated noise burst added to the jet drive.
   float vortex_ = 0.0f;
+
+  // Jet-drive source (jet_drive; skipped entirely when off).
+  bool jet_drive_ = false;
+  // y0/b, the flow split's offset in jet half-widths.
+  float jet_offset_ = 0.0f;
+  // Jet speed at the patch's own breath, over its full-breath value: the speed the
+  // jet delay is normalised to.
+  float jet_speed_ref_ = 1.0f;
+  // 1 / |first difference| at the fundamental, so the source's gain at f0 is the
+  // same at every note and rate.
+  float jet_drive_norm_ = 1.0f;
+  // The flow split one sample back, for its time difference.
+  float jet_flow_z1_ = 0.0f;
+  // The jet's displacement at the labium, eta: a leaky integral of the acoustic flow.
+  float jet_eta_ = 0.0f;
+  float jet_eta_leak_ = 0.0f;
 };
 
 }  // namespace sonare::midi::synth

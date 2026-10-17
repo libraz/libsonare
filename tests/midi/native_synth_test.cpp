@@ -1645,6 +1645,7 @@ TEST_CASE("the tuning field table reaches the switch beside every field it gates
       {SynthEngineMode::kReed, "reed.dynamic_reed", "reed.closing_pressure"},
       {SynthEngineMode::kReed, "reed.conical", "reed.cone_growth"},
       {SynthEngineMode::kBrass, "brass.conical", "brass.brightness"},
+      {SynthEngineMode::kFlute, "flute.jet_drive", "flute.jet_offset"},
       {SynthEngineMode::kVocal, "vocal.vowel", "vocal.brightness"},
       {SynthEngineMode::kPercussion, "percussion.gm_kit", "percussion.num_modes"},
       {SynthEngineMode::kFm, "fm.algorithm", "fm.ops1.level"},

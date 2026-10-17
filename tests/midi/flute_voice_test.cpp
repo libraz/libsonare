@@ -23,6 +23,7 @@
 #include "midi/synth/pitch.h"
 #include "midi/ump.h"
 #include "support/audio_fixtures.h"
+#include "support/golden_hash.h"
 #include "support/midi_render.h"
 #include "util/constants.h"
 
@@ -380,4 +381,171 @@ TEST_CASE("a streamed breath holds the flute onset overshoot", "[midi][synth][fl
   REQUIRE(render_with_initial_cc(on, 72, 100, 24000, 2, 90) ==
           render_with_initial_cc(off, 72, 100, 24000, 2, 90));
   REQUIRE(render_patch(on, 72, 100, 24000) != render_patch(off, 72, 100, 24000));
+}
+
+TEST_CASE("flute control hashes", "[.][midi][synth][flute][golden]") {
+  // The eight GM flute programs and a breath / brightness gesture, rendered with
+  // jet_drive off: the jet-drive field off must leave the engine as it was.
+  INFO(sonare::test::kGoldenDigestProvenance);
+  struct Row {
+    uint8_t program;
+    uint8_t note;
+    uint8_t velocity;
+    uint64_t hash;
+  };
+  static const Row kRows[] = {
+      {72, 84, 100, 0x1238209c3f7d777eull}, {73, 72, 100, 0x6b4b10f78f770eb1ull},
+      {74, 72, 64, 0x5116ad348486e9a0ull},  {75, 67, 127, 0xe29548e5b0492a89ull},
+      {76, 72, 100, 0x1305c1cb5fc0f37cull}, {77, 60, 90, 0xf97cece0a6e8eddbull},
+      {78, 79, 110, 0xac4c0168073bebdcull}, {79, 72, 80, 0xc3bf7e93946eba1dull},
+  };
+  for (const Row& r : kRows) {
+    const NativeSynthPatch& patch = gm_fallback_patch(0, r.program);
+    REQUIRE(patch.mode == SynthEngineMode::kFlute);
+    REQUIRE(!patch.flute.jet_drive);
+    INFO("program " << int(r.program));
+    CHECK(sonare::test::fnv1a_quantized(render_patch(patch, r.note, r.velocity, 24000)) == r.hash);
+  }
+  const NativeSynthPatch& flute = gm_fallback_patch(0, 73);
+  CHECK(sonare::test::fnv1a_quantized(render_cc_change(flute, 72, 100, 8000, 16000, 2, 20)) ==
+        0x8b342833118952b0ull);
+  CHECK(sonare::test::fnv1a_quantized(render_cc_change(flute, 72, 100, 8000, 16000, 74, 110)) ==
+        0x3371acb0e74c2b4aull);
+  CHECK(sonare::test::fnv1a_quantized(render_patch(flute_base_patch(), 60, 100, 24000)) ==
+        0x5f90049eacc9ed68ull);
+}
+
+namespace {
+
+/// Held level in dBFS over 0.4-0.8 s of a 0.8 s render.
+double held_db(const std::vector<float>& tone) {
+  const float level = rms(tone, static_cast<size_t>(0.4 * kRate), static_cast<size_t>(0.8 * kRate));
+  return 20.0 * std::log10(std::max(1.0e-12, static_cast<double>(level)));
+}
+
+/// Harmonic @p k over the fundamental (dB) of a held tone sounding @p f0.
+double harmonic_db(const std::vector<float>& tone, double f0, int k) {
+  const std::vector<double> ps = power_spectrum(tone, static_cast<size_t>(0.5 * kRate));
+  return 10.0 * std::log10(std::max(1.0e-30, harmonic_power(ps, f0, k)) /
+                           std::max(1.0e-30, harmonic_power(ps, f0, 1)));
+}
+
+/// Sounds the played fundamental: above -60 dBFS, within @p max_cents, and neither
+/// the octave nor the twelfth outweighs it (a register jump or a squeal reads as false).
+bool speaks_at(const std::vector<float>& tone, uint8_t note, double max_cents = 50.0) {
+  if (held_db(tone) < -60.0) return false;
+  const double f = fft_fundamental(tone, static_cast<size_t>(0.5 * kRate), note_hz(note));
+  const double cents = 1200.0 * std::log2(f / note_hz(note));
+  return std::fabs(cents) < max_cents && harmonic_db(tone, f, 2) < 0.0 &&
+         harmonic_db(tone, f, 3) < 0.0;
+}
+
+/// Jet-drive flute whose breath is the patch's own, so the jet delay sits at
+/// jet_ratio of the period.
+NativeSynthPatch jet_drive_patch() {
+  NativeSynthPatch p = flute_base_patch();
+  p.flute.jet_drive = true;
+  p.flute.jet_offset = 0.15f;
+  p.flute.vel_to_breath = 0.0f;
+  p.flute.breath_noise = 0.0f;
+  p.flute.chiff = 0.0f;
+  return p;
+}
+
+}  // namespace
+
+TEST_CASE("flute jet-drive held level follows the breath", "[midi][synth][flute]") {
+  // Above the jet-drive threshold at its shipped gain.
+  constexpr float kSoftBreath = 0.4f;
+  // The cubic jet settles where its loop gain reaches one, so its held level does
+  // not move with the breath; the jet-drive source scales with the jet speed.
+  const int n = static_cast<int>(0.8 * kRate);
+  double spread[2] = {0.0, 0.0};
+  for (int path = 0; path < 2; ++path) {
+    double db[2] = {0.0, 0.0};
+    for (int i = 0; i < 2; ++i) {
+      NativeSynthPatch patch = path == 0 ? flute_base_patch() : jet_drive_patch();
+      patch.flute.vel_to_breath = 0.0f;
+      patch.flute.breath_pressure = i == 0 ? kSoftBreath : 0.9f;
+      const std::vector<float> tone = render_patch(patch, 72, 100, n);
+      INFO("path " << path << " breath " << patch.flute.breath_pressure);
+      CHECK(speaks_at(tone, 72));
+      db[i] = held_db(tone);
+    }
+    spread[path] = db[1] - db[0];
+    INFO("path " << path << ": breath " << kSoftBreath << " " << db[0] << " dBFS, 0.9 " << db[1]
+                 << " dBFS");
+    CHECK(std::isfinite(spread[path]));
+  }
+  INFO("cubic spread " << spread[0] << " dB, jet-drive spread " << spread[1] << " dB");
+  CHECK(std::fabs(spread[0]) < 1.0);
+  // Uj ~ sqrt(P) alone scales the source by 3.5 dB between the two breaths.
+  CHECK(spread[1] > 3.0);
+}
+
+TEST_CASE("flute jet-drive delay shortens as the breath rises", "[midi][synth][flute]") {
+  FlutePatchParams params;
+  params.breath_noise = 0.0f;
+  params.chiff = 0.0f;
+  params.breath_pressure = 0.5f;
+  params.vel_to_breath = 1.0f;
+  const double sample_rate = 48000.0;
+  const int capacity = sonare::midi::synth::flute_buffer_capacity(sample_rate);
+  std::vector<float> slab(
+      static_cast<size_t>(sonare::midi::synth::flute_slab_capacity(sample_rate)));
+  const auto held_delay = [&](bool jet_drive, uint8_t velocity) {
+    params.jet_drive = jet_drive;
+    FluteVoiceCore core;
+    core.attach(slab.data(), capacity);
+    core.start(params, sample_rate, 72, Velocity16::from7(velocity), 0x4a455444ULL);
+    for (int i = 0; i < 12000; ++i) core.render(1.0f);
+    return core.jet_delay_samples();
+  };
+  // The cubic jet's delay is the jet ratio of the period whatever the breath.
+  CHECK(held_delay(false, 40) == held_delay(false, 120));
+  const float soft = held_delay(true, 40);
+  const float hard = held_delay(true, 120);
+  INFO("jet delay at velocity 40: " << soft << " samples, at 120: " << hard);
+  // Uj ~ sqrt(P), so the delay goes as the inverse root of the breath.
+  CHECK(hard / soft == Catch::Approx(std::sqrt(40.0 / 120.0)).epsilon(0.01));
+}
+
+TEST_CASE("flute jet offset voices the even harmonics", "[midi][synth][flute]") {
+  // A centred jet splits the flow symmetrically and its source is odd; an offset
+  // jet's is not.
+  const uint8_t note = 67;
+  const int n = static_cast<int>(0.8 * kRate);
+  NativeSynthPatch centred = jet_drive_patch();
+  centred.flute.jet_offset = 0.0f;
+  NativeSynthPatch offset = jet_drive_patch();
+  offset.flute.jet_offset = 0.3f;
+  const std::vector<float> c = render_patch(centred, note, 100, n);
+  const std::vector<float> o = render_patch(offset, note, 100, n);
+  const double fc = fft_fundamental(c, static_cast<size_t>(0.5 * kRate), note_hz(note));
+  const double fo = fft_fundamental(o, static_cast<size_t>(0.5 * kRate), note_hz(note));
+  CHECK(speaks_at(c, note));
+  CHECK(speaks_at(o, note));
+  const double h2c = harmonic_db(c, fc, 2);
+  const double h2o = harmonic_db(o, fo, 2);
+  INFO("h2/h1 centred " << h2c << " dB, offset 0.3 " << h2o << " dB");
+  CHECK(h2o > h2c + 6.0);
+}
+
+TEST_CASE("concert flute on the jet-drive path speaks at every note and velocity",
+          "[.][slow][midi][synth][flute]") {
+  NativeSynthPatch patch = gm_fallback_patch(0, 73);  // Flute
+  patch.flute.jet_drive = true;
+  patch.flute.jet_offset = 0.15f;
+  const int n = static_cast<int>(0.8 * kRate);
+  for (uint8_t note = 60; note <= 96; note += 4) {
+    for (uint8_t velocity : {uint8_t{32}, uint8_t{80}, uint8_t{127}}) {
+      const std::vector<float> tone = render_patch(patch, note, velocity, n);
+      const double f = fft_fundamental(tone, static_cast<size_t>(0.5 * kRate), note_hz(note));
+      INFO("note " << int(note) << " velocity " << int(velocity) << ": "
+                   << 1200.0 * std::log2(f / note_hz(note)) << " cents, " << held_db(tone)
+                   << " dBFS");
+      // The jet delay's breath law pulls v32 about 75 cents flat and v127 about 60 sharp.
+      CHECK(speaks_at(tone, note, 100.0));
+    }
+  }
 }
