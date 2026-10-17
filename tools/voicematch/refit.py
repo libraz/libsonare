@@ -67,6 +67,7 @@ from capture import CORPUS_ROOT
 from knobs import format_value
 from objective import objective_digest
 from writeback import (
+    _STRUCT_COPY,
     PROGRAM_TABLE_FILES,
     _key_path,
     patch_field_assignments,
@@ -93,7 +94,6 @@ HELD_OUT_MARGIN = 0.005
 BANK_VERSIONS = "tools/bank-versions.json"
 FITS_JSON = "tools/voicematch/fits.json"
 _EXPLICIT_FIELD = re.compile(r"^\s*o\.(\w+)\.([\w.\[\]]+)\s*=", re.MULTILINE)
-_STRUCT_COPY_LINE = re.compile(r"^\s*o\.(\w+)\s*=\s*o\.\w+;", re.MULTILINE)
 
 
 def run_root(digest: str) -> Path:
@@ -342,7 +342,7 @@ def assigned_after_copy(texts: Iterable[str]) -> dict[str, frozenset[str]]:
     """
     found: dict[str, set[str]] = {}
     for text in texts:
-        copied_at = {m.group(1): m.end() for m in _STRUCT_COPY_LINE.finditer(text)}
+        copied_at = {m.group(1): m.end() for m in _STRUCT_COPY.finditer(text)}
         for m in _EXPLICIT_FIELD.finditer(text):
             patch, member = m.groups()
             if patch in copied_at and m.start() > copied_at[patch]:

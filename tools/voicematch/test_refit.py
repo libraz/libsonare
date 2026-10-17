@@ -566,3 +566,19 @@ def test_rejudge_recreates_the_judged_state_without_fitting(tmp_path, monkeypatc
     assert not ver.get("resolved") and ver["attempts"][-1]["pending"]
     assert "pre.wide.json" in seen and "path_fit_1.wide.json" in seen, "re-measured, not reused"
     assert (d / "fit_r1.log").exists() and (d / "fit.json").exists() and not runs
+
+
+def test_a_copy_owns_only_the_fields_it_reassigns_after_the_copy():
+    from refit import assigned_after_copy, reach_copies
+
+    table = (
+        "  o.wide.gain = 0.1f;\n"  # ahead of the copy: overwritten by it
+        "  o.wide = o.cap;\n"
+        "  o.wide.modal.modes[2].ratio = 6.0f;\n"
+        "  o.wide.stereo_spread = 0.5f;\n"
+    )
+    explicit = assigned_after_copy([table])
+    assert explicit == {"wide": frozenset({"modal.modes2.ratio", "stereo_spread"})}
+    voice = {"patch": "cap", "gates": [{"patch": "cap"}, {"patch": "wide"}]}
+    out = reach_copies("cap.stereo_spread=0.2,cap.gain=0.3", voice, {"wide": "cap"}, explicit)
+    assert out == "cap.stereo_spread=0.2,cap.gain=0.3,wide.gain=0.3"
