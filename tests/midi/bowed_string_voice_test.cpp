@@ -483,6 +483,114 @@ TEST_CASE("elasto-plastic friction reshapes the tone but keeps it harmonic",
   REQUIRE(std::fabs(plastic_c - table_c) > 0.05 * table_c);
 }
 
+TEST_CASE("the hyperbolic friction junction sticks, slips and captures", "[midi][synth][bowed]") {
+  using sonare::midi::synth::hyperbolic_friction_injection;
+  // A cello C string under a 1 N bow: Z0 1.4 kg/s, so stick holds up to
+  // |dv| = mu_s F_b / (2 Z0) = 0.286 m/s.
+  const float z0 = 1.4f;
+  const float fb = 1.0f;
+  const float mu_s = 0.8f;
+  const float mu_d = 0.3f;
+  const float v0 = 0.1f;
+  const float stick_limit = mu_s * fb / (2.0f * z0);
+
+  SECTION("stick returns the relative velocity itself and stays stuck") {
+    bool slipping = false;
+    const float dv = 0.5f * stick_limit;
+    REQUIRE(hyperbolic_friction_injection(dv, fb, z0, mu_s, mu_d, v0, slipping) == dv);
+    REQUIRE_FALSE(slipping);
+    REQUIRE(hyperbolic_friction_injection(-dv, fb, z0, mu_s, mu_d, v0, slipping) == -dv);
+    REQUIRE_FALSE(slipping);
+  }
+
+  SECTION("a slip solution satisfies the friction law and the characteristic line") {
+    bool slipping = false;
+    const float dv = 2.0f * stick_limit;
+    const float inj = hyperbolic_friction_injection(dv, fb, z0, mu_s, mu_d, v0, slipping);
+    REQUIRE(slipping);
+    REQUIRE(inj > 0.0f);
+    REQUIRE(inj < dv);
+    // f = 2 Z0 inj on the line; the slip speed is dv - inj; the law must return f.
+    const float f = 2.0f * z0 * inj;
+    const float slip = dv - inj;
+    const float f_law = fb * (mu_d + (mu_s - mu_d) * v0 / (v0 + slip));
+    REQUIRE(std::fabs(f - f_law) < 1e-4f * fb);
+    // Odd in dv.
+    bool mirror = false;
+    REQUIRE(hyperbolic_friction_injection(-dv, fb, z0, mu_s, mu_d, v0, mirror) == -inj);
+  }
+
+  SECTION("inside the ambiguous region the branch follows the state") {
+    // A relative velocity the stick can hold and the slip branch still reaches
+    // (the window sits just under the stick limit at this v0): sticking stays
+    // stuck, slipping stays slipping, and the two answers differ.
+    const float dv = 0.99f * stick_limit;
+    bool stuck = false;
+    const float stick_inj = hyperbolic_friction_injection(dv, fb, z0, mu_s, mu_d, v0, stuck);
+    REQUIRE(stick_inj == dv);
+    REQUIRE_FALSE(stuck);
+    bool sliding = true;
+    const float slip_inj = hyperbolic_friction_injection(dv, fb, z0, mu_s, mu_d, v0, sliding);
+    REQUIRE(sliding);
+    REQUIRE(slip_inj < stick_inj);
+    REQUIRE(slip_inj > 0.0f);
+  }
+
+  SECTION("the string is captured when the slip branch disappears") {
+    bool slipping = true;
+    const float dv = 0.05f * stick_limit;
+    REQUIRE(hyperbolic_friction_injection(dv, fb, z0, mu_s, mu_d, v0, slipping) == dv);
+    REQUIRE_FALSE(slipping);
+  }
+
+  SECTION("no bow force is no friction") {
+    bool slipping = false;
+    REQUIRE(std::fabs(hyperbolic_friction_injection(0.3f, 0.0f, z0, mu_s, mu_d, v0, slipping)) <
+            1e-6f);
+  }
+}
+
+TEST_CASE("the hyperbolic friction junction renders a tuned, bounded, harmonic string",
+          "[midi][synth][bowed]") {
+  // The gated junction changes the render, stays bounded across the register and
+  // dynamics, keeps the pitch the delay lines set, and still produces the
+  // full-harmonic Helmholtz spectrum.
+  // 2 N at 0.16-0.37 m/s: inside Schelleng's window for the heavy low strings
+  // the violin constants give E1 and A2, and past its upper limit at the top,
+  // where the string still sounds, raucously.
+  NativeSynthPatch patch = bowed_base_patch();
+  patch.bowed_string.bow_force = 0.5f;
+  patch.bowed_string.bow_speed = 0.1f;
+  patch.bowed_string.vel_to_speed = 0.3f;
+  const std::vector<float> table = render_patch(patch, 57, 110, 24000);
+  patch.bowed_string.hyperbolic_friction = true;
+  const std::vector<float> tone = render_patch(patch, 57, 110, 24000);
+  REQUIRE(peak(tone) > 0.01f);
+  REQUIRE(tone != table);
+  for (uint8_t note : {28, 45, 57, 69, 88}) {
+    for (uint8_t velocity : {40, 100, 127}) {
+      const std::vector<float> t = render_patch(patch, note, velocity, 48000);
+      INFO("note " << int(note) << " vel " << int(velocity));
+      REQUIRE(peak(t) > 0.005f);
+      REQUIRE(peak(t) < 4.0f);
+      REQUIRE(std::isfinite(t.back()));
+    }
+  }
+  for (const auto& [note, expected] :
+       {std::pair<uint8_t, double>{69, 440.0}, std::pair<uint8_t, double>{45, 110.0}}) {
+    const std::vector<float> t = render_patch(patch, note, 110, 48000);
+    REQUIRE(std::fabs(fft_fundamental(t, 16000, expected) / expected - 1.0) < 0.02);
+  }
+  const std::vector<double> ps = power_spectrum(tone, 8000);
+  const double h1 = harmonic_power(ps, 220.0, 1);
+  REQUIRE(h1 > 0.0);
+  REQUIRE(harmonic_power(ps, 220.0, 2) > 0.02 * h1);
+  REQUIRE(harmonic_power(ps, 220.0, 3) > 0.01 * h1);
+  REQUIRE(harmonic_power(ps, 220.0, 4) > 0.005 * h1);
+  // Deterministic, like every other junction.
+  REQUIRE(render_patch(patch, 57, 100, 8192) == render_patch(patch, 57, 100, 8192));
+}
+
 TEST_CASE("sympathetic resonance is stable and rings an open-string halo", "[midi][synth][bowed]") {
   // The gated open-string bank is one-way driven (no loop feedback), so it must
   // stay bounded across the register and dynamics.

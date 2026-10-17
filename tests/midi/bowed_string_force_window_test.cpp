@@ -25,6 +25,7 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "midi/bowed_string_probe.h"
@@ -483,6 +484,191 @@ TEST_CASE("the bow-force window reading is not an artefact of the sympathetic ha
     REQUIRE(bare.reached);
     CHECK((shipped.per_period > kHelmholtzHi) == (bare.per_period > kHelmholtzHi));
   }
+}
+
+/// Harmonic stack of @p steady: the summed power of harmonics 2..6 over the
+/// fundamental's, in dB, read off the bins nearest each multiple of @p f0. A
+/// Helmholtz sawtooth sits a few dB over 0; a string slipping k times per
+/// period buries h1 under h_k and reads far above it.
+double harmonic_stack_db(const std::vector<float>& steady, double f0, double sr) {
+  const int fft = sonare::test::bowed::probe_fft_size(steady.size());
+  const std::vector<double> power = sonare::test::bowed::probe_power_spectrum(
+      steady, sonare::test::bowed::probe_window_start(steady.size(), fft), fft);
+  const auto at = [&](int harmonic) {
+    const double centre = harmonic * f0 * static_cast<double>(fft) / sr;
+    const std::size_t lo = static_cast<std::size_t>(std::max(1.0, std::floor(centre - 2.0)));
+    const std::size_t hi =
+        std::min(power.size() - 1, static_cast<std::size_t>(std::ceil(centre + 2.0)));
+    double top = 0.0;
+    for (std::size_t b = lo; b <= hi; ++b) top = std::max(top, power[b]);
+    return top;
+  };
+  const double h1 = at(1);
+  double stack = 0.0;
+  for (int h = 2; h <= 6; ++h) stack += at(h);
+  if (!(h1 > 0.0) || !(stack > 0.0)) return 0.0;
+  return 10.0 * std::log10(stack / h1);
+}
+
+/// The cello's C string as the junction reads it: Pickering's tension band for a
+/// cello C (roughly 110-140 N) over a 0.69 m stop, so Z0 = T / (2 L f0) comes out
+/// near 1.4 kg/s at C2.
+constexpr float kCelloTensionN = 130.0f;
+constexpr float kCelloLengthM = 0.69f;
+
+/// The junction's own axes: bow force (N) and speed (m/s) are the patch's [0,1]
+/// axes times the engine's kBowForceMaxN (4 N) and kBowVelocityMaxMps (1 m/s).
+constexpr float kJunctionForceMaxN = 4.0f;
+constexpr float kJunctionSpeedMaxMps = 1.0f;
+/// Schelleng's window at C2 on this string: F_max = 2 Z0 v_b / (beta (mu_s - mu_d))
+/// runs 1.7-7 N over these speeds at the shipped beta, and F_min sits well under 1 N
+/// at the loop's bridge loss, so the grid's interior is inside the window and its
+/// top row is at or past the upper limit.
+constexpr float kJunctionForce01[] = {0.25f, 0.375f, 0.5f, 0.75f, 1.0f};
+constexpr float kJunctionSpeed01[] = {0.05f, 0.1f, 0.2f, 0.3f};
+constexpr float kJunctionBeta[] = {0.08f, 0.12f, 0.167379f, 0.25f};
+constexpr int kJunctionForceCount = 5;
+constexpr int kJunctionSpeedCount = 4;
+constexpr int kJunctionBetaCount = 4;
+/// The control notes are read at the same two dimensionless bow forces, F_b / (Z0 v_b),
+/// so a note is not pushed past its own Schelleng limit by a force chosen for C2.
+constexpr double kJunctionControlRatio[] = {2.75, 5.5};
+constexpr float kJunctionControlSpeed01[] = {0.1f, 0.2f};
+/// 1.5 s at C2 is 98 periods, so the trailing half the rate is read over sits
+/// past the shipped cello's 347 ms bow ramp with 49 periods to count.
+constexpr int kJunctionSamples = 72000;
+
+/// The string impedance the junction derives for @p note on the cello constants.
+double cello_z0(uint8_t note) {
+  return kCelloTensionN /
+         (2.0 * kCelloLengthM * static_cast<double>(sonare::midi::synth::note_to_hz(note)));
+}
+
+/// The shipped cello (GM 42) with the hyperbolic junction on and its bow axes set
+/// directly: vel_to_speed 0 so bow_speed IS the speed axis the sweep drives.
+/// polarization is 0: the second-polarization line reflects positively, so it
+/// integrates the mean of what is injected with a DC gain of 1 / (1 - kPolLoss),
+/// and the junction's injection in m/s carries the mean friction force. On the
+/// shipped patch that put a 0.2-2 m/s offset into the render and, through the
+/// cross-coupling, back into the relative velocity the junction solves.
+BowedStringPatchParams cello_junction_params(float force01, float speed01, float beta) {
+  BowedStringPatchParams params = sonare::midi::synth::gm_fallback_patch(0, 42).bowed_string;
+  params.hyperbolic_friction = true;
+  params.string_tension_n = kCelloTensionN;
+  params.string_length_m = kCelloLengthM;
+  params.vel_to_speed = 0.0f;
+  params.bow_force = force01;
+  params.bow_speed = speed01;
+  params.bow_position = beta;
+  params.polarization = 0.0f;
+  return params;
+}
+
+/// One printed row: physical operating point, slip rate, whether Helmholtz
+/// motion established, the sounding pitch, the level and the stack.
+void print_junction_row(std::ostream& o, const char* tag, uint8_t note, double force_n,
+                        double speed_mps, float beta, const Cell& cell, double stack_db) {
+  o << "  " << std::setw(10) << std::left << tag << std::right << std::setw(5) << int{note}
+    << std::setw(7) << std::setprecision(2) << force_n << std::setw(8) << std::setprecision(2)
+    << speed_mps << std::setw(7) << std::setprecision(3) << beta << std::setw(7)
+    << std::setprecision(2) << cell.per_period << (cell.helmholtz ? 'h' : '-') << std::setw(7)
+    << std::setprecision(2) << cell.peak_ratio << std::setw(8) << std::setprecision(1)
+    << cell.level_db << std::setw(8) << std::setprecision(1) << stack_db << "\n";
+}
+
+/// A junction cell with its harmonic stack: render once, read both.
+std::pair<Cell, double> junction_cell(const BowedStringPatchParams& params, uint8_t note) {
+  const double f0 = static_cast<double>(sonare::midi::synth::note_to_hz(note));
+  const std::vector<float> render = render_core(params, note, kJunctionSamples);
+  const Cell cell = measure_cell(params, note, kJunctionSamples);
+  const std::vector<float> steady(render.begin() + static_cast<long>(render.size() / 2),
+                                  render.end());
+  return {cell, harmonic_stack_db(steady, f0, kSr)};
+}
+
+TEST_CASE("the hyperbolic friction junction at the cello's lowest note",
+          "[midi][synth][bowed][window][.][slow]") {
+  // The table junction cannot reach Helmholtz motion once N = sr/f0 passes about
+  // 300, and no coefficient of the loop moves that floor. This case asks whether
+  // a junction with the physics the table lacks — a sticking region set by the
+  // ratio of bow force to string impedance, and stick/slip hysteresis — reaches
+  // one slip per period at the cello's C2 (N = 734), over a grid of bow force,
+  // bow speed and position inside Schelleng's playing window. The verdict is
+  // reported; what is asserted is that every cell was measured and that the
+  // table baseline at the same note was read alongside it.
+  std::ostringstream o;
+  o << std::fixed;
+  o << "\n  cello (GM 42) junction readings (h = Helmholtz established, - = never)\n";
+  o << "  junction   note  F_b N  v_b m/s  beta   rate  pk/f0      dB  h2-6/h1 dB\n";
+  const BowedStringPatchParams& shipped =
+      sonare::midi::synth::gm_fallback_patch(0, 42).bowed_string;
+  const BowedStringPatchParams unpolarized = [&] {
+    BowedStringPatchParams p = shipped;
+    p.polarization = 0.0f;
+    return p;
+  }();
+  const double shipped_speed01 = (1.0 - shipped.vel_to_speed) * shipped.bow_speed +
+                                 shipped.vel_to_speed * static_cast<double>(kSweepVelocity) / 127.0;
+  int measured = 0;
+  int helmholtz_36 = 0;
+  int cells_36 = 0;
+  Cell table_36;
+  for (uint8_t note : {uint8_t{36}, uint8_t{48}, uint8_t{55}, uint8_t{72}}) {
+    // The table baseline at every note the junction is read at, as shipped and
+    // with the second polarization off, so the two junctions are compared on one
+    // grid rather than one against a memory. Its force and speed columns are the
+    // table's own [0,1] units.
+    for (const BowedStringPatchParams* table : {&shipped, &unpolarized}) {
+      const auto [cell, stack] = junction_cell(*table, note);
+      REQUIRE(cell.reached);
+      ++measured;
+      if (note == 36 && table == &shipped) table_36 = cell;
+      print_junction_row(o, table == &shipped ? "table" : "table pol0", note, table->bow_force,
+                         shipped_speed01, table->bow_position, cell, stack);
+    }
+    if (note == 36) {
+      for (int bi = 0; bi < kJunctionBetaCount; ++bi) {
+        for (int fi = 0; fi < kJunctionForceCount; ++fi) {
+          for (int si = 0; si < kJunctionSpeedCount; ++si) {
+            const BowedStringPatchParams params = cello_junction_params(
+                kJunctionForce01[fi], kJunctionSpeed01[si], kJunctionBeta[bi]);
+            const auto [cell, stack] = junction_cell(params, note);
+            REQUIRE(cell.reached);
+            ++measured;
+            print_junction_row(o, "hyperbola", note, kJunctionForce01[fi] * kJunctionForceMaxN,
+                               kJunctionSpeed01[si] * kJunctionSpeedMaxMps, kJunctionBeta[bi], cell,
+                               stack);
+            ++cells_36;
+            if (cell.helmholtz && cell.per_period < kHelmholtzHi &&
+                cell.peak_ratio < kPlayedPitchHi)
+              ++helmholtz_36;
+          }
+        }
+      }
+      continue;
+    }
+    // Control notes: does the junction break what the table already sounds?
+    // Read at the shipped beta and at fixed F_b / (Z0 v_b), so the force stays
+    // inside this note's own window.
+    for (double ratio : kJunctionControlRatio) {
+      for (float speed01 : kJunctionControlSpeed01) {
+        const double force_n = ratio * cello_z0(note) * speed01 * kJunctionSpeedMaxMps;
+        const BowedStringPatchParams params = cello_junction_params(
+            static_cast<float>(force_n / kJunctionForceMaxN), speed01, shipped.bow_position);
+        const auto [cell, stack] = junction_cell(params, note);
+        REQUIRE(cell.reached);
+        ++measured;
+        print_junction_row(o, "hyperbola", note, force_n, speed01 * kJunctionSpeedMaxMps,
+                           shipped.bow_position, cell, stack);
+      }
+    }
+  }
+  o << "  C2 cells sounding the played note with Helmholtz established: " << helmholtz_36 << "/"
+    << cells_36 << " (table baseline rate " << std::setprecision(2) << table_36.per_period
+    << ", peak at " << table_36.peak_ratio << " f0)\n";
+  const std::string report = o.str();
+  INFO(report);
+  CHECK(measured == 4 * 2 + kJunctionBetaCount * kJunctionForceCount * kJunctionSpeedCount + 3 * 4);
 }
 
 TEST_CASE("the shipped bowed patches at their own operating points",

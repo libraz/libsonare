@@ -245,6 +245,9 @@ constexpr BowedStringPatchParams blank_bowed_string() noexcept {
   z.rosin = 0.0f;
   z.elasto_plastic = false;
   z.stribeck = 0.0f;
+  z.hyperbolic_friction = false;
+  z.string_tension_n = 0.0f;
+  z.string_length_m = 0.0f;
   z.sympathetic = 0.0f;
   z.polarization = 0.0f;
   z.attack_noise = 0.0f;

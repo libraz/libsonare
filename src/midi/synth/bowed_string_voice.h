@@ -14,6 +14,11 @@
 /// the two inversions multiply to positive feedback — the full harmonic series,
 /// unlike the stopped organ pipe's odd-only comb.
 ///
+/// The junction has two realisations. The table is dimensionless in velocity-wave
+/// units; the gated hyperbolic junction (hyperbolic_friction_injection) solves a
+/// rosin friction law against the string's characteristic line in newtons, metres
+/// per second and kg/s, with the stick/slip hysteresis of a real bow.
+///
 /// The delay buffers are not owned here — the host attaches two spans per voice
 /// slot before start(), and the corpus is the shared BodyResonator
 /// (BodyType::kViolin), so the core emits the raw signal at the bridge.
@@ -29,6 +34,7 @@
 /// optional rosin texture comes from the counter-based (voice_index, note, age)
 /// stream, so identical events render bit-identically.
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 
@@ -111,6 +117,25 @@ struct BowedStringPatchParams {
   /// stick with a slower, warmer slip; lower = a sharper, edgier release.
   float stribeck = 0.5f;
 
+  // --- physical friction junction (gated; the table path is bit-identical when off) ---
+  /// Hyperbolic friction junction in physical units in place of the velocity-wave
+  /// bow table: the friction force is mu(dv) * F_b with
+  /// mu = mu_d + (mu_s - mu_d) * v0 / (v0 + |dv|), solved against the string's
+  /// characteristic line v = v_h + f / (2 Z0) with stick/slip hysteresis
+  /// (McIntyre, Schumacher & Woodhouse, JASA 74(5), 1983). The bow axes keep their
+  /// [0,1] range and are read in newtons and metres per second, so bow force and
+  /// bow speed become the ratio Schelleng's window is drawn over. The elasto-plastic
+  /// bristle is a table-side layer and does not apply here. OFF -> the table path.
+  bool hyperbolic_friction = false;
+  /// String tension (N). With string_length_m it sets the characteristic impedance
+  /// Z0 = T / (2 L f0) of the string whose open pitch is the played note, so a
+  /// stopped note on a lower string reads up to a fifth lighter than its string.
+  /// Only read when hyperbolic_friction is on.
+  float string_tension_n = 60.0f;
+  /// Vibrating length (m) of the open string, nut to bridge. Only read when
+  /// hyperbolic_friction is on.
+  float string_length_m = 0.325f;
+
   /// Sympathetic resonance in [0,1]: the halo of the instrument's OTHER (undamped
   /// open) strings ringing along with the bowed note. A small fixed bank of
   /// open-string resonators driven one-way by the bridge output (no feedback into
@@ -158,6 +183,43 @@ struct BowedStringPatchParams {
   /// explicit bypass branch, since a unity one-pole is not bit-identical.
   float corpus_tilt_hz = 0.0f;
 };
+
+/// One sample of the hyperbolic friction junction: the velocity the bow injects
+/// into both delay lines for a bow-minus-string relative velocity @p dv (m/s)
+/// under bow force @p force_n (N) on a string of impedance @p z0 (kg/s), with the
+/// rosin law mu = @p mu_d + (@p mu_s - @p mu_d) * @p v0 / (@p v0 + |slip speed|).
+/// @p slipping is the stick/slip state carried between samples: stick holds while
+/// 2 Z0 |dv| <= mu_s F_b, slip takes the stable (faster-sliding) intersection of
+/// the friction hyperbola with the characteristic line, and the string is
+/// captured when that intersection disappears — Friedlander's ambiguity resolved
+/// by staying on the branch the string is already on (McIntyre, Schumacher &
+/// Woodhouse 1983). Stick returns @p dv itself; the injection is f / (2 Z0).
+inline float hyperbolic_friction_injection(float dv, float force_n, float z0, float mu_s,
+                                           float mu_d, float v0, bool& slipping) noexcept {
+  const float two_z0 = 2.0f * z0;
+  const float adv = dv < 0.0f ? -dv : dv;
+  if (!slipping) {
+    if (two_z0 * adv <= mu_s * force_n) return dv;
+    slipping = true;
+  }
+  // Slip speed x = |dv| - |f| / (2 Z0) with |f| = F_b (mu_d + (mu_s - mu_d) v0 / (v0 + x)),
+  // which is 2 Z0 x^2 + (F_b mu_d + 2 Z0 (v0 - |dv|)) x + v0 (F_b mu_s - 2 Z0 |dv|) = 0.
+  const float a = two_z0;
+  const float b = force_n * mu_d + two_z0 * (v0 - adv);
+  const float c = v0 * (force_n * mu_s - two_z0 * adv);
+  const float disc = b * b - 4.0f * a * c;
+  if (disc < 0.0f) {
+    slipping = false;
+    return dv;
+  }
+  const float x = (-b + std::sqrt(disc)) / (2.0f * a);
+  if (x <= 0.0f) {
+    slipping = false;
+    return dv;
+  }
+  const float inj = adv - x;
+  return dv < 0.0f ? -inj : inj;
+}
 
 /// Per-voice bowed-string state, embedded in NativeSynthVoice. The voice's
 /// amplitude envelope / filter / mod matrix and the shared BodyResonator wrap
@@ -259,6 +321,11 @@ class BowedStringVoiceCore {
   // called on the gated path (elasto_plastic_).
   float elasto_plastic_injection(float dv) noexcept;
 
+  // Hyperbolic friction junction for the current relative velocity @p dv, in
+  // metres per second: the bow force in newtons comes off the smoothed force
+  // axis, Z0 off the note. Only called on the gated path (hyperbolic_).
+  float hyperbolic_injection(float dv) noexcept;
+
   // One sympathetic-bank sample: drives the open-string resonator bank with the
   // bridge output @p x and returns their summed ring. Only called on the gated
   // path (sympathetic_mix_ > 0).
@@ -341,9 +408,9 @@ class BowedStringVoiceCore {
   float position_mod01_ = 0.0f;
   float ctrl_coeff_ = 1.0f;
 
-  // Output trim bringing the raw waveguide velocity-wave (a small fraction of
-  // the bow velocity) up to a musical voice level, calibrated so a forte note
-  // peaks near the other engines' output range.
+  // Output trim bringing the raw string velocity at the bridge up to a musical
+  // voice level, set per junction at start(): the table's velocity-wave units
+  // and the hyperbolic junction's m/s need different trims for one level.
   float output_scale_ = 6.0f;
 
   // Rosin texture (deterministic bow-velocity noise; 0 = smooth bow).
@@ -362,6 +429,13 @@ class BowedStringVoiceCore {
   float ep_load_rate_ = 0.0f;   // per-sample bristle load rate (dt folded in)
   float ep_z_ba_ = 0.0f;        // breakaway deflection (stick below this)
   float ep_z_max_ = 0.0f;       // bristle clamp (divergence guard rail)
+
+  // Hyperbolic friction junction (off unless params.hyperbolic_friction): the loop
+  // then runs in metres per second, z0_ is the string's characteristic impedance
+  // (kg/s) and slipping_ the stick/slip hysteresis state.
+  bool hyperbolic_ = false;
+  bool slipping_ = false;
+  float z0_ = 1.0f;
 
   // Second (horizontal) polarization: a detuned string loop sharing the bow.
   // Off unless params.polarization > 0 (pol_couple_ == 0 -> render skips it,

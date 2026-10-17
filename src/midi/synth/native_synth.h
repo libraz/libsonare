@@ -1761,6 +1761,11 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.bowed_string.rosin =
       std::clamp(patch_clamp_detail::sanitize(p.bowed_string.rosin, 0.0f), 0.0f, 1.0f);
   p.bowed_string.stribeck = patch_clamp_detail::sanitize(p.bowed_string.stribeck, 0.5f);
+  // A violin string's tension up to a contrabass's; the length a violin's up to a bass's.
+  p.bowed_string.string_tension_n = std::clamp(
+      patch_clamp_detail::sanitize(p.bowed_string.string_tension_n, 60.0f), 1.0f, 500.0f);
+  p.bowed_string.string_length_m =
+      std::clamp(patch_clamp_detail::sanitize(p.bowed_string.string_length_m, 0.325f), 0.1f, 2.0f);
   p.bowed_string.sympathetic = patch_clamp_detail::sanitize(p.bowed_string.sympathetic, 0.0f);
   p.bowed_string.polarization = patch_clamp_detail::sanitize(p.bowed_string.polarization, 0.0f);
   p.bowed_string.attack_noise =

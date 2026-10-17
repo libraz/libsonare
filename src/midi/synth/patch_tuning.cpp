@@ -369,9 +369,13 @@ void apply_pipe_organ(NativeSynthPatch& p, const Fields& f) {
 }
 
 void apply_bowed_string(NativeSynthPatch& p, const Fields& f) {
-  // The friction model: off is the memoryless table, and `rosin` and `stribeck`
-  // shape the bristle memory only when it is on.
+  // The friction models: off is the memoryless table, `stribeck` shapes the
+  // bristle memory only when the elasto-plastic one is on, and the hyperbolic
+  // junction reads the string's tension and length only when it is on.
   I_TYPED(bowed_string.elasto_plastic, 0, 1);
+  I_TYPED(bowed_string.hyperbolic_friction, 0, 1);
+  F(bowed_string.string_tension_n);
+  F(bowed_string.string_length_m);
   F(bowed_string.bow_position);
   F(bowed_string.bow_force);
   F(bowed_string.bow_speed);
@@ -875,6 +879,9 @@ constexpr UnitRow kEngineUnits[] = {
     {"pipe_organ.wind_sag", Unit::None},
     {"pipe_organ.swell", Unit::None},
     {"bowed_string.elasto_plastic", Unit::None},
+    {"bowed_string.hyperbolic_friction", Unit::None},
+    {"bowed_string.string_tension_n", Unit::None},
+    {"bowed_string.string_length_m", Unit::Meters},
     {"bowed_string.bow_position", Unit::None},
     {"bowed_string.bow_force", Unit::None},
     {"bowed_string.bow_speed", Unit::None},
@@ -1359,6 +1366,10 @@ const GateRow kEngineGates[] = {
     {"pipe_organ.ranks.*", [](const GateSite& s) { return above("rankCount", s.index); }},
     // Bowed string: the bristle model, and the violin corpus the wrapper selects.
     {"bowed_string.stribeck", [](const GateSite&) { return is("elastoPlastic", true); }},
+    {"bowed_string.string_tension_n",
+     [](const GateSite&) { return is("hyperbolicFriction", true); }},
+    {"bowed_string.string_length_m",
+     [](const GateSite&) { return is("hyperbolicFriction", true); }},
     {"bowed_string.corpus_scale",
      [](const GateSite&) { return wrapper_is("body", "violin") & wrapper_above("bodyMix", 0); }},
     {"bowed_string.corpus_tilt_hz",

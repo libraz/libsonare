@@ -64,6 +64,24 @@ SONARE_TUNABLE(kEpZssFloor, 0.10f);
 // velocities, the hysteresis loop that warms the memoryless table's "dry" slip.
 SONARE_TUNABLE(kEpHystOffset, 0.6f);
 
+// --- hyperbolic friction junction (only when params.hyperbolic_friction) ---
+// The bow axes in physical units: force 1.0 is this many newtons and speed 1.0
+// this many metres per second, spanning the ranges Schelleng's diagram is drawn
+// over (roughly 0.1-2 N and 0.05-1 m/s).
+SONARE_TUNABLE(kBowForceMaxN, 4.0f);
+SONARE_TUNABLE(kBowVelocityMaxMps, 1.0f);
+// Rosin friction: the static and sliding coefficients bracket the steady-sliding
+// measurements of Smith & Woodhouse (J. Mech. Phys. Solids 48, 2000); v0 is the
+// slip speed at which the hyperbola has fallen half way between them.
+SONARE_TUNABLE(kMuStatic, 0.8f);
+SONARE_TUNABLE(kMuDynamic, 0.3f);
+SONARE_TUNABLE(kFrictionV0, 0.1f);
+// Output trim for the junction's string velocity in m/s, matching the table
+// path's level at the cello's shipped operating point.
+SONARE_TUNABLE(kPhysicalOutputScale, 1.2f);
+// Output trim for the table path's velocity-wave units.
+constexpr float kTableOutputScale = 6.0f;
+
 // --- sympathetic open-string resonance (only when params.sympathetic > 0) ---
 // Fixed open-string pitches (MIDI notes) the bank resonates at: a fifths-ish
 // spread spanning the violin family's open strings (contrabass E1 .. violin E5),
@@ -137,7 +155,19 @@ LoopBudget BowedStringVoiceCore::configure(const BowedStringPatchParams& params,
   const float vel_to_speed = std::clamp(params.vel_to_speed, 0.0f, 1.0f);
   const float speed =
       std::clamp((1.0f - vel_to_speed) * params.bow_speed + vel_to_speed * vel01, 0.0f, 1.0f);
-  base_bow_velocity_ = kBowVelocityBase + kBowVelocitySpan * speed;
+  // The hyperbolic junction reads the same axis in metres per second and the
+  // string's characteristic impedance off the note (Z0 = T / (2 L f0)).
+  hyperbolic_ = params.hyperbolic_friction;
+  slipping_ = false;
+  if (hyperbolic_) {
+    base_bow_velocity_ = kBowVelocityMaxMps * speed;
+    z0_ = std::max(params.string_tension_n, 1.0f) /
+          (2.0f * std::max(params.string_length_m, 0.01f) * std::max(1.0f, f0));
+    output_scale_ = kPhysicalOutputScale;
+  } else {
+    base_bow_velocity_ = kBowVelocityBase + kBowVelocitySpan * speed;
+    output_scale_ = kTableOutputScale;
+  }
   max_bow_velocity_ = base_bow_velocity_;
   bow_speed_target_ = base_bow_velocity_;
 
@@ -336,10 +366,13 @@ float BowedStringVoiceCore::render_internal(float pitch_ratio) noexcept {
   const float dv = bow_v - string_v;
 
   // Bow friction: the velocity the bow injects equally into both delay lines.
-  // Two models — the memoryless static table (default), or the gated
-  // elasto-plastic bristle (Phase 4) that adds stick->slip hysteresis.
+  // Three models — the memoryless static table (default), the gated
+  // elasto-plastic bristle that adds stick->slip hysteresis to it, or the gated
+  // hyperbolic junction in physical units, which outranks the bristle.
   float v_inj;
-  if (elasto_plastic_) {
+  if (hyperbolic_) {
+    v_inj = hyperbolic_injection(dv);
+  } else if (elasto_plastic_) {
     // The bristle memory integrates the string's OWN relative velocity, excluding
     // the weak second-polarization coupling: feeding the detuned polarization beat
     // into the hysteresis state lets it re-trigger the slip a second time per
@@ -457,6 +490,13 @@ float BowedStringVoiceCore::elasto_plastic_injection(float dv) noexcept {
   return dv * bow_coeff;
 }
 
+float BowedStringVoiceCore::hyperbolic_injection(float dv) noexcept {
+  // Bow force in newtons off the smoothed force axis the table path reads as a slope.
+  const float force01 = (kBowSlopeMax_ - bow_slope_) / kBowSlopeSpan_;
+  return hyperbolic_friction_injection(dv, kBowForceMaxN * force01, z0_, kMuStatic, kMuDynamic,
+                                       kFrictionV0, slipping_);
+}
+
 void BowedStringVoiceCore::release() noexcept { bow_.release(); }
 
 void BowedStringVoiceCore::kill() noexcept {
@@ -467,6 +507,7 @@ void BowedStringVoiceCore::kill() noexcept {
   neck_out_ = 0.0f;
   bridge_out_ = 0.0f;
   bristle_z_ = 0.0f;
+  slipping_ = false;
   pol_out_ = 0.0f;
   pol_lp_state_ = 0.0f;
   for (SympatheticMode& m : sympathetic_) {
