@@ -146,15 +146,18 @@ LoopBudget BowedStringVoiceCore::configure(const BowedStringPatchParams& params,
 
   const float f0 = note_to_hz(note);
   base_period_ = static_cast<float>(sr) / std::max(1.0f, f0);
+  const float vel01 = velocity.f7() / 127.0f;
+  // Under bow_position_ff a louder stroke plays nearer the bridge.
+  float beta_on = params.bow_position;
+  if (params.bow_position_ff > 0.0f) beta_on += (params.bow_position_ff - beta_on) * vel01;
   // The upper bound stays at 0.5: beta's Helmholtz window moves with N = sr/f0, so
   // no per-patch constant tracks it. Narrowing it to 0.25 was measured over the two
   // patches it would clamp and rescued no failing note while breaking two working ones.
-  beta_ = std::clamp(params.bow_position, 0.02f, 0.5f);
+  beta_ = std::clamp(beta_on, 0.02f, 0.5f);
   beta_base_ = beta_;
   beta_home_ = beta_base_;
   beta_target_ = beta_;
 
-  const float vel01 = velocity.f7() / 127.0f;
   // Bow speed = the dynamic level: the patch speed blended with the struck
   // velocity by vel_to_speed. This is the note-on base the expression scales.
   const float vel_to_speed = std::clamp(params.vel_to_speed, 0.0f, 1.0f);
@@ -183,6 +186,12 @@ LoopBudget BowedStringVoiceCore::configure(const BowedStringPatchParams& params,
   slope_home_ = slope_base_;
   slope_target_ = bow_slope_;
   bow_offset_ = 0.0f;
+  // F_b = force_ratio Z0 v_b at the note-on force axis, which scales it from there.
+  force_per_mps_ = 0.0f;
+  if (hyperbolic_ && params.force_ratio > 0.0f) {
+    const float home01 = (kBowSlopeMax_ - slope_home_) / kBowSlopeSpan_;
+    force_per_mps_ = params.force_ratio * z0_ / (home01 > 0.0f ? home01 : 1.0f);
+  }
   // A fresh note starts unmodulated; the matrix re-sets these on its first
   // render, and a voice whose matrix has no excitation route never touches them.
   force_mod01_ = 0.0f;
@@ -522,8 +531,10 @@ float BowedStringVoiceCore::elasto_plastic_injection(float dv) noexcept {
 float BowedStringVoiceCore::hyperbolic_injection(float dv) noexcept {
   // Bow force in newtons off the smoothed force axis the table path reads as a slope.
   const float force01 = (kBowSlopeMax_ - bow_slope_) / kBowSlopeSpan_;
-  return hyperbolic_friction_injection(dv, kBowForceMaxN * force01, z0_, kMuStatic, kMuDynamic,
-                                       kFrictionV0, slipping_);
+  const float force_n = force_per_mps_ > 0.0f ? force_per_mps_ * max_bow_velocity_ * force01
+                                              : kBowForceMaxN * force01;
+  return hyperbolic_friction_injection(dv, force_n, z0_, kMuStatic, kMuDynamic, kFrictionV0,
+                                       slipping_);
 }
 
 void BowedStringVoiceCore::release() noexcept { bow_.release(); }

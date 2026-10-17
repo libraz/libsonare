@@ -11,6 +11,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <complex>
+#include <tuple>
 #include <vector>
 
 #include "core/fft.h"
@@ -647,6 +648,149 @@ TEST_CASE("a finite-width bow takes the cello's C2 into Helmholtz motion at eith
   const std::vector<float> point = render_bowed_core_at(params, 48000.0, 48, 24000);
   params.bow_width_m = 0.012f;
   REQUIRE(render_bowed_core_at(params, 48000.0, 48, 24000) != point);
+}
+
+/// The core at 48 kHz for @p note struck at @p velocity, with an optional
+/// matrix offset on the force axis applied before the first sample.
+std::vector<float> render_bowed_core_struck(const BowedStringPatchParams& params, uint8_t note,
+                                            uint8_t velocity, size_t frames,
+                                            float force_mod01 = 0.0f) {
+  constexpr double kSampleRate = 48000.0;
+  const int capacity = sonare::midi::synth::bowed_string_buffer_capacity(kSampleRate);
+  std::vector<float> slab(
+      static_cast<size_t>(sonare::midi::synth::bowed_string_slab_capacity(kSampleRate)), 0.0f);
+  BowedStringVoiceCore core;
+  core.attach(slab.data(), capacity);
+  core.start(params, kSampleRate, note, sonare::midi::Velocity16::from7(velocity), 0x524f53494eULL);
+  if (force_mod01 != 0.0f) {
+    sonare::midi::synth::ExcitationAxes offsets;
+    offsets.force = force_mod01;
+    core.set_excitation_mod(offsets);
+    core.snap_excitation();
+  }
+  std::vector<float> output(frames, 0.0f);
+  for (size_t i = 0; i < frames; ++i) output[i] = core.render(1.0f);
+  return output;
+}
+
+/// RMS of @p a - @p b over the whole span relative to the RMS of @p b.
+double relative_difference(const std::vector<float>& a, const std::vector<float>& b) {
+  const double level = rms(b, 0, b.size());
+  return level > 0.0 ? rms_difference(a, b, 0, b.size()) / level : 1.0;
+}
+
+TEST_CASE("force_ratio sets the bow force from the string's impedance and the bow speed",
+          "[midi][synth][bowed]") {
+  // A cello-scaled string on the hyperbolic junction at 0.2 m/s. Under
+  // force_ratio r the bow force is r Z0 v_b, so each note renders as the same
+  // note on the fixed newton span at the force r Z0(note) v_b gives it: an octave
+  // apart, half the force. Equivalence is within rounding, not bitwise, because
+  // the two paths reach the same newtons through different float products.
+  constexpr float kTensionN = 130.0f;
+  constexpr float kLengthM = 0.69f;
+  constexpr float kSpeedMps = 0.2f;
+  constexpr float kRatio = 4.0f;
+  // The engine's force axis span (bowed_string_voice.cpp kBowForceMaxN).
+  constexpr float kForceMaxN = 4.0f;
+  constexpr size_t kFrames = 24000;
+  BowedStringPatchParams params = sonare::midi::synth::gm_fallback_patch(0, 42).bowed_string;
+  params.polarization = 0.0f;
+  params.sympathetic = 0.0f;
+  params.rosin = 0.0f;
+  params.vel_to_speed = 0.0f;
+  params.bow_speed = kSpeedMps;
+  params.string_tension_n = kTensionN;
+  params.string_length_m = kLengthM;
+  params.bow_force = 0.5f;
+
+  SECTION("the table junction does not read it") {
+    params.hyperbolic_friction = false;
+    const std::vector<float> off = render_bowed_core_struck(params, 48, 100, kFrames);
+    params.force_ratio = kRatio;
+    REQUIRE(render_bowed_core_struck(params, 48, 100, kFrames) == off);
+  }
+
+  SECTION("the hyperbolic junction's force follows Z0, a 2:1 ratio over an octave") {
+    params.hyperbolic_friction = true;
+    const auto newtons_for = [&](uint8_t note) {
+      const float f0 = sonare::midi::synth::note_to_hz(note);
+      return kRatio * kTensionN / (2.0f * kLengthM * f0) * kSpeedMps;
+    };
+    const float low_n = newtons_for(48);
+    const float high_n = newtons_for(60);
+    REQUIRE(std::fabs(low_n / high_n - 2.0f) < 1e-3f);
+    BowedStringPatchParams fixed = params;
+    params.force_ratio = kRatio;
+    for (const auto& [note, own_n, other_n] :
+         {std::tuple<uint8_t, float, float>{48, low_n, high_n},
+          std::tuple<uint8_t, float, float>{60, high_n, low_n}}) {
+      INFO("note " << int(note) << ": r Z0 v_b = " << own_n << " N");
+      const std::vector<float> ratio = render_bowed_core_struck(params, note, 100, kFrames);
+      REQUIRE(peak(ratio) > 0.01f);
+      fixed.bow_force = own_n / kForceMaxN;
+      const std::vector<float> own = render_bowed_core_struck(fixed, note, 100, kFrames);
+      fixed.bow_force = other_n / kForceMaxN;
+      const std::vector<float> other = render_bowed_core_struck(fixed, note, 100, kFrames);
+      const double d_own = relative_difference(ratio, own);
+      const double d_other = relative_difference(ratio, other);
+      INFO("relative difference: own force " << d_own << ", the other octave's " << d_other);
+      CHECK(d_own < 1e-3);
+      CHECK(d_other > 1e-2);
+    }
+    // Without force_ratio the same patch is the fixed span at its own bow_force.
+    const std::vector<float> ratio_low = render_bowed_core_struck(params, 48, 100, kFrames);
+    params.force_ratio = 0.0f;
+    fixed.bow_force = params.bow_force;
+    const std::vector<float> off = render_bowed_core_struck(params, 48, 100, kFrames);
+    REQUIRE(off == render_bowed_core_struck(fixed, 48, 100, kFrames));
+    CHECK(relative_difference(ratio_low, off) > 1e-2);
+  }
+
+  SECTION("the force axis scales it relative to the note-on force") {
+    params.hyperbolic_friction = true;
+    params.force_ratio = kRatio;
+    // The note-on force is the reference, so two patch forces render one note.
+    const std::vector<float> base = render_bowed_core_struck(params, 48, 100, kFrames);
+    BowedStringPatchParams lighter = params;
+    lighter.bow_force = 0.25f;
+    CHECK(relative_difference(render_bowed_core_struck(lighter, 48, 100, kFrames), base) < 1e-3);
+    // A matrix offset on the force axis still raises it: +0.25 over 0.5 is 1.5x.
+    const std::vector<float> pressed = render_bowed_core_struck(params, 48, 100, kFrames, 0.25f);
+    BowedStringPatchParams heavier = params;
+    heavier.force_ratio = 1.5f * kRatio;
+    const std::vector<float> scaled = render_bowed_core_struck(heavier, 48, 100, kFrames);
+    CHECK(relative_difference(pressed, base) > 1e-2);
+    CHECK(relative_difference(pressed, scaled) < 1e-3);
+  }
+}
+
+TEST_CASE("bow_position_ff moves the bowing point toward the bridge with velocity",
+          "[midi][synth][bowed]") {
+  // bow_position is the pianissimo point and bow_position_ff the point at
+  // velocity 127, linear in between: each velocity renders exactly as the same
+  // patch with bow_position set to its interpolated point, on either junction.
+  BowedStringPatchParams params = sonare::midi::synth::gm_fallback_patch(0, 42).bowed_string;
+  params.bow_position = 0.17f;
+  constexpr float kFf = 0.12f;
+  constexpr size_t kFrames = 24000;
+  for (const bool hyperbolic : {false, true}) {
+    params.hyperbolic_friction = hyperbolic;
+    params.bow_position_ff = 0.0f;
+    const std::vector<float> fixed = render_bowed_core_struck(params, 48, 127, kFrames);
+    for (const uint8_t velocity : {uint8_t{1}, uint8_t{64}, uint8_t{127}}) {
+      INFO((hyperbolic ? "hyperbolic" : "table") << " velocity " << int(velocity));
+      const float vel01 = sonare::midi::Velocity16::from7(velocity).f7() / 127.0f;
+      BowedStringPatchParams moved = params;
+      moved.bow_position_ff = kFf;
+      BowedStringPatchParams placed = params;
+      placed.bow_position = params.bow_position + (kFf - params.bow_position) * vel01;
+      REQUIRE(render_bowed_core_struck(moved, 48, velocity, kFrames) ==
+              render_bowed_core_struck(placed, 48, velocity, kFrames));
+    }
+    BowedStringPatchParams moved = params;
+    moved.bow_position_ff = kFf;
+    REQUIRE(render_bowed_core_struck(moved, 48, 127, kFrames) != fixed);
+  }
 }
 
 TEST_CASE("the second polarization carries no DC", "[midi][synth][bowed]") {

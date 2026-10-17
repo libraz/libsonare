@@ -142,6 +142,18 @@ struct BowedStringPatchParams {
   /// over that time (Pitteroff & Woodhouse, Acta Acustica 84, 1998). Applies to
   /// both junctions. 0 = off -> an explicit bypass, bit-identical.
   float bow_width_m = 0.0f;
+  /// Bow force as a multiple of Z0 v_b, the dimensionless operating point
+  /// Schelleng's window is drawn in: F_b = force_ratio * Z0 * v_b, with v_b the
+  /// note's target bow speed, so a player's force follows the bow speed and the
+  /// string (Schoonderwaldt, JASA 126(5), 2009). The force axis then scales F_b
+  /// relative to its note-on value. Only read by the hyperbolic junction;
+  /// 0 = off -> F_b is the force axis times a fixed newton span.
+  float force_ratio = 0.0f;
+  /// Bow position at velocity 127 (fraction of the string length from the
+  /// bridge): a louder stroke moves toward the bridge, and bow_position becomes
+  /// the pianissimo point, interpolated linearly in note velocity. Applies to
+  /// both junctions. 0 = off -> bow_position at every velocity.
+  float bow_position_ff = 0.0f;
 
   /// Sympathetic resonance in [0,1]: the halo of the instrument's OTHER (undamped
   /// open) strings ringing along with the bowed note. A small fixed bank of
@@ -330,7 +342,8 @@ class BowedStringVoiceCore {
 
   // Hyperbolic friction junction for the current relative velocity @p dv, in
   // metres per second: the bow force in newtons comes off the smoothed force
-  // axis, Z0 off the note. Only called on the gated path (hyperbolic_).
+  // axis (times Z0 v_b under force_ratio), Z0 off the note. Only called on the
+  // gated path (hyperbolic_).
   float hyperbolic_injection(float dv) noexcept;
 
   // One sympathetic-bank sample: drives the open-string resonator bank with the
@@ -455,6 +468,9 @@ class BowedStringVoiceCore {
   bool hyperbolic_ = false;
   bool slipping_ = false;
   float z0_ = 1.0f;
+  // Under force_ratio: newtons per (m/s of target bow speed x force axis), i.e.
+  // force_ratio * Z0 over the note-on force axis; 0 = the fixed newton span.
+  float force_per_mps_ = 0.0f;
 
   // Second (horizontal) polarization: a detuned string loop sharing the bow.
   // Off unless params.polarization > 0 (pol_couple_ == 0 -> render skips it,

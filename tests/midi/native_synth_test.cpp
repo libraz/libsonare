@@ -1640,6 +1640,8 @@ TEST_CASE("the tuning field table reaches the switch beside every field it gates
       {SynthEngineMode::kBowedString, "bowed_string.elasto_plastic", "bowed_string.stribeck"},
       {SynthEngineMode::kBowedString, "bowed_string.hyperbolic_friction",
        "bowed_string.string_tension_n"},
+      {SynthEngineMode::kBowedString, "bowed_string.hyperbolic_friction",
+       "bowed_string.force_ratio"},
       {SynthEngineMode::kReed, "reed.dynamic_reed", "reed.closing_pressure"},
       {SynthEngineMode::kReed, "reed.conical", "reed.cone_growth"},
       {SynthEngineMode::kBrass, "brass.conical", "brass.brightness"},

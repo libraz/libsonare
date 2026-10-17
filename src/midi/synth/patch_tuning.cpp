@@ -371,13 +371,16 @@ void apply_pipe_organ(NativeSynthPatch& p, const Fields& f) {
 void apply_bowed_string(NativeSynthPatch& p, const Fields& f) {
   // The friction models: off is the memoryless table, `stribeck` shapes the
   // bristle memory only when the elasto-plastic one is on, and the hyperbolic
-  // junction reads the string's tension and length only when it is on.
+  // junction reads the string's tension and length and the force ratio only
+  // when it is on.
   I_TYPED(bowed_string.elasto_plastic, 0, 1);
   I_TYPED(bowed_string.hyperbolic_friction, 0, 1);
   F(bowed_string.string_tension_n);
   F(bowed_string.string_length_m);
   F(bowed_string.bow_width_m);
+  F(bowed_string.force_ratio);
   F(bowed_string.bow_position);
+  F(bowed_string.bow_position_ff);
   F(bowed_string.bow_force);
   F(bowed_string.bow_speed);
   F(bowed_string.vel_to_speed);
@@ -884,7 +887,9 @@ constexpr UnitRow kEngineUnits[] = {
     {"bowed_string.string_tension_n", Unit::Newtons},
     {"bowed_string.string_length_m", Unit::Meters},
     {"bowed_string.bow_width_m", Unit::Meters},
+    {"bowed_string.force_ratio", Unit::Ratio},
     {"bowed_string.bow_position", Unit::None},
+    {"bowed_string.bow_position_ff", Unit::None},
     {"bowed_string.bow_force", Unit::None},
     {"bowed_string.bow_speed", Unit::None},
     {"bowed_string.vel_to_speed", Unit::None},
@@ -1377,6 +1382,7 @@ const GateRow kEngineGates[] = {
      [](const GateSite&) { return is("hyperbolicFriction", true); }},
     {"bowed_string.string_length_m",
      [](const GateSite&) { return is("hyperbolicFriction", true); }},
+    {"bowed_string.force_ratio", [](const GateSite&) { return is("hyperbolicFriction", true); }},
     {"bowed_string.corpus_scale",
      [](const GateSite&) { return wrapper_is("body", "violin") & wrapper_above("bodyMix", 0); }},
     {"bowed_string.corpus_tilt_hz",

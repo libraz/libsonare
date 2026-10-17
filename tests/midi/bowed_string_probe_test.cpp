@@ -340,6 +340,12 @@ TEST_CASE("bowed string control hashes", "[.][midi][synth][bowed][probe][golden]
   CHECK(fnv1a_quantized(core) == 0x5bc9b975789a34c0ull);
   // The same core with both radiation gates off, as the bridge-force probe reads it.
   CHECK(fnv1a_quantized(render_core(gates_off_violin_params(), 48000)) == 0x0d3899080b08691bull);
+  // The same patch on the hyperbolic junction with a 12 mm ribbon, the path the
+  // force-ratio and bowing-point fields extend.
+  BowedStringPatchParams hyperbolic = v;
+  hyperbolic.hyperbolic_friction = true;
+  hyperbolic.bow_width_m = 0.012f;
+  CHECK(fnv1a_quantized(render_core(hyperbolic, 48000)) == 0xb2b407f54106700eull);
 
   // (b) The body resonator on both of its entry points, driven by the same
   // deterministic excitation. The percussion-shell configuration is written out

@@ -133,13 +133,14 @@ const BowedStringPatchParams& violin_params() {
   return sonare::midi::synth::gm_fallback_patch(0, 40).bowed_string;
 }
 
-std::vector<float> render_core(const BowedStringPatchParams& params, uint8_t note, int samples) {
+std::vector<float> render_core(const BowedStringPatchParams& params, uint8_t note, int samples,
+                               uint8_t velocity = kSweepVelocity) {
   BowedStringVoiceCore core;
   const int per_line = sonare::midi::synth::bowed_string_buffer_capacity(kSr);
   std::vector<float> slab(
       static_cast<std::size_t>(sonare::midi::synth::bowed_string_slab_capacity(kSr)), 0.0f);
   core.attach(slab.data(), per_line);
-  core.start(params, kSr, note, sonare::midi::Velocity16::from7(kSweepVelocity), kSweepSeed);
+  core.start(params, kSr, note, sonare::midi::Velocity16::from7(velocity), kSweepSeed);
   std::vector<float> out(static_cast<std::size_t>(samples), 0.0f);
   for (int i = 0; i < samples; ++i) out[static_cast<std::size_t>(i)] = core.render(1.0f);
   return out;
@@ -160,10 +161,11 @@ double steady_level_db(const std::vector<float>& span) {
 
 /// One cell: render the patch and read the steady slip rate, whether Helmholtz
 /// motion ever established, and the level and sounding pitch it was read at.
-Cell measure_cell(const BowedStringPatchParams& params, uint8_t note, int samples) {
+Cell measure_cell(const BowedStringPatchParams& params, uint8_t note, int samples,
+                  uint8_t velocity = kSweepVelocity) {
   Cell cell;
   const double f0 = static_cast<double>(sonare::midi::synth::note_to_hz(note));
-  const std::vector<float> render = render_core(params, note, samples);
+  const std::vector<float> render = render_core(params, note, samples, velocity);
   const sonare::test::bowed::SlipRate rate = slips_per_period(render, f0, kSr);
   if (!(rate.periods > 0.0)) return cell;
   cell.per_period = rate.per_period;
@@ -926,4 +928,169 @@ TEST_CASE("the bow-speed threshold of the shipped bowed patches",
   }
   INFO("scans whose verdict differs between the bottom and top of the speed axis: " << moved);
   CHECK(moved > 0);
+}
+
+namespace {
+
+/// Each shipped patch's compass, read every kCompassStep semitones, and the
+/// string tension the unshipped 12 mm switch gives it beside kShipped's length.
+/// The order follows kShipped.
+struct CompassString {
+  uint8_t lo;
+  uint8_t hi;
+  float string_tension_n;
+};
+const CompassString kCompass[] = {
+    {55, 95, 60.0f},   // violin
+    {48, 88, 70.0f},   // viola
+    {36, 76, 130.0f},  // cello
+    {28, 64, 300.0f},  // contrabass
+    {55, 95, 60.0f},   // fiddle
+    {36, 96, 60.0f},   // string_ensemble_1
+    {36, 96, 60.0f},   // string_ensemble_2
+    {55, 95, 60.0f},   // violin_slow
+};
+static_assert(sizeof(kCompass) / sizeof(kCompass[0]) == kShippedCount,
+              "one compass per shipped patch");
+constexpr int kCompassStep = 4;
+constexpr float kSwitchWidthM = 0.012f;
+constexpr uint8_t kCompassVelocities[] = {32, 80, 127};
+constexpr int kCompassVelocityCount = 3;
+
+/// One census column. bow_position < 0 keeps the shipped point; force_ratio 0
+/// and hyperbolic false are the shipped junction.
+struct CompassConfig {
+  const char* name;
+  bool hyperbolic;
+  float force_ratio;
+  float bow_position;
+  float bow_position_ff;
+};
+const CompassConfig kCompassConfigs[] = {
+    {"r3 .17/.12", true, 3.0f, 0.17f, 0.12f},  {"r3 sh/.12", true, 3.0f, -1.0f, 0.12f},
+    {"r3 .15/.10", true, 3.0f, 0.15f, 0.10f},  {"r4.5 .17/.12", true, 4.5f, 0.17f, 0.12f},
+    {"r4.5 sh/.12", true, 4.5f, -1.0f, 0.12f}, {"r4.5 .15/.10", true, 4.5f, 0.15f, 0.10f},
+    {"r6 .17/.12", true, 6.0f, 0.17f, 0.12f},  {"r6 sh/.12", true, 6.0f, -1.0f, 0.12f},
+    {"r6 .15/.10", true, 6.0f, 0.15f, 0.10f},
+};
+constexpr int kCompassConfigCount = 9;
+
+/// @p shipped with the 12 mm switch's string and the column's junction and bowing points.
+BowedStringPatchParams compass_candidate(const BowedStringPatchParams& shipped,
+                                         const ShippedVoice& v, const CompassString& s,
+                                         const CompassConfig& c) {
+  BowedStringPatchParams p = shipped;
+  p.bow_width_m = kSwitchWidthM;
+  p.string_length_m = v.string_length_m;
+  p.string_tension_n = s.string_tension_n;
+  p.hyperbolic_friction = c.hyperbolic;
+  p.force_ratio = c.force_ratio;
+  if (c.bow_position >= 0.0f) p.bow_position = c.bow_position;
+  p.bow_position_ff = c.bow_position_ff;
+  return p;
+}
+
+}  // namespace
+
+TEST_CASE("the shipped bowed patches over their compass under the force-ratio player map",
+          "[midi][synth][bowed][window][.][slow]") {
+  // Every shipped bowed patch, its compass every four semitones at three note
+  // velocities: as shipped, then with the unshipped 12 mm switch (ribbon plus
+  // per-instrument string) on the hyperbolic junction under force_ratio and a
+  // velocity-dependent bowing point. A cell sounds when one slip per played
+  // period establishes on the played pitch. Two velocity-100 control columns
+  // repeat the earlier three-note census's two readings over the compass.
+  const auto sounds = [](const Cell& c) {
+    return c.reached && c.helmholtz && c.per_period < kHelmholtzHi && c.peak_ratio < kPlayedPitchHi;
+  };
+  std::ostringstream o;
+  o << std::fixed;
+  int total_cells = 0;
+  int unreached = 0;
+  int shipped_total = 0;
+  int control_total[2] = {};
+  int config_total[kCompassConfigCount] = {};
+  std::vector<std::string> lost[kCompassConfigCount];
+  std::ostringstream rows;
+  for (int vi = 0; vi < kShippedCount; ++vi) {
+    const ShippedVoice& v = kShipped[vi];
+    const CompassString& s = kCompass[vi];
+    const BowedStringPatchParams& params =
+        sonare::midi::synth::gm_fallback_patch(v.bank, v.program).bowed_string;
+    int notes = 0;
+    int shipped_sounding = 0;
+    int control_sounding[2] = {};
+    int config_sounding[kCompassConfigCount] = {};
+    for (int note = s.lo; note <= s.hi; note += kCompassStep) {
+      const auto n = static_cast<uint8_t>(note);
+      ++notes;
+      // Controls at the earlier census's velocity: as shipped, and the switch alone.
+      BowedStringPatchParams ribbon = params;
+      ribbon.bow_width_m = kSwitchWidthM;
+      ribbon.string_length_m = v.string_length_m;
+      ribbon.string_tension_n = s.string_tension_n;
+      const Cell control_shipped = measure_cell(params, n, kShippedSamples);
+      const Cell control_ribbon = measure_cell(ribbon, n, kShippedSamples);
+      if (!control_shipped.reached || !control_ribbon.reached) ++unreached;
+      if (sounds(control_shipped)) ++control_sounding[0];
+      if (sounds(control_ribbon)) ++control_sounding[1];
+      for (int ki = 0; ki < kCompassVelocityCount; ++ki) {
+        const uint8_t vel = kCompassVelocities[ki];
+        ++total_cells;
+        const Cell shipped = measure_cell(params, n, kShippedSamples, vel);
+        if (!shipped.reached) ++unreached;
+        const bool shipped_sounds = sounds(shipped);
+        if (shipped_sounds) ++shipped_sounding;
+        for (int ci = 0; ci < kCompassConfigCount; ++ci) {
+          const Cell cell = measure_cell(compass_candidate(params, v, s, kCompassConfigs[ci]), n,
+                                         kShippedSamples, vel);
+          if (!cell.reached) ++unreached;
+          if (sounds(cell)) {
+            ++config_sounding[ci];
+          } else if (shipped_sounds) {
+            std::ostringstream cell_name;
+            cell_name << v.name << "@" << note << "/v" << int{vel} << " (rate "
+                      << std::setprecision(2) << cell.per_period << (cell.helmholtz ? 'h' : '-')
+                      << " pk " << std::setprecision(2) << cell.peak_ratio << ")";
+            lost[ci].push_back(cell_name.str());
+          }
+        }
+      }
+    }
+    shipped_total += shipped_sounding;
+    control_total[0] += control_sounding[0];
+    control_total[1] += control_sounding[1];
+    rows << "  " << std::setw(18) << std::left << v.name << std::right << std::setw(4)
+         << notes * kCompassVelocityCount << std::setw(9) << shipped_sounding << std::setw(5)
+         << control_sounding[0] << "/" << std::setw(2) << std::left << notes << std::right
+         << std::setw(5) << control_sounding[1] << "/" << std::setw(2) << std::left << notes
+         << std::right;
+    for (int ci = 0; ci < kCompassConfigCount; ++ci) {
+      config_total[ci] += config_sounding[ci];
+      rows << std::setw(13) << config_sounding[ci];
+    }
+    rows << "\n";
+  }
+  o << "\n  compass census: cells sounding the played note with Helmholtz established"
+       "\n  (velocities 32/80/127; v100 columns are the controls at the earlier census's"
+       "\n  velocity, as shipped and with the 12 mm switch alone)\n";
+  o << "  patch              cells  shipped  v100 sh  v100 12mm";
+  for (const CompassConfig& c : kCompassConfigs) o << std::setw(13) << c.name;
+  o << "\n" << rows.str();
+  o << "  " << std::setw(18) << std::left << "total" << std::right << std::setw(4) << total_cells
+    << std::setw(9) << shipped_total << std::setw(5) << control_total[0] << "/" << std::setw(2)
+    << std::left << total_cells / kCompassVelocityCount << std::right << std::setw(5)
+    << control_total[1] << "/" << std::setw(2) << std::left << total_cells / kCompassVelocityCount
+    << std::right;
+  for (int ci = 0; ci < kCompassConfigCount; ++ci) o << std::setw(13) << config_total[ci];
+  o << "\n";
+  for (int ci = 0; ci < kCompassConfigCount; ++ci) {
+    o << "  sounding as shipped, not under " << kCompassConfigs[ci].name << ": " << lost[ci].size()
+      << "\n";
+    for (const std::string& cell : lost[ci]) o << "    " << cell << "\n";
+  }
+  const std::string report = o.str();
+  INFO(report);
+  CHECK(unreached == 0);
+  CHECK(total_cells == 97 * kCompassVelocityCount);
 }
