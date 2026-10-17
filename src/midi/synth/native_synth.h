@@ -579,6 +579,9 @@ struct NativeSynthVoice : VoiceState {
   /// Pushes live excitation-axis bases to a sounding voice (a CC arriving
   /// mid-note), without the snap: the engine's own ramp owns the approach.
   void push_excitation(const ExcitationAxes& base, uint32_t present) noexcept;
+  /// Drops a synthesized onset the engine would play over the player's own (a
+  /// profile that calls velocity meaningless). A mode with none is a no-op.
+  void hold_onset() noexcept;
   /// Restores each engine's start() excitation base (before any controller seeded it) without
   /// restarting its phase, envelope, or live matrix offset.
   void restore_excitation_base() noexcept;
@@ -1843,6 +1846,14 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.brass.half_valve, 0.0f), 0.0f, 1.0f);
   p.brass.dynamic_lip =
       std::clamp(patch_clamp_detail::sanitize(p.brass.dynamic_lip, 0.0f), 0.0f, 1.0f);
+  p.brass.onset_breath_overshoot_db = std::clamp(
+      patch_clamp_detail::sanitize(p.brass.onset_breath_overshoot_db, 0.0f), 0.0f, 12.0f);
+  p.brass.onset_breath_settle_ms =
+      std::clamp(patch_clamp_detail::sanitize(p.brass.onset_breath_settle_ms, 40.0f), 1.0f, 500.0f);
+  p.brass.onset_breath_overshoot_vel_db = std::clamp(
+      patch_clamp_detail::sanitize(p.brass.onset_breath_overshoot_vel_db, 0.0f), -6.0f, 6.0f);
+  p.brass.velocity_exponent =
+      std::clamp(patch_clamp_detail::sanitize(p.brass.velocity_exponent, 0.93f), 0.0f, 4.0f);
   p.flute.breath_pressure =
       std::clamp(patch_clamp_detail::sanitize(p.flute.breath_pressure, 0.55f), 0.0f, 1.0f);
   p.flute.vel_to_breath =

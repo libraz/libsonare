@@ -9,12 +9,16 @@
 /// and toward 0 once released, as a one-pole at a time constant given in
 /// milliseconds; the bowed string's constant-acceleration attack is the one
 /// alternative form. Each engine multiplies the level in where it always has.
+/// A tongued onset can carry an overshoot: the one-pole's target starts above 1
+/// and settles back onto it, which is exactly the plain ramp at 0 dB.
 ///
 /// ramp_coeff() is the one-pole time constant every sustained engine in this
 /// bank uses to smooth a control toward its target.
 
 #include <algorithm>
 #include <cmath>
+
+#include "util/db.h"
 
 namespace sonare::midi::synth {
 
@@ -34,6 +38,10 @@ struct OnsetContour {
   /// Per-sample rate of a linear attack (0 = the one-pole attack). Never used
   /// on the release.
   float attack_rate = 0.0f;
+  /// How far the one-pole attack's target stands above 1, decaying toward 0 at
+  /// overshoot_decay per sample while sustaining (0 = the plain ramp).
+  float overshoot = 0.0f;
+  float overshoot_decay = 0.0f;
 
   /// Note-on: silent and sustaining, with the attack and release time
   /// constants built for @p sample_rate. A non-zero @p linear_attack_ms makes
@@ -42,6 +50,7 @@ struct OnsetContour {
              float linear_attack_ms = 0.0f) noexcept {
     level = 0.0f;
     releasing = false;
+    overshoot = 0.0f;
     attack_coeff = ramp_coeff(attack_ms, sample_rate);
     release_coeff = ramp_coeff(release_ms, sample_rate);
     attack_rate =
@@ -49,6 +58,17 @@ struct OnsetContour {
             ? 1.0f / std::max(1.0f, linear_attack_ms * 0.001f * static_cast<float>(sample_rate))
             : 0.0f;
   }
+
+  /// The player's tongued onset on the one-pole attack: the target starts
+  /// @p overshoot_db above the held level and settles back onto it, ~95% of
+  /// the way in @p settle_ms. Call after start(); 0 dB leaves the ramp as it was.
+  void set_overshoot(float overshoot_db, float settle_ms, double sample_rate) noexcept {
+    overshoot = overshoot_db > 0.0f ? sonare::db_to_linear(overshoot_db) - 1.0f : 0.0f;
+    overshoot_decay = ramp_coeff(settle_ms, sample_rate);
+  }
+
+  /// Drops what is left of the overshoot, for an onset some input now drives.
+  void hold_overshoot() noexcept { overshoot = 0.0f; }
 
   /// Ramps level toward 1 (sustaining) or 0 (released), at attack_coeff or
   /// release_coeff depending on which state it is currently ramping toward,
@@ -59,7 +79,12 @@ struct OnsetContour {
       level = std::min(1.0f, level + attack_rate);
       return level;
     }
-    const float target = releasing ? 0.0f : 1.0f;
+    float target = releasing ? 0.0f : 1.0f;
+    if (overshoot > 0.0f && !releasing) {
+      target += overshoot;
+      overshoot -= overshoot_decay * overshoot;
+      if (overshoot < 1.0e-6f) overshoot = 0.0f;
+    }
     const float coeff = releasing ? release_coeff : attack_coeff;
     level += coeff * (target - level);
     return level;

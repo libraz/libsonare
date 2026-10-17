@@ -304,6 +304,10 @@ constexpr BrassPatchParams blank_brass() noexcept {
   z.mute = 0.0f;
   z.half_valve = 0.0f;
   z.dynamic_lip = 0.0f;
+  z.onset_breath_overshoot_db = 0.0f;
+  z.onset_breath_settle_ms = 0.0f;
+  z.onset_breath_overshoot_vel_db = 0.0f;
+  z.velocity_exponent = 0.0f;
   return z;
 }
 

@@ -326,15 +326,16 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       float bore_nonlinearity;
       float dynamic_lip;
     };
-    constexpr BellGroup kTrumpetBell{2400.0f, 2326.85f, 0.9f, 0.5019f, 0.715476f, 0.705098f, 0.25f};
-    constexpr BellGroup kTromboneBell{978.041f,  2450.08f,  0.153818f, 0.998735f,
+    constexpr BellGroup kTrumpetBell{1850.65f,  461.622f,  0.93213f, 0.62918f,
+                                     0.813931f, 0.161808f, 0.290392f};
+    constexpr BellGroup kTromboneBell{580.0f,    2450.08f,  0.153818f, 0.998735f,
                                       0.340141f, 0.381076f, 0.177051f};
-    constexpr BellGroup kTubaBell{1200.0f,   1281.14f,  0.726019f, 0.286475f,
-                                  0.232962f, 0.326848f, 0.25f};
-    constexpr BellGroup kMutedTrumpetBell{526.781f,  772.341f,  0.9f, 0.226005f,
-                                          0.771946f, 0.475425f, 0.25f};
-    constexpr BellGroup kFrenchHornBell{1600.0f,   821.625f, 0.704038f, 0.773387f,
-                                        0.170501f, 0.54057f, 0.177051f};
+    constexpr BellGroup kTubaBell{1200.0f,   784.162f, 0.817288f, 0.541796f,
+                                  0.691899f, 0.1f,     0.704915f};
+    constexpr BellGroup kMutedTrumpetBell{282.346f,  429.085f,  0.75647f, 0.719975f,
+                                          0.762261f, 0.284021f, 0.814383f};
+    constexpr BellGroup kFrenchHornBell{637.0f,    821.625f,  0.73703f, 0.606392f,
+                                        0.414392f, 0.208044f, 0.293441f};
 
     auto brass = [&](const char* name, bool conical, float lip_tension, float lip_damping,
                      float brightness, float damping, float attack_ms, float release_ms,
@@ -379,25 +380,25 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       v.config = from_patch(clamp_synth_patch(patch));
     };
     //     name             cone  tens   damp   bright damp   atk    rel     breath bell  gain
-    brass("trumpet", false, 0.55f, 0.30f, 0.72f, 0.28f, 18.0f, 80.0f, 0.85f, 0.50f, 0.70f,
+    brass("trumpet", false, 0.55f, 0.30f, 0.72f, 0.28f, 18.0f, 80.0f, 0.85f, 0.50f, 1.188f,
           kTrumpetBell);
-    brass("trombone", false, 0.48f, 0.45f, 0.55f, 0.32f, 26.0f, 100.0f, 0.85f, 0.0f, 0.72f,
+    brass("trombone", false, 0.48f, 0.45f, 0.55f, 0.32f, 26.0f, 100.0f, 0.85f, 0.0f, 16.0f,
           kTromboneBell);
-    brass("tuba", true, 0.42f, 0.70f, 0.30f, 0.42f, 40.0f, 140.0f, 0.88f, 0.0f, 0.74f, kTubaBell);
-    brass("french-horn", true, 0.50f, 0.55f, 0.42f, 0.34f, 30.0f, 110.0f, 0.82f, 0.0f, 0.70f,
+    brass("tuba", true, 0.42f, 0.70f, 0.30f, 0.42f, 40.0f, 140.0f, 0.88f, 0.0f, 1.83f, kTubaBell);
+    brass("french-horn", true, 0.50f, 0.55f, 0.42f, 0.34f, 30.0f, 110.0f, 0.82f, 0.0f, 1.844f,
           kFrenchHornBell);
     // The mute is modelled, so the bore is voiced open like the trumpet it is:
     // a darkened brightness standing in for the mute darkens it a second time.
-    brass("muted-trumpet", false, 0.58f, 0.35f, 0.72f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 0.66f,
-          kMutedTrumpetBell, 0.256358f);
+    brass("muted-trumpet", false, 0.58f, 0.35f, 0.72f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 1.581f,
+          kMutedTrumpetBell, 0.395877f);
     // These three have no program and no reference, so each takes the class its
     // bell belongs to: cornet and flugelhorn are small B-flat bells, euphonium a
     // large low one. The bore flag cannot stand in — all three are conical.
-    brass("cornet", true, 0.52f, 0.45f, 0.55f, 0.30f, 20.0f, 85.0f, 0.84f, 0.40f, 0.70f,
+    brass("cornet", true, 0.52f, 0.45f, 0.55f, 0.30f, 20.0f, 85.0f, 0.84f, 0.40f, 1.188f,
           kTrumpetBell);
-    brass("flugelhorn", true, 0.48f, 0.62f, 0.40f, 0.34f, 24.0f, 95.0f, 0.84f, 0.0f, 0.70f,
+    brass("flugelhorn", true, 0.48f, 0.62f, 0.40f, 0.34f, 24.0f, 95.0f, 0.84f, 0.0f, 1.188f,
           kTrumpetBell);
-    brass("euphonium", true, 0.45f, 0.60f, 0.40f, 0.36f, 30.0f, 110.0f, 0.86f, 0.0f, 0.72f,
+    brass("euphonium", true, 0.45f, 0.60f, 0.40f, 0.36f, 30.0f, 110.0f, 0.86f, 0.0f, 1.78f,
           kTubaBell);
   }
 

@@ -808,6 +808,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
       record_velocity_axes(*voice, velocity_excitation, velocity_excitation_mask);
     }
     voice->seed_excitation(base, present);
+    if (!controller_profile_.velocity_meaningful) voice->hold_onset();
   }
   // Bus-level piano body (the direct-share attenuation, the modal soundboard
   // and the pedal-gated sympathetic bank). In GM mode the engine is resolved

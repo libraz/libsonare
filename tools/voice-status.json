@@ -7007,8 +7007,9 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 9,
+          "gated": 8,
           "excused": [
+            "body",
             "stereo"
           ],
           "gaps": [],
@@ -7021,7 +7022,6 @@
           "unjudgeable": [
             "attack",
             "balance",
-            "body",
             "centroid_pct",
             "damper",
             "register",
@@ -7121,8 +7121,9 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 9,
+          "gated": 8,
           "excused": [
+            "body",
             "stereo"
           ],
           "gaps": [],
@@ -7135,7 +7136,6 @@
           "unjudgeable": [
             "attack",
             "balance",
-            "body",
             "centroid_pct",
             "damper",
             "register",
@@ -7184,8 +7184,9 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 9,
+          "gated": 8,
           "excused": [
+            "body",
             "stereo"
           ],
           "gaps": [],
@@ -7198,7 +7199,6 @@
           "unjudgeable": [
             "attack",
             "balance",
-            "body",
             "centroid_pct",
             "damper",
             "register",

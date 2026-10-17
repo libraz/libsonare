@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 
 #include "midi/synth/pitch.h"
 #include "midi/synth/string_loop.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
 #include "util/tunable.h"
@@ -22,13 +24,11 @@ using sonare::constants::kTwoPi;
 // this scale brings the calibrated breath band up to that buzzing pressure.
 SONARE_TUNABLE(kMouthScale, 1.0f);
 
-// Mouth-pressure calibration: the exposed breath range lands in the strong
-// buzzing band ([~0.72, ~1.0]) — the knobs colour the tone, they do not gate it
-// on and off. Dynamic LOUDNESS comes from the voice's velocity / amp VCA around
-// this core, not from pushing the breath, so breath varies only mildly with the
-// note. breath = base + span*level.
-SONARE_TUNABLE(kBreathBase, 0.72f);
-SONARE_TUNABLE(kBreathSpan, 0.28f);
+// Mouth-pressure calibration, breath = base + span*level: the exposed range stays
+// in the buzzing band, so the knobs colour the tone rather than gate it. The
+// trumpet fit under the reflected loop set the band to [0.84, 1.22].
+SONARE_TUNABLE(kBreathBase, 0.84102f);
+SONARE_TUNABLE(kBreathSpan, 0.378975f);
 
 // Lip valve calibration. The lip is a resonant reflection coefficient at the
 // mouthpiece: coeff = clamp(offset - couple*lip_displacement, -1, 1), and the
@@ -42,16 +42,14 @@ SONARE_TUNABLE(kBreathSpan, 0.28f);
 // biased a touch negative for a brighter operating point.
 SONARE_TUNABLE(kLipOffset, -0.1f);
 SONARE_TUNABLE(kLipCouple, 4.5f);
-// Mouthpiece coefficient of the one-sided valve, applied to the Bernoulli flow.
-// Seeded at unity and kept there: the valve is quieter than the reflection
-// coefficient it replaces, and the level belongs to the radiation makeup, not
-// here — raising this instead drives the loop into period doubling.
-SONARE_TUNABLE(kLipFlowScale, 1.0f);
+// Mouthpiece coefficient of the one-sided valve's Bernoulli flow, against the
+// reflected wave. At unity the reflected loop period-doubles (trumpet h1.5 18 dB
+// under h1); at 0.3 its half-f0 line falls under the reference's floor (-63 dB).
+SONARE_TUNABLE(kLipFlowScale, 0.3f);
 // Amplitude-dependent propagation: the fraction the bore delay shortens at full
-// bore_nonlinearity and full normalised bore pressure. Seeded from the physics
-// rather than fitted -- beta = (gamma+1)/2 = 1.2 for air, times a fortissimo
-// bore pressure of about 5% of atmospheric.
-SONARE_TUNABLE(kBoreSpeedSpan, 0.06f);
+// bore_nonlinearity, full dynamic and the wave's own peak. The single modulated
+// delay brightens only up to about 1% and darkens past it; 0.8% keeps ff brightest.
+SONARE_TUNABLE(kBoreSpeedSpan, 0.008f);
 // Lip resonator quality factor from lip_damping, held CONSTANT-Q (bandwidth
 // proportional to the note) so the lip stays selective at low notes — a
 // fixed-radius resonator is wider than the fundamental in the tuba range and
@@ -164,6 +162,9 @@ SONARE_TUNABLE(kCuivreDriveRefHz, 175.0f);
 SONARE_TUNABLE(kCuivreDriveRatioMax, 2.3f);
 // Max wet mix of the shaped (brassy) signal at full brassiness.
 SONARE_TUNABLE(kCuivreMixMax, 0.85f);
+// Release of the running amplitude the shaper normalises by, in bore periods:
+// one period holds the wave's own peak across the cycle and follows an onset.
+SONARE_TUNABLE(kCuivreEnvPeriods, 1.0f);
 
 // --- 4b mute (only when params.mute > 0) ---
 // Muted upper formant (Hz) and its resonance: the nasal honk of a straight/cup
@@ -188,6 +189,13 @@ SONARE_TUNABLE(kLip2Mult, 2.0f);
 SONARE_TUNABLE(kLip2Q, 7.0f);
 SONARE_TUNABLE(kLip2Couple, 1.5f);
 
+/// The response of @p c at @p omega radians per sample.
+std::complex<float> biquad_response(const rt::BiquadCoeffs& c, float omega) noexcept {
+  const std::complex<float> z1 = std::polar(1.0f, -omega);
+  const std::complex<float> z2 = z1 * z1;
+  return (c.b0 + c.b1 * z1 + c.b2 * z2) / (1.0f + c.a1 * z1 + c.a2 * z2);
+}
+
 }  // namespace
 
 void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, uint8_t note,
@@ -208,7 +216,11 @@ LoopBudget BrassVoiceCore::configure(const BrassPatchParams& params, double sr, 
   drive_index_ = 0;
   breath_.releasing = false;
   breath_.level = 0.0f;
+  breath_.overshoot = 0.0f;
   lp_state_ = 0.0f;
+  bell_lp_.reset();
+  bell_hp_.reset();
+  bell_hp_dry_.reset();
   bore_.out = 0.0f;
   dc_x1_ = 0.0f;
   dc_y1_ = 0.0f;
@@ -307,6 +319,13 @@ LoopBudget BrassVoiceCore::configure(const BrassPatchParams& params, double sr, 
   const float noise_gain = noise_gain_at_rate(sr);
   breath_.attack_coeff = ramp_coeff(params.attack_ms, sr);
   breath_.release_coeff = ramp_coeff(params.release_ms, sr);
+  // The overshoot is read down from velocity 127 by doublings; 0 dB at 127 is off.
+  const float onset_db =
+      params.onset_breath_overshoot_db > 0.0f
+          ? params.onset_breath_overshoot_db +
+                params.onset_breath_overshoot_vel_db * std::log2(std::max(vel01, 1.0f / 127.0f))
+          : 0.0f;
+  breath_.set_overshoot(onset_db, params.onset_breath_settle_ms, sr);
   breath_noise_ = std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathNoiseDepth * noise_gain;
   chiff_level_ = std::clamp(params.chiff, 0.0f, 1.0f) * kChiffDepth * noise_gain;
   chiff_coeff_ = ramp_coeff(params.chiff_ms, sr);
@@ -344,19 +363,25 @@ LoopBudget BrassVoiceCore::configure(const BrassPatchParams& params, double sr, 
   // linear branch untouched (bit-identical). ---
 
   // 4a: cuivré — a radiation-side level-preserving shock shaper. Off (0) ->
-  // skipped. cuivre_scale_ normalises by the note's raw peak (~peak_est) so the
-  // shaper sees a ~unit signal and the peak survives the reshaping.
+  // skipped. The shaper normalises by the wave's running peak so it sees a unit
+  // signal and the envelope survives the reshaping.
   brassiness_ = std::clamp(params.brassiness, 0.0f, 1.0f);
   cuivre_dynamics_ = std::clamp(params.cuivre_dynamics, 0.0f, 1.0f);
   dyn_vel01_ = vel01;
   dyn_seat_ = level;
-  cuivre_scale_ = peak_est;
-  cuivre_inv_scale_ = 1.0f / std::max(0.5f, peak_est);
   const float cuivre_fc = std::clamp(kCuivreDriveRefHz / f0, 1.0f, kCuivreDriveRatioMax);
   cuivre_fc_sq_ = cuivre_fc * cuivre_fc;
   cuivre_drive_ = (1.0f + kCuivreDrive * brassiness_) * cuivre_fc_sq_;
   cuivre_inv_tanh_ = 1.0f / std::tanh(cuivre_drive_);
   cuivre_adaa_.reset(0.0f);
+  cuivre_env_ = 0.0f;
+  bore_env_ = 0.0f;
+  cuivre_peak_ = 0.0f;
+  cuivre_env_decay_ = std::exp(-1.0f / std::max(1.0f, kCuivreEnvPeriods * bore_.period));
+  cuivre_pow_coeff_ = 1.0f - cuivre_env_decay_;
+  cuivre_pow_in_ = 0.0f;
+  cuivre_pow_out_ = 0.0f;
+  cuivre_rad_state_ = 0.0f;
 
   // 4b: mute — a radiation-side resonant formant + scoop. Off (0) -> skipped.
   mute_ = std::clamp(params.mute, 0.0f, 1.0f);
@@ -491,7 +516,11 @@ float BrassVoiceCore::render_internal(float pitch_ratio) noexcept {
 
   // Bell reflection from the previous bore output: one-pole loss lowpass, the
   // loss gain and the topology sign.
-  lp_state_ += lp_alpha_ * (bore_.out - lp_state_);
+  if (bell_cutoff_hz_ > 0.0f) {
+    lp_state_ = bell_lp_.process(bore_.out);
+  } else {
+    lp_state_ += lp_alpha_ * (bore_.out - lp_state_);
+  }
   float refl = sign_ * loss_gain_ * lp_state_;
   // Half-valve (gated): a stuffier, lossier bore.
   if (half_valve_ > 0.0f) refl *= half_valve_loss_;
@@ -520,7 +549,7 @@ float BrassVoiceCore::render_internal(float pitch_ratio) noexcept {
     const float flow = h * std::copysign(std::sqrt(std::fabs(dp_phys)), dp_phys);
     // Released, the reflection passes through unchanged rather than being re-driven by the valve.
     const float gate = breath_.gate();
-    inj = WindBore::injection(mouth + (1.0f - gate) * refl, kLipFlowScale * flow, gate);
+    inj = WindBore::injection(refl, kLipFlowScale * flow, gate);
   } else {
     // The symmetric path: the displacement modulates a reflection coefficient,
     // and its [-1,1] clamp is what bounds the loop here.
@@ -553,14 +582,19 @@ float BrassVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (bore_nonlinearity_ > 0.0f) {
     // kBoreSpeedSpan is the pressure at fortissimo, but the loop holds one
     // pressure at every velocity (the amp VCA carries the dynamic), so the speed
-    // law's pressure is the loop's times the played dynamic.
-    const float p_hat = lp_state_ * cuivre_inv_scale_ * played_dynamic();
+    // law's pressure is the loop's, against its own running amplitude, times the
+    // played dynamic.
+    bore_env_ = std::max(std::fabs(lp_state_), bore_env_ * cuivre_env_decay_);
+    const float p_hat = lp_state_ / std::max(bore_env_, 1.0e-9f) * played_dynamic();
     bore_ratio = ratio * std::clamp(1.0f + kBoreSpeedSpan * bore_nonlinearity_ * p_hat, 0.5f, 1.5f);
   }
   bore_.advance(dc, bore_ratio);
   ++drive_index_;
 
   float outp = bore_.out;
+  // The unshaped wave, radiated alongside the shaped one so the shaper can be
+  // held to the power it would have radiated.
+  float dry = outp;
 
   // Cuivré (gated): the amplitude-dependent nonlinear wave steepening. The shaper
   // reshapes the normalised bore output through an asymmetric tanh shock front,
@@ -588,32 +622,38 @@ float BrassVoiceCore::render_internal(float pitch_ratio) noexcept {
       drive = (1.0f + kCuivreDrive * b_eff) * cuivre_fc_sq_;
       inv_tanh = 1.0f / std::tanh(drive);
     }
-    const float xn = outp * cuivre_inv_scale_;  // normalise to ~[-1,1]
+    // Normalised by the wave's own running amplitude, so the shock reshapes the
+    // wave without limiting its envelope: an onset overshoot passes through.
+    cuivre_env_ = std::max(std::fabs(outp), cuivre_env_ * cuivre_env_decay_);
+    const float env = std::max(cuivre_env_, 1.0e-9f);
+    const float xn = outp / env;
     // Asymmetric shock: the |x| term steepens the front (even harmonics), tanh
     // bounds it; rescaling by 1/tanh(drive) keeps the full-scale peak so the
     // shaper brightens without crushing the level.
     const float xa = xn + kCuivreAsym * xn * std::fabs(xn);
-    const float shaped = cuivre_adaa_.process(drive * xa) * inv_tanh * cuivre_scale_;
-    outp += b_eff * kCuivreMixMax * (shaped - outp);
+    const float shaped = cuivre_adaa_.process(drive * xa) * inv_tanh * env;
+    // Below the shock's knee (drive x amplitude, against the loudest the note has
+    // been, under 1) the wave is reshaped in proportion, so a decaying tail rounds
+    // off and is never lifted.
+    cuivre_peak_ = std::max(cuivre_peak_, cuivre_env_);
+    const float depth = std::min(1.0f, drive * cuivre_env_ / std::max(cuivre_peak_, 1.0e-9f));
+    outp += depth * b_eff * kCuivreMixMax * (shaped - outp);
   }
 
   // Bell radiation (gated): the part the bell did not reflect. After the shock
   // shaper, which steepens inside the bore, and before the mute, which sits on
   // the bell's mouth.
   if (bell_cutoff_hz_ > 0.0f) {
-    // The reflection's own smoothed pole, read live, so a moving controller can
-    // never leave the two halves of the bell on different corners. The 1/sqrt
-    // is what makes this highpass the power complement of that lowpass: for a
-    // one-pole pair, 1 - |a/(1-pz^-1)|^2 is exactly |sqrt(p)(1-z^-1)/(1-pz^-1)|^2,
-    // and the plain difference below carries p rather than sqrt(p).
+    // The reflection's own corner, read live, so a moving controller can never
+    // leave the two halves of the bell on different corners: the second-order
+    // Butterworth highpass is the power complement of the lowpass the loop runs.
     if (rad_alpha_ != lp_alpha_ || ratio != rad_ratio_) {
       rad_alpha_ = lp_alpha_;
       rad_ratio_ = ratio;
       refresh_radiation_scale(rad_alpha_);
     }
-    const float pole = std::max(1.0f - rad_alpha_, 1.0e-4f);
-    rad_state_ += rad_alpha_ * (outp - rad_state_);
-    outp = rad_scale_ * (outp - rad_state_) / std::sqrt(pole);
+    outp = rad_scale_ * bell_hp_.process(outp);
+    if (brassiness_ > 0.0f) dry = rad_scale_ * bell_hp_dry_.process(dry);
   } else if (rad_alpha_ > 0.0f) {
     // The makeup is normalized at the sounding fundamental, so it follows the live ratio.
     if (ratio != rad_ratio_) {
@@ -622,6 +662,19 @@ float BrassVoiceCore::render_internal(float pitch_ratio) noexcept {
     }
     rad_state_ += rad_alpha_ * (outp - rad_state_);
     outp = rad_scale_ * (outp - rad_state_);
+    if (brassiness_ > 0.0f) {
+      cuivre_rad_state_ += rad_alpha_ * (dry - cuivre_rad_state_);
+      dry = rad_scale_ * (dry - cuivre_rad_state_);
+    }
+  }
+
+  // A sharper wave carries, and radiates, more power at the same peak; holding
+  // the shaped wave to the power the unshaped one radiates keeps the shaper off
+  // the envelope while b_eff moves, so it changes the shape and never the level.
+  if (brassiness_ > 0.0f) {
+    cuivre_pow_in_ += cuivre_pow_coeff_ * (dry * dry - cuivre_pow_in_);
+    cuivre_pow_out_ += cuivre_pow_coeff_ * (outp * outp - cuivre_pow_out_);
+    outp *= std::sqrt((cuivre_pow_in_ + 1.0e-18f) / (cuivre_pow_out_ + 1.0e-18f));
   }
 
   // Mute (gated): a resonant upper formant plus a scoop of the direct low-mid,
@@ -665,6 +718,7 @@ float BrassVoiceCore::lip_resonator2(float dp) noexcept {
 }
 
 void BrassVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {
+  if ((present & kAxisForce) != 0u) hold_onset();
   excite_.set_base(base, present & ~kAxisBrightness);
   if ((present & kAxisBrightness) != 0u) {
     // bell_alpha_for_brightness clamps its own argument.
@@ -692,8 +746,14 @@ void BrassVoiceCore::refresh_excitation_targets() noexcept {
 
 void BrassVoiceCore::refresh_radiation_scale(float rad_alpha) noexcept {
   if (rad_alpha <= 0.0f) return;
-  const float pole = 1.0f - rad_alpha;
   const float w0 = kTwoPi * bore_f0_ * rad_ratio_ / lip_srf_;
+  if (bell_cutoff_hz_ > 0.0f) {
+    const float gain = std::abs(biquad_response(bell_hp_.c, w0));
+    rad_scale_ =
+        kBellRadiationMakeup * std::pow(1.0f / std::max(gain, 1.0e-6f), kBellRadiationNorm);
+    return;
+  }
+  const float pole = 1.0f - rad_alpha;
   const float num = pole * 2.0f * std::fabs(std::sin(0.5f * w0));
   const float den = std::sqrt(1.0f - 2.0f * pole * std::cos(w0) + pole * pole);
   rad_scale_ = kBellRadiationMakeup * std::pow(den / std::max(num, 1.0e-6f), kBellRadiationNorm);
@@ -720,7 +780,18 @@ float BrassVoiceCore::bell_alpha_for_brightness(float bright01) const noexcept {
 }
 
 void BrassVoiceCore::retune_loop_comp() noexcept {
-  const float tau_lp = onepole_group_delay_samples(1.0f - lp_alpha_, comp_omega_);
+  float tau_lp = 0.0f;
+  if (bell_cutoff_hz_ > 0.0f) {
+    // The coupled bell is a second-order pair on the corner lp_alpha_ names; its
+    // phase delay at the fundamental lengthens the loop as the one-pole's does.
+    const float w_c = -std::log(std::max(1.0f - lp_alpha_, 1.0e-6f));
+    bell_lp_.set(rt::rbj_lowpass(w_c, sonare::constants::kButterworthQ));
+    bell_hp_.set(rt::rbj_highpass(w_c, sonare::constants::kButterworthQ));
+    bell_hp_dry_.set(bell_hp_.c);
+    tau_lp = -std::arg(biquad_response(bell_lp_.c, comp_omega_)) / std::max(comp_omega_, 1.0e-6f);
+  } else {
+    tau_lp = onepole_group_delay_samples(1.0f - lp_alpha_, comp_omega_);
+  }
   bore_.comp = 1.0f + tau_lp - kDcCompScale * comp_lead_;
   comp_alpha_ = lp_alpha_;
 }
@@ -737,6 +808,9 @@ void BrassVoiceCore::kill() noexcept {
   decimator_.reset();
   breath_.level = 0.0f;
   lp_state_ = 0.0f;
+  bell_lp_.reset();
+  bell_hp_.reset();
+  bell_hp_dry_.reset();
   rad_state_ = 0.0f;
   bore_.out = 0.0f;
   dc_x1_ = 0.0f;

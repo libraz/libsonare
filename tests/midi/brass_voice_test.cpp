@@ -27,6 +27,7 @@
 #include "midi/synth/native_synth.h"
 #include "midi/synth/synth_presets.h"
 #include "midi/ump.h"
+#include "rt/biquad_design.h"
 #include "support/audio_fixtures.h"
 #include "support/midi_render.h"
 #include "util/constants.h"
@@ -605,27 +606,15 @@ TEST_CASE("the lip valve opens and shuts", "[midi][synth][brass]") {
   // read on the bore with the radiation stage and the cuivre shaper both off.
   //
   // The quantity is the second harmonic's share of the fundamental, read across
-  // the rest aperture rather than at one setting. A single "open is brighter
-  // than shut" comparison would be the wrong shape twice over: the ratio is not
-  // monotonic in aperture, and a purely linear stage moves it by more than ten
-  // decibels without creating a single harmonic, so its value at one point says
-  // nothing about what made it.
+  // the rest aperture. With the mouthpiece reflecting, the valve's flow is the
+  // share of the bore input the aperture sets, so the ratio follows it one way
+  // across the whole travel; the symmetric path this replaces ignores the
+  // aperture altogether and leaves the response flat.
   //
-  // What only a one-sided valve can produce is the shape. A valve clamped at
-  // both ends is cut off below when it rests nearly shut and above when it
-  // rests nearly open, so somewhere between the two its flow waveform is at its
-  // most symmetric and the even harmonics cancel. That notch is structural. A
-  // gain, a filter and a monotone shaper all lack it, and the symmetric path
-  // this replaces ignores the aperture altogether, leaving the response flat.
-  //
-  // Three decibels is the margin because the same ratio moves 0.851 dB across
-  // two octaves, 0.211 dB across the whole velocity range and 0.000 dB between
-  // repeated renders, and because the hand-written shaper this is meant to make
-  // derivable only moves it 1.73 dB. The floor is measured, not assumed, and it
-  // is re-measurable: the sibling case tagged [null] prints it. That the closed
-  // side did NOT move is not claimed here, because there is nothing in this
-  // case to compare it against: the golden manifests say it, against values
-  // recorded before the valve.
+  // The ratio moves 0.851 dB across two octaves, 0.211 dB across the whole
+  // velocity range and 0.000 dB between repeated renders, so a reach is
+  // measurable at twice the largest of those (1.7 dB), and the velocity floor is
+  // the slack a step may take against the direction. The [null] sibling prints them.
   const double f0 = 261.6256;                         // C4, note 60
   NativeSynthPatch patch = gm_fallback_patch(0, 56);  // Trumpet
   REQUIRE(patch.mode == SynthEngineMode::kBrass);
@@ -675,13 +664,15 @@ TEST_CASE("the lip valve opens and shuts", "[midi][synth][brass]") {
   for (double v : h2_db) reach = std::max(reach, std::abs(v - off));
   INFO("furthest from off: " << reach << " dB");
 
-  const double ends = std::min(h2_db.front(), h2_db.back());
-  double notch = 0.0;
-  for (std::size_t i = 1; i + 1 < h2_db.size(); ++i) notch = std::max(notch, ends - h2_db[i]);
-  INFO("deepest interior notch below the shallower end: " << notch << " dB");
+  const double direction = h2_db.back() > h2_db.front() ? 1.0 : -1.0;
+  double against = 0.0;
+  for (std::size_t i = 0; i + 1 < h2_db.size(); ++i) {
+    against = std::max(against, -direction * (h2_db[i + 1] - h2_db[i]));
+  }
+  INFO("largest step against the direction of travel: " << against << " dB");
 
-  REQUIRE(reach >= 3.0);
-  REQUIRE(notch >= 3.0);
+  REQUIRE(reach >= 2.0 * 0.851);
+  REQUIRE(against <= 0.211);
 }
 
 TEST_CASE("bore harmonic ratios against causes that are not the lip", "[.][midi][synth][null]") {
@@ -1133,8 +1124,12 @@ TEST_CASE("coupled brass bell recomputes radiation makeup on live brightness",
             3.0e-6f);
       const float scale_error = std::fabs(moved.radiation_scale - fresh.radiation_scale);
       // The float control ramp stops a few ulps short of its target. Smooth
-      // radiation uses that actual pole; snap copies the target exactly.
-      CHECK((snap ? scale_error : scale_error / fresh.radiation_scale) < 1.0e-5f);
+      // radiation uses that actual pole; snap copies the target exactly. The
+      // two-pole |T| falls as the corner squared below it and the makeup takes
+      // it to the 0.35th power, so the ramp's pole error carries through at 2 x 0.35.
+      const float pole_error = 3.0e-6f / fresh.coefficients.radiate_alpha;
+      CHECK((snap ? scale_error : scale_error / fresh.radiation_scale) <
+            (snap ? 1.0e-5f : 2.0f * 0.35f * pole_error));
       CHECK(fresh.tail_rms > 1.0e-3f);
       CHECK(moved.tail_rms > 0.8f * fresh.tail_rms);
     }
@@ -1342,5 +1337,156 @@ TEST_CASE("bore nonlinearity brightens a loud note more than a soft one", "[midi
     INFO("velocity " << static_cast<int>(velocity) << " lifts the centroid by " << lift);
     REQUIRE(lift > previous);
     previous = lift;
+  }
+}
+
+namespace {
+
+/// The onset's peak 10 ms RMS in its first 150 ms over the held 0.2–0.4 s RMS, in dB.
+double onset_lift_db(const std::vector<float>& buf) {
+  const size_t win = static_cast<size_t>(0.010 * kRate);
+  double top = 0.0;
+  for (size_t i = 0; i + win <= static_cast<size_t>(0.150 * kRate); i += win / 2) {
+    top = std::max(top, static_cast<double>(rms(buf, i, i + win)));
+  }
+  const double held = rms(buf, static_cast<size_t>(0.2 * kRate), static_cast<size_t>(0.4 * kRate));
+  return 20.0 * std::log10(top / held);
+}
+
+/// Power in five bins around @p hz of a @p fft-point spectrum.
+double band_power(const std::vector<double>& power, double hz, int fft) {
+  const int centre = static_cast<int>(std::lround(hz / kRate * fft));
+  double acc = 0.0;
+  for (int b = centre - 2; b <= centre + 2; ++b) {
+    if (b > 0 && b < static_cast<int>(power.size())) acc += power[static_cast<size_t>(b)];
+  }
+  return acc;
+}
+
+}  // namespace
+
+TEST_CASE("brass onset overshoot is off by default (bit-identical)", "[midi][synth][brass]") {
+  // At 0 dB the settle and the velocity slope have nothing to shape, so neither
+  // reaches the render.
+  NativeSynthPatch base = gm_fallback_patch(0, 56);  // Trumpet
+  base.brass.onset_breath_overshoot_db = 0.0f;
+  NativeSynthPatch same = base;
+  same.brass.onset_breath_settle_ms = 120.0f;
+  same.brass.onset_breath_overshoot_vel_db = 4.0f;
+  REQUIRE(render_patch(base, 67, 100, 24000) == render_patch(same, 67, 100, 24000));
+}
+
+TEST_CASE("a brass onset overshoot lifts the onset, more at ff when it slopes with velocity",
+          "[midi][synth][brass]") {
+  NativeSynthPatch off = gm_fallback_patch(0, 56);  // Trumpet
+  off.brass.onset_breath_overshoot_db = 0.0f;
+  NativeSynthPatch on = off;
+  on.brass.onset_breath_overshoot_db = 6.0f;
+  on.brass.onset_breath_settle_ms = 40.0f;
+  on.brass.onset_breath_overshoot_vel_db = 3.0f;
+  const int n = static_cast<int>(0.45 * kRate);
+  const double soft_gain =
+      onset_lift_db(render_patch(on, 67, 32, n)) - onset_lift_db(render_patch(off, 67, 32, n));
+  const double hard_gain =
+      onset_lift_db(render_patch(on, 67, 127, n)) - onset_lift_db(render_patch(off, 67, 127, n));
+  INFO("onset lift added at velocity 32: " << soft_gain << " dB, at 127: " << hard_gain << " dB");
+  REQUIRE(hard_gain > 0.5);
+  REQUIRE(hard_gain > soft_gain);
+}
+
+TEST_CASE("a streamed breath holds the brass onset overshoot", "[midi][synth][brass]") {
+  // CC2 seeds the force axis before the note, so the player's breath is the
+  // onset and the synthesized tonguing must not play over it.
+  NativeSynthPatch off = gm_fallback_patch(0, 56);  // Trumpet
+  off.brass.onset_breath_overshoot_db = 0.0f;
+  NativeSynthPatch on = off;
+  on.brass.onset_breath_overshoot_db = 6.0f;
+  REQUIRE(render_with_initial_cc(on, 67, 100, 24000, 2, 90) ==
+          render_with_initial_cc(off, 67, 100, 24000, 2, 90));
+  REQUIRE(render_patch(on, 67, 100, 24000) != render_patch(off, 67, 100, 24000));
+}
+
+TEST_CASE("the open lip valve speaks on the note, not between the comb's teeth",
+          "[midi][synth][brass]") {
+  // With the mouthpiece reflecting, the onset step cannot ring the bore's
+  // antiperiodic modes (half-integer multiples of f0) ahead of the buzz.
+  const NativeSynthPatch patch = gm_fallback_patch(0, 56);  // Trumpet, lip aperture 0.9
+  REQUIRE(patch.brass.lip_aperture > 0.5f);
+  const double f0 = 391.995;  // G4, note 67
+  const int fft = 2048;       // the first 43 ms
+  for (uint8_t velocity : {uint8_t{32}, uint8_t{127}}) {
+    const std::vector<double> ps = power_spectrum(render_patch(patch, 67, velocity, fft), 0, fft);
+    const double on_note = band_power(ps, f0, fft) + band_power(ps, 2.0 * f0, fft);
+    const double between = band_power(ps, 0.5 * f0, fft) + band_power(ps, 1.5 * f0, fft);
+    INFO("velocity " << static_cast<int>(velocity) << ": harmonics " << on_note
+                     << ", half-integer modes " << between);
+    REQUIRE(on_note > 4.0 * between);
+  }
+}
+
+TEST_CASE("the cuivre shaper reshapes the wave without limiting its onset",
+          "[midi][synth][brass]") {
+  // Normalised by the wave's running peak, the shock bounds the waveform rather
+  // than the envelope, so the buzz's own overshoot passes through it.
+  NativeSynthPatch plain = gm_fallback_patch(0, 56);  // Trumpet
+  plain.brass.onset_breath_overshoot_db = 0.0f;
+  plain.brass.brassiness = 0.0f;
+  NativeSynthPatch shaped = plain;
+  shaped.brass.brassiness = 1.0f;
+  shaped.brass.cuivre_dynamics = 1.0f;
+  const int n = static_cast<int>(0.45 * kRate);
+  const double lift_plain = onset_lift_db(render_patch(plain, 67, 127, n));
+  const double lift_shaped = onset_lift_db(render_patch(shaped, 67, 127, n));
+  INFO("onset lift: plain " << lift_plain << " dB, shaped " << lift_shaped << " dB");
+  REQUIRE(lift_shaped > lift_plain - 1.0);
+}
+
+TEST_CASE("the reflected brass loop holds its period in the steady state", "[midi][synth][brass]") {
+  // A loop whose valve flow outweighs the reflection period-doubles: lines at
+  // half-integer multiples of f0 sustain under the note. Read past the onset on
+  // every fallback brass voice, at both ends of the velocity range.
+  for (int program = 56; program <= 61; ++program) {
+    const NativeSynthPatch patch = gm_fallback_patch(0, program);
+    REQUIRE(patch.mode == SynthEngineMode::kBrass);
+    const uint8_t note = program == 58 ? 52 : 62;
+    const double f0 = 440.0 * std::pow(2.0, (static_cast<int>(note) - 69) / 12.0);
+    for (uint8_t velocity : {uint8_t{32}, uint8_t{127}}) {
+      const std::vector<double> ps =
+          power_spectrum(render_patch(patch, note, velocity, 24000), 14400);
+      const double on_note = band_power(ps, f0, kFft) + band_power(ps, 2.0 * f0, kFft);
+      const double between = band_power(ps, 0.5 * f0, kFft) + band_power(ps, 1.5 * f0, kFft);
+      const double gap_db = 10.0 * std::log10(on_note / between);
+      INFO("program " << program << " velocity " << static_cast<int>(velocity)
+                      << ": half-integer lines " << gap_db << " dB under the harmonics");
+      REQUIRE(gap_db >= 30.0);
+    }
+  }
+}
+
+TEST_CASE("the coupled brass bell's two halves are power complementary", "[midi][synth][brass]") {
+  // What the bell does not reflect it radiates: the second-order reflection
+  // lowpass and the radiation highpass on one corner keep |R|^2 + |T|^2 = 1
+  // across the band, at either host rate.
+  for (double rate : {44100.0, 48000.0}) {
+    for (double corner_hz : {400.0, 1383.55, 6034.69}) {
+      const float w_c = static_cast<float>(2.0 * sonare::constants::kPiD * corner_hz / rate);
+      const sonare::rt::BiquadCoeffs lp =
+          sonare::rt::rbj_lowpass(w_c, sonare::constants::kButterworthQ);
+      const sonare::rt::BiquadCoeffs hp =
+          sonare::rt::rbj_highpass(w_c, sonare::constants::kButterworthQ);
+      const auto power = [](const sonare::rt::BiquadCoeffs& c, double w) {
+        const std::complex<double> z1 = std::polar(1.0, -w);
+        const std::complex<double> z2 = z1 * z1;
+        const double b0 = c.b0, b1 = c.b1, b2 = c.b2, a1 = c.a1, a2 = c.a2;
+        return std::norm((b0 + b1 * z1 + b2 * z2) / (1.0 + a1 * z1 + a2 * z2));
+      };
+      double worst = 0.0;
+      for (int i = 1; i < 256; ++i) {
+        const double w = sonare::constants::kPiD * i / 256.0;
+        worst = std::max(worst, std::fabs(power(lp, w) + power(hp, w) - 1.0));
+      }
+      INFO("rate " << rate << " corner " << corner_hz << " Hz: worst |R|^2+|T|^2-1 " << worst);
+      REQUIRE(worst < 1.0e-4);
+    }
   }
 }

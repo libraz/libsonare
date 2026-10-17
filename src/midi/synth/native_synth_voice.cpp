@@ -80,16 +80,6 @@ void apply_excitation_base(NativeSynthVoice& v, const ExcitationAxes& base, uint
 /// each asks for on its own is 0.80 and 1.46, and this is the midpoint.
 SONARE_TUNABLE(kPercussionVelocityExponent, 1.1f);
 
-/// Exponent of the same curve on the lip-reed generator.
-///
-/// The spec's 2.0 swung the four brass references 10.6 to 14.8 dB wider from
-/// velocity 32 to 127; with the curve off entirely the engine's own breath
-/// response is 4.1 to 7.7 dB, which is under every one of them, so this is an
-/// exponent rather than the opt-out the piano and the harpsichord take. The
-/// exponent each reference asks for is 0.76, 0.77, 1.06 and 1.12 — the low
-/// brass want less than the high — and this is their mean.
-SONARE_TUNABLE(kBrassVelocityExponent, 0.93f);
-
 /// Exponent of the same curve on the tonewheel generator.
 ///
 /// A key closes contacts on wheels that are already turning, so the instrument
@@ -100,7 +90,8 @@ SONARE_TUNABLE(kBrassVelocityExponent, 0.93f);
 SONARE_TUNABLE(kAdditiveVelocityExponent, 0.5f);
 
 /// Exponent of the SoundFont velocity-to-amplitude curve for @p p, 0 = off; the
-/// Karplus-Strong string carries its own in `ks.velocity_exponent`.
+/// Karplus-Strong string and the lip reed carry their own in `ks.velocity_exponent`
+/// and `brass.velocity_exponent`.
 ///
 /// `sf2_velocity_gain` exists because a sampled note was recorded at one force
 /// and has to be scaled to the force actually played. A physical engine is
@@ -132,7 +123,7 @@ SONARE_TUNABLE(kAdditiveVelocityExponent, 0.5f);
 float sampler_velocity_exponent(const NativeSynthPatch& p) noexcept {
   const SynthEngineMode mode = p.mode;
   if (mode == SynthEngineMode::kPiano || mode == SynthEngineMode::kHarpsichord) return 0.0f;
-  if (mode == SynthEngineMode::kBrass) return kBrassVelocityExponent;
+  if (mode == SynthEngineMode::kBrass) return p.brass.velocity_exponent;
   if (mode == SynthEngineMode::kPercussion) return kPercussionVelocityExponent;
   if (mode == SynthEngineMode::kAdditive) return kAdditiveVelocityExponent;
   if (mode == SynthEngineMode::kKarplusStrong) return p.ks.velocity_exponent;
@@ -465,6 +456,10 @@ void NativeSynthVoice::seed_excitation(const ExcitationAxes& base, uint32_t pres
 void NativeSynthVoice::push_excitation(const ExcitationAxes& base, uint32_t present) noexcept {
   if (patch == nullptr) return;
   apply_excitation_base(*this, base, present, false);
+}
+
+void NativeSynthVoice::hold_onset() noexcept {
+  if (patch != nullptr && patch->mode == SynthEngineMode::kBrass) brass.hold_onset();
 }
 
 void NativeSynthVoice::restore_excitation_base() noexcept {

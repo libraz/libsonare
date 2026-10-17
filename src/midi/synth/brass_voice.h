@@ -45,6 +45,7 @@
 #include "midi/synth/wind_bore.h"
 #include "midi/synth/wind_breath.h"
 #include "rt/adaa.h"
+#include "rt/biquad_design.h"
 #include "rt/nonlinearities.h"
 #include "util/constants.h"
 
@@ -214,6 +215,24 @@ struct BrassPatchParams {
   /// attack and a fuller buzz. 0 = off -> render is bit-identical (the second
   /// mode is skipped).
   float dynamic_lip = 0.0f;
+
+  /// Tongued-onset breath overshoot (dB of mouth pressure) at velocity 127: how
+  /// far the mouth pressure stands above its held level as the tongue releases
+  /// it, before it settles. The radiated overshoot is the loop's response to
+  /// this, not a copy of it. Applies only while no input streams the breath.
+  /// 0 = off -> bit-identical.
+  float onset_breath_overshoot_db = 0.0f;
+  /// Time the breath overshoot takes to settle back onto the held level (ms, ~95%).
+  float onset_breath_settle_ms = 40.0f;
+  /// Change of the breath overshoot per doubling of velocity (dB), read down from
+  /// velocity 127: positive gives a soft note less of it.
+  float onset_breath_overshoot_vel_db = 0.0f;
+
+  /// Exponent of the SoundFont velocity-to-amplitude curve on this voice (0 =
+  /// off). The loop's own breath response leaves every brass reference's range
+  /// short (trumpet by 18 dB from velocity 32 to 127 with the curve off), and the
+  /// references ask for 0.98 to 2.01, so each patch carries its own.
+  float velocity_exponent = 0.93f;
 };
 
 /// Per-voice brass state, embedded in NativeSynthVoice. The voice's amplitude
@@ -262,6 +281,9 @@ class BrassVoiceCore {
   /// regime; brightness (CC74) opens the bell reflection filter.
   void set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept;
   void restore_excitation_base() noexcept;
+  /// Drops the onset overshoot: the breath is driven by an input, or velocity
+  /// means nothing, so the synthesized tonguing would play over the player.
+  void hold_onset() noexcept { breath_.hold_overshoot(); }
   /// Mod-matrix offsets on the same axes, in the same normalized units. Held
   /// apart from the base so the two compose rather than overwrite, and applied
   /// through the same smoothing ramp: this is a control-rate destination, not an
@@ -328,6 +350,12 @@ class BrassVoiceCore {
   float comp_lead_ = 0.0f;
   float comp_alpha_ = -1.0f;
   float lp_state_ = 0.0f;
+  // The coupled bell (bell_cutoff_hz_ > 0) as a second-order Butterworth pair on
+  // one corner: the reflection lowpass in the loop and its power complement on
+  // the way out, for the shaped wave and the unshaped one it is held to.
+  rt::BiquadState bell_lp_{};
+  rt::BiquadState bell_hp_{};
+  rt::BiquadState bell_hp_dry_{};
   float loss_gain_ = 0.95f;
   // Bell radiation: the complement of the reflection, a one-pole highpass on the
   // way out. Its own state, so the loop is untouched.
@@ -419,13 +447,24 @@ class BrassVoiceCore {
   // the render path is bit-identical to the linear model). ---
 
   // 4a: cuivré. brassiness_ == 0 -> skipped (bit-identical). A radiation-side
-  // level-preserving waveshaper: the bore output is normalised by the note's raw
+  // level-preserving waveshaper: the bore output is normalised by its running
   // peak, pushed through a bounded asymmetric tanh (the shock front), and
-  // rescaled — so the peak is kept while the upper harmonics bloom. cuivre_scale_
-  // is the per-note raw peak used to normalise.
+  // rescaled — so the envelope is kept while the upper harmonics bloom.
   float brassiness_ = 0.0f;
-  float cuivre_scale_ = 1.0f;
-  float cuivre_inv_scale_ = 1.0f;
+  // The bore output's running peak the shaper normalises by, and its per-sample release.
+  float cuivre_env_ = 0.0f;
+  // The loudest cuivre_env_ has been this note, the reference the shock's knee is read against.
+  float cuivre_peak_ = 0.0f;
+  // The reflected wave's running amplitude the bore speed law reads its pressure against.
+  float bore_env_ = 0.0f;
+  float cuivre_env_decay_ = 0.0f;
+  // Power before and after the shaper, tracked over the same span, so its output
+  // carries the power its input did.
+  float cuivre_pow_coeff_ = 0.0f;
+  float cuivre_pow_in_ = 0.0f;
+  float cuivre_pow_out_ = 0.0f;
+  // The bell radiation's state for the unshaped wave.
+  float cuivre_rad_state_ = 0.0f;
   // Per-note shock drive: the nominal drive scaled by the low-register frequency
   // compensation, so the shaper saturates in the low range as it does up top.
   float cuivre_drive_ = 0.0f;
