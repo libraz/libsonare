@@ -528,6 +528,10 @@ def baseline_pins(
     }
 
 
+#: Forwarded to every autofit run; set from --allow-dirty-src in main().
+ALLOW_DIRTY_SRC = False
+
+
 def _fit(
     voice: dict, out: Path, build_dir: str, per_knob: int, weights: dict[str, float] | None = None
 ) -> None:
@@ -572,6 +576,8 @@ def _fit(
     ]
     for term, weight in sorted((weights or {}).items()):
         cmd += [f"--w-{term}", f"{weight:g}"]
+    if ALLOW_DIRTY_SRC:
+        cmd.append("--allow-dirty-src")
     log = out.with_suffix(".log")
     with log.open("w") as fh:
         subprocess.run(cmd, stdout=fh, stderr=subprocess.STDOUT, check=False)
@@ -1016,7 +1022,14 @@ def main() -> int:
     ap.add_argument("--build-dir", default="build-autofit")
     ap.add_argument("--evals-per-knob", type=int, default=EVALS_PER_KNOB)
     ap.add_argument("--out", default="", help="results directory (default: keyed by objective)")
+    ap.add_argument(
+        "--allow-dirty-src",
+        action="store_true",
+        help="pass autofit's --allow-dirty-src: fit against an uncommitted src/ edit of your own",
+    )
     args = ap.parse_args()
+    global ALLOW_DIRTY_SRC
+    ALLOW_DIRTY_SRC = args.allow_dirty_src
     only = {s.strip() for s in args.only.split(",") if s.strip()}
     root = Path(args.out) if args.out else run_root(objective_digest())
 
