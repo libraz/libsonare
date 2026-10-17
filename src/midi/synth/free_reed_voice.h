@@ -82,6 +82,17 @@ struct FreeReedPatchParams {
   /// Nyquist, so it changes timbre without moving that level. The harmonium and
   /// bandoneon measure at 1, the harmonica — played inside cupped hands — at 0.
   float radiation = 1.0f;
+
+  /// Onset bellows overshoot (dB of bellows pressure) at velocity 127: how far
+  /// the bellows stands above its held level as the player opens the valve,
+  /// before it settles. Applies only while no input streams the bellows.
+  /// 0 = off -> bit-identical.
+  float onset_breath_overshoot_db = 0.0f;
+  /// Time the bellows overshoot takes to settle back onto the held level (ms, ~95%).
+  float onset_breath_settle_ms = 40.0f;
+  /// Change of the bellows overshoot per doubling of velocity (dB), read down
+  /// from velocity 127: positive gives a soft note less of it.
+  float onset_breath_overshoot_vel_db = 0.0f;
 };
 
 /// Per-voice free-reed state, embedded in NativeSynthVoice. The voice's
@@ -115,6 +126,9 @@ class FreeReedVoiceCore {
   /// filter.
   void set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept;
   void restore_excitation_base() noexcept;
+  /// Drops the onset overshoot: the bellows is driven by an input, or velocity
+  /// means nothing, so the synthesized onset would play over the player.
+  void hold_onset() noexcept { bellows_.hold_overshoot(); }
   /// Mod-matrix offsets on the same axes, in the same normalized units. Held
   /// apart from the base so the two compose rather than overwrite, and applied
   /// through the same smoothing ramp: this is a control-rate destination, not an

@@ -18,6 +18,7 @@
 
 #include "core/fft.h"
 #include "midi/midi_event.h"
+#include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/pitch.h"
 #include "midi/ump.h"
@@ -31,6 +32,7 @@ using sonare::midi::MidiEvent;
 using sonare::midi::Velocity16;
 using sonare::midi::synth::FlutePatchParams;
 using sonare::midi::synth::FluteVoiceCore;
+using sonare::midi::synth::gm_fallback_patch;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
@@ -87,6 +89,30 @@ float peak(const std::vector<float>& buf) {
   float p = 0.0f;
   for (float s : buf) p = std::max(p, std::fabs(s));
   return p;
+}
+
+/// Sends @p cc = @p value BEFORE the note-on (so the note is seeded at that
+/// controller position), then renders @p num samples.
+std::vector<float> render_with_initial_cc(const NativeSynthPatch& patch, uint8_t note,
+                                          uint8_t velocity, int num, uint8_t cc, uint8_t value) {
+  NativeSynthConfig cfg;
+  cfg.patch = patch;
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, 256);
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, cc, value)));
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, velocity)));
+  return render_left(synth, num);
+}
+
+/// Loudest 10 ms of the first 150 ms over the 0.2-0.4 s held level, in dB.
+double onset_lift_db(const std::vector<float>& buf) {
+  const size_t win = static_cast<size_t>(0.010 * kRate);
+  double top = 0.0;
+  for (size_t i = 0; i + win <= static_cast<size_t>(0.150 * kRate); i += win / 2) {
+    top = std::max(top, static_cast<double>(rms(buf, i, i + win)));
+  }
+  const double held = rms(buf, static_cast<size_t>(0.2 * kRate), static_cast<size_t>(0.4 * kRate));
+  return 20.0 * std::log10(top / held);
 }
 
 using sonare::test::fft_fundamental;
@@ -310,4 +336,48 @@ TEST_CASE("flute advanced-physics gates change the tone and stay bounded", "[mid
     REQUIRE(peak(tone) < 4.0f);
     REQUIRE(std::isfinite(tone.back()));
   }
+}
+
+TEST_CASE("flute onset overshoot is off by default (bit-identical)", "[midi][synth][flute]") {
+  // At 0 dB the settle and the velocity slope have nothing to shape, so neither
+  // reaches the render.
+  NativeSynthPatch base = gm_fallback_patch(0, 73);  // Flute
+  base.flute.onset_breath_overshoot_db = 0.0f;
+  NativeSynthPatch same = base;
+  same.flute.onset_breath_settle_ms = 120.0f;
+  same.flute.onset_breath_overshoot_vel_db = 4.0f;
+  REQUIRE(render_patch(base, 72, 100, 24000) == render_patch(same, 72, 100, 24000));
+}
+
+TEST_CASE("a flute onset overshoot lifts the onset, more at ff when it slopes with velocity",
+          "[midi][synth][flute]") {
+  NativeSynthPatch off = gm_fallback_patch(0, 73);  // Flute
+  off.flute.onset_breath_overshoot_db = 0.0f;
+  // The patch's slow VCA attack would hide the onset the contour shapes.
+  off.amp_env.attack_ms = 5.0f;
+  NativeSynthPatch on = off;
+  // The jet takes ~30 ms to speak, so the overshoot has to outlast it to be heard.
+  on.flute.onset_breath_overshoot_db = 6.0f;
+  on.flute.onset_breath_settle_ms = 150.0f;
+  on.flute.onset_breath_overshoot_vel_db = 3.0f;
+  const int n = static_cast<int>(0.45 * kRate);
+  const double soft_gain =
+      onset_lift_db(render_patch(on, 72, 32, n)) - onset_lift_db(render_patch(off, 72, 32, n));
+  const double hard_gain =
+      onset_lift_db(render_patch(on, 72, 127, n)) - onset_lift_db(render_patch(off, 72, 127, n));
+  INFO("onset lift added at velocity 32: " << soft_gain << " dB, at 127: " << hard_gain << " dB");
+  REQUIRE(hard_gain > 0.5);
+  REQUIRE(hard_gain > soft_gain);
+}
+
+TEST_CASE("a streamed breath holds the flute onset overshoot", "[midi][synth][flute]") {
+  // CC2 seeds the force axis before the note, so the player's breath is the
+  // onset and the synthesized tonguing must not play over it.
+  NativeSynthPatch off = gm_fallback_patch(0, 73);  // Flute
+  off.flute.onset_breath_overshoot_db = 0.0f;
+  NativeSynthPatch on = off;
+  on.flute.onset_breath_overshoot_db = 6.0f;
+  REQUIRE(render_with_initial_cc(on, 72, 100, 24000, 2, 90) ==
+          render_with_initial_cc(off, 72, 100, 24000, 2, 90));
+  REQUIRE(render_patch(on, 72, 100, 24000) != render_patch(off, 72, 100, 24000));
 }

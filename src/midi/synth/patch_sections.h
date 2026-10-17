@@ -331,6 +331,9 @@ constexpr FlutePatchParams blank_flute() noexcept {
   z.jet_turbulence = 0.0f;
   z.edge_hysteresis = 0.0f;
   z.vortex = 0.0f;
+  z.onset_breath_overshoot_db = 0.0f;
+  z.onset_breath_settle_ms = 0.0f;
+  z.onset_breath_overshoot_vel_db = 0.0f;
   return z;
 }
 
@@ -377,6 +380,9 @@ constexpr FreeReedPatchParams blank_free_reed() noexcept {
   z.slot_return = 0.0f;
   z.slot_gap = 0.0f;
   z.radiation = 0.0f;
+  z.onset_breath_overshoot_db = 0.0f;
+  z.onset_breath_settle_ms = 0.0f;
+  z.onset_breath_overshoot_vel_db = 0.0f;
   return z;
 }
 

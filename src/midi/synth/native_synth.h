@@ -1846,12 +1846,12 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.brass.half_valve, 0.0f), 0.0f, 1.0f);
   p.brass.dynamic_lip =
       std::clamp(patch_clamp_detail::sanitize(p.brass.dynamic_lip, 0.0f), 0.0f, 1.0f);
-  p.brass.onset_breath_overshoot_db = std::clamp(
-      patch_clamp_detail::sanitize(p.brass.onset_breath_overshoot_db, 0.0f), 0.0f, 12.0f);
+  p.brass.onset_breath_overshoot_db =
+      std::clamp(patch_clamp_detail::sanitize(p.brass.onset_breath_overshoot_db, 0.0f), 0.0f, 8.0f);
   p.brass.onset_breath_settle_ms =
       std::clamp(patch_clamp_detail::sanitize(p.brass.onset_breath_settle_ms, 40.0f), 1.0f, 500.0f);
   p.brass.onset_breath_overshoot_vel_db = std::clamp(
-      patch_clamp_detail::sanitize(p.brass.onset_breath_overshoot_vel_db, 0.0f), -6.0f, 6.0f);
+      patch_clamp_detail::sanitize(p.brass.onset_breath_overshoot_vel_db, 0.0f), -3.0f, 6.0f);
   p.brass.velocity_exponent =
       std::clamp(patch_clamp_detail::sanitize(p.brass.velocity_exponent, 0.93f), 0.0f, 4.0f);
   p.flute.breath_pressure =
@@ -1885,6 +1885,12 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.flute.edge_hysteresis =
       std::clamp(patch_clamp_detail::sanitize(p.flute.edge_hysteresis, 0.0f), 0.0f, 1.0f);
   p.flute.vortex = std::clamp(patch_clamp_detail::sanitize(p.flute.vortex, 0.0f), 0.0f, 1.0f);
+  p.flute.onset_breath_overshoot_db =
+      std::clamp(patch_clamp_detail::sanitize(p.flute.onset_breath_overshoot_db, 0.0f), 0.0f, 8.0f);
+  p.flute.onset_breath_settle_ms =
+      std::clamp(patch_clamp_detail::sanitize(p.flute.onset_breath_settle_ms, 40.0f), 1.0f, 500.0f);
+  p.flute.onset_breath_overshoot_vel_db = std::clamp(
+      patch_clamp_detail::sanitize(p.flute.onset_breath_overshoot_vel_db, 0.0f), -3.0f, 6.0f);
   p.plucked_string.brightness =
       std::clamp(patch_clamp_detail::sanitize(p.plucked_string.brightness, 0.7f), 0.0f, 1.0f);
   p.plucked_string.decay_s =
@@ -1946,6 +1952,12 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.slot_gap, 0.14f), 0.02f, 0.5f);
   p.free_reed.radiation =
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.radiation, 1.0f), 0.0f, 1.0f);
+  p.free_reed.onset_breath_overshoot_db = std::clamp(
+      patch_clamp_detail::sanitize(p.free_reed.onset_breath_overshoot_db, 0.0f), 0.0f, 8.0f);
+  p.free_reed.onset_breath_settle_ms = std::clamp(
+      patch_clamp_detail::sanitize(p.free_reed.onset_breath_settle_ms, 40.0f), 1.0f, 500.0f);
+  p.free_reed.onset_breath_overshoot_vel_db = std::clamp(
+      patch_clamp_detail::sanitize(p.free_reed.onset_breath_overshoot_vel_db, 0.0f), -3.0f, 6.0f);
   p.harpsichord.pluck_8a =
       std::clamp(patch_clamp_detail::sanitize(p.harpsichord.pluck_8a, 0.14f), 0.0f, 0.5f);
   p.harpsichord.pluck_8b =

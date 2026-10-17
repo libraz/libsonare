@@ -77,6 +77,8 @@ class ExcitationFamily(str, Enum):
     HAMMERED = "hammered"
     STRUCK_MODAL = "struck-modal"
     PERCUSSION = "percussion"
+    # A wind source whose engine shapes the breath or bellows onset (brass, flute, free reed).
+    BREATH_ONSET = "breath-onset"
     OTHER = "other"
 
 
@@ -185,6 +187,11 @@ _PROGRAM_EXCITATION: dict[int, ExcitationFamily] = {
     # Pitched percussive GM slots are modal when played melodically.  A drum
     # channel note is handled separately below as PERCUSSION.
     **{program: ExcitationFamily.STRUCK_MODAL for program in range(112, 119)},
+    # The free-reed, brass and flute engines shape the breath onset; the synth
+    # brass (62, 63) and the reeds carry no such contour and stay OTHER.
+    **{program: ExcitationFamily.BREATH_ONSET for program in range(20, 24)},
+    **{program: ExcitationFamily.BREATH_ONSET for program in range(56, 62)},
+    **{program: ExcitationFamily.BREATH_ONSET for program in range(72, 80)},
 }
 
 # A keyboard interface is orthogonal to the physical event.  Celesta is the
@@ -415,6 +422,13 @@ def default_weights(
         ExcitationFamily.STRUCK_MODAL,
     }:
         # `_level_terms` removes the global offset, leaving a curve a gain cannot improve.
+        weights["level"] = 1.0
+    if profile.excitation is ExcitationFamily.BREATH_ONSET:
+        # The engine's overshoot is fitted against the reference's, cell by cell,
+        # beside the velocity level curve. `onsetvel` stays 0: the flute references are
+        # one sample across velocity (centroid within 1% from 32 to 127), and the
+        # free-reed references' overshoot moves under 0.05 dB per velocity doubling.
+        weights["onset"] = 1.0
         weights["level"] = 1.0
     return weights
 

@@ -220,11 +220,16 @@ bool reed_is_beating(const NativeSynthPatch& patch) noexcept {
   return patch.reed.closing_pressure > 0.0f;
 }
 
+bool flute_overshoots(const NativeSynthPatch& patch) noexcept {
+  return patch.flute.onset_breath_overshoot_db > 0.0f;
+}
+
 /// A patch field that gates a code path inside an engine. One representative per
 /// engine covers whichever side its lowest program happens to sit on, so an
 /// engine listed here takes one more row per selector -- `reed.closing_pressure` chooses the
 /// Bernoulli valve over the linearised table, and the lowest reed program is on the table side, so
-/// a change to the valve would have moved no gesture row at all. An engine absent from here claims
+/// a change to the valve would have moved no gesture row at all; a flute's breath overshoot is
+/// the same case. An engine absent from here claims
 /// its programs differ only in values the same code reads; a gate added without a row goes
 /// unmeasured under every gesture.
 struct PathSelector {
@@ -236,6 +241,7 @@ struct PathSelector {
 
 const PathSelector kPathSelectors[] = {
     {SynthEngineMode::kReed, "beating", &reed_is_beating},
+    {SynthEngineMode::kFlute, "overshoot", &flute_overshoots},
 };
 
 struct EngineRow {

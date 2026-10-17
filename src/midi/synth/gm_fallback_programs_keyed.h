@@ -960,6 +960,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.reed_organ.gain = 0.42f;
   o.reed_organ.amp_env.attack_ms = 18.3625f;
   o.reed_organ.amp_env.release_ms = 73.4498f;
+  o.reed_organ.amp_env.sustain = 0.809017f;
 
   // Accordion (GM 21): the same free reed on a narrower slot. It voiced off the
   // harmonium's patch until the two were measured apart — the accordion's null
@@ -998,7 +999,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.harmonica.lfo_to_pitch_cents = 8.0f;
   o.harmonica.stereo_spread = 0.12f;
   o.harmonica.gain = 0.44f;
-  o.harmonica.amp_env.attack_ms = 35.9658f;
+  o.harmonica.amp_env.attack_ms = 58.7598f;
   o.harmonica.amp_env.release_ms = 55.0874f;
   o.harmonica.cutoff_hz = 3378.8f;
 
@@ -1012,10 +1013,12 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.bandoneon.free_reed.detune = 0.30f;
   o.bandoneon.stereo_spread = 0.22f;
   o.bandoneon.gain = 0.44f;
-  o.bandoneon.amp_env.sustain = 0.618034f;
+  o.bandoneon.amp_env.sustain = 0.663119f;
   o.bandoneon.cutoff_hz = 6198.41f;
   o.bandoneon.drive = 0.118034f;
-  o.bandoneon.free_reed.breath_pressure = 0.666441f;
+  o.bandoneon.free_reed.breath_pressure = 0.803223f;
+  o.bandoneon.amp_env.attack_ms = 39.2105f;
+  o.bandoneon.free_reed.attack_ms = 48.0506f;
 
   // Orchestra Hit (GM 55): a sharp tutti stab. The ensemble family's slow pad
   // is the wrong envelope, so this overrides to a bright detuned-saw chord with

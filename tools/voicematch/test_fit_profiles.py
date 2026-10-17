@@ -31,9 +31,13 @@ from toneclass import ExcitationFamily, FitProfile, ToneClass, default_weights, 
         (49, ExcitationFamily.BOWED, False),
         (110, ExcitationFamily.BOWED, False),  # fiddle
         (16, ExcitationFamily.OTHER, True),  # drawbar organ: keyboard interface
-        (22, ExcitationFamily.OTHER, False),  # harmonica: wind instrument
+        (22, ExcitationFamily.BREATH_ONSET, False),  # harmonica: a breath-blown free reed
         (44, ExcitationFamily.OTHER, False),  # subtractive tremolo section patch
         (108, ExcitationFamily.STRUCK_MODAL, False),  # modal steel tine
+        (56, ExcitationFamily.BREATH_ONSET, False),  # trumpet: breath overshoot
+        (73, ExcitationFamily.BREATH_ONSET, False),  # flute
+        (62, ExcitationFamily.OTHER, False),  # synth brass: no overshoot mechanism
+        (71, ExcitationFamily.OTHER, False),  # clarinet: the reed carries none yet
     ],
 )
 def test_program_profiles_follow_the_bank_patch(program, excitation, keyboard):
@@ -97,10 +101,20 @@ def test_family_defaults_add_only_the_axes_the_excitation_can_explain():
 
 def test_unrelated_sustained_and_noise_defaults_remain_unchanged():
     organ = default_weights(19)
-    wind = default_weights(73)
+    wind = default_weights(68)  # oboe: a reed, which carries no onset contour
     noise = default_weights(120)
     assert fit_profile(16).excitation is ExcitationFamily.OTHER
     assert fit_profile(16).keyboard is True
     assert "level" not in organ and organ["mod"] > 0.0
     assert "level" not in wind and wind["mod"] > 0.0
     assert noise["mss"] == pytest.approx(1.0)
+
+
+def test_a_breath_onset_source_weighs_its_onset_and_nothing_else_does():
+    for program in (20, 21, 23, 56, 60, 73, 79):
+        weights = default_weights(program)
+        assert weights["onset"] == pytest.approx(1.0)
+        assert weights["level"] == pytest.approx(1.0)
+        assert "onsetvel" not in weights
+    for program in (19, 62, 66, 71, 40):
+        assert "onset" not in default_weights(program)

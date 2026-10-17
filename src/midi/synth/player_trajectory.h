@@ -67,8 +67,22 @@ struct OnsetContour {
     overshoot_decay = ramp_coeff(settle_ms, sample_rate);
   }
 
+  /// set_overshoot() read down from velocity 127: @p overshoot_db at 127, moved by
+  /// @p per_doubling_db for each halving of @p vel01. 0 dB at 127 is off.
+  void set_overshoot_at_velocity(float overshoot_db, float per_doubling_db, float vel01,
+                                 float settle_ms, double sample_rate) noexcept {
+    const float db =
+        overshoot_db > 0.0f
+            ? overshoot_db + per_doubling_db * std::log2(std::max(vel01, 1.0f / 127.0f))
+            : 0.0f;
+    set_overshoot(db, settle_ms, sample_rate);
+  }
+
   /// Drops what is left of the overshoot, for an onset some input now drives.
   void hold_overshoot() noexcept { overshoot = 0.0f; }
+
+  /// The overshoot's target over the held one: exactly 1 once it has settled.
+  float overshoot_ratio() const noexcept { return 1.0f + overshoot; }
 
   /// Ramps level toward 1 (sustaining) or 0 (released), at attack_coeff or
   /// release_coeff depending on which state it is currently ramping toward,

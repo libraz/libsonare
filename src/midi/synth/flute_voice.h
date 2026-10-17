@@ -138,6 +138,18 @@ struct FlutePatchParams {
   /// rougher, breathier source (some shakuhachi / ocarina voicings). 0 = off ->
   /// render is bit-identical.
   float vortex = 0.0f;
+
+  /// Tongued-onset breath overshoot (dB of mouth pressure) at velocity 127: how
+  /// far the mouth pressure stands above its held level as the tongue releases
+  /// it, before it settles. The radiated overshoot is the jet's response to
+  /// this, not a copy of it. Applies only while no input streams the breath.
+  /// 0 = off -> bit-identical.
+  float onset_breath_overshoot_db = 0.0f;
+  /// Time the breath overshoot takes to settle back onto the held level (ms, ~95%).
+  float onset_breath_settle_ms = 40.0f;
+  /// Change of the breath overshoot per doubling of velocity (dB), read down from
+  /// velocity 127: positive gives a soft note less of it.
+  float onset_breath_overshoot_vel_db = 0.0f;
 };
 
 /// Per-voice flute state, embedded in NativeSynthVoice. The voice's amplitude
@@ -187,6 +199,9 @@ class FluteVoiceCore {
   /// brightness (CC74) opens the open-end reflection filter.
   void set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept;
   void restore_excitation_base() noexcept;
+  /// Drops the onset overshoot: the breath is driven by an input, or velocity
+  /// means nothing, so the synthesized tonguing would play over the player.
+  void hold_onset() noexcept { breath_.hold_overshoot(); }
   /// Vibrato depth in [0,1] (CC1 modulation wheel): the voice-local pitch/level
   /// vibrato. 0 = off (the LFO is skipped). Not an excitation axis — it is the
   /// preset's own vibrato rather than anything the exciter does.

@@ -465,6 +465,9 @@ void apply_flute(NativeSynthPatch& p, const Fields& f) {
   F(flute.jet_turbulence);
   F(flute.edge_hysteresis);
   F(flute.vortex);
+  F(flute.onset_breath_overshoot_db);
+  F(flute.onset_breath_settle_ms);
+  F(flute.onset_breath_overshoot_vel_db);
 }
 
 void apply_ks(NativeSynthPatch& p, const Fields& f) {
@@ -562,6 +565,9 @@ void apply_free_reed(NativeSynthPatch& p, const Fields& f) {
   F(free_reed.slot_return);
   F(free_reed.slot_gap);
   F(free_reed.radiation);
+  F(free_reed.onset_breath_overshoot_db);
+  F(free_reed.onset_breath_settle_ms);
+  F(free_reed.onset_breath_overshoot_vel_db);
 }
 
 void apply_vocal(NativeSynthPatch& p, const Fields& f) {
@@ -950,6 +956,9 @@ constexpr UnitRow kEngineUnits[] = {
     {"flute.jet_turbulence", Unit::None},
     {"flute.edge_hysteresis", Unit::None},
     {"flute.vortex", Unit::None},
+    {"flute.onset_breath_overshoot_db", Unit::Db},
+    {"flute.onset_breath_settle_ms", Unit::Ms},
+    {"flute.onset_breath_overshoot_vel_db", Unit::Db},
     {"ks.brightness", Unit::None},
     {"ks.decay_s", Unit::Seconds},
     {"ks.decay_stretch", Unit::None},
@@ -1031,6 +1040,9 @@ constexpr UnitRow kEngineUnits[] = {
     {"free_reed.slot_return", Unit::None},
     {"free_reed.slot_gap", Unit::None},
     {"free_reed.radiation", Unit::None},
+    {"free_reed.onset_breath_overshoot_db", Unit::Db},
+    {"free_reed.onset_breath_settle_ms", Unit::Ms},
+    {"free_reed.onset_breath_overshoot_vel_db", Unit::Db},
     {"vocal.vowel", Unit::None},
     {"vocal.brightness", Unit::None},
     {"vocal.breath_noise", Unit::None},
@@ -1358,10 +1370,19 @@ const GateRow kEngineGates[] = {
     {"reed.pressure_scale", [](const GateSite&) { return above("closingPressure", 0); }},
     // Brass: a bell cutoff takes the radiation corner from the reflection pole.
     {"brass.bell_radiation_hz", [](const GateSite&) { return equals("bellCutoffHz", 0); }},
-    // Brass: the settle and the velocity slope shape an overshoot that has to be there.
+    // Brass, flute and free reed: the settle and the velocity slope shape an overshoot
+    // that has to be there.
     {"brass.onset_breath_settle_ms",
      [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
     {"brass.onset_breath_overshoot_vel_db",
+     [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
+    {"flute.onset_breath_settle_ms",
+     [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
+    {"flute.onset_breath_overshoot_vel_db",
+     [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
+    {"free_reed.onset_breath_settle_ms",
+     [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
+    {"free_reed.onset_breath_overshoot_vel_db",
      [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
     // Modal: a mallet contact time replaces the hardness curve and its two inputs.
     {"modal.strike_brightness", [](const GateSite&) { return equals("malletMs", 0); }},

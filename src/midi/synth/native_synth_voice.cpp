@@ -459,7 +459,10 @@ void NativeSynthVoice::push_excitation(const ExcitationAxes& base, uint32_t pres
 }
 
 void NativeSynthVoice::hold_onset() noexcept {
-  if (patch != nullptr && patch->mode == SynthEngineMode::kBrass) brass.hold_onset();
+  if (patch == nullptr) return;
+  if (patch->mode == SynthEngineMode::kBrass) brass.hold_onset();
+  if (patch->mode == SynthEngineMode::kFlute) flute.hold_onset();
+  if (patch->mode == SynthEngineMode::kFreeReed) free_reed.hold_onset();
 }
 
 void NativeSynthVoice::restore_excitation_base() noexcept {

@@ -192,6 +192,9 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
 
   // Contour + textures.
   bellows_.start(params.attack_ms, params.release_ms, sr);
+  bellows_.set_overshoot_at_velocity(params.onset_breath_overshoot_db,
+                                     params.onset_breath_overshoot_vel_db, vel01,
+                                     params.onset_breath_settle_ms, sr);
   // A per-sample draw voiced at kLossVoicedSr, so it carries the noise law's gain.
   breath_noise_ =
       std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathNoiseDepth * noise_gain_at_rate(sr);
@@ -216,6 +219,7 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
 }
 
 void FreeReedVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {
+  if ((present & kAxisForce) != 0u) hold_onset();
   excite_.set_base(base, present);
   refresh_excitation_targets();
 }

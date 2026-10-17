@@ -122,6 +122,7 @@ LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, 
   drive_index_ = 0;
   breath_.releasing = false;
   breath_.level = 0.0f;
+  breath_.overshoot = 0.0f;
   lp_state_ = 0.0f;
   bore_.out = 0.0f;
   dc_x1_ = 0.0f;
@@ -205,6 +206,9 @@ LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, 
   const float noise_gain = noise_gain_at_rate(sr);
   breath_.attack_coeff = ramp_coeff(params.attack_ms, sr);
   breath_.release_coeff = ramp_coeff(params.release_ms, sr);
+  breath_.set_overshoot_at_velocity(params.onset_breath_overshoot_db,
+                                    params.onset_breath_overshoot_vel_db, vel01,
+                                    params.onset_breath_settle_ms, sr);
   breath_noise_ = std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathNoiseDepth * noise_gain;
   chiff_level_ = std::clamp(params.chiff, 0.0f, 1.0f) * kChiffDepth * noise_gain;
   chiff_coeff_ = ramp_coeff(params.chiff_ms, sr);
@@ -356,10 +360,14 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
   bore_.advance(into_bore, ratio);
   ++drive_index_;
 
-  return output_scale_ * vib_gain * bore_.out;
+  // The saturated jet holds its own amplitude, but the onset's extra mouth
+  // pressure speeds the jet as sqrt(P), and the radiated flow follows the jet speed.
+  const float out = output_scale_ * vib_gain * bore_.out;
+  return breath_.overshoot > 0.0f ? out * std::sqrt(breath_.overshoot_ratio()) : out;
 }
 
 void FluteVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {
+  if ((present & kAxisForce) != 0u) hold_onset();
   excite_.set_base(base, present);
   refresh_excitation_targets();
 }

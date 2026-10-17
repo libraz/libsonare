@@ -325,13 +325,9 @@ LoopBudget BrassVoiceCore::configure(const BrassPatchParams& params, double sr, 
   const float noise_gain = noise_gain_at_rate(sr);
   breath_.attack_coeff = ramp_coeff(params.attack_ms, sr);
   breath_.release_coeff = ramp_coeff(params.release_ms, sr);
-  // The overshoot is read down from velocity 127 by doublings; 0 dB at 127 is off.
-  const float onset_db =
-      params.onset_breath_overshoot_db > 0.0f
-          ? params.onset_breath_overshoot_db +
-                params.onset_breath_overshoot_vel_db * std::log2(std::max(vel01, 1.0f / 127.0f))
-          : 0.0f;
-  breath_.set_overshoot(onset_db, params.onset_breath_settle_ms, sr);
+  breath_.set_overshoot_at_velocity(params.onset_breath_overshoot_db,
+                                    params.onset_breath_overshoot_vel_db, vel01,
+                                    params.onset_breath_settle_ms, sr);
   breath_noise_ = std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathNoiseDepth * noise_gain;
   chiff_level_ = std::clamp(params.chiff, 0.0f, 1.0f) * kChiffDepth * noise_gain;
   chiff_coeff_ = ramp_coeff(params.chiff_ms, sr);
