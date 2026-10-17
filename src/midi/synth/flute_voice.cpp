@@ -98,6 +98,9 @@ SONARE_TUNABLE(kEvenPumpDcHz, 30.0f);
 SONARE_TUNABLE(kJetDriveGain, 3.0f);
 // Leak corner (Hz) of the jet displacement's integral of the acoustic flow.
 SONARE_TUNABLE(kJetDisplacementLeakHz, 10.0f);
+// Share of the jet delay's sqrt(B_ref/B) breath law the player cancels by shortening the jet
+// with the breath (the lips close as the flutist blows harder); 0 = none, 1 = a fixed delay.
+SONARE_TUNABLE(kJetLengthCompensation, 0.0f);
 // Floor on the reference breath the jet delay is normalised to: one velocity step.
 constexpr float kJetBreathFloor = 1.0f / 127.0f;
 
@@ -361,7 +364,10 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (jet_drive_) {
     jet_speed =
         std::sqrt(std::max(0.0f, (breath_target_ - kBreathBase) / kBreathSpan) * breath_.level);
-    jet_period *= jet_speed_ref_ / std::max(jet_speed, 1.0e-6f);
+    const float stretch = jet_speed_ref_ / std::max(jet_speed, 1.0e-6f);
+    jet_period *= kJetLengthCompensation > 0.0f
+                      ? std::pow(stretch, 1.0f - std::min(kJetLengthCompensation, 1.0f))
+                      : stretch;
   }
   const float jet_delay = std::clamp(jet_period, 1.0f, static_cast<float>(capacity_ - 4));
   jet_delay_ = jet_delay;
