@@ -50,12 +50,13 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.violin.bowed_string.bow_speed = 0.689765f;
   o.violin.bowed_string.damping = 0.0822536f;
   o.violin.bowed_string.release_ms = 269.948f;
-  o.violin.amp_env.decay_ms = 46.9414f;
+  o.violin.amp_env.decay_ms = 140.69f;
   o.violin.amp_env.sustain = 0.631966f;
   o.violin.body_mix = 0.297933f;
   o.violin.bowed_string.stribeck = 0.811146f;
   o.violin.bowed_string.sympathetic = 0.35846f;
   o.violin.bowed_string.vel_to_speed = 0.312461f;
+  o.violin.bowed_string.velocity_exponent = 1.52f;
   o.violin.drift_cents = 1.22416f;
   o.violin.drift_rate_hz = 0.490131f;
   o.violin.stereo_spread = 0.141641f;
@@ -74,6 +75,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.viola.bowed_string.damping = 0.0577136f;
   o.viola.bowed_string.release_ms = 10.0997f;
   o.viola.bowed_string.stribeck = 0.730394f;
+  o.viola.bowed_string.velocity_exponent = 1.38f;
   o.viola.cutoff_hz = 2339.23f;
   o.viola.drift_rate_hz = 0.632726f;
   o.viola.resonance_q = 0.836075f;
@@ -85,9 +87,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.cello = bowed(0.14f, 0.60f, 0.44f, 0.38f, 70.0f, 140.0f, 0.40f, 0.28f);
   o.cello.lfo_rate_hz = 4.3315f;
   o.cello.lfo_to_pitch_cents = 4.43038f;
-  o.cello.amp_env.attack_ms = 10.9665f;
-  o.cello.amp_env.release_ms = 129.651f;
-  o.cello.amp_env.sustain = 0.526103f;
+  o.cello.amp_env.attack_ms = 6.71239f;
+  o.cello.amp_env.release_ms = 388.584f;
+  o.cello.amp_env.sustain = 0.398099f;
   o.cello.bowed_string.attack_ms = 346.911f;
   o.cello.bowed_string.bow_force = 0.374109f;
   o.cello.bowed_string.bow_position = 0.167379f;
@@ -96,6 +98,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.cello.bowed_string.damping = 0.355529f;
   o.cello.bowed_string.release_ms = 66.9834f;
   o.cello.bowed_string.stribeck = 0.310161f;
+  o.cello.bowed_string.velocity_exponent = 1.30f;
   o.cello.cutoff_hz = 12130.9f;
   o.cello.drift_rate_hz = 0.0730796f;
   o.cello.resonance_q = 0.5f;
@@ -103,7 +106,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // B1+/- and hill land that much low under this same uniform scale — a cello
   // is not a scaled violin.
   o.cello.bowed_string.corpus_scale = 0.37f;
-  o.cello.amp_env.decay_ms = 20.019f;
+  o.cello.amp_env.decay_ms = 32.7064f;
   o.cello.body_mix = 0.212461f;
   // Contrabass (GM 43): the one member of the family with a reference, and fitted
   // to it. The bridge reflection filter is fixed in Hz, so at these pitches its
@@ -115,28 +118,33 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // passes the corpus, so scaling it moves the post-body signal by only -37 to
   // -42 dB relative — inaudible, and would read as a fitted value for nothing.
   o.contrabass = bowed(0.177f, 0.58f, 0.15f, 0.18f, 185.0f, 160.0f, 0.06f, 0.69f);
-  o.contrabass.lfo_rate_hz = 8.67559f;
-  o.contrabass.lfo_to_pitch_cents = 2.62525f;
+  o.contrabass.lfo_rate_hz = 4.83651f;
+  o.contrabass.lfo_to_pitch_cents = 15.2584f;
   o.contrabass.cutoff_hz = 456.942f;
   o.contrabass.resonance_q = 2.04715f;
-  o.contrabass.bowed_string.release_ms = 183.355f;
+  o.contrabass.bowed_string.release_ms = 195.626f;
   o.contrabass.bowed_string.bow_speed = 0.342101f;
-  o.contrabass.bowed_string.vel_to_speed = 0.205584f;
-  o.contrabass.bowed_string.stribeck = 0.0524382f;
-  o.contrabass.bowed_string.sympathetic = 0.00371787f;
+  o.contrabass.bowed_string.vel_to_speed = 0.247303f;
+  o.contrabass.bowed_string.stribeck = 0.106625f;
+  o.contrabass.bowed_string.sympathetic = 0.0847627f;
   // The reference's held level settles 3.8 to 6.4 dB under its own attack peak and
   // then holds flat, so the sustain is that settle rather than a decay.
-  o.contrabass.amp_env.attack_ms = 87.251f;
-  o.contrabass.amp_env.decay_ms = 58.9522f;
-  o.contrabass.amp_env.sustain = 0.579043f;
+  o.contrabass.amp_env.attack_ms = 40.5885f;
+  o.contrabass.amp_env.decay_ms = 126.294f;
+  o.contrabass.amp_env.sustain = 0.549535f;
   o.contrabass.amp_env.release_ms = 179.169f;
-  o.contrabass.bowed_string.attack_ms = 92.5436f;
-  o.contrabass.bowed_string.bow_force = 0.836312f;
+  o.contrabass.bowed_string.attack_ms = 43.0505f;
+  o.contrabass.bowed_string.bow_force = 0.821558f;
   o.contrabass.bowed_string.bow_position = 0.36863f;
-  o.contrabass.bowed_string.damping = 0.392149f;
-  o.contrabass.drift_rate_hz = 2.63844f;
-  o.contrabass.body_mix = 0.427802f;
-  o.contrabass.drift_cents = 5.9943f;
+  o.contrabass.bowed_string.damping = 0.293174f;
+  o.contrabass.drift_rate_hz = 2.07078f;
+  o.contrabass.body_mix = 0.866769f;
+  o.contrabass.drift_cents = 4.55576f;
+  o.contrabass.bowed_string.brightness = 0.365896f;
+  o.contrabass.bowed_string.rosin = 0.0670085f;
+  o.contrabass.bowed_string.velocity_exponent = 1.70f;
+  o.contrabass.drive = 0.104102f;
+  o.contrabass.stereo_spread = 0.24582f;
 
   // Fiddle (GM 110): the same violin, bowed the other way. A short hard stroke
   // near the bridge with the rosin audible and next to no vibrato — the
@@ -149,7 +157,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.fiddle.bowed_string.attack_ms = 13.4658f;
   o.fiddle.bowed_string.rosin = 0.169969f;
   o.fiddle.bowed_string.sympathetic = 0.252098f;  // the open strings ring under the tune
-  o.fiddle.amp_env.attack_ms = 23.9772f;
+  o.fiddle.amp_env.attack_ms = 39.1732f;
   o.fiddle.cutoff_hz = 7000.0f;
   o.fiddle.lfo_to_pitch_cents = 2.0f;
   o.fiddle.amp_env.release_ms = 89.3211f;
@@ -157,6 +165,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.fiddle.body_mix = 0.595867f;
   o.fiddle.bowed_string.corpus_scale = 1.8614f;
   o.fiddle.bowed_string.release_ms = 55.129f;
+  o.fiddle.bowed_string.velocity_exponent = 1.26f;
   o.fiddle.bowed_string.vel_to_speed = 0.443769f;
   o.fiddle.drift_cents = 1.22416f;
   o.fiddle.drift_rate_hz = 0.490131f;
@@ -205,6 +214,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.string_ensemble_2.bowed_string.bow_speed = 0.627663f;
   o.string_ensemble_2.bowed_string.release_ms = 110.201f;
   o.string_ensemble_2.bowed_string.stribeck = 0.778821f;
+  o.string_ensemble_2.bowed_string.velocity_exponent = 1.49f;
   o.string_ensemble_2.drift_rate_hz = 0.0354479f;
   o.string_ensemble_2.lfo_rate_hz = 0.365881f;
   o.string_ensemble_2.resonance_q = 0.688613f;

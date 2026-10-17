@@ -157,8 +157,8 @@
       "outcome": "adopted"
     },
     "cello": {
-      "objective": "9ba17722be2738e0",
-      "date": "2026-10-16",
+      "objective": "b8f45c5945495aa9",
+      "date": "2026-10-17",
       "capture": "cello",
       "timbre": "gm043",
       "outcome": "adopted"
@@ -233,8 +233,8 @@
       "reason": "no point of the search kept every bound (newly over its bound: concert_flute:centroid_pct median)"
     },
     "contrabass": {
-      "objective": "0b559b72ad741fcd",
-      "date": "2026-10-16",
+      "objective": "b8f45c5945495aa9",
+      "date": "2026-10-17",
       "capture": "contrabass",
       "timbre": "gm044",
       "outcome": "adopted"
@@ -625,8 +625,8 @@
       "reason": "write-back refused: fitted_to_the_probe"
     },
     "fiddle": {
-      "objective": "0b559b72ad741fcd",
-      "date": "2026-10-16",
+      "objective": "b8f45c5945495aa9",
+      "date": "2026-10-17",
       "capture": "fiddle",
       "timbre": "gm111",
       "outcome": "adopted"
@@ -1159,19 +1159,20 @@
       "outcome": "adopted"
     },
     "string_ensemble_1": {
-      "objective": "0b559b72ad741fcd",
-      "date": "2026-10-16",
+      "objective": "b8f45c5945495aa9",
+      "date": "2026-10-17",
       "capture": "string_ensemble_1",
       "timbre": "gm049",
       "outcome": "kept",
       "reason": "no point of the search kept every bound (switch field moved: string_ensemble_1.body)"
     },
     "string_ensemble_2": {
-      "objective": "0b559b72ad741fcd",
-      "date": "2026-10-16",
+      "objective": "b8f45c5945495aa9",
+      "date": "2026-10-17",
       "capture": "string_ensemble_2",
       "timbre": "gm050",
-      "outcome": "adopted"
+      "outcome": "kept",
+      "reason": "no point of the search kept every bound (newly over its bound: string_ensemble_2:attack median, string_ensemble_2:balance p90, string_ensemble_2:register median, string_ensemble_2:stretch abs_median, string_ensemble_2:stretch median, string_ensemble_2:stretch p90, string_ensemble_2:tnr abs_median, string_ensemble_2:tnr median)"
     },
     "synth_bass_1": {
       "objective": "0b559b72ad741fcd",
@@ -1335,19 +1336,19 @@
       "outcome": "adopted"
     },
     "viola": {
-      "objective": "9ba17722be2738e0",
-      "date": "2026-10-16",
+      "objective": "b8f45c5945495aa9",
+      "date": "2026-10-17",
       "capture": "viola",
       "timbre": "gm042",
-      "outcome": "adopted"
+      "outcome": "kept",
+      "reason": "no point of the search kept every bound (switch field moved: viola.body)"
     },
     "violin": {
-      "objective": "cbe94c0cf2a3a80e",
+      "objective": "b8f45c5945495aa9",
       "date": "2026-10-17",
       "capture": "violin",
       "timbre": "gm041",
-      "outcome": "kept",
-      "reason": "no point of the search kept every bound (switch field moved: violin.body)"
+      "outcome": "adopted"
     },
     "violin_slow": {
       "objective": "cbe94c0cf2a3a80e",
