@@ -345,7 +345,7 @@ TEST_CASE("bowed string control hashes", "[.][midi][synth][bowed][probe][golden]
   BowedStringPatchParams hyperbolic = v;
   hyperbolic.hyperbolic_friction = true;
   hyperbolic.bow_width_m = 0.012f;
-  CHECK(fnv1a_quantized(render_core(hyperbolic, 48000)) == 0xb2b407f54106700eull);
+  CHECK(fnv1a_quantized(render_core(hyperbolic, 48000)) == 0x667d646b13f945d2ull);
 
   // (b) The body resonator on both of its entry points, driven by the same
   // deterministic excitation. The percussion-shell configuration is written out

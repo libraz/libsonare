@@ -66,10 +66,10 @@ SONARE_TUNABLE(kEpHystOffset, 0.6f);
 
 // --- hyperbolic friction junction (only when params.hyperbolic_friction) ---
 // The bow axes in physical units: force 1.0 is this many newtons and speed 1.0
-// this many metres per second, spanning the ranges Schelleng's diagram is drawn
-// over (roughly 0.1-2 N and 0.05-1 m/s).
+// this many metres per second. Above ~0.6 m/s v0/v_b falls under ~0.17 and a
+// full-force onset locks into the second mode (violin 63 at v127).
 SONARE_TUNABLE(kBowForceMaxN, 4.0f);
-SONARE_TUNABLE(kBowVelocityMaxMps, 1.0f);
+SONARE_TUNABLE(kBowVelocityMaxMps, 0.6f);
 // Rosin friction: the static and sliding coefficients bracket the steady-sliding
 // measurements of Smith & Woodhouse (J. Mech. Phys. Solids 48, 2000); v0 is the
 // slip speed at which the hyperbola has fallen half way between them.
@@ -77,8 +77,8 @@ SONARE_TUNABLE(kMuStatic, 0.8f);
 SONARE_TUNABLE(kMuDynamic, 0.3f);
 SONARE_TUNABLE(kFrictionV0, 0.1f);
 // Output trim for the junction's string velocity in m/s, matching the table
-// path's level at the cello's shipped operating point.
-SONARE_TUNABLE(kPhysicalOutputScale, 1.2f);
+// path's level at the cello's shipped operating point (string velocity scales with v_b).
+SONARE_TUNABLE(kPhysicalOutputScale, 2.0f);
 // Output trim for the table path's velocity-wave units.
 constexpr float kTableOutputScale = 6.0f;
 

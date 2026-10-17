@@ -564,8 +564,9 @@ TEST_CASE("the hyperbolic friction junction renders a tuned, bounded, harmonic s
   // where the string still sounds, raucously.
   NativeSynthPatch patch = bowed_base_patch();
   patch.bowed_string.bow_force = 0.5f;
-  patch.bowed_string.bow_speed = 0.1f;
-  patch.bowed_string.vel_to_speed = 0.3f;
+  // Speed axis 1.0 is kBowVelocityMaxMps (0.6 m/s).
+  patch.bowed_string.bow_speed = 0.2333f;
+  patch.bowed_string.vel_to_speed = 0.5f;
   const std::vector<float> table = render_patch(patch, 57, 110, 24000);
   patch.bowed_string.hyperbolic_friction = true;
   const std::vector<float> tone = render_patch(patch, 57, 110, 24000);
@@ -690,15 +691,17 @@ TEST_CASE("force_ratio sets the bow force from the string's impedance and the bo
   constexpr float kLengthM = 0.69f;
   constexpr float kSpeedMps = 0.2f;
   constexpr float kRatio = 4.0f;
-  // The engine's force axis span (bowed_string_voice.cpp kBowForceMaxN).
+  // The engine's force and speed axis spans (bowed_string_voice.cpp kBowForceMaxN,
+  // kBowVelocityMaxMps).
   constexpr float kForceMaxN = 4.0f;
+  constexpr float kSpeedMaxMps = 0.6f;
   constexpr size_t kFrames = 24000;
   BowedStringPatchParams params = sonare::midi::synth::gm_fallback_patch(0, 42).bowed_string;
   params.polarization = 0.0f;
   params.sympathetic = 0.0f;
   params.rosin = 0.0f;
   params.vel_to_speed = 0.0f;
-  params.bow_speed = kSpeedMps;
+  params.bow_speed = kSpeedMps / kSpeedMaxMps;
   params.string_tension_n = kTensionN;
   params.string_length_m = kLengthM;
   params.bow_force = 0.5f;

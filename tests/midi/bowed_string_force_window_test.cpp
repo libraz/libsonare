@@ -528,7 +528,7 @@ constexpr float kCelloTensionN = 130.0f;
 constexpr float kCelloLengthM = 0.69f;
 
 /// The junction's own axes: bow force (N) and speed (m/s) are the patch's [0,1]
-/// axes times the engine's kBowForceMaxN (4 N) and kBowVelocityMaxMps (1 m/s).
+/// axes times the engine's kBowForceMaxN (4 N) and kBowVelocityMaxMps (0.6 m/s).
 constexpr float kJunctionForceMaxN = 4.0f;
 constexpr float kJunctionSpeedMaxMps = 1.0f;
 /// Schelleng's window at C2 on this string: F_max = 2 Z0 v_b / (beta (mu_s - mu_d))
