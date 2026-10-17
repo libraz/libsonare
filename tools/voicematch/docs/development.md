@@ -7,7 +7,7 @@ The harness is maintained from the repository root. Use the rye invocation from 
 | command | purpose | build or data requirement |
 |---|---|---|
 | `status.py` | render the bank roll-up and next action; `--all` includes every voice | a tuning library adds engine and patch identity |
-| `refit.py` | refit every capital, variation or kit drum note under the current objective, judge each adoption by the gate, settle trades along the search path, and write adopted values; `plan`, `run`, `resolve`, `report`, `adopt` | a `BUILD_TUNING=ON` build dir and the captured corpora |
+| `refit.py` | refit every capital, variation or kit drum note under the current objective, judge each adoption by the gate, settle trades along the search path, re-judge existing fits against the pre-adoption baseline, and write adopted values; `plan`, `run`, `rejudge`, `resolve`, `report`, `adopt` | a `BUILD_TUNING=ON` build dir and the captured corpora |
 | `fits.py` | record a finished fit in `fits.json`; `digest` prints the current objective fingerprint | a fit's `--out` report |
 | `check_specs.py` | verify that every tracked spec key exists and still has a range | a tuning library |
 | `liveness.py` | verify that spec knobs move a measured term; `--census` checks patch fields | a tuning library and renderable probes |

@@ -383,3 +383,186 @@ def test_every_gate_a_capital_reaches_is_read_and_keyed_by_capture(tmp_path, mon
     refit._compare_voice(voice, out, Path("lib"))
     keys = [r["key"] for r in json.loads(out.read_text())["gate"]["readings"]]
     assert keys == ["harpsichord:decay", "harpsichord_alt:decay"]
+
+
+COPIES = {"wide": "cap", "wider": "wide"}
+EXPLICIT = {"wide": frozenset({"x", "modal"})}
+
+
+def test_an_override_on_a_patch_is_repeated_on_each_gate_patch_inheriting_it():
+    from refit import reach_copies
+
+    voice = {"patch": "cap", "gates": [{"patch": "cap"}, {"patch": "wide"}, {"patch": "wider"}]}
+    out = reach_copies("cap.a=2.0,cap.x=3.0,cap.modal.decay=1.0", voice, COPIES, EXPLICIT)
+    assert out.split(",") == [
+        "cap.a=2.0",
+        "cap.x=3.0",
+        "cap.modal.decay=1.0",
+        "wide.a=2.0",
+        "wider.a=2.0",
+    ], "a field or enclosing struct a copy assigns is its own"
+    assert reach_copies("wide.x=4.0", voice, COPIES, EXPLICIT) == "wide.x=4.0,wider.x=4.0"
+    assert reach_copies("cap.a=2.0,wide.a=5.0", voice, COPIES, EXPLICIT) == (
+        "cap.a=2.0,wide.a=5.0,wider.a=2.0"
+    ), "an entry already named is not overwritten"
+    assert reach_copies("", voice, COPIES, EXPLICIT) == ""
+
+
+def test_the_tuning_layer_runs_after_the_tables_copy_their_patches():
+    # The premise reach_copies rests on: an override on a source never reaches its copy.
+    from _repo import REPO_ROOT
+
+    text = (REPO_ROOT / "src/midi/synth/gm_fallback_programs.cpp").read_text()
+    assert text.index("configure_variation_programs(o);") < text.index("SONARE_GM_TUNE_ONE)")
+
+
+def test_explicit_fields_read_the_program_tables():
+    from refit import explicit_fields, owner
+    from writeback import struct_copies
+
+    explicit = explicit_fields()
+    assert {"stereo_spread", "modal.modes2.ratio"} <= explicit["marimba_wide"]
+    assert owner("marimba_wide", "stereo_spread", struct_copies(), explicit) == "marimba_wide"
+    assert owner("marimba_wide", "modal.modes0.gain", struct_copies(), explicit) == "marimba"
+
+
+def _snap(rev, cap, wide, fits_):
+    return {
+        "rev": rev,
+        "values": {"cap": cap, "wide": wide},
+        "fingerprints": {"cap": repr(sorted(cap.items())), "wide": repr(sorted(wide.items()))},
+        "fits": fits_,
+    }
+
+
+def _history(*, worktree_fits=None):
+    """c3 adopts the copy's own field, c2 the capital (reaching the copy), c1 is no refit."""
+    f3 = {"cap": {"outcome": "adopted", "o": 2}, "wide": {"outcome": "adopted", "o": 3}}
+    f2 = {"cap": {"outcome": "adopted", "o": 2}, "wide": None}
+    c3 = _snap("c3", {"a": 3.0, "b": 2.0}, {"a": 3.0, "b": 2.0, "x": 9.0}, f3)
+    c2 = _snap("c2", {"a": 3.0, "b": 2.0}, {"a": 3.0, "b": 2.0, "x": 0.5}, f2)
+    c1 = _snap("c1", {"a": 1.0, "b": 2.0}, {"a": 1.0, "b": 2.0, "x": 0.5}, {"cap": None})
+    c0 = _snap("c0", {"a": 1.0, "b": 0.0}, {"a": 1.0, "b": 0.0, "x": 0.5}, {"cap": None})
+    worktree = dict(c3, rev="worktree", fits=worktree_fits or f3)
+    return [worktree, c3, c2, c1, c0]
+
+
+def _pins(base):
+    return {p["key"]: (p["value"], p["source"].split(",")[0]) for p in base["pinned"]}
+
+
+def test_a_variation_baseline_undoes_its_capitals_adoption_and_its_own():
+    from refit import BANK_VERSIONS, baseline_pins
+
+    voice = {"patch": "wide", "gates": [{"patch": "wide"}]}
+    base = baseline_pins(voice, None, _history(), {"wide": "cap"}, {"wide": frozenset({"x"})})
+    assert _pins(base) == {
+        "wide.a": ("1.0", f"{BANK_VERSIONS}@c1"),  # before the capital's adoption reached it
+        "wide.x": ("0.5", f"{BANK_VERSIONS}@c2"),  # before its own
+    }, "c1 moved b without a fit record, so the run stops there"
+    assert base["overrides"] == "wide.a=1.0,wide.x=0.5" and not base["unresolved"]
+
+
+def test_a_capital_baseline_leaves_the_fields_its_copy_adopted_itself():
+    from refit import baseline_pins
+
+    voice = {"patch": "cap", "gates": [{"patch": "cap"}, {"patch": "wide"}]}
+    fit = {"knobs": [{"key": "cap.a", "start": 3.0}, {"key": "cap.c", "start": 5.0}]}
+    base = baseline_pins(voice, fit, _history(), {"wide": "cap"}, {"wide": frozenset({"x"})})
+    assert _pins(base) == {
+        "cap.a": ("1.0", "tools/bank-versions.json@c1"),  # the history outranks the fit's start
+        "cap.c": ("5.0", "fit.json start"),
+        "wide.a": ("1.0", "tools/bank-versions.json@c1"),
+        "wide.c": ("5.0", "fit.json start"),  # repeated on the copy that inherits it
+    }
+
+
+def test_an_adoption_the_registry_does_not_carry_is_reported_not_guessed():
+    from refit import baseline_pins
+
+    voice = {"patch": "wide", "gates": [{"patch": "wide"}]}
+    newer = {"cap": {"outcome": "adopted", "o": 4}, "wide": {"outcome": "adopted", "o": 3}}
+    base = baseline_pins(
+        voice, None, _history(worktree_fits=newer), {"wide": "cap"}, {"wide": frozenset({"x"})}
+    )
+    assert base["unresolved"] and base["unresolved"][0].startswith("cap:")
+    alone = baseline_pins(voice, None, _history()[:1], {"wide": "cap"}, {})
+    assert alone["pinned"] == [] and "no history" in alone["unresolved"][0]
+
+
+def _judged_dir(tmp_path, monkeypatch, *, fit_runs):
+    import json
+
+    import refit
+
+    seen: dict[str, str] = {}
+
+    def fake_compare(voice, out, lib, overrides=""):
+        seen[out.name] = overrides
+        over = "cap.a=9.0" in overrides
+        reading = {"key": "decay", "stat": "p90", "value": 2.0 if over else 0.5, "limit": 1.0}
+        reading.update(over=over, excess=1.0 if over else -0.5)
+        out.write_text(json.dumps({"gate": {"readings": [reading]}}))
+
+    def no_fit(*a, **k):
+        fit_runs.append(a)
+        raise RuntimeError("no fit may run")
+
+    monkeypatch.setattr(refit, "_tuning_lib", lambda build_dir: Path("lib"))
+    monkeypatch.setattr(refit, "_compare", fake_compare)
+    monkeypatch.setattr(refit, "_fit", no_fit)
+    monkeypatch.setattr(refit, "struct_copies", lambda: {"wide": "cap"})
+    monkeypatch.setattr(refit, "explicit_fields", lambda: {"wide": frozenset({"x"})})
+    monkeypatch.setattr(refit, "registry_history", lambda units: iter(_history()))
+    voice = {
+        "slug": "cap",
+        "patch": "cap",
+        "capture": "cap",
+        "gates": [
+            {"capture": "cap", "gate": "g", "timbre": "t", "patch": "cap"},
+            {"capture": "wide", "gate": "g", "timbre": "t", "patch": "wide"},
+        ],
+    }
+    d = tmp_path / "cap"
+    d.mkdir()
+    fit = {
+        "knobs": [{"key": "cap.a", "start": 3.0}],
+        "selected": {"values": [9.0]},
+        "loss": {"selected": 0.5},
+        "validation": {"independent": True, "start": 1.0, "best": 0.5},
+        "overrides": "cap.a=9.0",
+        "path": [{"eval": 1, "loss": 0.9, "values": [9.0]}],
+    }
+    (d / "fit.json").write_text(json.dumps(fit))
+    return refit, voice, d, seen
+
+
+def test_pre_is_pinned_to_the_baseline_and_says_so(tmp_path, monkeypatch):
+    import json
+
+    runs: list = []
+    refit, voice, d, seen = _judged_dir(tmp_path, monkeypatch, fit_runs=runs)
+    result = refit.run_voice(voice, tmp_path, "build", 8)
+    pre = json.loads((d / "pre.json").read_text())
+    assert pre["baseline"]["overrides"] == "cap.a=1.0,wide.a=1.0"
+    assert seen["pre.wide.json"] == "cap.a=1.0,wide.a=1.0"
+    assert seen["post.wide.json"] == "cap.a=9.0,wide.a=9.0", "post reaches the copy too"
+    assert result["newly_over"] == ["cap:decay p90", "wide:decay p90"] and not runs
+
+
+def test_rejudge_recreates_the_judged_state_without_fitting(tmp_path, monkeypatch):
+    import json
+
+    runs: list = []
+    refit, voice, d, seen = _judged_dir(tmp_path, monkeypatch, fit_runs=runs)
+    for stale in ("pre.json", "pre.wide.json", "post.json", "path_fit_1.wide.json"):
+        (d / stale).write_text(json.dumps({"gate": {"readings": []}}))
+    (d / "verdict.json").write_text(json.dumps({"decision": "adopt", "why": "old"}))
+    (d / "fit_r1.log").write_text("kept\n")
+    result = refit.rejudge_voice(voice, tmp_path, "build")
+    assert result["decision"] == "trade" and result["why"].startswith("(was adopt)")
+    assert result["why"].endswith("run resolve"), "the reweighed repeat is left to resolve"
+    ver = json.loads((d / "verdict.json").read_text())
+    assert not ver.get("resolved") and ver["attempts"][-1]["pending"]
+    assert "pre.wide.json" in seen and "path_fit_1.wide.json" in seen, "re-measured, not reused"
+    assert (d / "fit_r1.log").exists() and (d / "fit.json").exists() and not runs

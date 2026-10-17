@@ -23,7 +23,17 @@ dimensions weighed up when no point is.
 
 Each voice is judged by every gate its patch reaches: a capital by the gates of
 every capture resolving to its patch, a kit note by every kit gate, and readings
-are keyed `<capture>:<dimension>` in both.
+are keyed `<capture>:<dimension>` in both. The tuning layer applies a patch's
+overrides after the tables have copied it, so every override on a patch is
+repeated on each gate patch that inherits the field.
+
+`pre` is the state before the first adoption that reached the voice, not the
+tables at measurement time: each knob of an existing fit is pinned to its start,
+and every gate patch is put back to its values before the trailing run of refit
+commits on it that recorded a unit in the voice's struct-copy chain, read from
+the git history of `bank-versions.json` and `fits.json`. `pre.json` records each
+pin and its source. `rejudge` re-measures pre, post and the verdict of given
+slugs over their existing fits.
 
 Variations derive from their capital's patch at table-build time, so `--banks
 capitals` (the default) refits capitals and a later `--banks variations` pass
@@ -35,10 +45,13 @@ against the first voice's capture.
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
+import re
 import subprocess
 import sys
+from collections.abc import Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from types import SimpleNamespace
@@ -54,6 +67,8 @@ from capture import CORPUS_ROOT
 from knobs import format_value
 from objective import objective_digest
 from writeback import (
+    PROGRAM_TABLE_FILES,
+    _key_path,
     patch_field_assignments,
     struct_copies,
     switch_field,
@@ -73,6 +88,12 @@ PYTHON = [sys.executable]
 EVALS_PER_KNOB = 12
 #: Normalized held-out improvement a fit must show to count as generalising.
 HELD_OUT_MARGIN = 0.005
+#: The tracked registries a baseline is read back from: each patch's values as the
+#: library reported them, and which unit each refit recorded.
+BANK_VERSIONS = "tools/bank-versions.json"
+FITS_JSON = "tools/voicematch/fits.json"
+_EXPLICIT_FIELD = re.compile(r"^\s*o\.(\w+)\.([\w.\[\]]+)\s*=", re.MULTILINE)
+_STRUCT_COPY_LINE = re.compile(r"^\s*o\.(\w+)\s*=\s*o\.\w+;", re.MULTILINE)
 
 
 def run_root(digest: str) -> Path:
@@ -188,6 +209,7 @@ def capital_gates(
                 "capture": cap.id,
                 "gate": str(gate),
                 "timbre": json.loads(gate.read_text())["timbre"],
+                "patch": row["patch"] if here else patch_of[(cap.program, cap.bank)],
             }
         )
     return sorted(found, key=lambda g: g["capture"] != own)
@@ -280,19 +302,230 @@ def _compare(voice: dict, out: Path, lib: Path, overrides: str = "") -> None:
         raise RuntimeError(f"{voice['slug']}: compare wrote nothing, see {log}")
 
 
-def _compare_voice(voice: dict, out: Path, lib: Path, overrides: str = "") -> None:
-    """One voice's gate readings over every gate its patch reaches, keyed by capture."""
+def _compare_voice(
+    voice: dict, out: Path, lib: Path, overrides: str = "", baseline: dict | None = None
+) -> None:
+    """One voice's gate readings over every gate its patch reaches, keyed by capture.
+
+    `baseline` is recorded beside the readings, so a pinned pre says what it pinned.
+    """
     if "gates" not in voice:
         _compare(voice, out, lib, overrides)
-        return
-    readings = []
-    for g in voice["gates"]:
-        part = out.with_name(f"{out.stem}.{g['capture']}.json")
-        if not part.exists():
-            _compare({**voice, **g}, part, lib, overrides)
-        for r in json.loads(part.read_text())["gate"]["readings"]:
-            readings.append({**r, "key": f"{g['capture']}:{r['key']}"})
-    out.write_text(json.dumps({"gate": {"readings": readings}}, indent=2) + "\n")
+        body = json.loads(out.read_text())
+    else:
+        readings = []
+        for g in voice["gates"]:
+            part = out.with_name(f"{out.stem}.{g['capture']}.json")
+            if not part.exists():
+                _compare({**voice, **g}, part, lib, overrides)
+            for r in json.loads(part.read_text())["gate"]["readings"]:
+                readings.append({**r, "key": f"{g['capture']}:{r['key']}"})
+        body = {"gate": {"readings": readings}}
+    if baseline is not None:
+        body["baseline"] = baseline
+    out.write_text(json.dumps(body, indent=2) + "\n")
+
+
+def chain_of(patch: str, copies: dict[str, str]) -> list[str]:
+    """The patch, the patch it is copied from, that one's source, and so on."""
+    chain = [patch]
+    while chain[-1] in copies and copies[chain[-1]] not in chain:
+        chain.append(copies[chain[-1]])
+    return chain
+
+
+def assigned_after_copy(texts: Iterable[str]) -> dict[str, frozenset[str]]:
+    """Per copied patch, the key paths assigned on it by name after its `o.<copy> = o.<src>;`.
+
+    An assignment ahead of the copy line is overwritten by the copy, so it is not the
+    copy's own value.
+    """
+    found: dict[str, set[str]] = {}
+    for text in texts:
+        copied_at = {m.group(1): m.end() for m in _STRUCT_COPY_LINE.finditer(text)}
+        for m in _EXPLICIT_FIELD.finditer(text):
+            patch, member = m.groups()
+            if patch in copied_at and m.start() > copied_at[patch]:
+                found.setdefault(patch, set()).add(_key_path(member))
+    return {p: frozenset(s) for p, s in found.items()}
+
+
+@functools.lru_cache(maxsize=1)
+def explicit_fields() -> dict[str, frozenset[str]]:
+    """`assigned_after_copy` over the program tables."""
+    return assigned_after_copy((REPO_ROOT / rel).read_text() for rel in PROGRAM_TABLE_FILES)
+
+
+def owner(target: str, path: str, copies: dict[str, str], explicit: dict) -> str:
+    """The patch whose value of `path` `target` carries: the nearest in its copy chain
+    assigning the field (or an enclosing struct) by name, else the chain's root."""
+    chain = chain_of(target, copies)
+    for patch in chain[:-1]:
+        if any(path == e or path.startswith(e + ".") for e in explicit.get(patch, ())):
+            return patch
+    return chain[-1]
+
+
+def inherits(target: str, path: str, source: str, copies: dict[str, str], explicit: dict) -> bool:
+    """Whether `target`, copied from `source` at any depth, still carries its `path`."""
+    chain = chain_of(target, copies)
+    if source not in chain[1:]:
+        return False
+    return chain.index(owner(target, path, copies, explicit)) >= chain.index(source)
+
+
+def gate_patches(voice: dict) -> list[str]:
+    """Every patch the voice's gates render: its own, and each copy a gate reads."""
+    own = voice.get("patch")
+    found = {g.get("patch") or own for g in voice.get("gates", [])} | {own}
+    return sorted(p for p in found if p)
+
+
+def reach_copies(
+    overrides: str, voice: dict, copies: dict | None = None, explicit: dict | None = None
+) -> str:
+    """The overrides with each patch-field entry repeated on every gate patch inheriting it."""
+    if not overrides:
+        return overrides
+    copies = struct_copies() if copies is None else copies
+    explicit = explicit_fields() if explicit is None else explicit
+    entries = [e.partition("=") for e in overrides.split(",") if e]
+    named = {k for k, _, _ in entries}
+    out = [f"{k}={v}" for k, _, v in entries]
+    for key, _, value in entries:
+        unit, _, path = key.partition(".")
+        for target in gate_patches(voice):
+            copied = f"{target}.{path}"
+            if copied not in named and inherits(target, path, unit, copies, explicit):
+                out.append(f"{copied}={value}")
+                named.add(copied)
+    return ",".join(out)
+
+
+def _registry(rev: str | None, rel: str) -> dict:
+    """A tracked registry at a commit, or in the working tree for `None`."""
+    if rev is None:
+        path = REPO_ROOT / rel
+        return json.loads(path.read_text()) if path.exists() else {}
+    shown = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "show", f"{rev}:{rel}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return json.loads(shown.stdout) if shown.returncode == 0 else {}
+
+
+def registry_history(units: Iterable[str]) -> Iterator[dict]:
+    """Both registries for `units`, newest first: the working tree, then every
+    first-parent commit that changed either."""
+    units = sorted(set(units))
+    log = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "log", "--first-parent", "--format=%H", "--"]
+        + [BANK_VERSIONS, FITS_JSON],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    for rev in [None, *log.stdout.split()]:
+        bank_units = _registry(rev, BANK_VERSIONS).get("units", {})
+        fit_units = _registry(rev, FITS_JSON).get("fits", {})
+        yield {
+            "rev": rev or "worktree",
+            "values": {u: (bank_units.get(u) or {}).get("values", {}) for u in units},
+            "fingerprints": {u: (bank_units.get(u) or {}).get("fingerprint") for u in units},
+            "fits": {u: fit_units.get(u) for u in units},
+        }
+
+
+def baseline_pins(
+    voice: dict,
+    own_fit: dict | None,
+    history: Iterable[dict],
+    copies: dict | None = None,
+    explicit: dict | None = None,
+) -> dict:
+    """The overrides that put every gate patch back before the first adoption reaching the voice.
+
+    For each gate patch, the commits that moved its values are walked newest first
+    while each also changed the `fits.json` record of a unit in that patch's
+    struct-copy chain: the trailing run of refit write-backs its shipped values
+    descend from. A field moved in the run whose `owner` is in the voice's own
+    chain goes back to its value before the oldest such commit; a field a copy
+    further down owns is that copy's adoption and stays. Each knob of an existing
+    fit is pinned to its start, repeated on the copies inheriting it, where the
+    history pinned nothing. An ancestor whose adoption `fits.json` records but
+    `bank-versions.json` does not yet carry is reported unresolved and left at its
+    shipped values.
+    """
+    copies = struct_copies() if copies is None else copies
+    explicit = explicit_fields() if explicit is None else explicit
+    own = voice["patch"]
+    undo = set(chain_of(own, copies))
+    targets = gate_patches(voice)
+    chains = {t: set(chain_of(t, copies)) for t in targets}
+    pins: dict[str, tuple[float, str]] = {}
+    open_ = set(targets)
+    unresolved: list[str] = []
+    newer, pairs = None, 0
+    for older in history:
+        if newer is None:
+            newer = older
+            continue
+        pairs += 1
+        if newer["rev"] == "worktree":
+            for unit in sorted(undo - {own}):
+                entry = newer["fits"].get(unit)
+                if (
+                    entry != older["fits"].get(unit)
+                    and (entry or {}).get("outcome") == "adopted"
+                    and newer["fingerprints"].get(unit) == older["fingerprints"].get(unit)
+                ):
+                    unresolved.append(
+                        f"{unit}: fits.json records an adoption {BANK_VERSIONS} does not "
+                        "carry yet; regenerate it to pin that baseline"
+                    )
+        for t in sorted(open_):
+            if older["fingerprints"].get(t) is None:
+                open_.discard(t)  # the unit did not exist yet: nothing earlier to restore
+                continue
+            if newer["fingerprints"].get(t) == older["fingerprints"].get(t):
+                continue
+            recorded = sorted(u for u in chains[t] if newer["fits"].get(u) != older["fits"].get(u))
+            if not recorded:
+                open_.discard(t)
+                continue
+            now, before = newer["values"].get(t, {}), older["values"].get(t, {})
+            moved = {k for k in now.keys() | before.keys() if now.get(k) != before.get(k)}
+            source = (
+                f"{BANK_VERSIONS}@{older['rev'][:12]}, "
+                f"before {newer['rev'][:12]} ({', '.join(recorded)})"
+            )
+            for path in sorted(moved):
+                if path in before and owner(t, path, copies, explicit) in undo:
+                    pins[f"{t}.{path}"] = (before[path], source)
+        if not open_:
+            break
+        newer = older
+    if not pairs:
+        unresolved.append(f"no history of {BANK_VERSIONS}; gate patches left at shipped values")
+    for knob in (own_fit or {}).get("knobs", []):
+        unit, _, path = knob["key"].partition(".")
+        reached = [knob["key"]] + [
+            f"{t}.{path}"
+            for t in targets
+            if t != unit and inherits(t, path, unit, copies, explicit)
+        ]
+        for key in reached:
+            pins.setdefault(key, (knob["start"], "fit.json start"))
+    pinned = [
+        {"key": k, "value": format_value(v), "source": s} for k, (v, s) in sorted(pins.items())
+    ]
+    return {
+        "overrides": ",".join(f"{p['key']}={p['value']}" for p in pinned),
+        "pinned": pinned,
+        "unresolved": unresolved,
+    }
 
 
 def _fit(
@@ -434,12 +667,15 @@ def run_voice(voice: dict, root: Path, build_dir: str, per_knob: int) -> dict:
     pre, fit, post, ver = d / "pre.json", d / "fit.json", d / "post.json", d / "verdict.json"
     lib = _tuning_lib(build_dir)
     if not pre.exists():
-        _compare_voice(voice, pre, lib)
+        own_fit = json.loads(fit.read_text()) if fit.exists() else None
+        units = {u for t in gate_patches(voice) for u in chain_of(t, struct_copies())}
+        base = baseline_pins(voice, own_fit, registry_history(units))
+        _compare_voice(voice, pre, lib, base["overrides"], baseline=base)
     if not fit.exists():
         _fit(voice, fit, build_dir, per_knob)
     fit_report = json.loads(fit.read_text())
     if not post.exists():
-        _compare_voice(voice, post, lib, fit_report.get("overrides") or "")
+        _compare_voice(voice, post, lib, reach_copies(fit_report.get("overrides") or "", voice))
     result = {
         "slug": voice["slug"],
         **verdict(
@@ -499,7 +735,7 @@ def along_the_path(voice: dict, d: Path, lib: Path, report: dict, tag: str) -> d
         values = writable(report, path[i]["values"])
         out = d / f"path_{tag}_{path[i]['eval']}.json"
         if not out.exists():
-            _compare_voice(voice, out, lib, overrides_for(report, values))
+            _compare_voice(voice, out, lib, reach_copies(overrides_for(report, values), voice))
         post = json.loads(out.read_text())["gate"]["readings"]
         post_sum, post_over = _excess(post)
         ok = not post_over - pre_over and post_sum <= pre_sum + 1e-9 and gate_load(post) < pre_load
@@ -587,12 +823,13 @@ def reweighed(
     return {t: max(2.0 * weights.get(t, 0.0), 1.0) for t in terms}
 
 
-def resolve_voice(d: Path, build_dir: str, per_knob: int) -> dict | None:
+def resolve_voice(d: Path, build_dir: str, per_knob: int, *, refit: bool = True) -> dict | None:
     """Settle a trade by the furthest point along the search the gate accepts.
 
     Failing that on the fit itself, the fit is repeated once with the terms carrying
     the broken bounds weighed up, and its own path is searched the same way. With
-    neither, the shipped values are kept.
+    neither, the shipped values are kept. Without `refit`, a repeat not already on
+    disk is not run and the trade stays open for `resolve`.
     """
     ver = json.loads((d / "verdict.json").read_text())
     if ver["decision"] != "trade" or ver.get("resolved"):
@@ -609,6 +846,11 @@ def resolve_voice(d: Path, build_dir: str, per_knob: int) -> dict | None:
         if weights is not None:
             fit_path = d / "fit_r1.json"
             refused = None
+            if not fit_path.exists() and not refit:
+                attempts.append({"fit": "fit_r1.json", "weights": weights, "pending": True})
+                ver["attempts"] = attempts
+                (d / "verdict.json").write_text(json.dumps(ver, indent=2) + "\n")
+                return ver
             if not fit_path.exists():
                 try:
                     _fit(voice, fit_path, build_dir, per_knob, weights)
@@ -642,6 +884,33 @@ def resolve_voice(d: Path, build_dir: str, per_knob: int) -> dict | None:
     ver["resolved"] = True
     (d / "verdict.json").write_text(json.dumps(ver, indent=2) + "\n")
     return ver
+
+
+#: A voice's judged state, re-created by `rejudge` from the fits on disk.
+_JUDGED = ("pre.", "post.", "path_")
+
+
+def rejudge_voice(voice: dict, root: Path, build_dir: str) -> dict:
+    """Re-measure one voice's pre, post and verdict over the fits already on disk.
+
+    A trade is settled along those fits' paths; one that needs the reweighed repeat
+    is left open for `resolve`.
+    """
+    d = root / voice["slug"]
+    if not (d / "fit.json").exists():
+        raise RuntimeError(f"{voice['slug']}: no fit.json under {root} to re-judge")
+    ver = d / "verdict.json"
+    was = json.loads(ver.read_text())["decision"] if ver.exists() else "unjudged"
+    for path in d.iterdir():
+        if path.name.startswith(_JUDGED) or path == ver:
+            path.unlink()
+    result = run_voice(voice, root, build_dir, per_knob=0)
+    if result["decision"] == "trade":
+        result = resolve_voice(d, build_dir, 0, refit=False) or result
+    why = f"(was {was}) {result['why']}"
+    if (result.get("attempts") or [{}])[-1].get("pending"):
+        why += "; the reweighed fit is not on disk, run resolve"
+    return {**result, "why": why}
 
 
 def adopt(root: Path, only: set[str]) -> int:
@@ -740,7 +1009,7 @@ def _drain(futures: dict, jobs: int) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    ap.add_argument("cmd", choices=("plan", "run", "resolve", "report", "adopt"))
+    ap.add_argument("cmd", choices=("plan", "run", "rejudge", "resolve", "report", "adopt"))
     ap.add_argument("--banks", choices=("capitals", "variations", "kits"), default="capitals")
     ap.add_argument("--only", default="", help="comma-separated voice slugs")
     ap.add_argument("--jobs", type=int, default=2, help="voices fitted at once")
@@ -767,6 +1036,14 @@ def main() -> int:
     todo, skipped = plan(args.banks)
     if only:
         todo = [v for v in todo if v["slug"] in only]
+    if args.cmd == "rejudge":
+        missing = sorted(only - {v["slug"] for v in todo})
+        if not only or missing:
+            print(f"rejudge takes --only slugs this --banks plan lists; not planned: {missing}")
+            return 2
+        with ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
+            futures = {pool.submit(rejudge_voice, v, root, args.build_dir): v["slug"] for v in todo}
+            return _drain(futures, args.jobs)
     if args.cmd == "plan":
         for v in todo:
             grid = (
