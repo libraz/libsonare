@@ -752,8 +752,8 @@
       "reason": "no point of the search kept every bound (switch field moved: lead_voice.body)"
     },
     "marimba": {
-      "objective": "0b559b72ad741fcd",
-      "date": "2026-10-16",
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
       "capture": "marimba",
       "timbre": "gm013",
       "outcome": "adopted"
@@ -1202,11 +1202,12 @@
       "outcome": "adopted"
     },
     "violin": {
-      "objective": "0b559b72ad741fcd",
-      "date": "2026-10-16",
+      "objective": "cbe94c0cf2a3a80e",
+      "date": "2026-10-17",
       "capture": "violin",
       "timbre": "gm041",
-      "outcome": "adopted"
+      "outcome": "kept",
+      "reason": "no point of the search kept every bound (switch field moved: violin.body)"
     },
     "voice_oohs": {
       "objective": "0b559b72ad741fcd",

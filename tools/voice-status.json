@@ -2501,13 +2501,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-16",
+          "state": "current",
+          "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "judge the recorded candidate(s) — ring-2.3x, tube-open, tube-off, hard-mallet, soft-mallet, modes-two, modes-four, ring-short, bar-even — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p012b001-marimba",
@@ -5910,13 +5910,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-16",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-10-17",
+          "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p040b001-violin",
