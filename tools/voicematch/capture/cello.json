@@ -4,8 +4,11 @@
   "program": 42,
   "takes": "sustained",
   "audition_title": "libsonare cello vs the sampled reference",
-  "_notes": "Two octaves, and it leaves out the register a cello is most itself in. Below note 48 all three string slots return one recording, and although this is the only one of the three whose instrument reaches those notes -- which makes it the likely owner of those samples -- that is an inference rather than a measurement, and there is no way to settle it from this rack alone. The grid therefore starts at 48, the lowest note where this slot is measurably distinct from another. Above, it returns the viola's recording from 79, so the grid stops at 72.",
+  "_notes": "Every fourth semitone from 36, the open C string, to 72. Below note 48 all three string slots return one recording, and it is taken as the cello's by the rack's structure: a slot below its instrument's compass returns the next lower instrument's recording (the violin slot returns this one's below 60), this is the only one of the three whose instrument reaches those notes, and the contrabass slot returns a distinct recording there (gain-matched residual under 2 dB at 36, 44 and 48). Above, it returns the viola's recording from 79, so the grid stops at 72.",
   "notes": [
+    36,
+    40,
+    44,
     48,
     52,
     56,

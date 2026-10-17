@@ -4,8 +4,11 @@
   "program": 49,
   "takes": "sustained",
   "audition_title": "libsonare second string ensemble vs the sampled reference",
-  "_notes": "Every fourth semitone from 48 to 72, two octaves centred where this is written, and the grid the section voices already captured on this rack share. Both ends were rendered before this definition was written and both are healthy.",
+  "_notes": "Every fourth semitone from 36 to 72: the section reaches down to the cello's open C, and its recordings there are its own (gain-matched residual under 1 dB against the cello slot and the other section at 36 and 40). Both ends are healthy.",
   "notes": [
+    36,
+    40,
+    44,
     48,
     52,
     56,
