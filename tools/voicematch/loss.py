@@ -350,10 +350,10 @@ def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = HARM_REACH) -> 
     return {"init_db": init_db, **slopes}
 
 
-# The spectral centroid is deliberately excluded from the loss: it depends on
-# the probe note set (register weighting) and has been an unreliable, noisy
-# signal in this harness. Match harmonic profile, intonation, and noise floor
-# instead.
+# The spectral centroid carries no default weight on a pitched voice: breath and
+# bow noise move it note by note. It is scored per note as the gate's own ratio,
+# so a fit that asks for it (`--w-bright`) can see a string slipping into a higher
+# regime, which the audibility-weighted `harm` prices cheaply in the bass.
 
 
 def probe_rows(
@@ -607,7 +607,7 @@ def loss_terms(
         decay (the time-averaged harmonic term conflates them). Per-bin deltas
         are capped (12 dB / 30 dB/s) so single-sample oracle quirks cannot
         dominate the objective.
-    The spectral centroid is intentionally not part of the loss.
+      - `bright`: the gate's centroid ratio, |100 (model / oracle - 1)| per note.
 
     `mss` is carried through unchanged: it is already a whole-timeline measure
     (see `mss_distance`), so it is not averaged over notes.
@@ -655,7 +655,11 @@ def loss_terms(
     # cells all hit the cap is its worst, not its best, so none of the empty-set
     # guards above can see it and a reader cannot tell it from a real distance.
     cells = {t: CellCount() for t in ("env", "init", "slope", "tail", "hf", "lf", "mod", "modes")}
+    bright_hits = 0
     for m, o in zip(model_rows, oracle_rows_):
+        if o.get("centroid_hz") and m.get("centroid_hz"):
+            totals["bright"] += abs(100.0 * (m["centroid_hz"] / o["centroid_hz"] - 1.0))
+            bright_hits += 1
         pairs = list(zip(m["harmonics_db"][:n_harm], o["harmonics_db"][:n_harm]))
         available += max(0, len(pairs) - 1)
         # Which bins hold a partial rather than the note's own noise floor, read
@@ -802,6 +806,7 @@ def loss_terms(
     # bar, a bell, a membrane — and `harm` is then measuring nothing, in which
     # case its zero is not a match. Read it exactly as `dyn_groups` is read.
     out["harm_bins"] = float(compared)
+    out["bright_hits"] = float(bright_hits)
     for term, tally in cells.items():
         out.update(tally.out(term))
     out.update(level_counts)

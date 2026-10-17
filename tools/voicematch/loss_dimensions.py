@@ -92,7 +92,7 @@ TNR_ABSENT_CAP_DB = 24.0
 # other set reads as exactly 0.0 — indistinguishable, in the dict alone, from a
 # term the model matched perfectly. Anything that reasons about a residual
 # rather than about the combined loss has to know the difference.
-_SHARED_TERMS = ("env", "mss", "level", "crest", "dyn", "modes")
+_SHARED_TERMS = ("env", "mss", "level", "crest", "dyn", "modes", "bright")
 PITCHED_TERMS = (
     "harm",
     "cents",
@@ -128,8 +128,8 @@ PITCHED_TERMS = (
 #: relations across, and only a percussion capture has one — a pitched voice's
 #: between-note relations are `dyn` and `level`, which are the whole grid rather
 #: than a family inside it.
-#: `tilt` and `bright` are percussion-only, and they exist because `band` cannot
-#: stand in for them. `band` is an L1 over 25 bands with each side normalised to
+#: `tilt` is percussion-only; `bright` is shared, and on a kit both exist because
+#: `band` cannot stand in for them. `band` is an L1 over 25 bands with each side normalised to
 #: its OWN loudest band, so it charges a magnitude per band and never a
 #: direction, and when a candidate's loudest band moves the anchor moves with
 #: it: a whole-kit fit brought `band` down from 16.4 to 15.5 dB while taking the
@@ -165,7 +165,6 @@ PERCUSSION_TERMS = (
     "band",
     "bdecay",
     "tilt",
-    "bright",
     "tonal",
     "rise",
     "strike",

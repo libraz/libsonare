@@ -2492,9 +2492,9 @@ def main() -> int:
         type=float,
         default=None,
         dest="w_bright",
-        help="drum fits: weight on the spectral centroid as a percentage "
-        "of the reference's. The gate's own arithmetic, so a fit "
-        "moves the quantity the kit is judged on",
+        help="weight on the spectral centroid as a percentage of the "
+        "reference's, per note. The gate's own arithmetic, so a fit "
+        "moves the quantity the voice is judged on; default on drums only",
     )
     parser.add_argument(
         "--w-tonal",

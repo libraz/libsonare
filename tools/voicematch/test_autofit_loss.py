@@ -326,6 +326,28 @@ def test_a_model_cleaner_than_its_oracle_is_not_penalised():
     assert noisier["tnr"] == pytest.approx(10.0)
 
 
+def test_a_pitched_voice_scores_the_gates_centroid_ratio():
+    def row(centroid_hz):
+        return {
+            "harmonics_db": [0.0],
+            "f0_cents_err": 0.0,
+            "tnr_db": 20.0,
+            "sustain_slope_db_s": 0.0,
+            "release_ms": 0.0,
+            "attack_ms": 0.0,
+            **({"centroid_hz": centroid_hz} if centroid_hz else {}),
+        }
+
+    # A string sounding its octave doubles the centroid; the gate reads +100 %.
+    octave = loss_terms([row(1600.0), row(800.0)], [row(800.0), row(800.0)], n_harm=1)
+    assert octave["bright"] == pytest.approx(50.0)
+    assert octave["bright_hits"] == 2.0
+    # A reference with no centroid is unmeasured, not a match.
+    absent = loss_terms([row(1600.0)], [row(None)], n_harm=1)
+    assert absent["bright"] == 0.0
+    assert absent["bright_hits"] == 0.0
+
+
 def test_a_silent_render_does_not_win_the_harmonic_term():
     """Silencing a gain was the cheapest way to score a perfect harmonic ladder.
 
