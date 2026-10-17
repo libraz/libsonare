@@ -172,23 +172,23 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.vibraphone_wide.modal.vel_to_brightness = 0.788197f;
   o.vibraphone_wide.resonance_q = 1.05271f;
   o.marimba_wide = o.marimba;
-  o.marimba_wide.stereo_spread = 0.0454907f;
-  o.marimba_wide.amp_env.attack_ms = 0.63691f;
-  o.marimba_wide.amp_env.release_ms = 173.0f;
-  o.marimba_wide.amp_env.sustain = 0.576431f;
-  o.marimba_wide.body_mix = 0.92111f;
-  o.marimba_wide.cutoff_hz = 9965.29f;
-  o.marimba_wide.drive = 0.117212f;
-  o.marimba_wide.modal.decay_stretch = 0.139067f;
-  o.marimba_wide.modal.modes[0].decay_scale = 1.85046f;
-  o.marimba_wide.modal.modes[1].decay_scale = 0.825006f;
-  o.marimba_wide.modal.modes[1].ratio = 3.53804f;
-  o.marimba_wide.modal.modes[2].decay_scale = 0.445808f;
-  o.marimba_wide.modal.modes[2].ratio = 18.7362f;
-  o.marimba_wide.modal.release_damp_s = 0.141073f;
-  o.marimba_wide.modal.strike_brightness = 0.895711f;
-  o.marimba_wide.modal.vel_to_brightness = 0.391861f;
-  o.marimba_wide.resonance_q = 1.85524f;
+  o.marimba_wide.amp_env.attack_ms = 0.5f;
+  o.marimba_wide.amp_env.release_ms = 250.0f;
+  o.marimba_wide.amp_env.sustain = 1.0f;
+  o.marimba_wide.body_mix = 0.4f;
+  o.marimba_wide.cutoff_hz = 20000.0f;
+  o.marimba_wide.drive = 0.0f;
+  o.marimba_wide.modal.decay_stretch = 0.65f;
+  o.marimba_wide.modal.modes[0].decay_scale = 1.0f;
+  o.marimba_wide.modal.modes[1].decay_scale = 0.35f;
+  o.marimba_wide.modal.modes[1].ratio = 4.0f;
+  o.marimba_wide.modal.modes[2].decay_scale = 0.2f;
+  o.marimba_wide.modal.modes[2].ratio = 10.0f;
+  o.marimba_wide.modal.release_damp_s = 0.15f;
+  o.marimba_wide.modal.strike_brightness = 0.7f;
+  o.marimba_wide.modal.vel_to_brightness = 0.6f;
+  o.marimba_wide.resonance_q = 0.707f;
+  o.marimba_wide.stereo_spread = 0.5f;
 
   // Church Bell (program 14 variation 8): a cast bronze bell, not the tuned
   // tube the capital voices. Ratios, weights and per-mode t60 are the module's
@@ -378,11 +378,20 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.violin_slow = o.violin;
   o.violin_slow.bowed_string.attack_ms = 220.0f;
   o.violin_slow.bowed_string.bow_force = 0.48f;
-  o.violin_slow.amp_env.attack_ms = 110.175f;
-  o.violin_slow.amp_env.decay_ms = 28.732f;
-  o.violin_slow.amp_env.release_ms = 54.6719f;
-  o.violin_slow.amp_env.sustain = 0.668441f;
-  o.violin_slow.body_mix = 0.49315f;
+  o.violin_slow.amp_env.attack_ms = 180.0f;
+  o.violin_slow.amp_env.decay_ms = 60.0f;
+  o.violin_slow.amp_env.release_ms = 267.709f;
+  o.violin_slow.amp_env.sustain = 1.0f;
+  o.violin_slow.body_mix = 0.28f;
+  o.violin_slow.bowed_string.bow_speed = 0.630748f;
+  o.violin_slow.bowed_string.release_ms = 165.23f;
+  o.violin_slow.bowed_string.stribeck = 0.7f;
+  o.violin_slow.bowed_string.sympathetic = 0.08f;
+  o.violin_slow.bowed_string.vel_to_speed = 0.6f;
+  o.violin_slow.drift_cents = 2.0f;
+  o.violin_slow.drift_rate_hz = 0.3f;
+  o.violin_slow.lfo_to_pitch_cents = 9.0f;
+  o.violin_slow.stereo_spread = 0.1f;
 }
 
 }  // namespace sonare::midi::synth::detail
