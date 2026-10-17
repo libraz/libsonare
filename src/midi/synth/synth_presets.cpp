@@ -332,8 +332,8 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
                                       0.340141f, 0.381076f, 0.177051f};
     constexpr BellGroup kTubaBell{1200.0f,   784.162f, 0.817288f, 0.541796f,
                                   0.691899f, 0.1f,     0.704915f};
-    constexpr BellGroup kMutedTrumpetBell{8913.36f,  429.085f,  0.674929f, 0.463131f,
-                                          0.837987f, 0.225004f, 0.606152f};
+    constexpr BellGroup kMutedTrumpetBell{3530.56f, 429.085f,   0.684851f, 0.595097f,
+                                          0.90409f, 0.0994201f, 0.606152f};
     constexpr BellGroup kFrenchHornBell{637.0f,    821.625f,  0.73703f, 0.606392f,
                                         0.414392f, 0.208044f, 0.293441f};
 
