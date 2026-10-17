@@ -117,6 +117,11 @@ SONARE_TUNABLE(kPolRadiation, 0.25f);
 // The two feedback registers (neck_out_/bridge_out_) the loop carries outside its lines.
 constexpr float kRegisters = 2.0f;
 
+// Corner (Hz) of the DC block ahead of the second-polarization drive: half the
+// lowest fundamental the lines are sized for, so no note's fundamental is
+// touched while the mean friction injection is.
+constexpr float kPolDriveBlockHz = 0.5f * kBowedMinFundamentalHz;
+
 }  // namespace
 
 void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sample_rate,
@@ -247,6 +252,16 @@ LoopBudget BowedStringVoiceCore::configure(const BowedStringPatchParams& params,
     drive_index_ = static_cast<uint64_t>(prefill_span);
   }
 
+  // Finite-width bow: the injection relaxes over the time the wave takes to
+  // cross the hair ribbon, w / c with c = 2 L f0, as a coefficient at this rate.
+  width_state_ = 0.0f;
+  width_alpha_ = 0.0f;
+  if (params.bow_width_m > 0.0f) {
+    const double tau_s = static_cast<double>(params.bow_width_m) /
+                         (2.0 * std::max(params.string_length_m, 0.01f) * std::max(1.0f, f0));
+    width_alpha_ = static_cast<float>(1.0 - std::exp(-1.0 / (tau_s * sr)));
+  }
+
   // Bow velocity contour: bow_accel_ms 0 = one-pole ramp (ZeroIsSentinel); else a
   // constant-acceleration linear attack.
   bow_.start(params.attack_ms, params.release_ms, sr, params.bow_accel_ms);
@@ -303,6 +318,9 @@ LoopBudget BowedStringVoiceCore::configure(const BowedStringPatchParams& params,
   pol_out_ = 0.0f;
   pol_lp_state_ = 0.0f;
   pol_write_ = 0;
+  pol_hp_x1_ = 0.0f;
+  pol_hp_y1_ = 0.0f;
+  pol_hp_a_ = static_cast<float>(std::exp(-kTwoPi * kPolDriveBlockHz / sr));
   if (pol_couple_ > 0.0f) {
     pol_period_ = base_period_ * cents_to_ratio(kPolDetuneCents);
     // Same mapping as the primary loop; with no patch field of its own,
@@ -393,6 +411,12 @@ float BowedStringVoiceCore::render_internal(float pitch_ratio) noexcept {
     v_inj = dv * bow_coeff;
   }
 
+  // Finite-width bow: the ribbon is crossed over w / c, not in one sample.
+  if (width_alpha_ > 0.0f) {
+    width_state_ += width_alpha_ * (v_inj - width_state_);
+    v_inj = width_state_;
+  }
+
   // Split the (compensated) period between the two lines and read/write them.
   const float eff = loop_delay(base_period_ / ratio, comp_, 2.0f);
   const float neck_delay =
@@ -419,9 +443,14 @@ float BowedStringVoiceCore::render_internal(float pitch_ratio) noexcept {
     const float pol_refl = pol_loss_ * pol_lp_state_;
     const float pol_delay =
         std::clamp(pol_period_ / ratio - pol_comp_, 1.0f, static_cast<float>(capacity_ - 4));
-    pol_out_ = rt::lagrange3_fractional_delay(pol_, static_cast<size_t>(capacity_), pol_write_,
-                                              static_cast<int>(pol_delay * 256.0f),
-                                              pol_refl + pol_drive_ * v_inj);
+    // The drive minus its mean: a positively reflecting line integrates DC.
+    const float drive_in = pol_drive_ * v_inj;
+    const float drive = pol_hp_a_ * (pol_hp_y1_ + drive_in - pol_hp_x1_);
+    pol_hp_x1_ = drive_in;
+    pol_hp_y1_ = drive;
+    pol_out_ =
+        rt::lagrange3_fractional_delay(pol_, static_cast<size_t>(capacity_), pol_write_,
+                                       static_cast<int>(pol_delay * 256.0f), pol_refl + drive);
     dry += output_scale_ * kPolRadiation * pol_out_;
   }
   // Sympathetic open-string halo (gated; one-way, so it cannot destabilise the
@@ -508,8 +537,11 @@ void BowedStringVoiceCore::kill() noexcept {
   bridge_out_ = 0.0f;
   bristle_z_ = 0.0f;
   slipping_ = false;
+  width_state_ = 0.0f;
   pol_out_ = 0.0f;
   pol_lp_state_ = 0.0f;
+  pol_hp_x1_ = 0.0f;
+  pol_hp_y1_ = 0.0f;
   for (SympatheticMode& m : sympathetic_) {
     m.y1 = 0.0f;
     m.y2 = 0.0f;

@@ -14,8 +14,11 @@
 #include <vector>
 
 #include "core/fft.h"
+#include "midi/bowed_string_probe.h"
 #include "midi/midi_event.h"
+#include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/pitch.h"
 #include "midi/synth/synth_presets.h"
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
@@ -589,6 +592,78 @@ TEST_CASE("the hyperbolic friction junction renders a tuned, bounded, harmonic s
   REQUIRE(harmonic_power(ps, 220.0, 4) > 0.005 * h1);
   // Deterministic, like every other junction.
   REQUIRE(render_patch(patch, 57, 100, 8192) == render_patch(patch, 57, 100, 8192));
+}
+
+/// The core at @p sample_rate for @p frames: the slab is sized for that rate.
+std::vector<float> render_bowed_core_at(const BowedStringPatchParams& params, double sample_rate,
+                                        uint8_t note, size_t frames) {
+  const int capacity = sonare::midi::synth::bowed_string_buffer_capacity(sample_rate);
+  std::vector<float> slab(
+      static_cast<size_t>(sonare::midi::synth::bowed_string_slab_capacity(sample_rate)), 0.0f);
+  BowedStringVoiceCore core;
+  core.attach(slab.data(), capacity);
+  core.start(params, sample_rate, note, sonare::midi::Velocity16::from7(100), 0x524f53494eULL);
+  std::vector<float> output(frames, 0.0f);
+  for (size_t i = 0; i < frames; ++i) output[i] = core.render(1.0f);
+  return output;
+}
+
+TEST_CASE("a finite-width bow takes the cello's C2 into Helmholtz motion at either rate",
+          "[midi][synth][bowed]") {
+  // A point bow resolves a slip in one sample, and the loop's slip rate at C2
+  // (N = 734 at 48 kHz) followed that sample count rather than the physics. The
+  // ribbon's crossing time w / c is in seconds, so the same width must bring the
+  // same note into one slip per period at 48 kHz and at 44.1 kHz alike, where the
+  // point bow reaches it at neither. 18 mm is the width the C2 relaxation time
+  // implied; the literature's 10-12 mm still leaves 1.7 slips at 44.1 kHz here.
+  BowedStringPatchParams params = sonare::midi::synth::gm_fallback_patch(0, 42).bowed_string;
+  params.polarization = 0.0f;
+  params.string_length_m = 0.69f;
+  const double f0 = static_cast<double>(sonare::midi::synth::note_to_hz(uint8_t{36}));
+  for (double sr : {48000.0, 44100.0}) {
+    INFO("sample rate " << sr);
+    params.bow_width_m = 0.0f;
+    const std::vector<float> point =
+        render_bowed_core_at(params, sr, 36, static_cast<size_t>(1.5 * sr));
+    const sonare::test::bowed::SlipRate point_rate =
+        sonare::test::bowed::slips_per_period(point, f0, sr);
+    REQUIRE(point_rate.periods > 0.0);
+    CHECK(point_rate.per_period > sonare::test::bowed::kHelmholtzHi);
+    params.bow_width_m = 0.018f;
+    const std::vector<float> ribbon =
+        render_bowed_core_at(params, sr, 36, static_cast<size_t>(1.5 * sr));
+    const sonare::test::bowed::SlipRate ribbon_rate =
+        sonare::test::bowed::slips_per_period(ribbon, f0, sr);
+    REQUIRE(ribbon_rate.periods > 0.0);
+    CHECK(ribbon_rate.per_period < sonare::test::bowed::kHelmholtzHi);
+    CHECK(ribbon_rate.per_period >= sonare::test::bowed::kHelmholtzLo);
+    CHECK(sonare::test::bowed::time_to_helmholtz(ribbon, f0, sr).established);
+    REQUIRE(ribbon != point);
+  }
+  // The same ribbon on the hyperbolic junction changes its render too.
+  params.bow_width_m = 0.0f;
+  params.hyperbolic_friction = true;
+  params.string_tension_n = 130.0f;
+  const std::vector<float> point = render_bowed_core_at(params, 48000.0, 48, 24000);
+  params.bow_width_m = 0.012f;
+  REQUIRE(render_bowed_core_at(params, 48000.0, 48, 24000) != point);
+}
+
+TEST_CASE("the second polarization carries no DC", "[midi][synth][bowed]") {
+  // The horizontal line reflects positively, so it integrates the mean of its
+  // drive with a gain of 1 / (1 - loss); the bow's mean friction injection used
+  // to come out of it as a 10 % offset on the render. The drive is blocked at
+  // DC, so the steady output's mean is nothing against its RMS.
+  BowedStringPatchParams params = sonare::midi::synth::gm_fallback_patch(0, 40).bowed_string;
+  REQUIRE(params.polarization > 0.0f);
+  const std::vector<float> tone = render_bowed_core(params, 48000);
+  const size_t from = tone.size() / 2;
+  double mean = 0.0;
+  for (size_t i = from; i < tone.size(); ++i) mean += tone[i];
+  mean /= static_cast<double>(tone.size() - from);
+  const float level = rms(tone, from, tone.size());
+  REQUIRE(level > 0.01f);
+  CHECK(std::fabs(mean) < 0.01 * level);
 }
 
 TEST_CASE("sympathetic resonance is stable and rings an open-string halo", "[midi][synth][bowed]") {

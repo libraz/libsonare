@@ -337,7 +337,7 @@ TEST_CASE("bowed string control hashes", "[.][midi][synth][bowed][probe][golden]
   CHECK(v.polarization == 0.15f);
 
   const std::vector<float> core = render_core(v, 48000);
-  CHECK(fnv1a_quantized(core) == 0x30e81d0e2afa4a06ull);
+  CHECK(fnv1a_quantized(core) == 0x5bc9b975789a34c0ull);
   // The same core with both radiation gates off, as the bridge-force probe reads it.
   CHECK(fnv1a_quantized(render_core(gates_off_violin_params(), 48000)) == 0x0d3899080b08691bull);
 

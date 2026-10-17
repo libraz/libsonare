@@ -1638,6 +1638,8 @@ TEST_CASE("the tuning field table reaches the switch beside every field it gates
       {SynthEngineMode::kHarpsichord, "harpsichord.four", "harpsichord.pluck_4"},
       {SynthEngineMode::kPiano, "piano.strings", "piano.detune_cents"},
       {SynthEngineMode::kBowedString, "bowed_string.elasto_plastic", "bowed_string.stribeck"},
+      {SynthEngineMode::kBowedString, "bowed_string.hyperbolic_friction",
+       "bowed_string.string_tension_n"},
       {SynthEngineMode::kReed, "reed.dynamic_reed", "reed.closing_pressure"},
       {SynthEngineMode::kReed, "reed.conical", "reed.cone_growth"},
       {SynthEngineMode::kBrass, "brass.conical", "brass.brightness"},

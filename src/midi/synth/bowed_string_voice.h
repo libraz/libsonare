@@ -132,9 +132,16 @@ struct BowedStringPatchParams {
   /// stopped note on a lower string reads up to a fifth lighter than its string.
   /// Only read when hyperbolic_friction is on.
   float string_tension_n = 60.0f;
-  /// Vibrating length (m) of the open string, nut to bridge. Only read when
-  /// hyperbolic_friction is on.
+  /// Vibrating length (m) of the open string, nut to bridge. Read by the
+  /// hyperbolic junction (Z0) and by bow_width_m (the wave speed 2 L f0).
   float string_length_m = 0.325f;
+  /// Bow-hair contact width (m) along the string. A point bow resolves a slip
+  /// in one sample, which is why the loop's slip rate followed samples per
+  /// period rather than the physics; a real ribbon of hair takes w / c to be
+  /// crossed by the wave (c = 2 L f0), and the junction's injection relaxes
+  /// over that time (Pitteroff & Woodhouse, Acta Acustica 84, 1998). Applies to
+  /// both junctions. 0 = off -> an explicit bypass, bit-identical.
+  float bow_width_m = 0.0f;
 
   /// Sympathetic resonance in [0,1]: the halo of the instrument's OTHER (undamped
   /// open) strings ringing along with the bowed note. A small fixed bank of
@@ -429,6 +436,18 @@ class BowedStringVoiceCore {
   float ep_load_rate_ = 0.0f;   // per-sample bristle load rate (dt folded in)
   float ep_z_ba_ = 0.0f;        // breakaway deflection (stick below this)
   float ep_z_max_ = 0.0f;       // bristle clamp (divergence guard rail)
+
+  // Finite-width bow (off unless params.bow_width_m > 0): the injection's
+  // one-pole relaxation over w / c, built at the running rate, and its state.
+  float width_alpha_ = 0.0f;
+  float width_state_ = 0.0f;
+
+  // Second-polarization drive DC block: the line reflects positively, so it
+  // integrates the mean of what it is driven with (gain 1 / (1 - loss)); the
+  // one-pole highpass ahead of the drive removes that mean and nothing else.
+  float pol_hp_a_ = 0.0f;
+  float pol_hp_x1_ = 0.0f;
+  float pol_hp_y1_ = 0.0f;
 
   // Hyperbolic friction junction (off unless params.hyperbolic_friction): the loop
   // then runs in metres per second, z0_ is the string's characteristic impedance

@@ -376,6 +376,7 @@ void apply_bowed_string(NativeSynthPatch& p, const Fields& f) {
   I_TYPED(bowed_string.hyperbolic_friction, 0, 1);
   F(bowed_string.string_tension_n);
   F(bowed_string.string_length_m);
+  F(bowed_string.bow_width_m);
   F(bowed_string.bow_position);
   F(bowed_string.bow_force);
   F(bowed_string.bow_speed);
@@ -880,8 +881,9 @@ constexpr UnitRow kEngineUnits[] = {
     {"pipe_organ.swell", Unit::None},
     {"bowed_string.elasto_plastic", Unit::None},
     {"bowed_string.hyperbolic_friction", Unit::None},
-    {"bowed_string.string_tension_n", Unit::None},
+    {"bowed_string.string_tension_n", Unit::Newtons},
     {"bowed_string.string_length_m", Unit::Meters},
+    {"bowed_string.bow_width_m", Unit::Meters},
     {"bowed_string.bow_position", Unit::None},
     {"bowed_string.bow_force", Unit::None},
     {"bowed_string.bow_speed", Unit::None},
@@ -1364,8 +1366,13 @@ const GateRow kEngineGates[] = {
     {"pipe_organ.reed", [](const GateSite&) { return equals("rankCount", 0); }},
     {"pipe_organ.radiation", [](const GateSite&) { return equals("rankCount", 0); }},
     {"pipe_organ.ranks.*", [](const GateSite& s) { return above("rankCount", s.index); }},
-    // Bowed string: the bristle model, and the violin corpus the wrapper selects.
-    {"bowed_string.stribeck", [](const GateSite&) { return is("elastoPlastic", true); }},
+    // Bowed string: the bristle model (which the hyperbolic junction outranks),
+    // the string the hyperbolic junction reads, and the violin corpus the
+    // wrapper selects.
+    {"bowed_string.elasto_plastic",
+     [](const GateSite&) { return is("hyperbolicFriction", false); }},
+    {"bowed_string.stribeck",
+     [](const GateSite&) { return is("elastoPlastic", true) & is("hyperbolicFriction", false); }},
     {"bowed_string.string_tension_n",
      [](const GateSite&) { return is("hyperbolicFriction", true); }},
     {"bowed_string.string_length_m",

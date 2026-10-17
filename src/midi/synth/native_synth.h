@@ -1766,6 +1766,9 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       patch_clamp_detail::sanitize(p.bowed_string.string_tension_n, 60.0f), 1.0f, 500.0f);
   p.bowed_string.string_length_m =
       std::clamp(patch_clamp_detail::sanitize(p.bowed_string.string_length_m, 0.325f), 0.1f, 2.0f);
+  // Up to a bass bow's full hair ribbon; 0 is off.
+  p.bowed_string.bow_width_m =
+      std::clamp(patch_clamp_detail::sanitize(p.bowed_string.bow_width_m, 0.0f), 0.0f, 0.05f);
   p.bowed_string.sympathetic = patch_clamp_detail::sanitize(p.bowed_string.sympathetic, 0.0f);
   p.bowed_string.polarization = patch_clamp_detail::sanitize(p.bowed_string.polarization, 0.0f);
   p.bowed_string.attack_noise =

@@ -351,19 +351,28 @@ struct ShippedVoice {
   uint16_t bank;
   uint8_t program;
   uint8_t notes[3];
+  /// Vibrating string length (m) of the instrument the patch voices, which sets
+  /// the wave speed a bow width is crossed at.
+  float string_length_m;
 };
 
 const ShippedVoice kShipped[] = {
-    {"violin", 0, 40, {55, 72, 88}},      // G3 open string .. E6
-    {"viola", 0, 41, {48, 67, 84}},       // C3 open string .. C6
-    {"cello", 0, 42, {36, 55, 72}},       // C2 open string .. C5
-    {"contrabass", 0, 43, {28, 45, 55}},  // E1 sounding .. G3
-    {"fiddle", 0, 110, {55, 72, 88}},     // the violin's range
-    {"string_ensemble_1", 0, 48, {36, 60, 84}},
-    {"string_ensemble_2", 0, 49, {36, 60, 84}},
-    {"violin_slow", 8, 40, {55, 72, 88}},  // GS variation of the violin
+    {"violin", 0, 40, {55, 72, 88}, 0.325f},     // G3 open string .. E6
+    {"viola", 0, 41, {48, 67, 84}, 0.37f},       // C3 open string .. C6
+    {"cello", 0, 42, {36, 55, 72}, 0.69f},       // C2 open string .. C5
+    {"contrabass", 0, 43, {28, 45, 55}, 1.04f},  // E1 sounding .. G3
+    {"fiddle", 0, 110, {55, 72, 88}, 0.325f},    // the violin's range
+    {"string_ensemble_1", 0, 48, {36, 60, 84}, 0.325f},
+    {"string_ensemble_2", 0, 49, {36, 60, 84}, 0.325f},
+    {"violin_slow", 8, 40, {55, 72, 88}, 0.325f},  // GS variation of the violin
 };
 constexpr int kShippedCount = 8;
+
+/// Bow-hair ribbon widths the census is repeated at: the literature's contact
+/// width (Pitteroff & Woodhouse 1998, ~10-12 mm) and the width the C2 relaxation
+/// time implied.
+constexpr float kCensusWidthsM[] = {0.012f, 0.018f};
+constexpr int kCensusWidthCount = 2;
 
 /// Long enough that the trailing half the readings are taken over sits past the
 /// slowest shipped bow ramp (viola's attack_ms is 857).
@@ -678,11 +687,19 @@ TEST_CASE("the shipped bowed patches at their own operating points",
   // the reading with polarization alone at 0, because elasto-plastic friction
   // and the second polarization have a known double-slip interaction in the low
   // register that would otherwise be read as a bow-parameter failure.
+  // The two width columns repeat the shipped reading with a bow-hair ribbon of
+  // the literature's width and of the width C2 implied, at the instrument's own
+  // string length, so the before/after of a width change is one run.
+  const auto sounds = [](const Cell& c) {
+    return c.helmholtz && c.per_period < kHelmholtzHi && c.peak_ratio < kPlayedPitchHi;
+  };
   std::ostringstream o;
   o << std::fixed;
   o << "\n  shipped patch readings (h = Helmholtz established, - = never)\n";
-  o << "  patch                note   beta   force   rate  pk/f0   dB   |  rate(pol=0) pk/f0\n";
+  o << "  patch                note   beta   force   rate  pk/f0   dB   |  rate(pol=0) pk/f0  |"
+       "  rate(12mm) pk/f0  rate(18mm) pk/f0\n";
   int sounding = 0;
+  int sounding_width[kCensusWidthCount] = {};
   int cells = 0;
   for (int vi = 0; vi < kShippedCount; ++vi) {
     const ShippedVoice& v = kShipped[vi];
@@ -698,10 +715,7 @@ TEST_CASE("the shipped bowed patches at their own operating points",
       ++cells;
       // Sounding the note it was asked for: one slip per played period, and the
       // spectrum's peak on the played fundamental rather than a shorter period.
-      if (shipped.helmholtz && shipped.per_period < kHelmholtzHi &&
-          shipped.peak_ratio < kPlayedPitchHi) {
-        ++sounding;
-      }
+      if (sounds(shipped)) ++sounding;
       o << "  " << std::setw(18) << std::left << v.name << std::right << std::setw(6)
         << int{v.notes[ni]} << std::setw(7) << std::setprecision(3) << params.bow_position
         << std::setw(8) << std::setprecision(3) << params.bow_force << std::setw(7)
@@ -709,11 +723,27 @@ TEST_CASE("the shipped bowed patches at their own operating points",
         << std::setw(6) << std::setprecision(2) << shipped.peak_ratio << std::setw(7)
         << std::setprecision(1) << shipped.level_db << "  | " << std::setw(7)
         << std::setprecision(2) << control.per_period << (control.helmholtz ? 'h' : '-')
-        << std::setw(7) << std::setprecision(2) << control.peak_ratio << "\n";
+        << std::setw(7) << std::setprecision(2) << control.peak_ratio << "  |";
+      for (int wi = 0; wi < kCensusWidthCount; ++wi) {
+        BowedStringPatchParams ribbon = params;
+        ribbon.string_length_m = v.string_length_m;
+        ribbon.bow_width_m = kCensusWidthsM[wi];
+        const Cell wide = measure_cell(ribbon, v.notes[ni], kShippedSamples);
+        REQUIRE(wide.reached);
+        if (sounds(wide)) ++sounding_width[wi];
+        o << std::setw(8) << std::setprecision(2) << wide.per_period << (wide.helmholtz ? 'h' : '-')
+          << std::setw(6) << std::setprecision(2) << wide.peak_ratio;
+      }
+      o << "\n";
     }
   }
   o << "  cells sounding the played note with Helmholtz established: " << sounding << "/" << cells
-    << "\n";
+    << " as shipped";
+  for (int wi = 0; wi < kCensusWidthCount; ++wi) {
+    o << ", " << sounding_width[wi] << "/" << cells << " at " << std::setprecision(0)
+      << kCensusWidthsM[wi] * 1000.0f << " mm";
+  }
+  o << "\n";
   const std::string report = o.str();
   INFO(report);
   CHECK(cells == kShippedCount * 3);
