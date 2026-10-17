@@ -267,6 +267,7 @@ _CLASS_WEIGHTS: dict[ToneClass, dict[str, float]] = {
         "env": 0.5,
         "slope": 0.5,
         "dyn": 1.0,
+        "velspan": 0.5,
         "crest": 1.0,
     },
     # A hammered string: the decay and the strike carry it, and the aftersound
@@ -285,6 +286,7 @@ _CLASS_WEIGHTS: dict[ToneClass, dict[str, float]] = {
         "stiff": 0.5,
         "crest": 1.0,
         "dyn": 1.0,
+        "velspan": 0.5,
         "hfdyn": 1.0,
     },
     # A plucked string: the same shape, weighted toward the onset, since the
@@ -304,6 +306,7 @@ _CLASS_WEIGHTS: dict[ToneClass, dict[str, float]] = {
         "crest": 1.0,
         "stiff": 0.5,
         "dyn": 1.0,
+        "velspan": 0.5,
     },
     # A bar, bell or membrane. `harm`, `tnr` and `dyn` are deliberately absent:
     # each reads the harmonic ladder, which is not this instrument's series, so
@@ -321,6 +324,7 @@ _CLASS_WEIGHTS: dict[ToneClass, dict[str, float]] = {
         "hf": 0.5,
         "mod": 1.0,
         "modedyn": 1.0,
+        "velspan": 0.5,
     },
     # Nothing has a pitch, so only the whole-render measures say anything —
     # which is also why `dyn` is not here: it is fitted per pitch, and this
@@ -472,6 +476,10 @@ _MELODIC_ALL = (
     "register",  # held_peak_dbfs    — level against register
 )
 
+#: Read off the envelope's first 150 ms against the early sustain, so they belong to
+#: the voices whose excitation sets an onset overshoot.
+_BREATH_ONSET_DIMENSIONS = ("onset", "onset_settle")
+
 
 def _melodic(tone: ToneClass, drop: tuple[str, ...] = ()) -> tuple[str, ...]:
     """`_MELODIC_ALL` less `drop`, and less the ladder rulers where `tone` has no ladder."""
@@ -545,7 +553,10 @@ def canonical_dimensions(
     """
     if percussive or drum_note is not None:
         return PERCUSSION_DIMENSIONS
-    return CANONICAL_DIMENSIONS[tone_class(program)]
+    dims = CANONICAL_DIMENSIONS[tone_class(program)]
+    if fit_profile(program).excitation is ExcitationFamily.BREATH_ONSET:
+        dims += _BREATH_ONSET_DIMENSIONS
+    return dims
 
 
 # --------------------------------------------------------------------------- #

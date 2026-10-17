@@ -47,6 +47,7 @@ LOSS_TERMS = (
     "hfdyn",
     "modedyn",
     "onsetvel",
+    "velspan",
     "onset",
     "mss",
     "band",
@@ -106,6 +107,7 @@ PITCHED_TERMS = (
     "hfdyn",
     "modedyn",
     "onsetvel",
+    "velspan",
     "onset",
 ) + _SHARED_TERMS
 #: `modes` is shared because a drum has one too. A tom, a conga, a timbale, a
@@ -514,6 +516,56 @@ def _onset_terms(
         counts["ref_ineligible"] = float(ref_out)
         counts["model_ineligible"] = float(model_out)
     return (total / compared if compared else 0.0), compared
+
+
+def _velspan_terms(
+    model_rows: list[dict], oracle_rows_: list[dict], *, counts: dict[str, float] | None = None
+) -> tuple[float, int]:
+    """How far each pitch's softest-to-hardest `peak_dbfs` span sits from the reference's.
+
+    The quantity the gate's `vel_range` reads. A pitch is scored where the
+    reference holds a span (two finite velocities, spread of at least
+    `DYN_MIN_VELOCITY_SPREAD`); a model span missing there is charged the cap.
+    Returns the mean over those pitches and how many they were.
+    """
+    groups: dict[int, list[int]] = {}
+    for i, r in enumerate(model_rows):
+        if r.get("note") is not None and r.get("velocity"):
+            groups.setdefault(r["note"], []).append(i)
+
+    def span(rows: list[dict], idx: list[int]) -> float | None:
+        cells = [
+            (float(rows[i]["velocity"]), peak)
+            for i in idx
+            if (peak := _finite_or_none(rows[i].get("peak_dbfs"))) is not None
+        ]
+        if len(cells) < 2:
+            return None
+        vel = [v for v, _ in cells]
+        if max(vel) - min(vel) < DYN_MIN_VELOCITY_SPREAD:
+            return None
+        peaks = [p for _, p in cells]
+        return max(peaks) - min(peaks)
+
+    total = 0.0
+    used = absent = capped = 0
+    for idx in groups.values():
+        ref = span(oracle_rows_, idx)
+        if ref is None:
+            continue
+        mod = span(model_rows, idx)
+        if mod is None:
+            delta = LEVEL_DELTA_CAP_DB
+            absent += 1
+        else:
+            delta = abs(mod - ref)
+        capped += int(delta >= LEVEL_DELTA_CAP_DB)
+        total += min(delta, LEVEL_DELTA_CAP_DB)
+        used += 1
+    if counts is not None:
+        counts["capped"] = float(capped)
+        counts["absent"] = float(absent)
+    return (total / used if used else 0.0), used
 
 
 # --------------------------------------------------------------------------- #

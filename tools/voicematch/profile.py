@@ -1387,7 +1387,7 @@ def compare(
         attempted += 1
 
         def d(key, scale=1.0, m=m, r=r):
-            if key not in m or key not in r:
+            if m.get(key) is None or r.get(key) is None:
                 return None
             return (m[key] - r[key]) * scale
 
@@ -1428,6 +1428,9 @@ def compare(
             "attack": d("attack_ms"),
             # 4-8 kHz share of the first 120 ms; see `profile_measure.attack_hf_share_db`.
             "attack_hf": d("attack_hf_db"),
+            # Absent on either side where the early sustain is not flat.
+            "onset": d("onset_overshoot_db"),
+            "onset_settle": d("onset_settle_ms"),
             # The SECOND decay rate. A piano string loses energy fast while the
             # strings of its unison move together and far more slowly once they
             # have drifted apart and are trading it through the bridge rather

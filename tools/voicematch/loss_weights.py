@@ -64,6 +64,8 @@ TERM_UNITS = {
     "modedyn": 0.5,
     # Two slopes per pitch, each already divided by its own unit per velocity doubling.
     "onsetvel": 2.0,
+    # A mean absolute difference of the peak-level span in dB, capped like `level`.
+    "velspan": 1.0,
     # A dB of overshoot and a doubling of settle per cell.
     "onset": 2.0,
     # The third-octave profile's twenty-five bands at a dB each, and its eight
@@ -158,6 +160,7 @@ def cli_weights(args) -> dict[str, float]:
         weights.pop("hfdyn", None)
         weights.pop("modedyn", None)
         weights.pop("onsetvel", None)
+        weights.pop("velspan", None)
     if not getattr(args, "has_level_contrasts", True):
         weights.pop("level", None)
     if not getattr(args, "has_onset_reference", True):
@@ -203,6 +206,7 @@ DROP_REASONS = {
     "hfdyn": ("has_velocity_spread", "the probe sounds each pitch at one velocity"),
     "modedyn": ("has_velocity_spread", "the probe sounds each pitch at one velocity"),
     "onsetvel": ("has_velocity_spread", "the probe sounds each pitch at one velocity"),
+    "velspan": ("has_velocity_spread", "the probe sounds each pitch at one velocity"),
     "onset": ("has_onset_reference", "no reference cell is onset-eligible"),
     "tail": ("has_tail_window", "no note is held long enough to reach the 2-6 s band"),
 }
@@ -276,6 +280,7 @@ TERM_COUNT_KEYS = {
     "hfdyn": "hfdyn_groups",
     "modedyn": "modedyn_groups",
     "onsetvel": "onsetvel_groups",
+    "velspan": "velspan_groups",
     "onset": "onset_compared",
     "band": "band_bins",
     "bdecay": "bdecay_bins",
@@ -313,7 +318,19 @@ TERM_EXPECTED_KEYS = {"level": "level_expected"}
 # their raw values already include the observed fraction and must not be
 # multiplied by it a second time.
 SURVIVOR_MEAN_TERMS = frozenset(
-    ("mod", "modes", "stiff", "dyn", "hfdyn", "modedyn", "onsetvel", "onset", "lf", "kit")
+    (
+        "mod",
+        "modes",
+        "stiff",
+        "dyn",
+        "hfdyn",
+        "modedyn",
+        "onsetvel",
+        "velspan",
+        "onset",
+        "lf",
+        "kit",
+    )
 )
 
 # Terms whose raw value already charges each missing reference cell at the cap

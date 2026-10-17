@@ -50,7 +50,9 @@
     "attack",
     "balance",
     "centroid_pct",
-    "tnr"
+    "tnr",
+    "onset",
+    "onset_settle"
   ],
   "rig": "none",
   "room": "none",

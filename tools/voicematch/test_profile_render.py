@@ -1323,3 +1323,70 @@ def test_attack_hf_swing_is_signed_and_read_at_the_shared_extremes():
     ref = {60: {24: -60.0, 88: -30.0, 120: -20.0}, 72: {24: -58.0, 120: -30.0}, 84: {24: 0.0}}
     # n60 shares 24 and 120 only; n84 has one shared velocity and is left out.
     assert velocity_swing_deltas(model, ref) == [9.0 - 40.0, -10.0 - 28.0]
+
+
+def test_the_onset_dimensions_are_differenced_per_row_and_skipped_where_either_side_is_absent(
+    tmp_path, monkeypatch
+):
+    """Overshoot and settling are absent where the early sustain is not flat, on either side."""
+    _spy_render(monkeypatch)
+    onset = {
+        (60, 40): (8.8, 248.0),
+        (60, 80): (7.0, 100.0),
+        (60, 100): (None, None),
+        (60, 120): (3.0, 50.0),
+    }
+    ref_onset = {
+        (60, 40): (6.6, 66.0),
+        (60, 80): (6.0, 90.0),
+        (60, 100): (5.0, 60.0),
+        (60, 120): (None, None),
+    }
+
+    def row(vel, fields):
+        out = {"f0_hz": 261.6, "cents_vs_et": 0.0, "peak_dbfs": -20.0}
+        if fields[0] is not None:
+            out.update(onset_overshoot_db=fields[0], onset_settle_ms=fields[1])
+        return out
+
+    profile = {
+        "id": "o",
+        "label": "O",
+        "capture": {"program": 73, "gate_ms": 500, "preroll_ms": 0, "sample_rate": 48000},
+        "rows": [
+            {"timbre": "t", "note": n, "velocity": v, **row(v, ref_onset[(n, v)])}
+            for n, v in ref_onset
+        ],
+    }
+    cfg = {
+        "id": "o",
+        "notes": [60],
+        "velocities": [40, 80, 100, 120],
+        "gate_ms": 500,
+        "preroll_ms": 0,
+        "tail": "0s",
+        "program": 73,
+        "timbres": [{"id": "t"}],
+    }
+    path = tmp_path / "ref.json"
+    path.write_text(json.dumps(profile))
+    monkeypatch.setattr(
+        profile_module,
+        "measure_note",
+        lambda audio, sr, note, *, preroll_s, gate_s: row(0, onset[(note, _current["vel"])]),
+    )
+    _current = {}
+    real_smf = profile_module.write_smf
+
+    def spy_smf(notes, **kw):
+        _current["vel"] = notes[0].velocity
+        return real_smf(notes, **kw)
+
+    monkeypatch.setattr(profile_module, "write_smf", spy_smf)
+    out = tmp_path / "out.json"
+    profile_module.compare(cfg, path, timbre="t", notes_filter=set(), json_out=str(out))
+    summary = json.loads(out.read_text())
+    dims = summary["summary"]
+    assert dims["onset"]["n"] == 2 and dims["onset_settle"]["n"] == 2
+    assert dims["onset"]["median"] == pytest.approx((2.2 + 1.0) / 2)
+    assert dims["onset_settle"]["median"] == pytest.approx((182.0 + 10.0) / 2)

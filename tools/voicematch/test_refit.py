@@ -582,3 +582,10 @@ def test_a_copy_owns_only_the_fields_it_reassigns_after_the_copy():
     voice = {"patch": "cap", "gates": [{"patch": "cap"}, {"patch": "wide"}]}
     out = reach_copies("cap.stereo_spread=0.2,cap.gain=0.3", voice, {"wide": "cap"}, explicit)
     assert out == "cap.stereo_spread=0.2,cap.gain=0.3,wide.gain=0.3"
+
+
+def test_the_velocity_span_and_onset_gate_dimensions_name_their_fit_terms():
+    from refit import GATE_TERMS
+
+    assert GATE_TERMS["vel_range"] == "velspan"
+    assert GATE_TERMS["onset"] == GATE_TERMS["onset_settle"] == "onset"

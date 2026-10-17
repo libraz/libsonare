@@ -325,7 +325,7 @@ def resolve_probe(args) -> None:
     # dynamics match on every candidate and quietly dilute the whole objective.
     # Only what was asked for explicitly reaches here: a class default is already
     # gone, dropped by `cli_weights` off `has_velocity_spread`.
-    for flag in ("dyn", "hfdyn", "modedyn", "onsetvel"):
+    for flag in ("dyn", "hfdyn", "modedyn", "onsetvel", "velspan"):
         if getattr(args, f"w_{flag}", None) and not args.has_velocity_spread:
             raise ValueError(
                 f"--w-{flag} fits against velocity per pitch, and pattern "

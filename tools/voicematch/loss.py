@@ -79,6 +79,7 @@ from loss_dimensions import (
     _perc_lf_terms,
     _rows_comparable,
     _stiff_terms,
+    _velspan_terms,
     measured_terms,
 )
 from loss_kit import (
@@ -777,6 +778,8 @@ def loss_terms(
     )
     onset_counts: dict[str, float] = {}
     out["onset"], onset_compared = _onset_terms(model_rows, oracle_rows_, counts=onset_counts)
+    velspan_counts: dict[str, float] = {}
+    out["velspan"], velspan_groups = _velspan_terms(model_rows, oracle_rows_, counts=velspan_counts)
     stiff_counts: dict[str, float] = {}
     out["stiff"], stiff_notes = _stiff_terms(model_rows, oracle_rows_, counts=stiff_counts)
     out.update(stiff_counts)
@@ -786,6 +789,7 @@ def loss_terms(
     out["hfdyn_groups"] = float(hfdyn_groups)
     out["modedyn_groups"] = float(modedyn_groups)
     out["onsetvel_groups"] = float(onsetvel_groups)
+    out["velspan_groups"] = float(velspan_groups)
     out["onset_compared"] = float(onset_compared)
     out["stiff_notes"] = float(stiff_notes)
     out["tnr_notes"] = float(tnr_notes)
@@ -805,6 +809,7 @@ def loss_terms(
     out.update({f"hfdyn_{key}": value for key, value in hfdyn_counts.items()})
     out.update({f"modedyn_{key}": value for key, value in modedyn_counts.items()})
     out.update({f"onsetvel_{key}": value for key, value in onsetvel_counts.items()})
+    out.update({f"velspan_{key}": value for key, value in velspan_counts.items()})
     out.update({f"onset_{key}": value for key, value in onset_counts.items()})
     out["level_offset_db"] = offset
     out["comparable"] = 1.0

@@ -51,7 +51,9 @@
     "centroid_pct",
     "tnr",
     "vel_range",
-    "register"
+    "register",
+    "onset",
+    "onset_settle"
   ],
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap.",
   "dimensions_na": {

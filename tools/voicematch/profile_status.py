@@ -152,6 +152,8 @@ def readiness(cfg: dict, *, archive: Path, reference_dir: Path) -> dict:
         "centroid_pct": "centroid_hz",
         "tnr": "tnr_db",
         "vel_range": "peak_dbfs",
+        "onset": "onset_overshoot_db",
+        "onset_settle": "onset_settle_ms",
         "register": "held_peak_dbfs",
     }
     out["dimensions"] = wanted or ["(all measured)"]

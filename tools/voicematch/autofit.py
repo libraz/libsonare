@@ -2675,6 +2675,15 @@ def main() -> int:
         "whose committed profile has an onset-eligible cell",
     )
     parser.add_argument(
+        "--w-velspan",
+        type=float,
+        default=None,
+        dest="w_velspan",
+        help="weight on the VELOCITY SPAN: the softest-to-hardest range of the peak "
+        "level per pitch, the quantity the gate's `vel_range` reads. Needs a probe "
+        "with a velocity axis",
+    )
+    parser.add_argument(
         "--w-level",
         type=float,
         default=None,

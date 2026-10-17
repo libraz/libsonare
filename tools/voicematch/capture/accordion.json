@@ -54,7 +54,9 @@
     "centroid_pct",
     "tnr",
     "vel_range",
-    "register"
+    "register",
+    "onset",
+    "onset_settle"
   ],
   "source_class": "library",
   "_identity": "Which product this is captured from lives in the untracked sibling `accordion.local.json`. Everything here is the method; scoring, fitting and diagnosing read `reference/accordion.json`.",

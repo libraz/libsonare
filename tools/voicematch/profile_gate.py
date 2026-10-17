@@ -39,6 +39,8 @@ DELTA_LABELS = {
     "attack": "time to the note's arrival (ms)",
     "attack_hf": "4-8 kHz share of the first 120 ms, + = model is brighter (dB)",
     "attack_hf_swing": "softest-to-hardest change in the 4-8 kHz attack share, + = model swings more (dB)",
+    "onset": "onset overshoot over the early sustain, + = model overshoots more (dB)",
+    "onset_settle": "onset settling time, + = model settles slower (ms)",
     "crest": "peak over RMS of the hit (dB)",
     "level": "how loud the hit is vs the reference (dBFS)",
     "ring": "ring length, + = model rings longer (doublings)",
@@ -196,7 +198,11 @@ def reference_spread(profile: dict, dimensions: list[str] | None = None) -> dict
             x, y = by_key[a][key], by_key[b][key]
 
             def diff(field, sx=x, sy=y):
-                return (sx[field] - sy[field]) if field in sx and field in sy else None
+                return (
+                    (sx[field] - sy[field])
+                    if sx.get(field) is not None and sy.get(field) is not None
+                    else None
+                )
 
             row = {
                 "stretch": (
@@ -213,6 +219,8 @@ def reference_spread(profile: dict, dimensions: list[str] | None = None) -> dict
                 "body": diff("body_below_f0_db"),
                 "attack": diff("attack_ms"),
                 "attack_hf": diff("attack_hf_db"),
+                "onset": diff("onset_overshoot_db"),
+                "onset_settle": diff("onset_settle_ms"),
                 "stereo": diff("stereo_width"),
                 "damper": (
                     None
@@ -328,6 +336,9 @@ FLOOR_GUESSES = {
     "vel_range": 1.0,
     "stereo": 0.27,
     "attack": 40.0,
+    # A decibel of overshoot; settling on the same 40 ms as the arrival time.
+    "onset": 1.0,
+    "onset_settle": 40.0,
     "aftersound": 1.81,
     # A difference of two decay rates, so its own floor is wider than a single
     # rate's (0.5 for `decay`).

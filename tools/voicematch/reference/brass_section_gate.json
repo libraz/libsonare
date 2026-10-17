@@ -65,6 +65,22 @@
       "abs_median": 1.0,
       "p90": 2.678,
       "rows": 35
+    },
+    "onset": {
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 1.619,
+      "abs_median": 1.619,
+      "p90": 2.973,
+      "rows": 32
+    },
+    "onset_settle": {
+      "floor": 40.0,
+      "floor_from": "guess",
+      "median": 107.188,
+      "abs_median": 107.188,
+      "p90": 558.375,
+      "rows": 32
     }
   }
 }

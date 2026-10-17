@@ -1066,6 +1066,48 @@ def test_the_onset_velocity_term_reads_the_slope_against_log_velocity():
     assert all("onsetvel" not in default_weights(p) for p in range(128))
 
 
+def _peak_rows(peaks: dict[int, float | None], note: int = 60, **extra) -> list[dict]:
+    return [
+        {"note": note, "velocity": v, "peak_dbfs": p, "held_rms_dbfs": -30.0, **extra}
+        for v, p in peaks.items()
+    ]
+
+
+def test_the_velocity_span_term_reads_the_peak_level_range_the_gate_reads():
+    from loss_dimensions import LEVEL_DELTA_CAP_DB, _velspan_terms
+
+    ref = _peak_rows({32: -30.0, 64: -24.0, 127: -18.0})
+    same, groups = _velspan_terms(_peak_rows({32: -25.0, 64: -19.0, 127: -13.0}), ref)
+    assert groups == 1 and same == pytest.approx(0.0, abs=1e-9)
+    narrow, _ = _velspan_terms(_peak_rows({32: -30.0, 64: -27.0, 127: -24.0}), ref)
+    assert narrow == pytest.approx(6.0)
+    # A span wider by more than the cap is charged the cap.
+    wide, _ = _velspan_terms(_peak_rows({32: -60.0, 127: 0.0}), ref)
+    assert wide == pytest.approx(LEVEL_DELTA_CAP_DB)
+    one = _peak_rows({100: -20.0})
+    assert _velspan_terms(one, one) == (0.0, 0)
+
+
+def test_the_velocity_span_term_charges_a_missing_model_cell_the_cap():
+    from loss_dimensions import LEVEL_DELTA_CAP_DB, _velspan_terms
+
+    ref = _peak_rows({32: -30.0, 127: -18.0})
+    counts: dict[str, float] = {}
+    gone, groups = _velspan_terms(_peak_rows({32: None, 127: -18.0}), ref, counts=counts)
+    assert groups == 1 and gone == pytest.approx(LEVEL_DELTA_CAP_DB)
+    assert counts["absent"] == 1.0
+
+
+def test_the_velocity_span_term_reads_peak_dbfs_and_not_the_held_level():
+    from loss_dimensions import _velspan_terms
+
+    ref = _peak_rows({32: -30.0, 127: -18.0})
+    model = _peak_rows({32: -30.0, 127: -18.0})
+    for i, r in enumerate(model):
+        r["held_rms_dbfs"] = -50.0 + 20.0 * i
+    assert _velspan_terms(model, ref) == (0.0, 1)
+
+
 def _onset_row(overshoot_db: float, settle_ms: float, **kw) -> dict:
     from metrics_note import onset_shape
 

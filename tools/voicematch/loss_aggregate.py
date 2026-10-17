@@ -9,7 +9,7 @@ from loss_dimensions import LEVEL_DELTA_CAP_DB, LOSS_TERMS
 from loss_weights import TERM_COUNT_KEYS
 
 DEFAULT_TAIL_FRACTION = 0.25
-GRID_TERMS = frozenset(("mss", "dyn", "hfdyn", "modedyn", "onsetvel", "kit"))
+GRID_TERMS = frozenset(("mss", "dyn", "hfdyn", "modedyn", "onsetvel", "velspan", "kit"))
 
 
 def upper_tail_mean(values, fraction):

@@ -53,7 +53,9 @@
     "centroid_pct",
     "tnr",
     "vel_range",
-    "register"
+    "register",
+    "onset",
+    "onset_settle"
   ],
   "source_class": "library",
   "_identity": "Which product this is captured from lives in the untracked sibling `piccolo.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/piccolo.json` and need nothing.",

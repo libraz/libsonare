@@ -63,6 +63,7 @@ def _probe_args(**kwargs) -> argparse.Namespace:
         "w_hfdyn": None,
         "w_modedyn": None,
         "w_onsetvel": None,
+        "w_velspan": None,
         "w_onset": None,
         "w_modes": None,
         "w_mod": None,

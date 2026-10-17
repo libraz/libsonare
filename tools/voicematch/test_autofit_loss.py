@@ -742,10 +742,10 @@ def test_a_class_default_the_probe_cannot_fit_is_dropped_and_named():
         > 0.0
     )
     assert "dyn" not in cli_weights(args)
-    assert [t for t, _ in dropped_weights(args)] == ["dyn"]
+    assert [t for t, _ in dropped_weights(args)] == ["dyn", "velspan"]
     # Named on the command line it is refused by the caller instead, so the two
     # reports never say the same thing twice.
-    args.w_dyn = 1.0
+    args.w_dyn = args.w_velspan = 1.0
     assert dropped_weights(args) == []
 
 

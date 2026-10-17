@@ -45,7 +45,7 @@ from metrics import (
 )
 from patterns import LONG_DECAY_DRUM_NOTES, build_pattern, drum_gap_for
 from smf import Note
-from toneclass import ToneClass, default_weights, tone_class
+from toneclass import ToneClass, canonical_dimensions, default_weights, tone_class
 
 SR = 48000
 
@@ -1114,3 +1114,16 @@ def test_a_kit_term_that_stops_being_measurable_is_charged_like_every_other():
     assert weights.combine(_terms(kit=0.4, kit_notes=18.0)) == pytest.approx(1.0)
     assert weights.combine(_terms(kit=0.1, kit_notes=18.0)) < 1.0
     assert weights.combine(_terms(kit=0.0, kit_notes=0.0)) > 1.0
+
+
+def test_a_breath_onset_voice_is_gated_on_its_onset_and_a_string_is_not():
+    for dim in ("onset", "onset_settle"):
+        assert dim in canonical_dimensions(73)
+        assert dim not in canonical_dimensions(0)
+
+
+def test_the_velocity_span_term_defaults_on_where_the_gate_holds_vel_range():
+    for program in (0, 24, 40, 73, 8):
+        assert default_weights(program)["velspan"] == pytest.approx(0.5), program
+        assert "vel_range" in canonical_dimensions(program)
+    assert "velspan" not in default_weights(0, percussive=True)
