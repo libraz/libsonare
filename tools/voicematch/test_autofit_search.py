@@ -70,6 +70,21 @@ def test_wide_bound_with_a_zero_default_is_declined():
     assert _auto_range("x.percussion.base_freq_hz", 0.0, (0.0, 20000.0)) is None
 
 
+def test_a_decibel_field_is_searched_linearly_over_its_whole_bound():
+    """Off at 0 dB and a negative slope are both reachable, whatever the default."""
+    for key, value, bound in (
+        ("flute.flute.onset_breath_overshoot_db", 0.0, (0.0, 8.0)),
+        ("trumpet.brass.onset_breath_overshoot_db", 6.88525, (0.0, 8.0)),
+        ("trumpet.brass.onset_breath_overshoot_vel_db", 1.35125, (-3.0, 6.0)),
+        ("accordion.free_reed.onset_breath_overshoot_vel_db", 0.0, (-3.0, 6.0)),
+        ("harpsichord.harpsichord.velocity_range_db", 5.0, (0.0, 24.0)),
+        ("harpsichord.harpsichord.velocity_droop_db", 0.0, (0.0, 12.0)),
+        ("harpsichord.harpsichord.board_diffuse_db", -120.0, (-120.0, 0.0)),
+        ("d049.percussion.plate_cascade_drop_db", 0.0, (0.0, 60.0)),
+    ):
+        assert _auto_range(key, value, bound) == (bound[0], bound[1], False), key
+
+
 def test_unbounded_knob_falls_back_to_the_name_heuristic():
     """An engine calibration constant has no clamp anywhere; the old rules apply."""
     lo, hi, log = _auto_range("bowed_string_voice.kSomeTime_ms", 12.0, None)

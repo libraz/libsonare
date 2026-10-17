@@ -361,6 +361,10 @@ def _auto_range(
         lo, hi = bound
         if hi <= lo:
             return None
+        if leaf.endswith("_db"):
+            # Decibels are already logarithmic and 0 dB is a real setting, so the
+            # whole bound is searched linearly whatever the default.
+            return lo, hi, False
         if hi - lo <= AUTO_UNIT_SPAN:
             # A normalized or otherwise small interval — [0,1] for the amounts,
             # [0,4] for the gains, [0.02,0.5] for a bow position. Searchable

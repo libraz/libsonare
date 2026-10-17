@@ -35,7 +35,7 @@ The tuning catalogue is produced by the library under `SONARE_TUNING_DUMP`; it r
 
 Runtime knobs are set through `SONARE_TUNING_OVERRIDES`, so one tuning library serves the whole runtime-only search. Source knobs use a regex to replace one numeric literal, require exactly one match, and rebuild for every candidate; source-knob searches therefore run with one worker. Both forms may appear in one spec.
 
-Ranges come from the clamp where the field has a meaningful bound. Small normalized intervals are searched linearly; positive time-like ranges are searched around the default in log space; a zero-default field with no useful bound is omitted from `--spec auto` until a hand spec declares how to enable it. Fields left open by the clamp use the documented fallback range or require a hand spec. Integer, selector, count, and boolean fields are exposed through the same override layer and rounded to their declared type.
+Ranges come from the clamp where the field has a meaningful bound. Small normalized intervals, and every field in decibels (`*_db`), are searched linearly over the whole bound; positive time-like ranges are searched around the default in log space; a zero-default field with no useful bound is omitted from `--spec auto` until a hand spec declares how to enable it. Fields left open by the clamp use the documented fallback range or require a hand spec. Integer, selector, count, and boolean fields are exposed through the same override layer and rounded to their declared type.
 
 A best value on either range endpoint is a boundary result, including when the starting value is already there. Widen a hand range or inspect the model before calling it an optimum; a search cannot find a value outside the interval it was given.
 
