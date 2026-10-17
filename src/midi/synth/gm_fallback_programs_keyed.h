@@ -970,7 +970,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.accordion.free_reed.slot_duty = 0.349017f;
   o.accordion.free_reed.slot_return = 0.59139f;
   o.accordion.free_reed.slot_gap = 0.0382149f;
-  o.accordion.amp_env.attack_ms = 80.929f;
+  o.accordion.amp_env.attack_ms = 49.5352f;
   o.accordion.amp_env.release_ms = 2424.87f;
   o.accordion.amp_env.sustain = 0.14265f;
   o.accordion.cutoff_hz = 2068.1f;
