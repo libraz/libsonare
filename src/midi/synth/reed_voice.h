@@ -177,6 +177,9 @@ struct ReedPatchParams {
   /// table's own scale, which the valve inherited and where the note needs
   /// tens of round trips to speak.
   float pressure_scale = 1.0f;
+  /// Exponent of the voice-amplifier velocity curve, (velocity/127)^e; 2 is the
+  /// SoundFont curve, bit-identical to it.
+  float velocity_exponent = 2.0f;
   /// @note With the beating reed on, reed_stiffness and reed_opening address
   /// the table it replaces and stop reaching the sound. dynamic_reed does not:
   /// it turns the valve's own opening into a state (see its field above).

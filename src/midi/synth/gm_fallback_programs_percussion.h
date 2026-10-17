@@ -83,6 +83,7 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   ag.amp_env.attack_ms = 0.166825f;
   ag.amp_env.release_ms = 1798.29f;
   ag.amp_env.sustain = 0.809017f;
+  o.agogo.modal.velocity_exponent = 1.75f;
 
   // Steel Drums (GM 114): a tuned pan, and the one program here that is not a
   // membrane. A pan note is tuned so its octave and twelfth are true and the

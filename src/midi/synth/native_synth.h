@@ -1515,6 +1515,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.modal.contact = std::clamp(patch_clamp_detail::sanitize(p.modal.contact, 0.0f), 0.0f, 16.0f);
   p.modal.contact_ms =
       std::clamp(patch_clamp_detail::sanitize(p.modal.contact_ms, 0.5f), 0.02f, 20.0f);
+  p.modal.velocity_exponent =
+      std::clamp(patch_clamp_detail::sanitize(p.modal.velocity_exponent, 2.0f), 0.0f, 4.0f);
   for (float& level : p.additive.drawbars)
     level = std::clamp(patch_clamp_detail::sanitize(level, 0.0f), 0.0f, 8.0f);
   for (float& level : p.additive.drawbars_b)
@@ -1822,6 +1824,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.reed.pressure_scale =
       std::clamp(patch_clamp_detail::sanitize(p.reed.pressure_scale, 1.0f), 0.0f, 4.0f);
   p.reed.flow_gain = std::clamp(patch_clamp_detail::sanitize(p.reed.flow_gain, 0.7f), 0.0f, 1.5f);
+  p.reed.velocity_exponent =
+      std::clamp(patch_clamp_detail::sanitize(p.reed.velocity_exponent, 2.0f), 0.0f, 4.0f);
   p.brass.breath_pressure =
       std::clamp(patch_clamp_detail::sanitize(p.brass.breath_pressure, 0.7f), 0.0f, 1.0f);
   p.brass.vel_to_breath =
@@ -1909,6 +1913,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.flute.onset_breath_settle_ms, 40.0f), 1.0f, 500.0f);
   p.flute.onset_breath_overshoot_vel_db = std::clamp(
       patch_clamp_detail::sanitize(p.flute.onset_breath_overshoot_vel_db, 0.0f), -3.0f, 6.0f);
+  p.flute.velocity_exponent =
+      std::clamp(patch_clamp_detail::sanitize(p.flute.velocity_exponent, 2.0f), 0.0f, 4.0f);
   p.plucked_string.brightness =
       std::clamp(patch_clamp_detail::sanitize(p.plucked_string.brightness, 0.7f), 0.0f, 1.0f);
   p.plucked_string.decay_s =
@@ -1933,6 +1939,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.plucked_string.pick_noise, 0.0f), 0.0f, 1.0f);
   p.plucked_string.buzz =
       std::clamp(patch_clamp_detail::sanitize(p.plucked_string.buzz, 0.0f), 0.0f, 1.0f);
+  p.plucked_string.velocity_exponent = std::clamp(
+      patch_clamp_detail::sanitize(p.plucked_string.velocity_exponent, 2.0f), 0.0f, 4.0f);
   p.vocal.vowel = std::clamp(p.vocal.vowel, 0, kVocalVowels - 1);
   p.vocal.brightness =
       std::clamp(patch_clamp_detail::sanitize(p.vocal.brightness, 0.5f), 0.0f, 1.0f);
@@ -1946,6 +1954,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.vocal.attack_ms, 30.0f), 1.0f, 2000.0f);
   p.vocal.release_ms =
       std::clamp(patch_clamp_detail::sanitize(p.vocal.release_ms, 120.0f), 1.0f, 5000.0f);
+  p.vocal.velocity_exponent =
+      std::clamp(patch_clamp_detail::sanitize(p.vocal.velocity_exponent, 2.0f), 0.0f, 4.0f);
   p.free_reed.brightness =
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.brightness, 0.6f), 0.0f, 1.0f);
   p.free_reed.reed_stiffness =
@@ -1976,6 +1986,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       patch_clamp_detail::sanitize(p.free_reed.onset_breath_settle_ms, 40.0f), 1.0f, 500.0f);
   p.free_reed.onset_breath_overshoot_vel_db = std::clamp(
       patch_clamp_detail::sanitize(p.free_reed.onset_breath_overshoot_vel_db, 0.0f), -3.0f, 6.0f);
+  p.free_reed.velocity_exponent =
+      std::clamp(patch_clamp_detail::sanitize(p.free_reed.velocity_exponent, 2.0f), 0.0f, 4.0f);
   p.harpsichord.pluck_8a =
       std::clamp(patch_clamp_detail::sanitize(p.harpsichord.pluck_8a, 0.14f), 0.0f, 0.5f);
   p.harpsichord.pluck_8b =

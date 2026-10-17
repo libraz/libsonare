@@ -90,8 +90,7 @@ SONARE_TUNABLE(kPercussionVelocityExponent, 1.1f);
 SONARE_TUNABLE(kAdditiveVelocityExponent, 0.5f);
 
 /// Exponent of the SoundFont velocity-to-amplitude curve for @p p, 0 = off; the
-/// Karplus-Strong string, the lip reed and the bowed string carry their own in
-/// `ks.velocity_exponent`, `brass.velocity_exponent` and `bowed_string.velocity_exponent`.
+/// remaining physical engines read a per-patch `velocity_exponent` from their section.
 ///
 /// `sf2_velocity_gain` exists because a sampled note was recorded at one force
 /// and has to be scaled to the force actually played. A physical engine is
@@ -117,9 +116,8 @@ SONARE_TUNABLE(kAdditiveVelocityExponent, 0.5f);
 /// velocity response to spend, so the curve is not doubling a dynamic but
 /// inventing one.
 ///
-/// An engine opts out only once it has been measured against a reference corpus.
-/// Every other physical engine was voiced with the curve in place and would
-/// shift underneath its own calibration if this changed for it too.
+/// A per-patch exponent defaults to the curve's own 2, so a patch leaves the curve
+/// only once its level span has been measured against a reference corpus.
 float sampler_velocity_exponent(const NativeSynthPatch& p) noexcept {
   const SynthEngineMode mode = p.mode;
   if (mode == SynthEngineMode::kPiano || mode == SynthEngineMode::kHarpsichord) return 0.0f;
@@ -128,6 +126,12 @@ float sampler_velocity_exponent(const NativeSynthPatch& p) noexcept {
   if (mode == SynthEngineMode::kAdditive) return kAdditiveVelocityExponent;
   if (mode == SynthEngineMode::kKarplusStrong) return p.ks.velocity_exponent;
   if (mode == SynthEngineMode::kBowedString) return p.bowed_string.velocity_exponent;
+  if (mode == SynthEngineMode::kModal) return p.modal.velocity_exponent;
+  if (mode == SynthEngineMode::kReed) return p.reed.velocity_exponent;
+  if (mode == SynthEngineMode::kFlute) return p.flute.velocity_exponent;
+  if (mode == SynthEngineMode::kPluckedString) return p.plucked_string.velocity_exponent;
+  if (mode == SynthEngineMode::kVocal) return p.vocal.velocity_exponent;
+  if (mode == SynthEngineMode::kFreeReed) return p.free_reed.velocity_exponent;
   return 2.0f;
 }
 

@@ -424,6 +424,7 @@ void apply_reed(NativeSynthPatch& p, const Fields& f) {
   F(reed.closing_pressure);
   F(reed.flow_gain);
   F(reed.pressure_scale);
+  F(reed.velocity_exponent);
 }
 
 void apply_brass(NativeSynthPatch& p, const Fields& f) {
@@ -479,6 +480,7 @@ void apply_flute(NativeSynthPatch& p, const Fields& f) {
   F(flute.onset_breath_overshoot_db);
   F(flute.onset_breath_settle_ms);
   F(flute.onset_breath_overshoot_vel_db);
+  F(flute.velocity_exponent);
 }
 
 void apply_ks(NativeSynthPatch& p, const Fields& f) {
@@ -520,6 +522,7 @@ void apply_plucked_string(NativeSynthPatch& p, const Fields& f) {
   F(plucked_string.inharmonicity_b);
   F(plucked_string.pick_noise);
   F(plucked_string.buzz);
+  F(plucked_string.velocity_exponent);
 }
 
 void apply_harpsichord(NativeSynthPatch& p, const Fields& f) {
@@ -579,6 +582,7 @@ void apply_free_reed(NativeSynthPatch& p, const Fields& f) {
   F(free_reed.onset_breath_overshoot_db);
   F(free_reed.onset_breath_settle_ms);
   F(free_reed.onset_breath_overshoot_vel_db);
+  F(free_reed.velocity_exponent);
 }
 
 void apply_vocal(NativeSynthPatch& p, const Fields& f) {
@@ -590,6 +594,7 @@ void apply_vocal(NativeSynthPatch& p, const Fields& f) {
   F(vocal.vibrato_depth);
   F(vocal.attack_ms);
   F(vocal.release_ms);
+  F(vocal.velocity_exponent);
 }
 
 void apply_modal(NativeSynthPatch& p, const Fields& f) {
@@ -603,6 +608,7 @@ void apply_modal(NativeSynthPatch& p, const Fields& f) {
   F(modal.mallet_vel_exp);
   F(modal.contact);
   F(modal.contact_ms);
+  F(modal.velocity_exponent);
   for (int i = 0; i < kMaxModalModes; ++i) {
     ModalMode& m = p.modal.modes[static_cast<size_t>(i)];
     const std::string base = "modal.modes" + std::to_string(i) + '.';
@@ -931,6 +937,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"reed.closing_pressure", Unit::None},
     {"reed.flow_gain", Unit::None},
     {"reed.pressure_scale", Unit::Ratio},
+    {"reed.velocity_exponent", Unit::None},
     {"brass.conical", Unit::None},
     {"brass.breath_pressure", Unit::None},
     {"brass.vel_to_breath", Unit::None},
@@ -979,6 +986,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"flute.onset_breath_overshoot_db", Unit::Db},
     {"flute.onset_breath_settle_ms", Unit::Ms},
     {"flute.onset_breath_overshoot_vel_db", Unit::Db},
+    {"flute.velocity_exponent", Unit::None},
     {"ks.brightness", Unit::None},
     {"ks.decay_s", Unit::Seconds},
     {"ks.decay_stretch", Unit::None},
@@ -1014,6 +1022,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"plucked_string.inharmonicity_b", Unit::None},
     {"plucked_string.pick_noise", Unit::None},
     {"plucked_string.buzz", Unit::None},
+    {"plucked_string.velocity_exponent", Unit::None},
     {"harpsichord.eight_a", Unit::None},
     {"harpsichord.eight_b", Unit::None},
     {"harpsichord.four", Unit::None},
@@ -1063,6 +1072,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"free_reed.onset_breath_overshoot_db", Unit::Db},
     {"free_reed.onset_breath_settle_ms", Unit::Ms},
     {"free_reed.onset_breath_overshoot_vel_db", Unit::Db},
+    {"free_reed.velocity_exponent", Unit::None},
     {"vocal.vowel", Unit::None},
     {"vocal.brightness", Unit::None},
     {"vocal.breath_noise", Unit::None},
@@ -1070,6 +1080,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"vocal.vibrato_depth", Unit::None},
     {"vocal.attack_ms", Unit::Ms},
     {"vocal.release_ms", Unit::Ms},
+    {"vocal.velocity_exponent", Unit::None},
     {"modal.num_modes", Unit::Count},
     {"modal.decay_s", Unit::Seconds},
     {"modal.decay_stretch", Unit::None},
@@ -1152,6 +1163,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"modal.modes.ratio", Unit::Ratio},
     {"modal.modes.gain", Unit::None},
     {"modal.modes.decay_scale", Unit::Ratio},
+    {"modal.velocity_exponent", Unit::None},
     {"additive.drawbars", Unit::None},
     {"additive.drawbars_b", Unit::None},
     {"percussion.mode_ratios", Unit::Ratio},

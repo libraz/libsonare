@@ -73,6 +73,9 @@ struct ModalPatchParams {
   float contact = 0.0f;
   /// Contact time of that pulse (ms): its energy peaks at 1 / contact_ms.
   float contact_ms = 0.5f;
+  /// Exponent of the voice-amplifier velocity curve, (velocity/127)^e; 2 is the
+  /// SoundFont curve, bit-identical to it.
+  float velocity_exponent = 2.0f;
 };
 
 /// Per-voice modal state, embedded in NativeSynthVoice.

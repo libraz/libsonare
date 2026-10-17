@@ -93,6 +93,9 @@ struct FreeReedPatchParams {
   /// Change of the bellows overshoot per doubling of velocity (dB), read down
   /// from velocity 127: positive gives a soft note less of it.
   float onset_breath_overshoot_vel_db = 0.0f;
+  /// Exponent of the voice-amplifier velocity curve, (velocity/127)^e; 2 is the
+  /// SoundFont curve, bit-identical to it.
+  float velocity_exponent = 2.0f;
 };
 
 /// Per-voice free-reed state, embedded in NativeSynthVoice. The voice's

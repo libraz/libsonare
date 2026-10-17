@@ -394,10 +394,10 @@ TEST_CASE("flute control hashes", "[.][midi][synth][flute][golden]") {
     uint64_t hash;
   };
   static const Row kRows[] = {
-      {72, 84, 100, 0x1238209c3f7d777eull}, {73, 72, 100, 0x6b4b10f78f770eb1ull},
-      {74, 72, 64, 0x5116ad348486e9a0ull},  {75, 67, 127, 0xe29548e5b0492a89ull},
-      {76, 72, 100, 0x1305c1cb5fc0f37cull}, {77, 60, 90, 0xf97cece0a6e8eddbull},
-      {78, 79, 110, 0xac4c0168073bebdcull}, {79, 72, 80, 0xc3bf7e93946eba1dull},
+      {72, 84, 100, 0xdc3da02b4d3e1d9bull}, {73, 72, 100, 0x3a5a3e055be6710eull},
+      {74, 72, 64, 0x010480eb1f7c427dull},  {75, 67, 127, 0xe29548e5b0492a89ull},
+      {76, 72, 100, 0x14bf03092c01eeb2ull}, {77, 60, 90, 0x071157f2771744e0ull},
+      {78, 79, 110, 0x7be496dbd0f77b43ull}, {79, 72, 80, 0xe17e889d1d3bf5d4ull},
   };
   for (const Row& r : kRows) {
     const NativeSynthPatch& patch = gm_fallback_patch(0, r.program);
@@ -408,9 +408,9 @@ TEST_CASE("flute control hashes", "[.][midi][synth][flute][golden]") {
   }
   const NativeSynthPatch& flute = gm_fallback_patch(0, 73);
   CHECK(sonare::test::fnv1a_quantized(render_cc_change(flute, 72, 100, 8000, 16000, 2, 20)) ==
-        0x8b342833118952b0ull);
+        0xf8cacd76cc06b9a5ull);
   CHECK(sonare::test::fnv1a_quantized(render_cc_change(flute, 72, 100, 8000, 16000, 74, 110)) ==
-        0x3371acb0e74c2b4aull);
+        0x1adfcf07f7e620a0ull);
   CHECK(sonare::test::fnv1a_quantized(render_patch(flute_base_patch(), 60, 100, 24000)) ==
         0x5f90049eacc9ed68ull);
 }

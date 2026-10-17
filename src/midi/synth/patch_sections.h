@@ -107,6 +107,7 @@ constexpr ModalPatchParams blank_modal() noexcept {
   z.mallet_vel_exp = 0.0f;
   z.contact = 0.0f;
   z.contact_ms = 0.0f;
+  z.velocity_exponent = 0.0f;
   return z;
 }
 
@@ -285,6 +286,7 @@ constexpr ReedPatchParams blank_reed() noexcept {
   z.closing_pressure = 0.0f;
   z.flow_gain = 0.0f;
   z.pressure_scale = 0.0f;
+  z.velocity_exponent = 0.0f;
   return z;
 }
 
@@ -343,6 +345,7 @@ constexpr FlutePatchParams blank_flute() noexcept {
   z.onset_breath_overshoot_db = 0.0f;
   z.onset_breath_settle_ms = 0.0f;
   z.onset_breath_overshoot_vel_db = 0.0f;
+  z.velocity_exponent = 0.0f;
   return z;
 }
 
@@ -360,6 +363,7 @@ constexpr PluckedStringPatchParams blank_plucked_string() noexcept {
   z.inharmonicity_b = 0.0f;
   z.pick_noise = 0.0f;
   z.buzz = 0.0f;
+  z.velocity_exponent = 0.0f;
   return z;
 }
 
@@ -372,6 +376,7 @@ constexpr VocalPatchParams blank_vocal() noexcept {
   z.vibrato_depth = 0.0f;
   z.attack_ms = 0.0f;
   z.release_ms = 0.0f;
+  z.velocity_exponent = 0.0f;
   return z;
 }
 
@@ -392,6 +397,7 @@ constexpr FreeReedPatchParams blank_free_reed() noexcept {
   z.onset_breath_overshoot_db = 0.0f;
   z.onset_breath_settle_ms = 0.0f;
   z.onset_breath_overshoot_vel_db = 0.0f;
+  z.velocity_exponent = 0.0f;
   return z;
 }
 

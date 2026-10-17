@@ -281,6 +281,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.soprano_sax.reed.vel_to_breath = 0.768676f;
   o.soprano_sax.resonance_q = 0.626897f;
   o.soprano_sax.body_mix = 0.494427f;
+  o.soprano_sax.reed.velocity_exponent = 0.73f;
   o.alto_sax = reed(true, 0.55f, 0.55f, 0.62f, 0.34f, 16.0f, 90.0f, 0.78f, 0.32f, 0.1882f);
   // Fitted with the pressure held inside the valve's oscillating band, which
   // reed_voice.cpp states; the worst of 35 captured notes then holds within
@@ -310,6 +311,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.alto_sax.reed.release_ms = 18.1302f;
   o.alto_sax.resonance_q = 1.64558f;
   o.alto_sax.stereo_spread = 0.078303f;
+  o.alto_sax.reed.velocity_exponent = 1.17f;
   o.tenor_sax = reed(true, 0.60f, 0.50f, 0.56f, 0.36f, 20.0f, 100.0f, 0.78f, 0.36f, 0.8803f);
   // Fitted inside the valve's oscillating band; the worst of 35 captured notes
   // holds within 1.2 dB/s of its reference.
@@ -341,6 +343,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.tenor_sax.body_mix = 0.36f;
   o.tenor_sax.drift_cents = 1.5f;
   o.tenor_sax.drive = 0.0f;
+  o.tenor_sax.reed.velocity_exponent = 0.73f;
   o.baritone_sax = reed(true, 0.60f, 0.50f, 0.5f, 0.40f, 26.0f, 120.0f, 0.78f, 0.40f, 0.2849f);
   // Fitted inside the valve's oscillating band; the worst of 35 captured notes
   // holds within 1.5 dB/s of its reference.
@@ -366,6 +369,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.baritone_sax.reed.tonehole = 0.309017f;
   o.baritone_sax.reed.vel_to_breath = 0.312461f;
   o.baritone_sax.resonance_q = 0.907078f;
+  o.baritone_sax.reed.velocity_exponent = 1.42f;
   o.oboe = reed(true, 0.80f, 0.35f, 0.74f, 0.30f, 18.0f, 70.0f, 0.62f, 0.30f, 0.6f);
   o.oboe.cutoff_hz = 3143.15f;
   o.oboe.lfo_rate_hz = 4.87846f;
@@ -387,6 +391,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.oboe.reed.vel_to_breath = 1.0f;
   o.oboe.resonance_q = 2.96294f;
   o.oboe.amp_env.decay_ms = 98.0261f;
+  o.oboe.reed.velocity_exponent = 0.93f;
   o.english_horn = reed(true, 0.70f, 0.40f, 0.64f, 0.34f, 24.0f, 90.0f, 0.64f, 0.34f, 0.6f);
   o.english_horn.cutoff_hz = 1396.28f;
   o.english_horn.lfo_rate_hz = 0.0539485f;
@@ -414,6 +419,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.english_horn.reed.reed_stiffness = 0.388361f;
   o.english_horn.reed.tonehole = 0.190983f;
   o.english_horn.stereo_spread = 0.285089f;
+  o.english_horn.reed.velocity_exponent = 0.88f;
   o.bassoon = reed(true, 0.65f, 0.45f, 0.5f, 0.40f, 30.0f, 120.0f, 0.68f, 0.40f, 0.4554f);
   // Fitted inside the valve's oscillating band; the worst of 35 captured notes
   // holds within 0.8 dB/s of its reference.
@@ -436,10 +442,12 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.bassoon.reed.vel_to_breath = 0.156748f;
   o.bassoon.resonance_q = 1.23723f;
   o.bassoon.amp_env.decay_ms = 179.829f;
+  o.bassoon.reed.velocity_exponent = 2.18f;
   o.clarinet = reed(false, 0.40f, 0.50f, 0.54f, 0.30f, 25.0f, 90.0f, 0.72f, 0.25f, 0.6f);
   o.clarinet.cutoff_hz = 4800.0f;
   o.clarinet.lfo_rate_hz = 5.0f;
   o.clarinet.lfo_to_pitch_cents = 2.5f;
+  o.clarinet.reed.velocity_exponent = 2.80f;
 
   // Bag pipe (GM 109): the chanter — a stiff double reed on a conical bore fed
   // from the bag, so the pressure never varies and the note is never tongued.
@@ -469,6 +477,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.bag_pipe.reed.release_ms = 20.019f;
   o.bag_pipe.reed.tonehole = 0.118034f;
   o.bag_pipe.stereo_spread = 0.35846f;
+  o.bag_pipe.reed.velocity_exponent = 0.95f;
 
   // Shanai (GM 111): a double reed on a wooden cone into a flared METAL bell,
   // which is where its edge comes from and why it is the one reed here on the
@@ -501,6 +510,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.shanai.reed.cone_growth = 0.152786f;
   o.shanai.reed.vel_to_breath = 0.715248f;
   o.shanai.stereo_spread = 0.269934f;
+  o.shanai.reed.velocity_exponent = 0.96f;
 
   // Brass / lip reed (GM 56-60): one lip-reed waveguide voiced across the
   // trumpets, horns and low brass. Small-bore bells (trumpet family) get the
@@ -813,10 +823,12 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.piccolo.amp_env.sustain = 0.809017f;
   o.piccolo.flute.breath_noise = 0.155929f;
   o.piccolo.amp_env.decay_ms = 98.0261f;
+  o.piccolo.flute.velocity_exponent = 2.17f;
   o.concert_flute = flute(0.50f, 0.55f, 0.30f, 0.35f, 0.2f, 0.15f, 0.60f, 0.85f);
   o.concert_flute.cutoff_hz = 5000.0f;
   o.concert_flute.amp_env.attack_ms = 90.0f;
   o.concert_flute.flute.overblow = 0.35f;
+  o.concert_flute.flute.velocity_exponent = 1.12f;
   o.recorder = flute(0.50f, 0.50f, 0.35f, 0.14f, 0.55f, 0.05f, 0.55f, 0.85f);
   o.recorder.body = BodyType::kWoodTube;
   o.recorder.body_mix = 0.972592f;
@@ -843,11 +855,13 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.recorder.flute.onset_breath_overshoot_db = 2.47214f;
   o.recorder.flute.onset_breath_overshoot_vel_db = 1.63525f;
   o.recorder.flute.onset_breath_settle_ms = 24.4833f;
+  o.recorder.flute.velocity_exponent = 1.67f;
   o.pan_flute = flute(0.52f, 0.42f, 0.40f, 0.40f, 0.30f, 0.08f, 0.55f, 0.85f);
   o.pan_flute.flute.vortex = 0.35f;
   o.pan_flute.body = BodyType::kWoodTube;
   o.pan_flute.body_mix = 0.15f;
   o.pan_flute.amp_env.attack_ms = 23.9772f;
+  o.pan_flute.flute.velocity_exponent = 1.39f;
   o.blown_bottle = flute(0.50f, 0.35f, 0.50f, 0.35f, 0.25f, 0.0f, 0.55f, 0.85f);
   o.blown_bottle.amp_env.release_ms = 45.2492f;
   o.blown_bottle.amp_env.sustain = 0.45047f;
@@ -862,6 +876,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.blown_bottle.flute.attack_ms = 4.15482f;
   o.blown_bottle.flute.breath_noise = 0.314996f;
   o.blown_bottle.flute.breath_pressure = 0.775735f;
+  o.blown_bottle.flute.velocity_exponent = 1.21f;
   o.shakuhachi = flute(0.52f, 0.48f, 0.35f, 0.55f, 0.30f, 0.20f, 0.58f, 0.85f);
   o.shakuhachi.flute.vortex = 0.104581f;
   o.shakuhachi.body = BodyType::kWoodTube;
@@ -886,8 +901,10 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.shakuhachi.flute.vibrato_rate_hz = 5.21179f;
   o.shakuhachi.resonance_q = 0.5f;
   o.shakuhachi.amp_env.decay_ms = 179.829f;
+  o.shakuhachi.flute.velocity_exponent = 0.80f;
   o.tin_whistle = flute(0.48f, 0.70f, 0.28f, 0.10f, 0.45f, 0.04f, 0.62f, 0.80f);
   o.tin_whistle.flute.overblow = 0.25f;
+  o.tin_whistle.flute.velocity_exponent = 0.50f;
   o.ocarina = flute(0.50f, 0.40f, 0.55f, 0.15f, 0.30f, 0.06f, 0.55f, 0.85f);
   o.ocarina.amp_env.attack_ms = 2.25225f;
   o.ocarina.amp_env.decay_ms = 8.54137f;
@@ -916,6 +933,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.ocarina.flute.vibrato_depth = 0.114336f;
   o.ocarina.flute.vibrato_rate_hz = 1.82255f;
   o.ocarina.stereo_spread = 0.339801f;
+  o.ocarina.flute.velocity_exponent = 0.72f;
 }
 
 }  // namespace sonare::midi::synth::detail

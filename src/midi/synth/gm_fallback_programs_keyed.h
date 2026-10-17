@@ -178,6 +178,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // it takes the held-out notes 14.69 -> 14.69 with the gate unchanged.
   gl.modal.contact = 0.7639f;
   gl.modal.contact_ms = 0.5f;
+  o.glockenspiel.modal.velocity_exponent = 1.53f;
 
   NativeSynthPatch& vb = o.vibraphone;
   vb = bar;
@@ -221,6 +222,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   mr.resonance_q = 0.620709f;
   mr.stereo_spread = 0.177051f;
   mr.modal.modes[2].decay_scale = 0.290331f;
+  o.marimba.modal.velocity_exponent = 1.69f;
 
   NativeSynthPatch& xy = o.xylophone;
   xy = bar;
@@ -235,6 +237,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   xy.body = BodyType::kWoodTube;
   xy.body_mix = 0.305573f;
   xy.amp_env.attack_ms = 1.49858f;
+  o.xylophone.modal.velocity_exponent = 1.77f;
 
   // Celesta (GM 8): a soft felt-hammered steel bar over a wooden resonator —
   // the glockenspiel's uniform-bar ratios but rung shorter and softer, with a
@@ -265,6 +268,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   ce.amp_env.sustain = 0.618034f;
   ce.modal.modes[2].ratio = 16.1966f;
   ce.modal.modes[3].ratio = 5.4239f;
+  o.celesta.modal.velocity_exponent = 0.00f;
 
   // Music Box (GM 10): a plucked steel comb tooth — a stiff cantilever bar
   // (clamped-free 1 : 6.27 : 17.5 inharmonic series) with the tine "shimmer".
@@ -320,6 +324,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   tb.amp_env.release_ms = 6744.85f;
   tb.gain = 0.6f;
   tb.amp_env.attack_ms = 1.49858f;
+  o.tubular_bells.modal.velocity_exponent = 1.69f;
 
   // Dulcimer (GM 15): a hammered string — physically a struck (not plucked)
   // steel string, so the Karplus-Strong core with a hard hammer excitation,
@@ -672,6 +677,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   si.resonance_q = 0.866964f;
   si.amp_env.sustain = 1.0f;
   si.stereo_spread = 0.0f;
+  o.sitar.plucked_string.velocity_exponent = 0.90f;
 
   // Banjo (GM 105): steel strings over a stretched head, picked near the bridge
   // with a metal fingerpick. The head is what makes it a banjo and not a bright
@@ -710,6 +716,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.shamisen.gain = 0.8f;
   o.shamisen.amp_env.sustain = 0.690983f;
   o.shamisen.cutoff_hz = 12205.4f;
+  o.shamisen.plucked_string.velocity_exponent = 1.48f;
 
   // Koto (GM 107): long zither strings over movable bridges — mostly a clean
   // plucked ring with just a whisper of bridge buzz.
@@ -731,6 +738,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.koto.plucked_string.release_damp_s = 0.771882f;
   o.koto.plucked_string.vel_to_brightness = 0.184803f;
   o.koto.stereo_spread = 0.381966f;
+  o.koto.plucked_string.velocity_exponent = 1.14f;
 
   // Kalimba (GM 108): a plucked steel tine over a wooden box. A tine is a
   // clamped-free cantilever, so its partials are the 1 : 6.27 : 17.5 series the
@@ -753,6 +761,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   ka.body_mix = 0.45f;
   ka.amp_env.attack_ms = 0.166825f;
   ka.amp_env.sustain = 0.690983f;
+  o.kalimba.modal.velocity_exponent = 1.31f;
 
   // Harpsichord (GM 6): the jack-and-plectrum engine, voiced as a single 8'
   // choir — one string per key at written pitch. Decay and stretch are regressed
@@ -961,6 +970,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.reed_organ.amp_env.attack_ms = 18.3625f;
   o.reed_organ.amp_env.release_ms = 73.4498f;
   o.reed_organ.amp_env.sustain = 0.809017f;
+  o.reed_organ.free_reed.velocity_exponent = 1.00f;
 
   // Accordion (GM 21): the same free reed on a narrower slot. It voiced off the
   // harmonium's patch until the two were measured apart — the accordion's null
@@ -982,6 +992,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.accordion.free_reed.release_ms = 63.9651f;
   o.accordion.free_reed.vel_to_breath = 0.927186f;
   o.accordion.resonance_q = 0.83474f;
+  o.accordion.free_reed.velocity_exponent = 0.72f;
 
   // Harmonica (GM 22): a small, bright free reed right at the mouth — stiff
   // little tongues speak fast with a buzzy edge, and the player's cupping
@@ -1002,6 +1013,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.harmonica.amp_env.attack_ms = 58.7598f;
   o.harmonica.amp_env.release_ms = 55.0874f;
   o.harmonica.cutoff_hz = 3378.8f;
+  o.harmonica.free_reed.velocity_exponent = 0.84f;
 
   // Bandoneon (GM 23): the tango free reed. The defining trait is the musette
   // voicing — two near-unison tongues a few cents apart beat against each
@@ -1019,6 +1031,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.bandoneon.free_reed.breath_pressure = 0.803223f;
   o.bandoneon.amp_env.attack_ms = 39.2105f;
   o.bandoneon.free_reed.attack_ms = 48.0506f;
+  o.bandoneon.free_reed.velocity_exponent = 0.95f;
 
   // Orchestra Hit (GM 55): a sharp tutti stab. The ensemble family's slow pad
   // is the wrong envelope, so this overrides to a bright detuned-saw chord with
@@ -1131,6 +1144,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   ch.amp_env.sustain = 0.541641f;
   ch.drive = 0.0f;
   ch.resonance_q = 0.707f;
+  o.choir_aahs.vocal.velocity_exponent = 1.15f;
 
   // Voice Oohs (GM 53): the same voice with a nearly closed mouth — the /u/
   // vowel, darker and more covered.
@@ -1150,6 +1164,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.voice_oohs.vocal.breath_noise = 0.0970435f;
   o.voice_oohs.vocal.release_ms = 544.671f;
   o.voice_oohs.vocal.vibrato_rate_hz = 2.28646f;
+  o.voice_oohs.vocal.velocity_exponent = 1.10f;
 
   // Synth Voice (GM 54): a brighter, steadier synthetic vowel — the forward
   // /i/ with a quicker swell and less vibrato wobble.
@@ -1169,6 +1184,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.synth_voice.vocal.breath_noise = 0.775569f;
   o.synth_voice.vocal.vibrato_rate_hz = 4.77251f;
   o.synth_voice.stereo_spread = 0.328957f;
+  o.synth_voice.vocal.velocity_exponent = 1.13f;
 }
 
 }  // namespace sonare::midi::synth::detail

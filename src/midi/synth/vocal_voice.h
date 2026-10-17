@@ -64,6 +64,9 @@ struct VocalPatchParams {
   float attack_ms = 30.0f;
   /// Release fall (ms): the voice fades on note-off.
   float release_ms = 120.0f;
+  /// Exponent of the voice-amplifier velocity curve, (velocity/127)^e; 2 is the
+  /// SoundFont curve, bit-identical to it.
+  float velocity_exponent = 2.0f;
 };
 
 /// Per-voice vocal state, embedded in NativeSynthVoice. The voice's amplitude

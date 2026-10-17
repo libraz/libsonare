@@ -101,6 +101,9 @@ struct PluckedStringPatchParams {
   /// a sitar / tanpura). The limiter is a soft one-sided saturation applied in
   /// the loop; at 0 the loop is the plain string and render is bit-identical.
   float buzz = 0.0f;
+  /// Exponent of the voice-amplifier velocity curve, (velocity/127)^e; 2 is the
+  /// SoundFont curve, bit-identical to it.
+  float velocity_exponent = 2.0f;
 };
 
 /// Per-voice plucked-string state, embedded in NativeSynthVoice. The voice's
