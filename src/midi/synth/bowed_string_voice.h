@@ -154,6 +154,10 @@ struct BowedStringPatchParams {
   /// the pianissimo point, interpolated linearly in note velocity. Applies to
   /// both junctions. 0 = off -> bow_position at every velocity.
   float bow_position_ff = 0.0f;
+  /// Exponent of the voice-amplifier velocity curve, (velocity/127)^e; 2 is the
+  /// SoundFont curve, bit-identical to it. The string already radiates level in
+  /// proportion to v_b, so a velocity-driven bow speed spends the span twice at 2.
+  float velocity_exponent = 2.0f;
 
   /// Sympathetic resonance in [0,1]: the halo of the instrument's OTHER (undamped
   /// open) strings ringing along with the bowed note. A small fixed bank of

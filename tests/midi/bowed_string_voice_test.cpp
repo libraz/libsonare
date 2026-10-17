@@ -214,6 +214,24 @@ TEST_CASE("bow force brightens the tone", "[midi][synth][bowed]") {
   REQUIRE(swell_centroid(firm_tone, 8000) > 1.1 * swell_centroid(light_tone, 8000));
 }
 
+TEST_CASE("bowed string velocity exponent scales the voice amplifier alone",
+          "[midi][synth][bowed]") {
+  // The string renders the same at one velocity, so two exponents differ by
+  // exactly (velocity/127)^(e1 - e2).
+  for (uint8_t velocity : {40, 120}) {
+    NativeSynthPatch linear = bowed_base_patch();
+    linear.bowed_string.velocity_exponent = 1.0f;
+    NativeSynthPatch root = bowed_base_patch();
+    root.bowed_string.velocity_exponent = 0.5f;
+    const std::vector<float> a = render_patch(linear, 57, velocity, 24000);
+    const std::vector<float> b = render_patch(root, 57, velocity, 24000);
+    const float ratio_db = 20.0f * std::log10(rms(a, 4800, 24000) / rms(b, 4800, 24000));
+    INFO("velocity " << int(velocity));
+    REQUIRE(rms(b, 4800, 24000) > 1.0e-3f);
+    CHECK(std::abs(ratio_db - 10.0f * std::log10(velocity / 127.0f)) < 0.01f);
+  }
+}
+
 TEST_CASE("bowed string speaks promptly and sustains", "[midi][synth][bowed]") {
   NativeSynthPatch patch = bowed_base_patch();
   const std::vector<float> tone = render_patch(patch, 57, 110, 48000);

@@ -90,8 +90,8 @@ SONARE_TUNABLE(kPercussionVelocityExponent, 1.1f);
 SONARE_TUNABLE(kAdditiveVelocityExponent, 0.5f);
 
 /// Exponent of the SoundFont velocity-to-amplitude curve for @p p, 0 = off; the
-/// Karplus-Strong string and the lip reed carry their own in `ks.velocity_exponent`
-/// and `brass.velocity_exponent`.
+/// Karplus-Strong string, the lip reed and the bowed string carry their own in
+/// `ks.velocity_exponent`, `brass.velocity_exponent` and `bowed_string.velocity_exponent`.
 ///
 /// `sf2_velocity_gain` exists because a sampled note was recorded at one force
 /// and has to be scaled to the force actually played. A physical engine is
@@ -127,6 +127,7 @@ float sampler_velocity_exponent(const NativeSynthPatch& p) noexcept {
   if (mode == SynthEngineMode::kPercussion) return kPercussionVelocityExponent;
   if (mode == SynthEngineMode::kAdditive) return kAdditiveVelocityExponent;
   if (mode == SynthEngineMode::kKarplusStrong) return p.ks.velocity_exponent;
+  if (mode == SynthEngineMode::kBowedString) return p.bowed_string.velocity_exponent;
   return 2.0f;
 }
 
