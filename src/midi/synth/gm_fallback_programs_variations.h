@@ -376,6 +376,10 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   // string swell — a slower rise reaches Helmholtz motion late, so the onset
   // is breathy before it is pitched.
   o.violin_slow = o.violin;
+  // Still bowed on the bristle friction, with the violin's former values.
+  o.violin_slow.bowed_string.elasto_plastic = true;
+  o.violin_slow.bowed_string.rosin = 0.1f;
+  o.violin_slow.bowed_string.damping = 0.0822536f;
   o.violin_slow.bowed_string.attack_ms = 220.0f;
   o.violin_slow.bowed_string.bow_force = 0.48f;
   o.violin_slow.amp_env.attack_ms = 180.0f;

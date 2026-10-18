@@ -45,11 +45,11 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.violin.amp_env.attack_ms = 255.757f;
   o.violin.amp_env.release_ms = 163.86f;
   o.violin.bowed_string.attack_ms = 36.8818f;
-  o.violin.bowed_string.bow_force = 0.0643318f;
+  o.violin.bowed_string.bow_force = 0.1f;
   o.violin.bowed_string.bow_position = 0.17016f;
-  o.violin.bowed_string.bow_speed = 0.689765f;
-  o.violin.bowed_string.damping = 0.0822536f;
-  o.violin.bowed_string.release_ms = 269.948f;
+  o.violin.bowed_string.bow_speed = 0.6f;
+  o.violin.bowed_string.damping = 0.14f;
+  o.violin.bowed_string.release_ms = 300.0f;
   o.violin.amp_env.decay_ms = 140.69f;
   o.violin.amp_env.sustain = 0.631966f;
   o.violin.body_mix = 0.297933f;
@@ -60,6 +60,10 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.violin.drift_cents = 1.22416f;
   o.violin.drift_rate_hz = 0.490131f;
   o.violin.stereo_spread = 0.141641f;
+  // The bristle memory and the rosin stream each lay a broadband floor under the
+  // note: body below f0 read 15 dB over the reference with them, 1.3 dB without.
+  o.violin.bowed_string.elasto_plastic = false;
+  o.violin.bowed_string.rosin = 0.0f;
   o.viola = bowed(0.13f, 0.55f, 0.42f, 0.34f, 55.0f, 120.0f, 0.34f, 0.3f);
   o.viola.lfo_rate_hz = 5.43422f;
   o.viola.lfo_to_pitch_cents = 1.9526f;
@@ -152,6 +156,10 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // variation is the hand, so this derives from the violin rather than
   // restating it.
   o.fiddle = o.violin;
+  // Still bowed on the bristle friction, with the violin's former values.
+  o.fiddle.bowed_string.elasto_plastic = true;
+  o.fiddle.bowed_string.bow_speed = 0.689765f;
+  o.fiddle.bowed_string.damping = 0.0822536f;
   o.fiddle.bowed_string.bow_position = 0.10f;
   o.fiddle.bowed_string.bow_force = 0.68f;
   o.fiddle.bowed_string.brightness = 0.58f;

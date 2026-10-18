@@ -323,29 +323,29 @@ TEST_CASE("bowed string control hashes", "[.][midi][synth][bowed][probe][golden]
   // from a moved engine when this goes red.
   const BowedStringPatchParams& v = violin_params();
   CHECK(v.bow_position == 0.17016f);
-  CHECK(v.bow_force == 0.0643318f);
-  CHECK(v.bow_speed == 0.689765f);
+  CHECK(v.bow_force == 0.1f);
+  CHECK(v.bow_speed == 0.6f);
   CHECK(v.vel_to_speed == 0.312461f);
   CHECK(v.brightness == 0.47f);
-  CHECK(v.damping == 0.0822536f);
+  CHECK(v.damping == 0.14f);
   CHECK(v.attack_ms == 36.8818f);
-  CHECK(v.release_ms == 269.948f);
-  CHECK(v.rosin == 0.1f);
-  CHECK(v.elasto_plastic);
+  CHECK(v.release_ms == 300.0f);
+  CHECK(v.rosin == 0.0f);
+  CHECK_FALSE(v.elasto_plastic);
   CHECK(v.stribeck == 0.811146f);
   CHECK(v.sympathetic == 0.35846f);
   CHECK(v.polarization == 0.15f);
 
   const std::vector<float> core = render_core(v, 48000);
-  CHECK(fnv1a_quantized(core) == 0x5bc9b975789a34c0ull);
+  CHECK(fnv1a_quantized(core) == 0x4aa4324fcb9ad01bull);
   // The same core with both radiation gates off, as the bridge-force probe reads it.
-  CHECK(fnv1a_quantized(render_core(gates_off_violin_params(), 48000)) == 0x0d3899080b08691bull);
+  CHECK(fnv1a_quantized(render_core(gates_off_violin_params(), 48000)) == 0x2e52d3ae46e8183aull);
   // The same patch on the hyperbolic junction with a 12 mm ribbon, the path the
   // force-ratio and bowing-point fields extend.
   BowedStringPatchParams hyperbolic = v;
   hyperbolic.hyperbolic_friction = true;
   hyperbolic.bow_width_m = 0.012f;
-  CHECK(fnv1a_quantized(render_core(hyperbolic, 48000)) == 0x667d646b13f945d2ull);
+  CHECK(fnv1a_quantized(render_core(hyperbolic, 48000)) == 0xc742c9553b6c153dull);
 
   // (b) The body resonator on both of its entry points, driven by the same
   // deterministic excitation. The percussion-shell configuration is written out

@@ -440,13 +440,13 @@ TEST_CASE("the bow-force window sweep reads the patch it says it does",
   // Every field the sweep holds rather than drives. A moved patch value is told
   // apart from a moved engine here, the same way the control hashes do it.
   const BowedStringPatchParams& v = violin_params();
-  CHECK(v.bow_speed == 0.689765f);
+  CHECK(v.bow_speed == 0.6f);
   CHECK(v.vel_to_speed == 0.312461f);
   CHECK(v.brightness == 0.47f);
-  CHECK(v.damping == 0.0822536f);
+  CHECK(v.damping == 0.14f);
   CHECK(v.attack_ms == 36.8818f);
-  CHECK(v.release_ms == 269.948f);
-  CHECK(v.rosin == 0.1f);
+  CHECK(v.release_ms == 300.0f);
+  CHECK(v.rosin == 0.0f);
   CHECK(v.stribeck == 0.811146f);
   CHECK(v.sympathetic == 0.35846f);
   // The onset mechanisms are still at their identity defaults, so this sweep
@@ -456,22 +456,21 @@ TEST_CASE("the bow-force window sweep reads the patch it says it does",
   // Driven by the sweep, and pinned: recorded so the grid's own edges are read
   // against the shipped operating point rather than guessed.
   CHECK(v.bow_position == 0.17016f);
-  CHECK(v.bow_force == 0.0643318f);
+  CHECK(v.bow_force == 0.1f);
   CHECK(v.polarization == 0.15f);
-  CHECK(v.elasto_plastic);
+  CHECK_FALSE(v.elasto_plastic);
 }
 
 TEST_CASE("the bow-force window on the static friction table",
           "[midi][synth][bowed][window][.][slow]") {
-  // The control sheet: the memoryless bow table, which no shipped bowed patch
-  // runs on. Its threshold is the one Schelleng's law is stated for.
+  // The memoryless bow table, which the violin runs on. Its threshold is the
+  // one Schelleng's law is stated for.
   check_sheet(sweep(false), "elasto_plastic off");
 }
 
 TEST_CASE("the bow-force window on the elasto-plastic friction",
           "[midi][synth][bowed][window][.][slow]") {
-  // The shipped sheet: every bowed patch has elasto_plastic true, so this is
-  // the branch a force law would have to be written against.
+  // The bristle friction the other solo bowed patches run on.
   check_sheet(sweep(true), "elasto_plastic on");
 }
 
