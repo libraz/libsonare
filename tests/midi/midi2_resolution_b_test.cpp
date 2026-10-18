@@ -91,6 +91,8 @@ TEST_CASE("bowed string velocity between two 7-bit steps lands between their pea
     sonare::midi::synth::BowedStringVoiceCore core;
     core.attach(slab.data(), sonare::midi::synth::bowed_string_buffer_capacity(kSr));
     core.start(params, kSr, kNote, v, 0x3003u);
+    // The first stick's sub-audio step tops the onset peak out; the held level follows the bow.
+    for (int i = 0; i < static_cast<int>(0.3 * kSr); ++i) core.render(1.0f);
     return window_peak(core);
   });
 }
