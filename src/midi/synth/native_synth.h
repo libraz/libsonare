@@ -1781,6 +1781,11 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.bowed_string.velocity_exponent, 2.0f), 0.0f, 4.0f);
   p.bowed_string.sympathetic = patch_clamp_detail::sanitize(p.bowed_string.sympathetic, 0.0f);
   p.bowed_string.polarization = patch_clamp_detail::sanitize(p.bowed_string.polarization, 0.0f);
+  // A wide section vibrato; 0 is off. The rate spans a slow wander to a fast vibrato.
+  p.bowed_string.section_spread_cents = std::clamp(
+      patch_clamp_detail::sanitize(p.bowed_string.section_spread_cents, 0.0f), 0.0f, 50.0f);
+  p.bowed_string.section_rate_hz =
+      std::clamp(patch_clamp_detail::sanitize(p.bowed_string.section_rate_hz, 5.0f), 0.5f, 12.0f);
   p.bowed_string.attack_noise =
       std::clamp(patch_clamp_detail::sanitize(p.bowed_string.attack_noise, 0.0f), 0.0f, 1.0f);
   // Shares `attack_ms`'s upper bound; the lower bound is 0 because 0 is this

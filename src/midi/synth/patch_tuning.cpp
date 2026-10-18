@@ -393,6 +393,8 @@ void apply_bowed_string(NativeSynthPatch& p, const Fields& f) {
   F(bowed_string.stribeck);
   F(bowed_string.sympathetic);
   F(bowed_string.polarization);
+  F(bowed_string.section_spread_cents);
+  F(bowed_string.section_rate_hz);
   F(bowed_string.attack_noise);
   F(bowed_string.bow_accel_ms);
   F(bowed_string.corpus_scale);
@@ -911,6 +913,8 @@ constexpr UnitRow kEngineUnits[] = {
     {"bowed_string.stribeck", Unit::None},
     {"bowed_string.sympathetic", Unit::None},
     {"bowed_string.polarization", Unit::None},
+    {"bowed_string.section_spread_cents", Unit::Cents},
+    {"bowed_string.section_rate_hz", Unit::Hz},
     {"bowed_string.attack_noise", Unit::None},
     {"bowed_string.bow_accel_ms", Unit::Ms},
     {"bowed_string.corpus_scale", Unit::Ratio},
@@ -1401,6 +1405,8 @@ const GateRow kEngineGates[] = {
     {"bowed_string.string_length_m",
      [](const GateSite&) { return is("hyperbolicFriction", true); }},
     {"bowed_string.force_ratio", [](const GateSite&) { return is("hyperbolicFriction", true); }},
+    {"bowed_string.section_rate_hz",
+     [](const GateSite&) { return above("sectionSpreadCents", 0.0); }},
     {"bowed_string.corpus_scale",
      [](const GateSite&) { return wrapper_is("body", "violin") & wrapper_above("bodyMix", 0); }},
     {"bowed_string.corpus_tilt_hz",

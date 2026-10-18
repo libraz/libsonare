@@ -60,13 +60,13 @@ inline int bowed_string_buffer_capacity(double sample_rate) noexcept {
   return static_cast<int>(sr / kBowedMinFundamentalHz) + 8;
 }
 
-/// Whole-voice slab capacity (samples) the host must allocate: three delay-line
-/// spans — the neck and bridge of the bowed (vertical) polarization, plus the
-/// second (horizontal) polarization line used only when it is gated on. The
-/// third span is always reserved so attach() stays allocation-free regardless of
-/// whether a given note enables the second polarization.
+/// Whole-voice slab capacity (samples) the host must allocate: four spans — the
+/// neck and bridge of the bowed (vertical) polarization, the second (horizontal)
+/// polarization line, and the section stage's output history. The last two are
+/// used only when gated on but always reserved, so attach() stays allocation-free.
+inline constexpr int kBowedSlabSpans = 4;
 inline int bowed_string_slab_capacity(double sample_rate) noexcept {
-  return 3 * bowed_string_buffer_capacity(sample_rate);
+  return kBowedSlabSpans * bowed_string_buffer_capacity(sample_rate);
 }
 
 /// Bowed-string section of a NativeSynthPatch (used when mode == kBowedString).
@@ -176,6 +176,15 @@ struct BowedStringPatchParams {
   /// (bit-identical render).
   float polarization = 0.0f;
 
+  /// Section players' vibrato depth (cents, peak): the string's output reaches
+  /// the listener through several players at their own seats, each with an
+  /// independent vibrato, which is what widens a section's partials. Applied
+  /// outside the loop as modulated delays, so the bow junction never sees the
+  /// pitch move. 0 = off -> the stage is skipped (bit-identical render).
+  float section_spread_cents = 0.0f;
+  /// Section players' vibrato rate (Hz); each player draws its own around it.
+  float section_rate_hz = 5.0f;
+
   // --- onset: the string is not at rest and the bow is not at speed ---
   /// Note-on excitation seed in [0,1]: deterministic noise sown into the delay
   /// lines at note-on, the bowed sibling of the wind engines' bore prefill. A
@@ -250,13 +259,14 @@ inline float hyperbolic_friction_injection(float dv, float force_n, float z0, fl
 class BowedStringVoiceCore {
  public:
   /// CONTROL-thread wiring (or audio-thread pointer assignment before start()):
-  /// hands the core its delay slab (three spans of @p per_line_capacity — the
-  /// neck and bridge lines, plus the reserved second-polarization line). The
-  /// slab outlives the voice.
+  /// hands the core its delay slab (four spans of @p per_line_capacity — the
+  /// neck and bridge lines, plus the reserved second-polarization line and
+  /// section history). The slab outlives the voice.
   void attach(float* slab, int per_line_capacity) noexcept {
     neck_ = slab;
     bridge_ = slab != nullptr ? slab + per_line_capacity : nullptr;
     pol_ = slab != nullptr ? slab + 2 * per_line_capacity : nullptr;
+    section_ = slab != nullptr ? slab + 3 * per_line_capacity : nullptr;
     capacity_ = per_line_capacity;
   }
 
@@ -489,6 +499,21 @@ class BowedStringVoiceCore {
   float pol_comp_ = 1.0f;    // delay carried outside the line: register + loss-pole phase
   float pol_couple_ = 0.0f;  // 0 = off; horizontal -> vertical feed
   float pol_drive_ = 0.0f;   // bow injection into the 2nd polarization
+
+  // Section stage (off unless params.section_spread_cents > 0): each player reads
+  // the host-rate output history at its seat delay plus a sinusoidal wander.
+  float section_process(float x) noexcept;
+  static constexpr int kSectionPlayers_ = 6;
+  struct SectionPlayer {
+    float seat = 0.0f;   // mean delay (samples)
+    float depth = 0.0f;  // delay swing (samples) giving the peak pitch deviation
+    float phase = 0.0f;  // radians
+    float step = 0.0f;   // radians per host sample
+  };
+  SectionPlayer players_[kSectionPlayers_];
+  bool section_on_ = false;
+  float* section_ = nullptr;  // output history (host slab, 4th span)
+  size_t section_write_ = 0;
 };
 
 }  // namespace sonare::midi::synth

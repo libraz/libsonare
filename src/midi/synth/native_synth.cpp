@@ -693,8 +693,9 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
                              pipe_organ_capacity_);
   }
   if (!bowed_string_buffers_.empty()) {
-    voice->bowed_string.attach(bowed_string_buffers_.data() +
-                                   static_cast<size_t>(voice_index) * 3 * bowed_string_capacity_,
+    voice->bowed_string.attach(bowed_string_buffers_.data() + static_cast<size_t>(voice_index) *
+                                                                  kBowedSlabSpans *
+                                                                  bowed_string_capacity_,
                                bowed_string_capacity_);
   }
   if (!reed_buffers_.empty()) {

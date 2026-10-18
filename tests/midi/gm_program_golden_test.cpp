@@ -224,6 +224,14 @@ bool flute_overshoots(const NativeSynthPatch& patch) noexcept {
   return patch.flute.onset_breath_overshoot_db > 0.0f;
 }
 
+bool bow_is_hyperbolic(const NativeSynthPatch& patch) noexcept {
+  return patch.bowed_string.hyperbolic_friction;
+}
+
+bool bow_is_section(const NativeSynthPatch& patch) noexcept {
+  return patch.bowed_string.section_spread_cents > 0.0f;
+}
+
 /// A patch field that gates a code path inside an engine. One representative per
 /// engine covers whichever side its lowest program happens to sit on, so an
 /// engine listed here takes one more row per selector -- `reed.closing_pressure` chooses the
@@ -242,6 +250,8 @@ struct PathSelector {
 const PathSelector kPathSelectors[] = {
     {SynthEngineMode::kReed, "beating", &reed_is_beating},
     {SynthEngineMode::kFlute, "overshoot", &flute_overshoots},
+    {SynthEngineMode::kBowedString, "hyperbolic", &bow_is_hyperbolic},
+    {SynthEngineMode::kBowedString, "section", &bow_is_section},
 };
 
 struct EngineRow {

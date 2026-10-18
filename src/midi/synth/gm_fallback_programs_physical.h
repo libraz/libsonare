@@ -172,17 +172,15 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.fiddle.drift_rate_hz = 0.490131f;
 
   // String Ensemble 1/2 (GM 48-49): the bowed string in section. One waveguide
-  // is one player, so everything the section adds has to come from the spread —
-  // per-voice pitch drift, a slower and less unanimous speech, a wide image, and
-  // the second polarization plane opened past the soloists', because what reads
-  // as "many" is beating rather than count. Section 2 is the slower, warmer
-  // half of the pair.
+  // is one player, so the section is the section stage: six seats, each with its
+  // own vibrato, read off the string's output so the bow never sees the pitch
+  // move. Section 2 is the slower, warmer half of the pair.
   o.string_ensemble_1 = bowed(0.13f, 0.52f, 0.40f, 0.36f, 140.0f, 260.0f, 0.36f, 0.32f);
-  o.string_ensemble_1.amp_env.attack_ms = 110.233f;
-  o.string_ensemble_1.cutoff_hz = 3136.31f;
+  o.string_ensemble_1.amp_env.attack_ms = 8.08209f;
+  o.string_ensemble_1.cutoff_hz = 3398.59f;
   o.string_ensemble_1.bowed_string.polarization = 0.150685f;
   o.string_ensemble_1.bowed_string.sympathetic = 0.364805f;
-  o.string_ensemble_1.bowed_string.rosin = 0.06f;  // twenty bows average the grit out
+  o.string_ensemble_1.bowed_string.rosin = 0.239966f;
   o.string_ensemble_1.drift_cents = 9.6654f;
   o.string_ensemble_1.stereo_spread = 0.0631312f;
   o.string_ensemble_1.lfo_rate_hz = 1.87579f;
@@ -190,35 +188,57 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.string_ensemble_1.amp_env.decay_ms = 45.3946f;
   o.string_ensemble_1.amp_env.release_ms = 849.558f;
   o.string_ensemble_1.amp_env.sustain = 0.838679f;
-  o.string_ensemble_1.bowed_string.attack_ms = 37.4924f;
+  o.string_ensemble_1.bowed_string.attack_ms = 13.4315f;
   o.string_ensemble_1.bowed_string.bow_force = 0.139013f;
-  o.string_ensemble_1.bowed_string.bow_position = 0.296798f;
-  o.string_ensemble_1.bowed_string.bow_speed = 1.0f;
-  o.string_ensemble_1.bowed_string.brightness = 0.132531f;
-  o.string_ensemble_1.bowed_string.damping = 0.196473f;
+  o.string_ensemble_1.bowed_string.bow_position = 0.299943f;
+  o.string_ensemble_1.bowed_string.bow_speed = 0.49877f;
+  o.string_ensemble_1.bowed_string.brightness = 0.0321249f;
+  o.string_ensemble_1.bowed_string.damping = 0.690198f;
   o.string_ensemble_1.bowed_string.release_ms = 121.014f;
   o.string_ensemble_1.bowed_string.stribeck = 0.439863f;
   o.string_ensemble_1.drift_rate_hz = 1.69817f;
   o.string_ensemble_1.resonance_q = 1.39165f;
+  // Past about 7 the drifting string falls into period tripling: energy at f0/3 read
+  // 4.8 dB over the reference under the note. At 4.5 it read 3.6 dB under.
+  o.string_ensemble_1.bowed_string.force_ratio = 6.0f;
+  o.string_ensemble_1.bowed_string.bow_width_m = 0.0188825f;
+  o.string_ensemble_1.body_mix = 0.0507968f;
+  o.string_ensemble_1.bowed_string.corpus_scale = 0.77371f;
+  o.string_ensemble_1.bowed_string.vel_to_speed = 0.341634f;
+  o.string_ensemble_1.bowed_string.velocity_exponent = 1.57655f;
+  o.string_ensemble_1.bowed_string.hyperbolic_friction = true;
+  // The section's noise is skirts 4-8 % of f0 around each partial, not the gaps
+  // between them: one string read 12 dB cleaner, and 15 cents per seat closes it.
+  o.string_ensemble_1.bowed_string.section_spread_cents = 15.0f;
+  o.string_ensemble_1.bowed_string.section_rate_hz = 5.0f;
   o.string_ensemble_2 = o.string_ensemble_1;
-  o.string_ensemble_2.amp_env.attack_ms = 720.311f;
-  o.string_ensemble_2.bowed_string.attack_ms = 180.437f;
-  o.string_ensemble_2.bowed_string.brightness = 0.116989f;
-  o.string_ensemble_2.bowed_string.damping = 0.344621f;
-  o.string_ensemble_2.cutoff_hz = 13464.2f;
+  o.string_ensemble_2.amp_env.attack_ms = 361.485f;
+  o.string_ensemble_2.bowed_string.attack_ms = 80.7759f;
+  o.string_ensemble_2.bowed_string.brightness = 0.452887f;
+  o.string_ensemble_2.bowed_string.damping = 0.191758f;
+  o.string_ensemble_2.cutoff_hz = 4755.43f;
   o.string_ensemble_2.drift_cents = 3.50183f;
   o.string_ensemble_2.amp_env.decay_ms = 12.8399f;
   o.string_ensemble_2.amp_env.release_ms = 264.454f;
   o.string_ensemble_2.amp_env.sustain = 0.452227f;
   o.string_ensemble_2.bowed_string.bow_force = 0.790656f;
-  o.string_ensemble_2.bowed_string.bow_position = 0.105649f;
-  o.string_ensemble_2.bowed_string.bow_speed = 0.627663f;
+  o.string_ensemble_2.bowed_string.bow_position = 0.225855f;
+  o.string_ensemble_2.bowed_string.bow_speed = 0.867228f;
   o.string_ensemble_2.bowed_string.release_ms = 110.201f;
   o.string_ensemble_2.bowed_string.stribeck = 0.778821f;
-  o.string_ensemble_2.bowed_string.velocity_exponent = 1.49f;
+  o.string_ensemble_2.bowed_string.velocity_exponent = 1.18f;
   o.string_ensemble_2.drift_rate_hz = 0.0354479f;
   o.string_ensemble_2.lfo_rate_hz = 0.365881f;
   o.string_ensemble_2.resonance_q = 0.688613f;
+  o.string_ensemble_2.bowed_string.hyperbolic_friction = true;
+  o.string_ensemble_2.bowed_string.force_ratio = 5.89992f;
+  o.string_ensemble_2.bowed_string.bow_width_m = 0.0181513f;
+  o.string_ensemble_2.bowed_string.rosin = 0.334405f;
+  o.string_ensemble_2.body_mix = 0.636903f;
+  o.string_ensemble_2.bowed_string.corpus_scale = 1.32895f;
+  o.string_ensemble_2.bowed_string.vel_to_speed = 0.823056f;
+  o.string_ensemble_2.bowed_string.section_spread_cents = 15.0f;
+  o.string_ensemble_2.bowed_string.section_rate_hz = 6.0f;
 
   // Reed woodwind (GM 64-71): one single-reed waveguide voiced across the
   // single- and double-reed winds. The clarinet is the only cylinder

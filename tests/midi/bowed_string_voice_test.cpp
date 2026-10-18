@@ -1081,3 +1081,60 @@ TEST_CASE("the second polarization resonates at the string's pitch, not an octav
     for (const float s : doubled) REQUIRE(std::isfinite(s));
   }
 }
+
+namespace {
+
+/// Share of the power from @p from that lies within ±0.5 % of the first ten
+/// harmonics of @p f0, over a 1.4 s transform that resolves a 5 Hz vibrato.
+double harmonic_share(const std::vector<float>& buf, size_t from, double f0) {
+  constexpr int kLong = 65536;
+  const std::vector<double> ps = power_spectrum(buf, from, kLong);
+  double tone = 0.0;
+  double total = 0.0;
+  for (size_t b = 1; b < ps.size(); ++b) {
+    const double hz = static_cast<double>(b) * kRate / kLong;
+    total += ps[b];
+    const double k = std::round(hz / f0);
+    if (k >= 1.0 && k <= 10.0 && std::fabs(hz / (k * f0) - 1.0) < 0.005) tone += ps[b];
+  }
+  return total > 0.0 ? tone / total : 0.0;
+}
+
+}  // namespace
+
+TEST_CASE("the section stage widens the partials", "[midi][synth][bowed]") {
+  BowedStringPatchParams solo;
+  BowedStringPatchParams rate_only = solo;
+  rate_only.section_rate_hz = 9.0f;
+  const std::vector<float> solo_tone = render_bowed_core(solo, 96000);
+  // The rate is inert while the spread is off.
+  REQUIRE(render_bowed_core(rate_only, 96000) == solo_tone);
+
+  BowedStringPatchParams section = solo;
+  section.section_spread_cents = 20.0f;
+  section.section_rate_hz = 5.0f;
+  const std::vector<float> section_tone = render_bowed_core(section, 96000);
+  REQUIRE(section_tone == render_bowed_core(section, 96000));
+
+  const double solo_share = harmonic_share(solo_tone, 24000, 220.0);
+  const double section_share = harmonic_share(section_tone, 24000, 220.0);
+  INFO("harmonic share solo " << solo_share << " section " << section_share);
+  REQUIRE(section_share < solo_share - 0.2);
+}
+
+TEST_CASE("the section stage is bounded at its widest, slowest setting at either rate",
+          "[midi][synth][bowed]") {
+  BowedStringPatchParams solo;
+  BowedStringPatchParams params = solo;
+  params.section_spread_cents = 50.0f;
+  params.section_rate_hz = 0.5f;
+  for (double sample_rate : {44100.0, 96000.0}) {
+    const std::vector<float> solo_tone = render_bowed_core_at(solo, sample_rate, 57, 96000);
+    const std::vector<float> tone = render_bowed_core_at(params, sample_rate, 57, 96000);
+    INFO("rate " << sample_rate);
+    REQUIRE(std::all_of(tone.begin(), tone.end(), [](float s) { return std::isfinite(s); }));
+    // Six players at 1/sqrt(6) each can at most add up in phase.
+    REQUIRE(peak(tone) > 0.1f * peak(solo_tone));
+    REQUIRE(peak(tone) <= std::sqrt(6.0f) * peak(solo_tone) * 1.001f);
+  }
+}
