@@ -108,43 +108,44 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.cello.bowed_string.corpus_scale = 0.37f;
   o.cello.amp_env.decay_ms = 32.7064f;
   o.cello.body_mix = 0.212461f;
-  // Contrabass (GM 43): the one member of the family with a reference, and fitted
-  // to it. The bridge reflection filter is fixed in Hz, so at these pitches its
-  // whole range sits above every partial and the darkening has to come from the
-  // patch filter below. The corpus is all but muted because kViolin is a violin.
-  // Gain restated because the darker string and the muted corpus together cost
-  // 6.7 dB: it puts the model back on the reference's own peak and held level.
-  // No corpus_scale here: at body_mix 0.06 below, 94% of the output never
-  // passes the corpus, so scaling it moves the post-body signal by only -37 to
-  // -42 dB relative — inaudible, and would read as a fitted value for nothing.
+  // Contrabass (GM 43): fitted to its reference on the hyperbolic bow junction.
+  // The bridge reflection filter is fixed in Hz, so at these pitches its whole
+  // range sits above every partial and the darkening has to come from the string.
   o.contrabass = bowed(0.177f, 0.58f, 0.15f, 0.18f, 185.0f, 160.0f, 0.06f, 0.69f);
   o.contrabass.lfo_rate_hz = 4.83651f;
   o.contrabass.lfo_to_pitch_cents = 15.2584f;
-  o.contrabass.cutoff_hz = 456.942f;
+  o.contrabass.cutoff_hz = 2093.58f;
   o.contrabass.resonance_q = 2.04715f;
   o.contrabass.bowed_string.release_ms = 195.626f;
-  o.contrabass.bowed_string.bow_speed = 0.342101f;
-  o.contrabass.bowed_string.vel_to_speed = 0.247303f;
+  o.contrabass.bowed_string.bow_speed = 0.112373f;
+  o.contrabass.bowed_string.vel_to_speed = 0.0301324f;
   o.contrabass.bowed_string.stribeck = 0.106625f;
   o.contrabass.bowed_string.sympathetic = 0.0847627f;
   // The reference's held level settles 3.8 to 6.4 dB under its own attack peak and
   // then holds flat, so the sustain is that settle rather than a decay.
-  o.contrabass.amp_env.attack_ms = 40.5885f;
+  o.contrabass.amp_env.attack_ms = 273.932f;
   o.contrabass.amp_env.decay_ms = 126.294f;
   o.contrabass.amp_env.sustain = 0.549535f;
   o.contrabass.amp_env.release_ms = 179.169f;
-  o.contrabass.bowed_string.attack_ms = 43.0505f;
+  o.contrabass.bowed_string.attack_ms = 3.19923f;
   o.contrabass.bowed_string.bow_force = 0.821558f;
-  o.contrabass.bowed_string.bow_position = 0.36863f;
-  o.contrabass.bowed_string.damping = 0.293174f;
+  o.contrabass.bowed_string.bow_position = 0.274455f;
+  o.contrabass.bowed_string.damping = 0.0688832f;
   o.contrabass.drift_rate_hz = 2.07078f;
-  o.contrabass.body_mix = 0.866769f;
+  o.contrabass.body_mix = 0.462168f;
   o.contrabass.drift_cents = 4.55576f;
-  o.contrabass.bowed_string.brightness = 0.365896f;
-  o.contrabass.bowed_string.rosin = 0.0670085f;
-  o.contrabass.bowed_string.velocity_exponent = 1.70f;
+  o.contrabass.bowed_string.brightness = 0.00173835f;
+  o.contrabass.bowed_string.rosin = 0.593912f;
+  o.contrabass.bowed_string.velocity_exponent = 1.58f;
   o.contrabass.drive = 0.104102f;
   o.contrabass.stereo_spread = 0.24582f;
+  // At 1.44 the level was still climbing 3 dB at two seconds and arrived 650 ms late.
+  o.contrabass.bowed_string.force_ratio = 2.02851f;
+  o.contrabass.bowed_string.bow_width_m = 0.0185494f;
+  o.contrabass.bowed_string.corpus_scale = 1.74736f;
+  o.contrabass.bowed_string.hyperbolic_friction = true;
+  o.contrabass.bowed_string.string_length_m = 1.04f;
+  o.contrabass.bowed_string.string_tension_n = 300.0f;
 
   // Fiddle (GM 110): the same violin, bowed the other way. A short hard stroke
   // near the bridge with the rosin audible and next to no vibrato — the
