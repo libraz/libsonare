@@ -17,6 +17,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
     p.amp_env.sustain = 1.0f;
     p.amp_env.release_ms = release_ms;
     p.cutoff_hz = 20000.0f;
+    // The first stick drags the string off its mean, a ~10 Hz step the body cannot
+    // radiate; a section's seats stacked it 12-14 dB over the held note.
+    p.hp_cutoff_hz = 20.0f;
     p.bowed_string.bow_position = bow_position;
     p.bowed_string.bow_force = bow_force;
     p.bowed_string.brightness = brightness;
@@ -184,7 +187,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // own vibrato, read off the string's output so the bow never sees the pitch
   // move. Section 2 is the slower, warmer half of the pair.
   o.string_ensemble_1 = bowed(0.13f, 0.52f, 0.40f, 0.36f, 140.0f, 260.0f, 0.36f, 0.32f);
-  o.string_ensemble_1.amp_env.attack_ms = 8.08209f;
+  // A section does not enter as one bow: the reference reaches its held level
+  // 45-135 ms in, and at 8 ms the voice read 77 ms early on every note.
+  o.string_ensemble_1.amp_env.attack_ms = 140.0f;
   o.string_ensemble_1.cutoff_hz = 3398.59f;
   o.string_ensemble_1.bowed_string.polarization = 0.150685f;
   o.string_ensemble_1.bowed_string.sympathetic = 0.364805f;
@@ -219,7 +224,12 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // between them: one string read 12 dB cleaner, and 15 cents per seat closes it.
   o.string_ensemble_1.bowed_string.section_spread_cents = 15.0f;
   o.string_ensemble_1.bowed_string.section_rate_hz = 5.0f;
+  // Held level falls toward the bass against the reference, 12 dB from C2 to C5.
+  o.string_ensemble_1.mod_matrix.routes[0] = {ModSource::kKeyTrack, ModDestination::kAmpGain,
+                                              -0.3f};
   o.string_ensemble_2 = o.string_ensemble_1;
+  // Section 2's held level already follows the reference across the keyboard.
+  o.string_ensemble_2.mod_matrix.routes[0] = ModRoute{};
   o.string_ensemble_2.amp_env.attack_ms = 361.485f;
   o.string_ensemble_2.bowed_string.attack_ms = 80.7759f;
   o.string_ensemble_2.bowed_string.brightness = 0.452887f;

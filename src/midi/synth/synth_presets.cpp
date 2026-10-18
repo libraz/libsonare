@@ -240,6 +240,8 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       patch.amp_env.sustain = 1.0f;
       patch.amp_env.release_ms = release_ms;
       patch.cutoff_hz = 20000.0f;
+      // The first stick drags the string off its mean, a ~10 Hz step the body cannot radiate.
+      patch.hp_cutoff_hz = 20.0f;
       patch.bowed_string.bow_position = bow_position;
       patch.bowed_string.bow_force = bow_force;
       patch.bowed_string.brightness = brightness;
