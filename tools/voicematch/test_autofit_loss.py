@@ -348,6 +348,50 @@ def test_a_pitched_voice_scores_the_gates_centroid_ratio():
     assert absent["bright_hits"] == 0.0
 
 
+def test_a_pitched_voice_scores_the_gates_arrival_time():
+    def row(arrival_ms):
+        return {
+            "harmonics_db": [0.0],
+            "f0_cents_err": 0.0,
+            "tnr_db": 20.0,
+            "sustain_slope_db_s": 0.0,
+            "release_ms": 0.0,
+            "attack_ms": 0.0,
+            **({"arrival_ms": arrival_ms} if arrival_ms is not None else {}),
+        }
+
+    late = loss_terms([row(750.0), row(110.0)], [row(110.0), row(110.0)], n_harm=1)
+    assert late["arrival"] == pytest.approx(320.0)
+    assert late["arrival_hits"] == 2.0
+    # A reference arriving at its first window is a reading of zero, not an absence.
+    prompt = loss_terms([row(40.0)], [row(0.0)], n_harm=1)
+    assert prompt["arrival"] == pytest.approx(40.0)
+    absent = loss_terms([row(750.0)], [row(None)], n_harm=1)
+    assert absent["arrival"] == 0.0
+    assert absent["arrival_hits"] == 0.0
+
+
+def test_a_pitched_voice_scores_the_gates_body_reading_capped():
+    def row(body_db):
+        return {
+            "harmonics_db": [0.0],
+            "f0_cents_err": 0.0,
+            "tnr_db": 20.0,
+            "sustain_slope_db_s": 0.0,
+            "release_ms": 0.0,
+            "attack_ms": 0.0,
+            **({"body_below_f0_db": body_db} if body_db is not None else {}),
+        }
+
+    lost = loss_terms([row(10.0), row(-14.0)], [row(-30.0), row(-20.0)], n_harm=1)
+    assert lost["body"] == pytest.approx((24.0 + 6.0) / 2)
+    assert lost["body_hits"] == 2.0
+    # Under 120 Hz the reading does not exist; that is not a match.
+    absent = loss_terms([row(10.0)], [row(None)], n_harm=1)
+    assert absent["body"] == 0.0
+    assert absent["body_hits"] == 0.0
+
+
 def test_a_silent_render_does_not_win_the_harmonic_term():
     """Silencing a gain was the cheapest way to score a perfect harmonic ladder.
 

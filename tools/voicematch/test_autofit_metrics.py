@@ -221,6 +221,25 @@ def test_a_stiff_string_is_measured_where_its_partials_actually_are():
         assert worst < 2.0, f"B={b} worst partial error {worst:.1f} dB"
 
 
+def test_a_level_still_climbing_after_the_attack_arrives_late_on_the_gates_reading():
+    """A 20 ms rise followed by a 6 dB creep over two seconds.
+
+    The fine attack reads the rise and stops at half a second; the gate reads the
+    first point within 3 dB of the note's own maximum, which the creep pushes out.
+    """
+    sr = 48000
+    t = np.arange(int(3.0 * sr)) / sr
+    rise = np.clip(t / 0.02, 0.0, 1.0)
+    creep = 10 ** (np.clip(t / 2.0, 0.0, 1.0) * 6.0 / 20.0)
+    held = (t < 2.0).astype(float)
+    y = 0.1 * np.sin(2 * np.pi * 110.0 * t) * rise * creep * held
+    m = analyze_note(y, sr, Note(45, 96, 0.0, 2.0), 3.0)
+    assert m.attack_fine_ms < 250.0
+    assert m.arrival_ms > 800.0
+    flat = 0.1 * np.sin(2 * np.pi * 110.0 * t) * rise * held
+    assert analyze_note(flat, sr, Note(45, 96, 0.0, 2.0), 3.0).arrival_ms < 50.0
+
+
 def test_stiffness_is_read_from_the_signal_and_never_from_the_note_number():
     """A harmonic voice on a bass note must still come back at exactly zero.
 

@@ -31,6 +31,7 @@ from loss_dimensions import (
     BAND_REFERENCE_FLOOR_DB,
     BDECAY_MIN_RATE_DB_S,
     BDECAY_OCTAVE_CAP,
+    BODY_DELTA_CAP_DB,
     DYN_DELTA_CAP_DB,
     DYN_MIN_VELOCITY_SPREAD,
     DYN_VELOCITY_SPAN,
@@ -608,6 +609,8 @@ def loss_terms(
         are capped (12 dB / 30 dB/s) so single-sample oracle quirks cannot
         dominate the objective.
       - `bright`: the gate's centroid ratio, |100 (model / oracle - 1)| per note.
+      - `arrival`: the gate's arrival time, |model - oracle| ms per note.
+      - `body`: the gate's energy under the fundamental, |model - oracle| dB per note.
 
     `mss` is carried through unchanged: it is already a whole-timeline measure
     (see `mss_distance`), so it is not averaged over notes.
@@ -655,11 +658,19 @@ def loss_terms(
     # cells all hit the cap is its worst, not its best, so none of the empty-set
     # guards above can see it and a reader cannot tell it from a real distance.
     cells = {t: CellCount() for t in ("env", "init", "slope", "tail", "hf", "lf", "mod", "modes")}
-    bright_hits = 0
+    bright_hits = arrival_hits = body_hits = 0
     for m, o in zip(model_rows, oracle_rows_):
         if o.get("centroid_hz") and m.get("centroid_hz"):
             totals["bright"] += abs(100.0 * (m["centroid_hz"] / o["centroid_hz"] - 1.0))
             bright_hits += 1
+        if o.get("arrival_ms") is not None and m.get("arrival_ms") is not None:
+            totals["arrival"] += abs(m["arrival_ms"] - o["arrival_ms"])
+            arrival_hits += 1
+        if o.get("body_below_f0_db") is not None and m.get("body_below_f0_db") is not None:
+            totals["body"] += min(
+                abs(m["body_below_f0_db"] - o["body_below_f0_db"]), BODY_DELTA_CAP_DB
+            )
+            body_hits += 1
         pairs = list(zip(m["harmonics_db"][:n_harm], o["harmonics_db"][:n_harm]))
         available += max(0, len(pairs) - 1)
         # Which bins hold a partial rather than the note's own noise floor, read
@@ -807,6 +818,8 @@ def loss_terms(
     # case its zero is not a match. Read it exactly as `dyn_groups` is read.
     out["harm_bins"] = float(compared)
     out["bright_hits"] = float(bright_hits)
+    out["arrival_hits"] = float(arrival_hits)
+    out["body_hits"] = float(body_hits)
     for term, tally in cells.items():
         out.update(tally.out(term))
     out.update(level_counts)

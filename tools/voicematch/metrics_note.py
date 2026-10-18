@@ -16,6 +16,7 @@ from metrics_signal import (
     _peak_near,
     _rms_envelope,
     _spectrum,
+    arrival_index,
     midi_to_hz,
 )
 from smf import Note
@@ -93,6 +94,11 @@ class NoteMetrics:
     #: so measured on the coarse grid a 0.5 ms rise and a 5 ms rise report the
     #: same number.
     attack_fine_ms: float
+    #: The gate's arrival, `arrival_index` over the note from its onset to its
+    #: note-off: a level still climbing after `attack_fine_ms`'s half-second reads late.
+    arrival_ms: float | None
+    #: The gate's body reading, `body_below_f0_db` over the same span.
+    body_below_f0_db: float | None
     #: The onset's rise above the early sustain and how long it takes to come
     #: back, from `onset_shape`. None where the note is not sustained.
     onset_overshoot_db: float | None
@@ -133,6 +139,52 @@ ONSET_SETTLE_DB = 1.0
 #: The envelope window spans one period, so the waveform's own ripple is not
 #: read as an envelope; never shorter than the attack grid's window.
 ONSET_WINDOW_PERIODS = 1.0
+
+
+#: Where the body reading is taken, in seconds from the onset. After the strike,
+#: so the hammer's own broadband noise is not counted as the instrument's body,
+#: and a full second wide, because what is being measured is a resonance that
+#: outlives the string rather than a transient.
+BODY_WINDOW_S = (0.2, 1.2)
+#: The lowest fundamental this reading means anything for. Below it the band
+#: under the note is narrower than an octave and is measuring the note's own
+#: skirt rather than anything under it.
+BODY_MIN_F0_HZ = 120.0
+
+
+def body_below_f0_db(x: np.ndarray, sr: int, f0: float) -> float | None:
+    """Energy under the note's own fundamental, relative to the fundamental.
+
+    A grand's radiated sound is not only its string. The blow drives the bridge,
+    the bridge drives the board, and the board's low modes ring for seconds under
+    a note that has none of that frequency in it. How much of the sound that is
+    depends steeply on register, because the string's radiated fundamental falls
+    away toward the treble while the body's answer to a blow does not: measured
+    on three concert grands, this reading rises about forty decibels from C3 to
+    C8, and at C8 the energy under the note outweighs the note.
+
+    Taken as a ratio rather than as a level, so it says nothing about how loud
+    the render was and cannot be answered by a gain. A model that is a string and
+    only a string sits flat across the whole keyboard here, which no amount of
+    body LEVEL corrects -- the register dependence is the measurement.
+    """
+    if f0 < BODY_MIN_F0_HZ:
+        return None
+    a, b = int(BODY_WINDOW_S[0] * sr), int(BODY_WINDOW_S[1] * sr)
+    seg = x[a:b]
+    if seg.size < sr // 8:
+        return None
+    spec = np.abs(np.fft.rfft(seg * np.hanning(len(seg))))
+    freqs = np.fft.rfftfreq(len(seg), 1.0 / sr)
+
+    def band(lo: float, hi: float) -> float:
+        sel = (freqs >= lo) & (freqs < hi)
+        return float(np.sqrt(np.sum(spec[sel] ** 2))) if sel.any() else 0.0
+
+    under, fundamental = band(40.0, f0 * 0.7), band(f0 * 0.8, f0 * 1.25)
+    if fundamental <= 0.0 or under <= 0.0:
+        return None
+    return round(float(20.0 * np.log10(under / fundamental)), 2)
 
 
 def onset_shape(mono: np.ndarray, sr: int, onset_s: float, note_dur: float, f0: float) -> dict:
@@ -362,6 +414,11 @@ def analyze_note(
             a90 = np.where(f_env >= 0.9 * f_peak)[0]
             if a10.size and a90.size:
                 attack_fine_ms = max(0.0, (f_times[a90[0]] - f_times[a10[0]]) * 1000.0)
+    arrival_ms: float | None = None
+    if off - fine_start > int(0.004 * sr):
+        a_times, a_env = _rms_envelope(mono[fine_start:off], sr)
+        arrival_ms = round(float(a_times[arrival_index(np.asarray(_db(a_env)))]) * 1000.0, 1)
+    body_db = body_below_f0_db(mono[fine_start:off], sr, float(f0))
 
     shape = onset_shape(mono, sr, at, note_dur, float(f0))
     modal = modal_profile(freqs, mag, expected_f0, halves=half_spectra(sustain, sr))
@@ -388,6 +445,8 @@ def analyze_note(
         modal_ratio=modal["modal_ratio"],
         ladder_partials=sum(ladder_present(harmonics_db)),
         attack_fine_ms=round(attack_fine_ms, 2),
+        arrival_ms=arrival_ms,
+        body_below_f0_db=body_db,
         **shape,
         f0_width_cents=f0_width_cents(freqs, mag, float(f0)),
         **movement,

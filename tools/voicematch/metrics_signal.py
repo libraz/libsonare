@@ -117,6 +117,34 @@ def _rms_envelope(y: np.ndarray, sr: int, hop_ms: float = 5.0, win_ms: float = 1
     return times, rms
 
 
+#: How far under the envelope's maximum still counts as the note having arrived.
+#: A struck note's maximum IS its onset, but a held one has no maximum worth the
+#: name: measured on this corpus a clarinet's envelope crests 0.20 dB over its
+#: own mean, so its loudest 10 ms window falls wherever the vibrato happened to
+#: peak -- 1270 ms in, against 25 ms for the first arrival within this bound. The
+#: value is the one `metrics` already quotes an attack against on the percussion
+#: path, and it moves a decaying note's onset by under 15 ms.
+ONSET_SLACK_DB = 3.0
+
+
+def arrival_index(env_db: np.ndarray) -> int:
+    """First envelope point within @ref ONSET_SLACK_DB of the loudest one.
+
+    Where the note has ARRIVED at its level, which is the far end of the rise
+    and not its beginning — the beginning is `sound_onset_s`, the one detector
+    every window in this harness is placed by, and this was called `onset_index`
+    for long enough to read as a second one.
+
+    The attack time is read off this rather than off `argmax`, which is only an
+    onset on an instrument that decays. On a plateau `argmax` is the largest
+    sample of a flat line: a clarinet's envelope crests 0.13 dB over its own
+    median, so its loudest window lands wherever the vibrato happened to.
+    """
+    if env_db.size == 0:
+        return 0
+    return int(np.argmax(env_db >= float(np.max(env_db)) - ONSET_SLACK_DB))
+
+
 # Where a render is taken to start sounding, and on what grid that is decided.
 #
 # A hosted plugin does not always sound a note in the buffer it was delivered

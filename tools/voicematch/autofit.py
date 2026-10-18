@@ -2497,6 +2497,24 @@ def main() -> int:
         "moves the quantity the voice is judged on; default on drums only",
     )
     parser.add_argument(
+        "--w-arrival",
+        type=float,
+        default=None,
+        dest="w_arrival",
+        help="pitched fits: weight on the time to the note's arrival, the gate's "
+        "first point within 3 dB of the held maximum, per note. Sees a level "
+        "still climbing after the half-second `env` reads its attack over",
+    )
+    parser.add_argument(
+        "--w-body",
+        type=float,
+        default=None,
+        dest="w_body",
+        help="pitched fits: weight on the energy under the fundamental against "
+        "the fundamental, the gate's body reading, per note from 120 Hz up. "
+        "Sees a string that has lost its fundamental to a higher regime",
+    )
+    parser.add_argument(
         "--w-tonal",
         type=float,
         default=None,

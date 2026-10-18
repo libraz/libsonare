@@ -90,6 +90,10 @@ TERM_UNITS = {
     # inside what two takes of the same drum differ by.
     "tilt": 1.0,
     "bright": 5.0,
+    # The median disagreement between three concert grands on envelope peak time.
+    "arrival": 40.0,
+    # A decibel, as `tnr` and `tilt`.
+    "body": 1.0,
     # A decibel of flatness, the unit the gate records `tonality` in, and a
     # decibel of tilt for `tilt_rise` and for the strike's own tilt.
     "tonal": 1.0,
@@ -290,6 +294,8 @@ TERM_COUNT_KEYS = {
     "diffuse": "window_flatness_cells",
     "tilt": "tilt_hits",
     "bright": "bright_hits",
+    "arrival": "arrival_hits",
+    "body": "body_hits",
     "tonal": "tonal_hits",
     "rise": "rise_hits",
     "strike": "strike_hits",

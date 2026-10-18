@@ -16,7 +16,9 @@ from metrics import (
     _spectrum,
     _under_peak_db,
     analyze_hit,
+    arrival_index,
     attack_bands,
+    body_below_f0_db,
     channel_width,
     fit_partial_series,
     midi_to_hz,
@@ -157,38 +159,11 @@ DECAY_RANGE_DB = 60.0
 #: in a fraction of it, which is a comparison of a late rate against an early one.
 DECAY_SPAN_AGREEMENT = 0.6
 
-#: How far under the envelope's maximum still counts as the note having arrived.
-#: A struck note's maximum IS its onset, but a held one has no maximum worth the
-#: name: measured on this corpus a clarinet's envelope crests 0.20 dB over its
-#: own mean, so its loudest 10 ms window falls wherever the vibrato happened to
-#: peak -- 1270 ms in, against 25 ms for the first arrival within this bound. The
-#: value is the one `metrics` already quotes an attack against on the percussion
-#: path, and it moves a decaying note's onset by under 15 ms.
-ONSET_SLACK_DB = 3.0
-
 #: How long after arriving a note may still be climbing to the peak its decay is
 #: fitted from. Measured on this corpus the longest any voice with a real peak
 #: takes is 185 ms -- a vibraphone bar blooming -- while the earliest a plateau
 #: puts its highest sample is 375 ms, so the two populations do not overlap.
 RISE_WINDOW_S = 0.25
-
-
-def arrival_index(env_db: np.ndarray) -> int:
-    """First envelope point within @ref ONSET_SLACK_DB of the loudest one.
-
-    Where the note has ARRIVED at its level, which is the far end of the rise
-    and not its beginning — the beginning is `sound_onset_s`, the one detector
-    every window in this harness is placed by, and this was called `onset_index`
-    for long enough to read as a second one.
-
-    The attack time is read off this rather than off `argmax`, which is only an
-    onset on an instrument that decays. On a plateau `argmax` is the largest
-    sample of a flat line: a clarinet's envelope crests 0.13 dB over its own
-    median, so its loudest window lands wherever the vibrato happened to.
-    """
-    if env_db.size == 0:
-        return 0
-    return int(np.argmax(env_db >= float(np.max(env_db)) - ONSET_SLACK_DB))
 
 
 def decay_origin_index(env_db: np.ndarray, hop_s: float) -> int:
@@ -229,52 +204,6 @@ def attack_hf_share_db(mono: np.ndarray, sr: int, note: int, onset_s: float) -> 
     n_bands = len(ATTACK_BANDS_HZ)
     vals = [v for v in bands[ATTACK_HF_BAND_INDEX::n_bands] if v is not None]
     return round(float(np.median(vals)), 2) if vals else None
-
-
-#: Where the body reading is taken, in seconds from the onset. After the strike,
-#: so the hammer's own broadband noise is not counted as the instrument's body,
-#: and a full second wide, because what is being measured is a resonance that
-#: outlives the string rather than a transient.
-BODY_WINDOW_S = (0.2, 1.2)
-#: The lowest fundamental this reading means anything for. Below it the band
-#: under the note is narrower than an octave and is measuring the note's own
-#: skirt rather than anything under it.
-BODY_MIN_F0_HZ = 120.0
-
-
-def body_below_f0_db(x: np.ndarray, sr: int, f0: float) -> float | None:
-    """Energy under the note's own fundamental, relative to the fundamental.
-
-    A grand's radiated sound is not only its string. The blow drives the bridge,
-    the bridge drives the board, and the board's low modes ring for seconds under
-    a note that has none of that frequency in it. How much of the sound that is
-    depends steeply on register, because the string's radiated fundamental falls
-    away toward the treble while the body's answer to a blow does not: measured
-    on three concert grands, this reading rises about forty decibels from C3 to
-    C8, and at C8 the energy under the note outweighs the note.
-
-    Taken as a ratio rather than as a level, so it says nothing about how loud
-    the render was and cannot be answered by a gain. A model that is a string and
-    only a string sits flat across the whole keyboard here, which no amount of
-    body LEVEL corrects -- the register dependence is the measurement.
-    """
-    if f0 < BODY_MIN_F0_HZ:
-        return None
-    a, b = int(BODY_WINDOW_S[0] * sr), int(BODY_WINDOW_S[1] * sr)
-    seg = x[a:b]
-    if seg.size < sr // 8:
-        return None
-    spec = np.abs(np.fft.rfft(seg * np.hanning(len(seg))))
-    freqs = np.fft.rfftfreq(len(seg), 1.0 / sr)
-
-    def band(lo: float, hi: float) -> float:
-        sel = (freqs >= lo) & (freqs < hi)
-        return float(np.sqrt(np.sum(spec[sel] ** 2))) if sel.any() else 0.0
-
-    under, fundamental = band(40.0, f0 * 0.7), band(f0 * 0.8, f0 * 1.25)
-    if fundamental <= 0.0 or under <= 0.0:
-        return None
-    return round(float(20.0 * np.log10(under / fundamental)), 2)
 
 
 def double_decay_gap(row: dict) -> float | None:

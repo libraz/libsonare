@@ -54,6 +54,8 @@ LOSS_TERMS = (
     "bdecay",
     "tilt",
     "bright",
+    "arrival",
+    "body",
     "tonal",
     "rise",
     "strike",
@@ -82,6 +84,9 @@ HF_DELTA_CAP_DB = 24.0
 # the bass, which is the only register the band was added to watch.
 LF_DELTA_CAP_DB = 24.0
 LEVEL_DELTA_CAP_DB = 18.0
+# A string that has lost its fundamental reads tens of dB here against a floor on
+# both sides; capped as the attack bands are, so one such note cannot decide the fit.
+BODY_DELTA_CAP_DB = 24.0
 # What a note charges `tnr` when the model's own window fell silent (NaN) while
 # the reference's did not: the same cap the other absent-model terms use,
 # rather than skipping a note a fit could make disappear for free.
@@ -109,6 +114,8 @@ PITCHED_TERMS = (
     "onsetvel",
     "velspan",
     "onset",
+    "arrival",
+    "body",
 ) + _SHARED_TERMS
 #: `modes` is shared because a drum has one too. A tom, a conga, a timbale, a
 #: woodblock and a cowbell all have a definite pitch, and the 1/3-octave band
