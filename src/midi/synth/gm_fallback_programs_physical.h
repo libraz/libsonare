@@ -69,7 +69,6 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.violin.bowed_string.rosin = 0.0f;
   o.viola = bowed(0.13f, 0.55f, 0.42f, 0.34f, 55.0f, 120.0f, 0.34f, 0.3f);
   o.viola.lfo_rate_hz = 5.43422f;
-  o.viola.lfo_to_pitch_cents = 1.9526f;
   o.viola.amp_env.attack_ms = 393.35f;
   o.viola.amp_env.decay_ms = 1.0923f;
   o.viola.amp_env.release_ms = 4.56146f;
@@ -77,13 +76,10 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.viola.bowed_string.attack_ms = 857.198f;
   o.viola.bowed_string.bow_force = 0.404514f;
   o.viola.bowed_string.bow_position = 0.111153f;
-  o.viola.bowed_string.bow_speed = 0.781176f;
-  o.viola.bowed_string.brightness = 0.385659f;
   o.viola.bowed_string.damping = 0.0577136f;
   o.viola.bowed_string.release_ms = 10.0997f;
   o.viola.bowed_string.stribeck = 0.730394f;
   o.viola.bowed_string.velocity_exponent = 1.38f;
-  o.viola.cutoff_hz = 2339.23f;
   o.viola.drift_rate_hz = 0.632726f;
   o.viola.resonance_q = 0.836075f;
   // corpus_scale scales every mode centre in the violin corpus bank uniformly;
@@ -91,6 +87,24 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // scale places A0 but not B1+/- or the bridge hill — viola's A0 ratio tracks
   // its body-length ratio (0.88 against 0.87), so its upper modes land plausibly.
   o.viola.bowed_string.corpus_scale = 0.88f;
+  // On the bristle table the floor under the note read 13 dB over the reference;
+  // the hyperbolic junction without rosin brings it to 3 dB under.
+  o.viola.bowed_string.elasto_plastic = false;
+  o.viola.bowed_string.rosin = 0.0f;
+  o.viola.bowed_string.hyperbolic_friction = true;
+  o.viola.bowed_string.string_length_m = 0.37f;
+  o.viola.bowed_string.string_tension_n = 55.0f;
+  o.viola.bowed_string.bow_width_m = 0.0185f;
+  // Schelleng's minimum force rises toward the bass: at 2 C3 and F#3 fell out of
+  // Helmholtz motion (h2 over h1, 6 dB down); 3 holds every note in it.
+  o.viola.bowed_string.force_ratio = 3.0f;
+  o.viola.bowed_string.bow_speed = 0.9f;
+  o.viola.bowed_string.brightness = 0.75f;
+  o.viola.cutoff_hz = 5000.0f;
+  o.viola.lfo_to_pitch_cents = 12.0f;
+  // The body radiates little below its air mode: the reference's C3 and F#3 carry
+  // h2-h6 within 3 dB of h1, the sawtooth 12 dB under it.
+  o.viola.hp_cutoff_hz = 200.0f;
   o.cello = bowed(0.14f, 0.60f, 0.44f, 0.38f, 70.0f, 140.0f, 0.40f, 0.28f);
   o.cello.lfo_rate_hz = 4.3315f;
   o.cello.lfo_to_pitch_cents = 4.43038f;
