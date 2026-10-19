@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 
 #include "midi/synth/pitch.h"
 #include "midi/synth/string_loop.h"
@@ -180,6 +181,17 @@ LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, 
 
   jet_reflection_ = std::min(std::clamp(params.jet_reflection, 0.0f, 1.0f), kReflectMax);
   end_reflection_ = std::min(std::clamp(params.end_reflection, 0.0f, 1.0f), kReflectMax);
+
+  // Tone-hole lattice: one corner in Hz for every note, built at the loop's rate.
+  lattice_hz_ =
+      params.lattice_cutoff_hz > 0.0f ? std::min(params.lattice_cutoff_hz, 0.45f * srf) : 0.0f;
+  lattice_comp_ = 0.0f;
+  lattice_.reset();
+  if (lattice_hz_ > 0.0f) {
+    lattice_.set(rt::rbj_lowpass(kTwoPi * lattice_hz_ / srf, sonare::constants::kButterworthQ));
+    const float omega = kTwoPi * f0 / srf;
+    lattice_comp_ = -std::arg(rt::biquad_response(lattice_.c, omega)) / std::max(omega, 1.0e-6f);
+  }
 
   // Open-end reflection: damping alone sets the per-traversal gain, a flat
   // scalar that is already note- and rate-invariant because the loop is
@@ -379,6 +391,8 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
   // jet (below) and re-enters the bore directly.
   lp_state_ += lp_alpha_ * (bore_.out - lp_state_);
   float temp = loss_gain_ * lp_state_;
+  // Tone-hole lattice (gated): above its cutoff the holes pass the wave out rather than back.
+  if (lattice_hz_ > 0.0f) temp = lattice_.process(temp);
   // Mouth vortex loss (gated): the flow u the returning pressure r drives solves u + K u|u| = r.
   if (vortex_loss_ > 0.0f) {
     temp = 2.0f * temp / (1.0f + std::sqrt(1.0f + 4.0f * vortex_loss_ * std::fabs(temp)));
@@ -509,7 +523,8 @@ void FluteVoiceCore::retune_loop_comp() noexcept {
   const float sw = std::sin(omega);
   const float cw = std::cos(omega);
   const float phase_dc = std::atan2(sw, 1.0f - cw) - std::atan2(dc_r_ * sw, 1.0f - dc_r_ * cw);
-  bore_.comp = 1.0f + onepole_group_delay_samples(a, omega) - phase_dc / std::max(omega, 1.0e-6f);
+  bore_.comp = 1.0f + onepole_group_delay_samples(a, omega) - phase_dc / std::max(omega, 1.0e-6f) +
+               lattice_comp_;
   comp_alpha_ = lp_alpha_;
 }
 
@@ -531,6 +546,7 @@ void FluteVoiceCore::kill() noexcept {
   decimator_.reset();
   breath_.level = 0.0f;
   lp_state_ = 0.0f;
+  lattice_.reset();
   bore_.out = 0.0f;
   dc_x1_ = 0.0f;
   dc_y1_ = 0.0f;

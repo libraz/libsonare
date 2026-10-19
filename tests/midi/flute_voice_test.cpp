@@ -549,3 +549,54 @@ TEST_CASE("concert flute on the jet-drive path speaks at every note and velocity
     }
   }
 }
+
+TEST_CASE("flute tone-hole lattice is off by default (bit-identical)", "[midi][synth][flute]") {
+  // At 0 Hz the lattice sections are never built and the loop compensation gains an exact zero.
+  const std::vector<float> base = render_patch(flute_base_patch(), 84, 100, 16384);
+  NativeSynthPatch zeroed = flute_base_patch();
+  zeroed.flute.lattice_cutoff_hz = 0.0f;
+  REQUIRE(render_patch(zeroed, 84, 100, 16384) == base);
+}
+
+TEST_CASE("flute tone-hole lattice cutoff withdraws the bore from the partials above it",
+          "[midi][synth][flute]") {
+  // One corner for every note. C6's twelfth (3140 Hz) sits above an 1800 Hz lattice and loses the
+  // bore's regeneration on both jet paths; its octave (2093 Hz) falls only on the cubic path, since
+  // the jet-drive source remakes the even harmonics from its offset every cycle and the bore's
+  // passive gain at 2f0 is all the lattice can take away. C4's ladder up to h6 (1570 Hz) sits
+  // below the corner and keeps its octave. The section's phase delay at f0 comes off the bore, so
+  // neither note moves in pitch.
+  constexpr float kCutoffHz = 1800.0f;
+  const int n = static_cast<int>(0.8 * kRate);
+  struct Ladder {
+    double cents;
+    double h2;
+    double h3;
+  };
+  const auto measure = [&](const NativeSynthPatch& patch, uint8_t note) {
+    const std::vector<float> tone = render_patch(patch, note, 100, n);
+    REQUIRE(speaks_at(tone, note));
+    const double f = fft_fundamental(tone, static_cast<size_t>(0.5 * kRate), note_hz(note));
+    return Ladder{1200.0 * std::log2(f / note_hz(note)), harmonic_db(tone, f, 2),
+                  harmonic_db(tone, f, 3)};
+  };
+  for (int path = 0; path < 2; ++path) {
+    const NativeSynthPatch off = path == 0 ? flute_base_patch() : jet_drive_patch();
+    NativeSynthPatch on = off;
+    on.flute.lattice_cutoff_hz = kCutoffHz;
+    const Ladder top_off = measure(off, 84);
+    const Ladder top_on = measure(on, 84);
+    INFO("path " << path << " C6 h2/h1 " << top_off.h2 << " -> " << top_on.h2 << " dB, h3/h1 "
+                 << top_off.h3 << " -> " << top_on.h3 << " dB, f0 " << top_off.cents << " -> "
+                 << top_on.cents << " c");
+    CHECK(top_on.h3 < top_off.h3 - 2.0);
+    if (path == 0) CHECK(top_on.h2 < top_off.h2 - 3.0);
+    CHECK(std::fabs(top_on.cents - top_off.cents) < 10.0);
+    const Ladder low_off = measure(off, 60);
+    const Ladder low_on = measure(on, 60);
+    INFO("path " << path << " C4 h2/h1 " << low_off.h2 << " -> " << low_on.h2 << " dB, f0 "
+                 << low_off.cents << " -> " << low_on.cents << " c");
+    if (path == 0) CHECK(std::fabs(low_on.h2 - low_off.h2) < 2.0);
+    CHECK(std::fabs(low_on.cents - low_off.cents) < 10.0);
+  }
+}

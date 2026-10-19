@@ -33,6 +33,7 @@
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_bore.h"
 #include "midi/synth/wind_breath.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 
 namespace sonare::midi::synth {
@@ -154,6 +155,11 @@ struct FlutePatchParams {
   /// ([0, 2]): the flow-split asymmetry that voices the even harmonics on the
   /// jet-drive path. Read only when jet_drive is on.
   float jet_offset = 0.0f;
+
+  /// Tone-hole lattice cutoff (Hz), the same at every note: above it the wave runs
+  /// out through the open holes and the bore stops supporting partials (Benade).
+  /// A Butterworth section on the returning pressure; 0 = off.
+  float lattice_cutoff_hz = 0.0f;
 
   /// Tongued-onset breath overshoot (dB of mouth pressure) at velocity 127: how
   /// far the mouth pressure stands above its held level as the tongue releases
@@ -288,6 +294,11 @@ class FluteVoiceCore {
   float lp_state_ = 0.0f;
   float loss_gain_ = 1.0f;
   float damping_gain_ = 1.0f;
+  // Tone-hole lattice cutoff (Hz) on the returning pressure, a Butterworth section; 0 -> skipped.
+  // Its phase delay at f0 is held so retune_loop_comp() can take it off the bore.
+  float lattice_hz_ = 0.0f;
+  rt::BiquadState lattice_{};
+  float lattice_comp_ = 0.0f;
   // Jet / end reflection coefficients (the two feedback taps of the jet-drive
   // model).
   float jet_reflection_ = 0.5f;
