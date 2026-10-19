@@ -184,7 +184,8 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.fiddle.bowed_string.rosin = 0.169969f;
   o.fiddle.bowed_string.sympathetic = 0.252098f;  // the open strings ring under the tune
   o.fiddle.amp_env.attack_ms = 39.1732f;
-  o.fiddle.cutoff_hz = 7000.0f;
+  // At 7000 the centroid read 11 % over the reference; 4500 brings the median inside.
+  o.fiddle.cutoff_hz = 4500.0f;
   o.fiddle.lfo_to_pitch_cents = 2.0f;
   o.fiddle.amp_env.release_ms = 89.3211f;
   o.fiddle.amp_env.sustain = 0.618034f;
