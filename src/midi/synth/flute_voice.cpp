@@ -103,6 +103,17 @@ SONARE_TUNABLE(kJetDisplacementLeakHz, 10.0f);
 SONARE_TUNABLE(kJetLengthCompensation, 0.0f);
 // Floor on the reference breath the jet delay is normalised to: one velocity step.
 constexpr float kJetBreathFloor = 1.0f / 127.0f;
+// Strouhal corner f*tau of the jet's receptivity: the deflection follows the returning flow up to
+// this frequency over the jet delay, so the odd harmonics the half-period delay would regenerate
+// are not. 0 = none. At 1 the third stays under the second from C4 to C6 (y0 1, K 0.03, G 6).
+SONARE_TUNABLE(kJetReceptivityStrouhal, 0.0f);
+// Low Strouhal corner of the same receptivity, replacing the fixed displacement leak when set: a
+// jet does not amplify a near-steady deflection, and a leak at 10 Hz let the bore's sub-audio
+// return swing the jet's mean offset (±8 Hz sidebands at -28 dB on E4). 0 = the fixed leak.
+SONARE_TUNABLE(kJetReceptivityStrouhalLow, 0.0f);
+// Held level per octave above kPeakRefHz on the jet-drive path (dB): the bore level the source
+// settles at falls 2.6 dB/oct where the reference rises 3; a monopole's radiation is +6. 0 = flat.
+SONARE_TUNABLE(kJetDriveLevelTiltDb, 0.0f);
 
 /// The jet function: the S-shaped saturating transfer of the air jet deflecting
 /// across the labium (Fabre-Hirschberg lumped model / STK JetTable), with an
@@ -199,13 +210,30 @@ LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, 
   // the jet delay W/(kappa Uj), taken against the patch's own breath, is jet_ratio period
   // sqrt(B_ref/B).
   jet_drive_ = params.jet_drive;
-  jet_offset_ = std::clamp(params.jet_offset, 0.0f, 0.5f);
+  jet_offset_ = std::clamp(params.jet_offset, 0.0f, 2.0f);
   jet_speed_ref_ =
       std::sqrt(std::max(std::clamp(params.breath_pressure, 0.0f, 1.0f), kJetBreathFloor));
   jet_drive_norm_ = 1.0f / std::max(2.0f * std::sin(kPi * f0 / srf), 1.0e-6f);
   jet_flow_z1_ = std::tanh(-jet_offset_);
   jet_eta_ = 0.0f;
   jet_eta_leak_ = std::exp(-kTwoPi * kJetDisplacementLeakHz / srf);
+  // Receptivity band: both corners sit at a Strouhal number over the jet delay at the patch's own
+  // breath, and each pole's phase delay at f0 (for the leak, its shortfall against a pure
+  // integrator's) comes off the jet line so the delay alone still sets the tuning.
+  const float omega0 = kTwoPi * f0 / srf;
+  jet_lp_state_ = 0.0f;
+  jet_lp_alpha_ = 0.0f;
+  jet_lp_comp_ = 0.0f;
+  if (jet_drive_ && kJetReceptivityStrouhalLow > 0.0f) {
+    jet_eta_leak_ = std::exp(-kTwoPi * kJetReceptivityStrouhalLow / (jet_ratio_ * bore_.period));
+    jet_lp_comp_ -=
+        (kPi - omega0) / (2.0f * omega0) - onepole_group_delay_samples(jet_eta_leak_, omega0);
+  }
+  if (jet_drive_ && kJetReceptivityStrouhal > 0.0f) {
+    jet_lp_alpha_ =
+        1.0f - std::exp(-kTwoPi * kJetReceptivityStrouhal / (jet_ratio_ * bore_.period));
+    jet_lp_comp_ += onepole_group_delay_samples(1.0f - jet_lp_alpha_, omega0);
+  }
 
   retune_loop_comp();
   // The jet line is read at one sample or more as well, and it is the shorter of the two: its
@@ -248,6 +276,9 @@ LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, 
   const float peak_est =
       std::clamp(kPeakBase + kPeakTilt * std::log2(std::max(1.0f, f0) / kPeakRefHz), 0.8f, 5.0f);
   output_scale_ = kOutputTargetPeak / peak_est;
+  if (jet_drive_ && kJetDriveLevelTiltDb != 0.0f) {
+    output_scale_ *= std::pow(10.0f, kJetDriveLevelTiltDb * std::log2(f0 / kPeakRefHz) / 20.0f);
+  }
 
   // Prompt speech: pre-fill the bore with a low-level seeded noise burst so the
   // jet has an f0 component to lock onto rather than swelling up from silence.
@@ -274,6 +305,7 @@ LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, 
   edge_hyst_state_ = 0.0f;
   edge_hyst_alpha_ = 1.0f - loss_pole_at_rate(0.999f, sr);
   vortex_ = std::clamp(params.vortex, 0.0f, 1.0f) * noise_gain;
+  vortex_loss_ = std::max(params.vortex_loss, 0.0f);
   return budget;
 }
 
@@ -346,7 +378,11 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
   // period — the full harmonic series). The returning pressure both drives the
   // jet (below) and re-enters the bore directly.
   lp_state_ += lp_alpha_ * (bore_.out - lp_state_);
-  const float temp = loss_gain_ * lp_state_;
+  float temp = loss_gain_ * lp_state_;
+  // Mouth vortex loss (gated): the flow u the returning pressure r drives solves u + K u|u| = r.
+  if (vortex_loss_ > 0.0f) {
+    temp = 2.0f * temp / (1.0f + std::sqrt(1.0f + 4.0f * vortex_loss_ * std::fabs(temp)));
+  }
 
   // Jet drive: the pressure difference across the flue drives the jet, which
   // convects (jet delay) and deflects across the labium (the cubic jet table).
@@ -369,12 +405,19 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
                       ? std::pow(stretch, 1.0f - std::min(kJetLengthCompensation, 1.0f))
                       : stretch;
   }
+  // The receptivity pole's phase delay at f0 is taken off the line so the delay still sets the
+  // tuning.
+  jet_period -= jet_lp_comp_;
   const float jet_delay = std::clamp(jet_period, 1.0f, static_cast<float>(capacity_ - 4));
   jet_delay_ = jet_delay;
-  const float pd_j = rt::lagrange3_fractional_delay(
-      jet_, static_cast<size_t>(capacity_), jet_write_, static_cast<int>(jet_delay * 256.0f), pd);
+  float pd_j = rt::lagrange3_fractional_delay(jet_, static_cast<size_t>(capacity_), jet_write_,
+                                              static_cast<int>(jet_delay * 256.0f), pd);
   float jet_out;
   if (jet_drive_) {
+    if (jet_lp_alpha_ > 0.0f) {
+      jet_lp_state_ += jet_lp_alpha_ * (pd_j - jet_lp_state_);
+      pd_j = jet_lp_state_;
+    }
     // dQ/dt of the flow split Q ~ b Uj tanh((eta - y0)/b), eta in half-widths.
     // The jet deflection is the displacement the acoustic flow imposes: its integral, unit gain at
     // f0.

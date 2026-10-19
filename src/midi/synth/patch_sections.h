@@ -342,6 +342,7 @@ constexpr FlutePatchParams blank_flute() noexcept {
   z.jet_turbulence = 0.0f;
   z.edge_hysteresis = 0.0f;
   z.vortex = 0.0f;
+  z.vortex_loss = 0.0f;
   z.jet_drive = false;
   z.jet_offset = 0.0f;
   z.onset_breath_overshoot_db = 0.0f;

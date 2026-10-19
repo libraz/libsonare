@@ -1910,8 +1910,10 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.flute.edge_hysteresis =
       std::clamp(patch_clamp_detail::sanitize(p.flute.edge_hysteresis, 0.0f), 0.0f, 1.0f);
   p.flute.vortex = std::clamp(patch_clamp_detail::sanitize(p.flute.vortex, 0.0f), 0.0f, 1.0f);
+  p.flute.vortex_loss =
+      std::clamp(patch_clamp_detail::sanitize(p.flute.vortex_loss, 0.0f), 0.0f, 400.0f);
   p.flute.jet_offset =
-      std::clamp(patch_clamp_detail::sanitize(p.flute.jet_offset, 0.0f), 0.0f, 0.5f);
+      std::clamp(patch_clamp_detail::sanitize(p.flute.jet_offset, 0.0f), 0.0f, 2.0f);
   p.flute.onset_breath_overshoot_db =
       std::clamp(patch_clamp_detail::sanitize(p.flute.onset_breath_overshoot_db, 0.0f), 0.0f, 8.0f);
   p.flute.onset_breath_settle_ms =

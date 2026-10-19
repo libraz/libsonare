@@ -477,6 +477,7 @@ void apply_flute(NativeSynthPatch& p, const Fields& f) {
   F(flute.jet_turbulence);
   F(flute.edge_hysteresis);
   F(flute.vortex);
+  F(flute.vortex_loss);
   I_TYPED(flute.jet_drive, 0, 1);
   F(flute.jet_offset);
   F(flute.onset_breath_overshoot_db);
@@ -985,6 +986,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"flute.jet_turbulence", Unit::None},
     {"flute.edge_hysteresis", Unit::None},
     {"flute.vortex", Unit::None},
+    {"flute.vortex_loss", Unit::None},
     {"flute.jet_drive", Unit::None},
     {"flute.jet_offset", Unit::None},
     {"flute.onset_breath_overshoot_db", Unit::Db},

@@ -138,6 +138,11 @@ struct FlutePatchParams {
   /// rougher, breathier source (some shakuhachi / ocarina voicings). 0 = off ->
   /// render is bit-identical.
   float vortex = 0.0f;
+  /// Vortex (vena-contracta) loss at the mouth, K in u + K u|u| = r: the flow the
+  /// returning bore pressure drives through the embouchure saturates as K|u| passes
+  /// one, so this is what bounds the oscillation when the jet does not. Dimensionless
+  /// in bore-pressure units. 0 = off -> render is bit-identical.
+  float vortex_loss = 0.0f;
 
   // --- jet-drive source (Verge et al. 1994; gated, off by default) ---
   /// Replaces the cubic jet table and the even-harmonic pump with the jet-drive
@@ -146,7 +151,7 @@ struct FlutePatchParams {
   /// going as 1/Uj so it shortens as the breath rises. false = off -> bit-identical.
   bool jet_drive = false;
   /// Jet centreline offset from the labium at rest, y0/b in jet half-widths
-  /// ([0, 0.5]): the flow-split asymmetry that voices the even harmonics on the
+  /// ([0, 2]): the flow-split asymmetry that voices the even harmonics on the
   /// jet-drive path. Read only when jet_drive is on.
   float jet_offset = 0.0f;
 
@@ -365,6 +370,8 @@ class FluteVoiceCore {
   // 4d: discrete-vortex source. vortex_ == 0 -> skipped. A rougher, amplitude-
   // gated noise burst added to the jet drive.
   float vortex_ = 0.0f;
+  // Mouth vortex loss K on the returning flow. 0 -> skipped.
+  float vortex_loss_ = 0.0f;
 
   // Jet-drive source (jet_drive; skipped entirely when off).
   bool jet_drive_ = false;
@@ -381,6 +388,11 @@ class FluteVoiceCore {
   // The jet's displacement at the labium, eta: a leaky integral of the acoustic flow.
   float jet_eta_ = 0.0f;
   float jet_eta_leak_ = 0.0f;
+  // Receptivity lowpass on the flow the jet reads: its coefficient, state, and the phase delay
+  // (samples) at f0 taken off the jet line. All zero when off.
+  float jet_lp_alpha_ = 0.0f;
+  float jet_lp_state_ = 0.0f;
+  float jet_lp_comp_ = 0.0f;
 };
 
 }  // namespace sonare::midi::synth
