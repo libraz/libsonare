@@ -565,6 +565,93 @@ TEST_CASE("flute jet centring is off by default (bit-identical)", "[midi][synth]
   REQUIRE(render_patch(zeroed, 84, 100, 16384) == base);
 }
 
+TEST_CASE("flute receptivity window and zero-mean deflection are off by default (bit-identical)",
+          "[midi][synth][flute]") {
+  // Both gates belong to the jet-drive branch: zero on that path and any value on the cubic one
+  // leave the render untouched.
+  const std::vector<float> jet = render_patch(jet_drive_patch(), 72, 100, 16384);
+  NativeSynthPatch zeroed = jet_drive_patch();
+  zeroed.flute.jet_receptivity_window = 0.0f;
+  zeroed.flute.jet_cycle_mean = false;
+  REQUIRE(render_patch(zeroed, 72, 100, 16384) == jet);
+  const std::vector<float> cubic = render_patch(flute_base_patch(), 72, 100, 16384);
+  NativeSynthPatch gated = flute_base_patch();
+  gated.flute.jet_receptivity_window = 0.5f;
+  gated.flute.jet_cycle_mean = true;
+  REQUIRE(render_patch(gated, 72, 100, 16384) == cubic);
+}
+
+namespace {
+
+/// Fundamental (cents from equal temperament) and the third harmonic (dB over the
+/// fundamental) of a 0.8 s render, read over its second half.
+struct PitchAndThird {
+  double cents;
+  double h3;
+};
+
+PitchAndThird pitch_and_third(const NativeSynthPatch& patch, uint8_t note) {
+  const std::vector<float> tone = render_patch(patch, note, 100, static_cast<int>(0.8 * kRate));
+  REQUIRE(speaks_at(tone, note));
+  const double f = fft_fundamental(tone, static_cast<size_t>(0.4 * kRate), note_hz(note));
+  return {1200.0 * std::log2(f / note_hz(note)), harmonic_db(tone, f, 3)};
+}
+
+}  // namespace
+
+TEST_CASE("flute zero-mean deflection and receptivity window leave the jet branch a pure delay",
+          "[midi][synth][flute]") {
+  // With the leak, the receptivity pole and the DC blocker gone from the branch, every harmonic
+  // sees the same delay, so the loop locks where the lines say and not where the one-poles'
+  // f0-only compensation left the harmonics' phases. The ungated branch sits 9 cents under C4.
+  NativeSynthPatch on = jet_drive_patch();
+  on.flute.jet_receptivity_window = 0.5f;
+  on.flute.jet_cycle_mean = true;
+  for (uint8_t note : {uint8_t{60}, uint8_t{72}, uint8_t{84}}) {
+    const PitchAndThird off = pitch_and_third(jet_drive_patch(), note);
+    const PitchAndThird gated = pitch_and_third(on, note);
+    INFO("note " << int(note) << " f0 " << off.cents << " -> " << gated.cents << " c");
+    CHECK(std::fabs(gated.cents) < 2.0);
+    if (note == 60) CHECK(std::fabs(off.cents) > 5.0);
+  }
+}
+
+TEST_CASE("flute receptivity window sets the third harmonic without moving the pitch",
+          "[midi][synth][flute]") {
+  // The window's -3 dB Strouhal corner is 1/(pi * share): widening it from 0.25 to 0.5 takes the
+  // jet's regeneration of the twelfth down while the fundamental stays on the delay.
+  NativeSynthPatch narrow = jet_drive_patch();
+  narrow.flute.jet_cycle_mean = true;
+  narrow.flute.jet_receptivity_window = 0.25f;
+  NativeSynthPatch wide = narrow;
+  wide.flute.jet_receptivity_window = 0.5f;
+  const PitchAndThird a = pitch_and_third(narrow, 60);
+  const PitchAndThird b = pitch_and_third(wide, 60);
+  INFO("C4 h3/h1 " << a.h3 << " -> " << b.h3 << " dB, f0 " << a.cents << " -> " << b.cents << " c");
+  CHECK(b.h3 < a.h3 - 3.0);
+  CHECK(std::fabs(b.cents - a.cents) < 1.0);
+}
+
+TEST_CASE("flute jet-drive bore reflects above the cubic path's cap", "[midi][synth][flute]") {
+  // The cap guards the cubic's register; the jet-drive loop is bounded by its split and vortex
+  // loss, so its bore may keep more of the returning wave, which the held level shows.
+  const int n = static_cast<int>(0.8 * kRate);
+  NativeSynthPatch cubic_capped = flute_base_patch();
+  cubic_capped.flute.end_reflection = 0.62f;
+  NativeSynthPatch cubic_over = flute_base_patch();
+  cubic_over.flute.end_reflection = 0.9f;
+  REQUIRE(render_patch(cubic_over, 72, 100, n) == render_patch(cubic_capped, 72, 100, n));
+  NativeSynthPatch jet_capped = jet_drive_patch();
+  jet_capped.flute.end_reflection = 0.62f;
+  NativeSynthPatch jet_over = jet_drive_patch();
+  jet_over.flute.end_reflection = 0.9f;
+  const std::vector<float> capped = render_patch(jet_capped, 72, 100, n);
+  const std::vector<float> over = render_patch(jet_over, 72, 100, n);
+  REQUIRE(speaks_at(over, 72));
+  INFO("held " << held_db(capped) << " -> " << held_db(over) << " dBFS");
+  CHECK(held_db(over) > held_db(capped) + 4.0);
+}
+
 TEST_CASE("flute jet centring takes the even harmonics off the overblown registers",
           "[midi][synth][flute]") {
   // The first register spans the octave over the home note, so C4 keeps its offset to the sample;

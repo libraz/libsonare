@@ -166,6 +166,15 @@ struct FlutePatchParams {
   /// even harmonics fall away (Fletcher 1975). 0 = off.
   float jet_centring_per_octave = 0.0f;
 
+  /// Receptivity window (jet-drive only): the jet reads the returning flow as a triangular
+  /// average of this half-width in shares of the jet delay, centred on it, so every harmonic
+  /// sees the delay alone (-3 dB at a Strouhal number of 1/(pi * share)). [0, 0.7], 0 = off.
+  float jet_receptivity_window = 0.0f;
+  /// Zero-mean deflection (jet-drive only): a pure integrator giving up its cycle mean once a
+  /// period in place of the leak, with no DC blocker on the source (the split's time difference
+  /// carries none), so the jet branch holds no one-pole at all. false = off.
+  bool jet_cycle_mean = false;
+
   /// Tongued-onset breath overshoot (dB of mouth pressure) at velocity 127: how
   /// far the mouth pressure stands above its held level as the tongue releases
   /// it, before it settles. The radiated overshoot is the jet's response to
@@ -413,6 +422,17 @@ class FluteVoiceCore {
   float jet_lp_alpha_ = 0.0f;
   float jet_lp_state_ = 0.0f;
   float jet_lp_comp_ = 0.0f;
+  // Receptivity window: half-width (samples) of the triangular average read off the jet line in
+  // place of the point read, centred on the jet delay. 0 = the point read.
+  int jet_window_half_ = 0;
+  // Cycle mean of the displacement: its length (samples, one period), the running count and
+  // sum; at each boundary the mean is taken off the integrator's state. 0 = off.
+  int jet_cycle_ = 0;
+  int jet_cycle_count_ = 0;
+  float jet_cycle_acc_ = 0.0f;
+
+  // Reads the jet line as a triangular average centred on @p delay after writing @p input.
+  float jet_window_read(float delay, float input) noexcept;
 };
 
 }  // namespace sonare::midi::synth
