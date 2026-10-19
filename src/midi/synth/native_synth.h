@@ -1973,6 +1973,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.vel_to_breath, 0.5f), 0.0f, 1.0f);
   p.free_reed.detune =
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.detune, 0.3f), 0.0f, 1.0f);
+  p.free_reed.musette_partner_level =
+      std::clamp(patch_clamp_detail::sanitize(p.free_reed.musette_partner_level, 1.0f), 0.0f, 1.0f);
   p.free_reed.attack_ms =
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.attack_ms, 20.0f), 1.0f, 2000.0f);
   p.free_reed.release_ms =

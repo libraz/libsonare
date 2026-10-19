@@ -390,6 +390,8 @@ constexpr FreeReedPatchParams blank_free_reed() noexcept {
   z.breath_pressure = 0.0f;
   z.vel_to_breath = 0.0f;
   z.detune = 0.0f;
+  z.musette_flat = false;
+  z.musette_partner_level = 0.0f;
   z.attack_ms = 0.0f;
   z.release_ms = 0.0f;
   z.breath_noise = 0.0f;

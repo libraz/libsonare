@@ -122,20 +122,20 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   // pitch ratio so bend/drift keep the musette pair's ratio intact.
   inc_a_ = static_cast<float>(base_freq_hz_ / sr);
 
-  // Musette pair: a second tongue a few cents sharp. detune == 0 keeps dual_
-  // false so the single-tongue path never touches the second oscillator.
+  // Musette: a second tongue a few cents sharp, and optionally a third as far
+  // flat. detune == 0 leaves no partner, so the single-tongue path never touches them.
   const float detune = std::clamp(params.detune, 0.0f, 1.0f);
-  dual_ = detune > 0.0f;
+  partner_count_ = detune > 0.0f ? (params.musette_flat ? 2 : 1) : 0;
+  partner_level_ = std::clamp(params.musette_partner_level, 0.0f, 1.0f);
+  tongue_mix_ = 1.0f / (1.0f + static_cast<float>(partner_count_) * partner_level_);
   phase_a_ = 0.0f;
-  if (dual_) {
+  for (int i = 0; i < kMaxPartners; ++i) partners_[i] = Partner{};
+  for (int i = 0; i < partner_count_; ++i) {
     const float cents = kDetuneMinCents + kDetuneSpanCents * detune;
-    inc_b_ = inc_a_ * cents_to_ratio(cents);
-    // Decorrelate the pair's start (a real accordion's tongues never speak in
+    partners_[i].inc = inc_a_ * cents_to_ratio(i == 0 ? cents : -cents);
+    // Decorrelate the tongues' start (a real accordion's tongues never speak in
     // phase); seeded, so the offset is deterministic per voice.
-    phase_b_ = noise_.unipolar_at(0);
-  } else {
-    inc_b_ = 0.0f;
-    phase_b_ = 0.0f;
+    partners_[i].phase = noise_.unipolar_at(static_cast<uint64_t>(i));
   }
 
   // Bellows drive level: steady pressure blended with the struck velocity.
@@ -173,21 +173,20 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   // at the fundamental — small, and note-dependent. Normalising it away leaves
   // the tilt without the level or the register slope that come with it.
   radiation_halfangle_ = static_cast<float>(kTwoPi * base_freq_hz_ / (2.0 * sr));
-  radiation_halfangle_b_ = dual_ ? 0.5f * static_cast<float>(kTwoPi) * inc_b_ : 0.0f;
   radiation_ratio_ = 1.0f;
   radiation_norm_ = radiation_norm(radiation_halfangle_, 1.0f, static_cast<float>(sr));
-  radiation_norm_b_ =
-      dual_ ? radiation_norm(radiation_halfangle_b_, 1.0f, static_cast<float>(sr)) : 0.0f;
   radiation_mix_norm_ =
       radiation_mix_norm(radiation_, radiation_halfangle_, 1.0f, static_cast<float>(sr));
-  radiation_mix_norm_b_ =
-      dual_ ? radiation_mix_norm(radiation_, radiation_halfangle_b_, 1.0f, static_cast<float>(sr))
-            : 1.0f;
+  for (int i = 0; i < partner_count_; ++i) {
+    Partner& t = partners_[i];
+    t.halfangle = 0.5f * static_cast<float>(kTwoPi) * t.inc;
+    t.norm = radiation_norm(t.halfangle, 1.0f, static_cast<float>(sr));
+    t.mix_norm = radiation_mix_norm(radiation_, t.halfangle, 1.0f, static_cast<float>(sr));
+  }
 
   // The differentiator history is primed on the first render, after its live
   // pitch ratio is known. Keep the old zero history for a normal mono start.
   prev_flow_ = 0.0f;
-  prev_flow_b_ = 0.0f;
   radiation_history_ready_ = false;
 
   // Contour + textures.
@@ -281,26 +280,27 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
     const float effective_frequency = base_freq_hz_ * ratio;
     const float nyquist = 0.5f * static_cast<float>(sample_rate_);
     if (slot_duty_ > 0.0f &&
-        (dual_ || effective_frequency < 20.0f || effective_frequency > nyquist)) {
+        (partner_count_ > 0 || effective_frequency < 20.0f || effective_frequency > nyquist)) {
       // This is deliberately before phase advance: the first difference must
       // compare the first rendered phase against the phase that preceded it.
       prev_flow_ =
           slot_flow(phase_a_, slot_duty_, slot_return_, slot_gap_, slot_return_width_) - slot_mean_;
-      if (dual_) {
-        prev_flow_b_ =
-            slot_flow(phase_b_, slot_duty_, slot_return_, slot_gap_, slot_return_width_) -
-            slot_mean_;
+      for (int i = 0; i < partner_count_; ++i) {
+        Partner& t = partners_[i];
+        t.prev_flow = slot_flow(t.phase, slot_duty_, slot_return_, slot_gap_, slot_return_width_) -
+                      slot_mean_;
       }
     }
     radiation_history_ready_ = true;
   }
 
-  // Tongue A, and the musette partner (gated): two phase accumulators, averaged.
+  // The in-tune tongue, and the musette partners (gated): phase accumulators, averaged.
   phase_a_ += inc_a_ * ratio;
   phase_a_ -= std::floor(phase_a_);
-  if (dual_) {
-    phase_b_ += inc_b_ * ratio;
-    phase_b_ -= std::floor(phase_b_);
+  for (int i = 0; i < partner_count_; ++i) {
+    Partner& t = partners_[i];
+    t.phase += t.inc * ratio;
+    t.phase -= std::floor(t.phase);
   }
 
   float tongue;
@@ -313,11 +313,11 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
           radiation_norm(radiation_halfangle_, ratio, static_cast<float>(sample_rate_));
       radiation_mix_norm_ = radiation_mix_norm(radiation_, radiation_halfangle_, ratio,
                                                static_cast<float>(sample_rate_));
-      if (dual_) {
-        radiation_norm_b_ =
-            radiation_norm(radiation_halfangle_b_, ratio, static_cast<float>(sample_rate_));
-        radiation_mix_norm_b_ = radiation_mix_norm(radiation_, radiation_halfangle_b_, ratio,
-                                                   static_cast<float>(sample_rate_));
+      for (int i = 0; i < partner_count_; ++i) {
+        Partner& t = partners_[i];
+        t.norm = radiation_norm(t.halfangle, ratio, static_cast<float>(sample_rate_));
+        t.mix_norm =
+            radiation_mix_norm(radiation_, t.halfangle, ratio, static_cast<float>(sample_rate_));
       }
       radiation_ratio_ = ratio;
     }
@@ -325,29 +325,34 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
     // twice per cycle, so the source is a pair of humps rather than a shaped
     // saw. Radiating it is what lifts the second partial over the first.
     float flow = slot_flow(phase_a_, slot_duty_, slot_return_, slot_gap_, slot_return_width_);
-    if (dual_) {
-      const float flow_b =
-          slot_flow(phase_b_, slot_duty_, slot_return_, slot_gap_, slot_return_width_);
+    if (partner_count_ > 0) {
       if (radiation_ > 0.0f) {
         flow -= slot_mean_;
         const float radiated = (flow - prev_flow_) * radiation_norm_;
         prev_flow_ = flow;
-        const float tongue_a = radiation_ >= 1.0f
-                                   ? flow + radiation_ * (radiated - flow)
-                                   : (flow + radiation_ * (radiated - flow)) * radiation_mix_norm_;
-
-        float flow_b_centered = flow_b - slot_mean_;
-        const float radiated_b = (flow_b_centered - prev_flow_b_) * radiation_norm_b_;
-        prev_flow_b_ = flow_b_centered;
-        const float tongue_b =
-            radiation_ >= 1.0f ? flow_b_centered + radiation_ * (radiated_b - flow_b_centered)
-                               : (flow_b_centered + radiation_ * (radiated_b - flow_b_centered)) *
-                                     radiation_mix_norm_b_;
-        tongue = 0.5f * (tongue_a + tongue_b);
+        float sum = radiation_ >= 1.0f
+                        ? flow + radiation_ * (radiated - flow)
+                        : (flow + radiation_ * (radiated - flow)) * radiation_mix_norm_;
+        for (int i = 0; i < partner_count_; ++i) {
+          Partner& t = partners_[i];
+          const float flow_t =
+              slot_flow(t.phase, slot_duty_, slot_return_, slot_gap_, slot_return_width_) -
+              slot_mean_;
+          const float radiated_t = (flow_t - t.prev_flow) * t.norm;
+          t.prev_flow = flow_t;
+          sum += partner_level_ *
+                 (radiation_ >= 1.0f ? flow_t + radiation_ * (radiated_t - flow_t)
+                                     : (flow_t + radiation_ * (radiated_t - flow_t)) * t.mix_norm);
+        }
+        tongue = tongue_mix_ * sum;
       } else {
-        // Preserve the established dual dry path's average-then-subtract
-        // operation exactly when no radiation is requested.
-        flow = 0.5f * (flow + flow_b);
+        // The dry path averages the tongues' flows before taking off the steady mean.
+        float sum = flow;
+        for (int i = 0; i < partner_count_; ++i) {
+          sum += partner_level_ * slot_flow(partners_[i].phase, slot_duty_, slot_return_, slot_gap_,
+                                            slot_return_width_);
+        }
+        flow = tongue_mix_ * sum;
         flow -= slot_mean_;
         tongue = flow;
       }
@@ -364,10 +369,14 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
     const float saw_a = 2.0f * phase_a_ - 1.0f;
     const float gain_a = saw_a >= 0.0f ? (1.0f + asymmetry_) : (1.0f - asymmetry_);
     tongue = std::tanh(drive_ * gain_a * saw_a);
-    if (dual_) {
-      const float saw_b = 2.0f * phase_b_ - 1.0f;
-      const float gain_b = saw_b >= 0.0f ? (1.0f + asymmetry_) : (1.0f - asymmetry_);
-      tongue = 0.5f * (tongue + std::tanh(drive_ * gain_b * saw_b));
+    if (partner_count_ > 0) {
+      float sum = tongue;
+      for (int i = 0; i < partner_count_; ++i) {
+        const float saw_t = 2.0f * partners_[i].phase - 1.0f;
+        const float gain_t = saw_t >= 0.0f ? (1.0f + asymmetry_) : (1.0f - asymmetry_);
+        sum += partner_level_ * std::tanh(drive_ * gain_t * saw_t);
+      }
+      tongue = tongue_mix_ * sum;
     }
   }
 
@@ -390,9 +399,11 @@ void FreeReedVoiceCore::kill() noexcept {
   bellows_.kill();
   body_state_ = 0.0f;
   phase_a_ = 0.0f;
-  phase_b_ = 0.0f;
+  for (Partner& t : partners_) {
+    t.phase = 0.0f;
+    t.prev_flow = 0.0f;
+  }
   prev_flow_ = 0.0f;
-  prev_flow_b_ = 0.0f;
   radiation_history_ready_ = false;
 }
 

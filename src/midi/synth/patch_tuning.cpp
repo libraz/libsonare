@@ -575,6 +575,8 @@ void apply_free_reed(NativeSynthPatch& p, const Fields& f) {
   F(free_reed.breath_pressure);
   F(free_reed.vel_to_breath);
   F(free_reed.detune);
+  I_TYPED(free_reed.musette_flat, 0, 1);
+  F(free_reed.musette_partner_level);
   F(free_reed.attack_ms);
   F(free_reed.release_ms);
   F(free_reed.breath_noise);
@@ -1068,6 +1070,8 @@ constexpr UnitRow kEngineUnits[] = {
     {"free_reed.breath_pressure", Unit::None},
     {"free_reed.vel_to_breath", Unit::None},
     {"free_reed.detune", Unit::None},
+    {"free_reed.musette_flat", Unit::None},
+    {"free_reed.musette_partner_level", Unit::None},
     {"free_reed.attack_ms", Unit::Ms},
     {"free_reed.release_ms", Unit::Ms},
     {"free_reed.breath_noise", Unit::None},
@@ -1443,6 +1447,9 @@ const GateRow kEngineGates[] = {
     {"modal.contact_ms", [](const GateSite&) { return above("contact", 0); }},
     // Plucked string: the mid anchor is a second pole of the quoted loss solve.
     {"plucked_string.mid_decay_s", [](const GateSite&) { return above("hfDecayS", 0); }},
+    // Free reed: the flat tongue joins only a detuned musette.
+    {"free_reed.musette_flat", [](const GateSite&) { return above("detune", 0); }},
+    {"free_reed.musette_partner_level", [](const GateSite&) { return above("detune", 0); }},
     // Free reed: the slot flow replaces the shaped saw.
     {"free_reed.slot_return", [](const GateSite&) { return above("slotDuty", 0); }},
     {"free_reed.slot_gap", [](const GateSite&) { return above("slotDuty", 0); }},

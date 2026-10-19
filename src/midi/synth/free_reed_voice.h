@@ -55,6 +55,13 @@ struct FreeReedPatchParams {
   /// Musette detune in [0,1]: the beating between the two tongues per note
   /// (0 = a single tongue, no beating; higher = a wider wet-tuned accordion).
   float detune = 0.3f;
+  /// Adds a third tongue as far flat as the musette partner is sharp, so the
+  /// tremolo straddles the in-tune tongue instead of sitting above it. Read only
+  /// when detune > 0. false = off -> bit-identical.
+  bool musette_flat = false;
+  /// Level of each musette partner against the in-tune tongue in [0,1]. Read
+  /// only when detune > 0. 1 = equal tongues -> bit-identical.
+  float musette_partner_level = 1.0f;
   /// Onset rise (ms): the bellows takes up before the reed speaks.
   float attack_ms = 20.0f;
   /// Release fall (ms): the bellows releases and the reed stops.
@@ -155,13 +162,27 @@ class FreeReedVoiceCore {
   double sample_rate_ = 48000.0;
   float base_freq_hz_ = 220.0f;
 
-  // Two detuned tongue oscillators (phase accumulators). The second is skipped
-  // when detune == 0 (bit-identical single tongue).
+  /// A musette tongue beside the in-tune one: its oscillator and its own copy of
+  /// the radiation differentiator's normalisation and history.
+  struct Partner {
+    float phase = 0.0f;
+    float inc = 0.0f;
+    float halfangle = 0.0f;
+    float norm = 0.0f;
+    float mix_norm = 1.0f;
+    float prev_flow = 0.0f;
+  };
+  static constexpr int kMaxPartners = 2;
+
+  // The in-tune tongue's oscillator (phase accumulator) and its musette partners,
+  // none when detune == 0 (bit-identical single tongue).
   float phase_a_ = 0.0f;
-  float phase_b_ = 0.0f;
   float inc_a_ = 0.0f;
-  float inc_b_ = 0.0f;
-  bool dual_ = false;
+  Partner partners_[kMaxPartners];
+  int partner_count_ = 0;
+  // Each partner's level against the in-tune tongue, and the mix that averages them.
+  float partner_level_ = 1.0f;
+  float tongue_mix_ = 1.0f;
 
   // Tongue nonlinearity shaping (asymmetry from reed_stiffness).
   float asymmetry_ = 0.0f;
@@ -195,14 +216,10 @@ class FreeReedVoiceCore {
   // fundamental, not only at the note's base pitch.  Keep the half-angle and
   // last ratio so an unchanged bend stays on the exact start() path.
   float radiation_halfangle_ = 0.0f;
-  float radiation_halfangle_b_ = 0.0f;
   float radiation_ratio_ = 1.0f;
   float radiation_norm_ = 0.0f;
-  float radiation_norm_b_ = 0.0f;
   float radiation_mix_norm_ = 1.0f;
-  float radiation_mix_norm_b_ = 1.0f;
   float prev_flow_ = 0.0f;
-  float prev_flow_b_ = 0.0f;
   bool radiation_history_ready_ = false;
 
   // Body lowpass (reed-plate / cavity radiation): a one-pole roll-off.
