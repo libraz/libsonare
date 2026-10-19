@@ -440,6 +440,12 @@ BiquadCoeffs vicanek_low_shelf(float w0, float gain_db) {
   return stabilized(coeffs);
 }
 
+std::complex<float> biquad_response(const BiquadCoeffs& coeffs, float omega) {
+  const std::complex<float> z1 = std::polar(1.0f, -omega);
+  const std::complex<float> z2 = z1 * z1;
+  return (coeffs.b0 + coeffs.b1 * z1 + coeffs.b2 * z2) / (1.0f + coeffs.a1 * z1 + coeffs.a2 * z2);
+}
+
 float biquad_magnitude(const BiquadCoeffs& coeffs, float omega) {
   return magnitude_at(coeffs, omega);
 }

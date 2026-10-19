@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 
 #include "util/constants.h"
 
@@ -111,6 +112,9 @@ BiquadCoeffs first_order_low_shelf(float w0, float gain_db);
 /// @param w0 Normalized angular corner (2*pi*fc/fs), the half-gain point.
 /// @param gain_db Gain above the corner; below it the shelf is unity.
 BiquadCoeffs first_order_high_shelf(float w0, float gain_db);
+
+/// @brief Evaluate H(e^jw) for normalized biquad coefficients.
+std::complex<float> biquad_response(const BiquadCoeffs& coeffs, float omega);
 
 /// @brief Evaluate |H(e^jw)| for normalized biquad coefficients.
 float biquad_magnitude(const BiquadCoeffs& coeffs, float omega);

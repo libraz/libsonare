@@ -195,13 +195,6 @@ SONARE_TUNABLE(kLip2Mult, 2.0f);
 SONARE_TUNABLE(kLip2Q, 7.0f);
 SONARE_TUNABLE(kLip2Couple, 1.5f);
 
-/// The response of @p c at @p omega radians per sample.
-std::complex<float> biquad_response(const rt::BiquadCoeffs& c, float omega) noexcept {
-  const std::complex<float> z1 = std::polar(1.0f, -omega);
-  const std::complex<float> z2 = z1 * z1;
-  return (c.b0 + c.b1 * z1 + c.b2 * z2) / (1.0f + c.a1 * z1 + c.a2 * z2);
-}
-
 }  // namespace
 
 void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, uint8_t note,
@@ -744,7 +737,7 @@ void BrassVoiceCore::refresh_radiation_scale(float rad_alpha) noexcept {
   if (rad_alpha <= 0.0f) return;
   const float w0 = kTwoPi * bore_f0_ * rad_ratio_ / lip_srf_;
   if (bell_cutoff_hz_ > 0.0f) {
-    const float gain = std::abs(biquad_response(bell_hp_.c, w0));
+    const float gain = std::abs(rt::biquad_response(bell_hp_.c, w0));
     rad_scale_ =
         kBellRadiationMakeup * std::pow(1.0f / std::max(gain, 1.0e-6f), kBellRadiationNorm);
     return;
@@ -784,7 +777,8 @@ void BrassVoiceCore::retune_loop_comp() noexcept {
     bell_lp_.set(rt::rbj_lowpass(w_c, sonare::constants::kButterworthQ));
     bell_hp_.set(rt::rbj_highpass(w_c, sonare::constants::kButterworthQ));
     bell_hp_dry_.set(bell_hp_.c);
-    tau_lp = -std::arg(biquad_response(bell_lp_.c, comp_omega_)) / std::max(comp_omega_, 1.0e-6f);
+    tau_lp =
+        -std::arg(rt::biquad_response(bell_lp_.c, comp_omega_)) / std::max(comp_omega_, 1.0e-6f);
   } else {
     tau_lp = onepole_group_delay_samples(1.0f - lp_alpha_, comp_omega_);
   }
