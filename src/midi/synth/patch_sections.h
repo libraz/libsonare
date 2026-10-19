@@ -346,6 +346,7 @@ constexpr FlutePatchParams blank_flute() noexcept {
   z.jet_drive = false;
   z.jet_offset = 0.0f;
   z.lattice_cutoff_hz = 0.0f;
+  z.jet_centring_per_octave = 0.0f;
   z.onset_breath_overshoot_db = 0.0f;
   z.onset_breath_settle_ms = 0.0f;
   z.onset_breath_overshoot_vel_db = 0.0f;

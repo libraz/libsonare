@@ -558,6 +558,45 @@ TEST_CASE("flute tone-hole lattice is off by default (bit-identical)", "[midi][s
   REQUIRE(render_patch(zeroed, 84, 100, 16384) == base);
 }
 
+TEST_CASE("flute jet centring is off by default (bit-identical)", "[midi][synth][flute]") {
+  const std::vector<float> base = render_patch(flute_base_patch(), 84, 100, 16384);
+  NativeSynthPatch zeroed = flute_base_patch();
+  zeroed.flute.jet_centring_per_octave = 0.0f;
+  REQUIRE(render_patch(zeroed, 84, 100, 16384) == base);
+}
+
+TEST_CASE("flute jet centring takes the even harmonics off the overblown registers",
+          "[midi][synth][flute]") {
+  // The first register spans the octave over the home note, so C4 keeps its offset to the sample;
+  // 1.2 per octave above it leaves C6 with a centred jet on both paths and its octave falls. The
+  // cubic path's fundamental moves a few cents with it, since the octave it loses was feeding f0
+  // back through the cubic; that is the operating point, not a tuning error to bound here. The
+  // held level stays, since a centred split's steeper slope is taken back out of the drive.
+  const int n = static_cast<int>(0.8 * kRate);
+  const auto measure = [&](const NativeSynthPatch& patch, uint8_t note, double* level_db) {
+    const std::vector<float> tone = render_patch(patch, note, 100, n);
+    REQUIRE(speaks_at(tone, note));
+    const double f = fft_fundamental(tone, static_cast<size_t>(0.5 * kRate), note_hz(note));
+    *level_db = held_db(tone);
+    return harmonic_db(tone, f, 2);
+  };
+  for (int path = 0; path < 2; ++path) {
+    const NativeSynthPatch off = path == 0 ? flute_base_patch() : jet_drive_patch();
+    NativeSynthPatch on = off;
+    on.flute.jet_centring_per_octave = 1.2f;
+    REQUIRE(render_patch(on, 60, 100, n) == render_patch(off, 60, 100, n));
+    double level_off = 0.0;
+    double level_on = 0.0;
+    const double h2_off = measure(off, 84, &level_off);
+    const double h2_on = measure(on, 84, &level_on);
+    INFO("path " << path << " C6 h2/h1 " << h2_off << " -> " << h2_on << " dB, held " << level_off
+                 << " -> " << level_on << " dBFS");
+    // The cubic test patch's octave falls 6 dB, the jet-drive one's tens of dB.
+    CHECK(h2_on < h2_off - 4.0);
+    CHECK(std::fabs(level_on - level_off) < 3.0);
+  }
+}
+
 TEST_CASE("flute tone-hole lattice cutoff withdraws the bore from the partials above it",
           "[midi][synth][flute]") {
   // One corner for every note. C6's twelfth (3140 Hz) sits above an 1800 Hz lattice and loses the

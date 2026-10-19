@@ -161,6 +161,11 @@ struct FlutePatchParams {
   /// A Butterworth section on the returning pressure; 0 = off.
   float lattice_cutoff_hz = 0.0f;
 
+  /// Share of the jet's rest offset taken off per octave above the first register,
+  /// floored at centred: overblown registers are blown on the labium's line, so their
+  /// even harmonics fall away (Fletcher 1975). 0 = off.
+  float jet_centring_per_octave = 0.0f;
+
   /// Tongued-onset breath overshoot (dB of mouth pressure) at velocity 127: how
   /// far the mouth pressure stands above its held level as the tongue releases
   /// it, before it settles. The radiated overshoot is the jet's response to
@@ -318,6 +323,9 @@ class FluteVoiceCore {
   float even_gain_ = 0.0f;
   float even_state_ = 0.0f;
   float even_hp_alpha_ = 0.0f;
+  // Register fade of the jet's offset in [0,1], 1 when off; the pump reads it live.
+  float even_fade_ = 1.0f;
+  float jet_asym_ = 0.0f;
 
   // Breath contour: a one-pole ramp of the mouth pressure toward the target level
   // (1 while blowing, 0 once released). breath_target_ is the steady mouth
@@ -386,8 +394,9 @@ class FluteVoiceCore {
 
   // Jet-drive source (jet_drive; skipped entirely when off).
   bool jet_drive_ = false;
-  // y0/b, the flow split's offset in jet half-widths.
+  // y0/b, the flow split's offset in jet half-widths, and the source gain holding its rest slope.
   float jet_offset_ = 0.0f;
+  float jet_drive_gain_ = 1.0f;
   // Jet speed at the patch's own breath, over its full-breath value: the speed the
   // jet delay is normalised to.
   float jet_speed_ref_ = 1.0f;

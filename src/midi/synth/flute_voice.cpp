@@ -118,11 +118,11 @@ SONARE_TUNABLE(kJetDriveLevelTiltDb, 0.0f);
 
 /// The jet function: the S-shaped saturating transfer of the air jet deflecting
 /// across the labium (Fabre-Hirschberg lumped model / STK JetTable), with an
-/// offset asymmetry (kJetAsym) that seeds the even harmonics. The odd cubic's
-/// small-signal slope is inverting near zero (the oscillator drive); the clamp
-/// bounds the limit cycle.
-float jet_table(float x) noexcept {
-  const float y = x * (x * x - 1.0f) + kJetAsym * x * x;
+/// offset asymmetry @p asym (kJetAsym at the home register) that seeds the even
+/// harmonics. The odd cubic's small-signal slope is inverting near zero (the
+/// oscillator drive); the clamp bounds the limit cycle.
+float jet_table(float x, float asym) noexcept {
+  const float y = x * (x * x - 1.0f) + asym * x * x;
   return y < -1.0f ? -1.0f : (y > 1.0f ? 1.0f : y);
 }
 
@@ -212,6 +212,13 @@ LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, 
   // In-loop DC blocker pole (on the jet output).
   dc_r_ = 1.0f - static_cast<float>(kTwoPi * kDcCornerHz / sr);
 
+  // Register centring: above the first register the jet's offset falls per octave to centred.
+  const float centring = std::clamp(params.jet_centring_per_octave, 0.0f, 4.0f);
+  even_fade_ = centring > 0.0f
+                   ? std::clamp(1.0f - centring * std::log2(f0 / (2.0f * kPeakRefHz)), 0.0f, 1.0f)
+                   : 1.0f;
+  jet_asym_ = kJetAsym * even_fade_;
+
   // Even-harmonic pump (the octave-dominant open-pipe colour).
   even_gain_ = kEvenPumpGain;
   even_state_ = 0.0f;
@@ -222,7 +229,14 @@ LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, 
   // the jet delay W/(kappa Uj), taken against the patch's own breath, is jet_ratio period
   // sqrt(B_ref/B).
   jet_drive_ = params.jet_drive;
-  jet_offset_ = std::clamp(params.jet_offset, 0.0f, 2.0f);
+  const float jet_offset_rest = std::clamp(params.jet_offset, 0.0f, 2.0f);
+  jet_offset_ = jet_offset_rest * even_fade_;
+  jet_drive_gain_ = kJetDriveGain;
+  if (even_fade_ < 1.0f) {
+    const float t_rest = std::tanh(jet_offset_rest);
+    const float t = std::tanh(jet_offset_);
+    jet_drive_gain_ *= (1.0f - t_rest * t_rest) / (1.0f - t * t);
+  }
   jet_speed_ref_ =
       std::sqrt(std::max(std::clamp(params.breath_pressure, 0.0f, 1.0f), kJetBreathFloor));
   jet_drive_norm_ = 1.0f / std::max(2.0f * std::sin(kPi * f0 / srf), 1.0e-6f);
@@ -437,10 +451,10 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
     // f0.
     jet_eta_ = jet_eta_leak_ * jet_eta_ + pd_j / jet_drive_norm_;
     const float flow = std::tanh(jet_eta_ - jet_offset_);
-    jet_out = kJetDriveGain * jet_speed * jet_drive_norm_ * (flow - jet_flow_z1_);
+    jet_out = jet_drive_gain_ * jet_speed * jet_drive_norm_ * (flow - jet_flow_z1_);
     jet_flow_z1_ = flow;
   } else {
-    jet_out = jet_table(pd_j);
+    jet_out = jet_table(pd_j, jet_asym_);
   }
 
   // DC-block the jet output, then drive the bore: jet flow plus the bore end
@@ -465,7 +479,10 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
     // the direct end reflection is contractive (< 1), so bounding the pump too
     // keeps the whole loop BIBO-stable even at maximum drive (bright, undamped, high
     // reflection, high breath) — the pump is a colour, not an energy source.
-    float pump = even_gain_ * (rect - even_state_);
+    // Only the rectifier's even image (|x|/2) fades; its x/2 is loop gain the tuning rests on.
+    float pump = even_fade_ < 1.0f
+                     ? even_gain_ * (0.5f * temp + even_fade_ * (rect - 0.5f * temp - even_state_))
+                     : even_gain_ * (rect - even_state_);
     pump = pump < -1.5f ? -1.5f : (pump > 1.5f ? 1.5f : pump);
     into_bore = WindBore::injection(into_bore, pump, gate);
   }

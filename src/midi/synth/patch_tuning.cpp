@@ -481,6 +481,7 @@ void apply_flute(NativeSynthPatch& p, const Fields& f) {
   I_TYPED(flute.jet_drive, 0, 1);
   F(flute.jet_offset);
   F(flute.lattice_cutoff_hz);
+  F(flute.jet_centring_per_octave);
   F(flute.onset_breath_overshoot_db);
   F(flute.onset_breath_settle_ms);
   F(flute.onset_breath_overshoot_vel_db);
@@ -994,6 +995,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"flute.jet_drive", Unit::None},
     {"flute.jet_offset", Unit::None},
     {"flute.lattice_cutoff_hz", Unit::Hz},
+    {"flute.jet_centring_per_octave", Unit::None},
     {"flute.onset_breath_overshoot_db", Unit::Db},
     {"flute.onset_breath_settle_ms", Unit::Ms},
     {"flute.onset_breath_overshoot_vel_db", Unit::Db},
