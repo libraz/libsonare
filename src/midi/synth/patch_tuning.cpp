@@ -583,6 +583,7 @@ void apply_free_reed(NativeSynthPatch& p, const Fields& f) {
   F(free_reed.slot_duty);
   F(free_reed.slot_return);
   F(free_reed.slot_gap);
+  F(free_reed.slot_swing);
   F(free_reed.radiation);
   F(free_reed.onset_breath_overshoot_db);
   F(free_reed.onset_breath_settle_ms);
@@ -1078,6 +1079,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"free_reed.slot_duty", Unit::None},
     {"free_reed.slot_return", Unit::None},
     {"free_reed.slot_gap", Unit::None},
+    {"free_reed.slot_swing", Unit::None},
     {"free_reed.radiation", Unit::None},
     {"free_reed.onset_breath_overshoot_db", Unit::Db},
     {"free_reed.onset_breath_settle_ms", Unit::Ms},
@@ -1453,6 +1455,7 @@ const GateRow kEngineGates[] = {
     // Free reed: the slot flow replaces the shaped saw.
     {"free_reed.slot_return", [](const GateSite&) { return above("slotDuty", 0); }},
     {"free_reed.slot_gap", [](const GateSite&) { return above("slotDuty", 0); }},
+    {"free_reed.slot_swing", [](const GateSite&) { return above("slotDuty", 0); }},
     {"free_reed.radiation", [](const GateSite&) { return above("slotDuty", 0); }},
     // Harpsichord: each choir's fields reach it only once it is drawn.
     {"harpsichord.pluck_8b", [](const GateSite&) { return is("eightB", true); }},

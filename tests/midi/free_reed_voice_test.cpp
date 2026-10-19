@@ -2,8 +2,9 @@
 /// @brief Free-reed slot flow (midi/synth/free_reed_voice): the shipped saw
 ///        shaper stays reachable and bit-identical, the slot flow lifts the
 ///        second partial over the first where the saw cannot, its duty places
-///        the null the measured references carry, it leaves no steady flow
-///        under the note, and it stays bounded across the keyboard. The onset
+///        the null the measured references carry, its swing darkens with the
+///        register where a fixed shape cannot, it leaves no steady flow under
+///        the note, and it stays bounded across the keyboard. The onset
 ///        bellows overshoot is the identity at 0 dB and yields to a streamed bellows.
 
 #include "midi/synth/free_reed_voice.h"
@@ -162,6 +163,7 @@ TEST_CASE("the free reed's slot flow is off by default", "[midi][synth][free_ree
   gated.free_reed.slot_duty = 0.0f;
   gated.free_reed.slot_return = 1.4f;
   gated.free_reed.slot_gap = 0.47f;
+  gated.free_reed.slot_swing = 3.0f;
   gated.free_reed.radiation = 0.0f;
   REQUIRE(render_patch(plain, 60, 100, 24000) == render_patch(gated, 60, 100, 24000));
 }
@@ -222,6 +224,47 @@ TEST_CASE("the free reed's slot duty places the null", "[midi][synth][free_reed]
     return best;
   };
   REQUIRE(deepest(narrow_ps) > deepest(wide_ps));
+}
+
+TEST_CASE("the free reed's slot swing darkens with the register where the hump pair cannot",
+          "[midi][synth][free_reed]") {
+  NativeSynthPatch humps = free_reed_patch();
+  humps.free_reed.slot_duty = 0.35f;
+  humps.free_reed.slot_return = 0.59f;
+  humps.free_reed.slot_gap = 0.04f;
+  humps.free_reed.radiation = 1.0f;
+  NativeSynthPatch swing = humps;
+  swing.free_reed.slot_swing = 2.0f;
+
+  // h2-h6 against h1, in dB, over the held note.
+  const auto stack_db = [](const NativeSynthPatch& patch, uint8_t note) {
+    const double f0 = note_hz(note);
+    const std::vector<double> ps = power_spectrum(render_patch(patch, note, 100, 24000), 8000);
+    double sum = 0.0;
+    for (int k = 2; k <= 6; ++k) {
+      sum += 10.0 * std::log10(harmonic_power(ps, f0, k) / harmonic_power(ps, f0, 1) + 1e-30);
+    }
+    return sum / 5.0;
+  };
+  const auto ratio = [](const NativeSynthPatch& patch, uint8_t note, int k, int j) {
+    const double f0 = note_hz(note);
+    const std::vector<double> ps = power_spectrum(render_patch(patch, note, 100, 24000), 8000);
+    return harmonic_power(ps, f0, k) / harmonic_power(ps, f0, j);
+  };
+
+  // A fixed flow shape gives every note the same ladder, so with the body filter
+  // open the hump pair's stack barely moves between F3 and B5; the swing's falls
+  // by more than 10 dB as the tongue stops saturating the slot.
+  const double humps_tilt = stack_db(humps, 53) - stack_db(humps, 83);
+  const double swing_tilt = stack_db(swing, 53) - stack_db(swing, 83);
+  REQUIRE(humps_tilt < 5.0);
+  REQUIRE(swing_tilt > 10.0);
+
+  // The saturated bass flow is odd-dominant (the measured accordion's h3 and h5
+  // sit over h2 and h4); the hump pair puts the even partials on top.
+  REQUIRE(ratio(swing, 53, 3, 2) > 1.0);
+  REQUIRE(ratio(swing, 53, 5, 4) > 1.0);
+  REQUIRE(ratio(humps, 53, 3, 2) < 1.0);
 }
 
 TEST_CASE("the free reed's slot flow leaves no steady flow under the note",

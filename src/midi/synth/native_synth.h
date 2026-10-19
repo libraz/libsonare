@@ -1987,6 +1987,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.slot_return, 0.4f), 0.0f, 1.5f);
   p.free_reed.slot_gap =
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.slot_gap, 0.14f), 0.02f, 0.5f);
+  p.free_reed.slot_swing =
+      std::clamp(patch_clamp_detail::sanitize(p.free_reed.slot_swing, 0.0f), 0.0f, 16.0f);
   p.free_reed.radiation =
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.radiation, 1.0f), 0.0f, 1.0f);
   p.free_reed.onset_breath_overshoot_db = std::clamp(

@@ -13,6 +13,7 @@ namespace sonare::midi::synth {
 
 namespace {
 
+using sonare::constants::kA4Hz;
 using sonare::constants::kTwoPi;
 
 // Musette detune span (cents) between the two tongues: detune 0 collapses to a
@@ -56,6 +57,15 @@ SONARE_TUNABLE(kOutputSpan, 0.5f);
 SONARE_TUNABLE(kSlotReturnWidth, 0.75f);
 SONARE_TUNABLE(kSlotMakeup, 0.55f);
 
+// Slot swing (gated), in plate thicknesses: the tongue's rest height over the
+// plate, the lift past which the slot's own area caps the flow, and the share the
+// far side passes. Set on the accordion reference's odd-over-even bass ladder.
+SONARE_TUNABLE(kSwingRestOffset, 0.3f);
+SONARE_TUNABLE(kSwingSaturation, 1.0f);
+SONARE_TUNABLE(kSwingReturnFlow, 0.3f);
+// Period steps for the swing flow's mean, taken once per note.
+constexpr int kSwingMeanSteps = 256;
+
 // Live-control glide (ms) toward a moved axis, matching the other
 // continuously-excited engines.
 SONARE_TUNABLE(kControlSmoothMs, 8.0f);
@@ -80,6 +90,22 @@ float flow_hump(float phase, float centre, float width) noexcept {
 float slot_flow(float phase, float duty, float return_amount, float gap,
                 float return_width) noexcept {
   return flow_hump(phase, 0.0f, duty) + return_amount * flow_hump(phase, gap, return_width);
+}
+
+/// The gap a tongue swinging @p swing plate thicknesses opens at @p phase: linear
+/// in the lift, capped by the slot, choked inside the plate, partly open beyond it.
+float swing_flow(float phase, float swing) noexcept {
+  const float lift = swing * std::sin(static_cast<float>(kTwoPi) * phase) + kSwingRestOffset;
+  return std::clamp(lift, 0.0f, kSwingSaturation) +
+         kSwingReturnFlow * std::clamp(-lift - 1.0f, 0.0f, kSwingSaturation);
+}
+
+float swing_mean(float swing) noexcept {
+  float sum = 0.0f;
+  for (int i = 0; i < kSwingMeanSteps; ++i) {
+    sum += swing_flow((static_cast<float>(i) + 0.5f) / static_cast<float>(kSwingMeanSteps), swing);
+  }
+  return sum / static_cast<float>(kSwingMeanSteps);
 }
 
 float effective_radiation_halfangle(float halfangle, float ratio, float sample_rate) noexcept {
@@ -169,6 +195,10 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   // radiates nothing. Subtracted in closed form: a quartic bump integrates to
   // 8/15 of its width, so the pair's mean is exact and needs no tracker.
   slot_mean_ = (8.0f / 15.0f) * (slot_duty_ + slot_return_ * slot_return_width_);
+  // The swing is the patch's at A4 scaled 1/f0: tip amplitude follows tongue
+  // length squared over thickness, which is what sets the pitch.
+  swing_ = params.slot_swing > 0.0f ? params.slot_swing * kA4Hz / base_freq_hz_ : 0.0f;
+  if (swing_ > 0.0f) slot_mean_ = swing_mean(swing_);
   // A first difference is the monopole's +6 dB/octave, and it is 2*sin(pi*f0/sr)
   // at the fundamental — small, and note-dependent. Normalising it away leaves
   // the tilt without the level or the register slope that come with it.
@@ -283,12 +313,10 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
         (partner_count_ > 0 || effective_frequency < 20.0f || effective_frequency > nyquist)) {
       // This is deliberately before phase advance: the first difference must
       // compare the first rendered phase against the phase that preceded it.
-      prev_flow_ =
-          slot_flow(phase_a_, slot_duty_, slot_return_, slot_gap_, slot_return_width_) - slot_mean_;
+      prev_flow_ = slot_flow_at(phase_a_) - slot_mean_;
       for (int i = 0; i < partner_count_; ++i) {
         Partner& t = partners_[i];
-        t.prev_flow = slot_flow(t.phase, slot_duty_, slot_return_, slot_gap_, slot_return_width_) -
-                      slot_mean_;
+        t.prev_flow = slot_flow_at(t.phase) - slot_mean_;
       }
     }
     radiation_history_ready_ = true;
@@ -324,7 +352,7 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
     // Slot flow (gated): the tongue swings through the slot and lets air past
     // twice per cycle, so the source is a pair of humps rather than a shaped
     // saw. Radiating it is what lifts the second partial over the first.
-    float flow = slot_flow(phase_a_, slot_duty_, slot_return_, slot_gap_, slot_return_width_);
+    float flow = slot_flow_at(phase_a_);
     if (partner_count_ > 0) {
       if (radiation_ > 0.0f) {
         flow -= slot_mean_;
@@ -335,9 +363,7 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
                         : (flow + radiation_ * (radiated - flow)) * radiation_mix_norm_;
         for (int i = 0; i < partner_count_; ++i) {
           Partner& t = partners_[i];
-          const float flow_t =
-              slot_flow(t.phase, slot_duty_, slot_return_, slot_gap_, slot_return_width_) -
-              slot_mean_;
+          const float flow_t = slot_flow_at(t.phase) - slot_mean_;
           const float radiated_t = (flow_t - t.prev_flow) * t.norm;
           t.prev_flow = flow_t;
           sum += partner_level_ *
@@ -349,8 +375,7 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
         // The dry path averages the tongues' flows before taking off the steady mean.
         float sum = flow;
         for (int i = 0; i < partner_count_; ++i) {
-          sum += partner_level_ * slot_flow(partners_[i].phase, slot_duty_, slot_return_, slot_gap_,
-                                            slot_return_width_);
+          sum += partner_level_ * slot_flow_at(partners_[i].phase);
         }
         flow = tongue_mix_ * sum;
         flow -= slot_mean_;
@@ -391,6 +416,11 @@ float FreeReedVoiceCore::render(float pitch_ratio) noexcept {
   body_state_ += body_alpha_ * (tongue - body_state_);
 
   return body_state_ * bellows_.level * output_scale_;
+}
+
+float FreeReedVoiceCore::slot_flow_at(float phase) const noexcept {
+  return swing_ > 0.0f ? swing_flow(phase, swing_)
+                       : slot_flow(phase, slot_duty_, slot_return_, slot_gap_, slot_return_width_);
 }
 
 void FreeReedVoiceCore::release() noexcept { bellows_.release(); }

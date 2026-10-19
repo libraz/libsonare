@@ -83,6 +83,10 @@ struct FreeReedPatchParams {
   /// Where the return pass falls inside the period (only when slot_duty > 0).
   /// Sets how much even-harmonic content the pair of humps carries.
   float slot_gap = 0.14f;
+  /// Tongue swing at A4 in plate thicknesses (only when slot_duty > 0), scaled 1/f0:
+  /// the slot passes the gap the tongue opens, saturated and odd-rich in the bass,
+  /// near-sinusoidal in the treble. 0 keeps the hump pair.
+  float slot_swing = 0.0f;
   /// How much of a free monopole the reed plate is (only when slot_duty > 0):
   /// 0 radiates the flow itself, 1 its time derivative, the +6 dB/octave tilt a
   /// small source radiates with. Normalised at the fundamental from 20 Hz to
@@ -158,6 +162,9 @@ class FreeReedVoiceCore {
   void advance_excitation() noexcept;
   /// Re-derives drive_, output_scale_ and body_alpha_ from the live axes.
   void apply_excitation() noexcept;
+  /// The slot's flow at @p phase (cycles): the swinging tongue's gap when
+  /// slot_swing is set, else the hump pair.
+  float slot_flow_at(float phase) const noexcept;
 
   double sample_rate_ = 48000.0;
   float base_freq_hz_ = 220.0f;
@@ -211,6 +218,8 @@ class FreeReedVoiceCore {
   float slot_return_width_ = 0.0f;
   float slot_gap_ = 0.0f;
   float slot_mean_ = 0.0f;
+  // The tongue's swing at this note in plate thicknesses; 0 keeps the hump pair.
+  float swing_ = 0.0f;
   float radiation_ = 0.0f;
   // The differentiator's gain is normalised at the current sounding
   // fundamental, not only at the note's base pitch.  Keep the half-angle and
