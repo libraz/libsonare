@@ -399,6 +399,8 @@ void apply_bowed_string(NativeSynthPatch& p, const Fields& f) {
   F(bowed_string.bow_accel_ms);
   F(bowed_string.corpus_scale);
   F(bowed_string.corpus_tilt_hz);
+  I_TYPED(bowed_string.corpus_series, static_cast<int>(BowedCorpus::kNone),
+          static_cast<int>(BowedCorpus::kContrabass));
   F(bowed_string.string_loss_harmonic);
   F(bowed_string.string_loss_per_octave);
 }
@@ -927,6 +929,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"bowed_string.bow_accel_ms", Unit::Ms},
     {"bowed_string.corpus_scale", Unit::Ratio},
     {"bowed_string.corpus_tilt_hz", Unit::Hz},
+    {"bowed_string.corpus_series", Unit::None},
     {"bowed_string.string_loss_harmonic", Unit::None},
     {"bowed_string.string_loss_per_octave", Unit::None},
     {"reed.conical", Unit::None},
@@ -1426,6 +1429,8 @@ const GateRow kEngineGates[] = {
     {"bowed_string.corpus_scale",
      [](const GateSite&) { return wrapper_is("body", "violin") & wrapper_above("bodyMix", 0); }},
     {"bowed_string.corpus_tilt_hz",
+     [](const GateSite&) { return wrapper_is("body", "violin") & wrapper_above("bodyMix", 0); }},
+    {"bowed_string.corpus_series",
      [](const GateSite&) { return wrapper_is("body", "violin") & wrapper_above("bodyMix", 0); }},
     {"bowed_string.string_loss_per_octave",
      [](const GateSite&) { return above("stringLossHarmonic", 0); }},

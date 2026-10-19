@@ -424,15 +424,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   random_value = seq.bipolar_at(103);
 
   // Body/formant resonance + seeded stereo scatter (realism polish).
-  // corpus_scale/corpus_tilt_hz live in the bowed_string engine block (never
-  // on the C ABI), so a patch using BodyType::kViolin without being the
-  // bowed-string engine itself (pizzicato, the bowed pad) must not inherit
-  // them: those patches' bowed_string section is blanked to zero by
-  // strip_unvoiced_sections(), and 0 is not the identity for corpus_scale.
-  const bool bowed_corpus = p.mode == SynthEngineMode::kBowedString;
-  body.start(p.body, sample_rate, base_freq_hz, p.body_mix,
-             bowed_corpus ? p.bowed_string.corpus_scale : 1.0f,
-             bowed_corpus ? p.bowed_string.corpus_tilt_hz : 0.0f);
+  start_body(p, sample_rate, base_freq_hz);
   pan_scatter = seq.bipolar_at(104);
   pan_spread_units = pan_scatter_units(p.stereo_spread, pan_scatter);
   // A keymap zone places its sample, which is a constant for the voice's life
@@ -837,6 +829,25 @@ void NativeSynthVoice::retune(uint8_t new_note, uint8_t voiced_note, float per_n
   }
 }
 
+void NativeSynthVoice::start_body(const NativeSynthPatch& p, double sample_rate,
+                                  float note_hz) noexcept {
+  // corpus_scale/corpus_tilt_hz live in the bowed_string engine block (never
+  // on the C ABI), so a patch using BodyType::kViolin without being the
+  // bowed-string engine itself (pizzicato, the bowed pad) must not inherit
+  // them: those patches' bowed_string section is blanked to zero by
+  // strip_unvoiced_sections(), and 0 is not the identity for corpus_scale.
+  const bool bowed_corpus = p.mode == SynthEngineMode::kBowedString;
+  if (bowed_corpus && p.body != BodyType::kNone &&
+      p.bowed_string.corpus_series != BowedCorpus::kNone) {
+    body.start_series(p.bowed_string.corpus_series, sample_rate, note_hz, p.body_mix,
+                      p.bowed_string.corpus_scale, p.bowed_string.corpus_tilt_hz);
+    return;
+  }
+  body.start(p.body, sample_rate, note_hz, p.body_mix,
+             bowed_corpus ? p.bowed_string.corpus_scale : 1.0f,
+             bowed_corpus ? p.bowed_string.corpus_tilt_hz : 0.0f);
+}
+
 void NativeSynthVoice::refresh_live(const NativeSynthPatch& p, double sample_rate,
                                     uint64_t mask) noexcept {
   using Id = NativeSynthParamId;
@@ -906,11 +917,7 @@ void NativeSynthVoice::refresh_live(const NativeSynthPatch& p, double sample_rat
       body_fade_in = want;
       begin_law_fade(body_fade, sample_rate);
     } else if (want) {
-      const bool bowed_corpus = p.mode == SynthEngineMode::kBowedString;
-      const float current_freq_hz = voiced_freq_hz();
-      body.start(p.body, sample_rate, current_freq_hz, p.body_mix,
-                 bowed_corpus ? p.bowed_string.corpus_scale : 1.0f,
-                 bowed_corpus ? p.bowed_string.corpus_tilt_hz : 0.0f);
+      start_body(p, sample_rate, voiced_freq_hz());
       // A body type with no modes has nothing to fade in, as on a new note.
       if (body.active()) {
         body_fade_in = true;

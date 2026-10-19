@@ -3,6 +3,7 @@
 ///        floor and the scaling of its mode bank. Cases carry [bowed][body] and
 ///        are invoked as an AND, because [body] alone reaches other tests.
 
+#include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -10,8 +11,14 @@
 #include <vector>
 
 #include "midi/bowed_string_probe.h"
+#include "midi/midi_event.h"
 #include "midi/synth/body_resonator.h"
+#include "midi/synth/gm_fallback_map.h"
+#include "midi/synth/native_synth.h"
+#include "midi/ump.h"
+#include "support/audio_fixtures.h"
 #include "support/golden_hash.h"
+#include "support/midi_render.h"
 #include "util/constants.h"
 
 using sonare::midi::synth::BodyResonator;
@@ -21,6 +28,17 @@ using sonare::test::fnv1a_quantized;
 namespace {
 
 constexpr double kSr = 48000.0;
+
+/// Left channel of @p patch holding @p note at @p velocity for @p num_samples.
+std::vector<float> render_patch_left(const sonare::midi::synth::NativeSynthPatch& patch,
+                                     uint8_t note, uint8_t velocity, int num_samples) {
+  sonare::midi::synth::NativeSynthConfig cfg;
+  cfg.patch = patch;
+  sonare::midi::synth::NativeSynth synth(cfg);
+  synth.prepare(sonare::test::kRate, 256);
+  synth.on_event(0, sonare::test::event(sonare::midi::make_midi1_note_on(0, 0, note, velocity)));
+  return sonare::test::render_left(synth, num_samples);
+}
 
 /// Steady-state RMS of @p body's response to a @p freq_hz sine, discarding the
 /// leading half of @p periods as the one-pole's own settling time.
@@ -135,4 +153,103 @@ TEST_CASE("bowed string corpus fields at default reproduce the control hashes",
   for (std::size_t i = 0; i < excitation.size(); ++i)
     shell_out[i] = shell_body.process(excitation[i]);
   CHECK(fnv1a_quantized(shell_out) == 0x72eced39118ca79aull);
+}
+
+namespace {
+
+using sonare::midi::synth::BowedCorpus;
+
+/// RMS of a 1/k harmonic series at @p f0_hz through @p body, over the steady half of the run.
+double series_rms_through(BodyResonator& body, double f0_hz, int harmonics, double sr,
+                          bool through) {
+  const int total = static_cast<int>(2.0 * sr);
+  double acc = 0.0;
+  int count = 0;
+  for (int i = 0; i < total; ++i) {
+    double x = 0.0;
+    for (int k = 1; k <= harmonics; ++k)
+      x += std::sin(sonare::constants::kTwoPiD * f0_hz * k * static_cast<double>(i) / sr) / k;
+    const float y = through ? body.process(static_cast<float>(x)) : static_cast<float>(x);
+    if (i >= total / 2) {
+      acc += static_cast<double>(y) * static_cast<double>(y);
+      ++count;
+    }
+  }
+  return std::sqrt(acc / static_cast<double>(count));
+}
+
+}  // namespace
+
+TEST_CASE("the series body rolls off fourth-order below the air mode and peaks in its hump",
+          "[midi][synth][bowed][body]") {
+  // Cello bank, A0 at 100 Hz: an octave below the corner costs at least a Butterworth
+  // fourth-order's 24 dB less the skirt the modes add, and the hump sits over the corner.
+  BodyResonator cello;
+  cello.start_series(BowedCorpus::kCello, kSr, 65.4f, 1.0f, 1.0f, 0.0f);
+  REQUIRE(cello.active());
+  const double at_50 = steady_rms_at(cello, 50.0, kSr, 200);
+  cello.reset();
+  cello.start_series(BowedCorpus::kCello, kSr, 65.4f, 1.0f, 1.0f, 0.0f);
+  const double at_25 = steady_rms_at(cello, 25.0, kSr, 200);
+  REQUIRE(at_25 > 0.0);
+  const double octave_db = 20.0 * std::log10(at_50 / at_25);
+  INFO("50 Hz over 25 Hz: " << octave_db << " dB per octave under the air mode");
+  CHECK(octave_db > 18.0);
+
+  cello.reset();
+  cello.start_series(BowedCorpus::kCello, kSr, 65.4f, 1.0f, 1.0f, 0.0f);
+  const double peak = peak_hz_in_band(cello, 30.0, 2000.0);
+  INFO("cello series peak at " << peak << " Hz");
+  CHECK(peak >= 100.0);
+  CHECK(peak <= 330.0);
+}
+
+TEST_CASE("each member's series corpus peaks at its own register", "[midi][synth][bowed][body]") {
+  const BowedCorpus members[] = {BowedCorpus::kContrabass, BowedCorpus::kCello, BowedCorpus::kViola,
+                                 BowedCorpus::kViolin};
+  double last = 0.0;
+  for (const BowedCorpus corpus : members) {
+    BodyResonator body;
+    body.start_series(corpus, kSr, 220.0f, 1.0f, 1.0f, 0.0f);
+    REQUIRE(body.active());
+    const double peak = peak_hz_in_band(body, 30.0, 2000.0);
+    INFO("corpus " << static_cast<int>(corpus) << " peaks at " << peak << " Hz, previous " << last);
+    CHECK(peak > last);
+    last = peak;
+  }
+}
+
+TEST_CASE("the series body holds a harmonic series at its level on every note",
+          "[midi][synth][bowed][body]") {
+  // The stage is levelled per note for a 1/k series, so a note whose fundamental sits under
+  // the air mode and one on the hump come through within a couple of decibels of the dry RMS.
+  for (const double f0 : {65.4, 130.8, 261.6, 523.3}) {
+    BodyResonator body;
+    body.start_series(BowedCorpus::kCello, kSr, static_cast<float>(f0), 1.0f, 1.0f, 3000.0f);
+    const double dry = series_rms_through(body, f0, 16, kSr, false);
+    body.reset();
+    body.start_series(BowedCorpus::kCello, kSr, static_cast<float>(f0), 1.0f, 1.0f, 3000.0f);
+    const double wet = series_rms_through(body, f0, 16, kSr, true);
+    const double delta_db = 20.0 * std::log10(wet / dry);
+    INFO("f0 " << f0 << " Hz: series body changes the RMS by " << delta_db << " dB");
+    CHECK(std::fabs(delta_db) < 2.5);
+  }
+}
+
+TEST_CASE("a bowed patch naming no series corpus renders the parallel bank bit for bit",
+          "[midi][synth][bowed][body]") {
+  // The field defaults to kNone, and the cello's shipped render is the control: the series
+  // stage must not touch it, and naming the cello corpus must move it.
+  using sonare::midi::synth::NativeSynthPatch;
+  const NativeSynthPatch shipped = sonare::midi::synth::gm_fallback_patch(0, 42);
+  REQUIRE(shipped.bowed_string.corpus_series == BowedCorpus::kNone);
+  const std::vector<float> control = render_patch_left(shipped, 48, 100, 24000);
+  NativeSynthPatch named = shipped;
+  named.bowed_string.corpus_series = BowedCorpus::kNone;
+  CHECK(render_patch_left(named, 48, 100, 24000) == control);
+  named.bowed_string.corpus_series = BowedCorpus::kCello;
+  named.body_mix = 1.0f;
+  const std::vector<float> series = render_patch_left(named, 48, 100, 24000);
+  CHECK(series != control);
+  CHECK(std::all_of(series.begin(), series.end(), [](float s) { return std::isfinite(s); }));
 }

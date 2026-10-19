@@ -14,13 +14,21 @@
 ///     trumpet family only.
 ///   - kVocal: open-vowel ("aah") F1..F4 of a mixed choir, note-independent.
 ///
+/// The bowed family can instead run its member's bank in SERIES (start_series): the whole
+/// signal passes a 4th-order roll-off at the air mode, where the plate and f-hole volume
+/// velocities cancel, then the bank's broadband floor plus its modes — a bridge admittance
+/// rather than a resonant halo over a flat dry path — levelled per note so a harmonic series
+/// keeps its RMS through the stage.
+///
 /// RT contract: start()/process() are allocation-free; determinism: fixed
 /// tables, no RNG.
 
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <complex>
 
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 
 namespace sonare::midi::synth {
@@ -33,6 +41,16 @@ enum class BodyType : int {
   kWoodTube = 3,
   kBrassBell = 4,
   kVocal = 5,
+};
+
+/// The violin family's corpora for the series body (bowed_string.corpus_series); kNone keeps the
+/// wrapper's parallel bank.
+enum class BowedCorpus : int {
+  kNone = 0,
+  kViolin = 1,
+  kViola = 2,
+  kCello = 3,
+  kContrabass = 4,
 };
 
 class BodyResonator {
@@ -67,6 +85,7 @@ class BodyResonator {
   void start_specs(const Spec* specs, int count, double sample_rate, float mix,
                    float corpus_tilt_hz = 0.0f) noexcept {
     const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
+    series_ = false;
     mix_ = std::clamp(mix, 0.0f, 1.0f);
     num_modes_ = 0;
     configure_tilt(sr, corpus_tilt_hz);
@@ -93,6 +112,7 @@ class BodyResonator {
   void start(BodyType type, double sample_rate, float note_hz, float mix, float corpus_scale = 1.0f,
              float corpus_tilt_hz = 0.0f) noexcept {
     if (type == BodyType::kNone) {
+      series_ = false;
       mix_ = std::clamp(mix, 0.0f, 1.0f);
       num_modes_ = 0;
       configure_tilt(sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate,
@@ -143,6 +163,29 @@ class BodyResonator {
     start_specs(specs.data(), count, sample_rate, mix, corpus_tilt_hz);
   }
 
+  /// Configures @p corpus as a series bridge admittance for a note at @p note_hz: a 4th-order
+  /// Butterworth highpass at the (scaled) air mode, then the bank's floor and modes, levelled so
+  /// a 1/k harmonic series at @p note_hz keeps its RMS. @p mix blends the result over the dry
+  /// voice; @p corpus_scale and @p corpus_tilt_hz as in start(), the tilt on the floor path.
+  void start_series(BowedCorpus corpus, double sample_rate, float note_hz, float mix,
+                    float corpus_scale, float corpus_tilt_hz) noexcept {
+    const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
+    const Corpus bank = corpus_of(corpus);
+    std::array<Spec, kMaxModes> specs{};
+    const int count = fill_from_modal(specs, bank.modes, bank.count, 1.0f, corpus_scale);
+    start_specs(specs.data(), count, sample_rate, mix, corpus_tilt_hz);
+    if (num_modes_ <= 0) return;
+    series_ = true;
+    floor_gain_ = bank.floor;
+    const float srf = static_cast<float>(sr);
+    const float cancel_hz = std::min(bank.air_hz * corpus_scale, 0.45f * srf);
+    for (size_t k = 0; k < hp_.size(); ++k) {
+      hp_[k].reset();
+      hp_[k].set(rt::rbj_highpass(sonare::constants::kTwoPi * cancel_hz / srf, kButterworthQ4[k]));
+    }
+    series_gain_ = series_level(std::max(note_hz, 1.0f), sr);
+  }
+
   /// Retunes an active note-tracked bank without clearing its resonator state.
   /// This is used by legato voices, where restarting the bank would erase the
   /// body tail and make a carried note sound like a new strike.
@@ -179,8 +222,10 @@ class BodyResonator {
     reset();
   }
 
-  /// One sample through the bank: (tilted) dry floor + mixed body response.
+  /// One sample through the bank: (tilted) dry floor + mixed body response, or the series
+  /// admittance blended over the dry voice.
   float process(float x) noexcept {
+    if (series_) return process_series(x);
     // Real radiativity keeps a broadband floor between the modes, but that
     // floor falls above a few kHz where this dry path was flat. Branch past
     // the filter at the identity (tilt off) rather than run it at alpha = 1:
@@ -213,9 +258,79 @@ class BodyResonator {
     x2_ = 0.0f;
     floor_y_ = 0.0f;
     num_modes_ = 0;
+    for (rt::BiquadState& hp : hp_) hp.reset();
+    series_ = false;
   }
 
  private:
+  /// One sample of the series admittance: highpass, then floor + modes, blended by mix_.
+  float process_series(float x) noexcept {
+    float h = hp_[0].process(x);
+    h = hp_[1].process(h);
+    float floor_x = h;
+    if (tilt_active_) {
+      floor_y_ += tilt_alpha_ * (h - floor_y_);
+      floor_x = floor_y_;
+    }
+    const float bp_in = h - x2_;
+    x2_ = x1_;
+    x1_ = h;
+    float body = 0.0f;
+    for (int k = 0; k < num_modes_; ++k) {
+      Mode& mode = modes_[static_cast<size_t>(k)];
+      const float y = mode.a1 * mode.y1 + mode.a2 * mode.y2 + mode.gain * bp_in;
+      mode.y2 = mode.y1;
+      mode.y1 = y;
+      body += y;
+    }
+    const float wet = series_gain_ * (floor_gain_ * floor_x + body);
+    return x + mix_ * (wet - x);
+  }
+
+  // Section Qs of a 4th-order Butterworth highpass: 1 / (2 cos(pi/8)) and 1 / (2 cos(3 pi/8)).
+  static constexpr std::array<float, 2> kButterworthQ4 = {0.5411961f, 1.3065630f};
+
+  /// |H| of the series stage at angular frequency @p w (radians per sample).
+  double series_magnitude(double w) const noexcept {
+    const std::complex<double> z = std::polar(1.0, -w);
+    const std::complex<double> z2 = z * z;
+    std::complex<double> h = 1.0;
+    for (const rt::BiquadState& bq : hp_)
+      h *= std::complex<double>(rt::biquad_response(bq.c, static_cast<float>(w)));
+    std::complex<double> bank = 0.0;
+    for (int k = 0; k < num_modes_; ++k) {
+      const Mode& m = modes_[static_cast<size_t>(k)];
+      bank += static_cast<double>(m.gain) * (1.0 - z2) /
+              (1.0 - static_cast<double>(m.a1) * z - static_cast<double>(m.a2) * z2);
+    }
+    std::complex<double> floor = static_cast<double>(floor_gain_);
+    if (tilt_active_) {
+      const double alpha = tilt_alpha_;
+      floor *= alpha / (1.0 - (1.0 - alpha) * z);
+    }
+    return std::abs(h * (floor + bank));
+  }
+
+  // Harmonics the level normalisation reads (a 1/k series) and the gain it may reach: a note
+  // whose whole series sits under the air mode is lifted no more than this.
+  static constexpr int kSeriesLevelHarmonics = 32;
+  static constexpr float kSeriesGainMax = 10.0f;
+
+  /// Gain holding the RMS of a 1/k harmonic series at @p f0_hz through the stage at unity.
+  float series_level(float f0_hz, double sample_rate) const noexcept {
+    double weight = 0.0;
+    double power = 0.0;
+    for (int k = 1; k <= kSeriesLevelHarmonics; ++k) {
+      const double hz = static_cast<double>(k) * f0_hz;
+      if (hz >= 0.45 * sample_rate) break;
+      const double wk = 1.0 / (static_cast<double>(k) * k);
+      const double mag = series_magnitude(sonare::constants::kTwoPiD * hz / sample_rate);
+      weight += wk;
+      power += wk * mag * mag;
+    }
+    if (!(power > 0.0) || !(weight > 0.0)) return 1.0f;
+    return std::min(static_cast<float>(std::sqrt(weight / power)), kSeriesGainMax);
+  }
   /// Sets up the dry-floor one-pole from a cutoff in Hz; 0 leaves it inactive
   /// so process() takes the branch that skips it entirely.
   void configure_tilt(double sample_rate, float corpus_tilt_hz) noexcept {
@@ -241,16 +356,46 @@ class BodyResonator {
   /// weights scaled by @p level, centre frequencies by @p scale (a dimension
   /// ratio that can only place A0), Q held so t60 follows the scaled
   /// frequency. Returns the number of Specs written.
-  template <size_t N>
-  static int fill_from_modal(std::array<Spec, kMaxModes>& out, const std::array<ModeQ, N>& bank,
+  static int fill_from_modal(std::array<Spec, kMaxModes>& out, const ModeQ* bank, int bank_count,
                              float level, float scale) noexcept {
-    const int count = static_cast<int>(std::min<size_t>(N, kMaxModes));
+    const int count = std::min(bank_count, kMaxModes);
     for (int k = 0; k < count; ++k) {
       const ModeQ& m = bank[static_cast<size_t>(k)];
       const float freq_hz = m.freq_hz * scale;
       out[static_cast<size_t>(k)] = {freq_hz, q_to_t60(freq_hz, m.q), m.weight * level};
     }
     return count;
+  }
+  template <size_t N>
+  static int fill_from_modal(std::array<Spec, kMaxModes>& out, const std::array<ModeQ, N>& bank,
+                             float level, float scale) noexcept {
+    return fill_from_modal(out, bank.data(), static_cast<int>(N), level, scale);
+  }
+
+  /// One member's series corpus: the air mode (Hz), below which the plate and f-hole cancel,
+  /// the modes that radiate, and the broadband floor between them relative to a unit-weight peak.
+  struct Corpus {
+    float air_hz;
+    const ModeQ* modes;
+    int count;
+    float floor;
+  };
+  static Corpus corpus_of(BowedCorpus corpus) noexcept {
+    switch (corpus) {
+      case BowedCorpus::kViola:
+        return {kViolaBank[0].freq_hz, kViolaBank.data(), static_cast<int>(kViolaBank.size()),
+                kViolaFloor};
+      case BowedCorpus::kCello:
+        return {kCelloAirHz, kCelloBank.data(), static_cast<int>(kCelloBank.size()), kCelloFloor};
+      case BowedCorpus::kContrabass:
+        return {kContrabassBank[0].freq_hz, kContrabassBank.data(),
+                static_cast<int>(kContrabassBank.size()), kContrabassFloor};
+      case BowedCorpus::kViolin:
+      case BowedCorpus::kNone:
+        break;
+    }
+    return {kViolinBank[0].freq_hz, kViolinBank.data(), static_cast<int>(kViolinBank.size()),
+            kViolinFloor};
   }
 
   // Violin corpus from measured mobility/radiativity surveys (Dünnwald,
@@ -275,6 +420,68 @@ class BodyResonator {
   // Broadband normalization holding the richer bank within ~1 dB of the old
   // 4-mode voicing at the same body_mix, so calibrated presets need no change.
   static constexpr float kViolinLevel = 0.42f;
+  // Series floors: the dense-mode region a bank does not resolve. The cello's is measured on
+  // its reference between the hump and the modes; the others are estimates.
+  static constexpr float kViolinFloor = 0.25f;
+  static constexpr float kViolaFloor = 0.25f;
+  static constexpr float kCelloFloor = 0.62f;
+  static constexpr float kContrabassFloor = 0.25f;
+
+  // Viola: the violin corpus at the measured A0 ratio (0.88, its body-length ratio), as an
+  // estimate; no per-mode survey of a viola is used here.
+  static constexpr std::array<ModeQ, 14> kViolaBank = {{
+      {242.0f, 24.0f, 0.90f},   // A0
+      {356.0f, 20.0f, 0.50f},   // CBR
+      {405.0f, 22.0f, 0.85f},   // B1-
+      {484.0f, 22.0f, 1.00f},   // B1+
+      {616.0f, 15.0f, 0.55f},   // wood-mode cluster
+      {766.0f, 14.0f, 0.45f},   //
+      {968.0f, 13.0f, 0.50f},   //
+      {1188.0f, 12.0f, 0.40f},  //
+      {1408.0f, 12.0f, 0.45f},  //
+      {1716.0f, 11.0f, 0.40f},  //
+      {2068.0f, 6.0f, 0.75f},   // bridge hill
+      {2420.0f, 6.0f, 0.55f},   //
+      {2992.0f, 8.0f, 0.28f},   //
+      {3696.0f, 8.0f, 0.16f},   //
+  }};
+  // Cello: air mode, B1-, A1 and B1+ from modal surveys (Bynum & Rossing 1997); CBR, the
+  // cluster and the hill are estimates. The air mode only sets the corner; weights and Qs
+  // are fitted to the reference's radiativity with string loss and vibrato matched first.
+  static constexpr float kCelloAirHz = 100.0f;
+  static constexpr std::array<ModeQ, 15> kCelloBank = {{
+      {125.0f, 10.0f, 0.54f},  // CBR (estimate)
+      {150.0f, 10.0f, 1.00f},  // B1-
+      {180.0f, 10.0f, 0.85f},  // A1 (second air mode)
+      {200.0f, 10.0f, 0.93f},  // B1+
+      {255.0f, 8.0f, 0.94f},   // wood-mode cluster (estimate)
+      {320.0f, 8.0f, 0.68f},   //
+      {400.0f, 8.0f, 0.94f},   //
+      {490.0f, 6.0f, 0.24f},   //
+      {580.0f, 6.0f, 0.29f},   //
+      {710.0f, 6.0f, 0.46f},   //
+      {860.0f, 5.0f, 0.37f},   //
+      {1000.0f, 5.0f, 0.15f},  //
+      {1250.0f, 5.0f, 0.32f},  //
+      {1550.0f, 5.0f, 0.79f},  //
+      {2000.0f, 5.0f, 1.00f},  // bridge hill (estimate)
+  }};
+  // Contrabass: A0 near 60 Hz and the first corpus modes at 100-120 Hz, estimates from the
+  // instrument's scale (no survey checked); above is the violin cluster scaled to that B1+.
+  static constexpr std::array<ModeQ, 12> kContrabassBank = {{
+      {60.0f, 10.0f, 0.90f},   // A0
+      {80.0f, 10.0f, 0.50f},   // CBR (estimate)
+      {100.0f, 10.0f, 0.85f},  // B1-
+      {120.0f, 10.0f, 1.00f},  // B1+
+      {150.0f, 8.0f, 0.55f},   // wood-mode cluster (estimate)
+      {190.0f, 8.0f, 0.45f},   //
+      {240.0f, 8.0f, 0.50f},   //
+      {300.0f, 8.0f, 0.40f},   //
+      {370.0f, 6.0f, 0.45f},   //
+      {450.0f, 6.0f, 0.40f},   //
+      {520.0f, 5.0f, 0.75f},   // bridge hill (estimate)
+      {620.0f, 5.0f, 0.55f},   //
+  }};
 
   struct Mode {
     float a1 = 0.0f;
@@ -306,6 +513,11 @@ class BodyResonator {
   float floor_y_ = 0.0f;
   float tilt_alpha_ = 0.0f;
   bool tilt_active_ = false;
+  // Series admittance (start_series): the air-mode highpass, the floor and the per-note level.
+  std::array<rt::BiquadState, 2> hp_{};
+  bool series_ = false;
+  float floor_gain_ = 0.0f;
+  float series_gain_ = 1.0f;
 };
 
 }  // namespace sonare::midi::synth

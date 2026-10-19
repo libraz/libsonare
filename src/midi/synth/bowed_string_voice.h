@@ -39,6 +39,7 @@
 #include <cstdint>
 
 #include "midi/control_value.h"
+#include "midi/synth/body_resonator.h"
 #include "midi/synth/excitation_axes.h"
 #include "midi/synth/player_trajectory.h"
 #include "midi/synth/string_loop.h"
@@ -214,6 +215,10 @@ struct BowedStringPatchParams {
   /// falls above a few kHz while the parallel dry path is flat. 0 = off -> an
   /// explicit bypass branch, since a unity one-pole is not bit-identical.
   float corpus_tilt_hz = 0.0f;
+  /// Member whose corpus the bridge signal passes in SERIES: a 4th-order roll-off at the air
+  /// mode, then the member's floor and modes, levelled per note. corpus_scale and corpus_tilt_hz
+  /// still apply. kNone keeps the parallel bank above (bit-identical render).
+  BowedCorpus corpus_series = BowedCorpus::kNone;
 
   // --- string loss: a round-trip loss fixed in harmonic index, not in Hz ---
   /// Corner of a one-pole loop loss in harmonics of the note, quoted at A3 (220 Hz, inside every

@@ -604,6 +604,9 @@ struct NativeSynthVoice : VoiceState {
   /// origin has to account for to stay on the sounding pitch.
   void retune(uint8_t new_note, uint8_t voiced_note, float per_note_shift_cents,
               double sample_rate) noexcept;
+  /// Starts the body stage of @p p at @p note_hz: a bowed voice naming a series corpus runs
+  /// its member's admittance in series; every other voice runs the wrapper's parallel bank.
+  void start_body(const NativeSynthPatch& p, double sample_rate, float note_hz) noexcept;
   /// Frequency of the voiced key, which is what a note-tracked body follows.
   float voiced_freq_hz() const noexcept {
     return base_freq_hz * std::exp2(voiced_shift_cents() * (1.0f / constants::kCentsPerOctave));
@@ -1796,6 +1799,10 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.bowed_string.corpus_scale, 1.0f), 0.1f, 4.0f);
   p.bowed_string.corpus_tilt_hz =
       std::clamp(patch_clamp_detail::sanitize(p.bowed_string.corpus_tilt_hz, 0.0f), 0.0f, 20000.0f);
+  if (static_cast<int>(p.bowed_string.corpus_series) < 0 ||
+      static_cast<int>(p.bowed_string.corpus_series) > static_cast<int>(BowedCorpus::kContrabass)) {
+    p.bowed_string.corpus_series = BowedCorpus::kNone;
+  }
   p.bowed_string.string_loss_harmonic = std::clamp(
       patch_clamp_detail::sanitize(p.bowed_string.string_loss_harmonic, 0.0f), 0.0f, 1000.0f);
   p.bowed_string.string_loss_per_octave = std::clamp(
