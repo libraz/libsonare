@@ -179,6 +179,11 @@ struct FlutePatchParams {
   /// to this period peak and the offset's share sets the flow duty. [0, 8], 0 = unbounded.
   float jet_deflection_limit = 0.0f;
 
+  /// Direct radiation of the mouth turbulence (Verge, Hirschberg & Caussé 1997) from the embouchure
+  /// hole, bore-pressure units per unit mouth pressure: it carries the broadband floor under the
+  /// fundamental that the loop's source cannot. [0, 1], 0 = off.
+  float breath_radiation = 0.0f;
+
   /// Tongued-onset breath overshoot (dB of mouth pressure) at velocity 127: how
   /// far the mouth pressure stands above its held level as the tongue releases
   /// it, before it settles. The radiated overshoot is the jet's response to
@@ -439,6 +444,12 @@ class FluteVoiceCore {
   float jet_limit_ = 0.0f;
   float jet_cycle_peak_ = 0.0f;
   float jet_limit_gain_ = 1.0f;
+
+  // Direct breath-noise radiation: its level (bore pressure per unit mouth pressure, rate-
+  // corrected) and the one-pole at kBreathRadiationCornerHz it leaves through. 0 -> skipped.
+  float breath_rad_ = 0.0f;
+  float breath_rad_alpha_ = 0.0f;
+  float breath_rad_state_ = 0.0f;
 
   // Reads the jet line as a triangular average centred on @p delay after writing @p input.
   float jet_window_read(float delay, float input) noexcept;

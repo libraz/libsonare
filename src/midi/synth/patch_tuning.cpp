@@ -489,6 +489,7 @@ void apply_flute(NativeSynthPatch& p, const Fields& f) {
   F(flute.jet_receptivity_window);
   I_TYPED(flute.jet_cycle_mean, 0, 1);
   F(flute.jet_deflection_limit);
+  F(flute.breath_radiation);
   F(flute.onset_breath_overshoot_db);
   F(flute.onset_breath_settle_ms);
   F(flute.onset_breath_overshoot_vel_db);
@@ -1009,6 +1010,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"flute.jet_receptivity_window", Unit::None},
     {"flute.jet_cycle_mean", Unit::None},
     {"flute.jet_deflection_limit", Unit::None},
+    {"flute.breath_radiation", Unit::None},
     {"flute.onset_breath_overshoot_db", Unit::Db},
     {"flute.onset_breath_settle_ms", Unit::Ms},
     {"flute.onset_breath_overshoot_vel_db", Unit::Db},

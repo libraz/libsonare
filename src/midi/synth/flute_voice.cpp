@@ -54,6 +54,10 @@ SONARE_TUNABLE(kControlSmoothMs, 8.0f);
 
 // Jet turbulence depth (a light seeded multiplicative jitter on the breath).
 SONARE_TUNABLE(kBreathNoiseDepth, 0.10f);
+// Corner (Hz) of the one-pole on the directly radiated breath noise: the recording's inter-partial
+// floor is flat to 1 kHz and 5-10 dB down over 2-8 kHz. An estimate of the turbulence pressure
+// spectrum's roll-off, not a measured law.
+SONARE_TUNABLE(kBreathRadiationCornerHz, 2000.0f);
 
 // Onset chiff depth (the "speak" noise burst) and the level of the seeded burst
 // pre-filled into the bore so the jet locks onto an f0 seed promptly.
@@ -100,12 +104,12 @@ SONARE_TUNABLE(kEvenPumpDcHz, 30.0f);
 
 // Jet-drive source gain G: the bore pressure the flow split's time difference
 // injects at the fundamental, per unit jet speed at full breath.
-SONARE_TUNABLE(kJetDriveGain, 3.0f);
+SONARE_TUNABLE(kJetDriveGain, 2.70358f);
 // Leak corner (Hz) of the jet displacement's integral of the acoustic flow.
 SONARE_TUNABLE(kJetDisplacementLeakHz, 10.0f);
 // Share of the jet delay's sqrt(B_ref/B) breath law the player cancels by shortening the jet
 // with the breath (the lips close as the flutist blows harder); 0 = none, 1 = a fixed delay.
-SONARE_TUNABLE(kJetLengthCompensation, 0.0f);
+SONARE_TUNABLE(kJetLengthCompensation, 0.99f);
 // Floor on the reference breath the jet delay is normalised to: one velocity step.
 constexpr float kJetBreathFloor = 1.0f / 127.0f;
 // Strouhal corner f*tau of the jet's receptivity: the deflection follows the returning flow up to
@@ -118,7 +122,7 @@ SONARE_TUNABLE(kJetReceptivityStrouhal, 0.0f);
 SONARE_TUNABLE(kJetReceptivityStrouhalLow, 0.0f);
 // Held level per octave above kPeakRefHz on the jet-drive path (dB): the bore level the source
 // settles at falls 2.6 dB/oct where the reference rises 3; a monopole's radiation is +6. 0 = flat.
-SONARE_TUNABLE(kJetDriveLevelTiltDb, 0.0f);
+SONARE_TUNABLE(kJetDriveLevelTiltDb, 2.77154f);
 // Open-end reflection cap on the jet-drive path: its loop is bounded by the split's saturation and
 // the vortex loss, so the bore may reflect as a real one does; the cubic keeps kReflectMax.
 constexpr float kJetDriveReflectMax = 0.98f;
@@ -321,6 +325,12 @@ LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, 
                                     params.onset_breath_overshoot_vel_db, vel01,
                                     params.onset_breath_settle_ms, sr);
   breath_noise_ = std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathNoiseDepth * noise_gain;
+  // The radiated turbulence passes one one-pole, so its level takes that pole's rate correction.
+  const float rad_corner = std::min(kBreathRadiationCornerHz, 0.45f * srf);
+  breath_rad_alpha_ = 1.0f - std::exp(-kTwoPi * rad_corner / srf);
+  breath_rad_ =
+      std::clamp(params.breath_radiation, 0.0f, 1.0f) * onepole_noise_rate_gain(rad_corner, sr);
+  breath_rad_state_ = 0.0f;
   chiff_level_ = std::clamp(params.chiff, 0.0f, 1.0f) * kChiffDepth * noise_gain;
   chiff_coeff_ = ramp_coeff(params.chiff_ms, sr);
 
@@ -402,8 +412,11 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
     vib_gain = 1.0f + kVibAmp * vib_depth_ * v;
   }
 
+  // One draw is the mouth turbulence: the jet reads it and the embouchure hole radiates it.
+  const float turbulence =
+      breath_noise_ > 0.0f || breath_rad_ > 0.0f ? noise_.bipolar_at(drive_index_) : 0.0f;
   if (breath_noise_ > 0.0f) {
-    float n = noise_.bipolar_at(drive_index_);
+    float n = turbulence;
     // 4b: amplitude-dependent, one-pole-shaped jet turbulence (gated).
     if (jet_turb_ > 0.0f) {
       jet_turb_state_ += jet_turb_alpha_ * (n - jet_turb_state_);
@@ -547,7 +560,14 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
   // The saturated jet holds its own amplitude, but the onset's extra mouth
   // pressure speeds the jet as sqrt(P), and the radiated flow follows the jet speed.
   // The jet-drive source already scales with the jet speed.
-  const float out = output_scale_ * vib_gain * bore_.out;
+  float radiated = bore_.out;
+  // The embouchure hole radiates the mouth pressure's own fluctuation, outside the loop (gated).
+  if (breath_rad_ > 0.0f) {
+    breath_rad_state_ +=
+        breath_rad_alpha_ * (breath_rad_ * steady_breath * turbulence - breath_rad_state_);
+    radiated += breath_rad_state_;
+  }
+  const float out = output_scale_ * vib_gain * radiated;
   return breath_.overshoot > 0.0f && !jet_drive_ ? out * std::sqrt(breath_.overshoot_ratio()) : out;
 }
 
@@ -642,6 +662,7 @@ void FluteVoiceCore::kill() noexcept {
   dc_y1_ = 0.0f;
   chiff_level_ = 0.0f;
   jet_turb_state_ = 0.0f;
+  breath_rad_state_ = 0.0f;
   breath_.releasing = true;
 }
 

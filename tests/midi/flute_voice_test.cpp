@@ -384,8 +384,8 @@ TEST_CASE("a streamed breath holds the flute onset overshoot", "[midi][synth][fl
 }
 
 TEST_CASE("flute control hashes", "[.][midi][synth][flute][golden]") {
-  // The eight GM flute programs and a breath / brightness gesture, rendered with
-  // jet_drive off: the jet-drive field off must leave the engine as it was.
+  // The eight GM flute programs and a breath / brightness gesture; the flute (73) runs the
+  // jet-drive source and the other seven the cubic jet.
   INFO(sonare::test::kGoldenDigestProvenance);
   struct Row {
     uint8_t program;
@@ -394,7 +394,7 @@ TEST_CASE("flute control hashes", "[.][midi][synth][flute][golden]") {
     uint64_t hash;
   };
   static const Row kRows[] = {
-      {72, 84, 100, 0xdc3da02b4d3e1d9bull}, {73, 72, 100, 0x3a5a3e055be6710eull},
+      {72, 84, 100, 0xdc3da02b4d3e1d9bull}, {73, 72, 100, 0x37a18d27b9b0aee0ull},
       {74, 72, 64, 0x010480eb1f7c427dull},  {75, 67, 127, 0xe29548e5b0492a89ull},
       {76, 72, 100, 0x14bf03092c01eeb2ull}, {77, 60, 90, 0x071157f2771744e0ull},
       {78, 79, 110, 0x7be496dbd0f77b43ull}, {79, 72, 80, 0xe17e889d1d3bf5d4ull},
@@ -402,15 +402,15 @@ TEST_CASE("flute control hashes", "[.][midi][synth][flute][golden]") {
   for (const Row& r : kRows) {
     const NativeSynthPatch& patch = gm_fallback_patch(0, r.program);
     REQUIRE(patch.mode == SynthEngineMode::kFlute);
-    REQUIRE(!patch.flute.jet_drive);
+    REQUIRE(patch.flute.jet_drive == (r.program == 73));
     INFO("program " << int(r.program));
     CHECK(sonare::test::fnv1a_quantized(render_patch(patch, r.note, r.velocity, 24000)) == r.hash);
   }
   const NativeSynthPatch& flute = gm_fallback_patch(0, 73);
   CHECK(sonare::test::fnv1a_quantized(render_cc_change(flute, 72, 100, 8000, 16000, 2, 20)) ==
-        0xf8cacd76cc06b9a5ull);
+        0x5de8f72c7da1902full);
   CHECK(sonare::test::fnv1a_quantized(render_cc_change(flute, 72, 100, 8000, 16000, 74, 110)) ==
-        0x1adfcf07f7e620a0ull);
+        0x8801abb08f9deaa0ull);
   CHECK(sonare::test::fnv1a_quantized(render_patch(flute_base_patch(), 60, 100, 24000)) ==
         0x5f90049eacc9ed68ull);
 }
@@ -506,8 +506,9 @@ TEST_CASE("flute jet-drive delay shortens as the breath rises", "[midi][synth][f
   const float soft = held_delay(true, 40);
   const float hard = held_delay(true, 120);
   INFO("jet delay at velocity 40: " << soft << " samples, at 120: " << hard);
-  // Uj ~ sqrt(P), so the delay goes as the inverse root of the breath.
-  CHECK(hard / soft == Catch::Approx(std::sqrt(40.0 / 120.0)).epsilon(0.01));
+  // Uj ~ sqrt(P) puts the delay on the inverse root of the breath; the player cancels 0.99 of it.
+  CHECK(hard < soft);
+  CHECK(hard / soft == Catch::Approx(std::pow(40.0 / 120.0, 0.5 * (1.0 - 0.99))).epsilon(0.001));
 }
 
 TEST_CASE("flute jet offset voices the even harmonics", "[midi][synth][flute]") {
@@ -711,6 +712,75 @@ TEST_CASE("flute deflection limit hands the octave to the offset's share of the 
   const Ladder loud = ladder(held, 60, 127);
   INFO("C4 h2/h1 " << soft.h2 << " dB at v32, " << loud.h2 << " dB at v127");
   CHECK(std::fabs(soft.h2 - loud.h2) < 3.0);
+}
+
+TEST_CASE("flute breath radiation is off by default (bit-identical)", "[midi][synth][flute]") {
+  // No radiation share means no draw beyond the jet's own, on the cubic path and the jet-drive one.
+  NativeSynthPatch cubic = flute_base_patch();
+  cubic.flute.breath_radiation = 0.0f;
+  REQUIRE(render_patch(cubic, 72, 100, 16384) == render_patch(flute_base_patch(), 72, 100, 16384));
+  NativeSynthPatch jet = jet_drive_patch();
+  jet.flute.breath_radiation = 0.0f;
+  REQUIRE(render_patch(jet, 72, 100, 16384) == render_patch(jet_drive_patch(), 72, 100, 16384));
+}
+
+namespace {
+
+/// Mean power per bin re the fundamental band (dB) over @p lo..@p hi Hz of @p ps, keeping the bins
+/// more than 0.3 f0 from every harmonic: the floor between the partials.
+double gap_floor_db(const std::vector<double>& ps, int fft, double f0, double lo, double hi) {
+  const double bin_hz = kRate / static_cast<double>(fft);
+  double acc = 0.0;
+  double h1 = 0.0;
+  int bins = 0;
+  for (size_t b = 1; b < ps.size(); ++b) {
+    const double f = static_cast<double>(b) * bin_hz;
+    if (f >= 0.8 * f0 && f < 1.25 * f0) h1 += ps[b];
+    if (f < lo || f >= hi) continue;
+    const double k = f / f0;
+    if (std::fabs(k - std::round(k)) <= 0.3) continue;
+    acc += ps[b];
+    ++bins;
+  }
+  return 10.0 * std::log10(std::max(1.0e-30, acc / std::max(1, bins)) / std::max(1.0e-30, h1));
+}
+
+}  // namespace
+
+TEST_CASE("flute breath radiation lays a flat floor under the fundamental that rolls off above",
+          "[midi][synth][flute]") {
+  // The jet-drive source is the time difference of a per-period zero-mean deflection, so the
+  // turbulence it reads reaches the bore with nothing under the fundamental. The radiated share
+  // puts the floor there at the level of the inter-partial gaps, its corner keeps the 2-8 kHz
+  // gaps under them, and because it never enters the loop the pitch and the ladder do not move.
+  const int n = static_cast<int>(0.8 * kRate);
+  const int fft = 16384;
+  const size_t from = static_cast<size_t>(0.3 * kRate);
+  NativeSynthPatch dry = jet_drive_patch();
+  dry.flute.jet_cycle_mean = true;
+  NativeSynthPatch wet = dry;
+  wet.flute.breath_radiation = 0.1f;
+  for (uint8_t note : {uint8_t{60}, uint8_t{72}}) {
+    const std::vector<float> a = render_patch(dry, note, 100, n);
+    const std::vector<float> b = render_patch(wet, note, 100, n);
+    REQUIRE(speaks_at(a, note));
+    REQUIRE(speaks_at(b, note));
+    const double fa = fft_fundamental(a, from, note_hz(note));
+    const double fb = fft_fundamental(b, from, note_hz(note));
+    const std::vector<double> pa = power_spectrum(a, from, fft);
+    const std::vector<double> pb = power_spectrum(b, from, fft);
+    const double under_dry = gap_floor_db(pa, fft, fa, 40.0, 0.7 * fa);
+    const double under = gap_floor_db(pb, fft, fb, 40.0, 0.7 * fb);
+    const double mid = gap_floor_db(pb, fft, fb, 125.0, 1000.0);
+    const double high = gap_floor_db(pb, fft, fb, 2000.0, 8000.0);
+    INFO("note " << int(note) << " under f0 " << under_dry << " -> " << under << " dB, gaps 125-1k "
+                 << mid << " dB, gaps 2-8k " << high << " dB");
+    CHECK(under > under_dry + 20.0);
+    CHECK(std::fabs(under - mid) < 4.0);
+    CHECK(high < mid - 4.0);
+    CHECK(std::fabs(1200.0 * std::log2(fb / fa)) < 1.0);
+    CHECK(std::fabs(harmonic_db(b, fb, 2) - harmonic_db(a, fa, 2)) < 1.0);
+  }
 }
 
 TEST_CASE("flute jet centring takes the even harmonics off the overblown registers",
