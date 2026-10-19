@@ -214,6 +214,15 @@ struct BowedStringPatchParams {
   /// falls above a few kHz while the parallel dry path is flat. 0 = off -> an
   /// explicit bypass branch, since a unity one-pole is not bit-identical.
   float corpus_tilt_hz = 0.0f;
+
+  // --- string loss: a round-trip loss fixed in harmonic index, not in Hz ---
+  /// Corner of a one-pole loop loss in harmonics of the note, quoted at A3 (220 Hz, inside every
+  /// member's compass): a string's internal damping costs a partial per round trip in proportion
+  /// to its harmonic index, where the bridge pole above costs it by frequency. 0 = off.
+  float string_loss_harmonic = 0.0f;
+  /// Octaves the corner rises per octave of fundamental: 0 is one string's law at every note;
+  /// above 0 the lower notes, on heavier wound strings, lose more. Read only with the corner.
+  float string_loss_per_octave = 0.0f;
 };
 
 /// One sample of the hyperbolic friction junction: the velocity the bow injects
@@ -401,6 +410,12 @@ class BowedStringVoiceCore {
   float lp_alpha_ = 1.0f;
   float lp_state_ = 0.0f;
   float loss_gain_ = 0.95f;
+
+  // String loss (off unless params.string_loss_harmonic > 0): a second one-pole on the bridge
+  // reflection whose corner is this note's harmonic index, built at the running rate.
+  bool string_loss_on_ = false;
+  float string_loss_alpha_ = 1.0f;
+  float string_loss_state_ = 0.0f;
 
   // Bow position across the playing range (bridge .. fingerboard).
   static constexpr float kBowPositionSpan_ = 0.23f;

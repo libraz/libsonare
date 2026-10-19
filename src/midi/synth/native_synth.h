@@ -1796,6 +1796,10 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.bowed_string.corpus_scale, 1.0f), 0.1f, 4.0f);
   p.bowed_string.corpus_tilt_hz =
       std::clamp(patch_clamp_detail::sanitize(p.bowed_string.corpus_tilt_hz, 0.0f), 0.0f, 20000.0f);
+  p.bowed_string.string_loss_harmonic = std::clamp(
+      patch_clamp_detail::sanitize(p.bowed_string.string_loss_harmonic, 0.0f), 0.0f, 1000.0f);
+  p.bowed_string.string_loss_per_octave = std::clamp(
+      patch_clamp_detail::sanitize(p.bowed_string.string_loss_per_octave, 0.0f), 0.0f, 4.0f);
   p.reed.breath_pressure =
       std::clamp(patch_clamp_detail::sanitize(p.reed.breath_pressure, 0.6f), 0.0f, 1.0f);
   p.reed.vel_to_breath =

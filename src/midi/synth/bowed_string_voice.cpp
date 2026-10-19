@@ -129,6 +129,9 @@ constexpr float kRegisters = 2.0f;
 // touched while the mean friction injection is.
 constexpr float kPolDriveBlockHz = 0.5f * kBowedMinFundamentalHz;
 
+// The note string_loss_harmonic is quoted at: A3.
+constexpr float kStringLossAnchorHz = 220.0f;
+
 }  // namespace
 
 void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sample_rate,
@@ -238,6 +241,22 @@ LoopBudget BowedStringVoiceCore::configure(const BowedStringPatchParams& params,
   lp_alpha_ = 1.0f - a;
   loss_gain_ = std::clamp(0.99f - 0.09f * std::clamp(params.damping, 0.0f, 1.0f), 0.80f, 0.999f);
 
+  // String loss: the corner sits at this note's harmonic index, so it is a frequency of the note
+  // and its pole is built here at the running rate; above the band it is a bypass.
+  string_loss_state_ = 0.0f;
+  string_loss_on_ = false;
+  float a_string = 0.0f;
+  if (params.string_loss_harmonic > 0.0f) {
+    const float corner_hz =
+        params.string_loss_harmonic * f0 *
+        std::pow(f0 / kStringLossAnchorHz, std::max(params.string_loss_per_octave, 0.0f));
+    if (corner_hz < 0.45f * static_cast<float>(sr)) {
+      string_loss_on_ = true;
+      a_string = std::exp(-kTwoPi * corner_hz / static_cast<float>(sr));
+      string_loss_alpha_ = 1.0f - a_string;
+    }
+  }
+
   // Tuning compensation: the two feedback registers (neck_out_/bridge_out_ are
   // consumed one sample after they are produced -> ~2 samples of loop delay not
   // in the lines) plus the bridge lowpass's exact phase delay at the
@@ -245,6 +264,7 @@ LoopBudget BowedStringVoiceCore::configure(const BowedStringPatchParams& params,
   const float omega = kTwoPi / std::max(1.0f, base_period_);
   const float tau_lp = onepole_group_delay_samples(a, omega);
   comp_ = kRegisters + tau_lp;
+  if (string_loss_on_) comp_ += onepole_group_delay_samples(a_string, omega);
 
   // Each line spans the whole slab rather than this note's period. The line
   // length is what bounds a downward bend, and the clamp that enforces it
@@ -431,7 +451,12 @@ float BowedStringVoiceCore::render_internal(float pitch_ratio) noexcept {
   // Reflections from the previous delay-line outputs. Bridge: one-pole loss
   // filter then sign inversion; nut: ideal sign inversion.
   lp_state_ += lp_alpha_ * (bridge_out_ - lp_state_);
-  const float bridge_refl = -loss_gain_ * lp_state_;
+  float bridge_lp = lp_state_;
+  if (string_loss_on_) {
+    string_loss_state_ += string_loss_alpha_ * (lp_state_ - string_loss_state_);
+    bridge_lp = string_loss_state_;
+  }
+  const float bridge_refl = -loss_gain_ * bridge_lp;
   const float nut_refl = -neck_out_;
 
   // String velocity at the bow point = sum of the incoming velocity waves, plus
@@ -594,6 +619,7 @@ void BowedStringVoiceCore::kill() noexcept {
   decimator_.reset();
   bow_.kill();
   lp_state_ = 0.0f;
+  string_loss_state_ = 0.0f;
   neck_out_ = 0.0f;
   bridge_out_ = 0.0f;
   bristle_z_ = 0.0f;

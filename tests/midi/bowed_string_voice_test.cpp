@@ -1138,3 +1138,62 @@ TEST_CASE("the section stage is bounded at its widest, slowest setting at either
     REQUIRE(peak(tone) <= std::sqrt(6.0f) * peak(solo_tone) * 1.001f);
   }
 }
+
+namespace {
+
+/// Power of @p spectrum between @p lo_hz and @p hi_hz at a 48 kHz, @p fft-point grid.
+double band_power_hz(const std::vector<double>& spectrum, int fft, double lo_hz, double hi_hz) {
+  const double bin_hz = 48000.0 / static_cast<double>(fft);
+  const auto lo = static_cast<size_t>(std::max(0.0, lo_hz / bin_hz));
+  const auto hi = std::min(spectrum.size(), static_cast<size_t>(hi_hz / bin_hz) + 1);
+  double acc = 0.0;
+  for (size_t i = lo; i < hi; ++i) acc += spectrum[i];
+  return acc;
+}
+
+/// dB of the power above @p split_hz against the power below it, over the trailing window.
+double tilt_db(const std::vector<float>& tone, double split_hz) {
+  const int fft = sonare::test::bowed::probe_fft_size(tone.size());
+  const std::vector<double> ps = sonare::test::bowed::probe_power_spectrum(
+      tone, sonare::test::bowed::probe_window_start(tone.size(), fft), fft);
+  return 10.0 * std::log10(band_power_hz(ps, fft, split_hz, 12000.0) /
+                           std::max(band_power_hz(ps, fft, 30.0, split_hz), 1e-30));
+}
+
+}  // namespace
+
+TEST_CASE("string loss is a round-trip loss fixed in harmonic index", "[midi][synth][bowed]") {
+  // The corner sits at the same harmonic of every note, so C2 and C4 both lose their upper
+  // partials; a per-octave slope then takes more from the low note and less from the high.
+  // The split is read between harmonics: the cello bows near 1/6, which nulls every 6th.
+  BowedStringPatchParams params = sonare::midi::synth::gm_fallback_patch(0, 42).bowed_string;
+  constexpr size_t kFrames = 72000;
+  constexpr double kAnchorHz = 220.0;
+  constexpr double kSplitHarmonic = 9.5;
+  for (const uint8_t note : {uint8_t{36}, uint8_t{60}}) {
+    const double f0 = sonare::midi::synth::note_to_hz(note);
+    const double split = kSplitHarmonic * f0;
+    const std::vector<float> off = render_bowed_core_struck(params, note, 100, kFrames);
+    BowedStringPatchParams lossy = params;
+    lossy.string_loss_harmonic = 6.0f;
+    const std::vector<float> dark = render_bowed_core_struck(lossy, note, 100, kFrames);
+    REQUIRE(dark != off);
+    REQUIRE(std::all_of(dark.begin(), dark.end(), [](float s) { return std::isfinite(s); }));
+    const double drop = tilt_db(off, split) - tilt_db(dark, split);
+    INFO("note " << int(note) << " loss above harmonic " << kSplitHarmonic << ": " << drop
+                 << " dB");
+    CHECK(drop > 3.0);
+    CHECK(drop < 30.0);
+
+    BowedStringPatchParams sloped = lossy;
+    sloped.string_loss_per_octave = 1.0f;
+    const std::vector<float> sloped_tone = render_bowed_core_struck(sloped, note, 100, kFrames);
+    const double sloped_drop = tilt_db(off, split) - tilt_db(sloped_tone, split);
+    INFO("with a slope of one octave per octave: " << sloped_drop << " dB");
+    if (f0 < kAnchorHz) {
+      CHECK(sloped_drop > drop + 2.0);
+    } else {
+      CHECK(sloped_drop < drop - 1.0);
+    }
+  }
+}

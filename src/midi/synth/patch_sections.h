@@ -261,6 +261,8 @@ constexpr BowedStringPatchParams blank_bowed_string() noexcept {
   z.bow_accel_ms = 0.0f;
   z.corpus_scale = 0.0f;
   z.corpus_tilt_hz = 0.0f;
+  z.string_loss_harmonic = 0.0f;
+  z.string_loss_per_octave = 0.0f;
   return z;
 }
 

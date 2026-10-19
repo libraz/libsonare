@@ -399,6 +399,8 @@ void apply_bowed_string(NativeSynthPatch& p, const Fields& f) {
   F(bowed_string.bow_accel_ms);
   F(bowed_string.corpus_scale);
   F(bowed_string.corpus_tilt_hz);
+  F(bowed_string.string_loss_harmonic);
+  F(bowed_string.string_loss_per_octave);
 }
 
 void apply_reed(NativeSynthPatch& p, const Fields& f) {
@@ -925,6 +927,8 @@ constexpr UnitRow kEngineUnits[] = {
     {"bowed_string.bow_accel_ms", Unit::Ms},
     {"bowed_string.corpus_scale", Unit::Ratio},
     {"bowed_string.corpus_tilt_hz", Unit::Hz},
+    {"bowed_string.string_loss_harmonic", Unit::None},
+    {"bowed_string.string_loss_per_octave", Unit::None},
     {"reed.conical", Unit::None},
     {"reed.dynamic_reed", Unit::None},
     {"reed.breath_pressure", Unit::None},
@@ -1423,6 +1427,8 @@ const GateRow kEngineGates[] = {
      [](const GateSite&) { return wrapper_is("body", "violin") & wrapper_above("bodyMix", 0); }},
     {"bowed_string.corpus_tilt_hz",
      [](const GateSite&) { return wrapper_is("body", "violin") & wrapper_above("bodyMix", 0); }},
+    {"bowed_string.string_loss_per_octave",
+     [](const GateSite&) { return above("stringLossHarmonic", 0); }},
     // Reed: the mass-spring valve, the growth cone and the beating-reed channel.
     {"reed.reed_resonance", [](const GateSite&) { return is("dynamicReed", true); }},
     {"reed.cone_growth", [](const GateSite&) { return is("conical", true); }},
