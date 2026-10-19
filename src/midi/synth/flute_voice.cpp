@@ -252,6 +252,8 @@ LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, 
   jet_lp_comp_ = 0.0f;
   if (jet_drive_ && kJetReceptivityStrouhalLow > 0.0f) {
     jet_eta_leak_ = std::exp(-kTwoPi * kJetReceptivityStrouhalLow / (jet_ratio_ * bore_.period));
+  }
+  if (jet_drive_) {
     jet_lp_comp_ -=
         (kPi - omega0) / (2.0f * omega0) - onepole_group_delay_samples(jet_eta_leak_, omega0);
   }
