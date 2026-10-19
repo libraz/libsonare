@@ -111,11 +111,13 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.cello.amp_env.attack_ms = 6.71239f;
   o.cello.amp_env.release_ms = 388.584f;
   o.cello.amp_env.sustain = 0.398099f;
-  o.cello.bowed_string.attack_ms = 346.911f;
+  // The reference's slow sample attack arrives at 300-450 ms; at 347 the model came
+  // in 117 ms early, at 580 within 50.
+  o.cello.bowed_string.attack_ms = 580.0f;
   o.cello.bowed_string.bow_force = 0.374109f;
   o.cello.bowed_string.bow_position = 0.167379f;
   o.cello.bowed_string.bow_speed = 0.937158f;
-  o.cello.bowed_string.brightness = 0.161039f;
+  o.cello.bowed_string.brightness = 0.14f;
   o.cello.bowed_string.damping = 0.355529f;
   o.cello.bowed_string.release_ms = 66.9834f;
   o.cello.bowed_string.stribeck = 0.310161f;
