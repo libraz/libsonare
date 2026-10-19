@@ -903,5 +903,22 @@
         "note": "the model's held-note decay runs 1.80 to 2.38 times the reference's on every row of the grid (median 2.13), which empties the damper column entirely: the note is 45 dB down before note-off on 35 of 35 rows while the reference resolves a release on 33. Raising ks.decay_s from 4.5 to 15.0 takes the held-decay error from a median 4.04 dB/s over 28 scored rows to 0.63 over all 35, and the damper column from no rows at all to 30 of 35 at a median -45.0 ms against a 95-135 ms reference. Cost: doubling moves from p90-only to failing all three (median 9.77 against its 8.62 bound). vel_range fails identically before and after and is not this setting's doing. Not adopted - the doubling trade is a decision, and the value itself is a first bracket rather than a fit."
       }
     ]
+  },
+  "p073-flute": {
+    "variants": [
+      {
+        "name": "jet-drive-limited",
+        "title": {
+          "en": "Jet drive with the deflection held",
+          "ja": "振れ幅を抑えたジェット駆動"
+        },
+        "desc": {
+          "en": "A stronger octave under C5 and a hollower top register; listen for whether the low notes read as a flute rather than a square-ish pipe, and for any slow wobble.",
+          "ja": "C5より下でオクターブ成分が強まり、高音域は中身が抜けた音になります。低音がフルートらしく聞こえるか、角張った管の音になっていないか、ゆっくりした揺れがないかを聴いてください。"
+        },
+        "overrides": "flute_voice.kJetDriveGain=2.70358,concert_flute.flute.jet_offset=0.787258,concert_flute.flute.jet_deflection_limit=2.82715,concert_flute.flute.vortex_loss=0.0325243,concert_flute.flute.end_reflection=0.890181,concert_flute.flute.jet_receptivity_window=0.353174,concert_flute.flute.lattice_cutoff_hz=2420.66,concert_flute.flute.jet_centring_per_octave=0.9,concert_flute.flute.brightness=0.372594,flute_voice.kJetDriveLevelTiltDb=2.77154,concert_flute.flute.breath_noise=0.00590309,concert_flute.cutoff_hz=5961.8,concert_flute.flute.damping=0.153756,flute_voice.kJetLengthCompensation=0.99,concert_flute.flute.jet_ratio=0.503,concert_flute.flute.jet_drive=1.00003,concert_flute.flute.jet_cycle_mean=1.00005,concert_flute.flute.release_ms=184.428,concert_flute.flute.onset_breath_overshoot_db=3.549",
+        "note": "CMA-ES winner (300 evals, corpus grid) on the jet-drive branch with jet_deflection_limit 2.83 / jet_offset 0.79, hand-trimmed: centring 0.9, jet_ratio 0.503, length compensation 0.99. Gate: 2 lines (body median/abs_median 24.9 dB, the model's floor sits 25 dB under the recording's) against the shipped cubic's 3 (damper); every other dimension clears. C4 h2/h1 -10.2 dB against the reference's -2.6; C6 evens fall as a block. Not adopted: body is a line the shipped voice passes and no exclusion is recorded for the capture."
+      }
+    ]
   }
 }

@@ -63,6 +63,10 @@ SONARE_TUNABLE(kBorePrefill, 0.05f);
 // In-loop DC-blocker corner (~10 Hz): the jet's rectified DC does not radiate and
 // would charge the bore, so the jet output is DC-blocked before it enters.
 SONARE_TUNABLE(kDcCornerHz, 10.0f);
+// Corner (Hz) of the blocker on the returning pressure where the jet branch has none. Its lead is
+// compensated at f0 (1.4 c left on C4 from the harmonics' skew); below 4 Hz the mean the mouth
+// loss makes of a limited jet's wave relaxes slowly enough to hunt with the limit (66 % AM).
+SONARE_TUNABLE(kBoreDcCornerHz, 5.0f);
 
 // Vibrato depth mapping: full depth is a gentle ~30 cents of pitch and a touch
 // of level (a solo flute's own vibrato).
@@ -213,8 +217,11 @@ LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, 
   snap_excitation();
   excite_.remember_base();
 
-  // In-loop DC blocker pole (on the jet output).
-  dc_r_ = 1.0f - static_cast<float>(kTwoPi * kDcCornerHz / sr);
+  // In-loop DC blocker pole: on the jet output, or on the returning pressure where the jet branch
+  // holds no blocker and the mouth loss would otherwise charge the bore from an asymmetric wave.
+  const float dc_corner_hz =
+      params.jet_drive && params.jet_cycle_mean ? kBoreDcCornerHz : kDcCornerHz;
+  dc_r_ = 1.0f - static_cast<float>(kTwoPi * dc_corner_hz / sr);
 
   // Register centring: above the first register the jet's offset falls per octave to centred.
   const float centring = std::clamp(params.jet_centring_per_octave, 0.0f, 4.0f);
@@ -264,6 +271,10 @@ LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, 
   jet_cycle_count_ = 0;
   jet_cycle_acc_ = 0.0f;
   if (jet_cycle_ > 0) jet_eta_leak_ = 1.0f;
+  // The limit reads the period peak the cycle mean already walks, so it needs that branch.
+  jet_limit_ = jet_cycle_ > 0 ? std::clamp(params.jet_deflection_limit, 0.0f, 8.0f) : 0.0f;
+  jet_limit_gain_ = 1.0f;
+  jet_cycle_peak_ = 0.0f;
   if (jet_drive_) {
     jet_lp_comp_ -=
         (kPi - omega0) / (2.0f * omega0) - onepole_group_delay_samples(jet_eta_leak_, omega0);
@@ -431,6 +442,13 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (vortex_loss_ > 0.0f) {
     temp = 2.0f * temp / (1.0f + std::sqrt(1.0f + 4.0f * vortex_loss_ * std::fabs(temp)));
   }
+  // The cycle-mean path blocks DC here, so the mouth loss's mean neither recirculates nor ramps η.
+  if (jet_cycle_ > 0) {
+    const float blocked = temp - dc_x1_ + dc_r_ * dc_y1_;
+    dc_x1_ = temp;
+    dc_y1_ = blocked;
+    temp = blocked;
+  }
 
   // Jet drive: the pressure difference across the flue drives the jet, which
   // convects (jet delay) and deflects across the labium (the cubic jet table).
@@ -474,13 +492,17 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
     jet_eta_ = jet_eta_leak_ * jet_eta_ + pd_j / jet_drive_norm_;
     if (jet_cycle_ > 0) {
       jet_cycle_acc_ += jet_eta_;
+      jet_cycle_peak_ = std::max(jet_cycle_peak_, std::fabs(jet_eta_));
       if (++jet_cycle_count_ >= jet_cycle_) {
         jet_eta_ -= jet_cycle_acc_ / static_cast<float>(jet_cycle_);
+        // The swing the labium sees is held at the limit: the last period's peak sets the gain.
+        if (jet_limit_ > 0.0f) jet_limit_gain_ = std::min(1.0f, jet_limit_ / jet_cycle_peak_);
         jet_cycle_acc_ = 0.0f;
+        jet_cycle_peak_ = 0.0f;
         jet_cycle_count_ = 0;
       }
     }
-    const float flow = std::tanh(jet_eta_ - jet_offset_);
+    const float flow = std::tanh(jet_limit_gain_ * jet_eta_ - jet_offset_);
     jet_out = jet_drive_gain_ * jet_speed * jet_drive_norm_ * (flow - jet_flow_z1_);
     jet_flow_z1_ = flow;
   } else {
@@ -488,7 +510,7 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
   }
 
   // DC-block the jet output, then drive the bore: jet flow plus the bore end
-  // reflection. The zero-mean jet-drive branch carries no DC and keeps no blocker.
+  // reflection. The zero-mean jet-drive branch carries no DC; its blocker sits on the return.
   float jet_dc = jet_out;
   if (jet_cycle_ == 0) {
     jet_dc = jet_out - dc_x1_ + dc_r_ * dc_y1_;
@@ -590,8 +612,7 @@ void FluteVoiceCore::retune_loop_comp() noexcept {
   const float omega = kTwoPi * f0_ / srf_;
   const float sw = std::sin(omega);
   const float cw = std::cos(omega);
-  const float phase_dc =
-      jet_cycle_ > 0 ? 0.0f : std::atan2(sw, 1.0f - cw) - std::atan2(dc_r_ * sw, 1.0f - dc_r_ * cw);
+  const float phase_dc = std::atan2(sw, 1.0f - cw) - std::atan2(dc_r_ * sw, 1.0f - dc_r_ * cw);
   bore_.comp = 1.0f + onepole_group_delay_samples(a, omega) - phase_dc / std::max(omega, 1.0e-6f) +
                lattice_comp_;
   comp_alpha_ = lp_alpha_;

@@ -652,6 +652,67 @@ TEST_CASE("flute jet-drive bore reflects above the cubic path's cap", "[midi][sy
   CHECK(held_db(over) > held_db(capped) + 4.0);
 }
 
+TEST_CASE("flute deflection limit is off by default (bit-identical)", "[midi][synth][flute]") {
+  // The limit reads the period peak the cycle mean walks, so it belongs to that branch: zero
+  // there, and any value on the cubic path or on the jet-drive path without the cycle mean, leave
+  // the render untouched.
+  NativeSynthPatch mean = jet_drive_patch();
+  mean.flute.jet_cycle_mean = true;
+  const std::vector<float> jet = render_patch(mean, 72, 100, 16384);
+  NativeSynthPatch zeroed = mean;
+  zeroed.flute.jet_deflection_limit = 0.0f;
+  REQUIRE(render_patch(zeroed, 72, 100, 16384) == jet);
+  NativeSynthPatch leaky = jet_drive_patch();
+  leaky.flute.jet_deflection_limit = 1.6f;
+  REQUIRE(render_patch(leaky, 72, 100, 16384) == render_patch(jet_drive_patch(), 72, 100, 16384));
+  NativeSynthPatch cubic = flute_base_patch();
+  cubic.flute.jet_deflection_limit = 1.6f;
+  REQUIRE(render_patch(cubic, 72, 100, 16384) == render_patch(flute_base_patch(), 72, 100, 16384));
+}
+
+TEST_CASE("flute deflection limit hands the octave to the offset's share of the swing",
+          "[midi][synth][flute]") {
+  // Unbounded, the jet swings far past its offset and the split's duty sits near a half: the
+  // twelfth leads the octave by 17 dB. Held at 1.6 half-widths against an offset of 1, the duty
+  // follows y0/A and the octave comes up over the twelfth, within two cents of the same pitch and
+  // at every velocity, since the swing the labium sees no longer grows with the drive.
+  const int n = static_cast<int>(0.8 * kRate);
+  NativeSynthPatch open = jet_drive_patch();
+  open.flute.jet_cycle_mean = true;
+  open.flute.jet_receptivity_window = 0.34f;
+  open.flute.end_reflection = 0.9f;
+  open.flute.jet_offset = 1.0f;
+  open.flute.vel_to_breath = 0.5f;
+  NativeSynthPatch held = open;
+  held.flute.jet_deflection_limit = 1.6f;
+  struct Ladder {
+    double cents;
+    double h2;
+    double h3;
+  };
+  const auto ladder = [&](const NativeSynthPatch& patch, uint8_t note, uint8_t velocity) {
+    const std::vector<float> tone = render_patch(patch, note, velocity, n);
+    REQUIRE(speaks_at(tone, note));
+    const double f = fft_fundamental(tone, static_cast<size_t>(0.4 * kRate), note_hz(note));
+    return Ladder{1200.0 * std::log2(f / note_hz(note)), harmonic_db(tone, f, 2),
+                  harmonic_db(tone, f, 3)};
+  };
+  for (uint8_t note : {uint8_t{60}, uint8_t{72}}) {
+    const Ladder a = ladder(open, note, 100);
+    const Ladder b = ladder(held, note, 100);
+    INFO("note " << int(note) << " h2 " << a.h2 << " -> " << b.h2 << " dB, h3 " << a.h3 << " -> "
+                 << b.h3 << " dB, f0 " << a.cents << " -> " << b.cents << " c");
+    CHECK(a.h3 > a.h2 + 6.0);
+    CHECK(b.h2 > a.h2 + 6.0);
+    CHECK(b.h2 > b.h3);
+    CHECK(std::fabs(b.cents - a.cents) < 2.0);
+  }
+  const Ladder soft = ladder(held, 60, 32);
+  const Ladder loud = ladder(held, 60, 127);
+  INFO("C4 h2/h1 " << soft.h2 << " dB at v32, " << loud.h2 << " dB at v127");
+  CHECK(std::fabs(soft.h2 - loud.h2) < 3.0);
+}
+
 TEST_CASE("flute jet centring takes the even harmonics off the overblown registers",
           "[midi][synth][flute]") {
   // The first register spans the octave over the home note, so C4 keeps its offset to the sample;

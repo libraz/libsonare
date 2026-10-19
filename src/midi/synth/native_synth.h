@@ -1931,6 +1931,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.flute.jet_centring_per_octave, 0.0f), 0.0f, 4.0f);
   p.flute.jet_receptivity_window =
       std::clamp(patch_clamp_detail::sanitize(p.flute.jet_receptivity_window, 0.0f), 0.0f, 0.7f);
+  p.flute.jet_deflection_limit =
+      std::clamp(patch_clamp_detail::sanitize(p.flute.jet_deflection_limit, 0.0f), 0.0f, 8.0f);
   p.flute.onset_breath_overshoot_db =
       std::clamp(patch_clamp_detail::sanitize(p.flute.onset_breath_overshoot_db, 0.0f), 0.0f, 8.0f);
   p.flute.onset_breath_settle_ms =

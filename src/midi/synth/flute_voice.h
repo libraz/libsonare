@@ -174,6 +174,10 @@ struct FlutePatchParams {
   /// period in place of the leak, with no DC blocker on the source (the split's time difference
   /// carries none), so the jet branch holds no one-pole at all. false = off.
   bool jet_cycle_mean = false;
+  /// Deflection limit (with jet_cycle_mean), in jet half-widths: the swing at the labium stays near
+  /// the channel height whatever the drive (de la Cuadra & Fabre 2004), so the split reads η scaled
+  /// to this period peak and the offset's share sets the flow duty. [0, 8], 0 = unbounded.
+  float jet_deflection_limit = 0.0f;
 
   /// Tongued-onset breath overshoot (dB of mouth pressure) at velocity 127: how
   /// far the mouth pressure stands above its held level as the tongue releases
@@ -318,7 +322,7 @@ class FluteVoiceCore {
   float jet_reflection_ = 0.5f;
   float end_reflection_ = 0.5f;
   // In-loop DC blocker on the jet output (the jet's rectified DC does not
-  // radiate and would charge the bore).
+  // radiate and would charge the bore), or on the returning pressure on the cycle-mean path.
   float dc_x1_ = 0.0f;
   float dc_y1_ = 0.0f;
   float dc_r_ = 0.0f;
@@ -430,6 +434,11 @@ class FluteVoiceCore {
   int jet_cycle_ = 0;
   int jet_cycle_count_ = 0;
   float jet_cycle_acc_ = 0.0f;
+  // Swing limit (half-widths) of the displacement the split reads, the period peak it is taken
+  // against, and the gain holding the swing at the limit; 0 / 1 = unbounded.
+  float jet_limit_ = 0.0f;
+  float jet_cycle_peak_ = 0.0f;
+  float jet_limit_gain_ = 1.0f;
 
   // Reads the jet line as a triangular average centred on @p delay after writing @p input.
   float jet_window_read(float delay, float input) noexcept;
