@@ -928,12 +928,15 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.recorder.flute.onset_breath_overshoot_vel_db = 1.63525f;
   o.recorder.flute.onset_breath_settle_ms = 24.4833f;
   o.recorder.flute.velocity_exponent = 1.67f;
-  o.pan_flute = flute(0.52f, 0.42f, 0.40f, 0.40f, 0.30f, 0.08f, 0.55f, 0.85f);
+  // Jet delay on the half period: 0.52 pulled the pitch 4.4 cents flat and brightened the stack.
+  o.pan_flute = flute(0.50f, 0.42f, 0.40f, 0.40f, 0.30f, 0.08f, 0.55f, 0.85f);
   o.pan_flute.flute.vortex = 0.35f;
   o.pan_flute.body = BodyType::kWoodTube;
   o.pan_flute.body_mix = 0.15f;
   o.pan_flute.amp_env.attack_ms = 23.9772f;
   o.pan_flute.flute.velocity_exponent = 1.39f;
+  // The reference stops 85-95 ms after the key lifts; the breath ramp sets that, not the VCA.
+  o.pan_flute.flute.release_ms = 400.0f;
   o.blown_bottle = flute(0.50f, 0.35f, 0.50f, 0.35f, 0.25f, 0.0f, 0.55f, 0.85f);
   o.blown_bottle.amp_env.release_ms = 45.2492f;
   o.blown_bottle.amp_env.sustain = 0.45047f;
@@ -977,6 +980,8 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.tin_whistle = flute(0.48f, 0.70f, 0.28f, 0.10f, 0.45f, 0.04f, 0.62f, 0.80f);
   o.tin_whistle.flute.overblow = 0.25f;
   o.tin_whistle.flute.velocity_exponent = 0.50f;
+  // The reference stops 65 ms after the key lifts; the breath ramp sets that, not the VCA.
+  o.tin_whistle.flute.release_ms = 250.0f;
   o.ocarina = flute(0.50f, 0.40f, 0.55f, 0.15f, 0.30f, 0.06f, 0.55f, 0.85f);
   o.ocarina.amp_env.attack_ms = 2.25225f;
   o.ocarina.amp_env.decay_ms = 8.54137f;
