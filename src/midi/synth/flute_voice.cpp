@@ -508,8 +508,7 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
                       ? std::pow(stretch, 1.0f - std::min(kJetLengthCompensation, 1.0f))
                       : stretch;
   }
-  // The receptivity pole's phase delay at f0 is taken off the line (the blocker's lead put on it)
-  // so the delay still sets the tuning.
+  // The receptivity pole's delay at f0 comes off the line (the servo puts the blocker's lead on).
   jet_period -= jet_lp_comp_;
   const float jet_delay = std::clamp(jet_period, 1.0f, static_cast<float>(capacity_ - 4));
   jet_delay_ = jet_delay;
@@ -652,10 +651,10 @@ void FluteVoiceCore::retune_loop_comp() noexcept {
   // One feedback register (bore_.out is consumed one sample after it is
   // produced) plus the reflection lowpass's phase delay at f0, less the jet
   // path's DC-blocker phase LEAD there, as the flue pipe takes it: left in, the
-  // lead read +20 cents at note 36 and +11 at 48. The servo path measures the
-  // lead the whole injection holds instead, with the blocker's own on the jet line.
+  // lead read +20 cents at note 36 and +11 at 48.
   const float a = 1.0f - lp_alpha_;
   const float omega = kTwoPi * f0_ / srf_;
+  // The servo path takes the lead the whole injection is measured to hold instead.
   const float lead = phase_servo_ ? servo_comp_ : dc_lead_samples_;
   bore_.comp = 1.0f + onepole_group_delay_samples(a, omega) - lead + lattice_comp_;
   comp_alpha_ = lp_alpha_;
@@ -671,8 +670,7 @@ void FluteVoiceCore::servo_step(float returning, float injected, float ratio) no
   servo_sin_ = servo_sin_ * servo_rot_cos_ + servo_cos_ * servo_rot_sin_;
   servo_cos_ = c;
   if (++servo_count_ < servo_len_) return;
-  // The cross-spectrum's angle is the injection's lead over the returning pressure at f0; averaging
-  // the complex value weights each period by its power, so the seed and the ring-down hardly count.
+  // Averaging the complex cross-spectrum weights each period by its power; its angle is the lead.
   const float x_re = servo_inj_re_ * servo_ret_re_ + servo_inj_im_ * servo_ret_im_;
   const float x_im = servo_inj_im_ * servo_ret_re_ - servo_inj_re_ * servo_ret_im_;
   servo_x_re_ += servo_smooth_ * (x_re - servo_x_re_);

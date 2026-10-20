@@ -179,10 +179,9 @@ struct FlutePatchParams {
   /// to this period peak and the offset's share sets the flow duty. [0, 8], 0 = unbounded.
   float jet_deflection_limit = 0.0f;
 
-  /// Loop phase servo (cubic path only): the jet blocker's lead at f0 moves off the bore onto the
-  /// jet line, and the bore delay follows the lead the injection is measured to hold over the
-  /// returning pressure at f0 once a period, so the clipped jet's and the rectifier image's phase
-  /// no longer pull the pitch off the period. false = off.
+  /// Loop phase servo (cubic path only): the jet blocker's lead moves onto the jet line and, once
+  /// a period, the bore delay follows the injection's measured f0 lead over the returning pressure,
+  /// so the nonlinear source's phase no longer pulls the pitch. false = off.
   bool loop_phase_servo = false;
 
   /// Direct radiation of the mouth turbulence (Verge, Hirschberg & Caussé 1997) from the embouchure
@@ -457,11 +456,9 @@ class FluteVoiceCore {
   float breath_rad_alpha_ = 0.0f;
   float breath_rad_state_ = 0.0f;
 
-  // Loop phase servo: the jet blocker's lead at f0 (samples), the lead the bore line takes off
-  // instead of it, the per-period weight of the cross-spectrum average, the period in samples and
-  // the count into it, the f0 phasor and its per-sample rotation, one period's coherent sums of the
-  // returning pressure and the injection, and the smoothed cross-spectrum. Off = the blocker's lead
-  // stays on the bore.
+  // Loop phase servo state: the blocker's f0 lead and the measured lead (samples), the average's
+  // per-period weight, the period count, the f0 phasor, one period's coherent sums of the returning
+  // pressure and the injection, and the smoothed cross-spectrum.
   bool phase_servo_ = false;
   float dc_lead_samples_ = 0.0f;
   float servo_comp_ = 0.0f;
