@@ -294,6 +294,10 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.church_organ_flutes.pipe_organ.release_damp_s = 1.61224f;
   o.church_organ_flutes.pipe_organ.tremulant_depth = 0.259737f;
   o.church_organ_flutes.pipe_organ.wind_sag = 0.118034f;
+  // Unregulated: its 1.4 c steady flat sits where the font's own tuning puts the
+  // reference; regulated, the tuning gate reads +1.5 c and goes 0 -> 3 lines.
+  o.church_organ_flutes.pipe_organ.wind_regulated = false;
+  o.church_organ_flutes.gain = 0.45f;  // the plenum's gain before its wind was regulated
   o.church_organ_flutes.resonance_q = 0.837311f;
   o.church_organ_flutes.stereo_spread = 0.97204f;
 

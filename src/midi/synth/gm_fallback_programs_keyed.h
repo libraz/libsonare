@@ -943,10 +943,14 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // slow pressure undulation that keeps a sustained chord alive rather than
   // frozen (heard as faint sidebands around every partial).
   o.church_organ.pipe_organ.wind_sag = 0.25f;
+  // Regulated: unregulated, one key of the plenum sat 3.75 c flat for the whole note
+  // (the gate's tuning median), where the reference holds its pitch from 0.25 s on.
+  o.church_organ.pipe_organ.wind_regulated = true;
   o.church_organ.pipe_organ.tremulant_rate_hz = 4.8f;
   o.church_organ.pipe_organ.tremulant_depth = 0.18f;
   o.church_organ.stereo_spread = 0.55f;
-  o.church_organ.gain = 0.45f;
+  // 0.45 under the unregulated wind, which held one key 12.5% under pressure.
+  o.church_organ.gain = 0.394f;
 
   // Reed Organ (GM 20): a true free reed — the metal tongue swings through its
   // slot under steady bellows pressure. Harmonium colour: a mellow plate, soft

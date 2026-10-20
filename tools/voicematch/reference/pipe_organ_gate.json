@@ -3,10 +3,10 @@
   "timbre": "plenum-a",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-16T18:06:47+00:00",
-  "recorded_utc": "2026-10-20T05:58:42+00:00",
+  "recorded_utc": "2026-10-20T06:49:57+00:00",
   "model_build": {
-    "built_utc": "2026-10-20T05:58:33Z",
-    "newest_source_utc": "2026-10-20T05:57:03Z",
+    "built_utc": "2026-10-20T06:49:48Z",
+    "newest_source_utc": "2026-10-20T06:49:11Z",
     "stale": false
   },
   "reference_spread": {
@@ -20,7 +20,7 @@
     "stretch": {
       "floor": 0.76,
       "floor_from": "measured spread",
-      "median": 0.919,
+      "median": 0.894,
       "abs_median": 1.144,
       "p90": 3.531,
       "rows": 11
@@ -28,16 +28,16 @@
     "attack": {
       "floor": 150.0,
       "floor_from": "measured spread",
-      "median": 175.0,
-      "abs_median": 175.0,
-      "p90": 650.0,
+      "median": 150.0,
+      "abs_median": 150.0,
+      "p90": 631.25,
       "rows": 11
     },
     "balance": {
       "floor": 3.804,
       "floor_from": "measured spread",
       "median": 3.802,
-      "abs_median": 6.338,
+      "abs_median": 5.755,
       "p90": 9.485,
       "rows": 11
     },
@@ -45,7 +45,7 @@
       "floor": 17.2306,
       "floor_from": "measured spread",
       "median": 17.231,
-      "abs_median": 21.219,
+      "abs_median": 17.231,
       "p90": 38.304,
       "rows": 11
     },
@@ -53,8 +53,8 @@
       "floor": 2.81,
       "floor_from": "measured spread",
       "median": 2.81,
-      "abs_median": 7.125,
-      "p90": 12.713,
+      "abs_median": 7.075,
+      "p90": 12.487,
       "rows": 11
     }
   }
