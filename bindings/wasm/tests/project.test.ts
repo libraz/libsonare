@@ -665,13 +665,16 @@ describe('Sonare WASM Project', () => {
         return sum;
       };
 
-      const base = project.bounceWithSynthInstrument({ preset: 'warm-pad' }, options);
+      // A short envelope pinned in all three renders keeps the tail window past the
+      // decay stage however the preset's own envelope is voiced.
+      const envelope = { preset: 'warm-pad', ampAttackMs: 20, ampDecayMs: 150 };
+      const base = project.bounceWithSynthInstrument(envelope, options);
       const explicitZero = project.bounceWithSynthInstrument(
-        { preset: 'warm-pad', ampSustain: 0 },
+        { ...envelope, ampSustain: 0 },
         options,
       );
       const explicitLow = project.bounceWithSynthInstrument(
-        { preset: 'warm-pad', ampSustain: 0.2 },
+        { ...envelope, ampSustain: 0.2 },
         options,
       );
 
