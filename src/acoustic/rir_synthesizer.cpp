@@ -135,8 +135,9 @@ std::vector<Diagnostic> validate_rir_request(const ShoeboxRoom& room,
 
 // Sample rate an empty RIR reports when the request was refused.
 int diagnostic_sample_rate(int sample_rate) noexcept {
-  return sample_rate >= kMinAudioSampleRate && sample_rate <= kMaxAudioSampleRate ? sample_rate
-                                                                                  : 48000;
+  return sample_rate >= kMinAudioSampleRate && sample_rate <= kMaxAudioSampleRate
+             ? sample_rate
+             : static_cast<int>(sonare::constants::kDefaultDawSampleRate);
 }
 
 RirPlan plan_rir(const ShoeboxRoom& room, const SourceListener& placement, int sample_rate,
@@ -201,16 +202,8 @@ RirPlan plan_rir(const ShoeboxRoom& room, const SourceListener& placement, int s
   // the natural (uncapped) early length. Mirror synthesize_early_ir's own auto-size
   // formula here so the rir_length_clamped diagnostic below fires when the cap
   // truncates the early reflections, not just the late tail.
-  float early_max_delay = 0.0f;
-  for (const auto& im : plan.images) {
-    if (im.distance > 1e-6f) {
-      early_max_delay = std::max(early_max_delay, im.distance / kSoundSpeed * sr);
-    }
-  }
-  const double early_raw =
-      std::ceil(static_cast<double>(early_max_delay)) + static_cast<double>(early_half) + 2.0;
-  plan.early_natural_len =
-      std::max(1, static_cast<int>(std::min(early_raw, static_cast<double>(kMaxAutoSamples))));
+  EarlyIrConfig natural_early_cfg;
+  plan.early_natural_len = early_ir_natural_length(plan.images, sample_rate, natural_early_cfg);
 
   // Keep clamp telemetry aligned with synthesize_late_tail() through the shared
   // allocation-free resolver: above-Nyquist bands and the 60-second sizing

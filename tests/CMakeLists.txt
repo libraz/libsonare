@@ -501,6 +501,7 @@ if(BUILD_ACOUSTIC_SIM)
     acoustic/material_test.cpp
     acoustic/room_model_test.cpp
     acoustic/image_source_test.cpp
+    acoustic/rir_plan_length_test.cpp
     acoustic/late_reverb_test.cpp
     acoustic/rir_synthesizer_test.cpp
     acoustic/rir_robustness_test.cpp

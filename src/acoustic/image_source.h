@@ -87,6 +87,13 @@ struct EarlyIrConfig {
                         ///< NOT padded out to it — the cap only truncates a longer IR.
 };
 
+/// @brief Length `synthesize_early_ir` renders for @p images before `max_samples` is applied.
+///
+/// Farthest finite arrival plus the fractional-delay kernel half-width, clamped to
+/// `kMaxAutoSamples`; images with a non-positive or non-finite delay do not count.
+int early_ir_natural_length(const std::vector<ImageSource>& images, int sample_rate,
+                            const EarlyIrConfig& config = {});
+
 /// @brief Render the mono early-reflection impulse response.
 ///
 /// Each image contributes a windowed-sinc kernel centred at

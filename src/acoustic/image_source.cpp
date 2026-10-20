@@ -1,11 +1,13 @@
 #include "acoustic/image_source.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <set>
+#include <unordered_map>
 
 #include "acoustic/image_source_test_support.h"
 #include "acoustic/late_reverb.h"
@@ -25,6 +27,57 @@ void observe_polyhedral_frontier(std::size_t size) noexcept {
     observer(size);
   }
 }
+
+// Two images closer than this (Euclidean, m) are the same reflection.
+constexpr float kImageCoincidenceTolerance = 1e-4f;
+
+// Spatial hash over the images accepted at one order. Cells are one tolerance wide, so any pair
+// within the tolerance sits in the same or an adjacent cell and the 27-cell probe finds it; the
+// exact distance test is unchanged.
+class ImageCoincidenceIndex {
+ public:
+  bool contains_near(const std::vector<ImageSource>& images, const Vec3& p) const {
+    if (!finite(p)) return false;
+    const Cell c = cell_of(p);
+    for (double dx = -1.0; dx <= 1.0; dx += 1.0) {
+      for (double dy = -1.0; dy <= 1.0; dy += 1.0) {
+        for (double dz = -1.0; dz <= 1.0; dz += 1.0) {
+          const auto it = cells_.find(Cell{c[0] + dx, c[1] + dy, c[2] + dz});
+          if (it == cells_.end()) continue;
+          for (const size_t i : it->second) {
+            if (length(images[i].position - p) < kImageCoincidenceTolerance) return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  void add(const Vec3& p, size_t image_index) {
+    if (finite(p)) cells_[cell_of(p)].push_back(image_index);
+  }
+
+ private:
+  using Cell = std::array<double, 3>;
+  struct CellHash {
+    size_t operator()(const Cell& c) const noexcept {
+      size_t h = std::hash<double>{}(c[0]);
+      h = h * 1000003u ^ std::hash<double>{}(c[1]);
+      return h * 1000003u ^ std::hash<double>{}(c[2]);
+    }
+  };
+
+  static bool finite(const Vec3& p) {
+    return std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z);
+  }
+  static double cell_coord(float v) {
+    return std::floor(static_cast<double>(v) / static_cast<double>(kImageCoincidenceTolerance)) +
+           0.0;  // +0.0 folds -0.0 into 0.0
+  }
+  static Cell cell_of(const Vec3& p) { return {cell_coord(p.x), cell_coord(p.y), cell_coord(p.z)}; }
+
+  std::unordered_map<Cell, std::vector<size_t>, CellHash> cells_;
+};
 
 float beta_from_alpha(float alpha) noexcept { return std::sqrt(std::max(0.0f, 1.0f - alpha)); }
 
@@ -297,9 +350,8 @@ std::vector<ImageSource> polyhedral_image_sources(const PolyhedralRoom& room,
   std::vector<Vec3> partial;
 
   for (int order = 1; order <= max_order; ++order) {
-    // Images are appended in non-decreasing order, so a duplicate can only sit at or after this
-    // index.
-    const size_t order_begin = out.size();
+    // A duplicate can only coincide with an image accepted at this same order.
+    ImageCoincidenceIndex accepted_at_order;
     std::vector<PendingImage> next;
     std::set<FrontierEntry, FrontierEntryLess> ranking;
     std::uint64_t next_sequence = 0;
@@ -338,15 +390,13 @@ std::vector<ImageSource> polyhedral_image_sources(const PolyhedralRoom& room,
           // more than one of them. Drop a candidate whose image coincides with
           // an already-accepted one (same order) to avoid double-counting that
           // reflection's energy.
-          const bool duplicate =
-              std::any_of(out.begin() + static_cast<std::ptrdiff_t>(order_begin), out.end(),
-                          [&](const ImageSource& e) { return length(e.position - img) < 1e-4f; });
-          if (!duplicate) {
+          if (!accepted_at_order.contains_near(out, img)) {
             ImageSource im;
             im.order = order;
             im.position = img;
             im.distance = length(img - listener);
             im.reflection = cand.reflection;
+            accepted_at_order.add(img, out.size());
             out.push_back(im);
           }
         }
@@ -362,12 +412,23 @@ std::vector<ImageSource> polyhedral_image_sources(const PolyhedralRoom& room,
   return out;
 }
 
-Audio synthesize_early_ir(const std::vector<ImageSource>& images, int sample_rate,
-                          const EarlyIrConfig& config) {
-  const float c = config.sound_speed > 0.0f ? config.sound_speed : kSoundSpeed;
+namespace {
+// Fractional-delay kernel half-width; the fdl is forced odd so the kernel is symmetric about k=0.
+int early_kernel_half_width(const EarlyIrConfig& config) noexcept {
   int fdl = config.fdl < 1 ? 1 : config.fdl;
-  if (fdl % 2 == 0) ++fdl;  // force odd so the kernel is symmetric about k=0
-  const int half = fdl / 2;
+  if (fdl % 2 == 0) ++fdl;
+  return fdl / 2;
+}
+
+float early_sound_speed(const EarlyIrConfig& config) noexcept {
+  return config.sound_speed > 0.0f ? config.sound_speed : kSoundSpeed;
+}
+}  // namespace
+
+int early_ir_natural_length(const std::vector<ImageSource>& images, int sample_rate,
+                            const EarlyIrConfig& config) {
+  const float c = early_sound_speed(config);
+  const int half = early_kernel_half_width(config);
   const float sr = static_cast<float>(sample_rate);
 
   float max_delay = 0.0f;
@@ -383,7 +444,16 @@ Audio synthesize_early_ir(const std::vector<ImageSource>& images, int sample_rat
   // size one unbounded allocation, a WASM OOM risk. Computed in double so the
   // sum cannot overflow int before the clamp is applied.
   const double raw = std::ceil(static_cast<double>(max_delay)) + static_cast<double>(half) + 2.0;
-  double auto_length = std::min(raw, static_cast<double>(kMaxAutoSamples));
+  return std::max(1, static_cast<int>(std::min(raw, static_cast<double>(kMaxAutoSamples))));
+}
+
+Audio synthesize_early_ir(const std::vector<ImageSource>& images, int sample_rate,
+                          const EarlyIrConfig& config) {
+  const float c = early_sound_speed(config);
+  const int half = early_kernel_half_width(config);
+  const float sr = static_cast<float>(sample_rate);
+
+  double auto_length = static_cast<double>(early_ir_natural_length(images, sample_rate, config));
   // max_samples is an UPPER BOUND, not an exact length: a natural IR shorter than
   // the cap must not be zero-padded out to it (that inflates the convolution cost
   // and, at kMaxRirSeconds, is itself an OOM risk). Only truncate when the natural
