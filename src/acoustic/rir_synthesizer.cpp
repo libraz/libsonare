@@ -251,9 +251,11 @@ RirPlan plan_rir(const ShoeboxRoom& room, const SourceListener& placement, int s
   // decaying) early-reflection level. The early window must start strictly AFTER
   // the direct tap: t_mix is clamped to direct_sample + half_xfade, so a symmetric
   // window would otherwise capture the (loudest) direct impulse and inflate the
-  // early level, over-scaling the tail in small rooms.
+  // early level, over-scaling the tail in small rooms. The direct tap is a
+  // windowed-sinc kernel early_half wide, so the window starts past its whole
+  // support or the leakage sets the tail level and moves DRR with rate and position.
   plan.level_half = std::max(plan.half_xfade, static_cast<int>(std::lround(0.005f * sr)));
-  plan.early_lo = std::max(plan.t_mix - plan.level_half, plan.direct_sample + 1);
+  plan.early_lo = std::max(plan.t_mix - plan.level_half, plan.direct_sample + early_half + 1);
   return plan;
 }
 

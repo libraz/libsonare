@@ -933,3 +933,67 @@ TEST_CASE("receiver-pair no-tail padding preserves an asymmetric shorter prefix"
   REQUIRE(std::all_of(pair.right.begin() + static_cast<std::ptrdiff_t>(right_mono.size()),
                       pair.right.end(), [](float value) { return value == 0.0f; }));
 }
+
+namespace {
+
+// Direct-to-reverberant ratio (dB) of a rendered RIR: the energy inside the direct tap's
+// +-12 sample support (wider than the 21-tap kernel's half-width of 10) against everything after
+// it.
+float measured_drr_db(const Audio& rir, float source_listener_distance, int sr) {
+  const int direct = static_cast<int>(
+      std::lround(source_listener_distance / kSoundSpeed * static_cast<float>(sr)));
+  const int support = 12;
+  double direct_energy = 0.0;
+  double reverberant_energy = 0.0;
+  for (int i = 0; i < static_cast<int>(rir.size()); ++i) {
+    const double e = static_cast<double>(rir.data()[i]) * rir.data()[i];
+    if (i <= direct + support) {
+      if (i >= direct - support) direct_energy += e;
+    } else {
+      reverberant_energy += e;
+    }
+  }
+  return static_cast<float>(10.0 * std::log10(direct_energy / reverberant_energy));
+}
+
+}  // namespace
+
+TEST_CASE("RIR direct-to-reverberant ratio is stable across sample rates and sub-sample distances",
+          "[acoustic][rir][drr]") {
+  const ShoeboxRoom room = uniform_room(5.0f, 4.0f, 3.0f, 0.2f);
+  const Vec3 source{1.0f, 1.0f, 1.5f};
+
+  // Tail level is matched to the early reflections past the direct tap's kernel support, so
+  // the ratio is a property of the room. Per-sample tail variance scales as 1/sr and the sample
+  // count as sr, so tail energy is rate independent. Bounds: the leakage this guards moved
+  // DRR ~1.7 dB; the cross-rate bound is 1.0 dB and the sub-sample bound 0.5 dB.
+  SECTION("across 44.1, 48 and 96 kHz") {
+    float lo = std::numeric_limits<float>::max();
+    float hi = std::numeric_limits<float>::lowest();
+    for (int sr : {44100, 48000, 96000}) {
+      const SourceListener pl{source, {3.0f, 2.0f, 1.5f}};
+      const RirSynthResult res = synthesize_rir(room, pl, sr);
+      REQUIRE_FALSE(has_error(res.diagnostics));
+      const float drr = measured_drr_db(res.rir, length(pl.listener - pl.source), sr);
+      lo = std::min(lo, drr);
+      hi = std::max(hi, drr);
+    }
+    REQUIRE(hi - lo < 1.0f);
+  }
+
+  SECTION("across fractional-sample direct distances at 48 kHz") {
+    const int sr = 48000;
+    const float step = kSoundSpeed / static_cast<float>(sr);  // one sample of path (m)
+    float lo = std::numeric_limits<float>::max();
+    float hi = std::numeric_limits<float>::lowest();
+    for (float frac : {0.0f, 0.25f, 0.5f, 0.75f}) {
+      const SourceListener pl{source, {3.0f + frac * step, 2.0f, 1.5f}};
+      const RirSynthResult res = synthesize_rir(room, pl, sr);
+      REQUIRE_FALSE(has_error(res.diagnostics));
+      const float drr = measured_drr_db(res.rir, length(pl.listener - pl.source), sr);
+      lo = std::min(lo, drr);
+      hi = std::max(hi, drr);
+    }
+    REQUIRE(hi - lo < 0.5f);
+  }
+}
