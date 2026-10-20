@@ -17,6 +17,15 @@ namespace {
 // librosa power_to_db amin floor (1e-10); equals the generic epsilon value.
 constexpr float kAmin = constants::kEpsilon;
 
+using LogPowerMatrix = Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+
+/// Power to dB relative to the matrix maximum, floored at kDefaultTopDb below it.
+LogPowerMatrix power_to_relative_db(const Eigen::Map<const LogPowerMatrix>& power_map) {
+  LogPowerMatrix log_power = power_map.array().max(kAmin).log() * constants::kPowerToDbScale;
+  const float max_db = log_power.maxCoeff();
+  return (log_power.array() - max_db).max(-constants::kDefaultTopDb);
+}
+
 /// Right-shifts @p onset_env by @p frame_offset frames, keeping its length.
 /// Downstream beat/tempo/meter analyzers rely on the Mel frame count, so terminal
 /// frames shifted past the end are intentionally discarded.
@@ -46,10 +55,7 @@ std::vector<float> compute_onset_strength(const MelSpectrogram& mel_spec,
       power, n_mels, n_frames);
 
   /// Convert power to decibels before differencing.
-  Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> log_power =
-      power_map.array().max(kAmin).log() * constants::kPowerToDbScale;
-  float max_db = log_power.maxCoeff();
-  log_power = (log_power.array() - max_db).max(-constants::kDefaultTopDb);
+  const LogPowerMatrix log_power = power_to_relative_db(power_map);
 
   /// @details Compute first-order difference and half-wave rectification.
   /// diff = log_power[:, lag:] - log_power[:, :-lag]
@@ -137,10 +143,7 @@ std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_ba
       power, n_mels, n_frames);
 
   // Compute log power using Eigen
-  Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> log_power =
-      power_map.array().max(kAmin).log() * constants::kPowerToDbScale;
-  float max_db = log_power.maxCoeff();
-  log_power = (log_power.array() - max_db).max(-constants::kDefaultTopDb);
+  const LogPowerMatrix log_power = power_to_relative_db(power_map);
 
   // Divide Mel bands into n_bands groups
   int mels_per_band = n_mels / n_bands;
