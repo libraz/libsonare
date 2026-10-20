@@ -25,6 +25,8 @@ inline constexpr float kSqrt2 = 1.41421356237309504880f;
 inline constexpr double kSqrt2D = 1.41421356237309504880;
 inline constexpr float kInvSqrt2 = 0.70710678118654752440f;
 inline constexpr double kInvSqrt2D = 0.70710678118654752440;
+inline constexpr float kInvGoldenRatio = 0.61803398874989484820f;
+inline constexpr double kInvGoldenRatioD = 0.61803398874989484820;
 
 inline constexpr float kLn2 = 0.69314718055994530942f;
 inline constexpr double kLn2D = 0.69314718055994530942;

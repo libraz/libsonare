@@ -182,6 +182,9 @@ LoopBudget BowedStringVoiceCore::configure(const BowedStringPatchParams& params,
   // Under bow_position_ff a louder stroke plays nearer the bridge.
   float beta_on = params.bow_position;
   if (params.bow_position_ff > 0.0f) beta_on += (params.bow_position_ff - beta_on) * vel01;
+  // The note's own contact point: the spread moves the null to a harmonic of this note's.
+  if (params.bow_position_spread > 0.0f)
+    beta_on += params.bow_position_spread * bowed_contact_offset(note);
   // The upper bound stays at 0.5: beta's Helmholtz window moves with N = sr/f0, so
   // no per-patch constant tracks it. Narrowing it to 0.25 was measured over the two
   // patches it would clamp and rescued no failing note while breaking two working ones.

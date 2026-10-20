@@ -252,6 +252,7 @@ constexpr BowedStringPatchParams blank_bowed_string() noexcept {
   z.bow_width_m = 0.0f;
   z.force_ratio = 0.0f;
   z.bow_position_ff = 0.0f;
+  z.bow_position_spread = 0.0f;
   z.velocity_exponent = 0.0f;
   z.sympathetic = 0.0f;
   z.polarization = 0.0f;

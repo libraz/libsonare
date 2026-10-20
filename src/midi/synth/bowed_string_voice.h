@@ -44,6 +44,7 @@
 #include "midi/synth/player_trajectory.h"
 #include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -68,6 +69,14 @@ inline int bowed_string_buffer_capacity(double sample_rate) noexcept {
 inline constexpr int kBowedSlabSpans = 4;
 inline int bowed_string_slab_capacity(double sample_rate) noexcept {
   return kBowedSlabSpans * bowed_string_buffer_capacity(sample_rate);
+}
+
+/// Per-note contact-point offset in [-1, 1): the golden-ratio (Weyl) sequence over the note
+/// number, so a run of notes fills the spread evenly while each note's point is fixed and no
+/// velocity or voice slot moves it. A law in the note number, not a table of measured points.
+inline float bowed_contact_offset(uint8_t note) noexcept {
+  const double u = std::fmod(static_cast<double>(note) * sonare::constants::kInvGoldenRatioD, 1.0);
+  return static_cast<float>(2.0 * u - 1.0);
 }
 
 /// Bowed-string section of a NativeSynthPatch (used when mode == kBowedString).
@@ -155,6 +164,10 @@ struct BowedStringPatchParams {
   /// the pianissimo point, interpolated linearly in note velocity. Applies to
   /// both junctions. 0 = off -> bow_position at every velocity.
   float bow_position_ff = 0.0f;
+  /// Half-width of a per-note contact-point spread (fraction of the string length): the note
+  /// plays at its bow_position (after bow_position_ff) plus this times bowed_contact_offset(note),
+  /// so which harmonic the bow nulls changes from note to note. 0 = off (bit-identical).
+  float bow_position_spread = 0.0f;
   /// Exponent of the voice-amplifier velocity curve, (velocity/127)^e; 2 is the
   /// SoundFont curve, bit-identical to it. The string already radiates level in
   /// proportion to v_b, so a velocity-driven bow speed spends the span twice at 2.

@@ -381,6 +381,7 @@ void apply_bowed_string(NativeSynthPatch& p, const Fields& f) {
   F(bowed_string.force_ratio);
   F(bowed_string.bow_position);
   F(bowed_string.bow_position_ff);
+  F(bowed_string.bow_position_spread);
   F(bowed_string.velocity_exponent);
   F(bowed_string.bow_force);
   F(bowed_string.bow_speed);
@@ -915,6 +916,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"bowed_string.force_ratio", Unit::Ratio},
     {"bowed_string.bow_position", Unit::None},
     {"bowed_string.bow_position_ff", Unit::None},
+    {"bowed_string.bow_position_spread", Unit::None},
     {"bowed_string.velocity_exponent", Unit::None},
     {"bowed_string.bow_force", Unit::None},
     {"bowed_string.bow_speed", Unit::None},

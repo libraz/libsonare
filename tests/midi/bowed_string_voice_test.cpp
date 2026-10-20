@@ -814,6 +814,61 @@ TEST_CASE("bow_position_ff moves the bowing point toward the bridge with velocit
   }
 }
 
+TEST_CASE("bow_position_spread places each note's contact point by a fixed law",
+          "[midi][synth][bowed]") {
+  // Spread 0 is the shipped render. Each note plays at its bow_position (after the velocity
+  // interpolation) plus the spread times the note's own offset, at every velocity alike, so a
+  // velocity renders exactly as the patch with that point written in; two notes land apart.
+  BowedStringPatchParams params = sonare::midi::synth::gm_fallback_patch(0, 42).bowed_string;
+  REQUIRE(params.bow_position_spread == 0.0f);
+  constexpr size_t kFrames = 24000;
+  constexpr float kSpread = 0.04f;
+  constexpr float kFf = 0.12f;
+  const std::vector<float> shipped = render_bowed_core_struck(params, 48, 100, kFrames);
+  BowedStringPatchParams zero = params;
+  zero.bow_position_spread = 0.0f;
+  REQUIRE(render_bowed_core_struck(zero, 48, 100, kFrames) == shipped);
+
+  float low = 1.0f, high = -1.0f;
+  double mean = 0.0;
+  for (int note = 0; note < 128; ++note) {
+    const float offset = sonare::midi::synth::bowed_contact_offset(static_cast<uint8_t>(note));
+    REQUIRE(offset >= -1.0f);
+    REQUIRE(offset < 1.0f);
+    low = std::min(low, offset);
+    high = std::max(high, offset);
+    mean += offset;
+  }
+  CHECK(low < -0.9f);
+  CHECK(high > 0.9f);
+  CHECK(std::abs(mean / 128.0) < 0.05);
+  CHECK(sonare::midi::synth::bowed_contact_offset(48) !=
+        sonare::midi::synth::bowed_contact_offset(49));
+
+  for (const float ff : {0.0f, kFf}) {
+    for (const uint8_t note : {uint8_t{48}, uint8_t{49}}) {
+      const float offset = sonare::midi::synth::bowed_contact_offset(note);
+      for (const uint8_t velocity : {uint8_t{40}, uint8_t{127}}) {
+        INFO("ff " << ff << " note " << int(note) << " velocity " << int(velocity));
+        const float vel01 = sonare::midi::Velocity16::from7(velocity).f7() / 127.0f;
+        BowedStringPatchParams spread = params;
+        spread.bow_position_ff = ff;
+        spread.bow_position_spread = kSpread;
+        BowedStringPatchParams placed = params;
+        placed.bow_position_ff = 0.0f;
+        if (ff > 0.0f) placed.bow_position += (ff - params.bow_position) * vel01;
+        placed.bow_position += kSpread * offset;
+        const std::vector<float> law = render_bowed_core_struck(spread, note, velocity, kFrames);
+        REQUIRE(law == render_bowed_core_struck(placed, note, velocity, kFrames));
+        REQUIRE(law == render_bowed_core_struck(spread, note, velocity, kFrames));
+      }
+    }
+  }
+  BowedStringPatchParams spread = params;
+  spread.bow_position_spread = kSpread;
+  REQUIRE(render_bowed_core_struck(spread, 48, 100, kFrames) != shipped);
+}
+
 TEST_CASE("the second polarization carries no DC", "[midi][synth][bowed]") {
   // The horizontal line reflects positively, so it integrates the mean of its
   // drive with a gain of 1 / (1 - loss); the bow's mean friction injection used
