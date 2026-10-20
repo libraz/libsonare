@@ -183,14 +183,6 @@ std::vector<float> minimum_phase_kernel(const std::vector<float>& magnitude_bins
   return kernel;
 }
 
-int next_power_of_two(size_t value) {
-  size_t result = 1;
-  while (result < value) {
-    result <<= 1;
-  }
-  return static_cast<int>(result);
-}
-
 std::vector<float> apply_fir_partitioned(const Audio& audio, const std::vector<float>& kernel,
                                          int partition_size, int latency_compensation) {
   const int block_size = partition_size > 0 ? partition_size : 256;
@@ -620,7 +612,7 @@ float estimate_reference_delay_samples(const Audio& source, const Audio& referen
   // and normalize by the global signal energies so the score is comparable to
   // the previous Pearson-style correlation.
   // Linear (not circular) correlation over every lag the two lengths admit.
-  const int n_fft = next_power_of_two(source.size() + reference.size());
+  const int n_fft = static_cast<int>(next_power_of_2(source.size() + reference.size()));
   FFT fft(n_fft);
 
   std::vector<float> source_padded(static_cast<size_t>(n_fft), 0.0f);

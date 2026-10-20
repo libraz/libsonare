@@ -14,6 +14,7 @@
 #include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/math_utils.h"
 #include "util/non_finite_state.h"
 
 namespace sonare::mastering::stereo {
@@ -57,12 +58,6 @@ float wrap_signed_deg(float degrees) noexcept {
 double wrap_turn_deg(double degrees) noexcept {
   double wrapped = std::fmod(degrees, static_cast<double>(kDegreesPerTurn));
   return wrapped < 0.0 ? wrapped + kDegreesPerTurn : wrapped;
-}
-
-size_t next_power_of_two(size_t value) {
-  size_t out = 1;
-  while (out < value) out <<= 1;
-  return out;
 }
 
 float dot(const float* a, const float* b, int n) noexcept {
@@ -131,7 +126,7 @@ void BinauralPanner::prepare(double sample_rate, int max_block_size) {
   }
 
   // Four Lagrange taps past the longest ITD.
-  mono_.assign(next_power_of_two(static_cast<size_t>(std::ceil(max_itd)) + 4), 0.0f);
+  mono_.assign(next_power_of_2(static_cast<size_t>(std::ceil(max_itd)) + 4), 0.0f);
   for (auto& history : ear_history_) history.assign(2 * static_cast<size_t>(taps_), 0.0f);
   ramp_samples_ = std::max(1, static_cast<int>(std::lround(kGlideSeconds * sample_rate)));
 
@@ -156,8 +151,8 @@ void BinauralPanner::prepare(double sample_rate, int max_block_size) {
 void BinauralPanner::design_canceller() {
   // Symmetric plant [[Hi, Hc], [Hc, Hi]] diagonalised by mid/side: each of Hi + Hc and
   // Hi - Hc gets its own regularised inverse conj(X) / (|X|^2 + beta), delayed to centre.
-  const int n = static_cast<int>(next_power_of_two(
-      static_cast<size_t>(kCancellerDesignOversampling) * static_cast<size_t>(xtc_taps_)));
+  const int n = static_cast<int>(next_power_of_2(static_cast<size_t>(kCancellerDesignOversampling) *
+                                                 static_cast<size_t>(xtc_taps_)));
   const int bins = n / 2 + 1;
   FFT fft(n);
   std::vector<float> buffer(static_cast<size_t>(n), 0.0f);
