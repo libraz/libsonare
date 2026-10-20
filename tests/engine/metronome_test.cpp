@@ -80,9 +80,15 @@ TEST_CASE("Metronome reports fixed event-list overflow", "[engine][metronome]") 
   metro.prepare(48000.0, &tempo);
   metro.set_config({true, 0.25f, 0.75f, 384000});
 
+  // The look-back reaches only as far as continuous playback has gone, so the window
+  // fills past the list's capacity a few dozen blocks in.
   std::array<float, 128> left{};
   float* channels[] = {left.data()};
-  REQUIRE_FALSE(metro.process(channels, 1, static_cast<int>(left.size()), 0));
+  bool overflowed = false;
+  for (int64_t block = 0; block < 64 && !overflowed; ++block) {
+    overflowed = !metro.process(channels, 1, static_cast<int>(left.size()), block * 128);
+  }
+  REQUIRE(overflowed);
 }
 
 TEST_CASE("Metronome click envelope ramps up and decays to zero", "[engine][metronome]") {
@@ -151,6 +157,27 @@ TEST_CASE("Metronome click is continuous across sub-block boundaries", "[engine]
   // The click genuinely straddled the split point (non-zero on both sides).
   REQUIRE(whole[kSplit - 1] > 0.0f);
   REQUIRE(whole[kSplit + 1] > 0.0f);
+}
+
+TEST_CASE("Metronome sounds no earlier click tail after a jump into its decay",
+          "[engine][metronome]") {
+  sonare::transport::TempoMap tempo;
+  tempo.prepare(48000.0);
+  constexpr int kClickLen = 96;
+  sonare::engine::Metronome metro;
+  metro.prepare(48000.0, &tempo);
+  metro.set_config({true, 0.25f, 0.75f, kClickLen});
+
+  std::array<float, 128> first{};
+  float* first_ch[] = {first.data()};
+  metro.process(first_ch, 1, 128, 0);
+  REQUIRE(first[60] > 0.0f);
+
+  // A loop wrap back to 1 ms after the beat at 0: the click's decay is not replayed.
+  std::array<float, 32> wrapped{};
+  float* wrapped_ch[] = {wrapped.data()};
+  metro.process(wrapped_ch, 1, 32, 48);
+  for (float v : wrapped) CHECK(v == 0.0f);
 }
 
 TEST_CASE("Metronome bounds hostile click look-back and beat iteration",

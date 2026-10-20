@@ -6,6 +6,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 
 #include "transport/tempo_map.h"
 #include "util/constants.h"
@@ -61,9 +62,12 @@ class Metronome {
   // the plain in-block behavior.
   void collect_events(int64_t block_start_sample, int num_frames, MetronomeEventList* out,
                       int lookback_samples = 0) const noexcept;
-  /// Renders the click and returns false when the fixed event list overflowed.
+  /// Renders the click and returns false when the fixed event list overflowed. A
+  /// block that does not continue the previous one (a start, seek or loop wrap)
+  /// begins a new segment, and only a click started inside the current segment
+  /// sounds, so a jump never lands in the middle of an earlier beat's decay.
   bool process(float* const* channels, int num_channels, int num_frames,
-               int64_t block_start_sample) const noexcept;
+               int64_t block_start_sample) noexcept;
 
   /// Sample at which a count-in of @p bars bars ends, measured on this metronome's tempo map.
   int64_t count_in_end_sample(int64_t start_sample, int bars) const noexcept;
@@ -79,6 +83,9 @@ class Metronome {
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   const transport::TempoMap* tempo_map_ = nullptr;
   MetronomeConfig config_{};
+  // Start of the continuous run the last block belonged to, and where it ended.
+  int64_t segment_start_sample_ = 0;
+  int64_t next_block_start_sample_ = std::numeric_limits<int64_t>::min();
 };
 
 }  // namespace sonare::engine

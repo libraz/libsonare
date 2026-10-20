@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "transport/musical_time.h"
 #include "util/constants.h"
@@ -54,6 +55,7 @@ void Metronome::prepare(double sample_rate, const transport::TempoMap* tempo_map
   sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   tempo_map_ = tempo_map;
   config_ = normalized_config(config_, sample_rate_);
+  next_block_start_sample_ = std::numeric_limits<int64_t>::min();
 }
 
 void Metronome::set_config(MetronomeConfig config) noexcept {
@@ -114,17 +116,23 @@ void Metronome::collect_events(int64_t block_start_sample, int num_frames, Metro
 }
 
 bool Metronome::process(float* const* channels, int num_channels, int num_frames,
-                        int64_t block_start_sample) const noexcept {
+                        int64_t block_start_sample) noexcept {
   if (!channels || num_channels <= 0 || num_frames <= 0) return true;
+  if (block_start_sample != next_block_start_sample_) segment_start_sample_ = block_start_sample;
+  next_block_start_sample_ =
+      numeric::saturating_add(block_start_sample, static_cast<int64_t>(num_frames));
   const int click_len =
       config_.click_samples > 0
           ? config_.click_samples
           : std::max(1, static_cast<int>(std::lround(config_.click_seconds * sample_rate_)));
   // Look back by the click length so a click that began in a previous sub-block
   // continues seamlessly into this one rather than being truncated at the
-  // sub-block boundary (the engine renders the block as many short sub-blocks).
+  // sub-block boundary (the engine renders the block as many short sub-blocks),
+  // but never past the start of the current continuous segment.
+  const int64_t played = numeric::saturating_sub(block_start_sample, segment_start_sample_);
+  const int lookback = static_cast<int>(std::min<int64_t>(click_len - 1, played));
   MetronomeEventList events;
-  collect_events(block_start_sample, num_frames, &events, click_len - 1);
+  collect_events(block_start_sample, num_frames, &events, lookback);
   // Short raised-cosine attack so the click ramps up from silence instead of
   // stepping 0 -> peak, plus an exponential decay forced to exactly zero at the
   // final sample. This removes the start/end discontinuities that caused an

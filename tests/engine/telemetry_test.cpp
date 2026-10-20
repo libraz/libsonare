@@ -108,7 +108,9 @@ TEST_CASE("RealtimeEngine records metronome event overflow", "[engine][telemetry
 
   std::array<float, 128> buffer{};
   float* io[] = {buffer.data()};
-  engine.process(io, 1, 128);
+  // The click look-back fills past the event list only after a few dozen blocks of
+  // continuous playback.
+  for (int block = 0; block < 64; ++block) engine.process(io, 1, 128);
 
   bool found = false;
   sonare::engine::Telemetry telemetry{};
