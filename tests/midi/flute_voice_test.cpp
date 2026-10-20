@@ -186,7 +186,7 @@ TEST_CASE("flute is stable at parameter extremes", "[midi][synth][flute]") {
 TEST_CASE("flute tuning is accurate", "[midi][synth][flute]") {
   // The jet locks the first register; the played fundamental lands within a
   // couple of percent across the flute range.
-  for (uint8_t note : {55, 60, 67, 72, 79, 84, 91}) {
+  for (uint8_t note : {55, 60, 67, 72, 79, 84, 91, 96}) {
     const double f0 = note_hz(note);
     const std::vector<float> tone = render_patch(flute_base_patch(), note, 100, 24000);
     const double measured = fft_fundamental(tone, 12000, f0);
@@ -532,8 +532,9 @@ TEST_CASE("flute jet offset voices the even harmonics", "[midi][synth][flute]") 
   CHECK(h2o > h2c + 6.0);
 }
 
-TEST_CASE("concert flute on the jet-drive path speaks at every note and velocity",
+TEST_CASE("the concert flute with a near-centred jet speaks at every note and velocity",
           "[.][slow][midi][synth][flute]") {
+  // The shipped jet sits at offset 0.787; the shipped patch itself is swept in wind_rate_law_test.
   NativeSynthPatch patch = gm_fallback_patch(0, 73);  // Flute
   patch.flute.jet_drive = true;
   patch.flute.jet_offset = 0.15f;
@@ -547,6 +548,22 @@ TEST_CASE("concert flute on the jet-drive path speaks at every note and velocity
                    << " dBFS");
       // The jet delay's breath law pulls v32 about 75 cents flat and v127 about 60 sharp.
       CHECK(speaks_at(tone, note, 100.0));
+    }
+  }
+}
+
+TEST_CASE("the shipped concert flute speaks at every note of its top octave and velocity",
+          "[midi][synth][flute]") {
+  // The tone-hole lattice and the reflection pole once sat under the note here, and the jet gave
+  // out from C7 at velocity 20 and from D7 at 127.
+  const NativeSynthPatch patch = gm_fallback_patch(0, 73);  // Flute
+  const int n = static_cast<int>(0.8 * kRate);
+  for (uint8_t note = 84; note <= 98; ++note) {
+    for (uint8_t velocity : {uint8_t{20}, uint8_t{60}, uint8_t{127}}) {
+      const std::vector<float> tone = render_patch(patch, note, velocity, n);
+      INFO("note " << int(note) << " velocity " << int(velocity) << ": " << held_db(tone)
+                   << " dBFS");
+      CHECK(speaks_at(tone, note));
     }
   }
 }

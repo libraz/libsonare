@@ -102,24 +102,33 @@ struct FreeReedPatchParams {
   /// the differentiator is normalised at the fundamental and 1 restores the law. 0 = off.
   float radiation_keytrack = 0.0f;
 
-  /// Onset bellows overshoot (dB of bellows pressure) at velocity 127: how far
-  /// the bellows stands above its held level as the player opens the valve,
-  /// before it settles. Applies only while no input streams the bellows.
-  /// 0 = off -> bit-identical.
+  /// Onset bellows overshoot (dB of bellows pressure) at A4 and velocity 127,
+  /// clamped to [0, 8]: how far the bellows stands above its held level as the
+  /// player opens the valve, before it settles. Applies only while no input
+  /// streams the bellows. The value a note receives is
+  /// free_reed_onset_overshoot_db(). 0 = off -> bit-identical.
   float onset_breath_overshoot_db = 0.0f;
   /// Time the bellows overshoot takes to settle back onto the held level (ms, ~95%).
   float onset_breath_settle_ms = 40.0f;
   /// Change of the bellows overshoot per doubling of velocity (dB), read down
   /// from velocity 127: positive gives a soft note less of it.
   float onset_breath_overshoot_vel_db = 0.0f;
-  /// Change of the bellows overshoot per octave above A4 (dB), floored at 0 dB:
-  /// the measured accordion swells 4-7 dB at its bass notes and not at all in
-  /// its treble, at every velocity. 0 = the same overshoot at every note -> bit-identical.
+  /// Change of the bellows overshoot per octave above A4 (dB), clamped to
+  /// [-6, 6]. The per-note value is floored at 0 dB and has no ceiling, so a
+  /// negative slope lifts the bass past the A4 value's 8 dB bound (-3 dB/oct
+  /// from 5.5 dB reaches 13.75 dB at C2) and takes the treble to 0. Inert while
+  /// onset_breath_overshoot_db is 0. 0 = the same overshoot at every note -> bit-identical.
   float onset_breath_overshoot_key_db = 0.0f;
   /// Exponent of the voice-amplifier velocity curve, (velocity/127)^e; 2 is the
   /// SoundFont curve, bit-identical to it.
   float velocity_exponent = 2.0f;
 };
+
+/// Onset bellows overshoot (dB, at velocity 127) a note sounding @p f0_hz receives:
+/// onset_breath_overshoot_db moved by onset_breath_overshoot_key_db per octave from A4,
+/// floored at 0 dB. A zero A4 value is returned unmoved, which is the condition the
+/// tuning layer's gate reads for the key-tracking field.
+float free_reed_onset_overshoot_db(const FreeReedPatchParams& params, float f0_hz) noexcept;
 
 /// Per-voice free-reed state, embedded in NativeSynthVoice. The voice's
 /// amplitude envelope / filter / mod matrix wrap around this core; render()

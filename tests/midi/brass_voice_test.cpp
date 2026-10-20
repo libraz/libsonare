@@ -376,8 +376,8 @@ TEST_CASE("brass CC74 preserves the conical darkening on the live path", "[midi]
 }
 
 TEST_CASE("brass presets speak and stay bounded", "[midi][synth][brass]") {
-  // Every catalog brass preset must resolve, sound, and stay bounded across the
-  // brass range.
+  // Every catalog brass preset must resolve, sound at F3, and stay bounded. The
+  // shipped GM brass compasses are swept in wind_rate_law_test.cpp.
   for (const char* name : {"trumpet", "trombone", "tuba", "french-horn", "muted-trumpet", "cornet",
                            "flugelhorn", "euphonium"}) {
     const sonare::midi::synth::SynthPreset* preset = sonare::midi::synth::find_synth_preset(name);

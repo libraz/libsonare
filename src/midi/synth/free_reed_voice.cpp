@@ -135,6 +135,12 @@ float radiation_mix_norm(float radiation, float halfangle, float ratio,
 
 }  // namespace
 
+float free_reed_onset_overshoot_db(const FreeReedPatchParams& params, float f0_hz) noexcept {
+  const float base = params.onset_breath_overshoot_db;
+  if (!(base > 0.0f) || params.onset_breath_overshoot_key_db == 0.0f) return base;
+  return std::max(0.0f, base + params.onset_breath_overshoot_key_db * std::log2(f0_hz / kA4Hz));
+}
+
 void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_rate, uint8_t note,
                               Velocity16 velocity, uint64_t seed) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
@@ -224,12 +230,7 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
 
   // Contour + textures.
   bellows_.start(params.attack_ms, params.release_ms, sr);
-  // The overshoot moves per octave from A4; a treble tongue follows the bellows without one.
-  const float overshoot_db =
-      params.onset_breath_overshoot_db > 0.0f && params.onset_breath_overshoot_key_db != 0.0f
-          ? std::max(0.0f, params.onset_breath_overshoot_db + params.onset_breath_overshoot_key_db *
-                                                                  std::log2(base_freq_hz_ / kA4Hz))
-          : params.onset_breath_overshoot_db;
+  const float overshoot_db = free_reed_onset_overshoot_db(params, base_freq_hz_);
   bellows_.set_overshoot_at_velocity(overshoot_db, params.onset_breath_overshoot_vel_db, vel01,
                                      params.onset_breath_settle_ms, sr);
   // A per-sample draw voiced at kLossVoicedSr, so it carries the noise law's gain.

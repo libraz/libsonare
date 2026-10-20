@@ -44,6 +44,11 @@ SONARE_TUNABLE(kReflectMax, 0.62f);
 // The open-end reflection pole is `0.80 - 0.30*brightness`, voiced by ear at
 // `string_loop.h`'s kLossVoicedSr and mapped onto the running rate there.
 
+// Lowest corner of an in-loop colour filter (the reflection pole, the tone-hole lattice), in
+// multiples of the note: at the octave the fundamental keeps 0.89 of its reflection. A soft jet's
+// margin is thin, and corners left under the octave silenced C7 at velocity 20.
+constexpr float kColourCornerMinHarmonic = 2.0f;
+
 // Bore loss from damping: a mild reflection trim on top of the 0.5 reflections
 // (which already keep the loop bounded). High damping quiets the resonance so an
 // ocarina / blown bottle does not overblow.
@@ -196,7 +201,9 @@ LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, 
 
   // Tone-hole lattice: one corner in Hz for every note, built at the loop's rate.
   lattice_hz_ =
-      params.lattice_cutoff_hz > 0.0f ? std::min(params.lattice_cutoff_hz, 0.45f * srf) : 0.0f;
+      params.lattice_cutoff_hz > 0.0f
+          ? std::min(std::max(params.lattice_cutoff_hz, kColourCornerMinHarmonic * f0), 0.45f * srf)
+          : 0.0f;
   lattice_comp_ = 0.0f;
   lattice_.reset();
   if (lattice_hz_ > 0.0f) {
@@ -631,7 +638,9 @@ void FluteVoiceCore::refresh_excitation_targets() noexcept {
   // The pole the ear voiced, at kLossVoicedSr. The clamp is provably slack for
   // any br in [0,1] -- it ranges [0.50, 0.80], well inside [0, 0.95] -- and is
   // kept only to reproduce the shipped formula exactly.
-  const float a_voiced = std::clamp(0.80f - 0.30f * br, 0.0f, 0.95f);
+  const float a_shipped = std::clamp(0.80f - 0.30f * br, 0.0f, 0.95f);
+  const float a_voiced = std::min(a_shipped, std::exp(-kTwoPi * kColourCornerMinHarmonic * f0_ /
+                                                      static_cast<float>(kLossVoicedSr)));
   lp_alpha_target_ = 1.0f - loss_pole_at_rate(a_voiced, srf_);
   // The per-traversal gain needs no mapping: the loop is traversed f0 times a
   // second whatever the rate, so `damping_gain_` already means the same thing.

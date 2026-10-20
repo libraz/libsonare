@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <complex>
@@ -674,7 +675,7 @@ TEST_CASE("a key-tracked free reed onset overshoot falls toward the treble",
   NativeSynthPatch tracked = flat;
   tracked.free_reed.onset_breath_overshoot_key_db = -6.0f;
   const int n = static_cast<int>(0.45 * kRate);
-  // Two octaves under A4 the tracked overshoot doubles in dB; two over it is gone.
+  // Two octaves under A4 the tracked overshoot is 6 + 2 * 6 = 18 dB; two over it is floored at 0.
   const double bass = onset_lift_db(render_patch(tracked, 45, 100, n)) -
                       onset_lift_db(render_patch(flat, 45, 100, n));
   const double treble = onset_lift_db(render_patch(tracked, 93, 100, n)) -
@@ -682,6 +683,33 @@ TEST_CASE("a key-tracked free reed onset overshoot falls toward the treble",
   INFO("tracked minus flat onset lift: bass " << bass << " dB, treble " << treble << " dB");
   REQUIRE(bass > 2.0);
   REQUIRE(treble < -2.0);
+}
+
+TEST_CASE(
+    "the free reed onset overshoot moves per octave from A4, floored at 0 and unbounded above",
+    "[midi][synth][free_reed]") {
+  using sonare::midi::synth::free_reed_onset_overshoot_db;
+  using sonare::midi::synth::FreeReedPatchParams;
+  const auto hz = [](int note) {
+    return static_cast<float>(440.0 * std::pow(2.0, (note - 69) / 12.0));
+  };
+  FreeReedPatchParams p;
+  p.onset_breath_overshoot_db = 5.5f;
+  p.onset_breath_overshoot_key_db = -3.0f;
+  // C2 sits 2.75 octaves under A4: 5.5 + 3 * 2.75, past the 8 dB the A4 value is held to.
+  CHECK(free_reed_onset_overshoot_db(p, hz(36)) == Catch::Approx(13.75f).margin(1.0e-3));
+  CHECK(free_reed_onset_overshoot_db(p, hz(69)) == Catch::Approx(5.5f).margin(1.0e-5));
+  // Two octaves over A4 the slope would go negative; the floor holds it at 0.
+  CHECK(free_reed_onset_overshoot_db(p, hz(93)) == 0.0f);
+  // A zero A4 value is inert whatever the slope, which is what the tuning gate reads.
+  p.onset_breath_overshoot_db = 0.0f;
+  for (int note : {21, 36, 69, 108}) CHECK(free_reed_onset_overshoot_db(p, hz(note)) == 0.0f);
+  // The shipped accordion receives the same law the voice applies.
+  const NativeSynthPatch accordion = gm_fallback_patch(0, 21);
+  CHECK(free_reed_onset_overshoot_db(accordion.free_reed, hz(36)) ==
+        Catch::Approx(accordion.free_reed.onset_breath_overshoot_db -
+                      2.75f * accordion.free_reed.onset_breath_overshoot_key_db)
+            .margin(1.0e-3));
 }
 
 TEST_CASE("a streamed bellows holds the free reed onset overshoot", "[midi][synth][free_reed]") {

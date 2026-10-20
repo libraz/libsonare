@@ -90,6 +90,9 @@ SONARE_TUNABLE(kConicalDarken, 0.12f);  // extra pole for conical (horn / tuba)
 // 0.48 octaves down.
 SONARE_TUNABLE(kBellBrightOct, 2.75f);
 SONARE_TUNABLE(kConicalOct, 0.48f);
+// Lowest bell reflection corner, in multiples of the note: a bore resonates only below its bell's
+// cutoff, and the fitted corners left the horn silent from E5 and the muted trumpet from G5.
+constexpr float kBellCornerMinHarmonic = 1.0f;
 
 // How much of the bell highpass's loss at the fundamental is given back, as an
 // exponent: 1 restores it exactly, 0 leaves the radiated level as the filter made
@@ -756,11 +759,15 @@ float BrassVoiceCore::bell_alpha_for_brightness(float bright01) const noexcept {
     // and leaves nothing for the two halves of the bell to disagree about.
     float octaves = kBellBrightOct * (std::clamp(bright01, 0.0f, 1.0f) - 0.5f);
     if (conical_) octaves -= kConicalOct;
-    const float f_eff = std::min(bell_cutoff_hz_ * std::exp2(octaves), 0.45f * lip_srf_);
+    const float f_eff =
+        std::min(std::max(bell_cutoff_hz_ * std::exp2(octaves), kBellCornerMinHarmonic * bore_f0_),
+                 0.45f * lip_srf_);
     return 1.0f - std::exp(-kTwoPi * f_eff / lip_srf_);
   }
   float a = (1.0f - std::clamp(bright01, 0.0f, 1.0f)) * kBellPoleSpan;
   if (conical_) a = std::min(a + kConicalDarken, 0.95f);
+  a = std::min(
+      a, std::exp(-kTwoPi * kBellCornerMinHarmonic * bore_f0_ / static_cast<float>(kLossVoicedSr)));
   // Voiced at kLossVoicedSr like every other bell and bridge in the bank. The
   // lip resonator is already quoted in Hz and dominates the timbre, so this one
   // is masked rather than absent — and a masked pole still moves its corner with

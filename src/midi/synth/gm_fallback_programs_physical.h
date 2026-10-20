@@ -241,9 +241,10 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // between them: one string read 12 dB cleaner, and 15 cents per seat closes it.
   o.string_ensemble_1.bowed_string.section_spread_cents = 15.0f;
   o.string_ensemble_1.bowed_string.section_rate_hz = 5.0f;
-  // Held level falls toward the bass against the reference, 12 dB from C2 to C5.
+  // Held level falls toward the bass against the reference, 12 dB from C2 to C5. The gain is
+  // linear in octaves, so a depth past -1/5.58 reaches zero inside the keyboard: -0.3 silenced E7.
   o.string_ensemble_1.mod_matrix.routes[0] = {ModSource::kKeyTrack, ModDestination::kAmpGain,
-                                              -0.3f};
+                                              -0.17f};
   o.string_ensemble_2 = o.string_ensemble_1;
   // Section 2's held level already follows the reference across the keyboard.
   o.string_ensemble_2.mod_matrix.routes[0] = ModRoute{};

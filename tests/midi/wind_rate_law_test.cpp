@@ -20,6 +20,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <sstream>
@@ -1167,4 +1168,187 @@ TEST_CASE("each wind voice sounds its equal-tempered fundamental across its comp
       if (sounding) CHECK(std::abs(cents) <= voice.tolerance_cents);
     }
   }
+}
+
+namespace {
+
+/// A shipped GM program voiced by a self-oscillating physical engine, and the written compass of
+/// the instrument it names, as sounding MIDI notes.
+struct ShippedCompass {
+  int program;
+  const char* name;
+  int low;
+  int top;
+};
+
+/// Standard orchestral ranges; a string section spans its cellos to its violins, and the folk
+/// winds take the range of the common instrument of their kind.
+constexpr ShippedCompass kShippedCompasses[] = {
+    {19, "Church Organ", 36, 96},
+    {20, "Reed Organ", 36, 96},
+    {21, "Accordion", 53, 93},
+    {22, "Harmonica", 60, 98},
+    {23, "Tango Accordion", 36, 93},
+    {40, "Violin", 55, 105},
+    {41, "Viola", 48, 88},
+    {42, "Cello", 36, 81},
+    {43, "Contrabass", 28, 67},
+    {48, "String Ensemble 1", 36, 100},
+    {49, "String Ensemble 2", 36, 100},
+    {56, "Trumpet", 52, 84},
+    {57, "Trombone", 40, 77},
+    {58, "Tuba", 26, 65},
+    {59, "Muted Trumpet", 52, 84},
+    {60, "French Horn", 35, 77},
+    {61, "Brass Section", 40, 84},
+    {64, "Soprano Sax", 56, 88},
+    {65, "Alto Sax", 49, 80},
+    {66, "Tenor Sax", 44, 76},
+    {67, "Baritone Sax", 37, 68},
+    {68, "Oboe", 58, 93},
+    {69, "English Horn", 52, 84},
+    {70, "Bassoon", 34, 75},
+    {71, "Clarinet", 50, 94},
+    {72, "Piccolo", 74, 108},
+    {73, "Flute", 60, 98},
+    {74, "Recorder", 72, 98},
+    {75, "Pan Flute", 60, 96},
+    {76, "Blown Bottle", 60, 84},
+    {77, "Shakuhachi", 62, 93},
+    {78, "Whistle", 74, 98},
+    {79, "Ocarina", 69, 89},
+    {109, "Bag Pipe", 67, 81},
+    {110, "Fiddle", 55, 100},
+    {111, "Shanai", 60, 84},
+};
+
+/// Held level under which a note is numerical silence, however quiet its voicing: the muted
+/// trumpet's top note at velocity 20 holds -84 dBFS.
+constexpr double kCompassSilenceDb = -100.0;
+/// Largest held-level step between adjacent semitones. The dropouts fell 20-40 dB within one or
+/// two; a section's register character moves up to 8 dB from one note to the next.
+constexpr double kCompassStepDb = 12.0;
+/// Deepest a note may sit under the octave below it: the dropouts sat 30-45 dB under, and the
+/// steepest shipped slope, the muted trumpet's top octave at velocity 20, falls 13.
+constexpr double kCompassOctaveDb = 24.0;
+/// The played fundamental's tone stands this far over the noise midway between the partials: the
+/// flute's toneless dropouts read 13 dB, the faintest shipped note (GM 48's C#2, velocity 20) 26.
+constexpr double kCompassToneDb = 19.0;
+/// The strongest tone within a minor third of the played note sits on it: room for a section's
+/// spread seats and drift, and still well short of a neighbouring semitone. A wider scan reads
+/// the fiddle's sympathetic open strings over a soft top note.
+constexpr double kCompassCents = 60.0;
+
+struct HeldNote {
+  bool finite = true;
+  double level_db = -300.0;
+  double cents = 0.0;
+  double tone_db = 0.0;
+};
+
+/// @p program at @p note and @p velocity over the last 40% of a @p seconds render at @p sr: the
+/// held level of both channels, and the strongest tone of their sum within 300 cents of the note
+/// (cents, and its height over the gaps between the partials). A note a wide spread pans hard to
+/// one side is silent on the other, so neither channel alone can stand for it.
+HeldNote held_note(int program, int note, uint8_t velocity, double sr, double seconds) {
+  NativeSynthConfig cfg;
+  cfg.patch = sonare::midi::synth::gm_fallback_patch(0, static_cast<uint8_t>(program));
+  NativeSynth synth(cfg);
+  synth.prepare(sr, 256);
+  synth.on_event(
+      0, event(sonare::midi::make_midi1_note_on(0, 0, static_cast<uint8_t>(note), velocity)));
+  const sonare::test::StereoRender out =
+      sonare::test::render_stereo(synth, static_cast<int>(seconds * sr));
+  HeldNote held;
+  const size_t from = out.left.size() * 3 / 5;
+  std::vector<double> sum(out.left.size() - from);
+  double power = 0.0;
+  for (size_t i = from; i < out.left.size(); ++i) {
+    const double l = out.left[i];
+    const double r = out.right[i];
+    held.finite = held.finite && std::isfinite(l) && std::isfinite(r);
+    power += 0.5 * (l * l + r * r);
+    // Hann-weighted, so the leakage of strong partials stays out of the gaps between them.
+    const double phase = static_cast<double>(i - from) / static_cast<double>(sum.size());
+    sum[i - from] = (l + r) * (0.5 - 0.5 * std::cos(kTwoPiD * phase));
+  }
+  if (!held.finite) return held;
+  held.level_db = 10.0 * std::log10(std::max(1.0e-30, power / static_cast<double>(sum.size())));
+  const double f0 = note_to_hz(static_cast<uint8_t>(note));
+  const auto tone_power = [&](double hz) {
+    const double coeff = 2.0 * std::cos(kTwoPiD * hz / sr);
+    double s1 = 0.0, s2 = 0.0;
+    for (const double x : sum) {
+      const double s0 = x + coeff * s1 - s2;
+      s2 = s1;
+      s1 = s0;
+    }
+    return s1 * s1 + s2 * s2 - coeff * s1 * s2;
+  };
+  double best = -1.0;
+  for (int c = -300; c <= 300; c += 20) {
+    const double p = tone_power(f0 * std::exp2(c / 1200.0));
+    if (p > best) {
+      best = p;
+      held.cents = c;
+    }
+  }
+  // Midway between the partials, where a held tone leaves only its noise.
+  std::vector<double> gaps;
+  for (int k = 0; k < 6 && (k + 0.5) * f0 < 0.45 * sr; ++k)
+    gaps.push_back(tone_power((k + 0.5) * f0));
+  std::nth_element(gaps.begin(), gaps.begin() + static_cast<std::ptrdiff_t>(gaps.size() / 2),
+                   gaps.end());
+  held.tone_db =
+      10.0 * std::log10(std::max(1.0e-30, best) / std::max(1.0e-30, gaps[gaps.size() / 2]));
+  return held;
+}
+
+/// Sweeps the top @p span semitones of every compass (the whole compass when @p span is
+/// negative) at each of @p rates and @p velocities. Each note sounds its played fundamental above
+/// numerical silence, within kCompassStepDb of the semitone under it and no further than
+/// kCompassOctaveDb under the octave below, wherever those lie in the compass.
+void compass_sweep(int span, const std::vector<double>& rates,
+                   const std::vector<uint8_t>& velocities, double seconds) {
+  for (const ShippedCompass& row : kShippedCompasses) {
+    const int low = span < 0 ? row.low : std::max(row.low, row.top - span);
+    for (const double sr : rates) {
+      for (const uint8_t velocity : velocities) {
+        std::array<double, 128> level;
+        level.fill(std::nan(""));
+        const auto level_at = [&](int note) {
+          if (std::isnan(level[static_cast<size_t>(note)])) {
+            level[static_cast<size_t>(note)] =
+                held_note(row.program, note, velocity, sr, seconds).level_db;
+          }
+          return level[static_cast<size_t>(note)];
+        };
+        for (int note = low; note <= row.top; ++note) {
+          const HeldNote held = held_note(row.program, note, velocity, sr, seconds);
+          level[static_cast<size_t>(note)] = held.level_db;
+          const int vel = velocity;
+          CAPTURE(row.program, row.name, sr, vel, note, held.level_db, held.cents, held.tone_db);
+          REQUIRE(held.finite);
+          CHECK(held.level_db > kCompassSilenceDb);
+          CHECK(held.tone_db > kCompassToneDb);
+          CHECK(std::abs(held.cents) <= kCompassCents);
+          if (note > low) CHECK(std::abs(held.level_db - level_at(note - 1)) < kCompassStepDb);
+          if (note - 12 >= row.low) CHECK(held.level_db > level_at(note - 12) - kCompassOctaveDb);
+        }
+      }
+    }
+  }
+}
+
+}  // namespace
+
+TEST_CASE("every shipped self-oscillating program speaks at the top of its written compass",
+          "[midi][synth][wind][compass]") {
+  // Soft is where a jet's margin gave out first (the flute fell silent from C7 at velocity 20).
+  compass_sweep(0, {48000.0}, {20, 127}, 0.5);
+}
+
+TEST_CASE("every shipped self-oscillating program speaks across its written compass at any rate",
+          "[.][slow][midi][synth][wind][compass]") {
+  compass_sweep(-1, {44100.0, 48000.0, 96000.0}, {20, 60, 127}, 0.8);
 }
