@@ -398,6 +398,9 @@ struct Sf2Voice : VoiceState {
   float render(const Sf2ChannelMod& mod) noexcept;
   /// Note-off: release the envelopes; mode-3 loops stop looping.
   void release() noexcept;
+  /// Silence immediately and leave both envelopes idle at zero, so the next
+  /// note on this slot starts from the state a fresh slot would.
+  void kill() noexcept;
   /// Stop this voice now, over a fade short enough to read as a cut. Unlike
   /// release() it does not use the zone's own release, which on a pad runs for
   /// seconds and would leave a note it was told to silence audible.

@@ -943,6 +943,47 @@ TEST_CASE("Sf2Voice wraps sustained loops in constant time", "[midi][sf2]") {
   REQUIRE(voice.reader.position() < 3.0);
 }
 
+TEST_CASE("Sf2Voice carries no modulation envelope level into the next note", "[midi][sf2]") {
+  // The modulation envelope outlasts the volume envelope, so it is still
+  // mid-release when the voice ends; a note restarting it from there would bend
+  // differently from the first one played on the slot.
+  std::vector<float> pool(64);
+  for (size_t i = 0; i < pool.size(); ++i) {
+    pool[i] = std::sin(sonare::constants::kTwoPi * static_cast<float>(i) / 64.0f);
+  }
+  Sf2VoiceParams params;
+  params.start = 0;
+  params.end = 64;
+  params.loop_start = 0;
+  params.loop_end = 64;
+  params.loop_mode = 1;
+  params.pitch_increment = 1.0;
+  params.volume_env.attack_ms = 1.0f;
+  params.volume_env.sustain = 1.0f;
+  params.volume_env.release_ms = 20.0f;
+  params.mod_env.attack_ms = 50.0f;
+  params.mod_env.sustain = 1.0f;
+  params.mod_env.release_ms = 5000.0f;
+  params.mod_env_to_pitch = 1200.0f;
+
+  Sf2Voice voice;
+  auto play = [&]() {
+    voice.start(pool.data(), params, kOutRate);
+    voice.active = true;
+    std::vector<float> out;
+    for (int i = 0; i < 4800; ++i) out.push_back(voice.render({}));
+    voice.release();
+    int guard = 0;
+    while (voice.active && ++guard < 480000) voice.render({});
+    REQUIRE_FALSE(voice.active);
+    return out;
+  };
+  const std::vector<float> first = play();
+  const std::vector<float> second = play();
+  REQUIRE(peak(first) > 0.1f);
+  REQUIRE(first == second);
+}
+
 TEST_CASE("Sf2Player applies GS per-note drum NRPN to the fallback voice", "[midi][sf2]") {
   // The GS per-note drum edits (pitch coarse / TVA level / absolute pan) must
   // reach the data-free model floor, not just SF2 voices. NRPN sequence:

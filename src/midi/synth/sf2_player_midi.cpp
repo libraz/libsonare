@@ -863,11 +863,7 @@ void Sf2Player::all_sound_off(uint8_t channel) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
   for (Sf2Voice& v : pool_) {
-    if (v.active && v.channel == ch) {
-      v.env.kill();
-      v.active = false;
-      v.releasing = false;
-    }
+    if (v.active && v.channel == ch) v.kill();
   }
   for (NativeSynthVoice& v : fallback_pool_) {
     if (v.active && v.channel == ch) v.kill();

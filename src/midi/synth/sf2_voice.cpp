@@ -312,6 +312,13 @@ void Sf2Voice::release() noexcept {
   mod_env.note_off();
 }
 
+void Sf2Voice::kill() noexcept {
+  env.kill();
+  mod_env.kill();
+  active = false;
+  releasing = false;
+}
+
 void Sf2Voice::choke(double sample_rate) noexcept {
   // configure() recomputes stage rates and touches neither the level nor the
   // stage, so the fade starts from wherever the envelope already is and cannot
@@ -337,8 +344,7 @@ float Sf2Voice::render(const Sf2ChannelMod& mod) noexcept {
   // A mode 3 loop runs until the release begins, so a pedal-held note keeps looping.
   const bool looping = reader.looping(!releasing);
   if (!reader.wrap(looping)) {
-    active = false;
-    env.kill();
+    kill();
     return 0.0f;
   }
   float sample = reader.read(looping);
@@ -380,7 +386,7 @@ float Sf2Voice::render(const Sf2ChannelMod& mod) noexcept {
   // --- amplitude ---
   const float level = env.next();
   if (!env.active()) {
-    active = false;
+    kill();
     return 0.0f;
   }
   float gain = level * params.attenuation_gain * params.velocity_gain * mod.gain;

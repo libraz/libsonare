@@ -531,7 +531,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   const bool harpsichord_tail = patch->mode == SynthEngineMode::kHarpsichord &&
                                 harpsichord_tail_latched && harpsichord.tail_active();
   if (!amp_env.active() && !harpsichord_tail) {
-    active = false;
+    kill();
     return 0.0f;
   }
   const float level = harpsichord_tail ? harpsichord_tail_level : envelope_level;
@@ -660,8 +660,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     sample = fm.render(common);
     // A one-shot takes no note-off, so the slot ends when every audible carrier has.
     if (patch->one_shot && fm.finished()) {
-      active = false;
-      amp_env.kill();
+      kill();
       return 0.0f;
     }
   } else if (patch->mode == SynthEngineMode::kKarplusStrong) {
@@ -681,8 +680,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     // level reading would re-time a voice steal on pieces nothing asked to
     // change.
     if (patch->one_shot && patch->amp_env.sustain > 0.0f && percussion.silent()) {
-      active = false;
-      amp_env.kill();
+      kill();
       return 0.0f;
     }
   } else if (patch->mode == SynthEngineMode::kPiano) {
@@ -706,8 +704,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   } else if (patch->mode == SynthEngineMode::kHarpsichord) {
     sample = harpsichord.render(common);
     if (harpsichord.finished()) {
-      active = false;
-      amp_env.kill();
+      kill();
       return 0.0f;
     }
   } else if (patch->mode == SynthEngineMode::kSample) {
@@ -717,8 +714,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     // A one-shot region that ran out ends the voice; the amp envelope would
     // otherwise hold the slot open on silence for its whole release.
     if (sampler.finished()) {
-      active = false;
-      amp_env.kill();
+      kill();
       return 0.0f;
     }
   } else {
@@ -796,8 +792,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   if (releasing && !harpsichord_tail &&
       std::max(std::fabs(sample), std::fabs(contact)) <= 0.1f * DahdsrEnvelope::kSilenceLevel) {
     if (++silent_run >= silent_run_limit) {
-      active = false;
-      amp_env.kill();
+      kill();
       return 0.0f;
     }
   } else {

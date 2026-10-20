@@ -128,7 +128,7 @@ TEST_CASE("note retrigger renders a repeated note identically", "[midi][synth][r
   }
   // FM and modal are silent from a bare patch, so they are reached through a
   // catalog preset instead.
-  for (const char* name : {"e-piano", "bell"}) {
+  for (const char* name : {"e-piano", "bell", "saw-lead"}) {
     CAPTURE(name);
     const auto* preset = sonare::midi::synth::find_synth_preset(name);
     REQUIRE(preset != nullptr);
@@ -156,6 +156,22 @@ TEST_CASE("note retrigger reaches every seeded subtractive variation", "[midi][s
   const TwoPlays note = play_config(cfg, SynthRetrigger::kNote);
   REQUIRE(note.ended);
   REQUIRE(max_diff(note.first, note.second) == 0.0f);
+}
+
+TEST_CASE("an ended voice carries no filter envelope level into the next note",
+          "[midi][synth][retrigger]") {
+  // The filter envelope outlasts the amp envelope, so it is still mid-release
+  // when the voice ends; a note restarting it from there would open differently.
+  NativeSynthConfig cfg;
+  cfg.patch.cutoff_hz = 400.0f;
+  cfg.patch.env_to_cutoff_cents = 4800.0f;
+  cfg.patch.amp_env.release_ms = 30.0f;
+  cfg.patch.filter_env.attack_ms = 40.0f;
+  cfg.patch.filter_env.release_ms = 3000.0f;
+  const TwoPlays note = play_config(cfg, SynthRetrigger::kNote);
+  REQUIRE(note.ended);
+  REQUIRE(peak(note.first) > 1.0e-3f);
+  CHECK(max_diff(note.first, note.second) == 0.0f);
 }
 
 TEST_CASE("free retrigger varies a repeated note", "[midi][synth][retrigger]") {
