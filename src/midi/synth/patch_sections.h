@@ -405,6 +405,7 @@ constexpr FreeReedPatchParams blank_free_reed() noexcept {
   z.detune = 0.0f;
   z.musette_flat = false;
   z.musette_partner_level = 0.0f;
+  z.musette_taper = 0.0f;
   z.attack_ms = 0.0f;
   z.release_ms = 0.0f;
   z.breath_noise = 0.0f;
@@ -413,9 +414,11 @@ constexpr FreeReedPatchParams blank_free_reed() noexcept {
   z.slot_gap = 0.0f;
   z.slot_swing = 0.0f;
   z.radiation = 0.0f;
+  z.radiation_keytrack = 0.0f;
   z.onset_breath_overshoot_db = 0.0f;
   z.onset_breath_settle_ms = 0.0f;
   z.onset_breath_overshoot_vel_db = 0.0f;
+  z.onset_breath_overshoot_key_db = 0.0f;
   z.velocity_exponent = 0.0f;
   return z;
 }

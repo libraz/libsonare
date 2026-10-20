@@ -62,6 +62,10 @@ struct FreeReedPatchParams {
   /// Level of each musette partner against the in-tune tongue in [0,1]. Read
   /// only when detune > 0. 1 = equal tongues -> bit-identical.
   float musette_partner_level = 1.0f;
+  /// How the musette offset follows the compass, in [0,1]: its cents scale by
+  /// (A4/f0)^taper, so 0 holds the cents (the beat rate grows with f0) and 1
+  /// holds the beat rate in Hz. Read only when detune > 0. 0 -> bit-identical.
+  float musette_taper = 0.0f;
   /// Onset rise (ms): the bellows takes up before the reed speaks.
   float attack_ms = 20.0f;
   /// Release fall (ms): the bellows releases and the reed stops.
@@ -93,6 +97,10 @@ struct FreeReedPatchParams {
   /// Nyquist, so it changes timbre without moving that level. The harmonium and
   /// bandoneon measure at 1, the harmonica — played inside cupped hands — at 0.
   float radiation = 1.0f;
+  /// Share of the monopole's +6 dB per octave kept in the level across the
+  /// compass, at the note's base pitch (only when slot_duty > 0 and radiation > 0):
+  /// the differentiator is normalised at the fundamental and 1 restores the law. 0 = off.
+  float radiation_keytrack = 0.0f;
 
   /// Onset bellows overshoot (dB of bellows pressure) at velocity 127: how far
   /// the bellows stands above its held level as the player opens the valve,
@@ -104,6 +112,10 @@ struct FreeReedPatchParams {
   /// Change of the bellows overshoot per doubling of velocity (dB), read down
   /// from velocity 127: positive gives a soft note less of it.
   float onset_breath_overshoot_vel_db = 0.0f;
+  /// Change of the bellows overshoot per octave above A4 (dB), floored at 0 dB:
+  /// the measured accordion swells 4-7 dB at its bass notes and not at all in
+  /// its treble, at every velocity. 0 = the same overshoot at every note -> bit-identical.
+  float onset_breath_overshoot_key_db = 0.0f;
   /// Exponent of the voice-amplifier velocity curve, (velocity/127)^e; 2 is the
   /// SoundFont curve, bit-identical to it.
   float velocity_exponent = 2.0f;
@@ -221,6 +233,8 @@ class FreeReedVoiceCore {
   // The tongue's swing at this note in plate thicknesses; 0 keeps the hump pair.
   float swing_ = 0.0f;
   float radiation_ = 0.0f;
+  // The radiated level's register law the fundamental normalisation took out; 1 keeps it out.
+  float register_gain_ = 1.0f;
   // The differentiator's gain is normalised at the current sounding
   // fundamental, not only at the note's base pitch.  Keep the half-angle and
   // last ratio so an unchanged bend stays on the exact start() path.

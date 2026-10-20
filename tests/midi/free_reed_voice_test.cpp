@@ -4,8 +4,10 @@
 ///        second partial over the first where the saw cannot, its duty places
 ///        the null the measured references carry, its swing darkens with the
 ///        register where a fixed shape cannot, it leaves no steady flow under
-///        the note, and it stays bounded across the keyboard. The onset
-///        bellows overshoot is the identity at 0 dB and yields to a streamed bellows.
+///        the note, and it stays bounded across the keyboard. The musette taper
+///        holds the beat rate across the compass. The onset bellows overshoot is
+///        the identity at 0 dB, falls toward the treble when key-tracked, and
+///        yields to a streamed bellows.
 
 #include "midi/synth/free_reed_voice.h"
 
@@ -138,12 +140,12 @@ double rms_after_pitch_change(sonare::midi::synth::FreeReedVoiceCore& voice, flo
   return rms_after(voice, target_ratio, 0, samples);
 }
 
-double fundamental_amplitude(const FreeReedPatchParams& params, double sample_rate, uint8_t note,
-                             int warmup, int samples) {
+/// Amplitude of the rendered tone's component at @p frequency, by projection.
+double amplitude_at(const FreeReedPatchParams& params, double sample_rate, uint8_t note,
+                    double frequency, int warmup, int samples) {
   FreeReedVoiceCore voice;
   voice.start(params, sample_rate, note, sonare::midi::Velocity16::from7(100), 42);
   for (int i = 0; i < warmup; ++i) voice.render(1.0f);
-  const double frequency = note_hz(note);
   const double omega = 2.0 * 3.14159265358979323846 * frequency / sample_rate;
   std::complex<double> projection(0.0, 0.0);
   for (int i = 0; i < samples; ++i) {
@@ -153,7 +155,45 @@ double fundamental_amplitude(const FreeReedPatchParams& params, double sample_ra
   return 2.0 * std::abs(projection) / static_cast<double>(samples);
 }
 
+double fundamental_amplitude(const FreeReedPatchParams& params, double sample_rate, uint8_t note,
+                             int warmup, int samples) {
+  return amplitude_at(params, sample_rate, note, note_hz(note), warmup, samples);
+}
+
 }  // namespace
+
+TEST_CASE("the free reed musette taper is off without a musette", "[midi][synth][free_reed]") {
+  NativeSynthPatch plain = free_reed_patch();
+  NativeSynthPatch tapered = plain;
+  tapered.free_reed.musette_taper = 1.0f;
+  tapered.free_reed.musette_flat = true;
+  REQUIRE(render_patch(plain, 60, 100, 24000) == render_patch(tapered, 60, 100, 24000));
+}
+
+TEST_CASE("the free reed musette taper holds the beat rate across the compass",
+          "[midi][synth][free_reed]") {
+  FreeReedPatchParams params;
+  params.slot_duty = 0.29f;
+  params.slot_return = 0.7f;
+  params.detune = 1.0f;
+  params.breath_noise = 0.0f;
+  // detune 1 puts the partner 15 c sharp. Untapered that holds at every note;
+  // fully tapered the partner keeps A4's offset in Hz, which at F3 is 37.8 c, so
+  // the two laws put the partner on different lines and each leaves the other's empty.
+  const uint8_t note = 53;
+  const double f0 = note_hz(note);
+  const double at_cents = f0 * std::pow(2.0, 15.0 / 1200.0);
+  const double at_hz = f0 + 440.0 * (std::pow(2.0, 15.0 / 1200.0) - 1.0);
+  const int n = 4 * 48000;
+  params.musette_taper = 0.0f;
+  const double cents_law_on_cents = amplitude_at(params, 48000.0, note, at_cents, 24000, n);
+  const double cents_law_on_hz = amplitude_at(params, 48000.0, note, at_hz, 24000, n);
+  params.musette_taper = 1.0f;
+  const double hz_law_on_cents = amplitude_at(params, 48000.0, note, at_cents, 24000, n);
+  const double hz_law_on_hz = amplitude_at(params, 48000.0, note, at_hz, 24000, n);
+  REQUIRE(cents_law_on_cents > 4.0 * cents_law_on_hz);
+  REQUIRE(hz_law_on_hz > 4.0 * hz_law_on_cents);
+}
 
 TEST_CASE("the free reed's slot flow is off by default", "[midi][synth][free_reed]") {
   NativeSynthPatch plain = free_reed_patch();
@@ -165,7 +205,29 @@ TEST_CASE("the free reed's slot flow is off by default", "[midi][synth][free_ree
   gated.free_reed.slot_gap = 0.47f;
   gated.free_reed.slot_swing = 3.0f;
   gated.free_reed.radiation = 0.0f;
+  gated.free_reed.radiation_keytrack = 1.0f;
   REQUIRE(render_patch(plain, 60, 100, 24000) == render_patch(gated, 60, 100, 24000));
+}
+
+TEST_CASE("the free reed radiation keytrack restores the monopole's register law",
+          "[midi][synth][free_reed]") {
+  NativeSynthPatch flat = free_reed_patch();
+  flat.free_reed.slot_duty = 0.35f;
+  flat.free_reed.slot_return = 0.59f;
+  flat.free_reed.radiation = 1.0f;
+  NativeSynthPatch tracked = flat;
+  tracked.free_reed.radiation_keytrack = 1.0f;
+  const auto held_db = [](const NativeSynthPatch& patch, uint8_t note) {
+    const std::vector<float> tone = render_patch(patch, note, 100, 24000);
+    return 20.0 * std::log10(rms(tone, 12000, 24000));
+  };
+  // Normalised, two octaves cost the level nothing; tracked, they are the +12 dB
+  // a small source radiates, within the ladder's own change across the compass.
+  const double flat_rise = held_db(flat, 81) - held_db(flat, 57);
+  const double tracked_rise = held_db(tracked, 81) - held_db(tracked, 57);
+  INFO("rise over two octaves: normalised " << flat_rise << " dB, tracked " << tracked_rise);
+  REQUIRE(tracked_rise - flat_rise > 10.0);
+  REQUIRE(tracked_rise - flat_rise < 14.0);
 }
 
 TEST_CASE("the free reed's slot flow lifts the second partial over the first",
@@ -576,6 +638,7 @@ TEST_CASE("free reed onset overshoot is off by default (bit-identical)",
   NativeSynthPatch same = base;
   same.free_reed.onset_breath_settle_ms = 120.0f;
   same.free_reed.onset_breath_overshoot_vel_db = 4.0f;
+  same.free_reed.onset_breath_overshoot_key_db = -6.0f;
   REQUIRE(render_patch(base, 65, 100, 24000) == render_patch(same, 65, 100, 24000));
 }
 
@@ -597,6 +660,28 @@ TEST_CASE("a free reed onset overshoot lifts the onset, more at ff when it slope
   INFO("onset lift added at velocity 32: " << soft_gain << " dB, at 127: " << hard_gain << " dB");
   REQUIRE(hard_gain > 0.5);
   REQUIRE(hard_gain > soft_gain);
+}
+
+TEST_CASE("a key-tracked free reed onset overshoot falls toward the treble",
+          "[midi][synth][free_reed]") {
+  NativeSynthPatch flat = gm_fallback_patch(0, 21);  // Accordion
+  flat.amp_env.attack_ms = 5.0f;
+  flat.amp_env.sustain = 1.0f;
+  flat.free_reed.attack_ms = 2.0f;
+  flat.free_reed.onset_breath_overshoot_db = 6.0f;
+  flat.free_reed.onset_breath_settle_ms = 80.0f;
+  flat.free_reed.onset_breath_overshoot_key_db = 0.0f;
+  NativeSynthPatch tracked = flat;
+  tracked.free_reed.onset_breath_overshoot_key_db = -6.0f;
+  const int n = static_cast<int>(0.45 * kRate);
+  // Two octaves under A4 the tracked overshoot doubles in dB; two over it is gone.
+  const double bass = onset_lift_db(render_patch(tracked, 45, 100, n)) -
+                      onset_lift_db(render_patch(flat, 45, 100, n));
+  const double treble = onset_lift_db(render_patch(tracked, 93, 100, n)) -
+                        onset_lift_db(render_patch(flat, 93, 100, n));
+  INFO("tracked minus flat onset lift: bass " << bass << " dB, treble " << treble << " dB");
+  REQUIRE(bass > 2.0);
+  REQUIRE(treble < -2.0);
 }
 
 TEST_CASE("a streamed bellows holds the free reed onset overshoot", "[midi][synth][free_reed]") {

@@ -156,8 +156,11 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   tongue_mix_ = 1.0f / (1.0f + static_cast<float>(partner_count_) * partner_level_);
   phase_a_ = 0.0f;
   for (int i = 0; i < kMaxPartners; ++i) partners_[i] = Partner{};
+  // The offset's cents fall as (A4/f0)^taper: 0 holds the cents, 1 the beat rate in Hz.
+  const float taper = std::clamp(params.musette_taper, 0.0f, 1.0f);
+  const float cents_a4 = kDetuneMinCents + kDetuneSpanCents * detune;
+  const float cents = taper > 0.0f ? cents_a4 * std::pow(kA4Hz / base_freq_hz_, taper) : cents_a4;
   for (int i = 0; i < partner_count_; ++i) {
-    const float cents = kDetuneMinCents + kDetuneSpanCents * detune;
     partners_[i].inc = inc_a_ * cents_to_ratio(i == 0 ? cents : -cents);
     // Decorrelate the tongues' start (a real accordion's tongues never speak in
     // phase); seeded, so the offset is deterministic per voice.
@@ -221,8 +224,13 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
 
   // Contour + textures.
   bellows_.start(params.attack_ms, params.release_ms, sr);
-  bellows_.set_overshoot_at_velocity(params.onset_breath_overshoot_db,
-                                     params.onset_breath_overshoot_vel_db, vel01,
+  // The overshoot moves per octave from A4; a treble tongue follows the bellows without one.
+  const float overshoot_db =
+      params.onset_breath_overshoot_db > 0.0f && params.onset_breath_overshoot_key_db != 0.0f
+          ? std::max(0.0f, params.onset_breath_overshoot_db + params.onset_breath_overshoot_key_db *
+                                                                  std::log2(base_freq_hz_ / kA4Hz))
+          : params.onset_breath_overshoot_db;
+  bellows_.set_overshoot_at_velocity(overshoot_db, params.onset_breath_overshoot_vel_db, vel01,
                                      params.onset_breath_settle_ms, sr);
   // A per-sample draw voiced at kLossVoicedSr, so it carries the noise law's gain.
   breath_noise_ =
@@ -230,7 +238,12 @@ void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_r
   // The radiated pair swings wider than the saturated saw it replaces, so the
   // patch gains stay comparable across the two shapers.
   slot_makeup_ = slot_duty_ > 0.0f ? kSlotMakeup : 1.0f;
-  output_scale_ = (kOutputMin + kOutputSpan * level) * slot_makeup_;
+  // A monopole radiates +6 dB per octave; the share kept rides on the note's base pitch.
+  const float keytrack = std::clamp(params.radiation_keytrack, 0.0f, 1.0f);
+  register_gain_ = slot_duty_ > 0.0f && radiation_ > 0.0f && keytrack > 0.0f
+                       ? std::pow(base_freq_hz_ / kA4Hz, keytrack)
+                       : 1.0f;
+  output_scale_ = (kOutputMin + kOutputSpan * level) * slot_makeup_ * register_gain_;
 
   // Live axes start where the note put them, so nothing is armed and the
   // coefficients above stand until a control moves.
@@ -271,7 +284,7 @@ void FreeReedVoiceCore::refresh_excitation_targets() noexcept {
 
 void FreeReedVoiceCore::apply_excitation() noexcept {
   drive_ = drive_stiff_ + kDriveBreathSpan * force01_;
-  output_scale_ = (kOutputMin + kOutputSpan * force01_) * slot_makeup_;
+  output_scale_ = (kOutputMin + kOutputSpan * force01_) * slot_makeup_ * register_gain_;
   const float srf = static_cast<float>(sample_rate_);
   const float corner =
       std::min(kBodyMinHz * std::pow(kBodyMaxHz / kBodyMinHz, bright01_), 0.45f * srf);

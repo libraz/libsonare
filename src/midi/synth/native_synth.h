@@ -2000,6 +2000,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.detune, 0.3f), 0.0f, 1.0f);
   p.free_reed.musette_partner_level =
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.musette_partner_level, 1.0f), 0.0f, 1.0f);
+  p.free_reed.musette_taper =
+      std::clamp(patch_clamp_detail::sanitize(p.free_reed.musette_taper, 0.0f), 0.0f, 1.0f);
   p.free_reed.attack_ms =
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.attack_ms, 20.0f), 1.0f, 2000.0f);
   p.free_reed.release_ms =
@@ -2016,12 +2018,16 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.slot_swing, 0.0f), 0.0f, 16.0f);
   p.free_reed.radiation =
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.radiation, 1.0f), 0.0f, 1.0f);
+  p.free_reed.radiation_keytrack =
+      std::clamp(patch_clamp_detail::sanitize(p.free_reed.radiation_keytrack, 0.0f), 0.0f, 1.0f);
   p.free_reed.onset_breath_overshoot_db = std::clamp(
       patch_clamp_detail::sanitize(p.free_reed.onset_breath_overshoot_db, 0.0f), 0.0f, 8.0f);
   p.free_reed.onset_breath_settle_ms = std::clamp(
       patch_clamp_detail::sanitize(p.free_reed.onset_breath_settle_ms, 40.0f), 1.0f, 500.0f);
   p.free_reed.onset_breath_overshoot_vel_db = std::clamp(
       patch_clamp_detail::sanitize(p.free_reed.onset_breath_overshoot_vel_db, 0.0f), -3.0f, 6.0f);
+  p.free_reed.onset_breath_overshoot_key_db = std::clamp(
+      patch_clamp_detail::sanitize(p.free_reed.onset_breath_overshoot_key_db, 0.0f), -6.0f, 6.0f);
   p.free_reed.velocity_exponent =
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.velocity_exponent, 2.0f), 0.0f, 4.0f);
   p.harpsichord.pluck_8a =
