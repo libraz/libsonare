@@ -3,6 +3,7 @@
 /// @file true_peak_limiter.h
 /// @brief Ceiling limiter with true-peak style post guard.
 
+#include <array>
 #include <cstdint>
 #include <limits>
 #include <vector>
@@ -23,10 +24,12 @@ struct TruePeakLimiterConfig {
   ///   oversample_factor, to within float rounding of the final correction: the
   ///   last stage (@ref TruePeakOutputGuard) reconstructs the output with that
   ///   meter's own interpolation filter and scales any stencil whose
-  ///   interpolated value exceeds the ceiling. The default 4x is the BS.1770
-  ///   true-peak measure, so a delivery check at 4x reads at or below the
-  ///   ceiling. A meter running at a HIGHER oversampling interpolates points
-  ///   the limiter never evaluated and can read above the ceiling: measured
+  ///   interpolated value exceeds the ceiling. At 8x and 16x it also bounds the
+  ///   BS.1770 4x reading, whose filter is a different design, so a delivery
+  ///   check at 4x reads at or below the ceiling at every factor of 4 or more;
+  ///   1x and 2x bound only their own reading. A meter running at a HIGHER
+  ///   oversampling interpolates points the limiter never evaluated and can
+  ///   read above the ceiling: measured
   ///   for the default 4x limiter read by a 16x meter at 44.1 and 48 kHz, up to
   ///   +0.15 dB on a full-scale sine just below a quarter of the rate, +0.09 dB
   ///   on noise driven 24 dB into it and +0.02 dB on a driven kick-and-noise
@@ -58,7 +61,8 @@ struct TruePeakLimiterConfig {
 
 /// @brief Final ceiling guard, evaluated with the interpolation a meter uses.
 /// @details Reconstructs the base-rate output with the canonical true-peak FIR
-///   for the limiter's factor (the one metering::true_peak reads with) and,
+///   for the limiter's factor (the one metering::true_peak reads with), and
+///   above 4x with the 4x FIR as well, and,
 ///   where an interpolated value exceeds the ceiling, scales every base sample
 ///   of that value's stencil, channel-linked, so it lands on the ceiling.
 ///   Positions are visited in stream order and each reads every earlier
@@ -86,7 +90,11 @@ class TruePeakOutputGuard {
   // Bounds the rechecks after one correction; each pass only scales down.
   static constexpr int kMaxRecheckPasses = 8;
 
-  const rt::PolyphaseFir* fir_ = nullptr;
+  /// The limiter factor's FIR, then the BS.1770 4x FIR when the factor is finer.
+  std::array<const rt::PolyphaseFir*, 2> firs_{};
+  int fir_count_ = 0;
+  /// Shared stencil width; every factor above 1x uses the same taps per phase.
+  int taps_per_phase_ = 0;
   std::vector<std::vector<float>> work_;
   int reach_ = 0;
   int latency_ = 0;

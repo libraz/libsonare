@@ -7,6 +7,7 @@
 #include <limits>
 #include <vector>
 
+#include "mastering/common/loudness_measure.h"
 #include "mastering/common/parameter_domain.h"
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
@@ -44,8 +45,18 @@ bool valid_release_ms(float release_ms) noexcept {
 }  // namespace
 
 void TruePeakOutputGuard::prepare(int factor, int max_channels, int max_block_size) {
-  fir_ = &sonare::rt::true_peak_fir_for(factor);
-  reach_ = std::max(0, fir_->taps_per_phase - 1);
+  firs_ = {&sonare::rt::true_peak_fir_for(factor), nullptr};
+  fir_count_ = 1;
+  // A finer factor's FIR is a different design, so its stencil alone can leave a BS.1770 4x
+  // reading above the ceiling (measured +0.034 dB at 8x, 48 kHz); bound that reading too.
+  if (factor > common::kDefaultTruePeakOversample) {
+    firs_[fir_count_++] = &sonare::rt::true_peak_fir_for(common::kDefaultTruePeakOversample);
+  }
+  taps_per_phase_ = 0;
+  for (int i = 0; i < fir_count_; ++i) {
+    taps_per_phase_ = std::max(taps_per_phase_, firs_[static_cast<size_t>(i)]->taps_per_phase);
+  }
+  reach_ = std::max(0, taps_per_phase_ - 1);
   // One stencil's reach to complete a position, plus the recheck window's own
   // lookahead so a recheck only ever touches samples not yet emitted.
   latency_ = (1 + kRecheckReaches) * reach_;
@@ -72,8 +83,8 @@ float TruePeakOutputGuard::process(float* const* channels, int num_channels, int
 
   // Interpolated position k reads base samples [k - lookbehind, k + half]; the
   // previous block evaluated every position whose stencil it could complete.
-  const size_t half = static_cast<size_t>(fir_->taps_per_phase / 2);
-  const size_t lookbehind = static_cast<size_t>(fir_->taps_per_phase - 1) - half;
+  const size_t half = static_cast<size_t>(taps_per_phase_ / 2);
+  const size_t lookbehind = static_cast<size_t>(taps_per_phase_ - 1) - half;
   const size_t reach = static_cast<size_t>(reach_);
   const size_t last = length - 1 - half;
   float min_gain = 1.0f;
@@ -109,9 +120,12 @@ float TruePeakOutputGuard::process(float* const* channels, int num_channels, int
       if ((ch == excluded_channel) != excluded_plane) continue;
       const float* data = work_[static_cast<size_t>(ch)].data();
       peak = std::max(peak, std::abs(data[k]));
-      for (int phase = 0; phase < fir_->phases; ++phase) {
-        peak = std::max(peak, std::abs(sonare::rt::interpolate_polyphase_sample(data, length, k,
-                                                                                phase, *fir_)));
+      for (int i = 0; i < fir_count_; ++i) {
+        const rt::PolyphaseFir& fir = *firs_[static_cast<size_t>(i)];
+        for (int phase = 0; phase < fir.phases; ++phase) {
+          peak = std::max(peak, std::abs(sonare::rt::interpolate_polyphase_sample(data, length, k,
+                                                                                  phase, fir)));
+        }
       }
     }
     if (!(peak > ceiling)) return false;
@@ -560,11 +574,8 @@ int TruePeakLimiter::latency_samples() const noexcept {
 void TruePeakLimiter::prepare_buffers(int num_channels) {
   // Every scratch buffer is preallocated in prepare(). Never resize on the
   // audio thread; reject a route wider than the requested working capacity.
-  if (num_channels <= max_working_channels_) {
-    return;
-  }
-  throw SonareException(ErrorCode::InvalidParameter,
-                        "num_channels exceeds prepared TruePeakLimiter state");
+  require_prepared_channels(num_channels, static_cast<size_t>(max_working_channels_),
+                            "TruePeakLimiter");
 }
 
 double TruePeakLimiter::smoother_sample_rate() const noexcept {

@@ -253,6 +253,45 @@ TEST_CASE("TruePeakLimiter holds the ceiling as metered at its own oversample fa
   REQUIRE(measured <= kCeilingDb + kToleranceDb);
 }
 
+// A delivery check reads true peak at 4x (BS.1770) whatever factor the limiter
+// ran at. The 8x and 16x FIRs are different designs, so bounding only their own
+// interpolation left a 4x reading up to +0.034 dB over the ceiling.
+TEST_CASE("TruePeakLimiter above 4x holds the ceiling on a BS.1770 4x meter",
+          "[mastering][maximizer]") {
+  constexpr float kCeilingDb = -1.0f;
+  constexpr float kToleranceDb = 0.002f;
+
+  const int sample_rate = GENERATE(44100, 48000);
+  const int factor = GENERATE(8, 16);
+  const bool apply_gain_at_input_rate = GENERATE(false, true);
+  CAPTURE(sample_rate, factor, apply_gain_at_input_rate);
+
+  // Noise bursts driven 12 dB over full scale, separated by silence.
+  const int samples = sample_rate / 2;
+  std::vector<float> signal(static_cast<size_t>(samples), 0.0f);
+  std::mt19937 rng(1770);
+  std::uniform_real_distribution<float> dist(-4.0f, 4.0f);
+  for (int i = 0; i < samples; ++i) {
+    if ((i / 2000) % 2 == 0) signal[static_cast<size_t>(i)] = dist(rng);
+  }
+
+  TruePeakLimiter limiter({kCeilingDb, 1.0f, 50.0f, factor, apply_gain_at_input_rate});
+  limiter.prepare(static_cast<double>(sample_rate), 512);
+  signal.resize(signal.size() + static_cast<size_t>(limiter.latency_samples()), 0.0f);
+  const int total = static_cast<int>(signal.size());
+  for (int offset = 0; offset < total; offset += 512) {
+    float* block = signal.data() + offset;
+    limiter.process(&block, 1, std::min(512, total - offset));
+  }
+
+  const Audio limited = Audio::from_buffer(signal.data(), signal.size(), sample_rate);
+  const float at_four = metering::true_peak_db(limited, 4);
+  const float at_own = metering::true_peak_db(limited, factor);
+  CAPTURE(at_four, at_own);
+  REQUIRE(at_four <= kCeilingDb + kToleranceDb);
+  REQUIRE(at_own <= kCeilingDb + kToleranceDb);
+}
+
 // The offline runner trims the reported latency off the front of the render,
 // and with it the pre-ring the limiter bounded its first samples against. A
 // meter reads silence there instead, so a program starting at full level can
