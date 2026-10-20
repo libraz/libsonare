@@ -282,7 +282,7 @@ uint32_t SampleBankWasm::addSample(val data, val desc) {
   uint32_t index = 0;
   const SonareError err =
       sonare_sample_bank_add_sample(bank_, frames.data(), frames.size(), &c, &index);
-  if (err != SONARE_OK) throwCError(err, "failed to add a sample to the bank");
+  if (err != SONARE_OK) throwCodedCError(err, "failed to add a sample to the bank");
   return index;
 }
 
@@ -311,20 +311,20 @@ void SampleBankWasm::addZone(const val& set_index_val, val zone) {
   c.pan_units = static_cast<float>(numberField(zone, "panUnits", "sample zone", 0.0));
 
   const SonareError err = sonare_sample_bank_add_zone(bank_, set_index, &c);
-  if (err != SONARE_OK) throwCError(err, "failed to add a zone to the sample bank");
+  if (err != SONARE_OK) throwCodedCError(err, "failed to add a zone to the sample bank");
 }
 
 double SampleBankWasm::sampleCount() const {
   std::size_t count = 0;
   const SonareError err = sonare_sample_bank_sample_count(bank_, &count);
-  if (err != SONARE_OK) throwCError(err, "failed to read the bank sample count");
+  if (err != SONARE_OK) throwCodedCError(err, "failed to read the bank sample count");
   return static_cast<double>(count);
 }
 
 double SampleBankWasm::setCount() const {
   std::size_t count = 0;
   const SonareError err = sonare_sample_bank_set_count(bank_, &count);
-  if (err != SONARE_OK) throwCError(err, "failed to read the bank keymap set count");
+  if (err != SONARE_OK) throwCodedCError(err, "failed to read the bank keymap set count");
   return static_cast<double>(count);
 }
 

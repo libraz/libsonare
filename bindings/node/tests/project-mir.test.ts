@@ -33,9 +33,7 @@ describe('Project snapToGrid', () => {
     withProject((project) => {
       // -1 is representable as an int, so this is the C ABI's own rejection
       // rather than the argument guard's.
-      expect(() => project.snapToGrid(1.0, 1.0, -1)).toThrow(
-        expect.objectContaining({ codeName: 'InvalidParameter' }),
-      );
+      expect(() => project.snapToGrid(1.0, 1.0, -1)).toThrow(RangeError);
     });
   });
 });
@@ -155,10 +153,8 @@ describe('Project MIR integer arguments are range-checked', () => {
       expect(() => project.setProgramOnChannel(clipId, 0, 3, 24)).not.toThrow();
       expect(project.snapToGrid(0.27, 1.0, 4)).toBe(0.25);
       // An in-range index on an empty sidecar list is the C ABI's rejection,
-      // which carries a SonareError code rather than being a RangeError.
-      expect(() => project.getAssistSidecar(0)).toThrow(
-        expect.objectContaining({ name: 'SonareError' }),
-      );
+      // which surfaces as a RangeError because the index is the caller's value.
+      expect(() => project.getAssistSidecar(0)).toThrow(RangeError);
     });
   });
 });

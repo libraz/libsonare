@@ -57,7 +57,7 @@ from ._runtime import (
     SonareTakeAlignment,
     SonareValueError,
     _as_float32_buffer,
-    _check,
+    _check_argument,
     _get_lib,
     _guard_buffer,
     _narrow_double,
@@ -220,14 +220,14 @@ def align_take_to_reference(
     Raises:
         SonareValueError: If either buffer is empty or carries a non-finite
             sample, or if a configuration value does not fit its C field.
-        SonareError: ``INVALID_PARAMETER`` for a non-positive ``sample_rate`` or
+        SonareValueError: For a non-positive ``sample_rate`` or
             ``take_sample_rate``, a resampled take over the buffer size limit, a
             rate too low to carry the chroma grid, a ``bins_per_octave`` that is
             not a positive multiple of 12, or a pair that yields fewer than two
             distinct anchors -- which is what an unalignable pair looks like, and
             is reported rather than answered with a map a caller cannot use.
-            ``NOT_SUPPORTED`` when the library was built without the arrangement
-            subsystem.
+        SonareError: ``NOT_SUPPORTED`` when the library was built without the
+            arrangement subsystem.
 
     Example:
         >>> anchors, alignment = libsonare.align_take_to_reference(guide, take, 44100)
@@ -274,7 +274,7 @@ def align_take_to_reference(
         ctypes.byref(out_alignment),
     )
     try:
-        _check(rc)
+        _check_argument(rc)
         anchors = [
             (out_anchors[i].warp_sample, out_anchors[i].source_sample)
             for i in range(out_count.value)
@@ -344,7 +344,7 @@ def chord_symbol_from_analysis(chord: Chord) -> dict[str, object]:
     out_slash = ctypes.c_uint32()
     out_count = ctypes.c_size_t()
     extensions = (ctypes.c_uint8 * _CHORD_EXTENSION_CAPACITY)()
-    _check(
+    _check_argument(
         lib.sonare_chord_symbol_from_analysis(
             _to_c_int32(root, "chord.root"),
             _to_c_int32(ordinal, "chord.quality"),
@@ -387,7 +387,9 @@ def key_mode_from_analysis(mode: Mode | int) -> int:
             "rebuild or upgrade the shared library before calling key_mode_from_analysis"
         )
     out_mode = ctypes.c_uint32()
-    _check(lib.sonare_key_mode_from_analysis(_to_c_int32(mode, "mode"), ctypes.byref(out_mode)))
+    _check_argument(
+        lib.sonare_key_mode_from_analysis(_to_c_int32(mode, "mode"), ctypes.byref(out_mode))
+    )
     return int(out_mode.value)
 
 
@@ -404,7 +406,7 @@ class _ProjectEditMixin:
         raises.
         The change is applied through the edit history, so it is undoable.
         """
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_sample_rate(
                 self._require_handle(), _narrow_double(sample_rate, "sample_rate")
             )
@@ -414,7 +416,7 @@ class _ProjectEditMixin:
         """Return audio source ids that need PCM after deserialization."""
         count = ctypes.c_size_t()
         lib = _get_lib()
-        _check(
+        _check_argument(
             lib.sonare_project_unresolved_audio_source_count(
                 self._require_handle(), ctypes.byref(count)
             )
@@ -422,7 +424,7 @@ class _ProjectEditMixin:
         ids: list[int] = []
         for index in range(count.value):
             source_id = ctypes.c_uint32()
-            _check(
+            _check_argument(
                 lib.sonare_project_unresolved_audio_source_id_by_index(
                     self._require_handle(),
                     _to_c_size_t(index, "index"),
@@ -436,7 +438,7 @@ class _ProjectEditMixin:
         """Return descriptors of audio sources that need PCM, with the full URI."""
         count = ctypes.c_size_t()
         lib = _get_lib()
-        _check(
+        _check_argument(
             lib.sonare_project_unresolved_audio_source_count(
                 self._require_handle(), ctypes.byref(count)
             )
@@ -444,7 +446,7 @@ class _ProjectEditMixin:
         sources: list[ProjectSource] = []
         for index in range(count.value):
             raw = SonareProjectSource()
-            _check(
+            _check_argument(
                 lib.sonare_project_unresolved_audio_source_by_index(
                     self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
                 )
@@ -462,7 +464,7 @@ class _ProjectEditMixin:
         # Narrowed before the frame count is derived from it, so a `channels`
         # the C type cannot hold is refused under its own name.
         channel_count = _to_c_int(channels, "channels")
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_source_audio(
                 self._require_handle(),
                 _to_c_uint32(source_id, "source_id"),
@@ -486,7 +488,7 @@ class _ProjectEditMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_project_set_audio_source_metadata"):
             raise _not_supported("loaded libsonare does not support audio-source metadata")
-        _check(
+        _check_argument(
             lib.sonare_project_set_audio_source_metadata(
                 self._require_handle(),
                 _to_c_uint32(source_id, "source_id"),
@@ -509,7 +511,7 @@ class _ProjectEditMixin:
             name=_utf8_arg(name, "name") if name is not None else None,
         )
         out_id = ctypes.c_uint32()
-        _check(
+        _check_argument(
             _get_lib().sonare_project_add_track(
                 self._require_handle(), ctypes.byref(desc), ctypes.byref(out_id)
             )
@@ -567,7 +569,7 @@ class _ProjectEditMixin:
             source_uri=_utf8_arg(source_uri, "source_uri") if source_uri is not None else None,
         )
         out_id = ctypes.c_uint32()
-        _check(
+        _check_argument(
             _get_lib().sonare_project_add_clip(
                 self._require_handle(), ctypes.byref(desc), ctypes.byref(out_id)
             )
@@ -636,7 +638,7 @@ class _ProjectEditMixin:
         )
         result = SonareExternalStemImportResult()
         lib = _get_lib()
-        _check(
+        _check_argument(
             lib.sonare_project_import_external_stems(
                 self._require_handle(), ctypes.byref(request), ctypes.byref(result)
             )
@@ -710,7 +712,7 @@ class _ProjectEditMixin:
         )
         out_clip = ctypes.c_uint32()
         out_take_count = ctypes.c_size_t()
-        _check(
+        _check_argument(
             _get_lib().sonare_project_add_loop_recording_takes(
                 self._require_handle(),
                 ctypes.byref(desc),
@@ -730,7 +732,7 @@ class _ProjectEditMixin:
         """
         out_track = ctypes.c_uint32()
         out_clip = ctypes.c_uint32()
-        _check(
+        _check_argument(
             _get_lib().sonare_project_add_midi_clip(
                 self._require_handle(),
                 _narrow_double(start_ppq, "start_ppq"),
@@ -744,7 +746,7 @@ class _ProjectEditMixin:
     def split_clip(self, clip_id: int, split_ppq: float) -> int:
         """Split a clip at ``split_ppq`` (absolute PPQ); return the new clip id."""
         out_id = ctypes.c_uint32()
-        _check(
+        _check_argument(
             _get_lib().sonare_project_split_clip(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
@@ -756,7 +758,7 @@ class _ProjectEditMixin:
 
     def trim_clip(self, clip_id: int, new_start_ppq: float, new_length_ppq: float) -> None:
         """Trim a clip's start / length (PPQ)."""
-        _check(
+        _check_argument(
             _get_lib().sonare_project_trim_clip(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
@@ -767,7 +769,7 @@ class _ProjectEditMixin:
 
     def move_clip(self, clip_id: int, new_start_ppq: float, new_track_id: int = 0) -> None:
         """Move a clip to ``new_start_ppq`` (and optionally ``new_track_id``)."""
-        _check(
+        _check_argument(
             _get_lib().sonare_project_move_clip(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
@@ -778,7 +780,7 @@ class _ProjectEditMixin:
 
     def set_track_kind(self, track_id: int, kind: str | int) -> None:
         """Change a track kind via an undoable edit command."""
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_track_kind(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -788,7 +790,7 @@ class _ProjectEditMixin:
 
     def set_clip_warp_ref(self, clip_id: int, warp_ref_id: int) -> None:
         """Set a clip's warp reference id (``0`` clears it)."""
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_clip_warp_ref(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
@@ -798,7 +800,7 @@ class _ProjectEditMixin:
 
     def set_clip_warp_mode(self, clip_id: int, mode: str | int) -> None:
         """Set a clip's warp playback mode."""
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_clip_warp_mode(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
@@ -840,7 +842,7 @@ class _ProjectEditMixin:
                 encoded = _utf8_arg(str(name), "name")
                 name_backing.append(encoded)
                 c_takes[i].name = encoded
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_clip_takes(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
@@ -894,7 +896,7 @@ class _ProjectEditMixin:
             c_segments[i].crossfade_ppq = _narrow_double(
                 crossfade_ppq, f"set_clip_comp_segments: segments[{i}].crossfade_ppq"
             )
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_clip_comp_segments(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
@@ -928,11 +930,13 @@ class _ProjectEditMixin:
             anchors=c_anchors,
             anchor_count=count,
         )
-        _check(_get_lib().sonare_project_set_warp_map(self._require_handle(), ctypes.byref(desc)))
+        _check_argument(
+            _get_lib().sonare_project_set_warp_map(self._require_handle(), ctypes.byref(desc))
+        )
 
     def remove_warp_map(self, warp_ref_id: int) -> None:
         """Remove a first-class project warp map by id."""
-        _check(
+        _check_argument(
             _get_lib().sonare_project_remove_warp_map(
                 self._require_handle(),
                 _to_c_uint32(warp_ref_id, "warp_ref_id"),
@@ -954,7 +958,7 @@ class _ProjectEditMixin:
         into strip inputs; its channel-strip bounce raises ``SonareError`` with
         ``NOT_SUPPORTED``.
         """
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_track_midi_destination(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -981,9 +985,9 @@ class _ProjectEditMixin:
         The entry is stored data: bounces apply it to a NativeSynth or SF2
         instrument bound to the destination and ignore it on a builtin or
         callback instrument. Raises :class:`SonareValueError` for malformed
-        input and :class:`SonareError` with ``INVALID_PARAMETER`` for an
-        out-of-range part or an invalid chain, and ``NOT_SUPPORTED`` for a chain
-        in a build without mastering.
+        input and for an out-of-range part or an invalid chain, and
+        :class:`SonareError` with ``NOT_SUPPORTED`` for a chain in a build
+        without mastering.
         """
         mode_value = _part_rig_mode_value(mode)
         json_arg = _part_rig_inserts_arg(mode_value, inserts)
@@ -993,7 +997,7 @@ class _ProjectEditMixin:
                 "loaded libsonare does not export sonare_project_set_part_rig; "
                 "rebuild or upgrade the shared library before calling set_part_rig"
             )
-        _check(
+        _check_argument(
             lib.sonare_project_set_part_rig(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
@@ -1022,7 +1026,7 @@ class _ProjectEditMixin:
         mode = ctypes.c_int()
         out_json = ctypes.c_char_p()
         present = ctypes.c_int()
-        _check(
+        _check_argument(
             lib.sonare_project_get_part_rig(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
@@ -1062,7 +1066,7 @@ class _ProjectEditMixin:
                 "loaded libsonare does not export sonare_project_clear_part_rig; "
                 "rebuild or upgrade the shared library before calling clear_part_rig"
             )
-        _check(
+        _check_argument(
             lib.sonare_project_clear_part_rig(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
@@ -1093,7 +1097,7 @@ class _ProjectEditMixin:
         g = _narrow_float(gain, "gain")
         if g < 0.0:
             raise SonareValueError("gain must be a finite number >= 0")
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_track_gain(
                 self._require_handle(), _to_c_uint32(track_id, "track_id"), g
             )
@@ -1101,7 +1105,7 @@ class _ProjectEditMixin:
 
     def set_track_mute(self, track_id: int, mute: bool) -> None:
         """Set a track's mute flag via an undoable edit (a muted track is silent)."""
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_track_mute(
                 self._require_handle(), _to_c_uint32(track_id, "track_id"), 1 if mute else 0
             )
@@ -1112,7 +1116,7 @@ class _ProjectEditMixin:
 
         When any track is soloed, only soloed tracks sound.
         """
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_track_solo(
                 self._require_handle(), _to_c_uint32(track_id, "track_id"), 1 if solo else 0
             )
@@ -1121,8 +1125,8 @@ class _ProjectEditMixin:
     def set_track_pan(self, track_id: int, pan: float) -> None:
         """Set a track's stereo balance in [-1, +1] (0 = center) via an undoable edit.
 
-        A ``pan`` outside [-1, +1] or non-finite raises :class:`SonareError`
-        (InvalidParameter) and leaves the project unchanged. See
+        A ``pan`` outside [-1, +1] or non-finite raises :class:`SonareValueError`
+        and leaves the project unchanged. See
         :meth:`set_track_gain` for which stage a track's controls land on. The pan
         law that shapes the balance belongs to that stage: the strip's configured
         law on a channel strip and on the clips of an audio track sharing a strip,
@@ -1133,7 +1137,7 @@ class _ProjectEditMixin:
         level offset.
         """
         p = _narrow_float(pan, "pan")
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_track_pan(
                 self._require_handle(), _to_c_uint32(track_id, "track_id"), p
             )
@@ -1141,7 +1145,7 @@ class _ProjectEditMixin:
 
     def remove_clip(self, clip_id: int) -> None:
         """Remove a clip via an undoable edit command (undo restores it)."""
-        _check(
+        _check_argument(
             _get_lib().sonare_project_remove_clip(
                 self._require_handle(), _to_c_uint32(clip_id, "clip_id")
             )
@@ -1153,7 +1157,7 @@ class _ProjectEditMixin:
         g = _narrow_float(gain, "gain")
         if g < 0.0:
             raise SonareValueError("gain must be a finite number >= 0")
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_clip_gain(
                 self._require_handle(), _to_c_uint32(clip_id, "clip_id"), g
             )
@@ -1182,7 +1186,7 @@ class _ProjectEditMixin:
             raise SonareValueError("fade_out_length_ppq must be a finite number >= 0")
         c_in = SonareProjectClipFade(length_ppq=fin, curve=_fade_curve_value(fade_in_curve))
         c_out = SonareProjectClipFade(length_ppq=fout, curve=_fade_curve_value(fade_out_curve))
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_clip_fade(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
@@ -1214,7 +1218,7 @@ class _ProjectEditMixin:
             raise SonareValueError("loop_length_ppq must be a finite number >= 0")
         if not math.isfinite(crossfade) or crossfade < 0.0:
             raise SonareValueError("loop_crossfade_ppq must be a finite number >= 0")
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_clip_loop(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
@@ -1226,7 +1230,7 @@ class _ProjectEditMixin:
 
     def set_clip_source(self, clip_id: int, source_id: int) -> None:
         """Rebind a clip to a different (already-registered) source via an undoable edit."""
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_clip_source(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
@@ -1237,7 +1241,7 @@ class _ProjectEditMixin:
     def duplicate_clip(self, clip_id: int, new_start_ppq: float) -> int:
         """Duplicate a clip at ``new_start_ppq`` (same track); return the new clip id."""
         out_id = ctypes.c_uint32()
-        _check(
+        _check_argument(
             _get_lib().sonare_project_duplicate_clip(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
@@ -1249,7 +1253,7 @@ class _ProjectEditMixin:
 
     def remove_track(self, track_id: int) -> None:
         """Remove a track (and its clips) via an undoable edit command."""
-        _check(
+        _check_argument(
             _get_lib().sonare_project_remove_track(
                 self._require_handle(), _to_c_uint32(track_id, "track_id")
             )
@@ -1257,7 +1261,7 @@ class _ProjectEditMixin:
 
     def rename_track(self, track_id: int, name: str | None = None) -> None:
         """Rename a track via an undoable edit command (``None`` = empty name)."""
-        _check(
+        _check_argument(
             _get_lib().sonare_project_rename_track(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -1272,7 +1276,7 @@ class _ProjectEditMixin:
 
         Pass ``None`` (or ``""``) for either field to clear it.
         """
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_track_route(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -1323,7 +1327,7 @@ class _ProjectEditMixin:
             # Keep the legacy call shape and symbol selection exact when the
             # optional kind is absent. Native legacy edits preserve an
             # existing lane's typed kind by contract.
-            _check(
+            _check_argument(
                 lib.sonare_project_add_automation_lane(
                     self._require_handle(),
                     _to_c_uint32(track_id, "track_id"),
@@ -1340,7 +1344,7 @@ class _ProjectEditMixin:
                 points=desc.points,
                 point_count=desc.point_count,
             )
-            _check(
+            _check_argument(
                 lib.sonare_project_add_automation_lane_ex(
                     self._require_handle(),
                     _to_c_uint32(track_id, "track_id"),
@@ -1385,7 +1389,7 @@ class _ProjectEditMixin:
         )
         lib = _get_lib()
         if kind is None:
-            _check(
+            _check_argument(
                 lib.sonare_project_edit_automation_lane(
                     self._require_handle(),
                     _to_c_uint32(track_id, "track_id"),
@@ -1402,7 +1406,7 @@ class _ProjectEditMixin:
                 points=desc.points,
                 point_count=desc.point_count,
             )
-            _check(
+            _check_argument(
                 lib.sonare_project_edit_automation_lane_ex(
                     self._require_handle(),
                     _to_c_uint32(track_id, "track_id"),
@@ -1415,7 +1419,7 @@ class _ProjectEditMixin:
     def remove_automation_lane(self, track_id: int, target_param_id: int) -> None:
         """Remove the lane identified by ``target_param_id`` via an undoable edit."""
         target_id = _automation_target_param_id_value(target_param_id)
-        _check(
+        _check_argument(
             _get_lib().sonare_project_remove_automation_lane(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -1425,19 +1429,19 @@ class _ProjectEditMixin:
 
     def undo(self) -> None:
         """Undo the most recent edit (raises when the undo stack is empty)."""
-        _check(_get_lib().sonare_project_undo(self._require_handle()))
+        _check_argument(_get_lib().sonare_project_undo(self._require_handle()))
 
     def redo(self) -> None:
         """Redo the most recently undone edit (raises when the redo stack is empty)."""
-        _check(_get_lib().sonare_project_redo(self._require_handle()))
+        _check_argument(_get_lib().sonare_project_redo(self._require_handle()))
 
     def clear_history(self) -> None:
         """Empty the undo and redo stacks without altering project state."""
-        _check(_get_lib().sonare_project_clear_history(self._require_handle()))
+        _check_argument(_get_lib().sonare_project_clear_history(self._require_handle()))
 
     def set_max_undo_depth(self, depth: int) -> None:
         """Clamp the undo history to ``depth`` entries (minimum 1), evicting the oldest."""
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_max_undo_depth(
                 self._require_handle(),
                 _to_c_size_t(depth, "depth"),
@@ -1469,7 +1473,7 @@ class _ProjectEditMixin:
                 "rebuild or upgrade the shared library before calling "
                 "Project.set_max_history_bytes"
             )
-        _check(
+        _check_argument(
             lib.sonare_project_set_max_history_bytes(
                 self._require_handle(), _to_c_size_t(value, "value")
             )

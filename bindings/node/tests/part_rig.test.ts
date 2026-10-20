@@ -105,17 +105,15 @@ describe('part rig on a project', () => {
         inserts: [{ processor: 'saturation.overdrive', params: 1 }],
       })(),
     ).toThrow(/params/);
-    expect(codeNameOf(set({ part: 16 }))).toBe('InvalidParameter');
-    expect(codeNameOf(set({ mode: 'chain', inserts: [] }))).toBe('InvalidParameter');
+    expect(set({ part: 16 })).toThrow(RangeError);
+    expect(set({ mode: 'chain', inserts: [] })).toThrow(RangeError);
+    expect(set({ mode: 'chain', inserts: [{ processor: 'no.such', params: {} }] })).toThrow(
+      RangeError,
+    );
+    expect(set({ mode: 'none', inserts: chain })).toThrow(RangeError);
     expect(
-      codeNameOf(set({ mode: 'chain', inserts: [{ processor: 'no.such', params: {} }] })),
-    ).toBe('InvalidParameter');
-    expect(codeNameOf(set({ mode: 'none', inserts: chain }))).toBe('InvalidParameter');
-    expect(
-      codeNameOf(
-        set({ mode: 'chain', inserts: [{ processor: 'saturation.overdrive', params: '{' }] }),
-      ),
-    ).toBe('InvalidParameter');
+      set({ mode: 'chain', inserts: [{ processor: 'saturation.overdrive', params: '{' }] }),
+    ).toThrow(RangeError);
     expect(project.getPartRig({ destinationId: 4, part: 0 })).toBeNull();
   });
 });

@@ -39,7 +39,7 @@ from ._runtime import (
     SonareMidiRouteConfig,
     SonareNotePairValidation,
     SonareValueError,
-    _check,
+    _check_argument,
     _get_lib,
     _guard_buffer,
     _narrow_int,
@@ -95,7 +95,7 @@ class _ProjectMidiMixin:
             c_events[i].ppq = _validate_midi_event_ppq(ppq, f"events[{i}].ppq")
             c_events[i].data0 = _validate_midi_event_word(data0, f"events[{i}].data0")
             c_events[i].data1 = _validate_midi_event_word(data1, f"events[{i}].data1")
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_midi_events(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
@@ -194,10 +194,11 @@ class _ProjectMidiMixin:
             SonareValueError: If ``samples`` is empty or holds a NaN or Inf
                 sample, if a config argument is outside its domain, or if both
                 ``fmin`` and ``fmax`` are given and ``fmin`` is not below ``fmax``.
-            SonareError: ``INVALID_PARAMETER`` when only one of ``fmin``/``fmax``
+            SonareValueError: When only one of ``fmin``/``fmax``
                 is given and it does not lie on the right side of the selected
                 source's default for the other bound; also if the clip id is
-                unknown, or ``NOT_SUPPORTED`` when the library was built without
+                unknown.
+            SonareError: ``NOT_SUPPORTED`` when the library was built without
                 the pitch editor or the arrangement subsystem.
 
         Example:
@@ -227,7 +228,7 @@ class _ProjectMidiMixin:
         )
         c_array, length = _to_c_float_array(samples)
         note_count = ctypes.c_size_t()
-        _check(
+        _check_argument(
             _get_lib().sonare_project_transcribe_to_clip(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
@@ -243,14 +244,14 @@ class _ProjectMidiMixin:
     def import_smf(self, data: bytes) -> int:
         """Import an in-memory SMF buffer; return the first added clip id.
 
-        Raises :class:`SonareError` on malformed or partially truncated input
+        Raises :class:`SonareError` (``INVALID_FORMAT``) on malformed or partially truncated input
         instead of installing a silently shortened clip.
         """
         lib = _get_lib()
         raw = bytes(data)
         buf = (ctypes.c_uint8 * len(raw)).from_buffer_copy(raw) if raw else None
         out_id = ctypes.c_uint32()
-        _check(
+        _check_argument(
             lib.sonare_project_import_smf(
                 self._require_handle(),
                 buf,
@@ -265,7 +266,7 @@ class _ProjectMidiMixin:
         lib = _get_lib()
         out = ctypes.POINTER(ctypes.c_uint8)()
         out_len = ctypes.c_size_t()
-        _check(
+        _check_argument(
             lib.sonare_project_export_smf(
                 self._require_handle(), ctypes.byref(out), ctypes.byref(out_len)
             )
@@ -291,7 +292,7 @@ class _ProjectMidiMixin:
         raw = bytes(data)
         buf = (ctypes.c_uint8 * len(raw)).from_buffer_copy(raw) if raw else None
         out_id = ctypes.c_uint32()
-        _check(
+        _check_argument(
             lib.sonare_project_import_clip_file(
                 self._require_handle(),
                 buf,
@@ -311,7 +312,7 @@ class _ProjectMidiMixin:
         lib = _get_lib()
         out = ctypes.POINTER(ctypes.c_uint8)()
         out_len = ctypes.c_size_t()
-        _check(
+        _check_argument(
             lib.sonare_project_export_clip_file(
                 self._require_handle(), ctypes.byref(out), ctypes.byref(out_len)
             )
@@ -331,7 +332,7 @@ class _ProjectMidiMixin:
         :meth:`set_program_on_channel`; pass ``>= 0`` to emit a Bank Select. A
         negative ``bank`` is refused.
         """
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_program(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
@@ -344,7 +345,7 @@ class _ProjectMidiMixin:
         self, clip_id: int, group: int, channel: int, program: int, bank: int | None = None
     ) -> None:
         """Set a MIDI clip's program / bank for one UMP group and channel."""
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_program_on_channel(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
@@ -357,7 +358,7 @@ class _ProjectMidiMixin:
 
     def set_midi_fx(self, clip_id: int, config_json: str) -> None:
         """Backward alias that destructively bakes a clip's MIDI-FX chain."""
-        _check(
+        _check_argument(
             _get_lib().sonare_project_set_midi_fx(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
@@ -390,7 +391,7 @@ class _ProjectMidiMixin:
         handle = self._require_handle()
         config = _utf8_arg(config_json, "config_json")
         if not with_source_index:
-            _check(
+            _check_argument(
                 _get_lib().sonare_project_bake_midi_fx(
                     handle, _to_c_uint32(clip_id, "clip_id"), config
                 )
@@ -399,7 +400,7 @@ class _ProjectMidiMixin:
         expected = self.preview_midi_fx_count(clip_id, config_json)
         buffer = (ctypes.c_int32 * expected)() if expected else None
         written = ctypes.c_size_t(0)
-        _check(
+        _check_argument(
             _get_lib().sonare_project_bake_midi_fx_ex(
                 handle,
                 _to_c_uint32(clip_id, "clip_id"),
@@ -414,7 +415,7 @@ class _ProjectMidiMixin:
     def preview_midi_fx_count(self, clip_id: int, config_json: str) -> int:
         """Count the events :meth:`bake_midi_fx` would produce, without baking."""
         count = ctypes.c_size_t(0)
-        _check(
+        _check_argument(
             _get_lib().sonare_project_preview_midi_fx_count(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
@@ -432,7 +433,7 @@ class _ProjectMidiMixin:
         export, so it validates as paired.
         """
         result = SonareNotePairValidation()
-        _check(
+        _check_argument(
             _get_lib().sonare_project_validate_midi_notes(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
@@ -641,8 +642,8 @@ class _ProjectMidiMixin:
 
         The bank travels in the same message and is applied only when
         ``bank_valid`` is true. A non-zero ``bank_msb`` or ``bank_lsb`` with
-        ``bank_valid`` false is refused with :class:`SonareError`
-        (``INVALID_PARAMETER``): a bank the receiver would ignore is not packed."""
+        ``bank_valid`` false is refused with :class:`SonareValueError`: a bank the receiver would
+        ignore is not packed."""
         return _midi_event_tuple(
             "sonare_midi2_program",
             _validate_midi_event_ppq(ppq, "ppq"),
@@ -875,7 +876,7 @@ class _ProjectMidiMixin:
         lib = _get_lib()
         events = (SonareMidiEventPod * 3)()
         out_count = ctypes.c_size_t()
-        _check(
+        _check_argument(
             lib.sonare_midi_bank_program(
                 _narrow_double(ppq, "ppq"),
                 _to_c_uint8(group, "group"),
@@ -929,7 +930,7 @@ class _ProjectMidiMixin:
         out_count = ctypes.c_size_t()
         overflowed = ctypes.c_int()
         overflow_count = ctypes.c_uint32()
-        _check(
+        _check_argument(
             lib.sonare_midi_route_events(
                 c_in if n else None,
                 _to_c_size_t(n, "n"),
@@ -988,7 +989,7 @@ class _ProjectMidiMixin:
         )
         if rc == SONARE_ERROR_INVALID_STATE:
             return None
-        _check(rc)
+        _check_argument(rc)
         return _cc_binding_from_c(out_binding)
 
     @staticmethod
@@ -1022,7 +1023,7 @@ class _ProjectMidiMixin:
         )
         if rc == SONARE_ERROR_INVALID_STATE:
             return None
-        _check(rc)
+        _check_argument(rc)
         return (float(pt.ppq), float(pt.value), int(pt.curve_to_next))
 
     @staticmethod
@@ -1054,7 +1055,7 @@ class _ProjectMidiMixin:
         )
         if rc == SONARE_ERROR_INVALID_STATE:
             return None
-        _check(rc)
+        _check_argument(rc)
         return (float(out_event.ppq), int(out_event.data0), int(out_event.data1))
 
     # -- MIR ----------------------------------------------------------------

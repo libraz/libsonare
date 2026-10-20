@@ -407,7 +407,7 @@ describe('Sonare WASM NativeSynth', () => {
         [{ gain: 5 }, 'gain'],
       ] as [DistSynthPatch, string][]) {
         const error = rejection(patch);
-        expect(isSonareError(error) && error.code, key).toBe(ErrorCode.InvalidParameter);
+        expect(error, key).toBeInstanceOf(RangeError);
         expect((error as Error).message, key).toContain(`synth patch field '${key}': out of range`);
       }
       // The published ends are accepted.
@@ -634,7 +634,7 @@ describe('Sonare WASM NativeSynth', () => {
     }
   });
 
-  it('refuses a bad engine param as a coded error naming the key', () => {
+  it('refuses a bad engine param as a RangeError naming the key', () => {
     const bowed = synthEngineParamInfo('bowed-string');
     const force = bowed.find((info) => info.name === 'bowForce');
     const reedKey = synthEngineParamInfo('reed')[0].name;
@@ -649,7 +649,7 @@ describe('Sonare WASM NativeSynth', () => {
     ];
     for (const [key, engineParams] of bad) {
       const error = thrownBy(() => bounce({ engineMode: 'bowed-string', engineParams }));
-      expect(isSonareError(error) && error.code, key).toBe(ErrorCode.InvalidParameter);
+      expect(error, key).toBeInstanceOf(RangeError);
       expect((error as Error).message, key).toContain(key);
     }
 
@@ -668,7 +668,7 @@ describe('Sonare WASM NativeSynth', () => {
     const fraction = thrownBy(() =>
       bounce({ engineMode: integerMode, engineParams: { [integerKey as string]: 1.5 } }),
     );
-    expect(isSonareError(fraction) && fraction.code).toBe(ErrorCode.InvalidParameter);
+    expect(fraction).toBeInstanceOf(RangeError);
     expect((fraction as Error).message).toContain(integerKey as string);
   });
 

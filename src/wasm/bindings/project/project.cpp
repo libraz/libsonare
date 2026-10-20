@@ -43,8 +43,8 @@ ProjectWasm ProjectWasm::fromJson(const std::string& json) {
     sonare_free_string(diag);
     sonare_project_destroy(handle);
     // The C return code, as on every other surface.
-    throw sonare::SonareException(
-        err != SONARE_OK ? codeFromCError(err) : sonare::ErrorCode::InvalidFormat, message);
+    if (err != SONARE_OK) throwCErrorMessage(err, message);
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, message);
   }
   sonare_free_string(diag);
   return ProjectWasm(handle);
@@ -58,9 +58,10 @@ val ProjectWasm::fromJsonWithDiagnostics(const std::string& json) {
   sonare_free_string(diag);
   if (err != SONARE_OK || handle == nullptr) {
     sonare_project_destroy(handle);
-    throw sonare::SonareException(
-        err != SONARE_OK ? codeFromCError(err) : sonare::ErrorCode::InvalidFormat,
-        diagnostics.empty() ? std::string("invalid project JSON") : diagnostics);
+    const std::string message =
+        diagnostics.empty() ? std::string("invalid project JSON") : diagnostics;
+    if (err != SONARE_OK) throwCErrorMessage(err, message);
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, message);
   }
   val out = val::object();
   out.set("project", ProjectWasm(handle));

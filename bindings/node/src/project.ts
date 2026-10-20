@@ -958,7 +958,7 @@ export class Project {
    *
    * @param index - Zero-based index below {@link tempoSegmentCount}
    * @returns The segment, in the shape {@link setTempoSegments} accepts
-   * @throws A `SonareError` when the index is at or past the count
+   * @throws {RangeError} When the index is at or past the count
    */
   tempoSegmentByIndex(index: number): ProjectTempoSegment {
     return this.native.tempoSegmentByIndex(index);
@@ -969,7 +969,7 @@ export class Project {
    *
    * @param index - Zero-based index below {@link timeSignatureCount}
    * @returns The segment, in the shape {@link setTimeSignatures} accepts
-   * @throws A `SonareError` when the index is at or past the count
+   * @throws {RangeError} When the index is at or past the count
    */
   timeSignatureByIndex(index: number): ProjectTimeSignatureSegment {
     return this.native.timeSignatureByIndex(index);
@@ -1181,7 +1181,7 @@ export class Project {
    * Every law is normalized so a centered track stays at unity and only the away
    * channel is attenuated, so the difference is a taper, not a level offset.
    *
-   * @throws {SonareError} `InvalidParameter` when `pan` is outside `[-1, 1]` or
+   * @throws {RangeError} When `pan` is outside `[-1, 1]` or
    *   non-finite; the project and its undo history are left unchanged.
    */
   setTrackPan(trackId: number, pan: number): void {

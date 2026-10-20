@@ -117,7 +117,7 @@ from ._runtime import (
     SonareSynthModRouting,
     SonareSynthPatch,
     SonareValueError,
-    _check,
+    _check_argument,
     _curve_value,
     _get_lib,
     _last_error,
@@ -312,7 +312,7 @@ def _automation_lane_args(
 def _fade_curve_value(curve: str | int) -> int:
     if isinstance(curve, str):
         out = ctypes.c_uint32()
-        _check(
+        _check_argument(
             _get_lib().sonare_project_fade_curve_from_name(
                 _utf8_arg(curve, "curve"), ctypes.byref(out)
             )
@@ -709,7 +709,7 @@ class SynthPatch:
     field defaults to ``None``, meaning "keep the base value"; any value given
     overrides it, including an explicit ``0``. A value that is non-finite or
     outside the range :func:`synth_patch_param_info` publishes for its field is
-    refused with a :class:`SonareError` naming the field, and so are more than 8
+    refused with a :class:`SonareValueError` naming the field, and so are more than 8
     mod routings. Enum fields accept the C ordinal or a name with ``"default"``
     = keep. A
     ``mod_routings`` tuple REPLACES the base mod matrix, and an empty tuple
@@ -746,8 +746,8 @@ class SynthPatch:
     key (``"bowForce"``, ``"ops1.level"``; the keys and their ranges, units and
     defaults are :func:`synth_engine_param_info`). A key outside the selected
     engine's section, a non-finite value, a fractional value for an integer
-    field or a value outside a bounded field's range is refused with a coded
-    :class:`SonareError` naming the key; nothing is clamped. A patch read back
+    field or a value outside a bounded field's range is refused with a
+    :class:`SonareValueError` naming the key; nothing is clamped. A patch read back
     from a preset carries ``None`` here.
 
     ``env_to_cutoff_cents`` is the filter envelope's cutoff depth, in cents at
@@ -1204,12 +1204,12 @@ def synth_preset_patch(name: str) -> SynthPatch:
     """Fetch the named catalog preset as a :class:`SynthPatch` (the preset name
     plus the wrapper-section values), so hosts can inspect a preset and tweak
     fields before binding it. A ``"va:"`` routing prefix is accepted. Raises
-    :class:`SonareError` for unknown names."""
+    :class:`SonareValueError` for unknown names."""
     lib = _get_lib()
     if not hasattr(lib, "sonare_synth_preset_patch"):
         raise _not_supported("libsonare was built without the NativeSynth ABI")
     out = SonareSynthPatch()
-    _check(
+    _check_argument(
         lib.sonare_synth_preset_patch(_utf8_arg(_strip_va_prefix(name), "name"), ctypes.byref(out))
     )
     return SynthPatch._from_c(out)
@@ -1394,7 +1394,7 @@ def _midi_event_tuple(name: str, *args: float | ctypes._SimpleCData[int]) -> tup
     lib = _get_lib()
     event = SonareMidiEventPod()
     fn = getattr(lib, name)
-    _check(fn(*args, ctypes.byref(event)))
+    _check_argument(fn(*args, ctypes.byref(event)))
     return (float(event.ppq), int(event.data0), int(event.data1))
 
 

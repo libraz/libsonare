@@ -24,7 +24,7 @@ from ._runtime import (
     _UINT32_MAX,
     ErrorCode,
     SonareValueError,
-    _check,
+    _check_argument,
     _generic_error,
     _get_lib,
     _to_c_float_array,
@@ -468,7 +468,7 @@ class SampleBank:
         )
         c_array, length = _to_c_float_array(buf)
         out_index = ctypes.c_uint32()
-        _check(
+        _check_argument(
             _get_lib().sonare_sample_bank_add_sample(
                 self._require_handle(),
                 c_array,
@@ -517,7 +517,7 @@ class SampleBank:
 
         Raises:
             SonareValueError: For an argument outside its field's range.
-            SonareError: ``InvalidParameter`` for a sample index the bank does
+            SonareValueError: For a sample index the bank does
                 not have, an inverted key or velocity range, or a ``set_index``
                 at or above 4096.
         """
@@ -531,7 +531,7 @@ class SampleBank:
             gain=_finite(gain, "gain"),
             pan_units=_finite(pan_units, "pan_units"),
         )
-        _check(
+        _check_argument(
             _get_lib().sonare_sample_bank_add_zone(
                 self._require_handle(),
                 ctypes.c_uint32(_unsigned(set_index, "set_index", _UINT32_MAX)),
@@ -551,5 +551,5 @@ class SampleBank:
 
     def _count(self, symbol: str) -> int:
         out = ctypes.c_size_t()
-        _check(getattr(_get_lib(), symbol)(self._require_handle(), ctypes.byref(out)))
+        _check_argument(getattr(_get_lib(), symbol)(self._require_handle(), ctypes.byref(out)))
         return int(out.value)

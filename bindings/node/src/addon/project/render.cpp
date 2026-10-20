@@ -378,7 +378,7 @@ Napi::Value ProjectWrap::Compile(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   SonareProjectCompileResult result{};
-  ThrowIfError(env, sonare_project_compile(project_, &result));
+  ThrowIfArgumentError(env, sonare_project_compile(project_, &result));
   if (env.IsExceptionPending()) return env.Undefined();
   return CompileResultToObject(env, &result);
   SONARE_NODE_CATCH(env)
@@ -390,7 +390,7 @@ Napi::Value ProjectWrap::CompileTimeline(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   SonareProjectCompileResult result{};
   SonareProjectTimeline* timeline = nullptr;
-  ThrowIfError(env, sonare_project_compile_timeline(project_, &result, &timeline));
+  ThrowIfArgumentError(env, sonare_project_compile_timeline(project_, &result, &timeline));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = CompileResultToObject(env, &result);
   out.Set("timeline",
@@ -404,7 +404,7 @@ Napi::Value ProjectWrap::LastBounceCompileResult(const Napi::CallbackInfo& info)
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   SonareProjectCompileResult result{};
-  ThrowIfError(env, sonare_project_last_bounce_compile_result(project_, &result));
+  ThrowIfArgumentError(env, sonare_project_last_bounce_compile_result(project_, &result));
   if (env.IsExceptionPending()) return env.Undefined();
   return CompileResultToObject(env, &result);
   SONARE_NODE_CATCH(env)
@@ -421,7 +421,7 @@ Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {
   }
   float* interleaved = nullptr;
   size_t len = 0;
-  ThrowIfError(env, sonare_project_bounce(project_, &options, &interleaved, &len));
+  ThrowIfArgumentError(env, sonare_project_bounce(project_, &options, &interleaved, &len));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Float32Array out = Napi::Float32Array::New(env, len);
   if (len > 0 && interleaved != nullptr) {
@@ -464,9 +464,9 @@ Napi::Value ProjectWrap::BounceWithBuiltinInstruments(const Napi::CallbackInfo& 
   }
   float* interleaved = nullptr;
   size_t len = 0;
-  ThrowIfError(env, sonare_project_bounce_with_builtin_instruments(
-                        project_, &options, bindings.empty() ? nullptr : bindings.data(),
-                        bindings.size(), &interleaved, &len));
+  ThrowIfArgumentError(env, sonare_project_bounce_with_builtin_instruments(
+                                project_, &options, bindings.empty() ? nullptr : bindings.data(),
+                                bindings.size(), &interleaved, &len));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Float32Array out = Napi::Float32Array::New(env, len);
   if (len > 0 && interleaved != nullptr) {
@@ -552,10 +552,10 @@ Napi::Value ProjectWrap::BounceWithInstruments(const Napi::CallbackInfo& info) {
   if (job.error != SONARE_OK) {
     if (env.IsExceptionPending()) (void)env.GetAndClearPendingException();
     if (!job.detail.empty()) {
-      sonare_node::ThrowSonareErrorMessage(env, job.error, job.detail);
+      sonare_node::ThrowArgumentErrorMessage(env, job.error, job.detail);
     } else {
       // The detail slot is thread-local and was read on the bounce thread.
-      sonare_node::ThrowIfRealtimeError(env, job.error);
+      sonare_node::ThrowArgumentErrorMessage(env, job.error, sonare_error_message(job.error));
     }
     return env.Undefined();
   }
@@ -622,7 +622,7 @@ Napi::Value ProjectWrap::BounceWithSynthInstruments(const Napi::CallbackInfo& in
       project_, &options, bindings.empty() ? nullptr : bindings.data(), bindings.size(),
       &interleaved, &len);
   if (bounce_err != SONARE_OK && !env.IsExceptionPending()) {
-    sonare_node::ThrowLastSonareError(env, "", bounce_err);
+    sonare_node::ThrowLastArgumentError(env, bounce_err);
   }
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Float32Array out = Napi::Float32Array::New(env, len);
@@ -653,7 +653,7 @@ void ProjectWrap::LoadSoundFont(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return;
   }
-  ThrowIfError(env, sonare_project_load_soundfont(project_, bytes, len));
+  ThrowIfArgumentError(env, sonare_project_load_soundfont(project_, bytes, len));
   SONARE_NODE_CATCH_VOID(env)
 }
 
@@ -661,7 +661,7 @@ void ProjectWrap::ClearSoundFont(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN_VOID(env, project_, "Project");
-  ThrowIfError(info.Env(), sonare_project_clear_soundfont(project_));
+  ThrowIfArgumentError(info.Env(), sonare_project_clear_soundfont(project_));
   SONARE_NODE_CATCH_VOID(env)
 }
 
@@ -670,7 +670,7 @@ Napi::Value ProjectWrap::SoundFontPresetCount(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   size_t out = 0;
-  ThrowIfError(env, sonare_project_soundfont_preset_count(project_, &out));
+  ThrowIfArgumentError(env, sonare_project_soundfont_preset_count(project_, &out));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(out));
   SONARE_NODE_CATCH(env)
@@ -681,11 +681,12 @@ Napi::Value ProjectWrap::SoundFontManifest(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   size_t total = 0;
-  ThrowIfError(env, sonare_project_soundfont_manifest(project_, nullptr, 0, &total));
+  ThrowIfArgumentError(env, sonare_project_soundfont_manifest(project_, nullptr, 0, &total));
   if (env.IsExceptionPending()) return env.Undefined();
   std::vector<SonareSf2ProgramStatus> entries(total);
   if (total > 0) {
-    ThrowIfError(env, sonare_project_soundfont_manifest(project_, entries.data(), total, &total));
+    ThrowIfArgumentError(
+        env, sonare_project_soundfont_manifest(project_, entries.data(), total, &total));
     if (env.IsExceptionPending()) return env.Undefined();
   }
   Napi::Array out = Napi::Array::New(env, entries.size());
@@ -753,9 +754,9 @@ Napi::Value ProjectWrap::BounceWithSf2Instruments(const Napi::CallbackInfo& info
   }
   float* interleaved = nullptr;
   size_t len = 0;
-  ThrowIfError(env, sonare_project_bounce_with_sf2_instruments(
-                        project_, &options, bindings.empty() ? nullptr : bindings.data(),
-                        bindings.size(), &interleaved, &len));
+  ThrowIfArgumentError(env, sonare_project_bounce_with_sf2_instruments(
+                                project_, &options, bindings.empty() ? nullptr : bindings.data(),
+                                bindings.size(), &interleaved, &len));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Float32Array out = Napi::Float32Array::New(env, len);
   if (len > 0 && interleaved != nullptr) {

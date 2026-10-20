@@ -44,14 +44,14 @@ bool RefuseOutOfDomain(Napi::Env env, const SonareTranscribeConfig& config, bool
   for (const PositiveField& field : positive) {
     if (!field.present) continue;
     if (!(field.value > 0.0f)) {
-      ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
-                              std::string(field.key) + " must be a positive number");
+      ThrowArgumentErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
+                                std::string(field.key) + " must be a positive number");
       return false;
     }
   }
   if (!(config.velocity_floor_db < 0.0f)) {
-    ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
-                            "velocityFloorDb must be negative");
+    ThrowArgumentErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
+                              "velocityFloorDb must be negative");
     return false;
   }
   return true;
@@ -126,18 +126,18 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
   // pending, and a second throw on top of it aborts rather than reaching JS.
   if (env.IsExceptionPending()) return false;
   if (wrote_fixed_velocity && (out->fixed_velocity < 1 || out->fixed_velocity > 127)) {
-    ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
-                            "fixedVelocity must be an integer in [1, 127]");
+    ThrowArgumentErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
+                              "fixedVelocity must be an integer in [1, 127]");
     return false;
   }
   if (wrote_max_polyphony && (out->max_polyphony < 1 || out->max_polyphony > 64)) {
-    ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
-                            "maxPolyphony must be an integer in [1, 64]");
+    ThrowArgumentErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
+                              "maxPolyphony must be an integer in [1, 64]");
     return false;
   }
   if (wrote_min_note_division && (out->min_note_division < 1 || out->min_note_division > 128)) {
-    ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
-                            "minNoteDivision must be an integer in [1, 128]");
+    ThrowArgumentErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
+                              "minNoteDivision must be an integer in [1, 128]");
     return false;
   }
   const struct {
@@ -151,8 +151,8 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
   for (const auto& ratio : peak_ratios) {
     if (!ratio.present) continue;
     if (!(*ratio.value >= 0.0f && *ratio.value <= 1.0f)) {
-      ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
-                              std::string(ratio.key) + " must be a number in [0, 1]");
+      ThrowArgumentErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
+                                std::string(ratio.key) + " must be a number in [0, 1]");
       return false;
     }
     // A written 0 is a real zero; the C ABI spells that as a negative value.
@@ -162,8 +162,8 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
     if (out->reattack_ratio == 0.0f) {
       out->reattack_ratio = -1.0f;
     } else if (!(out->reattack_ratio > 1.0f)) {
-      ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
-                              "reattackRatio must be 0 (no split) or greater than 1");
+      ThrowArgumentErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
+                                "reattackRatio must be 0 (no split) or greater than 1");
       return false;
     }
   }
@@ -233,7 +233,7 @@ Napi::Value Transcribe(const Napi::CallbackInfo& info) {
   const SonareError error = sonare_transcribe(samples.Data(), samples.ElementLength(), sample_rate,
                                               tempo_bpm, &config, &result.value);
   if (error != SONARE_OK) {
-    ThrowIfError(env, error);
+    ThrowIfArgumentError(env, error);
     return env.Undefined();
   }
 
@@ -276,9 +276,10 @@ Napi::Value ProjectWrap::TranscribeToClip(const Napi::CallbackInfo& info) {
   if (!sonare_node::ReadTranscribeConfig(env, request, &config)) return env.Undefined();
 
   size_t note_count = 0;
-  sonare_node::ThrowIfError(env, sonare_project_transcribe_to_clip(
-                                     project_, clip_id, samples.Data(), samples.ElementLength(),
-                                     sample_rate, &config, &note_count));
+  sonare_node::ThrowIfArgumentError(
+      env,
+      sonare_project_transcribe_to_clip(project_, clip_id, samples.Data(), samples.ElementLength(),
+                                        sample_rate, &config, &note_count));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(note_count));
   SONARE_NODE_CATCH(env)

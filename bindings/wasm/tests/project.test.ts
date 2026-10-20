@@ -129,10 +129,7 @@ describe('Sonare WASM Project', () => {
         } catch (error) {
           caught = error;
         }
-        expect(isSonareError(caught)).toBe(true);
-        if (isSonareError(caught)) {
-          expect(caught.code).toBe(ErrorCode.InvalidParameter);
-        }
+        expectArgumentRefusal(caught, RangeError);
       };
 
       expectInvalidParameter(() =>
@@ -540,7 +537,7 @@ describe('Sonare WASM Project', () => {
     }
   });
 
-  it('preserves C error codes across every project bounce mapper', () => {
+  it('refuses an out-of-domain bounce option as a RangeError on every project bounce mapper', () => {
     const project = buildProject();
     const expectInvalidParameter = (call: () => unknown): void => {
       let caught: unknown;
@@ -549,12 +546,7 @@ describe('Sonare WASM Project', () => {
       } catch (error) {
         caught = error;
       }
-      expect(isSonareError(caught)).toBe(true);
-      if (!isSonareError(caught)) {
-        throw new Error('expected SonareError');
-      }
-      expect(caught.code).toBe(ErrorCode.InvalidParameter);
-      expect(caught.codeName).toBe('InvalidParameter');
+      expectArgumentRefusal(caught, RangeError);
     };
 
     try {
@@ -1122,7 +1114,7 @@ describe('Sonare WASM Project', () => {
       } catch (error) {
         caught = error;
       }
-      expect(isSonareError(caught) && caught.code).toBe(ErrorCode.InvalidParameter);
+      expectArgumentRefusal(caught, RangeError);
       expect(String((caught as Error).message)).toContain('whole number of hertz');
     } finally {
       project.delete();

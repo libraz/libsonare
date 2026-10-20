@@ -1050,8 +1050,8 @@ export class Project {
    * Every law is normalized so a centered track stays at unity and only the away
    * channel is attenuated, so the difference is a taper, not a level offset.
    *
-   * @throws {SonareError} `InvalidParameter` when `pan` is outside `[-1, 1]` or
-   *   non-finite; the project and its undo history are left unchanged.
+   * @throws {RangeError} when `pan` is outside `[-1, 1]` or non-finite, or the
+   *   track is unknown; the project and its undo history are left unchanged.
    */
   setTrackPan(trackId: number, pan: number): void {
     this.native.setTrackPan(trackId, pan);
@@ -1254,8 +1254,8 @@ export class Project {
    * @throws {RangeError} on empty `samples`, a non-finite sample, or a
    *   `sampleRate` outside `[8000, 384000]`
    * @throws {RangeError} on an option outside its domain
-   * @throws {SonareError} `InvalidParameter` when `clipId` is unknown or not a
-   *   MIDI clip; `NotSupported` when the library was built without the pitch
+   * @throws {RangeError} when `clipId` is unknown or not a MIDI clip
+   * @throws {SonareError} `NotSupported` when the library was built without the pitch
    *   editor
    */
   transcribeToClip(request: ProjectTranscribeRequest): number {

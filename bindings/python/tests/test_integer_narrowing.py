@@ -593,9 +593,11 @@ def test_a_packer_still_refuses_at_the_midi_bound_the_core_owns() -> None:
         lambda: ls.Project.midi_note_on(0.0, 0, 0, 60, 128),
         lambda: ls.Project.midi_pitch_bend(0.0, 0, 0, 16384),
     ):
-        with pytest.raises(SonareError) as raised:
+        with pytest.raises(SonareValueError) as raised:
             call()
-        assert not isinstance(raised.value, SonareValueError)
+        # A core refusal is raised from the C call's coded error; the facade's
+        # own narrowing raises with no cause.
+        assert isinstance(raised.value.__cause__, SonareError)
 
 
 def test_a_pitch_bend_keeps_the_range_its_own_width_carries() -> None:

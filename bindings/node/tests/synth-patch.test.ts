@@ -409,8 +409,7 @@ describe('Project.bounceWithSynthInstrument', () => {
         [{ gain: 5 }, 'gain'],
       ] as [SynthPatch, string][]) {
         const error = rejection(patch);
-        expect(error.name, key).toBe('SonareError');
-        expect(error.code, key).toBe(4);
+        expect(error.name, key).toBe('RangeError');
         expect(error.message, key).toContain(`synth patch field '${key}': out of range`);
       }
       // The published ends are accepted.
@@ -725,10 +724,9 @@ describe('SynthPatch.engineParams', () => {
     }
   });
 
-  it('refuses a bad key or value with a coded SonareError naming the key', () => {
+  it('refuses a bad key or value with a RangeError naming the key', () => {
     const unknown = rejection({ engineMode: 'bowed-string', engineParams: { noSuchField: 1 } });
-    expect(unknown.name).toBe('SonareError');
-    expect(unknown.code).toBe(4);
+    expect(unknown.name).toBe('RangeError');
     expect(unknown.message).toContain('noSuchField');
 
     const info = synthEngineParamInfo('bowed-string');
@@ -740,7 +738,7 @@ describe('SynthPatch.engineParams', () => {
       engineMode: 'bowed-string',
       engineParams: { [otherEngine?.name as string]: 0.5 },
     });
-    expect(wrongEngine.code).toBe(4);
+    expect(wrongEngine.name).toBe('RangeError');
     expect(wrongEngine.message).toContain(otherEngine?.name as string);
 
     const bounded = info.find((field) => field.min !== undefined && field.max !== undefined);
@@ -749,14 +747,14 @@ describe('SynthPatch.engineParams', () => {
       engineMode: 'bowed-string',
       engineParams: { [bounded?.name as string]: (bounded?.max as number) + 1000 },
     });
-    expect(outOfRange.code).toBe(4);
+    expect(outOfRange.name).toBe('RangeError');
     expect(outOfRange.message).toContain(bounded?.name as string);
 
     const nonFinite = rejection({
       engineMode: 'bowed-string',
       engineParams: { bowForce: Number.NaN },
     });
-    expect(nonFinite.code).toBe(4);
+    expect(nonFinite.name).toBe('RangeError');
     expect(nonFinite.message).toContain('bowForce');
   });
 

@@ -69,7 +69,14 @@ from ._project_model import (
     _validate_midi_event_word as _validate_midi_event_word,
 )
 from ._project_render import _compile_result_fields, _ProjectRenderMixin
-from ._runtime import SonareProjectCompileResult, SonareValueError, _check, _get_lib, _utf8_arg
+from ._runtime import (
+    SonareProjectCompileResult,
+    SonareValueError,
+    _check,
+    _check_argument,
+    _get_lib,
+    _utf8_arg,
+)
 
 if TYPE_CHECKING:
     import numpy as np
@@ -210,7 +217,7 @@ class Project(
         lib = _get_lib()
         result = SonareProjectCompileResult()
         timeline = ctypes.c_void_p()
-        _check(
+        _check_argument(
             lib.sonare_project_compile_timeline(
                 self._require_handle(), ctypes.byref(result), ctypes.byref(timeline)
             )
@@ -245,7 +252,7 @@ class Project(
         lib = _get_lib()
         out = ctypes.c_char_p()
         out_len = ctypes.c_size_t()
-        _check(
+        _check_argument(
             lib.sonare_project_serialize(
                 self._require_handle(), ctypes.byref(out), ctypes.byref(out_len)
             )

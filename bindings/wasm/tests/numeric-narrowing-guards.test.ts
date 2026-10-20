@@ -88,7 +88,7 @@ describe('int fields refuse a saturating, fractional or non-finite value', () =>
     expect(importAt(48000)).toBe(1);
     // A rate the project does not carry is refused, which is what makes the
     // acceptance above a measurement of the field rather than of its absence.
-    expectInvalidParameter(() => importAt(44100));
+    expectRangeRefusal(() => importAt(44100));
     expectRangeRefusal(() => importAt(48000.5));
   });
 

@@ -331,9 +331,7 @@ describe('Project native binding', () => {
     );
     const project = Project.create();
     expect(() => project.setSampleRate(44100.5)).toThrow(/whole number of hertz/);
-    expect(() => project.setSampleRate(44100.5)).toThrow(
-      expect.objectContaining({ code: ErrorCode.InvalidParameter }),
-    );
+    expect(() => project.setSampleRate(44100.5)).toThrow(RangeError);
   });
 
   it('round-trips toJson -> fromJson -> toJson byte-for-byte', () => {

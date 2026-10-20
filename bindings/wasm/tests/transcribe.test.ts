@@ -15,7 +15,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { ProjectMidiEvent, TranscribeOptions, TranscribeRequest } from '../src/index';
-import { ErrorCode, init, isSonareError, Project, transcribe } from '../src/index';
+import { init, Project, transcribe } from '../src/index';
 import { expectArgumentRefusal } from './_helpers';
 
 const sampleRate = 44100;
@@ -375,34 +375,34 @@ describe('WASM transcribe', () => {
     // of domain. Accepting it would answer with the default under a number they
     // did not choose.
     // The reader refuses the first group itself (a RangeError); the C ABI owns the
-    // last three, so those stay a coded SonareError.
-    const rejected: Array<[string, TranscribeOptions, 'range' | 'coded']> = [
-      ['fixedVelocity 0', { fixedVelocity: 0 }, 'range'],
-      ['fixedVelocity 128', { fixedVelocity: 128 }, 'range'],
-      ['velocityFloorDb 0', { velocityFloorDb: 0 }, 'range'],
-      ['velocityFloorDb positive', { velocityFloorDb: 6 }, 'range'],
-      ['referenceHz 0', { referenceHz: 0 }, 'range'],
-      ['minNoteMs 0', { minNoteMs: 0 }, 'range'],
-      ['minNoteDivision 0', { minNoteDivision: 0 }, 'range'],
-      ['minNoteDivision negative', { minNoteDivision: -1 }, 'range'],
-      ['minNoteDivision 129', { minNoteDivision: 129 }, 'range'],
-      ['minNoteDivision fractional', { minNoteDivision: 1.5 }, 'range'],
-      ['maxPolyphony 0', { polyphonic: true, maxPolyphony: 0 }, 'range'],
-      ['maxPolyphony 65', { polyphonic: true, maxPolyphony: 65 }, 'range'],
-      ['maxPolyphony fractional', { polyphonic: true, maxPolyphony: 2.5 }, 'range'],
-      ['minFramePeakRatio negative', { polyphonic: true, minFramePeakRatio: -0.1 }, 'range'],
-      ['minFramePeakRatio above 1', { polyphonic: true, minFramePeakRatio: 1.5 }, 'range'],
-      ['minRidgePeakRatio negative', { polyphonic: true, minRidgePeakRatio: -0.1 }, 'range'],
-      ['minRidgePeakRatio above 1', { polyphonic: true, minRidgePeakRatio: 1.5 }, 'range'],
-      ['reattackRatio negative', { polyphonic: true, reattackRatio: -1 }, 'range'],
-      ['reattackRatio 1', { polyphonic: true, reattackRatio: 1 }, 'range'],
-      ['reattackRatio 0.5', { polyphonic: true, reattackRatio: 0.5 }, 'range'],
-      ['segmentationThresholdCents 0', { segmentationThresholdCents: 0 }, 'range'],
-      ['fmax below fmin', { fmin: 500, fmax: 400 }, 'coded'],
-      ['channel above 15', { channel: 16 }, 'coded'],
-      ['group above 15', { group: 16 }, 'coded'],
+    // last three, which reach the caller as a RangeError as well.
+    const rejected: Array<[string, TranscribeOptions]> = [
+      ['fixedVelocity 0', { fixedVelocity: 0 }],
+      ['fixedVelocity 128', { fixedVelocity: 128 }],
+      ['velocityFloorDb 0', { velocityFloorDb: 0 }],
+      ['velocityFloorDb positive', { velocityFloorDb: 6 }],
+      ['referenceHz 0', { referenceHz: 0 }],
+      ['minNoteMs 0', { minNoteMs: 0 }],
+      ['minNoteDivision 0', { minNoteDivision: 0 }],
+      ['minNoteDivision negative', { minNoteDivision: -1 }],
+      ['minNoteDivision 129', { minNoteDivision: 129 }],
+      ['minNoteDivision fractional', { minNoteDivision: 1.5 }],
+      ['maxPolyphony 0', { polyphonic: true, maxPolyphony: 0 }],
+      ['maxPolyphony 65', { polyphonic: true, maxPolyphony: 65 }],
+      ['maxPolyphony fractional', { polyphonic: true, maxPolyphony: 2.5 }],
+      ['minFramePeakRatio negative', { polyphonic: true, minFramePeakRatio: -0.1 }],
+      ['minFramePeakRatio above 1', { polyphonic: true, minFramePeakRatio: 1.5 }],
+      ['minRidgePeakRatio negative', { polyphonic: true, minRidgePeakRatio: -0.1 }],
+      ['minRidgePeakRatio above 1', { polyphonic: true, minRidgePeakRatio: 1.5 }],
+      ['reattackRatio negative', { polyphonic: true, reattackRatio: -1 }],
+      ['reattackRatio 1', { polyphonic: true, reattackRatio: 1 }],
+      ['reattackRatio 0.5', { polyphonic: true, reattackRatio: 0.5 }],
+      ['segmentationThresholdCents 0', { segmentationThresholdCents: 0 }],
+      ['fmax below fmin', { fmin: 500, fmax: 400 }],
+      ['channel above 15', { channel: 16 }],
+      ['group above 15', { group: 16 }],
     ];
-    for (const [name, options, owner] of rejected) {
+    for (const [name, options] of rejected) {
       let thrown: unknown;
       try {
         transcribe({ samples, sampleRate, tempoBpm: 120, ...options });
@@ -410,11 +410,7 @@ describe('WASM transcribe', () => {
         thrown = error;
       }
       expect(thrown, name).toBeDefined();
-      if (owner === 'range') {
-        expectArgumentRefusal(thrown, RangeError, name);
-      } else {
-        expect(isSonareError(thrown) && thrown.code, name).toBe(ErrorCode.InvalidParameter);
-      }
+      expectArgumentRefusal(thrown, RangeError, name);
     }
   });
 
@@ -565,7 +561,7 @@ describe('WASM transcribe', () => {
     } catch (error) {
       thrown = error;
     }
-    expect(isSonareError(thrown) && thrown.code).toBe(ErrorCode.InvalidParameter);
+    expectArgumentRefusal(thrown, RangeError);
     expect((thrown as Error).message).toContain('min_note_division');
   });
 
@@ -583,7 +579,7 @@ describe('WASM transcribe', () => {
         thrown = error;
       }
       const name = Object.keys(options)[0];
-      expect(isSonareError(thrown) && thrown.code, name).toBe(ErrorCode.InvalidParameter);
+      expectArgumentRefusal(thrown, RangeError, name);
       const field = name.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
       expect((thrown as Error).message, name).toContain(field);
     }

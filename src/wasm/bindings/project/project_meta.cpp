@@ -494,11 +494,12 @@ val js_chord_symbol_from_analysis(const val& root_val, const val& quality_val,
   uint32_t slash_bass_pc = 0;
   uint8_t extensions[32] = {};
   size_t extension_count = 0;
-  checkCError(sonare_chord_symbol_from_analysis(
-                  static_cast<SonarePitchClass>(root), static_cast<SonareChordQuality>(quality),
-                  static_cast<SonarePitchClass>(bass), &root_pc, &out_quality, extensions,
-                  sizeof(extensions), &extension_count, &slash_bass_pc),
-              "failed to convert analysis chord");
+  checkCodedCError(sonare_chord_symbol_from_analysis(static_cast<SonarePitchClass>(root),
+                                                     static_cast<SonareChordQuality>(quality),
+                                                     static_cast<SonarePitchClass>(bass), &root_pc,
+                                                     &out_quality, extensions, sizeof(extensions),
+                                                     &extension_count, &slash_bass_pc),
+                   "failed to convert analysis chord");
   val list = val::array();
   for (size_t i = 0; i < extension_count && i < sizeof(extensions); ++i) {
     list.set(static_cast<unsigned>(i), static_cast<unsigned>(extensions[i]));
@@ -514,8 +515,8 @@ val js_chord_symbol_from_analysis(const val& root_val, const val& quality_val,
 unsigned js_key_mode_from_analysis(const val& mode_val) {
   const int mode = checkedIntFromVal(mode_val, "mode");
   uint32_t out_mode = 0;
-  checkCError(sonare_key_mode_from_analysis(static_cast<SonareMode>(mode), &out_mode),
-              "failed to convert analysis key mode");
+  checkCodedCError(sonare_key_mode_from_analysis(static_cast<SonareMode>(mode), &out_mode),
+                   "failed to convert analysis key mode");
   return out_mode;
 }
 
@@ -523,13 +524,15 @@ unsigned js_key_mode_from_analysis(const val& mode_val) {
 // facade parses it. A refusal (out-of-range mode) carries the C message.
 std::string js_synth_engine_param_info(const val& engine_mode) {
   const char* json = sonare_synth_engine_param_info(checkedIntFromVal(engine_mode, "engineMode"));
-  if (json == nullptr) throwCError(SONARE_ERROR_INVALID_PARAMETER, "failed to describe engine");
+  if (json == nullptr)
+    throwCodedCError(SONARE_ERROR_INVALID_PARAMETER, "failed to describe engine");
   return json;
 }
 
 std::string js_synth_patch_param_info() {
   const char* json = sonare_synth_patch_param_info();
-  if (json == nullptr) throwCError(SONARE_ERROR_NOT_SUPPORTED, "failed to describe synth patch");
+  if (json == nullptr)
+    throwCodedCError(SONARE_ERROR_NOT_SUPPORTED, "failed to describe synth patch");
   return json;
 }
 

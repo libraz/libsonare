@@ -109,7 +109,7 @@ Napi::Value ProjectWrap::ImportExternalStems(const Napi::CallbackInfo& info) {
   const SonareExternalStemImportRequest request_desc{0, IntProperty(request, "sampleRate", 0),
                                                      descriptors.data(), descriptors.size()};
   SonareExternalStemImportResult result{};
-  ThrowIfError(env, sonare_project_import_external_stems(project_, &request_desc, &result));
+  ThrowIfArgumentError(env, sonare_project_import_external_stems(project_, &request_desc, &result));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object output = Napi::Object::New(env);
   Napi::Array track_ids = Napi::Array::New(env, result.count);

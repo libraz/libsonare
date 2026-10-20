@@ -274,12 +274,8 @@ describe('transcribe', () => {
     expect(zeroed({ fixedVelocity: 0 })).toThrow(/fixedVelocity must be an integer in \[1, 127\]/);
     // The refusal reports the same class the C ABI gives the same field one step
     // further out, so two adjacent out-of-domain values are not two error kinds.
-    expect(zeroed({ velocityFloorDb: 0 })).toThrow(
-      expect.objectContaining({ name: 'SonareError', codeName: 'InvalidParameter' }),
-    );
-    expect(zeroed({ fixedVelocity: 0 })).toThrow(
-      expect.objectContaining({ name: 'SonareError', codeName: 'InvalidParameter' }),
-    );
+    expect(zeroed({ velocityFloorDb: 0 })).toThrow(RangeError);
+    expect(zeroed({ fixedVelocity: 0 })).toThrow(RangeError);
 
     // The two fields whose 0 IS a value a caller can mean stay accepted, and
     // that is the distinction deciding the whole set.

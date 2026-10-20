@@ -41,6 +41,7 @@ from ._runtime import (
     SonareValueError,
     _call_float_transform,
     _check,
+    _check_argument,
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
@@ -1075,15 +1076,14 @@ def transcribe(
 
     Raises:
         SonareValueError: If ``samples`` is empty or holds a NaN or Inf sample,
-            or if a config argument is outside its domain -- each named against
-            this function.
-        SonareError: ``INVALID_PARAMETER`` when ``min_note_division`` is given
-            together with ``min_note_ms``, when any polyphonic-only field is
-            given with ``polyphonic=False`` (the message names the field), or
-            when only one of ``fmin``/``fmax``
-            is given and it does not lie on the right side of the selected
-            path's default for the other bound; ``NOT_SUPPORTED`` when the
-            library was built without the pitch editor.
+            if a config argument is outside its domain -- each named against
+            this function -- if ``min_note_division`` is given together with
+            ``min_note_ms``, if any polyphonic-only field is given with
+            ``polyphonic=False`` (the message names the field), or if only one
+            of ``fmin``/``fmax`` is given and it does not lie on the right side
+            of the selected path's default for the other bound.
+        SonareError: ``NOT_SUPPORTED`` when the library was built without the
+            pitch editor.
 
     Example:
         >>> result = libsonare.transcribe(samples, sr, tempo_bpm=120.0)
@@ -1127,7 +1127,7 @@ def transcribe(
 
     out = SonareTranscribeResult()
     try:
-        _check(
+        _check_argument(
             lib.sonare_transcribe(
                 c_array,
                 _to_c_size_t(length, "length"),

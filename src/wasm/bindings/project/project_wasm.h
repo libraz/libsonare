@@ -67,13 +67,36 @@ inline sonare::ErrorCode codeFromCError(SonareError err) {
   return sonare_c_detail::error_code_from_c_error(err);
 }
 
-[[noreturn]] inline void throwCError(SonareError err, const char* context) {
+/// Throws a refused caller value (SONARE_ERROR_INVALID_PARAMETER) as a RangeError and every other
+/// C code as the coded SonareException.
+[[noreturn]] inline void throwCErrorMessage(SonareError err, const std::string& message) {
+  if (err == SONARE_ERROR_INVALID_PARAMETER) throw WasmRangeError(message);
+  throw sonare::SonareException(codeFromCError(err), message);
+}
+
+/// "<context>: <C detail, or the code's generic text>".
+inline std::string cErrorMessage(SonareError err, const char* context) {
   const char* detail = sonare_last_error_message();
   const char* fallback = sonare_error_message(err);
   std::string message = context != nullptr ? context : "C API call failed";
   message += ": ";
   message += detail != nullptr && detail[0] != '\0' ? detail : fallback;
-  throw sonare::SonareException(codeFromCError(err), message);
+  return message;
+}
+
+[[noreturn]] inline void throwCError(SonareError err, const char* context) {
+  throwCErrorMessage(err, cErrorMessage(err, context));
+}
+
+/// throwCError for the free functions and helper classes sharing these units, which keep
+/// every C code, INVALID_PARAMETER included, as the coded SonareException.
+[[noreturn]] inline void throwCodedCError(SonareError err, const char* context) {
+  throw sonare::SonareException(codeFromCError(err), cErrorMessage(err, context));
+}
+
+/// Throws via throwCodedCError unless @p err is SONARE_OK.
+inline void checkCodedCError(SonareError err, const char* context) {
+  if (err != SONARE_OK) throwCodedCError(err, context);
 }
 
 /// Throws via throwCError unless @p err is SONARE_OK.

@@ -318,7 +318,7 @@ val js_midi_bank_program(double ppq, const val& group_val, const val& channel_va
       sonare_midi_bank_program(ppq, static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
                                bank_msb, bank_lsb, program, events, 3, &count);
   if (err != SONARE_OK) {
-    throwCError(err, "invalid MIDI bank/program arguments");
+    throwCodedCError(err, "invalid MIDI bank/program arguments");
   }
   val out = val::array();
   for (size_t i = 0; i < count; ++i) {
@@ -406,7 +406,7 @@ val js_midi_cc_learn(val events, const val& param_id_val, const val& min_value_v
                            max_value, min_movement, &learned);
   if (err == SONARE_ERROR_INVALID_STATE) return val::null();
   if (err != SONARE_OK) {
-    throwCError(err, "invalid MIDI CC learn arguments");
+    throwCodedCError(err, "invalid MIDI CC learn arguments");
   }
   return js_cc_binding_to_val(learned);
 }
@@ -419,7 +419,7 @@ val js_midi_cc_to_breakpoint(val bindings, val event) {
       cc_bindings.empty() ? nullptr : cc_bindings.data(), cc_bindings.size(), &pod, &point);
   if (err == SONARE_ERROR_INVALID_STATE) return val::null();
   if (err != SONARE_OK) {
-    throwCError(err, "invalid MIDI CC breakpoint arguments");
+    throwCodedCError(err, "invalid MIDI CC breakpoint arguments");
   }
   val out = val::object();
   out.set("ppq", point.ppq);
@@ -445,7 +445,7 @@ val js_midi_param_to_cc(val bindings, val param_id, const val& unit_value_val, c
       unit_value, static_cast<uint8_t>(group), ppq, &event);
   if (err == SONARE_ERROR_INVALID_STATE) return val::null();
   if (err != SONARE_OK) {
-    throwCError(err, "invalid MIDI param-to-CC arguments");
+    throwCodedCError(err, "invalid MIDI param-to-CC arguments");
   }
   return js_midi_event_to_val(event);
 }
@@ -484,7 +484,7 @@ val js_midi_route_events(val events, val config) {
                                output.empty() ? nullptr : output.data(), output.size(),
                                &output_count, &overflowed, &overflow_count);
   if (err != SONARE_OK) {
-    throwCError(err, "invalid MIDI route arguments");
+    throwCodedCError(err, "invalid MIDI route arguments");
   }
 
   val out = val::object();

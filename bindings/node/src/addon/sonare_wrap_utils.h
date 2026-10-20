@@ -173,6 +173,40 @@ inline void ThrowIfError(Napi::Env env, SonareError err) {
   }
 }
 
+/// @brief Throw @p err with @p message: INVALID_PARAMETER (the caller's value
+///        was refused) as a plain RangeError, every other code as the coded
+///        SonareError. Same pending-exception backstop as ThrowIfError.
+inline void ThrowArgumentErrorMessage(Napi::Env env, SonareError err, const std::string& message) {
+  if (env.IsExceptionPending()) return;
+  if (err == SONARE_ERROR_INVALID_PARAMETER) {
+    Napi::RangeError::New(env, message).ThrowAsJavaScriptException();
+    return;
+  }
+  ThrowSonareErrorMessage(env, err, message);
+}
+
+/// @brief ThrowIfError for calls whose INVALID_PARAMETER means an argument
+///        refusal: that code becomes a RangeError carrying the C detail message,
+///        any other code (INVALID_STATE, NOT_SUPPORTED, ...) the coded SonareError.
+inline void ThrowIfArgumentError(Napi::Env env, SonareError err) {
+  if (env.IsExceptionPending() || err == SONARE_OK) return;
+  const char* detail = sonare_last_error_message();
+  ThrowArgumentErrorMessage(
+      env, err, (detail != nullptr && detail[0] != '\0') ? detail : sonare_error_message(err));
+}
+
+/// @brief ThrowLastSonareError for calls whose INVALID_PARAMETER means an
+///        argument refusal: the code is read from the library's last error,
+///        @p fallback when it recorded none.
+inline void ThrowLastArgumentError(Napi::Env env, SonareError fallback) {
+  if (env.IsExceptionPending()) return;
+  SonareError code = sonare_last_error_code();
+  if (code == SONARE_OK) code = fallback;
+  const char* detail = sonare_last_error_message();
+  ThrowArgumentErrorMessage(
+      env, code, (detail != nullptr && detail[0] != '\0') ? detail : sonare_error_message(code));
+}
+
 /// @brief ThrowIfError's audio-thread counterpart: reports @p err from the code
 ///        alone, never from the thread-local detail message.
 ///
