@@ -14,6 +14,7 @@
 #include "core/fft.h"
 #include "effects/modulation/domain_cases.h"
 #include "support/audio_fixtures.h"
+#include "util/constants.h"
 #ifdef SONARE_WITH_MASTERING
 #include "mastering/api/insert_factory.h"
 #endif
@@ -118,6 +119,46 @@ TEST_CASE("the BBD tone control darkens the wet path", "[effects][modulation][en
   const StereoOut bright_out = process_stereo(bright, input);
   REQUIRE(high_band_fraction(bright_out.left, kNumSamples - kFft, 3000.0) >
           2.0 * high_band_fraction(dark_out.left, kNumSamples - kFft, 3000.0));
+}
+
+// The tone control is a corner in Hz. A floor on the coefficient lifted a 500 Hz request to
+// about 614 Hz at 384 kHz, where the matched pole's coefficient falls below it.
+TEST_CASE("the BBD tone corner and the tail it sets are the same at every rate",
+          "[effects][modulation][ensemble]") {
+  constexpr float kToneHz = 500.0f;
+  constexpr double kTolerance = 0.01;
+  // The tail adds a two-sample read stencil and rounds up to a whole sample: 0.7 % at 44.1 kHz.
+  constexpr double kTailTolerance = 0.02;
+  EnsembleConfig config;
+  config.depth_slow_ms = 0.0f;
+  config.depth_fast_ms = 0.0f;
+  config.dry_wet = 1.0f;
+  config.tone_hz = kToneHz;
+
+  double reference_tail_s = 0.0;
+  for (const double rate : {44100.0, 352800.0, 384000.0}) {
+    CAPTURE(rate);
+    Ensemble ensemble(config);
+    const int samples = static_cast<int>(0.012 * rate);
+    ensemble.prepare(rate, samples);
+    std::vector<float> left = sonare::test::generate_impulse(samples);
+    std::vector<float> right = left;
+    float* block[2] = {left.data(), right.data()};
+    ensemble.process(block, 2, samples);
+
+    // Past the tap the wet path is the one-pole's free decay, (1 - alpha) per sample.
+    const size_t start = static_cast<size_t>(std::ceil(0.001 * config.center_delay_ms * rate)) + 2;
+    const size_t span = static_cast<size_t>(0.001 * rate);
+    const double corner_hz = -std::log(static_cast<double>(left[start + span]) / left[start]) *
+                             rate / (sonare::constants::kTwoPiD * static_cast<double>(span));
+    CAPTURE(corner_hz);
+    CHECK(std::abs(corner_hz - kToneHz) <= kTolerance * kToneHz);
+
+    const double tail_s = static_cast<double>(ensemble.tail_samples()) / rate;
+    if (reference_tail_s == 0.0) reference_tail_s = tail_s;
+    CAPTURE(tail_s, reference_tail_s);
+    CHECK(std::abs(tail_s - reference_tail_s) <= kTailTolerance * reference_tail_s);
+  }
 }
 
 TEST_CASE("ensemble renders deterministically", "[effects][modulation][ensemble]") {

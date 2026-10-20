@@ -5,6 +5,7 @@
 
 #include "effects/common/control_ranges.h"
 #include "effects/common/field_domain.h"
+#include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
@@ -20,7 +21,6 @@ using common::require_in_domain;
 using constants::kDefaultDawSampleRate;
 
 using common::kMaxModulationPreDelayMs;
-using constants::kTwoPi;
 using constants::kTwoPiD;
 
 namespace {
@@ -116,8 +116,7 @@ void Ensemble::process(float* const* channels, int num_channels, int num_samples
   const float wet = mix.wet;
   const float dry = mix.dry;
   const float ms_to_samples = 0.001f * static_cast<float>(sample_rate_);
-  const float tone_alpha = std::clamp(
-      1.0f - std::exp(-kTwoPi * config_.tone_hz / static_cast<float>(sample_rate_)), 0.01f, 1.0f);
+  const float tone_alpha = rt::one_pole_lowpass_alpha_matched(config_.tone_hz, sample_rate_);
 
   for (int i = 0; i < num_samples; ++i) {
     const float in_l = left[i];
@@ -168,7 +167,7 @@ int Ensemble::tail_samples() const noexcept {
                           (1.0 + std::fabs(static_cast<double>(config_.depth_dev)));
   const double longest_ms = config_.center_delay_ms + config_.pre_delay_dev_ms + sweep_ms;
   const double tone_alpha =
-      std::clamp(1.0 - std::exp(-kTwoPiD * config_.tone_hz / sample_rate_), 0.01, 1.0);
+      std::min(1.0, 1.0 - std::exp(-kTwoPiD * config_.tone_hz / sample_rate_));
   rt::TailBudget tail;
   tail.delay(longest_ms * 0.001 * sample_rate_ + kDelayReadStencilSamples).decay(1.0 - tone_alpha);
   return tail.samples();
