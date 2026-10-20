@@ -38,7 +38,6 @@ class Transformer : public rt::ProcessorBase {
  private:
   static void validate_config(const TransformerConfig& config);
   static common::JilesAthertonConfig make_ja_config(const TransformerConfig& config);
-  float process_sample(common::JilesAthertonState& state, float input) const;
   void ensure_state(int num_channels);
 
   TransformerConfig transformer_config_{};

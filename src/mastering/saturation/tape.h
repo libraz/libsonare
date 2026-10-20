@@ -91,7 +91,6 @@ class Tape : public rt::ProcessorBase {
 
  private:
   static common::JilesAthertonConfig make_ja_config(const TapeConfig& config);
-  float process_sample(common::JilesAthertonState& state, float input) const;
   void ensure_state(int num_channels);
   void update_filters(double sample_rate);
   /// @brief Returns the channel's recursive cells to rest when a non-finite

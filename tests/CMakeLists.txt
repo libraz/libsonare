@@ -249,6 +249,7 @@ if(BUILD_MASTERING)
     mastering/maximizer/true_peak_limiter_test.cpp
     mastering/saturation/amp_sim_test.cpp
     mastering/saturation/bitcrusher_test.cpp
+    mastering/saturation/config_domain_test.cpp
     mastering/saturation/exciter_test.cpp
     mastering/saturation/transformer_test.cpp
     mastering/spectral/air_band_test.cpp

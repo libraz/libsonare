@@ -237,9 +237,9 @@ std::vector<rt::ParamDescriptor> Tape::parameter_descriptors() const {
 }
 
 void Tape::validate_config(const TapeConfig& config) {
-  if (!valid_unit(config.saturation) || !valid_unit(config.hysteresis) ||
-      !valid_speed_ips(config.speed_ips) || !valid_head_bump_db(config.head_bump_db) ||
-      !valid_unit(config.gap_loss)) {
+  if (!numeric::finite(config.bias) || !valid_unit(config.saturation) ||
+      !valid_unit(config.hysteresis) || !valid_speed_ips(config.speed_ips) ||
+      !valid_head_bump_db(config.head_bump_db) || !valid_unit(config.gap_loss)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid tape configuration");
   }
   if (!numeric::finite(db_to_linear(config.drive_db)) ||
@@ -266,11 +266,6 @@ common::JilesAthertonConfig Tape::make_ja_config(const TapeConfig& config) {
   // core still takes exactly one step per sample.
   ja.max_field_step = k;
   return ja;
-}
-
-float Tape::process_sample(common::JilesAthertonState& state, float input) const {
-  return process_sample_with_scalars(hysteresis_, state, input,
-                                     make_scalars(config_, sample_rate_));
 }
 
 void Tape::ensure_state(int num_channels) {

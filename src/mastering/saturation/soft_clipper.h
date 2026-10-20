@@ -47,7 +47,6 @@ class SoftClipper : public rt::ProcessorBase {
   static void validate_config(const SoftClipperConfig& config);
   void ensure_state(int num_channels);
   void declare_path_latencies();
-  float process_sample(float sample, int channel);
 
   SoftClipperConfig config_{};
   bool prepared_ = false;

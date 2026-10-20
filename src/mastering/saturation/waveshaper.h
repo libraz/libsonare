@@ -58,15 +58,11 @@ class Waveshaper : public rt::ProcessorBase {
   int tail_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;
 
-  static float db_to_linear(float db);
-  static float shape(float sample, const WaveshaperConfig& config);
-
  private:
   static void validate_config(const WaveshaperConfig& config);
   static float apply_curve(float driven, WaveshaperCurve curve);
   void ensure_state(int num_channels);
   void declare_path_latencies();
-  float shape_sample(float sample, int channel);
 
   WaveshaperConfig config_{};
   bool prepared_ = false;

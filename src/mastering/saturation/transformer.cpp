@@ -171,11 +171,6 @@ common::JilesAthertonConfig Transformer::make_ja_config(const TransformerConfig&
   return ja;
 }
 
-float Transformer::process_sample(common::JilesAthertonState& state, float input) const {
-  return process_sample_with_scalars(hysteresis_, state, input,
-                                     make_scalars(transformer_config_, sample_rate_));
-}
-
 void Transformer::ensure_state(int num_channels) {
   require_prepared_channels(num_channels, states_.size(), "Transformer");
 }

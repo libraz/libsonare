@@ -7,6 +7,7 @@
 #include "mastering/dynamics/channel_limits.h"
 #include "mastering/saturation/saturation_process.h"
 #include "rt/scoped_no_denormals.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 
@@ -22,7 +23,7 @@ struct SoftClipperScalars {
 };
 
 SoftClipperScalars make_scalars(const SoftClipperConfig& config) {
-  return {Waveshaper::db_to_linear(config.drive_db), config.ceiling, config.mix,
+  return {db_to_linear(config.drive_db), config.ceiling, config.mix,
           config.aliasing == sonare::rt::AliasingControl::Adaa1};
 }
 
@@ -109,7 +110,7 @@ void SoftClipper::set_config(const SoftClipperConfig& config) {
 bool SoftClipper::set_parameter_impl(unsigned int param_id, float value) {
   switch (param_id) {
     case 0:
-      if (!numeric::finite(Waveshaper::db_to_linear(value))) return false;
+      if (!numeric::finite(db_to_linear(value))) return false;
       config_.drive_db = value;
       return true;
     case 1:
@@ -126,10 +127,10 @@ std::vector<rt::ParamDescriptor> SoftClipper::parameter_descriptors() const {
 }
 
 void SoftClipper::validate_config(const SoftClipperConfig& config) {
-  if (!(config.ceiling > 0.0f) || !valid_mix(config.mix)) {
+  if (!numeric::finite(config.ceiling) || !(config.ceiling > 0.0f) || !valid_mix(config.mix)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid soft clipper configuration");
   }
-  if (!numeric::finite(Waveshaper::db_to_linear(config.drive_db))) {
+  if (!numeric::finite(db_to_linear(config.drive_db))) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "soft clipper drive must produce a finite linear gain");
   }
@@ -165,9 +166,5 @@ int SoftClipper::tail_samples() const noexcept {
 int SoftClipper::latency_samples() const noexcept { return paths_.latency_samples(); }
 
 int SoftClipper::latency_samples_q8() const noexcept { return paths_.latency_samples_q8(); }
-
-float SoftClipper::process_sample(float sample, int channel) {
-  return process_sample_with_scalars(sample, channel, make_scalars(config_), tanh_adaa_, paths_);
-}
 
 }  // namespace sonare::mastering::saturation
