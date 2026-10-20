@@ -34,7 +34,9 @@ struct ChordHmmConfig {
   /// the chord does not pull, so it sits between a spelled cadence and an
   /// ordinary related transition.
   float weak_cadential_transition_logp = -1.7f;
+  /// @brief Cost of an ordinary chord change; every change when no key context is given.
   float related_transition_logp = -2.1f;
+  /// @brief Cost of a change the key context marks as remote; unused without key context.
   float remote_transition_logp = -4.6f;
   bool use_key_context = false;
   PitchClass key_root = PitchClass::C;

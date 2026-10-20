@@ -52,19 +52,8 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& requested)
                    "ChordConfig: tuning must be finite and in [-0.5, 0.5)");
 
   if (config.chroma_method == ChromaMethod::NNLS) {
-    NnlsChromaConfig nnls_config;
-    // Chord recognition does not need the full seven-octave, 100-iteration
-    // analysis profile used by the standalone NNLS feature. A lighter front-end
-    // keeps the audio constructor practical for tests and interactive use while
-    // preserving the semitone salience needed by the template matcher.
-    nnls_config.cqt.bins_per_octave = 12;
-    nnls_config.cqt.n_bins = 84;
-    nnls_config.cqt.hop_length = config.hop_length;
-    nnls_config.midi_min = 24;
-    nnls_config.n_pitches = 60;
-    nnls_config.n_harmonics = 4;
-    nnls_config.max_iter = 25;
-    nnls_config.tolerance = 1.0e-3f;
+    // The reduced profile keeps the semitone salience the template matcher needs.
+    NnlsChromaConfig nnls_config = NnlsChromaConfig::fast(config.hop_length);
     nnls_config.tuning = config.tuning;
     chroma_ = nnls_chroma(audio, nnls_config);
   } else {
@@ -310,9 +299,23 @@ ChordHmmObservation ChordAnalyzer::chord_observation(const float* chroma,
                                                      const std::array<float, 12>* bass) const {
   ChordHmmObservation observation;
   observation.candidates.reserve(templates_.size());
+  int best_tetrad_idx = -1;
   for (size_t i = 0; i < templates_.size(); ++i) {
-    observation.candidates.emplace_back(static_cast<int>(i),
-                                        template_score(templates_[i], chroma, bass));
+    const float score = template_score(templates_[i], chroma, bass);
+    observation.candidates.emplace_back(static_cast<int>(i), score);
+    if (!is_triad(templates_[i].quality) &&
+        (best_tetrad_idx < 0 || score > observation.candidates[best_tetrad_idx].second)) {
+      best_tetrad_idx = static_cast<int>(i);
+    }
+  }
+  // Every non-triad pays the margin of the frame's best non-triad, which is the
+  // comparison find_best_chord_with_confidence makes, so the per-frame emission
+  // winner is exactly the chord the unsmoothed path reports.
+  if (best_tetrad_idx >= 0) {
+    const float margin = extension_threshold(templates_[best_tetrad_idx].quality);
+    for (auto& candidate : observation.candidates) {
+      if (!is_triad(templates_[candidate.first].quality)) candidate.second -= margin;
+    }
   }
   return observation;
 }

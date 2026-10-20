@@ -117,8 +117,16 @@ float cadence_logp(CadenceStrength strength, const ChordHmmConfig& config) {
   return config.remote_transition_logp;
 }
 
+/// @brief Whether a change of chord is one a progression ordinarily makes.
+/// @details Without a key every change is: V -> vi and vi -> IV are as common as
+/// any fifth motion, and penalising them lets a template whose root connects
+/// better to both neighbours take over a whole segment it only nearly matches.
 bool related_transition(const ChordTemplate& from, const ChordTemplate& to,
                         const ChordHmmConfig& config) {
+  if (!config.use_key_context) {
+    return true;
+  }
+
   if (from.root == to.root) {
     return true;
   }
@@ -126,10 +134,6 @@ bool related_transition(const ChordTemplate& from, const ChordTemplate& to,
   const int root_motion = interval(from.root, to.root);
   if (root_motion == 5 || root_motion == 7) {
     return true;
-  }
-
-  if (!config.use_key_context) {
-    return false;
   }
 
   const bool from_diatonic = is_diatonic_root(from.root, config.key_root, config.key_mode);

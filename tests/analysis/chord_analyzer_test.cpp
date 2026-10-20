@@ -849,3 +849,142 @@ TEST_CASE("beat-synchronised chord names do not depend on the sample rate",
     CHECK(names_at(sr) == reference);
   }
 }
+
+namespace {
+
+/// @brief Decaying piano-like I-V-vi-IV in C with a bass line, 2 s per chord.
+Audio create_decaying_pop_progression(int sr) {
+  constexpr double kChordSec = 2.0;
+  const std::vector<std::vector<float>> voicings = {
+      {36.0f, 60.0f, 64.0f, 67.0f},  // C2 | C4 E4 G4
+      {43.0f, 55.0f, 59.0f, 62.0f},  // G2 | G3 B3 D4
+      {45.0f, 57.0f, 60.0f, 64.0f},  // A2 | A3 C4 E4
+      {41.0f, 53.0f, 57.0f, 60.0f},  // F2 | F3 A3 C4
+  };
+  const size_t per_chord = static_cast<size_t>(kChordSec * sr);
+  std::vector<float> samples(per_chord * voicings.size(), 0.0f);
+  for (size_t c = 0; c < voicings.size(); ++c) {
+    for (float midi : voicings[c]) {
+      const double f0 =
+          sonare::constants::kA4Hz * std::pow(2.0, (midi - sonare::constants::kMidiA4) /
+                                                       sonare::constants::kSemitonesPerOctave);
+      for (size_t i = 0; i < per_chord; ++i) {
+        const double t = static_cast<double>(i) / sr;
+        const double env = std::exp(-1.5 * t);
+        double v = 0.0;
+        for (int k = 1; k <= 6; ++k) {
+          v += std::sin(sonare::constants::kTwoPiD * f0 * k * t) / k;
+        }
+        samples[c * per_chord + i] += static_cast<float>(0.1 * env * v);
+      }
+    }
+  }
+  return Audio::from_vector(std::move(samples), sr);
+}
+
+}  // namespace
+
+TEST_CASE("Chord HMM smoothing keeps a clean I-V-vi-IV progression", "[chord_analyzer][hmm]") {
+  // Smoothing may only settle ambiguous transition frames: it may drop a short
+  // segment the unsmoothed path reported, but every label it emits must be the
+  // one that path chose over most of the same span, every stable unsmoothed
+  // segment must survive under its own label, and a boundary may move by at
+  // most one beat.
+  constexpr int kSr = 22050;
+  constexpr int kHop = 512;
+  constexpr float kBeatSec = 0.5f;
+  const Audio audio = create_decaying_pop_progression(kSr);
+
+  ChromaConfig chroma_config;
+  chroma_config.hop_length = kHop;
+  const Chroma chroma = Chroma::compute(audio, chroma_config);
+  BassChromaConfig bass_config;
+  bass_config.cqt.hop_length = kHop;
+  const Chroma bass = bass_chroma(audio, bass_config);
+  std::vector<float> beats;
+  for (float t = 0.0f; t < 8.0f; t += kBeatSec) beats.push_back(t);
+
+  constexpr float kStableSec = 2.0f * kBeatSec;
+  const float kBoundaryTolerance = kBeatSec + static_cast<float>(kHop) / kSr;
+  const auto same_label_overlap = [](const Chord& segment, const std::vector<Chord>& chords) {
+    float overlap = 0.0f;
+    for (const Chord& other : chords) {
+      if (other.to_string() != segment.to_string()) continue;
+      overlap +=
+          std::max(0.0f, std::min(segment.end, other.end) - std::max(segment.start, other.start));
+    }
+    return overlap;
+  };
+
+  const std::vector<std::string> expected = {"C", "G", "Am", "F"};
+  const auto names = [](const std::vector<Chord>& chords) {
+    std::vector<std::string> out;
+    for (const auto& chord : chords) out.push_back(chord.to_string());
+    return out;
+  };
+
+  for (const bool beat_sync : {false, true}) {
+    for (const bool triads_only : {true, false}) {
+      for (const bool key_context : {false, true}) {
+        CAPTURE(beat_sync, triads_only, key_context);
+        ChordConfig config;
+        config.use_beat_sync = beat_sync;
+        config.use_triads_only = triads_only;
+        const ChordAnalyzer plain_analyzer(chroma, beats, bass, config);
+        const std::vector<Chord>& plain = plain_analyzer.chords();
+
+        config.use_hmm = true;
+        config.use_key_context = key_context;
+        config.key_root = PitchClass::C;
+        config.key_mode = Mode::Major;
+        const std::vector<Chord> smoothed = ChordAnalyzer(chroma, beats, bass, config).chords();
+
+        CAPTURE(names(plain), names(smoothed));
+        // Over the full vocabulary the unsmoothed argmax already reads these
+        // partials as extended chords; that is the argmax's own decision, and
+        // what smoothing owes it is only not to relabel it.
+        if (triads_only) CHECK(names(plain) == expected);
+        // The frame path's oracle is the per-frame argmax before short segments
+        // are merged: a run the argmax fragments is merged away there, while the
+        // decoder may report it whole.
+        const std::vector<int>& argmax = plain_analyzer.frame_chords();
+        const float hop_sec = static_cast<float>(kHop) / kSr;
+        for (const Chord& segment : smoothed) {
+          CAPTURE(segment.to_string(), segment.start, segment.end);
+          if (beat_sync) {
+            CHECK(same_label_overlap(segment, plain) >= 0.5f * segment.duration());
+            continue;
+          }
+          const int first = static_cast<int>(std::lround(segment.start / hop_sec));
+          const int last = std::min(static_cast<int>(argmax.size()),
+                                    static_cast<int>(std::lround(segment.end / hop_sec)));
+          int agreeing = 0;
+          std::vector<std::string> argmax_labels;
+          for (int f = first; f < last; ++f) {
+            const int index = argmax[static_cast<size_t>(f)];
+            std::string label = "N.C.";
+            if (index >= 0) {
+              const ChordTemplate& chosen = plain_analyzer.templates()[static_cast<size_t>(index)];
+              label = chord_symbol(static_cast<int>(chosen.root), static_cast<int>(chosen.quality));
+            }
+            agreeing += label == segment.to_string() ? 1 : 0;
+            argmax_labels.push_back(label);
+          }
+          CAPTURE(argmax_labels);
+          CHECK(2 * agreeing >= last - first);
+        }
+        for (const Chord& segment : plain) {
+          if (segment.duration() < kStableSec) continue;
+          CAPTURE(segment.to_string(), segment.start, segment.end);
+          CHECK(same_label_overlap(segment, smoothed) >= 0.5f * segment.duration());
+          bool boundary_kept = false;
+          for (const Chord& other : smoothed) {
+            boundary_kept |= other.to_string() == segment.to_string() &&
+                             std::abs(other.start - segment.start) <= kBoundaryTolerance;
+          }
+          CHECK(boundary_kept);
+        }
+      }
+    }
+  }
+}

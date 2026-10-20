@@ -425,6 +425,53 @@ TEST_CASE("Chord HMM does not penalise a cadence for its quality", "[chord_analy
   REQUIRE(sequence[1] == a_minor);
 }
 
+TEST_CASE("Chord HMM does not trade a stable segment for a better-connected near miss",
+          "[chord_analyzer][hmm]") {
+  // C-G-Am-F, four steps each. Through the Am steps C augmented scores just
+  // below A minor, as it does on real audio where E's fifth harmonic lands on
+  // G#. Its root is a fourth from both G and F while A is a whole tone and a
+  // major sixth away, so a decoder that charges root motions differently can
+  // buy the whole segment for C augmented. Smoothing may only settle ambiguous
+  // frames; every step here has a clear per-step winner and must keep it.
+  const auto templates = generate_triad_templates();
+  const int c_major = template_index(templates, PitchClass::C, ChordQuality::Major);
+  const int g_major = template_index(templates, PitchClass::G, ChordQuality::Major);
+  const int a_minor = template_index(templates, PitchClass::A, ChordQuality::Minor);
+  const int f_major = template_index(templates, PitchClass::F, ChordQuality::Major);
+  const int c_aug = template_index(templates, PitchClass::C, ChordQuality::Augmented);
+  REQUIRE(c_major >= 0);
+  REQUIRE(g_major >= 0);
+  REQUIRE(a_minor >= 0);
+  REQUIRE(f_major >= 0);
+  REQUIRE(c_aug >= 0);
+
+  constexpr int kStepsPerChord = 4;
+  const std::array<int, 4> progression = {c_major, g_major, a_minor, f_major};
+  std::vector<ChordHmmObservation> observations;
+  std::vector<int> expected;
+  for (int chord : progression) {
+    for (int step = 0; step < kStepsPerChord; ++step) {
+      ChordHmmObservation observation;
+      observation.candidates = {{chord, 0.80f}, {c_major == chord ? g_major : c_major, 0.55f}};
+      if (chord == a_minor) {
+        observation.candidates.emplace_back(c_aug, 0.78f);
+      }
+      observations.push_back(std::move(observation));
+      expected.push_back(chord);
+    }
+  }
+
+  for (const bool use_key_context : {false, true}) {
+    CAPTURE(use_key_context);
+    ChordHmmConfig config;
+    config.use_key_context = use_key_context;
+    config.key_root = PitchClass::C;
+    config.key_mode = Mode::Major;
+    const std::vector<int> sequence = viterbi_chord_sequence(observations, templates, config);
+    REQUIRE(sequence == expected);
+  }
+}
+
 TEST_CASE("Bass evidence separates a chord from its relative",
           "[chord_analyzer][synthetic_matrix]") {
   // A major and the minor a third below share two of three tones, so a folded
@@ -517,8 +564,9 @@ namespace {
 // ---------------------------------------------------------------------------
 // Oracle: the beam decode's pre-reduction shape, one score row per step kept
 // live for the whole sequence. The transition term is not an independent
-// reimplementation -- with no key context only the self / related / remote
-// classes are reachable, and that scoring is not what these guard.
+// reimplementation -- it covers only C, C minor and C# under a C major key,
+// where no cadence applies, same root is related and any move to or from the
+// non-diatonic C# is remote; that scoring is not what these guard.
 // ---------------------------------------------------------------------------
 
 float oracle_transition(int from_idx, int to_idx, const std::vector<ChordTemplate>& templates,
@@ -526,9 +574,7 @@ float oracle_transition(int from_idx, int to_idx, const std::vector<ChordTemplat
   if (from_idx == to_idx) return config.self_transition_logp;
   const ChordTemplate& from = templates[static_cast<size_t>(from_idx)];
   const ChordTemplate& to = templates[static_cast<size_t>(to_idx)];
-  const int motion = (static_cast<int>(to.root) - static_cast<int>(from.root) + 12) % 12;
-  const bool related = from.root == to.root || motion == 5 || motion == 7;
-  return related ? config.related_transition_logp : config.remote_transition_logp;
+  return from.root == to.root ? config.related_transition_logp : config.remote_transition_logp;
 }
 
 std::vector<int> oracle_chord_viterbi(const std::vector<ChordHmmObservation>& observations,
@@ -598,15 +644,15 @@ TEST_CASE("Chord HMM matches a whole-score-matrix oracle", "[chord_analyzer][hmm
   const auto chord_templates = generate_triad_templates();
   const int c_major = template_index(chord_templates, PitchClass::C, ChordQuality::Major);
   const int c_minor = template_index(chord_templates, PitchClass::C, ChordQuality::Minor);
-  const int d_major = template_index(chord_templates, PitchClass::D, ChordQuality::Major);
+  const int cs_major = template_index(chord_templates, PitchClass::Cs, ChordQuality::Major);
   REQUIRE(c_major >= 0);
   REQUIRE(c_minor >= 0);
-  REQUIRE(d_major >= 0);
+  REQUIRE(cs_major >= 0);
 
-  // Three templates spanning all three transition classes a key-free decode can
-  // produce: staying put, the same root re-coloured (related), and a whole-tone
-  // root move (remote). The per-step scores are distinct, so the beam ordering
-  // does not depend on how an unstable sort breaks a draw.
+  // Three templates spanning the self / related / remote classes under a C major
+  // key: staying put, the same root re-coloured (related), and a move to the
+  // non-diatonic C# (remote). The per-step scores are distinct, so the beam
+  // ordering does not depend on how an unstable sort breaks a draw.
   const std::array<std::array<float, 3>, 7> emissions{{
       {{0.91f, 0.44f, 0.37f}},
       {{0.68f, 0.72f, 0.30f}},
@@ -619,13 +665,16 @@ TEST_CASE("Chord HMM matches a whole-score-matrix oracle", "[chord_analyzer][hmm
   std::vector<ChordHmmObservation> observations(emissions.size());
   for (size_t t = 0; t < emissions.size(); ++t) {
     observations[t].candidates = {
-        {c_major, emissions[t][0]}, {c_minor, emissions[t][1]}, {d_major, emissions[t][2]}};
+        {c_major, emissions[t][0]}, {c_minor, emissions[t][1]}, {cs_major, emissions[t][2]}};
   }
 
   for (float emission_weight : {1.0f, 6.0f, 20.0f}) {
     CAPTURE(emission_weight);
     ChordHmmConfig config;
     config.emission_weight = emission_weight;
+    config.use_key_context = true;
+    config.key_root = PitchClass::C;
+    config.key_mode = Mode::Major;
     const std::vector<int> got = viterbi_chord_sequence(observations, chord_templates, config);
     const std::vector<int> want = oracle_chord_viterbi(observations, chord_templates, config);
     REQUIRE(got.size() == want.size());
