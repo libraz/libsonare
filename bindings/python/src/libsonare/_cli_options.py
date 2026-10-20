@@ -20,6 +20,7 @@ from typing import Any, NoReturn
 from ._cli_common import EXIT_USAGE, _legacy_exit_codes
 from ._cli_inventory import _cli_domain, _cli_scalar_type, _inventory_subparsers
 from ._errors import SonareValueError
+from ._narrowing import _FLOAT32_MAX
 from ._runtime import _C_INT_MAX, _C_INT_MIN, _narrow_int
 
 
@@ -160,7 +161,7 @@ def _finite_float(value: str) -> float:
         parsed = float(value)
     except (TypeError, ValueError) as exc:
         raise argparse.ArgumentTypeError("must be a finite number") from exc
-    if not math.isfinite(parsed):
+    if not math.isfinite(parsed) or abs(parsed) > _FLOAT32_MAX:
         raise argparse.ArgumentTypeError("must be a finite number")
     return parsed
 
@@ -216,6 +217,11 @@ def _c_int_option(value: str, requirement: str) -> int:
         raise argparse.ArgumentTypeError("must fit in a signed 32-bit integer") from exc
 
 
+def _c_int(value: str) -> int:
+    """Parse an integer option that has no further domain of its own."""
+    return _c_int_option(value, "must be an integer")
+
+
 def _positive_int(value: str) -> int:
     # Type half shared, semantic half local: "positive" is this option's own rule.
     parsed = _c_int_option(value, "must be a positive integer")
@@ -265,6 +271,7 @@ _cli_scalar_type(_mode_mask, "integer")
 _cli_scalar_type(_positive_finite_float, "number")
 _cli_scalar_type(_closed_unit_float, "number")
 _cli_scalar_type(_pitch_threshold, "number")
+_cli_scalar_type(_c_int, "integer")
 _cli_scalar_type(_positive_int, "integer")
 
 # The accepted value set each of the checkers above enforces, in the shape the
@@ -288,7 +295,7 @@ def _add_wav_bits_argument(parser: argparse.ArgumentParser) -> argparse.Action:
     class rather than the usage one.
     """
     return _cli_domain(
-        parser.add_argument("--bits", type=int, default=16),
+        parser.add_argument("--bits", type=_c_int, default=16),
         choices=(16, 24),
         reject_exit="invalid_parameter",
     )
@@ -486,20 +493,20 @@ def build_shared_parsers() -> SharedParsers:
     )
 
     fft_options = _ContractArgumentParser(add_help=False, parents=[common])
-    fft_options.add_argument("--n-fft", type=int, default=2048, help="FFT size (default: 2048)")
+    fft_options.add_argument("--n-fft", type=_c_int, default=2048, help="FFT size (default: 2048)")
     fft_options.add_argument(
-        "--hop-length", type=int, default=512, help="Hop length (default: 512)"
+        "--hop-length", type=_c_int, default=512, help="Hop length (default: 512)"
     )
     fft_stdout_options = _ContractArgumentParser(add_help=False, parents=[stdout_options])
     fft_stdout_options.add_argument(
-        "--n-fft", type=int, default=2048, help="FFT size (default: 2048)"
+        "--n-fft", type=_c_int, default=2048, help="FFT size (default: 2048)"
     )
     fft_stdout_options.add_argument(
-        "--hop-length", type=int, default=512, help="Hop length (default: 512)"
+        "--hop-length", type=_c_int, default=512, help="Hop length (default: 512)"
     )
     mel_options = _ContractArgumentParser(add_help=False, parents=[fft_stdout_options])
     mel_options.add_argument(
-        "--n-mels", type=int, default=128, help="Number of mel bands (default: 128)"
+        "--n-mels", type=_c_int, default=128, help="Number of mel bands (default: 128)"
     )
     return SharedParsers(
         common=common,

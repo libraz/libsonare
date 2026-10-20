@@ -27,6 +27,7 @@ from ._cli_common import (
 from ._cli_inventory import _cli_domain
 from ._cli_options import (
     SharedParsers,
+    _c_int,
     _candidate_count,
     _ContractArgumentParser,
     _finite_float,
@@ -645,9 +646,9 @@ def register_analysis_parsers(
     # objects, so a set_defaults override would mutate the shared --n-fft used by
     # the other analysis commands.
     key_p.add_argument(
-        "--n-fft", type=int, default=4096, help="FFT size (default: 4096 for key analysis)"
+        "--n-fft", type=_c_int, default=4096, help="FFT size (default: 4096 for key analysis)"
     )
-    key_p.add_argument("--hop-length", type=int, default=512, help="Hop length (default: 512)")
+    key_p.add_argument("--hop-length", type=_c_int, default=512, help="Hop length (default: 512)")
     key_p.add_argument(
         "--candidates",
         type=_candidate_count,
@@ -728,7 +729,7 @@ def register_analysis_parsers(
     # closed at the bottom and only a negative width is refused.
     _cli_domain(
         chords_p.add_argument(
-            "--hmm-beam-width", type=int, default=24, help="HMM decoder beam width"
+            "--hmm-beam-width", type=_c_int, default=24, help="HMM decoder beam width"
         ),
         minimum=0,
         reject_exit="invalid_parameter",

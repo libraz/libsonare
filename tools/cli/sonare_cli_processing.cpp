@@ -988,9 +988,9 @@ int cmd_decompose_stems(const CliArgs& args, const Audio& audio) {
   // Mean absolute amplitude, the level summary both CLIs publish per component.
   auto component_energy = [](const std::vector<float>& component) {
     if (component.empty()) return 0.0f;
-    float total = 0.0f;
+    double total = 0.0;
     for (float sample : component) total += std::fabs(sample);
-    return total / static_cast<float>(component.size());
+    return static_cast<float>(total / static_cast<double>(component.size()));
   };
 
   std::vector<std::string> paths;
@@ -1074,9 +1074,9 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
   // Mean absolute amplitude, the level summary both CLIs publish per component.
   auto component_energy = [](const Audio& a) {
     if (a.empty()) return 0.0f;
-    float total = 0.0f;
+    double total = 0.0;
     for (float sample : a) total += std::fabs(sample);
-    return total / static_cast<float>(a.size());
+    return static_cast<float>(total / static_cast<double>(a.size()));
   };
 
   if (args.has("harmonic-only")) {

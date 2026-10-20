@@ -69,7 +69,7 @@ from ._cli_note_edit import (
 from ._cli_note_edit import (
     register_note_edit_parsers,
 )
-from ._cli_options import SharedParsers, _ContractArgumentParser, _finite_float
+from ._cli_options import SharedParsers, _c_int, _ContractArgumentParser, _finite_float
 
 
 def cmd_hpss(args: argparse.Namespace) -> int:
@@ -156,11 +156,11 @@ def cmd_hpss(args: argparse.Namespace) -> int:
             "sample_rate": output_sr,
         }
         if modes != ["percussive_only"]:
-            payload["harmonic_mean_abs"] = round(h_energy, 6)
+            payload["harmonic_mean_abs"] = h_energy
         if modes != ["harmonic_only"]:
-            payload["percussive_mean_abs"] = round(p_energy, 6)
+            payload["percussive_mean_abs"] = p_energy
         if residual.size:
-            payload["residual_mean_abs"] = round(_mean_abs(residual), 6)
+            payload["residual_mean_abs"] = _mean_abs(residual)
         if harmonic_path:
             payload["harmonic"] = harmonic_path
         if percussive_path:
@@ -215,7 +215,7 @@ def cmd_decompose_stems(args: argparse.Namespace) -> int:
     for path, component in zip(paths, components, strict=True):
         _write_wav(path, component, output_sr)
 
-    energies = [round(_mean_abs(component), 6) for component in components]
+    energies = [_mean_abs(component) for component in components]
     if args.json:
         print(
             _strict_json_dumps(
@@ -662,10 +662,10 @@ def register_effects_parsers(
 
     hpss_p = sub.add_parser("hpss", parents=[fft_options], help="Harmonic-percussive separation")
     hpss_p.add_argument(
-        "--kernel-harmonic", type=int, default=31, help="Harmonic median-filter kernel"
+        "--kernel-harmonic", type=_c_int, default=31, help="Harmonic median-filter kernel"
     )
     hpss_p.add_argument(
-        "--kernel-percussive", type=int, default=31, help="Percussive median-filter kernel"
+        "--kernel-percussive", type=_c_int, default=31, help="Percussive median-filter kernel"
     )
     hpss_p.add_argument("--harmonic-only", action="store_true")
     hpss_p.add_argument("--percussive-only", action="store_true")
@@ -687,10 +687,10 @@ def register_effects_parsers(
         help="Separate into NMF components that keep the original phase",
     )
     stems_p.add_argument(
-        "--n-components", type=int, default=4, help="Number of NMF components (default: 4)"
+        "--n-components", type=_c_int, default=4, help="Number of NMF components (default: 4)"
     )
     stems_p.add_argument(
-        "--n-iter", type=int, default=100, help="NMF update iterations (default: 100)"
+        "--n-iter", type=_c_int, default=100, help="NMF update iterations (default: 100)"
     )
     stems_p.add_argument(
         "--beta",
@@ -729,7 +729,7 @@ def register_effects_parsers(
     # handler's; these two commands are where it is reachable from a command line.
     for _geometry_option, _geometry_default in (("--n-fft", 2048), ("--hop-length", 512)):
         _cli_domain(
-            pitch_shift_p.add_argument(_geometry_option, type=int, default=_geometry_default),
+            pitch_shift_p.add_argument(_geometry_option, type=_c_int, default=_geometry_default),
             minimum=0,
             exclusive_minimum=True,
             reject_exit="invalid_parameter",
@@ -742,7 +742,7 @@ def register_effects_parsers(
     )
     for _geometry_option, _geometry_default in (("--n-fft", 2048), ("--hop-length", 512)):
         _cli_domain(
-            time_stretch_p.add_argument(_geometry_option, type=int, default=_geometry_default),
+            time_stretch_p.add_argument(_geometry_option, type=_c_int, default=_geometry_default),
             minimum=0,
             exclusive_minimum=True,
             reject_exit="invalid_parameter",
@@ -774,8 +774,8 @@ def register_effects_parsers(
     # alternate selector absent by default so the handler can distinguish the
     # default threshold mode from an explicit top-dB request.
     trim_silence_p.add_argument("--top-db", type=_finite_float, default=None)
-    trim_silence_p.add_argument("--n-fft", type=int, default=2048)
-    trim_silence_p.add_argument("--hop-length", type=int, default=512)
+    trim_silence_p.add_argument("--n-fft", type=_c_int, default=2048)
+    trim_silence_p.add_argument("--hop-length", type=_c_int, default=512)
     split_silence_p = sub.add_parser(
         "split-silence", parents=[fft_stdout_options], help="List non-silent intervals"
     )
@@ -818,7 +818,7 @@ def register_effects_parsers(
         "--target-rate",
         "--target-sr",
         dest="target_rate",
-        type=int,
+        type=_c_int,
         required=True,
         help="Target sample rate in Hz",
     )

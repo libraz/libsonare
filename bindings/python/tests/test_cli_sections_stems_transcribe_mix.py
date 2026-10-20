@@ -199,6 +199,8 @@ def test_decompose_stems_writes_components_that_sum_back(melody_wav: str) -> Non
         assert len(payload["components"]) == 3
         assert len(payload["energies"]) == 3
         assert all(energy > 0.0 for energy in payload["energies"])
+        # Levels keep their significant digits rather than being cut to six decimals.
+        assert any(energy != round(energy, 6) for energy in payload["energies"])
 
         source, _rate = _read_wav(melody_wav)
         summed = [0.0] * payload["length"]

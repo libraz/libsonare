@@ -28,6 +28,7 @@ from ._cli_inventory import _cli_domain
 from ._cli_options import (
     SharedParsers,
     _add_wav_bits_argument,
+    _c_int,
     _ContractArgumentParser,
     _finite_float,
     _option_supplied,
@@ -1042,7 +1043,7 @@ def register_mastering_parsers(
     mastering_p.add_argument("--params", default="")
     _add_wav_bits_argument(mastering_p)
     mastering_p.add_argument(
-        "--true-peak-oversample", type=int, choices=(1, 2, 4, 8, 16), default=4
+        "--true-peak-oversample", type=_c_int, choices=(1, 2, 4, 8, 16), default=4
     )
     mastering_p.add_argument("--report", default=None, help="Write a mastering report JSON file")
     mastering_p.add_argument("--assistant", action="store_true")
@@ -1065,7 +1066,7 @@ def register_mastering_parsers(
     _cli_domain(
         eq_p.add_argument(
             "--type",
-            type=int,
+            type=_c_int,
             default=0,
             help=(
                 "Band type enum: 0 peak, 1 low shelf, 2 high shelf, 3 low pass, "
@@ -1079,14 +1080,14 @@ def register_mastering_parsers(
     eq_p.add_argument("--gain-db", type=_finite_float, default=0.0)
     eq_p.add_argument("--q", type=_finite_float, default=1.0)
     _cli_domain(
-        eq_p.add_argument("--coeff-mode", type=int, default=0, help="0 RBJ, 1 Vicanek"),
+        eq_p.add_argument("--coeff-mode", type=_c_int, default=0, help="0 RBJ, 1 Vicanek"),
         choices=range(_EQ_ENUM_BOUNDS["coeff_mode"] + 1),
         reject_exit="invalid_parameter",
     )
-    eq_p.add_argument("--slope-db-oct", type=int, default=12)
+    eq_p.add_argument("--slope-db-oct", type=_c_int, default=12)
     _cli_domain(
         eq_p.add_argument(
-            "--placement", type=int, default=0, help="0 stereo, 1 left, 2 right, 3 mid, 4 side"
+            "--placement", type=_c_int, default=0, help="0 stereo, 1 left, 2 right, 3 mid, 4 side"
         ),
         choices=range(_EQ_ENUM_BOUNDS["placement"] + 1),
         reject_exit="invalid_parameter",
@@ -1094,7 +1095,7 @@ def register_mastering_parsers(
     _cli_domain(
         eq_p.add_argument(
             "--phase-mode",
-            type=int,
+            type=_c_int,
             default=1,
             help="0 inherit, 1 zero latency, 2 natural, 3 linear",
         ),
@@ -1104,7 +1105,7 @@ def register_mastering_parsers(
     _cli_domain(
         eq_p.add_argument(
             "--resolution",
-            type=int,
+            type=_c_int,
             default=0,
             help="0 custom/default, 1 low, 2 medium, 3 high, 4 very high, 5 maximum",
         ),

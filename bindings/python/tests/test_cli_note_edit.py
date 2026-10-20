@@ -374,9 +374,10 @@ def test_tune_to_midi_cli_reports_zero_assigned_for_a_reference_that_misses() ->
 def test_tune_to_midi_cli_forwards_an_overlap_ratio_of_zero() -> None:
     """0 is a value -- any overlap counts -- and not a request for the default."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        # A half-beat target covers a quarter second of a half-second note, so its
-        # overlap ratio is about 0.5: inside a bound of 0 and outside the default.
-        wav_path, smf_path = _tune_fixture(tmpdir, _TUNE_REFERENCE_MIDI[0], beats=0.5)
+        # A quarter-beat target covers an eighth of a second of a half-second note, so
+        # its overlap ratio is about 0.25: well inside a bound of 0 and well outside the
+        # default of 0.5, whatever pYIN frame the extraction used.
+        wav_path, smf_path = _tune_fixture(tmpdir, _TUNE_REFERENCE_MIDI[0], beats=0.25)
         assigned = []
         for extra in ([], ["--min-overlap-ratio", "0"]):
             out_path = os.path.join(tmpdir, f"ratio{len(extra)}.wav")
@@ -693,3 +694,50 @@ def test_note_stretch_omitted_offset_resolves_to_the_input_length(
     args.offset = 400
     _cli_note_edit.cmd_note_stretch(args)
     assert seen["offset_sample"] == 400
+
+
+@pytest.mark.parametrize(
+    ("sample_rate", "frame_length"), [(22050, 2048), (44100, 4096), (48000, 4458)]
+)
+@pytest.mark.parametrize("command", ["timevarying", "tune"])
+def test_note_edit_cli_scales_the_pyin_frame_with_the_input_rate(
+    monkeypatch, sample_rate, frame_length, command
+) -> None:
+    """The pYIN frame is 2048 samples at 22050 Hz, so it follows the file's rate."""
+    import argparse
+
+    import libsonare
+    from libsonare import _cli_note_edit
+
+    seen: dict[str, object] = {}
+
+    class _StopError(Exception):
+        pass
+
+    def fake_pyin(samples, **kwargs):
+        seen.update(kwargs)
+        raise _StopError
+
+    monkeypatch.setattr(libsonare, "pitch_pyin", fake_pyin)
+    monkeypatch.setattr(_cli_note_edit, "_load_audio", lambda _path: ([0.0] * 1000, sample_rate))
+    monkeypatch.setattr(_cli_note_edit, "_read_bounded", lambda *_args: b"")
+    monkeypatch.setattr(libsonare, "note_targets_from_smf", lambda *_a, **_k: [])
+    args = argparse.Namespace(
+        file="in.wav",
+        hop_length=512,
+        reference_smf="ref.mid",
+        track=0,
+        output="o.wav",
+        json=True,
+        unmatched_policy=next(iter(_cli_note_edit._UNMATCHED_POLICIES)),
+        min_overlap_ratio=None,
+        max_correction_semitones=None,
+    )
+    handler = (
+        _cli_note_edit.cmd_pitch_correct_timevarying
+        if command == "timevarying"
+        else _cli_note_edit.cmd_tune_to_midi
+    )
+    with pytest.raises(_StopError):
+        handler(args)
+    assert seen["frame_length"] == frame_length

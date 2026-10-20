@@ -29,7 +29,7 @@ from ._cli_common import (
     _write_channel_output,
     _write_wav_stereo_frames,
 )
-from ._cli_options import SharedParsers, _ContractArgumentParser
+from ._cli_options import SharedParsers, _c_int, _ContractArgumentParser
 
 
 def _mix_assistant_options(params: dict[str, float]) -> dict[str, Any]:
@@ -531,7 +531,7 @@ def register_mixing_parsers(
     )
     suggest_mix_p.add_argument(
         "--sample-rate",
-        type=int,
+        type=_c_int,
         default=48000,
         help="Shared analysis sample rate (default: 48000)",
     )
@@ -582,10 +582,10 @@ def register_mixing_parsers(
         ),
     )
     mix_p.add_argument(
-        "--sample-rate", type=int, default=48000, help="Mixer sample rate (default: 48000)"
+        "--sample-rate", type=_c_int, default=48000, help="Mixer sample rate (default: 48000)"
     )
     mix_p.add_argument(
-        "--block-size", type=int, default=512, help="Mixer max block size (default: 512)"
+        "--block-size", type=_c_int, default=512, help="Mixer max block size (default: 512)"
     )
 
     mix_strip_p = sub.add_parser(

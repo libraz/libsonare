@@ -16,6 +16,7 @@ from ._cli_common import (
     _legacy_exit_codes,
     _read_bounded,
     _strict_json_dumps,
+    _window_length_at_rate,
 )
 from ._cli_common import (
     _load_audio_from_facade as _load_audio,
@@ -23,6 +24,7 @@ from ._cli_common import (
 from ._cli_inventory import _cli_domain
 from ._cli_options import (
     SharedParsers,
+    _c_int,
     _closed_unit_float,
     _ContractArgumentParser,
     _finite_float,
@@ -68,7 +70,12 @@ def cmd_pitch_correct_timevarying(args: argparse.Namespace) -> int:
     from . import pitch_correct_timevarying, pitch_pyin
 
     samples, sr = _load_audio(args.file)
-    track = pitch_pyin(samples, sample_rate=sr, hop_length=args.hop_length)
+    track = pitch_pyin(
+        samples,
+        sample_rate=sr,
+        frame_length=_window_length_at_rate(_PYIN_FRAME_LENGTH, sr),
+        hop_length=args.hop_length,
+    )
     result = pitch_correct_timevarying(
         samples,
         track.f0,
@@ -157,6 +164,8 @@ _DEFAULT_UNMATCHED_POLICY = "leave"
 # analysis geometry, so the value the track and the note frame rate must agree on
 # is stated once.
 _TUNE_HOP_LENGTH = 512
+# pYIN frame length at the analysis rate, rescaled to the input rate like the native CLI.
+_PYIN_FRAME_LENGTH = 2048
 
 
 def cmd_tune_to_midi(args: argparse.Namespace) -> int:
@@ -204,7 +213,12 @@ def cmd_tune_to_midi(args: argparse.Namespace) -> int:
         _read_bounded(args.reference_smf, _MAX_PROJECT_OR_MIDI_BYTES),
         track_index=args.track,
     )
-    pitch = pitch_pyin(samples, sample_rate=sr, hop_length=_TUNE_HOP_LENGTH)
+    pitch = pitch_pyin(
+        samples,
+        sample_rate=sr,
+        frame_length=_window_length_at_rate(_PYIN_FRAME_LENGTH, sr),
+        hop_length=_TUNE_HOP_LENGTH,
+    )
     notes = extract_notes(
         samples,
         sr,
@@ -559,13 +573,13 @@ def register_note_edit_parsers(
         reject_exit="invalid_parameter",
     )
     _cli_domain(
-        pitch_tv_p.add_argument("--hop-length", type=int, default=512),
+        pitch_tv_p.add_argument("--hop-length", type=_c_int, default=512),
         minimum=0,
         exclusive_minimum=True,
         reject_exit="invalid_parameter",
     )
     _cli_domain(
-        pitch_tv_p.add_argument("--scale-root", type=int, default=0),
+        pitch_tv_p.add_argument("--scale-root", type=_c_int, default=0),
         minimum=0,
         maximum=11,
         reject_exit="invalid_parameter",
@@ -601,13 +615,13 @@ def register_note_edit_parsers(
             reject_exit="invalid_parameter",
         )
     note_move_p = sub.add_parser("note-move", parents=[common], help="Move one note region")
-    note_move_p.add_argument("--onset", type=int, default=0)
-    note_move_p.add_argument("--offset", type=int, default=None)
+    note_move_p.add_argument("--onset", type=_c_int, default=0)
+    note_move_p.add_argument("--offset", type=_c_int, default=None)
     # The library's own default, not None: note_move takes an int, so an absent
     # --target-onset reached ctypes as None and the command could not run with
     # its own defaults at all. --offset keeps None because the handler resolves
     # it to the end of the buffer, which is not a number a default can spell.
-    note_move_p.add_argument("--target-onset", type=int, default=0)
+    note_move_p.add_argument("--target-onset", type=_c_int, default=0)
     scale_quantize_p = sub.add_parser(
         "scale-quantize", parents=[stdout_options], help="Quantize one MIDI value to a scale"
     )
@@ -618,7 +632,7 @@ def register_note_edit_parsers(
     # closed at 0 because the anchor is a MIDI note; the C ABI reads 0 as the
     # library default, which is the same grid as any other whole-number anchor.
     _cli_domain(
-        scale_quantize_p.add_argument("--root", type=int, default=0),
+        scale_quantize_p.add_argument("--root", type=_c_int, default=0),
         minimum=0,
         maximum=11,
         reject_exit="invalid_parameter",
@@ -644,11 +658,11 @@ def register_note_edit_parsers(
         "note-stretch", parents=[common], help="Time-stretch a single note region"
     )
     note_stretch_p.add_argument(
-        "--onset", type=int, default=0, help="Start sample index of the note region"
+        "--onset", type=_c_int, default=0, help="Start sample index of the note region"
     )
     note_stretch_p.add_argument(
         "--offset",
-        type=int,
+        type=_c_int,
         default=None,
         help="End sample index of the note region (default: end of the input)",
     )
@@ -674,7 +688,7 @@ def register_note_edit_parsers(
     _cli_domain(
         tune_to_midi_p.add_argument(
             "--track",
-            type=int,
+            type=_c_int,
             default=0,
             metavar="N",
             help="MIDI-bearing track the melody is read from (default: 0)",

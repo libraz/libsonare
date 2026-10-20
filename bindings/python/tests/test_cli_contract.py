@@ -1455,3 +1455,21 @@ def test_root_version_flag_prints_the_package_version_and_exits_zero(monkeypatch
     captured = capsys.readouterr()
     assert captured.out.strip() == f"libsonare {__version__} (Python CLI)"
     assert captured.err == ""
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ("mel", "--n-fft", "99999999999"),
+        ("mel", "--n-mels", "3000000000"),
+        ("resample", "--target-sr", "3000000000", "-o", "out.wav"),
+        ("pitch-shift", "--semitones", "1e40", "-o", "out.wav"),
+    ],
+)
+def test_an_option_past_its_c_type_range_is_a_usage_error(tmp_path, arguments) -> None:
+    """An integer past int32 or a float past float32 fails at parse time, as the native CLI does."""
+    source = tmp_path / "tone.wav"
+    _write_tone_wav(source)
+
+    result = _run_console(arguments[0], str(source), *arguments[1:])
+    assert result.returncode == 2, result.stderr

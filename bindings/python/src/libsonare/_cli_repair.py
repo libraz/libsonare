@@ -23,6 +23,7 @@ from ._cli_common import (
 from ._cli_options import (
     SharedParsers,
     _add_wav_bits_argument,
+    _c_int,
     _ContractArgumentParser,
     _finite_float,
     _option_supplied,
@@ -446,6 +447,6 @@ def register_repair_parsers(
     _add_wav_bits_argument(repair_p)
     declip_p = sub.add_parser("declip", parents=[common], help="Repair clipped audio")
     declip_p.add_argument("--clip-threshold", type=_finite_float, default=0.98)
-    declip_p.add_argument("--lpc-order", type=int, default=36)
-    declip_p.add_argument("--iterations", type=int, default=2)
+    declip_p.add_argument("--lpc-order", type=_c_int, default=36)
+    declip_p.add_argument("--iterations", type=_c_int, default=2)
     declip_p.add_argument("--lpc-blend", type=_finite_float, default=0.65)

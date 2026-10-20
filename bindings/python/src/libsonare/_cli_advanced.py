@@ -14,7 +14,7 @@ from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
 from ._cli_inventory import _cli_domain
-from ._cli_options import SharedParsers, _ContractArgumentParser, _finite_float
+from ._cli_options import SharedParsers, _c_int, _ContractArgumentParser, _finite_float
 
 
 def cmd_rhythm(args: argparse.Namespace) -> int:
@@ -349,7 +349,9 @@ def register_advanced_parsers(
     )
     # Dynamics windows the loudness series but runs no FFT, so it takes the hop
     # control without the matching --n-fft.
-    dynamics_p.add_argument("--hop-length", type=int, default=512, help="Hop length (default: 512)")
+    dynamics_p.add_argument(
+        "--hop-length", type=_c_int, default=512, help="Hop length (default: 512)"
+    )
     sub.add_parser("timbre", parents=[mel_options], help="Analyze timbre/spectral shape")
     lufs_p = sub.add_parser("lufs", parents=[stdout_options], help="Compute LUFS loudness")
     lufs_p.add_argument(
@@ -359,12 +361,12 @@ def register_advanced_parsers(
         "onset-envelope", parents=[mel_options], help="Compute the onset strength envelope"
     )
     nnls_p = sub.add_parser("nnls-chroma", parents=[stdout_options], help="Compute NNLS chroma")
-    nnls_p.add_argument("--hop-length", type=int, default=512)
+    nnls_p.add_argument("--hop-length", type=_c_int, default=512)
     tempogram_p = sub.add_parser(
         "tempogram", parents=[mel_options], help="Compute autocorrelation tempogram"
     )
-    tempogram_p.add_argument("--win-length", type=int, default=384)
+    tempogram_p.add_argument("--win-length", type=_c_int, default=384)
     plp_p = sub.add_parser("plp", parents=[mel_options], help="Compute predominant local pulse")
     plp_p.add_argument("--tempo-min", type=_finite_float, default=30.0)
     plp_p.add_argument("--tempo-max", type=_finite_float, default=300.0)
-    plp_p.add_argument("--win-length", type=int, default=384)
+    plp_p.add_argument("--win-length", type=_c_int, default=384)

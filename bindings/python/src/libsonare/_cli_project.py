@@ -25,7 +25,7 @@ from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
 from ._cli_inventory import _cli_domain
-from ._cli_options import SharedParsers, _ContractArgumentParser, _finite_float
+from ._cli_options import SharedParsers, _c_int, _ContractArgumentParser, _finite_float
 from ._runtime import ErrorCode, SonareError
 
 # A project source's serialized `kind`: 0 audio, 1 MIDI (SourceKind). Only an
@@ -720,7 +720,7 @@ def register_project_parsers(
     pnew = project_sub.add_parser(
         "new", parents=[project_common], help="Create an empty project JSON"
     )
-    pnew.add_argument("--sample-rate", type=int, default=0, help="Project sample rate")
+    pnew.add_argument("--sample-rate", type=_c_int, default=0, help="Project sample rate")
     for pname in ("validate", "compile"):
         if pname == "validate":
             # Keep the active validation route's action order aligned with the
@@ -754,24 +754,24 @@ def register_project_parsers(
     pbounce.add_argument("--in", dest="input", required=True, help="Input project JSON")
     pbounce.add_argument(
         "--sample-rate",
-        type=int,
+        type=_c_int,
         default=None,
         help=(
             "Render sample rate; must equal the project's own rate (not a resample). "
             "Default: the project's own sample rate."
         ),
     )
-    pbounce.add_argument("--frames", type=int, default=0, help="Render length in frames")
-    pbounce.add_argument("--block-size", type=int, default=0, help="Render block size")
+    pbounce.add_argument("--frames", type=_c_int, default=0, help="Render length in frames")
+    pbounce.add_argument("--block-size", type=_c_int, default=0, help="Render block size")
     pbounce.add_argument(
         "--channels",
-        type=int,
+        type=_c_int,
         default=2,
         help=(
             "Render channel count: 1, 2, 6, or 8, at most the scene master's own width (default 2)"
         ),
     )
-    pbounce.add_argument("--instrument-latency", type=int, default=0)
+    pbounce.add_argument("--instrument-latency", type=_c_int, default=0)
     # One assignment per occurrence, as --set / --edit / suggest-mix --input do:
     # the id written with the path keeps the pairing in one token, so no second
     # repeatable option has to be kept in step with this one.
@@ -816,7 +816,7 @@ def register_project_parsers(
     _cli_domain(
         palign.add_argument(
             "--reference-source",
-            type=int,
+            type=_c_int,
             required=True,
             help="Audio source id whose timeline every take is aligned to",
         ),
@@ -844,7 +844,7 @@ def register_project_parsers(
     _cli_domain(
         palign.add_argument(
             "--hop-length",
-            type=int,
+            type=_c_int,
             default=0,
             help="Chroma hop in samples (0: the library value)",
         ),
@@ -854,7 +854,7 @@ def register_project_parsers(
     _cli_domain(
         palign.add_argument(
             "--bins-per-octave",
-            type=int,
+            type=_c_int,
             default=0,
             help="Chroma bins per octave (0: the library value)",
         ),
@@ -886,24 +886,24 @@ def register_project_parsers(
     midi_render_p.add_argument("--in", dest="input", required=True, help="Input project JSON")
     midi_render_p.add_argument(
         "--sample-rate",
-        type=int,
+        type=_c_int,
         default=None,
         help=(
             "Render sample rate; must equal the project's own rate (not a resample). "
             "Default: the project's own sample rate."
         ),
     )
-    midi_render_p.add_argument("--frames", type=int, default=0, help="Render length in frames")
-    midi_render_p.add_argument("--block-size", type=int, default=0, help="Render block size")
+    midi_render_p.add_argument("--frames", type=_c_int, default=0, help="Render length in frames")
+    midi_render_p.add_argument("--block-size", type=_c_int, default=0, help="Render block size")
     midi_render_p.add_argument(
         "--channels",
-        type=int,
+        type=_c_int,
         default=2,
         help=(
             "Render channel count: 1, 2, 6, or 8, at most the scene master's own width (default 2)"
         ),
     )
-    midi_render_p.add_argument("--instrument-latency", type=int, default=0)
+    midi_render_p.add_argument("--instrument-latency", type=_c_int, default=0)
     midi_render_p.add_argument(
         "--synth",
         default="",
@@ -953,7 +953,7 @@ def register_project_parsers(
     )
     transcribe_p.add_argument(
         "--min-note-division",
-        type=int,
+        type=_c_int,
         default=None,
         metavar="N",
         help="Shortest note kept, as a note value: N is a 1/N note at the tempo "
@@ -961,7 +961,7 @@ def register_project_parsers(
     )
     transcribe_p.add_argument(
         "--max-polyphony",
-        type=int,
+        type=_c_int,
         default=None,
         metavar="N",
         help="Polyphonic only: voices one frame may hold, 1-64 (default: 10)",
@@ -1000,14 +1000,17 @@ def register_project_parsers(
     )
     transcribe_p.add_argument(
         "--fixed-velocity",
-        type=int,
+        type=_c_int,
         default=None,
         metavar="N",
         help="Give every note velocity N (1-127) and skip the level measurement",
     )
     transcribe_p.add_argument(
-        "--group", type=int, default=0, help="UMP group the events are emitted on (default: 0)"
+        "--group", type=_c_int, default=0, help="UMP group the events are emitted on (default: 0)"
     )
     transcribe_p.add_argument(
-        "--channel", type=int, default=0, help="MIDI channel the events are emitted on (default: 0)"
+        "--channel",
+        type=_c_int,
+        default=0,
+        help="MIDI channel the events are emitted on (default: 0)",
     )

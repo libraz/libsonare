@@ -24,7 +24,7 @@ from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
 from ._cli_inventory import _cli_domain
-from ._cli_options import SharedParsers, _ContractArgumentParser, _finite_float
+from ._cli_options import SharedParsers, _c_int, _ContractArgumentParser, _finite_float
 from ._errors import SonareError
 
 # Upper bound of the receiver spacing, in metres; the library's own limit.
@@ -264,7 +264,7 @@ def register_acoustic_parsers(
         "acoustic", parents=[stdout_options], help="Estimate acoustic parameters"
     )
     acoustic_p.add_argument("--ir", action="store_true", help="Treat input as an impulse response")
-    acoustic_p.add_argument("--n-bands", type=int, default=6)
+    acoustic_p.add_argument("--n-bands", type=_c_int, default=6)
     acoustic_p.add_argument("--min-decay-db", type=_finite_float, default=30.0)
     acoustic_p.add_argument("--noise-floor-margin-db", type=_finite_float, default=10.0)
 
@@ -288,7 +288,7 @@ def register_acoustic_parsers(
         p.add_argument("--listener-x", type=_finite_float, default=5.0)
         p.add_argument("--listener-y", type=_finite_float, default=4.0)
         p.add_argument("--listener-z", type=_finite_float, default=1.7)
-        p.add_argument("--ism-order", type=int, default=3, help="Image-source reflection order")
+        p.add_argument("--ism-order", type=_c_int, default=3, help="Image-source reflection order")
         # The C field is a uint32 and 0 is its library-default sentinel, so the
         # range is closed at both ends rather than refusing only a negative.
         _cli_domain(
@@ -327,7 +327,7 @@ def register_acoustic_parsers(
     estimate_room_p.add_argument(
         "--n-octave-bands",
         "--n-bands",
-        type=int,
+        type=_c_int,
         default=None,
         dest="n_octave_bands",
         metavar="N",
@@ -338,7 +338,7 @@ def register_acoustic_parsers(
         "synthesize-rir", parents=[common], help="Synthesize a room impulse response from geometry"
     )
     _add_room_geometry(synth_rir_p)
-    synth_rir_p.add_argument("--sample-rate", type=int, default=48000, help="Output sample rate")
+    synth_rir_p.add_argument("--sample-rate", type=_c_int, default=48000, help="Output sample rate")
 
     room_morph_p = sub.add_parser(
         "room-morph", parents=[common], help="Morph reverberation toward a target room"

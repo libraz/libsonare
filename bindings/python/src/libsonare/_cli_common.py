@@ -14,6 +14,7 @@ from typing import Any, cast
 
 import numpy as np
 
+from ._errors import SonareValueError
 from ._ffi import (
     SONARE_ERROR_ABI_MISMATCH,
     SONARE_ERROR_CANCELLED,
@@ -58,6 +59,24 @@ EXIT_CANCELLED = 11
 EXIT_ENCODE_FAILED = 12
 # Python-only: the native CLI links its library statically and cannot skew.
 EXIT_ABI_MISMATCH = 13
+
+# Mirrors kAnalysisSampleRate and kMaxStftNFft: analysis windows are held as
+# samples at this rate and rescaled to the input rate.
+_ANALYSIS_SAMPLE_RATE = 22050
+_MAX_ANALYSIS_WINDOW = 524288
+
+
+def _window_length_at_rate(samples_at_analysis_rate: int, sample_rate: int) -> int:
+    """Rescale a window length in samples at 22050 Hz to ``sample_rate``, rounded, at least 2.
+
+    The native CLI's ``window_length_at_rate`` is the reference: a window held as
+    a duration, not as a sample count of whatever rate the file happens to have.
+    """
+    scaled = samples_at_analysis_rate * sample_rate / _ANALYSIS_SAMPLE_RATE
+    if scaled > _MAX_ANALYSIS_WINDOW:
+        raise SonareValueError("analysis window exceeds the maximum FFT length at this sample rate")
+    return max(2, math.floor(scaled + 0.5))
+
 
 # Keep the path loader's native file ceiling and read granularity when a
 # channel-preserving command takes the buffer decode route below. The native
