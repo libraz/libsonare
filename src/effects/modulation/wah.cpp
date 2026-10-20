@@ -71,10 +71,11 @@ void Wah::process(float* const* channels, int num_channels, int num_samples) {
     // LFO in [-1, 1] -> a [0, 1] sweep position -> centre frequency.
     const float sweep = 0.5f * (lfo_.process() + 1.0f);
     const float fc = wah_sweep_hz(law, lo, hi, sweep);
+    const SvfBandpass::Coefficients coeffs = filters_[0].coefficients(fc, q);
     for (int ch = 0; ch < active; ++ch) {
       if (channels[ch] == nullptr) continue;
       const float in = channels[ch][i];
-      channels[ch][i] = dry * in + wet * filters_[ch].process(in, fc, q, lowpass);
+      channels[ch][i] = dry * in + wet * filters_[ch].tick(in, coeffs, lowpass);
     }
   }
   bool discarded = false;

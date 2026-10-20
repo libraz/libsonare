@@ -71,52 +71,54 @@ class SvfBandpass {
   /// The bandpass output is scaled to unity peak gain at resonance; with
   /// @p lowpass the second integrator's state is returned instead.
   float process(float input, float cutoff_hz, float q, bool lowpass = false) noexcept {
+    return tick(input, coefficients(cutoff_hz, q), lowpass);
+  }
+
+  /// Coefficients of one section; computed once per sample by coefficients() and shared by every
+  /// channel that runs at the same corner.
+  struct Coefficients {
+    float k = 1.0f;
+    float a1 = 0.0f;
+    float a2 = 0.0f;
+    float a3 = 0.0f;
+  };
+
+  /// Coefficients for a centre frequency (Hz) and resonance Q, clamped as process() clamps them.
+  Coefficients coefficients(float cutoff_hz, float q) const noexcept {
     const float fc = std::clamp(cutoff_hz, 10.0f, max_cutoff_hz(sample_rate_));
     const float g = std::tan(static_cast<float>(::sonare::constants::kPiD) * fc /
                              static_cast<float>(sample_rate_));
-    const float k = 1.0f / std::max(0.5f, q);
-    const float a1 = 1.0f / (1.0f + g * (g + k));
-    const float a2 = g * a1;
-    const float a3 = g * a2;
-    const float v3 = input - ic2_;
-    const float v1 = a1 * ic1_ + a2 * v3;
-    const float v2 = ic2_ + a2 * ic1_ + a3 * v3;
-    ic1_ = 2.0f * v1 - ic1_;
-    ic2_ = 2.0f * v2 - ic2_;
-    if (lowpass) return v2;
-    // v1 is the bandpass state; multiply by k so the resonant peak reaches unity.
-    return k * v1;
+    Coefficients c;
+    c.k = 1.0f / std::max(0.5f, q);
+    c.a1 = 1.0f / (1.0f + g * (g + c.k));
+    c.a2 = g * c.a1;
+    c.a3 = g * c.a2;
+    return c;
   }
 
   /// Sets the coefficients for tick(): centre frequency (Hz) and resonance Q,
   /// clamped exactly as process() clamps them.
-  void set(float cutoff_hz, float q) noexcept {
-    const float fc = std::clamp(cutoff_hz, 10.0f, max_cutoff_hz(sample_rate_));
-    const float g = std::tan(static_cast<float>(::sonare::constants::kPiD) * fc /
-                             static_cast<float>(sample_rate_));
-    k_ = 1.0f / std::max(0.5f, q);
-    a1_ = 1.0f / (1.0f + g * (g + k_));
-    a2_ = g * a1_;
-    a3_ = g * a2_;
-  }
+  void set(float cutoff_hz, float q) noexcept { coeffs_ = coefficients(cutoff_hz, q); }
 
   /// Processes one sample with the coefficients of the last set(); the output
-  /// is the unity-peak bandpass, as in process().
-  float tick(float input) noexcept {
+  /// is the unity-peak bandpass, as in process(), or the low-pass tap with @p lowpass.
+  float tick(float input, bool lowpass = false) noexcept { return tick(input, coeffs_, lowpass); }
+
+  /// Processes one sample with explicit coefficients, leaving the stored ones untouched.
+  float tick(float input, const Coefficients& c, bool lowpass = false) noexcept {
     const float v3 = input - ic2_;
-    const float v1 = a1_ * ic1_ + a2_ * v3;
-    const float v2 = ic2_ + a2_ * ic1_ + a3_ * v3;
+    const float v1 = c.a1 * ic1_ + c.a2 * v3;
+    const float v2 = ic2_ + c.a2 * ic1_ + c.a3 * v3;
     ic1_ = 2.0f * v1 - ic1_;
     ic2_ = 2.0f * v2 - ic2_;
-    return k_ * v1;
+    if (lowpass) return v2;
+    // v1 is the bandpass state; multiply by k so the resonant peak reaches unity.
+    return c.k * v1;
   }
 
  private:
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
-  float k_ = 1.0f;
-  float a1_ = 0.0f;
-  float a2_ = 0.0f;
-  float a3_ = 0.0f;
+  Coefficients coeffs_;
   float ic1_ = 0.0f;
   float ic2_ = 0.0f;
 };

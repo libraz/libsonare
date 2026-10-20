@@ -95,10 +95,11 @@ void AutoWah::process(float* const* channels, int num_channels, int num_samples)
     float open = std::clamp(position, 0.0f, 1.0f);
     if (down) open = 1.0f - open;
     const float fc = wah_sweep_hz(law, lo, hi, open);
+    const SvfBandpass::Coefficients coeffs = filters_[0].coefficients(fc, q);
     for (int ch = 0; ch < active; ++ch) {
       if (channels[ch] == nullptr) continue;
       const float in = channels[ch][i];
-      channels[ch][i] = dry * in + wet * filters_[ch].process(in, fc, q, lowpass);
+      channels[ch][i] = dry * in + wet * filters_[ch].tick(in, coeffs, lowpass);
     }
   }
   discard_non_finite();
