@@ -89,6 +89,49 @@ NativeSynthPatch organ_base_patch() {
   return p;
 }
 
+/// Cents of the strongest component within +-30 c of @p f_hint over @p from..@p to, read by a
+/// zoomed DFT (the FFT fixture's bin is coarser than a cent at the bottom of the compass).
+double cents_near(const std::vector<float>& buf, size_t from, size_t to, double f_hint) {
+  double mean = 0.0;
+  for (size_t i = from; i < to; ++i) mean += buf[i];
+  mean /= static_cast<double>(to - from);
+  const auto magnitude = [&](double cents) {
+    const double f = f_hint * std::pow(2.0, cents / 1200.0);
+    std::complex<double> acc = 0.0;
+    for (size_t i = from; i < to; ++i) {
+      const double w =
+          0.5 - 0.5 * std::cos(sonare::constants::kTwoPiD * static_cast<double>(i - from) /
+                               static_cast<double>(to - from));
+      acc += (buf[i] - mean) * w *
+             std::polar(1.0, -sonare::constants::kTwoPiD * f * static_cast<double>(i) / kRate);
+    }
+    return std::abs(acc);
+  };
+  double best = -1.0;
+  double best_cents = 0.0;
+  for (int c = -60; c <= 60; ++c) {
+    const double m = magnitude(0.5 * c);
+    if (m > best) best = m, best_cents = 0.5 * c;
+  }
+  const double coarse = best_cents;
+  for (int c = -10; c <= 10; ++c) {
+    const double m = magnitude(coarse + 0.05 * c);
+    if (m > best) best = m, best_cents = coarse + 0.05 * c;
+  }
+  return best_cents;
+}
+
+/// Sounding cents vs ET of a one-rank @p patch at @p note (its rank's footage applied), over
+/// 0.8-1.9 s of a 2 s note.
+double rank_cents(const NativeSynthPatch& patch, uint8_t note) {
+  const std::vector<float> tone = render_patch(patch, note, 100, static_cast<int>(2.0 * kRate));
+  REQUIRE(peak(tone) > 0.01f);
+  const double footage =
+      patch.pipe_organ.rank_count > 0 ? patch.pipe_organ.ranks[0].footage_mult : 1.0;
+  const double f_et = 440.0 * std::pow(2.0, (static_cast<int>(note) - 69) / 12.0) * footage;
+  return cents_near(tone, static_cast<size_t>(0.8 * kRate), static_cast<size_t>(1.9 * kRate), f_et);
+}
+
 }  // namespace
 
 TEST_CASE("pipe organ rendering is deterministic", "[midi][synth][organ]") {
@@ -130,6 +173,52 @@ TEST_CASE("pipe organ tuning is accurate (open pipe)", "[midi][synth][organ]") {
     const double estimated = fft_fundamental(tone, 16000, expected);
     REQUIRE(std::fabs(estimated / expected - 1.0) < 0.015);
   }
+}
+
+TEST_CASE("pipe organ loop phase servo is off by default (bit-identical)", "[midi][synth][organ]") {
+  NativeSynthPatch off = organ_base_patch();
+  off.pipe_organ.loop_phase_servo = false;
+  REQUIRE(render_patch(off, 48, 100, 16384) == render_patch(organ_base_patch(), 48, 100, 16384));
+}
+
+TEST_CASE("pipe organ loop phase servo locks each rank on its own period", "[midi][synth][organ]") {
+  // The jet's own lead reads the bass flat by a term growing as 1/f0 (the base patch sits a few
+  // cents under at C2); the servo measures what the whole injection leads the returning pressure
+  // by and shortens the bore by it, per rank, so a 16' and a 4' both land on their periods.
+  NativeSynthPatch off = organ_base_patch();
+  off.pipe_organ.pipe_detune_cents = 0.0f;
+  off.pipe_organ.rank_count = 1;
+  NativeSynthPatch on = off;
+  on.pipe_organ.loop_phase_servo = true;
+  for (float footage : {0.5f, 2.0f}) {
+    for (uint8_t note : {uint8_t{36}, uint8_t{60}}) {
+      off.pipe_organ.ranks[0] = {footage, false, 0.6f, 1.0f, 0.0f, 0.0f};
+      on.pipe_organ.ranks[0] = off.pipe_organ.ranks[0];
+      const double free = rank_cents(off, note);
+      const double held = rank_cents(on, note);
+      INFO("footage " << footage << " note " << int(note) << " f0 " << free << " -> " << held
+                      << " c");
+      CHECK(std::fabs(held) < 0.5);
+      if (footage == 0.5f && note == 36) CHECK(free < -2.0);
+    }
+  }
+}
+
+TEST_CASE("pipe organ loop phase servo keeps a pipe's own tuning error", "[midi][synth][organ]") {
+  // The servo locks the loop on the rank's period, which carries the (rank, note) tuning error, so
+  // the chorus's beating survives: rank 0 at C3 sits over 3 c flat by that error with or without
+  // the servo.
+  NativeSynthPatch tuned = organ_base_patch();
+  tuned.pipe_organ.pipe_detune_cents = 0.0f;
+  NativeSynthPatch detuned = organ_base_patch();
+  detuned.pipe_organ.pipe_detune_cents = 4.0f;
+  const double error_off = rank_cents(detuned, 48) - rank_cents(tuned, 48);
+  tuned.pipe_organ.loop_phase_servo = true;
+  detuned.pipe_organ.loop_phase_servo = true;
+  const double error_on = rank_cents(detuned, 48) - rank_cents(tuned, 48);
+  INFO("tuning error at C3: " << error_off << " c without the servo, " << error_on << " c with it");
+  CHECK(error_off < -2.0);
+  CHECK(std::fabs(error_on - error_off) < 0.3);
 }
 
 TEST_CASE("stopped pipe shares the open pipe's fundamental", "[midi][synth][organ]") {

@@ -281,6 +281,7 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
   const float loss_gain = std::clamp(0.945f + 0.05f * purity, 0.5f, 0.998f);
 
   const float dc_r = 1.0f - static_cast<float>(kTwoPi * kDcCornerHz / sr);
+  phase_servo_ = params.loop_phase_servo;
   const float even_hp = std::clamp(1.0f - std::exp(-kTwoPi * kEvenPumpDcHz / srf), 0.0f, 1.0f);
 
   for (int r = 0; r < count; ++r) {
@@ -384,7 +385,12 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
     const float phase_dc = std::atan2(std::sin(omega), 1.0f - std::cos(omega)) -
                            std::atan2(dc_r * std::sin(omega), 1.0f - dc_r * std::cos(omega));
     const float tau_dc = phase_dc / std::max(omega, 1.0e-6f);
-    pipe.bore.comp = 1.0f + tau_lp - tau_dc;
+    pipe.tau_lp = tau_lp;
+    // On the servo path the blocker's lead lengthens the jet line, the one line it sits in, and
+    // the bore takes the lead the servo measures instead.
+    pipe.jet_comp = phase_servo_ ? -tau_dc : 0.0f;
+    pipe.bore.comp = 1.0f + tau_lp - (phase_servo_ ? 0.0f : tau_dc);
+    pipe.servo.start(pipe.bore.period, kTwoPi / pipe.bore.period, srf);
     // Both lines are read at one sample or more; the jet's delay is a ratio of the period, all
     // of it a duration.
     if (ranks[r].sounding()) {
@@ -636,8 +642,8 @@ float PipeOrganVoiceCore::render_internal(float pitch_ratio) noexcept {
         (noise_.bipolar_at(kTurbIndexBase + pipe.noise_offset + drive_index_) - pipe.turb_state);
     const float pd = breath - pipe.jet_reflection * temp + turb_gain_ * breath * pipe.turb_state;
     // The jet convects for a fraction of the PERIOD, never of the line's length (see the flute).
-    const float jet_delay = std::clamp(pipe.jet_ratio * pipe.bore.period / ratio, 1.0f,
-                                       static_cast<float>(span_capacity_ - 4));
+    const float jet_delay = std::clamp(pipe.jet_ratio * pipe.bore.period / ratio - pipe.jet_comp,
+                                       1.0f, static_cast<float>(span_capacity_ - 4));
     const float pd_j =
         rt::lagrange3_fractional_delay(pipe.jet, static_cast<size_t>(span_capacity_),
                                        pipe.jet_write, static_cast<int>(jet_delay * 256.0f), pd);
@@ -666,6 +672,11 @@ float PipeOrganVoiceCore::render_internal(float pitch_ratio) noexcept {
       into = WindBore::injection(into, pump, gate);
     }
 
+    // Once a period the bore line follows the lead the injection holds at the running pitch.
+    if (phase_servo_ &&
+        pipe.servo.step(temp, into, kTwoPi * ratio / pipe.bore.period, pipe.bore.period / ratio)) {
+      pipe.bore.comp = 1.0f + pipe.tau_lp - pipe.servo.lead;
+    }
     pipe.bore.advance(into, ratio);
 
     // Mouth/radiation high-shelf (lifting what the pipe radiates efficiently

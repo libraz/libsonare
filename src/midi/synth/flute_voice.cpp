@@ -71,9 +71,6 @@ SONARE_TUNABLE(kDcCornerHz, 10.0f);
 // compensated at f0 (1.4 c left on C4 from the harmonics' skew); below 4 Hz the mean the mouth
 // loss makes of a limited jet's wave relaxes slowly enough to hunt with the limit (66 % AM).
 SONARE_TUNABLE(kBoreDcCornerHz, 5.0f);
-// Time constant (ms) of the loop phase servo's cross-spectrum average: tens of periods, so one
-// period's harmonic leakage averages out while the onset still lands in tune. An estimate.
-constexpr float kLoopPhaseServoMs = 40.0f;
 
 // Vibrato depth mapping: full depth is a gentle ~30 cents of pitch and a touch
 // of level (a solo flute's own vibrato).
@@ -239,16 +236,7 @@ LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, 
   }
   // Loop phase servo (cubic path): the bore follows the injection's measured lead once a period.
   phase_servo_ = !params.jet_drive && params.loop_phase_servo;
-  servo_comp_ = 0.0f;
-  servo_len_ = std::max(1, static_cast<int>(std::lround(bore_.period)));
-  servo_count_ = 0;
-  servo_smooth_ = 1.0f - std::exp(-bore_.period * 1000.0f / (kLoopPhaseServoMs * srf));
-  servo_cos_ = 1.0f;
-  servo_sin_ = 0.0f;
-  servo_rot_cos_ = std::cos(kTwoPi * f0 / srf);
-  servo_rot_sin_ = std::sin(kTwoPi * f0 / srf);
-  servo_ret_re_ = servo_ret_im_ = servo_inj_re_ = servo_inj_im_ = 0.0f;
-  servo_x_re_ = servo_x_im_ = 0.0f;
+  servo_.start(bore_.period, kTwoPi * f0 / srf, srf);
 
   // Register centring: above the first register the jet's offset falls per octave to centred.
   const float centring = std::clamp(params.jet_centring_per_octave, 0.0f, 4.0f);
@@ -577,7 +565,10 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
     pump = pump < -1.5f ? -1.5f : (pump > 1.5f ? 1.5f : pump);
     into_bore = WindBore::injection(into_bore, pump, gate);
   }
-  if (phase_servo_) servo_step(temp, into_bore, ratio);
+  if (phase_servo_ &&
+      servo_.step(temp, into_bore, kTwoPi * f0_ * ratio / srf_, bore_.period / ratio)) {
+    retune_loop_comp();
+  }
   bore_.advance(into_bore, ratio);
   ++drive_index_;
 
@@ -655,37 +646,9 @@ void FluteVoiceCore::retune_loop_comp() noexcept {
   const float a = 1.0f - lp_alpha_;
   const float omega = kTwoPi * f0_ / srf_;
   // The servo path takes the lead the whole injection is measured to hold instead.
-  const float lead = phase_servo_ ? servo_comp_ : dc_lead_samples_;
+  const float lead = phase_servo_ ? servo_.lead : dc_lead_samples_;
   bore_.comp = 1.0f + onepole_group_delay_samples(a, omega) - lead + lattice_comp_;
   comp_alpha_ = lp_alpha_;
-}
-
-void FluteVoiceCore::servo_step(float returning, float injected, float ratio) noexcept {
-  // Coherent sums at f0 over the period, against the conjugate phasor.
-  servo_ret_re_ += returning * servo_cos_;
-  servo_ret_im_ -= returning * servo_sin_;
-  servo_inj_re_ += injected * servo_cos_;
-  servo_inj_im_ -= injected * servo_sin_;
-  const float c = servo_cos_ * servo_rot_cos_ - servo_sin_ * servo_rot_sin_;
-  servo_sin_ = servo_sin_ * servo_rot_cos_ + servo_cos_ * servo_rot_sin_;
-  servo_cos_ = c;
-  if (++servo_count_ < servo_len_) return;
-  // Averaging the complex cross-spectrum weights each period by its power; its angle is the lead.
-  const float x_re = servo_inj_re_ * servo_ret_re_ + servo_inj_im_ * servo_ret_im_;
-  const float x_im = servo_inj_im_ * servo_ret_re_ - servo_inj_re_ * servo_ret_im_;
-  servo_x_re_ += servo_smooth_ * (x_re - servo_x_re_);
-  servo_x_im_ += servo_smooth_ * (x_im - servo_x_im_);
-  const float omega = kTwoPi * f0_ * ratio / srf_;
-  servo_comp_ = std::atan2(servo_x_im_, servo_x_re_) / omega;
-  retune_loop_comp();
-  // The next period is read at the pitch the line is running at.
-  servo_len_ = std::max(1, static_cast<int>(std::lround(bore_.period / ratio)));
-  servo_count_ = 0;
-  servo_rot_cos_ = std::cos(omega);
-  servo_rot_sin_ = std::sin(omega);
-  servo_cos_ = 1.0f;
-  servo_sin_ = 0.0f;
-  servo_ret_re_ = servo_ret_im_ = servo_inj_re_ = servo_inj_im_ = 0.0f;
 }
 
 void FluteVoiceCore::set_vibrato(float depth01) noexcept {

@@ -350,6 +350,7 @@ void apply_pipe_organ(NativeSynthPatch& p, const Fields& f) {
   F(pipe_organ.radiation);
   F(pipe_organ.keytrack);
   F(pipe_organ.pipe_detune_cents);
+  I_TYPED(pipe_organ.loop_phase_servo, 0, 1);
   F(pipe_organ.tremulant_rate_hz);
   F(pipe_organ.tremulant_depth);
   F(pipe_organ.wind_sag);
@@ -905,6 +906,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"pipe_organ.radiation", Unit::None},
     {"pipe_organ.keytrack", Unit::None},
     {"pipe_organ.pipe_detune_cents", Unit::Cents},
+    {"pipe_organ.loop_phase_servo", Unit::None},
     {"pipe_organ.tremulant_rate_hz", Unit::Hz},
     {"pipe_organ.tremulant_depth", Unit::None},
     {"pipe_organ.wind_sag", Unit::None},

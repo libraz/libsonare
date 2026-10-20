@@ -30,6 +30,7 @@
 
 #include "midi/control_value.h"
 #include "midi/synth/excitation_axes.h"
+#include "midi/synth/loop_phase_servo.h"
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_bore.h"
 #include "midi/synth/wind_breath.h"
@@ -456,31 +457,14 @@ class FluteVoiceCore {
   float breath_rad_alpha_ = 0.0f;
   float breath_rad_state_ = 0.0f;
 
-  // Loop phase servo state: the blocker's f0 lead and the measured lead (samples), the average's
-  // per-period weight, the period count, the f0 phasor, one period's coherent sums of the returning
-  // pressure and the injection, and the smoothed cross-spectrum.
+  // Loop phase servo (cubic path): the blocker's f0 lead (samples) and the servo whose measured
+  // lead the bore follows.
   bool phase_servo_ = false;
   float dc_lead_samples_ = 0.0f;
-  float servo_comp_ = 0.0f;
-  float servo_smooth_ = 0.0f;
-  int servo_len_ = 0;
-  int servo_count_ = 0;
-  float servo_cos_ = 1.0f;
-  float servo_sin_ = 0.0f;
-  float servo_rot_cos_ = 1.0f;
-  float servo_rot_sin_ = 0.0f;
-  float servo_ret_re_ = 0.0f;
-  float servo_ret_im_ = 0.0f;
-  float servo_inj_re_ = 0.0f;
-  float servo_inj_im_ = 0.0f;
-  float servo_x_re_ = 0.0f;
-  float servo_x_im_ = 0.0f;
+  LoopPhaseServo servo_;
 
   // Reads the jet line as a triangular average centred on @p delay after writing @p input.
   float jet_window_read(float delay, float input) noexcept;
-  // Adds one sample of @p returning pressure and @p injected drive to the servo's period sums and,
-  // at the period's end, re-solves the bore line from the injection's measured lead at f0.
-  void servo_step(float returning, float injected, float ratio) noexcept;
 };
 
 }  // namespace sonare::midi::synth

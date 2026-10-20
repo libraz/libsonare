@@ -34,6 +34,7 @@
 
 #include "midi/control_value.h"
 #include "midi/synth/excitation_axes.h"
+#include "midi/synth/loop_phase_servo.h"
 #include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_bore.h"
@@ -147,6 +148,11 @@ struct PipeOrganPatchParams {
   /// inter-rank beating that leaves is the living chorus of a plenum. The span
   /// tapers above C4, where a tuner lands the small pipes closer to true.
   float pipe_detune_cents = 4.0f;
+  /// Loop phase servo, per rank: the jet blocker's f0 lead moves onto each rank's jet line and,
+  /// once a period, each bore follows the lead its injection is measured to hold over its returning
+  /// pressure, so the jet's phase no longer pulls the pitch (a flat term growing toward the bass).
+  /// The loop locks on the rank's own period, so a pipe's tuning error stays. false = off.
+  bool loop_phase_servo = false;
 
   /// Registration: number of ranks that sound together (0 = a single implicit
   /// 8' rank built from {stopped, brightness}; >0 uses ranks[0..rank_count)).
@@ -329,6 +335,11 @@ class PipeOrganVoiceCore {
     float rad_base = 0.0f;
     float tone_f0 = 0.0f;
     float tone_mult = 0.0f;
+    /// Loop phase servo: the reflection lowpass's phase delay at f0 (the bore's known delay past
+    /// the register), the lead the jet line carries, and the servo the bore follows.
+    float tau_lp = 0.0f;
+    float jet_comp = 0.0f;
+    LoopPhaseServo servo;
     /// Rank mix gain (level * chorus norm * output trim) and noise offset.
     float mix = 0.0f;
     float output_scale = 1.0f;
@@ -347,6 +358,8 @@ class PipeOrganVoiceCore {
   OnsetContour breath_{};
   /// Wind-hiss depth on the jet drive, the voiced depth at the noise law's gain.
   float turb_gain_ = 0.0f;
+  /// Every rank's bore follows its own servo's measured lead.
+  bool phase_servo_ = false;
 
   // Live excitation axes (jet drive, radiation brightness): base from the patch
   // or a CC, matrix offset, the composed target and the ramped value. The

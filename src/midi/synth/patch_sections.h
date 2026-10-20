@@ -216,6 +216,7 @@ constexpr PipeOrganPatchParams blank_pipe_organ() noexcept {
   z.stopped = false;
   z.brightness = 0.0f;
   z.pipe_detune_cents = 0.0f;
+  z.loop_phase_servo = false;
   z.tone_decay_s = 0.0f;
   z.breath = 0.0f;
   z.chiff = 0.0f;
