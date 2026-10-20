@@ -6,6 +6,7 @@
 
 #include "effects/common/control_ranges.h"
 #include "effects/common/field_domain.h"
+#include "rt/biquad_design.h"
 #include "rt/param_smoother.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
@@ -78,7 +79,7 @@ constexpr double kGateSmoothingMs = 1.0;
 
 // One-pole smoothing coefficient for a time constant in milliseconds at the working rate.
 float smoothing_coefficient(double ms, double sr) {
-  return static_cast<float>(1.0 - std::exp(-1000.0 / (ms * sr)));
+  return static_cast<float>(rt::one_pole_alpha_from_seconds_d(ms * 0.001, sr));
 }
 
 // Folds an LFO phase back into [0, 2pi) for any increment. A single
@@ -422,12 +423,8 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
     delay_r2_.write(r_dec);
     tail_r_ = delay_r2_.read_at(delay_r2_.length);
 
-    delay_l1_.advance();
-    delay_l2_.advance();
-    delay_r1_.advance();
-    delay_r2_.advance();
-
-    // Output taps (read after writes/advance so offsets address valid history).
+    // Output taps, read before the lines advance so offset N addresses the sample written N
+    // steps ago, the same convention as Allpass::read_at.
     // The 1913-sample tap reads from the delay line following the left decay
     // diffuser (delay_l2_, length 3720), per the canonical Dattorro topology.
     // It must NOT read decay_ap_l_ (length 1800): 1913 > 1800 would wrap the
@@ -440,6 +437,11 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
                   decay_ap_r_.read_at(tap_r_apr_) + delay_r2_.read_at(tap_r_r2_) -
                   delay_l1_.read_at(tap_r_l1_) - decay_ap_l_.read_at(tap_r_apl_) -
                   delay_l2_.read_at(tap_r_l2_);
+
+    delay_l1_.advance();
+    delay_l2_.advance();
+    delay_r1_.advance();
+    delay_r2_.advance();
 
     if (gate_on) {
       const float level = std::max(std::fabs(out_l), std::fabs(out_r));
