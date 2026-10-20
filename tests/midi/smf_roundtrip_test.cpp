@@ -21,6 +21,7 @@
 #include "midi/note_targets.h"
 #include "midi/program_map.h"
 #include "midi/smf.h"
+#include "midi/tick_conversion.h"
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
 #include "transport/tempo_map.h"
@@ -1955,4 +1956,40 @@ TEST_CASE("SMF export writes a MIDI 2.0 Registered Controller as its RPN data-en
   }
   const std::vector<std::pair<uint8_t, uint8_t>> expected = {{101, 0}, {100, 0}, {6, 12}, {38, 0}};
   REQUIRE(ccs == expected);
+}
+
+TEST_CASE("SMF import drops a zero-length note instead of leaving it sounding", "[midi][smf]") {
+  std::vector<uint8_t> body = {
+      0x00, 0x90, 0x3C, 0x64,        // tick 0: C4 on
+      0x00, 0x80, 0x3C, 0x00,        // tick 0: C4 off, closing it at its own tick
+      0x00, 0x90, 0x3E, 0x64,        // tick 0: D4 on
+      0x00, 0x90, 0x40, 0x64,        // tick 0: E4 on
+      0x83, 0x60, 0x90, 0x40, 0x64,  // tick 480: E4 re-struck before the old one ends
+      0x00, 0x80, 0x40, 0x00,        // tick 480: closes the first E4
+      0x00, 0x80, 0x3E, 0x00,        // tick 480: D4 off
+      0x83, 0x60, 0x80, 0x40, 0x00,  // tick 960: closes the second E4
+      0x00, 0xFF, 0x2F, 0x00};
+  const SmfImportResult imported = import_smf(wrap_format0_track(body));
+  REQUIRE(imported.ok());
+  REQUIRE(imported.clips.size() == 1);
+  CHECK(imported.skipped_events == 2);
+  const MidiClip& clip = imported.clips[0];
+  CHECK(clip.validate_note_pairs().ok);
+  CHECK(clip.events().size() == 6);
+  for (const MidiClipEvent& e : clip.events()) {
+    CHECK(e.ump.note_number() != 0x3C);
+  }
+}
+
+TEST_CASE("SMF export saturates a tick past the int64 range and counts the clamp",
+          "[midi][smf][export]") {
+  CHECK(sonare::midi::smf_ppq_to_ticks(1e17, 480) == std::numeric_limits<int64_t>::max());
+  CHECK(sonare::midi::smf_ppq_to_ticks(1e300, 480) == std::numeric_limits<int64_t>::max());
+  MidiClip clip;
+  clip.add_event(MidiClipEvent{0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)});
+  clip.add_event(MidiClipEvent{1e17, sonare::midi::make_midi1_note_on(0, 0, 62, 100)});
+  const auto exported = export_smf({clip}, {}, {});
+  REQUIRE(exported.ok());
+  CHECK(exported.clamped_delta_events == 1);
+  CHECK(exported.skipped_events == 0);
 }

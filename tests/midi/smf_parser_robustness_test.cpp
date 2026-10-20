@@ -287,7 +287,7 @@ TEST_CASE("SMF import resyncs after a trailing VLQ overruns a non-final track bo
   track0.push_back(0x90);
   track0.push_back(0x3C);  // note 60
   track0.push_back(0x64);
-  track0.push_back(0x00);
+  track0.push_back(0x01);  // one tick later: a zero-length note would be dropped on import
   track0.push_back(0x80);
   track0.push_back(0x3C);  // note 60 off
   track0.push_back(0x00);
@@ -656,25 +656,25 @@ TEST_CASE("SMF import rejects channel data bytes with the status bit and keeps l
 
 TEST_CASE("MIDI Clip File import plays the stretch before the first tempo and meter at 120 BPM",
           "[midi]") {
+  // The exporter holds a first tempo back to tick 0, so a file with no tempo at all
+  // and a late first meter carries the stretch the importer fills with 120 BPM in 4/4.
   MidiClip clip;
   clip.add_event(ev(0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
   clip.add_event(ev(2.0, sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
-  const std::vector<sonare::transport::TempoSegment> tempo = {{1.0, 60.0, 0.0}};
   std::vector<sonare::transport::TimeSignatureSegment> meter(1);
   meter[0].start_ppq = 1.0;
   meter[0].time_sig.numerator = 3;
   meter[0].time_sig.denominator = 4;
-  const auto exported = export_clip_file(clip, tempo, meter, Smf2ExportOptions{});
+  const auto exported = export_clip_file(clip, {}, meter, Smf2ExportOptions{});
   REQUIRE(exported.ok());
   const Smf2ImportResult r = import_clip_file(exported.bytes);
   REQUIRE(r.ok());
-  REQUIRE(r.tempo_segments.size() == 2);
+  REQUIRE(r.tempo_segments.size() == 1);
   CHECK(r.tempo_segments[0].start_ppq == 0.0);
   CHECK(r.tempo_segments[0].bpm == Catch::Approx(120.0));
-  CHECK(r.tempo_segments[1].start_ppq == Catch::Approx(1.0));
-  CHECK(r.tempo_segments[1].bpm == Catch::Approx(60.0));
   REQUIRE(r.time_signatures.size() == 2);
   CHECK(r.time_signatures[0].start_ppq == 0.0);
   CHECK(r.time_signatures[0].time_sig.numerator == 4);
+  CHECK(r.time_signatures[1].start_ppq == Catch::Approx(1.0));
   CHECK(r.time_signatures[1].time_sig.numerator == 3);
 }

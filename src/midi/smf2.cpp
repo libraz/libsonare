@@ -1027,14 +1027,15 @@ Smf2ExportResult export_clip_file(
   put_word(&out, delta_clockstamp_word(0));
   put_word(&out, dctpq_word(dctpq));
 
-  // The config header carries only the tick-0 initial state. A first tempo /
-  // time-signature anchored at start_ppq > 0 (e.g. the first change lands at bar
-  // 2) is NOT moved to tick 0 — it is emitted as a DCS-positioned sequence-data
-  // item below so the round-trip keeps its real position.
-  const bool tempo_in_header = !tempo_segments.empty() && tempo_segments.front().start_ppq == 0.0;
+  // The config header carries only the tick-0 initial state. The tempo map holds
+  // its first tempo back to ppq 0, so the first tempo event is always at tick 0;
+  // a first time signature anchored at start_ppq > 0 stays a DCS-positioned
+  // sequence-data item below so the round-trip keeps its real position.
+  const std::vector<SmfTempoEvent> tempo_events = smf_tempo_events(tempo_segments, dctpq);
+  const bool tempo_in_header = !tempo_events.empty() && tempo_events.front().tick == 0;
   const bool tsig_in_header = !time_signatures.empty() && time_signatures.front().start_ppq == 0.0;
   if (tempo_in_header) {
-    const uint32_t tempo10ns = tempo_10ns_from_bpm(tempo_segments.front().bpm);
+    const uint32_t tempo10ns = tempo_10ns_from_bpm(tempo_events.front().bpm);
     put_word(&out, delta_clockstamp_word(0));
     put_word(&out, flex_word0(kFlexBankSetupPerformance, kFlexStatusSetTempo));
     put_word(&out, tempo10ns);
@@ -1058,17 +1059,16 @@ Smf2ExportResult export_clip_file(
   put_word(&out, delta_clockstamp_word(0));
   put_stream(&out, kStreamStartOfClip);
 
-  // Build the merged sequence-data item list: every tempo / time-sig segment NOT
-  // already placed in the config header (the tick-0 initial state), plus all clip
-  // events. When the first segment is at a non-zero tick it stays here at its real
-  // position instead of being collapsed into the header.
+  // Build the merged sequence-data item list: every tempo event (ramp steps
+  // included) and time-sig segment NOT already placed in the config header (the
+  // tick-0 initial state), plus all clip events.
   std::vector<SeqItem> items;
-  for (size_t i = tempo_in_header ? 1 : 0; i < tempo_segments.size(); ++i) {
+  for (size_t i = tempo_in_header ? 1 : 0; i < tempo_events.size(); ++i) {
     SeqItem item;
-    item.tick = ppq_to_tick(tempo_segments[i].start_ppq, dctpq);
+    item.tick = static_cast<uint64_t>(tempo_events[i].tick);
     item.order = 0;
     item.words[0] = flex_word0(kFlexBankSetupPerformance, kFlexStatusSetTempo);
-    item.words[1] = tempo_10ns_from_bpm(tempo_segments[i].bpm);
+    item.words[1] = tempo_10ns_from_bpm(tempo_events[i].bpm);
     item.word_count = 4;
     items.push_back(item);
   }

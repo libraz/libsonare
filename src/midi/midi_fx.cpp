@@ -189,6 +189,17 @@ void MidiFxChain::clear_note_tracking(uint8_t group, uint8_t channel) noexcept {
   active_note_timing_count_ = write;
 }
 
+void MidiFxChain::clear_clip_note_tracking() noexcept {
+  size_t write = 0;
+  for (size_t read = 0; read < active_note_timing_count_; ++read) {
+    const ActiveNoteTiming& timing = active_note_timings_[read];
+    if (timing.from_clip) continue;
+    if (write != read) active_note_timings_[write] = timing;
+    ++write;
+  }
+  active_note_timing_count_ = write;
+}
+
 void MidiFxChain::clear_note_tracking(uint8_t group, uint8_t channel, uint8_t note,
                                       uint32_t source_track_id, bool from_clip,
                                       uint32_t clip_id) noexcept {

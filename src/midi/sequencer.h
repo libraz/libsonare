@@ -19,9 +19,12 @@
 ///
 /// Hang-note safety
 /// ----------------
-/// On loop wrap, seek, stop, clip end, and destination swap the sequencer emits
-/// note-off for every currently-sounding note before (or instead of) advancing,
-/// so no note is left hanging. After all_notes_off() the active-note count is 0.
+/// On a loop wrap or seek, release_clip_playback() emits note-off for every
+/// clip-sounding note and resets the channels only clips have touched; live-input
+/// notes keep sounding until their own note-off. On stop, panic and destination
+/// swap all_notes_off() (or its per-destination form) releases everything, and
+/// a clip end releases that clip's notes, so no note is left hanging. After
+/// all_notes_off() the active-note count is 0.
 ///
 /// Clock basis
 /// -----------
@@ -64,6 +67,12 @@ struct SequencerClock {
   DeviceFrame device;
   TimelineFrame timeline;
   bool rolling = true;
+  /// Tempo map of the timeline. When set, MIDI FX run in the PPQ-scaled frame
+  /// domain the offline bake uses (ppq * kMidiFxPpqScale) and every event is
+  /// converted through this map on the way in and out; null keeps the chain on
+  /// device frames. Must stay valid for as long as this clock is the last one
+  /// handed to dispatch_due (live injections reuse it).
+  const transport::TempoMap* tempo_map = nullptr;
 
   /// A rolling clock whose device and timeline frames coincide (offline and
   /// standalone use).
@@ -189,11 +198,18 @@ class MidiSequencer {
   /// call. RT-safe, no alloc.
   void process_block(const SequencerClock& clock, int num_frames) noexcept;
 
-  /// AUDIO thread: emit note-off for every sounding note (hang-note safety on
-  /// loop/seek/stop/clip-end/destination-swap), then clear the table and drop
+  /// AUDIO thread: emit note-off for every sounding note (the full panic on
+  /// stop or an explicit panic), then clear the table and drop
   /// pending clip-originated MIDI-FX output. Pending output of live input keeps
   /// its device frame. After this active_note_count() is 0. RT-safe, no alloc.
   void all_notes_off(DeviceFrame render_frame) noexcept;
+
+  /// AUDIO thread: release what clip playback left sounding (hang-note safety on
+  /// a loop wrap or seek): note-off for every clip note, a controller reset for
+  /// every channel only clips have touched, and pending clip MIDI-FX output
+  /// dropped. Live-input notes and the channels live input has touched keep their
+  /// state until their own note-off or a stop/panic. RT-safe, no alloc.
+  void release_clip_playback(DeviceFrame render_frame) noexcept;
 
   /// AUDIO thread (or CONTROL thread between blocks): emit note-off for every
   /// note currently sounding on `destination_id` and remove those entries,
@@ -211,6 +227,12 @@ class MidiSequencer {
   /// chain snaps it on the timeline grid of the last dispatch_due clock.
   /// RT-safe, no alloc.
   void inject_event(uint32_t destination_id, DeviceFrame render_frame, const Ump& ump) noexcept;
+
+  /// AUDIO thread: replace the tempo map live injections convert through until the
+  /// next dispatch_due, for a host that adopts a new map between dispatches.
+  void set_tempo_map(const transport::TempoMap* tempo_map) noexcept {
+    clock_.tempo_map = tempo_map;
+  }
 
   /// AUDIO thread: dispatch a single host-injected (live) SysEx event to a
   /// destination at `render_frame`. `sysex_payload`/`sysex_payload_size` view
@@ -256,6 +278,9 @@ class MidiSequencer {
     uint8_t group = 0;
     uint8_t channel = 0;
     bool active = false;
+    /// Which playback touched the channel since its last reset.
+    bool from_clip = false;
+    bool from_live = false;
   };
   struct DestinationFx {
     uint32_t destination_id = 0;
@@ -284,6 +309,8 @@ class MidiSequencer {
     MidiEvent event;
     uint32_t clip_id = 0;
     bool from_clip = false;
+    // The frame the MIDI-FX chain shaped this event at, in the chain's own domain.
+    int64_t fx_frame = 0;
     // Dispatched or cancelled; skipped by every reader until compact_pending() drops it.
     bool dead = false;
   };
@@ -311,11 +338,13 @@ class MidiSequencer {
   // identifies a new slot so a rejected note-on can roll that slot back when
   // the active-note table is full. Returns false only when a new slot cannot
   // be retained; existing entries always succeed.
-  bool retain_channel_state(uint32_t destination_id, uint8_t group, uint8_t channel,
+  bool retain_channel_state(uint32_t destination_id, uint8_t group, uint8_t channel, bool from_clip,
                             bool* inserted) noexcept;
   void release_retained_channel_state(uint32_t destination_id, uint8_t group, uint8_t channel,
                                       bool inserted) noexcept;
   void clear_retained_channel_states(bool single_destination, uint32_t destination_id) noexcept;
+  // Drops pending MIDI-FX output that clip playback produced; live output keeps its frame.
+  void drop_clip_pending() noexcept;
   void dispatch(uint32_t destination_id, const MidiEvent& event) noexcept;
   // Emit the standard reset sequence (damper off, reset-all-controllers,
   // all-notes-off, pitch-bend center) for one channel at render_frame. Used on a
@@ -342,7 +371,7 @@ class MidiSequencer {
                             uint32_t clip_id) noexcept;
   // False when the pending list is full and the event was not kept.
   bool enqueue_pending(uint32_t destination_id, const MidiEvent& event, bool from_clip,
-                       uint32_t clip_id) noexcept;
+                       uint32_t clip_id, int64_t fx_frame) noexcept;
   // Retire one pending FX event in place. Slots keep their positions until
   // compact_pending(), so a drain never shifts the queue per event and same-frame
   // controller gestures retain their stream order.

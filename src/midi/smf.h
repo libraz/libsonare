@@ -33,6 +33,9 @@
 ///   - Unrecognized meta events and MIDI 2.0-only messages are skipped lossily
 ///     and counted in the result's `skipped_events`; a skipped event's delta time
 ///     is still consumed, so what follows stays in time.
+///   - A zero-length note (a note-off following its own note-on at the same
+///     tick) is dropped with both events counted in `skipped_events`, since the
+///     off-before-on sort at one tick would otherwise leave it sounding.
 ///   - Export writes format 1: track 0 carries the tempo/time-signature map and
 ///     any @ref SmfExportOptions::markers, then one track per MidiClip. SysEx
 ///     handles re-emit only when `SmfExportOptions::sysex_store` is supplied and
@@ -218,5 +221,18 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
                            const std::vector<transport::TimeSignatureSegment>& time_signatures,
                            const std::vector<std::string>& clip_names = {},
                            const SmfExportOptions& options = {});
+
+/// One step-function tempo change at an absolute tick.
+struct SmfTempoEvent {
+  int64_t tick;
+  double bpm;
+};
+
+/// The step-function tempo events that reproduce `segments` at `ppqn`, shared by
+/// the SMF and MIDI Clip File exporters. The first tempo is placed at tick 0, as
+/// the tempo map holds it there, and a ramp becomes sixteenth-note (or coarser)
+/// steps whose boundaries land at the ramp's exact time. Sorted by tick.
+std::vector<SmfTempoEvent> smf_tempo_events(const std::vector<transport::TempoSegment>& segments,
+                                            uint16_t ppqn);
 
 }  // namespace sonare::midi

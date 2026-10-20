@@ -2826,6 +2826,119 @@ TEST_CASE("MidiSequencer loops a clip whose iterations run past INT64_MAX", "[mi
   CHECK(seq.active_note_count() == 1);
 }
 
+TEST_CASE("is_release_message agrees across MIDI 1.0 and its MIDI 2.0 form", "[midi]") {
+  using sonare::midi::is_release_message;
+  using sonare::midi::midi1_to_midi2;
+  std::vector<Ump> messages;
+  for (uint8_t controller :
+       {uint8_t{7}, uint8_t{64}, uint8_t{66}, uint8_t{120}, uint8_t{121}, uint8_t{123}}) {
+    for (uint8_t value : {uint8_t{0}, uint8_t{63}, uint8_t{64}, uint8_t{127}}) {
+      messages.push_back(sonare::midi::make_midi1_control_change(0, 3, controller, value));
+    }
+  }
+  for (uint16_t bend :
+       {uint16_t{0}, uint16_t{0x1FFF}, uint16_t{0x2000}, uint16_t{0x2001}, uint16_t{0x3FFF}}) {
+    messages.push_back(sonare::midi::make_midi1_pitch_bend(0, 3, bend));
+  }
+  for (const Ump& m : messages) {
+    INFO("word0 " << m.words[0]);
+    CHECK(is_release_message(midi1_to_midi2(m)) == is_release_message(m));
+  }
+  CHECK(is_release_message(sonare::midi::make_midi2_control_change(0, 0, 64, 0x7FFFFFFFu)));
+  CHECK_FALSE(is_release_message(sonare::midi::make_midi2_control_change(0, 0, 64, 0x80000000u)));
+  CHECK(is_release_message(sonare::midi::make_midi2_control_change(0, 0, 123, 0xFFFFFFFFu)));
+  CHECK(is_release_message(sonare::midi::make_midi2_pitch_bend(0, 0, 0x80000000u)));
+  CHECK_FALSE(is_release_message(sonare::midi::make_midi2_pitch_bend(0, 0, 0x80000001u)));
+}
+
+TEST_CASE("MidiSequencer releases clip playback and leaves live input sounding", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+  MidiClipSchedule clip;
+  clip.id = 61;
+  clip.destination_id = 1;
+  clip.events = {{0, sonare::midi::make_midi1_control_change(0, 0, 64, 127)},
+                 {0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  seq.process_block(SequencerClock::aligned(0), 8);
+  seq.inject_event(2, DeviceFrame{4}, sonare::midi::make_midi1_control_change(0, 1, 64, 127));
+  seq.inject_event(2, DeviceFrame{4}, sonare::midi::make_midi1_note_on(0, 1, 70, 100));
+  REQUIRE(seq.active_note_count() == 2);
+
+  sink.events.clear();
+  seq.release_clip_playback(DeviceFrame{8});
+  CHECK(seq.active_note_count() == 1);
+  bool clip_note_off = false;
+  bool clip_damper_up = false;
+  for (const auto& captured : sink.events) {
+    CHECK(captured.destination == 1);
+    CHECK(captured.event.render_frame == 8);
+    clip_note_off = clip_note_off ||
+                    (captured.event.ump.is_note_off() && captured.event.ump.note_number() == 60);
+    clip_damper_up =
+        clip_damper_up ||
+        (captured.event.ump.status_nibble() ==
+             static_cast<uint8_t>(sonare::midi::UmpStatus::kControlChange) &&
+         captured.event.ump.note_number() == 64 && captured.event.ump.data2_7bit() == 0);
+  }
+  CHECK(clip_note_off);
+  CHECK(clip_damper_up);
+
+  // The live note still ends on its own note-off, and a full panic still reaches it.
+  sink.events.clear();
+  seq.all_notes_off(DeviceFrame{16});
+  CHECK(seq.active_note_count() == 0);
+  bool live_note_off = false;
+  for (const auto& captured : sink.events) {
+    live_note_off =
+        live_note_off || (captured.destination == 2 && captured.event.ump.is_note_off() &&
+                          captured.event.ump.note_number() == 70);
+  }
+  CHECK(live_note_off);
+}
+
+TEST_CASE("MidiSequencer plays a written-out loop exactly as the repeated body", "[midi]") {
+  // The body's note runs past the loop end, so each repeat start has to release it.
+  const auto render = [](const MidiClipSchedule& clip) {
+    MidiSequencer seq;
+    CapturingSink sink;
+    seq.prepare(48000.0);
+    seq.set_sink(&sink);
+    seq.set_midi_clips({clip});
+    seq.acquire_midi_clips();
+    std::vector<std::pair<int64_t, bool>> out;
+    for (int64_t block = 0; block < 128; block += 32) {
+      seq.process_block(SequencerClock::aligned(block), 32);
+    }
+    for (const auto& captured : sink.events) {
+      out.emplace_back(captured.event.render_frame, captured.event.ump.is_note_on());
+    }
+    return out;
+  };
+  MidiClipSchedule looped;
+  looped.id = 51;
+  looped.length_samples = 90;
+  looped.loop_mode = sonare::midi::MidiLoopMode::kLoop;
+  looped.loop_length_samples = 30;
+  looped.events = {{5, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+
+  MidiClipSchedule written = looped;
+  written.loop_mode = sonare::midi::MidiLoopMode::kOneShot;
+  written.loop_length_samples = 0;
+  written.events = {{5, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                    {35, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                    {65, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  written.loop_iteration_starts = {30, 60};
+
+  const std::vector<std::pair<int64_t, bool>> expected{{5, true},   {30, false}, {35, true},
+                                                       {60, false}, {65, true},  {90, false}};
+  CHECK(render(looped) == expected);
+  CHECK(render(written) == expected);
+}
+
 TEST_CASE("MidiSequencer dispatches a late block of long clips in merged order", "[midi]") {
   MidiSequencer seq;
   CapturingSink sink;
@@ -3012,4 +3125,41 @@ TEST_CASE("MidiSequencer accepts a full pending list again after a same-frame bu
   seq.dispatch_due(jumped_clock(2100, 3600));
   REQUIRE(seq.midi_fx_pending_overflow_count() == 1);
   REQUIRE(seq.frames_until_next_event(jumped_clock(2100, 5000, false), 1000) == 400);
+}
+
+TEST_CASE("MidiSequencer quantizes live MIDI FX on a PPQ grid through the clock's tempo map",
+          "[midi]") {
+  for (const double bpm : {120.0, 60.0}) {
+    for (const double sample_rate : {44100.0, 48000.0}) {
+      INFO("bpm " << bpm << " rate " << sample_rate);
+      sonare::transport::TempoMap map;
+      init_tempo_map(&map, bpm, sample_rate);
+      const int64_t grid_line = map.ppq_to_sample(0.75);
+
+      MidiSequencer seq;
+      CapturingSink sink;
+      seq.prepare(sample_rate);
+      seq.set_sink(&sink);
+      MidiFxChain fx;
+      sonare::midi::QuantizeConfig quantize;
+      quantize.enabled = true;
+      quantize.grid_frames = sonare::midi::kMidiFxPpqScale / 4;  // 0.25 ppq
+      fx.set_quantize(quantize);
+      REQUIRE(seq.set_midi_fx(9, fx));
+      seq.acquire_midi_fx(DeviceFrame{0});
+
+      MidiClipSchedule clip;
+      clip.id = 71;
+      clip.destination_id = 9;
+      clip.events = {{grid_line + 90, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+      seq.set_midi_clips({clip});
+      seq.acquire_midi_clips();
+
+      SequencerClock clock = SequencerClock::aligned(0);
+      clock.tempo_map = &map;
+      seq.process_block(clock, static_cast<int>(grid_line + 1000));
+      REQUIRE(sink.events.size() == 1);
+      CHECK(sink.events[0].event.render_frame == grid_line);
+    }
+  }
 }

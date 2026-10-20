@@ -8,6 +8,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cfenv>
+#include <cmath>
 #include <cstdint>
 #include <initializer_list>
 #include <limits>
@@ -508,11 +509,10 @@ TEST_CASE("SMF2 round-trips every representable time-signature denominator", "[m
   }
 }
 
-TEST_CASE("SMF2 preserves the position of a non-zero first tempo/time-sig", "[midi][smf2]") {
-  // A clip whose first tempo and time-signature changes do NOT start at tick 0
-  // (e.g. they land at bar 2). The config header only holds the tick-0 initial
-  // state, so these must round-trip at their real positions instead of being
-  // collapsed to ppq 0.
+TEST_CASE("SMF2 holds a late first tempo from tick 0 and keeps a late first time-sig",
+          "[midi][smf2]") {
+  // The tempo map holds its first tempo back to ppq 0, so the file plays 150 BPM
+  // from the start; the first time signature keeps its real position.
   MidiClip clip;
   clip.add_event(ev(0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 64)));
   clip.add_event(ev(8.0, sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
@@ -529,19 +529,46 @@ TEST_CASE("SMF2 preserves the position of a non-zero first tempo/time-sig", "[mi
   const Smf2ImportResult imported = import_clip_file(exported.bytes);
   REQUIRE(imported.ok());
 
-  // Ahead of them the map carries the 120 BPM / 4/4 the file plays before its
-  // first tempo and meter messages.
-  REQUIRE(imported.tempo_segments.size() == 2);
+  REQUIRE(imported.tempo_segments.size() == 1);
   REQUIRE(imported.tempo_segments.front().start_ppq == 0.0);
-  REQUIRE(imported.tempo_segments.front().bpm == Catch::Approx(120.0));
-  REQUIRE(imported.tempo_segments[1].start_ppq == Catch::Approx(4.0).margin(0.01));
-  REQUIRE(imported.tempo_segments[1].bpm == Catch::Approx(150.0).margin(0.01));
+  REQUIRE(imported.tempo_segments.front().bpm == Catch::Approx(150.0).margin(0.01));
   REQUIRE(imported.time_signatures.size() == 2);
   REQUIRE(imported.time_signatures.front().start_ppq == 0.0);
   REQUIRE(imported.time_signatures.front().time_sig.numerator == 4);
   REQUIRE(imported.time_signatures[1].start_ppq == Catch::Approx(4.0).margin(0.01));
   REQUIRE(imported.time_signatures[1].time_sig.numerator == 7);
   REQUIRE(imported.time_signatures[1].time_sig.denominator == 8);
+}
+
+TEST_CASE("SMF2 export keeps every event time under a tempo ramp and a late first segment",
+          "[midi][smf2]") {
+  MidiClip clip;
+  for (int q = 0; q < 16; ++q) {
+    const double ppq = static_cast<double>(q);
+    clip.add_event(ev(ppq, sonare::midi::make_midi1_note_on(0, 0, 60, 64)));
+    clip.add_event(ev(ppq + 0.5, sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  }
+  const std::vector<sonare::transport::TempoSegment> tempos = {{2.0, 90.0, 180.0},
+                                                               {10.0, 180.0, 0.0}};
+  const auto exported = export_clip_file(clip, tempos, {}, Smf2ExportOptions{});
+  REQUIRE(exported.ok());
+  const Smf2ImportResult imported = import_clip_file(exported.bytes);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.clips.size() == 1);
+
+  sonare::transport::TempoMap source;
+  source.prepare(48000.0);
+  source.set_segments(tempos);
+  sonare::transport::TempoMap round_trip;
+  round_trip.prepare(48000.0);
+  round_trip.set_segments(imported.tempo_segments);
+  // One tick at the slowest tempo the map plays.
+  const double one_tick_sec = 60.0 / (90.0 * sonare::midi::kDefaultTicksPerQuarter);
+  for (const MidiClipEvent& e : imported.clips.front().events()) {
+    INFO("ppq " << e.ppq);
+    CHECK(std::abs(round_trip.ppq_to_seconds(e.ppq) - source.ppq_to_seconds(e.ppq)) <=
+          one_tick_sec);
+  }
 }
 
 TEST_CASE("SMF2 export clamps very low BPM tempo instead of wrapping", "[midi][smf2]") {

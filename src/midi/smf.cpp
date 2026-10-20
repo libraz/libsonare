@@ -268,6 +268,46 @@ int system_common_data_count(uint8_t status) noexcept {
 
 bool is_system_realtime(uint8_t status) noexcept { return status >= 0xF8u && status <= 0xFEu; }
 
+// Drops each note-on whose own note-off follows it at the same tick in file
+// order, with that note-off, counting both in `skipped`. The off-before-on sort
+// at one tick would otherwise reopen the note and leave it sounding. With an
+// earlier note of the key still open, the off closes that one, as the sort reads it.
+void drop_zero_length_notes(MidiClip* clip, uint32_t* skipped) {
+  const std::vector<MidiClipEvent>& events = clip->events();
+  std::vector<bool> dropped(events.size(), false);
+  std::vector<std::vector<size_t>> open(16 * 128);
+  bool any = false;
+  for (size_t i = 0; i < events.size(); ++i) {
+    const Ump& ump = events[i].ump;
+    if (!ump.is_note_on() && !ump.is_note_off()) continue;
+    std::vector<size_t>& keyed = open[ump.channel() * 128u + ump.note_number()];
+    if (ump.is_note_on()) {
+      keyed.push_back(i);
+      continue;
+    }
+    if (keyed.empty()) continue;
+    if (keyed.size() == 1 && events[keyed.back()].ppq == events[i].ppq) {
+      dropped[keyed.back()] = true;
+      dropped[i] = true;
+      keyed.pop_back();
+      any = true;
+    } else {
+      keyed.erase(keyed.begin());
+    }
+  }
+  if (!any) return;
+  std::vector<MidiClipEvent> kept;
+  kept.reserve(events.size());
+  for (size_t i = 0; i < events.size(); ++i) {
+    if (dropped[i]) {
+      ++(*skipped);
+    } else {
+      kept.push_back(events[i]);
+    }
+  }
+  clip->set_events(std::move(kept));
+}
+
 // Imports a single MTrk chunk body of `length` bytes starting at the reader's
 // current position. Appends parsed channel-voice events to `clip` (PPQ-timed),
 // captures track name / markers / tempo / time-sig into the out params, and
@@ -778,6 +818,7 @@ SmfImportResult parse_smf(const uint8_t* data, size_t size,
     ++tracks_read;
 
     if (track.has_midi_events) {
+      drop_zero_length_notes(&track.clip, &result.skipped_events);
       track.clip.sort_stable();
       result.clips.push_back(std::move(track.clip));
       result.clip_names.push_back(std::move(track.name));
@@ -875,14 +916,11 @@ void put_sysex(std::vector<uint8_t>* body, uint32_t delta, const SysExBody& syse
   body->insert(body->end(), payload.begin(), payload.end());
 }
 
-struct SmfTempoEvent {
-  int64_t tick;
-  double bpm;
-};
-
 // Set Tempo is a step function, so a ramp is written as steps whose durations
 // equal the ramp's at every step boundary; no drift accumulates across it.
 constexpr int64_t kMaxTempoRampSteps = 4096;
+
+}  // namespace
 
 std::vector<SmfTempoEvent> smf_tempo_events(const std::vector<transport::TempoSegment>& segments,
                                             uint16_t ppqn) {
@@ -907,10 +945,11 @@ std::vector<SmfTempoEvent> smf_tempo_events(const std::vector<transport::TempoSe
     }
     if (hold < start) events.push_back({hold, bpm});
     const int64_t end = smf_ppq_to_ticks(sorted[i + 1].start_ppq, ppqn);
+    const int64_t span = end - start;
     const int64_t step = std::max<int64_t>(
-        {1, ppqn / 4, (end - start + kMaxTempoRampSteps - 1) / kMaxTempoRampSteps});
-    for (int64_t a = start; a < end; a += step) {
-      const int64_t b = std::min(a + step, end);
+        {1, ppqn / 4, span / kMaxTempoRampSteps + (span % kMaxTempoRampSteps != 0 ? 1 : 0)});
+    for (int64_t a = start; a < end; a += std::min(step, end - a)) {
+      const int64_t b = a + std::min(step, end - a);
       const double seconds = map.ppq_to_seconds(static_cast<double>(b) / ticks_per_ppq) -
                              map.ppq_to_seconds(static_cast<double>(a) / ticks_per_ppq);
       const double beats = static_cast<double>(b - a) / ticks_per_ppq;
@@ -919,8 +958,6 @@ std::vector<SmfTempoEvent> smf_tempo_events(const std::vector<transport::TempoSe
   }
   return events;
 }
-
-}  // namespace
 
 SmfExportResult export_smf(const std::vector<MidiClip>& clips,
                            const std::vector<transport::TempoSegment>& tempo_segments,

@@ -12,6 +12,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
 #include "midi/clock_sync.h"  // kClockPulsesPerQuarter
 
@@ -34,10 +35,13 @@ inline double smf_ticks_to_ppq(uint64_t ticks, uint16_t ppqn) noexcept {
 }
 
 /// @brief PPQ (quarter notes) -> SMF ticks at `ppqn` (rounded to nearest,
-///        non-negative; 0 for non-finite or non-positive input).
+///        non-negative; 0 for non-finite or non-positive input, saturated at
+///        INT64_MAX where llround's result would be unspecified).
 inline int64_t smf_ppq_to_ticks(double ppq, uint16_t ppqn) noexcept {
+  constexpr int64_t kMaxTick = std::numeric_limits<int64_t>::max();
   const double t = ppq * static_cast<double>(ppqn);
   if (!std::isfinite(t) || t <= 0.0) return 0;
+  if (t >= static_cast<double>(kMaxTick)) return kMaxTick;
   return static_cast<int64_t>(std::llround(t));
 }
 

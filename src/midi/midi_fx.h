@@ -28,9 +28,10 @@
 
 namespace sonare::midi {
 
-/// Shared fixed PPQ-to-frame scale used when MIDI FX are applied outside a real
-/// tempo map (C ABI project bake / realtime JSON config / WASM facade). High
-/// enough to preserve sub-tick PPQ edits while keeping int64 headroom.
+/// Frames per PPQ of the domain MIDI FX configured in PPQ run in: the offline
+/// bake places events at ppq * this scale, and the live sequencer converts each
+/// event into and out of it through its tempo map. High enough to preserve
+/// sub-tick PPQ edits while keeping int64 headroom.
 inline constexpr int64_t kMidiFxPpqScale = 960000;
 
 /// Fixed-capacity output buffer for MIDI FX. Lives on the caller's stack (or a
@@ -75,13 +76,13 @@ struct TransposeConfig {
 };
 
 /// Snap note-on render frames to a grid; paired note-offs follow their note-on and
-/// other events stay put. The grid is expressed in render frames so the control thread
-/// can bake a PPQ grid (via TempoMap) into a frame interval before handing the chain to
-/// the audio thread.
+/// other events stay put. Every *_frames field of the chain is in chain frames:
+/// ppq * kMidiFxPpqScale, the domain the bake and a sequencer with a tempo map run
+/// the chain in (device frames only for a sequencer clock without one).
 struct QuantizeConfig {
   static constexpr size_t kMaxGrooveSteps = 16;
   bool enabled = false;
-  /// Grid spacing in render frames (must be > 0 to take effect).
+  /// Grid spacing in chain frames (must be > 0 to take effect).
   int64_t grid_frames = 0;
   /// Quantize strength in [0, 1]; 1 == full snap to nearest grid line, 0 == no
   /// movement. Intermediate values move the event a fraction of the way.
@@ -123,7 +124,7 @@ struct ChordConfig {
 
 /// Arpeggiate each input note: instead of one sustained note, emit a sequence of
 /// short gated note-on/off pairs walking the configured intervals. Timing is in
-/// render frames. Deterministic; the optional humanize-style gate jitter is
+/// chain frames (see QuantizeConfig). Deterministic; the optional humanize-style gate jitter is
 /// folded into Humanize, not here.
 struct ArpeggiatorConfig {
   static constexpr size_t kMaxArpSteps = 16;
@@ -144,7 +145,7 @@ struct HumanizeConfig {
   bool enabled = false;
   /// Explicit PRNG seed. Same seed + same input -> identical output.
   uint32_t seed = 0;
-  /// Maximum absolute timing jitter in render frames (uniform in
+  /// Maximum absolute timing jitter in chain frames (uniform in
   /// [-timing_frames, +timing_frames]).
   int64_t timing_frames = 0;
   /// Maximum absolute velocity jitter in velocity units (uniform in
@@ -175,6 +176,8 @@ class MidiFxChain {
   /// AUDIO thread: forget note timing pairs addressed by one UMP group/channel
   /// without disturbing other lanes in this chain.
   void clear_note_tracking(uint8_t group, uint8_t channel) noexcept;
+  /// AUDIO thread: forget every note timing row clip playback owns, keeping live input's.
+  void clear_clip_note_tracking() noexcept;
   /// AUDIO thread: forget every note timing row owned by one exact note lane.
   /// This is used when a clip-owned note is released during a schedule refresh,
   /// so a replacement on another source lane or clip cannot inherit its shift.

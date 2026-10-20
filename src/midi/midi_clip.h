@@ -186,6 +186,11 @@ struct MidiClipSchedule {
   MidiLoopMode loop_mode = MidiLoopMode::kOneShot;
   /// Loop length in samples (used when loop_mode == kLoop and > 0).
   int64_t loop_length_samples = 0;
+  /// Repeat starts (render frames, ascending, first repeat excluded) of a loop
+  /// already written out into `events`, as the arrangement compiler does when the
+  /// tempo changes inside the clip. A one-shot clip releases its sounding notes at
+  /// each, exactly as a kLoop clip does at its iteration starts.
+  std::vector<int64_t> loop_iteration_starts;
   /// Destination / route id the sequencer dispatches this clip's events to. 0 =
   /// default/null destination.
   uint32_t destination_id = 0;
@@ -212,9 +217,10 @@ struct MidiClipSchedule {
     return id == o.id && track_id == o.track_id && start_sample == o.start_sample &&
            start_ppq == o.start_ppq && length_samples == o.length_samples &&
            loop_mode == o.loop_mode && loop_length_samples == o.loop_length_samples &&
-           destination_id == o.destination_id && events == o.events && gain == o.gain &&
-           fade_in_samples == o.fade_in_samples && fade_out_samples == o.fade_out_samples &&
-           fade_in_curve == o.fade_in_curve && fade_out_curve == o.fade_out_curve;
+           loop_iteration_starts == o.loop_iteration_starts && destination_id == o.destination_id &&
+           events == o.events && gain == o.gain && fade_in_samples == o.fade_in_samples &&
+           fade_out_samples == o.fade_out_samples && fade_in_curve == o.fade_in_curve &&
+           fade_out_curve == o.fade_out_curve;
   }
 };
 
