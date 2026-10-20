@@ -7,6 +7,7 @@
 #include "analysis/tempo_curve.h"
 #include "util/constants.h"
 #include "util/insertion_sort.h"
+#include "util/peak.h"
 
 namespace sonare::mir {
 namespace {
@@ -222,11 +223,8 @@ double normalized_activation_at(const BeatAnalysisInput& input, double time_s,
 }
 
 double max_activation(const BeatAnalysisInput& input) {
-  double max_act = 0.0;
-  for (float value : input.onset_strength) {
-    max_act = std::max(max_act, static_cast<double>(value));
-  }
-  return max_act;
+  // The loudest few frames are set aside so one dominant onset cannot scale the rest.
+  return static_cast<double>(max_excluding_top(input.onset_strength, kReferenceIgnoredTopEvents));
 }
 
 float octave_evidence(const BeatAnalysisInput& input, double bpm_scale) {

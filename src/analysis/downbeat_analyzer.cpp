@@ -4,11 +4,13 @@
 #include <cmath>
 #include <limits>
 #include <numeric>
+#include <utility>
 
 #include "analysis/chord_analyzer.h"
 #include "filters/iir.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/peak.h"
 
 namespace sonare {
 
@@ -17,12 +19,16 @@ namespace {
 
 std::vector<float> normalize_to_unit(std::vector<float> values, size_t target_size) {
   values.resize(target_size, 0.0f);
-  float max_value = 0.0f;
+  // The loudest few beats are set aside so one dominant beat cannot shrink every
+  // other value against the fixed-scale prior terms.
+  std::vector<float> finite;
+  finite.reserve(values.size());
   for (float value : values) {
     if (std::isfinite(value)) {
-      max_value = std::max(max_value, value);
+      finite.push_back(std::max(value, 0.0f));
     }
   }
+  const float max_value = max_excluding_top(std::move(finite), kReferenceIgnoredTopEvents);
   if (max_value <= constants::kEpsilon) {
     return std::vector<float>(target_size, 0.0f);
   }

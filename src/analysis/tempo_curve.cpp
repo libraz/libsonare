@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 #include <vector>
 
 #include "util/constants.h"
+#include "util/peak.h"
 
 namespace sonare {
 namespace {
@@ -35,12 +37,17 @@ std::vector<BeatIntervalObservation> build_beat_interval_observations(
   const size_t n = beats.size();
   if (n < 2) return obs;
   obs.reserve(n - 1);
-  // Normalize activation by the max so weights are comparable across inputs.
-  double max_act = kEpsilon;
+  // Normalize by the activation once the loudest few beats are set aside, so one
+  // dominant beat cannot scale every other weight down.
+  std::vector<float> activations;
+  activations.reserve(n);
   for (const Beat& b : beats) {
-    max_act =
-        std::max(max_act, onset_activation_at(onset_strength, sample_rate, hop_length, b.time));
+    activations.push_back(
+        static_cast<float>(onset_activation_at(onset_strength, sample_rate, hop_length, b.time)));
   }
+  const double max_act = std::max(
+      static_cast<double>(max_excluding_top(std::move(activations), kReferenceIgnoredTopEvents)),
+      static_cast<double>(kEpsilon));
   for (size_t i = 1; i < n; ++i) {
     const double ibi = static_cast<double>(beats[i].time - beats[i - 1].time);
     const double act =

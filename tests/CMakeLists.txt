@@ -97,8 +97,10 @@ add_executable(sonare_tests
   analysis/dynamics_analyzer_test.cpp
   analysis/beat_analyzer_test.cpp
   analysis/tempo_curve_test.cpp
+  analysis/tempo_curve_outlier_test.cpp
   analysis/meter_analyzer_test.cpp
   analysis/downbeat_analyzer_test.cpp
+  analysis/downbeat_outlier_test.cpp
   analysis/chord_analyzer_test.cpp
   analysis/chord_synthetic_matrix_test.cpp
   analysis/progression_patterns_test.cpp
@@ -773,6 +775,7 @@ if(BUILD_ARRANGEMENT)
     midi/midi_routing_test.cpp
     mir/grid_snap_bar_length_test.cpp
     mir/mir_tempo_grid_test.cpp
+    mir/tempo_octave_evidence_outlier_test.cpp
     mir/mir_warp_test.cpp
     mir/mir_key_chord_onset_test.cpp
     serialize/project_serializer_roundtrip_test.cpp
