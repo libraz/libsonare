@@ -40,31 +40,31 @@ using namespace sonare_node;
 namespace {
 
 int PanModeValue(const Napi::Value& value) {
+  Napi::Env env = value.Env();
   if (value.IsNumber()) {
     const double raw = value.As<Napi::Number>().DoubleValue();
     if (!std::isfinite(raw) || std::floor(raw) != raw || raw < SONARE_PAN_MODE_BALANCE ||
         raw > SONARE_PAN_MODE_DUAL_PAN) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
+      throw Napi::RangeError::New(env, "unknown mixing pan mode");
     }
     return static_cast<int>(raw);
   }
   if (!value.IsString()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
+    throw Napi::TypeError::New(env, "panMode must be a string or a number");
   }
-  std::string mode = node_narrow_string(value.Env(), value, "panMode");
+  std::string mode = node_narrow_string(env, value, "panMode");
   for (char& ch : mode) {
     if (ch == '_') ch = '-';
     ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
   }
-  if (mode == "stereo-pan" || mode == "stereopan" || mode == "pan") {
+  if (mode == "stereo-pan" || mode == "stereopan") {
     return SONARE_PAN_MODE_STEREO_PAN;
   }
   if (mode == "dual-pan" || mode == "dualpan") {
     return SONARE_PAN_MODE_DUAL_PAN;
   }
   if (mode == "balance") return SONARE_PAN_MODE_BALANCE;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                "unknown mixing pan mode: " + mode);
+  throw Napi::RangeError::New(env, "unknown mixing pan mode: " + mode);
 }
 
 Napi::Value OptionAt(Napi::Env env, const Napi::Object& options, const char* key, size_t index) {

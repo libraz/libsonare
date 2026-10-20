@@ -62,6 +62,19 @@ describe('mixing native binding', () => {
     });
     expect(twoStrips.right[frames - 1]).toBeGreaterThan(0.1);
   });
+
+  it('refuses the removed pan-mode alias and unknown names with a RangeError', () => {
+    const left = new Float32Array([0.5, 0.5]);
+    const right = new Float32Array([0.5, 0.5]);
+    for (const panMode of ['pan', 'bogus', 99]) {
+      expect(() => mixStereo([left], [right], 48000, { pan: 0.5, panMode } as never)).toThrow(
+        RangeError,
+      );
+    }
+    expect(() => mixStereo([left], [right], 48000, { pan: 0.5, panMode: {} as never })).toThrow(
+      TypeError,
+    );
+  });
 });
 
 describe('insert param validation', () => {

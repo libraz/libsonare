@@ -5,7 +5,6 @@ import {
   analyzeAsync,
   ErrorCode,
   isSonareError,
-  mixStereo,
   SonareError,
   synthPresetPatch,
 } from '../src/index.js';
@@ -67,11 +66,6 @@ describe('every C-ABI failure carries the SonareError code', () => {
   const badHop = { samples: sine(22050), sampleRate: 22050, hopLength: 0 };
   const cases: ReadonlyArray<[string, () => unknown, ErrorCode]> = [
     ['analyze (sync)', () => analyze(badHop), ErrorCode.InvalidParameter],
-    [
-      'mixStereo',
-      () => mixStereo([sine(256)], [sine(256)], 22050, { panMode: 'bogus' as never }),
-      ErrorCode.InvalidParameter,
-    ],
     [
       'synthPresetPatch',
       () => synthPresetPatch('definitely-not-a-real-preset'),

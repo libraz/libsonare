@@ -1121,7 +1121,8 @@ class _ProjectEditMixin:
     def set_track_pan(self, track_id: int, pan: float) -> None:
         """Set a track's stereo balance in [-1, +1] (0 = center) via an undoable edit.
 
-        ``pan`` is clamped to the valid range by the core. See
+        A ``pan`` outside [-1, +1] or non-finite raises :class:`SonareError`
+        (InvalidParameter) and leaves the project unchanged. See
         :meth:`set_track_gain` for which stage a track's controls land on. The pan
         law that shapes the balance belongs to that stage: the strip's configured
         law on a channel strip and on the clips of an audio track sharing a strip,

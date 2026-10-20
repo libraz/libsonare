@@ -21,6 +21,7 @@ from ._runtime import (
     SonareMixMeterSnapshot,
     SonareValueError,
     _check,
+    _check_argument,
     _curve_value,
     _float_array_result,
     _get_lib,
@@ -463,9 +464,13 @@ class Mixer:
         )
 
     def set_dual_pan(self, strip: StripRef, left: float, right: float) -> None:
-        """Set independent left/right pan positions for a strip (dual-pan mode)."""
+        """Set independent left/right pan positions in [-1, 1] for a strip (dual-pan mode).
+
+        Raises:
+            SonareValueError: If either position is outside [-1, 1] or non-finite.
+        """
         handle = self._strip_handle(strip)
-        _check(
+        _check_argument(
             _get_lib().sonare_strip_set_dual_pan(
                 handle, _to_c_float(left, "left"), _to_c_float(right, "right")
             )
@@ -525,19 +530,26 @@ class Mixer:
         (``"balance"``/``"stereoPan"``/``"stereo-pan"``/``"dualPan"``/
         ``"dual-pan"``), or ``None`` to keep the strip's current pan mode. The
         ``None``/keep sentinel is passed to the C ABI as ``-1``.
+
+        Raises:
+            SonareValueError: If ``pan`` is outside [-1, 1] or non-finite.
         """
         handle = self._strip_handle(strip)
         mode = -1 if pan_mode is None else _pan_mode_value(pan_mode)
-        _check(
+        _check_argument(
             _get_lib().sonare_strip_set_pan(
                 handle, _to_c_float(pan, "pan"), _to_c_int(mode, "mode")
             )
         )
 
     def set_width(self, strip: StripRef, width: float) -> None:
-        """Set a strip's stereo width."""
+        """Set a strip's stereo width in [0, 2] (0 mono, 1 unchanged, 2 widest).
+
+        Raises:
+            SonareValueError: If ``width`` is outside [0, 2] or non-finite.
+        """
         handle = self._strip_handle(strip)
-        _check(_get_lib().sonare_strip_set_width(handle, _to_c_float(width, "width")))
+        _check_argument(_get_lib().sonare_strip_set_width(handle, _to_c_float(width, "width")))
 
     def set_muted(self, strip: StripRef, muted: bool) -> None:
         """Set a strip's mute state (takes effect without a recompile)."""
@@ -782,7 +794,7 @@ class Mixer:
     ) -> None:
         """Schedule a sample-accurate pan automation event on a strip."""
         handle = self._strip_handle(strip)
-        _check(
+        _check_argument(
             _get_lib().sonare_strip_schedule_pan_automation(
                 handle,
                 _to_c_int64(sample_pos, "sample_pos"),
@@ -800,7 +812,7 @@ class Mixer:
     ) -> None:
         """Schedule a sample-accurate stereo-width automation event on a strip."""
         handle = self._strip_handle(strip)
-        _check(
+        _check_argument(
             _get_lib().sonare_strip_schedule_width_automation(
                 handle,
                 _to_c_int64(sample_pos, "sample_pos"),

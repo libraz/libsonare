@@ -119,6 +119,11 @@ def test_set_track_gain_mute_solo_pan_undo() -> None:
     with pytest.raises(SonareError):
         p.set_track_gain(999999, 1.0)
 
+    for bad_pan in (1.5, -1.01, float("nan")):
+        with pytest.raises(SonareError):
+            p.set_track_pan(track, bad_pan)
+    assert p.to_json() == before
+
 
 def test_set_max_undo_depth_limits_history() -> None:
     p, track, _clip = _audio_project()

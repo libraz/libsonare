@@ -29,14 +29,15 @@ void MixerWasm::setPan(const val& strip_index_val, const val& pan_val, const val
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   const float pan = checkedFloatFromVal(pan_val, "pan");
   const int pan_mode = checkedIntFromVal(pan_mode_val, "panMode");
-  checkStripError(sonare_strip_set_pan(stripAt(strip_index), pan, pan_mode), "failed to set pan");
+  checkStripValueError(sonare_strip_set_pan(stripAt(strip_index), pan, pan_mode),
+                       "failed to set pan");
 }
 
 // Sets the strip's stereo width.
 void MixerWasm::setWidth(const val& strip_index_val, const val& width_val) {
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   const float width = checkedFloatFromVal(width_val, "width");
-  checkStripError(sonare_strip_set_width(stripAt(strip_index), width), "failed to set width");
+  checkStripValueError(sonare_strip_set_width(stripAt(strip_index), width), "failed to set width");
 }
 
 // Snaps the strip's input-trim, fader, pan and width smoothers to the values
@@ -109,8 +110,8 @@ void MixerWasm::setDualPan(const val& strip_index_val, const val& left_pan_val,
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   const float left_pan = checkedFloatFromVal(left_pan_val, "leftPan");
   const float right_pan = checkedFloatFromVal(right_pan_val, "rightPan");
-  checkStripError(sonare_strip_set_dual_pan(stripAt(strip_index), left_pan, right_pan),
-                  "failed to set dual pan");
+  checkStripValueError(sonare_strip_set_dual_pan(stripAt(strip_index), left_pan, right_pan),
+                       "failed to set dual pan");
 }
 
 // Sets the strip's surround pan from a JS object {azimuth, elevation,

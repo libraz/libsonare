@@ -300,6 +300,8 @@ class MixerWasm {
   void ensureScratchBuffers();
 
   static void checkStripError(SonareError err, const char* what);
+  // Like checkStripError, but a refused pan or width value (INVALID_PARAMETER) is a RangeError.
+  static void checkStripValueError(SonareError err, const char* what);
 
   SonareMixer* mixer_ = nullptr;
   int sample_rate_ = 48000;

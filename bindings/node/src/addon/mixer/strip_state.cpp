@@ -91,7 +91,7 @@ Napi::Value MixerWrap::SetPan(const Napi::CallbackInfo& info) {
   SonareError err =
       sonare_strip_set_pan(strip, node_narrow_finite_float(env, info[1], "pan"), pan_mode);
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to set strip pan: ");
+    sonare_node::ThrowStripValueError(env, err, "failed to set strip pan: ");
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -110,7 +110,7 @@ Napi::Value MixerWrap::SetWidth(const Napi::CallbackInfo& info) {
   }
   SonareError err = sonare_strip_set_width(strip, node_narrow_finite_float(env, info[1], "width"));
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to set strip width: ");
+    sonare_node::ThrowStripValueError(env, err, "failed to set strip width: ");
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -272,7 +272,7 @@ Napi::Value MixerWrap::SetDualPan(const Napi::CallbackInfo& info) {
       sonare_strip_set_dual_pan(strip, node_narrow_finite_float(env, info[1], "leftPan"),
                                 node_narrow_finite_float(env, info[2], "rightPan"));
   if (err != SONARE_OK) {
-    sonare_node::ThrowSonareError(env, err, "failed to set strip dual pan: ");
+    sonare_node::ThrowStripValueError(env, err, "failed to set strip dual pan: ");
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)

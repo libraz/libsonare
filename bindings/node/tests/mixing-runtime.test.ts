@@ -182,6 +182,16 @@ describe('Mixer runtime methods', () => {
     expect(preTap.peakDbL).toBeGreaterThanOrEqual(postTap.peakDbL - 1e-3);
   });
 
+  it('refuses an out-of-domain pan or width with a RangeError', () => {
+    expect(() => mixer.setPan('host', 1.5)).toThrow(RangeError);
+    expect(() => mixer.setPan('host', -1.01)).toThrow(RangeError);
+    expect(() => mixer.setDualPan('host', -1.5, 0)).toThrow(RangeError);
+    expect(() => mixer.setWidth('host', 3)).toThrow(RangeError);
+    expect(() => mixer.setWidth('host', -0.1)).toThrow(RangeError);
+    expect(() => mixer.schedulePanAutomation('host', 0, 1.5)).toThrow(RangeError);
+    expect(() => mixer.scheduleWidthAutomation('host', 0, 2.5)).toThrow(RangeError);
+  });
+
   it('setPan without panMode keeps the strip current pan mode', () => {
     // Put the strip into stereoPan mode explicitly first.
     mixer.setPan('host', 0.0, 'stereoPan');

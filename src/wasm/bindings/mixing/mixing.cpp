@@ -166,6 +166,13 @@ void MixerWasm::checkStripError(SonareError err, const char* what) {
   }
 }
 
+void MixerWasm::checkStripValueError(SonareError err, const char* what) {
+  if (err == SONARE_ERROR_INVALID_PARAMETER) {
+    throw WasmRangeError(std::string(what) + ": " + sonare_error_message(err));
+  }
+  checkStripError(err, what);
+}
+
 val MixerWasm::mixMeterSnapshotToVal(const SonareMixMeterSnapshot& snapshot) {
   val out = val::object();
   out.set("peakDbL", snapshot.peak_db_l);
@@ -225,68 +232,6 @@ std::optional<float> optionalNumberAt(val options, const char* key, int index) {
   return optionalNumber(value, key);
 }
 
-// Reached only on the build without a mixing graph, where a strip is configured
-// field by field instead of through the graph's scene.
-[[maybe_unused]] mixing::PanMode panModeFromVal(val value) {
-  if (value.isUndefined() || value.isNull()) {
-    return mixing::PanMode::Balance;
-  }
-  if (value.typeOf().as<std::string>() == "number") {
-    // The narrowing is shared; the domain answer keeps the C ABI's own wording,
-    // which to_pan_mode (mixing_internal.h) states for the same rejection.
-    const int mode = checkedIntFromVal(value, "mixing pan mode");
-    if (mode < static_cast<int>(mixing::PanMode::Balance) ||
-        mode > static_cast<int>(mixing::PanMode::DualPan)) {
-      throw WasmRangeError("unknown mixing pan mode");
-    }
-    if (mode == 1) return mixing::PanMode::StereoPan;
-    if (mode == 2) return mixing::PanMode::DualPan;
-    return mixing::PanMode::Balance;
-  }
-  if (value.typeOf().as<std::string>() != "string") {
-    throw WasmRangeError("unknown mixing pan mode");
-  }
-  std::string mode = value.as<std::string>();
-  for (char& ch : mode) {
-    if (ch == '_') ch = '-';
-    ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-  }
-  if (mode == "stereo-pan" || mode == "stereopan" || mode == "pan") {
-    return mixing::PanMode::StereoPan;
-  }
-  if (mode == "dual-pan" || mode == "dualpan") {
-    return mixing::PanMode::DualPan;
-  }
-  if (mode == "balance") return mixing::PanMode::Balance;
-  throw WasmRangeError("unknown mixing pan mode: " + mode);
-}
-
-// Same: the graph build reports meters through the scene walker instead.
-[[maybe_unused]] val meterSnapshotToVal(const mixing::MeterSnapshot& snapshot) {
-  val out = val::object();
-  out.set("peakDbL", snapshot.peak_db[0]);
-  out.set("peakDbR", snapshot.peak_db[1]);
-  out.set("rmsDbL", snapshot.rms_db[0]);
-  out.set("rmsDbR", snapshot.rms_db[1]);
-  out.set("correlation", snapshot.correlation);
-  out.set("monoCompatWidth", snapshot.mono_compat_width);
-  out.set("monoCompatPeak", snapshot.mono_compat_peak);
-  out.set("monoCompatSideRms", snapshot.mono_compat_side_rms);
-  out.set("likelyMonoCompatible", snapshot.likely_mono_compatible);
-  out.set("momentaryLufs", snapshot.momentary_lufs);
-  out.set("shortTermLufs", snapshot.short_term_lufs);
-  out.set("integratedLufs", snapshot.integrated_lufs);
-  out.set("gainReductionDb", snapshot.gain_reduction_db);
-  out.set("truePeakDbL", snapshot.true_peak_db[0]);
-  out.set("truePeakDbR", snapshot.true_peak_db[1]);
-  out.set("maxTruePeakDb", snapshot.max_true_peak_db);
-  out.set("seq", static_cast<double>(snapshot.seq));
-  setPerPlaneMeters(out, snapshot.peak_db.data(), snapshot.rms_db.data(),
-                    snapshot.true_peak_db.data(), snapshot.channel_count);
-  return out;
-}
-
-#if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 // Resolves a JS pan-mode value (number / string) to the SONARE_PAN_MODE_*
 // ordinal accepted by sonare_strip_set_pan, accepting the same spellings and
 // rejecting the same unknown values as the Node and Python facades. Deciding
@@ -317,7 +262,7 @@ int panModeOrdinalFromVal(val value) {
     if (ch == '_') ch = '-';
     ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
   }
-  if (mode == "stereo-pan" || mode == "stereopan" || mode == "pan") {
+  if (mode == "stereo-pan" || mode == "stereopan") {
     return SONARE_PAN_MODE_STEREO_PAN;
   }
   if (mode == "dual-pan" || mode == "dualpan") {
@@ -327,6 +272,45 @@ int panModeOrdinalFromVal(val value) {
   throw WasmRangeError("unknown mixing pan mode: " + mode);
 }
 
+// Reached only on the build without a mixing graph, where a strip is configured
+// field by field instead of through the graph's scene.
+[[maybe_unused]] mixing::PanMode panModeFromVal(val value) {
+  switch (panModeOrdinalFromVal(value)) {
+    case SONARE_PAN_MODE_STEREO_PAN:
+      return mixing::PanMode::StereoPan;
+    case SONARE_PAN_MODE_DUAL_PAN:
+      return mixing::PanMode::DualPan;
+    default:
+      return mixing::PanMode::Balance;
+  }
+}
+
+// Same: the graph build reports meters through the scene walker instead.
+[[maybe_unused]] val meterSnapshotToVal(const mixing::MeterSnapshot& snapshot) {
+  val out = val::object();
+  out.set("peakDbL", snapshot.peak_db[0]);
+  out.set("peakDbR", snapshot.peak_db[1]);
+  out.set("rmsDbL", snapshot.rms_db[0]);
+  out.set("rmsDbR", snapshot.rms_db[1]);
+  out.set("correlation", snapshot.correlation);
+  out.set("monoCompatWidth", snapshot.mono_compat_width);
+  out.set("monoCompatPeak", snapshot.mono_compat_peak);
+  out.set("monoCompatSideRms", snapshot.mono_compat_side_rms);
+  out.set("likelyMonoCompatible", snapshot.likely_mono_compatible);
+  out.set("momentaryLufs", snapshot.momentary_lufs);
+  out.set("shortTermLufs", snapshot.short_term_lufs);
+  out.set("integratedLufs", snapshot.integrated_lufs);
+  out.set("gainReductionDb", snapshot.gain_reduction_db);
+  out.set("truePeakDbL", snapshot.true_peak_db[0]);
+  out.set("truePeakDbR", snapshot.true_peak_db[1]);
+  out.set("maxTruePeakDb", snapshot.max_true_peak_db);
+  out.set("seq", static_cast<double>(snapshot.seq));
+  setPerPlaneMeters(out, snapshot.peak_db.data(), snapshot.rms_db.data(),
+                    snapshot.true_peak_db.data(), snapshot.channel_count);
+  return out;
+}
+
+#if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 void checkOneShotSetter(SonareError err, const char* what) {
   if (err != SONARE_OK) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,

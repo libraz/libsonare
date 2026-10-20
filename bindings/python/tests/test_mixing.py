@@ -313,6 +313,21 @@ def test_set_pan_law_accepts_enum_int_and_name(mixer) -> None:
         mixer.set_pan_law(0, "not-a-pan-law")
 
 
+def test_strip_pan_and_width_refusals_are_value_errors(mixer) -> None:
+    """An out-of-domain pan or width raises SonareValueError on every strip path."""
+    for call in (
+        lambda: mixer.set_pan(0, 1.5),
+        lambda: mixer.set_pan(0, -1.01),
+        lambda: mixer.set_dual_pan(0, -1.5, 0.0),
+        lambda: mixer.set_width(0, 3.0),
+        lambda: mixer.set_width(0, -0.1),
+        lambda: mixer.schedule_pan_automation(0, 0, 1.5),
+        lambda: mixer.schedule_width_automation(0, 0, 2.5),
+    ):
+        with pytest.raises(SonareValueError):
+            call()
+
+
 def test_set_pan_law_matches_shared_name_corpus(mixer) -> None:
     """Every canonical alias and conservative normalization maps cross-binding identically."""
     for case in _PAN_LAW_CORPUS["accepted"] + _PAN_LAW_CORPUS["normalization"]:

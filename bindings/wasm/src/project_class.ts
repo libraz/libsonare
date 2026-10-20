@@ -1049,6 +1049,9 @@ export class Project {
    * strip the host bound to that lane, or a linear balance when none is bound).
    * Every law is normalized so a centered track stays at unity and only the away
    * channel is attenuated, so the difference is a taper, not a level offset.
+   *
+   * @throws {SonareError} `InvalidParameter` when `pan` is outside `[-1, 1]` or
+   *   non-finite; the project and its undo history are left unchanged.
    */
   setTrackPan(trackId: number, pan: number): void {
     this.native.setTrackPan(trackId, pan);

@@ -416,6 +416,8 @@ export class Mixer {
    * Set a strip's pan position (-1..1) with an optional pan mode. Omitting
    * `panMode` keeps the strip's current mode (a plain pan nudge does not reset
    * a scene strip's pan mode).
+   *
+   * @throws {RangeError} when `pan` is outside `[-1, 1]` or non-finite.
    */
   setPan(strip: StripRef, pan: number, panMode?: PanMode): void {
     if (panMode === undefined) {
@@ -425,7 +427,11 @@ export class Mixer {
     }
   }
 
-  /** Set a strip's stereo width (0 = mono, 1 = original, >1 = widened). */
+  /**
+   * Set a strip's stereo width in `[0, 2]` (0 = mono, 1 = original, 2 = widest).
+   *
+   * @throws {RangeError} when `width` is outside `[0, 2]` or non-finite.
+   */
   setWidth(strip: StripRef, width: number): void {
     this.native.setWidth(strip, width);
   }

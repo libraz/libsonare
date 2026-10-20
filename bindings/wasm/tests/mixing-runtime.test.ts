@@ -162,6 +162,10 @@ describe('Mixer runtime controls (WASM)', () => {
 
         expect(() => mixer.setFaderDb(vocal, Number.NaN)).toThrow();
         expect(() => mixer.setPan(vocal, Number.POSITIVE_INFINITY)).toThrow();
+        expect(() => mixer.setPan(vocal, 1.5)).toThrow(RangeError);
+        expect(() => mixer.setWidth(vocal, 3)).toThrow(RangeError);
+        expect(() => mixer.schedulePanAutomation(vocal, 0, -1.5, 'linear')).toThrow(RangeError);
+        expect(() => mixer.scheduleWidthAutomation(vocal, 0, 2.5, 'linear')).toThrow(RangeError);
         expect(() => mixer.scheduleFaderAutomation(vocal, 0, Number.NaN, 'linear')).toThrow();
         expect(() => mixer.setFaderDb(vocal, -3)).not.toThrow();
         expect(() => mixer.setPan(vocal, 0.25)).not.toThrow();

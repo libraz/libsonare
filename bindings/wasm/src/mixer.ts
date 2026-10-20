@@ -464,6 +464,7 @@ export class Mixer {
    *   mode is kept (passes `SONARE_PAN_MODE_KEEP`), so a plain pan nudge does
    *   not reset a scene-defined `'stereoPan'` / `'dualPan'` mode back to
    *   balance. Pass `'balance'` (or `0`) explicitly to force balance mode.
+   * @throws {RangeError} when `pan` is outside `[-1, 1]` or non-finite.
    */
   setPan(stripIndex: number, pan: number, panMode?: PanMode | number): void {
     // SONARE_PAN_MODE_KEEP (-1) = keep the strip's current pan mode.
@@ -471,7 +472,11 @@ export class Mixer {
     this.mixer.setPan(stripIndex, pan, mode);
   }
 
-  /** Set the strip's stereo width. */
+  /**
+   * Set the strip's stereo width in `[0, 2]` (0 = mono, 1 = original, 2 = widest).
+   *
+   * @throws {RangeError} when `width` is outside `[0, 2]` or non-finite.
+   */
   setWidth(stripIndex: number, width: number): void {
     this.mixer.setWidth(stripIndex, width);
   }

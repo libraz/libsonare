@@ -105,9 +105,9 @@ void MixerWasm::schedulePanAutomation(const val& strip_index_val, double sample_
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   const float pan = checkedFloatFromVal(pan_val, "pan");
   const int curve = checkedIntFromVal(curve_val, "curve");
-  checkStripError(sonare_strip_schedule_pan_automation(
-                      stripAt(strip_index), static_cast<int64_t>(sample_pos), pan, curve),
-                  "failed to schedule pan automation");
+  checkStripValueError(sonare_strip_schedule_pan_automation(
+                           stripAt(strip_index), static_cast<int64_t>(sample_pos), pan, curve),
+                       "failed to schedule pan automation");
 }
 
 void MixerWasm::scheduleWidthAutomation(const val& strip_index_val, double sample_pos,
@@ -115,9 +115,9 @@ void MixerWasm::scheduleWidthAutomation(const val& strip_index_val, double sampl
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   const float width = checkedFloatFromVal(width_val, "width");
   const int curve = checkedIntFromVal(curve_val, "curve");
-  checkStripError(sonare_strip_schedule_width_automation(
-                      stripAt(strip_index), static_cast<int64_t>(sample_pos), width, curve),
-                  "failed to schedule width automation");
+  checkStripValueError(sonare_strip_schedule_width_automation(
+                           stripAt(strip_index), static_cast<int64_t>(sample_pos), width, curve),
+                       "failed to schedule width automation");
 }
 
 // Schedules sample-accurate send-level automation on a strip's send.
