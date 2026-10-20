@@ -10,6 +10,7 @@
 #include "analysis/analysis_rate.h"
 #include "core/spectrum.h"
 #include "feature/chroma.h"
+#include "feature/mel_spectrogram.h"
 #include "feature/spectral.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -231,12 +232,23 @@ void SectionAnalyzer::analyze() {
   boundary_config.peak_distance =
       std::min(std::max(0.0f, config_.min_section_sec), BoundaryConfig{}.peak_distance);
 
-  BoundaryDetector detector(audio_, boundary_config);
+  // One STFT for the whole pass: the boundary features, the merge and the descriptors all read
+  // it. The detector's own mel and chroma use this same window, hop and zero padding.
+  const Spectrogram spec =
+      Spectrogram::compute(audio_, section_chroma_config(config_, sr_).to_stft_config());
+  MelConfig mel_config;
+  mel_config.n_mels = constants::kDefaultNMels;
+  ChromaConfig chroma_config;
+  chroma_config.n_chroma = boundary_config.n_chroma;
+  const MelSpectrogram mel =
+      MelSpectrogram::from_spectrogram(spec, sr_, mel_config.to_mel_filter_config());
+  const Chroma chroma =
+      Chroma::from_spectrogram(spec, sr_, chroma_config.to_chroma_filter_config());
+
+  BoundaryDetector detector(mel, chroma, sr_, boundary_config);
   set_boundaries(detector.boundaries());
 
-  // One STFT for the whole pass: the merge and the descriptors both read it.
-  build_sections(
-      Spectrogram::compute(audio_, section_chroma_config(config_, sr_).to_stft_config()));
+  build_sections(spec);
 }
 
 void SectionAnalyzer::build_sections(const Spectrogram& spec) {

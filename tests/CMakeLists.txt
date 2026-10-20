@@ -114,6 +114,7 @@ add_executable(sonare_tests
   analysis/analysis_rate_test.cpp
   analysis/melody_analyzer_test.cpp
   analysis/section_analyzer_test.cpp
+  analysis/spectrogram_reuse_test.cpp
   analysis/music_analyzer_test.cpp
   analysis/analysis_tuning_test.cpp
   editing/percussive_event_test.cpp

@@ -308,17 +308,21 @@ KeyAnalyzer::KeyAnalyzer(const Audio& audio, const KeyConfig& requested) : confi
     std::array<std::array<float, 12>, 4> candidate_means{};
     {
       const Audio filtered_audio = high_passed_audio(audio, config);
-      const Chroma filtered_chroma =
-          Chroma::compute(filtered_audio, chroma_config_for(config, audio.sample_rate()));
+      const ChromaConfig chroma_config = chroma_config_for(config, audio.sample_rate());
+      const StftConfig stft_config = chroma_config.to_stft_config();
+      // One STFT of the filtered signal feeds both its chromagram and the harmonic separation.
+      validate_cola_geometry(stft_config.n_fft, stft_config.hop_length, stft_config.window,
+                             stft_config.actual_win_length());
+      const Spectrogram filtered_spec = Spectrogram::compute(filtered_audio, stft_config);
+      const Chroma filtered_chroma = Chroma::from_spectrogram(
+          filtered_spec, filtered_audio.sample_rate(), chroma_config.to_chroma_filter_config());
       candidate_means[0] =
           chroma_mean(filtered_chroma, filtered_audio, config, /*loudness_weighted=*/false);
       candidate_means[2] =
           chroma_mean(filtered_chroma, filtered_audio, config, /*loudness_weighted=*/true);
       const Audio harmonic_audio =
-          harmonic(filtered_audio, HpssConfig(),
-                   chroma_config_for(config, audio.sample_rate()).to_stft_config());
-      const Chroma harmonic_chroma =
-          Chroma::compute(harmonic_audio, chroma_config_for(config, audio.sample_rate()));
+          harmonic(filtered_spec, HpssConfig()).to_audio(static_cast<int>(filtered_audio.size()));
+      const Chroma harmonic_chroma = Chroma::compute(harmonic_audio, chroma_config);
       candidate_means[1] =
           chroma_mean(harmonic_chroma, harmonic_audio, config, /*loudness_weighted=*/false);
       candidate_means[3] =
