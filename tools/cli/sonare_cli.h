@@ -125,15 +125,16 @@ int print_name_catalog(const CliArgs& args, std::string_view key,
                        const std::vector<std::string>& names);
 std::string read_plain_text_file(const std::string& path);
 bool write_binary_file(const std::string& path, const uint8_t* data, size_t len);
-#ifdef SONARE_WITH_ARRANGEMENT
-/// Reads a file into a byte buffer, binary-safe, refusing an input past the
-/// shared project / SMF / MIDI 2.0 size cap. Declared here rather than kept
-/// file-local because every command that loads one of those must enforce the
-/// same cap; it is defined beside that cap in sonare_cli_project.cpp.
+/// Upper bound on any file the CLI loads into memory (project JSON, SMF, MIDI 2.0, config and
+/// preset JSON, HRTF data), mirrored from the Python CLI's _MAX_PROJECT_OR_MIDI_BYTES. Bounds the
+/// allocation so an oversized (or hostile) input is rejected instead of exhausting memory.
+inline constexpr size_t kMaxCliInputBytes = 64ull * 1024ull * 1024ull;
+/// Reads a file into a byte buffer, binary-safe, refusing an input past kMaxCliInputBytes. The
+/// cap is enforced on the bytes as they arrive, so a FIFO or a growing file is never buffered
+/// past it. Every command that loads a user-supplied path reads through this.
 /// @return false when the path cannot be opened.
 /// @throws std::invalid_argument — the input exceeds the cap.
 bool read_binary_file(const std::string& path, std::vector<uint8_t>* out);
-#endif
 std::string lowercase_cli_value(std::string value);
 
 std::vector<std::string> split_string(const std::string& text, char delimiter);

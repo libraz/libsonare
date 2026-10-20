@@ -24,11 +24,6 @@
 // the invalid-parameter code a plain `1` carries.
 constexpr int kExitUsage = 2;
 
-// Upper bound on a project JSON / SMF / MIDI 2.0 file loaded into memory, mirrored
-// from the Python CLI's _MAX_PROJECT_OR_MIDI_BYTES. Bounds the allocation so an
-// oversized (or hostile) input is rejected instead of exhausting memory.
-constexpr size_t kMaxProjectOrMidiBytes = 64ull * 1024ull * 1024ull;
-
 std::string project_error_string(SonareError err) {
   const char* msg = sonare_error_message(err);
   return msg != nullptr ? std::string(msg) : ("error " + std::to_string(static_cast<int>(err)));
@@ -81,54 +76,6 @@ int project_exit_code(SonareError err) {
 int report_output_write_failure(const std::string& path) {
   std::cerr << color::red << "Error: cannot write " << path << color::reset << "\n";
   return project_exit_code(SONARE_ERROR_ENCODE_FAILED);
-}
-
-// The one diagnostic an oversized input reports, raised both by the size probe
-// and by the read that enforces the same cap on the bytes actually delivered.
-// Sharing it keeps those two rejections indistinguishable to a caller.
-[[noreturn]] void reject_oversized_input(const std::string& path) {
-  throw std::invalid_argument("input file exceeds " + std::to_string(kMaxProjectOrMidiBytes) +
-                              " byte limit: " + path);
-}
-
-// Reads an arbitrary file into a byte buffer (binary-safe). The CLI owns file
-// I/O; the core / C ABI exchange in-memory buffers only. An input larger than
-// kMaxProjectOrMidiBytes is rejected with a clear diagnostic (mapped to the
-// invalid-parameter exit code by main()).
-//
-// The seek/tell probe only sizes the allocation: it is a snapshot the read
-// cannot rely on, because the file may grow between the two calls and a
-// non-regular input (a FIFO, a character device) has no size to report at all.
-// The cap is therefore enforced on the bytes as they arrive, so nothing past it
-// is ever buffered.
-bool read_binary_file(const std::string& path, std::vector<uint8_t>* out) {
-  std::ifstream file(path, std::ios::binary);
-  if (!file.is_open()) return false;
-  file.seekg(0, std::ios::end);
-  const std::streamoff size = file.tellg();
-  if (size > static_cast<std::streamoff>(kMaxProjectOrMidiBytes)) reject_oversized_input(path);
-  // An input with no size to probe fails the seek rather than reporting one, and
-  // a failed stream reads nothing. Clearing on both sides of the rewind keeps
-  // such an input readable from where it was opened, which is also the case the
-  // bounded read below exists for.
-  file.clear();
-  file.seekg(0, std::ios::beg);
-  file.clear();
-
-  constexpr size_t kReadChunkBytes = 64u * 1024u;
-  out->clear();
-  if (size > 0) out->reserve(static_cast<size_t>(size));
-  std::vector<char> chunk(kReadChunkBytes);
-  while (file) {
-    file.read(chunk.data(), static_cast<std::streamsize>(chunk.size()));
-    const auto read_bytes = static_cast<size_t>(file.gcount());
-    if (read_bytes == 0) break;
-    // Subtraction rather than addition: the sum of two size_t operands can wrap
-    // where the remaining budget cannot.
-    if (read_bytes > kMaxProjectOrMidiBytes - out->size()) reject_oversized_input(path);
-    out->insert(out->end(), chunk.data(), chunk.data() + read_bytes);
-  }
-  return true;
 }
 
 // Loads a project JSON file from --in into a fresh handle. Returns true on

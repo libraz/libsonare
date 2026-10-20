@@ -21,10 +21,10 @@ using sonare::util::json::Value;
 constexpr size_t kOfflineRenderBlockFrames = 4096;
 
 std::vector<uint8_t> read_hrtf_file(const std::string& path) {
-  std::ifstream file(path, std::ios::binary);
-  if (!file.is_open()) throw std::invalid_argument("cannot open --hrtf file: " + path);
-  return std::vector<uint8_t>(std::istreambuf_iterator<char>(file),
-                              std::istreambuf_iterator<char>());
+  std::vector<uint8_t> bytes;
+  if (!read_binary_file(path, &bytes))
+    throw std::invalid_argument("cannot open --hrtf file: " + path);
+  return bytes;
 }
 
 // SonareError and sonare::ErrorCode share the same numeric values for every

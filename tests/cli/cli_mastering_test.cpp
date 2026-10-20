@@ -1282,4 +1282,37 @@ TEST_CASE("CLI suggest-mix refuses a non-finite sample on either channel alike",
     CHECK(run(right_poisoned, extra) == 6);
   }
 }
+
+TEST_CASE("CLI text and HRTF readers refuse an input that outgrows the byte cap",
+          "[cli][mastering]") {
+  create_test_wav(TEST_WAV, 1.0f);
+  // A FIFO reports no size and then delivers more than the cap allows, so only a cap enforced
+  // on the bytes as they arrive keeps the CLI from buffering it.
+  const std::string over_cap = std::to_string(64ull * 1024ull * 1024ull + 1ull);
+  const std::string fifo = unique_temp_path("_reader.fifo");
+  std::remove(fifo.c_str());
+  REQUIRE(mkfifo(fifo.c_str(), S_IRUSR | S_IWUSR) == 0);
+
+  SECTION("--chain-config") {
+    auto [code, output] =
+        exec_command("head -c " + over_cap + " /dev/zero > " + fifo + " & " + CLI + " mastering " +
+                     TEST_WAV + " --chain-config " + fifo + " -q 2>&1");
+    CHECK(code == 3);
+    CHECK_THAT(output, ContainsSubstring("byte limit"));
+  }
+
+#ifdef SONARE_WITH_PLAYBACK
+  SECTION("--hrtf") {
+    const std::string out = unique_temp_path("_hrtf_cap.wav");
+    auto [code, output] =
+        exec_command("head -c " + over_cap + " /dev/zero > " + fifo + " & " + CLI + " playback " +
+                     TEST_WAV + " --target headphones --hrtf " + fifo + " -o " + out + " -q 2>&1");
+    CHECK(code == 3);
+    CHECK_THAT(output, ContainsSubstring("byte limit"));
+    std::remove(out.c_str());
+  }
+#endif
+
+  std::remove(fifo.c_str());
+}
 #endif

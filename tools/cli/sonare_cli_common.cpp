@@ -61,14 +61,51 @@ std::vector<int> parse_int_list(const std::string& text) {
       "integer", "--values must contain at least one integer");
 }
 
+// The seek/tell probe only sizes the allocation: it is a snapshot the read
+// cannot rely on, because the file may grow between the two calls and a
+// non-regular input (a FIFO, a character device) has no size to report at all.
+// The cap is therefore enforced on the bytes as they arrive, so nothing past it
+// is ever buffered.
+bool read_binary_file(const std::string& path, std::vector<uint8_t>* out) {
+  const auto reject_oversized = [&path]() {
+    throw std::invalid_argument("input file exceeds " + std::to_string(kMaxCliInputBytes) +
+                                " byte limit: " + path);
+  };
+  std::ifstream file(path, std::ios::binary);
+  if (!file.is_open()) return false;
+  file.seekg(0, std::ios::end);
+  const std::streamoff size = file.tellg();
+  if (size > static_cast<std::streamoff>(kMaxCliInputBytes)) reject_oversized();
+  // An input with no size to probe fails the seek rather than reporting one, and
+  // a failed stream reads nothing. Clearing on both sides of the rewind keeps
+  // such an input readable from where it was opened, which is also the case the
+  // bounded read below exists for.
+  file.clear();
+  file.seekg(0, std::ios::beg);
+  file.clear();
+
+  constexpr size_t kReadChunkBytes = 64u * 1024u;
+  out->clear();
+  if (size > 0) out->reserve(static_cast<size_t>(size));
+  std::vector<char> chunk(kReadChunkBytes);
+  while (file) {
+    file.read(chunk.data(), static_cast<std::streamsize>(chunk.size()));
+    const auto read_bytes = static_cast<size_t>(file.gcount());
+    if (read_bytes == 0) break;
+    // Subtraction rather than addition: the sum of two size_t operands can wrap
+    // where the remaining budget cannot.
+    if (read_bytes > kMaxCliInputBytes - out->size()) reject_oversized();
+    out->insert(out->end(), chunk.data(), chunk.data() + read_bytes);
+  }
+  return true;
+}
+
 std::string read_plain_text_file(const std::string& path) {
-  std::ifstream file(path);
-  if (!file.is_open()) {
+  std::vector<uint8_t> bytes;
+  if (!read_binary_file(path, &bytes)) {
     throw std::invalid_argument("cannot open text file: " + path);
   }
-  std::stringstream buffer;
-  buffer << file.rdbuf();
-  return buffer.str();
+  return std::string(bytes.begin(), bytes.end());
 }
 
 namespace {

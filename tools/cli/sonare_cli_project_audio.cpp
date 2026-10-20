@@ -85,7 +85,7 @@ std::map<uint32_t, std::string> project_audio_source_uris(const std::string& doc
 // What `project align-takes` has to read straight out of the document because
 // the C ABI exposes counts but no per-clip and no per-warp-map getter. Read the
 // same way project_audio_source_uris reads the URIs, and in one pass, since the
-// document may be as large as kMaxProjectOrMidiBytes.
+// document may be as large as kMaxCliInputBytes.
 struct ProjectAlignDocumentFacts {
   // Every source in the document, either kind, so a reference naming a MIDI
   // source is refused differently from one naming nothing.

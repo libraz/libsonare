@@ -202,13 +202,11 @@ void reject_unknown_processor_params(const std::string& processor,
 }  // namespace
 
 std::string read_text_file(const std::string& path) {
-  std::ifstream file(path);
-  if (!file.is_open()) {
+  std::vector<uint8_t> bytes;
+  if (!read_binary_file(path, &bytes)) {
     throw std::invalid_argument("cannot open config file: " + path);
   }
-  std::stringstream buffer;
-  buffer << file.rdbuf();
-  return buffer.str();
+  return std::string(bytes.begin(), bytes.end());
 }
 
 void append_mastering_loudness_summary_json(
