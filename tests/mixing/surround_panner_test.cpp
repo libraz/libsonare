@@ -7,6 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <utility>
 #include <vector>
 
 #include "playback/speaker_geometry.h"
@@ -54,6 +55,29 @@ TEST_CASE("surround panner places point sources at exact speaker azimuths", "[mi
     CHECK_THAT(g.gain[c.plane], WithinAbs(1.0f, 1e-5f));
     for (int plane = 0; plane < 6; ++plane) {
       if (plane != c.plane) CHECK_THAT(g.gain[plane], WithinAbs(0.0f, 1e-5f));
+    }
+  }
+}
+
+TEST_CASE("surround panner gains are never negative and the far speaker is silent at a speaker",
+          "[mixing][surround]") {
+  for (int step = -360; step <= 360; ++step) {
+    SurroundPanParams p;
+    p.azimuth = 0.5f * static_cast<float>(step);
+    CAPTURE(p.azimuth);
+    const SurroundPanGains g = compute_surround_pan_gains(p, ChannelLayout::FivePointOne);
+    for (int plane = 0; plane < g.count; ++plane) CHECK(g.gain[plane] >= 0.0f);
+  }
+  // 5.1 plane order: L(0) R(1) C(2) LFE(3) Ls(4) Rs(5).
+  const std::array<std::pair<float, int>, 5> speakers = {
+      {{-110.0f, 4}, {-30.0f, 0}, {0.0f, 2}, {30.0f, 1}, {110.0f, 5}}};
+  for (const auto& [azimuth, target] : speakers) {
+    SurroundPanParams p;
+    p.azimuth = azimuth;
+    CAPTURE(azimuth);
+    const SurroundPanGains g = compute_surround_pan_gains(p, ChannelLayout::FivePointOne);
+    for (int plane = 0; plane < g.count; ++plane) {
+      if (plane != target && plane != 3) CHECK(g.gain[plane] == 0.0f);
     }
   }
 }

@@ -572,10 +572,11 @@ TEST_CASE("TrackMixerRuntime monitor taps perform no heap allocation after prepa
 
 namespace {
 
-// Streams a DC stereo source through bus 1 and returns the last block's master
-// front-left sample. The first render warms the chain; the guarded one follows.
+// Streams a DC stereo source through bus 1 and returns the last block's sample on master
+// @p plane_index (front left by default). The first render warms the chain; the guarded one
+// follows.
 float render_bus_block(sonare::engine::TrackMixerRuntime& mixer, int master_channels, int block,
-                       size_t* allocations) {
+                       size_t* allocations, int plane_index = 0) {
   std::vector<float> source_l(static_cast<size_t>(block), 0.25f);
   std::vector<float> source_r(static_cast<size_t>(block), -0.125f);
   float* source[] = {source_l.data(), source_r.data()};
@@ -591,7 +592,7 @@ float render_bus_block(sonare::engine::TrackMixerRuntime& mixer, int master_chan
     *allocations = guard.count();
     REQUIRE(ok);
   }
-  return planes[0].back();
+  return planes[static_cast<size_t>(plane_index)].back();
 }
 
 sonare::mixing::api::Bus boosted_bus() {
@@ -632,7 +633,9 @@ TEST_CASE("TrackMixerRuntime bus pan and EQ render performs no heap allocation",
 TEST_CASE("TrackMixerRuntime surround bus EQ renders all eight planes without throwing",
           "[engine][track_mixer][rt][surround]") {
   constexpr int kBlock = 128;
-  const auto front_left = [](const sonare::mixing::api::Bus& bus, size_t* allocations) {
+  // A centred source on a 7.1 bus feeds the centre plane (L R C LFE ...); front left is silent.
+  constexpr int kCentrePlane = 2;
+  const auto centre = [](const sonare::mixing::api::Bus& bus, size_t* allocations) {
     sonare::engine::TrackMixerRuntime mixer;
     mixer.prepare(48000.0, kBlock);
     REQUIRE(mixer.set_buses({{1, 0.0f, sonare::ChannelLayout::SevenPointOne}}));
@@ -640,14 +643,16 @@ TEST_CASE("TrackMixerRuntime surround bus EQ renders all eight planes without th
     lane.output_bus_id = 1;
     REQUIRE(mixer.set_track_lanes({lane}));
     REQUIRE(mixer.set_bus_strip(1, bus));
-    return render_bus_block(mixer, 8, kBlock, allocations);
+    return render_bus_block(mixer, 8, kBlock, allocations, kCentrePlane);
   };
   size_t allocations = 99;
-  const float shaped = front_left(boosted_bus(), &allocations);
+  const float shaped = centre(boosted_bus(), &allocations);
   REQUIRE(allocations == 0);
   sonare::mixing::api::Bus flat;
   flat.id = "1";
-  REQUIRE(front_left(flat, &allocations) != shaped);
+  const float plain = centre(flat, &allocations);
+  REQUIRE(plain != 0.0f);
+  REQUIRE(plain != shaped);
 }
 
 TEST_CASE("TrackMixerRuntime bus EQ configured before prepare renders after it",

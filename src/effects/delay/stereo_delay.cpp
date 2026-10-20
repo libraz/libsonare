@@ -5,6 +5,7 @@
 
 #include "effects/common/control_ranges.h"
 #include "effects/common/field_domain.h"
+#include "rt/pan_law.h"
 #include "rt/param_smoother.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
@@ -19,7 +20,6 @@ using constants::kDegreesPerTurnD;
 
 using common::kLevelFloorDb;
 using common::kMaxFeedback;
-using constants::kPiD;
 using constants::kTwoPiD;
 
 namespace {
@@ -71,12 +71,6 @@ const FieldDomain* find_domain(unsigned int param_id) noexcept {
 
 float config_delay_samples(float delay_ms, double sample_rate) noexcept {
   return delay_ms * 0.001f * static_cast<float>(sample_rate);
-}
-
-/// Left and right gains of a constant-power pan, -1 left to +1 right.
-std::array<float, 2> pan_gains(float pan) noexcept {
-  const double angle = (static_cast<double>(pan) + 1.0) * kPiD * 0.25;
-  return {static_cast<float>(std::cos(angle)), static_cast<float>(std::sin(angle))};
 }
 
 }  // namespace
@@ -144,8 +138,8 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
   const bool tap_on[2] = {config_.tap3_ms > 0.0f, config_.tap4_ms > 0.0f};
   const float tap_level[2] = {db_to_linear(config_.tap3_level_db),
                               db_to_linear(config_.tap4_level_db)};
-  const std::array<float, 2> tap_pan[2] = {pan_gains(config_.tap3_pan),
-                                           pan_gains(config_.tap4_pan)};
+  const rt::PanGains tap_pan[2] = {rt::compute_pan_gains(config_.tap3_pan),
+                                   rt::compute_pan_gains(config_.tap4_pan)};
   const float level_l = db_to_linear(config_.tap1_level_db);
   const float level_r = db_to_linear(config_.tap2_level_db);
   const bool invert_l = config_.invert_l;
@@ -229,8 +223,8 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
       feedback_non_finite_ |= !std::isfinite(tap);
       if (!tap_on[t]) continue;
       const float heard = tap * tap_level[t];
-      heard_l += heard * tap_pan[t][0];
-      heard_r += heard * tap_pan[t][1];
+      heard_l += heard * tap_pan[t].left;
+      heard_r += heard * tap_pan[t].right;
     }
     if (invert_l) heard_l = -heard_l;
     if (invert_r) heard_r = -heard_r;

@@ -82,9 +82,10 @@ SurroundPanGains compute_surround_pan_gains(const SurroundPanParams& params, Cha
       }
     }
   }
-  const float angle = std::clamp(t, 0.0f, 1.0f) * constants::kHalfPi;
-  point[ring[lo_idx].plane] = std::cos(angle);
-  point[ring[hi_idx].plane] = std::sin(angle);
+  // Each speaker reads its own distance from the other, so the far gain is exactly 0 at an end.
+  const float toward_hi = std::clamp(t, 0.0f, 1.0f);
+  point[ring[lo_idx].plane] = std::sin((1.0f - toward_hi) * constants::kHalfPi);
+  point[ring[hi_idx].plane] = std::sin(toward_hi * constants::kHalfPi);
 
   // Equal-front-spread direction (unit power across the front L/C/R speakers).
   std::array<float, kMaxSurroundPlanes> spread{};

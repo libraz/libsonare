@@ -102,6 +102,21 @@ TEST_CASE("taps 3 and 4 arrive at their times, levels and pans and vanish at zer
     CHECK(at(out.right, 20) == Approx(minus_6_db * std::sqrt(0.5f)).margin(1e-5));
   }
 
+  SECTION("a hard-panned tap adds nothing to the far channel") {
+    config.tap4_ms = 0.0f;
+    StereoDelayConfig without_tap = config;
+    without_tap.tap3_ms = 0.0f;
+    const Stereo silent = run(without_tap);
+    for (const float pan : {-1.0f, 1.0f}) {
+      CAPTURE(pan);
+      config.tap3_pan = pan;
+      const Stereo panned = run(config);
+      const std::vector<float>& far = pan > 0.0f ? panned.left : panned.right;
+      const std::vector<float>& reference = pan > 0.0f ? silent.left : silent.right;
+      CHECK(far == reference);
+    }
+  }
+
   SECTION("a tap at zero milliseconds is gone") {
     config.tap3_ms = 0.0f;
     config.tap4_ms = 0.0f;

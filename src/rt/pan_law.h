@@ -89,11 +89,12 @@ inline PanGains raw_pan_gains(float pan, PanLaw law) noexcept {
   switch (law) {
     case PanLaw::Const3dB: {
       const float angle = t * ::sonare::constants::kHalfPi;
-      return {std::cos(angle), std::sin(angle)};
+      // cos(rounded pi/2) is -4.4e-8 at hard right: the far channel is silence, not antiphase.
+      return {std::max(0.0f, std::cos(angle)), std::sin(angle)};
     }
     case PanLaw::Const4p5dB: {
       const float angle = t * ::sonare::constants::kHalfPi;
-      const float constant_left = std::cos(angle);
+      const float constant_left = std::max(0.0f, std::cos(angle));
       const float constant_right = std::sin(angle);
       return {std::sqrt(linear_left * constant_left), std::sqrt(linear_right * constant_right)};
     }

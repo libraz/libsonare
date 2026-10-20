@@ -65,6 +65,28 @@ TEST_CASE("constant-power pan law conserves energy across the pan range", "[mixi
   }
 }
 
+TEST_CASE("pan gains are never negative and the far channel is silent at full pan",
+          "[mixing][pan]") {
+  constexpr std::array<PanNormalization, 3> kAllNormalizations = {
+      PanNormalization::Raw, PanNormalization::CenterUnity, PanNormalization::NearUnity};
+  for (const PanLaw law : kAllLaws) {
+    for (const PanNormalization normalization : kAllNormalizations) {
+      CAPTURE(static_cast<int>(law), static_cast<int>(normalization));
+      for (int i = -2000; i <= 2000; ++i) {
+        const float pan = static_cast<float>(i) / 2000.0f;
+        CAPTURE(pan);
+        const PanGains g = compute_pan_gains(pan, law, normalization);
+        REQUIRE(g.left >= 0.0f);
+        REQUIRE(g.right >= 0.0f);
+      }
+      if (law != PanLaw::Linear0dB) {
+        REQUIRE(compute_pan_gains(1.0f, law, normalization).left == 0.0f);
+        REQUIRE(compute_pan_gains(-1.0f, law, normalization).right == 0.0f);
+      }
+    }
+  }
+}
+
 TEST_CASE("centre-unity normalization is unity at centre for every law", "[mixing][pan]") {
   for (const PanLaw law : kAllLaws) {
     const PanGains g = compute_pan_gains(0.0f, law, PanNormalization::CenterUnity);
