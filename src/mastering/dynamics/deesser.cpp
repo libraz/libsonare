@@ -192,18 +192,10 @@ void DeEsser::update_coefficients(const DeEsserConfig& config) {
   const float w0 = static_cast<float>(2.0 * kPiD * cutoff / sample_rate_);
   filter_coeffs_.c = rt::rbj_bandpass(w0, q);
   for (auto& filter : bandpass_) {
-    const float z1 = filter.z1;
-    const float z2 = filter.z2;
-    filter = filter_coeffs_;
-    filter.z1 = z1;
-    filter.z2 = z2;
+    filter.c = filter_coeffs_.c;
   }
   for (auto& filter : bandpass2_) {
-    const float z1 = filter.z1;
-    const float z2 = filter.z2;
-    filter = filter_coeffs_;
-    filter.z1 = z1;
-    filter.z2 = z2;
+    filter.c = filter_coeffs_.c;
   }
   for (auto& follower : followers_) {
     follower.prepare(sample_rate_, config.attack_ms, config.release_ms);

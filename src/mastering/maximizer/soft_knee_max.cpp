@@ -15,6 +15,13 @@ namespace {
 
 bool valid_non_negative(float ms) noexcept { return std::isfinite(ms) && ms >= 0.0f; }
 
+constexpr float kInnerLookaheadMs = 1.0f;
+
+// The inner maximizer carries no drive (applied here) and the fixed lookahead.
+MaximizerConfig inner_config(const SoftKneeMaxConfig& config) noexcept {
+  return {0.0f, config.ceiling_db, kInnerLookaheadMs, config.release_ms};
+}
+
 }  // namespace
 
 SoftKneeMax::SoftKneeMax(SoftKneeMaxConfig config) : config_(config) { validate_config(config_); }
@@ -23,7 +30,7 @@ void SoftKneeMax::prepare(double sample_rate, int max_block_size) {
   validate_prepare_args(sample_rate, max_block_size);
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
-  maximizer_.set_config({0.0f, config_.ceiling_db, 1.0f, config_.release_ms});
+  maximizer_.set_config(inner_config(config_));
   maximizer_.prepare(sample_rate_, max_block_size_);
   non_finite_substitution_count_.reset();
   prepared_ = true;
@@ -68,12 +75,12 @@ void SoftKneeMax::reset() { maximizer_.reset(); }
 void SoftKneeMax::set_config(const SoftKneeMaxConfig& config) {
   validate_config(config);
   // The maximizer's own refusals, checked before anything is committed.
-  Maximizer::validate_config({0.0f, config.ceiling_db, 1.0f, config.release_ms});
+  Maximizer::validate_config(inner_config(config));
   // Drive and knee are read per block; the maximizer takes the rest and rebuilds
   // only what its own changed fields need.
   rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<SoftKneeMaxConfig>& diff) {
     if (diff.changed(&SoftKneeMaxConfig::ceiling_db, &SoftKneeMaxConfig::release_ms)) {
-      maximizer_.set_config({0.0f, config_.ceiling_db, 1.0f, config_.release_ms});
+      maximizer_.set_config(inner_config(config_));
     }
   });
 }

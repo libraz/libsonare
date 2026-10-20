@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <vector>
 
+#include "mastering/eq/dynamic_detector.h"
 #include "mastering/eq/parametric.h"
 #include "rt/processor_base.h"
 #include "rt/stage_gate.h"
@@ -119,13 +120,9 @@ class DynamicEq : public rt::ProcessorBase {
   // Skip re-applying a band's coefficients when the smoothed gain has not moved
   // by at least this many dB since the last applied value (steady state).
   static constexpr float kGainEpsilonDb = 1.0e-3f;
-  // Maximum per-band detector delay the audio-thread path supports. The
-  // detector-delay rings are preallocated to this many samples (at the
-  // prepare() sample rate) so process()/ensure_detector never allocate; a band
-  // requesting more is clamped to this bound. Unlike the fixed-size limiter
-  // lookahead this mirrors in sizing, this delay is on the detector's input
-  // only -- the audio path itself is never delayed.
-  static constexpr float kMaxDetectorDelayMs = 20.0f;
+  // The detector-delay rings are preallocated to kMaxDetectorDelayMs (at the
+  // prepare() sample rate); a band requesting more is clamped to it. The delay
+  // is on the detector's input only -- the audio path itself is never delayed.
 
   // Persistent per-(band, channel) sidechain detector state. Kept across blocks
   // so the bandpass filter, envelope follower and detector delay all evolve

@@ -30,14 +30,8 @@ bool valid_ceiling_db(float v) noexcept {
   return numeric::finite(linear) && linear > 0.0f;
 }
 
-struct LimiterReleaseCache {
-  float coefficient = 0.0f;
-  bool ready = false;
-};
-
 float update_limiter_sample(float sample, float& gain, float ceiling,
-                            const ParallelCompConfig& config, double sample_rate,
-                            LimiterReleaseCache& release_cache) noexcept {
+                            const ParallelCompConfig& config, float release_coeff) noexcept {
   if (!(ceiling > 0.0f)) return sample;
   const float magnitude = std::abs(sample);
   // Attack is instant; recovery toward the gain this sample needs follows the
@@ -48,12 +42,7 @@ float update_limiter_sample(float sample, float& gain, float ceiling,
   } else if (config.release_ms <= 0.0f) {
     gain = target;
   } else {
-    if (!release_cache.ready) {
-      release_cache.coefficient =
-          std::exp(-1.0f / (0.001f * config.release_ms * static_cast<float>(sample_rate)));
-      release_cache.ready = true;
-    }
-    gain = target - (target - gain) * release_cache.coefficient;
+    gain = target - (target - gain) * release_coeff;
     if (gain > target) gain = target;
   }
   return sample * gain;
@@ -122,7 +111,6 @@ void ParallelComp::process(float* const* channels, int num_channels, int num_sam
   }
 
   const float ceiling = db_to_linear(cfg.output_ceiling_db);
-  LimiterReleaseCache release_cache;
   float max_reduction = 0.0f;
   bool discarded = false;
   if (cfg.linked_detection) {
@@ -143,8 +131,7 @@ void ParallelComp::process(float* const* channels, int num_channels, int num_sam
       if (output_limiter) {
         // Protect every output plane with the same gain, including planes
         // excluded from the compressor detector.
-        update_limiter_sample(output_peak, limiter_gains_[0], ceiling, cfg, sample_rate_,
-                              release_cache);
+        update_limiter_sample(output_peak, limiter_gains_[0], ceiling, cfg, limiter_release_coeff_);
         for (int ch = 0; ch < num_channels; ++ch) {
           channels[ch][i] *= limiter_gains_[0];
         }
@@ -167,7 +154,7 @@ void ParallelComp::process(float* const* channels, int num_channels, int num_sam
         float out = dry * (1.0f - cfg.mix) + compressed * cfg.mix;
         if (output_limiter) {
           out = update_limiter_sample(out, limiter_gains_[static_cast<size_t>(ch)], ceiling, cfg,
-                                      sample_rate_, release_cache);
+                                      limiter_release_coeff_);
         }
         channels[ch][i] = out;
         max_reduction = std::min(max_reduction, reduction_db);
@@ -263,19 +250,17 @@ void ParallelComp::ensure_followers(int num_channels) {
   // Followers are preallocated to kRealtimePreparedChannels in prepare(); never
   // grow the vector on the audio thread (emplace_back would malloc). Reject
   // blocks wider than the prepared state (matches the established pattern).
-  if (followers_.size() >= static_cast<size_t>(num_channels) &&
-      limiter_gains_.size() >= static_cast<size_t>(num_channels)) {
-    return;
-  }
-
-  throw SonareException(ErrorCode::InvalidParameter,
-                        "num_channels exceeds prepared ParallelComp state");
+  require_prepared_channels(num_channels, std::min(followers_.size(), limiter_gains_.size()),
+                            "ParallelComp");
 }
 
 void ParallelComp::update_coefficients(const ParallelCompConfig& config) {
   for (auto& follower : followers_) {
     follower.prepare(sample_rate_, config.attack_ms, config.release_ms);
   }
+  // Float evaluation, not time_to_coefficient's double: keeps the limiter release bit-identical.
+  limiter_release_coeff_ =
+      std::exp(-1.0f / (0.001f * config.release_ms * static_cast<float>(sample_rate_)));
 }
 
 }  // namespace sonare::mastering::dynamics

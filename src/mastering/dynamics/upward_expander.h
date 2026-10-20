@@ -67,7 +67,6 @@ class UpwardExpander : public rt::RtConfigLifecycle<UpwardExpander, UpwardExpand
   ///          from the audio thread when a new configuration snapshot is
   ///          adopted between blocks.
   void update_coefficients(const UpwardExpanderConfig& config);
-  void ensure_channel_capacity(int num_channels);
 
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   bool prepared_ = false;

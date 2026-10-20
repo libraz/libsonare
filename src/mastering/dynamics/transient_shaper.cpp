@@ -197,14 +197,11 @@ void TransientShaper::validate_config(const TransientShaperConfig& config) {
 }
 
 void TransientShaper::ensure_followers(int num_channels) {
-  if (static_cast<size_t>(num_channels) > fast_followers_.size() ||
-      static_cast<size_t>(num_channels) > slow_followers_.size() ||
-      static_cast<size_t>(num_channels) > gain_state_db_.size() ||
-      static_cast<size_t>(num_channels) > lookahead_.size() ||
-      static_cast<size_t>(num_channels) > lookahead_index_.size()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels exceeds prepared TransientShaper state");
-  }
+  require_prepared_channels(
+      num_channels,
+      std::min({fast_followers_.size(), slow_followers_.size(), gain_state_db_.size(),
+                lookahead_.size(), lookahead_index_.size()}),
+      "TransientShaper");
 }
 
 void TransientShaper::update_coefficients(const TransientShaperConfig& config) {

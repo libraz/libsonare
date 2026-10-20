@@ -55,7 +55,7 @@ void UpwardCompressor::process(float* const* channels, int num_channels, int num
   // changes its current() value inside acquire(), and we already called it.
   const UpwardCompressorConfig& cfg = *adopt_snapshot_for_block();
 
-  ensure_channel_capacity(num_channels);
+  require_prepared_channels(num_channels, kRealtimePreparedChannels, "UpwardCompressor");
 
   // Linked detection (mirrors Compressor): one detector envelope drives every channel.
   auto& follower = follower_;
@@ -136,15 +136,6 @@ float UpwardCompressor::gain_db(float input_db, const UpwardCompressorConfig& co
 
 void UpwardCompressor::update_coefficients(const UpwardCompressorConfig& config) {
   follower_.prepare(sample_rate_, config.attack_ms, config.release_ms);
-}
-
-void UpwardCompressor::ensure_channel_capacity(int num_channels) {
-  if (static_cast<size_t>(num_channels) <= kRealtimePreparedChannels) {
-    return;
-  }
-
-  throw SonareException(ErrorCode::InvalidParameter,
-                        "num_channels exceeds prepared UpwardCompressor state");
 }
 
 }  // namespace sonare::mastering::dynamics

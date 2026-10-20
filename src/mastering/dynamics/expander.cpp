@@ -47,7 +47,7 @@ void Expander::process(float* const* channels, int num_channels, int num_samples
     return;
   }
 
-  ensure_channel_capacity(num_channels);
+  require_prepared_channels(num_channels, kRealtimePreparedChannels, "Expander");
 
   // Adopt the latest published configuration once per block. The returned
   // pointer is stable for the entire per-sample loop — RtPublisher only
@@ -129,15 +129,6 @@ float Expander::gain_reduction_db(float input_db, const ExpanderConfig& config) 
   const float below_db = config.threshold_db - input_db;
   const float reduction = below_db * (config.ratio - 1.0f);
   return std::max(config.range_db, -reduction);
-}
-
-void Expander::ensure_channel_capacity(int num_channels) {
-  if (static_cast<size_t>(num_channels) <= kRealtimePreparedChannels) {
-    return;
-  }
-
-  throw SonareException(ErrorCode::InvalidParameter,
-                        "num_channels exceeds prepared Expander state");
 }
 
 void Expander::update_coefficients(const ExpanderConfig& config) {

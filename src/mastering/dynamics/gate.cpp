@@ -59,11 +59,8 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "Gate");
   if (!validate_process_buffers(channels, num_channels, num_samples)) return;
-  if (static_cast<size_t>(num_channels) > hpf_x1_.size() ||
-      static_cast<size_t>(num_channels) > hpf_y1_.size() ||
-      static_cast<size_t>(num_channels) > hpf_channel_gates_.size()) {
-    throw SonareException(ErrorCode::InvalidParameter, "num_channels exceeds prepared Gate state");
-  }
+  require_prepared_channels(
+      num_channels, std::min({hpf_x1_.size(), hpf_y1_.size(), hpf_channel_gates_.size()}), "Gate");
 
   // Adopt the latest published configuration once per block. The returned
   // pointer is stable for the entire per-sample loop — RtPublisher only
@@ -74,8 +71,6 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
     std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
   });
 
-  const float attack = time_to_coefficient(sample_rate_, cfg.attack_ms);
-  const float release = time_to_coefficient(sample_rate_, cfg.release_ms);
   const double hold_samples_value = sample_rate_ * static_cast<double>(cfg.hold_ms) * 0.001;
   const int hold_samples = hold_samples_value > static_cast<double>(std::numeric_limits<int>::max())
                                ? std::numeric_limits<int>::max()
@@ -91,13 +86,15 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
     });
   }
   const float range_gain = db_to_linear(cfg.range_db);
-  last_gain_reduction_db_ = 0.0f;
+  // Metering converts once after the loop. linear_to_db is monotone on positive
+  // gains but floors at kFloorDb for gain <= 0, so the positive minimum and the
+  // floor case are tracked apart to match a per-sample min exactly.
+  float min_positive_gain = std::numeric_limits<float>::infinity();
+  bool saw_non_positive_gain = false;
   for (int i = 0; i < num_samples; ++i) {
     float detector = 0.0f;
     for (int ch = 0; ch < num_channels; ++ch) {
       if (ch == excluded_channel) continue;
-      if (channels[ch] == nullptr)
-        throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
       float s = channels[ch][i];
       if (hpf_admitted[static_cast<size_t>(ch)]) {
         const auto idx = static_cast<size_t>(ch);
@@ -122,12 +119,24 @@ void Gate::process(float* const* channels, int num_channels, int num_samples) {
     // db_to_linear(-inf) underflows for a fully-closed range), producing an
     // unnatural opening. range_db == -inf maps to a linear floor of 0.
     const float target_gain = open ? 1.0f : range_gain;
-    const float c = target_gain > gain_ ? attack : release;
+    const float c = target_gain > gain_ ? attack_coeff_ : release_coeff_;
     gain_ = c * gain_ + (1.0f - c) * target_gain;
     const float gain = gain_;
     for (int ch = 0; ch < num_channels; ++ch) channels[ch][i] *= gain;
-    last_gain_reduction_db_ = std::min(last_gain_reduction_db_, linear_to_db(gain_));
+    if (gain_ > 0.0f) {
+      min_positive_gain = std::min(min_positive_gain, gain_);
+    } else if (gain_ <= 0.0f) {
+      saw_non_positive_gain = true;
+    }
   }
+  float min_reduction_db = 0.0f;
+  if (min_positive_gain != std::numeric_limits<float>::infinity()) {
+    min_reduction_db = std::min(min_reduction_db, linear_to_db(min_positive_gain));
+  }
+  if (saw_non_positive_gain) {
+    min_reduction_db = std::min(min_reduction_db, linear_to_db(0.0f));
+  }
+  last_gain_reduction_db_ = min_reduction_db;
 
   // Every cell carried between blocks, once per block. The gain rests open, at
   // unity.
@@ -215,6 +224,8 @@ void Gate::update_coefficients(const GateConfig& config) {
     hpf_b0_ = 1.0f;
     hpf_a1_ = 0.0f;
   }
+  attack_coeff_ = time_to_coefficient(sample_rate_, config.attack_ms);
+  release_coeff_ = time_to_coefficient(sample_rate_, config.release_ms);
 }
 
 }  // namespace sonare::mastering::dynamics

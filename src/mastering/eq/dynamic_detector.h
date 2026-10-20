@@ -10,6 +10,10 @@
 
 namespace sonare::mastering::eq {
 
+/// Maximum per-band detector delay the detector rings are preallocated for. A
+/// delay past this bound saturates so the audio-thread path never resizes.
+inline constexpr float kMaxDetectorDelayMs = 20.0f;
+
 /// @brief Broadband RMS level of a block, in dB.
 /// @details Root-mean-square over all channels and samples, converted to dB.
 ///          The accumulation is double-precision and the sample count is floored

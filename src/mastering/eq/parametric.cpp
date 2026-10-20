@@ -93,10 +93,7 @@ void ParametricEq::process(float* const* channels, int num_channels, int num_sam
   // Per-channel biquad state is preallocated to kRealtimePreparedChannels in
   // prepare(); never resize on the audio thread. Reject blocks wider than the
   // prepared state (matches the dynamics-processor pattern).
-  if (num_channels_ < num_channels) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels exceeds prepared ParametricEq state");
-  }
+  require_prepared_channels(num_channels, static_cast<size_t>(num_channels_), "ParametricEq");
 
   bool discarded = false;
   for (size_t band_index = 0; band_index < kMaxBands; ++band_index) {

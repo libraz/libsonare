@@ -76,6 +76,7 @@ class ParallelComp : public rt::RtConfigLifecycle<ParallelComp, ParallelCompConf
   rt::StageGate output_limiter_gate_;
   bool last_linked_detection_ = true;
   float last_gain_reduction_db_ = 0.0f;
+  float limiter_release_coeff_ = 0.0f;
 };
 
 }  // namespace sonare::mastering::dynamics

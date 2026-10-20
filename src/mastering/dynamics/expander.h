@@ -57,7 +57,6 @@ class Expander : public rt::RtConfigLifecycle<Expander, ExpanderConfig> {
 
  private:
   static float gain_reduction_db(float input_db, const ExpanderConfig& config);
-  void ensure_channel_capacity(int num_channels);
   /// @brief Recomputes scalar derived coefficients (envelope follower
   ///        attack/release) from @p config. RT-safe: scalar math only, no
   ///        allocation (the envelope follower is a member).

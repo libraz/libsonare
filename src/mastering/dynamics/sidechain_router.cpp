@@ -6,6 +6,7 @@
 #include <memory>
 #include <utility>
 
+#include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "mastering/dynamics/detector_level.h"
 #include "mastering/dynamics/lookahead_validation.h"
@@ -277,12 +278,8 @@ void SidechainRouter::ensure_capacity(int num_channels) const {
   // lines and per-source-channel HPF state are preallocated to
   // kRealtimePreparedChannels in prepare(); a wider block throws instead of
   // allocating (matches Limiter::prepare_buffers).
-  if (static_cast<size_t>(num_channels) <= lookahead_.size() &&
-      static_cast<size_t>(num_channels) <= hpf_x1_.size()) {
-    return;
-  }
-  throw SonareException(ErrorCode::InvalidParameter,
-                        "num_channels exceeds prepared SidechainRouter state");
+  require_prepared_channels(num_channels, std::min(lookahead_.size(), hpf_x1_.size()),
+                            "SidechainRouter");
 }
 
 float SidechainRouter::detector_sample(float* const* channels, int num_channels, int sample,

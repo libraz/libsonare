@@ -288,11 +288,7 @@ void Tape::update_filters(double sample_rate) {
   head_bump_coeffs_.c.a1 = coeffs.a1;
   head_bump_coeffs_.c.a2 = coeffs.a2;
   for (auto& filter : head_bump_) {
-    const float z1 = filter.z1;
-    const float z2 = filter.z2;
-    filter = head_bump_coeffs_;
-    filter.z1 = z1;
-    filter.z2 = z2;
+    filter.c = head_bump_coeffs_.c;
   }
   const float gap_upper = static_cast<float>(sample_rate * 0.45);
   const float gap_lower = std::min(1000.0f, gap_upper);

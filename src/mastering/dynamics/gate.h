@@ -76,6 +76,8 @@ class Gate : public rt::RtConfigLifecycle<Gate, GateConfig> {
   bool gate_open_ = false;
   float hpf_b0_ = 1.0f;
   float hpf_a1_ = 0.0f;
+  float attack_coeff_ = 0.0f;
+  float release_coeff_ = 0.0f;
   rt::StageGate key_hpf_gate_;
   std::vector<rt::StageGate> hpf_channel_gates_;
   std::vector<float> hpf_x1_;

@@ -110,10 +110,7 @@ void CutFilter::process(float* const* channels, int num_channels, int num_sample
   // Per-channel biquad state is preallocated to kRealtimePreparedChannels in
   // prepare(); never resize on the audio thread. Reject blocks wider than the
   // prepared state (matches the ParametricEq/LinearPhaseEq pattern).
-  if (num_channels_ < num_channels) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels exceeds prepared CutFilter state");
-  }
+  require_prepared_channels(num_channels, static_cast<size_t>(num_channels_), "CutFilter");
   admit_sections(high_pass_sections_, high_pass_gates_, high_pass_states_);
   admit_sections(low_pass_sections_, low_pass_gates_, low_pass_states_);
   bool discarded = false;

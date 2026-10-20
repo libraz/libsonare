@@ -108,12 +108,9 @@ void Compressor::process(float* const* channels, int num_channels, int num_sampl
     std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
   });
 
-  if (static_cast<size_t>(num_channels) > hpf_x1_.size() ||
-      static_cast<size_t>(num_channels) > hpf_y1_.size() ||
-      static_cast<size_t>(num_channels) > hpf_channel_gates_.size()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels exceeds prepared Compressor state");
-  }
+  require_prepared_channels(num_channels,
+                            std::min({hpf_x1_.size(), hpf_y1_.size(), hpf_channel_gates_.size()}),
+                            "Compressor");
 
   // Detect a detector-mode change since the previous block. The Rms and LogRms
   // detectors share rms_state_ with different time constants, so a mid-stream

@@ -220,12 +220,7 @@ void VocalRider::ensure_followers(int num_channels) {
   // kRealtimePreparedChannels in prepare(); never resize on the audio thread
   // (assign() would malloc and wipe the running envelope/gain state, producing
   // a click). Reject blocks wider than the prepared state.
-  if (followers_.size() >= static_cast<size_t>(num_channels)) {
-    return;
-  }
-
-  throw SonareException(ErrorCode::InvalidParameter,
-                        "num_channels exceeds prepared VocalRider state");
+  require_prepared_channels(num_channels, followers_.size(), "VocalRider");
 }
 
 void VocalRider::update_coefficients(const VocalRiderConfig& config) {

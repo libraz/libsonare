@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "mastering/eq/dynamic_detector.h"
 #include "mastering/eq/equalizer_spectrum.h"
 #include "mastering/eq/linear_phase.h"
 #include "mastering/eq/parametric.h"
@@ -167,9 +168,6 @@ class EqualizerProcessor : public rt::ProcessorBase {
     size_t look_size = 0;
     size_t look_pos = 0;
   };
-  // Maximum per-band detector delay the detector ring is preallocated for. A
-  // delay past this bound saturates so the audio-thread path never resizes.
-  static constexpr float kMaxDetectorDelayMs = 20.0f;
   // @p excluded_channel (-1 for none) contributes to neither sum nor count.
   float band_detector_db(size_t band_index, const float* const* channels, int num_channels,
                          int num_samples, int excluded_channel, double sample_rate,

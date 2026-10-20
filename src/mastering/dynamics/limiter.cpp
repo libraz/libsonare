@@ -137,12 +137,9 @@ void Limiter::process(float* const* channels, int num_channels, int num_samples)
     min_gain = std::min(min_gain, gain);
   }
 
-  // The detector cannot reach this cell -- a non-finite peak is dropped by the
-  // fold above -- but release_coeff_ can: validate_config checks finiteness of
-  // threshold_db only, and a non-finite release_ms passes its ordered comparison
-  // and makes the coefficient non-finite, which the smoother multiplies into its
-  // own state. Bounding that to one block is not a repair of it; the coefficient
-  // stays non-finite and poisons the next block's first sample.
+  // Neither the detector (a non-finite peak is dropped by the fold above) nor
+  // release_coeff_ (validate_config requires finite timing) should reach this
+  // cell; the smoother is recursive, so a stray non-finite is bounded to one block.
   if (gain_smoother_.discard_if_non_finite()) note_non_finite_discard();
 
   last_gain_reduction_db_ = std::min(0.0f, linear_to_db(min_gain));
@@ -268,11 +265,7 @@ void Limiter::prepare_buffers(int num_channels) {
   // kRealtimePreparedChannels in prepare(). Never resize on the audio thread;
   // reject blocks wider than the prepared state (matches the established
   // dynamics-processor pattern).
-  if (lookahead_.size() >= static_cast<size_t>(num_channels)) {
-    return;
-  }
-
-  throw SonareException(ErrorCode::InvalidParameter, "num_channels exceeds prepared Limiter state");
+  require_prepared_channels(num_channels, lookahead_.size(), "Limiter");
 }
 
 void Limiter::update_coefficients(const LimiterConfig& config) {
