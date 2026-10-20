@@ -25,7 +25,7 @@ namespace {
 /// @brief Maximum number of cached FFT plans per thread.
 constexpr size_t kMaxFrameFftCacheSize = 8;
 
-/// @brief Thread-local FFT plans for the single-frame path, keyed on n_fft.
+/// @brief Thread-local FFT plans for the whole-signal and single-frame paths, keyed on n_fft.
 /// @details FFT::forward writes backend scratch, so an instance may not be shared
 ///          across threads; thread_local storage is what makes the reuse legal.
 thread_local std::map<int, std::unique_ptr<FFT>> g_frame_fft_cache;
@@ -125,7 +125,7 @@ SpectrumResult spectrum(const Audio& audio, const SpectrumConfig& config) {
   std::vector<float> frame(n_fft, 0.0f);
   std::vector<std::complex<float>> bins(n_bins);
   std::vector<double> power_accum(static_cast<size_t>(n_bins), 0.0);
-  FFT fft(config.n_fft);
+  FFT& fft = get_frame_fft_cached(config.n_fft);
 
   // Every full frame divides by the same coherent gain, so the sum over the
   // whole window is taken once here; only the zero-padded tail frame, which
