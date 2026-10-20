@@ -410,6 +410,7 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
     return;
   }
   bool non_finite = false;
+  bool discarded = false;
   for (int i = 0; i < num_samples; ++i) {
     const rt::GainPairGlide::Pair mix = mix_glide_.advance(target);
     // A voice at unity ratio reads one fixed tap instead of a drifting grain.
@@ -428,6 +429,7 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
           // The sections are recursive: one non-finite input would stay in them for good.
           for (auto& section : anti_alias_[c]) section.reset();
           written = 0.0f;
+          discarded = true;
         }
       }
       buffers_[c][static_cast<size_t>(write_pos_[c])] = written;
@@ -453,6 +455,7 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
   }
   // A non-finite sample would otherwise circulate through the feedback path forever.
   if (non_finite) reset();
+  if (non_finite || discarded) note_non_finite_discard();
 }
 
 bool PitchShifter::set_parameter_impl(unsigned int param_id, float value) {
