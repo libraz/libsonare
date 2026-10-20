@@ -14,6 +14,15 @@ int clamp_integer_delay(int delay_samples) noexcept {
   return std::min(std::max(0, delay_samples), kMaxAlignmentDelaySamples);
 }
 
+int clamp_delay_q8(int delay_samples_q8) noexcept {
+  return std::min(std::max(0, delay_samples_q8), kMaxAlignmentDelaySamples << 8);
+}
+
+// A whole-sample delay never uses the fractional path, whatever mode was asked for.
+FractionalDelayMode effective_mode(int delay_samples_q8, FractionalDelayMode mode) noexcept {
+  return (delay_samples_q8 & 0xff) == 0 ? FractionalDelayMode::None : mode;
+}
+
 }  // namespace
 
 AlignmentDelay::AlignmentDelay(int delay_samples)
@@ -130,9 +139,9 @@ void AlignmentDelay::set_delay_samples(int delay_samples) {
 }
 
 void AlignmentDelay::set_delay_samples_q8(int delay_samples_q8, FractionalDelayMode mode) {
-  delay_samples_q8_ = std::min(std::max(0, delay_samples_q8), kMaxAlignmentDelaySamples << 8);
+  delay_samples_q8_ = clamp_delay_q8(delay_samples_q8);
   delay_samples_ = delay_samples_q8_ >> 8;
-  fractional_mode_ = (delay_samples_q8_ & 0xff) == 0 ? FractionalDelayMode::None : mode;
+  fractional_mode_ = effective_mode(delay_samples_q8_, mode);
   prepare_storage();
 }
 
@@ -158,37 +167,23 @@ bool AlignmentDelay::try_set_delay_samples_q8(int delay_samples_q8,
 bool AlignmentDelay::prepare_update(int delay_samples_q8, FractionalDelayMode mode,
                                     PreparedUpdate& out) const noexcept {
   PreparedUpdate next;
-  next.delay_samples_q8 = std::min(std::max(0, delay_samples_q8), kMaxAlignmentDelaySamples << 8);
+  next.delay_samples_q8 = clamp_delay_q8(delay_samples_q8);
   next.delay_samples = next.delay_samples_q8 >> 8;
-  next.fractional_mode = (next.delay_samples_q8 & 0xff) == 0 ? FractionalDelayMode::None : mode;
+  next.fractional_mode = effective_mode(next.delay_samples_q8, mode);
   next.prepared_channels = prepared_channels_;
-  next.integer_delay = static_cast<size_t>(next.delay_samples);
-  if (next.fractional_mode != FractionalDelayMode::None && (next.delay_samples_q8 & 0xff) != 0) {
-    next.fractional_size = static_cast<size_t>(std::max(8, (next.delay_samples_q8 >> 8) + 8));
-  }
+  const StorageSpec want =
+      spec_for(next.delay_samples_q8, next.fractional_mode, prepared_channels_);
+  next.integer_delay = want.integer_delay;
+  next.fractional_size = want.fractional_size;
 
-  const StorageSpec want{next.prepared_channels, next.integer_delay, next.fractional_size};
-  const bool same_shape =
-      want == storage_ && delays_.size() == static_cast<size_t>(want.channels) &&
-      fractional_.size() == (want.fractional_size == 0 ? 0u : static_cast<size_t>(want.channels));
-  if (same_shape) {
+  if (holds_shape(want)) {
     next.replace_storage = false;
     out = std::move(next);
     return true;
   }
 
   try {
-    next.delays.resize(static_cast<size_t>(want.channels));
-    for (rt::DelayLine& delay : next.delays) {
-      delay.prepare(want.integer_delay);
-    }
-    if (want.fractional_size != 0) {
-      next.fractional.assign(static_cast<size_t>(want.channels), FractionalState{});
-      for (FractionalState& state : next.fractional) {
-        state.buffer.assign(want.fractional_size, 0.0f);
-        state.write_index = 0;
-      }
-    }
+    build_storage(want, next.delays, next.fractional);
   } catch (...) {
     return false;
   }
@@ -209,16 +204,37 @@ void AlignmentDelay::commit_update(PreparedUpdate& update) noexcept {
   fractional_mode_ = update.fractional_mode;
 }
 
-AlignmentDelay::StorageSpec AlignmentDelay::required_storage() const noexcept {
+AlignmentDelay::StorageSpec AlignmentDelay::spec_for(int delay_samples_q8, FractionalDelayMode mode,
+                                                     int channels) noexcept {
   StorageSpec spec;
-  spec.channels = prepared_channels_;
-  spec.integer_delay = static_cast<size_t>(delay_samples_);
-  if (fractional_mode_ == FractionalDelayMode::None || (delay_samples_q8_ & 0xff) == 0) {
+  spec.channels = channels;
+  spec.integer_delay = static_cast<size_t>(delay_samples_q8 >> 8);
+  if (mode == FractionalDelayMode::None || (delay_samples_q8 & 0xff) == 0) {
     return spec;
   }
-  const int integer_delay = delay_samples_q8_ >> 8;
-  spec.fractional_size = static_cast<size_t>(std::max(8, integer_delay + 8));
+  spec.fractional_size = static_cast<size_t>(std::max(8, (delay_samples_q8 >> 8) + 8));
   return spec;
+}
+
+void AlignmentDelay::build_storage(const StorageSpec& spec, std::vector<rt::DelayLine>& delays,
+                                   std::vector<FractionalState>& fractional) {
+  delays.resize(static_cast<size_t>(spec.channels));
+  for (rt::DelayLine& delay : delays) {
+    delay.prepare(spec.integer_delay);
+  }
+  if (spec.fractional_size != 0) {
+    fractional.assign(static_cast<size_t>(spec.channels), FractionalState{});
+    for (FractionalState& state : fractional) {
+      state.buffer.assign(spec.fractional_size, 0.0f);
+      state.write_index = 0;
+    }
+  }
+}
+
+bool AlignmentDelay::holds_shape(const StorageSpec& spec) const noexcept {
+  return spec == storage_ && delays_.size() == static_cast<size_t>(spec.channels) &&
+         fractional_.size() ==
+             (spec.fractional_size == 0 ? 0u : static_cast<size_t>(spec.channels));
 }
 
 void AlignmentDelay::prepare_storage() {
@@ -226,33 +242,21 @@ void AlignmentDelay::prepare_storage() {
     return;
   }
 
-  const StorageSpec want = required_storage();
+  const StorageSpec want = spec_for(delay_samples_q8_, fractional_mode_, prepared_channels_);
   // The single point every mutator funnels through. When the storage a
   // configuration needs is the shape already held, the delay lines and their
   // history are left exactly as they are -- so re-applying an unchanged
   // alignment (which the mixer does on every unrelated strip edit) costs
   // nothing and drops no audio. A caller cannot opt out of this.
-  const size_t want_fractional_rows =
-      want.fractional_size == 0 ? 0u : static_cast<size_t>(want.channels);
-  if (want == storage_ && delays_.size() == static_cast<size_t>(want.channels) &&
-      fractional_.size() == want_fractional_rows) {
+  if (holds_shape(want)) {
     return;
   }
 
   // Build the replacements first, commit by swapping: a caller that catches the
   // allocation failure finds the bank exactly as it was.
-  std::vector<rt::DelayLine> next_delays(static_cast<size_t>(want.channels));
-  for (rt::DelayLine& delay : next_delays) {
-    delay.prepare(want.integer_delay);
-  }
+  std::vector<rt::DelayLine> next_delays;
   std::vector<FractionalState> next_fractional;
-  if (want.fractional_size != 0) {
-    next_fractional.assign(static_cast<size_t>(want.channels), FractionalState{});
-    for (FractionalState& state : next_fractional) {
-      state.buffer.assign(want.fractional_size, 0.0f);
-      state.write_index = 0;
-    }
-  }
+  build_storage(want, next_delays, next_fractional);
 
   delays_.swap(next_delays);
   fractional_.swap(next_fractional);

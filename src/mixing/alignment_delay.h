@@ -199,7 +199,14 @@ class AlignmentDelay : public rt::ProcessorBase {
     }
   };
 
-  StorageSpec required_storage() const noexcept;
+  /// The storage a clamped Q8 delay and its effective fractional mode need on @p channels.
+  static StorageSpec spec_for(int delay_samples_q8, FractionalDelayMode mode,
+                              int channels) noexcept;
+  /// Builds fresh, zeroed replacement storage of shape @p spec; throws on allocation failure.
+  static void build_storage(const StorageSpec& spec, std::vector<rt::DelayLine>& delays,
+                            std::vector<FractionalState>& fractional);
+  /// True when the held storage already has shape @p spec.
+  bool holds_shape(const StorageSpec& spec) const noexcept;
   void prepare_storage();
   void note_channel_overflow(int num_channels) noexcept;
   float process_fractional(FractionalState& state, float input) const noexcept;
