@@ -62,8 +62,8 @@ Audio dither_interleaved(const Audio& audio, std::size_t channel_count,
 
 /// @brief Dithers and quantizes @p audio to @c config.target_bits.
 /// @details A separate @ref bit_depth pass over the result is a no-op: the
-///          samples are already on that grid. @ref output_chain runs both so a
-///          @c None dither still reaches the target word length.
+///          samples are already on that grid. @ref output_chain therefore runs
+///          this stage alone, and @ref bit_depth alone for a @c None dither.
 /// @param[out] non_finite_samples Optional count of input samples that were not
 ///        finite. Each leaves as silence, which is in range and free of any
 ///        error, so this count is the only thing that distinguishes such a

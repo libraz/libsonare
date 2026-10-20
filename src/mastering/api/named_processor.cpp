@@ -620,14 +620,13 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     apply_per_channel(channels, sample_rate, [&](const Audio& audio, int channel_index) {
       // Decorrelate the dither noise across stereo channels (no-op for the left
       // channel, channel_index 0). output_chain() applies the default
-      // DitherConfig seed to both channels, so replicate its dither + bit-depth
-      // steps here with a per-channel seed instead of routing through
-      // output_chain() directly.
+      // DitherConfig seed to every channel, so run the dither and bit-depth
+      // stages here with a per-channel seed instead of routing through it.
       dither_config.seed =
           final::dither_channel_seed(base_seed, static_cast<size_t>(channel_index));
-      // Both steps are counted, as output_chain() itself sums them: the dither
-      // step substitutes first, so the bit-depth step sees a finite input and
-      // contributes only where dither is bypassed.
+      // Both steps are counted: the dither step substitutes first, so the
+      // bit-depth step sees a finite input and contributes only where dither is
+      // bypassed.
       std::size_t dither_non_finite = 0;
       std::size_t bit_depth_non_finite = 0;
       Audio out = final::bit_depth(final::dither(audio, dither_config, &dither_non_finite),
