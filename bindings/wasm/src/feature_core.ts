@@ -103,6 +103,30 @@ export function clicks(
   );
 }
 
+export interface FramesToTimeRequest {
+  frames: number;
+  sr?: number;
+  hopLength?: number;
+}
+
+export interface TimeToFramesRequest {
+  time: number;
+  sr?: number;
+  hopLength?: number;
+}
+
+export interface FramesToSamplesRequest {
+  frames: number;
+  hopLength?: number;
+  nFft?: number;
+}
+
+export interface SamplesToFramesRequest {
+  samples: number;
+  hopLength?: number;
+  nFft?: number;
+}
+
 export interface DbConversionRequest {
   values: Float32Array;
   ref?: number;
@@ -399,7 +423,17 @@ export function noteToHz(note: string): number {
  * @param hopLength - Hop length in samples (default: 512)
  * @returns Time in seconds
  */
-export function framesToTime(frames: number, sr = 22050, hopLength = 512): number {
+export function framesToTime(request: FramesToTimeRequest): number;
+export function framesToTime(frames: number, sr?: number, hopLength?: number): number;
+export function framesToTime(
+  frames: number | FramesToTimeRequest,
+  sr = 22050,
+  hopLength = 512,
+): number {
+  if (typeof frames === 'object' && frames !== null) {
+    requestObject('framesToTime', frames, 'request', true);
+    return framesToTime(frames.frames, frames.sr, frames.hopLength);
+  }
   assertNumber('framesToTime', frames, 'frames');
   assertNumber('framesToTime', sr, 'sr');
   assertPositiveInteger('framesToTime', hopLength, 'hopLength');
@@ -414,21 +448,51 @@ export function framesToTime(frames: number, sr = 22050, hopLength = 512): numbe
  * @param hopLength - Hop length in samples (default: 512)
  * @returns Frame index
  */
-export function timeToFrames(time: number, sr = 22050, hopLength = 512): number {
+export function timeToFrames(request: TimeToFramesRequest): number;
+export function timeToFrames(time: number, sr?: number, hopLength?: number): number;
+export function timeToFrames(
+  time: number | TimeToFramesRequest,
+  sr = 22050,
+  hopLength = 512,
+): number {
+  if (typeof time === 'object' && time !== null) {
+    requestObject('timeToFrames', time, 'request', true);
+    return timeToFrames(time.time, time.sr, time.hopLength);
+  }
   assertNumber('timeToFrames', time, 'time');
   assertNumber('timeToFrames', sr, 'sr');
   assertPositiveInteger('timeToFrames', hopLength, 'hopLength');
   return requireModule().timeToFrames(time, sr, hopLength);
 }
 
-export function framesToSamples(frames: number, hopLength = 512, nFft = 0): number {
+export function framesToSamples(request: FramesToSamplesRequest): number;
+export function framesToSamples(frames: number, hopLength?: number, nFft?: number): number;
+export function framesToSamples(
+  frames: number | FramesToSamplesRequest,
+  hopLength = 512,
+  nFft = 0,
+): number {
+  if (typeof frames === 'object' && frames !== null) {
+    requestObject('framesToSamples', frames, 'request', true);
+    return framesToSamples(frames.frames, frames.hopLength, frames.nFft);
+  }
   assertNumber('framesToSamples', frames, 'frames');
   assertNumber('framesToSamples', hopLength, 'hopLength');
   assertNumber('framesToSamples', nFft, 'nFft');
   return requireModule().framesToSamples(frames, hopLength, nFft);
 }
 
-export function samplesToFrames(samples: number, hopLength = 512, nFft = 0): number {
+export function samplesToFrames(request: SamplesToFramesRequest): number;
+export function samplesToFrames(samples: number, hopLength?: number, nFft?: number): number;
+export function samplesToFrames(
+  samples: number | SamplesToFramesRequest,
+  hopLength = 512,
+  nFft = 0,
+): number {
+  if (typeof samples === 'object' && samples !== null) {
+    requestObject('samplesToFrames', samples, 'request', true);
+    return samplesToFrames(samples.samples, samples.hopLength, samples.nFft);
+  }
   assertNumber('samplesToFrames', samples, 'samples');
   assertNumber('samplesToFrames', hopLength, 'hopLength');
   assertNumber('samplesToFrames', nFft, 'nFft');

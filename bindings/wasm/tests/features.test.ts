@@ -11,6 +11,7 @@ import {
   chroma,
   detectOnsets,
   ErrorCode,
+  framesToSamples,
   framesToTime,
   griffinLim,
   harmonic,
@@ -37,6 +38,7 @@ import {
   resample,
   rmsEnergy,
   SonareError,
+  samplesToFrames,
   segmentAgglomerative,
   segmentCrossSimilarity,
   segmentLagToRecurrence,
@@ -239,6 +241,27 @@ describe('Feature API precision (reference compatibility)', () => {
     it('should convert MIDI to Hz accurately', () => {
       expect(withinRel(midiToHz(69), 440.0, 1e-4)).toBe(true);
       expect(withinRel(midiToHz(60), 261.6255653, 1e-4)).toBe(true);
+    });
+
+    it('frame, time and sample conversions answer a request object as their positional form', () => {
+      expect(framesToTime({ frames: 8, sr: 44100, hopLength: 128 })).toBe(
+        framesToTime(8, 44100, 128),
+      );
+      expect(framesToTime({ frames: 8 })).toBe(framesToTime(8));
+      expect(timeToFrames({ time: 0.5, sr: 44100, hopLength: 128 })).toBe(
+        timeToFrames(0.5, 44100, 128),
+      );
+      expect(timeToFrames({ time: 0.5 })).toBe(timeToFrames(0.5));
+      expect(framesToSamples({ frames: 8, hopLength: 128, nFft: 512 })).toBe(
+        framesToSamples(8, 128, 512),
+      );
+      expect(framesToSamples({ frames: 8 })).toBe(framesToSamples(8));
+      expect(samplesToFrames({ samples: 4096, hopLength: 128, nFft: 512 })).toBe(
+        samplesToFrames(4096, 128, 512),
+      );
+      expect(samplesToFrames({ samples: 4096 })).toBe(samplesToFrames(4096));
+      expect(() => framesToTime({ frames: 1, hopLength: 0 })).toThrow(RangeError);
+      expect(() => timeToFrames({ time: '1' as unknown as number })).toThrow(TypeError);
     });
   });
 

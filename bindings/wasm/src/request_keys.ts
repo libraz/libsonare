@@ -37,14 +37,18 @@ import type {
   FixFramesRequest,
   FixLengthRequest,
   FrameSignalRequest,
+  FramesToSamplesRequest,
+  FramesToTimeRequest,
   OnsetBacktrackRequest,
   PadCenterRequest,
   PcenRequest,
   PeakPickRequest,
   PlpRequest,
+  SamplesToFramesRequest,
   SilenceRequest,
   SplitSilenceCommonRequest,
   TempogramRequest,
+  TimeToFramesRequest,
   ToneRequest,
   TonnetzRequest,
   VectorNormalizeRequest,
@@ -290,6 +294,18 @@ const AlignTakeToReferenceRequestKeys = keysOf<AlignTakeToReferenceRequest>()([
   'binsPerOctave',
 ]);
 const DbConversionRequestKeys = keysOf<DbConversionRequest>()(['values', 'ref', 'amin', 'topDb']);
+const FramesToTimeRequestKeys = keysOf<FramesToTimeRequest>()(['frames', 'sr', 'hopLength']);
+const TimeToFramesRequestKeys = keysOf<TimeToFramesRequest>()(['time', 'sr', 'hopLength']);
+const FramesToSamplesRequestKeys = keysOf<FramesToSamplesRequest>()([
+  'frames',
+  'hopLength',
+  'nFft',
+]);
+const SamplesToFramesRequestKeys = keysOf<SamplesToFramesRequest>()([
+  'samples',
+  'hopLength',
+  'nFft',
+]);
 const MusicAnalyzeRequestKeys = keysOf<MusicAnalyzeRequest>()([
   'samples',
   'sampleRate',
@@ -2275,6 +2291,8 @@ export const REQUEST_SHAPES: Readonly<Record<string, RequestShape>> = {
   fixLength: { keys: FixLengthRequestKeys },
   fourierTempogram: { keys: FourierTempogramRequestKeys },
   frameSignal: { keys: FrameSignalRequestKeys },
+  framesToSamples: { keys: FramesToSamplesRequestKeys },
+  framesToTime: { keys: FramesToTimeRequestKeys },
   griffinLim: { keys: GriffinLimRequestKeys },
   harmonic: { keys: HarmonicRequestKeys },
   hpss: { keys: HpssRequestKeys },
@@ -2440,6 +2458,7 @@ export const REQUEST_SHAPES: Readonly<Record<string, RequestShape>> = {
   },
   roomMorph: { keys: RoomMorphRequestKeys },
   roomMorphStereo: { keys: RoomMorphStereoRequestKeys },
+  samplesToFrames: { keys: SamplesToFramesRequestKeys },
   segmentAgglomerative: { keys: SegmentAgglomerativeRequestKeys },
   segmentCrossSimilarity: { keys: SegmentCrossSimilarityRequestKeys },
   segmentLagToRecurrence: { keys: SegmentLagToRecurrenceRequestKeys },
@@ -2480,6 +2499,7 @@ export const REQUEST_SHAPES: Readonly<Record<string, RequestShape>> = {
   synthesizeRir: { keys: RirSynthOptionsKeys },
   tempogram: { keys: TempogramRequestKeys },
   tempogramRatio: { keys: TempogramRatioRequestKeys },
+  timeToFrames: { keys: TimeToFramesRequestKeys },
   timeStretch: { keys: TimeStretchRequestKeys },
   tone: { keys: ToneRequestKeys },
   tonnetz: { keys: TonnetzRequestKeys },

@@ -567,6 +567,38 @@ const ROWS: Row[] = [
   },
 
   {
+    name: 'framesToTime',
+    fn: sonare.framesToTime,
+    params: 'frames sr? hopLength?',
+    values: { frames: 37, sr: ALT_SR, hopLength: 300 },
+    invalid: { hopLength: 0 },
+  },
+
+  {
+    name: 'timeToFrames',
+    fn: sonare.timeToFrames,
+    params: 'time sr? hopLength?',
+    values: { time: 1.7, sr: ALT_SR, hopLength: 300 },
+    invalid: { hopLength: 0 },
+  },
+
+  {
+    name: 'framesToSamples',
+    fn: sonare.framesToSamples,
+    params: 'frames hopLength? nFft?',
+    values: { frames: 37, hopLength: 300, nFft: 4096 },
+    invalid: { hopLength: 1.5 },
+  },
+
+  {
+    name: 'samplesToFrames',
+    fn: sonare.samplesToFrames,
+    params: 'samples hopLength? nFft?',
+    values: { samples: 100000, hopLength: 300, nFft: 4096 },
+    invalid: { hopLength: 1.5 },
+  },
+
+  {
     name: 'onsetBacktrack',
     fn: sonare.onsetBacktrack,
     params: 'events energy',
