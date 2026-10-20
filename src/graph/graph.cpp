@@ -192,12 +192,10 @@ bool Graph::compile() {
         static_cast<int>(connection_index));
   }
   // Group each node's incoming edges by destination port (stable, so insertion
-  // order is preserved within a port). process_block() then treats the first
-  // edge into each port as an overwrite and the rest as adds, making the mixed
-  // result a port-wise sum that is independent of connection insertion order
-  // (it previously depended on it: a Replace edge processed after an Add wiped
-  // the accumulated contribution). The first-edge overwrite also clears any
-  // stale buffer contents from the previous block.
+  // order is preserved within a port). process_block() then has the first edge
+  // into each port overwrite it, which also clears the previous block's
+  // contents; a later Add edge accumulates and a later Replace edge overwrites
+  // what the edges before it left, so only an all-Add port is order-independent.
   for (std::vector<int>& edges : incoming_by_topo_) {
     insertion_sort(edges.begin(), edges.end(), [this](int lhs, int rhs) {
       return connections_[static_cast<size_t>(lhs)].dest_port <

@@ -149,8 +149,10 @@ class InstrumentSourceRenderSink {
 ///   @c set_mixing_enabled, @c set_monitoring_enabled (atomic flags),
 ///   @c set_param_smoothing_ms, @c set_graph_latency_samples_q8,
 ///   @c transport, @c automation accessors, all @c *_count noexcept getters.
-/// - **Control-thread seqlock publishers (single writer):** @c set_capture_*
-///   and @c reset_capture. Noexcept, allocation-free and safe alongside
+/// - **Control-thread seqlock publishers (single writer):** @c set_capture_*,
+///   @c reset_capture, @c set_instrument_controller_profile and
+///   @c set_instrument_articulation (the instrument adopts the edit at the next
+///   block; their read-backs answer the control copy). Noexcept, allocation-free and safe alongside
 ///   @c process (the audio thread is the torn-free reader), but sole-writer, so
 ///   never from the audio thread.
 /// - **Control-thread-preferred (lock-free but NOT torn-read-safe):**
@@ -322,7 +324,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   ///        blocks, because each call restarts the block grid at its own frame 0
   ///        and freezes the clip / automation snapshots once per block — a chunk
   ///        ending mid-block shifts every later boundary. Audio stays continuous
-  ///        either way; only bit-identity is lost.
+  ///        either way; only bit-identity is lost. A @p total_frames of 0 renders
+  ///        nothing and, when finalizing, only ends the timeline.
   void render_offline(float* const* out, int num_channels, int64_t total_frames, int block_size,
                       bool finalize = true);
 
@@ -342,6 +345,19 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// device will get and the notes otherwise hang outside the engine.
   void finish_offline_render() noexcept;
 
+  /// @brief Renders @p total_frames from the playhead aligned to the timeline.
+  /// @details Renders the latency of the layers being rendered ahead of the span
+  ///          and drops it, so output frame 0 holds the playhead's timeline sample:
+  ///          the reported latency, or only the source layer's share (instrument
+  ///          PDC plus the track mixer) during a freeze. Finalizes like a one-shot
+  ///          render_offline(), and advances the transport by the span plus that
+  ///          latency (whole samples; a fractional remainder stays in the output).
+  ///          Streamed clip pages are needed for the span only: a read past it
+  ///          feeds audio the trim drops, so its miss is not refused.
+  /// @throws SonareException for an empty shape and the shapes render_offline() refuses.
+  std::vector<std::vector<float>> render_offline_aligned(int num_channels, int64_t total_frames,
+                                                         int block_size);
+
   /// @brief Freezes the source layer: renders it offline and installs the result
   ///        as the engine's only clip.
   /// @details The render covers every audio clip and hosted MIDI instrument through
@@ -352,6 +368,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   ///          whole clip set and every MIDI clip is withdrawn, so no source sounds
   ///          twice; live MIDI input still reaches the instruments. Renders from
   ///          the current playhead like render_offline() and has its thread rules.
+  ///          The clip holds the span timeline-aligned (see render_offline_aligned),
+  ///          because replay passes it through the source layer's latency again.
   /// @return The installed clip (id @p clip_id, or 1 when it is 0); its storage
   ///         owns the frozen audio.
   /// @throws SonareException for the shapes render_offline() refuses.
@@ -513,6 +531,10 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// bindings, so it presumes the instruments it was staged for are still bound.
   void publish_midi_clips(PreparedMidiClips&& prepared);
   size_t midi_clip_count() const noexcept { return midi_sequencer_.clip_count(); }
+  /// Installs @p chain on @p destination_id. Its frame-denominated lengths (grid,
+  /// arpeggiator step and gate, humanize) are in the PPQ-scaled domain
+  /// (ppq * midi::kMidiFxPpqScale): the sequencer converts each event through the
+  /// active tempo map, so a length keeps its musical value at every tempo and rate.
   bool set_midi_fx(uint32_t destination_id, const midi::MidiFxChain& chain) noexcept;
   void clear_midi_fx(uint32_t destination_id) noexcept;
   void set_midi_input_source(host::MidiInputSource* source, uint32_t destination_id = 0) noexcept {
@@ -666,6 +688,25 @@ class RealtimeEngine : private ClipPageRequestSink {
     return instrument_rack_.get(destination_id);
   }
   size_t midi_instrument_count() const noexcept { return instrument_rack_.size(); }
+  /// Outcome of an instrument control call: it took, nothing is bound to the
+  /// destination, or the bound instrument has no such control.
+  enum class InstrumentControlStatus : uint8_t { kOk, kNoInstrument, kNotSupported };
+  /// CONTROL thread, safe alongside process(): installs @p profile on the
+  /// instrument bound to @p destination_id, adopted at the next block. The
+  /// control thread never writes the instrument's voice or channel state.
+  InstrumentControlStatus set_instrument_controller_profile(
+      uint32_t destination_id, const midi::ControllerProfile& profile) noexcept;
+  /// CONTROL thread, safe alongside process(): the profile last installed,
+  /// including one the audio thread has not adopted yet.
+  InstrumentControlStatus instrument_controller_profile(
+      uint32_t destination_id, midi::ControllerProfile* out) const noexcept;
+  /// CONTROL thread, safe alongside process(): sets @p channel's articulation
+  /// (0..15) on the instrument bound to @p destination_id, adopted at the next block.
+  InstrumentControlStatus set_instrument_articulation(uint32_t destination_id, uint8_t channel,
+                                                      midi::ArticulationMode mode) noexcept;
+  /// CONTROL thread, safe alongside process(): the articulation last set on @p channel.
+  InstrumentControlStatus instrument_articulation(uint32_t destination_id, uint8_t channel,
+                                                  midi::ArticulationMode* out) const noexcept;
   /// CONTROL thread / offline only: directs source-aware instrument buffers to
   /// @p sink instead of the live lane mixer.
   void set_instrument_source_render_sink(InstrumentSourceRenderSink* sink) noexcept {
@@ -1084,6 +1125,38 @@ class RealtimeEngine : private ClipPageRequestSink {
   // unbind). The destination's reserved ids stay valid; only the in-flight
   // smoothers are dropped.
   void release_instrument_automations(uint32_t destination_id) noexcept;
+
+  // Controller profile and articulation of one bound instrument, handed to the
+  // audio thread whole. A serial moves when its half carries a new edit.
+  struct InstrumentControlState {
+    midi::MidiInstrument* instrument = nullptr;
+    uint32_t profile_serial = 0;
+    uint32_t articulation_serial = 0;
+    midi::ControllerProfile profile{};
+    std::array<midi::ArticulationMode, 16> articulation{};
+  };
+  struct InstrumentControlSlot {
+    // CONTROL thread: what the host installed, and which controls the instrument has.
+    uint32_t destination_id = 0;
+    bool has_profile = false;
+    bool has_articulation = false;
+    InstrumentControlState desired{};
+    rt::SeqlockCell<InstrumentControlState> published{};
+    std::atomic<uint32_t> published_generation{0};
+    // AUDIO thread, reset only by sync_instrument_control (never alongside process()).
+    rt::SeqlockCell<InstrumentControlState>::Reader reader{published.reader()};
+    uint32_t adopted_generation = 0;
+    uint32_t applied_profile_serial = 0;
+    uint32_t applied_articulation_serial = 0;
+  };
+  // CONTROL thread, not alongside process(): reads the controls of the instrument
+  // just bound to (or prepared at) @p destination_id; nullptr frees the slot.
+  void sync_instrument_control(uint32_t destination_id, midi::MidiInstrument* instrument) noexcept;
+  InstrumentControlSlot* find_instrument_control(uint32_t destination_id) noexcept;
+  const InstrumentControlSlot* find_instrument_control(uint32_t destination_id) const noexcept;
+  void publish_instrument_control(InstrumentControlSlot& slot) noexcept;
+  // AUDIO thread, block head: applies the control edits published since the last block.
+  void adopt_instrument_controls() noexcept;
 #endif
 #if defined(SONARE_WITH_MIXING)
   // Which insert edits a purge reaches: ids whose entry belongs to one strip
@@ -1145,6 +1218,13 @@ class RealtimeEngine : private ClipPageRequestSink {
   void settle_master_insert_automations() noexcept;
   void clear_master_insert_automations() noexcept;
 #endif
+  // render_offline that refuses a streamed-page miss only within its first
+  // @p promised_frames, ending a block there so a later read is told apart.
+  void render_offline_span(float* const* out, int num_channels, int64_t total_frames,
+                           int block_size, bool finalize, int64_t promised_frames);
+  // Latency (Q8.8 samples) of the full render chain, or of the source layer alone
+  // (instrument PDC plus the track mixer) when @p source_layer_only.
+  int render_latency_q8(bool source_layer_only) const noexcept;
   void update_reported_graph_latency() noexcept;
   void enqueue_telemetry(Telemetry telemetry) noexcept;
   void enqueue_error(TelemetryErrorCode code, int64_t render_frame, int64_t timeline_sample,
@@ -1523,6 +1603,7 @@ class RealtimeEngine : private ClipPageRequestSink {
   // at the clip/source stage. Owned by the engine; each slot borrows a
   // caller-owned instrument pointer.
   InstrumentRack instrument_rack_{};
+  std::array<InstrumentControlSlot, InstrumentRack::kMaxInstruments> instrument_controls_{};
   MidiDispatchSink midi_dispatch_sink_{};
   // Destination-tagged external MIDI output queue (audio thread produces via the
   // dispatch sink / clock sink; the host drains with drain_external_midi()).

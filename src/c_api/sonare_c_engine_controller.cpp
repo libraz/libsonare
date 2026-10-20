@@ -3,11 +3,12 @@
 ///        which expression axis that gesture means.
 ///
 /// Every entry here reads the destination's current profile, changes one thing,
-/// and installs the result through the instrument's own setter, so the rule
-/// that installing a profile drops the channels' accumulated axis values holds
-/// however the profile was reached. An instrument with nowhere to put a profile
-/// answers NOT_SUPPORTED rather than succeeding quietly: the caller cannot tell
-/// a silently discarded mapping from one that took until a note sounds.
+/// and installs the result through the engine, which hands it to the instrument
+/// on the audio thread at the next block. Installing drops the channels'
+/// accumulated axis values however the profile was reached. An instrument with
+/// nowhere to put a profile answers NOT_SUPPORTED rather than succeeding quietly:
+/// the caller cannot tell a silently discarded mapping from one that took until
+/// a note sounds.
 
 #include <sonare/sonare_c.h>
 
@@ -34,44 +35,36 @@ static_assert(SONARE_MPE_DIMENSION_COUNT == sonare::midi::kMpeDimensionCount,
 
 namespace {
 
-/// The instrument bound to @p destination_id, or nullptr. Split out because
-/// every entry below needs the same two failures told apart: no instrument at
-/// all, and an instrument that declines a profile.
-sonare::midi::MidiInstrument* instrument_of(SonareRealtimeEngine* engine,
-                                            uint32_t destination_id) noexcept {
-  return engine->engine.midi_instrument(destination_id);
+/// Maps an engine instrument-control outcome to its C status. Tells the two
+/// failures apart: INVALID_PARAMETER for a destination_id nothing is bound to
+/// (the spelling sonare_engine_resolve_instrument_automation_id already uses for
+/// it), and NOT_SUPPORTED for a bound instrument that holds no profile.
+SonareError profile_status(
+    sonare::engine::RealtimeEngine::InstrumentControlStatus status) noexcept {
+  using Status = sonare::engine::RealtimeEngine::InstrumentControlStatus;
+  switch (status) {
+    case Status::kOk:
+      return SONARE_OK;
+    case Status::kNoInstrument:
+      return SONARE_ERROR_INVALID_PARAMETER;
+    case Status::kNotSupported:
+      break;
+  }
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED, "destination instrument holds no controller profile");
+  return SONARE_ERROR_NOT_SUPPORTED;
 }
 
-/// Reads the destination's profile into @p out. Tells the two failures apart:
-/// INVALID_PARAMETER for a destination_id nothing is bound to (the spelling
-/// sonare_engine_resolve_instrument_automation_id already uses for it), and
-/// NOT_SUPPORTED for a bound instrument that holds no profile.
+/// Reads the profile last installed on the destination into @p out.
 SonareError profile_of(SonareRealtimeEngine* engine, uint32_t destination_id,
                        sonare::midi::ControllerProfile* out) noexcept {
-  sonare::midi::MidiInstrument* instrument = instrument_of(engine, destination_id);
-  if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  const sonare::midi::ControllerProfile* profile = instrument->controller_profile();
-  if (profile == nullptr) {
-    set_last_error(SONARE_ERROR_NOT_SUPPORTED,
-                   "destination instrument holds no controller profile");
-    return SONARE_ERROR_NOT_SUPPORTED;
-  }
-  *out = *profile;
-  return SONARE_OK;
+  return profile_status(engine->engine.instrument_controller_profile(destination_id, out));
 }
 
-/// Installs @p profile back onto the destination. Only called after profile_of
-/// has already succeeded, so a refusal here means the instrument's setter and
-/// its getter disagree, which is a defect in that instrument rather than in the
-/// call.
+/// Hands @p profile to the destination's instrument, adopted on the audio thread
+/// at the next block; the control thread never writes the instrument itself.
 SonareError install(SonareRealtimeEngine* engine, uint32_t destination_id,
                     const sonare::midi::ControllerProfile& profile) noexcept {
-  sonare::midi::MidiInstrument* instrument = instrument_of(engine, destination_id);
-  if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  if (instrument->set_controller_profile(profile)) return SONARE_OK;
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED,
-                 "destination instrument does not accept a controller profile");
-  return SONARE_ERROR_NOT_SUPPORTED;
+  return profile_status(engine->engine.set_instrument_controller_profile(destination_id, profile));
 }
 
 /// The tracking field @p dimension names. A pointer rather than a copy so the

@@ -282,16 +282,8 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
   // RealtimeEngine::prime_offline_parameters, and the same pre-roll in the
   // project bounce path).
   engine->engine.prime_offline_parameters(options->num_channels, options->block_size);
-  std::vector<std::vector<float>> channels(
-      static_cast<size_t>(options->num_channels),
-      std::vector<float>(static_cast<size_t>(options->total_frames), 0.0f));
-  std::vector<float*> ptrs;
-  ptrs.reserve(channels.size());
-  for (auto& channel : channels) {
-    ptrs.push_back(channel.data());
-  }
-  engine->engine.render_offline(ptrs.data(), options->num_channels, options->total_frames,
-                                options->block_size);
+  std::vector<std::vector<float>> channels = engine->engine.render_offline_aligned(
+      options->num_channels, options->total_frames, options->block_size);
 
   channels = resample_channels(channels, source_sample_rate, target_sample_rate);
   std::vector<float> interleaved = interleave_channels(channels);

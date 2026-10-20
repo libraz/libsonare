@@ -353,11 +353,12 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
     case rt::CommandType::kTransportSeekSample:
       transport_.seek_sample(command.arg.i);
       transport_.fold_into_loop();
-      // Hang-note safety: a seek jumps the playhead, so notes sounding before
-      // the jump must be released at the seek frame rather than left to a
-      // note-off that the new position will never reach.
+      // Hang-note safety: a seek jumps the playhead, so clip notes sounding
+      // before the jump must be released at the seek frame rather than left to
+      // a note-off the new position will never reach. Live-input notes keep
+      // sounding until their own note-off.
 #if defined(SONARE_WITH_ARRANGEMENT)
-      midi_sequencer_.all_notes_off(midi::DeviceFrame{command.sample_time});
+      midi_sequencer_.release_clip_playback(midi::DeviceFrame{command.sample_time});
 #endif
       flush_pdc_delays();
       break;
@@ -365,7 +366,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       transport_.seek_ppq(command.arg.d);
       transport_.fold_into_loop();
 #if defined(SONARE_WITH_ARRANGEMENT)
-      midi_sequencer_.all_notes_off(midi::DeviceFrame{command.sample_time});
+      midi_sequencer_.release_clip_playback(midi::DeviceFrame{command.sample_time});
 #endif
       flush_pdc_delays();
       break;
@@ -377,7 +378,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
         transport_.fold_into_loop();
         // Successful marker seek is a playhead jump: same hang-note release.
 #if defined(SONARE_WITH_ARRANGEMENT)
-        midi_sequencer_.all_notes_off(midi::DeviceFrame{command.sample_time});
+        midi_sequencer_.release_clip_playback(midi::DeviceFrame{command.sample_time});
 #endif
         flush_pdc_delays();
       }

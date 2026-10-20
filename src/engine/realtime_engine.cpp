@@ -100,6 +100,7 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   // Adopt routes after MIDI-FX cleanup (old route) and before any event dispatches this block.
   adopt_midi_destination_routes(state.render_frame);
   midi_cc_maps_.acquire();
+  adopt_instrument_controls();
   host::MidiInputSource* midi_input_source = midi_input_source_.load(std::memory_order_acquire);
   const uint64_t source_generation = midi_input_source_generation_.load(std::memory_order_relaxed);
   if (source_generation != adopted_midi_input_source_generation_) {
@@ -210,12 +211,12 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     }
     const int64_t render_frame = transport_.render_frame();
 #if defined(SONARE_WITH_ARRANGEMENT)
-    // Hang-note safety: notes of the iteration a wrap left are released before
-    // this frame's commands, so a note-on queued for the wrap frame belongs to
-    // the new iteration and is not released with them.
+    // Hang-note safety: clip notes of the iteration a wrap left are released
+    // before this frame's commands, so a note-on queued for the wrap frame
+    // belongs to the new iteration. Live-input notes are not the loop's to end.
     if (wrapped) {
       publish_instrument_transport();
-      midi_sequencer_.all_notes_off(midi::DeviceFrame{render_frame});
+      midi_sequencer_.release_clip_playback(midi::DeviceFrame{render_frame});
     }
     // Commands of this span must see its transport first.
     publish_instrument_transport();
@@ -253,7 +254,7 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (wrapped) {
     publish_instrument_transport();
-    midi_sequencer_.all_notes_off(midi::DeviceFrame{transport_.render_frame()});
+    midi_sequencer_.release_clip_playback(midi::DeviceFrame{transport_.render_frame()});
   }
 #else
   (void)wrapped;

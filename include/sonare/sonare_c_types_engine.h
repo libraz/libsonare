@@ -531,12 +531,13 @@ typedef struct {
   int source_port;
   char dest_node[64];
   int dest_port;
-  /* Mixing intent (0 = replace, 1 = add). NOTE: not currently honored — the
-     compiled graph always sums edges into a shared destination port in an
-     order-independent way (the first edge into a port overwrites, every later
-     edge adds), regardless of this value. Retained for API compatibility and to
-     express intent; multiple edges into one port are always summed. Any other
-     value is refused with SONARE_ERROR_INVALID_PARAMETER. */
+  /* How this edge meets the others into the same destination port, taken in
+     connection order: 0 = replace (the port takes this edge's signal, dropping
+     what earlier edges put there), 1 = add (accumulates onto it). A port's first
+     edge initializes it either way, so the two differ only on a shared port.
+     A zero-initialized connection is replace, unlike the language bindings,
+     which default an omitted mix to add: set 1 on every edge that should sum.
+     Any other value is refused with SONARE_ERROR_INVALID_PARAMETER. */
   int mix;
 } SonareEngineGraphConnection;
 

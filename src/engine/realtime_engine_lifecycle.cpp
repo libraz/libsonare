@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <memory>
 #include <new>
 #include <utility>
@@ -137,6 +138,7 @@ bool RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
   boundary_splitter_.prepare(static_cast<size_t>(max_block_size_) + 1u);
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_sequencer_.prepare(sample_rate);
+  midi_sequencer_.set_tempo_map(active_tempo_map_);
   midi_clock_.prepare(active_tempo_map_);
   // Pre-size the host-instrument render scratch (channel-planar) so the audio
   // path never allocates when an instrument is registered. Re-prepare an
@@ -184,8 +186,10 @@ bool RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
   midi_dispatch_sink_.external = &external_midi_queue_;
   external_clock_sync_sink_.queue = &external_midi_queue_;
   midi_sequencer_.set_sink(&midi_dispatch_sink_);
-  instrument_rack_.for_each([&](uint32_t, midi::MidiInstrument* instrument) {
+  instrument_rack_.for_each([&](uint32_t destination_id, midi::MidiInstrument* instrument) {
     instrument->prepare(sample_rate_, max_block_size_);
+    // Preparing resets the instrument's channel state, which the control copy has to follow.
+    sync_instrument_control(destination_id, instrument);
   });
   // Re-prepare clip SysEx against the freshly prepared instruments, all or none.
   midi_sequencer_.acquire_midi_clips_control_quiescent();
@@ -364,6 +368,9 @@ void RealtimeEngine::adopt_tempo_map_snapshot() noexcept {
   metronome_.set_tempo_map(active_tempo_map_);
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_clock_.prepare(active_tempo_map_);
+  // The superseded snapshot may be reclaimed by the next publish, so live
+  // injections must not keep converting through it.
+  midi_sequencer_.set_tempo_map(active_tempo_map_);
 #endif
 }
 
@@ -402,7 +409,12 @@ void RealtimeEngine::prime_offline_parameters(int num_channels, int block_size) 
 
 void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t total_frames,
                                     int block_size, bool finalize) {
-  if (out == nullptr || num_channels <= 0 || total_frames <= 0) {
+  render_offline_span(out, num_channels, total_frames, block_size, finalize, total_frames);
+}
+
+void RealtimeEngine::render_offline_span(float* const* out, int num_channels, int64_t total_frames,
+                                         int block_size, bool finalize, int64_t promised_frames) {
+  if (out == nullptr || num_channels <= 0 || total_frames < 0) {
     return;
   }
   // Not prepared: max_block_size_ is still 0. Emit a single kNotPrepared record
@@ -410,6 +422,11 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
   if (max_block_size_ <= 0) {
     enqueue_error(TelemetryErrorCode::kNotPrepared, transport_.render_frame(),
                   transport_.sample_position(), 0);
+    return;
+  }
+  // An empty last chunk still ends the timeline when asked to.
+  if (total_frames == 0) {
+    if (finalize) finish_offline_render();
     return;
   }
   // Requesting more planes than prepare() reserved scratch for makes process()
@@ -445,13 +462,21 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
   if (!was_playing) {
     transport_.play();
   }
-  for (int64_t frame = 0; frame < total_frames; frame += frames_per_block) {
-    const int frames = static_cast<int>(std::min<int64_t>(frames_per_block, total_frames - frame));
+  uint64_t promised_misses = 0;
+  for (int64_t frame = 0; frame < total_frames;) {
+    int64_t limit = std::min<int64_t>(frames_per_block, total_frames - frame);
+    // A block ends at the promised span, so a page read after it is told apart.
+    if (frame < promised_frames) limit = std::min(limit, promised_frames - frame);
+    const int frames = static_cast<int>(limit);
     for (int ch = 0; ch < num_channels; ++ch) {
       render_block_channels_[static_cast<size_t>(ch)] = out[ch] ? out[ch] + frame : nullptr;
     }
     // The program output only: a bounce never depends on PFL/AFL listening state.
     process_impl(render_block_channels_.data(), nullptr, num_channels, frames, false);
+    frame += frames;
+    if (frame == promised_frames) {
+      promised_misses = clip_page_read_misses_.load(std::memory_order_relaxed) - read_misses_before;
+    }
   }
   if (!was_playing) {
     transport_.stop();
@@ -467,7 +492,7 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
   if (finalize) {
     finish_offline_render();
   }
-  if (clip_page_read_misses_.load(std::memory_order_relaxed) != read_misses_before) {
+  if (promised_misses != 0) {
     throw SonareException(ErrorCode::InvalidState,
                           "render_offline: a streamed clip page was not resident, so part of "
                           "the render is silence");
@@ -480,18 +505,15 @@ ClipSchedule RealtimeEngine::freeze_offline(int num_channels, int64_t total_fram
     throw SonareException(ErrorCode::InvalidParameter, "freeze_offline: empty render shape");
   }
   auto owned = std::make_shared<ClipAudioStorage>();
-  owned->channels.assign(
-      static_cast<size_t>(std::max(num_channels, 0)),
-      std::vector<float>(static_cast<size_t>(std::max<int64_t>(total_frames, 0)), 0.0f));
-  std::vector<float*> render_ptrs;
-  render_ptrs.reserve(owned->channels.size());
-  for (auto& channel : owned->channels) render_ptrs.push_back(channel.data());
-  struct SourceLayerScope {
-    bool& flag;
-    explicit SourceLayerScope(bool& f) : flag(f) { flag = true; }
-    ~SourceLayerScope() { flag = false; }
-  } scope(source_layer_render_);
-  render_offline(render_ptrs.data(), num_channels, total_frames, block_size);
+  {
+    struct SourceLayerScope {
+      bool& flag;
+      explicit SourceLayerScope(bool& f) : flag(f) { flag = true; }
+      ~SourceLayerScope() { flag = false; }
+    } scope(source_layer_render_);
+    // Timeline-aligned, because replay runs the frozen clip through the same latency again.
+    owned->channels = render_offline_aligned(num_channels, total_frames, block_size);
+  }
 
   for (const auto& channel : owned->channels) owned->channel_ptrs.push_back(channel.data());
   owned->refresh_content_signature();
@@ -513,6 +535,30 @@ ClipSchedule RealtimeEngine::freeze_offline(int num_channels, int64_t total_fram
   publish_midi_clips(prepare_midi_clips({}));
 #endif
   return schedule;
+}
+
+std::vector<std::vector<float>> RealtimeEngine::render_offline_aligned(int num_channels,
+                                                                       int64_t total_frames,
+                                                                       int block_size) {
+  if (num_channels <= 0 || total_frames <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "render_offline_aligned: empty render shape");
+  }
+  const int64_t latency = static_cast<int64_t>(render_latency_q8(source_layer_render_) >> 8);
+  const int64_t render_frames = total_frames + latency;
+  std::vector<std::vector<float>> channels(
+      static_cast<size_t>(num_channels),
+      std::vector<float>(static_cast<size_t>(render_frames), 0.0f));
+  std::vector<float*> ptrs;
+  ptrs.reserve(channels.size());
+  for (auto& channel : channels) ptrs.push_back(channel.data());
+  // Clip reads past the span only feed audio the trim drops, so a page the host
+  // never supplied for them is not a miss.
+  render_offline_span(ptrs.data(), num_channels, render_frames, block_size, true, total_frames);
+  for (auto& channel : channels) {
+    channel.erase(channel.begin(), channel.begin() + static_cast<std::ptrdiff_t>(latency));
+  }
+  return channels;
 }
 
 void RealtimeEngine::finish_offline_render() noexcept {
@@ -605,21 +651,28 @@ void RealtimeEngine::set_graph_latency_samples_q8(int latency_q8) noexcept {
   graph_latency_samples_q8_.store(std::max(latency_q8, 0), std::memory_order_relaxed);
 }
 
-void RealtimeEngine::update_reported_graph_latency() noexcept {
+int RealtimeEngine::render_latency_q8(bool source_layer_only) const noexcept {
   int latency_q8 = 0;
-#if defined(SONARE_WITH_GRAPH)
-  latency_q8 += graph_runtime_.latency_samples_q8();
-#endif
 #if defined(SONARE_WITH_ARRANGEMENT)
   latency_q8 += pdc_total_q8_;
 #endif
 #if defined(SONARE_WITH_MIXING)
   latency_q8 += track_mixer_runtime_.latency_samples_q8();
+#endif
+  if (source_layer_only) return latency_q8;
+#if defined(SONARE_WITH_GRAPH)
+  latency_q8 += graph_runtime_.latency_samples_q8();
+#endif
+#if defined(SONARE_WITH_MIXING)
   if (mixing_enabled_.load(std::memory_order_relaxed)) {
     latency_q8 += mixing_runtime_.latency_samples_q8();
   }
 #endif
-  set_graph_latency_samples_q8(latency_q8);
+  return latency_q8;
+}
+
+void RealtimeEngine::update_reported_graph_latency() noexcept {
+  set_graph_latency_samples_q8(render_latency_q8(false));
 }
 
 int64_t RealtimeEngine::audible_timeline_sample(int64_t timeline_sample) const noexcept {

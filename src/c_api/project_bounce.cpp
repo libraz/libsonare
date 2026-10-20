@@ -647,7 +647,9 @@ SonareError sonare_project_bounce_with_sf2_instruments(
   // the data-free floor (every program still sounds; the manifest reports the
   // synth backend honestly).
   for (size_t i = 0; i < instrument_count; ++i) {
-    if (instruments[i].config.struct_version > 4) return SONARE_ERROR_INVALID_PARAMETER;
+    if (!sonare_c_detail::sf2_config_version_supported(instruments[i].config)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
   }
   std::vector<std::unique_ptr<sonare::midi::synth::Sf2Player>> owned;
   std::vector<HostedInstrument> hosted;

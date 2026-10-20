@@ -8,11 +8,17 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <cmath>
 #include <cstddef>
+#include <memory>
 #include <new>
 #include <utility>
 #include <vector>
 
 #include "sonare_c_engine_test_helpers.h"
+
+#if defined(SONARE_WITH_MIXING)
+#include "mixing/alignment_delay.h"
+#include "mixing/channel_strip.h"
+#endif
 
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_MIXING)
 #include "c_api/project_bounce_internal.h"
@@ -684,6 +690,124 @@ TEST_CASE("sonare_engine_bounce_offline resamples when the target differs from t
 
   sonare_engine_destroy(engine);
 }
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("sonare_engine_bounce_offline aligns the mix to the timeline under reported latency",
+          "[c_api][engine][bounce_latency]") {
+  constexpr int kFrames = 256;
+  constexpr int kLatency = 24;
+  std::vector<float> impulse(kFrames, 0.0f);
+  impulse[0] = 1.0f;
+  const float* clip_channels[] = {impulse.data()};
+  sonare::mixing::ChannelStrip master({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  master.add_pre_insert(std::make_unique<sonare::mixing::AlignmentDelay>(kLatency));
+
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 16, 64, 1) == SONARE_OK);
+  SonareEngineClip source{};
+  source.id = 1;
+  source.channels = clip_channels;
+  source.num_channels = 1;
+  source.num_samples = kFrames;
+  source.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &source, 1) == SONARE_OK);
+  REQUIRE(engine->engine.bind_mixing_strip(&master));
+  engine->engine.set_mixing_enabled(true);
+  int latency_q8 = 0;
+  REQUIRE(sonare_engine_graph_latency_samples_q8(engine, &latency_q8) == SONARE_OK);
+  REQUIRE(latency_q8 == (kLatency << 8));
+  const auto peak_index = [](const float* data, size_t size) {
+    return static_cast<size_t>(
+        std::max_element(data, data + size,
+                         [](float a, float b) { return std::abs(a) < std::abs(b); }) -
+        data);
+  };
+
+  SonareEngineBounceOptions options{};
+  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  options.total_frames = kFrames;
+  options.block_size = 128;
+  options.num_channels = 1;
+  SonareEngineBounceResult result{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
+  REQUIRE(result.frames == kFrames);
+  REQUIRE(result.sample_count == static_cast<size_t>(kFrames));
+  // The impulse lands on its own timeline sample, not delayed by the master insert.
+  REQUIRE(peak_index(result.interleaved, result.sample_count) == 0u);
+  REQUIRE(result.interleaved[0] > 0.5f);
+  sonare_free_bounce_result(&result);
+
+  // Control: the plain render of the same span carries the latency, as live output does.
+  sonare::rt::Command seek{};
+  seek.type = sonare::rt::CommandType::kTransportSeekSample;
+  seek.sample_time = -1;
+  seek.arg.i = 0;
+  REQUIRE(engine->engine.push_command(seek));
+  std::vector<float> plain(kFrames, 0.0f);
+  float* io[] = {plain.data()};
+  REQUIRE(sonare_engine_render_offline(engine, io, 1, kFrames, 128) == SONARE_OK);
+  REQUIRE(peak_index(plain.data(), plain.size()) == static_cast<size_t>(kLatency));
+
+  sonare_engine_destroy(engine);
+}
+#endif
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("an aligned bounce does not need pages past the span it was asked for",
+          "[c_api][engine][bounce_latency]") {
+  // The streamed clip runs past the span and only the span's pages are supplied;
+  // the latency pre-roll reads clip frames past the span that the trim drops.
+  constexpr int kLatency = 4;
+  sonare::mixing::ChannelStripConfig master_config{0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB,
+                                                   0.0f};
+  // A host-built mono strip otherwise carries the law's raw centre energy (x sqrt 2 here).
+  master_config.mono_pan_centre_unity = true;
+  sonare::mixing::ChannelStrip master(master_config);
+  master.add_pre_insert(std::make_unique<sonare::mixing::AlignmentDelay>(kLatency));
+  SonareClipPageProvider* provider = nullptr;
+  REQUIRE(sonare_clip_page_provider_create(1, 16, 4, &provider) == SONARE_OK);
+  std::array<float, 4> page0{1.0f, 2.0f, 3.0f, 4.0f};
+  std::array<float, 4> page1{5.0f, 6.0f, 7.0f, 8.0f};
+  const float* page0_channels[] = {page0.data()};
+  const float* page1_channels[] = {page1.data()};
+  REQUIRE(sonare_clip_page_provider_supply(provider, 0, page0_channels, 1, 4) == SONARE_OK);
+  REQUIRE(sonare_clip_page_provider_supply(provider, 1, page1_channels, 1, 4) == SONARE_OK);
+
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 4, 16, 16, 1) == SONARE_OK);
+  SonareEngineClip clip{};
+  clip.id = 5;
+  clip.gain = 1.0f;
+  clip.page_provider = provider;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+  REQUIRE(engine->engine.bind_mixing_strip(&master));
+  engine->engine.set_mixing_enabled(true);
+
+  SonareEngineBounceOptions options{};
+  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  options.total_frames = 8;
+  options.block_size = 4;
+  options.num_channels = 1;
+  SonareEngineBounceResult result{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) == SONARE_OK);
+  REQUIRE(result.frames == 8);
+  for (size_t i = 0; i < result.sample_count; ++i) {
+    CHECK(result.interleaved[i] == Catch::Approx(static_cast<float>(i + 1)).margin(1.0e-4f));
+  }
+  sonare_free_bounce_result(&result);
+
+  // Control: a plain render that itself covers the unsupplied page is refused.
+  REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+  std::array<float, 12> plain{};
+  float* io[] = {plain.data()};
+  REQUIRE(sonare_engine_render_offline(engine, io, 1, 12, 4) == SONARE_ERROR_INVALID_STATE);
+
+  sonare_engine_destroy(engine);
+  sonare_clip_page_provider_destroy(provider);
+}
+#endif
 
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_MIXING)
 TEST_CASE("project bounce gathers timeline events with one reservation",

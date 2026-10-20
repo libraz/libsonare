@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -74,25 +75,49 @@ SonareError bind_engine_instrument(SonareRealtimeEngine* engine, uint32_t destin
   return SONARE_OK;
 }
 
+// Maps an engine instrument-control outcome to the articulation entries' C status.
+SonareError articulation_status(
+    sonare::engine::RealtimeEngine::InstrumentControlStatus status) noexcept {
+  using Status = sonare::engine::RealtimeEngine::InstrumentControlStatus;
+  switch (status) {
+    case Status::kOk:
+      return SONARE_OK;
+    case Status::kNoInstrument:
+      return SONARE_ERROR_INVALID_PARAMETER;
+    case Status::kNotSupported:
+      break;
+  }
+  set_last_error(SONARE_ERROR_NOT_SUPPORTED,
+                 "destination instrument does not support articulation modes");
+  return SONARE_ERROR_NOT_SUPPORTED;
+}
+
 uint64_t pack_midi_note(uint8_t group, uint8_t channel, uint8_t note, uint8_t velocity) noexcept {
   return static_cast<uint64_t>(velocity) | (static_cast<uint64_t>(note) << 8) |
          (static_cast<uint64_t>(channel) << 16) | (static_cast<uint64_t>(group) << 24);
 }
 
-// Records "<function>: <error>" and returns INVALID_PARAMETER when the live push
-// argument rule refused an argument; SONARE_OK otherwise.
-SonareError refuse_live_push_arg(const char* function, const char* error) {
+// Records "<function>: <detail>" as the last error and returns @p code. Formats
+// into a fixed buffer so the unguarded live push entries can never throw.
+SonareError refuse_with(SonareError code, const char* function, const char* detail) noexcept {
+  char message[256];
+  std::snprintf(message, sizeof(message), "%s: %s", function, detail);
+  set_last_error(code, message);
+  return code;
+}
+
+// Returns INVALID_PARAMETER with the reason recorded when the live push argument
+// rule refused an argument; SONARE_OK otherwise.
+SonareError refuse_live_push_arg(const char* function, const char* error) noexcept {
   if (error == nullptr) return SONARE_OK;
-  set_last_error(SONARE_ERROR_INVALID_PARAMETER, (std::string(function) + ": " + error).c_str());
-  return SONARE_ERROR_INVALID_PARAMETER;
+  return refuse_with(SONARE_ERROR_INVALID_PARAMETER, function, error);
 }
 
 // The input-source family's state check, applied after its arguments.
-SonareError require_midi_input_source(const SonareRealtimeEngine* engine, const char* function) {
+SonareError require_midi_input_source(const SonareRealtimeEngine* engine,
+                                      const char* function) noexcept {
   if (engine->midi_input_source_enabled) return SONARE_OK;
-  set_last_error(SONARE_ERROR_INVALID_STATE,
-                 (std::string(function) + ": the MIDI input source is not enabled").c_str());
-  return SONARE_ERROR_INVALID_STATE;
+  return refuse_with(SONARE_ERROR_INVALID_STATE, function, "the MIDI input source is not enabled");
 }
 
 // Queues @p ump on the engine-owned input source after the state check.
@@ -351,7 +376,9 @@ SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint3
   (void)destination_id;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  if (config->struct_version > 4) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!sonare_c_detail::sf2_config_version_supported(*config)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   // A missing SoundFont is allowed: the player's NativeSynth GM fallback is
   // the data-free floor, so live MIDI stays audible with zero data.
   SONARE_C_TRY
@@ -419,17 +446,9 @@ SonareError sonare_engine_set_articulation(SonareRealtimeEngine* engine, uint32_
   (void)destination_id;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  SONARE_C_TRY
-  sonare::midi::MidiInstrument* instrument = engine->engine.midi_instrument(destination_id);
-  if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  if (instrument->set_articulation(
-          channel, admitted_ordinal_to_enum<sonare::midi::ArticulationMode>(articulation))) {
-    return SONARE_OK;
-  }
-  set_last_error(SONARE_ERROR_NOT_SUPPORTED,
-                 "destination instrument does not support articulation modes");
-  return SONARE_ERROR_NOT_SUPPORTED;
-  SONARE_C_CATCH
+  return articulation_status(engine->engine.set_instrument_articulation(
+      destination_id, channel,
+      admitted_ordinal_to_enum<sonare::midi::ArticulationMode>(articulation)));
 #endif
 }
 
@@ -444,18 +463,11 @@ SonareError sonare_engine_articulation(SonareRealtimeEngine* engine, uint32_t de
   (void)destination_id;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  SONARE_C_TRY
-  sonare::midi::MidiInstrument* instrument = engine->engine.midi_instrument(destination_id);
-  if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   sonare::midi::ArticulationMode mode = sonare::midi::ArticulationMode::kPoly;
-  if (!instrument->articulation(channel, &mode)) {
-    set_last_error(SONARE_ERROR_NOT_SUPPORTED,
-                   "destination instrument does not support articulation modes");
-    return SONARE_ERROR_NOT_SUPPORTED;
-  }
-  *out_articulation = static_cast<int>(mode);
-  return SONARE_OK;
-  SONARE_C_CATCH
+  const SonareError status =
+      articulation_status(engine->engine.instrument_articulation(destination_id, channel, &mode));
+  if (status == SONARE_OK) *out_articulation = static_cast<int>(mode);
+  return status;
 #endif
 }
 

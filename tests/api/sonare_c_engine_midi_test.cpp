@@ -3,10 +3,12 @@
 
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "midi/ump.h"
 #include "sonare_c_engine_test_helpers.h"
+#include "support/alloc_guard.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "c_api/synth_patch_common.h"
@@ -1470,6 +1472,81 @@ TEST_CASE("sonare_engine input-source pushes refuse a disabled source as invalid
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("an SF2 instrument config outside its struct_version range is refused",
+          "[c_api][engine][sf2]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+  SonareEngineSf2InstrumentConfig config{};
+  for (const int version : {-1, -4, 5}) {
+    INFO(version);
+    config.struct_version = version;
+    REQUIRE(sonare_engine_set_sf2_instrument(engine, 2, &config) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+  size_t count = 0;
+  REQUIRE(sonare_engine_midi_instrument_count(engine, &count) == SONARE_OK);
+  REQUIRE(count == 0);
+  config.struct_version = 0;
+  REQUIRE(sonare_engine_set_sf2_instrument(engine, 2, &config) == SONARE_OK);
+  sonare_engine_destroy(engine);
+
+  // The project bounce spelling of the same config takes the same refusal.
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  SonareProjectBounceOptions options{};
+  options.total_frames = 64;
+  options.block_size = 64;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+  SonareSf2InstrumentBinding binding{};
+  binding.destination_id = 2;
+  for (const int version : {-1, 5}) {
+    INFO(version);
+    binding.config.struct_version = version;
+    float* out = nullptr;
+    size_t out_len = 0;
+    REQUIRE(sonare_project_bounce_with_sf2_instruments(project, &options, &binding, 1, &out,
+                                                       &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == nullptr);
+  }
+  sonare_project_destroy(project);
+}
+
+// The failure injection lives in the allocator overrides the mixing test set links.
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("sonare_engine live push refusals return their code when the heap fails",
+          "[c_api][engine][midi]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+  // An argument refusal and a state refusal: both record their reason with the
+  // first allocation failing, so neither may let a bad_alloc leave the C boundary.
+  std::vector<std::pair<LivePush, SonareError>> cases = {
+      {{"sonare_engine_push_midi_note_on",
+        [](SonareRealtimeEngine* e) {
+          return sonare_engine_push_midi_note_on(e, 3, 0, 16, 60, 100, -1);
+        }},
+       SONARE_ERROR_INVALID_PARAMETER},
+      {{"sonare_engine_push_midi_input_cc",
+        [](SonareRealtimeEngine* e) {
+          return sonare_engine_push_midi_input_cc(e, 0, 0, 128, 0, 0);
+        }},
+       SONARE_ERROR_INVALID_PARAMETER}};
+  for (const LivePush& p : valid_input_pushes()) cases.push_back({p, SONARE_ERROR_INVALID_STATE});
+  for (const auto& [push, expected] : cases) {
+    INFO(push.function);
+    SonareError result = SONARE_OK;
+    {
+      sonare::test::AllocationFailureAtGuard fail_first(1);
+      result = push.push(engine);
+    }
+    REQUIRE(result == expected);
+    CHECK(sonare_last_error_code() == expected);
+  }
+  sonare_engine_destroy(engine);
+}
+#endif
+
 TEST_CASE("sonare_engine input-source pushes report a full queue as out of memory",
           "[c_api][engine][midi]") {
   // Nothing drains without a process call, so the bounded input queue fills.
@@ -1521,6 +1598,12 @@ TEST_CASE("synth patch refuses an unknown routing ordinal, a bad depth or an unk
     CAPTURE(source);
     SonareSynthPatch patch = base();
     patch.mod_routings[0].source = source;
+    refused(patch);
+  }
+  for (int version : {-1, SONARE_SYNTH_PATCH_STRUCT_VERSION + 1}) {
+    CAPTURE(version);
+    SonareSynthPatch patch = base();
+    patch.struct_version = version;
     refused(patch);
   }
   for (int destination : {-1, SONARE_SYNTH_MOD_DESTINATION_COUNT, 99}) {

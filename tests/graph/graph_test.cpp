@@ -423,7 +423,7 @@ TEST_CASE("Graph supports replace and add connection mixing", "[graph]") {
   REQUIRE_THAT(output[0], WithinAbs(3.0f, 0.0001f));
 }
 
-TEST_CASE("Graph port mixing is independent of connection insertion order", "[graph]") {
+TEST_CASE("Graph port mixing honours Replace at its position in connection order", "[graph]") {
   // Replace is intentionally order-sensitive: it clears the accumulated value
   // at its position, while Add contributes after it.
   auto build = [](bool add_first) {

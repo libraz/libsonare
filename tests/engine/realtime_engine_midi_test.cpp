@@ -33,6 +33,7 @@
 #include "rt/command.h"
 #include "support/alloc_guard.h"
 #include "support/sf2_builder.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace {
@@ -41,6 +42,14 @@ using sonare::engine::RealtimeEngine;
 using sonare::midi::MidiEvent;
 using sonare::midi::MidiInstrument;
 using sonare::midi::PreparedMidiSysEx;
+
+// A MIDI-FX length of @p samples at 48 kHz and the engine's default tempo, spelled in
+// the PPQ-scaled frame domain the live sequencer runs a chain in.
+int64_t fx_frames(int64_t samples) {
+  const double samples_per_ppq = 48000.0 * 60.0 / sonare::constants::kDefaultBpm;
+  return std::llround(static_cast<double>(samples) *
+                      static_cast<double>(sonare::midi::kMidiFxPpqScale) / samples_per_ppq);
+}
 
 // A minimal instrument that counts events and emits DC while a note sounds, so
 // audio output (peak) reflects whether a note is still ringing.
@@ -1893,8 +1902,8 @@ TEST_CASE("RealtimeEngine route flips discard pending arpeggiator events", "[eng
   arp.steps = 2;
   arp.intervals[0] = 0;
   arp.intervals[1] = 12;
-  arp.step_frames = kBlock;
-  arp.gate_frames = kBlock / 2;
+  arp.step_frames = fx_frames(kBlock);
+  arp.gate_frames = fx_frames(kBlock / 2);
   fx.set_arpeggiator(arp);
   REQUIRE(engine.set_midi_fx(kDestination, fx));
 
@@ -2760,6 +2769,100 @@ TEST_CASE("finish_offline_render releases what a chunked render left sounding", 
   engine.set_midi_instrument(nullptr);
 }
 
+TEST_CASE("a zero-frame finalizing render_offline ends the timeline", "[engine][midi]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 128;
+  constexpr int64_t kFrames = 512;
+  std::vector<float> out_l(static_cast<size_t>(kFrames), 0.0f);
+  std::vector<float> out_r(static_cast<size_t>(kFrames), 0.0f);
+  float* out[] = {out_l.data(), out_r.data()};
+
+  SECTION("a note held across the last chunk is released") {
+    RealtimeEngine engine;
+    engine.prepare(kSr, kBlock);
+    CountingInstrument inst;
+    engine.set_midi_instrument(&inst);
+    engine.set_midi_clips(note_on_at_zero());
+    push_play(engine);
+    engine.render_offline(out, 2, kFrames, kBlock, /*finalize=*/false);
+    REQUIRE(engine.midi_sequencer().active_note_count() == 1);
+
+    // An empty chunk that does not finalize changes nothing.
+    engine.render_offline(out, 2, 0, kBlock, /*finalize=*/false);
+    REQUIRE(inst.note_off_count_ == 0);
+    REQUIRE(engine.midi_sequencer().active_note_count() == 1);
+
+    engine.render_offline(out, 2, 0, kBlock, /*finalize=*/true);
+    REQUIRE(inst.note_off_count_ >= 1);
+    REQUIRE(engine.midi_sequencer().active_note_count() == 0);
+    engine.set_midi_instrument(nullptr);
+  }
+
+  SECTION("the PDC delay lines are flushed") {
+    constexpr int kLatency = 64;
+    // Renders a clip that ends exactly at the chunk boundary, then the next kLatency frames,
+    // which hold the clip delay's residue unless the empty call flushed it.
+    const auto residue_peak = [&](bool finalize_empty) {
+      RealtimeEngine engine;
+      engine.prepare(kSr, kBlock);
+      LatencyImpulseInstrument slow(kLatency);
+      REQUIRE(engine.set_midi_instrument(1, &slow));
+      engine.set_clips({constant_clip(kFrames, 0.5f)});
+      push_play(engine);
+      engine.render_offline(out, 2, kFrames, kBlock, /*finalize=*/false);
+      engine.render_offline(out, 2, 0, kBlock, finalize_empty);
+      std::vector<float> tail_l(static_cast<size_t>(kLatency), 0.0f);
+      std::vector<float> tail_r(static_cast<size_t>(kLatency), 0.0f);
+      float* tail[] = {tail_l.data(), tail_r.data()};
+      engine.render_offline(tail, 2, kLatency, kBlock, /*finalize=*/false);
+      engine.finish_offline_render();
+      engine.set_midi_instrument(1, nullptr);
+      return block_peak(tail_l);
+    };
+    REQUIRE(residue_peak(false) == Catch::Approx(0.5f));
+    REQUIRE(residue_peak(true) == 0.0f);
+  }
+}
+
+TEST_CASE("RealtimeEngine freeze bakes instrument PDC out of the frozen clip",
+          "[engine][midi][freeze]") {
+  constexpr double kSr = 48000.0;
+  constexpr int kBlock = 128;
+  constexpr int kLatency = 100;
+  constexpr int64_t kFrames = 512;
+  RealtimeEngine engine;
+  engine.prepare(kSr, kBlock);
+  LatencyImpulseInstrument inst(kLatency);
+  engine.set_midi_instrument(&inst);
+  engine.set_clips({impulse_clip(kFrames)});
+
+  std::vector<float> live_l(static_cast<size_t>(kFrames), 0.0f);
+  std::vector<float> live_r(static_cast<size_t>(kFrames), 0.0f);
+  float* live[] = {live_l.data(), live_r.data()};
+  engine.render_offline(live, 2, kFrames, kBlock);
+  REQUIRE(live_l[static_cast<size_t>(kLatency)] == Catch::Approx(1.0f));
+
+  seek_to_zero(engine);
+  const sonare::engine::ClipSchedule frozen =
+      engine.freeze_offline(2, kFrames, kBlock, 9, 0.0, 1.0f);
+  // The clip holds the span on the timeline: the impulse at its own sample, no leading fill.
+  REQUIRE(frozen.length_samples == kFrames);
+  REQUIRE(frozen.buffer.num_samples == kFrames);
+  REQUIRE(frozen.buffer.channels[0][0] == Catch::Approx(1.0f));
+  REQUIRE(frozen.buffer.channels[0][kLatency] == 0.0f);
+
+  // Replay passes the clip through the same PDC once, landing where the source did.
+  seek_to_zero(engine);
+  std::vector<float> replay_l(static_cast<size_t>(kFrames), 0.0f);
+  std::vector<float> replay_r(static_cast<size_t>(kFrames), 0.0f);
+  float* replay[] = {replay_l.data(), replay_r.data()};
+  engine.render_offline(replay, 2, kFrames, kBlock);
+  for (size_t i = 0; i < live_l.size(); ++i) {
+    REQUIRE(replay_l[i] == Catch::Approx(live_l[i]).margin(1.0e-6f));
+  }
+  engine.set_midi_instrument(nullptr);
+}
+
 TEST_CASE("a bind whose compensation cannot be allocated is refused, not left half-done",
           "[engine][midi][pdc]") {
   // Reallocating the PDC banks is the one part of a bind that can fail, and it
@@ -3294,8 +3397,8 @@ std::vector<float> arpeggiated_render(int block) {
   arp.steps = 2;
   arp.intervals[0] = 0;
   arp.intervals[1] = 12;
-  arp.step_frames = 40;
-  arp.gate_frames = 30;
+  arp.step_frames = fx_frames(40);
+  arp.gate_frames = fx_frames(30);
   fx.set_arpeggiator(arp);
   REQUIRE(engine.set_midi_fx(0, fx));
   sonare::midi::MidiClipSchedule clip;
@@ -3358,8 +3461,8 @@ TEST_CASE("RealtimeEngine fires a live MIDI-FX event at its device frame while s
   arp.steps = 2;
   arp.intervals[0] = 0;
   arp.intervals[1] = 12;
-  arp.step_frames = 100;
-  arp.gate_frames = 10;
+  arp.step_frames = fx_frames(100);
+  arp.gate_frames = fx_frames(10);
   fx.set_arpeggiator(arp);
   REQUIRE(engine.set_midi_fx(0, fx));
 
@@ -3461,6 +3564,64 @@ TEST_CASE("RealtimeEngine keeps a live note-on queued for the loop-wrap frame", 
   CHECK(engine.midi_sequencer().active_note_count() == 1);
 }
 
+TEST_CASE("RealtimeEngine keeps live-input notes held across a loop wrap and a seek",
+          "[engine][midi]") {
+  constexpr int kBlock = 64;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  engine.set_tempo(120.0);
+  EventLogInstrument log;
+  REQUIRE(engine.set_midi_instrument(0, &log));
+  // A clip note with no note-off in range: the discontinuity is what must end it,
+  // so it shows the release ran at all.
+  sonare::midi::MidiClipSchedule clip;
+  clip.id = 1;
+  clip.events = {MidiEvent{4, sonare::midi::make_midi1_note_on(0, 0, 50, 100)}};
+  engine.set_midi_clips({clip});
+  const auto offs_of = [&log](uint8_t note) {
+    std::vector<int64_t> frames;
+    for (const auto& entry : log.notes(false)) {
+      if (entry.ump.note_number() == note) frames.push_back(entry.event_frame);
+    }
+    return frames;
+  };
+
+  SECTION("loop wrap") {
+    engine.set_loop(0.0, 96.0 / 24000.0, true);
+    push_transport(engine, sonare::rt::CommandType::kTransportPlay, 0);
+    push_live_note(engine, 0, true, 60, 10);  // held across the wrap at 96
+    push_live_note(engine, 0, true, 72, 90);  // key still down at the wrap
+    render_blocks(engine, 2 * kBlock, kBlock);
+    CHECK(offs_of(60).empty());
+    CHECK(offs_of(72).empty());
+    REQUIRE(offs_of(50).size() == 1);
+    CHECK(offs_of(50)[0] == 96);
+
+    // Each live note ends at its own note-off.
+    push_live_note(engine, 0, false, 60, 130);
+    render_blocks(engine, kBlock, kBlock);
+    REQUIRE(offs_of(60).size() == 1);
+    CHECK(offs_of(60)[0] == 130);
+    CHECK(offs_of(72).empty());
+  }
+
+  SECTION("seek") {
+    push_transport(engine, sonare::rt::CommandType::kTransportPlay, 0);
+    push_live_note(engine, 0, true, 60, 10);
+    push_transport(engine, sonare::rt::CommandType::kTransportSeekSample, 70, 0);
+    render_blocks(engine, 2 * kBlock, kBlock);
+    CHECK(offs_of(60).empty());
+    REQUIRE_FALSE(offs_of(50).empty());
+    CHECK(offs_of(50)[0] == 70);
+
+    push_live_note(engine, 0, false, 60, 140);
+    render_blocks(engine, kBlock, kBlock);
+    REQUIRE(offs_of(60).size() == 1);
+    CHECK(offs_of(60)[0] == 140);
+  }
+  engine.set_midi_instrument(0, nullptr);
+}
+
 TEST_CASE("RealtimeEngine drains external clock and notes in time order", "[engine][midi]") {
   constexpr int kBlock = 2048;
   RealtimeEngine engine;
@@ -3497,7 +3658,7 @@ TEST_CASE("RealtimeEngine quantizes live input on the timeline grid", "[engine][
   sonare::midi::MidiFxChain fx;
   sonare::midi::QuantizeConfig quantize;
   quantize.enabled = true;
-  quantize.grid_frames = 100;
+  quantize.grid_frames = fx_frames(100);
   fx.set_quantize(quantize);
   REQUIRE(engine.set_midi_fx(0, fx));
 

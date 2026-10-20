@@ -456,7 +456,8 @@ void RealtimeEngine::dispatch_midi_without_render(int num_frames) noexcept {
   midi_sequencer_.acquire_midi_clips();
   midi_sequencer_.process_block(
       midi::SequencerClock{midi::DeviceFrame{render_frame},
-                           midi::TimelineFrame{transport_.sample_position()}, transport_.playing()},
+                           midi::TimelineFrame{transport_.sample_position()}, transport_.playing(),
+                           active_tempo_map_},
       num_frames);
 }
 
@@ -464,7 +465,7 @@ int RealtimeEngine::dispatch_midi_span(int64_t render_frame, int64_t block_rende
                                        int max_frames) noexcept {
   const midi::SequencerClock clock{midi::DeviceFrame{render_frame},
                                    midi::TimelineFrame{transport_.sample_position()},
-                                   transport_.playing()};
+                                   transport_.playing(), active_tempo_map_};
   midi_sequencer_.dispatch_due(clock);
   // Live input due by this frame follows the sequenced events of the same frame.
   int span = max_frames;
@@ -629,6 +630,7 @@ bool RealtimeEngine::set_midi_instrument(uint32_t destination_id,
   if (!instrument_rack_.set(destination_id, instrument)) {
     return report(MidiInstrumentBindStatus::kRackFull);
   }
+  sync_instrument_control(destination_id, instrument);
   if (instrument != nullptr) {
     instrument_swap_tails_.on_bound(destination_id);
   } else {

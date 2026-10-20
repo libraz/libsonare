@@ -1,6 +1,7 @@
 /// @file realtime_engine_instruments.cpp
 /// @brief RealtimeEngine: continuous parameter automation for hosted
-///        instruments (the reserved instrument-param id namespace).
+///        instruments (the reserved instrument-param id namespace), and the
+///        controller-profile / articulation hand-off to the audio thread.
 
 #include <cmath>
 
@@ -155,6 +156,119 @@ bool RealtimeEngine::describe_reserved_parameter(uint32_t id,
   return describe_instrument_reserved_parameter(id, out);
 }
 #endif
+
+RealtimeEngine::InstrumentControlSlot* RealtimeEngine::find_instrument_control(
+    uint32_t destination_id) noexcept {
+  for (InstrumentControlSlot& slot : instrument_controls_) {
+    if (slot.desired.instrument != nullptr && slot.destination_id == destination_id) return &slot;
+  }
+  return nullptr;
+}
+
+const RealtimeEngine::InstrumentControlSlot* RealtimeEngine::find_instrument_control(
+    uint32_t destination_id) const noexcept {
+  for (const InstrumentControlSlot& slot : instrument_controls_) {
+    if (slot.desired.instrument != nullptr && slot.destination_id == destination_id) return &slot;
+  }
+  return nullptr;
+}
+
+void RealtimeEngine::publish_instrument_control(InstrumentControlSlot& slot) noexcept {
+  slot.published.store(slot.desired);
+  slot.published_generation.fetch_add(1, std::memory_order_release);
+}
+
+void RealtimeEngine::sync_instrument_control(uint32_t destination_id,
+                                             midi::MidiInstrument* instrument) noexcept {
+  InstrumentControlSlot* slot = find_instrument_control(destination_id);
+  for (size_t i = 0; slot == nullptr && i < instrument_controls_.size(); ++i) {
+    if (instrument_controls_[i].desired.instrument == nullptr) slot = &instrument_controls_[i];
+  }
+  // The table has the rack's capacity, so a bound instrument always finds a slot.
+  if (slot == nullptr) return;
+  InstrumentControlState state{};
+  state.instrument = instrument;
+  slot->destination_id = destination_id;
+  slot->has_profile = false;
+  slot->has_articulation = instrument != nullptr;
+  if (instrument != nullptr) {
+    if (const midi::ControllerProfile* profile = instrument->controller_profile()) {
+      state.profile = *profile;
+      slot->has_profile = true;
+    }
+    for (uint8_t channel = 0; slot->has_articulation && channel < 16; ++channel) {
+      slot->has_articulation = instrument->articulation(channel, &state.articulation[channel]);
+    }
+  }
+  slot->desired = state;
+  publish_instrument_control(*slot);
+  // The instrument already holds this state, so the audio thread adopts it without applying.
+  slot->adopted_generation = slot->published_generation.load(std::memory_order_relaxed);
+  slot->applied_profile_serial = state.profile_serial;
+  slot->applied_articulation_serial = state.articulation_serial;
+}
+
+RealtimeEngine::InstrumentControlStatus RealtimeEngine::set_instrument_controller_profile(
+    uint32_t destination_id, const midi::ControllerProfile& profile) noexcept {
+  InstrumentControlSlot* slot = find_instrument_control(destination_id);
+  if (slot == nullptr) return InstrumentControlStatus::kNoInstrument;
+  if (!slot->has_profile) return InstrumentControlStatus::kNotSupported;
+  slot->desired.profile = profile;
+  ++slot->desired.profile_serial;
+  publish_instrument_control(*slot);
+  return InstrumentControlStatus::kOk;
+}
+
+RealtimeEngine::InstrumentControlStatus RealtimeEngine::instrument_controller_profile(
+    uint32_t destination_id, midi::ControllerProfile* out) const noexcept {
+  const InstrumentControlSlot* slot = find_instrument_control(destination_id);
+  if (slot == nullptr) return InstrumentControlStatus::kNoInstrument;
+  if (!slot->has_profile) return InstrumentControlStatus::kNotSupported;
+  *out = slot->desired.profile;
+  return InstrumentControlStatus::kOk;
+}
+
+RealtimeEngine::InstrumentControlStatus RealtimeEngine::set_instrument_articulation(
+    uint32_t destination_id, uint8_t channel, midi::ArticulationMode mode) noexcept {
+  InstrumentControlSlot* slot = find_instrument_control(destination_id);
+  if (slot == nullptr) return InstrumentControlStatus::kNoInstrument;
+  if (!slot->has_articulation) return InstrumentControlStatus::kNotSupported;
+  slot->desired.articulation[channel & 0x0Fu] = mode;
+  ++slot->desired.articulation_serial;
+  publish_instrument_control(*slot);
+  return InstrumentControlStatus::kOk;
+}
+
+RealtimeEngine::InstrumentControlStatus RealtimeEngine::instrument_articulation(
+    uint32_t destination_id, uint8_t channel, midi::ArticulationMode* out) const noexcept {
+  const InstrumentControlSlot* slot = find_instrument_control(destination_id);
+  if (slot == nullptr) return InstrumentControlStatus::kNoInstrument;
+  if (!slot->has_articulation) return InstrumentControlStatus::kNotSupported;
+  *out = slot->desired.articulation[channel & 0x0Fu];
+  return InstrumentControlStatus::kOk;
+}
+
+void RealtimeEngine::adopt_instrument_controls() noexcept {
+  for (InstrumentControlSlot& slot : instrument_controls_) {
+    const uint32_t generation = slot.published_generation.load(std::memory_order_acquire);
+    if (generation == slot.adopted_generation) continue;
+    InstrumentControlState state{};
+    // A store in progress is adopted at the next block.
+    if (!slot.reader.try_load_into(&state)) continue;
+    slot.adopted_generation = generation;
+    if (state.instrument == nullptr) continue;
+    if (state.profile_serial != slot.applied_profile_serial) {
+      slot.applied_profile_serial = state.profile_serial;
+      state.instrument->set_controller_profile(state.profile);
+    }
+    if (state.articulation_serial != slot.applied_articulation_serial) {
+      slot.applied_articulation_serial = state.articulation_serial;
+      for (uint8_t channel = 0; channel < 16; ++channel) {
+        state.instrument->set_articulation(channel, state.articulation[channel]);
+      }
+    }
+  }
+}
 
 }  // namespace sonare::engine
 

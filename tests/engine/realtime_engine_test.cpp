@@ -513,6 +513,62 @@ TEST_CASE("RealtimeEngine freeze leaves a non-unity master live and applied once
 }
 #endif
 
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("RealtimeEngine freeze bakes lane latency out of the frozen clip",
+          "[engine][realtime][freeze]") {
+  constexpr int kFrames = 256;
+  constexpr int kLatency = 16;
+  std::vector<float> source(kFrames, 0.0f);
+  source[0] = 1.0f;
+  const float* channels[] = {source.data()};
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 128, 16, 16, 1);
+  REQUIRE(engine.set_track_lanes({{10}}));
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.add_pre_insert(std::make_unique<sonare::mixing::AlignmentDelay>(kLatency));
+  REQUIRE(engine.bind_track_strip(10, &strip));
+  REQUIRE(engine.graph_latency_samples_q8() == (kLatency << 8));
+  sonare::engine::ClipSchedule clip{1, {channels, 1, kFrames}, 0.0, 0, 0, kFrames, false, 1.0f, 0,
+                                    0};
+  clip.track_id = 10;
+  engine.set_clips({clip});
+  const auto seek_to_start = [&] {
+    sonare::rt::Command seek{};
+    seek.type = sonare::rt::CommandType::kTransportSeekSample;
+    seek.sample_time = -1;
+    seek.arg.i = 0;
+    REQUIRE(engine.push_command(seek));
+  };
+  const auto peak_index = [](const float* data, size_t size) {
+    return static_cast<size_t>(
+        std::max_element(data, data + size,
+                         [](float a, float b) { return std::abs(a) < std::abs(b); }) -
+        data);
+  };
+
+  std::vector<float> live(kFrames, 0.0f);
+  float* live_io[] = {live.data()};
+  engine.render_offline(live_io, 1, kFrames, 128);
+  REQUIRE(peak_index(live.data(), live.size()) == static_cast<size_t>(kLatency));
+  REQUIRE(std::abs(live[kLatency]) > 0.5f);
+
+  seek_to_start();
+  const sonare::engine::ClipSchedule frozen = engine.freeze_offline(1, kFrames, 128, 5, 0.0, 1.0f);
+  // The clip holds the span on the timeline, not delayed by the lane it was rendered through.
+  REQUIRE(frozen.length_samples == kFrames);
+  REQUIRE(peak_index(frozen.buffer.channels[0], kFrames) == 0u);
+
+  // Replay runs the frozen clip through the same alignment once, landing where the source did.
+  seek_to_start();
+  std::vector<float> replay(kFrames, 0.0f);
+  float* replay_io[] = {replay.data()};
+  engine.render_offline(replay_io, 1, kFrames, 128);
+  for (size_t i = 0; i < live.size(); ++i) {
+    REQUIRE(replay[i] == Catch::Approx(live[i]).margin(1.0e-6f));
+  }
+}
+#endif
+
 #if defined(SONARE_WITH_GRAPH)
 TEST_CASE("RealtimeEngine freeze leaves the engine graph live and applied once",
           "[engine][realtime][freeze]") {

@@ -55,9 +55,20 @@ inline sonare::midi::BuiltinSynthConfig builtin_synth_config_from_c(const C& c) 
   return sonare::midi::clamp_synth_config(cfg);
 }
 
+/// Highest struct_version either C ABI SF2 config spelling defines.
+inline constexpr int kSf2InstrumentConfigVersion = 4;
+
+/// Whether @p c carries a struct_version its spelling defines (0 and 1 are both
+/// version 1). Shared by every entry that reads either spelling, so a negative or
+/// future version is refused the same way everywhere.
+template <typename C>
+constexpr bool sf2_config_version_supported(const C& c) noexcept {
+  return c.struct_version >= 0 && c.struct_version <= kSf2InstrumentConfigVersion;
+}
+
 /// Converts either C ABI SF2 config spelling to the core player config.
 /// Version gates are kept here so engine and bounce bindings cannot drift;
-/// callers retain ownership of the version upper-bound check and any
+/// callers check sf2_config_version_supported first and keep any
 /// surface-specific offline options.
 template <typename C>
 inline sonare::midi::synth::Sf2PlayerConfig sf2_player_config_from_c(const C& c) {
@@ -343,7 +354,7 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     *dst = value;
     return true;
   };
-  if (c.struct_version > SONARE_SYNTH_PATCH_STRUCT_VERSION) {
+  if (c.struct_version < 0 || c.struct_version > SONARE_SYNTH_PATCH_STRUCT_VERSION) {
     if (out_error) *out_error = "unsupported SonareSynthPatch struct_version";
     return false;
   }

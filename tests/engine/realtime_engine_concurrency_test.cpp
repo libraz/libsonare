@@ -174,6 +174,113 @@ TEST_CASE("RealtimeEngine tempo publishing cannot lap an audio-held snapshot",
   REQUIRE(all_finite(right.data(), kFrames));
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+namespace {
+
+// Holds a controller profile and per-channel articulation, and records whether
+// either setter ever ran on a thread other than the audio thread.
+class ControlRecordingInstrument final : public sonare::midi::MidiInstrument {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+  void on_event(uint32_t, const sonare::midi::MidiEvent&) noexcept override {}
+  bool set_controller_profile(const sonare::midi::ControllerProfile& profile) noexcept override {
+    note_writer();
+    profile_ = profile;
+    return true;
+  }
+  const sonare::midi::ControllerProfile* controller_profile() const noexcept override {
+    return &profile_;
+  }
+  bool set_articulation(uint8_t channel, sonare::midi::ArticulationMode mode) noexcept override {
+    note_writer();
+    articulation_[channel & 0x0Fu] = mode;
+    return true;
+  }
+  bool articulation(uint8_t channel, sonare::midi::ArticulationMode* out) const noexcept override {
+    *out = articulation_[channel & 0x0Fu];
+    return true;
+  }
+
+  std::thread::id audio_thread{};
+  std::atomic<bool> written_off_audio{false};
+
+ private:
+  void note_writer() noexcept {
+    if (std::this_thread::get_id() != audio_thread) written_off_audio.store(true);
+  }
+  sonare::midi::ControllerProfile profile_{};
+  std::array<sonare::midi::ArticulationMode, 16> articulation_{};
+};
+
+}  // namespace
+
+TEST_CASE("RealtimeEngine hands instrument control edits to the audio thread",
+          "[engine][realtime][concurrency]") {
+  using Status = sonare::engine::RealtimeEngine::InstrumentControlStatus;
+  using sonare::midi::ArticulationMode;
+  constexpr int kFrames = 128;
+  constexpr int kIterations = 2048;
+  constexpr uint32_t kDestination = 4;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kFrames);
+  ControlRecordingInstrument instrument;
+  instrument.audio_thread = std::this_thread::get_id();
+  REQUIRE(engine.set_midi_instrument(kDestination, &instrument));
+  std::array<float, kFrames> left{};
+  std::array<float, kFrames> right{};
+  float* io[] = {left.data(), right.data()};
+
+  // The setter writes nothing on the calling thread; the read-back answers at once,
+  // and the instrument takes the edit at the next block.
+  sonare::midi::ControllerProfile profile;
+  profile.velocity_meaningful = false;
+  REQUIRE(engine.set_instrument_controller_profile(kDestination, profile) == Status::kOk);
+  REQUIRE(engine.set_instrument_articulation(kDestination, 3, ArticulationMode::kMonoLegato) ==
+          Status::kOk);
+  sonare::midi::ControllerProfile read_back;
+  REQUIRE(engine.instrument_controller_profile(kDestination, &read_back) == Status::kOk);
+  REQUIRE_FALSE(read_back.velocity_meaningful);
+  ArticulationMode mode = ArticulationMode::kPoly;
+  REQUIRE(engine.instrument_articulation(kDestination, 3, &mode) == Status::kOk);
+  REQUIRE(mode == ArticulationMode::kMonoLegato);
+  REQUIRE(instrument.controller_profile()->velocity_meaningful);
+  REQUIRE(instrument.articulation(3, &mode));
+  REQUIRE(mode == ArticulationMode::kPoly);
+  engine.process(io, 2, kFrames);
+  REQUIRE_FALSE(instrument.controller_profile()->velocity_meaningful);
+  REQUIRE(instrument.articulation(3, &mode));
+  REQUIRE(mode == ArticulationMode::kMonoLegato);
+  REQUIRE(engine.instrument_articulation(9, 3, &mode) == Status::kNoInstrument);
+
+  // Edits racing the render: every write still lands on the audio thread.
+  std::atomic<bool> done{false};
+  std::atomic<int> refused{0};
+  std::thread control([&] {
+    for (int i = 0; i < kIterations; ++i) {
+      sonare::midi::ControllerProfile next;
+      next.velocity_meaningful = i % 2 == 0;
+      if (engine.set_instrument_controller_profile(kDestination, next) != Status::kOk) ++refused;
+      const auto next_mode = static_cast<ArticulationMode>(i % 3);
+      if (engine.set_instrument_articulation(kDestination, 3, next_mode) != Status::kOk) ++refused;
+    }
+    done.store(true, std::memory_order_release);
+  });
+  while (!done.load(std::memory_order_acquire)) engine.process(io, 2, kFrames);
+  control.join();
+  engine.process(io, 2, kFrames);
+
+  REQUIRE(refused.load() == 0);
+  REQUIRE_FALSE(instrument.written_off_audio.load());
+  constexpr int kLast = kIterations - 1;
+  REQUIRE(instrument.controller_profile()->velocity_meaningful == (kLast % 2 == 0));
+  REQUIRE(instrument.articulation(3, &mode));
+  REQUIRE(mode == static_cast<ArticulationMode>(kLast % 3));
+  engine.set_midi_instrument(kDestination, nullptr);
+}
+#endif
+
 #if defined(SONARE_WITH_MIXING)
 #include "engine/monitor_runtime.h"
 #include "mixing/channel_strip.h"

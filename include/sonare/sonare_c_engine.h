@@ -32,14 +32,22 @@ extern "C" {
 ///   `sonare_engine_seek_sample`, `sonare_engine_seek_ppq`,
 ///   `sonare_engine_set_tempo`, `sonare_engine_set_time_signature`,
 ///   `sonare_engine_set_loop`, `sonare_engine_seek_marker`,
-///   `sonare_engine_set_loop_from_markers`. A playback discontinuity (loop
-///   wrap, seek, stop) sends note-offs plus CC64=0, CC121, CC123 and pitch-bend
-///   centre on every channel the sequencer has played since the last reset, so
-///   controller values set before a loop region are not restored at the wrap.
+///   `sonare_engine_set_loop_from_markers`. A loop wrap or seek sends note-offs
+///   for the clip notes still sounding, plus CC64=0, CC121, CC123 and pitch-bend
+///   centre on every channel only clip playback has touched since the last
+///   reset, so controller values set before a loop region are not restored at
+///   the wrap; live-input notes and channels keep their state. A stop releases
+///   every note and resets every played channel, live ones included.
 /// - Live parameter / MIDI: `sonare_engine_set_parameter`,
 ///   `sonare_engine_set_parameter_smoothed`, and the live MIDI push family
 ///   (`sonare_engine_push_midi_*`, `sonare_engine_push_midi_input_*`; see the
 ///   MIDI section below for the full list).
+/// - Instrument controls: `sonare_engine_set_controller_profile`,
+///   `sonare_engine_bind_controller`, `sonare_engine_clear_controller_bindings`,
+///   `sonare_engine_set_controller_velocity_meaningful`,
+///   `sonare_engine_set_controller_note_tracking`, `sonare_engine_set_articulation`
+///   and their read-backs. A change is adopted at the next block; a read-back
+///   answers what was set, including a change not yet adopted.
 /// - Capture control: `sonare_engine_set_capture_buffer`,
 ///   `sonare_engine_arm_capture`, `sonare_engine_set_capture_punch`,
 ///   `sonare_engine_reset_capture`. The buffer given to `set_capture_buffer`
@@ -58,9 +66,10 @@ extern "C" {
 ///   `sonare_engine_set_master_strip_json`.
 /// - Live MIDI configuration: `sonare_engine_set_midi_fx`,
 ///   `sonare_engine_clear_midi_fx`, `sonare_engine_bind_midi_cc`,
-///   `sonare_engine_clear_midi_cc_bindings`. These four publish immutable state
-///   adopted at the next block, so they MAY run while `process` is active;
-///   callbacks and note flushes stay on the audio thread.
+///   `sonare_engine_clear_midi_cc_bindings`, `sonare_engine_set_part_rig`. These
+///   publish immutable state adopted at the next block (the part rig's chains
+///   are built here and handed over whole), so they MAY run while `process` is
+///   active; callbacks and note flushes stay on the audio thread.
 /// - Live SysEx: `sonare_engine_push_midi_sysex` may allocate while preparing
 ///   instrument state and MAY run while `process` is active. Call it from the
 ///   serialized control thread; dispatch at the requested frame remains
@@ -873,6 +882,9 @@ SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* co
 ///   renders continuous audio -- no note is cut and no delay line is cleared --
 ///   but it is not bit-identical to the one-call result.
 ///
+///   A @p total_frames of 0 renders nothing; with @p finalize non-zero it still
+///   ends the timeline, exactly as sonare_engine_finish_offline_render does.
+///
 /// @return @c SONARE_ERROR_INVALID_PARAMETER when @p block_size exceeds the
 ///   block size the engine was prepared with, or @p num_channels exceeds the
 ///   prepared channel count; @c SONARE_ERROR_INVALID_STATE when the engine was
@@ -909,6 +921,13 @@ SonareError sonare_engine_finish_offline_render(SonareRealtimeEngine* engine);
 ///   does. sonare_engine_render_offline does NOT pre-roll, because a chunked
 ///   render would re-prime on every chunk; a host driving it directly calls
 ///   sonare_engine_prime_offline_parameters once itself.
+///
+///   The result is aligned to the timeline: the engine renders its reported
+///   latency (sonare_engine_graph_latency_samples_q8, whole samples) ahead of the
+///   span and drops it, so frame 0 holds the playhead's timeline sample and the
+///   result is @c total_frames long. The transport therefore advances by the span
+///   plus that latency. sonare_engine_render_offline is not aligned; its output
+///   carries the latency as live output does.
 ///
 ///   The whole result is held in memory, so the span is capped by a 1 GiB peak
 ///   budget over the full-size float buffers a bounce holds at once. The cap is
@@ -954,6 +973,9 @@ void sonare_free_bounce_result(SonareEngineBounceResult* result);
 ///   from the current playhead and runs the same offline pre-roll as
 ///   sonare_engine_bounce_offline, so the frozen clip captures the lanes at their
 ///   settled values instead of carrying a fade-in the live lanes never had.
+///   The clip holds the span aligned to the timeline: the source layer's latency
+///   (instrument PDC plus the lane and bus alignment) is rendered ahead and
+///   dropped, because playback passes the clip through that latency again.
 /// @return @c SONARE_ERROR_INVALID_PARAMETER when @c block_size exceeds the
 ///   prepared block size or @c num_channels the prepared channel count;
 ///   @c SONARE_ERROR_INVALID_STATE when the engine was never prepared.
