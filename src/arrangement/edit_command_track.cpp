@@ -9,6 +9,7 @@
 #include "arrangement/edit_command.h"
 #include "arrangement/edit_command_internal.h"
 #include "arrangement/vocal_edit_sidecar.h"
+#include "mixing/panner.h"
 
 namespace sonare::arrangement {
 
@@ -240,7 +241,10 @@ bool SetTrackPan::apply(Project& project, MidiContentStore& /*store*/) {
   if (t == nullptr) {
     return false;
   }
-  t->pan = std::isfinite(pan_) ? std::clamp(pan_, -1.0f, 1.0f) : 0.0f;
+  if (!mixing::pan_in_range(pan_)) {
+    return false;
+  }
+  t->pan = pan_;
   return true;
 }
 

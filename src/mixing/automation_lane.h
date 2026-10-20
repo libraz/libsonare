@@ -54,6 +54,8 @@ struct AutomationBlockEvent {
 enum class AutomationPushResult {
   Success,
   NonMonotonic,
+  /// The value lies outside the target parameter's documented domain.
+  OutOfDomain,
   Full,
 };
 

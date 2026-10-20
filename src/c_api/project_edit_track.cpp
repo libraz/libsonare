@@ -1,6 +1,11 @@
 #include <algorithm>
 
 #include "c_api/project_internal.h"
+#include "mixing/panner.h"
+#include "mixing/stereo_width.h"
+#if defined(SONARE_WITH_MIXING)
+#include "engine/mixing_runtime.h"
+#endif
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
@@ -43,9 +48,31 @@ static_assert(static_cast<int>(arr::MarkerKind::kKeySignature) == SONARE_MARKER_
 
 namespace {
 
+// True when @p value is outside the domain of the pan or width parameter the lane drives.
+bool lane_value_out_of_domain(sonare::automation::AutomationTargetKind kind, uint32_t param_id,
+                              float value) {
+  if (kind == sonare::automation::AutomationTargetKind::kTrackPan) {
+    return !sonare::mixing::pan_in_range(value);
+  }
+#if defined(SONARE_WITH_MIXING)
+  if (kind == sonare::automation::AutomationTargetKind::kOpaque) {
+    if (param_id == sonare::engine::MixingRuntime::kPan) {
+      return !sonare::mixing::pan_in_range(value);
+    }
+    if (param_id == sonare::engine::MixingRuntime::kWidth) {
+      return !sonare::mixing::width_in_range(value);
+    }
+  }
+#else
+  (void)param_id;
+#endif
+  return false;
+}
+
 // Validates lane descriptor fields and builds an automation::AutomationLane.
 // The target parameter id must be non-zero; each breakpoint's ppq must be
-// finite and >= 0, its value finite, and its curve ordinal in range.
+// finite and >= 0, its value finite (and inside the pan or width domain for such lanes), and its
+// curve ordinal in range.
 SonareError automation_lane_from_values(uint32_t target_param_id, uint32_t target_kind,
                                         const SonareAutomationPoint* point_data, size_t point_count,
                                         sonare::automation::AutomationLane* out) {
@@ -60,7 +87,8 @@ SonareError automation_lane_from_values(uint32_t target_param_id, uint32_t targe
   breakpoints.reserve(point_count);
   for (size_t i = 0; i < point_count; ++i) {
     const SonareAutomationPoint& p = point_data[i];
-    if (!finite_non_negative(p.ppq) || !std::isfinite(p.value)) {
+    if (!finite_non_negative(p.ppq) || !std::isfinite(p.value) ||
+        lane_value_out_of_domain(kind, target_param_id, p.value)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     sonare::automation::Breakpoint bp;
@@ -502,7 +530,9 @@ SonareError sonare_project_set_track_solo(SonareProject* project, uint32_t track
 SonareError sonare_project_set_track_pan(SonareProject* project, uint32_t track_id, float pan) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!project || track_id == 0 || !std::isfinite(pan)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!project || track_id == 0 || !sonare::mixing::pan_in_range(pan)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   if (!project->history.project().has_track(track_id)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   auto command = std::make_unique<arr::SetTrackPan>(track_id, pan);

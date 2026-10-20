@@ -1322,6 +1322,18 @@ TEST_CASE("present invalid project integer and enum fields report invalid_format
   CHECK(edge.project->time_signatures()[0].time_sig.numerator == std::numeric_limits<int>::max());
 }
 
+TEST_CASE("project deserialize refuses a track pan outside [-1, 1]", "[serialize]") {
+  for (const char* document : {R"({"version":1,"tracks":[{"id":1,"pan":1.5}]})",
+                               R"({"version":1,"tracks":[{"id":1,"pan":-1.01}]})"}) {
+    INFO(document);
+    const auto result = project_from_json(document);
+    REQUIRE_FALSE(result.ok());
+    REQUIRE_FALSE(result.diagnostics.empty());
+    CHECK(result.diagnostics.back().code == "invalid_format");
+    CHECK(result.diagnostics.back().message.find("tracks[].pan") != std::string::npos);
+  }
+}
+
 TEST_CASE("project deserialize rejects float narrowing overflow with a field path", "[serialize]") {
   struct InvalidFloatField {
     const char* document;

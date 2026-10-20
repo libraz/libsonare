@@ -19,6 +19,7 @@ bool ChannelStrip::schedule_width_automation(int64_t sample_pos, float width,
 AutomationPushResult ChannelStrip::schedule_width_automation_result(
     int64_t sample_pos, float width, AutomationCurveType curve) noexcept {
   if (!std::isfinite(width)) return AutomationPushResult::NonMonotonic;
+  if (!width_in_range(width)) return AutomationPushResult::OutOfDomain;
   AutomationEvent event;
   event.sample_pos = sample_pos;
   event.value = width;
@@ -52,6 +53,7 @@ bool ChannelStrip::schedule_pan_automation(int64_t sample_pos, float pan,
 AutomationPushResult ChannelStrip::schedule_pan_automation_result(
     int64_t sample_pos, float pan, AutomationCurveType curve) noexcept {
   if (!std::isfinite(pan)) return AutomationPushResult::NonMonotonic;
+  if (!pan_in_range(pan)) return AutomationPushResult::OutOfDomain;
   AutomationEvent event;
   event.sample_pos = sample_pos;
   event.value = pan;
@@ -108,6 +110,7 @@ InsertAutomationScheduleResult ChannelStrip::schedule_insert_automation_result(
       case AutomationPushResult::Success:
         return InsertAutomationScheduleResult::Success;
       case AutomationPushResult::NonMonotonic:
+      case AutomationPushResult::OutOfDomain:
         return InsertAutomationScheduleResult::InvalidParameter;
       case AutomationPushResult::Full:
         break;
@@ -159,6 +162,7 @@ void ChannelStrip::apply_automation_event(const AutomationEvent& event) noexcept
       set_fader_db(event.value);
       break;
     case AutomationTargetKind::Pan:
+      // Scheduling already refused out-of-domain values.
       set_pan(event.value);
       break;
     case AutomationTargetKind::Width:

@@ -1146,6 +1146,13 @@ TEST_CASE("C-ABI set_track_gain/mute/solo/pan with undo", "[project][c-abi-edit]
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(serialize(project) == before);
 
+  // A pan outside [-1, 1] is refused rather than clamped; the project and undo history
+  // are unchanged.
+  REQUIRE(sonare_project_set_track_pan(project, fx.track, 1.5f) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_set_track_pan(project, fx.track, -1.01f) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(serialize(project) == before);
+
   sonare_project_destroy(project);
 }
 
@@ -1313,6 +1320,34 @@ TEST_CASE("C-ABI staging-vector setters keep exceptions inside the ABI", "[proje
   sonare_project_destroy(project);
 }
 
+TEST_CASE("C-ABI automation lane refuses out-of-domain pan and width breakpoints",
+          "[project][c-abi-edit]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  AudioFixture fx = add_audio_track_clip(project, 0.0, 8.0);
+  const std::string before = serialize(project);
+
+  SonareAutomationPoint point{};
+  point.ppq = 0.0;
+  point.curve_to_next = SONARE_CURVE_LINEAR;
+  SonareAutomationLaneDescEx desc{};
+  desc.target_param_id = 7;
+  desc.target_kind = SONARE_AUTOMATION_TARGET_TRACK_PAN;
+  desc.points = &point;
+  desc.point_count = 1;
+  uint32_t out_id = 0;
+
+  point.value = 1.5f;
+  REQUIRE(sonare_project_add_automation_lane_ex(project, fx.track, &desc, &out_id) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(serialize(project) == before);
+
+  point.value = 1.0f;
+  REQUIRE(sonare_project_add_automation_lane_ex(project, fx.track, &desc, &out_id) == SONARE_OK);
+
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("C-ABI automation lane add / edit / remove with undo", "[project][c-abi-edit]") {
   SonareProject* project = nullptr;
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
@@ -1470,9 +1505,12 @@ TEST_CASE("C-ABI typed automation lane add/edit preserves legacy compatibility",
   opaque.point_count = 1;
   REQUIRE(sonare_project_add_automation_lane(project, fx.track, &opaque, nullptr) == SONARE_OK);
 
+  // Pan breakpoints are refused outside [-1, 1], so the pan lanes carry a value of their own.
+  SonareAutomationPoint pan_points[1] = {{0.0, 0.25f, SONARE_CURVE_LINEAR}};
   SonareAutomationLaneDescEx pan = fader;
   pan.target_param_id = 101;
   pan.target_kind = SONARE_AUTOMATION_TARGET_TRACK_PAN;
+  pan.points = pan_points;
   REQUIRE(sonare_project_add_automation_lane_ex(project, fx.track, &pan, nullptr) == SONARE_OK);
   const std::string with_fader_and_pan = serialize(project);
 
@@ -1494,6 +1532,7 @@ TEST_CASE("C-ABI typed automation lane add/edit preserves legacy compatibility",
   // Editing the fader into the already occupied pan slot is also atomic.
   SonareAutomationLaneDescEx conflicting_edit = fader;
   conflicting_edit.target_kind = SONARE_AUTOMATION_TARGET_TRACK_PAN;
+  conflicting_edit.points = pan_points;
   REQUIRE(sonare_project_edit_automation_lane_ex(project, fx.track, 100, &conflicting_edit) ==
           SONARE_ERROR_INVALID_STATE);
   REQUIRE(serialize(project) == with_fader_and_pan);

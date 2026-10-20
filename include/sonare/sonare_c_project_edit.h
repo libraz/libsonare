@@ -642,7 +642,8 @@ SonareError sonare_project_set_track_mute(SonareProject* project, uint32_t track
 SonareError sonare_project_set_track_solo(SonareProject* project, uint32_t track_id, int solo);
 
 /// @brief Sets a track's stereo balance in [-1, +1] (0 = center) via an undoable
-///        edit command. @p pan is clamped to the valid range. @p track_id must
+///        edit command. @p pan outside [-1, +1] or non-finite is refused
+///        with SONARE_ERROR_INVALID_PARAMETER and leaves the project unchanged. @p track_id must
 ///        reference an existing track. See @ref sonare_project_set_track_gain for
 ///        how track controls are applied.
 ///

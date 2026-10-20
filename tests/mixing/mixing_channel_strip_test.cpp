@@ -1698,6 +1698,25 @@ TEST_CASE("ChannelStrip rejects non-finite live values without poisoning later u
   REQUIRE(strip.schedule_fader_automation(0, -3.0f));
 }
 
+TEST_CASE("ChannelStrip refuses out-of-domain pan and width on every path", "[mixing]") {
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  strip.prepare(48000.0, 64);
+
+  REQUIRE_FALSE(strip.set_pan(1.5f));
+  REQUIRE_FALSE(strip.set_width(3.0f));
+  REQUIRE(strip.pan() == 0.0f);
+  REQUIRE(strip.width() == 1.0f);
+  REQUIRE(strip.set_pan(-1.0f));
+  REQUIRE(strip.set_width(2.0f));
+
+  using sonare::mixing::AutomationPushResult;
+  REQUIRE(strip.schedule_pan_automation_result(0, -1.5f) == AutomationPushResult::OutOfDomain);
+  REQUIRE(strip.schedule_width_automation_result(0, -0.5f) == AutomationPushResult::OutOfDomain);
+  REQUIRE(strip.schedule_width_automation_result(0, 2.5f) == AutomationPushResult::OutOfDomain);
+  REQUIRE(strip.schedule_pan_automation_result(0, 1.0f) == AutomationPushResult::Success);
+  REQUIRE(strip.schedule_width_automation_result(0, 2.0f) == AutomationPushResult::Success);
+}
+
 TEST_CASE("ChannelStrip applies pan and width automation in sample order", "[mixing]") {
   std::array<float, 6> left{1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
   std::array<float, 6> right{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};

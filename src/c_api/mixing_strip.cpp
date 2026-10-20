@@ -516,7 +516,8 @@ SonareError sonare_strip_schedule_pan_automation(SonareStrip* strip, int64_t sam
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   const auto result = strip->strip.schedule_pan_automation_result(sample_pos, pan, curve_enum);
-  if (result == sonare::mixing::AutomationPushResult::NonMonotonic) {
+  if (result == sonare::mixing::AutomationPushResult::NonMonotonic ||
+      result == sonare::mixing::AutomationPushResult::OutOfDomain) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (result == sonare::mixing::AutomationPushResult::Full) {
@@ -536,7 +537,8 @@ SonareError sonare_strip_schedule_width_automation(SonareStrip* strip, int64_t s
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   const auto result = strip->strip.schedule_width_automation_result(sample_pos, width, curve_enum);
-  if (result == sonare::mixing::AutomationPushResult::NonMonotonic) {
+  if (result == sonare::mixing::AutomationPushResult::NonMonotonic ||
+      result == sonare::mixing::AutomationPushResult::OutOfDomain) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (result == sonare::mixing::AutomationPushResult::Full) {

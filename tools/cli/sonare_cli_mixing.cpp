@@ -29,9 +29,13 @@ int cmd_mix(const CliArgs& args, const Audio& audio) {
   mixing::ChannelStrip strip;
   strip.set_input_trim_db(args.get_float("input-trim-db", 0.0f));
   strip.set_fader_db(args.get_float("fader-db", 0.0f));
-  strip.set_pan(args.get_float("pan", 0.0f));
+  if (!strip.set_pan(args.get_float("pan", 0.0f))) {
+    throw std::invalid_argument("--pan must be a finite value within [-1, 1]");
+  }
   strip.set_pan_mode(parse_pan_mode_option(args.get_string("pan-mode", "balance")));
-  strip.set_width(width);
+  if (!strip.set_width(width)) {
+    throw std::invalid_argument("--width must be a finite value within [0, 2]");
+  }
 
   std::vector<float> left;
   std::vector<float> right;

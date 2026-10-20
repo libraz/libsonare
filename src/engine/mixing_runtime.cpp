@@ -46,11 +46,9 @@ bool MixingRuntime::set_parameter_impl(unsigned int param_id, float value) {
       strip_->set_fader_db(value);
       return true;
     case kPan:
-      strip_->set_pan(value);
-      return true;
+      return strip_->set_pan(value);
     case kWidth:
-      strip_->set_width(value);
-      return true;
+      return strip_->set_width(value);
     default:
       return false;
   }

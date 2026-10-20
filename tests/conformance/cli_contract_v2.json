@@ -16294,6 +16294,42 @@
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty"
+        },
+        {
+          "id": "pan_out_of_range",
+          "argv": [
+            "mix-strip",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--pan",
+            "1.5",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "width_out_of_range",
+          "argv": [
+            "mix-strip",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--width",
+            "3",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
         }
       ],
       "artifacts": {}

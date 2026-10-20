@@ -59,6 +59,22 @@ TEST_CASE("MixingRuntime drives ChannelStrip process_at and RT-safe parameters",
   REQUIRE(right[7] < 0.51f);
 }
 
+TEST_CASE("MixingRuntime refuses out-of-domain master pan and width", "[engine][mixing]") {
+  sonare::mixing::ChannelStrip strip({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  sonare::engine::MixingRuntime runtime;
+  REQUIRE(runtime.bind(&strip));
+  runtime.prepare(48000.0, 64);
+
+  REQUIRE_FALSE(runtime.set_parameter(sonare::engine::MixingRuntime::kPan, 1.5f));
+  REQUIRE_FALSE(runtime.set_parameter(sonare::engine::MixingRuntime::kWidth, 3.0f));
+  REQUIRE(strip.pan() == 0.0f);
+  REQUIRE(strip.width() == 1.0f);
+  REQUIRE(runtime.set_parameter(sonare::engine::MixingRuntime::kPan, 0.5f));
+  REQUIRE(runtime.set_parameter(sonare::engine::MixingRuntime::kWidth, 1.5f));
+  REQUIRE(strip.pan() == 0.5f);
+  REQUIRE(strip.width() == 1.5f);
+}
+
 TEST_CASE("AutomationEngine can drive MixingRuntime fader parameter",
           "[engine][mixing_runtime][automation]") {
   sonare::transport::TempoMap tempo;

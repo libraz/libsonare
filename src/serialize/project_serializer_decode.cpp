@@ -17,6 +17,7 @@
 #include "arrangement/harmonic_timeline.h"
 #include "automation/automation_lane.h"
 #include "mixing/api/scene.h"
+#include "mixing/panner.h"
 #include "serialize/project_serializer_internal.h"
 #include "serialize/project_serializer_private.h"
 #include "serialize/serialized_enum_bounds.h"
@@ -136,7 +137,11 @@ arrangement::Track track_from_json(const Value& v, uint32_t schema_version) {
   t.gain = std::max(0.0f, float_or(v, "gain", 1.0f, "tracks[].gain"));
   t.mute = bool_or(v, "mute", false);
   t.solo = bool_or(v, "solo", false);
-  t.pan = std::clamp(float_or(v, "pan", 0.0f, "tracks[].pan"), -1.0f, 1.0f);
+  t.pan = float_or(v, "pan", 0.0f, "tracks[].pan");
+  if (!mixing::pan_in_range(t.pan)) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          "tracks[].pan must be within [-1, 1]: " + std::to_string(t.pan));
+  }
   t.channel_strip_ref = str_or(v, "channel_strip_ref", "");
   t.output_target = str_or(v, "output_target", "");
   t.midi_destination_id = uint_or(v, "midi_destination_id", 0);

@@ -167,7 +167,8 @@ class ChannelStrip : public rt::ProcessorBase {
     return automation_staging_refusals_.load();
   }
 
-  void set_width(float width) noexcept { width_.set_width(width); }
+  /// @return false, leaving the width unchanged, when @p width is outside [0, 2] or non-finite.
+  bool set_width(float width) noexcept { return width_.set_width(width); }
   float width() const noexcept { return width_.width(); }
   bool schedule_width_automation(int64_t sample_pos, float width,
                                  AutomationCurveType curve = AutomationCurveType::Linear) noexcept;
@@ -193,7 +194,8 @@ class ChannelStrip : public rt::ProcessorBase {
   float vca_offset_db() const noexcept { return fader_.vca_offset_db(); }
   float vca_trim_offset_db() const noexcept { return fader_.vca_trim_offset_db(); }
 
-  void set_pan(float pan) noexcept { panner_.set_pan(pan); }
+  /// @return false, leaving the position unchanged, when @p pan is outside [-1, 1] or non-finite.
+  bool set_pan(float pan) noexcept { return panner_.set_pan(pan); }
   float pan() const noexcept { return panner_.pan(); }
   bool schedule_pan_automation(int64_t sample_pos, float pan,
                                AutomationCurveType curve = AutomationCurveType::Linear) noexcept;
