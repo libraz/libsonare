@@ -25,32 +25,11 @@ float EqualizerProcessor::band_detector_db(size_t band_index, const float* const
                                            int readable_samples) {
   if (num_samples <= 0 || num_channels <= 0) return kFloorDb;
 
-  // Shared bandpass coefficients for this band's detector. Each channel keeps its
-  // own persistent z-state in detector_states_ so the filter and envelope carry
-  // over between blocks (see DetectorState comment in equalizer.h).
-  const double detector_frequency =
-      band.dyn.sidechain_freq_hz > 0.0f ? band.dyn.sidechain_freq_hz : band.frequency_hz;
-  const double frequency =
-      std::clamp(static_cast<double>(detector_frequency), 1.0, sample_rate * 0.5 - 1.0);
-  const auto coeffs = rt::rbj_bandpass_d(
-      frequency, sample_rate, std::max(static_cast<double>(band.dyn.sidechain_q), 1.0e-6));
-  const double b0 = coeffs.b0;
-  const double b1 = coeffs.b1;
-  const double b2 = coeffs.b2;
-  const double a1 = coeffs.a1;
-  const double a2 = coeffs.a2;
-
-  const int readable =
-      (readable_samples < 0 || readable_samples > num_samples) ? num_samples : readable_samples;
-
-  const double attack = sonare::time_to_attack_release_rate(sample_rate, band.dyn.attack_ms);
-  const double release = sonare::time_to_attack_release_rate(sample_rate, band.dyn.release_ms);
-  // Clamp the detector delay to the ring capacity preallocated in prepare() so
-  // the audio-thread path never reallocates (automation past the bound
-  // saturates).
-  const int detector_delay_samples =
-      static_cast<int>(std::clamp(std::round(sample_rate * band.dyn.detector_delay_ms * 0.001), 0.0,
-                                  static_cast<double>(max_detector_delay_samples_)));
+  const BandDetectorDesign design =
+      design_band_detector(sample_rate, band.frequency_hz, band.dyn.sidechain_freq_hz,
+                           band.dyn.sidechain_q, band.dyn.attack_ms, band.dyn.release_ms);
+  const size_t look = static_cast<size_t>(band_detector_delay_samples(
+      sample_rate, band.dyn.detector_delay_ms, max_detector_delay_samples_));
 
   auto& states = detector_states_[band_index];
   // States are preallocated in prepare(); only grow if a wider channel count is
@@ -59,56 +38,16 @@ float EqualizerProcessor::band_detector_db(size_t band_index, const float* const
     states.resize(static_cast<size_t>(num_channels));
   }
 
-  const auto biquad = [&](double x, double& z1, double& z2) {
-    const double y = b0 * x + z1;
-    z1 = b1 * x - a1 * y + z2;
-    z2 = b2 * x - a2 * y;
-    return y;
-  };
-
   double sum = 0.0;
   int counted = 0;
   for (int ch = 0; ch < num_channels; ++ch) {
     if (ch == excluded_channel) continue;
     ++counted;
-    DetectorState& s = states[static_cast<size_t>(ch)];
-    // Re-window the persistent detector-delay ring when the delay changes. The
-    // ring is preallocated; offline/unprepared paths that grew states above may
-    // have an unsized ring, so grow it here (only off the audio thread).
-    const size_t look = static_cast<size_t>(std::max(detector_delay_samples, 0));
-    if (s.look_size != look) {
-      if (s.look_ring.size() < look) {
-        s.look_ring.assign(look, 0.0f);
-      } else {
-        std::fill(s.look_ring.begin(), s.look_ring.begin() + look, 0.0f);
-      }
-      s.look_size = look;
-      s.look_pos = 0;
-    }
-    double envelope = s.envelope;
-    // The detector consumes a continuous stream: a per-channel FIFO carries the
-    // last `look` input samples from the previous block into this one, so a
-    // transient near a block boundary is still detected (within ~look samples)
-    // instead of the final sample being repeated.
-    for (int i = 0; i < num_samples; ++i) {
-      float input;
-      if (look > 0) {
-        input = s.look_ring[s.look_pos];
-        s.look_ring[s.look_pos] = i < readable ? channels[ch][i] : 0.0f;
-        s.look_pos = (s.look_pos + 1) % look;
-      } else {
-        input = i < readable ? channels[ch][i] : 0.0f;
-      }
-      const double stage_a = biquad(input, s.filter_a_z1, s.filter_a_z2);
-      const double rectified = std::abs(biquad(stage_a, s.filter_b_z1, s.filter_b_z2));
-      const double coeff = rectified > envelope ? attack : release;
-      envelope += coeff * (rectified - envelope);
-      sum += envelope * envelope;
-    }
-    s.envelope = envelope;
+    BandDetectorChannel& state = states[static_cast<size_t>(ch)];
+    state.set_delay(look);
+    sum += state.accumulate(design, channels[ch], num_samples, readable_samples);
   }
-  const double count = static_cast<double>(counted) * static_cast<double>(num_samples);
-  return linear_to_db(static_cast<float>(std::sqrt(sum / std::max(count, 1.0))));
+  return band_detector_level_db(sum, counted, num_samples);
 }
 
 float EqualizerProcessor::rms_db(const float* const* channels, int num_channels,

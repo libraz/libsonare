@@ -252,6 +252,7 @@ if(BUILD_MASTERING)
     mastering/dynamics/parallel_comp_test.cpp
     mastering/dynamics/sidechain_router_test.cpp
     mastering/eq/dynamic_eq_detector_delay_test.cpp
+    mastering/eq/dynamic_detector_shared_test.cpp
     mastering/eq/tilt_test.cpp
     mastering/final/dither_noise_shaping_rate_test.cpp
     mastering/maximizer/true_peak_limiter_test.cpp

@@ -30,7 +30,6 @@ bool valid_sidechain_freq_hz(float hz) noexcept { return hz == -1.0f || hz > 0.0
 using sonare::discard_group_if_non_finite;
 using sonare::discard_if_non_finite;
 using sonare::constants::kFloorDb;
-using sonare::constants::kTwoPiD;
 using sonare::mastering::dynamics::kRealtimePreparedChannels;
 
 void DynamicEq::prepare(double sample_rate, int max_block_size) {
@@ -51,11 +50,7 @@ void DynamicEq::prepare(double sample_rate, int max_block_size) {
     // coefficients that no longer exist and keep them from being designed.
     detector = DetectorState{};
     detector.channels.assign(kRealtimePreparedChannels, {});
-    for (auto& channel : detector.channels) {
-      channel.look_ring.assign(static_cast<size_t>(std::max(max_detector_delay_samples_, 0)), 0.0f);
-      channel.look_size = 0;
-      channel.look_pos = 0;
-    }
+    for (auto& channel : detector.channels) channel.prepare(max_detector_delay_samples_);
   }
   sub_channels_.assign(kRealtimePreparedChannels, nullptr);
   prepared_ = true;
@@ -403,13 +398,6 @@ void DynamicEq::ensure_detector(size_t index, int num_channels) {
                           "num_channels exceeds prepared DynamicEq detector state");
   }
 
-  // Clamp the detector delay to the capacity preallocated in prepare() so the
-  // ring is never reallocated on the audio thread (automation past the bound
-  // saturates).
-  const int detector_delay_samples =
-      static_cast<int>(std::clamp(std::round(sample_rate_ * band.detector_delay_ms * 0.001), 0.0,
-                                  static_cast<double>(max_detector_delay_samples_)));
-
   // (Re)design the bandpass prototype and timing only when the relevant band
   // fields change — coefficient design is double-precision and not free.
   const bool design_changed =
@@ -417,20 +405,8 @@ void DynamicEq::ensure_detector(size_t index, int num_channels) {
       state.sidechain_freq_hz != band.sidechain_freq_hz || state.sidechain_q != band.sidechain_q ||
       state.attack_ms != band.attack_ms || state.release_ms != band.release_ms;
   if (design_changed) {
-    const double detector_frequency =
-        band.sidechain_freq_hz > 0.0f ? band.sidechain_freq_hz : band.frequency_hz;
-    const double frequency =
-        std::clamp(static_cast<double>(detector_frequency), 1.0, sample_rate_ * 0.5 - 1.0);
-    const auto coeffs = rt::rbj_bandpass(
-        static_cast<float>(kTwoPiD * frequency / sample_rate_),
-        static_cast<float>(std::max(static_cast<double>(band.sidechain_q), 1.0e-6)));
-    state.prototype.b0 = coeffs.b0;
-    state.prototype.b1 = coeffs.b1;
-    state.prototype.b2 = coeffs.b2;
-    state.prototype.a1 = coeffs.a1;
-    state.prototype.a2 = coeffs.a2;
-    state.attack = sonare::time_to_attack_release_rate(sample_rate_, band.attack_ms);
-    state.release = sonare::time_to_attack_release_rate(sample_rate_, band.release_ms);
+    state.design = design_band_detector(sample_rate_, band.frequency_hz, band.sidechain_freq_hz,
+                                        band.sidechain_q, band.attack_ms, band.release_ms);
     state.frequency_hz = band.frequency_hz;
     state.sidechain_freq_hz = band.sidechain_freq_hz;
     state.sidechain_q = band.sidechain_q;
@@ -438,44 +414,12 @@ void DynamicEq::ensure_detector(size_t index, int num_channels) {
     state.release_ms = band.release_ms;
   }
 
-  // The per-channel state is preallocated in prepare(); channels_changed here
-  // means the observed channel count differs from the previous block (no
-  // allocation, just a re-seed of the now-active channels' coefficients).
-  const bool channels_changed = state.active_channels != num_channels;
-  const bool detector_delay_changed = state.detector_delay_ms != band.detector_delay_ms ||
-                                      state.detector_delay_samples != detector_delay_samples;
-  if (channels_changed) {
-    state.active_channels = num_channels;
-  }
-  if (detector_delay_changed) {
-    state.detector_delay_samples = detector_delay_samples;
-    state.detector_delay_ms = band.detector_delay_ms;
-  }
-
-  // Propagate fresh coefficients (and re-window the detector-delay ring) only
-  // when something relevant changed; the per-sample filter state (z1/z2) and
-  // ring contents are otherwise preserved across blocks for continuity. The
-  // ring is never resized here — its live FIFO length (look_size) is set
-  // within the capacity preallocated in prepare(), and the newly active
-  // window is zeroed.
-  if (design_changed || channels_changed || detector_delay_changed) {
-    for (int ch = 0; ch < num_channels; ++ch) {
-      DetectorChannel& channel = state.channels[static_cast<size_t>(ch)];
-      const auto copy = [&](DetectorBiquad& f) {
-        f.b0 = state.prototype.b0;
-        f.b1 = state.prototype.b1;
-        f.b2 = state.prototype.b2;
-        f.a1 = state.prototype.a1;
-        f.a2 = state.prototype.a2;
-      };
-      copy(channel.filter_a);
-      copy(channel.filter_b);
-      if (channel.look_size != static_cast<size_t>(detector_delay_samples)) {
-        channel.look_size = static_cast<size_t>(detector_delay_samples);
-        std::fill(channel.look_ring.begin(), channel.look_ring.begin() + channel.look_size, 0.0f);
-        channel.look_pos = 0;
-      }
-    }
+  // The delay is clamped to the capacity preallocated in prepare() so the ring is never
+  // reallocated on the audio thread (automation past the bound saturates).
+  const size_t look = static_cast<size_t>(band_detector_delay_samples(
+      sample_rate_, band.detector_delay_ms, max_detector_delay_samples_));
+  for (int ch = 0; ch < num_channels; ++ch) {
+    state.channels[static_cast<size_t>(ch)].set_delay(look);
   }
 }
 
@@ -484,59 +428,20 @@ float DynamicEq::band_detector_db(const float* const* channels, int num_channels
   if (num_samples <= 0 || num_channels <= 0) return kFloorDb;
   ensure_detector(index, num_channels);
   DetectorState& state = detectors_[index];
-  const int look = state.detector_delay_samples;
-  const int readable =
-      (readable_samples < 0 || readable_samples > num_samples) ? num_samples : readable_samples;
 
-  // Detector-history continuity fix (NOT true zero-latency lookahead). The
-  // bandpass filters and envelope follower are persistent across blocks, and a
-  // per-channel ring (look_ring) carries the last `look` input samples from the
-  // previous block into this one. The detector therefore processes a CONTINUOUS
-  // input stream — `[carried tail] ++ [this block minus its own tail]` — instead
-  // of the previous code's `min(num_samples-1, i+look)` which repeated the final
-  // sample for the last `look` positions of every block and systematically
-  // under-detected at each boundary.
-  //
-  // Trade-off: because the audio path stays latency-free, the detection horizon
-  // effectively LAGS by up to `look` samples rather than leading; a transient at
-  // a block boundary is still detected (within ~look samples), just not ahead of
-  // time. True lookahead would require delaying the audio, which this processor
-  // intentionally does not do.
+  // Detector-history continuity (NOT true zero-latency lookahead): each channel's persistent
+  // filters, envelope and delay ring carry over between blocks, so the detector reads a
+  // continuous stream. The audio path stays latency-free, so a transient at a block boundary is
+  // detected up to the detector delay late rather than ahead of time.
   double sum = 0.0;
   int counted = 0;
   for (int ch = 0; ch < num_channels; ++ch) {
     if (ch == excluded_channel) continue;
     ++counted;
-    DetectorChannel& dc = state.channels[static_cast<size_t>(ch)];
-    auto step = [&](float sample) {
-      const double rectified = std::abs(dc.filter_b.process(dc.filter_a.process(sample)));
-      const double coeff = rectified > dc.envelope ? state.attack : state.release;
-      dc.envelope += coeff * (rectified - dc.envelope);
-      sum += dc.envelope * dc.envelope;
-    };
-    // Continuous stream: the carried tail (oldest first) feeds the detector,
-    // followed by the current block. The detector consumes exactly num_samples
-    // inputs per channel (look carried + (num_samples - look) fresh), so the RMS
-    // count below stays num_channels * num_samples. After processing, the ring is
-    // a plain FIFO holding the most recent `look` input samples for the next
-    // call. No per-block allocation: the ring is sized once in ensure_detector().
-    for (int i = 0; i < num_samples; ++i) {
-      if (look > 0) {
-        // FIFO: emit the oldest stored sample, then store the new input in its
-        // slot. This delays each input by exactly `look` samples, giving the
-        // continuous stream described above.
-        const float oldest = dc.look_ring[dc.look_pos];
-        dc.look_ring[dc.look_pos] = i < readable ? channels[ch][i] : 0.0f;
-        dc.look_pos = (dc.look_pos + 1) % dc.look_size;
-        step(oldest);
-      } else {
-        step(i < readable ? channels[ch][i] : 0.0f);
-      }
-    }
+    sum += state.channels[static_cast<size_t>(ch)].accumulate(state.design, channels[ch],
+                                                              num_samples, readable_samples);
   }
-  const double count = static_cast<double>(counted) * static_cast<double>(num_samples);
-  const double rms = std::sqrt(sum / std::max(count, 1.0));
-  return linear_to_db(static_cast<float>(rms));
+  return band_detector_level_db(sum, counted, num_samples);
 }
 
 float DynamicEq::dynamic_gain_delta(const DynamicEqBand& band, float detector_db) {

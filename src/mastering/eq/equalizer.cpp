@@ -114,10 +114,8 @@ void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
   max_detector_delay_samples_ =
       static_cast<int>(std::round(sample_rate_ * kMaxDetectorDelayMs * 0.001));
   for (auto& states : detector_states_) {
-    states.assign(static_cast<size_t>(std::max(config_.max_channels, 0)), DetectorState{});
-    for (auto& state : states) {
-      state.look_ring.assign(static_cast<size_t>(std::max(max_detector_delay_samples_, 0)), 0.0f);
-    }
+    states.assign(static_cast<size_t>(std::max(config_.max_channels, 0)), BandDetectorChannel{});
+    for (auto& state : states) state.prepare(max_detector_delay_samples_);
   }
   validate_backend_capacity(bands_, phase_mode_);
   rebuild_iir();
@@ -256,13 +254,7 @@ void EqualizerProcessor::reset() {
   last_band_detector_db_.fill(kFloorDb);
   for (auto& states : detector_states_) {
     for (auto& state : states) {
-      // Zero the filter/envelope state and the live detector-delay window
-      // without releasing the preallocated ring (a default-assign would free it).
-      state.filter_a_z1 = state.filter_a_z2 = 0.0;
-      state.filter_b_z1 = state.filter_b_z2 = 0.0;
-      state.envelope = 0.0;
-      std::fill(state.look_ring.begin(), state.look_ring.end(), 0.0f);
-      state.look_pos = 0;
+      state.reset();
     }
   }
   last_applied_gain_db_.fill(0.0f);
@@ -283,8 +275,8 @@ bool EqualizerProcessor::discard_non_finite_dynamic_state() noexcept {
       // Five scalars per band per channel is the whole per-block cost. The delay
       // ring is the detector's history too, but it is walked only when the group
       // trips, never per block.
-      if (discard_group_if_non_finite(state.filter_a_z1, state.filter_a_z2, state.filter_b_z1,
-                                      state.filter_b_z2, state.envelope)) {
+      if (discard_group_if_non_finite(state.filter_a.z1, state.filter_a.z2, state.filter_b.z1,
+                                      state.filter_b.z2, state.envelope)) {
         std::fill(state.look_ring.begin(), state.look_ring.end(), 0.0f);
         state.look_pos = 0;
         discarded = true;

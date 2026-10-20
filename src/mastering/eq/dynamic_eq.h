@@ -124,61 +124,15 @@ class DynamicEq : public rt::ProcessorBase {
   // prepare() sample rate); a band requesting more is clamped to it. The delay
   // is on the detector's input only -- the audio path itself is never delayed.
 
-  // Persistent per-(band, channel) sidechain detector state. Kept across blocks
-  // so the bandpass filter, envelope follower and detector delay all evolve
-  // continuously — the detection horizon therefore crosses block boundaries
-  // correctly.
-  struct DetectorBiquad {
-    double b0 = 1.0, b1 = 0.0, b2 = 0.0, a1 = 0.0, a2 = 0.0;
-    double z1 = 0.0, z2 = 0.0;
-    double process(double x) {
-      const double y = b0 * x + z1;
-      z1 = b1 * x - a1 * y + z2;
-      z2 = b2 * x - a2 * y;
-      return y;
-    }
-    void reset() { z1 = z2 = 0.0; }
-  };
-  struct DetectorChannel {
-    DetectorBiquad filter_a;
-    DetectorBiquad filter_b;
-    double envelope = 0.0;
-    // Detector-delay ring of pre-filter input samples. This is NOT true
-    // lookahead: the detector consumes a sample that is `detector_delay_samples`
-    // BEHIND the audio position (a plain FIFO delay on the detector's own
-    // input), drawing the tail from the previous block so the horizon is
-    // continuous across block boundaries. See band_detector_db() for the full
-    // rationale. The vector is preallocated in prepare() to the maximum
-    // supported delay; only the first `look_size` entries are the live
-    // FIFO, so the modulo wrap uses look_size (not look_ring.size()) and
-    // changing the delay never resizes.
-    std::vector<float> look_ring;
-    size_t look_size = 0;
-    size_t look_pos = 0;
-    void reset() {
-      filter_a.reset();
-      filter_b.reset();
-      envelope = 0.0;
-      // Only the live FIFO is ever read; a window that grows is zeroed by ensure_detector().
-      std::fill(look_ring.begin(), look_ring.begin() + static_cast<std::ptrdiff_t>(look_size),
-                0.0f);
-      look_pos = 0;
-    }
-  };
   struct DetectorState {
-    std::vector<DetectorChannel> channels;  // preallocated to kRealtimePreparedChannels
-    int active_channels = -1;               // observed channel count (-1 until first block)
-    int detector_delay_samples = 0;
+    std::vector<BandDetectorChannel> channels;  // preallocated to kRealtimePreparedChannels
     // Cached design inputs so coefficients/ring are only rebuilt on change.
     float frequency_hz = -1.0f;
     float sidechain_freq_hz = -2.0f;
     float sidechain_q = -1.0f;
     float attack_ms = -1.0f;
     float release_ms = -1.0f;
-    float detector_delay_ms = -1.0f;
-    DetectorBiquad prototype;
-    double attack = 1.0;
-    double release = 1.0;
+    BandDetectorDesign design;
   };
 
   static void validate_index(size_t index);
