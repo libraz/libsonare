@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
-#include <numeric>
+#include <utility>
 #include <vector>
 
 #include "feature/cqt.h"
@@ -13,18 +13,21 @@ namespace sonare::detail {
 /// Append one dense row using librosa-style cumulative L1 sparsification.
 inline void append_sparsified_kernel_row(SparseComplexKernel& out, const std::complex<float>* row,
                                          int columns, float sparsity = 0.01f) {
-  std::vector<int> order(static_cast<size_t>(columns));
-  std::iota(order.begin(), order.end(), 0);
-  std::sort(order.begin(), order.end(),
-            [row](int lhs, int rhs) { return std::abs(row[lhs]) < std::abs(row[rhs]); });
-
+  // Zero columns are never kept and spend none of the budget, so only the
+  // nonzero ones are ordered; ties fall back to the column index.
+  std::vector<std::pair<float, int>> order;
+  order.reserve(static_cast<size_t>(columns));
   double total = 0.0;
-  for (int column = 0; column < columns; ++column) total += std::abs(row[column]);
+  for (int column = 0; column < columns; ++column) {
+    const float magnitude = std::abs(row[column]);
+    total += magnitude;
+    if (row[column] != std::complex<float>{}) order.emplace_back(magnitude, column);
+  }
+  std::sort(order.begin(), order.end());
   const double discard_budget = total * std::clamp(sparsity, 0.0f, 1.0f);
   double discarded = 0.0;
   std::vector<unsigned char> keep(static_cast<size_t>(columns), 1);
-  for (int column : order) {
-    const double magnitude = std::abs(row[column]);
+  for (const auto& [magnitude, column] : order) {
     if (discarded + magnitude > discard_budget) break;
     keep[static_cast<size_t>(column)] = 0;
     discarded += magnitude;
