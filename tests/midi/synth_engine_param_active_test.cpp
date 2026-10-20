@@ -60,6 +60,8 @@ const Excuse kExcuses[] = {
     {SynthEngineMode::kPipeOrgan, "swell", "performance: the shutter follows CC11"},
     {SynthEngineMode::kHarpsichord, "velocityDroopDb",
      "performance: acts only on a velocity above peakVelocity"},
+    {SynthEngineMode::kFlute, "jetCentringPerOctave",
+     "acts only above the first register (f0 over 2 x C4), a relation to the key"},
 };
 
 bool excuse_matches(const Excuse& e, SynthEngineMode mode, const std::string& key) {
