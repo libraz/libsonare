@@ -95,7 +95,7 @@ void HrtfSet::interpolate(float azimuth_deg, float elevation_deg, float* left, f
   const float az_step = data_.header.az_step_deg;
 
   // Azimuth wraps around the full circle covered by the n_az columns.
-  const float wrapped_az = wrap_azimuth_deg(azimuth_deg);
+  const float wrapped_az = std::isfinite(azimuth_deg) ? wrap_azimuth_deg(azimuth_deg) : 0.0f;
   const float az_units = wrapped_az / az_step;
   const float az_floor = std::floor(az_units);
   int az_low = static_cast<int>(az_floor) % n_az;
@@ -113,9 +113,10 @@ void HrtfSet::interpolate(float azimuth_deg, float elevation_deg, float* left, f
   if (n_el > 1 && elevation_deg > el_min && elevation_deg < el_max) {
     const float el_units = (elevation_deg - el_min) / el_step;
     const float el_floor = std::floor(el_units);
-    el_low = static_cast<int>(el_floor);
+    // Rounding near el_max can land the floor on the last row; keep the pair inside the table.
+    el_low = std::min(static_cast<int>(el_floor), n_el - 2);
     el_high = el_low + 1;
-    el_frac = el_units - el_floor;
+    el_frac = std::min(std::max(el_units - static_cast<float>(el_low), 0.0f), 1.0f);
   } else if (elevation_deg >= el_max) {
     el_low = el_high = n_el - 1;
   }

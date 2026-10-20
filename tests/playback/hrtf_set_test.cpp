@@ -247,6 +247,36 @@ TEST_CASE("HRTF interpolation clamps elevation to the nearest row", "[playback][
   CHECK(std::abs(itd - fixture_itd_samples(spec, spec.n_el - 1, 2)) < 1e-4f);
 }
 
+TEST_CASE(
+    "HRTF interpolation stays inside the table just below the top elevation and for non-finite "
+    "angles",
+    "[playback][hrtf]") {
+  for (const float step : {15.0f, 0.1f * 3.0f, 7.3f}) {
+    ShrfFixtureSpec spec;
+    spec.n_el = 5;
+    spec.el_min_deg = -3.7f;
+    spec.el_step_deg = step;
+    const std::unique_ptr<HrtfSet> set = load(make_shrf_fixture(spec));
+    std::vector<float> left(static_cast<size_t>(spec.taps));
+    std::vector<float> right(static_cast<size_t>(spec.taps));
+    float itd = 0.0f;
+    const float el_max = spec.el_min_deg + step * static_cast<float>(spec.n_el - 1);
+
+    set->interpolate(90.0f, std::nextafter(el_max, 0.0f), left.data(), right.data(), &itd);
+    CHECK(std::abs(itd - fixture_itd_samples(spec, spec.n_el - 1, 2)) <
+          1e-2f * (1.0f + std::abs(itd)));
+
+    const float inf = std::numeric_limits<float>::infinity();
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    for (const float az : {inf, -inf, nan}) {
+      for (const float el : {inf, -inf, nan, 0.0f}) {
+        set->interpolate(az, el, left.data(), right.data(), &itd);
+        CHECK(std::isfinite(itd));
+      }
+    }
+  }
+}
+
 TEST_CASE("resampling to the same rate is a no-op", "[playback][hrtf]") {
   ShrfFixtureSpec spec;
   spec.taps = 256;
