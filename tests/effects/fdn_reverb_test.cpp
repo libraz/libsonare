@@ -6,11 +6,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <complex>
 #include <limits>
 #include <string>
 #include <vector>
 
 #include "support/audio_fixtures.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 using namespace sonare;
@@ -18,7 +20,80 @@ using Catch::Matchers::WithinAbs;
 using sonare::effects::reverb::FdnReverb;
 using sonare::effects::reverb::FdnReverbConfig;
 
-namespace {}  // namespace
+namespace {
+
+/// T60 (s) of the wet tail in a band 30 % either side of @p centre_hz: band power read in
+/// successive windows of the impulse response, then a least-squares line through the dB values.
+/// A narrower band or shorter span reads the four-line network's beating: 3.5 % apart at rates
+/// that ring alike, more than the tolerance below.
+double band_t60_seconds(double centre_hz, double sample_rate) {
+  constexpr double kStartS = 0.3;
+  constexpr double kWindowS = 0.2;
+  constexpr int kWindows = 12;
+  constexpr int kFrequencies = 65;
+  constexpr double kHalfBand = 0.3;
+  FdnReverbConfig config;
+  config.dry_wet = 1.0f;
+  FdnReverb reverb(config);
+  const int samples = static_cast<int>((kStartS + kWindowS * kWindows) * sample_rate) + 1;
+  reverb.prepare(sample_rate, samples);
+  std::vector<float> response = sonare::test::generate_impulse(samples);
+  float* channels[1] = {response.data()};
+  reverb.process(channels, 1, samples);
+
+  const size_t window = static_cast<size_t>(kWindowS * sample_rate);
+  const size_t first = static_cast<size_t>(kStartS * sample_rate);
+  std::vector<double> power_db(kWindows, 0.0);
+  for (int k = 0; k < kFrequencies; ++k) {
+    const double hz = centre_hz * (1.0 - kHalfBand + 2.0 * kHalfBand * k / (kFrequencies - 1));
+    const std::complex<double> step = std::polar(1.0, -constants::kTwoPiD * hz / sample_rate);
+    for (int w = 0; w < kWindows; ++w) {
+      std::complex<double> phasor(1.0, 0.0);
+      std::complex<double> sum(0.0, 0.0);
+      const size_t begin = first + static_cast<size_t>(w) * window;
+      for (size_t n = begin; n < begin + window; ++n) {
+        sum += static_cast<double>(response[n]) * phasor;
+        phasor *= step;
+      }
+      power_db[static_cast<size_t>(w)] += std::norm(sum) / kFrequencies;
+    }
+  }
+  double mean_t = 0.0;
+  double mean_db = 0.0;
+  for (int w = 0; w < kWindows; ++w) {
+    power_db[static_cast<size_t>(w)] = 10.0 * std::log10(power_db[static_cast<size_t>(w)]);
+    mean_t += w * kWindowS / kWindows;
+    mean_db += power_db[static_cast<size_t>(w)] / kWindows;
+  }
+  double covariance = 0.0;
+  double variance = 0.0;
+  for (int w = 0; w < kWindows; ++w) {
+    const double dt = w * kWindowS - mean_t;
+    covariance += dt * (power_db[static_cast<size_t>(w)] - mean_db);
+    variance += dt * dt;
+  }
+  const double slope_db_per_s = covariance / variance;
+  return slope_db_per_s < 0.0 ? -60.0 / slope_db_per_s : 0.0;
+}
+
+}  // namespace
+
+// The damping is a T60 shortening in physical frequency, so the same config rings the same
+// in a band at every rate. Anchoring the HF loss at Nyquist made the 8 kHz band ring 17 %
+// longer at 96 kHz than at 44.1 kHz.
+TEST_CASE("FdnReverb band decay does not depend on the sample rate", "[reverb][fdn]") {
+  constexpr double kTolerance = 0.03;
+  for (const double band_hz : {2000.0, 8000.0}) {
+    const double reference = band_t60_seconds(band_hz, 48000.0);
+    CAPTURE(band_hz, reference);
+    REQUIRE(reference > 0.0);
+    for (const double rate : {44100.0, 96000.0, 192000.0}) {
+      const double t60 = band_t60_seconds(band_hz, rate);
+      CAPTURE(rate, t60);
+      CHECK(std::abs(t60 - reference) <= kTolerance * reference);
+    }
+  }
+}
 
 // Regression for the mono output clobber bug: when num_channels == 1 the right
 // channel aliases the left buffer, so writing both taps to the same address used

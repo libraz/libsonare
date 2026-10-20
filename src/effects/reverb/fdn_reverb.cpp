@@ -5,6 +5,7 @@
 #include <limits>
 
 #include "effects/common/field_domain.h"
+#include "rt/rate_scaled.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
@@ -47,7 +48,8 @@ void FdnReverb::prepare(double sample_rate, int max_block_size) {
 }
 
 void FdnReverb::update_absorption() {
-  // Per-line absorption: derive one-pole coefficients from LF/HF T60 targets.
+  // Per-line absorption: one-pole coefficients from LF/HF T60 targets, as voiced at 48 kHz, then
+  // re-expressed so the loss at a frequency in Hz is that voicing's at the prepared rate.
   const float t60_lf = std::max(0.01f, config_.decay * 10.0f);
   const float hf_damping = config_.hf_damping;
   const float t60_hf = t60_lf * (1.0f - 0.9f * hf_damping);
@@ -57,8 +59,12 @@ void FdnReverb::update_absorption() {
     const float g_lf = std::pow(10.0f, -3.0f * d / (t60_lf * sr));
     const float g_hf = std::pow(10.0f, -3.0f * d / (t60_hf * sr));
     const float denom = g_lf + g_hf + kEpsilon;
-    a1_[i] = std::clamp((g_lf - g_hf) / denom, -0.999f, 0.999f);
-    b0_[i] = std::clamp(2.0f * g_lf * g_hf / denom, 0.0f, 1.0f);
+    const float a1 = std::clamp((g_lf - g_hf) / denom, -0.999f, 0.999f);
+    const float b0 = std::clamp(2.0f * g_lf * g_hf / denom, 0.0f, 1.0f);
+    const rt::FirstOrderShelf shelf = rt::voiced_one_pole_at_rate(b0, a1, sample_rate_);
+    b0_[i] = shelf.b0;
+    b1_[i] = shelf.b1;
+    a1_[i] = shelf.a1;
   }
 }
 
@@ -82,10 +88,12 @@ void FdnReverb::process(float* const* channels, int num_channels, int num_sample
     const float in_r = right[i];
     const float input = 0.5f * (in_l + in_r);
 
-    // Per-line absorption: y = b0*x + a1*y_prev applied to the delay outputs.
+    // Per-line absorption: y = b0*x + a1*y_prev (+ b1*x_prev off the voiced rate).
     std::array<float, 4> absorbed{};
     for (size_t k = 0; k < 4; ++k) {
       absorbed[k] = b0_[k] * state_[k] + a1_[k] * filt_state_[k];
+      if (b1_[k] != 0.0f) absorbed[k] += b1_[k] * filt_in_state_[k];
+      filt_in_state_[k] = state_[k];
       filt_state_[k] = absorbed[k];
     }
 
@@ -117,6 +125,7 @@ void FdnReverb::process(float* const* channels, int num_channels, int num_sample
 void FdnReverb::discard_non_finite() noexcept {
   bool discarded = discard_run_if_non_finite(state_.begin(), state_.end(), 0.0f);
   discarded |= discard_run_if_non_finite(filt_state_.begin(), filt_state_.end(), 0.0f);
+  discarded |= discard_run_if_non_finite(filt_in_state_.begin(), filt_in_state_.end(), 0.0f);
   discarded |= dc_blocker_.discard_non_finite();
   if (!discarded) return;
   note_non_finite_discard();
@@ -147,8 +156,13 @@ double FdnReverb::decay_to_floor_seconds() const noexcept {
     double slowest = std::numeric_limits<double>::infinity();
     for (size_t i = 0; i < delays_.size(); ++i) {
       const double a1 = a1_[i];
-      const double gain_db =
-          20.0 * std::log10(b0_[i]) - 10.0 * std::log10(1.0 - 2.0 * a1 * cos_w + a1 * a1);
+      const double b0 = b0_[i];
+      const double b1 = b1_[i];
+      // The voiced rate keeps its float log10 of b0, so its tail estimate is unchanged.
+      const double numerator_db =
+          b1 == 0.0 ? 20.0 * std::log10(b0_[i])
+                    : 10.0 * std::log10(b0 * b0 + b1 * b1 + 2.0 * b0 * b1 * cos_w);
+      const double gain_db = numerator_db - 10.0 * std::log10(1.0 - 2.0 * a1 * cos_w + a1 * a1);
       if (!(gain_db < 0.0)) return -1.0;
       slowest = std::min(slowest, -gain_db * sample_rate_ / lengths_[i]);
     }
@@ -232,6 +246,7 @@ void FdnReverb::reset() {
   }
   state_ = {0.0f, 0.0f, 0.0f, 0.0f};
   filt_state_ = {0.0f, 0.0f, 0.0f, 0.0f};
+  filt_in_state_ = {0.0f, 0.0f, 0.0f, 0.0f};
   dc_blocker_.reset();
 }
 

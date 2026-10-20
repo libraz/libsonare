@@ -59,10 +59,13 @@ class FdnReverb : public rt::ProcessorBase {
   std::array<int, 4> lengths_{{1, 1, 1, 1}};
   std::array<rt::DelayLine, 4> delays_;
   std::array<float, 4> state_{{0.0f, 0.0f, 0.0f, 0.0f}};
-  // Per-line one-pole absorption filters (frequency-dependent decay).
+  // Per-line absorption (frequency-dependent decay): the one-pole voiced at 48 kHz, re-expressed
+  // with a b1 tap at other rates so its loss in Hz is unchanged.
   std::array<float, 4> a1_{{0.0f, 0.0f, 0.0f, 0.0f}};
   std::array<float, 4> b0_{{0.0f, 0.0f, 0.0f, 0.0f}};
+  std::array<float, 4> b1_{{0.0f, 0.0f, 0.0f, 0.0f}};
   std::array<float, 4> filt_state_{{0.0f, 0.0f, 0.0f, 0.0f}};
+  std::array<float, 4> filt_in_state_{{0.0f, 0.0f, 0.0f, 0.0f}};
   effects::common::DcBlocker dc_blocker_;
 };
 
