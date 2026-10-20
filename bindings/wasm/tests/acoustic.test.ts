@@ -548,7 +548,10 @@ describe('named selectors and estimate-to-geometry', () => {
   it('refuses an estimate with no measurable room', () => {
     const silent = estimateRoom(new Float32Array(48000), 48000);
     expect(Number.isNaN(silent.lengthM)).toBe(true);
-    expect(() => roomGeometryFromEstimate(silent)).toThrow();
+    // The same coded library failure the C ABI and Node report, not an argument refusal.
+    expect(() => roomGeometryFromEstimate(silent)).toThrow(
+      expect.objectContaining({ code: ErrorCode.InvalidParameter }),
+    );
   });
 });
 

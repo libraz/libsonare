@@ -445,6 +445,8 @@ describe('worklet attachOpfsClipStream', () => {
         pageFrames: 4,
         worker: worker as unknown as Worker,
       });
+      // An id other than the stream's own is an argument refusal, not a bare Error.
+      expect(() => engine.addClip(10, provider, 0, { id: 702 })).toThrow(RangeError);
       engine.addClip(10, provider, 0, { id: 701 });
       engine.transport.play();
 

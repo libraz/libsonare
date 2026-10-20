@@ -860,7 +860,7 @@ export function estimateRoom(
  * bands. `source` and `listener` override the scaled placement when given.
  * Absorption bands that did not converge are left out of `bandAbsorption`.
  *
- * @throws RangeError when the estimate has no measurable dimensions (NaN).
+ * @throws SonareError when the estimate has no measurable dimensions (NaN).
  */
 export function roomGeometryFromEstimate(
   request: RoomGeometryFromEstimateRequest,

@@ -80,7 +80,7 @@ export class SonareWorkletProcessor {
 
   constructor(options: SonareWorkletProcessorOptions, transport?: WorkletTransport) {
     if (!options.sceneJson) {
-      throw new Error('sceneJson is required.');
+      throw new TypeError('sceneJson is required.');
     }
     this.sampleRate = resolveScopeSampleRate(options.sampleRate, 'SonareWorkletProcessor');
     this.blockSize = options.blockSize ?? 128;
@@ -115,7 +115,7 @@ export class SonareWorkletProcessor {
     const sceneStripCount = this.mixer.stripCount();
     const stripCount = options.stripCount ?? sceneStripCount;
     if (stripCount !== sceneStripCount) {
-      throw new Error('stripCount must match the scene strip count.');
+      throw new RangeError('stripCount must match the scene strip count.');
     }
     this.realtime = this.mixer.createRealtimeBuffer();
     // The mixer meters the master it just produced, so the true-peak filter sees

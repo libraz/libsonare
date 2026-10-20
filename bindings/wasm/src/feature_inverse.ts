@@ -36,6 +36,7 @@ function isResultRequest(
   if (typeof request !== 'object' || request === null) {
     throw new TypeError(`${fn}: expected a Float32Array or a request object`);
   }
+  requestObject(fn, request, field, true);
   if ('result' in request) {
     return true;
   }
@@ -331,6 +332,7 @@ export function melToStft(
   htk = false,
   options: GuardedOptions = {},
 ): StftMagnitudeResult {
+  optionsBag('melToStft', options);
   if (!(power instanceof Float32Array)) {
     const request = isResultRequest('melToStft', power, 'power')
       ? melRequestFromResult('melToStft', power, MEL_TO_STFT_CARRIED)
@@ -344,7 +346,7 @@ export function melToStft(
       request.fmin,
       request.fmax,
       request.htk,
-      request,
+      { validate: request.validate },
     );
   }
   assertSampleRate('melToStft', sampleRate);
@@ -400,6 +402,7 @@ export function melToAudio(
   htk = false,
   options: GuardedOptions = {},
 ): Float32Array {
+  optionsBag('melToAudio', options);
   if (!(power instanceof Float32Array)) {
     const request = isResultRequest('melToAudio', power, 'power')
       ? melRequestFromResult('melToAudio', power, MEL_TO_AUDIO_CARRIED)
@@ -415,7 +418,7 @@ export function melToAudio(
       request.fmax,
       request.nIter,
       request.htk,
-      request,
+      { validate: request.validate },
     );
   }
   assertSampleRate('melToAudio', sampleRate);
@@ -520,6 +523,7 @@ export function mfccToMel(
   lifter = 0,
   options: GuardedOptions = {},
 ): MelPowerResult {
+  optionsBag('mfccToMel', options);
   if (!(coefficients instanceof Float32Array)) {
     const request = isResultRequest('mfccToMel', coefficients, 'coefficients')
       ? mfccRequestFromResult('mfccToMel', coefficients, MFCC_TO_MEL_CARRIED)
@@ -530,7 +534,7 @@ export function mfccToMel(
       request.nFrames,
       request.nMels,
       request.lifter,
-      request,
+      { validate: request.validate },
     );
   }
   validateMatrix('mfccToMel', coefficients, nMfcc, nFrames, 'coefficients', 'nMfcc', options);
@@ -586,6 +590,7 @@ export function mfccToAudio(
   lifter = 0,
   options: GuardedOptions = {},
 ): Float32Array {
+  optionsBag('mfccToAudio', options);
   if (!(coefficients instanceof Float32Array)) {
     const request = isResultRequest('mfccToAudio', coefficients, 'coefficients')
       ? mfccRequestFromResult('mfccToAudio', coefficients, MFCC_TO_AUDIO_CARRIED)
@@ -603,7 +608,7 @@ export function mfccToAudio(
       request.nIter,
       request.htk,
       request.lifter,
-      request,
+      { validate: request.validate },
     );
   }
   assertSampleRate('mfccToAudio', sampleRate);
@@ -627,7 +632,7 @@ export function mfccToAudio(
   );
 }
 
-export interface PhaseVocoderRequest extends SpectralFrameRequest {
+export interface PhaseVocoderRequest extends SpectralFrameRequest, GuardedOptions {
   rate: number;
 }
 
@@ -646,19 +651,25 @@ export function phaseVocoder(
 export function phaseVocoder(
   samples: Float32Array | PhaseVocoderRequest,
   sampleRate = 22050,
-  rate = 1,
+  rate = Number.NaN,
   nFft = 2048,
   hopLength = 512,
 ): Float32Array {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('phaseVocoder', samples);
-    const r = samples;
-    return phaseVocoder(r.samples, r.sampleRate ?? 22050, r.rate, r.nFft, r.hopLength);
-  }
-  assertAudioInput('phaseVocoder', samples, sampleRate);
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, rate, nFft, hopLength }
+      : requestObject('phaseVocoder', samples);
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertAudioInput('phaseVocoder', request.samples, resolvedSampleRate, request);
   // Matches the addon. A finite value too wide for a float is not covered here
   // and cannot be — it is still finite to Number.isFinite; the core's own guard
   // refuses the infinity it becomes.
-  assertFiniteScalar('phaseVocoder', rate, 'rate');
-  return requireModule().phaseVocoder(samples, sampleRate, rate, nFft, hopLength);
+  assertFiniteScalar('phaseVocoder', request.rate, 'rate');
+  return requireModule().phaseVocoder(
+    request.samples,
+    resolvedSampleRate,
+    request.rate,
+    request.nFft ?? 2048,
+    request.hopLength ?? 512,
+  );
 }

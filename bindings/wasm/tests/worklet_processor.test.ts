@@ -21,6 +21,18 @@ import {
 describe('SonareWorkletProcessor', () => {
   setupWorklet();
 
+  it('refuses a missing scene and a mismatched strip count with argument errors', () => {
+    expect(() => new SonareWorkletProcessor({ sampleRate: 48000 } as never)).toThrow(TypeError);
+    expect(
+      () =>
+        new SonareWorkletProcessor({
+          sceneJson: mixingScenePresetJson('vocalReverbSend'),
+          sampleRate: 48000,
+          stripCount: 999,
+        }),
+    ).toThrow(RangeError);
+  });
+
   it('matches the offline mixer for one 128-sample render quantum', () => {
     const sampleRate = 48000;
     const blockSize = 128;

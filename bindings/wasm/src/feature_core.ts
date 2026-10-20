@@ -8,6 +8,8 @@ import type {
 } from './sonare.js';
 import {
   assertAudioSamples,
+  assertNumber,
+  assertPositiveInteger,
   assertString,
   requestObject,
   resolveOptionalNonNegative,
@@ -316,6 +318,7 @@ export interface PlpRequest {
  * @returns Mel frequency
  */
 export function hzToMel(hz: number): number {
+  assertNumber('hzToMel', hz, 'hz');
   return requireModule().hzToMel(hz);
 }
 
@@ -327,6 +330,7 @@ export function hzToMel(hz: number): number {
  * @returns Frequency in Hz
  */
 export function melToHz(mel: number): number {
+  assertNumber('melToHz', mel, 'mel');
   return requireModule().melToHz(mel);
 }
 
@@ -342,6 +346,7 @@ export function melToHz(mel: number): number {
  * @returns MIDI note number (A4 = 440 Hz = 69)
  */
 export function hzToMidi(hz: number): number {
+  assertNumber('hzToMidi', hz, 'hz');
   return requireModule().hzToMidi(hz);
 }
 
@@ -353,6 +358,7 @@ export function hzToMidi(hz: number): number {
  * @returns Frequency in Hz
  */
 export function midiToHz(midi: number): number {
+  assertNumber('midiToHz', midi, 'midi');
   return requireModule().midiToHz(midi);
 }
 
@@ -368,6 +374,7 @@ export function midiToHz(midi: number): number {
  * note: zero, negative, past the representable MIDI range, and non-finite alike.
  */
 export function hzToNote(hz: number): string {
+  assertNumber('hzToNote', hz, 'hz');
   return requireModule().hzToNote(hz);
 }
 
@@ -393,6 +400,9 @@ export function noteToHz(note: string): number {
  * @returns Time in seconds
  */
 export function framesToTime(frames: number, sr = 22050, hopLength = 512): number {
+  assertNumber('framesToTime', frames, 'frames');
+  assertNumber('framesToTime', sr, 'sr');
+  assertPositiveInteger('framesToTime', hopLength, 'hopLength');
   return requireModule().framesToTime(frames, sr, hopLength);
 }
 
@@ -405,14 +415,23 @@ export function framesToTime(frames: number, sr = 22050, hopLength = 512): numbe
  * @returns Frame index
  */
 export function timeToFrames(time: number, sr = 22050, hopLength = 512): number {
+  assertNumber('timeToFrames', time, 'time');
+  assertNumber('timeToFrames', sr, 'sr');
+  assertPositiveInteger('timeToFrames', hopLength, 'hopLength');
   return requireModule().timeToFrames(time, sr, hopLength);
 }
 
 export function framesToSamples(frames: number, hopLength = 512, nFft = 0): number {
+  assertNumber('framesToSamples', frames, 'frames');
+  assertNumber('framesToSamples', hopLength, 'hopLength');
+  assertNumber('framesToSamples', nFft, 'nFft');
   return requireModule().framesToSamples(frames, hopLength, nFft);
 }
 
 export function samplesToFrames(samples: number, hopLength = 512, nFft = 0): number {
+  assertNumber('samplesToFrames', samples, 'samples');
+  assertNumber('samplesToFrames', hopLength, 'hopLength');
+  assertNumber('samplesToFrames', nFft, 'nFft');
   return requireModule().samplesToFrames(samples, hopLength, nFft);
 }
 
@@ -457,10 +476,12 @@ export function amplitudeToDb(
 }
 
 export function dbToPower(values: Float32Array, ref = 1.0): Float32Array {
+  assertNumber('dbToPower', ref, 'ref');
   return requireModule().dbToPower(values, ref);
 }
 
 export function dbToAmplitude(values: Float32Array, ref = 1.0): Float32Array {
+  assertNumber('dbToAmplitude', ref, 'ref');
   return requireModule().dbToAmplitude(values, ref);
 }
 

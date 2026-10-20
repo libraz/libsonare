@@ -1,5 +1,6 @@
 import { assertHandleLive } from './_handle_guard.js';
 import { resolveOrdinalInRange } from './codes.js';
+import { ErrorCode, SonareError } from './errors.js';
 import { getSonareModule } from './module_state.js';
 import type { ChordQuality, PitchClass } from './public_types.js';
 import type { WasmStreamAnalyzer } from './sonare.js';
@@ -68,7 +69,9 @@ export class StreamAnalyzer {
    */
   constructor(config: StreamConfig = {}) {
     if (config.computeMagnitude) {
-      throw new Error(
+      throw new SonareError(
+        ErrorCode.InvalidParameter,
+        'InvalidParameter',
         'computeMagnitude is not supported because magnitude frames are not exposed by StreamAnalyzer read paths.',
       );
     }

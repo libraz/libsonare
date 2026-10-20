@@ -1153,6 +1153,53 @@ const GRIFFIN_LIM_REQUEST_KEYS = keySet(
   'momentum',
 );
 const PHASE_VOCODER_REQUEST_KEYS = keySet('rate', 'nFft', 'hopLength', 'samples', 'sampleRate');
+const MEL_TO_STFT_REQUEST_KEYS = keySet(
+  'power',
+  'result',
+  'nMels',
+  'nFrames',
+  'sampleRate',
+  'nFft',
+  'fmin',
+  'fmax',
+  'htk',
+);
+const MEL_TO_AUDIO_REQUEST_KEYS = keySet(
+  'power',
+  'result',
+  'nMels',
+  'nFrames',
+  'sampleRate',
+  'nFft',
+  'hopLength',
+  'fmin',
+  'fmax',
+  'htk',
+  'nIter',
+);
+const MFCC_TO_MEL_REQUEST_KEYS = keySet(
+  'coefficients',
+  'result',
+  'nMfcc',
+  'nFrames',
+  'nMels',
+  'lifter',
+);
+const MFCC_TO_AUDIO_REQUEST_KEYS = keySet(
+  'coefficients',
+  'result',
+  'nMfcc',
+  'nFrames',
+  'nMels',
+  'lifter',
+  'sampleRate',
+  'nFft',
+  'hopLength',
+  'fmin',
+  'fmax',
+  'htk',
+  'nIter',
+);
 const TONE_REQUEST_KEYS = keySet('frequency', 'sampleRate', 'duration', 'phase', 'amplitude');
 const CHIRP_REQUEST_KEYS = keySet('fmin', 'fmax', 'sampleRate', 'duration', 'linear');
 const CLICKS_REQUEST_KEYS = keySet('times', 'sampleRate', 'length', 'frequency', 'clickDuration');
@@ -1693,6 +1740,10 @@ export const REQUEST_KEYS = {
   vqtToAudio: VQT_TO_AUDIO_REQUEST_KEYS,
   griffinLim: GRIFFIN_LIM_REQUEST_KEYS,
   phaseVocoder: PHASE_VOCODER_REQUEST_KEYS,
+  melToStft: MEL_TO_STFT_REQUEST_KEYS,
+  melToAudio: MEL_TO_AUDIO_REQUEST_KEYS,
+  mfccToMel: MFCC_TO_MEL_REQUEST_KEYS,
+  mfccToAudio: MFCC_TO_AUDIO_REQUEST_KEYS,
   tone: TONE_REQUEST_KEYS,
   chirp: CHIRP_REQUEST_KEYS,
   clicks: CLICKS_REQUEST_KEYS,

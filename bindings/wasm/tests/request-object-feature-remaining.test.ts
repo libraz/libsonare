@@ -144,6 +144,22 @@ describe('remaining feature request-object compatibility', () => {
     const reqRate = captureThrow(() =>
       phaseVocoder({ samples, rate: 0, sampleRate, nFft: 512, hopLength: 128 }),
     );
+    // A missing rate is refused in both forms, never defaulted to a no-op stretch.
+    const posMissing = captureThrow(() =>
+      (phaseVocoder as (...args: unknown[]) => unknown)(samples, sampleRate),
+    );
+    const reqMissing = captureThrow(() => phaseVocoder({ samples, sampleRate } as never));
+    expect(posMissing.threw).toBe(true);
+    expect(reqMissing.message).toBe(posMissing.message);
+    // `validate: false` is honoured on the request form: the finiteness scan is skipped.
+    const dirty = Float32Array.from(samples);
+    dirty[3] = Number.NaN;
+    const scanned = captureThrow(() => phaseVocoder({ samples: dirty, rate: 1.1, sampleRate }));
+    expect(scanned.message).toMatch(/contains NaN/);
+    const unscanned = captureThrow(() =>
+      phaseVocoder({ samples: dirty, rate: 1.1, sampleRate, validate: false }),
+    );
+    expect(unscanned.message).not.toMatch(/contains NaN/);
     expect(posRate.threw).toBe(true);
     expect(reqRate.threw).toBe(true);
     expect(reqRate.message).toBe(posRate.message);

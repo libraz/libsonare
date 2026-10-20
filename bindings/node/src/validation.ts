@@ -640,7 +640,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * and the first key of a nested options object outside its declared fields. A
  * key that belongs to a nested object is reported with the field it goes under.
  */
-function assertKnownRequestKeys(fnName: RequestFn, value: Record<string, unknown>): void {
+export function assertKnownRequestKeys(fnName: RequestFn, value: Record<string, unknown>): void {
   const keys: object = REQUEST_KEYS[fnName];
   const nested: Record<string, object> =
     NESTED_REQUEST_KEYS[fnName as keyof typeof NESTED_REQUEST_KEYS] ?? {};

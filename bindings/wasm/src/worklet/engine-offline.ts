@@ -147,7 +147,7 @@ export function normalizeTrackLanes(
     ids.push(entry.trackId);
   }
   if (new Set(ids).size !== ids.length) {
-    throw new Error('Duplicate track id in mixer lane list');
+    throw new RangeError('Duplicate track id in mixer lane list');
   }
   for (let index = 0; index < existing.length; index++) {
     if (ids[index] !== existing[index]) {
@@ -187,7 +187,7 @@ export function resolveMarkerSet(
         throw new RangeError(`Invalid marker id: ${String(marker.id)}`);
       }
       if (seen.has(marker.id)) {
-        throw new Error(`Duplicate marker id: ${marker.id}`);
+        throw new RangeError(`Duplicate marker id: ${marker.id}`);
       }
     }
     const id = marker.id ?? counter++;

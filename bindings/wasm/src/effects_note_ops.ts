@@ -41,6 +41,7 @@ function assertNoteTrack(
   request: ExtractNotesRequest | NoteSetRequest,
 ): Float32Array | undefined {
   assertAudioInput(fnName, request.samples, request.sampleRate, request);
+  assertFiniteScalar(fnName, request.frameRate, 'frameRate');
   const voicedF32 = request.voiced == null ? undefined : toVoicedFloat32(fnName, request.voiced);
   assertPitchTrackLengths(fnName, request.f0Hz, request.voiced, request.voicedProb);
   return voicedF32;

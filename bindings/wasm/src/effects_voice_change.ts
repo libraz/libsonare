@@ -130,10 +130,10 @@ export function voiceChangeRealtime(
   assertAudioInput('voiceChangeRealtime', request.samples, request.sampleRate ?? 48000, request);
   const channels = request.channels ?? 1;
   if (channels !== 1 && channels !== 2) {
-    throw new Error('voiceChangeRealtime: channels must be 1 or 2.');
+    throw new RangeError('voiceChangeRealtime: channels must be 1 or 2.');
   }
   if (channels === 2 && request.samples.length % 2 !== 0) {
-    throw new Error('voiceChangeRealtime: stereo input length must be a multiple of 2.');
+    throw new RangeError('voiceChangeRealtime: stereo input length must be a multiple of 2.');
   }
   const presetConfig = request.preset ?? 'neutral-monitor';
   return requireModule().voiceChangeRealtime(

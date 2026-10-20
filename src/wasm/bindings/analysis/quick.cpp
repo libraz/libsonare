@@ -1200,7 +1200,8 @@ val js_room_geometry_from_estimate(val estimate) {
   const float width = floatOption(estimate, "widthM", nan);
   const float height = floatOption(estimate, "heightM", nan);
   if (!sonare::acoustic::estimated_dimensions_measured(length, width, height)) {
-    throw WasmRangeError("room estimate has no measurable dimensions");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "room estimate has no measurable dimensions");
   }
   val out = val::object();
   out.set("lengthM", length);

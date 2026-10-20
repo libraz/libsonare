@@ -968,7 +968,7 @@ export class SonareEngine {
       throw releasedHandleError('SonareEngine', 'is destroyed.');
     }
     if (!Number.isFinite(frames) || frames < 0) {
-      throw new Error('clip page prefetch frames must be a finite value >= 0.');
+      throw new RangeError('clip page prefetch frames must be a finite value >= 0.');
     }
     commitSync(
       this.commitContext,
@@ -1695,7 +1695,7 @@ export class SonareEngine {
     }
     const stream = this.workletPageProviderClipIds.get(providerId);
     if (stream !== undefined && clip.id !== stream.clipId) {
-      throw new Error(
+      throw new RangeError(
         `OPFS stream clipId ${stream.clipId} must match addClip(..., { id: ${stream.clipId} }).`,
       );
     }

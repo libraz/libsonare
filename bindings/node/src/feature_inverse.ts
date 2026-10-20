@@ -11,6 +11,7 @@ import {
   assertAudioInput,
   assertFiniteScalar,
   assertIntegralSampleRate,
+  assertKnownRequestKeys,
   assertPositiveInteger,
   assertSampleRate,
   requestObject,
@@ -19,13 +20,14 @@ import {
 
 /** True for a `{ result }` request; a request with neither `result` nor `field` is refused by name. */
 function isResultRequest(
-  fn: string,
+  fn: 'melToStft' | 'melToAudio' | 'mfccToMel' | 'mfccToAudio',
   request: unknown,
   field: string,
 ): request is { result: unknown } {
   if (typeof request !== 'object' || request === null) {
     throw new TypeError(`${fn}: expected a Float32Array or a request object`);
   }
+  assertKnownRequestKeys(fn, request as Record<string, unknown>);
   if ('result' in request) {
     return true;
   }

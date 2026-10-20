@@ -39,7 +39,9 @@ describe('request objects refuse unknown keys', () => {
 
   it.each(names)('%s refuses an undeclared key by name', (name) => {
     // A bare room estimate is also accepted, so only `estimate` marks the request form.
-    const payload = name === 'roomGeometryFromEstimate' ? { estimate: {}, bogus: 1 } : { bogus: 1 };
+    const takesEstimate =
+      name === 'roomGeometryFromEstimate' || name === 'masteringRepairDereverbConfigForRoom';
+    const payload = takesEstimate ? { estimate: {}, bogus: 1 } : { bogus: 1 };
     const call = () => entry(name)(payload);
     expect(call).toThrow(TypeError);
     expect(message(call)).toBe(`${name}: unknown request key 'bogus'`);
@@ -106,6 +108,7 @@ const POSITIONAL_OPTIONS: ReadonlyArray<readonly [string, number]> = [
   ['masteringRepairDehum', 2],
   ['masteringRepairDenoiseClassical', 2],
   ['masteringRepairDereverbClassical', 2],
+  ['masteringRepairDereverbConfigForRoom', 1],
   ['masteringRepairDetectClicks', 2],
   ['masteringRepairDetectClipping', 2],
   ['masteringRepairDetectCrackle', 2],
@@ -115,6 +118,8 @@ const POSITIONAL_OPTIONS: ReadonlyArray<readonly [string, number]> = [
   ['masteringRepairDetectTrimRange', 2],
   ['masteringRepairTrimSilence', 2],
   ['melSpectrogram', 8],
+  ['melToAudio', 10],
+  ['melToStft', 8],
   ['meteringCrestFactorDb', 2],
   ['meteringDcOffset', 2],
   ['meteringDetectClipping', 2],
@@ -132,6 +137,8 @@ const POSITIONAL_OPTIONS: ReadonlyArray<readonly [string, number]> = [
   ['meteringVectorscope', 3],
   ['meteringVectorscopeDecimated', 4],
   ['mfcc', 10],
+  ['mfccToAudio', 12],
+  ['mfccToMel', 5],
   ['mixStereo', 3],
   ['momentaryLufs', 2],
   ['normalize', 4],

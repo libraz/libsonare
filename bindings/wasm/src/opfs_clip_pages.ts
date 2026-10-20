@@ -204,7 +204,7 @@ export function createOpfsClipPageProvider(
   options: OpfsClipPageProviderOptions,
 ): OpfsClipPageProviderBinding {
   if (options.numChannels <= 0 || options.numSamples <= 0 || options.pageFrames <= 0) {
-    throw new Error('numChannels, numSamples, and pageFrames must be positive');
+    throw new RangeError('numChannels, numSamples, and pageFrames must be positive');
   }
   const provider = engine.createClipPageProvider(
     options.numChannels,

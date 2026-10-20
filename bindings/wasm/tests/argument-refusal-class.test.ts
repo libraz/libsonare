@@ -9,12 +9,35 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  dbToAmplitude,
+  detectChords,
   ErrorCode,
+  extractNotes,
+  framesToSamples,
+  framesToTime,
+  hzToMel,
+  hzToMidi,
+  hzToNote,
   init,
   isSonareError,
   Mixer,
+  masteringRepairDereverbConfigForRoom,
+  masteringRepairNoiseBandBins,
+  melToAudio,
+  melToHz,
+  melToStft,
+  mfccToAudio,
+  mfccToMel,
+  midiToHz,
   mixingScenePresetJson,
+  mixStereo,
   RealtimeEngine,
+  renderPlayback,
+  StreamAnalyzer,
+  StreamingEqualizer,
+  samplesToFrames,
+  timeToFrames,
+  voiceChangeRealtime,
 } from '../dist/index.js';
 
 function thrown(call: () => unknown): unknown {
@@ -97,5 +120,127 @@ describe('argument refusal error class', () => {
     } finally {
       mixer.destroy();
     }
+  });
+});
+
+describe('argument refusal classes shared with the Node surface', () => {
+  const samples = new Float32Array(2205);
+
+  beforeAll(async () => {
+    await init();
+  });
+
+  it('refuses a non-number unit-conversion argument with a TypeError and keeps NaN total', () => {
+    const wrong = '440' as unknown as number;
+    for (const call of [
+      () => hzToMel(wrong),
+      () => melToHz(wrong),
+      () => hzToMidi(wrong),
+      () => midiToHz(wrong),
+      () => hzToNote(wrong),
+      () => dbToAmplitude(new Float32Array(2), wrong),
+      () => framesToTime(wrong),
+      () => framesToSamples(wrong),
+      () => samplesToFrames(wrong),
+      () => timeToFrames(wrong),
+    ]) {
+      expect(thrown(call)).toBeInstanceOf(TypeError);
+    }
+    expect(Number.isNaN(hzToMel(Number.NaN))).toBe(true);
+  });
+
+  it('refuses a non-positive hop in the frame/time conversions with a RangeError', () => {
+    expect(thrown(() => framesToTime(1, 22050, 0))).toBeInstanceOf(RangeError);
+    expect(thrown(() => timeToFrames(1, 22050, -1))).toBeInstanceOf(RangeError);
+  });
+
+  it('refuses a missing frameRate on the note entry points with a RangeError', () => {
+    const request = {
+      samples,
+      sampleRate: 22050,
+      f0Hz: new Float32Array(4),
+      voiced: new Uint8Array(4),
+    } as unknown as Parameters<typeof extractNotes>[0];
+    expect(thrown(() => extractNotes(request))).toBeInstanceOf(RangeError);
+  });
+
+  it('refuses a missing playback config with a TypeError, not an embind error', () => {
+    const error = thrown(() =>
+      renderPlayback({ samples: new Float32Array(480), channels: 1, sampleRate: 48000 } as never),
+    );
+    expect(error).toBeInstanceOf(TypeError);
+  });
+
+  it('refuses an unknown chord chroma method with a RangeError', () => {
+    expect(
+      thrown(() => detectChords(samples, 22050, { chromaMethod: 'bogus' } as never)),
+    ).toBeInstanceOf(RangeError);
+  });
+
+  it('refuses an unknown EQ phase mode and band placement with a RangeError', () => {
+    const eq = new StreamingEqualizer();
+    try {
+      expect(thrown(() => eq.setPhaseMode('bogus' as never))).toBeInstanceOf(RangeError);
+      expect(
+        thrown(() => eq.magnitudeResponse(new Float32Array(1), 'bogus' as never)),
+      ).toBeInstanceOf(RangeError);
+    } finally {
+      eq.delete();
+    }
+  });
+
+  it('refuses a bad realtime voice-changer channel count and stereo length with a RangeError', () => {
+    expect(
+      thrown(() => voiceChangeRealtime({ samples, sampleRate: 48000, channels: 3 })),
+    ).toBeInstanceOf(RangeError);
+    expect(
+      thrown(() =>
+        voiceChangeRealtime({ samples: new Float32Array(2205), sampleRate: 48000, channels: 2 }),
+      ),
+    ).toBeInstanceOf(RangeError);
+  });
+
+  it('refuses the removed pan-mode alias with a RangeError', () => {
+    const left = [new Float32Array(2205).fill(0.1)];
+    const right = [new Float32Array(2205).fill(0.1)];
+    for (const panMode of ['pan', 'bogus']) {
+      const error = thrown(() => mixStereo(left, right, 22050, { pan: 0.5, panMode } as never));
+      expect(error).toBeInstanceOf(RangeError);
+    }
+  });
+
+  it('reports StreamAnalyzer computeMagnitude as a coded InvalidParameter SonareError', () => {
+    const error = thrown(() => new StreamAnalyzer({ sampleRate: 22050, computeMagnitude: true }));
+    expect(isSonareError(error)).toBe(true);
+    expect((error as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+    expect((error as Error).message).toMatch(/computeMagnitude is not supported/);
+  });
+
+  it('refuses a misspelt request key of the inverse transforms by name', () => {
+    const power = new Float32Array(8);
+    const refused = (call: () => unknown, key: string) => {
+      const error = thrown(call);
+      expect(error).toBeInstanceOf(TypeError);
+      expect((error as Error).message).toContain(`'${key}'`);
+    };
+    refused(() => melToStft({ power, nMels: 2, nFrames: 4, nfft: 4096 } as never), 'nfft');
+    refused(() => melToAudio({ power, nMels: 2, nFrames: 4, nfft: 4096 } as never), 'nfft');
+    refused(
+      () => mfccToMel({ coefficients: power, nMfcc: 2, nFrames: 4, nmels: 8 } as never),
+      'nmels',
+    );
+    refused(
+      () => mfccToAudio({ coefficients: power, nMfcc: 2, nFrames: 4, nfft: 4096 } as never),
+      'nfft',
+    );
+    refused(() => masteringRepairNoiseBandBins({ nfft: 4096 } as never), 'nfft');
+    refused(
+      () => masteringRepairDereverbConfigForRoom({ estimate: {}, bogus: 1 } as never),
+      'bogus',
+    );
+    refused(
+      () => masteringRepairDereverbConfigForRoom({} as never, { bogus: 1 } as never),
+      'bogus',
+    );
   });
 });

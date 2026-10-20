@@ -11,7 +11,16 @@ import type { WasmHrtfSet, WasmPlaybackLoudnessMeter, WasmPlaybackRenderer } fro
 import { assertAudioInput, assertFiniteScalar, requestObject } from './validation.js';
 
 function configJsonText(config: PlaybackRendererConfig | string): string {
-  return typeof config === 'string' ? config : JSON.stringify(config);
+  if (typeof config === 'string') {
+    return config;
+  }
+  // `JSON.stringify` yields `undefined` for a missing or function config, which embind
+  // would report as a raw binding error.
+  const text: unknown = JSON.stringify(config);
+  if (typeof text !== 'string') {
+    throw new TypeError('config must be a configuration object or a JSON string');
+  }
+  return text;
 }
 
 const FLOAT32_MAX = 3.4028234663852886e38;

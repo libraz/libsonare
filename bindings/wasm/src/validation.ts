@@ -106,6 +106,13 @@ export function assertFiniteScalar(fnName: string, value: number, argName: strin
   }
 }
 
+/** A scalar the native layer reads as a float; only the type is checked, so NaN and infinities pass through. */
+export function assertNumber(fnName: string, value: unknown, argName: string): void {
+  if (typeof value !== 'number') {
+    throw new TypeError(`${fnName}: ${argName} must be a number`);
+  }
+}
+
 export function assertSampleRate(fnName: string, sampleRate: number, argName = 'sampleRate'): void {
   if (typeof sampleRate !== 'number') {
     throw new TypeError(`${fnName}: ${argName} must be a number`);

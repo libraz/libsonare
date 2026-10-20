@@ -65,7 +65,18 @@ import type {
   SegmentRecurrenceToLagRequest,
   SegmentSubsegmentRequest,
 } from './feature_decompose.js';
-import type { GriffinLimRequest, PhaseVocoderRequest } from './feature_inverse.js';
+import type {
+  GriffinLimRequest,
+  MelResultToAudioRequest,
+  MelResultToStftRequest,
+  MelToAudioRequest,
+  MelToStftRequest,
+  MfccResultToAudioRequest,
+  MfccResultToMelRequest,
+  MfccToAudioRequest,
+  MfccToMelRequest,
+  PhaseVocoderRequest,
+} from './feature_inverse.js';
 import type {
   Ebur128LoudnessRangeRequest,
   LufsInterleavedRequest,
@@ -205,6 +216,7 @@ import type {
   MasteringRepairDereverbClassicalLinkedRequest,
   MasteringRepairDereverbClassicalRequest,
   MasteringRepairDereverbClassicalStereoRequest,
+  MasteringRepairDereverbConfigForRoomRequest,
   MasteringRepairDetectReverbRequest,
 } from './repair_dereverb.js';
 import type {
@@ -226,6 +238,7 @@ import type {
   MasteringRepairDenoiseClassicalStereoRequest,
   MasteringRepairDetectHumRequest,
   MasteringRepairDetectNoiseFloorRequest,
+  MasteringRepairNoiseBandBinsRequest,
 } from './repair_noise.js';
 import type {
   MasteringRepairAnalyzeRequest,
@@ -1356,6 +1369,77 @@ const MasteringStreamingPreviewRequestKeys = keysOf<MasteringStreamingPreviewReq
 const MasteringStreamingPreviewStereoRequestKeys = keysOf<MasteringStreamingPreviewStereoRequest>()(
   ['left', 'right', 'sampleRate', 'platforms'],
 );
+const MelToStftRequestKeys = keysOf<MelToStftRequest & MelResultToStftRequest>()([
+  'power',
+  'result',
+  'nMels',
+  'nFrames',
+  'sampleRate',
+  'nFft',
+  'fmin',
+  'fmax',
+  'htk',
+  'validate',
+]);
+const MelToAudioRequestKeys = keysOf<MelToAudioRequest & MelResultToAudioRequest>()([
+  'power',
+  'result',
+  'nMels',
+  'nFrames',
+  'sampleRate',
+  'nFft',
+  'hopLength',
+  'fmin',
+  'fmax',
+  'htk',
+  'nIter',
+  'validate',
+]);
+const MfccToMelRequestKeys = keysOf<MfccToMelRequest & MfccResultToMelRequest>()([
+  'coefficients',
+  'result',
+  'nMfcc',
+  'nFrames',
+  'nMels',
+  'lifter',
+  'validate',
+]);
+const MfccToAudioRequestKeys = keysOf<MfccToAudioRequest & MfccResultToAudioRequest>()([
+  'coefficients',
+  'result',
+  'nMfcc',
+  'nFrames',
+  'nMels',
+  'lifter',
+  'sampleRate',
+  'nFft',
+  'hopLength',
+  'fmin',
+  'fmax',
+  'htk',
+  'nIter',
+  'validate',
+]);
+const MasteringRepairDereverbConfigForRoomRequestKeys =
+  keysOf<MasteringRepairDereverbConfigForRoomRequest>()([
+    'estimate',
+    'threshold',
+    'attenuation',
+    'nFft',
+    'hopLength',
+    't60Sec',
+    'lateDelayMs',
+    'overSubtraction',
+    'spectralFloor',
+    'wpeEnabled',
+    'wpeIterations',
+    'wpeTaps',
+    'wpeStrength',
+  ]);
+const MasteringRepairNoiseBandBinsRequestKeys = keysOf<MasteringRepairNoiseBandBinsRequest>()([
+  'nFft',
+  'sampleRate',
+]);
 const MelDeltaRequestKeys = keysOf<MelDeltaRequest>()([
   'features',
   'nFeatures',
@@ -1594,6 +1678,7 @@ const PhaseVocoderRequestKeys = keysOf<PhaseVocoderRequest>()([
   'sampleRate',
   'nFft',
   'hopLength',
+  'validate',
 ]);
 const PiptrackRequestKeys = keysOf<PiptrackRequest>()([
   'samples',
@@ -2261,6 +2346,9 @@ export const REQUEST_SHAPES: Readonly<Record<string, RequestShape>> = {
   masteringRepairDereverbClassicalStereo: {
     keys: MasteringRepairDereverbClassicalStereoRequestKeys,
   },
+  masteringRepairDereverbConfigForRoom: {
+    keys: MasteringRepairDereverbConfigForRoomRequestKeys,
+  },
   masteringRepairDetectClicks: { keys: MasteringRepairDetectClicksRequestKeys },
   masteringRepairDetectClipping: { keys: MasteringRepairDetectClippingRequestKeys },
   masteringRepairDetectCrackle: { keys: MasteringRepairDetectCrackleRequestKeys },
@@ -2269,6 +2357,7 @@ export const REQUEST_SHAPES: Readonly<Record<string, RequestShape>> = {
   masteringRepairDetectReverb: { keys: MasteringRepairDetectReverbRequestKeys },
   masteringRepairDetectTrimRange: { keys: MasteringRepairDetectTrimRangeRequestKeys },
   masteringRepairDetectTrimRangeStereo: { keys: MasteringRepairDetectTrimRangeStereoRequestKeys },
+  masteringRepairNoiseBandBins: { keys: MasteringRepairNoiseBandBinsRequestKeys },
   masteringRepairTrimSilence: { keys: MasteringRepairTrimSilenceRequestKeys },
   masteringRepairTrimSilenceStereo: { keys: MasteringRepairTrimSilenceStereoRequestKeys },
   masteringStereoAnalyze: { keys: Anon105Keys },
@@ -2276,6 +2365,8 @@ export const REQUEST_SHAPES: Readonly<Record<string, RequestShape>> = {
   masteringStreamingPreviewStereo: { keys: MasteringStreamingPreviewStereoRequestKeys },
   melDelta: { keys: MelDeltaRequestKeys },
   melSpectrogram: { keys: MelSpectrogramRequestKeys },
+  melToAudio: { keys: MelToAudioRequestKeys },
+  melToStft: { keys: MelToStftRequestKeys },
   mergeNotes: { keys: MergeNotesRequestKeys },
   meteringCrestFactorDb: { keys: MeteringSamplesRequestKeys },
   meteringCrestFactorDbStereo: { keys: MeteringStereoRequestKeys },
@@ -2295,6 +2386,8 @@ export const REQUEST_SHAPES: Readonly<Record<string, RequestShape>> = {
   meteringVectorscope: { keys: MeteringStereoDecimatedRequestKeys },
   meteringVectorscopeDecimated: { keys: MeteringStereoDecimatedRequestKeys },
   mfcc: { keys: MfccRequestKeys },
+  mfccToAudio: { keys: MfccToAudioRequestKeys },
+  mfccToMel: { keys: MfccToMelRequestKeys },
   mixStereo: { keys: MixStereoRequestKeys },
   momentaryLufs: { keys: LufsRequestKeys },
   nnFilter: { keys: NnFilterRequestKeys },

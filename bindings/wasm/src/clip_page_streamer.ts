@@ -118,7 +118,7 @@ export class ClipPageStreamer {
       throw releasedHandleError('ClipPageStreamer', 'is closed.');
     }
     if (source.pageFrames <= 0 || source.numSamples <= 0) {
-      throw new Error('pageFrames and numSamples must be positive');
+      throw new RangeError('pageFrames and numSamples must be positive');
     }
     const lastPage = Math.ceil(source.numSamples / source.pageFrames) - 1;
     const previous = this.sources.get(source.clipId);
@@ -362,7 +362,7 @@ export async function attachOpfsClipStream(
   const engine = engineOrOptions as RealtimeEngine;
   const options = maybeOptions;
   if (!options) {
-    throw new Error('attachOpfsClipStream requires options.');
+    throw new TypeError('attachOpfsClipStream requires options.');
   }
   const { clipId, primePages = 1, ...providerOptions } = options;
   const epoch = streamerEpochs.get(streamer);

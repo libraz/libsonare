@@ -429,7 +429,10 @@ export function masteringRepairNoiseBandBins(
   // Both positional arguments are optional, so a default on `nFft` would swallow
   // an explicit `undefined` and take the request branch with `sampleRate` in hand
   // but unreachable. Discriminate on the value instead.
-  const request = typeof nFft === 'object' && nFft !== null ? nFft : { nFft, sampleRate };
+  const request =
+    typeof nFft === 'object' && nFft !== null
+      ? requestObject('masteringRepairNoiseBandBins', nFft, 'nFft', true)
+      : { nFft, sampleRate };
   return requireModule().masteringRepairNoiseBandBins(
     request.nFft ?? 1024,
     request.sampleRate ?? 22050,

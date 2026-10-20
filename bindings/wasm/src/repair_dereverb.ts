@@ -283,8 +283,8 @@ export function masteringRepairDereverbConfigForRoom(
 ): Required<DereverbClassicalOptions> {
   const request =
     typeof estimate === 'object' && estimate !== null && 'estimate' in estimate
-      ? estimate
-      : { estimate, ...config };
+      ? requestObject('masteringRepairDereverbConfigForRoom', estimate)
+      : { estimate, ...optionsBag('masteringRepairDereverbConfigForRoom', config) };
   if (typeof request.estimate !== 'object' || request.estimate === null) {
     throw new TypeError('masteringRepairDereverbConfigForRoom: estimate must be a room estimate');
   }
