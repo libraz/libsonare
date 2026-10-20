@@ -355,7 +355,9 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
       }
       if (abs_count > 0) {
         const double preliminary = abs_energy / static_cast<double>(abs_count);
-        const double relative_gate_lufs = static_cast<double>(energy_to_lufs(preliminary)) - 10.0;
+        const double relative_gate_lufs =
+            static_cast<double>(energy_to_lufs(preliminary)) +
+            static_cast<double>(metering::kLufsIntegratedRelativeGate);
         const int gate_bin =
             static_cast<int>(std::ceil((relative_gate_lufs - kHistLowLufs) / kHistBinLu));
 

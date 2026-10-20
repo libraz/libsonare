@@ -28,9 +28,9 @@ constexpr float kSilenceLufsThreshold = kFloorDb + kSilenceFloorHeadroomDb;
 
 // BS.1770 integrates over 400 ms gating blocks, so a track shorter than one
 // block has no gated measurement to stage against — whatever number comes back
-// describes the gate, not the material. Matches the profiler's own default, so
+// describes the gate, not the material. Shares the profiler's own default, so
 // a track this stage keeps is one the profiler also kept.
-constexpr float kMinMeasurableDurationSec = 0.4f;
+constexpr float kMinMeasurableDurationSec = kDefaultMinTrackDurationSec;
 
 // band_occupancy sums to 1 for a track with measurable spectral content and to
 // 0 for one without; DC-only material has no energy inside any band, the lowest

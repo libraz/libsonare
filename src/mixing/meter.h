@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "metering/lufs.h"
 #include "rt/biquad_design.h"
 #include "rt/processor_base.h"
 #include "rt/seqlock_cell.h"
@@ -201,7 +202,7 @@ class MeterProcessor : public rt::ProcessorBase {
   // -70.0 .. +30.0 LUFS in 0.1 LU steps: past full scale on every 7.1 plane at once. A louder
   // block lands in the top bin with its exact energy, so only the gate's bin resolution moves.
   static constexpr int kHistBins = 1000;
-  static constexpr double kHistLowLufs = -70.0;
+  static constexpr double kHistLowLufs = metering::kLufsAbsoluteGate;
   static constexpr double kHistBinLu = 0.1;
   std::array<uint64_t, kHistBins> hist_count_{};
   std::array<double, kHistBins> hist_energy_{};

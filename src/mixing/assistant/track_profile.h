@@ -253,6 +253,9 @@ struct TrackProfile {
   bool peak_measured = false;
 };
 
+/// @brief Default shortest track that yields a gated loudness: one BS.1770 400 ms gating block.
+constexpr float kDefaultMinTrackDurationSec = 0.4f;
+
 /// @brief Tunables for @ref analyze_track_profiles.
 struct TrackProfileConfig {
   /// @brief Shared across every track in one call. The values are checked by
@@ -267,7 +270,7 @@ struct TrackProfileConfig {
   /// @brief Tracks shorter than this cannot produce a meaningful gated
   ///        integrated loudness, so they are marked unusable. Must be finite
   ///        and non-negative; zero disables the minimum-duration gate.
-  float min_duration_sec = 0.4f;
+  float min_duration_sec = kDefaultMinTrackDurationSec;
 };
 
 /// @note No raw spectrogram is retained — nothing keeps both full bin resolution
