@@ -4,9 +4,9 @@
 #include <cmath>
 
 #include "mastering/common/prepare_args.h"
+#include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
-#include "util/constants.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
 
@@ -118,7 +118,7 @@ void MonoMaker::validate_config(const MonoMakerConfig& config) {
 void MonoMaker::update_coefficient() noexcept {
   const double frequency =
       std::min<double>(config_.frequency_hz, 0.49 * std::max(sample_rate_, 1.0));
-  coefficient_ = static_cast<float>(std::exp(-constants::kTwoPiD * frequency / sample_rate_));
+  coefficient_ = static_cast<float>(rt::one_pole_pole_matched_d(frequency, sample_rate_));
 }
 
 }  // namespace sonare::mastering::stereo

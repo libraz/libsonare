@@ -21,7 +21,6 @@ using common::require_in_domain;
 using constants::kDefaultDawSampleRate;
 
 using common::kMaxModulationPreDelayMs;
-using constants::kTwoPiD;
 
 namespace {
 constexpr float kMaxDepthMs = 10.0f;
@@ -166,8 +165,7 @@ int Ensemble::tail_samples() const noexcept {
   const double sweep_ms = (config_.depth_slow_ms + config_.depth_fast_ms) *
                           (1.0 + std::fabs(static_cast<double>(config_.depth_dev)));
   const double longest_ms = config_.center_delay_ms + config_.pre_delay_dev_ms + sweep_ms;
-  const double tone_alpha =
-      std::min(1.0, 1.0 - std::exp(-kTwoPiD * config_.tone_hz / sample_rate_));
+  const double tone_alpha = rt::one_pole_lowpass_alpha_matched_d(config_.tone_hz, sample_rate_);
   rt::TailBudget tail;
   tail.delay(longest_ms * 0.001 * sample_rate_ + kDelayReadStencilSamples).decay(1.0 - tone_alpha);
   return tail.samples();

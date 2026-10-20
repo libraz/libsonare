@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "rt/biquad_design.h"
 #include "rt/processor_base.h"
 #include "util/exception.h"
 
@@ -99,7 +100,7 @@ float JilesAtherton::process(JilesAthertonState& state, float field, float sampl
     const float tau = config_.viscosity_time_constant_s;
     if (tau > 0.0f && sample_rate > 0.0f) {
       if (tau != state.relax_tau || sample_rate != state.relax_sample_rate) {
-        state.relax_rate = 1.0f - std::exp(-1.0f / (tau * sample_rate));
+        state.relax_rate = static_cast<float>(rt::one_pole_alpha_from_seconds_d(tau, sample_rate));
         state.relax_tau = tau;
         state.relax_sample_rate = sample_rate;
       }

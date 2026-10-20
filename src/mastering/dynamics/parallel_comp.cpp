@@ -8,6 +8,7 @@
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/detector_level.h"
 #include "mastering/dynamics/linked_gain.h"
+#include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -258,9 +259,8 @@ void ParallelComp::update_coefficients(const ParallelCompConfig& config) {
   for (auto& follower : followers_) {
     follower.prepare(sample_rate_, config.attack_ms, config.release_ms);
   }
-  // Float evaluation, not time_to_coefficient's double: keeps the limiter release bit-identical.
-  limiter_release_coeff_ =
-      std::exp(-1.0f / (0.001f * config.release_ms * static_cast<float>(sample_rate_)));
+  limiter_release_coeff_ = static_cast<float>(rt::one_pole_pole_from_seconds_d(
+      0.001 * static_cast<double>(config.release_ms), sample_rate_));
 }
 
 }  // namespace sonare::mastering::dynamics

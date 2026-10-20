@@ -33,7 +33,7 @@ double envelope_time_constant_seconds() {
 
 float envelope_alpha_for_sample_rate(double sample_rate) {
   const double tau = envelope_time_constant_seconds();
-  return static_cast<float>(1.0 - std::exp(-1.0 / (tau * sample_rate)));
+  return static_cast<float>(rt::one_pole_alpha_from_seconds_d(tau, sample_rate));
 }
 
 AirBand::Biquad make_highpass(double frequency_hz, double sample_rate, double q) {
@@ -91,8 +91,9 @@ void AirBand::prepare(double sample_rate, int max_block_size, int max_channels) 
   harmonic_gain_.assign(n, 0.0f);
   shelf_control_samples_.assign(n, 0);
   envelope_alpha_ = envelope_alpha_for_sample_rate(sample_rate_);
-  normalization_rms_alpha_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.030 * sample_rate_)));
-  harmonic_gain_alpha_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.005 * sample_rate_)));
+  normalization_rms_alpha_ =
+      static_cast<float>(rt::one_pole_alpha_from_seconds_d(0.030, sample_rate_));
+  harmonic_gain_alpha_ = static_cast<float>(rt::one_pole_alpha_from_seconds_d(0.005, sample_rate_));
   band_scratch_.assign(static_cast<size_t>(max_block_size_), 0.0f);
   oversampled_scratch_.assign(static_cast<size_t>(max_block_size_) * kHarmonicOversampleFactor,
                               0.0f);

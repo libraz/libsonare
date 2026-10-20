@@ -5,6 +5,7 @@
 
 #include "effects/common/control_ranges.h"
 #include "effects/common/field_domain.h"
+#include "rt/biquad_design.h"
 #include "rt/pan_law.h"
 #include "rt/param_smoother.h"
 #include "rt/scoped_no_denormals.h"
@@ -110,8 +111,8 @@ void StereoDelay::update_damping() noexcept {
     damping_gain_ = 0.0f;
     return;
   }
-  const double pole = std::exp(-kTwoPiD * config_.damping_hz / sample_rate_);
-  damping_gain_ = static_cast<float>(1.0 - pole);
+  damping_gain_ =
+      static_cast<float>(rt::one_pole_lowpass_alpha_matched_d(config_.damping_hz, sample_rate_));
 }
 
 void StereoDelay::process(float* const* channels, int num_channels, int num_samples) {

@@ -635,10 +635,10 @@ void AmpSim::design_chain() {
         1.0f / (1.0f + kTwoPi * cv.coupling_hz / static_cast<float>(os_rate)), 0.0f, 1.0f);
     cathode_c_ = rt::rbj_low_shelf(rt::frequency_to_w0(cv.cathode_hz, os_rate), kButterworthQ,
                                    cv.cathode_db);
-    grid_charge_alpha_ = std::clamp(
-        1.0f - std::exp(-1.0f / (kBiasChargeTauS * static_cast<float>(os_rate))), 0.0f, 1.0f);
-    grid_discharge_alpha_ = std::clamp(
-        1.0f - std::exp(-1.0f / (kBiasDischargeTauS * static_cast<float>(os_rate))), 0.0f, 1.0f);
+    grid_charge_alpha_ =
+        static_cast<float>(rt::one_pole_alpha_from_seconds_d(kBiasChargeTauS, os_rate));
+    grid_discharge_alpha_ =
+        static_cast<float>(rt::one_pole_alpha_from_seconds_d(kBiasDischargeTauS, os_rate));
     // The bass pot is logarithmic on the real circuit; squaring the position is
     // the usual audio-taper approximation.
     const float bass_pos = tone_position(config_.bass_db);
@@ -650,8 +650,7 @@ void AmpSim::design_chain() {
 
   // Sag envelope: ~40 ms reservoir-cap time constant.
   constexpr float kSagTauS = 0.04f;
-  sag_alpha_ = std::clamp(1.0f - std::exp(-1.0f / (kSagTauS * static_cast<float>(sample_rate_))),
-                          0.0f, 1.0f);
+  sag_alpha_ = static_cast<float>(rt::one_pole_alpha_from_seconds_d(kSagTauS, sample_rate_));
   // Transformer low-band extractor: a ~120 Hz one-pole corner.
   constexpr float kXfCornerHz = 120.0f;
   xf_alpha_ = rt::one_pole_lowpass_alpha_matched(kXfCornerHz, sample_rate_);

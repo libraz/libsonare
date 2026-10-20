@@ -5,6 +5,7 @@
 
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
+#include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -102,7 +103,8 @@ int Transformer::tail_samples() const noexcept {
 
   // Match the float relaxation arithmetic in JilesAtherton::process().
   const float rate = static_cast<float>(sample_rate_);
-  const float relax_rate = 1.0f - std::exp(-1.0f / (ja.viscosity_time_constant_s * rate));
+  const float relax_rate =
+      static_cast<float>(rt::one_pole_alpha_from_seconds_d(ja.viscosity_time_constant_s, rate));
   const float relax_pole = 1.0f - relax_rate * (1.0f - coupling);
   if (!(relax_pole > 0.0f)) return 1;
   if (!(relax_pole < 1.0f) || !std::isfinite(relax_pole)) {

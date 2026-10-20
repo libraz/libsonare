@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "effects/common/field_domain.h"
+#include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
@@ -12,8 +13,6 @@
 namespace sonare::effects::reverb {
 
 using constants::kDefaultDawSampleRate;
-
-using sonare::constants::kTwoPi;
 
 namespace {
 constexpr float kShelfCutoffHz = 6000.0f;
@@ -159,7 +158,7 @@ void VelvetReverb::prepare(double sample_rate, int max_block_size) {
   late_output_r_.assign(kEarlyPartitionSamples, 0.0f);
   late_fill_count_ = 0;
 
-  shelf_pole_ = std::exp(-kTwoPi * kShelfCutoffHz / static_cast<float>(sr));
+  shelf_pole_ = static_cast<float>(rt::one_pole_pole_matched_d(kShelfCutoffHz, sr));
   shelf_b0_ = 1.0f - shelf_pole_;
 
   dc_blocker_.prepare(sample_rate, max_block_size);

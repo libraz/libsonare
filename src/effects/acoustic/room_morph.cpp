@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "acoustic/rir_synthesizer.h"
+#include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -30,7 +31,7 @@ constexpr float kSilenceFloor = 1e-4f;
 
 float one_pole_coef(float tau_seconds, int sample_rate) {
   const float tau = std::max(1e-4f, tau_seconds);
-  return std::exp(-1.0f / (tau * static_cast<float>(sample_rate)));
+  return static_cast<float>(rt::one_pole_pole_from_seconds_d(tau, sample_rate));
 }
 
 /// The target-RIR synthesis configuration this processor derives from its own

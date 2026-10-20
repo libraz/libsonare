@@ -5,6 +5,7 @@
 
 #include "effects/common/control_ranges.h"
 #include "effects/common/field_domain.h"
+#include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
@@ -22,7 +23,6 @@ using constants::kDefaultDawSampleRate;
 using common::kMaxFeedback;
 using sonare::constants::kPi;
 using sonare::constants::kPiD;
-using sonare::constants::kTwoPiD;
 
 namespace {
 
@@ -77,7 +77,8 @@ void Phaser::prepare(double sample_rate, int) {
   lfos_[0].set_rate_hz(config_.rate_hz);
   lfos_[1].set_rate_hz(config_.rate_hz);
   // exp(-2*pi*fc/sr): evaluated here so the corner stays a frequency in hertz.
-  loop_highpass_pole_ = static_cast<float>(std::exp(-kTwoPiD * kLoopHighpassHz / sample_rate_));
+  loop_highpass_pole_ =
+      static_cast<float>(rt::one_pole_pole_matched_d(kLoopHighpassHz, sample_rate_));
   reset();
 }
 

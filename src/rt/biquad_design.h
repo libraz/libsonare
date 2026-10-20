@@ -145,6 +145,21 @@ double one_pole_lowpass_alpha_matched_d(double frequency_hz, double sample_rate)
 /// @return Coefficient in `[0, 1]`.
 float one_pole_alpha_from_time_ms(float time_ms, double sample_rate);
 
+/// @brief Matched-z one-pole pole `exp(-2*pi*fc/fs)`, i.e. `1 - one_pole_lowpass_alpha_matched_d`.
+/// @details Evaluated directly so a pole near 1 keeps full precision. Returns 1 for a
+///          non-positive frequency and 0 for a non-positive sample rate; result in `[0, 1]`.
+double one_pole_pole_matched_d(double frequency_hz, double sample_rate);
+
+/// @brief Time-constant one-pole coefficient `1 - exp(-1 / (tau_s * sample_rate))`.
+/// @details Unlike @ref one_pole_alpha_from_time_ms there is no floor on the time constant:
+///          `tau_s <= 0` or a non-positive sample rate returns 1. Result in `[0, 1]`.
+double one_pole_alpha_from_seconds_d(double tau_s, double sample_rate);
+
+/// @brief Time-constant one-pole pole `exp(-1 / (tau_s * sample_rate))`, i.e. the complement of
+///        @ref one_pole_alpha_from_seconds_d.
+/// @details `tau_s <= 0` or a non-positive sample rate returns 0. Result in `[0, 1]`.
+double one_pole_pole_from_seconds_d(double tau_s, double sample_rate);
+
 /// @brief Normalized angular frequency `2*pi*frequency_hz/sample_rate`.
 /// @details The frequency is clamped to `[20 Hz, sample_rate*0.45]` so biquad
 ///          designs stay safely inside the unit circle and away from Nyquist.

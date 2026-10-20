@@ -23,11 +23,6 @@ constexpr float kMaxDepthMs = 20.0f;
 
 /// The fraction of the remaining gap a first-order glide closes per sample.
 /// A non-positive time constant is no glide at all: the rotor arrives at once.
-double glide_coeff(float tau_s, double sample_rate) noexcept {
-  if (!(tau_s > 0.0f)) return 1.0;
-  return -std::expm1(-1.0 / (static_cast<double>(tau_s) * sample_rate));
-}
-
 /// One validated field: its automation id and the closed interval a value must lie in.
 struct FieldDomain {
   const char* name;
@@ -104,12 +99,9 @@ float Rotary::drum_target_hz() const noexcept {
 void Rotary::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   prepared_ = true;
-  // One-pole lowpass crossover coefficient.
-  const double x =
-      std::exp(-2.0 * ::sonare::constants::kPiD * static_cast<double>(kCrossoverHz) / sample_rate_);
-  lp_coeff_ = static_cast<float>(x);
-  accel_coeff_ = glide_coeff(config_.accel_tau_s, sample_rate_);
-  decel_coeff_ = glide_coeff(config_.decel_tau_s, sample_rate_);
+  lp_coeff_ = static_cast<float>(rt::one_pole_pole_matched_d(kCrossoverHz, sample_rate_));
+  accel_coeff_ = rt::one_pole_alpha_from_seconds_d(config_.accel_tau_s, sample_rate_);
+  decel_coeff_ = rt::one_pole_alpha_from_seconds_d(config_.decel_tau_s, sample_rate_);
   const int max_delay =
       static_cast<int>(sample_rate_ * (2.0 * static_cast<double>(kMaxDepthMs) + 2.0) * 0.001) + 1;
   for (int ch = 0; ch < 2; ++ch) {
@@ -477,11 +469,11 @@ bool Rotary::set_parameter_impl(unsigned int param_id, float value) {
     }
     case 15:
       config_.accel_tau_s = value;
-      accel_coeff_ = glide_coeff(config_.accel_tau_s, sample_rate_);
+      accel_coeff_ = rt::one_pole_alpha_from_seconds_d(config_.accel_tau_s, sample_rate_);
       return true;
     case 16:
       config_.decel_tau_s = value;
-      decel_coeff_ = glide_coeff(config_.decel_tau_s, sample_rate_);
+      decel_coeff_ = rt::one_pole_alpha_from_seconds_d(config_.decel_tau_s, sample_rate_);
       return true;
     case 17:
       config_.undershoot_hz = value;

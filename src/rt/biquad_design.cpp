@@ -486,6 +486,22 @@ float one_pole_alpha_from_time_ms(float time_ms, double sample_rate) {
   return std::clamp(1.0f - std::exp(exponent), 0.0f, 1.0f);
 }
 
+double one_pole_pole_matched_d(double frequency_hz, double sample_rate) {
+  if (!(frequency_hz > 0.0)) return 1.0;
+  if (!(sample_rate > 0.0)) return 0.0;
+  return std::clamp(std::exp(-kTwoPiD * frequency_hz / sample_rate), 0.0, 1.0);
+}
+
+double one_pole_alpha_from_seconds_d(double tau_s, double sample_rate) {
+  if (!(tau_s > 0.0) || !(sample_rate > 0.0)) return 1.0;
+  return std::clamp(-std::expm1(-1.0 / (tau_s * sample_rate)), 0.0, 1.0);
+}
+
+double one_pole_pole_from_seconds_d(double tau_s, double sample_rate) {
+  if (!(tau_s > 0.0) || !(sample_rate > 0.0)) return 0.0;
+  return std::clamp(std::exp(-1.0 / (tau_s * sample_rate)), 0.0, 1.0);
+}
+
 float frequency_to_w0(float frequency_hz, double sample_rate) {
   if (!(sample_rate > 0.0)) return 0.0f;
   const float maximum_frequency = std::max(20.0f, static_cast<float>(sample_rate * 0.45));
