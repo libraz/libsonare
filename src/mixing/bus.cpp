@@ -87,11 +87,7 @@ void BusProcessor::reset() {
 int BusProcessor::latency_samples() const noexcept { return latency_samples_q8() >> 8; }
 
 int BusProcessor::latency_samples_q8() const noexcept {
-  int total = 0;
-  for (const auto& insert : inserts_) {
-    total += insert->latency_samples_q8();
-  }
-  return total;
+  return processor_chain_latency_q8(inserts_);
 }
 
 int BusProcessor::tail_samples() const noexcept {
@@ -104,14 +100,7 @@ std::optional<int> BusProcessor::insert_input_latency_samples_q8(
   const size_t index = insert_index;
   if (index >= inserts_.size()) return std::nullopt;
   int64_t prefix = 0;
-  for (size_t prior = 0; prior < index; ++prior) {
-    if (inserts_[prior] != nullptr) {
-      prefix += static_cast<int64_t>(inserts_[prior]->latency_samples_q8());
-      if (prefix < std::numeric_limits<int>::min() || prefix > std::numeric_limits<int>::max()) {
-        return std::nullopt;
-      }
-    }
-  }
+  if (!accumulate_chain_latency_q8(inserts_, index, prefix)) return std::nullopt;
   return static_cast<int>(prefix);
 }
 
@@ -181,16 +170,7 @@ int BusProcessor::insert_parameter_id_for_key(unsigned int insert_index,
   if (index >= inserts_.size()) {
     return -1;
   }
-  const rt::ProcessorBase* insert = inserts_[index].get();
-  if (insert == nullptr) {
-    return -1;
-  }
-  for (const auto& desc : insert->parameter_descriptors()) {
-    if (desc.key == key) {
-      return insert->parameter_is_realtime_safe(desc.id) ? static_cast<int>(desc.id) : -1;
-    }
-  }
-  return -1;
+  return processor_parameter_id_for_key(inserts_[index].get(), key);
 }
 
 void BusProcessor::set_insert_sidechain(unsigned int insert_index, const float* const* channels,

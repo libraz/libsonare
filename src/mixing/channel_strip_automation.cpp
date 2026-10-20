@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "mixing/channel_strip.h"
+#include "mixing/tail_utils.h"
 
 namespace sonare::mixing {
 
@@ -61,14 +62,7 @@ AutomationPushResult ChannelStrip::schedule_pan_automation_result(
 
 bool ChannelStrip::set_insert_bypassed(unsigned int insert_index, bool bypassed,
                                        bool reset_on_bypass) noexcept {
-  const size_t idx = insert_index;
-  const size_t pre_count = pre_inserts_.size();
-  rt::ProcessorBase* insert = nullptr;
-  if (idx < pre_count) {
-    insert = pre_inserts_[idx].get();
-  } else if (idx - pre_count < post_inserts_.size()) {
-    insert = post_inserts_[idx - pre_count].get();
-  }
+  rt::ProcessorBase* insert = insert_at(insert_index);
   return insert != nullptr && insert->set_bypassed(bypassed, reset_on_bypass);
 }
 
@@ -79,14 +73,7 @@ InsertAutomationScheduleResult ChannelStrip::schedule_insert_automation_result(
   if (param_id > kMaxReasonableParamId || !std::isfinite(value)) {
     return InsertAutomationScheduleResult::InvalidParameter;
   }
-  const size_t idx = insert_index;
-  const size_t pre_count = pre_inserts_.size();
-  rt::ProcessorBase* insert = nullptr;
-  if (idx < pre_count) {
-    insert = pre_inserts_[idx].get();
-  } else if (idx - pre_count < post_inserts_.size()) {
-    insert = post_inserts_[idx - pre_count].get();
-  }
+  rt::ProcessorBase* insert = insert_at(insert_index);
   if (insert == nullptr) {
     return InsertAutomationScheduleResult::InvalidParameter;
   }
@@ -179,14 +166,7 @@ void ChannelStrip::apply_automation_event(const AutomationEvent& event) noexcept
       break;
     case AutomationTargetKind::InsertParameter: {
       // insert_index addresses the combined sequence [pre_inserts_ ... post_inserts_ ...].
-      const size_t idx = event.target.insert_index;
-      const size_t pre_count = pre_inserts_.size();
-      rt::ProcessorBase* insert = nullptr;
-      if (idx < pre_count) {
-        insert = pre_inserts_[idx].get();
-      } else if (idx - pre_count < post_inserts_.size()) {
-        insert = post_inserts_[idx - pre_count].get();
-      }
+      rt::ProcessorBase* insert = insert_at(event.target.insert_index);
       if (insert != nullptr && insert->parameter_is_realtime_safe(event.target.param_id)) {
         // Ignore unrecognized ids / out-of-range; no-op on failure.
         insert->set_parameter(event.target.param_id, event.value);
@@ -204,14 +184,7 @@ void ChannelStrip::apply_automation_event(const AutomationEvent& event) noexcept
 bool ChannelStrip::apply_insert_parameter(unsigned int insert_index, unsigned int param_id,
                                           float value) noexcept {
   // insert_index addresses the combined sequence [pre_inserts_ ... post_inserts_ ...].
-  const size_t idx = insert_index;
-  const size_t pre_count = pre_inserts_.size();
-  rt::ProcessorBase* insert = nullptr;
-  if (idx < pre_count) {
-    insert = pre_inserts_[idx].get();
-  } else if (idx - pre_count < post_inserts_.size()) {
-    insert = post_inserts_[idx - pre_count].get();
-  }
+  rt::ProcessorBase* insert = insert_at(insert_index);
   if (insert == nullptr || !insert->parameter_is_realtime_safe(param_id)) {
     return false;
   }
@@ -221,50 +194,20 @@ bool ChannelStrip::apply_insert_parameter(unsigned int insert_index, unsigned in
 bool ChannelStrip::constructed_insert_parameter_value(unsigned int insert_index,
                                                       unsigned int param_id,
                                                       float* out) const noexcept {
-  const size_t idx = insert_index;
-  const size_t pre_count = pre_inserts_.size();
-  const rt::ProcessorBase* insert = nullptr;
-  if (idx < pre_count) {
-    insert = pre_inserts_[idx].get();
-  } else if (idx - pre_count < post_inserts_.size()) {
-    insert = post_inserts_[idx - pre_count].get();
-  }
+  const rt::ProcessorBase* insert = insert_processor(insert_index);
   return insert != nullptr && insert->constructed_parameter_value(param_id, out);
 }
 
 bool ChannelStrip::last_applied_insert_parameter_value(unsigned int insert_index,
                                                        unsigned int param_id,
                                                        float* out) const noexcept {
-  const size_t idx = insert_index;
-  const size_t pre_count = pre_inserts_.size();
-  const rt::ProcessorBase* insert = nullptr;
-  if (idx < pre_count) {
-    insert = pre_inserts_[idx].get();
-  } else if (idx - pre_count < post_inserts_.size()) {
-    insert = post_inserts_[idx - pre_count].get();
-  }
+  const rt::ProcessorBase* insert = insert_processor(insert_index);
   return insert != nullptr && insert->last_applied_parameter_value(param_id, out);
 }
 
 int ChannelStrip::insert_parameter_id_for_key(unsigned int insert_index,
                                               const std::string& key) const noexcept {
-  const size_t idx = insert_index;
-  const size_t pre_count = pre_inserts_.size();
-  const rt::ProcessorBase* insert = nullptr;
-  if (idx < pre_count) {
-    insert = pre_inserts_[idx].get();
-  } else if (idx - pre_count < post_inserts_.size()) {
-    insert = post_inserts_[idx - pre_count].get();
-  }
-  if (insert == nullptr) {
-    return -1;
-  }
-  for (const auto& desc : insert->parameter_descriptors()) {
-    if (desc.key == key) {
-      return insert->parameter_is_realtime_safe(desc.id) ? static_cast<int>(desc.id) : -1;
-    }
-  }
-  return -1;
+  return processor_parameter_id_for_key(insert_processor(insert_index), key);
 }
 
 }  // namespace sonare::mixing

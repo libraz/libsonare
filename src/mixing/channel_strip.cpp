@@ -55,14 +55,6 @@ void copy_to_taps(float* const* channels, std::vector<std::vector<float>>& taps,
   }
 }
 
-int total_latency_q8(const std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts) noexcept {
-  int total = 0;
-  for (const auto& insert : inserts) {
-    total += insert->latency_samples_q8();
-  }
-  return total;
-}
-
 // The meter reports the reduction the block actually took, so a bypassed insert
 // contributes nothing. The hidden processor runs on scratch to keep its state
 // current, but its gain reduction is not applied to the audible bypass path.
@@ -770,30 +762,25 @@ int ChannelStrip::pre_fader_tail_samples() const noexcept {
 
 int ChannelStrip::pre_fader_latency_samples_q8() const noexcept {
   // The channel delay moves this strip relative to the others; PDC must not undo it.
-  return total_latency_q8(pre_inserts_);
+  return processor_chain_latency_q8(pre_inserts_);
 }
 
 int ChannelStrip::post_fader_latency_samples_q8() const noexcept {
-  return pre_fader_latency_samples_q8() + total_latency_q8(post_inserts_);
+  return pre_fader_latency_samples_q8() + processor_chain_latency_q8(post_inserts_);
 }
 
 std::optional<int> ChannelStrip::insert_input_latency_samples_q8(
     unsigned int insert_index) const noexcept {
   const size_t index = insert_index;
   const size_t pre_count = pre_inserts_.size();
-  const size_t total = pre_count + post_inserts_.size();
-  if (index >= total) return std::nullopt;
+  if (index >= pre_count + post_inserts_.size()) return std::nullopt;
 
   int64_t prefix = 0;
-  for (size_t prior = 0; prior < index; ++prior) {
-    const auto& chain = prior < pre_count ? pre_inserts_ : post_inserts_;
-    const size_t local = prior < pre_count ? prior : prior - pre_count;
-    if (local < chain.size() && chain[local] != nullptr) {
-      prefix += static_cast<int64_t>(chain[local]->latency_samples_q8());
-      if (prefix < std::numeric_limits<int>::min() || prefix > std::numeric_limits<int>::max()) {
-        return std::nullopt;
-      }
-    }
+  if (!accumulate_chain_latency_q8(pre_inserts_, std::min(index, pre_count), prefix)) {
+    return std::nullopt;
+  }
+  if (index > pre_count && !accumulate_chain_latency_q8(post_inserts_, index - pre_count, prefix)) {
+    return std::nullopt;
   }
   return static_cast<int>(prefix);
 }

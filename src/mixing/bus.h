@@ -116,7 +116,10 @@ class BusProcessor : public rt::ProcessorBase {
   static constexpr size_t kMaxInserts = 64;
 
  private:
-  static constexpr int kMaxBusScratchChannels = 8;
+  // Widest bed a bus can be handed; derived from the layout table so a wider layout cannot
+  // leave the bypass scratch short.
+  static constexpr int kMaxBusScratchChannels = channel_count(ChannelLayout::SevenPointOne);
+  static_assert(kMaxBusScratchChannels == 8, "bypass scratch holds one plane per 7.1 channel");
 
   void prepare_insert_alignment_delays(size_t insert_index);
 

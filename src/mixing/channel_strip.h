@@ -442,6 +442,11 @@ class ChannelStrip : public rt::ProcessorBase {
                              const api::StripEq* previous);
 
  private:
+  /// The processor at @p insert_index of the combined pre-then-post sequence, or nullptr.
+  rt::ProcessorBase* insert_at(unsigned int insert_index) noexcept {
+    return const_cast<rt::ProcessorBase*>(insert_processor(insert_index));
+  }
+
   static constexpr int kPreparedChannels = 2;
   static constexpr int kMaxStackChannels = 8;
   static constexpr size_t kMaxAutomationEventsPerBlock = 128;
