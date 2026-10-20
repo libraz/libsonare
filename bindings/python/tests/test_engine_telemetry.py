@@ -420,3 +420,14 @@ def test_engine_overflow_counters_start_at_zero_and_stay_there_when_nothing_drop
 def test_engine_telemetry_error_parameter_base_overflow_ordinal() -> None:
     assert EngineTelemetryError.PARAMETER_BASE_OVERFLOW.value == 21
     assert EngineTelemetryError.PARAMETER_BASE_OVERFLOW.name == "PARAMETER_BASE_OVERFLOW"
+
+
+def test_graph_connection_mix_is_replace_or_add_only() -> None:
+    from libsonare import EngineGraphConnection, EngineGraphMix, SonareValueError
+    from libsonare._engine_conversions import _graph_connection_to_c
+
+    assert _graph_connection_to_c(EngineGraphConnection("a", 0, "b", 0)).mix == 1
+    replace = EngineGraphConnection("a", 0, "b", 0, mix=EngineGraphMix.REPLACE)
+    assert _graph_connection_to_c(replace).mix == 0
+    with pytest.raises(SonareValueError):
+        _graph_connection_to_c(EngineGraphConnection("a", 0, "b", 0, mix=2))  # type: ignore[arg-type]

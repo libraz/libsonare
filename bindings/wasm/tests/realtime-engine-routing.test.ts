@@ -742,6 +742,30 @@ describe('Sonare WASM Module', () => {
       engine.destroy();
     });
 
+    it('reads a graph connection mix of 0 (replace) or 1 (add) and refuses any other value', () => {
+      const graph = (mix: number | undefined) => ({
+        nodes: [
+          { id: 'in', numPorts: 2 },
+          { id: 'out', numPorts: 2 },
+        ],
+        connections: [{ sourceNode: 'in', sourcePort: 0, destNode: 'out', destPort: 0, mix }],
+        inputNode: 'in',
+        outputNode: 'out',
+        numChannels: 2,
+      });
+      const engine = new RealtimeEngine(48000, 128);
+      try {
+        for (const mix of [0, 1, undefined]) {
+          expect(() => engine.setGraph(graph(mix))).not.toThrow();
+        }
+        for (const mix of [2, -1, 7]) {
+          expect(() => engine.setGraph(graph(mix))).toThrow(RangeError);
+        }
+      } finally {
+        engine.destroy();
+      }
+    });
+
     it('routes track clips through lanes and lane commands', () => {
       const engine = new RealtimeEngine(48000, 256);
       const frames = 256 * 10;

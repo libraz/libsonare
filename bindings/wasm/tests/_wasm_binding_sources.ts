@@ -190,9 +190,14 @@ const OFFLINE_WRAPPER_DEFINITION = /\bRealtimeEngineWasm::(\w*Offline)\s*\(/g;
 
 /**
  * The core entry points that own the prepared-channel precondition:
- * render_offline itself, and freeze_offline, which renders through it.
+ * render_offline itself, plus render_offline_aligned and freeze_offline, which render
+ * through it.
  */
-const CORE_OFFLINE_RENDERS = ['engine_.render_offline(', 'engine_.freeze_offline('];
+const CORE_OFFLINE_RENDERS = [
+  'engine_.render_offline(',
+  'engine_.render_offline_aligned(',
+  'engine_.freeze_offline(',
+];
 
 /**
  * Every offline-render entry point on the WASM engine facade, with whether its

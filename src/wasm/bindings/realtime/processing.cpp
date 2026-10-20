@@ -135,9 +135,13 @@ void RealtimeEngineWasm::setGraph(val spec) {
     graph_connection.source_port = intProperty(connection, "sourcePort", 0);
     graph_connection.dest_node = stringProperty(connection, "destNode", "");
     graph_connection.dest_port = intProperty(connection, "destPort", 0);
-    graph_connection.mix = intProperty(connection, "mix", 1) == 0
-                               ? sonare::graph::Connection::Mix::Replace
-                               : sonare::graph::Connection::Mix::Add;
+    // 0 = Replace, 1 = Add (the default when omitted); anything else is refused, not read as Add.
+    const int mix = intProperty(connection, "mix", 1);
+    if (mix != 0 && mix != 1) {
+      throw WasmRangeError("graph connection mix must be 0 (replace) or 1 (add)");
+    }
+    graph_connection.mix =
+        mix == 0 ? sonare::graph::Connection::Mix::Replace : sonare::graph::Connection::Mix::Add;
     if (!graph->connect(std::move(graph_connection))) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to connect graph");
     }
@@ -416,14 +420,8 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   // bounce is a one-shot render, so the first audible block must open at the
   // settled fader/pan/gate values instead of ramping in from the defaults.
   engine_.prime_offline_parameters(num_channels, block_size);
-  std::vector<std::vector<float>> channels(static_cast<size_t>(num_channels),
-                                           std::vector<float>(static_cast<size_t>(total_frames)));
-  std::vector<float*> pointers;
-  pointers.reserve(channels.size());
-  for (auto& channel : channels) {
-    pointers.push_back(channel.data());
-  }
-  engine_.render_offline(pointers.data(), num_channels, total_frames, block_size);
+  std::vector<std::vector<float>> channels =
+      engine_.render_offline_aligned(num_channels, total_frames, block_size);
 
   if (source_sample_rate != target_sample_rate) {
     for (auto& channel : channels) {

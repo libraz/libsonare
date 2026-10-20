@@ -531,13 +531,8 @@ export interface EngineFreezeResult {
 export type EngineGraphNodeType = 0 | 1;
 
 /**
- * Mixing intent for a graph edge (`0` = replace, `1` = add).
- *
- * NOTE: not currently honored — the compiled graph always sums edges into a
- * shared destination port in an order-independent way (the first edge into a
- * port overwrites, every later edge adds), regardless of this value. Retained
- * for API compatibility and to express intent; multiple edges into one port are
- * always summed.
+ * Mixing intent for a graph edge: `0` replaces what the destination port already
+ * holds, `1` adds to it. Omitted means add; any other value is refused.
  */
 export type EngineGraphMix = 0 | 1;
 

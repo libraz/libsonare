@@ -2459,11 +2459,11 @@ class EngineGraphNodeType(IntEnum):
 class EngineGraphMix(IntEnum):
     """Mixing intent for a graph edge.
 
-    NOTE: not currently honored -- the compiled graph always sums edges into a
-    shared destination port in an order-independent way (the first edge into a
-    port overwrites, every later edge adds), regardless of this value. Retained
-    for API compatibility and to express intent; multiple edges into one port
-    are always summed.
+    Edges into one destination port are taken in connection order. ``REPLACE``
+    overwrites what earlier edges put on the port; ``ADD`` accumulates onto it.
+    A port's first edge initializes it either way, so the two differ only on a
+    shared port. An omitted ``mix`` is ``ADD``, unlike a zero-initialized C
+    connection, which is ``REPLACE``.
     """
 
     REPLACE = 0

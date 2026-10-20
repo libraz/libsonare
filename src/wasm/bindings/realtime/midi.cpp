@@ -64,29 +64,40 @@ sonare::midi::MidiInstrument* wasmBoundInstrument(const sonare::engine::Realtime
   return instrument;
 }
 
-// The destination's current profile. NotImplemented (the C ABI's NOT_SUPPORTED)
-// for a bound instrument that holds no profile.
-sonare::midi::ControllerProfile wasmControllerProfile(const sonare::engine::RealtimeEngine& engine,
-                                                      uint32_t destination_id) {
-  const sonare::midi::ControllerProfile* profile =
-      wasmBoundInstrument(engine, destination_id)->controller_profile();
-  if (profile == nullptr) {
-    throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                  "the bound instrument holds no controller profile");
+// Maps an engine instrument-control outcome onto the exceptions the C ABI's statuses become:
+// InvalidParameter for a destination nothing is bound to, NotImplemented (the C ABI's
+// NOT_SUPPORTED) for a bound instrument without the control.
+void wasmRequireControlOk(sonare::engine::RealtimeEngine::InstrumentControlStatus status,
+                          const char* unsupported_message) {
+  using Status = sonare::engine::RealtimeEngine::InstrumentControlStatus;
+  switch (status) {
+    case Status::kOk:
+      return;
+    case Status::kNoInstrument:
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "no MIDI instrument is bound to this destination");
+    case Status::kNotSupported:
+      break;
   }
-  return *profile;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented, unsupported_message);
 }
 
-// Installs a profile back onto the destination. Every entry reads, changes one
-// thing and installs, so the rule that installing drops the channels'
-// accumulated axis values holds however the profile was reached.
-void wasmInstallControllerProfile(const sonare::engine::RealtimeEngine& engine,
-                                  uint32_t destination_id,
+// The destination's current profile, read through the engine rather than from the instrument.
+sonare::midi::ControllerProfile wasmControllerProfile(const sonare::engine::RealtimeEngine& engine,
+                                                      uint32_t destination_id) {
+  sonare::midi::ControllerProfile profile;
+  wasmRequireControlOk(engine.instrument_controller_profile(destination_id, &profile),
+                       "the bound instrument holds no controller profile");
+  return profile;
+}
+
+// Installs a profile back onto the destination, adopted by the instrument on the audio thread.
+// Every entry reads, changes one thing and installs, so the rule that installing drops the
+// channels' accumulated axis values holds however the profile was reached.
+void wasmInstallControllerProfile(sonare::engine::RealtimeEngine& engine, uint32_t destination_id,
                                   const sonare::midi::ControllerProfile& profile) {
-  if (!wasmBoundInstrument(engine, destination_id)->set_controller_profile(profile)) {
-    throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                  "the bound instrument declined a controller profile");
-  }
+  wasmRequireControlOk(engine.set_instrument_controller_profile(destination_id, profile),
+                       "the bound instrument declined a controller profile");
 }
 
 // The tracking field a dimension ordinal names. A pointer rather than a copy so
@@ -741,12 +752,10 @@ void RealtimeEngineWasm::setArticulation(const val& destination_id_val, const va
   requireOrdinalInRange(channel, 0, 15, "channel");
   const int mode = sonare_wasm_synth::enumFromVal(articulation, sonare_wasm_synth::kArticulations,
                                                   SONARE_ARTICULATION_COUNT, "articulation");
-  if (!wasmBoundInstrument(engine_, destination_id)
-           ->set_articulation(static_cast<uint8_t>(channel),
-                              static_cast<sonare::midi::ArticulationMode>(mode))) {
-    throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                  "the bound instrument has no articulation of its own");
-  }
+  wasmRequireControlOk(
+      engine_.set_instrument_articulation(destination_id, static_cast<uint8_t>(channel),
+                                          static_cast<sonare::midi::ArticulationMode>(mode)),
+      "the bound instrument has no articulation of its own");
 #else
   (void)destination_id_val;
   (void)channel_val;
@@ -765,11 +774,9 @@ val RealtimeEngineWasm::articulation(const val& destination_id_val, const val& c
   const int channel = checkedIntFromVal(channel_val, "channel");
   requireOrdinalInRange(channel, 0, 15, "channel");
   sonare::midi::ArticulationMode mode = sonare::midi::ArticulationMode::kPoly;
-  if (!wasmBoundInstrument(engine_, destination_id)
-           ->articulation(static_cast<uint8_t>(channel), &mode)) {
-    throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                  "the bound instrument has no articulation of its own");
-  }
+  wasmRequireControlOk(
+      engine_.instrument_articulation(destination_id, static_cast<uint8_t>(channel), &mode),
+      "the bound instrument has no articulation of its own");
   return sonare_wasm_synth::enumNameVal(static_cast<int>(mode), sonare_wasm_synth::kArticulations,
                                         SONARE_ARTICULATION_COUNT);
 #else

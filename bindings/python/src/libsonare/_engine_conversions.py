@@ -298,7 +298,12 @@ def _graph_connection_to_c(connection: EngineGraphConnection) -> SonareEngineGra
     raw.source_port = connection.source_port
     raw.dest_node = _fixed_bytes(connection.dest_node, 64, "dest_node")
     raw.dest_port = connection.dest_port
-    raw.mix = int(EngineGraphMix(connection.mix))
+    try:
+        raw.mix = int(EngineGraphMix(connection.mix))
+    except ValueError as exc:
+        raise SonareValueError(
+            f"mix must be EngineGraphMix.REPLACE or EngineGraphMix.ADD, got {connection.mix!r}"
+        ) from exc
     return raw
 
 
