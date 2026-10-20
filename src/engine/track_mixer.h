@@ -205,11 +205,21 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   };
 
   bool set_track_lanes(std::vector<TrackLaneConfig> lanes);
+  /// True when the most recent refusal by set_track_lanes, set_buses,
+  /// set_track_strip or set_bus_strip came from configuration earlier calls left
+  /// (a full strip table or admission pool, retained delay, pan or routing, or a
+  /// combined latency past the alignment ceiling) rather than from its own
+  /// arguments. Meaningful only right after one of them returned false.
+  bool last_refusal_from_state() const noexcept { return last_refusal_from_state_; }
   /// Pure: true exactly when set_track_lanes would accept @p lanes on validation grounds.
   bool validate_track_lanes(const std::vector<TrackLaneConfig>& lanes) const noexcept {
     return lane_config_valid(lanes);
   }
   bool set_buses(std::vector<TrackBusConfig> buses);
+  /// Pure: true when set_buses would not refuse @p buses on their own content.
+  bool validate_buses(const std::vector<TrackBusConfig>& buses) const noexcept {
+    return bus_config_valid(buses);
+  }
   /// AUDIO thread: acquires this block's lane config and sidechain binding table.
   void acquire_lanes() noexcept {
     lanes_.acquire();
@@ -298,7 +308,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   /// True when nothing was bound.
   bool release_track_strip(uint32_t track_id);
   /// Asked with a rebuilt insert chain before it replaces the current one; false
-  /// refuses the change with nothing applied. Not asked when the chain is kept.
+  /// refuses the change with nothing applied, as a refusal from state (the
+  /// capacity it guards was filled by earlier calls). Not asked when the chain is kept.
   using StripAdmission = bool (*)(void* context, uint32_t track_id,
                                   const mixing::ChannelStrip& strip);
   using BusAdmission = bool (*)(void* context, uint32_t bus_id, const mixing::FxBus& bus);
@@ -674,6 +685,10 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   };
 
  private:
+  bool refuse_from_state() noexcept {
+    last_refusal_from_state_ = true;
+    return false;
+  }
   struct LaneState {
     uint32_t track_id = 0;
     // Linear gain, even though the public parameter is dB. Converting once at
@@ -1164,6 +1179,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // Last committed raw-clip PDC target. The engine owns the common direct-clip
   // bank; this target is carried by each lane's staged bank.
   int clip_pdc_delay_q8_ = 0;
+  // See last_refusal_from_state(); reset on entry to each setter it covers.
+  bool last_refusal_from_state_ = false;
   // Control-thread binding table; the audio thread never reads it.
   SidechainTable sidechains_{};
   rt::SeqlockCell<SidechainTable> sidechains_published_{};

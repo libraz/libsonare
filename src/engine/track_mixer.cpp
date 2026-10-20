@@ -230,10 +230,11 @@ bool lane_sends_equal(const TrackLaneConfig& left, const TrackLaneConfig& right)
 }  // namespace
 
 bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
+  last_refusal_from_state_ = false;
   if (!lane_config_valid(lanes)) return false;
   constexpr int kMaxLaneClipDelayQ8 = mixing::kMaxAlignmentDelaySamples << 8;
   // Refuse a non-empty lane snapshot when the retained direct delay exceeds the lane bank ceiling.
-  if (!lanes.empty() && clip_pdc_delay_q8_ > kMaxLaneClipDelayQ8) return false;
+  if (!lanes.empty() && clip_pdc_delay_q8_ > kMaxLaneClipDelayQ8) return refuse_from_state();
   std::shared_ptr<const std::vector<TrackLaneConfig>> snapshot;
   try {
     snapshot = std::make_shared<const std::vector<TrackLaneConfig>>(std::move(lanes));
@@ -269,7 +270,9 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
         candidate_strips[lane_index] = owned_strip_for(config.track_id);
       }
       if (candidate_strips[lane_index] == nullptr && !config.sends.empty()) {
-        if (retained_owned_count + staged_owned_count >= kMaxTrackLanes) return false;
+        if (retained_owned_count + staged_owned_count >= kMaxTrackLanes) {
+          return refuse_from_state();
+        }
         auto strip = make_seed_strip();
         candidate_strips[lane_index] = strip.get();
         staged_owned[lane_index] = std::move(strip);
@@ -313,12 +316,14 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
 
   PdcPlan plan;
   const BusGraphView view = current_bus_graph_view();
-  if (!plan_pdc(*snapshot, view, &plan, &candidate_strips)) return false;
+  if (!plan_pdc(*snapshot, view, &plan, &candidate_strips)) return refuse_from_state();
   std::array<int, kMaxTrackLanes> lane_sources{};
   std::array<bool, kMaxTrackLanes> lane_reset{};
   make_lane_pdc_sources(*snapshot, &lane_sources, &lane_reset);
   PreparedPdc prepared_pdc;
-  if (!prepare_pdc_updates(plan, lane_sources, lane_reset, &prepared_pdc)) return false;
+  if (!prepare_pdc_updates(plan, lane_sources, lane_reset, &prepared_pdc)) {
+    return refuse_from_state();
+  }
 
   // From here on every vector has capacity and every processor is prepared, so nothing can fail.
   // Insert ramps stay keyed by track identity; only a track leaving the snapshot is retired.
@@ -357,6 +362,7 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
 }
 
 bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
+  last_refusal_from_state_ = false;
   if (!bus_config_valid(buses)) return false;
   // Bus state follows the bus id, not the slot: source[i] is the slot new bus i
   // held before, or -1 for a bus declared now.
@@ -377,7 +383,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
     // Pan and width are refused on a wider bus rather than silently reset.
     if (layout_wider_than_stereo(buses[index].layout) &&
         !bus_stereo_image_is_default(bus_states_[static_cast<size_t>(previous)].spec)) {
-      return false;
+      return refuse_from_state();
     }
     source[index] = previous;
     if (previous == static_cast<int>(index)) {
@@ -423,9 +429,9 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
   const std::vector<TrackLaneConfig>* current_lanes = lanes_.control_current().get();
   const std::vector<TrackLaneConfig>& lanes = current_lanes ? *current_lanes : kNoLanes;
   for (const TrackLaneConfig& lane : lanes) {
-    if (lane.output_bus_id != 0 && !declared(lane.output_bus_id)) return false;
+    if (lane.output_bus_id != 0 && !declared(lane.output_bus_id)) return refuse_from_state();
     for (const TrackLaneConfig::Send& send : lane.sends) {
-      if (!declared(send.bus_id)) return false;
+      if (!declared(send.bus_id)) return refuse_from_state();
     }
   }
   // The alignment the new graph needs has to fit the delay lines.
@@ -441,7 +447,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
     view.latency_q8[index] = fx != nullptr ? fx->latency_samples_q8() : 0;
   }
   PdcPlan plan;
-  if (!plan_pdc(lanes, view, &plan)) return false;
+  if (!plan_pdc(lanes, view, &plan)) return refuse_from_state();
   std::array<int, kMaxBusLanes> bank_sources{};
   bank_sources.fill(-1);
   std::array<bool, kMaxBusLanes> bank_used{};
@@ -482,7 +488,9 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
         }
       }
       if (strip == nullptr && !config.sends.empty()) {
-        if (owned_strips_.size() + staged_lane_owned_count >= kMaxTrackLanes) return false;
+        if (owned_strips_.size() + staged_lane_owned_count >= kMaxTrackLanes) {
+          return refuse_from_state();
+        }
         auto owned = make_seed_strip();
         strip = owned.get();
         staged_lane_owned[lane_index] = std::move(owned);
@@ -542,7 +550,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
   }
   PreparedPdc prepared_pdc;
   if (!prepare_pdc_updates(plan, pdc_sources, pdc_reset, &prepared_pdc, &bank_sources)) {
-    return false;
+    return refuse_from_state();
   }
 
   decltype(bus_sends_) sends{};
@@ -970,6 +978,7 @@ void TrackMixerRuntime::erase_owned_strip(size_t index) noexcept {
 
 bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::Strip& spec,
                                         StripAdmission admit, void* admit_context) {
+  last_refusal_from_state_ = false;
   if (track_id == 0 || !strip_eq_acceptable(spec.eq, sample_rate_)) return false;
 
   // In-place fast path: when a strip already exists for this track and only its
@@ -993,7 +1002,7 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
         if (!recompute_lane_pdc(*lanes)) {
           // Refused: the previous scalars return, and the live PDC still fits them.
           apply_strip_scalars(*owned.strip, owned.spec, spec);
-          return false;
+          return refuse_from_state();
         }
       }
       if (spec.soloed != owned.spec.soloed) apply_spec_solo(track_id, spec.soloed);
@@ -1013,13 +1022,13 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
   if (max_block_size_ > 0) {
     strip->prepare(sample_rate_, max_block_size_);
   }
-  if (admit != nullptr && !admit(admit_context, track_id, *strip)) return false;
+  if (admit != nullptr && !admit(admit_context, track_id, *strip)) return refuse_from_state();
 
   OwnedStrip* existing = nullptr;
   for (OwnedStrip& owned : owned_strips_) {
     if (owned.track_id == track_id) existing = &owned;
   }
-  if (existing == nullptr && owned_strips_.size() >= kMaxTrackLanes) return false;
+  if (existing == nullptr && owned_strips_.size() >= kMaxTrackLanes) return refuse_from_state();
   mixing::ChannelStrip* raw = strip.get();
   mixing::api::Strip next_spec;
   try {
@@ -1028,8 +1037,9 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
   } catch (...) {
     return false;
   }
+  // Staging refuses only for a full lane table or a latency the other lanes cannot align to.
   StagedTrackStrip staged;
-  if (!stage_track_strip(track_id, *raw, &staged)) return false;
+  if (!stage_track_strip(track_id, *raw, &staged)) return refuse_from_state();
 
   // Control thread, not concurrent with process(): the previous strip is
   // destroyed here, after the lane points away from it.
@@ -1048,6 +1058,7 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
 
 bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& bus,
                                       BusAdmission admit, void* admit_context) {
+  last_refusal_from_state_ = false;
   const int found = configured_bus_index(bus_id);
   if (found < 0) return false;
   const size_t bus_index = static_cast<size_t>(found);
@@ -1083,7 +1094,7 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
     if (max_block_size_ > 0) {
       fx->prepare(sample_rate_, max_block_size_);
     }
-    if (admit != nullptr && !admit(admit_context, bus_id, *fx)) return false;
+    if (admit != nullptr && !admit(admit_context, bus_id, *fx)) return refuse_from_state();
   }
   mixing::api::Bus next_spec;
   try {
@@ -1106,7 +1117,7 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
       PdcPlan plan;
       if (!plan_pdc(*lanes, view, &plan, nullptr, nullptr, false, &next_sidechains) ||
           !prepare_identity_pdc(plan, &prepared)) {
-        return false;
+        return refuse_from_state();
       }
       has_pdc = true;
     }

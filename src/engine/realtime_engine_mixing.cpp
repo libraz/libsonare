@@ -239,12 +239,16 @@ bool RealtimeEngine::bind_mixing_strip(mixing::ChannelStrip* strip) {
 }
 
 bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
-  if (!strip_eq_acceptable(strip_spec.eq, sample_rate_)) return false;
+  const auto refuse_argument = [this] {
+    return report_mixer_edit(MixerEditStatus::kInvalidArgument);
+  };
+  const auto refuse_state = [this] { return report_mixer_edit(MixerEditStatus::kInvalidState); };
+  if (!strip_eq_acceptable(strip_spec.eq, sample_rate_)) return refuse_argument();
   mixing::api::Strip next_spec;
   try {
     next_spec = strip_spec;
   } catch (...) {
-    return false;
+    return refuse_argument();
   }
   // In-place: an unchanged insert chain keeps the bound strip, and with it the
   // insert state (tails, envelopes), the insert automation and the EQ filter
@@ -252,34 +256,34 @@ bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
   if (owned_master_strip_ != nullptr && mixing_runtime_.strip() == owned_master_strip_.get() &&
       strip_inserts_equal(master_strip_spec_.inserts, strip_spec.inserts)) {
     if (!owned_master_strip_->try_set_channel_delay_samples(strip_spec.channel_delay_samples)) {
-      return false;
+      return refuse_argument();
     }
     apply_strip_scalars(*owned_master_strip_, strip_spec, master_strip_spec_);
     std::swap(master_strip_spec_, next_spec);
     update_reported_graph_latency();
     set_mixing_enabled(true);
-    return true;
+    return report_mixer_edit(MixerEditStatus::kApplied);
   }
   std::unique_ptr<mixing::ChannelStrip> strip;
   try {
     strip = make_channel_strip_from_spec(next_spec, sample_rate_);
-    if (strip == nullptr) return false;
+    if (strip == nullptr) return refuse_argument();
     if (max_block_size_ > 0) strip->prepare(sample_rate_, max_block_size_);
   } catch (...) {
-    return false;
+    return refuse_argument();
   }
   if (!insert_automation_room(
           insert_entries_to_mint(insert_automation_targets_, InsertStripKind::kMaster, 0, *strip,
                                  strip->num_pre_inserts() + strip->num_post_inserts()))) {
-    return false;
+    return refuse_state();
   }
   TrackMixerRuntime::PreparedMasterStripUpdate update;
   if (!track_mixer_runtime_.prepare_master_strip_update(strip.get(), next_spec.inserts.size(),
                                                         &update)) {
-    return false;
+    return refuse_state();
   }
   // Keys stay on their insert index; an index the new chain lacks is dropped.
-  if (!mixing_runtime_.bind(strip.get())) return false;
+  if (!mixing_runtime_.bind(strip.get())) return refuse_state();
   // Control-thread-only: this std::move destroys the old master immediately (no
   // deferred reclaim), so the caller must not run process() concurrently.
   clear_master_insert_automations();
@@ -289,7 +293,7 @@ bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
   sync_insert_automation_targets();
   set_mixing_enabled(true);
   update_reported_graph_latency();
-  return true;
+  return report_mixer_edit(MixerEditStatus::kApplied);
 }
 
 bool RealtimeEngine::validate_track_lanes(const std::vector<TrackLaneConfig>& lanes) const {
@@ -306,6 +310,10 @@ bool RealtimeEngine::validate_track_strip(const mixing::api::Strip& strip) const
 }
 
 bool RealtimeEngine::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
+  // The list's own content is judged before the capacity earlier calls used up.
+  if (!track_mixer_runtime_.validate_track_lanes(lanes)) {
+    return report_mixer_edit(MixerEditStatus::kInvalidArgument);
+  }
   std::array<uint32_t, TrackMixerRuntime::kMaxTrackLanes> new_lane_ids{};
   const size_t new_lane_count = std::min(lanes.size(), new_lane_ids.size());
   size_t entering_inserts = 0;
@@ -318,7 +326,9 @@ bool RealtimeEngine::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
           1 + track_mixer_runtime_.bound_track_insert_count(new_lane_ids[lane_index]);
     }
   }
-  if (!insert_automation_room(entering_inserts)) return false;
+  if (!insert_automation_room(entering_inserts)) {
+    return report_mixer_edit(MixerEditStatus::kInvalidState);
+  }
 
   const bool ok = track_mixer_runtime_.set_track_lanes(std::move(lanes));
   if (ok) {
@@ -343,7 +353,7 @@ bool RealtimeEngine::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
     sync_insert_automation_targets();
     update_reported_graph_latency();
   }
-  return ok;
+  return report_track_mixer_edit(ok);
 }
 
 namespace {
@@ -364,6 +374,13 @@ bool copy_lanes_holding(const std::vector<TrackLaneConfig>* published, uint32_t 
 
 }  // namespace
 
+TrackLaneEditResult RealtimeEngine::track_lane_edit_result(bool applied) const noexcept {
+  if (applied) return TrackLaneEditResult::kApplied;
+  return last_mixer_edit_status() == MixerEditStatus::kInvalidState
+             ? TrackLaneEditResult::kStateRefused
+             : TrackLaneEditResult::kRefused;
+}
+
 TrackLaneEditResult RealtimeEngine::set_track_sends(uint32_t track_id,
                                                     std::vector<TrackLaneConfig::Send> sends) {
   std::vector<TrackLaneConfig> lanes;
@@ -372,8 +389,7 @@ TrackLaneEditResult RealtimeEngine::set_track_sends(uint32_t track_id,
     return TrackLaneEditResult::kUnknownTrack;
   }
   lane->sends = std::move(sends);
-  return set_track_lanes(std::move(lanes)) ? TrackLaneEditResult::kApplied
-                                           : TrackLaneEditResult::kRefused;
+  return track_lane_edit_result(set_track_lanes(std::move(lanes)));
 }
 
 TrackLaneEditResult RealtimeEngine::set_track_output_bus(uint32_t track_id,
@@ -384,17 +400,19 @@ TrackLaneEditResult RealtimeEngine::set_track_output_bus(uint32_t track_id,
     return TrackLaneEditResult::kUnknownTrack;
   }
   lane->output_bus_id = output_bus_id;
-  return set_track_lanes(std::move(lanes)) ? TrackLaneEditResult::kApplied
-                                           : TrackLaneEditResult::kRefused;
+  return track_lane_edit_result(set_track_lanes(std::move(lanes)));
 }
 
 bool RealtimeEngine::set_track_buses(std::vector<TrackBusConfig> buses) {
+  if (!track_mixer_runtime_.validate_buses(buses)) {
+    return report_mixer_edit(MixerEditStatus::kInvalidArgument);
+  }
   // An entering bus mints its fader entry; its slots are minted when its strip is set.
   size_t entering = 0;
   for (const TrackBusConfig& bus : buses) {
     if (!track_mixer_runtime_.configured_bus(bus.bus_id)) ++entering;
   }
-  if (!insert_automation_room(entering)) return false;
+  if (!insert_automation_room(entering)) return report_mixer_edit(MixerEditStatus::kInvalidState);
   const bool ok = track_mixer_runtime_.set_buses(std::move(buses));
   if (ok) {
     // A removed bus's ids are retired, and their queued edits and bases go with
@@ -403,7 +421,7 @@ bool RealtimeEngine::set_track_buses(std::vector<TrackBusConfig> buses) {
     sync_insert_automation_targets();
     update_reported_graph_latency();
   }
-  return ok;
+  return report_track_mixer_edit(ok);
 }
 
 bool RealtimeEngine::set_lane_sidechain(uint32_t track_id, unsigned int insert_index,
@@ -469,7 +487,7 @@ bool RealtimeEngine::set_track_strip(uint32_t track_id, const mixing::api::Strip
   if (ok) {
     update_reported_graph_latency();
   }
-  return ok;
+  return report_track_mixer_edit(ok);
 }
 
 bool RealtimeEngine::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& bus) {
@@ -479,7 +497,7 @@ bool RealtimeEngine::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& bus)
   if (ok) {
     update_reported_graph_latency();
   }
-  return ok;
+  return report_track_mixer_edit(ok);
 }
 
 bool RealtimeEngine::set_track_insert_bypassed(uint32_t track_id, unsigned int insert_index,

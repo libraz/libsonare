@@ -39,16 +39,31 @@ static_assert(sonare::midi::kArticulationModeCount == SONARE_ARTICULATION_COUNT,
 
 namespace {
 
-// Maps a refused set_midi_instrument() to its C status: a permanent refusal is
-// an invalid parameter, a full rack or failed allocation is out of memory.
+// Maps a refused set_midi_instrument() to its C status: a refused instrument is
+// an invalid parameter; a full rack, or a scheduled or queued SysEx the new
+// instrument refuses, is invalid state; a failed allocation is out of memory.
 SonareError midi_instrument_bind_error(const sonare::engine::RealtimeEngine& engine) noexcept {
   switch (engine.last_midi_instrument_bind_status()) {
     case sonare::engine::MidiInstrumentBindStatus::kAlreadyBoundElsewhere:
-    case sonare::engine::MidiInstrumentBindStatus::kPreparationFailed:
+    case sonare::engine::MidiInstrumentBindStatus::kInstrumentPrepareFailed:
       return SONARE_ERROR_INVALID_PARAMETER;
+    case sonare::engine::MidiInstrumentBindStatus::kRackFull:
+    case sonare::engine::MidiInstrumentBindStatus::kPreparationFailed:
+      return SONARE_ERROR_INVALID_STATE;
     default:
       return SONARE_ERROR_OUT_OF_MEMORY;
   }
+}
+
+// Maps a refused bind_midi_cc() whose arguments were already validated. A rebind
+// of a bound (cc, channel) fits a full table, so a refusal there is the table
+// earlier bindings filled; otherwise the snapshot failed to allocate.
+SonareError midi_cc_bind_error(const sonare::engine::RealtimeEngine& engine) noexcept {
+  if (engine.midi_cc_binding_count() >= sonare::midi::CcMap::kMaxBindings) {
+    set_last_error(SONARE_ERROR_INVALID_STATE, "MIDI CC binding table is full");
+    return SONARE_ERROR_INVALID_STATE;
+  }
+  return SONARE_ERROR_OUT_OF_MEMORY;
 }
 
 // Binds (or replaces) an engine-owned instrument on a destination, keeping the
@@ -549,9 +564,10 @@ SonareError sonare_engine_bind_midi_cc(SonareRealtimeEngine* engine, uint8_t cha
 #if !defined(SONARE_WITH_ARRANGEMENT)
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
-  return engine->engine.bind_midi_cc(controller, channel, param_id, min_value, max_value)
-             ? SONARE_OK
-             : SONARE_ERROR_OUT_OF_MEMORY;
+  if (engine->engine.bind_midi_cc(controller, channel, param_id, min_value, max_value)) {
+    return SONARE_OK;
+  }
+  return midi_cc_bind_error(engine->engine);
 #endif
 }
 
@@ -591,7 +607,8 @@ SonareError sonare_engine_bind_midi_cc_binding(SonareRealtimeEngine* engine,
   native.param_id = binding->param_id;
   native.min_value = binding->min_value;
   native.max_value = binding->max_value;
-  return engine->engine.bind_midi_cc(native) ? SONARE_OK : SONARE_ERROR_OUT_OF_MEMORY;
+  if (engine->engine.bind_midi_cc(native)) return SONARE_OK;
+  return midi_cc_bind_error(engine->engine);
 #endif
 }
 
@@ -1171,7 +1188,8 @@ SonareError sonare_engine_set_midi_destination_external(SonareRealtimeEngine* en
 #else
   SONARE_C_TRY
   if (!engine->engine.set_midi_destination_external(destination_id, external != 0)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    set_last_error(SONARE_ERROR_INVALID_STATE, "external MIDI destination table is full");
+    return SONARE_ERROR_INVALID_STATE;
   }
   return SONARE_OK;
   SONARE_C_CATCH

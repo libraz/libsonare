@@ -69,11 +69,29 @@ enum class InsertParamSetResult : uint8_t {
 /// @ref RealtimeEngine::set_track_output_bus.
 ///
 /// kUnknownTrack: the track has no lane in the published lane list.
-/// kRefused: the edited lane list failed set_track_lanes.
+/// kRefused: set_track_lanes refused the edited lane list for its own content.
+/// kStateRefused: set_track_lanes refused it for configuration earlier calls left
+/// (see MixerEditStatus::kInvalidState).
 enum class TrackLaneEditResult : uint8_t {
   kApplied,
   kUnknownTrack,
   kRefused,
+  kStateRefused,
+};
+
+/// Diagnostic retained by the most recent mixer configuration call
+/// (@ref RealtimeEngine::set_track_lanes, set_track_buses, set_track_strip,
+/// set_bus_strip, set_master_strip), read on the control thread immediately
+/// after it. kInvalidArgument: the call's own arguments were refused.
+/// kInvalidState: the arguments are acceptable, but configuration earlier calls
+/// left refuses them -- the shared insert-automation table or the owned-strip
+/// table is full, a retained delay, pan or lane routing forbids the change, or
+/// the combined latency passes the alignment ceiling.
+enum class MixerEditStatus : uint8_t {
+  kNotAttempted,
+  kApplied,
+  kInvalidArgument,
+  kInvalidState,
 };
 
 /// Result of @ref RealtimeEngine::push_midi_ump.
@@ -103,9 +121,11 @@ enum class MidiSysExPushStatus : uint8_t {
 
 /// Diagnostic retained by the most recent @ref RealtimeEngine::set_midi_instrument
 /// call, read on the control thread immediately after it. kAlreadyBoundElsewhere
-/// and kPreparationFailed (the instrument failed to prepare, or refused a
-/// scheduled or queued SysEx) are permanent for that instrument and schedule;
-/// kRackFull and kOutOfMemory are resource failures.
+/// and kInstrumentPrepareFailed (the instrument's own prepare() threw) refuse the
+/// instrument itself. kPreparationFailed (the instrument refused a SysEx already
+/// scheduled in a clip or queued live) and kRackFull (the rack or the instrument
+/// automation table is full) are refusals from state earlier calls left.
+/// kOutOfMemory is a resource failure.
 enum class MidiInstrumentBindStatus : uint8_t {
   kNotAttempted,
   kBound,
@@ -113,6 +133,7 @@ enum class MidiInstrumentBindStatus : uint8_t {
   kRackFull,
   kPreparationFailed,
   kOutOfMemory,
+  kInstrumentPrepareFailed,
 };
 
 enum class CaptureSource {
@@ -806,6 +827,13 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool mixing_enabled() const noexcept { return mixing_enabled_.load(std::memory_order_relaxed); }
   MixingRuntime& mixing() noexcept { return mixing_runtime_; }
   bool set_master_strip(const mixing::api::Strip& strip);
+  /// True when set_master_strip has built the engine-owned master strip that the
+  /// master EQ, insert-bypass, insert-parameter and sidechain setters address.
+  bool has_master_strip() const noexcept { return owned_master_strip_ != nullptr; }
+  /// Why the most recent mixer configuration call refused; see MixerEditStatus.
+  MixerEditStatus last_mixer_edit_status() const noexcept {
+    return last_mixer_edit_status_.load(std::memory_order_relaxed);
+  }
   bool set_track_lanes(std::vector<TrackLaneConfig> lanes);
   /// Replaces @p track_id's lane sends (empty clears them) and republishes the
   /// rest of the lane list unchanged through set_track_lanes, so an unchanged
@@ -1182,6 +1210,20 @@ class RealtimeEngine : private ClipPageRequestSink {
   // Control thread: true when @p needed more entries fit in the table.
   bool insert_automation_room(size_t needed) const noexcept {
     return needed <= insert_automation_targets_.remaining();
+  }
+  // Control thread: retains @p status for last_mixer_edit_status(); true for kApplied.
+  bool report_mixer_edit(MixerEditStatus status) noexcept {
+    last_mixer_edit_status_.store(status, std::memory_order_relaxed);
+    return status == MixerEditStatus::kApplied;
+  }
+  // Control thread: maps set_track_lanes' outcome for the single-track lane edits.
+  TrackLaneEditResult track_lane_edit_result(bool applied) const noexcept;
+  // Control thread: reports a track-mixer setter's outcome, classifying a refusal by its cause.
+  bool report_track_mixer_edit(bool applied) noexcept {
+    if (applied) return report_mixer_edit(MixerEditStatus::kApplied);
+    return report_mixer_edit(track_mixer_runtime_.last_refusal_from_state()
+                                 ? MixerEditStatus::kInvalidState
+                                 : MixerEditStatus::kInvalidArgument);
   }
   // Control thread: the processor a target's slot holds now, or nullptr.
   const rt::ProcessorBase* current_insert_processor(
@@ -1675,6 +1717,7 @@ class RealtimeEngine : private ClipPageRequestSink {
 #if defined(SONARE_WITH_MIXING)
   MixingRuntime mixing_runtime_{};
   std::unique_ptr<mixing::ChannelStrip> owned_master_strip_{};
+  std::atomic<MixerEditStatus> last_mixer_edit_status_{MixerEditStatus::kNotAttempted};
   // Last spec passed to set_master_strip(), read by describe_reserved_parameter
   // while owned_master_strip_ is still the bound strip.
   mixing::api::Strip master_strip_spec_{};

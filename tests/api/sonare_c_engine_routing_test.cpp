@@ -269,7 +269,9 @@ TEST_CASE("sonare_engine refused bus routing and sidechain calls leave the rende
   buses_refused({bus(1, 0, twice_to_bus2, 2), bus(2)});  // duplicate send target
   buses_refused({bus(1), bus(2, 0, to_bus1, 1)});        // send 2 -> 1 against the key 1 -> 2
   buses_refused({bus(1), bus(2, 1)});                    // output 2 -> 1 against the key
-  buses_refused({bus(2)});                               // retires bus 1, still a lane output
+  // Retiring bus 1, still a lane output, is refused by the lane routing earlier calls left.
+  CHECK(sonare_engine_set_track_buses(engine, std::vector<SonareEngineBus>{bus(2)}.data(), 1) ==
+        SONARE_ERROR_INVALID_STATE);
   buses_refused({SonareEngineBus{1, 0.0f, 99, 0, nullptr, 0}, bus(2)});  // bad layout
   CHECK(sonare_engine_set_track_buses(engine, nullptr, 1) == kInvalid);
 

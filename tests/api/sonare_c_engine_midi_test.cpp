@@ -446,7 +446,9 @@ TEST_CASE("sonare_engine reports external-destination table overflow", "[c_api][
   // Re-marking an already-external destination is idempotent, not an overflow.
   REQUIRE(sonare_engine_set_midi_destination_external(engine, 3, 1) == SONARE_OK);
   // A 17th distinct destination overflows instead of silently routing internally.
-  REQUIRE(sonare_engine_set_midi_destination_external(engine, 99, 1) ==
+  // The table the earlier marks filled is state; a missing engine is the argument.
+  REQUIRE(sonare_engine_set_midi_destination_external(engine, 99, 1) == SONARE_ERROR_INVALID_STATE);
+  REQUIRE(sonare_engine_set_midi_destination_external(nullptr, 99, 1) ==
           SONARE_ERROR_INVALID_PARAMETER);
   // Freeing a slot lets the next mark succeed.
   REQUIRE(sonare_engine_set_midi_destination_external(engine, 3, 0) == SONARE_OK);
@@ -454,6 +456,58 @@ TEST_CASE("sonare_engine reports external-destination table overflow", "[c_api][
 
   sonare_engine_destroy(engine);
 }
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("sonare_engine reports a full MIDI CC binding table as state", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  // 16 channels x 16 controllers fill the 256-entry table.
+  for (uint8_t channel = 0; channel < 16; ++channel) {
+    for (uint8_t controller = 0; controller < 16; ++controller) {
+      REQUIRE(sonare_engine_bind_midi_cc(engine, channel, controller, 7, 0.0f, 1.0f) == SONARE_OK);
+    }
+  }
+  REQUIRE(sonare_engine_bind_midi_cc(engine, 0, 74, 7, 0.0f, 1.0f) == SONARE_ERROR_INVALID_STATE);
+  SonareMidiCcBinding binding{};
+  binding.kind = SONARE_MIDI_CC_CONTROL_CHANGE_7;
+  binding.cc_number = 74;
+  binding.channel = 0;
+  binding.param_id = 7;
+  binding.min_value = 0.0f;
+  binding.max_value = 1.0f;
+  REQUIRE(sonare_engine_bind_midi_cc_binding(engine, &binding) == SONARE_ERROR_INVALID_STATE);
+  // An out-of-range channel stays an argument refusal on the full table, and a
+  // rebind of a bound controller and channel replaces it in place.
+  REQUIRE(sonare_engine_bind_midi_cc(engine, 16, 74, 7, 0.0f, 1.0f) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_bind_midi_cc(engine, 0, 0, 7, -1.0f, 1.0f) == SONARE_OK);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine reports a full instrument rack as state", "[c_api][engine][midi]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  SonareEngineBuiltinSynthConfig synth{};
+  for (uint32_t destination = 0; destination < 16; ++destination) {
+    REQUIRE(sonare_engine_set_builtin_instrument(engine, destination, &synth) == SONARE_OK);
+  }
+  // The rack the earlier binds filled refuses a 17th destination; a bad config
+  // is still the argument, and replacing a bound destination still fits.
+  REQUIRE(sonare_engine_set_builtin_instrument(engine, 99, &synth) == SONARE_ERROR_INVALID_STATE);
+  REQUIRE(sonare_engine_set_builtin_instrument(engine, 99, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_builtin_instrument(engine, 3, &synth) == SONARE_OK);
+  size_t count = 0;
+  REQUIRE(sonare_engine_midi_instrument_count(engine, &count) == SONARE_OK);
+  REQUIRE(count == 16);
+
+  sonare_engine_destroy(engine);
+}
+#endif
 
 TEST_CASE("sonare_engine_set_param_smoothing_ms validates its argument", "[c_api][engine]") {
   SonareRealtimeEngine* engine = nullptr;

@@ -1326,9 +1326,13 @@ TEST_CASE("track strip, lane and bus changes that would overflow the insert id t
       sonare_engine_set_bus_strip_json(engine, 1, insert_scene("buses", "1", gains(40)).c_str()) ==
       SONARE_OK);  // 24 entries left
 
-  // Track strip: 30 new slots do not fit, 20 do.
+  // Track strip: 30 new slots do not fit, 20 do. The table earlier calls filled is
+  // state; a processor that does not exist is still the argument.
   REQUIRE(sonare_engine_set_track_strip_json(
               engine, 10, insert_scene("strips", "track-10", gains(30)).c_str()) ==
+          SONARE_ERROR_INVALID_STATE);
+  REQUIRE(sonare_engine_set_track_strip_json(
+              engine, 10, insert_scene("strips", "track-10", {"no.such.processor"}).c_str()) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_set_track_strip_json(
               engine, 10, insert_scene("strips", "track-10", gains(20)).c_str()) == SONARE_OK);
@@ -1339,16 +1343,29 @@ TEST_CASE("track strip, lane and bus changes that would overflow the insert id t
           SONARE_OK);
   REQUIRE(sonare_engine_set_bus_strip_json(
               engine, 1, insert_scene("buses", "1", gains(40), quieter).c_str()) == SONARE_OK);
-  // Bus: a new kind in 40 slots does not fit.
+  // Bus: a new kind in 40 slots does not fit; an unknown bus is the argument.
   REQUIRE(
       sonare_engine_set_bus_strip_json(
           engine, 1, insert_scene("buses", "1", std::vector<const char*>(40, "eq.tilt")).c_str()) ==
+      SONARE_ERROR_INVALID_STATE);
+  REQUIRE(
+      sonare_engine_set_bus_strip_json(engine, 99, insert_scene("buses", "99", gains(1)).c_str()) ==
       SONARE_ERROR_INVALID_PARAMETER);
+  // Buses: five entering buses need five fader entries of the four left; a
+  // duplicate bus id is the argument.
+  SonareEngineBus six[] = {{1, 0.0f, 1, 0, nullptr, 0}, {2, 0.0f, 1, 0, nullptr, 0},
+                           {3, 0.0f, 1, 0, nullptr, 0}, {4, 0.0f, 1, 0, nullptr, 0},
+                           {5, 0.0f, 1, 0, nullptr, 0}, {6, 0.0f, 1, 0, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_buses(engine, six, 6) == SONARE_ERROR_INVALID_STATE);
+  SonareEngineBus twice[] = {{1, 0.0f, 1, 0, nullptr, 0}, {1, 0.0f, 1, 0, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_buses(engine, twice, 2) == SONARE_ERROR_INVALID_PARAMETER);
   // Lane: a track entering with 10 slots does not fit.
   REQUIRE(sonare_engine_set_track_strip_json(
               engine, 20, insert_scene("strips", "track-20", gains(10)).c_str()) == SONARE_OK);
   SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}, {20, nullptr, 0, 0, 1}};
-  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_ERROR_INVALID_STATE);
+  SonareEngineTrackLane duplicate[] = {{10, nullptr, 0, 0, 1}, {10, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, duplicate, 2) == SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_engine_destroy(engine);
 }
@@ -1372,11 +1389,96 @@ TEST_CASE("a strip change that would overflow the insert id table is refused", "
   uint32_t before = 0;
   REQUIRE(sonare_engine_resolve_master_insert_automation_id(engine, 0, "tiltDb", &before) ==
           SONARE_OK);
-  REQUIRE(sonare_engine_set_master_strip_json(engine, gain.c_str()) ==
+  REQUIRE(sonare_engine_set_master_strip_json(engine, gain.c_str()) == SONARE_ERROR_INVALID_STATE);
+  REQUIRE(sonare_engine_set_master_strip_json(
+              engine, insert_scene("strips", "master", {"no.such.processor"}).c_str()) ==
           SONARE_ERROR_INVALID_PARAMETER);
   // The refused change left the strip and its ids untouched; an unchanged chain still applies.
   REQUIRE(id_alive(engine, before));
   REQUIRE(sonare_engine_set_master_strip_json(engine, tilt.c_str()) == SONARE_OK);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("master strip setters without a master strip report invalid state",
+          "[c_api][engine][mixing]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 64, 16) == SONARE_OK);
+  const char* band = R"({"type":"Peak","frequencyHz":1000,"gainDb":3,"q":1,"enabled":true})";
+  uint32_t id = 7;
+
+  CHECK(sonare_engine_set_master_strip_eq_band_json(engine, 0, band) == SONARE_ERROR_INVALID_STATE);
+  CHECK(sonare_engine_set_master_strip_insert_bypassed(engine, 0, 1, 0) ==
+        SONARE_ERROR_INVALID_STATE);
+  CHECK(sonare_engine_set_master_strip_insert_param_by_name(engine, 0, "levelDb", -3.0f) ==
+        SONARE_ERROR_INVALID_STATE);
+  CHECK(sonare_engine_restore_master_strip_insert_param_by_name(engine, 0, "levelDb", -3.0f) ==
+        SONARE_ERROR_INVALID_STATE);
+  CHECK(sonare_engine_resolve_master_insert_automation_id(engine, 0, "levelDb", &id) ==
+        SONARE_ERROR_INVALID_STATE);
+  CHECK(id == 0);
+  CHECK(sonare_engine_set_master_sidechain(engine, 0, SONARE_SIDECHAIN_SOURCE_TRACK, 10) ==
+        SONARE_ERROR_INVALID_STATE);
+
+  // With the strip in place the same calls refuse only what they name.
+  REQUIRE(sonare_engine_set_master_strip_json(
+              engine, insert_scene("strips", "master", {"utility.gain"}).c_str()) == SONARE_OK);
+  CHECK(sonare_engine_set_master_strip_eq_band_json(engine, 99, band) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_set_master_strip_eq_band_json(engine, 0, band) == SONARE_OK);
+  CHECK(sonare_engine_set_master_strip_insert_bypassed(engine, 5, 1, 0) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_set_master_strip_insert_bypassed(engine, 0, 1, 0) == SONARE_OK);
+  CHECK(sonare_engine_set_master_strip_insert_param_by_name(engine, 0, "nope", -3.0f) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_set_master_strip_insert_param_by_name(engine, 0, "levelDb", -3.0f) ==
+        SONARE_OK);
+  CHECK(sonare_engine_restore_master_strip_insert_param_by_name(engine, 0, "nope", -3.0f) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_resolve_master_insert_automation_id(engine, 0, "nope", &id) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_resolve_master_insert_automation_id(engine, 0, "levelDb", &id) == SONARE_OK);
+  CHECK(sonare_engine_set_master_sidechain(engine, 0, SONARE_SIDECHAIN_SOURCE_TRACK, 10) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("a bus list refused by earlier bus or lane configuration reports invalid state",
+          "[c_api][engine][mixing]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 64, 16) == SONARE_OK);
+  SonareEngineBus stereo[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0},
+                              {2, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_buses(engine, stereo, 2) == SONARE_OK);
+  SonareEngineTrackLane lane[] = {{10, nullptr, 0, 2, SONARE_CHANNEL_LAYOUT_STEREO}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_bus_strip_pan(engine, 1, 0.5f) == SONARE_OK);
+
+  // Bus 1's earlier pan forbids a surround layout, and lane 10 still outputs to bus 2.
+  SonareEngineBus surround[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_5_1, 0, nullptr, 0},
+                                {2, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0}};
+  CHECK(sonare_engine_set_track_buses(engine, surround, 2) == SONARE_ERROR_INVALID_STATE);
+  CHECK(sonare_engine_set_track_buses(engine, stereo, 1) == SONARE_ERROR_INVALID_STATE);
+  // The list's own faults stay argument refusals.
+  SonareEngineBus loud[] = {{1, 1000.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0},
+                            {2, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0}};
+  CHECK(sonare_engine_set_track_buses(engine, loud, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  SonareEngineBus self_output[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 1, nullptr, 0},
+                                   {2, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0}};
+  CHECK(sonare_engine_set_track_buses(engine, self_output, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  // A lane naming an undeclared bus is the lane list's own fault.
+  SonareEngineTrackLane unknown_bus[] = {{10, nullptr, 0, 9, SONARE_CHANNEL_LAYOUT_STEREO}};
+  CHECK(sonare_engine_set_track_lanes(engine, unknown_bus, 1) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_engine_set_track_output_bus(engine, 10, 9) == SONARE_ERROR_INVALID_PARAMETER);
+  // Once the lane leaves bus 2 and bus 1 is centred, both lists apply.
+  REQUIRE(sonare_engine_set_track_output_bus(engine, 10, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_set_bus_strip_pan(engine, 1, 0.0f) == SONARE_OK);
+  CHECK(sonare_engine_set_track_buses(engine, stereo, 1) == SONARE_OK);
+  SonareEngineBus surround_one[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_5_1, 0, nullptr, 0}};
+  CHECK(sonare_engine_set_track_buses(engine, surround_one, 1) == SONARE_OK);
 
   sonare_engine_destroy(engine);
 }
@@ -1403,9 +1505,15 @@ TEST_CASE("insert automation resolvers define out_id on every exit path",
           expected);
   REQUIRE(track_id == 0);
 
+  // No master strip is configured, which is the engine's state rather than the call's.
+#if defined(SONARE_WITH_MIXING)
+  const SonareError master_expected = SONARE_ERROR_INVALID_STATE;
+#else
+  const SonareError master_expected = SONARE_ERROR_NOT_SUPPORTED;
+#endif
   uint32_t master_id = 0xDEADBEEFu;
   REQUIRE(sonare_engine_resolve_master_insert_automation_id(engine, 0, "cutoff", &master_id) ==
-          expected);
+          master_expected);
   REQUIRE(master_id == 0);
 
   uint32_t bus_id = 0xDEADBEEFu;

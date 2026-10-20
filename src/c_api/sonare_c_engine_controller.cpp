@@ -179,12 +179,20 @@ SonareError sonare_engine_bind_controller(SonareRealtimeEngine* engine, uint32_t
   entry.hi = binding->hi;
   entry.curve = binding->curve;
 
-  if (!profile.bind(entry)) {
-    set_last_error(
-        SONARE_ERROR_INVALID_PARAMETER,
-        "controller binding refused: the table is full, the axis is none, or a poly-pressure "
-        "binding named a channel-level axis");
+  // The binding itself is checked before the table, so a full table never hides a bad binding.
+  if (axis == sonare::midi::ControllerAxis::kNone) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, "controller binding: the axis is none");
     return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (input == sonare::midi::ControllerInput::kPolyPressure &&
+      !sonare::midi::controller_axis_is_excitation(axis)) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "controller binding: a poly-pressure binding named a channel-level axis");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (!profile.bind(entry)) {
+    set_last_error(SONARE_ERROR_INVALID_STATE, "controller binding table is full");
+    return SONARE_ERROR_INVALID_STATE;
   }
   return install(engine, destination_id, profile);
   SONARE_C_CATCH

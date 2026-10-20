@@ -521,7 +521,7 @@ bool RealtimeEngine::set_midi_instrument(uint32_t destination_id,
   } catch (const std::bad_alloc&) {
     return report(MidiInstrumentBindStatus::kOutOfMemory);
   } catch (...) {
-    return report(MidiInstrumentBindStatus::kPreparationFailed);
+    return report(MidiInstrumentBindStatus::kInstrumentPrepareFailed);
   }
 
   struct PendingTokenUpdate {

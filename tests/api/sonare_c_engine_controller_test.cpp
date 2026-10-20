@@ -236,6 +236,16 @@ TEST_CASE("the controller binding table fills rather than growing", "[c_api][con
   REQUIRE(sonare_engine_controller_binding_count(engine, 3, &count) == SONARE_OK);
   REQUIRE(count == static_cast<size_t>(SONARE_MAX_CONTROLLER_BINDINGS));
 
+  // The full table is state the earlier binds left; a binding that cannot mean
+  // anything is still refused as the argument it is, full table or not.
+  SonareControllerBinding binding = breath_to_excitation();
+  REQUIRE(sonare_engine_bind_controller(engine, 3, &binding) == SONARE_ERROR_INVALID_STATE);
+  binding.axis = SONARE_CONTROLLER_AXIS_NONE;
+  REQUIRE(sonare_engine_bind_controller(engine, 3, &binding) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_clear_controller_bindings(engine, 3) == SONARE_OK);
+  binding = breath_to_excitation();
+  REQUIRE(sonare_engine_bind_controller(engine, 3, &binding) == SONARE_OK);
+
   sonare_engine_destroy(engine);
 }
 
