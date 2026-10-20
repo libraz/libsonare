@@ -179,6 +179,12 @@ struct FlutePatchParams {
   /// to this period peak and the offset's share sets the flow duty. [0, 8], 0 = unbounded.
   float jet_deflection_limit = 0.0f;
 
+  /// Loop phase servo (cubic path only): the jet blocker's lead at f0 moves off the bore onto the
+  /// jet line, and the bore delay follows the lead the injection is measured to hold over the
+  /// returning pressure at f0 once a period, so the clipped jet's and the rectifier image's phase
+  /// no longer pull the pitch off the period. false = off.
+  bool loop_phase_servo = false;
+
   /// Direct radiation of the mouth turbulence (Verge, Hirschberg & Caussé 1997) from the embouchure
   /// hole, bore-pressure units per unit mouth pressure: it carries the broadband floor under the
   /// fundamental that the loop's source cannot. [0, 1], 0 = off.
@@ -451,8 +457,33 @@ class FluteVoiceCore {
   float breath_rad_alpha_ = 0.0f;
   float breath_rad_state_ = 0.0f;
 
+  // Loop phase servo: the jet blocker's lead at f0 (samples), the lead the bore line takes off
+  // instead of it, the per-period weight of the cross-spectrum average, the period in samples and
+  // the count into it, the f0 phasor and its per-sample rotation, one period's coherent sums of the
+  // returning pressure and the injection, and the smoothed cross-spectrum. Off = the blocker's lead
+  // stays on the bore.
+  bool phase_servo_ = false;
+  float dc_lead_samples_ = 0.0f;
+  float servo_comp_ = 0.0f;
+  float servo_smooth_ = 0.0f;
+  int servo_len_ = 0;
+  int servo_count_ = 0;
+  float servo_cos_ = 1.0f;
+  float servo_sin_ = 0.0f;
+  float servo_rot_cos_ = 1.0f;
+  float servo_rot_sin_ = 0.0f;
+  float servo_ret_re_ = 0.0f;
+  float servo_ret_im_ = 0.0f;
+  float servo_inj_re_ = 0.0f;
+  float servo_inj_im_ = 0.0f;
+  float servo_x_re_ = 0.0f;
+  float servo_x_im_ = 0.0f;
+
   // Reads the jet line as a triangular average centred on @p delay after writing @p input.
   float jet_window_read(float delay, float input) noexcept;
+  // Adds one sample of @p returning pressure and @p injected drive to the servo's period sums and,
+  // at the period's end, re-solves the bore line from the injection's measured lead at f0.
+  void servo_step(float returning, float injected, float ratio) noexcept;
 };
 
 }  // namespace sonare::midi::synth

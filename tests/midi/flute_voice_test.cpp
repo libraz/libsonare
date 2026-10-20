@@ -714,6 +714,38 @@ TEST_CASE("flute deflection limit hands the octave to the offset's share of the 
   CHECK(std::fabs(soft.h2 - loud.h2) < 3.0);
 }
 
+TEST_CASE("flute loop phase servo is off by default (bit-identical)", "[midi][synth][flute]") {
+  // The servo belongs to the cubic source: off there, and on on the jet-drive path, leave the
+  // render untouched.
+  NativeSynthPatch cubic = flute_base_patch();
+  cubic.flute.loop_phase_servo = false;
+  REQUIRE(render_patch(cubic, 72, 100, 16384) == render_patch(flute_base_patch(), 72, 100, 16384));
+  NativeSynthPatch jet = jet_drive_patch();
+  jet.flute.loop_phase_servo = true;
+  REQUIRE(render_patch(jet, 72, 100, 16384) == render_patch(jet_drive_patch(), 72, 100, 16384));
+}
+
+TEST_CASE("flute loop phase servo locks the cubic loop on the period", "[midi][synth][flute]") {
+  // Off the half period the jet line's phase at f0 pulls the pitch (0.46 reads +6 c at C5, 0.56
+  // -13 c), and the clipped jet's own lead adds a residual of its own; the servo measures what the
+  // whole injection leads the returning pressure by and lengthens the bore by it, so the loop sits
+  // on the period whatever the jet ratio.
+  for (float jet_ratio : {0.46f, 0.56f}) {
+    NativeSynthPatch off = flute_base_patch();
+    off.flute.jet_ratio = jet_ratio;
+    NativeSynthPatch on = off;
+    on.flute.loop_phase_servo = true;
+    for (uint8_t note : {uint8_t{60}, uint8_t{72}, uint8_t{84}}) {
+      const PitchAndThird free = pitch_and_third(off, note);
+      const PitchAndThird held = pitch_and_third(on, note);
+      INFO("jet ratio " << jet_ratio << " note " << int(note) << " f0 " << free.cents << " -> "
+                        << held.cents << " c");
+      CHECK(std::fabs(held.cents) < 1.0);
+      if (note == 72) CHECK(std::fabs(free.cents) > 3.0);
+    }
+  }
+}
+
 TEST_CASE("flute breath radiation is off by default (bit-identical)", "[midi][synth][flute]") {
   // No radiation share means no draw beyond the jet's own, on the cubic path and the jet-drive one.
   NativeSynthPatch cubic = flute_base_patch();

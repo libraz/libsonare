@@ -489,6 +489,7 @@ void apply_flute(NativeSynthPatch& p, const Fields& f) {
   F(flute.jet_centring_per_octave);
   F(flute.jet_receptivity_window);
   I_TYPED(flute.jet_cycle_mean, 0, 1);
+  I_TYPED(flute.loop_phase_servo, 0, 1);
   F(flute.jet_deflection_limit);
   F(flute.breath_radiation);
   F(flute.onset_breath_overshoot_db);
@@ -1011,6 +1012,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"flute.jet_centring_per_octave", Unit::None},
     {"flute.jet_receptivity_window", Unit::None},
     {"flute.jet_cycle_mean", Unit::None},
+    {"flute.loop_phase_servo", Unit::None},
     {"flute.jet_deflection_limit", Unit::None},
     {"flute.breath_radiation", Unit::None},
     {"flute.onset_breath_overshoot_db", Unit::Db},
@@ -1465,6 +1467,8 @@ const GateRow kEngineGates[] = {
     {"flute.jet_offset", [](const GateSite&) { return is("jetDrive", true); }},
     {"flute.jet_receptivity_window", [](const GateSite&) { return is("jetDrive", true); }},
     {"flute.jet_cycle_mean", [](const GateSite&) { return is("jetDrive", true); }},
+    // The servo belongs to the cubic source.
+    {"flute.loop_phase_servo", [](const GateSite&) { return is("jetDrive", false); }},
     {"flute.jet_deflection_limit",
      [](const GateSite&) { return is("jetDrive", true) & is("jetCycleMean", true); }},
     {"free_reed.onset_breath_settle_ms",
