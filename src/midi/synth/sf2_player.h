@@ -876,6 +876,7 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
     float rate = -1.0f;
     float depth = -1.0f;
     float sag = -1.0f;
+    bool regulated = false;
   };
   std::array<OrganWindSupply, 16> fallback_wind_;
   std::array<FallbackWindParams, 16> fallback_wind_params_{};

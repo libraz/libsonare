@@ -671,9 +671,10 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 veloc
     const float rate = patch.pipe_organ.tremulant_rate_hz;
     const float depth = patch.pipe_organ.tremulant_depth;
     const float sag = patch.pipe_organ.wind_sag;
-    if (wp.rate != rate || wp.depth != depth || wp.sag != sag) {
-      wp = {rate, depth, sag};
-      fallback_wind_[part].prepare(sample_rate_, rate, depth, sag);
+    const bool regulated = patch.pipe_organ.wind_regulated;
+    if (wp.rate != rate || wp.depth != depth || wp.sag != sag || wp.regulated != regulated) {
+      wp = {rate, depth, sag, regulated};
+      fallback_wind_[part].prepare(sample_rate_, rate, depth, sag, regulated);
     }
   }
 

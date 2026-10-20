@@ -1308,6 +1308,14 @@ TEST_CASE("NativeSynth wind sag follows sounding rank count, not voice count",
   // second load of their own.
   REQUIRE(six_ratio < one_ratio - 0.15f);
   CHECK(std::fabs(sparse_ratio - one_ratio) < 0.08f);
+
+  // A regulated supply restores the set pressure, so the same six-rank draw
+  // settles at the dry level.
+  NativeSynthPatch regulated = make_patch(6, 0.9f, false);
+  regulated.pipe_organ.wind_regulated = true;
+  const float regulated_ratio = settled_rms(regulated) / six_dry;
+  INFO("regulated ratio " << regulated_ratio);
+  CHECK(std::fabs(regulated_ratio - 1.0f) < 0.01f);
 }
 
 TEST_CASE("All Sound Off silences the piano bus resonators too", "[midi][synth][sf2]") {

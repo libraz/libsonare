@@ -856,12 +856,15 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
     const float trem_rate = patch->pipe_organ.tremulant_rate_hz;
     const float trem_depth = patch->pipe_organ.tremulant_depth;
     const float sag = patch->pipe_organ.wind_sag;
+    const bool regulated = patch->pipe_organ.wind_regulated;
     if (!params.armed || params.tremulant_rate_hz != trem_rate ||
-        params.tremulant_depth != trem_depth || params.wind_sag != sag) {
-      part_wind_[ch].prepare(sample_rate_, trem_rate, trem_depth, sag);
+        params.tremulant_depth != trem_depth || params.wind_sag != sag ||
+        params.wind_regulated != regulated) {
+      part_wind_[ch].prepare(sample_rate_, trem_rate, trem_depth, sag, regulated);
       params.tremulant_rate_hz = trem_rate;
       params.tremulant_depth = trem_depth;
       params.wind_sag = sag;
+      params.wind_regulated = regulated;
       params.armed = true;
     }
     part_swell_depth_[ch] = patch->pipe_organ.swell;

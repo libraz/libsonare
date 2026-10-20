@@ -1954,32 +1954,28 @@ TEST_CASE("Sf2Player detaches absolute pitch before reset in both voice pools",
 
 TEST_CASE("Sf2Player organ wind demand follows the number of sounding ranks",
           "[midi][sf2][synth][organ]") {
-  // GS Church Organ variation 8 has three ranks and variation 16 has eight.
-  // Keep track 1 on variation 8 in every render, then change the part's bank
-  // only before the optional track 2 note. This holds the measured voice's
-  // static registration fixed while the shared wind demand changes from 3 to
-  // 6 or 11 pipes.
-  const auto first_voice_rms = [](uint8_t second_variation) {
+  // GS Church Organ variation 8 draws four ranks on an unregulated wind, so a
+  // second note on the same part doubles the pipes on the shared chest and the
+  // first voice settles lower. The part's registration is fixed throughout, so
+  // the only thing that moves is the demand.
+  const auto first_voice_rms = [](int notes) {
     Sf2Player player = make_player(nullptr);
     send(player, sonare::midi::make_midi1_control_change(0, 0, 0, 8));
     send(player, sonare::midi::make_midi1_program_change(0, 0, 19));
     player.on_event(0, on_track(sonare::midi::make_midi1_note_on(0, 0, 60, 110), 1));
-    if (second_variation != 0) {
-      send(player, sonare::midi::make_midi1_control_change(0, 0, 0, second_variation));
-      player.on_event(0, on_track(sonare::midi::make_midi1_note_on(0, 0, 60, 110), 2));
+    if (notes > 1) {
+      player.on_event(0, on_track(sonare::midi::make_midi1_note_on(0, 0, 67, 110), 2));
     }
     const auto tracks = render_tracks(player, 48000);
     return rms_window(tracks[0], 24000, 48000);
   };
 
-  const float one_voice = first_voice_rms(0);
-  const float three_rank_chord = first_voice_rms(8);
-  const float eight_rank_chord = first_voice_rms(16);
-  const float three_ratio = three_rank_chord / std::max(1.0e-20f, one_voice);
-  const float eight_ratio = eight_rank_chord / std::max(1.0e-20f, one_voice);
-  CAPTURE(one_voice, three_rank_chord, eight_rank_chord, three_ratio, eight_ratio);
+  const float one_voice = first_voice_rms(1);
+  const float two_voices = first_voice_rms(2);
+  const float two_ratio = two_voices / std::max(1.0e-20f, one_voice);
+  CAPTURE(one_voice, two_voices, two_ratio);
   REQUIRE(one_voice > 1.0e-4f);
-  REQUIRE(eight_ratio + 0.01f < three_ratio);
+  REQUIRE(two_ratio + 0.01f < 1.0f);
 }
 
 namespace {

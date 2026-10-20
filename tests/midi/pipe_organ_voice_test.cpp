@@ -459,11 +459,54 @@ TEST_CASE("wind sag drops pressure under load", "[midi][synth][organ]") {
   for (int i = 0; i < 4800; ++i) idle = wind.process(0);
   REQUIRE(std::fabs(idle.gain - 1.0f) < 1.0e-3f);
   REQUIRE(std::fabs(idle.pitch_ratio - 1.0f) < 1.0e-3f);
-  // Sustained heavy demand sags the wind: gain and pitch both fall.
+  // Sustained heavy demand sags the wind: gain and pitch both fall and stay down.
   OrganWindSupply::State loaded;
   for (int i = 0; i < 4800; ++i) loaded = wind.process(12);
   REQUIRE(loaded.gain < 0.97f);
   REQUIRE(loaded.pitch_ratio < 1.0f);
+  OrganWindSupply::State held;
+  for (int i = 0; i < static_cast<int>(kRate); ++i) held = wind.process(12);
+  REQUIRE(held.gain <= loaded.gain);
+  REQUIRE(held.gain < 0.97f);
+}
+
+TEST_CASE("a regulated wind dips at a rise in demand and restores the set pressure",
+          "[midi][synth][organ]") {
+  using sonare::midi::synth::OrganWindSupply;
+  // Minimum gain and pitch over the first half second of a demand step, then the
+  // state a second later.
+  const auto step = [](int demand, OrganWindSupply::State& floor) {
+    OrganWindSupply wind;
+    wind.prepare(kRate, /*tremulant_rate_hz=*/0.0f, /*depth=*/0.0f, /*wind_sag=*/0.5f,
+                 /*regulated=*/true);
+    REQUIRE(wind.active());
+    floor = OrganWindSupply::State{};
+    for (int i = 0; i < static_cast<int>(kRate / 2); ++i) {
+      const OrganWindSupply::State s = wind.process(demand);
+      floor.gain = std::min(floor.gain, s.gain);
+      floor.pitch_ratio = std::min(floor.pitch_ratio, s.pitch_ratio);
+    }
+    OrganWindSupply::State held;
+    for (int i = 0; i < static_cast<int>(kRate); ++i) held = wind.process(demand);
+    return held;
+  };
+  // No load: pressure stays full (unity pitch and gain).
+  OrganWindSupply::State idle_floor;
+  const OrganWindSupply::State idle = step(0, idle_floor);
+  REQUIRE(std::fabs(idle_floor.gain - 1.0f) < 1.0e-3f);
+  REQUIRE(std::fabs(idle.pitch_ratio - 1.0f) < 1.0e-3f);
+  // A heavy draw dips gain and pitch together, deeper than a light one.
+  OrganWindSupply::State light_floor;
+  OrganWindSupply::State heavy_floor;
+  const OrganWindSupply::State light = step(2, light_floor);
+  const OrganWindSupply::State heavy = step(12, heavy_floor);
+  REQUIRE(heavy_floor.gain < 0.97f);
+  REQUIRE(heavy_floor.pitch_ratio < 1.0f);
+  REQUIRE(heavy_floor.gain < light_floor.gain);
+  // A steady draw holds the set pressure: the regulator has taken the dip back out.
+  REQUIRE(std::fabs(heavy.gain - 1.0f) < 1.0e-3f);
+  REQUIRE(std::fabs(heavy.pitch_ratio - 1.0f) < 1.0e-3f);
+  REQUIRE(std::fabs(light.gain - 1.0f) < 1.0e-3f);
 }
 
 TEST_CASE("pipe-organ wind demand counts only positively drawn ranks", "[midi][synth][organ]") {

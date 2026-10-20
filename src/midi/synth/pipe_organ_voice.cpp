@@ -746,11 +746,12 @@ void PipeOrganVoiceCore::kill() noexcept {
 // ---------------------------------------------------------------------------
 
 void OrganWindSupply::prepare(double sample_rate, float tremulant_rate_hz, float tremulant_depth,
-                              float wind_sag) noexcept {
+                              float wind_sag, bool regulated) noexcept {
   sr_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   const float rate = tremulant_rate_hz > 0.0f ? tremulant_rate_hz : 0.0f;
   const float depth = std::clamp(tremulant_depth, 0.0f, 1.0f);
   sag_depth_ = std::clamp(wind_sag, 0.0f, 1.0f);
+  regulated_supply_ = regulated;
 
   trem_phase_ = 0.0;
   trem_inc_ = rate > 0.0f ? kTwoPi * static_cast<double>(rate) / sr_ : 0.0;
@@ -759,9 +760,10 @@ void OrganWindSupply::prepare(double sample_rate, float tremulant_rate_hz, float
   trem_pitch_cents_ = (rate > 0.0f) ? 25.0f * depth : 0.0f;
   trem_amp_ = (rate > 0.0f) ? 0.28f * depth : 0.0f;
 
-  // Wind sag follower: pressure relaxes toward its target over ~80 ms, so a
-  // chord onset dips then the regulator catches up.
+  // Wind sag: the chest dips over ~80 ms as the draw rises; a regulated supply
+  // restores the set pressure over the same time, so a steady draw costs nothing.
   pressure_ = 1.0f;
+  regulated_ = 0.0f;
   follow_coeff_ = static_cast<float>(1.0 - std::exp(-1.0 / (0.08 * sr_)));
 
   active_ = trem_inc_ > 0.0 || sag_depth_ > 0.0f;
@@ -770,6 +772,7 @@ void OrganWindSupply::prepare(double sample_rate, float tremulant_rate_hz, float
 void OrganWindSupply::reset() noexcept {
   trem_phase_ = 0.0;
   pressure_ = 1.0f;
+  regulated_ = 0.0f;
 }
 
 OrganWindSupply::State OrganWindSupply::process(int demand) noexcept {
@@ -777,12 +780,15 @@ OrganWindSupply::State OrganWindSupply::process(int demand) noexcept {
   if (!active_) return s;
 
   // Wind sag: demand (sounding pipes) pulls the pressure down through a
-  // saturating load, smoothed by the regulator follower.
+  // saturating load, smoothed by the chest follower; a regulated supply follows
+  // the drop and adds it back.
   if (sag_depth_ > 0.0f) {
     const float load = static_cast<float>(std::max(0, demand));
     const float target = 1.0f - sag_depth_ * (load / (load + 6.0f));
     pressure_ += follow_coeff_ * (target - pressure_);
+    if (regulated_supply_) regulated_ += follow_coeff_ * ((1.0f - pressure_) - regulated_);
   }
+  const float pressure = pressure_ + regulated_;
 
   // Tremulant: a slow undulation of the pressure on top of the sag.
   float trem = 0.0f;
@@ -794,9 +800,9 @@ OrganWindSupply::State OrganWindSupply::process(int demand) noexcept {
 
   const float pitch_cents = trem_pitch_cents_ * trem;
   // Sag drops pitch a touch as pressure falls (a slack pipe speaks flat).
-  const float sag_pitch_cents = (pressure_ - 1.0f) * 30.0f;
+  const float sag_pitch_cents = (pressure - 1.0f) * 30.0f;
   s.pitch_ratio = std::exp2((pitch_cents + sag_pitch_cents) * (1.0f / kCentsPerOctave));
-  s.gain = pressure_ * (1.0f + trem_amp_ * trem);
+  s.gain = pressure * (1.0f + trem_amp_ * trem);
   return s;
 }
 

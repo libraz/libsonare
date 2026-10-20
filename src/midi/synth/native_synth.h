@@ -1361,6 +1361,7 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
     float tremulant_rate_hz = -1.0f;
     float tremulant_depth = -1.0f;
     float wind_sag = -1.0f;
+    bool wind_regulated = false;
     bool armed = false;
   };
   /// One wind chest and swell box per MIDI part. GM resolves the pipe patch at

@@ -167,9 +167,14 @@ struct PipeOrganPatchParams {
   /// Tremulant depth in [0,1] (pressure-undulation amount).
   float tremulant_depth = 0.0f;
   /// Wind sag in [0,1]: how far the shared wind pressure drops as more pipes
-  /// draw on it, so a full chord sinks slightly in pitch and level then the
-  /// regulator recovers — the breathing of a real wind chest.
+  /// draw on it, so a full chord sinks slightly in pitch and level — the
+  /// breathing of a real wind chest.
   float wind_sag = 0.0f;
+  /// Regulated wind: the sag is the dip at a rise in demand and the regulator
+  /// restores the set pressure, so a steady draw holds pitch and level. Off,
+  /// the pressure stays down for as long as the pipes draw (an unregulated
+  /// supply: a single key of a six-rank plenum sits 3.75 c flat at sag 0.25).
+  bool wind_regulated = false;
   /// Swell-box depth in [0,1] (0 = no swell box). A division behind a swell
   /// shutter: as the expression pedal (CC11) closes, a per-part lowpass applied
   /// before the part's rig darkens the organ, the way closing louvres muffle
@@ -388,11 +393,13 @@ class PipeOrganVoiceCore {
 ///   - TREMULANT: a slow LFO undulation of the pressure, heard as a combined
 ///     pitch vibrato + amplitude tremolo (the classic organ tremulant — both at
 ///     once, because pressure sets both the pipe speed and its level).
-///   - WIND SAG: as more pipes draw on the chest the pressure drops, so a full
-///     chord sinks slightly in pitch and loudness, then the regulator recovers.
-///     The "breathing" a fixed electronic organ lacks. The drop follows the
-///     instantaneous demand (a count of sounding pipes) through a one-pole
-///     follower, so it is order-independent and deterministic.
+///   - WIND SAG: as more pipes draw on the chest the pressure drops, so a chord
+///     onset sinks slightly in pitch and loudness. The "breathing" a fixed
+///     electronic organ lacks. The drop follows the instantaneous demand (a
+///     count of sounding pipes) through a one-pole follower, so it is
+///     order-independent and deterministic; a regulated supply follows that
+///     drop through a second pole and takes it back out, so only a rise in
+///     demand is heard and a steady draw holds pitch.
 /// process() returns the per-sample pitch factor (fold into each pipe voice's
 /// pitch_ratio) and level factor (scale the pipe voice's output).
 ///
@@ -406,9 +413,10 @@ class OrganWindSupply {
   };
 
   /// Tunes the wind chest for @p sample_rate. @p tremulant_rate_hz <= 0 turns
-  /// the tremulant off; @p wind_sag is the pressure-drop depth in [0,1].
-  void prepare(double sample_rate, float tremulant_rate_hz, float tremulant_depth,
-               float wind_sag) noexcept;
+  /// the tremulant off; @p wind_sag is the pressure-drop depth in [0,1], held
+  /// for as long as the pipes draw unless @p regulated restores it.
+  void prepare(double sample_rate, float tremulant_rate_hz, float tremulant_depth, float wind_sag,
+               bool regulated = false) noexcept;
   /// Clears the LFO phase and the pressure follower (full pressure).
   void reset() noexcept;
   /// Advances the wind one sample under @p demand sounding pipes; returns the
@@ -427,9 +435,12 @@ class OrganWindSupply {
   double trem_inc_ = 0.0;
   float trem_pitch_cents_ = 0.0f;
   float trem_amp_ = 0.0f;
-  // Wind-sag pressure follower: pressure relaxes toward 1 - sag*load.
+  // Wind sag: the chest's pressure relaxes toward 1 - sag*load through one
+  // pole; a regulated supply follows the drop through a second and adds it back.
   float sag_depth_ = 0.0f;
+  bool regulated_supply_ = false;
   float pressure_ = 1.0f;
+  float regulated_ = 0.0f;
   float follow_coeff_ = 0.0f;
 };
 

@@ -354,6 +354,7 @@ void apply_pipe_organ(NativeSynthPatch& p, const Fields& f) {
   F(pipe_organ.tremulant_rate_hz);
   F(pipe_organ.tremulant_depth);
   F(pipe_organ.wind_sag);
+  I_TYPED(pipe_organ.wind_regulated, 0, 1);
   F(pipe_organ.swell);
   for (int i = 0; i < kMaxPipeRanks; ++i) {
     PipeOrganRank& r = p.pipe_organ.ranks[static_cast<size_t>(i)];
@@ -910,6 +911,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"pipe_organ.tremulant_rate_hz", Unit::Hz},
     {"pipe_organ.tremulant_depth", Unit::None},
     {"pipe_organ.wind_sag", Unit::None},
+    {"pipe_organ.wind_regulated", Unit::None},
     {"pipe_organ.swell", Unit::None},
     {"bowed_string.elasto_plastic", Unit::None},
     {"bowed_string.hyperbolic_friction", Unit::None},

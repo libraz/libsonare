@@ -230,6 +230,7 @@ constexpr PipeOrganPatchParams blank_pipe_organ() noexcept {
   z.tremulant_rate_hz = 0.0f;
   z.tremulant_depth = 0.0f;
   z.wind_sag = 0.0f;
+  z.wind_regulated = false;
   z.swell = 0.0f;
   return z;
 }
