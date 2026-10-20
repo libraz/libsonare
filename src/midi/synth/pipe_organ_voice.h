@@ -170,10 +170,9 @@ struct PipeOrganPatchParams {
   /// draw on it, so a full chord sinks slightly in pitch and level — the
   /// breathing of a real wind chest.
   float wind_sag = 0.0f;
-  /// Regulated wind: the sag is the dip at a rise in demand and the regulator
-  /// restores the set pressure, so a steady draw holds pitch and level. Off,
-  /// the pressure stays down for as long as the pipes draw (an unregulated
-  /// supply: a single key of a six-rank plenum sits 3.75 c flat at sag 0.25).
+  /// Regulated wind: the sag is only the dip at a rise in demand and a steady draw holds pitch
+  /// and level. Off, the pressure stays down while the pipes draw (one key of a six-rank plenum
+  /// sits 3.75 c flat at sag 0.25).
   bool wind_regulated = false;
   /// Swell-box depth in [0,1] (0 = no swell box). A division behind a swell
   /// shutter: as the expression pedal (CC11) closes, a per-part lowpass applied
