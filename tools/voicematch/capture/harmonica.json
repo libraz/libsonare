@@ -41,10 +41,11 @@
   ],
   "_dimensions": "The slot is a free reed. `damper` matters here in the way it does on anything whose key is a valve rather than a hammer: the sound stops when the key does, and a model that lets it fall instead gives itself away there. `stereo` is gated rather than excused because this slot does render an image - its two channels are not identical, which is not true of every rack here.",
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a sustained voice already drops `decay`, `aftersound` and `doubling` - a voice fed continuously has no free fall for them to describe - so those are not listed here.",
-  "dimensions_na": {},
+  "dimensions_na": {
+    "body": "the reference holds no breath floor under f0: its per-bin floor is -115 to -130 dB re the f0 band, and the under-band energy is one to three discrete lines at non-harmonic fractions of f0 (n60 f0/2 +/- 8 Hz, n78 a lone 45 Hz line, n84 near f0/3 and 2f0/3), identical at v32 and v127, so they belong to the sampled zones rather than to the instrument. Read against the note they follow no register law (-0.9 dB/oct with 4.5 dB rms residual, a 13 dB step between n72 and n78), and a model breath noise matches them only by coincidence"
+  },
   "dimensions": [
     "stretch",
-    "body",
     "attack",
     "stereo",
     "damper",
