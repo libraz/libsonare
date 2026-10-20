@@ -8,6 +8,7 @@
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "mastering/eq/parametric.h"
+#include "mastering/multiband/multiband_common.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
 
@@ -30,8 +31,7 @@ void MultibandLimiter::prepare(double sample_rate, int max_block_size, int max_c
   max_block_size_ = max_block_size;
   max_working_channels_ = max_channels;
   prepared_ = true;
-  crossover_.prepare(sample_rate_, max_block_size_, max_working_channels_);
-  crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
+  prepare_band_split(crossover_, scratch_, sample_rate_, max_block_size_, max_working_channels_);
   for (auto& limiter : limiters_) {
     limiter.prepare(sample_rate_, max_block_size_);
   }
@@ -41,42 +41,27 @@ void MultibandLimiter::prepare(double sample_rate, int max_block_size, int max_c
 
 void MultibandLimiter::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
-  ensure_prepared(prepared_, "MultibandLimiter");
-  if (!validate_block_size(num_channels, num_samples)) {
+  if (!validate_multiband_block(prepared_, "MultibandLimiter", max_working_channels_,
+                                max_block_size_, channels, num_channels, num_samples)) {
     return;
   }
-  if (num_channels > max_working_channels_) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels exceeds prepared MultibandLimiter capacity");
-  }
-  if (num_samples > max_block_size_) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_samples exceeds prepared MultibandLimiter block size");
-  }
-  validate_channel_buffers(channels, num_channels);
 
   // Summed over the crossover and every band, read once on either side of the
   // whole block: this processor records one discard per process() call.
   const auto member_discards = [this]() noexcept -> uint64_t {
-    uint64_t total = crossover_.non_finite_discard_count();
-    for (const auto& limiter : limiters_) {
-      total += limiter.non_finite_discard_count();
-    }
-    return total;
+    return member_discard_total(crossover_, limiters_, [](const auto& m) -> uint64_t {
+      return m.non_finite_discard_count();
+    });
   };
   const uint64_t member_discards_before = member_discards();
 
-  crossover_.ensure_scratch(scratch_, num_channels, num_samples);
   crossover_.split_into(channels, num_channels, num_samples, scratch_);
   const int num_bands = scratch_.num_bands();
   for (int band = 0; band < num_bands; ++band) {
     auto& band_channels = scratch_.band_channels[static_cast<size_t>(band)];
     limiters_[static_cast<size_t>(band)].run(detector_excluded_channel(num_channels),
                                              band_channels.data(), num_channels, num_samples);
-    for (int ch = 0; ch < num_channels; ++ch) {
-      band_paths_.align_block(static_cast<size_t>(band), static_cast<size_t>(ch),
-                              band_channels[static_cast<size_t>(ch)], num_samples);
-    }
+    align_band(band_paths_, static_cast<size_t>(band), band_channels, num_channels, num_samples);
     last_gain_reductions_db_[static_cast<size_t>(band)] =
         limiters_[static_cast<size_t>(band)].last_gain_reduction_db();
   }
@@ -117,9 +102,8 @@ void MultibandLimiter::set_config(const MultibandLimiterConfig& config) {
       config_, config, [this](const rt::ConfigDiff<MultibandLimiterConfig>& diff) {
         // The crossover rebuilds (and zeroes) itself only for a changed split.
         if (diff.changed(&MultibandLimiterConfig::crossover)) {
-          crossover_.set_config(config_.crossover);
-          if (prepared_)
-            crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
+          apply_band_split_config(crossover_, scratch_, config_.crossover, prepared_,
+                                  max_working_channels_, max_block_size_);
         }
         if (limiters_.size() == config_.bands.size()) {
           for (size_t band = 0; band < limiters_.size(); ++band) {

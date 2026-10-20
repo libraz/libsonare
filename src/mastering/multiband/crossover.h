@@ -94,12 +94,6 @@ class Crossover {
   /// size; pass a larger value to support oversized offline blocks.
   void prepare_scratch(CrossoverScratch& scratch, int num_channels, int max_samples = -1) const;
 
-  /// Grow @p scratch in place if it cannot already hold @p num_channels /
-  /// @p num_samples for the current band layout. Returns true if a reallocation
-  /// occurred (i.e. the call was NOT real-time safe). When the scratch is
-  /// already large enough this is allocation-free and returns false.
-  bool ensure_scratch(CrossoverScratch& scratch, int num_channels, int num_samples) const;
-
   /// Allocation-free, lock-free split into caller-owned @p scratch. The scratch
   /// must have been sized by prepare_scratch() for at least @p num_channels and
   /// the current block size; @p num_samples must not exceed its capacity.

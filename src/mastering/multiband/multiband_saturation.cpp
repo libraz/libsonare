@@ -8,6 +8,7 @@
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "mastering/eq/parametric.h"
+#include "mastering/multiband/multiband_common.h"
 #include "mastering/saturation/exciter.h"
 #include "mastering/saturation/soft_clipper.h"
 #include "mastering/saturation/tape.h"
@@ -109,36 +110,24 @@ void MultibandSaturation::prepare(double sample_rate, int max_block_size, int ma
 
 void MultibandSaturation::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
-  ensure_prepared(prepared_, "MultibandSaturation");
-  if (!validate_block_size(num_channels, num_samples)) {
+  if (!validate_multiband_block(prepared_, "MultibandSaturation", max_working_channels_,
+                                max_block_size_, channels, num_channels, num_samples)) {
     return;
   }
-  if (num_channels > max_working_channels_) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels exceeds prepared MultibandSaturation capacity");
-  }
-  if (num_samples > max_block_size_) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_samples exceeds prepared MultibandSaturation block size");
-  }
-  validate_channel_buffers(channels, num_channels);
 
   // Summed over the crossover and every band, read once on either side of the
   // whole block: the sum detects that some member moved without standing in for
   // this processor's own count, which is one per process() call.
   const auto member_discards = [this]() noexcept -> uint64_t {
-    uint64_t total = crossover_.non_finite_discard_count();
-    for (const auto& processor : processors_) {
-      if (processor) total += processor->non_finite_discard_count();
-    }
-    return total;
+    return member_discard_total(crossover_, processors_, [](const auto& m) -> uint64_t {
+      return m ? m->non_finite_discard_count() : uint64_t{0};
+    });
   };
   const uint64_t member_discards_before = member_discards();
 
   // Valid prepared blocks reuse the exact bound-sized scratch without
   // allocation; oversized blocks fail closed above rather than growing scratch
   // on the audio thread.
-  crossover_.ensure_scratch(scratch_, num_channels, num_samples);
   crossover_.split_into(channels, num_channels, num_samples, scratch_);
   const int num_bands = scratch_.num_bands();
   for (int band = 0; band < num_bands; ++band) {
@@ -184,11 +173,8 @@ void MultibandSaturation::process(float* const* channels, int num_channels, int 
     }
     // Pad the shallower bands (including a bypassed one) up to the deepest band
     // delay so the sum below reconstructs the crossover.
-    for (int ch = 0; ch < num_channels; ++ch) {
-      band_paths_.align_block(
-          static_cast<size_t>(band), static_cast<size_t>(ch),
-          scratch_.band_channels[static_cast<size_t>(band)][static_cast<size_t>(ch)], num_samples);
-    }
+    align_band(band_paths_, static_cast<size_t>(band),
+               scratch_.band_channels[static_cast<size_t>(band)], num_channels, num_samples);
   }
 
   scratch_.sum_into(channels, num_channels, num_samples);
@@ -212,9 +198,8 @@ void MultibandSaturation::set_config(const MultibandSaturationConfig& config) {
       config_, config, [this](const rt::ConfigDiff<MultibandSaturationConfig>& diff) {
         // The crossover rebuilds (and zeroes) itself only for a changed split.
         if (diff.changed(&MultibandSaturationConfig::crossover)) {
-          crossover_.set_config(config_.crossover);
-          if (prepared_)
-            crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
+          apply_band_split_config(crossover_, scratch_, config_.crossover, prepared_,
+                                  max_working_channels_, max_block_size_);
         }
         if (processors_.size() == config_.bands.size()) {
           for (size_t band = 0; band < processors_.size(); ++band) {

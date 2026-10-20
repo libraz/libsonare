@@ -8,6 +8,7 @@
 
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
+#include "mastering/multiband/multiband_common.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -31,8 +32,7 @@ void MultibandDynamicEq::prepare(double sample_rate, int max_block_size, int max
   max_block_size_ = max_block_size;
   max_working_channels_ = max_channels;
   prepared_ = true;
-  crossover_.prepare(sample_rate_, max_block_size_, max_working_channels_);
-  crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
+  prepare_band_split(crossover_, scratch_, sample_rate_, max_block_size_, max_working_channels_);
   for (size_t band = 0; band < processors_.size(); ++band) {
     processors_[band].prepare(sample_rate_, max_block_size_);
     configure_processor(band);
@@ -42,30 +42,18 @@ void MultibandDynamicEq::prepare(double sample_rate, int max_block_size, int max
 
 void MultibandDynamicEq::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
-  ensure_prepared(prepared_, "MultibandDynamicEq");
-  if (!validate_block_size(num_channels, num_samples)) {
+  if (!validate_multiband_block(prepared_, "MultibandDynamicEq", max_working_channels_,
+                                max_block_size_, channels, num_channels, num_samples)) {
     return;
   }
-  if (num_channels > max_working_channels_) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels exceeds prepared MultibandDynamicEq capacity");
-  }
-  if (num_samples > max_block_size_) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_samples exceeds prepared MultibandDynamicEq block size");
-  }
-  validate_channel_buffers(channels, num_channels);
 
-  crossover_.ensure_scratch(scratch_, num_channels, num_samples);
   // Summed over the crossover and every band, read once on either side of the
   // whole block: the sum detects that some member moved without standing in for
   // this processor's own count, which is one per process() call.
   const auto member_discards = [this]() noexcept -> uint64_t {
-    uint64_t total = crossover_.non_finite_discard_count();
-    for (const auto& processor : processors_) {
-      total += processor.non_finite_discard_count();
-    }
-    return total;
+    return member_discard_total(crossover_, processors_, [](const auto& m) -> uint64_t {
+      return m.non_finite_discard_count();
+    });
   };
   const uint64_t member_discards_before = member_discards();
 
@@ -107,9 +95,8 @@ void MultibandDynamicEq::set_config(const MultibandDynamicEqConfig& config) {
       config_, config, [this](const rt::ConfigDiff<MultibandDynamicEqConfig>& diff) {
         // The crossover rebuilds (and zeroes) itself only for a changed split.
         if (diff.changed(&MultibandDynamicEqConfig::crossover)) {
-          crossover_.set_config(config_.crossover);
-          if (prepared_)
-            crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
+          apply_band_split_config(crossover_, scratch_, config_.crossover, prepared_,
+                                  max_working_channels_, max_block_size_);
         }
         if (processors_.size() == config_.bands.size()) {
           // Only a crossover band whose sub-bands changed is reconfigured; the

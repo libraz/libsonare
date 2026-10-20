@@ -5,6 +5,7 @@
 
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
+#include "mastering/multiband/multiband_common.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
 
@@ -27,8 +28,7 @@ void MultibandExpander::prepare(double sample_rate, int max_block_size, int max_
   max_block_size_ = max_block_size;
   max_working_channels_ = max_channels;
   prepared_ = true;
-  crossover_.prepare(sample_rate_, max_block_size_, max_working_channels_);
-  crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
+  prepare_band_split(crossover_, scratch_, sample_rate_, max_block_size_, max_working_channels_);
   for (auto& expander : expanders_) {
     expander.prepare(sample_rate_, max_block_size_);
   }
@@ -37,32 +37,20 @@ void MultibandExpander::prepare(double sample_rate, int max_block_size, int max_
 
 void MultibandExpander::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
-  ensure_prepared(prepared_, "MultibandExpander");
-  if (!validate_block_size(num_channels, num_samples)) {
+  if (!validate_multiband_block(prepared_, "MultibandExpander", max_working_channels_,
+                                max_block_size_, channels, num_channels, num_samples)) {
     return;
   }
-  if (num_channels > max_working_channels_) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels exceeds prepared MultibandExpander capacity");
-  }
-  if (num_samples > max_block_size_) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_samples exceeds prepared MultibandExpander block size");
-  }
-  validate_channel_buffers(channels, num_channels);
 
   // Summed over the crossover and every band, read once on either side of the
   // whole block: this processor records one discard per process() call.
   const auto member_discards = [this]() noexcept -> uint64_t {
-    uint64_t total = crossover_.non_finite_discard_count();
-    for (const auto& expander : expanders_) {
-      total += expander.non_finite_discard_count();
-    }
-    return total;
+    return member_discard_total(crossover_, expanders_, [](const auto& m) -> uint64_t {
+      return m.non_finite_discard_count();
+    });
   };
   const uint64_t member_discards_before = member_discards();
 
-  crossover_.ensure_scratch(scratch_, num_channels, num_samples);
   crossover_.split_into(channels, num_channels, num_samples, scratch_);
   const int num_bands = scratch_.num_bands();
   for (int band = 0; band < num_bands; ++band) {
@@ -93,9 +81,8 @@ void MultibandExpander::set_config(const MultibandExpanderConfig& config) {
       config_, config, [this](const rt::ConfigDiff<MultibandExpanderConfig>& diff) {
         // The crossover rebuilds (and zeroes) itself only for a changed split.
         if (diff.changed(&MultibandExpanderConfig::crossover)) {
-          crossover_.set_config(config_.crossover);
-          if (prepared_)
-            crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
+          apply_band_split_config(crossover_, scratch_, config_.crossover, prepared_,
+                                  max_working_channels_, max_block_size_);
         }
         if (expanders_.size() == config_.bands.size()) {
           // Same band count: each expander takes its own config as a snapshot, which

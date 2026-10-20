@@ -8,6 +8,7 @@
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "mastering/eq/parametric.h"
+#include "mastering/multiband/multiband_common.h"
 #include "mastering/stereo/constant_power_width.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -66,8 +67,7 @@ void MultibandImager::prepare(double sample_rate, int max_block_size, int max_ch
   max_block_size_ = max_block_size;
   max_working_channels_ = max_channels;
   prepared_ = true;
-  crossover_.prepare(sample_rate_, max_block_size_, max_working_channels_);
-  crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
+  prepare_band_split(crossover_, scratch_, sample_rate_, max_block_size_, max_working_channels_);
   allpass_.resize(config_.bands.size());
   decorrelation_gates_.assign(config_.bands.size(), rt::StageGate{});
   for (auto& band_stages : allpass_) {
@@ -81,21 +81,11 @@ void MultibandImager::prepare(double sample_rate, int max_block_size, int max_ch
 
 void MultibandImager::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
-  ensure_prepared(prepared_, "MultibandImager");
-  if (!validate_block_size(num_channels, num_samples)) {
+  if (!validate_multiband_block(prepared_, "MultibandImager", max_working_channels_,
+                                max_block_size_, channels, num_channels, num_samples)) {
     return;
   }
-  if (num_channels > max_working_channels_) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels exceeds prepared MultibandImager capacity");
-  }
-  if (num_samples > max_block_size_) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_samples exceeds prepared MultibandImager block size");
-  }
-  validate_channel_buffers(channels, num_channels);
 
-  crossover_.ensure_scratch(scratch_, num_channels, num_samples);
   // Read as a delta rather than summed: the crossover is driven once per block
   // here, but a member driven in sub-blocks would contribute several of its own
   // counts to one of this processor's, and the unit is one process() call.

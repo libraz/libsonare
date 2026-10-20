@@ -8,6 +8,7 @@
 
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
+#include "mastering/multiband/multiband_common.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
 
@@ -30,8 +31,8 @@ void MultibandExciter::prepare(double sample_rate, int max_block_size, int max_c
   max_block_size_ = max_block_size;
   max_working_channels_ = max_channels;
   prepared_ = true;
-  crossover_.prepare(sample_rate_, max_block_size_, max_working_channels_);
-  crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
+  multiband::prepare_band_split(crossover_, scratch_, sample_rate_, max_block_size_,
+                                max_working_channels_);
   for (auto& exciter : exciters_) exciter.prepare(sample_rate_, max_block_size_);
   rebuild_band_compensation();
   reset();
@@ -39,28 +40,18 @@ void MultibandExciter::prepare(double sample_rate, int max_block_size, int max_c
 
 void MultibandExciter::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
-  ensure_prepared(prepared_, "MultibandExciter");
-  if (!validate_block_size(num_channels, num_samples)) {
+  if (!multiband::validate_multiband_block(prepared_, "MultibandExciter", max_working_channels_,
+                                           max_block_size_, channels, num_channels, num_samples)) {
     return;
   }
-  if (num_channels > max_working_channels_) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels exceeds prepared MultibandExciter capacity");
-  }
-  if (num_samples > max_block_size_) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_samples exceeds prepared MultibandExciter block size");
-  }
-  validate_channel_buffers(channels, num_channels);
 
-  crossover_.ensure_scratch(scratch_, num_channels, num_samples);
   // Summed over the crossover and every band, read once on either side of the
   // whole block: the sum detects that some member moved without standing in for
   // this processor's own count, which is one per process() call.
   const auto member_discards = [this]() noexcept -> uint64_t {
-    uint64_t total = crossover_.non_finite_discard_count();
-    for (const auto& exciter : exciters_) total += exciter.non_finite_discard_count();
-    return total;
+    return multiband::member_discard_total(crossover_, exciters_, [](const auto& m) -> uint64_t {
+      return m.non_finite_discard_count();
+    });
   };
   const uint64_t member_discards_before = member_discards();
 
@@ -69,10 +60,8 @@ void MultibandExciter::process(float* const* channels, int num_channels, int num
   for (int band = 0; band < num_bands; ++band) {
     auto& band_channels = scratch_.band_channels[static_cast<size_t>(band)];
     exciters_[static_cast<size_t>(band)].process(band_channels.data(), num_channels, num_samples);
-    for (int ch = 0; ch < num_channels; ++ch) {
-      band_paths_.align_block(static_cast<size_t>(band), static_cast<size_t>(ch),
-                              band_channels[static_cast<size_t>(ch)], num_samples);
-    }
+    multiband::align_band(band_paths_, static_cast<size_t>(band), band_channels, num_channels,
+                          num_samples);
   }
 
   scratch_.sum_into(channels, num_channels, num_samples);
@@ -93,9 +82,8 @@ void MultibandExciter::set_config(const MultibandExciterConfig& config) {
       config_, config, [this](const rt::ConfigDiff<MultibandExciterConfig>& diff) {
         // The crossover rebuilds (and zeroes) itself only for a changed split.
         if (diff.changed(&MultibandExciterConfig::crossover)) {
-          crossover_.set_config(config_.crossover);
-          if (prepared_)
-            crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
+          multiband::apply_band_split_config(crossover_, scratch_, config_.crossover, prepared_,
+                                             max_working_channels_, max_block_size_);
         }
         if (exciters_.size() == config_.bands.size()) {
           // Each exciter rebuilds only what its own changed fields feed.
