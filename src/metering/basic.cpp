@@ -62,27 +62,29 @@ float rms_db(const Audio& audio) {
   return linear_to_db(audio_rms);
 }
 
+namespace {
+
+// Silent input has no meaningful peak-to-RMS ratio; both crest meters report the
+// same 0 dB neutral, decided on the linear levels rather than on the dB floors.
+float crest_from_samples(const float* samples, std::size_t total, const char* fn) {
+  require_measurable(samples, total, fn);
+  const float peak = peak_abs(samples, total);
+  const float level = rms(samples, total);
+  if (peak < kEpsilon || level < kEpsilon) return 0.0f;
+  return linear_to_db(peak) - linear_to_db(level);
+}
+
+}  // namespace
+
 float crest_factor_db(const Audio& audio) {
-  const float peak = peak_db(audio);
-  const float rms = rms_db(audio);
-  if (!std::isfinite(peak) || !std::isfinite(rms)) {
-    // Silent/empty input has no meaningful peak-to-RMS ratio. Return 0 dB (a
-    // usable neutral) rather than +inf, which callers cannot average or display.
-    return 0.0f;
-  }
-  return peak - rms;
+  if (audio.empty()) return 0.0f;
+  return crest_from_samples(audio.data(), audio.size(), "crest_factor_db");
 }
 
 float crest_factor_db_interleaved(const float* samples, std::size_t frames, int channels) {
   if (samples == nullptr || frames == 0 || channels <= 0) return 0.0f;
   const std::size_t total = frames * static_cast<std::size_t>(channels);
-  require_measurable(samples, total, "crest_factor_db_interleaved");
-  const float peak = peak_abs(samples, total);
-  const float level = rms(samples, total);
-  // Silent input has no meaningful peak-to-RMS ratio; return the same 0 dB
-  // neutral the mono meter reports rather than a value callers cannot display.
-  if (peak < kEpsilon || level < kEpsilon) return 0.0f;
-  return linear_to_db(peak) - linear_to_db(level);
+  return crest_from_samples(samples, total, "crest_factor_db_interleaved");
 }
 
 float clipping_ratio(const Audio& audio, float threshold) {

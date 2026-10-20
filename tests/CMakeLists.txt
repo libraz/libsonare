@@ -104,6 +104,7 @@ add_executable(sonare_tests
   analysis/progression_patterns_test.cpp
   analysis/boundary_detector_test.cpp
   metering/meter_basic_test.cpp
+  metering/crest_factor_silence_test.cpp
   analysis/rhythm_analyzer_test.cpp
   analysis/timbre_analyzer_test.cpp
   analysis/timbre_tile_test.cpp
