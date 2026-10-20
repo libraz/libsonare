@@ -14,8 +14,6 @@ namespace sonare::effects::common {
 using sonare::constants::kTwoPi;
 using sonare::mastering::dynamics::kRealtimePreparedChannels;
 
-DcBlocker::DcBlocker(float pole) { set_pole(pole); }
-
 void DcBlocker::prepare(double sample_rate, int) {
   if (sample_rate > 0.0) {
     const float pole =

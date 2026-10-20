@@ -339,8 +339,9 @@ TEST_CASE("DattorroReverb grows modulation buffers for depth changes", "[fx]") {
 TEST_CASE("DcBlocker attenuates sustained DC", "[fx]") {
   std::vector<float> mono(2048, 1.0f);
   float* channels[] = {mono.data()};
-  sonare::effects::common::DcBlocker blocker(0.99f);
+  sonare::effects::common::DcBlocker blocker;
 
+  blocker.set_cutoff_hz(40.0f);
   blocker.prepare(48000.0, static_cast<int>(mono.size()));
   blocker.process(channels, 1, static_cast<int>(mono.size()));
 

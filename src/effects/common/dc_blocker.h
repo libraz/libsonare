@@ -12,8 +12,6 @@ namespace sonare::effects::common {
 
 class DcBlocker : public rt::ProcessorBase {
  public:
-  explicit DcBlocker(float pole = 0.995f);
-
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
@@ -29,7 +27,6 @@ class DcBlocker : public rt::ProcessorBase {
   /// @return true when any channel was discarded.
   bool discard_non_finite() noexcept;
 
-  void set_pole(float pole) noexcept;
   float pole() const noexcept { return pole_; }
 
   /// @brief Sets the high-pass corner frequency (Hz). Takes effect on the next
@@ -38,6 +35,8 @@ class DcBlocker : public rt::ProcessorBase {
   float cutoff_hz() const noexcept { return cutoff_hz_; }
 
  private:
+  void set_pole(float pole) noexcept;
+
   static constexpr float kDefaultCutoffHz = 20.0f;
 
   float pole_ = 0.995f;
