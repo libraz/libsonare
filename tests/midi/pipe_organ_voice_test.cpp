@@ -312,9 +312,13 @@ TEST_CASE("GM harmonica and bandoneon voice the free-reed core", "[midi][synth][
     const double estimated = fft_fundamental(tone, 8000, 261.6256);
     REQUIRE(std::fabs(estimated / 261.6256 - 1.0) < 0.02);
   }
-  // The bandoneon's musette voicing detunes its twin reeds for a beating chorus.
+  // The bandoneon is dry-tuned, one reed per note; the accordion (21) carries the
+  // musette, a partner either side of its in-tune tongue.
   const NativeSynthPatch& bandoneon = gm_fallback_patch(0, 23);
-  REQUIRE(bandoneon.free_reed.detune > 0.0f);
+  REQUIRE(bandoneon.free_reed.detune == 0.0f);
+  const NativeSynthPatch& accordion = gm_fallback_patch(0, 21);
+  REQUIRE(accordion.free_reed.detune > 0.0f);
+  REQUIRE(accordion.free_reed.musette_flat);
 }
 
 TEST_CASE("GM orchestra hit is a fast-attack stab", "[midi][synth][organ]") {

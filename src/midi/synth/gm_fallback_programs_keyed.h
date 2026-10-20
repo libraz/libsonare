@@ -963,9 +963,11 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.reed_organ.mode = SynthEngineMode::kFreeReed;
   o.reed_organ.amp_env = fallback_env(30.0f, 0.0f, 1.0f, 120.0f);
   o.reed_organ.cutoff_hz = 20000.0f;
-  o.reed_organ.free_reed.brightness = 0.50f;
+  o.reed_organ.free_reed.brightness = 0.60f;
   o.reed_organ.free_reed.reed_stiffness = 0.40f;
-  o.reed_organ.free_reed.detune = 0.12f;
+  // One reed per note: the reference's partials carry no second line.
+  o.reed_organ.free_reed.detune = 0.0f;
+  o.reed_organ.free_reed.breath_noise = 0.12f;
   o.reed_organ.free_reed.breath_pressure = 0.7f;
   o.reed_organ.free_reed.attack_ms = 30.0f;
   o.reed_organ.free_reed.release_ms = 120.0f;
@@ -984,14 +986,27 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // sits an octave higher, which is a slot half the width, and no single duty
   // put both inside their references.
   o.accordion = o.reed_organ;
+  // A three-reed musette, measured: the centre on the note, the sides 14 c
+  // either way at A4 with the beat rate growing as f0^0.77, at half the level.
+  o.accordion.free_reed.detune = 0.9f;
+  o.accordion.free_reed.musette_flat = true;
+  o.accordion.free_reed.musette_taper = 0.23f;
+  o.accordion.free_reed.musette_partner_level = 0.5f;
+  o.accordion.pitch_offset_cents = 2.5f;
   o.accordion.free_reed.slot_duty = 0.349017f;
   o.accordion.free_reed.slot_return = 0.59139f;
   o.accordion.free_reed.slot_gap = 0.0382149f;
+  o.accordion.free_reed.slot_swing = 3.0f;
+  o.accordion.free_reed.radiation_keytrack = 1.0f;
   o.accordion.amp_env.attack_ms = 49.5352f;
   o.accordion.amp_env.release_ms = 2424.87f;
-  o.accordion.amp_env.sustain = 0.14265f;
+  // The bellows carries the onset: a VCA sustain under 1 was a 12-17 dB spike.
+  o.accordion.amp_env.sustain = 1.0f;
+  o.accordion.free_reed.onset_breath_overshoot_db = 5.5f;
+  o.accordion.free_reed.onset_breath_overshoot_key_db = -3.0f;
+  o.accordion.free_reed.onset_breath_settle_ms = 250.0f;
   o.accordion.cutoff_hz = 2068.1f;
-  o.accordion.free_reed.attack_ms = 16.0321f;
+  o.accordion.free_reed.attack_ms = 30.0f;
   o.accordion.free_reed.breath_noise = 0.0118062f;
   o.accordion.free_reed.breath_pressure = 0.372382f;
   o.accordion.free_reed.brightness = 0.551186f;
@@ -1006,13 +1021,20 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // hands add a gentle vibrato. Cupped hands are also why it radiates as less
   // than a free monopole where the bellows instruments measure as one.
   o.harmonica = o.accordion;
+  // The accordion's musette, swing, register law and bellows swell stay behind.
+  o.harmonica.free_reed.slot_swing = 0.0f;
+  o.harmonica.free_reed.radiation_keytrack = 0.0f;
+  o.harmonica.free_reed.onset_breath_overshoot_db = 0.0f;
+  o.harmonica.pitch_offset_cents = 0.0f;
   o.harmonica.amp_env = fallback_env(12.0f, 0.0f, 1.0f, 90.0f);
-  o.harmonica.free_reed.brightness = 0.78f;
+  o.harmonica.free_reed.brightness = 0.86f;
   o.harmonica.free_reed.reed_stiffness = 0.65f;
-  o.harmonica.free_reed.detune = 0.15f;
+  // One reed per note: the reference's partials carry no second line.
+  o.harmonica.free_reed.detune = 0.0f;
   o.harmonica.free_reed.attack_ms = 12.0f;
   o.harmonica.free_reed.release_ms = 90.0f;
-  o.harmonica.free_reed.radiation = 0.6f;
+  o.harmonica.free_reed.radiation = 0.35f;
+  o.harmonica.free_reed.breath_noise = 0.05f;
   o.harmonica.lfo_rate_hz = 5.6f;
   o.harmonica.lfo_to_pitch_cents = 8.0f;
   o.harmonica.stereo_spread = 0.12f;
@@ -1022,14 +1044,22 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.harmonica.cutoff_hz = 3378.8f;
   o.harmonica.free_reed.velocity_exponent = 0.84f;
 
-  // Bandoneon (GM 23): the tango free reed. The defining trait is the musette
-  // voicing — two near-unison tongues a few cents apart beat against each
-  // other, producing the characteristic wet shimmer.
+  // Bandoneon (GM 23): the tango free reed, dry-tuned — the reference holds one
+  // reed line per note, so there is no musette; a darker plate and a harder
+  // bellows are what set it apart from the accordion.
   o.bandoneon = o.accordion;
+  // The accordion's musette, swing, register law and bellows swell stay behind.
+  o.bandoneon.free_reed.slot_swing = 0.0f;
+  o.bandoneon.free_reed.radiation_keytrack = 0.0f;
+  o.bandoneon.free_reed.onset_breath_overshoot_db = 0.0f;
+  o.bandoneon.pitch_offset_cents = 0.0f;
   o.bandoneon.amp_env = fallback_env(24.0f, 0.0f, 1.0f, 120.0f);
   o.bandoneon.free_reed.brightness = 0.55f;
   o.bandoneon.free_reed.reed_stiffness = 0.45f;
-  o.bandoneon.free_reed.detune = 0.30f;
+  // One reed per note: the reference's partials carry no second line.
+  o.bandoneon.free_reed.detune = 0.0f;
+  o.bandoneon.free_reed.release_ms = 52.0f;
+  o.bandoneon.free_reed.breath_noise = 0.02f;
   o.bandoneon.stereo_spread = 0.22f;
   o.bandoneon.gain = 0.44f;
   o.bandoneon.amp_env.sustain = 0.663119f;

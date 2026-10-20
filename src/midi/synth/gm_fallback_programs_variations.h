@@ -327,7 +327,16 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   // wider apart beat against each other — the wet, shimmering register that is
   // the whole difference from the dry French tuning of the capital.
   o.accordion_italian = o.accordion;
-  o.accordion_italian.free_reed.detune = 0.46f;
+  // Measured: two lines per partial, the second a constant 3.2 Hz sharp of the
+  // centre at a third of its level, on the note itself and with no swing.
+  o.accordion_italian.free_reed.detune = 0.8f;
+  o.accordion_italian.free_reed.musette_flat = false;
+  o.accordion_italian.free_reed.musette_taper = 1.0f;
+  o.accordion_italian.free_reed.musette_partner_level = 0.35f;
+  o.accordion_italian.free_reed.slot_swing = 0.0f;
+  o.accordion_italian.pitch_offset_cents = 0.0f;
+  o.accordion_italian.free_reed.onset_breath_overshoot_db = 3.0f;
+  o.accordion_italian.free_reed.onset_breath_settle_ms = 60.0f;
   o.accordion_italian.free_reed.brightness = 0.58f;
   o.accordion_italian.stereo_spread = 0.3f;
 
