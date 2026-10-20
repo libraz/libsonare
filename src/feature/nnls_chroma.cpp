@@ -26,32 +26,32 @@ float harmonic_weight(int harmonic) {
   return kWeights[kWeightCount - 1] / std::sqrt(static_cast<float>(harmonic - kWeightCount + 1));
 }
 
-std::vector<float> whiten_rows(const std::vector<float>& magnitude, int n_bins, int n_frames,
-                               int window) {
-  if (n_bins <= 0 || n_frames <= 0 || window <= 1) {
+std::vector<float> whiten_across_frequency(const std::vector<float>& magnitude, int n_bins,
+                                           int n_frames, int bins_per_octave) {
+  const int half = bins_per_octave / 2;
+  if (n_bins <= 0 || n_frames <= 0 || half < 1) {
     return magnitude;
   }
 
   std::vector<float> out(magnitude.size(), 0.0f);
-  const int half = window / 2;
-  for (int bin = 0; bin < n_bins; ++bin) {
-    for (int frame = 0; frame < n_frames; ++frame) {
-      const int start = std::max(0, frame - half);
-      const int end = std::min(n_frames, frame + half + 1);
+  for (int frame = 0; frame < n_frames; ++frame) {
+    for (int bin = 0; bin < n_bins; ++bin) {
+      const int start = std::max(0, bin - half);
+      const int end = std::min(n_bins, bin + half + 1);
       float mean = 0.0f;
-      for (int t = start; t < end; ++t) {
-        mean += magnitude[bin * n_frames + t];
+      for (int b = start; b < end; ++b) {
+        mean += magnitude[b * n_frames + frame];
       }
       mean /= static_cast<float>(end - start);
 
       float var = 0.0f;
-      for (int t = start; t < end; ++t) {
-        const float diff = magnitude[bin * n_frames + t] - mean;
+      for (int b = start; b < end; ++b) {
+        const float diff = magnitude[b * n_frames + frame] - mean;
         var += diff * diff;
       }
       const float stddev = std::sqrt(var / static_cast<float>(end - start));
-      // Domain-specific z-score floor: larger than constants::kEpsilon so flat
-      // CQT rows do not get over-amplified by near-zero variance.
+      // Domain-specific z-score floor: larger than constants::kEpsilon so a flat
+      // neighbourhood does not get over-amplified by near-zero variance.
       constexpr float kStddevFloor = 1e-6f;
       out[bin * n_frames + frame] =
           std::max(0.0f, (magnitude[bin * n_frames + frame] - mean) / (stddev + kStddevFloor));
@@ -145,7 +145,7 @@ Chroma nnls_chroma(const Audio& audio, const NnlsChromaConfig& config) {
   const int n_frames = cqt_result.n_frames();
   std::vector<float> magnitude = cqt_result.magnitude();
   if (config.whiten) {
-    magnitude = whiten_rows(magnitude, n_bins, n_frames, config.whitening_window);
+    magnitude = whiten_across_frequency(magnitude, n_bins, n_frames, config.cqt.bins_per_octave);
   }
 
   const std::vector<float> template_matrix =

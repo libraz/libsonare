@@ -187,6 +187,36 @@ TEST_CASE("ChordAnalyzer supports opt-in NNLS chroma front-end", "[.][slow][chor
   REQUIRE(most_common.quality == ChordQuality::Major);
 }
 
+TEST_CASE("ChordAnalyzer NNLS front-end reads a harmonic triad as the triad", "[chord_analyzer]") {
+  // Eight 1/n partials per note put the 9th and major 7th of C in the spectrum (harmonics 9
+  // and 15 of C, 3 of G); the full template set must still name the plain triad.
+  const int sr = 22050;
+  std::vector<float> samples(static_cast<size_t>(sr), 0.0f);
+  for (float note : {48.0f, 52.0f, 55.0f}) {
+    const float f0 = 440.0f * std::exp2((note - 69.0f) / 12.0f);
+    for (int h = 1; h <= 8; ++h) {
+      for (size_t i = 0; i < samples.size(); ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(sr);
+        samples[i] += 0.1f / static_cast<float>(h) *
+                      std::sin(2.0f * sonare::constants::kPiD * f0 * static_cast<float>(h) * t);
+      }
+    }
+  }
+  const Audio audio = Audio::from_vector(std::move(samples), sr);
+
+  ChordConfig config;
+  config.chroma_method = ChromaMethod::NNLS;
+  config.use_beat_sync = false;
+  config.smoothing_window = 0.5f;
+
+  ChordAnalyzer analyzer(audio, config);
+  REQUIRE(analyzer.count() >= 1);
+  const Chord most_common = analyzer.most_common_chord();
+  CAPTURE(most_common.to_string());
+  CHECK(most_common.root == PitchClass::C);
+  CHECK(most_common.quality == ChordQuality::Major);
+}
+
 TEST_CASE("ChordAnalyzer uses low-frequency bass chroma for inversion detection",
           "[.][slow][chord_analyzer]") {
   Audio audio = create_c_major_over_e(22050, 1.0f);

@@ -19,11 +19,12 @@ struct NnlsChromaConfig {
     config.n_bins = 252;          // Seven octaves.
     return config;
   }();
-  int midi_min = 21;             ///< A0, used for harmonic template pitch indexing
-  int n_pitches = 88;            ///< Piano range A0-C8
-  int n_harmonics = 6;           ///< Harmonics used in the spectral template
-  bool whiten = true;            ///< Per-frequency running normalization
-  int whitening_window = 15;     ///< Frames for running mean/std normalization
+  int midi_min = 21;    ///< A0, used for harmonic template pitch indexing
+  int n_pitches = 88;   ///< Piano range A0-C8
+  int n_harmonics = 6;  ///< Harmonics used in the spectral template
+  /// Per frame, z-score each CQT bin against the bins within half an octave of it, so the
+  /// harmonic peaks stand above the local spectral envelope; a held note keeps its level.
+  bool whiten = true;
   int max_iter = 100;            ///< NNLS iterations per frame
   float tolerance = 1e-4f;       ///< NNLS KKT tolerance
   bool normalize_frames = true;  ///< L-infinity normalize chroma frames

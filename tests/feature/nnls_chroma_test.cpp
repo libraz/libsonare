@@ -25,6 +25,25 @@ Audio sine(float freq, float duration, int sr = 22050) {
   return Audio::from_vector(std::move(samples), sr);
 }
 
+/// A held triad of harmonic tones with 1/n partials, the way an instrument rather than a sine
+/// sounds it: every overtone lands on some pitch class, most of them outside the chord.
+Audio harmonic_triad(const std::vector<float>& midi_notes, float duration, int sr = 22050) {
+  std::vector<float> samples(static_cast<size_t>(duration * sr), 0.0f);
+  for (float note : midi_notes) {
+    const float f0 = 440.0f * std::exp2((note - 69.0f) / 12.0f);
+    for (int h = 1; h <= 8; ++h) {
+      const float f = f0 * static_cast<float>(h);
+      if (f >= 0.5f * static_cast<float>(sr)) break;
+      for (size_t i = 0; i < samples.size(); ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(sr);
+        samples[i] += 0.1f / static_cast<float>(h) *
+                      std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * f * t);
+      }
+    }
+  }
+  return Audio::from_vector(std::move(samples), sr);
+}
+
 int argmax(const std::array<float, 12>& values) {
   return static_cast<int>(std::max_element(values.begin(), values.end()) - values.begin());
 }
@@ -69,13 +88,29 @@ TEST_CASE("nnls_chroma emphasizes pitch class of a sine tone", "[.][slow][nnls_c
   NnlsChromaConfig config;
   config.cqt.n_bins = 48;
   config.cqt.hop_length = 512;
-  config.whiten = false;
 
   Chroma chroma = nnls_chroma(sine(440.0f, 0.75f), config);
   REQUIRE(!chroma.empty());
 
   const auto mean = chroma.mean_energy();
   REQUIRE(argmax(mean) == static_cast<int>(PitchClass::A));
+}
+
+TEST_CASE("nnls_chroma keeps a held harmonic triad on its chord tones", "[nnls_chroma]") {
+  // Without the STFT blend, so the salience the NNLS stage itself produces is what is read.
+  NnlsChromaConfig config = NnlsChromaConfig::fast(512);
+  config.enable_stft_blend = false;
+  const Chroma chroma = nnls_chroma(harmonic_triad({48.0f, 52.0f, 55.0f}, 1.0f), config);
+  REQUIRE(!chroma.empty());
+
+  const auto mean = chroma.mean_energy();
+  const float weakest_chord_tone = std::min({mean[0], mean[4], mean[7]});
+  float strongest_other = 0.0f;
+  for (int c = 0; c < 12; ++c) {
+    if (c != 0 && c != 4 && c != 7) strongest_other = std::max(strongest_other, mean[c]);
+  }
+  CAPTURE(mean);
+  CHECK(strongest_other < 0.6f * weakest_chord_tone);
 }
 
 TEST_CASE("sonare_nnls_chroma runs the shared fast profile", "[nnls_chroma][c_api]") {
