@@ -114,17 +114,17 @@ inline FirstOrderShelf voiced_one_pole_at_rate(float b0, float a1, double sample
   std::array<double, kVoicedFitPoints> loss{};
   const double high_hz = std::min(0.5 * sample_rate, kVoicedFitHighestHz);
   for (int i = 0; i < kVoicedFitPoints; ++i) {
-    const double hz = kVoicedFitLowestHz *
-                      std::pow(high_hz / kVoicedFitLowestHz,
-                               static_cast<double>(i) / (kVoicedFitPoints - 1));
+    const double hz =
+        kVoicedFitLowestHz *
+        std::pow(high_hz / kVoicedFitLowestHz, static_cast<double>(i) / (kVoicedFitPoints - 1));
     cos_w[static_cast<size_t>(i)] = std::cos(rad_per_hz * hz);
     loss[static_cast<size_t>(i)] = -std::log(voiced_power(hz));
     if (!(loss[static_cast<size_t>(i)] > 0.0)) return voiced;
   }
   const double dc_loss = -std::log(dc);
   const auto fitted_loss = [&](double z, double p, double c) {
-    return dc_loss + 2.0 * std::log((1.0 - z) / (1.0 - p)) -
-           std::log(1.0 - 2.0 * z * c + z * z) + std::log(1.0 - 2.0 * p * c + p * p);
+    return dc_loss + 2.0 * std::log((1.0 - z) / (1.0 - p)) - std::log(1.0 - 2.0 * z * c + z * z) +
+           std::log(1.0 - 2.0 * p * c + p * p);
   };
   for (int iteration = 0; iteration < kVoicedFitIterations; ++iteration) {
     double jzz = 0.0;
@@ -135,12 +135,12 @@ inline FirstOrderShelf voiced_one_pole_at_rate(float b0, float a1, double sample
     for (size_t i = 0; i < cos_w.size(); ++i) {
       const double c = cos_w[i];
       const double r = (fitted_loss(zero, pole, c) - loss[i]) / loss[i];
-      const double dz = (-2.0 / (1.0 - zero) - (2.0 * zero - 2.0 * c) /
-                                                   (1.0 - 2.0 * zero * c + zero * zero)) /
-                        loss[i];
-      const double dp = (2.0 / (1.0 - pole) + (2.0 * pole - 2.0 * c) /
-                                                  (1.0 - 2.0 * pole * c + pole * pole)) /
-                        loss[i];
+      const double dz =
+          (-2.0 / (1.0 - zero) - (2.0 * zero - 2.0 * c) / (1.0 - 2.0 * zero * c + zero * zero)) /
+          loss[i];
+      const double dp =
+          (2.0 / (1.0 - pole) + (2.0 * pole - 2.0 * c) / (1.0 - 2.0 * pole * c + pole * pole)) /
+          loss[i];
       jzz += dz * dz;
       jzp += dz * dp;
       jpp += dp * dp;
