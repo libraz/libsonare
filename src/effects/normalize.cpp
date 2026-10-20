@@ -187,19 +187,28 @@ std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float th
   const float* data = audio.data();
   size_t n_samples = audio.size();
 
-  /// Find start (first frame above threshold)
-  size_t start = 0;
-  for (size_t pos = 0; pos + frame_length <= n_samples; pos += hop_length) {
+  auto frame_rms = [&](size_t pos) {
     float rms = 0.0f;
     for (int i = 0; i < frame_length; ++i) {
       rms += data[pos + i] * data[pos + i];
     }
-    rms = std::sqrt(rms / static_cast<float>(frame_length));
+    return std::sqrt(rms / static_cast<float>(frame_length));
+  };
 
-    if (rms > threshold_linear) {
+  /// Find start (first frame above threshold). The hop grid can stop short of the
+  /// buffer's tail, so the tail frame the end scan starts from is tried last.
+  size_t start = 0;
+  bool start_found = false;
+  for (size_t pos = 0; pos + frame_length <= n_samples; pos += hop_length) {
+    if (frame_rms(pos) > threshold_linear) {
       start = pos;
+      start_found = true;
       break;
     }
+  }
+  if (!start_found && n_samples >= static_cast<size_t>(frame_length)) {
+    const size_t tail = n_samples - frame_length;
+    if (frame_rms(tail) > threshold_linear) start = tail;
   }
 
   /// Find end (last frame above threshold), scanning backward.

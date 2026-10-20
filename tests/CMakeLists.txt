@@ -85,6 +85,7 @@ add_executable(sonare_tests
   effects/phase_vocoder_synthesis_test.cpp
   effects/formant_warp_test.cpp
   effects/normalize_test.cpp
+  effects/silence_boundaries_test.cpp
   effects/fx_reachability_test.cpp
   analysis/key_profiles_test.cpp
   analysis/chord_templates_test.cpp
