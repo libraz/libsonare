@@ -227,7 +227,9 @@ OnsetAnalyzer& MusicAnalyzer::onset_analyzer() {
 DynamicsAnalyzer& MusicAnalyzer::dynamics_analyzer() {
   std::call_once(dynamics_analyzer_once_, [this]() {
     DynamicsConfig dynamics_config;
-    dynamics_config.hop_length = config_->hop_length;
+    // Levels read the native audio; the hop is samples at the analysis rate, so it is rescaled.
+    dynamics_config.hop_length =
+        window_length_at_rate(config_->hop_length, audio_.sample_rate(), analysis_sr_);
     dynamics_analyzer_ = std::make_unique<DynamicsAnalyzer>(audio_, dynamics_config);
   });
   return *dynamics_analyzer_;
@@ -265,7 +267,7 @@ MelodyAnalyzer& MusicAnalyzer::melody_analyzer() {
   std::call_once(melody_analyzer_once_, [this]() {
     MelodyConfig melody_config;
     melody_config.hop_length = config_->hop_length;
-    melody_analyzer_ = std::make_unique<MelodyAnalyzer>(audio_, melody_config);
+    melody_analyzer_ = std::make_unique<MelodyAnalyzer>(analysis_audio_, melody_config);
   });
   return *melody_analyzer_;
 }
