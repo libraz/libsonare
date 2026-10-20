@@ -502,25 +502,39 @@ class AdaptivePass {
         fundamental_(config.fundamental_hz),
         target_fundamental_(config.fundamental_hz) {
     const size_t harmonic_count = static_cast<size_t>(config.harmonics);
+    if (subtracting_) {
+      cancellers_.assign(channel_count, std::vector<HarmonicCanceller>(harmonic_count));
+    } else {
+      cascades_.assign(channel_count, std::vector<Notch>(harmonic_count));
+    }
+    reset();
+  }
+
+  /// Restores the constructed state in place, without allocating.
+  void reset() {
+    const DehumConfig& config = config_;
+    fundamental_ = config.fundamental_hz;
+    target_fundamental_ = config.fundamental_hz;
+    tracker_ = PllTracker{};
     tracker_.frequency_hz = fundamental_;
     tracker_.anchor_hz = fundamental_;
+    last_coeff_fundamental_ = 0.0f;
+    trace_ = PassTrace{};
     // Unlike the fixed path the cancellers start at zero: their phase origin is
     // the tracker's own oscillator, which does not exist before the pass runs, so
     // there is nothing for a projection to be referred to. Each converges over
     // the same time constant the notch it replaces rings for.
     if (subtracting_) {
-      cancellers_.assign(channel_count, std::vector<HarmonicCanceller>(harmonic_count));
       for (int harmonic = 1; harmonic <= config.harmonics; ++harmonic) {
         HarmonicCanceller seed;
         seed.set_selectivity(fundamental_ * static_cast<float>(harmonic),
-                             static_cast<float>(sample_rate), config.q);
+                             static_cast<float>(sample_rate_), config.q);
         for (auto& channel : cancellers_) channel[static_cast<size_t>(harmonic - 1)] = seed;
       }
     } else {
-      cascades_.assign(channel_count, std::vector<Notch>(harmonic_count));
       for (int harmonic = 1; harmonic <= config.harmonics; ++harmonic) {
         const Notch seed = make_notch(fundamental_ * static_cast<float>(harmonic),
-                                      static_cast<float>(sample_rate), config.q);
+                                      static_cast<float>(sample_rate_), config.q);
         for (auto& cascade : cascades_) cascade[static_cast<size_t>(harmonic - 1)] = seed;
       }
     }
@@ -852,6 +866,8 @@ struct StreamingDehum::State {
   std::vector<std::vector<HarmonicCanceller>> cancellers;
   std::vector<double> increments;
   std::vector<double> phases;
+  // Per-sample (cos, sin) of each phase, computed once and read by every channel.
+  std::vector<std::pair<float, float>> references;
   // Adaptive: one pass per channel, the block being filled and the block being emitted.
   std::vector<std::unique_ptr<AdaptivePass>> passes;
   std::vector<std::vector<float>> filling;
@@ -877,24 +893,19 @@ void StreamingDehum::prepare(double sample_rate, int max_block_size, int max_cha
   state_->sample_rate = rate;
   state_->max_channels = max_channels;
   state_->max_block_size = max_block_size;
-  reset();
-}
-
-void StreamingDehum::reset() {
   State& state = *state_;
-  const auto channels = static_cast<size_t>(state.max_channels);
-  const float rate = static_cast<float>(state.sample_rate);
+  const auto channels = static_cast<size_t>(max_channels);
+  const float sample_rate_f = static_cast<float>(state.sample_rate);
+  // Everything reset() restores in place is sized here, so reset() never allocates.
   state.notches.assign(channels, {});
   state.cancellers.assign(channels, {});
   state.increments.clear();
   state.phases.clear();
+  state.references.clear();
   state.passes.clear();
   state.filling.assign(channels, {});
   state.emitting.assign(channels, {});
   state.target.assign(1, nullptr);
-  state.fill = 0;
-  state.blocks_done = 0;
-  if (state.sample_rate <= 0) return;
   if (config_.adaptive) {
     const auto frame = static_cast<size_t>(config_.frame_size);
     for (size_t c = 0; c < channels; ++c) {
@@ -902,24 +913,55 @@ void StreamingDehum::reset() {
       state.filling[c].assign(frame, 0.0f);
       state.emitting[c].assign(frame, 0.0f);
     }
+  } else {
+    for (int harmonic = 1; harmonic <= config_.harmonics; ++harmonic) {
+      const float frequency = config_.fundamental_hz * static_cast<float>(harmonic);
+      if (frequency >= sample_rate_f * 0.5f) break;
+      for (size_t c = 0; c < channels; ++c) {
+        if (config_.mode == DehumMode::Subtract) {
+          state.cancellers[c].emplace_back();
+        } else {
+          state.notches[c].emplace_back();
+        }
+      }
+      if (config_.mode == DehumMode::Subtract) {
+        state.increments.push_back(kTwoPiD * frequency / static_cast<double>(state.sample_rate));
+        state.phases.push_back(0.0);
+        state.references.push_back({});
+      }
+    }
+  }
+  reset();
+}
+
+void StreamingDehum::reset() {
+  State& state = *state_;
+  for (auto& block : state.filling) std::fill(block.begin(), block.end(), 0.0f);
+  for (auto& block : state.emitting) std::fill(block.begin(), block.end(), 0.0f);
+  if (!state.target.empty()) state.target[0] = nullptr;
+  state.fill = 0;
+  state.blocks_done = 0;
+  if (state.sample_rate <= 0) return;
+  if (config_.adaptive) {
+    for (auto& pass : state.passes) pass->reset();
     return;
   }
+  const float rate = static_cast<float>(state.sample_rate);
+  size_t slot = 0;
   for (int harmonic = 1; harmonic <= config_.harmonics; ++harmonic) {
     const float frequency = config_.fundamental_hz * static_cast<float>(harmonic);
     if (frequency >= rate * 0.5f) break;
-    for (size_t c = 0; c < channels; ++c) {
+    for (size_t c = 0; c < state.notches.size(); ++c) {
       if (config_.mode == DehumMode::Subtract) {
         HarmonicCanceller canceller;
         canceller.set_selectivity(frequency, rate, config_.q);
-        state.cancellers[c].push_back(canceller);
+        state.cancellers[c][slot] = canceller;
       } else {
-        state.notches[c].push_back(make_notch(frequency, rate, config_.q));
+        state.notches[c][slot] = make_notch(frequency, rate, config_.q);
       }
     }
-    if (config_.mode == DehumMode::Subtract) {
-      state.increments.push_back(kTwoPiD * frequency / static_cast<double>(state.sample_rate));
-      state.phases.push_back(0.0);
-    }
+    if (config_.mode == DehumMode::Subtract) state.phases[slot] = 0.0;
+    ++slot;
   }
 }
 
@@ -951,12 +993,16 @@ void StreamingDehum::process(float* const* channels, int num_channels, int num_s
   if (!config_.adaptive) {
     // The references advance once per sample whichever channels the block carries.
     for (int i = 0; i < num_samples; ++i) {
+      for (size_t k = 0; k < state.phases.size(); ++k) {
+        state.references[k] = {static_cast<float>(std::cos(state.phases[k])),
+                               static_cast<float>(std::sin(state.phases[k]))};
+      }
       for (int c = 0; c < num_channels; ++c) {
         auto& set = state.cancellers[static_cast<size_t>(c)];
         float residual = channels[c][i];
         for (size_t k = 0; k < set.size(); ++k) {
-          residual = set[k].process(residual, static_cast<float>(std::cos(state.phases[k])),
-                                    static_cast<float>(std::sin(state.phases[k])));
+          residual =
+              set[k].process(residual, state.references[k].first, state.references[k].second);
         }
         channels[c][i] = residual;
       }
