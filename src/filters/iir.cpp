@@ -48,6 +48,9 @@ BiquadZi lfilter_zi(const BiquadCoeffs& c) {
   return zi;
 }
 
+constexpr float kQ1 = 0.5411961f;  // 1/(2*cos(pi/8))
+constexpr float kQ2 = 1.3065630f;  // 1/(2*cos(3*pi/8))
+
 /// @brief Applies a DF2T biquad with explicit initial delay states.
 std::vector<float> apply_biquad_zi(const float* input, size_t size, const BiquadCoeffs& coeffs,
                                    const BiquadZi& zi) {
@@ -103,21 +106,7 @@ std::vector<float> apply_biquad(const float* input, size_t size, const BiquadCoe
   }
   SONARE_CHECK(input != nullptr, ErrorCode::InvalidParameter);
 
-  std::vector<float> output(size);
-
-  // Direct Form II Transposed
-  float z1 = 0.0f;
-  float z2 = 0.0f;
-
-  for (size_t i = 0; i < size; ++i) {
-    float x = input[i];
-    float y = coeffs.b0 * x + z1;
-    z1 = coeffs.b1 * x - coeffs.a1 * y + z2;
-    z2 = coeffs.b2 * x - coeffs.a2 * y;
-    output[i] = y;
-  }
-
-  return output;
+  return apply_biquad_zi(input, size, coeffs, BiquadZi{0.0f, 0.0f});
 }
 
 std::vector<float> apply_biquad(const std::vector<float>& input, const BiquadCoeffs& coeffs) {
@@ -157,9 +146,6 @@ CascadedBiquad highpass_coeffs_4th(float cutoff_hz, int sr) {
   // Each section uses different Q values for proper Butterworth response
   // Q1 = 1/(2*cos(pi/8)) ≈ 0.541
   // Q2 = 1/(2*cos(3*pi/8)) ≈ 1.307
-  constexpr float kQ1 = 0.5411961f;  // 1/(2*cos(pi/8))
-  constexpr float kQ2 = 1.3065630f;  // 1/(2*cos(3*pi/8))
-
   CascadedBiquad cascade;
   cascade.sections.resize(2);
   const float w0 = normalized_omega(cutoff_hz, sr);
@@ -172,9 +158,6 @@ CascadedBiquad highpass_coeffs_4th(float cutoff_hz, int sr) {
 CascadedBiquad lowpass_coeffs_4th(float cutoff_hz, int sr) {
   SONARE_CHECK(cutoff_hz > 0 && sr > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(cutoff_hz < sr / 2.0f, ErrorCode::InvalidParameter);
-
-  constexpr float kQ1 = 0.5411961f;
-  constexpr float kQ2 = 1.3065630f;
 
   CascadedBiquad cascade;
   cascade.sections.resize(2);
