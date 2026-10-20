@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "core/fft.h"
+#include "mastering/assistant/audio_profile.h"
 #include "util/constants.h"
 
 namespace sonare::mixing::assistant {
@@ -24,6 +25,11 @@ using sonare::constants::kEpsilon;
 /// within ~60 ms of the joint activity peak while the envelope scan stays
 /// negligible next to the correlation it feeds.
 constexpr std::size_t kEnergyBlocksPerWindow = 16;
+
+/// Block-energy events (any local maximum) the activity scale is taken from, with
+/// lone dominant ones set aside by summary_reference.
+constexpr int kReferenceLookbackBlocks = 1;
+constexpr float kReferenceRise = 1.0f;
 
 /// Shortest overlap, in samples, a correlation is trusted over. Below this the
 /// peak is decided by the handful of samples that happen to line up rather than
@@ -53,9 +59,11 @@ struct ActivityEnvelope {
   /// buffer, non-positive sample rate, no frames, or silence throughout.
   bool measurable = false;
   std::size_t block_size = 1;
-  /// Per-block energy scaled so the loudest block reads 1. Scaling each track
-  /// to its own peak is what lets the two curves be compared: an absolute
-  /// energy comparison would just pick whichever window the louder track likes.
+  /// Per-block energy scaled so the track's reference block reads 1 (lone loud
+  /// blocks clip to 1). Scaling each track to its own level is what lets the two
+  /// curves be compared: an absolute energy comparison would just pick whichever
+  /// window the louder track likes, and a bare maximum would let one click set
+  /// the scale for the whole track.
   std::vector<float> activity;
 };
 
@@ -102,9 +110,16 @@ ActivityEnvelope build_envelope(const TrackInput& track, bool usable, float wind
   // the comparison is false for a NaN peak, so the track drops out unmeasured.
   if (!(peak > kEpsilon)) return envelope;
 
+  std::vector<float> energy_f(energy.begin(), energy.end());
+  const float duration_sec =
+      static_cast<float>(track.frame_count) / static_cast<float>(track.sample_rate);
+  const double reference = mastering::assistant::summary_reference(
+      mastering::assistant::rising_peak_heights(energy_f, kReferenceLookbackBlocks, kReferenceRise),
+      duration_sec, static_cast<float>(peak));
+  const double scale = reference > kEpsilon ? reference : peak;
   envelope.activity.resize(block_count);
   for (std::size_t block = 0; block < block_count; ++block) {
-    envelope.activity[block] = static_cast<float>(energy[block] / peak);
+    envelope.activity[block] = static_cast<float>(std::min(1.0, energy[block] / scale));
   }
   envelope.measurable = true;
   return envelope;

@@ -413,8 +413,10 @@ if(BUILD_MIXING_ASSISTANT)
     mixing/assistant/gain_staging_test.cpp
     mixing/assistant/image_occupancy_test.cpp
     mixing/assistant/masking_test.cpp
+    mixing/assistant/masking_outlier_reference_test.cpp
     mixing/assistant/mix_eval_test.cpp
     mixing/assistant/phase_alignment_test.cpp
+    mixing/assistant/phase_alignment_outlier_test.cpp
     mixing/assistant/rt_boundary_test.cpp
     mixing/assistant/scene_delta_test.cpp
     mixing/assistant/source_classifier_test.cpp

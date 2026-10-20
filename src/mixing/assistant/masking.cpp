@@ -6,8 +6,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <utility>
 #include <vector>
 
+#include "mastering/assistant/audio_profile.h"
 #include "util/db.h"
 
 namespace sonare::mixing::assistant {
@@ -39,6 +41,12 @@ constexpr float kBandFloorBelowPeakDb = -60.0f;
 // it does not fall away to 38 dB and below, so the line is drawn between them.
 // Power dB, matching the linear power in BandEnergyEnvelope.
 constexpr float kBandFloorBelowTrackPeakDb = -35.0f;
+
+// A band's or track's reference level is its loudest frame with lone events set
+// aside (mastering::assistant::summary_reference), so a single burst cannot set
+// the floors for everything else. Any local maximum counts as an event.
+constexpr int kPeakLookbackFrames = 1;
+constexpr float kPeakRise = 1.0f;
 
 // Upper bound on the number of frames one pair is evaluated over; past it the
 // frame grid is walked with a whole-number stride. The result is a mean over
@@ -124,16 +132,31 @@ std::vector<BandDominance> analyze_band_dominance(const std::vector<TrackProfile
   for (std::size_t track = 0; track < track_count; ++track) {
     if (!measurable[track]) continue;
     const BandEnergyEnvelope& bands = profiles[track].bands;
+    const float duration_sec = (bands.sample_rate > 0 && bands.hop_length > 0)
+                                   ? static_cast<float>(bands.n_frames) *
+                                         static_cast<float>(bands.hop_length) /
+                                         static_cast<float>(bands.sample_rate)
+                                   : 0.0f;
     std::vector<float> band_peaks(static_cast<std::size_t>(kBandCount), 0.0f);
-    float track_peak = 0.0f;
+    std::vector<float> track_events;
+    float track_max = 0.0f;
+    std::vector<float> series;
     for (int band = 0; band < kBandCount; ++band) {
+      series.clear();
       float peak = 0.0f;
       for (int frame = 0; frame < bands.n_frames; frame += frame_stride) {
-        peak = std::max(peak, bands.at(band, frame));
+        series.push_back(bands.at(band, frame));
+        peak = std::max(peak, series.back());
       }
-      band_peaks[static_cast<std::size_t>(band)] = peak;
-      track_peak = std::max(track_peak, peak);
+      std::vector<float> events =
+          mastering::assistant::rising_peak_heights(series, kPeakLookbackFrames, kPeakRise);
+      track_events.insert(track_events.end(), events.begin(), events.end());
+      band_peaks[static_cast<std::size_t>(band)] =
+          mastering::assistant::summary_reference(std::move(events), duration_sec, peak);
+      track_max = std::max(track_max, peak);
     }
+    const float track_peak =
+        mastering::assistant::summary_reference(std::move(track_events), duration_sec, track_max);
     // The higher of the two floors wins: a frame has to be loud for its own band
     // and the band has to be one the track actually occupies.
     const float occupancy_floor = track_peak * track_floor_scale;
