@@ -63,7 +63,6 @@ std::vector<float> compute_bin_frequencies(int n_bins, int sr, int n_fft);
 float compute_centroid_frame(const float* magnitude, int n_bins, const float* frequencies);
 float compute_flatness_frame(const float* magnitude, int n_bins);
 float compute_rms_frame(const float* samples, int n_fft);
-float lag_to_bpm(int lag, int sr, int hop_length);
 using sonare::bpm_to_lag;  // one lag grid with BpmAnalyzer
 void compute_autocorrelation_streaming(const float* signal, int signal_size, int max_lag,
                                        std::vector<float>& autocorr);

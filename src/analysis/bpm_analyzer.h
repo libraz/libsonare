@@ -11,10 +11,14 @@
 /// - Computes onset strength envelope and autocorrelation
 /// - Builds BPM histogram from local maxima (0.5 BPM bins)
 /// - Groups candidates into harmonic clusters (half, double, triplet, etc.)
+/// - Picks the octave family of the candidate best supported at its tempo, half of it and its
+///   subdivision, counting peaks beyond the range
 /// - Uses smart selection: prefers strongly supported musically common tempos (80-180 BPM)
 /// - Avoids octave errors with harmonic relationships and bounded octave correction
 
+#include <algorithm>
 #include <array>
+#include <cstddef>
 #include <map>
 #include <utility>
 #include <vector>
@@ -26,6 +30,44 @@ namespace sonare {
 /// @brief Converts a tempo to an autocorrelation lag in frames (0 when @p bpm is not positive).
 /// @details Shared with the streaming analyzer so both read one lag grid.
 int bpm_to_lag(float bpm, int sr, int hop_length);
+
+/// @brief One positive autocorrelation peak, measured between integer lags.
+struct TempoPeak {
+  float bpm = 0.0f;       ///< Tempo at the parabolically refined lag
+  float strength = 0.0f;  ///< Mean of the peak sample and its two neighbours, in [0, 1]
+  int votes = 0;          ///< Votes it casts: strength x 100, in [1, 100]
+  bool in_range = false;  ///< May be chosen; otherwise it is beat evidence only
+};
+
+/// @brief Measures the peak at @p lag when it is a positive local maximum.
+/// @details A peak about two lags wide keeps its mass inside the three samples around it wherever
+///          its apex falls, so a peak split across two lags weighs what an aligned one does.
+///          Requires 1 <= @p lag and `lag + 1` inside @p autocorr. Allocation free.
+/// @return False when @p lag is not a positive local maximum
+bool measure_tempo_peak(const float* autocorr, int lag, int sr, int hop_length, TempoPeak& peak);
+
+/// @brief Longest lag a tempo estimate over [@p bpm_min, ...] reads: lag(bpm_min / 2), so the
+///        half tempo of the slowest candidate is visible as evidence.
+int tempo_evidence_lag(int sr, int hop_length, float bpm_min);
+
+/// @brief Calls @p visit(const TempoPeak&) for each peak of @p autocorr from three times
+///        @p bpm_max down to half of @p bpm_min, the span beat evidence is read from.
+/// @details A peak is in range inside [bpm_min, bpm_max] and below lag(bpm_min); the last two
+///          lags of that range are evidence only. Allocation free.
+template <typename Visit>
+void for_each_tempo_peak(const float* autocorr, int size, int sr, int hop_length, float bpm_min,
+                         float bpm_max, Visit&& visit) {
+  const int range_lags = std::min(bpm_to_lag(bpm_min, sr, hop_length), size);
+  const int lag_first = std::max(1, bpm_to_lag(3.0f * bpm_max, sr, hop_length));
+  const int lag_last = std::min(size - 2, tempo_evidence_lag(sr, hop_length, bpm_min));
+  for (int lag = lag_first; lag <= lag_last; ++lag) {
+    TempoPeak peak;
+    if (!measure_tempo_peak(autocorr, lag, sr, hop_length, peak)) continue;
+    if (peak.bpm < 0.5f * bpm_min || peak.bpm > 3.0f * bpm_max) continue;
+    peak.in_range = peak.bpm >= bpm_min && peak.bpm <= bpm_max && lag <= range_lags - 2;
+    visit(peak);
+  }
+}
 
 /// @brief Constants for BPM detection algorithm.
 /// @details Parameters match bpm-detector Python implementation for consistency.
@@ -89,12 +131,32 @@ std::vector<BpmHistogramBin> build_bpm_histogram(const std::vector<float>& candi
 /// @return Map of base_bpm -> [(bpm, votes), ...] clusters
 HarmonicClusterMap harmonic_cluster(const std::vector<BpmHistogramBin>& top_bins);
 
+/// @brief Beat tempo chosen from in-range candidates and out-of-range evidence.
+struct BeatTempoChoice {
+  float bpm = 0.0f;     ///< Chosen tempo, 0 when no candidate is supported
+  float anchor = 0.0f;  ///< Best supported candidate, whose octave family @ref bpm belongs to
+  int votes = 0;        ///< Votes of the chosen candidate
+};
+
+/// @brief Allocation-free core of @ref smart_choice, shared with the streaming analyzer.
+/// @details Scores each common-range candidate by the votes at its tempo, at half of it and at its
+///          subdivision (twice or three times it, whichever holds more), across @p candidates and
+///          @p evidence, then picks the strongest supported member of the winner's octave family
+///          (tempi a power of two apart). A 2/3 or 3/2 relative is chosen only as the better
+///          supported beat, never for out-voting the beat at its own tempo alone.
+BeatTempoChoice choose_beat_tempo(const BpmHistogramBin* candidates, size_t n_candidates,
+                                  const BpmHistogramBin* evidence, size_t n_evidence);
+
 /// @brief Selects best BPM from harmonic clusters using smart selection.
-/// @details Selects the strongest supported BPM in the largest harmonic cluster.
+/// @details @ref choose_beat_tempo over every cluster member and @p octave_evidence.
 /// @param clusters Harmonic clusters from harmonic_cluster()
 /// @param total_votes Total number of votes across all bins
-/// @return Pair of (best_bpm, confidence_percentage)
-std::pair<float, float> smart_choice(const HarmonicClusterMap& clusters, int total_votes);
+/// @param octave_evidence Peaks outside the analysed range; they count as support and are never
+///        chosen
+/// @return Pair of (best_bpm, confidence_percentage), the confidence being the vote share of the
+///         cluster holding the winning family
+std::pair<float, float> smart_choice(const HarmonicClusterMap& clusters, int total_votes,
+                                     const std::vector<BpmHistogramBin>& octave_evidence = {});
 
 /// @brief Applies 3-peak octave correction to tempo candidates.
 /// @details If a half/double-related pair exists among the strongest candidates,

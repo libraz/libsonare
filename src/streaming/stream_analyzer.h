@@ -419,7 +419,7 @@ class StreamAnalyzer {
   // cap the oldest frames are dropped from the front so memory and the
   // per-BPM-update autocorrelation cost stay O(1) over an arbitrarily long
   // stream. The window is sized to comfortably exceed the maximum
-  // autocorrelation lag (bpm_to_lag(kBpmMin) ≈ 86 frames at 44.1 kHz / hop 512),
+  // autocorrelation lag (tempo_evidence_lag(kBpmMin) ≈ 172 frames at 44.1 kHz / hop 512),
   // so trimming never removes lags the BPM estimator needs — it only discards
   // ancient onsets that no longer reflect the current tempo. Declared as a
   // fixed ring so both growth and front-trimming are allocation-free.
@@ -430,8 +430,8 @@ class StreamAnalyzer {
   std::vector<float> bpm_autocorr_scratch_;
 
   /// @brief Seconds of onset history retained by onset_accumulator_.
-  /// @details Far larger than the BPM autocorrelation's maximum lag (~1 s at
-  ///          kBpmMin = 60 BPM), so the sliding window keeps every lag the
+  /// @details Far larger than the BPM autocorrelation's maximum lag (~2 s, half
+  ///          of kBpmMin = 60 BPM), so the sliding window keeps every lag the
   ///          tempo estimator inspects while still bounding memory/CPU.
   static constexpr float kOnsetWindowSeconds = 60.0f;
 

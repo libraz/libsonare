@@ -152,14 +152,14 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   /// Size the bounded onset history window. Frames-per-second is
   /// internal_sample_rate_ / hop_length; multiply by kOnsetWindowSeconds to get
   /// the retained frame count. Floor it at a few times the maximum
-  /// autocorrelation lag (bpm_to_lag(kBpmMin)) so the BPM estimator always has
-  /// enough lags even for unusually large hop lengths.
+  /// autocorrelation lag (tempo_evidence_lag(kBpmMin), half of kBpmMin) so the
+  /// BPM estimator always has enough lags even for unusually large hop lengths.
   {
     const int hop = std::max(config_.hop_length, 1);
     const size_t window_from_seconds = static_cast<size_t>(
         kOnsetWindowSeconds * static_cast<float>(internal_sample_rate_) / static_cast<float>(hop));
-    const int max_lag = streaming_detail::bpm_to_lag(streaming_detail::kBpmMin,
-                                                     internal_sample_rate_, config_.hop_length);
+    const int max_lag =
+        tempo_evidence_lag(internal_sample_rate_, config_.hop_length, streaming_detail::kBpmMin);
     const size_t min_window = static_cast<size_t>(std::max(max_lag, 1)) * 4;
     onset_window_frames_ = std::max(window_from_seconds, min_window);
   }
@@ -169,9 +169,8 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   // separate counters and begin at zero.
   onset_accumulator_.resize(onset_window_frames_);
   onset_window_scratch_.reserve(onset_window_frames_);
-  const int prepared_max_lag =
-      std::max(1, streaming_detail::bpm_to_lag(streaming_detail::kBpmMin, internal_sample_rate_,
-                                               config_.hop_length));
+  const int prepared_max_lag = std::max(
+      1, tempo_evidence_lag(internal_sample_rate_, config_.hop_length, streaming_detail::kBpmMin));
   bpm_autocorr_scratch_.reserve(static_cast<size_t>(prepared_max_lag));
   chroma_history_.resize(static_cast<size_t>(kChordSmoothingFrames));
   full_chroma_history_.resize(kMaxChromaHistoryFrames);

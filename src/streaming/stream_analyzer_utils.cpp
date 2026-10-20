@@ -1,7 +1,9 @@
 #include "streaming/stream_analyzer_utils.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
 
 #include "analysis/chord_templates.h"
 #include "core/fft.h"
@@ -77,12 +79,6 @@ float compute_rms_frame(const float* samples, int n_fft) {
   return rms(samples, static_cast<size_t>(std::max(n_fft, 0)));
 }
 
-float lag_to_bpm(int lag, int sr, int hop_length) {
-  if (lag <= 0) return 0.0f;
-  float seconds_per_beat = static_cast<float>(lag * hop_length) / static_cast<float>(sr);
-  return 60.0f / seconds_per_beat;
-}
-
 void compute_autocorrelation_streaming(const float* signal, int signal_size, int max_lag,
                                        std::vector<float>& autocorr) {
   autocorr.resize(static_cast<size_t>(std::max(max_lag, 0)));
@@ -121,72 +117,51 @@ void compute_autocorrelation_streaming(const float* signal, int signal_size, int
 
 TempoEstimate find_best_tempo(const std::vector<float>& autocorr, int sr, int hop_length,
                               float bpm_min, float bpm_max) {
-  int lag_min = bpm_to_lag(bpm_max, sr, hop_length);
-  int lag_max = bpm_to_lag(bpm_min, sr, hop_length);
-
-  lag_min = std::max(1, lag_min);
-  lag_max = std::min(static_cast<int>(autocorr.size()) - 1, lag_max);
-
-  /// No usable lag range: report "unknown" via BPM 0 with confidence 0 so the
-  /// caller can detect the absence of an estimate. Returning a plausible-looking
-  /// 120 BPM here (as the old code did) masked the failure: 120 and 0
-  /// confidence are indistinguishable from a genuine low-confidence 120 BPM.
-  if (lag_min >= lag_max) {
-    return {};
-  }
-
-  constexpr float kCommonBpmMin = 80.0f;
-  constexpr float kCommonBpmMax = 180.0f;
-  constexpr float kWeightThreshold = 0.3f;
-
-  // First pass: find the strongest valid peak and retain it as the fallback.
-  // This replaces the old per-update candidates vector with constant storage.
-  // The candidates are still counted: that count is the only thing the removed
-  // vector was reported for, and it is a public field.
-  float max_weight = 0.0f;
-  float fallback_bpm = 0.0f;
+  // The batch estimator's selection on fixed storage: the strongest in-range peaks are the
+  // candidates, as its top histogram bins are, and every other peak is evidence.
+  constexpr size_t kMaxEvidence = 512;
+  std::array<BpmHistogramBin, bpm_constants::kTopBins> candidates{};
+  std::array<BpmHistogramBin, kMaxEvidence> evidence{};
+  size_t n_candidates = 0;
+  size_t n_evidence = 0;
   int candidate_count = 0;
-  for (int lag = lag_min + 1; lag <= lag_max - 1; ++lag) {
-    const float weight = autocorr[lag];
-    if (weight > autocorr[lag - 1] && weight > autocorr[lag + 1] && weight > 0.0f) {
-      const float bpm = lag_to_bpm(lag, sr, hop_length);
-      if (bpm >= bpm_min && bpm <= bpm_max) {
-        ++candidate_count;
-        if (weight > max_weight) {
-          max_weight = weight;
-          fallback_bpm = bpm;
-        }
-      }
+  int max_votes = 0;
+  // A full store replaces its weakest entry, so what is kept never depends on lag order.
+  const auto keep = [](auto& store, size_t& n, const BpmHistogramBin& bin) {
+    if (n < store.size()) {
+      store[n++] = bin;
+      return;
     }
-  }
+    auto weakest = std::min_element(store.begin(), store.end(),
+                                    [](const auto& a, const auto& b) { return a.votes < b.votes; });
+    if (bin.votes > weakest->votes) *weakest = bin;
+  };
+  for_each_tempo_peak(autocorr.data(), static_cast<int>(autocorr.size()), sr, hop_length, bpm_min,
+                      bpm_max, [&](const TempoPeak& peak) {
+                        const BpmHistogramBin bin{peak.bpm, peak.votes};
+                        if (peak.in_range) {
+                          ++candidate_count;
+                          max_votes = std::max(max_votes, peak.votes);
+                          keep(candidates, n_candidates, bin);
+                        } else {
+                          keep(evidence, n_evidence, bin);
+                        }
+                      });
 
-  if (max_weight <= 0.0f) {
+  /// No in-range peak: report "unknown" via BPM 0 with confidence 0 so the
+  /// caller can detect the absence of an estimate rather than a plausible 120.
+  if (max_votes <= 0) {
     return {0.0f, 0.0f, candidate_count};
   }
-
-  // Second pass: preserve the common-tempo preference without materializing
-  // candidate pairs. If none qualifies, use the strongest peak from pass one.
-  float best_bpm = 0.0f;
-  float best_weight = 0.0f;
-  for (int lag = lag_min + 1; lag <= lag_max - 1; ++lag) {
-    const float weight = autocorr[lag];
-    if (weight > autocorr[lag - 1] && weight > autocorr[lag + 1] && weight > 0.0f) {
-      const float bpm = lag_to_bpm(lag, sr, hop_length);
-      if (bpm >= kCommonBpmMin && bpm <= kCommonBpmMax && weight >= kWeightThreshold * max_weight &&
-          weight > best_weight) {
-        best_bpm = bpm;
-        best_weight = weight;
-      }
-    }
+  std::sort(candidates.begin(), candidates.begin() + static_cast<std::ptrdiff_t>(n_candidates),
+            [](const BpmHistogramBin& a, const BpmHistogramBin& b) { return a.votes > b.votes; });
+  const BeatTempoChoice choice =
+      choose_beat_tempo(candidates.data(), n_candidates, evidence.data(), n_evidence);
+  if (choice.bpm <= 0.0f) {
+    return {0.0f, 0.0f, candidate_count};
   }
-
-  if (best_bpm == 0.0f) {
-    best_bpm = fallback_bpm;
-    best_weight = max_weight;
-  }
-
-  float confidence = (max_weight > 0.0f) ? best_weight / max_weight : 0.0f;
-  return {best_bpm, confidence, candidate_count};
+  const float confidence = static_cast<float>(choice.votes) / static_cast<float>(max_votes);
+  return {choice.bpm, confidence, candidate_count};
 }
 
 namespace {

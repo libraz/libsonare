@@ -8,6 +8,8 @@
 #include <cmath>
 #include <vector>
 
+#include "analysis/music_analyzer.h"
+#include "support/drum_groove.h"
 #include "support/rate_material.h"
 #include "util/constants.h"
 
@@ -450,4 +452,57 @@ TEST_CASE("BpmAnalyzer does not snap slow tempos to the histogram grid", "[bpm_a
       CHECK(std::abs(bpm - multiple * tempo) <= 0.15f * multiple);
     }
   }
+}
+
+TEST_CASE("BpmAnalyzer reports the beat, not two thirds of it, on an eighth-note-hat groove",
+          "[bpm_analyzer][analysis_rate]") {
+  // Every eighth carries an onset, so the dotted-quarter lag correlates nearly as well as the
+  // beat; only the octave family (eighth, beat, half note) tells the two apart.
+  BpmConfig analyze_range;
+  analyze_range.bpm_min = MusicAnalyzerConfig().bpm_min;
+  analyze_range.bpm_max = MusicAnalyzerConfig().bpm_max;
+  for (int sr : {22050, 44100}) {
+    for (float tempo : {120.0f, 121.0f, 125.0f}) {
+      const Audio audio = test::make_eighth_hat_groove(tempo, sr);
+      const float detected = detect_bpm(audio);
+      const float in_analyze_range = detect_bpm(audio, analyze_range);
+      CAPTURE(sr, tempo, detected, in_analyze_range);
+      CHECK_THAT(detected, WithinRel(tempo, 0.03f));
+      CHECK_THAT(in_analyze_range, WithinRel(tempo, 0.03f));
+    }
+  }
+}
+
+TEST_CASE("MusicAnalyzer publishes the beat tempo and grid of an eighth-note-hat groove",
+          "[bpm_analyzer][music_analyzer]") {
+  for (float tempo : {120.0f, 121.0f}) {
+    const float duration = 8.0f;
+    MusicAnalyzer analyzer(test::make_eighth_hat_groove(tempo, 22050, duration));
+    const float bpm = analyzer.bpm();
+    const size_t beats = analyzer.beat_times().size();
+    CAPTURE(tempo, bpm, beats);
+    CHECK_THAT(bpm, WithinRel(tempo, 0.03f));
+    // A two-thirds grid would hold about 10 beats in 8 s.
+    CHECK(static_cast<float>(beats) >= 0.85f * tempo * duration / 60.0f);
+  }
+}
+
+TEST_CASE("smart_choice keeps the beat over a two-thirds relative with more votes",
+          "[bpm_analyzer]") {
+  // The histogram of a 120 BPM groove with eighth-note hats: the dotted quarter (80.2) out-votes
+  // the beat (119.8), but the beat's family also holds the half note (60) and the eighth (238.3).
+  HarmonicClusterMap clusters;
+  clusters[60.0f] = {
+      {60.0f, 18}, {238.3f, 15}, {80.2f, 14}, {47.9f, 14}, {39.9f, 14}, {119.8f, 13},
+  };
+  const auto [bpm, confidence] = smart_choice(clusters, 88);
+  CHECK_THAT(bpm, WithinAbs(119.8f, 0.1f));
+  CHECK(confidence > 0.0f);
+
+  // Within a 60-200 BPM range the half note and eighth fall outside it and arrive as evidence.
+  HarmonicClusterMap narrow;
+  narrow[80.7f] = {{80.7f, 83}, {121.5f, 83}};
+  const std::vector<BpmHistogramBin> evidence = {{240.2f, 75}, {60.4f, 80}};
+  CHECK_THAT(smart_choice(narrow, 166, evidence).first, WithinAbs(121.5f, 0.1f));
+  CHECK_THAT(smart_choice(narrow, 166, evidence).second, WithinAbs(100.0f, 0.1f));
 }

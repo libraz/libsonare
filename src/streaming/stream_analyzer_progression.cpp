@@ -248,8 +248,8 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
 
     float time_since_bpm_update = elapsed - last_bpm_update_time_;
     if (time_since_bpm_update >= config_.bpm_update_interval_sec && n_onset >= kMinOnsetFrames) {
-      /// Compute max lag based on minimum BPM (use internal sample rate)
-      int max_lag = bpm_to_lag(kBpmMin, internal_sample_rate_, config_.hop_length);
+      /// Lags down to half of kBpmMin, the batch estimator's evidence span (internal rate)
+      int max_lag = tempo_evidence_lag(internal_sample_rate_, config_.hop_length, kBpmMin);
       max_lag = std::min(max_lag, n_onset - 1);
 
       if (max_lag > 2) {

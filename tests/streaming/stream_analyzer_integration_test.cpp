@@ -1,7 +1,9 @@
 /// @file stream_analyzer_integration_test.cpp
 /// @brief StreamAnalyzer integration simulation tests.
 
+#include "analysis/bpm_analyzer.h"
 #include "stream_analyzer_test_helpers.h"
+#include "support/drum_groove.h"
 
 TEST_CASE("StreamAnalyzer integration: AudioWorklet simulation", "[streaming][integration]") {
   // Simulate AudioWorklet processing with 128-sample chunks
@@ -227,3 +229,34 @@ TEST_CASE("StreamAnalyzer kBarVoteSlots constant pins kNumChordQualities cardina
 // ============================================================================
 // H7 regression: onset_accumulator_ must stay bounded over long streams
 // ============================================================================
+
+TEST_CASE("StreamAnalyzer and the batch BPM estimator agree on an eighth-note-hat groove",
+          "[streaming][bpm][analysis_rate]") {
+  // Both read the same peak strength and beat selection, so neither reports the 2/3 tempo the
+  // dotted-quarter lag suggests.
+  for (int sr : {22050, 44100, 48000}) {
+    for (float tempo : {120.0f, 122.0f, 125.0f, 140.0f}) {
+      const Audio audio = test::make_eighth_hat_groove(tempo, sr, 12.0f);
+      StreamConfig config;
+      config.sample_rate = sr;
+      config.compute_onset = true;
+      config.compute_mel = true;
+      config.bpm_update_interval_sec = 5.0f;
+      StreamAnalyzer analyzer(config);
+      constexpr size_t kBlock = 4096;
+      for (size_t position = 0; position < audio.size(); position += kBlock) {
+        analyzer.process(audio.data() + position, std::min(kBlock, audio.size() - position));
+        analyzer.read_frames(100000);
+      }
+      BpmConfig batch_config;
+      batch_config.bpm_min = streaming_detail::kBpmMin;
+      batch_config.bpm_max = streaming_detail::kBpmMax;
+      const float batch = detect_bpm(audio, batch_config);
+      const float streamed = analyzer.stats().estimate.bpm;
+      CAPTURE(sr, tempo, batch, streamed);
+      CHECK_THAT(batch, WithinRel(tempo, 0.03f));
+      CHECK_THAT(streamed, WithinRel(tempo, 0.03f));
+      CHECK_THAT(streamed, WithinRel(batch, 0.03f));
+    }
+  }
+}
