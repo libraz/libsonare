@@ -22,10 +22,10 @@
 #include <memory>
 #include <vector>
 
-#include "core/fft.h"
 #include "mastering/common/noise_tracker.h"
 #include "mastering/repair/denoise_classical.h"
 #include "mastering/repair/denoise_internal.h"
+#include "mastering/repair/stft_ola_stream.h"
 #include "rt/processor_base.h"
 #include "util/constants.h"
 
@@ -84,7 +84,7 @@ class StreamingDenoise : public rt::ProcessorBase {
   const DenoiseClassicalConfig& config() const noexcept { return config_; }
 
  private:
-  /// Builds one frame from the input rings, masks it and overlap-adds it.
+  /// Takes the tracker and mask for the frame in the stream's spectra and emits it.
   void analyze_frame();
 
   /// @brief Returns every value-carrying cell to its post-reset state when a
@@ -99,42 +99,20 @@ class StreamingDenoise : public rt::ProcessorBase {
   /// @return true when anything was discarded.
   bool discard_non_finite_state() noexcept;
 
-  /// Overlap-adds one masked frame at @p start and finalizes one hop of output.
-  void emit_frame(const double* gains, const std::complex<float>* source);
-
-  /// Moves every synthesis-ring sample below absolute index @p end into the
-  /// delay queue, normalized by the accumulated analysis*synthesis window sum.
-  void finalize_before(std::size_t end);
-
   DenoiseClassicalConfig config_;
   int n_fft_ = 0;
   int hop_length_ = 0;
   int n_bins_ = 0;
   int mask_latency_frames_ = 0;
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
-  int max_block_size_ = 0;
-  int max_channels_ = 0;
-  int active_channels_ = 0;
   bool prepared_ = false;
 
-  std::vector<float> analysis_window_;
-  std::vector<float> synthesis_window_;
-  std::vector<float> window_product_;
+  detail::StftOlaStream ola_;
 
-  // Analysis input: one n_fft ring per channel, written sample by sample. A
-  // frame is taken the moment the ring holds exactly the n_fft samples it spans.
-  // reset() places the write cursor at logical_zero_prefix_ (half a window), so
-  // the first frame holds the offline centring's zeros before host sample zero.
-  std::vector<float> input_ring_;
-  int input_write_ = 0;
-  int samples_to_next_frame_ = 0;
-  int logical_zero_prefix_ = 0;
+  // Spectra of the previous frame, applied when the mask stage lags a frame.
+  std::vector<std::complex<float>> held_spectra_;
 
   // Per-frame scratch, all sized in prepare().
-  std::vector<float> frame_;
-  std::vector<std::complex<float>> spectra_;
-  std::vector<std::complex<float>> held_spectra_;
-  std::vector<std::complex<float>> masked_;
   std::vector<float> power_f_;
   std::vector<double> power_d_;
   std::vector<float> channel_power_f_;
@@ -142,23 +120,8 @@ class StreamingDenoise : public rt::ProcessorBase {
   std::vector<float> tracker_input_;
   std::vector<double> noise_frame_;
 
-  // Overlap-add: one n_fft ring per channel plus the window sum they share,
-  // since the mask is one real number per cell and every channel carries it.
-  std::vector<float> synthesis_ring_;
-  std::vector<float> window_sum_ring_;
-  std::size_t ring_base_ = 0;
-  std::size_t next_frame_start_ = 0;
-
-  // Finished samples waiting to be handed back, one ring per channel. Primed
-  // with latency_samples() zeros so a block always finds a block's worth here.
-  std::vector<float> output_queue_;
-  int queue_capacity_ = 0;
-  int queue_read_ = 0;
-  int queue_size_ = 0;
-
   std::unique_ptr<detail::GainStage> stage_;
   std::unique_ptr<common::NoiseTracker> tracker_;
-  FFT fft_;
 };
 
 }  // namespace sonare::mastering::repair

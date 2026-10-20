@@ -13,8 +13,8 @@
 #include <cstddef>
 #include <vector>
 
-#include "core/fft.h"
 #include "mastering/repair/dereverb_classical.h"
+#include "mastering/repair/stft_ola_stream.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::repair {
@@ -55,31 +55,16 @@ class StreamingDereverb : public rt::ProcessorBase {
 
  private:
   void analyze_frame();
-  void finalize_before(std::size_t end);
 
   DereverbClassicalConfig config_;
   int n_fft_ = 0;
-  int hop_length_ = 0;
   int n_bins_ = 0;
-  int prefix_ = 0;
   int delay_frames_ = 1;
   double decay_ = 0.0;
-  int max_block_size_ = 0;
-  int max_channels_ = 0;
-  int active_channels_ = 0;
   bool prepared_ = false;
 
-  std::vector<float> analysis_window_;
-  std::vector<float> synthesis_window_;
-  std::vector<float> window_product_;
+  detail::StftOlaStream ola_;
 
-  std::vector<float> input_ring_;
-  int input_write_ = 0;
-  int samples_to_next_frame_ = 0;
-
-  std::vector<float> frame_;
-  std::vector<std::complex<float>> spectra_;
-  std::vector<std::complex<float>> masked_;
   std::vector<float> power_;
   std::vector<double> gains_;
 
@@ -87,18 +72,6 @@ class StreamingDereverb : public rt::ProcessorBase {
   std::vector<float> power_history_;
   int power_history_read_ = 0;
   std::size_t frames_taken_ = 0;
-
-  std::vector<float> synthesis_ring_;
-  std::vector<float> window_sum_ring_;
-  std::size_t ring_base_ = 0;
-  std::size_t next_frame_start_ = 0;
-
-  std::vector<float> output_queue_;
-  int queue_capacity_ = 0;
-  int queue_read_ = 0;
-  int queue_size_ = 0;
-
-  FFT fft_;
 };
 
 }  // namespace sonare::mastering::repair

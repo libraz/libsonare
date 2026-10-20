@@ -180,6 +180,45 @@ TEST_CASE("denoise insert reproduces the offline linked mask at its reported lat
   }
 }
 
+TEST_CASE("denoise and dereverb inserts are bit-identical across block sizes",
+          "[mastering][repair][repair-insert]") {
+  const std::vector<float> left = material(kSr / 4, 11);
+  const std::vector<float> right = material(kSr / 4, 12);
+  const auto bits_equal = [](const std::vector<std::vector<float>>& a,
+                             const std::vector<std::vector<float>>& b) {
+    if (a.size() != b.size()) return false;
+    for (std::size_t c = 0; c < a.size(); ++c) {
+      if (a[c] != b[c]) return false;
+    }
+    return true;
+  };
+
+  // 517 is not a divisor of the hop, so a ring that wrapped wrongly on a partial hop shows here.
+  repair::DereverbClassicalConfig dereverb_config;
+  dereverb_config.t60_sec = 1.2f;
+  repair::StreamingDereverb dereverb_a(dereverb_config);
+  repair::StreamingDereverb dereverb_b(dereverb_config);
+  const auto dereverb_out_a = run_insert(dereverb_a, {left, right}, 64);
+  const auto dereverb_out_b = run_insert(dereverb_b, {left, right}, 517);
+  float moved = 0.0f;
+  for (std::size_t i = 0; i < left.size(); ++i) {
+    moved = std::max(
+        moved,
+        std::abs(dereverb_out_a[0][i + static_cast<std::size_t>(dereverb_a.latency_samples())] -
+                 left[i]));
+  }
+  REQUIRE(moved > 0.001f);
+  CHECK(bits_equal(dereverb_out_a, dereverb_out_b));
+
+  repair::DenoiseClassicalConfig denoise_config;
+  denoise_config.noise_estimator = repair::DenoiseNoiseEstimator::Spp;
+  repair::StreamingDenoise denoise_a(denoise_config);
+  repair::StreamingDenoise denoise_b(denoise_config);
+  const auto denoise_out_a = run_insert(denoise_a, {left, right}, 64);
+  const auto denoise_out_b = run_insert(denoise_b, {left, right}, 517);
+  CHECK(bits_equal(denoise_out_a, denoise_out_b));
+}
+
 TEST_CASE("dehum insert reproduces the offline notch and the adaptive pass",
           "[mastering][repair][repair-insert]") {
   const std::vector<float> input = material(kSr / 2, 4);

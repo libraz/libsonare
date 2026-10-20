@@ -3,20 +3,14 @@
 #include <algorithm>
 #include <cmath>
 
-#include "core/window.h"
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
-#include "util/constants.h"
 #include "util/exception.h"
-#include "util/non_finite_state.h"
 #include "util/validated.h"
 
 namespace sonare::mastering::repair {
-
-using sonare::discard_run_if_non_finite;
-using sonare::constants::kSpectrumEpsilon;
 
 namespace {
 
@@ -45,14 +39,11 @@ StreamingDenoise::StreamingDenoise(const DenoiseClassicalConfig& config)
       n_fft_(config_.n_fft),
       hop_length_(config_.hop_length),
       n_bins_(config_.n_fft / 2 + 1),
-      fft_(config_.n_fft) {
+      ola_(config_.n_fft, config_.hop_length) {
   // Built here rather than in prepare() so latency_samples() answers from the
   // configuration alone, which is what a host asks before it prepares anything.
-  // The offline STFT centres its frames, padding half a window of zeros ahead of sample zero.
-  logical_zero_prefix_ = n_fft_ / 2;
   stage_ = std::make_unique<detail::GainStage>(n_bins_, config_);
   mask_latency_frames_ = stage_->latency();
-  samples_to_next_frame_ = n_fft_;
 }
 
 void StreamingDenoise::prepare(double sample_rate, int max_block_size) {
@@ -63,50 +54,21 @@ void StreamingDenoise::prepare(double sample_rate, int max_block_size, int max_c
   validate_prepare_args(sample_rate, max_block_size, max_channels, "StreamingDenoise");
 
   sample_rate_ = sample_rate;
-  max_block_size_ = max_block_size;
-  max_channels_ = max_channels;
 
-  const auto fft = static_cast<std::size_t>(n_fft_);
   const auto bins = static_cast<std::size_t>(n_bins_);
-  const auto channels = static_cast<std::size_t>(max_channels_);
-
-  // Analysis periodic, synthesis symmetric, normalizer their product: the pair
-  // Spectrogram::to_audio accumulates. win_length is n_fft here, so neither
-  // window needs the zero padding a shorter one would sit in.
-  const auto periodic = get_window_cached(WindowType::Hann, n_fft_, true);
-  const auto symmetric = get_window_cached(WindowType::Hann, n_fft_, false);
-  analysis_window_.assign(periodic->begin(), periodic->end());
-  synthesis_window_.assign(symmetric->begin(), symmetric->end());
-  window_product_.assign(fft, 0.0f);
-  for (std::size_t i = 0; i < fft; ++i) {
-    window_product_[i] = analysis_window_[i] * synthesis_window_[i];
-  }
-
-  input_ring_.assign(fft * channels, 0.0f);
-  frame_.assign(fft, 0.0f);
-  spectra_.assign(bins * channels, std::complex<float>{});
+  const auto channels = static_cast<std::size_t>(max_channels);
   held_spectra_.assign(bins * channels, std::complex<float>{});
-  masked_.assign(bins, std::complex<float>{});
   power_f_.assign(bins, 0.0f);
   power_d_.assign(bins, 0.0);
   channel_power_f_.assign(bins, 0.0f);
   channel_power_d_.assign(bins, 0.0);
   tracker_input_.assign(bins, 0.0f);
   noise_frame_.assign(bins, 0.0);
-  synthesis_ring_.assign(fft * channels, 0.0f);
-  window_sum_ring_.assign(fft, 0.0f);
-
-  // The queue holds the reported delay plus at most one block, which is the
-  // most that can sit in it: a block's own output is queued before it drains.
-  queue_capacity_ = latency_samples() + max_block_size_;
-  output_queue_.assign(static_cast<std::size_t>(queue_capacity_) * channels, 0.0f);
+  ola_.prepare(max_block_size, max_channels, latency_samples());
 
   tracker_ = std::make_unique<common::NoiseTracker>(
       n_bins_, static_cast<int>(std::lround(sample_rate_)),
       detail::tracker_mode_for(config_.noise_estimator), hop_length_);
-  // A transform kind builds its backend state on its first use; build both here
-  // so no process() block is the one that pays for it.
-  fft_.prepare(/*real_forward=*/true, /*real_inverse=*/true, /*complex_forward=*/false);
 
   prepared_ = true;
   reset();
@@ -116,98 +78,42 @@ void StreamingDenoise::process(float* const* channels, int num_channels, int num
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "StreamingDenoise");
   if (!validate_process_buffers(channels, num_channels, num_samples)) return;
-  if (num_channels > max_channels_) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels exceeds prepared StreamingDenoise capacity");
-  }
-  if (num_samples > max_block_size_) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_samples exceeds prepared StreamingDenoise block size");
-  }
-  if (active_channels_ == 0) active_channels_ = num_channels;
-  if (num_channels != active_channels_) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamingDenoise channel count must not change between resets: one "
-                          "mask is built from every channel of the block at once");
-  }
-
-  const auto fft = static_cast<std::size_t>(n_fft_);
-  bool analyzed = false;
-  for (int i = 0; i < num_samples; ++i) {
-    for (int ch = 0; ch < num_channels; ++ch) {
-      input_ring_[fft * static_cast<std::size_t>(ch) + static_cast<std::size_t>(input_write_)] =
-          channels[ch][i];
-    }
-    input_write_ = input_write_ + 1 == n_fft_ ? 0 : input_write_ + 1;
-    if (--samples_to_next_frame_ == 0) {
-      analyze_frame();
-      analyzed = true;
-      samples_to_next_frame_ = hop_length_;
-    }
-  }
-
-  // Once per block, and skipped entirely by a block that took no frame, so the
-  // sweep runs min(blocks, frames) times rather than once per either. The cells
-  // outnumber a hop's samples by an order of magnitude, so per-frame would cost
-  // more than the transforms it guards at a long block, and per-block would cost
-  // more than that again at a short one. A block that took no frame changed no
-  // state: the input ring poisons nothing until a frame is taken from it.
-  // Placed before the output is handed back, so a poisoned sample is zeroed on
-  // its way out rather than after the caller has seen it.
-  if (analyzed && discard_non_finite_state()) note_non_finite_discard();
-
-  // Reads the arithmetic above rather than trusting it: an underrun here would
-  // otherwise leave the host a block of stale samples and a silent desync.
-  if (queue_size_ < num_samples) {
-    throw SonareException(ErrorCode::InvalidState,
-                          "StreamingDenoise output queue underran its reported latency");
-  }
-  const auto capacity = static_cast<std::size_t>(queue_capacity_);
-  for (int i = 0; i < num_samples; ++i) {
-    for (int ch = 0; ch < num_channels; ++ch) {
-      channels[ch][i] = output_queue_[capacity * static_cast<std::size_t>(ch) +
-                                      static_cast<std::size_t>(queue_read_)];
-    }
-    queue_read_ = queue_read_ + 1 == queue_capacity_ ? 0 : queue_read_ + 1;
-    --queue_size_;
-  }
+  // Once per block, and skipped entirely by a block that took no frame, so the sweep runs
+  // min(blocks, frames) times rather than once per either. The cells outnumber a hop's samples
+  // by an order of magnitude, so per-frame would cost more than the transforms it guards at a
+  // long block, and per-block would cost more than that again at a short one. A block that took
+  // no frame changed no state: the input ring poisons nothing until a frame is taken from it.
+  ola_.process(
+      channels, num_channels, num_samples, "StreamingDenoise", [this] { analyze_frame(); },
+      [this](bool analyzed) {
+        if (analyzed && discard_non_finite_state()) note_non_finite_discard();
+      });
 }
 
 bool StreamingDenoise::discard_non_finite_state() noexcept {
   bool discarded = tracker_->discard_non_finite_state();
   discarded |= stage_->discard_non_finite_state();
   // Not redundant beside the tracker's reset: the reset only clears the seed, and
-  // NoiseTracker reseeds from the next frame, which this ring still supplies.
-  discarded |= discard_run_if_non_finite(input_ring_.begin(), input_ring_.end(), 0.0f);
-  discarded |= discard_run_if_non_finite(synthesis_ring_.begin(), synthesis_ring_.end(), 0.0f);
-  discarded |= discard_run_if_non_finite(window_sum_ring_.begin(), window_sum_ring_.end(), 0.0f);
-  // Values only; the fill count is what this block's output owes the caller.
-  discarded |= discard_run_if_non_finite(output_queue_.begin(), output_queue_.end(), 0.0f);
+  // NoiseTracker reseeds from the next frame, which the stream's input ring still supplies.
+  discarded |= ola_.discard_non_finite_state();
   if (discarded) {
-    std::fill(spectra_.begin(), spectra_.end(), std::complex<float>{});
+    auto& spectra = ola_.spectra_storage();
+    std::fill(spectra.begin(), spectra.end(), std::complex<float>{});
     std::fill(held_spectra_.begin(), held_spectra_.end(), std::complex<float>{});
   }
   return discarded;
 }
 
 void StreamingDenoise::analyze_frame() {
-  const auto fft = static_cast<std::size_t>(n_fft_);
   const auto bins = static_cast<std::size_t>(n_bins_);
+  const int channels = ola_.active_channels();
+  std::complex<float>* spectra = ola_.spectra();
 
   std::fill(power_f_.begin(), power_f_.end(), 0.0f);
   std::fill(power_d_.begin(), power_d_.end(), 0.0);
-  for (int ch = 0; ch < active_channels_; ++ch) {
-    const float* ring = input_ring_.data() + fft * static_cast<std::size_t>(ch);
-    // The write cursor points at the oldest ring sample, which is this frame's
-    // first: the frame is taken the moment the ring holds exactly its span.
-    for (int i = 0; i < n_fft_; ++i) {
-      const int pos = input_write_ + i < n_fft_ ? input_write_ + i : input_write_ + i - n_fft_;
-      frame_[static_cast<std::size_t>(i)] =
-          ring[pos] * analysis_window_[static_cast<std::size_t>(i)];
-    }
-    std::complex<float>* spectrum = spectra_.data() + bins * static_cast<std::size_t>(ch);
-    fft_.forward(frame_.data(), spectrum);
-    detail::frame_powers(spectrum, n_bins_, channel_power_f_.data(), channel_power_d_.data());
+  for (int ch = 0; ch < channels; ++ch) {
+    detail::frame_powers(spectra + bins * static_cast<std::size_t>(ch), n_bins_,
+                         channel_power_f_.data(), channel_power_d_.data());
     for (int b = 0; b < n_bins_; ++b) {
       power_f_[static_cast<std::size_t>(b)] += channel_power_f_[static_cast<std::size_t>(b)];
       power_d_[static_cast<std::size_t>(b)] += channel_power_d_[static_cast<std::size_t>(b)];
@@ -224,91 +130,16 @@ void StreamingDenoise::analyze_frame() {
 
   const double* gains = stage_->push(power_d_.data(), noise_frame_.data());
   const bool lagged = mask_latency_frames_ != 0;
-  if (gains != nullptr) emit_frame(gains, lagged ? held_spectra_.data() : spectra_.data());
+  if (gains != nullptr) ola_.emit_frame(gains, lagged ? held_spectra_.data() : spectra);
   if (lagged) {
-    const auto span =
-        static_cast<std::ptrdiff_t>(bins * static_cast<std::size_t>(active_channels_));
-    std::copy(spectra_.begin(), spectra_.begin() + span, held_spectra_.begin());
-  }
-}
-
-void StreamingDenoise::emit_frame(const double* gains, const std::complex<float>* source) {
-  const auto fft = static_cast<std::size_t>(n_fft_);
-  const auto bins = static_cast<std::size_t>(n_bins_);
-  const std::size_t base = next_frame_start_ % fft;
-
-  for (int ch = 0; ch < active_channels_; ++ch) {
-    const std::complex<float>* channel = source + bins * static_cast<std::size_t>(ch);
-    for (int b = 0; b < n_bins_; ++b) {
-      masked_[static_cast<std::size_t>(b)] = {static_cast<float>(channel[b].real() * gains[b]),
-                                              static_cast<float>(channel[b].imag() * gains[b])};
-    }
-    fft_.inverse(masked_.data(), frame_.data());
-    float* ring = synthesis_ring_.data() + fft * static_cast<std::size_t>(ch);
-    for (int i = 0; i < n_fft_; ++i) {
-      const std::size_t offset = base + static_cast<std::size_t>(i);
-      const std::size_t pos = offset < fft ? offset : offset - fft;
-      // Kept as two statements so the multiply and the add stay unfused, as they
-      // are in IstftAccumulator and in to_audio's Eigen expression before it.
-      const float contribution =
-          frame_[static_cast<std::size_t>(i)] * synthesis_window_[static_cast<std::size_t>(i)];
-      ring[pos] += contribution;
-    }
-  }
-  for (int i = 0; i < n_fft_; ++i) {
-    const std::size_t offset = base + static_cast<std::size_t>(i);
-    const std::size_t pos = offset < fft ? offset : offset - fft;
-    window_sum_ring_[pos] += window_product_[static_cast<std::size_t>(i)];
-  }
-
-  next_frame_start_ += static_cast<std::size_t>(hop_length_);
-  // No later frame starts below the next frame's start, so one hop is now final.
-  finalize_before(next_frame_start_);
-}
-
-void StreamingDenoise::finalize_before(std::size_t end) {
-  const auto fft = static_cast<std::size_t>(n_fft_);
-  const auto capacity = static_cast<std::size_t>(queue_capacity_);
-  while (ring_base_ < end) {
-    const std::size_t pos = ring_base_ % fft;
-    const float window_sum = window_sum_ring_[pos];
-    // Walk and clear prefix cells without enqueuing them, so nothing leaks on wrap.
-    const bool enqueue = ring_base_ >= static_cast<std::size_t>(logical_zero_prefix_);
-    const auto write =
-        enqueue ? static_cast<std::size_t>((queue_read_ + queue_size_) % queue_capacity_) : 0;
-    for (int ch = 0; ch < active_channels_; ++ch) {
-      const std::size_t lane = fft * static_cast<std::size_t>(ch) + pos;
-      const float raw = synthesis_ring_[lane];
-      // to_audio's select verbatim: the guard is a strict > eps and the divisor
-      // is still clamped, so a lane that fails it keeps its un-normalized sample.
-      if (enqueue) {
-        output_queue_[capacity * static_cast<std::size_t>(ch) + write] =
-            window_sum > kSpectrumEpsilon ? raw / std::max(window_sum, kSpectrumEpsilon) : raw;
-      }
-      synthesis_ring_[lane] = 0.0f;
-    }
-    window_sum_ring_[pos] = 0.0f;
-    ++ring_base_;
-    if (enqueue) ++queue_size_;
+    const auto span = static_cast<std::ptrdiff_t>(bins * static_cast<std::size_t>(channels));
+    std::copy(spectra, spectra + span, held_spectra_.begin());
   }
 }
 
 void StreamingDenoise::reset() {
-  std::fill(input_ring_.begin(), input_ring_.end(), 0.0f);
-  input_write_ = logical_zero_prefix_;
-  samples_to_next_frame_ = n_fft_ - logical_zero_prefix_;
-  std::fill(spectra_.begin(), spectra_.end(), std::complex<float>{});
+  ola_.reset();
   std::fill(held_spectra_.begin(), held_spectra_.end(), std::complex<float>{});
-  std::fill(synthesis_ring_.begin(), synthesis_ring_.end(), 0.0f);
-  std::fill(window_sum_ring_.begin(), window_sum_ring_.end(), 0.0f);
-  ring_base_ = 0;
-  next_frame_start_ = 0;
-  std::fill(output_queue_.begin(), output_queue_.end(), 0.0f);
-  queue_read_ = 0;
-  // The delay a host compensates for starts as that many zeros already queued,
-  // so every block finds a block's worth waiting from the first one onwards.
-  queue_size_ = std::min(latency_samples(), queue_capacity_);
-  active_channels_ = 0;
   if (tracker_ != nullptr) tracker_->reset();
   stage_->reset();
 }
