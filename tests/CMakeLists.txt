@@ -254,6 +254,7 @@ if(BUILD_MASTERING)
     mastering/saturation/exciter_test.cpp
     mastering/saturation/transformer_test.cpp
     mastering/spectral/air_band_test.cpp
+    mastering/spectral/prepare_domain_test.cpp
     mastering/stereo/imager_test.cpp
     mastering/transient_gain_reduction_test.cpp
     mastering/assistant_defect_profile_test.cpp

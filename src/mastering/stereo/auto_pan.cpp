@@ -65,8 +65,9 @@ void AutoPan::set_config(const AutoPanConfig& config) {
 }
 
 namespace {
-constexpr bool rate_valid(float v) noexcept { return !(v < 0.0f); }
-constexpr bool depth_valid(float v) noexcept { return !(v < 0.0f || v > 1.0f); }
+bool rate_valid(float v) noexcept { return std::isfinite(v) && v >= 0.0f; }
+bool depth_valid(float v) noexcept { return std::isfinite(v) && v >= 0.0f && v <= 1.0f; }
+bool phase_valid(float v) noexcept { return std::isfinite(v); }
 }  // namespace
 
 bool AutoPan::set_parameter_impl(unsigned int param_id, float value) {
@@ -100,7 +101,7 @@ std::vector<rt::ParamDescriptor> AutoPan::parameter_descriptors() const {
 }
 
 void AutoPan::validate_config(const AutoPanConfig& config) {
-  if (!rate_valid(config.rate_hz) || !depth_valid(config.depth)) {
+  if (!rate_valid(config.rate_hz) || !depth_valid(config.depth) || !phase_valid(config.phase)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid auto pan configuration");
   }
 }

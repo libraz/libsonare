@@ -34,9 +34,7 @@ PresenceEnhancer::PresenceEnhancer(PresenceEnhancerConfig config) : config_(conf
 }
 
 void PresenceEnhancer::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0) || max_block_size < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid prepare arguments");
-  }
+  validate_prepare_args(sample_rate, max_block_size);
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   prepared_ = true;
@@ -198,10 +196,8 @@ bool PresenceEnhancer::set_parameter_impl(unsigned int param_id, float value) {
       }
       // Recompute the cached bandpass coefficients in place, preserving each
       // channel's filter state (z1/z2).
-      for (auto& filter : bandpass_) {
-        const Biquad updated = make_bandpass(config_.center_frequency_hz, sample_rate_, config_.q);
-        filter.c = updated.c;
-      }
+      const Biquad updated = make_bandpass(config_.center_frequency_hz, sample_rate_, config_.q);
+      for (auto& filter : bandpass_) filter.c = updated.c;
       return true;
     }
     default:

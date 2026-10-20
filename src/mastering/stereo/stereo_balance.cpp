@@ -105,7 +105,7 @@ void StereoBalance::set_config(const StereoBalanceConfig& config) {
 }
 
 namespace {
-constexpr bool balance_valid(float v) noexcept { return !(v < -1.0f || v > 1.0f); }
+bool balance_valid(float v) noexcept { return std::isfinite(v) && v >= -1.0f && v <= 1.0f; }
 bool gain_valid(float v) noexcept { return sonare::numeric::finite(v) && v >= 0.0f; }
 }  // namespace
 

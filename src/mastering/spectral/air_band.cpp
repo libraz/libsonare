@@ -74,12 +74,7 @@ void AirBand::prepare(double sample_rate, int max_block_size) {
 }
 
 void AirBand::prepare(double sample_rate, int max_block_size, int max_channels) {
-  if (!(sample_rate > 0.0) || max_block_size < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid prepare arguments");
-  }
-  if (max_channels < 1 || max_channels > static_cast<int>(dynamics::kRealtimePreparedChannels)) {
-    throw SonareException(ErrorCode::InvalidParameter, "max_channels exceeds AirBand capacity");
-  }
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "AirBand");
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   max_working_channels_ = max_channels;
@@ -139,8 +134,8 @@ void AirBand::process(float* const* channels, int num_channels, int num_samples)
       const float band = detector_[static_cast<size_t>(ch)].process(channels[ch][i]);
       band_scratch_[static_cast<size_t>(i)] = band;
       envelope = (1.0f - envelope_alpha_) * envelope + envelope_alpha_ * std::abs(band);
-      const float over_db = std::max(0.0f, linear_to_db(envelope) - config_.dynamic_threshold_db);
       if (shelf_control_samples == 0) {
+        const float over_db = std::max(0.0f, linear_to_db(envelope) - config_.dynamic_threshold_db);
         current_gain_db = std::min(config_.dynamic_range_db, over_db * 0.25f) * config_.amount;
         assign_biquad(shelf, rt::rbj_high_shelf_from_design_d(shelf_design, current_gain_db));
         shelf_control_samples = kShelfControlInterval;
@@ -257,7 +252,7 @@ void AirBand::set_config(const AirBandConfig& config) {
 namespace {
 constexpr bool amount_valid(float v) noexcept { return v >= 0.0f && v <= 1.0f; }
 constexpr bool shelf_frequency_valid(float v) noexcept { return v > 0.0f; }
-constexpr bool dynamic_range_valid(float v) noexcept { return !(v < 0.0f); }
+bool dynamic_range_valid(float v) noexcept { return std::isfinite(v) && v >= 0.0f; }
 }  // namespace
 
 bool AirBand::set_parameter_impl(unsigned int param_id, float value) {
@@ -271,16 +266,10 @@ bool AirBand::set_parameter_impl(unsigned int param_id, float value) {
       config_.shelf_frequency_hz = value;
       // Recompute the detector highpass coefficients in place, preserving its
       // filter state (z1/z2). The shelf is rebuilt per-sample in process().
-      for (auto& filter : detector_) {
-        const Biquad updated = make_highpass(config_.shelf_frequency_hz, sample_rate_,
-                                             sonare::constants::kButterworthQD);
-        filter.c = updated.c;
-      }
-      for (auto& filter : harmonic_filter_) {
-        const Biquad updated = make_highpass(config_.shelf_frequency_hz, sample_rate_,
-                                             sonare::constants::kButterworthQD);
-        filter.c = updated.c;
-      }
+      const Biquad updated = make_highpass(config_.shelf_frequency_hz, sample_rate_,
+                                           sonare::constants::kButterworthQD);
+      for (auto& filter : detector_) filter.c = updated.c;
+      for (auto& filter : harmonic_filter_) filter.c = updated.c;
       return true;
     }
     case 2:

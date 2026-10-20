@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
@@ -18,9 +19,7 @@ using sonare::discard_if_non_finite;
 LowEndFocus::LowEndFocus(LowEndFocusConfig config) : config_(config) { validate_config(config_); }
 
 void LowEndFocus::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0) || max_block_size < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "invalid prepare arguments");
-  }
+  validate_prepare_args(sample_rate, max_block_size);
   sample_rate_ = sample_rate;
   const size_t channel_count = dynamics::kRealtimePreparedChannels;
   low_state_.assign(channel_count, 0.0f);
