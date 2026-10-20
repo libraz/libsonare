@@ -91,7 +91,7 @@ TEST_CASE("project bounce rejects arrangement plus instrument-tail overflow",
   size_t out_len = 1;
   const SonareProjectBounceOptions options = bounce_options(std::numeric_limits<int64_t>::min());
   REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out, &out_len) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_STATE);
   REQUIRE(out == nullptr);
   REQUIRE(out_len == 0);
   REQUIRE(state.render_calls == 0);

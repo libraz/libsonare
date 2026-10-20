@@ -421,11 +421,10 @@ TEST_CASE("project MIDI loop export is bounded and requires representable progre
 
     uint8_t* bytes = nullptr;
     size_t len = 0;
-    REQUIRE(sonare_project_export_smf(project, &bytes, &len) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_project_export_smf(project, &bytes, &len) == SONARE_ERROR_INVALID_STATE);
     CHECK(bytes == nullptr);
     CHECK(len == 0);
-    REQUIRE(sonare_project_export_clip_file(project, &bytes, &len) ==
-            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_project_export_clip_file(project, &bytes, &len) == SONARE_ERROR_INVALID_STATE);
     CHECK(bytes == nullptr);
     CHECK(len == 0);
     sonare_project_destroy(project);

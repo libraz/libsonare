@@ -260,12 +260,12 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   // arrangement (musical end + the longest instrument release tail).
   int64_t arrangement_frames = 0;
   if (!arrangement_end_frames(*compiled.timeline, &arrangement_frames)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return SONARE_ERROR_INVALID_STATE;
   }
   int64_t mixer_input_frames = arrangement_frames;
   if (mixer_input_frames > 0 &&
       !checked_nonnegative_add(mixer_input_frames, instrument_tail, &mixer_input_frames)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return SONARE_ERROR_INVALID_STATE;
   }
   int64_t frames = opts.total_frames;
   if (frames <= 0) {
@@ -273,7 +273,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
     if (unbounded_tail && arrangement_frames > 0) return SONARE_ERROR_INVALID_PARAMETER;
     frames = arrangement_frames;
     if (frames > 0 && !checked_nonnegative_add(frames, instrument_tail, &frames)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+      return SONARE_ERROR_INVALID_STATE;
     }
 #if defined(SONARE_WITH_MIXING)
     if (frames > 0 && mixer_required) {
@@ -289,7 +289,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
       if (!mixer_delay.valid ||
           !checked_nonnegative_add(frames, static_cast<int64_t>(mixer_delay.tail_samples),
                                    &frames)) {
-        return SONARE_ERROR_INVALID_PARAMETER;
+        return SONARE_ERROR_INVALID_STATE;
       }
     }
 #endif
@@ -348,7 +348,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   std::vector<std::vector<float>> channels;
   if (!render_timeline(*compiled.timeline, /*keep=*/{}, instruments, sample_rate, block_size,
                        /*num_channels=*/2, render_frames, &channels)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return SONARE_ERROR_INVALID_STATE;
   }
 
   std::unique_ptr<float[]> interleaved(new float[total]);

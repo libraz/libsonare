@@ -422,6 +422,8 @@ SonareError sonare_project_import_smf(SonareProject* project, const uint8_t* byt
 ///       @ref sonare_project_set_midi_events are emitted. MIDI 2.0-only events
 ///       that cannot be represented in SMF/MIDI 1.0 are dropped by the MIDI
 ///       exporter, matching @ref sonare::midi::export_smf.
+/// @return SONARE_ERROR_INVALID_STATE when a stored clip expands past the
+///         export's loop or event limits.
 SonareError sonare_project_export_smf(const SonareProject* project, uint8_t** out_bytes,
                                       size_t* out_len);
 
@@ -444,6 +446,8 @@ SonareError sonare_project_import_clip_file(SonareProject* project, const uint8_
 ///        sonare_project_export_smf when MIDI 2.0 fidelity matters.
 /// @param out_bytes Receives a heap byte array (free with @ref sonare_free_bytes).
 /// @param out_len   Receives the byte length.
+/// @return SONARE_ERROR_INVALID_STATE when a stored clip expands past the
+///         export's loop or event limits.
 SonareError sonare_project_export_clip_file(const SonareProject* project, uint8_t** out_bytes,
                                             size_t* out_len);
 

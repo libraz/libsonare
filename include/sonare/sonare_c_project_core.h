@@ -492,6 +492,10 @@ void sonare_project_free_compile_result(SonareProjectCompileResult* result);
 ///          output within one build. When options->total_frames is positive,
 ///          that explicit length is used as-is; mixer FX / instrument tails are
 ///          auto-extended only when total_frames <= 0.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a refused option;
+///         SONARE_ERROR_INVALID_STATE when the stored project cannot be
+///         rendered (its derived length overflows, or the compiled arrangement
+///         does not fit the engine or the scene's mixer).
 SonareError sonare_project_bounce(SonareProject* project, const SonareProjectBounceOptions* options,
                                   float** out_interleaved, size_t* out_len);
 

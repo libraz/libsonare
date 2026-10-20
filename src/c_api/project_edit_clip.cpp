@@ -788,6 +788,9 @@ SonareError sonare_project_split_clip(SonareProject* project, uint32_t clip_id, 
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_new_clip_id) *out_new_clip_id = 0;
   if (!project || clip_id == 0 || !std::isfinite(split_ppq)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (project->history.project().find_clip(clip_id) == nullptr) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   auto command = std::make_unique<arr::SplitClip>(clip_id, split_ppq);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
@@ -811,6 +814,9 @@ SonareError sonare_project_trim_clip(SonareProject* project, uint32_t clip_id, d
       !finite_positive(new_length_ppq)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  if (project->history.project().find_clip(clip_id) == nullptr) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   auto command = std::make_unique<arr::TrimClip>(clip_id, new_start_ppq, new_length_ppq);
   if (!project->history.apply(std::move(command))) return SONARE_ERROR_INVALID_STATE;
@@ -826,6 +832,12 @@ SonareError sonare_project_move_clip(SonareProject* project, uint32_t clip_id, d
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project || clip_id == 0 || !finite_non_negative(new_start_ppq)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (project->history.project().find_clip(clip_id) == nullptr) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (new_track_id != 0 && !project->history.project().has_track(new_track_id)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY

@@ -467,7 +467,7 @@ SonareError make_smf_clip_from_events(
     if (!sonare::numeric::checked_ceil_ratio(clip.length_ppq, clip.loop_length_ppq,
                                              kMaxMidiExportLoopIterations, &loop_iterations) ||
         loop_iterations == 0) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+      return SONARE_ERROR_INVALID_STATE;
     }
   }
 
@@ -483,7 +483,7 @@ SonareError make_smf_clip_from_events(
   size_t projected_events = 0;
   if (!sonare::numeric::checked_size_product(eligible_events, loop_iterations, max_output_events,
                                              &projected_events)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return SONARE_ERROR_INVALID_STATE;
   }
 
   std::vector<sonare::midi::MidiClipEvent> expanded;

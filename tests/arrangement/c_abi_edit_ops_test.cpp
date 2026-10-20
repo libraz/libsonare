@@ -2083,3 +2083,28 @@ TEST_CASE("C ABI chord and key conversion matches the core mapping and refuses u
             SONARE_ERROR_INVALID_PARAMETER);
   }
 }
+
+TEST_CASE("C-ABI clip edits refuse an unknown clip or track id as a parameter",
+          "[project][c-abi-edit]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+  const std::string before = serialize(project);
+  const uint32_t unknown = clip + 1000;
+  uint32_t new_clip = 0;
+
+  CHECK(sonare_project_split_clip(project, unknown, 2.0, &new_clip) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_trim_clip(project, unknown, 0.0, 2.0) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_move_clip(project, unknown, 1.0, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(sonare_project_move_clip(project, clip, 1.0, track + 1000) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(serialize(project) == before);
+  // The ids are the only thing wrong: the same edits on the real clip apply.
+  CHECK(sonare_project_move_clip(project, clip, 1.0, 0) == SONARE_OK);
+  CHECK(sonare_project_trim_clip(project, clip, 1.0, 3.0) == SONARE_OK);
+  CHECK(sonare_project_split_clip(project, clip, 2.0, &new_clip) == SONARE_OK);
+  sonare_project_destroy(project);
+}

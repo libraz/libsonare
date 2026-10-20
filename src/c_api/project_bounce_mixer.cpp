@@ -371,7 +371,7 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
   int mixer_latency = 0;
   if (sonare_mixer_latency_samples(mixer_owner.get(), &mixer_latency) != SONARE_OK ||
       mixer_latency < 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return SONARE_ERROR_INVALID_STATE;
   }
   int64_t mixer_render_frames = 0;
   if (!checked_nonnegative_add(frames, static_cast<int64_t>(mixer_latency), &mixer_render_frames)) {
@@ -460,7 +460,7 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
     }
     std::vector<std::vector<float>> stem;
     if (!stem_aligned([&tracks](uint32_t t) { return tracks.count(t) != 0; }, &stem)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+      return SONARE_ERROR_INVALID_STATE;
     }
     stems.push_back(std::move(stem));
     if (midi_source_stems) {
@@ -475,7 +475,7 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
     const std::set<uint32_t>& bound = routing.bound_tracks;
     std::vector<std::vector<float>> direct;
     if (!stem_aligned([&bound](uint32_t t) { return bound.count(t) == 0; }, &direct)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+      return SONARE_ERROR_INVALID_STATE;
     }
     if (midi_source_stems) {
       std::set<uint32_t> direct_midi_tracks;
