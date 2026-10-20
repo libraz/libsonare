@@ -123,10 +123,7 @@ Audio apply_gain(const Audio& audio, float gain_db, bool clip) {
 }
 
 Audio normalize(const Audio& audio, float target_db, bool clip) {
-  SONARE_CHECK_MSG(std::isfinite(target_db), ErrorCode::InvalidParameter,
-                   "target_db must be finite, got " + util::to_text(target_db));
-  SONARE_CHECK_MSG(!clip || target_db <= 0.0f, ErrorCode::InvalidParameter,
-                   "target_db must be <= 0 when clip is set, got " + util::to_text(target_db));
+  check_normalize_target(target_db, clip);
   if (audio.empty()) return audio;
 
   float current_peak = audio_peak_db(audio);
@@ -140,10 +137,7 @@ Audio normalize(const Audio& audio, float target_db, bool clip) {
 }
 
 Audio normalize_rms(const Audio& audio, float target_db, bool clip) {
-  SONARE_CHECK_MSG(std::isfinite(target_db), ErrorCode::InvalidParameter,
-                   "target_db must be finite, got " + util::to_text(target_db));
-  SONARE_CHECK_MSG(!clip || target_db <= 0.0f, ErrorCode::InvalidParameter,
-                   "target_db must be <= 0 when clip is set, got " + util::to_text(target_db));
+  check_normalize_target(target_db, clip);
   if (audio.empty()) return audio;
 
   float current_rms = audio_rms_db(audio);

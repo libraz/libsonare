@@ -6,6 +6,7 @@
 #include "acoustic/rir_synthesizer.h"
 #include "acoustic/room_model.h"
 #include "core/diagnostic.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare::effects::reverb {
@@ -65,7 +66,8 @@ void RoomReverb::prepare(double sample_rate, int max_block_size) {
   const ShoeboxRoom room = uniform_shoebox(config_.dims, config_.absorption);
   const RirSynthConfig rc = rir_config_from(config_);
 
-  const int sr = sample_rate > 0.0 ? static_cast<int>(std::lround(sample_rate)) : 48000;
+  const int sr = sample_rate > 0.0 ? static_cast<int>(std::lround(sample_rate))
+                                   : static_cast<int>(::sonare::constants::kDefaultDawSampleRate);
   const SourceListener placement{config_.source, config_.listener};
   const RirSynthResult res = synthesize_rir(room, placement, sr, rc);
 

@@ -6,6 +6,7 @@
 
 #include "acoustic/rir_synthesizer.h"
 #include "rt/scoped_no_denormals.h"
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
 #include "util/numeric_validation.h"
@@ -89,7 +90,8 @@ RoomMorphProcessor::RoomMorphProcessor(RoomMorphConfig config,
 void RoomMorphProcessor::prepare(double sample_rate, int max_block_size) {
   using namespace sonare::acoustic;
 
-  const int sr = sample_rate > 0.0 ? static_cast<int>(std::lround(sample_rate)) : 48000;
+  const int sr = sample_rate > 0.0 ? static_cast<int>(std::lround(sample_rate))
+                                   : static_cast<int>(::sonare::constants::kDefaultDawSampleRate);
 
   const RirSynthConfig rc = rir_config_from(config_);
   const RirSynthResult res = synthesize_rir(config_.target, config_.placement, sr, rc);
