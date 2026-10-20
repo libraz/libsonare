@@ -2362,3 +2362,26 @@ TEST_CASE("room insert refuses an unknown materialPreset instead of ignoring it"
     REQUIRE_NOTHROW(make_insert("effects.acoustic.roomMorph", params));
   }
 }
+
+TEST_CASE("C BPM and rhythm entries agree with detect_bpm across input rates",
+          "[c_api][analysis]") {
+  for (const int rate : {44100, 48000}) {
+    CAPTURE(rate);
+    const auto clicks = generate_clicks(120.0f, rate, 6.0f);
+
+    float quick = 0.0f;
+    REQUIRE(sonare_detect_bpm(clicks.data(), clicks.size(), rate, &quick) == SONARE_OK);
+
+    SonareBpmAnalysisResult detailed = {};
+    REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), rate, 60.0f, 200.0f, 120.0f, 2048, 512,
+                               5, &detailed) == SONARE_OK);
+    CHECK(detailed.bpm == Catch::Approx(quick).margin(2.5f));
+    sonare_free_bpm_analysis_result(&detailed);
+
+    SonareRhythmResult rhythm = {};
+    REQUIRE(sonare_analyze_rhythm(clicks.data(), clicks.size(), rate, 60.0f, 200.0f, 120.0f, 2048,
+                                  512, &rhythm) == SONARE_OK);
+    CHECK(rhythm.bpm == Catch::Approx(quick).margin(2.5f));
+    sonare_free_rhythm_result(&rhythm);
+  }
+}
