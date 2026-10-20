@@ -13,8 +13,6 @@
 #include "analysis/downbeat_analyzer.h"
 #include "analysis/meter_analyzer.h"
 #include "core/convert.h"
-#include "feature/mel_spectrogram.h"
-#include "feature/onset.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/peak.h"
@@ -189,20 +187,7 @@ BeatAnalyzer::BeatAnalyzer(const Audio& audio, const BeatConfig& config)
       config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
-  // Compute onset strength
-  // The window is a time quantity (samples at 22050 Hz); the hop stays in input samples.
-  const RateWindow window = window_at_rate(config.n_fft, sr_);
-  MelConfig mel_config;
-  mel_config.n_fft = window.n_fft;
-  mel_config.win_length = window.win_length;
-  mel_config.hop_length = config.hop_length;
-  mel_config.n_mels = constants::kDefaultNMels;
-
-  OnsetConfig onset_config;
-  onset_config.lag = 1;
-  onset_config.detrend = true;
-
-  onset_strength_ = compute_onset_strength(audio, mel_config, onset_config);
+  onset_strength_ = analysis_onset_strength(audio, config.n_fft, config.hop_length);
 
   track_beats();
   const std::vector<float> low_frequency_energy = low_frequency_energy_observations(beats_, audio);

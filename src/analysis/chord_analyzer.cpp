@@ -24,6 +24,20 @@ float ChordAnalyzer::analysis_end() const {
   return signal_duration_ > 0.0f ? std::min(grid_end, signal_duration_) : grid_end;
 }
 
+void ChordAnalyzer::init_templates() {
+  SONARE_CHECK(std::isfinite(config_.min_duration) && config_.min_duration >= 0.0f &&
+                   std::isfinite(config_.smoothing_window) && config_.smoothing_window >= 0.0f &&
+                   std::isfinite(config_.threshold) && config_.threshold >= 0.0f &&
+                   config_.threshold <= 1.0f,
+               ErrorCode::InvalidParameter);
+
+  if (config_.use_triads_only) {
+    templates_ = generate_triad_templates();
+  } else {
+    templates_ = generate_all_chord_templates();
+  }
+}
+
 ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& requested)
     : config_(requested) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
@@ -32,11 +46,7 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& requested)
     config_.auto_tuning = false;
   }
   const ChordConfig& config = config_;
-  SONARE_CHECK(std::isfinite(config_.min_duration) && config_.min_duration >= 0.0f &&
-                   std::isfinite(config_.smoothing_window) && config_.smoothing_window >= 0.0f &&
-                   std::isfinite(config_.threshold) && config_.threshold >= 0.0f &&
-                   config_.threshold <= 1.0f,
-               ErrorCode::InvalidParameter);
+  init_templates();
   signal_duration_ = static_cast<float>(audio.size()) / static_cast<float>(audio.sample_rate());
   SONARE_CHECK_MSG(is_valid_chroma_tuning(config_.tuning), ErrorCode::InvalidParameter,
                    "ChordConfig: tuning must be finite and in [-0.5, 0.5)");
@@ -78,13 +88,6 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& requested)
     bass_chroma_ = bass_chroma(audio, bass_config);
   }
 
-  // Generate templates
-  if (config.use_triads_only) {
-    templates_ = generate_triad_templates();
-  } else {
-    templates_ = generate_all_chord_templates();
-  }
-
   // Beat-synchronised when asked and a beat grid is found; frame-level otherwise,
   // the same rule the chroma + beat-times constructor applies.
   std::vector<float> beat_times;
@@ -102,17 +105,7 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& requested)
 
 ChordAnalyzer::ChordAnalyzer(const Chroma& chroma, const ChordConfig& config)
     : chroma_(chroma), config_(config) {
-  SONARE_CHECK(std::isfinite(config_.min_duration) && config_.min_duration >= 0.0f &&
-                   std::isfinite(config_.smoothing_window) && config_.smoothing_window >= 0.0f &&
-                   std::isfinite(config_.threshold) && config_.threshold >= 0.0f &&
-                   config_.threshold <= 1.0f,
-               ErrorCode::InvalidParameter);
-  // Generate templates
-  if (config.use_triads_only) {
-    templates_ = generate_triad_templates();
-  } else {
-    templates_ = generate_all_chord_templates();
-  }
+  init_templates();
 
   analyze_chords();
 }
@@ -124,17 +117,7 @@ ChordAnalyzer::ChordAnalyzer(const Chroma& chroma, const std::vector<float>& bea
 ChordAnalyzer::ChordAnalyzer(const Chroma& chroma, const std::vector<float>& beat_times,
                              const Chroma& bass_chroma, const ChordConfig& config)
     : chroma_(chroma), bass_chroma_(bass_chroma), config_(config) {
-  SONARE_CHECK(std::isfinite(config_.min_duration) && config_.min_duration >= 0.0f &&
-                   std::isfinite(config_.smoothing_window) && config_.smoothing_window >= 0.0f &&
-                   std::isfinite(config_.threshold) && config_.threshold >= 0.0f &&
-                   config_.threshold <= 1.0f,
-               ErrorCode::InvalidParameter);
-  // Generate templates
-  if (config.use_triads_only) {
-    templates_ = generate_triad_templates();
-  } else {
-    templates_ = generate_all_chord_templates();
-  }
+  init_templates();
 
   if (config.use_beat_sync && !beat_times.empty()) {
     analyze_chords_beat_sync(beat_times);

@@ -51,8 +51,7 @@ float observation_score(size_t beat_index, size_t beat_count, int position, int 
   const size_t stride = static_cast<size_t>(numerator);
   const float group_size = static_cast<float>((beat_count - 1 - beat_index % stride) / stride + 1);
   const bool is_downbeat = position == 0;
-  const bool is_secondary_strong =
-      (numerator == 4 && position == 2) || (numerator == 6 && position == 3);
+  const bool is_secondary_strong = is_secondary_strong_position(numerator, position);
   float score = 0.0f;
   if (is_downbeat) {
     score += observations.beat_strength_weight * beat_strengths[beat_index];

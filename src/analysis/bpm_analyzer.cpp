@@ -5,8 +5,6 @@
 #include <numeric>
 
 #include "analysis/analysis_rate.h"
-#include "feature/mel_spectrogram.h"
-#include "feature/onset.h"
 #include "feature/rhythm.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -276,14 +274,6 @@ float refine_peak_lag(const std::vector<float>& autocorr, int lag) {
   return static_cast<float>(lag) + std::clamp(offset, -0.5f, 0.5f);
 }
 
-/// @brief Converts BPM to lag (in frames).
-int bpm_to_lag(float bpm, int sr, int hop_length) {
-  if (bpm <= 0.0f) return 0;
-  float seconds_per_beat = 60.0f / bpm;
-  return static_cast<int>(seconds_per_beat * static_cast<float>(sr) /
-                          static_cast<float>(hop_length));
-}
-
 /// @brief Finds peaks in autocorrelation within BPM range.
 std::vector<BpmCandidate> find_tempo_peaks(const std::vector<float>& autocorr, int sr,
                                            int hop_length, float bpm_min, float bpm_max) {
@@ -398,22 +388,17 @@ float median_bpm(std::vector<float> values) {
 
 }  // namespace
 
+int bpm_to_lag(float bpm, int sr, int hop_length) {
+  if (bpm <= 0.0f) return 0;
+  float seconds_per_beat = 60.0f / bpm;
+  return static_cast<int>(seconds_per_beat * static_cast<float>(sr) /
+                          static_cast<float>(hop_length));
+}
+
 BpmAnalyzer::BpmAnalyzer(const Audio& audio, const BpmConfig& config) : config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
-  /// Compute onset strength
-  const RateWindow window = window_at_rate(config.n_fft, audio.sample_rate());
-  MelConfig mel_config;
-  mel_config.n_fft = window.n_fft;
-  mel_config.win_length = window.win_length;
-  mel_config.hop_length = config.hop_length;
-  mel_config.n_mels = constants::kDefaultNMels;
-
-  OnsetConfig onset_config;
-  onset_config.lag = 1;
-  onset_config.detrend = true;
-
-  std::vector<float> onset = compute_onset_strength(audio, mel_config, onset_config);
+  const std::vector<float> onset = analysis_onset_strength(audio, config.n_fft, config.hop_length);
 
   analyze(onset, audio.sample_rate(), config.hop_length);
 }

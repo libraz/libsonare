@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "analysis/analysis_evidence.h"
+#include "analysis/downbeat_analyzer.h"
 #include "analysis/meter_analyzer.h"
 #include "analysis/onset_analyzer.h"
 #include "util/constants.h"
@@ -257,8 +258,8 @@ void RhythmAnalyzer::compute_syncopation() {
     // Strong beats are typically 0 (downbeat) plus a secondary accent: position 2
     // for 4/4 and position 3 for 6/8 compound meter (consistent with
     // MeterAnalyzer/DownbeatAnalyzer). Position 0 alone covers 3/4.
-    const bool is_strong_beat = (bar_position == 0) || (beats_per_bar == 4 && bar_position == 2) ||
-                                (beats_per_bar == 6 && bar_position == 3);
+    const bool is_strong_beat =
+        bar_position == 0 || is_secondary_strong_position(beats_per_bar, bar_position);
 
     // Bring the accents onto a common [0, 1] scale before comparing them. They
     // are sums of log-power differences whose range depends entirely on the

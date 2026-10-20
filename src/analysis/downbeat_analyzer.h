@@ -38,6 +38,12 @@ struct DownbeatObservations {
 DownbeatResult estimate_downbeats(const std::vector<Beat>& beats,
                                   const TimeSignature& time_signature, int downbeat_phase);
 
+/// @brief True at the secondary accent of a bar: position 2 in 4/4, position 3 in 6/8.
+/// @details Position 0 (the downbeat) is not included; 3/4 has no secondary accent.
+constexpr bool is_secondary_strong_position(int beats_per_bar, int position) {
+  return (beats_per_bar == 4 && position == 2) || (beats_per_bar == 6 && position == 3);
+}
+
 /// @brief Estimates downbeats using beat-level observations and a meter-state Viterbi pass.
 DownbeatResult estimate_downbeats(const std::vector<Beat>& beats,
                                   const TimeSignature& time_signature, int downbeat_phase,

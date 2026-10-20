@@ -16,28 +16,13 @@ OnsetAnalyzer::OnsetAnalyzer(const Audio& audio, const OnsetDetectConfig& config
     : sr_(audio.sample_rate()), hop_length_(config.hop_length), config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
-  // Compute onset strength
-  MelConfig mel_config;
-  if (framing == OnsetFraming::kAnalysisRate) {
-    const RateWindow window = window_at_rate(config.n_fft, audio.sample_rate());
-    mel_config.n_fft = window.n_fft;
-    mel_config.win_length = window.win_length;
-  } else {
-    mel_config.n_fft = config.n_fft;
-  }
-  mel_config.hop_length = config.hop_length;
-  mel_config.n_mels = constants::kDefaultNMels;
-
-  // Use the OnsetConfig from feature/onset.h. This internal detection pipeline
-  // opts into detrend explicitly (the public OnsetConfig default is
-  // detrend=false to match librosa.onset.onset_strength); removing the slow
-  // baseline sharpens peak picking, consistent with the bpm / beat / music /
-  // audio-profile analyzers, which all force detrend=true here too.
-  OnsetConfig feature_onset_cfg;
-  feature_onset_cfg.lag = 1;
-  feature_onset_cfg.detrend = true;
-
-  onset_strength_ = compute_onset_strength(audio, mel_config, feature_onset_cfg);
+  // The detection pipeline detrends the onset envelope (the public feature OnsetConfig default
+  // is false, to match librosa.onset.onset_strength): removing the slow baseline sharpens peak
+  // picking, consistent with the bpm / beat / music / audio-profile analyzers.
+  onset_strength_ =
+      framing == OnsetFraming::kAnalysisRate
+          ? analysis_onset_strength(audio, config.n_fft, config.hop_length)
+          : onset_strength_in_window(audio, RateWindow{0, config.n_fft}, config.hop_length);
 
   detect_onsets();
 

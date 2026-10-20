@@ -83,13 +83,6 @@ float lag_to_bpm(int lag, int sr, int hop_length) {
   return 60.0f / seconds_per_beat;
 }
 
-int bpm_to_lag(float bpm, int sr, int hop_length) {
-  if (bpm <= 0.0f) return 0;
-  float seconds_per_beat = 60.0f / bpm;
-  return static_cast<int>(seconds_per_beat * static_cast<float>(sr) /
-                          static_cast<float>(hop_length));
-}
-
 void compute_autocorrelation_streaming(const float* signal, int signal_size, int max_lag,
                                        std::vector<float>& autocorr) {
   autocorr.resize(static_cast<size_t>(std::max(max_lag, 0)));

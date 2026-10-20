@@ -23,6 +23,10 @@
 
 namespace sonare {
 
+/// @brief Converts a tempo to an autocorrelation lag in frames (0 when @p bpm is not positive).
+/// @details Shared with the streaming analyzer so both read one lag grid.
+int bpm_to_lag(float bpm, int sr, int hop_length);
+
 /// @brief Constants for BPM detection algorithm.
 /// @details Parameters match bpm-detector Python implementation for consistency.
 namespace bpm_constants {

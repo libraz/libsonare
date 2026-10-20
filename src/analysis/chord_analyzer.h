@@ -213,6 +213,8 @@ class ChordAnalyzer {
     float confidence;  ///< Correlation score
   };
 
+  /// @brief Rejects a non-finite or out-of-range configuration and selects the template set.
+  void init_templates();
   void analyze_chords();
   void analyze_chords_beat_sync(const std::vector<float>& beat_times);
   void merge_short_segments();

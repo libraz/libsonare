@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "analysis/bpm_analyzer.h"
 #include "filters/chroma.h"
 #include "util/constants.h"
 
@@ -63,7 +64,7 @@ float compute_centroid_frame(const float* magnitude, int n_bins, const float* fr
 float compute_flatness_frame(const float* magnitude, int n_bins);
 float compute_rms_frame(const float* samples, int n_fft);
 float lag_to_bpm(int lag, int sr, int hop_length);
-int bpm_to_lag(float bpm, int sr, int hop_length);
+using sonare::bpm_to_lag;  // one lag grid with BpmAnalyzer
 void compute_autocorrelation_streaming(const float* signal, int signal_size, int max_lag,
                                        std::vector<float>& autocorr);
 TempoEstimate find_best_tempo(const std::vector<float>& autocorr, int sr, int hop_length,
