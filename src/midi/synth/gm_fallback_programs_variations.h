@@ -276,7 +276,6 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.church_organ_flutes.amp_env.sustain = 0.676229f;
   o.church_organ_flutes.cutoff_hz = 9572.08f;
   o.church_organ_flutes.pipe_organ.chiff_ms = 23.3431f;
-  o.church_organ_flutes.pipe_organ.pipe_detune_cents = 2.43683f;
   o.church_organ_flutes.pipe_organ.ranks[0].level = 0.559017f;
   o.church_organ_flutes.pipe_organ.ranks[0].radiation = 0.480941f;
   o.church_organ_flutes.pipe_organ.ranks[0].reed = 0.381966f;

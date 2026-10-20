@@ -143,10 +143,9 @@ struct PipeOrganPatchParams {
   /// (footage <= 1) are untouched, only the upperwork thins. 0 disables it
   /// (every rank keeps its full level — a bit-identical bypass).
   float keytrack = 0.0f;
-  /// Per-pipe tuning error at and below C4, in cents (peak): every (rank, note)
-  /// pair is its own pipe, hand-tuned within a few cents of true, and the slow
-  /// inter-rank beating that leaves is the living chorus of a plenum. The span
-  /// tapers above C4, where a tuner lands the small pipes closer to true.
+  /// Per-pipe tuning error at and below C4, in cents (peak), fixed per (rank, note); the slow
+  /// inter-rank beating it leaves is the chorus. One value for every registration, measured: a
+  /// module's organ tones hold two layers 8 c apart at every note, a sampled plenum's ranks 3-9 c.
   float pipe_detune_cents = 4.0f;
   /// Loop phase servo, per rank: the jet blocker's f0 lead moves onto each rank's jet line and,
   /// once a period, each bore follows the lead its injection is measured to hold over its returning
