@@ -20,6 +20,7 @@
 
 #include "effects/common/mix_law.h"
 #include "mastering/final/dither.h"
+#include "mastering/final/noise_shaping.h"
 #include "rt/processor_base.h"
 #include "rt/stage_gate.h"
 #include "util/constants.h"
@@ -148,6 +149,9 @@ class BitCrusher : public rt::ProcessorBase {
   enum LpfIndex : size_t { kRadioLpf, kWpLpf, kDiscLpf, kHumLpf, kLpfCount };
   /// @brief Derives the per-sample phase increment from @c config_.hold_hz and
   ///        the prepared rate. The rate is what the null is fixed against.
+  /// @details Also refits the noise shaper to the latch rate, the rate its
+  ///          error-feedback loop runs at, when noise shaping is selected and
+  ///          that rate moved.
   void update_hold_increment() noexcept;
   /// @brief Derives every filter and generator coefficient from the configured
   ///        corners and the prepared rate.
@@ -201,7 +205,10 @@ class BitCrusher : public rt::ProcessorBase {
   /// discard_non_finite_state() returns to rest.
   std::vector<double> hold_phase_;
   std::vector<uint32_t> rng_state_;
-  std::vector<std::array<float, 9>> error_history_;
+  std::vector<final::NoiseShapingHistory> error_history_;
+  final::NoiseShapingCoeffs noise_shaping_coeffs_{};
+  /// Latch rate @c noise_shaping_coeffs_ were designed for; 0 before the first design.
+  double noise_shaping_rate_ = 0.0;
 };
 
 }  // namespace sonare::mastering::saturation

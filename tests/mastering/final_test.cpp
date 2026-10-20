@@ -122,7 +122,9 @@ TEST_CASE("Noise-shaped dither does not leak clipped input into silence", "[mast
   CAPTURE(overload, suffix_peak, suffix_peak / kLsb, non_finite, off_grid);
   REQUIRE(non_finite == 0);
   REQUIRE(off_grid == 0);
-  REQUIRE(suffix_peak <= 16.0f * kLsb);
+  // Shaped TPDF noise at 48 kHz has an RMS near 4 LSB and peaks near 16 over
+  // these frames; a leak of even the 1.01 overload's excess is over 300 LSB.
+  REQUIRE(suffix_peak <= 32.0f * kLsb);
 }
 
 TEST_CASE("Noise-shaped dither stays deterministic and shaped without clipping",

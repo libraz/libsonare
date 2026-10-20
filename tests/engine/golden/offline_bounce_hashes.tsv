@@ -3,6 +3,6 @@ src-only	tone	70518f1ea80c5c86	24000	2	24000
 src-only	transient	812f434ca3cb8923	24000	2	24000
 src-lufs-tpdf	tone	e33448650eb3c322	24000	2	24000
 src-lufs-tpdf	transient	acde4f5c1e4da238	24000	2	24000
-src-lufs-noiseshaped	tone	5f84504533ae38da	24000	2	24000
-src-lufs-noiseshaped	transient	6ff605befd298123	24000	2	24000
+src-lufs-noiseshaped	tone	4d0795ebeda8a8a1	24000	2	24000
+src-lufs-noiseshaped	transient	51e97a8ef965d182	24000	2	24000
 sf2-gs-effects	reverb-chorus-delay	41a1b18e85358e70	24000	2	48000

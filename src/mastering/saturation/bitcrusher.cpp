@@ -6,6 +6,7 @@
 
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
+#include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
@@ -22,9 +23,6 @@ using sonare::constants::kPiD;
 using sonare::constants::kTwoPiD;
 
 namespace {
-
-constexpr std::array<float, 9> kNoiseShapingCoeffs = {2.412f,  -3.370f, 3.937f,  -4.174f, 3.353f,
-                                                      -2.205f, 1.281f,  -0.569f, 0.0847f};
 
 // A whole period of the hold rate: the phase starts here so the first sample of
 // a run is latched, which is where the sample-count cadence starts too.
@@ -370,6 +368,13 @@ void BitCrusher::update_hold_increment() noexcept {
                             : config_.hold_hz;
   const double increment = static_cast<double>(hold_hz) / rate;
   hold_increment_ = increment > 0.0 ? std::min(increment, 1.0) : 0.0;
+  if (config_.dither_type != final::DitherType::NoiseShaped) return;
+  const double latch_rate = hold_increment_ > 0.0
+                                ? hold_increment_ * rate
+                                : rate / static_cast<double>(config_.downsample_factor);
+  if (latch_rate == noise_shaping_rate_) return;
+  noise_shaping_coeffs_ = final::design_noise_shaping(latch_rate);
+  noise_shaping_rate_ = latch_rate;
 }
 
 double BitCrusher::one_pole_gain(float corner_hz) const noexcept {
@@ -396,7 +401,7 @@ void BitCrusher::update_coefficients() noexcept {
   lpf_gain_[kWpLpf] = one_pole_gain(config_.wp_noise_lpf_hz);
   lpf_gain_[kDiscLpf] = one_pole_gain(config_.disc_noise_lpf_hz);
   lpf_gain_[kHumLpf] = one_pole_gain(config_.hum_lpf_hz);
-  radio_shape_pole_ = std::exp(-kTwoPiD * static_cast<double>(kRadioNoiseCornerHz) / rate);
+  radio_shape_pole_ = rt::one_pole_pole_matched_d(static_cast<double>(kRadioNoiseCornerHz), rate);
   // A click's chance per sample is its rate over the sample rate, so the density
   // per second holds at every rate. Scaled to the full 32-bit draw, whose step is
   // far below the chance, so the threshold keeps its fraction.
@@ -457,24 +462,16 @@ void BitCrusher::render_noise(int count, const std::array<bool, kLpfCount>& lpf_
 
 float BitCrusher::quantize(float sample, int bit_depth, int channel) {
   const float levels = std::pow(2.0f, static_cast<float>(bit_depth - 1)) - 1.0f;
-  float shaped = 0.0f;
-  if (config_.dither_type == final::DitherType::NoiseShaped) {
-    auto& history = error_history_[static_cast<size_t>(channel)];
-    for (size_t i = 0; i < history.size(); ++i) {
-      shaped += kNoiseShapingCoeffs[i] * history[i];
-    }
-  }
-  const float dithered = sample + dither_noise(channel) / std::max(levels, 1.0f) + shaped / levels;
+  const bool shaping = config_.dither_type == final::DitherType::NoiseShaped;
+  auto& history = error_history_[static_cast<size_t>(channel)];
+  const float shaped =
+      shaping ? final::noise_shaping_feedback(noise_shaping_coeffs_, history) : 0.0f;
+  const float noise = dither_noise(channel) / std::max(levels, 1.0f);
+  const float dithered = sample + noise + shaped / levels;
   const float clamped = std::clamp(dithered, -1.0f, 1.0f);
   const float quantized = std::round(clamped * levels) / levels;
-  if (config_.dither_type == final::DitherType::NoiseShaped) {
-    auto& history = error_history_[static_cast<size_t>(channel)];
-    const float error = (clamped - quantized) * levels;
-    for (size_t i = history.size() - 1; i > 0; --i) {
-      history[i] = history[i - 1];
-    }
-    history[0] = error;
-  }
+  // The dither is excluded from the error so the shaper shapes it too.
+  if (shaping) final::push_noise_shaping_error(history, (clamped - quantized - noise) * levels);
   return quantized;
 }
 

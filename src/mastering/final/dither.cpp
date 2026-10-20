@@ -1,26 +1,19 @@
 #include "mastering/final/dither.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstddef>
 #include <random>
 #include <utility>
 #include <vector>
 
+#include "mastering/final/noise_shaping.h"
 #include "util/exception.h"
 #include "util/non_finite_sample.h"
 
 namespace sonare::mastering::final {
 
 namespace {
-
-// 9-tap F-weighted noise-shaping filter (Lipshitz/Vanderkooy/Wannamaker
-// "Minimally Audible Noise Shaping", JAES 1991). Coefficients shape the
-// quantization noise to follow the inverse F-weighting curve, pushing energy
-// out of the ear's most sensitive 1-5 kHz band.
-constexpr std::array<float, 9> kLvNoiseShapingCoeffs = {2.412f,  -3.370f, 3.937f,  -4.174f, 3.353f,
-                                                        -2.205f, 1.281f,  -0.569f, 0.0847f};
 
 // Round a dithered sample onto the target-bit code grid. Dither is the noise a
 // quantizer needs to decorrelate its error, so every mode quantizes here: a
@@ -95,35 +88,24 @@ Audio dither_interleaved(const Audio& audio, size_t channel_count, const DitherC
   }
 
   // NoiseShaped: TPDF dither plus F-weighted feedback of the quantization error.
-  std::vector<std::array<float, 9>> error_history(channel_count);
+  const NoiseShapingCoeffs coeffs = design_noise_shaping(audio.sample_rate());
+  std::vector<NoiseShapingHistory> error_history(channel_count);
   for (size_t index = 0; index < samples.size(); ++index) {
     auto& sample = samples[index];
     const size_t channel = index % channel_count;
-    float feedback = 0.0f;
-    for (size_t k = 0; k < kLvNoiseShapingCoeffs.size(); ++k) {
-      feedback += kLvNoiseShapingCoeffs[k] * error_history[channel][k];
-    }
+    const float feedback = noise_shaping_feedback(coeffs, error_history[channel]);
 
     if (resolve_non_finite(kDestination, sample)) ++non_finite;
-    const float dithered =
-        sample +
-        (distributions[channel](rngs[channel]) + distributions[channel](rngs[channel])) * lsb +
-        feedback * lsb;
+    const float tpdf =
+        distributions[channel](rngs[channel]) + distributions[channel](rngs[channel]);
+    const float dithered = sample + tpdf * lsb + feedback * lsb;
     // Noise-shaping feedback can push the dithered value beyond full scale;
     // clamp before quantizing so the output never leaves [-1, 1] regardless of
     // the downstream clamp setting. The error feedback uses the clamped output
     // so the shaper accounts for the clamping as part of the quantization step.
     const float clamped = std::clamp(dithered, -1.0f, 1.0f);
-    // Quantize the dithered signal to the target LSB resolution.
     const float quantized = quantize_to_grid(clamped, lsb, min_code, max_code);
-    const float quant_error = (clamped - quantized) / lsb;
-
-    // Shift the error history (newest at index 0).
-    for (size_t k = kLvNoiseShapingCoeffs.size() - 1; k > 0; --k) {
-      error_history[channel][k] = error_history[channel][k - 1];
-    }
-    error_history[channel][0] = quant_error;
-
+    push_noise_shaping_error(error_history[channel], (clamped - quantized) / lsb - tpdf);
     sample = quantized;
   }
   if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
