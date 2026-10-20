@@ -302,6 +302,9 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   // trompette and the 16' bombarde add the brassy snarl that turns a chorus
   // into a tutti. Eight ranks is the per-key maximum (kMaxPipeRanks).
   o.church_organ_full = o.church_organ;
+  // Off here: locking the eight ranks moves the h2-h6 stack 2.2 -> 6.9 dB over its reference,
+  // as the in-tune ranks sharing f0 sum at a fixed phase the window then reads.
+  o.church_organ_full.pipe_organ.loop_phase_servo = false;
   // The plenum's own balance: the upperwork lift Church Org.1 takes turns this
   // registration's centroid 43% and its h2-h6 stack 2.4 dB over its reference.
   o.church_organ_full.pipe_organ.ranks[0].level = 0.42f;

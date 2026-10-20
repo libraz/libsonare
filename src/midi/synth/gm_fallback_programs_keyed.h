@@ -936,6 +936,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // sampled references: it left the partial stack 1.4x and the brightness 1.2x
   // their spread, where 0.175 leaves them at 1.0x and 0.6x for the same tuning.
   o.church_organ.pipe_organ.keytrack = 0.175078f;
+  // Each rank's bore follows its own measured loop lead, so the jet's phase no longer reads the
+  // bass flat (the 8' alone sat 4.25 c under at C2 and 0.2 c at C6); what remains is the sag.
+  o.church_organ.pipe_organ.loop_phase_servo = true;
   // A touch of wind sag so a full chord breathes, and a gentle tremulant — the
   // slow pressure undulation that keeps a sustained chord alive rather than
   // frozen (heard as faint sidebands around every partial).

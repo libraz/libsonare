@@ -3,55 +3,60 @@
   "timbre": "t0",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-16T18:03:18+00:00",
-  "recorded_utc": "2026-09-20T19:34:08+00:00",
+  "recorded_utc": "2026-10-20T05:58:39+00:00",
+  "model_build": {
+    "built_utc": "2026-10-20T05:58:33Z",
+    "newest_source_utc": "2026-10-20T05:57:03Z",
+    "stale": false
+  },
   "reference_spread": {},
   "bounds": {
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 12.781,
-      "abs_median": 14.556,
-      "p90": 27.369,
+      "median": 1.0,
+      "abs_median": 2.231,
+      "p90": 6.156,
       "rows": 11
     },
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 4.6,
-      "abs_median": 4.6,
-      "p90": 11.8,
+      "median": 4.437,
+      "abs_median": 4.437,
+      "p90": 7.75,
       "rows": 11
     },
     "attack": {
       "floor": 40.0,
       "floor_from": "guess",
-      "median": 106.0,
-      "abs_median": 106.0,
-      "p90": 748.375,
+      "median": 40.0,
+      "abs_median": 40.0,
+      "p90": 230.75,
       "rows": 11
     },
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 10.467,
-      "abs_median": 10.467,
-      "p90": 15.473,
+      "median": 1.008,
+      "abs_median": 2.745,
+      "p90": 5.235,
       "rows": 11
     },
     "centroid_pct": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 46.062,
-      "abs_median": 46.062,
-      "p90": 75.58,
+      "median": 18.501,
+      "abs_median": 28.229,
+      "p90": 47.31,
       "rows": 11
     },
     "body": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 6.337,
-      "abs_median": 6.337,
-      "p90": 13.39,
+      "median": 1.0,
+      "abs_median": 2.5,
+      "p90": 6.252,
       "rows": 9
     }
   }
