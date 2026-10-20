@@ -394,10 +394,10 @@ TEST_CASE("flute control hashes", "[.][midi][synth][flute][golden]") {
     uint64_t hash;
   };
   static const Row kRows[] = {
-      {72, 84, 100, 0xdc3da02b4d3e1d9bull}, {73, 72, 100, 0x37a18d27b9b0aee0ull},
-      {74, 72, 64, 0x010480eb1f7c427dull},  {75, 67, 127, 0xf094a084b5a3b0cbull},
-      {76, 72, 100, 0x14bf03092c01eeb2ull}, {77, 60, 90, 0x071157f2771744e0ull},
-      {78, 79, 110, 0x7be496dbd0f77b43ull}, {79, 72, 80, 0xe17e889d1d3bf5d4ull},
+      {72, 84, 100, 0x0a196d744ed30e6dull}, {73, 72, 100, 0x37a18d27b9b0aee0ull},
+      {74, 72, 64, 0x7e935b44fa77087cull},  {75, 67, 127, 0xf0181566736c043dull},
+      {76, 72, 100, 0x478cfc8817595250ull}, {77, 60, 90, 0x9f66d946fe594240ull},
+      {78, 79, 110, 0xfb1c2ff634f3ae0bull}, {79, 72, 80, 0x42bf4dcf1aeabd33ull},
   };
   for (const Row& r : kRows) {
     const NativeSynthPatch& patch = gm_fallback_patch(0, r.program);
