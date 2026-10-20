@@ -49,8 +49,8 @@ float EqualizerProcessor::band_detector_db(size_t band_index, const float* const
   // the audio-thread path never reallocates (automation past the bound
   // saturates).
   const int detector_delay_samples =
-      std::clamp(static_cast<int>(std::round(sample_rate * band.dyn.detector_delay_ms * 0.001)), 0,
-                 max_detector_delay_samples_);
+      static_cast<int>(std::clamp(std::round(sample_rate * band.dyn.detector_delay_ms * 0.001), 0.0,
+                                  static_cast<double>(max_detector_delay_samples_)));
 
   auto& states = detector_states_[band_index];
   // States are preallocated in prepare(); only grow if a wider channel count is

@@ -245,6 +245,7 @@ if(BUILD_MASTERING)
     mastering/dynamics/gate_test.cpp
     mastering/dynamics/parallel_comp_test.cpp
     mastering/dynamics/sidechain_router_test.cpp
+    mastering/eq/dynamic_eq_detector_delay_test.cpp
     mastering/eq/tilt_test.cpp
     mastering/maximizer/true_peak_limiter_test.cpp
     mastering/saturation/amp_sim_test.cpp

@@ -18,6 +18,8 @@ bool gain_db_is_realizable(float gain_db) noexcept {
   return numeric::finite(gain_db) && numeric::finite(db_to_linear(gain_db));
 }
 
+bool valid_time_ms(float ms) noexcept { return numeric::finite(ms) && ms >= 0.0f; }
+
 size_t iir_cut_stage_count(const EqBand& band) {
   if (!is_cut_band(band.type) || band.slope_db_oct == 12) {
     return 1;
@@ -191,8 +193,8 @@ void EqualizerProcessor::validate_dynamic_params(const DynamicParams& dyn) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "dynamic EQ threshold or range is too large to realize");
   }
-  if (!(dyn.sidechain_q > 0.0f) || dyn.attack_ms < 0.0f || dyn.release_ms < 0.0f ||
-      dyn.detector_delay_ms < 0.0f ||
+  if (!(dyn.sidechain_q > 0.0f) || !valid_time_ms(dyn.attack_ms) ||
+      !valid_time_ms(dyn.release_ms) || !valid_time_ms(dyn.detector_delay_ms) ||
       (dyn.sidechain_freq_hz != -1.0f && dyn.sidechain_freq_hz <= 0.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid dynamic EQ configuration");
   }

@@ -21,7 +21,7 @@ namespace {
 
 bool valid_frequency_hz(float frequency_hz) noexcept { return frequency_hz > 0.0f; }
 bool valid_ratio(float ratio) noexcept { return ratio >= 1.0f; }
-bool valid_time_ms(float ms) noexcept { return ms >= 0.0f; }
+bool valid_time_ms(float ms) noexcept { return std::isfinite(ms) && ms >= 0.0f; }
 // -1 follows the band frequency; anything else must be a positive frequency.
 bool valid_sidechain_freq_hz(float hz) noexcept { return hz == -1.0f || hz > 0.0f; }
 
@@ -407,8 +407,8 @@ void DynamicEq::ensure_detector(size_t index, int num_channels) {
   // ring is never reallocated on the audio thread (automation past the bound
   // saturates).
   const int detector_delay_samples =
-      std::clamp(static_cast<int>(std::round(sample_rate_ * band.detector_delay_ms * 0.001)), 0,
-                 max_detector_delay_samples_);
+      static_cast<int>(std::clamp(std::round(sample_rate_ * band.detector_delay_ms * 0.001), 0.0,
+                                  static_cast<double>(max_detector_delay_samples_)));
 
   // (Re)design the bandpass prototype and timing only when the relevant band
   // fields change — coefficient design is double-precision and not free.
