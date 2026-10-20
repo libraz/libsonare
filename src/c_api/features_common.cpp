@@ -1,18 +1,5 @@
 #include "c_api/features_internal.h"
 
-NnlsChromaConfig make_fast_nnls_chroma_config(int hop_length) {
-  NnlsChromaConfig config;
-  config.cqt.bins_per_octave = 12;
-  config.cqt.n_bins = 84;
-  config.cqt.hop_length = hop_length;
-  config.midi_min = 24;
-  config.n_pitches = 60;
-  config.n_harmonics = 4;
-  config.max_iter = 25;
-  config.tolerance = 1.0e-3f;
-  return config;
-}
-
 SonareError fill_inverse_result(const std::vector<float>& data, int rows, int n_frames,
                                 SonareInverseResult* out) {
   *out = {};

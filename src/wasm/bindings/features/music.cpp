@@ -108,11 +108,10 @@ val js_nnls_chroma_ex(val samples, const val& sample_rate, bool enable_stft_blen
   const float stft_blend_weight = checkedFloatFromVal(stft_blend_weight_val, "stftBlendWeight");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
 
-  NnlsChromaConfig config;
+  NnlsChromaConfig config = NnlsChromaConfig::fast(checkedIntFromVal(hop_length, "hopLength"));
   config.enable_stft_blend = enable_stft_blend;
   config.stft_blend_weight = stft_blend_weight;
   config.stft_blend_n_fft = checkedIntFromVal(stft_blend_n_fft, "stftBlendNFft");
-  config.cqt.hop_length = checkedIntFromVal(hop_length, "hopLength");
   Chroma chroma = nnls_chroma(audio, config);
 
   val out = val::object();

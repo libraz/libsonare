@@ -193,7 +193,7 @@ SonareError sonare_nnls_chroma_ex2(const float* samples, size_t length, int sr,
   }
 
   return run_offline(samples, length, sr, [&](const Audio& audio) -> SonareError {
-    NnlsChromaConfig config = make_fast_nnls_chroma_config(hop_length);
+    NnlsChromaConfig config = NnlsChromaConfig::fast(hop_length);
     config.enable_stft_blend = enable_stft_blend != 0;
     config.stft_blend_weight = stft_blend_weight;
     config.stft_blend_n_fft = stft_blend_n_fft;

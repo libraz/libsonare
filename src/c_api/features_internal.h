@@ -30,7 +30,6 @@
 using namespace sonare;
 using namespace sonare_c_detail;
 
-NnlsChromaConfig make_fast_nnls_chroma_config(int hop_length = 512);
 SonareError fill_inverse_result(const std::vector<float>& data, int rows, int n_frames,
                                 SonareInverseResult* out);
 SonareError fill_audio_samples(const Audio& audio, float** out, size_t* out_length);

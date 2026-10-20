@@ -36,6 +36,21 @@ struct NnlsChromaConfig {
   bool enable_stft_blend = true;    ///< Disable to use NNLS/CQT salience only.
   float stft_blend_weight = 0.55f;  ///< Weight applied to the STFT chroma in the blend.
   int stft_blend_n_fft = 4096;      ///< FFT size used for the STFT chroma fallback.
+
+  /// @brief The reduced analysis profile shared by every public NNLS chroma entry point: one
+  /// semitone per CQT bin over seven octaves, four harmonics, 25 iterations.
+  static NnlsChromaConfig fast(int hop_length) {
+    NnlsChromaConfig config;
+    config.cqt.bins_per_octave = 12;
+    config.cqt.n_bins = 84;
+    config.cqt.hop_length = hop_length;
+    config.midi_min = 24;
+    config.n_pitches = 60;
+    config.n_harmonics = 4;
+    config.max_iter = 25;
+    config.tolerance = 1.0e-3f;
+    return config;
+  }
 };
 
 /// @brief Builds a log-frequency harmonic template matrix for NNLS.

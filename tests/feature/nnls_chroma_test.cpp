@@ -3,6 +3,8 @@
 
 #include "feature/nnls_chroma.h"
 
+#include <sonare/sonare_c.h>
+
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -74,4 +76,27 @@ TEST_CASE("nnls_chroma emphasizes pitch class of a sine tone", "[.][slow][nnls_c
 
   const auto mean = chroma.mean_energy();
   REQUIRE(argmax(mean) == static_cast<int>(PitchClass::A));
+}
+
+TEST_CASE("sonare_nnls_chroma runs the shared fast profile", "[nnls_chroma][c_api]") {
+  const Audio audio = sine(440.0f, 0.5f);
+  NnlsChromaConfig config = NnlsChromaConfig::fast(512);
+  REQUIRE(config.cqt.bins_per_octave == 12);
+  REQUIRE(config.n_pitches == 60);
+  config.enable_stft_blend = true;
+  config.stft_blend_weight = 0.55f;
+  config.stft_blend_n_fft = 4096;
+  const Chroma expected = nnls_chroma(audio, config);
+
+  float* data = nullptr;
+  size_t length = 0;
+  int n_frames = 0;
+  REQUIRE(sonare_nnls_chroma(audio.data(), audio.size(), audio.sample_rate(), &data, &length,
+                             &n_frames) == SONARE_OK);
+  REQUIRE(n_frames == expected.n_frames());
+  REQUIRE(length == static_cast<size_t>(expected.n_chroma()) * expected.n_frames());
+  for (size_t i = 0; i < length; ++i) {
+    REQUIRE(std::abs(data[i] - expected.data()[i]) < 1e-5f);
+  }
+  sonare_free_floats(data);
 }
