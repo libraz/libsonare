@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cmath>
 #include <limits>
 #include <map>
@@ -18,11 +19,13 @@
 #include "engine/mixing_runtime.h"
 #include "engine/tempo_sync.h"
 #include "midi/midi_clip.h"
+#include "mixing/panner.h"
 #include "rt/pan_law.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
+#include "util/resource_limits.h"
 
 namespace sonare::arrangement {
 
@@ -94,11 +97,12 @@ float effective_track_gain(const Track* track, bool any_solo) noexcept {
   return track->gain;
 }
 
-// Stereo balance a track contributes (the player applies it per output channel),
-// clamped to the valid range. Missing track -> center (0).
+// Stereo balance a track contributes (the player applies it per output channel).
+// The setters and the project decoder keep a stored pan in [-1, 1]. Missing track -> center (0).
 float effective_track_pan(const Track* track) noexcept {
   if (track == nullptr) return 0.0f;
-  return std::clamp(track->pan, -1.0f, 1.0f);
+  assert(mixing::pan_in_range(track->pan));
+  return track->pan;
 }
 
 #if defined(SONARE_WITH_MIXING)
@@ -416,6 +420,11 @@ bool validate_tempo(const Project& project, CompileResult* result) {
   return true;
 }
 
+// Bounds on writing a looped MIDI clip out under a tempo change; the same bounds
+// the project MIDI export applies when it writes a loop out.
+constexpr size_t kMaxWrittenOutLoopIterations = resource::kMaxMidiExportLoopIterations;
+constexpr size_t kMaxWrittenOutLoopEvents = resource::kMaxProjectMidiExportEvents;
+
 // Effective loop length in PPQ for a looped clip. A stored length of 0 means
 // "loop the entire clip", resolved here from the clip's own timeline duration.
 // Only meaningful when clip.loop_mode == LoopMode::kLoop.
@@ -423,33 +432,55 @@ double effective_loop_length_ppq(const EditClip& clip) noexcept {
   return clip.loop_length_ppq > 0.0 ? clip.loop_length_ppq : clip.length_ppq;
 }
 
+// True when repeating a loop body every `period_samples` lands each repeat, and
+// each event in it, where the tempo map puts it: one constant tempo across the
+// whole clip and a whole-sample period.
+bool fixed_period_loop_is_exact(const Project& project, const EditClip& clip, double loop_ppq,
+                                int64_t period_samples) {
+  const std::vector<transport::TempoSegment>& segments = project.tempo_segments();
+  double bpm = kDefaultBpm;
+  if (!segments.empty()) {
+    size_t i = 0;
+    while (i + 1 < segments.size() && segments[i + 1].start_ppq <= clip.start_ppq) ++i;
+    const bool bounded = i + 1 < segments.size();
+    if (bounded && segments[i + 1].start_ppq < clip.end_ppq()) return false;
+    const transport::TempoSegment& segment = segments[i];
+    if (bounded && segment.end_bpm > 0.0 && segment.end_bpm != segment.bpm) return false;
+    bpm = segment.bpm;
+  }
+  // Same samples-per-quarter expression as the tempo map's.
+  const double period = loop_ppq * (project.sample_rate() * 60.0 / bpm);
+  return static_cast<double>(period_samples) == period;
+}
+
+// Appends the clip's events as render frames over `iterations` repeats of its
+// body, each repeat at its own tempo-mapped position. Repeat starts after the
+// first go to `sched->loop_iteration_starts`. A one-shot clip is one repeat.
 void append_midi_render_events(const midi::MidiClip& midi_clip, const EditClip& clip,
-                               const transport::TempoMap& tempo_map,
-                               std::vector<midi::MidiEvent>* out) {
-  if (out == nullptr) return;
+                               const transport::TempoMap& tempo_map, size_t iterations,
+                               midi::MidiClipSchedule* sched) {
+  const bool loop = clip.loop_mode == LoopMode::kLoop;
+  const double body_ppq = loop ? effective_loop_length_ppq(clip) : clip.length_ppq;
   const double clip_end_ppq = clip.end_ppq();
-  if (clip.loop_mode == LoopMode::kLoop) {
-    const double loop_len = effective_loop_length_ppq(clip);
+  const int64_t clip_end_sample = tempo_map.ppq_to_sample(clip_end_ppq);
+  for (size_t k = 0; k < iterations; ++k) {
+    const double iteration_ppq = clip.start_ppq + static_cast<double>(k) * body_ppq;
+    if (iteration_ppq >= clip_end_ppq) break;
+    if (k > 0) {
+      const int64_t iteration_sample = tempo_map.ppq_to_sample(iteration_ppq);
+      if (iteration_sample >= clip_end_sample) break;
+      sched->loop_iteration_starts.push_back(iteration_sample);
+    }
     for (const midi::MidiClipEvent& ev : midi_clip.events()) {
-      if (ev.ppq < 0.0 || ev.ppq >= loop_len) continue;
-      const double event_ppq = clip.start_ppq + ev.ppq;
-      if (event_ppq >= clip_end_ppq) continue;
+      if (ev.ppq < 0.0 || ev.ppq >= body_ppq) continue;
+      const double event_ppq = iteration_ppq + ev.ppq;
+      if (loop && event_ppq >= clip_end_ppq) continue;
       midi::MidiEvent rendered;
       rendered.render_frame = tempo_map.ppq_to_sample(event_ppq);
       rendered.ump = ev.ump;
       rendered.sysex_payload = ev.sysex_payload;
       rendered.sysex_payload_size = ev.sysex_payload_size;
-      out->push_back(rendered);
-    }
-  } else {
-    for (const midi::MidiClipEvent& ev : midi_clip.events()) {
-      if (ev.ppq < 0.0 || ev.ppq >= clip.length_ppq) continue;
-      midi::MidiEvent rendered;
-      rendered.render_frame = tempo_map.ppq_to_sample(clip.start_ppq + ev.ppq);
-      rendered.ump = ev.ump;
-      rendered.sysex_payload = ev.sysex_payload;
-      rendered.sysex_payload_size = ev.sysex_payload_size;
-      out->push_back(rendered);
+      sched->events.push_back(rendered);
     }
   }
 }
@@ -956,6 +987,12 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       std::shared_ptr<const engine::ClipAudioStorage> storage;
       const bool compile_baked_tempo_sync =
           clip.warp_mode == WarpMode::kTempoSync && baked_warp_ref == 0 && rt_warp_map != nullptr;
+      // A warped bake (compiled here or registered pre-baked) is indexed by warp position, which
+      // the map already ties to the source, so the read starts at the part's clip-timeline onset
+      // exactly as the runtime warp modes do.
+      if (compile_baked_tempo_sync || baked_warp_ref != 0) {
+        clip_offset_samples = std::max<int64_t>(0, start_sample - clip_start_sample);
+      }
       const auto cache_key = std::make_pair(
           part.source_id, compile_baked_tempo_sync ? clip.warp_ref_id : baked_warp_ref);
       const auto cached = baked.find(cache_key);
@@ -1280,10 +1317,29 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
         std::max<int64_t>(0, tempo_map.ppq_to_sample(clip.end_ppq()) - sched.start_sample);
     sched.loop_mode = clip.loop_mode == LoopMode::kLoop ? midi::MidiLoopMode::kLoop
                                                         : midi::MidiLoopMode::kOneShot;
+    size_t iterations = 1;
     if (sched.loop_mode == midi::MidiLoopMode::kLoop) {
+      const double loop_ppq = effective_loop_length_ppq(clip);
       sched.loop_length_samples = std::max<int64_t>(
-          0, tempo_map.ppq_to_sample(clip.start_ppq + effective_loop_length_ppq(clip)) -
-                 sched.start_sample);
+          0, tempo_map.ppq_to_sample(clip.start_ppq + loop_ppq) - sched.start_sample);
+      // A fixed sample period drifts from the tempo map wherever the tempo moves,
+      // so such a loop is written out repeat by repeat instead.
+      if (!fixed_period_loop_is_exact(project, clip, loop_ppq, sched.loop_length_samples)) {
+        size_t written_events = 0;
+        if (numeric::checked_ceil_ratio(clip.length_ppq, loop_ppq, kMaxWrittenOutLoopIterations,
+                                        &iterations) &&
+            numeric::checked_size_product(midi_clip.events().size(), iterations,
+                                          kMaxWrittenOutLoopEvents, &written_events)) {
+          sched.loop_mode = midi::MidiLoopMode::kOneShot;
+          sched.loop_length_samples = 0;
+          sched.events.reserve(written_events);
+        } else {
+          iterations = 1;
+          add_diag(&result, Diagnostic::Code::kInvalidPpq, Diagnostic::Severity::kWarning, clip.id,
+                   "looped MIDI clip repeats too often to follow the tempo map; it repeats at "
+                   "its first iteration's sample length");
+        }
+      }
     }
     // Gain / fade envelope, converted the same way as an audio clip's (ppq ->
     // samples at the clip's own start tempo, clamped to the clip's own
@@ -1301,7 +1357,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
     }
     sched.fade_in_curve = to_engine_fade_curve(clip.fade_in.curve);
     sched.fade_out_curve = to_engine_fade_curve(clip.fade_out.curve);
-    append_midi_render_events(midi_clip, clip, tempo_map, &sched.events);
+    append_midi_render_events(midi_clip, clip, tempo_map, iterations, &sched);
     first_midi_clip_id = timeline.midi_clips.empty() ? sched.id : first_midi_clip_id;
     timeline.midi_clips.push_back(std::move(sched));
 

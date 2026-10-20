@@ -21,6 +21,7 @@
 #include "rt/command.h"
 #include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
+#include "transport/tempo_map.h"
 #include "util/constants.h"
 #include "util/db.h"
 
@@ -1011,6 +1012,66 @@ TEST_CASE("MIDI compile emits one loop body for RT-looped clips", "[arrangement]
   REQUIRE(events[1].render_frame == 18000);
 }
 
+TEST_CASE("A looped MIDI clip under a tempo ramp repeats where its written-out twin plays",
+          "[arrangement]") {
+  const auto compile_clip = [](double loop_ppq, const std::vector<arr::MidiClipEvent>& events) {
+    arr::Project project;
+    project.set_sample_rate(kProjectSr);
+    project.set_tempo_segments({{0.0, 100.0, 0.0, 200.0}, {8.0, 200.0, 0.0}});
+    arr::MidiSourceRef src;
+    const arr::SourceId sid = project.add_midi_source(src);
+    arr::Track track;
+    track.kind = arr::Track::Kind::kMidi;
+    const arr::TrackId tid = project.add_track(track);
+    arr::EditClip clip;
+    clip.track_id = tid;
+    clip.source_id = sid;
+    clip.start_ppq = 0.5;
+    clip.length_ppq = 5.0;
+    if (loop_ppq > 0.0) {
+      clip.loop_mode = arr::LoopMode::kLoop;
+      clip.loop_length_ppq = loop_ppq;
+    }
+    const arr::ClipId cid = project.add_clip(clip);
+    REQUIRE(cid != 0);
+    arr::MidiContentStore midi;
+    midi.events[cid] = events;
+    arr::CompileResult r = arr::compile(project, midi, arr::AudioContentStore{});
+    REQUIRE_FALSE(r.has_errors());
+    REQUIRE(r.timeline.has_value());
+    REQUIRE(r.timeline->midi_clips.size() == 1);
+    return r.timeline->midi_clips.front();
+  };
+  const uint32_t on = sonare::midi::make_midi1_note_on(0, 0, 64, 100).words[0];
+  const uint32_t off = sonare::midi::make_midi1_note_off(0, 0, 64, 0).words[0];
+  const auto looped = compile_clip(1.5, {{0.0, on, 0}, {0.75, off, 0}, {1.0, on, 0}});
+  // ceil(5 / 1.5) = 4 repeats, the last one cut by the clip end.
+  std::vector<arr::MidiClipEvent> written_out;
+  for (int k = 0; k < 4; ++k) {
+    const double base = 1.5 * k;
+    for (const arr::MidiClipEvent& e :
+         std::vector<arr::MidiClipEvent>{{0.0, on, 0}, {0.75, off, 0}, {1.0, on, 0}}) {
+      if (base + e.ppq < 5.0) written_out.push_back({base + e.ppq, e.data0, e.data1});
+    }
+  }
+  const auto one_shot = compile_clip(0.0, written_out);
+
+  CHECK(looped.loop_mode == sonare::midi::MidiLoopMode::kOneShot);
+  CHECK(looped.length_samples == one_shot.length_samples);
+  REQUIRE(looped.events.size() == one_shot.events.size());
+  for (size_t i = 0; i < looped.events.size(); ++i) {
+    CHECK(looped.events[i].render_frame == one_shot.events[i].render_frame);
+  }
+  sonare::transport::TempoMap map;
+  map.prepare(kProjectSr);
+  map.set_segments({{0.0, 100.0, 0.0, 200.0}, {8.0, 200.0, 0.0}});
+  REQUIRE(looped.loop_iteration_starts.size() == 3);
+  for (size_t k = 1; k <= 3; ++k) {
+    CHECK(looped.loop_iteration_starts[k - 1] ==
+          map.ppq_to_sample(0.5 + 1.5 * static_cast<double>(k)));
+  }
+}
+
 TEST_CASE("compiler preserves independent audio fade curves", "[arrangement]") {
   Fixture f = make_fixture();
   arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
@@ -1591,6 +1652,49 @@ TEST_CASE(
                    static_cast<double>(sched.storage->channels[0][i]);
   }
   REQUIRE(main_energy > 0.0);
+}
+
+// The warp map alone ties timeline to source in every warp mode, so a source
+// offset must not shift a tempo-sync bake that time-stretch does not shift.
+TEST_CASE("tempo-sync and time-stretch place a burst at one position under a source offset",
+          "[arrangement]") {
+  constexpr int kBurstAt = 24000;
+  const auto burst_peak = [](arr::WarpMode mode) {
+    Fixture f = make_fixture();
+    arr::AudioSourceSamples burst;
+    burst.sample_rate = kProjectSr;
+    burst.channels.assign(2, std::vector<float>(96000, 0.0f));
+    for (int i = 0; i < 256; ++i) {
+      const float v = 0.5f * std::sin(static_cast<float>(i) * 0.25f);
+      burst.channels[0][static_cast<size_t>(kBurstAt + i)] = v;
+      burst.channels[1][static_cast<size_t>(kBurstAt + i)] = v;
+    }
+    f.audio.sources[f.source_id] = std::move(burst);
+    arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+    REQUIRE(clip != nullptr);
+    clip->source_offset_ppq = 0.5;  // 12000 samples at 120 BPM.
+    clip->warp_ref_id = 77;
+    clip->warp_mode = mode;
+    REQUIRE(f.project.set_warp_map({77, "identity", {{0.0, 0.0}, {48000.0, 48000.0}}}));
+    arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
+    REQUIRE_FALSE(r.has_errors());
+    REQUIRE(r.timeline.has_value());
+    const std::vector<float> out = render(*r.timeline, 48000);
+    int64_t peak = -1;
+    float peak_abs = 0.0f;
+    for (size_t i = 0; i < out.size(); i += 2) {
+      if (std::abs(out[i]) > peak_abs) {
+        peak_abs = std::abs(out[i]);
+        peak = static_cast<int64_t>(i / 2);
+      }
+    }
+    REQUIRE(peak_abs > 0.01f);
+    return peak;
+  };
+  const int64_t stretched = burst_peak(arr::WarpMode::kTimeStretch);
+  const int64_t synced = burst_peak(arr::WarpMode::kTempoSync);
+  CHECK(std::abs(stretched - kBurstAt) < 2048);
+  CHECK(std::abs(synced - stretched) < 2048);
 }
 
 TEST_CASE("apply_to_engine installs full tempo and time-signature maps", "[arrangement]") {
