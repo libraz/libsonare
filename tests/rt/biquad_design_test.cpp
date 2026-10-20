@@ -1,11 +1,14 @@
 #include "rt/biquad_design.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <complex>
 #include <iterator>
 #include <limits>
 
+#include "rt/rate_scaled.h"
 #include "util/constants.h"
 
 using Catch::Matchers::WithinAbs;
@@ -310,4 +313,42 @@ TEST_CASE("the design ceiling sits strictly below Nyquist in float", "[rt][biqua
   REQUIRE(domain.w0 == sonare::rt::kMinDesignW0);
   REQUIRE(domain.q == sonare::rt::kMaxDesignQ);
   REQUIRE(sonare::rt::clamp_design_domain(4.0, 1.0).w0 == sonare::rt::kMaxDesignW0);
+}
+
+// A one-pole voiced at 48 kHz keeps its coefficients there and its loss in Hz elsewhere.
+TEST_CASE("Voiced one-pole is re-expressed in Hz at other rates", "[rt][biquad]") {
+  constexpr float kDcGain = 0.98f;
+  constexpr float kTopGain = 0.6f;
+  const float a1 = (kDcGain - kTopGain) / (kDcGain + kTopGain);
+  const float b0 = 2.0f * kDcGain * kTopGain / (kDcGain + kTopGain);
+
+  const sonare::rt::FirstOrderShelf voiced = sonare::rt::voiced_one_pole_at_rate(b0, a1, 48000.0);
+  CHECK(voiced.b0 == b0);
+  CHECK(voiced.b1 == 0.0f);
+  CHECK(voiced.a1 == a1);
+
+  const auto voiced_loss_db = [&](double hz) {
+    const std::complex<double> z1 = std::polar(1.0, -sonare::constants::kTwoPiD * hz / 48000.0);
+    return -20.0 *
+           std::log10(std::abs(static_cast<double>(b0) / (1.0 - static_cast<double>(a1) * z1)));
+  };
+  // A relative loss error is a band's relative T60 error, compounded over every pass.
+  constexpr double kRelativeLossTolerance = 0.03;
+  for (const double rate : {44100.0, 96000.0, 192000.0, 384000.0}) {
+    CAPTURE(rate);
+    const sonare::rt::FirstOrderShelf shelf = sonare::rt::voiced_one_pole_at_rate(b0, a1, rate);
+    REQUIRE(std::abs(shelf.a1) < 1.0f);
+    const auto loss_db = [&](double hz) {
+      const std::complex<double> z1 = std::polar(1.0, -sonare::constants::kTwoPiD * hz / rate);
+      const std::complex<double> numerator =
+          static_cast<double>(shelf.b0) + static_cast<double>(shelf.b1) * z1;
+      return -20.0 * std::log10(std::abs(numerator / (1.0 - static_cast<double>(shelf.a1) * z1)));
+    };
+    CHECK_THAT(loss_db(0.0), WithinAbs(voiced_loss_db(0.0), 1.0e-5));
+    for (double hz = 100.0; hz <= std::min(0.5 * rate, 20000.0); hz *= 1.1) {
+      CAPTURE(hz);
+      const double voiced = voiced_loss_db(hz);
+      CHECK(std::abs(loss_db(hz) - voiced) <= kRelativeLossTolerance * voiced);
+    }
+  }
 }
