@@ -23,6 +23,10 @@ namespace {
 constexpr float kHighpassFallbackCurrentConfidenceMax = 0.75f;
 constexpr float kHighpassFallbackConfidenceMin = 0.50f;
 
+/// Chroma posterior, as a share of the chroma winner's, a chord-derived key needs before the chords
+/// may choose it: within a factor of four, a correlation margin of about 0.11.
+constexpr float kChordOverrideMinPosteriorRatio = 0.25f;
+
 std::string lowercase_ascii(std::string value) {
   std::transform(value.begin(), value.end(), value.begin(),
                  [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
@@ -553,7 +557,11 @@ std::vector<Chord> recognized_chords(const std::vector<Chord>& chords) {
   return out;
 }
 
-Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords);
+/// Chord-progression score of every key, indexed [mode == Minor][root]; one scale for all 24.
+using ChordKeyScores = std::array<std::array<float, 12>, 2>;
+
+Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords,
+                                        ChordKeyScores* scores = nullptr);
 
 }  // namespace
 
@@ -563,7 +571,10 @@ Key estimate_key_from_chords(const std::vector<Chord>& all_chords) {
 
 namespace {
 
-Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords) {
+Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords, ChordKeyScores* scores) {
+  if (scores != nullptr) {
+    for (auto& row : *scores) row.fill(0.0f);
+  }
   if (chords.empty()) {
     return Key{PitchClass::C, Mode::Major, 0.0f};
   }
@@ -668,6 +679,7 @@ Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords) {
 
     float total_major_score =
         major_score + major_tonic_score + cadence_bonus + bookend_bonus + first_chord_bonus;
+    if (scores != nullptr) (*scores)[0][static_cast<size_t>(key_idx)] = total_major_score;
     if (total_major_score > best_score) {
       best_score = total_major_score;
       best_root = key_root;
@@ -745,6 +757,7 @@ Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords) {
 
     float total_minor_score = minor_score + minor_tonic_score + minor_cadence_bonus +
                               minor_bookend_bonus + minor_first_chord_bonus;
+    if (scores != nullptr) (*scores)[1][static_cast<size_t>(minor_root)] = total_minor_score;
     if (total_minor_score > best_score) {
       best_score = total_minor_score;
       best_root = minor_root;
@@ -776,57 +789,41 @@ float key_posterior(const std::vector<KeyCandidate>& candidates, const Key& key)
   return 0.0f;
 }
 
-Key refine_key_with_chords(const Key& chroma_key, const std::vector<Chord>& all_chords) {
+Key refine_key_with_chords(const std::vector<KeyCandidate>& chroma_candidates,
+                           const std::vector<Chord>& all_chords) {
+  if (chroma_candidates.empty()) {
+    return Key{PitchClass::C, Mode::Major, 0.0f};
+  }
+  const Key chroma_key = std::max_element(chroma_candidates.begin(), chroma_candidates.end(),
+                                          [](const KeyCandidate& a, const KeyCandidate& b) {
+                                            return a.key.confidence < b.key.confidence;
+                                          })
+                             ->key;
+
   const std::vector<Chord> chords = recognized_chords(all_chords);
   if (chords.empty()) {
     return chroma_key;
   }
-
-  Key chord_key = estimate_key_from_recognized_chords(chords);
-
-  // If both methods agree, use that key with boosted confidence
-  if (chroma_key.root == chord_key.root && chroma_key.mode == chord_key.mode) {
-    float combined_confidence =
-        std::min((chroma_key.confidence + chord_key.confidence) / 2.0f + 0.1f, 1.0f);
-    return Key{chroma_key.root, chroma_key.mode, combined_confidence};
+  ChordKeyScores scores{};
+  Key chord_key = estimate_key_from_recognized_chords(chords, &scores);
+  if (chord_key.root == chroma_key.root && chord_key.mode == chroma_key.mode) {
+    return chroma_key;
   }
 
-  // If chord-based detection has high confidence, prefer it
-  // This helps when chroma-based detection is confused by strong subdominant
-  if (chord_key.confidence > 0.7f && chord_key.confidence > chroma_key.confidence) {
+  // The chords may only choose among keys the chroma leaves ambiguous, and between the two they are
+  // compared on the chord score alone.
+  const float chord_posterior = key_posterior(chroma_candidates, chord_key);
+  if (chord_posterior < kChordOverrideMinPosteriorRatio * chroma_key.confidence) {
+    return chroma_key;
+  }
+  const auto chord_score = [&](const Key& key) {
+    return scores[key.mode == Mode::Minor ? 1 : 0][static_cast<size_t>(key.root)];
+  };
+  if (chord_score(chord_key) > chord_score(chroma_key)) {
+    chord_key.confidence = chord_posterior;
     return chord_key;
   }
-
-  // Check if one key is the relative major/minor of the other
-  int interval = (static_cast<int>(chord_key.root) - static_cast<int>(chroma_key.root) + 12) % 12;
-  bool are_relative = (interval == 3 || interval == 9);
-
-  if (are_relative) {
-    // For relative keys, prefer the one with higher confidence
-    if (chord_key.confidence > chroma_key.confidence) {
-      return chord_key;
-    }
-    return chroma_key;
-  }
-
-  // Check if chroma detected subdominant (F major) when actual key is tonic (C major)
-  // This happens often with I-V-vi-IV progressions
-  if (chroma_key.mode == Mode::Major && chord_key.mode == Mode::Major) {
-    // If chord_key is a perfect fifth above chroma_key, chroma likely detected IV
-    if (interval == 7) {
-      // Chord detection says tonic is a fifth above what chroma detected
-      // This suggests chroma detected the subdominant as tonic
-      return chord_key;
-    }
-  }
-
-  // Default: use chroma key if its confidence is reasonable
-  if (chroma_key.confidence > 0.6f) {
-    return chroma_key;
-  }
-
-  // Otherwise prefer chord-based detection
-  return chord_key;
+  return chroma_key;
 }
 
 }  // namespace sonare

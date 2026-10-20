@@ -523,7 +523,7 @@ std::optional<AnalysisResult> MusicAnalyzer::analyze_impl() {
   if constexpr (CheckCancel) {
     if (cancel_callback_ && cancel_callback_()) return std::nullopt;
   }
-  Key chroma_key = key_analyzer().key();
+  const std::vector<KeyCandidate>& chroma_candidates = key_analyzer().all_candidates();
 
   // Beats and time signature (25-40%)
   report_progress(0.25f, "beats");
@@ -564,7 +564,7 @@ std::optional<AnalysisResult> MusicAnalyzer::analyze_impl() {
   }
 
   // Refine key using chord progression analysis
-  result.key = refine_key_with_chords(chroma_key, result.chords);
+  result.key = refine_key_with_chords(chroma_candidates, result.chords);
   // Whichever key the chords settle on, it reports its chroma posterior like detect_key does.
   result.key.confidence = key_posterior(key_analyzer().all_candidates(), result.key);
   result.chord_roman_numerals.reserve(result.chords.size());

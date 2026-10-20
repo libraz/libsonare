@@ -10,6 +10,7 @@
 #include <limits>
 #include <vector>
 
+#include "analysis/music_analyzer.h"
 #include "effects/hpss.h"
 #include "feature/chroma.h"
 #include "feature/spectral.h"
@@ -690,5 +691,43 @@ TEST_CASE("key of the same content agrees across input sample rates",
             at_rate.key().confidence);
     CHECK(at_rate.key().root == base.key().root);
     CHECK(at_rate.key().mode == base.key().mode);
+  }
+}
+
+TEST_CASE("analyze publishes the chroma key on unambiguous monophonic input",
+          "[key_analyzer][music_analyzer]") {
+  // A melody's chord track names keys the chroma rules out (B minor for a C major scale, F major
+  // for a lone A); none of them may replace the chroma key.
+  constexpr int sr = 22050;
+  const auto notes = [](const std::vector<int>& midis, double note_sec) {
+    const size_t note_samples = static_cast<size_t>(note_sec * sr);
+    std::vector<float> samples(midis.size() * note_samples, 0.0f);
+    for (size_t n = 0; n < midis.size(); ++n) {
+      const double f = constants::kA4Hz * std::pow(2.0, (midis[n] - constants::kMidiA4) /
+                                                            constants::kSemitonesPerOctave);
+      for (size_t i = 0; i < note_samples; ++i) {
+        const double t = static_cast<double>(i) / sr;
+        const double env = std::min(1.0, t / 0.01) * std::min(1.0, (note_sec - t) / 0.03);
+        double v = 0.0;
+        for (int h = 1; h <= 4; ++h)
+          v += std::pow(0.5, h - 1) * std::sin(constants::kTwoPiD * f * h * t);
+        samples[n * note_samples + i] = static_cast<float>(0.2 * env * v);
+      }
+    }
+    return Audio::from_vector(std::move(samples), sr);
+  };
+  const std::vector<std::pair<const char*, Audio>> inputs = {
+      {"C major scale",
+       notes({60, 62, 64, 65, 67, 69, 71, 72, 72, 71, 69, 67, 65, 64, 62, 60}, 0.4)},
+      {"A4", notes({69}, 4.0)},
+      {"C4", notes({60}, 4.0)},
+  };
+  for (const auto& [name, audio] : inputs) {
+    const Key chroma = detect_key(audio);
+    const AnalysisResult result = MusicAnalyzer(audio).analyze();
+    CAPTURE(name, chroma.to_string(), result.key.to_string(), result.key.confidence);
+    CHECK(result.key.root == chroma.root);
+    CHECK(result.key.mode == chroma.mode);
+    CHECK_THAT(result.key.confidence, WithinAbs(chroma.confidence, 1e-4f));
   }
 }

@@ -36,9 +36,8 @@ struct Key {
   ///          `tests/fixtures/music_eval/README.md` describes how to measure
   ///          accuracy on a corpus you hold.
   ///
-  ///          @ref estimate_key_from_chords and @ref refine_key_with_chords
-  ///          report a different quantity in this field — the diatonic share of
-  ///          the progression — which is documented at each of them.
+  ///          @ref estimate_key_from_chords reports a different quantity in this
+  ///          field — the diatonic share of the progression — documented there.
   float confidence;
 
   /// @brief Returns key name (e.g., "C major", "A minor").
@@ -165,17 +164,17 @@ Key detect_key(const Audio& audio, const KeyConfig& config = KeyConfig());
 ///         reports and not comparable with it.
 Key estimate_key_from_chords(const std::vector<struct Chord>& chords);
 
-/// @brief Refines key estimate using chord progression.
-/// @details Combines chroma-based key detection with chord progression analysis.
-/// @param chroma_key Key from chroma analysis, carrying the posterior confidence
+/// @brief Refines the chroma key estimate using the chord progression.
+/// @details The chroma winner stands unless the progression's key differs from it, carries at
+///          least a quarter of the winner's chroma posterior (a key the chroma leaves ambiguous)
+///          and scores higher than the winner on the progression's own key score. A key the chroma
+///          rules out, or one it never scored, is never returned.
+/// @param chroma_candidates Scored chroma candidates, each carrying its posterior confidence
 /// @param chords Detected chords
-/// @return Refined key estimate. The confidence it carries is whichever of the
-///         two inputs won, so it is on that input's scale; a caller publishing the
-///         key restates it through @ref key_posterior, as MusicAnalyzer::analyze does.
-/// @warning The two inputs measure different things — a posterior over key
-///          candidates against a diatonic-coverage share — and this arbitrates
-///          between them with fixed thresholds rather than a common scale.
-Key refine_key_with_chords(const Key& chroma_key, const std::vector<struct Chord>& chords);
+/// @return The chosen key with its chroma posterior as confidence; C major with 0 when
+///         @p chroma_candidates is empty.
+Key refine_key_with_chords(const std::vector<KeyCandidate>& chroma_candidates,
+                           const std::vector<struct Chord>& chords);
 
 /// @brief Softmax posterior of @p key among @p candidates (matched on root and mode).
 /// @return That candidate's confidence, or 0 when @p key was not among the scored candidates.

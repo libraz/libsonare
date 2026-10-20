@@ -48,6 +48,26 @@ PitchClass transpose(PitchClass root, int semitones) {
   return static_cast<PitchClass>((static_cast<int>(root) + semitones) % 12);
 }
 
+/// Chroma candidates over @p modes: @p given keys carry their posteriors, the rest split the rest.
+std::vector<KeyCandidate> chroma_candidates(const std::vector<Key>& given,
+                                            const std::vector<Mode>& modes = {Mode::Major,
+                                                                              Mode::Minor}) {
+  float given_mass = 0.0f;
+  for (const Key& key : given) given_mass += key.confidence;
+  const size_t others = modes.size() * 12 - given.size();
+  std::vector<KeyCandidate> out;
+  for (Mode mode : modes) {
+    for (int root = 0; root < 12; ++root) {
+      Key key{static_cast<PitchClass>(root), mode, (1.0f - given_mass) / others};
+      for (const Key& g : given) {
+        if (g.root == key.root && g.mode == key.mode) key.confidence = g.confidence;
+      }
+      out.push_back({key, 0.0f});
+    }
+  }
+  return out;
+}
+
 }  // namespace
 
 TEST_CASE("KeyAnalyzer synthetic chroma matrix detects all major and minor keys",
@@ -254,8 +274,53 @@ TEST_CASE("N.C. segments carry no key evidence in the chord-based estimate",
 
   // A timeline of nothing but N.C. leaves the chroma estimate as it was.
   const Key chroma{PitchClass::F, Mode::Major, 0.5f};
-  const Key refined = refine_key_with_chords(chroma, {nc(0.0f, 4.0f), nc(4.0f, 8.0f)});
+  const Key refined =
+      refine_key_with_chords(chroma_candidates({chroma}), {nc(0.0f, 4.0f), nc(4.0f, 8.0f)});
   CHECK(refined.root == chroma.root);
   CHECK(refined.mode == chroma.mode);
   CHECK(refined.confidence == chroma.confidence);
+}
+
+TEST_CASE("refine_key_with_chords lets the chords choose only among keys the chroma leaves open",
+          "[key_analyzer][synthetic_matrix]") {
+  const PitchClass c = PitchClass::C;
+  const std::vector<Chord> c_cadence = {
+      chord(c, ChordQuality::Major, 0.0f, 2.0f),
+      chord(transpose(c, 5), ChordQuality::Major, 2.0f, 4.0f),
+      chord(transpose(c, 7), ChordQuality::Dominant7, 4.0f, 6.0f),
+      chord(c, ChordQuality::Major, 6.0f, 8.0f),
+  };
+  REQUIRE(estimate_key_from_chords(c_cadence).root == c);
+
+  SECTION("an ambiguous chroma defers to the progression") {
+    const Key refined = refine_key_with_chords(
+        chroma_candidates({{PitchClass::F, Mode::Major, 0.5f}, {c, Mode::Major, 0.4f}}), c_cadence);
+    CHECK(refined.root == c);
+    CHECK(refined.mode == Mode::Major);
+    CHECK(refined.confidence == 0.4f);
+  }
+
+  SECTION("a key the chroma rules out is never published") {
+    const Key refined = refine_key_with_chords(
+        chroma_candidates({{PitchClass::F, Mode::Major, 0.95f}, {c, Mode::Major, 0.004f}}),
+        c_cadence);
+    CHECK(refined.root == PitchClass::F);
+    CHECK(refined.mode == Mode::Major);
+    CHECK(refined.confidence == 0.95f);
+  }
+
+  SECTION("a key the chroma never scored is never published") {
+    const PitchClass a = PitchClass::A;
+    const std::vector<Chord> a_minor = {
+        chord(a, ChordQuality::Minor, 0.0f, 2.0f),
+        chord(transpose(a, 5), ChordQuality::Minor, 2.0f, 4.0f),
+        chord(transpose(a, 7), ChordQuality::Major, 4.0f, 6.0f),
+        chord(a, ChordQuality::Minor, 6.0f, 8.0f),
+    };
+    REQUIRE(estimate_key_from_chords(a_minor).mode == Mode::Minor);
+    const Key refined =
+        refine_key_with_chords(chroma_candidates({{c, Mode::Major, 0.6f}}, {Mode::Major}), a_minor);
+    CHECK(refined.mode == Mode::Major);
+    CHECK(refined.root == c);
+  }
 }
