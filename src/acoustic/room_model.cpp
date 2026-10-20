@@ -71,7 +71,8 @@ inline bool better_hit(float t, int fi, const MeshHit& best) noexcept {
 ShoeboxRoom uniform_shoebox(const RoomDimensions& dims, float absorption, float scattering) {
   ShoeboxRoom room;
   room.dims = dims;
-  const Material wall = uniform_material(std::clamp(absorption, 0.0f, 0.999f), scattering);
+  const Material wall =
+      uniform_material(std::clamp(absorption, 0.0f, kMaxWallAbsorption), scattering);
   for (Material& w : room.walls) w = wall;
   return room;
 }
@@ -113,11 +114,11 @@ ShoeboxRoom make_uniform_room(const RoomDimensions& dims, const WallMaterialRequ
     // singularity, matching uniform_shoebox's scalar clamp so a band table and
     // a scalar of the same value reflect the same energy.
     for (float coefficient : request.absorption_bands) {
-      wall.absorption.push_back(std::clamp(coefficient, 0.0f, 0.999f));
+      wall.absorption.push_back(std::clamp(coefficient, 0.0f, kMaxWallAbsorption));
     }
     wall.scattering.assign(wall.absorption.size(), 0.0f);
   } else {
-    wall = uniform_material(std::clamp(request.absorption, 0.0f, 0.999f), 0.0f);
+    wall = uniform_material(std::clamp(request.absorption, 0.0f, kMaxWallAbsorption), 0.0f);
   }
 
   if (!request.scattering_bands.empty()) {

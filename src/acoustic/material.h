@@ -14,6 +14,9 @@ namespace sonare::acoustic {
 /// Maximum caller-supplied octave-band coefficients in one material.
 inline constexpr std::size_t kMaxMaterialBands = 64u;
 
+/// @brief Ceiling on a wall's energy absorption coefficient; keeps `log(1 - alpha)` finite.
+inline constexpr float kMaxWallAbsorption = 0.999f;
+
 /// @brief Per-octave-band surface material.
 ///
 /// `absorption` and `scattering` hold one coefficient in [0,1] per octave band

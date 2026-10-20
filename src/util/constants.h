@@ -30,6 +30,9 @@ inline constexpr double kInvGoldenRatioD = 0.61803398874989484820;
 
 inline constexpr float kLn2 = 0.69314718055994530942f;
 inline constexpr double kLn2D = 0.69314718055994530942;
+inline constexpr double kLn10D = 2.30258509299404568402;
+/// ln(1000): the decay constant of a 60 dB (amplitude 10^-3) fall.
+inline constexpr double kLn1000D = 6.90775527898213705205;
 inline constexpr float kLog10Of2 = 0.30102999566398119521f;
 inline constexpr double kLog10Of2D = 0.30102999566398119521;
 

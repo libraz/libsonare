@@ -60,7 +60,10 @@ float sabine_rt60(float volume, float absorption_area) noexcept;
 /// @param mean_absorption area-weighted mean absorption alpha-bar; clamped to
 ///                        [0, 1) to keep the logarithm finite. Returns 0 for a
 ///                        non-positive mean absorption (see `sabine_rt60`).
-float eyring_rt60(float volume, float surface_area, float mean_absorption) noexcept;
+/// @param air_term        atmospheric absorption 4mV (m^2) added to the denominator; a
+///                        positive value keeps a non-absorbing room's decay finite
+float eyring_rt60(float volume, float surface_area, float mean_absorption,
+                  float air_term = 0.0f) noexcept;
 
 /// @brief Statistical-reverberation model selector.
 enum class ReverbModel {

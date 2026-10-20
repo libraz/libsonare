@@ -13,6 +13,8 @@ namespace sonare::acoustic {
 
 namespace {
 
+using sonare::constants::kLn1000D;
+using sonare::constants::kLn10D;
 using sonare::constants::kSqrt2;
 using sonare::constants::kTwoPiD;
 
@@ -59,9 +61,6 @@ float third_octave_rt60(const std::vector<float>& octave_rt60, int k) noexcept {
   const float frac = static_cast<float>(step) / kThirdsPerOctave;
   return std::exp(std::log(lo) + frac * (std::log(hi) - std::log(lo)));
 }
-
-// -60 dB of energy: env(RT60) = 10^-3 in amplitude, i.e. exp(-ln(1000) * t/RT60).
-constexpr double kLn1000 = 6.90775527898213705;
 
 // Deterministic, platform-independent PRNG (SplitMix64) so synthesized tails are
 // bit-reproducible from the seed alone, never relying on std distribution
@@ -210,10 +209,13 @@ float sabine_rt60(float volume, float absorption_area) noexcept {
   return kSabineCoeff * volume / absorption_area;
 }
 
-float eyring_rt60(float volume, float surface_area, float mean_absorption) noexcept {
-  if (volume <= 0.0f || surface_area <= 0.0f || mean_absorption <= 0.0f) return 0.0f;
-  const float alpha = std::min(mean_absorption, 0.999f);
-  const float denom = -surface_area * std::log(1.0f - alpha);
+float eyring_rt60(float volume, float surface_area, float mean_absorption,
+                  float air_term) noexcept {
+  if (volume <= 0.0f || surface_area <= 0.0f) return 0.0f;
+  // Without an air term a non-absorbing room has an unbounded decay.
+  if (mean_absorption <= 0.0f && air_term <= 0.0f) return 0.0f;
+  const float alpha = std::min(mean_absorption, kMaxWallAbsorption);
+  const float denom = -surface_area * std::log(1.0f - alpha) + air_term;
   if (denom <= 0.0f) return 0.0f;
   return kSabineCoeff * volume / denom;
 }
@@ -257,7 +259,7 @@ float air_absorption_m_per_meter(float freq_hz, float temperature_c,
 
   // Convert pressure-level dB/m to the energy attenuation exponent (nepers/m):
   // I/I0 = 10^(-alpha_db * d / 10) = exp(-(alpha_db * ln10 / 10) * d).
-  constexpr double kDbToNeperEnergy = 2.302585092994046 / 10.0;  // ln(10) / 10
+  constexpr double kDbToNeperEnergy = kLn10D / 10.0;
   return static_cast<float>(alpha_db * kDbToNeperEnergy);
 }
 
@@ -315,10 +317,7 @@ ReverbTime shoebox_reverb_time(const ShoeboxRoom& room, ReverbModel model,
       rt.rt60_bands[b] = sabine_rt60(volume, absorption_area + air_term);
     } else {
       const float mean_alpha = surface > 0.0f ? absorption_area / surface : 0.0f;
-      const float alpha = std::min(mean_alpha, 0.999f);
-      const float denom = -surface * std::log(1.0f - alpha) + air_term;
-      rt.rt60_bands[b] =
-          (volume > 0.0f && surface > 0.0f && denom > 0.0f) ? kSabineCoeff * volume / denom : 0.0f;
+      rt.rt60_bands[b] = eyring_rt60(volume, surface, mean_alpha, air_term);
     }
   }
   return rt;
@@ -344,7 +343,7 @@ Audio synthesize_late_tail(const ReverbTime& rt, int sample_rate, const LateReve
     take_third_octave_band(residual, band, k, thirds, sample_rate);
     const float rt60 = third_octave_rt60(rt.rt60_bands, k);
     if (!(rt60 > 0.0f)) continue;
-    const double decay_rate = kLn1000 / static_cast<double>(rt60);
+    const double decay_rate = kLn1000D / static_cast<double>(rt60);
     for (std::size_t i = 0; i < out.size(); ++i) {
       out[i] += band[i] * decay_envelope_at(i, decay_rate, sr);
     }
@@ -406,7 +405,7 @@ LateTailPair synthesize_late_tail_pair(const ReverbTime& rt, int sample_rate,
     take_third_octave_band(residual_r, band_r, k, thirds, sample_rate);
     const float rt60 = third_octave_rt60(rt.rt60_bands, k);
     if (!(rt60 > 0.0f)) continue;
-    const double decay_rate = kLn1000 / static_cast<double>(rt60);
+    const double decay_rate = kLn1000D / static_cast<double>(rt60);
     // Only the right band is mixed, so the left channel stays the mono tail.
     const float gamma = late_tail_pair_coherence(k, spacing_m, sample_rate, rt.rt60_bands.size());
     const float ortho = std::sqrt(std::max(0.0f, 1.0f - gamma * gamma));
