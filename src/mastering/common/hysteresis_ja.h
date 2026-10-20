@@ -33,6 +33,11 @@ struct JilesAthertonConfig {
 struct JilesAthertonState {
   float magnetization = 0.0f;
   float previous_field = 0.0f;
+  /// Memo of the held-field relaxation rate for the (time constant, sample rate) pair it was
+  /// computed from; a pure function of them, so reset() leaves it alone.
+  float relax_tau = 0.0f;
+  float relax_sample_rate = 0.0f;
+  float relax_rate = 0.0f;
 };
 
 class JilesAtherton {
@@ -68,9 +73,6 @@ class JilesAtherton {
   JilesAthertonConfig config_{};
 };
 
-using JaParams = JilesAthertonConfig;
-using HysteresisJa = JilesAtherton;
-
 namespace jiles_atherton_presets {
 
 JilesAthertonConfig oxide_tape();
@@ -79,14 +81,5 @@ JilesAthertonConfig silicon_steel();
 JilesAthertonConfig mu_metal();
 
 }  // namespace jiles_atherton_presets
-
-namespace presets {
-
-JilesAthertonConfig oxide_tape();
-JilesAthertonConfig tape();
-JilesAthertonConfig silicon_steel();
-JilesAthertonConfig mu_metal();
-
-}  // namespace presets
 
 }  // namespace sonare::mastering::common

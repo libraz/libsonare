@@ -823,14 +823,12 @@ TEST_CASE("Shared Jiles-Atherton engine matches DAFx-19 reference equation",
 TEST_CASE("Jiles-Atherton presets expose tape, steel, and mu-metal cores",
           "[mastering][saturation]") {
   namespace presets = sonare::mastering::common::jiles_atherton_presets;
-  namespace plan_presets = sonare::mastering::common::presets;
 
   const auto oxide = presets::oxide_tape();
   const auto tape = presets::tape();
   const auto steel = presets::silicon_steel();
   const auto mu_metal = presets::mu_metal();
-  const sonare::mastering::common::JaParams plan_params = plan_presets::oxide_tape();
-  sonare::mastering::common::HysteresisJa plan_engine(plan_params);
+  sonare::mastering::common::JilesAtherton plan_engine(oxide);
   sonare::mastering::common::JilesAthertonState plan_state;
 
   REQUIRE_THAT(tape.coercivity, WithinAbs(oxide.coercivity, 0.0f));

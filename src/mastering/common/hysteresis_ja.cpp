@@ -98,8 +98,12 @@ float JilesAtherton::process(JilesAthertonState& state, float field, float sampl
     // magnetization for the held field.
     const float tau = config_.viscosity_time_constant_s;
     if (tau > 0.0f && sample_rate > 0.0f) {
-      const float relax_rate = 1.0f - std::exp(-1.0f / (tau * sample_rate));
-      state.magnetization += relax_rate * (anhysteretic - state.magnetization);
+      if (tau != state.relax_tau || sample_rate != state.relax_sample_rate) {
+        state.relax_rate = 1.0f - std::exp(-1.0f / (tau * sample_rate));
+        state.relax_tau = tau;
+        state.relax_sample_rate = sample_rate;
+      }
+      state.magnetization += state.relax_rate * (anhysteretic - state.magnetization);
     }
     state.previous_field = field;
     return state.magnetization;
@@ -199,14 +203,5 @@ JilesAthertonConfig mu_metal() {
 }
 
 }  // namespace jiles_atherton_presets
-
-namespace presets {
-
-JilesAthertonConfig oxide_tape() { return jiles_atherton_presets::oxide_tape(); }
-JilesAthertonConfig tape() { return jiles_atherton_presets::tape(); }
-JilesAthertonConfig silicon_steel() { return jiles_atherton_presets::silicon_steel(); }
-JilesAthertonConfig mu_metal() { return jiles_atherton_presets::mu_metal(); }
-
-}  // namespace presets
 
 }  // namespace sonare::mastering::common
