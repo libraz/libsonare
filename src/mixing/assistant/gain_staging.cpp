@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/number_format.h"
 
 namespace sonare::mixing::assistant {
@@ -155,11 +156,12 @@ float decide_master_headroom_db(const std::vector<TrackProfile>& profiles, const
     }
     if (!found) continue;
 
-    peak_amplitude += std::pow(10.0, (profile.base.loudness.true_peak_db + gain_db) / 20.0);
+    peak_amplitude +=
+        db_to_linear(static_cast<double>(profile.base.loudness.true_peak_db + gain_db));
   }
 
   if (!(peak_amplitude > 0.0)) return 0.0f;
-  const double estimated_peak_dbtp = 20.0 * std::log10(peak_amplitude);
+  const double estimated_peak_dbtp = linear_to_db(peak_amplitude);
   const double trim = static_cast<double>(config.mix_bus_headroom_dbtp) - estimated_peak_dbtp;
   // Never positive: a mix that already fits needs no help, and pushing it up
   // would be a creative choice this stage has no basis for making.
