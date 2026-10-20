@@ -15,8 +15,6 @@
 #include <algorithm>
 #include <cmath>
 
-#include "util/constants.h"
-
 namespace sonare::midi::synth {
 
 /// Time constant (ms) of the servo's cross-spectrum average: tens of periods, so one period's
