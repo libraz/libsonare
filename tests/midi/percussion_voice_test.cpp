@@ -16,6 +16,7 @@
 
 #include "midi/midi_event.h"
 #include "midi/synth/bessel.h"
+#include "midi/synth/fdn_plate.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
 #include "midi/ump.h"
@@ -1753,5 +1754,55 @@ TEST_CASE("percussion wire bound includes the wire filter and air rings",
               PercussionVoiceCore::ring_bound_s(dry, sample_rate));
       }
     }
+  }
+}
+
+TEST_CASE("the plate's 8 kHz band decays with the same T60 at every host rate",
+          "[midi][synth][percussion]") {
+  using sonare::midi::synth::FdnPlate;
+  constexpr double kPi = 3.14159265358979323846;
+  // Energy near 8 kHz in a window, summed over many Goertzel bins so no single partial decides
+  // the reading.
+  const auto band_db = [&](const std::vector<float>& x, double sr, double t0, double t1) {
+    const size_t a = static_cast<size_t>(t0 * sr);
+    const size_t b = static_cast<size_t>(t1 * sr);
+    double total = 0.0;
+    for (int k = 0; k < 48; ++k) {
+      const double w = 2.0 * kPi * (7000.0 + 50.0 * k) / sr;
+      double re = 0.0, im = 0.0;
+      for (size_t i = a; i < b; ++i) {
+        const double phase = static_cast<double>(i - a) / static_cast<double>(b - a);
+        const double hann = 0.5 - 0.5 * std::cos(2.0 * kPi * phase);
+        re += hann * x[i] * std::cos(w * static_cast<double>(i));
+        im += hann * x[i] * std::sin(w * static_cast<double>(i));
+      }
+      total += re * re + im * im;
+    }
+    return 10.0 * std::log10(std::max(1.0e-30, total));
+  };
+  // One plate's partials are sparse enough in a 100 ms window to move the reading by several
+  // percent; averaging over the plate sizes leaves what the damping itself does. The sizes sit
+  // above the lowest partial the line array holds at 192 kHz, so every rate places them as asked.
+  const auto t60_of = [&](double sr) {
+    double sum = 0.0;
+    int count = 0;
+    for (float low_hz = 300.0f; low_hz <= 380.0f; low_hz += 10.0f) {
+      FdnPlate plate;
+      plate.start(sr, low_hz, 1.5f, 0.3f, 0.0f);
+      std::vector<float> out(static_cast<size_t>(0.4 * sr));
+      for (size_t i = 0; i < out.size(); ++i) out[i] = plate.process(i == 0 ? 1.0f : 0.0f);
+      const double drop = band_db(out, sr, 0.05, 0.15) - band_db(out, sr, 0.25, 0.35);
+      sum += 60.0 * 0.2 / drop;
+      ++count;
+    }
+    return sum / count;
+  };
+  const double reference = t60_of(48000.0);
+  INFO("48 kHz T60 " << reference << " s");
+  CHECK(reference > 0.0);
+  for (const double sr : {44100.0, 96000.0, 192000.0}) {
+    const double t60 = t60_of(sr);
+    INFO("sample rate " << sr << " T60 " << t60 << " s");
+    CHECK(std::fabs(t60 - reference) < 0.03 * reference);
   }
 }

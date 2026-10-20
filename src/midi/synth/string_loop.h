@@ -27,6 +27,7 @@
 #include <cstddef>
 
 #include "rt/fractional_delay.h"
+#include "rt/rate_scaled.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
 
@@ -42,7 +43,7 @@ inline float string_loop_gain_for(float period_samples, double sample_rate, floa
 
 /// The sample rate every shipped loss coefficient and seeded noise level in
 /// this bank was voiced at.
-constexpr double kLossVoicedSr = 48000.0;
+constexpr double kLossVoicedSr = rt::kVoicedSampleRate;
 
 /// Re-expresses a loss pole voiced at @ref kLossVoicedSr so it keeps its corner,
 /// in Hz, at @p sample_rate.
@@ -64,15 +65,8 @@ inline float loss_pole_at_rate(float a_voiced, double sample_rate) noexcept {
   return static_cast<float>(std::pow(static_cast<double>(a_voiced), kLossVoicedSr / sample_rate));
 }
 
-/// loss_pole_at_rate() for a loss one-pole written `y += alpha*(x-y)`, taking
-/// and returning `alpha = 1 - a`. Computed in double so the voiced rate returns
-/// @p alpha_voiced bit for bit, which `1 - loss_pole_at_rate(1 - alpha)` in
-/// float does not.
-inline float loss_alpha_at_rate(float alpha_voiced, double sample_rate) noexcept {
-  if (!(sample_rate > 0.0) || !(alpha_voiced < 1.0f)) return alpha_voiced;
-  const double a = 1.0 - static_cast<double>(alpha_voiced);
-  return static_cast<float>(1.0 - std::pow(a, kLossVoicedSr / sample_rate));
-}
+using rt::loss_alpha_at_rate;
+using rt::lowpass_alpha_at_rate;
 
 /// Re-expresses a per-sample noise level voiced at @ref kLossVoicedSr so it
 /// keeps its power per Hz at @p sample_rate.
@@ -102,8 +96,7 @@ inline float noise_gain_at_rate(double sample_rate) noexcept {
 inline float onepole_noise_rate_gain(float cutoff_hz, double sample_rate) noexcept {
   if (!(sample_rate > 0.0) || !(cutoff_hz > 0.0f)) return 1.0f;
   const auto pole_variance = [](float fc, double sr) noexcept {
-    const float a =
-        std::clamp(1.0f - std::exp(-constants::kTwoPi * fc / static_cast<float>(sr)), 0.01f, 1.0f);
+    const float a = lowpass_alpha_at_rate(fc, sr);
     return a / (2.0f - a);
   };
   return std::sqrt(pole_variance(cutoff_hz, kLossVoicedSr) / pole_variance(cutoff_hz, sample_rate));
@@ -377,9 +370,7 @@ struct NoiseBurst {
     pos = armed ? 0 : len;
     lp = 0.0f;
     env = armed ? 1.0f : 0.0f;
-    alpha = std::clamp(
-        1.0f - std::exp(-constants::kTwoPi * cutoff_hz / static_cast<float>(sample_rate)), 0.01f,
-        1.0f);
+    alpha = lowpass_alpha_at_rate(cutoff_hz, sample_rate);
     decay = std::exp(-4.0f / static_cast<float>(len));
   }
   void arm() noexcept {

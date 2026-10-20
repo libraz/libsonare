@@ -535,6 +535,10 @@ struct NativeSynthVoice : VoiceState {
   float sampler_pan_units = 0.0f;
   /// Set by choke(): the voice is being cut and takes no live refresh.
   bool choked = false;
+  /// Consecutive released samples whose chain output stayed under the silence floor, and the run
+  /// (a time quantity set in start()) at which the slot is freed.
+  uint32_t silent_run = 0;
+  uint32_t silent_run_limit = 0;
   /// Amp level latched at note-off while the undamped 4' tail sounds; the tail
   /// holds it past the shared envelope's idle. Choke paths fade it with the
   /// envelope's release law.
@@ -850,9 +854,10 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
 
   /// Both a declining engine and a pitch below the engine's delay line land
   /// here.
+  /// Safe to read from the control thread while process() runs.
   bool legato_fallback_count(uint64_t* out) const noexcept override {
     if (out == nullptr) return false;
-    *out = legato_fallbacks_;
+    *out = legato_fallbacks_->load(std::memory_order_relaxed);
     return true;
   }
 
@@ -1163,7 +1168,10 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   /// channel can be sounding. Never resized on the audio thread.
   std::vector<MpeNote> mpe_notes_;
   std::vector<uint64_t> mpe_note_ages_;
-  uint64_t legato_fallbacks_ = 0;
+  /// Counted on the audio thread, read by the host; atomic and held by pointer so the instrument
+  /// stays movable.
+  std::unique_ptr<std::atomic<uint64_t>> legato_fallbacks_ =
+      std::make_unique<std::atomic<uint64_t>>(0);
   uint64_t skipped_events_ = 0;
   /// MIDI 2.0 per-note pitch: the rows per key (surviving note-off and Reset All Controllers),
   /// RC 0/7 per channel, and each pool voice's binding, indexed like the pool and sized in

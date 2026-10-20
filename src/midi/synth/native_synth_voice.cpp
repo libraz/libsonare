@@ -196,6 +196,15 @@ float pan_scatter_units(float stereo_spread, float scatter) noexcept {
   return 500.0f * stereo_spread * scatter;
 }
 
+/// A released voice whose chain output stays under kSilenceLevel / 10 (-100 dBFS) this long is
+/// finished: longer than the half period of the lowest pitch, so a zero crossing cannot end it.
+constexpr float kReleasedSilenceSeconds = 0.064f;
+
+uint32_t released_silence_run(double sample_rate) noexcept {
+  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  return static_cast<uint32_t>(std::ceil(static_cast<double>(kReleasedSilenceSeconds) * sr));
+}
+
 float law_fade_step(double sample_rate) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   return static_cast<float>(1.0 / (sr * static_cast<double>(kLawFadeSeconds)));
@@ -238,6 +247,8 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   patch = &p;
   key_down = true;
   releasing = false;
+  silent_run = 0;
+  silent_run_limit = released_silence_run(sample_rate);
   sostenuto = false;
   // GS per-note drum edits: pitch coarse, absolute pan and the three send
   // multiplicands carry into render; the TVA level folds into velocity_gain
@@ -604,8 +615,11 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   // Refresh the cached stereo pan gains when the effective pan changed. A GS
   // per-note drum pan overrides the channel pan (absolute); otherwise the
   // channel pan stands.
-  const float base_pan = drum_pan_units < 1.0e8f ? drum_pan_units : mod.pan_units;
-  const float pan_units = base_pan + offsets.pan_units + pan_spread_units;
+  // The seeded scatter stands aside for an absolute pan, which would otherwise differ per strike.
+  const bool absolute_pan = drum_pan_units < 1.0e8f;
+  const float base_pan = absolute_pan ? drum_pan_units : mod.pan_units;
+  const float spread_pan = absolute_pan ? sampler_pan_units : pan_spread_units;
+  const float pan_units = base_pan + offsets.pan_units + spread_pan;
   if (pan_units != cached_pan_units) {
     cached_pan_units = pan_units;
     const rt::PanGains gains = voice_pan_gains(pan_units);
@@ -775,6 +789,20 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     sample = hold_value;
   }
   if (quant_step > 0.0f) sample = std::round(sample / quant_step) * quant_step;
+
+  // --- release end: a released voice whose chain has gone silent frees its slot ---
+  // The amplitude envelope may be set to ring far past the source (a damped string, a bellows
+  // that closes in tens of milliseconds); the slot follows the audible output instead.
+  if (releasing && !harpsichord_tail &&
+      std::max(std::fabs(sample), std::fabs(contact)) <= 0.1f * DahdsrEnvelope::kSilenceLevel) {
+    if (++silent_run >= silent_run_limit) {
+      active = false;
+      amp_env.kill();
+      return 0.0f;
+    }
+  } else {
+    silent_run = 0;
+  }
 
   // --- amplitude (wind_gain is the shared tremulant/sag level; 1.0 otherwise) ---
   // The contact transient joins here rather than upstream: it is the strike

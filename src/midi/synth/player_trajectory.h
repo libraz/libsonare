@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "midi/synth/envelope.h"
 #include "util/db.h"
 
 namespace sonare::midi::synth {
@@ -27,6 +28,10 @@ inline float ramp_coeff(float ms, double sample_rate) noexcept {
   const double t = std::max(0.5f, ms) * 0.001 * sample_rate;
   return static_cast<float>(1.0 - std::exp(-3.0 / std::max(1.0, t)));
 }
+
+/// Level under which a released OnsetContour is exactly zero: a hundredth of the amplitude
+/// envelope's floor, so the snap stays far below anything it could shape.
+inline constexpr float kOnsetSilenceLevel = 0.01f * DahdsrEnvelope::kSilenceLevel;
 
 /// The onset envelope a sustained engine ramps toward 1 while the player
 /// sustains and toward 0 once released.
@@ -101,6 +106,8 @@ struct OnsetContour {
     }
     const float coeff = releasing ? release_coeff : attack_coeff;
     level += coeff * (target - level);
+    // Below the floor a release is silence; left to decay it would park on a subnormal.
+    if (releasing && level <= kOnsetSilenceLevel) level = 0.0f;
     return level;
   }
 

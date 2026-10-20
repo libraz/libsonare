@@ -239,6 +239,12 @@ class KsVoiceCore {
   LoopBudget configure(const KsPatchParams& params, double sr, uint8_t note, Velocity16 velocity,
                        uint64_t seed) noexcept;
   // One sample of the loops at the internal rate.
+  /// Ratio of the expected to this strike's ring energy of the burst: its energy at each
+  /// harmonic of the loop, weighted by how long the loop keeps that harmonic. Equalising total
+  /// energy alone leaves the level of a bass note wandering with how the draw lands on the
+  /// harmonics that ring.
+  float burst_level_correction(double sr, float loop_period, float loop_gain,
+                               float loop_pole) const noexcept;
   float render_internal(float pitch_ratio) noexcept;
   // Brings the oversampled loops back to the host rate; the identity at factor 1.
   LoopDecimator decimator_;
@@ -276,6 +282,9 @@ class KsVoiceCore {
   int exc_pos_ = 0;
   int pick_delay_ = 0;
   float exc_alpha_ = 1.0f;
+  /// Burst noise level: holds its power per Hz at the internal rate, and scales this strike's
+  /// seeded draw to the energy the burst has on average, so identical notes sound equally loud.
+  float exc_noise_gain_ = 1.0f;
   float exc_lp1_ = 0.0f;
   float exc_lp2_ = 0.0f;
   // Physical-pluck doublet. pluck_style_ == 0 -> the burst is the plain seeded

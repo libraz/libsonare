@@ -231,12 +231,15 @@ TEST_CASE("the fallback ambience weighting scales the channel send", "[midi][sf2
     player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 94, 0)));
     player.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, program)));
     player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
-    render(player, 4800);
+    // The return is read against what the note itself put into the send, so a program's own
+    // attack level (an organ speaks in slowly, a bass at once) does not decide the comparison.
+    const StereoRender dry = render(player, 4800);
+    const float dry_level = rms(dry.left, 0, 4800) + rms(dry.right, 0, 4800);
     player.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
     // Kill the voices, leaving only what the effect bus is still returning.
     player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 120, 0)));
     const StereoRender out = render(player, 24000);
-    return rms(out.left, 240, 24000) + rms(out.right, 240, 24000);
+    return (rms(out.left, 240, 24000) + rms(out.right, 240, 24000)) / std::max(dry_level, 1.0e-6f);
   };
 
   REQUIRE(wet_tail(19, 0) < kSilenceFloor);  // church organ, no send -> dry

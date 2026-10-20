@@ -703,3 +703,74 @@ TEST_CASE("loss_alpha_at_rate is the loss law in alpha form, exact at the voiced
   }
   REQUIRE(loss_alpha_at_rate(1.0f, 96000.0) == 1.0f);  // a transparent filter stays transparent
 }
+
+TEST_CASE("the excitation lowpass coefficient keeps its corner and its floor in Hz at every rate",
+          "[midi][synth][loss_law]") {
+  using sonare::midi::synth::lowpass_alpha_at_rate;
+  const auto corner_hz = [](float alpha, double sr) {
+    return -std::log(1.0 - static_cast<double>(alpha)) * sr / (2.0 * 3.14159265358979323846);
+  };
+  // 300 Hz is the darkest KS and plucked-string excitation corner; a per-sample floor of 0.01
+  // lifted it from about 187 kHz up. A corner under the floor (10 Hz) lands on the same ~77 Hz
+  // at every rate.
+  const double floor_voiced = corner_hz(lowpass_alpha_at_rate(10.0f, kLossVoicedSr), kLossVoicedSr);
+  for (const double sr : {44100.0, 48000.0, 96000.0, 192000.0, 384000.0}) {
+    INFO("sample rate " << sr);
+    CHECK(corner_hz(lowpass_alpha_at_rate(300.0f, sr), sr) == Catch::Approx(300.0).epsilon(2.0e-3));
+    CHECK(corner_hz(lowpass_alpha_at_rate(10.0f, sr), sr) ==
+          Catch::Approx(floor_voiced).epsilon(2.0e-3));
+  }
+}
+
+TEST_CASE("the KS onset level does not move with the host rate", "[midi][synth][ks][loss_law]") {
+  // The burst is one string period of noise drawn per sample, so its power per Hz is held at the
+  // voiced rate by a level scaled with the rate.
+  KsPatchParams params;
+  params.hf_decay_s = 0.0f;
+  std::ostringstream report;
+  double lo = 0.0, hi = 0.0;
+  bool first = true;
+  for (const double sr : {44100.0, 48000.0, 96000.0, 192000.0}) {
+    const int samples = static_cast<int>(0.1 * sr);
+    const std::vector<float> out = render_ks(params, 37, sr, samples);
+    double acc = 0.0;
+    for (const float v : out) acc += static_cast<double>(v) * v;
+    const double db = 10.0 * std::log10(std::max(1.0e-24, acc / samples));
+    report << "sr " << sr << " onset rms " << db << " dB\n";
+    lo = first ? db : std::min(lo, db);
+    hi = first ? db : std::max(hi, db);
+    first = false;
+  }
+  INFO(report.str());
+  CHECK(hi - lo < 4.0);
+}
+
+TEST_CASE("the pipe-organ tone filter keeps its corner for a low pipe at high host rates",
+          "[midi][synth][loss_law]") {
+  sonare::midi::synth::PipeOrganPatchParams stopped;
+  stopped.stopped = true;
+  stopped.brightness = 0.0f;
+  stopped.breath = 0.0f;
+  stopped.chiff = 0.0f;
+  std::ostringstream report;
+  double lo = 0.0, hi = 0.0;
+  bool first = true;
+  for (const double sr : {48000.0, 192000.0, 384000.0}) {
+    const int samples = window_samples(sr);
+    sonare::midi::synth::PipeOrganVoiceCore core;
+    std::vector<float> slab(static_cast<size_t>(sonare::midi::synth::pipe_organ_slab_capacity(sr)),
+                            0.0f);
+    core.attach(slab.data(), sonare::midi::synth::pipe_organ_buffer_capacity(sr));
+    core.start(stopped, sr, 24, sonare::midi::Velocity16::from7(100), 0x5011ADE5ull);
+    for (int i = 0; i < samples / 2; ++i) core.render(1.0f);
+    std::vector<float> tone(static_cast<size_t>(samples));
+    for (float& v : tone) v = core.render(1.0f);
+    const double tilt = tilt_of(tone, sr);
+    report << "sr " << sr << " tilt " << tilt << "\n";
+    lo = first ? tilt : std::min(lo, tilt);
+    hi = first ? tilt : std::max(hi, tilt);
+    first = false;
+  }
+  INFO(report.str());
+  CHECK(hi - lo < 1.5);
+}

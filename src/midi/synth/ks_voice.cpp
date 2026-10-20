@@ -1,6 +1,7 @@
 #include "midi/synth/ks_voice.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include "midi/synth/pitch.h"
@@ -67,6 +68,11 @@ constexpr uint64_t kPickNoiseIndexBase = 1ull << 24;
 /// higher-frequency contact than a felt damper falling onto it.
 SONARE_TUNABLE(kKsPickNoiseMs, 25.0f);
 SONARE_TUNABLE(kKsPickNoiseCutoffHz, 6000.0f);
+
+/// Harmonics of the string read when this strike's burst is levelled, and the span of a note
+/// over which the level is judged.
+constexpr int kLevelHarmonics = 128;
+constexpr float kLevelHorizonS = 0.25f;
 
 /// Where ks.hf_decay_s is quoted. A fixed frequency for the reason string_loop.h
 /// gives: a target quoted at the octave is unreachable in the bass.
@@ -196,8 +202,10 @@ LoopBudget KsVoiceCore::configure(const KsPatchParams& params, double sr, uint8_
   // Exponential brightness -> cutoff map (300 Hz .. ~12 kHz) through two
   // cascaded one-poles, so the velocity swing is clearly audible.
   const float exc_cutoff = 300.0f * std::exp2(5.3f * bright);
-  exc_alpha_ =
-      std::clamp(1.0f - std::exp(-kTwoPi * exc_cutoff / static_cast<float>(sr)), 0.01f, 1.0f);
+  exc_alpha_ = lowpass_alpha_at_rate(exc_cutoff, sr);
+  exc_noise_gain_ =
+      noise_gain_at_rate(sr) *
+      burst_level_correction(sr, loop_period, string_loop_gain_for(loop_period, sr, t60), a);
   exc_lp1_ = 0.0f;
   exc_lp2_ = 0.0f;
 
@@ -329,6 +337,82 @@ LoopBudget KsVoiceCore::configure(const KsPatchParams& params, double sr, uint8_
   return budget;
 }
 
+// Bounded and allocation-free: at most kLevelHarmonics harmonics over one burst, measured about
+// 50 us at E1 and 48 kHz.
+float KsVoiceCore::burst_level_correction(double sr, float loop_period, float loop_gain,
+                                          float loop_pole) const noexcept {
+  const double a = static_cast<double>(exc_alpha_);
+  const double p = 1.0 - a;
+  const double pole = static_cast<double>(loop_pole);
+  const int limit =
+      std::min(kLevelHarmonics,
+               static_cast<int>(std::floor(0.5 * (static_cast<double>(loop_period) - 1.0))));
+  if (limit < 1) return 1.0f;
+
+  // Per harmonic of the loop: how long it keeps ringing inside the horizon (the integral of its
+  // decay, in passes) times the energy the comb and the two excitation poles let through. The
+  // draw is white, so a harmonic's expected energy is that response times exc_total_ / 3.
+  std::array<double, kLevelHarmonics> weight{}, response{};
+  const double horizon_passes =
+      static_cast<double>(kLevelHorizonS) * sr / static_cast<double>(loop_period);
+  double total = 0.0;
+  for (int k = 1; k <= limit; ++k) {
+    const double w = constants::kTwoPiD * k / static_cast<double>(loop_period);
+    const double loop_mag = static_cast<double>(loop_gain) * (1.0 - pole) /
+                            std::hypot(1.0 - pole * std::cos(w), pole * std::sin(w));
+    const double lambda = -std::log(std::max(loop_mag, 1.0e-9));
+    const double ring =
+        -std::expm1(-2.0 * lambda * horizon_passes) / (2.0 * std::max(lambda, 1.0e-9));
+    const double lp = a / std::hypot(1.0 - p * std::cos(w), p * std::sin(w));
+    const double comb =
+        pick_delay_ > 0 ? 2.0 - 2.0 * std::cos(w * static_cast<double>(pick_delay_)) : 1.0;
+    weight[static_cast<size_t>(k - 1)] = ring;
+    response[static_cast<size_t>(k - 1)] = lp * lp * lp * lp * comb;
+    total += ring * response[static_cast<size_t>(k - 1)];
+  }
+  // Harmonics past the point where the rest holds under half a percent are not read.
+  int harmonics = limit;
+  for (double tail = 0.0; harmonics > 1; --harmonics) {
+    tail +=
+        weight[static_cast<size_t>(harmonics - 1)] * response[static_cast<size_t>(harmonics - 1)];
+    if (tail > 0.005 * total) break;
+  }
+
+  // This strike: the raw draw through the comb and the two poles, as render_internal() runs it,
+  // read at each harmonic with a Goertzel recurrence (only the magnitude is wanted).
+  std::array<double, kLevelHarmonics> coeff{}, s1{}, s2{};
+  double expected = 0.0;
+  for (int k = 0; k < harmonics; ++k) {
+    const auto i = static_cast<size_t>(k);
+    coeff[i] = 2.0 * std::cos(constants::kTwoPiD * (k + 1) / static_cast<double>(loop_period));
+    expected += weight[i] * response[i];
+  }
+  expected *= exc_total_ / 3.0;
+  const int window = exc_total_ + pick_delay_;
+  double l1 = 0.0, l2 = 0.0;
+  for (int pos = 0; pos < window; ++pos) {
+    double burst =
+        pos < exc_total_ ? noise_.bipolar_at(kNoiseIndexBase + static_cast<uint64_t>(pos)) : 0.0;
+    if (pick_delay_ > 0 && pos >= pick_delay_) {
+      burst -= noise_.bipolar_at(kNoiseIndexBase + static_cast<uint64_t>(pos - pick_delay_));
+    }
+    l1 += a * (burst - l1);
+    l2 += a * (l1 - l2);
+    for (int k = 0; k < harmonics; ++k) {
+      const auto i = static_cast<size_t>(k);
+      const double next = l2 + coeff[i] * s1[i] - s2[i];
+      s2[i] = s1[i];
+      s1[i] = next;
+    }
+  }
+  double actual = 0.0;
+  for (int k = 0; k < harmonics; ++k) {
+    const auto i = static_cast<size_t>(k);
+    actual += weight[i] * (s1[i] * s1[i] + s2[i] * s2[i] - coeff[i] * s1[i] * s2[i]);
+  }
+  return actual > 1.0e-12 ? static_cast<float>(std::sqrt(expected / actual)) : 1.0f;
+}
+
 float KsVoiceCore::render(float pitch_ratio) noexcept {
   if (killed_) return 0.0f;
   return decimator_.run([&] { return render_internal(pitch_ratio); });
@@ -344,7 +428,8 @@ float KsVoiceCore::render_internal(float pitch_ratio) noexcept {
     // deterministic pluck doublet. pluck_style_ == 0 returns the raw noise so the
     // path is bit-identical.
     auto source_at = [this](int k) noexcept -> float {
-      const float nz = noise_.bipolar_at(kNoiseIndexBase + static_cast<uint64_t>(k));
+      const float nz =
+          exc_noise_gain_ * noise_.bipolar_at(kNoiseIndexBase + static_cast<uint64_t>(k));
       if (pluck_style_ <= 0.0f) return nz;
       // Raised-cosine up/down lobe: the finger's release-velocity pulse. Zero-
       // mean (the second half is negated), width pluck_contact_ (narrow = bright).

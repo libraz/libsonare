@@ -476,8 +476,8 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
     pipe.tone_f0 = f0;
     pipe.tone_mult = tone_mult;
     pipe.tone_alpha = std::clamp(
-        1.0f - std::exp(-kTwoPi * tone_mult * (1.0f + kRadToneSpan * radiation) * f0 / srf), 0.01f,
-        1.0f);
+        1.0f - std::exp(-kTwoPi * tone_mult * (1.0f + kRadToneSpan * radiation) * f0 / srf),
+        loss_alpha_at_rate(0.01f, sr), 1.0f);
     pipe.tone_s1 = 0.0f;
     pipe.tone_s2 = 0.0f;
 
@@ -578,7 +578,7 @@ void PipeOrganVoiceCore::apply_excitation() noexcept {
     pipe.tone_alpha =
         std::clamp(1.0f - std::exp(-kTwoPi * pipe.tone_mult * (1.0f + kRadToneSpan * radiation) *
                                    pipe.tone_f0 / srf_),
-                   0.01f, 1.0f);
+                   loss_alpha_at_rate(0.01f, srf_), 1.0f);
   }
 }
 

@@ -577,7 +577,7 @@ NativeSynth::LegatoResult NativeSynth::legato_continue(uint8_t ch, bool release,
                      voiced_key(to_note, to_pitch), lowest_pitch_mult(*voice->patch));
   if (!carry) {
     // Counted, because nothing in the sound says whether the phrase ended or was declined.
-    if (legato) ++legato_fallbacks_;
+    if (legato) legato_fallbacks_->fetch_add(1, std::memory_order_relaxed);
     if (!release) {
       // Monophonic either way: the previous note stops. Fast rather than the patch's own release,
       // which on a sustaining patch runs past a second and would leave the note it replaced

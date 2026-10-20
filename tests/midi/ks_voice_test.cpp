@@ -968,3 +968,68 @@ TEST_CASE("KS kill silences subsequent rendering and permits restart", "[midi][s
   const bool deterministic = restarted_samples == fresh_samples;
   REQUIRE(deterministic);
 }
+
+TEST_CASE("identical bass strikes are equally loud at the core", "[midi][synth][ks]") {
+  std::vector<float> slab(static_cast<size_t>(ks_slab_capacity(kRate)), 0.0f);
+  const auto level_db = [&](const KsPatchParams& params, uint8_t note, uint8_t velocity,
+                            uint64_t seed) {
+    KsVoiceCore core;
+    core.attach(slab.data(), ks_buffer_capacity(kRate));
+    core.start(params, kRate, note, sonare::midi::Velocity16::from7(velocity), seed);
+    const int samples = static_cast<int>(0.25 * kRate);
+    double acc = 0.0;
+    for (int i = 0; i < samples; ++i) {
+      const double v = core.render(1.0f);
+      acc += v * v;
+    }
+    return 10.0 * std::log10(std::max(1.0e-30, acc / samples));
+  };
+  // Measured over 40 seeds the spread is 0.2-0.7 dB; the bound leaves room for the platform.
+  constexpr int kStrikes = 24;
+  for (const uint8_t program : {32, 33, 34, 35}) {
+    const KsPatchParams& params = gm_fallback_patch(0, program).ks;
+    for (const uint8_t note : {37, 61}) {
+      for (const uint8_t velocity : {60, 76}) {
+        double lo = 1.0e9, hi = -1.0e9;
+        for (int strike = 0; strike < kStrikes; ++strike) {
+          const double db = level_db(params, note, velocity,
+                                     0x9E3779B97F4A7C15ull * static_cast<uint64_t>(strike + 1));
+          lo = std::min(lo, db);
+          hi = std::max(hi, db);
+        }
+        INFO("program " << static_cast<int>(program) << " note " << static_cast<int>(note)
+                        << " velocity " << static_cast<int>(velocity) << ": " << lo << ".." << hi);
+        CHECK(hi - lo < 1.0);
+      }
+    }
+  }
+}
+
+TEST_CASE("a harder bass velocity never sounds softer than a softer one across strikes",
+          "[midi][synth][ks]") {
+  for (const uint8_t program : {32, 33, 34, 35}) {
+    for (const uint8_t note : {37, 61}) {
+      NativeSynthConfig cfg;
+      cfg.patch = gm_fallback_patch(0, program);
+      NativeSynth synth(cfg);
+      synth.prepare(kRate, 256);
+      const auto strike_db = [&](uint8_t velocity) {
+        synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, velocity)));
+        const std::vector<float> body = render_left(synth, static_cast<int>(0.25 * kRate));
+        synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, note, 0)));
+        (void)render_left(synth, static_cast<int>(0.6 * kRate));
+        double acc = 0.0;
+        for (const float v : body) acc += static_cast<double>(v) * v;
+        return 10.0 * std::log10(std::max(1.0e-30, acc / static_cast<double>(body.size())));
+      };
+      double soft_hi = -1.0e9, hard_lo = 1.0e9;
+      for (int strike = 0; strike < 16; ++strike) {
+        soft_hi = std::max(soft_hi, strike_db(60));
+        hard_lo = std::min(hard_lo, strike_db(76));
+      }
+      INFO("program " << static_cast<int>(program) << " note " << static_cast<int>(note)
+                      << " softest-to-loudest soft " << soft_hi << " hard " << hard_lo);
+      CHECK(hard_lo > soft_hi);
+    }
+  }
+}

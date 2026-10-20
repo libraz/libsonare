@@ -321,7 +321,8 @@ struct PercussionPatchParams {
   float plate_gain = 0.0f;
   /// Reverberation time of the plate at the bottom of its band.
   float plate_t60_s = 2.0f;
-  /// Reverberation time at Nyquist as a fraction of `plate_t60_s`. A cymbal
+  /// Reverberation time at the 48 kHz voicing's Nyquist (24 kHz, kept in Hz at every rate) as a
+  /// fraction of `plate_t60_s`. A cymbal
   /// holds its top far longer than a drum head does, so this sits high here;
   /// at 1 the top of the band is undamped.
   float plate_hf_ratio = 0.6f;

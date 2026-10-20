@@ -4241,3 +4241,107 @@ TEST_CASE("GM fallback tail covers every source across supported rates", "[bound
     }
   }
 }
+
+TEST_CASE("a released voice frees its slot once the source is silent, not at the envelope tail",
+          "[midi][synth][release]") {
+  using sonare::midi::synth::gm_fallback_patch;
+  using sonare::midi::synth::NativeSynthConfig;
+  // Electric grand, dulcimer, glockenspiel, vibraphone, accordion and synth voice all carry an
+  // amplitude release of seconds over a source that falls silent far sooner.
+  for (const uint8_t program : {2, 9, 11, 15, 21, 54}) {
+    NativeSynthConfig cfg;
+    cfg.patch = gm_fallback_patch(0, program);
+    NativeSynth synth(cfg);
+    synth.prepare(sonare::test::kRate, 256);
+    synth.on_event(0, sonare::test::event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    (void)sonare::test::render_left(synth, static_cast<int>(0.4 * sonare::test::kRate));
+    REQUIRE(synth.active_voice_count() == 1);
+    synth.on_event(0, sonare::test::event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+    int freed_at = -1;
+    const int block = 256;
+    const int limit = static_cast<int>(3.5 * sonare::test::kRate);
+    for (int done = 0; done < limit && freed_at < 0; done += block) {
+      (void)sonare::test::render_left(synth, block);
+      if (synth.active_voice_count() == 0) freed_at = done;
+    }
+    INFO("program " << static_cast<int>(program));
+    CHECK(freed_at >= 0);
+  }
+}
+
+TEST_CASE("the accordion amplitude path rises into its held level without a step",
+          "[midi][synth][accordion]") {
+  using sonare::midi::synth::gm_fallback_patch;
+  for (const uint8_t variation : {0, 8}) {
+    const auto& patch = gm_fallback_patch(variation, 21, sonare::midi::synth::GsToneMap::kSc55);
+    INFO("variation " << static_cast<int>(variation));
+    REQUIRE(patch.mode == sonare::midi::synth::SynthEngineMode::kFreeReed);
+    CHECK((patch.amp_env.sustain >= 1.0f || patch.amp_env.decay_ms > 0.0f));
+  }
+}
+
+TEST_CASE(
+    "a released voice is cut at the same note-relative sample whatever the onset or block size",
+    "[midi][synth][release]") {
+  using sonare::midi::synth::gm_fallback_patch;
+  using sonare::midi::synth::NativeSynthConfig;
+  using sonare::midi::synth::SynthRetrigger;
+  // One note, released after half a second, rendered with the onset at two offsets and the host
+  // blocks at two sizes. Events land on exact samples, so a block boundary falls differently
+  // against the note each time.
+  const auto render_note = [](uint8_t program, long onset, int block, int* active_at_end) {
+    NativeSynthConfig cfg;
+    cfg.patch = gm_fallback_patch(0, program);
+    cfg.patch.retrigger = SynthRetrigger::kNote;
+    NativeSynth synth(cfg);
+    synth.prepare(sonare::test::kRate, block);
+    // Reverb, chorus and delay sends off, so only the voice is compared.
+    for (const uint8_t cc : {91, 93, 94}) {
+      synth.on_event(0, sonare::test::event(sonare::midi::make_midi1_control_change(0, 0, cc, 0)));
+    }
+    const long release_at = onset + 24000;
+    const long total = onset + 3 * 48000;
+    std::vector<float> out;
+    long pos = 0;
+    bool noted = false;
+    bool released = false;
+    while (pos < total) {
+      if (!noted && pos >= onset) {
+        synth.on_event(0, sonare::test::event(sonare::midi::make_midi1_note_on(0, 0, 48, 100)));
+        noted = true;
+      }
+      if (!released && pos >= release_at) {
+        synth.on_event(0, sonare::test::event(sonare::midi::make_midi1_note_off(0, 0, 48, 0)));
+        released = true;
+      }
+      long n = std::min<long>(block, total - pos);
+      if (!noted) n = std::min(n, onset - pos);
+      if (noted && !released) n = std::min(n, release_at - pos);
+      std::vector<float> left(static_cast<size_t>(n));
+      std::vector<float> right(static_cast<size_t>(n));
+      float* chans[2] = {left.data(), right.data()};
+      synth.process(chans, 2, static_cast<int>(n));
+      out.insert(out.end(), left.begin(), left.end());
+      pos += n;
+    }
+    *active_at_end = synth.active_voice_count();
+    return std::vector<float>(out.begin() + onset, out.end());
+  };
+  // Karplus-Strong bass, Synth Voice, Warm Pad and Saw Lead: the cores whose output falls silent
+  // after release, and the voices whose amplitude release outlasts them.
+  for (const uint8_t program : {33, 54, 89, 81}) {
+    int active_a = -1, active_b = -1, active_c = -1;
+    const std::vector<float> reference = render_note(program, 0, 64, &active_a);
+    const std::vector<float> shifted = render_note(program, 12345, 64, &active_b);
+    const std::vector<float> reblocked = render_note(program, 40001, 777, &active_c);
+    INFO("program " << static_cast<int>(program));
+    REQUIRE(reference.size() == shifted.size());
+    REQUIRE(reference.size() == reblocked.size());
+    CHECK(reference == shifted);
+    CHECK(reference == reblocked);
+    // The slot is freed by the end of the three seconds in every case.
+    CHECK(active_a == 0);
+    CHECK(active_b == 0);
+    CHECK(active_c == 0);
+  }
+}

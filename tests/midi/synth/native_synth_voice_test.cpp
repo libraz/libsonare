@@ -7,6 +7,7 @@
 
 #include "midi/midi_event.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/player_trajectory.h"
 #include "midi/ump.h"
 #include "util/constants.h"
 
@@ -160,4 +161,63 @@ TEST_CASE("Native sample one-shot tail follows a live downward pitch offset", "[
     REQUIRE(last_above_floor > frames);
     CHECK(last_above_floor < declared);
   }
+}
+
+TEST_CASE("a releasing OnsetContour reaches exactly zero and never holds a subnormal",
+          "[midi][synth][contour]") {
+  using sonare::midi::synth::OnsetContour;
+  using sonare::midi::synth::ramp_coeff;
+  constexpr double kSr = 48000.0;
+  for (const float release_ms : {20.0f, 64.0f, 120.0f}) {
+    OnsetContour contour;
+    contour.attack_coeff = ramp_coeff(10.0f, kSr);
+    contour.release_coeff = ramp_coeff(release_ms, kSr);
+    contour.level = 1.0f;
+    contour.release();
+    // Five time constants of the 95% rise per millisecond is far inside this bound.
+    const int bound = static_cast<int>(10.0 * release_ms * 0.001 * kSr);
+    int reached = -1;
+    for (int i = 0; i < bound; ++i) {
+      const float level = contour.advance();
+      REQUIRE(std::fpclassify(level) != FP_SUBNORMAL);
+      if (level == 0.0f) {
+        reached = i;
+        break;
+      }
+    }
+    INFO("release_ms " << release_ms);
+    CHECK(reached >= 0);
+    CHECK(contour.advance() == 0.0f);
+  }
+}
+
+TEST_CASE("a GS absolute drum pan is the same on every strike whatever the seed",
+          "[midi][synth][pan]") {
+  using sonare::midi::synth::DrumVoiceMod;
+  NativeSynthPatch patch;
+  patch.stereo_spread = 1.0f;
+  DrumVoiceMod mod;
+  mod.pan_units = 200.0f;
+  std::array<float, 2> left_gain{};
+  std::array<float, 2> right_gain{};
+  std::array<float, 2> free_left{};
+  for (uint32_t index = 0; index < 2; ++index) {
+    NativeSynthVoice voice;
+    voice.note = 38;
+    voice.active = true;
+    voice.start(patch, 48000.0, Velocity16::from7(100), index + 7, 0.0f, false, 0, mod);
+    voice.render(Sf2ChannelMod{});
+    left_gain[index] = voice.gain_left;
+    right_gain[index] = voice.gain_right;
+    NativeSynthVoice scattered;
+    scattered.note = 38;
+    scattered.active = true;
+    scattered.start(patch, 48000.0, Velocity16::from7(100), index + 7);
+    scattered.render(Sf2ChannelMod{});
+    free_left[index] = scattered.gain_left;
+  }
+  CHECK(left_gain[0] == left_gain[1]);
+  CHECK(right_gain[0] == right_gain[1]);
+  // Without a drum pan the scatter still places each strike apart.
+  CHECK(free_left[0] != free_left[1]);
 }

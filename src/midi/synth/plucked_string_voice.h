@@ -162,6 +162,8 @@ class PluckedStringVoiceCore {
   int exc_pos_ = 0;
   int pick_delay_ = 0;
   float exc_alpha_ = 1.0f;
+  /// Burst noise level holding its power per Hz at the internal rate.
+  float exc_noise_gain_ = 1.0f;
   float exc_lp_ = 0.0f;
 
   /// Output trim bringing the raw string sample up to a musical voice level.

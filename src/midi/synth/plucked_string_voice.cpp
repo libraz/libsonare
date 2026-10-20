@@ -145,8 +145,8 @@ LoopBudget PluckedStringVoiceCore::configure(const PluckedStringPatchParams& par
   // Exponential brightness -> cutoff map (300 Hz .. ~12 kHz) through a single
   // one-pole, so the velocity swing is clearly audible.
   const float exc_cutoff = 300.0f * std::exp2(5.3f * bright);
-  exc_alpha_ =
-      std::clamp(1.0f - std::exp(-kTwoPi * exc_cutoff / static_cast<float>(sr)), 0.01f, 1.0f);
+  exc_alpha_ = lowpass_alpha_at_rate(exc_cutoff, sr);
+  exc_noise_gain_ = noise_gain_at_rate(sr);
   exc_lp_ = 0.0f;
 
   // Pick contact click, armed at note-on; 0 adds nothing (bit-identical).
@@ -171,11 +171,13 @@ float PluckedStringVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (exc_pos_ < exc_total_ + pick_delay_) {
     // Pick-position comb: burst[n] - burst[n - pick_delay]. The delayed copy
     // runs pick_delay samples past the burst so the comb notches stay exact.
-    float burst = exc_pos_ < exc_total_
-                      ? noise_.bipolar_at(kNoiseIndexBase + static_cast<uint64_t>(exc_pos_))
-                      : 0.0f;
+    float burst =
+        exc_pos_ < exc_total_
+            ? exc_noise_gain_ * noise_.bipolar_at(kNoiseIndexBase + static_cast<uint64_t>(exc_pos_))
+            : 0.0f;
     if (pick_delay_ > 0 && exc_pos_ >= pick_delay_) {
-      burst -= noise_.bipolar_at(kNoiseIndexBase + static_cast<uint64_t>(exc_pos_ - pick_delay_));
+      burst -= exc_noise_gain_ *
+               noise_.bipolar_at(kNoiseIndexBase + static_cast<uint64_t>(exc_pos_ - pick_delay_));
     }
     ++exc_pos_;
     exc_lp_ += exc_alpha_ * (burst - exc_lp_);

@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "midi/synth/pitch.h"
+#include "rt/rate_scaled.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
@@ -166,8 +167,7 @@ float bridge_force(float k, float beta, float duty, float image, float w) noexce
 }
 
 float onepole_alpha(float cutoff_hz, double sample_rate) noexcept {
-  return std::clamp(1.0f - std::exp(-kTwoPi * cutoff_hz / static_cast<float>(sample_rate)), 0.01f,
-                    1.0f);
+  return rt::lowpass_alpha_at_rate(cutoff_hz, sample_rate);
 }
 
 double harpsichord_t60_seconds(const HarpsichordPatchParams& params, uint8_t note) noexcept {

@@ -24,6 +24,10 @@
 /// and a one-pole loss in each loop gives the top of the band its own, which is
 /// the difference between a ride that shimmers and a plate that thuds.
 ///
+/// The high-band loss is voiced at 48 kHz as a one-pole anchored at Nyquist. At any other rate it
+/// is the first-order section rt::voiced_one_pole_at_rate fits to that response in Hz, so a band
+/// quoted in Hz decays at the same t60 at every rate.
+///
 /// RT contract: start() and process() are allocation-free (the lines are
 /// fixed-size members). Determinism: fixed lengths, no RNG.
 
@@ -31,6 +35,7 @@
 #include <array>
 #include <cmath>
 
+#include "rt/rate_scaled.h"
 #include "util/constants.h"
 
 namespace sonare::midi::synth {
@@ -71,12 +76,14 @@ class FdnPlate {
   /// buys density. A line array this size is the voice's largest member, so
   /// this is the shortest length that still reaches a plate's mode density
   /// while placing a partial as low as any cymbal radiates (70 Hz at 48 kHz,
-  /// 140 Hz at 96 kHz) rather than a comfortable round number.
+  /// 140 Hz at 96 kHz) rather than a comfortable round number. The array does
+  /// not grow with the rate, so the lowest placed partial is max(low_hz,
+  /// sample_rate / 684) Hz: a @p low_hz below that is raised to it.
   static constexpr int kMaxDelay = 1024;
 
   /// Configures the network. @p low_hz is the lowest partial (it scales every
   /// line), @p t60_s the reverberation time at the bottom of the band,
-  /// @p hf_ratio the reverberation time at Nyquist as a fraction of it —
+  /// @p hf_ratio the reverberation time at Nyquist (48 kHz voicing) as a fraction of it —
   /// 1 leaves the top of the band undamped, and values above 1 are clamped
   /// there because a loop that gains with frequency does not settle — and
   /// @p air_hz the top of the band the plate responds in at all (0 = up to
@@ -110,6 +117,7 @@ class FdnPlate {
     const float sr = static_cast<float>(
         sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate);
     active_ = t60_s > 0.0f;
+    voiced_ = sr == static_cast<float>(rt::kVoicedSampleRate);
     cascade_ = active_ ? std::max(0.0f, cascade) / sr : 0.0f;
     energy_ = 0.0f;
     peak_energy_ = 0.0f;
@@ -184,6 +192,12 @@ class FdnPlate {
     // array end by more than any prime gap below kMaxDelay.
     const float headroom = static_cast<float>(kMaxDelay - 32) / kSpread[kLines - 1];
     const float base = std::min(sr / std::max(20.0f, low_hz), headroom);
+    // The off-voicing fit depends only on these four inputs, and costs far more than the rest of
+    // a strike, so a repeat of the same plate keeps the coefficients already held.
+    const std::array<float, 4> fit_key = {sr, low_hz, t60_dc, hf};
+    const bool fit_reused = !voiced_ && fit_valid_ && fit_key == fit_key_;
+    fit_key_ = fit_key;
+    fit_valid_ = !voiced_;
     for (int i = 0; i < kLines; ++i) {
       const auto k = static_cast<size_t>(i);
       const int want = std::clamp(static_cast<int>(base * kSpread[k]), 8, kMaxDelay - 32);
@@ -202,6 +216,14 @@ class FdnPlate {
       const float nyquist_gain =
           std::min(1.0f, std::pow(10.0f, exponent / t60_hf) / std::max(1.0e-12f, gain_[k]));
       damp_[k] = (1.0f - nyquist_gain) / (1.0f + nyquist_gain);
+      if (!voiced_ && !fit_reused) {
+        const rt::FirstOrderShelf shelf =
+            rt::voiced_one_pole_at_rate(gain_[k] * (1.0f - damp_[k]), damp_[k], sr);
+        b0_[k] = shelf.b0;
+        b1_[k] = shelf.b1;
+        a1_[k] = shelf.a1;
+      }
+      x1_[k] = 0.0f;
       lp_[k] = 0.0f;
 
       // Each line is its own ring, so only the samples it uses need clearing —
@@ -243,9 +265,7 @@ class FdnPlate {
     float out = 0.0f;
     for (int i = 0; i < kLines; ++i) {
       const auto k = static_cast<size_t>(i);
-      float v = (s[k] - shared) * gain_[k];
-      lp_[k] = v * (1.0f - damp_[k]) + lp_[k] * damp_[k];
-      v = lp_[k];
+      float v = loss_step(k, s[k] - shared);
       lines_[k][static_cast<size_t>(pos_[k])] = v + x * kInputSign[k];
       if (++pos_[k] >= len_[k]) pos_[k] = 0;
       out += s[k] * kOutputSign[k];
@@ -263,11 +283,24 @@ class FdnPlate {
     lo2_ = 0.0f;
     pos_.fill(0);
     lp_.fill(0.0f);
+    x1_.fill(0.0f);
   }
 
   bool active() const noexcept { return active_; }
 
  private:
+  // One line's loop loss: the 48 kHz one-pole as voiced, a matched shelf at other rates.
+  float loss_step(size_t k, float in) noexcept {
+    if (voiced_) {
+      const float v = in * gain_[k];
+      lp_[k] = v * (1.0f - damp_[k]) + lp_[k] * damp_[k];
+    } else {
+      lp_[k] = b0_[k] * in + b1_[k] * x1_[k] + a1_[k] * lp_[k];
+      x1_[k] = in;
+    }
+    return lp_[k];
+  }
+
   // process() with the drained low band put back as the output's high-passed square.
   float process_cascade(float x) noexcept {
     lo1_ += (x - lo1_) * lo_a_;
@@ -299,9 +332,7 @@ class FdnPlate {
     float deep_energy = 0.0f;
     for (int i = 0; i < kLines; ++i) {
       const auto k = static_cast<size_t>(i);
-      const float w = (s[k] - shared) * gain_[k];
-      lp_[k] = w * (1.0f - damp_[k]) + lp_[k] * damp_[k];
-      v[k] = lp_[k];
+      v[k] = loss_step(k, s[k] - shared);
       low_[k] += (v[k] - low_[k]) * low_a_;
       low_energy += low_[k] * low_[k];
       deep_[k] += (v[k] - deep_[k]) * deep_a_;
@@ -361,8 +392,15 @@ class FdnPlate {
   std::array<std::array<float, kMaxDelay>, kLines> lines_{};
   std::array<int, kLines> len_{};
   std::array<int, kLines> pos_{};
+  bool voiced_ = true;
+  bool fit_valid_ = false;
+  std::array<float, 4> fit_key_{};
   std::array<float, kLines> gain_{};
   std::array<float, kLines> damp_{};
+  std::array<float, kLines> b0_{};
+  std::array<float, kLines> b1_{};
+  std::array<float, kLines> a1_{};
+  std::array<float, kLines> x1_{};
   std::array<float, kLines> lp_{};
   float air_a_ = 0.0f;
   float air1_ = 0.0f;
