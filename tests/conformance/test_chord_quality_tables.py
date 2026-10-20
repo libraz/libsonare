@@ -278,7 +278,7 @@ class RenamedEntryTest(_CopiedTree):
 
     def test_a_renamed_node_union_member_is_reported(self) -> None:
         lines = self.lines(
-            check.evaluate(self.tree({NODE_TYPES: ("    | 'halfDim7'", "    | 'halfDiminished7'")})),
+            check.evaluate(self.tree({NODE_TYPES: ("  | 'halfDim7'", "  | 'halfDiminished7'")})),
             "key set no longer matches the core enum",
         )
         self.assertEqual(len(lines), 2, lines)
@@ -293,7 +293,7 @@ class MissingTableTest(_CopiedTree):
         self.assertEqual(len(missing), 1, missing)
         self.assertIn(PY_MUSIC, missing[0])
         floor = self.lines(failures, "no longer locates the population")
-        self.assertTrue(any("ordinal_tables: found 7, floor is 8" in line for line in floor), floor)
+        self.assertTrue(any("ordinal_tables: found 8, floor is 9" in line for line in floor), floor)
 
     def test_a_renamed_table_symbol_is_reported(self) -> None:
         missing = self.lines(

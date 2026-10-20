@@ -230,6 +230,14 @@ ORDINAL_TABLES = (
         "core",
         "the quality string the native CLI writes into every chord",
     ),
+    Table(
+        "bindings/node/src/types_analysis.ts",
+        "ChordQuality",
+        "ts_object",
+        "pascal",
+        "node",
+        "the exported constant a Node caller compares an ordinal against",
+    ),
 )
 
 # Tables keyed on a name. Ordering carries nothing, but the set is a public
@@ -237,11 +245,11 @@ ORDINAL_TABLES = (
 NAME_TABLES = (
     Table(
         "bindings/node/src/types_analysis.ts",
-        "Chord.quality",
+        "ChordQualityName",
         "ts_union",
         "camel",
         "node",
-        "the TypeScript type of the string the addon writes",
+        "the TypeScript type of a quality spelled as a name in a hand-built chord",
     ),
     Table(
         "bindings/python/src/libsonare/_analysis_detection.py",
@@ -336,7 +344,7 @@ SUFFIX_EXCEPTIONS: dict[tuple[str, int], SuffixException] = {
 # tables, and it is vacuous with fewer than two of them in it.
 FLOOR = {
     "qualities": 25,
-    "ordinal_tables": 8,
+    "ordinal_tables": 9,
     "name_tables": 3,
     "suffix_tables": 4,
     "suffix_symbol_tables": 2,
@@ -631,7 +639,15 @@ _TS_UNION = re.compile(r"\bquality\s*:\s*((?:\s*\|\s*'[^']+')+)\s*;")
 
 
 def ts_union(text: str, table: Table) -> tuple[int, list[str]] | None:
-    """The string-literal union of the ``quality`` property on the named interface."""
+    """The string-literal union of the ``quality`` property on the named interface, or of the
+    named ``export type`` alias."""
+    if "." not in table.symbol:
+        alias = re.search(
+            rf"\bexport\s+type\s+{re.escape(table.symbol)}\s*=((?:\s*\|\s*'[^']+')+)\s*;", text
+        )
+        if alias is None:
+            return None
+        return text[: alias.start()].count("\n") + 1, re.findall(r"'([^']+)'", alias.group(1))
     interface, _, member = table.symbol.partition(".")
     anchor = re.compile(rf"\bexport\s+interface\s+{re.escape(interface)}\s*\{{")
     found = block(text, anchor)

@@ -149,24 +149,10 @@ export interface BeatObservations {
 }
 
 /**
- * One chord in {@link AnalysisResult.chords}. Mirrors the camelCase JSON emitted
- * by the full-analysis pipeline. Unlike the standalone {@link Chord} (whose
- * `root`/`bass`/`quality` are string labels), the full-analysis chord encodes
- * `root`/`bass` as pitch-class ordinals (0..11, C=0) and `quality` as a
- * ChordQuality ordinal, and carries a human-readable `name` (e.g. `'Cmaj7'`).
+ * One chord in {@link AnalysisResult.chords}: a {@link Chord} that also carries its
+ * Roman numeral in the analysis key.
  */
-export interface AnalysisChord {
-  /** Root pitch class ordinal (0..11, C=0). */
-  root: number;
-  /** Bass pitch class ordinal (0..11, C=0). */
-  bass: number;
-  /** ChordQuality ordinal. */
-  quality: number;
-  start: number;
-  end: number;
-  confidence: number;
-  /** Human-readable chord name (e.g. `'Cmaj7'`). */
-  name: string;
+export interface AnalysisChord extends Chord {
   /**
    * Roman numeral of the chord relative to the analysis key
    * ({@link AnalysisResult.key}), e.g. `'V7'`, `'vi'`, `'bVII'`. The same
@@ -977,39 +963,76 @@ export interface TimbreResult {
   timbreOverTime: TimbreFrame[];
 }
 
+/** Chord quality ordinals, as `Chord.quality` carries them. */
+export const ChordQuality = {
+  Major: 0,
+  Minor: 1,
+  Diminished: 2,
+  Augmented: 3,
+  Dominant7: 4,
+  Major7: 5,
+  Minor7: 6,
+  Sus2: 7,
+  Sus4: 8,
+  Unknown: 9,
+  Add9: 10,
+  MinorAdd9: 11,
+  Dim7: 12,
+  HalfDim7: 13,
+  Major9: 14,
+  Dominant9: 15,
+  Sus2Add4: 16,
+  Major6: 17,
+  Minor6: 18,
+  MinorMajor7: 19,
+  Dominant7Sus4: 20,
+  Dominant11: 21,
+  Dominant13: 22,
+  Dominant7Flat9: 23,
+  Dominant7Sharp9: 24,
+} as const;
+
+export type ChordQuality = (typeof ChordQuality)[keyof typeof ChordQuality];
+
+/** The spelling of a chord quality, accepted wherever a hand-built chord names one. */
+export type ChordQualityName =
+  | 'major'
+  | 'minor'
+  | 'diminished'
+  | 'augmented'
+  | 'dominant7'
+  | 'major7'
+  | 'minor7'
+  | 'sus2'
+  | 'sus4'
+  | 'add9'
+  | 'minorAdd9'
+  | 'dim7'
+  | 'halfDim7'
+  | 'major9'
+  | 'dominant9'
+  | 'sus2Add4'
+  | 'major6'
+  | 'minor6'
+  | 'minorMajor7'
+  | 'dominant7Sus4'
+  | 'dominant11'
+  | 'dominant13'
+  | 'dominant7Flat9'
+  | 'dominant7Sharp9'
+  | 'unknown';
+
 export interface Chord {
-  root: string;
-  bass: string;
-  /** Canonical core spelling; stable across all language bindings. */
+  /** Root pitch class ordinal (0..11, C=0). */
+  root: number;
+  /** Bass pitch class ordinal (0..11, C=0). */
+  bass: number;
+  /** Canonical core spelling of `root`; stable across all language bindings. */
   rootName: string;
-  /** Canonical core spelling; stable across all language bindings. */
+  /** Canonical core spelling of `bass`; stable across all language bindings. */
   bassName: string;
-  quality:
-    | 'major'
-    | 'minor'
-    | 'diminished'
-    | 'augmented'
-    | 'dominant7'
-    | 'major7'
-    | 'minor7'
-    | 'sus2'
-    | 'sus4'
-    | 'add9'
-    | 'minorAdd9'
-    | 'dim7'
-    | 'halfDim7'
-    | 'major9'
-    | 'dominant9'
-    | 'sus2Add4'
-    | 'major6'
-    | 'minor6'
-    | 'minorMajor7'
-    | 'dominant7Sus4'
-    | 'dominant11'
-    | 'dominant13'
-    | 'dominant7Flat9'
-    | 'dominant7Sharp9'
-    | 'unknown';
+  /** ChordQuality ordinal. */
+  quality: ChordQuality;
   /** Canonical core chord symbol (e.g. `'Cmaj7'`, `'Am/C'`, `'N.C.'`). */
   name: string;
   start: number;
@@ -1035,8 +1058,8 @@ export type FunctionalChord<T extends ChordFunctionsInput = Chord> = T & {
 export interface ChordFunctionsInput {
   /** Pitch class name (`'C'`, `'C#'`, ...) or ordinal 0..11. */
   root: string | number;
-  /** The `quality` name a detected chord carries, or its ordinal 0..24. */
-  quality: Chord['quality'] | number;
+  /** Chord quality ordinal 0..24, or its name. */
+  quality: ChordQualityName | number;
 }
 
 /** A key given as `detectKey` reports it, or by ordinals. */

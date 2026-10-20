@@ -74,6 +74,9 @@ function generateSine(freq: number, sr: number, duration: number): Float32Array 
   return samples;
 }
 
+const CHORD_PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const CHORD_QUALITY_UNKNOWN = 9;
+
 describe('standalone functions', () => {
   it('version returns a string', () => {
     const v = version();
@@ -316,13 +319,13 @@ describe('standalone functions', () => {
     // this input is a sustained triad, so it must detect at least one chord.
     expect(chords.chords.length).toBeGreaterThan(0);
     for (const chord of chords.chords) {
-      expect(chord.rootName).toBe(chord.root);
-      expect(chord.bassName).toBe(chord.bass);
+      expect(chord.rootName).toBe(CHORD_PITCH_NAMES[chord.root]);
+      expect(chord.bassName).toBe(CHORD_PITCH_NAMES[chord.bass]);
       // `name` is the core's rendered symbol: root spelling, then the quality
       // suffix, then a slash bass only when the bass differs from the root.
       expect(typeof chord.name).toBe('string');
       expect(chord.name.length).toBeGreaterThan(0);
-      if (chord.quality === 'unknown') {
+      if (chord.quality === CHORD_QUALITY_UNKNOWN) {
         expect(chord.name).toBe('N.C.');
       } else {
         expect(chord.name.startsWith(chord.rootName)).toBe(true);
@@ -415,9 +418,9 @@ describe('standalone functions', () => {
     const low = detectChords(silence, SR, { ...common, threshold: 0 });
     const high = detectChords(silence, SR, { ...common, threshold: 0.99 });
     expect(low.chords).toHaveLength(1);
-    expect(low.chords[0]?.quality).not.toBe('unknown');
+    expect(low.chords[0]?.quality).not.toBe(CHORD_QUALITY_UNKNOWN);
     expect(high.chords).toHaveLength(1);
-    expect(high.chords[0]?.quality).toBe('unknown');
+    expect(high.chords[0]?.quality).toBe(CHORD_QUALITY_UNKNOWN);
     expect(high.chords[0]?.start).toBe(0);
     expect(high.chords[0]?.end).toBeGreaterThan(0);
   });
@@ -669,5 +672,54 @@ describe('standalone functions', () => {
     expect(() => masteringAudioProfileStereo({ left, right, sampleRate })).toThrow();
     expect(() => masteringAssistantSuggestStereo({ left, right, sampleRate })).toThrow();
     expect(() => meteringCrestFactorDbStereo({ left, right, sampleRate })).toThrow();
+  });
+});
+
+describe('chord entry shape', () => {
+  // The same field set and types come from detectChords and analyze, on Node and WASM alike.
+  const CHORD_FIELDS = [
+    'bass',
+    'bassName',
+    'confidence',
+    'duration',
+    'end',
+    'name',
+    'quality',
+    'root',
+    'rootName',
+    'start',
+  ];
+
+  it('gives detectChords and analyze chords one ordinal + name shape for a C major triad', () => {
+    const sr = 22050;
+    const triad = new Float32Array(sr * 4);
+    for (let i = 0; i < triad.length; i++) {
+      triad[i] =
+        0.25 *
+        (Math.sin((2 * Math.PI * 261.63 * i) / sr) +
+          Math.sin((2 * Math.PI * 329.63 * i) / sr) +
+          Math.sin((2 * Math.PI * 392.0 * i) / sr));
+    }
+    const detected = detectChords(triad, sr).chords;
+    const analysed = analyze(triad, sr).chords;
+    expect(detected.length).toBeGreaterThan(0);
+    expect(analysed.length).toBeGreaterThan(0);
+    for (const chord of detected) {
+      expect(Object.keys(chord).sort()).toEqual(CHORD_FIELDS);
+    }
+    for (const chord of analysed) {
+      expect(Object.keys(chord).sort()).toEqual([...CHORD_FIELDS, 'romanNumeral'].sort());
+    }
+    for (const chord of [...detected, ...analysed]) {
+      expect(typeof chord.root).toBe('number');
+      expect(typeof chord.bass).toBe('number');
+      expect(typeof chord.quality).toBe('number');
+      expect(chord.rootName).toBe(CHORD_PITCH_NAMES[chord.root]);
+      expect(chord.bassName).toBe(CHORD_PITCH_NAMES[chord.bass]);
+      expect(chord.duration).toBeCloseTo(chord.end - chord.start, 5);
+    }
+    const first = detected.find((chord) => chord.name !== 'N.C.');
+    expect(first?.rootName).toBe('C');
+    expect(first?.root).toBe(0);
   });
 });

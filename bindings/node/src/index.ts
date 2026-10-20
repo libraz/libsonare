@@ -76,6 +76,7 @@ export type {
   ChordFunction,
   ChordFunctionsInput,
   ChordFunctionsKey,
+  ChordQualityName,
   ChromaResult,
   ClickDetection,
   ClipDetection,
@@ -418,6 +419,7 @@ export type {
 export {
   ARTICULATIONS,
   BUILTIN_SYNTH_WAVEFORMS,
+  ChordQuality,
   CONTROLLER_AXES,
   CONTROLLER_INPUTS,
   EXPECTED_PROJECT_ABI_VERSION,

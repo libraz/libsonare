@@ -292,3 +292,56 @@ describe('WASM wave3 analysis parity', () => {
     });
   });
 });
+
+describe('chord entry shape', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  // The same field set and types come from detectChords and analyze, on Node and WASM alike.
+  const CHORD_FIELDS = [
+    'bass',
+    'bassName',
+    'confidence',
+    'duration',
+    'end',
+    'name',
+    'quality',
+    'root',
+    'rootName',
+    'start',
+  ];
+  const PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+  it('gives detectChords and analyze chords one ordinal + name shape for a C major triad', () => {
+    const triad = new Float32Array(SR * 4);
+    for (let i = 0; i < triad.length; i++) {
+      triad[i] =
+        0.25 *
+        (Math.sin((2 * Math.PI * 261.63 * i) / SR) +
+          Math.sin((2 * Math.PI * 329.63 * i) / SR) +
+          Math.sin((2 * Math.PI * 392.0 * i) / SR));
+    }
+    const detected = detectChords(triad, SR).chords;
+    const analysed = analyze(triad, SR).chords;
+    expect(detected.length).toBeGreaterThan(0);
+    expect(analysed.length).toBeGreaterThan(0);
+    for (const chord of detected) {
+      expect(Object.keys(chord).sort()).toEqual(CHORD_FIELDS);
+    }
+    for (const chord of analysed) {
+      expect(Object.keys(chord).sort()).toEqual([...CHORD_FIELDS, 'romanNumeral'].sort());
+    }
+    for (const chord of [...detected, ...analysed]) {
+      expect(typeof chord.root).toBe('number');
+      expect(typeof chord.bass).toBe('number');
+      expect(typeof chord.quality).toBe('number');
+      expect(chord.rootName).toBe(PITCH_NAMES[chord.root]);
+      expect(chord.bassName).toBe(PITCH_NAMES[chord.bass]);
+      expect(chord.duration).toBeCloseTo(chord.end - chord.start, 5);
+    }
+    const first = detected.find((chord) => chord.name !== 'N.C.');
+    expect(first?.rootName).toBe('C');
+    expect(first?.root).toBe(0);
+  });
+});

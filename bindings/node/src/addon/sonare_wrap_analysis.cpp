@@ -901,14 +901,11 @@ Napi::Array ChordsToJs(Napi::Env env, const SonareChordAnalysisResult& analysis)
   Napi::Array chords = Napi::Array::New(env, analysis.chord_count);
   for (size_t i = 0; i < analysis.chord_count; ++i) {
     Napi::Object chord = Napi::Object::New(env);
-    std::string root = PitchClassNameLocal(analysis.chords[i].root);
-    std::string bass = PitchClassNameLocal(analysis.chords[i].bass);
-    std::string quality = ChordQualityName(analysis.chords[i].quality);
-    chord.Set("root", Napi::String::New(env, root));
-    chord.Set("bass", Napi::String::New(env, bass));
-    chord.Set("rootName", Napi::String::New(env, root));
-    chord.Set("bassName", Napi::String::New(env, bass));
-    chord.Set("quality", Napi::String::New(env, quality));
+    chord.Set("root", Napi::Number::New(env, static_cast<int>(analysis.chords[i].root)));
+    chord.Set("bass", Napi::Number::New(env, static_cast<int>(analysis.chords[i].bass)));
+    chord.Set("rootName", Napi::String::New(env, PitchClassNameLocal(analysis.chords[i].root)));
+    chord.Set("bassName", Napi::String::New(env, PitchClassNameLocal(analysis.chords[i].bass)));
+    chord.Set("quality", Napi::Number::New(env, static_cast<int>(analysis.chords[i].quality)));
     chord.Set("name", Napi::String::New(env, ChordSymbol(analysis.chords[i])));
     chord.Set("start", Napi::Number::New(env, analysis.chords[i].start));
     chord.Set("end", Napi::Number::New(env, analysis.chords[i].end));
