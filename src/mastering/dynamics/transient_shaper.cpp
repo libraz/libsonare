@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "mastering/common/prepare_args.h"
+#include "mastering/dynamics/lookahead_validation.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
@@ -21,7 +22,7 @@ using sonare::discard_if_non_finite;
 constexpr float kEnvelopeFloor = 1.0e-6f;
 
 // Field domains shared by validate_config and live automation.
-bool valid_non_negative(float v) noexcept { return !(v < 0.0f); }
+bool valid_non_negative(float v) noexcept { return std::isfinite(v) && v >= 0.0f; }
 bool valid_max_gain_db(float v) noexcept {
   return valid_non_negative(v) && numeric::finite(db_to_linear(v));
 }
@@ -35,6 +36,7 @@ TransientShaper::TransientShaper(TransientShaperConfig config) : ConfigBase(std:
 void TransientShaper::prepare(double sample_rate, int max_block_size) {
   validate_prepare_args(sample_rate, max_block_size);
 
+  const int lookahead_samples = checked_lookahead_samples(sample_rate, config_.lookahead_ms);
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   prepared_ = true;
@@ -43,9 +45,9 @@ void TransientShaper::prepare(double sample_rate, int max_block_size) {
   fast_followers_.assign(channel_count, {});
   slow_followers_.assign(channel_count, {});
   gain_state_db_.assign(channel_count, 0.0f);
-  lookahead_samples_ = static_cast<int>(std::round(sample_rate_ * config_.lookahead_ms * 0.001));
-  const size_t lookahead_samples = static_cast<size_t>(std::max(lookahead_samples_, 0));
-  lookahead_.assign(channel_count, std::vector<float>(lookahead_samples, 0.0f));
+  lookahead_samples_ = lookahead_samples;
+  lookahead_.assign(channel_count,
+                    std::vector<float>(static_cast<size_t>(lookahead_samples_), 0.0f));
   lookahead_index_.assign(channel_count, 0);
   update_coefficients(active_);
   reset();

@@ -25,10 +25,10 @@ using sonare::discard_if_non_finite;
 using sonare::constants::kFloorDb;
 
 // Field domains shared by validate_config and live automation.
-bool valid_ratio(float v) noexcept { return v >= 1.0f; }
-bool valid_non_negative(float v) noexcept { return !(v < 0.0f); }
-bool valid_positive(float v) noexcept { return !(v <= 0.0f); }
-bool valid_release_scale(float v) noexcept { return !(v < 1.0f); }
+bool valid_ratio(float v) noexcept { return std::isfinite(v) && v >= 1.0f; }
+bool valid_non_negative(float v) noexcept { return std::isfinite(v) && v >= 0.0f; }
+bool valid_positive(float v) noexcept { return std::isfinite(v) && v > 0.0f; }
+bool valid_release_scale(float v) noexcept { return std::isfinite(v) && v >= 1.0f; }
 
 constexpr float kRmsWindowMs = 10.0f;
 constexpr float kLogRmsWindowMs = 50.0f;
@@ -309,6 +309,9 @@ std::vector<rt::ParamDescriptor> Compressor::parameter_descriptors() const {
 }
 
 void Compressor::validate_config(const CompressorConfig& config) {
+  if (!std::isfinite(config.threshold_db)) {
+    throw SonareException(ErrorCode::InvalidParameter, "compressor threshold must be finite");
+  }
   if (!valid_ratio(config.ratio)) {
     throw SonareException(ErrorCode::InvalidParameter, "compressor ratio must be at least 1");
   }

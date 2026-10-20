@@ -21,7 +21,7 @@ namespace {
 using sonare::discard_if_non_finite;
 
 // Field domains shared by validate_config and live automation.
-bool valid_non_negative(float v) noexcept { return !(v < 0.0f); }
+bool valid_non_negative(float v) noexcept { return std::isfinite(v) && v >= 0.0f; }
 bool valid_peak_gain(float max_boost_db, float output_gain_db) noexcept {
   return numeric::finite(db_to_linear(max_boost_db + output_gain_db));
 }

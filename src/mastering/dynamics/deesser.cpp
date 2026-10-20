@@ -23,9 +23,9 @@ using sonare::discard_group_if_non_finite;
 using sonare::constants::kPiD;
 
 // Field domains shared by validate_config and live automation.
-bool valid_positive(float v) noexcept { return v > 0.0f; }
-bool valid_ratio(float v) noexcept { return v >= 1.0f; }
-bool valid_non_negative(float v) noexcept { return !(v < 0.0f); }
+bool valid_positive(float v) noexcept { return std::isfinite(v) && v > 0.0f; }
+bool valid_ratio(float v) noexcept { return std::isfinite(v) && v >= 1.0f; }
+bool valid_non_negative(float v) noexcept { return std::isfinite(v) && v >= 0.0f; }
 
 }  // namespace
 
@@ -162,9 +162,10 @@ std::vector<rt::ParamDescriptor> DeEsser::parameter_descriptors() const {
 }
 
 void DeEsser::validate_config(const DeEsserConfig& config) {
-  if (!valid_positive(config.frequency_hz) || !valid_ratio(config.ratio) ||
-      !valid_non_negative(config.attack_ms) || !valid_non_negative(config.release_ms) ||
-      !valid_non_negative(config.range_db) || !valid_positive(config.bandpass_q)) {
+  if (!std::isfinite(config.threshold_db) || !valid_positive(config.frequency_hz) ||
+      !valid_ratio(config.ratio) || !valid_non_negative(config.attack_ms) ||
+      !valid_non_negative(config.release_ms) || !valid_non_negative(config.range_db) ||
+      !valid_positive(config.bandpass_q)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid de-esser configuration");
   }
 }

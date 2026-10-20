@@ -241,6 +241,7 @@ endif()
 if(BUILD_MASTERING)
   target_sources(sonare_tests PRIVATE
     mastering/dynamics/compressor_test.cpp
+    mastering/dynamics/config_domain_test.cpp
     mastering/dynamics/gate_test.cpp
     mastering/dynamics/parallel_comp_test.cpp
     mastering/dynamics/sidechain_router_test.cpp
