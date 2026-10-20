@@ -44,11 +44,8 @@ describe('Sonare WASM Module', () => {
       } catch (error) {
         duplicateBusError = error;
       }
-      expect(isSonareError(duplicateBusError)).toBe(true);
-      if (!isSonareError(duplicateBusError)) {
-        throw new Error('expected SonareError');
-      }
-      expect(duplicateBusError.code).toBe(ErrorCode.InvalidParameter);
+      expect(duplicateBusError).toBeInstanceOf(RangeError);
+      expect(isSonareError(duplicateBusError)).toBe(false);
 
       engine.setTrackLanes([{ trackId: 10, sends: [{ busId: 1, levelDb: 0, enabled: true }] }]);
       for (const lane of [
@@ -68,11 +65,8 @@ describe('Sonare WASM Module', () => {
         } catch (error) {
           laneError = error;
         }
-        expect(isSonareError(laneError)).toBe(true);
-        if (!isSonareError(laneError)) {
-          throw new Error('expected SonareError');
-        }
-        expect(laneError.code).toBe(ErrorCode.InvalidParameter);
+        expect(laneError).toBeInstanceOf(RangeError);
+        expect(isSonareError(laneError)).toBe(false);
       }
 
       engine.play();
@@ -159,11 +153,8 @@ describe('Sonare WASM Module', () => {
       } catch (error) {
         badProcessorError = error;
       }
-      expect(isSonareError(badProcessorError)).toBe(true);
-      if (!isSonareError(badProcessorError)) {
-        throw new Error('expected SonareError');
-      }
-      expect(badProcessorError.code).toBe(ErrorCode.InvalidParameter);
+      expect(badProcessorError).toBeInstanceOf(RangeError);
+      expect(isSonareError(badProcessorError)).toBe(false);
       let badParamError: unknown;
       try {
         engine.setTrackStripJson(
@@ -173,22 +164,20 @@ describe('Sonare WASM Module', () => {
       } catch (error) {
         badParamError = error;
       }
-      expect(isSonareError(badParamError)).toBe(true);
-      if (!isSonareError(badParamError)) {
-        throw new Error('expected SonareError');
-      }
-      expect(badParamError.code).toBe(ErrorCode.InvalidParameter);
+      expect(badParamError).toBeInstanceOf(RangeError);
+      expect(isSonareError(badParamError)).toBe(false);
       let badBypassError: unknown;
       try {
         engine.setMasterStripInsertBypassed(0, true);
       } catch (error) {
         badBypassError = error;
       }
+      // No master strip is configured yet: the engine's state refuses, not the index.
       expect(isSonareError(badBypassError)).toBe(true);
       if (!isSonareError(badBypassError)) {
         throw new Error('expected SonareError');
       }
-      expect(badBypassError.code).toBe(ErrorCode.InvalidParameter);
+      expect(badBypassError.code).toBe(ErrorCode.InvalidState);
 
       engine.play();
       const processed = engine.process([new Float32Array(256)]);
@@ -224,11 +213,8 @@ describe('Sonare WASM Module', () => {
       } catch (error) {
         badIndexError = error;
       }
-      expect(isSonareError(badIndexError)).toBe(true);
-      if (!isSonareError(badIndexError)) {
-        throw new Error('expected SonareError');
-      }
-      expect(badIndexError.code).toBe(ErrorCode.InvalidParameter);
+      expect(badIndexError).toBeInstanceOf(RangeError);
+      expect(isSonareError(badIndexError)).toBe(false);
 
       engine.play();
       let eqOut: Float32Array = new Float32Array(256);
@@ -269,11 +255,8 @@ describe('Sonare WASM Module', () => {
       } catch (error) {
         badIndexError = error;
       }
-      expect(isSonareError(badIndexError)).toBe(true);
-      if (!isSonareError(badIndexError)) {
-        throw new Error('expected SonareError');
-      }
-      expect(badIndexError.code).toBe(ErrorCode.InvalidParameter);
+      expect(badIndexError).toBeInstanceOf(RangeError);
+      expect(isSonareError(badIndexError)).toBe(false);
 
       engine.play();
       const [flatOut] = engine.process([new Float32Array(256)]);
@@ -332,11 +315,8 @@ describe('Sonare WASM Module', () => {
       } catch (error) {
         badParamError = error;
       }
-      expect(isSonareError(badParamError)).toBe(true);
-      if (!isSonareError(badParamError)) {
-        throw new Error('expected SonareError');
-      }
-      expect(badParamError.code).toBe(ErrorCode.InvalidParameter);
+      expect(badParamError).toBeInstanceOf(RangeError);
+      expect(isSonareError(badParamError)).toBe(false);
 
       engine.play();
       const processed = engine.process([new Float32Array(256)]);
@@ -377,11 +357,8 @@ describe('Sonare WASM Module', () => {
       } catch (error) {
         badIndexError = error;
       }
-      expect(isSonareError(badIndexError)).toBe(true);
-      if (!isSonareError(badIndexError)) {
-        throw new Error('expected SonareError');
-      }
-      expect(badIndexError.code).toBe(ErrorCode.InvalidParameter);
+      expect(badIndexError).toBeInstanceOf(RangeError);
+      expect(isSonareError(badIndexError)).toBe(false);
 
       engine.play();
       const [flatOut] = engine.process([new Float32Array(256)]);
@@ -428,19 +405,6 @@ describe('Sonare WASM Module', () => {
         }
         return out;
       };
-      const expectInvalidParameter = (call: () => void): void => {
-        let caught: unknown;
-        try {
-          call();
-        } catch (error) {
-          caught = error;
-        }
-        expect(isSonareError(caught)).toBe(true);
-        if (!isSonareError(caught)) {
-          throw new Error('expected SonareError');
-        }
-        expect(caught.code).toBe(ErrorCode.InvalidParameter);
-      };
       engine.play();
       const [flatLeft, flatRight] = settle();
       expect(rms(flatLeft)).toBeGreaterThan(0.05);
@@ -475,20 +439,20 @@ describe('Sonare WASM Module', () => {
       const [restoredLeft] = settle();
       expect(rms(restoredLeft)).toBeCloseTo(rms(flatLeft), 3);
 
-      expectInvalidParameter(() => engine.setBusStripPan(99, 0.5));
-      expectInvalidParameter(() => engine.setBusStripPanLaw(99, 'const3dB'));
-      expectInvalidParameter(() => engine.setBusStripPanMode(99, 'balance'));
-      expectInvalidParameter(() => engine.setBusStripDualPan(99, -1, 1));
-      expectInvalidParameter(() => engine.setBusStripEqBand(99, 0, { type: 'Peak' }));
-      expectInvalidParameter(() => engine.setBusStripEqBand(1, 99, { type: 'Peak' }));
-      expectInvalidParameter(() => engine.setBusStripEqBandJson(1, -1, '{"type":"Peak"}'));
+      expectRefusalOf(() => engine.setBusStripPan(99, 0.5));
+      expectRefusalOf(() => engine.setBusStripPanLaw(99, 'const3dB'));
+      expectRefusalOf(() => engine.setBusStripPanMode(99, 'balance'));
+      expectRefusalOf(() => engine.setBusStripDualPan(99, -1, 1));
+      expectRefusalOf(() => engine.setBusStripEqBand(99, 0, { type: 'Peak' }));
+      expectRefusalOf(() => engine.setBusStripEqBand(1, 99, { type: 'Peak' }));
+      expectRefusalOf(() => engine.setBusStripEqBandJson(1, -1, '{"type":"Peak"}'));
       // A surround bus has no stereo image to pan; its EQ is still addressable.
       engine.setTrackBuses([
         { busId: 1, gainDb: 0 },
         { busId: 2, gainDb: 0, channelLayout: 2 },
       ]);
-      expectInvalidParameter(() => engine.setBusStripPan(2, 0.5));
-      expectInvalidParameter(() => engine.setBusStripDualPan(2, -1, 0));
+      expectRefusalOf(() => engine.setBusStripPan(2, 0.5));
+      expectRefusalOf(() => engine.setBusStripDualPan(2, -1, 0));
       engine.setBusStripEqBand(2, 0, { type: 'Peak', frequencyHz: 500, gainDb: 3 });
       engine.destroy();
     });
@@ -523,10 +487,6 @@ describe('Sonare WASM Module', () => {
       processor: 'dynamics.limiter',
       params: JSON.stringify({ thresholdDb: 0, lookaheadMs: 0, releaseMs: 50 }),
     });
-
-    const expectInvalidParameter = (call: () => void): void => {
-      expect(call).toThrow(expect.objectContaining({ code: ErrorCode.InvalidParameter }));
-    };
 
     const burst = (): Float32Array[] => {
       const left = new Float32Array(96000);
@@ -674,11 +634,11 @@ describe('Sonare WASM Module', () => {
       expect(engine.canSetLaneSidechain(10, 0, 0)).toEqual(ok);
       expect(engine.canSetLaneSidechain(10, 0, 99)).toEqual(no('undeclaredSource'));
       expect(engine.canSetLaneSidechain(10, 1, 11)).toEqual(no('insertOutOfRange'));
-      expectInvalidParameter(() => engine.setLaneSidechain(10, 0, 99));
-      expectInvalidParameter(() => engine.setLaneSidechain(10, 1, 11));
+      expectRefusalOf(() => engine.setLaneSidechain(10, 0, 99));
+      expectRefusalOf(() => engine.setLaneSidechain(10, 1, 11));
       engine.setLaneSidechain(10, 0, 11);
       expect(engine.canSetLaneSidechain(11, 0, 10)).toEqual(no('cycle'));
-      expectInvalidParameter(() => engine.setLaneSidechain(11, 0, 10));
+      expectRefusalOf(() => engine.setLaneSidechain(11, 0, 10));
 
       expect(engine.canSetBusSidechain(99, 0, 'bus', 1)).toEqual(no('invalidTarget'));
       expect(engine.canSetBusSidechain(1, 5, 'bus', 2)).toEqual(no('insertOutOfRange'));
@@ -689,7 +649,7 @@ describe('Sonare WASM Module', () => {
       expect(engine.canSetBusSidechain(1, 0, 'bus', 2)).toEqual(ok);
       engine.setBusSidechain(1, 0, 'bus', 2);
       expect(engine.canSetBusSidechain(2, 0, 'bus', 1)).toEqual(no('cycle'));
-      expectInvalidParameter(() => engine.setBusSidechain(2, 0, 'bus', 1));
+      expectRefusalOf(() => engine.setBusSidechain(2, 0, 'bus', 1));
 
       expect(engine.canSetMasterSidechain(5, 'bus', 1)).toEqual(no('insertOutOfRange'));
       expect(engine.canSetMasterSidechain(0, 'bus', 77)).toEqual(no('undeclaredSource'));
@@ -706,9 +666,9 @@ describe('Sonare WASM Module', () => {
       engine.setTrackLanes([{ trackId: 5 }, { trackId: 7 }]);
       const point = [{ ppq: 0, value: -6, curveToNext: 0 }];
       for (const positional of [0x4d580101, 0x4d580001, 0x4d58fe00]) {
-        expectInvalidParameter(() => engine.setParameterSmoothed(positional, -6));
-        expectInvalidParameter(() => engine.setParameter(positional, -6));
-        expectInvalidParameter(() => engine.setAutomationLane(positional, point));
+        expectRefusalOf(() => engine.setParameterSmoothed(positional, -6));
+        expectRefusalOf(() => engine.setParameter(positional, -6));
+        expectRefusalOf(() => engine.setAutomationLane(positional, point));
       }
       const laneFader = engine.resolveTrackLaneAutomationId(7, 'faderDb');
       expect(() => engine.setParameterSmoothed(laneFader, -6)).not.toThrow();
@@ -809,20 +769,15 @@ describe('Sonare WASM Module', () => {
       return undefined;
     };
 
-    it('keeps the scene reader code for a well-formed document, as the C ABI does', () => {
+    it('refuses a bad slot in a well-formed document and codes a malformed one', () => {
       const engine = new RealtimeEngine(48000, 256);
       try {
         engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
         engine.setTrackLanes([{ trackId: 10 }]);
-        expect(codeOf(() => engine.setBusStripJson(1, scene('buses', '1', 'sideways')))).toBe(
-          ErrorCode.InvalidParameter,
-        );
-        expect(codeOf(() => engine.setTrackStripJson(10, scene('strips', 't', 'sideways')))).toBe(
-          ErrorCode.InvalidParameter,
-        );
-        expect(codeOf(() => engine.setMasterStripJson(scene('strips', 'm', 'sideways')))).toBe(
-          ErrorCode.InvalidParameter,
-        );
+        // The reader's InvalidParameter is an argument refusal, a RangeError as on Node.
+        expectRefusalOf(() => engine.setBusStripJson(1, scene('buses', '1', 'sideways')));
+        expectRefusalOf(() => engine.setTrackStripJson(10, scene('strips', 't', 'sideways')));
+        expectRefusalOf(() => engine.setMasterStripJson(scene('strips', 'm', 'sideways')));
         // A non-object element is a structural failure the reader codes InvalidFormat.
         const nonObject = JSON.stringify({ version: 1, strips: [7], buses: [], connections: [] });
         expect(codeOf(() => engine.setMasterStripJson(nonObject))).toBe(ErrorCode.InvalidFormat);

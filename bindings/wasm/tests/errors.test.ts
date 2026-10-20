@@ -47,11 +47,11 @@ describe('SonareError', () => {
   });
 
   it('rethrows a native C++ exception as a coded SonareError', () => {
-    // An unknown marker id is the engine's answer, not a refused argument.
+    // A master-strip edit before any master strip exists is the engine's state, not the argument.
     const engine = new RealtimeEngine(48000, 128);
     let caught: unknown;
     try {
-      engine.marker(999);
+      engine.setMasterStripInsertBypassed(0, true);
     } catch (e) {
       caught = e;
     } finally {
@@ -62,10 +62,10 @@ describe('SonareError', () => {
 
     const err = caught as SonareError;
     expect(err.name).toBe('SonareError');
-    expect(err.code).toBe(ErrorCode.InvalidParameter);
-    expect(err.codeName).toBe('InvalidParameter');
+    expect(err.code).toBe(ErrorCode.InvalidState);
+    expect(err.codeName).toBe('InvalidState');
     // The native detail message survives the pointer round-trip.
-    expect(err.message).toContain('marker');
+    expect(err.message).toContain('master strip');
   });
 
   it('rethrows a refused argument as the native JS class, not a SonareError', () => {
@@ -112,7 +112,7 @@ describe('SonareError is a value class with brand-based instanceof', () => {
     const engine = new RealtimeEngine(48000, 128);
     let caught: unknown;
     try {
-      engine.marker(999);
+      engine.setMasterStripInsertBypassed(0, true);
     } catch (e) {
       caught = e;
     } finally {

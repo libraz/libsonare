@@ -11,7 +11,6 @@ import {
   BUILTIN_SYNTH_WAVEFORMS,
   CONTROLLER_AXES,
   CONTROLLER_INPUTS,
-  ErrorCode,
   init,
   isSonareError,
   MPE_DIMENSIONS,
@@ -627,7 +626,8 @@ describe('Sonare WASM NativeSynth', () => {
           8,
         ),
       );
-      expect(isSonareError(error) && error.code).toBe(ErrorCode.InvalidParameter);
+      expect(error).toBeInstanceOf(RangeError);
+      expect(isSonareError(error)).toBe(false);
       expect((error as Error).message).toContain('noSuchKey');
     } finally {
       engine.destroy();

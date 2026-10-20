@@ -22,13 +22,15 @@ const synthEngine = (engineMode: SynthEngineMode): RealtimeEngine => {
 };
 
 /**
- * The `codeName` of the SonareError a call throws. The message can be a
- * thread-local detail string, so the code is what tells two refusals apart.
+ * The `codeName` of the SonareError a call throws, or `RangeError` for an argument
+ * refusal. The message can be a thread-local detail string, so the code is what tells
+ * two refusals apart.
  */
 const codeNameOf = (call: () => unknown): string => {
   try {
     call();
   } catch (error) {
+    if (error instanceof RangeError) return 'RangeError';
     return (error as { codeName?: string }).codeName ?? 'not a SonareError';
   }
   return 'did not throw';
@@ -121,8 +123,8 @@ describe('RealtimeEngine articulation', () => {
 
   it('refuses a channel past 15 rather than clamping it', () => {
     const engine = synthEngine('reed');
-    expect(codeNameOf(() => engine.setArticulation(3, 16, 'poly'))).toBe('InvalidParameter');
-    expect(codeNameOf(() => engine.articulation(3, 16))).toBe('InvalidParameter');
+    expect(codeNameOf(() => engine.setArticulation(3, 16, 'poly'))).toBe('RangeError');
+    expect(codeNameOf(() => engine.articulation(3, 16))).toBe('RangeError');
     engine.destroy();
   });
 
@@ -131,9 +133,9 @@ describe('RealtimeEngine articulation', () => {
     // Nothing is bound to destination 5 yet. Both answers would otherwise read
     // as "the call worked" to a caller that only checks for a return, and both
     // read as one answer to a caller that only checks that something threw.
-    expect(codeNameOf(() => engine.setArticulation(5, 0, 'mono-legato'))).toBe('InvalidParameter');
-    expect(codeNameOf(() => engine.articulation(5, 0))).toBe('InvalidParameter');
-    expect(codeNameOf(() => engine.legatoFallbackCount(5))).toBe('InvalidParameter');
+    expect(codeNameOf(() => engine.setArticulation(5, 0, 'mono-legato'))).toBe('RangeError');
+    expect(codeNameOf(() => engine.articulation(5, 0))).toBe('RangeError');
+    expect(codeNameOf(() => engine.legatoFallbackCount(5))).toBe('RangeError');
 
     // The built-in oscillator synth has no articulation of its own, which is a
     // different answer from having no instrument at all.

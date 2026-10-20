@@ -178,8 +178,7 @@ RealtimeEngineWasm::BuiltClip RealtimeEngineWasm::buildClipSchedule(val clip_val
         checkedIntFromVal(objectProperty(clip_val, "pageProvider"), "pageProvider");
     auto provider = liveProviderById(clip_page_providers_, provider_id);
     if (!provider) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "pageProvider is not live");
+      throw WasmRangeError("pageProvider is not live");
     }
     schedule.page_provider = provider;
     schedule.buffer = {};
@@ -427,7 +426,7 @@ void RealtimeEngineWasm::upsertClip(val clip) {
 void RealtimeEngineWasm::removeClip(const val& clip_id_val) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   if (!engine_.remove_clip(clip_id)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "no clip has that id");
+    throw WasmRangeError("no clip has that id");
   }
   for (size_t index = clip_ids_.size(); index-- > 0;) {
     if (clip_ids_[index] == clip_id) {
@@ -480,7 +479,7 @@ void RealtimeEngineWasm::supplyClipPage(const val& provider_id_val, int64_t page
   const int provider_id = checkedIntFromVal(provider_id_val, "providerId");
   auto provider = liveProviderById(clip_page_providers_, provider_id);
   if (!provider) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "pageProvider is not live");
+    throw WasmRangeError("pageProvider is not live");
   }
   provider->supply(page_index, channels);
 }
@@ -489,7 +488,7 @@ void RealtimeEngineWasm::clearClipPage(const val& provider_id_val, int64_t page_
   const int provider_id = checkedIntFromVal(provider_id_val, "providerId");
   auto provider = liveProviderById(clip_page_providers_, provider_id);
   if (!provider) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "pageProvider is not live");
+    throw WasmRangeError("pageProvider is not live");
   }
   provider->clear(page_index);
 }

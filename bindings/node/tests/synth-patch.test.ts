@@ -785,7 +785,12 @@ describe('SynthPatch.engineParams', () => {
           { engineMode: 'bowed-string', engineParams: { noSuchField: 1 } },
           0,
         ),
-      ).toThrow(/noSuchField/);
+      ).toThrow(
+        expect.objectContaining({
+          name: 'RangeError',
+          message: expect.stringMatching(/noSuchField/),
+        }),
+      );
     } finally {
       engine.destroy();
     }

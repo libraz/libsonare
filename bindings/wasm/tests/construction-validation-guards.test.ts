@@ -93,13 +93,13 @@ describe('offline render honours the prepared channel count', () => {
   it('renderOffline rejects more planes than were prepared', () => {
     const engine = new RealtimeEngine(48000, 128, 1024, 1024, preparedChannels);
     const channels = Array.from({ length: requestedChannels }, () => new Float32Array(128));
-    expectInvalidParameter(() => engine.renderOffline(channels, 128));
+    expectRangeRefusal(() => engine.renderOffline(channels, 128));
     engine.destroy();
   });
 
   it('bounceOffline rejects more planes than were prepared', () => {
     const engine = new RealtimeEngine(48000, 128, 1024, 1024, preparedChannels);
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       engine.bounceOffline({
         totalFrames: 256,
         blockSize: 128,
@@ -113,7 +113,7 @@ describe('offline render honours the prepared channel count', () => {
 
   it('freezeOffline rejects more planes than were prepared', () => {
     const engine = new RealtimeEngine(48000, 128, 1024, 1024, preparedChannels);
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       engine.freezeOffline({
         totalFrames: 256,
         blockSize: 128,

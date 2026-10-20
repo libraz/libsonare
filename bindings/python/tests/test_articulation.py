@@ -126,9 +126,8 @@ def test_articulation_keeps_its_three_refusals_apart() -> None:
     with _synth_engine("reed") as engine:
         # A channel past 15 is the C ABI's refusal, not the binding's: 16 fits
         # the uint8 the binding narrows to, so it reaches the library.
-        with pytest.raises(SonareError) as channel_refusal:
+        with pytest.raises(SonareValueError) as channel_refusal:
             engine.set_articulation(DESTINATION, 16, "poly")
-        assert not isinstance(channel_refusal.value, SonareValueError)
         assert channel_refusal.value.code == int(ErrorCode.INVALID_PARAMETER)
         with pytest.raises(SonareError):
             engine.articulation(DESTINATION, 16)
@@ -143,7 +142,7 @@ def test_articulation_keeps_its_three_refusals_apart() -> None:
             lambda: engine.articulation(5, 0),
             lambda: engine.legato_fallback_count(5),
         ):
-            with pytest.raises(SonareError) as unbound_refusal:
+            with pytest.raises(SonareValueError) as unbound_refusal:
                 unbound()
             assert unbound_refusal.value.code == int(ErrorCode.INVALID_PARAMETER)
 

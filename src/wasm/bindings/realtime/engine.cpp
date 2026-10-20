@@ -31,8 +31,7 @@ void RealtimeEngineWasm::applyProjectTimeline(const val& timeline_id_val) {
   const uint32_t id = checkedUintFromVal(timeline_id_val, "timeline id");
   const SonareProjectTimeline* handle = ProjectTimelineWasm::lookup(id);
   if (handle == nullptr || !handle->timeline) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "project timeline has been released");
+    throw WasmRangeError("project timeline has been released");
   }
   if (engine_.transport_state_control().playing) {
     throw sonare::SonareException(

@@ -17,6 +17,7 @@ import math
 import pytest
 
 from libsonare import (
+    ErrorCode,
     RealtimeEngine,
     SonareError,
     SonareValueError,
@@ -107,10 +108,9 @@ def test_a_controller_profile_installs_binds_counts_and_clears() -> None:
 def test_an_unknown_spelling_or_ordinal_is_refused_by_the_binding() -> None:
     """The refusals the binding makes before the C ABI is reached.
 
-    Each one asserts :class:`SonareValueError` rather than :class:`SonareError`,
-    which is what says the binding refused it: the C ABI range-checks the same
-    ordinals and would raise the plain base class, so the two sides are
-    indistinguishable here unless the exception type is the one asserted.
+    The C ABI range-checks the same ordinals and also raises
+    :class:`SonareValueError`, so each case matches the binding's own message
+    to show which side refused.
     """
     with _reed_engine() as engine:
         engine.clear_controller_bindings(DESTINATION)
@@ -153,17 +153,15 @@ def test_a_binding_that_cannot_mean_anything_is_refused_by_the_c_abi() -> None:
 
         # A per-note value on a channel-level axis: refused rather than widened,
         # because a caller cannot tell a widened binding from one that took.
-        with pytest.raises(SonareError) as refusal:
+        with pytest.raises(SonareValueError) as refusal:
             engine.bind_controller(DESTINATION, input="poly-pressure", axis="loudness")
-        # Named as the C ABI's refusal rather than the binding's own, so a
-        # Python-side guard growing over it would fail here instead of passing.
-        assert not isinstance(refusal.value, SonareValueError)
+        assert refusal.value.code == int(ErrorCode.INVALID_PARAMETER)
 
-        with pytest.raises(SonareError) as none_refusal:
+        with pytest.raises(SonareValueError) as none_refusal:
             engine.bind_controller(DESTINATION, input="control-change", axis="none")
         # "none" is a name the C table supplies, so the spelling resolves here
         # and the refusal is the C ABI's -- asserted the same way as above.
-        assert not isinstance(none_refusal.value, SonareValueError)
+        assert none_refusal.value.code == int(ErrorCode.INVALID_PARAMETER)
 
         # The same input on an excitation axis is accepted, so the refusal above
         # is about the axis and not about poly pressure.

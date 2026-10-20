@@ -361,7 +361,7 @@ export class RealtimeEngine {
    * regardless of whether the manual value or the lane clear reaches the
    * audio thread first.
    * A reserved mixer id (`0x4d58xxxx`) other than a master id names no strip and
-   * throws `InvalidParameter`; resolve ids with the `resolve*AutomationId`
+   * throws a `RangeError`; resolve ids with the `resolve*AutomationId`
    * methods (`resolveMasterAutomationId` for the master fader, pan and width).
    */
   setAutomationLane(paramId: number, points: EngineAutomationPoint[]): void {
@@ -497,8 +497,9 @@ export class RealtimeEngine {
    * facade's `setTrackSends` shares the name but creates lanes as needed.
    * Control-thread only; do not call concurrently with `process`.
    *
-   * @throws SonareError `InvalidParameter` for an unknown track (the message
-   *   names the id) or a send list `setTrackLanes` would refuse; `TypeError`
+   * @throws RangeError for an unknown track (the message names the id) or a send
+   *   list `setTrackLanes` would refuse as invalid; `SonareError` `InvalidState` when the
+   *   list is valid but earlier configuration refuses it; `TypeError`
    *   when `sends` is not an array
    */
   setTrackSends(trackId: number, sends: EngineTrackSend[]): void {
@@ -1387,7 +1388,7 @@ export class RealtimeEngine {
    * later starts (and stops) driving `paramId`, the target reverts to this
    * value once that lane empties — see {@link setAutomationLane}.
    * A reserved mixer id (`0x4d58xxxx`) other than a master id names no strip and
-   * throws `InvalidParameter`; resolve ids with the `resolve*AutomationId`
+   * throws a `RangeError`; resolve ids with the `resolve*AutomationId`
    * methods (`resolveMasterAutomationId` for the master fader, pan and width).
    */
   setParameter(paramId: number, value: number, renderFrame?: number): void {
@@ -1575,9 +1576,9 @@ export class RealtimeEngine {
 
   /**
    * Add one {@link ControllerBinding} on top of the destination instrument's
-   * current profile. Throws when the table is full, when the axis is `'none'`,
-   * when a `poly-pressure` binding names a channel-level axis, or when the
-   * range or curve is not finite.
+   * current profile. Throws a `RangeError` when the axis is `'none'`, when a
+   * `poly-pressure` binding names a channel-level axis, or when the range or curve
+   * is not finite, and an `InvalidState` `SonareError` when the table is full.
    */
   bindController(destinationId: number, binding: ControllerBinding): void {
     this.native.bindController(destinationId, binding);
@@ -1622,7 +1623,7 @@ export class RealtimeEngine {
    *
    * Both arguments are required and are a name or its C ordinal; an unknown
    * spelling throws rather than resolving to a default. A destination with no
-   * instrument bound throws `InvalidParameter`; one whose instrument holds no
+   * instrument bound throws a `RangeError`; one whose instrument holds no
    * controller profile throws `NotSupported`.
    */
   setControllerNoteTracking(
@@ -1655,7 +1656,7 @@ export class RealtimeEngine {
    * required: an omitted one would mean `'poly'`, which plays every note and
    * slurs none of them — indistinguishable from a request that took. A channel
    * above 15 and an out-of-range mode throw rather than being clamped. A
-   * destination with no instrument bound throws `InvalidParameter`; one whose
+   * destination with no instrument bound throws a `RangeError`; one whose
    * instrument has no articulation of its own throws `NotSupported`, and the
    * two are deliberately different answers.
    */
@@ -1670,7 +1671,7 @@ export class RealtimeEngine {
   /**
    * Set one part rig of the destination's instrument (see
    * {@link Project.setPartRig} for the request). A destination with no
-   * instrument bound throws `InvalidParameter`; an instrument without part rigs
+   * instrument bound throws a `RangeError`; an instrument without part rigs
    * (builtin, host callback) throws `NotSupported`.
    */
   setPartRig(request: PartRigRequest): void;
@@ -1708,7 +1709,7 @@ export class RealtimeEngine {
    *
    * Refuses on the same terms as {@link RealtimeEngine.setArticulation} rather
    * than answering zero: a destination with no instrument bound throws
-   * `InvalidParameter`, and one whose instrument has no articulation of its own
+   * a `RangeError`, and one whose instrument has no articulation of its own
    * throws `NotSupported`. An instrument that never had an articulation has
    * refused nothing, and a zero here would read as "every slur took" — the
    * reading this counter exists to prevent.
@@ -2020,7 +2021,7 @@ export class RealtimeEngine {
    * Queue an immediate (live) MIDI SysEx message to a MIDI destination. `data`
    * is the full SysEx frame including the leading 0xF0 and trailing 0xF7, and
    * must be 1..512 bytes. `renderFrame` is the render-frame time to apply
-   * (omit for immediate). Throws `InvalidParameter` when the destination
+   * (omit for immediate). Throws a `RangeError` when the destination
    * instrument cannot prepare the SysEx (retrying cannot help), and
    * `OutOfMemory` when the payload slots or the command queue are full
    * (retry after a processed block).

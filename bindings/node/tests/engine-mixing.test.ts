@@ -10,19 +10,16 @@ import {
 import { rms } from './_engine_signals.js';
 
 describe('RealtimeEngine native binding', () => {
-  /** Asserts that `call` throws a SonareError carrying exactly `code`. */
-  const expectSonareErrorCode = (call: () => void, code: ErrorCode): void => {
+  /** Asserts that `call` is refused as an argument error (RangeError, not SonareError). */
+  const expectArgumentRefusal = (call: () => void): void => {
     let error: unknown;
     try {
       call();
     } catch (thrown) {
       error = thrown;
     }
-    expect(isSonareError(error)).toBe(true);
-    if (!isSonareError(error)) {
-      throw new Error('expected SonareError');
-    }
-    expect(error.code).toBe(code);
+    expect(error).toBeInstanceOf(RangeError);
+    expect(isSonareError(error)).toBe(false);
   };
 
   it('routes track clips through lanes and lane commands', () => {
@@ -51,11 +48,8 @@ describe('RealtimeEngine native binding', () => {
     } catch (error) {
       duplicateLaneError = error;
     }
-    expect(isSonareError(duplicateLaneError)).toBe(true);
-    if (!isSonareError(duplicateLaneError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(duplicateLaneError.code).toBe(ErrorCode.InvalidParameter);
+    expect(duplicateLaneError).toBeInstanceOf(RangeError);
+    expect(isSonareError(duplicateLaneError)).toBe(false);
     engine.setTrackLanes([10, { trackId: 20 }]);
 
     engine.play();
@@ -101,11 +95,8 @@ describe('RealtimeEngine native binding', () => {
     } catch (error) {
       duplicateBusError = error;
     }
-    expect(isSonareError(duplicateBusError)).toBe(true);
-    if (!isSonareError(duplicateBusError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(duplicateBusError.code).toBe(ErrorCode.InvalidParameter);
+    expect(duplicateBusError).toBeInstanceOf(RangeError);
+    expect(isSonareError(duplicateBusError)).toBe(false);
 
     // A surround bus/source layout flows through to the native struct fields
     // (the native side validates the enum range).
@@ -148,11 +139,8 @@ describe('RealtimeEngine native binding', () => {
       } catch (error) {
         laneError = error;
       }
-      expect(isSonareError(laneError)).toBe(true);
-      if (!isSonareError(laneError)) {
-        throw new Error('expected SonareError');
-      }
-      expect(laneError.code).toBe(ErrorCode.InvalidParameter);
+      expect(laneError).toBeInstanceOf(RangeError);
+      expect(isSonareError(laneError)).toBe(false);
     }
 
     engine.play();
@@ -370,11 +358,8 @@ describe('RealtimeEngine native binding', () => {
     } catch (error) {
       badProcessorError = error;
     }
-    expect(isSonareError(badProcessorError)).toBe(true);
-    if (!isSonareError(badProcessorError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(badProcessorError.code).toBe(ErrorCode.InvalidParameter);
+    expect(badProcessorError).toBeInstanceOf(RangeError);
+    expect(isSonareError(badProcessorError)).toBe(false);
     let badParamError: unknown;
     try {
       engine.setTrackStripJson(
@@ -384,11 +369,8 @@ describe('RealtimeEngine native binding', () => {
     } catch (error) {
       badParamError = error;
     }
-    expect(isSonareError(badParamError)).toBe(true);
-    if (!isSonareError(badParamError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(badParamError.code).toBe(ErrorCode.InvalidParameter);
+    expect(badParamError).toBeInstanceOf(RangeError);
+    expect(isSonareError(badParamError)).toBe(false);
     let badBypassError: unknown;
     try {
       engine.setMasterStripInsertBypassed(0, true);
@@ -399,7 +381,7 @@ describe('RealtimeEngine native binding', () => {
     if (!isSonareError(badBypassError)) {
       throw new Error('expected SonareError');
     }
-    expect(badBypassError.code).toBe(ErrorCode.InvalidParameter);
+    expect(badBypassError.code).toBe(ErrorCode.InvalidState);
 
     engine.play();
     const processed = engine.process([new Float32Array(256)]);
@@ -516,11 +498,8 @@ describe('RealtimeEngine native binding', () => {
     } catch (error) {
       badIndexError = error;
     }
-    expect(isSonareError(badIndexError)).toBe(true);
-    if (!isSonareError(badIndexError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(badIndexError.code).toBe(ErrorCode.InvalidParameter);
+    expect(badIndexError).toBeInstanceOf(RangeError);
+    expect(isSonareError(badIndexError)).toBe(false);
 
     engine.play();
     let eqOut: Float32Array<ArrayBufferLike> = new Float32Array(256);
@@ -561,11 +540,8 @@ describe('RealtimeEngine native binding', () => {
     } catch (error) {
       badIndexError = error;
     }
-    expect(isSonareError(badIndexError)).toBe(true);
-    if (!isSonareError(badIndexError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(badIndexError.code).toBe(ErrorCode.InvalidParameter);
+    expect(badIndexError).toBeInstanceOf(RangeError);
+    expect(isSonareError(badIndexError)).toBe(false);
 
     engine.play();
     const [flatOut] = engine.process([new Float32Array(256)]);
@@ -637,10 +613,7 @@ describe('RealtimeEngine native binding', () => {
     ]);
     engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
     engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
-    expectSonareErrorCode(
-      () => engine.setBusStripEqBand(1, 99, { type: 'Peak', enabled: true }),
-      ErrorCode.InvalidParameter,
-    );
+    expectArgumentRefusal(() => engine.setBusStripEqBand(1, 99, { type: 'Peak', enabled: true }));
 
     engine.play();
     const [flatOut] = engine.process([new Float32Array(256)]);
@@ -664,22 +637,13 @@ describe('RealtimeEngine native binding', () => {
     const engine = new RealtimeEngine(48000, 256);
     engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
 
-    expectSonareErrorCode(() => engine.setBusStripPan(0, -1), ErrorCode.InvalidParameter);
-    expectSonareErrorCode(() => engine.setBusStripPan(99, -1), ErrorCode.InvalidParameter);
-    expectSonareErrorCode(() => engine.setBusStripPan(1, Number.NaN), ErrorCode.InvalidParameter);
-    expectSonareErrorCode(
-      () => engine.setBusStripPanLaw(99, 'const6dB'),
-      ErrorCode.InvalidParameter,
-    );
-    expectSonareErrorCode(
-      () => engine.setBusStripPanMode(99, 'stereoPan'),
-      ErrorCode.InvalidParameter,
-    );
-    expectSonareErrorCode(() => engine.setBusStripDualPan(99, -1, 1), ErrorCode.InvalidParameter);
-    expectSonareErrorCode(
-      () => engine.setBusStripDualPan(1, Number.POSITIVE_INFINITY, 1),
-      ErrorCode.InvalidParameter,
-    );
+    expectArgumentRefusal(() => engine.setBusStripPan(0, -1));
+    expectArgumentRefusal(() => engine.setBusStripPan(99, -1));
+    expectArgumentRefusal(() => engine.setBusStripPan(1, Number.NaN));
+    expectArgumentRefusal(() => engine.setBusStripPanLaw(99, 'const6dB'));
+    expectArgumentRefusal(() => engine.setBusStripPanMode(99, 'stereoPan'));
+    expectArgumentRefusal(() => engine.setBusStripDualPan(99, -1, 1));
+    expectArgumentRefusal(() => engine.setBusStripDualPan(1, Number.POSITIVE_INFINITY, 1));
 
     engine.destroy();
   });
@@ -688,16 +652,10 @@ describe('RealtimeEngine native binding', () => {
     const engine = new RealtimeEngine(48000, 256);
     engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 2 }]); // 5.1
 
-    expectSonareErrorCode(() => engine.setBusStripPan(1, -1), ErrorCode.InvalidParameter);
-    expectSonareErrorCode(
-      () => engine.setBusStripPanLaw(1, 'const6dB'),
-      ErrorCode.InvalidParameter,
-    );
-    expectSonareErrorCode(
-      () => engine.setBusStripPanMode(1, 'stereoPan'),
-      ErrorCode.InvalidParameter,
-    );
-    expectSonareErrorCode(() => engine.setBusStripDualPan(1, -1, 1), ErrorCode.InvalidParameter);
+    expectArgumentRefusal(() => engine.setBusStripPan(1, -1));
+    expectArgumentRefusal(() => engine.setBusStripPanLaw(1, 'const6dB'));
+    expectArgumentRefusal(() => engine.setBusStripPanMode(1, 'stereoPan'));
+    expectArgumentRefusal(() => engine.setBusStripDualPan(1, -1, 1));
 
     expect(() =>
       engine.setBusStripEqBand(1, 0, {
@@ -751,11 +709,8 @@ describe('RealtimeEngine native binding', () => {
     } catch (error) {
       badParamError = error;
     }
-    expect(isSonareError(badParamError)).toBe(true);
-    if (!isSonareError(badParamError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(badParamError.code).toBe(ErrorCode.InvalidParameter);
+    expect(badParamError).toBeInstanceOf(RangeError);
+    expect(isSonareError(badParamError)).toBe(false);
 
     engine.play();
     const processed = engine.process([new Float32Array(256)]);
@@ -789,11 +744,8 @@ describe('RealtimeEngine native binding', () => {
         } catch (e) {
           error = e;
         }
-        expect(isSonareError(error)).toBe(true);
-        if (!isSonareError(error)) {
-          throw new Error('expected SonareError');
-        }
-        expect(error.code).toBe(ErrorCode.InvalidParameter);
+        expect(error).toBeInstanceOf(RangeError);
+        expect(isSonareError(error)).toBe(false);
       }
     }
     const laneFader = engine.resolveTrackLaneAutomationId(7, 'faderDb');
@@ -828,11 +780,8 @@ describe('RealtimeEngine native binding', () => {
     } catch (error) {
       badIndexError = error;
     }
-    expect(isSonareError(badIndexError)).toBe(true);
-    if (!isSonareError(badIndexError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(badIndexError.code).toBe(ErrorCode.InvalidParameter);
+    expect(badIndexError).toBeInstanceOf(RangeError);
+    expect(isSonareError(badIndexError)).toBe(false);
 
     engine.play();
     const [flatOut] = engine.process([new Float32Array(256)]);
@@ -1086,11 +1035,8 @@ describe('RealtimeEngine native binding', () => {
     } catch (error) {
       badBusError = error;
     }
-    expect(isSonareError(badBusError)).toBe(true);
-    if (!isSonareError(badBusError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(badBusError.code).toBe(ErrorCode.InvalidParameter);
+    expect(badBusError).toBeInstanceOf(RangeError);
+    expect(isSonareError(badBusError)).toBe(false);
     engine.destroy();
   });
 
@@ -1183,11 +1129,8 @@ describe('RealtimeEngine native binding', () => {
     } catch (error) {
       restoreTrackError = error;
     }
-    expect(isSonareError(restoreTrackError)).toBe(true);
-    if (!isSonareError(restoreTrackError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(restoreTrackError.code).toBe(ErrorCode.InvalidParameter);
+    expect(restoreTrackError).toBeInstanceOf(RangeError);
+    expect(isSonareError(restoreTrackError)).toBe(false);
 
     let restoreBusError: unknown;
     try {
@@ -1195,11 +1138,8 @@ describe('RealtimeEngine native binding', () => {
     } catch (error) {
       restoreBusError = error;
     }
-    expect(isSonareError(restoreBusError)).toBe(true);
-    if (!isSonareError(restoreBusError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(restoreBusError.code).toBe(ErrorCode.InvalidParameter);
+    expect(restoreBusError).toBeInstanceOf(RangeError);
+    expect(isSonareError(restoreBusError)).toBe(false);
 
     // clear works for a known target and throws for an unknown track/bus.
     expect(() => engine.clearTrackInsertParameterBases(10)).not.toThrow();
@@ -1212,11 +1152,8 @@ describe('RealtimeEngine native binding', () => {
     } catch (error) {
       clearTrackError = error;
     }
-    expect(isSonareError(clearTrackError)).toBe(true);
-    if (!isSonareError(clearTrackError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(clearTrackError.code).toBe(ErrorCode.InvalidParameter);
+    expect(clearTrackError).toBeInstanceOf(RangeError);
+    expect(isSonareError(clearTrackError)).toBe(false);
 
     let clearBusError: unknown;
     try {
@@ -1224,11 +1161,8 @@ describe('RealtimeEngine native binding', () => {
     } catch (error) {
       clearBusError = error;
     }
-    expect(isSonareError(clearBusError)).toBe(true);
-    if (!isSonareError(clearBusError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(clearBusError.code).toBe(ErrorCode.InvalidParameter);
+    expect(clearBusError).toBeInstanceOf(RangeError);
+    expect(isSonareError(clearBusError)).toBe(false);
 
     engine.destroy();
   });

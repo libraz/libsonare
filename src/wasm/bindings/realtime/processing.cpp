@@ -122,8 +122,7 @@ void RealtimeEngineWasm::setGraph(val spec) {
     }
     const int ports = requested_ports == 0 ? num_channels : requested_ports;
     if (!graph->add_node(id, std::move(processor), ports)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "failed to add graph node");
+      throw WasmRangeError("failed to add graph node");
     }
   }
   val connections = spec["connections"];
@@ -143,11 +142,11 @@ void RealtimeEngineWasm::setGraph(val spec) {
     graph_connection.mix =
         mix == 0 ? sonare::graph::Connection::Mix::Replace : sonare::graph::Connection::Mix::Add;
     if (!graph->connect(std::move(graph_connection))) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to connect graph");
+      throw WasmRangeError("failed to connect graph");
     }
   }
   if (!graph->compile()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to compile graph");
+    throw WasmRangeError("failed to compile graph");
   }
   const auto state = engine_.transport().snapshot_control();
   graph->prepare(state.sample_rate, engine_.max_block_size());
@@ -167,7 +166,7 @@ void RealtimeEngineWasm::setGraph(val spec) {
   if (!engine_.swap_graph(std::move(graph), wasmCString(input_node, "inputNode"),
                           wasmCString(output_node, "outputNode"), num_channels,
                           std::move(parameter_bindings))) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to swap graph");
+    throw WasmRangeError("failed to swap graph");
   }
 #else
   (void)spec;

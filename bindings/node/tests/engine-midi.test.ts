@@ -35,11 +35,8 @@ describe('RealtimeEngine native binding', () => {
     } catch (error) {
       badGroupError = error;
     }
-    expect(isSonareError(badGroupError)).toBe(true);
-    if (!isSonareError(badGroupError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(badGroupError.code).toBe(ErrorCode.InvalidParameter);
+    expect(badGroupError).toBeInstanceOf(RangeError);
+    expect(isSonareError(badGroupError)).toBe(false);
 
     expect(() => engine.pushMidiNoteOn(5, 0, 16, 60, 100)).toThrow(
       new RangeError('pushMidiNoteOn: channel must be in [0, 15]'),

@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { ErrorCode, isSonareError, RealtimeEngine } from '../src/index.js';
+import { isSonareError, RealtimeEngine } from '../src/index.js';
 
 const BLOCK = 256;
 const FRAMES = BLOCK * 40;
@@ -17,19 +17,16 @@ const FRAMES = BLOCK * 40;
 const midi1Word = (status: number, channel: number, data0: number, data1: number): number =>
   (0x2 << 28) | ((status & 0xf) << 20) | ((channel & 0xf) << 16) | (data0 << 8) | data1;
 
-/** Asserts that `call` throws a SonareError carrying exactly `code`. */
-function expectSonareErrorCode(call: () => void, code: ErrorCode): void {
+/** Asserts that `call` is refused as an argument error (RangeError, not SonareError). */
+function expectArgumentRefusal(call: () => void): void {
   let error: unknown;
   try {
     call();
   } catch (thrown) {
     error = thrown;
   }
-  expect(isSonareError(error)).toBe(true);
-  if (!isSonareError(error)) {
-    throw new Error('expected SonareError');
-  }
-  expect(error.code).toBe(code);
+  expect(error).toBeInstanceOf(RangeError);
+  expect(isSonareError(error)).toBe(false);
 }
 
 /** One mono DC(1.0) clip on `trackId`, routed onto lane->bus `outputBusId`. */
@@ -245,12 +242,9 @@ describe('RealtimeEngine per-lane sends and output bus', () => {
       } catch (thrown) {
         error = thrown;
       }
-      expect(isSonareError(error)).toBe(true);
-      if (!isSonareError(error)) {
-        throw new Error('expected SonareError');
-      }
-      expect(error.code).toBe(ErrorCode.InvalidParameter);
-      expect(error.message).toMatch(/unknown track id 99/);
+      expect(error).toBeInstanceOf(RangeError);
+      expect(isSonareError(error)).toBe(false);
+      expect((error as Error).message).toMatch(/unknown track id 99/);
     }
     expectSameRender(renderBlocks(engine), before);
     engine.destroy();
@@ -260,19 +254,10 @@ describe('RealtimeEngine per-lane sends and output bus', () => {
     const engine = partialOpsEngine();
     engine.setTrackSends(10, [{ busId: 2 }]);
     const before = renderBlocks(engine);
-    expectSonareErrorCode(
-      () => engine.setTrackSends(10, [{ busId: 7 }]),
-      ErrorCode.InvalidParameter,
-    );
-    expectSonareErrorCode(() => engine.setTrackOutputBus(10, 7), ErrorCode.InvalidParameter);
-    expectSonareErrorCode(
-      () => engine.setTrackSends(10, [{ busId: 1 }, { busId: 1 }]),
-      ErrorCode.InvalidParameter,
-    );
-    expectSonareErrorCode(
-      () => engine.setTrackSends(10, [{ busId: 1, levelDb: 100 }]),
-      ErrorCode.InvalidParameter,
-    );
+    expectArgumentRefusal(() => engine.setTrackSends(10, [{ busId: 7 }]));
+    expectArgumentRefusal(() => engine.setTrackOutputBus(10, 7));
+    expectArgumentRefusal(() => engine.setTrackSends(10, [{ busId: 1 }, { busId: 1 }]));
+    expectArgumentRefusal(() => engine.setTrackSends(10, [{ busId: 1, levelDb: 100 }]));
     expectSameRender(renderBlocks(engine), before);
     engine.destroy();
   });
@@ -465,11 +450,8 @@ describe('RealtimeEngine bus and master sidechain', () => {
     expect(() => engine.setMasterSidechain(0, 2, 30)).toThrow(RangeError);
     // A declared sourceKind naming an undeclared source is refused by the C
     // ABI itself.
-    expectSonareErrorCode(
-      () => engine.setBusSidechain(1, 0, 'track', 99),
-      ErrorCode.InvalidParameter,
-    );
-    expectSonareErrorCode(() => engine.setMasterSidechain(0, 'bus', 9), ErrorCode.InvalidParameter);
+    expectArgumentRefusal(() => engine.setBusSidechain(1, 0, 'track', 99));
+    expectArgumentRefusal(() => engine.setMasterSidechain(0, 'bus', 9));
     engine.destroy();
   });
 });
@@ -538,8 +520,8 @@ describe('RealtimeEngine sidechain pre-check', () => {
       reason: 'insertOutOfRange',
     });
     expect(engine.canSetLaneSidechain(10, 0, 30)).toEqual({ ok: true, reason: null });
-    expectSonareErrorCode(() => engine.setLaneSidechain(10, 0, 99), ErrorCode.InvalidParameter);
-    expectSonareErrorCode(() => engine.setLaneSidechain(10, 3, 30), ErrorCode.InvalidParameter);
+    expectArgumentRefusal(() => engine.setLaneSidechain(10, 0, 99));
+    expectArgumentRefusal(() => engine.setLaneSidechain(10, 3, 30));
     expect(() => engine.setLaneSidechain(10, 0, 30)).not.toThrow();
     engine.destroy();
   });

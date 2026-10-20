@@ -13,15 +13,55 @@
 
 namespace {
 
-// Throws InvalidParameter with @p message unless the engine accepted the edit.
+// Throws a RangeError with @p message unless the engine accepted the caller-named target.
 [[maybe_unused]] void requireMixingTarget(bool accepted, const char* message) {
-  if (!accepted) throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, message);
+  if (!accepted) throw WasmRangeError(message);
 }
 
 }  // namespace
 
 #if defined(SONARE_WITH_MIXING)
 namespace {
+
+// Throws InvalidState with @p message: the call was refused by what earlier calls left.
+[[noreturn]] void throwMixerStateRefusal(const char* message) {
+  throw sonare::SonareException(sonare::ErrorCode::InvalidState, message);
+}
+
+// Classifies a refused mixer configuration call by the cause the engine retained.
+void requireMixerEdit(const sonare::engine::RealtimeEngine& engine, bool applied,
+                      const char* message) {
+  if (applied) return;
+  if (engine.last_mixer_edit_status() == sonare::engine::MixerEditStatus::kInvalidState) {
+    throwMixerStateRefusal(message);
+  }
+  throw WasmRangeError(message);
+}
+
+// Classifies a single-track lane edit (setTrackSends / setTrackOutputBus).
+void requireTrackLaneEdit(sonare::engine::TrackLaneEditResult result, const char* message) {
+  if (result == sonare::engine::TrackLaneEditResult::kApplied) return;
+  if (result == sonare::engine::TrackLaneEditResult::kStateRefused) throwMixerStateRefusal(message);
+  throw WasmRangeError(message);
+}
+
+// The master EQ, insert and sidechain setters address the engine-owned master strip.
+void requireMasterStrip(const sonare::engine::RealtimeEngine& engine) {
+  if (!engine.has_master_strip()) {
+    throwMixerStateRefusal("no master strip is configured; set one with setMasterStripJson");
+  }
+}
+
+// Table-full and alignment-ceiling verdicts come from bindings and latency earlier
+// calls left; every other verdict refuses the call's own target or source.
+[[noreturn]] void throwSidechainRefusal(sonare::engine::SidechainRefusal refusal,
+                                        const char* message) {
+  if (refusal == sonare::engine::SidechainRefusal::kTableFull ||
+      refusal == sonare::engine::SidechainRefusal::kPlanRefused) {
+    throwMixerStateRefusal(message);
+  }
+  throw WasmRangeError(message);
+}
 
 // Reads a `sends` array (a lane's, a bus's or the positional ops'), in the one
 // shape all share. sendTiming mirrors SonareSendTiming (0 post, 1 pre) and
@@ -119,8 +159,8 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
     if (lane_val.typeOf().as<std::string>() == "object") config.sends = readOptionalSends(lane_val);
     configs.push_back(std::move(config));
   }
-  requireMixingTarget(engine_.set_track_lanes(std::move(configs)),
-                      "invalid track lane configuration");
+  requireMixerEdit(engine_, engine_.set_track_lanes(std::move(configs)),
+                   "invalid track lane configuration");
 #else
   (void)lanes;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
@@ -134,9 +174,8 @@ void RealtimeEngineWasm::setTrackSends(const val& track_id_val, const val& sends
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
 #if defined(SONARE_WITH_MIXING)
   auto sends = readSends(sends_val);
-  requireMixingTarget(engine_.set_track_sends(track_id, std::move(sends)) ==
-                          sonare::engine::TrackLaneEditResult::kApplied,
-                      "invalid track lane configuration");
+  requireTrackLaneEdit(engine_.set_track_sends(track_id, std::move(sends)),
+                       "invalid track lane configuration");
 #else
   (void)track_id;
   (void)sends_val;
@@ -151,9 +190,8 @@ void RealtimeEngineWasm::setTrackOutputBus(const val& track_id_val, const val& b
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
 #if defined(SONARE_WITH_MIXING)
-  requireMixingTarget(engine_.set_track_output_bus(track_id, bus_id) ==
-                          sonare::engine::TrackLaneEditResult::kApplied,
-                      "invalid track lane configuration");
+  requireTrackLaneEdit(engine_.set_track_output_bus(track_id, bus_id),
+                       "invalid track lane configuration");
 #else
   (void)track_id;
   (void)bus_id;
@@ -164,18 +202,20 @@ void RealtimeEngineWasm::setTrackOutputBus(const val& track_id_val, const val& b
 
 /// Keys one insert of a lane strip from another lane's post-strip audio
 /// (ducking/sidechainRouter inserts); sourceTrackId 0 removes the binding.
-/// Throws InvalidParameter, leaving the bindings unchanged, for a lane keying
-/// itself, a binding that closes a cycle, a full table and an alignment past
-/// the delay ceiling. Matches sonare_engine_set_lane_sidechain.
+/// Throws, leaving the bindings unchanged, a RangeError for a lane keying itself
+/// or a binding that closes a cycle, and InvalidState for a full table or an
+/// alignment past the delay ceiling. Matches sonare_engine_set_lane_sidechain.
 void RealtimeEngineWasm::setLaneSidechain(const val& track_id_val, const val& insert_index_val,
                                           const val& source_track_id_val) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const uint32_t source_track_id = checkedUintFromVal(source_track_id_val, "sourceTrackId");
 #if defined(SONARE_WITH_MIXING)
-  requireMixingTarget(
-      track_id != 0 && engine_.set_lane_sidechain(track_id, insert_index, source_track_id),
-      "invalid lane sidechain binding");
+  requireMixingTarget(track_id != 0, "invalid lane sidechain binding");
+  if (!engine_.set_lane_sidechain(track_id, insert_index, source_track_id)) {
+    throwSidechainRefusal(engine_.can_set_lane_sidechain(track_id, insert_index, source_track_id),
+                          "invalid lane sidechain binding");
+  }
 #else
   (void)track_id;
   (void)insert_index;
@@ -227,8 +267,8 @@ void RealtimeEngineWasm::setTrackBuses(val buses) {
     config.sends = readOptionalSends(bus);
     configs.push_back(std::move(config));
   }
-  requireMixingTarget(engine_.set_track_buses(std::move(configs)),
-                      "invalid track bus configuration");
+  requireMixerEdit(engine_, engine_.set_track_buses(std::move(configs)),
+                   "invalid track bus configuration");
 #else
   (void)buses;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
@@ -246,9 +286,10 @@ void RealtimeEngineWasm::setBusSidechain(const val& bus_id_val, const val& inser
   const uint32_t source_id = checkedUintFromVal(source_id_val, "sourceId");
 #if defined(SONARE_WITH_MIXING)
   const sonare::engine::SidechainSourceKind kind = sidechainSourceKind(source_kind);
-  if (bus_id == 0 || !engine_.set_bus_sidechain(bus_id, insert_index, kind, source_id)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid bus sidechain binding");
+  requireMixingTarget(bus_id != 0, "invalid bus sidechain binding");
+  if (!engine_.set_bus_sidechain(bus_id, insert_index, kind, source_id)) {
+    throwSidechainRefusal(engine_.can_set_bus_sidechain(bus_id, insert_index, kind, source_id),
+                          "invalid bus sidechain binding");
   }
 #else
   (void)bus_id;
@@ -310,9 +351,12 @@ void RealtimeEngineWasm::setMasterSidechain(const val& insert_index_val, const v
   const int source_kind = checkedIntFromVal(source_kind_val, "sourceKind");
   const uint32_t source_id = checkedUintFromVal(source_id_val, "sourceId");
 #if defined(SONARE_WITH_MIXING)
-  requireMixingTarget(
-      engine_.set_master_sidechain(insert_index, sidechainSourceKind(source_kind), source_id),
-      "invalid master sidechain binding");
+  const sonare::engine::SidechainSourceKind kind = sidechainSourceKind(source_kind);
+  requireMasterStrip(engine_);
+  if (!engine_.set_master_sidechain(insert_index, kind, source_id)) {
+    throwSidechainRefusal(engine_.can_set_master_sidechain(insert_index, kind, source_id),
+                          "invalid master sidechain binding");
+  }
 #else
   (void)insert_index;
   (void)source_kind;
@@ -326,9 +370,9 @@ void RealtimeEngineWasm::setBusStripJson(const val& bus_id_val, const std::strin
   const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
 #if defined(SONARE_WITH_MIXING)
   const sonare::mixing::api::Scene scene = parseStripScene(scene_json);
-  if (bus_id == 0 || scene.buses.empty() || !engine_.set_bus_strip(bus_id, scene.buses.front())) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid bus strip spec");
-  }
+  requireMixingTarget(bus_id != 0 && !scene.buses.empty(), "invalid bus strip spec");
+  requireMixerEdit(engine_, engine_.set_bus_strip(bus_id, scene.buses.front()),
+                   "invalid bus strip spec");
 #else
   (void)bus_id;
   (void)scene_json;
@@ -344,9 +388,9 @@ void RealtimeEngineWasm::setTrackStripJson(const val& track_id_val, const std::s
     throw WasmRangeError("track id must be non-zero");
   }
   const sonare::mixing::api::Scene scene = parseStripScene(scene_json);
-  if (scene.strips.empty() || !engine_.set_track_strip(track_id, scene.strips.front())) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid track strip spec");
-  }
+  requireMixingTarget(!scene.strips.empty(), "invalid track strip spec");
+  requireMixerEdit(engine_, engine_.set_track_strip(track_id, scene.strips.front()),
+                   "invalid track strip spec");
 #else
   (void)track_id;
   (void)scene_json;
@@ -360,13 +404,11 @@ void RealtimeEngineWasm::setTrackStripEqBandJson(const val& track_id_val, const 
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   const int band_index = checkedIntFromVal(band_index_val, "bandIndex");
 #if defined(SONARE_WITH_MIXING)
-  if (track_id == 0 || band_index < 0 ||
-      !engine_.set_track_eq_band(
-          track_id, static_cast<size_t>(band_index),
-          sonare::c_api::parse_eq_band_json(wasmCString(band_json, "bandJson")))) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid track strip EQ band target");
-  }
+  requireMixingTarget(track_id != 0 && band_index >= 0, "invalid track strip EQ band target");
+  const sonare::mastering::eq::EqBand band =
+      sonare::c_api::parse_eq_band_json(wasmCString(band_json, "bandJson"));
+  requireMixingTarget(engine_.set_track_eq_band(track_id, static_cast<size_t>(band_index), band),
+                      "invalid track strip EQ band target");
 #else
   (void)track_id;
   (void)band_index;
@@ -381,13 +423,11 @@ void RealtimeEngineWasm::setBusStripEqBandJson(const val& bus_id_val, const val&
   const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
   const int band_index = checkedIntFromVal(band_index_val, "bandIndex");
 #if defined(SONARE_WITH_MIXING)
-  if (bus_id == 0 || band_index < 0 ||
-      !engine_.set_bus_eq_band(
-          bus_id, static_cast<size_t>(band_index),
-          sonare::c_api::parse_eq_band_json(wasmCString(band_json, "bandJson")))) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid bus strip EQ band target");
-  }
+  requireMixingTarget(bus_id != 0 && band_index >= 0, "invalid bus strip EQ band target");
+  const sonare::mastering::eq::EqBand band =
+      sonare::c_api::parse_eq_band_json(wasmCString(band_json, "bandJson"));
+  requireMixingTarget(engine_.set_bus_eq_band(bus_id, static_cast<size_t>(band_index), band),
+                      "invalid bus strip EQ band target");
 #else
   (void)bus_id;
   (void)band_index;
@@ -419,9 +459,9 @@ void RealtimeEngineWasm::setTrackStripInsertBypassed(const val& track_id_val,
 void RealtimeEngineWasm::setMasterStripJson(const std::string& scene_json) {
 #if defined(SONARE_WITH_MIXING)
   const sonare::mixing::api::Scene scene = parseStripScene(scene_json);
-  if (scene.strips.empty() || !engine_.set_master_strip(scene.strips.front())) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid master strip spec");
-  }
+  requireMixingTarget(!scene.strips.empty(), "invalid master strip spec");
+  requireMixerEdit(engine_, engine_.set_master_strip(scene.strips.front()),
+                   "invalid master strip spec");
 #else
   (void)scene_json;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
@@ -433,12 +473,12 @@ void RealtimeEngineWasm::setMasterStripEqBandJson(const val& band_index_val,
                                                   const std::string& band_json) {
   const int band_index = checkedIntFromVal(band_index_val, "bandIndex");
 #if defined(SONARE_WITH_MIXING)
-  if (band_index < 0 || !engine_.set_master_eq_band(static_cast<size_t>(band_index),
-                                                    sonare::c_api::parse_eq_band_json(
-                                                        wasmCString(band_json, "bandJson")))) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid master strip EQ band target");
-  }
+  requireMixingTarget(band_index >= 0, "invalid master strip EQ band target");
+  const sonare::mastering::eq::EqBand band =
+      sonare::c_api::parse_eq_band_json(wasmCString(band_json, "bandJson"));
+  requireMasterStrip(engine_);
+  requireMixingTarget(engine_.set_master_eq_band(static_cast<size_t>(band_index), band),
+                      "invalid master strip EQ band target");
 #else
   (void)band_index;
   (void)band_json;
@@ -451,6 +491,7 @@ void RealtimeEngineWasm::setMasterStripInsertBypassed(const val& insert_index_va
                                                       bool reset_on_bypass) {
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
 #if defined(SONARE_WITH_MIXING)
+  requireMasterStrip(engine_);
   requireMixingTarget(engine_.set_master_insert_bypassed(insert_index, bypassed, reset_on_bypass),
                       "invalid master strip insert bypass target");
 #else
@@ -492,8 +533,7 @@ void RealtimeEngineWasm::setTrackStripInsertParamByName(const val& track_id_val,
   const auto result =
       engine_.set_track_insert_param_detailed(track_id, insert_index, param_name, value);
   if (result == sonare::engine::InsertParamSetResult::kInvalidTarget) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid track strip insert parameter target");
+    throw WasmRangeError("invalid track strip insert parameter target");
   }
   if (result == sonare::engine::InsertParamSetResult::kQueueFull) {
     throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
@@ -567,10 +607,10 @@ void RealtimeEngineWasm::setMasterStripInsertParamByName(const val& insert_index
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const float value = checkedFloatFromVal(value_val, "value");
 #if defined(SONARE_WITH_MIXING)
+  requireMasterStrip(engine_);
   const auto result = engine_.set_master_insert_param_detailed(insert_index, param_name, value);
   if (result == sonare::engine::InsertParamSetResult::kInvalidTarget) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid master strip insert parameter target");
+    throw WasmRangeError("invalid master strip insert parameter target");
   }
   if (result == sonare::engine::InsertParamSetResult::kQueueFull) {
     throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
@@ -616,6 +656,7 @@ void RealtimeEngineWasm::restoreMasterStripInsertParamByName(const val& insert_i
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
   const float value = checkedFloatFromVal(value_val, "value");
 #if defined(SONARE_WITH_MIXING)
+  requireMasterStrip(engine_);
   requireMixingTarget(engine_.restore_master_insert_param_by_name(insert_index, param_name, value),
                       "invalid master strip insert parameter target");
 #else
@@ -638,8 +679,7 @@ void RealtimeEngineWasm::setBusStripInsertParamByName(const val& bus_id_val,
   const auto result =
       engine_.set_bus_insert_param_detailed(bus_id, insert_index, param_name, value);
   if (result == sonare::engine::InsertParamSetResult::kInvalidTarget) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid bus strip insert parameter target");
+    throw WasmRangeError("invalid bus strip insert parameter target");
   }
   if (result == sonare::engine::InsertParamSetResult::kQueueFull) {
     throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
@@ -770,6 +810,7 @@ double RealtimeEngineWasm::resolveMasterInsertAutomationId(const val& insert_ind
                                                            const std::string& param_name) {
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
 #if defined(SONARE_WITH_MIXING)
+  requireMasterStrip(engine_);
   return resolvedAutomationId(engine_.resolve_master_insert_automation_id(insert_index, param_name),
                               param_name);
 #else

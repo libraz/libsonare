@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import type { EngineBounceOptions } from '../src/index.js';
 import {
   Audio,
-  ErrorCode,
   engineAbiVersion,
   isSonareError,
   MarkerKind,
@@ -363,11 +362,8 @@ describe('RealtimeEngine native binding', () => {
     } catch (error) {
       badMonitorGainError = error;
     }
-    expect(isSonareError(badMonitorGainError)).toBe(true);
-    if (!isSonareError(badMonitorGainError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(badMonitorGainError.code).toBe(ErrorCode.InvalidParameter);
+    expect(badMonitorGainError).toBeInstanceOf(RangeError);
+    expect(isSonareError(badMonitorGainError)).toBe(false);
 
     engine.destroy();
   });
@@ -659,11 +655,8 @@ describe('RealtimeEngine native binding', () => {
     } catch (error) {
       badPpqError = error;
     }
-    expect(isSonareError(badPpqError)).toBe(true);
-    if (!isSonareError(badPpqError)) {
-      throw new Error('expected SonareError');
-    }
-    expect(badPpqError.code).toBe(ErrorCode.InvalidParameter);
+    expect(badPpqError).toBeInstanceOf(RangeError);
+    expect(isSonareError(badPpqError)).toBe(false);
     expect(() => engine.sampleAtPpq(1e300)).toThrow();
     expect(() => engine.seekPpq(1e300)).toThrow();
     expect(() => engine.setLoop(0, 1e300, true)).toThrow();
@@ -807,10 +800,8 @@ describe('RealtimeEngine native binding', () => {
         } catch (error) {
           caught = error;
         }
-        expect(isSonareError(caught)).toBe(true);
-        if (isSonareError(caught)) {
-          expect(caught.code).toBe(ErrorCode.InvalidParameter);
-        }
+        expect(caught).toBeInstanceOf(RangeError);
+        expect(isSonareError(caught)).toBe(false);
       };
       refused(() => engine.renderOffline(planes(), 129));
       refused(() => engine.renderOffline({ channels: planes(), blockSize: 129 }));

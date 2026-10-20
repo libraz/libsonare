@@ -16,10 +16,8 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
-  ErrorCode,
   fixFrames,
   init,
-  isSonareError,
   masteringRepairDereverbClassical,
   meteringSpectrumFrame,
   Project,
@@ -32,18 +30,6 @@ import { expectRefusalOf } from './_helpers';
 beforeAll(async () => {
   await init();
 });
-
-function expectInvalidParameter(fn: () => unknown): void {
-  let caught: unknown;
-  try {
-    fn();
-  } catch (e) {
-    caught = e;
-  }
-  expect(caught, 'expected a SonareError, got no throw').toBeDefined();
-  expect(isSonareError(caught)).toBe(true);
-  expect((caught as SonareError).code).toBe(ErrorCode.InvalidParameter);
-}
 
 /** Saturating, wrapping and truncating inputs, in the spellings they arrive in. */
 const SATURATING = [2 ** 31, 2 ** 40, 3e9, 4294967295, 2 ** 53 + 1];
@@ -161,9 +147,9 @@ describe('clip fields refuse a handle or an ordinal that is not whole', () => {
     for (const value of [...NON_FINITE, ...SATURATING]) {
       expectRangeRefusal(() => withProvider(value));
     }
-    // A whole number that names no live provider is the engine's answer, not an argument refusal.
+    // A whole number that names no live provider is refused as an unknown id.
     for (const value of [0, -1, 3]) {
-      expectInvalidParameter(() => withProvider(value));
+      expectRangeRefusal(() => withProvider(value));
     }
   });
 

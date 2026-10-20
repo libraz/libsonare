@@ -354,7 +354,7 @@ class RealtimeEngineWasm {
   /// Replaces every published clip carrying `clip.id` with `clip`, or adds it;
   /// other clips keep their storage. Mirrors sonare_engine_upsert_clip.
   void upsertClip(emscripten::val clip);
-  /// Removes the clips carrying the id; InvalidParameter when none does.
+  /// Removes the clips carrying the id; a RangeError when none does.
   void removeClip(const emscripten::val& clip_id_val);
   emscripten::val prebakedClipChannels(const emscripten::val& clip_id_val) const;
   int clipCount() const;

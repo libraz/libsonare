@@ -244,7 +244,7 @@ val RealtimeEngineWasm::markerByIndex(const val& index_val) const {
   const int index = checkedIntFromVal(index_val, "index");
   sonare::transport::Marker marker{};
   if (index < 0 || !engine_.marker_by_index(static_cast<size_t>(index), &marker)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "marker index out of range");
+    throw WasmRangeError("marker index out of range");
   }
   return markerToVal(marker);
 }
@@ -253,7 +253,7 @@ val RealtimeEngineWasm::marker(const val& id_val) const {
   const uint32_t id = checkedUintFromVal(id_val, "id");
   sonare::transport::Marker marker{};
   if (!engine_.marker_by_id(id, &marker)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown marker id");
+    throw WasmRangeError("unknown marker id");
   }
   return markerToVal(marker);
 }
@@ -304,7 +304,7 @@ void RealtimeEngineWasm::setLoopFromMarkers(const val& start_marker_id_val,
   const uint32_t start_marker_id = checkedUintFromVal(start_marker_id_val, "startMarkerId");
   const uint32_t end_marker_id = checkedUintFromVal(end_marker_id_val, "endMarkerId");
   if (!engine_.set_loop_from_markers(start_marker_id, end_marker_id)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown loop marker id");
+    throw WasmRangeError("unknown loop marker id");
   }
 }
 

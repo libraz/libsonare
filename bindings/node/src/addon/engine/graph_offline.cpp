@@ -47,7 +47,7 @@ Napi::Value DrainTelemetryInto(const Napi::CallbackInfo& info, SonareRealtimeEng
   while (budget > 0) {
     const size_t want = std::min(records.size(), budget);
     size_t written = 0;
-    ThrowIfError(env, drain(engine, records.data(), want, &written));
+    ThrowIfArgumentError(env, drain(engine, records.data(), want, &written));
     if (env.IsExceptionPending()) return env.Undefined();
     if (written == 0) break;
     // Defensive: the C ABI promises written <= want, but clamp anyway so a
@@ -170,7 +170,7 @@ Napi::Value RealtimeEngineWrap::SetGraph(const Napi::CallbackInfo& info) {
   CopyString(spec.output_node, sizeof(spec.output_node), text);
   spec.num_channels = IntProperty(spec_obj, "numChannels", 2);
   if (env.IsExceptionPending()) return env.Undefined();
-  ThrowIfError(env, sonare_engine_set_graph(engine_, &spec));
+  ThrowIfArgumentError(env, sonare_engine_set_graph(engine_, &spec));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -180,7 +180,7 @@ Napi::Value RealtimeEngineWrap::GraphNodeCount(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   size_t count = 0;
-  ThrowIfError(env, sonare_engine_graph_node_count(engine_, &count));
+  ThrowIfArgumentError(env, sonare_engine_graph_node_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(count));
   SONARE_NODE_CATCH(env)
@@ -191,7 +191,7 @@ Napi::Value RealtimeEngineWrap::GraphConnectionCount(const Napi::CallbackInfo& i
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   size_t count = 0;
-  ThrowIfError(env, sonare_engine_graph_connection_count(engine_, &count));
+  ThrowIfArgumentError(env, sonare_engine_graph_connection_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(count));
   SONARE_NODE_CATCH(env)
@@ -255,9 +255,10 @@ Napi::Value RealtimeEngineWrap::RenderOffline(const Napi::CallbackInfo& info) {
       !OptionalBoolArg(env, info, 2, "finalize", true, &finalize)) {
     return env.Undefined();
   }
-  ThrowIfError(env, sonare_engine_render_offline_ex(engine_, block.pointers.data(),
-                                                    static_cast<int>(block.pointers.size()),
-                                                    block.frames, block_size, finalize ? 1 : 0));
+  ThrowIfArgumentError(
+      env, sonare_engine_render_offline_ex(engine_, block.pointers.data(),
+                                           static_cast<int>(block.pointers.size()), block.frames,
+                                           block_size, finalize ? 1 : 0));
   if (env.IsExceptionPending()) return env.Undefined();
   return ChannelsToJs(env, block);
   SONARE_NODE_CATCH(env)
@@ -267,7 +268,7 @@ Napi::Value RealtimeEngineWrap::FinishOfflineRender(const Napi::CallbackInfo& in
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  ThrowIfError(env, sonare_engine_finish_offline_render(engine_));
+  ThrowIfArgumentError(env, sonare_engine_finish_offline_render(engine_));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -294,7 +295,7 @@ Napi::Value RealtimeEngineWrap::BounceOffline(const Napi::CallbackInfo& info) {
   options.dither_bits = IntProperty(obj, "ditherBits", 16);
   options.dither_seed = Uint32Property(obj, "ditherSeed", kZeroIsSentinel);
   SonareEngineBounceResult result{};
-  ThrowIfError(env, sonare_engine_bounce_offline(engine_, &options, &result));
+  ThrowIfArgumentError(env, sonare_engine_bounce_offline(engine_, &options, &result));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Float32Array interleaved = Napi::Float32Array::New(env, result.sample_count);
   if (result.sample_count > 0 && result.interleaved != nullptr) {
@@ -334,7 +335,7 @@ Napi::Value RealtimeEngineWrap::FreezeOffline(const Napi::CallbackInfo& info) {
   options.start_ppq = sonare_node::DoubleProperty(obj, "startPpq", 0.0);
   options.gain = FloatProperty(obj, "gain", 1.0f);
   SonareEngineFreezeResult result{};
-  ThrowIfError(env, sonare_engine_freeze_offline(engine_, &options, &result));
+  ThrowIfArgumentError(env, sonare_engine_freeze_offline(engine_, &options, &result));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
   out.Set("clipId", Napi::Number::New(env, result.clip_id));
@@ -379,8 +380,8 @@ Napi::Value RealtimeEngineWrap::MeterTargetInsertGainReduction(const Napi::Callb
   if (!RequiredUint32Arg(env, info, 0, "targetId", &target_id)) return env.Undefined();
   float db[SONARE_METER_MAX_INSERTS];
   size_t count = 0;
-  ThrowIfError(env, sonare_engine_meter_target_insert_gain_reduction(
-                        engine_, target_id, db, SONARE_METER_MAX_INSERTS, &count));
+  ThrowIfArgumentError(env, sonare_engine_meter_target_insert_gain_reduction(
+                                engine_, target_id, db, SONARE_METER_MAX_INSERTS, &count));
   if (env.IsExceptionPending()) return env.Undefined();
   count = std::min<size_t>(count, SONARE_METER_MAX_INSERTS);
   Napi::Array out = Napi::Array::New(env, count);
@@ -403,7 +404,7 @@ Napi::Value RealtimeEngineWrap::ConfigureScopeTelemetry(const Napi::CallbackInfo
   const int interval_frames = sonare_node::node_narrow_int(env, info[0], "intervalFrames");
   const unsigned int band_count = sonare_node::node_narrow_uint32(env, info[1], "bandCount");
   unsigned int applied = 0;
-  ThrowIfError(
+  ThrowIfArgumentError(
       env, sonare_engine_configure_scope_telemetry(engine_, interval_frames, band_count, &applied));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, applied);

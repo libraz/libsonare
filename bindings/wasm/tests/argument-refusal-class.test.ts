@@ -103,11 +103,11 @@ describe('argument refusal error class', () => {
     });
   });
 
-  it('keeps an engine lookup failure a coded SonareError', () => {
+  it('refuses an engine lookup of an unknown id with a RangeError', () => {
     withEngine((engine) => {
       const error = thrown(() => engine.marker(999));
-      expect(isSonareError(error)).toBe(true);
-      expect((error as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+      expect(error).toBeInstanceOf(RangeError);
+      expect(isSonareError(error)).toBe(false);
     });
   });
 

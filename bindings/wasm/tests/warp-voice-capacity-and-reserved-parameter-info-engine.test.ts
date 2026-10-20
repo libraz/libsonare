@@ -4,13 +4,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import {
-  ErrorCode,
-  init,
-  isSonareError,
-  masteringInsertParamInfo,
-  RealtimeEngine,
-} from '../dist/index.js';
+import { init, isSonareError, masteringInsertParamInfo, RealtimeEngine } from '../dist/index.js';
 import { SonareEngineTelemetryError } from '../dist/worklet.js';
 
 describe('Sonare WASM Module', () => {
@@ -155,11 +149,8 @@ describe('Sonare WASM Module', () => {
         } catch (caught) {
           error = caught;
         }
-        expect(isSonareError(error)).toBe(true);
-        if (!isSonareError(error)) {
-          throw new Error('expected SonareError');
-        }
-        expect(error.code).toBe(ErrorCode.InvalidParameter);
+        expect(error).toBeInstanceOf(RangeError);
+        expect(isSonareError(error)).toBe(false);
       } finally {
         engine.destroy();
       }

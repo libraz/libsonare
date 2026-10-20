@@ -792,8 +792,8 @@ describe('Sonare WASM Module', () => {
       } catch (error) {
         duplicateLaneError = error;
       }
-      expect(isSonareError(duplicateLaneError)).toBe(true);
-      expect((duplicateLaneError as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+      expect(duplicateLaneError).toBeInstanceOf(RangeError);
+      expect(isSonareError(duplicateLaneError)).toBe(false);
       engine.setTrackLanes([10, { trackId: 20 }]);
 
       engine.play();
@@ -1111,7 +1111,8 @@ describe('Sonare WASM Module', () => {
         } catch (error) {
           caught = error;
         }
-        expect(isSonareError(caught) && caught.code).toBe(ErrorCode.InvalidParameter);
+        expect(caught).toBeInstanceOf(RangeError);
+        expect(isSonareError(caught)).toBe(false);
       } finally {
         engine.destroy();
       }

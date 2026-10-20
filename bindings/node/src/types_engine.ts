@@ -463,8 +463,7 @@ export interface EngineBounceOptions {
   /**
    * Length of the bounce in frames. The whole result is held in memory, so the
    * span is capped by a 1 GiB peak budget over the full-size float buffers a
-   * bounce holds at once, and exceeding it throws an `InvalidParameter`
-   * `SonareError`.
+   * bounce holds at once, and exceeding it throws a `RangeError`.
    *
    * The cap is a **frame** count: inversely proportional to `numChannels`, and
    * independent of the sample rate. Stereo refuses past 44,739,242 frames, or
@@ -487,7 +486,7 @@ export interface EngineBounceOptions {
   targetSampleRate?: number;
   /**
    * Rate `totalFrames` is counted in. Omitting it (or `0`) means the engine's
-   * prepared rate; a different value throws an `InvalidParameter` `SonareError`,
+   * prepared rate; a different value throws a `RangeError`,
    * because the render always runs at the prepared rate.
    */
   sourceSampleRate?: number;

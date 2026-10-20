@@ -99,7 +99,7 @@ describe('SonareEngine offline export', () => {
     const raw = padEngine();
     try {
       const refused = (run: () => unknown) => {
-        expect(run).toThrow(expect.objectContaining({ code: 4 }));
+        expect(run).toThrow(RangeError);
       };
       const planes = () => [new Float32Array(256), new Float32Array(256)];
       refused(() => raw.renderOffline(planes(), BLOCK + 1));

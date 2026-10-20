@@ -42,30 +42,26 @@ void wasmMidiFxChainFromJson(const std::string& config_json, sonare::midi::MidiF
   if (error == SONARE_ERROR_INVALID_FORMAT) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, "invalid MIDI-FX JSON");
   }
-  if (error != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid MIDI-FX configuration");
-  }
+  if (error != SONARE_OK) throw WasmRangeError("invalid MIDI-FX configuration");
 }
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
 // The destination's bound instrument. WASM links neither the controller nor the
 // engine-MIDI C-ABI unit, so their shared first refusal is reproduced here:
-// InvalidParameter for a destination nothing is bound to, which every entry
-// below has to keep apart from the instrument's own "no such capability".
+// a RangeError for a destination nothing is bound to, which every entry below
+// has to keep apart from the instrument's own "no such capability".
 sonare::midi::MidiInstrument* wasmBoundInstrument(const sonare::engine::RealtimeEngine& engine,
                                                   uint32_t destination_id) {
   sonare::midi::MidiInstrument* instrument = engine.midi_instrument(destination_id);
   if (instrument == nullptr) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "no MIDI instrument is bound to this destination");
+    throw WasmRangeError("no MIDI instrument is bound to this destination");
   }
   return instrument;
 }
 
 // Maps an engine instrument-control outcome onto the exceptions the C ABI's statuses become:
-// InvalidParameter for a destination nothing is bound to, NotImplemented (the C ABI's
+// a RangeError for a destination nothing is bound to, NotImplemented (the C ABI's
 // NOT_SUPPORTED) for a bound instrument without the control.
 void wasmRequireControlOk(sonare::engine::RealtimeEngine::InstrumentControlStatus status,
                           const char* unsupported_message) {
@@ -74,8 +70,7 @@ void wasmRequireControlOk(sonare::engine::RealtimeEngine::InstrumentControlStatu
     case Status::kOk:
       return;
     case Status::kNoInstrument:
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "no MIDI instrument is bound to this destination");
+      throw WasmRangeError("no MIDI instrument is bound to this destination");
     case Status::kNotSupported:
       break;
   }
@@ -272,8 +267,7 @@ void RealtimeEngineWasm::setSynthInstrument(const val& destination_id_val, val p
   sonare::midi::synth::NativeSynthConfig cfg;
   const char* error = nullptr;
   if (!sonare_c_detail::synth_config_from_patch_c(c_patch, &cfg, &error)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  error != nullptr ? error : "invalid synth patch");
+    throw WasmRangeError(error != nullptr ? error : "invalid synth patch");
   }
   // `useGmPrograms` is a binding convenience beside the patch fields. Keep
   // its strict boolean contract here, where realtime and offline synth
@@ -393,17 +387,33 @@ void RealtimeEngineWasm::setSf2Instrument(const val& destination_id_val, val con
 #if defined(SONARE_WITH_ARRANGEMENT)
 namespace {
 
-// Mirrors the C ABI's bind mapping: a permanent refusal is InvalidParameter, a
-// full rack or failed allocation is OutOfMemory.
+// Mirrors the C ABI's bind mapping: a refused instrument is a RangeError; a full
+// rack, or a scheduled or queued SysEx the new instrument refuses, is
+// InvalidState; a failed allocation is OutOfMemory.
 [[noreturn]] void throwMidiInstrumentBindFailure(const sonare::engine::RealtimeEngine& engine,
                                                  const char* message) {
   switch (engine.last_midi_instrument_bind_status()) {
     case sonare::engine::MidiInstrumentBindStatus::kAlreadyBoundElsewhere:
+    case sonare::engine::MidiInstrumentBindStatus::kInstrumentPrepareFailed:
+      throw WasmRangeError(message);
+    case sonare::engine::MidiInstrumentBindStatus::kRackFull:
     case sonare::engine::MidiInstrumentBindStatus::kPreparationFailed:
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, message);
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState, message);
     default:
       throw sonare::SonareException(sonare::ErrorCode::OutOfMemory, message);
   }
+}
+
+// Mirrors the C ABI's mapping for a refused bind_midi_cc() whose arguments were
+// already validated: a full table is InvalidState, otherwise the snapshot failed
+// to allocate.
+[[noreturn]] void throwMidiCcBindFailure(const sonare::engine::RealtimeEngine& engine,
+                                         const char* message) {
+  if (engine.midi_cc_binding_count() >= sonare::midi::CcMap::kMaxBindings) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  std::string(message) + ": the MIDI CC binding table is full");
+  }
+  throw sonare::SonareException(sonare::ErrorCode::OutOfMemory, message);
 }
 
 }  // namespace
@@ -473,7 +483,7 @@ void RealtimeEngineWasm::bindMidiCc(const val& channel_val, const val& controlle
   }
   if (!engine_.bind_midi_cc(static_cast<uint8_t>(controller), static_cast<uint8_t>(channel),
                             param_id, min_value, max_value)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to bind MIDI CC");
+    throwMidiCcBindFailure(engine_, "failed to bind MIDI CC");
   }
 #else
   (void)channel_val;
@@ -517,8 +527,7 @@ void RealtimeEngineWasm::bindMidiCcBinding(val object) {
     throw WasmRangeError("invalid full MIDI CC binding");
   }
   if (!engine_.bind_midi_cc(binding)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  "failed to bind full MIDI CC descriptor");
+    throwMidiCcBindFailure(engine_, "failed to bind full MIDI CC descriptor");
   }
 #else
   (void)object;
@@ -610,11 +619,17 @@ void RealtimeEngineWasm::bindController(const val& destination_id_val, val bindi
   entry.hi = hi;
   entry.curve = curve;
 
+  // The binding itself is checked before the table, so a full table never hides a bad binding.
+  if (entry.axis == sonare::midi::ControllerAxis::kNone) {
+    throw WasmRangeError("controller binding: the axis is none");
+  }
+  if (entry.input == sonare::midi::ControllerInput::kPolyPressure &&
+      !sonare::midi::controller_axis_is_excitation(entry.axis)) {
+    throw WasmRangeError("controller binding: a poly-pressure binding named a channel-level axis");
+  }
   if (!profile.bind(entry)) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "controller binding refused: the table is full, the axis is none, or a poly-pressure "
-        "binding named a channel-level axis");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "controller binding table is full");
   }
   wasmInstallControllerProfile(engine_, destination_id, profile);
 #else
@@ -843,12 +858,11 @@ void RealtimeEngineWasm::setPartRig(const val& destination_id_val, const val& pa
     }
   }
   if (!sonare::midi::validate_part_rig(static_cast<uint8_t>(part), rig)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid part rig");
+    throw WasmRangeError("invalid part rig");
   }
 #if defined(SONARE_WITH_MASTERING)
   if (!sonare_c_detail::validate_part_rig_chain(rig.stages)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid part rig insert chain");
+    throw WasmRangeError("invalid part rig insert chain");
   }
 #else
   if (rig.mode == sonare::midi::PartRigMode::kChain) {
@@ -930,7 +944,7 @@ void RealtimeEngineWasm::setMidiDestinationExternal(const val& destination_id_va
 #if defined(SONARE_WITH_ARRANGEMENT)
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   if (!engine_.set_midi_destination_external(destination_id, external)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
                                   "external MIDI destination table is full");
   }
 #else
@@ -1272,7 +1286,7 @@ size_t umpWordsFromVal(const val& words_val, uint32_t (&words)[4], const char* w
 
 // Queues one live UMP of 1 to 4 words to a MIDI destination at @p render_frame
 // (-1 = immediate). Mirrors the C ABI sonare_engine_push_midi_ump: malformed
-// messages and Data types (MT 0x3 / 0x5) are InvalidParameter, a full slot ring
+// messages and Data types (MT 0x3 / 0x5) are a RangeError, a full slot ring
 // or command queue is transient OutOfMemory back-pressure.
 //
 // A control-change word reaches the CC binding table exactly as it would through
@@ -1519,8 +1533,8 @@ void RealtimeEngineWasm::pushMidiSysex(const val& destination_id_val, val data,
   std::vector<uint8_t> bytes = uint8ArrayToVector(data);
   // Distinguish the two rejection classes the C ABI reports (it bypasses the
   // C-ABI translation unit here, so the mapping is reproduced): malformed or
-  // oversized requests and payloads the destination cannot prepare are
-  // InvalidParameter, while full payload slots or a full command queue are
+  // oversized requests and payloads the destination cannot prepare are a
+  // RangeError, while full payload slots or a full command queue are
   // transient OutOfMemory back-pressure. The ceiling is the engine's own
   // constant, not a copy of its value, so raising it moves this guard with it.
   constexpr size_t kMaxSysExBytes = sonare::engine::RealtimeEngine::kMaxSysExPayloadBytes;
@@ -1533,8 +1547,7 @@ void RealtimeEngineWasm::pushMidiSysex(const val& destination_id_val, val data,
     switch (engine_.last_midi_sysex_push_status()) {
       case sonare::engine::MidiSysExPushStatus::kInvalidPayload:
       case sonare::engine::MidiSysExPushStatus::kPreparationFailed:
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "pushMidiSysex: the destination cannot prepare this SysEx");
+        throw WasmRangeError("pushMidiSysex: the destination cannot prepare this SysEx");
       default:
         throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
                                       "failed to queue MIDI SysEx command");

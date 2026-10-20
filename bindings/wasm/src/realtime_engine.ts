@@ -7,7 +7,7 @@ import {
   sidechainSourceKindCode,
   trackMonitorModeCode,
 } from './codes.js';
-import { ErrorCode, SonareError } from './errors.js';
+import { ErrorCode, isSonareError, SonareError } from './errors.js';
 import { getSonareModule } from './module_state.js';
 import type {
   Articulation,
@@ -327,6 +327,45 @@ export function engineCapabilities(): EngineCapabilities {
   };
 }
 
+/**
+ * The error an engine call surfaces: a library `InvalidParameter` refusal is the
+ * caller's argument, so it is rebuilt as a `RangeError` (the Node binding maps
+ * the C ABI's INVALID_PARAMETER the same way); every other error passes through.
+ */
+function engineCallError(error: unknown): unknown {
+  if (isSonareError(error) && error.code === ErrorCode.InvalidParameter) {
+    return new RangeError(error.message);
+  }
+  return error;
+}
+
+/** Routes every method of the native engine through {@link engineCallError}. */
+function withEngineArgumentRefusals(handle: WasmRealtimeEngine): WasmRealtimeEngine {
+  const methods = new Map<PropertyKey, unknown>();
+  return new Proxy(handle, {
+    get(target, prop) {
+      const member = Reflect.get(target, prop);
+      if (typeof member !== 'function') {
+        return member;
+      }
+      const cached = methods.get(prop);
+      if (cached) {
+        return cached;
+      }
+      const method = member as (...args: unknown[]) => unknown;
+      const wrapped = (...args: unknown[]): unknown => {
+        try {
+          return Reflect.apply(method, target, args);
+        } catch (error) {
+          throw engineCallError(error);
+        }
+      };
+      methods.set(prop, wrapped);
+      return wrapped;
+    },
+  });
+}
+
 /** The clip shape the embind layer reads: a page provider travels as its id. */
 function nativeClip(clip: EngineClip): WasmEngineClip {
   return {
@@ -338,6 +377,24 @@ function nativeClip(clip: EngineClip): WasmEngineClip {
   } as WasmEngineClip;
 }
 
+/**
+ * Sample-accurate realtime engine: clips, MIDI instruments, a track mixer and
+ * automation, rendered block by block or offline.
+ *
+ * Errors follow one rule across the methods:
+ * - A call refused for its own argument (an out-of-range value, an unknown or
+ *   wrong-kind track, bus, insert, destination or parameter id or name, a
+ *   malformed patch or strip, an unknown `engineParams` key) throws a
+ *   `RangeError` (`TypeError` for a value of the wrong type), never a
+ *   `SonareError`.
+ * - A call refused because of state earlier calls left (a full binding table,
+ *   rack or pool, no master strip configured, a queued SysEx the new instrument
+ *   cannot prepare) throws a `SonareError` with `ErrorCode.InvalidState`; a
+ *   call on a destroyed engine does too.
+ * - A full command queue or payload ring, and a failed allocation, throw a
+ *   `SonareError` with `ErrorCode.OutOfMemory`; a feature compiled out of the
+ *   build throws `ErrorCode.NotSupported`.
+ */
 export class RealtimeEngine {
   private nativeHandle: WasmRealtimeEngine;
   private released = false;
@@ -365,13 +422,19 @@ export class RealtimeEngine {
       );
     }
     this.sampleRate = sampleRate;
-    this.nativeHandle = new module.RealtimeEngine(
-      sampleRate,
-      maxBlockSize,
-      commandCapacity,
-      telemetryCapacity,
-      maxChannels,
-    );
+    let handle: WasmRealtimeEngine;
+    try {
+      handle = new module.RealtimeEngine(
+        sampleRate,
+        maxBlockSize,
+        commandCapacity,
+        telemetryCapacity,
+        maxChannels,
+      );
+    } catch (error) {
+      throw engineCallError(error);
+    }
+    this.nativeHandle = withEngineArgumentRefusals(handle);
   }
 
   /**
@@ -403,7 +466,7 @@ export class RealtimeEngine {
   /**
    * Queue a sample-accurate parameter change (engine kSetParam).
    * A reserved mixer id (`0x4d58xxxx`) other than a master id names no strip and
-   * throws `InvalidParameter`; resolve ids with the `resolve*AutomationId`
+   * throws a `RangeError`; resolve ids with the `resolve*AutomationId`
    * methods (`resolveMasterAutomationId` for the master fader, pan and width).
    */
   setParameter(paramId: number, value: number, renderFrame?: number): void {
@@ -1148,7 +1211,7 @@ export class RealtimeEngine {
    * Queue an immediate (live) MIDI SysEx frame to a MIDI destination. `data` is
    * the full message including the leading 0xF0 and trailing 0xF7 (1..512
    * bytes). `renderFrame` is the frame to fire at (omit for immediate). Throws
-   * `InvalidParameter` when the destination instrument cannot prepare
+   * a `RangeError` when the destination instrument cannot prepare
    * the SysEx (retrying cannot help), and `OutOfMemory` when the payload
    * slots or the command queue are full (retry after a processed block).
    * Mirrors the Node/Python/C-ABI `pushMidiSysex`.
@@ -1348,7 +1411,7 @@ export class RealtimeEngine {
   /**
    * Replaces the automation lane driving `paramId`.
    * A reserved mixer id (`0x4d58xxxx`) other than a master id names no strip and
-   * throws `InvalidParameter`; resolve ids with the `resolve*AutomationId`
+   * throws a `RangeError`; resolve ids with the `resolve*AutomationId`
    * methods (`resolveMasterAutomationId` for the master fader, pan and width).
    */
   setAutomationLane(paramId: number, points: EngineAutomationPoint[]): void {
@@ -1431,7 +1494,7 @@ export class RealtimeEngine {
   /**
    * Removes the clip carrying `clipId`.
    *
-   * @throws SonareError `InvalidParameter` when no clip has that id.
+   * @throws RangeError when no clip has that id.
    */
   removeClip(clipId: number): void {
     this.native.removeClip(clipId);
