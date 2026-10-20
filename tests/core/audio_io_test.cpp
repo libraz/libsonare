@@ -24,7 +24,12 @@
 #include "core/audio_io_detail.h"
 
 #ifndef _WIN32
+#include <fcntl.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
+#include <unistd.h>
+
+#include <csignal>
 #endif
 
 #include "core/audio.h"
@@ -618,6 +623,59 @@ TEST_CASE("load_buffer_wav float32", "[audio_io]") {
   // Compare samples (should be identical for float32)
   for (size_t i = 0; i < samples; ++i) {
     REQUIRE(loaded[i] == original[i]);
+  }
+}
+
+TEST_CASE("MS-ADPCM blocks whose step delta keeps growing decode to bounded samples",
+          "[audio_io]") {
+  constexpr int sr = 22050;
+  constexpr uint16_t kBlockAlign = 256;
+  constexpr uint16_t kSamplesPerBlock = (kBlockAlign - 7) * 2 + 2;
+  constexpr int kBlocks = 4;
+  std::vector<uint8_t> wav;
+  auto put16 = [&wav](uint16_t v) {
+    wav.push_back(static_cast<uint8_t>(v & 0xFF));
+    wav.push_back(static_cast<uint8_t>(v >> 8));
+  };
+  auto put32 = [&put16](uint32_t v) {
+    put16(static_cast<uint16_t>(v & 0xFFFF));
+    put16(static_cast<uint16_t>(v >> 16));
+  };
+  const uint32_t data_bytes = kBlockAlign * kBlocks;
+  const uint32_t fmt_bytes = 18 + 32;
+  for (char c : {'R', 'I', 'F', 'F'}) wav.push_back(static_cast<uint8_t>(c));
+  put32(4 + 8 + fmt_bytes + 8 + data_bytes);
+  for (char c : {'W', 'A', 'V', 'E', 'f', 'm', 't', ' '}) wav.push_back(static_cast<uint8_t>(c));
+  put32(fmt_bytes);
+  put16(2);  // MS-ADPCM
+  put16(1);
+  put32(sr);
+  put32(sr * kBlockAlign / kSamplesPerBlock);
+  put16(kBlockAlign);
+  put16(4);
+  put16(32);
+  put16(kSamplesPerBlock);
+  put16(7);
+  for (const int16_t c : {256, 0, 512, -256, 0, 0, 192, 64, 240, 0, 460, -208, 392, -232}) {
+    put16(static_cast<uint16_t>(c));
+  }
+  for (char c : {'d', 'a', 't', 'a'}) wav.push_back(static_cast<uint8_t>(c));
+  put32(data_bytes);
+  for (int b = 0; b < kBlocks; ++b) {
+    wav.push_back(0);  // predictor 0
+    put16(0x7FFF);     // initial delta at its signed maximum
+    put16(0);
+    put16(0);
+    // Nibble 8 scales the delta by 768/256 each step, so a few bytes overflow an unclamped int32.
+    wav.insert(wav.end(), kBlockAlign - 7, 0x88);
+  }
+
+  auto [samples, rate] = load_buffer_wav(wav.data(), wav.size());
+  REQUIRE(rate == sr);
+  REQUIRE(!samples.empty());
+  for (const float v : samples) {
+    REQUIRE(std::isfinite(v));
+    REQUIRE(std::abs(v) <= 1.0f);
   }
 }
 
@@ -2163,3 +2221,72 @@ TEST_CASE("a failed write reports an encode error, not a decode error", "[audio_
   // other direction either.
   REQUIRE(code_of([&] { Audio::from_file(unwritable); }) != ErrorCode::EncodeFailed);
 }
+
+#ifndef _WIN32
+TEST_CASE("a write failing at write, flush or close leaves the destination byte-identical",
+          "[audio_io]") {
+  // RLIMIT_FSIZE makes the kernel refuse bytes past the limit with EFBIG, the
+  // same deferred failure a full disk gives: a small image fails only when stdio
+  // flushes its buffer, a large one already inside fwrite.
+  const std::filesystem::path scratch = scratch_dir();
+  const std::string path = (scratch / "keep.wav").string();
+  save_wav(path, std::vector<float>(256, 0.25f), 48000);
+  const std::vector<uint8_t> before = read_file_bytes(path);
+  REQUIRE(before.size() > 64);
+
+  const auto lowest_free_fd = [] {
+    const int fd = ::open("/dev/null", O_RDONLY);
+    ::close(fd);
+    return fd;
+  };
+  const auto encode_code = [](auto&& fn) {
+    try {
+      fn();
+    } catch (const SonareException& e) {
+      return e.code();
+    }
+    return ErrorCode::Ok;
+  };
+
+  for (const size_t n_samples : {size_t{300}, size_t{60000}}) {
+    const std::vector<float> replacement(n_samples, -0.5f);
+    const int fd_before = lowest_free_fd();
+
+    struct rlimit saved {};
+    REQUIRE(::getrlimit(RLIMIT_FSIZE, &saved) == 0);
+    struct rlimit limited = saved;
+    limited.rlim_cur = 64;
+    void (*saved_handler)(int) = std::signal(SIGXFSZ, SIG_IGN);
+    const bool limited_ok = ::setrlimit(RLIMIT_FSIZE, &limited) == 0;
+    // Nothing may assert while the limit holds: a failed REQUIRE would leave it
+    // in place for every later test.
+    const ErrorCode mono = encode_code([&] { save_wav(path, replacement, 48000, 24); });
+    const ErrorCode stereo = encode_code([&] {
+      save_wav_multichannel(path, replacement.data(), n_samples / 2, 2, ChannelLayout::Stereo,
+                            48000);
+    });
+    const ErrorCode surround = encode_code([&] {
+      save_wav_multichannel(path, replacement.data(), n_samples / 6, 6, ChannelLayout::FivePointOne,
+                            48000);
+    });
+    const bool restored = ::setrlimit(RLIMIT_FSIZE, &saved) == 0;
+    std::signal(SIGXFSZ, saved_handler);
+
+    CAPTURE(n_samples);
+    REQUIRE(limited_ok);
+    REQUIRE(restored);
+    CHECK(mono == ErrorCode::EncodeFailed);
+    CHECK(stereo == ErrorCode::EncodeFailed);
+    CHECK(surround == ErrorCode::EncodeFailed);
+    CHECK(read_file_bytes(path) == before);
+    CHECK(lowest_free_fd() == fd_before);
+  }
+
+  // No temp sibling survived any of the failed writes.
+  for (const auto& entry : std::filesystem::directory_iterator(scratch)) {
+    CAPTURE(entry.path().string());
+    CHECK(entry.path().filename() == "keep.wav");
+  }
+  std::filesystem::remove_all(scratch);
+}
+#endif

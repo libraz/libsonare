@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <string>
 
 #include "core/audio_io_detail.h"
@@ -18,7 +19,6 @@
 #ifdef _WIN32
 #include <windows.h>
 #else
-#include <fcntl.h>
 #include <unistd.h>
 #endif
 #endif
@@ -938,7 +938,7 @@ int32_t float_to_pcm24(float sample, size_t& non_finite) {
 // id plus a monotonic counter keep concurrent writers to the same destination on
 // distinct temp files; a fixed name would let two writers open and interleave
 // into the same temp before either renames, leaving a corrupt result. The same
-// scheme is duplicated in tools/cli/sonare_cli_project.cpp (the CLI reaches this
+// scheme is duplicated in tools/cli/sonare_cli_common.cpp (the CLI reaches this
 // only through the C ABI and cannot share this internal helper).
 std::string atomic_tmp_path(const std::string& path) {
   static std::atomic<uint64_t> counter{0};
@@ -961,24 +961,6 @@ struct TmpFileGuard {
   }
 };
 
-// fsyncs the completed temp file (best-effort durability) then atomically renames
-// it over the destination.
-void finalize_atomic(const std::string& tmp, const std::string& path) {
-#ifndef _WIN32
-  const int fd = ::open(tmp.c_str(), O_RDONLY);
-  if (fd >= 0) {
-    ::fsync(fd);
-    ::close(fd);
-  }
-#endif
-  // The rename is the last stage of writing the output, so it carries the same
-  // error class as every earlier one. A destination that resolves to a
-  // directory fails here and nowhere else, and reporting it as a decode failure
-  // told the caller their input could not be read.
-  SONARE_CHECK_MSG(std::rename(tmp.c_str(), path.c_str()) == 0, ErrorCode::EncodeFailed,
-                   "Failed to finalize file: " + path);
-}
-
 // RIFF stores both the data chunk and the enclosing file size in uint32. Every
 // WAV writer applies this before it packs or allocates anything: past the bound
 // the header is truncated to a value that reads as a corrupt short file, and
@@ -1000,65 +982,6 @@ void check_riff_size_fits(size_t n_frames, int channel_count, int bits_per_sampl
 #endif  // !__EMSCRIPTEN__
 
 }  // namespace
-
-void save_wav(const std::string& path, const float* samples, size_t n_samples, int sample_rate,
-              int bits_per_sample, size_t* non_finite_samples) {
-  SONARE_CHECK_MSG(samples != nullptr, ErrorCode::InvalidParameter, "Samples pointer is null");
-  SONARE_CHECK_MSG(n_samples > 0, ErrorCode::InvalidParameter, "No samples to save");
-  SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::InvalidParameter, "Invalid sample rate");
-  SONARE_CHECK_MSG(bits_per_sample == 16 || bits_per_sample == 24, ErrorCode::InvalidParameter,
-                   "bits_per_sample must be 16 or 24");
-  check_riff_size_fits(n_samples, 1, bits_per_sample);
-
-  drwav_data_format format;
-  format.container = drwav_container_riff;
-  format.format = DR_WAVE_FORMAT_PCM;
-  format.channels = 1;
-  format.sampleRate = static_cast<drwav_uint32>(sample_rate);
-  format.bitsPerSample = static_cast<drwav_uint32>(bits_per_sample);
-
-  const std::string tmp = atomic_tmp_path(path);
-  TmpFileGuard guard{tmp};
-  drwav wav;
-  drwav_bool32 ok = drwav_init_file_write(&wav, tmp.c_str(), &format, nullptr);
-  SONARE_CHECK_MSG(ok, ErrorCode::EncodeFailed, "Failed to create WAV file: " + path);
-
-  size_t non_finite = 0;
-  if (bits_per_sample == 16) {
-    // Convert float to int16
-    std::vector<int16_t> int_samples(n_samples);
-    for (size_t i = 0; i < n_samples; ++i) {
-      int_samples[i] = float_to_pcm16(samples[i], non_finite);
-    }
-    if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
-    drwav_uint64 written = drwav_write_pcm_frames(&wav, n_samples, int_samples.data());
-    drwav_uninit(&wav);
-    SONARE_CHECK_MSG(written == n_samples, ErrorCode::EncodeFailed, "Failed to write all samples");
-  } else {
-    // 24-bit: pack as tightly packed 3-byte little-endian samples. dr_wav's
-    // writer is a raw byte copy (bytesToWrite = frames * channels * 24 / 8) with
-    // no width/stride conversion, so a 4-byte int32 buffer would be read
-    // misaligned. Build the exact 3-byte-per-sample byte stream it expects.
-    std::vector<uint8_t> bytes(n_samples * 3);
-    for (size_t i = 0; i < n_samples; ++i) {
-      int32_t v = float_to_pcm24(samples[i], non_finite);
-      bytes[i * 3 + 0] = static_cast<uint8_t>(v & 0xFF);
-      bytes[i * 3 + 1] = static_cast<uint8_t>((v >> 8) & 0xFF);
-      bytes[i * 3 + 2] = static_cast<uint8_t>((v >> 16) & 0xFF);
-    }
-    if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
-    drwav_uint64 written = drwav_write_pcm_frames(&wav, n_samples, bytes.data());
-    drwav_uninit(&wav);
-    SONARE_CHECK_MSG(written == n_samples, ErrorCode::EncodeFailed, "Failed to write all samples");
-  }
-  finalize_atomic(tmp, path);
-  guard.committed = true;
-}
-
-void save_wav(const std::string& path, const std::vector<float>& samples, int sample_rate,
-              int bits_per_sample, size_t* non_finite_samples) {
-  save_wav(path, samples.data(), samples.size(), sample_rate, bits_per_sample, non_finite_samples);
-}
 
 namespace {
 
@@ -1086,25 +1009,93 @@ std::vector<uint8_t> pack_pcm_bytes(const float* samples, size_t n_samples, int 
   return bytes;
 }
 
-void write_le16(std::ostream& os, uint16_t value) {
-  const uint8_t b[2] = {static_cast<uint8_t>(value & 0xFF),
-                        static_cast<uint8_t>((value >> 8) & 0xFF)};
-  os.write(reinterpret_cast<const char*>(b), 2);
+void append_le16(std::vector<uint8_t>& out, uint16_t value) {
+  out.push_back(static_cast<uint8_t>(value & 0xFF));
+  out.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
 }
 
-void write_le32(std::ostream& os, uint32_t value) {
-  const uint8_t b[4] = {
-      static_cast<uint8_t>(value & 0xFF), static_cast<uint8_t>((value >> 8) & 0xFF),
-      static_cast<uint8_t>((value >> 16) & 0xFF), static_cast<uint8_t>((value >> 24) & 0xFF)};
-  os.write(reinterpret_cast<const char*>(b), 4);
+void append_le32(std::vector<uint8_t>& out, uint32_t value) {
+  for (int shift = 0; shift < 32; shift += 8) {
+    out.push_back(static_cast<uint8_t>((value >> shift) & 0xFF));
+  }
 }
 
-/// Hand-writes a WAVE_FORMAT_EXTENSIBLE PCM file. The pinned dr_wav (v0.14.4)
+void append_tag(std::vector<uint8_t>& out, const char (&tag)[5]) {
+  out.insert(out.end(), tag, tag + 4);
+}
+
+struct FileCloser {
+  void operator()(std::FILE* file) const { std::fclose(file); }
+};
+
+/// Writes a complete WAV image to a sibling temp file and renames it over @p path
+/// only after the write, flush, fsync and close have all succeeded, so a failure
+/// at any stage leaves an existing destination untouched. The image is fully
+/// built before the file is opened, so nothing between open and close allocates.
+void write_wav_image_atomic(const std::string& path, const std::vector<uint8_t>& image) {
+  const std::string tmp = atomic_tmp_path(path);
+  TmpFileGuard guard{tmp};
+  std::unique_ptr<std::FILE, FileCloser> file(std::fopen(tmp.c_str(), "wb"));
+  SONARE_CHECK_MSG(file != nullptr, ErrorCode::EncodeFailed, "Failed to create WAV file: " + path);
+  bool ok = std::fwrite(image.data(), 1, image.size(), file.get()) == image.size() &&
+            std::fflush(file.get()) == 0;
+#ifndef _WIN32
+  ok = ok && ::fsync(fileno(file.get())) == 0;
+#endif
+  // fclose can report a deferred write error of its own, so it is checked too.
+  ok = std::fclose(file.release()) == 0 && ok;
+  SONARE_CHECK_MSG(ok, ErrorCode::EncodeFailed, "Failed to write WAV file: " + path);
+  // The rename is the last stage of writing the output, so it carries the same
+  // error class as every earlier one. A destination that resolves to a
+  // directory fails here and nowhere else, and reporting it as a decode failure
+  // told the caller their input could not be read.
+  SONARE_CHECK_MSG(std::rename(tmp.c_str(), path.c_str()) == 0, ErrorCode::EncodeFailed,
+                   "Failed to finalize file: " + path);
+  guard.committed = true;
+}
+
+/// Builds a plain WAVE_FORMAT_PCM file image (mono/stereo): the canonical 44-byte
+/// header, the samples, and the RIFF pad byte after an odd-sized data chunk.
+std::vector<uint8_t> encode_pcm_wav(const float* interleaved, size_t n_frames, int channel_count,
+                                    int sample_rate, int bits_per_sample,
+                                    size_t* non_finite_samples) {
+  size_t non_finite = 0;
+  const std::vector<uint8_t> pcm = pack_pcm_bytes(
+      interleaved, n_frames * static_cast<size_t>(channel_count), bits_per_sample, non_finite);
+  if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
+
+  const auto data_size = static_cast<uint32_t>(pcm.size());
+  const uint32_t pad = data_size % 2;
+  const auto block_align = static_cast<uint16_t>(channel_count * (bits_per_sample / 8));
+  const uint32_t fmt_size = 16;
+
+  std::vector<uint8_t> image;
+  image.reserve(44 + pcm.size() + pad);
+  append_tag(image, "RIFF");
+  append_le32(image, 4 + (8 + fmt_size) + (8 + data_size + pad));
+  append_tag(image, "WAVE");
+  append_tag(image, "fmt ");
+  append_le32(image, fmt_size);
+  append_le16(image, 1);  // WAVE_FORMAT_PCM
+  append_le16(image, static_cast<uint16_t>(channel_count));
+  append_le32(image, static_cast<uint32_t>(sample_rate));
+  append_le32(image, static_cast<uint32_t>(sample_rate) * block_align);
+  append_le16(image, block_align);
+  append_le16(image, static_cast<uint16_t>(bits_per_sample));
+  append_tag(image, "data");
+  append_le32(image, data_size);
+  image.insert(image.end(), pcm.begin(), pcm.end());
+  if (pad != 0) image.push_back(0);
+  return image;
+}
+
+/// Builds a WAVE_FORMAT_EXTENSIBLE PCM file image. The pinned dr_wav (v0.14.4)
 /// has no channelMask field and rejects EXTENSIBLE on write, so surround beds
 /// must be serialized directly.
-void write_wav_extensible(const std::string& path, const float* interleaved, size_t n_frames,
-                          int channel_count, uint32_t channel_mask, int sample_rate,
-                          int bits_per_sample, size_t* non_finite_samples) {
+std::vector<uint8_t> encode_extensible_wav(const float* interleaved, size_t n_frames,
+                                           int channel_count, uint32_t channel_mask,
+                                           int sample_rate, int bits_per_sample,
+                                           size_t* non_finite_samples) {
   const int bytes_per_sample = bits_per_sample / 8;
   const size_t n_samples = n_frames * static_cast<size_t>(channel_count);
   size_t non_finite = 0;
@@ -1123,39 +1114,49 @@ void write_wav_extensible(const std::string& path, const float* interleaved, siz
   static const uint8_t kPcmSubFormat[16] = {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
                                             0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71};
 
-  const std::string tmp = atomic_tmp_path(path);
-  TmpFileGuard guard{tmp};
-  std::ofstream os(tmp, std::ios::binary);
-  SONARE_CHECK_MSG(os.is_open(), ErrorCode::EncodeFailed, "Failed to create WAV file: " + path);
+  std::vector<uint8_t> image;
+  image.reserve(68 + pcm.size());
+  append_tag(image, "RIFF");
+  append_le32(image, riff_size);
+  append_tag(image, "WAVE");
 
-  os.write("RIFF", 4);
-  write_le32(os, riff_size);
-  os.write("WAVE", 4);
+  append_tag(image, "fmt ");
+  append_le32(image, fmt_size);
+  append_le16(image, 0xFFFE);  // WAVE_FORMAT_EXTENSIBLE
+  append_le16(image, static_cast<uint16_t>(channel_count));
+  append_le32(image, static_cast<uint32_t>(sample_rate));
+  append_le32(image, byte_rate);
+  append_le16(image, block_align);
+  append_le16(image, static_cast<uint16_t>(bits_per_sample));
+  append_le16(image, 22);                                      // cbSize
+  append_le16(image, static_cast<uint16_t>(bits_per_sample));  // wValidBitsPerSample
+  append_le32(image, channel_mask);
+  image.insert(image.end(), kPcmSubFormat, kPcmSubFormat + 16);
 
-  os.write("fmt ", 4);
-  write_le32(os, fmt_size);
-  write_le16(os, 0xFFFE);  // WAVE_FORMAT_EXTENSIBLE
-  write_le16(os, static_cast<uint16_t>(channel_count));
-  write_le32(os, static_cast<uint32_t>(sample_rate));
-  write_le32(os, byte_rate);
-  write_le16(os, block_align);
-  write_le16(os, static_cast<uint16_t>(bits_per_sample));
-  write_le16(os, 22);                                      // cbSize
-  write_le16(os, static_cast<uint16_t>(bits_per_sample));  // wValidBitsPerSample
-  write_le32(os, channel_mask);
-  os.write(reinterpret_cast<const char*>(kPcmSubFormat), 16);
-
-  os.write("data", 4);
-  write_le32(os, data_size);
-  os.write(reinterpret_cast<const char*>(pcm.data()), static_cast<std::streamsize>(pcm.size()));
-  os.flush();
-  SONARE_CHECK_MSG(os.good(), ErrorCode::EncodeFailed, "Failed to write WAV file: " + path);
-  os.close();
-  finalize_atomic(tmp, path);
-  guard.committed = true;
+  append_tag(image, "data");
+  append_le32(image, data_size);
+  image.insert(image.end(), pcm.begin(), pcm.end());
+  return image;
 }
 
 }  // namespace
+
+void save_wav(const std::string& path, const float* samples, size_t n_samples, int sample_rate,
+              int bits_per_sample, size_t* non_finite_samples) {
+  SONARE_CHECK_MSG(samples != nullptr, ErrorCode::InvalidParameter, "Samples pointer is null");
+  SONARE_CHECK_MSG(n_samples > 0, ErrorCode::InvalidParameter, "No samples to save");
+  SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::InvalidParameter, "Invalid sample rate");
+  SONARE_CHECK_MSG(bits_per_sample == 16 || bits_per_sample == 24, ErrorCode::InvalidParameter,
+                   "bits_per_sample must be 16 or 24");
+  check_riff_size_fits(n_samples, 1, bits_per_sample);
+  write_wav_image_atomic(path, encode_pcm_wav(samples, n_samples, 1, sample_rate, bits_per_sample,
+                                              non_finite_samples));
+}
+
+void save_wav(const std::string& path, const std::vector<float>& samples, int sample_rate,
+              int bits_per_sample, size_t* non_finite_samples) {
+  save_wav(path, samples.data(), samples.size(), sample_rate, bits_per_sample, non_finite_samples);
+}
 
 void save_wav_multichannel(const std::string& path, const float* interleaved, size_t n_frames,
                            int channel_count, ChannelLayout layout, int sample_rate,
@@ -1170,36 +1171,14 @@ void save_wav_multichannel(const std::string& path, const float* interleaved, si
 
   check_riff_size_fits(n_frames, channel_count, bits_per_sample);
 
-  if (channel_count <= 2) {
-    // Plain WAVE_FORMAT_PCM for mono/stereo (maximum compatibility, and
-    // bit-identical to the existing mono/stereo writer).
-    drwav_data_format format;
-    format.container = drwav_container_riff;
-    format.format = DR_WAVE_FORMAT_PCM;
-    format.channels = static_cast<drwav_uint32>(channel_count);
-    format.sampleRate = static_cast<drwav_uint32>(sample_rate);
-    format.bitsPerSample = static_cast<drwav_uint32>(bits_per_sample);
-
-    const std::string tmp = atomic_tmp_path(path);
-    TmpFileGuard guard{tmp};
-    drwav wav;
-    drwav_bool32 ok = drwav_init_file_write(&wav, tmp.c_str(), &format, nullptr);
-    SONARE_CHECK_MSG(ok, ErrorCode::EncodeFailed, "Failed to create WAV file: " + path);
-
-    size_t non_finite = 0;
-    const std::vector<uint8_t> pcm = pack_pcm_bytes(
-        interleaved, n_frames * static_cast<size_t>(channel_count), bits_per_sample, non_finite);
-    if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
-    drwav_uint64 written = drwav_write_pcm_frames(&wav, n_frames, pcm.data());
-    drwav_uninit(&wav);
-    SONARE_CHECK_MSG(written == n_frames, ErrorCode::EncodeFailed, "Failed to write all frames");
-    finalize_atomic(tmp, path);
-    guard.committed = true;
-    return;
-  }
-
-  write_wav_extensible(path, interleaved, n_frames, channel_count, wave_channel_mask(layout),
-                       sample_rate, bits_per_sample, non_finite_samples);
+  // Plain WAVE_FORMAT_PCM for mono/stereo (maximum compatibility, and
+  // bit-identical to the mono writer); EXTENSIBLE with a channel mask above that.
+  write_wav_image_atomic(
+      path, channel_count <= 2 ? encode_pcm_wav(interleaved, n_frames, channel_count, sample_rate,
+                                                bits_per_sample, non_finite_samples)
+                               : encode_extensible_wav(interleaved, n_frames, channel_count,
+                                                       wave_channel_mask(layout), sample_rate,
+                                                       bits_per_sample, non_finite_samples));
 }
 #endif  // !__EMSCRIPTEN__
 

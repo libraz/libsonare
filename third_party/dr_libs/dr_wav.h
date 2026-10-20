@@ -6380,6 +6380,9 @@ DRWAV_PRIVATE drwav_uint64 drwav_read_pcm_frames_s16__msadpcm(drwav* pWav, drwav
                     newSample0  = drwav_clamp(newSample0, -32768, 32767);
 
                     pWav->msadpcm.delta[0] = (adaptationTable[((nibbles & 0xF0) >> 4)] * pWav->msadpcm.delta[0]) >> 8;
+                    if (pWav->msadpcm.delta[0] > 65535) {
+                        pWav->msadpcm.delta[0] = 65535;   /* Keeps delta * adaptationTable[n] and nibble * delta within int32 for crafted input. */
+                    }
                     if (pWav->msadpcm.delta[0] < 16) {
                         pWav->msadpcm.delta[0] = 16;
                     }
@@ -6393,6 +6396,9 @@ DRWAV_PRIVATE drwav_uint64 drwav_read_pcm_frames_s16__msadpcm(drwav* pWav, drwav
                     newSample1  = drwav_clamp(newSample1, -32768, 32767);
 
                     pWav->msadpcm.delta[0] = (adaptationTable[((nibbles & 0x0F) >> 0)] * pWav->msadpcm.delta[0]) >> 8;
+                    if (pWav->msadpcm.delta[0] > 65535) {
+                        pWav->msadpcm.delta[0] = 65535;   /* Keeps delta * adaptationTable[n] and nibble * delta within int32 for crafted input. */
+                    }
                     if (pWav->msadpcm.delta[0] < 16) {
                         pWav->msadpcm.delta[0] = 16;
                     }
@@ -6418,6 +6424,9 @@ DRWAV_PRIVATE drwav_uint64 drwav_read_pcm_frames_s16__msadpcm(drwav* pWav, drwav
                     newSample0  = drwav_clamp(newSample0, -32768, 32767);
 
                     pWav->msadpcm.delta[0] = (adaptationTable[((nibbles & 0xF0) >> 4)] * pWav->msadpcm.delta[0]) >> 8;
+                    if (pWav->msadpcm.delta[0] > 65535) {
+                        pWav->msadpcm.delta[0] = 65535;   /* Keeps delta * adaptationTable[n] and nibble * delta within int32 for crafted input. */
+                    }
                     if (pWav->msadpcm.delta[0] < 16) {
                         pWav->msadpcm.delta[0] = 16;
                     }
@@ -6436,6 +6445,9 @@ DRWAV_PRIVATE drwav_uint64 drwav_read_pcm_frames_s16__msadpcm(drwav* pWav, drwav
                     newSample1  = drwav_clamp(newSample1, -32768, 32767);
 
                     pWav->msadpcm.delta[1] = (adaptationTable[((nibbles & 0x0F) >> 0)] * pWav->msadpcm.delta[1]) >> 8;
+                    if (pWav->msadpcm.delta[1] > 65535) {
+                        pWav->msadpcm.delta[1] = 65535;   /* Keeps delta * adaptationTable[n] and nibble * delta within int32 for crafted input. */
+                    }
                     if (pWav->msadpcm.delta[1] < 16) {
                         pWav->msadpcm.delta[1] = 16;
                     }
