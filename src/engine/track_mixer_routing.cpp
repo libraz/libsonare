@@ -2,6 +2,7 @@
 #include <array>
 #include <cstdint>
 #include <limits>
+#include <new>
 #include <vector>
 
 #include "engine/track_mixer.h"
@@ -520,17 +521,23 @@ bool TrackMixerRuntime::prepare_pdc_updates(
   prepared->plan = plan;
   prepared->lane_source = sources;
   prepared->lane_reset = reset;
+  // AlignmentDelay::prepare_update clamps the delay, so it fails only for an allocation.
+  const auto prepare_delay = [prepared](const mixing::AlignmentDelay& delay, int delay_q8,
+                                        mixing::AlignmentDelay::PreparedUpdate& update) {
+    if (delay.prepare_update(delay_q8, mixing::FractionalDelayMode::Lagrange3, update)) {
+      return true;
+    }
+    prepared->out_of_memory = true;
+    return false;
+  };
   try {
     for (size_t i = 0; i < kMaxTrackLanes; ++i) {
       const size_t source = sources[i] >= 0 ? static_cast<size_t>(sources[i]) : i;
-      if (!lane_pdc_delays_[source].prepare_update(
-              plan.lane_q8[i], mixing::FractionalDelayMode::Lagrange3, prepared->lane_updates[i]) ||
-          !lane_pre_send_pdc_delays_[source].prepare_update(plan.lane_pre_q8[i],
-                                                            mixing::FractionalDelayMode::Lagrange3,
-                                                            prepared->lane_pre_send_updates[i]) ||
-          !lane_in_pdc_delays_[source].prepare_update(plan.lane_in_q8[i],
-                                                      mixing::FractionalDelayMode::Lagrange3,
-                                                      prepared->lane_in_updates[i])) {
+      if (!prepare_delay(lane_pdc_delays_[source], plan.lane_q8[i], prepared->lane_updates[i]) ||
+          !prepare_delay(lane_pre_send_pdc_delays_[source], plan.lane_pre_q8[i],
+                         prepared->lane_pre_send_updates[i]) ||
+          !prepare_delay(lane_in_pdc_delays_[source], plan.lane_in_q8[i],
+                         prepared->lane_in_updates[i])) {
         return false;
       }
     }
@@ -538,9 +545,8 @@ bool TrackMixerRuntime::prepare_pdc_updates(
       const size_t source = bus_sources != nullptr && (*bus_sources)[i] >= 0
                                 ? static_cast<size_t>((*bus_sources)[i])
                                 : i;
-      if (source >= kMaxBusLanes || !bus_pdc_delays_[source].prepare_update(
-                                        plan.bus_in_q8[i], mixing::FractionalDelayMode::Lagrange3,
-                                        prepared->bus_updates[i])) {
+      if (source >= kMaxBusLanes ||
+          !prepare_delay(bus_pdc_delays_[source], plan.bus_in_q8[i], prepared->bus_updates[i])) {
         return false;
       }
     }
@@ -552,23 +558,22 @@ bool TrackMixerRuntime::prepare_pdc_updates(
                                     : bus;
       const size_t source = source_bus * kBusEdgesPerBus + edge;
       if (source >= bus_edge_delays_.size() ||
-          !bus_edge_delays_[source].prepare_update(
-              plan.edge_q8[i], mixing::FractionalDelayMode::Lagrange3, prepared->edge_updates[i])) {
+          !prepare_delay(bus_edge_delays_[source], plan.edge_q8[i], prepared->edge_updates[i])) {
         return false;
       }
     }
     for (size_t i = 0; i < key_edge_delays_.size(); ++i) {
-      if (!key_edge_delays_[i].prepare_update(
-              plan.key_q8[i], mixing::FractionalDelayMode::Lagrange3, prepared->key_updates[i])) {
+      if (!prepare_delay(key_edge_delays_[i], plan.key_q8[i], prepared->key_updates[i])) {
         return false;
       }
     }
-    if (!direct_pdc_delay_.prepare_update(plan.direct_q8, mixing::FractionalDelayMode::Lagrange3,
-                                          prepared->direct_update)) {
+    if (!prepare_delay(direct_pdc_delay_, plan.direct_q8, prepared->direct_update)) {
       return false;
     }
-    return master_pdc_delay_.prepare_update(plan.master_q8, mixing::FractionalDelayMode::Lagrange3,
-                                            prepared->master_update);
+    return prepare_delay(master_pdc_delay_, plan.master_q8, prepared->master_update);
+  } catch (const std::bad_alloc&) {
+    prepared->out_of_memory = true;
+    return false;
   } catch (...) {
     return false;
   }

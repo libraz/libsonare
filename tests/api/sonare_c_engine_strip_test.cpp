@@ -2,6 +2,7 @@
 /// @brief Engine C ABI track lanes, strips, buses and scope telemetry.
 
 #include "sonare_c_engine_test_helpers.h"
+#include "support/alloc_guard.h"
 
 #if defined(SONARE_WITH_MIXING)
 TEST_CASE("sonare_engine bounce scatters a strip's surround pan into a 5.1 master end-to-end",
@@ -1479,6 +1480,46 @@ TEST_CASE("a bus list refused by earlier bus or lane configuration reports inval
   CHECK(sonare_engine_set_track_buses(engine, stereo, 1) == SONARE_OK);
   SonareEngineBus surround_one[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_5_1, 0, nullptr, 0}};
   CHECK(sonare_engine_set_track_buses(engine, surround_one, 1) == SONARE_OK);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("an allocation failure in an engine mixer setter reports out of memory",
+          "[c_api][engine][mixing][allocation]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 64, 16) == SONARE_OK);
+  SonareEngineBus bus[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0}};
+  const SonareEngineTrackSend send[] = {{1, 0.0f, 1, SONARE_SEND_TIMING_POST_FADER}};
+  SonareEngineTrackLane lane[] = {{10, send, 1, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
+  const char* strip_json =
+      R"({"version":1,"strips":[{"id":"s","inserts":[{"slot":"pre","processor":"dynamics.limiter","params":"{\"lookaheadMs\":1}"}]}]})";
+
+  // Each allocation the call makes fails in turn until the call applies; no refusal on the way
+  // may read as the arguments' fault or as earlier configuration.
+  const auto sweep = [](const char* name, const auto& call) {
+    INFO(name);
+    bool out_of_memory = false;
+    SonareError result = SONARE_ERROR_OUT_OF_MEMORY;
+    for (size_t nth = 1; nth < 4096 && result != SONARE_OK; ++nth) {
+      {
+        sonare::test::AllocationFailureAtGuard fail_nth(nth);
+        result = call();
+      }
+      CAPTURE(nth, result, std::string(sonare_last_error_message()));
+      REQUIRE((result == SONARE_OK || result == SONARE_ERROR_OUT_OF_MEMORY));
+      out_of_memory = out_of_memory || result == SONARE_ERROR_OUT_OF_MEMORY;
+    }
+    CHECK(result == SONARE_OK);
+    CHECK(out_of_memory);
+  };
+  sweep("set_track_buses", [&] { return sonare_engine_set_track_buses(engine, bus, 1); });
+  sweep("set_track_lanes", [&] { return sonare_engine_set_track_lanes(engine, lane, 1); });
+  sweep("set_track_strip_json",
+        [&] { return sonare_engine_set_track_strip_json(engine, 10, strip_json); });
+  sweep("set_master_strip_json",
+        [&] { return sonare_engine_set_master_strip_json(engine, strip_json); });
+  sweep("set_track_sends", [&] { return sonare_engine_set_track_sends(engine, 10, nullptr, 0); });
 
   sonare_engine_destroy(engine);
 }

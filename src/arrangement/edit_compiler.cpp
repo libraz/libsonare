@@ -1671,7 +1671,18 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
     // (3) Track lanes: the first mutation. The engine leaves its lanes untouched on refusal.
 #if defined(SONARE_WITH_MIXING)
     if (!engine.set_track_lanes(std::move(track_lanes))) {
-      return apply_refused(ErrorCode::InvalidParameter, "the engine refuses the track-lane vector");
+      // The vector was validated above, so the engine's refusal names its own cause.
+      switch (engine.last_mixer_edit_status()) {
+        case sonare::engine::MixerEditStatus::kInvalidState:
+          return apply_refused(ErrorCode::InvalidState,
+                               "earlier engine configuration refuses the track-lane vector");
+        case sonare::engine::MixerEditStatus::kOutOfMemory:
+          return apply_refused(ErrorCode::OutOfMemory,
+                               "out of memory while installing the track lanes");
+        default:
+          return apply_refused(ErrorCode::InvalidParameter,
+                               "the engine refuses the track-lane vector");
+      }
     }
     if (!bind_playback_lane_targets(engine, playback_lane_tracks, &playback_lanes) ||
         !bind_playback_lane_targets(engine, playback_lane_tracks, &result.installed_automation)) {

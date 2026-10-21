@@ -32,16 +32,23 @@ namespace {
 void requireMixerEdit(const sonare::engine::RealtimeEngine& engine, bool applied,
                       const char* message) {
   if (applied) return;
-  if (engine.last_mixer_edit_status() == sonare::engine::MixerEditStatus::kInvalidState) {
-    throwMixerStateRefusal(message);
+  switch (engine.last_mixer_edit_status()) {
+    case sonare::engine::MixerEditStatus::kInvalidState:
+      throwMixerStateRefusal(message);
+    case sonare::engine::MixerEditStatus::kOutOfMemory:
+      throw sonare::SonareException(sonare::ErrorCode::OutOfMemory, message);
+    default:
+      throw WasmRangeError(message);
   }
-  throw WasmRangeError(message);
 }
 
 // Classifies a single-track lane edit (setTrackSends / setTrackOutputBus).
 void requireTrackLaneEdit(sonare::engine::TrackLaneEditResult result, const char* message) {
   if (result == sonare::engine::TrackLaneEditResult::kApplied) return;
   if (result == sonare::engine::TrackLaneEditResult::kStateRefused) throwMixerStateRefusal(message);
+  if (result == sonare::engine::TrackLaneEditResult::kOutOfMemory) {
+    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory, message);
+  }
   throw WasmRangeError(message);
 }
 

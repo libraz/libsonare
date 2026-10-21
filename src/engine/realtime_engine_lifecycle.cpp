@@ -44,7 +44,7 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
   }
   // Raised only after prepare_impl() committed, so the engine stays prepared.
   if (!clip_sysex_prepared) {
-    throw SonareException(ErrorCode::InvalidParameter,
+    throw SonareException(ErrorCode::InvalidState,
                           "prepare: a bound instrument refused a scheduled MIDI SysEx; the MIDI "
                           "clip schedule was cleared");
   }

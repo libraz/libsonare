@@ -93,8 +93,11 @@ void sonare_project_timeline_destroy(SonareProjectTimeline* timeline);
 /// @return @c SONARE_ERROR_INVALID_PARAMETER for a NULL argument or a timeline
 ///         the engine cannot hold (for example more track lanes than it
 ///         supports, a sample-rate mismatch, or a scene strip it cannot build);
-///         @c SONARE_ERROR_INVALID_STATE for an unprepared engine or while the
-///         transport is playing;
+///         @c SONARE_ERROR_INVALID_STATE for an unprepared engine, while the
+///         transport is playing, or when earlier engine configuration refuses
+///         the timeline's track lanes (a full automation id table or a retained
+///         clip delay past the lane alignment ceiling);
+///         @c SONARE_ERROR_OUT_OF_MEMORY when an allocation fails;
 ///         @c SONARE_ERROR_NOT_SUPPORTED when one scene strip is routed from
 ///         several tracks, because live playback runs one strip per track.
 SonareError sonare_engine_apply_project_timeline(SonareRealtimeEngine* engine,

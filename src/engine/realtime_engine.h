@@ -72,11 +72,13 @@ enum class InsertParamSetResult : uint8_t {
 /// kRefused: set_track_lanes refused the edited lane list for its own content.
 /// kStateRefused: set_track_lanes refused it for configuration earlier calls left
 /// (see MixerEditStatus::kInvalidState).
+/// kOutOfMemory: an allocation failed while set_track_lanes staged it.
 enum class TrackLaneEditResult : uint8_t {
   kApplied,
   kUnknownTrack,
   kRefused,
   kStateRefused,
+  kOutOfMemory,
 };
 
 /// Diagnostic retained by the most recent mixer configuration call
@@ -86,12 +88,14 @@ enum class TrackLaneEditResult : uint8_t {
 /// kInvalidState: the arguments are acceptable, but configuration earlier calls
 /// left refuses them -- the shared insert-automation table or the owned-strip
 /// table is full, a retained delay, pan or lane routing forbids the change, or
-/// the combined latency passes the alignment ceiling.
+/// the combined latency passes the alignment ceiling. kOutOfMemory: an
+/// allocation failed while the call staged its change; nothing was applied.
 enum class MixerEditStatus : uint8_t {
   kNotAttempted,
   kApplied,
   kInvalidArgument,
   kInvalidState,
+  kOutOfMemory,
 };
 
 /// Result of @ref RealtimeEngine::push_midi_ump.
@@ -1221,9 +1225,15 @@ class RealtimeEngine : private ClipPageRequestSink {
   // Control thread: reports a track-mixer setter's outcome, classifying a refusal by its cause.
   bool report_track_mixer_edit(bool applied) noexcept {
     if (applied) return report_mixer_edit(MixerEditStatus::kApplied);
-    return report_mixer_edit(track_mixer_runtime_.last_refusal_from_state()
-                                 ? MixerEditStatus::kInvalidState
-                                 : MixerEditStatus::kInvalidArgument);
+    switch (track_mixer_runtime_.last_refusal()) {
+      case MixerRefusal::kState:
+        return report_mixer_edit(MixerEditStatus::kInvalidState);
+      case MixerRefusal::kOutOfMemory:
+        return report_mixer_edit(MixerEditStatus::kOutOfMemory);
+      case MixerRefusal::kArgument:
+        break;
+    }
+    return report_mixer_edit(MixerEditStatus::kInvalidArgument);
   }
   // Control thread: the processor a target's slot holds now, or nullptr.
   const rt::ProcessorBase* current_insert_processor(

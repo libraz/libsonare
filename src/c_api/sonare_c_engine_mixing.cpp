@@ -55,9 +55,14 @@ SonareError insert_param_result_to_error(engine::InsertParamSetResult result) {
 
 // Maps a refused mixer configuration call to its C status by the cause the engine retained.
 SonareError mixer_edit_error(const engine::RealtimeEngine& engine) {
-  return engine.last_mixer_edit_status() == engine::MixerEditStatus::kInvalidState
-             ? SONARE_ERROR_INVALID_STATE
-             : SONARE_ERROR_INVALID_PARAMETER;
+  switch (engine.last_mixer_edit_status()) {
+    case engine::MixerEditStatus::kInvalidState:
+      return SONARE_ERROR_INVALID_STATE;
+    case engine::MixerEditStatus::kOutOfMemory:
+      return SONARE_ERROR_OUT_OF_MEMORY;
+    default:
+      return SONARE_ERROR_INVALID_PARAMETER;
+  }
 }
 
 // The master EQ, insert and sidechain setters address the engine-owned master
@@ -142,6 +147,8 @@ SonareError track_lane_edit_result_to_error(engine::TrackLaneEditResult result, 
       return SONARE_ERROR_INVALID_PARAMETER;
     case engine::TrackLaneEditResult::kStateRefused:
       return SONARE_ERROR_INVALID_STATE;
+    case engine::TrackLaneEditResult::kOutOfMemory:
+      return SONARE_ERROR_OUT_OF_MEMORY;
   }
   return SONARE_ERROR_INVALID_STATE;
 }

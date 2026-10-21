@@ -3,6 +3,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <new>
 #include <string>
 #include <utility>
 #include <vector>
@@ -243,12 +244,15 @@ bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
     return report_mixer_edit(MixerEditStatus::kInvalidArgument);
   };
   const auto refuse_state = [this] { return report_mixer_edit(MixerEditStatus::kInvalidState); };
+  const auto refuse_out_of_memory = [this] {
+    return report_mixer_edit(MixerEditStatus::kOutOfMemory);
+  };
   if (!strip_eq_acceptable(strip_spec.eq, sample_rate_)) return refuse_argument();
   mixing::api::Strip next_spec;
   try {
     next_spec = strip_spec;
   } catch (...) {
-    return refuse_argument();
+    return refuse_out_of_memory();
   }
   // In-place: an unchanged insert chain keeps the bound strip, and with it the
   // insert state (tails, envelopes), the insert automation and the EQ filter
@@ -269,6 +273,8 @@ bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
     strip = make_channel_strip_from_spec(next_spec, sample_rate_);
     if (strip == nullptr) return refuse_argument();
     if (max_block_size_ > 0) strip->prepare(sample_rate_, max_block_size_);
+  } catch (const std::bad_alloc&) {
+    return refuse_out_of_memory();
   } catch (...) {
     return refuse_argument();
   }
@@ -280,7 +286,7 @@ bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
   TrackMixerRuntime::PreparedMasterStripUpdate update;
   if (!track_mixer_runtime_.prepare_master_strip_update(strip.get(), next_spec.inserts.size(),
                                                         &update)) {
-    return refuse_state();
+    return update.pdc.out_of_memory ? refuse_out_of_memory() : refuse_state();
   }
   // Keys stay on their insert index; an index the new chain lacks is dropped.
   if (!mixing_runtime_.bind(strip.get())) return refuse_state();
@@ -304,6 +310,8 @@ bool RealtimeEngine::validate_track_strip(const mixing::api::Strip& strip) const
   if (!strip_eq_acceptable(strip.eq, sample_rate_)) return false;
   try {
     return make_channel_strip_from_spec(strip, sample_rate_) != nullptr;
+  } catch (const std::bad_alloc&) {
+    throw;
   } catch (...) {
     return false;
   }
@@ -376,9 +384,14 @@ bool copy_lanes_holding(const std::vector<TrackLaneConfig>* published, uint32_t 
 
 TrackLaneEditResult RealtimeEngine::track_lane_edit_result(bool applied) const noexcept {
   if (applied) return TrackLaneEditResult::kApplied;
-  return last_mixer_edit_status() == MixerEditStatus::kInvalidState
-             ? TrackLaneEditResult::kStateRefused
-             : TrackLaneEditResult::kRefused;
+  switch (last_mixer_edit_status()) {
+    case MixerEditStatus::kInvalidState:
+      return TrackLaneEditResult::kStateRefused;
+    case MixerEditStatus::kOutOfMemory:
+      return TrackLaneEditResult::kOutOfMemory;
+    default:
+      return TrackLaneEditResult::kRefused;
+  }
 }
 
 TrackLaneEditResult RealtimeEngine::set_track_sends(uint32_t track_id,

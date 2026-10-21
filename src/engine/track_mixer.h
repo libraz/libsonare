@@ -149,6 +149,13 @@ enum class SidechainRefusal : uint8_t {
   kPlanRefused = 8,
 };
 
+/// Cause of a refused track-mixer configuration call; see TrackMixerRuntime::last_refusal().
+enum class MixerRefusal : uint8_t {
+  kArgument,
+  kState,
+  kOutOfMemory,
+};
+
 class TrackMixerRuntime final : public rt::ProcessorBase {
  public:
   static constexpr size_t kMaxTrackLanes = 32;
@@ -205,12 +212,12 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   };
 
   bool set_track_lanes(std::vector<TrackLaneConfig> lanes);
-  /// True when the most recent refusal by set_track_lanes, set_buses,
-  /// set_track_strip or set_bus_strip came from configuration earlier calls left
-  /// (a full strip table or admission pool, retained delay, pan or routing, or a
-  /// combined latency past the alignment ceiling) rather than from its own
-  /// arguments. Meaningful only right after one of them returned false.
-  bool last_refusal_from_state() const noexcept { return last_refusal_from_state_; }
+  /// Why the most recent refusal by set_track_lanes, set_buses, set_track_strip
+  /// or set_bus_strip happened: its own arguments, configuration earlier calls
+  /// left (a full strip table or admission pool, retained delay, pan or routing,
+  /// or a combined latency past the alignment ceiling), or a failed allocation.
+  /// Meaningful only right after one of them returned false.
+  MixerRefusal last_refusal() const noexcept { return last_refusal_; }
   /// Pure: true exactly when set_track_lanes would accept @p lanes on validation grounds.
   bool validate_track_lanes(const std::vector<TrackLaneConfig>& lanes) const noexcept {
     return lane_config_valid(lanes);
@@ -669,6 +676,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     std::array<mixing::AlignmentDelay::PreparedUpdate, kMaxSidechainBindings> key_updates{};
     mixing::AlignmentDelay::PreparedUpdate direct_update{};
     mixing::AlignmentDelay::PreparedUpdate master_update{};
+    // Set when preparing failed for an allocation rather than for the plan.
+    bool out_of_memory = false;
   };
   struct PreparedMasterStripUpdate {
     const mixing::ChannelStrip* candidate = nullptr;
@@ -685,9 +694,18 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   };
 
  private:
+  // An allocation failure recorded deeper in the same call outranks the state verdict.
   bool refuse_from_state() noexcept {
-    last_refusal_from_state_ = true;
+    if (last_refusal_ != MixerRefusal::kOutOfMemory) last_refusal_ = MixerRefusal::kState;
     return false;
+  }
+  bool refuse_out_of_memory() noexcept {
+    last_refusal_ = MixerRefusal::kOutOfMemory;
+    return false;
+  }
+  // A failed PDC preparation: an allocation failure or the state verdict.
+  bool refuse_pdc(const PreparedPdc& prepared) noexcept {
+    return prepared.out_of_memory ? refuse_out_of_memory() : refuse_from_state();
   }
   struct LaneState {
     uint32_t track_id = 0;
@@ -1179,8 +1197,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // Last committed raw-clip PDC target. The engine owns the common direct-clip
   // bank; this target is carried by each lane's staged bank.
   int clip_pdc_delay_q8_ = 0;
-  // See last_refusal_from_state(); reset on entry to each setter it covers.
-  bool last_refusal_from_state_ = false;
+  // See last_refusal(); reset on entry to each setter it covers.
+  MixerRefusal last_refusal_ = MixerRefusal::kArgument;
   // Control-thread binding table; the audio thread never reads it.
   SidechainTable sidechains_{};
   rt::SeqlockCell<SidechainTable> sidechains_published_{};

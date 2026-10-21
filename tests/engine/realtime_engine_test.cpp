@@ -16,6 +16,7 @@
 #if defined(SONARE_WITH_MIXING)
 #include "engine/insert_automation_id.h"
 #include "mastering/dynamics/compressor.h"
+#include "mixing/api/scene.h"
 #endif
 #include "engine/parameter_base_table.h"
 #include "engine/telemetry.h"
@@ -4418,5 +4419,71 @@ TEST_CASE("Re-enabled bus EQ does not replay filter history from before it was d
   output.fill(0.0f);
   engine.process(io, 1, kBlock);
   for (const float sample : output) CHECK(sample == 0.0f);
+}
+#endif  // defined(SONARE_WITH_MIXING)
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("RealtimeEngine reports an allocation failure in a mixer setter as out of memory",
+          "[engine][mixing][allocation]") {
+  using sonare::engine::MixerEditStatus;
+  using sonare::engine::TrackLaneEditResult;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  sonare::mixing::api::Strip strip;
+  strip.id = "s";
+  strip.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "dynamics.limiter", R"({"lookaheadMs":1})"});
+  sonare::mixing::api::Bus bus;
+  bus.id = "1";
+  bus.inserts.push_back({sonare::mixing::api::InsertSlot::PreFader, "dynamics.compressor",
+                         R"({"thresholdDb":-30,"ratio":8,"attackMs":0,"releaseMs":20})"});
+  sonare::engine::TrackLaneConfig lane{10};
+  lane.sends.push_back({1, 0.0f, true});
+
+  // Fails each allocation of @p call in turn until it applies. A refusal it returns must name
+  // the failed allocation, never its arguments or earlier configuration; a bad_alloc that
+  // escapes is the C ABI's to report.
+  const auto sweep = [](const char* name, const auto& call, const auto& refused_for_memory) {
+    INFO(name);
+    bool refused = false;
+    bool applied = false;
+    for (size_t nth = 1; nth < 4096 && !applied; ++nth) {
+      bool threw = false;
+      {
+        sonare::test::AllocationFailureAtGuard fail_nth(nth);
+        try {
+          applied = call();
+        } catch (const std::bad_alloc&) {
+          threw = true;
+        }
+      }
+      CAPTURE(nth, threw);
+      if (applied || threw) continue;
+      refused = true;
+      REQUIRE(refused_for_memory());
+    }
+    CHECK(applied);
+    CHECK(refused);
+  };
+  const auto status_is_oom = [&engine] {
+    return engine.last_mixer_edit_status() == MixerEditStatus::kOutOfMemory;
+  };
+
+  sweep(
+      "set_track_buses",
+      [&] { return engine.set_track_buses({sonare::engine::TrackBusConfig{1, 0.0f}}); },
+      status_is_oom);
+  sweep("set_track_lanes", [&] { return engine.set_track_lanes({lane}); }, status_is_oom);
+  sweep("set_bus_strip", [&] { return engine.set_bus_strip(1, bus); }, status_is_oom);
+  sweep("set_track_strip", [&] { return engine.set_track_strip(10, strip); }, status_is_oom);
+  sweep("set_master_strip", [&] { return engine.set_master_strip(strip); }, status_is_oom);
+  TrackLaneEditResult sends = TrackLaneEditResult::kRefused;
+  sweep(
+      "set_track_sends",
+      [&] {
+        sends = engine.set_track_sends(10, {});
+        return sends == TrackLaneEditResult::kApplied;
+      },
+      [&] { return sends == TrackLaneEditResult::kOutOfMemory; });
 }
 #endif  // defined(SONARE_WITH_MIXING)

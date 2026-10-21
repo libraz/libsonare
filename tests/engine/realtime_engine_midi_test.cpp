@@ -1380,7 +1380,7 @@ TEST_CASE("prepare reports a scheduled SysEx the bound instrument refuses",
   try {
     engine.prepare(48000.0, 64);
   } catch (const sonare::SonareException& error) {
-    refused = error.code() == sonare::ErrorCode::InvalidParameter;
+    refused = error.code() == sonare::ErrorCode::InvalidState;
   }
   REQUIRE(refused);
   REQUIRE(instrument.prepare_calls_ == prepare_calls + 1);

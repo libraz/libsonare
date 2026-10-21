@@ -108,8 +108,8 @@ void sonare_engine_destroy(SonareRealtimeEngine* engine);
 ///          selects the internal minimum rather than disabling the queue.
 ///          @p sample_rate must be a whole number of hertz in [8000, 384000];
 ///          a fractional rate returns SONARE_ERROR_INVALID_PARAMETER.
-/// @return SONARE_ERROR_INVALID_PARAMETER also when a bound instrument cannot
-///         prepare a SysEx in the scheduled MIDI clips; the engine is then
+/// @return SONARE_ERROR_INVALID_STATE when a bound instrument cannot prepare a
+///         SysEx in the MIDI clips scheduled earlier; the engine is then
 ///         prepared, but its MIDI clip schedule has been cleared.
 /// @return SONARE_ERROR_INVALID_STATE when an applied project timeline locks the
 ///         sample rate and @p sample_rate differs from it; the engine is left
@@ -342,6 +342,7 @@ SonareError sonare_engine_clip_count(SonareRealtimeEngine* engine, size_t* out_c
 ///   valid but earlier configuration refuses it: added tracks whose fader/pan and
 ///   insert ids would not fit the automation id table, a retained clip delay past
 ///   the lane alignment ceiling, or a combined latency the lanes cannot align;
+///   SONARE_ERROR_OUT_OF_MEMORY when an allocation fails (state unchanged);
 ///   SONARE_ERROR_NOT_SUPPORTED when mixing support is disabled.
 SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
                                           const SonareEngineTrackLane* lanes, size_t lane_count);
@@ -356,7 +357,8 @@ SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
 /// @return SONARE_ERROR_INVALID_PARAMETER when @p track_id has no lane in the
 ///   published lane list (with the last-error message "unknown track id <n>"),
 ///   or for a send list sonare_engine_set_track_lanes would refuse as invalid;
-///   SONARE_ERROR_INVALID_STATE where sonare_engine_set_track_lanes would;
+///   SONARE_ERROR_INVALID_STATE or SONARE_ERROR_OUT_OF_MEMORY where
+///   sonare_engine_set_track_lanes would;
 ///   SONARE_ERROR_NOT_SUPPORTED when mixing support is disabled.
 SonareError sonare_engine_set_track_sends(SonareRealtimeEngine* engine, uint32_t track_id,
                                           const SonareEngineTrackSend* sends, size_t send_count);
@@ -400,7 +402,8 @@ SonareError sonare_engine_can_set_lane_sidechain(SonareRealtimeEngine* engine, u
 ///   for a bus whose earlier pan or width is not the default, the removal of a bus
 ///   a track lane's output or send still names, added buses whose fader ids would
 ///   not fit the automation id table, and a combined latency past the alignment
-///   ceiling. Bus fader and insert automation ids keep naming their
+///   ceiling. SONARE_ERROR_OUT_OF_MEMORY when an allocation fails (state
+///   unchanged). Bus fader and insert automation ids keep naming their
 ///   bus across a reorder (see @ref sonare_engine_resolve_bus_automation_id and
 ///   @ref sonare_engine_resolve_bus_insert_automation_id); the ids of a removed
 ///   bus stop applying, and its queued edits under them are dropped.
@@ -448,7 +451,8 @@ SonareError sonare_engine_can_set_master_sidechain(SonareRealtimeEngine* engine,
 ///          `unknown strip key 'strips[0].faderDB'`.
 /// @return SONARE_ERROR_INVALID_PARAMETER for an unknown bus or a spec the bus
 ///   cannot take; SONARE_ERROR_INVALID_STATE when a rebuilt insert chain would not
-///   fit the automation id table or its latency cannot be aligned.
+///   fit the automation id table or its latency cannot be aligned;
+///   SONARE_ERROR_OUT_OF_MEMORY when an allocation fails (state unchanged).
 SonareError sonare_engine_set_bus_strip_json(SonareRealtimeEngine* engine, uint32_t bus_id,
                                              const char* scene_json);
 /// @brief Builds an engine-owned ChannelStrip for @p track_id from a mixer scene JSON.
@@ -459,7 +463,8 @@ SonareError sonare_engine_set_bus_strip_json(SonareRealtimeEngine* engine, uint3
 /// @return SONARE_ERROR_INVALID_PARAMETER for a spec that cannot be built;
 ///   SONARE_ERROR_INVALID_STATE when the strip table is full, a rebuilt insert
 ///   chain would not fit the automation id table, or the lanes cannot align the
-///   new latency.
+///   new latency; SONARE_ERROR_OUT_OF_MEMORY when an allocation fails (state
+///   unchanged).
 SonareError sonare_engine_set_track_strip_json(SonareRealtimeEngine* engine, uint32_t track_id,
                                                const char* scene_json);
 /// @brief Sets one embedded EQ band on an engine-owned track strip.
@@ -481,7 +486,8 @@ SonareError sonare_engine_set_track_strip_insert_bypassed(SonareRealtimeEngine* 
 ///          @ref sonare_engine_set_bus_strip_json.
 /// @return SONARE_ERROR_INVALID_PARAMETER for a spec that cannot be built;
 ///   SONARE_ERROR_INVALID_STATE when a rebuilt insert chain would not fit the
-///   automation id table or the mixer cannot align its latency.
+///   automation id table or the mixer cannot align its latency;
+///   SONARE_ERROR_OUT_OF_MEMORY when an allocation fails (state unchanged).
 SonareError sonare_engine_set_master_strip_json(SonareRealtimeEngine* engine,
                                                 const char* scene_json);
 /// @brief Sets one embedded EQ band on an engine-owned master strip.

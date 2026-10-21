@@ -230,7 +230,7 @@ bool lane_sends_equal(const TrackLaneConfig& left, const TrackLaneConfig& right)
 }  // namespace
 
 bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
-  last_refusal_from_state_ = false;
+  last_refusal_ = MixerRefusal::kArgument;
   if (!lane_config_valid(lanes)) return false;
   constexpr int kMaxLaneClipDelayQ8 = mixing::kMaxAlignmentDelaySamples << 8;
   // Refuse a non-empty lane snapshot when the retained direct delay exceeds the lane bank ceiling.
@@ -242,6 +242,8 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
     // commit below only appends into these reserved tables.
     owned_strips_.reserve(owned_strips_.size() + snapshot->size());
     track_strip_bindings_.reserve(track_strip_bindings_.size() + snapshot->size());
+  } catch (const std::bad_alloc&) {
+    return refuse_out_of_memory();
   } catch (...) {
     return false;
   }
@@ -307,9 +309,12 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
       }
       if (!candidate_strips[lane_index]->prepare_sends(sends.data(), config.sends.size(),
                                                        staged_sends[lane_index])) {
-        return false;
+        // The sends were validated with the list, so only an allocation fails here.
+        return refuse_out_of_memory();
       }
     }
+  } catch (const std::bad_alloc&) {
+    return refuse_out_of_memory();
   } catch (...) {
     return false;
   }
@@ -322,7 +327,7 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
   make_lane_pdc_sources(*snapshot, &lane_sources, &lane_reset);
   PreparedPdc prepared_pdc;
   if (!prepare_pdc_updates(plan, lane_sources, lane_reset, &prepared_pdc)) {
-    return refuse_from_state();
+    return refuse_pdc(prepared_pdc);
   }
 
   // From here on every vector has capacity and every processor is prepared, so nothing can fail.
@@ -362,7 +367,7 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
 }
 
 bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
-  last_refusal_from_state_ = false;
+  last_refusal_ = MixerRefusal::kArgument;
   if (!bus_config_valid(buses)) return false;
   // Bus state follows the bus id, not the slot: source[i] is the slot new bus i
   // held before, or -1 for a bus declared now.
@@ -515,11 +520,14 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
       }
       if (!strip->prepare_sends(configs.data(), config.sends.size(),
                                 prepared_lane_sends[lane_index])) {
-        return false;
+        // The sends were validated with the list, so only an allocation fails here.
+        return refuse_out_of_memory();
       }
     }
     owned_strips_.reserve(owned_strips_.size() + staged_lane_owned_count);
     track_strip_bindings_.reserve(track_strip_bindings_.size() + staged_lane_owned_count);
+  } catch (const std::bad_alloc&) {
+    return refuse_out_of_memory();
   } catch (...) {
     return false;
   }
@@ -537,6 +545,8 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
       if (max_block_size_ > 0) bus->prepare(sample_rate_, max_block_size_);
       staged_buses[index] = std::move(bus);
     }
+  } catch (const std::bad_alloc&) {
+    return refuse_out_of_memory();
   } catch (...) {
     return false;
   }
@@ -550,7 +560,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
   }
   PreparedPdc prepared_pdc;
   if (!prepare_pdc_updates(plan, pdc_sources, pdc_reset, &prepared_pdc, &bank_sources)) {
-    return refuse_from_state();
+    return refuse_pdc(prepared_pdc);
   }
 
   decltype(bus_sends_) sends{};
@@ -564,6 +574,8 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
         sends[index][send_index] = std::move(processor);
       }
     }
+  } catch (const std::bad_alloc&) {
+    return refuse_out_of_memory();
   } catch (...) {
     return false;
   }
@@ -577,6 +589,8 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
         stage_bus_state(bus_states_[index], (*staging)[index]);
       }
     }
+  } catch (const std::bad_alloc&) {
+    return refuse_out_of_memory();
   } catch (...) {
     return false;
   }
@@ -866,6 +880,8 @@ bool TrackMixerRuntime::stage_track_strip(uint32_t track_id, mixing::ChannelStri
         if (config.track_id == track_id) configure_strip_sends(config, strip);
       }
     }
+  } catch (const std::bad_alloc&) {
+    return refuse_out_of_memory();
   } catch (...) {
     return false;
   }
@@ -875,9 +891,9 @@ bool TrackMixerRuntime::stage_track_strip(uint32_t track_id, mixing::ChannelStri
     for (size_t i = 0; i < kMaxTrackLanes; ++i) candidate[i] = lane_states_[i].strip;
     candidate[out->lane_index] = &strip;
     PdcPlan plan;
-    if (!plan_pdc(*lanes, current_bus_graph_view(), &plan, &candidate) ||
-        !prepare_identity_pdc(plan, &out->pdc)) {
-      return false;
+    if (!plan_pdc(*lanes, current_bus_graph_view(), &plan, &candidate)) return false;
+    if (!prepare_identity_pdc(plan, &out->pdc)) {
+      return out->pdc.out_of_memory ? refuse_out_of_memory() : false;
     }
     out->has_pdc = true;
   }
@@ -978,7 +994,7 @@ void TrackMixerRuntime::erase_owned_strip(size_t index) noexcept {
 
 bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::Strip& spec,
                                         StripAdmission admit, void* admit_context) {
-  last_refusal_from_state_ = false;
+  last_refusal_ = MixerRefusal::kArgument;
   if (track_id == 0 || !strip_eq_acceptable(spec.eq, sample_rate_)) return false;
 
   // In-place fast path: when a strip already exists for this track and only its
@@ -994,6 +1010,8 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
       mixing::api::Strip next_spec;
       try {
         next_spec = spec;
+      } catch (const std::bad_alloc&) {
+        return refuse_out_of_memory();
       } catch (...) {
         return false;
       }
@@ -1015,6 +1033,8 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
   std::unique_ptr<mixing::ChannelStrip> strip;
   try {
     strip = make_channel_strip_from_spec(spec, sample_rate_);
+  } catch (const std::bad_alloc&) {
+    return refuse_out_of_memory();
   } catch (...) {
     return false;
   }
@@ -1034,6 +1054,8 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
   try {
     next_spec = spec;
     if (existing == nullptr) owned_strips_.reserve(owned_strips_.size() + 1);
+  } catch (const std::bad_alloc&) {
+    return refuse_out_of_memory();
   } catch (...) {
     return false;
   }
@@ -1058,7 +1080,7 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
 
 bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& bus,
                                       BusAdmission admit, void* admit_context) {
-  last_refusal_from_state_ = false;
+  last_refusal_ = MixerRefusal::kArgument;
   const int found = configured_bus_index(bus_id);
   if (found < 0) return false;
   const size_t bus_index = static_cast<size_t>(found);
@@ -1088,6 +1110,8 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
                          mastering::api::ChannelPolicy::StereoPairOnly;
         fx->add_insert(std::move(processor), spo);
       }
+    } catch (const std::bad_alloc&) {
+      return refuse_out_of_memory();
     } catch (...) {
       return false;
     }
@@ -1099,6 +1123,8 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
   mixing::api::Bus next_spec;
   try {
     next_spec = bus;
+  } catch (const std::bad_alloc&) {
+    return refuse_out_of_memory();
   } catch (...) {
     return false;
   }
@@ -1115,10 +1141,10 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
       view.latency_q8[bus_index] = fx->latency_samples_q8();
       build_routes(*view.buses, view.skip_binding, &view.routes, &next_sidechains);
       PdcPlan plan;
-      if (!plan_pdc(*lanes, view, &plan, nullptr, nullptr, false, &next_sidechains) ||
-          !prepare_identity_pdc(plan, &prepared)) {
+      if (!plan_pdc(*lanes, view, &plan, nullptr, nullptr, false, &next_sidechains)) {
         return refuse_from_state();
       }
+      if (!prepare_identity_pdc(plan, &prepared)) return refuse_pdc(prepared);
       has_pdc = true;
     }
   }
