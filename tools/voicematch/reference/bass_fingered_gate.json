@@ -3,10 +3,10 @@
   "timbre": "di",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-15T10:12:57+00:00",
-  "recorded_utc": "2026-09-25T20:39:32+00:00",
+  "recorded_utc": "2026-10-21T10:21:31+00:00",
   "model_build": {
-    "built_utc": "2026-09-25T20:30:56Z",
-    "newest_source_utc": "2026-09-25T20:39:15Z",
+    "built_utc": "2026-10-21T10:18:24Z",
+    "newest_source_utc": "2026-10-21T10:20:44Z",
     "stale": true
   },
   "reference_spread": {},
@@ -16,7 +16,7 @@
       "floor_from": "guess",
       "median": 1.0,
       "abs_median": 2.225,
-      "p90": 7.098,
+      "p90": 7.068,
       "rows": 35
     },
     "decay": {
@@ -30,9 +30,9 @@
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 16.975,
-      "abs_median": 16.975,
-      "p90": 29.482,
+      "median": 16.837,
+      "abs_median": 16.837,
+      "p90": 29.035,
       "rows": 35
     },
     "attack": {
@@ -64,7 +64,7 @@
       "floor_from": "default",
       "median": 4.15,
       "abs_median": 5.525,
-      "p90": 12.445,
+      "p90": 12.248,
       "rows": 35
     },
     "balance": {
@@ -78,9 +78,9 @@
     "partial_tilt": {
       "floor": 3.0,
       "floor_from": "guess",
-      "median": 72.122,
-      "abs_median": 72.122,
-      "p90": 118.553,
+      "median": 72.081,
+      "abs_median": 72.081,
+      "p90": 118.504,
       "rows": 35
     },
     "centroid_pct": {
@@ -94,17 +94,17 @@
     "body": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 77.45,
-      "abs_median": 77.45,
-      "p90": 83.161,
+      "median": 77.219,
+      "abs_median": 77.219,
+      "p90": 82.699,
       "rows": 10
     },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 1.263,
-      "abs_median": 1.713,
-      "p90": 5.355,
+      "median": 1.0,
+      "abs_median": 1.575,
+      "p90": 5.027,
       "rows": 7
     },
     "attack_hf_swing": {
@@ -112,7 +112,7 @@
       "floor_from": "default",
       "median": 1.0,
       "abs_median": 3.15,
-      "p90": 6.257,
+      "p90": 5.34,
       "rows": 7
     },
     "register": {

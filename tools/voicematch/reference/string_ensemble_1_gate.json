@@ -3,11 +3,11 @@
   "timbre": "gm049",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-17T13:13:17+00:00",
-  "recorded_utc": "2026-10-18T17:38:08+00:00",
+  "recorded_utc": "2026-10-21T10:21:56+00:00",
   "model_build": {
-    "built_utc": "2026-10-18T17:34:35Z",
-    "newest_source_utc": "2026-10-18T17:34:14Z",
-    "stale": false
+    "built_utc": "2026-10-21T10:18:24Z",
+    "newest_source_utc": "2026-10-21T10:20:44Z",
+    "stale": true
   },
   "reference_spread": {},
   "bounds": {

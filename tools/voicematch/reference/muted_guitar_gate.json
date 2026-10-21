@@ -3,11 +3,11 @@
   "timbre": "gm029",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-15T10:09:07+00:00",
-  "recorded_utc": "2026-09-25T20:34:35+00:00",
+  "recorded_utc": "2026-10-21T10:21:23+00:00",
   "model_build": {
-    "built_utc": "2026-09-25T20:30:56Z",
-    "newest_source_utc": "2026-09-25T20:28:05Z",
-    "stale": false
+    "built_utc": "2026-10-21T10:18:24Z",
+    "newest_source_utc": "2026-10-21T10:20:44Z",
+    "stale": true
   },
   "reference_spread": {},
   "_fossil": "2babd0d2 moved this patch's ks.decay_s 0.355891 -> 1.16 at 20:37 UTC; this gate was recorded 3h17m later, through the documented SONARE_LIB_PATH fallback to a stale build/lib/libsonare.dylib that predated the fix. Confirmed 2026-09-22 against the current, verified-non-stale build-python-shared dylib: tnr reads -4.60/4.60/10.09 against this file's 29.925/29.925/46.0 (median/abs_median/p90) - the bound is holding almost seven times more slack than the voice now needs. decay reads unchanged (-1.16/4.29/12.19 vs the recorded 1.45/5.362/15.232), so not every dimension here moved. Not re-recorded here because src/midi/synth/string_loop.h and ks_voice.h - the exact engine this patch's Karplus-Strong loop runs on - are under live edit by a concurrent agent; re-recording now risks a second fossil within the hour. Re-record once that work lands. centroid_pct, body and vel_range were already failing this gate before 2babd0d2 and are unrelated to this fossil.",
@@ -23,17 +23,17 @@
     "decay": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 1.438,
-      "abs_median": 5.362,
-      "p90": 15.232,
+      "median": 0.5,
+      "abs_median": 5.113,
+      "p90": 14.62,
       "rows": 35
     },
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 5.75,
-      "abs_median": 5.75,
-      "p90": 12.603,
+      "median": 4.95,
+      "abs_median": 4.95,
+      "p90": 12.228,
       "rows": 35
     },
     "attack": {
@@ -79,16 +79,16 @@
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 12.921,
-      "abs_median": 12.921,
-      "p90": 34.979,
+      "median": 10.3,
+      "abs_median": 10.3,
+      "p90": 30.671,
       "rows": 35
     },
     "partial_tilt": {
       "floor": 3.0,
       "floor_from": "guess",
       "median": 26.487,
-      "abs_median": 37.734,
+      "abs_median": 31.759,
       "p90": 64.814,
       "rows": 35
     },
@@ -96,7 +96,7 @@
       "floor": 1.0,
       "floor_from": "guess",
       "median": 12.302,
-      "abs_median": 30.936,
+      "abs_median": 29.814,
       "p90": 33.016,
       "rows": 35
     },
@@ -113,14 +113,14 @@
       "floor_from": "guess",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 2.063,
+      "p90": 1.207,
       "rows": 7
     },
     "attack_hf_swing": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 20.087,
-      "abs_median": 20.087,
+      "median": 19.187,
+      "abs_median": 19.187,
       "p90": 21.75,
       "rows": 7
     },
@@ -128,8 +128,8 @@
       "floor": 1.0,
       "floor_from": "default",
       "median": 1.0,
-      "abs_median": 2.387,
-      "p90": 7.212,
+      "abs_median": 1.625,
+      "p90": 6.04,
       "rows": 35
     }
   }

@@ -338,7 +338,10 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   du.ks.decay_stretch = 0.199139f;
   du.ks.pick_position = 0.319239f;
   du.ks.exc_brightness = 0.557447f;
-  du.ks.vel_to_brightness = 0.657824f;
+  // With each strike's burst held to its expected energy, 0.658 and the engine's 1.19 left the
+  // level range 1.15 dB wider than the reference at the median; these two read 0.53.
+  du.ks.vel_to_brightness = 0.5f;
+  du.ks.velocity_exponent = 1.23f;
   du.ks.release_damp_s = 0.0701437f;
   du.ks.nail = 0.7f;             // hard hammer edge
   du.ks.pluck_style = 0.6f;      // deterministic struck excitation
@@ -473,6 +476,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.electric_guitar.cutoff_hz = 2500.0f;
   o.electric_guitar.resonance_q = 2.0f;
   o.electric_guitar.ks.velocity_exponent = 1.31f;
+  // Each strike's burst held to its expected energy left the 4-8 kHz attack share 16.17 dB off
+  // at the median against a 16.10 bound; a slightly darker burst reads 15.75.
+  o.electric_guitar.ks.exc_brightness = 0.88f;
   o.electric_guitar.amp_env.attack_ms = 2.99715f;
   o.electric_guitar.amp_env.release_ms = 408.442f;
   // Against the direct reference: partial decay tilt -91.7
@@ -509,14 +515,20 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // 22.4 dB/s the old value fell at 72.7, three times too fast, and the note was
   // gone before the key came up on every row of the grid.
   o.muted_guitar.ks.decay_s = 1.16f;
-  o.muted_guitar.ks.decay_stretch = 0.798374f;
   o.muted_guitar.ks.brightness = 0.55f;
   o.muted_guitar.ks.release_damp_s = 0.04f;
   o.muted_guitar.cutoff_hz = 617.386f;
-  o.muted_guitar.ks.exc_brightness = 0.236068f;
-  o.muted_guitar.ks.vel_to_brightness = 0.708204f;
-  o.muted_guitar.ks.nail = 0.618034f;
-  o.muted_guitar.ks.pluck_style = 0.437694f;
+  // Fitted with each strike's burst noise held to its expected energy: the high (h5-h8) minus
+  // low (h1-h2) partial decay reads 25 dB/s steeper than the reference at the median, with the
+  // double decay and register profile inside their bounds.
+  o.muted_guitar.ks.decay_stretch = 0.85f;
+  o.muted_guitar.ks.exc_brightness = 0.1f;
+  o.muted_guitar.ks.vel_to_brightness = 0.9f;
+  o.muted_guitar.ks.nail = 0.6f;
+  o.muted_guitar.ks.pluck_style = 0.5f;
+  o.muted_guitar.ks.polarization = 0.1f;
+  o.muted_guitar.ks.body_coupling = 0.25f;
+  o.muted_guitar.ks.tension_mod = 0.4f;
   o.muted_guitar.ks.pick_position = 0.381966f;
   o.muted_guitar.ks.pickup_pos = 0.336881f;
   // Solved against the reference's own level range, v32 to v127, which the
@@ -560,6 +572,12 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   bass.body_mix = 0.0f;
   bass.gain = 1.2f;
   o.bass_fingered = bass;
+  // Each strike's burst held to its expected energy left the register profile 5.01 dB off at
+  // p90 against a 4.82 bound, a quiet G#1 against the reference; these read 4.77.
+  o.bass_fingered.ks.exc_brightness = 0.475f;
+  o.bass_fingered.ks.decay_stretch = 0.725f;
+  o.bass_fingered.ks.polarization = 0.25f;
+  o.bass_fingered.cutoff_hz = 2000.0f;
 
   // Acoustic upright: darker, softer pluck, a large resonating body.
   o.bass_acoustic = bass;
@@ -574,6 +592,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.bass_acoustic.body_mix = 0.45f;
   o.bass_acoustic.gain = 1.2f;
   o.bass_acoustic.amp_env.sustain = 0.809017f;
+  // Each strike's burst held to its expected energy left the level range 1.09 dB off the
+  // reference's at the median note; the engine default of 1.19 moved to this reads 0.76.
+  o.bass_acoustic.ks.velocity_exponent = 1.22f;
 
   // Pick: near-bridge, bright attack, shorter ring.
   o.bass_picked = bass;
@@ -631,6 +652,16 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // value would put it 5 dB wide.
   o.bass_pop.ks.velocity_exponent = 1.19f;
   o.bass_pop.cutoff_hz = 6500.0f;
+
+  // The pick voicing refitted after the slap and pop copies took theirs: each strike's burst
+  // held to its expected energy left the register profile 1.12 dB off at the median note against
+  // a 1.00 bound, and these read 0.97 with the level range inside its own.
+  o.bass_picked.ks.exc_brightness = 0.8375f;
+  o.bass_picked.ks.decay_stretch = 0.675f;
+  o.bass_picked.ks.pick_position = 0.111f;
+  o.bass_picked.ks.vel_to_brightness = 0.625f;
+  o.bass_picked.ks.velocity_exponent = 1.62f;
+  o.bass_picked.cutoff_hz = 6250.0f;
 
   // Orchestral harp: long stretched decay, strings keep ringing after
   // note-off (no damper grip), mid-string pluck.
@@ -1131,7 +1162,10 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   pz.ks.vel_to_brightness = 0.5f;
   pz.ks.release_damp_s = 0.06f;
   pz.ks.nail = 0.3f;  // finger flesh
-  pz.ks.pluck_style = 0.4f;
+  // Each strike's burst held to its expected energy left the level range 2.30 dB narrow and the
+  // centroid 9.2% off at the median; at these two they read 1.04 dB and 7.0%.
+  pz.ks.pluck_style = 0.5f;
+  pz.ks.velocity_exponent = 1.35f;
   pz.body = BodyType::kViolin;
   pz.body_mix = 0.4f;
   pz.stereo_spread = 0.3f;

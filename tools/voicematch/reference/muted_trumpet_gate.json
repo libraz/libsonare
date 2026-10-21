@@ -3,58 +3,47 @@
   "timbre": "gm060",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-15T18:18:38+00:00",
-  "recorded_utc": "2026-09-10T00:31:23+00:00",
+  "recorded_utc": "2026-10-21T10:22:03+00:00",
+  "model_build": {
+    "built_utc": "2026-10-21T10:18:24Z",
+    "newest_source_utc": "2026-10-21T10:20:44Z",
+    "stale": true
+  },
   "reference_spread": {},
   "_excluded": {
     "body": "the gated window reads the steady part, which is the library's sustain loop held to 0.1 dB over 2.4 s (-64 to -69 dB re f0, one take at every velocity); the reference's onset transient below f0 (about -54 dB at 0.2-0.5 s) is real and is not what this dimension weighs"
   },
   "bounds": {
     "stretch": {
-      "median": 1.809,
-      "abs_median": 1.809,
-      "p90": 2.479,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 1.0,
+      "abs_median": 1.284,
+      "p90": 1.392,
       "rows": 35
     },
     "tnr": {
-      "median": 11.725,
-      "abs_median": 11.725,
-      "p90": 34.138,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 1.188,
+      "abs_median": 6.363,
+      "p90": 18.713,
       "rows": 35
     },
     "damper": {
-      "median": 68.75,
-      "abs_median": 68.75,
-      "p90": 85.0,
+      "floor": 5.0,
+      "floor_from": "guess",
+      "median": 43.75,
+      "abs_median": 43.75,
+      "p90": 81.25,
       "rows": 35
     },
     "attack": {
-      "median": 56.25,
-      "abs_median": 56.25,
-      "p90": 91.25,
-      "rows": 35
-    },
-    "balance": {
-      "median": 5.953,
-      "abs_median": 11.415,
-      "p90": 26.613,
-      "rows": 35
-    },
-    "centroid_pct": {
-      "median": 4.017,
-      "abs_median": 26.838,
-      "p90": 67.815,
-      "rows": 35
-    },
-    "vel_range": {
-      "median": 1.95,
-      "abs_median": 1.95,
-      "p90": 10.955,
-      "rows": 7
-    },
-    "register": {
-      "median": 1.962,
-      "abs_median": 3.725,
-      "p90": 6.93,
+      "floor": 40.0,
+      "floor_from": "guess",
+      "median": 40.0,
+      "abs_median": 40.0,
+      "p90": 40.0,
       "rows": 35
     },
     "onset": {
@@ -68,9 +57,41 @@
     "onset_settle": {
       "floor": 40.0,
       "floor_from": "guess",
-      "median": 59.375,
-      "abs_median": 59.375,
-      "p90": 90.125,
+      "median": 52.5,
+      "abs_median": 52.5,
+      "p90": 84.375,
+      "rows": 35
+    },
+    "balance": {
+      "floor": 0.5,
+      "floor_from": "guess",
+      "median": 5.542,
+      "abs_median": 5.715,
+      "p90": 13.89,
+      "rows": 35
+    },
+    "centroid_pct": {
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 4.017,
+      "abs_median": 14.664,
+      "p90": 55.806,
+      "rows": 35
+    },
+    "vel_range": {
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 1.0,
+      "abs_median": 1.075,
+      "p90": 5.72,
+      "rows": 7
+    },
+    "register": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 1.962,
+      "abs_median": 2.037,
+      "p90": 5.348,
       "rows": 35
     }
   }

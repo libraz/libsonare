@@ -3,10 +3,10 @@
   "timbre": "gm033",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-15T10:13:14+00:00",
-  "recorded_utc": "2026-09-25T20:38:34+00:00",
+  "recorded_utc": "2026-10-21T10:21:13+00:00",
   "model_build": {
-    "built_utc": "2026-09-25T20:30:56Z",
-    "newest_source_utc": "2026-09-25T20:37:52Z",
+    "built_utc": "2026-10-21T10:18:24Z",
+    "newest_source_utc": "2026-10-21T10:20:44Z",
     "stale": true
   },
   "reference_spread": {},
@@ -112,7 +112,7 @@
       "floor_from": "guess",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 3.087,
+      "p90": 2.505,
       "rows": 7
     },
     "attack_hf_swing": {
@@ -128,7 +128,7 @@
       "floor_from": "default",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 2.047,
+      "p90": 1.232,
       "rows": 35
     }
   }

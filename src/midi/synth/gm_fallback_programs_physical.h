@@ -241,13 +241,16 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // between them: one string read 12 dB cleaner, and 15 cents per seat closes it.
   o.string_ensemble_1.bowed_string.section_spread_cents = 15.0f;
   o.string_ensemble_1.bowed_string.section_rate_hz = 5.0f;
-  // Held level falls toward the bass against the reference, 12 dB from C2 to C5. The gain is
-  // linear in octaves, so a depth past -1/5.58 reaches zero inside the keyboard: -0.3 silenced E7.
+  // Held level falls toward the bass against the reference, 12 dB from C2 to C5. Two routes
+  // multiply to (1 - 0.15 k)^2: within 0.5 dB of one route at -0.3 over C2-C5, and positive to
+  // note 127, where one route at -0.3 reached zero at E7.
   o.string_ensemble_1.mod_matrix.routes[0] = {ModSource::kKeyTrack, ModDestination::kAmpGain,
-                                              -0.17f};
+                                              -0.15f};
+  o.string_ensemble_1.mod_matrix.routes[1] = o.string_ensemble_1.mod_matrix.routes[0];
   o.string_ensemble_2 = o.string_ensemble_1;
   // Section 2's held level already follows the reference across the keyboard.
   o.string_ensemble_2.mod_matrix.routes[0] = ModRoute{};
+  o.string_ensemble_2.mod_matrix.routes[1] = ModRoute{};
   o.string_ensemble_2.amp_env.attack_ms = 361.485f;
   o.string_ensemble_2.bowed_string.attack_ms = 80.7759f;
   o.string_ensemble_2.bowed_string.brightness = 0.452887f;
@@ -739,8 +742,10 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.muted_trumpet.brass.brightness = 0.655602f;
   o.muted_trumpet.gain = 1.51195f;
   o.muted_trumpet.brass.bore_nonlinearity = 0.0994201f;
-  o.muted_trumpet.brass.onset_breath_overshoot_db = 6.7374f;
-  o.muted_trumpet.brass.onset_breath_settle_ms = 29.3032f;
+  // With the bell corner held at or above the fundamental, D5-E5 overshot their early sustain
+  // 2.25 dB past the reference at p90 against a 2.05 bound; these read 1.92.
+  o.muted_trumpet.brass.onset_breath_overshoot_db = 6.3f;
+  o.muted_trumpet.brass.onset_breath_settle_ms = 26.0f;
   o.muted_trumpet.body_mix = 0.195493f;
   o.muted_trumpet.brass.breath_noise = 0.0827071f;
   o.muted_trumpet.brass.dynamic_lip = 0.606152f;
