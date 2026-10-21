@@ -76,6 +76,9 @@ describe('RealtimeEngine state refusals stay coded SonareError', () => {
       expect(() => engine.setMasterStripEqBand(0, { type: 'Peak', enabled: true })).toThrow(
         expect.objectContaining({ code: ErrorCode.InvalidState }),
       );
+      expect(() => engine.resolveMasterInsertAutomationId(0, 'thresholdDb')).toThrow(
+        expect.objectContaining({ code: ErrorCode.InvalidState }),
+      );
     });
   });
 

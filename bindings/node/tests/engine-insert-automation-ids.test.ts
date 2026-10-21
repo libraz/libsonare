@@ -152,6 +152,7 @@ describe('insert automation ids (Node)', () => {
     try {
       engine.setTrackLanes([10]);
       engine.setTrackStripJson(10, insertScene('strips', 'track-10', ['utility.gain']));
+      engine.setMasterStripJson(insertScene('strips', 'master', ['utility.gain']));
       expect(() => engine.resolveTrackInsertAutomationId(10, 0, 'noSuchParam')).toThrow(RangeError);
       expect(() => engine.resolveTrackInsertAutomationId(10, 0, 'noSuchParam')).toThrow(
         /noSuchParam/,
