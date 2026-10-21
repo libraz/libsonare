@@ -9,6 +9,7 @@
 #include <initializer_list>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -1757,34 +1758,84 @@ ParamMap probe_map(const std::string& name, const std::string& key, double value
 // Whether a value is accepted, as measured through one construction path.
 using AcceptFn = std::function<bool(double)>;
 
+// Probe verdicts shared, while one insert is catalogued, by keys that differ only in their
+// indices: `band3.q` builds with a value exactly when `band0.q` does, so each index-free shape
+// is built once per value. A slow test holds every insert to the key-by-key measurement.
+using SharedProbeVerdicts = std::unordered_map<std::string, bool>;
+thread_local SharedProbeVerdicts* t_shared_probe_verdicts = nullptr;
+
+class ScopedSharedProbeVerdicts {
+ public:
+  ScopedSharedProbeVerdicts() : previous_(t_shared_probe_verdicts) {
+    t_shared_probe_verdicts = &verdicts_;
+  }
+  ~ScopedSharedProbeVerdicts() { t_shared_probe_verdicts = previous_; }
+  ScopedSharedProbeVerdicts(const ScopedSharedProbeVerdicts&) = delete;
+  ScopedSharedProbeVerdicts& operator=(const ScopedSharedProbeVerdicts&) = delete;
+
+ private:
+  SharedProbeVerdicts verdicts_;
+  SharedProbeVerdicts* previous_;
+};
+
+// @p probe's verdict, or the one an earlier key of the same shape got for the same value and rate.
+template <typename Probe>
+bool shared_probe_verdict(const std::string& name, const std::string& key, double value,
+                          double sample_rate, const Probe& probe) {
+  if (t_shared_probe_verdicts == nullptr) return probe();
+  std::string shape = name;
+  shape += '\n';
+  for (const char c : key) {
+    if (std::isdigit(static_cast<unsigned char>(c)) == 0) {
+      shape += c;
+    } else if (shape.back() != '#') {
+      shape += '#';
+    }
+  }
+  shape += '\n';
+  shape.append(reinterpret_cast<const char*>(&value), sizeof(value));
+  shape.append(reinterpret_cast<const char*>(&sample_rate), sizeof(sample_rate));
+  const auto found = t_shared_probe_verdicts->find(shape);
+  if (found != t_shared_probe_verdicts->end()) return found->second;
+  const bool verdict = probe();
+  t_shared_probe_verdicts->emplace(std::move(shape), verdict);
+  return verdict;
+}
+
 // Whether construction accepts @p value for @p key with every other parameter
 // at its default. An unknown name yields no processor and so accepts nothing,
 // which keeps a caller from measuring bounds against a processor that does not
 // exist in this build configuration.
 bool insert_accepts(const std::string& name, const std::string& key, double value,
                     const std::vector<Param>& released = {}) {
-  try {
-    return constructs(name, probe_map(name, key, value, released));
-  } catch (...) {
-    return false;
-  }
+  const auto probe = [&] {
+    try {
+      return constructs(name, probe_map(name, key, value, released));
+    } catch (...) {
+      return false;
+    }
+  };
+  // Released siblings are named by index, so such a probe is the key's own.
+  return released.empty() ? shared_probe_verdict(name, key, value, 0.0, probe) : probe();
 }
 
 // insert_accepts, then prepared: a processor may refuse a selection only once
 // it knows its rate (a linear-phase EQ has no all-pass response to realize).
 bool insert_accepts_at_rate(const std::string& name, const std::string& key, double value,
                             double sample_rate) {
-  try {
-    const ParamMap probe = probe_map(name, key, value);
-    if (name == kChainOnlyProbe) return read_chain_only_config(probe);
-    if (measuring_offline_repair) return read_repair_config(name, probe);
-    auto processor = build_insert(name, probe, nullptr, sample_rate);
-    if (processor == nullptr) return read_repair_config(name, probe);
-    processor->prepare(sample_rate, kInsertProbeBlockSize);
-    return true;
-  } catch (...) {
-    return false;
-  }
+  return shared_probe_verdict(name, key, value, sample_rate, [&] {
+    try {
+      const ParamMap probe = probe_map(name, key, value);
+      if (name == kChainOnlyProbe) return read_chain_only_config(probe);
+      if (measuring_offline_repair) return read_repair_config(name, probe);
+      auto processor = build_insert(name, probe, nullptr, sample_rate);
+      if (processor == nullptr) return read_repair_config(name, probe);
+      processor->prepare(sample_rate, kInsertProbeBlockSize);
+      return true;
+    } catch (...) {
+      return false;
+    }
+  });
 }
 
 bool insert_accepts_prepared(const std::string& name, const std::string& key, double value) {
@@ -2307,7 +2358,8 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
   out += "]}";
 }
 
-std::string build_insert_param_info_json(const std::string& name, double sample_rate) {
+std::string build_insert_param_info_json(const std::string& name, double sample_rate,
+                                         bool share_indexed_verdicts = true) {
   // Build a throwaway processor (like insert_param_names). Its descriptor table
   // gives the automation targets; the same build recorded every key the config
   // builder read, the C++ type it read it as (ParamMap::note_kind, driven by the
@@ -2319,6 +2371,8 @@ std::string build_insert_param_info_json(const std::string& name, double sample_
   ParamMap params;
   auto processor = build_insert(name, params);
   if (processor == nullptr) return "[]";
+  std::optional<ScopedSharedProbeVerdicts> shared_verdicts;
+  if (share_indexed_verdicts) shared_verdicts.emplace();
   std::string out = "[";
   const auto descriptors = processor->parameter_descriptors();
   std::unordered_set<std::string> descriptor_keys;
@@ -2559,6 +2613,14 @@ std::string insert_param_info_json_at_rate(const std::string& requested_name, do
   std::string info = build_insert_param_info_json(name, sample_rate);
   if (info == "[]") info = repair_param_info_json(name);
   return memo.emplace(memo_key, std::move(info)).first->second;
+}
+
+std::string insert_param_info_json_measured_per_key(const std::string& requested_name,
+                                                    double sample_rate) {
+  const std::string name = canonical_processor_id(requested_name);
+  std::string info =
+      build_insert_param_info_json(name, sample_rate, /*share_indexed_verdicts=*/false);
+  return info == "[]" ? repair_param_info_json(name) : info;
 }
 
 const std::vector<std::string>& insert_param_info_schema_paths() {

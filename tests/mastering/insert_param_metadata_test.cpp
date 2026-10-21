@@ -60,6 +60,7 @@ namespace json = sonare::util::json;
 using sonare::mastering::api::insert_factory_names;
 using sonare::mastering::api::insert_param_info_json;
 using sonare::mastering::api::insert_param_info_json_at_rate;
+using sonare::mastering::api::insert_param_info_json_measured_per_key;
 using sonare::mastering::api::insert_param_names;
 using sonare::mastering::api::insert_probe_params;
 using sonare::mastering::api::make_insert;
@@ -1977,4 +1978,19 @@ TEST_CASE(
   // The same band is refused by a build for a rate that cannot carry it.
   CHECK_THROWS_AS(make_insert("eq.parametric", wide, nullptr, limits, 48000.0),
                   sonare::SonareException);
+}
+
+TEST_CASE("sharing a probe verdict across indexed keys matches measuring every key",
+          "[mastering][catalog][.][slow]") {
+  // The catalog builds once per index-free key shape and value; every insert, at the rate-less
+  // probe and at two host rates, must read exactly as the key-by-key measurement does.
+  for (const std::string& name : insert_factory_names()) {
+    INFO(name);
+    CHECK(insert_param_info_json(name) == insert_param_info_json_measured_per_key(name, 0.0));
+    for (const double sample_rate : {44100.0, 96000.0}) {
+      INFO(sample_rate);
+      CHECK(insert_param_info_json_at_rate(name, sample_rate) ==
+            insert_param_info_json_measured_per_key(name, sample_rate));
+    }
+  }
 }

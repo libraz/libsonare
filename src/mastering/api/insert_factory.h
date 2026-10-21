@@ -140,6 +140,14 @@ std::string repair_param_info_json(const std::string& name);
 ///          rate-less answer.
 std::string insert_param_info_json_at_rate(const std::string& name, double sample_rate);
 
+/// @brief insert_param_info_json_at_rate() measured key by key, uncached.
+/// @details The catalog shares one probe verdict between keys that differ only in
+///          their indices (`band0.q`, `band3.q`); this builds every probe for every
+///          key instead. It is the reference that sharing is tested against, and as
+///          slow as that implies. A @p sample_rate that is not positive gives the
+///          rate-less answer.
+std::string insert_param_info_json_measured_per_key(const std::string& name, double sample_rate);
+
 /// @brief The key groups of an insert that exist only under a condition.
 /// @return A JSON array string, one entry per slot in the order construction
 ///         declares them: `name` (the key prefix, e.g. "midBand3" or

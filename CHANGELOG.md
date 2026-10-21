@@ -120,6 +120,10 @@
 - Node `setAssistSidecar` leaves the project unchanged when it refuses its arguments, and the streaming mastering and equalizer constructors report the library's error code.
 - The WASM npm entry exports the public types its signatures name.
 
+### Performance
+
+- The first `capabilityCatalog()` call, and the first parameter-info query for a multiband insert, are about 3x faster on every surface; the catalog is unchanged.
+
 ## v1.9.1 (2026-10-13)
 
 This release renames processor ids, amp models and amp presets that carried product designations, refuses unknown keys in Node and WASM request objects, fixes Butterworth and Bessel multiband crossovers that cancelled at their cutoffs, weights 7.1 and quad loudness by loudspeaker position, fixes level changes at note-edit seams and drum hits read as repair defects, closes notes cut at a MIDI clip end, keeps the monitor cue out of offline renders, and closes several gaps between the bindings, the CLIs and the C ABI. No ABI counter moved.
