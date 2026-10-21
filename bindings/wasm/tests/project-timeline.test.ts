@@ -6,7 +6,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, Project, type ProjectTimeline, RealtimeEngine } from '../dist/index.js';
+import { ErrorCode, init, Project, type ProjectTimeline, RealtimeEngine } from '../dist/index.js';
 
 const SAMPLE_RATE = 48000;
 const BLOCK_SIZE = 128;
@@ -145,7 +145,9 @@ describe('Project timeline applied to a RealtimeEngine', () => {
       const timeline = compileAndApply(engine, project);
       timeline.dispose();
       timeline.dispose();
-      expect(() => engine.applyProjectTimeline(timeline)).toThrow();
+      expect(() => engine.applyProjectTimeline(timeline)).toThrow(
+        expect.objectContaining({ code: ErrorCode.InvalidState }),
+      );
       expect(engineBounce(engine)).toEqual(projectBounce(project));
     } finally {
       engine.destroy();
@@ -194,6 +196,26 @@ describe('Project timeline applied to a RealtimeEngine', () => {
       expect(() => engine.applyProjectTimeline({} as never)).toThrow(TypeError);
     } finally {
       engine.destroy();
+    }
+  });
+
+  it('tells a released timeline id from one never issued at the native layer', () => {
+    const { project } = buildProject();
+    const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
+    try {
+      const { timeline } = project.compileTimeline();
+      expect(timeline).not.toBeNull();
+      const releasedId = (timeline as unknown as { nativeId: number }).nativeId;
+      (timeline as ProjectTimeline).dispose();
+      const native = (engine as unknown as { native: { applyProjectTimeline(id: number): void } })
+        .native;
+      expect(() => native.applyProjectTimeline(releasedId)).toThrow(
+        expect.objectContaining({ code: ErrorCode.InvalidState }),
+      );
+      expect(() => native.applyProjectTimeline(0x7fffffff)).toThrow(RangeError);
+    } finally {
+      engine.destroy();
+      project.delete();
     }
   });
 

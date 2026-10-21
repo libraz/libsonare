@@ -85,6 +85,7 @@
 
 ### Fixes
 
+- On WASM, `RealtimeEngine.applyProjectTimeline` raises `InvalidState` for a disposed `ProjectTimeline`, as Node and Python do; it raised `TypeError`.
 - CQT and VQT build their kernels from the exact `fmin` and VQT `gamma` given, instead of reusing a kernel cached for a nearby value. In C++, VQT `filter_scale` and the CQT `window` take effect, and `nnls` no longer returns zero for systems orthogonal to its starting vector.
 - The built-in chord generator and harmonizer place notes correctly in clips with a non-zero start or source offset. The harmonizer covers both of two overlapping same-pitch notes, and a chord decision reports `accepted: false` when every voice was rejected.
 - Assist commands that change a track outside the scope (its gain, mute, solo, pan or automation, or a clip's warp, takes, comp or loop crossfade) are discarded.

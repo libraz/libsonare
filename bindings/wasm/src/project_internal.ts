@@ -92,24 +92,33 @@ export interface WasmProjectTimeline {
   delete: () => void;
 }
 
-const projectTimelineHandles = new WeakMap<object, WasmProjectTimeline>();
+// A disposed facade stays keyed with a null handle, so it is refused as released
+// rather than as something that never was a timeline.
+const projectTimelineHandles = new WeakMap<object, WasmProjectTimeline | null>();
 
 /** Internal: registers the facade object whose identity may cross to the engine. */
 export function registerProjectTimeline(owner: object, native: WasmProjectTimeline): void {
   projectTimelineHandles.set(owner, native);
 }
 
-/** Internal: removes a disposed facade from the identity registry. */
+/** Internal: marks a facade disposed in the identity registry. */
 export function unregisterProjectTimeline(owner: object): void {
-  projectTimelineHandles.delete(owner);
+  projectTimelineHandles.set(owner, null);
 }
 
-/** Internal: resolves only a timeline facade created by this module. */
+/**
+ * Internal: resolves only a timeline facade created by this module; undefined
+ * for anything else. Throws `InvalidState` for a disposed one.
+ */
 export function projectTimelineNativeId(owner: unknown): number | undefined {
   if (owner === null || (typeof owner !== 'object' && typeof owner !== 'function')) {
     return undefined;
   }
-  return projectTimelineHandles.get(owner)?.id;
+  const native = projectTimelineHandles.get(owner);
+  if (native === null) {
+    throw releasedHandleError('ProjectTimeline');
+  }
+  return native?.id;
 }
 
 /** `compileTimeline` as the embind layer returns it, before the facade wraps the handle. */

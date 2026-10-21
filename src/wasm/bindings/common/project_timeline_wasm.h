@@ -7,8 +7,8 @@
 /// A timeline crosses from Project to RealtimeEngine as an integer id rather
 /// than as an embind instance, for the same reason a sample bank does: an
 /// instance cannot travel through the plain argument the engine reads, and an
-/// id turns a released timeline into an InvalidParameter instead of a
-/// use-after-free.
+/// id turns a released timeline into an InvalidState (a fabricated id into a
+/// RangeError) instead of a use-after-free.
 
 #ifdef __EMSCRIPTEN__
 
@@ -33,6 +33,9 @@ class ProjectTimelineWasm {
 
   /// The live timeline for @p id, or nullptr once every handle has been released.
   static SonareProjectTimeline* lookup(uint32_t id);
+
+  /// Whether @p id was ever handed out, released or not.
+  static bool issued(uint32_t id);
 
  private:
   std::shared_ptr<SonareProjectTimeline> timeline_;

@@ -6,9 +6,10 @@
 ///
 /// A binding descriptor names a bank by the id its handle carries rather than
 /// by a pointer: an embind class instance cannot travel inside the plain JS
-/// object the C++ readers walk field by field, and an id turns a released or
-/// fabricated handle into an InvalidParameter instead of a use-after-free. The
-/// TS facade does the swap, so hosts still pass the `SampleBank` itself.
+/// object the C++ readers walk field by field, and an id turns a released
+/// handle into an InvalidState (a fabricated id into a RangeError) instead of a
+/// use-after-free. The TS facade does the swap, so hosts still pass the
+/// `SampleBank` itself.
 
 #ifdef __EMSCRIPTEN__
 
@@ -59,6 +60,9 @@ class SampleBankWasm {
   // The live bank for @p id, or nullptr once its handle has been released.
   static SonareSampleBank* lookup(uint32_t id);
 
+  // Whether @p id was ever handed out, released or not.
+  static bool issued(uint32_t id);
+
   // The bank a synth-instrument descriptor's `sampleBankId` names, or nullptr
   // when the field is absent or zero. Throws for a malformed id and for one
   // whose handle is gone, so a bank released too early is a clear error rather
@@ -71,9 +75,12 @@ class SampleBankWasm {
     const uint32_t id = checkedUintFromVal(desc["sampleBankId"], "synth instrument sampleBankId");
     if (id == 0) return nullptr;
     SonareSampleBank* bank = lookup(id);
-    if (bank == nullptr) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+    if (bank == nullptr && issued(id)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
                                     "synth instrument sampleBank has been released");
+    }
+    if (bank == nullptr) {
+      throw WasmRangeError("synth instrument sampleBankId names no sample bank");
     }
     return bank;
   }

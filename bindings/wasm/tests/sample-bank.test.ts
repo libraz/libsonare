@@ -258,6 +258,30 @@ describe('Sonare WASM sample bank', () => {
     }
   });
 
+  it('tells a released bank id from one never issued at the native layer', () => {
+    // The facade swaps the handle for its id, so only the native layer ever sees
+    // a bare id; a released one is the bank's state, an unissued one the argument.
+    const engine = new RealtimeEngine(SAMPLE_RATE, 128);
+    const bank = new SampleBank();
+    try {
+      const releasedId = bank.nativeId;
+      bank.delete();
+      const native = (
+        engine as unknown as {
+          native: { setSynthInstrument(destination: number, patch: object): void };
+        }
+      ).native;
+      expect(() =>
+        native.setSynthInstrument(7, { engineMode: 'sample', sampleBankId: releasedId }),
+      ).toThrow(expect.objectContaining({ code: ErrorCode.InvalidState }));
+      expect(() =>
+        native.setSynthInstrument(7, { engineMode: 'sample', sampleBankId: 0x7fffffff }),
+      ).toThrow(RangeError);
+    } finally {
+      engine.destroy();
+    }
+  });
+
   it('binds the same bank on the realtime engine', () => {
     // The realtime path resolves `sampleBank` through the same normalizer as
     // the bounce, so a patch that sounds offline sounds live. The synth takes a

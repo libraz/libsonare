@@ -63,8 +63,8 @@ EM_JS(void, sonare_project_add_scratch, (EM_VAL scratch, float* dst, int frames)
 namespace {
 
 /// Live sample banks by id. A bounce binding names a bank by the id its handle
-/// carries rather than by a raw pointer, so a released or fabricated id is an
-/// InvalidParameter instead of a use-after-free. Control thread only, which
+/// carries rather than by a raw pointer, so a released or fabricated id is a
+/// refusal instead of a use-after-free. Control thread only, which
 /// single-threaded WASM guarantees.
 std::unordered_map<uint32_t, SonareSampleBank*>& sampleBankRegistry() {
   static std::unordered_map<uint32_t, SonareSampleBank*> registry;
@@ -78,17 +78,14 @@ std::unordered_map<uint32_t, SonareProjectTimeline*>& projectTimelineRegistry() 
   return registry;
 }
 
-/// Ids start at 1 so zero stays available as "no timeline".
-uint32_t nextProjectTimelineId() {
-  static uint32_t next = 1;
-  return next++;
-}
+/// Ids start at 1 so zero stays available as "no timeline". Monotonic, so an id
+/// below the counter was issued once and is released if no longer registered.
+uint32_t g_next_project_timeline_id = 1;
+uint32_t nextProjectTimelineId() { return g_next_project_timeline_id++; }
 
 /// Ids start at 1 so zero stays available as "no bank" in a binding.
-uint32_t nextSampleBankId() {
-  static uint32_t next = 1;
-  return next++;
-}
+uint32_t g_next_sample_bank_id = 1;
+uint32_t nextSampleBankId() { return g_next_sample_bank_id++; }
 
 /// Optional numeric field: absent keeps @p fallback, present-but-not-a-finite-
 /// number throws rather than coercing.
@@ -261,6 +258,8 @@ SonareSampleBank* SampleBankWasm::lookup(uint32_t id) {
   const auto it = registry.find(id);
   return it != registry.end() ? it->second : nullptr;
 }
+
+bool SampleBankWasm::issued(uint32_t id) { return id != 0 && id < g_next_sample_bank_id; }
 
 uint32_t SampleBankWasm::addSample(val data, val desc) {
   if (wasmFloat32ArrayLength(data, "sample data") == 0) {
@@ -762,6 +761,8 @@ SonareProjectTimeline* ProjectTimelineWasm::lookup(uint32_t id) {
   const auto it = registry.find(id);
   return it != registry.end() ? it->second : nullptr;
 }
+
+bool ProjectTimelineWasm::issued(uint32_t id) { return id != 0 && id < g_next_project_timeline_id; }
 
 void registerProjectTimeline() {
   class_<ProjectTimelineWasm>("ProjectTimeline").property("id", &ProjectTimelineWasm::id);
