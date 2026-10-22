@@ -154,8 +154,8 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   // reachable is the weight — a low cutoff with the drive up puts the energy
   // under the line instead of over it.
   o.lead_bass_lead = lead;
-  o.lead_bass_lead.unison = 4;
-  o.lead_bass_lead.detune_cents = 16.0f;
+  // The reference holds one still line at h1; a wider stack beats into pitch motion.
+  o.lead_bass_lead.detune_cents = 8.0f;
   o.lead_bass_lead.cutoff_hz = 1600.0f;
   o.lead_bass_lead.drive = 0.35f;
   o.lead_bass_lead.env_to_cutoff_cents = 2400.0f;
