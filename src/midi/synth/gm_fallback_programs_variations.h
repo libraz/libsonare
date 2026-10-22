@@ -368,7 +368,8 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   // tune, so the second polarization carries the chorus that follows from it.
   o.twelve_string_guitar = fam[3];
   o.twelve_string_guitar.ks.octave_mix = 0.55f;
-  o.twelve_string_guitar.ks.polarization = 0.5f;
+  // 0.35 took the double decay from 3.58 to 0.66 dB/s off its reference (median, bound 1.66).
+  o.twelve_string_guitar.ks.polarization = 0.35f;
   o.twelve_string_guitar.ks.body_coupling = 0.45f;
   o.twelve_string_guitar.ks.decay_s = 4.0f;
   o.twelve_string_guitar.stereo_spread = 0.35f;

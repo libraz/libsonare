@@ -392,10 +392,13 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.steel_guitar = steel;
   o.steel_guitar.amp_env.attack_ms = 2.99715f;
   o.steel_guitar.amp_env.release_ms = 408.442f;
-  // Knock 0.56 took body-under-the-note p90 from 71.5 to 39.3 dB on this capture's gate; past
-  // ~0.6 the register profile p90 leaves its bound. The halo stays undamped: damping made 12
-  // damper rows measurable against a bound recorded from 5.
-  o.steel_guitar.ks.body_knock = 0.56f;
+  // A 0.6 s air-mode ring under a 0.35 knock took body-under-the-note from -32.1 to -24.7 dB
+  // (median); the stretch and body mix hold the register profile p90 at 2.60 against 2.67. The
+  // halo stays undamped: damping made 12 damper rows measurable against a bound recorded from 5.
+  o.steel_guitar.ks.body_knock = 0.35f;
+  o.steel_guitar.ks.body_air_t60_s = 0.6f;
+  o.steel_guitar.ks.decay_stretch = 0.66f;
+  o.steel_guitar.body_mix = 0.4f;
 
   // Harmonics (GM 31): a finger resting at the twelfth fret, which is the node
   // at half the string. The touch is the whole of it — the loop halves and the
@@ -420,7 +423,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // the pluck to the flesh of a fingertip with a lighter tension bend.
   o.nylon_guitar = steel;
   o.nylon_guitar.ks.brightness = 0.72f;
-  o.nylon_guitar.ks.exc_brightness = 0.325593f;
+  o.nylon_guitar.ks.exc_brightness = 0.29f;
   o.nylon_guitar.ks.pick_position = 0.1313f;
   o.nylon_guitar.ks.decay_s = 8.11134f;
   o.nylon_guitar.ks.dispersion = 0.0f;
@@ -430,10 +433,10 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.nylon_guitar.amp_env.attack_ms = 0.839868f;
   o.nylon_guitar.amp_env.release_ms = 132.841f;
   o.nylon_guitar.amp_env.sustain = 0.465764f;
-  o.nylon_guitar.cutoff_hz = 8122.57f;
+  o.nylon_guitar.cutoff_hz = 8400.0f;
   o.nylon_guitar.ks.decay_stretch = 0.328695f;
   o.nylon_guitar.ks.release_damp_s = 0.0585365f;
-  o.nylon_guitar.ks.vel_to_brightness = 0.829639f;
+  o.nylon_guitar.ks.vel_to_brightness = 1.0f;
   o.nylon_guitar.resonance_q = 4.05989f;
   // A fingertip/nail contact click the loop's own excitation cannot carry
   // (it feeds the resonance, not the attack). 0.2 passed the reference gate
@@ -442,10 +445,13 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // Solved against the reference's own level range, v32 to v127, which the
   // engine default of 1.19 left 3.59 dB wide.
   o.nylon_guitar.ks.velocity_exponent = 0.89f;
-  // Knock 1.0 on the body's own 100 Hz air mode took body-under-the-note from -24.6 to -6.6 dB
-  // (median); retuning the mode to the reference's 112.5 Hz line, or damping the halo at 0.2-0.8 s,
-  // moved brightness p90 or damper release out of bounds.
-  o.nylon_guitar.ks.body_knock = 1.0f;
+  // With the burst, corner and velocity tilt above, these took body-under-the-note from -6.6 to
+  // -3.7 dB and brightness from 2.3 to 0.3 % (medians); the lighter plane coupling brings the
+  // ukulele's double decay inside its bound. Retuning the 100 Hz air mode moved other lines out.
+  o.nylon_guitar.ks.body_knock = 1.6f;
+  o.nylon_guitar.ks.body_air_t60_s = 0.1f;
+  o.nylon_guitar.ks.polarization = 0.15f;
+  o.nylon_guitar.ks.body_coupling = 0.2f;
 
   // Electric (jazz/clean) — the `electric-guitar` preset: bright sustaining
   // loop, near-bridge pick, a pickup-ish lowpass instead of the open string.
@@ -481,12 +487,15 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // neck and a damped 2.5 kHz pickup corner take the h2-h6 stack 13.3 -> 3.7 dB
   // over and the centroid 51 -> 10% over; the exponent then zeroes the level range.
   o.electric_guitar.ks.pickup_pos = 0.3f;
-  o.electric_guitar.cutoff_hz = 2500.0f;
-  o.electric_guitar.resonance_q = 2.0f;
-  o.electric_guitar.ks.velocity_exponent = 1.31f;
-  // Each strike's burst held to its expected energy left the 4-8 kHz attack share 16.17 dB off
-  // at the median against a 16.10 bound; a slightly darker burst reads 15.75.
-  o.electric_guitar.ks.exc_brightness = 0.88f;
+  o.electric_guitar.cutoff_hz = 2300.0f;
+  o.electric_guitar.resonance_q = 3.0f;
+  o.electric_guitar.ks.velocity_exponent = 1.45f;
+  // The 2.3 kHz corner at Q 3, this burst, the exponent and these planes took the attack-share
+  // swing, the level range p90 and the double decay's medians back inside the jazz gate; the
+  // h2-h6 stack, centroid and register profile p90 stay over it.
+  o.electric_guitar.ks.exc_brightness = 0.95f;
+  o.electric_guitar.ks.polarization = 0.3f;
+  o.electric_guitar.ks.body_coupling = 0.05f;
   o.electric_guitar.amp_env.attack_ms = 2.99715f;
   o.electric_guitar.amp_env.release_ms = 408.442f;
   // Against the direct reference: partial decay tilt -91.7
@@ -525,12 +534,14 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.muted_guitar.ks.decay_s = 1.16f;
   o.muted_guitar.ks.brightness = 0.55f;
   o.muted_guitar.ks.release_damp_s = 0.04f;
-  o.muted_guitar.cutoff_hz = 617.386f;
+  o.muted_guitar.cutoff_hz = 520.0f;
   // Fitted with each strike's burst noise held to its expected energy: the high (h5-h8) minus
   // low (h1-h2) partial decay reads 25 dB/s steeper than the reference at the median, with the
   // double decay and register profile inside their bounds.
   o.muted_guitar.ks.decay_stretch = 0.85f;
-  o.muted_guitar.ks.exc_brightness = 0.1f;
+  // 520 Hz and 0.085 took the partial decay tilt p90 from 71.6 to 64.1 dB/s (bound 64.8); any
+  // value that brightens the note steepens that tilt past its bound.
+  o.muted_guitar.ks.exc_brightness = 0.085f;
   o.muted_guitar.ks.vel_to_brightness = 0.9f;
   o.muted_guitar.ks.nail = 0.6f;
   o.muted_guitar.ks.pluck_style = 0.5f;
@@ -736,13 +747,16 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // The head drains the string fast, but not as fast as this was doing it: the
   // reference falls 22.9 dB/s where 1.0 gave 73.2, so the ping was over before
   // the instrument's own ring had started.
-  o.banjo.ks.decay_s = 3.0f;
+  o.banjo.ks.decay_s = 3.13f;
   o.banjo.ks.decay_stretch = 0.25f;  // a short neck: the low strings ring little longer
   o.banjo.ks.brightness = 0.8f;
   o.banjo.ks.pick_position = 0.10f;  // picked close to the bridge
   o.banjo.ks.nail = 0.9f;            // a metal fingerpick, harder than a nail
   o.banjo.ks.exc_brightness = 0.95f;
-  o.banjo.ks.body_coupling = 0.15f;
+  // 3.13 with the planes coupled took the held-note decay from 1.66 to 0.78 dB/s off (median);
+  // 3.2 alone reaches it but puts the aftersound out of its bound.
+  o.banjo.ks.body_coupling = 0.6f;
+  o.banjo.ks.polarization = 0.4f;
   o.banjo.ks.tension_mod = 0.2f;
   o.banjo.body_mix = 0.12f;
   o.banjo.gain = 1.2f;
