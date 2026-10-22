@@ -71,7 +71,9 @@ constexpr KsPatchParams blank_ks() noexcept {
   z.decay_s = 0.0f;
   z.decay_stretch = 0.0f;
   z.pick_position = 0.0f;
+  z.pick_position_per_octave = 0.0f;
   z.exc_brightness = 0.0f;
+  z.exc_brightness_per_octave = 0.0f;
   z.vel_to_brightness = 0.0f;
   z.release_damp_s = 0.0f;
   z.mute_harmonic = 0.0f;
@@ -375,7 +377,9 @@ constexpr PluckedStringPatchParams blank_plucked_string() noexcept {
   z.decay_s = 0.0f;
   z.decay_stretch = 0.0f;
   z.pick_position = 0.0f;
+  z.pick_position_per_octave = 0.0f;
   z.exc_brightness = 0.0f;
+  z.exc_brightness_per_octave = 0.0f;
   z.vel_to_brightness = 0.0f;
   z.release_damp_s = 0.0f;
   z.hf_decay_s = 0.0f;

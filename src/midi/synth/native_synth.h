@@ -1477,8 +1477,12 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.ks.decay_stretch, 0.5f), 0.0f, 1.0f);
   p.ks.pick_position =
       std::clamp(patch_clamp_detail::sanitize(p.ks.pick_position, 0.18f), 0.0f, 0.5f);
+  p.ks.pick_position_per_octave =
+      std::clamp(patch_clamp_detail::sanitize(p.ks.pick_position_per_octave, 0.0f), 0.0f, 4.0f);
   p.ks.exc_brightness =
       std::clamp(patch_clamp_detail::sanitize(p.ks.exc_brightness, 0.85f), 0.0f, 1.0f);
+  p.ks.exc_brightness_per_octave =
+      std::clamp(patch_clamp_detail::sanitize(p.ks.exc_brightness_per_octave, 0.0f), 0.0f, 4.0f);
   p.ks.vel_to_brightness =
       std::clamp(patch_clamp_detail::sanitize(p.ks.vel_to_brightness, 0.6f), 0.0f, 1.0f);
   p.ks.release_damp_s =
@@ -1968,8 +1972,12 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.plucked_string.decay_stretch, 0.5f), 0.0f, 1.0f);
   p.plucked_string.pick_position =
       std::clamp(patch_clamp_detail::sanitize(p.plucked_string.pick_position, 0.2f), 0.0f, 0.5f);
+  p.plucked_string.pick_position_per_octave = std::clamp(
+      patch_clamp_detail::sanitize(p.plucked_string.pick_position_per_octave, 0.0f), 0.0f, 4.0f);
   p.plucked_string.exc_brightness =
       std::clamp(patch_clamp_detail::sanitize(p.plucked_string.exc_brightness, 0.85f), 0.0f, 1.0f);
+  p.plucked_string.exc_brightness_per_octave = std::clamp(
+      patch_clamp_detail::sanitize(p.plucked_string.exc_brightness_per_octave, 0.0f), 0.0f, 4.0f);
   p.plucked_string.vel_to_brightness = std::clamp(
       patch_clamp_detail::sanitize(p.plucked_string.vel_to_brightness, 0.6f), 0.0f, 1.0f);
   p.plucked_string.release_damp_s = std::clamp(

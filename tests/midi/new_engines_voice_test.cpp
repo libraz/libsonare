@@ -266,6 +266,23 @@ TEST_CASE("plucked-string default A4 decay keeps its four-second target",
   REQUIRE(measured == Catch::Approx(4.0).margin(0.25));
 }
 
+TEST_CASE("plucked-string pick and excitation key tracks are quoted at A2",
+          "[midi][synth][new_engines][plucked]") {
+  constexpr double kSampleRate = 48000.0;
+  const PluckedStringPatchParams defaults;
+  REQUIRE(defaults.pick_position_per_octave == 0.0f);
+  REQUIRE(defaults.exc_brightness_per_octave == 0.0f);
+
+  PluckedStringPatchParams tracked = defaults;
+  tracked.pick_position_per_octave = 1.5f;
+  tracked.exc_brightness_per_octave = 1.0f;
+  // At the quote note (A2) any slope leaves the render untouched; above it the pluck moves.
+  REQUIRE(render_plucked_core(tracked, kSampleRate, 45, 12000) ==
+          render_plucked_core(defaults, kSampleRate, 45, 12000));
+  REQUIRE(render_plucked_core(tracked, kSampleRate, 69, 12000) !=
+          render_plucked_core(defaults, kSampleRate, 69, 12000));
+}
+
 TEST_CASE("new-engine presets resolve and select their engine", "[midi][synth][new_engines]") {
   using sonare::midi::synth::find_synth_preset;
   for (const char* name :

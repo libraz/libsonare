@@ -3,14 +3,13 @@
   "timbre": "t0",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-22T06:05:46+00:00",
-  "recorded_utc": "2026-10-22T08:14:01+00:00",
+  "recorded_utc": "2026-10-22T08:41:30+00:00",
   "model_build": {
-    "built_utc": "2026-10-22T08:13:48Z",
-    "newest_source_utc": "2026-10-22T08:13:19Z",
+    "built_utc": "2026-10-22T08:41:12Z",
+    "newest_source_utc": "2026-10-22T08:39:47Z",
     "stale": false
   },
   "reference_spread": {},
-  "_rerecorded": "attack_hf (median 1.0 -> 14.338) and balance (median 0.725 -> 2.22) moved with the voice change that gave the harp its upper partials: under the previous 0.07 s hf_decay_s the model's h3-h5 fell at 50-270 dB/s, so inside the 0.12-1.62 s window the partial stack and the 4-8 kHz share were measured on partials that had already died and matched the reference by that accident. Both bounds now describe partials that sound. Deleted by hand before re-recording, since _keep_the_tighter would otherwise have held the accidental values.",
   "_excluded": {
     "body": "below f0 the reference carries the source's own gain modulation rather than a body: at 7 of 9 notes the energy the metric reads is one line at f0 minus 125 or 250 Hz (-50 to -58 dB re the fundamental), the lower sideband of a gain update every 8 ms that every partial carries, and at note 48 a 50 Hz hum line (-67.8 dB). Notching those lines moves the reading from -50/-55 to -57\u2026-80 dB; they sit at no harp string's pitch and at no fixed frequency (60-273 Hz across the grid)",
     "tnr": "everything the metric counts as noise in the reference is modulation sidebands of the partials - 100 % of the non-tonal power lies below 1 kHz, in lines at f0 +- 5 Hz (-36 to -44 dB, a 5.0 Hz amplitude modulation at every note) and at n*f0 + k*125 Hz (-52 to -58 dB). Against the recordings' real floor (-93 to -105 dB per bin) the ratio would read 71-78 dB, not the 35-50 recorded, so a bound here would hold the model to the source's synthesis"
@@ -21,7 +20,7 @@
       "floor_from": "guess",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 3.265,
+      "p90": 3.262,
       "rows": 9
     },
     "decay": {
@@ -43,9 +42,9 @@
     "attack_hf": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 14.338,
-      "abs_median": 14.338,
-      "p90": 22.227,
+      "median": 2.5,
+      "abs_median": 7.713,
+      "p90": 12.71,
       "rows": 9
     },
     "aftersound": {
@@ -67,9 +66,9 @@
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 2.22,
-      "abs_median": 2.628,
-      "p90": 8.577,
+      "median": 0.805,
+      "abs_median": 1.682,
+      "p90": 8.008,
       "rows": 9
     },
     "partial_tilt": {
@@ -83,9 +82,9 @@
     "centroid_pct": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 2.041,
-      "abs_median": 7.468,
-      "p90": 24.601,
+      "median": 1.284,
+      "abs_median": 1.995,
+      "p90": 11.828,
       "rows": 9
     }
   }

@@ -44,6 +44,9 @@ constexpr uint64_t kPickNoiseIndexBase = 1ull << 24;
 SONARE_TUNABLE(kPluckedPickNoiseMs, 25.0f);
 SONARE_TUNABLE(kPluckedPickNoiseCutoffHz, 6000.0f);
 
+/// Where the pick and excitation key tracks are quoted (A2), as the Karplus-Strong core does.
+constexpr float kPluckedPluckQuoteHz = 110.0f;
+
 }  // namespace
 
 void PluckedStringVoiceCore::start(const PluckedStringPatchParams& params, double sample_rate,
@@ -136,15 +139,21 @@ LoopBudget PluckedStringVoiceCore::configure(const PluckedStringPatchParams& par
   // the velocity-driven dynamic-level lowpass (hard pluck = bright).
   exc_total_ = std::max(8, static_cast<int>(base_period_));
   exc_pos_ = 0;
-  pick_delay_ =
-      static_cast<int>(std::clamp(params.pick_position, 0.0f, 0.5f) * base_period_ + 0.5f);
+  // Octaves from the quote note; both pluck key tracks are 2^(slope * this), exactly 1 at slope 0.
+  const float pluck_octaves = std::log2(f0 / kPluckedPluckQuoteHz);
+  const float pick_track =
+      std::exp2(std::clamp(params.pick_position_per_octave, 0.0f, 4.0f) * pluck_octaves);
+  pick_delay_ = static_cast<int>(
+      std::clamp(params.pick_position * pick_track, 0.0f, 0.5f) * base_period_ + 0.5f);
   const float vel01 = velocity.f7() / 127.0f;
   const float vel_amount = std::clamp(params.vel_to_brightness, 0.0f, 1.0f);
   const float bright =
       std::clamp(params.exc_brightness, 0.0f, 1.0f) * ((1.0f - vel_amount) + vel_amount * vel01);
   // Exponential brightness -> cutoff map (300 Hz .. ~12 kHz) through a single
   // one-pole, so the velocity swing is clearly audible.
-  const float exc_cutoff = 300.0f * std::exp2(5.3f * bright);
+  const float exc_cutoff =
+      300.0f * std::exp2(5.3f * bright) *
+      std::exp2(std::clamp(params.exc_brightness_per_octave, 0.0f, 4.0f) * pluck_octaves);
   exc_alpha_ = lowpass_alpha_at_rate(exc_cutoff, sr);
   exc_noise_gain_ = noise_gain_at_rate(sr);
   exc_lp_ = 0.0f;

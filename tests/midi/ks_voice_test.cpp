@@ -271,6 +271,70 @@ TEST_CASE("velocity opens the excitation lowpass (brightness)", "[midi][synth][k
   REQUIRE(loud_high > 1.5 * soft_high);
 }
 
+TEST_CASE("pick and excitation key tracks are off by default and quoted at A2",
+          "[midi][synth][ks]") {
+  const KsPatchParams defaults;
+  REQUIRE(defaults.pick_position_per_octave == 0.0f);
+  REQUIRE(defaults.exc_brightness_per_octave == 0.0f);
+
+  // At the quote note (A2, 110 Hz) any slope leaves the render untouched.
+  KsPatchParams tracked = defaults;
+  tracked.pick_position = 0.3f;
+  tracked.pick_position_per_octave = 2.5f;
+  tracked.exc_brightness_per_octave = 1.5f;
+  KsPatchParams flat = tracked;
+  flat.pick_position_per_octave = 0.0f;
+  flat.exc_brightness_per_octave = 0.0f;
+  REQUIRE(render_ks_core(tracked, 45, 1.0f, 12000) == render_ks_core(flat, 45, 1.0f, 12000));
+  REQUIRE(render_ks_core(tracked, 57, 1.0f, 12000) != render_ks_core(flat, 57, 1.0f, 12000));
+}
+
+TEST_CASE("pick key track moves the pluck toward the midpoint up the compass",
+          "[midi][synth][ks]") {
+  // Quoted at 0.25 on A2, one octave of slope puts A3's pluck at the midpoint (h2 notched),
+  // where a flat law keeps it at a quarter (h4 notched, h2 at its strongest).
+  KsPatchParams flat;
+  flat.brightness = 0.85f;
+  flat.hf_decay_s = 2.0f;
+  flat.pick_position = 0.25f;
+  KsPatchParams tracked = flat;
+  tracked.pick_position_per_octave = 1.0f;
+
+  const double f0 = 220.0;
+  const std::vector<double> flat_power =
+      power_spectrum(render_ks_core(flat, 57, 1.0f, 24000), 2048);
+  const std::vector<double> tracked_power =
+      power_spectrum(render_ks_core(tracked, 57, 1.0f, 24000), 2048);
+  const auto ratio = [&](const std::vector<double>& p, int n) {
+    return harmonic_power(p, f0, n) / harmonic_power(p, f0, 1);
+  };
+  REQUIRE(ratio(flat_power, 2) > 8.0 * ratio(tracked_power, 2));
+  REQUIRE(ratio(tracked_power, 4) < ratio(tracked_power, 3));
+
+  // The position is capped at the midpoint: further up it stays there.
+  KsPatchParams steep = tracked;
+  steep.pick_position_per_octave = 3.0f;
+  REQUIRE(render_ks_core(steep, 69, 1.0f, 12000) == render_ks_core(tracked, 69, 1.0f, 12000));
+}
+
+TEST_CASE("excitation key track darkens the bass and brightens the treble", "[midi][synth][ks]") {
+  KsPatchParams flat;
+  flat.exc_brightness = 0.6f;
+  flat.hf_decay_s = 2.0f;
+  KsPatchParams tracked = flat;
+  tracked.exc_brightness_per_octave = 1.0f;
+
+  // Above the A2 quote the corner rises with the note, below it falls.
+  const double treble_flat = high_band_fraction(render_ks_core(flat, 69, 1.0f, 12000), 0, 4000.0);
+  const double treble_tracked =
+      high_band_fraction(render_ks_core(tracked, 69, 1.0f, 12000), 0, 4000.0);
+  REQUIRE(treble_tracked > 2.0 * treble_flat);
+  const double bass_flat = high_band_fraction(render_ks_core(flat, 33, 1.0f, 12000), 0, 1000.0);
+  const double bass_tracked =
+      high_band_fraction(render_ks_core(tracked, 33, 1.0f, 12000), 0, 1000.0);
+  REQUIRE(bass_tracked < 0.7 * bass_flat);
+}
+
 TEST_CASE("note-off damps the string", "[midi][synth][ks]") {
   NativeSynthPatch patch = ks_base_patch();
   patch.ks.decay_s = 6.0f;

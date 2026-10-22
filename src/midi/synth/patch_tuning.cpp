@@ -505,7 +505,9 @@ void apply_ks(NativeSynthPatch& p, const Fields& f) {
   F(ks.decay_s);
   F(ks.decay_stretch);
   F(ks.pick_position);
+  F(ks.pick_position_per_octave);
   F(ks.exc_brightness);
+  F(ks.exc_brightness_per_octave);
   F(ks.vel_to_brightness);
   F(ks.release_damp_s);
   F(ks.mute_harmonic);
@@ -536,7 +538,9 @@ void apply_plucked_string(NativeSynthPatch& p, const Fields& f) {
   F(plucked_string.decay_s);
   F(plucked_string.decay_stretch);
   F(plucked_string.pick_position);
+  F(plucked_string.pick_position_per_octave);
   F(plucked_string.exc_brightness);
+  F(plucked_string.exc_brightness_per_octave);
   F(plucked_string.vel_to_brightness);
   F(plucked_string.release_damp_s);
   F(plucked_string.hf_decay_s);
@@ -1035,7 +1039,9 @@ constexpr UnitRow kEngineUnits[] = {
     {"ks.decay_s", Unit::Seconds},
     {"ks.decay_stretch", Unit::None},
     {"ks.pick_position", Unit::None},
+    {"ks.pick_position_per_octave", Unit::None},
     {"ks.exc_brightness", Unit::None},
+    {"ks.exc_brightness_per_octave", Unit::None},
     {"ks.vel_to_brightness", Unit::None},
     {"ks.release_damp_s", Unit::Seconds},
     {"ks.mute_harmonic", Unit::None},
@@ -1063,7 +1069,9 @@ constexpr UnitRow kEngineUnits[] = {
     {"plucked_string.decay_s", Unit::Seconds},
     {"plucked_string.decay_stretch", Unit::None},
     {"plucked_string.pick_position", Unit::None},
+    {"plucked_string.pick_position_per_octave", Unit::None},
     {"plucked_string.exc_brightness", Unit::None},
+    {"plucked_string.exc_brightness_per_octave", Unit::None},
     {"plucked_string.vel_to_brightness", Unit::None},
     {"plucked_string.release_damp_s", Unit::Seconds},
     {"plucked_string.hf_decay_s", Unit::Seconds},
@@ -1502,8 +1510,9 @@ const GateRow kEngineGates[] = {
     {"modal.vel_to_brightness", [](const GateSite&) { return equals("malletMs", 0); }},
     {"modal.mallet_vel_exp", [](const GateSite&) { return above("malletMs", 0); }},
     {"modal.contact_ms", [](const GateSite&) { return above("contact", 0); }},
-    // Karplus-Strong: the hand damps only the halo bank, and the air mode belongs to the
-    // guitar body the wrapper selects.
+    // Karplus-Strong: the pick key track scales a pick position that has to be there, the hand
+    // damps only the halo bank, and the air mode belongs to the guitar body the wrapper selects.
+    {"ks.pick_position_per_octave", [](const GateSite&) { return above("pickPosition", 0); }},
     {"ks.halo_damp_s", [](const GateSite&) { return is("sympathetic", true); }},
     {"ks.body_air_hz",
      [](const GateSite&) { return wrapper_is("body", "guitar") & wrapper_above("bodyMix", 0); }},
@@ -1511,8 +1520,11 @@ const GateRow kEngineGates[] = {
      [](const GateSite&) { return wrapper_is("body", "guitar") & wrapper_above("bodyMix", 0); }},
     {"ks.body_knock",
      [](const GateSite&) { return wrapper_is("body", "guitar") & wrapper_above("bodyMix", 0); }},
-    // Plucked string: the mid anchor is a second pole of the quoted loss solve.
+    // Plucked string: the mid anchor is a second pole of the quoted loss solve, and the pick key
+    // track scales a pick position that has to be there.
     {"plucked_string.mid_decay_s", [](const GateSite&) { return above("hfDecayS", 0); }},
+    {"plucked_string.pick_position_per_octave",
+     [](const GateSite&) { return above("pickPosition", 0); }},
     // Free reed: the flat tongue joins only a detuned musette.
     {"free_reed.musette_flat", [](const GateSite&) { return above("detune", 0); }},
     {"free_reed.musette_partner_level", [](const GateSite&) { return above("detune", 0); }},

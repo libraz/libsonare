@@ -692,8 +692,11 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // compass.
   o.harp.ks.decay_s = 3.6f;
   o.harp.ks.decay_stretch = 0.07f;
-  // h2 and h4 sit 43 dB under h1 from D#4 up: the pluck lands just off the string's midpoint.
-  o.harp.ks.pick_position = 0.47f;
+  // The recordings notch h5 at C3 and D#3 (a pluck at a fifth of the string) and h2/h4 from D#4
+  // up (the midpoint): the finger stays near one height as the strings shorten, reaching the
+  // midpoint by F3.
+  o.harp.ks.pick_position = 0.156f;
+  o.harp.ks.pick_position_per_octave = 2.64f;
   o.harp.ks.vel_to_brightness = 0.26385f;
   o.harp.ks.release_damp_s = 0.407461f;
   // A harp's many open strings ring in sympathy (keep the halo), but the strings
@@ -710,10 +713,12 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.harp.body_mix = 0.3f;  // large open soundboard, less boxy than the guitar
   o.harp.amp_env.attack_ms = 2.0517f;
   o.harp.amp_env.release_ms = 150.0f;
-  // The recordings hold nothing above 2.5-5 kHz once the pluck is over, and their 4-8 kHz
-  // share of the first 120 ms sits at -72 dB at C3.
-  o.harp.cutoff_hz = 4500.0f;
-  o.harp.ks.exc_brightness = 0.08f;
+  // The recordings' 4-8 kHz share of the first 120 ms rises 34 dB from C3 (-72 dB) to C5
+  // (-38 dB), so both the pluck's corner and the voice filter rise with the note.
+  o.harp.cutoff_hz = 2000.0f;
+  o.harp.key_track = 1.0f;
+  o.harp.ks.exc_brightness = 0.0f;
+  o.harp.ks.exc_brightness_per_octave = 0.3f;
   o.harp.resonance_q = 0.627799f;
   // Kept from the earlier library reference's v32-v127 level range; the module's recordings
   // hold one velocity per note, so nothing here re-measures it.

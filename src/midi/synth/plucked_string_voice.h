@@ -69,8 +69,16 @@ struct PluckedStringPatchParams {
   /// Plucking point as a fraction of the string period in [0, 0.5]; the
   /// excitation comb notches harmonics with a node there (0 = no comb).
   float pick_position = 0.2f;
+  /// Octaves the pick position rises per octave of fundamental, quoted at A2 and capped at the
+  /// string's midpoint, in [0, 4]: 1 holds the finger at a fixed distance from the string's end
+  /// as the strings shorten. 0 = the same fraction at every note (render bit-identical).
+  float pick_position_per_octave = 0.0f;
   /// Excitation lowpass openness at full velocity in [0,1].
   float exc_brightness = 0.85f;
+  /// Octaves the excitation lowpass corner rises per octave of fundamental, quoted at A2, in
+  /// [0, 4]: 1 holds the corner at a fixed harmonic of the note. 0 = the corner stays in Hz
+  /// at every note (render bit-identical).
+  float exc_brightness_per_octave = 0.0f;
   /// Velocity -> excitation brightness amount in [0,1].
   float vel_to_brightness = 0.6f;
   /// Damped t60 in seconds applied at note-off (finger/palm mute).
