@@ -514,6 +514,8 @@ void apply_ks(NativeSynthPatch& p, const Fields& f) {
   F(ks.body_coupling);
   F(ks.pluck_style);
   F(ks.nail);
+  I_TYPED(ks.sympathetic, 0, 1);
+  F(ks.halo_damp_s);
   F(ks.pickup_pos);
   F(ks.dispersion);
   F(ks.tension_mod);
@@ -521,6 +523,9 @@ void apply_ks(NativeSynthPatch& p, const Fields& f) {
   F(ks.harmonic_node);
   F(ks.keyoff_noise);
   F(ks.pick_noise);
+  F(ks.body_air_hz);
+  F(ks.body_air_t60_s);
+  F(ks.body_knock);
   F(ks.hf_decay_s);
   F(ks.mid_decay_s);
   F(ks.velocity_exponent);
@@ -1039,6 +1044,8 @@ constexpr UnitRow kEngineUnits[] = {
     {"ks.body_coupling", Unit::None},
     {"ks.pluck_style", Unit::None},
     {"ks.nail", Unit::None},
+    {"ks.sympathetic", Unit::None},
+    {"ks.halo_damp_s", Unit::Seconds},
     {"ks.pickup_pos", Unit::None},
     {"ks.dispersion", Unit::None},
     {"ks.tension_mod", Unit::None},
@@ -1046,6 +1053,9 @@ constexpr UnitRow kEngineUnits[] = {
     {"ks.harmonic_node", Unit::None},
     {"ks.keyoff_noise", Unit::None},
     {"ks.pick_noise", Unit::None},
+    {"ks.body_air_hz", Unit::Hz},
+    {"ks.body_air_t60_s", Unit::Seconds},
+    {"ks.body_knock", Unit::Ratio},
     {"ks.hf_decay_s", Unit::Seconds},
     {"ks.mid_decay_s", Unit::Seconds},
     {"ks.velocity_exponent", Unit::None},
@@ -1492,6 +1502,15 @@ const GateRow kEngineGates[] = {
     {"modal.vel_to_brightness", [](const GateSite&) { return equals("malletMs", 0); }},
     {"modal.mallet_vel_exp", [](const GateSite&) { return above("malletMs", 0); }},
     {"modal.contact_ms", [](const GateSite&) { return above("contact", 0); }},
+    // Karplus-Strong: the hand damps only the halo bank, and the air mode belongs to the
+    // guitar body the wrapper selects.
+    {"ks.halo_damp_s", [](const GateSite&) { return is("sympathetic", true); }},
+    {"ks.body_air_hz",
+     [](const GateSite&) { return wrapper_is("body", "guitar") & wrapper_above("bodyMix", 0); }},
+    {"ks.body_air_t60_s",
+     [](const GateSite&) { return wrapper_is("body", "guitar") & wrapper_above("bodyMix", 0); }},
+    {"ks.body_knock",
+     [](const GateSite&) { return wrapper_is("body", "guitar") & wrapper_above("bodyMix", 0); }},
     // Plucked string: the mid anchor is a second pole of the quoted loss solve.
     {"plucked_string.mid_decay_s", [](const GateSite&) { return above("hfDecayS", 0); }},
     // Free reed: the flat tongue joins only a detuned musette.

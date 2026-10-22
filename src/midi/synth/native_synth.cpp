@@ -885,6 +885,14 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
     part_halo_[ch].prepare_guitar_sympathetic(sample_rate_);
     part_halo_armed_[ch] = true;
   }
+  // A bank outlives any one patch, so every halo note restates how a hand damps it.
+  if (patch->mode == SynthEngineMode::kKarplusStrong && patch->ks.sympathetic) {
+    if (part_fx_.enabled()) {
+      part_halo_[ch].set_hand_damping(patch->ks.halo_damp_s);
+    } else {
+      guitar_halo_.set_hand_damping(patch->ks.halo_damp_s);
+    }
+  }
   // A body or halo armed by this note rings past it, which the heard-patch tail counts.
   if (config_.use_gm_programs && bus_tails_before != bus_tails()) raise_tail();
   channels_[ch].last_freq_hz = voice->base_freq_hz;
@@ -1878,6 +1886,16 @@ void NativeSynth::process_impl(float* const* channels,
       }
     }
   }
+  // A held halo key keeps the hand off its part's open strings, and any part's off the shared bank.
+  std::array<bool, 16> halo_held{};
+  bool any_halo_held = false;
+  for (const NativeSynthVoice& v : pool_) {
+    if (v.active && !v.releasing && v.patch != nullptr &&
+        v.patch->mode == SynthEngineMode::kKarplusStrong && v.patch->ks.sympathetic) {
+      halo_held[static_cast<size_t>(v.channel & 0x0Fu)] = true;
+      any_halo_held = true;
+    }
+  }
 
   // Swell boxes are per organ part. A GM organ may share the host with another
   // engine, and each part's CC11 must affect only the pipe leg it owns.
@@ -2220,7 +2238,8 @@ void NativeSynth::process_impl(float* const* channels,
           const float guitar_raw_l = chunk_part_guitar_l_[part][static_cast<size_t>(c)];
           const float guitar_raw_r = chunk_part_guitar_r_[part][static_cast<size_t>(c)];
           const float halo = part_halo_[part].process(0.5f * (guitar_raw_l + guitar_raw_r),
-                                                      channels_[part].sustain);
+                                                      channels_[part].sustain,
+                                                      halo_held[part] || channels_[part].sustain);
           chunk_part_guitar_l_[part][static_cast<size_t>(c)] = halo;
           chunk_part_guitar_r_[part][static_cast<size_t>(c)] = halo;
           if (bussed_part) {
@@ -2428,7 +2447,8 @@ void NativeSynth::process_impl(float* const* channels,
         // eligible voice has ever sounded, so every existing KS voicing with no
         // halo renders bit-identically.
         const float dry_mono = 0.5f * (guitar_raw_l + guitar_raw_r);
-        const float symp = config_.gain * guitar_halo_.process(dry_mono, damper_open);
+        const float symp = config_.gain * guitar_halo_.process(dry_mono, damper_open,
+                                                               any_halo_held || damper_open);
         guitar_res_l = symp;
         guitar_res_r = symp;
         mix_l += symp;

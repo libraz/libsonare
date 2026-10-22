@@ -6,6 +6,7 @@
 
 #include "midi/synth/ks_voice.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <complex>
@@ -17,11 +18,13 @@
 #include "midi/midi_event.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/pitch.h"
 #include "midi/synth/synth_presets.h"
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
 #include "support/midi_render.h"
+#include "util/constants.h"
 
 namespace {
 
@@ -1032,4 +1035,197 @@ TEST_CASE("a harder bass velocity never sounds softer than a softer one across s
       CHECK(hard_lo > soft_hi);
     }
   }
+}
+
+namespace {
+
+using sonare::midi::synth::BodyType;
+
+/// Left channel of @p patch at @p rate: E4 at velocity 110 from t = 0, released at @p off_s
+/// (never when negative), with the sustain pedal held throughout when @p pedal.
+std::vector<float> render_at_rate(const NativeSynthPatch& patch, double rate, double total_s,
+                                  double off_s, bool pedal = false) {
+  NativeSynthConfig cfg;
+  cfg.patch = patch;
+  NativeSynth synth(cfg);
+  synth.prepare(rate, 256);
+  if (pedal) synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 64, 127)));
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 64, 110)));
+  const int total = static_cast<int>(std::lround(total_s * rate));
+  if (off_s < 0.0) return render_left(synth, total);
+  const int off = static_cast<int>(std::lround(off_s * rate));
+  std::vector<float> out = render_left(synth, off);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 64, 0)));
+  const std::vector<float> tail = render_left(synth, total - off);
+  out.insert(out.end(), tail.begin(), tail.end());
+  return out;
+}
+
+std::vector<float> difference(const std::vector<float>& a, const std::vector<float>& b) {
+  std::vector<float> d(a.size());
+  for (size_t i = 0; i < a.size(); ++i) d[i] = a[i] - b[i];
+  return d;
+}
+
+/// Least-squares line through the windowed RMS level (dB) of @p x over [from_s, to_s), windows
+/// of @p window samples: returns {slope in dB/s, level in dB at t = 0}.
+std::pair<double, double> level_line(const std::vector<float>& x, double rate, double from_s,
+                                     double to_s, size_t window) {
+  double st = 0.0, sl = 0.0, stt = 0.0, stl = 0.0;
+  int n = 0;
+  for (size_t start = static_cast<size_t>(from_s * rate);
+       start + window <= static_cast<size_t>(to_s * rate) && start + window <= x.size();
+       start += window) {
+    const double t = (static_cast<double>(start) + 0.5 * static_cast<double>(window)) / rate;
+    const double level =
+        20.0 * std::log10(std::max(1.0e-30, static_cast<double>(rms(x, start, start + window))));
+    st += t;
+    sl += level;
+    stt += t * t;
+    stl += t * level;
+    ++n;
+  }
+  const double slope = (n * stl - st * sl) / (n * stt - st * st);
+  return {slope, (sl - slope * st) / n};
+}
+
+/// Frequency of a single decaying sinusoid from its upward zero crossings over [from_s, to_s).
+double crossing_frequency(const std::vector<float>& x, double rate, double from_s, double to_s) {
+  double first = -1.0, last = -1.0;
+  int cycles = 0;
+  for (size_t i = static_cast<size_t>(from_s * rate) + 1;
+       i < static_cast<size_t>(to_s * rate) && i < x.size(); ++i) {
+    if (x[i - 1] < 0.0f && x[i] >= 0.0f) {
+      const double t = static_cast<double>(i - 1) + x[i - 1] / (x[i - 1] - x[i]);
+      if (first < 0.0) {
+        first = t;
+      } else {
+        last = t;
+        ++cycles;
+      }
+    }
+  }
+  return cycles > 0 ? cycles * rate / (last - first) : 0.0;
+}
+
+/// Amplitude of @p x at @p hz over a whole number of its periods starting at @p from_s.
+double amplitude_at(const std::vector<float>& x, double rate, double hz, double from_s,
+                    int periods) {
+  const size_t begin = static_cast<size_t>(from_s * rate);
+  const size_t n = static_cast<size_t>(std::lround(periods * rate / hz));
+  std::complex<double> acc = 0.0;
+  for (size_t i = 0; i < n; ++i) {
+    acc += static_cast<double>(x[begin + i]) *
+           std::polar(1.0, -sonare::constants::kTwoPiD * hz * static_cast<double>(i) / rate);
+  }
+  return 2.0 * std::abs(acc) / static_cast<double>(n);
+}
+
+/// A halo patch whose dry string is gone within tens of milliseconds of its note-off, so what
+/// rings after it is the open-string bank alone.
+NativeSynthPatch halo_patch(float damp_s) {
+  NativeSynthPatch p = ks_base_patch();
+  p.ks.sympathetic = true;
+  p.ks.release_damp_s = 0.01f;
+  p.amp_env.release_ms = 5.0f;
+  p.ks.halo_damp_s = damp_s;
+  return p;
+}
+
+}  // namespace
+
+TEST_CASE("halo hand damping sets the open strings' t60 after key-up at any rate",
+          "[midi][synth][ks]") {
+  constexpr double kOffS = 0.5;
+  constexpr float kDampS = 0.2f;
+  double damped_t60[2] = {};
+  int r = 0;
+  for (const double rate : {44100.0, 48000.0}) {
+    CAPTURE(rate);
+    NativeSynthPatch dry = halo_patch(0.0f);
+    dry.ks.sympathetic = false;
+    const std::vector<float> dry_out = render_at_rate(dry, rate, 1.2, kOffS);
+    const std::vector<float> open =
+        difference(render_at_rate(halo_patch(0.0f), rate, 1.2, kOffS), dry_out);
+    const std::vector<float> damped =
+        difference(render_at_rate(halo_patch(kDampS), rate, 1.2, kOffS), dry_out);
+    const size_t window = static_cast<size_t>(0.01 * rate);
+    // The bank is undamped while the key is held, so the two halos agree to the note-off.
+    const size_t off = static_cast<size_t>(kOffS * rate);
+    REQUIRE(
+        std::equal(open.begin(), open.begin() + static_cast<std::ptrdiff_t>(off), damped.begin()));
+    const double open_t60 = -60.0 / level_line(open, rate, kOffS + 0.06, kOffS + 0.3, window).first;
+    damped_t60[r] = -60.0 / level_line(damped, rate, kOffS + 0.06, kOffS + 0.3, window).first;
+    CAPTURE(open_t60, damped_t60[r]);
+    CHECK(open_t60 > 1.0);
+    CHECK(std::fabs(damped_t60[r] / kDampS - 1.0) < 0.1);
+    ++r;
+  }
+  CHECK(std::fabs(damped_t60[0] / damped_t60[1] - 1.0) < 0.03);
+}
+
+TEST_CASE("halo hand damping leaves a pedal-held halo and an out-of-range value untouched",
+          "[midi][synth][ks]") {
+  const std::vector<float> open = render_at_rate(halo_patch(0.0f), kRate, 1.0, 0.4, true);
+  REQUIRE(render_at_rate(halo_patch(0.2f), kRate, 1.0, 0.4, true) == open);
+  // A damped t60 at or above the bank's own ring cannot lengthen it, so it is no damping.
+  const std::vector<float> released = render_at_rate(halo_patch(0.0f), kRate, 1.0, 0.4);
+  REQUIRE(render_at_rate(halo_patch(1.5f), kRate, 1.0, 0.4) == released);
+  REQUIRE(render_at_rate(halo_patch(0.2f), kRate, 1.0, 0.4) != released);
+}
+
+TEST_CASE("the pluck strikes the guitar body's air mode at the asked frequency, t60 and level",
+          "[midi][synth][ks]") {
+  constexpr float kAirHz = 112.5f;
+  constexpr float kAirT60S = 0.55f;
+  constexpr float kKnock = 0.5f;
+  NativeSynthPatch quiet = ks_base_patch();
+  quiet.body = BodyType::kGuitar;
+  quiet.body_mix = 0.1f;
+  quiet.ks.body_air_hz = kAirHz;
+  quiet.ks.body_air_t60_s = kAirT60S;
+  NativeSynthPatch knocked = quiet;
+  knocked.ks.body_knock = kKnock;
+  const double f0 = sonare::midi::synth::note_to_hz(static_cast<uint8_t>(64));
+  double hz[2] = {}, t60[2] = {}, re_f0_db[2] = {};
+  int r = 0;
+  for (const double rate : {44100.0, 48000.0}) {
+    CAPTURE(rate);
+    const std::vector<float> string_only = render_at_rate(quiet, rate, 1.0, -1.0);
+    const std::vector<float> line =
+        difference(render_at_rate(knocked, rate, 1.0, -1.0), string_only);
+    hz[r] = crossing_frequency(line, rate, 0.02, 0.6);
+    const auto [slope, onset_db] =
+        level_line(line, rate, 0.02, 0.6, static_cast<size_t>(std::lround(10.0 * rate / kAirHz)));
+    t60[r] = -60.0 / slope;
+    // The line's RMS read back to its peak at the strike, over the string's fundamental.
+    const double peak_db = onset_db + 20.0 * std::log10(std::sqrt(2.0));
+    re_f0_db[r] = peak_db - 20.0 * std::log10(amplitude_at(string_only, rate, f0, 0.01, 13));
+    CAPTURE(hz[r], t60[r], re_f0_db[r]);
+    CHECK(std::fabs(hz[r] / kAirHz - 1.0) < 0.005);
+    CHECK(std::fabs(t60[r] / kAirT60S - 1.0) < 0.05);
+    CHECK(std::fabs(re_f0_db[r] - 20.0 * std::log10(kKnock)) < 1.5);
+    ++r;
+  }
+  CHECK(std::fabs(hz[0] / hz[1] - 1.0) < 0.002);
+  CHECK(std::fabs(t60[0] / t60[1] - 1.0) < 0.02);
+  CHECK(std::fabs(re_f0_db[0] - re_f0_db[1]) < 0.5);
+}
+
+TEST_CASE("the guitar body's air-mode fields at their defaults are the bank's own mode",
+          "[midi][synth][ks]") {
+  NativeSynthPatch plain = ks_base_patch();
+  plain.body = BodyType::kGuitar;
+  plain.body_mix = 0.4f;
+  NativeSynthPatch spelled = plain;
+  spelled.ks.body_air_hz = 100.0f;
+  spelled.ks.body_air_t60_s = 0.12f;
+  const std::vector<float> reference = render_at_rate(plain, kRate, 0.5, 0.3);
+  REQUIRE(render_at_rate(spelled, kRate, 0.5, 0.3) == reference);
+  // A knock asked of a body that is not the guitar's has no air mode to strike.
+  NativeSynthPatch violin = plain;
+  violin.body = BodyType::kViolin;
+  NativeSynthPatch violin_knock = violin;
+  violin_knock.ks.body_knock = 1.0f;
+  REQUIRE(render_at_rate(violin_knock, kRate, 0.5, 0.3) == render_at_rate(violin, kRate, 0.5, 0.3));
 }

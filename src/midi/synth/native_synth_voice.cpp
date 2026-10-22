@@ -436,6 +436,11 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
 
   // Body/formant resonance + seeded stereo scatter (realism polish).
   start_body(p, sample_rate, base_freq_hz);
+  if (p.mode == SynthEngineMode::kKarplusStrong && p.ks.body_knock > 0.0f &&
+      p.body == BodyType::kGuitar && body.active()) {
+    // The pluck strikes the body's air mode, quoted against its own fundamental.
+    body.strike_air(p.ks.body_knock * ks.pluck_fundamental());
+  }
   pan_scatter = seq.bipolar_at(104);
   pan_spread_units = pan_scatter_units(p.stereo_spread, pan_scatter);
   // A keymap zone places its sample, which is a constant for the voice's life
@@ -866,9 +871,12 @@ void NativeSynthVoice::start_body(const NativeSynthPatch& p, double sample_rate,
                       p.bowed_string.corpus_scale, p.bowed_string.corpus_tilt_hz);
     return;
   }
+  // The air-mode overrides live in the ks section under the same rule as the corpus above.
+  const bool ks_air = p.mode == SynthEngineMode::kKarplusStrong;
   body.start(p.body, sample_rate, note_hz, p.body_mix,
              bowed_corpus ? p.bowed_string.corpus_scale : 1.0f,
-             bowed_corpus ? p.bowed_string.corpus_tilt_hz : 0.0f);
+             bowed_corpus ? p.bowed_string.corpus_tilt_hz : 0.0f, ks_air ? p.ks.body_air_hz : 0.0f,
+             ks_air ? p.ks.body_air_t60_s : 0.0f);
 }
 
 void NativeSynthVoice::refresh_live(const NativeSynthPatch& p, double sample_rate,

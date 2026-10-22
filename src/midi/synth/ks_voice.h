@@ -138,6 +138,10 @@ struct KsPatchParams {
   /// it — gated by the same sustain-pedal state as the piano board.
   /// Not carried in the per-voice core state.
   bool sympathetic = false;
+  /// Damped t60 in seconds of the open-string halo once every key on the part and the sustain
+  /// pedal are up: the fretting hand and palm stopping the open strings. 0, or a value at or
+  /// above the bank's own ring, leaves it undamped. Acts only on a @ref sympathetic patch.
+  float halo_damp_s = 0.0f;
   /// Magnetic-pickup position in [0, 0.5] (off-by-default; 0 = no pickup, render
   /// bit-identical — the electric-guitar model). A magnetic pickup senses the
   /// string at a fixed point, not the whole motion: it combs the output with a
@@ -189,6 +193,14 @@ struct KsPatchParams {
   /// to the OUTPUT at note-on rather than fed into the loop, so its fixed
   /// few-ms decay does not track @ref decay_s; scaled by velocity.
   float pick_noise = 0.0f;
+  /// Air-mode frequency in Hz of a guitar body (BodyType::kGuitar); 0 keeps the bank's 100 Hz.
+  float body_air_hz = 0.0f;
+  /// Air-mode t60 in seconds of a guitar body; 0 keeps the bank's 0.12 s.
+  float body_air_t60_s = 0.0f;
+  /// The pluck striking the guitar body's air mode, as the peak of the struck mode over the
+  /// pluck's own fundamental amplitude (linear; 0 = no strike, render bit-identical). A string
+  /// loop passes almost nothing below its fundamental, so the body's lowest mode is driven here.
+  float body_knock = 0.0f;
   /// T60 in seconds of the partial at the engine's fixed high-frequency quote
   /// (4 kHz); 0 keeps the pole the tone knob implies. Default is shorter than
   /// every reference (2.0-9.6 s), so a patch moves it only with its excitation.
@@ -231,6 +243,9 @@ class KsVoiceCore {
   void kill() noexcept;
   /// The factor the loops run at per host sample, settled at start(); 1 when none is short.
   int oversample() const noexcept { return decimator_.factor(); }
+  /// Amplitude of the injected pluck at the string's fundamental, settled at start(); 0 unless
+  /// the patch's @ref KsPatchParams::body_knock asks for it.
+  float pluck_fundamental() const noexcept { return pluck_fundamental_; }
 
  private:
   bool killed_ = true;
@@ -246,6 +261,10 @@ class KsVoiceCore {
   float burst_level_correction(double sr, float loop_period, float loop_gain,
                                float loop_pole) const noexcept;
   float render_internal(float pitch_ratio) noexcept;
+  // The burst's source sample @p k: seeded noise, crossfaded toward the pluck doublet.
+  float excitation_source(int k) const noexcept;
+  // The excitation injected at burst position @p pos, advancing the two poles @p lp1 / @p lp2.
+  float excitation_step(int pos, float& lp1, float& lp2) const noexcept;
   // Brings the oversampled loops back to the host rate; the identity at factor 1.
   LoopDecimator decimator_;
   /// The delay slab attach() handed over, and the span length each loop takes
@@ -292,6 +311,7 @@ class KsVoiceCore {
   // (narrow = nail/pick/bright, wide = fingertip/round).
   float pluck_style_ = 0.0f;
   int pluck_contact_ = 0;
+  float pluck_fundamental_ = 0.0f;
 
   // Magnetic pickup (electric). pickup_depth_ == 0 -> no pickup. pickup_fraction_
   // is the physical tap position; pickup_reference_delay_ is the effective loop

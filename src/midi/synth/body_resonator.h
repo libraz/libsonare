@@ -88,6 +88,7 @@ class BodyResonator {
     series_ = false;
     mix_ = std::clamp(mix, 0.0f, 1.0f);
     num_modes_ = 0;
+    strike_ = 0.0f;
     configure_tilt(sr, corpus_tilt_hz);
     if (mix_ <= 0.0f || count <= 0 || specs == nullptr) return;
     count = std::min(count, kMaxModes);
@@ -108,9 +109,10 @@ class BodyResonator {
   /// @p mix in [0,1] blends the resonated path over the dry voice.
   /// @p corpus_scale uniformly scales the mode bank's centre frequencies
   /// (kViolin only; identity at 1.0, its default). @p corpus_tilt_hz is the
-  /// dry-floor cutoff passed through to start_specs().
+  /// dry-floor cutoff passed through to start_specs(). @p air_hz and
+  /// @p air_t60_s replace kGuitar's air mode (mode 0); 0, their default, keeps the bank's.
   void start(BodyType type, double sample_rate, float note_hz, float mix, float corpus_scale = 1.0f,
-             float corpus_tilt_hz = 0.0f) noexcept {
+             float corpus_tilt_hz = 0.0f, float air_hz = 0.0f, float air_t60_s = 0.0f) noexcept {
     if (type == BodyType::kNone) {
       series_ = false;
       mix_ = std::clamp(mix, 0.0f, 1.0f);
@@ -123,7 +125,7 @@ class BodyResonator {
     int count = 0;
     switch (type) {
       case BodyType::kGuitar:
-        specs = {{{100.0f, 0.12f, 1.0f},
+        specs = {{{air_hz > 0.0f ? air_hz : 100.0f, air_t60_s > 0.0f ? air_t60_s : 0.12f, 1.0f},
                   {200.0f, 0.08f, 0.7f},
                   {400.0f, 0.06f, 0.5f},
                   {550.0f, 0.05f, 0.35f}}};
@@ -212,6 +214,15 @@ class BodyResonator {
 
   bool active() const noexcept { return num_modes_ > 0; }
 
+  /// Strikes the bank's first mode (kGuitar's air mode) so the mixed output gains a decaying
+  /// sine of peak @p amplitude at the mode's frequency and t60, starting in sine phase on the
+  /// next process() sample. A later set_mix() rescales what remains of it by new/old mix.
+  void strike_air(float amplitude) noexcept {
+    if (num_modes_ <= 0 || mix_ <= 0.0f || series_) return;
+    // The impulse response of y = a1 y1 + a2 y2 + d is d r^n sin((n+1)w) / sin(w).
+    strike_ += amplitude * modes_[0].sin_w / mix_;
+  }
+
   /// Rescales the body path of a running bank; a bank that is not running
   /// stays off (start the bank first).
   void set_mix(float mix) noexcept { mix_ = std::clamp(mix, 0.0f, 1.0f); }
@@ -246,6 +257,12 @@ class BodyResonator {
       mode.y1 = y;
       body += y;
     }
+    if (strike_ != 0.0f) {
+      // A pending strike joins mode 0's recursion on this sample.
+      modes_[0].y1 += strike_;
+      body += strike_;
+      strike_ = 0.0f;
+    }
     return floor_x + mix_ * body;
   }
 
@@ -258,6 +275,7 @@ class BodyResonator {
     x2_ = 0.0f;
     floor_y_ = 0.0f;
     num_modes_ = 0;
+    strike_ = 0.0f;
     for (rt::BiquadState& hp : hp_) hp.reset();
     series_ = false;
   }
@@ -489,12 +507,14 @@ class BodyResonator {
     float gain = 0.0f;
     float y1 = 0.0f;
     float y2 = 0.0f;
+    float sin_w = 0.0f;
   };
   static void configure_mode(Mode& mode, const Spec& spec, float sample_rate) noexcept {
     const float w = sonare::constants::kTwoPi * spec.freq_hz / sample_rate;
     const float r = std::exp(-6.907755279f / (sample_rate * spec.t60_s));
     mode.a1 = 2.0f * r * std::cos(w);
     mode.a2 = -r * r;
+    mode.sin_w = std::sin(w);
     // Bandpass form (zeros at z = +-1): phase-aligned with the dry path at
     // resonance, so the mix is a clean magnitude peak rather than a phasey
     // quadrature sum. Normalized to peak gain = weight.
@@ -508,6 +528,8 @@ class BodyResonator {
   float x2_ = 0.0f;
   int num_modes_ = 0;
   float mix_ = 0.0f;
+  // strike_air() amount waiting for the next process() sample.
+  float strike_ = 0.0f;
   // Dry-floor one-pole (corpus_tilt_hz): state and coefficient, inactive
   // unless configure_tilt() was given a positive cutoff.
   float floor_y_ = 0.0f;

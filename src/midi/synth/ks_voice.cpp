@@ -222,6 +222,22 @@ LoopBudget KsVoiceCore::configure(const KsPatchParams& params, double sr, uint8_
     pluck_contact_ = 0;
   }
 
+  // A body knock's reference: (2/N)|E(2pi/N)| of exactly what render_internal() injects.
+  pluck_fundamental_ = 0.0f;
+  if (params.body_knock > 0.0f) {
+    const double coeff = 2.0 * std::cos(constants::kTwoPiD / static_cast<double>(base_period));
+    double s1 = 0.0, s2 = 0.0;
+    float lp1 = 0.0f, lp2 = 0.0f;
+    for (int pos = 0; pos < exc_total_ + pick_delay_; ++pos) {
+      const double next = static_cast<double>(excitation_step(pos, lp1, lp2)) + coeff * s1 - s2;
+      s2 = s1;
+      s1 = next;
+    }
+    const double power = std::max(0.0, s1 * s1 + s2 * s2 - coeff * s1 * s2);
+    pluck_fundamental_ =
+        static_cast<float>(2.0 * std::sqrt(power) / static_cast<double>(base_period));
+  }
+
   // Magnetic pickup (electric). 0 disables it so the output stays bit-identical.
   // The pickup senses the string at a fixed point: a second, output-side comb
   // with a node at pickup_pos of the period, plus a mild field-gradient
@@ -413,6 +429,34 @@ float KsVoiceCore::burst_level_correction(double sr, float loop_period, float lo
   return actual > 1.0e-12 ? static_cast<float>(std::sqrt(expected / actual)) : 1.0f;
 }
 
+// The seeded noise burst, optionally crossfaded toward a deterministic pluck doublet;
+// pluck_style_ == 0 returns the raw noise so the path is bit-identical.
+float KsVoiceCore::excitation_source(int k) const noexcept {
+  const float nz = exc_noise_gain_ * noise_.bipolar_at(kNoiseIndexBase + static_cast<uint64_t>(k));
+  if (pluck_style_ <= 0.0f) return nz;
+  // Raised-cosine up/down lobe: the finger's release-velocity pulse. Zero-
+  // mean (the second half is negated), width pluck_contact_ (narrow = bright).
+  float pluck = 0.0f;
+  if (k < pluck_contact_) {
+    const float win = 0.5f * (1.0f - std::cos(kTwoPi * (static_cast<float>(k) + 1.0f) /
+                                              static_cast<float>(pluck_contact_ + 1)));
+    pluck = (k < pluck_contact_ / 2) ? win : -win;
+  }
+  return nz + pluck_style_ * (pluck - nz);
+}
+
+// Pick-position comb burst[n] - burst[n - pick_delay], whose delayed copy runs pick_delay
+// samples past the burst so the notches stay exact, then the two excitation poles.
+float KsVoiceCore::excitation_step(int pos, float& lp1, float& lp2) const noexcept {
+  float burst = pos < exc_total_ ? excitation_source(pos) : 0.0f;
+  if (pick_delay_ > 0 && pos >= pick_delay_) {
+    burst -= excitation_source(pos - pick_delay_);
+  }
+  lp1 += exc_alpha_ * (burst - lp1);
+  lp2 += exc_alpha_ * (lp1 - lp2);
+  return 0.7f * lp2;  // comb headroom
+}
+
 float KsVoiceCore::render(float pitch_ratio) noexcept {
   if (killed_) return 0.0f;
   return decimator_.run([&] { return render_internal(pitch_ratio); });
@@ -424,33 +468,8 @@ float KsVoiceCore::render_internal(float pitch_ratio) noexcept {
 
   float exc = 0.0f;
   if (exc_pos_ < exc_total_ + pick_delay_) {
-    // Excitation source: the seeded noise burst, optionally crossfaded toward a
-    // deterministic pluck doublet. pluck_style_ == 0 returns the raw noise so the
-    // path is bit-identical.
-    auto source_at = [this](int k) noexcept -> float {
-      const float nz =
-          exc_noise_gain_ * noise_.bipolar_at(kNoiseIndexBase + static_cast<uint64_t>(k));
-      if (pluck_style_ <= 0.0f) return nz;
-      // Raised-cosine up/down lobe: the finger's release-velocity pulse. Zero-
-      // mean (the second half is negated), width pluck_contact_ (narrow = bright).
-      float pluck = 0.0f;
-      if (k < pluck_contact_) {
-        const float win = 0.5f * (1.0f - std::cos(kTwoPi * (static_cast<float>(k) + 1.0f) /
-                                                  static_cast<float>(pluck_contact_ + 1)));
-        pluck = (k < pluck_contact_ / 2) ? win : -win;
-      }
-      return nz + pluck_style_ * (pluck - nz);
-    };
-    // Pick-position comb: burst[n] - burst[n - pick_delay]. The delayed copy
-    // runs pick_delay samples past the burst so the comb notches stay exact.
-    float burst = exc_pos_ < exc_total_ ? source_at(exc_pos_) : 0.0f;
-    if (pick_delay_ > 0 && exc_pos_ >= pick_delay_) {
-      burst -= source_at(exc_pos_ - pick_delay_);
-    }
+    exc = excitation_step(exc_pos_, exc_lp1_, exc_lp2_);
     ++exc_pos_;
-    exc_lp1_ += exc_alpha_ * (burst - exc_lp1_);
-    exc_lp2_ += exc_alpha_ * (exc_lp1_ - exc_lp2_);
-    exc = 0.7f * exc_lp2_;  // comb headroom
   }
 
   // pitch_ratio scales the frequency, so it divides the loop delay.

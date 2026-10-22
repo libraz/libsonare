@@ -1500,6 +1500,11 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.ks.harmonic_node, 0.0f), 0.0f, 8.0f);
   p.ks.keyoff_noise = patch_clamp_detail::sanitize(p.ks.keyoff_noise, 0.0f);
   p.ks.pick_noise = patch_clamp_detail::sanitize(p.ks.pick_noise, 0.0f);
+  p.ks.halo_damp_s = std::clamp(patch_clamp_detail::sanitize(p.ks.halo_damp_s, 0.0f), 0.0f, 10.0f);
+  p.ks.body_air_hz = std::clamp(patch_clamp_detail::sanitize(p.ks.body_air_hz, 0.0f), 0.0f, 400.0f);
+  p.ks.body_air_t60_s =
+      std::clamp(patch_clamp_detail::sanitize(p.ks.body_air_t60_s, 0.0f), 0.0f, 2.0f);
+  p.ks.body_knock = std::clamp(patch_clamp_detail::sanitize(p.ks.body_knock, 0.0f), 0.0f, 4.0f);
   p.ks.hf_decay_s = std::clamp(patch_clamp_detail::sanitize(p.ks.hf_decay_s, 0.07f), 0.0f, 60.0f);
   p.ks.mid_decay_s = std::clamp(patch_clamp_detail::sanitize(p.ks.mid_decay_s, 0.0f), 0.0f, 60.0f);
   p.ks.velocity_exponent =

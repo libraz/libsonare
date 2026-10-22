@@ -40,20 +40,26 @@ class PianoResonanceBank {
   /// clamped to kResonanceModes, the surplus zeroed) instead of the built-in
   /// piano register grid, with a @p ring_t60_s resonator decay and a @p out_gain
   /// coupling level. Used as a plucked-string sympathetic resonator (open
-  /// guitar/harp strings), gated by the same sustain-pedal state as the piano.
+  /// guitar/harp strings), gated by the same sustain-pedal state as the piano;
+  /// @p floor is the drive gate's level with the pedal up.
   void prepare_custom(double sample_rate, const float* freqs, int count, float ring_t60_s,
-                      float out_gain) noexcept;
+                      float out_gain, float floor) noexcept;
   /// prepare_custom() preset for the plucked-string "sound halo": the bank is
   /// tuned to the standard-tuning open guitar strings (E2 A2 D3 G3 B3 E4) plus
   /// their low harmonics, ringing ~1.5 s at a weak coupling. Shared by every
   /// host that voices a ks.sympathetic patch.
   void prepare_guitar_sympathetic(double sample_rate) noexcept;
+  /// Re-states the t60 in seconds the bank's stored ring falls at while no hand holds it
+  /// (process()'s @p hand_on false), leaving the state alone. 0, or a value at or above the
+  /// bank's own ring, leaves it undamped. Only meaningful after prepare_custom().
+  void set_hand_damping(float damp_t60_s) noexcept;
   /// Clears the resonator state and the damper gate.
   void reset() noexcept;
   /// Adds the sympathetic resonance for one input sample. @p damper_open
   /// (sustain pedal down) gates the excitation through a smoothed envelope;
-  /// returns the resonance to mix into the output.
-  float process(float bridge_in, bool damper_open) noexcept;
+  /// with @p hand_on false the stored ring also falls at the set_hand_damping() t60.
+  /// Returns the resonance to mix into the output.
+  float process(float bridge_in, bool damper_open, bool hand_on = true) noexcept;
 
  private:
   /// A grand's dampers stop partway up the treble, so the modes below
@@ -74,6 +80,13 @@ class PianoResonanceBank {
   float gate_close_coeff_ = 1.0f;
   float ringout_ = 1.0f;
   float out_gain_ = 0.0f;
+  /// Drive gate level with the dampers down.
+  float floor_ = 0.0f;
+  /// Per-sample state scale while no hand holds the strings; 1 skips it.
+  float hand_damp_ = 1.0f;
+  /// What set_hand_damping() is measured against: the modes' ring and the rate they run at.
+  float ring_t60_s_ = 0.0f;
+  float sample_rate_ = 0.0f;
 };
 
 /// Shared modal soundboard: a fixed bank of second-order resonators across

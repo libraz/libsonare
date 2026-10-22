@@ -699,8 +699,10 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 veloc
       // than driven by. After any prepare() above, which clears the network.
       fallback_board_[part].strike(voice->piano.case_strike());
       fallback_board_[part].strike_board(voice->piano.board_strike());
-    } else if (!body.prepared) {
-      fallback_halo_[part].prepare_guitar_sympathetic(sample_rate_);
+    } else {
+      if (!body.prepared) fallback_halo_[part].prepare_guitar_sympathetic(sample_rate_);
+      // The part's bank outlives any one patch, so every halo note restates its hand damping.
+      fallback_halo_[part].set_hand_damping(patch.ks.halo_damp_s);
     }
     body.prepared = true;
   }

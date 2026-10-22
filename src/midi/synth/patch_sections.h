@@ -81,6 +81,7 @@ constexpr KsPatchParams blank_ks() noexcept {
   z.pluck_style = 0.0f;
   z.nail = 0.0f;
   z.sympathetic = false;
+  z.halo_damp_s = 0.0f;
   z.pickup_pos = 0.0f;
   z.dispersion = 0.0f;
   z.tension_mod = 0.0f;
@@ -88,6 +89,9 @@ constexpr KsPatchParams blank_ks() noexcept {
   z.harmonic_node = 0.0f;
   z.keyoff_noise = 0.0f;
   z.pick_noise = 0.0f;
+  z.body_air_hz = 0.0f;
+  z.body_air_t60_s = 0.0f;
+  z.body_knock = 0.0f;
   z.hf_decay_s = 0.0f;
   z.mid_decay_s = 0.0f;
   z.velocity_exponent = 0.0f;

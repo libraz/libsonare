@@ -245,12 +245,15 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
     any_wind = any_wind || wind_active[part];
   }
   bool body_has_voice[16][kFallbackBodyKinds] = {};
+  // A halo voice whose key is still held keeps the hand off the part's open strings.
+  bool halo_held[16] = {};
   for (const NativeSynthVoice& v : fallback_pool_) {
     if (!v.active || v.patch == nullptr) continue;
     const uint8_t part = v.channel & 0x0Fu;
     FallbackBodyKind kind{};
     if (fallback_body_kind(*v.patch, &kind)) {
       body_has_voice[part][static_cast<size_t>(kind)] = true;
+      if (kind == FallbackBodyKind::kGuitarHalo && !v.releasing) halo_held[part] = true;
     }
   }
   // Body resonators keep ringing for a bounded tail after the last voice dies
@@ -520,8 +523,9 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
           } else {
             // Plucked-string halo: damped exactly like the piano's bank above,
             // by whichever channel on this part is holding the sustain pedal.
-            add = fallback_halo_[static_cast<size_t>(part)].process(
-                dry, channels_[static_cast<size_t>(part)].sustain);
+            const bool sustain = channels_[static_cast<size_t>(part)].sustain;
+            add = fallback_halo_[static_cast<size_t>(part)].process(dry, sustain,
+                                                                    halo_held[part] || sustain);
           }
           if (source_render) {
             float* staged = body_residual_.data() +

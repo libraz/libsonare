@@ -21,6 +21,10 @@ using sonare::constants::kTwoPi;
 /// faint ring, so pedal-up sustain is not a bare harmonic stack.
 SONARE_TUNABLE(kDuplexFloor, 0.3f);
 
+/// Gate floor of the plucked-string halo with the pedal up, held apart from the piano's so either
+/// can be fitted alone; the value it carried while the two were one constant.
+SONARE_TUNABLE(kHaloFloor, 0.3f);
+
 /// Permanently undamped treble: coupling level, where the dampers stop, and ring t60. Level 0
 /// removes the population (identity). Measured t60 is ~5 s (22.7 dB fall between the 0.5-1.5 s and
 /// 2.5-3.5 s windows on C8, 23.1 dB on C7). Stays 0: enabled, notes 88+ ring as fixed-pitch chimes.
@@ -212,10 +216,12 @@ void PianoResonanceBank::prepare(double sample_rate) noexcept {
   ringout_ = std::exp(-6.907755279f / (sr * 0.15f));
   // Weak sympathetic coupling (the played string still dominates).
   out_gain_ = std::max(0.0f, kSympCoupling);
+  floor_ = kDuplexFloor;
+  hand_damp_ = 1.0f;
 }
 
 void PianoResonanceBank::prepare_custom(double sample_rate, const float* freqs, int count,
-                                        float ring_t60_s, float out_gain) noexcept {
+                                        float ring_t60_s, float out_gain, float floor) noexcept {
   const float sr = sample_rate > 0.0
                        ? static_cast<float>(sample_rate)
                        : static_cast<float>(::sonare::constants::kDefaultDawSampleRate);
@@ -248,6 +254,22 @@ void PianoResonanceBank::prepare_custom(double sample_rate, const float* freqs, 
   gate_close_coeff_ = 1.0f - std::exp(-1.0f / (0.060f * sr));
   ringout_ = std::exp(-6.907755279f / (sr * 0.15f));
   out_gain_ = std::max(0.0f, out_gain);
+  floor_ = floor;
+  hand_damp_ = 1.0f;
+  ring_t60_s_ = t60;
+  sample_rate_ = sr;
+}
+
+// Scaling both state registers by c each sample moves every pole from r to c r exactly, so
+// c = exp(-ln(1000)/sr (1/T_d - 1/T_ring)) gives the damped t60 T_d at any rate.
+void PianoResonanceBank::set_hand_damping(float damp_t60_s) noexcept {
+  if (!(damp_t60_s > 0.0f) || !(damp_t60_s < ring_t60_s_) || !(sample_rate_ > 0.0f)) {
+    hand_damp_ = 1.0f;
+    return;
+  }
+  const double per_s =
+      1.0 / static_cast<double>(damp_t60_s) - 1.0 / static_cast<double>(ring_t60_s_);
+  hand_damp_ = static_cast<float>(std::exp(-constants::kLn1000D * per_s / sample_rate_));
 }
 
 void PianoResonanceBank::prepare_guitar_sympathetic(double sample_rate) noexcept {
@@ -259,7 +281,7 @@ void PianoResonanceBank::prepare_guitar_sympathetic(double sample_rate) noexcept
   for (int i = 0; i < 4; ++i) freqs[n++] = 3.0f * note_to_hz(kOpenStrings[i]);
   // Open guitar/harp strings ring for seconds; a ~1.5 s bank t60 keeps the
   // halo audible without a runaway tail, at a weak coupling level.
-  prepare_custom(sample_rate, freqs, n, /*ring_t60_s=*/1.5f, /*out_gain=*/0.05f);
+  prepare_custom(sample_rate, freqs, n, /*ring_t60_s=*/1.5f, /*out_gain=*/0.05f, kHaloFloor);
 }
 
 void PianoResonanceBank::reset() noexcept {
@@ -270,8 +292,8 @@ void PianoResonanceBank::reset() noexcept {
   gate_ = 0.0f;
 }
 
-float PianoResonanceBank::process(float bridge_in, bool damper_open) noexcept {
-  const float target = damper_open ? 1.0f : kDuplexFloor;
+float PianoResonanceBank::process(float bridge_in, bool damper_open, bool hand_on) noexcept {
+  const float target = damper_open ? 1.0f : floor_;
   gate_ += (damper_open ? gate_open_coeff_ : gate_close_coeff_) * (target - gate_);
   float sum = 0.0f;
   // The undamped treble takes the drive raw: no felt ever touches it, so
@@ -293,11 +315,18 @@ float PianoResonanceBank::process(float bridge_in, bool damper_open) noexcept {
   }
   // As the dampers fall back the pedal-lifted strings stop ringing quickly
   // (down to the duplex floor, whose faint ring stays).
-  if (!damper_open && gate_ < 0.5f && gate_ > 1.2f * kDuplexFloor) {
+  if (!damper_open && gate_ < 0.5f && gate_ > 1.2f * floor_) {
     for (int i = ungated_count_; i < kResonanceModes; ++i) {
       Mode& m = modes_[static_cast<size_t>(i)];
       m.y1 *= ringout_;
       m.y2 *= ringout_;
+    }
+  }
+  // No key and no pedal holding the strings: a hand stops what they still store.
+  if (!hand_on && hand_damp_ < 1.0f) {
+    for (Mode& m : modes_) {
+      m.y1 *= hand_damp_;
+      m.y2 *= hand_damp_;
     }
   }
   return out_gain_ * sum;
