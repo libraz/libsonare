@@ -352,6 +352,9 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.ukulele.ks.nail = 0.4f;
   o.ukulele.body_mix = 0.42f;
   o.ukulele.gain = o.nylon_guitar.gain * 0.9f;
+  // A small box is not the capital's air mode: inherited, the knock pushed body and double decay
+  // further from this capture's reference.
+  o.ukulele.ks.body_knock = 0.0f;
 
   // Nylon Gt.o (program 24 variation 16): the capital plus the key-off noise —
   // the fingers coming off the string and the fret buzz that follows. Roland's

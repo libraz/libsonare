@@ -7,6 +7,7 @@
 
 #include "midi/synth/sf2_player.h"
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -20,6 +21,7 @@
 #include "midi/control_value.h"
 #include "midi/midi_event.h"
 #include "midi/synth/envelope.h"
+#include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_layer.h"
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/sf2_voice.h"
@@ -1076,6 +1078,34 @@ TEST_CASE("Sf2Player keeps a ringing note on the body it was struck through", "[
     CAPTURE(same_part, other_part, delta_db);
     CHECK(std::abs(delta_db) < 0.1);
   }
+}
+
+TEST_CASE("Sf2Player lets the hand damp a released harp's open-string halo", "[midi][sf2][body]") {
+  // Undamped, the part's bank holds the released note's tail up at a t60 of about 1.3 s; damped
+  // at key-up it falls under the dry string's own release, about 0.19 s here.
+  REQUIRE(sonare::midi::synth::gm_fallback_patch(0, 46).ks.halo_damp_s > 0.0f);
+  REQUIRE(sonare::midi::synth::gm_fallback_patch(0, 46).ks.halo_damp_s < 1.5f);
+  const double damp_s = sonare::midi::synth::gm_fallback_patch(0, 46).ks.halo_damp_s;
+  Sf2Player p = make_fallback_player();
+  p.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 46)));
+  p.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 91, 0)));
+  p.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 93, 0)));
+  p.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 64, 110)));
+  render(p, static_cast<int>(0.5 * kOutRate));
+  p.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 64, 0)));
+  const StereoRender tail = render(p, static_cast<int>(0.6 * kOutRate));
+  const size_t window = static_cast<size_t>(0.01 * kOutRate);
+  const auto level_db = [&](double at_s) {
+    const size_t from = static_cast<size_t>(at_s * kOutRate);
+    double acc = 0.0;
+    for (size_t i = from; i < from + window; ++i) {
+      acc += static_cast<double>(tail.left[i]) * tail.left[i];
+    }
+    return 10.0 * std::log10(std::max(1.0e-30, acc / static_cast<double>(window)));
+  };
+  const double t60 = -60.0 * 0.1 / (level_db(0.35) - level_db(0.25));
+  CAPTURE(damp_s, t60);
+  CHECK(t60 < 0.5);
 }
 
 namespace {

@@ -392,6 +392,10 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.steel_guitar = steel;
   o.steel_guitar.amp_env.attack_ms = 2.99715f;
   o.steel_guitar.amp_env.release_ms = 408.442f;
+  // Knock 0.56 took body-under-the-note p90 from 71.5 to 39.3 dB on this capture's gate; past
+  // ~0.6 the register profile p90 leaves its bound. The halo stays undamped: damping made 12
+  // damper rows measurable against a bound recorded from 5.
+  o.steel_guitar.ks.body_knock = 0.56f;
 
   // Harmonics (GM 31): a finger resting at the twelfth fret, which is the node
   // at half the string. The touch is the whole of it — the loop halves and the
@@ -438,6 +442,10 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // Solved against the reference's own level range, v32 to v127, which the
   // engine default of 1.19 left 3.59 dB wide.
   o.nylon_guitar.ks.velocity_exponent = 0.89f;
+  // Knock 1.0 on the body's own 100 Hz air mode took body-under-the-note from -24.6 to -6.6 dB
+  // (median); retuning the mode to the reference's 112.5 Hz line, or damping the halo at 0.2-0.8 s,
+  // moved brightness p90 or damper release out of bounds.
+  o.nylon_guitar.ks.body_knock = 1.0f;
 
   // Electric (jazz/clean) — the `electric-guitar` preset: bright sustaining
   // loop, near-bridge pick, a pickup-ish lowpass instead of the open string.
@@ -687,6 +695,12 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // Solved against the reference's own level range, v32 to v127, which the
   // engine default of 1.19 left 3.69 dB narrow.
   o.harp.ks.velocity_exponent = 1.50f;
+  // Not harp physics, which has no damper: 0.1 s stands in for the GM patch's release fade and
+  // took damper release from +30 to +20 ms. The 0.6 s air mode struck at 0.18 took body-under-the-
+  // note from -28.0 to -0.7 dB (median).
+  o.harp.ks.halo_damp_s = 0.1f;
+  o.harp.ks.body_air_t60_s = 0.6f;
+  o.harp.ks.body_knock = 0.18f;
 
   // Sitar (GM 104): a plucked string over the curved jawari bridge — the
   // grazing bridge contact keeps spraying energy into the upper partials, so

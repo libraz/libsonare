@@ -3,11 +3,11 @@
   "timbre": "t0",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-22T01:12:14+00:00",
-  "recorded_utc": "2026-10-22T01:24:03+00:00",
+  "recorded_utc": "2026-10-22T02:47:34+00:00",
   "model_build": {
-    "built_utc": "2026-10-21T10:18:24Z",
-    "newest_source_utc": "2026-10-21T10:20:44Z",
-    "stale": true
+    "built_utc": "2026-10-22T02:42:55Z",
+    "newest_source_utc": "2026-10-22T02:41:43Z",
+    "stale": false
   },
   "reference_spread": {},
   "bounds": {
@@ -94,9 +94,9 @@
     "body": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 41.794,
-      "abs_median": 41.794,
-      "p90": 80.683,
+      "median": 38.656,
+      "abs_median": 38.656,
+      "p90": 77.386,
       "rows": 4
     }
   }

@@ -232,6 +232,8 @@ bool bow_is_section(const NativeSynthPatch& patch) noexcept {
   return patch.bowed_string.section_spread_cents > 0.0f;
 }
 
+bool ks_knocks(const NativeSynthPatch& patch) noexcept { return patch.ks.body_knock > 0.0f; }
+
 /// A patch field that gates a code path inside an engine. One representative per
 /// engine covers whichever side its lowest program happens to sit on, so an
 /// engine listed here takes one more row per selector -- `reed.closing_pressure` chooses the
@@ -252,6 +254,7 @@ const PathSelector kPathSelectors[] = {
     {SynthEngineMode::kFlute, "overshoot", &flute_overshoots},
     {SynthEngineMode::kBowedString, "hyperbolic", &bow_is_hyperbolic},
     {SynthEngineMode::kBowedString, "section", &bow_is_section},
+    {SynthEngineMode::kKarplusStrong, "knock", &ks_knocks},
 };
 
 struct EngineRow {
