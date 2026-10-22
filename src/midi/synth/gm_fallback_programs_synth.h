@@ -571,17 +571,23 @@ SONARE_TUNED_CONSTEXPR void configure_synth_bass_and_brass_programs(ProgramOverr
   // family's 4 c LFO read as 16 dB of sideband noise against it.
   o.synth_brass_1.lfo_to_pitch_cents = 0.0f;
 
-  // Synth Brass 2 (GM 63): darker in the harmonics (h3 sits 8 to 12 dB under
-  // brass 1's), narrower (width 0.23 to 0.51) and slower to let go (120 to 170
-  // ms), with the feedback operator carrying its high shelf.
+  // Synth Brass 2 (GM 63): two FM pairs, the second 20.4 c flat like the reference's layer.
   o.synth_brass_2 = fam[7];
-  o.synth_brass_2.fm.ops[2].feedback = 1.88854f;
-  o.synth_brass_2.fm.ops[1].level = 1.16718f;
-  o.synth_brass_2.fm.ops[2].level = 1.16718f;
+  o.synth_brass_2.fm.algorithm = FmAlgorithm::kPair2x2;
+  o.synth_brass_2.fm.ops[1].feedback = 1.926f;
+  o.synth_brass_2.fm.ops[1].level = 1.634f;
   o.synth_brass_2.fm.ops[1].vel_to_level = 0.944272f;
-  o.synth_brass_2.fm.ops[2].vel_to_level = 0.0557281f;
   o.synth_brass_2.fm.ops[1].env.decay_ms = 1547.3f;
-  o.synth_brass_2.cutoff_hz = 1078.64f;
+  o.synth_brass_2.fm.ops[2] = o.synth_brass_2.fm.ops[0];
+  o.synth_brass_2.fm.ops[2].level = 0.214f;
+  o.synth_brass_2.fm.ops[2].detune_cents = -20.4f;
+  o.synth_brass_2.fm.ops[3] = o.synth_brass_2.fm.ops[1];
+  o.synth_brass_2.fm.ops[3].level = 3.97f;
+  o.synth_brass_2.fm.ops[3].vel_to_level = 0.0f;
+  o.synth_brass_2.fm.ops[3].feedback = 0.0f;
+  o.synth_brass_2.fm.ops[3].detune_cents = -20.4f;
+  o.synth_brass_2.cutoff_hz = 1229.0f;
+  o.synth_brass_2.gain = 0.98f;
   o.synth_brass_2.amp_env = fallback_env(40.0f, 200.0f, 0.85f, 150.0f);
   o.synth_brass_2.stereo_spread = 0.3f;
   o.synth_brass_2.amp_env.decay_ms = 66.73f;

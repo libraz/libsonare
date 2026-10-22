@@ -179,10 +179,10 @@ TEST_CASE("the feedback operator enriches the brass spectrum", "[midi][synth][fm
   // Synth Brass 2, the FM brass patch whose fit kept the feedback operator.
   const NativeSynthPatch& brass = gm_fallback_patch(0, 63);
   REQUIRE(brass.mode == SynthEngineMode::kFm);
-  REQUIRE(brass.fm.ops[2].feedback > 0.0f);
+  REQUIRE(brass.fm.ops[1].feedback > 0.0f);
 
   NativeSynthPatch no_feedback = brass;
-  no_feedback.fm.ops[2].feedback = 0.0f;
+  no_feedback.fm.ops[1].feedback = 0.0f;
 
   const std::vector<float> with_fb = render_patch(brass, 57, 127, 24000);
   const std::vector<float> without_fb = render_patch(no_feedback, 57, 127, 24000);
