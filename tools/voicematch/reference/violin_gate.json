@@ -2,30 +2,31 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm041",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-22T10:55:42+00:00",
-  "recorded_utc": "2026-10-22T14:27:12+00:00",
+  "reference_measured_utc": "2026-10-22T16:02:52+00:00",
+  "recorded_utc": "2026-10-22T16:08:33+00:00",
   "model_build": {
-    "built_utc": "2026-10-22T14:25:39Z",
-    "newest_source_utc": "2026-10-22T14:25:22Z",
+    "built_utc": "2026-10-22T15:28:03Z",
+    "newest_source_utc": "2026-10-22T15:27:19Z",
     "stale": false
   },
   "reference_spread": {},
   "_vibrato_depth": "stretch.p90 and balance.median were deleted 2026-10-22 and re-recorded when the LFO took the reference's vibrato: a triangle of 22 c peak at 5.42 Hz, whose fundamental is the reference's 35.7 c peak to peak, its third harmonic at -20 dB in a triangle's phase. Both lines read the vibrato as well as the voice: f0 is the strongest spectral line within 80 c and the partials are peak heights, so a deeper FM moves which Bessel line wins and lowers the upper partials' peaks. The model rendered with no vibrato and time-warped by a pure LFO, the engine held fixed, moves tuning p90 4.25 -> 9.92 c and the stack median -0.85 -> -1.41 dB from the former LFO (14.7 c at 5.3 Hz) to this one; the engine read 5.12 -> 10.42 c and -0.82 -> -1.52 dB. On the reference alone the peak-picked f0 sits 8.5 c (p90) from the mean of its own demodulated pitch track, over the 6.06 the bound held.",
+  "_vibrato_reading": "stretch.p90 (was 13.031), tnr.median (was 4.45), tnr.p90 (was 9.188) deleted 2026-10-23 and re-recorded when the measurement moved on both sides at once: under a vibrato the tuning is the fundamental's mean pitch, demodulated under its own FM extent, rather than the strongest spectral line within 80 c; a partial's level is its power summed over that FM extent rather than its peak bin; and a vibrato whose rate wanders, or whose line shares the pitch track with fast FM, now widens the tone-to-noise mask and is read at the band's RMS depth over its rate span. The reference was re-measured and the model is read with the same ruler, so these bounds were recorded under a ruler that no longer exists. A still tone reads as it did.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
       "median": 1.853,
       "abs_median": 2.072,
-      "p90": 13.031,
+      "p90": 17.137,
       "rows": 35
     },
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 4.45,
+      "median": 6.2,
       "abs_median": 5.625,
-      "p90": 9.188,
+      "p90": 12.658,
       "rows": 35
     },
     "damper": {
@@ -55,9 +56,9 @@
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 1.902,
-      "abs_median": 2.78,
-      "p90": 6.939,
+      "median": 0.5,
+      "abs_median": 2.038,
+      "p90": 4.677,
       "rows": 35
     },
     "centroid_pct": {

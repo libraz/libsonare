@@ -3,22 +3,23 @@
   "timbre": "gm051",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-22T01:14:20+00:00",
-  "recorded_utc": "2026-10-22T01:25:17+00:00",
+  "recorded_utc": "2026-10-22T16:08:24+00:00",
   "model_build": {
-    "built_utc": "2026-10-21T10:18:24Z",
-    "newest_source_utc": "2026-10-21T10:20:44Z",
-    "stale": true
+    "built_utc": "2026-10-22T15:28:03Z",
+    "newest_source_utc": "2026-10-22T15:27:19Z",
+    "stale": false
   },
   "reference_spread": {},
   "_unbounded": {
     "damper": "neither side resolves a release inside the capture's 0.5 s tail: `damper_capped` is true on 35 of 35 reference rows and on 35 of 35 model rows, and the 495.0 ms the reference reports (490-495 ms on the model) is the last envelope point of that tail rather than a release time. 0 of 35 rows reach a verdict, so there is nothing to record a bound from. Lengthening the tail is a re-capture, not a voice change."
   },
+  "_vibrato_reading": "tnr.p90 (was 15.995) deleted 2026-10-23 and re-recorded when the measurement moved on both sides at once: under a vibrato the tuning is the fundamental's mean pitch, demodulated under its own FM extent, rather than the strongest spectral line within 80 c; a partial's level is its power summed over that FM extent rather than its peak bin; and a vibrato whose rate wanders, or whose line shares the pitch track with fast FM, now widens the tone-to-noise mask and is read at the band's RMS depth over its rate span. The reference was re-measured and the model is read with the same ruler, so these bounds were recorded under a ruler that no longer exists. A still tone reads as it did.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 3.337,
-      "abs_median": 4.438,
+      "median": 1.95,
+      "abs_median": 3.337,
       "p90": 11.143,
       "rows": 35
     },
@@ -27,7 +28,7 @@
       "floor_from": "guess",
       "median": 3.9,
       "abs_median": 9.188,
-      "p90": 15.995,
+      "p90": 22.527,
       "rows": 35
     },
     "attack": {

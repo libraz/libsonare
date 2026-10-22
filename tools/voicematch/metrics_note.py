@@ -10,8 +10,10 @@ from metrics_modal import half_spectra, modal_profile
 from metrics_modulation import f0_width_cents, modulation_note, vibrato_extent
 from metrics_partials import (
     estimate_inharmonicity_b,
+    held_pitch,
     ladder_present,
     partial_hz,
+    partial_level,
     tone_to_noise_db,
 )
 from metrics_signal import (
@@ -305,8 +307,9 @@ def analyze_note(
 
     freqs, mag = _spectrum(sustain, sr)
 
-    # Fundamental: strongest peak within ±80 cents of equal temperament.
+    # Fundamental: strongest peak within ±80 cents of equal temperament, re-read under a vibrato.
     f0, h1_mag = _peak_near(freqs, mag, expected_f0, 80.0)
+    f0, motion = held_pitch(sustain, sr, f0)
     cents_err = 1200.0 * np.log2(f0 / expected_f0) if f0 > 0 else 0.0
 
     # How far this string's partials have been stretched by its own stiffness.
@@ -316,6 +319,8 @@ def analyze_note(
 
     # Harmonic profile relative to h1, each partial searched where the string
     # actually puts it rather than at an integer multiple.
+    if motion is not None:
+        h1_mag = partial_level(freqs, mag, f0, f0, motion)
     harmonics_db: list[float] = [0.0]
     h_mags = [h1_mag]
     for k in range(2, N_HARMONICS + 1):
@@ -324,7 +329,10 @@ def analyze_note(
             harmonics_db.append(-120.0)
             h_mags.append(0.0)
             continue
-        _, hk = _peak_near(freqs, mag, target, 40.0)
+        if motion is None:
+            _, hk = _peak_near(freqs, mag, target, 40.0)
+        else:
+            hk = partial_level(freqs, mag, target, f0, motion)
         h_mags.append(hk)
         harmonics_db.append(float(_db(hk) - _db(h1_mag)) if h1_mag > 0 else -120.0)
 

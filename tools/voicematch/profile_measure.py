@@ -21,9 +21,11 @@ from metrics import (
     body_below_f0_db,
     channel_width,
     fit_partial_series,
+    held_pitch,
     midi_to_hz,
     onset_shape,
     partial_hz,
+    partial_level,
     sound_onset_s,
     to_mono,
     tone_to_noise_db,
@@ -96,6 +98,10 @@ def find_partials(seg: np.ndarray, sr: int, note: int) -> dict:
     three-note piano probe. What stays here is the reporting — which partials
     were found at the fitted series, how strong each was, and whether there
     were enough of them for B to mean anything.
+
+    Under a vibrato the fundamental is `held_pitch`'s demodulated mean and each
+    level is `partial_level`'s power over the partial's FM extent, the ruler
+    `metrics_note.analyze_note` reads the fit's ladder with.
     """
     freqs, mag = _spectrum(seg, sr)
     et = midi_to_hz(note)
@@ -103,6 +109,7 @@ def find_partials(seg: np.ndarray, sr: int, note: int) -> dict:
     if a0 <= 0.0:
         return {}
     f0, b, fitted_on = fit_partial_series(freqs, mag, f0_seed, a0, sr)
+    f0, motion = held_pitch(seg, sr, f0)
     found: list[tuple[int, float, float]] = []
     for n in range(1, MAX_PARTIALS + 1):
         predicted = partial_hz(f0, n, b)
@@ -110,7 +117,9 @@ def find_partials(seg: np.ndarray, sr: int, note: int) -> dict:
             break
         fn, an = _peak_near(freqs, mag, predicted, INHARMONICITY_TOLERANCES[-1])
         if an > 0.0:
-            found.append((n, fn, an))
+            found.append(
+                (n, fn, an if motion is None else partial_level(freqs, mag, predicted, f0, motion))
+            )
 
     if not found:
         return {}

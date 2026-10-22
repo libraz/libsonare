@@ -18,8 +18,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import profile as profile_module
 
-from metrics import _spectrum, fm_sideband_reach, vibrato_extent
+import metrics_modulation
+import metrics_partials
+from metrics import (
+    Vibrato,
+    _spectrum,
+    analyze_note,
+    fm_sideband_reach,
+    held_pitch,
+    vibrato_extent,
+)
+from profile_measure import find_partials
 from profile_test_fixtures import SR
+from smf import Note
 
 
 def harmonic(f0: float, n_harm: int = 8, seconds: float = 1.0, noise: float = 0.0) -> np.ndarray:
@@ -120,6 +131,7 @@ def test_a_still_note_keeps_the_mask_it_had_without_the_vibrato_reading(f0):
     for noise in (1e-3, 3e-2):
         x = harmonic(f0, noise=noise)
         assert vibrato_extent(x, SR, f0) is None
+        assert held_pitch(x, SR, f0) == (f0, None)
         assert tnr_with_vibrato(x, f0) == profile_module.tone_to_noise_db(*_spectrum(x, SR), f0)
 
 
@@ -146,7 +158,142 @@ def test_noise_between_the_partials_of_a_vibrato_note_is_still_counted():
     assert tnr_with_vibrato(between, 147.0) < 25.0
     # A vibrato too deep to resolve still leaves half of white noise outside the mask.
     noise = _spectrum(np.random.default_rng(1).standard_normal(SR), SR)
-    assert profile_module.tone_to_noise_db(*noise, 220.0, 0.0, (200.0, 5.0)) < 1.0
+    assert profile_module.tone_to_noise_db(*noise, 220.0, 0.0, Vibrato(200.0, 5.0, 5.0)) < 1.0
+
+
+def moving_tone(
+    f0: float,
+    cents: float,
+    deviation: str = "sine",
+    rate: float = 6.0,
+    seconds: float = 1.5,
+    noise: float = 1e-3,
+    seed: int = 0,
+) -> np.ndarray:
+    """`harmonic` with its pitch moving `cents` peak to peak about `f0`.
+
+    `wander` steps the rate to a new value in 4-6 Hz every 250 ms, a player's
+    vibrato rather than an oscillator's.
+    """
+    t = np.arange(int(SR * seconds)) / SR
+    cycle = 2 * np.pi * rate * t
+    if deviation == "wander":
+        knots = np.random.default_rng(seed).uniform(4.0, 6.0, int(seconds * 4) + 2)
+        cycle = 2 * np.pi * np.cumsum(np.interp(t, np.linspace(0, seconds, len(knots)), knots)) / SR
+    shape = 2 / np.pi * np.arcsin(np.sin(cycle)) if deviation == "triangle" else np.sin(cycle)
+    phase = 2 * np.pi * np.cumsum(f0 * 2.0 ** (0.5 * cents * shape / 1200.0)) / SR
+    x = sum(np.sin(n * phase) / n for n in range(1, 9))
+    return np.asarray(x + noise * np.random.default_rng(0).standard_normal(t.shape))
+
+
+# Bin-centred for the 1.5 s window, so the still reading carries no scalloping of its own.
+ON_BIN_F0 = (110.0, 220.0, 440.0)
+
+
+@pytest.mark.parametrize("deviation", ["sine", "triangle"])
+@pytest.mark.parametrize("f0", ON_BIN_F0)
+def test_a_vibrato_reads_the_tuning_and_stack_of_the_note_held_still(f0, deviation):
+    """6 Hz x 35 cents: the peak is whichever FM line won, and the upper partials' peaks fall."""
+    note = round(69 + 12 * np.log2(f0 / 440.0))
+    still = find_partials(moving_tone(f0, 0.0), SR, note)
+    moving = find_partials(moving_tone(f0, 35.0, deviation), SR, note)
+    assert moving["cents_vs_et"] == pytest.approx(still["cents_vs_et"], abs=1.0)
+    assert profile_module.partial_balance_db(moving["partials_db"]) == pytest.approx(
+        profile_module.partial_balance_db(still["partials_db"]), abs=0.5
+    )
+
+
+@pytest.mark.parametrize("deviation", ["sine", "triangle"])
+@pytest.mark.parametrize("f0", ON_BIN_F0)
+def test_the_fit_reads_a_vibrato_with_the_reference_profile_s_ruler(f0, deviation):
+    """`analyze_note` is what the loss compares, so it has to agree with `find_partials`."""
+    note = Note(round(69 + 12 * np.log2(f0 / 440.0)), 100, 0.0, 2.0)
+    pad = np.zeros(int(0.5 * SR))
+    still = analyze_note(np.concatenate([moving_tone(f0, 0.0, seconds=2.0), pad]), SR, note, 2.5)
+    moving = analyze_note(
+        np.concatenate([moving_tone(f0, 35.0, deviation, seconds=2.0), pad]), SR, note, 2.5
+    )
+    assert moving.f0_cents_err == pytest.approx(still.f0_cents_err, abs=1.0)
+    assert np.mean(moving.harmonics_db[1:6]) == pytest.approx(
+        np.mean(still.harmonics_db[1:6]), abs=0.5
+    )
+
+
+def test_a_vibrato_off_its_centre_is_read_at_its_mean_pitch():
+    """Demodulated around a peak 20 cents high, the track's mean still finds the centre."""
+    f0 = 220.0
+    x = moving_tone(f0, 35.0)
+    pitch, vibrato = held_pitch(x, SR, f0 * 2.0 ** (20.0 / 1200.0))
+    assert vibrato is not None
+    assert 1200.0 * np.log2(pitch / f0) == pytest.approx(0.0, abs=1.0)
+
+
+def test_the_held_pitch_does_not_follow_a_component_beside_the_fundamental(monkeypatch):
+    """A fourth below, a dipping fundamental's phase follows the neighbour in a wide passband."""
+    f0 = 104.0
+    t = np.arange(int(1.5 * SR)) / SR
+    phase = 2 * np.pi * np.cumsum(f0 * 2.0 ** (6.0 * np.sin(2 * np.pi * 6.0 * t) / 1200.0)) / SR
+    dipping = 1.0 - 0.7 * (0.5 - 0.5 * np.cos(2 * np.pi * 0.8 * t))
+    x = dipping * np.sin(phase) + sum(np.sin(n * phase) / n for n in range(2, 6))
+    x = x + 0.4 * np.sin(2 * np.pi * 0.75 * f0 * t)
+    monkeypatch.setattr(metrics_partials, "vibrato_extent", lambda *_: Vibrato(12.0, 6.0, 6.0))
+    pitch, _ = metrics_partials.held_pitch(x, SR, f0)
+    assert 1200.0 * np.log2(pitch / f0) == pytest.approx(0.0, abs=1.0)
+    wide = metrics_modulation.demodulated_pitch(
+        x,
+        SR,
+        f0,
+        metrics_modulation.FM_LOWPASS_F0_FRACTION * f0,
+        metrics_modulation.FM_STOP_F0_FRACTION * f0,
+    )
+    assert abs(float(np.mean(wide))) > 20.0
+
+
+@pytest.mark.parametrize("f0", ON_BIN_F0)
+def test_a_wandering_vibrato_reads_as_clean_as_the_same_note_held_still(f0):
+    """Masked at its line's one rate, the sidebands of the 6 Hz end read as noise."""
+    still = tnr_with_vibrato(moving_tone(f0, 0.0), f0)
+    moving = moving_tone(f0, 15.0, "wander", seed=6)
+    vibrato = vibrato_extent(moving, SR, f0)
+    assert vibrato is not None and vibrato.rate_hi_hz > vibrato.rate_hz
+    assert tnr_with_vibrato(moving, f0) == pytest.approx(still, abs=3.0)
+    assert profile_module.tone_to_noise_db(*_spectrum(moving, SR), f0) < still - 20.0
+
+
+def fm_tone(f0: float, components: list[tuple[float, float]], seconds: float = 1.5) -> np.ndarray:
+    """`harmonic` under a pitch deviation summed from (peak-to-peak cents, rate Hz) sines."""
+    t = np.arange(int(SR * seconds)) / SR
+    shape = sum(0.5 * c * np.sin(2 * np.pi * r * t + r) for c, r in components)
+    phase = 2 * np.pi * np.cumsum(f0 * 2.0 ** (shape / 1200.0)) / SR
+    x = sum(np.sin(n * phase) / n for n in range(1, 9))
+    return np.asarray(x + 1e-3 * np.random.default_rng(0).standard_normal(t.shape))
+
+
+def test_a_vibrato_sharing_its_track_with_fast_fm_is_still_a_vibrato():
+    """A second component inside the demodulation passband puts its beat far above the band."""
+    x = fm_tone(330.0, [(6.0, 5.0), (8.0, 39.0)])
+    vibrato = vibrato_extent(x, SR, 330.0)
+    assert vibrato is not None
+    assert vibrato.cents == pytest.approx(6.0, abs=1.0)
+    assert vibrato.rate_hz <= 5.0 <= vibrato.rate_hi_hz
+
+
+@pytest.mark.parametrize(
+    "components",
+    [
+        [(20.0, 1.5), (6.0, 0.7)],  # slow drift under the band
+        [(12.0, 39.0)],  # fast FM alone
+        [(1.5, 6.0), (12.0, 13.0)],  # a shallow line under a beat's second harmonic
+        [(2.0, 5.0)],  # a periodic line too shallow for the band shape, kept by the line test
+    ],
+)
+def test_motion_that_is_not_a_wandering_vibrato_keeps_the_line_test(components):
+    x = fm_tone(220.0, components)
+    vibrato = vibrato_extent(x, SR, 220.0)
+    if components == [(2.0, 5.0)]:
+        assert vibrato is not None and vibrato.cents == pytest.approx(2.0, abs=0.5)
+    else:
+        assert vibrato is None
 
 
 def test_the_sideband_reach_follows_the_modulation_index():

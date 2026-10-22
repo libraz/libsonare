@@ -3,6 +3,13 @@
 from __future__ import annotations
 
 import numpy as np
+from metrics_modulation import (
+    FM_LOWPASS_F0_FRACTION,
+    FM_STOP_F0_FRACTION,
+    Vibrato,
+    demodulated_pitch,
+    vibrato_extent,
+)
 from metrics_signal import N_HARMONICS, _peak_near, _spectrum
 
 # A stiff string's partials are not at integer multiples: the nth sits at
@@ -164,12 +171,87 @@ def fm_sideband_reach(beta: float, max_order: int) -> int:
     return int(above[-1]) + 1 if above.size else 0
 
 
+def fm_margin_hz(target: float, f0_hz: float, bin_hz: float, vibrato: Vibrato | None) -> float:
+    """How far either side of a partial at `target` its energy reaches, in Hz.
+
+    Three bins hold a still partial's Hann main lobe. A vibrato spreads partial n
+    into sidebands at multiples of the rate, with index beta_n = n's peak
+    deviation over the rate, and adds the rate times the highest sideband order
+    still above `TNR_SIDEBAND_DB`, counted up to a quarter of f0. A rate that
+    wanders puts the order its slowest rate reaches at its fastest rate's spacing.
+    """
+    margin = 3.0 * bin_hz
+    if vibrato is None:
+        return margin
+    slow = vibrato.rate_hz
+    beta = target * (2.0 ** (0.5 * vibrato.cents / 1200.0) - 1.0) / slow
+    return margin + vibrato.rate_hi_hz * fm_sideband_reach(beta, int(np.ceil(0.25 * f0_hz / slow)))
+
+
+#: A Hann window's noise bandwidth in bins: a still partial's power summed over its
+#: lobe, over its peak bin's.
+HANN_POWER_BINS = 1.5
+
+
+def partial_level(
+    freqs: np.ndarray, mag: np.ndarray, target: float, f0_hz: float, vibrato: Vibrato | None
+) -> float:
+    """A partial's magnitude as its power summed over its FM extent, on a still peak's scale.
+
+    Under a vibrato the peak bin is whichever Bessel line won, and it falls as the
+    index rises, so upper partials read dark by the depth of the vibrato. The
+    sidebands hold the partial's power between them, so it is summed over
+    `fm_margin_hz` either side (under the quarter-f0 cap the tone-to-noise mask
+    uses) and scaled by `HANN_POWER_BINS`, which returns a still on-bin partial's
+    peak magnitude.
+    """
+    if freqs.size < 2:
+        return 0.0
+    bin_hz = float(freqs[1] - freqs[0])
+    half = min(fm_margin_hz(target, f0_hz, bin_hz, vibrato), 0.25 * f0_hz)
+    inside = (freqs >= target - half) & (freqs <= target + half)
+    return float(np.sqrt(np.sum(mag[inside].astype(np.float64) ** 2) / HANN_POWER_BINS))
+
+
+#: Passes `held_pitch` demodulates the fundamental for, each centred on the last
+#: one's mean, so a start a sideband off the centre still ends on it.
+HELD_PITCH_PASSES = 2
+
+
+def held_pitch(seg: np.ndarray, sr: int, f0: float) -> tuple[float, Vibrato | None]:
+    """The pitch `seg` holds, and its vibrato.
+
+    Under a vibrato a spectral peak is whichever FM line won, so the pitch is
+    the Hann-weighted mean of the fundamental's demodulated track. The
+    demodulation passes only the fundamental's own FM extent (`fm_margin_hz`,
+    under the quarter-f0 cap): over `vibrato_extent`'s wider passband the track
+    follows a second component near the fundamental, and a lead whose detuned
+    oscillators beat under one a fourth below read 22.8 cents flat. Where the
+    pitch holds still, `f0` is returned unchanged, so a still tone reads exactly
+    as its peak did.
+    """
+    vibrato = vibrato_extent(seg, sr, f0)
+    if vibrato is None:
+        return f0, None
+    bin_hz = sr / len(seg)
+    centre = f0
+    for _ in range(HELD_PITCH_PASSES):
+        cutoff = min(fm_margin_hz(centre, centre, bin_hz, vibrato), 0.25 * centre)
+        stop = cutoff * FM_STOP_F0_FRACTION / FM_LOWPASS_F0_FRACTION
+        cents = demodulated_pitch(seg, sr, centre, cutoff, stop)
+        if cents is None:
+            break
+        taper = np.hanning(len(cents))
+        centre *= 2.0 ** (float(np.sum(cents * taper) / np.sum(taper)) / 1200.0)
+    return centre, vibrato
+
+
 def tone_to_noise_db(
     freqs: np.ndarray,
     mag: np.ndarray,
     f0_hz: float,
     b: float = 0.0,
-    vibrato: tuple[float, float] | None = None,
+    vibrato: Vibrato | None = None,
 ) -> float:
     """Energy in the partials against everything else in the audible band.
 
@@ -194,16 +276,14 @@ def tone_to_noise_db(
     each gap between partials, and from the 25th the windows tile the spectrum
     and broadband noise there would all count as tone.
 
-    `vibrato` is (peak-to-peak cents, rate Hz) measured over the same segment,
-    as `metrics_modulation.vibrato_extent` gives it. Vibrato spreads partial n
-    into sidebands at multiples of the rate, with index beta_n = n's peak
-    deviation over the rate; on a low note the first of them lie outside the
-    window and were read as noise. Each window's bin margin is widened by the
-    rate times the highest sideband order still above `TNR_SIDEBAND_DB`, under
-    the same quarter-f0 cap, so noise between partials is still counted. Past
-    that cap -- a deep vibrato on the upper partials of a bright low note -- the
-    excursion fills the gap and part of it still reads as noise. None leaves the
-    mask exactly as for a still tone.
+    `vibrato` is measured over the same segment, as
+    `metrics_modulation.vibrato_extent` gives it. On a low note a vibrato's
+    first sidebands lie outside the still window and were read as noise, so
+    each window's bin margin is `fm_margin_hz`, under the same quarter-f0 cap,
+    and noise between partials is still counted. Past that cap -- a deep
+    vibrato on the upper partials of a bright low note -- the excursion fills
+    the gap and part of it still reads as noise. None leaves the mask exactly
+    as for a still tone.
     """
     if freqs.size < 2 or f0_hz <= 0.0:
         return float("nan")
@@ -214,11 +294,7 @@ def tone_to_noise_db(
     n = 1
     while True:
         target = partial_hz(f0_hz, n, b)
-        margin = 3.0 * bin_hz
-        if vibrato is not None:
-            cents, rate = vibrato
-            beta = target * (2.0 ** (0.5 * cents / 1200.0) - 1.0) / rate
-            margin += rate * fm_sideband_reach(beta, int(np.ceil(0.25 * f0_hz / rate)))
+        margin = fm_margin_hz(target, f0_hz, bin_hz, vibrato)
         half = min(max(0.02 * target, margin), 0.25 * f0_hz)
         if target - half > top:
             break

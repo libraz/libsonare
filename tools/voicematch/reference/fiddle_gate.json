@@ -2,30 +2,31 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm111",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-22T10:52:08+00:00",
-  "recorded_utc": "2026-10-22T14:27:17+00:00",
+  "reference_measured_utc": "2026-10-22T16:01:43+00:00",
+  "recorded_utc": "2026-10-22T16:08:21+00:00",
   "model_build": {
-    "built_utc": "2026-10-22T14:25:39Z",
-    "newest_source_utc": "2026-10-22T14:25:22Z",
+    "built_utc": "2026-10-22T15:28:03Z",
+    "newest_source_utc": "2026-10-22T15:27:19Z",
     "stale": false
   },
   "reference_spread": {},
   "_attack_floor": "attack.abs_median was deleted 2026-10-22 and re-recorded. The 40 it held rests on the dimension's floor, as the compare report lists it, and on this voice it does not resolve the attack: changing only the LFO's shape, at the patch's former 2 c depth, moved it from 30 to 55 ms, and every vibrato from 2 to 23 c read 45-75. Re-recorded when the vibrato moved to 6 c at the reference's 6.35 Hz; the reference reads 34 c peak to peak, and deeper than 6 c the register p90 leaves its bound by 0.02-0.16 dB.",
+  "_vibrato_reading": "balance.median (was 0.5), balance.p90 (was 7.258) deleted 2026-10-23 and re-recorded when the measurement moved on both sides at once: under a vibrato the tuning is the fundamental's mean pitch, demodulated under its own FM extent, rather than the strongest spectral line within 80 c; a partial's level is its power summed over that FM extent rather than its peak bin; and a vibrato whose rate wanders, or whose line shares the pitch track with fast FM, now widens the tone-to-noise mask and is read at the band's RMS depth over its rate span. The reference was re-measured and the model is read with the same ruler, so these bounds were recorded under a ruler that no longer exists. A still tone reads as it did.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
       "median": 1.0,
-      "abs_median": 1.7,
-      "p90": 3.431,
+      "abs_median": 1.206,
+      "p90": 3.129,
       "rows": 35
     },
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 5.663,
-      "abs_median": 5.663,
-      "p90": 9.508,
+      "median": 5.238,
+      "abs_median": 5.238,
+      "p90": 8.975,
       "rows": 35
     },
     "damper": {
@@ -55,9 +56,9 @@
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 0.5,
-      "abs_median": 3.457,
-      "p90": 7.258,
+      "median": 1.635,
+      "abs_median": 3.285,
+      "p90": 9.565,
       "rows": 35
     },
     "centroid_pct": {

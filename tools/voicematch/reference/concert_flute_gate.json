@@ -3,28 +3,29 @@
   "timbre": "gm074",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-22T01:09:39+00:00",
-  "recorded_utc": "2026-10-22T01:48:48+00:00",
+  "recorded_utc": "2026-10-22T16:08:11+00:00",
   "model_build": {
-    "built_utc": "2026-10-21T10:18:24Z",
-    "newest_source_utc": "2026-10-21T10:20:44Z",
-    "stale": true
+    "built_utc": "2026-10-22T15:28:03Z",
+    "newest_source_utc": "2026-10-22T15:27:19Z",
+    "stale": false
   },
   "reference_spread": {},
+  "_vibrato_reading": "balance.abs_median (was 3.508), balance.median (was 3.508), balance.p90 (was 15.432) deleted 2026-10-23 and re-recorded when the measurement moved on both sides at once: under a vibrato the tuning is the fundamental's mean pitch, demodulated under its own FM extent, rather than the strongest spectral line within 80 c; a partial's level is its power summed over that FM extent rather than its peak bin; and a vibrato whose rate wanders, or whose line shares the pitch track with fast FM, now widens the tone-to-noise mask and is read at the band's RMS depth over its rate span. The reference was re-measured and the model is read with the same ruler, so these bounds were recorded under a ruler that no longer exists. A still tone reads as it did.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
       "median": 1.0,
       "abs_median": 1.15,
-      "p90": 2.05,
+      "p90": 2.027,
       "rows": 35
     },
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 16.013,
-      "abs_median": 16.013,
-      "p90": 37.358,
+      "median": 5.575,
+      "abs_median": 9.8,
+      "p90": 32.028,
       "rows": 35
     },
     "damper": {
@@ -70,9 +71,9 @@
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 3.508,
-      "abs_median": 3.508,
-      "p90": 15.432,
+      "median": 8.493,
+      "abs_median": 8.493,
+      "p90": 20.98,
       "rows": 35
     },
     "centroid_pct": {

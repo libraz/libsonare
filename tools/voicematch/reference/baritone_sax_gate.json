@@ -2,28 +2,29 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm068",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-22T10:50:55+00:00",
-  "recorded_utc": "2026-10-22T12:28:02+00:00",
+  "reference_measured_utc": "2026-10-22T15:54:02+00:00",
+  "recorded_utc": "2026-10-22T16:08:03+00:00",
   "model_build": {
-    "built_utc": "2026-10-22T12:27:01Z",
-    "newest_source_utc": "2026-10-22T12:26:52Z",
+    "built_utc": "2026-10-22T15:28:03Z",
+    "newest_source_utc": "2026-10-22T15:27:19Z",
     "stale": false
   },
   "reference_spread": {},
   "_register_margin": "register reached a full 35-row verdict throughout the fdff77ef/16d89962 loop-loss regression and its fix, not a censored one: p90 was 3.43 dB before fdff77ef, rose to 5.40 against this file's 5.457 bound during the regression (fdff77ef's own commit message), and returned to 3.43 after 16d89962 (confirmed 2026-09-22 against the current dylib, all three stats and rows=35 unchanged). The note grid straddles the note-48 anchor and per-note the tilt runs -2.5 (n36) to +3.4 (n44) to -2.3 (n60), not a monotone -3.81/+1.17 ramp end to end - the shape genuinely stayed under the 1.25x margin, spending nearly all of it. This is a margin question, not a reader defect: no fix to the reader is needed.",
+  "_vibrato_reading": "balance.median (was 2.473) deleted 2026-10-23 and re-recorded when the measurement moved on both sides at once: under a vibrato the tuning is the fundamental's mean pitch, demodulated under its own FM extent, rather than the strongest spectral line within 80 c; a partial's level is its power summed over that FM extent rather than its peak bin; and a vibrato whose rate wanders, or whose line shares the pitch track with fast FM, now widens the tone-to-noise mask and is read at the band's RMS depth over its rate span. The reference was re-measured and the model is read with the same ruler, so these bounds were recorded under a ruler that no longer exists. A still tone reads as it did.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 2.0,
+      "p90": 1.223,
       "rows": 35
     },
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 11.113,
+      "median": 10.75,
       "abs_median": 12.637,
       "p90": 33.123,
       "rows": 35
@@ -47,7 +48,7 @@
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 2.473,
+      "median": 3.435,
       "abs_median": 4.195,
       "p90": 12.082,
       "rows": 35
