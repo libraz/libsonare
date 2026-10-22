@@ -51,19 +51,21 @@ BEAT_BAND_HZ = (0.3, 3.0)
 #: frame rate over the frame count, so `MOD_MIN_FRAMES` leaves the beat band one
 #: bin wide, where `argmax` returns that bin whatever the note did.
 MOD_MIN_BAND_BINS = 2
-#: How far either side of the nominal pitch the tracker looks. Wider than the
-#: deepest vibrato any instrument uses, so the track cannot be clipped by its
-#: own search range and report a shallow one.
+#: How far either side of the nominal pitch the level tracker looks. Wider than
+#: the deepest vibrato any instrument uses, so a vibrato cannot carry the
+#: fundamental out of the search range and read as tremolo.
 MOD_TRACK_CENTS = 120.0
 MOD_TRACK_POINTS = 49
-#: Pitch-modulation bands outside the vibrato band. The tracker's 50 ms window
-#: averages away most of a 20 Hz modulation, so these are read off a demodulated
-#: fundamental instead; 45 Hz clears the engine's 40 Hz LFO ceiling.
+#: Pitch-modulation bands either side of the vibrato band, read off the same
+#: demodulated fundamental as the vibrato; 45 Hz clears the engine's 40 Hz LFO
+#: ceiling.
 FM_SLOW_BAND_HZ = (1.0, 3.0)
 FM_FAST_BAND_HZ = (9.0, 45.0)
-#: How far the demodulation lowpass may reach, as a fraction of f0, so the second
-#: partial (f0 away once the fundamental is shifted to 0 Hz) stays outside it.
-FM_LOWPASS_F0_FRACTION = 0.45
+#: The demodulation lowpass passes up to this fraction of f0 and stops by
+#: `FM_STOP_F0_FRACTION`, short of a sub-octave rank (an organ's 16', f0/2 away)
+#: as well as the second partial; 0.35 still passes the vibrato band at 27.5 Hz.
+FM_LOWPASS_F0_FRACTION = 0.35
+FM_STOP_F0_FRACTION = 0.45
 FM_HOP_S = 0.005
 #: Tapered and then trimmed at both ends of the segment, so its edges do not
 #: ring through the lowpass into the track.
@@ -71,6 +73,10 @@ FM_EDGE_S = 0.05
 #: Where the demodulated level falls this far under its peak, the phase is the
 #: floor's rather than the note's, so the track stops there.
 FM_FLOOR_DB = 40.0
+#: Least power the passband must hold over what the floor around it puts in the
+#: same bandwidth. Measured: noise, drums and notes with no fundamental 1-16.5 dB
+#: and reading tens of cents; the weakest real vibrato, a low cello, 19.7 dB.
+FM_MIN_FUNDAMENTAL_DB = 18.0
 
 
 def _band_peak(
@@ -104,7 +110,9 @@ def _demodulated_cents(seg: np.ndarray, sr: int, f0: float) -> tuple[np.ndarray,
     The fundamental is shifted to 0 Hz, lowpassed under `FM_LOWPASS_F0_FRACTION`
     of f0, and its phase differentiated over `FM_HOP_S` steps: an instantaneous
     frequency whose bandwidth is the lowpass, not a tracker window. None when the
-    segment, or the part of it above the floor, is too short to hold a track.
+    segment, or the part of it above the floor, is too short to hold a track, and
+    when the passband is not `FM_MIN_FUNDAMENTAL_DB` over the floor within f0 of
+    the fundamental: the phase is then the noise's, read as hundreds of cents.
     """
     cutoff = min(FM_FAST_BAND_HZ[1], FM_LOWPASS_F0_FRACTION * f0)
     edge = int(FM_EDGE_S * sr)
@@ -115,9 +123,15 @@ def _demodulated_cents(seg: np.ndarray, sr: int, f0: float) -> tuple[np.ndarray,
     ramp = np.ones(len(seg))
     ramp[:edge] = ramp[-edge:][::-1] = np.hanning(2 * edge)[:edge]
     spectrum = np.fft.fft(seg * ramp * np.exp(-2j * np.pi * f0 * t))
-    # Raised-cosine roll-off, reaching zero where the second partial's band begins.
-    stop = f0 - cutoff
     away = np.abs(np.fft.fftfreq(len(seg), 1.0 / sr))
+    power = np.abs(spectrum) ** 2
+    passband = away < cutoff
+    # The median within f0 is the floor: only the fundamental and a sub-octave rank sit there.
+    floor = float(np.median(power[away < f0])) * int(np.count_nonzero(passband))
+    if not float(power[passband].sum()) > floor * 10.0 ** (FM_MIN_FUNDAMENTAL_DB / 10.0):
+        return None
+    # Raised-cosine roll-off, zero before the nearest other component can sit.
+    stop = FM_STOP_F0_FRACTION * f0
     gain = 0.5 * (1.0 + np.cos(np.pi * np.clip((away - cutoff) / (stop - cutoff), 0.0, 1.0)))
     spectrum *= gain
     base = np.fft.ifft(spectrum)[edge:-edge][::hop]
@@ -135,14 +149,15 @@ def _demodulated_cents(seg: np.ndarray, sr: int, f0: float) -> tuple[np.ndarray,
     return cents - np.polyval(np.polyfit(idx, cents, 1), idx), cutoff
 
 
-def wideband_fm(seg: np.ndarray, sr: int, f0: float) -> dict[str, tuple[float, float] | None]:
-    """Strongest pitch modulation in each band outside the vibrato band.
+def pitch_modulation(seg: np.ndarray, sr: int, f0: float) -> dict[str, tuple[float, float] | None]:
+    """Strongest pitch modulation in the vibrato band and in each band beside it.
 
-    Read off `_demodulated_cents`. Returns, per band name, (peak-to-peak cents,
-    rate in Hz) as `_band_peak` does, or None where the band is above the
-    lowpass or unresolved by the track's length.
+    Read off `_demodulated_cents`, one track for all three bands. Returns, per
+    band name (`vibrato`, `slow`, `fast`), (peak-to-peak cents, rate in Hz) as
+    `_band_peak` does, or None where the band is above the lowpass or unresolved
+    by the track's length.
     """
-    out: dict[str, tuple[float, float] | None] = {"slow": None, "fast": None}
+    out: dict[str, tuple[float, float] | None] = {"vibrato": None, "slow": None, "fast": None}
     demodulated = _demodulated_cents(seg, sr, f0)
     if demodulated is None:
         return out
@@ -150,7 +165,8 @@ def wideband_fm(seg: np.ndarray, sr: int, f0: float) -> dict[str, tuple[float, f
     n = len(cents)
     fm = np.abs(np.fft.rfft(cents * np.hanning(n)))
     rate = 1.0 / FM_HOP_S
-    for name, (lo, hi) in (("slow", FM_SLOW_BAND_HZ), ("fast", FM_FAST_BAND_HZ)):
+    bands = (("vibrato", VIBRATO_BAND_HZ), ("slow", FM_SLOW_BAND_HZ), ("fast", FM_FAST_BAND_HZ))
+    for name, (lo, hi) in bands:
         if min(hi, cutoff) > lo:
             out[name] = _band_peak(fm, rate, (lo, min(hi, cutoff)), n)
     return out
@@ -172,11 +188,10 @@ def vibrato_extent(seg: np.ndarray, sr: int, f0: float) -> tuple[float, float] |
     """Peak-to-peak cents and rate of the periodic vibrato held in `seg`, or None.
 
     Read over the caller's own segment, so it describes the spectrum taken from
-    it, and off `_demodulated_cents` rather than `modulation_note`'s tracker:
-    below about 110 Hz that tracker's 50 ms frames hold too few cycles, and the
-    second partial leaking into them reads as up to 12 cents of vibrato on a
-    still tone. A vibrato puts its partials' energy into sidebands at multiples
-    of its rate only when it is periodic, so its line (its bin and both
+    it, off the same `_demodulated_cents` track as `pitch_modulation`'s vibrato
+    band, and stricter than that band's plain peak. A vibrato puts its partials'
+    energy into sidebands at multiples of its rate only when it is periodic, so
+    its line (its bin and both
     neighbours) must carry `VIBRATO_LINE_SHARE` of the track's energy above DC,
     stand above both neighbours, and lie at least `VIBRATO_MIN_CYCLES` bins up:
     a peak on the band's lower edge with the spectrum still rising below it is
@@ -210,12 +225,17 @@ def modulation_note(
 ) -> dict:
     """Vibrato, tremolo and beat of one note's fundamental.
 
-    The fundamental is tracked rather than assumed: a zoomed DFT over a bank of
-    candidate frequencies per frame, which resolves a few cents at a 50 ms
-    window where an FFT bin is 20 Hz. Both the frequency track and the level
-    track are linearly detrended before the modulation spectrum is taken, so a
-    note that is decaying (every level track) or drifting (a wind instrument
-    warming) does not report its trend as a very slow modulation.
+    Pitch movement in every band is read off `pitch_modulation`'s demodulated
+    fundamental. The level is tracked with a zoomed DFT over a bank of
+    candidate frequencies per 50 ms frame, so it follows the fundamental through
+    a vibrato. It is not trusted with the pitch: below about 110 Hz its frames
+    hold too few cycles, and the leakage of a neighbouring partial or of the
+    fundamental's negative-frequency image beats at a multiple of f0 that the
+    100 Hz frame rate aliases into the vibrato band — up to 14 cents read on a
+    still tone, while its level reading stays under 0.03 dB. Both tracks are
+    linearly detrended before the modulation spectrum is taken, so a note that
+    is decaying (every level track) or drifting (a wind instrument warming) does
+    not report its trend as a very slow modulation.
 
     Every field is None when the note is too short, too quiet or has no
     fundamental to track. A zero would be a claim that the note is dead still,
@@ -257,42 +277,23 @@ def modulation_note(
     if float(level.max()) <= 0.0:
         return empty
 
-    # Parabolic refinement over the candidate grid, so the track is not
-    # quantised to the grid spacing (5 cents at the default point count).
-    log_cand = np.log2(cand)
-    track = np.empty(n_frames)
-    for i, ki in enumerate(k):
-        if 0 < ki < MOD_TRACK_POINTS - 1:
-            y0, y1, y2 = amps[i, ki - 1], amps[i, ki], amps[i, ki + 1]
-            denom = y0 - 2 * y1 + y2
-            d = float(np.clip(0.5 * (y0 - y2) / denom, -0.5, 0.5)) if abs(denom) > 1e-12 else 0.0
-        else:
-            d = 0.0
-        step = log_cand[1] - log_cand[0]
-        track[i] = log_cand[ki] + d * step
-    cents = 1200.0 * (track - float(np.median(track)))
     level_db = 20.0 * np.log10(np.maximum(level, 1e-12))
-
     idx = np.arange(n_frames, dtype=np.float64)
-    cents = cents - np.polyval(np.polyfit(idx, cents, 1), idx)
     level_db = level_db - np.polyval(np.polyfit(idx, level_db, 1), idx)
-
-    window = np.hanning(n_frames)
+    am = np.abs(np.fft.rfft(level_db * np.hanning(n_frames)))
     rate = 1.0 / MOD_FRAME_HOP_S
-    fm = np.abs(np.fft.rfft(cents * window))
-    am = np.abs(np.fft.rfft(level_db * window))
 
     # Per band, because they are not resolved together: the same window that
     # carries fourteen bins of vibrato carries one of beat.
     def _pair(peak: tuple[float, float] | None) -> tuple[float | None, float | None]:
         return (None, None) if peak is None else (round(peak[0], 2), round(peak[1], 2))
 
-    vib_cents, vib_rate = _pair(_band_peak(fm, rate, VIBRATO_BAND_HZ, n_frames))
     trem_db, trem_rate = _pair(_band_peak(am, rate, VIBRATO_BAND_HZ, n_frames))
     beat_db, beat_rate = _pair(_band_peak(am, rate, BEAT_BAND_HZ, n_frames))
-    wide = wideband_fm(seg, sr, f0)
-    slow_cents, slow_rate = _pair(wide["slow"])
-    fast_cents, fast_rate = _pair(wide["fast"])
+    pitch = pitch_modulation(seg, sr, f0)
+    vib_cents, vib_rate = _pair(pitch["vibrato"])
+    slow_cents, slow_rate = _pair(pitch["slow"])
+    fast_cents, fast_rate = _pair(pitch["fast"])
     return {
         "vib_cents": vib_cents,
         "vib_rate_hz": vib_rate,

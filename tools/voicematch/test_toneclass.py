@@ -42,6 +42,7 @@ from metrics import (
     pitch_drop,
     shared_band_edge,
     to_mono,
+    vibrato_extent,
 )
 from patterns import LONG_DECAY_DRUM_NOTES, build_pattern, drum_gap_for
 from smf import Note
@@ -344,6 +345,70 @@ def test_a_vibrato_is_measured_where_nothing_else_could_say_it():
     got = modulation_note(y, SR, Note(69, 100, 0.0, 3.0), 440.0)
     assert got["vib_cents"] == pytest.approx(35.0, rel=0.2)
     assert got["vib_rate_hz"] == pytest.approx(5.5, abs=0.4)
+
+
+def _harmonic_vibrato(f0: float, cents_pp: float, rate: float, seconds: float = 3.0) -> np.ndarray:
+    """Eight partials falling 0.6 per step, every one carrying the same vibrato."""
+    t = np.arange(int(SR * seconds)) / SR
+    inst = f0 * 2.0 ** (0.5 * cents_pp * np.sin(2 * np.pi * rate * t) / 1200.0)
+    phase = 2 * np.pi * np.cumsum(inst) / SR
+    return sum(0.6 ** (k - 1) * np.sin(k * phase) for k in range(1, 9))
+
+
+@pytest.mark.parametrize("f0", [27.5, 47.5, 73.4, 104.6, 147.0, 440.0])
+def test_a_still_low_note_reads_no_vibrato(f0):
+    """A 50 ms frame tracker reads up to 14 cents here, from leakage aliased by its frame rate."""
+    got = modulation_note(_harmonic_vibrato(f0, 0.0, 5.0), SR, Note(60, 100, 0.0, 3.0), f0)
+    assert got["vib_cents"] is not None and got["vib_cents"] < 1.0
+
+
+@pytest.mark.parametrize("f0", [65.4, 92.5, 185.0, 740.0])
+def test_a_sub_octave_rank_under_a_still_note_reads_no_vibrato(f0):
+    """An organ's 16' sits f0/2 from the fundamental, inside a lowpass reaching toward f0."""
+    t = np.arange(int(SR * 3.0)) / SR
+    y = _harmonic_vibrato(f0, 0.0, 5.0) + np.sin(np.pi * f0 * t)
+    got = modulation_note(y, SR, Note(60, 100, 0.0, 3.0), f0)
+    for field in ("vib_cents", "fm_slow_cents", "fm_fast_cents"):
+        assert got[field] is not None and got[field] < 1.0, field
+
+
+@pytest.mark.parametrize("f0", [55.0, 147.0, 440.0])
+@pytest.mark.parametrize(("cents_pp", "rate"), [(6.0, 5.0), (30.0, 6.0)])
+def test_a_vibrato_reads_its_depth_and_rate_at_every_register(f0, cents_pp, rate):
+    got = modulation_note(_harmonic_vibrato(f0, cents_pp, rate), SR, Note(60, 100, 0.0, 3.0), f0)
+    assert got["vib_cents"] == pytest.approx(cents_pp, rel=0.15)
+    assert got["vib_rate_hz"] == pytest.approx(rate, abs=0.3)
+
+
+_PITCH_FIELDS = ("vib_cents", "vib_rate_hz", "fm_slow_cents", "fm_fast_cents")
+
+
+@pytest.mark.parametrize("kind", ["noise", "no fundamental"])
+def test_a_note_with_no_fundamental_withholds_its_pitch_movement(kind):
+    """Demodulating the floor reads its phase as hundreds of cents of vibrato."""
+    f0 = 220.0
+    rng = np.random.default_rng(7)
+    if kind == "noise":
+        y = rng.standard_normal(int(SR * 3.0))
+    else:
+        t = np.arange(int(SR * 3.0)) / SR
+        y = sum(np.sin(2 * np.pi * k * f0 * t) for k in range(2, 9))
+        y = y + 0.01 * rng.standard_normal(len(t))
+    got = modulation_note(y, SR, Note(57, 100, 0.0, 3.0), f0)
+    assert all(got[field] is None for field in _PITCH_FIELDS)
+    assert got["trem_db"] is not None
+    assert vibrato_extent(y[int(0.3 * SR) : int(2.5 * SR)], SR, f0) is None
+
+
+@pytest.mark.parametrize("f0", [65.4, 196.0])
+def test_a_vibrato_over_a_noise_floor_keeps_its_reading(f0):
+    """Noise standing 25 dB under the fundamental's passband, 7 dB from the guard."""
+    rng = np.random.default_rng(3)
+    y = _harmonic_vibrato(f0, 24.0, 4.5)
+    y = y + 0.7 * rng.standard_normal(len(y))
+    got = modulation_note(y, SR, Note(60, 100, 0.0, 3.0), f0)
+    assert got["vib_cents"] == pytest.approx(24.0, rel=0.15)
+    assert got["vib_rate_hz"] == pytest.approx(4.5, abs=0.3)
 
 
 def test_a_still_note_reports_no_movement_rather_than_no_measurement():

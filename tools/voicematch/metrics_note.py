@@ -118,7 +118,7 @@ class NoteMetrics:
     trem_rate_hz: float | None
     beat_db: float | None
     beat_rate_hz: float | None
-    #: Pitch modulation outside the vibrato band. See `wideband_fm`.
+    #: Pitch modulation outside the vibrato band. See `pitch_modulation`.
     fm_slow_cents: float | None
     fm_slow_rate_hz: float | None
     fm_fast_cents: float | None

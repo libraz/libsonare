@@ -1,7 +1,7 @@
 {
  "id": "harpsichord_keyoff",
  "label": "Harpsi.o, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-22T01:11:28+00:00",
+ "measured_utc": "2026-10-22T12:59:14+00:00",
  "capture": {
   "program": 6,
   "params": [],
@@ -352,7 +352,7 @@
    "damper_release_ms": 89.8,
    "damper_capped": true,
    "centroid_hz": 613.7,
-   "tnr_db": 24.53
+   "tnr_db": 24.55
   },
   {
    "timbre": "t0",
@@ -431,7 +431,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 802.1,
-   "tnr_db": 30.06
+   "tnr_db": 30.18
   },
   {
    "timbre": "t0",
@@ -512,7 +512,7 @@
    "damper_release_ms": 89.8,
    "damper_capped": true,
    "centroid_hz": 584.2,
-   "tnr_db": 37.72
+   "tnr_db": 37.83
   },
   {
    "timbre": "t0",
@@ -977,13 +977,13 @@
      "100": 25.66
     },
     "48": {
-     "100": 24.53
+     "100": 24.55
     },
     "54": {
-     "100": 30.06
+     "100": 30.18
     },
     "60": {
-     "100": 37.72
+     "100": 37.83
     },
     "66": {
      "100": 50.87

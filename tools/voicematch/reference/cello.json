@@ -1,7 +1,7 @@
 {
  "id": "cello",
  "label": "Cello, sampled, close and dry",
- "measured_utc": "2026-10-22T10:51:18+00:00",
+ "measured_utc": "2026-10-22T12:59:11+00:00",
  "capture": {
   "program": 42,
   "params": [],
@@ -1364,7 +1364,7 @@
    "damper_release_ms": 185.0,
    "damper_capped": false,
    "centroid_hz": 341.2,
-   "tnr_db": 22.3,
+   "tnr_db": 29.45,
    "stereo_width": 0.0
   },
   {
@@ -1448,7 +1448,7 @@
    "damper_release_ms": 185.0,
    "damper_capped": false,
    "centroid_hz": 352.9,
-   "tnr_db": 22.26,
+   "tnr_db": 29.12,
    "stereo_width": -0.0
   },
   {
@@ -1532,7 +1532,7 @@
    "damper_release_ms": 185.0,
    "damper_capped": false,
    "centroid_hz": 359.1,
-   "tnr_db": 22.23,
+   "tnr_db": 28.93,
    "stereo_width": 0.0
   },
   {
@@ -1616,7 +1616,7 @@
    "damper_release_ms": 185.0,
    "damper_capped": false,
    "centroid_hz": 361.9,
-   "tnr_db": 22.21,
+   "tnr_db": 28.82,
    "stereo_width": 0.0
   },
   {
@@ -1700,7 +1700,7 @@
    "damper_release_ms": 185.0,
    "damper_capped": false,
    "centroid_hz": 363.0,
-   "tnr_db": 22.2,
+   "tnr_db": 28.77,
    "stereo_width": 0.0
   },
   {
@@ -1784,7 +1784,7 @@
    "damper_release_ms": 185.0,
    "damper_capped": false,
    "centroid_hz": 295.6,
-   "tnr_db": 25.71,
+   "tnr_db": 31.96,
    "stereo_width": 0.0
   },
   {
@@ -1868,7 +1868,7 @@
    "damper_release_ms": 185.0,
    "damper_capped": false,
    "centroid_hz": 313.1,
-   "tnr_db": 25.64,
+   "tnr_db": 31.43,
    "stereo_width": 0.0
   },
   {
@@ -1952,7 +1952,7 @@
    "damper_release_ms": 185.0,
    "damper_capped": false,
    "centroid_hz": 323.9,
-   "tnr_db": 25.57,
+   "tnr_db": 31.08,
    "stereo_width": -0.0
   },
   {
@@ -2036,7 +2036,7 @@
    "damper_release_ms": 185.0,
    "damper_capped": false,
    "centroid_hz": 329.3,
-   "tnr_db": 25.52,
+   "tnr_db": 30.87,
    "stereo_width": 0.0
   },
   {
@@ -2120,7 +2120,7 @@
    "damper_release_ms": 185.0,
    "damper_capped": false,
    "centroid_hz": 331.5,
-   "tnr_db": 25.48,
+   "tnr_db": 30.75,
    "stereo_width": 0.0
   },
   {
@@ -4561,18 +4561,18 @@
      "127": 31.82
     },
     "48": {
-     "32": 22.3,
-     "56": 22.26,
-     "80": 22.23,
-     "104": 22.21,
-     "127": 22.2
+     "32": 29.45,
+     "56": 29.12,
+     "80": 28.93,
+     "104": 28.82,
+     "127": 28.77
     },
     "52": {
-     "32": 25.71,
-     "56": 25.64,
-     "80": 25.57,
-     "104": 25.52,
-     "127": 25.48
+     "32": 31.96,
+     "56": 31.43,
+     "80": 31.08,
+     "104": 30.87,
+     "127": 30.75
     },
     "56": {
      "32": 34.42,
