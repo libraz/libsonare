@@ -195,8 +195,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // it takes the held-out notes 13.63 -> 13.24 with the gate unchanged.
   vb.modal.contact = 1.0279f;
   vb.modal.contact_ms = 2.4359f;
-  // The motor-driven rotating vanes: the defining vibraphone tremolo.
-  vb.lfo2_rate_hz = 4.5f;
+  // The motor's vanes: the reference swings as a sine at 3.99 Hz, no sideband past the first.
+  vb.lfo_shape = LfoShape::kSine;
+  vb.lfo2_rate_hz = 3.99f;
   vb.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kAmpGain, 0.35f};
   vb.amp_env.attack_ms = 0.166825f;
   vb.amp_env.sustain = 0.809017f;

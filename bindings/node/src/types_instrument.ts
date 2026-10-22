@@ -340,10 +340,10 @@ export type SampleKeyTrack = (typeof SAMPLE_KEY_TRACKS)[number];
 export type SynthRetrigger = (typeof SYNTH_RETRIGGERS)[number];
 
 /**
- * LFO1's waveform on a {@link SynthPatch}, at every destination it reaches
- * (`'default'` keeps the base patch's). `'triangle'` is every catalog preset's
- * shape; `'sine'` carries no harmonics, so a vibrato's sidebands sit where a
- * player's do.
+ * The patch's LFO waveform (vibrato and tremolo LFOs) on a {@link SynthPatch},
+ * at every destination either reaches (`'default'` keeps the base patch's).
+ * `'triangle'` is every catalog preset's shape; `'sine'` carries no harmonics,
+ * so a vibrato's or a tremolo's sidebands sit where a player's do.
  */
 export type SynthLfoShape = (typeof SYNTH_LFO_SHAPES)[number];
 
@@ -727,7 +727,7 @@ export interface SynthPatch {
   // --- LFOs / glide ---
   lfoRateHz?: number;
   lfoToPitchCents?: number;
-  /** LFO1's waveform, as a {@link SynthLfoShape} name or ordinal. */
+  /** The patch's LFO waveform (vibrato and tremolo LFOs), as a {@link SynthLfoShape} name or ordinal. */
   lfoShape?: SynthLfoShape | number;
   lfo2RateHz?: number;
   glideMs?: number;

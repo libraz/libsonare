@@ -39,6 +39,7 @@
   "_dimensions": "Coverage is read against `toneclass.canonical_dimensions`, which for program 11 is 12 dimensions. The three below are what this source cannot carry, each argued from what the font sets rather than from its being a font. The ladder rulers listed after them are the modal class's exclusions rather than the source's.",
   "_dimensions_register": "`register` is gated here and excused on the sibling marimba variation, and the difference is measured rather than assumed. The font sets no `initialAttenuation` anywhere, so what one recording's peak is against the next is what the module puts out. Over this grid that fall is 4.81 dB and strictly monotonic from note 54 to note 78; the marimba's is 1.95 dB and changes direction three times, which is the headroom each recording was normalised into rather than a bar getting quieter as it rises.",
   "dimensions_na": {
+    "body": "what sits under the fundamental in these recordings is not a body. At four of the five notes the energy the metric reads (-51 to -56 dB re the fundamental) is one narrow line at f0 minus 125 or 250 Hz (-53.9 to -61.4 dB), decaying with the note, the lower sideband of the module's own periodic gain update that its harp recordings carry too; at note 72 it is a line at 52 Hz (-54.0 dB). The lines sit at no bar's mode and at no fixed frequency (52 to 490 Hz across the grid), so a model is being asked to reproduce the source's modulation, not an instrument",
     "vel_range": "the font declares no velocity layers at all - `velRange` is set on none of its zones, so it holds one recording per note at a velocity it does not state. A grid asking for more than one would write that recording into every row of the axis a dynamics fit reads",
     "stereo": "the recordings are mono (`sampleType` 1) and the font sets no `pan`, so the image is absent by construction rather than by voicing. This one costs more here than on the siblings: the `w` in Vib.w is the width, so the one thing that separates this variation from its capital is the thing the recording cannot hold. What is left to fit is the tone under it",
     "damper": "a recording ends where it was cut and carries no note-off, so there is no key lift for a release to be read from",
@@ -51,7 +52,6 @@
     "decay",
     "aftersound",
     "doubling",
-    "body",
     "attack",
     "attack_hf",
     "centroid_pct",

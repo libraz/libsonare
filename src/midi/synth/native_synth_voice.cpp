@@ -417,7 +417,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   // edit is the only thing that can give it one.
   vibrato_lfo.start(sample_rate, gs_vib_delay_seconds(0.0f, part_mod.vib_delay_scale),
                     p.lfo_rate_hz * part_mod.vib_rate_scale, p.lfo_shape);
-  lfo2.start(sample_rate, 0.0f, p.lfo2_rate_hz);
+  lfo2.start(sample_rate, 0.0f, p.lfo2_rate_hz, p.lfo_shape);
   // Per-voice drift: seeded depth (sign included) and a seeded rate offset so
   // stacked voices beat against each other instead of wobbling in unison.
   drift_seed = seq.bipolar_at(101);

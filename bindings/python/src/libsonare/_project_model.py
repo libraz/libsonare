@@ -776,10 +776,11 @@ class SynthPatch:
     (``"default"`` / ``"on"`` / ``"off"``); both accept the C ordinal too.
 
     ``lfo_shape`` (``"default"`` / ``"triangle"`` / ``"sine"``, or the C
-    ordinal) shapes LFO1 wherever it is read: vibrato depth, the GS LFO
-    cutoff and amplitude depths, and the ``lfo1`` mod source. ``"triangle"`` is
-    every catalog preset's shape; ``"sine"`` carries no harmonics, so a
-    vibrato's sidebands sit where a player's do.
+    ordinal) is the patch's LFO waveform (vibrato and tremolo LFOs), wherever
+    either is read: vibrato depth, the GS LFO cutoff and amplitude depths, and
+    the ``lfo1`` and ``lfo2`` mod sources. ``"triangle"`` is every catalog
+    preset's shape; ``"sine"`` carries no harmonics, so a vibrato's or a
+    tremolo's sidebands sit where a player's do.
 
     ``retrigger`` picks what seeds each voice's start state (``"default"`` /
     ``"free"`` / ``"note"``, or the C ordinal). ``"note"`` derives oscillator

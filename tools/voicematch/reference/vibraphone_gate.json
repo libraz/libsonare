@@ -3,13 +3,16 @@
   "timbre": "gm012",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-22T21:08:52+00:00",
-  "recorded_utc": "2026-10-22T01:25:39+00:00",
+  "recorded_utc": "2026-10-22T21:29:07+00:00",
   "model_build": {
-    "built_utc": "2026-10-21T10:18:24Z",
-    "newest_source_utc": "2026-10-21T10:20:44Z",
-    "stale": true
+    "built_utc": "2026-10-22T21:28:48Z",
+    "newest_source_utc": "2026-10-22T21:28:16Z",
+    "stale": false
   },
   "reference_spread": {},
+  "_excluded": {
+    "body": "below f0 the reference carries the recording's room and its edit rather than a body: a 10-17 Hz rumble spilling into the 40 Hz band (-49 to -69 dB re the fundamental), at a fixed ratio to the note across velocity layers (-49.1 dB at note 53 velocity 32, -49.6 at 127) and cut off rather than decaying (note 61, 40-80 Hz: -45.6 to -83.4 dB between 0.4 and 0.6 s)"
+  },
   "bounds": {
     "decay": {
       "floor": 0.5,
@@ -38,8 +41,8 @@
     "aftersound": {
       "floor": 1.81,
       "floor_from": "guess",
-      "median": 2.725,
-      "abs_median": 2.725,
+      "median": 2.712,
+      "abs_median": 2.712,
       "p90": 5.942,
       "rows": 35
     },
@@ -49,14 +52,6 @@
       "median": 4.425,
       "abs_median": 6.338,
       "p90": 12.503,
-      "rows": 35
-    },
-    "body": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 13.125,
-      "abs_median": 13.125,
-      "p90": 17.398,
       "rows": 35
     },
     "centroid_pct": {
@@ -88,7 +83,7 @@
       "floor_from": "default",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 2.792,
+      "p90": 2.782,
       "rows": 35
     }
   }

@@ -212,7 +212,7 @@ typedef enum SONARE_ENUM_BASE {
   /// A sample's own looping, as SonareSampleDesc.loop_mode spells it. The names
   /// are not ordinals: "none" is 0, "continuous" 1 and "key-down" 3.
   SONARE_SYNTH_ENUM_SAMPLE_DESC_LOOP_MODE = 17,
-  /// LFO1's waveform (@ref SonareSynthLfoShape).
+  /// The patch's LFO waveform, vibrato and tremolo LFOs (@ref SonareSynthLfoShape).
   SONARE_SYNTH_ENUM_LFO_SHAPE = 18
 } SonareSynthEnumKind;
 

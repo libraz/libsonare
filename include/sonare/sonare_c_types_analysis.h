@@ -517,11 +517,12 @@ typedef enum {
 } SonareSynthRetrigger;
 #define SONARE_SYNTH_RETRIGGER_COUNT 3
 
-/* LFO1's waveform, at every destination it reaches. 0 keeps the base patch's choice. */
+/* The patch's LFO waveform (vibrato and tremolo LFOs), at every destination either
+   reaches. 0 keeps the base patch's choice. */
 typedef enum {
   SONARE_SYNTH_LFO_SHAPE_BASE = 0,
   SONARE_SYNTH_LFO_SHAPE_TRIANGLE = 1, /* every catalog preset's shape */
-  SONARE_SYNTH_LFO_SHAPE_SINE = 2 /* no harmonics: a vibrato's sidebands sit where a player's do */
+  SONARE_SYNTH_LFO_SHAPE_SINE = 2 /* no harmonics: sidebands sit where a player's or a motor's do */
 } SonareSynthLfoShape;
 #define SONARE_SYNTH_LFO_SHAPE_COUNT 3
 
@@ -799,8 +800,9 @@ typedef struct {
                             envelope's decay or its engine's own end */
 
   /* --- LFO shape (struct_version 10) --- */
-  /* SonareSynthLfoShape; 0 => base. Shapes LFO1 wherever it is read: the
-     vibrato depth, the GS LFO cutoff and amplitude depths and mod source lfo1. */
+  /* SonareSynthLfoShape; 0 => base. Shapes both the vibrato and the tremolo
+     LFO wherever they are read: the vibrato depth, the GS LFO cutoff and
+     amplitude depths and mod sources lfo1 and lfo2. */
   int lfo_shape;
 } SonareSynthPatch;
 

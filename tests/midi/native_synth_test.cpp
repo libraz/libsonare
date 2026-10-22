@@ -585,6 +585,68 @@ TEST_CASE("NativeSynth LFO shape: sine vibrato carries no third harmonic, triang
   REQUIRE(render(a, 9600).left == render(b, 9600).left);
 }
 
+TEST_CASE("NativeSynth LFO shape: a sine LFO2 tremolo carries no third-order sideband",
+          "[midi][synth][lfo_shape]") {
+  using sonare::midi::synth::LfoShape;
+  using sonare::midi::synth::ModDestination;
+  using sonare::midi::synth::ModSource;
+  constexpr float kRateHz = 4.0f;
+  constexpr float kDepth = 0.35f;
+  constexpr double kCarrierHz = 440.0;  // note 69
+
+  auto render_tremolo = [&](LfoShape shape) {
+    NativeSynthConfig cfg;
+    cfg.patch.waveform = VaWaveform::kSine;
+    cfg.patch.cutoff_hz = 20000.0f;
+    cfg.patch.gain = 0.8f;
+    cfg.patch.drift_cents = 0.0f;
+    cfg.patch.amp_env.attack_ms = 1.0f;
+    cfg.patch.amp_env.sustain = 1.0f;
+    cfg.patch.lfo2_rate_hz = kRateHz;
+    cfg.patch.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kAmpGain, kDepth};
+    cfg.patch.lfo_shape = shape;
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 69, 127)));
+    return render(synth, static_cast<int>(kOutRate * 2.5)).left;
+  };
+
+  // Hann-weighted DFT over eight whole LFO cycles past the attack, in dB re the carrier.
+  const auto sidebands = [&](LfoShape shape) {
+    const auto buf = render_tremolo(shape);
+    const size_t from = static_cast<size_t>(0.25 * kOutRate);
+    const size_t len = static_cast<size_t>(8.0 / kRateHz * kOutRate);
+    REQUIRE(buf.size() >= from + len);
+    const auto level = [&](double hz) {
+      double re = 0.0;
+      double im = 0.0;
+      for (size_t i = 0; i < len; ++i) {
+        const double w =
+            0.5 - 0.5 * std::cos(sonare::constants::kTwoPiD * static_cast<double>(i) / len);
+        const double ph = sonare::constants::kTwoPiD * hz * static_cast<double>(i) / kOutRate;
+        re += w * buf[from + i] * std::cos(ph);
+        im += w * buf[from + i] * std::sin(ph);
+      }
+      return std::hypot(re, im);
+    };
+    const double carrier = level(kCarrierHz);
+    const auto rel_db = [&](int k) {
+      const double side = 0.5 * (level(kCarrierHz - k * kRateHz) + level(kCarrierHz + k * kRateHz));
+      return 20.0 * std::log10(side / carrier);
+    };
+    return std::pair<double, double>{rel_db(1), rel_db(3)};
+  };
+
+  const auto [sine_k1_db, sine_k3_db] = sidebands(LfoShape::kSine);
+  const auto [tri_k1_db, tri_k3_db] = sidebands(LfoShape::kTriangle);
+  // Linear AM at depth m puts each first sideband at m/2: -15.1 dB for the sine, 8/pi^2 of it
+  // (-17.0 dB) for the triangle, whose third harmonic is 1/9 of that again (-36.1 dB).
+  CHECK(sine_k1_db == Catch::Approx(-15.1).margin(1.0));
+  CHECK(tri_k1_db == Catch::Approx(-17.0).margin(1.0));
+  CHECK(sine_k3_db < -60.0);
+  CHECK(tri_k3_db > -40.0);
+}
+
 TEST_CASE("Sf2Player without a SoundFont plays every GM program via the fallback",
           "[midi][sf2][synth]") {
   Sf2Player player = make_fallback_player();
