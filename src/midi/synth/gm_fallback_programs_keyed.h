@@ -682,29 +682,41 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.bass_picked.ks.velocity_exponent = 1.62f;
   o.bass_picked.cutoff_hz = 6250.0f;
 
-  // Orchestral harp: long stretched decay, strings keep ringing after
-  // note-off (no damper grip), mid-string pluck.
+  // Orchestral harp: strings keep ringing after note-off (no damper grip), plucked near
+  // the middle of the string with the flesh of the finger.
   o.harp = steel;
   o.harp.amp_env = fallback_env(1.0f, 0.0f, 1.0f, 1200.0f);
   o.harp.ks.brightness = 0.5f;
-  o.harp.ks.decay_s = 5.20362f;
-  o.harp.ks.decay_stretch = 0.775531f;
-  o.harp.ks.pick_position = 0.200318f;
+  // The module's recordings fall as a straight line in dB at -15.0 (C3) to -16.7 dB/s (C5): an
+  // applied fade, not string damping, so the t60 is 3.6 s with almost no stretch across the
+  // compass.
+  o.harp.ks.decay_s = 3.6f;
+  o.harp.ks.decay_stretch = 0.07f;
+  // h2 and h4 sit 43 dB under h1 from D#4 up: the pluck lands just off the string's midpoint.
+  o.harp.ks.pick_position = 0.47f;
   o.harp.ks.vel_to_brightness = 0.26385f;
   o.harp.ks.release_damp_s = 0.407461f;
   // A harp's many open strings ring in sympathy (keep the halo), but the strings
   // are plucked with the flesh of the finger and are not stiff or tension-bent.
-  o.harp.ks.nail = 0.365492f;
+  o.harp.ks.nail = 0.0f;
   o.harp.ks.dispersion = 0.0f;
   o.harp.ks.tension_mod = 0.0f;
+  // One string plane: the recordings decay in a single stage (prompt and late rates within
+  // 3 dB/s), where the coupled second polarization put the model's prompt stage 16 dB/s faster.
+  o.harp.ks.polarization = 0.0f;
+  // The upper partials ring with the fundamental: h5-h8 fall at most 13 dB/s faster than h1-h2
+  // in the recordings, where the 0.07 s default had the model's h3-h5 falling at 50-270 dB/s.
+  o.harp.ks.hf_decay_s = 2.0f;
   o.harp.body_mix = 0.3f;  // large open soundboard, less boxy than the guitar
   o.harp.amp_env.attack_ms = 2.0517f;
   o.harp.amp_env.release_ms = 150.0f;
-  o.harp.cutoff_hz = 11609.5f;
-  o.harp.ks.exc_brightness = 0.923523f;
+  // The recordings hold nothing above 2.5-5 kHz once the pluck is over, and their 4-8 kHz
+  // share of the first 120 ms sits at -72 dB at C3.
+  o.harp.cutoff_hz = 4500.0f;
+  o.harp.ks.exc_brightness = 0.08f;
   o.harp.resonance_q = 0.627799f;
-  // Solved against the reference's own level range, v32 to v127, which the
-  // engine default of 1.19 left 3.69 dB narrow.
+  // Kept from the earlier library reference's v32-v127 level range; the module's recordings
+  // hold one velocity per note, so nothing here re-measures it.
   o.harp.ks.velocity_exponent = 1.50f;
   // Not harp physics, which has no damper: 0.1 s stands in for the GM patch's release fade, so the
   // open-string halo stops with the last key up rather than ringing on.

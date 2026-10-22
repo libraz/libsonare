@@ -45,7 +45,9 @@
     "stereo": "every recording of this tone is mono (`sampleType` 1) and no `pan` is set, so the image is absent by construction rather than by voicing",
     "register": "no `initialAttenuation` is set on this tone, so the level relation between one note and the next is not in the source. Over this grid the peaks span 1.93 dB and do not fall with pitch - the loudest cell is note 72 and the quietest note 51 - which is the headroom each recording was normalised into rather than the instrument's fall across its compass",
     "damper": "a recording ends where it was cut and carries no note-off, so there is no key lift for a release to be read from",
-    "attack_hf_swing": "this reference holds one velocity (100) per note, so there is no softest-to-hardest change to measure -- the same fact vel_range is excused for"
+    "attack_hf_swing": "this reference holds one velocity (100) per note, so there is no softest-to-hardest change to measure -- the same fact vel_range is excused for",
+    "body": "what sits under the fundamental in these recordings is not a body. At seven of the nine notes the energy the metric reads is one narrow line at f0 minus 125 or 250 Hz (-50 to -58 dB re the fundamental), the lower sideband of a gain update every 8 ms that every partial carries; at note 48 it is a 50 Hz hum line (-67.8 dB) and nothing else. Notching those lines takes the reading from -50/-55 dB to -57 to -80 dB. The lines sit at no harp string's pitch and at no fixed frequency (60 to 273 Hz across the grid), so a model is being asked to reproduce the source's modulation, not an instrument",
+    "tnr": "the whole of what the metric counts as noise here is modulation sidebands of the partials: 100 % of the non-tonal power lies below 1 kHz, in lines at f0 +- 5 Hz (-36 to -44 dB, a 5.0 Hz amplitude modulation present at every note) and at n*f0 + k*125 Hz (-52 to -58 dB, the same 8 ms gain update). Against the recordings' actual floor (-93 to -105 dB per bin) the tone-to-noise ratio would read 71 to 78 dB, not the 35 to 50 recorded, so the 15 to 25 dB the model reads cleaner is the source's synthesis, not a missing mechanism noise"
   },
   "dimensions": [
     "stretch",
@@ -53,12 +55,10 @@
     "aftersound",
     "doubling",
     "partial_tilt",
-    "body",
     "attack",
     "attack_hf",
     "balance",
-    "centroid_pct",
-    "tnr"
+    "centroid_pct"
   ],
   "rig": "none",
   "room": "none",
