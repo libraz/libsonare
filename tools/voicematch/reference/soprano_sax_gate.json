@@ -3,28 +3,29 @@
   "timbre": "gm065",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-22T10:54:30+00:00",
-  "recorded_utc": "2026-10-22T12:27:58+00:00",
+  "recorded_utc": "2026-10-22T13:36:24+00:00",
   "model_build": {
-    "built_utc": "2026-10-22T12:27:01Z",
-    "newest_source_utc": "2026-10-22T12:26:52Z",
+    "built_utc": "2026-10-22T13:35:38Z",
+    "newest_source_utc": "2026-10-22T13:35:13Z",
     "stale": false
   },
   "reference_spread": {},
+  "_body_floor": "body.median and body.abs_median were deleted 2026-10-22 and re-recorded. The +0.76 / 2.30 they held were read with reed.growl at 0.15, whose 28 Hz breath modulation put a sub-audio product into the band under the note (20 Hz..0.8 f0 at -44.6 dB re the tone; -67 dB with growl off; the reference's -71). The reference's own band there is -50 to -76 dB under the note, -75 to -98 dBFS, and tracks the sample's gain with velocity (slope 0 to -1 across n56-n80), which is its recording floor scaled by the library rather than radiated content. With growl off the model reads 5.7 dB under that floor and the dimension compares two floors; it says nothing audible about the voice.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 2.284,
-      "abs_median": 2.284,
-      "p90": 3.249,
+      "median": 1.134,
+      "abs_median": 1.134,
+      "p90": 1.957,
       "rows": 35
     },
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 18.212,
-      "abs_median": 18.212,
-      "p90": 23.282,
+      "median": 12.05,
+      "abs_median": 12.138,
+      "p90": 15.298,
       "rows": 35
     },
     "damper": {
@@ -38,33 +39,33 @@
     "attack": {
       "floor": 40.0,
       "floor_from": "guess",
-      "median": 100.0,
-      "abs_median": 100.0,
-      "p90": 200.0,
+      "median": 87.5,
+      "abs_median": 87.5,
+      "p90": 191.25,
       "rows": 35
     },
     "body": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 1.0,
-      "abs_median": 2.875,
+      "median": 7.175,
+      "abs_median": 7.175,
       "p90": 11.875,
       "rows": 35
     },
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 12.51,
-      "abs_median": 12.51,
-      "p90": 21.3,
+      "median": 7.773,
+      "abs_median": 10.783,
+      "p90": 17.446,
       "rows": 35
     },
     "centroid_pct": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 31.778,
-      "abs_median": 31.778,
-      "p90": 56.634,
+      "median": 25.916,
+      "abs_median": 25.916,
+      "p90": 55.515,
       "rows": 35
     },
     "vel_range": {

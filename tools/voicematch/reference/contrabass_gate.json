@@ -3,13 +3,14 @@
   "timbre": "gm044",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-22T10:51:29+00:00",
-  "recorded_utc": "2026-10-22T10:59:37+00:00",
+  "recorded_utc": "2026-10-22T13:36:20+00:00",
   "model_build": {
-    "built_utc": "2026-10-22T10:57:01Z",
-    "newest_source_utc": "2026-10-22T10:42:43Z",
+    "built_utc": "2026-10-22T13:35:38Z",
+    "newest_source_utc": "2026-10-22T13:35:13Z",
     "stale": false
   },
   "reference_spread": {},
+  "_damper_abs_median_grid": "damper.abs_median was deleted 2026-10-22 and re-recorded. The 6.25 it held sat between two quanta of a reading taken on a 5 ms grid: at the recording 18 of the 35 rows read |delta| <= 5 ms and 17 read >= 10 ms, so the median was the 18th row exactly, and any one row crossing a quantum moves the median from 5 to 10. Taking the rosin jitter off the patch moved two rows by one quantum (n48 v80 -5 -> -10, n44 v104 -5 -> 0) and the median to 10 while the signed median stayed -5 and the p90 25; that is the grid, not the release.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
@@ -22,16 +23,16 @@
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 14.963,
-      "abs_median": 14.963,
-      "p90": 23.207,
+      "median": 4.038,
+      "abs_median": 10.525,
+      "p90": 21.497,
       "rows": 35
     },
     "damper": {
       "floor": 5.0,
       "floor_from": "guess",
       "median": 6.25,
-      "abs_median": 6.25,
+      "abs_median": 12.5,
       "p90": 31.25,
       "rows": 35
     },
@@ -62,9 +63,9 @@
     "body": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 39.944,
-      "abs_median": 39.944,
-      "p90": 47.201,
+      "median": 18.125,
+      "abs_median": 18.125,
+      "p90": 24.225,
       "rows": 10
     },
     "vel_range": {

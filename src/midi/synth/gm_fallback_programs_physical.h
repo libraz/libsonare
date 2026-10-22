@@ -101,7 +101,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.viola.bowed_string.bow_speed = 0.9f;
   o.viola.bowed_string.brightness = 0.75f;
   o.viola.cutoff_hz = 5000.0f;
-  o.viola.lfo_to_pitch_cents = 12.0f;
+  // The reference's vibrato reads 40 c peak to peak; 14 reads 20 and is the deepest
+  // that holds the stack and tuning bounds (16 moves both by one row).
+  o.viola.lfo_to_pitch_cents = 14.0f;
   // The body radiates little below its air mode: the reference's C3 and F#3 carry
   // h2-h6 within 3 dB of h1, the sawtooth 12 dB under it.
   o.viola.hp_cutoff_hz = 200.0f;
@@ -136,7 +138,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // range sits above every partial and the darkening has to come from the string.
   o.contrabass = bowed(0.177f, 0.58f, 0.15f, 0.18f, 185.0f, 160.0f, 0.06f, 0.69f);
   o.contrabass.lfo_rate_hz = 4.83651f;
-  o.contrabass.lfo_to_pitch_cents = 15.2584f;
+  o.contrabass.lfo_to_pitch_cents = 14.0f;
   o.contrabass.cutoff_hz = 2093.58f;
   o.contrabass.resonance_q = 2.04715f;
   o.contrabass.bowed_string.release_ms = 195.626f;
@@ -158,7 +160,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.contrabass.body_mix = 0.462168f;
   o.contrabass.drift_cents = 4.55576f;
   o.contrabass.bowed_string.brightness = 0.00173835f;
-  o.contrabass.bowed_string.rosin = 0.593912f;
+  // The reference's floor between partials sits 70 dB under the tone; at 0.59 the
+  // rosin jitter laid one 15 dB higher across 0.5-4 kHz, 12 dB of tone-to-noise.
+  o.contrabass.bowed_string.rosin = 0.0f;
   o.contrabass.bowed_string.velocity_exponent = 1.58f;
   o.contrabass.drive = 0.104102f;
   o.contrabass.stereo_spread = 0.24582f;
@@ -318,11 +322,15 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // clarinet reach their brightness through it too, and pay for it in
   // tone-to-noise and in the band under the note, so they keep the table. Each
   // fitted gain holds the sustained level the table had, so only timbre moves.
-  o.soprano_sax = reed(true, 0.55f, 0.55f, 0.64f, 0.32f, 16.0f, 80.0f, 0.78f, 0.30f, 0.55f);
-  o.soprano_sax.cutoff_hz = 2010.43f;
-  o.soprano_sax.lfo_rate_hz = 1.39493f;
-  o.soprano_sax.lfo_to_pitch_cents = 1.10793f;
-  o.soprano_sax.reed.growl = 0.15f;
+  o.soprano_sax = reed(true, 0.55f, 0.55f, 0.64f, 0.32f, 16.0f, 80.0f, 0.78f, 0.30f, 0.772954f);
+  o.soprano_sax.cutoff_hz = 5495.18f;
+  // The reference holds a 5 Hz, 11.7 c vibrato and no growl: at 0.15 the 28 Hz
+  // sidebands sat 48 dB under each partial where the reference carries nothing
+  // above -86 dB, and tone-to-noise read 15 dB noisier than it.
+  o.soprano_sax.lfo_rate_hz = 5.02f;
+  o.soprano_sax.lfo_to_pitch_cents = 7.6f;
+  o.soprano_sax.reed.growl = 0.0f;
+  o.soprano_sax.reed.cone_growth = 0.00601161f;
   o.soprano_sax.reed.chiff = 0.76839f;
   o.soprano_sax.amp_env.attack_ms = 0.970615f;
   o.soprano_sax.amp_env.decay_ms = 12.023f;
@@ -330,17 +338,17 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.soprano_sax.amp_env.sustain = 0.846997f;
   o.soprano_sax.drift_rate_hz = 0.578362f;
   o.soprano_sax.reed.attack_ms = 2.25692f;
-  o.soprano_sax.reed.breath_noise = 0.527053f;
-  o.soprano_sax.reed.breath_pressure = 0.157512f;
+  o.soprano_sax.reed.breath_noise = 0.256735f;
+  o.soprano_sax.reed.breath_pressure = 0.3429f;
   o.soprano_sax.reed.brightness = 0.448914f;
   o.soprano_sax.reed.chiff_ms = 8.15432f;
   o.soprano_sax.reed.damping = 0.263819f;
-  o.soprano_sax.reed.reed_opening = 0.778698f;
-  o.soprano_sax.reed.reed_stiffness = 0.618202f;
+  o.soprano_sax.reed.reed_opening = 0.519118f;
+  o.soprano_sax.reed.reed_stiffness = 0.70138f;
   o.soprano_sax.reed.release_ms = 478.75f;
   o.soprano_sax.reed.vel_to_breath = 0.768676f;
-  o.soprano_sax.resonance_q = 0.626897f;
-  o.soprano_sax.body_mix = 0.494427f;
+  o.soprano_sax.resonance_q = 3.00697f;
+  o.soprano_sax.body_mix = 0.120715f;
   o.soprano_sax.reed.velocity_exponent = 0.73f;
   o.alto_sax = reed(true, 0.55f, 0.55f, 0.62f, 0.34f, 16.0f, 90.0f, 0.78f, 0.32f, 0.1882f);
   // Fitted with the pressure held inside the valve's oscillating band, which
