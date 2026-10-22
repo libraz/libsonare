@@ -1,0 +1,69 @@
+{
+  "id": "orchestral_harp_module",
+  "label": "Harp, the GS capital tone, read out of a module's own recordings",
+  "program": 46,
+  "takes": "sustained",
+  "audition_title": "libsonare orchestral harp vs the module's own recordings",
+  "_notes": "The capital of program 46, which carries no `bank` key for the same reason every other capital in this directory carries none - a variation is recognised by a non-zero bank, so the capital is the absence of one. The grid spans 48 to 72, the compass `orchestral_harp` probes for the same address, but sits on the source's own lattice - one recording every three semitones from 24 to 96 and nothing between - so no cell here is a resampled neighbour. 48, 60 and 72 are shared with that capture's grid cell for cell.",
+  "notes": [
+    48,
+    51,
+    54,
+    57,
+    60,
+    63,
+    66,
+    69,
+    72
+  ],
+  "_velocities": "One, and 100 is a label rather than a measurement: the source sets `velRange` on none of this tone's zones, so it holds one recording per note at a velocity it does not state, and the importer refuses a grid asking for more than one layer. `vel_range` is excused in `dimensions_na` for that reason.",
+  "velocities": [
+    100
+  ],
+  "_dry": "Nothing played this, so nothing was switched off. What the file holds is the module's own PCM with no effect in front of it, which is what `source_class: module` asks for.",
+  "dry": false,
+  "params": [],
+  "_stimulus": "The gate is the recording itself. Over this grid the cells run 2.00 to 2.58 s, shortening toward the top, and nothing pads one, so 2000 ms is the longest round window all 9 of them hold.",
+  "gate_ms": 2000,
+  "tail": "0s",
+  "_realtime": "Read rather than played: `import_sf2.py` extracts the recorded frames, so there is no host to settle and no lead-in to strip. `preroll_ms` is 0 because a recording begins at its own first frame.",
+  "realtime": false,
+  "warmup": false,
+  "settle_ms": 0,
+  "preroll_ms": 0,
+  "sample_rate": 44100,
+  "_timbres": "One. The source holds exactly one recording per note of this tone, so there is no second of it to disagree with and this capture cannot move the voice past `voiced` however complete its coverage.",
+  "timbres": [
+    {
+      "id": "t0",
+      "label": "Harp, module recording"
+    }
+  ],
+  "_dimensions": "Coverage is read against `toneclass.canonical_dimensions` for a plucked string. The five below are what this source cannot carry, each argued from what it sets on this tone rather than from its being a font.",
+  "dimensions_na": {
+    "vel_range": "`velRange` is set on none of this tone's zones, so it holds one recording per note at a velocity it does not state. A grid asking for more than one would write that recording into every row of the axis a dynamics fit reads",
+    "stereo": "every recording of this tone is mono (`sampleType` 1) and no `pan` is set, so the image is absent by construction rather than by voicing",
+    "register": "no `initialAttenuation` is set on this tone, so the level relation between one note and the next is not in the source. Over this grid the peaks span 1.93 dB and do not fall with pitch - the loudest cell is note 72 and the quietest note 51 - which is the headroom each recording was normalised into rather than the instrument's fall across its compass",
+    "damper": "a recording ends where it was cut and carries no note-off, so there is no key lift for a release to be read from",
+    "attack_hf_swing": "this reference holds one velocity (100) per note, so there is no softest-to-hardest change to measure -- the same fact vel_range is excused for"
+  },
+  "dimensions": [
+    "stretch",
+    "decay",
+    "aftersound",
+    "doubling",
+    "partial_tilt",
+    "body",
+    "attack",
+    "attack_hf",
+    "balance",
+    "centroid_pct",
+    "tnr"
+  ],
+  "rig": "none",
+  "room": "none",
+  "_room": "The module is recorded with reverb, chorus, delay and the insertion effect all off, and `import_sf2.py --report` plus its own dryness check measure the imported corpus rather than taking this declaration's word for it.",
+  "source_class": "module",
+  "_identity": "Which file and which of its presets answered this timbre lives in the untracked sibling `orchestral_harp_module.local.json`. Everything here is the method; scoring, fitting and diagnosing read `reference/orchestral_harp_module.json`.",
+  "_slots": "Slot identity is measured, never taken from a name or a position. This tone shares no recording with either nylon guitar on hand - the module's own and the one `nylon_guitar` captures: at every shared note the best whole-file alignment against them sits 198 to 2574 samples off, where the library's program 46 slot aligns with `nylon_guitar` within 10 samples at all five notes it shares. Its partial ladder (h2-h8 against h1, 0.05-0.45 s) sits 16.6 and 19.7 dB from `nylon_guitar` at notes 48 and 60 and 9.9 to 19.4 dB from the module's nylon guitar over 48-72, where those two guitars sit 6.8 and 10.2 dB from each other. At note 60 it carries less above the fundamental than either guitar - h2 at -26.0 dB against -19.7 and -4.1 - and its fundamental falls 15.0 to 16.6 dB/s where the module's nylon guitar falls 8.3 to 10.3."
+}

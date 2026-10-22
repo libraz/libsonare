@@ -121,13 +121,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p000b002-acoustic-grand-piano",
@@ -243,13 +243,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p000b016-acoustic-grand-piano",
@@ -431,13 +431,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p001b008-bright-acoustic-piano",
@@ -494,13 +494,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p002-electric-grand-piano",
@@ -524,10 +524,13 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 16,
-          "gated": 14,
+          "gated": 11,
           "excused": [
             "attack_hf_swing",
-            "stereo"
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
           ],
           "gaps": [],
           "complete": true
@@ -543,14 +546,11 @@
             "balance",
             "body",
             "centroid_pct",
-            "damper",
             "decay",
             "doubling",
             "partial_tilt",
-            "register",
             "stretch",
-            "tnr",
-            "vel_range"
+            "tnr"
           ]
         },
         "structure": null,
@@ -620,13 +620,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p002b008-electric-grand-piano",
@@ -683,13 +683,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p003-honky-tonk-piano",
@@ -1406,13 +1406,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p005b002-electric-piano-2",
@@ -1528,13 +1528,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p005b016-electric-piano-2",
@@ -1623,15 +1623,18 @@
           "complete": true
         },
         "agreement": {
-          "inside": 10,
-          "total": 16,
+          "inside": 9,
+          "total": 18,
           "outside": {
             "attack_hf_swing": 4.24,
             "body": 2.2,
             "partial_tilt": 2.0,
-            "attack_hf": 1.7,
+            "attack_hf": 1.69,
+            "tnr": 1.67,
             "balance": 1.29,
-            "vel_range": 1.29
+            "vel_range": 1.29,
+            "onset_settle": 1.04,
+            "onset": 1.01
           }
         },
         "structure": {
@@ -1707,13 +1710,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p006b002-harpsichord",
@@ -1770,13 +1773,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p006b003-harpsichord",
@@ -1833,13 +1836,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p006b008-harpsichord",
@@ -1896,13 +1899,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p006b016-harpsichord",
@@ -1959,13 +1962,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p006b024-harpsichord",
@@ -2022,13 +2025,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p007-clavinet",
@@ -2399,13 +2402,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p011b008-vibraphone",
@@ -2461,13 +2464,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p012-marimba",
@@ -2533,13 +2536,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "judge the recorded candidate(s) — ring-2.3x, tube-open, tube-off, hard-mallet, soft-mallet, modes-two, modes-four, ring-short, bar-even — then listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p012b001-marimba",
@@ -2595,13 +2598,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p012b008-marimba",
@@ -2657,13 +2660,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p013-xylophone",
@@ -2845,13 +2848,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p014b002-tubular-bells",
@@ -2907,13 +2910,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p014b008-tubular-bells",
@@ -2969,13 +2972,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p014b009-tubular-bells",
@@ -3031,13 +3034,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p015-dulcimer",
@@ -3228,8 +3231,8 @@
       "patch": "organ_sixties",
       "engine": "additive",
       "capture": "organ_sixties",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "additive",
@@ -3239,7 +3242,7 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 5,
+          "gated": 6,
           "excused": [
             "damper",
             "register",
@@ -3247,10 +3250,7 @@
             "vel_range"
           ],
           "gaps": [],
-          "complete": false,
-          "unbounded": [
-            "balance"
-          ]
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -3258,6 +3258,7 @@
           "outside": {},
           "unjudgeable": [
             "attack",
+            "balance",
             "body",
             "centroid_pct",
             "stretch",
@@ -3268,13 +3269,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "1 dimension(s) recorded unbounded in the gate: balance — read the reason there, then either record a bound that became measurable or fix what the model is missing"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p016b003-drawbar-organ",
@@ -3393,8 +3394,8 @@
       "patch": "organ_sixties",
       "engine": "additive",
       "capture": "organ_sixties",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "additive",
@@ -3404,7 +3405,7 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 5,
+          "gated": 6,
           "excused": [
             "damper",
             "register",
@@ -3412,10 +3413,7 @@
             "vel_range"
           ],
           "gaps": [],
-          "complete": false,
-          "unbounded": [
-            "balance"
-          ]
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -3423,6 +3421,7 @@
           "outside": {},
           "unjudgeable": [
             "attack",
+            "balance",
             "body",
             "centroid_pct",
             "stretch",
@@ -3433,13 +3432,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "1 dimension(s) recorded unbounded in the gate: balance — read the reason there, then either record a bound that became measurable or fix what the model is missing"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p016b032-drawbar-organ",
@@ -3871,11 +3870,9 @@
           "complete": true
         },
         "agreement": {
-          "inside": 4,
+          "inside": 5,
           "total": 5,
-          "outside": {
-            "centroid_pct": 1.29
-          }
+          "outside": {}
         },
         "structure": {
           "state": "stale",
@@ -3948,13 +3945,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p019b002-church-organ",
@@ -4005,13 +4002,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p019b008-church-organ",
@@ -4062,13 +4059,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p019b016-church-organ",
@@ -4119,13 +4116,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p020-reed-organ",
@@ -4148,8 +4145,8 @@
         "profile_rows": 40,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 10,
+          "canonical": 12,
+          "gated": 12,
           "excused": [],
           "gaps": [],
           "complete": true
@@ -4164,6 +4161,8 @@
             "body",
             "centroid_pct",
             "damper",
+            "onset",
+            "onset_settle",
             "register",
             "stereo",
             "stretch",
@@ -4176,7 +4175,7 @@
         "instrument": null,
         "fit": {
           "state": "stale",
-          "date": "2026-10-16",
+          "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
@@ -4204,8 +4203,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 10,
+          "canonical": 12,
+          "gated": 12,
           "excused": [],
           "gaps": [],
           "complete": true
@@ -4220,6 +4219,8 @@
             "body",
             "centroid_pct",
             "damper",
+            "onset",
+            "onset_settle",
             "register",
             "stereo",
             "stretch",
@@ -4232,8 +4233,8 @@
         "instrument": null,
         "fit": {
           "state": "stale",
-          "date": "2026-10-16",
-          "outcome": "kept",
+          "date": "2026-10-17",
+          "outcome": "adopted",
           "fittable": true
         }
       },
@@ -4260,8 +4261,8 @@
         "profile_rows": 6,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 6,
+          "canonical": 12,
+          "gated": 8,
           "excused": [
             "damper",
             "register",
@@ -4280,6 +4281,8 @@
             "balance",
             "body",
             "centroid_pct",
+            "onset",
+            "onset_settle",
             "stretch",
             "tnr"
           ]
@@ -4288,13 +4291,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p022-harmonica",
@@ -4317,9 +4320,11 @@
         "profile_rows": 25,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 10,
-          "excused": [],
+          "canonical": 12,
+          "gated": 11,
+          "excused": [
+            "body"
+          ],
           "gaps": [],
           "complete": true
         },
@@ -4330,9 +4335,10 @@
           "unjudgeable": [
             "attack",
             "balance",
-            "body",
             "centroid_pct",
             "damper",
+            "onset",
+            "onset_settle",
             "register",
             "stereo",
             "stretch",
@@ -4345,7 +4351,7 @@
         "instrument": null,
         "fit": {
           "state": "stale",
-          "date": "2026-10-16",
+          "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
@@ -4373,8 +4379,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 10,
+          "canonical": 12,
+          "gated": 12,
           "excused": [],
           "gaps": [],
           "complete": true
@@ -4389,6 +4395,8 @@
             "body",
             "centroid_pct",
             "damper",
+            "onset",
+            "onset_settle",
             "register",
             "stereo",
             "stretch",
@@ -4401,7 +4409,7 @@
         "instrument": null,
         "fit": {
           "state": "stale",
-          "date": "2026-10-16",
+          "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
@@ -4496,9 +4504,10 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 16,
-          "gated": 11,
+          "gated": 10,
           "excused": [
             "attack_hf_swing",
+            "body",
             "damper",
             "register",
             "stereo",
@@ -4516,7 +4525,6 @@
             "attack",
             "attack_hf",
             "balance",
-            "body",
             "centroid_pct",
             "decay",
             "doubling",
@@ -4529,13 +4537,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p024b002-acoustic-guitar-nylon",
@@ -4592,13 +4600,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p024b008-acoustic-guitar-nylon",
@@ -4622,9 +4630,10 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 16,
-          "gated": 11,
+          "gated": 10,
           "excused": [
             "attack_hf_swing",
+            "body",
             "damper",
             "register",
             "stereo",
@@ -4642,7 +4651,6 @@
             "attack",
             "attack_hf",
             "balance",
-            "body",
             "centroid_pct",
             "decay",
             "doubling",
@@ -4655,13 +4663,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p024b016-acoustic-guitar-nylon",
@@ -4718,13 +4726,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p025-acoustic-guitar-steel",
@@ -4810,9 +4818,10 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 16,
-          "gated": 11,
+          "gated": 10,
           "excused": [
             "attack_hf_swing",
+            "body",
             "damper",
             "register",
             "stereo",
@@ -4830,7 +4839,6 @@
             "attack",
             "attack_hf",
             "balance",
-            "body",
             "centroid_pct",
             "decay",
             "doubling",
@@ -4843,13 +4851,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p025b002-acoustic-guitar-steel",
@@ -4873,9 +4881,10 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 16,
-          "gated": 11,
+          "gated": 10,
           "excused": [
             "attack_hf_swing",
+            "body",
             "damper",
             "register",
             "stereo",
@@ -4893,7 +4902,6 @@
             "attack",
             "attack_hf",
             "balance",
-            "body",
             "centroid_pct",
             "decay",
             "doubling",
@@ -4906,13 +4914,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p025b008-acoustic-guitar-steel",
@@ -4936,9 +4944,10 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 16,
-          "gated": 11,
+          "gated": 10,
           "excused": [
             "attack_hf_swing",
+            "body",
             "damper",
             "register",
             "stereo",
@@ -4956,7 +4965,6 @@
             "attack",
             "attack_hf",
             "balance",
-            "body",
             "centroid_pct",
             "decay",
             "doubling",
@@ -4969,13 +4977,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p025b016-acoustic-guitar-steel",
@@ -4999,9 +5007,10 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 16,
-          "gated": 11,
+          "gated": 10,
           "excused": [
             "attack_hf_swing",
+            "body",
             "damper",
             "register",
             "stereo",
@@ -5019,7 +5028,6 @@
             "attack",
             "attack_hf",
             "balance",
-            "body",
             "centroid_pct",
             "decay",
             "doubling",
@@ -5032,13 +5040,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p026-electric-guitar-jazz",
@@ -5051,8 +5059,8 @@
       "patch": "electric_guitar",
       "engine": "karplus_strong",
       "capture": "jazz_guitar",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [
         "string-rings-longer"
       ],
@@ -5064,10 +5072,12 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 16,
-          "gated": 16,
+          "gated": 15,
           "excused": [],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "damper"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -5081,7 +5091,6 @@
             "balance",
             "body",
             "centroid_pct",
-            "damper",
             "decay",
             "doubling",
             "partial_tilt",
@@ -5108,7 +5117,7 @@
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "1 canonical dimension(s) neither gated nor excused: damper"
     },
     {
       "slug": "p027-electric-guitar-clean",
@@ -5156,9 +5165,9 @@
           "total": 14,
           "outside": {
             "vel_range": 38.48,
-            "attack_hf_swing": 7.82,
-            "tnr": 4.59,
+            "attack_hf_swing": 6.12,
             "body": 4.28,
+            "tnr": 2.31,
             "attack_hf": 1.8,
             "attack": 1.5
           }
@@ -5197,8 +5206,9 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 16,
-          "gated": 15,
+          "gated": 14,
           "excused": [
+            "body",
             "damper"
           ],
           "gaps": [],
@@ -5214,7 +5224,6 @@
             "attack_hf",
             "attack_hf_swing",
             "balance",
-            "body",
             "centroid_pct",
             "decay",
             "doubling",
@@ -5380,10 +5389,11 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 16,
-          "gated": 14,
+          "gated": 13,
           "excused": [
             "balance",
-            "body"
+            "body",
+            "doubling"
           ],
           "gaps": [],
           "complete": true
@@ -5400,7 +5410,6 @@
             "centroid_pct",
             "damper",
             "decay",
-            "doubling",
             "partial_tilt",
             "register",
             "stereo",
@@ -5984,13 +5993,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
-          "outcome": "kept",
+          "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p040b001-violin",
@@ -6041,13 +6050,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p040b008-violin",
@@ -6098,13 +6107,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p041-viola",
@@ -6162,8 +6171,8 @@
         "instrument": null,
         "fit": {
           "state": "stale",
-          "date": "2026-10-16",
-          "outcome": "adopted",
+          "date": "2026-10-17",
+          "outcome": "kept",
           "fittable": true
         }
       },
@@ -6187,7 +6196,7 @@
         "engine": "bowed_string",
         "patch": "cello",
         "timbres": 1,
-        "profile_rows": 35,
+        "profile_rows": 50,
         "gate_state": "current",
         "coverage": {
           "canonical": 10,
@@ -6225,7 +6234,7 @@
         "instrument": null,
         "fit": {
           "state": "stale",
-          "date": "2026-10-16",
+          "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
@@ -6282,7 +6291,7 @@
         "instrument": null,
         "fit": {
           "state": "stale",
-          "date": "2026-10-16",
+          "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
@@ -6430,7 +6439,7 @@
       "tone_class": "plucked-string",
       "patch": "harp",
       "engine": "karplus_strong",
-      "capture": "orchestral_harp",
+      "capture": "orchestral_harp_module",
       "stage": 0.6,
       "stage_name": "fitted",
       "open_candidates": [],
@@ -6438,13 +6447,17 @@
         "engine": "karplus_strong",
         "patch": "harp",
         "timbres": 1,
-        "profile_rows": 35,
+        "profile_rows": 44,
         "gate_state": "current",
         "coverage": {
           "canonical": 16,
-          "gated": 15,
+          "gated": 11,
           "excused": [
-            "stereo"
+            "attack_hf_swing",
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
           ],
           "gaps": [],
           "complete": true
@@ -6457,18 +6470,14 @@
             "aftersound",
             "attack",
             "attack_hf",
-            "attack_hf_swing",
             "balance",
             "body",
             "centroid_pct",
-            "damper",
             "decay",
             "doubling",
             "partial_tilt",
-            "register",
             "stretch",
-            "tnr",
-            "vel_range"
+            "tnr"
           ]
         },
         "structure": null,
@@ -6570,7 +6579,7 @@
         "engine": "bowed_string",
         "patch": "string_ensemble_1",
         "timbres": 1,
-        "profile_rows": 35,
+        "profile_rows": 50,
         "gate_state": "current",
         "coverage": {
           "canonical": 10,
@@ -6607,7 +6616,7 @@
         "instrument": null,
         "fit": {
           "state": "stale",
-          "date": "2026-10-16",
+          "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
@@ -6632,7 +6641,7 @@
         "engine": "bowed_string",
         "patch": "string_ensemble_2",
         "timbres": 1,
-        "profile_rows": 35,
+        "profile_rows": 50,
         "gate_state": "current",
         "coverage": {
           "canonical": 10,
@@ -6669,8 +6678,8 @@
         "instrument": null,
         "fit": {
           "state": "stale",
-          "date": "2026-10-16",
-          "outcome": "adopted",
+          "date": "2026-10-17",
+          "outcome": "kept",
           "fittable": true
         }
       },
@@ -6877,8 +6886,8 @@
       "patch": "voice_oohs",
       "engine": "vocal",
       "capture": "voice_oohs",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "vocal",
@@ -6888,13 +6897,10 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 9,
+          "gated": 10,
           "excused": [],
           "gaps": [],
-          "complete": false,
-          "unbounded": [
-            "damper"
-          ]
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -6905,6 +6911,7 @@
             "balance",
             "body",
             "centroid_pct",
+            "damper",
             "register",
             "stereo",
             "stretch",
@@ -6928,7 +6935,7 @@
           "fittable": true
         }
       },
-      "next": "1 dimension(s) recorded unbounded in the gate: damper — read the reason there, then either record a bound that became measurable or fix what the model is missing"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p054-synth-voice",
@@ -7084,8 +7091,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 8,
+          "canonical": 12,
+          "gated": 10,
           "excused": [
             "body",
             "stereo"
@@ -7102,6 +7109,8 @@
             "balance",
             "centroid_pct",
             "damper",
+            "onset",
+            "onset_settle",
             "register",
             "stretch",
             "tnr",
@@ -7141,8 +7150,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 9,
+          "canonical": 12,
+          "gated": 11,
           "excused": [
             "stereo"
           ],
@@ -7159,6 +7168,8 @@
             "body",
             "centroid_pct",
             "damper",
+            "onset",
+            "onset_settle",
             "register",
             "stretch",
             "tnr",
@@ -7198,8 +7209,8 @@
         "profile_rows": 30,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 8,
+          "canonical": 12,
+          "gated": 10,
           "excused": [
             "body",
             "stereo"
@@ -7216,6 +7227,8 @@
             "balance",
             "centroid_pct",
             "damper",
+            "onset",
+            "onset_settle",
             "register",
             "stretch",
             "tnr",
@@ -7261,8 +7274,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 8,
+          "canonical": 12,
+          "gated": 10,
           "excused": [
             "body",
             "stereo"
@@ -7279,6 +7292,8 @@
             "balance",
             "centroid_pct",
             "damper",
+            "onset",
+            "onset_settle",
             "register",
             "stretch",
             "tnr",
@@ -7296,8 +7311,8 @@
         "instrument": null,
         "fit": {
           "state": "stale",
-          "date": "2026-10-16",
-          "outcome": "kept",
+          "date": "2026-10-17",
+          "outcome": "adopted",
           "fittable": true
         }
       },
@@ -7324,8 +7339,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 10,
+          "canonical": 12,
+          "gated": 12,
           "excused": [],
           "gaps": [],
           "complete": true
@@ -7340,6 +7355,8 @@
             "body",
             "centroid_pct",
             "damper",
+            "onset",
+            "onset_settle",
             "register",
             "stereo",
             "stretch",
@@ -7380,8 +7397,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 10,
+          "canonical": 12,
+          "gated": 12,
           "excused": [],
           "gaps": [],
           "complete": true
@@ -7396,6 +7413,8 @@
             "body",
             "centroid_pct",
             "damper",
+            "onset",
+            "onset_settle",
             "register",
             "stereo",
             "stretch",
@@ -8018,8 +8037,8 @@
         "profile_rows": 25,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 9,
+          "canonical": 12,
+          "gated": 11,
           "excused": [
             "stereo"
           ],
@@ -8036,6 +8055,8 @@
             "body",
             "centroid_pct",
             "damper",
+            "onset",
+            "onset_settle",
             "register",
             "stretch",
             "tnr",
@@ -8047,7 +8068,7 @@
         "instrument": null,
         "fit": {
           "state": "stale",
-          "date": "2026-10-16",
+          "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
@@ -8075,8 +8096,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 9,
+          "canonical": 12,
+          "gated": 11,
           "excused": [
             "stereo"
           ],
@@ -8093,6 +8114,8 @@
             "body",
             "centroid_pct",
             "damper",
+            "onset",
+            "onset_settle",
             "register",
             "stretch",
             "tnr",
@@ -8104,7 +8127,7 @@
         "instrument": null,
         "fit": {
           "state": "stale",
-          "date": "2026-10-16",
+          "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
@@ -8132,8 +8155,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 9,
+          "canonical": 12,
+          "gated": 11,
           "excused": [
             "stereo"
           ],
@@ -8150,6 +8173,8 @@
             "body",
             "centroid_pct",
             "damper",
+            "onset",
+            "onset_settle",
             "register",
             "stretch",
             "tnr",
@@ -8161,7 +8186,7 @@
         "instrument": null,
         "fit": {
           "state": "stale",
-          "date": "2026-10-16",
+          "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
@@ -8189,8 +8214,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 9,
+          "canonical": 12,
+          "gated": 11,
           "excused": [
             "stereo"
           ],
@@ -8207,6 +8232,8 @@
             "body",
             "centroid_pct",
             "damper",
+            "onset",
+            "onset_settle",
             "register",
             "stretch",
             "tnr",
@@ -8218,7 +8245,7 @@
         "instrument": null,
         "fit": {
           "state": "stale",
-          "date": "2026-10-16",
+          "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
@@ -8246,8 +8273,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 9,
+          "canonical": 12,
+          "gated": 11,
           "excused": [
             "stereo"
           ],
@@ -8264,6 +8291,8 @@
             "body",
             "centroid_pct",
             "damper",
+            "onset",
+            "onset_settle",
             "register",
             "stretch",
             "tnr",
@@ -8275,7 +8304,7 @@
         "instrument": null,
         "fit": {
           "state": "stale",
-          "date": "2026-10-16",
+          "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
@@ -8303,8 +8332,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 9,
+          "canonical": 12,
+          "gated": 11,
           "excused": [
             "stereo"
           ],
@@ -8321,6 +8350,8 @@
             "body",
             "centroid_pct",
             "damper",
+            "onset",
+            "onset_settle",
             "register",
             "stretch",
             "tnr",
@@ -8332,7 +8363,7 @@
         "instrument": null,
         "fit": {
           "state": "stale",
-          "date": "2026-10-16",
+          "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
@@ -8362,8 +8393,8 @@
         "profile_rows": 25,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 9,
+          "canonical": 12,
+          "gated": 11,
           "excused": [
             "stereo"
           ],
@@ -8380,6 +8411,8 @@
             "body",
             "centroid_pct",
             "damper",
+            "onset",
+            "onset_settle",
             "register",
             "stretch",
             "tnr",
@@ -8391,7 +8424,7 @@
         "instrument": null,
         "fit": {
           "state": "stale",
-          "date": "2026-10-16",
+          "date": "2026-10-17",
           "outcome": "kept",
           "fittable": true
         }
@@ -8419,8 +8452,8 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 9,
+          "canonical": 12,
+          "gated": 11,
           "excused": [
             "stereo"
           ],
@@ -8437,6 +8470,8 @@
             "body",
             "centroid_pct",
             "damper",
+            "onset",
+            "onset_settle",
             "register",
             "stretch",
             "tnr",
@@ -8448,7 +8483,7 @@
         "instrument": null,
         "fit": {
           "state": "stale",
-          "date": "2026-10-16",
+          "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }
@@ -9895,8 +9930,9 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 16,
-          "gated": 14,
+          "gated": 13,
           "excused": [
+            "body",
             "damper",
             "stereo"
           ],
@@ -9913,7 +9949,6 @@
             "attack_hf",
             "attack_hf_swing",
             "balance",
-            "body",
             "centroid_pct",
             "decay",
             "doubling",
@@ -10238,7 +10273,7 @@
         "instrument": null,
         "fit": {
           "state": "stale",
-          "date": "2026-10-16",
+          "date": "2026-10-17",
           "outcome": "adopted",
           "fittable": true
         }

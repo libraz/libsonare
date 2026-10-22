@@ -706,12 +706,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // Solved against the reference's own level range, v32 to v127, which the
   // engine default of 1.19 left 3.69 dB narrow.
   o.harp.ks.velocity_exponent = 1.50f;
-  // Not harp physics, which has no damper: 0.1 s stands in for the GM patch's release fade and
-  // took damper release from +30 to +20 ms. The 0.6 s air mode struck at 0.18 took body-under-the-
-  // note from -28.0 to -0.7 dB (median).
+  // Not harp physics, which has no damper: 0.1 s stands in for the GM patch's release fade, so the
+  // open-string halo stops with the last key up rather than ringing on.
   o.harp.ks.halo_damp_s = 0.1f;
-  o.harp.ks.body_air_t60_s = 0.6f;
-  o.harp.ks.body_knock = 0.18f;
 
   // Sitar (GM 104): a plucked string over the curved jawari bridge — the
   // grazing bridge contact keeps spraying energy into the upper partials, so
