@@ -640,6 +640,14 @@ TEST_CASE("synth patch conversion rejects out-of-range enum fields", "[project][
     p.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
     p.retrigger = -1;
   }));
+  REQUIRE(rejected([](SonareSynthPatch& p) {
+    p.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+    p.lfo_shape = SONARE_SYNTH_LFO_SHAPE_COUNT;
+  }));
+  REQUIRE(rejected([](SonareSynthPatch& p) {
+    p.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+    p.lfo_shape = -1;
+  }));
 
   REQUIRE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
 }
@@ -1140,6 +1148,38 @@ TEST_CASE("the patch retrigger mode is read only by a caller that declares it",
   SonareSynthPatch preset{};
   REQUIRE(sonare_synth_preset_patch("saw-lead", &preset) == SONARE_OK);
   REQUIRE(preset.retrigger == SONARE_SYNTH_RETRIGGER_FREE);
+}
+
+TEST_CASE("the patch LFO shape is read only by a caller that declares it",
+          "[project][synth_patch][lfo_shape]") {
+  using sonare::midi::synth::LfoShape;
+  SonareSynthPatch asked{};
+  asked.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+  std::strcpy(asked.preset, "saw-lead");
+  asked.lfo_shape = SONARE_SYNTH_LFO_SHAPE_SINE;
+  sonare::midi::synth::NativeSynthConfig read;
+  const char* error = nullptr;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(asked, &read, &error));
+  REQUIRE(read.patch.lfo_shape == LfoShape::kSine);
+
+  // Zero keeps the base, which for every catalog preset is the triangle.
+  SonareSynthPatch base = asked;
+  base.lfo_shape = SONARE_SYNTH_LFO_SHAPE_BASE;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(base, &read, &error));
+  REQUIRE(read.patch.lfo_shape == LfoShape::kTriangle);
+
+  // A version-9 caller's struct ends before the field, so an out-of-range value there is not read.
+  SonareSynthPatch older = asked;
+  older.struct_version = 9;
+  older.lfo_shape = 99;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(older, &read, &error));
+  REQUIRE(error == nullptr);
+  REQUIRE(read.patch.lfo_shape == LfoShape::kTriangle);
+
+  // The read direction reports the resolved shape rather than the keep-base zero.
+  SonareSynthPatch preset{};
+  REQUIRE(sonare_synth_preset_patch("saw-lead", &preset) == SONARE_OK);
+  REQUIRE(preset.lfo_shape == SONARE_SYNTH_LFO_SHAPE_TRIANGLE);
 }
 
 TEST_CASE("the second presence word's fields are read only by a caller that declares them",

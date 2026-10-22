@@ -25,6 +25,7 @@ inline constexpr const auto& kSynthFilterModels = synth_names::kFilterModels;
 inline constexpr const auto& kSynthFilterOutputs = synth_names::kFilterOutputs;
 inline constexpr const auto& kSynthBodyTypes = synth_names::kBodyTypes;
 inline constexpr const auto& kSynthRetriggers = synth_names::kRetriggers;
+inline constexpr const auto& kSynthLfoShapes = synth_names::kLfoShapes;
 inline constexpr const auto& kSynthModSources = synth_names::kModSources;
 inline constexpr const auto& kSynthModDestinations = synth_names::kModDestinations;
 inline constexpr const auto& kPartRigModes = synth_names::kPartRigModes;
@@ -156,6 +157,8 @@ inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareS
                          "body type", &patch->body) ||
       !SynthEnumProperty(env, obj, "retrigger", kSynthRetriggers, SONARE_SYNTH_RETRIGGER_COUNT,
                          "retrigger mode", &patch->retrigger) ||
+      !SynthEnumProperty(env, obj, "lfoShape", kSynthLfoShapes, SONARE_SYNTH_LFO_SHAPE_COUNT,
+                         "LFO shape", &patch->lfo_shape) ||
       !SynthEnumProperty(env, obj, "sampleLoop", kSampleLoopModes, SONARE_SAMPLE_LOOP_MODE_COUNT,
                          "sample loop mode", &patch->sample_loop) ||
       !SynthEnumProperty(env, obj, "sampleKeyTrack", kSampleKeyTracks,
@@ -344,6 +347,7 @@ inline Napi::Object SynthPatchToObject(Napi::Env env, const SonareSynthPatch& pa
   out.Set("bodyMix", patch.body_mix);
   out.Set("stereoSpread", patch.stereo_spread);
   out.Set("retrigger", enum_name(patch.retrigger, kSynthRetriggers, SONARE_SYNTH_RETRIGGER_COUNT));
+  out.Set("lfoShape", enum_name(patch.lfo_shape, kSynthLfoShapes, SONARE_SYNTH_LFO_SHAPE_COUNT));
   out.Set("driftRateHz", patch.drift_rate_hz);
   out.Set("ampDelayMs", patch.amp_delay_ms);
   out.Set("ampHoldMs", patch.amp_hold_ms);

@@ -3,28 +3,29 @@
   "timbre": "gm042",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-22T12:59:12+00:00",
-  "recorded_utc": "2026-10-22T13:36:23+00:00",
+  "recorded_utc": "2026-10-22T14:27:15+00:00",
   "model_build": {
-    "built_utc": "2026-10-22T13:35:38Z",
-    "newest_source_utc": "2026-10-22T13:35:13Z",
+    "built_utc": "2026-10-22T14:25:39Z",
+    "newest_source_utc": "2026-10-22T14:25:22Z",
     "stale": false
   },
   "reference_spread": {},
+  "_vibrato_depth": "stretch.median, stretch.abs_median and balance.median were deleted 2026-10-22 and re-recorded when the LFO moved to 19.9 c at the reference's 5.62 Hz, from 14 c at 5.43 (the reference reads 39.8 c peak to peak). They read the vibrato as the violin's do: the model rendered with no vibrato and time-warped by a pure LFO, the engine held fixed, moves the tuning median -0.84 -> -2.06 c, its |median| 2.15 -> 2.89 c and the stack median -0.36 -> -0.84 dB across that change; the engine read +0.51 -> -1.60 c, 1.74 -> 2.89 c and -0.43 -> -1.15 dB. On the reference alone the peak-picked f0 sits 23.6 c (p90) from the mean of its own demodulated pitch track. Deeper than 19.9 the body line moves as well (4.01 at 22 c, 4.16 at 24.5 c against 3.92), which the warp does not reproduce (-2.60 -> -2.70 dB), so the depth stops there.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 1.0,
-      "abs_median": 2.175,
-      "p90": 7.428,
+      "median": 2.0,
+      "abs_median": 3.612,
+      "p90": 5.508,
       "rows": 35
     },
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 8.163,
-      "abs_median": 8.163,
-      "p90": 20.213,
+      "median": 8.012,
+      "abs_median": 8.012,
+      "p90": 16.778,
       "rows": 35
     },
     "damper": {
@@ -47,14 +48,14 @@
       "floor": 1.0,
       "floor_from": "default",
       "median": 3.925,
-      "abs_median": 9.263,
+      "abs_median": 9.075,
       "p90": 14.922,
       "rows": 35
     },
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 0.5,
+      "median": 1.442,
       "abs_median": 3.118,
       "p90": 12.325,
       "rows": 35

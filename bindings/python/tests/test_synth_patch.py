@@ -123,6 +123,7 @@ EXPECTED_SYNTH_ENUM_TABLES = {
     "sample_loop_modes": ("default", "none", "continuous", "key-down"),
     "sample_key_tracks": ("default", "on", "off"),
     "retriggers": ("default", "free", "note"),
+    "lfo_shapes": ("default", "triangle", "sine"),
     "part_rig_modes": ("bank", "none", "chain"),
     "sample_desc_loop_modes": ("none", "continuous", "key-down"),
 }
@@ -271,6 +272,7 @@ def test_every_python_enum_table_matches_the_c_abi_kind() -> None:
         "sample_loop_modes": synth._SAMPLE_LOOP_MODES,
         "sample_key_tracks": synth._SAMPLE_KEY_TRACKS,
         "retriggers": synth._SYNTH_RETRIGGERS,
+        "lfo_shapes": synth._SYNTH_LFO_SHAPES,
         "part_rig_modes": synth.PART_RIG_MODES,
     }
     assert set(ordinal_maps) | {"builtin_waveforms", "sample_desc_loop_modes"} == set(
@@ -378,6 +380,17 @@ def test_synth_patch_retrigger_round_trips_and_refuses_unknown_values() -> None:
         SynthPatch(retrigger="phase")._to_c()
     with pytest.raises(ValueError):
         SynthPatch(retrigger=3)._to_c()
+
+
+def test_synth_patch_lfo_shape_round_trips_and_refuses_unknown_values() -> None:
+    for ordinal, name in enumerate(("default", "triangle", "sine")):
+        assert SynthPatch._from_c(SynthPatch(lfo_shape=name)._to_c()).lfo_shape == name
+        assert SynthPatch._from_c(SynthPatch(lfo_shape=ordinal)._to_c()).lfo_shape == name
+    assert synth_preset_patch("saw-lead").lfo_shape == "triangle"
+    with pytest.raises(ValueError):
+        SynthPatch(lfo_shape="square")._to_c()
+    with pytest.raises(ValueError):
+        SynthPatch(lfo_shape=3)._to_c()
 
 
 def _repeated_note_diff(audio: np.ndarray) -> float:

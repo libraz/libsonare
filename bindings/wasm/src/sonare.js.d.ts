@@ -1849,6 +1849,7 @@ export interface WasmSynthEnumTables {
   sampleLoopModes: string[];
   sampleKeyTracks: string[];
   retriggers: string[];
+  lfoShapes: string[];
   partRigModes: string[];
   sampleDescLoopModes: string[];
 }

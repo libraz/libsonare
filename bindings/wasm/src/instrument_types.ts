@@ -182,6 +182,8 @@ export const SAMPLE_KEY_TRACKS = ['default', 'on', 'off'] as const;
 
 export const SYNTH_RETRIGGERS = ['default', 'free', 'note'] as const;
 
+export const SYNTH_LFO_SHAPES = ['default', 'triangle', 'sine'] as const;
+
 export const SYNTH_OSC_WAVEFORMS = [
   'default',
   'sine',
@@ -313,6 +315,7 @@ export interface SynthEnumTables {
   sampleLoopModes: string[];
   sampleKeyTracks: string[];
   retriggers: string[];
+  lfoShapes: string[];
   partRigModes: string[];
   sampleDescLoopModes: string[];
 }
@@ -400,6 +403,13 @@ export type SampleKeyTrack = (typeof SAMPLE_KEY_TRACKS)[number];
  * `'note'` seeds them from the note number alone.
  */
 export type SynthRetrigger = (typeof SYNTH_RETRIGGERS)[number];
+
+/**
+ * LFO1's waveform at every destination (`'default'` keeps the base patch's).
+ * `'triangle'` is every catalog preset's shape; `'sine'` carries no harmonics,
+ * so a vibrato's sidebands sit where a player's do.
+ */
+export type SynthLfoShape = (typeof SYNTH_LFO_SHAPES)[number];
 
 /**
  * Loop behaviour recorded for one sample in a {@link SampleBank}.
@@ -791,6 +801,8 @@ export interface SynthPatch {
    */
   oneShot?: boolean;
   lfoRateHz?: number;
+  /** LFO1's waveform at every destination; see {@link SynthLfoShape}. */
+  lfoShape?: SynthLfoShape | number;
   lfoToPitchCents?: number;
   lfo2RateHz?: number;
   glideMs?: number;

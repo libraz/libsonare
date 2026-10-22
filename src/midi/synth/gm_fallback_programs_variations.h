@@ -413,6 +413,7 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.violin_slow.drift_cents = 2.0f;
   o.violin_slow.drift_rate_hz = 0.3f;
   o.violin_slow.lfo_to_pitch_cents = 9.0f;
+  o.violin_slow.lfo_rate_hz = 5.3f;  // the violin's 5.42 moves this take's tuning and noise
   o.violin_slow.stereo_spread = 0.1f;
 }
 

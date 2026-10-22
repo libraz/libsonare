@@ -579,6 +579,7 @@ Napi::Value SynthEnumTables(const Napi::CallbackInfo& info) {
           SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_KEY_TRACK)));
   out.Set("retriggers",
           SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_RETRIGGER)));
+  out.Set("lfoShapes", SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_LFO_SHAPE)));
   out.Set("partRigModes",
           SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_PART_RIG_MODE)));
   out.Set("sampleDescLoopModes",

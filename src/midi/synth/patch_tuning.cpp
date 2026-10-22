@@ -290,6 +290,7 @@ void apply_common(NativeSynthPatch& p, const Fields& f) {
   I(unison);
   I_TYPED(body, static_cast<int>(BodyType::kNone), static_cast<int>(BodyType::kVocal));
   I_TYPED(one_shot, 0, 1);
+  I_TYPED(lfo_shape, static_cast<int>(LfoShape::kTriangle), static_cast<int>(LfoShape::kSine));
   I_TYPED(filter_output, static_cast<int>(SynthFilterOutput::kLowpass),
           static_cast<int>(SynthFilterOutput::kHighpass));
   F(detune_cents);

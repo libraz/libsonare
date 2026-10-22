@@ -704,7 +704,7 @@ class SonareSynthEngineParam(CStruct):
 
 
 class SonareSynthPatch(CStruct):
-    """Maps to SonareSynthPatch in sonare_c_types.h (struct_version 9).
+    """Maps to SonareSynthPatch in sonare_c_types.h (struct_version 10).
 
     Versioned NativeSynth patch: the base is the named ``preset`` (or the
     default subtractive patch when empty) and every non-zero field overrides
@@ -717,7 +717,8 @@ class SonareSynthPatch(CStruct):
     retrigger mode past it; version 8 adds the engine params, a borrowed
     array of ``SonareSynthEngineParam`` the caller keeps alive for the call;
     version 9 adds ``present_fields2`` and the drift rate, envelope delay /
-    hold and one-shot fields it marks.
+    hold and one-shot fields it marks; version 10 adds the LFO shape at the
+    tail.
     """
 
     _fields_ = [
@@ -776,6 +777,7 @@ class SonareSynthPatch(CStruct):
         ("filter_delay_ms", ctypes.c_float),
         ("filter_hold_ms", ctypes.c_float),
         ("one_shot", ctypes.c_int),
+        ("lfo_shape", ctypes.c_int),
     ]
 
 

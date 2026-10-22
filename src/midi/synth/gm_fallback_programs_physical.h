@@ -43,8 +43,10 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   };
   o.violin = bowed(0.12f, 0.55f, 0.47f, 0.32f, 45.0f, 110.0f, 0.28f, 0.3f);
   o.violin.cutoff_hz = 6000.0f;
-  o.violin.lfo_rate_hz = 5.3f;
-  o.violin.lfo_to_pitch_cents = 14.7039f;
+  // The reference's vibrato: 35.7 c peak to peak at 5.42 Hz, its third harmonic at
+  // -20 dB in a triangle's phase, so the triangle whose fundamental matches it.
+  o.violin.lfo_rate_hz = 5.42f;
+  o.violin.lfo_to_pitch_cents = 22.0f;
   o.violin.amp_env.attack_ms = 255.757f;
   o.violin.amp_env.release_ms = 163.86f;
   o.violin.bowed_string.attack_ms = 36.8818f;
@@ -68,7 +70,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.violin.bowed_string.elasto_plastic = false;
   o.violin.bowed_string.rosin = 0.0f;
   o.viola = bowed(0.13f, 0.55f, 0.42f, 0.34f, 55.0f, 120.0f, 0.34f, 0.3f);
-  o.viola.lfo_rate_hz = 5.43422f;
+  o.viola.lfo_rate_hz = 5.62f;
   o.viola.amp_env.attack_ms = 393.35f;
   o.viola.amp_env.decay_ms = 1.0923f;
   o.viola.amp_env.release_ms = 4.56146f;
@@ -101,9 +103,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.viola.bowed_string.bow_speed = 0.9f;
   o.viola.bowed_string.brightness = 0.75f;
   o.viola.cutoff_hz = 5000.0f;
-  // The reference's vibrato reads 40 c peak to peak; 14 reads 20 and is the deepest
-  // that holds the stack and tuning bounds (16 moves both by one row).
-  o.viola.lfo_to_pitch_cents = 14.0f;
+  // The reference's vibrato reads 39.8 c peak to peak at 5.62 Hz; past 19.9 (32 c of
+  // fundamental) the bow's in-loop modulation lifts the band under the note.
+  o.viola.lfo_to_pitch_cents = 19.9f;
   // The body radiates little below its air mode: the reference's C3 and F#3 carry
   // h2-h6 within 3 dB of h1, the sawtooth 12 dB under it.
   o.viola.hp_cutoff_hz = 200.0f;
@@ -137,8 +139,11 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // The bridge reflection filter is fixed in Hz, so at these pitches its whole
   // range sits above every partial and the darkening has to come from the string.
   o.contrabass = bowed(0.177f, 0.58f, 0.15f, 0.18f, 185.0f, 160.0f, 0.06f, 0.69f);
-  o.contrabass.lfo_rate_hz = 4.83651f;
-  o.contrabass.lfo_to_pitch_cents = 14.0f;
+  // The reference's vibrato: 19.7 c peak to peak at 4.82 Hz, its third harmonic in
+  // phase with the fundamental rather than a triangle's opposed one, so a sine.
+  o.contrabass.lfo_rate_hz = 4.82f;
+  o.contrabass.lfo_to_pitch_cents = 9.85f;
+  o.contrabass.lfo_shape = LfoShape::kSine;
   o.contrabass.cutoff_hz = 2093.58f;
   o.contrabass.resonance_q = 2.04715f;
   o.contrabass.bowed_string.release_ms = 195.626f;
@@ -175,7 +180,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.contrabass.bowed_string.string_tension_n = 300.0f;
 
   // Fiddle (GM 110): the same violin, bowed the other way. A short hard stroke
-  // near the bridge with the rosin audible and next to no vibrato — the
+  // near the bridge with the rosin audible and a quicker vibrato — the
   // variation is the hand, so this derives from the violin rather than
   // restating it.
   o.fiddle = o.violin;
@@ -192,7 +197,10 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.fiddle.amp_env.attack_ms = 39.1732f;
   // At 7000 the centroid read 11 % over the reference; 4500 brings the median inside.
   o.fiddle.cutoff_hz = 4500.0f;
-  o.fiddle.lfo_to_pitch_cents = 2.0f;
+  // The reference's vibrato reads 34 c peak to peak at 6.35 Hz; past 6 the bow's
+  // in-loop modulation moves the register profile's level outside its bound.
+  o.fiddle.lfo_rate_hz = 6.35f;
+  o.fiddle.lfo_to_pitch_cents = 6.0f;
   o.fiddle.amp_env.release_ms = 89.3211f;
   o.fiddle.amp_env.sustain = 0.618034f;
   o.fiddle.body_mix = 0.595867f;
@@ -272,6 +280,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.string_ensemble_2.bowed_string.velocity_exponent = 1.18f;
   o.string_ensemble_2.drift_rate_hz = 0.0354479f;
   o.string_ensemble_2.lfo_rate_hz = 0.365881f;
+  o.string_ensemble_2.lfo_shape = LfoShape::kSine;
   o.string_ensemble_2.resonance_q = 0.688613f;
   o.string_ensemble_2.bowed_string.hyperbolic_friction = true;
   o.string_ensemble_2.bowed_string.force_ratio = 5.89992f;
@@ -324,11 +333,12 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // fitted gain holds the sustained level the table had, so only timbre moves.
   o.soprano_sax = reed(true, 0.55f, 0.55f, 0.64f, 0.32f, 16.0f, 80.0f, 0.78f, 0.30f, 0.772954f);
   o.soprano_sax.cutoff_hz = 5495.18f;
-  // The reference holds a 5 Hz, 11.7 c vibrato and no growl: at 0.15 the 28 Hz
-  // sidebands sat 48 dB under each partial where the reference carries nothing
-  // above -86 dB, and tone-to-noise read 15 dB noisier than it.
-  o.soprano_sax.lfo_rate_hz = 5.02f;
-  o.soprano_sax.lfo_to_pitch_cents = 7.6f;
+  // The reference holds a 4.79 Hz, 10.5 c sine vibrato (third harmonic -31 dB) and no
+  // growl: at 0.15 the 28 Hz sidebands sat 48 dB under each partial where the
+  // reference carries nothing above -86 dB, and tone-to-noise read 15 dB noisier.
+  o.soprano_sax.lfo_rate_hz = 4.79f;
+  o.soprano_sax.lfo_to_pitch_cents = 5.25f;
+  o.soprano_sax.lfo_shape = LfoShape::kSine;
   o.soprano_sax.reed.growl = 0.0f;
   o.soprano_sax.reed.cone_growth = 0.00601161f;
   o.soprano_sax.reed.chiff = 0.76839f;
@@ -474,8 +484,11 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.english_horn.cutoff_hz = 1396.28f;
   // The reference carries a 5 Hz, 6.1 c vibrato (7.8 c here reads the same);
   // 5 c keeps the partial stack inside its bound, which 7.8 c does not.
-  o.english_horn.lfo_rate_hz = 5.0f;
-  o.english_horn.lfo_to_pitch_cents = 5.0f;
+  // The reference's vibrato is a 4.79 Hz sine of 10.4 c peak to peak; at that depth
+  // the partial stack leaves its bound, and 7 c holds it.
+  o.english_horn.lfo_rate_hz = 4.79f;
+  o.english_horn.lfo_to_pitch_cents = 3.5f;
+  o.english_horn.lfo_shape = LfoShape::kSine;
   o.english_horn.amp_env.attack_ms = 2.12781f;
   o.english_horn.amp_env.decay_ms = 812.385f;
   o.english_horn.amp_env.release_ms = 29.2249f;
@@ -688,6 +701,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.trombone.brass.cuivre_dynamics = 0.340141f;
   o.trombone.lfo_rate_hz = 2.47118f;
   o.trombone.lfo_to_pitch_cents = 0.597068f;
+  o.trombone.lfo_shape = LfoShape::kSine;
   o.trombone.amp_env.attack_ms = 79.4293f;
   o.trombone.amp_env.release_ms = 99.453f;
   o.trombone.amp_env.sustain = 0.532329f;
@@ -743,6 +757,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.tuba.drift_cents = 2.45065f;
   o.tuba.drift_rate_hz = 0.899146f;
   o.tuba.lfo_rate_hz = 3.06041f;
+  o.tuba.lfo_shape = LfoShape::kSine;
   o.tuba.resonance_q = 0.907078f;
   o.tuba.stereo_spread = 0.35846f;
   // The muted trumpet plays through the real mute model instead of the old
@@ -756,6 +771,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.muted_trumpet.brass.mute = 1.0f;
   o.muted_trumpet.lfo_rate_hz = 1.14931f;
   o.muted_trumpet.lfo_to_pitch_cents = 0.0336192f;
+  o.muted_trumpet.lfo_shape = LfoShape::kSine;
   o.muted_trumpet.amp_env.attack_ms = 21.3873f;
   o.muted_trumpet.amp_env.decay_ms = 170.323f;
   o.muted_trumpet.amp_env.release_ms = 107.846f;
@@ -821,6 +837,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.french_horn.drift_cents = 0.270029f;
   o.french_horn.drift_rate_hz = 0.407723f;
   o.french_horn.lfo_rate_hz = 15.3679f;
+  o.french_horn.lfo_shape = LfoShape::kSine;
   o.french_horn.resonance_q = 1.33736f;
   o.french_horn.brass.onset_breath_overshoot_db = 2.32198f;
   o.french_horn.brass.onset_breath_settle_ms = 15.9492f;
@@ -843,6 +860,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.brass_section.stereo_spread = 0.972044f;
   o.brass_section.lfo_rate_hz = 1.79471f;
   o.brass_section.lfo_to_pitch_cents = 2.01483f;
+  o.brass_section.lfo_shape = LfoShape::kSine;
   o.brass_section.amp_env.decay_ms = 0.648809f;
   o.brass_section.amp_env.release_ms = 69.7742f;
   o.brass_section.amp_env.sustain = 0.420284f;

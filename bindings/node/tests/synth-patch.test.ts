@@ -15,6 +15,7 @@ import {
   SYNTH_ENGINE_MODES,
   SYNTH_FILTER_MODELS,
   SYNTH_FILTER_OUTPUTS,
+  SYNTH_LFO_SHAPES,
   SYNTH_MOD_DESTINATIONS,
   SYNTH_MOD_SOURCES,
   SYNTH_OSC_WAVEFORMS,
@@ -156,6 +157,7 @@ describe('NativeSynth preset catalog', () => {
       sampleLoopModes: [...SAMPLE_LOOP_MODES],
       sampleKeyTracks: [...SAMPLE_KEY_TRACKS],
       retriggers: [...SYNTH_RETRIGGERS],
+      lfoShapes: [...SYNTH_LFO_SHAPES],
       partRigModes: [...PART_RIG_MODES],
       sampleDescLoopModes: ['none', 'continuous', 'key-down'],
     });
@@ -220,6 +222,22 @@ describe('NativeSynth preset catalog', () => {
       RangeError,
     );
     expect(synthPresetPatch('saw-lead').retrigger).toBe('free');
+  });
+
+  it('round-trips the LFO shape by name and ordinal and refuses unknown values', () => {
+    expect(SYNTH_LFO_SHAPES).toEqual(['default', 'triangle', 'sine']);
+    for (const [ordinal, name] of SYNTH_LFO_SHAPES.entries()) {
+      expect(synthPatchRoundTripForTest({ lfoShape: name }).lfoShape).toBe(name);
+      expect(synthPatchRoundTripForTest({ lfoShape: ordinal }).lfoShape).toBe(name);
+    }
+    expect(synthPatchRoundTripForTest({}).lfoShape).toBe('default');
+    expect(() =>
+      synthPatchRoundTripForTest({ lfoShape: 'square' } as unknown as SynthPatch),
+    ).toThrow(RangeError);
+    expect(() => synthPatchRoundTripForTest({ lfoShape: SYNTH_LFO_SHAPES.length })).toThrow(
+      RangeError,
+    );
+    expect(synthPresetPatch('saw-lead').lfoShape).toBe('triangle');
   });
 
   it('reads a null enum field as absent and refuses a wrong type by name', () => {

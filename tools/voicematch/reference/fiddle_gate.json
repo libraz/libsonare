@@ -3,13 +3,14 @@
   "timbre": "gm111",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-22T10:52:08+00:00",
-  "recorded_utc": "2026-10-22T11:01:30+00:00",
+  "recorded_utc": "2026-10-22T14:27:17+00:00",
   "model_build": {
-    "built_utc": "2026-10-22T11:01:22Z",
-    "newest_source_utc": "2026-10-22T10:42:43Z",
+    "built_utc": "2026-10-22T14:25:39Z",
+    "newest_source_utc": "2026-10-22T14:25:22Z",
     "stale": false
   },
   "reference_spread": {},
+  "_attack_floor": "attack.abs_median was deleted 2026-10-22 and re-recorded. The 40 it held rests on the dimension's floor, as the compare report lists it, and on this voice it does not resolve the attack: changing only the LFO's shape, at the patch's former 2 c depth, moved it from 30 to 55 ms, and every vibrato from 2 to 23 c read 45-75. Re-recorded when the vibrato moved to 6 c at the reference's 6.35 Hz; the reference reads 34 c peak to peak, and deeper than 6 c the register p90 leaves its bound by 0.02-0.16 dB.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
@@ -39,7 +40,7 @@
       "floor": 40.0,
       "floor_from": "guess",
       "median": 40.0,
-      "abs_median": 40.0,
+      "abs_median": 62.5,
       "p90": 187.5,
       "rows": 35
     },
@@ -48,15 +49,15 @@
       "floor_from": "default",
       "median": 22.2,
       "abs_median": 22.2,
-      "p90": 33.068,
+      "p90": 31.375,
       "rows": 35
     },
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
       "median": 0.5,
-      "abs_median": 4.375,
-      "p90": 7.744,
+      "abs_median": 3.457,
+      "p90": 7.258,
       "rows": 35
     },
     "centroid_pct": {
@@ -72,7 +73,7 @@
       "floor_from": "guess",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 3.302,
+      "p90": 2.942,
       "rows": 7
     },
     "register": {

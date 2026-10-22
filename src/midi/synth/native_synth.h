@@ -162,6 +162,9 @@ struct NativeSynthPatch {
   /// LFO1 with the hardwired vibrato routing (also ModSource::kLfo1).
   float lfo_rate_hz = 5.0f;
   float lfo_to_pitch_cents = 0.0f;
+  /// LFO1's waveform, the same at every destination it reaches (vibrato, the
+  /// GS LFO cutoff and amplitude depths, ModSource::kLfo1).
+  LfoShape lfo_shape = LfoShape::kTriangle;
   /// LFO2 is matrix-routed only (ModSource::kLfo2).
   float lfo2_rate_hz = 1.0f;
 

@@ -29,6 +29,7 @@
 /// RT contract: resolve_voice_params() / Sf2Voice methods are allocation-free
 /// (audio thread); the referenced Sf2File data is read-only.
 
+#include <cmath>
 #include <cstdint>
 
 #include "midi/control_value.h"
@@ -199,15 +200,26 @@ struct Sf2ChannelMod {
   float fallback_chorus_send = 0.0f;
 };
 
-/// SF2 triangle LFO: starts at zero after its delay, rises positive first.
+/// LFO waveform. Both start at zero, rise positive first and cross zero at
+/// half a cycle; a sine carries no harmonics, so a pitch vibrato driven by it
+/// puts its sidebands only where a player's vibrato does.
+enum class LfoShape : int {
+  kTriangle = 0,
+  kSine = 1,
+};
+
+/// SF2 LFO (triangle unless asked otherwise): starts at zero after its delay,
+/// rises positive first.
 class Sf2Lfo {
  public:
-  void start(double sample_rate, float delay_seconds, float freq_hz) noexcept {
+  void start(double sample_rate, float delay_seconds, float freq_hz,
+             LfoShape shape = LfoShape::kTriangle) noexcept {
     const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
     delay_samples_ = delay_seconds > 0.0f ? static_cast<int64_t>(delay_seconds * sr) : 0;
     inc_ = freq_hz > 0.0f ? static_cast<float>(freq_hz / sr) : 0.0f;
     phase_ = 0.0;
     settling_ = false;
+    shape_ = shape;
   }
 
   /// Retunes the LFO under a held note without touching the phase. @p freq_hz
@@ -230,7 +242,7 @@ class Sf2Lfo {
     }
   }
 
-  /// Advance one sample; returns the bipolar triangle value in [-1, 1].
+  /// Advance one sample; returns the bipolar value in [-1, 1].
   /// @p rate_scale multiplies the frequency for this sample only, which is how
   /// a controller retunes the LFO under a held note: the phase carries across
   /// unchanged, so a scale that moves stays continuous and 1.0 is exact.
@@ -248,12 +260,15 @@ class Sf2Lfo {
       inc_ = 0.0;
       settling_ = false;
     }
+    if (shape_ == LfoShape::kSine)
+      return static_cast<float>(std::sin(::sonare::constants::kTwoPiD * p));
     if (p < 0.25) return static_cast<float>(4.0 * p);
     if (p < 0.75) return static_cast<float>(2.0 - 4.0 * p);
     return static_cast<float>(4.0 * p - 4.0);
   }
 
  private:
+  LfoShape shape_ = LfoShape::kTriangle;
   int64_t delay_samples_ = 0;
   float inc_ = 0.0f;
   double phase_ = 0.0;

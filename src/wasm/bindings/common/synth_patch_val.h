@@ -32,6 +32,7 @@ inline constexpr const auto& kFilterModels = synth_names::kFilterModels;
 inline constexpr const auto& kFilterOutputs = synth_names::kFilterOutputs;
 inline constexpr const auto& kBodyTypes = synth_names::kBodyTypes;
 inline constexpr const auto& kRetriggers = synth_names::kRetriggers;
+inline constexpr const auto& kLfoShapes = synth_names::kLfoShapes;
 inline constexpr const auto& kModSources = synth_names::kModSources;
 inline constexpr const auto& kModDestinations = synth_names::kModDestinations;
 inline constexpr const auto& kControllerInputs = synth_names::kControllerInputs;
@@ -83,6 +84,7 @@ inline emscripten::val synthEnumTablesToVal() {
   out.set("sampleKeyTracks",
           array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_KEY_TRACK)));
   out.set("retriggers", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_RETRIGGER)));
+  out.set("lfoShapes", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_LFO_SHAPE)));
   out.set("partRigModes", array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_PART_RIG_MODE)));
   out.set("sampleDescLoopModes",
           array_from(sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_DESC_LOOP_MODE)));
@@ -238,6 +240,8 @@ inline SynthPatchStorage synthPatchFromVal(emscripten::val desc) {
   enumProperty(desc, "body", kBodyTypes, SONARE_SYNTH_BODY_TYPE_COUNT, "body type", &patch.body);
   enumProperty(desc, "retrigger", kRetriggers, SONARE_SYNTH_RETRIGGER_COUNT, "retrigger mode",
                &patch.retrigger);
+  enumProperty(desc, "lfoShape", kLfoShapes, SONARE_SYNTH_LFO_SHAPE_COUNT, "LFO shape",
+               &patch.lfo_shape);
   auto read_float = [&desc, &patch](const char* key, uint32_t bit, float* out) {
     *out = floatProperty(desc, key, 0.0f);
     if (hasProperty(desc, key)) patch.present_fields |= bit;
@@ -371,6 +375,7 @@ inline emscripten::val synthPatchToVal(const SonareSynthPatch& patch) {
   out.set("bodyMix", patch.body_mix);
   out.set("stereoSpread", patch.stereo_spread);
   out.set("retrigger", enumNameVal(patch.retrigger, kRetriggers, SONARE_SYNTH_RETRIGGER_COUNT));
+  out.set("lfoShape", enumNameVal(patch.lfo_shape, kLfoShapes, SONARE_SYNTH_LFO_SHAPE_COUNT));
   out.set("driftRateHz", patch.drift_rate_hz);
   out.set("ampDelayMs", patch.amp_delay_ms);
   out.set("ampHoldMs", patch.amp_hold_ms);

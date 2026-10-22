@@ -3,28 +3,29 @@
   "timbre": "gm041",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-22T10:55:42+00:00",
-  "recorded_utc": "2026-10-22T10:58:53+00:00",
+  "recorded_utc": "2026-10-22T14:27:12+00:00",
   "model_build": {
-    "built_utc": "2026-10-22T10:57:01Z",
-    "newest_source_utc": "2026-10-22T10:42:43Z",
+    "built_utc": "2026-10-22T14:25:39Z",
+    "newest_source_utc": "2026-10-22T14:25:22Z",
     "stale": false
   },
   "reference_spread": {},
+  "_vibrato_depth": "stretch.p90 and balance.median were deleted 2026-10-22 and re-recorded when the LFO took the reference's vibrato: a triangle of 22 c peak at 5.42 Hz, whose fundamental is the reference's 35.7 c peak to peak, its third harmonic at -20 dB in a triangle's phase. Both lines read the vibrato as well as the voice: f0 is the strongest spectral line within 80 c and the partials are peak heights, so a deeper FM moves which Bessel line wins and lowers the upper partials' peaks. The model rendered with no vibrato and time-warped by a pure LFO, the engine held fixed, moves tuning p90 4.25 -> 9.92 c and the stack median -0.85 -> -1.41 dB from the former LFO (14.7 c at 5.3 Hz) to this one; the engine read 5.12 -> 10.42 c and -0.82 -> -1.52 dB. On the reference alone the peak-picked f0 sits 8.5 c (p90) from the mean of its own demodulated pitch track, over the 6.06 the bound held.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 2.441,
-      "abs_median": 2.441,
-      "p90": 6.063,
+      "median": 1.853,
+      "abs_median": 2.072,
+      "p90": 13.031,
       "rows": 35
     },
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 9.975,
-      "abs_median": 9.987,
-      "p90": 14.298,
+      "median": 4.45,
+      "abs_median": 5.625,
+      "p90": 9.188,
       "rows": 35
     },
     "damper": {
@@ -46,7 +47,7 @@
     "body": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 1.575,
+      "median": 1.0,
       "abs_median": 5.763,
       "p90": 12.558,
       "rows": 35
@@ -54,17 +55,17 @@
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 0.93,
-      "abs_median": 3.133,
-      "p90": 7.016,
+      "median": 1.902,
+      "abs_median": 2.78,
+      "p90": 6.939,
       "rows": 35
     },
     "centroid_pct": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 5.711,
-      "abs_median": 15.853,
-      "p90": 30.979,
+      "median": 5.642,
+      "abs_median": 14.779,
+      "p90": 30.926,
       "rows": 35
     },
     "vel_range": {
@@ -72,7 +73,7 @@
       "floor_from": "guess",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 2.29,
+      "p90": 2.285,
       "rows": 7
     },
     "register": {

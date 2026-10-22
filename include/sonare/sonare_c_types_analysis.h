@@ -517,6 +517,14 @@ typedef enum {
 } SonareSynthRetrigger;
 #define SONARE_SYNTH_RETRIGGER_COUNT 3
 
+/* LFO1's waveform, at every destination it reaches. 0 keeps the base patch's choice. */
+typedef enum {
+  SONARE_SYNTH_LFO_SHAPE_BASE = 0,
+  SONARE_SYNTH_LFO_SHAPE_TRIANGLE = 1, /* every catalog preset's shape */
+  SONARE_SYNTH_LFO_SHAPE_SINE = 2 /* no harmonics: a vibrato's sidebands sit where a player's do */
+} SonareSynthLfoShape;
+#define SONARE_SYNTH_LFO_SHAPE_COUNT 3
+
 #define SONARE_SYNTH_MOD_SOURCE_COUNT 13
 #define SONARE_SYNTH_MOD_DESTINATION_COUNT 13
 
@@ -629,7 +637,8 @@ typedef struct {
                                                 6 => the pitch offset at the tail is read too;
                                                 7 => the retrigger mode at the tail is read too;
                                                 8 => the engine params at the tail are read too;
-                                                9 => present_fields2 and its fields are read too */
+                                                9 => present_fields2 and its fields are read too;
+                                                10 => the LFO shape at the tail is read too */
   char preset[SONARE_SYNTH_PRESET_NAME_MAX]; /* base preset name; "" = init patch */
   int engine_mode;                           /* SonareSynthEngineMode; 0 => base */
 
@@ -788,13 +797,18 @@ typedef struct {
   float filter_hold_ms;  /* filter envelope hold at the peak, [0, 5000] ms */
   int one_shot;          /* non-zero: note-off is ignored and the voice ends with its
                             envelope's decay or its engine's own end */
+
+  /* --- LFO shape (struct_version 10) --- */
+  /* SonareSynthLfoShape; 0 => base. Shapes LFO1 wherever it is read: the
+     vibrato depth, the GS LFO cutoff and amplitude depths and mod source lfo1. */
+  int lfo_shape;
 } SonareSynthPatch;
 
 /* Newest SonareSynthPatch layout. Named rather than written out at each site,
    because every one of them — the reader's upper bound, the writer's stamp, and
    the tests that pin "one past the newest is refused" — has to move together,
    and a literal in any of them goes stale silently. */
-#define SONARE_SYNTH_PATCH_STRUCT_VERSION 9
+#define SONARE_SYNTH_PATCH_STRUCT_VERSION 10
 
 /* Bit positions for SonareSynthPatch.present_fields. The enum fields are absent
    on purpose: their zero is already the reserved "keep base" value and every
@@ -878,6 +892,8 @@ static_assert(SONARE_SYNTH_BODY_VOCAL + 1 == SONARE_SYNTH_BODY_TYPE_COUNT,
               "SonareSynthBodyType count changed");
 static_assert(SONARE_SYNTH_RETRIGGER_NOTE + 1 == SONARE_SYNTH_RETRIGGER_COUNT,
               "SonareSynthRetrigger count changed");
+static_assert(SONARE_SYNTH_LFO_SHAPE_SINE + 1 == SONARE_SYNTH_LFO_SHAPE_COUNT,
+              "SonareSynthLfoShape count changed");
 
 static_assert(sizeof(SonareSynthModRouting) == 2u * sizeof(int) + sizeof(float),
               "SonareSynthModRouting layout changed");

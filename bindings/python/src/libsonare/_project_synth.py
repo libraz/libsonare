@@ -80,6 +80,12 @@ _SYNTH_RETRIGGERS = {
     "free": 1,
     "note": 2,
 }
+# SonareSynthLfoShape; "default" = 0 keeps the base patch's shape.
+_SYNTH_LFO_SHAPES = {
+    "default": 0,
+    "triangle": 1,
+    "sine": 2,
+}
 # The sample's own looping, in the SF2 sampleModes values SonareSampleDesc
 # takes. A different scale from _SAMPLE_LOOP_MODES above, which is the patch's
 # override of it, so the two never share a table.
@@ -218,6 +224,7 @@ SYNTH_ENUM_TABLES = {
     "sample_loop_modes": tuple(_SAMPLE_LOOP_MODES),
     "sample_key_tracks": tuple(_SAMPLE_KEY_TRACKS),
     "retriggers": tuple(_SYNTH_RETRIGGERS),
+    "lfo_shapes": tuple(_SYNTH_LFO_SHAPES),
     "part_rig_modes": tuple(PART_RIG_MODES),
     "sample_desc_loop_modes": tuple(_SAMPLE_DESC_LOOP_MODES),
 }
@@ -240,6 +247,7 @@ _SYNTH_ENUM_KINDS = {
     "retriggers": 15,
     "part_rig_modes": 16,
     "sample_desc_loop_modes": 17,
+    "lfo_shapes": 18,
 }
 
 

@@ -82,6 +82,7 @@ from ._project_synth import (
     _SYNTH_FILTER_MODEL_INPUT,
     _SYNTH_FILTER_MODELS,
     _SYNTH_FILTER_OUTPUTS,
+    _SYNTH_LFO_SHAPES,
     _SYNTH_MOD_DESTINATIONS,
     _SYNTH_MOD_SOURCES,
     _SYNTH_OSC_WAVEFORMS,
@@ -774,6 +775,12 @@ class SynthPatch:
     ``sample_key_track`` whether the sample follows the played key
     (``"default"`` / ``"on"`` / ``"off"``); both accept the C ordinal too.
 
+    ``lfo_shape`` (``"default"`` / ``"triangle"`` / ``"sine"``, or the C
+    ordinal) shapes LFO1 wherever it is read: vibrato depth, the GS LFO
+    cutoff and amplitude depths, and the ``lfo1`` mod source. ``"triangle"`` is
+    every catalog preset's shape; ``"sine"`` carries no harmonics, so a
+    vibrato's sidebands sit where a player's do.
+
     ``retrigger`` picks what seeds each voice's start state (``"default"`` /
     ``"free"`` / ``"note"``, or the C ordinal). ``"note"`` derives oscillator
     start phases, unison jitter, drift and every engine's noise stream from
@@ -830,6 +837,7 @@ class SynthPatch:
     filter_release_ms: float | None = None
     lfo_rate_hz: float | None = None
     lfo_to_pitch_cents: float | None = None
+    lfo_shape: str | int = 0
     lfo2_rate_hz: float | None = None
     glide_ms: float | None = None
     body: str | int = 0
@@ -868,7 +876,7 @@ class SynthPatch:
         if not isinstance(self.preset, str):
             raise TypeError("synth patch preset must be a string")
         c = SonareSynthPatch()
-        c.struct_version = 9
+        c.struct_version = 10
 
         # A field left at None keeps the base; anything supplied — including a
         # zero — is marked present so the core overrides with it.
@@ -947,6 +955,7 @@ class SynthPatch:
         _set_float("body_mix", SONARE_SYNTH_FIELD_BODY_MIX, self.body_mix)
         _set_float("stereo_spread", SONARE_SYNTH_FIELD_STEREO_SPREAD, self.stereo_spread)
         c.retrigger = _synth_enum_value(self.retrigger, _SYNTH_RETRIGGERS, "retrigger mode")
+        c.lfo_shape = _synth_enum_value(self.lfo_shape, _SYNTH_LFO_SHAPES, "LFO shape")
         routings = list(self.mod_routings or ())
         if self.mod_routings is not None:
             c.present_fields |= SONARE_SYNTH_FIELD_MOD_ROUTINGS
@@ -1050,6 +1059,7 @@ class SynthPatch:
             body_mix=float(c.body_mix),
             stereo_spread=float(c.stereo_spread),
             retrigger=_synth_enum_name(int(c.retrigger), _SYNTH_RETRIGGERS),
+            lfo_shape=_synth_enum_name(int(c.lfo_shape), _SYNTH_LFO_SHAPES),
             mod_routings=routings,
             gain=float(c.gain),
             polyphony=int(c.polyphony),

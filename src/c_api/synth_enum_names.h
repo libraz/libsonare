@@ -39,6 +39,7 @@ inline constexpr const char* kFilterOutputs[] = {"default", "lowpass", "bandpass
 inline constexpr const char* kBodyTypes[] = {"default",   "none",       "guitar", "violin",
                                              "wood-tube", "brass-bell", "vocal"};
 inline constexpr const char* kRetriggers[] = {"default", "free", "note"};
+inline constexpr const char* kLfoShapes[] = {"default", "triangle", "sine"};
 inline constexpr const char* kModSources[] = {
     "none",      "amp-env", "filter-env", "lfo1",       "lfo2",          "velocity",  "key-track",
     "mod-wheel", "random",  "breath",     "aftertouch", "expression-cc", "pitch-bend"};
@@ -92,6 +93,8 @@ static_assert(std::size(kBodyTypes) == SONARE_SYNTH_BODY_TYPE_COUNT,
               "body type names out of step with the enum");
 static_assert(std::size(kRetriggers) == SONARE_SYNTH_RETRIGGER_COUNT,
               "retrigger names out of step with the enum");
+static_assert(std::size(kLfoShapes) == SONARE_SYNTH_LFO_SHAPE_COUNT,
+              "LFO shape names out of step with the enum");
 static_assert(std::size(kModSources) == SONARE_SYNTH_MOD_SOURCE_COUNT,
               "mod source names out of step with the enum");
 static_assert(std::size(kModDestinations) == SONARE_SYNTH_MOD_DESTINATION_COUNT,
@@ -154,9 +157,10 @@ inline constexpr NameTable kTablesByKind[] = {
     name_table(kControllerAxes),  name_table(kArticulations),    name_table(kMpeDimensions),
     name_table(kNoteTrackings),   name_table(kSampleLoopModes),  name_table(kSampleKeyTracks),
     name_table(kRetriggers),      name_table(kPartRigModes),     name_table(kSampleDescLoopModes),
+    name_table(kLfoShapes),
 };
 
-static_assert(std::size(kTablesByKind) == SONARE_SYNTH_ENUM_SAMPLE_DESC_LOOP_MODE + 1,
+static_assert(std::size(kTablesByKind) == SONARE_SYNTH_ENUM_LFO_SHAPE + 1,
               "every SonareSynthEnumKind needs a table, in kind order");
 
 }  // namespace sonare::c_api::synth_names

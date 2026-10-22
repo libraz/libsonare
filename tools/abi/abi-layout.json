@@ -10063,6 +10063,12 @@
         "name": "one_shot",
         "offset": 344,
         "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "lfo_shape",
+        "offset": 348,
+        "size": 4
       }
     ],
     "size": 352

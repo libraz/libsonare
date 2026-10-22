@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <complex>
@@ -482,6 +483,106 @@ TEST_CASE("NativeSynth applies pitch offset outside the subtractive engine", "[m
   const double shifted = peak_hz(1200.0f);
   REQUIRE(base > 0.0);
   REQUIRE(shifted > base * 1.5);
+}
+
+namespace lfo_shape_detail {
+
+// Vibrato in cents per carrier cycle, read off successive rising zero crossings.
+struct PitchTrack {
+  std::vector<double> time_s;
+  std::vector<double> cents;
+};
+
+PitchTrack pitch_track(const std::vector<float>& buf, double sample_rate, double ref_hz) {
+  PitchTrack track;
+  double last = -1.0;
+  for (size_t i = 1; i < buf.size(); ++i) {
+    if (!(buf[i - 1] < 0.0f && buf[i] >= 0.0f)) continue;
+    const double denom = static_cast<double>(buf[i]) - static_cast<double>(buf[i - 1]);
+    const double t = static_cast<double>(i - 1) - static_cast<double>(buf[i - 1]) / denom;
+    if (last >= 0.0) {
+      track.time_s.push_back(0.5 * (t + last) / sample_rate);
+      track.cents.push_back(1200.0 * std::log2(sample_rate / (t - last) / ref_hz));
+    }
+    last = t;
+  }
+  return track;
+}
+
+// Amplitude of the track's component at @p hz over [from_s, to_s).
+double component(const PitchTrack& track, double hz, double from_s, double to_s) {
+  double re = 0.0;
+  double im = 0.0;
+  int n = 0;
+  for (size_t i = 0; i < track.time_s.size(); ++i) {
+    if (track.time_s[i] < from_s || track.time_s[i] >= to_s) continue;
+    const double w = sonare::constants::kTwoPiD * hz * track.time_s[i];
+    re += track.cents[i] * std::cos(w);
+    im += track.cents[i] * std::sin(w);
+    ++n;
+  }
+  return n > 0 ? 2.0 * std::hypot(re, im) / n : 0.0;
+}
+
+}  // namespace lfo_shape_detail
+
+TEST_CASE("NativeSynth LFO shape: sine vibrato carries no third harmonic, triangle stays default",
+          "[midi][synth][lfo_shape]") {
+  using sonare::midi::synth::LfoShape;
+  constexpr float kRateHz = 5.0f;
+  constexpr float kDepthCents = 40.0f;
+  constexpr double kCarrierHz = 1760.0;  // note 93
+
+  REQUIRE(NativeSynthPatch{}.lfo_shape == LfoShape::kTriangle);
+
+  auto render_vibrato = [&](LfoShape shape) {
+    NativeSynthConfig cfg;
+    cfg.patch.waveform = VaWaveform::kSine;
+    cfg.patch.cutoff_hz = 20000.0f;
+    cfg.patch.gain = 0.8f;
+    cfg.patch.drift_cents = 0.0f;
+    cfg.patch.lfo_rate_hz = kRateHz;
+    cfg.patch.lfo_to_pitch_cents = kDepthCents;
+    cfg.patch.lfo_shape = shape;
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 93, 127)));
+    return render(synth, static_cast<int>(kOutRate * 2.0)).left;
+  };
+
+  // Eight whole LFO cycles past the attack.
+  constexpr double kFrom = 0.2;
+  constexpr double kTo = kFrom + 8.0 / kRateHz;
+  const auto harmonics = [&](LfoShape shape) {
+    const auto track = lfo_shape_detail::pitch_track(render_vibrato(shape), kOutRate, kCarrierHz);
+    const double h1 = lfo_shape_detail::component(track, kRateHz, kFrom, kTo);
+    const double h3 = lfo_shape_detail::component(track, 3.0 * kRateHz, kFrom, kTo);
+    return std::pair<double, double>{h1, 20.0 * std::log10(h3 / h1)};
+  };
+
+  const auto [sine_h1, sine_h3_db] = harmonics(LfoShape::kSine);
+  const auto [tri_h1, tri_h3_db] = harmonics(LfoShape::kTriangle);
+  // Both reach the asked depth: a sine's peak is its fundamental, a triangle's is 8/pi^2 of it.
+  CHECK(sine_h1 == Catch::Approx(kDepthCents).epsilon(0.03));
+  constexpr double kPi = sonare::constants::kPiD;
+  CHECK(tri_h1 == Catch::Approx(kDepthCents * 8.0 / (kPi * kPi)).epsilon(0.03));
+  CHECK(sine_h3_db < -40.0);
+  // A triangle's third harmonic is 1/9 of its fundamental, -19.1 dB; this is what the sine removes.
+  CHECK(tri_h3_db == Catch::Approx(-19.1).margin(1.5));
+
+  // The default patch takes the triangle path sample for sample.
+  NativeSynthConfig implicit;
+  implicit.patch.waveform = VaWaveform::kSine;
+  implicit.patch.lfo_to_pitch_cents = kDepthCents;
+  NativeSynthConfig explicit_tri = implicit;
+  explicit_tri.patch.lfo_shape = LfoShape::kTriangle;
+  NativeSynth a(implicit);
+  NativeSynth b(explicit_tri);
+  a.prepare(kOutRate, 256);
+  b.prepare(kOutRate, 256);
+  a.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 69, 100)));
+  b.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 69, 100)));
+  REQUIRE(render(a, 9600).left == render(b, 9600).left);
 }
 
 TEST_CASE("Sf2Player without a SoundFont plays every GM program via the fallback",
