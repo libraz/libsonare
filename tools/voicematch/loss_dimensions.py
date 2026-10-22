@@ -690,6 +690,13 @@ MOD_RATE_CAP_HZ = 4.0
 #: Below this much depth a modulation is not present, so its rate says nothing.
 MOD_RATE_MIN_CENTS = 5.0
 MOD_RATE_MIN_DB = 1.0
+#: Pitch modulation outside the vibrato band, charged only where the model has
+#: more than the reference. Past 9 Hz it is heard as sidebands rather than as
+#: pitch movement, so a tenth of the vibrato's step already counts as one.
+MOD_FM_SLOW_CENTS_PER_UNIT = 5.0
+MOD_FM_FAST_CENTS_PER_UNIT = 0.5
+MOD_FM_SLOW_CAP_CENTS = 60.0
+MOD_FM_FAST_CAP_CENTS = 6.0
 
 
 def _mod_terms(
@@ -718,6 +725,16 @@ def _mod_terms(
     7.0 between them. The term added to charge a model for being too still had a
     cliff in it rewarding exactly that, and a decaying note reads as still by
     construction, since `measure_modulation` detrends the level track.
+
+    **Pitch modulation outside the vibrato band is charged one-sided.** A model
+    LFO the reference does not have — a 23 Hz wobble of a fraction of a cent, or
+    a 2 Hz drift — puts sidebands around every partial that no other term
+    attributes to it, while the 3-9 Hz rate is skipped against a still
+    reference. Only the model's excess over the reference's own reading in the
+    same band is charged, so sampler-loop and breath jitter the reference
+    carries are not demanded back, and a model stiller than the reference
+    costs nothing here. It applies whatever the reference's vibrato depth,
+    because neither band can hold a vibrato.
     """
     total = 0.0
     used = 0
@@ -761,6 +778,20 @@ def _mod_terms(
             if tally is not None:
                 tally.clipped += offset >= MOD_RATE_CAP_HZ
                 tally.compared += offset < MOD_RATE_CAP_HZ
+        for field, scale, cap in (
+            ("fm_slow_cents", MOD_FM_SLOW_CENTS_PER_UNIT, MOD_FM_SLOW_CAP_CENTS),
+            ("fm_fast_cents", MOD_FM_FAST_CENTS_PER_UNIT, MOD_FM_FAST_CAP_CENTS),
+        ):
+            mv, ov = _finite_or_none(m.get(field)), _finite_or_none(o.get(field))
+            if mv is None or ov is None:
+                # A model too dead to read is charged by the depth parts above.
+                continue
+            scored = True
+            excess = max(0.0, mv - ov)
+            parts.append(min(excess, cap) / scale)
+            if tally is not None:
+                tally.clipped += excess >= cap
+                tally.compared += excess < cap
         if scored:
             total += sum(parts)
             used += 1

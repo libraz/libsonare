@@ -221,6 +221,22 @@ def fit_profile(
     )
 
 
+#: GM slots naming a synthesiser or a sound effect: a pitch LFO there is sound
+#: design at whatever rate the patch picks, not a player's vibrato.
+_SYNTHETIC_PROGRAMS = frozenset((38, 39, 50, 51, 62, 63, *range(80, 104), *range(120, 128)))
+
+
+def played_vibrato(program: int, *, drum_note: int | None = None) -> bool:
+    """Whether a pitch LFO on this program stands for a player's vibrato.
+
+    True for every slot naming an instrument someone plays, electric ones
+    included, since a hand, a lip or a tremolo arm moves at a hand's rate.
+    False for the synth and effect slots, and for a drum note, which has no
+    vibrato to imitate.
+    """
+    return drum_note is None and program not in _SYNTHETIC_PROGRAMS
+
+
 def tone_class(program: int, *, drum_note: int | None = None) -> ToneClass:
     """What kind of sound `program` makes.
 

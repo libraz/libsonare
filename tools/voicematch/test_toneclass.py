@@ -468,6 +468,73 @@ def test_a_rate_the_reference_does_not_have_is_still_skipped():
     )
 
 
+def test_a_fast_pitch_wobble_is_measured_past_the_vibrato_band():
+    """±0.4 cents at 23 Hz: the 3-9 Hz reading cannot see it, the wideband one must."""
+    got = modulation_note(_vibrato(185.0, 0.8, 23.0), SR, Note(54, 100, 0.0, 3.0), 185.0)
+    assert got["vib_cents"] < 0.1
+    assert got["fm_fast_cents"] == pytest.approx(0.8, rel=0.15)
+    assert got["fm_fast_rate_hz"] == pytest.approx(23.0, abs=0.5)
+    still = modulation_note(_vibrato(185.0, 0.0, 23.0), SR, Note(54, 100, 0.0, 3.0), 185.0)
+    assert still["fm_fast_cents"] < 0.05 and still["fm_slow_cents"] < 0.05
+
+
+def test_a_wobble_the_still_reference_does_not_have_is_charged_until_it_is_gone():
+    """A still reference skips the vibrato rate, so nothing else charged a fast LFO."""
+    note = Note(54, 100, 0.0, 3.0)
+    reference = analyze_note(_vibrato(185.0, 0.0, 5.5), SR, note, 3.0).to_dict()
+    assert reference["vib_cents"] < 5.0
+
+    def score(cents_pp: float) -> float:
+        model = analyze_note(_vibrato(185.0, cents_pp, 23.0), SR, note, 3.0).to_dict()
+        return _mod_terms([model], [reference])[0]
+
+    wobbling, gone = score(0.8), score(0.0)
+    assert wobbling > 1.0
+    assert gone < 0.1 * wobbling
+
+
+def test_out_of_band_fm_is_charged_one_sided_and_leaves_a_vibrato_match_alone():
+    """The reference's own vibrato terms are scored exactly as without the new fields.
+
+    Only the model's excess over the reference's reading in the same band is
+    charged, so a model no busier than a vibrato reference outside its band
+    scores what it scored before those readings existed.
+    """
+    reference = _moving(20.0, 1.5, rate=5.5) | {"fm_slow_cents": 0.4, "fm_fast_cents": 1.2}
+    model = _moving(14.0, 1.0, rate=6.5) | {"fm_slow_cents": 0.1, "fm_fast_cents": 0.9}
+
+    def strip(row: dict) -> dict:
+        return {k: v for k, v in row.items() if not k.startswith("fm_")}
+
+    assert _mod_terms([model], [reference])[0] == pytest.approx(
+        _mod_terms([strip(model)], [strip(reference)])[0]
+    )
+    busier = model | {"fm_fast_cents": 2.2}
+    assert _mod_terms([busier], [reference])[0] == pytest.approx(
+        _mod_terms([model], [reference])[0] + (2.2 - 1.2) / 0.5
+    )
+
+
+def test_a_played_instruments_lfo_rate_is_searched_over_a_players_vibrato_rates():
+    """The engine's 0-40 Hz stays the bound; only the search range narrows."""
+    from catalogue import Catalogue
+    from knobs import VIBRATO_RATE_RANGE_HZ, auto_spec
+    from toneclass import played_vibrato
+
+    cat = Catalogue(
+        defaults={"trumpet.lfo_rate_hz": 23.7, "saw_lead.lfo_rate_hz": 5.0},
+        programs={(56, 0): "trumpet", (81, 0): "saw_lead"},
+        bounds={"lfo_rate_hz": (0.0, 40.0)},
+    )
+    (trumpet,) = auto_spec(56, cat)
+    assert (trumpet["min"], trumpet["max"]) == VIBRATO_RATE_RANGE_HZ
+    assert trumpet["start"] == VIBRATO_RATE_RANGE_HZ[1]
+    (lead,) = auto_spec(81, cat)
+    assert (lead["min"], lead["max"]) == (5.0 / 8.0, 40.0)
+    assert played_vibrato(56) and played_vibrato(27) and not played_vibrato(81)
+    assert not played_vibrato(0, drum_note=38)
+
+
 def test_a_unison_pair_is_wider_and_beats_where_one_string_does_neither():
     """The one property of an ensemble patch a single note can carry."""
     n = int(SR * 3.0)

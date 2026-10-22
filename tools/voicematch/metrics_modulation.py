@@ -56,6 +56,21 @@ MOD_MIN_BAND_BINS = 2
 #: own search range and report a shallow one.
 MOD_TRACK_CENTS = 120.0
 MOD_TRACK_POINTS = 49
+#: Pitch-modulation bands outside the vibrato band. The tracker's 50 ms window
+#: averages away most of a 20 Hz modulation, so these are read off a demodulated
+#: fundamental instead; 45 Hz clears the engine's 40 Hz LFO ceiling.
+FM_SLOW_BAND_HZ = (1.0, 3.0)
+FM_FAST_BAND_HZ = (9.0, 45.0)
+#: How far the demodulation lowpass may reach, as a fraction of f0, so the second
+#: partial (f0 away once the fundamental is shifted to 0 Hz) stays outside it.
+FM_LOWPASS_F0_FRACTION = 0.45
+FM_HOP_S = 0.005
+#: Tapered and then trimmed at both ends of the segment, so its edges do not
+#: ring through the lowpass into the track.
+FM_EDGE_S = 0.05
+#: Where the demodulated level falls this far under its peak, the phase is the
+#: floor's rather than the note's, so the track stops there.
+FM_FLOOR_DB = 40.0
 
 
 def _band_peak(
@@ -83,6 +98,52 @@ def _band_peak(
     return float(8.0 * spectrum[k] / n), float(freqs[k])
 
 
+def wideband_fm(seg: np.ndarray, sr: int, f0: float) -> dict[str, tuple[float, float] | None]:
+    """Strongest pitch modulation in each band outside the vibrato band.
+
+    The fundamental is shifted to 0 Hz, lowpassed under `FM_LOWPASS_F0_FRACTION`
+    of f0, and its phase differentiated over `FM_HOP_S` steps: an instantaneous
+    frequency whose bandwidth is the lowpass, not a tracker window. Returns, per
+    band name, (peak-to-peak cents, rate in Hz) as `_band_peak` does, or None
+    where the band is above the lowpass or unresolved by the track's length.
+    """
+    out: dict[str, tuple[float, float] | None] = {"slow": None, "fast": None}
+    cutoff = min(FM_FAST_BAND_HZ[1], FM_LOWPASS_F0_FRACTION * f0)
+    edge = int(FM_EDGE_S * sr)
+    hop = int(FM_HOP_S * sr)
+    if len(seg) <= 2 * edge + hop * MOD_MIN_FRAMES:
+        return out
+    t = np.arange(len(seg)) / sr
+    ramp = np.ones(len(seg))
+    ramp[:edge] = ramp[-edge:][::-1] = np.hanning(2 * edge)[:edge]
+    spectrum = np.fft.fft(seg * ramp * np.exp(-2j * np.pi * f0 * t))
+    # Raised-cosine roll-off, reaching zero where the second partial's band begins.
+    stop = f0 - cutoff
+    away = np.abs(np.fft.fftfreq(len(seg), 1.0 / sr))
+    gain = 0.5 * (1.0 + np.cos(np.pi * np.clip((away - cutoff) / (stop - cutoff), 0.0, 1.0)))
+    spectrum *= gain
+    base = np.fft.ifft(spectrum)[edge:-edge][::hop]
+    level = np.abs(base)
+    if float(level.max()) <= 0.0:
+        return out
+    below = np.nonzero(level < level.max() * 10.0 ** (-FM_FLOOR_DB / 20.0))[0]
+    if below.size:
+        base = base[: below[0]]
+    if len(base) <= MOD_MIN_FRAMES:
+        return out
+    offset_hz = np.diff(np.unwrap(np.angle(base))) * sr / (2.0 * np.pi * hop)
+    cents = 1200.0 * np.log2(np.maximum(f0 + offset_hz, 1e-6) / f0)
+    idx = np.arange(len(cents), dtype=np.float64)
+    cents = cents - np.polyval(np.polyfit(idx, cents, 1), idx)
+    n = len(cents)
+    fm = np.abs(np.fft.rfft(cents * np.hanning(n)))
+    rate = 1.0 / FM_HOP_S
+    for name, (lo, hi) in (("slow", FM_SLOW_BAND_HZ), ("fast", FM_FAST_BAND_HZ)):
+        if min(hi, cutoff) > lo:
+            out[name] = _band_peak(fm, rate, (lo, min(hi, cutoff)), n)
+    return out
+
+
 def modulation_note(
     mono: np.ndarray, sr: int, note: Note, f0: float, onset: float | None = None
 ) -> dict:
@@ -106,6 +167,10 @@ def modulation_note(
         "trem_rate_hz": None,
         "beat_db": None,
         "beat_rate_hz": None,
+        "fm_slow_cents": None,
+        "fm_slow_rate_hz": None,
+        "fm_fast_cents": None,
+        "fm_fast_rate_hz": None,
     }
     if f0 <= 0.0 or f0 > sr / 2.0:
         return empty
@@ -164,6 +229,9 @@ def modulation_note(
     vib_cents, vib_rate = _pair(_band_peak(fm, rate, VIBRATO_BAND_HZ, n_frames))
     trem_db, trem_rate = _pair(_band_peak(am, rate, VIBRATO_BAND_HZ, n_frames))
     beat_db, beat_rate = _pair(_band_peak(am, rate, BEAT_BAND_HZ, n_frames))
+    wide = wideband_fm(seg, sr, f0)
+    slow_cents, slow_rate = _pair(wide["slow"])
+    fast_cents, fast_rate = _pair(wide["fast"])
     return {
         "vib_cents": vib_cents,
         "vib_rate_hz": vib_rate,
@@ -171,6 +239,10 @@ def modulation_note(
         "trem_rate_hz": trem_rate,
         "beat_db": beat_db,
         "beat_rate_hz": beat_rate,
+        "fm_slow_cents": slow_cents,
+        "fm_slow_rate_hz": slow_rate,
+        "fm_fast_cents": fast_cents,
+        "fm_fast_rate_hz": fast_rate,
     }
 
 

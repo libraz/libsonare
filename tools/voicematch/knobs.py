@@ -29,6 +29,7 @@ from catalogue import (
     resolve_knob_name,
     scan_tunables,
 )
+from toneclass import played_vibrato
 
 
 @dataclass
@@ -490,6 +491,12 @@ PINNED_KEYS = {
 }
 
 
+#: Where a played vibrato's rate lies. The engine accepts 0-40 Hz for its synth
+#: patches; on a played instrument a fit past this band lands on a rate no
+#: player produces, and against a still reference nothing pulls it back.
+VIBRATO_RATE_RANGE_HZ = (3.0, 8.0)
+
+
 def _offered(key: str) -> bool:
     """Whether `--spec auto` puts this patch field (`patch.section.field`) before a search."""
     field = key.rsplit(".", 1)[-1]
@@ -566,11 +573,14 @@ def auto_spec(
         else sorted(k for k in defaults if engine and k.startswith(f"{engine}_voice."))
     )
 
+    vibrato = played_vibrato(program, drum_note=drum_note)
     spec: list[dict] = []
     for k in patch_keys + engine_keys:
         rng = _auto_range(k, defaults[k], catalogue.bound_for(k))
         if rng is None:
             continue
+        if vibrato and k.endswith(".lfo_rate_hz"):
+            rng = (*VIBRATO_RATE_RANGE_HZ, True)
         lo, hi, log = rng
         spec.append(
             {
@@ -578,7 +588,7 @@ def auto_spec(
                 "min": round(lo, 6),
                 "max": round(hi, 6),
                 "scale": "log" if log else "linear",
-                "start": defaults[k],
+                "start": min(max(defaults[k], lo), hi),
             }
         )
     return spec
