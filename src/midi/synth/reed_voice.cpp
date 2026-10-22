@@ -87,10 +87,12 @@ SONARE_TUNABLE(kBorePrefillCylinder, 0.0f);
 // with a sub-audio rumble. The corner therefore tracks the pitch (a fraction of
 // f0): it stays far enough below the fundamental to leave the tone's phase / tune
 // essentially untouched, while rising with the note so nothing below the
-// fundamental can resonate. A floor keeps the lowest reeds' fundamental clear of
-// the corner.
+// fundamental can resonate.
 SONARE_TUNABLE(kHpCornerFracF0, 0.06f);
-SONARE_TUNABLE(kHpCornerFloorHz, 10.0f);
+// Corner floor (Hz). At 10 Hz the bassoon's low Bb (58 Hz) lost 0.12 dB per round trip at its
+// fundamental and nothing at the octave, so the note handed itself to the octave over two
+// seconds; at the cylinder's 3 Hz its fundamental holds within 0.3 dB.
+SONARE_TUNABLE(kHpCornerFloorHz, 3.0f);
 // The cylinder's corner, fixed: at 10 Hz the blocker's sag over a half period (pi*fc/f0, 48% at
 // note 36) shaped the wave and read +12 cents at 48; at 3 Hz the note sits within 2.6 cents
 // from 42 up and the regimes the reed tests guard hold, which 1 Hz (24 kHz floor) does not.
@@ -129,10 +131,10 @@ SONARE_TUNABLE(kReedValveDamping, 1.2f);
 // is pinned shut, so it starts its swing from a closed channel rather than from
 // equilibrium. 0 = the tongue is already off at note-on.
 SONARE_TUNABLE(kTongueReleaseLevel, 0.5f);
-// Fraction of the dynamic valve's group delay that turns into a pitch shift.
-// Only the opening is delayed and the flow's square root is not, so the loop
-// sees far less lag than the reed alone carries — read against the cone.
-SONARE_TUNABLE(kReedValveCompScale, 0.15f);
+// Fraction of the dynamic valve's group delay that turns into a pitch shift. Only the opening is
+// delayed and the flow's square root is not, so the loop sees far less lag than the reed alone
+// carries; read against the cone, which holds within 1.3 cents of the static valve here.
+SONARE_TUNABLE(kReedValveCompScale, 0.165f);
 
 // --- 4b register vent (only when params.register_vent > 0) ---
 // Low-band follower corner (Hz): the follower tracks the loop's low content so
@@ -186,6 +188,57 @@ SONARE_TUNABLE(kToneholeGainMax, 0.5f);
 float reed_natural_hz(float resonance01, float srf) noexcept {
   const float res01 = std::clamp(resonance01, 0.0f, 1.0f);
   return std::min(kReedResBaseHz + kReedResSpanHz * res01, 0.45f * srf);
+}
+
+/// The pressure drop across the reed channel when the wave the channel launches is part of the
+/// pressure it sees: the root of d + zc*o(d)*sgn(d)*sqrt|d| = c with the opening
+/// o(d) = clamp(alpha - beta*d, 0, 1), @p zc the flow-to-pressure gain and @p c the drop the
+/// mouth would see against twice the returning wave. Monotone in d while zc stays under the
+/// square root of the closing drop, which is where the root is unique.
+float solve_valve_drop(float c, float zc, float alpha, float beta) noexcept {
+  if (zc <= 0.0f || beta <= 0.0f) return c;
+  auto g = [&](float d) {
+    const float o = std::clamp(alpha - beta * d, 0.0f, 1.0f);
+    return d + zc * o * std::copysign(std::sqrt(std::fabs(d)), d) - c;
+  };
+  // Breakpoints: wide open below the first, shut above the last, linear with fixed sign between.
+  float b[3] = {(alpha - 1.0f) / beta, 0.0f, alpha / beta};
+  std::sort(b, b + 3);
+  if (g(b[2]) <= 0.0f) return c;
+  if (g(b[0]) > 0.0f) {
+    // d = -s^2 with o = 1: s^2 + zc*s + c = 0, and c < 0 here.
+    const float s = 0.5f * (-zc + std::sqrt(std::max(zc * zc - 4.0f * c, 0.0f)));
+    return -s * s;
+  }
+  float lo = b[0];
+  float hi = b[2];
+  if (g(b[1]) > 0.0f) {
+    hi = b[1];
+  } else {
+    lo = b[1];
+  }
+  // Newton in s = sqrt|d|, where the flow is regular, held inside the bracket.
+  const float sigma = hi <= 0.0f ? -1.0f : 1.0f;
+  float s_lo = std::sqrt(std::fabs(lo));
+  float s_hi = std::sqrt(std::fabs(hi));
+  if (s_lo > s_hi) std::swap(s_lo, s_hi);
+  float s = 0.5f * (s_lo + s_hi);
+  for (int it = 0; it < 12; ++it) {
+    const float o = alpha - beta * sigma * s * s;
+    const float gv = sigma * s * s + zc * sigma * s * o - c;
+    const float dg = 2.0f * sigma * s + zc * (sigma * alpha - 3.0f * beta * s * s);
+    if ((gv > 0.0f) == (sigma > 0.0f)) {
+      s_hi = s;
+    } else {
+      s_lo = s;
+    }
+    float next = dg != 0.0f ? s - gv / dg : 0.5f * (s_lo + s_hi);
+    if (!(next > s_lo && next < s_hi)) next = 0.5f * (s_lo + s_hi);
+    const bool settled = std::fabs(next - s) < 1.0e-7f;
+    s = next;
+    if (settled) break;
+  }
+  return sigma * s * s;
 }
 
 }  // namespace
@@ -284,10 +337,9 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
     reed_b0_ = 1.0f - reed_a1_ - reed_a2_;
     tongue_release_ = std::clamp(kTongueReleaseLevel, 0.0f, 0.99f);
     tongue_held_ = true;
-    // The opening lags its drive by the reed's group delay at DC. A cylinder's
-    // loop is half the period, so the same lag is twice the share of it and the
-    // cone-referenced fraction doubles there.
-    const float topology = params.conical ? 1.0f : 2.0f;
+    // The opening lags its drive by the reed's group delay at DC; a cylinder's loop is half the
+    // period, and four times the cone's fraction holds it within 5.3 cents from note 34 to 70.
+    const float topology = params.conical ? 1.0f : 4.0f;
     valve_tau = kReedValveCompScale * topology * qr * srf / (kTwoPi * f_reed);
   }
 
@@ -546,7 +598,6 @@ float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (closing_pressure_ > 0.0f) {
     const float mouth = pressure_scale_ * breath;
     const float pc = pressure_scale_ * closing_pressure_;
-    const float drop = mouth - refl;
     // Tonguing (dynamic valve only): the tongue pins the reed shut against the
     // lay, so the channel passes nothing at all, until the mouth pressure has
     // risen through the release level. What speaks the note is the swing from a
@@ -555,9 +606,6 @@ float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
     if (tongue_held_) {
       inj = refl;
     } else {
-      const float x_rest = 1.0f - drop / pc;
-      const float open = reed_dyn_ ? valve_opening(x_rest) : std::clamp(x_rest, 0.0f, 1.0f);
-      const float flow = open * std::copysign(std::sqrt(std::fabs(drop)), drop);
       // The same flow with the bore at rest is the steady part, which holds the
       // mouthpiece open and radiates nothing. Subtracted in closed form rather
       // than tracked, so the note speaks without a settling rumble under it.
@@ -565,6 +613,19 @@ float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
       // exactly what makes the reed's swing toward it a forcing term.
       const float rest = std::clamp(1.0f - mouth / pc, 0.0f, 1.0f);
       const float steady = rest * std::sqrt(std::max(mouth, 0.0f));
+      // The drop includes the wave the reed launches (McIntyre, Schumacher & Woodhouse 1983).
+      const float zc = breath_.gate() * flow_gain_;
+      float alpha = 1.0f;
+      float beta = 1.0f / pc;
+      if (reed_dyn_) {
+        // The valve's own opening is linear in the drop through its input gain, plus its history.
+        alpha = reed_b0_ + reed_a1_ * reed_z1_ + reed_a2_ * reed_z2_;
+        beta = reed_b0_ / pc;
+      }
+      const float drop = solve_valve_drop(mouth - 2.0f * refl + zc * steady, zc, alpha, beta);
+      const float open = std::clamp(alpha - beta * drop, 0.0f, 1.0f);
+      if (reed_dyn_) valve_opening(1.0f - drop / pc);
+      const float flow = open * std::copysign(std::sqrt(std::fabs(drop)), drop);
       inj = WindBore::injection(refl, flow_gain_ * (flow - steady), breath_.gate());
     }
   }

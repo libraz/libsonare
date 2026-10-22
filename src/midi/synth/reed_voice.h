@@ -13,8 +13,11 @@
 /// a weak quadratic term, so at the pressures the bank plays it drives the bore
 /// with something close to a sine. `closing_pressure` swaps in the channel's own
 /// physics — a linearly closing opening and a Bernoulli flow — which is what
-/// puts a series over the fundamental, at the cost of a column far weaker and a
-/// subharmonic waiting past the flow gains the bank uses.
+/// puts a series over the fundamental. That valve sees the bore pressure proper,
+/// the returning wave plus the wave it launches, so its drop is solved per
+/// sample rather than read off the returning wave: the flow's slope is unbounded
+/// at zero drop, and taken explicitly it reflected far past unity and ran the
+/// loop period-doubled.
 ///
 /// Cylinder vs cone is loop topology, not EQ, and is the decision the
 /// declarations do not show: the clarinet's cylinder is a negative-feedback comb
@@ -163,9 +166,10 @@ struct ReedPatchParams {
   /// How much of the reed's flow the bore receives (only when
   /// closing_pressure > 0). Sets the oscillation amplitude and, with it, how far
   /// the opening swings — so it reads as drive rather than as level, and the
-  /// patch's own gain is what holds the loudness. Clamped to 1.5: past roughly
-  /// 1 the loop enters the subharmonic every fit ran into, and the column's
-  /// level stops tracking the drive.
+  /// patch's own gain is what holds the loudness. Clamped to 1.5. The drop's
+  /// solve has one root while this stays under the square root of
+  /// pressure_scale * closing_pressure; past that the valve has two states to
+  /// choose between and chatters.
   float flow_gain = 0.7f;
   /// Pressure scale the valve works in (only when closing_pressure > 0). The
   /// flow follows a square root, so this is a LOOP GAIN and not a level:

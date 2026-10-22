@@ -16,6 +16,7 @@
 
 #include "core/fft.h"
 #include "midi/midi_event.h"
+#include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/synth_presets.h"
 #include "midi/ump.h"
@@ -828,6 +829,56 @@ TEST_CASE("the beating reed leaves no steady flow under the note", "[midi][synth
       under += ps[static_cast<size_t>(b)];
     }
     REQUIRE(under < 0.25 * harmonic_power(ps, f0, 1));
+  }
+}
+
+TEST_CASE("the beating reed holds one period at the bassoon's operating point",
+          "[midi][synth][reed]") {
+  // A double reed closes once per cycle and the tone stays periodic. The GM bassoon is the voice
+  // that sits deepest in the beating band, so its own patch is the subject: with the valve's drop
+  // read off the returning wave alone, its lines at half-integer multiples of f0 stood 42-48 dB
+  // under the fundamental and the fundamental itself wandered 13 dB across the sustain.
+  using sonare::midi::synth::gm_fallback_patch;
+  // Breath noise off: its floor sits near the bound and is not a line the loop makes.
+  NativeSynthPatch patch = gm_fallback_patch(0, 70);
+  patch.reed.breath_noise = 0.0f;
+  REQUIRE(patch.reed.closing_pressure > 0.0f);
+  constexpr int fft = 32768;
+  const double bin_hz = kRate / fft;
+  auto band = [&](const std::vector<double>& ps, double hz) {
+    const double half = std::max(0.015 * hz, 3.0 * bin_hz);
+    double sum = 0.0;
+    for (int b = static_cast<int>((hz - half) / bin_hz);
+         b <= static_cast<int>((hz + half) / bin_hz); ++b) {
+      if (b > 0 && b < static_cast<int>(ps.size())) sum += ps[static_cast<size_t>(b)];
+    }
+    return sum;
+  };
+  for (uint8_t note : {34, 42}) {
+    const double f0 = 440.0 * std::pow(2.0, (note - 69) / 12.0);
+    const std::vector<float> tone = render_patch(patch, note, 80, 96000);
+    const std::vector<double> ps = power_spectrum(tone, 28800, fft);
+    const double h1 = band(ps, f0);
+    double half_lines = 0.0;
+    for (int k = 0; k < 5; ++k) half_lines = std::max(half_lines, band(ps, (k + 0.5) * f0));
+    INFO("note " << int(note) << ": strongest half-integer line "
+                 << 10.0 * std::log10(half_lines / h1) << " dB re h1");
+    CHECK(half_lines < h1 * std::pow(10.0, -50.0 / 10.0));
+    // The fundamental's amplitude over the sustain, 100 ms frames from 0.6 s to 1.8 s.
+    const size_t frame = 4800;
+    double lo = 1.0e30;
+    double hi = 0.0;
+    for (size_t at = 28800; at + frame <= 86400; at += frame) {
+      std::complex<double> acc = 0.0;
+      for (size_t i = 0; i < frame; ++i) {
+        const double w = 0.5 - 0.5 * std::cos(2.0 * sonare::constants::kPiD * i / frame);
+        acc += tone[at + i] * w * std::polar(1.0, -2.0 * sonare::constants::kPiD * f0 * i / kRate);
+      }
+      lo = std::min(lo, std::abs(acc));
+      hi = std::max(hi, std::abs(acc));
+    }
+    INFO("note " << int(note) << ": fundamental spans " << 20.0 * std::log10(hi / lo) << " dB");
+    CHECK(hi < lo * std::pow(10.0, 3.0 / 20.0));
   }
 }
 

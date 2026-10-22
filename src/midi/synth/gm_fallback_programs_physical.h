@@ -347,91 +347,99 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // reed_voice.cpp states; the worst of 35 captured notes then holds within
   // 0.2 dB/s of its reference, and the gain centres the grid's level.
   o.alto_sax.reed.closing_pressure = 1.88816f;
-  o.alto_sax.reed.flow_gain = 1.03769f;
+  o.alto_sax.reed.flow_gain = 1.05175f;
   o.alto_sax.cutoff_hz = 2773.85f;
   o.alto_sax.lfo_rate_hz = 3.01923f;
   o.alto_sax.lfo_to_pitch_cents = 20.3309f;
   o.alto_sax.reed.growl = 0.084017f;
   o.alto_sax.reed.chiff = 0.6f;
   o.alto_sax.reed.reed_opening = 0.62f;
-  o.alto_sax.reed.breath_noise = 0.677129f;
+  o.alto_sax.reed.breath_noise = 0.802129f;
   o.alto_sax.amp_env.attack_ms = 72.9492f;
   o.alto_sax.amp_env.decay_ms = 136.673f;
   o.alto_sax.amp_env.release_ms = 30.0285f;
   o.alto_sax.amp_env.sustain = 0.456559f;
-  o.alto_sax.body_mix = 0.428475f;
+  o.alto_sax.body_mix = 0.459725f;
   o.alto_sax.drift_cents = 0.878369f;
   o.alto_sax.drift_rate_hz = 0.394728f;
   o.alto_sax.reed.attack_ms = 4.72187f;
   o.alto_sax.reed.breath_pressure = 0.706935f;
-  o.alto_sax.reed.brightness = 0.66387f;
+  o.alto_sax.reed.brightness = 0.41387f;
   o.alto_sax.reed.chiff_ms = 28.3312f;
   o.alto_sax.reed.cone_growth = 0.0838137f;
   o.alto_sax.reed.damping = 0.320851f;
   o.alto_sax.reed.release_ms = 18.1302f;
   o.alto_sax.resonance_q = 1.64558f;
   o.alto_sax.stereo_spread = 0.078303f;
-  o.alto_sax.reed.velocity_exponent = 1.17f;
+  o.alto_sax.reed.velocity_exponent = 1.22313f;
   o.tenor_sax = reed(true, 0.60f, 0.50f, 0.56f, 0.36f, 20.0f, 100.0f, 0.78f, 0.36f, 0.8803f);
-  // Fitted inside the valve's oscillating band; the worst of 35 captured notes
-  // holds within 1.2 dB/s of its reference.
-  o.tenor_sax.reed.closing_pressure = 1.26761f;
-  o.tenor_sax.reed.flow_gain = 0.57712f;
-  o.tenor_sax.cutoff_hz = 2827.72f;
-  // The reference carries a 5 Hz, 6.1 c vibrato. At equal depth the model reads
-  // 7 dB noisier than it, and above 2 c tone-to-noise leaves its bound.
-  o.tenor_sax.lfo_rate_hz = 5.0f;
-  o.tenor_sax.lfo_to_pitch_cents = 2.0f;
-  o.tenor_sax.reed.growl = 0.317241f;
-  o.tenor_sax.reed.chiff = 0.531633f;
-  o.tenor_sax.reed.breath_noise = 0.319254f;
-  o.tenor_sax.amp_env.attack_ms = 19.4671f;
-  o.tenor_sax.amp_env.release_ms = 89.9691f;
-  o.tenor_sax.amp_env.sustain = 0.833916f;
+  // Placed where the solved valve holds one period across the grid: at 1.27 the lowest notes
+  // put lines up to 34 dB under the fundamental, at 2.0 none closer than 49 dB; 2.2 leaves the
+  // note arriving 425 ms late.
+  o.tenor_sax.reed.closing_pressure = 2.0f;
+  o.tenor_sax.reed.flow_gain = 0.85809f;
+  o.tenor_sax.cutoff_hz = 4770.65f;
+  // Depth fitted against the reference's 5 Hz vibrato; tone-to-noise reads its sidebands as tone.
+  o.tenor_sax.lfo_rate_hz = 4.68214f;
+  o.tenor_sax.lfo_to_pitch_cents = 5.2443f;
+  o.tenor_sax.reed.growl = 0.0541918f;
+  o.tenor_sax.reed.chiff = 0.7714f;
+  o.tenor_sax.reed.breath_noise = 0.348762f;
+  o.tenor_sax.amp_env.attack_ms = 106.412f;
+  o.tenor_sax.amp_env.release_ms = 44.3496f;
+  o.tenor_sax.amp_env.sustain = 0.584104f;
   o.tenor_sax.drift_rate_hz = 0.52401f;
-  o.tenor_sax.reed.attack_ms = 3.44883f;
-  o.tenor_sax.reed.breath_pressure = 0.529918f;
-  o.tenor_sax.reed.chiff_ms = 23.6422f;
-  o.tenor_sax.reed.damping = 0.853888f;
-  o.tenor_sax.reed.release_ms = 265.076f;
-  o.tenor_sax.reed.vel_to_breath = 0.605556f;
-  o.tenor_sax.resonance_q = 0.550554f;
-  o.tenor_sax.stereo_spread = 0.0f;
+  o.tenor_sax.reed.attack_ms = 7.51687f;
+  o.tenor_sax.reed.breath_pressure = 0.67445f;
+  o.tenor_sax.reed.chiff_ms = 77.2934f;
+  o.tenor_sax.reed.damping = 0.256414f;
+  o.tenor_sax.reed.release_ms = 338.817f;
+  o.tenor_sax.reed.vel_to_breath = 1.0f;
+  o.tenor_sax.resonance_q = 0.587518f;
+  o.tenor_sax.stereo_spread = 0.506966f;
   // Radiation corner a fit chose with it free: held-out loss 7.70 units against
   // 10.22 for the same budget held at 0. On these values alone it takes gate excess
   // 13.45 -> 12.40 and centroid/f0 error 0.42 -> 0.29 octave.
-  o.tenor_sax.reed.bell_radiation_hz = 687.285f;
-  o.tenor_sax.amp_env.decay_ms = 20.019f;
-  o.tenor_sax.body_mix = 0.36f;
-  o.tenor_sax.drift_cents = 1.5f;
+  o.tenor_sax.reed.bell_radiation_hz = 420.675f;
+  o.tenor_sax.amp_env.decay_ms = 126.564f;
+  o.tenor_sax.body_mix = 0.65144f;
+  o.tenor_sax.drift_cents = 0.5f;
   o.tenor_sax.drive = 0.0f;
-  o.tenor_sax.reed.velocity_exponent = 0.73f;
+  o.tenor_sax.reed.velocity_exponent = 0.794909f;
+  o.tenor_sax.reed.brightness = 0.640952f;
+  o.tenor_sax.reed.cone_growth = 0.218769f;
+  o.tenor_sax.reed.pressure_scale = 0.983204f;
+  o.tenor_sax.reed.register_vent = 0.0477458f;
+  o.tenor_sax.reed.tonehole = 0.0772542f;
   o.baritone_sax = reed(true, 0.60f, 0.50f, 0.5f, 0.40f, 26.0f, 120.0f, 0.78f, 0.40f, 0.2849f);
   // Fitted inside the valve's oscillating band; the worst of 35 captured notes
   // holds within 1.5 dB/s of its reference.
   o.baritone_sax.reed.closing_pressure = 2.04294f;
   o.baritone_sax.reed.flow_gain = 0.85836f;
-  o.baritone_sax.cutoff_hz = 1329.13f;
+  o.baritone_sax.cutoff_hz = 1039.85f;
   o.baritone_sax.lfo_rate_hz = 4.8f;
-  o.baritone_sax.lfo_to_pitch_cents = 6.53508f;
-  o.baritone_sax.reed.growl = 0.156807f;
+  o.baritone_sax.lfo_to_pitch_cents = 4.0f;
+  o.baritone_sax.reed.growl = 0.0520812f;
   o.baritone_sax.reed.chiff = 0.656231f;
-  o.baritone_sax.amp_env.attack_ms = 8.66437f;
+  o.baritone_sax.amp_env.attack_ms = 12.1217f;
   o.baritone_sax.amp_env.release_ms = 24.1736f;
-  o.baritone_sax.amp_env.sustain = 0.845492f;
-  o.baritone_sax.body_mix = 0.497214f;
-  o.baritone_sax.drift_cents = 2.59684f;
+  o.baritone_sax.amp_env.sustain = 0.335043f;
+  o.baritone_sax.body_mix = 0.443285f;
+  o.baritone_sax.drift_cents = 1.24354f;
   o.baritone_sax.drift_rate_hz = 0.490131f;
-  o.baritone_sax.reed.attack_ms = 15.9141f;
-  o.baritone_sax.reed.breath_noise = 0.383181f;
-  o.baritone_sax.reed.breath_pressure = 0.709524f;
+  o.baritone_sax.reed.attack_ms = 26.0f;
+  o.baritone_sax.reed.breath_noise = 0.1f;
+  o.baritone_sax.reed.breath_pressure = 0.3f;
   o.baritone_sax.reed.brightness = 0.763932f;
-  o.baritone_sax.reed.chiff_ms = 59.5691f;
-  o.baritone_sax.reed.cone_growth = 0.0944272f;
+  o.baritone_sax.reed.chiff_ms = 178.538f;
+  o.baritone_sax.reed.cone_growth = 0.0487028f;
   o.baritone_sax.reed.tonehole = 0.309017f;
-  o.baritone_sax.reed.vel_to_breath = 0.312461f;
-  o.baritone_sax.resonance_q = 0.907078f;
+  o.baritone_sax.reed.vel_to_breath = 0.191796f;
+  o.baritone_sax.resonance_q = 1.08741f;
   o.baritone_sax.reed.velocity_exponent = 1.42f;
+  o.baritone_sax.amp_env.decay_ms = 427.032f;
+  o.baritone_sax.reed.damping = 0.775f;
+  o.baritone_sax.stereo_spread = 0.225445f;
   o.oboe = reed(true, 0.80f, 0.35f, 0.74f, 0.30f, 18.0f, 70.0f, 0.62f, 0.30f, 0.6f);
   o.oboe.cutoff_hz = 3143.15f;
   o.oboe.lfo_rate_hz = 4.87846f;
@@ -485,27 +493,40 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.english_horn.stereo_spread = 0.285089f;
   o.english_horn.reed.velocity_exponent = 0.88f;
   o.bassoon = reed(true, 0.65f, 0.45f, 0.5f, 0.40f, 30.0f, 120.0f, 0.68f, 0.40f, 0.4554f);
-  // Fitted inside the valve's oscillating band; the worst of 35 captured notes
-  // holds within 0.8 dB/s of its reference.
-  o.bassoon.reed.closing_pressure = 1.06731f;
-  o.bassoon.reed.flow_gain = 0.70627f;
-  o.bassoon.cutoff_hz = 3537.47f;
+  // Placed where the solved valve holds one period: at 1.07 the reed sat closed 30% of the
+  // cycle and the loop ran period-doubled, half-integer lines 42-48 dB under the fundamental;
+  // at 1.6 it still beats (20% closed) and the lines sit 62 dB down and more.
+  o.bassoon.reed.closing_pressure = 1.6f;
+  o.bassoon.reed.flow_gain = 0.811499f;
+  // Low because the drive ahead of it adds the upper partials; the centroid reads 32% under the
+  // reference's.
+  o.bassoon.cutoff_hz = 755.142f;
   // No vibrato: the reference's 3-8 Hz pitch modulation reads under 0.1 c.
-  o.bassoon.amp_env.attack_ms = 96.7436f;
-  o.bassoon.amp_env.release_ms = 66.9303f;
-  o.bassoon.amp_env.sustain = 0.552624f;
-  o.bassoon.drift_rate_hz = 0.683934f;
-  o.bassoon.reed.attack_ms = 36.7159f;
-  o.bassoon.reed.breath_noise = 0.62601f;
-  o.bassoon.reed.breath_pressure = 0.489349f;
-  o.bassoon.reed.brightness = 0.685527f;
-  o.bassoon.reed.chiff = 0.505784f;
-  o.bassoon.reed.chiff_ms = 1.5f;
-  o.bassoon.reed.release_ms = 35.1109f;
-  o.bassoon.reed.vel_to_breath = 0.156748f;
-  o.bassoon.resonance_q = 1.23723f;
-  o.bassoon.amp_env.decay_ms = 179.829f;
+  o.bassoon.amp_env.attack_ms = 43.1601f;
+  o.bassoon.amp_env.release_ms = 52.3634f;
+  o.bassoon.amp_env.sustain = 0.596887f;
+  o.bassoon.drift_rate_hz = 0.228195f;
+  o.bassoon.reed.attack_ms = 59.9853f;
+  // Breath noise is what fills the band under the note that the reference carries: here that
+  // band matches and the tone reads 11 dB noisier than the reference; at 0.3 the tone is 4 dB
+  // cleaner and the band 8 dB short. No setting meets both.
+  o.bassoon.reed.breath_noise = 0.8f;
+  o.bassoon.reed.breath_pressure = 0.741138f;
+  o.bassoon.reed.brightness = 0.942493f;
+  o.bassoon.reed.chiff = 0.623818f;
+  o.bassoon.reed.chiff_ms = 1.52222f;
+  o.bassoon.reed.release_ms = 93.718f;
+  o.bassoon.reed.vel_to_breath = 0.184872f;
+  o.bassoon.resonance_q = 2.73855f;
+  o.bassoon.amp_env.decay_ms = 251.586f;
   o.bassoon.reed.velocity_exponent = 2.18f;
+  o.bassoon.body_mix = 0.772581f;
+  o.bassoon.drift_cents = 1.41556f;
+  o.bassoon.drive = 0.704915f;
+  o.bassoon.reed.cone_growth = 0.401064f;
+  o.bassoon.reed.damping = 0.211803f;
+  o.bassoon.reed.tonehole = 0.322949f;
+  o.bassoon.stereo_spread = 0.248766f;
   o.clarinet = reed(false, 0.40f, 0.50f, 0.54f, 0.30f, 25.0f, 90.0f, 0.72f, 0.25f, 0.6f);
   o.clarinet.cutoff_hz = 4800.0f;
   // No vibrato: the reference's f0 holds within 0.1 c peak to peak; a 2.5 c LFO
