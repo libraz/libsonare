@@ -10,6 +10,9 @@
     "stale": false
   },
   "reference_spread": {},
+  "_excluded": {
+    "body": "the 40 Hz-0.7 f0 band holds a fixed ratio to the note from the first 50 ms (n48: -38.7, -36.0, -36.4, -36.6, -37.2 dB re f0 at 0.05-2.0 s while the fundamental falls 18 dB; n60: -24.8 to -28.1) and falls against it after the pluck on 1 of 4 rows, so what the -25 to -40 dB reading measures is a layer baked into the sample, not a body excited by the pluck"
+  },
   "bounds": {
     "stretch": {
       "floor": 1.0,
@@ -90,14 +93,6 @@
       "abs_median": 43.201,
       "p90": 59.514,
       "rows": 5
-    },
-    "body": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 33.856,
-      "abs_median": 33.856,
-      "p90": 47.556,
-      "rows": 4
     }
   }
 }

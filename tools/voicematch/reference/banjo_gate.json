@@ -10,6 +10,9 @@
     "stale": false
   },
   "reference_spread": {},
+  "_excluded": {
+    "body": "below f0 the reference carries sample-loop content rather than a head or body: on 0 of 35 rows does the 40 Hz-0.7 f0 band fall against the note in the first 0.7 s (median change -1.4 dB, it rises), at n52 and n60 it holds within 1 dB of its ratio to f0 for 2 s while the fundamental falls 29-36 dB, and n60 and n72, an octave apart, carry the same 139 Hz line with its 278 Hz partial at 92-98 % of the band - a tone neither note has in it"
+  },
   "bounds": {
     "stretch": {
       "floor": 1.0,
@@ -65,14 +68,6 @@
       "median": 29.1,
       "abs_median": 29.1,
       "p90": 80.63,
-      "rows": 35
-    },
-    "body": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 1.0,
-      "abs_median": 13.4,
-      "p90": 16.498,
       "rows": 35
     },
     "balance": {

@@ -67,14 +67,6 @@
       "p90": 54.375,
       "rows": 6
     },
-    "body": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 5.631,
-      "abs_median": 5.631,
-      "p90": 13.144,
-      "rows": 6
-    },
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",

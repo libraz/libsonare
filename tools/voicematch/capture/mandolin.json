@@ -42,7 +42,8 @@
     "stereo": "the recordings are mono (`sampleType` 1) and the font sets no `pan`, so the image is absent by construction rather than by voicing",
     "register": "the font sets no `initialAttenuation` anywhere, so the level relation between one note and the next is not in it. Over this grid the peaks span 2.8 dB, which is the headroom each recording was normalised into rather than the instrument's fall across its compass",
     "damper": "a recording ends where it was cut and carries no note-off, so there is no key lift for a release to be read from",
-    "attack_hf_swing": "this reference holds one velocity (100) per note, so there is no softest-to-hardest change to measure -- the same fact vel_range is excused for"
+    "attack_hf_swing": "this reference holds one velocity (100) per note, so there is no softest-to-hardest change to measure -- the same fact vel_range is excused for",
+    "body": "the under-band is mains hum: a 50.0 Hz line carries 60-96 % of the 40 Hz-0.7 f0 energy over the 0.2-1.2 s window on 5 of 5 rows, and the same line sits in the silence before the note within 0.2-1.3 dB of its level under it, so the -49 to -57 dB the dimension reads is the capture chain's floor and the instrument's own body, if any, is below it"
   },
   "dimensions": [
     "stretch",
@@ -50,7 +51,6 @@
     "aftersound",
     "doubling",
     "partial_tilt",
-    "body",
     "attack",
     "attack_hf",
     "balance",
