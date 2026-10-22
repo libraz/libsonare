@@ -2,14 +2,15 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm094",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-22T16:02:04+00:00",
-  "recorded_utc": "2026-10-22T16:12:58+00:00",
+  "reference_measured_utc": "2026-10-22T19:51:39+00:00",
+  "recorded_utc": "2026-10-22T20:02:28+00:00",
   "model_build": {
-    "built_utc": "2026-10-22T15:28:03Z",
-    "newest_source_utc": "2026-10-22T15:27:19Z",
+    "built_utc": "2026-10-22T16:49:49Z",
+    "newest_source_utc": "2026-10-22T16:45:34Z",
     "stale": false
   },
   "reference_spread": {},
+  "_pitch_motion_reading": "tnr.abs_median (was 11.05), tnr.median (was 6.987) deleted 2026-10-23 and re-recorded when the tone-to-noise mask and the partial-level windows began widening, where no vibrato line is read, by the held excursion of the demodulated fundamental: twice the 99th percentile of its power-weighted distance from the mean pitch over the note's held part (0.3 s in to 0.15 s before the end), at the rate under which nine tenths of the motion lies, and 10 cents peak to peak at least. This reference's held pitch moves: an excursion reads on 16 of 28 rows, median 37 c at 6.9 Hz, detuned layers beating. The held pitch is not moved by it, so a still tone, a drift, a vibrato and the tuning read as they did.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
@@ -22,8 +23,8 @@
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 6.987,
-      "abs_median": 11.05,
+      "median": 18.863,
+      "abs_median": 19.2,
       "p90": 37.554,
       "rows": 28
     },

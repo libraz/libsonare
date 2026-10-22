@@ -106,18 +106,14 @@ def _band_peak(
     return float(8.0 * spectrum[k] / n), float(freqs[k])
 
 
-def demodulated_pitch(
-    seg: np.ndarray, sr: int, f0: float, cutoff: float, stop: float
-) -> np.ndarray | None:
-    """The fundamental's pitch track in cents from `f0` at `FM_HOP_S`.
+def _baseband(seg: np.ndarray, sr: int, f0: float, cutoff: float, stop: float) -> np.ndarray | None:
+    """The fundamental shifted to 0 Hz and lowpassed, as complex samples at `FM_HOP_S`.
 
-    The fundamental is shifted to 0 Hz, lowpassed under `cutoff` with a
-    raised-cosine roll-off to zero at `stop`, and its phase differentiated over
-    `FM_HOP_S` steps: an instantaneous frequency whose bandwidth is the lowpass,
-    not a tracker window. None when the segment, or the part of it above the
-    floor, is too short to hold a track, and when the passband is not
-    `FM_MIN_FUNDAMENTAL_DB` over the floor within f0 of the fundamental: the
-    phase is then the noise's, read as hundreds of cents.
+    The lowpass passes under `cutoff` with a raised-cosine roll-off to zero at
+    `stop`. The samples end where the level falls `FM_FLOOR_DB` under its peak.
+    None when the segment, or the part of it above the floor, is too short to
+    hold a track, and when the passband is not `FM_MIN_FUNDAMENTAL_DB` over the
+    floor within f0 of the fundamental: the phase is then the noise's.
     """
     edge = int(FM_EDGE_S * sr)
     hop = int(FM_HOP_S * sr)
@@ -145,6 +141,23 @@ def demodulated_pitch(
         base = base[: below[0]]
     if len(base) <= MOD_MIN_FRAMES:
         return None
+    return base
+
+
+def demodulated_pitch(
+    seg: np.ndarray, sr: int, f0: float, cutoff: float, stop: float
+) -> np.ndarray | None:
+    """The fundamental's pitch track in cents from `f0` at `FM_HOP_S`.
+
+    `_baseband`'s phase differentiated over `FM_HOP_S` steps: an instantaneous
+    frequency whose bandwidth is the lowpass, not a tracker window. None where
+    `_baseband` holds no track, since a phase read under the floor is hundreds
+    of cents of noise.
+    """
+    base = _baseband(seg, sr, f0, cutoff, stop)
+    if base is None:
+        return None
+    hop = int(FM_HOP_S * sr)
     offset_hz = np.diff(np.unwrap(np.angle(base))) * sr / (2.0 * np.pi * hop)
     return 1200.0 * np.log2(np.maximum(f0 + offset_hz, 1e-6) / f0)
 
@@ -276,6 +289,107 @@ def vibrato_extent(seg: np.ndarray, sr: int, f0: float) -> Vibrato | None:
         return None
     span = freqs[band][power[band] >= power[k] * 10.0 ** (-VIBRATO_SPAN_DB / 10.0)]
     return Vibrato(depth, float(span.min()), float(span.max()))
+
+
+#: Percentile of the level-weighted distance from the mean pitch read as the excursion;
+#: above it sit a beat's phase jumps. Measured on 18 synthetic six-player sections at
+#: -60 dB noise: the 95th left 8 reading over 3 dB noisier than one still player, the 99th 1.
+EXCURSION_PERCENTILE = 99.0
+#: Share of the excursion's level-weighted modulation power under its one rate. On the
+#: same sections the median rate left 8 over 3 dB noisier, nine tenths 1.
+EXCURSION_RATE_SHARE = 0.9
+#: Least modulation index, peak deviation over rate at the fundamental, where a weak
+#: component beside it beats with its own relative level as the index. Measured: marimba
+#: and koto references 0.009-0.048, choir and calliope references 0.09 and up.
+EXCURSION_MIN_INDEX = 0.05
+#: Shallowest excursion, peak-to-peak. Measured on held parts: still notes and a
+#: tremolo leaking into a weak fundamental read 0.1-2.5 c, the least ensemble 16 c.
+EXCURSION_MIN_CENTS = 10.0
+#: Track trimmed off the start and end before the excursion is read: an onset's pitch
+#: glide and a release's fall are not held motion.
+EXCURSION_SKIP_S = 0.3
+EXCURSION_TAIL_S = 0.15
+#: Where `pitch_excursion`'s demodulation stops, as a fraction of f0: the quarter-f0
+#: cap on the mask it widens, short of a layer a fourth below.
+EXCURSION_STOP_F0_FRACTION = 0.25
+
+
+def pitch_excursion(seg: np.ndarray, sr: int, f0: float) -> Vibrato | None:
+    """How far the fundamental's pitch moves over `seg`, whatever its periodicity, or None.
+
+    A section's or a choir's churn has no single line for `vibrato_extent` to
+    find, yet it spreads every partial as a vibrato does. Read off the
+    fundamental demodulated under a passband stopping at
+    `EXCURSION_STOP_F0_FRACTION` of f0: beyond that the mask cannot widen, and
+    a layer there would read as the fundamental's motion. The track rolls off
+    from the vibrato band's top to zero at `VIBRATO_SHARE_TOP_HZ`; faster pitch
+    motion is a beat against another component, which `pitch_modulation` reads
+    as fast FM. Only the held part of the track is read, `EXCURSION_SKIP_S`
+    after its start and `EXCURSION_TAIL_S` before its end: a struck or plucked
+    note's onset glide and a release's fall are not motion the held spectrum
+    spreads with.
+
+    A drift or a glide is tone too, but it needs no widening: within ±34 cents
+    it stays inside every partial's still window (±2 %, or three bins where
+    that is wider), and the sidebands its rate would space fall in the Hann
+    main lobe. Read as motion, 10 cents of 0.7 Hz drift on a 65 Hz synth bass
+    masked the window's own leakage and read 12 dB cleaner than the same
+    note's still mask, which a still model cannot match. So a motion whose rate
+    completes fewer than `VIBRATO_MIN_CYCLES` cycles over the track is no
+    excursion, as it is no vibrato.
+
+    The depth is twice the `EXCURSION_PERCENTILE` of the distance from the mean
+    pitch, both weighted by the fundamental's power as its spectrum weights
+    them, and the one rate is where `EXCURSION_RATE_SHARE` of the motion's
+    level-weighted power lies, so `metrics_partials.fm_margin_hz` reaches its
+    sidebands as a vibrato's at that rate. Players whose vibratos cancel in the
+    mean pitch read shallower than each one moves. None when the segment holds
+    no track or its held part fewer than `MOD_MIN_FRAMES` steps; when the
+    excursion is under `EXCURSION_MIN_CENTS`; when it reaches past the passband's cutoff, where
+    the track follows another component; when the rate is a drift's; and when
+    the index is under `EXCURSION_MIN_INDEX`, a component beside the
+    fundamental rather than the note spreading.
+    """
+    if f0 <= 0.0 or f0 > sr / 2.0:
+        return None
+    stop = EXCURSION_STOP_F0_FRACTION * f0
+    cutoff = min(FM_FAST_BAND_HZ[1], stop * FM_LOWPASS_F0_FRACTION / FM_STOP_F0_FRACTION)
+    if cutoff <= VIBRATO_BAND_HZ[1]:
+        return None
+    base = _baseband(np.asarray(seg, dtype=np.float64), sr, f0, cutoff, stop)
+    if base is None:
+        return None
+    hop = int(FM_HOP_S * sr)
+    offset_hz = np.diff(np.unwrap(np.angle(base))) * sr / (2.0 * np.pi * hop)
+    cents = 1200.0 * np.log2(np.maximum(f0 + offset_hz, 1e-6) / f0)
+    weight = np.abs(base[1:] * base[:-1])
+    k0, k1 = int(EXCURSION_SKIP_S / FM_HOP_S), len(cents) - int(EXCURSION_TAIL_S / FM_HOP_S)
+    if k1 - k0 <= MOD_MIN_FRAMES:
+        return None
+    cents, weight = cents[k0:k1], weight[k0:k1]
+    n = len(cents)
+    idx = np.arange(n, dtype=np.float64)
+    freqs = np.fft.rfftfreq(n, FM_HOP_S)
+    taper = np.sqrt(weight) * np.hanning(n)
+    top = VIBRATO_BAND_HZ[1]
+    held = (freqs > 0.0) & (freqs < VIBRATO_SHARE_TOP_HZ)
+    # Lowpassed about the linear trend, so the segment's ends do not ring.
+    trend = np.polyval(np.polyfit(idx, cents, 1), idx)
+    gain = 0.5 * (1.0 + np.cos(np.pi * np.clip((freqs - top) / (VIBRATO_SHARE_TOP_HZ - top), 0, 1)))
+    track = np.fft.irfft(np.fft.rfft(cents - trend) * gain, n) + trend
+    deviation = track - float(np.sum(weight * track) / np.sum(weight))
+    order = np.argsort(np.abs(deviation))
+    share = np.cumsum(weight[order]) / float(np.sum(weight))
+    reach = float(np.abs(deviation[order][np.searchsorted(share, EXCURSION_PERCENTILE / 100.0)]))
+    reach_hz = f0 * (2.0 ** (reach / 1200.0) - 1.0)
+    if 2.0 * reach < EXCURSION_MIN_CENTS or reach_hz >= cutoff:
+        return None
+    power = np.abs(np.fft.rfft(deviation * taper)) ** 2
+    cumulative = np.cumsum(power[held]) / float(np.sum(power[held]))
+    rate = float(freqs[held][np.searchsorted(cumulative, EXCURSION_RATE_SHARE)])
+    if rate * n * FM_HOP_S < VIBRATO_MIN_CYCLES or reach_hz < EXCURSION_MIN_INDEX * rate:
+        return None
+    return Vibrato(2.0 * reach, rate, rate)
 
 
 def modulation_note(

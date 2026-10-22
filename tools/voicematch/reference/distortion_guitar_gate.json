@@ -3,13 +3,14 @@
   "timbre": "gm031",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-22T01:09:47+00:00",
-  "recorded_utc": "2026-10-22T01:49:14+00:00",
+  "recorded_utc": "2026-10-22T20:11:31+00:00",
   "model_build": {
-    "built_utc": "2026-10-21T10:18:24Z",
-    "newest_source_utc": "2026-10-21T10:20:44Z",
-    "stale": true
+    "built_utc": "2026-10-22T16:49:49Z",
+    "newest_source_utc": "2026-10-22T16:45:34Z",
+    "stale": false
   },
   "reference_spread": {},
+  "_pitch_motion_reading": "tnr.abs_median (was 6.65), tnr.median (was 2.763) deleted 2026-10-23 and re-recorded when the tone-to-noise mask and the partial-level windows began widening, where no vibrato line is read, by the held excursion of the demodulated fundamental: twice the 99th percentile of its power-weighted distance from the mean pitch over the note's held part (0.3 s in to 0.15 s before the end), at the rate under which nine tenths of the motion lies, and 10 cents peak to peak at least. model-only motion: 10/35 model rows read an excursion of 13\u201347 c, the reference holds still (0/35 rows); a model defect, not a reference reading.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
@@ -30,8 +31,8 @@
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 2.763,
-      "abs_median": 6.65,
+      "median": 7.675,
+      "abs_median": 12.637,
       "p90": 28.205,
       "rows": 35
     },

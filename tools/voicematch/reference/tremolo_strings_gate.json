@@ -2,14 +2,15 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm045",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-22T01:14:41+00:00",
-  "recorded_utc": "2026-10-22T01:50:59+00:00",
+  "reference_measured_utc": "2026-10-22T19:52:17+00:00",
+  "recorded_utc": "2026-10-22T20:02:39+00:00",
   "model_build": {
-    "built_utc": "2026-10-21T10:18:24Z",
-    "newest_source_utc": "2026-10-21T10:20:44Z",
-    "stale": true
+    "built_utc": "2026-10-22T16:49:49Z",
+    "newest_source_utc": "2026-10-22T16:45:34Z",
+    "stale": false
   },
   "reference_spread": {},
+  "_pitch_motion_reading": "balance.median (was 0.51), tnr.abs_median (was 5.063) deleted 2026-10-23 and re-recorded when the tone-to-noise mask and the partial-level windows began widening, where no vibrato line is read, by the held excursion of the demodulated fundamental: twice the 99th percentile of its power-weighted distance from the mean pitch over the note's held part (0.3 s in to 0.15 s before the end), at the rate under which nine tenths of the motion lies, and 10 cents peak to peak at least. This reference's held pitch moves: an excursion reads on 24 of 35 rows, median 66 c at 11.6 Hz, a section's players moving against each other. The held pitch is not moved by it, so a still tone, a drift, a vibrato and the tuning read as they did.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
@@ -23,7 +24,7 @@
       "floor": 1.0,
       "floor_from": "guess",
       "median": 5.063,
-      "abs_median": 5.063,
+      "abs_median": 10.9,
       "p90": 26.8,
       "rows": 35
     },
@@ -62,7 +63,7 @@
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 0.51,
+      "median": 0.673,
       "abs_median": 3.353,
       "p90": 9.024,
       "rows": 35

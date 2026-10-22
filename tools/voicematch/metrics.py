@@ -146,6 +146,7 @@ from metrics_modulation import (
     _band_peak,
     f0_width_cents,
     modulation_note,
+    pitch_excursion,
     vibrato_extent,
 )
 from metrics_note import (
@@ -188,6 +189,7 @@ from metrics_partials import (
     partial_hz,
     partial_level,
     partial_offset,
+    pitch_motion,
     stretch_cents,
     tone_to_noise_db,
 )

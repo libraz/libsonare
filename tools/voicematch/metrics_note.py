@@ -7,13 +7,14 @@ from dataclasses import asdict, dataclass
 import numpy as np
 from metrics_hit import HIT_ENVELOPE_HOP_MS, HIT_ENVELOPE_WIN_MS, _hit_onset
 from metrics_modal import half_spectra, modal_profile
-from metrics_modulation import f0_width_cents, modulation_note, vibrato_extent
+from metrics_modulation import f0_width_cents, modulation_note
 from metrics_partials import (
     estimate_inharmonicity_b,
     held_pitch,
     ladder_present,
     partial_hz,
     partial_level,
+    pitch_motion,
     tone_to_noise_db,
 )
 from metrics_signal import (
@@ -350,7 +351,7 @@ def analyze_note(
         float("nan")
         if under_peak_db < SILENT_WINDOW_DB
         else tone_to_noise_db(
-            freqs, mag, float(f0), inharmonicity_b, vibrato_extent(sustain, sr, float(f0))
+            freqs, mag, float(f0), inharmonicity_b, pitch_motion(sustain, sr, float(f0))
         )
     )
 

@@ -2,16 +2,17 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm043",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-22T16:01:17+00:00",
-  "recorded_utc": "2026-10-22T16:08:06+00:00",
+  "reference_measured_utc": "2026-10-22T19:50:35+00:00",
+  "recorded_utc": "2026-10-22T20:02:12+00:00",
   "model_build": {
-    "built_utc": "2026-10-22T15:28:03Z",
-    "newest_source_utc": "2026-10-22T15:27:19Z",
+    "built_utc": "2026-10-22T16:49:49Z",
+    "newest_source_utc": "2026-10-22T16:45:34Z",
     "stale": false
   },
   "reference_spread": {},
   "_balance_p90_population": "balance.p90 was deleted 2026-10-22 and re-recorded from the 50-row grid. The 7.559 it held was recorded 2026-10-16 (ddf22d2da) over the 48-72 grid, 35 rows; 64fc090f8 (2026-10-17) extended the capture to the open C string and the ratchet kept the 35-row p90 through every re-record since (fea17fd55 moved `rows` 35 -> 50 on this dimension while p90 stayed). The ten rows it then failed on are n36 and n40 at every velocity: the reference reads h2-h6 at +15.1 and +7.9 dB over h1 there (a C-string recording below the body's air mode, where the fundamental is barely radiated) against the model's -12 to -14 dB, a 20-27 dB per-row error, while the other 40 rows hold a 3.5 dB median. Deleting that bound records the population the gate actually compares; it does not say the sub-A0 stack is right, and the 2026-10-19/20 attempts to reach it (hp_cutoff_hz 100-130, a 6th-order roll-off, the series corpus) each cost 4-10 other lines.",
   "_vibrato_reading": "balance.median (was 0.5) deleted 2026-10-23 and re-recorded when the measurement moved on both sides at once: under a vibrato the tuning is the fundamental's mean pitch, demodulated under its own FM extent, rather than the strongest spectral line within 80 c; a partial's level is its power summed over that FM extent rather than its peak bin; and a vibrato whose rate wanders, or whose line shares the pitch track with fast FM, now widens the tone-to-noise mask and is read at the band's RMS depth over its rate span. The reference was re-measured and the model is read with the same ruler, so these bounds were recorded under a ruler that no longer exists. A still tone reads as it did.",
+  "_pitch_motion_reading": "balance.median (was 1.165) deleted 2026-10-23 and re-recorded when the tone-to-noise mask and the partial-level windows began widening, where no vibrato line is read, by the held excursion of the demodulated fundamental: twice the 99th percentile of its power-weighted distance from the mean pitch over the note's held part (0.3 s in to 0.15 s before the end), at the rate under which nine tenths of the motion lies, and 10 cents peak to peak at least. This reference's held pitch moves: an excursion reads on 10 of 50 rows, median 24 c at 11.1 Hz, pitch motion above the vibrato band. The held pitch is not moved by it, so a still tone, a drift, a vibrato and the tuning read as they did.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
@@ -48,7 +49,7 @@
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 1.165,
+      "median": 1.501,
       "abs_median": 2.805,
       "p90": 27.64,
       "rows": 50

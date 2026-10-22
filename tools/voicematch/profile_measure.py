@@ -26,10 +26,10 @@ from metrics import (
     onset_shape,
     partial_hz,
     partial_level,
+    pitch_motion,
     sound_onset_s,
     to_mono,
     tone_to_noise_db,
-    vibrato_extent,
 )
 from smf import Note
 
@@ -99,7 +99,7 @@ def find_partials(seg: np.ndarray, sr: int, note: int) -> dict:
     were found at the fitted series, how strong each was, and whether there
     were enough of them for B to mean anything.
 
-    Under a vibrato the fundamental is `held_pitch`'s demodulated mean and each
+    Under a pitch motion the fundamental is `held_pitch`'s demodulated mean and each
     level is `partial_level`'s power over the partial's FM extent, the ruler
     `metrics_note.analyze_note` reads the fit's ladder with.
     """
@@ -573,8 +573,8 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *, preroll_s: float, gat
     p = mag**2
     row["centroid_hz"] = round(float((freqs * p).sum() / max(p.sum(), 1e-20)), 1)
     stiffness = row["inharmonicity_b"] if row.get("inharmonicity_reliable") else 0.0
-    vibrato = vibrato_extent(held[a:b], sr, row["f0_hz"])
-    tnr = tone_to_noise_db(freqs, mag, row["f0_hz"], stiffness, vibrato)
+    motion = pitch_motion(held[a:b], sr, row["f0_hz"])
+    tnr = tone_to_noise_db(freqs, mag, row["f0_hz"], stiffness, motion)
     if np.isfinite(tnr):
         row["tnr_db"] = round(tnr, 2)
     width = channel_width(audio, on, off)

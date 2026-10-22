@@ -26,6 +26,8 @@ from metrics import (
     analyze_note,
     fm_sideband_reach,
     held_pitch,
+    pitch_excursion,
+    pitch_motion,
     vibrato_extent,
 )
 from profile_measure import find_partials
@@ -258,6 +260,160 @@ def test_a_wandering_vibrato_reads_as_clean_as_the_same_note_held_still(f0):
     assert vibrato is not None and vibrato.rate_hi_hz > vibrato.rate_hz
     assert tnr_with_vibrato(moving, f0) == pytest.approx(still, abs=3.0)
     assert profile_module.tone_to_noise_db(*_spectrum(moving, SR), f0) < still - 20.0
+
+
+def tnr_with_motion(x: np.ndarray, f0: float) -> float:
+    """The ratio as both callers take it: `pitch_motion` measured on the segment the spectrum covers."""
+    return profile_module.tone_to_noise_db(*_spectrum(x, SR), f0, 0.0, pitch_motion(x, SR, f0))
+
+
+def ensemble_tone(f0: float, seed: int, players: int = 6, seconds: float = 1.5) -> np.ndarray:
+    """`harmonic` played by `players` copies at unit RMS, -60 dB noise added.
+
+    Each copy has its own 5-7 Hz vibrato of 10-20 cents peak to peak, its own
+    detune within ±10 cents and its own phases, as a section's players do.
+    """
+    rng = np.random.default_rng(seed)
+    t = np.arange(int(SR * seconds)) / SR
+    x = np.zeros_like(t)
+    for _ in range(players):
+        rate, depth, detune = rng.uniform(5.0, 7.0), rng.uniform(10.0, 20.0), rng.uniform(-10, 10)
+        cents = detune + 0.5 * depth * np.sin(2 * np.pi * rate * t + rng.uniform(0, 2 * np.pi))
+        phase = 2 * np.pi * np.cumsum(f0 * 2.0 ** (cents / 1200.0)) / SR + rng.uniform(0, 2 * np.pi)
+        x += sum(np.sin(n * phase) / n for n in range(1, 9))
+    return with_noise(x)
+
+
+def with_noise(x: np.ndarray) -> np.ndarray:
+    """`x` at unit RMS with white noise 60 dB under it."""
+    noise = 1e-3 * np.random.default_rng(1).standard_normal(x.shape)
+    return np.asarray(x / np.std(x) + noise)
+
+
+def still_tone(f0: float, seconds: float = 1.5) -> np.ndarray:
+    t = np.arange(int(SR * seconds)) / SR
+    return with_noise(sum(np.sin(2 * np.pi * f0 * n * t) / n for n in range(1, 9)))
+
+
+#: Sections the held-part excursion does not read as clean as one still player, and why.
+ENSEMBLE_SHORTFALLS = {
+    (110.0, 1): "the six vibratos cancel in the mean pitch: 7 c against 11-20 c",
+    (110.0, 4): "the held part's rate reads 5.3 Hz for the whole track's 5.7: 5.5 dB short",
+    (440.0, 3): "the fundamental cancels 40 dB down at 0.5 s, leaving under 0.2 s held",
+}
+ENSEMBLE_CASES = [
+    pytest.param(
+        f0, seed, marks=pytest.mark.xfail(strict=True, reason=ENSEMBLE_SHORTFALLS[f0, seed])
+    )
+    if (f0, seed) in ENSEMBLE_SHORTFALLS
+    else (f0, seed)
+    for f0 in ON_BIN_F0
+    for seed in range(6)
+]
+
+
+@pytest.mark.parametrize(("f0", "seed"), ENSEMBLE_CASES)
+def test_an_ensemble_reads_as_clean_as_one_player_held_still(f0, seed):
+    """Six players' aperiodic spread is tone, read off the mean pitch's excursion."""
+    assert tnr_with_motion(ensemble_tone(f0, seed), f0) == pytest.approx(
+        tnr_with_motion(still_tone(f0), f0), abs=3.0
+    )
+
+
+@pytest.mark.parametrize("f0", ON_BIN_F0)
+def test_an_interferer_between_an_ensemble_s_partials_is_still_counted(f0):
+    """Halfway between two partials, past the quarter-f0 cap, it is noise as for a still tone."""
+    t = np.arange(int(1.5 * SR)) / SR
+    interferer = 0.1 * np.sin(2 * np.pi * 1.5 * f0 * t)
+    ensemble = ensemble_tone(f0, 0)
+    assert tnr_with_motion(ensemble + interferer, f0) < tnr_with_motion(ensemble, f0) - 30.0
+    assert tnr_with_motion(ensemble + interferer, f0) == pytest.approx(
+        tnr_with_motion(still_tone(f0) + interferer, f0), abs=2.0
+    )
+
+
+@pytest.mark.parametrize("f0", ON_BIN_F0)
+def test_a_slow_drift_keeps_the_still_mask(f0):
+    """20 cents at 0.5 Hz completes under a cycle: it stays inside each partial's still window."""
+    t = np.arange(int(1.5 * SR)) / SR
+    phase = 2 * np.pi * np.cumsum(f0 * 2.0 ** (10.0 * np.sin(2 * np.pi * 0.5 * t) / 1200.0)) / SR
+    drifting = with_noise(sum(np.sin(n * phase) / n for n in range(1, 9)))
+    assert pitch_motion(drifting, SR, f0) is None
+    assert held_pitch(drifting, SR, f0) == (f0, None)
+
+
+@pytest.mark.parametrize("f0", [47.5, 73.4, 104.6, 147.0, 440.0])
+def test_a_still_note_has_no_pitch_motion(f0):
+    for noise in (1e-3, 3e-2):
+        x = harmonic(f0, noise=noise)
+        assert pitch_excursion(x, SR, f0) is None
+        assert pitch_motion(x, SR, f0) is None
+
+
+@pytest.mark.parametrize("f0", ON_BIN_F0)
+def test_a_sine_vibrato_reads_as_its_line_alone(f0):
+    """Where the track holds a vibrato, its line decides, though an excursion reads too."""
+    x = moving_tone(f0, 35.0)
+    assert pitch_excursion(x, SR, f0) is not None
+    assert pitch_motion(x, SR, f0) == vibrato_extent(x, SR, f0)
+
+
+def test_a_layer_a_fourth_below_is_not_read_as_the_fundamental_s_excursion():
+    """The excursion's passband stops at a quarter of f0, where the layer sits."""
+    f0 = 104.0
+    t = np.arange(int(1.5 * SR)) / SR
+    phase = 2 * np.pi * np.cumsum(f0 * 2.0 ** (6.0 * np.sin(2 * np.pi * 6.0 * t) / 1200.0)) / SR
+    dipping = 1.0 - 0.7 * (0.5 - 0.5 * np.cos(2 * np.pi * 0.8 * t))
+    x = dipping * np.sin(phase) + sum(np.sin(n * phase) / n for n in range(2, 6))
+    x = x + 0.4 * np.sin(2 * np.pi * 0.75 * f0 * t)
+    excursion = pitch_excursion(x, SR, f0)
+    assert excursion is not None and excursion.cents < 20.0
+
+
+@pytest.mark.parametrize("f0", [82.4, 110.0, 220.0, 440.0])
+def test_an_onset_glide_that_then_holds_is_no_excursion(f0, monkeypatch):
+    """70 cents falling to pitch over 0.25 s, then 6.6 c of jitter: the held part is still."""
+    t = np.arange(int(1.5 * SR)) / SR
+    jitter = sum(1.5 * np.sin(2 * np.pi * r * t + k) for k, r in enumerate((6.3, 9.1, 13.7)))
+    cents = 70.0 * np.clip(1.0 - t / 0.25, 0.0, 1.0) + jitter
+    phase = 2 * np.pi * np.cumsum(f0 * 2.0 ** (cents / 1200.0)) / SR
+    x = with_noise(np.exp(-t / 1.5) * sum(np.sin(n * phase) / n for n in range(1, 9)))
+    assert pitch_excursion(x, SR, f0) is None
+    assert pitch_motion(x, SR, f0) is None
+    monkeypatch.setattr(metrics_modulation, "EXCURSION_SKIP_S", 0.0)
+    monkeypatch.setattr(metrics_modulation, "EXCURSION_TAIL_S", 0.0)
+    assert pitch_excursion(x, SR, f0).cents > 70.0
+
+
+@pytest.mark.parametrize("f0", [349.2, 440.0, 523.3])
+def test_a_tremolo_s_phase_leak_on_a_weak_fundamental_is_no_excursion(f0, monkeypatch):
+    """Sidebands 16 dB down at +4.1 and -3.9 Hz, as a vibraphone's motor puts them, leak 5-9 c."""
+    t = np.arange(int(1.5 * SR)) / SR
+    carrier = (
+        np.sin(2 * np.pi * f0 * t)
+        + 0.16 * np.sin(2 * np.pi * (f0 + 4.1) * t)
+        + 0.16 * np.sin(2 * np.pi * (f0 - 3.9) * t)
+    )
+    upper = sum(np.sin(2 * np.pi * n * f0 * t) / n for n in range(2, 6))
+    x = with_noise(
+        np.exp(-t) * (0.3 * carrier + upper * (1.0 + 0.32 * np.cos(2 * np.pi * 4.0 * t)))
+    )
+    assert pitch_excursion(x, SR, f0) is None
+    monkeypatch.setattr(metrics_modulation, "EXCURSION_MIN_CENTS", 3.0)
+    assert pitch_excursion(x, SR, f0) is not None
+
+
+@pytest.mark.parametrize("f0", ON_BIN_F0)
+def test_a_two_line_beat_widens_the_mask_but_leaves_the_pitch(f0):
+    """A component 0.7 of the fundamental 12 Hz above it: tone, but no line to relocate."""
+    t = np.arange(int(1.5 * SR)) / SR
+    x = sum(np.sin(2 * np.pi * n * f0 * t) / n for n in range(1, 9))
+    x = with_noise(x + 0.7 * np.sin(2 * np.pi * (f0 + 12.0) * t))
+    motion = pitch_motion(x, SR, f0)
+    assert vibrato_extent(x, SR, f0) is None and motion is not None
+    assert held_pitch(x, SR, f0) == (f0, motion)
+    still = profile_module.tone_to_noise_db(*_spectrum(x, SR), f0)
+    assert tnr_with_motion(x, f0) > still + 30.0
 
 
 def fm_tone(f0: float, components: list[tuple[float, float]], seconds: float = 1.5) -> np.ndarray:
