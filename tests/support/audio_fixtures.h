@@ -276,6 +276,22 @@ inline double harmonic_power(const std::vector<double>& power, double f0, int k)
   return acc;
 }
 
+/// Share of the power from @p from that lies within ±0.5 % of the first ten
+/// harmonics of @p f0, over a 1.4 s transform that resolves a 5 Hz vibrato.
+inline double harmonic_share(const std::vector<float>& buf, std::size_t from, double f0) {
+  constexpr int kLong = 65536;
+  const std::vector<double> ps = power_spectrum(buf, from, kLong);
+  double tone = 0.0;
+  double total = 0.0;
+  for (std::size_t b = 1; b < ps.size(); ++b) {
+    const double hz = static_cast<double>(b) * kRate / kLong;
+    total += ps[b];
+    const double k = std::round(hz / f0);
+    if (k >= 1.0 && k <= 10.0 && std::fabs(hz / (k * f0) - 1.0) < 0.005) tone += ps[b];
+  }
+  return total > 0.0 ? tone / total : 0.0;
+}
+
 /// Power-weighted mean frequency of @p buf from @p from, in Hz. Bin 0 is left
 /// out so a DC offset cannot pull the centroid down.
 inline double spectral_centroid(const std::vector<float>& buf, std::size_t from) {

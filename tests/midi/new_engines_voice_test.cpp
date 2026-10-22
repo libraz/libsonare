@@ -18,7 +18,9 @@
 #include "midi/synth/native_synth.h"
 #include "midi/synth/plucked_string_voice.h"
 #include "midi/synth/synth_presets.h"
+#include "midi/synth/vocal_voice.h"
 #include "midi/ump.h"
+#include "support/audio_fixtures.h"
 #include "support/midi_render.h"
 #include "util/constants.h"
 
@@ -351,4 +353,62 @@ TEST_CASE("plucked-string kill silences subsequent rendering and permits restart
   for (float& sample : fresh_samples) sample = fresh.render(1.0f);
   const bool deterministic = restarted_samples == fresh_samples;
   REQUIRE(deterministic);
+}
+
+namespace {
+
+using sonare::midi::synth::VocalPatchParams;
+using sonare::midi::synth::VocalVoiceCore;
+
+std::vector<float> render_vocal_core(const VocalPatchParams& params, double sample_rate,
+                                     uint8_t note, size_t frames) {
+  std::vector<float> history(
+      static_cast<size_t>(sonare::midi::synth::vocal_slab_capacity(sample_rate)));
+  VocalVoiceCore core;
+  core.attach(history.data(), static_cast<int>(history.size()));
+  core.start(params, sample_rate, note, sonare::midi::Velocity16::from7(110), 0x5EC7u);
+  std::vector<float> output(frames, 0.0f);
+  for (float& sample : output) sample = core.render(1.0f);
+  return output;
+}
+
+}  // namespace
+
+TEST_CASE("the vocal section stage widens the partials", "[midi][synth][new_engines]") {
+  VocalPatchParams solo;
+  solo.vibrato_depth = 0.0f;
+  VocalPatchParams rate_only = solo;
+  rate_only.section_rate_hz = 9.0f;
+  const std::vector<float> solo_tone = render_vocal_core(solo, kRate, 57, 96000);
+  // The rate is inert while the spread is off.
+  REQUIRE(render_vocal_core(rate_only, kRate, 57, 96000) == solo_tone);
+
+  VocalPatchParams section = solo;
+  section.section_spread_cents = 20.0f;
+  section.section_rate_hz = 5.0f;
+  const std::vector<float> section_tone = render_vocal_core(section, kRate, 57, 96000);
+  REQUIRE(section_tone == render_vocal_core(section, kRate, 57, 96000));
+
+  using sonare::test::harmonic_share;
+  const double solo_share = harmonic_share(solo_tone, 24000, 220.0);
+  const double section_share = harmonic_share(section_tone, 24000, 220.0);
+  INFO("harmonic share solo " << solo_share << " section " << section_share);
+  REQUIRE(section_share < solo_share - 0.2);
+}
+
+TEST_CASE("the vocal section stage is bounded at its widest, slowest setting at either rate",
+          "[midi][synth][new_engines]") {
+  VocalPatchParams solo;
+  VocalPatchParams params = solo;
+  params.section_spread_cents = 50.0f;
+  params.section_rate_hz = 0.5f;
+  for (double sample_rate : {44100.0, 96000.0}) {
+    const std::vector<float> solo_tone = render_vocal_core(solo, sample_rate, 57, 96000);
+    const std::vector<float> tone = render_vocal_core(params, sample_rate, 57, 96000);
+    INFO("rate " << sample_rate);
+    REQUIRE(all_finite(tone));
+    // Six singers at 1/sqrt(6) each can at most add up in phase.
+    REQUIRE(peak(tone) > 0.1f * peak(solo_tone));
+    REQUIRE(peak(tone) <= std::sqrt(6.0f) * peak(solo_tone) * 1.001f);
+  }
 }

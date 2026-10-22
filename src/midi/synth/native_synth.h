@@ -411,7 +411,8 @@ struct NativeSynthVoice : VoiceState {
   /// Buzzing-bridge plucked-string core; like KS, the host attach()es its delay
   /// span before start().
   PluckedStringVoiceCore plucked_string;
-  /// Source-filter vocal core (no host slab; the formant bank is feed-forward).
+  /// Source-filter vocal core; like KS, the host attach()es its section history
+  /// before start().
   VocalVoiceCore vocal;
   /// Free-reed core (no host slab; the driven tongue oscillator is feed-forward).
   FreeReedVoiceCore free_reed;
@@ -1338,6 +1339,10 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   std::vector<float> bowed_string_buffers_;
   int bowed_string_capacity_ = 0;  // per-line span
   bool bowed_string_mode_ = false;
+  /// Vocal section history: one span per voice slot, allocated in prepare()
+  /// only when the patch is a vocal.
+  std::vector<float> vocal_buffers_;
+  int vocal_capacity_ = 0;  // history span
   /// Reed-woodwind bore slab: one bore span per voice slot, allocated in
   /// prepare() only when the patch is a reed woodwind.
   std::vector<float> reed_buffers_;
@@ -2012,6 +2017,10 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.vocal.release_ms, 120.0f), 1.0f, 5000.0f);
   p.vocal.velocity_exponent =
       std::clamp(patch_clamp_detail::sanitize(p.vocal.velocity_exponent, 2.0f), 0.0f, 4.0f);
+  p.vocal.section_spread_cents =
+      std::clamp(patch_clamp_detail::sanitize(p.vocal.section_spread_cents, 0.0f), 0.0f, 50.0f);
+  p.vocal.section_rate_hz =
+      std::clamp(patch_clamp_detail::sanitize(p.vocal.section_rate_hz, 5.0f), 0.5f, 12.0f);
   p.free_reed.brightness =
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.brightness, 0.6f), 0.0f, 1.0f);
   p.free_reed.reed_stiffness =

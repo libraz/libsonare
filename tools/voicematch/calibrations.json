@@ -903,5 +903,56 @@
         "note": "the model's held-note decay runs 1.80 to 2.38 times the reference's on every row of the grid (median 2.13), which empties the damper column entirely: the note is 45 dB down before note-off on 35 of 35 rows while the reference resolves a release on 33. Raising ks.decay_s from 4.5 to 15.0 takes the held-decay error from a median 4.04 dB/s over 28 scored rows to 0.63 over all 35, and the damper column from no rows at all to 30 of 35 at a median -45.0 ms against a 95-135 ms reference. Cost: doubling moves from p90-only to failing all three (median 9.77 against its 8.62 bound). vel_range fails identically before and after and is not this setting's doing. Not adopted - the doubling trade is a decision, and the value itself is a first bracket rather than a fit."
       }
     ]
+  },
+  "p085-lead-6-voice": {
+    "variants": [
+      {
+        "name": "three-voice-chorus",
+        "title": {
+          "en": "Three detuned voices, filter re-centred",
+          "ja": "3本のデチューン声部とフィルタの再調整"
+        },
+        "desc": {
+          "en": "The lead should turn from one wobbling voice into a thicker, slowly beating chorus like the reference, without getting brighter overall.",
+          "ja": "1本のゆらぐ声から、リファレンスのように厚くゆっくりうねるコーラスになるはずです。全体の明るさは変わらないはずです。"
+        },
+        "overrides": "lead_voice.unison=3,lead_voice.detune_cents=25,lead_voice.cutoff_hz=1500,lead_voice.key_track=0.4",
+        "note": "the reference's partials are 71-98 cents wide at -20 dB with a 0.7-3 Hz, 15-20 cent wander and 10-16 dB of beating; the model's two voices 9 cents apart give 25-38 cent lines, which the tone-to-noise column reads as the model 13.8 dB cleaner. Three voices 25 cents apart give 58-111 cent lines and bring the column to +2.7 dB. cutoff 1500 with key_track 0.4 holds the centroid median at +2.8 % and cuts its p90 from 54.8 % to 21.1 %, but the per-row |median| rises from 6.45 % to 11.3 % against an 8.06 bound, and tuning |median| from 7.1 to 5.9 cents with the median at -0.13. Not adopted - the brightness trade (tighter register, looser centre) is a decision."
+      }
+    ]
+  },
+  "p049-string-ensemble-2": {
+    "variants": [
+      {
+        "name": "wider-section",
+        "title": {
+          "en": "A section spread as wide as the reference's",
+          "ja": "リファレンス並みに広いセクションの揺れ"
+        },
+        "desc": {
+          "en": "The players should drift further apart from each other, so the ensemble sounds broader and less like one bowed string with vibrato.",
+          "ja": "奏者どうしの音程の揺れが大きくなり、ビブラート付きの1本の弦ではなく幅のあるアンサンブルに聞こえるはずです。"
+        },
+        "overrides": "string_ensemble_2.bowed_string.section_spread_cents=40",
+        "note": "the reference's fundamental wanders 33-44 cents rms with 16-22 dB of beating and 92-108 cent lines at -20 dB; at 15 cents per seat the model gives 9-13 cents rms, 6-9 dB and 29-67 cent lines, which the tone-to-noise column reads as 17.1 dB cleaner. 40 cents per seat gives 25-45 cents rms, 9-18 dB and 29-121 cent lines and brings the column to -8.2 dB, but moves tuning |median| 2.42 -> 3.62 cents (p90 7.3 -> 21.1 against 8.94) and register |median| 1.77 -> 2.49 dB against 1.84. 28 cents per seat halves the gap (+11.2 dB) and still fails tuning p90 (11.9) and vel_range p90 (1.22 against 1.15). Not adopted - the spread the reference asks for moves the pitch reading itself, and whether that reading is the voice or the ruler is a decision."
+      }
+    ]
+  },
+  "p054-synth-voice": {
+    "variants": [
+      {
+        "name": "section-of-singers",
+        "title": {
+          "en": "Six singers instead of one",
+          "ja": "1人ではなく6人の歌い手"
+        },
+        "desc": {
+          "en": "The vowel should stop sounding like one voice with a metronome vibrato and spread into a slowly churning group, as the reference does.",
+          "ja": "メトロノームのようなビブラートの1人の声ではなく、リファレンスのようにゆっくりうねる集団の声に聞こえるはずです。"
+        },
+        "overrides": "synth_voice.vocal.section_spread_cents=20,synth_voice.vocal.section_rate_hz=5",
+        "note": "the reference's fundamental wanders 26-37 cents rms with no single periodic line (strongest 6-12 % of the track), 15-17 dB of beating and 61-92 cent lines at -20 dB; the model's single 17-cent 4.8 Hz vibrato (61 % of its track) gives 11-65 cent lines and 7 dB, which the tone-to-noise column reads as 12.6 dB cleaner. The vocal section stage at 20 cents per singer gives 34-47 cents rms, 14-17 dB and 81-123 cent lines and brings the column to +1.2 dB (at 15 cents, +10.6: the mask still reads the model's vibrato as periodic). Cost: the arrival column moves +130 -> +485 ms on every row (a 10 ms seat cannot do that; the beating moves the reader's threshold crossing), brightness p90 43.6 -> 50.0 against 43.62, tuning |median| 1.04 -> 2.04 against 1.19. Not adopted - the arrival reading under beating has to be understood before the bound can be re-recorded."
+      }
+    ]
   }
 }

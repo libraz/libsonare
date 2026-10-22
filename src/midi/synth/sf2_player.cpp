@@ -419,6 +419,11 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
           ? fallback_pool_.size() * static_cast<size_t>(bowed_string_slab_capacity(sample_rate_))
           : 0,
       0.0f);
+  fallback_vocal_capacity_ = vocal_slab_capacity(sample_rate_);
+  fallback_vocal_buffers_.assign(
+      config_.synth_fallback ? fallback_pool_.size() * static_cast<size_t>(fallback_vocal_capacity_)
+                             : 0,
+      0.0f);
   fallback_reed_capacity_ = reed_buffer_capacity(sample_rate_);
   fallback_reed_buffers_.assign(
       config_.synth_fallback

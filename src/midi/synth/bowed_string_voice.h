@@ -42,6 +42,7 @@
 #include "midi/synth/body_resonator.h"
 #include "midi/synth/excitation_axes.h"
 #include "midi/synth/player_trajectory.h"
+#include "midi/synth/section_stage.h"
 #include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 #include "util/constants.h"
@@ -293,7 +294,7 @@ class BowedStringVoiceCore {
     neck_ = slab;
     bridge_ = slab != nullptr ? slab + per_line_capacity : nullptr;
     pol_ = slab != nullptr ? slab + 2 * per_line_capacity : nullptr;
-    section_ = slab != nullptr ? slab + 3 * per_line_capacity : nullptr;
+    section_.attach(slab != nullptr ? slab + 3 * per_line_capacity : nullptr, per_line_capacity);
     capacity_ = per_line_capacity;
   }
 
@@ -533,20 +534,9 @@ class BowedStringVoiceCore {
   float pol_couple_ = 0.0f;  // 0 = off; horizontal -> vertical feed
   float pol_drive_ = 0.0f;   // bow injection into the 2nd polarization
 
-  // Section stage (off unless params.section_spread_cents > 0): each player reads
-  // the host-rate output history at its seat delay plus a sinusoidal wander.
-  float section_process(float x) noexcept;
-  static constexpr int kSectionPlayers_ = 6;
-  struct SectionPlayer {
-    float seat = 0.0f;   // mean delay (samples)
-    float depth = 0.0f;  // delay swing (samples) giving the peak pitch deviation
-    float phase = 0.0f;  // radians
-    float step = 0.0f;   // radians per host sample
-  };
-  SectionPlayer players_[kSectionPlayers_];
-  bool section_on_ = false;
-  float* section_ = nullptr;  // output history (host slab, 4th span)
-  size_t section_write_ = 0;
+  // Section stage (off unless params.section_spread_cents > 0) over the
+  // host-rate output; its history is the slab's 4th span.
+  SectionStage section_;
 };
 
 }  // namespace sonare::midi::synth

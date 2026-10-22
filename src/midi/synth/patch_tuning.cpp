@@ -628,6 +628,8 @@ void apply_vocal(NativeSynthPatch& p, const Fields& f) {
   F(vocal.attack_ms);
   F(vocal.release_ms);
   F(vocal.velocity_exponent);
+  F(vocal.section_spread_cents);
+  F(vocal.section_rate_hz);
 }
 
 void apply_modal(NativeSynthPatch& p, const Fields& f) {
@@ -1145,6 +1147,8 @@ constexpr UnitRow kEngineUnits[] = {
     {"vocal.attack_ms", Unit::Ms},
     {"vocal.release_ms", Unit::Ms},
     {"vocal.velocity_exponent", Unit::None},
+    {"vocal.section_spread_cents", Unit::Cents},
+    {"vocal.section_rate_hz", Unit::Hz},
     {"modal.num_modes", Unit::Count},
     {"modal.decay_s", Unit::Seconds},
     {"modal.decay_stretch", Unit::None},
@@ -1467,6 +1471,8 @@ const GateRow kEngineGates[] = {
     {"bowed_string.force_ratio", [](const GateSite&) { return is("hyperbolicFriction", true); }},
     {"bowed_string.section_rate_hz",
      [](const GateSite&) { return above("sectionSpreadCents", 0.0); }},
+    // Vocal: the section stage over the formant bank, as the bowed string's.
+    {"vocal.section_rate_hz", [](const GateSite&) { return above("sectionSpreadCents", 0.0); }},
     {"bowed_string.corpus_scale",
      [](const GateSite&) { return wrapper_is("body", "violin") & wrapper_above("bodyMix", 0); }},
     {"bowed_string.corpus_tilt_hz",

@@ -89,6 +89,7 @@ float rms_difference(const std::vector<float>& a, const std::vector<float>& b, s
 
 using sonare::test::fft_fundamental;
 using sonare::test::harmonic_power;
+using sonare::test::harmonic_share;
 using sonare::test::power_spectrum;
 
 double swell_centroid(const std::vector<float>& buf, size_t from) {
@@ -1136,26 +1137,6 @@ TEST_CASE("the second polarization resonates at the string's pitch, not an octav
     for (const float s : doubled) REQUIRE(std::isfinite(s));
   }
 }
-
-namespace {
-
-/// Share of the power from @p from that lies within ±0.5 % of the first ten
-/// harmonics of @p f0, over a 1.4 s transform that resolves a 5 Hz vibrato.
-double harmonic_share(const std::vector<float>& buf, size_t from, double f0) {
-  constexpr int kLong = 65536;
-  const std::vector<double> ps = power_spectrum(buf, from, kLong);
-  double tone = 0.0;
-  double total = 0.0;
-  for (size_t b = 1; b < ps.size(); ++b) {
-    const double hz = static_cast<double>(b) * kRate / kLong;
-    total += ps[b];
-    const double k = std::round(hz / f0);
-    if (k >= 1.0 && k <= 10.0 && std::fabs(hz / (k * f0) - 1.0) < 0.005) tone += ps[b];
-  }
-  return total > 0.0 ? tone / total : 0.0;
-}
-
-}  // namespace
 
 TEST_CASE("the section stage widens the partials", "[midi][synth][bowed]") {
   BowedStringPatchParams solo;

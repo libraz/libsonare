@@ -572,6 +572,11 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 veloc
                                                                     fallback_bowed_capacity_,
                                fallback_bowed_capacity_);
   }
+  if (!fallback_vocal_buffers_.empty()) {
+    voice->vocal.attach(fallback_vocal_buffers_.data() +
+                            static_cast<size_t>(voice_index) * fallback_vocal_capacity_,
+                        fallback_vocal_capacity_);
+  }
   if (!fallback_reed_buffers_.empty()) {
     voice->reed.attach(
         fallback_reed_buffers_.data() + static_cast<size_t>(voice_index) * fallback_reed_capacity_,

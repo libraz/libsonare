@@ -250,8 +250,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.string_ensemble_1.bowed_string.velocity_exponent = 1.57655f;
   o.string_ensemble_1.bowed_string.hyperbolic_friction = true;
   // The section's noise is skirts 4-8 % of f0 around each partial, not the gaps
-  // between them: one string read 12 dB cleaner, and 15 cents per seat closes it.
-  o.string_ensemble_1.bowed_string.section_spread_cents = 15.0f;
+  // between them. Read under the vibrato-aware mask the model is 12 dB cleaner at
+  // 15 cents per seat and 9 at 18; 20 pushes the body under the note past its bound.
+  o.string_ensemble_1.bowed_string.section_spread_cents = 18.0f;
   o.string_ensemble_1.bowed_string.section_rate_hz = 5.0f;
   // Held level falls toward the bass against the reference, 12 dB from C2 to C5. Two routes
   // multiply to (1 - 0.15 k)^2: within 0.5 dB of one route at -0.3 over C2-C5, and positive to

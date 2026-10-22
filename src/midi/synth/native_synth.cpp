@@ -288,6 +288,14 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   } else {
     bowed_string_buffers_.clear();
   }
+  // Vocal: one section-history span per voice slot. The only allocation site;
+  // voices attach their span at note-on.
+  vocal_capacity_ = vocal_slab_capacity(sample_rate_);
+  if (any_engine || config_.patch.mode == SynthEngineMode::kVocal) {
+    vocal_buffers_.assign(pool_.size() * static_cast<size_t>(vocal_capacity_), 0.0f);
+  } else {
+    vocal_buffers_.clear();
+  }
   // Reed woodwind: one bore delay span per voice slot. The only allocation site;
   // voices attach their span at note-on.
   reed_capacity_ = reed_buffer_capacity(sample_rate_);
@@ -697,6 +705,10 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
                                                                   kBowedSlabSpans *
                                                                   bowed_string_capacity_,
                                bowed_string_capacity_);
+  }
+  if (!vocal_buffers_.empty()) {
+    voice->vocal.attach(vocal_buffers_.data() + static_cast<size_t>(voice_index) * vocal_capacity_,
+                        vocal_capacity_);
   }
   if (!reed_buffers_.empty()) {
     voice->reed.attach(reed_buffers_.data() + static_cast<size_t>(voice_index) * reed_capacity_,

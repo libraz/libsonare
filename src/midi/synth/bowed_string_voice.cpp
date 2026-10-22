@@ -15,7 +15,6 @@ namespace sonare::midi::synth {
 
 namespace {
 
-using sonare::constants::kCentsPerOctave;
 using sonare::constants::kEpsilon;
 using sonare::constants::kPi;
 using sonare::constants::kTwoPi;
@@ -143,27 +142,8 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
       [&](int f) { return configure(params, host_sr * f, note, velocity, seed); });
   decimator_.configure(factor);
 
-  // A delay swing d sin(w t) moves the pitch by a peak ratio of d w, so the swing
-  // for a peak of spread cents at rate w is (2^(c/1200) - 1) / w samples.
-  const float spread = std::clamp(params.section_spread_cents, 0.0f, 50.0f);
-  section_on_ = spread > 0.0f && section_ != nullptr;
-  if (section_on_) {
-    const float srf = static_cast<float>(host_sr);
-    const float ratio = std::exp2(spread / kCentsPerOctave) - 1.0f;
-    const float rate = std::clamp(params.section_rate_hz, 0.5f, 12.0f);
-    VoiceRandomSequence draw(voice_hash(seed ^ 0x5EC7105EC7ull));
-    for (int k = 0; k < kSectionPlayers_; ++k) {
-      SectionPlayer& pl = players_[k];
-      const float hz = rate * (1.0f + kSectionRateSpread * draw.next_bipolar());
-      pl.step = kTwoPi * hz / srf;
-      pl.depth = ratio / pl.step;
-      pl.phase = kTwoPi * draw.next_unipolar();
-      const float seat = (static_cast<float>(k) + draw.next_unipolar()) / kSectionPlayers_;
-      pl.seat = 1.0f + pl.depth + seat * kSectionSeatMs * 0.001f * srf;
-    }
-    std::fill(section_, section_ + capacity_, 0.0f);
-    section_write_ = 0;
-  }
+  section_.start(params.section_spread_cents, params.section_rate_hz, kSectionSeatMs,
+                 kSectionRateSpread, host_sr, seed);
 }
 
 LoopBudget BowedStringVoiceCore::configure(const BowedStringPatchParams& params, double sr,
@@ -410,26 +390,7 @@ LoopBudget BowedStringVoiceCore::configure(const BowedStringPatchParams& params,
 float BowedStringVoiceCore::render(float pitch_ratio) noexcept {
   if (killed_) return 0.0f;
   const float y = decimator_.run([&] { return render_internal(pitch_ratio); });
-  return section_on_ ? section_process(y) : y;
-}
-
-float BowedStringVoiceCore::section_process(float x) noexcept {
-  const size_t cap = static_cast<size_t>(capacity_);
-  section_[section_write_] = x;
-  float sum = 0.0f;
-  for (SectionPlayer& pl : players_) {
-    const float d = pl.seat + pl.depth * std::sin(pl.phase);
-    pl.phase += pl.step;
-    if (pl.phase >= kTwoPi) pl.phase -= kTwoPi;
-    const float di = std::floor(d);
-    const float frac = d - di;
-    const size_t back = static_cast<size_t>(di);
-    const size_t i0 = (section_write_ + cap - back) % cap;
-    const size_t i1 = (i0 + cap - 1) % cap;
-    sum += section_[i0] + frac * (section_[i1] - section_[i0]);
-  }
-  section_write_ = (section_write_ + 1) % cap;
-  return sum * (1.0f / std::sqrt(static_cast<float>(kSectionPlayers_)));
+  return section_.on() ? section_.process(y) : y;
 }
 
 float BowedStringVoiceCore::render_internal(float pitch_ratio) noexcept {
@@ -618,7 +579,7 @@ void BowedStringVoiceCore::release() noexcept { bow_.release(); }
 
 void BowedStringVoiceCore::kill() noexcept {
   killed_ = true;
-  section_on_ = false;
+  section_.stop();
   decimator_.reset();
   bow_.kill();
   lp_state_ = 0.0f;

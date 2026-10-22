@@ -91,6 +91,12 @@ SONARE_TUNABLE(kVelFloor, 0.4f);
 // continuously-excited engines.
 SONARE_TUNABLE(kControlSmoothMs, 8.0f);
 
+// --- section stage (only when params.section_spread_cents > 0) ---
+// Path differences across the risers (ms): three or four rows about a metre apart.
+SONARE_TUNABLE(kSectionSeatMs, 10.0f);
+// Each singer's vibrato rate lies within this fraction either side of the patch rate.
+SONARE_TUNABLE(kSectionRateSpread, 0.2f);
+
 // Gap at which the ramp is declared arrived and the per-sample re-cut stops.
 // Below a brightness step any controller can express, so settling costs nothing
 // audible and buys back the six transcendentals the re-cut spends.
@@ -166,6 +172,9 @@ void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, u
   const float vel01 = velocity.f7() / 127.0f;
   output_scale_ = kOutputScale * (kVelFloor + (1.0f - kVelFloor) * vel01);
   excite_.remember_base();
+
+  section_.start(params.section_spread_cents, params.section_rate_hz, kSectionSeatMs,
+                 kSectionRateSpread, sr, seed);
 }
 
 void VocalVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {
@@ -259,13 +268,15 @@ float VocalVoiceCore::render(float pitch_ratio) noexcept {
     sum += form_gain_[i] * y;
   }
 
-  return sum * level_.level * output_scale_;
+  const float out = sum * level_.level * output_scale_;
+  return section_.on() ? section_.process(out) : out;
 }
 
 void VocalVoiceCore::release() noexcept { level_.release(); }
 
 void VocalVoiceCore::kill() noexcept {
   level_.kill();
+  section_.stop();
   phase_ = 0.0f;
   tilt_state_ = 0.0f;
   vib_phase_ = 0.0f;

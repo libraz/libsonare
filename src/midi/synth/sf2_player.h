@@ -855,6 +855,9 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   /// fallback is enabled, attached at note-on like the other waveguide voices.
   std::vector<float> fallback_bowed_buffers_;
   int fallback_bowed_capacity_ = 0;
+  /// The vocal family's (GM 52-54) section history, one span per slot.
+  std::vector<float> fallback_vocal_buffers_;
+  int fallback_vocal_capacity_ = 0;
   std::vector<float> fallback_reed_buffers_;
   int fallback_reed_capacity_ = 0;
   std::vector<float> fallback_brass_buffers_;

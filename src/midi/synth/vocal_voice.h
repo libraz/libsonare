@@ -18,10 +18,11 @@
 ///      upper formants.
 ///
 /// A voice-local vibrato (a singer's own vibrato) modulates the source pitch.
-/// No delay line is needed (source-filter is feed-forward), so the core owns no
-/// host slab.
+/// The source-filter chain is feed-forward and needs no delay line; the one
+/// host span the core attaches is the section stage's output history, read
+/// only when a patch asks for a section of singers.
 ///
-/// RT contract: start()/render() are allocation-free. Determinism: the
+/// RT contract: attach()/start()/render() are allocation-free. Determinism: the
 /// aspiration noise is the counter-based (voice_index, note, age) stream, so
 /// identical event streams render bit-identically.
 
@@ -29,10 +30,18 @@
 
 #include "midi/control_value.h"
 #include "midi/synth/excitation_axes.h"
+#include "midi/synth/section_stage.h"
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_breath.h"
 
 namespace sonare::midi::synth {
+
+/// Section history the host must allocate per voice slot (samples): the seat
+/// span plus the widest, slowest wander the clamp admits, at @p sample_rate.
+inline int vocal_slab_capacity(double sample_rate) noexcept {
+  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  return static_cast<int>(sr * 0.03) + 8;
+}
 
 /// Formant bank size (F1..F5). Five poles cover a sung vowel's spectral
 /// envelope; unused formants have zero gain.
@@ -67,6 +76,15 @@ struct VocalPatchParams {
   /// Exponent of the voice-amplifier velocity curve, (velocity/127)^e; 2 is the
   /// SoundFont curve, bit-identical to it.
   float velocity_exponent = 2.0f;
+  /// Section singers' vibrato depth (cents, peak): the voice reaches the
+  /// listener through several singers on their own risers, each with an
+  /// independent vibrato, which is what widens a choir's partials. Applied
+  /// outside the source-filter chain as modulated delays, so the glottal source
+  /// never sees the pitch move. 0 = off -> the stage is skipped (bit-identical
+  /// render).
+  float section_spread_cents = 0.0f;
+  /// Section singers' vibrato rate (Hz); each singer draws their own around it.
+  float section_rate_hz = 5.0f;
 };
 
 /// Per-voice vocal state, embedded in NativeSynthVoice. The voice's amplitude
@@ -74,6 +92,11 @@ struct VocalPatchParams {
 /// raw vocal sample.
 class VocalVoiceCore {
  public:
+  /// CONTROL-thread wiring (or audio-thread pointer assignment before start()):
+  /// hands the core its section history of @p capacity samples
+  /// (vocal_slab_capacity). The span outlives the voice.
+  void attach(float* history, int capacity) noexcept { section_.attach(history, capacity); }
+
   /// Configures the source / formant bank for @p note / @p velocity and seeds
   /// the aspiration noise. @p seed drives the deterministic breath.
   void start(const VocalPatchParams& params, double sample_rate, uint8_t note, Velocity16 velocity,
@@ -178,6 +201,10 @@ class VocalVoiceCore {
 
   /// Output trim bringing the raw vocal sample up to a musical voice level.
   float output_scale_ = 1.0f;
+
+  // Section stage (off unless params.section_spread_cents > 0) over the output;
+  // its history is the attached host span.
+  SectionStage section_;
 };
 
 }  // namespace sonare::midi::synth
