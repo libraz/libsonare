@@ -22,11 +22,10 @@ namespace sonare::midi::synth::detail {
 /// That says nothing about the rest of the bank, which spans 22 dB on the same
 /// note and is its own question.
 ///
-/// Two of them cannot be finished here. `fifths` and `bass + lead` are layers
-/// at a fixed interval, and the oscillator section has no interval: unison
-/// positions are a symmetric spread with an anti-phase-lock jitter sized as a
-/// tenth of it, so at a fifth's width the jitter alone is 70 cents out. Both
-/// are voiced as far as the engine reaches and named for what they are missing.
+/// `fifths` and `bass + lead` are layers at a fixed interval, which the unison
+/// spread cannot make (its anti-phase-lock jitter alone is 70 cents out at a
+/// fifth's width); the engine's second oscillator (`va.osc2_*`) is that layer.
+/// `bass + lead` is still voiced without it.
 constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   // The shared lead: a detuned saw stack through the ladder, fast enough to
   // play a line with, its filter envelope carrying the attack.
@@ -75,14 +74,18 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_calliope.unison = 1;
   o.lead_calliope.detune_cents = 0.0f;
   o.lead_calliope.drive = 0.0f;
-  o.lead_calliope.cutoff_hz = 4247.8f;
+  o.lead_calliope.cutoff_hz = 6000.0f;
+  // The reference carries an octave line over the triangle and breath under it.
+  o.lead_calliope.va.osc2_level = 0.4f;
+  o.lead_calliope.va.osc2_interval_cents = 1200.0f;
+  o.lead_calliope.va.noise_level = 0.5f;
   o.lead_calliope.env_to_cutoff_cents = 200.19f;
   o.lead_calliope.amp_env = fallback_env(35.0f, 200.0f, 0.9f, 180.0f);
   o.lead_calliope.lfo_rate_hz = 6.0f;
   o.lead_calliope.lfo_to_pitch_cents = 22.0f;
   o.lead_calliope.body = BodyType::kWoodTube;
   o.lead_calliope.body_mix = 0.463525f;
-  o.lead_calliope.gain = 0.59f;
+  o.lead_calliope.gain = 0.536f;
   o.lead_calliope.amp_env.attack_ms = 104.9f;
   o.lead_calliope.amp_env.decay_ms = 326.754f;
   o.lead_calliope.amp_env.release_ms = 60.057f;
@@ -138,21 +141,24 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_voice.body_mix = 0.6f;
   o.lead_voice.gain = 0.61f;
 
-  // Fifths (GM 86): the interval it is named for is not reachable — see the
-  // file header. Voiced instead as the hollow, hard-detuned stack the program
-  // is used for, so it is at least not a second sawtooth lead.
+  // Fifths (GM 86): a still saw and one a fourth below at equal level, as the reference
+  // holds them; the linear SVF keeps the pair from intermodulating, the noise is its floor.
   o.lead_fifths = lead;
-  o.lead_fifths.waveform = VaWaveform::kSquare;
-  o.lead_fifths.unison = 5;
-  o.lead_fifths.detune_cents = 28.0f;
-  o.lead_fifths.cutoff_hz = 3000.0f;
-  o.lead_fifths.resonance_q = 1.6f;
+  o.lead_fifths.unison = 1;
+  o.lead_fifths.detune_cents = 0.0f;
+  o.lead_fifths.filter_model = SynthFilterModel::kSvf;
+  o.lead_fifths.drive = 0.0f;
+  o.lead_fifths.cutoff_hz = 1200.0f;
+  o.lead_fifths.hp_cutoff_hz = 65.0f;
   o.lead_fifths.stereo_spread = 0.35f;
-  o.lead_fifths.gain = 0.96f;
+  o.lead_fifths.gain = 0.31f;
+  o.lead_fifths.va.osc2_level = 1.0f;
+  o.lead_fifths.va.osc2_interval_cents = -500.0f;
+  o.lead_fifths.va.noise_level = 0.02f;
 
-  // Bass + lead (GM 87): likewise a layer, and likewise not reachable. What is
-  // reachable is the weight — a low cutoff with the drive up puts the energy
-  // under the line instead of over it.
+  // Bass + lead (GM 87): a layer too, not yet voiced with the second
+  // oscillator. What it carries is the weight — a low cutoff with the drive up
+  // puts the energy under the line instead of over it.
   o.lead_bass_lead = lead;
   // The reference holds one still line at h1; a wider stack beats into pitch motion.
   o.lead_bass_lead.detune_cents = 8.0f;
