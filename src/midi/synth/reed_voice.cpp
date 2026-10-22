@@ -73,6 +73,10 @@ SONARE_TUNABLE(kBreathNoiseDepth, 0.08f);
 // the seeded burst pre-filled into the bore so the note speaks promptly.
 SONARE_TUNABLE(kChiffDepth, 0.5f);
 SONARE_TUNABLE(kBorePrefill, 0.02f);
+// The cylinder's low-loss loop holds the seed for the whole note: unseeded, the
+// clarinet reads 1.7 dB cleaner and its slowest onset falls 171 -> 85 ms, while
+// the conical voices lose onset and tuning without it.
+SONARE_TUNABLE(kBorePrefillCylinder, 0.0f);
 
 // In-loop sub-fundamental highpass: the conical (positive-feedback) comb has a
 // DC mode that does not radiate, and the breath DC drives the reed, so the loop
@@ -380,7 +384,8 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
   // rather than swelling up from silence. Past the seed the line has to be
   // cleared rather than left alone: it is a slab slot the previous note wrote,
   // and everything outside the seed is read before it is written.
-  const float prefill = kBorePrefill * breath_target_ * noise_gain;
+  const float prefill =
+      (params.conical ? kBorePrefill : kBorePrefillCylinder) * breath_target_ * noise_gain;
   bore_.seed(prefill, noise_);
   drive_index_ = static_cast<uint64_t>(bore_.prefill_span);
 

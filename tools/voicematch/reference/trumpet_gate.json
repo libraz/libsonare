@@ -3,11 +3,11 @@
   "timbre": "gm057",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-22T01:14:46+00:00",
-  "recorded_utc": "2026-10-22T01:51:03+00:00",
+  "recorded_utc": "2026-10-22T10:01:51+00:00",
   "model_build": {
-    "built_utc": "2026-10-21T10:18:24Z",
-    "newest_source_utc": "2026-10-21T10:20:44Z",
-    "stale": true
+    "built_utc": "2026-10-22T10:01:00Z",
+    "newest_source_utc": "2026-10-22T10:00:27Z",
+    "stale": false
   },
   "reference_spread": {},
   "_excluded": {
@@ -25,9 +25,9 @@
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 12.562,
-      "abs_median": 14.5,
-      "p90": 31.082,
+      "median": 1.713,
+      "abs_median": 8.125,
+      "p90": 26.395,
       "rows": 35
     },
     "damper": {
@@ -75,7 +75,7 @@
       "floor_from": "guess",
       "median": 1.0,
       "abs_median": 16.414,
-      "p90": 44.584,
+      "p90": 44.254,
       "rows": 35
     },
     "vel_range": {

@@ -567,6 +567,9 @@ SONARE_TUNED_CONSTEXPR void configure_synth_bass_and_brass_programs(ProgramOverr
   o.synth_brass_1.amp_env.decay_ms = 599.43f;
   o.synth_brass_1.amp_env.release_ms = 36.7249f;
   o.synth_brass_1.amp_env.sustain = 0.503444f;
+  // No vibrato: the reference wanders under 3 Hz and carries none at 5 Hz; the
+  // family's 4 c LFO read as 16 dB of sideband noise against it.
+  o.synth_brass_1.lfo_to_pitch_cents = 0.0f;
 
   // Synth Brass 2 (GM 63): darker in the harmonics (h3 sits 8 to 12 dB under
   // brass 1's), narrower (width 0.23 to 0.51) and slower to let go (120 to 170

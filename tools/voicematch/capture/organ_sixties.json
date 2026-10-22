@@ -42,16 +42,16 @@
       "label": "60's Organ1, module recording"
     }
   ],
-  "_dimensions": "Coverage is read against `toneclass.canonical_dimensions`, which for program 16 is 10 dimensions. The four below are what this source cannot carry, each argued from what the font sets rather than from its being a font.",
+  "_dimensions": "Coverage is read against `toneclass.canonical_dimensions`, which for program 16 is 10 dimensions. The five below are what this source cannot carry, each argued from what the font sets or from what its recordings measure rather than from its being a font.",
   "dimensions_na": {
     "vel_range": "the font declares no velocity layers at all - `velRange` is set on none of its zones, so it holds one recording per note at a velocity it does not state. A grid asking for more than one would write that recording into every row of the axis a dynamics fit reads",
     "stereo": "the recordings are mono (`sampleType` 1) and the font sets no `pan`, so the image is absent by construction rather than by voicing",
     "register": "the font sets no `initialAttenuation` anywhere, so the level relation between one note and the next is not in it. Over this grid the peaks span 3.5 dB, which is the headroom each recording was normalised into rather than the instrument's fall across its compass",
-    "damper": "a recording ends where it was cut and carries no note-off, so there is no key lift for a release to be read from"
+    "damper": "a recording ends where it was cut and carries no note-off, so there is no key lift for a release to be read from",
+    "body": "below f0 the recordings hold mains hum and their own floor rather than the instrument. On every note the strongest line under 0.7 f0 sits at 50.0 Hz whatever the pitch, and on notes 48 to 72 the 50 Hz series carries over 90% of the band's energy; what remains sits within 6 dB of the inter-harmonic floor. f0/2 and 1.5 f0 lie 75 to 105 dB under the fundamental, so no sub-octave or quint stop is sounding for the reading to describe"
   },
   "dimensions": [
     "stretch",
-    "body",
     "attack",
     "balance",
     "centroid_pct",

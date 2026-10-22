@@ -1040,7 +1040,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.reed_organ.free_reed.reed_stiffness = 0.40f;
   // One reed per note: the reference's partials carry no second line.
   o.reed_organ.free_reed.detune = 0.0f;
-  o.reed_organ.free_reed.breath_noise = 0.12f;
+  // Breath turbulence at 0.12 left the model 9 dB noisier than the reference;
+  // 0.03 brings the tone-to-noise level with it.
+  o.reed_organ.free_reed.breath_noise = 0.03f;
   o.reed_organ.free_reed.breath_pressure = 0.7f;
   o.reed_organ.free_reed.attack_ms = 30.0f;
   o.reed_organ.free_reed.release_ms = 120.0f;
@@ -1090,9 +1092,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.accordion.free_reed.velocity_exponent = 0.72f;
 
   // Harmonica (GM 22): a small, bright free reed right at the mouth — stiff
-  // little tongues speak fast with a buzzy edge, and the player's cupping
-  // hands add a gentle vibrato. Cupped hands are also why it radiates as less
-  // than a free monopole where the bellows instruments measure as one.
+  // little tongues speak fast with a buzzy edge. The player's cupping hands are
+  // why it radiates as less than a free monopole where the bellows instruments
+  // measure as one.
   o.harmonica = o.accordion;
   // The accordion's musette, swing, register law and bellows swell stay behind.
   o.harmonica.free_reed.slot_swing = 0.0f;
@@ -1108,13 +1110,17 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.harmonica.free_reed.release_ms = 90.0f;
   o.harmonica.free_reed.radiation = 0.35f;
   o.harmonica.free_reed.breath_noise = 0.05f;
-  o.harmonica.lfo_rate_hz = 5.6f;
-  o.harmonica.lfo_to_pitch_cents = 8.0f;
+  // No vibrato: the reference's f0 holds within 0.1 c, and an 8 c LFO read as
+  // 15 dB of sideband noise. Unsmeared, h2-h6 stood 3.6 dB high; the slot below
+  // takes them back down with the brightness held inside its bound.
+  o.harmonica.free_reed.slot_duty = 0.405f;
+  o.harmonica.free_reed.slot_return = 1.5f;
+  o.harmonica.free_reed.slot_gap = 0.02f;
   o.harmonica.stereo_spread = 0.12f;
   o.harmonica.gain = 0.44f;
   o.harmonica.amp_env.attack_ms = 58.7598f;
   o.harmonica.amp_env.release_ms = 55.0874f;
-  o.harmonica.cutoff_hz = 3378.8f;
+  o.harmonica.cutoff_hz = 5500.0f;
   o.harmonica.free_reed.velocity_exponent = 0.84f;
 
   // Bandoneon (GM 23): the tango free reed, dry-tuned — the reference holds one

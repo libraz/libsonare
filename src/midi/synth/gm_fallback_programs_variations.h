@@ -124,14 +124,13 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.organ_detuned_2.stereo_spread = 0.45f;
   o.organ_detuned_2.additive.drawbars = {8.0f, 8.0f, 6.0f, 0.0f, 0.0f, 0.0f, 0.0f, 2.0f, 4.0f};
 
-  // 60's Organ 1: the registration of the decade — the first three drawbars
-  // fully out with nothing above them, and the key click hard.
+  // 60's Organ 1: the 8' alone and the key click hard. The module tone holds
+  // f0/2 and 1.5 f0 75 dB or more under the fundamental, so 16' and 5 1/3' are closed;
+  // through the drive they intermodulated into 27 dB of noise against it.
   o.organ_sixties = o.drawbar_organ;
-  o.organ_sixties.additive.drawbars = {8.0f, 8.0f, 8.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  o.organ_sixties.additive.drawbars = {0.0f, 0.0f, 8.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
   o.organ_sixties.additive.key_click = 0.570308f;
   o.organ_sixties.additive.click_decay_ms = 4.78422f;
-  o.organ_sixties.additive.drawbars[0] = 2.19853f;
-  o.organ_sixties.additive.drawbars[1] = 3.2914f;
   o.organ_sixties.amp_env.attack_ms = 1.66943f;
   o.organ_sixties.amp_env.release_ms = 191.864f;
   o.organ_sixties.amp_env.sustain = 0.693547f;

@@ -378,8 +378,10 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.tenor_sax.reed.closing_pressure = 1.26761f;
   o.tenor_sax.reed.flow_gain = 0.57712f;
   o.tenor_sax.cutoff_hz = 2827.72f;
-  o.tenor_sax.lfo_rate_hz = 18.3065f;
-  o.tenor_sax.lfo_to_pitch_cents = 0.625687f;
+  // The reference carries a 5 Hz, 6.1 c vibrato. At equal depth the model reads
+  // 7 dB noisier than it, and above 2 c tone-to-noise leaves its bound.
+  o.tenor_sax.lfo_rate_hz = 5.0f;
+  o.tenor_sax.lfo_to_pitch_cents = 2.0f;
   o.tenor_sax.reed.growl = 0.317241f;
   o.tenor_sax.reed.chiff = 0.531633f;
   o.tenor_sax.reed.breath_noise = 0.319254f;
@@ -454,8 +456,10 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.oboe.reed.velocity_exponent = 0.93f;
   o.english_horn = reed(true, 0.70f, 0.40f, 0.64f, 0.34f, 24.0f, 90.0f, 0.64f, 0.34f, 0.6f);
   o.english_horn.cutoff_hz = 1396.28f;
-  o.english_horn.lfo_rate_hz = 0.0539485f;
-  o.english_horn.lfo_to_pitch_cents = 0.338969f;
+  // The reference carries a 5 Hz, 6.1 c vibrato (7.8 c here reads the same);
+  // 5 c keeps the partial stack inside its bound, which 7.8 c does not.
+  o.english_horn.lfo_rate_hz = 5.0f;
+  o.english_horn.lfo_to_pitch_cents = 5.0f;
   o.english_horn.amp_env.attack_ms = 2.12781f;
   o.english_horn.amp_env.decay_ms = 812.385f;
   o.english_horn.amp_env.release_ms = 29.2249f;
@@ -486,8 +490,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.bassoon.reed.closing_pressure = 1.06731f;
   o.bassoon.reed.flow_gain = 0.70627f;
   o.bassoon.cutoff_hz = 3537.47f;
-  o.bassoon.lfo_rate_hz = 14.7409f;
-  o.bassoon.lfo_to_pitch_cents = 0.680254f;
+  // No vibrato: the reference's 3-8 Hz pitch modulation reads under 0.1 c.
   o.bassoon.amp_env.attack_ms = 96.7436f;
   o.bassoon.amp_env.release_ms = 66.9303f;
   o.bassoon.amp_env.sustain = 0.552624f;
@@ -505,8 +508,8 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.bassoon.reed.velocity_exponent = 2.18f;
   o.clarinet = reed(false, 0.40f, 0.50f, 0.54f, 0.30f, 25.0f, 90.0f, 0.72f, 0.25f, 0.6f);
   o.clarinet.cutoff_hz = 4800.0f;
-  o.clarinet.lfo_rate_hz = 5.0f;
-  o.clarinet.lfo_to_pitch_cents = 2.5f;
+  // No vibrato: the reference's f0 holds within 0.1 c peak to peak; a 2.5 c LFO
+  // read as 21 dB of sideband noise against it.
   o.clarinet.reed.velocity_exponent = 2.80f;
 
   // Bag pipe (GM 109): the chanter — a stiff double reed on a conical bore fed
@@ -618,8 +621,8 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.trumpet.cutoff_hz = 1850.65f;
   o.trumpet.brass.brassiness = 0.62918f;
   o.trumpet.brass.cuivre_dynamics = 0.813931f;
-  o.trumpet.lfo_rate_hz = 23.696f;
-  o.trumpet.lfo_to_pitch_cents = 0.637942f;
+  // No vibrato: the reference's f0 holds within 1.2 c; a fitted 24 Hz pitch LFO
+  // read as 10 dB of sideband noise against it.
   o.trumpet.brass.bell_cutoff_hz = 461.622f;
   o.trumpet.brass.breath_pressure = 0.658586f;
   o.trumpet.brass.brightness = 0.840833f;
