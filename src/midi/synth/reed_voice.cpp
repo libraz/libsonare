@@ -167,16 +167,11 @@ SONARE_TUNABLE(kConeThroatMult, 1.6f);
 SONARE_TUNABLE(kConeGrowthGain, 1.4f);
 
 // --- 4e tonehole scattering (only when params.tonehole > 0) ---
-// Hole position as a fraction of the one-way bore delay (the reed->hole
-// distance), so the reed<->hole round trip resonates the register above the
-// fundamental — the surviving mode when the hole imposes a node there. The
-// value is topology-specific: a cylinder overblows to the TWELFTH (3*f0), a
-// cone to the OCTAVE (2*f0). For a cone, half-way (0.5) is degenerate — the
-// sub-loop coincides with the full-bore mode and the loop either quenches or
-// runs away — so the cone hole sits a quarter of the way down (sub-loop at
-// 2*f0), while the cylinder hole sits half-way.
-SONARE_TUNABLE(kToneholeFracCylinder, 0.5f);
-SONARE_TUNABLE(kToneholeFracCone, 0.25f);
+// Hole position as a fraction of the bore length (reed->hole over reed->bell), at the pressure
+// node of the register the open hole selects: a cylinder's twelfth (3*f0) has its node a third
+// of the way down, a cone's octave (2*f0) half-way. At the bell (1.0) the hole selects nothing.
+SONARE_TUNABLE(kToneholeFracCylinder, 0.333333f);
+SONARE_TUNABLE(kToneholeFracCone, 0.5f);
 // Maximum scattering-reflection strength at a fully open hole (the pressure
 // release is partial — a real hole is a finite, radiating branch, not a perfect
 // short). Kept < 1 so the reed<->hole sub-loop stays bounded alongside the main
@@ -491,8 +486,8 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
 
   // 4e: tonehole scattering — an inline reflection tapped from the bore at the
   // reed<->hole round trip. Off (0) -> the tap is skipped (bit-identical). The
-  // hole sits kToneholeFrac of the way down the bore, so its round trip is twice
-  // that; the tap depth is clamped inside the used span.
+  // hole sits kToneholeFrac of the way down the bore, so its round trip is that
+  // fraction of the bore's own; the tap depth is clamped inside the used span.
   hole_gain_ = 0.0f;
   hole_delay_samples_ = 0;
   hole_refl_ = 0.0f;
@@ -500,7 +495,7 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
   if (hole > 0.0f) {
     hole_gain_ = kToneholeGainMax * hole;
     const float frac = params.conical ? kToneholeFracCone : kToneholeFracCylinder;
-    const int round_trip = static_cast<int>(2.0f * frac * bore_.period);
+    const int round_trip = static_cast<int>(frac * bore_.period);
     hole_delay_samples_ = std::clamp(round_trip, 1, bore_.prefill_span - 1);
   }
   return budget;

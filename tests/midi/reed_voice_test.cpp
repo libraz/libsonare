@@ -687,10 +687,10 @@ TEST_CASE("tonehole scattering jumps the cylinder to its twelfth", "[midi][synth
 }
 
 TEST_CASE("tonehole scattering lifts the cone register", "[midi][synth][reed]") {
-  // A cone overblows to the octave, not the twelfth, so its tonehole sits a
-  // quarter of the way down the bore (half-way is degenerate for a cone). The
-  // open hole lifts the upper register — the tone brightens measurably — and
-  // stays bounded (the sub-loop cannot run away).
+  // A cone overblows to the octave, not the twelfth, so its tonehole sits
+  // half-way down the bore, at the octave's pressure node. The open hole lifts
+  // the upper register — the tone brightens measurably — and stays bounded (the
+  // sub-loop cannot run away).
   NativeSynthPatch closed = reed_base_patch();
   closed.reed.conical = true;
   NativeSynthPatch open = reed_base_patch();
