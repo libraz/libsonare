@@ -142,11 +142,13 @@ from metrics_modulation import (
     VIBRATO_EXTENT_MIN_CENTS,
     VIBRATO_LINE_SHARE,
     VIBRATO_MIN_CYCLES,
+    Tremolo,
     Vibrato,
     _band_peak,
     f0_width_cents,
     modulation_note,
     pitch_excursion,
+    tremolo_extent,
     vibrato_extent,
 )
 from metrics_note import (
@@ -180,6 +182,7 @@ from metrics_partials import (
     MIN_PARTIALS_FOR_B,
     TNR_SIDEBAND_DB,
     TNR_TOP_HZ,
+    am_sideband_reach,
     estimate_inharmonicity_b,
     fit_partial_series,
     fm_sideband_reach,

@@ -1,7 +1,7 @@
 {
  "id": "contrabass",
  "label": "Contrabass, bowed, sampled, close and dry",
- "measured_utc": "2026-10-22T16:01:22+00:00",
+ "measured_utc": "2026-10-22T21:07:11+00:00",
  "capture": {
   "program": 43,
   "params": [],
@@ -364,7 +364,7 @@
    "damper_release_ms": 200.0,
    "damper_capped": false,
    "centroid_hz": 96.9,
-   "tnr_db": 29.22,
+   "tnr_db": 29.31,
    "stereo_width": 0.0
   },
   {
@@ -3180,7 +3180,7 @@
      "32": 45.92,
      "56": 44.01,
      "80": 38.21,
-     "104": 29.22,
+     "104": 29.31,
      "127": 23.58
     },
     "32": {

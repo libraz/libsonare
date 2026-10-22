@@ -21,13 +21,16 @@ import profile as profile_module
 import metrics_modulation
 import metrics_partials
 from metrics import (
+    Tremolo,
     Vibrato,
     _spectrum,
+    am_sideband_reach,
     analyze_note,
     fm_sideband_reach,
     held_pitch,
     pitch_excursion,
     pitch_motion,
+    tremolo_extent,
     vibrato_extent,
 )
 from profile_measure import find_partials
@@ -458,6 +461,91 @@ def test_the_sideband_reach_follows_the_modulation_index():
     assert fm_sideband_reach(0.05, 10) == 1
     assert fm_sideband_reach(5.0, 40) > 6
     assert fm_sideband_reach(5.0, 3) == 3
+
+
+def tremolo_tone(
+    f0: float, db_pp: float, rate: float = 4.3, noise: float = 1e-3, seconds: float = 1.5
+) -> np.ndarray:
+    """`harmonic` under a level swinging `db_pp` peak to peak in dB, at the still tone's mean power."""
+    t = np.arange(int(SR * seconds)) / SR
+    swing = 10.0 ** (0.5 * db_pp * np.sin(2 * np.pi * rate * t + 1.0) / 20.0)
+    swing /= np.sqrt(np.mean(swing**2))
+    x = swing * sum(np.sin(2 * np.pi * f0 * n * t) / n for n in range(1, 9))
+    return np.asarray(x + noise * np.random.default_rng(0).standard_normal(t.shape))
+
+
+def tnr_as_measured(x: np.ndarray, f0: float) -> float:
+    """The ratio as both callers take it: pitch and level motion read over the spectrum's segment."""
+    return profile_module.tone_to_noise_db(
+        *_spectrum(x, SR), f0, 0.0, pitch_motion(x, SR, f0), tremolo_extent(x, SR, f0)
+    )
+
+
+@pytest.mark.parametrize("db_pp", [5.8, 18.0])
+def test_a_tremolo_low_note_reads_as_clean_as_the_same_note_held_still(db_pp):
+    """At 130 Hz a 4.3 Hz tremolo's first sidebands sit outside the still window.
+
+    The still tone sits 45 dB clean: sidebands under `TNR_SIDEBAND_DB` stay noise,
+    which caps a tremolo note's ratio near 60 dB.
+    """
+    still = tnr_as_measured(tremolo_tone(130.0, 0.0, noise=1e-2), 130.0)
+    moving = tremolo_tone(130.0, db_pp, noise=1e-2)
+    tremolo = tremolo_extent(moving, SR, 130.0)
+    assert tremolo is not None
+    assert tremolo.rate_hz == pytest.approx(4.3, abs=0.05)
+    assert tremolo.db == pytest.approx(db_pp, abs=0.1 * db_pp)
+    assert tnr_as_measured(moving, 130.0) == pytest.approx(still, abs=1.0)
+    assert profile_module.tone_to_noise_db(*_spectrum(moving, SR), 130.0) < still - 10.0
+
+
+@pytest.mark.parametrize("decay_db_s", [6.0, 20.0, 60.0])
+@pytest.mark.parametrize("knee_s", [None, 0.4])
+def test_a_decaying_struck_tone_reads_no_tremolo(decay_db_s, knee_s):
+    """A strike, then a fall whose rate may break at a knee: a level trend, not a modulation."""
+    f0 = 130.0
+    t = np.arange(int(1.5 * SR)) / SR
+    struck = t >= 0.1
+    after = np.maximum(t - 0.1, 0.0)
+    fall = decay_db_s * after
+    if knee_s is not None:
+        fall = np.where(after < knee_s, 3.0 * fall, 3.0 * decay_db_s * knee_s + fall)
+    level = np.where(struck, 10.0 ** (-fall / 20.0), 0.0)
+    x = level * sum(np.sin(2 * np.pi * f0 * n * t) / n for n in range(1, 9))
+    x = x + 1e-4 * np.random.default_rng(0).standard_normal(t.shape)
+    assert tremolo_extent(x, SR, f0) is None
+
+
+@pytest.mark.parametrize("f0", [47.5, 73.4, 104.6, 130.0, 147.0, 440.0])
+def test_a_still_note_keeps_the_mask_it_had_without_the_tremolo_reading(f0):
+    for noise in (1e-3, 3e-2):
+        x = harmonic(f0, noise=noise)
+        assert tremolo_extent(x, SR, f0) is None
+        assert tnr_as_measured(x, f0) == profile_module.tone_to_noise_db(
+            *_spectrum(x, SR), f0, 0.0, pitch_motion(x, SR, f0)
+        )
+
+
+def test_noise_between_the_partials_of_a_tremolo_note_is_still_counted():
+    """The widened windows stay under the quarter-f0 cap, so the gaps still hold noise."""
+    noisy = tremolo_tone(130.0, 18.0, noise=0.03)
+    assert tremolo_extent(noisy, SR, 130.0) is not None
+    assert tnr_as_measured(noisy, 130.0) == pytest.approx(
+        tnr_as_measured(tremolo_tone(130.0, 0.0, noise=0.03), 130.0), abs=2.0
+    )
+    assert tnr_as_measured(noisy, 130.0) < tnr_as_measured(tremolo_tone(130.0, 18.0), 130.0) - 20.0
+    # A tremolo deep enough to reach the cap still leaves half of white noise outside the mask.
+    noise = _spectrum(np.random.default_rng(1).standard_normal(SR), SR)
+    assert profile_module.tone_to_noise_db(*noise, 220.0, 0.0, None, Tremolo(60.0, 8.0)) < 1.0
+
+
+def test_the_am_sideband_reach_follows_the_depth():
+    """5.8 dB peak to peak, a vibraphone's motor, keeps its -37 dB second pair and not its third."""
+    nepers = np.log(10.0) / 40.0
+    assert am_sideband_reach(0.0, 10) == 0
+    assert am_sideband_reach(1.0 * nepers, 10) == 1
+    assert am_sideband_reach(5.8 * nepers, 10) == 2
+    assert am_sideband_reach(18.0 * nepers, 10) == 4
+    assert am_sideband_reach(18.0 * nepers, 3) == 3
 
 
 def test_an_empty_spectrum_is_not_a_measurement():

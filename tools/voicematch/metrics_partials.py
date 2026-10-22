@@ -6,6 +6,7 @@ import numpy as np
 from metrics_modulation import (
     FM_LOWPASS_F0_FRACTION,
     FM_STOP_F0_FRACTION,
+    Tremolo,
     Vibrato,
     demodulated_pitch,
     pitch_excursion,
@@ -172,6 +173,35 @@ def fm_sideband_reach(beta: float, max_order: int) -> int:
     return int(above[-1]) + 1 if above.size else 0
 
 
+def am_sideband_reach(index: float, max_order: int) -> int:
+    """Highest order k <= `max_order` whose I_k(index)/I_0(index) reaches `TNR_SIDEBAND_DB`, or 0.
+
+    A level that swings sinusoidally in dB is exp(index·sin) in amplitude, whose
+    sidebands are the modified Bessel functions' ratios to the carrier.
+    """
+    if index <= 0.0 or max_order < 1:
+        return 0
+    k = np.arange(0, max_order + 1)[:, None]
+    ik = np.trapezoid(
+        np.exp(index * (np.cos(_BESSEL_TAU) - 1.0)) * np.cos(k * _BESSEL_TAU), _BESSEL_TAU, axis=1
+    )
+    above = np.nonzero(np.abs(ik[1:]) >= ik[0] * 10.0 ** (TNR_SIDEBAND_DB / 20.0))[0]
+    return int(above[-1]) + 1 if above.size else 0
+
+
+def am_margin_hz(f0_hz: float, bin_hz: float, tremolo: Tremolo) -> float:
+    """How far either side of every partial a tremolo's sidebands reach, in Hz.
+
+    The same for every partial, since the level swings the whole note: three bins
+    for the main lobe plus the rate times the highest order `am_sideband_reach`
+    keeps, counted up to a quarter of f0. `tremolo.db` peak-to-peak is an index of
+    db·ln(10)/40 nepers.
+    """
+    index = tremolo.db * np.log(10.0) / 40.0
+    order = am_sideband_reach(index, int(np.ceil(0.25 * f0_hz / tremolo.rate_hz)))
+    return 3.0 * bin_hz + tremolo.rate_hz * order
+
+
 def pitch_motion(seg: np.ndarray, sr: int, f0: float) -> Vibrato | None:
     """The fundamental's motion over `seg` as one reading, or None when it holds still.
 
@@ -270,6 +300,7 @@ def tone_to_noise_db(
     f0_hz: float,
     b: float = 0.0,
     motion: Vibrato | None = None,
+    tremolo: Tremolo | None = None,
 ) -> float:
     """Energy in the partials against everything else in the audible band.
 
@@ -302,6 +333,14 @@ def tone_to_noise_db(
     is still counted. Past that cap -- a deep vibrato on the upper partials of
     a bright low note -- the excursion fills the gap and part of it still reads
     as noise. None leaves the mask exactly as for a still tone.
+
+    `tremolo`, as `tremolo_extent` reads it over the same segment, puts sidebands
+    at multiples of its rate around every partial: a vibraphone's motor puts its
+    first pair 4 Hz out at -16 dB, outside the still window below 200 Hz. The
+    window reaches the farther of `am_margin_hz` and the FM margin: a level swing
+    riding a vibrato is mostly the vibrato's own through the body's resonances,
+    at its rate, and adds no lines past it. None leaves the mask exactly as
+    without it.
     """
     if freqs.size < 2 or f0_hz <= 0.0:
         return float("nan")
@@ -309,10 +348,11 @@ def tone_to_noise_db(
     bin_hz = float(freqs[1] - freqs[0])
     top = min(TNR_TOP_HZ, float(freqs[-1]))
     tonal = np.zeros(freqs.shape, dtype=bool)
+    am = 0.0 if tremolo is None else am_margin_hz(f0_hz, bin_hz, tremolo)
     n = 1
     while True:
         target = partial_hz(f0_hz, n, b)
-        margin = fm_margin_hz(target, f0_hz, bin_hz, motion)
+        margin = max(fm_margin_hz(target, f0_hz, bin_hz, motion), am)
         half = min(max(0.02 * target, margin), 0.25 * f0_hz)
         if target - half > top:
             break

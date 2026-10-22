@@ -392,6 +392,95 @@ def pitch_excursion(seg: np.ndarray, sr: int, f0: float) -> Vibrato | None:
     return Vibrato(2.0 * reach, rate, rate)
 
 
+def _level_track(seg: np.ndarray, sr: int, f0: float) -> np.ndarray | None:
+    """The fundamental's level over `seg` in dB, one value per `MOD_FRAME_HOP_S`, linearly detrended.
+
+    A zoomed DFT over a bank of candidates `MOD_TRACK_CENTS` either side of `f0`
+    per `MOD_FRAME_WIN_S` frame, so the level follows the fundamental through a
+    vibrato. None under `MOD_MIN_FRAMES` frames or where the track is silent.
+    """
+    win_n = int(MOD_FRAME_WIN_S * sr)
+    hop = int(MOD_FRAME_HOP_S * sr)
+    n_frames = (len(seg) - win_n) // hop + 1 if len(seg) >= win_n else 0
+    if n_frames < MOD_MIN_FRAMES:
+        return None
+
+    frames = np.lib.stride_tricks.sliding_window_view(seg, win_n)[::hop][:n_frames]
+    frames = frames * np.hanning(win_n)
+    span = 2.0 ** (MOD_TRACK_CENTS / 1200.0)
+    cand = np.linspace(f0 / span, f0 * span, MOD_TRACK_POINTS)
+    t = np.arange(win_n) / sr
+    basis = np.exp(-2j * np.pi * np.outer(cand, t))  # (points, win_n)
+    amps = np.abs(frames @ basis.T)  # (frames, points)
+    k = np.argmax(amps, axis=1)
+    level = amps[np.arange(n_frames), k]
+    if float(level.max()) <= 0.0:
+        return None
+
+    level_db = 20.0 * np.log10(np.maximum(level, 1e-12))
+    idx = np.arange(n_frames, dtype=np.float64)
+    return level_db - np.polyval(np.polyfit(idx, level_db, 1), idx)
+
+
+#: Rates `tremolo_extent` reads a level modulation at: a vibraphone's motor runs about 4 Hz.
+TREMOLO_BAND_HZ = (3.0, 8.0)
+#: Least share of the level track's modulation energy above DC the tremolo line must hold.
+#: Measured: the vibraphone's motor 0.60-0.98; 491 of 4588 reference rows hold a line at 0.5.
+TREMOLO_LINE_SHARE = 0.5
+#: Shallowest tremolo, peak-to-peak; its first sidebands sit 31 dB under the partial. Measured:
+#: still lines of held organ, brass and guitar notes 0.00-0.25 dB, the vibraphone's motor 5.7-5.9.
+TREMOLO_MIN_DB = 1.0
+
+
+class Tremolo(NamedTuple):
+    """A level modulation held over a segment: `db` peak-to-peak at `rate_hz`."""
+
+    db: float
+    rate_hz: float
+
+
+def tremolo_extent(seg: np.ndarray, sr: int, f0: float) -> Tremolo | None:
+    """The periodic amplitude modulation held in `seg`, or None.
+
+    Read off `_level_track`'s fundamental over the caller's own segment, so it
+    describes the spectrum taken from it. The track is detrended, so a decay
+    reads no modulation. As `vibrato_extent`'s line, the strongest bin in
+    `TREMOLO_BAND_HZ` must stand above both neighbours, lie at least
+    `VIBRATO_MIN_CYCLES` bins up and, with its neighbours, carry
+    `TREMOLO_LINE_SHARE` of the track's energy above DC: an onset or a decay's
+    knee spreads over the low bins and holds no line. The depth is the line's
+    RMS as a sinusoid's peak-to-peak, at least `TREMOLO_MIN_DB`.
+    """
+    if f0 <= 0.0 or f0 > sr / 2.0:
+        return None
+    level_db = _level_track(np.asarray(seg, dtype=np.float64), sr, f0)
+    if level_db is None:
+        return None
+    n = len(level_db)
+    rate = 1.0 / MOD_FRAME_HOP_S
+    taper = np.hanning(n)
+    am = np.abs(np.fft.rfft(level_db * taper))
+    peak = _band_peak(am, rate, TREMOLO_BAND_HZ, n)
+    if peak is None:
+        return None
+    k = round(peak[1] * n / rate)
+    if k < VIBRATO_MIN_CYCLES or k + 1 >= len(am) or am[k] < max(am[k - 1], am[k + 1]):
+        return None
+    power = am**2
+    line = float(np.sum(power[k - 1 : k + 2]))
+    if line < TREMOLO_LINE_SHARE * float(np.sum(power[1:])):
+        return None
+    # Parseval through the taper, as `vibrato_extent`'s depth.
+    depth = 4.0 * float(np.sqrt(line / (n * np.sum(taper**2))))
+    if depth < TREMOLO_MIN_DB:
+        return None
+    # The rate between bins, by a parabola through the line's log magnitudes.
+    lo, mid, hi = np.log(np.maximum(am[k - 1 : k + 2], 1e-30))
+    curve = lo - 2.0 * mid + hi
+    offset = 0.5 * (lo - hi) / curve if curve < 0.0 else 0.0
+    return Tremolo(depth, float((k + offset) * rate / n))
+
+
 def modulation_note(
     mono: np.ndarray, sr: int, note: Note, f0: float, onset: float | None = None
 ) -> dict:
@@ -431,27 +520,10 @@ def modulation_note(
     end = min((note.start if onset is None else onset) + MOD_WINDOW_S[1], note.start + note.dur)
     a, b = int(start * sr), int(end * sr)
     seg = np.asarray(mono[a:b], dtype=np.float64)
-    win_n = int(MOD_FRAME_WIN_S * sr)
-    hop = int(MOD_FRAME_HOP_S * sr)
-    n_frames = (len(seg) - win_n) // hop + 1 if len(seg) >= win_n else 0
-    if n_frames < MOD_MIN_FRAMES:
+    level_db = _level_track(seg, sr, f0)
+    if level_db is None:
         return empty
-
-    frames = np.lib.stride_tricks.sliding_window_view(seg, win_n)[::hop][:n_frames]
-    frames = frames * np.hanning(win_n)
-    span = 2.0 ** (MOD_TRACK_CENTS / 1200.0)
-    cand = np.linspace(f0 / span, f0 * span, MOD_TRACK_POINTS)
-    t = np.arange(win_n) / sr
-    basis = np.exp(-2j * np.pi * np.outer(cand, t))  # (points, win_n)
-    amps = np.abs(frames @ basis.T)  # (frames, points)
-    k = np.argmax(amps, axis=1)
-    level = amps[np.arange(n_frames), k]
-    if float(level.max()) <= 0.0:
-        return empty
-
-    level_db = 20.0 * np.log10(np.maximum(level, 1e-12))
-    idx = np.arange(n_frames, dtype=np.float64)
-    level_db = level_db - np.polyval(np.polyfit(idx, level_db, 1), idx)
+    n_frames = len(level_db)
     am = np.abs(np.fft.rfft(level_db * np.hanning(n_frames)))
     rate = 1.0 / MOD_FRAME_HOP_S
 

@@ -30,6 +30,7 @@ from metrics import (
     sound_onset_s,
     to_mono,
     tone_to_noise_db,
+    tremolo_extent,
 )
 from smf import Note
 
@@ -574,7 +575,8 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *, preroll_s: float, gat
     row["centroid_hz"] = round(float((freqs * p).sum() / max(p.sum(), 1e-20)), 1)
     stiffness = row["inharmonicity_b"] if row.get("inharmonicity_reliable") else 0.0
     motion = pitch_motion(held[a:b], sr, row["f0_hz"])
-    tnr = tone_to_noise_db(freqs, mag, row["f0_hz"], stiffness, motion)
+    tremolo = tremolo_extent(held[a:b], sr, row["f0_hz"])
+    tnr = tone_to_noise_db(freqs, mag, row["f0_hz"], stiffness, motion, tremolo)
     if np.isfinite(tnr):
         row["tnr_db"] = round(tnr, 2)
     width = channel_width(audio, on, off)

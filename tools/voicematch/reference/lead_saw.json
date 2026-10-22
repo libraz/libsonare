@@ -1,7 +1,7 @@
 {
  "id": "lead_saw",
  "label": "Lead 2 (sawtooth), sampled, close and dry",
- "measured_utc": "2026-10-22T19:51:24+00:00",
+ "measured_utc": "2026-10-22T21:07:55+00:00",
  "capture": {
   "program": 81,
   "params": [],
@@ -2275,7 +2275,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 1245.3,
-   "tnr_db": 78.93,
+   "tnr_db": 78.95,
    "stereo_width": 0.424
   },
   {
@@ -2597,7 +2597,7 @@
     "84": {
      "32": 80.9,
      "64": 81.24,
-     "96": 78.93,
+     "96": 78.95,
      "127": 78.89
     }
    },
