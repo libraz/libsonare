@@ -1,7 +1,7 @@
 {
  "id": "church_bell",
  "label": "Church Bell, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-09-19T16:35:36+00:00",
+ "measured_utc": "2026-10-22T00:51:58+00:00",
  "capture": {
   "program": 14,
   "params": [],
@@ -87,6 +87,7 @@
    "held_peak_dbfs": -10.71,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -42.36,
    "decay_span_s": 4.629,
    "decay_db_s": -7.46,
    "decay_early_db_s": -14.56,
@@ -106,8 +107,7 @@
    "damper_release_ms": 1721.1,
    "damper_capped": true,
    "centroid_hz": 934.5,
-   "tnr_db": -0.25,
-   "attack_hf_db": -42.36
+   "tnr_db": -0.25
   },
   {
    "timbre": "t0",
@@ -168,6 +168,7 @@
    "held_peak_dbfs": -10.79,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -35.92,
    "decay_span_s": 4.629,
    "decay_db_s": -5.84,
    "decay_early_db_s": -8.89,
@@ -187,8 +188,7 @@
    "damper_release_ms": 798.2,
    "damper_capped": true,
    "centroid_hz": 1234.2,
-   "tnr_db": -0.79,
-   "attack_hf_db": -35.92
+   "tnr_db": -0.79
   },
   {
    "timbre": "t0",
@@ -249,6 +249,7 @@
    "held_peak_dbfs": -11.29,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -26.02,
    "decay_span_s": 4.629,
    "decay_db_s": -5.45,
    "decay_early_db_s": -10.33,
@@ -268,8 +269,7 @@
    "damper_release_ms": 1356.9,
    "damper_capped": true,
    "centroid_hz": 1631.5,
-   "tnr_db": 0.88,
-   "attack_hf_db": -26.02
+   "tnr_db": 0.88
   },
   {
    "timbre": "t0",
@@ -330,6 +330,9 @@
    "held_peak_dbfs": -11.64,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -6.76,
+   "onset_overshoot_db": 21.47,
+   "onset_settle_ms": 826.1,
    "decay_span_s": 4.629,
    "decay_db_s": -5.36,
    "decay_early_db_s": -13.24,
@@ -349,8 +352,7 @@
    "damper_release_ms": 1566.5,
    "damper_capped": true,
    "centroid_hz": 2137.7,
-   "tnr_db": 1.26,
-   "attack_hf_db": -6.76
+   "tnr_db": 1.26
   },
   {
    "timbre": "t0",
@@ -411,6 +413,7 @@
    "held_peak_dbfs": -12.72,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -4.26,
    "decay_span_s": 4.629,
    "decay_db_s": -5.48,
    "decay_early_db_s": -16.95,
@@ -428,8 +431,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 2693.0,
-   "tnr_db": 0.54,
-   "attack_hf_db": -4.26
+   "tnr_db": 0.54
   }
  ],
  "summary": {

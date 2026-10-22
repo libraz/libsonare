@@ -1,7 +1,7 @@
 {
  "id": "reverse_cymbal",
  "label": "Reverse Cymbal, sampled, close and dry",
- "measured_utc": "2026-10-15T09:56:15+00:00",
+ "measured_utc": "2026-10-22T00:52:54+00:00",
  "capture": {
   "program": 119,
   "params": [],
@@ -91,6 +91,8 @@
    "onset_ms": 0.0,
    "attack_ms": 900.0,
    "attack_hf_db": -2.56,
+   "onset_overshoot_db": 0.71,
+   "onset_settle_ms": 0.0,
    "decay_span_s": 0.045,
    "decay_db_s": -206.7,
    "partial_decay_db_s": [
@@ -168,6 +170,8 @@
    "onset_ms": 0.0,
    "attack_ms": 900.0,
    "attack_hf_db": -2.56,
+   "onset_overshoot_db": 0.71,
+   "onset_settle_ms": 0.0,
    "decay_span_s": 0.045,
    "decay_db_s": -206.7,
    "partial_decay_db_s": [
@@ -245,6 +249,8 @@
    "onset_ms": 0.0,
    "attack_ms": 900.0,
    "attack_hf_db": -2.56,
+   "onset_overshoot_db": 0.71,
+   "onset_settle_ms": 0.0,
    "decay_span_s": 0.045,
    "decay_db_s": -206.7,
    "partial_decay_db_s": [
@@ -322,6 +328,8 @@
    "onset_ms": 0.0,
    "attack_ms": 900.0,
    "attack_hf_db": -2.56,
+   "onset_overshoot_db": 0.71,
+   "onset_settle_ms": 0.0,
    "decay_span_s": 0.045,
    "decay_db_s": -206.7,
    "partial_decay_db_s": [
@@ -399,6 +407,8 @@
    "onset_ms": 0.0,
    "attack_ms": 900.0,
    "attack_hf_db": -2.56,
+   "onset_overshoot_db": 0.71,
+   "onset_settle_ms": 0.0,
    "decay_span_s": 0.045,
    "decay_db_s": -206.7,
    "partial_decay_db_s": [
@@ -856,6 +866,8 @@
    "onset_ms": 0.0,
    "attack_ms": 430.0,
    "attack_hf_db": -7.58,
+   "onset_overshoot_db": 187.08,
+   "onset_settle_ms": 461.0,
    "decay_span_s": 0.025,
    "partial_decay_db_s": [
     58.56,
@@ -932,6 +944,8 @@
    "onset_ms": 0.0,
    "attack_ms": 430.0,
    "attack_hf_db": -7.58,
+   "onset_overshoot_db": 191.94,
+   "onset_settle_ms": 461.0,
    "decay_span_s": 0.025,
    "partial_decay_db_s": [
     58.57,
@@ -1008,6 +1022,8 @@
    "onset_ms": 0.0,
    "attack_ms": 430.0,
    "attack_hf_db": -7.58,
+   "onset_overshoot_db": 195.03,
+   "onset_settle_ms": 461.0,
    "decay_span_s": 0.025,
    "partial_decay_db_s": [
     58.57,
@@ -1084,6 +1100,8 @@
    "onset_ms": 0.0,
    "attack_ms": 430.0,
    "attack_hf_db": -7.58,
+   "onset_overshoot_db": 197.31,
+   "onset_settle_ms": 461.0,
    "decay_span_s": 0.025,
    "partial_decay_db_s": [
     58.57,
@@ -1160,6 +1178,8 @@
    "onset_ms": 0.0,
    "attack_ms": 430.0,
    "attack_hf_db": -7.58,
+   "onset_overshoot_db": 199.05,
+   "onset_settle_ms": 461.0,
    "decay_span_s": 0.025,
    "partial_decay_db_s": [
     58.57,

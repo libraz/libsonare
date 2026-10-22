@@ -1,7 +1,7 @@
 {
  "id": "electric_grand_module",
  "label": "Piano 3, the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-09-20T16:42:50+00:00",
+ "measured_utc": "2026-10-22T00:52:09+00:00",
  "capture": {
   "program": 2,
   "params": [],
@@ -90,6 +90,9 @@
    "held_peak_dbfs": -15.58,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -22.94,
+   "onset_overshoot_db": 6.71,
+   "onset_settle_ms": 213.5,
    "decay_span_s": 2.385,
    "decay_db_s": -4.43,
    "decay_early_db_s": -8.54,
@@ -109,8 +112,7 @@
    "damper_release_ms": 2678.9,
    "damper_capped": true,
    "centroid_hz": 169.4,
-   "tnr_db": 15.41,
-   "attack_hf_db": -22.94
+   "tnr_db": 15.41
   },
   {
    "timbre": "t0",
@@ -170,6 +172,9 @@
    "held_peak_dbfs": -17.03,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -25.96,
+   "onset_overshoot_db": 3.64,
+   "onset_settle_ms": 53.4,
    "decay_span_s": 2.39,
    "decay_db_s": -5.25,
    "decay_early_db_s": -4.63,
@@ -189,8 +194,7 @@
    "damper_release_ms": 2399.6,
    "damper_capped": true,
    "centroid_hz": 232.8,
-   "tnr_db": 14.86,
-   "attack_hf_db": -25.96
+   "tnr_db": 14.86
   },
   {
    "timbre": "t0",
@@ -251,6 +255,7 @@
    "held_peak_dbfs": -15.63,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -25.86,
    "decay_span_s": 2.38,
    "decay_db_s": -6.64,
    "decay_early_db_s": -7.75,
@@ -270,8 +275,7 @@
    "damper_release_ms": 1820.9,
    "damper_capped": true,
    "centroid_hz": 278.0,
-   "tnr_db": 18.52,
-   "attack_hf_db": -25.86
+   "tnr_db": 18.52
   },
   {
    "timbre": "t0",
@@ -332,6 +336,7 @@
    "held_peak_dbfs": -15.37,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -16.7,
    "decay_span_s": 2.39,
    "decay_db_s": -7.31,
    "decay_early_db_s": -9.51,
@@ -351,8 +356,7 @@
    "damper_release_ms": 1466.7,
    "damper_capped": true,
    "centroid_hz": 386.5,
-   "tnr_db": 22.96,
-   "attack_hf_db": -16.7
+   "tnr_db": 22.96
   },
   {
    "timbre": "t0",
@@ -413,6 +417,7 @@
    "held_peak_dbfs": -15.35,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -14.7,
    "decay_span_s": 2.39,
    "decay_db_s": -9.76,
    "decay_early_db_s": -16.87,
@@ -432,8 +437,7 @@
    "damper_release_ms": 753.3,
    "damper_capped": true,
    "centroid_hz": 1242.3,
-   "tnr_db": 6.9,
-   "attack_hf_db": -14.7
+   "tnr_db": 6.9
   },
   {
    "timbre": "t0",
@@ -494,6 +498,7 @@
    "held_peak_dbfs": -16.14,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -17.26,
    "decay_span_s": 2.39,
    "decay_db_s": -9.21,
    "decay_early_db_s": -21.27,
@@ -513,8 +518,7 @@
    "damper_release_ms": 379.1,
    "damper_capped": true,
    "centroid_hz": 914.9,
-   "tnr_db": 17.66,
-   "attack_hf_db": -17.26
+   "tnr_db": 17.66
   },
   {
    "timbre": "t0",
@@ -575,6 +579,7 @@
    "held_peak_dbfs": -14.05,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -16.22,
    "decay_span_s": 2.39,
    "decay_db_s": -10.39,
    "decay_early_db_s": -21.75,
@@ -594,8 +599,7 @@
    "damper_release_ms": 269.4,
    "damper_capped": true,
    "centroid_hz": 907.2,
-   "tnr_db": 31.28,
-   "attack_hf_db": -16.22
+   "tnr_db": 31.28
   },
   {
    "timbre": "t0",
@@ -656,6 +660,7 @@
    "held_peak_dbfs": -16.74,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -14.68,
    "decay_span_s": 2.39,
    "decay_db_s": -10.08,
    "decay_early_db_s": -9.96,
@@ -675,8 +680,7 @@
    "damper_release_ms": 264.4,
    "damper_capped": true,
    "centroid_hz": 926.5,
-   "tnr_db": 33.27,
-   "attack_hf_db": -14.68
+   "tnr_db": 33.27
   },
   {
    "timbre": "t0",
@@ -727,6 +731,7 @@
    "held_peak_dbfs": -17.1,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -12.75,
    "decay_span_s": 2.39,
    "decay_db_s": -10.71,
    "decay_early_db_s": -11.01,
@@ -746,8 +751,7 @@
    "damper_release_ms": 84.8,
    "damper_capped": true,
    "centroid_hz": 1220.1,
-   "tnr_db": 39.4,
-   "attack_hf_db": -12.75
+   "tnr_db": 39.4
   }
  ],
  "summary": {
