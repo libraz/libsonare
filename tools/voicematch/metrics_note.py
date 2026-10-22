@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 import numpy as np
 from metrics_hit import HIT_ENVELOPE_HOP_MS, HIT_ENVELOPE_WIN_MS, _hit_onset
 from metrics_modal import half_spectra, modal_profile
-from metrics_modulation import f0_width_cents, modulation_note
+from metrics_modulation import f0_width_cents, modulation_note, vibrato_extent
 from metrics_partials import (
     estimate_inharmonicity_b,
     ladder_present,
@@ -341,7 +341,9 @@ def analyze_note(
     tnr = (
         float("nan")
         if under_peak_db < SILENT_WINDOW_DB
-        else tone_to_noise_db(freqs, mag, float(f0), inharmonicity_b)
+        else tone_to_noise_db(
+            freqs, mag, float(f0), inharmonicity_b, vibrato_extent(sustain, sr, float(f0))
+        )
     )
 
     # Envelope metrics.

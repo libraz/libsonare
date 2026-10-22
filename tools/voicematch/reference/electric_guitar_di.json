@@ -1,7 +1,7 @@
 {
  "id": "electric_guitar_di",
  "label": "Electric guitar, sampled, direct out with no amplifier",
- "measured_utc": "2026-10-22T01:10:16+00:00",
+ "measured_utc": "2026-10-22T10:51:57+00:00",
  "capture": {
   "program": 27,
   "params": [],
@@ -1332,7 +1332,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 165.2,
-   "tnr_db": 28.85,
+   "tnr_db": 37.63,
    "stereo_width": 0.0
   },
   {
@@ -1412,7 +1412,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 165.2,
-   "tnr_db": 28.85,
+   "tnr_db": 37.63,
    "stereo_width": 0.0
   },
   {
@@ -8403,8 +8403,8 @@
      "104": 56.79
     },
     "52": {
-     "32": 28.85,
-     "48": 28.85,
+     "32": 37.63,
+     "48": 37.63,
      "56": 48.34,
      "80": 48.33,
      "104": 48.33

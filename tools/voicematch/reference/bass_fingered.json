@@ -1,7 +1,7 @@
 {
  "id": "bass_fingered",
  "label": "Fingered electric bass, sampled, direct out with no amplifier",
- "measured_utc": "2026-10-22T01:08:44+00:00",
+ "measured_utc": "2026-10-22T10:50:58+00:00",
  "capture": {
   "program": 33,
   "params": [],
@@ -115,7 +115,7 @@
    "damper_release_ms": 2995.0,
    "damper_capped": true,
    "centroid_hz": 101.1,
-   "tnr_db": 41.01,
+   "tnr_db": 53.14,
    "stereo_width": 0.0
   },
   {
@@ -198,7 +198,7 @@
    "damper_release_ms": 2995.0,
    "damper_capped": true,
    "centroid_hz": 177.7,
-   "tnr_db": 47.68,
+   "tnr_db": 55.51,
    "stereo_width": -0.0
   },
   {
@@ -3127,8 +3127,8 @@
    },
    "tnr_db": {
     "28": {
-     "32": 41.01,
-     "56": 47.68,
+     "32": 53.14,
+     "56": 55.51,
      "80": 40.98,
      "104": 42.37,
      "127": 29.49

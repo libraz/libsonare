@@ -1,7 +1,7 @@
 {
  "id": "synth_strings_2",
  "label": "Synth Strings 2, sampled, close and dry",
- "measured_utc": "2026-10-22T01:14:24+00:00",
+ "measured_utc": "2026-10-22T10:55:03+00:00",
  "capture": {
   "program": 51,
   "params": [],
@@ -114,7 +114,7 @@
    "damper_release_ms": 495.0,
    "damper_capped": true,
    "centroid_hz": 268.9,
-   "tnr_db": 21.91,
+   "tnr_db": 28.89,
    "stereo_width": 0.443
   },
   {
@@ -196,7 +196,7 @@
    "damper_release_ms": 495.0,
    "damper_capped": true,
    "centroid_hz": 272.4,
-   "tnr_db": 21.83,
+   "tnr_db": 28.4,
    "stereo_width": 0.444
   },
   {
@@ -278,7 +278,7 @@
    "damper_release_ms": 495.0,
    "damper_capped": true,
    "centroid_hz": 278.0,
-   "tnr_db": 21.68,
+   "tnr_db": 27.64,
    "stereo_width": 0.445
   },
   {
@@ -360,7 +360,7 @@
    "damper_release_ms": 495.0,
    "damper_capped": true,
    "centroid_hz": 285.4,
-   "tnr_db": 21.44,
+   "tnr_db": 26.68,
    "stereo_width": 0.446
   },
   {
@@ -442,7 +442,7 @@
    "damper_release_ms": 495.0,
    "damper_capped": true,
    "centroid_hz": 294.3,
-   "tnr_db": 21.1,
+   "tnr_db": 25.58,
    "stereo_width": 0.448
   },
   {
@@ -3172,11 +3172,11 @@
    },
    "tnr_db": {
     "48": {
-     "32": 21.91,
-     "56": 21.83,
-     "80": 21.68,
-     "104": 21.44,
-     "127": 21.1
+     "32": 28.89,
+     "56": 28.4,
+     "80": 27.64,
+     "104": 26.68,
+     "127": 25.58
     },
     "52": {
      "32": 16.46,

@@ -1,7 +1,7 @@
 {
  "id": "whistle",
  "label": "Whistle, sampled, close and dry",
- "measured_utc": "2026-10-22T01:15:04+00:00",
+ "measured_utc": "2026-10-22T10:55:46+00:00",
  "capture": {
   "program": 78,
   "params": [],
@@ -114,7 +114,7 @@
    "damper_release_ms": 70.0,
    "damper_capped": false,
    "centroid_hz": 523.4,
-   "tnr_db": 35.22,
+   "tnr_db": 42.9,
    "stereo_width": 0.0
   },
   {
@@ -198,7 +198,7 @@
    "damper_release_ms": 70.0,
    "damper_capped": false,
    "centroid_hz": 523.4,
-   "tnr_db": 35.11,
+   "tnr_db": 42.28,
    "stereo_width": -0.0
   },
   {
@@ -282,7 +282,7 @@
    "damper_release_ms": 70.0,
    "damper_capped": false,
    "centroid_hz": 523.4,
-   "tnr_db": 35.03,
+   "tnr_db": 41.88,
    "stereo_width": 0.0
   },
   {
@@ -366,7 +366,7 @@
    "damper_release_ms": 70.0,
    "damper_capped": false,
    "centroid_hz": 523.4,
-   "tnr_db": 34.97,
+   "tnr_db": 41.59,
    "stereo_width": -0.0
   },
   {
@@ -450,7 +450,7 @@
    "damper_release_ms": 70.0,
    "damper_capped": false,
    "centroid_hz": 523.4,
-   "tnr_db": 34.92,
+   "tnr_db": 41.39,
    "stereo_width": 0.0
   },
   {
@@ -534,7 +534,7 @@
    "damper_release_ms": 65.0,
    "damper_capped": false,
    "centroid_hz": 659.5,
-   "tnr_db": 33.36,
+   "tnr_db": 42.08,
    "stereo_width": 0.0
   },
   {
@@ -618,7 +618,7 @@
    "damper_release_ms": 65.0,
    "damper_capped": false,
    "centroid_hz": 659.5,
-   "tnr_db": 33.3,
+   "tnr_db": 41.63,
    "stereo_width": 0.0
   },
   {
@@ -702,7 +702,7 @@
    "damper_release_ms": 65.0,
    "damper_capped": false,
    "centroid_hz": 659.5,
-   "tnr_db": 33.26,
+   "tnr_db": 41.33,
    "stereo_width": 0.0
   },
   {
@@ -786,7 +786,7 @@
    "damper_release_ms": 65.0,
    "damper_capped": false,
    "centroid_hz": 659.5,
-   "tnr_db": 33.23,
+   "tnr_db": 41.11,
    "stereo_width": 0.0
   },
   {
@@ -870,7 +870,7 @@
    "damper_release_ms": 65.0,
    "damper_capped": false,
    "centroid_hz": 659.5,
-   "tnr_db": 33.2,
+   "tnr_db": 40.96,
    "stereo_width": 0.0
   },
   {
@@ -2224,18 +2224,18 @@
    },
    "tnr_db": {
     "72": {
-     "32": 35.22,
-     "56": 35.11,
-     "80": 35.03,
-     "104": 34.97,
-     "127": 34.92
+     "32": 42.9,
+     "56": 42.28,
+     "80": 41.88,
+     "104": 41.59,
+     "127": 41.39
     },
     "76": {
-     "32": 33.36,
-     "56": 33.3,
-     "80": 33.26,
-     "104": 33.23,
-     "127": 33.2
+     "32": 42.08,
+     "56": 41.63,
+     "80": 41.33,
+     "104": 41.11,
+     "127": 40.96
     },
     "80": {
      "32": 40.26,

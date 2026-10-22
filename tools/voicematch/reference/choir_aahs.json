@@ -1,7 +1,7 @@
 {
  "id": "choir_aahs",
  "label": "Choir Aahs, sampled, close and dry",
- "measured_utc": "2026-10-22T01:09:24+00:00",
+ "measured_utc": "2026-10-22T10:51:19+00:00",
  "capture": {
   "program": 52,
   "params": [],
@@ -1608,7 +1608,7 @@
    "damper_release_ms": 495.0,
    "damper_capped": true,
    "centroid_hz": 400.6,
-   "tnr_db": 18.25,
+   "tnr_db": 20.26,
    "stereo_width": 0.441
   },
   {
@@ -1692,7 +1692,7 @@
    "damper_release_ms": 495.0,
    "damper_capped": true,
    "centroid_hz": 408.7,
-   "tnr_db": 18.05,
+   "tnr_db": 19.95,
    "stereo_width": 0.441
   },
   {
@@ -3176,8 +3176,8 @@
      "32": 19.42,
      "56": 18.98,
      "80": 18.59,
-     "104": 18.25,
-     "127": 18.05
+     "104": 20.26,
+     "127": 19.95
     },
     "64": {
      "32": 23.96,

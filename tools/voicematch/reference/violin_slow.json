@@ -1,7 +1,7 @@
 {
  "id": "violin_slow",
  "label": "Slow Violin, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-22T01:15:01+00:00",
+ "measured_utc": "2026-10-22T10:55:39+00:00",
  "capture": {
   "program": 40,
   "params": [],
@@ -107,7 +107,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 767.3,
-   "tnr_db": 26.77
+   "tnr_db": 28.16
   },
   {
    "timbre": "t0",
@@ -269,7 +269,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 1547.9,
-   "tnr_db": 34.19
+   "tnr_db": 34.86
   },
   {
    "timbre": "t0",
@@ -500,13 +500,13 @@
    "damper_release_ms": {},
    "tnr_db": {
     "60": {
-     "100": 26.77
+     "100": 28.16
     },
     "66": {
      "100": 32.3
     },
     "72": {
-     "100": 34.19
+     "100": 34.86
     },
     "78": {
      "100": 35.06

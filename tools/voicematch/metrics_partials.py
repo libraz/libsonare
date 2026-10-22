@@ -145,9 +145,32 @@ def partial_hz(f0: float, n: int, b: float) -> float:
 
 #: Top of the tone-to-noise band, and of the partials masked inside it.
 TNR_TOP_HZ = 12000.0
+#: Weakest FM sideband, relative to the unmodulated partial, that the mask keeps
+#: as tone. Measured on synthetic 30-cent vibrato: at -40 dB TNR still read 4-6 dB low.
+TNR_SIDEBAND_DB = -60.0
+_BESSEL_TAU = np.linspace(0.0, np.pi, 513)
 
 
-def tone_to_noise_db(freqs: np.ndarray, mag: np.ndarray, f0_hz: float, b: float = 0.0) -> float:
+def fm_sideband_reach(beta: float, max_order: int) -> int:
+    """Highest order k <= `max_order` whose |J_k(beta)| reaches `TNR_SIDEBAND_DB`, or 0."""
+    if beta <= 0.0 or max_order < 1:
+        return 0
+    k = np.arange(1, max_order + 1)[:, None]
+    jk = (
+        np.trapezoid(np.cos(k * _BESSEL_TAU - beta * np.sin(_BESSEL_TAU)), _BESSEL_TAU, axis=1)
+        / np.pi
+    )
+    above = np.nonzero(np.abs(jk) >= 10.0 ** (TNR_SIDEBAND_DB / 20.0))[0]
+    return int(above[-1]) + 1 if above.size else 0
+
+
+def tone_to_noise_db(
+    freqs: np.ndarray,
+    mag: np.ndarray,
+    f0_hz: float,
+    b: float = 0.0,
+    vibrato: tuple[float, float] | None = None,
+) -> float:
     """Energy in the partials against everything else in the audible band.
 
     What it separates is the string from the mechanism: a plucked or struck
@@ -170,6 +193,17 @@ def tone_to_noise_db(freqs: np.ndarray, mag: np.ndarray, f0_hz: float, b: float 
     the fundamental: from the 13th partial up ±2 % would cover more than half of
     each gap between partials, and from the 25th the windows tile the spectrum
     and broadband noise there would all count as tone.
+
+    `vibrato` is (peak-to-peak cents, rate Hz) measured over the same segment,
+    as `metrics_modulation.vibrato_extent` gives it. Vibrato spreads partial n
+    into sidebands at multiples of the rate, with index beta_n = n's peak
+    deviation over the rate; on a low note the first of them lie outside the
+    window and were read as noise. Each window's bin margin is widened by the
+    rate times the highest sideband order still above `TNR_SIDEBAND_DB`, under
+    the same quarter-f0 cap, so noise between partials is still counted. Past
+    that cap -- a deep vibrato on the upper partials of a bright low note -- the
+    excursion fills the gap and part of it still reads as noise. None leaves the
+    mask exactly as for a still tone.
     """
     if freqs.size < 2 or f0_hz <= 0.0:
         return float("nan")
@@ -180,7 +214,12 @@ def tone_to_noise_db(freqs: np.ndarray, mag: np.ndarray, f0_hz: float, b: float 
     n = 1
     while True:
         target = partial_hz(f0_hz, n, b)
-        half = min(max(0.02 * target, 3.0 * bin_hz), 0.25 * f0_hz)
+        margin = 3.0 * bin_hz
+        if vibrato is not None:
+            cents, rate = vibrato
+            beta = target * (2.0 ** (0.5 * cents / 1200.0) - 1.0) / rate
+            margin += rate * fm_sideband_reach(beta, int(np.ceil(0.25 * f0_hz / rate)))
+        half = min(max(0.02 * target, margin), 0.25 * f0_hz)
         if target - half > top:
             break
         tonal |= (freqs >= target - half) & (freqs <= target + half)

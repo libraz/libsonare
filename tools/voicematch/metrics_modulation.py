@@ -98,21 +98,19 @@ def _band_peak(
     return float(8.0 * spectrum[k] / n), float(freqs[k])
 
 
-def wideband_fm(seg: np.ndarray, sr: int, f0: float) -> dict[str, tuple[float, float] | None]:
-    """Strongest pitch modulation in each band outside the vibrato band.
+def _demodulated_cents(seg: np.ndarray, sr: int, f0: float) -> tuple[np.ndarray, float] | None:
+    """The fundamental's detrended pitch track in cents at `FM_HOP_S`, and its lowpass.
 
     The fundamental is shifted to 0 Hz, lowpassed under `FM_LOWPASS_F0_FRACTION`
     of f0, and its phase differentiated over `FM_HOP_S` steps: an instantaneous
-    frequency whose bandwidth is the lowpass, not a tracker window. Returns, per
-    band name, (peak-to-peak cents, rate in Hz) as `_band_peak` does, or None
-    where the band is above the lowpass or unresolved by the track's length.
+    frequency whose bandwidth is the lowpass, not a tracker window. None when the
+    segment, or the part of it above the floor, is too short to hold a track.
     """
-    out: dict[str, tuple[float, float] | None] = {"slow": None, "fast": None}
     cutoff = min(FM_FAST_BAND_HZ[1], FM_LOWPASS_F0_FRACTION * f0)
     edge = int(FM_EDGE_S * sr)
     hop = int(FM_HOP_S * sr)
     if len(seg) <= 2 * edge + hop * MOD_MIN_FRAMES:
-        return out
+        return None
     t = np.arange(len(seg)) / sr
     ramp = np.ones(len(seg))
     ramp[:edge] = ramp[-edge:][::-1] = np.hanning(2 * edge)[:edge]
@@ -125,16 +123,30 @@ def wideband_fm(seg: np.ndarray, sr: int, f0: float) -> dict[str, tuple[float, f
     base = np.fft.ifft(spectrum)[edge:-edge][::hop]
     level = np.abs(base)
     if float(level.max()) <= 0.0:
-        return out
+        return None
     below = np.nonzero(level < level.max() * 10.0 ** (-FM_FLOOR_DB / 20.0))[0]
     if below.size:
         base = base[: below[0]]
     if len(base) <= MOD_MIN_FRAMES:
-        return out
+        return None
     offset_hz = np.diff(np.unwrap(np.angle(base))) * sr / (2.0 * np.pi * hop)
     cents = 1200.0 * np.log2(np.maximum(f0 + offset_hz, 1e-6) / f0)
     idx = np.arange(len(cents), dtype=np.float64)
-    cents = cents - np.polyval(np.polyfit(idx, cents, 1), idx)
+    return cents - np.polyval(np.polyfit(idx, cents, 1), idx), cutoff
+
+
+def wideband_fm(seg: np.ndarray, sr: int, f0: float) -> dict[str, tuple[float, float] | None]:
+    """Strongest pitch modulation in each band outside the vibrato band.
+
+    Read off `_demodulated_cents`. Returns, per band name, (peak-to-peak cents,
+    rate in Hz) as `_band_peak` does, or None where the band is above the
+    lowpass or unresolved by the track's length.
+    """
+    out: dict[str, tuple[float, float] | None] = {"slow": None, "fast": None}
+    demodulated = _demodulated_cents(seg, sr, f0)
+    if demodulated is None:
+        return out
+    cents, cutoff = demodulated
     n = len(cents)
     fm = np.abs(np.fft.rfft(cents * np.hanning(n)))
     rate = 1.0 / FM_HOP_S
@@ -142,6 +154,55 @@ def wideband_fm(seg: np.ndarray, sr: int, f0: float) -> dict[str, tuple[float, f
         if min(hi, cutoff) > lo:
             out[name] = _band_peak(fm, rate, (lo, min(hi, cutoff)), n)
     return out
+
+
+#: Shallowest vibrato that `vibrato_extent` reports: under it the first sidebands
+#: of a low fundamental sit below -40 dB.
+VIBRATO_EXTENT_MIN_CENTS = 1.0
+#: Least share of the pitch track's modulation energy the vibrato line must hold.
+#: Measured: wind and string vibrato 0.8-0.99; piano unison beating and a wandering
+#: bass fundamental 0.0-0.2, though they read 1-100 cents.
+VIBRATO_LINE_SHARE = 0.5
+#: Fewest vibrato cycles the track must hold. The Hann main lobe spans two bins, so
+#: below three cycles the line's lower neighbour carries the detrended drift at DC.
+VIBRATO_MIN_CYCLES = 3
+
+
+def vibrato_extent(seg: np.ndarray, sr: int, f0: float) -> tuple[float, float] | None:
+    """Peak-to-peak cents and rate of the periodic vibrato held in `seg`, or None.
+
+    Read over the caller's own segment, so it describes the spectrum taken from
+    it, and off `_demodulated_cents` rather than `modulation_note`'s tracker:
+    below about 110 Hz that tracker's 50 ms frames hold too few cycles, and the
+    second partial leaking into them reads as up to 12 cents of vibrato on a
+    still tone. A vibrato puts its partials' energy into sidebands at multiples
+    of its rate only when it is periodic, so its line (its bin and both
+    neighbours) must carry `VIBRATO_LINE_SHARE` of the track's energy above DC,
+    stand above both neighbours, and lie at least `VIBRATO_MIN_CYCLES` bins up:
+    a peak on the band's lower edge with the spectrum still rising below it is
+    slow drift or beating, and a track a decay or a bow stroke cut to a quarter
+    second holds one cycle, whose line is the drift's leakage. None when the
+    segment is too short to track, the vibrato is shallower than
+    `VIBRATO_EXTENT_MIN_CENTS`, or it is not periodic.
+    """
+    if f0 <= 0.0 or f0 > sr / 2.0:
+        return None
+    demodulated = _demodulated_cents(np.asarray(seg, dtype=np.float64), sr, f0)
+    if demodulated is None or demodulated[1] <= VIBRATO_BAND_HZ[1]:
+        return None
+    cents = demodulated[0]
+    n = len(cents)
+    rate = 1.0 / FM_HOP_S
+    fm = np.abs(np.fft.rfft(cents * np.hanning(n)))
+    peak = _band_peak(fm, rate, VIBRATO_BAND_HZ, n)
+    if peak is None or peak[0] < VIBRATO_EXTENT_MIN_CENTS:
+        return None
+    k = round(peak[1] * n / rate)
+    if k < VIBRATO_MIN_CYCLES or fm[k] < max(fm[k - 1], fm[k + 1]):
+        return None
+    if float(np.sum(fm[k - 1 : k + 2] ** 2)) < VIBRATO_LINE_SHARE * float(np.sum(fm[1:] ** 2)):
+        return None
+    return peak
 
 
 def modulation_note(

@@ -1,7 +1,7 @@
 {
  "id": "brass_section",
  "label": "Brass section, sampled, close and dry",
- "measured_utc": "2026-10-22T01:09:06+00:00",
+ "measured_utc": "2026-10-22T10:51:10+00:00",
  "capture": {
   "program": 61,
   "params": [],
@@ -2212,7 +2212,7 @@
    "damper_release_ms": 95.0,
    "damper_capped": false,
    "centroid_hz": 523.2,
-   "tnr_db": 35.09,
+   "tnr_db": 36.46,
    "stereo_width": 0.592
   },
   {
@@ -2296,7 +2296,7 @@
    "damper_release_ms": 95.0,
    "damper_capped": false,
    "centroid_hz": 703.2,
-   "tnr_db": 35.24,
+   "tnr_db": 36.22,
    "stereo_width": 0.593
   },
   {
@@ -2380,7 +2380,7 @@
    "damper_release_ms": 95.0,
    "damper_capped": false,
    "centroid_hz": 924.2,
-   "tnr_db": 35.35,
+   "tnr_db": 36.03,
    "stereo_width": 0.579
   },
   {
@@ -2464,7 +2464,7 @@
    "damper_release_ms": 95.0,
    "damper_capped": false,
    "centroid_hz": 1083.7,
-   "tnr_db": 35.23,
+   "tnr_db": 35.77,
    "stereo_width": 0.571
   },
   {
@@ -2548,7 +2548,7 @@
    "damper_release_ms": 95.0,
    "damper_capped": false,
    "centroid_hz": 1163.4,
-   "tnr_db": 35.04,
+   "tnr_db": 35.51,
    "stereo_width": 0.568
   },
   {
@@ -3231,11 +3231,11 @@
      "127": 35.15
     },
     "68": {
-     "32": 35.09,
-     "56": 35.24,
-     "80": 35.35,
-     "104": 35.23,
-     "127": 35.04
+     "32": 36.46,
+     "56": 36.22,
+     "80": 36.03,
+     "104": 35.77,
+     "127": 35.51
     },
     "72": {
      "32": 37.76,

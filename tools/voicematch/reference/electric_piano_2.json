@@ -1,7 +1,7 @@
 {
  "id": "electric_piano_2",
  "label": "Electric piano, FM, sampled, close and dry",
- "measured_utc": "2026-10-22T01:10:32+00:00",
+ "measured_utc": "2026-10-22T10:52:05+00:00",
  "capture": {
   "program": 5,
   "params": [],
@@ -2842,7 +2842,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 623.1,
-   "tnr_db": 58.44,
+   "tnr_db": 58.49,
    "stereo_width": 0.0
   },
   {
@@ -2924,7 +2924,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 682.5,
-   "tnr_db": 56.65,
+   "tnr_db": 56.67,
    "stereo_width": 0.0
   },
   {
@@ -4041,8 +4041,8 @@
      "32": 59.82,
      "56": 59.38,
      "80": 58.39,
-     "104": 58.44,
-     "127": 56.65
+     "104": 58.49,
+     "127": 56.67
     },
     "78": {
      "32": 48.35,

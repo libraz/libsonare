@@ -1,7 +1,7 @@
 {
  "id": "accordion",
  "label": "Accordion, sampled, close and dry",
- "measured_utc": "2026-10-22T01:08:26+00:00",
+ "measured_utc": "2026-10-22T10:50:47+00:00",
  "capture": {
   "program": 21,
   "params": [],
@@ -956,7 +956,7 @@
    "damper_release_ms": 65.0,
    "damper_capped": false,
    "centroid_hz": 1001.7,
-   "tnr_db": 33.65,
+   "tnr_db": 35.13,
    "stereo_width": 0.0
   },
   {
@@ -1040,7 +1040,7 @@
    "damper_release_ms": 65.0,
    "damper_capped": false,
    "centroid_hz": 1069.2,
-   "tnr_db": 32.51,
+   "tnr_db": 33.58,
    "stereo_width": 0.0
   },
   {
@@ -1124,7 +1124,7 @@
    "damper_release_ms": 65.0,
    "damper_capped": false,
    "centroid_hz": 1114.4,
-   "tnr_db": 30.0,
+   "tnr_db": 30.57,
    "stereo_width": 0.0
   },
   {
@@ -1208,7 +1208,7 @@
    "damper_release_ms": 65.0,
    "damper_capped": false,
    "centroid_hz": 1130.6,
-   "tnr_db": 27.53,
+   "tnr_db": 27.84,
    "stereo_width": 0.0
   },
   {
@@ -1292,7 +1292,7 @@
    "damper_release_ms": 65.0,
    "damper_capped": false,
    "centroid_hz": 1131.1,
-   "tnr_db": 26.85,
+   "tnr_db": 27.11,
    "stereo_width": 0.0
   },
   {
@@ -1796,7 +1796,7 @@
    "damper_release_ms": 65.0,
    "damper_capped": false,
    "centroid_hz": 1270.0,
-   "tnr_db": 27.26,
+   "tnr_db": 30.01,
    "stereo_width": 0.0
   },
   {
@@ -1880,7 +1880,7 @@
    "damper_release_ms": 65.0,
    "damper_capped": false,
    "centroid_hz": 1321.8,
-   "tnr_db": 27.4,
+   "tnr_db": 30.17,
    "stereo_width": 0.0
   },
   {
@@ -1964,7 +1964,7 @@
    "damper_release_ms": 65.0,
    "damper_capped": false,
    "centroid_hz": 1341.8,
-   "tnr_db": 27.42,
+   "tnr_db": 30.19,
    "stereo_width": 0.0
   },
   {
@@ -2048,7 +2048,7 @@
    "damper_release_ms": 65.0,
    "damper_capped": false,
    "centroid_hz": 1352.9,
-   "tnr_db": 27.41,
+   "tnr_db": 30.18,
    "stereo_width": 0.0
   },
   {
@@ -2132,7 +2132,7 @@
    "damper_release_ms": 65.0,
    "damper_capped": false,
    "centroid_hz": 1360.5,
-   "tnr_db": 27.4,
+   "tnr_db": 30.17,
    "stereo_width": 0.0
   },
   {
@@ -3212,11 +3212,11 @@
      "127": 30.34
     },
     "65": {
-     "32": 33.65,
-     "56": 32.51,
-     "80": 30.0,
-     "104": 27.53,
-     "127": 26.85
+     "32": 35.13,
+     "56": 33.58,
+     "80": 30.57,
+     "104": 27.84,
+     "127": 27.11
     },
     "71": {
      "32": 34.16,
@@ -3226,11 +3226,11 @@
      "127": 31.38
     },
     "77": {
-     "32": 27.26,
-     "56": 27.4,
-     "80": 27.42,
-     "104": 27.41,
-     "127": 27.4
+     "32": 30.01,
+     "56": 30.17,
+     "80": 30.19,
+     "104": 30.18,
+     "127": 30.17
     },
     "83": {
      "32": 42.67,

@@ -1,7 +1,7 @@
 {
  "id": "harpsichord_octave",
  "label": "Coupled Hps., the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-22T01:11:29+00:00",
+ "measured_utc": "2026-10-22T10:52:31+00:00",
  "capture": {
   "program": 6,
   "params": [],
@@ -358,7 +358,7 @@
    "damper_release_ms": 3232.7,
    "damper_capped": true,
    "centroid_hz": 570.4,
-   "tnr_db": 28.45
+   "tnr_db": 29.09
   },
   {
    "timbre": "t0",
@@ -439,7 +439,7 @@
    "damper_release_ms": 2644.0,
    "damper_capped": true,
    "centroid_hz": 744.3,
-   "tnr_db": 33.0
+   "tnr_db": 34.45
   },
   {
    "timbre": "t0",
@@ -520,7 +520,7 @@
    "damper_release_ms": 2269.9,
    "damper_capped": true,
    "centroid_hz": 601.7,
-   "tnr_db": 33.78
+   "tnr_db": 41.64
   },
   {
    "timbre": "t0",
@@ -1003,13 +1003,13 @@
      "100": 27.44
     },
     "48": {
-     "100": 28.45
+     "100": 29.09
     },
     "54": {
-     "100": 33.0
+     "100": 34.45
     },
     "60": {
-     "100": 33.78
+     "100": 41.64
     },
     "66": {
      "100": 47.57

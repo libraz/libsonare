@@ -1,7 +1,7 @@
 {
  "id": "orchestral_harp_module",
  "label": "Harp, the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-10-22T06:05:46+00:00",
+ "measured_utc": "2026-10-22T10:53:23+00:00",
  "capture": {
   "program": 46,
   "params": [],
@@ -273,7 +273,7 @@
    "damper_release_ms": 508.9,
    "damper_capped": true,
    "centroid_hz": 185.8,
-   "tnr_db": 35.53
+   "tnr_db": 49.26
   },
   {
    "timbre": "t0",
@@ -354,7 +354,7 @@
    "damper_release_ms": 518.8,
    "damper_capped": true,
    "centroid_hz": 221.2,
-   "tnr_db": 35.46
+   "tnr_db": 49.11
   },
   {
    "timbre": "t0",
@@ -435,7 +435,7 @@
    "damper_release_ms": 459.0,
    "damper_capped": true,
    "centroid_hz": 263.2,
-   "tnr_db": 44.18
+   "tnr_db": 49.8
   },
   {
    "timbre": "t0",
@@ -516,7 +516,7 @@
    "damper_release_ms": 234.5,
    "damper_capped": true,
    "centroid_hz": 319.3,
-   "tnr_db": 49.23
+   "tnr_db": 49.92
   },
   {
    "timbre": "t0",
@@ -900,16 +900,16 @@
      "100": 38.29
     },
     "54": {
-     "100": 35.53
+     "100": 49.26
     },
     "57": {
-     "100": 35.46
+     "100": 49.11
     },
     "60": {
-     "100": 44.18
+     "100": 49.8
     },
     "63": {
-     "100": 49.23
+     "100": 49.92
     },
     "66": {
      "100": 50.05

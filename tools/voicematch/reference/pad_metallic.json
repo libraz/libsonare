@@ -1,7 +1,7 @@
 {
  "id": "pad_metallic",
  "label": "Pad 6 (metallic), sampled, close and dry",
- "measured_utc": "2026-10-22T01:12:35+00:00",
+ "measured_utc": "2026-10-22T10:53:35+00:00",
  "capture": {
   "program": 93,
   "params": [],
@@ -1435,7 +1435,7 @@
    "damper_release_ms": 1095.0,
    "damper_capped": false,
    "centroid_hz": 548.4,
-   "tnr_db": 28.4,
+   "tnr_db": 42.14,
    "stereo_width": 0.0
   },
   {
@@ -1519,7 +1519,7 @@
    "damper_release_ms": 1095.0,
    "damper_capped": false,
    "centroid_hz": 548.4,
-   "tnr_db": 28.4,
+   "tnr_db": 42.14,
    "stereo_width": 0.0
   },
   {
@@ -1603,7 +1603,7 @@
    "damper_release_ms": 1095.0,
    "damper_capped": false,
    "centroid_hz": 548.4,
-   "tnr_db": 28.4,
+   "tnr_db": 42.19,
    "stereo_width": 0.0
   },
   {
@@ -1687,7 +1687,7 @@
    "damper_release_ms": 1095.0,
    "damper_capped": false,
    "centroid_hz": 548.4,
-   "tnr_db": 28.4,
+   "tnr_db": 42.18,
    "stereo_width": 0.0
   },
   {
@@ -2585,10 +2585,10 @@
      "127": 26.33
     },
     "68": {
-     "32": 28.4,
-     "64": 28.4,
-     "96": 28.4,
-     "127": 28.4
+     "32": 42.14,
+     "64": 42.14,
+     "96": 42.19,
+     "127": 42.18
     },
     "76": {
      "32": 28.21,

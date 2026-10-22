@@ -1,7 +1,7 @@
 {
  "id": "organ_sixties",
  "label": "60's Organ1, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-22T01:12:23+00:00",
+ "measured_utc": "2026-10-22T10:53:26+00:00",
  "capture": {
   "program": 16,
   "params": [],
@@ -112,7 +112,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 114.2,
-   "tnr_db": 43.14
+   "tnr_db": 58.86
   },
   {
    "timbre": "t0",
@@ -192,7 +192,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 171.8,
-   "tnr_db": 39.74
+   "tnr_db": 65.51
   },
   {
    "timbre": "t0",
@@ -273,7 +273,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 231.3,
-   "tnr_db": 43.03
+   "tnr_db": 65.28
   },
   {
    "timbre": "t0",
@@ -354,7 +354,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 307.3,
-   "tnr_db": 41.2
+   "tnr_db": 65.73
   },
   {
    "timbre": "t0",
@@ -435,7 +435,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 493.0,
-   "tnr_db": 40.81
+   "tnr_db": 63.41
   },
   {
    "timbre": "t0",
@@ -516,7 +516,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 947.6,
-   "tnr_db": 40.11
+   "tnr_db": 58.79
   },
   {
    "timbre": "t0",
@@ -1026,22 +1026,22 @@
    },
    "tnr_db": {
     "36": {
-     "100": 43.14
+     "100": 58.86
     },
     "42": {
-     "100": 39.74
+     "100": 65.51
     },
     "48": {
-     "100": 43.03
+     "100": 65.28
     },
     "54": {
-     "100": 41.2
+     "100": 65.73
     },
     "60": {
-     "100": 40.81
+     "100": 63.41
     },
     "66": {
-     "100": 40.11
+     "100": 58.79
     },
     "72": {
      "100": 58.34

@@ -1,7 +1,7 @@
 {
  "id": "pipe_organ",
  "label": "Church organ, principal chorus, recorded in its building",
- "measured_utc": "2026-10-22T01:13:24+00:00",
+ "measured_utc": "2026-10-22T10:54:07+00:00",
  "capture": {
   "program": 19,
   "params": [],
@@ -1587,7 +1587,7 @@
    "damper_release_ms": 1770.0,
    "damper_capped": false,
    "centroid_hz": 2215.9,
-   "tnr_db": 33.11,
+   "tnr_db": 33.27,
    "stereo_width": 0.448
   },
   {
@@ -2206,7 +2206,7 @@
      "100": 33.06
     },
     "78": {
-     "100": 33.11
+     "100": 33.27
     },
     "84": {
      "100": 32.48
