@@ -86,6 +86,18 @@ enum class SynthRetrigger : int {
   kNote = 1,
 };
 
+/// The subtractive engine's own section: a second oscillator a fixed interval
+/// from the unison stack, and white noise, both summed ahead of the filter. At
+/// zero level each is absent and the voice is bit-identical to one without it.
+struct VaPatchParams {
+  /// Second oscillator's offset from the played pitch (cents), same waveform.
+  float osc2_interval_cents = 0.0f;
+  /// Second oscillator's linear level against one unison oscillator; 0 = absent.
+  float osc2_level = 0.0f;
+  /// Seeded white noise's linear level in the oscillator sum; 0 = absent.
+  float noise_level = 0.0f;
+};
+
 /// One playable patch: oscillator section, filter section, envelopes and the
 /// single vibrato LFO. A POD by design — fallback tables are static const
 /// data and the later ABI struct mirrors these fields.
@@ -186,6 +198,9 @@ struct NativeSynthPatch {
 
   /// Free-form modulation routings on top of the hardwired patch modulations.
   ModMatrix mod_matrix;
+
+  /// Second oscillator and noise (used when mode == kSubtractive).
+  VaPatchParams va;
 
   /// FM operator stack (used when mode == kFm; the subtractive oscillator
   /// section is ignored in that mode, while amp envelope / filter / matrix /
@@ -339,6 +354,12 @@ struct NativeSynthVoice : VoiceState {
   std::array<float, kMaxUnisonOscs> detune_ratio{};
   int unison = 1;
   float osc_norm = 1.0f;  // 1/sqrt(unison)
+  /// The subtractive section's second oscillator and noise, latched at note-on.
+  VaOscillator osc2;
+  VaOscillator noise_osc;
+  float osc2_ratio = 1.0f;
+  float osc2_level = 0.0f;
+  float noise_level = 0.0f;
   float base_freq_hz = constants::kA4Hz;
   float velocity_gain = 1.0f;
   /// The exclusive/mute group this voice was STARTED in, which a GS ASSIGN
@@ -1465,6 +1486,10 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.lfo_to_pitch_cents, 0.0f), 0.0f, 1200.0f);
   p.lfo2_rate_hz = std::clamp(patch_clamp_detail::sanitize(p.lfo2_rate_hz, 1.0f), 0.0f, 40.0f);
   p.glide_ms = std::clamp(patch_clamp_detail::sanitize(p.glide_ms, 0.0f), 0.0f, 5000.0f);
+  p.va.osc2_interval_cents =
+      std::clamp(patch_clamp_detail::sanitize(p.va.osc2_interval_cents, 0.0f), -2400.0f, 2400.0f);
+  p.va.osc2_level = std::clamp(patch_clamp_detail::sanitize(p.va.osc2_level, 0.0f), 0.0f, 4.0f);
+  p.va.noise_level = std::clamp(patch_clamp_detail::sanitize(p.va.noise_level, 0.0f), 0.0f, 4.0f);
   for (ModRoute& route : p.mod_matrix.routes) {
     route.depth = std::clamp(patch_clamp_detail::sanitize(route.depth, 0.0f), -9600.0f, 9600.0f);
   }

@@ -262,11 +262,11 @@ SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out);
 ///          is a number, a boolean (against a switch) or a vocabulary name
 ///          (against a wrapper enum such as `body`). What a field further
 ///          needs from a performance (velocity, a controller, overlapping
-///          notes), or a value past which it saturates, is not stated. The default,
-///          subtractive and sample modes have no engine section and answer
-///          `[]`. Valid until the next call on the same thread; the caller must
-///          NOT free it. Returns NULL with SONARE_ERROR_INVALID_PARAMETER as
-///          the last error for an out-of-range @p engine_mode, and with
+///          notes), or a value past which it saturates, is not stated. The default
+///          and sample modes have no engine section and answer `[]`. Valid
+///          until the next call on the same thread; the caller must NOT free
+///          it. Returns NULL with SONARE_ERROR_INVALID_PARAMETER as the last
+///          error for an out-of-range @p engine_mode, and with
 ///          SONARE_ERROR_NOT_SUPPORTED in a build without arrangement support.
 const char* sonare_synth_engine_param_info(int engine_mode);
 

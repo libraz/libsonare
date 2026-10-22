@@ -35,7 +35,8 @@ bool is_zero(const T& section) {
 /// Every section the patch's own `mode` does not select must be gone.
 bool only_voiced_section_present(const NativeSynthPatch& p) {
   const SynthEngineMode m = p.mode;
-  return (m == SynthEngineMode::kFm || is_zero(p.fm)) &&
+  return (m == SynthEngineMode::kSubtractive || is_zero(p.va)) &&
+         (m == SynthEngineMode::kFm || is_zero(p.fm)) &&
          (m == SynthEngineMode::kKarplusStrong || is_zero(p.ks)) &&
          (m == SynthEngineMode::kModal || is_zero(p.modal)) &&
          (m == SynthEngineMode::kAdditive || is_zero(p.additive)) &&
@@ -76,6 +77,7 @@ TEST_CASE("stripping keeps the voiced section and clears the rest", "[midi][synt
   p.mode = SynthEngineMode::kBowedString;
   p.bowed_string.bow_force = 0.61f;
   p.reed.breath_pressure = 0.9f;
+  p.va.osc2_level = 0.3f;
   p.gain = 0.42f;
 
   const NativeSynthPatch stripped = strip_unvoiced_sections(p);
@@ -83,14 +85,17 @@ TEST_CASE("stripping keeps the voiced section and clears the rest", "[midi][synt
   CHECK(stripped.bowed_string.bow_force == 0.61f);
   CHECK(stripped.gain == 0.42f);
   CHECK(stripped.reed.breath_pressure == 0.0f);
+  CHECK(stripped.va.osc2_level == 0.0f);
   CHECK(stripped.piano.strings == 0);
   CHECK(stripped.percussion.mode_ratios[0] == 0.0f);
   CHECK(stripped.modal.modes[0].ratio == 0.0f);
 
-  // A subtractive patch voices none of the sixteen, so all fifteen go.
+  // A subtractive patch keeps its own section and loses the other sixteen.
   NativeSynthPatch sub{};
   sub.mode = SynthEngineMode::kSubtractive;
+  sub.va.noise_level = 0.25f;
   const NativeSynthPatch sub_stripped = strip_unvoiced_sections(sub);
+  CHECK(sub_stripped.va.noise_level == 0.25f);
   CHECK(sub_stripped.fm.ops[0].ratio == 0.0f);
   CHECK(sub_stripped.harpsichord.eight_a == false);
   CHECK(sub_stripped.pipe_organ.ranks[0].footage_mult == 0.0f);

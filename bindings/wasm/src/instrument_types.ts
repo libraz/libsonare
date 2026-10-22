@@ -182,7 +182,7 @@ export const SAMPLE_KEY_TRACKS = ['default', 'on', 'off'] as const;
 
 export const SYNTH_RETRIGGERS = ['default', 'free', 'note'] as const;
 
-export const SYNTH_LFO_SHAPES = ['default', 'triangle', 'sine'] as const;
+export const SYNTH_LFO_SHAPES = ['default', 'triangle', 'sine', 'random'] as const;
 
 export const SYNTH_OSC_WAVEFORMS = [
   'default',
@@ -408,7 +408,9 @@ export type SynthRetrigger = (typeof SYNTH_RETRIGGERS)[number];
  * The patch's LFO waveform (vibrato and tremolo LFOs) at every destination
  * (`'default'` keeps the base patch's). `'triangle'` is every catalog preset's
  * shape; `'sine'` carries no harmonics, so a vibrato's or a tremolo's sidebands
- * sit where a player's do.
+ * sit where a player's do. `'random'` glides to a new seeded value in [-1, 1]
+ * each cycle, so it wanders with no line at the rate; it is seeded per voice, so a
+ * bounce repeats it exactly.
  */
 export type SynthLfoShape = (typeof SYNTH_LFO_SHAPES)[number];
 

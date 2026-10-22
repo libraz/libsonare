@@ -39,7 +39,7 @@ inline constexpr const char* kFilterOutputs[] = {"default", "lowpass", "bandpass
 inline constexpr const char* kBodyTypes[] = {"default",   "none",       "guitar", "violin",
                                              "wood-tube", "brass-bell", "vocal"};
 inline constexpr const char* kRetriggers[] = {"default", "free", "note"};
-inline constexpr const char* kLfoShapes[] = {"default", "triangle", "sine"};
+inline constexpr const char* kLfoShapes[] = {"default", "triangle", "sine", "random"};
 inline constexpr const char* kModSources[] = {
     "none",      "amp-env", "filter-env", "lfo1",       "lfo2",          "velocity",  "key-track",
     "mod-wheel", "random",  "breath",     "aftertouch", "expression-cc", "pitch-bend"};

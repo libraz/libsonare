@@ -225,7 +225,7 @@ describe('NativeSynth preset catalog', () => {
   });
 
   it('round-trips the LFO shape by name and ordinal and refuses unknown values', () => {
-    expect(SYNTH_LFO_SHAPES).toEqual(['default', 'triangle', 'sine']);
+    expect(SYNTH_LFO_SHAPES).toEqual(['default', 'triangle', 'sine', 'random']);
     for (const [ordinal, name] of SYNTH_LFO_SHAPES.entries()) {
       expect(synthPatchRoundTripForTest({ lfoShape: name }).lfoShape).toBe(name);
       expect(synthPatchRoundTripForTest({ lfoShape: ordinal }).lfoShape).toBe(name);
@@ -717,6 +717,21 @@ describe('SynthPatch.engineParams', () => {
     }
   });
 
+  it('accepts the subtractive section by key', () => {
+    const names = synthEngineParamInfo('subtractive').map((field) => field.name);
+    expect(names.sort()).toEqual(['noiseLevel', 'osc2IntervalCents', 'osc2Level']);
+    const plain = bounce({ engineMode: 'subtractive' });
+    const layered = bounce({
+      engineMode: 'subtractive',
+      engineParams: { osc2IntervalCents: 702, osc2Level: 0.5, noiseLevel: 0.1 },
+    });
+    expect(peak(plain)).toBeGreaterThan(0);
+    expect(layered).not.toEqual(plain);
+    expect(() =>
+      bounce({ engineMode: 'subtractive', engineParams: { osc2IntervalCents: 2401 } }),
+    ).toThrow(/osc2IntervalCents/);
+  });
+
   it('changes a render when an engine field is set', () => {
     const bare = bounce({ engineMode: 'bowed-string' });
     const stronger = bounce({ engineMode: 'bowed-string', engineParams: { bowForce: 0.9 } });
@@ -817,7 +832,7 @@ describe('SynthPatch.engineParams', () => {
 
 describe('synth parameter descriptors', () => {
   it('describes each engine section; engines without one answer empty', () => {
-    for (const mode of ['default', 'subtractive', 'sample'] as const) {
+    for (const mode of ['default', 'sample'] as const) {
       expect(synthEngineParamInfo(mode)).toEqual([]);
     }
     const bowed = synthEngineParamInfo('bowed-string');

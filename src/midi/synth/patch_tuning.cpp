@@ -290,7 +290,7 @@ void apply_common(NativeSynthPatch& p, const Fields& f) {
   I(unison);
   I_TYPED(body, static_cast<int>(BodyType::kNone), static_cast<int>(BodyType::kVocal));
   I_TYPED(one_shot, 0, 1);
-  I_TYPED(lfo_shape, static_cast<int>(LfoShape::kTriangle), static_cast<int>(LfoShape::kSine));
+  I_TYPED(lfo_shape, static_cast<int>(LfoShape::kTriangle), static_cast<int>(LfoShape::kRandom));
   I_TYPED(filter_output, static_cast<int>(SynthFilterOutput::kLowpass),
           static_cast<int>(SynthFilterOutput::kHighpass));
   F(detune_cents);
@@ -762,6 +762,13 @@ void apply_percussion(NativeSynthPatch& p, const Fields& f) {
   F(percussion.phisem_pitch_glide);
 }
 
+void apply_va(NativeSynthPatch& p, const Fields& f) {
+  // The level first: at 0 the interval moves nothing.
+  F(va.osc2_level);
+  F(va.osc2_interval_cents);
+  F(va.noise_level);
+}
+
 void apply_fm(NativeSynthPatch& p, const Fields& f) {
   I_TYPED(fm.algorithm, static_cast<int>(FmAlgorithm::kStack2),
           static_cast<int>(FmAlgorithm::kAdd2));
@@ -830,6 +837,8 @@ void walk_engine(NativeSynthPatch& p, const Fields& f) {
       apply_fm(p, f);
       break;
     case SynthEngineMode::kSubtractive:
+      apply_va(p, f);
+      break;
     // The sample engine's fields address host data rather than model
     // behaviour, so there is nothing here a reference could fit.
     case SynthEngineMode::kSample:
@@ -1239,6 +1248,9 @@ constexpr UnitRow kEngineUnits[] = {
     {"percussion.shell_freq_hz", Unit::Hz},
     {"percussion.shell_t60_s", Unit::Seconds},
     {"percussion.shell_weight", Unit::None},
+    {"va.osc2_level", Unit::None},
+    {"va.osc2_interval_cents", Unit::Cents},
+    {"va.noise_level", Unit::None},
     {"fm.algorithm", Unit::None},
     {"fm.ops.ratio", Unit::Ratio},
     {"fm.ops.detune_cents", Unit::Cents},
@@ -1451,6 +1463,8 @@ struct GateRow {
 };
 
 const GateRow kEngineGates[] = {
+    // Subtractive: the interval places an oscillator that is there only at a level.
+    {"va.osc2_interval_cents", [](const GateSite&) { return above("osc2Level", 0); }},
     // Pipe organ: the flat voicing builds the implicit 8' only.
     {"pipe_organ.stopped", [](const GateSite&) { return equals("rankCount", 0); }},
     {"pipe_organ.brightness", [](const GateSite&) { return equals("rankCount", 0); }},

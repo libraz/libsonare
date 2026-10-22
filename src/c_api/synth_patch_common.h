@@ -179,6 +179,8 @@ static_assert(static_cast<int>(sonare::midi::synth::LfoShape::kTriangle) + 1 ==
               SONARE_SYNTH_LFO_SHAPE_TRIANGLE);
 static_assert(static_cast<int>(sonare::midi::synth::LfoShape::kSine) + 1 ==
               SONARE_SYNTH_LFO_SHAPE_SINE);
+static_assert(static_cast<int>(sonare::midi::synth::LfoShape::kRandom) + 1 ==
+              SONARE_SYNTH_LFO_SHAPE_RANDOM);
 
 static_assert(static_cast<int>(sonare::midi::synth::ModSource::kPitchBend) + 1 ==
               SONARE_SYNTH_MOD_SOURCE_COUNT);
@@ -313,6 +315,8 @@ inline void copy_engine_section(const sonare::midi::synth::NativeSynthPatch& fro
       to->harpsichord = from.harpsichord;
       break;
     case SynthEngineMode::kSubtractive:
+      to->va = from.va;
+      break;
     case SynthEngineMode::kSample:
       break;
   }

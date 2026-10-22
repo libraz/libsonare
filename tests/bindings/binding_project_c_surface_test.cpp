@@ -309,7 +309,7 @@ TEST_CASE("NativeSynth enum names are supplied by the C project ABI", "[project]
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_DESC_LOOP_MODE)) ==
         std::vector<std::string>{"none", "continuous", "key-down"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_LFO_SHAPE)) ==
-        std::vector<std::string>{"default", "triangle", "sine"});
+        std::vector<std::string>{"default", "triangle", "sine", "random"});
   CHECK(std::string(sonare_synth_enum_names(SONARE_SYNTH_ENUM_LFO_SHAPE + 1)) == "");
   CHECK(std::string(sonare_synth_enum_names(-1)) == "");
   CHECK(sonare_synth_builtin_waveform_from_name("sine") == SONARE_SYNTH_WAVEFORM_SINE);

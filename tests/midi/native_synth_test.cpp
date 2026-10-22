@@ -647,6 +647,178 @@ TEST_CASE("NativeSynth LFO shape: a sine LFO2 tremolo carries no third-order sid
   CHECK(tri_k3_db > -40.0);
 }
 
+namespace va_section_detail {
+
+// Hann-weighted DFT magnitude of @p buf at @p hz over [from, from + len), as a sinusoid's
+// amplitude.
+double hann_level(const std::vector<float>& buf, double sample_rate, double hz, size_t from,
+                  size_t len) {
+  double re = 0.0;
+  double im = 0.0;
+  double wsum = 0.0;
+  for (size_t i = 0; i < len; ++i) {
+    const double w =
+        0.5 - 0.5 * std::cos(sonare::constants::kTwoPiD * static_cast<double>(i) / len);
+    const double ph = sonare::constants::kTwoPiD * hz * static_cast<double>(i) / sample_rate;
+    re += w * buf[from + i] * std::cos(ph);
+    im += w * buf[from + i] * std::sin(ph);
+    wsum += w;
+  }
+  return 2.0 * std::hypot(re, im) / wsum;
+}
+
+std::vector<float> lfo_run(sonare::midi::synth::LfoShape shape, float rate_hz, uint64_t seed,
+                           size_t n) {
+  sonare::midi::synth::Sf2Lfo lfo;
+  lfo.start(kOutRate, 0.0f, rate_hz, shape, seed);
+  std::vector<float> out(n);
+  for (float& v : out) v = lfo.next();
+  return out;
+}
+
+}  // namespace va_section_detail
+
+TEST_CASE("Sf2Lfo random shape: seeded, bounded, and without a line at the rate",
+          "[midi][synth][lfo_shape]") {
+  using sonare::midi::synth::LfoShape;
+  using va_section_detail::hann_level;
+  using va_section_detail::lfo_run;
+  constexpr float kRateHz = 5.0f;
+  const size_t n = static_cast<size_t>(64.0 / kRateHz * kOutRate);
+
+  const std::vector<float> a = lfo_run(LfoShape::kRandom, kRateHz, 11, n);
+  REQUIRE(a.front() == 0.0f);
+  REQUIRE(lfo_run(LfoShape::kRandom, kRateHz, 11, n) == a);
+  REQUIRE(lfo_run(LfoShape::kRandom, kRateHz, 12, n) != a);
+  float lo = 0.0f;
+  float hi = 0.0f;
+  for (float v : a) {
+    lo = std::min(lo, v);
+    hi = std::max(hi, v);
+  }
+  CHECK(lo >= -1.0f);
+  CHECK(hi <= 1.0f);
+  // Not vacuous: 64 uniform targets reach well into both halves.
+  CHECK(hi - lo > 1.0f);
+
+  // The half-cosine glide has spectral nulls at every multiple of the rate, where the
+  // periodic shapes put their lines; the band between them is where the wander lives.
+  const std::vector<float> sine = lfo_run(LfoShape::kSine, kRateHz, 11, n);
+  const std::vector<float> tri = lfo_run(LfoShape::kTriangle, kRateHz, 11, n);
+  CHECK(hann_level(sine, kOutRate, kRateHz, 0, n) > 0.9);
+  CHECK(hann_level(tri, kOutRate, 3.0 * kRateHz, 0, n) > 0.05);
+  double band = 0.0;
+  for (int i = 0; i <= 10; ++i) band += hann_level(a, kOutRate, kRateHz * (0.3 + 0.05 * i), 0, n);
+  band /= 11.0;
+  CHECK(band > 0.01);
+  for (int k = 1; k <= 3; ++k) {
+    INFO("harmonic " << k);
+    CHECK(hann_level(a, kOutRate, k * kRateHz, 0, n) < 0.01);
+  }
+
+  // A zero rate runs on to a target of 0 and rests there.
+  sonare::midi::synth::Sf2Lfo lfo;
+  lfo.start(kOutRate, 0.0f, kRateHz, LfoShape::kRandom, 11);
+  for (int i = 0; i < 1000; ++i) lfo.next();
+  lfo.set_frequency(kOutRate, 0.0f);
+  for (int i = 0; i < static_cast<int>(2.0 / kRateHz * kOutRate) + 2; ++i) lfo.next();
+  REQUIRE(lfo.next() == 0.0f);
+  REQUIRE(lfo.next() == 0.0f);
+}
+
+TEST_CASE("NativeSynth random LFO shape reaches the voice and repeats per seed",
+          "[midi][synth][lfo_shape]") {
+  using sonare::midi::synth::LfoShape;
+  auto render_shape = [](LfoShape shape, uint8_t note) {
+    NativeSynthConfig cfg;
+    cfg.patch.waveform = VaWaveform::kSine;
+    cfg.patch.lfo_rate_hz = 6.0f;
+    cfg.patch.lfo_to_pitch_cents = 50.0f;
+    cfg.patch.lfo_shape = shape;
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, 100)));
+    return render(synth, 24000).left;
+  };
+  const auto random = render_shape(LfoShape::kRandom, 69);
+  REQUIRE(render_shape(LfoShape::kRandom, 69) == random);
+  REQUIRE(render_shape(LfoShape::kTriangle, 69) != random);
+  REQUIRE(render_shape(LfoShape::kSine, 69) != random);
+}
+
+TEST_CASE("NativeSynth subtractive section: osc2 and noise are absent at level 0",
+          "[midi][synth][va]") {
+  REQUIRE(NativeSynthPatch{}.va.osc2_level == 0.0f);
+  REQUIRE(NativeSynthPatch{}.va.noise_level == 0.0f);
+  auto render_patch = [](const NativeSynthPatch& patch) {
+    NativeSynthConfig cfg;
+    cfg.patch = patch;
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 69, 100)));
+    return render(synth, 9600).left;
+  };
+  NativeSynthPatch base;
+  base.unison = 3;
+  base.detune_cents = 12.0f;
+  NativeSynthPatch interval_only = base;
+  interval_only.va.osc2_interval_cents = 702.0f;
+  REQUIRE(render_patch(interval_only) == render_patch(base));
+  NativeSynthPatch with_osc2 = base;
+  with_osc2.va.osc2_level = 0.5f;
+  REQUIRE(render_patch(with_osc2) != render_patch(base));
+}
+
+TEST_CASE("NativeSynth subtractive section: osc2 sits at its interval, noise fills the gaps",
+          "[midi][synth][va]") {
+  using va_section_detail::hann_level;
+  constexpr double kF0 = 440.0;  // note 69
+  auto render_patch = [](const NativeSynthPatch& patch) {
+    NativeSynthConfig cfg;
+    cfg.patch = patch;
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 69, 127)));
+    return render(synth, static_cast<int>(kOutRate)).left;
+  };
+  NativeSynthPatch base;
+  base.waveform = VaWaveform::kSine;
+  base.cutoff_hz = 20000.0f;
+  base.amp_env.attack_ms = 1.0f;
+  base.amp_env.sustain = 1.0f;
+  const size_t from = static_cast<size_t>(0.2 * kOutRate);
+  const size_t len = static_cast<size_t>(0.5 * kOutRate);
+
+  NativeSynthPatch fifth = base;
+  fifth.va.osc2_interval_cents = 702.0f;
+  fifth.va.osc2_level = 1.0f;
+  const auto dry = render_patch(base);
+  const auto wet = render_patch(fifth);
+  const double osc2_hz = kF0 * std::exp2(702.0 / sonare::constants::kCentsPerOctave);
+  const double dry_line = hann_level(dry, kOutRate, osc2_hz, from, len);
+  const double wet_line = hann_level(wet, kOutRate, osc2_hz, from, len);
+  const double wet_f0 = hann_level(wet, kOutRate, kF0, from, len);
+  // Equal levels: the fifth stands as tall as the fundamental, where the sine alone has nothing.
+  CHECK(wet_line == Catch::Approx(wet_f0).epsilon(0.05));
+  CHECK(dry_line < 1e-3 * wet_f0);
+
+  NativeSynthPatch noisy = base;
+  noisy.va.noise_level = 0.2f;
+  const auto hiss = render_patch(noisy);
+  // Mean level over bins between the fundamental and its octave.
+  const auto floor = [&](const std::vector<float>& buf) {
+    double sum = 0.0;
+    for (int i = 0; i < 16; ++i) sum += hann_level(buf, kOutRate, 1.2 * kF0 + 8.0 * i, from, len);
+    return sum / 16.0;
+  };
+  const double dry_floor = floor(dry);
+  const double hiss_floor = floor(hiss);
+  CHECK(hiss_floor > 100.0 * std::max(dry_floor, 1e-9));
+  // The fundamental is still there under it.
+  CHECK(hann_level(hiss, kOutRate, kF0, from, len) ==
+        Catch::Approx(hann_level(dry, kOutRate, kF0, from, len)).epsilon(0.05));
+}
+
 TEST_CASE("Sf2Player without a SoundFont plays every GM program via the fallback",
           "[midi][sf2][synth]") {
   Sf2Player player = make_fallback_player();
@@ -1888,7 +2060,7 @@ TEST_CASE("engine params reach every engine-section field and read back through 
   for (const NativeSynthPatch& base : one_patch_per_engine_mode()) {
     INFO("engine mode " << static_cast<int>(base.mode));
     const std::vector<EngineParamDescriptor> before = engine_param_descriptors(base);
-    if (base.mode == SynthEngineMode::kSubtractive || base.mode == SynthEngineMode::kSample) {
+    if (base.mode == SynthEngineMode::kSample) {
       REQUIRE(before.empty());
       continue;
     }

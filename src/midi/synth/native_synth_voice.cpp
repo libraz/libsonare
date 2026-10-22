@@ -378,6 +378,16 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
     const float phase = seq.unipolar_at(static_cast<uint64_t>(k) * 2 + 1);
     oscs[static_cast<size_t>(k)].start(sample_rate, p.waveform, phase, seed ^ (k + 1));
   }
+  // Seeds and phases past the unison stack's, so adding either leaves the stack untouched.
+  osc2_level = osc_less ? 0.0f : p.va.osc2_level;
+  noise_level = osc_less ? 0.0f : p.va.noise_level;
+  if (osc2_level > 0.0f) {
+    osc2_ratio = std::exp2(p.va.osc2_interval_cents / kCentsPerOctave);
+    osc2.start(sample_rate, p.waveform, seq.unipolar_at(105), seed ^ (kMaxUnisonOscs + 1));
+  }
+  if (noise_level > 0.0f) {
+    noise_osc.start(sample_rate, VaWaveform::kNoise, 0.0f, seed ^ (kMaxUnisonOscs + 2));
+  }
 
   const float sampler_vel = sampler_velocity_gain(velocity, sampler_velocity_exponent(p));
   velocity_gain = sampler_vel * kit_gain * drum_mod.level_gain;
@@ -416,8 +426,8 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   // The model bank's LFO has no onset delay of its own, so a GS vibrato-delay
   // edit is the only thing that can give it one.
   vibrato_lfo.start(sample_rate, gs_vib_delay_seconds(0.0f, part_mod.vib_delay_scale),
-                    p.lfo_rate_hz * part_mod.vib_rate_scale, p.lfo_shape);
-  lfo2.start(sample_rate, 0.0f, p.lfo2_rate_hz, p.lfo_shape);
+                    p.lfo_rate_hz * part_mod.vib_rate_scale, p.lfo_shape, seed ^ 106);
+  lfo2.start(sample_rate, 0.0f, p.lfo2_rate_hz, p.lfo_shape, seed ^ 107);
   // Per-voice drift: seeded depth (sign included) and a seeded rate offset so
   // stacked voices beat against each other instead of wobbling in unison.
   drift_seed = seq.bipolar_at(101);
@@ -729,6 +739,11 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
       sample += osc.next();
     }
     sample *= osc_norm;
+    if (osc2_level > 0.0f) {
+      osc2.set_frequency(base_freq_hz * common * osc2_ratio);
+      sample += osc2_level * osc2.next();
+    }
+    if (noise_level > 0.0f) sample += noise_level * noise_osc.next();
   }
 
   // --- body/formant resonance (after the string/source, before the amp) ---

@@ -85,6 +85,7 @@ _SYNTH_LFO_SHAPES = {
     "default": 0,
     "triangle": 1,
     "sine": 2,
+    "random": 3,
 }
 # The sample's own looping, in the SF2 sampleModes values SonareSampleDesc
 # takes. A different scale from _SAMPLE_LOOP_MODES above, which is the patch's

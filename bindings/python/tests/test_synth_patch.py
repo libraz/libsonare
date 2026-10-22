@@ -123,7 +123,7 @@ EXPECTED_SYNTH_ENUM_TABLES = {
     "sample_loop_modes": ("default", "none", "continuous", "key-down"),
     "sample_key_tracks": ("default", "on", "off"),
     "retriggers": ("default", "free", "note"),
-    "lfo_shapes": ("default", "triangle", "sine"),
+    "lfo_shapes": ("default", "triangle", "sine", "random"),
     "part_rig_modes": ("bank", "none", "chain"),
     "sample_desc_loop_modes": ("none", "continuous", "key-down"),
 }
@@ -383,14 +383,14 @@ def test_synth_patch_retrigger_round_trips_and_refuses_unknown_values() -> None:
 
 
 def test_synth_patch_lfo_shape_round_trips_and_refuses_unknown_values() -> None:
-    for ordinal, name in enumerate(("default", "triangle", "sine")):
+    for ordinal, name in enumerate(("default", "triangle", "sine", "random")):
         assert SynthPatch._from_c(SynthPatch(lfo_shape=name)._to_c()).lfo_shape == name
         assert SynthPatch._from_c(SynthPatch(lfo_shape=ordinal)._to_c()).lfo_shape == name
     assert synth_preset_patch("saw-lead").lfo_shape == "triangle"
     with pytest.raises(ValueError):
         SynthPatch(lfo_shape="square")._to_c()
     with pytest.raises(ValueError):
-        SynthPatch(lfo_shape=3)._to_c()
+        SynthPatch(lfo_shape=4)._to_c()
 
 
 def _repeated_note_diff(audio: np.ndarray) -> float:
@@ -886,6 +886,33 @@ def test_engine_params_change_a_render_and_default_to_none() -> None:
         project.close()
 
 
+def test_subtractive_engine_params_are_accepted_by_key() -> None:
+    rows = {row["name"]: row for row in synth_engine_param_info("subtractive")}
+    assert set(rows) == {"osc2IntervalCents", "osc2Level", "noiseLevel"}
+    assert all(row["default"] == 0 for row in rows.values())
+    project = _build_midi_only_project()
+    try:
+        plain = project.bounce_with_synth_instrument(
+            SynthPatch(engine_mode="subtractive"), total_frames=24000
+        )
+        layered = project.bounce_with_synth_instrument(
+            SynthPatch(
+                engine_mode="subtractive",
+                engine_params={"osc2IntervalCents": 702.0, "osc2Level": 0.5, "noiseLevel": 0.1},
+            ),
+            total_frames=24000,
+        )
+        assert _peak(plain) > 0.0
+        assert not np.array_equal(plain, layered)
+        with pytest.raises(SonareError, match="osc2IntervalCents"):
+            project.bounce_with_synth_instrument(
+                SynthPatch(engine_mode="subtractive", engine_params={"osc2IntervalCents": 2401.0}),
+                total_frames=128,
+            )
+    finally:
+        project.close()
+
+
 def test_engine_params_refusals_are_coded_errors_naming_the_key() -> None:
     project = _build_midi_only_project()
     try:
@@ -907,7 +934,7 @@ def test_engine_params_refusals_are_coded_errors_naming_the_key() -> None:
 
 
 def test_engine_param_info_shape() -> None:
-    for mode in ("default", "subtractive", "sample"):
+    for mode in ("default", "sample"):
         assert synth_engine_param_info(mode) == []
     bowed = synth_engine_param_info("bowed-string")
     by_name = {row["name"]: row for row in bowed}

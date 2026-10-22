@@ -2,11 +2,11 @@
 
 /// @file patch_sections.h
 /// @brief Blanks the engine sections a patch does not voice.
-/// @details A `NativeSynthPatch` carries all sixteen engines' parameters side
-/// by side and voices exactly one, chosen by `mode`. The other fifteen sit at
+/// @details A `NativeSynthPatch` carries all seventeen engines' parameters side
+/// by side and voices exactly one, chosen by `mode`. The other sixteen sit at
 /// defaults that are mostly non-zero, and `clamp_synth_patch` raises several of
 /// them to a non-zero lower bound, so every one of the bank's ~290
-/// constant-initialised patches writes fifteen unread sections into the
+/// constant-initialised patches writes sixteen unread sections into the
 /// WebAssembly data section. Blanking them where the table is stored deletes
 /// that: each section is read only under its own `mode`, so no rendered sample
 /// moves.
@@ -55,6 +55,14 @@ constexpr PipeOrganRank blank_pipe_organ_rank() noexcept {
   z.level = 0.0f;
   z.reed = 0.0f;
   z.radiation = 0.0f;
+  return z;
+}
+
+constexpr VaPatchParams blank_va() noexcept {
+  VaPatchParams z{};
+  z.osc2_interval_cents = 0.0f;
+  z.osc2_level = 0.0f;
+  z.noise_level = 0.0f;
   return z;
 }
 
@@ -483,10 +491,10 @@ constexpr SamplePatchParams blank_sample() noexcept {
 }
 
 /// Returns @p patch with every engine section other than the one `mode` selects
-/// replaced by zeroes. `kSubtractive` voices none of them, so it blanks all
-/// sixteen.
+/// replaced by zeroes.
 constexpr NativeSynthPatch strip_unvoiced_sections(const NativeSynthPatch& patch) noexcept {
   NativeSynthPatch p = patch;
+  if (p.mode != SynthEngineMode::kSubtractive) p.va = blank_va();
   if (p.mode != SynthEngineMode::kFm) p.fm = blank_fm();
   if (p.mode != SynthEngineMode::kKarplusStrong) p.ks = blank_ks();
   if (p.mode != SynthEngineMode::kModal) p.modal = blank_modal();

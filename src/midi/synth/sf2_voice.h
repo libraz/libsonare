@@ -39,6 +39,7 @@
 #include "midi/synth/sf2_file.h"
 #include "midi/synth/svf.h"
 #include "midi/synth/voice_pool.h"
+#include "midi/synth/voice_random.h"
 #include "rt/pan_law.h"
 #include "util/constants.h"
 
@@ -200,31 +201,41 @@ struct Sf2ChannelMod {
   float fallback_chorus_send = 0.0f;
 };
 
-/// LFO waveform. Both start at zero, rise positive first and cross zero at
-/// half a cycle; a sine carries no harmonics, so a pitch vibrato driven by it
-/// puts its sidebands only where a player's vibrato does.
+/// LFO waveform. All start at zero. The triangle and sine rise positive first
+/// and cross zero at half a cycle; a sine carries no harmonics, so a pitch
+/// vibrato driven by it puts its sidebands only where a player's vibrato does.
+/// kRandom draws a new seeded target in [-1, 1] each cycle and glides to it on
+/// a half cosine, so it wanders without a line at the rate or its harmonics.
 enum class LfoShape : int {
   kTriangle = 0,
   kSine = 1,
+  kRandom = 2,
 };
 
 /// SF2 LFO (triangle unless asked otherwise): starts at zero after its delay,
 /// rises positive first.
 class Sf2Lfo {
  public:
+  /// @p seed feeds kRandom's targets; derive it from the voice seed.
   void start(double sample_rate, float delay_seconds, float freq_hz,
-             LfoShape shape = LfoShape::kTriangle) noexcept {
+             LfoShape shape = LfoShape::kTriangle, uint64_t seed = 0) noexcept {
     const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
     delay_samples_ = delay_seconds > 0.0f ? static_cast<int64_t>(delay_seconds * sr) : 0;
     inc_ = freq_hz > 0.0f ? static_cast<float>(freq_hz / sr) : 0.0f;
     phase_ = 0.0;
     settling_ = false;
     shape_ = shape;
+    if (shape == LfoShape::kRandom) {
+      random_ = VoiceRandomSequence(voice_hash(seed));
+      from_ = 0.0f;
+      to_ = random_.next_bipolar();
+    }
   }
 
   /// Retunes the LFO under a held note without touching the phase. @p freq_hz
   /// <= 0 freezes it at once during the delay or at an exact zero crossing, and
-  /// otherwise runs on to the next output-zero point (0 or 0.5) before resting.
+  /// otherwise runs on to the next output-zero point (0 or 0.5) before resting;
+  /// kRandom's next zero is a target of 0, drawn at the next cycle boundary.
   void set_frequency(double sample_rate, float freq_hz) noexcept {
     const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
     if (freq_hz > 0.0f) {
@@ -232,7 +243,9 @@ class Sf2Lfo {
       settling_ = false;
     } else if (inc_ > 0.0f) {
       // The output is pinned at zero during the delay and at a zero crossing, so freeze now.
-      if (delay_samples_ > 0 || phase_ == 0.0 || phase_ == 0.5) {
+      const bool at_zero = shape_ == LfoShape::kRandom ? phase_ == 0.0 && from_ == 0.0f
+                                                       : phase_ == 0.0 || phase_ == 0.5;
+      if (delay_samples_ > 0 || at_zero) {
         inc_ = 0.0f;
         settling_ = false;
         return;
@@ -251,6 +264,7 @@ class Sf2Lfo {
       --delay_samples_;
       return 0.0f;
     }
+    if (shape_ == LfoShape::kRandom) return next_random(rate_scale);
     // Triangle from phase [0,1): 0 -> +1 -> 0 -> -1 -> 0.
     const double p = phase_;
     phase_ += static_cast<double>(inc_) * static_cast<double>(rate_scale);
@@ -268,7 +282,29 @@ class Sf2Lfo {
   }
 
  private:
+  /// One cycle glides from_ to to_; settling makes the next target 0 and rests there.
+  float next_random(float rate_scale) noexcept {
+    const double p = phase_;
+    const double w = 0.5 - 0.5 * std::cos(::sonare::constants::kPiD * p);
+    const float out = static_cast<float>(from_ + (to_ - from_) * w);
+    phase_ += static_cast<double>(inc_) * static_cast<double>(rate_scale);
+    if (phase_ >= 1.0) {
+      phase_ -= 1.0;
+      from_ = to_;
+      to_ = settling_ ? 0.0f : random_.next_bipolar();
+      if (settling_ && from_ == 0.0f) {
+        phase_ = 0.0;
+        inc_ = 0.0f;
+        settling_ = false;
+      }
+    }
+    return out;
+  }
+
   LfoShape shape_ = LfoShape::kTriangle;
+  VoiceRandomSequence random_;
+  float from_ = 0.0f;
+  float to_ = 0.0f;
   int64_t delay_samples_ = 0;
   float inc_ = 0.0f;
   double phase_ = 0.0;

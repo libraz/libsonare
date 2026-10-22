@@ -122,8 +122,7 @@ function synthInfoModule(): SynthInfoModule {
 /**
  * Describe the engine-section fields {@link SynthPatch.engineParams} accepts
  * for an engine mode: key, type, range, unit and the engine's base preset's
- * value. `[]` for modes with no section (`'default'`, `'subtractive'`,
- * `'sample'`). Throws for an unknown mode.
+ * value. `[]` for modes with no section (`'default'`, `'sample'`). Throws for an unknown mode.
  */
 export function synthEngineParamInfo(engineMode: SynthEngineMode | number): SynthParamInfo[] {
   const ordinal = resolveEnumOrdinal(

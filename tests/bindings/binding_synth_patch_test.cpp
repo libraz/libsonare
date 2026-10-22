@@ -450,6 +450,49 @@ TEST_CASE("an engine param reaches the render", "[project][synth_patch]") {
   sonare_project_destroy(project);
 }
 
+TEST_CASE("the subtractive section is set by key and reaches the render",
+          "[project][synth_patch]") {
+  const sonare::util::json::Value info =
+      parse_info(sonare_synth_engine_param_info(SONARE_SYNTH_ENGINE_SUBTRACTIVE));
+  std::set<std::string> names;
+  for (const auto& d : info.as_array()) {
+    names.insert(d["name"].as_string());
+    // Every field defaults to absent.
+    REQUIRE(d["default"].as_number() == 0.0);
+  }
+  REQUIRE(names == std::set<std::string>{"osc2IntervalCents", "osc2Level", "noiseLevel"});
+
+  SonareProject* project = make_synth_project(3);
+  SonareSynthPatch base{};
+  base.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+  std::strcpy(base.preset, "saw");
+  const std::vector<float> reference = bounce_synth(project, base);
+  REQUIRE(peak_of(reference) > 0.0f);
+  for (const char* key : {"osc2Level", "noiseLevel"}) {
+    CAPTURE(key);
+    const SonareSynthEngineParam param{key, 0.5};
+    SonareSynthPatch with = base;
+    with.engine_params = &param;
+    with.engine_param_count = 1;
+    REQUIRE(bounce_synth(project, with) != reference);
+  }
+  // The interval alone places an oscillator nobody hears, as its gate states.
+  const SonareSynthEngineParam interval{"osc2IntervalCents", 702.0};
+  SonareSynthPatch interval_only = base;
+  interval_only.engine_params = &interval;
+  interval_only.engine_param_count = 1;
+  REQUIRE(bounce_synth(project, interval_only) == reference);
+  const SonareSynthEngineParam beyond{"osc2IntervalCents", 2401.0};
+  SonareSynthPatch refused = base;
+  refused.engine_params = &beyond;
+  refused.engine_param_count = 1;
+  sonare::midi::synth::NativeSynthConfig cfg;
+  const char* error = nullptr;
+  REQUIRE_FALSE(sonare_c_detail::synth_config_from_patch_c(refused, &cfg, &error));
+  REQUIRE(std::string(error).find("osc2IntervalCents") != std::string::npos);
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("synth engine param info lists exactly the walker's engine section",
           "[project][synth_patch]") {
   for (int mode = 0; mode < SONARE_SYNTH_ENGINE_MODE_COUNT; ++mode) {
@@ -476,9 +519,8 @@ TEST_CASE("synth engine param info lists exactly the walker's engine section",
     }
     REQUIRE(names == walked);
   }
-  // Exactly these three have no section of their own.
-  for (int mode :
-       {SONARE_SYNTH_ENGINE_DEFAULT, SONARE_SYNTH_ENGINE_SUBTRACTIVE, SONARE_SYNTH_ENGINE_SAMPLE}) {
+  // Exactly these two have no section of their own.
+  for (int mode : {SONARE_SYNTH_ENGINE_DEFAULT, SONARE_SYNTH_ENGINE_SAMPLE}) {
     REQUIRE(std::string(sonare_synth_engine_param_info(mode)) == "[]");
   }
   for (int mode : {-1, SONARE_SYNTH_ENGINE_MODE_COUNT}) {
@@ -1161,6 +1203,13 @@ TEST_CASE("the patch LFO shape is read only by a caller that declares it",
   const char* error = nullptr;
   REQUIRE(sonare_c_detail::synth_config_from_patch_c(asked, &read, &error));
   REQUIRE(read.patch.lfo_shape == LfoShape::kSine);
+  SonareSynthPatch random = asked;
+  random.lfo_shape = SONARE_SYNTH_LFO_SHAPE_RANDOM;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(random, &read, &error));
+  REQUIRE(read.patch.lfo_shape == LfoShape::kRandom);
+  SonareSynthPatch written{};
+  sonare_c_detail::synth_patch_to_c(sonare::midi::synth::SynthPreset{"saw-lead", read}, &written);
+  REQUIRE(written.lfo_shape == SONARE_SYNTH_LFO_SHAPE_RANDOM);
 
   // Zero keeps the base, which for every catalog preset is the triangle.
   SonareSynthPatch base = asked;

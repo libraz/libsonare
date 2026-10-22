@@ -775,12 +775,14 @@ class SynthPatch:
     ``sample_key_track`` whether the sample follows the played key
     (``"default"`` / ``"on"`` / ``"off"``); both accept the C ordinal too.
 
-    ``lfo_shape`` (``"default"`` / ``"triangle"`` / ``"sine"``, or the C
-    ordinal) is the patch's LFO waveform (vibrato and tremolo LFOs), wherever
-    either is read: vibrato depth, the GS LFO cutoff and amplitude depths, and
-    the ``lfo1`` and ``lfo2`` mod sources. ``"triangle"`` is every catalog
+    ``lfo_shape`` (``"default"`` / ``"triangle"`` / ``"sine"`` / ``"random"``,
+    or the C ordinal) is the patch's LFO waveform (vibrato and tremolo LFOs),
+    wherever either is read: vibrato depth, the GS LFO cutoff and amplitude
+    depths, and the ``lfo1`` and ``lfo2`` mod sources. ``"triangle"`` is every catalog
     preset's shape; ``"sine"`` carries no harmonics, so a vibrato's or a
-    tremolo's sidebands sit where a player's do.
+    tremolo's sidebands sit where a player's do. ``"random"`` glides to a new
+    seeded value in [-1, 1] each cycle, so it wanders with no line at the rate;
+    it is seeded per voice, so a bounce repeats it exactly.
 
     ``retrigger`` picks what seeds each voice's start state (``"default"`` /
     ``"free"`` / ``"note"``, or the C ordinal). ``"note"`` derives oscillator
@@ -1113,9 +1115,9 @@ def synth_engine_param_info(engine_mode: str | int) -> list[SynthParamInfo]:
     :func:`mastering_insert_param_info` plus an ``integer`` flag (present and
     true for a field taking whole numbers). ``min`` / ``max`` are present only
     for a field with a closed range, which a value outside is refused rather than
-    clamped; ``default`` is the engine's base preset value. The ``"default"``,
-    ``"subtractive"`` and ``"sample"`` modes have no engine section and give an
-    empty list. An unknown mode raises.
+    clamped; ``default`` is the engine's base preset value. The ``"default"``
+    and ``"sample"`` modes have no engine section and give an empty list. An
+    unknown mode raises.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_synth_engine_param_info"):

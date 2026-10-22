@@ -522,9 +522,10 @@ typedef enum {
 typedef enum {
   SONARE_SYNTH_LFO_SHAPE_BASE = 0,
   SONARE_SYNTH_LFO_SHAPE_TRIANGLE = 1, /* every catalog preset's shape */
-  SONARE_SYNTH_LFO_SHAPE_SINE = 2 /* no harmonics: sidebands sit where a player's or a motor's do */
+  SONARE_SYNTH_LFO_SHAPE_SINE = 2,  /* no harmonics: sidebands sit where a player's or motor's do */
+  SONARE_SYNTH_LFO_SHAPE_RANDOM = 3 /* a seeded target per cycle, glided to: no line at the rate */
 } SonareSynthLfoShape;
-#define SONARE_SYNTH_LFO_SHAPE_COUNT 3
+#define SONARE_SYNTH_LFO_SHAPE_COUNT 4
 
 #define SONARE_SYNTH_MOD_SOURCE_COUNT 13
 #define SONARE_SYNTH_MOD_DESTINATION_COUNT 13
@@ -894,7 +895,7 @@ static_assert(SONARE_SYNTH_BODY_VOCAL + 1 == SONARE_SYNTH_BODY_TYPE_COUNT,
               "SonareSynthBodyType count changed");
 static_assert(SONARE_SYNTH_RETRIGGER_NOTE + 1 == SONARE_SYNTH_RETRIGGER_COUNT,
               "SonareSynthRetrigger count changed");
-static_assert(SONARE_SYNTH_LFO_SHAPE_SINE + 1 == SONARE_SYNTH_LFO_SHAPE_COUNT,
+static_assert(SONARE_SYNTH_LFO_SHAPE_RANDOM + 1 == SONARE_SYNTH_LFO_SHAPE_COUNT,
               "SonareSynthLfoShape count changed");
 
 static_assert(sizeof(SonareSynthModRouting) == 2u * sizeof(int) + sizeof(float),

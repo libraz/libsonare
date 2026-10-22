@@ -592,6 +592,7 @@ const char* base_preset_name(SynthEngineMode mode) noexcept {
     case SynthEngineMode::kHarpsichord:
       return "harpsichord";
     case SynthEngineMode::kSubtractive:
+      return "saw";
     case SynthEngineMode::kSample:
       return nullptr;
   }
