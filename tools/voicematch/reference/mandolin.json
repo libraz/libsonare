@@ -1,7 +1,7 @@
 {
  "id": "mandolin",
  "label": "Mandolin, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-09-19T16:35:39+00:00",
+ "measured_utc": "2026-10-22T01:12:00+00:00",
  "capture": {
   "program": 25,
   "params": [],
@@ -87,6 +87,7 @@
    "held_peak_dbfs": -13.05,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -21.39,
    "decay_span_s": 1.207,
    "decay_db_s": -23.56,
    "decay_early_db_s": -26.17,
@@ -106,8 +107,7 @@
    "damper_release_ms": 369.2,
    "damper_capped": true,
    "centroid_hz": 331.1,
-   "tnr_db": 36.32,
-   "attack_hf_db": -21.39
+   "tnr_db": 36.84
   },
   {
    "timbre": "t0",
@@ -168,6 +168,7 @@
    "held_peak_dbfs": -12.07,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -17.62,
    "decay_span_s": 1.212,
    "decay_db_s": -24.8,
    "decay_early_db_s": -25.22,
@@ -187,8 +188,7 @@
    "damper_release_ms": 234.5,
    "damper_capped": true,
    "centroid_hz": 451.4,
-   "tnr_db": 41.55,
-   "attack_hf_db": -17.62
+   "tnr_db": 43.57
   },
   {
    "timbre": "t0",
@@ -249,6 +249,7 @@
    "held_peak_dbfs": -10.95,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -13.46,
    "decay_span_s": 1.207,
    "decay_db_s": -26.04,
    "decay_early_db_s": -58.98,
@@ -268,8 +269,7 @@
    "damper_release_ms": 59.9,
    "damper_capped": true,
    "centroid_hz": 958.2,
-   "tnr_db": 48.01,
-   "attack_hf_db": -13.46
+   "tnr_db": 50.57
   },
   {
    "timbre": "t0",
@@ -330,6 +330,7 @@
    "held_peak_dbfs": -11.0,
    "onset_ms": 0.0,
    "attack_ms": 10.0,
+   "attack_hf_db": -19.68,
    "decay_span_s": 1.197,
    "decay_db_s": -25.77,
    "decay_early_db_s": -33.39,
@@ -349,8 +350,7 @@
    "damper_release_ms": 79.8,
    "damper_capped": true,
    "centroid_hz": 559.2,
-   "tnr_db": 51.3,
-   "attack_hf_db": -19.68
+   "tnr_db": 52.33
   },
   {
    "timbre": "t0",
@@ -411,6 +411,7 @@
    "held_peak_dbfs": -12.44,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -14.31,
    "decay_span_s": 1.217,
    "decay_db_s": -25.6,
    "decay_early_db_s": -25.1,
@@ -428,8 +429,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 838.1,
-   "tnr_db": 52.05,
-   "attack_hf_db": -14.31
+   "tnr_db": 54.6
   }
  ],
  "summary": {
@@ -515,19 +515,19 @@
    },
    "tnr_db": {
     "54": {
-     "100": 36.32
+     "100": 36.84
     },
     "60": {
-     "100": 41.55
+     "100": 43.57
     },
     "66": {
-     "100": 48.01
+     "100": 50.57
     },
     "72": {
-     "100": 51.3
+     "100": 52.33
     },
     "78": {
-     "100": 52.05
+     "100": 54.6
     }
    },
    "velocity_response": {}

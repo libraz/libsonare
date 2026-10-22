@@ -1,7 +1,7 @@
 {
  "id": "agogo",
  "label": "Agogo bells, sampled, close and dry",
- "measured_utc": "2026-10-15T10:06:18+00:00",
+ "measured_utc": "2026-10-22T01:08:31+00:00",
  "capture": {
   "program": 113,
   "params": [],
@@ -110,7 +110,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1025.7,
-   "tnr_db": 41.46,
+   "tnr_db": 41.75,
    "stereo_width": 0.0
   },
   {
@@ -190,7 +190,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1035.0,
-   "tnr_db": 33.33,
+   "tnr_db": 33.37,
    "stereo_width": -0.0
   },
   {
@@ -270,7 +270,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1043.3,
-   "tnr_db": 27.67,
+   "tnr_db": 27.66,
    "stereo_width": 0.0
   },
   {
@@ -350,7 +350,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1047.3,
-   "tnr_db": 26.8,
+   "tnr_db": 26.69,
    "stereo_width": 0.0
   },
   {
@@ -430,7 +430,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1047.5,
-   "tnr_db": 26.79,
+   "tnr_db": 26.67,
    "stereo_width": -0.0
   },
   {
@@ -510,7 +510,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1210.4,
-   "tnr_db": 44.77,
+   "tnr_db": 44.99,
    "stereo_width": 0.0
   },
   {
@@ -590,7 +590,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1227.8,
-   "tnr_db": 36.88,
+   "tnr_db": 36.89,
    "stereo_width": -0.0
   },
   {
@@ -670,7 +670,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1232.3,
-   "tnr_db": 30.43,
+   "tnr_db": 30.42,
    "stereo_width": 0.0
   },
   {
@@ -750,7 +750,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1235.2,
-   "tnr_db": 29.15,
+   "tnr_db": 34.66,
    "stereo_width": -0.0
   },
   {
@@ -830,7 +830,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1235.3,
-   "tnr_db": 29.13,
+   "tnr_db": 34.66,
    "stereo_width": 0.0
   },
   {
@@ -910,7 +910,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1425.1,
-   "tnr_db": 46.57,
+   "tnr_db": 46.7,
    "stereo_width": 0.0
   },
   {
@@ -990,7 +990,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1458.5,
-   "tnr_db": 39.34,
+   "tnr_db": 39.35,
    "stereo_width": -0.0
   },
   {
@@ -1310,7 +1310,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1669.6,
-   "tnr_db": 47.95,
+   "tnr_db": 48.14,
    "stereo_width": 0.0
   },
   {
@@ -1390,7 +1390,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1732.9,
-   "tnr_db": 41.26,
+   "tnr_db": 41.27,
    "stereo_width": 0.0
   },
   {
@@ -1630,7 +1630,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1742.4,
-   "tnr_db": 30.49,
+   "tnr_db": 30.5,
    "stereo_width": 0.0
   },
   {
@@ -1708,7 +1708,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1939.7,
-   "tnr_db": 48.66,
+   "tnr_db": 48.74,
    "stereo_width": 0.0
   },
   {
@@ -2018,7 +2018,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 2072.0,
-   "tnr_db": 30.53,
+   "tnr_db": 35.66,
    "stereo_width": 0.0
   }
  ],
@@ -2152,39 +2152,39 @@
    "damper_release_ms": {},
    "tnr_db": {
     "72": {
-     "32": 41.46,
-     "56": 33.33,
-     "80": 27.67,
-     "104": 26.8,
-     "127": 26.79
+     "32": 41.75,
+     "56": 33.37,
+     "80": 27.66,
+     "104": 26.69,
+     "127": 26.67
     },
     "75": {
-     "32": 44.77,
-     "56": 36.88,
-     "80": 30.43,
-     "104": 29.15,
-     "127": 29.13
+     "32": 44.99,
+     "56": 36.89,
+     "80": 30.42,
+     "104": 34.66,
+     "127": 34.66
     },
     "78": {
-     "32": 46.57,
-     "56": 39.34,
+     "32": 46.7,
+     "56": 39.35,
      "80": 32.09,
      "104": 30.26,
      "127": 30.23
     },
     "81": {
-     "32": 47.95,
-     "56": 41.26,
+     "32": 48.14,
+     "56": 41.27,
      "80": 33.15,
      "104": 30.56,
-     "127": 30.49
+     "127": 30.5
     },
     "84": {
-     "32": 48.66,
+     "32": 48.74,
      "56": 43.01,
      "80": 34.19,
      "104": 30.64,
-     "127": 30.53
+     "127": 35.66
     }
    },
    "velocity_response": {

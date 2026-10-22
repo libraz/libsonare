@@ -1,7 +1,7 @@
 {
  "id": "vibraphone_wide",
  "label": "Vib.w, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-09-20T19:33:26+00:00",
+ "measured_utc": "2026-10-22T01:14:57+00:00",
  "capture": {
   "program": 11,
   "params": [],
@@ -87,6 +87,7 @@
    "held_peak_dbfs": -9.15,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -40.06,
    "decay_span_s": 2.973,
    "decay_db_s": -8.83,
    "decay_early_db_s": 0.53,
@@ -106,8 +107,7 @@
    "damper_release_ms": 1287.1,
    "damper_capped": true,
    "centroid_hz": 284.4,
-   "tnr_db": 15.43,
-   "attack_hf_db": -40.06
+   "tnr_db": 16.02
   },
   {
    "timbre": "t0",
@@ -168,6 +168,7 @@
    "held_peak_dbfs": -10.41,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -31.18,
    "decay_span_s": 2.963,
    "decay_db_s": -9.75,
    "decay_early_db_s": -0.4,
@@ -187,8 +188,7 @@
    "damper_release_ms": 917.9,
    "damper_capped": true,
    "centroid_hz": 711.0,
-   "tnr_db": 35.63,
-   "attack_hf_db": -31.18
+   "tnr_db": 39.34
   },
   {
    "timbre": "t0",
@@ -249,6 +249,7 @@
    "held_peak_dbfs": -10.99,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -28.57,
    "decay_span_s": 2.739,
    "decay_db_s": -10.36,
    "decay_early_db_s": -17.48,
@@ -268,8 +269,7 @@
    "damper_release_ms": 678.5,
    "damper_capped": true,
    "centroid_hz": 477.9,
-   "tnr_db": 28.18,
-   "attack_hf_db": -28.57
+   "tnr_db": 28.3
   },
   {
    "timbre": "t0",
@@ -330,6 +330,7 @@
    "held_peak_dbfs": -12.49,
    "onset_ms": 0.0,
    "attack_ms": 10.0,
+   "attack_hf_db": -18.63,
    "decay_span_s": 2.948,
    "decay_db_s": -11.25,
    "decay_early_db_s": -1.98,
@@ -349,8 +350,7 @@
    "damper_release_ms": 304.3,
    "damper_capped": true,
    "centroid_hz": 941.6,
-   "tnr_db": 23.51,
-   "attack_hf_db": -18.63
+   "tnr_db": 41.65
   },
   {
    "timbre": "t0",
@@ -411,6 +411,7 @@
    "held_peak_dbfs": -12.93,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -35.81,
    "decay_span_s": 2.953,
    "decay_db_s": -12.09,
    "decay_early_db_s": -2.95,
@@ -428,8 +429,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 938.3,
-   "tnr_db": 40.91,
-   "attack_hf_db": -35.81
+   "tnr_db": 41.02
   }
  ],
  "summary": {
@@ -514,19 +514,19 @@
    },
    "tnr_db": {
     "54": {
-     "100": 15.43
+     "100": 16.02
     },
     "60": {
-     "100": 35.63
+     "100": 39.34
     },
     "66": {
-     "100": 28.18
+     "100": 28.3
     },
     "72": {
-     "100": 23.51
+     "100": 41.65
     },
     "78": {
-     "100": 40.91
+     "100": 41.02
     }
    },
    "velocity_response": {}

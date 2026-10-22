@@ -2,65 +2,88 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm051",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-16T18:07:55+00:00",
-  "recorded_utc": "2026-09-09T16:50:24+00:00",
+  "reference_measured_utc": "2026-10-22T01:14:20+00:00",
+  "recorded_utc": "2026-10-22T01:25:17+00:00",
+  "model_build": {
+    "built_utc": "2026-10-21T10:18:24Z",
+    "newest_source_utc": "2026-10-21T10:20:44Z",
+    "stale": true
+  },
   "reference_spread": {},
   "_unbounded": {
     "damper": "neither side resolves a release inside the capture's 0.5 s tail: `damper_capped` is true on 35 of 35 reference rows and on 35 of 35 model rows, and the 495.0 ms the reference reports (490-495 ms on the model) is the last envelope point of that tail rather than a release time. 0 of 35 rows reach a verdict, so there is nothing to record a bound from. Lengthening the tail is a re-capture, not a voice change."
   },
   "bounds": {
     "stretch": {
+      "floor": 1.0,
+      "floor_from": "guess",
       "median": 3.337,
-      "abs_median": 4.463,
-      "p90": 12.13,
+      "abs_median": 4.438,
+      "p90": 11.143,
       "rows": 35
     },
     "tnr": {
-      "median": 1.3,
-      "abs_median": 2.188,
-      "p90": 9.37,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 3.9,
+      "abs_median": 9.188,
+      "p90": 15.995,
       "rows": 35
     },
     "attack": {
+      "floor": 40.0,
+      "floor_from": "guess",
       "median": 331.25,
-      "abs_median": 375.0,
+      "abs_median": 368.75,
       "p90": 1173.75,
       "rows": 35
     },
     "body": {
-      "median": 30.613,
-      "abs_median": 30.613,
-      "p90": 41.695,
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 30.562,
+      "abs_median": 30.562,
+      "p90": 41.457,
       "rows": 35
     },
     "stereo": {
+      "floor": 0.27,
+      "floor_from": "guess",
       "median": 0.716,
       "abs_median": 0.716,
       "p90": 0.756,
       "rows": 35
     },
     "balance": {
-      "median": 3.048,
-      "abs_median": 3.048,
+      "floor": 0.5,
+      "floor_from": "guess",
+      "median": 2.955,
+      "abs_median": 2.955,
       "p90": 5.239,
       "rows": 35
     },
     "centroid_pct": {
+      "floor": 1.0,
+      "floor_from": "guess",
       "median": 6.118,
       "abs_median": 8.787,
       "p90": 25.953,
       "rows": 35
     },
     "vel_range": {
+      "floor": 1.0,
+      "floor_from": "guess",
       "median": 2.713,
       "abs_median": 2.713,
       "p90": 2.785,
       "rows": 7
     },
     "register": {
+      "floor": 1.0,
+      "floor_from": "default",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 1.9,
+      "p90": 1.575,
       "rows": 35
     }
   }

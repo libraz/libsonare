@@ -1,7 +1,7 @@
 {
  "id": "woodblock",
  "label": "Woodblock, sampled, close and dry",
- "measured_utc": "2026-10-15T10:06:31+00:00",
+ "measured_utc": "2026-10-22T01:15:05+00:00",
  "capture": {
   "program": 115,
   "params": [],
@@ -176,7 +176,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1163.6,
-   "tnr_db": 4.48,
+   "tnr_db": 4.46,
    "stereo_width": 0.0
   },
   {
@@ -249,7 +249,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1181.4,
-   "tnr_db": 4.42,
+   "tnr_db": 4.4,
    "stereo_width": -0.0
   },
   {
@@ -322,7 +322,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1183.2,
-   "tnr_db": 4.42,
+   "tnr_db": 4.4,
    "stereo_width": 0.0
   },
   {
@@ -395,7 +395,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1183.9,
-   "tnr_db": 4.41,
+   "tnr_db": 4.4,
    "stereo_width": 0.0
   },
   {
@@ -470,7 +470,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1338.7,
-   "tnr_db": 3.05,
+   "tnr_db": 3.06,
    "stereo_width": 0.0
   },
   {
@@ -545,7 +545,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1409.0,
-   "tnr_db": 2.71,
+   "tnr_db": 2.72,
    "stereo_width": -0.0
   },
   {
@@ -620,7 +620,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1434.9,
-   "tnr_db": 2.66,
+   "tnr_db": 2.67,
    "stereo_width": 0.0
   },
   {
@@ -695,7 +695,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1437.3,
-   "tnr_db": 2.66,
+   "tnr_db": 2.67,
    "stereo_width": 0.0
   },
   {
@@ -845,7 +845,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1610.5,
-   "tnr_db": 3.02,
+   "tnr_db": 2.84,
    "stereo_width": 0.0
   },
   {
@@ -920,7 +920,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1706.5,
-   "tnr_db": 2.64,
+   "tnr_db": 2.66,
    "stereo_width": 0.0
   },
   {
@@ -995,7 +995,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1743.4,
-   "tnr_db": 2.59,
+   "tnr_db": 2.61,
    "stereo_width": 0.0
   },
   {
@@ -1070,7 +1070,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1746.8,
-   "tnr_db": 2.59,
+   "tnr_db": 2.6,
    "stereo_width": 0.0
   },
   {
@@ -1145,7 +1145,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1748.2,
-   "tnr_db": 2.59,
+   "tnr_db": 2.6,
    "stereo_width": 0.0
   },
   {
@@ -1220,7 +1220,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1936.8,
-   "tnr_db": 1.96,
+   "tnr_db": 1.98,
    "stereo_width": -0.0
   },
   {
@@ -1295,7 +1295,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 2065.0,
-   "tnr_db": 1.61,
+   "tnr_db": 1.63,
    "stereo_width": 0.0
   },
   {
@@ -1370,7 +1370,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 2115.9,
-   "tnr_db": 1.57,
+   "tnr_db": 1.59,
    "stereo_width": 0.0
   },
   {
@@ -1445,7 +1445,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 2121.2,
-   "tnr_db": 1.57,
+   "tnr_db": 1.59,
    "stereo_width": 0.0
   },
   {
@@ -1520,7 +1520,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 2121.1,
-   "tnr_db": 1.57,
+   "tnr_db": 1.59,
    "stereo_width": -0.0
   },
   {
@@ -1585,7 +1585,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 2320.1,
-   "tnr_db": -1.75,
+   "tnr_db": -1.85,
    "stereo_width": -0.0
   },
   {
@@ -1652,7 +1652,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 2521.0,
-   "tnr_db": -2.02,
+   "tnr_db": -2.16,
    "stereo_width": -0.0
   },
   {
@@ -1723,7 +1723,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 2612.1,
-   "tnr_db": -1.24,
+   "tnr_db": -1.21,
    "stereo_width": 0.0
   },
   {
@@ -1792,7 +1792,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 2618.9,
-   "tnr_db": -1.24,
+   "tnr_db": -1.23,
    "stereo_width": 0.0
   },
   {
@@ -1861,7 +1861,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 2618.9,
-   "tnr_db": -1.24,
+   "tnr_db": -1.23,
    "stereo_width": 0.0
   }
  ],
@@ -1960,38 +1960,38 @@
    "tnr_db": {
     "72": {
      "32": 4.83,
-     "56": 4.48,
-     "80": 4.42,
-     "104": 4.42,
-     "127": 4.41
+     "56": 4.46,
+     "80": 4.4,
+     "104": 4.4,
+     "127": 4.4
     },
     "75": {
-     "32": 3.05,
-     "56": 2.71,
-     "80": 2.66,
-     "104": 2.66,
+     "32": 3.06,
+     "56": 2.72,
+     "80": 2.67,
+     "104": 2.67,
      "127": 2.66
     },
     "78": {
-     "32": 3.02,
-     "56": 2.64,
-     "80": 2.59,
-     "104": 2.59,
-     "127": 2.59
+     "32": 2.84,
+     "56": 2.66,
+     "80": 2.61,
+     "104": 2.6,
+     "127": 2.6
     },
     "81": {
-     "32": 1.96,
-     "56": 1.61,
-     "80": 1.57,
-     "104": 1.57,
-     "127": 1.57
+     "32": 1.98,
+     "56": 1.63,
+     "80": 1.59,
+     "104": 1.59,
+     "127": 1.59
     },
     "84": {
-     "32": -1.75,
-     "56": -2.02,
-     "80": -1.24,
-     "104": -1.24,
-     "127": -1.24
+     "32": -1.85,
+     "56": -2.16,
+     "80": -1.21,
+     "104": -1.23,
+     "127": -1.23
     }
    },
    "velocity_response": {

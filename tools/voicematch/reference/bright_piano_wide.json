@@ -1,7 +1,7 @@
 {
  "id": "bright_piano_wide",
  "label": "Piano 2w, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-09-19T16:35:36+00:00",
+ "measured_utc": "2026-10-22T01:09:15+00:00",
  "capture": {
   "program": 1,
   "params": [],
@@ -90,6 +90,7 @@
    "held_peak_dbfs": -12.01,
    "onset_ms": 0.0,
    "attack_ms": 10.0,
+   "attack_hf_db": -29.78,
    "decay_span_s": 2.834,
    "decay_db_s": -7.04,
    "decay_early_db_s": -7.59,
@@ -109,8 +110,7 @@
    "damper_release_ms": 2190.0,
    "damper_capped": true,
    "centroid_hz": 225.8,
-   "tnr_db": 16.01,
-   "attack_hf_db": -29.78
+   "tnr_db": 31.04
   },
   {
    "timbre": "t0",
@@ -170,6 +170,7 @@
    "held_peak_dbfs": -12.18,
    "onset_ms": 0.0,
    "attack_ms": 10.0,
+   "attack_hf_db": -28.48,
    "decay_span_s": 2.849,
    "decay_db_s": -7.67,
    "decay_early_db_s": -11.32,
@@ -189,8 +190,7 @@
    "damper_release_ms": 2175.1,
    "damper_capped": true,
    "centroid_hz": 398.2,
-   "tnr_db": 13.63,
-   "attack_hf_db": -28.48
+   "tnr_db": 24.18
   },
   {
    "timbre": "t0",
@@ -251,6 +251,7 @@
    "held_peak_dbfs": -14.02,
    "onset_ms": 0.0,
    "attack_ms": 10.0,
+   "attack_hf_db": -24.67,
    "decay_span_s": 2.834,
    "decay_db_s": -7.15,
    "decay_early_db_s": -15.72,
@@ -270,8 +271,7 @@
    "damper_release_ms": 2155.1,
    "damper_capped": true,
    "centroid_hz": 555.5,
-   "tnr_db": 14.94,
-   "attack_hf_db": -24.67
+   "tnr_db": 24.25
   },
   {
    "timbre": "t0",
@@ -332,6 +332,7 @@
    "held_peak_dbfs": -14.04,
    "onset_ms": 0.0,
    "attack_ms": 10.0,
+   "attack_hf_db": -28.27,
    "decay_span_s": 2.834,
    "decay_db_s": -7.27,
    "decay_early_db_s": -12.04,
@@ -351,8 +352,7 @@
    "damper_release_ms": 2125.2,
    "damper_capped": true,
    "centroid_hz": 314.5,
-   "tnr_db": 29.67,
-   "attack_hf_db": -28.27
+   "tnr_db": 39.8
   },
   {
    "timbre": "t0",
@@ -413,6 +413,7 @@
    "held_peak_dbfs": -14.6,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -23.11,
    "decay_span_s": 2.849,
    "decay_db_s": -8.07,
    "decay_early_db_s": -13.32,
@@ -432,8 +433,7 @@
    "damper_release_ms": 1865.8,
    "damper_capped": true,
    "centroid_hz": 451.5,
-   "tnr_db": 34.33,
-   "attack_hf_db": -23.11
+   "tnr_db": 43.5
   },
   {
    "timbre": "t0",
@@ -494,6 +494,7 @@
    "held_peak_dbfs": -15.79,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -21.07,
    "decay_span_s": 2.854,
    "decay_db_s": -7.58,
    "decay_early_db_s": -18.08,
@@ -513,8 +514,7 @@
    "damper_release_ms": 643.5,
    "damper_capped": true,
    "centroid_hz": 487.6,
-   "tnr_db": 27.87,
-   "attack_hf_db": -21.07
+   "tnr_db": 37.69
   },
   {
    "timbre": "t0",
@@ -575,6 +575,7 @@
    "held_peak_dbfs": -14.79,
    "onset_ms": 0.0,
    "attack_ms": 10.0,
+   "attack_hf_db": -26.97,
    "decay_span_s": 2.849,
    "decay_db_s": -5.95,
    "decay_early_db_s": -14.07,
@@ -594,8 +595,7 @@
    "damper_release_ms": 2180.1,
    "damper_capped": true,
    "centroid_hz": 529.2,
-   "tnr_db": 42.59,
-   "attack_hf_db": -26.97
+   "tnr_db": 47.71
   },
   {
    "timbre": "t0",
@@ -656,6 +656,7 @@
    "held_peak_dbfs": -15.59,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -29.7,
    "decay_span_s": 2.854,
    "decay_db_s": -8.45,
    "decay_early_db_s": -22.47,
@@ -675,8 +676,7 @@
    "damper_release_ms": 893.0,
    "damper_capped": true,
    "centroid_hz": 751.2,
-   "tnr_db": 37.39,
-   "attack_hf_db": -29.7
+   "tnr_db": 44.12
   },
   {
    "timbre": "t0",
@@ -727,6 +727,7 @@
    "held_peak_dbfs": -14.84,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -19.34,
    "decay_span_s": 2.859,
    "decay_db_s": -7.55,
    "decay_early_db_s": -32.8,
@@ -744,8 +745,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 1084.3,
-   "tnr_db": 34.34,
-   "attack_hf_db": -19.34
+   "tnr_db": 42.97
   }
  ],
  "summary": {
@@ -887,31 +887,31 @@
    },
    "tnr_db": {
     "36": {
-     "100": 16.01
+     "100": 31.04
     },
     "42": {
-     "100": 13.63
+     "100": 24.18
     },
     "48": {
-     "100": 14.94
+     "100": 24.25
     },
     "54": {
-     "100": 29.67
+     "100": 39.8
     },
     "60": {
-     "100": 34.33
+     "100": 43.5
     },
     "66": {
-     "100": 27.87
+     "100": 37.69
     },
     "72": {
-     "100": 42.59
+     "100": 47.71
     },
     "78": {
-     "100": 37.39
+     "100": 44.12
     },
     "84": {
-     "100": 34.34
+     "100": 42.97
     }
    },
    "velocity_response": {}

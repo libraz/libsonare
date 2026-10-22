@@ -1,7 +1,7 @@
 {
  "id": "harpsichord_wide",
  "label": "Harpsi.w, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-09-19T16:35:39+00:00",
+ "measured_utc": "2026-10-22T01:11:30+00:00",
  "capture": {
   "program": 6,
   "params": [],
@@ -91,6 +91,7 @@
    "held_peak_dbfs": -11.86,
    "onset_ms": 0.0,
    "attack_ms": 34.9,
+   "attack_hf_db": -9.52,
    "decay_span_s": 2.025,
    "decay_db_s": -6.44,
    "decay_early_db_s": -6.0,
@@ -110,8 +111,7 @@
    "damper_release_ms": 2484.4,
    "damper_capped": true,
    "centroid_hz": 248.5,
-   "tnr_db": 11.87,
-   "attack_hf_db": -9.52
+   "tnr_db": 20.86
   },
   {
    "timbre": "t0",
@@ -171,6 +171,7 @@
    "held_peak_dbfs": -13.25,
    "onset_ms": 0.0,
    "attack_ms": 25.0,
+   "attack_hf_db": -14.04,
    "decay_span_s": 2.06,
    "decay_db_s": -6.62,
    "decay_early_db_s": -6.1,
@@ -190,8 +191,7 @@
    "damper_release_ms": 2259.9,
    "damper_capped": true,
    "centroid_hz": 335.1,
-   "tnr_db": 11.96,
-   "attack_hf_db": -14.04
+   "tnr_db": 22.66
   },
   {
    "timbre": "t0",
@@ -251,6 +251,7 @@
    "held_peak_dbfs": -13.87,
    "onset_ms": 0.0,
    "attack_ms": 15.0,
+   "attack_hf_db": -16.5,
    "decay_span_s": 2.12,
    "decay_db_s": -6.77,
    "decay_early_db_s": -5.89,
@@ -270,8 +271,7 @@
    "damper_release_ms": 2020.4,
    "damper_capped": true,
    "centroid_hz": 441.9,
-   "tnr_db": 12.58,
-   "attack_hf_db": -16.5
+   "tnr_db": 25.87
   },
   {
    "timbre": "t0",
@@ -332,6 +332,7 @@
    "held_peak_dbfs": -14.68,
    "onset_ms": 0.0,
    "attack_ms": 10.0,
+   "attack_hf_db": -13.24,
    "decay_span_s": 2.145,
    "decay_db_s": -7.48,
    "decay_early_db_s": -6.56,
@@ -351,8 +352,7 @@
    "damper_release_ms": 1721.1,
    "damper_capped": true,
    "centroid_hz": 614.6,
-   "tnr_db": 14.99,
-   "attack_hf_db": -13.24
+   "tnr_db": 24.43
   },
   {
    "timbre": "t0",
@@ -413,6 +413,7 @@
    "held_peak_dbfs": -15.05,
    "onset_ms": 0.0,
    "attack_ms": 10.0,
+   "attack_hf_db": -12.73,
    "decay_span_s": 2.16,
    "decay_db_s": -7.75,
    "decay_early_db_s": -6.48,
@@ -432,8 +433,7 @@
    "damper_release_ms": 1426.8,
    "damper_capped": true,
    "centroid_hz": 801.4,
-   "tnr_db": 18.08,
-   "attack_hf_db": -12.73
+   "tnr_db": 30.25
   },
   {
    "timbre": "t0",
@@ -494,6 +494,7 @@
    "held_peak_dbfs": -16.62,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -11.49,
    "decay_span_s": 2.08,
    "decay_db_s": -7.95,
    "decay_early_db_s": -7.22,
@@ -513,8 +514,7 @@
    "damper_release_ms": 1327.0,
    "damper_capped": true,
    "centroid_hz": 583.3,
-   "tnr_db": 21.19,
-   "attack_hf_db": -11.49
+   "tnr_db": 37.66
   },
   {
    "timbre": "t0",
@@ -575,6 +575,7 @@
    "held_peak_dbfs": -14.01,
    "onset_ms": 0.0,
    "attack_ms": 20.0,
+   "attack_hf_db": -15.3,
    "decay_span_s": 2.14,
    "decay_db_s": -7.67,
    "decay_early_db_s": -6.66,
@@ -594,8 +595,7 @@
    "damper_release_ms": 1546.5,
    "damper_capped": true,
    "centroid_hz": 664.1,
-   "tnr_db": 39.34,
-   "attack_hf_db": -15.3
+   "tnr_db": 51.0
   },
   {
    "timbre": "t0",
@@ -656,6 +656,7 @@
    "held_peak_dbfs": -15.37,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -13.43,
    "decay_span_s": 2.135,
    "decay_db_s": -8.22,
    "decay_early_db_s": -7.25,
@@ -675,8 +676,7 @@
    "damper_release_ms": 1147.4,
    "damper_capped": true,
    "centroid_hz": 702.0,
-   "tnr_db": 44.71,
-   "attack_hf_db": -13.43
+   "tnr_db": 51.78
   },
   {
    "timbre": "t0",
@@ -737,6 +737,7 @@
    "held_peak_dbfs": -15.57,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -13.55,
    "decay_span_s": 2.15,
    "decay_db_s": -9.63,
    "decay_early_db_s": -7.43,
@@ -756,8 +757,7 @@
    "damper_release_ms": 673.5,
    "damper_capped": true,
    "centroid_hz": 917.9,
-   "tnr_db": 48.47,
-   "attack_hf_db": -13.55
+   "tnr_db": 49.01
   },
   {
    "timbre": "t0",
@@ -814,6 +814,7 @@
    "held_peak_dbfs": -18.05,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -5.49,
    "decay_span_s": 2.175,
    "decay_db_s": -13.72,
    "decay_early_db_s": -9.02,
@@ -831,8 +832,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 1219.5,
-   "tnr_db": 45.71,
-   "attack_hf_db": -5.49
+   "tnr_db": 47.14
   }
  ],
  "summary": {
@@ -988,34 +988,34 @@
    },
    "tnr_db": {
     "30": {
-     "100": 11.87
+     "100": 20.86
     },
     "36": {
-     "100": 11.96
+     "100": 22.66
     },
     "42": {
-     "100": 12.58
+     "100": 25.87
     },
     "48": {
-     "100": 14.99
+     "100": 24.43
     },
     "54": {
-     "100": 18.08
+     "100": 30.25
     },
     "60": {
-     "100": 21.19
+     "100": 37.66
     },
     "66": {
-     "100": 39.34
+     "100": 51.0
     },
     "72": {
-     "100": 44.71
+     "100": 51.78
     },
     "78": {
-     "100": 48.47
+     "100": 49.01
     },
     "84": {
-     "100": 45.71
+     "100": 47.14
     }
    },
    "velocity_response": {}

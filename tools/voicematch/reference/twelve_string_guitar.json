@@ -1,7 +1,7 @@
 {
  "id": "twelve_string_guitar",
  "label": "12-str.Gt, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-22T00:53:04+00:00",
+ "measured_utc": "2026-10-22T01:14:52+00:00",
  "capture": {
   "program": 25,
   "params": [],
@@ -106,7 +106,7 @@
    "damper_release_ms": 733.3,
    "damper_capped": true,
    "centroid_hz": 399.8,
-   "tnr_db": 23.32
+   "tnr_db": 16.55
   },
   {
    "timbre": "t0",
@@ -187,7 +187,7 @@
    "damper_release_ms": 987.8,
    "damper_capped": true,
    "centroid_hz": 415.4,
-   "tnr_db": 29.55
+   "tnr_db": 33.13
   },
   {
    "timbre": "t0",
@@ -270,7 +270,7 @@
    "damper_release_ms": 538.8,
    "damper_capped": true,
    "centroid_hz": 438.0,
-   "tnr_db": 28.33
+   "tnr_db": 31.19
   },
   {
    "timbre": "t0",
@@ -349,7 +349,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 703.4,
-   "tnr_db": 24.97
+   "tnr_db": 38.91
   },
   {
    "timbre": "t0",
@@ -430,7 +430,7 @@
    "damper_release_ms": 209.5,
    "damper_capped": true,
    "centroid_hz": 671.4,
-   "tnr_db": 28.27
+   "tnr_db": 42.46
   }
  ],
  "summary": {
@@ -516,19 +516,19 @@
    },
    "tnr_db": {
     "42": {
-     "100": 23.32
+     "100": 16.55
     },
     "48": {
-     "100": 29.55
+     "100": 33.13
     },
     "54": {
-     "100": 28.33
+     "100": 31.19
     },
     "60": {
-     "100": 24.97
+     "100": 38.91
     },
     "66": {
-     "100": 28.27
+     "100": 42.46
     }
    },
    "velocity_response": {}

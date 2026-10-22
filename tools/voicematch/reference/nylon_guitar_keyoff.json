@@ -1,7 +1,7 @@
 {
  "id": "nylon_guitar_keyoff",
  "label": "Nylon Gt.o, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-09-19T16:35:39+00:00",
+ "measured_utc": "2026-10-22T01:12:14+00:00",
  "capture": {
   "program": 24,
   "params": [],
@@ -86,6 +86,7 @@
    "held_peak_dbfs": -9.91,
    "onset_ms": 0.0,
    "attack_ms": 15.0,
+   "attack_hf_db": -76.6,
    "decay_span_s": 4.969,
    "decay_db_s": -7.37,
    "decay_early_db_s": -14.76,
@@ -105,8 +106,7 @@
    "damper_release_ms": 104.8,
    "damper_capped": true,
    "centroid_hz": 132.0,
-   "tnr_db": 36.27,
-   "attack_hf_db": -76.6
+   "tnr_db": 36.75
   },
   {
    "timbre": "t0",
@@ -167,6 +167,7 @@
    "held_peak_dbfs": -9.35,
    "onset_ms": 0.0,
    "attack_ms": 15.0,
+   "attack_hf_db": -70.49,
    "decay_span_s": 4.979,
    "decay_db_s": -7.5,
    "decay_early_db_s": -14.57,
@@ -186,8 +187,7 @@
    "damper_release_ms": 109.8,
    "damper_capped": true,
    "centroid_hz": 176.1,
-   "tnr_db": 37.69,
-   "attack_hf_db": -70.49
+   "tnr_db": 37.97
   },
   {
    "timbre": "t0",
@@ -248,6 +248,7 @@
    "held_peak_dbfs": -7.47,
    "onset_ms": 0.0,
    "attack_ms": 20.0,
+   "attack_hf_db": -57.77,
    "decay_span_s": 4.964,
    "decay_db_s": -7.91,
    "decay_early_db_s": -28.35,
@@ -265,8 +266,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 268.4,
-   "tnr_db": 31.41,
-   "attack_hf_db": -57.77
+   "tnr_db": 42.71
   },
   {
    "timbre": "t0",
@@ -327,6 +327,7 @@
    "held_peak_dbfs": -12.47,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -33.34,
    "decay_span_s": 4.989,
    "decay_db_s": -8.44,
    "decay_early_db_s": -33.19,
@@ -344,8 +345,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 786.0,
-   "tnr_db": 29.06,
-   "attack_hf_db": -33.34
+   "tnr_db": 30.63
   },
   {
    "timbre": "t0",
@@ -406,6 +406,7 @@
    "held_peak_dbfs": -11.53,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
+   "attack_hf_db": -29.15,
    "decay_span_s": 4.979,
    "decay_db_s": -8.4,
    "decay_early_db_s": -27.71,
@@ -425,8 +426,7 @@
    "damper_release_ms": 94.8,
    "damper_capped": true,
    "centroid_hz": 391.6,
-   "tnr_db": 31.27,
-   "attack_hf_db": -29.15
+   "tnr_db": 32.43
   }
  ],
  "summary": {
@@ -509,19 +509,19 @@
    },
    "tnr_db": {
     "42": {
-     "100": 36.27
+     "100": 36.75
     },
     "48": {
-     "100": 37.69
+     "100": 37.97
     },
     "54": {
-     "100": 31.41
+     "100": 42.71
     },
     "60": {
-     "100": 29.06
+     "100": 30.63
     },
     "66": {
-     "100": 31.27
+     "100": 32.43
     }
    },
    "velocity_response": {}

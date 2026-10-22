@@ -2,63 +2,86 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm068",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-16T18:02:48+00:00",
-  "recorded_utc": "2026-09-09T16:48:51+00:00",
-  "_register_margin": "register reached a full 35-row verdict throughout the fdff77ef/16d89962 loop-loss regression and its fix, not a censored one: p90 was 3.43 dB before fdff77ef, rose to 5.40 against this file's 5.457 bound during the regression (fdff77ef's own commit message), and returned to 3.43 after 16d89962 (confirmed 2026-09-22 against the current dylib, all three stats and rows=35 unchanged). The note grid straddles the note-48 anchor and per-note the tilt runs -2.5 (n36) to +3.4 (n44) to -2.3 (n60), not a monotone -3.81/+1.17 ramp end to end - the shape genuinely stayed under the 1.25x margin, spending nearly all of it. This is a margin question, not a reader defect: no fix to the reader is needed.",
+  "reference_measured_utc": "2026-10-22T01:08:39+00:00",
+  "recorded_utc": "2026-10-22T01:48:26+00:00",
+  "model_build": {
+    "built_utc": "2026-10-21T10:18:24Z",
+    "newest_source_utc": "2026-10-21T10:20:44Z",
+    "stale": true
+  },
   "reference_spread": {},
+  "_register_margin": "register reached a full 35-row verdict throughout the fdff77ef/16d89962 loop-loss regression and its fix, not a censored one: p90 was 3.43 dB before fdff77ef, rose to 5.40 against this file's 5.457 bound during the regression (fdff77ef's own commit message), and returned to 3.43 after 16d89962 (confirmed 2026-09-22 against the current dylib, all three stats and rows=35 unchanged). The note grid straddles the note-48 anchor and per-note the tilt runs -2.5 (n36) to +3.4 (n44) to -2.3 (n60), not a monotone -3.81/+1.17 ramp end to end - the shape genuinely stayed under the 1.25x margin, spending nearly all of it. This is a margin question, not a reader defect: no fix to the reader is needed.",
   "bounds": {
     "stretch": {
-      "median": 2.987,
-      "abs_median": 4.613,
-      "p90": 20.45,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 1.0,
+      "abs_median": 1.037,
+      "p90": 3.033,
       "rows": 35
     },
     "tnr": {
-      "median": 5.775,
-      "abs_median": 6.713,
-      "p90": 21.823,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 3.35,
+      "abs_median": 3.687,
+      "p90": 9.19,
       "rows": 35
     },
     "damper": {
-      "median": 18.75,
-      "abs_median": 18.75,
-      "p90": 25.0,
-      "rows": 16
+      "floor": 5.0,
+      "floor_from": "guess",
+      "median": 25.0,
+      "abs_median": 25.0,
+      "p90": 31.25,
+      "rows": 35
     },
     "attack": {
+      "floor": 40.0,
+      "floor_from": "guess",
       "median": 40.0,
       "abs_median": 40.0,
       "p90": 40.0,
       "rows": 35
     },
     "balance": {
+      "floor": 0.5,
+      "floor_from": "guess",
       "median": 2.473,
       "abs_median": 4.195,
       "p90": 12.082,
       "rows": 35
     },
     "centroid_pct": {
-      "median": 24.075,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 23.054,
       "abs_median": 40.17,
       "p90": 79.029,
       "rows": 35
     },
     "body": {
+      "floor": 1.0,
+      "floor_from": "default",
       "median": 13.312,
       "abs_median": 17.181,
       "p90": 22.555,
       "rows": 20
     },
     "vel_range": {
-      "median": 8.988,
-      "abs_median": 8.988,
-      "p90": 10.098,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 1.0,
+      "abs_median": 1.287,
+      "p90": 3.863,
       "rows": 7
     },
     "register": {
-      "median": 2.05,
-      "abs_median": 3.275,
-      "p90": 5.457,
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 1.0,
+      "abs_median": 2.163,
+      "p90": 4.582,
       "rows": 35
     }
   }

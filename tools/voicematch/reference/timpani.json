@@ -1,7 +1,7 @@
 {
  "id": "timpani",
  "label": "Timpani, sampled, close and dry",
- "measured_utc": "2026-10-15T10:06:58+00:00",
+ "measured_utc": "2026-10-22T01:14:37+00:00",
  "capture": {
   "program": 47,
   "params": [],
@@ -267,7 +267,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 106.8,
-   "tnr_db": 7.25,
+   "tnr_db": 7.26,
    "stereo_width": 0.0
   },
   {
@@ -346,7 +346,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 113.0,
-   "tnr_db": 7.07,
+   "tnr_db": 7.08,
    "stereo_width": -0.0
   },
   {
@@ -425,7 +425,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 115.6,
-   "tnr_db": 7.0,
+   "tnr_db": 7.01,
    "stereo_width": 0.0
   },
   {
@@ -741,7 +741,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 126.0,
-   "tnr_db": 8.78,
+   "tnr_db": 8.79,
    "stereo_width": 0.0
   },
   {
@@ -820,7 +820,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 128.2,
-   "tnr_db": 8.71,
+   "tnr_db": 8.72,
    "stereo_width": 0.0
   },
   {
@@ -978,7 +978,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 126.8,
-   "tnr_db": 10.81,
+   "tnr_db": 10.8,
    "stereo_width": -0.0
   },
   {
@@ -2151,20 +2151,20 @@
     "36": {
      "32": 8.23,
      "56": 7.64,
-     "80": 7.25,
-     "104": 7.07,
-     "127": 7.0
+     "80": 7.26,
+     "104": 7.08,
+     "127": 7.01
     },
     "40": {
      "32": 9.99,
      "56": 9.36,
      "80": 8.97,
-     "104": 8.78,
-     "127": 8.71
+     "104": 8.79,
+     "127": 8.72
     },
     "44": {
      "32": 11.33,
-     "56": 10.81,
+     "56": 10.8,
      "80": 10.48,
      "104": 10.33,
      "127": 10.27

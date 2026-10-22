@@ -1,7 +1,7 @@
 {
  "id": "tinkle_bell",
  "label": "Tinkle bell, sampled, close and dry",
- "measured_utc": "2026-10-15T10:06:53+00:00",
+ "measured_utc": "2026-10-22T01:14:38+00:00",
  "capture": {
   "program": 112,
   "params": [],
@@ -112,7 +112,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 579.2,
-   "tnr_db": 40.05,
+   "tnr_db": 42.8,
    "stereo_width": 0.0
   },
   {
@@ -192,7 +192,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 579.7,
-   "tnr_db": 39.67,
+   "tnr_db": 42.58,
    "stereo_width": 0.0
   },
   {
@@ -272,7 +272,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 580.3,
-   "tnr_db": 39.21,
+   "tnr_db": 42.32,
    "stereo_width": 0.0
   },
   {
@@ -352,7 +352,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 580.9,
-   "tnr_db": 38.65,
+   "tnr_db": 42.05,
    "stereo_width": 0.0
   },
   {
@@ -432,7 +432,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 581.6,
-   "tnr_db": 38.02,
+   "tnr_db": 41.79,
    "stereo_width": 0.0
   },
   {
@@ -512,7 +512,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 682.1,
-   "tnr_db": 53.6,
+   "tnr_db": 53.74,
    "stereo_width": -0.0
   },
   {
@@ -592,7 +592,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 682.4,
-   "tnr_db": 53.37,
+   "tnr_db": 53.5,
    "stereo_width": -0.0
   },
   {
@@ -672,7 +672,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 682.8,
-   "tnr_db": 53.1,
+   "tnr_db": 53.22,
    "stereo_width": 0.0
   },
   {
@@ -752,7 +752,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 683.2,
-   "tnr_db": 52.8,
+   "tnr_db": 52.91,
    "stereo_width": 0.0
   },
   {
@@ -832,7 +832,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 683.6,
-   "tnr_db": 52.47,
+   "tnr_db": 52.58,
    "stereo_width": 0.0
   },
   {
@@ -912,7 +912,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 902.6,
-   "tnr_db": 41.91,
+   "tnr_db": 41.92,
    "stereo_width": 0.0
   },
   {
@@ -992,7 +992,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 904.3,
-   "tnr_db": 41.47,
+   "tnr_db": 41.48,
    "stereo_width": 0.0
   },
   {
@@ -1700,7 +1700,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1337.9,
-   "tnr_db": 46.96,
+   "tnr_db": 46.99,
    "stereo_width": 0.0
   },
   {
@@ -1768,7 +1768,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1338.9,
-   "tnr_db": 46.49,
+   "tnr_db": 46.51,
    "stereo_width": -0.0
   },
   {
@@ -1836,7 +1836,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1340.0,
-   "tnr_db": 45.91,
+   "tnr_db": 45.94,
    "stereo_width": 0.0
   },
   {
@@ -1904,7 +1904,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1341.2,
-   "tnr_db": 45.22,
+   "tnr_db": 45.24,
    "stereo_width": 0.0
   },
   {
@@ -1972,7 +1972,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1342.4,
-   "tnr_db": 44.44,
+   "tnr_db": 44.46,
    "stereo_width": 0.0
   },
   {
@@ -2036,7 +2036,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1671.0,
-   "tnr_db": 46.39,
+   "tnr_db": 46.49,
    "stereo_width": -0.0
   },
   {
@@ -2100,7 +2100,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1671.7,
-   "tnr_db": 46.35,
+   "tnr_db": 46.45,
    "stereo_width": 0.0
   },
   {
@@ -2164,7 +2164,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1672.5,
-   "tnr_db": 46.31,
+   "tnr_db": 46.4,
    "stereo_width": 0.0
   },
   {
@@ -2228,7 +2228,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1673.4,
-   "tnr_db": 46.26,
+   "tnr_db": 46.36,
    "stereo_width": 0.0
   },
   {
@@ -2292,7 +2292,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1674.5,
-   "tnr_db": 46.22,
+   "tnr_db": 46.31,
    "stereo_width": 0.0
   },
   {
@@ -2350,7 +2350,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 2096.6,
-   "tnr_db": 52.83,
+   "tnr_db": 53.02,
    "stereo_width": 0.0
   },
   {
@@ -2408,7 +2408,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 2097.0,
-   "tnr_db": 52.59,
+   "tnr_db": 52.77,
    "stereo_width": 0.0
   },
   {
@@ -2466,7 +2466,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 2097.4,
-   "tnr_db": 52.32,
+   "tnr_db": 52.49,
    "stereo_width": -0.0
   },
   {
@@ -2524,7 +2524,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 2098.0,
-   "tnr_db": 52.03,
+   "tnr_db": 52.19,
    "stereo_width": -0.0
   },
   {
@@ -2582,7 +2582,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 2098.6,
-   "tnr_db": 51.73,
+   "tnr_db": 51.87,
    "stereo_width": -0.0
   }
  ],
@@ -2756,22 +2756,22 @@
    "damper_release_ms": {},
    "tnr_db": {
     "72": {
-     "32": 40.05,
-     "56": 39.67,
-     "80": 39.21,
-     "104": 38.65,
-     "127": 38.02
+     "32": 42.8,
+     "56": 42.58,
+     "80": 42.32,
+     "104": 42.05,
+     "127": 41.79
     },
     "76": {
-     "32": 53.6,
-     "56": 53.37,
-     "80": 53.1,
-     "104": 52.8,
-     "127": 52.47
+     "32": 53.74,
+     "56": 53.5,
+     "80": 53.22,
+     "104": 52.91,
+     "127": 52.58
     },
     "80": {
-     "32": 41.91,
-     "56": 41.47,
+     "32": 41.92,
+     "56": 41.48,
      "80": 40.97,
      "104": 40.39,
      "127": 39.77
@@ -2784,25 +2784,25 @@
      "127": 35.97
     },
     "88": {
-     "32": 46.96,
-     "56": 46.49,
-     "80": 45.91,
-     "104": 45.22,
-     "127": 44.44
+     "32": 46.99,
+     "56": 46.51,
+     "80": 45.94,
+     "104": 45.24,
+     "127": 44.46
     },
     "92": {
-     "32": 46.39,
-     "56": 46.35,
-     "80": 46.31,
-     "104": 46.26,
-     "127": 46.22
+     "32": 46.49,
+     "56": 46.45,
+     "80": 46.4,
+     "104": 46.36,
+     "127": 46.31
     },
     "96": {
-     "32": 52.83,
-     "56": 52.59,
-     "80": 52.32,
-     "104": 52.03,
-     "127": 51.73
+     "32": 53.02,
+     "56": 52.77,
+     "80": 52.49,
+     "104": 52.19,
+     "127": 51.87
     }
    },
    "velocity_response": {

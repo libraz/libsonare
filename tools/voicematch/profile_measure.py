@@ -26,6 +26,7 @@ from metrics import (
     partial_hz,
     sound_onset_s,
     to_mono,
+    tone_to_noise_db,
 )
 from smf import Note
 
@@ -350,6 +351,13 @@ def partial_decay(
     return out
 
 
+#: Pole Q of the two biquads that cascade into a 4th-order Butterworth high-pass.
+_BUTTERWORTH4_Q = (0.5411961001461970, 1.3065629648763766)
+
+#: History before the key lift the release filter runs over before it is read.
+DAMPER_SETTLE_S = 0.5
+
+
 def _above_fundamental(seg: np.ndarray, sr: int, f0_hz: float) -> np.ndarray:
     """Drop everything below the note, so a release measures the string.
 
@@ -365,48 +373,30 @@ def _above_fundamental(seg: np.ndarray, sr: int, f0_hz: float) -> np.ndarray:
     do so at the bottom of the keyboard, where those modes are the note's own
     first partials; a bass row is contaminated whatever this does, and the
     velocities where it matters are also the ones the capture tail truncates.
+
+    The filter is causal, so the caller hands it history before the key lift to
+    settle on. A brick-wall cut in the frequency domain spreads its truncation
+    error across the whole segment, and a release that falls fast then stalls
+    on that leakage 33 to 38 dB down instead of reaching the 40 dB it is timed to.
     """
-    n = len(seg)
-    if n < 16:
-        return seg.astype(np.float64)
-    fc = max(20.0, 0.6 * f0_hz)
-    spec = np.fft.rfft(seg.astype(np.float64))
-    spec[np.fft.rfftfreq(n, 1.0 / sr) < fc] = 0.0
-    return np.fft.irfft(spec, n)
-
-
-def tone_to_noise_db(
-    freqs: np.ndarray, mag: np.ndarray, f0_hz: float, n_partials: int = 16
-) -> float:
-    """Energy in the partials against everything else in the audible band.
-
-    What it separates is the string from the mechanism: a plucked or struck
-    instrument's noise floor is its own action — a plectrum scraping, a hammer's
-    felt, a jack falling back — and a model that has the partial stack right and
-    no mechanism noise reads far cleaner than any recording of the real thing.
-    That reads as an improvement on every spectral metric and is the single most
-    audible thing still missing.
-
-    The partial window is the wider of ±2 % and three FFT bins. A relative-only
-    window collapses below one bin at a low fundamental — at 44 Hz it asks for
-    ±0.9 Hz out of a 1.7 Hz grid — so a bass note would score as pure noise for
-    a reason that is entirely the analysis window's.
-    """
-    if freqs.size < 2 or f0_hz <= 0.0:
-        return float("nan")
-    power = mag.astype(np.float64) ** 2
-    bin_hz = float(freqs[1] - freqs[0])
-    tonal = np.zeros(freqs.shape, dtype=bool)
-    for n in range(1, n_partials + 1):
-        target = n * f0_hz
-        if target > freqs[-1]:
-            break
-        half = max(0.02 * target, 3.0 * bin_hz)
-        tonal |= (freqs >= target - half) & (freqs <= target + half)
-    band = (freqs >= 40.0) & (freqs <= 12000.0)
-    tone = float(power[tonal & band].sum())
-    noise = float(power[~tonal & band].sum())
-    return float(10.0 * np.log10((tone + 1e-30) / (noise + 1e-30)))
+    y = seg.astype(np.float64)
+    if len(y) < 16:
+        return y
+    w0 = 2.0 * np.pi * max(20.0, 0.6 * f0_hz) / sr
+    cw, sw = float(np.cos(w0)), float(np.sin(w0))
+    for q in _BUTTERWORTH4_Q:
+        alpha = sw / (2.0 * q)
+        a0 = 1.0 + alpha
+        b0 = (1.0 + cw) / (2.0 * a0)
+        b1, a1, a2 = -2.0 * b0, -2.0 * cw / a0, (1.0 - alpha) / a0
+        out: list[float] = []
+        x1 = x2 = y1 = y2 = 0.0
+        for x0 in y.tolist():
+            o = b0 * (x0 + x2) + b1 * x1 - a1 * y1 - a2 * y2
+            x2, x1, y2, y1 = x1, x0, y1, o
+            out.append(o)
+        y = np.asarray(out)
+    return y
 
 
 #: How far under its own peak a note's ring is still worth fitting partials in.
@@ -557,7 +547,9 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *, preroll_s: float, gat
     row["decayed_before_note_off"] = bool(off_db < held_peak_db - 45.0)
     rel = mono[lift:]
     if rel.size > sr // 20 and not row["decayed_before_note_off"]:
-        t_rel, env_rel = _rms_envelope(_above_fundamental(rel, sr, row["f0_hz"]), sr)
+        settle = min(lift - on, int(DAMPER_SETTLE_S * sr))
+        filtered = _above_fundamental(mono[lift - settle :], sr, row["f0_hz"])[settle:]
+        t_rel, env_rel = _rms_envelope(filtered, sr)
         start_db = float(_db(env_rel[0]))
         under = np.where(_db(env_rel) < start_db - 40.0)[0]
         row["damper_release_ms"] = (
@@ -570,7 +562,8 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *, preroll_s: float, gat
     freqs, mag = _spectrum(held[a:b], sr)
     p = mag**2
     row["centroid_hz"] = round(float((freqs * p).sum() / max(p.sum(), 1e-20)), 1)
-    tnr = tone_to_noise_db(freqs, mag, row["f0_hz"])
+    stiffness = row["inharmonicity_b"] if row.get("inharmonicity_reliable") else 0.0
+    tnr = tone_to_noise_db(freqs, mag, row["f0_hz"], stiffness)
     if np.isfinite(tnr):
         row["tnr_db"] = round(tnr, 2)
     width = channel_width(audio, on, off)

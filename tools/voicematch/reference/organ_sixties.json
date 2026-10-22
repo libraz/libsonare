@@ -1,7 +1,7 @@
 {
  "id": "organ_sixties",
  "label": "60's Organ1, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-15T18:19:02+00:00",
+ "measured_utc": "2026-10-22T01:12:23+00:00",
  "capture": {
   "program": 16,
   "params": [],
@@ -112,7 +112,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 114.2,
-   "tnr_db": 31.17
+   "tnr_db": 43.14
   },
   {
    "timbre": "t0",
@@ -192,7 +192,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 171.8,
-   "tnr_db": 30.23
+   "tnr_db": 39.74
   },
   {
    "timbre": "t0",
@@ -273,7 +273,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 231.3,
-   "tnr_db": 31.51
+   "tnr_db": 43.03
   },
   {
    "timbre": "t0",
@@ -354,7 +354,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 307.3,
-   "tnr_db": 30.77
+   "tnr_db": 41.2
   },
   {
    "timbre": "t0",
@@ -435,7 +435,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 493.0,
-   "tnr_db": 31.31
+   "tnr_db": 40.81
   },
   {
    "timbre": "t0",
@@ -516,7 +516,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 947.6,
-   "tnr_db": 32.18
+   "tnr_db": 40.11
   },
   {
    "timbre": "t0",
@@ -597,7 +597,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 2101.4,
-   "tnr_db": 33.1
+   "tnr_db": 58.34
   },
   {
    "timbre": "t0",
@@ -678,7 +678,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 2528.3,
-   "tnr_db": 55.64
+   "tnr_db": 55.92
   },
   {
    "timbre": "t0",
@@ -755,7 +755,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 3606.0,
-   "tnr_db": 53.25
+   "tnr_db": 53.62
   },
   {
    "timbre": "t0",
@@ -824,7 +824,7 @@
    "damper_release_ms": 15.0,
    "damper_capped": false,
    "centroid_hz": 4769.8,
-   "tnr_db": 49.15
+   "tnr_db": 49.27
   },
   {
    "timbre": "t0",
@@ -883,7 +883,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 4052.1,
-   "tnr_db": 52.79
+   "tnr_db": 53.03
   }
  ],
  "summary": {
@@ -1026,37 +1026,37 @@
    },
    "tnr_db": {
     "36": {
-     "100": 31.17
+     "100": 43.14
     },
     "42": {
-     "100": 30.23
+     "100": 39.74
     },
     "48": {
-     "100": 31.51
+     "100": 43.03
     },
     "54": {
-     "100": 30.77
+     "100": 41.2
     },
     "60": {
-     "100": 31.31
+     "100": 40.81
     },
     "66": {
-     "100": 32.18
+     "100": 40.11
     },
     "72": {
-     "100": 33.1
+     "100": 58.34
     },
     "78": {
-     "100": 55.64
+     "100": 55.92
     },
     "84": {
-     "100": 53.25
+     "100": 53.62
     },
     "90": {
-     "100": 49.15
+     "100": 49.27
     },
     "96": {
-     "100": 52.79
+     "100": 53.03
     }
    },
    "velocity_response": {}

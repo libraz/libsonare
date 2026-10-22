@@ -263,15 +263,38 @@ def test_the_noise_term_does_not_file_stretched_partials_as_noise():
     """
     sr = 48000
     rng = np.random.default_rng(0)
-    y, _ = _string(sr, 0.0008, n_partials=30, step_db=1.2)
+    # Off the analysis grid: an exactly bin-centred ladder leaks nothing outside its mask.
+    f0 = 55.2
+    y, _ = _string(sr, 0.0008, n_partials=30, f0=f0, step_db=1.2)
     y = y + 1e-3 * rng.standard_normal(len(y))
     stiff = analyze_note(y, sr, Note(33, 96, 0.0, 2.0), 3.0)
-    harmonic, _ = _string(sr, 0.0, n_partials=30, step_db=1.2)
+    harmonic, _ = _string(sr, 0.0, n_partials=30, f0=f0, step_db=1.2)
     harmonic = harmonic + 1e-3 * rng.standard_normal(len(harmonic))
     clean = analyze_note(harmonic, sr, Note(33, 96, 0.0, 2.0), 3.0)
     # Two renders of the same ladder, one stiff and one not, are both clean
     # signals: the stiff one must not report itself dozens of dB noisier.
     assert abs(stiff.tnr_db - clean.tnr_db) < 12.0
+
+
+@pytest.mark.parametrize("b", [0.0, 0.0006])
+def test_the_noise_term_reads_the_tone_to_noise_the_reference_profile_reads(b):
+    """The loss charges `tnr` against the number the gate bounds, so both are one ruler."""
+    sr, preroll, gate = 48000, 0.1, 2.0
+    rng = np.random.default_rng(3)
+    t = np.arange(int((preroll + gate + 0.5) * sr)) / sr
+    f0 = 220.0
+    tone = sum(
+        10 ** (-2.0 * (n - 1) / 20.0) * np.sin(2 * np.pi * n * f0 * np.sqrt(1.0 + b * n * n) * t)
+        for n in range(1, 25)
+    )
+    y = np.where((t >= preroll) & (t < preroll + gate), tone, 0.0)
+    y = y + 0.1 * rng.standard_normal(len(t))
+    model = analyze_note(y, sr, Note(57, 96, preroll, gate), len(t) / sr)
+    reference = profile_module.measure_note(
+        y.astype(np.float32), sr, 57, preroll_s=preroll, gate_s=gate
+    )
+    assert 10.0 < reference["tnr_db"] < 40.0
+    assert model.tnr_db == pytest.approx(reference["tnr_db"], abs=0.5)
 
 
 def _band_limited_low_excess(sr: int):

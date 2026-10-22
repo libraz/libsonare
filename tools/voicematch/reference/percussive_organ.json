@@ -1,7 +1,7 @@
 {
  "id": "percussive_organ",
  "label": "Drawbar organ with a percussion stop, sampled",
- "measured_utc": "2026-10-16T18:06:38+00:00",
+ "measured_utc": "2026-10-22T01:12:48+00:00",
  "capture": {
   "program": 17,
   "params": [],
@@ -110,7 +110,7 @@
     0.05
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 170.0,
+   "damper_release_ms": 50.0,
    "damper_capped": false,
    "centroid_hz": 66.8,
    "tnr_db": 22.04,
@@ -193,10 +193,10 @@
     1.01
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 45.0,
+   "damper_release_ms": 40.0,
    "damper_capped": false,
    "centroid_hz": 88.1,
-   "tnr_db": 8.7,
+   "tnr_db": 20.33,
    "stereo_width": 0.013
   },
   {
@@ -277,10 +277,10 @@
     0.32
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 255.0,
+   "damper_release_ms": 40.0,
    "damper_capped": false,
    "centroid_hz": 113.2,
-   "tnr_db": 4.21,
+   "tnr_db": 27.43,
    "stereo_width": 0.019
   },
   {
@@ -361,10 +361,10 @@
     -1.28
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 495.0,
-   "damper_capped": true,
+   "damper_release_ms": 30.0,
+   "damper_capped": false,
    "centroid_hz": 149.3,
-   "tnr_db": 2.02,
+   "tnr_db": 36.77,
    "stereo_width": 0.028
   },
   {
@@ -445,10 +445,10 @@
     -0.12
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 495.0,
-   "damper_capped": true,
+   "damper_release_ms": 25.0,
+   "damper_capped": false,
    "centroid_hz": 132.9,
-   "tnr_db": -18.11,
+   "tnr_db": 30.34,
    "stereo_width": 0.025
   },
   {
@@ -529,10 +529,10 @@
     -2.21
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 495.0,
-   "damper_capped": true,
+   "damper_release_ms": 20.0,
+   "damper_capped": false,
    "centroid_hz": 200.8,
-   "tnr_db": -10.36,
+   "tnr_db": 37.46,
    "stereo_width": 0.083
   },
   {
@@ -613,10 +613,10 @@
     -0.44
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 495.0,
-   "damper_capped": true,
+   "damper_release_ms": 20.0,
+   "damper_capped": false,
    "centroid_hz": 271.3,
-   "tnr_db": -17.66,
+   "tnr_db": 22.28,
    "stereo_width": 0.317
   },
   {
@@ -697,10 +697,10 @@
     -1.34
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 495.0,
-   "damper_capped": true,
+   "damper_release_ms": 15.0,
+   "damper_capped": false,
    "centroid_hz": 597.7,
-   "tnr_db": 1.79,
+   "tnr_db": 24.38,
    "stereo_width": 0.418
   },
   {
@@ -779,10 +779,10 @@
     0.38
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 20.0,
+   "damper_release_ms": 15.0,
    "damper_capped": false,
    "centroid_hz": 1072.9,
-   "tnr_db": 10.34,
+   "tnr_db": 11.72,
    "stereo_width": 0.382
   }
  ],
@@ -894,31 +894,31 @@
    },
    "damper_release_ms": {
     "36": {
-     "100": 170.0
+     "100": 50.0
     },
     "42": {
-     "100": 45.0
+     "100": 40.0
     },
     "48": {
-     "100": 255.0
+     "100": 40.0
     },
     "54": {
-     "100": 495.0
+     "100": 30.0
     },
     "60": {
-     "100": 495.0
+     "100": 25.0
     },
     "66": {
-     "100": 495.0
+     "100": 20.0
     },
     "72": {
-     "100": 495.0
+     "100": 20.0
     },
     "78": {
-     "100": 495.0
+     "100": 15.0
     },
     "84": {
-     "100": 20.0
+     "100": 15.0
     }
    },
    "tnr_db": {
@@ -926,28 +926,28 @@
      "100": 22.04
     },
     "42": {
-     "100": 8.7
+     "100": 20.33
     },
     "48": {
-     "100": 4.21
+     "100": 27.43
     },
     "54": {
-     "100": 2.02
+     "100": 36.77
     },
     "60": {
-     "100": -18.11
+     "100": 30.34
     },
     "66": {
-     "100": -10.36
+     "100": 37.46
     },
     "72": {
-     "100": -17.66
+     "100": 22.28
     },
     "78": {
-     "100": 1.79
+     "100": 24.38
     },
     "84": {
-     "100": 10.34
+     "100": 11.72
     }
    },
    "velocity_response": {}

@@ -1,7 +1,7 @@
 {
  "id": "church_bell",
  "label": "Church Bell, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-22T00:51:58+00:00",
+ "measured_utc": "2026-10-22T01:09:25+00:00",
  "capture": {
   "program": 14,
   "params": [],
@@ -188,7 +188,7 @@
    "damper_release_ms": 798.2,
    "damper_capped": true,
    "centroid_hz": 1234.2,
-   "tnr_db": -0.79
+   "tnr_db": -0.8
   },
   {
    "timbre": "t0",
@@ -520,7 +520,7 @@
      "100": -0.25
     },
     "60": {
-     "100": -0.79
+     "100": -0.8
     },
     "66": {
      "100": 0.88

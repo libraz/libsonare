@@ -120,6 +120,25 @@ def test_damper_release_is_measured_from_note_off():
     assert got["damper_capped"] is False
 
 
+@pytest.mark.parametrize("note", [40, 45, 52])
+def test_a_fast_damper_is_not_read_as_filter_leakage(note):
+    """A release 40 dB down in 20 ms reads as about that, not as its own stall.
+
+    A brick-wall high-pass spreads its truncation error across the release, so
+    a fall this fast stopped on that floor short of 40 dB and read 60 to 190 ms.
+    """
+    preroll, gate, tail = 0.1, 1.0, 0.5
+    t = np.arange(int((preroll + gate + tail) * SR)) / SR
+    f0 = midi_to_hz(note)
+    tone = sum(np.sin(2 * np.pi * f0 * k * t) / k for k in range(1, 12))
+    off = preroll + gate
+    env = np.where(t < preroll, 0.0, 1.0)
+    env = env * np.where(t < off, 1.0, 10.0 ** (-80.0 / 20.0 * (t - off) / 0.040))
+    got = measure_note((tone * env).astype(np.float32), SR, note, preroll_s=preroll, gate_s=gate)
+    assert got["damper_capped"] is False
+    assert got["damper_release_ms"] < 50.0
+
+
 def test_measure_note_returns_nothing_for_silence():
     silence = np.zeros(int(2.0 * SR), dtype=np.float32)
     assert measure_note(silence, SR, 60, preroll_s=0.1, gate_s=1.0) == {}

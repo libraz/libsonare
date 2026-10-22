@@ -1,7 +1,7 @@
 {
  "id": "lead_charang",
  "label": "Lead 5 (charang), sampled, close and dry",
- "measured_utc": "2026-10-16T18:05:06+00:00",
+ "measured_utc": "2026-10-22T01:11:51+00:00",
  "capture": {
   "program": 84,
   "params": [],
@@ -114,7 +114,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 180.8,
-   "tnr_db": 32.84,
+   "tnr_db": 32.93,
    "stereo_width": -0.0
   },
   {
@@ -197,7 +197,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 208.6,
-   "tnr_db": 32.46,
+   "tnr_db": 33.43,
    "stereo_width": 0.0
   },
   {
@@ -280,7 +280,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 244.6,
-   "tnr_db": 29.05,
+   "tnr_db": 33.97,
    "stereo_width": 0.0
   },
   {
@@ -363,7 +363,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 290.1,
-   "tnr_db": 23.67,
+   "tnr_db": 34.59,
    "stereo_width": 0.0
   },
   {
@@ -443,10 +443,10 @@
     -7.03
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 40.0,
+   "damper_release_ms": 30.0,
    "damper_capped": false,
    "centroid_hz": 259.3,
-   "tnr_db": 39.0,
+   "tnr_db": 39.24,
    "stereo_width": 0.0
   },
   {
@@ -526,10 +526,10 @@
     -5.89
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 25.0,
+   "damper_release_ms": 30.0,
    "damper_capped": false,
    "centroid_hz": 287.1,
-   "tnr_db": 37.99,
+   "tnr_db": 39.44,
    "stereo_width": -0.0
   },
   {
@@ -609,10 +609,10 @@
     -2.93
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 35.0,
+   "damper_release_ms": 30.0,
    "damper_capped": false,
    "centroid_hz": 287.3,
-   "tnr_db": 31.82,
+   "tnr_db": 37.6,
    "stereo_width": 0.0
   },
   {
@@ -692,10 +692,10 @@
     -3.08
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 40.0,
+   "damper_release_ms": 30.0,
    "damper_capped": false,
    "centroid_hz": 323.0,
-   "tnr_db": 23.64,
+   "tnr_db": 34.8,
    "stereo_width": 0.0
   },
   {
@@ -776,10 +776,10 @@
     -6.46
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 90.0,
+   "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 311.6,
-   "tnr_db": 42.09,
+   "tnr_db": 44.54,
    "stereo_width": 0.0
   },
   {
@@ -860,10 +860,10 @@
     -6.55
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 70.0,
+   "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 381.9,
-   "tnr_db": 37.73,
+   "tnr_db": 45.81,
    "stereo_width": 0.0
   },
   {
@@ -944,10 +944,10 @@
     -5.12
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 50.0,
+   "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 389.0,
-   "tnr_db": 29.04,
+   "tnr_db": 45.4,
    "stereo_width": -0.0
   },
   {
@@ -1028,10 +1028,10 @@
     -1.63
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 55.0,
+   "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 443.2,
-   "tnr_db": 19.87,
+   "tnr_db": 44.96,
    "stereo_width": 0.0
   },
   {
@@ -1112,10 +1112,10 @@
     -5.58
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 45.0,
+   "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 347.6,
-   "tnr_db": 48.95,
+   "tnr_db": 49.92,
    "stereo_width": 0.0
   },
   {
@@ -1196,10 +1196,10 @@
     -5.8
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 30.0,
+   "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 429.6,
-   "tnr_db": 47.53,
+   "tnr_db": 48.7,
    "stereo_width": 0.0
   },
   {
@@ -1280,10 +1280,10 @@
     -5.52
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 30.0,
+   "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 581.5,
-   "tnr_db": 44.26,
+   "tnr_db": 47.54,
    "stereo_width": 0.0
   },
   {
@@ -1364,10 +1364,10 @@
     -3.26
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 30.0,
+   "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 980.5,
-   "tnr_db": 39.02,
+   "tnr_db": 48.23,
    "stereo_width": 0.0
   },
   {
@@ -1448,10 +1448,10 @@
     -5.91
    ],
    "decayed_before_note_off": false,
-   "damper_release_ms": 30.0,
+   "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 544.4,
-   "tnr_db": 50.18,
+   "tnr_db": 54.36,
    "stereo_width": 0.0
   },
   {
@@ -1535,7 +1535,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 750.9,
-   "tnr_db": 50.45,
+   "tnr_db": 52.39,
    "stereo_width": -0.0
   },
   {
@@ -1619,7 +1619,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 996.7,
-   "tnr_db": 49.1,
+   "tnr_db": 49.96,
    "stereo_width": -0.0
   },
   {
@@ -1703,7 +1703,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 1502.6,
-   "tnr_db": 48.65,
+   "tnr_db": 49.13,
    "stereo_width": 0.0
   },
   {
@@ -1787,7 +1787,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 666.6,
-   "tnr_db": 52.73,
+   "tnr_db": 52.78,
    "stereo_width": 0.0
   },
   {
@@ -1871,7 +1871,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 691.7,
-   "tnr_db": 51.23,
+   "tnr_db": 51.24,
    "stereo_width": 0.0
   },
   {
@@ -2121,7 +2121,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 1069.1,
-   "tnr_db": 47.25,
+   "tnr_db": 64.23,
    "stereo_width": 0.0
   },
   {
@@ -2205,7 +2205,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 1082.3,
-   "tnr_db": 53.14,
+   "tnr_db": 62.95,
    "stereo_width": 0.0
   },
   {
@@ -2289,7 +2289,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 1256.0,
-   "tnr_db": 52.93,
+   "tnr_db": 58.65,
    "stereo_width": -0.0
   },
   {
@@ -2373,7 +2373,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 1841.4,
-   "tnr_db": 52.0,
+   "tnr_db": 54.72,
    "stereo_width": 0.0
   }
  ],
@@ -2537,25 +2537,25 @@
      "127": 25.0
     },
     "44": {
-     "32": 40.0,
-     "64": 25.0,
-     "96": 35.0,
-     "127": 40.0
-    },
-    "52": {
-     "32": 90.0,
-     "64": 70.0,
-     "96": 50.0,
-     "127": 55.0
-    },
-    "60": {
-     "32": 45.0,
+     "32": 30.0,
      "64": 30.0,
      "96": 30.0,
      "127": 30.0
     },
+    "52": {
+     "32": 25.0,
+     "64": 25.0,
+     "96": 25.0,
+     "127": 25.0
+    },
+    "60": {
+     "32": 25.0,
+     "64": 25.0,
+     "96": 25.0,
+     "127": 25.0
+    },
     "68": {
-     "32": 30.0,
+     "32": 25.0,
      "64": 25.0,
      "96": 25.0,
      "127": 25.0
@@ -2575,46 +2575,46 @@
    },
    "tnr_db": {
     "36": {
-     "32": 32.84,
-     "64": 32.46,
-     "96": 29.05,
-     "127": 23.67
+     "32": 32.93,
+     "64": 33.43,
+     "96": 33.97,
+     "127": 34.59
     },
     "44": {
-     "32": 39.0,
-     "64": 37.99,
-     "96": 31.82,
-     "127": 23.64
+     "32": 39.24,
+     "64": 39.44,
+     "96": 37.6,
+     "127": 34.8
     },
     "52": {
-     "32": 42.09,
-     "64": 37.73,
-     "96": 29.04,
-     "127": 19.87
+     "32": 44.54,
+     "64": 45.81,
+     "96": 45.4,
+     "127": 44.96
     },
     "60": {
-     "32": 48.95,
-     "64": 47.53,
-     "96": 44.26,
-     "127": 39.02
+     "32": 49.92,
+     "64": 48.7,
+     "96": 47.54,
+     "127": 48.23
     },
     "68": {
-     "32": 50.18,
-     "64": 50.45,
-     "96": 49.1,
-     "127": 48.65
+     "32": 54.36,
+     "64": 52.39,
+     "96": 49.96,
+     "127": 49.13
     },
     "76": {
-     "32": 52.73,
-     "64": 51.23,
+     "32": 52.78,
+     "64": 51.24,
      "96": 46.7,
      "127": 47.24
     },
     "84": {
-     "32": 47.25,
-     "64": 53.14,
-     "96": 52.93,
-     "127": 52.0
+     "32": 64.23,
+     "64": 62.95,
+     "96": 58.65,
+     "127": 54.72
     }
    },
    "velocity_response": {

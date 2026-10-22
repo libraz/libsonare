@@ -60,6 +60,36 @@ def test_a_bass_note_is_not_scored_as_noise_by_the_analysis_window(f0):
     assert profile_module.tone_to_noise_db(*_spectrum(harmonic(f0), SR), f0) > 20.0
 
 
+def test_partials_above_the_sixteenth_are_tone_not_noise():
+    """A bright string's ladder runs far past h16, and all of it is the string."""
+    f0 = 110.0
+    t = np.arange(SR) / SR
+    x = sum(np.sin(2 * np.pi * f0 * n * t) / np.sqrt(n) for n in range(1, 101))
+    assert profile_module.tone_to_noise_db(*_spectrum(x, SR), f0) > 40.0
+
+
+def test_energy_below_the_fundamental_is_left_to_the_body_reading():
+    """Sub-f0 energy is what `body_below_f0_db` measures; counted here it is counted twice."""
+    f0 = 110.0
+    t = np.arange(SR) / SR
+    body = 0.5 * np.sin(2 * np.pi * 55.0 * t) + 0.5 * np.sin(2 * np.pi * 70.0 * t)
+    assert profile_module.tone_to_noise_db(*_spectrum(harmonic(f0) + body, SR), f0) > 40.0
+
+
+def test_a_stiff_string_is_masked_where_its_partials_actually_sit():
+    """Placed at integer multiples, a stiff string's upper partials fall between the windows."""
+    f0, b = 110.0, 2e-4
+    t = np.arange(SR) / SR
+    x = sum(
+        np.sin(2 * np.pi * f0 * n * np.sqrt(1.0 + b * n * n) * t) / np.sqrt(n) for n in range(1, 81)
+    )
+    spectrum = _spectrum(x, SR)
+    assert profile_module.tone_to_noise_db(*spectrum, f0, b) > 40.0
+    assert profile_module.tone_to_noise_db(*spectrum, f0, b) > (
+        profile_module.tone_to_noise_db(*spectrum, f0) + 20.0
+    )
+
+
 def test_an_empty_spectrum_is_not_a_measurement():
     assert not np.isfinite(profile_module.tone_to_noise_db(np.zeros(0), np.zeros(0), 220.0))
 

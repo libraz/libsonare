@@ -172,6 +172,7 @@ from metrics_partials import (
     MAX_FIT_PARTIALS,
     MAX_INHARMONICITY_B,
     MIN_PARTIALS_FOR_B,
+    TNR_TOP_HZ,
     estimate_inharmonicity_b,
     fit_partial_series,
     harmonic_share,
@@ -179,6 +180,7 @@ from metrics_partials import (
     partial_hz,
     partial_offset,
     stretch_cents,
+    tone_to_noise_db,
 )
 from metrics_signal import (
     AUDIBILITY_A_FLOOR_DB,

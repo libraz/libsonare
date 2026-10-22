@@ -2,12 +2,12 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm032",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-15T10:02:33+00:00",
-  "recorded_utc": "2026-09-25T20:33:58+00:00",
+  "reference_measured_utc": "2026-10-22T01:11:09+00:00",
+  "recorded_utc": "2026-10-22T01:49:40+00:00",
   "model_build": {
-    "built_utc": "2026-09-25T20:30:56Z",
-    "newest_source_utc": "2026-09-25T20:28:05Z",
-    "stale": false
+    "built_utc": "2026-10-21T10:18:24Z",
+    "newest_source_utc": "2026-10-21T10:20:44Z",
+    "stale": true
   },
   "reference_spread": {},
   "_fossil": "This recording sits 3h17m after 2babd0d2 moved this patch's ks.decay_s, through the documented SONARE_LIB_PATH fallback to a stale build/lib/libsonare.dylib that predated the fix. Confirmed 2026-09-22 against the current, verified-non-stale build-python-shared dylib: tnr reads 39.57/39.57/55.27 against this file's 20.538/22.763/45.985 (median/abs_median/p90), and centroid_pct, doubling and vel_range also exceed their recorded bounds. Not re-recorded here because src/midi/synth/string_loop.h and ks_voice.h - the exact engine this patch's Karplus-Strong loop runs on - are under live edit by a concurrent agent; re-recording now risks a second fossil within the hour. Re-record once that work lands.",
@@ -17,7 +17,7 @@
       "floor_from": "guess",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 6.698,
+      "p90": 6.693,
       "rows": 35
     },
     "decay": {
@@ -25,15 +25,15 @@
       "floor_from": "guess",
       "median": 0.537,
       "abs_median": 0.537,
-      "p90": 1.468,
+      "p90": 1.423,
       "rows": 35
     },
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 20.538,
-      "abs_median": 22.763,
-      "p90": 45.985,
+      "median": 28.162,
+      "abs_median": 28.162,
+      "p90": 60.8,
       "rows": 35
     },
     "attack": {
@@ -49,7 +49,7 @@
       "floor_from": "default",
       "median": 30.825,
       "abs_median": 30.825,
-      "p90": 48.115,
+      "p90": 47.278,
       "rows": 35
     },
     "aftersound": {
@@ -65,7 +65,7 @@
       "floor_from": "default",
       "median": 3.363,
       "abs_median": 3.363,
-      "p90": 8.308,
+      "p90": 7.463,
       "rows": 35
     },
     "stereo": {
@@ -89,15 +89,15 @@
       "floor_from": "guess",
       "median": 5.265,
       "abs_median": 71.478,
-      "p90": 100.635,
+      "p90": 100.197,
       "rows": 35
     },
     "damper": {
       "floor": 5.0,
       "floor_from": "guess",
-      "median": 18.75,
-      "abs_median": 50.0,
-      "p90": 156.25,
+      "median": 43.75,
+      "abs_median": 56.25,
+      "p90": 69.375,
       "rows": 20
     },
     "vel_range": {
@@ -105,14 +105,14 @@
       "floor_from": "guess",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 1.53,
+      "p90": 1.325,
       "rows": 7
     },
     "attack_hf_swing": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 6.3,
-      "abs_median": 6.3,
+      "median": 5.825,
+      "abs_median": 5.825,
       "p90": 7.06,
       "rows": 7
     },

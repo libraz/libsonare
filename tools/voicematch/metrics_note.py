@@ -8,7 +8,12 @@ import numpy as np
 from metrics_hit import HIT_ENVELOPE_HOP_MS, HIT_ENVELOPE_WIN_MS, _hit_onset
 from metrics_modal import half_spectra, modal_profile
 from metrics_modulation import f0_width_cents, modulation_note
-from metrics_partials import estimate_inharmonicity_b, ladder_present, partial_hz
+from metrics_partials import (
+    estimate_inharmonicity_b,
+    ladder_present,
+    partial_hz,
+    tone_to_noise_db,
+)
 from metrics_signal import (
     DB_FLOOR,
     N_HARMONICS,
@@ -326,33 +331,12 @@ def analyze_note(
     band = freqs <= 12000.0
     centroid = float(np.sum(freqs[band] * mag[band]) / max(np.sum(mag[band]), 1e-12))
 
-    # Tonal-to-noise: power in ±50-cent bands around every harmonic vs the rest
-    # of the 80 Hz - 16 kHz band.
-    # The mask runs to the fortieth partial, where stiffness has moved the
-    # partial far further than it moved the twelfth: at B=4e-4 the fortieth is
-    # 427 cents sharp, four times outside its own ±50 cent band. Left on
-    # integer multiples the mask files a stiff string's upper partials as noise
-    # and reports the voice as noisier than it is — in a term that also carries
-    # weight 1.0 by default, and in the one direction `tnr` penalises.
-    power = mag**2
-    harmonic_mask = np.zeros_like(freqs, dtype=bool)
-    k = 1
-    while k <= 40:
-        target = partial_hz(f0, k, inharmonicity_b)
-        if target >= min(16000.0, sr / 2):
-            break
-        lo = target * 2.0 ** (-50.0 / 1200.0)
-        hi = target * 2.0 ** (50.0 / 1200.0)
-        harmonic_mask |= (freqs >= lo) & (freqs <= hi)
-        k += 1
-    band = (freqs >= 80.0) & (freqs <= 16000.0)
-    p_harm = float(np.sum(power[band & harmonic_mask]))
-    p_noise = float(np.sum(power[band & ~harmonic_mask]))
+    # The reference profile's ruler, so the fit is charged on the quantity the gate reads.
     # A silent window has nothing real in either bin, so the ratio would read implausibly clean.
     tnr = (
         float("nan")
         if under_peak_db < SILENT_WINDOW_DB
-        else 10.0 * np.log10(max(p_harm, 1e-12) / max(p_noise, 1e-12))
+        else tone_to_noise_db(freqs, mag, float(f0), inharmonicity_b)
     )
 
     # Envelope metrics.

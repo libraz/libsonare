@@ -2,12 +2,12 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm005",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-15T10:03:56+00:00",
-  "recorded_utc": "2026-09-25T20:31:34+00:00",
+  "reference_measured_utc": "2026-10-22T01:10:24+00:00",
+  "recorded_utc": "2026-10-22T01:49:04+00:00",
   "model_build": {
-    "built_utc": "2026-09-25T20:30:56Z",
-    "newest_source_utc": "2026-09-25T20:28:05Z",
-    "stale": false
+    "built_utc": "2026-10-21T10:18:24Z",
+    "newest_source_utc": "2026-10-21T10:20:44Z",
+    "stale": true
   },
   "reference_spread": {},
   "_recorded_while_stale": "model_build.stale is true and does not apply to this voice. The flag is whole-tree: it compares the dylib against the newest source anywhere in src/, and at recording time that was concurrent work on the wind engines, the Karplus-Strong sympathetic path and the effects inserts. This voice renders through fm_voice.{cpp,h} and gm_fallback_programs_variations.h, all three older than the dylib, and the FM path never enters the branch the sympathetic edit touches. The bound it replaces was a genuine fossil: recorded through a library that predated 2babd0d2, it read tnr 3.075/11.212/19.245 where the same voice measures 12.48/12.48/24.00 today. Re-recording required deleting the old tnr bound by hand first, because _keep_the_tighter keeps whichever bound is numerically tighter and a fossil recorded through a quieter library is always the tighter one.",
@@ -25,24 +25,24 @@
       "floor_from": "guess",
       "median": 0.5,
       "abs_median": 1.6,
-      "p90": 3.05,
+      "p90": 2.838,
       "rows": 45
     },
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 15.6,
-      "abs_median": 15.6,
-      "p90": 30.005,
+      "median": 5.175,
+      "abs_median": 9.662,
+      "p90": 27.705,
       "rows": 45
     },
     "damper": {
       "floor": 5.0,
       "floor_from": "guess",
-      "median": 193.75,
-      "abs_median": 193.75,
-      "p90": 231.25,
-      "rows": 19
+      "median": 56.25,
+      "abs_median": 56.25,
+      "p90": 56.25,
+      "rows": 15
     },
     "attack": {
       "floor": 40.0,
@@ -56,7 +56,7 @@
       "floor": 1.0,
       "floor_from": "default",
       "median": 1.0,
-      "abs_median": 18.588,
+      "abs_median": 18.562,
       "p90": 62.26,
       "rows": 45
     },
@@ -65,7 +65,7 @@
       "floor_from": "guess",
       "median": 1.81,
       "abs_median": 1.81,
-      "p90": 3.425,
+      "p90": 3.213,
       "rows": 45
     },
     "doubling": {
@@ -73,15 +73,15 @@
       "floor_from": "default",
       "median": 3.75,
       "abs_median": 3.875,
-      "p90": 5.19,
+      "p90": 5.187,
       "rows": 45
     },
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 13.802,
+      "median": 13.774,
       "abs_median": 15.721,
-      "p90": 46.621,
+      "p90": 46.607,
       "rows": 45
     },
     "partial_tilt": {
@@ -89,7 +89,7 @@
       "floor_from": "guess",
       "median": 6.494,
       "abs_median": 6.494,
-      "p90": 25.422,
+      "p90": 25.309,
       "rows": 45
     },
     "centroid_pct": {
@@ -111,16 +111,16 @@
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 4.2,
-      "abs_median": 4.2,
+      "median": 4.138,
+      "abs_median": 4.138,
       "p90": 4.357,
       "rows": 9
     },
     "attack_hf_swing": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 22.875,
-      "abs_median": 22.875,
+      "median": 22.812,
+      "abs_median": 22.812,
       "p90": 64.242,
       "rows": 9
     },

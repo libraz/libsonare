@@ -2,68 +2,45 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm061",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-15T18:16:25+00:00",
-  "recorded_utc": "2026-09-09T16:49:24+00:00",
+  "reference_measured_utc": "2026-10-22T01:10:40+00:00",
+  "recorded_utc": "2026-10-22T01:49:25+00:00",
+  "model_build": {
+    "built_utc": "2026-10-21T10:18:24Z",
+    "newest_source_utc": "2026-10-21T10:20:44Z",
+    "stale": true
+  },
   "reference_spread": {},
   "bounds": {
     "stretch": {
-      "median": 6.05,
-      "abs_median": 6.05,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 5.15,
+      "abs_median": 5.15,
       "p90": 7.415,
       "rows": 35
     },
     "tnr": {
-      "median": 5.162,
-      "abs_median": 6.275,
-      "p90": 11.37,
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 6.9,
+      "abs_median": 6.9,
+      "p90": 8.767,
       "rows": 35
     },
     "damper": {
-      "median": 37.5,
-      "abs_median": 37.5,
-      "p90": 75.0,
+      "floor": 5.0,
+      "floor_from": "guess",
+      "median": 6.25,
+      "abs_median": 6.25,
+      "p90": 6.25,
       "rows": 35
     },
     "attack": {
-      "median": 181.25,
-      "abs_median": 181.25,
-      "p90": 272.5,
-      "rows": 35
-    },
-    "stereo": {
-      "median": 0.27,
-      "abs_median": 0.27,
-      "p90": 0.427,
-      "rows": 35
-    },
-    "balance": {
-      "median": 12.858,
-      "abs_median": 12.858,
-      "p90": 26.183,
-      "rows": 35
-    },
-    "centroid_pct": {
-      "median": 12.701,
-      "abs_median": 25.702,
-      "p90": 42.715,
-      "rows": 35
-    },
-    "body": {
-      "median": 28.8,
-      "abs_median": 28.8,
-      "p90": 46.825,
-      "rows": 25
-    },
-    "vel_range": {
-      "median": 2.75,
-      "abs_median": 2.75,
-      "p90": 2.982,
-      "rows": 7
-    },
-    "register": {
-      "median": 1.0,
-      "abs_median": 1.325,
-      "p90": 3.428,
+      "floor": 40.0,
+      "floor_from": "guess",
+      "median": 40.0,
+      "abs_median": 40.0,
+      "p90": 85.0,
       "rows": 35
     },
     "onset": {
@@ -80,6 +57,54 @@
       "median": 40.0,
       "abs_median": 48.125,
       "p90": 85.625,
+      "rows": 35
+    },
+    "stereo": {
+      "floor": 0.27,
+      "floor_from": "guess",
+      "median": 0.27,
+      "abs_median": 0.27,
+      "p90": 0.427,
+      "rows": 35
+    },
+    "balance": {
+      "floor": 0.5,
+      "floor_from": "guess",
+      "median": 9.995,
+      "abs_median": 9.995,
+      "p90": 17.248,
+      "rows": 35
+    },
+    "centroid_pct": {
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 3.435,
+      "abs_median": 14.874,
+      "p90": 42.715,
+      "rows": 35
+    },
+    "body": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 3.725,
+      "abs_median": 5.725,
+      "p90": 20.685,
+      "rows": 25
+    },
+    "vel_range": {
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 1.0,
+      "abs_median": 1.0,
+      "p90": 1.0,
+      "rows": 7
+    },
+    "register": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 1.0,
+      "abs_median": 1.325,
+      "p90": 3.363,
       "rows": 35
     }
   }

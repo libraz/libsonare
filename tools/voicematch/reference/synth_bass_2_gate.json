@@ -2,11 +2,11 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm040",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-15T09:59:43+00:00",
-  "recorded_utc": "2026-09-25T20:35:29+00:00",
+  "reference_measured_utc": "2026-10-22T01:14:10+00:00",
+  "recorded_utc": "2026-10-22T01:25:12+00:00",
   "model_build": {
-    "built_utc": "2026-09-25T20:30:56Z",
-    "newest_source_utc": "2026-09-25T20:34:54Z",
+    "built_utc": "2026-10-21T10:18:24Z",
+    "newest_source_utc": "2026-10-21T10:20:44Z",
     "stale": true
   },
   "reference_spread": {},
@@ -22,9 +22,17 @@
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 1.263,
-      "abs_median": 1.263,
-      "p90": 2.72,
+      "median": 1.262,
+      "abs_median": 1.262,
+      "p90": 2.835,
+      "rows": 35
+    },
+    "damper": {
+      "floor": 5.0,
+      "floor_from": "guess",
+      "median": 12.5,
+      "abs_median": 12.5,
+      "p90": 18.75,
       "rows": 35
     },
     "attack": {
@@ -40,7 +48,7 @@
       "floor_from": "default",
       "median": 43.488,
       "abs_median": 43.488,
-      "p90": 72.755,
+      "p90": 72.74,
       "rows": 35
     },
     "balance": {
@@ -48,7 +56,7 @@
       "floor_from": "guess",
       "median": 6.033,
       "abs_median": 6.033,
-      "p90": 10.919,
+      "p90": 10.918,
       "rows": 35
     },
     "partial_tilt": {
@@ -67,20 +75,12 @@
       "p90": 17.197,
       "rows": 35
     },
-    "damper": {
-      "floor": 5.0,
-      "floor_from": "guess",
-      "median": 34.375,
-      "abs_median": 43.75,
-      "p90": 105.625,
-      "rows": 22
-    },
     "body": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 7.719,
-      "abs_median": 7.719,
-      "p90": 9.679,
+      "median": 7.706,
+      "abs_median": 7.706,
+      "p90": 9.651,
       "rows": 10
     },
     "vel_range": {
@@ -104,7 +104,7 @@
       "floor_from": "default",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 1.92,
+      "p90": 1.913,
       "rows": 35
     }
   }

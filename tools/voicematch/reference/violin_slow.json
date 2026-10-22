@@ -1,7 +1,7 @@
 {
  "id": "violin_slow",
  "label": "Slow Violin, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-15T18:23:15+00:00",
+ "measured_utc": "2026-10-22T01:15:01+00:00",
  "capture": {
   "program": 40,
   "params": [],
@@ -107,7 +107,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 767.3,
-   "tnr_db": 26.18
+   "tnr_db": 26.77
   },
   {
    "timbre": "t0",
@@ -188,7 +188,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 1597.9,
-   "tnr_db": 31.38
+   "tnr_db": 32.3
   },
   {
    "timbre": "t0",
@@ -269,7 +269,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 1547.9,
-   "tnr_db": 33.55
+   "tnr_db": 34.19
   },
   {
    "timbre": "t0",
@@ -350,7 +350,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 2094.3,
-   "tnr_db": 33.61
+   "tnr_db": 35.06
   },
   {
    "timbre": "t0",
@@ -427,7 +427,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 1595.4,
-   "tnr_db": 39.08
+   "tnr_db": 42.0
   }
  ],
  "summary": {
@@ -500,19 +500,19 @@
    "damper_release_ms": {},
    "tnr_db": {
     "60": {
-     "100": 26.18
+     "100": 26.77
     },
     "66": {
-     "100": 31.38
+     "100": 32.3
     },
     "72": {
-     "100": 33.55
+     "100": 34.19
     },
     "78": {
-     "100": 33.61
+     "100": 35.06
     },
     "84": {
-     "100": 39.08
+     "100": 42.0
     }
    },
    "velocity_response": {}

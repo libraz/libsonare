@@ -2,12 +2,14 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "t0",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-15T18:19:02+00:00",
-  "recorded_utc": "2026-09-20T19:34:15+00:00",
-  "reference_spread": {},
-  "_unbounded": {
-    "balance": "0 of 11 rows scored, and the reason is the registration rather than the dimension. This patch pulls 16', 8' and 5 1/3' and zeroes every upper drawbar, which `additive_voice.cpp` sounds at 0.5, 1.0 and 1.5 times the played note; at note 48 the three sit within 1.01 dB of each other. h2-h6 are read against the played note, so two of those three fall between its rungs and 4' - the first upper drawbar, at 2.0 - is 80.6 dB down. The reference is not silent there: it carries 4' at -4.35 dB, 2' at -11.62 and 1 1/3' at -14.96 under its own fundamental, on the same grid. So the two sides disagree about which drawbars are out, and this dimension is the instrument that says so once the model has them. Two things this entry is NOT: it is not a claim that a drawbar voice cannot be scored here, and it is not evidence of a missing mechanism - anchored an octave lower the model's three partials are a complete 1:2:3 ladder. Every ratio in the drawbar table is a multiple of 0.5, so 16' and 5 1/3' are invisible to any probe anchored on the played note, at every registration; read a null on this dimension against the patch's own drawbars before reading it as absence."
+  "reference_measured_utc": "2026-10-22T01:12:23+00:00",
+  "recorded_utc": "2026-10-22T01:24:09+00:00",
+  "model_build": {
+    "built_utc": "2026-10-21T10:18:24Z",
+    "newest_source_utc": "2026-10-21T10:20:44Z",
+    "stale": true
   },
+  "reference_spread": {},
   "bounds": {
     "stretch": {
       "floor": 1.0,
@@ -20,9 +22,9 @@
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 43.987,
-      "abs_median": 43.987,
-      "p90": 70.325,
+      "median": 33.55,
+      "abs_median": 33.55,
+      "p90": 54.188,
       "rows": 11
     },
     "attack": {
@@ -33,20 +35,28 @@
       "p90": 40.0,
       "rows": 11
     },
+    "balance": {
+      "floor": 0.5,
+      "floor_from": "guess",
+      "median": 17.195,
+      "abs_median": 17.195,
+      "p90": 29.705,
+      "rows": 11
+    },
     "centroid_pct": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 60.435,
-      "abs_median": 60.435,
-      "p90": 88.724,
+      "median": 50.152,
+      "abs_median": 50.152,
+      "p90": 83.697,
       "rows": 11
     },
     "body": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 80.638,
-      "abs_median": 80.638,
-      "p90": 87.145,
+      "median": 59.913,
+      "abs_median": 59.913,
+      "p90": 63.735,
       "rows": 9
     }
   }

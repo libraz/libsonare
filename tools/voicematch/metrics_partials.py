@@ -143,6 +143,54 @@ def partial_hz(f0: float, n: int, b: float) -> float:
     return n * f0 * float(np.sqrt(1.0 + b * n * n))
 
 
+#: Top of the tone-to-noise band, and of the partials masked inside it.
+TNR_TOP_HZ = 12000.0
+
+
+def tone_to_noise_db(freqs: np.ndarray, mag: np.ndarray, f0_hz: float, b: float = 0.0) -> float:
+    """Energy in the partials against everything else in the audible band.
+
+    What it separates is the string from the mechanism: a plucked or struck
+    instrument's noise floor is its own action — a plectrum scraping, a hammer's
+    felt, a jack falling back — and a model that has the partial stack right and
+    no mechanism noise reads far cleaner than any recording of the real thing.
+    That reads as an improvement on every spectral metric and is the single most
+    audible thing still missing.
+
+    Every partial up to the band's top is masked, placed by the fitted stiffness
+    `b`: a plucked string's spectrum above its sixteenth partial is still almost
+    all partial, and counted as noise it read the string as its own mechanism.
+    The band starts just under the fundamental, because the energy below it is
+    the body, which `body_below_f0_db` already measures.
+
+    The partial window is the wider of ±2 % and three FFT bins. A relative-only
+    window collapses below one bin at a low fundamental — at 44 Hz it asks for
+    ±0.9 Hz out of a 1.7 Hz grid — so a bass note would score as pure noise for
+    a reason that is entirely the analysis window's. It is capped at a quarter of
+    the fundamental: from the 13th partial up ±2 % would cover more than half of
+    each gap between partials, and from the 25th the windows tile the spectrum
+    and broadband noise there would all count as tone.
+    """
+    if freqs.size < 2 or f0_hz <= 0.0:
+        return float("nan")
+    power = mag.astype(np.float64) ** 2
+    bin_hz = float(freqs[1] - freqs[0])
+    top = min(TNR_TOP_HZ, float(freqs[-1]))
+    tonal = np.zeros(freqs.shape, dtype=bool)
+    n = 1
+    while True:
+        target = partial_hz(f0_hz, n, b)
+        half = min(max(0.02 * target, 3.0 * bin_hz), 0.25 * f0_hz)
+        if target - half > top:
+            break
+        tonal |= (freqs >= target - half) & (freqs <= target + half)
+        n += 1
+    band = (freqs >= max(40.0, 0.8 * f0_hz)) & (freqs <= top)
+    tone = float(power[tonal & band].sum())
+    noise = float(power[~tonal & band].sum())
+    return float(10.0 * np.log10((tone + 1e-30) / (noise + 1e-30)))
+
+
 # How far out the partial series is worth extrapolating. The stiffness fit reads
 # the low partials, where a string has any, and B enters the frequency as n², so
 # the error in a predicted partial grows as the square of how far past the fit
