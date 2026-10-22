@@ -518,7 +518,10 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // cycle and the loop ran period-doubled, half-integer lines 42-48 dB under the fundamental;
   // at 1.6 it still beats (20% closed) and the lines sit 62 dB down and more.
   o.bassoon.reed.closing_pressure = 1.6f;
-  o.bassoon.reed.flow_gain = 0.811499f;
+  // Holds the fundamental through the top of the compass: from 0.78 up, D5 at 48 kHz ran
+  // period-doubled 14 dB under its neighbours (half-integer lines 34 dB under h1), while the
+  // same note at 44.1 and 96 kHz held, so the fitted 0.81 sat on the regime's edge.
+  o.bassoon.reed.flow_gain = 0.76f;
   // Low because the drive ahead of it adds the upper partials; the centroid reads 32% under the
   // reference's.
   o.bassoon.cutoff_hz = 755.142f;
@@ -529,9 +532,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.bassoon.drift_rate_hz = 0.228195f;
   o.bassoon.reed.attack_ms = 59.9853f;
   // Breath noise is what fills the band under the note that the reference carries: here that
-  // band matches and the tone reads 11 dB noisier than the reference; at 0.3 the tone is 4 dB
-  // cleaner and the band 8 dB short. No setting meets both.
-  o.bassoon.reed.breath_noise = 0.8f;
+  // band matches under the lower flow gain and the tone reads 12 dB noisier than the
+  // reference; at 0.3 the tone is 4 dB cleaner and the band 8 dB short. No setting meets both.
+  o.bassoon.reed.breath_noise = 0.9f;
   o.bassoon.reed.breath_pressure = 0.741138f;
   o.bassoon.reed.brightness = 0.942493f;
   o.bassoon.reed.chiff = 0.623818f;

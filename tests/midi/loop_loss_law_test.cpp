@@ -458,16 +458,14 @@ TEST_CASE("the rendered engines' sr-discriminator, with ks_voice as the control"
   // (solve_string_loop_filter's own HF-quote solve), so its reading must ALSO
   // group by f0 -- proving the discriminator itself, not merely one engine,
   // can tell the two groupings apart.
-  // Each engine's own pair of notes and per-note bounds: ks_voice's own sr
-  // noise floor (measured 2.03-2.80 dB across every note used below) sets the
-  // bound as much as the migrated engine's does, so the pair and its bounds
-  // are per engine rather than shared.
+  // Each engine's own pair of notes and per-note bounds, since the engines'
+  // own sr noise floors differ.
   //
   // What the engines actually read, so a later widening is visibly a decision:
   // flute 0.295 / 0.286, bowed 0.248 / 0.008, plucked 0.294, an order of
-  // magnitude inside bounds the control sets. A note term reintroduced at an
-  // engine's own call site measured 5.09 (flute) and 4.40 (bowed), so the
-  // bounds straddle the defect rather than merely clearing the noise.
+  // magnitude inside the bounds. A note term reintroduced at an engine's own
+  // call site measured 5.09 (flute) and 4.40 (bowed), so the bounds straddle
+  // the defect rather than merely clearing the noise.
   struct EngineCase {
     const char* name;
     std::vector<float> (*render)(uint8_t, double, int);
@@ -482,7 +480,12 @@ TEST_CASE("the rendered engines' sr-discriminator, with ks_voice as the control"
       {"plucked_string", render_plucked_dark, 48, 60, 3.5, 4.5},
       {"reed", render_reed_dark, 48, 60, 3.0, 4.0},
   };
-  const KsPatchParams& steel_guitar = gm_fallback_patch(0, 25).ks;
+  // The control plucks with the deterministic doublet alone. A one-period noise burst draws
+  // every harmonic afresh at each rate, and that draw alone read 2.0-4.3 dB of spread on the
+  // shipped steel guitar across three library generations; this control reads under 0.31.
+  KsPatchParams control;
+  control.pluck_style = 1.0f;
+  control.nail = 0.0f;
   const double rates[] = {24000.0, 48000.0, 96000.0};
 
   for (const EngineCase& engine : engines) {
@@ -500,7 +503,7 @@ TEST_CASE("the rendered engines' sr-discriminator, with ks_voice as the control"
 
         const std::vector<float> engine_out = engine.render(note, sr, samples);
         const BandTilt engine_tilt = octave_band_tilt(engine_out, 200.0, 6400.0, sr);
-        const std::vector<float> ks_out = render_ks(steel_guitar, note, sr, samples);
+        const std::vector<float> ks_out = render_ks(control, note, sr, samples);
         const BandTilt ks_tilt = octave_band_tilt(ks_out, 200.0, 6400.0, sr);
 
         report << engine.name << " note " << int{note} << " sr " << sr << "  engine "
