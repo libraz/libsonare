@@ -767,8 +767,10 @@ TEST_CASE("NativeSynth subtractive section: osc2 and noise are absent at level 0
   interval_only.va.osc2_interval_cents = 702.0f;
   REQUIRE(render_patch(interval_only) == render_patch(base));
   NativeSynthPatch corners_only = base;
-  corners_only.va.band_noise_low_ratio = 3.0f;
+  corners_only.va.band_noise_low_hz = 800.0f;
+  corners_only.va.band_noise_low_key_track = 1.0f;
   corners_only.va.band_noise_high_hz = 900.0f;
+  corners_only.va.band_noise_high_key_track = 1.0f;
   REQUIRE(render_patch(corners_only) == render_patch(base));
   NativeSynthPatch with_osc2 = base;
   with_osc2.va.osc2_level = 0.5f;
@@ -886,6 +888,7 @@ TEST_CASE("NativeSynth subtractive section: band noise passes the closed filter,
   filtered_noise.va.noise_level = 0.2f;
   NativeSynthPatch banded = closed;
   banded.va.band_noise_level = 0.2f;
+  banded.va.band_noise_low_hz = 300.0f;
   banded.va.band_noise_high_hz = 3000.0f;
   const size_t from = static_cast<size_t>(0.2 * kOutRate);
   const size_t len = static_cast<size_t>(0.5 * kOutRate);
@@ -899,16 +902,20 @@ TEST_CASE("NativeSynth subtractive section: band noise passes the closed filter,
   // Between the partials, where the closed filter leaves the same noise ahead of it little.
   const double gap = band(wet, 1.2 * kF0);
   CHECK(gap > 30.0 * std::max(band(filtered, 1.2 * kF0), 1e-9));
-  // Below the played pitch and above the lowpass corner the band falls away.
+  // Below the highpass corner and above the lowpass corner the band falls away.
   CHECK(band(wet, 30.0) < 0.1 * gap);
   CHECK(band(wet, 12000.0) < 0.1 * gap);
   // Tracking the key moves the lowpass corner up an octave over the octave above middle C.
   NativeSynthPatch fixed_corner = banded;
   fixed_corner.va.band_noise_high_hz = 1000.0f;
   NativeSynthPatch tracked_corner = fixed_corner;
-  tracked_corner.va.band_noise_key_track = 1.0f;
+  tracked_corner.va.band_noise_high_key_track = 1.0f;
   CHECK(band(render_patch(tracked_corner), 1500.0) >
         2.0 * band(render_patch(fixed_corner), 1500.0));
+  // Tracking the key moves the highpass corner up too, out of the band beneath it.
+  NativeSynthPatch tracked_low = banded;
+  tracked_low.va.band_noise_low_key_track = 1.0f;
+  CHECK(band(render_patch(tracked_low), 150.0) < 0.6 * band(wet, 150.0));
 }
 
 TEST_CASE("Sf2Player without a SoundFont plays every GM program via the fallback",

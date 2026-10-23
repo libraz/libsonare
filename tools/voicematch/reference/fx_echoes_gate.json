@@ -3,53 +3,54 @@
   "timbre": "gm103",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-23T06:58:07+00:00",
-  "recorded_utc": "2026-10-23T07:25:07+00:00",
+  "recorded_utc": "2026-10-23T13:47:11+00:00",
   "model_build": {
-    "built_utc": "2026-10-23T06:18:37Z",
-    "newest_source_utc": "2026-10-23T06:17:49Z",
+    "built_utc": "2026-10-23T13:46:50Z",
+    "newest_source_utc": "2026-10-23T13:46:12Z",
     "stale": false
   },
   "reference_spread": {},
   "_tnr_mask_reading": "tnr.median (was 14.53), tnr.abs_median (was 14.53) deleted 2026-10-23 and re-recorded when the model's tone-to-noise ratio came to be read through its reference's mask: each reference row records the pitch motion and tremolo its own mask was widened by, and the model note is measured through that record rather than its own, so the same bins count as tone on both sides. The reference's own ratio did not move.",
+  "_balance_population": "balance.p90 raised 13.727 -> 17.787 on 2026-10-23 when the voice gained an octave and a noise floor. The old bound was recorded while the model's triangle had no even partials, so its h2, h4 and h6 bins were rejected by the ladder and the model's stack was the mean of h3 and h5 against the reference's h2-h6. With the floor present those bins read, and the residual is the reference's h4 (about -25 dB), which a triangle and its octave cannot produce, plus n52, whose stack sits 7 dB above its neighbours.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 4.178,
-      "abs_median": 5.253,
-      "p90": 11.614,
+      "median": 3.691,
+      "abs_median": 5.047,
+      "p90": 10.902,
       "rows": 35
     },
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 23.0,
-      "abs_median": 23.0,
-      "p90": 28.66,
+      "median": 2.475,
+      "abs_median": 4.0,
+      "p90": 10.973,
       "rows": 35
     },
     "damper": {
       "floor": 5.0,
       "floor_from": "guess",
       "median": 125.0,
-      "abs_median": 218.75,
-      "p90": 368.75,
+      "abs_median": 143.75,
+      "p90": 356.25,
       "rows": 35
     },
     "attack": {
       "floor": 40.0,
       "floor_from": "guess",
       "median": 50.0,
-      "abs_median": 106.25,
-      "p90": 2493.75,
+      "abs_median": 93.75,
+      "p90": 306.25,
       "rows": 35
     },
     "body": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 34.487,
-      "abs_median": 34.487,
-      "p90": 40.71,
+      "median": 2.4,
+      "abs_median": 7.737,
+      "p90": 24.268,
       "rows": 35
     },
     "stereo": {
@@ -63,24 +64,24 @@
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 4.223,
-      "abs_median": 6.088,
-      "p90": 13.727,
+      "median": 0.873,
+      "abs_median": 4.132,
+      "p90": 17.787,
       "rows": 35
     },
     "centroid_pct": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 14.808,
+      "median": 3.237,
       "abs_median": 14.808,
-      "p90": 44.985,
+      "p90": 38.797,
       "rows": 35
     },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 15.013,
-      "abs_median": 15.013,
+      "median": 15.012,
+      "abs_median": 15.012,
       "p90": 15.302,
       "rows": 7
     },
@@ -89,7 +90,7 @@
       "floor_from": "default",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 6.408,
+      "p90": 6.125,
       "rows": 35
     }
   }

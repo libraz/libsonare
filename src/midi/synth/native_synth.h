@@ -103,12 +103,14 @@ struct VaPatchParams {
   /// Seeded white noise added after the filter through its own band, so the
   /// floor between partials holds still while the filter tracks the key; 0 = absent.
   float band_noise_level = 0.0f;
-  /// That band's highpass corner as a multiple of the played pitch.
-  float band_noise_low_ratio = 1.0f;
+  /// That band's 2-pole highpass corner at middle C (Hz).
+  float band_noise_low_hz = 20.0f;
+  /// How far the highpass corner follows the played pitch (1 = by its interval from middle C).
+  float band_noise_low_key_track = 0.0f;
   /// That band's 4th-order lowpass corner at middle C (Hz).
   float band_noise_high_hz = 4000.0f;
   /// How far the lowpass corner follows the played pitch (1 = by its interval from middle C).
-  float band_noise_key_track = 0.0f;
+  float band_noise_high_key_track = 0.0f;
 };
 
 /// One playable patch: oscillator section, filter section, envelopes and the
@@ -1514,12 +1516,14 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.va.noise_am = std::clamp(patch_clamp_detail::sanitize(p.va.noise_am, 0.0f), 0.0f, 1.0f);
   p.va.band_noise_level =
       std::clamp(patch_clamp_detail::sanitize(p.va.band_noise_level, 0.0f), 0.0f, 4.0f);
-  p.va.band_noise_low_ratio =
-      std::clamp(patch_clamp_detail::sanitize(p.va.band_noise_low_ratio, 1.0f), 0.0f, 16.0f);
+  p.va.band_noise_low_hz =
+      std::clamp(patch_clamp_detail::sanitize(p.va.band_noise_low_hz, 20.0f), 10.0f, 20000.0f);
+  p.va.band_noise_low_key_track =
+      std::clamp(patch_clamp_detail::sanitize(p.va.band_noise_low_key_track, 0.0f), 0.0f, 1.0f);
   p.va.band_noise_high_hz =
       std::clamp(patch_clamp_detail::sanitize(p.va.band_noise_high_hz, 4000.0f), 20.0f, 20000.0f);
-  p.va.band_noise_key_track =
-      std::clamp(patch_clamp_detail::sanitize(p.va.band_noise_key_track, 0.0f), 0.0f, 1.0f);
+  p.va.band_noise_high_key_track =
+      std::clamp(patch_clamp_detail::sanitize(p.va.band_noise_high_key_track, 0.0f), 0.0f, 1.0f);
   for (ModRoute& route : p.mod_matrix.routes) {
     route.depth = std::clamp(patch_clamp_detail::sanitize(route.depth, 0.0f), -9600.0f, 9600.0f);
   }

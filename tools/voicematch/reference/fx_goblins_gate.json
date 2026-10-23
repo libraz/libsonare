@@ -3,10 +3,10 @@
   "timbre": "gm102",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-23T06:58:18+00:00",
-  "recorded_utc": "2026-10-23T07:25:18+00:00",
+  "recorded_utc": "2026-10-23T14:10:09+00:00",
   "model_build": {
-    "built_utc": "2026-10-23T06:18:37Z",
-    "newest_source_utc": "2026-10-23T06:17:49Z",
+    "built_utc": "2026-10-23T14:09:52Z",
+    "newest_source_utc": "2026-10-23T14:09:19Z",
     "stale": false
   },
   "reference_spread": {},
@@ -14,25 +14,25 @@
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 5.775,
-      "abs_median": 52.531,
-      "p90": 116.079,
+      "median": 1.0,
+      "abs_median": 1.0,
+      "p90": 1.285,
       "rows": 35
     },
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 24.787,
-      "abs_median": 24.787,
-      "p90": 35.918,
+      "median": 15.738,
+      "abs_median": 15.738,
+      "p90": 25.355,
       "rows": 35
     },
     "damper": {
       "floor": 5.0,
       "floor_from": "guess",
-      "median": 693.75,
-      "abs_median": 693.75,
-      "p90": 868.75,
+      "median": 93.75,
+      "abs_median": 93.75,
+      "p90": 106.25,
       "rows": 35
     },
     "attack": {
@@ -46,41 +46,41 @@
     "body": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 50.738,
-      "abs_median": 50.738,
-      "p90": 66.33,
+      "median": 32.112,
+      "abs_median": 32.112,
+      "p90": 50.75,
       "rows": 35
     },
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 21.651,
-      "abs_median": 21.651,
-      "p90": 29.899,
+      "median": 1.127,
+      "abs_median": 9.195,
+      "p90": 13.315,
       "rows": 35
     },
     "centroid_pct": {
       "floor": 1.0,
       "floor_from": "guess",
       "median": 1.0,
-      "abs_median": 3.612,
-      "p90": 5.431,
+      "abs_median": 1.0,
+      "p90": 1.896,
       "rows": 35
     },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 28.063,
-      "abs_median": 28.063,
-      "p90": 28.112,
+      "median": 28.062,
+      "abs_median": 28.062,
+      "p90": 28.11,
       "rows": 7
     },
     "register": {
       "floor": 1.0,
       "floor_from": "default",
       "median": 1.0,
-      "abs_median": 1.512,
-      "p90": 3.17,
+      "abs_median": 1.0,
+      "p90": 1.0,
       "rows": 35
     }
   }

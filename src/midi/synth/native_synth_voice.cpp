@@ -409,10 +409,13 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   if (band_noise_level > 0.0f) {
     band_noise_osc.start(sample_rate, VaWaveform::kNoise, 0.0f, seed ^ (kMaxUnisonOscs + 4));
     band_noise_hp.prepare(sample_rate);
-    band_noise_hp.set(p.va.band_noise_low_ratio * base_freq_hz, constants::kButterworthQ);
+    const float low_hz =
+        p.va.band_noise_low_hz *
+        std::exp2(p.va.band_noise_low_key_track * note_offset_semitones / kSemitonesPerOctave);
+    band_noise_hp.set(low_hz, constants::kButterworthQ);
     const float high_hz =
         p.va.band_noise_high_hz *
-        std::exp2(p.va.band_noise_key_track * note_offset_semitones / kSemitonesPerOctave);
+        std::exp2(p.va.band_noise_high_key_track * note_offset_semitones / kSemitonesPerOctave);
     band_noise_lp.prepare(sample_rate);
     band_noise_lp.set(high_hz, constants::kButterworth4QLow);
     band_noise_lp2.prepare(sample_rate);

@@ -83,9 +83,10 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_calliope.va.osc2_interval_cents = 1200.0f;
   o.lead_calliope.va.noise_am = 0.22f;
   o.lead_calliope.va.band_noise_level = 0.2f;
-  o.lead_calliope.va.band_noise_low_ratio = 1.5f;
+  o.lead_calliope.va.band_noise_low_hz = 392.0f;
+  o.lead_calliope.va.band_noise_low_key_track = 1.0f;
   o.lead_calliope.va.band_noise_high_hz = 3000.0f;
-  o.lead_calliope.va.band_noise_key_track = 0.25f;
+  o.lead_calliope.va.band_noise_high_key_track = 0.25f;
   o.lead_calliope.env_to_cutoff_cents = 200.19f;
   o.lead_calliope.amp_env = fallback_env(35.0f, 200.0f, 0.9f, 180.0f);
   o.lead_calliope.body = BodyType::kWoodTube;
@@ -134,17 +135,21 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_charang.amp_env.release_ms = 91.8123f;
 
   // Voice (GM 85): a sung lead. The vocal formant bank is the model; the
-  // oscillator behind it only has to be rich enough to feed the formants.
+  // oscillator behind it only has to be rich enough to feed the formants. The
+  // reference breathes between its partials up to about 4 kHz, below the fundamental too.
   o.lead_voice = lead;
   o.lead_voice.unison = 2;
   o.lead_voice.detune_cents = 9.0f;
-  o.lead_voice.cutoff_hz = 2200.0f;
+  o.lead_voice.cutoff_hz = 1800.0f;
   o.lead_voice.amp_env = fallback_env(45.0f, 250.0f, 0.85f, 220.0f);
   o.lead_voice.lfo_rate_hz = 5.2f;
   o.lead_voice.lfo_to_pitch_cents = 14.0f;
   o.lead_voice.body = BodyType::kVocal;
   o.lead_voice.body_mix = 0.6f;
   o.lead_voice.gain = 0.61f;
+  o.lead_voice.va.band_noise_level = 0.05f;
+  o.lead_voice.va.band_noise_low_hz = 65.0f;
+  o.lead_voice.va.band_noise_low_key_track = 1.0f;
 
   // Fifths (GM 86): a still saw and one a fourth below at equal level, as the reference
   // holds them; a linear 4-pole keeps the pair from intermodulating (a ladder's tanh put
@@ -364,7 +369,9 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_crystal.gain = 0.58f;
   o.fx_crystal.amp_env.attack_ms = 2.99715f;
 
-  // FX 4 Atmosphere: wide drift supplies the motion possible in a one-note voice.
+  // FX 4 Atmosphere: wide drift supplies the motion possible in a one-note voice. The
+  // reference's floor between partials sits flat from 60 Hz, under the fundamental too, and
+  // falls away above 2.5-5 kHz, so its breath is a band after the filter.
   o.fx_atmosphere = fx;
   o.fx_atmosphere.waveform = VaWaveform::kSaw;
   o.fx_atmosphere.unison = 4;
@@ -380,6 +387,11 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_atmosphere.amp_env.release_ms = 714.758f;
   o.fx_atmosphere.amp_env.sustain = 0.43011f;
   o.fx_atmosphere.drift_rate_hz = 0.168613f;
+  o.fx_atmosphere.va.band_noise_level = 0.035f;
+  o.fx_atmosphere.va.band_noise_low_hz = 26.0f;
+  o.fx_atmosphere.va.band_noise_low_key_track = 1.0f;
+  o.fx_atmosphere.va.band_noise_high_hz = 2500.0f;
+  o.fx_atmosphere.va.band_noise_high_key_track = 0.3f;
 
   // FX 5 Brightness: square-wave and high-pass edge with a little brittle drive.
   o.fx_brightness = fx;
@@ -401,31 +413,37 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_brightness.filter_env.attack_ms = 0.305805f;
   o.fx_brightness.filter_env.decay_ms = 21.64f;
 
-  // FX 6 Goblins: detune, drift and seeded random pitch make a deterministic twitch.
+  // FX 6 Goblins: a dark square that holds its pitch; the reference neither drifts nor
+  // detunes (every note sits within 2 cents of tempered). Its partial stack is the same
+  // on every note, so the filter tracks the key, and its noise is a hiss from 5 to 12 kHz
+  // at a fixed frequency, nearly silent beneath.
   o.fx_goblins = fx;
   o.fx_goblins.waveform = VaWaveform::kSquare;
-  o.fx_goblins.unison = 2;
-  o.fx_goblins.detune_cents = 48.0f;
-  o.fx_goblins.drift_cents = 2.775f;
+  o.fx_goblins.unison = 1;
+  o.fx_goblins.filter_model = SynthFilterModel::kSvf4Pole;
   o.fx_goblins.amp_env = fallback_env(40.0f, 250.0f, 0.55f, 350.0f);
-  o.fx_goblins.cutoff_hz = 380.199f;
+  o.fx_goblins.cutoff_hz = 410.0f;
+  o.fx_goblins.key_track = 1.0f;
   o.fx_goblins.resonance_q = 0.539422f;
   o.fx_goblins.filter_env = fallback_env(2.0f, 160.0f, 0.1f, 200.0f);
   o.fx_goblins.env_to_cutoff_cents = 981.231f;
-  o.fx_goblins.mod_matrix.routes[0] = {ModSource::kRandom, ModDestination::kPitchCents, 80.0f};
   o.fx_goblins.gain = 0.54f;
   o.fx_goblins.amp_env.attack_ms = 144.178f;
   o.fx_goblins.amp_env.decay_ms = 882.691f;
   o.fx_goblins.amp_env.release_ms = 750.351f;
   o.fx_goblins.amp_env.sustain = 0.498283f;
-  o.fx_goblins.drift_rate_hz = 1.70823f;
   o.fx_goblins.drive = 0.0f;
   o.fx_goblins.filter_env.attack_ms = 15.4188f;
   o.fx_goblins.filter_env.decay_ms = 2326.59f;
   o.fx_goblins.filter_env.release_ms = 1133.65f;
   o.fx_goblins.filter_env.sustain = 0.377439f;
+  o.fx_goblins.va.band_noise_level = 0.1f;
+  o.fx_goblins.va.band_noise_low_hz = 5000.0f;
+  o.fx_goblins.va.band_noise_high_hz = 12000.0f;
 
-  // FX 7 Echoes: without a delay line, slow LFO gain pulses mimic repeats.
+  // FX 7 Echoes: without a delay line, slow LFO gain pulses mimic repeats. The reference
+  // carries an octave (h2 -9 dB at the median) over a triangle-like odd series, and a
+  // floor between partials that is highest around the fundamental and falls above 1-2 kHz.
   o.fx_echoes = fx;
   o.fx_echoes.waveform = VaWaveform::kTriangle;
   o.fx_echoes.unison = 4;
@@ -440,6 +458,13 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_echoes.amp_env.decay_ms = 449.135f;
   o.fx_echoes.amp_env.release_ms = 803.905f;
   o.fx_echoes.amp_env.sustain = 0.308815f;
+  o.fx_echoes.va.osc2_level = 0.3f;
+  o.fx_echoes.va.osc2_interval_cents = 1200.0f;
+  o.fx_echoes.va.band_noise_level = 0.12f;
+  o.fx_echoes.va.band_noise_low_hz = 131.0f;
+  o.fx_echoes.va.band_noise_low_key_track = 1.0f;
+  o.fx_echoes.va.band_noise_high_hz = 1200.0f;
+  o.fx_echoes.va.band_noise_high_key_track = 0.5f;
 
   // FX 8 Sci-Fi: an opening resonant radio band with a slow synthetic sweep.
   o.fx_sci_fi = fx;

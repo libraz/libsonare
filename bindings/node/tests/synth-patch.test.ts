@@ -721,9 +721,10 @@ describe('SynthPatch.engineParams', () => {
     const names = synthEngineParamInfo('subtractive').map((field) => field.name);
     expect(names.sort()).toEqual([
       'bandNoiseHighHz',
-      'bandNoiseKeyTrack',
+      'bandNoiseHighKeyTrack',
       'bandNoiseLevel',
-      'bandNoiseLowRatio',
+      'bandNoiseLowHz',
+      'bandNoiseLowKeyTrack',
       'noiseAm',
       'noiseLevel',
       'osc2IntervalCents',

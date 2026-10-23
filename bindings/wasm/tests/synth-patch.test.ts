@@ -616,9 +616,10 @@ describe('Sonare WASM NativeSynth', () => {
     const names = synthEngineParamInfo('subtractive').map((info) => info.name);
     expect(names.sort()).toEqual([
       'bandNoiseHighHz',
-      'bandNoiseKeyTrack',
+      'bandNoiseHighKeyTrack',
       'bandNoiseLevel',
-      'bandNoiseLowRatio',
+      'bandNoiseLowHz',
+      'bandNoiseLowKeyTrack',
       'noiseAm',
       'noiseLevel',
       'osc2IntervalCents',
