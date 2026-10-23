@@ -283,7 +283,7 @@ TEST_CASE("NativeSynth enum names are supplied by the C project ABI", "[project]
         std::vector<std::string>{"sine", "saw", "sawtooth", "square", "triangle"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_MODEL)) ==
         std::vector<std::string>{"default", "svf", "transistor-ladder", "diode-ladder",
-                                 "sallen-key"});
+                                 "sallen-key", "svf-4-pole"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_OUTPUT)) ==
         std::vector<std::string>{"default", "lowpass", "bandpass", "highpass"});
   CHECK(split(sonare_synth_enum_names(SONARE_SYNTH_ENUM_BODY_TYPE)) ==

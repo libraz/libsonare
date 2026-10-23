@@ -150,6 +150,8 @@ static_assert(static_cast<int>(sonare::midi::synth::SynthFilterModel::kDiodeLadd
               SONARE_SYNTH_FILTER_DIODE_LADDER);
 static_assert(static_cast<int>(sonare::midi::synth::SynthFilterModel::kSallenKey) + 1 ==
               SONARE_SYNTH_FILTER_SALLEN_KEY);
+static_assert(static_cast<int>(sonare::midi::synth::SynthFilterModel::kSvf4Pole) + 1 ==
+              SONARE_SYNTH_FILTER_SVF_4POLE);
 
 static_assert(static_cast<int>(sonare::midi::synth::SynthFilterOutput::kLowpass) + 1 ==
               SONARE_SYNTH_FILTER_OUT_LOWPASS);

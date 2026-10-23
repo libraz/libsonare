@@ -54,7 +54,7 @@ EXPECTED_SYNTH_ENUM_TABLES = {
     ),
     "waveforms": ("default", "sine", "saw", "square", "triangle", "noise"),
     "builtin_waveforms": ("sine", "saw", "sawtooth", "square", "triangle"),
-    "filter_models": ("default", "svf", "transistor-ladder", "diode-ladder", "sallen-key"),
+    "filter_models": ("default", "svf", "transistor-ladder", "diode-ladder", "sallen-key", "svf-4-pole"),
     "filter_outputs": ("default", "lowpass", "bandpass", "highpass"),
     "body_types": ("default", "none", "guitar", "violin", "wood-tube", "brass-bell", "vocal"),
     "mod_sources": (

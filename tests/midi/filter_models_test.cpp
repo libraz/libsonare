@@ -30,10 +30,9 @@ using sonare::midi::synth::SynthFilterOutput;
 constexpr double kRate = 48000.0;
 
 constexpr SynthFilterModel kAllModels[] = {
-    SynthFilterModel::kSvf,
-    SynthFilterModel::kTransistorLadder,
-    SynthFilterModel::kDiodeLadder,
-    SynthFilterModel::kSallenKey,
+    SynthFilterModel::kSvf,         SynthFilterModel::kTransistorLadder,
+    SynthFilterModel::kDiodeLadder, SynthFilterModel::kSallenKey,
+    SynthFilterModel::kSvf4Pole,
 };
 
 constexpr SynthFilterModel kSelfOscModels[] = {
@@ -173,6 +172,39 @@ TEST_CASE("filter models attenuate above cutoff and pass below it", "[midi][synt
     REQUIRE(low > passband_floor);
     REQUIRE(high < 0.05f * low);  // > ~26 dB down at 4 octaves above Fc
   }
+}
+
+TEST_CASE("the 4-pole SVF falls at 24 dB per octave and stays linear", "[midi][synth][filter]") {
+  constexpr int kN = 9600;
+  auto level_at = [&](SynthFilterModel model, double freq_hz, float amplitude) {
+    SynthFilter filter;
+    filter.prepare(kRate);
+    filter.set_model(model);
+    filter.set(500.0f, 0.707f);
+    std::vector<float> out(kN);
+    for (int i = 0; i < kN; ++i) {
+      const float x =
+          amplitude * static_cast<float>(std::sin(2.0 * 3.14159265358979 * freq_hz * i / kRate));
+      out[static_cast<size_t>(i)] = filter.process(x, SynthFilterOutput::kLowpass);
+    }
+    return rms(out, kN / 2);
+  };
+  const auto octave_db = [&](SynthFilterModel model) {
+    return 20.0f * std::log10(level_at(model, 2000.0, 1.0f) / level_at(model, 4000.0, 1.0f));
+  };
+  const float four_pole = octave_db(SynthFilterModel::kSvf4Pole);
+  const float two_pole = octave_db(SynthFilterModel::kSvf);
+  CHECK(four_pole > 22.0f);
+  CHECK(four_pole < 26.0f);
+  CHECK(two_pole < 13.0f);
+  // Butterworth: the corner is the -3 dB point, as it is for the 2-pole SVF.
+  const float corner_db = 20.0f * std::log10(level_at(SynthFilterModel::kSvf4Pole, 500.0, 1.0f) /
+                                             (1.0f / std::sqrt(2.0f)));
+  CHECK(std::fabs(corner_db + 3.01f) < 0.2f);
+  // No saturation anywhere in the path: a 4x input is a 4x output.
+  const float small = level_at(SynthFilterModel::kSvf4Pole, 300.0, 0.5f);
+  const float large = level_at(SynthFilterModel::kSvf4Pole, 300.0, 2.0f);
+  CHECK(std::fabs(large / small - 4.0f) < 1.0e-4f);
 }
 
 TEST_CASE("ladder and Sallen-Key models self-oscillate deterministically",

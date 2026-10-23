@@ -342,8 +342,17 @@ void Korg35Filter::settle(float x) noexcept {
 // SynthFilter — model dispatch
 // ---------------------------------------------------------------------------
 
+namespace {
+
+// Section Qs of a 4th-order Butterworth lowpass: 1 / (2 cos(pi/8)) and 1 / (2 cos(3pi/8)).
+constexpr float kFourPoleLowQ = 0.54119610f;
+constexpr float kFourPoleHighQ = 1.30656296f;
+
+}  // namespace
+
 void SynthFilter::prepare(double sample_rate) noexcept {
   svf_.prepare(sample_rate);
+  svf_second_.prepare(sample_rate);
   transistor_.prepare(sample_rate);
   diode_.prepare(sample_rate);
   sallen_key_.prepare(sample_rate);
@@ -351,6 +360,7 @@ void SynthFilter::prepare(double sample_rate) noexcept {
 
 void SynthFilter::reset() noexcept {
   svf_.reset();
+  svf_second_.reset();
   transistor_.reset();
   diode_.reset();
   sallen_key_.reset();
@@ -376,6 +386,10 @@ void SynthFilter::set(float cutoff_hz, float q) noexcept {
     case SynthFilterModel::kSallenKey:
       sallen_key_.set(cutoff_hz, filter_resonance01_from_q(q));
       break;
+    case SynthFilterModel::kSvf4Pole:
+      svf_.set(cutoff_hz, kFourPoleLowQ);
+      svf_second_.set(cutoff_hz, kFourPoleHighQ * q / constants::kButterworthQ);
+      break;
   }
 }
 
@@ -399,6 +413,8 @@ float SynthFilter::process(float x, SynthFilterOutput output) noexcept {
       return diode_.process(x);
     case SynthFilterModel::kSallenKey:
       return sallen_key_.process(x);
+    case SynthFilterModel::kSvf4Pole:
+      return svf_second_.process(svf_.process(x).lp).lp;
   }
   return x;
 }
@@ -416,6 +432,10 @@ void SynthFilter::settle(float x) noexcept {
       break;
     case SynthFilterModel::kSallenKey:
       sallen_key_.settle(x);
+      break;
+    case SynthFilterModel::kSvf4Pole:
+      svf_.settle(x);
+      svf_second_.settle(x);
       break;
   }
 }

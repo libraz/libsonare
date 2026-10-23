@@ -199,6 +199,7 @@ export const SYNTH_FILTER_MODELS = [
   'transistor-ladder',
   'diode-ladder',
   'sallen-key',
+  'svf-4-pole',
 ] as const;
 
 export const SYNTH_FILTER_OUTPUTS = ['default', 'lowpass', 'bandpass', 'highpass'] as const;
@@ -747,8 +748,8 @@ export interface SynthPatch {
    * 2^(envelope × envToCutoffCents / 1200), so the response moves by exactly
    * that interval wherever the corner sits well below Nyquist; near the top the
    * `svf` moves slightly less and the ladders slightly more. `cutoffHz` is the
-   * −3 dB corner only for `svf` at `resonanceQ` 0.707: with resonance the `svf`
-   * corner sits above it, and the ladder and Sallen-Key models put their
+   * −3 dB corner only for `svf` and `svf-4-pole` at `resonanceQ` 0.707: with
+   * resonance their corner sits above it, and the ladder and Sallen-Key models put their
    * resonant peak on it with the −3 dB point one to three octaves lower, so
    * measure a depth as a ratio of corners rather than against `cutoffHz`.
    */

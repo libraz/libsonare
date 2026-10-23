@@ -13,6 +13,9 @@
 ///          - kSallenKey:        Korg35 Sallen-Key lowpass (MS-10 / early MS-20;
 ///                               ZDF two-LPF1 + HPF1 loop of Pirkle's AN-5;
 ///                               aggressive resonance, self-oscillates).
+///          - kSvf4Pole:         two cascaded TPT SVF lowpasses at the 4th-order
+///                               Butterworth pole pair (24 dB/oct, linear: the
+///                               digital filter of a sample-playback voice).
 ///
 /// All models are topology-preserving-transform (zero-delay-feedback)
 /// discretizations — stable and zipper-free under per-sample cutoff/resonance
@@ -39,10 +42,11 @@ enum class SynthFilterModel : int {
   kTransistorLadder = 1,
   kDiodeLadder = 2,
   kSallenKey = 3,
+  kSvf4Pole = 4,
 };
 
 /// Which TPT SVF output the voice mixes (highpass enables noise hats /
-/// cymbals). The ladder and Sallen-Key models are lowpass-only.
+/// cymbals). The ladder, Sallen-Key and 4-pole SVF models are lowpass-only.
 enum class SynthFilterOutput : int {
   kLowpass = 0,
   kBandpass = 1,
@@ -145,12 +149,13 @@ class SynthFilter {
   void set_model(SynthFilterModel model) noexcept;
   SynthFilterModel model() const noexcept { return model_; }
 
-  /// Cutoff in Hz and the patch Q (SVF uses Q directly; the ladder /
-  /// Sallen-Key models map it through filter_resonance01_from_q()).
+  /// Cutoff in Hz and the patch Q (SVF uses Q directly, the 4-pole SVF scales its
+  /// second section by Q / kButterworthQ; the ladder / Sallen-Key models map it
+  /// through filter_resonance01_from_q()).
   void set(float cutoff_hz, float q) noexcept;
 
-  /// Renders one sample. @p output selects the SVF tap; the ladder and
-  /// Sallen-Key models are lowpass-only and ignore it.
+  /// Renders one sample. @p output selects the SVF tap; the ladder,
+  /// Sallen-Key and 4-pole SVF models are lowpass-only and ignore it.
   float process(float x, SynthFilterOutput output) noexcept;
 
   /// Puts the selected model at the steady state of a constant input @p x, at the coefficients
@@ -161,6 +166,7 @@ class SynthFilter {
  private:
   SynthFilterModel model_ = SynthFilterModel::kSvf;
   TptSvf svf_;
+  TptSvf svf_second_;  // kSvf4Pole's second section; kSvf4Pole runs svf_ first
   TransistorLadderFilter transistor_;
   DiodeLadderFilter diode_;
   Korg35Filter sallen_key_;

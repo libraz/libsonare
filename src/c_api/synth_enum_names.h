@@ -33,8 +33,8 @@ inline constexpr const char* kWaveforms[] = {"default", "sine",     "saw",
                                              "square",  "triangle", "noise"};
 inline constexpr const char* kBuiltinWaveforms[] = {"sine", "saw", "sawtooth", "square",
                                                     "triangle"};
-inline constexpr const char* kFilterModels[] = {"default", "svf", "transistor-ladder",
-                                                "diode-ladder", "sallen-key"};
+inline constexpr const char* kFilterModels[] = {"default",      "svf",        "transistor-ladder",
+                                                "diode-ladder", "sallen-key", "svf-4-pole"};
 inline constexpr const char* kFilterOutputs[] = {"default", "lowpass", "bandpass", "highpass"};
 inline constexpr const char* kBodyTypes[] = {"default",   "none",       "guitar", "violin",
                                              "wood-tube", "brass-bell", "vocal"};

@@ -482,12 +482,13 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_SYNTH_FILTER_SVF = 1,
   SONARE_SYNTH_FILTER_TRANSISTOR_LADDER = 2,
   SONARE_SYNTH_FILTER_DIODE_LADDER = 3,
-  SONARE_SYNTH_FILTER_SALLEN_KEY = 4
+  SONARE_SYNTH_FILTER_SALLEN_KEY = 4,
+  SONARE_SYNTH_FILTER_SVF_4POLE = 5
 } SonareSynthFilterModel;
-#define SONARE_SYNTH_FILTER_MODEL_COUNT 5
+#define SONARE_SYNTH_FILTER_MODEL_COUNT 6
 
-/* Which filter output the voice mixes (SVF only; the ladder and Sallen-Key
-   models are lowpass-only). 0 keeps the base patch's value. */
+/* Which filter output the voice mixes (SVF only; the ladder, Sallen-Key and
+   4-pole SVF models are lowpass-only). 0 keeps the base patch's value. */
 typedef enum SONARE_ENUM_BASE {
   SONARE_SYNTH_FILTER_OUT_DEFAULT = 0,
   SONARE_SYNTH_FILTER_OUT_LOWPASS = 1,
@@ -887,7 +888,7 @@ static_assert(SONARE_SAMPLE_KEY_TRACK_OFF + 1 == SONARE_SAMPLE_KEY_TRACK_COUNT,
               "SonareSampleKeyTrack count changed");
 static_assert(SONARE_SYNTH_OSC_NOISE + 1 == SONARE_SYNTH_OSC_WAVEFORM_COUNT,
               "SonareSynthOscWaveform count changed");
-static_assert(SONARE_SYNTH_FILTER_SALLEN_KEY + 1 == SONARE_SYNTH_FILTER_MODEL_COUNT,
+static_assert(SONARE_SYNTH_FILTER_SVF_4POLE + 1 == SONARE_SYNTH_FILTER_MODEL_COUNT,
               "SonareSynthFilterModel count changed");
 static_assert(SONARE_SYNTH_FILTER_OUT_HIGHPASS + 1 == SONARE_SYNTH_FILTER_OUTPUT_COUNT,
               "SonareSynthFilterOutput count changed");

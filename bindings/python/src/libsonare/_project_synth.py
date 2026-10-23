@@ -118,6 +118,7 @@ _SYNTH_FILTER_MODELS = {
     "transistor-ladder": 2,
     "diode-ladder": 3,
     "sallen-key": 4,
+    "svf-4-pole": 5,
 }
 # Input-only: "moog-ladder" is the pre-rename spelling of "transistor-ladder".
 _SYNTH_FILTER_MODEL_INPUT = {**_SYNTH_FILTER_MODELS, "moog-ladder": 2}
