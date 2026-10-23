@@ -66,22 +66,24 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_saw.amp_env.decay_ms = 122.416f;
   o.lead_saw.amp_env.release_ms = 91.8123f;
 
-  // Calliope (GM 82): a steam whistle rank. The reference's odd partials are strong (h3 -13,
-  // h5 -16 dB at C4) and it has no periodic vibrato; its breath skirts each partial 10-20 Hz
-  // wide, which amplitude noise stands in for. The floor between partials runs from f0 to
-  // about 3 kHz, its upper edge rising a quarter as fast as the key, so the breath is a band
-  // after the key-tracked filter.
+  // Calliope (GM 82): a steam whistle rank. Across the reference's grid the odd partials fall
+  // about as a triangle's (h3 -18, h7 -31 dB at the median) under a strong octave (h2 -10 dB),
+  // and it has no periodic vibrato; its breath skirts each partial 10-20 Hz wide, which
+  // amplitude noise stands in for. The floor between partials runs from f0 to about 3 kHz,
+  // its upper edge rising a quarter as fast as the key, so the breath is a band after the
+  // key-tracked filter.
   o.lead_calliope = lead;
-  o.lead_calliope.waveform = VaWaveform::kSquare;
+  o.lead_calliope.waveform = VaWaveform::kTriangle;
   o.lead_calliope.unison = 1;
   o.lead_calliope.detune_cents = 0.0f;
   o.lead_calliope.drive = 0.0f;
   o.lead_calliope.cutoff_hz = 2500.0f;
   o.lead_calliope.key_track = 1.0f;
-  o.lead_calliope.va.osc2_level = 0.4f;
+  o.lead_calliope.va.osc2_level = 0.8f;
   o.lead_calliope.va.osc2_interval_cents = 1200.0f;
   o.lead_calliope.va.noise_am = 0.22f;
   o.lead_calliope.va.band_noise_level = 0.2f;
+  o.lead_calliope.va.band_noise_low_ratio = 1.5f;
   o.lead_calliope.va.band_noise_high_hz = 3000.0f;
   o.lead_calliope.va.band_noise_key_track = 0.25f;
   o.lead_calliope.env_to_cutoff_cents = 200.19f;
