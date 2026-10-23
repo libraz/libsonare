@@ -119,8 +119,12 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   ep.fm.ops[0].env.release_ms = 250.0f;
 
   // Electric Piano 2 is the FM tone rather than the tine one, so it is its own
-  // patch, starting from the same voice and fitted against its own reference.
+  // patch, starting from the same voice and fitted against its own reference. Its body
+  // index runs deeper and falls over 12 s: at 0.9 and 3.6 s the held note was nearly a
+  // sine by 0.6 s, h3 21 dB and h4 40 dB under the reference's.
   o.e_piano_2 = o.e_piano;
+  o.e_piano_2.fm.ops[1].level = 1.4f;
+  o.e_piano_2.fm.ops[1].env.decay_ms = 12000.0f;
   o.e_piano_2.amp_env.attack_ms = 0.33365f;
   o.e_piano_2.amp_env.decay_ms = 8508.71f;
   o.e_piano_2.amp_env.release_ms = 83.4125f;

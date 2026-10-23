@@ -76,7 +76,11 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.e_piano_detuned_1.drift_rate_hz = 0.45f;
   o.e_piano_detuned_1.stereo_spread = 0.4f;
   o.e_piano_detuned_1.fm.ops[2].detune_cents = 6.0f;  // the tine pair, not the body
+  // The detuned variation keeps the shallower body index: the deeper one overshoots the
+  // gap its own reference holds between the prompt decay and the aftersound.
   o.e_piano_detuned_2 = o.e_piano_2;
+  o.e_piano_detuned_2.fm.ops[1].level = 0.9f;
+  o.e_piano_detuned_2.fm.ops[1].env.decay_ms = 3600.0f;
   o.e_piano_detuned_2.drift_cents = 7.0f;
   o.e_piano_detuned_2.drift_rate_hz = 0.45f;
   o.e_piano_detuned_2.stereo_spread = 0.4f;
@@ -124,18 +128,19 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.organ_detuned_2.stereo_spread = 0.45f;
   o.organ_detuned_2.additive.drawbars = {8.0f, 8.0f, 6.0f, 0.0f, 0.0f, 0.0f, 0.0f, 2.0f, 4.0f};
 
-  // 60's Organ 1: the 8' alone and the key click hard. The module tone holds
+  // 60's Organ 1: the key click hard and the even partials up. The module tone holds
   // f0/2 and 1.5 f0 75 dB or more under the fundamental, so 16' and 5 1/3' are closed;
-  // through the drive they intermodulated into 27 dB of noise against it.
+  // over notes 36-78 it sits at h2 -6, h3 -22, h4 -11, h6 -15, h8 -18 dB, which the
+  // 4', 2 2/3', 2', 1 1/3' and 1' bars give at about 3 dB a step.
   o.organ_sixties = o.drawbar_organ;
-  o.organ_sixties.additive.drawbars = {0.0f, 0.0f, 8.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  o.organ_sixties.additive.drawbars = {0.0f, 0.0f, 8.0f, 6.0f, 1.0f, 4.0f, 0.0f, 3.0f, 2.0f};
   o.organ_sixties.additive.key_click = 0.570308f;
   o.organ_sixties.additive.click_decay_ms = 4.78422f;
   o.organ_sixties.amp_env.attack_ms = 1.66943f;
   o.organ_sixties.amp_env.release_ms = 191.864f;
   o.organ_sixties.amp_env.sustain = 0.693547f;
   o.organ_sixties.cutoff_hz = 12263.5f;
-  o.organ_sixties.drive = 0.302051f;
+  o.organ_sixties.drive = 0.15f;
   o.organ_sixties.resonance_q = 1.24356f;
   o.organ_sixties.stereo_spread = 0.333717f;
 
