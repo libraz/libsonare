@@ -321,15 +321,15 @@ def analyze_note(
 
     freqs, mag = _spectrum(sustain, sr)
 
-    # Fundamental: strongest peak within ±80 cents of equal temperament, re-read under a vibrato.
+    # Fundamental: strongest peak within ±80 cents of equal temperament, re-read by `held_pitch`.
     f0, h1_mag = _peak_near(freqs, mag, expected_f0, 80.0)
-    f0, motion = held_pitch(sustain, sr, f0)
-    cents_err = 1200.0 * np.log2(f0 / expected_f0) if f0 > 0 else 0.0
 
     # How far this string's partials have been stretched by its own stiffness.
     # Zero for anything that is not a stiff string, which is what makes every
     # such voice read exactly what it read before this was measured at all.
     inharmonicity_b, inharmonicity_partials = estimate_inharmonicity_b(freqs, mag, f0, h1_mag, sr)
+    f0, motion = held_pitch(sustain, sr, f0, inharmonicity_b)
+    cents_err = 1200.0 * np.log2(f0 / expected_f0) if f0 > 0 else 0.0
 
     # Harmonic profile relative to h1, each partial searched where the string
     # actually puts it rather than at an integer multiple.

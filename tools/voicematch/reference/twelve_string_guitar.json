@@ -1,7 +1,7 @@
 {
  "id": "twelve_string_guitar",
  "label": "12-str.Gt, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-23T07:14:47+00:00",
+ "measured_utc": "2026-10-23T19:36:56+00:00",
  "capture": {
   "program": 25,
   "params": [],
@@ -32,8 +32,8 @@
    "timbre": "t0",
    "note": 42,
    "velocity": 100,
-   "f0_hz": 91.99,
-   "cents_vs_et": -9.55,
+   "f0_hz": 92.055,
+   "cents_vs_et": -8.32,
    "inharmonicity_b": 0.0003787,
    "partials_fit": 19,
    "inharmonicity_reliable": true,
@@ -48,12 +48,12 @@
     741.16,
     829.61,
     926.48,
-    1020.6,
-    1118.2,
+    1021.0,
+    1118.33,
     1217.71,
     1318.8,
     1422.3,
-    1555.75,
+    1565.0,
     1668.16,
     1763.03,
     1853.06,
@@ -70,16 +70,16 @@
     5.71,
     -12.44,
     0.84,
-    -22.81,
-    -16.3,
-    -40.06,
-    -48.61,
-    -55.64,
-    -58.01,
-    -26.0,
+    -22.83,
+    -18.39,
+    -40.95,
+    -48.74,
+    -55.65,
+    -54.42,
+    -25.82,
     -21.22,
-    -23.27,
-    -32.22
+    -23.28,
+    -39.7
    ],
    "peak_dbfs": -1.91,
    "rms_dbfs": -21.38,
@@ -108,19 +108,19 @@
    "centroid_hz": 399.8,
    "tnr_mask": {
     "fm": [
-     28.818,
+     28.824,
      4.211,
      4.211
     ]
    },
-   "tnr_db": 16.73
+   "tnr_db": 16.68
   },
   {
    "timbre": "t0",
    "note": 48,
    "velocity": 100,
-   "f0_hz": 130.735,
-   "cents_vs_et": -1.03,
+   "f0_hz": 130.712,
+   "cents_vs_et": -1.33,
    "inharmonicity_b": 3.233e-05,
    "partials_fit": 20,
    "inharmonicity_reliable": true,
@@ -195,14 +195,14 @@
    "damper_capped": true,
    "centroid_hz": 415.4,
    "tnr_mask": {},
-   "tnr_db": 33.13
+   "tnr_db": 32.9
   },
   {
    "timbre": "t0",
    "note": 54,
    "velocity": 100,
-   "f0_hz": 184.241,
-   "cents_vs_et": -7.09,
+   "f0_hz": 184.262,
+   "cents_vs_et": -6.89,
    "inharmonicity_b": 4.221e-05,
    "partials_fit": 19,
    "inharmonicity_reliable": true,
@@ -285,8 +285,8 @@
    "timbre": "t0",
    "note": 60,
    "velocity": 100,
-   "f0_hz": 261.277,
-   "cents_vs_et": -2.31,
+   "f0_hz": 261.322,
+   "cents_vs_et": -2.01,
    "inharmonicity_b": 1.163e-05,
    "partials_fit": 20,
    "inharmonicity_reliable": true,
@@ -365,8 +365,8 @@
    "timbre": "t0",
    "note": 66,
    "velocity": 100,
-   "f0_hz": 369.306,
-   "cents_vs_et": -3.23,
+   "f0_hz": 369.019,
+   "cents_vs_et": -4.57,
    "inharmonicity_b": 2.306e-05,
    "partials_fit": 19,
    "inharmonicity_reliable": true,
@@ -441,17 +441,17 @@
    "damper_capped": true,
    "centroid_hz": 671.4,
    "tnr_mask": {},
-   "tnr_db": 42.46
+   "tnr_db": 42.35
   }
  ],
  "summary": {
   "t0": {
    "stretch_cents": {
-    "42": -9.55,
-    "48": -1.03,
-    "54": -7.09,
-    "60": -2.31,
-    "66": -3.23
+    "42": -8.32,
+    "48": -1.33,
+    "54": -6.89,
+    "60": -2.01,
+    "66": -4.57
    },
    "inharmonicity_b": {
     "42": 0.0003787,
@@ -527,10 +527,10 @@
    },
    "tnr_db": {
     "42": {
-     "100": 16.73
+     "100": 16.68
     },
     "48": {
-     "100": 33.13
+     "100": 32.9
     },
     "54": {
      "100": 31.19
@@ -539,7 +539,7 @@
      "100": 38.91
     },
     "66": {
-     "100": 42.46
+     "100": 42.35
     }
    },
    "velocity_response": {}

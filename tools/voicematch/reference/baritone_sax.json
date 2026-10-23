@@ -1,7 +1,7 @@
 {
  "id": "baritone_sax",
  "label": "Baritone saxophone, sampled, close and dry",
- "measured_utc": "2026-10-23T06:46:30+00:00",
+ "measured_utc": "2026-10-23T19:58:33+00:00",
  "capture": {
   "program": 67,
   "params": [],
@@ -579,8 +579,8 @@
    "timbre": "gm068",
    "note": 40,
    "velocity": 56,
-   "f0_hz": 82.411,
-   "cents_vs_et": 0.09,
+   "f0_hz": 82.407,
+   "cents_vs_et": -0.0,
    "inharmonicity_b": 0.0001014,
    "partials_fit": 18,
    "inharmonicity_reliable": true,
@@ -603,7 +603,7 @@
     1318.51,
     1401.0,
     1488.17,
-    1575.36,
+    1571.0,
     1657.76
    ],
    "partials_db": [
@@ -626,7 +626,7 @@
     -39.31,
     -33.42,
     -39.65,
-    -43.82
+    -43.62
    ],
    "peak_dbfs": -12.6,
    "rms_dbfs": -28.53,
@@ -662,15 +662,15 @@
      5.735
     ]
    },
-   "tnr_db": 18.91,
+   "tnr_db": 18.77,
    "stereo_width": 0.0
   },
   {
    "timbre": "gm068",
    "note": 40,
    "velocity": 80,
-   "f0_hz": 82.407,
-   "cents_vs_et": 0.0,
+   "f0_hz": 82.398,
+   "cents_vs_et": -0.19,
    "inharmonicity_b": 0.0002278,
    "partials_fit": 18,
    "inharmonicity_reliable": true,
@@ -687,7 +687,7 @@
     824.08,
     906.46,
     993.68,
-    1076.33,
+    1076.1,
     1163.27,
     1250.4,
     1369.94,
@@ -711,11 +711,11 @@
     -20.02,
     -11.37,
     -24.12,
-    -52.74,
+    -45.52,
     -71.06,
     -68.21,
     -34.45,
-    -9.7,
+    -9.72,
     -7.56
    ],
    "peak_dbfs": -8.11,
@@ -759,8 +759,8 @@
    "timbre": "gm068",
    "note": 40,
    "velocity": 104,
-   "f0_hz": 82.405,
-   "cents_vs_et": -0.04,
+   "f0_hz": 82.395,
+   "cents_vs_et": -0.24,
    "inharmonicity_b": 0.0002362,
    "partials_fit": 18,
    "inharmonicity_reliable": true,
@@ -777,12 +777,12 @@
     824.06,
     906.44,
     993.66,
-    1077.67,
+    1076.33,
     1163.25,
     1250.37,
     1369.92,
     1468.9,
-    1561.02,
+    1561.0,
     1648.09,
     1730.47
    ],
@@ -800,13 +800,13 @@
     -7.01,
     -19.3,
     -15.94,
-    -33.42,
+    -28.53,
     -52.58,
     -69.8,
     -61.22,
     -32.69,
     -7.78,
-    -5.55
+    -5.56
    ],
    "peak_dbfs": -4.16,
    "rms_dbfs": -21.84,
@@ -842,15 +842,15 @@
      5.735
     ]
    },
-   "tnr_db": 11.07,
+   "tnr_db": 11.06,
    "stereo_width": -0.0
   },
   {
    "timbre": "gm068",
    "note": 40,
    "velocity": 127,
-   "f0_hz": 82.404,
-   "cents_vs_et": -0.05,
+   "f0_hz": 82.394,
+   "cents_vs_et": -0.26,
    "inharmonicity_b": 0.0002397,
    "partials_fit": 18,
    "inharmonicity_reliable": true,
@@ -869,7 +869,7 @@
     993.66,
     1077.67,
     1163.67,
-    1251.0,
+    1250.36,
     1369.91,
     1468.89,
     1561.01,
@@ -932,7 +932,7 @@
      5.735
     ]
    },
-   "tnr_db": 10.33,
+   "tnr_db": 10.32,
    "stereo_width": 0.0
   },
   {
@@ -1119,8 +1119,8 @@
    "timbre": "gm068",
    "note": 44,
    "velocity": 80,
-   "f0_hz": 103.827,
-   "cents_vs_et": 0.01,
+   "f0_hz": 103.826,
+   "cents_vs_et": 0.0,
    "inharmonicity_b": 7.135e-06,
    "partials_fit": 20,
    "inharmonicity_reliable": true,
@@ -1210,7 +1210,7 @@
    "note": 44,
    "velocity": 104,
    "f0_hz": 103.824,
-   "cents_vs_et": -0.03,
+   "cents_vs_et": -0.04,
    "inharmonicity_b": 7.527e-06,
    "partials_fit": 20,
    "inharmonicity_reliable": true,
@@ -1300,7 +1300,7 @@
    "note": 44,
    "velocity": 127,
    "f0_hz": 103.823,
-   "cents_vs_et": -0.05,
+   "cents_vs_et": -0.06,
    "inharmonicity_b": 8.56e-06,
    "partials_fit": 20,
    "inharmonicity_reliable": true,
@@ -3210,8 +3210,8 @@
   "gm068": {
    "stretch_cents": {
     "36": -0.01,
-    "40": 0.0,
-    "44": 0.01,
+    "40": -0.19,
+    "44": 0.0,
     "48": 0.02,
     "52": 0.02,
     "56": 0.03,
@@ -3440,10 +3440,10 @@
     },
     "40": {
      "32": 56.72,
-     "56": 18.91,
+     "56": 18.77,
      "80": 13.89,
-     "104": 11.07,
-     "127": 10.33
+     "104": 11.06,
+     "127": 10.32
     },
     "44": {
      "32": 55.93,

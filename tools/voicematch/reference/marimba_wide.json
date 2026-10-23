@@ -1,7 +1,7 @@
 {
  "id": "marimba_wide",
  "label": "Marimba w, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-22T01:12:01+00:00",
+ "measured_utc": "2026-10-23T20:03:30+00:00",
  "capture": {
   "program": 12,
   "params": [],
@@ -34,8 +34,8 @@
    "timbre": "t0",
    "note": 45,
    "velocity": 100,
-   "f0_hz": 109.824,
-   "cents_vs_et": -2.77,
+   "f0_hz": 109.809,
+   "cents_vs_et": -3.01,
    "inharmonicity_b": 0.0,
    "partials_fit": 5,
    "inharmonicity_reliable": false,
@@ -57,7 +57,7 @@
     1646.88,
     1732.58,
     1890.16,
-    1949.24,
+    1949.09,
     2109.83,
     2180.48
    ],
@@ -77,9 +77,9 @@
     -87.41,
     -85.48,
     -84.95,
-    -83.14,
+    -79.35,
     -78.04,
-    -84.17,
+    -83.51,
     -77.77,
     -72.96
    ],
@@ -108,14 +108,15 @@
    "damper_release_ms": 139.7,
    "damper_capped": true,
    "centroid_hz": 242.3,
+   "tnr_mask": {},
    "tnr_db": 8.53
   },
   {
    "timbre": "t0",
    "note": 51,
    "velocity": 100,
-   "f0_hz": 155.376,
-   "cents_vs_et": -2.09,
+   "f0_hz": 155.38,
+   "cents_vs_et": -2.05,
    "inharmonicity_b": 6.159e-06,
    "partials_fit": 4,
    "inharmonicity_reliable": false,
@@ -189,14 +190,15 @@
    "damper_release_ms": 114.8,
    "damper_capped": true,
    "centroid_hz": 387.1,
+   "tnr_mask": {},
    "tnr_db": 7.46
   },
   {
    "timbre": "t0",
    "note": 57,
    "velocity": 100,
-   "f0_hz": 219.846,
-   "cents_vs_et": -1.21,
+   "f0_hz": 219.842,
+   "cents_vs_et": -1.24,
    "inharmonicity_b": 0.0,
    "partials_fit": 5,
    "inharmonicity_reliable": false,
@@ -270,14 +272,15 @@
    "damper_release_ms": 139.7,
    "damper_capped": true,
    "centroid_hz": 229.3,
+   "tnr_mask": {},
    "tnr_db": 25.56
   },
   {
    "timbre": "t0",
    "note": 63,
    "velocity": 100,
-   "f0_hz": 311.031,
-   "cents_vs_et": -0.53,
+   "f0_hz": 311.023,
+   "cents_vs_et": -0.58,
    "inharmonicity_b": 0.0,
    "partials_fit": 6,
    "inharmonicity_reliable": true,
@@ -349,14 +352,15 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 368.5,
+   "tnr_mask": {},
    "tnr_db": 37.07
   },
   {
    "timbre": "t0",
    "note": 69,
    "velocity": 100,
-   "f0_hz": 439.984,
-   "cents_vs_et": -0.06,
+   "f0_hz": 439.979,
+   "cents_vs_et": -0.08,
    "inharmonicity_b": 0.0,
    "partials_fit": 0,
    "inharmonicity_reliable": false,
@@ -430,14 +434,15 @@
    "damper_release_ms": 104.8,
    "damper_capped": true,
    "centroid_hz": 440.2,
+   "tnr_mask": {},
    "tnr_db": 36.38
   },
   {
    "timbre": "t0",
    "note": 75,
    "velocity": 100,
-   "f0_hz": 622.39,
-   "cents_vs_et": 0.38,
+   "f0_hz": 622.404,
+   "cents_vs_et": 0.42,
    "inharmonicity_b": 1.348e-05,
    "partials_fit": 0,
    "inharmonicity_reliable": false,
@@ -509,14 +514,15 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 622.6,
-   "tnr_db": 38.76
+   "tnr_mask": {},
+   "tnr_db": 38.77
   },
   {
    "timbre": "t0",
    "note": 81,
    "velocity": 100,
-   "f0_hz": 880.453,
-   "cents_vs_et": 0.89,
+   "f0_hz": 880.459,
+   "cents_vs_et": 0.9,
    "inharmonicity_b": 0.0,
    "partials_fit": 0,
    "inharmonicity_reliable": false,
@@ -588,19 +594,20 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 880.5,
+   "tnr_mask": {},
    "tnr_db": 51.72
   }
  ],
  "summary": {
   "t0": {
    "stretch_cents": {
-    "45": -2.77,
-    "51": -2.09,
-    "57": -1.21,
-    "63": -0.53,
-    "69": -0.06,
-    "75": 0.38,
-    "81": 0.89
+    "45": -3.01,
+    "51": -2.05,
+    "57": -1.24,
+    "63": -0.58,
+    "69": -0.08,
+    "75": 0.42,
+    "81": 0.9
    },
    "inharmonicity_b": {
     "63": 0.0
@@ -705,7 +712,7 @@
      "100": 36.38
     },
     "75": {
-     "100": 38.76
+     "100": 38.77
     },
     "81": {
      "100": 51.72

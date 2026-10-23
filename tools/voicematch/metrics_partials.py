@@ -263,8 +263,52 @@ def partial_level(
 #: one's mean, so a start a sideband off the centre still ends on it.
 HELD_PITCH_PASSES = 2
 
+#: How far either side of a partial, past its Hann lobe, `line_centroid_pitch`
+#: pools detuned lines. The widest spread among the references is pad_warm's,
+#: three lines 12.6 cents apart.
+LINE_SPREAD_CENTS = 15.0
 
-def held_pitch(seg: np.ndarray, sr: int, f0: float) -> tuple[float, Vibrato | None]:
+
+def line_centroid_pitch(seg: np.ndarray, sr: int, f0: float, b: float) -> float:
+    """The fundamental a held ladder's lines centre on: each partial's power centroid over its number.
+
+    `f0` is the fundamental's own frequency and `b` stretches the partials
+    above it. Detuned oscillators put two or three lines a few cents apart
+    under every partial, and a peak picks whichever the window's beat phase
+    favoured: a sawtooth lead read -4.2 to +4.2 cents from note to note against
+    a centre within 0.4 of it. Pooled over `LINE_SPREAD_CENTS` and weighted by
+    power across the series, the upper partials, whose lines separate, steady
+    the low ones, whose lines do not. A partial whose strongest line lies past
+    the spread holds another mode and is left out. The reading is the
+    power-weighted mean pitch over the window, the quantity a vibrato's
+    demodulated track is averaged to, so a note that glides reads its mean.
+    """
+    freqs, mag = _spectrum(seg, sr)
+    if freqs.size < 2 or f0 <= 0.0:
+        return f0
+    bin_hz = float(freqs[1] - freqs[0])
+    power = mag.astype(np.float64) ** 2
+    h1_ratio = partial_hz(1.0, 1, b)
+    num = den = 0.0
+    for n in range(1, N_HARMONICS + 1):
+        ratio = partial_hz(1.0, n, b) / h1_ratio
+        target = f0 * ratio
+        if target > 0.45 * sr:
+            break
+        spread = target * (2.0 ** (LINE_SPREAD_CENTS / 1200.0) - 1.0)
+        half = min(3.0 * bin_hz + spread, 0.25 * f0)
+        inside = (freqs >= target - half) & (freqs <= target + half)
+        p = power[inside]
+        total = float(p.sum())
+        # A window whose strongest line sits past the spread holds another mode, not this partial.
+        if total <= 0.0 or abs(freqs[inside][np.argmax(p)] - target) > bin_hz + spread:
+            continue
+        num += float(np.sum(freqs[inside] * p)) / ratio
+        den += total
+    return num / den if den > 0.0 else f0
+
+
+def held_pitch(seg: np.ndarray, sr: int, f0: float, b: float = 0.0) -> tuple[float, Vibrato | None]:
     """The pitch `seg` holds, and its `pitch_motion`.
 
     Under a vibrato a spectral peak is whichever FM line won, so the pitch is
@@ -272,16 +316,14 @@ def held_pitch(seg: np.ndarray, sr: int, f0: float) -> tuple[float, Vibrato | No
     demodulation passes only the fundamental's own FM extent (`fm_margin_hz`,
     under the quarter-f0 cap): over `vibrato_extent`'s wider passband the track
     follows a second component near the fundamental, and a lead whose detuned
-    oscillators beat under one a fourth below read 22.8 cents flat. An
-    excursion leaves the pitch at `f0`: its motion has no line a peak could
-    have picked off-centre, and where it is two components beating the
-    demodulated mean moves off the stronger one's pitch. It still returns as the
-    motion, which widens the partial windows. Where the pitch holds still,
-    `f0` is returned unchanged, so a still tone reads exactly as its peak did.
+    oscillators beat under one a fourth below read 22.8 cents flat. `f0` is the
+    fundamental's own frequency. Without a vibrato the pitch is
+    `line_centroid_pitch` over a series stretched by `b`; an excursion still
+    returns as the motion, which widens the partial windows.
     """
     vibrato = vibrato_extent(seg, sr, f0)
     if vibrato is None:
-        return f0, pitch_excursion(seg, sr, f0)
+        return line_centroid_pitch(seg, sr, f0, b), pitch_excursion(seg, sr, f0)
     bin_hz = sr / len(seg)
     centre = f0
     for _ in range(HELD_PITCH_PASSES):

@@ -136,7 +136,9 @@ def test_a_still_note_keeps_the_mask_it_had_without_the_vibrato_reading(f0):
     for noise in (1e-3, 3e-2):
         x = harmonic(f0, noise=noise)
         assert vibrato_extent(x, SR, f0) is None
-        assert held_pitch(x, SR, f0) == (f0, None)
+        pitch, motion = held_pitch(x, SR, f0)
+        assert motion is None
+        assert 1200.0 * np.log2(pitch / f0) == pytest.approx(0.0, abs=0.01)
         assert tnr_with_vibrato(x, f0) == profile_module.tone_to_noise_db(*_spectrum(x, SR), f0)
 
 
@@ -231,6 +233,31 @@ def test_a_vibrato_off_its_centre_is_read_at_its_mean_pitch():
     pitch, vibrato = held_pitch(x, SR, f0 * 2.0 ** (20.0 / 1200.0))
     assert vibrato is not None
     assert 1200.0 * np.log2(pitch / f0) == pytest.approx(0.0, abs=1.0)
+
+
+@pytest.mark.parametrize("f0", [65.4, 130.8, 261.6])
+def test_two_detuned_lines_read_at_their_centre_whatever_the_beat_phase(f0):
+    """Two sawtooths 4 cents either side: a peak picks a line by the window's beat phase."""
+    t = np.arange(int(1.5 * SR)) / SR
+
+    def saw(hz: float, phase: float) -> np.ndarray:
+        return sum(np.sin(n * (2 * np.pi * hz * t + phase)) / n for n in range(1, 13))
+
+    readings = []
+    for phase in np.linspace(0.0, 2.0 * np.pi, 6, endpoint=False):
+        x = saw(f0 * 2.0 ** (4.0 / 1200.0), 0.0) + saw(f0 * 2.0 ** (-4.0 / 1200.0), phase)
+        pitch, _ = held_pitch(with_noise(x), SR, f0)
+        readings.append(1200.0 * np.log2(pitch / f0))
+    assert readings == pytest.approx([0.0] * len(readings), abs=0.05)
+
+
+def test_a_mode_off_the_stretched_series_does_not_pull_the_pitch():
+    """A membrane's mode at 1.99 f0 beside a series stretched to put h2 at 2.04 f0."""
+    f0 = 65.4
+    t = np.arange(int(1.5 * SR)) / SR
+    x = with_noise(np.sin(2 * np.pi * f0 * t) + 0.8 * np.sin(2 * np.pi * 1.99 * f0 * t))
+    pitch = metrics_partials.line_centroid_pitch(x, SR, f0, 0.01)
+    assert 1200.0 * np.log2(pitch / f0) == pytest.approx(0.0, abs=0.1)
 
 
 def test_the_held_pitch_does_not_follow_a_component_beside_the_fundamental(monkeypatch):
@@ -337,12 +364,20 @@ def test_an_interferer_between_an_ensemble_s_partials_is_still_counted(f0):
 
 @pytest.mark.parametrize("f0", ON_BIN_F0)
 def test_a_slow_drift_keeps_the_still_mask(f0):
-    """20 cents at 0.5 Hz completes under a cycle: it stays inside each partial's still window."""
+    """20 cents at 0.5 Hz completes under a cycle: it stays inside each partial's still window.
+
+    The pitch reads the drift's mean under the analysis window, not the start's.
+    """
     t = np.arange(int(1.5 * SR)) / SR
-    phase = 2 * np.pi * np.cumsum(f0 * 2.0 ** (10.0 * np.sin(2 * np.pi * 0.5 * t) / 1200.0)) / SR
+    drift = 10.0 * np.sin(2 * np.pi * 0.5 * t)
+    phase = 2 * np.pi * np.cumsum(f0 * 2.0 ** (drift / 1200.0)) / SR
     drifting = with_noise(sum(np.sin(n * phase) / n for n in range(1, 9)))
     assert pitch_motion(drifting, SR, f0) is None
-    assert held_pitch(drifting, SR, f0) == (f0, None)
+    pitch, motion = held_pitch(drifting, SR, f0)
+    assert motion is None
+    taper = np.hanning(t.size) ** 2
+    mean = float(np.sum(drift * taper) / np.sum(taper))
+    assert 1200.0 * np.log2(pitch / f0) == pytest.approx(mean, abs=0.3)
 
 
 @pytest.mark.parametrize("f0", [47.5, 73.4, 104.6, 147.0, 440.0])
@@ -414,7 +449,9 @@ def test_a_two_line_beat_widens_the_mask_but_leaves_the_pitch(f0):
     x = with_noise(x + 0.7 * np.sin(2 * np.pi * (f0 + 12.0) * t))
     motion = pitch_motion(x, SR, f0)
     assert vibrato_extent(x, SR, f0) is None and motion is not None
-    assert held_pitch(x, SR, f0) == (f0, motion)
+    pitch, held_motion = held_pitch(x, SR, f0)
+    assert held_motion == motion
+    assert 1200.0 * np.log2(pitch / f0) == pytest.approx(0.0, abs=0.01)
     still = profile_module.tone_to_noise_db(*_spectrum(x, SR), f0)
     assert tnr_with_motion(x, f0) > still + 30.0
 
@@ -592,12 +629,17 @@ def test_the_partial_ladder_reads_each_side_against_its_own_fundamental():
     assert lines[-1].split("|")[1].split() == ["-11.0", "+4.5"]
 
 
-def test_the_partial_ladder_leaves_a_floor_bin_blank():
-    """A bin either side's ladder rejects is not a level, so it carries no difference."""
+def test_the_partial_ladder_names_the_side_a_floor_bin_is_missing_from():
+    """A bin a ladder rejects is not a level, so it carries no difference, only its side."""
     lines = profile_module.partial_ladder_lines(
-        [(60, 96, [0.0, -99.0, -12.0], [0.0, -10.0, -15.0])], top=3
+        [
+            (60, 96, [0.0, -99.0, -12.0, -99.0], [0.0, -10.0, -15.0, -99.0]),
+            (72, 96, [0.0, -10.0, -12.0], [0.0, -99.0, -15.0]),
+        ],
+        top=4,
     )
-    assert lines[1].split("|")[1].split() == ["+3.0", "3.0"]
+    assert lines[1].split("|")[1].split() == ["m", "+3.0", "-", "3.0"]
+    assert lines[2].split("|")[1].split() == ["r", "+3.0", "-", "3.0"]
     assert lines[-1].split("|")[1].split() == ["+3.0"]
 
 

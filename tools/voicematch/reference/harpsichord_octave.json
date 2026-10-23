@@ -1,7 +1,7 @@
 {
  "id": "harpsichord_octave",
  "label": "Coupled Hps., the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-23T07:00:09+00:00",
+ "measured_utc": "2026-10-23T20:02:16+00:00",
  "capture": {
   "program": 6,
   "params": [],
@@ -37,8 +37,8 @@
    "timbre": "t0",
    "note": 30,
    "velocity": 100,
-   "f0_hz": 46.193,
-   "cents_vs_et": -2.13,
+   "f0_hz": 46.197,
+   "cents_vs_et": -1.96,
    "inharmonicity_b": 0.0,
    "partials_fit": 20,
    "inharmonicity_reliable": true,
@@ -114,14 +114,14 @@
    "damper_capped": true,
    "centroid_hz": 258.1,
    "tnr_mask": {},
-   "tnr_db": 21.95
+   "tnr_db": 21.93
   },
   {
    "timbre": "t0",
    "note": 36,
    "velocity": 100,
-   "f0_hz": 65.326,
-   "cents_vs_et": -2.12,
+   "f0_hz": 65.335,
+   "cents_vs_et": -1.9,
    "inharmonicity_b": 0.0,
    "partials_fit": 20,
    "inharmonicity_reliable": true,
@@ -175,8 +175,8 @@
    "onset_ms": 0.0,
    "attack_ms": 10.0,
    "attack_hf_db": -14.29,
-   "onset_overshoot_db": 4.37,
-   "onset_settle_ms": 358.2,
+   "onset_overshoot_db": 4.36,
+   "onset_settle_ms": 360.7,
    "decay_span_s": 1.537,
    "decay_db_s": -4.45,
    "decay_early_db_s": -14.27,
@@ -197,7 +197,7 @@
    "damper_capped": true,
    "centroid_hz": 338.1,
    "tnr_mask": {},
-   "tnr_db": 24.33
+   "tnr_db": 24.3
   },
   {
    "timbre": "t0",
@@ -293,7 +293,7 @@
    "note": 48,
    "velocity": 100,
    "f0_hz": 130.732,
-   "cents_vs_et": -1.06,
+   "cents_vs_et": -1.07,
    "inharmonicity_b": 7.687e-07,
    "partials_fit": 20,
    "inharmonicity_reliable": true,
@@ -820,8 +820,8 @@
    "timbre": "t0",
    "note": 84,
    "velocity": 100,
-   "f0_hz": 1046.73,
-   "cents_vs_et": 0.38,
+   "f0_hz": 1046.703,
+   "cents_vs_et": 0.33,
    "inharmonicity_b": 5.184e-05,
    "partials_fit": 11,
    "inharmonicity_reliable": true,
@@ -855,14 +855,14 @@
     -29.58,
     -43.08,
     -41.17,
-    -78.0,
+    -77.87,
     -79.29,
     -81.41,
-    -80.24,
-    -61.74,
-    -83.07,
+    -80.22,
+    -61.77,
+    -83.03,
     -83.3,
-    -84.21,
+    -84.17,
     -84.15
    ],
    "body_below_f0_db": -50.98,
@@ -902,16 +902,16 @@
  "summary": {
   "t0": {
    "stretch_cents": {
-    "30": -2.13,
-    "36": -2.12,
+    "30": -1.96,
+    "36": -1.9,
     "42": -1.39,
-    "48": -1.06,
+    "48": -1.07,
     "54": -0.82,
     "60": -0.54,
     "66": -0.27,
     "72": 0.02,
     "78": 0.22,
-    "84": 0.38
+    "84": 0.33
    },
    "inharmonicity_b": {
     "30": 0.0,
@@ -1052,10 +1052,10 @@
    },
    "tnr_db": {
     "30": {
-     "100": 21.95
+     "100": 21.93
     },
     "36": {
-     "100": 24.33
+     "100": 24.3
     },
     "42": {
      "100": 27.88

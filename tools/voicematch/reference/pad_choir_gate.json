@@ -2,29 +2,30 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm092",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-23T07:05:47+00:00",
-  "recorded_utc": "2026-10-23T07:31:38+00:00",
+  "reference_measured_utc": "2026-10-23T19:15:21+00:00",
+  "recorded_utc": "2026-10-23T20:31:59+00:00",
   "model_build": {
-    "built_utc": "2026-10-23T06:18:37Z",
-    "newest_source_utc": "2026-10-23T06:17:49Z",
+    "built_utc": "2026-10-23T15:19:39Z",
+    "newest_source_utc": "2026-10-23T15:11:27Z",
     "stale": false
   },
   "reference_spread": {},
+  "_pitch_ruler": "raised on 2026-10-24 when the held pitch moved from the strongest peak to the power centroid of each partial's lines (metrics_partials.line_centroid_pitch), and every reference was re-measured with it: tnr.abs_median 37.46 -> 48.15, tnr.median 37.46 -> 48.15, stretch.median 1.0 -> 1.693. The old bounds were recorded from a reading that picked one of a partial's detuned lines by the window's beat phase, or placed the windows that the other readings take from f0 on that line.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 1.004,
+      "median": 1.693,
       "abs_median": 4.298,
-      "p90": 12.744,
+      "p90": 8.775,
       "rows": 28
     },
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 37.463,
-      "abs_median": 37.463,
-      "p90": 65.949,
+      "median": 48.15,
+      "abs_median": 48.15,
+      "p90": 65.185,
       "rows": 28
     },
     "damper": {

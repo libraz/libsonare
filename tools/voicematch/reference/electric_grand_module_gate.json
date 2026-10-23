@@ -2,21 +2,22 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "t0",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-23T06:55:44+00:00",
-  "recorded_utc": "2026-10-23T07:23:03+00:00",
+  "reference_measured_utc": "2026-10-23T19:12:54+00:00",
+  "recorded_utc": "2026-10-23T20:31:16+00:00",
   "model_build": {
-    "built_utc": "2026-10-23T06:18:37Z",
-    "newest_source_utc": "2026-10-23T06:17:49Z",
+    "built_utc": "2026-10-23T15:19:39Z",
+    "newest_source_utc": "2026-10-23T15:11:27Z",
     "stale": false
   },
   "reference_spread": {},
+  "_pitch_ruler": "raised on 2026-10-24 when the held pitch moved from the strongest peak to the power centroid of each partial's lines (metrics_partials.line_centroid_pitch), and every reference was re-measured with it: stretch.abs_median 1.55 -> 1.962, stretch.median 1.55 -> 1.962. The old bounds were recorded from a reading that picked one of a partial's detuned lines by the window's beat phase, or placed the windows that the other readings take from f0 on that line.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 1.55,
-      "abs_median": 1.55,
-      "p90": 5.293,
+      "median": 1.962,
+      "abs_median": 1.962,
+      "p90": 4.43,
       "rows": 9
     },
     "decay": {
@@ -32,7 +33,7 @@
       "floor_from": "guess",
       "median": 5.025,
       "abs_median": 5.962,
-      "p90": 14.577,
+      "p90": 14.542,
       "rows": 9
     },
     "attack": {
@@ -72,7 +73,7 @@
       "floor_from": "guess",
       "median": 6.945,
       "abs_median": 6.95,
-      "p90": 10.62,
+      "p90": 10.453,
       "rows": 9
     },
     "partial_tilt": {

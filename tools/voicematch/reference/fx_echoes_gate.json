@@ -2,29 +2,30 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm103",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-23T06:58:07+00:00",
-  "recorded_utc": "2026-10-23T13:47:11+00:00",
+  "reference_measured_utc": "2026-10-23T19:13:44+00:00",
+  "recorded_utc": "2026-10-23T20:31:37+00:00",
   "model_build": {
-    "built_utc": "2026-10-23T13:46:50Z",
-    "newest_source_utc": "2026-10-23T13:46:12Z",
+    "built_utc": "2026-10-23T15:19:39Z",
+    "newest_source_utc": "2026-10-23T15:11:27Z",
     "stale": false
   },
   "reference_spread": {},
   "_tnr_mask_reading": "tnr.median (was 14.53), tnr.abs_median (was 14.53) deleted 2026-10-23 and re-recorded when the model's tone-to-noise ratio came to be read through its reference's mask: each reference row records the pitch motion and tremolo its own mask was widened by, and the model note is measured through that record rather than its own, so the same bins count as tone on both sides. The reference's own ratio did not move.",
   "_balance_population": "balance.p90 raised 13.727 -> 17.787 on 2026-10-23 when the voice gained an octave and a noise floor. The old bound was recorded while the model's triangle had no even partials, so its h2, h4 and h6 bins were rejected by the ladder and the model's stack was the mean of h3 and h5 against the reference's h2-h6. With the floor present those bins read, and the residual is the reference's h4 (about -25 dB), which a triangle and its octave cannot produce, plus n52, whose stack sits 7 dB above its neighbours.",
+  "_pitch_ruler": "raised on 2026-10-24 when the held pitch moved from the strongest peak to the power centroid of each partial's lines (metrics_partials.line_centroid_pitch), and every reference was re-measured with it: tnr.median 2.48 -> 3.45. The old bounds were recorded from a reading that picked one of a partial's detuned lines by the window's beat phase, or placed the windows that the other readings take from f0 on that line.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 3.691,
-      "abs_median": 5.047,
-      "p90": 10.902,
+      "median": 1.0,
+      "abs_median": 3.775,
+      "p90": 7.56,
       "rows": 35
     },
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 2.475,
+      "median": 3.45,
       "abs_median": 4.0,
       "p90": 10.973,
       "rows": 35
@@ -49,7 +50,7 @@
       "floor": 1.0,
       "floor_from": "default",
       "median": 2.4,
-      "abs_median": 7.737,
+      "abs_median": 7.713,
       "p90": 24.268,
       "rows": 35
     },

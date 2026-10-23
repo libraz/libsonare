@@ -291,8 +291,9 @@ def partial_ladder_lines(
 
     `balance` folds h2-h6 into one mean, so a missing octave and an odd series
     that is too strong cancel inside it; the ladder keeps them apart. A bin
-    either side's `ladder_present` rejects is left blank rather than read as a
-    level. The last line is each partial's median over the rows: a partial wrong
+    `ladder_present` rejects is not read as a level: it prints `m` where only the
+    model lacks it, `r` where only the reference does, and `-` where both do. The
+    last line is each partial's median over the rows: a partial wrong
     on every note is a mechanism, one whose sign alternates between neighbouring
     notes is the reference's own multisample zones.
     """
@@ -308,13 +309,15 @@ def partial_ladder_lines(
         cells, errs = [], []
         for k in range(2, k_max + 1):
             i = k - 1
-            if i < min(len(mod), len(ref)) and ok_m[i] and ok_r[i]:
+            has_m = i < len(mod) and ok_m[i]
+            has_r = i < len(ref) and ok_r[i]
+            if has_m and has_r:
                 v = (mod[i] - mod[0]) - (ref[i] - ref[0])
                 cells.append(f"{v:+6.1f}")
                 errs.append(abs(v))
                 per_k.setdefault(k, []).append(v)
             else:
-                cells.append(f"{'':>6s}")
+                cells.append(f"{'r' if has_m else 'm' if has_r else '-':>6s}")
         mean = f"{np.mean(errs):9.1f}" if errs else f"{'-':>9s}"
         lines.append(f"  {note:4d} {vel:3d} |" + "".join(cells) + mean)
     lines.append(

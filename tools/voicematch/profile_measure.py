@@ -110,7 +110,10 @@ def find_partials(seg: np.ndarray, sr: int, note: int) -> dict:
     if a0 <= 0.0:
         return {}
     f0, b, fitted_on = fit_partial_series(freqs, mag, f0_seed, a0, sr)
-    f0, motion = held_pitch(seg, sr, f0)
+    # The fit's f0 is the stiffness law's, whose h1 sits above it; without a fit it is h1's own.
+    h1_ratio = partial_hz(1.0, 1, b) if fitted_on else 1.0
+    h1, motion = held_pitch(seg, sr, f0 * h1_ratio, b)
+    f0 = h1 / h1_ratio
     found: list[tuple[int, float, float]] = []
     for n in range(1, MAX_PARTIALS + 1):
         predicted = partial_hz(f0, n, b)

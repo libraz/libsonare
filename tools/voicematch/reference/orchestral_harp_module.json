@@ -1,7 +1,7 @@
 {
  "id": "orchestral_harp_module",
  "label": "Harp, the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-10-22T16:02:19+00:00",
+ "measured_utc": "2026-10-23T20:04:13+00:00",
  "capture": {
   "program": 46,
   "params": [],
@@ -36,8 +36,8 @@
    "timbre": "t0",
    "note": 48,
    "velocity": 100,
-   "f0_hz": 130.571,
-   "cents_vs_et": -3.21,
+   "f0_hz": 130.587,
+   "cents_vs_et": -2.99,
    "inharmonicity_b": 0.0001344,
    "partials_fit": 13,
    "inharmonicity_reliable": true,
@@ -111,14 +111,15 @@
    "damper_release_ms": 573.7,
    "damper_capped": true,
    "centroid_hz": 181.7,
-   "tnr_db": 37.18
+   "tnr_mask": {},
+   "tnr_db": 37.13
   },
   {
    "timbre": "t0",
    "note": 51,
    "velocity": 100,
-   "f0_hz": 155.324,
-   "cents_vs_et": -2.66,
+   "f0_hz": 155.34,
+   "cents_vs_et": -2.49,
    "inharmonicity_b": 0.0001309,
    "partials_fit": 13,
    "inharmonicity_reliable": true,
@@ -192,6 +193,7 @@
    "damper_release_ms": 503.9,
    "damper_capped": true,
    "centroid_hz": 219.2,
+   "tnr_mask": {},
    "tnr_db": 38.29
   },
   {
@@ -273,6 +275,13 @@
    "damper_release_ms": 508.9,
    "damper_capped": true,
    "centroid_hz": 185.8,
+   "tnr_mask": {
+    "fm": [
+     1.524,
+     4.286,
+     5.714
+    ]
+   },
    "tnr_db": 49.94
   },
   {
@@ -354,6 +363,13 @@
    "damper_release_ms": 518.8,
    "damper_capped": true,
    "centroid_hz": 221.2,
+   "tnr_mask": {
+    "fm": [
+     1.477,
+     4.286,
+     5.714
+    ]
+   },
    "tnr_db": 49.54
   },
   {
@@ -435,14 +451,21 @@
    "damper_release_ms": 459.0,
    "damper_capped": true,
    "centroid_hz": 263.2,
+   "tnr_mask": {
+    "fm": [
+     1.36,
+     4.286,
+     5.714
+    ]
+   },
    "tnr_db": 49.88
   },
   {
    "timbre": "t0",
    "note": 63,
    "velocity": 100,
-   "f0_hz": 311.033,
-   "cents_vs_et": -0.52,
+   "f0_hz": 311.019,
+   "cents_vs_et": -0.6,
    "inharmonicity_b": 9.139e-05,
    "partials_fit": 9,
    "inharmonicity_reliable": true,
@@ -479,16 +502,16 @@
     -73.68,
     -79.12,
     -92.66,
-    -85.04,
-    -88.84,
-    -87.36,
+    -84.85,
+    -88.72,
+    -87.32,
     -92.08,
-    -92.03,
-    -92.18,
+    -92.01,
     -92.23,
-    -91.1,
-    -93.11,
-    -94.34
+    -92.31,
+    -91.15,
+    -93.12,
+    -94.15
    ],
    "body_below_f0_db": -50.29,
    "peak_dbfs": -2.54,
@@ -516,14 +539,21 @@
    "damper_release_ms": 234.5,
    "damper_capped": true,
    "centroid_hz": 319.3,
+   "tnr_mask": {
+    "fm": [
+     1.412,
+     4.286,
+     5.714
+    ]
+   },
    "tnr_db": 50.2
   },
   {
    "timbre": "t0",
    "note": 66,
    "velocity": 100,
-   "f0_hz": 369.952,
-   "cents_vs_et": -0.2,
+   "f0_hz": 369.942,
+   "cents_vs_et": -0.25,
    "inharmonicity_b": 5.66e-05,
    "partials_fit": 8,
    "inharmonicity_reliable": true,
@@ -559,17 +589,17 @@
     -44.01,
     -75.83,
     -80.05,
-    -89.44,
+    -89.47,
     -83.44,
     -90.35,
-    -88.34,
+    -88.35,
     -92.89,
-    -91.65,
-    -92.12,
+    -91.32,
+    -92.03,
     -93.31,
-    -92.59,
-    -93.09,
-    -92.83
+    -92.49,
+    -93.04,
+    -92.9
    ],
    "body_below_f0_db": -50.92,
    "peak_dbfs": -2.6,
@@ -597,6 +627,13 @@
    "damper_release_ms": 164.6,
    "damper_capped": true,
    "centroid_hz": 379.8,
+   "tnr_mask": {
+    "fm": [
+     1.389,
+     4.286,
+     5.714
+    ]
+   },
    "tnr_db": 50.05
   },
   {
@@ -676,6 +713,13 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 484.2,
+   "tnr_mask": {
+    "fm": [
+     1.397,
+     4.286,
+     5.714
+    ]
+   },
    "tnr_db": 49.59
   },
   {
@@ -755,19 +799,26 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 570.9,
+   "tnr_mask": {
+    "fm": [
+     1.468,
+     4.286,
+     5.714
+    ]
+   },
    "tnr_db": 49.74
   }
  ],
  "summary": {
   "t0": {
    "stretch_cents": {
-    "48": -3.21,
-    "51": -2.66,
+    "48": -2.99,
+    "51": -2.49,
     "54": -1.73,
     "57": -1.33,
     "60": -0.93,
-    "63": -0.52,
-    "66": -0.2,
+    "63": -0.6,
+    "66": -0.25,
     "69": -0.22,
     "72": -0.05
    },
@@ -894,7 +945,7 @@
    },
    "tnr_db": {
     "48": {
-     "100": 37.18
+     "100": 37.13
     },
     "51": {
      "100": 38.29

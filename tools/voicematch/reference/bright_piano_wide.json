@@ -1,7 +1,7 @@
 {
  "id": "bright_piano_wide",
  "label": "Piano 2w, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-23T06:50:56+00:00",
+ "measured_utc": "2026-10-23T19:59:12+00:00",
  "capture": {
   "program": 1,
   "params": [],
@@ -36,8 +36,8 @@
    "timbre": "t0",
    "note": 36,
    "velocity": 100,
-   "f0_hz": 65.138,
-   "cents_vs_et": -7.11,
+   "f0_hz": 65.157,
+   "cents_vs_et": -6.62,
    "inharmonicity_b": 6.074e-05,
    "partials_fit": 20,
    "inharmonicity_reliable": true,
@@ -111,14 +111,14 @@
    "damper_capped": true,
    "centroid_hz": 225.8,
    "tnr_mask": {},
-   "tnr_db": 31.04
+   "tnr_db": 31.01
   },
   {
    "timbre": "t0",
    "note": 42,
    "velocity": 100,
-   "f0_hz": 92.39,
-   "cents_vs_et": -2.03,
+   "f0_hz": 92.388,
+   "cents_vs_et": -2.07,
    "inharmonicity_b": 4.409e-05,
    "partials_fit": 20,
    "inharmonicity_reliable": true,
@@ -204,8 +204,8 @@
    "timbre": "t0",
    "note": 48,
    "velocity": 100,
-   "f0_hz": 130.554,
-   "cents_vs_et": -3.43,
+   "f0_hz": 130.547,
+   "cents_vs_et": -3.52,
    "inharmonicity_b": 0.0001064,
    "partials_fit": 16,
    "inharmonicity_reliable": true,
@@ -286,8 +286,8 @@
    "timbre": "t0",
    "note": 54,
    "velocity": 100,
-   "f0_hz": 184.808,
-   "cents_vs_et": -1.77,
+   "f0_hz": 184.793,
+   "cents_vs_et": -1.91,
    "inharmonicity_b": 0.0001691,
    "partials_fit": 20,
    "inharmonicity_reliable": true,
@@ -368,8 +368,8 @@
    "timbre": "t0",
    "note": 60,
    "velocity": 100,
-   "f0_hz": 261.308,
-   "cents_vs_et": -2.1,
+   "f0_hz": 261.314,
+   "cents_vs_et": -2.07,
    "inharmonicity_b": 0.0002808,
    "partials_fit": 18,
    "inharmonicity_reliable": true,
@@ -450,8 +450,8 @@
    "timbre": "t0",
    "note": 66,
    "velocity": 100,
-   "f0_hz": 369.623,
-   "cents_vs_et": -1.74,
+   "f0_hz": 369.486,
+   "cents_vs_et": -2.38,
    "inharmonicity_b": 0.0003782,
    "partials_fit": 17,
    "inharmonicity_reliable": true,
@@ -532,8 +532,8 @@
    "timbre": "t0",
    "note": 72,
    "velocity": 100,
-   "f0_hz": 523.132,
-   "cents_vs_et": -0.39,
+   "f0_hz": 523.162,
+   "cents_vs_et": -0.3,
    "inharmonicity_b": 0.0005624,
    "partials_fit": 10,
    "inharmonicity_reliable": true,
@@ -614,8 +614,8 @@
    "timbre": "t0",
    "note": 78,
    "velocity": 100,
-   "f0_hz": 743.898,
-   "cents_vs_et": 9.12,
+   "f0_hz": 743.384,
+   "cents_vs_et": 7.93,
    "inharmonicity_b": 0.001382,
    "partials_fit": 8,
    "inharmonicity_reliable": true,
@@ -644,24 +644,24 @@
    "partials_db": [
     0.0,
     -20.68,
-    -43.94,
+    -43.9,
     -37.2,
     -42.38,
-    -42.12,
+    -42.13,
     -51.85,
-    -55.84,
-    -64.66,
-    -71.9,
-    -80.53,
-    -83.62,
-    -84.81,
-    -83.5,
-    -85.64,
-    -83.32,
-    -83.58,
-    -84.42,
-    -83.84,
-    -84.41
+    -55.78,
+    -64.69,
+    -71.94,
+    -80.66,
+    -84.04,
+    -85.09,
+    -83.66,
+    -85.4,
+    -83.3,
+    -83.53,
+    -84.04,
+    -83.98,
+    -84.15
    ],
    "body_below_f0_db": -42.01,
    "peak_dbfs": -8.9,
@@ -696,14 +696,14 @@
      5.0
     ]
    },
-   "tnr_db": 44.03
+   "tnr_db": 44.12
   },
   {
    "timbre": "t0",
    "note": 84,
    "velocity": 100,
-   "f0_hz": 1055.094,
-   "cents_vs_et": 14.16,
+   "f0_hz": 1054.19,
+   "cents_vs_et": 12.67,
    "inharmonicity_b": 0.001716,
    "partials_fit": 6,
    "inharmonicity_reliable": true,
@@ -720,7 +720,7 @@
     11279.08,
     12664.89,
     14073.41,
-    15801.36,
+    15760.25,
     16856.5,
     18773.45
    ],
@@ -731,15 +731,15 @@
     -29.29,
     -39.44,
     -45.33,
-    -66.3,
-    -77.09,
-    -78.69,
-    -77.77,
-    -78.97,
-    -78.19,
-    -78.7,
-    -77.97,
-    -79.6
+    -66.25,
+    -77.11,
+    -78.35,
+    -78.01,
+    -79.44,
+    -78.66,
+    -78.78,
+    -77.99,
+    -79.15
    ],
    "body_below_f0_db": -36.85,
    "peak_dbfs": -7.41,
@@ -772,21 +772,21 @@
      5.0
     ]
    },
-   "tnr_db": 42.94
+   "tnr_db": 42.97
   }
  ],
  "summary": {
   "t0": {
    "stretch_cents": {
-    "36": -7.11,
-    "42": -2.03,
-    "48": -3.43,
-    "54": -1.77,
-    "60": -2.1,
-    "66": -1.74,
-    "72": -0.39,
-    "78": 9.12,
-    "84": 14.16
+    "36": -6.62,
+    "42": -2.07,
+    "48": -3.52,
+    "54": -1.91,
+    "60": -2.07,
+    "66": -2.38,
+    "72": -0.3,
+    "78": 7.93,
+    "84": 12.67
    },
    "inharmonicity_b": {
     "36": 6.074e-05,
@@ -914,7 +914,7 @@
    },
    "tnr_db": {
     "36": {
-     "100": 31.04
+     "100": 31.01
     },
     "42": {
      "100": 25.48
@@ -935,10 +935,10 @@
      "100": 47.71
     },
     "78": {
-     "100": 44.03
+     "100": 44.12
     },
     "84": {
-     "100": 42.94
+     "100": 42.97
     }
    },
    "velocity_response": {}
