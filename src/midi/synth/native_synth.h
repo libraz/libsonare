@@ -96,6 +96,9 @@ struct VaPatchParams {
   float osc2_level = 0.0f;
   /// Seeded white noise's linear level in the oscillator sum; 0 = absent.
   float noise_level = 0.0f;
+  /// RMS depth of slow seeded noise multiplying the oscillator sum, so a breath
+  /// skirt rides on every partial at the partial's own level; 0 = absent.
+  float noise_am = 0.0f;
 };
 
 /// One playable patch: oscillator section, filter section, envelopes and the
@@ -357,9 +360,12 @@ struct NativeSynthVoice : VoiceState {
   /// The subtractive section's second oscillator and noise, latched at note-on.
   VaOscillator osc2;
   VaOscillator noise_osc;
+  VaOscillator am_noise_osc;
+  TptSvf am_noise_lp;
   float osc2_ratio = 1.0f;
   float osc2_level = 0.0f;
   float noise_level = 0.0f;
+  float noise_am = 0.0f;  // depth already divided by the lowpassed noise's RMS
   float base_freq_hz = constants::kA4Hz;
   float velocity_gain = 1.0f;
   /// The exclusive/mute group this voice was STARTED in, which a GS ASSIGN
@@ -1490,6 +1496,7 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.va.osc2_interval_cents, 0.0f), -2400.0f, 2400.0f);
   p.va.osc2_level = std::clamp(patch_clamp_detail::sanitize(p.va.osc2_level, 0.0f), 0.0f, 4.0f);
   p.va.noise_level = std::clamp(patch_clamp_detail::sanitize(p.va.noise_level, 0.0f), 0.0f, 4.0f);
+  p.va.noise_am = std::clamp(patch_clamp_detail::sanitize(p.va.noise_am, 0.0f), 0.0f, 1.0f);
   for (ModRoute& route : p.mod_matrix.routes) {
     route.depth = std::clamp(patch_clamp_detail::sanitize(route.depth, 0.0f), -9600.0f, 9600.0f);
   }

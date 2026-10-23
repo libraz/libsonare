@@ -460,7 +460,8 @@ TEST_CASE("the subtractive section is set by key and reaches the render",
     // Every field defaults to absent.
     REQUIRE(d["default"].as_number() == 0.0);
   }
-  REQUIRE(names == std::set<std::string>{"osc2IntervalCents", "osc2Level", "noiseLevel"});
+  REQUIRE(names ==
+          std::set<std::string>{"osc2IntervalCents", "osc2Level", "noiseLevel", "noiseAm"});
 
   SonareProject* project = make_synth_project(3);
   SonareSynthPatch base{};
@@ -468,7 +469,7 @@ TEST_CASE("the subtractive section is set by key and reaches the render",
   std::strcpy(base.preset, "saw");
   const std::vector<float> reference = bounce_synth(project, base);
   REQUIRE(peak_of(reference) > 0.0f);
-  for (const char* key : {"osc2Level", "noiseLevel"}) {
+  for (const char* key : {"osc2Level", "noiseLevel", "noiseAm"}) {
     CAPTURE(key);
     const SonareSynthEngineParam param{key, 0.5};
     SonareSynthPatch with = base;

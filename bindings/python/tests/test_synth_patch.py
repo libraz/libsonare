@@ -888,7 +888,7 @@ def test_engine_params_change_a_render_and_default_to_none() -> None:
 
 def test_subtractive_engine_params_are_accepted_by_key() -> None:
     rows = {row["name"]: row for row in synth_engine_param_info("subtractive")}
-    assert set(rows) == {"osc2IntervalCents", "osc2Level", "noiseLevel"}
+    assert set(rows) == {"osc2IntervalCents", "osc2Level", "noiseLevel", "noiseAm"}
     assert all(row["default"] == 0 for row in rows.values())
     project = _build_midi_only_project()
     try:

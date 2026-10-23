@@ -89,6 +89,11 @@ SONARE_TUNABLE(kPercussionVelocityExponent, 1.1f);
 /// exponent each asks for is 0.47 and 0.52.
 SONARE_TUNABLE(kAdditiveVelocityExponent, 0.5f);
 
+/// Corner of the lowpass shaping the subtractive section's amplitude noise.
+/// The calliope reference's skirt is the same width on h1 and h2 (amplitude,
+/// not pitch): 24 dB down 10 Hz off the partial, 34 at 20, at the floor by 40.
+SONARE_TUNABLE(kNoiseAmCornerHz, 12.0f);
+
 /// Exponent of the SoundFont velocity-to-amplitude curve for @p p, 0 = off; the
 /// remaining physical engines read a per-patch `velocity_exponent` from their section.
 ///
@@ -387,6 +392,18 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   }
   if (noise_level > 0.0f) {
     noise_osc.start(sample_rate, VaWaveform::kNoise, 0.0f, seed ^ (kMaxUnisonOscs + 2));
+  }
+  noise_am = 0.0f;
+  if (!osc_less && p.va.noise_am > 0.0f) {
+    am_noise_osc.start(sample_rate, VaWaveform::kNoise, 0.0f, seed ^ (kMaxUnisonOscs + 3));
+    am_noise_lp.prepare(sample_rate);
+    am_noise_lp.set(kNoiseAmCornerHz, constants::kButterworthQ);
+    // Uniform noise has variance 1/3; a 2-pole Butterworth's noise bandwidth is (pi/4)/sin(pi/4)
+    // fc.
+    const double bandwidth_hz =
+        constants::kPiD * 0.25 / constants::kButterworthQD * kNoiseAmCornerHz;
+    const double passed = (1.0 / 3.0) * bandwidth_hz / (0.5 * sample_rate);
+    noise_am = p.va.noise_am / static_cast<float>(std::sqrt(passed));
   }
 
   const float sampler_vel = sampler_velocity_gain(velocity, sampler_velocity_exponent(p));
@@ -743,6 +760,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
       osc2.set_frequency(base_freq_hz * common * osc2_ratio);
       sample += osc2_level * osc2.next();
     }
+    if (noise_am > 0.0f) sample *= 1.0f + noise_am * am_noise_lp.process(am_noise_osc.next()).lp;
     if (noise_level > 0.0f) sample += noise_level * noise_osc.next();
   }
 

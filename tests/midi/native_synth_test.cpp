@@ -750,6 +750,7 @@ TEST_CASE("NativeSynth subtractive section: osc2 and noise are absent at level 0
           "[midi][synth][va]") {
   REQUIRE(NativeSynthPatch{}.va.osc2_level == 0.0f);
   REQUIRE(NativeSynthPatch{}.va.noise_level == 0.0f);
+  REQUIRE(NativeSynthPatch{}.va.noise_am == 0.0f);
   auto render_patch = [](const NativeSynthPatch& patch) {
     NativeSynthConfig cfg;
     cfg.patch = patch;
@@ -817,6 +818,43 @@ TEST_CASE("NativeSynth subtractive section: osc2 sits at its interval, noise fil
   // The fundamental is still there under it.
   CHECK(hann_level(hiss, kOutRate, kF0, from, len) ==
         Catch::Approx(hann_level(dry, kOutRate, kF0, from, len)).epsilon(0.05));
+}
+
+TEST_CASE("NativeSynth subtractive section: amplitude noise skirts each partial at its own level",
+          "[midi][synth][va]") {
+  using va_section_detail::hann_level;
+  constexpr double kF0 = 440.0;  // note 69
+  auto render_patch = [](const NativeSynthPatch& patch) {
+    NativeSynthConfig cfg;
+    cfg.patch = patch;
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 69, 127)));
+    return render(synth, static_cast<int>(kOutRate)).left;
+  };
+  NativeSynthPatch base;
+  base.waveform = VaWaveform::kSine;
+  base.cutoff_hz = 20000.0f;
+  base.amp_env.attack_ms = 1.0f;
+  base.amp_env.sustain = 1.0f;
+  base.va.osc2_interval_cents = 1200.0f;
+  base.va.osc2_level = 0.25f;
+  NativeSynthPatch breathy = base;
+  breathy.va.noise_am = 0.2f;
+  const auto dry = render_patch(base);
+  const auto wet = render_patch(breathy);
+  const size_t from = static_cast<size_t>(0.2 * kOutRate);
+  const size_t len = static_cast<size_t>(0.5 * kOutRate);
+  const auto skirt = [&](const std::vector<float>& buf, double line_hz) {
+    return hann_level(buf, kOutRate, line_hz + 8.0, from, len) /
+           hann_level(buf, kOutRate, line_hz, from, len);
+  };
+  // Amplitude, not pitch: the octave's skirt is no wider relative to its line than f0's.
+  CHECK(skirt(wet, kF0) > 10.0 * skirt(dry, kF0));
+  CHECK(skirt(wet, 2.0 * kF0) == Catch::Approx(skirt(wet, kF0)).epsilon(0.5));
+  // The gap between the partials stays empty.
+  CHECK(hann_level(wet, kOutRate, 1.5 * kF0, from, len) <
+        1e-3 * hann_level(wet, kOutRate, kF0, from, len));
 }
 
 TEST_CASE("Sf2Player without a SoundFont plays every GM program via the fallback",

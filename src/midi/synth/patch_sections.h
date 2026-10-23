@@ -63,6 +63,7 @@ constexpr VaPatchParams blank_va() noexcept {
   z.osc2_interval_cents = 0.0f;
   z.osc2_level = 0.0f;
   z.noise_level = 0.0f;
+  z.noise_am = 0.0f;
   return z;
 }
 

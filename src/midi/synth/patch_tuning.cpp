@@ -767,6 +767,7 @@ void apply_va(NativeSynthPatch& p, const Fields& f) {
   F(va.osc2_level);
   F(va.osc2_interval_cents);
   F(va.noise_level);
+  F(va.noise_am);
 }
 
 void apply_fm(NativeSynthPatch& p, const Fields& f) {
@@ -1251,6 +1252,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"va.osc2_level", Unit::None},
     {"va.osc2_interval_cents", Unit::Cents},
     {"va.noise_level", Unit::None},
+    {"va.noise_am", Unit::None},
     {"fm.algorithm", Unit::None},
     {"fm.ops.ratio", Unit::Ratio},
     {"fm.ops.detune_cents", Unit::Cents},
