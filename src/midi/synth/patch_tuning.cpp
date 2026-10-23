@@ -293,6 +293,9 @@ void apply_common(NativeSynthPatch& p, const Fields& f) {
   I_TYPED(lfo_shape, static_cast<int>(LfoShape::kTriangle), static_cast<int>(LfoShape::kRandom));
   I_TYPED(filter_output, static_cast<int>(SynthFilterOutput::kLowpass),
           static_cast<int>(SynthFilterOutput::kHighpass));
+  I_TYPED(filter_model, static_cast<int>(SynthFilterModel::kSvf),
+          static_cast<int>(SynthFilterModel::kSvf4Pole));
+  I_TYPED(waveform, static_cast<int>(VaWaveform::kSine), static_cast<int>(VaWaveform::kNoise));
   F(detune_cents);
   F(drift_cents);
   F(drift_rate_hz);
