@@ -247,8 +247,12 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     process_subblock(io, monitor_out, num_channels, offset, span, fold_monitor_to_main);
     transport_.advance(span);
     // advance() folds a playhead reaching loop_end, which is the wrap.
-    wrapped =
-        rolling && transport_.sample_position() != numeric::saturating_add(position, int64_t{span});
+    const int64_t left_position = numeric::saturating_add(position, int64_t{span});
+    wrapped = rolling && transport_.sample_position() != left_position;
+    if (wrapped) {
+      last_loop_wrap_ = {true, transport_.render_frame(), left_position,
+                         transport_.sample_position()};
+    }
     offset += span;
   }
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -806,9 +810,7 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
         capture_input ? reinterpret_cast<const float* const*>(input_capture_channels_.data())
                       : reinterpret_cast<const float* const*>(sub_channels.data());
     if (!capture_sink_.punch_state_rt().punch_enabled || transport_.playing()) {
-      const int64_t record_offset = record_offset_samples_.load(std::memory_order_acquire);
-      capture_sink_.process(capture_channels, channels, num_frames,
-                            numeric::saturating_sub(transport_.sample_position(), record_offset));
+      capture_subblock(capture_channels, channels, num_frames);
     }
 #if defined(SONARE_WITH_MIXING)
     scope_tap_.append_master_pre_metronome(sub_channels.data(), channels, num_frames,
@@ -823,6 +825,35 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
                     transport_.sample_position(), 1);
     }
   }
+}
+
+void RealtimeEngine::capture_subblock(const float* const* channels, int num_channels,
+                                      int num_frames) noexcept {
+  const int64_t record_offset = record_offset_samples_.load(std::memory_order_acquire);
+  const int64_t position = transport_.sample_position();
+  int carried = 0;
+  // Input arriving within record_offset frames of a wrap was played at the end of the
+  // previous pass; the position check drops a wrap a seek or stop has since overtaken.
+  const LoopWrap& wrap = last_loop_wrap_;
+  if (wrap.valid && record_offset > 0 &&
+      record_offset <= numeric::saturating_sub(wrap.left_position, wrap.resumed_position)) {
+    const int64_t since = numeric::saturating_sub(transport_.render_frame(), wrap.render_frame);
+    if (since >= 0 && since < record_offset &&
+        position == numeric::saturating_add(wrap.resumed_position, since)) {
+      carried = static_cast<int>(std::min<int64_t>(num_frames, record_offset - since));
+      capture_sink_.process(channels, num_channels, carried,
+                            wrap.left_position - (record_offset - since));
+    }
+  }
+  if (carried == num_frames) return;
+  std::array<const float*, kMaxAudioChannels> rest{};
+  const int count = std::min(num_channels, static_cast<int>(rest.size()));
+  for (int ch = 0; ch < count; ++ch) {
+    rest[static_cast<size_t>(ch)] = channels[ch] ? channels[ch] + carried : nullptr;
+  }
+  capture_sink_.process(
+      rest.data(), count, num_frames - carried,
+      numeric::saturating_sub(numeric::saturating_add(position, int64_t{carried}), record_offset));
 }
 
 void RealtimeEngine::silence(float* const* io, int num_channels, int num_frames) noexcept {

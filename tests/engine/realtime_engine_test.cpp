@@ -1136,6 +1136,49 @@ TEST_CASE("RealtimeEngine reapplies automation after every loop wrap in one bloc
   REQUIRE(changes == expected);
 }
 
+TEST_CASE("RealtimeEngine record offset keeps each loop pass whole across the wrap",
+          "[engine][realtime][capture]") {
+  constexpr double kSampleRate = 48000.0;
+  constexpr int kLoopSamples = 100;
+  constexpr int kOffset = 10;
+  constexpr int kBlock = 64;
+  constexpr int kFrames = 320;
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(kSampleRate, kBlock);
+  engine.set_tempo(60.0);
+  engine.set_loop(0.0, static_cast<double>(kLoopSamples) / kSampleRate, true);
+
+  std::vector<float> captured(2 * kLoopSamples, -1.0f);
+  float* capture_channels[] = {captured.data()};
+  engine.set_capture_segment({capture_channels, 1, static_cast<int64_t>(captured.size())});
+  engine.set_capture_source(sonare::engine::CaptureSource::kInput);
+  engine.set_capture_punch(0, kLoopSamples, true);
+  engine.set_record_offset_samples(kOffset);
+  engine.set_capture_armed(true);
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  // Each input sample carries the render frame it arrives at.
+  for (int start = 0; start < kFrames; start += kBlock) {
+    std::array<float, kBlock> io{};
+    for (int i = 0; i < kBlock; ++i) io[static_cast<size_t>(i)] = static_cast<float>(start + i);
+    float* channels[] = {io.data()};
+    engine.process(channels, 1, kBlock);
+  }
+
+  // Pass one is the input of frames [10, 110), pass two that of [110, 210): the
+  // frames arriving just after a wrap close the pass that was played before it.
+  REQUIRE(engine.captured_frames() == 2 * kLoopSamples);
+  for (int i = 0; i < 2 * kLoopSamples; ++i) {
+    INFO("captured frame " << i);
+    REQUIRE(captured[static_cast<size_t>(i)] == static_cast<float>(i + kOffset));
+  }
+}
+
 TEST_CASE("RealtimeEngine repeats loop automation from a mid-loop block start",
           "[engine][realtime]") {
   constexpr double kSampleRate = 48000.0;

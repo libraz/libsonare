@@ -1106,6 +1106,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   void process_subblock(float* const* io, float* const* monitor_out, int num_channels, int offset,
                         int num_frames, bool fold_monitor_to_main) noexcept;
   void silence(float* const* io, int num_channels, int num_frames) noexcept;
+  // Captures one sub-block at the record-offset-compensated timeline position.
+  void capture_subblock(const float* const* channels, int num_channels, int num_frames) noexcept;
   // Returns true whenever @p value took effect on @p target_id -- a smoother
   // slot claimed (retargeted, reactivated, or newly assigned), or, when the
   // slot table was full, the immediate fallback apply via automation_ (see
@@ -1711,6 +1713,15 @@ class RealtimeEngine : private ClipPageRequestSink {
   CaptureSink capture_sink_{};
   std::atomic<CaptureSource> capture_source_{CaptureSource::kOutput};
   std::atomic<int64_t> record_offset_samples_{0};
+  // Audio-thread only: the last loop wrap, so input delayed by the record offset
+  // across it is placed at the end of the pass it was played in.
+  struct LoopWrap {
+    bool valid = false;
+    int64_t render_frame = 0;
+    int64_t left_position = 0;
+    int64_t resumed_position = 0;
+  };
+  LoopWrap last_loop_wrap_{};
   rt::SeqlockCell<InputMonitorState> input_monitor_{InputMonitorState{}};
   // The one audio-thread reader of the cell above; the control-thread getters
   // next to set_input_monitor() take the spinning load() path instead.
