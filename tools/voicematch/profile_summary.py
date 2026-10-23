@@ -284,6 +284,49 @@ def partial_balance_db(partials_db: list[float] | None) -> float | None:
     return float(np.mean(upper) - ref)
 
 
+def partial_ladder_lines(
+    rows: list[tuple[int, int, list[float] | None, list[float] | None]], top: int = 10
+) -> list[str]:
+    """Model minus reference per partial h2..h`top`, each relative to its own h1, note by note.
+
+    `balance` folds h2-h6 into one mean, so a missing octave and an odd series
+    that is too strong cancel inside it; the ladder keeps them apart. A bin
+    either side's `ladder_present` rejects is left blank rather than read as a
+    level. The last line is each partial's median over the rows: a partial wrong
+    on every note is a mechanism, one whose sign alternates between neighbouring
+    notes is the reference's own multisample zones.
+    """
+    k_max = max(2, top)
+    lines = [
+        "  " + "note vel |" + "".join(f"{f'h{k}':>6s}" for k in range(2, k_max + 1)) + "   mean|d|"
+    ]
+    per_k: dict[int, list[float]] = {}
+    for note, vel, mod, ref in rows:
+        if not mod or not ref or len(mod) < 2 or len(ref) < 2:
+            continue
+        ok_m, ok_r = ladder_present(mod), ladder_present(ref)
+        cells, errs = [], []
+        for k in range(2, k_max + 1):
+            i = k - 1
+            if i < min(len(mod), len(ref)) and ok_m[i] and ok_r[i]:
+                v = (mod[i] - mod[0]) - (ref[i] - ref[0])
+                cells.append(f"{v:+6.1f}")
+                errs.append(abs(v))
+                per_k.setdefault(k, []).append(v)
+            else:
+                cells.append(f"{'':>6s}")
+        mean = f"{np.mean(errs):9.1f}" if errs else f"{'-':>9s}"
+        lines.append(f"  {note:4d} {vel:3d} |" + "".join(cells) + mean)
+    lines.append(
+        "  median   |"
+        + "".join(
+            f"{np.median(per_k[k]):+6.1f}" if k in per_k else f"{'':>6s}"
+            for k in range(2, k_max + 1)
+        )
+    )
+    return lines
+
+
 def partial_tilt_db_s(partial_decay_db_s: list[float] | None) -> float | None:
     """High minus low partial decay rate (dB/s): how much faster the top of the stack falls than the bottom.
 

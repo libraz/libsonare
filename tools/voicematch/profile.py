@@ -180,6 +180,7 @@ from profile_summary import (
     a4_offset_cents,
     band_db,
     partial_balance_db,
+    partial_ladder_lines,
     partial_ratio_by_band,
     partial_tilt_db_s,
     print_percussion_summary,
@@ -1299,8 +1300,12 @@ def compare(
     margin: float = 1.25,
     corpus_dir: Path | None = None,
     json_out: str = "",
+    partials: int = 0,
 ) -> int:
-    """Measure libsonare the same way and print the difference, dimension by dimension."""
+    """Measure libsonare the same way and print the difference, dimension by dimension.
+
+    `partials` > 0 also prints the partial ladder up to that harmonic, note by note.
+    """
     if not profile_path.exists():
         print(f"no profile at {profile_path} — run `profile.py measure` first")
         return 2
@@ -1360,6 +1365,7 @@ def compare(
     # Rows that reached the per-row arithmetic at all, which is what every
     # dimension below was OFFERED — see `print_summary_table`.
     attempted = 0
+    ladders: list[tuple[int, int, list[float] | None, list[float] | None]] = []
     offered_keys: set[str] = set()
     # Peak level per side, per note, per velocity. The dynamic range is the one
     # dimension no single (note, velocity) row can carry: it is the difference
@@ -1400,6 +1406,7 @@ def compare(
             print(f"{note:5d} {vel:4d} | model rendered nothing measurable")
             continue
         attempted += 1
+        ladders.append((note, vel, m.get("partials_db"), r.get("partials_db")))
 
         def d(key, scale=1.0, m=m, r=r):
             if m.get(key) is None or r.get(key) is None:
@@ -1558,6 +1565,9 @@ def compare(
         summarize_deltas(deltas), cfg.get("dimensions") or [], cfg.get("dimensions_na") or {}
     )
     spread = reference_spread(profile, list(summary))
+    if partials:
+        print("\npartial ladder, model minus reference, dB, each side against its own h1:")
+        print("\n".join(partial_ladder_lines(ladders, partials)))
     print_summary_table(summary, spread, attempted)
     print_vanished_dimensions(
         offered_keys, summary, cfg.get("dimensions") or [], cfg.get("dimensions_na") or {}
@@ -2061,6 +2071,13 @@ def main() -> int:
         help="also write the summary and each bounded reading beside its limit to this JSON",
     )
     gate_group.add_argument(
+        "--partials",
+        type=int,
+        default=0,
+        help="also print each note's partials h2..N as model minus reference, each against "
+        "its own h1, and each partial's median over the notes (0, the default, prints none)",
+    )
+    gate_group.add_argument(
         "--margin",
         type=float,
         default=1.25,
@@ -2180,6 +2197,7 @@ def main() -> int:
         margin=args.margin,
         corpus_dir=corpus_dir,
         json_out=args.json_out,
+        partials=args.partials,
     )
 
 

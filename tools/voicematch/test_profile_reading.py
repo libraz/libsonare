@@ -578,6 +578,29 @@ def test_a_floor_bin_does_not_drag_the_mean_of_a_real_partial():
     ) == pytest.approx(-6.0)
 
 
+def test_the_partial_ladder_reads_each_side_against_its_own_fundamental():
+    """A missing octave and a too-strong h3 stay apart, and the median line carries both."""
+    lines = profile_module.partial_ladder_lines(
+        [
+            (60, 96, [-3.0, -23.0, -12.0], [0.0, -10.0, -15.0]),
+            (72, 96, [0.0, -20.0, -11.0], [0.0, -8.0, -14.0]),
+        ],
+        top=3,
+    )
+    assert lines[1].split("|")[1].split() == ["-10.0", "+6.0", "8.0"]
+    assert lines[2].split("|")[1].split() == ["-12.0", "+3.0", "7.5"]
+    assert lines[-1].split("|")[1].split() == ["-11.0", "+4.5"]
+
+
+def test_the_partial_ladder_leaves_a_floor_bin_blank():
+    """A bin either side's ladder rejects is not a level, so it carries no difference."""
+    lines = profile_module.partial_ladder_lines(
+        [(60, 96, [0.0, -99.0, -12.0], [0.0, -10.0, -15.0])], top=3
+    )
+    assert lines[1].split("|")[1].split() == ["+3.0", "3.0"]
+    assert lines[-1].split("|")[1].split() == ["+3.0"]
+
+
 # --------------------------------------------------------------------------
 # the velocity axis
 
