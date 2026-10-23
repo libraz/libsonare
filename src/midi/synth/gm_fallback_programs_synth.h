@@ -142,13 +142,15 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_voice.gain = 0.61f;
 
   // Fifths (GM 86): a still saw and one a fourth below at equal level, as the reference
-  // holds them; the linear SVF keeps the pair from intermodulating, the noise is its floor.
+  // holds them; a linear 4-pole keeps the pair from intermodulating (a ladder's tanh put
+  // +18.7 dB of difference tone under f0) and falls as steeply as the reference does.
   o.lead_fifths = lead;
   o.lead_fifths.unison = 1;
   o.lead_fifths.detune_cents = 0.0f;
-  o.lead_fifths.filter_model = SynthFilterModel::kSvf;
+  o.lead_fifths.filter_model = SynthFilterModel::kSvf4Pole;
   o.lead_fifths.drive = 0.0f;
-  o.lead_fifths.cutoff_hz = 1200.0f;
+  o.lead_fifths.cutoff_hz = 950.0f;
+  o.lead_fifths.vel_to_cutoff_cents = 600.0f;
   o.lead_fifths.hp_cutoff_hz = 65.0f;
   o.lead_fifths.stereo_spread = 0.35f;
   o.lead_fifths.gain = 0.31f;
