@@ -1,7 +1,7 @@
 {
  "id": "accordion_italian",
  "label": "Accordion It, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-22T19:50:15+00:00",
+ "measured_utc": "2026-10-23T06:45:28+00:00",
  "capture": {
   "program": 21,
   "params": [],
@@ -108,6 +108,13 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 1648.3,
+   "tnr_mask": {
+    "fm": [
+     7.728,
+     4.286,
+     5.714
+    ]
+   },
    "tnr_db": 12.14
   },
   {
@@ -189,6 +196,17 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 1746.5,
+   "tnr_mask": {
+    "fm": [
+     16.096,
+     6.316,
+     6.316
+    ],
+    "am": [
+     2.794,
+     3.167
+    ]
+   },
    "tnr_db": 32.46
   },
   {
@@ -270,6 +288,17 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 2082.3,
+   "tnr_mask": {
+    "fm": [
+     10.775,
+     3.571,
+     4.286
+    ],
+    "am": [
+     6.155,
+     3.459
+    ]
+   },
    "tnr_db": 8.23
   },
   {
@@ -351,6 +380,13 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 2156.1,
+   "tnr_mask": {
+    "fm": [
+     11.534,
+     8.421,
+     8.421
+    ]
+   },
    "tnr_db": 32.83
   },
   {
@@ -432,6 +468,17 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 1952.6,
+   "tnr_mask": {
+    "fm": [
+     5.975,
+     3.571,
+     7.143
+    ],
+    "am": [
+     5.8,
+     3.344
+    ]
+   },
    "tnr_db": 42.35
   },
   {
@@ -509,6 +556,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 2558.9,
+   "tnr_mask": {},
    "tnr_db": 37.72
   }
  ],

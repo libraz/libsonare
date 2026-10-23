@@ -350,7 +350,16 @@ def test_a_note_is_rendered_over_its_recorded_window_on_the_pitched_path_too(tmp
             "sample_rate": 48000,
             "channel": 1,
         },
-        "rows": [{"timbre": "t", "note": 60, "velocity": 100, "f0_hz": 261.6, "cents_vs_et": 0.0}],
+        "rows": [
+            {
+                "timbre": "t",
+                "note": 60,
+                "velocity": 100,
+                "f0_hz": 261.6,
+                "cents_vs_et": 0.0,
+                "tnr_mask": {},
+            }
+        ],
     }
     cfg = {
         "id": "w",
@@ -1274,7 +1283,16 @@ def _bank_capture(tmp_path, bank):
         "id": "v",
         "label": "V",
         "capture": {"program": 14, "gate_ms": 500, "preroll_ms": 0, "sample_rate": 48000},
-        "rows": [{"timbre": "t", "note": 60, "velocity": 100, "f0_hz": 261.6, "cents_vs_et": 0.0}],
+        "rows": [
+            {
+                "timbre": "t",
+                "note": 60,
+                "velocity": 100,
+                "f0_hz": 261.6,
+                "cents_vs_et": 0.0,
+                "tnr_mask": {},
+            }
+        ],
     }
     cfg = {
         "id": "v",
@@ -1344,7 +1362,7 @@ def test_the_onset_dimensions_are_differenced_per_row_and_skipped_where_either_s
     }
 
     def row(vel, fields):
-        out = {"f0_hz": 261.6, "cents_vs_et": 0.0, "peak_dbfs": -20.0}
+        out = {"f0_hz": 261.6, "cents_vs_et": 0.0, "peak_dbfs": -20.0, "tnr_mask": {}}
         if fields[0] is not None:
             out.update(onset_overshoot_db=fields[0], onset_settle_ms=fields[1])
         return out
@@ -1373,7 +1391,9 @@ def test_the_onset_dimensions_are_differenced_per_row_and_skipped_where_either_s
     monkeypatch.setattr(
         profile_module,
         "measure_note",
-        lambda audio, sr, note, *, preroll_s, gate_s: row(0, onset[(note, _current["vel"])]),
+        lambda audio, sr, note, *, preroll_s, gate_s, tnr_mask=None: row(
+            0, onset[(note, _current["vel"])]
+        ),
     )
     _current = {}
     real_smf = profile_module.write_smf

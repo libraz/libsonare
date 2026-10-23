@@ -1,7 +1,7 @@
 {
  "id": "lead_bass_lead",
  "label": "Lead 8 (bass + lead), sampled, close and dry",
- "measured_utc": "2026-10-22T01:11:47+00:00",
+ "measured_utc": "2026-10-23T07:01:06+00:00",
  "capture": {
   "program": 87,
   "params": [],
@@ -114,6 +114,7 @@
    "damper_release_ms": 50.0,
    "damper_capped": false,
    "centroid_hz": 115.0,
+   "tnr_mask": {},
    "tnr_db": 49.26,
    "stereo_width": 0.0
   },
@@ -197,6 +198,7 @@
    "damper_release_ms": 50.0,
    "damper_capped": false,
    "centroid_hz": 126.9,
+   "tnr_mask": {},
    "tnr_db": 49.28,
    "stereo_width": 0.0
   },
@@ -280,6 +282,7 @@
    "damper_release_ms": 50.0,
    "damper_capped": false,
    "centroid_hz": 139.0,
+   "tnr_mask": {},
    "tnr_db": 49.28,
    "stereo_width": -0.0
   },
@@ -363,6 +366,7 @@
    "damper_release_ms": 50.0,
    "damper_capped": false,
    "centroid_hz": 150.8,
+   "tnr_mask": {},
    "tnr_db": 49.26,
    "stereo_width": 0.0
   },
@@ -446,6 +450,7 @@
    "damper_release_ms": 30.0,
    "damper_capped": false,
    "centroid_hz": 162.4,
+   "tnr_mask": {},
    "tnr_db": 43.32,
    "stereo_width": 0.0
   },
@@ -529,6 +534,7 @@
    "damper_release_ms": 30.0,
    "damper_capped": false,
    "centroid_hz": 180.6,
+   "tnr_mask": {},
    "tnr_db": 43.53,
    "stereo_width": -0.0
   },
@@ -612,6 +618,7 @@
    "damper_release_ms": 30.0,
    "damper_capped": false,
    "centroid_hz": 199.3,
+   "tnr_mask": {},
    "tnr_db": 43.65,
    "stereo_width": 0.0
   },
@@ -695,6 +702,7 @@
    "damper_release_ms": 30.0,
    "damper_capped": false,
    "centroid_hz": 217.6,
+   "tnr_mask": {},
    "tnr_db": 43.72,
    "stereo_width": -0.0
   },
@@ -779,6 +787,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 227.8,
+   "tnr_mask": {},
    "tnr_db": 56.46,
    "stereo_width": 0.0
   },
@@ -863,6 +872,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 255.2,
+   "tnr_mask": {},
    "tnr_db": 56.6,
    "stereo_width": -0.0
   },
@@ -947,6 +957,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 283.8,
+   "tnr_mask": {},
    "tnr_db": 56.61,
    "stereo_width": 0.0
   },
@@ -1031,6 +1042,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 312.2,
+   "tnr_mask": {},
    "tnr_db": 56.57,
    "stereo_width": -0.0
   },
@@ -1115,6 +1127,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 317.8,
+   "tnr_mask": {},
    "tnr_db": 61.36,
    "stereo_width": -0.0
   },
@@ -1199,6 +1212,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 358.0,
+   "tnr_mask": {},
    "tnr_db": 62.18,
    "stereo_width": 0.0
   },
@@ -1283,6 +1297,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 401.0,
+   "tnr_mask": {},
    "tnr_db": 62.63,
    "stereo_width": -0.0
   },
@@ -1367,6 +1382,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 444.4,
+   "tnr_mask": {},
    "tnr_db": 62.85,
    "stereo_width": 0.0
   },
@@ -1451,6 +1467,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 448.4,
+   "tnr_mask": {},
    "tnr_db": 68.48,
    "stereo_width": 0.0
   },
@@ -1535,6 +1552,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 499.2,
+   "tnr_mask": {},
    "tnr_db": 72.59,
    "stereo_width": 0.0
   },
@@ -1619,6 +1637,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 562.3,
+   "tnr_mask": {},
    "tnr_db": 75.94,
    "stereo_width": -0.0
   },
@@ -1703,6 +1722,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 627.5,
+   "tnr_mask": {},
    "tnr_db": 78.17,
    "stereo_width": 0.0
   },
@@ -1787,6 +1807,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 677.4,
+   "tnr_mask": {},
    "tnr_db": 70.73,
    "stereo_width": -0.0
   },
@@ -1871,6 +1892,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 706.9,
+   "tnr_mask": {},
    "tnr_db": 73.56,
    "stereo_width": -0.0
   },
@@ -1955,6 +1977,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 783.7,
+   "tnr_mask": {},
    "tnr_db": 76.68,
    "stereo_width": 0.0
   },
@@ -2039,6 +2062,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 879.2,
+   "tnr_mask": {},
    "tnr_db": 78.13,
    "stereo_width": 0.0
   },
@@ -2123,6 +2147,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 1064.3,
+   "tnr_mask": {},
    "tnr_db": 74.56,
    "stereo_width": 0.0
   },
@@ -2207,6 +2232,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 1073.0,
+   "tnr_mask": {},
    "tnr_db": 75.46,
    "stereo_width": -0.0
   },
@@ -2291,6 +2317,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 1114.4,
+   "tnr_mask": {},
    "tnr_db": 76.81,
    "stereo_width": 0.0
   },
@@ -2375,6 +2402,7 @@
    "damper_release_ms": 25.0,
    "damper_capped": false,
    "centroid_hz": 1224.7,
+   "tnr_mask": {},
    "tnr_db": 77.16,
    "stereo_width": 0.0
   }

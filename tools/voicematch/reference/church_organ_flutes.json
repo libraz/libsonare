@@ -1,7 +1,7 @@
 {
  "id": "church_organ_flutes",
  "label": "Church Org.2, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-22T19:50:36+00:00",
+ "measured_utc": "2026-10-23T06:52:12+00:00",
  "capture": {
   "program": 19,
   "params": [],
@@ -114,6 +114,13 @@
    "damper_release_ms": 129.7,
    "damper_capped": true,
    "centroid_hz": 297.2,
+   "tnr_mask": {
+    "fm": [
+     37.155,
+     3.158,
+     3.158
+    ]
+   },
    "tnr_db": 11.73
   },
   {
@@ -194,6 +201,13 @@
    "damper_release_ms": 94.8,
    "damper_capped": true,
    "centroid_hz": 447.3,
+   "tnr_mask": {
+    "fm": [
+     86.667,
+     4.211,
+     4.211
+    ]
+   },
    "tnr_db": 8.17
   },
   {
@@ -277,6 +291,13 @@
    "damper_release_ms": 89.8,
    "damper_capped": true,
    "centroid_hz": 548.8,
+   "tnr_mask": {
+    "fm": [
+     62.661,
+     5.263,
+     5.263
+    ]
+   },
    "tnr_db": 14.68
   },
   {
@@ -360,6 +381,13 @@
    "damper_release_ms": 69.9,
    "damper_capped": true,
    "centroid_hz": 734.3,
+   "tnr_mask": {
+    "fm": [
+     47.302,
+     8.421,
+     8.421
+    ]
+   },
    "tnr_db": 15.51
   },
   {
@@ -443,6 +471,7 @@
    "damper_release_ms": 79.8,
    "damper_capped": true,
    "centroid_hz": 739.5,
+   "tnr_mask": {},
    "tnr_db": 15.59
   },
   {
@@ -526,6 +555,13 @@
    "damper_release_ms": 69.9,
    "damper_capped": true,
    "centroid_hz": 1028.3,
+   "tnr_mask": {
+    "fm": [
+     19.407,
+     3.158,
+     3.158
+    ]
+   },
    "tnr_db": 15.14
   },
   {
@@ -609,6 +645,13 @@
    "damper_release_ms": 64.9,
    "damper_capped": true,
    "centroid_hz": 1306.9,
+   "tnr_mask": {
+    "fm": [
+     26.854,
+     8.421,
+     8.421
+    ]
+   },
    "tnr_db": 13.2
   },
   {
@@ -692,6 +735,17 @@
    "damper_release_ms": 54.9,
    "damper_capped": true,
    "centroid_hz": 1549.2,
+   "tnr_mask": {
+    "fm": [
+     20.741,
+     7.368,
+     7.368
+    ],
+    "am": [
+     10.54,
+     3.404
+    ]
+   },
    "tnr_db": 13.52
   },
   {
@@ -771,6 +825,13 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 2409.5,
+   "tnr_mask": {
+    "fm": [
+     11.303,
+     4.286,
+     7.857
+    ]
+   },
    "tnr_db": 9.12
   },
   {
@@ -838,6 +899,17 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 2269.1,
+   "tnr_mask": {
+    "fm": [
+     6.658,
+     6.429,
+     7.143
+    ],
+    "am": [
+     6.683,
+     6.769
+    ]
+   },
    "tnr_db": 8.75
   },
   {
@@ -897,6 +969,13 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 2302.3,
+   "tnr_mask": {
+    "fm": [
+     19.865,
+     11.579,
+     11.579
+    ]
+   },
    "tnr_db": 9.67
   }
  ],

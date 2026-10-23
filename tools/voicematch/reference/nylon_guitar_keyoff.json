@@ -1,7 +1,7 @@
 {
  "id": "nylon_guitar_keyoff",
  "label": "Nylon Gt.o, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-22T01:12:14+00:00",
+ "measured_utc": "2026-10-23T07:03:51+00:00",
  "capture": {
   "program": 24,
   "params": [],
@@ -106,6 +106,7 @@
    "damper_release_ms": 104.8,
    "damper_capped": true,
    "centroid_hz": 132.0,
+   "tnr_mask": {},
    "tnr_db": 36.75
   },
   {
@@ -187,6 +188,7 @@
    "damper_release_ms": 109.8,
    "damper_capped": true,
    "centroid_hz": 176.1,
+   "tnr_mask": {},
    "tnr_db": 37.97
   },
   {
@@ -266,6 +268,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 268.4,
+   "tnr_mask": {},
    "tnr_db": 42.71
   },
   {
@@ -345,6 +348,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 786.0,
+   "tnr_mask": {},
    "tnr_db": 30.63
   },
   {
@@ -426,6 +430,7 @@
    "damper_release_ms": 94.8,
    "damper_capped": true,
    "centroid_hz": 391.6,
+   "tnr_mask": {},
    "tnr_db": 32.43
   }
  ],

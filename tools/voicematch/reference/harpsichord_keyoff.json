@@ -1,7 +1,7 @@
 {
  "id": "harpsichord_keyoff",
  "label": "Harpsi.o, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-22T15:54:39+00:00",
+ "measured_utc": "2026-10-23T07:00:06+00:00",
  "capture": {
   "program": 6,
   "params": [],
@@ -111,6 +111,7 @@
    "damper_release_ms": 144.7,
    "damper_capped": true,
    "centroid_hz": 248.6,
+   "tnr_mask": {},
    "tnr_db": 20.79
   },
   {
@@ -191,6 +192,7 @@
    "damper_release_ms": 119.7,
    "damper_capped": true,
    "centroid_hz": 335.4,
+   "tnr_mask": {},
    "tnr_db": 22.46
   },
   {
@@ -271,6 +273,7 @@
    "damper_release_ms": 114.8,
    "damper_capped": true,
    "centroid_hz": 442.3,
+   "tnr_mask": {},
    "tnr_db": 25.66
   },
   {
@@ -352,6 +355,13 @@
    "damper_release_ms": 89.8,
    "damper_capped": true,
    "centroid_hz": 613.7,
+   "tnr_mask": {
+    "fm": [
+     1.286,
+     3.571,
+     5.714
+    ]
+   },
    "tnr_db": 24.55
   },
   {
@@ -431,6 +441,13 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 802.1,
+   "tnr_mask": {
+    "fm": [
+     1.302,
+     4.286,
+     5.0
+    ]
+   },
    "tnr_db": 30.18
   },
   {
@@ -512,6 +529,13 @@
    "damper_release_ms": 89.8,
    "damper_capped": true,
    "centroid_hz": 584.2,
+   "tnr_mask": {
+    "fm": [
+     1.329,
+     3.571,
+     5.0
+    ]
+   },
    "tnr_db": 37.84
   },
   {
@@ -591,6 +615,13 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 663.2,
+   "tnr_mask": {
+    "fm": [
+     1.282,
+     3.571,
+     5.0
+    ]
+   },
    "tnr_db": 50.87
   },
   {
@@ -670,6 +701,13 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 700.7,
+   "tnr_mask": {
+    "fm": [
+     1.321,
+     3.571,
+     5.0
+    ]
+   },
    "tnr_db": 51.71
   },
   {
@@ -749,6 +787,13 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 916.8,
+   "tnr_mask": {
+    "fm": [
+     1.255,
+     3.571,
+     5.0
+    ]
+   },
    "tnr_db": 48.99
   },
   {
@@ -824,6 +869,13 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1215.6,
+   "tnr_mask": {
+    "fm": [
+     1.332,
+     3.571,
+     5.0
+    ]
+   },
    "tnr_db": 47.24
   }
  ],

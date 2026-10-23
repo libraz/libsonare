@@ -43,7 +43,7 @@ for _path in (_TOOLS_ROOT, _TOOLS_DIR):
 
 from fit_quality import aggregate_term_residuals
 from knobs import Knob, format_value
-from loss import probe_rows
+from loss import oracle_tnr_masks, probe_rows
 from loss_aggregate import robust_score_terms
 from loss_weights import LossWeights
 from metrics_signal import normalize_rms
@@ -279,8 +279,13 @@ def _measure(
     envelope: str = "oracle",
     dynamics: str = "oracle",
     gain_offset: float = 1.0,
+    tnr_masks: tuple[list[dict] | None, list[dict] | None] = (None, None),
 ) -> tuple[list[dict], list[dict]]:
-    """Render once, then measure train and holdout views of the same piece."""
+    """Render once, then measure train and holdout views of the same piece.
+
+    `tnr_masks` is the oracle's train and holdout masks, given when the values
+    are a candidate's, so both sides read tone-to-noise through the oracle's.
+    """
 
     piece, train_pattern, holdout_pattern = patterns
     raw = _render_audio(
@@ -294,8 +299,8 @@ def _measure(
         gain_offset=gain_offset,
     )
     mono = normalize_rms(raw)
-    train_rows = probe_rows(mono, train_pattern, SAMPLE_RATE, raw=raw)
-    holdout_rows = probe_rows(mono, holdout_pattern, SAMPLE_RATE, raw=raw)
+    train_rows = probe_rows(mono, train_pattern, SAMPLE_RATE, raw=raw, tnr_masks=tnr_masks[0])
+    holdout_rows = probe_rows(mono, holdout_pattern, SAMPLE_RATE, raw=raw, tnr_masks=tnr_masks[1])
     return train_rows, holdout_rows
 
 
@@ -457,6 +462,7 @@ class FamilyEvaluator:
         spec: FamilySpec,
         patterns: tuple[Pattern, Pattern, Pattern],
         oracle_train: list[dict],
+        oracle_holdout: list[dict],
         oracle_terms: dict[str, float],
         weights: dict[str, float],
         *,
@@ -465,6 +471,8 @@ class FamilyEvaluator:
         self.spec = spec
         self.patterns = patterns
         self.oracle_train = oracle_train
+        self.oracle_holdout = oracle_holdout
+        self.tnr_masks = (oracle_tnr_masks(oracle_train), oracle_tnr_masks(oracle_holdout))
         self.oracle_terms = oracle_terms
         self.weights = weights
         self.seed = seed
@@ -487,7 +495,9 @@ class FamilyEvaluator:
     def measure(
         self, values: list[float] | tuple[float, ...], **kwargs
     ) -> tuple[list[dict], list[dict]]:
-        return _measure(self.spec, self.patterns, values, seed=self.seed, **kwargs)
+        return _measure(
+            self.spec, self.patterns, values, seed=self.seed, tnr_masks=self.tnr_masks, **kwargs
+        )
 
     def terms(
         self, values: list[float] | tuple[float, ...]
@@ -527,7 +537,7 @@ class FamilyEvaluator:
         train = _residual_payload(
             terms, self.oracle_terms, train_rows, len(self.spec.train_pairs), self.weights
         )
-        oracle_holdout = _measure(self.spec, self.patterns, ORACLE_VALUES, seed=self.seed)[1]
+        oracle_holdout = self.oracle_holdout
         holdout_terms = robust_score_terms(
             holdout_rows, oracle_holdout, percussive=self.spec.percussive
         )
@@ -609,11 +619,13 @@ def run_family(
     started = time.perf_counter()
     patterns = _make_patterns(spec)
     weights, unavailable = _effective_weights(spec)
-    oracle_train, _ = _measure(spec, patterns, ORACLE_VALUES, seed=seed)
+    oracle_train, oracle_holdout = _measure(spec, patterns, ORACLE_VALUES, seed=seed)
     oracle_terms = robust_score_terms(oracle_train, oracle_train, percussive=spec.percussive)
     if oracle_terms is None:
         raise RuntimeError(f"oracle audio for {family} was not comparable")
-    evaluator = FamilyEvaluator(spec, patterns, oracle_train, oracle_terms, weights, seed=seed)
+    evaluator = FamilyEvaluator(
+        spec, patterns, oracle_train, oracle_holdout, oracle_terms, weights, seed=seed
+    )
     initial = evaluator(list(START_VALUES))
     args = _optimizer_args(max_evals, seed, optimizer)
     search = optimize if optimizer == "coordinate" else cma_es

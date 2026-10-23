@@ -1,7 +1,7 @@
 {
  "id": "mandolin",
  "label": "Mandolin, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-22T01:12:00+00:00",
+ "measured_utc": "2026-10-23T07:02:17+00:00",
  "capture": {
   "program": 25,
   "params": [],
@@ -107,6 +107,7 @@
    "damper_release_ms": 369.2,
    "damper_capped": true,
    "centroid_hz": 331.1,
+   "tnr_mask": {},
    "tnr_db": 36.84
   },
   {
@@ -188,6 +189,7 @@
    "damper_release_ms": 234.5,
    "damper_capped": true,
    "centroid_hz": 451.4,
+   "tnr_mask": {},
    "tnr_db": 43.57
   },
   {
@@ -269,6 +271,7 @@
    "damper_release_ms": 59.9,
    "damper_capped": true,
    "centroid_hz": 958.2,
+   "tnr_mask": {},
    "tnr_db": 50.57
   },
   {
@@ -350,6 +353,7 @@
    "damper_release_ms": 79.8,
    "damper_capped": true,
    "centroid_hz": 559.2,
+   "tnr_mask": {},
    "tnr_db": 52.33
   },
   {
@@ -429,6 +433,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 838.1,
+   "tnr_mask": {},
    "tnr_db": 54.6
   }
  ],

@@ -316,6 +316,7 @@ from loss import (
     cli_weights,
     dropped_weights,
     mss_distance,
+    oracle_tnr_masks,
     probe_rows,
     refused_weights,
     score_terms,
@@ -618,6 +619,7 @@ def render_model_rows_subprocess(
     bank: int = 0,
     band_edge_hz: float | None = None,
     metric_threads: int = 1,
+    tnr_masks: list[dict] | None = None,
 ) -> tuple[list[dict], np.ndarray | None]:
     """Render the model in a fresh subprocess; return per-note metrics (+ audio).
 
@@ -661,6 +663,8 @@ def render_model_rows_subprocess(
         cmd += ["--drum-gate-ms", str(gate_ms)]
     if band_edge_hz:
         cmd += ["--band-edge-hz", str(band_edge_hz)]
+    if tnr_masks is not None:
+        cmd += ["--tnr-masks", json.dumps(tnr_masks)]
     if room_ir is not None:
         cmd += ["--room-ir", str(room_ir)]
     if corpus is not None:
@@ -991,6 +995,7 @@ class Evaluator:
             bank=getattr(self.args, "bank", 0),
             band_edge_hz=self.band_edge_hz,
             metric_threads=self.metric_threads,
+            tnr_masks=oracle_tnr_masks(self.oracle),
         )
         mss = 0.0
         if want_audio and model_audio is not None:
@@ -1379,6 +1384,7 @@ def holdout_scorer(args, build_dir, knobs, room_ir):
             bank=getattr(args, "bank", 0),
             band_edge_hz=band_edge,
             metric_threads=resolve_metric_threads(args),
+            tnr_masks=oracle_tnr_masks(oracle_rows),
         )
         mss = mss_distance(audio, oracle_audio) if want_audio and audio is not None else 0.0
         terms = robust_score_terms(
@@ -1622,6 +1628,12 @@ def render_metrics_main(argv: list[str]) -> int:
         dest="metric_threads",
         help="measure this many of the probe's notes at once",
     )
+    p.add_argument(
+        "--tnr-masks",
+        default="",
+        dest="tnr_masks",
+        help="the oracle rows' tone-to-noise masks as JSON, one per analysis note",
+    )
     a = p.parse_args(argv)
 
     corpus = load_corpus(a.corpus, a.corpus_timbre) if a.corpus else None
@@ -1651,6 +1663,7 @@ def render_metrics_main(argv: list[str]) -> int:
         raw=raw,
         max_band_hz=a.band_edge_hz or None,
         threads=a.metric_threads,
+        tnr_masks=json.loads(a.tnr_masks) if a.tnr_masks else None,
     )
     if a.dump_audio:
         np.save(a.dump_audio, mono.astype(np.float32))

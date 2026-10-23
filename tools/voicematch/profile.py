@@ -153,6 +153,7 @@ from profile_measure import (
     measure_hit,
     measure_note,
     partial_decay,
+    reference_tnr_mask,
     register_deltas,
     tone_to_noise_db,
     usable_decay_end,
@@ -697,7 +698,14 @@ def dynamics(
                 end_pad=max(0.0, window_s - preroll_s - gate_s),
             )
             audio = render_model(smf, window_s, cap["sample_rate"], rig=rig)
-            m = measure_note(audio, cap["sample_rate"], note, preroll_s=preroll_s, gate_s=gate_s)
+            m = measure_note(
+                audio,
+                cap["sample_rate"],
+                note,
+                preroll_s=preroll_s,
+                gate_s=gate_s,
+                tnr_mask=reference_tnr_mask(ref[(note, v)]),
+            )
             if not m:
                 break
             got[v] = (m, ref[(note, v)])
@@ -1379,8 +1387,15 @@ def compare(
         )
         audio = render_model(smf, window_s, cap["sample_rate"], rig=rig)
         audio = place(audio, cap["sample_rate"])
-        m = measure_note(audio, cap["sample_rate"], note, preroll_s=preroll_s, gate_s=gate_s)
         r = ref[(note, vel)]
+        m = measure_note(
+            audio,
+            cap["sample_rate"],
+            note,
+            preroll_s=preroll_s,
+            gate_s=gate_s,
+            tnr_mask=reference_tnr_mask(r),
+        )
         if not m:
             print(f"{note:5d} {vel:4d} | model rendered nothing measurable")
             continue

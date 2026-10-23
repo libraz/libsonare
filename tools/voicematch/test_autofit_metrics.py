@@ -32,6 +32,7 @@ from loss import (
     _refine_partial,
     _refine_partial_direct,
     loss_terms,
+    oracle_tnr_masks,
     probe_rows,
     score_terms,
     skeleton_note,
@@ -889,6 +890,27 @@ def test_measuring_the_notes_at_once_measures_the_same_notes(percussive):
     threaded = probe_rows(y, pattern, sr, raw=y, threads=4)
     assert len(serial) > 1, "one note cannot tell an ordering mistake from a correct one"
     assert threaded == serial
+
+
+def test_a_model_probe_is_read_through_the_oracle_masks():
+    """Each note takes its own oracle row's mask, in order, threaded or not."""
+    sr = 48000
+    pattern = build_pattern("sustain", 0)
+    y = np.zeros(int(pattern_length(pattern) * sr))
+    for note in pattern.analysis_notes:
+        seg = _rung_note(sr, 440.0 * 2 ** ((note.note - 69) / 12.0), ring_hz=9700.0)
+        a = int(note.start * sr)
+        n = min(len(seg), len(y) - a)
+        y[a : a + n] += seg[:n]
+    oracle = [
+        {"tnr_mask": {"fm": [30.0 + i, 5.0, 6.0]}} for i in range(len(pattern.analysis_notes))
+    ]
+    masks = oracle_tnr_masks(oracle)
+    rows = probe_rows(y, pattern, sr, threads=4, tnr_masks=masks)
+    assert [r["tnr_mask"] for r in rows] == masks
+    with pytest.raises(ValueError, match="masks"):
+        probe_rows(y, pattern, sr, tnr_masks=masks[:-1])
+    assert oracle_tnr_masks([{"tnr_db": 20.0}]) is None
 
 
 def test_a_zero_noise_term_says_whether_it_measured_anything():

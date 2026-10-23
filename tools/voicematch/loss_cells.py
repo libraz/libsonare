@@ -40,6 +40,7 @@ from loss import (
     band_min_note_s,
     cli_weights,
     mss_distance,
+    oracle_tnr_masks,
     probe_rows,
     score_terms,
 )
@@ -161,8 +162,10 @@ def measure(directory: Path) -> dict | None:
     if len(pattern.analysis_notes) != len(rows):
         return {"skip": "the rebuilt pattern and the report disagree on note count"}
     model, oracle = normalize_rms(model_raw), normalize_rms(oracle_raw)
-    model_rows = probe_rows(model, pattern, sr, raw=model_raw, threads=2)
     oracle_rows = probe_rows(oracle, pattern, sr, raw=oracle_raw, threads=2)
+    model_rows = probe_rows(
+        model, pattern, sr, raw=model_raw, threads=2, tnr_masks=oracle_tnr_masks(oracle_rows)
+    )
     # Did the rebuilt pattern land on the notes the render actually holds? The
     # report was measured through the same windows, so its f0 is the check: a
     # window off by one note moves it by hundreds of cents.

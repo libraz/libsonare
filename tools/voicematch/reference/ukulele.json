@@ -1,7 +1,7 @@
 {
  "id": "ukulele",
  "label": "Ukulele, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-22T01:14:52+00:00",
+ "measured_utc": "2026-10-23T07:14:49+00:00",
  "capture": {
   "program": 24,
   "params": [],
@@ -108,6 +108,7 @@
    "damper_release_ms": 434.0,
    "damper_capped": true,
    "centroid_hz": 341.3,
+   "tnr_mask": {},
    "tnr_db": 38.15
   },
   {
@@ -189,6 +190,7 @@
    "damper_release_ms": 339.2,
    "damper_capped": true,
    "centroid_hz": 390.2,
+   "tnr_mask": {},
    "tnr_db": 42.6
   },
   {
@@ -270,6 +272,7 @@
    "damper_release_ms": 79.8,
    "damper_capped": true,
    "centroid_hz": 679.3,
+   "tnr_mask": {},
    "tnr_db": 49.19
   },
   {
@@ -349,6 +352,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 745.4,
+   "tnr_mask": {},
    "tnr_db": 48.62
   },
   {
@@ -430,6 +434,7 @@
    "damper_release_ms": 64.9,
    "damper_capped": true,
    "centroid_hz": 683.6,
+   "tnr_mask": {},
    "tnr_db": 49.16
   },
   {
@@ -509,6 +514,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 758.0,
+   "tnr_mask": {},
    "tnr_db": 50.59
   }
  ],

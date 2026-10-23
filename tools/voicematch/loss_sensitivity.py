@@ -43,6 +43,7 @@ from loss import (
     LOSS_TERMS,
     LossWeights,
     mss_distance,
+    oracle_tnr_masks,
     probe_rows,
     score_terms,
 )
@@ -371,9 +372,24 @@ PERTURBATIONS = (
 # --------------------------------------------------------------------------- #
 # Running one subject
 # --------------------------------------------------------------------------- #
-def _measure(raw: np.ndarray, pattern, threads: int, band_edge: float | None):
+def _measure(
+    raw: np.ndarray,
+    pattern,
+    threads: int,
+    band_edge: float | None,
+    through: list[dict] | None = None,
+):
+    """`raw`'s rows, read through the rows `through`'s tone-to-noise masks where given."""
     mono = normalize_rms(raw)
-    rows = probe_rows(mono, pattern, SR, raw=raw, max_band_hz=band_edge, threads=threads)
+    rows = probe_rows(
+        mono,
+        pattern,
+        SR,
+        raw=raw,
+        max_band_hz=band_edge,
+        threads=threads,
+        tnr_masks=None if through is None else oracle_tnr_masks(through),
+    )
     return rows, mono
 
 
@@ -523,8 +539,18 @@ def run_subject(subject: Subject, root: Path, threads: int) -> dict | None:
         other = load_corpus(manifest, timbre)
         raw_b = to_mono(corpus_oracle(other, pattern, SR))
         rows_b, mono_b = _measure(raw_b, pattern, threads, band_edge)
-        fwd = _terms(rows_b, rows_a, mono_b, mono_a, subject, groups)
-        rev = _terms(rows_a, rows_b, mono_a, mono_b, subject, groups)
+        rows_ba = (
+            rows_b
+            if subject.percussive
+            else _measure(raw_b, pattern, threads, band_edge, rows_a)[0]
+        )
+        rows_ab = (
+            rows_a
+            if subject.percussive
+            else _measure(raw_a, pattern, threads, band_edge, rows_b)[0]
+        )
+        fwd = _terms(rows_ba, rows_a, mono_b, mono_a, subject, groups)
+        rev = _terms(rows_ab, rows_b, mono_a, mono_b, subject, groups)
         if fwd is None or rev is None:
             print(
                 f"  {subject.capture}/{timbre}: the pair did not compare — skipped", file=sys.stderr
@@ -567,8 +593,18 @@ def run_subject(subject: Subject, root: Path, threads: int) -> dict | None:
         for tag, amp in (("", pert.amp), ("_zero", pert.zero)):
             raw_p, how = pert.fn(raw_a, pattern, rows_a, amp)
             rows_p, mono_p = _measure(raw_p, pattern, threads, band_edge)
-            fwd = _terms(rows_p, rows_a, mono_p, mono_a, subject, groups)
-            rev = _terms(rows_a, rows_p, mono_a, mono_p, subject, groups)
+            rows_pa = (
+                rows_p
+                if subject.percussive
+                else _measure(raw_p, pattern, threads, band_edge, rows_a)[0]
+            )
+            rows_ap = (
+                rows_a
+                if subject.percussive
+                else _measure(raw_a, pattern, threads, band_edge, rows_p)[0]
+            )
+            fwd = _terms(rows_pa, rows_a, mono_p, mono_a, subject, groups)
+            rev = _terms(rows_ap, rows_p, mono_a, mono_p, subject, groups)
             entry = {
                 "key": pert.key + tag,
                 "label": pert.label if not tag else pert.label + " [amplitude 0]",

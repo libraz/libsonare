@@ -1,7 +1,7 @@
 {
  "id": "pizzicato_strings",
  "label": "Pizzicato Strings, sampled, close and dry",
- "measured_utc": "2026-10-22T01:13:25+00:00",
+ "measured_utc": "2026-10-23T07:09:08+00:00",
  "capture": {
   "program": 45,
   "params": [],
@@ -112,6 +112,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 159.2,
+   "tnr_mask": {},
    "tnr_db": 5.4,
    "stereo_width": 0.0
   },
@@ -192,6 +193,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 159.1,
+   "tnr_mask": {},
    "tnr_db": 5.39,
    "stereo_width": -0.0
   },
@@ -272,6 +274,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 159.0,
+   "tnr_mask": {},
    "tnr_db": 5.39,
    "stereo_width": 0.0
   },
@@ -352,6 +355,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 159.0,
+   "tnr_mask": {},
    "tnr_db": 5.39,
    "stereo_width": 0.0
   },
@@ -432,6 +436,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 159.0,
+   "tnr_mask": {},
    "tnr_db": 5.39,
    "stereo_width": 0.0
   },
@@ -512,6 +517,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 256.4,
+   "tnr_mask": {},
    "tnr_db": 4.13,
    "stereo_width": 0.0
   },
@@ -592,6 +598,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 255.5,
+   "tnr_mask": {},
    "tnr_db": 4.11,
    "stereo_width": -0.0
   },
@@ -672,6 +679,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 255.1,
+   "tnr_mask": {},
    "tnr_db": 4.11,
    "stereo_width": -0.0
   },
@@ -752,6 +760,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 255.0,
+   "tnr_mask": {},
    "tnr_db": 4.1,
    "stereo_width": -0.0
   },
@@ -832,6 +841,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 254.9,
+   "tnr_mask": {},
    "tnr_db": 4.1,
    "stereo_width": 0.0
   },
@@ -912,6 +922,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 262.6,
+   "tnr_mask": {},
    "tnr_db": 11.32,
    "stereo_width": 0.0
   },
@@ -992,6 +1003,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 262.6,
+   "tnr_mask": {},
    "tnr_db": 11.32,
    "stereo_width": 0.0
   },
@@ -1072,6 +1084,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 262.6,
+   "tnr_mask": {},
    "tnr_db": 11.32,
    "stereo_width": 0.0
   },
@@ -1152,6 +1165,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 262.6,
+   "tnr_mask": {},
    "tnr_db": 11.32,
    "stereo_width": -0.0
   },
@@ -1232,6 +1246,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 262.6,
+   "tnr_mask": {},
    "tnr_db": 11.32,
    "stereo_width": 0.0
   },
@@ -1312,6 +1327,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 380.1,
+   "tnr_mask": {},
    "tnr_db": 9.58,
    "stereo_width": 0.0
   },
@@ -1392,6 +1408,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 380.8,
+   "tnr_mask": {},
    "tnr_db": 9.58,
    "stereo_width": 0.0
   },
@@ -1472,6 +1489,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 380.9,
+   "tnr_mask": {},
    "tnr_db": 9.59,
    "stereo_width": -0.0
   },
@@ -1552,6 +1570,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 380.8,
+   "tnr_mask": {},
    "tnr_db": 9.59,
    "stereo_width": 0.0
   },
@@ -1632,6 +1651,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 380.9,
+   "tnr_mask": {},
    "tnr_db": 9.59,
    "stereo_width": 0.0
   },
@@ -1712,6 +1732,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 540.9,
+   "tnr_mask": {},
    "tnr_db": 12.01,
    "stereo_width": 0.0
   },
@@ -1792,6 +1813,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 545.6,
+   "tnr_mask": {},
    "tnr_db": 11.97,
    "stereo_width": 0.0
   },
@@ -1872,6 +1894,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 547.2,
+   "tnr_mask": {},
    "tnr_db": 11.97,
    "stereo_width": -0.0
   },
@@ -1952,6 +1975,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 547.1,
+   "tnr_mask": {},
    "tnr_db": 11.97,
    "stereo_width": -0.0
   },
@@ -2032,6 +2056,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 547.1,
+   "tnr_mask": {},
    "tnr_db": 11.97,
    "stereo_width": 0.0
   },
@@ -2112,6 +2137,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 749.9,
+   "tnr_mask": {},
    "tnr_db": 9.6,
    "stereo_width": -0.0
   },
@@ -2192,6 +2218,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 758.4,
+   "tnr_mask": {},
    "tnr_db": 9.54,
    "stereo_width": 0.0
   },
@@ -2272,6 +2299,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 763.2,
+   "tnr_mask": {},
    "tnr_db": 9.53,
    "stereo_width": -0.0
   },
@@ -2352,6 +2380,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 764.1,
+   "tnr_mask": {},
    "tnr_db": 9.53,
    "stereo_width": 0.0
   },
@@ -2432,6 +2461,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 763.8,
+   "tnr_mask": {},
    "tnr_db": 9.53,
    "stereo_width": 0.0
   },
@@ -2512,6 +2542,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1042.7,
+   "tnr_mask": {},
    "tnr_db": 7.84,
    "stereo_width": -0.0
   },
@@ -2592,6 +2623,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1068.6,
+   "tnr_mask": {},
    "tnr_db": 7.94,
    "stereo_width": 0.0
   },
@@ -2672,6 +2704,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1076.0,
+   "tnr_mask": {},
    "tnr_db": 7.84,
    "stereo_width": 0.0
   },
@@ -2752,6 +2785,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1077.9,
+   "tnr_mask": {},
    "tnr_db": 7.84,
    "stereo_width": 0.0
   },
@@ -2832,6 +2866,7 @@
    ],
    "decayed_before_note_off": true,
    "centroid_hz": 1077.5,
+   "tnr_mask": {},
    "tnr_db": 7.84,
    "stereo_width": 0.0
   }

@@ -2,14 +2,15 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm070",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-22T15:54:31+00:00",
-  "recorded_utc": "2026-10-22T16:08:13+00:00",
+  "reference_measured_utc": "2026-10-23T06:56:55+00:00",
+  "recorded_utc": "2026-10-23T07:24:07+00:00",
   "model_build": {
-    "built_utc": "2026-10-22T15:28:03Z",
-    "newest_source_utc": "2026-10-22T15:27:19Z",
+    "built_utc": "2026-10-23T06:18:37Z",
+    "newest_source_utc": "2026-10-23T06:17:49Z",
     "stale": false
   },
   "reference_spread": {},
+  "_tnr_mask_reading": "tnr.median (was 3.83), tnr.abs_median (was 6.15) deleted 2026-10-23 and re-recorded when the model's tone-to-noise ratio came to be read through its reference's mask: each reference row records the pitch motion and tremolo its own mask was widened by, and the model note is measured through that record rather than its own, so the same bins count as tone on both sides. The reference's own ratio did not move.",
   "_vibrato_reading": "balance.abs_median (was 11.86), balance.median (was 11.86) deleted 2026-10-23 and re-recorded when the measurement moved on both sides at once: under a vibrato the tuning is the fundamental's mean pitch, demodulated under its own FM extent, rather than the strongest spectral line within 80 c; a partial's level is its power summed over that FM extent rather than its peak bin; and a vibrato whose rate wanders, or whose line shares the pitch track with fast FM, now widens the tone-to-noise mask and is read at the band's RMS depth over its rate span. The reference was re-measured and the model is read with the same ruler, so these bounds were recorded under a ruler that no longer exists. A still tone reads as it did.",
   "bounds": {
     "stretch": {
@@ -23,8 +24,8 @@
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 3.825,
-      "abs_median": 6.15,
+      "median": 6.15,
+      "abs_median": 8.85,
       "p90": 12.93,
       "rows": 35
     },

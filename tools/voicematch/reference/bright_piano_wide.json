@@ -1,7 +1,7 @@
 {
  "id": "bright_piano_wide",
  "label": "Piano 2w, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-22T15:54:09+00:00",
+ "measured_utc": "2026-10-23T06:50:56+00:00",
  "capture": {
   "program": 1,
   "params": [],
@@ -110,6 +110,7 @@
    "damper_release_ms": 2190.0,
    "damper_capped": true,
    "centroid_hz": 225.8,
+   "tnr_mask": {},
    "tnr_db": 31.04
   },
   {
@@ -190,6 +191,13 @@
    "damper_release_ms": 2175.1,
    "damper_capped": true,
    "centroid_hz": 398.2,
+   "tnr_mask": {
+    "fm": [
+     3.487,
+     3.571,
+     8.571
+    ]
+   },
    "tnr_db": 25.48
   },
   {
@@ -271,6 +279,7 @@
    "damper_release_ms": 2155.1,
    "damper_capped": true,
    "centroid_hz": 555.5,
+   "tnr_mask": {},
    "tnr_db": 24.25
   },
   {
@@ -352,6 +361,7 @@
    "damper_release_ms": 2125.2,
    "damper_capped": true,
    "centroid_hz": 314.5,
+   "tnr_mask": {},
    "tnr_db": 39.8
   },
   {
@@ -433,6 +443,7 @@
    "damper_release_ms": 1865.8,
    "damper_capped": true,
    "centroid_hz": 451.5,
+   "tnr_mask": {},
    "tnr_db": 43.5
   },
   {
@@ -514,6 +525,7 @@
    "damper_release_ms": 643.5,
    "damper_capped": true,
    "centroid_hz": 487.6,
+   "tnr_mask": {},
    "tnr_db": 37.69
   },
   {
@@ -595,6 +607,7 @@
    "damper_release_ms": 2180.1,
    "damper_capped": true,
    "centroid_hz": 529.2,
+   "tnr_mask": {},
    "tnr_db": 47.71
   },
   {
@@ -676,6 +689,13 @@
    "damper_release_ms": 893.0,
    "damper_capped": true,
    "centroid_hz": 751.2,
+   "tnr_mask": {
+    "fm": [
+     1.251,
+     3.571,
+     5.0
+    ]
+   },
    "tnr_db": 44.03
   },
   {
@@ -745,6 +765,13 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 1084.3,
+   "tnr_mask": {
+    "fm": [
+     1.265,
+     3.571,
+     5.0
+    ]
+   },
    "tnr_db": 42.94
   }
  ],

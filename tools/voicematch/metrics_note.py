@@ -7,14 +7,15 @@ from dataclasses import asdict, dataclass
 import numpy as np
 from metrics_hit import HIT_ENVELOPE_HOP_MS, HIT_ENVELOPE_WIN_MS, _hit_onset
 from metrics_modal import half_spectra, modal_profile
-from metrics_modulation import f0_width_cents, modulation_note, tremolo_extent
+from metrics_modulation import f0_width_cents, modulation_note
 from metrics_partials import (
     estimate_inharmonicity_b,
     held_pitch,
     ladder_present,
+    measure_tnr_mask,
     partial_hz,
     partial_level,
-    pitch_motion,
+    tnr_mask_parts,
     tone_to_noise_db,
 )
 from metrics_signal import (
@@ -65,6 +66,9 @@ class NoteMetrics:
     #: NaN where the window never rose out of SILENT_WINDOW_DB: there is no
     #: measurement to report, not a clean one.
     tnr_db: float
+    #: What the tone-to-noise mask was widened by, as `measure_tnr_mask` records it;
+    #: on a model row it is the oracle's, so both sides read through one mask.
+    tnr_mask: dict
     attack_ms: float
     #: None where the sustain window sat on the dB clamp: a note that reached
     #: digital zero fits a flat line through `DB_FLOOR` and comes out at 0.0,
@@ -263,7 +267,13 @@ def _under_peak_db(window: np.ndarray, note: np.ndarray) -> float:
 
 
 def analyze_note(
-    mono: np.ndarray, sr: int, note: Note, render_end: float, *, onset: float | None = None
+    mono: np.ndarray,
+    sr: int,
+    note: Note,
+    render_end: float,
+    *,
+    onset: float | None = None,
+    tnr_mask: dict | None = None,
 ) -> NoteMetrics:
     """Compute all per-note metrics from the mono render.
 
@@ -273,6 +283,9 @@ def analyze_note(
     attack and the modulation set — so that passing it cannot change a number
     one of those profiles carries. `attack_ms`, the ladder and the envelope
     metrics stay anchored on the score exactly as they were.
+
+    `tnr_mask` is the oracle row's, given when the note is the model's; without
+    it the note's tone-to-noise ratio is read through its own mask.
     """
     expected_f0 = midi_to_hz(note.note)
     on = int(note.start * sr)
@@ -347,17 +360,12 @@ def analyze_note(
 
     # The reference profile's ruler, so the fit is charged on the quantity the gate reads.
     # A silent window has nothing real in either bin, so the ratio would read implausibly clean.
+    if tnr_mask is None:
+        tnr_mask = measure_tnr_mask(sustain, sr, float(f0))
     tnr = (
         float("nan")
         if under_peak_db < SILENT_WINDOW_DB
-        else tone_to_noise_db(
-            freqs,
-            mag,
-            float(f0),
-            inharmonicity_b,
-            pitch_motion(sustain, sr, float(f0)),
-            tremolo_extent(sustain, sr, float(f0)),
-        )
+        else tone_to_noise_db(freqs, mag, float(f0), inharmonicity_b, *tnr_mask_parts(tnr_mask))
     )
 
     # Envelope metrics.
@@ -438,6 +446,7 @@ def analyze_note(
         centroid_hz=round(centroid, 1),
         odd_even_db=round(odd_even, 2),
         tnr_db=round(float(tnr), 2),
+        tnr_mask=tnr_mask,
         attack_ms=round(attack_ms, 1),
         sustain_slope_db_s=None if slope is None else round(slope, 2),
         release_ms=round(release_ms, 1),

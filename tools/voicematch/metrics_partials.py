@@ -10,6 +10,7 @@ from metrics_modulation import (
     Vibrato,
     demodulated_pitch,
     pitch_excursion,
+    tremolo_extent,
     vibrato_extent,
 )
 from metrics_signal import N_HARMONICS, _peak_near, _spectrum
@@ -292,6 +293,32 @@ def held_pitch(seg: np.ndarray, sr: int, f0: float) -> tuple[float, Vibrato | No
         taper = np.hanning(len(cents))
         centre *= 2.0 ** (float(np.sum(cents * taper) / np.sum(taper)) / 1200.0)
     return centre, vibrato
+
+
+def measure_tnr_mask(seg: np.ndarray, sr: int, f0: float) -> dict:
+    """The motion and tremolo `seg` widens the tone-to-noise mask by, as a row stores them.
+
+    `fm` is `pitch_motion`'s cents and rate span, `am` `tremolo_extent`'s depth
+    and rate; each is absent where the segment holds still. A model is measured
+    through its reference's record rather than its own, so both sides count the
+    same bins as tone: a still model's mask was the bare lobe while the
+    reference's took its wander's sidebands, and the skirt the reference keeps
+    inside the mask read on the model as noise.
+    """
+    record: dict = {}
+    motion = pitch_motion(seg, sr, f0)
+    if motion is not None:
+        record["fm"] = [round(float(v), 3) for v in motion]
+    tremolo = tremolo_extent(seg, sr, f0)
+    if tremolo is not None:
+        record["am"] = [round(float(v), 3) for v in tremolo]
+    return record
+
+
+def tnr_mask_parts(record: dict) -> tuple[Vibrato | None, Tremolo | None]:
+    """`measure_tnr_mask`'s record as the `motion` and `tremolo` `tone_to_noise_db` takes."""
+    fm, am = record.get("fm"), record.get("am")
+    return (Vibrato(*fm) if fm else None, Tremolo(*am) if am else None)
 
 
 def tone_to_noise_db(

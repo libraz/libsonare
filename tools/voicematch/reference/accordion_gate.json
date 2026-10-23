@@ -2,11 +2,11 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm022",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-22T19:50:17+00:00",
-  "recorded_utc": "2026-10-22T20:02:10+00:00",
+  "reference_measured_utc": "2026-10-23T06:45:21+00:00",
+  "recorded_utc": "2026-10-23T07:17:04+00:00",
   "model_build": {
-    "built_utc": "2026-10-22T16:49:49Z",
-    "newest_source_utc": "2026-10-22T16:45:34Z",
+    "built_utc": "2026-10-23T06:18:37Z",
+    "newest_source_utc": "2026-10-23T06:17:49Z",
     "stale": false
   },
   "reference_spread": {},
@@ -25,7 +25,7 @@
       "floor_from": "guess",
       "median": 23.15,
       "abs_median": 23.15,
-      "p90": 32.31,
+      "p90": 29.375,
       "rows": 35
     },
     "damper": {
@@ -80,8 +80,8 @@
       "floor": 0.5,
       "floor_from": "guess",
       "median": 1.217,
-      "abs_median": 4.588,
-      "p90": 9.016,
+      "abs_median": 3.472,
+      "p90": 7.538,
       "rows": 35
     },
     "centroid_pct": {

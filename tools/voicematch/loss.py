@@ -357,6 +357,15 @@ def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = HARM_REACH) -> 
 # regime, which the audibility-weighted `harm` prices cheaply in the bass.
 
 
+def oracle_tnr_masks(oracle_rows: list[dict]) -> list[dict] | None:
+    """The oracle rows' `tnr_mask`s, for `probe_rows` to read the model through.
+
+    None for a percussive probe, whose rows carry no tone-to-noise ratio.
+    """
+    masks = [row.get("tnr_mask") for row in oracle_rows]
+    return None if any(m is None for m in masks) else masks
+
+
 def probe_rows(
     mono: np.ndarray,
     pattern,
@@ -364,6 +373,7 @@ def probe_rows(
     raw: np.ndarray | None = None,
     max_band_hz: float | None = None,
     threads: int = 1,
+    tnr_masks: list[dict] | None = None,
 ) -> list[dict]:
     """Measure every analysis note of `pattern` with the metric set it calls for.
 
@@ -396,21 +406,29 @@ def probe_rows(
     most of it. The caller decides the number: a render already running
     alongside its siblings wants 1, since the concurrency is being spent a
     level up.
+
+    `tnr_masks` is the oracle rows' `tnr_mask`, one per analysis note, given
+    when the render is the model's so both sides read tone-to-noise through
+    the oracle's mask.
     """
+    notes = list(pattern.analysis_notes)
+    masks = [None] * len(notes) if tnr_masks is None else list(tnr_masks)
+    if len(masks) != len(notes):
+        raise ValueError(f"{len(masks)} tone-to-noise masks for {len(notes)} analysis notes")
     if pattern.percussive:
 
-        def measure(note) -> dict:
+        def measure(note, _mask) -> dict:
             return analyze_hit(
                 mono, sr, note, analysis_window_end(pattern, note), max_band_hz=max_band_hz
             ).to_dict()
     else:
 
-        def measure(note) -> dict:
+        def measure(note, mask) -> dict:
             end = analysis_window_end(pattern, note)
             # Found once and shared, so nothing that reads the attack can
             # disagree about where the note began.
             onset = note_onset(mono, sr, note, end)
-            row = analyze_note(mono, sr, note, end, onset=onset).to_dict()
+            row = analyze_note(mono, sr, note, end, onset=onset, tnr_mask=mask).to_dict()
             row["skeleton"] = skeleton_note(mono, sr, note)
             row["onset_ms"] = round((onset - note.start) * 1000.0, 2)
             row["attack_hf_db"] = attack_bands(mono, sr, note, onset)
@@ -424,12 +442,11 @@ def probe_rows(
             row["attack_peaks"] = attack_peaks(mono, sr, note, onset)
             return row
 
-    notes = list(pattern.analysis_notes)
     if threads > 1 and len(notes) > 1:
         with ThreadPoolExecutor(max_workers=min(threads, len(notes))) as pool:
-            rows = list(pool.map(measure, notes))
+            rows = list(pool.map(measure, notes, masks))
     else:
-        rows = [measure(note) for note in notes]
+        rows = [measure(note, mask) for note, mask in zip(notes, masks)]
     if raw is not None:
         for row, note in zip(rows, pattern.analysis_notes):
             row.update(level_of(raw, sr, note, analysis_window_end(pattern, note)))

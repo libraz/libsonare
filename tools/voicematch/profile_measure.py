@@ -22,15 +22,15 @@ from metrics import (
     channel_width,
     fit_partial_series,
     held_pitch,
+    measure_tnr_mask,
     midi_to_hz,
     onset_shape,
     partial_hz,
     partial_level,
-    pitch_motion,
     sound_onset_s,
+    tnr_mask_parts,
     to_mono,
     tone_to_noise_db,
-    tremolo_extent,
 )
 from smf import Note
 
@@ -437,8 +437,35 @@ def _short_ring_window(held: np.ndarray, sr: int) -> tuple[int, int]:
     return (a, b) if b - a >= sr // 200 else (0, 0)
 
 
-def measure_note(audio: np.ndarray, sr: int, note: int, *, preroll_s: float, gate_s: float) -> dict:
+def reference_tnr_mask(row: dict) -> dict:
+    """The mask a reference row's tone-to-noise ratio was read through, for its model note.
+
+    A row measured before the mask was recorded is refused rather than read as a
+    still tone, which would put the model back on its own mask.
+    """
+    if "tnr_mask" not in row:
+        raise SystemExit(
+            f"reference row {row.get('note')}/{row.get('velocity')} records no tnr_mask; "
+            "re-measure the reference with `profile.py measure`"
+        )
+    return row["tnr_mask"]
+
+
+def measure_note(
+    audio: np.ndarray,
+    sr: int,
+    note: int,
+    *,
+    preroll_s: float,
+    gate_s: float,
+    tnr_mask: dict | None = None,
+) -> dict:
     """Every measurement this profile carries, for one captured note.
+
+    `tnr_mask` is the reference row's `tnr_mask`, given when the note is the
+    model's, so the tone-to-noise ratio is read through the reference's mask;
+    without it the note is measured through its own. Either way the row records
+    the mask it was read through.
 
     The gate window is placed on the onset the render actually has rather than
     on the one the score asked for. A capture's own guard refuses a render that
@@ -574,9 +601,10 @@ def measure_note(audio: np.ndarray, sr: int, note: int, *, preroll_s: float, gat
     p = mag**2
     row["centroid_hz"] = round(float((freqs * p).sum() / max(p.sum(), 1e-20)), 1)
     stiffness = row["inharmonicity_b"] if row.get("inharmonicity_reliable") else 0.0
-    motion = pitch_motion(held[a:b], sr, row["f0_hz"])
-    tremolo = tremolo_extent(held[a:b], sr, row["f0_hz"])
-    tnr = tone_to_noise_db(freqs, mag, row["f0_hz"], stiffness, motion, tremolo)
+    if tnr_mask is None:
+        tnr_mask = measure_tnr_mask(held[a:b], sr, row["f0_hz"])
+    row["tnr_mask"] = tnr_mask
+    tnr = tone_to_noise_db(freqs, mag, row["f0_hz"], stiffness, *tnr_mask_parts(tnr_mask))
     if np.isfinite(tnr):
         row["tnr_db"] = round(tnr, 2)
     width = channel_width(audio, on, off)

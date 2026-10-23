@@ -1,7 +1,7 @@
 {
  "id": "harpsichord_wide",
  "label": "Harpsi.w, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-10-22T01:11:30+00:00",
+ "measured_utc": "2026-10-23T07:00:11+00:00",
  "capture": {
   "program": 6,
   "params": [],
@@ -111,6 +111,7 @@
    "damper_release_ms": 2484.4,
    "damper_capped": true,
    "centroid_hz": 248.5,
+   "tnr_mask": {},
    "tnr_db": 20.86
   },
   {
@@ -191,6 +192,7 @@
    "damper_release_ms": 2259.9,
    "damper_capped": true,
    "centroid_hz": 335.1,
+   "tnr_mask": {},
    "tnr_db": 22.66
   },
   {
@@ -271,6 +273,7 @@
    "damper_release_ms": 2020.4,
    "damper_capped": true,
    "centroid_hz": 441.9,
+   "tnr_mask": {},
    "tnr_db": 25.87
   },
   {
@@ -352,6 +355,7 @@
    "damper_release_ms": 1721.1,
    "damper_capped": true,
    "centroid_hz": 614.6,
+   "tnr_mask": {},
    "tnr_db": 24.43
   },
   {
@@ -433,6 +437,7 @@
    "damper_release_ms": 1426.8,
    "damper_capped": true,
    "centroid_hz": 801.4,
+   "tnr_mask": {},
    "tnr_db": 30.25
   },
   {
@@ -514,6 +519,7 @@
    "damper_release_ms": 1327.0,
    "damper_capped": true,
    "centroid_hz": 583.3,
+   "tnr_mask": {},
    "tnr_db": 37.66
   },
   {
@@ -595,6 +601,7 @@
    "damper_release_ms": 1546.5,
    "damper_capped": true,
    "centroid_hz": 664.1,
+   "tnr_mask": {},
    "tnr_db": 51.0
   },
   {
@@ -676,6 +683,7 @@
    "damper_release_ms": 1147.4,
    "damper_capped": true,
    "centroid_hz": 702.0,
+   "tnr_mask": {},
    "tnr_db": 51.78
   },
   {
@@ -757,6 +765,7 @@
    "damper_release_ms": 673.5,
    "damper_capped": true,
    "centroid_hz": 917.9,
+   "tnr_mask": {},
    "tnr_db": 49.01
   },
   {
@@ -832,6 +841,7 @@
    ],
    "decayed_before_note_off": false,
    "centroid_hz": 1219.5,
+   "tnr_mask": {},
    "tnr_db": 47.14
   }
  ],

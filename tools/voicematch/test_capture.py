@@ -25,6 +25,7 @@ from profile import (
     double_decay,
     find_partials,
     measure_note,
+    reference_tnr_mask,
 )
 
 import au_oracle
@@ -142,6 +143,51 @@ def test_a_fast_damper_is_not_read_as_filter_leakage(note):
 def test_measure_note_returns_nothing_for_silence():
     silence = np.zeros(int(2.0 * SR), dtype=np.float32)
     assert measure_note(silence, SR, 60, preroll_s=0.1, gate_s=1.0) == {}
+
+
+def _held_tone(note: int, *, vibrato_cents: float = 0.0, skirt: float = 0.0) -> np.ndarray:
+    """Eight partials held 2 s after a 0.1 s preroll, under a 5.5 Hz vibrato or a
+    level wandering by noise lowpassed at 12 Hz, which skirts each partial that wide."""
+    t = np.arange(int(2.0 * SR)) / SR
+    swing = 2.0 ** (0.5 * vibrato_cents / 1200.0 * np.sin(2 * np.pi * 5.5 * t))
+    phase = 2 * np.pi * np.cumsum(midi_to_hz(note) * swing) / SR
+    x = sum(np.sin(k * phase) / k for k in range(1, 9))
+    if skirt:
+        spec = np.fft.rfft(np.random.default_rng(3).standard_normal(t.size))
+        spec[np.fft.rfftfreq(t.size, 1.0 / SR) > 12.0] = 0.0
+        wander = np.fft.irfft(spec, t.size)
+        x = x * (1.0 + skirt * wander / wander.std())
+    x = np.concatenate([np.zeros(int(0.1 * SR)), x])
+    return (0.3 * x / np.abs(x).max()).astype(np.float32)
+
+
+def test_a_model_note_is_read_through_the_reference_mask():
+    """A still model whose partials carry the skirt a vibrato reference's mask
+    holds as tone reads that skirt as tone too, rather than as noise its own
+    bare-lobe mask leaves outside."""
+    ref = measure_note(_held_tone(57, vibrato_cents=40.0), SR, 57, preroll_s=0.1, gate_s=1.8)
+    assert "fm" in ref["tnr_mask"]
+    skirted = _held_tone(57, skirt=0.3)
+    own = measure_note(skirted, SR, 57, preroll_s=0.1, gate_s=1.8)
+    through = measure_note(
+        skirted, SR, 57, preroll_s=0.1, gate_s=1.8, tnr_mask=reference_tnr_mask(ref)
+    )
+    assert through["tnr_mask"] == ref["tnr_mask"]
+    assert through["tnr_db"] > own["tnr_db"] + 20.0
+
+
+def test_a_reference_read_through_its_own_record_keeps_its_ratio():
+    """The record is rounded; the reference's own ratio is read through it, so a
+    model given it is measured through exactly the reference's mask."""
+    audio = _held_tone(57, vibrato_cents=40.0)
+    ref = measure_note(audio, SR, 57, preroll_s=0.1, gate_s=1.8)
+    again = measure_note(audio, SR, 57, preroll_s=0.1, gate_s=1.8, tnr_mask=ref["tnr_mask"])
+    assert again["tnr_db"] == ref["tnr_db"]
+
+
+def test_a_reference_row_without_a_mask_is_refused():
+    with pytest.raises(SystemExit, match="tnr_mask"):
+        reference_tnr_mask({"note": 60, "velocity": 96, "tnr_db": 20.0})
 
 
 def _short_ring(note: int, ring_ms: float, preroll: float = 0.1, gate: float = 0.5) -> np.ndarray:
