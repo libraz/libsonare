@@ -2,38 +2,39 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm082",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-23T07:01:52+00:00",
-  "recorded_utc": "2026-10-23T07:28:59+00:00",
+  "reference_measured_utc": "2026-10-23T19:14:51+00:00",
+  "recorded_utc": "2026-10-23T20:48:08+00:00",
   "model_build": {
-    "built_utc": "2026-10-23T06:18:37Z",
-    "newest_source_utc": "2026-10-23T06:17:49Z",
+    "built_utc": "2026-10-23T20:47:45Z",
+    "newest_source_utc": "2026-10-23T20:46:52Z",
     "stale": false
   },
   "reference_spread": {},
   "_pitch_motion_reading": "balance.median (was 0.945) deleted 2026-10-23 and re-recorded when the tone-to-noise mask and the partial-level windows began widening, where no vibrato line is read, by the held excursion of the demodulated fundamental: twice the 99th percentile of its power-weighted distance from the mean pitch over the note's held part (0.3 s in to 0.15 s before the end), at the rate under which nine tenths of the motion lies, and 10 cents peak to peak at least. model-only motion: 20/28 model rows read an excursion of 20\u201330 c, the reference holds still (3/28 rows); a model defect, not a reference reading.",
+  "_beat_phase": "balance.abs_median 3.09 -> 4.332 and centroid_pct.p90 35.231 -> 49.502 on 2026-10-24, when the voice went from three saws 12 cents apart to the reference's two lines 8 cents apart. Two lines that close beat slower than the 1.5 s window below E3 (C2's period is 3.3 s), so each note's h1 level, and with it the stack and the centroid, is set by where the window falls in the beat: one note's four velocities read brightness -47 % to -3 % against the reference, and the reference's own takes move the same way. The old bounds held the three-saw model's beats, fast enough to average inside the window, rather than agreement with the reference. The same change took tnr from -29.9 to -11.0 dB and stretch.abs_median from 0.45 to 0.20 cents.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 1.682,
-      "abs_median": 1.912,
-      "p90": 7.517,
+      "median": 1.0,
+      "abs_median": 1.0,
+      "p90": 1.0,
       "rows": 28
     },
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 39.625,
-      "abs_median": 39.625,
-      "p90": 55.059,
+      "median": 13.756,
+      "abs_median": 14.187,
+      "p90": 40.696,
       "rows": 28
     },
     "damper": {
       "floor": 5.0,
       "floor_from": "guess",
-      "median": 153.125,
-      "abs_median": 153.125,
-      "p90": 168.75,
+      "median": 143.75,
+      "abs_median": 143.75,
+      "p90": 162.5,
       "rows": 28
     },
     "attack": {
@@ -55,25 +56,25 @@
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 1.544,
-      "abs_median": 3.09,
-      "p90": 15.021,
+      "median": 1.352,
+      "abs_median": 4.332,
+      "p90": 12.958,
       "rows": 28
     },
     "centroid_pct": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 11.096,
-      "abs_median": 13.111,
-      "p90": 35.231,
+      "median": 4.893,
+      "abs_median": 8.947,
+      "p90": 49.502,
       "rows": 28
     },
     "body": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 49.138,
-      "abs_median": 49.138,
-      "p90": 50.655,
+      "median": 40.644,
+      "abs_median": 40.644,
+      "p90": 42.397,
       "rows": 20
     },
     "vel_range": {
@@ -89,7 +90,7 @@
       "floor_from": "default",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 1.944,
+      "p90": 1.551,
       "rows": 28
     }
   }

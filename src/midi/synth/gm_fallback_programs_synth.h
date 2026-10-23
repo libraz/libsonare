@@ -56,11 +56,15 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_square.amp_env.decay_ms = 599.43f;
   o.lead_square.amp_env.release_ms = 50.0475f;
 
-  // Sawtooth (GM 81): the shared lead itself, opened up — the saw is what the
-  // stack was written around.
+  // Sawtooth (GM 81): two saws 8 cents apart, the line pair the reference holds
+  // under every partial, through a 12 dB/oct filter. The ladder's stack left C6's
+  // h8-h10 15 dB over the reference and the three-saw spread read 30 dB noisy.
   o.lead_saw = lead;
-  o.lead_saw.drive = 0.2f;
-  o.lead_saw.cutoff_hz = 4000.0f;
+  o.lead_saw.unison = 2;
+  o.lead_saw.detune_cents = 8.0f;
+  o.lead_saw.filter_model = SynthFilterModel::kSvf;
+  o.lead_saw.env_to_cutoff_cents = 900.0f;
+  o.lead_saw.cutoff_hz = 1600.0f;
   o.lead_saw.gain = 0.61f;
   o.lead_saw.amp_env.attack_ms = 14.9858f;
   o.lead_saw.amp_env.decay_ms = 122.416f;
