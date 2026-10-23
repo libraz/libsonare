@@ -2308,9 +2308,10 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 10,
+          "gated": 9,
           "excused": [
             "balance",
+            "body",
             "damper",
             "partial_tilt",
             "stereo",
@@ -2328,7 +2329,6 @@
             "attack",
             "attack_hf",
             "attack_hf_swing",
-            "body",
             "centroid_pct",
             "decay",
             "doubling",
@@ -2370,10 +2370,11 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 8,
+          "gated": 7,
           "excused": [
             "attack_hf_swing",
             "balance",
+            "body",
             "damper",
             "partial_tilt",
             "stereo",
@@ -2391,7 +2392,6 @@
             "aftersound",
             "attack",
             "attack_hf",
-            "body",
             "centroid_pct",
             "decay",
             "doubling",
@@ -2432,10 +2432,11 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 12,
-          "gated": 8,
+          "gated": 7,
           "excused": [
             "attack_hf_swing",
             "balance",
+            "body",
             "damper",
             "partial_tilt",
             "stereo",
@@ -2453,7 +2454,6 @@
             "aftersound",
             "attack",
             "attack_hf",
-            "body",
             "centroid_pct",
             "decay",
             "doubling",
@@ -3137,7 +3137,7 @@
           "total": 9,
           "outside": {
             "vel_range": 1.81,
-            "balance": 1.32,
+            "balance": 1.49,
             "stereo": 1.2,
             "stretch": 1.02
           },
@@ -3242,8 +3242,9 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 6,
+          "gated": 5,
           "excused": [
+            "body",
             "damper",
             "register",
             "stereo",
@@ -3259,7 +3260,6 @@
           "unjudgeable": [
             "attack",
             "balance",
-            "body",
             "centroid_pct",
             "stretch",
             "tnr"
@@ -3405,8 +3405,9 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 6,
+          "gated": 5,
           "excused": [
+            "body",
             "damper",
             "register",
             "stereo",
@@ -3422,7 +3423,6 @@
           "unjudgeable": [
             "attack",
             "balance",
-            "body",
             "centroid_pct",
             "stretch",
             "tnr"
@@ -6451,12 +6451,14 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 16,
-          "gated": 11,
+          "gated": 9,
           "excused": [
             "attack_hf_swing",
+            "body",
             "damper",
             "register",
             "stereo",
+            "tnr",
             "vel_range"
           ],
           "gaps": [],
@@ -6471,13 +6473,11 @@
             "attack",
             "attack_hf",
             "balance",
-            "body",
             "centroid_pct",
             "decay",
             "doubling",
             "partial_tilt",
-            "stretch",
-            "tnr"
+            "stretch"
           ]
         },
         "structure": null,
@@ -6636,7 +6636,9 @@
       "capture": "string_ensemble_2",
       "stage": 0.6,
       "stage_name": "fitted",
-      "open_candidates": [],
+      "open_candidates": [
+        "wider-section"
+      ],
       "axes": {
         "engine": "bowed_string",
         "patch": "string_ensemble_2",
@@ -6950,7 +6952,9 @@
       "capture": "synth_voice",
       "stage": 0.4,
       "stage_name": "targeted",
-      "open_candidates": [],
+      "open_candidates": [
+        "section-of-singers"
+      ],
       "axes": {
         "engine": "vocal",
         "patch": "synth_voice",
@@ -8786,7 +8790,9 @@
       "capture": "lead_voice",
       "stage": 0.6,
       "stage_name": "fitted",
-      "open_candidates": [],
+      "open_candidates": [
+        "three-voice-chorus"
+      ],
       "axes": {
         "engine": "subtractive",
         "patch": "lead_voice",
