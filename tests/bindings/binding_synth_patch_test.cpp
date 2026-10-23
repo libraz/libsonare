@@ -455,13 +455,15 @@ TEST_CASE("the subtractive section is set by key and reaches the render",
   const sonare::util::json::Value info =
       parse_info(sonare_synth_engine_param_info(SONARE_SYNTH_ENGINE_SUBTRACTIVE));
   std::set<std::string> names;
+  const std::set<std::string> levels{"osc2Level", "noiseLevel", "noiseAm", "bandNoiseLevel"};
   for (const auto& d : info.as_array()) {
     names.insert(d["name"].as_string());
-    // Every field defaults to absent.
-    REQUIRE(d["default"].as_number() == 0.0);
+    // Every source defaults to absent.
+    if (levels.count(d["name"].as_string()) != 0) REQUIRE(d["default"].as_number() == 0.0);
   }
-  REQUIRE(names ==
-          std::set<std::string>{"osc2IntervalCents", "osc2Level", "noiseLevel", "noiseAm"});
+  REQUIRE(names == std::set<std::string>{"osc2IntervalCents", "osc2Level", "noiseLevel", "noiseAm",
+                                         "bandNoiseLevel", "bandNoiseLowRatio", "bandNoiseHighHz",
+                                         "bandNoiseKeyTrack"});
 
   SonareProject* project = make_synth_project(3);
   SonareSynthPatch base{};
@@ -469,7 +471,7 @@ TEST_CASE("the subtractive section is set by key and reaches the render",
   std::strcpy(base.preset, "saw");
   const std::vector<float> reference = bounce_synth(project, base);
   REQUIRE(peak_of(reference) > 0.0f);
-  for (const char* key : {"osc2Level", "noiseLevel", "noiseAm"}) {
+  for (const char* key : {"osc2Level", "noiseLevel", "noiseAm", "bandNoiseLevel"}) {
     CAPTURE(key);
     const SonareSynthEngineParam param{key, 0.5};
     SonareSynthPatch with = base;

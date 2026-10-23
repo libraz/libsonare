@@ -614,7 +614,16 @@ describe('Sonare WASM NativeSynth', () => {
 
   it('accepts the subtractive section by key', () => {
     const names = synthEngineParamInfo('subtractive').map((info) => info.name);
-    expect(names.sort()).toEqual(['noiseAm', 'noiseLevel', 'osc2IntervalCents', 'osc2Level']);
+    expect(names.sort()).toEqual([
+      'bandNoiseHighHz',
+      'bandNoiseKeyTrack',
+      'bandNoiseLevel',
+      'bandNoiseLowRatio',
+      'noiseAm',
+      'noiseLevel',
+      'osc2IntervalCents',
+      'osc2Level',
+    ]);
     const plain = bounce({ engineMode: 'subtractive' });
     const layered = bounce({
       engineMode: 'subtractive',

@@ -405,6 +405,19 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
     const double passed = (1.0 / 3.0) * bandwidth_hz / (0.5 * sample_rate);
     noise_am = p.va.noise_am / static_cast<float>(std::sqrt(passed));
   }
+  band_noise_level = osc_less ? 0.0f : p.va.band_noise_level;
+  if (band_noise_level > 0.0f) {
+    band_noise_osc.start(sample_rate, VaWaveform::kNoise, 0.0f, seed ^ (kMaxUnisonOscs + 4));
+    band_noise_hp.prepare(sample_rate);
+    band_noise_hp.set(p.va.band_noise_low_ratio * base_freq_hz, constants::kButterworthQ);
+    const float high_hz =
+        p.va.band_noise_high_hz *
+        std::exp2(p.va.band_noise_key_track * note_offset_semitones / kSemitonesPerOctave);
+    band_noise_lp.prepare(sample_rate);
+    band_noise_lp.set(high_hz, constants::kButterworth4QLow);
+    band_noise_lp2.prepare(sample_rate);
+    band_noise_lp2.set(high_hz, constants::kButterworth4QHigh);
+  }
 
   const float sampler_vel = sampler_velocity_gain(velocity, sampler_velocity_exponent(p));
   velocity_gain = sampler_vel * kit_gain * drum_mod.level_gain;
@@ -809,6 +822,10 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
 
   // --- series highpass: the other end of a band the main filter cannot make ---
   if (hp_active) sample = hp_stage.process(sample).hp;
+  if (band_noise_level > 0.0f) {
+    const float band = band_noise_hp.process(band_noise_osc.next()).hp;
+    sample += band_noise_level * band_noise_lp2.process(band_noise_lp.process(band).lp).lp;
+  }
 
   // --- converter: sample and hold, then quantize, in that order ---
   // Ahead of the amplitude envelope, which is where the converter sits in the

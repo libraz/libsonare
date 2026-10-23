@@ -751,6 +751,7 @@ TEST_CASE("NativeSynth subtractive section: osc2 and noise are absent at level 0
   REQUIRE(NativeSynthPatch{}.va.osc2_level == 0.0f);
   REQUIRE(NativeSynthPatch{}.va.noise_level == 0.0f);
   REQUIRE(NativeSynthPatch{}.va.noise_am == 0.0f);
+  REQUIRE(NativeSynthPatch{}.va.band_noise_level == 0.0f);
   auto render_patch = [](const NativeSynthPatch& patch) {
     NativeSynthConfig cfg;
     cfg.patch = patch;
@@ -765,6 +766,10 @@ TEST_CASE("NativeSynth subtractive section: osc2 and noise are absent at level 0
   NativeSynthPatch interval_only = base;
   interval_only.va.osc2_interval_cents = 702.0f;
   REQUIRE(render_patch(interval_only) == render_patch(base));
+  NativeSynthPatch corners_only = base;
+  corners_only.va.band_noise_low_ratio = 3.0f;
+  corners_only.va.band_noise_high_hz = 900.0f;
+  REQUIRE(render_patch(corners_only) == render_patch(base));
   NativeSynthPatch with_osc2 = base;
   with_osc2.va.osc2_level = 0.5f;
   REQUIRE(render_patch(with_osc2) != render_patch(base));
@@ -855,6 +860,55 @@ TEST_CASE("NativeSynth subtractive section: amplitude noise skirts each partial 
   // The gap between the partials stays empty.
   CHECK(hann_level(wet, kOutRate, 1.5 * kF0, from, len) <
         1e-3 * hann_level(wet, kOutRate, kF0, from, len));
+}
+
+TEST_CASE("NativeSynth subtractive section: band noise passes the closed filter, inside its band",
+          "[midi][synth][va]") {
+  using va_section_detail::hann_level;
+  constexpr double kF0 = 440.0;  // note 69
+  auto render_patch = [](const NativeSynthPatch& patch) {
+    NativeSynthConfig cfg;
+    cfg.patch = patch;
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 69, 127)));
+    return render(synth, static_cast<int>(kOutRate)).left;
+  };
+  NativeSynthPatch base;
+  base.waveform = VaWaveform::kSine;
+  base.cutoff_hz = 20000.0f;
+  base.amp_env.attack_ms = 1.0f;
+  base.amp_env.sustain = 1.0f;
+  NativeSynthPatch closed = base;
+  closed.cutoff_hz = 60.0f;
+  closed.key_track = 0.0f;
+  NativeSynthPatch filtered_noise = closed;
+  filtered_noise.va.noise_level = 0.2f;
+  NativeSynthPatch banded = closed;
+  banded.va.band_noise_level = 0.2f;
+  banded.va.band_noise_high_hz = 3000.0f;
+  const size_t from = static_cast<size_t>(0.2 * kOutRate);
+  const size_t len = static_cast<size_t>(0.5 * kOutRate);
+  const auto band = [&](const std::vector<float>& buf, double lo_hz) {
+    double sum = 0.0;
+    for (int i = 0; i < 16; ++i) sum += hann_level(buf, kOutRate, lo_hz + 8.0 * i, from, len);
+    return sum / 16.0;
+  };
+  const auto filtered = render_patch(filtered_noise);
+  const auto wet = render_patch(banded);
+  // Between the partials, where the closed filter leaves the same noise ahead of it little.
+  const double gap = band(wet, 1.2 * kF0);
+  CHECK(gap > 30.0 * std::max(band(filtered, 1.2 * kF0), 1e-9));
+  // Below the played pitch and above the lowpass corner the band falls away.
+  CHECK(band(wet, 30.0) < 0.1 * gap);
+  CHECK(band(wet, 12000.0) < 0.1 * gap);
+  // Tracking the key moves the lowpass corner up an octave over the octave above middle C.
+  NativeSynthPatch fixed_corner = banded;
+  fixed_corner.va.band_noise_high_hz = 1000.0f;
+  NativeSynthPatch tracked_corner = fixed_corner;
+  tracked_corner.va.band_noise_key_track = 1.0f;
+  CHECK(band(render_patch(tracked_corner), 1500.0) >
+        2.0 * band(render_patch(fixed_corner), 1500.0));
 }
 
 TEST_CASE("Sf2Player without a SoundFont plays every GM program via the fallback",

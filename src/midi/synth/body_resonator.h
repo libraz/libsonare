@@ -306,7 +306,8 @@ class BodyResonator {
   }
 
   // Section Qs of a 4th-order Butterworth highpass: 1 / (2 cos(pi/8)) and 1 / (2 cos(3 pi/8)).
-  static constexpr std::array<float, 2> kButterworthQ4 = {0.5411961f, 1.3065630f};
+  static constexpr std::array<float, 2> kButterworthQ4 = {sonare::constants::kButterworth4QLow,
+                                                          sonare::constants::kButterworth4QHigh};
 
   /// |H| of the series stage at angular frequency @p w (radians per sample).
   double series_magnitude(double w) const noexcept {

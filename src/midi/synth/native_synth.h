@@ -87,8 +87,9 @@ enum class SynthRetrigger : int {
 };
 
 /// The subtractive engine's own section: a second oscillator a fixed interval
-/// from the unison stack, and white noise, both summed ahead of the filter. At
-/// zero level each is absent and the voice is bit-identical to one without it.
+/// from the unison stack and white noise, both summed ahead of the filter, and
+/// a band of noise added after it. At zero level each is absent and the voice
+/// is bit-identical to one without it.
 struct VaPatchParams {
   /// Second oscillator's offset from the played pitch (cents), same waveform.
   float osc2_interval_cents = 0.0f;
@@ -99,6 +100,15 @@ struct VaPatchParams {
   /// RMS depth of slow seeded noise multiplying the oscillator sum, so a breath
   /// skirt rides on every partial at the partial's own level; 0 = absent.
   float noise_am = 0.0f;
+  /// Seeded white noise added after the filter through its own band, so the
+  /// floor between partials holds still while the filter tracks the key; 0 = absent.
+  float band_noise_level = 0.0f;
+  /// That band's highpass corner as a multiple of the played pitch.
+  float band_noise_low_ratio = 1.0f;
+  /// That band's 4th-order lowpass corner at middle C (Hz).
+  float band_noise_high_hz = 4000.0f;
+  /// How far the lowpass corner follows the played pitch (1 = by its interval from middle C).
+  float band_noise_key_track = 0.0f;
 };
 
 /// One playable patch: oscillator section, filter section, envelopes and the
@@ -366,6 +376,11 @@ struct NativeSynthVoice : VoiceState {
   float osc2_level = 0.0f;
   float noise_level = 0.0f;
   float noise_am = 0.0f;  // depth already divided by the lowpassed noise's RMS
+  VaOscillator band_noise_osc;
+  TptSvf band_noise_hp;
+  TptSvf band_noise_lp;
+  TptSvf band_noise_lp2;
+  float band_noise_level = 0.0f;
   float base_freq_hz = constants::kA4Hz;
   float velocity_gain = 1.0f;
   /// The exclusive/mute group this voice was STARTED in, which a GS ASSIGN
@@ -1497,6 +1512,14 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.va.osc2_level = std::clamp(patch_clamp_detail::sanitize(p.va.osc2_level, 0.0f), 0.0f, 4.0f);
   p.va.noise_level = std::clamp(patch_clamp_detail::sanitize(p.va.noise_level, 0.0f), 0.0f, 4.0f);
   p.va.noise_am = std::clamp(patch_clamp_detail::sanitize(p.va.noise_am, 0.0f), 0.0f, 1.0f);
+  p.va.band_noise_level =
+      std::clamp(patch_clamp_detail::sanitize(p.va.band_noise_level, 0.0f), 0.0f, 4.0f);
+  p.va.band_noise_low_ratio =
+      std::clamp(patch_clamp_detail::sanitize(p.va.band_noise_low_ratio, 1.0f), 0.0f, 16.0f);
+  p.va.band_noise_high_hz =
+      std::clamp(patch_clamp_detail::sanitize(p.va.band_noise_high_hz, 4000.0f), 20.0f, 20000.0f);
+  p.va.band_noise_key_track =
+      std::clamp(patch_clamp_detail::sanitize(p.va.band_noise_key_track, 0.0f), 0.0f, 1.0f);
   for (ModRoute& route : p.mod_matrix.routes) {
     route.depth = std::clamp(patch_clamp_detail::sanitize(route.depth, 0.0f), -9600.0f, 9600.0f);
   }

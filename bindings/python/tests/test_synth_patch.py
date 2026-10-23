@@ -888,8 +888,18 @@ def test_engine_params_change_a_render_and_default_to_none() -> None:
 
 def test_subtractive_engine_params_are_accepted_by_key() -> None:
     rows = {row["name"]: row for row in synth_engine_param_info("subtractive")}
-    assert set(rows) == {"osc2IntervalCents", "osc2Level", "noiseLevel", "noiseAm"}
-    assert all(row["default"] == 0 for row in rows.values())
+    assert set(rows) == {
+        "osc2IntervalCents",
+        "osc2Level",
+        "noiseLevel",
+        "noiseAm",
+        "bandNoiseLevel",
+        "bandNoiseLowRatio",
+        "bandNoiseHighHz",
+        "bandNoiseKeyTrack",
+    }
+    levels = ("osc2Level", "noiseLevel", "noiseAm", "bandNoiseLevel")
+    assert all(rows[name]["default"] == 0 for name in levels)
     project = _build_midi_only_project()
     try:
         plain = project.bounce_with_synth_instrument(

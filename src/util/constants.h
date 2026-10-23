@@ -69,6 +69,9 @@ inline constexpr float kCentsPerSemitone = 100.0f;
 inline constexpr float kButterworthQ =
     0.70710678118654752440f;  ///< 1/sqrt(2), Butterworth response Q
 inline constexpr double kButterworthQD = 0.70710678118654752440;
+/// Section Qs of a 4th-order Butterworth built as two cascaded 2nd-order stages.
+inline constexpr float kButterworth4QLow = 0.5411961f;
+inline constexpr float kButterworth4QHigh = 1.3065630f;
 
 // ============================================================
 // Acoustics

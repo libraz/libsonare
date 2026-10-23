@@ -768,6 +768,11 @@ void apply_va(NativeSynthPatch& p, const Fields& f) {
   F(va.osc2_interval_cents);
   F(va.noise_level);
   F(va.noise_am);
+  // The level first: at 0 the band's corners move nothing.
+  F(va.band_noise_level);
+  F(va.band_noise_low_ratio);
+  F(va.band_noise_high_hz);
+  F(va.band_noise_key_track);
 }
 
 void apply_fm(NativeSynthPatch& p, const Fields& f) {
@@ -1253,6 +1258,10 @@ constexpr UnitRow kEngineUnits[] = {
     {"va.osc2_interval_cents", Unit::Cents},
     {"va.noise_level", Unit::None},
     {"va.noise_am", Unit::None},
+    {"va.band_noise_level", Unit::None},
+    {"va.band_noise_low_ratio", Unit::Ratio},
+    {"va.band_noise_high_hz", Unit::Hz},
+    {"va.band_noise_key_track", Unit::None},
     {"fm.algorithm", Unit::None},
     {"fm.ops.ratio", Unit::Ratio},
     {"fm.ops.detune_cents", Unit::Cents},
@@ -1467,6 +1476,10 @@ struct GateRow {
 const GateRow kEngineGates[] = {
     // Subtractive: the interval places an oscillator that is there only at a level.
     {"va.osc2_interval_cents", [](const GateSite&) { return above("osc2Level", 0); }},
+    // The band's corners shape noise that is there only at a level.
+    {"va.band_noise_low_ratio", [](const GateSite&) { return above("bandNoiseLevel", 0); }},
+    {"va.band_noise_high_hz", [](const GateSite&) { return above("bandNoiseLevel", 0); }},
+    {"va.band_noise_key_track", [](const GateSite&) { return above("bandNoiseLevel", 0); }},
     // Pipe organ: the flat voicing builds the implicit 8' only.
     {"pipe_organ.stopped", [](const GateSite&) { return equals("rankCount", 0); }},
     {"pipe_organ.brightness", [](const GateSite&) { return equals("rankCount", 0); }},
