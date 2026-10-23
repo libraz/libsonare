@@ -65,7 +65,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_saw.filter_model = SynthFilterModel::kSvf;
   o.lead_saw.env_to_cutoff_cents = 900.0f;
   o.lead_saw.cutoff_hz = 1600.0f;
-  o.lead_saw.gain = 0.61f;
+  o.lead_saw.gain = 0.43f;
   o.lead_saw.amp_env.attack_ms = 14.9858f;
   o.lead_saw.amp_env.decay_ms = 122.416f;
   o.lead_saw.amp_env.release_ms = 91.8123f;
