@@ -3,6 +3,7 @@ import type { EngineAutomationPoint, MasteringProcessorCatalogEntry } from '../s
 import {
   ErrorCode,
   isSonareError,
+  MAX_TRACK_LANES,
   masteringInsertParamInfo,
   masteringProcessorCatalog,
   RealtimeEngine,
@@ -109,6 +110,12 @@ describe('RealtimeEngine native binding', () => {
         /must be stereo/,
       );
     }
+    // The lane cap is exported and its refusal names it.
+    const lanes = Array.from({ length: MAX_TRACK_LANES + 1 }, (_, i) => ({ trackId: i + 1 }));
+    expect(MAX_TRACK_LANES).toBe(32);
+    expect(() => engine.setTrackLanes(lanes.slice(0, MAX_TRACK_LANES))).not.toThrow();
+    expect(() => engine.setTrackLanes(lanes)).toThrow(/at most 32 track lanes/);
+    expect(() => engine.setTrackLanes([{ trackId: 10 }])).not.toThrow();
     // 257/-255 narrow to 1 (Stereo, valid) if the addon range-checks the
     // uint8_t C-ABI field's value AFTER narrowing to it instead of before --
     // the wrap this guards against on both the lane and the bus reader.

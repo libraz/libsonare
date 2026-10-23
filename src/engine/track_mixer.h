@@ -83,6 +83,8 @@ enum class TrackMonitorMode : uint8_t {
 /// Message surfaces attach when a lane names a source layout other than stereo.
 inline constexpr const char* kTrackLaneLayoutRefusal =
     "track lane sourceChannelLayout must be stereo; multichannel lanes are not implemented";
+/// Message surfaces attach when a lane list is longer than TrackMixerRuntime::kMaxTrackLanes.
+inline constexpr const char* kTrackLaneCountRefusal = "at most 32 track lanes are supported";
 
 struct TrackLaneConfig {
   struct Send {
@@ -159,6 +161,7 @@ enum class MixerRefusal : uint8_t {
 class TrackMixerRuntime final : public rt::ProcessorBase {
  public:
   static constexpr size_t kMaxTrackLanes = 32;
+  static_assert(kMaxTrackLanes == 32, "kTrackLaneCountRefusal names the lane cap");
   static constexpr size_t kMaxBusLanes = 8;
   static constexpr int kMaxLaneChannels = 2;
   /// Per-insert gain reduction published by the audio thread; empty for an unused slot.

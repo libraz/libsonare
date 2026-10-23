@@ -53,6 +53,7 @@
 - `lfoShape` / `lfo_shape` takes `'random'` (`SONARE_SYNTH_LFO_SHAPE_RANDOM`): a smoothed sample-and-hold that glides to a new value each cycle, seeded per voice so a bounce repeats it, with no spectral line at the LFO rate or its harmonics.
 - `filterModel` / `filter_model` takes `'svf-4-pole'` (`SONARE_SYNTH_FILTER_SVF_4POLE`): two state-variable lowpass sections at the 4th-order Butterworth pole pair, falling 24 dB per octave with no saturation in the path, so a stacked interval stays free of difference tones; resonance raises the second section's Q.
 - The subtractive engine has an engine section of its own, set through `engineParams` / `engine_params`: a second oscillator a fixed interval from the played pitch (`osc2IntervalCents`, `osc2Level`), white noise ahead of the filter (`noiseLevel`), and slow noise modulating the oscillators' amplitude (`noiseAm`), which puts a breath skirt on every partial at the partial's own level. Each is absent at level 0, and `synthEngineParamInfo('subtractive')` (Python `synth_engine_param_info`) lists them.
+- `MAX_TRACK_LANES` (Node, WASM and Python; C `SONARE_ENGINE_MAX_TRACK_LANES`) is the most lanes `setTrackLanes` accepts, 32. A longer list is refused with the message `at most 32 track lanes are supported`, which tells it apart from the other lane-list refusals.
 - `PlaybackRenderer.renderOffline(samples, inChannels)` (Python `render_offline`, C `sonare_playback_renderer_render_offline`) renders a whole buffer offline through an existing renderer, which is reset first, with the same output as `renderPlayback`; the renderer's diagnostics afterwards describe that render. `sonare playback` uses it on both command lines.
 
 ### Behaviour changes
@@ -87,9 +88,11 @@
 - A smoothed parameter change the realtime engine starts in the middle of a block advances at its 64-frame control period whatever the host block size.
 - In C++, `AutomationEngine::bind`, `unbind` and `clear` are no longer `noexcept`; they wait until the audio thread has stopped reading the previous target table.
 - Loading a project drops SysEx payloads that no MIDI event references.
+- After a loop wrap, a seek or a stop, the realtime engine sends again the controller, program, channel pressure, pitch bend and MIDI 2.0 registered/assignable controller values the clips set before the new position, when playback next rolls. Each loop pass and each seek starts from the state continuous playback reaches; before, the reset at the jump left them at their defaults. MIDI 1.0 RPN/NRPN sequences are not sent again.
 
 ### Fixes
 
+- Recording with a record offset (`setRecordOffsetSamples`) in a loop keeps every pass whole: the input arriving within the offset after a wrap is captured at the end of the pass played before it, instead of before the loop start, so each pass covers exactly the loop range.
 - On WASM, `RealtimeEngine.applyProjectTimeline` raises `InvalidState` for a disposed `ProjectTimeline`, as Node and Python do; it raised `TypeError`.
 - CQT and VQT build their kernels from the exact `fmin` and VQT `gamma` given, instead of reusing a kernel cached for a nearby value. In C++, VQT `filter_scale` and the CQT `window` take effect, and `nnls` no longer returns zero for systems orthogonal to its starting vector.
 - The built-in chord generator and harmonizer place notes correctly in clips with a non-zero start or source offset. The harmonizer covers both of two overlapping same-pitch notes, and a chord decision reports `accepted: false` when every voice was rejected.

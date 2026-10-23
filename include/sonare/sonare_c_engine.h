@@ -326,6 +326,8 @@ SonareError sonare_engine_upsert_clip(SonareRealtimeEngine* engine, const Sonare
 /// @return @ref SONARE_ERROR_INVALID_PARAMETER when no clip has that id.
 SonareError sonare_engine_remove_clip(SonareRealtimeEngine* engine, uint32_t clip_id);
 SonareError sonare_engine_clip_count(SonareRealtimeEngine* engine, size_t* out_count);
+/// @brief Most lanes @ref sonare_engine_set_track_lanes accepts.
+#define SONARE_ENGINE_MAX_TRACK_LANES 32u
 /// @brief Replaces the configured track-lane order and membership.
 /// @details A successful call may reorder existing track ids, remove track ids,
 ///   or add new ones. Track fader/pan and insert automation ids keep naming
@@ -338,7 +340,9 @@ SonareError sonare_engine_clip_count(SonareRealtimeEngine* engine, size_t* out_c
 ///   position after the call. Control-thread only; do not call concurrently
 ///   with @ref sonare_engine_process.
 /// @return SONARE_ERROR_INVALID_PARAMETER for an invalid lane list (an unknown
-///   output or send bus included); SONARE_ERROR_INVALID_STATE when the list is
+///   output or send bus included; more than @ref SONARE_ENGINE_MAX_TRACK_LANES
+///   lanes sets the last-error message "at most 32 track lanes are supported");
+///   SONARE_ERROR_INVALID_STATE when the list is
 ///   valid but earlier configuration refuses it: added tracks whose fader/pan and
 ///   insert ids would not fit the automation id table, a retained clip delay past
 ///   the lane alignment ceiling, or a combined latency the lanes cannot align;
@@ -866,7 +870,9 @@ SonareError sonare_engine_set_capture_punch(SonareRealtimeEngine* engine, int64_
 SonareError sonare_engine_set_capture_source(SonareRealtimeEngine* engine,
                                              SonareEngineCaptureSource source);
 /** Shift the recording window in timeline samples. A positive value delays
- * capture: output frame 0 corresponds to punch_start + offset_samples. */
+ * capture: output frame 0 corresponds to punch_start + offset_samples. Input
+ * arriving within the offset after a loop wrap belongs to the end of the pass
+ * played before it, so every pass captures the whole loop range. */
 SonareError sonare_engine_set_record_offset_samples(SonareRealtimeEngine* engine,
                                                     int64_t offset_samples);
 SonareError sonare_engine_set_input_monitor(SonareRealtimeEngine* engine, int enabled, float gain);

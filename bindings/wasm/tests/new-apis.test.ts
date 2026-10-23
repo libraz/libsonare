@@ -19,6 +19,7 @@ import {
   hybridCqt,
   init,
   lufs,
+  MAX_TRACK_LANES,
   Mixer,
   melSpectrogram,
   melToAudio,
@@ -1091,6 +1092,12 @@ describe('v1.2 feature additions (WASM)', () => {
           /must be stereo/,
         );
       }
+      expect(() => engine.setTrackLanes([{ trackId: 10 }])).not.toThrow();
+      // The lane cap is exported and its refusal names it.
+      const lanes = Array.from({ length: MAX_TRACK_LANES + 1 }, (_, i) => ({ trackId: i + 1 }));
+      expect(MAX_TRACK_LANES).toBe(32);
+      expect(() => engine.setTrackLanes(lanes.slice(0, MAX_TRACK_LANES))).not.toThrow();
+      expect(() => engine.setTrackLanes(lanes)).toThrow(/at most 32 track lanes/);
       expect(() => engine.setTrackLanes([{ trackId: 10 }])).not.toThrow();
       // Out-of-range layout is rejected like the C ABI is_valid_channel_layout.
       expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 9 }])).toThrow();

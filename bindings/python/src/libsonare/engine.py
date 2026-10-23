@@ -112,6 +112,9 @@ from .types import (
 # binary lays out engine structs differently than this wrapper expects.
 EXPECTED_ENGINE_ABI_VERSION = 3
 
+# SONARE_ENGINE_MAX_TRACK_LANES: most lanes RealtimeEngine.set_track_lanes accepts.
+MAX_TRACK_LANES = 32
+
 # The most MIDI 1.0 messages one queued external-MIDI record can lower to, and
 # therefore the smallest drain budget that can consume a record at all. Mirrors
 # sonare::host::ExternalMidi1Lowered::messages, which the C ABI reads for the
@@ -260,8 +263,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """Stop the transport.
 
         A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
-        centred pitch bend on every channel played since the last reset, so
-        controller values set before a loop region are not restored at the wrap.
+        centred pitch bend on every channel played since the last reset. When
+        playback next rolls, the controller, program, channel pressure and pitch
+        bend values the clips set before the new position are sent again, so each
+        loop pass and each seek starts from the state continuous playback reaches.
         """
         _check_argument(
             _get_lib().sonare_engine_stop(
@@ -274,8 +279,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """Move the playhead to a timeline sample.
 
         A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
-        centred pitch bend on every channel played since the last reset, so
-        controller values set before a loop region are not restored at the wrap.
+        centred pitch bend on every channel played since the last reset. When
+        playback next rolls, the controller, program, channel pressure and pitch
+        bend values the clips set before the new position are sent again, so each
+        loop pass and each seek starts from the state continuous playback reaches.
         """
         _check_argument(
             _get_lib().sonare_engine_seek_sample(
@@ -381,8 +388,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """Move the playhead to a PPQ position.
 
         A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
-        centred pitch bend on every channel played since the last reset, so
-        controller values set before a loop region are not restored at the wrap.
+        centred pitch bend on every channel played since the last reset. When
+        playback next rolls, the controller, program, channel pressure and pitch
+        bend values the clips set before the new position are sent again, so each
+        loop pass and each seek starts from the state continuous playback reaches.
         """
         _check_argument(
             _get_lib().sonare_engine_seek_ppq(
@@ -498,8 +507,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """Set the loop region and whether it is enabled.
 
         A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
-        centred pitch bend on every channel played since the last reset, so
-        controller values set before a loop region are not restored at the wrap.
+        centred pitch bend on every channel played since the last reset. When
+        playback next rolls, the controller, program, channel pressure and pitch
+        bend values the clips set before the new position are sent again, so each
+        loop pass and each seek starts from the state continuous playback reaches.
         """
         _check_argument(
             _get_lib().sonare_engine_set_loop(

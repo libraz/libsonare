@@ -328,7 +328,7 @@ from .analyzer import (
     zero_crossings,
 )
 from .audio import Audio, decode_channels, downmix
-from .engine import ClipPageProvider, FileClipPageProvider, RealtimeEngine
+from .engine import MAX_TRACK_LANES, ClipPageProvider, FileClipPageProvider, RealtimeEngine
 from .mixing_assistant import (
     MixTrackInput,
     mix_source_class_from_name,
@@ -835,6 +835,7 @@ __all__ = [
     "StreamingEqualizer",
     "PART_RIG_ALL_PARTS",
     "PART_RIG_MODES",
+    "MAX_TRACK_LANES",
     "TakeAlignment",
     "TimbreFrame",
     "TimbreResult",

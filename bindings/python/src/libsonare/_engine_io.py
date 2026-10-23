@@ -160,7 +160,11 @@ class _EngineIoMixin:
         )
 
     def set_record_offset_samples(self, offset_samples: int) -> None:
-        """Shift capture on the timeline; positive values delay the punch window."""
+        """Shift capture on the timeline; positive values delay the punch window.
+
+        Input arriving within the offset after a loop wrap belongs to the end of
+        the pass played before it, so every pass captures the whole loop range.
+        """
         _check_argument(
             _get_lib().sonare_engine_set_record_offset_samples(
                 self._require_handle(), _to_c_int64(offset_samples, "offset_samples")

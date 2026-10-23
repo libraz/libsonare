@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from libsonare import (
+    MAX_TRACK_LANES,
     AutomationPoint,
     ChannelLayout,
     EngineClip,
@@ -181,6 +182,11 @@ def test_engine_track_buses_route_lane_sends() -> None:
         ):
             with pytest.raises(SonareError, match="must be stereo"):
                 engine.set_track_lanes([{"track_id": 10, "source_channel_layout": layout}])
+
+        assert MAX_TRACK_LANES == 32
+        engine.set_track_lanes(list(range(1, MAX_TRACK_LANES + 1)))
+        with pytest.raises(SonareError, match="at most 32 track lanes"):
+            engine.set_track_lanes(list(range(1, MAX_TRACK_LANES + 2)))
 
         engine.set_track_lanes([{"track_id": 10, "sends": [{"bus_id": 1, "level_db": 0.0}]}])
         bad_lanes = [

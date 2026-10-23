@@ -262,8 +262,10 @@ export class SonareEngine {
 
   /**
    * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
-   * centred pitch bend on every channel played since the last reset, so
-   * controller values set before a loop region are not restored at the wrap.
+   * centred pitch bend on every channel played since the last reset. When
+   * playback next rolls, the controller, program, channel pressure and pitch
+   * bend values the clips set before the new position are sent again, so each
+   * loop pass and each seek starts from the state continuous playback reaches.
    */
   setLoop(startPpq: number, endPpq: number, enabled = true): boolean {
     return tempo.setLoop(this.tempoContext, startPpq, endPpq, enabled);
@@ -535,7 +537,7 @@ export class SonareEngine {
    * track id, and so do track insert automation ids (see
    * resolveTrackInsertAutomationId). Entries carrying
    * `sends` replace that track's send list; entries without `sends` leave
-   * existing sends untouched.
+   * existing sends untouched. At most `MAX_TRACK_LANES` (32) lanes are accepted.
    *
    * @param lanes Track ids or lane descriptors in the desired lane order.
    */

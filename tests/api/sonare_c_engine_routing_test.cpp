@@ -176,6 +176,22 @@ TEST_CASE("sonare_engine_set_track_lanes accepts only a stereo source layout",
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine_set_track_lanes refuses more lanes than the cap by name",
+          "[c_engine_routing]") {
+  SonareRealtimeEngine* engine = make_routing_engine({{10, 1.0f}});
+  std::vector<SonareEngineTrackLane> lanes(SONARE_ENGINE_MAX_TRACK_LANES + 1);
+  for (size_t i = 0; i < lanes.size(); ++i) {
+    lanes[i] = {static_cast<uint32_t>(i + 1), nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO};
+  }
+  CHECK(sonare_engine_set_track_lanes(engine, lanes.data(), SONARE_ENGINE_MAX_TRACK_LANES) ==
+        SONARE_OK);
+  CHECK(sonare_engine_set_track_lanes(engine, lanes.data(), lanes.size()) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("at most 32 track lanes") !=
+        std::string::npos);
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("sonare_engine bus output_bus_id routes a bus into another bus", "[c_engine_routing]") {
   const float x = direct_level();
   const float half = sonare::db_to_linear(-6.0f);

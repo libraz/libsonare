@@ -98,6 +98,11 @@ SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
   (void)lane_count;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
+  static_assert(SONARE_ENGINE_MAX_TRACK_LANES == engine::TrackMixerRuntime::kMaxTrackLanes);
+  if (lane_count > SONARE_ENGINE_MAX_TRACK_LANES) {
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER, engine::kTrackLaneCountRefusal);
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   std::vector<engine::TrackLaneConfig> configs;
   configs.reserve(lane_count);

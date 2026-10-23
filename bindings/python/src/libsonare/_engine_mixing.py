@@ -83,6 +83,11 @@ class _EngineMixingMixin:
         def _require_handle(self) -> ctypes.c_void_p: ...
 
     def set_track_lanes(self, lanes: Sequence[int | Mapping[str, object]]) -> None:
+        """Declare the mixer track lanes in their order.
+
+        Raises SonareValueError when ``lanes`` holds more than
+        :data:`MAX_TRACK_LANES` lanes.
+        """
         raw = (SonareEngineTrackLane * len(lanes))()
         send_arrays: list[object] = []
         for i, lane in enumerate(lanes):

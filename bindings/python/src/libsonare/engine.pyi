@@ -45,6 +45,7 @@ from .types import (
 PlanarChannels: TypeAlias = Sequence[FloatSamples] | np.ndarray[Any, Any]
 
 EXPECTED_ENGINE_ABI_VERSION: int
+MAX_TRACK_LANES: int
 
 class ClipPageProvider:
     def __init__(self, num_channels: int, num_samples: int, page_frames: int) -> None: ...

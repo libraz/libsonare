@@ -1064,6 +1064,7 @@ export {
   ClipPageProvider,
   EXPECTED_ENGINE_ABI_VERSION,
   engineCapabilities,
+  MAX_TRACK_LANES,
   RealtimeEngine,
 } from './realtime_engine.js';
 export {

@@ -220,6 +220,9 @@ export interface EngineMidiClipSchedule {
 
 export const EXPECTED_ENGINE_ABI_VERSION = 3;
 
+/** Most lanes {@link RealtimeEngine.setTrackLanes} accepts (`SONARE_ENGINE_MAX_TRACK_LANES`). */
+export const MAX_TRACK_LANES = 32;
+
 /** Options for {@link RealtimeEngine.bindMidiCc}. All fields are optional. */
 export interface MidiCcBindOptions {
   /** Lower end of the mapped parameter range. Default `0`. */
@@ -1267,8 +1270,10 @@ export class RealtimeEngine {
    * Stops transport playback, at `renderFrame` when given.
    *
    * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
-   * centred pitch bend on every channel played since the last reset, so
-   * controller values set before a loop region are not restored at the wrap.
+   * centred pitch bend on every channel played since the last reset. When
+   * playback next rolls, the controller, program, channel pressure and pitch
+   * bend values the clips set before the new position are sent again, so each
+   * loop pass and each seek starts from the state continuous playback reaches.
    */
   stop(renderFrame?: number): void {
     this.native.stop(resolveRenderFrame('stop', renderFrame));
@@ -1526,6 +1531,10 @@ export class RealtimeEngine {
     }));
   }
 
+  /**
+   * Declares the mixer track lanes in their order. Throws a `RangeError` when
+   * the list holds more than {@link MAX_TRACK_LANES} lanes.
+   */
   setTrackLanes(lanes: Array<number | EngineTrackLane>): void {
     this.native.setTrackLanes(
       lanes.map((lane) => {
@@ -2197,7 +2206,11 @@ export class RealtimeEngine {
     this.native.setCaptureSource(source);
   }
 
-  /** Positive values delay capture relative to the punch window. */
+  /**
+   * Positive values delay capture relative to the punch window. Input arriving
+   * within the offset after a loop wrap belongs to the end of the pass played
+   * before it, so every pass captures the whole loop range.
+   */
   setRecordOffsetSamples(offsetSamples: number): void {
     this.native.setRecordOffsetSamples(offsetSamples);
   }
