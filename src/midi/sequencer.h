@@ -26,6 +26,15 @@
 /// a clip end releases that clip's notes, so no note is left hanging. After
 /// all_notes_off() the active-note count is 0.
 ///
+/// Controller chase
+/// ----------------
+/// After either release, the first rolling dispatch re-sends, at its own frame,
+/// the controller, program, channel pressure, pitch bend and MIDI 2.0
+/// registered/assignable controller values the clips set before that timeline
+/// frame, so every loop pass and every seek starts from the state continuous
+/// playback would have reached. MIDI 1.0 RPN/NRPN sequences (CC 6, 38, 96-101)
+/// and channel-mode messages are not chased.
+///
 /// Clock basis
 /// -----------
 /// Compiled clips are stamped on the TIMELINE (which wraps on a loop and jumps on
@@ -125,6 +134,9 @@ class MidiSequencer {
   static constexpr size_t kMaxRetainedChannelStates = 256;
   static constexpr size_t kMaxMidiFxInserts = 32;
   static constexpr size_t kMaxPendingFxEvents = 512;
+  /// Distinct (destination, channel state) values one chase can re-send; the
+  /// rest are counted in chase_overflow_count(). A power of two (open addressing).
+  static constexpr size_t kMaxChasedStates = 2048;
 
   void prepare(double sample_rate);
   void reset() noexcept;
@@ -262,6 +274,9 @@ class MidiSequencer {
   uint32_t midi_fx_pending_overflow_count() const noexcept {
     return midi_fx_pending_overflow_count_.load(std::memory_order_relaxed);
   }
+  uint32_t chase_overflow_count() const noexcept {
+    return chase_overflow_count_.load(std::memory_order_relaxed);
+  }
 
  private:
   struct ActiveNote {
@@ -320,9 +335,21 @@ class MidiSequencer {
   // dereferenced by the audio thread. Keeping the owner stable across reset()
   // and repeated prepare() calls makes the RT path allocation-free while also
   // avoiding a control/audio lifetime race.
+  // The newest value of one (destination, channel state) a chase has found so far.
+  struct ChasedState {
+    uint32_t destination_id = 0;
+    uint32_t key = 0;
+    uint32_t clip_id = 0;
+    uint32_t track_id = 0;
+    int64_t frame = 0;
+    const MidiEvent* event = nullptr;
+  };
   struct RuntimeStorage {
     std::array<DestinationFx, kMaxMidiFxInserts> midi_fx{};
     std::array<PendingFxEvent, kMaxPendingFxEvents> pending_fx{};
+    std::array<ChasedState, kMaxChasedStates> chased{};
+    // Slots of `chased` in first-found order; also what clears them afterwards.
+    std::array<uint16_t, kMaxChasedStates> chased_order{};
   };
 
   // Records a sounding note; returns false on capacity overflow (bumps counter).
@@ -397,6 +424,9 @@ class MidiSequencer {
   // not hang its notes.
   void release_notes_for_absent_clips(const std::vector<MidiClipSchedule>* clips,
                                       const SequencerClock& clock) noexcept;
+  // Re-sends the channel state @p clips set before the clock's timeline frame.
+  void chase_clip_state(const std::vector<MidiClipSchedule>& clips,
+                        const SequencerClock& clock) noexcept;
 
   double sample_rate_ = constants::kDefaultDawSampleRate;
   MidiEventSink* sink_ = nullptr;
@@ -417,6 +447,9 @@ class MidiSequencer {
   std::array<RetainedChannelState, kMaxRetainedChannelStates> retained_channels_{};
   std::atomic<uint32_t> retained_channel_overflow_count_{0};
   std::atomic<uint32_t> dispatched_event_count_{0};
+  std::atomic<uint32_t> chase_overflow_count_{0};
+  // Audio-thread only: set by a playback discontinuity, consumed by the next rolling dispatch.
+  bool chase_pending_ = true;
   mutable rt::RtPublisher<MidiFxSnapshot> midi_fx_snapshots_;
   const MidiFxSnapshot* last_midi_fx_snapshot_ = nullptr;
   // Audio-thread-only: the clock of the last dispatch_due, whose device frame of

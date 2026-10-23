@@ -3536,6 +3536,39 @@ TEST_CASE("RealtimeEngine places MIDI after a loop wrap at its own device frame"
   CHECK(released);
 }
 
+TEST_CASE("RealtimeEngine restores a controller set before the loop at every wrap",
+          "[engine][midi]") {
+  constexpr int kBlock = 64;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  engine.set_tempo(120.0);
+  EventLogInstrument log;
+  REQUIRE(engine.set_midi_instrument(0, &log));
+  // Loop timeline [16, 48): wraps at device frames 48, 80 and 112.
+  engine.set_loop(16.0 / 24000.0, 48.0 / 24000.0, true);
+  sonare::midi::MidiClipSchedule clip;
+  clip.id = 1;
+  clip.events = {MidiEvent{4, sonare::midi::make_midi1_control_change(0, 0, 11, 100)},
+                 MidiEvent{20, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                 MidiEvent{30, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  engine.set_midi_clips({clip});
+  push_transport(engine, sonare::rt::CommandType::kTransportPlay, 0);
+  render_blocks(engine, 2 * kBlock, kBlock);
+
+  // At each wrap the reset comes first and the expression the clip set before the loop follows it.
+  std::vector<int64_t> restored;
+  bool reset_seen = false;
+  for (const auto& entry : log.log) {
+    const bool cc = entry.ump.status_nibble() == 0xB;
+    if (cc && entry.ump.note_number() == 121) reset_seen = true;
+    if (cc && entry.ump.note_number() == 11 && entry.ump.data2_7bit() == 100 && reset_seen) {
+      restored.push_back(entry.event_frame);
+      reset_seen = false;
+    }
+  }
+  CHECK(restored == std::vector<int64_t>{48, 80, 112});
+}
+
 TEST_CASE("RealtimeEngine keeps a live note-on queued for the loop-wrap frame", "[engine][midi]") {
   constexpr int kBlock = 64;
   RealtimeEngine engine;

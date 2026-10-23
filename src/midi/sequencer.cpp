@@ -86,6 +86,121 @@ std::vector<MidiEvent>::const_iterator first_loop_event_at(const MidiClipSchedul
   return first_event_at(clip, numeric::saturating_add(clip.start_sample, local));
 }
 
+// Chase keys: (group, channel) above kChaseKindBits, the state kind below it.
+constexpr uint32_t kChaseKindBits = 18;
+constexpr uint32_t kChaseKindProgram = 128;
+constexpr uint32_t kChaseKindChannelPressure = 129;
+constexpr uint32_t kChaseKindPitchBend = 130;
+constexpr uint32_t kChaseKindRegistered = 0x10000;
+constexpr uint32_t kChaseKindAssignable = 0x20000;
+
+/// Controllers whose meaning depends on the messages around them, so no single value is a state.
+bool is_sequence_controller(uint8_t controller) noexcept {
+  return controller == cc::kDataEntryMsb || controller == cc::kDataEntryLsb ||
+         controller == cc::kPortamentoControl ||
+         (controller >= cc::kDataIncrement && controller <= cc::kRpnMsb) ||
+         controller >= cc::kAllSoundOff;
+}
+
+/// The chase key of a message setting a channel state, or false for any other message.
+bool chase_key(const Ump& ump, uint32_t* key) noexcept {
+  if (!is_channel_voice(ump)) return false;
+  uint32_t kind = 0;
+  switch (static_cast<UmpStatus>(ump.status_nibble())) {
+    case UmpStatus::kControlChange:
+      if (is_sequence_controller(ump.note_number())) return false;
+      kind = ump.note_number();
+      break;
+    case UmpStatus::kProgramChange:
+      kind = kChaseKindProgram;
+      break;
+    case UmpStatus::kChannelPressure:
+      kind = kChaseKindChannelPressure;
+      break;
+    case UmpStatus::kPitchBend:
+      kind = kChaseKindPitchBend;
+      break;
+    case UmpStatus::kRegisteredController:
+    case UmpStatus::kAssignableController:
+      if (!is_registered_or_assignable_controller(ump)) return false;
+      kind = (ump.status_nibble() == static_cast<uint8_t>(UmpStatus::kRegisteredController)
+                  ? kChaseKindRegistered
+                  : kChaseKindAssignable) |
+             (static_cast<uint32_t>(ump.note_number()) << 7) | (ump.words[0] & 0x7Fu);
+      break;
+    default:
+      return false;
+  }
+  *key = ((static_cast<uint32_t>(ump.group & 0x0Fu) << 4 | ump.channel()) << kChaseKindBits) | kind;
+  return true;
+}
+
+/// Emission pass of a chase key: bank select, then program, then the rest, bend last.
+int chase_pass(uint32_t key) noexcept {
+  const uint32_t kind = key & ((1u << kChaseKindBits) - 1u);
+  if (kind == cc::kBankSelectMsb || kind == cc::kBankSelectLsb) return 0;
+  if (kind == kChaseKindProgram) return 1;
+  if (kind == kChaseKindChannelPressure || kind == kChaseKindPitchBend) return 3;
+  return 2;
+}
+constexpr int kChasePasses = 4;
+
+std::shared_ptr<const MidiClipChaseIndex> build_chase_index(const MidiClipSchedule& clip) {
+  std::vector<std::pair<uint32_t, uint32_t>> keyed;
+  for (size_t i = 0; i < clip.events.size(); ++i) {
+    uint32_t key = 0;
+    if (chase_key(clip.events[i].ump, &key)) keyed.emplace_back(key, static_cast<uint32_t>(i));
+  }
+  if (keyed.empty()) return nullptr;
+  std::sort(keyed.begin(), keyed.end());
+  auto index = std::make_shared<MidiClipChaseIndex>();
+  index->event_indices.reserve(keyed.size());
+  for (size_t i = 0; i < keyed.size(); ++i) {
+    if (i == 0 || keyed[i].first != keyed[i - 1].first) {
+      const auto at = static_cast<uint32_t>(i);
+      index->runs.push_back({keyed[i].first, at, at});
+    }
+    index->event_indices.push_back(keyed[i].second);
+    index->runs.back().end = static_cast<uint32_t>(i + 1);
+  }
+  return index;
+}
+
+/// The event of one chase run in force just before timeline frame @p at, and the
+/// timeline frame it played at, under the same placement rules visit_scheduled uses.
+const MidiEvent* chased_event(const MidiClipSchedule& clip, const uint32_t* first,
+                              const uint32_t* last, int64_t at, int64_t* frame) noexcept {
+  const auto frame_of = [&](uint32_t index) noexcept { return clip.events[index].render_frame; };
+  // The last index in [first, last) whose event lies before @p bound, or nullptr.
+  const auto last_before = [&](int64_t bound) noexcept -> const uint32_t* {
+    const uint32_t* it = std::partition_point(
+        first, last, [&](uint32_t index) noexcept { return frame_of(index) < bound; });
+    return it == first ? nullptr : it - 1;
+  };
+  if (clip.loop_mode == MidiLoopMode::kLoop && clip.loop_length_samples > 0) {
+    const int64_t bound = std::min(at, saturating_clip_end(clip));
+    if (bound <= clip.start_sample) return nullptr;
+    const int64_t loop_len = clip.loop_length_samples;
+    const int64_t phase = loop_phase(clip, bound);
+    const int64_t iter_start = numeric::saturating_sub(bound, phase);
+    const uint32_t* hit = last_before(numeric::saturating_add(clip.start_sample, phase));
+    int64_t base = iter_start;
+    if ((hit == nullptr || frame_of(*hit) < clip.start_sample) && iter_start > clip.start_sample) {
+      // Nothing yet in this iteration: the previous one ran to its end.
+      hit = last_before(numeric::saturating_add(clip.start_sample, loop_len));
+      base = numeric::saturating_sub(iter_start, loop_len);
+    }
+    if (hit == nullptr || frame_of(*hit) < clip.start_sample) return nullptr;
+    *frame = numeric::saturating_add(base, frame_of(*hit) - clip.start_sample);
+    return &clip.events[*hit];
+  }
+  const bool finite_one_shot = clip.loop_mode == MidiLoopMode::kOneShot && clip.length_samples > 0;
+  const uint32_t* hit = last_before(finite_one_shot ? std::min(at, saturating_clip_end(clip)) : at);
+  if (hit == nullptr) return nullptr;
+  *frame = frame_of(*hit);
+  return &clip.events[*hit];
+}
+
 }  // namespace
 
 SequencerClock SequencerClock::advanced(int64_t frames) const noexcept {
@@ -128,6 +243,7 @@ void MidiSequencer::reset() noexcept {
     }
   }
   for (RetainedChannelState& state : retained_channels_) state = RetainedChannelState{};
+  chase_pending_ = true;
   last_clips_ = nullptr;
   last_midi_fx_snapshot_ = nullptr;
   dispatched_event_count_.store(0, std::memory_order_relaxed);
@@ -165,6 +281,7 @@ void MidiSequencer::set_midi_clips(std::vector<MidiClipSchedule> clips) {
       std::stable_sort(clip.events.begin(), clip.events.end(), by_frame);
     }
   }
+  for (MidiClipSchedule& clip : clips) clip.chase_index = build_chase_index(clip);
   MidiSysExPayloadError payload_error = MidiSysExPayloadError::kNone;
   if (!own_sysex_payloads(clips, &payload_error)) {
     throw SonareException(payload_error == MidiSysExPayloadError::kOutOfMemory
@@ -844,6 +961,11 @@ void MidiSequencer::dispatch_due(const SequencerClock& clock) noexcept {
     }
   }
 
+  if (clock.rolling && chase_pending_) {
+    chase_pending_ = false;
+    if (clips != nullptr) chase_clip_state(*clips, clock);
+  }
+
   // Pending output and clip events at this frame merge by same_time_rank.
   const int64_t timeline = clock.timeline.value;
   for (int rank = 0; rank <= kMaxSameTimeRank; ++rank) {
@@ -903,6 +1025,60 @@ void MidiSequencer::process_block(const SequencerClock& clock, int num_frames) n
   }
 }
 
+void MidiSequencer::chase_clip_state(const std::vector<MidiClipSchedule>& clips,
+                                     const SequencerClock& clock) noexcept {
+  if (runtime_storage_ == nullptr) return;
+  auto& table = runtime_storage_->chased;
+  auto& order = runtime_storage_->chased_order;
+  size_t found = 0;
+  bool overflowed = false;
+  constexpr size_t kMask = kMaxChasedStates - 1;
+  static_assert((kMaxChasedStates & kMask) == 0, "kMaxChasedStates must be a power of two");
+  for (const MidiClipSchedule& clip : clips) {
+    if (clip.chase_index == nullptr) continue;
+    const MidiClipChaseIndex& index = *clip.chase_index;
+    for (const MidiClipChaseIndex::Run& run : index.runs) {
+      int64_t frame = 0;
+      const MidiEvent* event =
+          chased_event(clip, index.event_indices.data() + run.begin,
+                       index.event_indices.data() + run.end, clock.timeline.value, &frame);
+      if (event == nullptr) continue;
+      size_t slot = (run.key * 2654435761u ^ clip.destination_id * 40503u) & kMask;
+      while (table[slot].event != nullptr &&
+             (table[slot].destination_id != clip.destination_id || table[slot].key != run.key)) {
+        slot = (slot + 1) & kMask;
+        if (found == kMaxChasedStates) break;
+      }
+      ChasedState& state = table[slot];
+      if (state.event == nullptr) {
+        if (found == kMaxChasedStates) {
+          overflowed = true;
+          continue;
+        }
+        order[found++] = static_cast<uint16_t>(slot);
+      } else if (state.destination_id != clip.destination_id || state.key != run.key) {
+        overflowed = true;
+        continue;
+      } else if (frame < state.frame) {
+        continue;  // A later clip at the same frame wins, as it would dispatch last.
+      }
+      state = ChasedState{clip.destination_id, run.key, clip.id, clip.track_id, frame, event};
+    }
+  }
+  if (overflowed) chase_overflow_count_.fetch_add(1, std::memory_order_relaxed);
+  for (int pass = 0; pass < kChasePasses; ++pass) {
+    for (size_t i = 0; i < found; ++i) {
+      const ChasedState& state = table[order[i]];
+      if (chase_pass(state.key) != pass) continue;
+      MidiEvent event = *state.event;
+      event.render_frame = clock.device.value;
+      event.source_track_id = state.track_id;
+      dispatch_transformed(state.destination_id, event, /*from_clip=*/true, state.clip_id);
+    }
+  }
+  for (size_t i = 0; i < found; ++i) table[order[i]] = ChasedState{};
+}
+
 void MidiSequencer::emit_controller_reset(uint32_t destination_id, uint8_t group, uint8_t channel,
                                           DeviceFrame render_frame) noexcept {
   // Standard MIDI reset on a playback discontinuity: damper off, reset all
@@ -954,6 +1130,7 @@ void MidiSequencer::all_notes_off(DeviceFrame render_frame) noexcept {
     }
   }
   clear_retained_channel_states(/*single_destination=*/false, 0);
+  chase_pending_ = true;
 }
 
 void MidiSequencer::release_clip_playback(DeviceFrame render_frame) noexcept {
@@ -984,6 +1161,7 @@ void MidiSequencer::release_clip_playback(DeviceFrame render_frame) noexcept {
       if (fx.active) fx.chain.clear_clip_note_tracking();
     }
   }
+  chase_pending_ = true;
 }
 
 void MidiSequencer::drop_clip_pending() noexcept {

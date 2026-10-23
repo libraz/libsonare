@@ -2993,6 +2993,9 @@ TEST_CASE("MidiSequencer dispatches a late block of long clips in merged order",
     if (has_odd_clip_event && odd_is_on) expected.emplace_back(frame, 5u);
   }
 
+  // Playback starting mid-loop first chases the controller the loop clip left set.
+  expected.insert(expected.begin(), {block_start, 6u});
+
   seq.process_block(SequencerClock::aligned(block_start), block_frames);
   REQUIRE(sink.events.size() == expected.size());
   for (size_t i = 0; i < expected.size(); ++i) {

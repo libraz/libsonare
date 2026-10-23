@@ -778,6 +778,7 @@ if(BUILD_ARRANGEMENT)
     midi/sysex_framing_test.cpp
     midi/midi_fx_test.cpp
     midi/midi_fx_nan_config_test.cpp
+    midi/sequencer_chase_test.cpp
     midi/sequencer_stop_order_test.cpp
     midi/channel_voice_predicate_test.cpp
     midi/program_map_test.cpp

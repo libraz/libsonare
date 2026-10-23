@@ -156,6 +156,22 @@ using MidiSysExPreparer =
     std::function<bool(uint32_t destination, const uint8_t* payload, size_t size,
                        std::shared_ptr<const PreparedMidiSysEx>& prepared)>;
 
+/// Where each channel state a clip sets -- a controller, the program, channel
+/// pressure, pitch bend, a MIDI 2.0 registered or assignable controller -- sits in
+/// its `events`, so a chase can find the value in force at a frame by binary search.
+/// Derived by MidiSequencer::set_midi_clips when the clip set is published.
+struct MidiClipChaseIndex {
+  /// One state: its key and its events as the range [begin, end) of event_indices.
+  struct Run {
+    uint32_t key = 0;
+    uint32_t begin = 0;
+    uint32_t end = 0;
+  };
+  std::vector<Run> runs;
+  /// Indices into MidiClipSchedule::events, ascending within each run.
+  std::vector<uint32_t> event_indices;
+};
+
 /// The RT-facing compiled MIDI clip. Owned value data handed to the engine via
 /// the RtPublisher path (like engine::ClipSchedule). Events are already in
 /// absolute render frames (PPQ->frame baked by the compiler). The RT sequencer
@@ -212,6 +228,8 @@ struct MidiClipSchedule {
   /// The sequencer replaces it with a fresh bank when publishing, which also
   /// makes direct caller-created schedules independent of their source buffers.
   std::shared_ptr<const MidiSysExPayloadBank> sysex_payload_bank;
+  /// Derived from `events` on publication, so it takes no part in comparison.
+  std::shared_ptr<const MidiClipChaseIndex> chase_index;
 
   bool operator==(const MidiClipSchedule& o) const noexcept {
     return id == o.id && track_id == o.track_id && start_sample == o.start_sample &&
