@@ -90,8 +90,8 @@ SONARE_TUNABLE(kPercussionVelocityExponent, 1.1f);
 SONARE_TUNABLE(kAdditiveVelocityExponent, 0.5f);
 
 /// Corner of the lowpass shaping the subtractive section's amplitude noise.
-/// The calliope reference's skirt is the same width on h1 and h2 (amplitude,
-/// not pitch): 24 dB down 10 Hz off the partial, 34 at 20, at the floor by 40.
+/// Set against the calliope reference's skirt on h1: 24 dB down 10 Hz off the
+/// partial, 34 at 20, at the floor by 40.
 SONARE_TUNABLE(kNoiseAmCornerHz, 12.0f);
 
 /// Exponent of the SoundFont velocity-to-amplitude curve for @p p, 0 = off; the

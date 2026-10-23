@@ -67,8 +67,8 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_saw.amp_env.release_ms = 91.8123f;
 
   // Calliope (GM 82): a steam whistle rank. The reference's odd partials are strong (h3 -13,
-  // h5 -16 dB at C4) and it carries no vibrato; its breath rides on each partial as a
-  // 10-20 Hz amplitude skirt, where white noise alone put +20 dB under f0.
+  // h5 -16 dB at C4) and it has no periodic vibrato; its breath skirts each partial 10-20 Hz
+  // wide, which amplitude noise stands in for where white noise alone put +20 dB under f0.
   o.lead_calliope = lead;
   o.lead_calliope.waveform = VaWaveform::kSquare;
   o.lead_calliope.unison = 1;
