@@ -59,14 +59,14 @@ enum class Bank : uint8_t {
 const char* bank_name(Bank bank) { return bank == Bank::kSoundFont ? "soundfont" : "model"; }
 
 /// The program each bank is probed on. The SoundFont bank plays the fixture
-/// preset at program 0. The model bank plays GM 82 (Lead 3, calliope), which is
-/// the one program whose fallback patch can show all eight at once: a running
-/// vibrato (22 cents at 6 Hz, so a rate, a depth and a delay edit all have a
-/// depth to act on), a ladder filter at 2.6 kHz that is never bypassed, and a
-/// full 35 / 200 / 0.9 / 180 amplitude envelope, so attack, decay and release
-/// are each a segment the render crosses.
+/// preset at program 0. The model bank plays GM 85 (Lead 6, voice), whose
+/// fallback patch can show all eight at once: a running vibrato (14 cents at
+/// 5.2 Hz, so a rate, a depth and a delay edit all have a depth to act on), a
+/// ladder filter at 2.2 kHz that is never bypassed, and a full 45 / 250 / 0.85 /
+/// 220 amplitude envelope, so attack, decay and release are each a segment the
+/// render crosses.
 constexpr uint8_t kSoundFontProgram = 0;
-constexpr uint8_t kModelProgram = 82;
+constexpr uint8_t kModelProgram = 85;
 
 using sonare::test::event;
 

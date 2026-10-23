@@ -66,23 +66,22 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_saw.amp_env.decay_ms = 122.416f;
   o.lead_saw.amp_env.release_ms = 91.8123f;
 
-  // Calliope (GM 82): a steam whistle rank. One pure triangle in a tube, no
-  // stack and no drive, with the deep vibrato a whistle organ has from its
-  // wind supply rather than from a player.
+  // Calliope (GM 82): a steam whistle rank. The reference's odd partials are strong (h3 -13,
+  // h5 -16 dB at C4) and it carries no vibrato; its breath rides on each partial as a
+  // 10-20 Hz amplitude skirt, where white noise alone put +20 dB under f0.
   o.lead_calliope = lead;
-  o.lead_calliope.waveform = VaWaveform::kTriangle;
+  o.lead_calliope.waveform = VaWaveform::kSquare;
   o.lead_calliope.unison = 1;
   o.lead_calliope.detune_cents = 0.0f;
   o.lead_calliope.drive = 0.0f;
-  o.lead_calliope.cutoff_hz = 6000.0f;
-  // The reference carries an octave line over the triangle and breath under it.
+  o.lead_calliope.cutoff_hz = 2500.0f;
+  o.lead_calliope.key_track = 1.0f;
   o.lead_calliope.va.osc2_level = 0.4f;
   o.lead_calliope.va.osc2_interval_cents = 1200.0f;
-  o.lead_calliope.va.noise_level = 0.5f;
+  o.lead_calliope.va.noise_level = 0.2f;
+  o.lead_calliope.va.noise_am = 0.22f;
   o.lead_calliope.env_to_cutoff_cents = 200.19f;
   o.lead_calliope.amp_env = fallback_env(35.0f, 200.0f, 0.9f, 180.0f);
-  o.lead_calliope.lfo_rate_hz = 6.0f;
-  o.lead_calliope.lfo_to_pitch_cents = 22.0f;
   o.lead_calliope.body = BodyType::kWoodTube;
   o.lead_calliope.body_mix = 0.463525f;
   o.lead_calliope.gain = 0.536f;
