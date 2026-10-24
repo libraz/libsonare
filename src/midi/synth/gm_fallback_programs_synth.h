@@ -42,19 +42,24 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   lead.vel_to_cutoff_cents = 1200.0f;
   lead.gain = 0.5f;
 
-  // Square (GM 80): the name is the oscillator. A hollow square needs no stack
-  // to be heard, so the unison drops to two and the mod wheel carries the
-  // vibrato a lead player reaches for rather than it running all the time.
+  // Square (GM 80): two squares 8 cents apart through a linear 24 dB/oct filter. The ladder's
+  // saturation mixed the pair into difference tones under f0 and between the partials (32 dB
+  // over the reference below f0); the reference's level spans 12 dB pp to ff, a linear law.
   o.lead_square = lead;
   o.lead_square.waveform = VaWaveform::kSquare;
   o.lead_square.unison = 2;
   o.lead_square.detune_cents = 8.0f;
-  o.lead_square.cutoff_hz = 4200.0f;
+  o.lead_square.filter_model = SynthFilterModel::kSvf4Pole;
+  o.lead_square.drive = 0.0f;
+  o.lead_square.cutoff_hz = 1400.0f;
+  o.lead_square.key_track = 0.5f;
+  o.lead_square.vel_to_cutoff_cents = 2400.0f;
+  o.lead_square.va.velocity_exponent = 1.0f;
   o.lead_square.mod_matrix.routes[0] = {ModSource::kModWheel, ModDestination::kPitchCents, 35.0f};
-  o.lead_square.gain = 0.60f;
+  o.lead_square.gain = 0.22f;
   o.lead_square.amp_env.attack_ms = 14.9858f;
   o.lead_square.amp_env.decay_ms = 599.43f;
-  o.lead_square.amp_env.release_ms = 50.0475f;
+  o.lead_square.amp_env.release_ms = 10.0f;
 
   // Sawtooth (GM 81): two saws 8 cents apart, the line pair the reference holds
   // under every partial, through a 12 dB/oct filter. The ladder's stack left C6's
