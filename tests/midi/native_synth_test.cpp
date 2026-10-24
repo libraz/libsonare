@@ -3301,7 +3301,7 @@ TEST_CASE("the synth leads and pads are sixteen voices, not two", "[midi][synth]
   REQUIRE(loudest < 1.42f * quietest);  // inside 3 dB
 }
 
-TEST_CASE("the FX and SFX octets have dedicated subtractive voices", "[midi][synth]") {
+TEST_CASE("the FX and SFX octets have dedicated voices", "[midi][synth]") {
   using sonare::midi::synth::gm_fallback_patch;
   using sonare::midi::synth::detail::family_patches;
   static constexpr std::array<uint8_t, 16> kPrograms = {
@@ -3313,7 +3313,6 @@ TEST_CASE("the FX and SFX octets have dedicated subtractive voices", "[midi][syn
   for (const uint8_t program : kPrograms) {
     const auto& patch = gm_fallback_patch(0, program);
     INFO("GM program " << int(program));
-    REQUIRE(patch.mode == SynthEngineMode::kSubtractive);
     // The old family patch remains available as a default, but no member of
     // either octet should resolve to it after receiving a named voice.
     REQUIRE(&patch != &family_patches()[program >> 3]);

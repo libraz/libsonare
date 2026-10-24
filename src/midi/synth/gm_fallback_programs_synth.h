@@ -359,19 +359,30 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_soundtrack.stereo_spread = 0.6f;
   o.fx_soundtrack.gain = 0.43f;
 
-  // FX 3 Crystal: a narrow, high-Q triangle band makes upper partials speak first.
+  // FX 3 Crystal: a sine under a quiet fourth harmonic that velocity raises (its f0 modulation
+  // puts sidebands at h3 and h5), every partial falling at ~16 dB/s, and an inharmonic glint
+  // near 20.6 f0 that the strike brings in at -4 dB of h1 and drops ~25 dB within 0.3 s.
   o.fx_crystal = fx;
-  o.fx_crystal.waveform = VaWaveform::kTriangle;
-  o.fx_crystal.unison = 2;
-  o.fx_crystal.detune_cents = 4.0f;
-  o.fx_crystal.amp_env = fallback_env(1.0f, 1800.0f, 0.05f, 500.0f);
-  o.fx_crystal.filter_output = SynthFilterOutput::kBandpass;
-  o.fx_crystal.cutoff_hz = 5200.0f;
-  o.fx_crystal.resonance_q = 8.0f;
-  o.fx_crystal.filter_env = fallback_env(1.0f, 900.0f, 0.0f, 300.0f);
-  o.fx_crystal.env_to_cutoff_cents = 1800.0f;
+  o.fx_crystal.mode = SynthEngineMode::kFm;
+  o.fx_crystal.amp_env = fallback_env(3.0f, 3400.0f, 0.0f, 500.0f);
+  o.fx_crystal.cutoff_hz = 20000.0f;
+  o.fx_crystal.fm.algorithm = FmAlgorithm::kPair2x2;
+  o.fx_crystal.fm.ops[0].ratio = 1.0f;
+  o.fx_crystal.fm.ops[0].level = 1.0f;
+  o.fx_crystal.fm.ops[0].env = o.fx_crystal.amp_env;
+  o.fx_crystal.fm.ops[1].ratio = 19.6f;
+  o.fx_crystal.fm.ops[1].level = 1.0f;
+  o.fx_crystal.fm.ops[1].vel_to_level = 1.0f;
+  o.fx_crystal.fm.ops[1].env = fallback_env(1.0f, 600.0f, 0.2f, 500.0f);
+  o.fx_crystal.fm.ops[2].ratio = 4.0f;
+  o.fx_crystal.fm.ops[2].level = 0.13f;
+  o.fx_crystal.fm.ops[2].vel_to_level = 1.0f;
+  o.fx_crystal.fm.ops[2].env = o.fx_crystal.amp_env;
+  o.fx_crystal.fm.ops[3].ratio = 1.0f;
+  o.fx_crystal.fm.ops[3].level = 0.18f;
+  o.fx_crystal.fm.ops[3].vel_to_level = 1.0f;
+  o.fx_crystal.fm.ops[3].env = fallback_env(1.0f, 0.0f, 1.0f, 500.0f);
   o.fx_crystal.gain = 0.58f;
-  o.fx_crystal.amp_env.attack_ms = 2.99715f;
 
   // FX 4 Atmosphere: wide drift supplies the motion possible in a one-note voice. The
   // reference's floor between partials sits flat from 60 Hz, under the fundamental too, and
