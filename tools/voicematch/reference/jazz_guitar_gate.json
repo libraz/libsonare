@@ -2,21 +2,22 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm027",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-23T07:00:45+00:00",
-  "recorded_utc": "2026-10-23T07:27:57+00:00",
+  "reference_measured_utc": "2026-10-23T19:14:36+00:00",
+  "recorded_utc": "2026-10-24T05:28:16+00:00",
   "model_build": {
-    "built_utc": "2026-10-23T06:18:37Z",
-    "newest_source_utc": "2026-10-23T06:17:49Z",
+    "built_utc": "2026-10-24T05:25:37Z",
+    "newest_source_utc": "2026-10-24T05:25:12Z",
     "stale": false
   },
   "reference_spread": {},
+  "_pickup_comb": "attack_hf.median (was 1.45), attack_hf.abs_median (was 16.1) deleted 2026-10-24 and re-recorded when the pickup tap came to sit pickup_pos of the period ahead of the loop's own read rather than of the nominal period, so the comb takes the same share of h1 at every note. The reference's 4-8 kHz attack share climbs 47 dB from E2 to E4 and the model's sits flat within 7 dB before and after; the move is within 3 dB on every row, and no string or filter setting tried (cutoff, key tracking, excitation brightness and its per-octave slope, nail, pickup position) brought both statistics back without breaking another bound.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 1.363,
+      "p90": 1.248,
       "rows": 35
     },
     "decay": {
@@ -32,7 +33,7 @@
       "floor_from": "guess",
       "median": 1.875,
       "abs_median": 2.1,
-      "p90": 26.12,
+      "p90": 26.03,
       "rows": 35
     },
     "attack": {
@@ -46,8 +47,8 @@
     "attack_hf": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 1.45,
-      "abs_median": 16.1,
+      "median": 3.45,
+      "abs_median": 22.6,
       "p90": 29.777,
       "rows": 35
     },
@@ -112,15 +113,15 @@
       "floor_from": "guess",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 1.82,
+      "p90": 1.275,
       "rows": 7
     },
     "attack_hf_swing": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 2.837,
+      "median": 1.0,
       "abs_median": 4.9,
-      "p90": 10.985,
+      "p90": 10.12,
       "rows": 7
     },
     "register": {

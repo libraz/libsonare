@@ -10,6 +10,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <complex>
+#include <sstream>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -695,6 +696,41 @@ TEST_CASE("magnetic pickup comb follows a bent string", "[midi][synth][ks]") {
                   << sensed_h4 / sensed_h2);
     CHECK(sensed_h4 / sensed_h2 < 0.30 * (dry_h4 / dry_h2));
   }
+}
+
+TEST_CASE("a pickup near the string's end leaves no trough across the register",
+          "[midi][synth][ks]") {
+  // The comb's delay is a fraction of the period, so its cut follows the harmonics at every
+  // pitch. Placed against the nominal period rather than the loop's own read, it lost the
+  // delay the loss filter and dispersion carry, by an amount that varies with the note.
+  KsPatchParams plain;
+  plain.brightness = 0.8f;
+  plain.decay_s = 6.0f;
+  plain.pick_position = 0.1f;
+  plain.dispersion = 0.3f;
+  plain.hf_decay_s = 1.5f;
+  KsPatchParams pickup = plain;
+  pickup.pickup_pos = 0.03f;
+
+  const auto energy = [](const std::vector<float>& x) {
+    double sum = 0.0;
+    for (const float v : x) sum += static_cast<double>(v) * v;
+    return sum;
+  };
+  // The cost may drift with register as the string's own spectrum does; what the misplaced
+  // tap made was a trough, a run of notes far under the ones on either side of it.
+  double lowest_below = 1.0e30;
+  double worst_recovery = 0.0;
+  std::ostringstream per_note;
+  for (uint8_t note = 44; note <= 84; note += 2) {
+    const double cost_db = 10.0 * std::log10(energy(render_ks_core(pickup, note, 1.0f, 16000)) /
+                                             energy(render_ks_core(plain, note, 1.0f, 16000)));
+    per_note << " n" << int{note} << " " << cost_db;
+    worst_recovery = std::max(worst_recovery, cost_db - lowest_below);
+    lowest_below = std::min(lowest_below, cost_db);
+  }
+  INFO("level of the pickup against none (dB):" << per_note.str());
+  CHECK(worst_recovery < 1.5);
 }
 
 TEST_CASE("steel dispersion stretches the partials and stays off by default", "[midi][synth][ks]") {

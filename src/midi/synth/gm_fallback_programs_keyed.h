@@ -501,7 +501,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.electric_guitar.ks.exc_brightness = 0.95f;
   o.electric_guitar.ks.polarization = 0.3f;
   o.electric_guitar.ks.body_coupling = 0.05f;
-  o.electric_guitar.amp_env.attack_ms = 2.99715f;
+  o.electric_guitar.amp_env.attack_ms = 8.98291f;
   o.electric_guitar.amp_env.release_ms = 408.442f;
   // Against the direct reference: partial decay tilt -91.7
   // -> -8.3 dB/s, held decay 4.32 -> 1.73 dB/s off, double decay 6.86 -> 2.30,
@@ -554,7 +554,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.muted_guitar.ks.body_coupling = 0.25f;
   o.muted_guitar.ks.tension_mod = 0.4f;
   o.muted_guitar.ks.pick_position = 0.381966f;
-  o.muted_guitar.ks.pickup_pos = 0.336881f;
+  o.muted_guitar.ks.pickup_pos = 0.32f;
   // Solved against the reference's own level range, v32 to v127, which the
   // engine default of 1.19 left 4.75 dB narrow.
   o.muted_guitar.ks.velocity_exponent = 1.59f;
