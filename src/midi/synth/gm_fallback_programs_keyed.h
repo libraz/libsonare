@@ -130,26 +130,35 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.e_piano_2.amp_env.release_ms = 83.4125f;
   o.e_piano_2.cutoff_hz = 13887.1f;
 
-  // FM clavi / harpsichord: bright high-ratio pluck with a fast index decay.
-  //
-  // The carrier and the VCA carry the ring and move together; the modulator's
-  // 150 ms stays where it is, because that fall is the pluck's brightness and
-  // not its length. At 1000 the note fell 52.0 dB/s against the reference's 8.2
-  // and its usable span was a sixth of the reference's.
+  // Clavi (GM 7): a tangent-struck steel string read by a pickup near its end, which leaves
+  // h1 thin under h2-h4. The strike is bright and the ring dark because the string sheds its
+  // upper partials fast, not through a filter: the 4-8 kHz attack share climbs 43 dB pp to ff.
   NativeSynthPatch& cl = o.clav;
-  cl.mode = SynthEngineMode::kFm;
-  cl.amp_env = fallback_env(1.0f, 6340.0f, 0.0f, 120.0f);
-  cl.fm.algorithm = FmAlgorithm::kStack2;
-  cl.fm.ops[0].ratio = 1.0f;
-  cl.fm.ops[0].level = 1.0f;
-  cl.fm.ops[0].env = fallback_env(1.0f, 6340.0f, 0.0f, 120.0f);
-  cl.fm.ops[0].key_rate_scale = 0.4f;
-  cl.fm.ops[1].ratio = 7.0f;
-  cl.fm.ops[1].level = 2.0f;
-  cl.fm.ops[1].env = fallback_env(1.0f, 150.0f, 0.0f, 100.0f);
-  cl.fm.ops[1].vel_to_level = 0.6f;
-  cl.fm.ops[1].key_rate_scale = 0.5f;
-  cl.gain = 0.6f;
+  cl.mode = SynthEngineMode::kKarplusStrong;
+  cl.amp_env = fallback_env(2.29352f, 0.0f, 0.798568f, 512.262f);
+  cl.cutoff_hz = 6478.38f;
+  cl.stereo_spread = 0.0477458f;
+  cl.ks.brightness = 0.802622f;
+  cl.ks.decay_s = 10.0f;
+  cl.ks.decay_stretch = 0.383727f;
+  cl.ks.pick_position = 0.139058f;
+  cl.ks.exc_brightness = 0.794263f;
+  cl.ks.exc_brightness_per_octave = 0.100037f;
+  cl.ks.vel_to_brightness = 0.943136f;
+  cl.ks.velocity_exponent = 0.75f;
+  cl.ks.release_damp_s = 0.025272f;
+  cl.ks.nail = 0.8f;
+  cl.ks.dispersion = 0.305573f;
+  cl.ks.pickup_pos = 0.0258596f;
+  cl.ks.hf_decay_s = 0.191728f;
+  cl.ks.body_coupling = 0.169263f;
+  cl.ks.polarization = 0.256966f;
+  cl.ks.octave_mix = 0.059017f;
+  cl.ks.pick_noise = 0.594669f;
+  cl.ks.keyoff_noise = 0.539958f;
+  cl.ks.slap = 0.0250092f;
+  cl.ks.tension_mod = 0.513932f;
+  cl.gain = 1.3f;
 
   // Modal mallets: the realism is the mode-ratio data — uniform bar
   // (glockenspiel) 1:2.756:5.404:8.933 vs deep-arch tuned bar (marimba /

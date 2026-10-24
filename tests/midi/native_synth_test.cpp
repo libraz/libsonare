@@ -1026,9 +1026,9 @@ TEST_CASE("clamp_synth_patch sanitizes every field a bare std::clamp leaves NaN-
 TEST_CASE("physical-model GM programs route to their waveguide engines", "[midi][synth]") {
   using sonare::midi::synth::gm_fallback_patch;
   // Harpsichord (GM 6) voices its own jack-and-plectrum engine; the clavinet (7)
-  // stays FM (struck string + pickup, no dedicated model yet).
-  REQUIRE(gm_fallback_patch(0, 6).mode == SynthEngineMode::kHarpsichord);  // Harpsichord
-  REQUIRE(gm_fallback_patch(0, 7).mode == SynthEngineMode::kFm);           // Clavi
+  // is a tangent-struck string read by a pickup, on the plucked-string loop.
+  REQUIRE(gm_fallback_patch(0, 6).mode == SynthEngineMode::kHarpsichord);    // Harpsichord
+  REQUIRE(gm_fallback_patch(0, 7).mode == SynthEngineMode::kKarplusStrong);  // Clavi
   // Bowed string family (GM 40-43) now voices the friction waveguide.
   REQUIRE(gm_fallback_patch(0, 40).mode == SynthEngineMode::kBowedString);  // Violin
   REQUIRE(gm_fallback_patch(0, 43).mode == SynthEngineMode::kBowedString);  // Contrabass
@@ -1089,7 +1089,7 @@ TEST_CASE("model-first program set matches the GM fallback routing", "[midi][syn
   // preferred over an SF2 sample. A change here means a program's fallback
   // engine changed: reconcile the routing and this expectation together.
   static constexpr int kModelFirst[] = {
-      0,   1,   2,   3,   6,                   // piano + harpsichord
+      0,   1,   2,   3,   6,   7,              // piano + harpsichord + clavi
       8,   9,   10,  11,  12,  13,  14,  15,   // chromatic percussion (modal / KS)
       19,  20,  21,  22,  23,                  // church organ + free reeds
       24,  25,  26,  27,  28,  29,  30,  31,   // guitars (KS)
