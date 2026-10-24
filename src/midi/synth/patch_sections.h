@@ -77,6 +77,7 @@ constexpr FmPatchParams blank_fm() noexcept {
   FmPatchParams z{};
   z.algorithm = static_cast<FmAlgorithm>(0);
   for (FmOperatorParams& v : z.ops) v = blank_fm_operator();
+  z.velocity_exponent = 0.0f;
   return z;
 }
 

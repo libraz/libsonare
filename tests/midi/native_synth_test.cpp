@@ -3278,26 +3278,35 @@ double high_fraction(const std::vector<float>& buf, size_t from, double split_hz
 
 }  // namespace
 
-TEST_CASE("the subtractive velocity exponent scales the voice amplifier alone", "[midi][synth]") {
+TEST_CASE("the subtractive and FM velocity exponents scale the voice amplifier alone",
+          "[midi][synth]") {
   // The oscillators and filter render the same at one velocity, so two exponents differ by
   // exactly (velocity/127)^(e1 - e2).
-  auto render_at = [](float exponent, uint8_t velocity) {
-    NativeSynthConfig cfg;
-    cfg.patch.waveform = sonare::midi::synth::VaWaveform::kSaw;
-    cfg.patch.cutoff_hz = 3000.0f;
-    cfg.patch.va.velocity_exponent = exponent;
-    NativeSynth synth(cfg);
-    synth.prepare(kOutRate, 256);
-    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, velocity)));
-    return render(synth, 24000).left;
-  };
-  for (uint8_t velocity : {40, 120}) {
-    const std::vector<float> linear = render_at(1.0f, velocity);
-    const std::vector<float> square = render_at(2.0f, velocity);
-    INFO("velocity " << int(velocity));
-    REQUIRE(rms(square, 4800) > 1.0e-3f);
-    const float ratio_db = 20.0f * std::log10(rms(linear, 4800) / rms(square, 4800));
-    CHECK(std::abs(ratio_db + 20.0f * std::log10(velocity / 127.0f)) < 0.01f);
+  for (const bool fm : {false, true}) {
+    auto render_at = [fm](float exponent, uint8_t velocity) {
+      NativeSynthConfig cfg;
+      cfg.patch.cutoff_hz = 3000.0f;
+      if (fm) {
+        cfg.patch.mode = SynthEngineMode::kFm;
+        cfg.patch.fm.ops[0].level = 1.0f;
+        cfg.patch.fm.velocity_exponent = exponent;
+      } else {
+        cfg.patch.waveform = sonare::midi::synth::VaWaveform::kSaw;
+        cfg.patch.va.velocity_exponent = exponent;
+      }
+      NativeSynth synth(cfg);
+      synth.prepare(kOutRate, 256);
+      synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, velocity)));
+      return render(synth, 24000).left;
+    };
+    for (uint8_t velocity : {40, 120}) {
+      const std::vector<float> linear = render_at(1.0f, velocity);
+      const std::vector<float> square = render_at(2.0f, velocity);
+      INFO((fm ? "fm" : "subtractive") << ", velocity " << int(velocity));
+      REQUIRE(rms(square, 4800) > 1.0e-3f);
+      const float ratio_db = 20.0f * std::log10(rms(linear, 4800) / rms(square, 4800));
+      CHECK(std::abs(ratio_db + 20.0f * std::log10(velocity / 127.0f)) < 0.01f);
+    }
   }
 }
 

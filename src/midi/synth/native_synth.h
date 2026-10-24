@@ -1531,6 +1531,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   for (ModRoute& route : p.mod_matrix.routes) {
     route.depth = std::clamp(patch_clamp_detail::sanitize(route.depth, 0.0f), -9600.0f, 9600.0f);
   }
+  p.fm.velocity_exponent =
+      std::clamp(patch_clamp_detail::sanitize(p.fm.velocity_exponent, 2.0f), 0.0f, 4.0f);
   for (FmOperatorParams& op : p.fm.ops) {
     op.ratio = std::clamp(patch_clamp_detail::sanitize(op.ratio, 1.0f), 0.0f, 64.0f);
     op.detune_cents =

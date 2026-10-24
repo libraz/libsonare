@@ -66,6 +66,8 @@ enum class FmAlgorithm : int {
 struct FmPatchParams {
   FmAlgorithm algorithm = FmAlgorithm::kStack2;
   std::array<FmOperatorParams, kMaxFmOperators> ops{};
+  /// Exponent of the note-on level curve, (velocity / 127)^exponent; 2 is the SF2 square law.
+  float velocity_exponent = 2.0f;
 };
 
 /// Upper bound for a one-shot FM voice's carrier tail at the slowest playable

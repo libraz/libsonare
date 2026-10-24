@@ -783,6 +783,7 @@ void apply_va(NativeSynthPatch& p, const Fields& f) {
 void apply_fm(NativeSynthPatch& p, const Fields& f) {
   I_TYPED(fm.algorithm, static_cast<int>(FmAlgorithm::kStack2),
           static_cast<int>(FmAlgorithm::kAdd2));
+  F(fm.velocity_exponent);
   for (int i = 0; i < kMaxFmOperators; ++i) {
     FmOperatorParams& op = p.fm.ops[static_cast<size_t>(i)];
     const std::string base = "fm.ops" + std::to_string(i);
@@ -1270,6 +1271,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"va.band_noise_high_key_track", Unit::None},
     {"va.velocity_exponent", Unit::None},
     {"fm.algorithm", Unit::None},
+    {"fm.velocity_exponent", Unit::None},
     {"fm.ops.ratio", Unit::Ratio},
     {"fm.ops.detune_cents", Unit::Cents},
     {"fm.ops.level", Unit::None},
