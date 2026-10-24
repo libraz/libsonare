@@ -30,7 +30,9 @@ const codeNameOf = (call: () => unknown): string => {
   try {
     call();
   } catch (error) {
-    if (error instanceof RangeError) return 'RangeError';
+    if (error instanceof RangeError) {
+      return 'RangeError';
+    }
     return (error as { codeName?: string }).codeName ?? 'not a SonareError';
   }
   return 'did not throw';
