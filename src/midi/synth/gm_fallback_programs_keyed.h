@@ -109,7 +109,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   ep.fm.ops[3].env = fallback_env(1.0f, 120.0f, 0.0f, 80.0f);
   ep.fm.ops[3].vel_to_level = 0.8f;
   ep.fm.ops[3].key_rate_scale = 0.6f;
-  ep.gain = 0.6f;
+  ep.gain = 0.5612f;
   ep.amp_env.attack_ms = 0.612082f;
   ep.amp_env.decay_ms = 8508.71f;
   ep.amp_env.release_ms = 83.4125f;
@@ -117,6 +117,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   ep.fm.ops[0].env.attack_ms = 0.612082f;
   ep.fm.ops[0].env.decay_ms = 9000.0f;
   ep.fm.ops[0].env.release_ms = 250.0f;
+  ep.fm.velocity_exponent = 1.72f;
 
   // Electric Piano 2 is the FM tone rather than the tine one, so it is its own
   // patch, starting from the same voice and fitted against its own reference. Its body
@@ -129,6 +130,10 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.e_piano_2.amp_env.decay_ms = 8508.71f;
   o.e_piano_2.amp_env.release_ms = 83.4125f;
   o.e_piano_2.cutoff_hz = 13887.1f;
+  // The tine voice above takes a gentler level curve; this one already meets its span on the
+  // square law, so it keeps that curve and the level it had.
+  o.e_piano_2.fm.velocity_exponent = 2.0f;
+  o.e_piano_2.gain = 0.6f;
 
   // Clavi (GM 7): a tangent-struck steel string read by a pickup near its end, which leaves
   // h1 thin under h2-h4. The strike is bright and the ring dark because the string sheds its
@@ -1178,7 +1183,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   oh.key_track = 0.4f;
   oh.vel_to_cutoff_cents = 1999.86f;
   oh.stereo_spread = 0.227079f;
-  oh.gain = 0.7f;
+  oh.gain = 0.6408f;
   oh.amp_env.attack_ms = 0.380382f;
   // A stab is short, but 40 ms is a click: the reference's hit is still usable
   // 0.77 s in where this one was done in 0.09. The two envelopes move together
@@ -1188,6 +1193,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   oh.filter_env.attack_ms = 6.73709f;
   oh.filter_env.decay_ms = 490.0f;
   oh.resonance_q = 0.765154f;
+  oh.va.velocity_exponent = 1.63f;
 
   // Tremolo Strings (GM 44): the string-section pad under a measured-bow
   // amplitude tremolo (LFO2 -> amp) — the section shudders rather than
