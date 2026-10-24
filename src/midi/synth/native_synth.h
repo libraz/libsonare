@@ -111,6 +111,8 @@ struct VaPatchParams {
   float band_noise_high_hz = 4000.0f;
   /// How far the lowpass corner follows the played pitch (1 = by its interval from middle C).
   float band_noise_high_key_track = 0.0f;
+  /// Exponent of the note-on level curve, (velocity / 127)^exponent; 2 is the SF2 square law.
+  float velocity_exponent = 2.0f;
 };
 
 /// One playable patch: oscillator section, filter section, envelopes and the
@@ -1524,6 +1526,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.va.band_noise_high_hz, 4000.0f), 20.0f, 20000.0f);
   p.va.band_noise_high_key_track =
       std::clamp(patch_clamp_detail::sanitize(p.va.band_noise_high_key_track, 0.0f), 0.0f, 1.0f);
+  p.va.velocity_exponent =
+      std::clamp(patch_clamp_detail::sanitize(p.va.velocity_exponent, 2.0f), 0.0f, 4.0f);
   for (ModRoute& route : p.mod_matrix.routes) {
     route.depth = std::clamp(patch_clamp_detail::sanitize(route.depth, 0.0f), -9600.0f, 9600.0f);
   }

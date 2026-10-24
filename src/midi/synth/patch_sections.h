@@ -69,6 +69,7 @@ constexpr VaPatchParams blank_va() noexcept {
   z.band_noise_low_key_track = 0.0f;
   z.band_noise_high_hz = 0.0f;
   z.band_noise_high_key_track = 0.0f;
+  z.velocity_exponent = 0.0f;
   return z;
 }
 

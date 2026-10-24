@@ -137,6 +137,7 @@ float sampler_velocity_exponent(const NativeSynthPatch& p) noexcept {
   if (mode == SynthEngineMode::kPluckedString) return p.plucked_string.velocity_exponent;
   if (mode == SynthEngineMode::kVocal) return p.vocal.velocity_exponent;
   if (mode == SynthEngineMode::kFreeReed) return p.free_reed.velocity_exponent;
+  if (mode == SynthEngineMode::kSubtractive) return p.va.velocity_exponent;
   return 2.0f;
 }
 

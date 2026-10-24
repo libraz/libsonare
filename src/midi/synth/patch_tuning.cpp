@@ -777,6 +777,7 @@ void apply_va(NativeSynthPatch& p, const Fields& f) {
   F(va.band_noise_low_key_track);
   F(va.band_noise_high_hz);
   F(va.band_noise_high_key_track);
+  F(va.velocity_exponent);
 }
 
 void apply_fm(NativeSynthPatch& p, const Fields& f) {
@@ -1267,6 +1268,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"va.band_noise_low_key_track", Unit::None},
     {"va.band_noise_high_hz", Unit::Hz},
     {"va.band_noise_high_key_track", Unit::None},
+    {"va.velocity_exponent", Unit::None},
     {"fm.algorithm", Unit::None},
     {"fm.ops.ratio", Unit::Ratio},
     {"fm.ops.detune_cents", Unit::Cents},
