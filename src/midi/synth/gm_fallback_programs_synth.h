@@ -182,19 +182,22 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_fifths.va.noise_level = 0.02f;
   o.lead_fifths.va.velocity_exponent = 0.94f;
 
-  // Bass + lead (GM 87): a layer too, not yet voiced with the second
-  // oscillator. What it carries is the weight — a low cutoff with the drive up
-  // puts the energy under the line instead of over it.
+  // Bass + lead (GM 87): one still mono saw, no layer, through a 2-pole lowpass at Q 1.1
+  // (0.3-0.9 dB rms across the keys). The cutoff falls 1.75 octaves to sustain with a
+  // 0.3 s time constant; sustained it reads 720 / 920 / 1400 Hz at n36 / 60 / 84, v96.
   o.lead_bass_lead = lead;
-  // The reference holds one still line at h1; a wider stack beats into pitch motion.
-  o.lead_bass_lead.detune_cents = 8.0f;
-  o.lead_bass_lead.cutoff_hz = 1600.0f;
-  o.lead_bass_lead.drive = 0.35f;
-  o.lead_bass_lead.env_to_cutoff_cents = 2400.0f;
-  o.lead_bass_lead.key_track = 0.4f;
-  o.lead_bass_lead.gain = 0.6063f;
-  o.lead_bass_lead.amp_env.attack_ms = 8.16884f;
-  o.lead_bass_lead.amp_env.release_ms = 91.8123f;
+  o.lead_bass_lead.unison = 1;
+  o.lead_bass_lead.detune_cents = 0.0f;
+  o.lead_bass_lead.filter_model = SynthFilterModel::kSvf;
+  o.lead_bass_lead.resonance_q = 1.1f;
+  o.lead_bass_lead.drive = 0.0f;
+  o.lead_bass_lead.cutoff_hz = 1195.0f;
+  o.lead_bass_lead.key_track = 0.32f;
+  o.lead_bass_lead.vel_to_cutoff_cents = 2200.0f;
+  o.lead_bass_lead.env_to_cutoff_cents = 2100.0f;
+  o.lead_bass_lead.filter_env = fallback_env(1.0f, 900.0f, 0.0f, 150.0f);
+  o.lead_bass_lead.gain = 0.4957f;
+  o.lead_bass_lead.amp_env = fallback_env(8.16884f, 0.0f, 1.0f, 10.0f);
   o.lead_bass_lead.va.velocity_exponent = 0.91f;
 
   // Synth Strings (GM 50, 51). Both hold a note that swells and falls by about
