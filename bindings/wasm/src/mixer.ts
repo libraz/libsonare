@@ -376,7 +376,7 @@ export class Mixer {
    * about 1.4 MB per strip at 48 kHz). Marks the routing graph dirty; call
    * {@link compile} (or {@link processStereo}) to rebuild.
    *
-   * @throws If the id is already taken, or `truePeakOversample` is neither 4 nor 8
+   * @throws If the id is already taken, or `truePeakOversample` is not 0 (default), 4 or 8
    */
   addStrip(id: string, metering: StripMeteringOptions = {}): void {
     this.mixer.addStrip(id, metering);
