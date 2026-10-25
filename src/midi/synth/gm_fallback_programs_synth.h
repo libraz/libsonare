@@ -297,21 +297,36 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.pad_choir.gain = 0.3535f;
   o.pad_choir.va.velocity_exponent = 0.72f;
 
-  // Bowed (GM 92): bowed glass. The swell is longer than any of the others and
-  // the corpus resonance gives it the wooden body a bow implies; the model is
-  // not the bowed-string waveguide, which belongs to an instrument that has
-  // one, so this stays a pad wearing a bow's envelope.
-  o.pad_bowed = pad;
-  o.pad_bowed.unison = 5;
-  o.pad_bowed.detune_cents = 12.0f;
-  o.pad_bowed.cutoff_hz = 3000.0f;
-  o.pad_bowed.resonance_q = 2.5f;
-  o.pad_bowed.amp_env = fallback_env(900.0f, 900.0f, 0.9f, 1200.0f);
-  o.pad_bowed.body = BodyType::kViolin;
-  o.pad_bowed.body_mix = 0.35f;
-  o.pad_bowed.gain = 0.2504f;
-  o.pad_bowed.amp_env.attack_ms = 550.874f;
-  o.pad_bowed.va.velocity_exponent = 0.72f;
+  // Bowed (GM 92): bowed glass. A held sine with its octave at -34 dB under the
+  // glass's own inharmonic modes, struck by the onset and dying in two stages;
+  // their level falls with absolute frequency, so the lowpass does not track.
+  NativeSynthPatch& bw = o.pad_bowed;
+  bw = NativeSynthPatch{};
+  bw.mode = SynthEngineMode::kModal;
+  bw.modal.num_modes = 12;
+  bw.modal.modes[0] = {1.0f, 1.0f, 4.0f};
+  bw.modal.modes[1] = {2.0f, 0.025f, 4.0f};
+  bw.modal.modes[2] = {4.0f, 0.0007f, 4.0f};
+  bw.modal.modes[3] = {6.0f, 0.00044f, 4.0f};
+  bw.modal.modes[4] = {5.49f, 0.00625f, 0.06f};
+  bw.modal.modes[5] = {7.73f, 0.0031f, 0.06f};
+  bw.modal.modes[6] = {10.62f, 0.69f, 0.017f};
+  bw.modal.modes[7] = {10.62f, 0.065f, 0.13f};
+  bw.modal.modes[8] = {15.89f, 0.167f, 0.017f};
+  bw.modal.modes[9] = {15.89f, 0.067f, 0.13f};
+  bw.modal.modes[10] = {25.7f, 0.38f, 0.017f};
+  bw.modal.modes[11] = {25.7f, 0.067f, 0.13f};
+  bw.modal.decay_s = 60.0f;
+  bw.modal.decay_stretch = 0.4f;
+  bw.modal.strike_brightness = 1.0f;
+  bw.modal.vel_to_brightness = 0.3f;
+  bw.modal.release_damp_s = 6.5f;
+  bw.modal.velocity_exponent = 0.65f;
+  bw.cutoff_hz = 2000.0f;
+  bw.amp_env = fallback_env(420.0f, 0.0f, 1.0f, 1500.0f);
+  // 2.4 dB over the bank's RMS balance: a sine's peak sits nearest its RMS, and
+  // this keeps the sixteen leads and pads inside 3 dB of each other on peak.
+  bw.gain = 0.29f;
 
   // Metallic (GM 93): two layers of one narrow pulse. A chorused one through a
   // lowpass on the fundamental, 3.5 c flat, gives h2-h6; an unfiltered single

@@ -1129,6 +1129,7 @@ TEST_CASE("model-first program set matches the GM fallback routing", "[midi][syn
       56,  57,  58,  59,  60,  61,             // brass (lip reed), section included
       64,  65,  66,  67,  68,  69,  70,  71,   // reeds (sax / oboe / clarinet ...)
       72,  73,  74,  75,  76,  77,  78,  79,   // air-jet flutes
+      92,                                      // bowed glass pad (modal)
       104, 105, 106, 107, 108, 109, 110, 111,  // ethnic plucked / bowed / reed
       112, 113, 114, 115, 116, 117, 118, 119,  // pitched / synth percussion
   };
