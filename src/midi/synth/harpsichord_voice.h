@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 
 #include "midi/control_value.h"
 #include "midi/synth/string_loop.h"
@@ -53,8 +54,10 @@ inline int harpsichord_buffer_capacity(double sample_rate) noexcept {
 /// choir. Every span is reserved whether or not the registration draws its stop,
 /// so attach() stays allocation-free.
 inline int harpsichord_slab_capacity(double sample_rate) noexcept {
-  const int full = harpsichord_buffer_capacity(sample_rate);
-  return 2 * (2 * full + full / 2) + full / 8;
+  const int64_t full = harpsichord_buffer_capacity(sample_rate);
+  // Saturates rather than overflowing at extreme rates.
+  const int64_t slab = 2 * (2 * full + full / 2) + full / 8;
+  return static_cast<int>(std::min<int64_t>(slab, std::numeric_limits<int>::max()));
 }
 
 /// Where a note's HF decay is quoted: @p requested_hz kept clear of the
