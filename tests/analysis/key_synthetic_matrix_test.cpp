@@ -240,7 +240,7 @@ TEST_CASE("KeyAnalyzer modal synthetic matrix is opt-in", "[key_analyzer][synthe
       CAPTURE(root_idx);
       CAPTURE(static_cast<int>(mode));
 
-      KeyAnalyzer analyzer(boosted_mode_chroma(root, mode, config.profile_type), config);
+      KeyAnalyzer analyzer(boosted_mode_chroma(root, mode, *config.profile_type), config);
       REQUIRE(analyzer.key().root == root);
       REQUIRE(analyzer.key().mode == mode);
       REQUIRE(analyzer.key().confidence > 0.5f);

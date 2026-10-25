@@ -76,6 +76,9 @@ bool fill_key_profile(SonareKeyProfileType profile_type, KeyConfig* config) {
     return false;
   }
   switch (profile_type) {
+    case SONARE_KEY_PROFILE_AUTO:
+      config->profile_type.reset();
+      return true;
     case SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER:
       config->profile_type = KeyProfileType::KrumhanslSchmuckler;
       return true;

@@ -1172,9 +1172,13 @@ _KEY_PROFILE_NAMES = {
 }
 
 
+# SONARE_KEY_PROFILE_AUTO: no profile pinned, so the genre hint or the chroma chooses one.
+_KEY_PROFILE_AUTO = -1
+
+
 def _profile_value(profile: KeyProfile | str | None) -> int:
     if profile is None:
-        return int(KeyProfile.KRUMHANSL_SCHMUCKLER)
+        return _KEY_PROFILE_AUTO
     if not isinstance(profile, str):
         return int(KeyProfile(profile))
     return _resolve_enum(profile, _KEY_PROFILE_NAMES, "key profile", verb="invalid")

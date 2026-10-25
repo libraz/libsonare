@@ -76,7 +76,7 @@ Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
   bool loudness_weighted = false;
   float high_pass_hz = 0.0f;
   std::vector<SonareMode> modes;
-  SonareKeyProfileType profile = SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER;
+  SonareKeyProfileType profile = SONARE_KEY_PROFILE_AUTO;
   std::string genre_hint;
   KeyTuningOption tuning;
   if (info.Length() >= 3 && info[2].IsObject()) {
@@ -126,7 +126,7 @@ Napi::Value SonareWrap::DetectKeyCandidates(const Napi::CallbackInfo& info) {
   bool loudness_weighted = false;
   float high_pass_hz = 0.0f;
   std::vector<SonareMode> modes;
-  SonareKeyProfileType profile = SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER;
+  SonareKeyProfileType profile = SONARE_KEY_PROFILE_AUTO;
   std::string genre_hint;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();

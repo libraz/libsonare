@@ -65,6 +65,10 @@ export interface KeyDetectionOptions {
   loudnessWeighted?: boolean;
   highPassHz?: number;
   modes?: KeyMode[] | 'major-minor' | 'all' | 'modal';
+  /**
+   * Pins the key-profile family; a pinned profile outranks `genreHint`. Omitted, `genreHint`
+   * chooses it, or the chroma does under the default `'auto'` hint.
+   */
   profile?: KeyProfile;
   genreHint?: 'auto' | 'edm' | 'electronic' | 'dance' | 'pop' | 'classical' | 'jazz' | string;
 }

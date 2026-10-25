@@ -85,6 +85,8 @@ typedef enum SONARE_ENUM_BASE {
 } SonareMode;
 
 typedef enum SONARE_ENUM_BASE {
+  /** No profile pinned: the genre hint chooses one, or the chroma when the hint is "auto". */
+  SONARE_KEY_PROFILE_AUTO = -1,
   SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER = 0,
   SONARE_KEY_PROFILE_TEMPERLEY = 1,
   SONARE_KEY_PROFILE_SHAATH = 2,

@@ -74,7 +74,7 @@ inline std::vector<SonareMode> node_modes_option(const Napi::Object& object) {
 /// @brief Parse the `profile` option (numeric ordinal or profile name).
 inline SonareKeyProfileType node_profile_from_value(const Napi::Value& value) {
   if (value.IsUndefined() || value.IsNull()) {
-    return SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER;
+    return SONARE_KEY_PROFILE_AUTO;
   }
   if (value.IsNumber()) {
     const int profile = sonare_node::node_narrow_int(value.Env(), value, "keyProfile");

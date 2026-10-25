@@ -74,7 +74,7 @@ SonareError sonare_detect_key_with_options_and_modes(const float* samples, size_
   SONARE_C_API_ENTRY;
   return sonare_detect_key_with_extended_options(
       samples, length, sample_rate, n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz,
-      modes, mode_count, SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER, nullptr, out_key);
+      modes, mode_count, SONARE_KEY_PROFILE_AUTO, nullptr, out_key);
 }
 
 SonareError sonare_detect_key_with_extended_options(
@@ -138,8 +138,7 @@ SonareError sonare_detect_key_candidates_with_modes(
   SONARE_C_API_ENTRY;
   return sonare_detect_key_candidates_with_extended_options(
       samples, length, sample_rate, n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz,
-      modes, mode_count, SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER, nullptr, out_candidates,
-      out_count);
+      modes, mode_count, SONARE_KEY_PROFILE_AUTO, nullptr, out_candidates, out_count);
 }
 
 SonareError sonare_detect_key_candidates_with_extended_options(

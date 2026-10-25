@@ -265,11 +265,15 @@ def test_a_key_enum_ordinal_is_bounded_by_its_enum_rather_than_by_a_name_table()
     is not what stops an out-of-range ordinal there -- the constructor is.
     """
     # Positive control: both routes carry a legal value through.
-    assert _mode_values([1]) == [1] and _profile_value(None) == 0  # type: ignore[list-item]
+    assert _mode_values([1]) == [1] and _profile_value(0) == 0  # type: ignore[list-item]
+    # Omitted is SONARE_KEY_PROFILE_AUTO; the same -1 given as an ordinal is refused.
+    assert _profile_value(None) == -1
     with pytest.raises(ValueError, match="Mode"):
         _mode_values([99])  # type: ignore[list-item]
     with pytest.raises(ValueError, match="KeyProfile"):
         _profile_value(99)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="KeyProfile"):
+        _profile_value(-1)  # type: ignore[arg-type]
 
 
 @pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not found")

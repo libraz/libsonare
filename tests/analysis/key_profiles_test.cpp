@@ -284,3 +284,23 @@ TEST_CASE("scale_mask_for_mode is the major scale rotated for the relative modes
     REQUIRE(scale_mask_for_mode(row.mode) == rotated);
   }
 }
+
+TEST_CASE("an explicit Krumhansl-Schmuckler profile is pinned, not read as auto",
+          "[key_profiles]") {
+  const std::array<float, 12> edm_chroma = normalize_profile(
+      get_boosted_minor_profile(PitchClass::A, KeyProfileBoosts(), KeyProfileType::FaraldoEDMA));
+
+  KeyConfig plain_ks;
+  plain_ks.genre_hint = "";
+  const float ks_correlation = KeyAnalyzer(edm_chroma, plain_ks).candidates(1)[0].correlation;
+  const float auto_correlation = KeyAnalyzer(edm_chroma, KeyConfig()).candidates(1)[0].correlation;
+  REQUIRE(auto_correlation > ks_correlation);
+
+  KeyConfig pinned;
+  pinned.profile_type = KeyProfileType::KrumhanslSchmuckler;
+  CHECK(KeyAnalyzer(edm_chroma, pinned).candidates(1)[0].correlation == ks_correlation);
+
+  KeyConfig pinned_over_hint = pinned;
+  pinned_over_hint.genre_hint = "edm";
+  CHECK(KeyAnalyzer(edm_chroma, pinned_over_hint).candidates(1)[0].correlation == ks_correlation);
+}

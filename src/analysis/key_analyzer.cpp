@@ -141,8 +141,8 @@ KeyProfileMatch select_auto_profile_type(const std::array<float, 12>& mean_chrom
 }
 
 KeyProfileType resolve_profile_type(const KeyConfig& config) {
-  if (config.profile_type != KeyProfileType::KrumhanslSchmuckler) {
-    return config.profile_type;
+  if (config.profile_type.has_value()) {
+    return *config.profile_type;
   }
 
   const std::string hint = lowercase_ascii(config.genre_hint);
@@ -403,8 +403,7 @@ void KeyAnalyzer::analyze() {
 
   const std::vector<Mode> candidate_modes = candidate_modes_for_config(config_);
   KeyProfileType profile_type = resolve_profile_type(config_);
-  if (config_.profile_type == KeyProfileType::KrumhanslSchmuckler &&
-      lowercase_ascii(config_.genre_hint) == "auto") {
+  if (!config_.profile_type.has_value() && lowercase_ascii(config_.genre_hint) == "auto") {
     profile_type = select_auto_profile_type(mean_chroma_, config_, candidate_modes).profile_type;
   }
 

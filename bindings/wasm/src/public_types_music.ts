@@ -188,6 +188,10 @@ export interface KeyDetectionOptions extends ValidateOptions {
   loudnessWeighted?: boolean;
   highPassHz?: number;
   modes?: Mode[] | KeyMode[] | 'major-minor' | 'all' | 'modal';
+  /**
+   * Pins the key-profile family; a pinned profile outranks `genreHint`. Omitted, `genreHint`
+   * chooses it, or the chroma does under the default `'auto'` hint.
+   */
   profile?: KeyProfile | KeyProfileName;
   genreHint?: 'auto' | 'edm' | 'electronic' | 'dance' | 'pop' | 'classical' | 'jazz' | string;
 }

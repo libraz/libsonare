@@ -720,7 +720,9 @@ TEST_CASE("Music optional key fixtures", "[music_dataset][key]") {
     }
     std::string profile_text;
     if (parse_optional_string_token(row, 4, "profile=", profile_text)) {
-      REQUIRE(parse_key_profile(profile_text, key_config.profile_type));
+      KeyProfileType profile_type = KeyProfileType::KrumhanslSchmuckler;
+      REQUIRE(parse_key_profile(profile_text, profile_type));
+      key_config.profile_type = profile_type;
     }
     std::string genre_hint;
     if (parse_optional_string_token(row, 4, "genre_hint=", genre_hint)) {

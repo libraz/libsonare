@@ -114,7 +114,9 @@ def detect_key(
         use_hpss: Use harmonic-percussive separation before chroma analysis.
         loudness_weighted: Weight chroma frames by RMS loudness.
         high_pass_hz: Optional high-pass cutoff before chroma analysis.
-        profile: Optional key-profile family.
+        profile: Key-profile family to pin; it outranks ``genre_hint``. ``None``
+            lets ``genre_hint`` choose it, or the chroma under the default
+            ``"auto"`` hint.
         genre_hint: Optional genre hint (``"auto"``, ``"edm"``, ``"pop"``,
             ``"classical"``, or ``"jazz"``).
         tuning: Tuning offset of the recording in fractions of a semitone, in

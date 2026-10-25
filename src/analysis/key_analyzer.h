@@ -3,6 +3,7 @@
 /// @file key_analyzer.h
 /// @brief Musical key detection.
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -67,7 +68,8 @@ struct KeyConfig {
   bool use_hpss = false;  ///< Use HPSS to extract harmonic component
   bool loudness_weighted = false;  ///< Weight chroma frames by RMS loudness
   float high_pass_hz = 0.0f;       ///< High-pass filter cutoff (0 = disabled)
-  KeyProfileType profile_type = KeyProfileType::KrumhanslSchmuckler;
+  /// Profile family; unset lets @ref genre_hint choose it, or the chroma when the hint is "auto".
+  std::optional<KeyProfileType> profile_type;
   std::string genre_hint = "auto";  ///< "auto" | "edm" | "pop" | "classical" | "jazz"
   std::vector<Mode> modes = {Mode::Major, Mode::Minor};  ///< Candidate modes; default compatible
   /// Recording tuning offset in fractions of a semitone; must be in [-0.5, 0.5). 0 is concert
