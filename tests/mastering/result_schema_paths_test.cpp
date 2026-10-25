@@ -106,8 +106,10 @@ TEST_CASE("each stereo analysis schema list matches what its writer emits",
   // The log-band default tops out at 20 kHz, above this fixture's Nyquist.
   const std::vector<api::Param> params = {{"highHz", 10000.0}};
   const auto paths_of = [&](const char* name, const std::vector<float>& second) {
-    return sonare::test::schema_paths_of(api::analyze_named_stereo(
-        name, left.data(), second.data(), left.size(), kSampleRate, params));
+    const bool log_bands = std::string(name) == "stereo.monoCompatCheckLogBands";
+    return sonare::test::schema_paths_of(
+        api::analyze_named_stereo(name, left.data(), second.data(), left.size(), kSampleRate,
+                                  log_bands ? params : std::vector<api::Param>{}));
   };
 
   REQUIRE(paths_of("stereo.monoCompatCheck", right) ==

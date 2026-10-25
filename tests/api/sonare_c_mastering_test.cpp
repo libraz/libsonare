@@ -852,10 +852,13 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE_FALSE(pair_analyses.empty());
     for (const auto& name : pair_analyses) {
       INFO("pair analysis: " << name);
+      // Only the log-band analysis reads the band ceiling; the others refuse it.
       SonareMasteringParam params[] = {{"highHz", 18000.0}};
+      const size_t param_count = name == "match.tonalBalanceLogBands" ? 1 : 0;
       char* json = nullptr;
       REQUIRE(sonare_mastering_analyze_pair(name.c_str(), source.data(), reference.data(),
-                                            source.size(), 44100, params, 1, &json) == SONARE_OK);
+                                            source.size(), 44100, params, param_count,
+                                            &json) == SONARE_OK);
       REQUIRE(json != nullptr);
       REQUIRE(std::strlen(json) > 2);
       sonare_free_string(json);
@@ -866,9 +869,11 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     for (const auto& name : stereo_analyses) {
       INFO("stereo analysis: " << name);
       SonareMasteringParam params[] = {{"highHz", 18000.0}};
+      const size_t param_count = name == "stereo.monoCompatCheckLogBands" ? 1 : 0;
       char* json = nullptr;
       REQUIRE(sonare_mastering_analyze_stereo(name.c_str(), source.data(), reference.data(),
-                                              source.size(), 44100, params, 1, &json) == SONARE_OK);
+                                              source.size(), 44100, params, param_count,
+                                              &json) == SONARE_OK);
       REQUIRE(json != nullptr);
       REQUIRE(std::strlen(json) > 2);
       sonare_free_string(json);

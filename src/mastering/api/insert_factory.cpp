@@ -1297,11 +1297,15 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert(
 }
 
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert_from_params(
-    const std::string& requested_name, const std::vector<Param>& param_list) {
+    const std::string& requested_name, const std::vector<Param>& param_list,
+    std::vector<std::string>* out_unknown_keys) {
   const std::string name = canonical_processor_id(requested_name);
   const ParamMap params = detail::make_map(param_list);
   auto processor = build_insert(name, params);
   attach_constructed_parameter_values(processor.get(), params);
+  if (out_unknown_keys != nullptr && processor != nullptr) {
+    *out_unknown_keys = params.unprobed_keys();
+  }
   return processor;
 }
 

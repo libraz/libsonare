@@ -64,10 +64,13 @@ void prepare_for_build_rate(sonare::rt::ProcessorBase& processor, double sample_
 ///        of a JSON string. Used by the offline named-processor path so it can
 ///        reach the streaming inserts (e.g. the creative effects.* reverbs and
 ///        modulation effects) without re-serializing to JSON.
+/// @param out_unknown_keys When non-null and @p name is known, receives the supplied keys the
+///        processor never read (see make_insert()).
 /// @return A heap-allocated processor, or nullptr if @p name is not a known
 ///         block-processor insert.
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert_from_params(
-    const std::string& name, const std::vector<Param>& param_list);
+    const std::string& name, const std::vector<Param>& param_list,
+    std::vector<std::string>* out_unknown_keys = nullptr);
 
 /// @brief Construct a streaming insert that needs an impulse response.
 /// @param name Processor name. For "effects.reverb.convolution" the returned

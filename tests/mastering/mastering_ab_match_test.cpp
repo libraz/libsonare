@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <limits>
 #include <new>
@@ -431,19 +432,24 @@ TEST_CASE("Named stereo A/B crossfade reads parameters like the mono pair proces
   constexpr int kSampleRate = 48000;
   const std::vector<float> source(8, 1.0f);
   const std::vector<float> reference(8, 3.0f);
-  const std::vector<std::vector<Param>> param_sets = {
-      {Param{"unexpected", 0.5}},
-      {Param{"mix", 0.2}, Param{"mix", 0.8}},
-  };
-  for (const auto& params : param_sets) {
-    const auto mono = apply_named_pair_processor(
-        "match.abCrossfade", source.data(), reference.data(), source.size(), kSampleRate, params);
-    const auto stereo = apply_named_pair_processor_stereo(
-        "match.abCrossfade", source.data(), source.data(), reference.data(), reference.data(),
-        source.size(), kSampleRate, params);
-    REQUIRE(stereo.left == mono.samples);
-    REQUIRE(stereo.right == mono.samples);
-  }
+  const std::vector<Param> repeated = {Param{"mix", 0.2}, Param{"mix", 0.8}};
+  const auto mono = apply_named_pair_processor("match.abCrossfade", source.data(), reference.data(),
+                                               source.size(), kSampleRate, repeated);
+  const auto stereo = apply_named_pair_processor_stereo(
+      "match.abCrossfade", source.data(), source.data(), reference.data(), reference.data(),
+      source.size(), kSampleRate, repeated);
+  REQUIRE(stereo.left == mono.samples);
+  REQUIRE(stereo.right == mono.samples);
+
+  const std::vector<Param> unread = {Param{"unexpected", 0.5}};
+  REQUIRE_THROWS_WITH(
+      apply_named_pair_processor("match.abCrossfade", source.data(), reference.data(),
+                                 source.size(), kSampleRate, unread),
+      Catch::Matchers::ContainsSubstring("does not read parameter(s): unexpected"));
+  REQUIRE_THROWS_WITH(apply_named_pair_processor_stereo(
+                          "match.abCrossfade", source.data(), source.data(), reference.data(),
+                          reference.data(), source.size(), kSampleRate, unread),
+                      Catch::Matchers::ContainsSubstring("does not read parameter(s): unexpected"));
 }
 
 TEST_CASE("Named stereo pair rejects oversized buffers before copying",

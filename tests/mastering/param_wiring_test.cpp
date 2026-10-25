@@ -14,6 +14,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -42,6 +43,7 @@
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/json.h"
 
 namespace {
 
@@ -1209,4 +1211,147 @@ TEST_CASE("multiband.saturation band enabled=false keeps the band out of the sum
 
   REQUIRE(off_driven == off_clean);
   REQUIRE(off_driven != on_driven);
+}
+
+namespace {
+
+// Message of the SonareException @p call throws, or empty when it returns.
+template <typename Fn>
+std::string refusal_of(Fn&& call) {
+  try {
+    call();
+  } catch (const sonare::SonareException& error) {
+    return error.what();
+  }
+  return {};
+}
+
+bool names_unread_key(const std::string& message, const std::string& key) {
+  return message.find("does not read parameter(s)") != std::string::npos &&
+         message.find(key) != std::string::npos;
+}
+
+}  // namespace
+
+TEST_CASE("the named-processor entry points refuse a key the processor does not read",
+          "[mastering][param_wiring]") {
+  namespace api = sonare::mastering::api;
+  constexpr int kRate = 48000;
+  const std::vector<float> a(4800, 0.1f);
+  const std::vector<float> b(4800, 0.05f);
+  const std::vector<Param> typo{{"gainDb", -6.0}};
+
+  SECTION("mono") {
+    const std::string message = refusal_of(
+        [&] { api::apply_named_processor("utility.gain", a.data(), a.size(), kRate, typo); });
+    CHECK(names_unread_key(message, "gainDb"));
+    CHECK(message.find("utility.gain") != std::string::npos);
+    const auto result =
+        api::apply_named_processor("utility.gain", a.data(), a.size(), kRate, {{"levelDb", -6.0}});
+    CHECK(result.samples.at(100) < 0.06f);
+  }
+  SECTION("stereo") {
+    CHECK(names_unread_key(refusal_of([&] {
+                             apply_named_processor_stereo("dynamics.compressor", a.data(), b.data(),
+                                                          a.size(), kRate, {{"bogus", 1.0}});
+                           }),
+                           "bogus"));
+  }
+  SECTION("effects insert, mono and stereo") {
+    CHECK(names_unread_key(refusal_of([&] {
+                             api::apply_named_processor("effects.modulation.chorus", a.data(),
+                                                        a.size(), kRate, {{"bogus", 1.0}});
+                           }),
+                           "bogus"));
+    CHECK(names_unread_key(refusal_of([&] {
+                             apply_named_processor_stereo("effects.modulation.chorus", a.data(),
+                                                          b.data(), a.size(), kRate,
+                                                          {{"bogus", 1.0}});
+                           }),
+                           "bogus"));
+  }
+  SECTION("pair processors and analyses") {
+    CHECK(names_unread_key(refusal_of([&] {
+                             api::apply_named_pair_processor("match.abCrossfade", a.data(),
+                                                             b.data(), a.size(), kRate,
+                                                             {{"mixx", 0.5}});
+                           }),
+                           "mixx"));
+    CHECK(names_unread_key(refusal_of([&] {
+                             api::apply_named_pair_processor_stereo(
+                                 "match.abCrossfade", a.data(), a.data(), b.data(), b.data(),
+                                 a.size(), kRate, {{"mixx", 0.5}});
+                           }),
+                           "mixx"));
+    CHECK(names_unread_key(refusal_of([&] {
+                             api::analyze_named_pair("match.referenceLoudness", a.data(), b.data(),
+                                                     a.size(), kRate, {{"bogus", 1.0}});
+                           }),
+                           "bogus"));
+    CHECK(names_unread_key(refusal_of([&] {
+                             api::analyze_named_stereo("stereo.monoCompatCheck", a.data(), b.data(),
+                                                       a.size(), kRate, {{"bogus", 1.0}});
+                           }),
+                           "bogus"));
+  }
+}
+
+TEST_CASE("every key the catalog publishes for an offline processor is one it reads",
+          "[mastering][param_wiring]") {
+  namespace api = sonare::mastering::api;
+  namespace json = sonare::util::json;
+  constexpr int kRate = 48000;
+  const std::vector<float> left =
+      sonare::test::generate_sine_samples(440.0f, kRate, kRate / 4, 0.3f);
+  const std::vector<float> right =
+      sonare::test::generate_sine_samples(660.0f, kRate, kRate / 4, 0.3f);
+  const auto stereo_only = api::stereo_processor_names();
+  const json::Value catalog = json::parse_strict(api::processor_catalog_json());
+  std::vector<std::string> defects;
+  std::size_t ran = 0;
+  for (const std::string& id : api::processor_names()) {
+    std::vector<Param> params;
+    for (const json::Value& entry : catalog.as_array()) {
+      if (entry["id"].as_string() != id) continue;
+      // A slot is live only from the crossover count it declares, so its keys go in only then.
+      double cutoffs = 0.0;
+      for (const json::Value& param : entry["params"].as_array()) {
+        const std::string& name = param["name"].as_string();
+        if (name.rfind("cutoff", 0) == 0 && param["default"].is_number()) ++cutoffs;
+      }
+      std::set<std::string> dormant_slots;
+      for (const json::Value& slot : entry["slots"].as_array()) {
+        const json::Value& needed = slot["minCrossoverCutoffs"];
+        const json::Value& parent = slot["parent"];
+        if ((needed.is_number() && needed.as_number() > cutoffs) ||
+            (parent.is_string() && dormant_slots.count(parent.as_string()) != 0)) {
+          dormant_slots.insert(slot["name"].as_string());
+        }
+      }
+      for (const json::Value& param : entry["params"].as_array()) {
+        const std::string& name = param["name"].as_string();
+        if (param["slot"].is_string() && dormant_slots.count(param["slot"].as_string()) != 0) {
+          continue;
+        }
+        // Read only beside a cabinet impulse response, which the offline path cannot carry.
+        if (name == "cabIrSampleRate") continue;
+        const json::Value& fallback = param["default"];
+        if (fallback.is_number()) params.push_back({name, fallback.as_number()});
+        if (fallback.is_bool()) params.push_back({name, fallback.as_bool() ? 1.0 : 0.0});
+      }
+    }
+    const bool stereo = std::find(stereo_only.begin(), stereo_only.end(), id) != stereo_only.end();
+    const std::string message = refusal_of([&] {
+      if (stereo) {
+        apply_named_processor_stereo(id, left.data(), right.data(), left.size(), kRate, params);
+      } else {
+        api::apply_named_processor(id, left.data(), left.size(), kRate, params);
+      }
+    });
+    if (message.find("does not read parameter(s)") != std::string::npos) defects.push_back(message);
+    if (message.empty()) ++ran;
+  }
+  for (const std::string& defect : defects) UNSCOPED_INFO(defect.substr(0, 160));
+  CHECK(defects.empty());
+  CHECK(ran >= 60);
 }

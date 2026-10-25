@@ -90,6 +90,7 @@ def test_pair_analysis_results(name: str, typed: str) -> None:
     ],
 )
 def test_stereo_analysis_results(name: str, typed: str) -> None:
-    params = {"highHz": 10000.0}
+    # Only the log-band analysis reads the band ceiling; the plain check refuses it.
+    params = {"highHz": 10000.0} if name.endswith("LogBands") else None
     result = json.loads(libsonare.mastering_stereo_analyze(name, SOURCE, REFERENCE, SR, params))
     _assert_matches(result, getattr(libsonare, typed), name)

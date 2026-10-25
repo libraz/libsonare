@@ -366,6 +366,18 @@ inline ParamMap make_map(const std::vector<Param>& params) {
   return map;
 }
 
+/// @brief Refuses the supplied keys @p name never read, naming each one; no-op when empty.
+inline void refuse_unread_params(const std::string& name, const std::vector<std::string>& keys) {
+  if (keys.empty()) return;
+  std::string joined;
+  for (const std::string& key : keys) {
+    if (!joined.empty()) joined += ", ";
+    joined += key;
+  }
+  throw SonareException(ErrorCode::InvalidParameter,
+                        name + " does not read parameter(s): " + joined);
+}
+
 inline float f(const ParamMap& params, const char* key, float default_value) {
   params.note_kind(key, ParamKind::Number);
   params.note_default(key, static_cast<double>(default_value));
