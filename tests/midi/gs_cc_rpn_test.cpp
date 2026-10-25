@@ -151,6 +151,20 @@ double frequency_in(const std::vector<float>& buf, size_t from, size_t to) {
   return kOutRate * static_cast<double>(cycles) / (last - first);
 }
 
+/// @p buf through two one-pole lowpasses at @p corner_hz.
+std::vector<float> smoothed(const std::vector<float>& buf, double corner_hz) {
+  const double a = std::exp(-kTwoPi * corner_hz / kOutRate);
+  double y1 = 0.0;
+  double y2 = 0.0;
+  std::vector<float> out(buf.size());
+  for (size_t i = 0; i < buf.size(); ++i) {
+    y1 = (1.0 - a) * buf[i] + a * y1;
+    y2 = (1.0 - a) * y1 + a * y2;
+    out[i] = static_cast<float>(y2);
+  }
+  return out;
+}
+
 /// A part's note-on frequency spread, for the vibrato positive control.
 double frequency_spread(const std::vector<float>& buf, size_t from) {
   double min_hz = 1e9;
@@ -344,8 +358,9 @@ TEST_CASE("portamento reaches the synth fallback voices too", "[midi][sf2][gs]")
     note_on(player, 0, kNoteC5);
     return render(player, 48000);
   };
-  const std::vector<float> gliding = run(true);
-  const std::vector<float> plain = run(false);
+  // A square's upper partials cross zero inside each period; smoothing leaves one crossing.
+  const std::vector<float> gliding = smoothed(run(true), 700.0);
+  const std::vector<float> plain = smoothed(run(false), 700.0);
   const double early_glide = frequency_in(gliding, 0, 2400);
   const double early_plain = frequency_in(plain, 0, 2400);
   const double late_glide = frequency_in(gliding, 33600, 48000);
