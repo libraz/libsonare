@@ -1556,6 +1556,10 @@ const GateRow kEngineGates[] = {
     {"modal.vel_to_brightness", [](const GateSite&) { return equals("malletMs", 0); }},
     {"modal.mallet_vel_exp", [](const GateSite&) { return above("malletMs", 0); }},
     {"modal.contact_ms", [](const GateSite&) { return above("contact", 0); }},
+    // A mode slot sounds only below the mode count.
+    {"modal.modes.ratio", [](const GateSite& s) { return above("numModes", s.index); }},
+    {"modal.modes.gain", [](const GateSite& s) { return above("numModes", s.index); }},
+    {"modal.modes.decay_scale", [](const GateSite& s) { return above("numModes", s.index); }},
     // Karplus-Strong: the pick key track scales a pick position that has to be there, the hand
     // damps only the halo bank, and the air mode belongs to the guitar body the wrapper selects.
     {"ks.pick_position_per_octave", [](const GateSite&) { return above("pickPosition", 0); }},

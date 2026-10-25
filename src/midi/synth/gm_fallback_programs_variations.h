@@ -168,12 +168,10 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.vibraphone_wide.drive = 0.190983f;
   o.vibraphone_wide.modal.contact = 1.67935f;
   o.vibraphone_wide.modal.contact_ms = 0.812739f;
+  // The module's bars ring shorter than the capital's reference: 5 s at A4.
+  o.vibraphone_wide.modal.decay_s = 5.0f;
   o.vibraphone_wide.modal.decay_stretch = 0.212461f;
-  o.vibraphone_wide.modal.modes[2].decay_scale = 0.724388f;
-  o.vibraphone_wide.modal.modes[2].ratio = 6.02199f;
   o.vibraphone_wide.modal.release_damp_s = 0.744614f;
-  o.vibraphone_wide.modal.strike_brightness = 0.822949f;
-  o.vibraphone_wide.modal.vel_to_brightness = 0.788197f;
   o.vibraphone_wide.resonance_q = 1.05271f;
   o.marimba_wide = o.marimba;
   o.marimba_wide.amp_env.attack_ms = 0.5f;

@@ -166,8 +166,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   cl.gain = 1.3f;
 
   // Modal mallets: the realism is the mode-ratio data — uniform bar
-  // (glockenspiel) 1:2.756:5.404:8.933 vs deep-arch tuned bar (marimba /
-  // vibraphone) 1:4:10. All ring as one-shot-ish bars gated by note-off.
+  // (glockenspiel) 1:2.756:5.404:8.933 vs deep-arch tuned bar (marimba) 1:4:10;
+  // the vibraphone carries its reference's own sixteen. All ring as one-shot-ish
+  // bars gated by note-off.
   NativeSynthPatch bar{};
   bar.mode = SynthEngineMode::kModal;
   bar.amp_env = fallback_env(0.5f, 0.0f, 1.0f, 350.0f);
@@ -200,13 +201,32 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
 
   NativeSynthPatch& vb = o.vibraphone;
   vb = bar;
-  vb.modal.num_modes = 3;
+  // The reference's own bar modes, read off its strike at every key: the third
+  // sits at 9.73, not 10. Gains and decay scales are each mode's level 20 ms in
+  // and its 60 dB fall, the fundamental's t60 8 s at A4.
+  vb.modal.num_modes = 16;
   vb.modal.modes[0] = {1.0f, 1.0f, 1.0f};
-  vb.modal.modes[1] = {4.0f, 0.5f, 0.5f};
-  vb.modal.modes[2] = {10.0f, 0.25f, 0.3f};
-  vb.modal.decay_s = 5.0f;
+  vb.modal.modes[1] = {4.0f, 0.2661f, 0.42f};
+  vb.modal.modes[2] = {6.83f, 0.0285f, 0.7f};
+  vb.modal.modes[3] = {9.73f, 0.5129f, 0.04f};
+  vb.modal.modes[4] = {12.86f, 0.8511f, 0.05f};
+  vb.modal.modes[5] = {15.38f, 0.1445f, 0.025f};
+  vb.modal.modes[6] = {18.66f, 0.1161f, 0.04f};
+  vb.modal.modes[7] = {21.8f, 0.1862f, 0.025f};
+  vb.modal.modes[8] = {22.88f, 0.2512f, 0.025f};
+  vb.modal.modes[9] = {30.0f, 0.0989f, 0.025f};
+  vb.modal.modes[10] = {31.5f, 0.0596f, 0.02f};
+  vb.modal.modes[11] = {36.81f, 0.1084f, 0.02f};
+  vb.modal.modes[12] = {38.32f, 0.1175f, 0.025f};
+  vb.modal.modes[13] = {45.43f, 0.5559f, 0.02f};
+  vb.modal.modes[14] = {46.52f, 0.3467f, 0.02f};
+  vb.modal.modes[15] = {55.45f, 0.6683f, 0.025f};
+  vb.modal.decay_s = 8.0f;
   vb.modal.decay_stretch = 0.4f;
-  vb.modal.strike_brightness = 0.75f;
+  // Hertzian contact: 0.25 ms at full velocity, lengthening as v^-0.95, puts the
+  // 4-8 kHz share of the first 120 ms on the reference's at every velocity layer.
+  vb.modal.mallet_ms = 0.25f;
+  vb.modal.mallet_vel_exp = 0.95f;
   vb.amp_env.release_ms = 2098.01f;
   // The mallet's direct radiation: a fit with it free beat one holding it at 0
   // on held-out notes (9.94 against 10.74) and on the gate; alone on these values
@@ -219,6 +239,10 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   vb.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kAmpGain, 0.35f};
   vb.amp_env.attack_ms = 0.166825f;
   vb.amp_env.sustain = 0.809017f;
+  // The upper modes widen the peak span at full velocity; 1.88 puts it back on
+  // the reference's, the gain holding the velocity-100 level.
+  vb.modal.velocity_exponent = 1.88f;
+  vb.gain = 0.6802f;
 
   NativeSynthPatch& mr = o.marimba;
   mr = bar;

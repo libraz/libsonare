@@ -31,7 +31,7 @@
 
 namespace sonare::midi::synth {
 
-inline constexpr int kMaxModalModes = 8;
+inline constexpr int kMaxModalModes = 16;
 
 /// One resonator mode of a modal patch.
 struct ModalMode {
