@@ -1,71 +1,115 @@
 # Changelog
 
-## Unreleased
+## v1.10.0 (2026-10-26)
+
+This release tightens argument validation on every surface: values that used to be clamped, ignored or read as a default are refused by name, a refused argument is a `RangeError` / `SonareValueError` / `TypeError` rather than a coded `InvalidParameter`, and failures caused by earlier configuration or a released object are `InvalidState`. The synthesizer gains a subtractive engine section, LFO shapes, a 4-pole state-variable filter, 16 modal modes and many physical-engine parameters, and the GM fallback bank's physical voices are revoiced. It also adds offline rendering through an existing playback renderer and a 32-lane track cap, and analysis windows, tempo and key choices, effect tails and project bounces give different results. No ABI counter moved since v1.9.1; `SonareSynthPatch` is struct version 10 with its 64-bit size unchanged.
 
 ### Upgrade notes
 
 #### Removed and renamed
 
-- Python `mel_to_stft` / `mel_result_to_stft` return `StftMagnitudeResult` (`n_bins`, `n_frames`, `magnitude`) and `mfcc_to_mel` / `mfcc_result_to_mel` return `MelPowerResult` (`n_mels`, `n_frames`, `power`), matching the WASM types and the fields of Node `InverseStftResult` / `InverseMelResult`; `InverseResult` and its `rows` / `data` fields are removed.
-- The WASM `/worklet` shared-memory rings carry a per-slot state word and a protocol version: the meter ring is protocol 3 and the spectrum, scope and telemetry rings are protocol 1. A ring must be created with its `createSonare*RingBuffer` helper, which fills in the descriptors the processors now check, and the worklet and main-thread code must come from the same package version; a buffer sized by hand is refused when the processor is constructed.
-- Python `RealtimeEngine.process`, `process_with_monitor` and `render_offline`, and `EngineBounceResult.interleaved`, return float32 NumPy arrays instead of lists. The Python command line passes whole buffers as arrays too.
-- `resolve*AutomationId` raises `RangeError` on Node and WASM for an unknown track, insert, bus or parameter instead of returning `-1`; Python raises `SonareValueError` instead of a `SonareError` coded `InvalidParameter`. Python `RealtimeEngine.resolve_instrument_automation_id` takes `(destination_id, param_name)` like the other `resolve_*_automation_id` methods, and `destination_id` no longer defaults to 0.
-- `recurrence_to_lag` (Node and WASM `segmentRecurrenceToLag`) uses librosa's lag-by-time layout and defaults to `pad=True` (`pad: true`), returning `2n × n` where a default call returned `n × n` (`n × n` unpadded; a padded call returned `n × (2n−1)`); `lag_to_recurrence` (`segmentLagToRecurrence`) takes either height. The C entry keeps its explicit `pad` argument.
-- Python raises `TypeError` instead of `SonareValueError` when a numeric argument or field receives a non-number, such as a string or a bool, so an `except ValueError` no longer catches it; a fractional, non-finite or out-of-range number is still `SonareValueError`.
-- The WASM mixer no longer accepts `'pan'` as a pan-mode alias; use `'stereo-pan'`.
-- In C++, `AutomationEngine::bind_target`, `unbind_target` and `clear_targets` are no longer `noexcept`; they wait until the audio thread has stopped reading the previous target table. An `AudioDeviceCallback::render` must clear its output planes, because the CoreAudio backend no longer zeroes them first. `NnlsChromaConfig::whitening_window` is removed, and `FormantWarpConfig` defaults to `lpc_order = 0` (derived from the rate) and `frame_in_time = true`.
-- A WASM SAB command record is 40 bytes and carries the sequence number of the last sync posted before it; the processor holds the command until that sync has been processed (applied or refused), so a command no longer overtakes the setup it depends on.
-- `Project` methods report a refused argument (an out-of-range value, an unknown or zero id, an unknown name) as `RangeError` on Node and WASM and `SonareValueError` on Python, instead of a `SonareError` coded `InvalidParameter`; `transcribe` does the same. A refusal caused by the stored project rather than the call stays a coded `SonareError`: bouncing a project whose derived length overflows or whose compiled arrangement does not fit the engine, and exporting a clip that expands past the SMF or MIDI Clip File limits, now return `INVALID_STATE` (C: `SONARE_ERROR_INVALID_STATE`) instead of `INVALID_PARAMETER`. Python's `SonareValueError` is a `SonareError` subclass, so a Python `except SonareError` still catches these; on Node and WASM a handler for `SonareError` no longer does.
-- `RealtimeEngine` follows the same rule: a refused argument (an out-of-range value, an unknown or wrong-kind track, bus, insert, destination or parameter, a malformed patch or strip value, an unknown `engineParams` (Python `engine_params`) key) is `RangeError` on Node and WASM and `SonareValueError` on Python. A refusal caused by what earlier calls configured is a coded `INVALID_STATE` (C: `SONARE_ERROR_INVALID_STATE`) on every surface: a full insert-automation, strip, MIDI CC, external destination or controller binding table, a master-strip setter before a master strip is configured, a bus or lane change that earlier routing, pan or retained delay forbids, a full sidechain table or a sidechain plan earlier routing refuses, and binding an instrument to a full rack or one that cannot take SysEx already scheduled. A full MIDI CC table and a full instrument rack were `OUT_OF_MEMORY`; a full controller-binding, external-destination or sidechain table, a refused sidechain plan and an instrument refusing SysEx already scheduled were `INVALID_PARAMETER`. An allocation failure while a mixer setter (track lanes, sends, output bus, buses, track, bus or master strip) stages its change is `OUT_OF_MEMORY` on every surface; it was reported as a refused argument. A re-`prepare` whose bound instrument refuses a SysEx scheduled earlier, and `applyProjectTimeline` (`sonare_engine_apply_project_timeline`) when earlier engine configuration refuses the timeline's track lanes, are `INVALID_STATE` too; both were `INVALID_PARAMETER`.
+- Python `mel_to_stft` / `mel_result_to_stft` return `StftMagnitudeResult` (`n_bins`, `n_frames`, `magnitude`) and `mfcc_to_mel` / `mfcc_result_to_mel` return `MelPowerResult` (`n_mels`, `n_frames`, `power`), matching WASM and Node `InverseStftResult` / `InverseMelResult`; `InverseResult` and its `rows` / `data` fields are removed.
+- The WASM `/worklet` shared-memory rings carry a per-slot state word and a protocol version (meter ring 3; spectrum, scope and telemetry rings 1), and the telemetry ring header counts records dropped while a reader held their slot in a `lost` word.
+- Create each WASM ring with its `createSonare*RingBuffer` helper and load worklet and main-thread code from the same package version; a hand-sized buffer is refused when the processor is constructed.
+- A WASM SAB command record is 40 bytes and carries the sequence number of the last sync posted before it; the processor holds the command until that sync is processed.
+- Python `RealtimeEngine.process`, `process_with_monitor`, `render_offline` and `EngineBounceResult.interleaved` return float32 NumPy arrays instead of lists, and the Python command line passes buffers as arrays.
+- `resolve*AutomationId` raises `RangeError` on Node and WASM for an unknown track, insert, bus or parameter instead of returning `-1`, and Python raises `SonareValueError` instead of an `InvalidParameter` `SonareError`.
+- Python `RealtimeEngine.resolve_instrument_automation_id` takes `(destination_id, param_name)` like the other `resolve_*_automation_id` methods, and `destination_id` no longer defaults to 0.
+- `recurrence_to_lag` (Node and WASM `segmentRecurrenceToLag`) uses librosa's lag-by-time layout and defaults to `pad=True` (`pad: true`), returning `2n × n` (`n × n` unpadded) where a default call returned `n × n` and a padded one `n × (2n−1)`.
+- `lag_to_recurrence` (`segmentLagToRecurrence`) takes either height, and the C entry keeps its explicit `pad`.
+- Python raises `TypeError` instead of `SonareValueError` when a numeric argument or field gets a non-number such as a string or bool, so `except ValueError` no longer catches it; a fractional, non-finite or out-of-range number stays `SonareValueError`.
+- The WASM mixer no longer accepts the `'pan'` pan-mode alias; use `'stereo-pan'`.
+- `Project` methods and `transcribe` report a refused argument (out-of-range value, unknown or zero id, unknown name) as `RangeError` on Node and WASM and `SonareValueError` on Python instead of an `InvalidParameter` `SonareError`.
+- Python's `SonareValueError` subclasses `SonareError`, so `except SonareError` still catches these refusals, while a Node or WASM `SonareError` handler no longer does.
+- Bouncing a project whose derived length overflows or whose compiled arrangement does not fit the engine, and exporting a clip past the SMF or MIDI Clip File limits, return `INVALID_STATE` (C `SONARE_ERROR_INVALID_STATE`) instead of `INVALID_PARAMETER`.
+- `RealtimeEngine` reports a refused argument (out-of-range value, unknown or wrong-kind track, bus, insert, destination or parameter, malformed patch or strip value, unknown `engineParams` / `engine_params` key) as `RangeError` on Node and WASM and `SonareValueError` on Python.
+- A `RealtimeEngine` refusal caused by earlier configuration is a coded `INVALID_STATE` on every surface, such as a full insert-automation, strip, MIDI CC, external-destination, controller-binding or sidechain table.
+- The same `INVALID_STATE` covers a master-strip setter before a master strip exists, a bus or lane change that earlier routing, pan or retained delay forbids, a refused sidechain plan, and binding an instrument to a full rack or one that cannot take already-scheduled SysEx.
+- Of those, a full MIDI CC table and a full instrument rack were `OUT_OF_MEMORY`, and the full controller-binding, external-destination and sidechain tables, the refused sidechain plan and the SysEx refusal were `INVALID_PARAMETER`.
+- A re-`prepare` whose bound instrument refuses earlier-scheduled SysEx, and `applyProjectTimeline` (`sonare_engine_apply_project_timeline`) when earlier configuration refuses the timeline's track lanes, return `INVALID_STATE` instead of `INVALID_PARAMETER`.
+- An allocation failure while a mixer setter (track lanes, sends, output bus, buses, track, bus or master strip) stages its change is `OUT_OF_MEMORY` on every surface instead of a refused argument.
+- In C++, `AutomationEngine::bind_target`, `unbind_target` and `clear_targets` are no longer `noexcept` and wait until the audio thread stops reading the previous target table.
+- In C++, an `AudioDeviceCallback::render` must clear its output planes, since the CoreAudio backend no longer zeroes them.
+- In C++, `NnlsChromaConfig::whitening_window` is removed, and `FormantWarpConfig` defaults to `lpc_order = 0` (derived from the rate) and `frame_in_time = true`.
 
 #### Now refused
 
-- The one-shot named-processor calls (`masteringProcess` and its stereo, pair and analysis forms on Node and WASM, `mastering_process` and its siblings in Python, `sonare_mastering_apply_processor` and its siblings in C) refuse a parameter the processor does not read, naming it, instead of ignoring it, as building an insert already did: `utility.gain` with `gainDb` (the key is `levelDb`) used to return the input unchanged. A multiband band's keys are read only when enough crossover cutoffs make the band live, and an amp sim's `cabIrSampleRate` only beside a cabinet impulse response.
-- `split_clip`, `trim_clip` and `move_clip` (C: `sonare_project_*`) refuse an unknown clip id, and `move_clip` an unknown destination track, with `INVALID_PARAMETER` (Node and WASM `RangeError`, Python `SonareValueError`) before the edit, like the other clip setters; they returned `INVALID_STATE`.
-- Every `SynthPatch` field `synthPatchParamInfo()` (Python: `synth_patch_param_info()`) publishes a range for is refused, naming the field, when it is non-finite or outside that range (`synth patch field 'cutoffHz': out of range [10, 22000]`): `INVALID_PARAMETER` on the C ABI, `RangeError` on Node and WASM, `SonareValueError` on Python. These values were clamped (`gain` was already refused). This includes `unison`, `polyphony`, `sampleLevel` and `sampleStartOffset`, and an explicit zero where the range starts above it (`ampReleaseMs`, `filterReleaseMs`, `driftRateHz`). A C `num_mod_routings` above 8 or below 0 is refused instead of capped at 8 or read as none.
-- Loading a project (`Project.fromJson`; C: `sonare_project_deserialize`; Python likewise) refuses duplicate take ids, an active take that does not exist, takes on a MIDI track, and comp segments that overlap, run past the clip end or carry a negative crossfade; such a project used to load and skip the clip at compile time. The C++ `Project::add_clip` applies the same rules. A take whose source is missing or of the wrong kind still loads with a warning.
-- A `SampleBank` zone with a non-finite tune, gain or pan, or a tune that overflows when added to the sample's own tuning, is refused and the bank is left unchanged; an infinite pan used to clamp.
-- Silence trimming and splitting refuse a non-finite `top_db` on the C ABI and Node, as WASM and Python already did (zero and negative values were already refused), and input longer than `INT_MAX` samples. Note segmentation refuses a negative or non-finite `segmentationThresholdCents` / `minNoteMs` (Python `segmentation_threshold_cents` / `min_note_ms`) on every surface.
+- The one-shot named-processor calls (`masteringProcess` and its stereo, pair and analysis forms; Python `mastering_process` and siblings; C `sonare_mastering_apply_processor` and siblings) refuse a parameter the processor does not read, naming it; `utility.gain` with `gainDb` (the key is `levelDb`) used to return the input unchanged.
+- A multiband band's keys are read only when enough crossover cutoffs make the band live, and an amp sim's `cabIrSampleRate` only beside a cabinet impulse response.
+- `split_clip`, `trim_clip` and `move_clip` (C `sonare_project_*`) refuse an unknown clip id, and `move_clip` an unknown destination track, with `INVALID_PARAMETER` (Node and WASM `RangeError`, Python `SonareValueError`) instead of `INVALID_STATE`.
+- Every `SynthPatch` field with a range in `synthPatchParamInfo()` (`synth_patch_param_info()`) is refused by name when non-finite or out of range instead of clamped (`INVALID_PARAMETER`, `RangeError`, `SonareValueError`), including `unison`, `polyphony`, `sampleLevel`, `sampleStartOffset` and an explicit zero below the range (`ampReleaseMs`, `filterReleaseMs`, `driftRateHz`).
+- A C `num_mod_routings` above 8 or below 0 is refused instead of capped at 8 or read as none, as is a negative `struct_version` on a C synth patch or SF2 instrument config.
+- Loading a project (`Project.fromJson`, C `sonare_project_deserialize`, Python likewise) refuses duplicate take ids, a missing active take, takes on a MIDI track, and comp segments that overlap, run past the clip end or carry a negative crossfade.
+- C++ `Project::add_clip` applies the same take and comp rules, and a take whose source is missing or of the wrong kind still loads with a warning.
+- Loading a project or mixer scene refuses a container or array element of the wrong type, naming its path, instead of reading it as empty or skipping it.
+- A `SampleBank` zone with a non-finite tune, gain or pan, or a tune that overflows with the sample's own tuning, is refused and the bank left unchanged.
+- Silence trimming and splitting refuse a non-finite `top_db` on the C ABI, as Node, WASM and Python already did, and input longer than `INT_MAX` samples.
+- Note segmentation refuses a negative or non-finite `segmentationThresholdCents` / `minNoteMs` (`segmentation_threshold_cents` / `min_note_ms`) on every surface.
 - Pre-emphasis and de-emphasis refuse a non-finite coefficient or initial value on the C ABI, and a non-finite coefficient on Node, as WASM and Python already did.
-- `PlaybackRenderer.setHeadOrientation` on Node and WASM refuses a non-finite angle, or one beyond the 32-bit float range, with a `RangeError` (a non-number with a `TypeError`; Node also refuses `null` for `pitchDeg` / `rollDeg`), as Python already did; such angles used to be ignored.
-- The WASM voice-changer, mixer, engine and playback worklet processors run at the `AudioWorkletGlobalScope` sample rate: a `sampleRate` option that differs is refused with `RangeError`, and outside a worklet scope the option is required. The voice-changer and mixer processors used to run at 48000 whatever the scope rate, and the playback processor and a directly built engine processor fell back to 48000 when no rate was given.
-- Hum detection and adaptive dehum (offline, linked and streaming) refuse a `fundamentalHz` ± `searchRangeHz` window that misses [1 Hz, 0.49 × sample rate], instead of clamping it against reversed bounds.
-- The acoustic room inserts refuse a `materialPreset` outside 0–5 instead of ignoring it.
-- The `{ result }` request forms of `melToStft`, `melToAudio`, `mfccToMel` and `mfccToAudio` refuse unknown keys on Node and WASM. WASM also refuses unknown keys on the noise band bins and the dereverb room config, type-checks the scalar unit conversions (`hzToMel`, `framesToTime`, …, the `dbToPower` `ref`) and requires `phaseVocoder`'s `rate`.
-- The Python command line refuses an integer option beyond int32 or a float option beyond float32 as a usage error, and the native command line refuses any text, config or HRTF file larger than 64 MiB, the cap its audio reads already used.
-- A negative `struct_version` on a C synth patch or SF2 instrument config is refused.
-- `voiceChange` (Python `voice_change`, C `sonare_voice_change`) refuses a relative-mode `formantFactor` outside [0.55, 1.65] instead of clamping it. Every surface reports a refused factor as `RangeError` / `SonareValueError` in both formant modes.
-- The realtime voice changer (and the `voice.changer` insert, including its automation) refuses a configuration value outside its documented range on every surface instead of clamping it. The error names the field, its range and the value, and the previous configuration stays in effect.
-- Realtime automation of mastering and dynamics processors (compressors, gates, expanders, de-esser, limiters and maximizers, EQs, saturation, spectral and stereo processors, multiband wrappers) and of a mixer bus fader refuses a value its configuration would refuse instead of clamping it: the parameter reports not applied and the processor keeps its previous value. A value the configuration accepts is applied exactly, including ones the live path used to raise or lower (for example a de-esser frequency below 1 Hz). Paired bounds (adaptive-release minimum and maximum release, its low and high crest factor, and the spectral-shaper band edges) refuse a write that would cross the other bound instead of reordering them. Live `ceilingDb` automation on the brickwall and true-peak limiters refuses a non-finite value or one above 0 dBFS.
-- Effects inserts (chorus, flanger, phaser, ensemble, wah, auto-wah, rotary, pitch shifter, ring modulator, stereo delay, vowel filter and the Dattorro, velvet, FDN and convolution reverbs) refuse a configuration value outside its range, or a non-finite one, when constructed, configured or automated, instead of clamping it; the error names the processor, the field and its range. Mixer pan outside [-1, 1] and width outside [0, 2] are refused the same way in scene JSON, on the C mixer strip, on track lanes, on the project track pan (`setTrackPan`, C `sonare_project_set_track_pan`), in pan and width automation breakpoints, in a loaded project's `tracks[].pan` and by the native `mix-strip --pan` / `--width`, as is a lane fader outside the fader range. The pitch shifter's live window and pre-delay accept the same ranges as its configuration.
-- The C ABI refuses an unknown enum ordinal instead of mapping it to a default: synth modulation sources and destinations (and a non-finite depth, or one beyond ±9600 in the destination's units), sample loop modes and key tracks, `norm_type`, the room-estimate mode, the late-reverb model, the material preset, sample-bank loop modes, pitch classes and modes, vocal-edit target, formant and merge modes, graph connection mixing, dither and automation curve shapes. The WASM equivalents refuse the same values.
-- A negative seek position and an enabled punch range of zero length are refused on every surface.
-- Mixer true-peak meter oversampling is 4 or 8. Adding a strip (C `sonare_mixer_add_strip_ex`, `addStrip` / `add_strip` on Node, WASM and Python) also takes 0 for the default (4); scene JSON (`truePeakOversample`, now an enum in the schema) and WASM `Mixer.configureMeter` take only 4 or 8. Any other value is refused; mastering loudness oversampling is unchanged.
-- Loading a project or a mixer scene refuses a container or array element of the wrong type, naming its path, instead of reading it as empty or skipping it.
-- Mastering processors (clippers, waveshaper, bitcrusher, amp sim, tube, tape, transformer, exciter, de-esser, air band, presence enhancer) refuse a block with more channels than `prepare()` was given, instead of growing state on the audio thread; the DC blocker refuses channels it was not prepared for.
-- AdaptiveRelease configurations refuse a non-finite value in any field; Maximizer and SoftKneeMax refuse a non-finite ceiling, lookahead, release or knee (an input gain of `-inf` dB is still accepted).
-- The graphic EQ (`eq.graphic`) refuses a negative or non-finite `q` instead of reading it as 0, the gain-derived default; realtime automation of `q` reports the value as not applied.
-- Node `StreamingEqualizer` refuses a fractional, NaN or oversized `maxBlockSize` or slope.
-- WASM refuses ring dimensions, `scopeBands` above 64, a fractional Punch range, negative or NaN `seekSeconds`, out-of-range bigint commands (`sendCommand` returns `false`), bad `setMeterInterval` messages, and malformed `waveformPeakPyramid` levels, `setClipWarpMode` values and chord extensions, instead of rounding, clamping or ignoring them.
-- Vocal-edit operations refuse an omitted sample position on Node, WASM and Python instead of reading it as sample 0; an explicit 0 is position 0.
+- `PlaybackRenderer.setHeadOrientation` on Node and WASM refuses a non-finite or beyond-float32 angle with `RangeError` and a non-number with `TypeError` (Node also `null` for `pitchDeg` / `rollDeg`), as Python did, instead of ignoring it.
 - The Node `PlaybackRenderer` constructor and `renderPlayback` refuse an `hrtf` option that is not an `HrtfSet` with `TypeError`.
-- FFmpeg-enabled builds refuse input whose data names other inputs (concat/ffconcat, HLS, DASH, image sequences) and no longer accept MXF and a few niche demuxers (Audible aa/aax, codec2, G.722/G.729, LAF, OSQ, APAC, Westwood audio, SDS, SMJPEG, MTV).
-- In C++: a non-finite clip start, source offset or loop length, or an infinite length, in `AddClip`; non-finite Gate, Expander, UpwardCompressor, UpwardExpander and MultibandImager settings (Gate's `range_db = -inf` is still accepted); non-finite Compressor, DeEsser, TransientShaper, VocalRider, DynamicEq, AutoPan and StereoBalance settings, a non-finite Tape or Waveshaper bias, an infinite SoftClipper ceiling, and a non-finite or sub-hertz sample rate in the spectral processors' `prepare`; a non-finite or non-positive dynamics or timbre analyzer `window_sec`; a `PartitionedConvolver` partition size above `INT_MAX / 2` or an IR longer than `INT_MAX`; `match_eq_bands` / `match_eq_bands_from_curve` given the Q, gain and smoothing values the match EQ configuration refuses, or a curve with non-finite values or decreasing frequencies; `compile_pitch_plan` given the malformed pitch targets a vocal-edit session refuses; and `warp_to_map` with a span that is non-finite or longer than `INT_MAX` samples.
+- The WASM voice-changer, mixer, engine and playback worklet processors run at the `AudioWorkletGlobalScope` sample rate, refusing a differing `sampleRate` option with `RangeError` and requiring it outside a worklet scope; they used to run at, or fall back to, 48000.
+- Hum detection and adaptive dehum (offline, linked and streaming) refuse a `fundamentalHz` ± `searchRangeHz` window outside [1 Hz, 0.49 × sample rate] instead of clamping it.
+- The acoustic room inserts refuse a `materialPreset` outside 0–5 instead of ignoring it.
+- The `{ result }` request forms of `melToStft`, `melToAudio`, `mfccToMel` and `mfccToAudio` refuse unknown keys on Node and WASM.
+- WASM refuses unknown keys on the noise band bins and the dereverb room config, type-checks the scalar unit conversions (`hzToMel`, `framesToTime`, …, the `dbToPower` `ref`) and requires `phaseVocoder`'s `rate`.
+- WASM refuses bad ring dimensions, `scopeBands` above 64, a fractional Punch range, negative or NaN `seekSeconds` and out-of-range bigint commands (`sendCommand` returns `false`).
+- WASM refuses bad `setMeterInterval` messages and malformed `waveformPeakPyramid` levels, `setClipWarpMode` values and chord extensions, instead of rounding, clamping or ignoring them.
+- Node `StreamingEqualizer` refuses a fractional, NaN or oversized `maxBlockSize` or slope.
+- The Python command line refuses an integer option beyond int32 or a float option beyond float32 as a usage error.
+- The native command line refuses a text, config or HRTF file larger than 64 MiB, the cap its project and MIDI reads already used.
+- `voiceChange` (`voice_change`, `sonare_voice_change`) refuses a relative-mode `formantFactor` outside [0.55, 1.65] instead of clamping it, and every surface reports a refused factor as `RangeError` / `SonareValueError` in both formant modes.
+- The realtime voice changer and the `voice.changer` insert, including its automation, refuse an out-of-range configuration value by name instead of clamping it, keeping the previous configuration.
+- Realtime automation of mastering and dynamics processors (compressors, gates, expanders, de-esser, limiters, maximizers, EQs, saturation, spectral, stereo and multiband processors) and of a mixer bus fader refuses a value the configuration would refuse instead of clamping it, reporting it not applied.
+- An automated value the configuration accepts is applied exactly, including ones the live path used to move (for example a de-esser frequency below 1 Hz).
+- Automated paired bounds (adaptive-release minimum and maximum release and low and high crest factor, spectral-shaper band edges) refuse a write that would cross the other bound instead of reordering them.
+- Live `ceilingDb` automation on the brickwall and true-peak limiters refuses a non-finite value or one above 0 dBFS.
+- Effects inserts (chorus, flanger, phaser, ensemble, wah, auto-wah, rotary, pitch shifter, ring modulator, stereo delay, vowel filter, and the Dattorro, velvet, FDN and convolution reverbs) refuse an out-of-range or non-finite value by name when constructed, configured or automated, instead of clamping it.
+- The pitch shifter's live window and pre-delay take its configuration ranges.
+- Mixer pan outside [-1, 1] and width outside [0, 2] are refused in scene JSON, the C mixer strip, track lanes, `setTrackPan` (C `sonare_project_set_track_pan`), pan and width automation breakpoints, a loaded project's `tracks[].pan` and native `mix-strip --pan` / `--width`.
+- A lane fader outside the fader range is refused.
+- Mixer true-peak meter oversampling is 4 or 8: adding a strip (`sonare_mixer_add_strip_ex`, `addStrip` / `add_strip`) also takes 0 for the default 4, while scene JSON `truePeakOversample` (now a schema enum) and WASM `Mixer.configureMeter` take only 4 or 8; mastering loudness oversampling is unchanged.
+- Mastering processors (clippers, waveshaper, bitcrusher, amp sim, tube, tape, transformer, exciter, de-esser, air band, presence enhancer) refuse a block with more channels than `prepare()` was given, and the DC blocker refuses channels it was not prepared for.
+- AdaptiveRelease refuses a non-finite value in any field, and Maximizer and SoftKneeMax a non-finite ceiling, lookahead, release or knee (a `-inf` dB input gain is still accepted).
+- The graphic EQ (`eq.graphic`) refuses a negative or non-finite `q` instead of reading it as 0, and automating `q` to such a value reports it not applied.
+- The C ABI and WASM refuse an unknown enum ordinal instead of mapping it to a default for synth modulation sources and destinations (and a non-finite depth or one beyond ±9600 destination units), sample loop modes and key tracks, and `norm_type`.
+- The C ABI and WASM likewise refuse an unknown ordinal for the room-estimate mode, late-reverb model, material preset, sample-bank loop modes, pitch classes and modes, vocal-edit target, formant and merge modes, graph connection mixing, dither and automation curve shapes.
+- A negative seek position and an enabled zero-length punch range are refused on every surface.
+- Vocal-edit operations refuse an omitted sample position on Node, WASM and Python instead of reading it as sample 0.
+- FFmpeg-enabled builds refuse input whose data names other inputs (concat/ffconcat, HLS, DASH, image sequences).
+- FFmpeg-enabled builds load only demuxers on an audio and A/V allowlist (WAV, FLAC, MP3, Ogg, MP4/MOV, Matroska and similar), so MXF and every demuxer outside it, for example Audible aa/aax, codec2 or SMJPEG, no longer loads.
+- In C++, `AddClip` refuses a non-finite clip start, source offset or loop length or an infinite length, and `warp_to_map` a non-finite span or one longer than `INT_MAX` samples.
+- In C++, Gate, Expander, UpwardCompressor, UpwardExpander, MultibandImager, Compressor, DeEsser, TransientShaper, VocalRider, DynamicEq, AutoPan and StereoBalance refuse non-finite settings (Gate's `range_db = -inf` is still accepted), as do Tape and Waveshaper for a non-finite bias and SoftClipper for an infinite ceiling.
+- In C++, the spectral processors' `prepare` refuses a non-finite or sub-hertz sample rate, the dynamics and timbre analyzers a non-finite or non-positive `window_sec`, and `PartitionedConvolver` a partition size above `INT_MAX / 2` or an IR longer than `INT_MAX`.
+- In C++, `match_eq_bands` / `match_eq_bands_from_curve` refuse the Q, gain and smoothing values the match EQ configuration refuses and a curve with non-finite values or decreasing frequencies, and `compile_pitch_plan` the malformed pitch targets a vocal-edit session refuses.
 
 ### New
 
-- `stereo.stereoBalance` takes a `gain` parameter (linear, at least 0, default 1), applied to both channels after the balance law.
-- `synthEnumTables()` (Python `synth_enum_tables()`) and the C `sonare_synth_enum_names` cover the sample loop modes, sample key tracks and retrigger modes (`SONARE_SYNTH_ENUM_SAMPLE_LOOP_MODE`, `SAMPLE_KEY_TRACK`, `RETRIGGER`), LFO shapes (`LFO_SHAPE`), part rig modes (`PART_RIG_MODE`) and sample-descriptor loop modes (`SAMPLE_DESC_LOOP_MODE`); the tables gain `sampleLoopModes`, `sampleKeyTracks`, `retriggers`, `lfoShapes`, `partRigModes` and `sampleDescLoopModes` (Python `sample_loop_modes`, `sample_key_tracks`, `retriggers`, `lfo_shapes`, `part_rig_modes`, `sample_desc_loop_modes`).
-- Choose the patch's LFO waveform (vibrato and tremolo LFOs), triangle, sine or random, at every destination including the filter route (`lfoShape`, `lfo_shape`; C `SonareSynthLfoShape`).
-- `SonareSynthPatch` is struct version 10: `lfo_shape` sits in the struct's former tail padding on 64-bit targets, so its size there is unchanged; earlier versions are still read.
-- The random LFO shape (`'random'`, `SONARE_SYNTH_LFO_SHAPE_RANDOM`) is a smoothed sample-and-hold that glides to a new value each cycle, seeded per voice so a bounce repeats it, with no spectral line at the LFO rate or its harmonics.
-- `filterModel` / `filter_model` takes `'svf-4-pole'` (`SONARE_SYNTH_FILTER_SVF_4POLE`): two state-variable lowpass sections at the 4th-order Butterworth pole pair, falling 24 dB per octave with no saturation in the path, so a stacked interval stays free of difference tones; resonance raises the second section's Q.
-- The subtractive engine has an engine section of its own, set through `engineParams` / `engine_params`: a second oscillator a fixed interval from the played pitch (`osc2IntervalCents`, `osc2Level`), white noise ahead of the filter (`noiseLevel`), and slow noise modulating the oscillators' amplitude (`noiseAm`), which puts a breath skirt on every partial at the partial's own level. Each is absent at level 0, and `synthEngineParamInfo('subtractive')` (Python `synth_engine_param_info`) lists them.
-- The subtractive engine section also takes a band of white noise added after the filter (`bandNoiseLevel`), between a 2-pole highpass corner (`bandNoiseLowHz`) and a 4th-order lowpass corner (`bandNoiseHighHz`), each given at middle C and following the key by its own fraction (`bandNoiseLowKeyTrack`, `bandNoiseHighKeyTrack`), so a breath floor holds between the partials while the filter tracks the key. It is absent at level 0, and the GM calliope, voice, atmosphere, echoes and goblins programs (82, 85, 99, 102, 101) use it.
-- The subtractive engine section takes a pulse width for the square oscillator (`pulseWidth`, 0.5 the symmetric square) and a share of the second oscillator that joins after the filter rather than through it (`osc2Dry`, 0 all of it filtered). The GM metallic pad (program 93) uses both, as a lowpassed narrow pulse with an unfiltered one over it.
-- The subtractive engine section takes a stereo width for its unison stack (`unisonWidth`, 0 every oscillator centred): each oscillator pans by the width times its detune position, through its own copy of the filter, so one note fills the field rather than sitting at a point while the mono sum stays the centred stack's. The GM warm pad (program 89) uses it, as two saws 6 cents apart, one each side.
-- The bowed string, reed, brass, flute, plucked string, free reed, vocal, modal, subtractive and FM engine sections take a `velocityExponent` through `engineParams` (Python `engine_params`), setting the note-on level curve `(velocity / 127)^exponent` as the Karplus-Strong engine's already did.
-- The physical engines take new `engineParams` keys, each listed by `synthEngineParamInfo()` and leaving the sound as before at its default (all are off except `pipeDetuneCents`, whose default of 4 cents is the detune the organ already applied):
+#### Mastering and repair
+
+- Scale both channels after the balance law with `stereo.stereoBalance`'s new `gain` (linear, at least 0, default 1).
+- Read the min/max range of every effects insert parameter, the room inserts' `materialPreset` (0–5), the equalizer band frequencies and the graphic EQ `q` from the processor parameter descriptors (`capabilityCatalog()` and the param-info calls), matching the ranges those inserts now refuse.
+
+#### Analysis
+
+- Pass a request object to WASM `framesToTime`, `timeToFrames`, `framesToSamples` and `samplesToFrames`, as on Node.
+- Move the feature matrix out of a C++ `Chroma` with `Chroma::release_features()`.
+
+#### MIDI and synthesizer
+
+- Choose the vibrato and tremolo LFO waveform, triangle, sine or random, at every destination including the filter (`lfoShape`, `lfo_shape`; C `SonareSynthLfoShape`).
+- The random shape (`'random'`, `SONARE_SYNTH_LFO_SHAPE_RANDOM`) is a smoothed sample-and-hold seeded per voice, so a bounce repeats it.
+- `SonareSynthPatch` is struct version 10, holding `lfo_shape` in the former tail padding so its 64-bit size is unchanged; earlier versions are still read.
+- Use an unsaturated 24 dB/octave lowpass with `filterModel` / `filter_model` `'svf-4-pole'` (`SONARE_SYNTH_FILTER_SVF_4POLE`), two state-variable sections whose resonance raises the second section's Q.
+- `synthEnumTables()` (`synth_enum_tables()`) and C `sonare_synth_enum_names` cover sample loop modes, sample key tracks, retrigger modes, LFO shapes, part rig modes and sample-descriptor loop modes (`SONARE_SYNTH_ENUM_SAMPLE_LOOP_MODE`, `SAMPLE_KEY_TRACK`, `RETRIGGER`, `LFO_SHAPE`, `PART_RIG_MODE`, `SAMPLE_DESC_LOOP_MODE`).
+- The enum tables gain `sampleLoopModes`, `sampleKeyTracks`, `retriggers`, `lfoShapes`, `partRigModes` and `sampleDescLoopModes` (Python `sample_loop_modes`, `sample_key_tracks`, `retriggers`, `lfo_shapes`, `part_rig_modes`, `sample_desc_loop_modes`).
+- Give the subtractive engine a second oscillator a fixed interval from the played pitch (`osc2IntervalCents`, `osc2Level`), pre-filter white noise (`noiseLevel`) and slow amplitude noise on the oscillators (`noiseAm`) through `engineParams` / `engine_params`, each absent at level 0 and listed by `synthEngineParamInfo('subtractive')` (`synth_engine_param_info`).
+- Add a key-tracked band of post-filter white noise to the subtractive engine (`bandNoiseLevel`, `bandNoiseLowHz`, `bandNoiseHighHz`, `bandNoiseLowKeyTrack`, `bandNoiseHighKeyTrack`), absent at level 0; GM programs 82, 85, 99, 101 and 102 use it.
+- Set the subtractive square oscillator's pulse width (`pulseWidth`, 0.5 symmetric) and the share of the second oscillator that bypasses the filter (`osc2Dry`, 0 all filtered); the GM metallic pad (program 93) uses both.
+- Spread the subtractive unison stack across the stereo field with `unisonWidth` (0 centred), keeping the mono sum of the centred stack; the GM warm pad (program 89) uses it.
+- Set the note-on level curve `(velocity / 127)^exponent` with `velocityExponent` on the bowed string, reed, brass, flute, plucked string, free reed, vocal, modal, subtractive and FM engines, as Karplus-Strong already could.
+- Use up to 16 modal modes instead of 8 (`numModes`, slots `modes0.*` to `modes15.*`); a slot at or past `numModes` reports not live.
+- The physical engines take new `engineParams` keys, listed by `synthEngineParamInfo()`; each leaves the sound as before at its default, which gates its feature off, except `pipeDetuneCents`, whose 4-cent default is the detune the organ already applied:
   - reed: `bellRadiationHz`
   - brass, flute and free reed: a breath onset that overshoots and settles (`onsetBreathOvershootDb`, `onsetBreathSettleMs`, `onsetBreathOvershootVelDb`; free reed also `onsetBreathOvershootKeyDb`)
   - bowed string: `hyperbolicFriction`, `stringTensionN`, `stringLengthM`, `bowWidthM`, `forceRatio`, `bowPositionFf`, `bowPositionSpread`, `sectionSpreadCents`, `sectionRateHz`, `stringLossHarmonic`, `stringLossPerOctave`, `corpusSeries`
@@ -77,114 +121,196 @@
   - modal: `malletMs`, `malletVelExp`, `contact`, `contactMs`
   - pipe organ: `pipeDetuneCents`, `loopPhaseServo`, `windRegulated`
   - vocal: `sectionSpreadCents`, `sectionRateHz`
-- The modal engine holds up to 16 modes instead of 8: `numModes` reaches 16 and the `engineParams` mode slots run from `modes0.*` to `modes15.*`; a slot at or past `numModes` is reported as not live.
 - `SynthParamInfo.unit` can be `'N'` (newtons), for the bowed string's `stringTensionN`.
-- WASM `framesToTime`, `timeToFrames`, `framesToSamples` and `samplesToFrames` accept a request object beside their positional form, as on Node.
-- `MAX_TRACK_LANES` (Node, WASM and Python; C `SONARE_ENGINE_MAX_TRACK_LANES`) is the most lanes `setTrackLanes` accepts, 32. A longer list is refused with the message `at most 32 track lanes are supported`, which tells it apart from the other lane-list refusals.
-- `PlaybackRenderer.renderOffline(samples, inChannels)` (Python `render_offline`, C `sonare_playback_renderer_render_offline`) renders a whole buffer offline through an existing renderer, which is reset first, with the same output as `renderPlayback`; the renderer's diagnostics afterwards describe that render, and empty or non-finite input is refused with `RangeError` on Node. `sonare playback` uses it on both command lines.
+
+#### Realtime engine and project
+
+- `MAX_TRACK_LANES` (Node, WASM and Python; C `SONARE_ENGINE_MAX_TRACK_LANES`) is the most lanes `setTrackLanes` accepts, 32; a longer list is refused with `at most 32 track lanes are supported`.
+
+#### Playback renderer
+
+- Render a whole buffer offline through an existing renderer with `PlaybackRenderer.renderOffline(samples, inChannels)` (`render_offline`, `sonare_playback_renderer_render_offline`), which resets it first, matches `renderPlayback` and leaves diagnostics describing that render.
+- `renderOffline` on Node refuses empty or non-finite input with `RangeError`, and `sonare playback` uses it on both command lines.
 
 ### Behaviour changes
 
-- Key detection pins Krumhansl-Schmuckler when it is asked for (`profile: 'ks'`, Python `profile="ks"`, C `SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER`), and a pinned profile outranks the genre hint. An omitted profile (C: the new `SONARE_KEY_PROFILE_AUTO`) keeps the previous behaviour: the genre hint chooses the profile, or the chroma under the default `auto` hint. Asking for KS used to be read as no choice, so it could still switch to another profile.
-- Built-in synth renders change, including MIDI 1.0 renders: free-reed radiation level, modal-voice low-register precision and modulated decay, the slow modulation clocks of the plate reverb, pitch shifter and SoundFont LFO, the harpsichord release after a downward bend, and GS pan level, which now matches between the initial setup and live edits.
-- The GM fallback bank's physical voices change sound: most melodic programs and many drum notes take values fitted against their reference recordings; the reed voices radiate through a bell high-pass, the plucked string runs on the Karplus-Strong loop with a two-band decay and pick noise, tuned percussion and the kit's mallet pieces have a contact law, the brass loop has a mouthpiece reflection, the brass, flute and free-reed voices a breath onset that overshoots and settles, the muted trumpet radiates through a straight mute's cavity and gap, and Electric Piano 2 is its own patch.
-- A stage that has been off, bypassed or fed mono starts from rest when it resumes, instead of replaying its old filter or delay state. This covers chorus, flanger, rotary, wah, auto-wah, vowel filter, phaser, the room-morph suppressor, the pitch shifter's right channel, the compressor, gate and sidechain-router high-pass filters, the parallel-compressor limiter, the amp-sim power stage, the imager, the bitcrusher noise filters, the exciter, percussion noise and the voice changer's channels.
-- `tailSamples` covers gliding, boosted and rate-dependent state for the stereo delay, pitch shifter, auto-wah, GS effect bus, the voice changer (its reverb loops, diffusion and mix glide, instead of 1.5× the decay time), the bitcrusher (its filter rings and sample hold), synth and SoundFont DC blockers, sample one-shots whose pitch offset is lowered mid-note, percussion voices, and the decay of a SoundFont player's master EQ. `saturation.transformer` reports an unbounded tail while `asymmetry` is non-zero (the default) and none when fully dry.
-- `sonare_project_assist_apply_json` commits nothing when a run is truncated by its iteration or time budget, and still returns `SONARE_OK` with the proposed patches in the document; check the reported status before treating the patches as applied. `maxIterations` counts only qualified in-scope candidates, saturating at the cap.
-- Composition assist passes the remaining iteration budget to each module; the built-in modules check the time budget and report truncation, and notes outside the scope no longer use up the harmonizer's iterations. Harmonizer output is ordered by onset, note, group, channel and end, so the same request gives the same order on every platform.
-- The maximum automatic RIR length is 13,421,772 samples (about 280 s at 48 kHz) for a mono RIR, down from 16,777,216; a stereo RIR is capped at 7,456,540 samples (about 155 s) and its late tail at 11,184,810.
-- The NNLS solver bounds its step by the row-sum norm of `AᵀA`, so `mel_to_stft` and NNLS chroma results can differ from v1.9.1 within the solver tolerance.
-- Project-load warnings for invalid warp maps, SysEx handle keys and MIDI clip keys count toward the bounded diagnostic list and are summarised past its limit.
+#### Errors
+
+- Every released, destroyed or closed object raises a coded `InvalidState` on Node, WASM and Python, and releasing twice stays a no-op.
+- A method on a deleted WASM handle raises `InvalidState` instead of embind's generic error, and a released `HrtfSet`, `ProjectTimeline` or `SampleBank` passed as an argument on Node and WASM instead of `TypeError`.
 - A closed Python `PlaybackRenderer` or `PlaybackLoudnessMeter` raises `InvalidState` instead of `InvalidParameter`.
-- Every released, destroyed or closed object raises a coded `InvalidState` on Node, WASM and Python; on WASM a method called on a deleted handle used to throw embind's generic error, and on Node and WASM a released `HrtfSet`, `ProjectTimeline` or `SampleBank` passed as an argument raised `TypeError`. Releasing an object twice stays a no-op. Errors raised inside the WASM worker and AudioWorklet keep their `SonareError` code, and the WASM realtime strip-JSON setters report the real code instead of `InvalidFormat`.
-- Analysis windows are time quantities at every input rate: music, section and boundary analysis below 22050 Hz, timbre roughness, pitch tracking in note transcription, `auto_tune` and the `pitch-correct-timevarying` / `tune-to-midi` commands, and the formant warp in note editing, vocal editing and relative-mode voice changing; `MusicAnalyzer` melody and dynamics step on the analysis hop above 22050 Hz instead of a fraction of it. Results at 44.1 and 48 kHz change; formant edits leave a noise-free synthetic multi-tone signal unchanged.
-- Silent input yields the no-result answer: rhythm regularity and stability 0, sections `Unknown` with confidence 0, `is_compressed` false, timbre density 0.
-- `analyze()` key confidence is the chroma posterior of the chosen key; BPM histogram bins report the vote-weighted mean tempo; a single loud section no longer makes an ordinary first or last section read as Intro or Outro.
-- Batch and streaming BPM choose the beat over its 2/3 and 3/2 relatives; tempo-curve beat weights, downbeat strengths and the double-tempo evidence are normalised against a reference that sets the loudest few beats aside; HMM chord smoothing keeps the unsmoothed path's triad preference; chord evidence changes the key only to one holding at least a quarter of the chroma winner's posterior.
-- NNLS chroma whitens each CQT bin against its neighbours within half an octave rather than along time, so a held chord keeps its chord tones.
-- Mixing-assistant masking floors and phase-alignment activity are taken against a reference that sets lone bursts aside, so a single click or hit no longer sets the floor or picks the alignment window.
-- The Dattorro plate reverb's damping and the FDN reverb's high-band decay are held in hertz, and the ensemble's tone corner no longer shifts at high host rates, so they sound the same at every host rate (unchanged at 48 kHz).
+- Errors raised inside the WASM worker and AudioWorklet keep their `SonareError` code, and the WASM realtime strip-JSON setters report the real code instead of `InvalidFormat`.
+- C entry points return an error code instead of terminating the host on huge counts or memory pressure, clear the previous error on entry, and leave every out-pointer NULL and count 0 when an allocation fails.
+- Node and WASM validators give the same refusal for the same value (an odd value where an even one is required names the minimum, a negative optional count says to omit it).
+- WASM interleaved-sample inputs must be a `Float32Array`, as on Node.
+
+#### Mixing
+
+- A refused mixer block leaves the caller's output untouched instead of zero-filling it.
+- Bus meters report true peak, the WASM mixer's `flushMeters` also drains the master meter, and a non-finite meter sample counts as silence and one discard in its block.
+- Mixing-assistant masking floors and phase-alignment activity set lone bursts aside, so a single click or hit no longer sets the floor or picks the alignment window.
+
+#### Mastering and repair
+
+- A stage that has been off, bypassed or fed mono starts from rest when it resumes instead of replaying old filter or delay state, in chorus, flanger, rotary, wah, auto-wah, vowel filter, phaser, the room-morph suppressor and the pitch shifter's right channel.
+- The same restart from rest applies to the compressor, gate and sidechain-router high-pass filters, the parallel-compressor limiter, the amp-sim power stage, imager, bitcrusher noise filters, exciter, percussion noise and the voice changer's channels.
+- `tailSamples` covers gliding, boosted and rate-dependent state for the stereo delay, pitch shifter, auto-wah, GS effect bus, voice changer (instead of 1.5× the decay time), bitcrusher, synth and SoundFont DC blockers, sample one-shots lowered mid-note, percussion voices and a SoundFont player's master EQ.
+- The playback upmix and layout-conversion `tailSamples` end at the shared tail floor.
+- `saturation.transformer` reports an unbounded tail while `asymmetry` is non-zero (the default) and none when fully dry.
+- The Dattorro plate damping, FDN high-band decay, ensemble tone corner, and Karplus-Strong and plucked-string excitation corners and burst levels are held in hertz, so they sound the same at every host rate (unchanged at 48 kHz).
+- The true-peak limiter keeps a detector-excluded channel (LFE) under the ceiling without letting it steer the gain.
+- Standalone loudness optimisation reaches the target when part of the input sits below the gate, and the graphic EQ `q` applies on the offline named-processor path.
+- `pitchShift` no longer refuses an upward shift whose shifted rate exceeds 192 kHz; it refuses only a shifted rate outside [1000 Hz, INT_MAX] or a stretched buffer past the audio limit, and the C refusal carries a message.
+- The maximum automatic RIR length is 13,421,772 samples (about 280 s at 48 kHz) for mono, down from 16,777,216, and 7,456,540 samples (about 155 s) for stereo with its late tail capped at 11,184,810.
 - Formant warping treats quiet voiced input like loud input; only an effectively silent or non-finite frame passes through unwarped.
-- `bounceOffline` (C `sonare_engine_bounce_offline`) and engine freeze are aligned to the timeline: the reported latency is rendered ahead and dropped, so frame 0 is the playhead's sample, and a frozen clip no longer bakes the latency in.
+
+#### Analysis
+
+- Key detection pins Krumhansl-Schmuckler when asked (`profile: 'ks'`, `profile="ks"`, C `SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER`), and a pinned profile outranks the genre hint; an omitted profile (C: the new `SONARE_KEY_PROFILE_AUTO`) lets the genre hint or chroma choose as before.
+- Analysis windows are time quantities at every input rate in music, section and boundary analysis below 22050 Hz, timbre roughness, note-transcription pitch tracking, `auto_tune`, the `pitch-correct-timevarying` / `tune-to-midi` commands, and the formant warp of note editing, vocal editing and relative-mode voice changing.
+- Those analysis results change at 44.1 and 48 kHz; formant edits leave a noise-free synthetic multi-tone signal unchanged.
+- `MusicAnalyzer` melody and dynamics step on the analysis hop above 22050 Hz instead of a fraction of it.
+- Silent input yields the no-result answer: rhythm regularity and stability 0, sections `Unknown` with confidence 0, `is_compressed` false, timbre density 0.
+- `analyze()` key confidence is the chosen key's chroma posterior, BPM histogram bins report the vote-weighted mean tempo, and a single loud section no longer makes an ordinary first or last section read as Intro or Outro.
+- Batch and streaming BPM choose the beat over its 2/3 and 3/2 relatives, and tempo-curve beat weights, downbeat strengths and double-tempo evidence are normalised against a reference that sets the loudest few beats aside.
+- HMM chord smoothing keeps the unsmoothed path's triad preference, and chord evidence changes the key only to one holding at least a quarter of the chroma winner's posterior.
+- NNLS chroma whitens each CQT bin against its neighbours within half an octave rather than along time, so a held chord keeps its chord tones.
+- The NNLS solver bounds its step by the row-sum norm of `AᵀA`, so `mel_to_stft` and NNLS chroma results can differ from v1.9.1 within the solver tolerance.
+
+#### Editing and alignment
+
+- A vocal-edit render of a sub-range renders only the notes whose source or destination touches the range, and its processed ranges, cache counters, unit total and diagnostics describe those notes.
+- `sonare_project_assist_apply_json` commits nothing when its iteration or time budget truncates a run but still returns `SONARE_OK` with the proposed patches, so check the reported status; `maxIterations` counts only qualified in-scope candidates, saturating at the cap.
+- Composition assist passes the remaining iteration budget to each module, the built-in modules check the time budget and report truncation, and out-of-scope notes no longer use up harmonizer iterations.
+- Harmonizer output is ordered by onset, note, group, channel and end, giving the same order on every platform.
+
+#### MIDI and synthesizer
+
+- The GM fallback bank's physical-model voices sound different: most melodic programs and many drum notes take values fitted against their reference recordings, and reed, brass, flute, free-reed, plucked-string and tuned-percussion models gained structure (bell radiation, mouthpiece reflection, breath onset, contact law, a straight mute); only the acoustic piano is calibrated, and the other voices are tuned in patch releases, so their output moves across patches.
+- Built-in synth renders change, MIDI 1.0 renders included, in free-reed radiation level, modal low-register precision and modulated decay, the slow modulation clocks of the plate reverb, pitch shifter and SoundFont LFO, the harpsichord release after a downward bend, and GS pan level, which now matches between setup and live edits.
 - With `preferModelForModeledFamilies`, GM program 7 (Clavi) plays its built-in string model instead of the SoundFont sample.
 - GS Reset and GM System On clear the CC#32 tone map.
-- Bus meters report true peak, the WASM mixer's `flushMeters` also drains the master meter, and a non-finite meter sample counts as silence and one discard in the block it arrives in.
-- The true-peak limiter keeps a detector-excluded channel (LFE) under the ceiling without letting it steer the gain. Standalone loudness optimisation reaches the target when part of the input sits below the gate. The graphic EQ `q` applies on the offline named-processor path.
-- `pitchShift` accepts upward shifts at 96–384 kHz that a fixed cap used to refuse; the shift is refused only when the shifted rate leaves [1000 Hz, INT_MAX] or the stretched buffer exceeds the audio limit, and the C refusal carries a message.
+
+#### Realtime engine and project
+
+- `bounceOffline` (C `sonare_engine_bounce_offline`) and engine freeze render the reported latency ahead and drop it, so frame 0 is the playhead's sample and a frozen clip no longer bakes the latency in.
+- After a loop wrap, seek or stop, the engine resends the controller, program, channel pressure, pitch bend and MIDI 2.0 registered/assignable controller values the clips set before the new position when playback next rolls, instead of leaving them at their defaults.
+- Data entry, RPN/NRPN selection, portamento control (CC 84) and channel-mode messages are not resent.
+- A smoothed parameter change started mid-block advances at its 64-frame control period whatever the host block size.
 - `sonare_engine_count_in_end_sample` returns `start_sample` for `bars <= 0` instead of `INVALID_PARAMETER`.
-- C entry points return an error code instead of terminating the host on huge counts or memory pressure, clear the previous error on entry, and leave every out-pointer NULL and count 0 when an allocation fails. A refused mixer block leaves the caller's output untouched instead of zero-filling it.
-- The native `voice-change --json` reports the requested `formant_factor`, as the Python command line already did. `note-stretch` without `--offset` stretches to the end of the input. `suggest-mix` refuses a non-finite sample in either channel with exit 6.
-- Python `hpss` and `decompose-stems` command-line level summaries are accumulated in double and no longer rounded.
-- A vocal-edit render of a sub-range renders only the notes whose source or destination touches the range, and its processed ranges, cache counters, unit total and diagnostics describe those notes rather than the whole song.
-- Node and WASM validators give the same refusal for the same value: an odd value where an even one is required names the minimum on both, a negative optional count says to omit it on both, and WASM interleaved-sample inputs must be a `Float32Array` as on Node.
-- A smoothed parameter change the realtime engine starts in the middle of a block advances at its 64-frame control period whatever the host block size.
+- The WASM engine worklet renders silence for a quantum larger than its prepared size instead of clamping it and logging a one-time warning.
 - Loading a project drops SysEx payloads that no MIDI event references.
-- After a loop wrap, a seek or a stop, the realtime engine sends again the controller, program, channel pressure, pitch bend and MIDI 2.0 registered/assignable controller values the clips set before the new position, when playback next rolls. Each loop pass and each seek starts from the state continuous playback reaches; before, the reset at the jump left them at their defaults. Data entry, RPN/NRPN selection, portamento control (CC 84) and channel-mode messages are not sent again.
+- Project-load warnings for invalid warp maps, SysEx handle keys and MIDI clip keys count toward the bounded diagnostic list and are summarised past its limit.
+
+#### Command-line tools
+
+- The native `voice-change --json` reports the requested `formant_factor`, as the Python command line already did.
+- `note-stretch` without `--offset` stretches to the end of the input, and `suggest-mix` refuses a non-finite sample in either channel with exit 6.
+- Python `hpss` and `decompose-stems` command-line level summaries are accumulated in double and no longer rounded.
 
 ### Fixes
 
-- The choir and voice programs (GM 52-54) band-limit their glottal source, so high notes no longer alias; their renders change.
-- Recording with a record offset (`setRecordOffsetSamples`) in a loop keeps every pass whole: the input arriving within the offset after a wrap is captured at the end of the pass played before it, instead of before the loop start, so each pass covers exactly the loop range.
-- On WASM, `RealtimeEngine.applyProjectTimeline` raises `InvalidState` for a disposed `ProjectTimeline`, as Node and Python do; it raised `TypeError`.
-- CQT and VQT build their kernels from the exact `fmin`, `filter_scale` and VQT `gamma` given, instead of reusing a kernel cached for a nearby value. In C++, the CQT `window` takes effect, and `nnls` no longer returns zero for systems orthogonal to its starting vector.
-- The built-in chord generator and harmonizer place notes correctly in clips with a non-zero start or source offset. The harmonizer covers both of two overlapping same-pitch notes, and a chord decision reports `accepted: false` when every voice was rejected.
-- Assist commands that change a track outside the scope (its gain, mute, solo, pan or automation, or a clip's warp, takes, comp or loop crossfade) are discarded.
-- Realtime automation keeps every distinct breakpoint in a block when many lanes share a breakpoint time.
-- In C++, a MIDI clip published to the realtime engine or sequencer with events out of frame order is played in frame order instead of stalling the audio thread; the C ABI, WASM and project paths already sorted their events.
-- Undoing a MIDI event replacement or patch on a clip that had no events removes the clip's event entry again, so the saved project and its SMF export match those from before the edit.
-- WASM meter, scope, spectrum and telemetry readers never return a record mixing two writes; a record still being written is read on the next call, and one dropped because a reader held its slot is counted in the telemetry ring header's `lost` word.
-- WASM live input stops the microphone tracks it acquired if setup fails. The offline worker client and OPFS clip pages settle a request whose message could not be posted. Worklet `destroy()` disconnects and settles pending requests even if notifying the processor fails.
-- On macOS, opening an explicitly chosen output device fails if the device cannot be bound, instead of playing on the default device.
-- `sonare_assign_note_targets` reports an allocation failure as an error code instead of letting a C++ exception cross the C boundary.
-- Note segmentation returns no notes when the minimum note length is longer than the track, instead of overflowing its frame count.
-- A convolution reverb refuses an impulse response containing NaN or infinity, and one that refuses an IR keeps its previous IR and engine.
-- Rebinding realtime automation while the engine plays never applies one target's lane to another target, and published tempo maps, markers and automation targets are not freed while the audio thread still reads them, however many publishes it falls behind.
-- The multiband expander and limiter record a non-finite discard in their own diagnostics when the crossover or a band discarded non-finite audio, instead of hiding it inside the band; the pitch shifter counts its non-finite recoveries too.
+#### Mixing
+
 - The mixing meter measures true peak over the whole of a block longer than its prepared maximum, instead of only its head.
-- A project whose clip loop is off keeps a negative loop length through save and load, as the editing commands allow.
-- `sonare-cli mastering --report`, `mastering-suggest --config-out` and `suggest-mix --scene-out` write through a temporary file and replace the destination only on success, so a failed write no longer truncates an existing file (it still exits 12); on Windows, `sonare-cli` project export replaces an existing file instead of failing.
-- Playback realtime gain changes glide over about 20 ms instead of stepping: switching night mode off, toggling the output limiter, and changing speaker trim, LFE gain or the LFE fold-down level during playback.
-- Night mode reacts to a loud passage that follows a quiet one as fast as to any other loud onset, instead of briefly playing it boosted.
-- Offline speaker playback keeps the beginning of the nearer speakers when speaker distances differ; only the latency common to every channel is trimmed. Both command lines trim the same amount.
-- Headphone room simulation at low sample rates keeps the beginning of the late reverberation.
-- SoundFont playback follows more of the file: volume modulation from the modulation LFO swings both ways by the programmed depth in the file's direction, hold and decay times the file scales by key change around middle C in the direction the file programs, for both the volume and modulation envelopes, and a zone with a fixed velocity plays at that velocity whatever the played velocity.
-- A synth voice's filter no longer clicks when it re-engages after sitting fully open, for example when its cutoff is swept down from the top of its range or a mod wheel routed to cutoff is raised.
+- Flushing a mixing meter measures the whole pending true-peak window, and the next signal starts with clean reconstruction history.
+- Full pan silences the far channel exactly in the pan law, the surround panner and the stereo delay taps.
 - `stereo.phaseAlign` and `stereo.haasEnhancer` no longer route audio buffered from the previous source into the other channel when the delayed side is switched.
-- MP3 files with leading junk before the first frame load; a non-PCM WAV with a zero-length chunk before the `fmt` chunk decodes through the codec path; FFmpeg-enabled builds skip a corrupt packet or frame instead of failing the whole decode, and fail only when no frame decodes.
-- A multichannel `WAVE_FORMAT_EXTENSIBLE` file folds to mono by its declared speaker mask, so a 6.0 file keeps its back centre instead of dropping it as LFE.
-- Writing a WAV file reports `EncodeFailed` and leaves an existing file intact when any write, flush, sync or close fails, and a crafted MS-ADPCM WAV no longer overflows the decoder.
-- The native synth no longer applies data entry to the last RPN when NRPN reception is off.
-- Audio clips stay on the grid when the project tempo changes after they were set, and a burst of clip or automation updates while the engine runs no longer leaves the newest one unplayed.
-- Undoing the removal of a marker, assist sidecar or warp map restores it in its original place in the list, and loading a document no longer leaves MIDI event lists that a new clip would inherit.
-- WASM: a refused live command, bus gain or capture reset no longer changes the offline mirror or the facade cache, and a loop end set live is exactly the offline loop end instead of being rounded to a millionth of a beat.
-- Node `setAssistSidecar` leaves the project unchanged when it refuses its arguments, and the streaming mastering and equalizer constructors report the library's error code.
-- The WASM npm entry exports the public types its signatures name.
-- The true-peak limiter at 8x or 16x oversampling also keeps a 4x true-peak reading under the ceiling; it could exceed it by about 0.03 dB.
-- Digital silence sits below a threshold set under -120 dB: gates, compressors, the de-esser, parallel compressor, sidechain router, vocal rider, the linked expanders and upward processors, and LUFS-gated silence trim no longer open, duck, boost or keep silent input at such thresholds.
-- A sidechain insert keeps its external key when an automation split starts past the key's end, instead of switching to main-signal detection; `sonare_eq_set_sidechain` and the EQ inserts accept a key shorter than the block and read past its end as silence.
+
+#### Mastering and repair
+
+- At thresholds set under -120 dB, gates, compressors, the de-esser, parallel compressor, sidechain router, vocal rider and the linked expanders and upward processors no longer open, duck or boost on digital silence, and LUFS-gated silence trim no longer keeps it.
+- The true-peak limiter at 8x or 16x oversampling also keeps a 4x true-peak reading under the ceiling, which it could exceed by about 0.03 dB.
+- A sidechain insert keeps its external key when an automation split starts past the key's end, and `sonare_eq_set_sidechain` and the EQ inserts accept a key shorter than the block, reading past its end as silence.
 - Editing one dynamic EQ band (live `setBand` or a parameter write) no longer snaps the other bands' in-progress gain to its target.
 - `eq.shelving` with default corners prepares at 8 and 16 kHz instead of refusing its 10 kHz default.
-- Noise-shaped dither shapes the TPDF dither as well as the rounding error, and its noise-shaping filter is designed for each sample rate (unchanged at 44.1 kHz); the bitcrusher uses the same design.
-- The Dattorro plate (`effects.reverb.plate` and the GS system reverb) reads its output taps at the delays of the published design, one sample earlier than before.
-- Full pan silences the far channel exactly in the pan law, the surround panner and the stereo delay taps.
-- The realtime voice changer caps its automatic retune grain at 8192, so a saved configuration round-trips its grain and latency at 176.4 and 192 kHz; in absolute formant mode the warp follows only the retune's wet share. A reset after a configuration change starts from the new configuration, and the gain-reduction meter leaves out compressor make-up.
-- Early-IR synthesis skips an image source whose delay is non-finite or outside the rendered length, instead of converting it out of range.
-- HRTF playback at or just below the table's highest elevation interpolates within the table instead of reading past its last row.
-- Silence trimming keeps audio that lies only past the last hop-aligned frame, instead of returning the input untrimmed.
-- The crest factor of near-silent input whose RMS is below the floor reads 0 dB instead of a negative value.
+- Noise-shaped dither shapes the TPDF dither as well as the rounding error, with a noise-shaping filter designed per sample rate (unchanged at 44.1 kHz) that the bitcrusher shares.
+- The Dattorro plate (`effects.reverb.plate` and the GS system reverb) reads its output taps at the published design's delays, one sample earlier than before.
+- A convolution reverb refuses an impulse response containing NaN or infinity, and keeps its previous IR and engine when it refuses one.
+- The multiband expander and limiter record a non-finite discard in their own diagnostics when the crossover or a band discarded non-finite audio, and the pitch shifter counts its non-finite recoveries.
+- The realtime voice changer caps its automatic retune grain at 8192, so a saved configuration round-trips its grain and latency at 176.4 and 192 kHz, and in absolute formant mode the warp follows only the retune's wet share.
+- A voice-changer reset after a configuration change starts from the new configuration, and its gain-reduction meter leaves out compressor make-up.
 - Synthesized RIRs start the late-tail level window past the direct sound, so the direct-to-reverberant ratio no longer moves with sample rate and sub-sample source distance.
-- Flushing a mixing meter measures the whole pending true-peak window, and the next signal starts with clean reconstruction history.
-- SMF and MIDI Clip File export follow the tempo map (ramps as steps, the first tempo at tick 0), and looped MIDI clips export every repeat after a tempo change; a zero-length note is dropped on SMF import instead of left sounding; warped bakes read from the clip-timeline onset.
+- Early-IR synthesis skips an image source whose delay is non-finite or outside the rendered length instead of converting it out of range.
+
+#### Analysis
+
+- CQT and VQT build their kernels from the exact `fmin`, `filter_scale` and VQT `gamma` given instead of reusing a kernel cached for a nearby value.
+- In C++, the CQT `window` takes effect, and `nnls` no longer returns zero for systems orthogonal to its starting vector.
+- Note segmentation returns no notes when the minimum note length is longer than the track, instead of overflowing its frame count.
+- Silence trimming keeps audio that lies only past the last hop-aligned frame instead of returning the input untrimmed.
+- The crest factor of near-silent input whose RMS is below the floor reads 0 dB instead of a negative value.
+- MP3 files with leading junk before the first frame load, and a non-PCM WAV with a zero-length chunk before `fmt` decodes through the codec path.
+- FFmpeg-enabled builds skip a corrupt packet or frame instead of failing the whole decode, and fail only when no frame decodes.
+- A multichannel `WAVE_FORMAT_EXTENSIBLE` file folds to mono by its declared speaker mask, so a 6.0 file keeps its back centre instead of dropping it as LFE.
+- Writing a WAV file reports `EncodeFailed` and leaves an existing file intact when any write, flush, sync or close fails, and a crafted MS-ADPCM WAV no longer overflows the decoder.
+
+#### Editing and alignment
+
+- Grid snapping takes the bar length from the transport definition, so odd signatures such as 5/3 snap to the same bar as the tempo map.
+- In C++, a non-finite quantize strength or swing is read as 0 instead of reaching an integer conversion.
+- The built-in chord generator and harmonizer place notes correctly in clips with a non-zero start or source offset.
+- The harmonizer covers both of two overlapping same-pitch notes, and a chord decision reports `accepted: false` when every voice was rejected.
+- Assist commands that change a track outside the scope (its gain, mute, solo, pan or automation, or a clip's warp, takes, comp or loop crossfade) are discarded.
+- `sonare_assign_note_targets` reports an allocation failure as an error code instead of letting a C++ exception cross the C boundary.
+- Undoing a MIDI event replacement or patch on a clip that had no events removes the clip's event entry again, so the saved project and its SMF export match the pre-edit ones.
+- Undoing the removal of a marker, assist sidecar or warp map restores it in its original place, and loading a document no longer leaves MIDI event lists a new clip would inherit.
+- A project whose clip loop is off keeps a negative loop length through save and load, as the editing commands allow.
+
+#### MIDI and synthesizer
+
+- The choir and voice programs (GM 52–54) band-limit their glottal source, so high notes no longer alias; their renders change.
+- A synth voice's filter no longer clicks when it re-engages after sitting fully open, for example when its cutoff is swept down from the top of its range.
+- A NativeSynth or SoundFont voice that ends on its own resets its filter and modulation envelopes, and a released voice below the silence floor for 64 ms frees its slot.
+- A GS absolute drum pan is no longer offset by the stereo spread.
+- SoundFont playback follows more of the file: modulation-LFO volume modulation swings both ways by the programmed depth, key-scaled hold and decay times follow the file's direction around middle C on both envelopes, and a fixed-velocity zone plays at that velocity.
+- The native synth no longer applies data entry to the last RPN when NRPN reception is off.
+- Stopping a destination releases its notes before resetting its controllers, as all-notes-off does, so a note held under the damper is stopped rather than left sounding.
+- In C++, a MIDI clip published to the realtime engine or sequencer with events out of frame order is played in frame order instead of skipping or mistiming events; the C ABI, WASM and project paths already sorted them.
+- SMF and MIDI Clip File export follow the tempo map (ramps as steps, the first tempo at tick 0) and export every repeat of a looped MIDI clip after a tempo change.
+- SMF import drops a zero-length note instead of leaving it sounding.
+- Warped bakes read from the clip-timeline onset.
 - Live MIDI FX follow the timeline tempo map, and a loop wrap or seek releases only clip notes, so live input keeps sounding.
 - After a start, seek or loop wrap the metronome sounds only clicks started since the jump, never an earlier beat's decay.
-- A NativeSynth or SoundFont voice that ends on its own resets its filter and modulation envelopes, so the next note on that slot does not open from a leftover level; a released voice below the silence floor for 64 ms frees its slot; a GS absolute drum pan is no longer offset by the stereo spread.
+
+#### Realtime engine and project
+
+- Recording with a record offset (`setRecordOffsetSamples`) in a loop keeps every pass whole, capturing the input that arrives within the offset after a wrap at the end of the previous pass.
+- Realtime automation keeps every distinct breakpoint in a block when many lanes share a breakpoint time.
+- Rebinding realtime automation during playback never applies one target's lane to another, and published tempo maps, markers and automation targets are not freed while the audio thread still reads them.
+- Audio clips stay on the grid when the project tempo changes after they were set, and a burst of clip or automation updates while the engine runs no longer leaves the newest one unplayed.
 - Controller-profile and articulation edits made while the engine processes reach the audio thread consistently.
+- WASM meter, scope, spectrum and telemetry readers never return a record mixing two writes, and a record still being written is read on the next call.
+- WASM: a refused live command, bus gain or capture reset no longer changes the offline mirror or the facade cache, and a loop end set live equals the offline loop end instead of being rounded to a millionth of a beat.
+- WASM live input stops the microphone tracks it acquired if setup fails.
+- The WASM offline worker client and OPFS clip pages settle a request whose message could not be posted, and worklet `destroy()` disconnects and settles pending requests even if notifying the processor fails.
+- Node `setAssistSidecar` leaves the project unchanged when it refuses its arguments, and the streaming mastering and equalizer constructors report the library's error code.
+- On macOS, opening an explicitly chosen output device fails if the device cannot be bound, instead of playing on the default device.
+
+#### Playback renderer
+
+- Playback gain changes glide over about 20 ms instead of stepping when night mode is switched off, the output limiter is toggled, or speaker trim, LFE gain or the LFE fold-down level changes during playback.
+- Night mode reacts to a loud passage after a quiet one as fast as to any other loud onset, instead of briefly playing it boosted.
+- Offline speaker playback keeps the beginning of the nearer speakers when speaker distances differ, trimming only the latency common to every channel, by the same amount on both command lines.
+- Headphone room simulation at low sample rates keeps the beginning of the late reverberation.
+- HRTF playback at or just below the table's highest elevation interpolates within the table instead of reading past its last row.
+
+#### Command-line tools
+
+- `sonare-cli mastering --report`, `mastering-suggest --config-out` and `suggest-mix --scene-out` write through a temporary file and replace the destination only on success, so a failed write (still exit 12) no longer truncates an existing file.
+- On Windows, `sonare-cli` project export replaces an existing file instead of failing.
+
+#### Distribution and build
+
+- The WASM npm entry exports the public types its signatures name.
 
 ### Performance
 
-- The first `capabilityCatalog()` (`capability_catalog()`) call is about 3x faster, and the first rate-given parameter-info query for an insert with per-band parameters about 4x faster, on every surface; results are unchanged.
-- The first CQT or VQT at a new configuration no longer spends seconds building its kernel; output is unchanged.
+- The first `capabilityCatalog()` (`capability_catalog()`) call is about 3x faster, and the first rate-given parameter-info query for an insert with per-band parameters about 4x faster, on every surface.
+- The first CQT or VQT at a new configuration no longer spends seconds building its kernel.
 - Sorting a long out-of-order event list is no longer quadratic, and long clip publishes, large-project edits and undo history, and vocal-edit range renders do less work.
+- RIR synthesis, HPSS, gate/expander/compressor key detection, and `suggest-mix --tempo-bpm auto` and `mix-strip` (input decoded once) do less work with unchanged results.
+- Python `decompose_stems` and `process_planar` (fewer copies), the sequencer's pending-event queue, project edit snapshots, SoundFont program lookup, and section and key analysis (one STFT shared by the mel and chroma views) do less work; results are unchanged throughout.
 
 ## v1.9.1 (2026-10-13)
 
