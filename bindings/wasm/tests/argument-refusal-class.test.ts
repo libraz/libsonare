@@ -191,7 +191,7 @@ describe('argument refusal classes shared with the Node surface', () => {
 
   it('refuses a bad realtime voice-changer channel count and stereo length with a RangeError', () => {
     expect(
-      thrown(() => voiceChangeRealtime({ samples, sampleRate: 48000, channels: 3 })),
+      thrown(() => voiceChangeRealtime({ samples, sampleRate: 48000, channels: 3 as never })),
     ).toBeInstanceOf(RangeError);
     expect(
       thrown(() =>
