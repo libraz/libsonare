@@ -77,6 +77,7 @@ export type MasteringInsertParamUnit =
   | 'ratio'
   | 'bits'
   | 'count'
+  | 'N'
   | 'none';
 
 /** Axis a control draws an insert parameter on. */

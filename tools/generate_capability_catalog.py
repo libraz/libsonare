@@ -31,6 +31,7 @@ PARAMETER_UNITS = {
     "ratio",
     "bits",
     "count",
+    "N",
     "none",
 }
 DEPENDENCY_RELATIONS = {"lt", "le", "gt", "ge"}

@@ -37,6 +37,7 @@ MasteringInsertParamUnit = Literal[
     "ratio",
     "bits",
     "count",
+    "N",
     "none",
 ]
 MasteringInsertParamScale = Literal["linear", "log"]

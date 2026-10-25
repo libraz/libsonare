@@ -211,6 +211,7 @@
             "ratio",
             "bits",
             "count",
+            "N",
             "none",
             null
           ]
