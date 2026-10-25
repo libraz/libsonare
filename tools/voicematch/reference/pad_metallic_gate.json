@@ -3,62 +3,63 @@
   "timbre": "gm094",
   "margin": 1.25,
   "reference_measured_utc": "2026-10-23T20:04:51+00:00",
-  "recorded_utc": "2026-10-24T20:58:20+00:00",
+  "recorded_utc": "2026-10-25T05:50:47+00:00",
   "model_build": {
-    "built_utc": "2026-10-24T20:56:07Z",
-    "newest_source_utc": "2026-10-24T20:51:21Z",
+    "built_utc": "2026-10-25T05:50:21Z",
+    "newest_source_utc": "2026-10-25T05:50:03Z",
     "stale": false
   },
   "reference_spread": {},
   "_pitch_motion_reading": "tnr.abs_median (was 11.05), tnr.median (was 6.987) deleted 2026-10-23 and re-recorded when the tone-to-noise mask and the partial-level windows began widening, where no vibrato line is read, by the held excursion of the demodulated fundamental: twice the 99th percentile of its power-weighted distance from the mean pitch over the note's held part (0.3 s in to 0.15 s before the end), at the rate under which nine tenths of the motion lies, and 10 cents peak to peak at least. This reference's held pitch moves: an excursion reads on 16 of 28 rows, median 37 c at 6.9 Hz, detuned layers beating. The held pitch is not moved by it, so a still tone, a drift, a vibrato and the tuning read as they did.",
   "_pitch_ruler": "raised on 2026-10-24 when the held pitch moved from the strongest peak to the power centroid of each partial's lines (metrics_partials.line_centroid_pitch), and every reference was re-measured with it: tnr.abs_median 19.2 -> 24.056, stretch.abs_median 5.35 -> 8.498, stretch.median 1.2 -> 3.439. The old bounds were recorded from a reading that picked one of a partial's detuned lines by the window's beat phase, or placed the windows that the other readings take from f0 on that line.",
+  "_beat_phase_arrival": "attack.abs_median (was 50.0) deleted 2026-10-25 and re-recorded when the pad became two layers of a chorused narrow pulse. Both sides beat through the held note, 3.1-3.4 dB (reference) and 2.6-3.2 dB (model) around their own trend, as deep as the 3 dB slack the arrival is read within, so the arrival lands on whichever beat crest comes first: moving the attack 120 -> 130 ms flips C6 from -135 to +60 ms. The signed median stays inside its bound.",
   "bounds": {
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 3.439,
-      "abs_median": 8.498,
+      "median": 2.348,
+      "abs_median": 2.386,
       "p90": 12.189,
       "rows": 28
     },
     "tnr": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 14.731,
-      "abs_median": 24.056,
+      "median": 11.775,
+      "abs_median": 13.944,
       "p90": 31.538,
       "rows": 28
     },
     "damper": {
       "floor": 5.0,
       "floor_from": "guess",
-      "median": 362.5,
-      "abs_median": 362.5,
-      "p90": 756.25,
+      "median": 62.5,
+      "abs_median": 68.75,
+      "p90": 325.0,
       "rows": 28
     },
     "attack": {
       "floor": 40.0,
       "floor_from": "guess",
-      "median": 50.0,
-      "abs_median": 50.0,
+      "median": 40.0,
+      "abs_median": 112.5,
       "p90": 150.0,
       "rows": 28
     },
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 20.981,
-      "abs_median": 20.981,
-      "p90": 23.567,
+      "median": 0.613,
+      "abs_median": 1.948,
+      "p90": 4.574,
       "rows": 28
     },
     "centroid_pct": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 741.561,
-      "abs_median": 741.561,
-      "p90": 1279.404,
+      "median": 15.079,
+      "abs_median": 15.079,
+      "p90": 19.243,
       "rows": 28
     },
     "body": {
@@ -82,7 +83,7 @@
       "floor_from": "default",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 3.838,
+      "p90": 1.791,
       "rows": 28
     }
   }

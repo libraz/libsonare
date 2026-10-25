@@ -95,6 +95,9 @@ struct VaPatchParams {
   float osc2_interval_cents = 0.0f;
   /// Second oscillator's linear level against one unison oscillator; 0 = absent.
   float osc2_level = 0.0f;
+  /// Share of the second oscillator that joins after the filter, a layer the
+  /// filter does not shape; 0 = all of it filtered.
+  float osc2_dry = 0.0f;
   /// Seeded white noise's linear level in the oscillator sum; 0 = absent.
   float noise_level = 0.0f;
   /// RMS depth of slow seeded noise multiplying the oscillator sum, so a breath
@@ -113,6 +116,8 @@ struct VaPatchParams {
   float band_noise_high_key_track = 0.0f;
   /// Exponent of the note-on level curve, (velocity / 127)^exponent; 2 is the SF2 square law.
   float velocity_exponent = 2.0f;
+  /// Fraction of each period a square oscillator spends high; 0.5 is the symmetric square.
+  float pulse_width = 0.5f;
 };
 
 /// One playable patch: oscillator section, filter section, envelopes and the
@@ -378,6 +383,8 @@ struct NativeSynthVoice : VoiceState {
   TptSvf am_noise_lp;
   float osc2_ratio = 1.0f;
   float osc2_level = 0.0f;
+  float osc2_dry = 0.0f;
+  float osc2_dry_sample = 0.0f;
   float noise_level = 0.0f;
   float noise_am = 0.0f;  // depth already divided by the lowpassed noise's RMS
   VaOscillator band_noise_osc;
@@ -1514,6 +1521,7 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.va.osc2_interval_cents =
       std::clamp(patch_clamp_detail::sanitize(p.va.osc2_interval_cents, 0.0f), -2400.0f, 2400.0f);
   p.va.osc2_level = std::clamp(patch_clamp_detail::sanitize(p.va.osc2_level, 0.0f), 0.0f, 4.0f);
+  p.va.osc2_dry = std::clamp(patch_clamp_detail::sanitize(p.va.osc2_dry, 0.0f), 0.0f, 1.0f);
   p.va.noise_level = std::clamp(patch_clamp_detail::sanitize(p.va.noise_level, 0.0f), 0.0f, 4.0f);
   p.va.noise_am = std::clamp(patch_clamp_detail::sanitize(p.va.noise_am, 0.0f), 0.0f, 1.0f);
   p.va.band_noise_level =
@@ -1528,6 +1536,7 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.va.band_noise_high_key_track, 0.0f), 0.0f, 1.0f);
   p.va.velocity_exponent =
       std::clamp(patch_clamp_detail::sanitize(p.va.velocity_exponent, 2.0f), 0.0f, 4.0f);
+  p.va.pulse_width = std::clamp(patch_clamp_detail::sanitize(p.va.pulse_width, 0.5f), 0.02f, 0.98f);
   for (ModRoute& route : p.mod_matrix.routes) {
     route.depth = std::clamp(patch_clamp_detail::sanitize(route.depth, 0.0f), -9600.0f, 9600.0f);
   }

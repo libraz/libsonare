@@ -313,21 +313,24 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.pad_bowed.amp_env.attack_ms = 550.874f;
   o.pad_bowed.va.velocity_exponent = 0.72f;
 
-  // Metallic (GM 93): a narrow resonant band on a square is how a subtractive
-  // synth makes metal — the state-variable filter is the only model here with
-  // a bandpass output, so the metallic pad is the one that must not be on a
-  // ladder.
+  // Metallic (GM 93): two layers of one narrow pulse. A chorused one through a
+  // lowpass on the fundamental, 3.5 c flat, gives h2-h6; an unfiltered single
+  // one 1.5 c sharp lays the flat -36 dB plateau over h8-h15 the module holds.
   o.pad_metallic = pad;
   o.pad_metallic.waveform = VaWaveform::kSquare;
   o.pad_metallic.unison = 5;
-  o.pad_metallic.detune_cents = 20.0f;
+  o.pad_metallic.detune_cents = 32.0f;
+  o.pad_metallic.pitch_offset_cents = -3.5f;
   o.pad_metallic.filter_model = SynthFilterModel::kSvf;
-  o.pad_metallic.filter_output = SynthFilterOutput::kBandpass;
-  o.pad_metallic.cutoff_hz = 2600.0f;
-  o.pad_metallic.resonance_q = 6.0f;
-  o.pad_metallic.key_track = 0.6f;
-  o.pad_metallic.amp_env = fallback_env(300.0f, 1200.0f, 0.6f, 1000.0f);
-  o.pad_metallic.gain = 0.3331f;
+  o.pad_metallic.cutoff_hz = 300.0f;
+  o.pad_metallic.resonance_q = 0.7f;
+  o.pad_metallic.key_track = 1.0f;
+  o.pad_metallic.va.pulse_width = 0.0417f;
+  o.pad_metallic.va.osc2_level = 0.02f;
+  o.pad_metallic.va.osc2_interval_cents = 5.0f;
+  o.pad_metallic.va.osc2_dry = 1.0f;
+  o.pad_metallic.amp_env = fallback_env(120.0f, 1200.0f, 0.6f, 750.0f);
+  o.pad_metallic.gain = 2.0694f;
   o.pad_metallic.va.velocity_exponent = 0.65f;
 
   // Halo (GM 94): distance. The slowest attack, the widest scatter, the most

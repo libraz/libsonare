@@ -62,6 +62,7 @@ constexpr VaPatchParams blank_va() noexcept {
   VaPatchParams z{};
   z.osc2_interval_cents = 0.0f;
   z.osc2_level = 0.0f;
+  z.osc2_dry = 0.0f;
   z.noise_level = 0.0f;
   z.noise_am = 0.0f;
   z.band_noise_level = 0.0f;
@@ -70,6 +71,7 @@ constexpr VaPatchParams blank_va() noexcept {
   z.band_noise_high_hz = 0.0f;
   z.band_noise_high_key_track = 0.0f;
   z.velocity_exponent = 0.0f;
+  z.pulse_width = 0.0f;
   return z;
 }
 

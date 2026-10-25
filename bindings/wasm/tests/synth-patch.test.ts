@@ -622,8 +622,11 @@ describe('Sonare WASM NativeSynth', () => {
       'bandNoiseLowKeyTrack',
       'noiseAm',
       'noiseLevel',
+      'osc2Dry',
       'osc2IntervalCents',
       'osc2Level',
+      'pulseWidth',
+      'velocityExponent',
     ]);
     const plain = bounce({ engineMode: 'subtractive' });
     const layered = bounce({

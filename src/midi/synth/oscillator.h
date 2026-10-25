@@ -40,6 +40,10 @@ class VaOscillator {
   /// Per-sample frequency update (pitch modulation); clamped to [0, Nyquist).
   void set_frequency(float freq_hz) noexcept;
 
+  /// Fraction of the period the square spends high, so its k-th harmonic falls
+  /// as sin(pi k w) / k; start() resets it to the symmetric 0.5.
+  void set_pulse_width(float width01) noexcept { pulse_width_ = width01; }
+
   /// Render one sample in [-1, 1].
   float next() noexcept;
 
@@ -48,6 +52,7 @@ class VaOscillator {
   float sample_rate_ = 48000.0f;
   float phase_ = 0.0f;  // [0,1)
   float inc_ = 0.0f;    // cycles per sample
+  float pulse_width_ = 0.5f;
   /// Leaky-integrator state for the triangle (integrated PolyBLEP square).
   float tri_state_ = 0.0f;
   uint64_t noise_seed_ = 0;

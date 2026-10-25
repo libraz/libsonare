@@ -384,13 +384,17 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
     // sound phasey/static; noise gets a per-osc seed stream instead.
     const float phase = seq.unipolar_at(static_cast<uint64_t>(k) * 2 + 1);
     oscs[static_cast<size_t>(k)].start(sample_rate, p.waveform, phase, seed ^ (k + 1));
+    oscs[static_cast<size_t>(k)].set_pulse_width(p.va.pulse_width);
   }
   // Seeds and phases past the unison stack's, so adding either leaves the stack untouched.
   osc2_level = osc_less ? 0.0f : p.va.osc2_level;
+  osc2_dry = osc2_level > 0.0f ? p.va.osc2_dry : 0.0f;
+  osc2_dry_sample = 0.0f;
   noise_level = osc_less ? 0.0f : p.va.noise_level;
   if (osc2_level > 0.0f) {
     osc2_ratio = std::exp2(p.va.osc2_interval_cents / kCentsPerOctave);
     osc2.start(sample_rate, p.waveform, seq.unipolar_at(105), seed ^ (kMaxUnisonOscs + 1));
+    osc2.set_pulse_width(p.va.pulse_width);
   }
   if (noise_level > 0.0f) {
     noise_osc.start(sample_rate, VaWaveform::kNoise, 0.0f, seed ^ (kMaxUnisonOscs + 2));
@@ -776,7 +780,13 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     sample *= osc_norm;
     if (osc2_level > 0.0f) {
       osc2.set_frequency(base_freq_hz * common * osc2_ratio);
-      sample += osc2_level * osc2.next();
+      if (osc2_dry > 0.0f) {
+        const float layer = osc2_level * osc2.next();
+        osc2_dry_sample = osc2_dry * layer;
+        sample += layer - osc2_dry_sample;
+      } else {
+        sample += osc2_level * osc2.next();
+      }
     }
     if (noise_am > 0.0f) sample *= 1.0f + noise_am * am_noise_lp.process(am_noise_osc.next()).lp;
     if (noise_level > 0.0f) sample += noise_level * noise_osc.next();
@@ -831,6 +841,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     const float band = band_noise_hp.process(band_noise_osc.next()).hp;
     sample += band_noise_level * band_noise_lp2.process(band_noise_lp.process(band).lp).lp;
   }
+  if (osc2_dry > 0.0f) sample += osc2_dry_sample;
 
   // --- converter: sample and hold, then quantize, in that order ---
   // Ahead of the amplitude envelope, which is where the converter sits in the

@@ -905,6 +905,9 @@ def test_subtractive_engine_params_are_accepted_by_key() -> None:
         "bandNoiseLowKeyTrack",
         "bandNoiseHighHz",
         "bandNoiseHighKeyTrack",
+        "velocityExponent",
+        "pulseWidth",
+        "osc2Dry",
     }
     levels = ("osc2Level", "noiseLevel", "noiseAm", "bandNoiseLevel")
     assert all(rows[name]["default"] == 0 for name in levels)

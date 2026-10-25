@@ -768,6 +768,7 @@ void apply_percussion(NativeSynthPatch& p, const Fields& f) {
 void apply_va(NativeSynthPatch& p, const Fields& f) {
   // The level first: at 0 the interval moves nothing.
   F(va.osc2_level);
+  F(va.osc2_dry);
   F(va.osc2_interval_cents);
   F(va.noise_level);
   F(va.noise_am);
@@ -778,6 +779,7 @@ void apply_va(NativeSynthPatch& p, const Fields& f) {
   F(va.band_noise_high_hz);
   F(va.band_noise_high_key_track);
   F(va.velocity_exponent);
+  F(va.pulse_width);
 }
 
 void apply_fm(NativeSynthPatch& p, const Fields& f) {
@@ -1261,6 +1263,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"percussion.shell_t60_s", Unit::Seconds},
     {"percussion.shell_weight", Unit::None},
     {"va.osc2_level", Unit::None},
+    {"va.osc2_dry", Unit::None},
     {"va.osc2_interval_cents", Unit::Cents},
     {"va.noise_level", Unit::None},
     {"va.noise_am", Unit::None},
@@ -1270,6 +1273,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"va.band_noise_high_hz", Unit::Hz},
     {"va.band_noise_high_key_track", Unit::None},
     {"va.velocity_exponent", Unit::None},
+    {"va.pulse_width", Unit::Ratio},
     {"fm.algorithm", Unit::None},
     {"fm.velocity_exponent", Unit::None},
     {"fm.ops.ratio", Unit::Ratio},
@@ -1485,6 +1489,9 @@ struct GateRow {
 const GateRow kEngineGates[] = {
     // Subtractive: the interval places an oscillator that is there only at a level.
     {"va.osc2_interval_cents", [](const GateSite&) { return above("osc2Level", 0); }},
+    {"va.osc2_dry", [](const GateSite&) { return above("osc2Level", 0); }},
+    // Only the square oscillator has a duty to set.
+    {"va.pulse_width", [](const GateSite&) { return wrapper_is("waveform", "square"); }},
     // The band's corners shape noise that is there only at a level.
     {"va.band_noise_low_hz", [](const GateSite&) { return above("bandNoiseLevel", 0); }},
     {"va.band_noise_low_key_track", [](const GateSite&) { return above("bandNoiseLevel", 0); }},

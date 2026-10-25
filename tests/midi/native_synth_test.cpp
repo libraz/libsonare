@@ -255,6 +255,36 @@ TEST_CASE("PolyBLEP square and triangle stay below the alias threshold", "[midi]
   }
 }
 
+TEST_CASE("a quarter-width pulse carries no DC and drops its fourth harmonic", "[midi][synth]") {
+  // 375 Hz is 128 samples a period, so 8192 samples hold whole periods.
+  constexpr int kN = 8192;
+  constexpr double kF0 = 375.0;
+  VaOscillator osc;
+  osc.start(kOutRate, VaWaveform::kSquare, 0.0f, 0);
+  osc.set_pulse_width(0.25f);
+  osc.set_frequency(static_cast<float>(kF0));
+  std::vector<float> buf(kN);
+  for (float& s : buf) s = osc.next();
+  const auto harmonic = [&](int k) {
+    double re = 0.0;
+    double im = 0.0;
+    for (int i = 0; i < kN; ++i) {
+      const double w = sonare::constants::kTwoPiD * k * kF0 * i / kOutRate;
+      re += buf[static_cast<size_t>(i)] * std::cos(w);
+      im += buf[static_cast<size_t>(i)] * std::sin(w);
+    }
+    return 2.0 * std::hypot(re, im) / kN;
+  };
+  double mean = 0.0;
+  for (const float s : buf) mean += s;
+  mean /= kN;
+  REQUIRE(std::abs(mean) < 1.0e-3);
+  // |sin(pi k w)| / k: h2 sits 3 dB under h1 and h4 is a null.
+  const double h1 = harmonic(1);
+  REQUIRE(std::abs(20.0 * std::log10(harmonic(2) / h1) + 3.01) < 0.3);
+  REQUIRE(harmonic(4) < 0.01 * h1);
+}
+
 TEST_CASE("NativeSynth renders deterministically", "[midi][synth]") {
   NativeSynthConfig cfg;
   cfg.patch.unison = 5;
@@ -3427,16 +3457,17 @@ TEST_CASE("the sweep pad's filter is the program", "[midi][synth]") {
   REQUIRE(brightest > 30.0 * dullest);
 }
 
-TEST_CASE("the metallic pad is a band, not a roll-off", "[midi][synth]") {
-  // A subtractive synth makes metal with a narrow resonant band, which needs
-  // the state-variable filter: it is the only model here with a bandpass
-  // output, so this is the one pad that must not be on a ladder. What that
-  // buys is a missing bottom, which a lowpass pad cannot have.
-  const std::vector<float> metallic = render_program(93, 60, 96000);
-  const std::vector<float> warm = render_program(89, 60, 96000);
-  const double metallic_low = 1.0 - high_fraction(metallic, 40000, 800.0, 4096);
-  const double warm_low = 1.0 - high_fraction(warm, 40000, 800.0, 4096);
-  REQUIRE(metallic_low < 0.25 * warm_low);
+TEST_CASE("the metallic pad's top is a layer the filter does not shape", "[midi][synth]") {
+  // The pad is one narrow pulse twice over: through a lowpass on the
+  // fundamental for the low partials, and unfiltered for the flat top above
+  // them, which no lowpass setting gives. Filtering that copy too loses the top.
+  const auto& metallic = sonare::midi::synth::gm_fallback_patch(0, 93);
+  auto filtered = metallic;
+  filtered.va.osc2_dry = 0.0f;
+  const double top = high_fraction(render_patch(metallic, 60, 96000), 40000, 4000.0, 4096);
+  const double lowpassed = high_fraction(render_patch(filtered, 60, 96000), 40000, 4000.0, 4096);
+  // Measured 45x above 4 kHz at middle C.
+  REQUIRE(top > 10.0 * lowpassed);
 }
 
 namespace {

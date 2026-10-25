@@ -41,6 +41,7 @@ void VaOscillator::start(double sample_rate, VaWaveform waveform, float phase01,
   waveform_ = waveform;
   phase_ = phase01 - std::floor(phase01);
   inc_ = 0.0f;
+  pulse_width_ = 0.5f;
   tri_state_ = ideal_triangle(phase_);
   noise_seed_ = noise_seed;
   noise_counter_ = 0;
@@ -62,13 +63,14 @@ float VaOscillator::next() noexcept {
     case VaWaveform::kSaw:
       return 2.0f * t - 1.0f - poly_blep(t, inc_);
     case VaWaveform::kSquare: {
-      float s = t < 0.5f ? 1.0f : -1.0f;
+      float s = t < pulse_width_ ? 1.0f : -1.0f;
       s += poly_blep(t, inc_);
-      // The falling edge at phase 0.5 is the rising edge of phase + 0.5.
-      float t2 = t + 0.5f;
+      // The falling edge at the pulse width is the rising edge of phase + (1 - width).
+      float t2 = t + (1.0f - pulse_width_);
       if (t2 >= 1.0f) t2 -= 1.0f;
       s -= poly_blep(t2, inc_);
-      return s;
+      // A pulse other than the symmetric one carries 2w - 1 of DC.
+      return s - (2.0f * pulse_width_ - 1.0f);
     }
     case VaWaveform::kTriangle: {
       // Integrate the PolyBLEP square through a leaky integrator. The leak

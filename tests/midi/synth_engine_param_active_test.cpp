@@ -35,6 +35,7 @@ using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
 using sonare::midi::synth::SynthEngineMode;
+using sonare::midi::synth::VaWaveform;
 
 using Gate = std::vector<ActiveAlternative>;
 
@@ -80,6 +81,8 @@ bool excused(SynthEngineMode mode, const std::string& key) {
 
 /// The wrapper body vocabulary, in BodyType order.
 const char* const kBodyNames[] = {"none", "guitar", "violin", "wood-tube", "brass-bell", "vocal"};
+/// The wrapper waveform vocabulary, in VaWaveform order.
+const char* const kWaveformNames[] = {"sine", "saw", "square", "triangle", "noise"};
 
 /// A patch as a host selecting only @p mode gets it: the init wrapper and the
 /// base preset's engine section.
@@ -217,8 +220,10 @@ const WrapperNumber& wrapper_number(const std::string& key) {
 bool holds(const ActiveCondition& c, const Patch& p) {
   double v = 0.0;
   if (c.scope == ActiveCondition::Scope::kPatch && c.kind == ActiveCondition::Kind::kString) {
-    REQUIRE(c.key == "body");
     REQUIRE(c.relation == ActiveCondition::Relation::kEq);
+    if (c.key == "waveform")
+      return c.text == kWaveformNames[static_cast<int>(p.cfg.patch.waveform)];
+    REQUIRE(c.key == "body");
     return c.text == kBodyNames[static_cast<int>(p.cfg.patch.body)];
   }
   if (c.scope == ActiveCondition::Scope::kPatch) {
@@ -264,6 +269,15 @@ bool gate_holds(const Gate& gate, const Patch& p) {
 void force(const ActiveCondition& c, Patch& p, bool broken) {
   if (c.scope == ActiveCondition::Scope::kPatch && c.kind == ActiveCondition::Kind::kString) {
     const bool want_named = !broken;
+    if (c.key == "waveform") {
+      for (int i = 0; i < static_cast<int>(std::size(kWaveformNames)); ++i) {
+        if ((c.text == kWaveformNames[i]) == want_named) {
+          p.cfg.patch.waveform = static_cast<VaWaveform>(i);
+          return;
+        }
+      }
+      FAIL("no waveform to force " << c.text);
+    }
     for (int i = 0; i < static_cast<int>(std::size(kBodyNames)); ++i) {
       if ((c.text == kBodyNames[i]) == want_named) {
         p.cfg.patch.body = static_cast<BodyType>(i);
