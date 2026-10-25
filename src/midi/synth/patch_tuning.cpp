@@ -780,6 +780,7 @@ void apply_va(NativeSynthPatch& p, const Fields& f) {
   F(va.band_noise_high_key_track);
   F(va.velocity_exponent);
   F(va.pulse_width);
+  F(va.unison_width);
 }
 
 void apply_fm(NativeSynthPatch& p, const Fields& f) {
@@ -1274,6 +1275,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"va.band_noise_high_key_track", Unit::None},
     {"va.velocity_exponent", Unit::None},
     {"va.pulse_width", Unit::Ratio},
+    {"va.unison_width", Unit::None},
     {"fm.algorithm", Unit::None},
     {"fm.velocity_exponent", Unit::None},
     {"fm.ops.ratio", Unit::Ratio},
@@ -1492,6 +1494,8 @@ const GateRow kEngineGates[] = {
     {"va.osc2_dry", [](const GateSite&) { return above("osc2Level", 0); }},
     // Only the square oscillator has a duty to set.
     {"va.pulse_width", [](const GateSite&) { return wrapper_is("waveform", "square"); }},
+    // A single oscillator has no detune position to pan by.
+    {"va.unison_width", [](const GateSite&) { return wrapper_above("unison", 1); }},
     // The band's corners shape noise that is there only at a level.
     {"va.band_noise_low_hz", [](const GateSite&) { return above("bandNoiseLevel", 0); }},
     {"va.band_noise_low_key_track", [](const GateSite&) { return above("bandNoiseLevel", 0); }},

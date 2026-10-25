@@ -406,8 +406,9 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       }
       float s = v.render(*render_mod, wind.pitch_ratio, wind.gain);
       discarded |= resolve_non_finite(SampleDestination::kRecursiveState, s);
-      float l = s * v.gain_left;
-      float r = s * v.gain_right;
+      float l = 0.0f;
+      float r = 0.0f;
+      v.stereo_legs(s, &l, &r);
       // The body this voice was struck through, from its own patch.
       FallbackBodyKind body_kind{};
       const bool has_body = v.patch != nullptr && fallback_body_kind(*v.patch, &body_kind);

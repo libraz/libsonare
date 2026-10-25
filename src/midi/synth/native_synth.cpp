@@ -2037,8 +2037,9 @@ void NativeSynth::process_impl(float* const* channels,
         if (any_bussed && fx->part_bussed[static_cast<size_t>(part)]) {
           // The rig's processors are recursive state a non-finite sample would poison.
           discarded |= resolve_non_finite(SampleDestination::kRecursiveState, s);
-          const float bus_l = s * v.gain_left;
-          const float bus_r = s * v.gain_right;
+          float bus_l = 0.0f;
+          float bus_r = 0.0f;
+          v.stereo_legs(s, &bus_l, &bus_r);
           const bool mono_rig = fx->mono_prefix[static_cast<size_t>(part)] != 0;
           if (organ_voice) {
             // Organ swell is a part stage before the rig, so retain its stereo
@@ -2122,8 +2123,9 @@ void NativeSynth::process_impl(float* const* channels,
           }
           continue;
         }
-        const float voice_l = s * v.gain_left;
-        const float voice_r = s * v.gain_right;
+        float voice_l = 0.0f;
+        float voice_r = 0.0f;
+        v.stereo_legs(s, &voice_l, &voice_r);
         if (organ_voice) {
           // Keep the unbussed dry leg in the mix and on its source lane; the
           // pre-rig swell residual is added and attributed per part below.

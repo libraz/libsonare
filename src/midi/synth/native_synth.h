@@ -118,6 +118,10 @@ struct VaPatchParams {
   float velocity_exponent = 2.0f;
   /// Fraction of each period a square oscillator spends high; 0.5 is the symmetric square.
   float pulse_width = 0.5f;
+  /// How far the unison stack spreads across the stereo field: each oscillator
+  /// pans by this times its detune position, through its own copy of the filter;
+  /// 0 = every oscillator centred, bit-identical.
+  float unison_width = 0.0f;
 };
 
 /// One playable patch: oscillator section, filter section, envelopes and the
@@ -385,6 +389,15 @@ struct NativeSynthVoice : VoiceState {
   float osc2_level = 0.0f;
   float osc2_dry = 0.0f;
   float osc2_dry_sample = 0.0f;
+  /// The unison stack's stereo difference (patch va.unison_width): each
+  /// oscillator's weight, the filter and highpass copies it runs through, and
+  /// the sample the mixer reads beside render()'s, L = mid - side, R = mid + side.
+  float unison_width = 0.0f;
+  std::array<float, kMaxUnisonOscs> side_weight{};
+  SynthFilter side_filter;
+  TptSvf side_hp;
+  float side_hold = 0.0f;
+  float side_sample = 0.0f;
   float noise_level = 0.0f;
   float noise_am = 0.0f;  // depth already divided by the lowpassed noise's RMS
   VaOscillator band_noise_osc;
@@ -650,6 +663,17 @@ struct NativeSynthVoice : VoiceState {
   /// @p wind_pitch / @p wind_gain carry the shared organ wind modulation
   /// (tremulant / wind sag); 1.0 leaves the voice unmodulated.
   float render(const Sf2ChannelMod& mod, float wind_pitch = 1.0f, float wind_gain = 1.0f) noexcept;
+  /// The left and right legs of render()'s @p s at this voice's pan gains,
+  /// with the unison stack's stereo difference when the patch spreads it.
+  void stereo_legs(float s, float* left, float* right) const noexcept {
+    if (unison_width > 0.0f) {
+      *left = (s - side_sample) * gain_left;
+      *right = (s + side_sample) * gain_right;
+    } else {
+      *left = s * gain_left;
+      *right = s * gain_right;
+    }
+  }
   /// Legato continuation: carry this sounding voice to @p new_note, whose
   /// tracking inputs (filter and body) are those of a fresh voice on
   /// @p voiced_note.
@@ -1537,6 +1561,7 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.va.velocity_exponent =
       std::clamp(patch_clamp_detail::sanitize(p.va.velocity_exponent, 2.0f), 0.0f, 4.0f);
   p.va.pulse_width = std::clamp(patch_clamp_detail::sanitize(p.va.pulse_width, 0.5f), 0.02f, 0.98f);
+  p.va.unison_width = std::clamp(patch_clamp_detail::sanitize(p.va.unison_width, 0.0f), 0.0f, 1.0f);
   for (ModRoute& route : p.mod_matrix.routes) {
     route.depth = std::clamp(patch_clamp_detail::sanitize(route.depth, 0.0f), -9600.0f, 9600.0f);
   }

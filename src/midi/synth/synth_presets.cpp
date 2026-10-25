@@ -82,7 +82,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     SynthPreset& pad = t[i++];
     pad.name = "warm-pad";
     pad.config = from_patch(gm_fallback_patch(0, 89));
-    pad.config.bus_drive = 0.15f;  // glue the supersaw stack
+    pad.config.bus_drive = 0.15f;  // glue the stack
   }
 
   // --- tuned sustain / struck (GM fallback aliases) ---

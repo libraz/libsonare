@@ -189,7 +189,7 @@ def test_synth_preset_patch_round_trips() -> None:
     assert pad.preset == "warm-pad"
     assert pad.engine_mode == "subtractive"
     assert pad.waveform == "saw"
-    assert pad.unison == 7
+    assert pad.unison == 2
     assert pad.stereo_spread > 0.0
     # The "va:" routing prefix is accepted.
     assert synth_preset_patch("va:e-piano").engine_mode == "fm"
@@ -908,6 +908,7 @@ def test_subtractive_engine_params_are_accepted_by_key() -> None:
         "velocityExponent",
         "pulseWidth",
         "osc2Dry",
+        "unisonWidth",
     }
     levels = ("osc2Level", "noiseLevel", "noiseAm", "bandNoiseLevel")
     assert all(rows[name]["default"] == 0 for name in levels)

@@ -89,7 +89,7 @@ describe('Sonare WASM NativeSynth', () => {
     expect(pad.preset).toBe('warm-pad');
     expect(pad.engineMode).toBe('subtractive');
     expect(pad.waveform).toBe('saw');
-    expect(pad.unison).toBe(7);
+    expect(pad.unison).toBe(2);
     // The "va:" routing prefix is accepted.
     expect(synthPresetPatch('va:e-piano').engineMode).toBe('fm');
     expect(synthPresetPatch('clarinet').engineMode).toBe('reed');
@@ -626,6 +626,7 @@ describe('Sonare WASM NativeSynth', () => {
       'osc2IntervalCents',
       'osc2Level',
       'pulseWidth',
+      'unisonWidth',
       'velocityExponent',
     ]);
     const plain = bounce({ engineMode: 'subtractive' });

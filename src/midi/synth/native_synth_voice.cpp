@@ -386,6 +386,12 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
     oscs[static_cast<size_t>(k)].start(sample_rate, p.waveform, phase, seed ^ (k + 1));
     oscs[static_cast<size_t>(k)].set_pulse_width(p.va.pulse_width);
   }
+  unison_width = unison > 1 ? p.va.unison_width : 0.0f;
+  for (int k = 0; k < unison; ++k) {
+    side_weight[static_cast<size_t>(k)] = unison_width * unison_spread[static_cast<size_t>(k)];
+  }
+  side_hold = 0.0f;
+  side_sample = 0.0f;
   // Seeds and phases past the unison stack's, so adding either leaves the stack untouched.
   osc2_level = osc_less ? 0.0f : p.va.osc2_level;
   osc2_dry = osc2_level > 0.0f ? p.va.osc2_dry : 0.0f;
@@ -447,11 +453,17 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   filter_env.note_on();
   filter.prepare(sample_rate);
   filter.set_model(p.filter_model);
+  if (unison_width > 0.0f) {
+    side_filter.prepare(sample_rate);
+    side_filter.set_model(p.filter_model);
+  }
   filter_state_live = true;
   hp_active = p.hp_cutoff_hz > 0.0f;
   if (hp_active) {
     hp_stage.prepare(sample_rate);
     hp_stage.set(p.hp_cutoff_hz, constants::kButterworthQ);
+    side_hp.prepare(sample_rate);
+    side_hp.set(p.hp_cutoff_hz, constants::kButterworthQ);
   }
 
   // Converter.
@@ -708,6 +720,8 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   common *= drum_pitch_ratio;
 
   float sample = 0.0f;
+  // The unison stack's stereo difference; zero unless the patch spreads it.
+  float side = 0.0f;
   // Percussion and modal; summed past the envelope at the foot of this function.
   float contact = 0.0f;
   if (patch->mode == SynthEngineMode::kFm) {
@@ -772,10 +786,21 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
       return 0.0f;
     }
   } else {
-    for (int k = 0; k < unison; ++k) {
-      auto& osc = oscs[static_cast<size_t>(k)];
-      osc.set_frequency(base_freq_hz * common * detune_ratio[static_cast<size_t>(k)]);
-      sample += osc.next();
+    if (unison_width > 0.0f) {
+      for (int k = 0; k < unison; ++k) {
+        auto& osc = oscs[static_cast<size_t>(k)];
+        osc.set_frequency(base_freq_hz * common * detune_ratio[static_cast<size_t>(k)]);
+        const float out = osc.next();
+        sample += out;
+        side += side_weight[static_cast<size_t>(k)] * out;
+      }
+      side *= osc_norm;
+    } else {
+      for (int k = 0; k < unison; ++k) {
+        auto& osc = oscs[static_cast<size_t>(k)];
+        osc.set_frequency(base_freq_hz * common * detune_ratio[static_cast<size_t>(k)]);
+        sample += osc.next();
+      }
     }
     sample *= osc_norm;
     if (osc2_level > 0.0f) {
@@ -825,6 +850,11 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     if (offsets.resonance_q != 0.0f) q = std::max(0.5f, q + offsets.resonance_q);
     if (gs_resonance_gain != 1.0f) q = std::max(0.5f, q * gs_resonance_gain);
     filter.set(fc, q);
+    if (unison_width > 0.0f) {
+      side_filter.set(fc, q);
+      if (!filter_state_live) side_filter.settle(side);
+      side = side_filter.process(side, patch->filter_output);
+    }
     if (!filter_state_live) {
       // Re-engaging after a skip: the stale state would replay old history.
       filter.settle(sample);
@@ -837,6 +867,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
 
   // --- series highpass: the other end of a band the main filter cannot make ---
   if (hp_active) sample = hp_stage.process(sample).hp;
+  if (hp_active && unison_width > 0.0f) side = side_hp.process(side).hp;
   if (band_noise_level > 0.0f) {
     const float band = band_noise_hp.process(band_noise_osc.next()).hp;
     sample += band_noise_level * band_noise_lp2.process(band_noise_lp.process(band).lp).lp;
@@ -852,10 +883,15 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     if (hold_phase >= 1.0f) {
       hold_phase -= std::floor(hold_phase);
       hold_value = sample;
+      side_hold = side;
     }
     sample = hold_value;
+    side = side_hold;
   }
-  if (quant_step > 0.0f) sample = std::round(sample / quant_step) * quant_step;
+  if (quant_step > 0.0f) {
+    sample = std::round(sample / quant_step) * quant_step;
+    side = std::round(side / quant_step) * quant_step;
+  }
 
   // --- release end: a released voice whose chain has gone silent frees its slot ---
   // The amplitude envelope may be set to ring far past the source (a damped string, a bellows
@@ -879,6 +915,10 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   // The LFO's peak is the part's own level and the depth is spent below it.
   const float tremolo =
       mod.tremolo_depth01 != 0.0f ? 1.0f - mod.tremolo_depth01 * (1.0f - lfo1_value) * 0.5f : 1.0f;
+  if (unison_width > 0.0f) {
+    side_sample = side * level * velocity_gain * patch->gain * mod.gain * offsets.amp_gain *
+                  wind_gain * tremolo;
+  }
   return (sample * level + contact) * velocity_gain * patch->gain * mod.gain * offsets.amp_gain *
          wind_gain * tremolo;
 }
@@ -1038,8 +1078,12 @@ void NativeSynthVoice::refresh_live(const NativeSynthPatch& p, double sample_rat
   if (has(Id::kHpCutoffHz)) {
     if (p.hp_cutoff_hz > 0.0f) {
       // Opening starts the stage from rest; a running stage keeps its state.
-      if (!hp_active) hp_stage.prepare(sample_rate);
+      if (!hp_active) {
+        hp_stage.prepare(sample_rate);
+        side_hp.prepare(sample_rate);
+      }
       hp_stage.set(p.hp_cutoff_hz, constants::kButterworthQ);
+      side_hp.set(p.hp_cutoff_hz, constants::kButterworthQ);
       hp_active = true;
     } else {
       hp_active = false;
@@ -1110,6 +1154,7 @@ void NativeSynthVoice::kill() noexcept {
   harpsichord.kill();
   harpsichord_tail_latched = false;
   harpsichord_tail_level = 0.0f;
+  side_sample = 0.0f;
   active = false;
   releasing = false;
 }

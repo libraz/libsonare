@@ -130,7 +130,7 @@ describe('NativeSynth preset catalog', () => {
     expect(pad.preset).toBe('warm-pad');
     expect(pad.engineMode).toBe('subtractive');
     expect(pad.waveform).toBe('saw');
-    expect(pad.unison).toBe(7);
+    expect(pad.unison).toBe(2);
     expect(pad.stereoSpread).toBeGreaterThan(0);
     // The "va:" routing prefix is accepted.
     expect(synthPresetPatch('va:e-piano').engineMode).toBe('fm');
@@ -731,6 +731,7 @@ describe('SynthPatch.engineParams', () => {
       'osc2IntervalCents',
       'osc2Level',
       'pulseWidth',
+      'unisonWidth',
       'velocityExponent',
     ]);
     const plain = bounce({ engineMode: 'subtractive' });

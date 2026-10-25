@@ -11,6 +11,7 @@
 #include <cstring>
 #include <iterator>
 #include <limits>
+#include <map>
 #include <set>
 #include <string>
 #include <utility>
@@ -203,13 +204,13 @@ TEST_CASE("synth preset catalog lists every §E entry", "[project][synth_patch]"
 TEST_CASE("synth preset patches round-trip through the versioned struct",
           "[project][synth_patch]") {
   SonareSynthPatch patch{};
-  // warm-pad: a 7-osc subtractive supersaw.
+  // warm-pad: two subtractive saws spread across the field.
   REQUIRE(sonare_synth_preset_patch("warm-pad", &patch) == SONARE_OK);
   REQUIRE(patch.struct_version == SONARE_SYNTH_PATCH_STRUCT_VERSION);
   REQUIRE(std::string(patch.preset) == "warm-pad");
   REQUIRE(patch.engine_mode == SONARE_SYNTH_ENGINE_SUBTRACTIVE);
   REQUIRE(patch.waveform == SONARE_SYNTH_OSC_SAW);
-  REQUIRE(patch.unison == 7);
+  REQUIRE(patch.unison == 2);
   REQUIRE(patch.stereo_spread > 0.0f);
   // The bare single-oscillator waveforms the CLI documents each resolve to a
   // one-voice subtractive patch on their named waveform (the richer -lead
@@ -461,9 +462,11 @@ TEST_CASE("the subtractive section is set by key and reaches the render",
     // Every source defaults to absent.
     if (levels.count(d["name"].as_string()) != 0) REQUIRE(d["default"].as_number() == 0.0);
   }
-  REQUIRE(names == std::set<std::string>{"osc2IntervalCents", "osc2Level", "noiseLevel", "noiseAm",
-                                         "bandNoiseLevel", "bandNoiseLowHz", "bandNoiseLowKeyTrack",
-                                         "bandNoiseHighHz", "bandNoiseHighKeyTrack"});
+  REQUIRE(names == std::set<std::string>{"osc2IntervalCents", "osc2Level", "osc2Dry", "noiseLevel",
+                                         "noiseAm", "bandNoiseLevel", "bandNoiseLowHz",
+                                         "bandNoiseLowKeyTrack", "bandNoiseHighHz",
+                                         "bandNoiseHighKeyTrack", "pulseWidth", "unisonWidth",
+                                         "velocityExponent"});
 
   SonareProject* project = make_synth_project(3);
   SonareSynthPatch base{};
@@ -547,8 +550,11 @@ TEST_CASE("synth engine param gates name a key of their scope with a value it ca
     }
     return names;
   };
-  const std::set<std::string> body_types = vocabulary(SONARE_SYNTH_ENUM_BODY_TYPE);
-  REQUIRE(body_types.count("violin") == 1);
+  const std::map<std::string, std::set<std::string>> enum_fields{
+      {"body", vocabulary(SONARE_SYNTH_ENUM_BODY_TYPE)},
+      {"waveform", vocabulary(SONARE_SYNTH_ENUM_OSC_WAVEFORM)}};
+  REQUIRE(enum_fields.at("body").count("violin") == 1);
+  REQUIRE(enum_fields.at("waveform").count("square") == 1);
   const sonare::util::json::Value patch_info = parse_info(sonare_synth_patch_param_info());
 
   size_t conditions = 0;
@@ -574,9 +580,10 @@ TEST_CASE("synth engine param gates name a key of their scope with a value it ca
           const sonare::util::json::Value& value = c["value"];
           if (c["scope"].as_string() == "patch") {
             ++patch_conditions;
-            if (key == "body") {
+            const auto field = enum_fields.find(key);
+            if (field != enum_fields.end()) {
               REQUIRE(value.is_string());
-              REQUIRE(body_types.count(value.as_string()) == 1);
+              REQUIRE(field->second.count(value.as_string()) == 1);
               continue;
             }
             const sonare::util::json::Value* target = named(patch_info, key);

@@ -205,9 +205,13 @@ bool acts(const Patch& p, const std::string& key, const std::vector<float>* refe
 struct WrapperNumber {
   const char* key;
   float NativeSynthPatch::*member;
+  int NativeSynthPatch::*int_member;
   double lo, hi;
 };
-const WrapperNumber kWrapperNumbers[] = {{"bodyMix", &NativeSynthPatch::body_mix, 0.0, 1.0}};
+const WrapperNumber kWrapperNumbers[] = {
+    {"bodyMix", &NativeSynthPatch::body_mix, nullptr, 0.0, 1.0},
+    {"unison", nullptr, &NativeSynthPatch::unison, 1.0, 7.0},
+};
 
 const WrapperNumber& wrapper_number(const std::string& key) {
   for (const WrapperNumber& w : kWrapperNumbers) {
@@ -227,7 +231,8 @@ bool holds(const ActiveCondition& c, const Patch& p) {
     return c.text == kBodyNames[static_cast<int>(p.cfg.patch.body)];
   }
   if (c.scope == ActiveCondition::Scope::kPatch) {
-    v = p.cfg.patch.*wrapper_number(c.key).member;
+    const WrapperNumber& w = wrapper_number(c.key);
+    v = w.member != nullptr ? p.cfg.patch.*w.member : p.cfg.patch.*w.int_member;
   } else {
     v = field(p, c.key).value;
   }
@@ -288,7 +293,8 @@ void force(const ActiveCondition& c, Patch& p, bool broken) {
   }
   const bool wrapper = c.scope == ActiveCondition::Scope::kPatch;
   const EngineParamDescriptor* d = wrapper ? nullptr : &field(p, c.key);
-  const bool whole = !wrapper && (d->integer || d->boolean);
+  const bool whole =
+      wrapper ? wrapper_number(c.key).int_member != nullptr : d->integer || d->boolean;
   const bool boolean = !wrapper && d->boolean;
   const double v = c.number;
   const double lo = wrapper ? wrapper_number(c.key).lo : d->bounded ? d->lo : v - 1.0;
@@ -338,7 +344,12 @@ void force(const ActiveCondition& c, Patch& p, bool broken) {
   }
   INFO("forcing " << c.key << " to " << target);
   if (wrapper) {
-    p.cfg.patch.*wrapper_number(c.key).member = static_cast<float>(target);
+    const WrapperNumber& w = wrapper_number(c.key);
+    if (w.member != nullptr) {
+      p.cfg.patch.*w.member = static_cast<float>(target);
+    } else {
+      p.cfg.patch.*w.int_member = static_cast<int>(std::lround(target));
+    }
     return;
   }
   REQUIRE(set(p, c.key, target));

@@ -15,12 +15,11 @@ namespace sonare::midi::synth::detail {
 /// have. The effects have no sample or delay line in this engine, so the patches
 /// use the closest oscillator, envelope and filter gesture available.
 ///
-/// The lead/pad gains are levelled rather than voiced: a synthetic program has
-/// no physical output level, and with each patch's filter and stack chosen
-/// independently the block spanned 9.6 dB before they were set. Measured on a
-/// held C4 at velocity 100 they now sit inside 2.2 dB, leads a little over pads.
-/// That says nothing about the rest of the bank, which spans 22 dB on the same
-/// note and is its own question.
+/// The lead/pad gains follow the module's own slot levels. A synthetic program
+/// has no physical output level, but the module that names these sixteen sounds
+/// sets one each, and their references come from one rack at one setting: on a
+/// held C4 at velocity 96 (equal-power RMS, 0.5-2 s in) each patch sits at the
+/// same offset from its reference, so the slots keep the module's 10 dB spread.
 ///
 /// `fifths` and `bass + lead` are layers at a fixed interval, which the unison
 /// spread cannot make (its anti-phase-lock jitter alone is 70 cents out at a
@@ -56,7 +55,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_square.vel_to_cutoff_cents = 2400.0f;
   o.lead_square.va.velocity_exponent = 1.0f;
   o.lead_square.mod_matrix.routes[0] = {ModSource::kModWheel, ModDestination::kPitchCents, 35.0f};
-  o.lead_square.gain = 0.22f;
+  o.lead_square.gain = 0.3108f;
   o.lead_square.amp_env.attack_ms = 14.9858f;
   o.lead_square.amp_env.decay_ms = 599.43f;
   o.lead_square.amp_env.release_ms = 10.0f;
@@ -70,7 +69,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_saw.filter_model = SynthFilterModel::kSvf;
   o.lead_saw.env_to_cutoff_cents = 900.0f;
   o.lead_saw.cutoff_hz = 1600.0f;
-  o.lead_saw.gain = 0.341f;
+  o.lead_saw.gain = 0.3124f;
   o.lead_saw.amp_env.attack_ms = 14.9858f;
   o.lead_saw.amp_env.decay_ms = 122.416f;
   o.lead_saw.amp_env.release_ms = 91.8123f;
@@ -101,7 +100,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_calliope.amp_env = fallback_env(35.0f, 200.0f, 0.9f, 180.0f);
   o.lead_calliope.body = BodyType::kWoodTube;
   o.lead_calliope.body_mix = 0.463525f;
-  o.lead_calliope.gain = 0.421f;
+  o.lead_calliope.gain = 0.4449f;
   o.lead_calliope.amp_env.attack_ms = 104.9f;
   o.lead_calliope.amp_env.decay_ms = 326.754f;
   o.lead_calliope.amp_env.release_ms = 60.057f;
@@ -128,7 +127,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_chiff.filter_env.hold_ms = 10.0f;
   o.lead_chiff.env_to_cutoff_cents = 3900.0f;
   o.lead_chiff.resonance_q = 1.8f;
-  o.lead_chiff.gain = 0.5012f;
+  o.lead_chiff.gain = 0.5477f;
   o.lead_chiff.amp_env.attack_ms = 8.16884f;
   o.lead_chiff.amp_env.release_ms = 91.8123f;
   o.lead_chiff.va.velocity_exponent = 1.11f;
@@ -143,7 +142,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_charang.drive = 0.55f;
   o.lead_charang.resonance_q = 2.0f;
   o.lead_charang.cutoff_hz = 2600.0f;
-  o.lead_charang.gain = 0.7577f;
+  o.lead_charang.gain = 0.4909f;
   o.lead_charang.amp_env.release_ms = 91.8123f;
   o.lead_charang.va.velocity_exponent = 1.01f;
 
@@ -159,7 +158,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_voice.lfo_to_pitch_cents = 14.0f;
   o.lead_voice.body = BodyType::kVocal;
   o.lead_voice.body_mix = 0.6f;
-  o.lead_voice.gain = 0.4656f;
+  o.lead_voice.gain = 0.4743f;
   o.lead_voice.va.band_noise_level = 0.05f;
   o.lead_voice.va.band_noise_low_hz = 65.0f;
   o.lead_voice.va.band_noise_low_key_track = 1.0f;
@@ -177,7 +176,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_fifths.vel_to_cutoff_cents = 600.0f;
   o.lead_fifths.hp_cutoff_hz = 65.0f;
   o.lead_fifths.stereo_spread = 0.35f;
-  o.lead_fifths.gain = 0.2406f;
+  o.lead_fifths.gain = 0.2879f;
   o.lead_fifths.va.osc2_level = 1.0f;
   o.lead_fifths.va.osc2_interval_cents = -500.0f;
   o.lead_fifths.va.noise_level = 0.02f;
@@ -193,7 +192,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_bass_lead.drive = 0.35f;
   o.lead_bass_lead.env_to_cutoff_cents = 2400.0f;
   o.lead_bass_lead.key_track = 0.4f;
-  o.lead_bass_lead.gain = 0.4855f;
+  o.lead_bass_lead.gain = 0.6063f;
   o.lead_bass_lead.amp_env.attack_ms = 8.16884f;
   o.lead_bass_lead.amp_env.release_ms = 91.8123f;
   o.lead_bass_lead.va.velocity_exponent = 0.91f;
@@ -257,18 +256,23 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.pad_new_age.amp_env = fallback_env(350.0f, 900.0f, 0.75f, 1400.0f);
   o.pad_new_age.lfo2_rate_hz = 0.25f;
   o.pad_new_age.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kCutoffCents, 900.0f};
-  o.pad_new_age.gain = 0.2789f;
+  o.pad_new_age.gain = 0.4375f;
   o.pad_new_age.va.velocity_exponent = 1.05f;
 
-  // Warm (GM 89): the shared pad taken down and slowed. Nothing else — warm is
-  // the absence of edge, not the presence of anything.
+  // Warm (GM 89): two saws 6 c apart, one each side of the field, through a
+  // 4th-order Butterworth lowpass at 590 Hz on middle C tracking the key by 0.6,
+  // which is the reference's ladder to 4 dB; a slow noise AM gives its skirt.
   o.pad_warm = pad;
-  o.pad_warm.cutoff_hz = 1101.75f;
-  o.pad_warm.amp_env = fallback_env(620.0f, 800.0f, 0.85f, 1100.0f);
-  o.pad_warm.gain = 0.3648f;
-  o.pad_warm.amp_env.decay_ms = 2397.72f;
-  o.pad_warm.amp_env.release_ms = 673.29f;
-  o.pad_warm.amp_env.sustain = 0.751722f;
+  o.pad_warm.unison = 2;
+  o.pad_warm.detune_cents = 6.0f;
+  o.pad_warm.pitch_offset_cents = -1.0f;
+  o.pad_warm.va.unison_width = 1.0f;
+  o.pad_warm.va.noise_am = 0.012f;
+  o.pad_warm.filter_model = SynthFilterModel::kSvf4Pole;
+  o.pad_warm.cutoff_hz = 590.0f;
+  o.pad_warm.key_track = 0.6f;
+  o.pad_warm.amp_env = fallback_env(120.0f, 2397.72f, 0.751722f, 580.0f);
+  o.pad_warm.gain = 0.3981f;
   o.pad_warm.va.velocity_exponent = 0.94f;
 
   // Polysynth (GM 90): a pad you can still play chords on, so the attack comes
@@ -281,7 +285,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.pad_polysynth.amp_env = fallback_env(90.0f, 700.0f, 0.7f, 600.0f);
   o.pad_polysynth.filter_env = fallback_env(20.0f, 900.0f, 0.5f, 600.0f);
   o.pad_polysynth.env_to_cutoff_cents = 1500.0f;
-  o.pad_polysynth.gain = 0.5739f;
+  o.pad_polysynth.gain = 0.2274f;
   o.pad_polysynth.amp_env.attack_ms = 147.039f;
   o.pad_polysynth.va.velocity_exponent = 0.77f;
 
@@ -294,7 +298,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.pad_choir.amp_env = fallback_env(500.0f, 700.0f, 0.85f, 900.0f);
   o.pad_choir.body = BodyType::kVocal;
   o.pad_choir.body_mix = 0.7f;
-  o.pad_choir.gain = 0.3535f;
+  o.pad_choir.gain = 0.2618f;
   o.pad_choir.va.velocity_exponent = 0.72f;
 
   // Bowed (GM 92): bowed glass. A held sine with its octave at -34 dB under the
@@ -324,9 +328,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   bw.modal.velocity_exponent = 0.65f;
   bw.cutoff_hz = 2000.0f;
   bw.amp_env = fallback_env(420.0f, 0.0f, 1.0f, 1500.0f);
-  // 2.4 dB over the bank's RMS balance: a sine's peak sits nearest its RMS, and
-  // this keeps the sixteen leads and pads inside 3 dB of each other on peak.
-  bw.gain = 0.29f;
+  bw.gain = 0.2847f;
 
   // Metallic (GM 93): two layers of one narrow pulse. A chorused one through a
   // lowpass on the fundamental, 3.5 c flat, gives h2-h6; an unfiltered single
@@ -345,7 +347,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.pad_metallic.va.osc2_interval_cents = 5.0f;
   o.pad_metallic.va.osc2_dry = 1.0f;
   o.pad_metallic.amp_env = fallback_env(120.0f, 1200.0f, 0.6f, 750.0f);
-  o.pad_metallic.gain = 2.0694f;
+  o.pad_metallic.gain = 1.264f;
   o.pad_metallic.va.velocity_exponent = 0.65f;
 
   // Halo (GM 94): distance. The slowest attack, the widest scatter, the most
@@ -358,7 +360,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   // whole two-second tail.
   o.pad_halo.amp_env = fallback_env(1200.0f, 900.0f, 0.85f, 600.0f);
   o.pad_halo.stereo_spread = 0.85f;
-  o.pad_halo.gain = 0.7512f;
+  o.pad_halo.gain = 0.2069f;
   o.pad_halo.va.velocity_exponent = 0.72f;
 
   // Sweep (GM 95): the modulation is the program. A slow LFO across most of
@@ -369,7 +371,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.pad_sweep.resonance_q = 3.0f;
   o.pad_sweep.lfo2_rate_hz = 0.3f;
   o.pad_sweep.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kCutoffCents, 2600.0f};
-  o.pad_sweep.gain = 0.2798f;
+  o.pad_sweep.gain = 0.1751f;
   o.pad_sweep.amp_env.attack_ms = 244.833f;
   o.pad_sweep.va.velocity_exponent = 0.72f;
 

@@ -3344,24 +3344,43 @@ TEST_CASE("the subtractive and FM velocity exponents scale the voice amplifier a
 TEST_CASE("the synth leads and pads are sixteen voices, not two", "[midi][synth]") {
   // 80-95 answered to two family patches, so eight leads rendered one sound and
   // eight pads another. Distinctness is the claim the names make; the levels
-  // are the claim that they can be sequenced next to each other.
-  std::vector<std::vector<float>> tones;
+  // are the module's own slot levels, each reference's held C4 at velocity 96
+  // (equal-power RMS 0.5-2 s in, dBFS), which every patch sits one offset under.
+  static constexpr std::array<double, 16> kModuleDb = {
+      -19.1, -22.5, -23.0, -21.4, -24.2, -20.4, -21.8, -17.5,
+      -21.3, -19.6, -24.9, -24.0, -20.5, -27.7, -25.4, -26.1,
+  };
+  std::vector<StereoRender> tones;
+  std::vector<double> offsets;
   for (int program = 80; program <= 95; ++program) {
-    tones.push_back(render_program(static_cast<uint8_t>(program), 60, 96000));
-  }
-  float loudest = 0.0f;
-  float quietest = 1.0f;
-  for (const std::vector<float>& tone : tones) {
-    const float p = peak(tone);
-    REQUIRE(p > 0.01f);
-    REQUIRE(p < 1.0f);
-    loudest = std::max(loudest, p);
-    quietest = std::min(quietest, p);
+    NativeSynthConfig cfg;
+    cfg.patch = sonare::midi::synth::gm_fallback_patch(0, static_cast<uint8_t>(program));
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 96)));
+    tones.push_back(render(synth, 96000));
+    const StereoRender& tone = tones.back();
+    double power = 0.0;
+    for (size_t i = 24000; i < 96000; ++i) {
+      power += 0.5 * (static_cast<double>(tone.left[i]) * tone.left[i] +
+                      static_cast<double>(tone.right[i]) * tone.right[i]);
+    }
+    power /= 72000.0;
+    REQUIRE(power > 0.0);
+    REQUIRE(std::max(peak(tone.left), peak(tone.right)) < 1.0f);
+    offsets.push_back(10.0 * std::log10(power) - kModuleDb[static_cast<size_t>(program - 80)]);
   }
   for (size_t i = 0; i < tones.size(); ++i) {
-    for (size_t j = i + 1; j < tones.size(); ++j) REQUIRE(tones[i] != tones[j]);
+    for (size_t j = i + 1; j < tones.size(); ++j) REQUIRE(tones[i].left != tones[j].left);
   }
-  REQUIRE(loudest < 1.42f * quietest);  // inside 3 dB
+  std::vector<double> sorted = offsets;
+  std::sort(sorted.begin(), sorted.end());
+  const double median = 0.5 * (sorted[7] + sorted[8]);
+  for (size_t i = 0; i < offsets.size(); ++i) {
+    INFO("GM program " << (80 + i) << " sits " << offsets[i] - median
+                       << " dB off the module's balance");
+    CHECK(std::fabs(offsets[i] - median) < 0.5);
+  }
 }
 
 TEST_CASE("the FX and SFX octets have dedicated voices", "[midi][synth]") {
@@ -3513,6 +3532,41 @@ double aftersound_rms(const std::vector<float>& buf) {
 }
 
 }  // namespace
+
+TEST_CASE("the unison width spreads the stack across the field and keeps its centre",
+          "[midi][synth]") {
+  sonare::midi::synth::NativeSynthPatch patch;
+  patch.unison = 2;
+  patch.detune_cents = 6.0f;
+  auto stereo = [](const sonare::midi::synth::NativeSynthPatch& p) {
+    NativeSynthConfig cfg;
+    cfg.patch = p;
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    return render(synth, 48000);
+  };
+  const StereoRender narrow = stereo(patch);
+  patch.va.unison_width = 1.0f;
+  const StereoRender wide = stereo(patch);
+  REQUIRE(narrow.left == narrow.right);
+
+  // The two legs carry different oscillators while their sum is the centred stack's.
+  double sum_error = 0.0;
+  double sum_energy = 0.0;
+  double difference = 0.0;
+  for (size_t i = 4800; i < wide.left.size(); ++i) {
+    const double centre = static_cast<double>(narrow.left[i]) + narrow.right[i];
+    const double sum = static_cast<double>(wide.left[i]) + wide.right[i];
+    sum_error += (sum - centre) * (sum - centre);
+    sum_energy += centre * centre;
+    difference += (static_cast<double>(wide.right[i]) - wide.left[i]) *
+                  (static_cast<double>(wide.right[i]) - wide.left[i]);
+  }
+  REQUIRE(sum_energy > 0.0);
+  CHECK(sum_error < 1e-8 * sum_energy);
+  CHECK(difference > 0.5 * sum_energy);
+}
 
 TEST_CASE("programs 0-3 are four pianos, not one", "[midi][synth]") {
   // All four answered to the family patch, so Bright, Electric Grand and
