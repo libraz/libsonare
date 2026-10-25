@@ -113,7 +113,7 @@ void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, u
 
   // Glottal source pitch.
   base_freq_hz_ = note_to_hz(note);
-  phase_ = 0.0f;
+  glottis_.start(sr, VaWaveform::kSaw, 0.0f, 0);
   phase_inc_ = base_freq_hz_ / static_cast<float>(sr);
 
   // Source tilt: brightness slides the glottal roll-off corner up, keeping more
@@ -242,15 +242,12 @@ float VocalVoiceCore::render(float pitch_ratio) noexcept {
     if (vib_phase_ >= kTwoPi) vib_phase_ -= kTwoPi;
   }
 
-  // Glottal source: a naive sawtooth through the one-pole tilt (the glottal
-  // flow's spectral roll-off), plus the seeded aspiration noise. Source-filter
-  // is feed-forward, so any aliasing of the raw saw is further shaped by the
-  // narrow formant bands rather than accumulated.
+  // Glottal source: a PolyBLEP sawtooth through the one-pole tilt (the glottal
+  // flow's spectral roll-off), plus the seeded aspiration noise.
   float inc = phase_inc_ * ratio * vib;
   if (inc > 0.45f) inc = 0.45f;
-  phase_ += inc;
-  phase_ -= std::floor(phase_);
-  const float saw = 2.0f * phase_ - 1.0f;
+  glottis_.set_frequency(inc * static_cast<float>(sample_rate_));
+  const float saw = glottis_.next();
   tilt_state_ += tilt_alpha_ * (saw - tilt_state_);
   float exc = tilt_state_;
   if (breath_ > 0.0f) {
@@ -277,7 +274,7 @@ void VocalVoiceCore::release() noexcept { level_.release(); }
 void VocalVoiceCore::kill() noexcept {
   level_.kill();
   section_.stop();
-  phase_ = 0.0f;
+  glottis_.start(sample_rate_, VaWaveform::kSaw, 0.0f, 0);
   tilt_state_ = 0.0f;
   vib_phase_ = 0.0f;
   for (int i = 0; i < kVocalFormants; ++i) {

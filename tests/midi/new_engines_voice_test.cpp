@@ -412,3 +412,28 @@ TEST_CASE("the vocal section stage is bounded at its widest, slowest setting at 
     REQUIRE(peak(tone) <= std::sqrt(6.0f) * peak(solo_tone) * 1.001f);
   }
 }
+
+TEST_CASE("the vocal glottal source does not fold its partials back below Nyquist",
+          "[midi][synth][new_engines]") {
+  // Measured share of power on the harmonics: 0.85 at note 100 and 0.59 at note 105 with a
+  // naive sawtooth source, 1.000 with the PolyBLEP one.
+  VocalPatchParams params;
+  params.vibrato_depth = 0.0f;
+  params.breath_noise = 0.0f;
+  constexpr int kLong = 65536;
+  for (uint8_t note : {uint8_t{100}, uint8_t{105}}) {
+    const std::vector<float> tone = render_vocal_core(params, kRate, note, 96000);
+    const double f0 = 440.0 * std::pow(2.0, (note - 69) / 12.0);
+    const std::vector<double> power = sonare::test::power_spectrum(tone, 24000, kLong);
+    double on_harmonics = 0.0;
+    double total = 0.0;
+    for (std::size_t bin = 1; bin < power.size(); ++bin) {
+      const double hz = static_cast<double>(bin) * kRate / kLong;
+      const double k = std::round(hz / f0);
+      total += power[bin];
+      if (k >= 1.0 && std::fabs(hz / (k * f0) - 1.0) < 0.005) on_harmonics += power[bin];
+    }
+    INFO("note " << int(note) << " harmonic share " << on_harmonics / total);
+    REQUIRE(on_harmonics / total > 0.99);
+  }
+}

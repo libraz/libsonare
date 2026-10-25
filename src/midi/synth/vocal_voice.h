@@ -9,7 +9,7 @@
 ///        formant peaks sit, not by a fixed partial recipe.
 ///
 /// Two stages:
-///   1. GLOTTAL SOURCE: a band-limited pulse train at the note fundamental with
+///   1. GLOTTAL SOURCE: a PolyBLEP band-limited sawtooth at the note fundamental with
 ///      a spectral tilt (the glottal flow's -12 dB/oct roll-off), plus a small
 ///      aspiration noise (breath). This is the voice's excitation.
 ///   2. FORMANT BANK: a parallel bank of resonant bandpass biquads tuned to a
@@ -30,6 +30,7 @@
 
 #include "midi/control_value.h"
 #include "midi/synth/excitation_axes.h"
+#include "midi/synth/oscillator.h"
 #include "midi/synth/section_stage.h"
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_breath.h"
@@ -152,9 +153,9 @@ class VocalVoiceCore {
   double sample_rate_ = 48000.0;
   float base_freq_hz_ = 220.0f;
 
-  // Glottal source: a phase accumulator driving a band-limited pulse with a
-  // one-pole spectral tilt (the glottal roll-off).
-  float phase_ = 0.0f;
+  // Glottal source: a PolyBLEP sawtooth with a one-pole spectral tilt (the
+  // glottal roll-off). phase_inc_ is the unmodulated increment in cycles/sample.
+  VaOscillator glottis_;
   float phase_inc_ = 0.0f;
   float tilt_state_ = 0.0f;
   float tilt_alpha_ = 1.0f;
