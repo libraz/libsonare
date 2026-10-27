@@ -186,7 +186,7 @@ This release tightens argument validation on every surface: values that used to 
 
 #### MIDI and synthesizer
 
-- The GM fallback bank's physical-model voices sound different: most melodic programs and many drum notes take values fitted against their reference recordings, and reed, brass, flute, free-reed, plucked-string and tuned-percussion models gained structure (bell radiation, mouthpiece reflection, breath onset, contact law, a straight mute); only the acoustic piano is calibrated, and the other voices are tuned in patch releases, so their output moves across patches.
+- The GM fallback bank's voices sound different: most melodic programs and many drum notes take values fitted against their reference recordings, lead and pad levels follow the reference module's slot balance, and reed, brass, flute, free-reed, plucked-string and tuned-percussion models gained structure (bell radiation, mouthpiece reflection, breath onset, contact law, a straight mute); only the acoustic piano is calibrated, and the other voices are tuned in patch releases, so their output moves across patches.
 - Built-in synth renders change, MIDI 1.0 renders included, in free-reed radiation level, modal low-register precision and modulated decay, the slow modulation clocks of the plate reverb, pitch shifter and SoundFont LFO, the harpsichord release after a downward bend, and GS pan level, which now matches between setup and live edits.
 - With `preferModelForModeledFamilies`, GM program 7 (Clavi) plays its built-in string model instead of the SoundFont sample.
 - GS Reset and GM System On clear the CC#32 tone map.
