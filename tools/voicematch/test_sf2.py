@@ -35,13 +35,16 @@ def _font(
     extra_igen: list[tuple[int, int]] = (),
     rate: int = 44100,
     name: str = "test",
+    presets: list[tuple[str, int, int, list[int]]] = (),
 ) -> Path:
-    """Write a one-preset, one-instrument SoundFont.
+    """Write a SoundFont of one instrument per preset.
 
     `zones` is one `(key_lo, key_hi, sample index)` per instrument zone;
     `extra_igen` is appended to the FIRST zone, which is how a test asks for a
-    generator the reader is meant to refuse.
+    generator the reader is meant to refuse. `presets` is one `(name, bank,
+    program, zone indices)` each; left empty, one preset `name` holds every zone.
     """
+    presets = list(presets) or [(name, 0, 0, list(range(len(zones))))]
     smpl = bytearray()
     shdr = bytearray()
     for i, (frames, pitch) in enumerate(zip(audio, pitches)):
@@ -65,24 +68,30 @@ def _font(
         )
     shdr += struct.pack("<20sIIIIIBbHH", b"EOS", 0, 0, 0, 0, 0, 0, 0, 0, 0)
 
-    igen, ibag = bytearray(), bytearray()
-    for n, (lo, hi, sample) in enumerate(zones):
-        ibag += struct.pack("<HH", len(igen) // 4, 0)
-        gens = [(43, (hi << 8) | lo)]
-        if n == 0:
-            gens += list(extra_igen)
-        gens.append((53, sample))  # sampleID is the terminal generator of a zone
-        for op, amount in gens:
-            igen += struct.pack("<Hh", op, amount)
+    igen, ibag, inst = bytearray(), bytearray(), bytearray()
+    for i, (_pname, _bank, _program, members) in enumerate(presets):
+        inst += struct.pack("<20sH", f"inst{i}".encode(), len(ibag) // 4)
+        for z in members:
+            lo, hi, sample = zones[z]
+            ibag += struct.pack("<HH", len(igen) // 4, 0)
+            gens = [(43, (hi << 8) | lo)]
+            if z == 0:
+                gens += list(extra_igen)
+            gens.append((53, sample))  # sampleID is the terminal generator of a zone
+            for op, amount in gens:
+                igen += struct.pack("<Hh", op, amount)
+    inst += struct.pack("<20sH", b"EOI", len(ibag) // 4)
     ibag += struct.pack("<HH", len(igen) // 4, 0)  # terminal bag
     igen += struct.pack("<Hh", 0, 0)  # terminal gen
 
-    inst = struct.pack("<20sH", b"inst", 0) + struct.pack("<20sH", b"EOI", len(zones))
-    pgen = struct.pack("<Hh", 41, 0) + struct.pack("<Hh", 0, 0)
-    pbag = struct.pack("<HH", 0, 0) + struct.pack("<HH", 1, 0)
-    phdr = struct.pack("<20sHHHIII", name.encode(), 0, 0, 0, 0, 0, 0) + struct.pack(
-        "<20sHHHIII", b"EOP", 0, 0, 1, 0, 0, 0
-    )
+    pgen, pbag, phdr = bytearray(), bytearray(), bytearray()
+    for i, (pname, bank, program, _members) in enumerate(presets):
+        phdr += struct.pack("<20sHHHIII", pname.encode(), program, bank, i, 0, 0, 0)
+        pbag += struct.pack("<HH", i, 0)
+        pgen += struct.pack("<Hh", 41, i)
+    phdr += struct.pack("<20sHHHIII", b"EOP", 0, 0, len(presets), 0, 0, 0)
+    pbag += struct.pack("<HH", len(presets), 0)
+    pgen += struct.pack("<Hh", 0, 0)
     terminal_mod = b"\x00" * 10
 
     def chunk(cid: bytes, body: bytes) -> bytes:

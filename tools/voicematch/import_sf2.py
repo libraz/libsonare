@@ -239,6 +239,70 @@ def import_corpus(cfg: dict, out: Path, *, verbose: bool = False) -> dict:
     return manifest
 
 
+#: Where a witness's fall is read: from 20 dB under the level it began at to 30 dB
+#: under it. A tank that loud behind the fall would set the slope there; one quieter
+#: leaves a held note's tail energy under the 35 dB `Room.is_dry` reads as no room.
+WITNESS_FROM_DB = 20.0
+WITNESS_DEPTH_DB = 30.0
+#: How much faster than the measured space a witness has to fall to rule it out.
+WITNESS_MARGIN = 1.25
+#: How long a witness has to run on past its deepest reading. Fonts are trimmed at
+#: about 35 dB down, often with a fade, and a fade falls fast whatever is behind it.
+WITNESS_CLEAR_S = 0.5
+#: Two tones, so one recording trimmed or gated by hand cannot vouch for a session.
+WITNESSES_NEEDED = 2
+
+
+def lower_fall_rate(audio: np.ndarray, sr: int) -> float | None:
+    """How fast a recording's last fall runs through its lower part, in dB/s.
+
+    The fall begins at the last 10 ms frame within 6 dB of the loudest; the rate is
+    taken between the first crossings of `WITNESS_FROM_DB` and `WITNESS_DEPTH_DB`
+    under the level there. None where the recording ends before falling that far,
+    or ends within `WITNESS_CLEAR_S` of it.
+    """
+    mono = audio.mean(axis=1) if audio.ndim > 1 else audio
+    hop = max(1, sr // 100)
+    frames = mono.size // hop
+    if frames < 3:
+        return None
+    rms = np.sqrt(np.mean(np.square(mono[: frames * hop].reshape(frames, hop)), axis=1))
+    db = 20.0 * np.log10(np.maximum(rms, 1e-12))
+    start = int(np.nonzero(db >= db.max() - 6.0)[0][-1])
+    fall = db[start:] - db[start]
+    upper = np.nonzero(fall <= -WITNESS_FROM_DB)[0]
+    lower = np.nonzero(fall <= -WITNESS_DEPTH_DB)[0]
+    if not upper.size or not lower.size or lower[0] <= upper[0]:
+        return None
+    if (fall.size - lower[0]) * hop / sr < WITNESS_CLEAR_S:
+        return None
+    return (WITNESS_DEPTH_DB - WITNESS_FROM_DB) / ((lower[0] - upper[0]) * hop / sr)
+
+
+def session_witnesses(font: SoundFont, own: set[str], rt60_s: float) -> list[dict]:
+    """Recordings from the same file that fall too fast for a space of `rt60_s`.
+
+    A module's effects are set per part, not per tone, so a session recorded with
+    a tank on leaves it behind every tone. Read from presets other than `own` in
+    the same banks, one witness per preset, so a drum bank recorded on a part of
+    its own never vouches for a melodic one.
+    """
+    banks = {p.bank for p in font.presets if p.name in own}
+    needed = WITNESS_MARGIN * 60.0 / rt60_s
+    found = []
+    for preset in font.presets:
+        if preset.name in own or preset.bank not in banks:
+            continue
+        for note, sample in sorted(font.note_map(preset).items()):
+            rate = lower_fall_rate(*font.extract(sample))
+            if rate is not None and rate >= needed:
+                found.append({"preset": preset.name, "note": note, "fall_db_s": round(rate, 1)})
+                break
+        if len(found) >= WITNESSES_NEEDED:
+            break
+    return found
+
+
 def check_module_is_dry(cfg: dict, manifest: dict, out: Path) -> int:
     """The measured half of `source_class: module` + `room: present`.
 
@@ -248,6 +312,11 @@ def check_module_is_dry(cfg: dict, manifest: dict, out: Path) -> int:
     Neither is importable, and neither is visible to the declared half of the
     rule ([reference.md](docs/reference.md)), which can only catch a capture that
     admits to a room in the same file where it claims to be the module.
+
+    A note-tail estimate also reads a long release as a space, which no reading of
+    the tone's own notes can rule out. The session can: where other tones of the
+    same file fall faster than the space measured here could decay, the effects
+    were off and the reading is the tone's own release (`session_witnesses`).
     """
     if cfg.get("source_class") != "module":
         return 0
@@ -273,6 +342,30 @@ def check_module_is_dry(cfg: dict, manifest: dict, out: Path) -> int:
         return 0
     for tid, room in sorted(rooms.items()):
         print(f"  {tid}: RT60 {room.get('rt60_s', 0.0):.2f} s", file=sys.stderr)
+    vouched = {}
+    for timbre in cfg["timbres"]:
+        room = rooms.get(timbre["id"])
+        if room is None:
+            continue
+        path, name = _resolve_font(cfg, timbre)
+        with SoundFont(path) as font:
+            witnesses = session_witnesses(font, {name}, float(room["rt60_s"]))
+        if len(witnesses) < WITNESSES_NEEDED:
+            break
+        vouched[timbre["id"]] = witnesses
+    if len(vouched) == len(rooms):
+        for tid, witnesses in sorted(vouched.items()):
+            listing = ", ".join(
+                f"{w['preset']!r} n{w['note']:03d} {w['fall_db_s']:.0f} dB/s" for w in witnesses
+            )
+            print(
+                f"  {tid}: read as the tone's own release — the same file's {listing} "
+                f"fall faster than a space of RT60 {rooms[tid]['rt60_s']:.2f} s could decay",
+                file=sys.stderr,
+            )
+        manifest["dryness"] = {"witnesses": vouched, "rooms_read_as_release": rooms}
+        (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+        return 0
     print(
         f"\n{cfg['id']}: this is declared `source_class: module` and its own audio "
         f"measures a space on {len(rooms)} timbre(s). A module is captured with every "

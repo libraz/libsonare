@@ -206,6 +206,85 @@ def test_a_module_corpus_that_measures_a_space_fails(module_cfg_and_corpus, caps
     assert "measures a space" in capsys.readouterr().err
 
 
+def _falling(rate_db_s: float, freq: float = 330.0, seconds: float = 1.0) -> np.ndarray:
+    """A tone falling freely from its first frame at `rate_db_s`."""
+    t = np.arange(int(seconds * RATE)) / RATE
+    return 0.5 * np.sin(2 * np.pi * freq * t) * 10.0 ** (-rate_db_s * t / 20.0)
+
+
+def test_a_free_fall_is_read_at_its_own_rate_and_a_tail_behind_it_slows_it():
+    assert import_sf2.lower_fall_rate(_falling(150.0), RATE) == pytest.approx(150.0, rel=0.1)
+    wet = _wet(_falling(150.0), 1.3)
+    slowed = import_sf2.lower_fall_rate(wet, RATE)
+    assert slowed is None or slowed < 60.0 / 1.3 * import_sf2.WITNESS_MARGIN
+
+
+def test_a_recording_that_never_falls_far_enough_is_no_witness():
+    assert import_sf2.lower_fall_rate(_burst(seconds=1.0, freq=330.0), RATE) is None
+
+
+def test_a_fall_cut_off_just_past_its_deepest_reading_is_no_witness():
+    """A sustain faded out at the trim reads as a fast fall whatever sits behind it."""
+    held = _burst(seconds=1.0, freq=330.0)
+    fade = np.linspace(1.0, 0.0, int(0.1 * RATE)) ** 4
+    trimmed = np.concatenate([held, held[: fade.size] * fade])
+    assert import_sf2.lower_fall_rate(trimmed, RATE) is None
+    # The same fall left to run on is read.
+    assert import_sf2.lower_fall_rate(_falling(150.0, seconds=0.8), RATE) is not None
+
+
+@pytest.fixture
+def session(tmp_path: Path):
+    """A long-release tone under test, beside other presets of the same file."""
+
+    def build(witness_audio: list[np.ndarray], witness_bank: int = 0):
+        tone = [
+            _wet(_burst(seconds=1.0, freq=261.6), 1.3),
+            _wet(_burst(seconds=1.0, freq=440.0), 1.3),
+        ]
+        zones = [(58, 62, 0), (70, 74, 1)]
+        presets = [("mod", 0, 80, [0, 1])]
+        for i, audio in enumerate(witness_audio):
+            zones.append((64, 64, 2 + i))
+            presets.append((f"w{i}", witness_bank, 81 + i, [2 + i]))
+        f = _font(
+            tmp_path,
+            zones=zones,
+            audio=tone + witness_audio,
+            pitches=[60, 72] + [64] * len(witness_audio),
+            name="session",
+            presets=presets,
+        )
+        cfg = _load(_definition(tmp_path, f, "mod", gate_ms=900))
+        out = tmp_path / "corpus"
+        return cfg, import_corpus(cfg, out), out
+
+    return build
+
+
+def test_a_space_the_rest_of_the_session_falls_through_is_read_as_a_release(session, capsys):
+    cfg, manifest, out = session([_falling(150.0), _falling(200.0, freq=500.0)])
+    assert check_module_is_dry(cfg, manifest, out) == 0
+    assert "own release" in capsys.readouterr().err
+    assert len(json.loads((out / "manifest.json").read_text())["dryness"]["witnesses"]["t0"]) == 2
+
+
+def test_a_session_whose_other_tones_carry_the_tail_too_is_still_refused(session, capsys):
+    cfg, manifest, out = session([_wet(_falling(150.0), 1.3), _wet(_falling(200.0), 1.3)])
+    assert check_module_is_dry(cfg, manifest, out) == 1
+    assert "measures a space" in capsys.readouterr().err
+
+
+def test_one_witness_does_not_vouch_for_a_session(session):
+    cfg, manifest, out = session([_falling(150.0)])
+    assert check_module_is_dry(cfg, manifest, out) == 1
+
+
+def test_a_drum_bank_does_not_vouch_for_a_melodic_tone(session):
+    cfg, manifest, out = session([_falling(150.0), _falling(200.0)], witness_bank=128)
+    assert check_module_is_dry(cfg, manifest, out) == 1
+
+
 def test_the_dryness_check_does_not_run_for_a_non_module_capture(
     tmp_path: Path, font: Path, monkeypatch
 ):
