@@ -2,11 +2,11 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "drawbar-dark",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-23T06:54:19+00:00",
-  "recorded_utc": "2026-10-23T07:22:36+00:00",
+  "reference_measured_utc": "2026-10-23T20:00:04+00:00",
+  "recorded_utc": "2026-10-26T06:34:40+00:00",
   "model_build": {
-    "built_utc": "2026-10-23T06:18:37Z",
-    "newest_source_utc": "2026-10-23T06:17:49Z",
+    "built_utc": "2026-10-26T06:34:05Z",
+    "newest_source_utc": "2026-10-26T00:12:32Z",
     "stale": false
   },
   "reference_spread": {
@@ -17,17 +17,17 @@
     "damper": 587.5,
     "register": 1.135,
     "stereo": 0.1715,
-    "stretch": 1.2525,
+    "stretch": 0.1275,
     "tnr": 17.64,
     "vel_range": 0.31
   },
   "bounds": {
     "stretch": {
-      "floor": 1.2525,
+      "floor": 0.1275,
       "floor_from": "measured spread",
-      "median": 1.597,
-      "abs_median": 1.597,
-      "p90": 3.266,
+      "median": 0.253,
+      "abs_median": 0.253,
+      "p90": 0.553,
       "rows": 22
     },
     "tnr": {
