@@ -18,6 +18,7 @@ import { activeKey, applyGains, renderLevels, span, startAt } from './player.js'
 import { clearStatus, recordPreference, renderComparedAgainst } from './feedback.js';
 import { renderIdent, writeRoute } from './address.js';
 import { renderSubject } from './subject.js';
+import { shipChip, shipsOf } from './identity.js';
 
 /* Slots in the order they are shown, which is the order `1`…`9` count in.
  *
@@ -87,6 +88,25 @@ function versionFace(slot) {
 /// keys carry their title on the page rather than in the registry.
 const BASELINE_TITLES = { model: 'ver.baseline', 'model-di': 'ver.baselineDirect' };
 
+/// What the unmodified build is, for a listener: the path that ships, or the
+/// same voice with the rig and the sends taken off.
+const BASELINE_DESCS = { model: 'ver.baselineDesc', 'model-di': 'ver.baselineDirectDesc' };
+
+/* The one word a model button needs beyond its name: a candidate is not what
+ * ships, and an unmodified render older than the bank is not what ships
+ * either. Nothing on a button said the second, so an old page's "as shipped"
+ * read as today's voice. */
+function versionTag(slot) {
+  if (state.blind) return null;
+  const key = state.take.keys[slot];
+  if (roleOf(key) !== 'model') return null;
+  if (BASELINE_TITLES[key]) {
+    const ships = shipsOf(state.setId);
+    return ships && ships.state === 'stale' ? el('span', 'vtag warn', t('ver.tagStale')) : null;
+  }
+  return el('span', 'vtag', t('ver.tagCandidate'));
+}
+
 /// A capture has no registry title, so its own label names it instead of its key.
 const sourceTitle = (key) => {
   if (BASELINE_TITLES[key]) return t(BASELINE_TITLES[key]);
@@ -144,6 +164,8 @@ export function buildVersionButtons() {
     const text = el('span', 'vtext');
     text.append(el('span', 'vname', face.name));
     if (face.key) text.append(el('span', 'vkey', face.key));
+    const tag = versionTag(slot);
+    if (tag) text.append(tag);
     b.append(text);
     b.title = versionTitle(slot);
     b.setAttribute('aria-pressed', String(slot === state.versionIndex));
@@ -467,10 +489,23 @@ function renderNow() {
   // a sentence written for whoever is listening; the label and the override
   // string are the record, and they are what the button's tooltip carries.
   const title = sourceTitle(key);
-  const desc = BASELINE_TITLES[key] ? t('ver.baselineDesc') : phrase(src.desc);
+  const desc = BASELINE_DESCS[key] ? t(BASELINE_DESCS[key]) : phrase(src.desc);
   if (title) box.append(el('span', 'now-title', title));
   const detail = [src.label, src.detail].filter((s) => s && s !== key).join('  ·  ');
   box.append(el('span', 'now-detail', desc || detail || sourceLabel(key)));
+  box.append(nowStatus(key, role));
+}
+
+/* What the sounding version stands for, as one chip at the banner's end: the
+ * voice as it ships (and whether this render still is it), a candidate that
+ * does not ship, the target, or a capture heard for context. */
+function nowStatus(key, role) {
+  if (role === 'model' && BASELINE_TITLES[key]) return shipChip(shipsOf(state.setId));
+  const which = role === 'model' ? 'candidate' : role === 'reference' ? 'target' : 'context';
+  const chip = el('span', 'idstate', t(`now.is.${which}`));
+  chip.dataset.state = which;
+  chip.title = t(`now.is.${which}.long`);
+  return chip;
 }
 
 export function renderCaptions() {

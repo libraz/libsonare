@@ -19,19 +19,25 @@
 
 import { $, el, state } from './state.js';
 import { t } from './i18n.js';
-
-/* Sixteen engines, three methods. What the eye is being asked here is "physical
- * model, FM, or neither" — sixteen hues would answer nothing, and the engine's
- * own name is on the row. */
-const METHODS = { fm: 'fm', subtractive: 'classic', additive: 'classic' };
-
-export const methodOf = (engine) => (engine ? (METHODS[engine] || 'physical') : 'classic');
+import {
+  addressOf, methodOf, methodTag, shipChip, shipsOf, slotKind, slotLong, slotTag, targetShort,
+  targetState, targetWords,
+} from './identity.js';
 
 const METHOD_PICKS = [
   ['', 'bank.any'],
   ['physical', 'bank.physical'],
   ['fm', 'bank.fm'],
   ['classic', 'bank.classic'],
+];
+
+/// Where on the map a slot sits. One axis, so it is a segmented control.
+const SLOT_PICKS = [
+  ['', 'bank.any'],
+  ['gm', 'slot.short.gm'],
+  ['gs', 'slot.short.gs'],
+  ['gm2', 'slot.short.gm2'],
+  ['kit', 'slot.short.kit'],
 ];
 
 const FILTER_PICKS = [
@@ -50,6 +56,7 @@ const stageColor = (i) => `var(--s${i})`;
 
 const bank = {
   method: '',
+  slot: '',
   filter: '',
   stage: null,     // a rung index, or null for every rung
 };
@@ -76,11 +83,16 @@ export async function loadBank() {
 function bankMatches(v) {
   const find = $('bankFind').value.trim().toLowerCase();
   if (bank.method && methodOf(v.engine) !== bank.method) return false;
+  if (bank.slot && slotKind(v) !== bank.slot) return false;
   if (bank.stage !== null && stageIndex(v) !== bank.stage) return false;
   if (bank.filter === 'oracle' && !v.capture) return false;
   if (bank.filter === 'no-oracle' && v.capture) return false;
   if (bank.filter === 'unwritten' && !(v.open_candidates || []).length) return false;
   if (bank.filter === 'page' && !hasPage(v.slug)) return false;
+  if (bank.filter === 'stale' && pageState(v) !== 'stale') return false;
+  if (bank.filter === 'current' && pageState(v) !== 'current') return false;
+  if (bank.filter === 't-instrument' && targetOf(v).timbre !== 'instrument') return false;
+  if (bank.filter === 't-machine' && targetOf(v).timbre !== 'machine') return false;
   if (find) {
     const hay = [v.name, v.engine, v.patch, v.slug, v.tone_class].join(' ').toLowerCase();
     if (!hay.includes(find)) return false;
@@ -88,8 +100,10 @@ function bankMatches(v) {
   return true;
 }
 
-const addressOf = (v) =>
-  (v.kit ? `kit ${v.program}` : `${v.program}${v.bank ? `:${v.bank}` : ''}`);
+const targetOf = (v) => v.target || {};
+
+/// Whether a voice's rendered page plays today's voice, or '' with no page.
+const pageState = (v) => ((shipsOf(v.slug) || {}).state) || '';
 
 /* ---- the small repeated readouts, shared with the listening surface ---- */
 
@@ -186,6 +200,10 @@ function renderMasthead() {
   const withOracle = vs.filter((v) => v.capture).length;
   const unwritten = vs.reduce((n, v) => n + (v.open_candidates || []).length, 0);
   const pages = vs.filter((v) => hasPage(v.slug)).length;
+  const current = vs.filter((v) => pageState(v) === 'current').length;
+  const stale = vs.filter((v) => pageState(v) === 'stale').length;
+  const aimInstrument = vs.filter((v) => targetOf(v).timbre === 'instrument').length;
+  const aimMachine = vs.filter((v) => targetOf(v).timbre === 'machine').length;
   const pick = (name) => () => {
     bank.filter = bank.filter === name ? '' : name;
     renderBank();
@@ -196,6 +214,10 @@ function renderMasthead() {
     figure(t('bank.withOracle'), withOracle, pick('oracle')),
     figure(t('bank.unwritten'), unwritten, unwritten ? pick('unwritten') : null, unwritten > 0),
     figure(t('bank.rendered'), pages, pages ? pick('page') : null),
+    figure(t('bank.pagesCurrent'), current, current ? pick('current') : null),
+    figure(t('bank.pagesStale'), stale, stale ? pick('stale') : null, stale > 0),
+    figure(t('bank.aimInstrument'), aimInstrument, aimInstrument ? pick('t-instrument') : null),
+    figure(t('bank.aimMachine'), aimMachine, aimMachine ? pick('t-machine') : null),
   );
 
   distBar($('bankDist'), vs);
@@ -233,11 +255,10 @@ function bankRow(v, index) {
   if (v.patch) who.append(el('span', 'patch', `  ${v.patch}`));
 
   const engine = el('span', 'engine');
-  engine.append(dotEl(v.engine), el('span', '', v.engine || t('bank.notReported')));
-  engine.title = v.engine ? `${methodOf(v.engine)} — ${v.tone_class}` : '';
+  engine.append(methodTag(v.engine, { short: true }), el('span', '', v.engine || t('bank.notReported')));
 
-  const oracle = el('span', `oracle${v.capture ? '' : ' absent'}`,
-    v.capture || t('bank.noOracle'));
+  const page = el('span', 'page-cell');
+  if (hasPage(v.slug)) page.append(shipChip(shipsOf(v.slug), { short: true }));
 
   const tail = el('span', 'bank-tail');
   const open = v.open_candidates || [];
@@ -250,12 +271,32 @@ function bankRow(v, index) {
   // 150 copies of it bury the four that say something.
   if (v.stage > 0.2 && v.stage < 1) tail.append(el('span', 'next', v.next));
 
-  row.append(el('span', 'addr', addressOf(v)), who, engine, stageEl(v), oracle,
+  row.append(el('span', 'addr', addressOf(v)), slotTag(v, { short: true }), who, engine, stageEl(v),
+    targetEl(v), page,
     // The same two readouts the palette carries, from the same functions: what
     // the ear has said about this voice, and the two claims the top of the
     // ladder is gated on.
     heardChip(v.slug), signoffChip(v), tail);
   return row;
+}
+
+/* What the slot is aimed at and what answers it, in one cell: the kind of
+ * target in words, then the capture in the reference colour where it is on
+ * target, in the warning colour where it is not, and quiet where there is
+ * none — most voices have none, and a hundred copies of a loud absence would
+ * bury the ones that say something. */
+function targetEl(v) {
+  const tg = targetOf(v);
+  const cell = el('span', 'target-cell');
+  cell.append(el('span', 'aim', targetShort(tg) || '—'));
+  const st = tg.state || (v.capture ? 'aimed' : 'uncaptured');
+  const what = v.capture ? v.capture : t(`tst.${st}`);
+  const cap = el('span', `oracle${v.capture ? '' : ' absent'}${st === 'off-target' || st === 'unclassified' ? ' off' : ''}`, what);
+  cell.append(cap);
+  cell.title = [targetWords(tg), t(`tst.${st}`),
+    tg.approximated ? t('tgt.approximated', { slot: tg.approximated.answered_by }) : '']
+    .filter(Boolean).join(' — ');
+  return cell;
 }
 
 const SORTS = {
@@ -316,6 +357,9 @@ function markToolbar() {
   for (const b of $('bankMethod').querySelectorAll('button')) {
     b.setAttribute('aria-pressed', String(b.dataset.method === bank.method));
   }
+  for (const b of $('bankSlot').querySelectorAll('button')) {
+    b.setAttribute('aria-pressed', String(b.dataset.slot === bank.slot));
+  }
   for (const b of $('bankFilter').querySelectorAll('button')) {
     b.setAttribute('aria-pressed', String(b.dataset.filter === bank.filter));
   }
@@ -366,7 +410,8 @@ function methodLegend() {
   for (const [m, key] of [['physical', 'bank.physical'], ['fm', 'bank.fm'],
     ['classic', 'bank.classic']]) {
     const row = el('div');
-    row.append(el('span', `dot ${m}`), el('span', '', t(key)));
+    row.append(methodTag(m === 'fm' ? 'fm' : m === 'classic' ? 'subtractive' : 'piano'),
+      el('span', '', t(`method.${m}.legend`)));
     legend.append(row);
   }
   return legend;
@@ -399,11 +444,7 @@ function inspectVoice(box, v) {
   box.append(el('h2', '', v.name));
   box.append(el('p', 'addr-line',
     [addressOf(v), v.patch, v.tone_class].filter(Boolean).join('  ·  ')));
-
-  const engine = el('p', 'addr-line engine');
-  engine.append(dotEl(v.engine),
-    el('span', '', `${v.engine || t('bank.notReported')}  ·  ${methodOf(v.engine)}`));
-  box.append(engine);
+  box.append(identityFacts(v));
 
   const here = stageIndex(v);
   box.append(el('span', 'lab',
@@ -462,6 +503,42 @@ function inspectVoice(box, v) {
   box.append(keyHint());
 }
 
+/* The voice's identity, in the same words as the listening surface's strip:
+ * where it sits on the map, how it is made, what it is aimed at, what ships,
+ * and whether its rendered page still plays that. */
+function identityFacts(v) {
+  const dl = el('dl', 'facts idfacts');
+  const slot = el('dd');
+  slot.append(slotTag(v), el('span', 'aside', `  ${slotLong(v)}`));
+  dl.append(el('dt', '', t('id.map')), slot);
+
+  const how = el('dd');
+  how.append(methodTag(v.engine), el('span', 'aside', `  ${v.engine || t('bank.notReported')}`));
+  dl.append(el('dt', '', t('id.method')), how);
+
+  const tg = targetOf(v);
+  const aim = el('dd', '', targetWords(tg) || '—');
+  const st = targetState(tg);
+  if (st) aim.append(' ', st);
+  if (tg.approximated) {
+    aim.append(el('span', 'aside warn', `  ${t('tgt.approximated', { slot: tg.approximated.answered_by })}`));
+  }
+  dl.append(el('dt', '', t('id.target')), aim);
+
+  if (v.ships) {
+    dl.append(el('dt', '', t('id.shipsNow')),
+      el('dd', '', t('ship.versionOf', { unit: v.ships.unit, v: v.ships.version, date: v.ships.date })));
+  }
+  if (hasPage(v.slug)) {
+    const ships = shipsOf(v.slug);
+    const dd = el('dd');
+    dd.append(shipChip(ships));
+    if (ships && ships.rendered) dd.append(el('span', 'aside', `  ${t('ship.rendered', { date: ships.rendered })}`));
+    dl.append(el('dt', '', t('id.page')), dd);
+  }
+  return dl;
+}
+
 function renderInspect() {
   const box = $('bankInspect');
   box.replaceChildren();
@@ -493,6 +570,17 @@ export function wireBank(onOpen) {
     b.dataset.method = value;
     b.addEventListener('click', () => { bank.method = value; renderBank(); });
     method.append(b);
+  }
+
+  const slot = $('bankSlot');
+  slot.replaceChildren();
+  for (const [value, key] of SLOT_PICKS) {
+    const b = el('button', '', t(key));
+    b.type = 'button';
+    b.dataset.slot = value;
+    if (value) b.title = t(`slot.${value}`);
+    b.addEventListener('click', () => { bank.slot = value; renderBank(); });
+    slot.append(b);
   }
 
   const filter = $('bankFilter');

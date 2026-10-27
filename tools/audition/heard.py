@@ -359,12 +359,16 @@ def note_units(entry: dict, voice: dict) -> list[str]:
     return [patch] if patch else []
 
 
-def unit_facts() -> dict[str, tuple[int, str]]:
-    """Every versioned unit's generation and the date it last changed."""
-    try:
-        units = json.loads(BANK_VERSIONS.read_text(encoding="utf-8")).get("units") or {}
-    except (OSError, ValueError):
-        return {}
+def unit_facts(units: dict | None = None) -> dict[str, tuple[int, str]]:
+    """Every versioned unit's generation and the date it last changed.
+
+    `units` is the registry's `units` for a caller already holding it parsed.
+    """
+    if units is None:
+        try:
+            units = json.loads(BANK_VERSIONS.read_text(encoding="utf-8")).get("units") or {}
+        except (OSError, ValueError):
+            return {}
     out = {}
     for name, unit in units.items():
         if not isinstance(unit, dict):

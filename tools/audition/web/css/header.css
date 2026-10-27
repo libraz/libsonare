@@ -269,6 +269,7 @@ body.lang-ja .palette-group { letter-spacing: 0.04em; text-transform: none; font
 
 .sg {
   padding: 0 5px;
+  white-space: nowrap;
   border: 1px solid var(--tint-line);
   border-radius: 3px;
   font-size: 10px;
@@ -330,3 +331,8 @@ body.bank-view #options { display: none; }
 body.bank-view { grid-template-rows: auto 1fr; }
 
 body:not(.bank-view) .bank { display: none; }
+
+/* A page that knows its voice names it in the identity band below, product
+   included where blind mode allows; the prose title would only repeat it, and
+   in blind mode it would name the product the band withholds. */
+body:has(#subject:not(:empty)) #title { display: none; }

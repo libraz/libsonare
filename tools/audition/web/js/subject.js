@@ -1,5 +1,6 @@
-/* What the page is about, as opposed to what is sounding: the slot of the map,
- * where its reference came from, and how far the voice has got.
+/* What the page is about, as opposed to what is sounding: the voice and its
+ * place on the map, what it is aimed at, whether it is what ships, and how far
+ * the voice has got.
  */
 
 'use strict';
@@ -7,101 +8,164 @@
 import { $, el, state, roleClass, selectedComparison } from './state.js';
 import { t } from './i18n.js';
 import { dotEl, stageBar } from './bank.js';
+import {
+  methodTag, rerenderCommand, shipChip, shipReasons, shipsOf, slotLong, slotTag, targetState,
+  targetWords,
+} from './identity.js';
 
-/* Which slot of the map, and where the reference came from.
+/* Which voice this page is of, what it is aimed at, and whether what plays is
+ * what ships — three cells, because they are three questions and a listener
+ * asks all of them before trusting anything heard.
  *
- * The page used to name a program in a prose title and play a reference beside
- * it, and nothing said whether that reference is the KIND of thing the slot is
- * aimed at. Forty slots name a sound the machine invented, whose only possible
- * target is the machine, and every one of them is currently answered by a
- * sample library's idea of it — which sounds like a finished voice and is a
- * gap. `serve.py` resolves the two facts per request against the tracked
- * policy, so this line is current even on a page rendered months ago.
+ * The voice cell places the slot on the GM/GS map and says how it is made.
+ * The target cell is the policy's answer for this slot and the capture that
+ * answers it; its product half is withheld in blind mode, where naming the
+ * product would name the version. The ship cell compares the page's
+ * unmodified render against the bank registry: a page rendered before the
+ * voice last moved plays an older voice than the one that ships, and nothing
+ * else on the page can say so. `serve.py` resolves all three per request, so
+ * a page rendered months ago still answers against today's policy and bank.
  */
 export function renderSubject() {
   const box = $('subject');
   box.replaceChildren();
   const voice = (state.manifest || {}).voice;
   if (!voice) return;
+  const prov = (state.manifest || {}).provenance || null;
+  const row = state.bank.voices.find((x) => x.slug === state.setId) || null;
+  box.append(voiceCell(voice, row), targetCell(voice, prov, row), shipCell(voice, row));
+}
 
-  const prov = (state.manifest || {}).provenance;
-  const slot = el('span', 'subj');
-  slot.append(el('span', 'lab', t('subj.slot')));
-  if (voice.kit) {
-    slot.append(el('span', 'subj-key', t('subj.kit', { n: voice.program })),
-      el('span', 'subj-more', t('subj.channel10')));
-  } else {
-    // Both numbers, because the printed map counts from one and every MIDI
-    // file counts from zero — the reference timbres are labelled `[GM 041]`
-    // and the manifest says program 40, and they are the same slot.
-    slot.append(el('span', 'subj-key', t('subj.gm', { n: voice.program + 1 })),
-      el('span', 'subj-more', t('subj.program', { n: voice.program })),
-      el('span', 'subj-more', t('subj.bank', { n: voice.bank || 0 })));
-  }
-  slot.append(el('span', 'subj-more',
-    voice.patch ? t('subj.patch', { name: voice.patch }) : t('subj.noPatch')));
-  box.append(slot);
+function cell(kind, label) {
+  const c = el('section', `idcell ${kind}`);
+  c.append(el('h3', 'idhead', label));
+  return c;
+}
+
+function voiceCell(voice, row) {
+  const c = cell('id-voice', t('id.voice'));
+  const name = el('p', 'idname', voice.name || state.setId || '');
+  // Both numbers, because the printed map counts from one and every MIDI
+  // file counts from zero — the reference timbres are labelled `[GM 041]`
+  // and the manifest says program 40, and they are the same slot.
+  const addr = voice.kit
+    ? [t('subj.kit', { n: voice.program }), t('subj.channel10')]
+    : [t('subj.gm', { n: voice.program + 1 }), t('subj.program', { n: voice.program }),
+      t('subj.bank', { n: voice.bank || 0 })];
+  name.append(el('span', 'idaddr', addr.join(' · ')));
+  c.append(name);
+
+  const tags = el('p', 'idtags');
+  const v = row || voice;
+  tags.append(slotTag(v), el('span', 'idlong', slotLong(v)));
+  c.append(tags);
+
+  const how = el('p', 'idtags');
+  const engine = row ? row.engine : '';
+  how.append(methodTag(engine), el('span', 'idmono',
+    [engine || t('bank.notReported'),
+      voice.patch ? t('subj.patch', { name: voice.patch }) : t('subj.noPatch')].join(' · ')));
+  c.append(how);
 
   /* A kit is one part holding forty-odd instruments, so on a kit the slot
    * above names the part and this names what is actually being struck. The
    * take decides it: a hi-hat take is three notes of the map and a fill is
-   * six, and each of them is versioned on its own as `dNNN`. Without this the
-   * line says "kit 0" on every page of the kit and identifies nothing. */
+   * six, and each of them is versioned on its own as `dNNN`. */
   const struck = voice.kit ? takeInstruments() : [];
   if (struck.length) {
-    const box2 = el('span', 'subj');
-    box2.append(el('span', 'lab', t('subj.struck')));
-    for (const one of struck) {
-      box2.append(el('span', one === struck[0] ? 'subj-key' : 'subj-more', one));
-    }
-    box.append(box2);
+    const line = el('p', 'idtags');
+    line.append(el('span', 'lab', t('subj.struck')), el('span', 'idmono', struck.join(' · ')));
+    c.append(line);
   }
+  return c;
+}
 
-  if (!prov || state.blind) return;
-  const ref = el('span', 'subj subj-ref');
-  ref.classList.add(roleClass('reference'));
-  ref.append(el('span', 'dot'), el('span', 'lab', t('subj.reference')));
+function targetCell(voice, prov, row) {
+  const c = cell('id-target', t('id.target'));
+  c.classList.add(roleClass('reference'));
+  const target = (row && row.target) || (prov && prov.want ? { ...prov.want, state: prov.state } : null);
+  if (!target || !target.branch) {
+    c.append(el('p', 'idline dim', t('id.noPolicy')));
+    return c;
+  }
+  const aim = el('p', 'idbig', targetWords(target));
+  // The policy's own sentence, so "why that target" is one hover away.
+  aim.title = (prov && prov.want && prov.want.reason) || '';
+  c.append(aim);
+
+  const line = el('p', 'idtags');
+  // Whether the capture is on target is a fact about the reference side, so a
+  // blind run withholds it with the product.
+  if (state.blind) {
+    line.append(el('span', 'idlong', t('id.blindHidden')));
+    c.append(line);
+    return c;
+  }
+  const st = targetState({ ...target, state: (prov && prov.state) || target.state });
+  if (st) line.append(st);
   // The voice's capture answers only the comparisons that list it; a comparison
   // with no oracle says so rather than naming the other one's reference.
   const comparison = selectedComparison();
-  const cap = comparison && !(comparison.oracle_sources || []).length ? null : prov.capture;
-  if (comparison && !cap) {
-    ref.append(el('span', 'subj-key dim', t('compare.noReference')));
-  } else if (cap) {
-    ref.append(el('span', 'subj-key', t(`src.${cap.source_class || 'unclassified'}`)));
-    // The product comes from the untracked overlay, so a clone without one
-    // still gets the class above and simply does not get the name.
-    if (cap.product) ref.append(el('span', 'subj-more', cap.product));
-    ref.append(el('span', 'subj-more', roomWord(cap)));
-  } else if (prov.declined) {
+  const cap = prov && (comparison && !(comparison.oracle_sources || []).length ? null : prov.capture);
+  if (cap) {
+    line.append(el('span', 'idlong', [t(`src.${cap.source_class || 'unclassified'}`),
+      cap.product, roomWord(cap)].filter(Boolean).join(' · ')));
+  } else if (comparison && prov && prov.capture) {
+    line.append(el('span', 'idlong', t('compare.noReference')));
+  } else if (prov && prov.declined) {
     const d = prov.declined;
-    const line = d.names && d.carries
-      ? t('subj.declined', { names: d.names, carries: d.carries })
-      : t('subj.declinedBare');
-    const span = el('span', 'subj-key dim', line);
+    const span = el('span', 'idlong', d.names && d.carries
+      ? t('subj.declined', { names: d.names, carries: d.carries }) : t('subj.declinedBare'));
     span.title = d.reason || '';
-    ref.append(span);
-  } else {
-    ref.append(el('span', 'subj-key dim', t('subj.none')));
+    line.append(span);
   }
+  c.append(line);
 
-  const want = prov.want || {};
-  if (want.timbre) {
-    const badge = el('span', 'badge',
-      t('subj.target', { what: t(`want.${want.timbre}`) }));
-    // The policy's own sentence, so the answer to "why that target" is one
-    // hover away rather than in a file nobody opens mid-session.
-    badge.title = want.reason || '';
-    if (prov.state === 'off-target') {
-      badge.classList.add('warn');
-      badge.append(el('span', 'badge-why', t('prov.offTarget')));
+  const approx = (prov && prov.approximated) || (row && row.target && row.target.approximated);
+  if (approx) {
+    const p = el('p', 'idline warn', t('tgt.approximated', { slot: approx.answered_by }));
+    p.title = approx.reason || '';
+    c.append(p);
+  }
+  const answers = (prov && prov.answers) || (row && row.target && row.target.answers);
+  if (answers && answers.length) {
+    c.append(el('p', 'idline dim', t('tgt.answers', { slots: answers.join(', ') })));
+  }
+  return c;
+}
+
+function shipCell(voice, row) {
+  const c = cell('id-ships', t('id.ships'));
+  const ships = shipsOf(state.setId);
+  const big = el('p', 'idbig');
+  big.append(shipChip(ships));
+  c.append(big);
+  const now = (row && row.ships) || null;
+  if (now) {
+    c.append(el('p', 'idline',
+      t('ship.shipping', { unit: now.unit, v: now.version, date: now.date })));
+  } else if (ships && ships.units && ships.units.length > 1) {
+    c.append(el('p', 'idline', t('ship.kitUnits', { n: ships.units.length })));
+  }
+  if (ships && ships.rendered) {
+    const then = ships.then || {};
+    const unit = Object.keys(then)[0];
+    const p = el('p', 'idline dim', unit && Object.keys(then).length === 1
+      ? t('ship.renderedThen', { unit, v: then[unit], date: ships.rendered })
+      : t('ship.rendered', { date: ships.rendered }));
+    if ((ships.since || []).length) {
+      const since = el('span', 'idsince', t('ship.since', { n: ships.since.length }));
+      since.title = shipReasons(ships);
+      p.append(since);
     }
-    ref.append(badge);
+    c.append(p);
   }
-  if (prov.state === 'unclassified') {
-    ref.append(el('span', 'badge warn', t('prov.unclassified')));
+  if (ships && ships.state === 'stale') {
+    const cmd = el('code', 'idcmd', rerenderCommand(voice));
+    cmd.title = t('ship.rerenderTitle');
+    c.append(cmd);
   }
-  box.append(ref);
+  return c;
 }
 
 /// The distinct drum notes this take strikes, in the order it strikes them,

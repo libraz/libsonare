@@ -368,6 +368,9 @@ def registry_digest(path: Path) -> str | None:
 
 
 #: Registries found by digest in this process, and the paths whose history was read.
+#: Held slim -- the generation and each unit's version and kind -- since that is
+#: all `bank_state` reads, and a long-running reader holding every committed
+#: revision whole costs half a gigabyte.
 _REGISTRIES: dict[str, dict] = {}
 _SCANNED: set[str] = set()
 
@@ -403,10 +406,22 @@ def registry_at(digest: str, path: Path) -> dict | None:
                 blob = subprocess.run(
                     [*git, "show", f"{rev}:{rel}"], capture_output=True, check=True
                 ).stdout
-                _REGISTRIES.setdefault(hashlib.sha256(blob).hexdigest(), json.loads(blob))
+                _REGISTRIES.setdefault(hashlib.sha256(blob).hexdigest(), _slim(json.loads(blob)))
             except (OSError, subprocess.CalledProcessError, ValueError):
                 continue
     return _REGISTRIES.get(digest)
+
+
+def _slim(raw: dict) -> dict:
+    """A registry reduced to what a version comparison reads."""
+    return {
+        "bank_generation": raw.get("bank_generation"),
+        "units": {
+            name: {"version": u.get("version"), "kind": u.get("kind")}
+            for name, u in (raw.get("units") or {}).items()
+            if isinstance(u, dict)
+        },
+    }
 
 
 def _versions(raw: dict) -> dict[str, int]:
@@ -445,6 +460,7 @@ def bank_state(
     *,
     then_versions: dict[str, int] | None = None,
     then_generation: int | None = None,
+    current: tuple[dict, str] | None = None,
 ) -> tuple[str, list[str], dict]:
     """Whether a recording's bank still stands: `(state, reasons, then)`.
 
@@ -454,16 +470,21 @@ def bank_state(
     else found by `registry_at` -- is compared unit by unit: one of `units`
     moving is `stale`, and a shared unit moving after it is `unverified`, the
     policy `Provenance.state` applies. `then` is that registry's generation and
-    the versions of `units` in it.
+    the versions of `units` in it. `current` is the registry as it stands and
+    its digest, for a caller that already holds them parsed.
     """
     if not digest:
         return UNVERIFIED, ["the library embedded no bank registry digest"], {}
-    try:
-        now = json.loads(registry.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return UNVERIFIED, ["no bank registry to compare against"], {}
+    if current is None:
+        try:
+            now = json.loads(registry.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return UNVERIFIED, ["no bank registry to compare against"], {}
+        now_digest = registry_digest(registry)
+    else:
+        now, now_digest = current
     if then_versions is None:
-        found = registry_at(digest, registry)
+        found = now if digest == now_digest else registry_at(digest, registry)
         if found is None:
             return (
                 UNVERIFIED,
@@ -476,7 +497,7 @@ def bank_state(
         "bank_generation": int(then_generation or 0),
         "units": {u: then_versions[u] for u in units if u in then_versions},
     }
-    same_registry = digest == registry_digest(registry)
+    same_registry = digest == now_digest
     now_versions = _versions(now)
     states, reasons = [], []
     if not units:

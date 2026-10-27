@@ -205,7 +205,7 @@ body.blind-on .legend-row { display: none; }
   background: var(--ink-faint);
 }
 
-.dot.physical { background: var(--accent); }
+.dot.physical { background: var(--ink); }
 .dot.fm { background: var(--fm); }
 .dot.classic { background: var(--line); box-shadow: inset 0 0 0 1px var(--ink-faint); }
 
@@ -224,6 +224,73 @@ body.blind-on .legend-row { display: none; }
 }
 
 .badge.warn { border-color: var(--warn-line); background: var(--warn-tint); }
+
+/* What a voice is, as small tags: its place on the map and how it is made.
+   Neutral rather than coloured — the role colours are taken, and the word is
+   the information. The method keeps the three marks its dot always had: a
+   solid ink for a physical model, the FM blue, an outline for waveform. */
+.idtag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink);
+  white-space: nowrap;
+  flex: none;
+}
+
+.idtag[data-method]::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.idtag[data-method="physical"]::before { background: var(--ink); }
+.idtag[data-method="fm"]::before { background: var(--fm); }
+.idtag[data-method="classic"]::before { box-shadow: inset 0 0 0 1px var(--ink-faint); }
+.idtag[data-slot="gs"], .idtag[data-slot="gm2"] { border-style: dashed; }
+.idtag[data-slot="kit"] { border-color: var(--ink-faint); }
+
+/* A state, as a pill: settled is the tint, open is the amber middle, wrong is
+   the warning — the three states every status chip on the page uses. */
+.idstate {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink);
+  white-space: nowrap;
+  flex: none;
+}
+
+.idstate[data-state="current"],
+.idstate[data-state="aimed"] { border-color: var(--tint-line); background: var(--tint); }
+
+.idstate[data-state="unverified"],
+.idstate[data-state="checking"],
+.idstate[data-state="unclassified"],
+.idstate[data-state="candidate"] { border-color: var(--mid-line); background: var(--mid-tint); }
+
+.idstate[data-state="stale"],
+.idstate[data-state="off-target"] { border-color: var(--warn-line); background: var(--warn-tint); }
+
+.idstate[data-state="none"],
+.idstate[data-state="declined"],
+.idstate[data-state="uncaptured"],
+.idstate[data-state="context"] { color: var(--ink-dim); }
+
+.idstate[data-state="target"] {
+  border-color: color-mix(in srgb, var(--role-reference) 34%, var(--line));
+  color: var(--role-reference);
+}
 
 @keyframes rise {
   from { opacity: 0; transform: translateY(3px); }

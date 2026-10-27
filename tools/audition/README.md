@@ -22,22 +22,28 @@ The banner says it in words as well: the role, then the source's full label and 
 
 Blind mode withholds all of this on purpose: the names, the path, the version in the address, the colours and the legend.
 
-## Which slot, and where its reference came from
+## What the page is about: the voice, its target, and whether it ships
 
-The line above the banner says what the page is *about*, as opposed to which render is sounding: the slot, and the reference's provenance.
+The band above the version switch says what the page is *about*, as opposed to which render is sounding. Three cells, because they are three questions and a listener asks all of them before trusting anything heard.
 
 ```
-SLOT       GM 82 · program 81 · bank 0 · patch lead_saw
-REFERENCE  a sample library · <the product> · no room in it   [target: the module | not what this slot is aimed at]
+THIS VOICE                    AIMED AT                                AGAINST WHAT SHIPS
+Lead 2 (sawtooth)             the module's own sound                  [older than what ships]
+GM 82 · program 81 · bank 0   [off target] a sample library ·         ships: lead_saw v17 (2026-10-25)
+[GM] a GM Level 1 sound…        <the product> · no room in it         this page: lead_saw v12, rendered …  5 changes since
+[● waveform] subtractive ·                                            tools/voicematch/make_audition.py --program 81 --banks 0
+  patch lead_saw
 ```
 
-Both numbers, because the printed map counts from one and every MIDI file counts from zero — a reference timbre labelled `[GM 082]` and a manifest saying program 81 are the same slot, and that off-by-one is the one thing about an address nobody should have to hold.
+**This voice** places the slot on the map and says how it is made. Both numbers, because the printed map counts from one and every MIDI file counts from zero — a reference timbre labelled `[GM 082]` and a manifest saying program 81 are the same slot. The map tag is `GM` for a bank-0 program (the GS capital tone), `GS variation` for a Bank Select MSB variation, `GM2 address` for the LSB address of the same patch — with the GS address it shares named — and `drum kit` for a rhythm part. The method is `physical model`, `FM` or `waveform` (subtractive or additive oscillators), with the engine that answers it beside it. **A kit is one part holding forty-odd instruments, so its slot has a second level**: on a kit page the note number *is* the instrument, so the cell also names what the open take strikes, from the GM drum map, and each of those notes is versioned on its own as `dNNN`.
 
-**A kit is one part holding forty-odd instruments, so its slot has a second level.** `kit 0` names the rhythm part and identifies nothing on its own — on a kit page the note number *is* the instrument, so the line also names what the open take strikes, from the same GM drum map the rest of the harness names drums from. A hi-hat take is three notes of that map and a fill is six, and each of them is versioned on its own as `dNNN`.
+**Aimed at** is `tools/voicematch/policy.json`'s answer for this slot, in words that say why: a recording of the real instrument, the module's own sound for one the machine invented, the module's kit, the module's variation tone, or the module because the library holds another instrument at that address. Under it, whether the captured reference is that kind of source (`on target`, `off target`, `source unclassified`), then what answered it — the module itself, a dedicated instrument, or a sample library, the product, and whether it carries a room. A slot the policy holds to have no usable reference says so with the name the map gives the address and what the recordings hold there; the policy keys that entry once per patch, so the GM2 address of the same patch reads it too. A slot knowingly answered by another voice (`approximated`) says which. Blind mode withholds everything under the first line.
 
-**The reference side carries what kind of source answered it, not only which product.** The capture definition classifies it — the module itself, a dedicated instrument, or a sample library — and `tools/voicematch/policy.json` says which of those the slot is aimed at. Where they disagree the line says so: forty slots name a sound the machine invented, whose only possible target is the machine, and a library's idea of one sounds exactly like a finished voice. A slot the policy holds to have no usable reference says that instead, with the name the machine gives the address, and is not confused with one nobody has captured yet.
+**Against what ships** compares the page's unmodified render with `tools/bank-versions.json`. `this is what ships` means the render's bank is today's for every unit it is made of — the patch, or for a kit every drum note its takes strike; `older than what ships` means one of those units moved after it, so the page plays an older voice than the library does; `cannot confirm it ships` means the render embedded no registry digest and only dates were left, or a shared engine unit moved since. A render with a digest is judged by `signoff.bank_state`, the rule a sign-off is held to; one without falls back to the date rule `heard.py` dates notes by. Every bump since the render is listed in the tooltip with its note, since a bump can be a refit or a change to what the fingerprint covers with no value moved. A stale page names the command that renders it again. The server reads every committed registry once in the background so an older digest can be named; until it has, a page says `checking…` and the page asks again.
 
-Both facts are resolved when the page is served rather than written into a render, so a page rendered months ago tells you what the policy says today. The product name comes from the untracked half of the capture definition; a clone without it still gets the class. Blind mode drops the whole reference half.
+All three are resolved when the page is served rather than written into a render, so a page rendered months ago answers against today's policy and today's bank. The product name comes from the untracked half of the capture definition; a clone without it still gets the class.
+
+**The version switch and the banner use the same words.** The unmodified build is `as shipped` (down the product path, rig and GS effects included) or `as shipped, instrument only` (the same voice with the rig and sends taken off — what ships puts the rig after it), and is tagged `old render` when the band says the page is older than the bank. A recorded candidate is tagged `not shipped`. The banner ends with what the sounding version stands for: the ship state for the unmodified build, `candidate, not shipped`, `the target`, or `for context`.
 
 ## Saying what you heard
 
@@ -133,6 +139,8 @@ It reads `tools/voice-status.json`, which is committed and generated by `tools/v
 **A fresh clone opens on it.** There are no renders to listen to and the bank still says which voices exist and which need a reference, neither of which requires anything to have been rendered. Otherwise the view is whichever one the last session was left on — except behind an address.
 
 The listening surface keeps a line of the same information in its header: the engine, the stage, and anything unadopted for the voice being heard. A page otherwise says what a voice sounds like and nothing about why it is open.
+
+**Each row also says where the voice sits and what it is aimed at, in the listening band's words.** The map column is `GM`, `GS`, `GM2` or `kit`; the method column is `physical`, `FM` or `wave` beside the engine; the target column is `instrument` or `module` followed by the capture in the reference colour, in the warning colour where it is off target, or why there is none; the page column says whether the rendered page plays what ships (`current`, `old`, `unconfirmed`). The masthead counts each of these and every count is a filter, and the map is a segmented control beside the method. The inspector opens with the same five facts in full — map, method, target, the version that ships, and this page's ship state.
 
 ## Several sets, one server
 
@@ -245,7 +253,7 @@ Any format the browser decodes will play. 16-bit PCM WAV is the safe choice — 
 `serve.py` and `heard.py` stay at the top, beside their tests; the page is `web/`. `web/index.html` loads one stylesheet per region from `web/css/` — `base.css` holds the tokens and shared controls, then `header.css`, `listen.css`, `console.css`, `feedback.css` and `bank.css` — and one ES module per job from `web/js/`:
 
 - `app.js` wires the two views, the keys and the frame loop.
-- `listen.js` loads a set and moves between its takes; `versions.js` is the version switch and the banner naming what is sounding; `blind.js` is blind mode; `address.js` is the URL, the breadcrumbs and the copied block; `path.js` is the signal-path line; `palette.js` is the voice picker; `subject.js` is the line saying which slot the page is about.
+- `listen.js` loads a set and moves between its takes; `versions.js` is the version switch and the banner naming what is sounding; `blind.js` is blind mode; `address.js` is the URL, the breadcrumbs and the copied block; `path.js` is the signal-path line; `palette.js` is the voice picker; `subject.js` is the band saying which voice the page is about, what it is aimed at and whether it ships; `identity.js` holds the words and tags for those facts, shared by that band and the bank.
 - `player.js` is the transport, `scope.js` draws the two pictures, `bank.js` is the bank, `feedback.js` is the panel that takes a note, `i18n.js` holds every string in both languages and the question tree, `take-text.js` translates take labels, and `state.js` is what they all read.
 
 The server serves `web/js/*.js` and `web/css/*.css` by pattern and nothing else from the tree, so a new file under either needs no change to it; a new directory does.

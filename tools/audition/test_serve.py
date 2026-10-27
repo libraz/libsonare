@@ -11,6 +11,7 @@ there was nothing to notice beyond a picker that had grown.
 
 from __future__ import annotations
 
+import hashlib
 import http.client
 import json
 import re
@@ -514,6 +515,133 @@ def test_an_address_held_to_have_no_reference_is_not_one_nobody_captured() -> No
         missing = serve.provenance({"program": 7}, "p007-clavi")
         assert missing["state"] == "uncaptured", missing
         assert "declined" not in missing, missing
+
+
+@_with_bank_files
+def test_a_declined_patch_is_declined_at_both_of_its_addresses() -> None:
+    """The policy names a patch once, so its GM2 alias has to be found through it.
+
+    A variation's Bank-Select-MSB row and its GM2 LSB row are one patch, and the
+    policy keys the entry under one of them. Read by slug alone, the alias
+    reported "not captured yet" -- work owed -- for an address the policy holds
+    to have nothing to capture.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        _bank_files(Path(tmp), {})
+        policy = json.loads(serve.POLICY_PATH.read_text())
+        named = {
+            "slug": "p000b016-acoustic-grand-piano",
+            "program": 0,
+            "bank": 16,
+            "patch": "piano_dark",
+        }
+        alias = {
+            "slug": "p000b002-acoustic-grand-piano",
+            "program": 0,
+            "bank": 2,
+            "patch": "piano_dark",
+        }
+        # The control: same program and bank shape, a different patch.
+        other = {
+            "slug": "p000b001-acoustic-grand-piano",
+            "program": 0,
+            "bank": 1,
+            "patch": "piano_wide",
+        }
+        voices = [named, alias, other]
+        assert serve.slot_target(policy, named, voices)["state"] == "declined"
+        assert serve.slot_target(policy, alias, voices)["state"] == "declined"
+        assert serve.slot_target(policy, other, voices)["state"] == "uncaptured"
+
+
+def _registry(tmp: Path, history: list[dict], shared: list[dict] | None = None) -> None:
+    """A bank registry with one patch unit, and the server pointed at it."""
+    units = {
+        "violin": {"kind": "patch", "version": history[-1]["version"], "history": history},
+        "bowed_string_voice": {"kind": "shared", "version": 1, "history": shared or []},
+    }
+    path = tmp / "bank-versions.json"
+    path.write_text(json.dumps({"bank_generation": 9, "units": units}), encoding="utf-8")
+    serve.BANK_VERSIONS = path
+    serve._REGISTRY["stamp"] = None
+    serve._SHIPS.clear()
+
+
+def _with_registry(fn):
+    """Restore the registry path after a test moved it."""
+
+    def wrapped() -> None:
+        registry = serve.BANK_VERSIONS
+        try:
+            fn()
+        finally:
+            serve.BANK_VERSIONS = registry
+            serve._REGISTRY["stamp"] = None
+            serve._SHIPS.clear()
+
+    wrapped.__name__ = fn.__name__
+    wrapped.__doc__ = fn.__doc__
+    return wrapped
+
+
+def _violin_manifest(generated: str, digest: str | None = None) -> dict:
+    evidence = {"model": {"path": {"bank_registry_digest": digest}}} if digest else {}
+    return {
+        "generated": f"{generated}T09:00:00+00:00",
+        "voice": {"program": 40, "patch": "violin"},
+        "sources": {"model": {"role": "model"}, "cand": {"role": "model"}},
+        "items": [{"id": "a", "tracks": {}, "evidence": evidence}],
+    }
+
+
+@_with_registry
+def test_a_page_rendered_before_its_voice_moved_says_it_is_not_what_ships() -> None:
+    """The page used to call its unmodified render "as it ships" whatever its age.
+
+    With no digest only dates are left: a move after the render date is enough
+    to say the page plays an older voice, and every bump since is listed with
+    its note, since a bump can move no value at all.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        _registry(
+            Path(tmp),
+            [
+                {"version": 1, "generation": 3, "date": "2026-09-01", "note": "first"},
+                {"version": 2, "generation": 8, "date": "2026-10-01", "note": "refit"},
+            ],
+        )
+        old = serve.shipping(_violin_manifest("2026-09-20"))
+        assert old["state"] == "stale", old
+        assert [b["version"] for b in old["since"]] == [2], old
+        assert old["units"][0]["version"] == 2, old
+
+        # The control: rendered after the last move. Dates cannot prove the
+        # library was built from that registry, so it is unconfirmed, not current.
+        later = serve.shipping(_violin_manifest("2026-10-05"))
+        assert later["state"] == "unverified", later
+        assert later["since"] == [], later
+
+
+@_with_registry
+def test_a_render_carrying_todays_registry_digest_is_what_ships() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        _registry(Path(tmp), [{"version": 1, "generation": 3, "date": "2026-09-01", "note": ""}])
+        digest = hashlib.sha256(serve.BANK_VERSIONS.read_bytes()).hexdigest()
+        current = serve.shipping(_violin_manifest("2026-09-02", digest))
+        assert current["state"] == "current", current
+        assert current["source"] == "model", current
+
+
+@_with_registry
+def test_a_kit_is_versioned_by_the_drum_notes_its_takes_strike() -> None:
+    manifest = {
+        "voice": {"program": 0, "kit": True},
+        "items": [
+            {"meta": {"notes": [{"note": 38}, {"note": 36}]}},
+            {"meta": {"notes": [{"note": 38}, {"note": 42}]}},
+        ],
+    }
+    assert serve.render_units(manifest) == ["d036", "d038", "d042"]
 
 
 @_with_bank_files

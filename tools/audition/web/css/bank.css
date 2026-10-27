@@ -192,7 +192,7 @@
 .bank-row, .bank-cols {
   display: grid;
   grid-template-columns:
-    4.2rem minmax(8rem, 1.3fr) 8.4rem 5.2rem 6.4rem 2.4rem 3.6rem minmax(0, 1.4fr);
+    4.2rem 3.4rem minmax(8rem, 1.3fr) 10rem 5.2rem 10rem 4.6rem 2.4rem 4.4rem minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -319,6 +319,32 @@ body.lang-ja .bank-cols { letter-spacing: 0.04em; text-transform: none; font-siz
 
 .stage .seg.on { background: var(--sc, var(--accent)); box-shadow: none; }
 
+/* What the slot is aimed at, then what answers it. */
+.target-cell {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+
+.target-cell .aim {
+  flex: none;
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+
+.page-cell { display: flex; }
+
+/* In a row the state is a word, not a pill: most pages are older than the bank,
+   and a column of a hundred and sixty warning pills would bury the twenty that
+   play what ships. Only those keep the tint. */
+.page-cell .idstate:not([data-state="current"]) { border-color: transparent; background: none; padding-left: 0; }
+.page-cell .idstate[data-state="stale"] { color: var(--warn); }
+.page-cell .idstate[data-state="unverified"] { color: var(--role-reference); }
+
+.idfacts dd { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.idfacts .aside.warn { color: var(--warn); }
+
 /* Present is a fact worth reading; absent is 184 rows of the same word, so it
    stays quiet and the four that say something are the ones the eye finds. */
 .oracle {
@@ -331,6 +357,7 @@ body.lang-ja .bank-cols { letter-spacing: 0.04em; text-transform: none; font-siz
 }
 
 .oracle.absent { color: var(--ink-faint); opacity: 0.5; }
+.oracle.off { color: var(--warn); }
 
 .bank-tail {
   display: flex;

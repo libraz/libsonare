@@ -139,6 +139,7 @@
   </div>
 
   <div class="bank-bar">
+    <div id="bankSlot" class="seg4" role="group" data-i18n-aria="bank.slot"></div>
     <div id="bankMethod" class="seg4" role="group" data-i18n-aria="bank.method"></div>
     <div id="bankFilter" class="chips" role="group" data-i18n-aria="bank.filter"></div>
     <label class="pick grow">
@@ -161,10 +162,12 @@
     <div class="bank-table">
       <div class="bank-cols" aria-hidden="true">
         <span data-i18n="bank.colProg">prog</span>
+        <span data-i18n="bank.colSlot">map</span>
         <span data-i18n="bank.colVoice">voice</span>
-        <span data-i18n="bank.colEngine">engine</span>
+        <span data-i18n="bank.colEngine">method</span>
         <span data-i18n="bank.colStage">stage</span>
-        <span data-i18n="bank.colOracle">reference</span>
+        <span data-i18n="bank.colOracle">target</span>
+        <span data-i18n="bank.colPage">page</span>
         <span data-i18n="bank.colHeard">heard</span>
         <span data-i18n="bank.colSignoff">claims</span>
         <span data-i18n="bank.colNext">next</span>
@@ -184,11 +187,11 @@
          block that stays put while the readouts scroll under it: switching a
          version and hearing it is the loop. -->
     <div class="console">
-      <!-- Which slot of the map this is, and where its reference came from.
-           Above the version switch because it is true of the whole page: a
-           version says which render is sounding, this says what the page is
-           about. The reference half is hidden in blind mode, where naming the
-           product would name the version. -->
+      <!-- What the page is about, in three cells: the voice and its place on
+           the GM/GS map, what it is aimed at, and whether what plays is what
+           ships. Above the version switch because it is true of the whole
+           page. The reference's product is hidden in blind mode, where naming
+           it would name the version. -->
       <div id="subject" class="subject"></div>
 
       <div id="versions" class="versions compare-only"></div>

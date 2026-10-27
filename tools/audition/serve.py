@@ -92,7 +92,7 @@ sys.path.insert(0, str(APP_DIR.parent))
 sys.path.insert(0, str(APP_DIR))
 
 from _repo import REPO_ROOT
-from heard import oracle_flag
+from heard import BANK_VERSIONS, oracle_flag, unit_facts
 
 AUDIO_SUFFIXES = (".wav", ".flac", ".mp3", ".ogg", ".m4a", ".aac")
 #: The scratch root the whole harness renders into, and the one `capture.py`
@@ -270,9 +270,21 @@ def read_bank() -> dict:
     whose first view works without it.
     """
     try:
-        return json.loads(BANK_PATH.read_text())
+        bank = json.loads(BANK_PATH.read_text())
     except (OSError, ValueError):
         return {"voices": []}
+    # What each slot is aimed at and the version that ships, resolved here for
+    # the same reason a page's provenance is: both are tracked facts that move
+    # on their own, and the generated file deliberately carries neither.
+    policy = _read_json(POLICY_PATH)
+    facts = registry_facts()
+    voices = [v for v in bank.get("voices") or [] if isinstance(v, dict)]
+    for voice in voices:
+        voice["target"] = slot_target(policy, voice, voices)
+        patch = voice.get("patch") or ""
+        if patch in facts:
+            voice["ships"] = {"unit": patch, "version": facts[patch][0], "date": facts[patch][1]}
+    return bank
 
 
 def drum_names() -> dict[str, str]:
@@ -476,7 +488,7 @@ def provenance(voice: dict, ident: str) -> dict:
     kit = bool(voice.get("kit"))
     bank = voice.get("bank")
     want = wanted_layer(policy, program, kit, bank if isinstance(bank, int) else 0)
-    declined = (policy.get("no_reference") or {}).get(ident)
+    declined = declined_for(policy, {**voice, "slug": ident})
     capture = capture_facts(voice.get("capture") or "") if voice.get("capture") else {}
 
     layers = _layers()
@@ -512,7 +524,296 @@ def provenance(voice: dict, ident: str) -> dict:
             "carries": declined.get("carries") or "",
             "reason": declined.get("reason") or "",
         }
+    out.update(approximation(policy, ident))
     return out
+
+
+def declined_for(policy: dict, voice: dict, voices: list[dict] | None = None) -> dict | None:
+    """The `no_reference` entry for a slot, found at either address of its patch.
+
+    The policy keys one entry per patch, never per address: a GS variation's
+    Bank-Select-MSB row and its GM2 LSB row are one patch, and a second entry
+    under the alias would be a copy free to disagree. So a slot not named
+    there is looked up again through any other voice the bank reports with the
+    same program and patch.
+    """
+    table = policy.get("no_reference") or {}
+    found = table.get(voice.get("slug") or "")
+    if isinstance(found, dict) or not voice.get("patch") or voice.get("kit"):
+        return found if isinstance(found, dict) else None
+    if voices is None:
+        voices = read_bank_voices()
+    for other in voices:
+        if (
+            other is not voice
+            and not other.get("kit")
+            and other.get("program") == voice.get("program")
+            and other.get("patch") == voice.get("patch")
+            and isinstance(table.get(other.get("slug") or ""), dict)
+        ):
+            return table[other["slug"]]
+    return None
+
+
+def read_bank_voices() -> list[dict]:
+    """The bank's voices as generated, without the per-request additions."""
+    try:
+        voices = json.loads(BANK_PATH.read_text()).get("voices") or []
+    except (OSError, ValueError):
+        return []
+    return [v for v in voices if isinstance(v, dict)]
+
+
+def approximation(policy: dict, ident: str) -> dict:
+    """Whether this slot is knowingly answered by another voice, or answers one.
+
+    Nothing downstream can tell an approximation from an unfinished voice, so a
+    page of either kind says so where the slot is named.
+    """
+    table = policy.get("approximated") or {}
+    out: dict = {}
+    mine = table.get(ident)
+    if isinstance(mine, dict):
+        out["approximated"] = {
+            "answered_by": mine.get("answered_by") or "",
+            "reason": mine.get("reason") or "",
+        }
+    answers = sorted(
+        slot
+        for slot, row in table.items()
+        if isinstance(row, dict) and row.get("answered_by") == ident
+    )
+    if answers:
+        out["answers"] = answers
+    return out
+
+
+def slot_target(policy: dict, voice: dict, voices: list[dict]) -> dict:
+    """The bank row's half of `provenance`: what the slot is aimed at, compactly.
+
+    The bank lists every voice at once, so it carries the policy branch, the
+    verdict on the capture and the class of source that answered it, and leaves
+    the product name and the reasons to the page of the voice itself.
+    """
+    program = voice.get("program")
+    if not isinstance(program, int):
+        return {}
+    ident = voice.get("slug") or ""
+    bank = voice.get("bank") if isinstance(voice.get("bank"), int) else 0
+    want = wanted_layer(policy, program, bool(voice.get("kit")), bank)
+    capture = voice.get("capture") or ""
+    cls = (_read_json(CAPTURE_DIR / f"{capture}.json").get("source_class") or "") if capture else ""
+    layers = _layers()
+    if capture:
+        if not cls:
+            state = "unclassified"
+        elif layers and not layers.answers_layer(cls, want):
+            state = "off-target"
+        else:
+            state = "aimed"
+    elif declined_for(policy, voice, voices) is not None:
+        state = "declined"
+    else:
+        state = "uncaptured"
+    out = {
+        "branch": want.get("branch") or "",
+        "timbre": want.get("timbre") or "",
+        "state": state,
+        "source_class": cls,
+    }
+    out.update(approximation(policy, ident))
+    return out
+
+
+#: The bank registry as it stands, parsed once per change of the file: it is
+#: two megabytes and every set in the index is compared against it.
+_REGISTRY: dict = {"stamp": None, "raw": {}, "digest": "", "facts": {}}
+#: Set once every committed revision of the registry has been hashed, which
+#: takes seconds and runs beside the server rather than in front of a request.
+_HISTORY_READY = threading.Event()
+#: Ship states already worked out, keyed by what decides them.
+_SHIPS: dict[tuple, dict] = {}
+
+
+def registry_facts() -> dict[str, tuple[int, str]]:
+    """`heard.unit_facts` over the cached registry."""
+    bank_registry()
+    return _REGISTRY["facts"]
+
+
+def bank_registry() -> tuple[dict, str]:
+    """The current registry and the digest a library built from it embeds."""
+    try:
+        stamp = BANK_VERSIONS.stat().st_mtime_ns
+    except OSError:
+        return {}, ""
+    if _REGISTRY["stamp"] != stamp:
+        raw = BANK_VERSIONS.read_bytes()
+        try:
+            parsed = json.loads(raw)
+        except ValueError:
+            return {}, ""
+        _REGISTRY.update(
+            stamp=stamp,
+            raw=parsed,
+            digest=hashlib.sha256(raw).hexdigest(),
+            facts=unit_facts(parsed.get("units") or {}),
+        )
+        _SHIPS.clear()
+    return _REGISTRY["raw"], _REGISTRY["digest"]
+
+
+def read_registry_history() -> None:
+    """Hash every committed registry, so an older render's digest can be named."""
+    claims = _signoff()
+    if claims is not None:
+        claims.registry_at("", BANK_VERSIONS)
+    _HISTORY_READY.set()
+
+
+def _signoff():
+    """The module owning the bank-state rule, or None outside the repository."""
+    tools = REPO_ROOT / "tools" / "voicematch"
+    if str(tools) not in sys.path:
+        sys.path.append(str(tools))
+    try:
+        import signoff
+    except ImportError:
+        return None
+    return signoff
+
+
+#: The unmodified build, at the shipped boundary first. A candidate is never
+#: what ships, so it is never what this is asked of.
+BASELINE_KEYS = ("model", "model-di")
+
+
+def render_units(manifest: dict) -> list[str]:
+    """The versioned units a set's baseline render is made of.
+
+    A melodic voice is its patch. A kit has no patch, and its unit of work is
+    the drum note, so it is every note any take strikes.
+    """
+    voice = manifest.get("voice") or {}
+    if voice.get("kit"):
+        notes = {
+            n.get("note")
+            for item in manifest.get("items") or []
+            for n in ((item.get("meta") or {}).get("notes") or [])
+            if isinstance(n, dict)
+        }
+        return [f"d{n:03d}" for n in sorted(x for x in notes if isinstance(x, int))]
+    patch = voice.get("patch") or ""
+    return [patch] if patch else []
+
+
+def shipping(manifest: dict) -> dict:
+    """Whether a set's unmodified render is what the library ships today.
+
+    `current` the render's bank is today's for every unit it is made of;
+    `stale` one of those units moved after it, so the page plays an older
+    voice; `unverified` neither can be shown -- no digest was embedded and
+    only dates are left, or a shared engine unit moved since; `checking` the
+    committed registries are still being read. A render with an embedded
+    digest is judged by `signoff.bank_state`, the rule a sign-off is held to;
+    one without falls back to the date rule `heard.py` dates notes by.
+    """
+    sources = manifest.get("sources") or {}
+    key = next((k for k in BASELINE_KEYS if k in sources), None)
+    registry, current = bank_registry()
+    units = render_units(manifest)
+    if key is None or not registry or not units:
+        return {}
+    digest = next(
+        (
+            ((item.get("evidence") or {}).get(key) or {})
+            .get("path", {})
+            .get("bank_registry_digest")
+            for item in manifest.get("items") or []
+            if ((item.get("evidence") or {}).get(key) or {}).get("path")
+        ),
+        None,
+    )
+    rendered = str(manifest.get("generated") or "")[:10]
+    now_units = registry.get("units") or {}
+    facts = registry_facts()
+    out = {
+        "source": key,
+        "rendered": rendered,
+        "units": [
+            {
+                "unit": u,
+                "version": facts[u][0],
+                "date": facts[u][1],
+                "note": _last_note(now_units, u),
+            }
+            for u in units
+            if u in facts
+        ],
+    }
+    cache_key = (digest, rendered, tuple(units))
+    if cache_key in _SHIPS:
+        return {**out, **_SHIPS[cache_key]}
+    claims = _signoff()
+    if digest and claims is not None:
+        if digest != current and not _HISTORY_READY.is_set():
+            return {**out, "state": "checking", "reasons": []}
+        state, reasons, then = claims.bank_state(
+            digest, units, BANK_VERSIONS, current=(registry, current)
+        )
+        verdict = {"state": state, "reasons": reasons, "then": then.get("units") or {}}
+    else:
+        verdict = _dated(units, rendered, facts, now_units)
+    # Every bump since the render, with its note: a bump can be a re-fit or a
+    # change to what the fingerprint covers with no value moved, and only the
+    # note tells a listener which.
+    verdict["since"] = [
+        {"unit": u, "version": h.get("version"), "date": h.get("date"), "note": h.get("note") or ""}
+        for u in units
+        for h in (now_units.get(u) or {}).get("history") or []
+        if isinstance(h, dict)
+        and (
+            (h.get("version") or 0) > verdict["then"][u]
+            if u in verdict["then"]
+            else str(h.get("date") or "") > rendered
+        )
+    ]
+    _SHIPS[cache_key] = verdict
+    return {**out, **verdict}
+
+
+def _last_note(units: dict, unit: str) -> str:
+    history = [h for h in (units.get(unit) or {}).get("history") or [] if isinstance(h, dict)]
+    return str(history[-1].get("note") or "") if history else ""
+
+
+def _dated(units: list[str], rendered: str, facts: dict, now_units: dict) -> dict:
+    """The date rule, for a render that embedded no registry digest."""
+    if not rendered:
+        return {"state": "unverified", "reasons": ["the render is undated"], "then": {}}
+    moved = [u for u in units if u in facts and facts[u][1] > rendered]
+    if moved:
+        return {
+            "state": "stale",
+            "reasons": [
+                f"{u} moved on {facts[u][1]}, after the render on {rendered}" for u in moved
+            ],
+            "then": {},
+        }
+    shared = max(
+        (
+            str(h.get("date") or "")
+            for u in now_units.values()
+            if isinstance(u, dict) and u.get("kind") == "shared"
+            for h in u.get("history") or []
+            if isinstance(h, dict)
+        ),
+        default="",
+    )
+    reasons = [f"the render on {rendered} recorded no bank digest; only dates were compared"]
+    if shared > rendered:
+        reasons.append(f"a shared engine unit moved on {shared}")
+    return {"state": "unverified", "reasons": reasons, "then": {}}
 
 
 def infer_manifest(root: Path) -> dict:
@@ -751,6 +1052,10 @@ class Sets:
                     # of names without one.
                     "group": manifest.get("group") or "",
                     "path": str(root),
+                    # Whether its unmodified render is today's bank, so the
+                    # bank and the voice picker can say which pages play an
+                    # older voice than the one that ships.
+                    "ships": shipping(manifest),
                 }
             )
         cls.by_id = by_id
@@ -1140,6 +1445,7 @@ def main() -> int:
             webbrowser.open(url)
         return 0
 
+    threading.Thread(target=read_registry_history, daemon=True).start()
     Sets.paths = list(args.directory)
     roots = discover(args.directory)
     Sets.load(roots)

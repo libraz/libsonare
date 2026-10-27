@@ -14,6 +14,7 @@
 import { $, el, state } from './state.js';
 import { t } from './i18n.js';
 import { dotEl, heardChip, signoffChip, stageBar } from './bank.js';
+import { addressOf } from './identity.js';
 
 /// The status row for a set, where the bank has one. A set served from outside
 /// this repository has none, and the row is then just its name.
@@ -75,9 +76,6 @@ function voiceRow(s, v) {
   row.append(el('span', 'solo', s.compare ? '' : t('pick.playOnly')));
   return row;
 }
-
-const addressOf = (v) =>
-  (v.kit ? `kit ${v.program}` : `${v.program}${v.bank ? `:${v.bank}` : ''}`);
 
 export function renderPickLabel() {
   const v = voiceOf(state.setId);

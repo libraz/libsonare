@@ -328,6 +328,24 @@ function wire() {
 
 /* ------------------------------------------------------------------- boot */
 
+/* The server reads every committed bank registry beside its first requests,
+ * so a set whose render names an older registry says `checking` until that is
+ * done. Ask again until nothing does, then redraw what reads it. */
+function settleShips() {
+  if (!state.sets.some((s) => (s.ships || {}).state === 'checking')) return;
+  setTimeout(async () => {
+    try {
+      state.sets = await (await fetch('sets.json')).json();
+    } catch {
+      return;
+    }
+    renderSubject();
+    if (state.take) rebuildVersions();
+    if (state.bank.loaded) renderBank();
+    settleShips();
+  }, 2500);
+}
+
 async function boot() {
   initLang();
   buildLangToggle();
@@ -341,6 +359,7 @@ async function boot() {
   // Loaded up front rather than on the first switch to the bank: the listening
   // surface's own header line reads from it too.
   await loadBank();
+  settleShips();
 
   onLang(() => {
     buildLangToggle();

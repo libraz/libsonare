@@ -1,65 +1,128 @@
 /* The console: which slot, what is sounding, the version switch and the
    transport. */
 
-/* ---- which slot, and where its reference came from ---- */
+/* ---- what the page is about ---- */
 
-/* One quiet line above the banner. It is true of the whole page rather than of
-   what is sounding, so it is typographic rather than boxed: the banner below is
-   the only tinted block in the console and stays the thing the eye lands on. */
+/* Three cells in one band, hairlines between them rather than three boxes: the
+   band is true of the whole page, so it stays quieter than the tinted banner
+   below, which is the thing the eye lands on. */
 .subject {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 5px 18px;
-  min-width: 0;
-  font-size: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.2fr) minmax(0, 1fr);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
 }
 
 .subject:empty { display: none; }
 
-.subj {
+.idcell {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px 14px 11px;
+}
+
+.idcell + .idcell { border-left: 1px solid var(--line-soft); }
+
+.idhead {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+body.lang-ja .idhead { letter-spacing: 0.04em; text-transform: none; font-size: 11px; }
+
+/* The target cell is about the reference side, so its head takes that colour. */
+.id-target .idhead { color: var(--role); }
+
+.idcell p { margin: 0; min-width: 0; }
+
+.idname {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 7px;
-  min-width: 0;
+  gap: 4px 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
 }
 
-.subj .dot { align-self: center; background: var(--role); }
-
-/* The one label on this line that is about a side of the comparison takes that
-   side's colour, so the reference half is recognisable before it is read. */
-.subj-ref .lab { color: var(--role); }
-
-.subj-key { color: var(--ink); }
-.subj-key.dim { color: var(--ink-dim); }
-
-.subj-more {
-  min-width: 0;
+.idaddr, .idmono {
   font-family: var(--mono);
   font-size: 11.5px;
+  font-weight: 400;
   color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.idtags {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.idlong, .idmono {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* The separator rides on the item rather than sitting between two of them, so a
-   wrapped line never starts with a dangling dot. */
-.subj-more::before {
-  content: "·";
-  margin-right: 7px;
-  color: var(--ink-faint);
+/* A sentence, so it wraps rather than losing its second half to an ellipsis. */
+.idlong { color: var(--ink-dim); white-space: normal; }
+
+.idbig {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
 }
 
-.subj .badge { font-size: 10px; }
+.idbig .idstate { font-size: 12.5px; padding: 2px 10px; }
 
-/* Two facts in one badge when they disagree: what the slot is aimed at, and
-   that this is not it. Apart they read as two unrelated chips. */
-.badge-why {
-  margin-left: 6px;
-  padding-left: 6px;
-  border-left: 1px solid var(--warn-line);
+.idline {
+  font-size: 12px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.idline.dim { color: var(--ink-dim); }
+.idline.warn { color: var(--warn); }
+
+.idsince {
+  display: inline-block;
+  margin-left: 8px;
+  color: var(--ink-faint);
+  text-decoration: underline dotted;
+  cursor: help;
+}
+
+.idcmd {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-dim);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+@media (max-width: 1100px) {
+  .subject { grid-template-columns: minmax(0, 1fr); }
+  .idcell + .idcell { border-left: 0; border-top: 1px solid var(--line-soft); }
 }
 
 /* ---- what is sounding ---- */
@@ -113,6 +176,8 @@
   font-size: 13px;
   color: var(--ink);
 }
+
+.now-role .idstate { margin-left: auto; align-self: center; }
 
 .now-detail {
   min-width: 0;
@@ -381,6 +446,16 @@
   opacity: 0.5;
 }
 
+/* "not shipped" on a candidate, "old render" on an unmodified build the bank
+   has moved past: the one word a model button needs beyond its name. */
+.segmented .vtag {
+  font-size: 10px;
+  color: var(--ink-dim);
+}
+
+.segmented .vtag.warn { color: var(--warn); }
+.segmented button[aria-pressed="true"] .vtag { color: inherit; opacity: 0.7; }
+
 /* ---- transport ---- */
 
 /* The controls that make a sound are grouped and the readouts are spaced away
@@ -483,3 +558,5 @@
 }
 
 .passage-x:hover { background: var(--panel-3); color: var(--ink); }
+
+.idtags .lab { flex: none; white-space: nowrap; }
