@@ -44,10 +44,9 @@ void process_mono(SidechainRouter& router, std::vector<float>& samples,
                   const std::vector<float>* key = nullptr) {
   for (size_t offset = 0; offset < samples.size(); offset += kBlock) {
     const int count = static_cast<int>(std::min<size_t>(kBlock, samples.size() - offset));
-    if (key != nullptr) {
-      const float* key_channels[] = {key->data() + offset};
-      router.set_sidechain(key_channels, 1, count);
-    }
+    // set_sidechain borrows the channel array, so it must outlive process().
+    const float* key_channels[] = {key != nullptr ? key->data() + offset : nullptr};
+    if (key != nullptr) router.set_sidechain(key_channels, 1, count);
     float* channels[] = {samples.data() + offset};
     router.process(channels, 1, count);
   }
