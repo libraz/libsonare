@@ -299,6 +299,7 @@ class GoalTest(_CopiedTree):
         failures = check.evaluate(
             self.tree(lambda p: p["goals"].__setitem__("_", "which release asks for what")),
             NO_FLOOR,
+            NO_CEILING,
         )
         self.assertEqual(failures, [], self.classes(failures))
 
@@ -354,6 +355,7 @@ class ApproximatedTest(_CopiedTree):
         failures = check.evaluate(
             self.tree(lambda p: p["approximated"].__setitem__("p105-banjo", self.ENTRY)),
             NO_FLOOR,
+            NO_CEILING,
         )
         self.assertEqual(failures, [], self.classes(failures))
 

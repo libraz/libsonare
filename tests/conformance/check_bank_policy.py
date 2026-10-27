@@ -127,14 +127,14 @@ DOC_PREFIX = "_"
 # on the bank's progress — every one counts declarations and rows, never a
 # stage.
 # A ratchet rather than a floor, and the only one here: it may fall and may not
-# rise. Forty machine-defined slots are answered by something other than the
+# rise. Two machine-defined slots are answered by something other than the
 # module, and nobody can clear that today — a module reference per slot is
 # open-ended work against hardware, and a red build nobody can clear is the
 # shape this file refuses everywhere else. A *new* one is clearable, by whoever
 # added the capture, which is what this catches. Lower it in the change that
 # captures a module reference; the failure says so.
 CEILING = {
-    "machine_slots_without_a_module_reference": 40,
+    "machine_slots_without_a_module_reference": 2,
 }
 
 FLOOR = {
