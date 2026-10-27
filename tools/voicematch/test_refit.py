@@ -169,6 +169,56 @@ def test_a_grid_with_one_condition_per_note_is_judged_by_the_gate_alone():
     assert verdict(pre, fit, post, gate_only=True)["decision"] == "trade"
 
 
+@pytest.mark.parametrize(
+    ("start", "value", "branch"),
+    [(0.0, 0.6, True), (0.0, 0.00005, False), (0.7, 0.0, True), (0.7, 0.4, False)],
+)
+def test_a_sustain_crossing_silence_is_a_branch_and_is_held(start, value, branch):
+    """A one-shot that gains a sustain rings until a note-off a drum never sends."""
+    from refit import switch_moves, writable
+
+    knobs = [{"key": "d036.amp_env.sustain", "start": start}, {"key": FLOAT, "start": 1.0}]
+    fit = {"knobs": knobs, "selected": {"values": [value, 2.0]}}
+    assert switch_moves(fit) == (["d036.amp_env.sustain"] if branch else [])
+    assert writable(fit, [value, 2.0]) == [start if branch else value, 2.0]
+    pre, good, post = _case(*GOOD)
+    good["knobs"], good["selected"] = fit["knobs"], fit["selected"]
+    assert verdict(pre, good, post)["decision"] == ("trade" if branch else "adopt")
+
+
+def test_a_count_landing_in_another_bucket_is_held():
+    """A mode count adds or removes a resonator the gate window may never reach."""
+    from refit import switch_moves, writable
+
+    knobs = [{"key": "d048.percussion.num_modes", "start": 7.0}, {"key": FLOAT, "start": 1.0}]
+    moved = {"knobs": knobs, "selected": {"values": [8.2, 2.0]}}
+    assert switch_moves(moved) == ["d048.percussion.num_modes"]
+    assert writable(moved, [8.2, 2.0]) == [7.0, 2.0]
+    still = {"knobs": knobs, "selected": {"values": [7.3, 2.0]}}
+    assert switch_moves(still) == []
+
+
+def test_a_release_is_held_only_where_no_gate_reads_the_key_lift(tmp_path, monkeypatch):
+    import refit
+
+    monkeypatch.setattr(refit, "CAPTURE_DIR", tmp_path)
+    (tmp_path / "blind.json").write_text('{"dimensions": ["attack", "body"]}')
+    (tmp_path / "lifts.json").write_text('{"dimensions": ["attack", "damper"]}')
+    blind = refit.unmeasured({"gates": [{"capture": "blind"}]})
+    assert blind == {"release_ms"}
+    assert refit.unmeasured({"gates": [{"capture": "blind"}, {"capture": "lifts"}]}) == set()
+
+    knobs = [{"key": "pad.amp_env.release_ms", "start": 580.0}, {"key": FLOAT, "start": 1.0}]
+    fit = {"knobs": knobs, "selected": {"values": [947.0, 2.0]}}
+    assert refit.switch_moves(fit, blind) == ["pad.amp_env.release_ms"]
+    assert refit.writable(fit, [947.0, 2.0], blind) == [580.0, 2.0]
+    assert refit.switch_moves(fit) == []
+    pre, good, post = _case(*GOOD)
+    good["knobs"], good["selected"] = fit["knobs"], fit["selected"]
+    assert refit.verdict(pre, good, post, unjudged=blind)["decision"] == "trade"
+    assert refit.verdict(pre, good, post)["decision"] == "adopt"
+
+
 def test_a_kit_trade_is_reweighed_with_the_percussion_terms():
     from refit import reweighed
 

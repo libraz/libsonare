@@ -17,7 +17,8 @@ voice runs the same four steps, recorded under `<scratch>/refit/<objective>/`:
 file already exists), `report` prints the verdicts, and `adopt` writes the
 adopted values into the program tables and records every finished fit in
 `fits.json`. A fit that improves the held-out notes while newly exceeding a
-bound, or moving a switch, is a trade, and `resolve` settles it by the furthest
+bound, or moving a field the gate cannot judge (`_held`), is a trade, and
+`resolve` settles it, with those fields at their shipped values, by the furthest
 point along the search the gate accepts, refitting once with the broken
 dimensions weighed up when no point is.
 
@@ -70,6 +71,7 @@ from writeback import (
     _STRUCT_COPY,
     PROGRAM_TABLE_FILES,
     _key_path,
+    integer_field,
     patch_field_assignments,
     struct_copies,
     switch_field,
@@ -89,6 +91,9 @@ PYTHON = [sys.executable]
 EVALS_PER_KNOB = 12
 #: Normalized held-out improvement a fit must show to count as generalising.
 HELD_OUT_MARGIN = 0.005
+#: `DahdsrEnvelope::kSilenceLevel`: a sustain at or under it makes the envelope end
+#: itself when the decay lands, so leaving it is a branch, not a value.
+SILENT_SUSTAIN = 1.0e-4
 #: The tracked registries a baseline is read back from: each patch's values as the
 #: library reported them, and which unit each refit recorded.
 BANK_VERSIONS = "tools/bank-versions.json"
@@ -597,16 +602,55 @@ def _excess(readings: list[dict]) -> tuple[float, set[tuple[str, str]]]:
     return total, over
 
 
-def switch_moves(report: dict) -> list[str]:
-    moved = []
-    for knob, value in zip(report["knobs"], report["selected"]["values"]):
-        path = knob["key"].partition(".")[2]
-        if switch_field(path) and round(value) != round(knob["start"]):
-            moved.append(knob["key"])
-    return moved
+def unmeasured(voice: dict) -> frozenset[str]:
+    """Field suffixes none of the voice's gates can see move.
+
+    A release acts after the key lift, which only the `damper` dimension reads; a
+    voice no gate of which declares it has its releases settled by nothing, so a
+    fit moving one moves it blind.
+    """
+    for gate in voice.get("gates") or [{"capture": voice.get("capture")}]:
+        path = CAPTURE_DIR / f"{gate['capture']}.json"
+        if path.exists() and "damper" in json.loads(path.read_text()).get("dimensions", []):
+            return frozenset()
+    return frozenset({"release_ms"})
 
 
-def verdict(pre: dict, fit: dict, post: dict, *, gate_only: bool = False) -> dict:
+def _held(knob: dict, value: float, held: frozenset[str] = frozenset()) -> bool:
+    """Whether the gate cannot judge this knob at `value`, so it stays at its start.
+
+    A typed switch and a count by their bucket — a search lands on one, not on a
+    number, and a count adds or removes a resonator the gate window may never
+    reach; an envelope's sustain by whether it still ends the note on its own,
+    since a one-shot that gains one rings until a note-off a drum never sends; and
+    a field in `held`, which no gate of this voice measures.
+    """
+    path = knob["key"].partition(".")[2]
+    if switch_field(path) or integer_field(path):
+        return round(value) != round(knob["start"])
+    if path.endswith("amp_env.sustain"):
+        return (knob["start"] <= SILENT_SUSTAIN) != (value <= SILENT_SUSTAIN)
+    if any(path.endswith(suffix) for suffix in held):
+        return format_value(value) != format_value(knob["start"])
+    return False
+
+
+def switch_moves(report: dict, held: frozenset[str] = frozenset()) -> list[str]:
+    return [
+        knob["key"]
+        for knob, value in zip(report["knobs"], report["selected"]["values"])
+        if _held(knob, value, held)
+    ]
+
+
+def verdict(
+    pre: dict,
+    fit: dict,
+    post: dict,
+    *,
+    gate_only: bool = False,
+    unjudged: frozenset[str] = frozenset(),
+) -> dict:
     """The adoption decision for one voice, with the numbers it rests on.
 
     `gate_only` is for a grid with one condition per note, a drum module's single
@@ -632,7 +676,7 @@ def verdict(pre: dict, fit: dict, post: dict, *, gate_only: bool = False) -> dic
         "held_out_gain": held,
         "excess": [pre_sum, post_sum],
         "newly_over": newly,
-        "switches": switch_moves(fit),
+        "switches": switch_moves(fit, unjudged),
         "refused": (fit.get("write_back") or {}).get("refused"),
     }
     if out["refused"]:
@@ -644,7 +688,10 @@ def verdict(pre: dict, fit: dict, post: dict, *, gate_only: bool = False) -> dic
     elif held is not None and held <= HELD_OUT_MARGIN:
         out["decision"], out["why"] = "kept", f"held-out notes did not improve ({held:+.4f})"
     elif out["switches"]:
-        out["decision"], out["why"] = "trade", f"switch field moved: {', '.join(out['switches'])}"
+        out["decision"], out["why"] = (
+            "trade",
+            f"a field the gate cannot judge moved: {', '.join(out['switches'])}",
+        )
     elif newly:
         out["decision"], out["why"] = "trade", f"newly over its bound: {', '.join(newly)}"
     elif post_sum > pre_sum + 1e-9:
@@ -689,17 +736,18 @@ def run_voice(voice: dict, root: Path, build_dir: str, per_knob: int) -> dict:
             fit_report,
             json.loads(post.read_text()),
             gate_only=bool(voice.get("gate_only")),
+            unjudged=unmeasured(voice),
         ),
     }
     ver.write_text(json.dumps(result, indent=2) + "\n")
     return result
 
 
-def writable(report: dict, values: list[float]) -> list[float]:
-    """The values as the write-back would land them: a switch is never written, so it
-    stays at its shipped value."""
+def writable(report: dict, values: list[float], held: frozenset[str] = frozenset()) -> list[float]:
+    """The values as the write-back would land them: a switch is never written, and a
+    value the gate cannot judge is held, so both stay at their shipped values."""
     return [
-        k["start"] if switch_field(k["key"].partition(".")[2]) else v
+        k["start"] if switch_field(k["key"].partition(".")[2]) or _held(k, v, held) else v
         for k, v in zip(report["knobs"], values)
     ]
 
@@ -738,7 +786,7 @@ def along_the_path(voice: dict, d: Path, lib: Path, report: dict, tag: str) -> d
     checked: dict[int, dict] = {}
 
     def accepted(i: int) -> bool:
-        values = writable(report, path[i]["values"])
+        values = writable(report, path[i]["values"], unmeasured(voice))
         out = d / f"path_{tag}_{path[i]['eval']}.json"
         if not out.exists():
             _compare_voice(voice, out, lib, reach_copies(overrides_for(report, values), voice))
