@@ -69,11 +69,12 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_saw.filter_model = SynthFilterModel::kSvf;
   o.lead_saw.env_to_cutoff_cents = 900.0f;
   o.lead_saw.cutoff_hz = 1600.0f;
-  o.lead_saw.gain = 0.3124f;
-  o.lead_saw.amp_env.attack_ms = 14.9858f;
-  o.lead_saw.amp_env.decay_ms = 122.416f;
+  o.lead_saw.gain = 0.5371f;
+  o.lead_saw.amp_env.attack_ms = 5.00001f;
+  o.lead_saw.amp_env.decay_ms = 366.899f;
   o.lead_saw.amp_env.release_ms = 91.8123f;
   o.lead_saw.va.velocity_exponent = 1.03f;
+  o.lead_saw.amp_env.sustain = 0.465248f;
 
   // Calliope (GM 82): a steam whistle rank. Across the reference's grid the odd partials fall
   // about as a triangle's (h3 -18, h7 -31 dB at the median) under a strong octave (h2 -10 dB),
@@ -86,7 +87,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_calliope.unison = 1;
   o.lead_calliope.detune_cents = 0.0f;
   o.lead_calliope.drive = 0.0f;
-  o.lead_calliope.cutoff_hz = 2500.0f;
+  o.lead_calliope.cutoff_hz = 7492.88f;
   o.lead_calliope.key_track = 1.0f;
   o.lead_calliope.va.osc2_level = 0.8f;
   o.lead_calliope.va.osc2_interval_cents = 1200.0f;
@@ -94,21 +95,24 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_calliope.va.band_noise_level = 0.2f;
   o.lead_calliope.va.band_noise_low_hz = 392.0f;
   o.lead_calliope.va.band_noise_low_key_track = 1.0f;
-  o.lead_calliope.va.band_noise_high_hz = 3000.0f;
-  o.lead_calliope.va.band_noise_high_key_track = 0.25f;
-  o.lead_calliope.env_to_cutoff_cents = 200.19f;
+  o.lead_calliope.va.band_noise_high_hz = 1027.93f;
+  o.lead_calliope.va.band_noise_high_key_track = 0.572949f;
+  o.lead_calliope.env_to_cutoff_cents = 122.533f;
   o.lead_calliope.amp_env = fallback_env(35.0f, 200.0f, 0.9f, 180.0f);
   o.lead_calliope.body = BodyType::kWoodTube;
   o.lead_calliope.body_mix = 0.463525f;
-  o.lead_calliope.gain = 0.4449f;
-  o.lead_calliope.amp_env.attack_ms = 104.9f;
+  o.lead_calliope.gain = 0.5662f;
+  o.lead_calliope.amp_env.attack_ms = 171.382f;
   o.lead_calliope.amp_env.decay_ms = 326.754f;
   o.lead_calliope.amp_env.release_ms = 60.057f;
-  o.lead_calliope.amp_env.sustain = 0.541641f;
-  o.lead_calliope.filter_env.decay_ms = 116.778f;
+  o.lead_calliope.amp_env.sustain = 0.407702f;
+  o.lead_calliope.filter_env.decay_ms = 38.963f;
   o.lead_calliope.filter_env.release_ms = 449.573f;
-  o.lead_calliope.filter_env.sustain = 0.212461f;
+  o.lead_calliope.filter_env.sustain = 0.168189f;
   o.lead_calliope.va.velocity_exponent = 0.99f;
+  o.lead_calliope.filter_env.attack_ms = 0.33365f;
+  o.lead_calliope.resonance_q = 0.722503f;
+  o.lead_calliope.stereo_spread = 0.381966f;
 
   // Chiff (GM 83): the attack transient is the whole program. A wide filter
   // envelope that collapses in 60 ms puts the breath edge on the onset and
@@ -141,10 +145,11 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_charang.filter_model = SynthFilterModel::kDiodeLadder;
   o.lead_charang.drive = 0.55f;
   o.lead_charang.resonance_q = 2.0f;
-  o.lead_charang.cutoff_hz = 2600.0f;
-  o.lead_charang.gain = 0.4909f;
+  o.lead_charang.cutoff_hz = 4247.8f;
+  o.lead_charang.gain = 0.7591f;
   o.lead_charang.amp_env.release_ms = 91.8123f;
   o.lead_charang.va.velocity_exponent = 1.01f;
+  o.lead_charang.amp_env.sustain = 0.465248f;
 
   // Voice (GM 85): a sung lead. The vocal formant bank is the model; the
   // oscillator behind it only has to be rich enough to feed the formants. The
@@ -163,6 +168,8 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_voice.va.band_noise_low_hz = 65.0f;
   o.lead_voice.va.band_noise_low_key_track = 1.0f;
   o.lead_voice.va.velocity_exponent = 0.87f;
+  o.lead_voice.amp_env.attack_ms = 134.872f;
+  o.lead_voice.amp_env.decay_ms = 408.442f;
 
   // Fifths (GM 86): a still saw and one a fourth below at equal level, as the reference
   // holds them; a linear 4-pole keeps the pair from intermodulating (a ladder's tanh put
@@ -189,16 +196,20 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_bass_lead.unison = 1;
   o.lead_bass_lead.detune_cents = 0.0f;
   o.lead_bass_lead.filter_model = SynthFilterModel::kSvf;
-  o.lead_bass_lead.resonance_q = 1.1f;
+  o.lead_bass_lead.resonance_q = 1.97462f;
   o.lead_bass_lead.drive = 0.0f;
   o.lead_bass_lead.cutoff_hz = 1195.0f;
   o.lead_bass_lead.key_track = 0.32f;
   o.lead_bass_lead.vel_to_cutoff_cents = 2200.0f;
-  o.lead_bass_lead.env_to_cutoff_cents = 2100.0f;
+  o.lead_bass_lead.env_to_cutoff_cents = 2701.6f;
   o.lead_bass_lead.filter_env = fallback_env(1.0f, 900.0f, 0.0f, 150.0f);
-  o.lead_bass_lead.gain = 0.4957f;
+  o.lead_bass_lead.gain = 0.6992f;
   o.lead_bass_lead.amp_env = fallback_env(8.16884f, 0.0f, 1.0f, 10.0f);
   o.lead_bass_lead.va.velocity_exponent = 0.91f;
+  o.lead_bass_lead.amp_env.attack_ms = 5.0f;
+  o.lead_bass_lead.amp_env.sustain = 0.618034f;
+  o.lead_bass_lead.filter_env.attack_ms = 0.33365f;
+  o.lead_bass_lead.stereo_spread = 0.309017f;
 
   // Synth Strings (GM 50, 51). Both hold a note that swells and falls by about
   // 10 dB, and the two differ in what that motion is made of: the second's rate
@@ -238,6 +249,8 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.synth_strings_2.amp_env = fallback_env(270.0f, 500.0f, 0.8f, 700.0f);
   o.synth_strings_2.va.velocity_exponent = 1.83f;
   o.synth_strings_2.gain = 0.4801f;
+  o.synth_strings_2.amp_env.attack_ms = 165.262f;
+  o.synth_strings_2.amp_env.decay_ms = 1498.58f;
 
   // The shared pad: a supersaw that arrives slowly, drifts, and spreads.
   NativeSynthPatch pad{};
@@ -267,7 +280,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   // which is the reference's ladder to 4 dB; a slow noise AM gives its skirt.
   o.pad_warm = pad;
   o.pad_warm.unison = 2;
-  o.pad_warm.detune_cents = 6.0f;
+  o.pad_warm.detune_cents = 9.80261f;
   o.pad_warm.pitch_offset_cents = -1.0f;
   o.pad_warm.va.unison_width = 1.0f;
   o.pad_warm.va.noise_am = 0.012f;
@@ -275,22 +288,27 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.pad_warm.cutoff_hz = 590.0f;
   o.pad_warm.key_track = 0.6f;
   o.pad_warm.amp_env = fallback_env(120.0f, 2397.72f, 0.751722f, 580.0f);
-  o.pad_warm.gain = 0.3981f;
+  o.pad_warm.gain = 0.5522f;
   o.pad_warm.va.velocity_exponent = 0.94f;
+  o.pad_warm.amp_env.attack_ms = 359.658f;
+  o.pad_warm.amp_env.decay_ms = 800.0f;
+  o.pad_warm.amp_env.sustain = 0.537539f;
 
   // Polysynth (GM 90): a pad you can still play chords on, so the attack comes
   // back inside a tenth of a second and the stack is wide and bright.
   o.pad_polysynth = pad;
   o.pad_polysynth.unison = 5;
   o.pad_polysynth.detune_cents = 24.0f;
-  o.pad_polysynth.cutoff_hz = 4200.0f;
+  o.pad_polysynth.cutoff_hz = 2492.54f;
   o.pad_polysynth.drive = 0.15f;
   o.pad_polysynth.amp_env = fallback_env(90.0f, 700.0f, 0.7f, 600.0f);
   o.pad_polysynth.filter_env = fallback_env(20.0f, 900.0f, 0.5f, 600.0f);
   o.pad_polysynth.env_to_cutoff_cents = 1500.0f;
-  o.pad_polysynth.gain = 0.2274f;
-  o.pad_polysynth.amp_env.attack_ms = 147.039f;
+  o.pad_polysynth.gain = 0.4187f;
+  o.pad_polysynth.amp_env.attack_ms = 89.9999f;
   o.pad_polysynth.va.velocity_exponent = 0.77f;
+  o.pad_polysynth.amp_env.decay_ms = 233.555f;
+  o.pad_polysynth.amp_env.sustain = 0.388854f;
 
   // Choir (GM 91): the same formant bank the vocal lead uses, over the pad's
   // envelope instead of the lead's.
@@ -350,8 +368,10 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.pad_metallic.va.osc2_interval_cents = 5.0f;
   o.pad_metallic.va.osc2_dry = 1.0f;
   o.pad_metallic.amp_env = fallback_env(120.0f, 1200.0f, 0.6f, 750.0f);
-  o.pad_metallic.gain = 1.264f;
+  o.pad_metallic.gain = 0.9990f;
   o.pad_metallic.va.velocity_exponent = 0.65f;
+  o.pad_metallic.amp_env.attack_ms = 359.658f;
+  o.pad_metallic.amp_env.decay_ms = 3596.58f;
 
   // Halo (GM 94): distance. The slowest attack, the widest scatter, the most
   // drift, and the top rolled off so nothing in it is close to the listener.
@@ -375,8 +395,9 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.pad_sweep.lfo2_rate_hz = 0.3f;
   o.pad_sweep.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kCutoffCents, 2600.0f};
   o.pad_sweep.gain = 0.1751f;
-  o.pad_sweep.amp_env.attack_ms = 244.833f;
+  o.pad_sweep.amp_env.attack_ms = 400.001f;
   o.pad_sweep.va.velocity_exponent = 0.72f;
+  o.pad_sweep.amp_env.decay_ms = 980.261f;
 
   // --- Synth effects (GM 96-103) -------------------------------------------
   // Sample-like GM gestures use the closest source, envelope, filter and modulation available.
@@ -390,9 +411,12 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_rain.amp_env = fallback_env(2.0f, 260.0f, 0.05f, 160.0f);
   o.fx_rain.filter_output = SynthFilterOutput::kHighpass;
   o.fx_rain.cutoff_hz = 6200.0f;
-  o.fx_rain.resonance_q = 1.1f;
+  o.fx_rain.resonance_q = 1.16852f;
   o.fx_rain.gain = 0.5617f;
   o.fx_rain.va.velocity_exponent = 1.2f;
+  o.fx_rain.amp_env.attack_ms = 0.6673f;
+  o.fx_rain.amp_env.decay_ms = 424.78f;
+  o.fx_rain.stereo_spread = 0.381966f;
 
   // FX 2 Soundtrack: a broad saw stack and long envelope make the score-like wash.
   o.fx_soundtrack = fx;
@@ -413,7 +437,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_crystal = fx;
   o.fx_crystal.mode = SynthEngineMode::kFm;
   o.fx_crystal.amp_env = fallback_env(3.0f, 3400.0f, 0.0f, 500.0f);
-  o.fx_crystal.cutoff_hz = 20000.0f;
+  o.fx_crystal.cutoff_hz = 10592.0f;
   o.fx_crystal.fm.algorithm = FmAlgorithm::kPair2x2;
   o.fx_crystal.fm.ops[0].ratio = 1.0f;
   o.fx_crystal.fm.ops[0].level = 1.0f;
@@ -446,8 +470,8 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_atmosphere.resonance_q = 0.572042f;
   o.fx_atmosphere.stereo_spread = 0.626456f;
   o.fx_atmosphere.gain = 0.4484f;
-  o.fx_atmosphere.amp_env.attack_ms = 26.0488f;
-  o.fx_atmosphere.amp_env.decay_ms = 26.4543f;
+  o.fx_atmosphere.amp_env.attack_ms = 15.944f;
+  o.fx_atmosphere.amp_env.decay_ms = 16.1922f;
   o.fx_atmosphere.amp_env.release_ms = 714.758f;
   o.fx_atmosphere.amp_env.sustain = 0.43011f;
   o.fx_atmosphere.drift_rate_hz = 0.168613f;
@@ -471,7 +495,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_brightness.env_to_cutoff_cents = 127.403f;
   o.fx_brightness.drive = 0.362055f;
   o.fx_brightness.gain = 0.3665f;
-  o.fx_brightness.amp_env.attack_ms = 0.20204f;
+  o.fx_brightness.amp_env.attack_ms = 0.0674107f;
   o.fx_brightness.amp_env.decay_ms = 565.715f;
   o.fx_brightness.amp_env.release_ms = 734.285f;
   o.fx_brightness.amp_env.sustain = 0.143557f;
@@ -494,10 +518,10 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_goblins.filter_env = fallback_env(2.0f, 160.0f, 0.1f, 200.0f);
   o.fx_goblins.env_to_cutoff_cents = 981.231f;
   o.fx_goblins.gain = 0.3445f;
-  o.fx_goblins.amp_env.attack_ms = 144.178f;
-  o.fx_goblins.amp_env.decay_ms = 882.691f;
+  o.fx_goblins.amp_env.attack_ms = 432.123f;
+  o.fx_goblins.amp_env.decay_ms = 294.51f;
   o.fx_goblins.amp_env.release_ms = 750.351f;
-  o.fx_goblins.amp_env.sustain = 0.498283f;
+  o.fx_goblins.amp_env.sustain = 0.38131f;
   o.fx_goblins.drive = 0.0f;
   o.fx_goblins.filter_env.attack_ms = 15.4188f;
   o.fx_goblins.filter_env.decay_ms = 2326.59f;
@@ -514,25 +538,29 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_echoes = fx;
   o.fx_echoes.waveform = VaWaveform::kTriangle;
   o.fx_echoes.unison = 4;
-  o.fx_echoes.detune_cents = 9.0f;
+  o.fx_echoes.detune_cents = 14.7039f;
   o.fx_echoes.amp_env = fallback_env(8.0f, 1400.0f, 0.45f, 900.0f);
-  o.fx_echoes.cutoff_hz = 4200.0f;
-  o.fx_echoes.resonance_q = 1.2f;
+  o.fx_echoes.cutoff_hz = 1858.3f;
+  o.fx_echoes.resonance_q = 2.1405f;
   o.fx_echoes.lfo2_rate_hz = 1.8f;
   o.fx_echoes.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kAmpGain, -0.65f};
-  o.fx_echoes.stereo_spread = 0.55f;
+  o.fx_echoes.stereo_spread = 0.696149f;
   o.fx_echoes.gain = 0.4331f;
-  o.fx_echoes.amp_env.decay_ms = 449.135f;
+  o.fx_echoes.amp_env.decay_ms = 766.992f;
   o.fx_echoes.amp_env.release_ms = 803.905f;
-  o.fx_echoes.amp_env.sustain = 0.308815f;
-  o.fx_echoes.va.osc2_level = 0.3f;
+  o.fx_echoes.amp_env.sustain = 0.367909f;
+  o.fx_echoes.va.osc2_level = 0.306888f;
   o.fx_echoes.va.osc2_interval_cents = 1200.0f;
   o.fx_echoes.va.band_noise_level = 0.12f;
   o.fx_echoes.va.band_noise_low_hz = 131.0f;
-  o.fx_echoes.va.band_noise_low_key_track = 1.0f;
+  o.fx_echoes.va.band_noise_low_key_track = 0.940983f;
   o.fx_echoes.va.band_noise_high_hz = 1200.0f;
-  o.fx_echoes.va.band_noise_high_key_track = 0.5f;
+  o.fx_echoes.va.band_noise_high_key_track = 0.236068f;
   o.fx_echoes.va.velocity_exponent = 1.0f;
+  o.fx_echoes.amp_env.attack_ms = 29.5694f;
+  o.fx_echoes.drive = 0.0954915f;
+  o.fx_echoes.va.noise_am = 0.190983f;
+  o.fx_echoes.va.osc2_dry = 0.440983f;
 
   // FX 8 Sci-Fi: an opening resonant radio band with a slow synthetic sweep.
   o.fx_sci_fi = fx;
@@ -546,8 +574,8 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_sci_fi.lfo2_rate_hz = 1.1f;
   o.fx_sci_fi.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kCutoffCents, 800.0f};
   o.fx_sci_fi.gain = 0.485f;
-  o.fx_sci_fi.amp_env.attack_ms = 70.7156f;
-  o.fx_sci_fi.amp_env.decay_ms = 182.175f;
+  o.fx_sci_fi.amp_env.attack_ms = 43.2837f;
+  o.fx_sci_fi.amp_env.decay_ms = 60.7827f;
   o.fx_sci_fi.amp_env.release_ms = 765.605f;
   o.fx_sci_fi.amp_env.sustain = 0.458263f;
   o.fx_sci_fi.filter_env.decay_ms = 1325.53f;
@@ -644,20 +672,21 @@ SONARE_TUNED_CONSTEXPR void configure_synth_bass_and_brass_programs(ProgramOverr
   // envelope carries since the amp attack cannot answer velocity.
   o.synth_bass_2 = sbass;
   o.synth_bass_2.filter_model = SynthFilterModel::kTransistorLadder;
-  o.synth_bass_2.cutoff_hz = 181.399f;
+  o.synth_bass_2.cutoff_hz = 543.68f;
   o.synth_bass_2.resonance_q = 6.71441f;
   o.synth_bass_2.vel_to_cutoff_cents = 394.698f;
-  o.synth_bass_2.env_to_cutoff_cents = 283.833f;
+  o.synth_bass_2.env_to_cutoff_cents = 94.7009f;
   o.synth_bass_2.amp_env = fallback_env(16.7184f, 0.0f, 1.0f, 36.9329f);
   o.synth_bass_2.filter_env = fallback_env(120.0f, 400.0f, 1.0f, 150.0f);
   o.synth_bass_2.gain = 0.562f;
-  o.synth_bass_2.amp_env.attack_ms = 5.60608f;
+  o.synth_bass_2.amp_env.attack_ms = 9.15904f;
   o.synth_bass_2.amp_env.release_ms = 32.6151f;
-  o.synth_bass_2.filter_env.attack_ms = 45.369f;
+  o.synth_bass_2.filter_env.attack_ms = 74.1225f;
   o.synth_bass_2.filter_env.release_ms = 354.786f;
-  o.synth_bass_2.filter_env.sustain = 0.619768f;
-  o.synth_bass_2.amp_env.sustain = 0.618034f;
+  o.synth_bass_2.filter_env.sustain = 0.327563f;
+  o.synth_bass_2.amp_env.sustain = 0.454915f;
   o.synth_bass_2.va.velocity_exponent = 0.9f;
+  o.synth_bass_2.drive = 0.190983f;
 
   // Synth Brass 1 (GM 62): the family stack with the feedback operator off, and
   // the fit put it there on its own, against the range floor. It is the wider
@@ -673,9 +702,9 @@ SONARE_TUNED_CONSTEXPR void configure_synth_bass_and_brass_programs(ProgramOverr
   o.synth_brass_1.cutoff_hz = 16316.9f;
   o.synth_brass_1.amp_env = fallback_env(40.0f, 200.0f, 0.85f, 60.0f);
   o.synth_brass_1.stereo_spread = 0.6f;
-  o.synth_brass_1.amp_env.decay_ms = 599.43f;
+  o.synth_brass_1.amp_env.decay_ms = 366.9f;
   o.synth_brass_1.amp_env.release_ms = 36.7249f;
-  o.synth_brass_1.amp_env.sustain = 0.503444f;
+  o.synth_brass_1.amp_env.sustain = 0.384095f;
   // No vibrato: the reference wanders under 3 Hz and carries none at 5 Hz; the
   // family's 4 c LFO read as 16 dB of sideband noise against it.
   o.synth_brass_1.lfo_to_pitch_cents = 0.0f;
@@ -697,11 +726,17 @@ SONARE_TUNED_CONSTEXPR void configure_synth_bass_and_brass_programs(ProgramOverr
   o.synth_brass_2.fm.ops[3].vel_to_level = 0.0f;
   o.synth_brass_2.fm.ops[3].feedback = 0.0f;
   o.synth_brass_2.fm.ops[3].detune_cents = -20.4f;
-  o.synth_brass_2.cutoff_hz = 1229.0f;
+  o.synth_brass_2.cutoff_hz = 3683.5f;
   o.synth_brass_2.gain = 0.98f;
   o.synth_brass_2.amp_env = fallback_env(40.0f, 200.0f, 0.85f, 150.0f);
   o.synth_brass_2.stereo_spread = 0.3f;
-  o.synth_brass_2.amp_env.decay_ms = 66.73f;
+  o.synth_brass_2.amp_env.decay_ms = 200.0f;
+  o.synth_brass_2.amp_env.sustain = 0.598278f;
+  o.synth_brass_2.fm.ops[0].env.attack_ms = 24.4833f;
+  o.synth_brass_2.fm.ops[0].env.decay_ms = 122.416f;
+  o.synth_brass_2.fm.ops[0].env.sustain = 0.846556f;
+  o.synth_brass_2.fm.ops[0].feedback = 0.472136f;
+  o.synth_brass_2.fm.ops[0].vel_to_level = 0.309017f;
 }
 
 }  // namespace sonare::midi::synth::detail

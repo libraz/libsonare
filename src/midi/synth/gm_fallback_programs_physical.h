@@ -112,13 +112,13 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.cello = bowed(0.14f, 0.60f, 0.44f, 0.38f, 70.0f, 140.0f, 0.40f, 0.28f);
   o.cello.lfo_rate_hz = 4.3315f;
   o.cello.lfo_to_pitch_cents = 4.43038f;
-  o.cello.amp_env.attack_ms = 6.71239f;
-  o.cello.amp_env.release_ms = 388.584f;
-  o.cello.amp_env.sustain = 0.398099f;
+  o.cello.amp_env.attack_ms = 20.1181f;
+  o.cello.amp_env.release_ms = 634.856f;
+  o.cello.amp_env.sustain = 0.555056f;
   // The reference's slow sample attack arrives at 300-450 ms; at 347 the model came
   // in 117 ms early, at 580 within 50.
-  o.cello.bowed_string.attack_ms = 580.0f;
-  o.cello.bowed_string.bow_force = 0.374109f;
+  o.cello.bowed_string.attack_ms = 661.51f;
+  o.cello.bowed_string.bow_force = 0.33388f;
   o.cello.bowed_string.bow_position = 0.167379f;
   o.cello.bowed_string.bow_speed = 0.937158f;
   o.cello.bowed_string.brightness = 0.14f;
@@ -133,8 +133,8 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // B1+/- and hill land that much low under this same uniform scale — a cello
   // is not a scaled violin.
   o.cello.bowed_string.corpus_scale = 0.37f;
-  o.cello.amp_env.decay_ms = 32.7064f;
-  o.cello.body_mix = 0.212461f;
+  o.cello.amp_env.decay_ms = 98.026f;
+  o.cello.body_mix = 0.272136f;
   // Contrabass (GM 43): fitted to its reference on the hyperbolic bow junction.
   // The bridge reflection filter is fixed in Hz, so at these pitches its whole
   // range sits above every partial and the darkening has to come from the string.
@@ -153,8 +153,8 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.contrabass.bowed_string.sympathetic = 0.0847627f;
   // The reference's held level settles 3.8 to 6.4 dB under its own attack peak and
   // then holds flat, so the sustain is that settle rather than a decay.
-  o.contrabass.amp_env.attack_ms = 273.932f;
-  o.contrabass.amp_env.decay_ms = 126.294f;
+  o.contrabass.amp_env.attack_ms = 167.669f;
+  o.contrabass.amp_env.decay_ms = 378.522f;
   o.contrabass.amp_env.sustain = 0.549535f;
   o.contrabass.amp_env.release_ms = 179.169f;
   o.contrabass.bowed_string.attack_ms = 3.19923f;
@@ -490,7 +490,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.english_horn.lfo_rate_hz = 4.79f;
   o.english_horn.lfo_to_pitch_cents = 3.5f;
   o.english_horn.lfo_shape = LfoShape::kSine;
-  o.english_horn.amp_env.attack_ms = 2.12781f;
+  o.english_horn.amp_env.attack_ms = 0.709944f;
   o.english_horn.amp_env.decay_ms = 812.385f;
   o.english_horn.amp_env.release_ms = 29.2249f;
   o.english_horn.amp_env.sustain = 0.347453f;
@@ -557,6 +557,10 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // No vibrato: the reference's f0 holds within 0.1 c peak to peak; a 2.5 c LFO
   // read as 21 dB of sideband noise against it.
   o.clarinet.reed.velocity_exponent = 2.80f;
+  o.clarinet.amp_env.attack_ms = 9.18123f;
+  o.clarinet.amp_env.release_ms = 269.744f;
+  o.clarinet.amp_env.sustain = 0.809017f;
+  o.clarinet.body_mix = 0.286475f;
 
   // Bag pipe (GM 109): the chanter — a stiff double reed on a conical bore fed
   // from the bag, so the pressure never varies and the note is never tongued.
@@ -570,7 +574,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.bag_pipe.amp_env.attack_ms = 29.2278f;
   o.bag_pipe.amp_env.decay_ms = 3.03525f;
   o.bag_pipe.amp_env.release_ms = 44.8033f;
-  o.bag_pipe.amp_env.sustain = 0.817048f;
+  o.bag_pipe.amp_env.sustain = 0.838777f;
   o.bag_pipe.drift_rate_hz = 0.0886129f;
   o.bag_pipe.reed.attack_ms = 1.80993f;
   o.bag_pipe.reed.breath_pressure = 0.76746f;
@@ -706,7 +710,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.trombone.lfo_rate_hz = 2.47118f;
   o.trombone.lfo_to_pitch_cents = 0.597068f;
   o.trombone.lfo_shape = LfoShape::kSine;
-  o.trombone.amp_env.attack_ms = 79.4293f;
+  o.trombone.amp_env.attack_ms = 129.769f;
   o.trombone.amp_env.release_ms = 99.453f;
   o.trombone.amp_env.sustain = 0.532329f;
   o.trombone.brass.attack_ms = 2.33858f;
@@ -854,40 +858,44 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // together far less precisely than a soloist, so the speech is slower and
   // softer-edged while the summed blare stays.
   o.brass_section = brass(false, 0.50f, 0.42f, 0.72f, 0.32f, 45.0f, 130.0f, 0.85f, 0.35f, 0.85f);
-  o.brass_section.brass.lip_aperture = 0.810896f;
+  o.brass_section.brass.lip_aperture = 0.842372f;
   o.brass_section.amp_env.attack_ms = 36.6655f;
   o.brass_section.cutoff_hz = 570.505f;
   o.brass_section.brass.brassiness = 0.228995f;
-  o.brass_section.brass.cuivre_dynamics = 0.748863f;
+  o.brass_section.brass.cuivre_dynamics = 0.772108f;
   o.brass_section.brass.chiff = 0.203084f;
   o.brass_section.drift_cents = 10.209f;
   o.brass_section.stereo_spread = 0.972044f;
-  o.brass_section.lfo_rate_hz = 1.79471f;
-  o.brass_section.lfo_to_pitch_cents = 2.01483f;
+  o.brass_section.lfo_rate_hz = 3.61805f;
+  o.brass_section.lfo_to_pitch_cents = 1.23324f;
   o.brass_section.lfo_shape = LfoShape::kSine;
-  o.brass_section.amp_env.decay_ms = 0.648809f;
+  o.brass_section.amp_env.decay_ms = 0.374768f;
   o.brass_section.amp_env.release_ms = 69.7742f;
   o.brass_section.amp_env.sustain = 0.420284f;
-  o.brass_section.brass.attack_ms = 9.20641f;
-  o.brass_section.brass.breath_pressure = 0.673627f;
-  o.brass_section.brass.brightness = 0.743112f;
-  o.brass_section.brass.chiff_ms = 6.94592f;
+  o.brass_section.brass.attack_ms = 15.0411f;
+  o.brass_section.brass.breath_pressure = 0.80492f;
+  o.brass_section.brass.brightness = 0.710895f;
+  o.brass_section.brass.chiff_ms = 4.38893f;
   o.brass_section.brass.damping = 0.59656f;
   o.brass_section.brass.lip_damping = 0.812364f;
   o.brass_section.brass.lip_tension = 0.646858f;
   o.brass_section.brass.release_ms = 264.072f;
   o.brass_section.brass.vel_to_breath = 0.201144f;
-  o.brass_section.drift_rate_hz = 2.95782f;
+  o.brass_section.drift_rate_hz = 4.49753f;
   o.brass_section.resonance_q = 0.506819f;
   o.brass_section.brass.bell_cutoff_hz = 3859.29f;
   o.brass_section.gain = 7.34402f;
-  o.brass_section.brass.bore_nonlinearity = 0.479409f;
-  o.brass_section.body_mix = 0.843808f;
-  o.brass_section.brass.breath_noise = 0.0824593f;
-  o.brass_section.brass.dynamic_lip = 0.425212f;
-  o.brass_section.brass.half_valve = 0.111068f;
+  o.brass_section.brass.bore_nonlinearity = 0.546291f;
+  o.brass_section.body_mix = 0.904415f;
+  o.brass_section.brass.breath_noise = 0.22248f;
+  o.brass_section.brass.dynamic_lip = 0.706799f;
+  o.brass_section.brass.half_valve = 0.144254f;
   o.brass_section.brass.velocity_exponent = 1.81084f;
-  o.brass_section.drive = 0.113923f;
+  o.brass_section.drive = 0.234498f;
+  o.brass_section.brass.mute = 0.25f;
+  o.brass_section.brass.onset_breath_overshoot_db = 1.52786f;
+  o.brass_section.brass.onset_breath_overshoot_vel_db = 2.19834f;
+  o.brass_section.brass.onset_breath_settle_ms = 147.847f;
 
   // Air-jet flute (GM 72-79): one edge-tone waveguide voiced across the
   // open-pipe flutes and their breathier relatives — mirrors the flute presets.
@@ -944,7 +952,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.piccolo.flute.velocity_exponent = 2.17f;
   o.concert_flute = flute(0.50f, 0.55f, 0.30f, 0.35f, 0.2f, 0.15f, 0.60f, 0.85f);
   o.concert_flute.cutoff_hz = 5961.8f;
-  o.concert_flute.amp_env.attack_ms = 90.0f;
+  o.concert_flute.amp_env.attack_ms = 30.0285f;
   o.concert_flute.flute.overblow = 0.35f;
   o.concert_flute.flute.velocity_exponent = 1.12f;
   o.concert_flute.flute.jet_drive = true;
@@ -997,7 +1005,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.pan_flute.flute.vortex = 0.35f;
   o.pan_flute.body = BodyType::kWoodTube;
   o.pan_flute.body_mix = 0.15f;
-  o.pan_flute.amp_env.attack_ms = 23.9772f;
+  o.pan_flute.amp_env.attack_ms = 14.676f;
   o.pan_flute.flute.velocity_exponent = 1.39f;
   // The reference stops 85-95 ms after the key lifts; the breath ramp sets that, not the VCA.
   o.pan_flute.flute.release_ms = 400.0f;
@@ -1026,7 +1034,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.shakuhachi.amp_env.attack_ms = 64.009f;
   o.shakuhachi.amp_env.release_ms = 83.7378f;
   o.shakuhachi.amp_env.sustain = 0.317428f;
-  o.shakuhachi.cutoff_hz = 7643.73f;
+  o.shakuhachi.cutoff_hz = 8070.44f;
   o.shakuhachi.drift_rate_hz = 0.0677458f;
   o.shakuhachi.flute.attack_ms = 8.93819f;
   o.shakuhachi.flute.breath_noise = 0.668968f;
@@ -1052,16 +1060,16 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.tin_whistle.flute.release_ms = 250.0f;
   o.ocarina = flute(0.50f, 0.40f, 0.55f, 0.15f, 0.30f, 0.06f, 0.55f, 0.85f);
   o.ocarina.flute.loop_phase_servo = true;
-  o.ocarina.amp_env.attack_ms = 2.25225f;
+  o.ocarina.amp_env.attack_ms = 1.37856f;
   o.ocarina.amp_env.decay_ms = 8.54137f;
   // The reference is 40 dB down 20 ms after the key lifts; at 6 ms only the step's splatter was
   // left to read.
-  o.ocarina.amp_env.release_ms = 20.0f;
-  o.ocarina.amp_env.sustain = 0.300173f;
+  o.ocarina.amp_env.release_ms = 6.673f;
+  o.ocarina.amp_env.sustain = 0.305639f;
   o.ocarina.cutoff_hz = 1015.67f;
-  o.ocarina.drift_rate_hz = 0.0285699f;
+  o.ocarina.drift_rate_hz = 0.0271448f;
   o.ocarina.drive = 0.0f;
-  o.ocarina.flute.attack_ms = 4.53609f;
+  o.ocarina.flute.attack_ms = 3.53769f;
   o.ocarina.flute.breath_pressure = 0.352329f;
   o.ocarina.flute.brightness = 0.639144f;
   o.ocarina.flute.chiff = 0.292181f;
@@ -1072,9 +1080,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.ocarina.flute.release_ms = 287.352f;
   o.ocarina.flute.vel_to_breath = 0.282063f;
   o.ocarina.resonance_q = 0.94061f;
-  o.ocarina.drift_cents = 0.918123f;
+  o.ocarina.drift_cents = 2.75175f;
   o.ocarina.flute.breath_noise = 0.0269825f;
-  o.ocarina.flute.damping = 0.307256f;
+  o.ocarina.flute.damping = 0.308344f;
   o.ocarina.flute.edge_hysteresis = 0.0780765f;
   o.ocarina.flute.jet_turbulence = 0.0274937f;
   o.ocarina.flute.overblow = 0.0568644f;

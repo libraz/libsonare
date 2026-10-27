@@ -815,15 +815,24 @@ TEST_CASE("GS drum keys differ in sustain by archetype", "[midi][synth][percussi
   REQUIRE(claves < open_triangle * 0.1);
 }
 
-TEST_CASE("the cowbell voices its two clangy partials", "[midi][synth][percussion]") {
-  // TR-808-informed cowbell: two tones near 587 Hz and 845 Hz (ratio ~1.44)
-  // dominate over the surrounding spectrum.
-  const std::vector<float> bell = render_kit({{0, 56}}, 8000);
-  const double low = goertzel(bell, 587.0);
-  const double high = goertzel(bell, 845.0);
+TEST_CASE("the cowbell voices the module's partials", "[midi][synth][percussion]") {
+  // The module's cowbell is a 472 Hz bell with an inharmonic series up to 4.6 kHz,
+  // not a two-tone 587/845 Hz pair. Read Hann-windowed over the 63 ms its recording
+  // holds, 472 Hz is 202x and 4648 Hz 145x the 300 Hz floor, and 845 Hz under it.
+  std::vector<float> bell = render_kit({{0, 56}}, static_cast<int>(0.063 * kRate));
+  for (size_t i = 0; i < bell.size(); ++i) {
+    bell[i] *= static_cast<float>(0.5 - 0.5 * std::cos(2.0 * M_PI * static_cast<double>(i) /
+                                                       static_cast<double>(bell.size() - 1)));
+  }
+  const double low = goertzel(bell, 472.0);
+  const double top = goertzel(bell, 4648.0);
+  const double pair = goertzel(bell, 845.0);
   const double off = goertzel(bell, 300.0);
-  REQUIRE(low > 3.0 * off);
-  REQUIRE(high > 1.5 * off);
+  INFO("472 Hz " << low / off << "x, 4648 Hz " << top / off << "x, 845 Hz " << pair / off
+                 << "x the 300 Hz floor");
+  REQUIRE(low > 20.0 * off);
+  REQUIRE(top > 10.0 * off);
+  REQUIRE(low > 10.0 * pair);
 }
 
 TEST_CASE("a closed hi-hat chokes the ringing open hi-hat", "[midi][synth][percussion]") {

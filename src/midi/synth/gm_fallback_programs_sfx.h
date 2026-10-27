@@ -22,8 +22,8 @@ constexpr void configure_sfx_programs(ProgramOverrides& o) noexcept {
   o.sfx_guitar_fret.amp_env.attack_ms = 2.23697f;
   o.sfx_guitar_fret.amp_env.decay_ms = 94.4725f;
   o.sfx_guitar_fret.unison = 1;
-  o.sfx_guitar_fret.drive = 0.238832f;
-  o.sfx_guitar_fret.stereo_spread = 0.0985691f;
+  o.sfx_guitar_fret.drive = 0.174415f;
+  o.sfx_guitar_fret.stereo_spread = 0.228633f;
   o.sfx_guitar_fret.va.velocity_exponent = 1.18f;
 
   // Breath Noise (GM 121): a soft low-passed burst with a gradual mouth onset.
@@ -60,13 +60,13 @@ constexpr void configure_sfx_programs(ProgramOverrides& o) noexcept {
   o.sfx_seashore.gain = 0.5367f;
   o.sfx_seashore.amp_env.attack_ms = 845.17f;
   o.sfx_seashore.amp_env.release_ms = 3404.28f;
-  o.sfx_seashore.amp_env.sustain = 0.672047f;
+  o.sfx_seashore.amp_env.sustain = 0.68375f;
   o.sfx_seashore.filter_env.attack_ms = 866.014f;
   o.sfx_seashore.filter_env.decay_ms = 59.0997f;
   o.sfx_seashore.filter_env.release_ms = 14443.3f;
   o.sfx_seashore.filter_env.sustain = 0.320674f;
   o.sfx_seashore.unison = 2;
-  o.sfx_seashore.amp_env.decay_ms = 533.84f;
+  o.sfx_seashore.amp_env.decay_ms = 1600.0f;
   o.sfx_seashore.va.velocity_exponent = 1.01f;
 
   // Bird Tweet (GM 123): AmpEnv -> PitchCents sweeps the triangle upward as the call opens.
@@ -74,23 +74,23 @@ constexpr void configure_sfx_programs(ProgramOverrides& o) noexcept {
   o.sfx_bird_tweet.waveform = VaWaveform::kTriangle;
   o.sfx_bird_tweet.amp_env = fallback_env(35.0f, 180.0f, 0.2f, 100.0f);
   o.sfx_bird_tweet.cutoff_hz = 7329.37f;
-  o.sfx_bird_tweet.resonance_q = 1.49558f;
+  o.sfx_bird_tweet.resonance_q = 3.88314f;
   o.sfx_bird_tweet.filter_env = fallback_env(2.0f, 100.0f, 0.2f, 80.0f);
-  o.sfx_bird_tweet.env_to_cutoff_cents = 262.303f;
-  o.sfx_bird_tweet.lfo_rate_hz = 35.4734f;
-  o.sfx_bird_tweet.lfo_to_pitch_cents = 614.177f;
+  o.sfx_bird_tweet.env_to_cutoff_cents = 87.5174f;
+  o.sfx_bird_tweet.lfo_rate_hz = 15.7523f;
+  o.sfx_bird_tweet.lfo_to_pitch_cents = 251.712f;
   o.sfx_bird_tweet.mod_matrix.routes[0] = {ModSource::kAmpEnv, ModDestination::kPitchCents, 900.0f};
   o.sfx_bird_tweet.gain = 0.5245f;
   o.sfx_bird_tweet.amp_env.attack_ms = 339.109f;
-  o.sfx_bird_tweet.amp_env.decay_ms = 17.7284f;
+  o.sfx_bird_tweet.amp_env.decay_ms = 10.8512f;
   o.sfx_bird_tweet.amp_env.release_ms = 1183.12f;
   o.sfx_bird_tweet.amp_env.sustain = 0.0728634f;
   o.sfx_bird_tweet.filter_env.sustain = 0.563241f;
   o.sfx_bird_tweet.unison = 2;
-  o.sfx_bird_tweet.filter_env.attack_ms = 1.06624f;
-  o.sfx_bird_tweet.filter_env.decay_ms = 81.5462f;
+  o.sfx_bird_tweet.filter_env.attack_ms = 0.652626f;
+  o.sfx_bird_tweet.filter_env.decay_ms = 49.9129f;
   o.sfx_bird_tweet.filter_env.release_ms = 630.762f;
-  o.sfx_bird_tweet.stereo_spread = 0.0119364f;
+  o.sfx_bird_tweet.stereo_spread = 0.391085f;
   o.sfx_bird_tweet.va.velocity_exponent = 1.3f;
 
   // Telephone Ring (GM 124): no fixed oscillator, so this is a key-following resonant square
@@ -102,18 +102,26 @@ constexpr void configure_sfx_programs(ProgramOverrides& o) noexcept {
   o.sfx_telephone_ring.amp_env = fallback_env(5.0f, 120.0f, 0.6f, 120.0f);
   o.sfx_telephone_ring.filter_output = SynthFilterOutput::kBandpass;
   o.sfx_telephone_ring.cutoff_hz = 4946.83f;
-  o.sfx_telephone_ring.resonance_q = 4.92292f;
+  o.sfx_telephone_ring.resonance_q = 1.02329f;
   o.sfx_telephone_ring.key_track = 0.4f;
   o.sfx_telephone_ring.lfo2_rate_hz = 2.2f;
   o.sfx_telephone_ring.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kAmpGain, -0.5f};
   o.sfx_telephone_ring.gain = 0.4567f;
   o.sfx_telephone_ring.amp_env.attack_ms = 178.532f;
-  o.sfx_telephone_ring.amp_env.decay_ms = 126.687f;
+  o.sfx_telephone_ring.amp_env.decay_ms = 161.93f;
   o.sfx_telephone_ring.amp_env.release_ms = 99.1493f;
   o.sfx_telephone_ring.amp_env.sustain = 0.479105f;
-  o.sfx_telephone_ring.drive = 0.513932f;
-  o.sfx_telephone_ring.stereo_spread = 0.059017f;
+  o.sfx_telephone_ring.drive = 0.63119f;
+  o.sfx_telephone_ring.stereo_spread = 0.213525f;
   o.sfx_telephone_ring.va.velocity_exponent = 1.0f;
+  o.sfx_telephone_ring.va.band_noise_high_hz = 2458.34f;
+  o.sfx_telephone_ring.va.band_noise_high_key_track = 0.190983f;
+  o.sfx_telephone_ring.va.band_noise_level = 0.562306f;
+  o.sfx_telephone_ring.va.band_noise_low_hz = 33.9622f;
+  o.sfx_telephone_ring.va.band_noise_low_key_track = 0.177051f;
+  o.sfx_telephone_ring.va.noise_am = 0.190983f;
+  o.sfx_telephone_ring.va.noise_level = 1.34752f;
+  o.sfx_telephone_ring.va.pulse_width = 0.386687f;
 
   // Helicopter (GM 125): a low noise band with periodic amplitude substitutes for rotor structure.
   o.sfx_helicopter = sfx;
@@ -125,14 +133,17 @@ constexpr void configure_sfx_programs(ProgramOverrides& o) noexcept {
   o.sfx_helicopter.lfo2_rate_hz = 6.0f;
   o.sfx_helicopter.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kAmpGain, 0.8f};
   o.sfx_helicopter.gain = 0.5051f;
-  o.sfx_helicopter.amp_env.attack_ms = 0.603522f;
-  o.sfx_helicopter.amp_env.decay_ms = 176.254f;
+  o.sfx_helicopter.amp_env.attack_ms = 1.80885f;
+  o.sfx_helicopter.amp_env.decay_ms = 287.958f;
   o.sfx_helicopter.amp_env.release_ms = 2132.05f;
-  o.sfx_helicopter.amp_env.sustain = 0.317108f;
+  o.sfx_helicopter.amp_env.sustain = 0.192893f;
   o.sfx_helicopter.unison = 3;
-  o.sfx_helicopter.drive = 0.244159f;
-  o.sfx_helicopter.stereo_spread = 0.00537227f;
+  o.sfx_helicopter.drive = 0.568487f;
+  o.sfx_helicopter.stereo_spread = 0.312337f;
   o.sfx_helicopter.va.velocity_exponent = 1.01f;
+  o.sfx_helicopter.va.noise_level = 1.52786f;
+  o.sfx_helicopter.va.osc2_level = 1.52786f;
+  o.sfx_helicopter.va.unison_width = 0.381966f;
 
   // Applause (GM 126): broad bright noise with random scatter and a gentle envelope flutter.
   o.sfx_applause = sfx;
@@ -145,31 +156,38 @@ constexpr void configure_sfx_programs(ProgramOverrides& o) noexcept {
   o.sfx_applause.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kAmpGain, 0.35f};
   o.sfx_applause.stereo_spread = 0.149f;
   o.sfx_applause.gain = 0.5486f;
-  o.sfx_applause.amp_env.attack_ms = 1.10334f;
-  o.sfx_applause.amp_env.decay_ms = 6331.34f;
+  o.sfx_applause.amp_env.attack_ms = 0.368129f;
+  o.sfx_applause.amp_env.decay_ms = 2419.16f;
   o.sfx_applause.amp_env.release_ms = 2908.98f;
-  o.sfx_applause.amp_env.sustain = 0.691363f;
+  o.sfx_applause.amp_env.sustain = 0.809107f;
   o.sfx_applause.unison = 5;
   o.sfx_applause.va.velocity_exponent = 0.98f;
+  o.sfx_applause.va.band_noise_level = 0.763932f;
+  o.sfx_applause.va.band_noise_low_hz = 16.3377f;
+  o.sfx_applause.va.band_noise_low_key_track = 0.118034f;
+  o.sfx_applause.va.noise_am = 0.381966f;
+  o.sfx_applause.va.unison_width = 0.381966f;
 
   // Gunshot (GM 127): a compressed noise impulse with a bright muzzle envelope and pressure crack.
   o.sfx_gunshot = sfx;
   o.sfx_gunshot.waveform = VaWaveform::kNoise;
   o.sfx_gunshot.amp_env = fallback_env(0.2f, 300.0f, 0.0f, 80.0f);
-  o.sfx_gunshot.cutoff_hz = 5865.21f;
-  o.sfx_gunshot.resonance_q = 1.26163f;
+  o.sfx_gunshot.cutoff_hz = 6934.18f;
+  o.sfx_gunshot.resonance_q = 4.16925f;
   o.sfx_gunshot.filter_env = fallback_env(0.2f, 100.0f, 0.0f, 70.0f);
   o.sfx_gunshot.env_to_cutoff_cents = 3144.8f;
-  o.sfx_gunshot.drive = 0.979878f;
+  o.sfx_gunshot.drive = 0.911798f;
   o.sfx_gunshot.gain = 0.6405f;
-  o.sfx_gunshot.amp_env.attack_ms = 4.83103f;
+  o.sfx_gunshot.amp_env.attack_ms = 6.27013f;
   o.sfx_gunshot.amp_env.decay_ms = 410.849f;
-  o.sfx_gunshot.filter_env.decay_ms = 3352.34f;
-  o.sfx_gunshot.filter_env.sustain = 0.860338f;
-  o.sfx_gunshot.filter_env.attack_ms = 0.191351f;
-  o.sfx_gunshot.stereo_spread = 0.262831f;
+  o.sfx_gunshot.filter_env.decay_ms = 829.113f;
+  o.sfx_gunshot.filter_env.sustain = 0.511342f;
+  o.sfx_gunshot.filter_env.attack_ms = 0.117123f;
+  o.sfx_gunshot.stereo_spread = 0.086526f;
   o.sfx_gunshot.unison = 2;
   o.sfx_gunshot.va.velocity_exponent = 1.07f;
+  o.sfx_gunshot.va.noise_am = 0.0295085f;
+  o.sfx_gunshot.va.unison_width = 0.0745935f;
 }
 
 }  // namespace sonare::midi::synth::detail

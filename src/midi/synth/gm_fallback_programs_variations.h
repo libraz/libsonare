@@ -81,14 +81,14 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.e_piano_detuned_2 = o.e_piano_2;
   o.e_piano_detuned_2.fm.ops[1].level = 0.9f;
   o.e_piano_detuned_2.fm.ops[1].env.decay_ms = 3600.0f;
-  o.e_piano_detuned_2.drift_cents = 7.0f;
+  o.e_piano_detuned_2.drift_cents = 4.28457f;
   o.e_piano_detuned_2.drift_rate_hz = 0.45f;
   o.e_piano_detuned_2.stereo_spread = 0.4f;
   o.e_piano_detuned_2.fm.ops[2].detune_cents = 9.0f;
-  o.e_piano_detuned_2.amp_env.attack_ms = 0.111322f;
+  o.e_piano_detuned_2.amp_env.attack_ms = 0.0681378f;
   o.e_piano_detuned_2.amp_env.decay_ms = 4762.88f;
   o.e_piano_detuned_2.amp_env.release_ms = 250.0f;
-  o.e_piano_detuned_2.cutoff_hz = 14624.3f;
+  o.e_piano_detuned_2.cutoff_hz = 14894.6f;
 
   // E.Piano 1v / 2v: the velocity-switched mix. A Rhodes bar bites into a
   // metallic bark when it is struck hard, which on an FM voice is the tine
@@ -134,8 +134,8 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   // 4', 2 2/3', 2', 1 1/3' and 1' bars give at about 3 dB a step.
   o.organ_sixties = o.drawbar_organ;
   o.organ_sixties.additive.drawbars = {0.0f, 0.0f, 8.0f, 6.0f, 1.0f, 4.0f, 0.0f, 3.0f, 2.0f};
-  o.organ_sixties.additive.key_click = 0.570308f;
-  o.organ_sixties.additive.click_decay_ms = 4.78422f;
+  o.organ_sixties.additive.key_click = 0.289779f;
+  o.organ_sixties.additive.click_decay_ms = 1.59626f;
   o.organ_sixties.amp_env.attack_ms = 1.66943f;
   o.organ_sixties.amp_env.release_ms = 191.864f;
   o.organ_sixties.amp_env.sustain = 0.693547f;
@@ -143,6 +143,9 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.organ_sixties.drive = 0.15f;
   o.organ_sixties.resonance_q = 1.24356f;
   o.organ_sixties.stereo_spread = 0.333717f;
+  o.organ_sixties.additive.drawbars[4] = 2.99715f;
+  o.organ_sixties.additive.drawbars[7] = 1.17496f;
+  o.organ_sixties.additive.drawbars[8] = 2.43033f;
 
   // Organ 4: every drawbar out — the full, hooting tutti.
   o.organ_4 = o.drawbar_organ;
@@ -184,7 +187,7 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.marimba_wide = o.marimba;
   o.marimba_wide.amp_env.attack_ms = 0.5f;
   o.marimba_wide.amp_env.release_ms = 250.0f;
-  o.marimba_wide.amp_env.sustain = 1.0f;
+  o.marimba_wide.amp_env.sustain = 0.618034f;
   o.marimba_wide.body_mix = 0.4f;
   o.marimba_wide.cutoff_hz = 20000.0f;
   o.marimba_wide.drive = 0.0f;
@@ -236,7 +239,7 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.church_bell.modal.release_damp_s = 8.0f;
   o.church_bell.amp_env.release_ms = 3445.28f;
   o.church_bell.gain = 0.55f;
-  o.church_bell.amp_env.attack_ms = 0.917254f;
+  o.church_bell.amp_env.attack_ms = 1.49858f;
   o.church_bell.amp_env.sustain = 0.5f;
 
   // Carillon (program 14 variation 9): the same bell struck the same way and
@@ -261,7 +264,7 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.carillon.modal.release_damp_s = 2.07987f;
   o.carillon.amp_env.release_ms = 710.438f;
   o.carillon.gain = 0.6f;
-  o.carillon.amp_env.attack_ms = 3.32747f;
+  o.carillon.amp_env.attack_ms = 2.03668f;
   o.carillon.amp_env.sustain = 0.5f;
   o.carillon.cutoff_hz = 11362.6f;
   o.carillon.modal.modes[7].ratio = 8.41695f;
@@ -278,14 +281,14 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.church_organ_flutes.pipe_organ.ranks[0] = {0.5f, true, 0.32f, 0.5f, 0.0f, 0.0f};  // 16' bourdon
   o.church_organ_flutes.pipe_organ.ranks[1] = {1.0f, true, 0.45f, 1.0f, 0.0f, 0.15f};  // 8' gedackt
   o.church_organ_flutes.pipe_organ.ranks[2] = {2.0f, false, 0.55f, 0.5f, 0.0f, 0.3f};  // 4' flute
-  o.church_organ_flutes.pipe_organ.chiff = 0.664284f;
-  o.church_organ_flutes.pipe_organ.breath = 0.0851886f;
-  o.church_organ_flutes.pipe_organ.keytrack = 0.351964f;
-  o.church_organ_flutes.amp_env.attack_ms = 123.527f;
+  o.church_organ_flutes.pipe_organ.chiff = 0.36157f;
+  o.church_organ_flutes.pipe_organ.breath = 0.361666f;
+  o.church_organ_flutes.pipe_organ.keytrack = 0.650843f;
+  o.church_organ_flutes.amp_env.attack_ms = 201.815f;
   o.church_organ_flutes.amp_env.release_ms = 793.541f;
   o.church_organ_flutes.amp_env.sustain = 0.676229f;
-  o.church_organ_flutes.cutoff_hz = 9572.08f;
-  o.church_organ_flutes.pipe_organ.chiff_ms = 23.3431f;
+  o.church_organ_flutes.cutoff_hz = 12818.9f;
+  o.church_organ_flutes.pipe_organ.chiff_ms = 14.2879f;
   o.church_organ_flutes.pipe_organ.ranks[0].level = 0.559017f;
   o.church_organ_flutes.pipe_organ.ranks[0].radiation = 0.480941f;
   o.church_organ_flutes.pipe_organ.ranks[0].reed = 0.381966f;
@@ -309,6 +312,7 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.church_organ_flutes.gain = 0.45f;  // the plenum's gain before its wind was regulated
   o.church_organ_flutes.resonance_q = 0.837311f;
   o.church_organ_flutes.stereo_spread = 0.97204f;
+  o.church_organ_flutes.drive = 0.118034f;
 
   // Church Org.3: full organ — the plenum with the reed chorus drawn on top.
   // A lingual rank drives the same jet harder and asymmetrically, so the
@@ -329,8 +333,10 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
                                              0.45f, 0.72f, 0.4f};                    // 16' bombarde
   o.church_organ_full.pipe_organ.ranks[7] = {1.0f, false, 0.85f, 0.6f, 0.8f, 0.5f};  // 8' trompette
   o.church_organ_full.pipe_organ.breath = 0.42f;
-  o.church_organ_full.pipe_organ.chiff = 0.45f;
+  o.church_organ_full.pipe_organ.chiff = 0.224265f;
   o.church_organ_full.gain = o.church_organ.gain * 0.82f;  // eight ranks per key, not six
+  o.church_organ_full.cutoff_hz = 7219.86f;
+  o.church_organ_full.pipe_organ.chiff_ms = 3.67599f;
 
   // --- Accordion (capital: program 21, on the free-reed voice) --------------
   // Accordion It: the Italian musette. Three reed banks tuned progressively
@@ -365,6 +371,7 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   // A small box is not the capital's air mode: inherited, the knock pushed body and double decay
   // further from this capture's reference.
   o.ukulele.ks.body_knock = 0.0f;
+  o.ukulele.amp_env.sustain = 0.596875f;
 
   // Nylon Gt.o (program 24 variation 16): the capital plus the key-off noise —
   // the fingers coming off the string and the fret buzz that follows. Roland's
@@ -372,6 +379,8 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   // harpsichord draws.
   o.nylon_guitar_keyoff = o.nylon_guitar;
   o.nylon_guitar_keyoff.ks.keyoff_noise = 0.42f;
+  o.nylon_guitar_keyoff.amp_env.attack_ms = 4.11254f;
+  o.nylon_guitar_keyoff.amp_env.sustain = 0.596875f;
 
   // 12-str.Gt (program 25 variation 8): six courses, each an octave pair. The
   // octave companion line IS the instrument; the pairs are never in perfect
@@ -409,13 +418,13 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.violin_slow.bowed_string.elasto_plastic = true;
   o.violin_slow.bowed_string.rosin = 0.1f;
   o.violin_slow.bowed_string.damping = 0.0822536f;
-  o.violin_slow.bowed_string.attack_ms = 220.0f;
+  o.violin_slow.bowed_string.attack_ms = 73.403f;
   o.violin_slow.bowed_string.bow_force = 0.48f;
-  o.violin_slow.amp_env.attack_ms = 180.0f;
+  o.violin_slow.amp_env.attack_ms = 60.057f;
   o.violin_slow.amp_env.decay_ms = 60.0f;
   o.violin_slow.amp_env.release_ms = 267.709f;
-  o.violin_slow.amp_env.sustain = 1.0f;
-  o.violin_slow.body_mix = 0.28f;
+  o.violin_slow.amp_env.sustain = 0.618034f;
+  o.violin_slow.body_mix = 0.595867f;
   o.violin_slow.bowed_string.bow_speed = 0.630748f;
   o.violin_slow.bowed_string.release_ms = 165.23f;
   o.violin_slow.bowed_string.stribeck = 0.7f;

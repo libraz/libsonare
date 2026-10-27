@@ -111,9 +111,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   ep.fm.ops[3].key_rate_scale = 0.6f;
   ep.gain = 0.5612f;
   ep.amp_env.attack_ms = 0.612082f;
-  ep.amp_env.decay_ms = 8508.71f;
-  ep.amp_env.release_ms = 83.4125f;
-  ep.cutoff_hz = 13887.1f;
+  ep.amp_env.decay_ms = 8239.4f;
+  ep.amp_env.release_ms = 27.8306f;
+  ep.cutoff_hz = 14624.3f;
   ep.fm.ops[0].env.attack_ms = 0.612082f;
   ep.fm.ops[0].env.decay_ms = 9000.0f;
   ep.fm.ops[0].env.release_ms = 250.0f;
@@ -312,6 +312,10 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   ce.modal.modes[2].ratio = 16.1966f;
   ce.modal.modes[3].ratio = 5.4239f;
   o.celesta.modal.velocity_exponent = 0.00f;
+  o.celesta.amp_env.attack_ms = 0.5f;
+  o.celesta.amp_env.release_ms = 500.0f;
+  o.celesta.amp_env.sustain = 0.326238f;
+  o.celesta.cutoff_hz = 8913.36f;
 
   // Music Box (GM 10): a plucked steel comb tooth — a stiff cantilever bar
   // (clamped-free 1 : 6.27 : 17.5 inharmonic series) with the tine "shimmer".
@@ -331,9 +335,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   mb.modal.strike_brightness = 0.8f;
   mb.amp_env.release_ms = 2098.01f;
   mb.gain = 0.55f;
-  mb.amp_env.attack_ms = 0.0474505f;
+  mb.amp_env.attack_ms = 0.142215f;
   mb.modal.vel_to_brightness = 0.521641f;
-  mb.amp_env.sustain = 0.809017f;
+  mb.amp_env.sustain = 0.836881f;
   mb.cutoff_hz = 10592.0f;
 
   // Tubular Bells (GM 14): a struck tube, whose partials are not a bar's. The
@@ -368,6 +372,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   tb.gain = 0.6f;
   tb.amp_env.attack_ms = 1.49858f;
   o.tubular_bells.modal.velocity_exponent = 1.69f;
+  o.tubular_bells.amp_env.attack_ms = 0.500002f;
+  o.tubular_bells.cutoff_hz = 14003.3f;
+  o.tubular_bells.modal.decay_stretch = 0.301753f;
 
   // Dulcimer (GM 15): a hammered string — physically a struck (not plucked)
   // steel string, so the Karplus-Strong core with a hard hammer excitation,
@@ -375,27 +382,31 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   NativeSynthPatch& du = o.dulcimer;
   du.mode = SynthEngineMode::kKarplusStrong;
   du.amp_env = fallback_env(1.0f, 0.0f, 1.0f, 250.0f);
-  du.cutoff_hz = 4892.18f;
-  du.ks.brightness = 0.7f;
+  du.cutoff_hz = 6948.67f;
+  du.ks.brightness = 0.3741f;
   du.ks.decay_s = 9.98273f;
-  du.ks.decay_stretch = 0.199139f;
+  du.ks.decay_stretch = 0.244137f;
   du.ks.pick_position = 0.319239f;
   du.ks.exc_brightness = 0.557447f;
   // With each strike's burst held to its expected energy, 0.658 and the engine's 1.19 left the
   // level range 1.15 dB wider than the reference at the median; these two read 0.53.
-  du.ks.vel_to_brightness = 0.5f;
-  du.ks.velocity_exponent = 1.23f;
-  du.ks.release_damp_s = 0.0701437f;
-  du.ks.nail = 0.7f;             // hard hammer edge
-  du.ks.pluck_style = 0.6f;      // deterministic struck excitation
-  du.ks.dispersion = 0.305573f;  // steel stiffness
-  du.ks.polarization = 0.3f;     // course of two/three strings beat
+  du.ks.vel_to_brightness = 0.514754f;
+  du.ks.velocity_exponent = 1.11197f;
+  du.ks.release_damp_s = 0.115111f;
+  du.ks.nail = 0.811146f;          // hard hammer edge
+  du.ks.pluck_style = 0.763525f;   // deterministic struck excitation
+  du.ks.dispersion = 0.542134f;    // steel stiffness
+  du.ks.polarization = 0.336436f;  // course of two/three strings beat
   du.body = BodyType::kGuitar;
-  du.body_mix = 0.5548f;
+  du.body_mix = 0.875843f;
   du.gain = 1.3f;
-  du.amp_env.attack_ms = 0.544318f;
+  du.amp_env.attack_ms = 0.942338f;
   du.amp_env.release_ms = 3308.92f;
-  du.resonance_q = 0.941944f;
+  du.resonance_q = 2.99027f;
+  du.amp_env.sustain = 0.743034f;
+  du.drive = 0.118034f;
+  du.ks.keyoff_noise = 0.612907f;
+  du.ks.pick_noise = 0.499178f;
 
   // KS guitar variants: all derive from the one steel string below, which
   // family 3 duplicates, and differ in pick position / loop brightness / decay
@@ -473,8 +484,8 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.nylon_guitar.ks.nail = 0.28f;  // fingertip flesh, rounder
   o.nylon_guitar.ks.tension_mod = 0.310695f;
   o.nylon_guitar.body_mix = 0.439239f;
-  o.nylon_guitar.amp_env.attack_ms = 0.839868f;
-  o.nylon_guitar.amp_env.release_ms = 132.841f;
+  o.nylon_guitar.amp_env.attack_ms = 1.37215f;
+  o.nylon_guitar.amp_env.release_ms = 398.145f;
   o.nylon_guitar.amp_env.sustain = 0.465764f;
   o.nylon_guitar.cutoff_hz = 8400.0f;
   o.nylon_guitar.ks.decay_stretch = 0.328695f;
@@ -557,7 +568,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // Against the direct reference at 0.14: h2-h6 stack 12.9 -> -0.2 dB off,
   // tone-to-noise 15.1 -> 11.4 dB cleaner, register profile back inside its bound.
   o.clean_guitar.ks.pickup_pos = 0.35f;
-  o.clean_guitar.amp_env.attack_ms = 1.0f;
+  o.clean_guitar.amp_env.attack_ms = 0.33365f;
   o.clean_guitar.amp_env.release_ms = 250.0f;
   o.clean_guitar.amp_env.sustain = 1.0f;
   o.clean_guitar.ks.body_coupling = 0.2f;
@@ -575,13 +586,13 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // 22.4 dB/s the old value fell at 72.7, three times too fast, and the note was
   // gone before the key came up on every row of the grid.
   o.muted_guitar.ks.decay_s = 1.16f;
-  o.muted_guitar.ks.brightness = 0.55f;
+  o.muted_guitar.ks.brightness = 0.412868f;
   o.muted_guitar.ks.release_damp_s = 0.04f;
   o.muted_guitar.cutoff_hz = 520.0f;
   // Fitted with each strike's burst noise held to its expected energy: the high (h5-h8) minus
   // low (h1-h2) partial decay reads 25 dB/s steeper than the reference at the median, with the
   // double decay and register profile inside their bounds.
-  o.muted_guitar.ks.decay_stretch = 0.85f;
+  o.muted_guitar.ks.decay_stretch = 0.846556f;
   // 520 Hz and 0.085 took the partial decay tilt p90 from 71.6 to 64.1 dB/s (bound 64.8); any
   // value that brightens the note steepens that tilt past its bound.
   o.muted_guitar.ks.exc_brightness = 0.085f;
@@ -589,13 +600,14 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.muted_guitar.ks.nail = 0.6f;
   o.muted_guitar.ks.pluck_style = 0.5f;
   o.muted_guitar.ks.polarization = 0.1f;
-  o.muted_guitar.ks.body_coupling = 0.25f;
+  o.muted_guitar.ks.body_coupling = 0.363729f;
   o.muted_guitar.ks.tension_mod = 0.4f;
   o.muted_guitar.ks.pick_position = 0.381966f;
   o.muted_guitar.ks.pickup_pos = 0.32f;
   // Solved against the reference's own level range, v32 to v127, which the
   // engine default of 1.19 left 4.75 dB narrow.
   o.muted_guitar.ks.velocity_exponent = 1.59f;
+  o.muted_guitar.amp_env.attack_ms = 1.63377f;
 
   // Overdriven / distortion: the same instrument. What makes these two programs
   // different from the clean guitar is the amplifier, which the bank binds after
@@ -680,11 +692,12 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.bass_fretless.ks.pick_position = 0.28f;
   o.bass_fretless.ks.exc_brightness = 0.55f;
   o.bass_fretless.ks.release_damp_s = 0.12f;
-  o.bass_fretless.cutoff_hz = 4200.0f;
+  o.bass_fretless.cutoff_hz = 2492.54f;
   o.bass_fretless.gain = 1.2f;
   // Solved against the reference's own level range, v32 to v127, which the
   // engine default of 1.19 left 4.01 dB narrow.
   o.bass_fretless.ks.velocity_exponent = 1.53f;
+  o.bass_fretless.amp_env.release_ms = 66.73f;
 
   // Slap Bass 1 (GM 36, thumb): the hard near-bridge attack of the pick voicing
   // driven into the fret-slap limiter — the string knocks the frets, so the
@@ -820,6 +833,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // Solved against the reference's own level range, v32 to v127, which the
   // engine default of 1.19 left 9.88 dB wide.
   o.banjo.ks.velocity_exponent = 0.37f;
+  o.banjo.amp_env.attack_ms = 2.99715f;
 
   // Shamisen (GM 106): the sawari — only a slight graze against the bare wood
   // at the nut — gives a drier, harder buzz than the sitar, over a shorter
@@ -937,7 +951,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.harpsichord.body = BodyType::kGuitar;
   o.harpsichord.body_mix = 0.3f;
   o.harpsichord.gain = 0.30f;
-  o.harpsichord.amp_env.attack_ms = 2.99715f;
+  o.harpsichord.amp_env.attack_ms = 4.89665f;
   o.harpsichord.amp_env.release_ms = 749.288f;
   o.harpsichord.amp_env.sustain = 0.690983f;
   o.harpsichord.harpsichord.bass_foreshortening = 0.35f;
@@ -958,6 +972,8 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.harpsichord_wide = o.harpsichord;
   o.harpsichord_wide.harpsichord.eight_b = true;
   o.harpsichord_wide.stereo_spread = 0.5f;
+  o.harpsichord_wide.amp_env.sustain = 0.809017f;
+  o.harpsichord_wide.body_mix = 0.611146f;
   // Bank 3 — with key off: the jack dropping back and the damper landing.
   o.harpsichord_keyoff = o.harpsichord;
   o.harpsichord_keyoff.harpsichord.jack_noise = 0.5f;
@@ -1006,16 +1022,16 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.rock_organ.additive.drawbars = {8.0f, 8.0f, 8.0f, 6.0f, 4.0f, 4.0f, 2.0f, 2.0f, 6.0f};
   o.rock_organ.additive.key_click = 0.6f;
   o.rock_organ.gain = dr.gain * 0.85f;  // nine drawbars sounding, not six
-  o.rock_organ.additive.click_decay_ms = 17.9829f;
+  o.rock_organ.additive.click_decay_ms = 42.6137f;
 
   // Church organ: a principal chorus of self-oscillating jet flue pipes. Each
   // rank locks its pitch and holds a solid, endless tone while keyed (no decay,
   // no breath-noise wander); the amp envelope just gates the wind on and off.
   o.church_organ.mode = SynthEngineMode::kPipeOrgan;
   o.church_organ.amp_env = fallback_env(120.0f, 0.0f, 1.0f, 380.0f);
-  o.church_organ.cutoff_hz = 20000.0f;
+  o.church_organ.cutoff_hz = 16640.6f;
   o.church_organ.pipe_organ.tone_decay_s = 8.0f;
-  o.church_organ.pipe_organ.breath = 0.549198f;
+  o.church_organ.pipe_organ.breath = 0.775546f;
   o.church_organ.pipe_organ.chiff = 0.38f;
   o.church_organ.pipe_organ.release_damp_s = 0.75f;
   // GM Church Organ: a principal chorus (plenum) — 16' stopped sub for gravity
@@ -1051,7 +1067,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // keep the full chorus. Over C4 and up, 0.5 regulated far harder than the
   // sampled references: it left the partial stack 1.4x and the brightness 1.2x
   // their spread, where 0.175 leaves them at 1.0x and 0.6x for the same tuning.
-  o.church_organ.pipe_organ.keytrack = 0.175078f;
+  o.church_organ.pipe_organ.keytrack = 0.159364f;
   // Each rank's bore follows its own measured loop lead, so the jet's phase no longer reads the
   // bass flat (the 8' alone sat 4.25 c under at C2 and 0.2 c at C6); what remains is the sag.
   o.church_organ.pipe_organ.loop_phase_servo = true;
@@ -1067,6 +1083,16 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.church_organ.stereo_spread = 0.55f;
   // 0.45 under the unregulated wind, which held one key 12.5% under pressure.
   o.church_organ.gain = 0.394f;
+  o.church_organ.amp_env.attack_ms = 73.4498f;
+  o.church_organ.pipe_organ.chiff_ms = 11.0175f;
+  o.church_organ.pipe_organ.ranks[0].level = 0.482067f;
+  o.church_organ.pipe_organ.ranks[0].radiation = 0.190983f;
+  o.church_organ.pipe_organ.ranks[1].radiation = 0.494427f;
+  o.church_organ.pipe_organ.ranks[1].reed = 0.190983f;
+  o.church_organ.pipe_organ.ranks[2].brightness = 0.669987f;
+  o.church_organ.pipe_organ.ranks[2].radiation = 0.587132f;
+  o.church_organ.pipe_organ.ranks[3].brightness = 0.603492f;
+  o.church_organ.pipe_organ.ranks[3].radiation = 0.412868f;
 
   // Reed Organ (GM 20): a true free reed — the metal tongue swings through its
   // slot under steady bellows pressure. Harmonium colour: a mellow plate, soft
@@ -1094,7 +1120,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.reed_organ.free_reed.slot_gap = 0.41f;
   o.reed_organ.stereo_spread = 0.18f;
   o.reed_organ.gain = 0.42f;
-  o.reed_organ.amp_env.attack_ms = 18.3625f;
+  o.reed_organ.amp_env.attack_ms = 11.2394f;
   o.reed_organ.amp_env.release_ms = 73.4498f;
   o.reed_organ.amp_env.sustain = 0.809017f;
   o.reed_organ.free_reed.velocity_exponent = 1.00f;
@@ -1188,7 +1214,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.bandoneon.cutoff_hz = 6198.41f;
   o.bandoneon.drive = 0.118034f;
   o.bandoneon.free_reed.breath_pressure = 0.803223f;
-  o.bandoneon.amp_env.attack_ms = 39.2105f;
+  o.bandoneon.amp_env.attack_ms = 13.0826f;
   o.bandoneon.free_reed.attack_ms = 48.0506f;
   o.bandoneon.free_reed.velocity_exponent = 0.95f;
 
@@ -1262,6 +1288,8 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   pz.body_mix = 0.4f;
   pz.stereo_spread = 0.3f;
   pz.gain = 1.3f;
+  pz.amp_env.attack_ms = 1.63377f;
+  pz.amp_env.sustain = 0.690983f;
 
   // Timpani (GM 47): a note-tracked kettledrum — full membrane mode set, long
   // pitched ring under a soft mallet thud, no snare/noise wash.
@@ -1283,7 +1311,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   tp.percussion.strike_r = 0.6f;
   tp.stereo_spread = 0.15f;
   tp.gain = 1.2f;
-  tp.amp_env.attack_ms = 0.166825f;
+  tp.amp_env.attack_ms = 0.0556611f;
   tp.amp_env.decay_ms = 2940.78f;
 
   // Choir Aahs (GM 52): a glottal source sung through the open /a/ formant
@@ -1333,21 +1361,21 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // /i/ with a quicker swell and less vibrato wobble.
   o.synth_voice = ch;
   o.synth_voice.vocal.vowel = 2;  // /i/
-  o.synth_voice.vocal.brightness = 0.612694f;
+  o.synth_voice.vocal.brightness = 0.322159f;
   o.synth_voice.vocal.vibrato_depth = 0.174457f;
   o.synth_voice.vocal.attack_ms = 1911.71f;
   o.synth_voice.vocal.release_ms = 237.098f;
   o.synth_voice.amp_env = fallback_env(120.0f, 300.0f, 0.9f, 300.0f);
-  o.synth_voice.amp_env.attack_ms = 88.2849f;
-  o.synth_voice.amp_env.decay_ms = 167.856f;
+  o.synth_voice.amp_env.attack_ms = 264.603f;
+  o.synth_voice.amp_env.decay_ms = 503.09f;
   o.synth_voice.amp_env.release_ms = 4226.4f;
-  o.synth_voice.amp_env.sustain = 0.72256f;
-  o.synth_voice.cutoff_hz = 4974.89f;
-  o.synth_voice.resonance_q = 8.14556f;
-  o.synth_voice.vocal.breath_noise = 0.775569f;
+  o.synth_voice.amp_env.sustain = 0.519516f;
+  o.synth_voice.cutoff_hz = 10167.3f;
+  o.synth_voice.resonance_q = 3.04343f;
+  o.synth_voice.vocal.breath_noise = 0.446584f;
   o.synth_voice.vocal.vibrato_rate_hz = 4.77251f;
-  o.synth_voice.stereo_spread = 0.328957f;
-  o.synth_voice.vocal.velocity_exponent = 1.13f;
+  o.synth_voice.stereo_spread = 0.316633f;
+  o.synth_voice.vocal.velocity_exponent = 1.19555f;
 }
 
 }  // namespace sonare::midi::synth::detail

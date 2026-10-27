@@ -84,6 +84,8 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   ag.amp_env.release_ms = 1798.29f;
   ag.amp_env.sustain = 0.809017f;
   o.agogo.modal.velocity_exponent = 1.75f;
+  o.agogo.amp_env.attack_ms = 0.272553f;
+  o.agogo.amp_env.sustain = 0.472136f;
 
   // Steel Drums (GM 114): a tuned pan, and the one program here that is not a
   // membrane. A pan note is tuned so its octave and twelfth are true and the
@@ -125,70 +127,79 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   NativeSynthPatch& wb = o.woodblock;
   wb.mode = SynthEngineMode::kPercussion;
   wb.amp_env = fallback_env(0.3f, 100.0f, 0.0f, 40.0f);
-  wb.cutoff_hz = 10591.1f;
+  wb.cutoff_hz = 8241.62f;
   wb.percussion.num_modes = 1;
   wb.percussion.mode_ratios = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
   wb.percussion.base_freq_hz = 0.0f;
-  wb.percussion.mode_decay_s = 0.134876f;
-  wb.percussion.tone_gain = 4.0f;
-  wb.percussion.noise_gain = 1.37027f;
-  wb.percussion.noise_decay_ms = 14.579f;
-  wb.percussion.noise_cutoff_hz = 2904.06f;
+  wb.percussion.mode_decay_s = 0.404242f;
+  wb.percussion.tone_gain = 2.90983f;
+  wb.percussion.noise_gain = 0.795613f;
+  wb.percussion.noise_decay_ms = 12.8953f;
+  wb.percussion.noise_cutoff_hz = 2227.53f;
   wb.percussion.noise_output = SynthFilterOutput::kBandpass;
   wb.gain = 0.6f;
-  wb.amp_env.attack_ms = 0.039043f;
-  wb.amp_env.decay_ms = 49.025f;
+  wb.amp_env.attack_ms = 0.117017f;
+  wb.amp_env.decay_ms = 11.3488f;
   wb.amp_env.release_ms = 2112.55f;
-  wb.amp_env.sustain = 0.527511f;
+  wb.amp_env.sustain = 0.770426f;
   wb.percussion.mode_ratios[0] = 2.77762f;
-  wb.percussion.noise_q = 1.52151f;
+  wb.percussion.noise_q = 0.947773f;
   wb.percussion.plate_hf_ratio = 0.278273f;
   wb.percussion.plate_low_hz = 798.233f;
   wb.percussion.plate_t60_s = 8.16114f;
   wb.percussion.tone_direct = 0.23688f;
-  wb.resonance_q = 3.36119f;
-  wb.drive = 0.381966f;
-  wb.percussion.mode_decay_exp = 0.763932f;
+  wb.resonance_q = 1.63435f;
+  wb.drive = 0.108167f;
+  wb.percussion.mode_decay_exp = 1.09017f;
+  wb.percussion.strike_r = 0.513932f;
+  wb.percussion.wire_buzz = 0.347524f;
+  wb.percussion.wire_cutoff_hz = 878.445f;
+  wb.stereo_spread = 0.322949f;
 
   // Taiko (GM 116): a large struck membrane — the full Rayleigh mode set, a
   // strong strike pitch drop and a low shell boom.
   NativeSynthPatch& ti = o.taiko;
   ti.mode = SynthEngineMode::kPercussion;
   ti.amp_env = fallback_env(0.5f, 700.0f, 0.0f, 200.0f);
-  ti.cutoff_hz = 15123.5f;
+  ti.cutoff_hz = 12046.3f;
   ti.percussion.num_modes = 5;
   ti.percussion.base_freq_hz = 0.0f;
   ti.percussion.mode_decay_s = 1.55947f;
   ti.percussion.tone_gain = 3.63643f;
-  ti.percussion.pitch_drop = 0.134927f;
-  ti.percussion.pitch_drop_ms = 29.931f;
-  ti.percussion.noise_gain = 2.93126f;
-  ti.percussion.noise_decay_ms = 1.94051f;
-  ti.percussion.noise_cutoff_hz = 161.898f;
+  ti.percussion.pitch_drop = 0.119344f;
+  ti.percussion.pitch_drop_ms = 5.36542f;
+  ti.percussion.noise_gain = 2.87523f;
+  ti.percussion.noise_decay_ms = 8.91094f;
+  ti.percussion.noise_cutoff_hz = 803.676f;
   ti.percussion.noise_output = SynthFilterOutput::kLowpass;
-  ti.percussion.strike_r = 0.559041f;
-  ti.percussion.shell_mix = 0.806885f;
+  ti.percussion.strike_r = 0.640586f;
+  ti.percussion.shell_mix = 0.455753f;
   ti.percussion.shell_num_modes = 1;
   ti.percussion.shell_freq_hz = {90.0f, 0.0f, 0.0f, 0.0f};
   ti.percussion.shell_t60_s = {0.14f, 0.0f, 0.0f, 0.0f};
   ti.percussion.shell_weight = {1.0f, 0.0f, 0.0f, 0.0f};
   ti.gain = 1.1f;
-  ti.amp_env.attack_ms = 0.0678843f;
-  ti.amp_env.decay_ms = 2061.92f;
+  ti.amp_env.attack_ms = 0.216333f;
+  ti.amp_env.decay_ms = 1823.79f;
   ti.amp_env.release_ms = 9777.52f;
-  ti.amp_env.sustain = 0.26644f;
+  ti.amp_env.sustain = 0.068491f;
   ti.percussion.contact = 0.0f;
   ti.percussion.contact_ms = 0.761066f;
   ti.percussion.mode_ratios[0] = 1.1535f;
   ti.percussion.mode_ratios[1] = 0.624269f;
-  ti.percussion.noise_q = 0.619676f;
+  ti.percussion.noise_q = 0.68021f;
   ti.percussion.plate_hf_ratio = 0.0336278f;
   ti.percussion.plate_low_hz = 623.604f;
   ti.percussion.plate_t60_s = 0.234847f;
   ti.percussion.shell_t60_s[0] = 0.111498f;
-  ti.percussion.shell_weight[0] = 2.42255f;
+  ti.percussion.shell_weight[0] = 2.45041f;
   ti.percussion.tone_direct = 0.692916f;
-  ti.resonance_q = 1.09065f;
+  ti.resonance_q = 0.768703f;
+  ti.drive = 0.118034f;
+  ti.percussion.mode_ratios[2] = 2.73533f;
+  ti.percussion.mode_ratios[4] = 2.8177f;
+  ti.percussion.strike_theta = 0.39672f;
+  ti.stereo_spread = 0.0625f;
 
   // Melodic Tom (GM 117): a pitched tom — note-tracked membrane with a pitch
   // drop and a shell body, one patch for every tom size.
@@ -216,7 +227,7 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   mt.percussion.shell_t60_s = {0.12f, 0.06f, 0.0f, 0.0f};
   mt.percussion.shell_weight = {1.0f, 0.4f, 0.0f, 0.0f};
   mt.gain = 1.0f;
-  mt.amp_env.attack_ms = 0.166825f;
+  mt.amp_env.attack_ms = 0.272553f;
   mt.amp_env.release_ms = 449.573f;
 
   // Synth Drum (GM 118): a synthetic decaying-sine tom (the TR-808 recipe) —
@@ -269,7 +280,7 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   rc.amp_env.release_ms = 210.34f;
   rc.percussion.contact_ms = 0.0507509f;
   rc.percussion.mode_ratios[0] = 1.1172f;
-  rc.percussion.mode_ratios[1] = 2.55874f;
+  rc.percussion.mode_ratios[1] = 2.17251f;
   rc.percussion.mode_ratios[2] = 1.25982f;
   rc.percussion.mode_ratios[3] = 41.3911f;
   rc.percussion.noise_q = 0.628894f;
@@ -283,7 +294,7 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   rc.percussion.shell_weight[3] = 1.52081f;
   rc.percussion.tone_direct = 0.854284f;
   rc.resonance_q = 0.765824f;
-  rc.amp_env.sustain = 0.618034f;
+  rc.amp_env.sustain = 0.326238f;
   rc.percussion.mode_decay_exp = 0.236068f;
 }
 

@@ -990,7 +990,7 @@ TEST_CASE("Sf2Player applies GS per-note drum NRPN to the fallback voice", "[mid
   // The GS per-note drum edits (pitch coarse / TVA level / absolute pan) must
   // reach the data-free model floor, not just SF2 voices. NRPN sequence:
   // CC99 = param MSB (0x18 pitch / 0x1A level / 0x1C pan), CC98 = drum note,
-  // CC6 = data. Note 56 (cowbell) has clear ~587/845 Hz partials.
+  // CC6 = data. Note 56 (cowbell) has a clear 472 Hz fundamental.
   auto nrpn = [](Sf2Player& p, uint8_t msb, uint8_t note, uint8_t data) {
     p.on_event(0, event(sonare::midi::make_midi1_control_change(0, 9, 99, msb)));
     p.on_event(0, event(sonare::midi::make_midi1_control_change(0, 9, 98, note)));
@@ -1008,8 +1008,8 @@ TEST_CASE("Sf2Player applies GS per-note drum NRPN to the fallback voice", "[mid
     nrpn(up, 0x18, 56, 76);  // +12 semitones (data - 64)
     strike(up, 56);
     const StereoRender u = render(up, 8000);
-    REQUIRE(goertzel(b.left, 587.0) > goertzel(b.left, 1174.0));  // baseline centred low
-    REQUIRE(goertzel(u.left, 1174.0) > goertzel(u.left, 587.0));  // shifted up an octave
+    REQUIRE(goertzel(b.left, 472.0) > goertzel(b.left, 944.0));  // baseline centred low
+    REQUIRE(goertzel(u.left, 944.0) > goertzel(u.left, 472.0));  // shifted up an octave
   }
 
   SECTION("TVA level attenuates the drum") {

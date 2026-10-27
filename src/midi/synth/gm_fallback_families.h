@@ -133,6 +133,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 16> build_family_patches() n
   // it sits between the violin and the alto sax, which is where a grand belongs
   // among them.
   t[0].gain = 0.3f;
+  t[0].amp_env.attack_ms = 3.67249f;
 
   // Steel-string pluck base (GM family 3): Karplus-Strong, the string itself
   // decaying so the amp envelope only gates note-off. Read by
