@@ -11,38 +11,6 @@
   },
   "reference_spread": {},
   "bounds": {
-    "decay": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 1.425,
-      "abs_median": 1.425,
-      "p90": 1.547,
-      "rows": 15
-    },
-    "attack": {
-      "floor": 40.0,
-      "floor_from": "guess",
-      "median": 850.0,
-      "abs_median": 850.0,
-      "p90": 1012.5,
-      "rows": 15
-    },
-    "stereo": {
-      "floor": 0.27,
-      "floor_from": "guess",
-      "median": 1.241,
-      "abs_median": 1.241,
-      "p90": 1.248,
-      "rows": 15
-    },
-    "centroid_pct": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 277.187,
-      "abs_median": 277.187,
-      "p90": 303.826,
-      "rows": 15
-    },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -51,5 +19,6 @@
       "p90": 1.395,
       "rows": 3
     }
-  }
+  },
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `applause_module` (decay, attack, stereo, centroid_pct); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
 }

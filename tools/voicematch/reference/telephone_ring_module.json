@@ -1,0 +1,358 @@
+{
+ "id": "telephone_ring_module",
+ "label": "Telephone Ring, the GS capital tone, read out of a module's own recordings",
+ "measured_utc": "2026-10-25T20:14:21+00:00",
+ "capture": {
+  "program": 124,
+  "params": [],
+  "sample_rate": 44100,
+  "gate_ms": 5000,
+  "tail": "0s",
+  "preroll_ms": 0,
+  "timbres": [
+   {
+    "id": "t0",
+    "label": "Telephone Ring, module recording"
+   }
+  ],
+  "notes": [
+   48,
+   60,
+   72
+  ],
+  "velocities": [
+   100
+  ],
+  "band_edge_hz": null
+ },
+ "rows": [
+  {
+   "timbre": "t0",
+   "note": 48,
+   "velocity": 100,
+   "f0_hz": 121.234,
+   "cents_vs_et": -131.65,
+   "inharmonicity_b": 0.0003426,
+   "partials_fit": 20,
+   "inharmonicity_reliable": true,
+   "partials_hz": [
+    123.0,
+    246.33,
+    369.25,
+    479.2,
+    606.95,
+    721.79,
+    851.97,
+    991.28,
+    1106.14,
+    1229.69,
+    1368.63,
+    1475.09,
+    1621.87,
+    1777.88,
+    1882.86,
+    2030.99,
+    2186.49,
+    2276.9,
+    2432.67,
+    2605.21
+   ],
+   "partials_db": [
+    0.0,
+    -2.8,
+    -9.86,
+    3.88,
+    -15.27,
+    -15.41,
+    -5.13,
+    8.68,
+    -2.84,
+    23.91,
+    -0.65,
+    4.77,
+    -0.46,
+    -5.36,
+    -10.84,
+    -8.31,
+    -8.93,
+    -3.6,
+    5.46,
+    16.66
+   ],
+   "body_below_f0_db": -15.79,
+   "peak_dbfs": -5.14,
+   "rms_dbfs": -16.15,
+   "held_peak_dbfs": -14.95,
+   "onset_ms": 0.0,
+   "attack_ms": 5.0,
+   "attack_hf_db": -1.72,
+   "onset_overshoot_db": 0.31,
+   "onset_settle_ms": 0.0,
+   "decay_span_s": 4.959,
+   "decay_db_s": -0.02,
+   "decay_early_db_s": 0.18,
+   "decay_late_db_s": 0.03,
+   "decay_knee_s": 0.948,
+   "partial_decay_db_s": [
+    -0.01,
+    -0.02,
+    -0.06,
+    -0.02,
+    -0.0,
+    -0.03,
+    -0.03,
+    -0.25
+   ],
+   "decayed_before_note_off": false,
+   "damper_release_ms": 64.9,
+   "damper_capped": true,
+   "centroid_hz": 4805.5,
+   "tnr_mask": {},
+   "tnr_db": -4.79
+  },
+  {
+   "timbre": "t0",
+   "note": 60,
+   "velocity": 100,
+   "f0_hz": 235.019,
+   "cents_vs_et": -185.67,
+   "inharmonicity_b": 0.0003165,
+   "partials_fit": 20,
+   "inharmonicity_reliable": true,
+   "partials_hz": [
+    235.98,
+    471.95,
+    698.49,
+    953.32,
+    1163.67,
+    1415.5,
+    1641.87,
+    1887.0,
+    2151.27,
+    2387.35,
+    2604.31,
+    2848.69,
+    3113.0,
+    3386.9,
+    3650.75,
+    3868.13,
+    4160.34,
+    4386.06,
+    4754.59,
+    5056.53
+   ],
+   "partials_db": [
+    0.0,
+    6.21,
+    -13.21,
+    -3.67,
+    12.9,
+    22.52,
+    0.48,
+    -0.81,
+    -11.45,
+    -15.84,
+    -3.54,
+    2.55,
+    -0.33,
+    -3.56,
+    15.75,
+    -5.43,
+    -1.92,
+    -1.66,
+    -5.46,
+    -2.29
+   ],
+   "body_below_f0_db": 1.02,
+   "peak_dbfs": -5.32,
+   "rms_dbfs": -16.17,
+   "held_peak_dbfs": -15.06,
+   "onset_ms": 0.0,
+   "attack_ms": 5.0,
+   "attack_hf_db": -2.54,
+   "onset_overshoot_db": 0.86,
+   "onset_settle_ms": 0.0,
+   "decay_span_s": 4.989,
+   "decay_db_s": -0.02,
+   "decay_early_db_s": 0.02,
+   "decay_late_db_s": 0.24,
+   "decay_knee_s": 3.707,
+   "partial_decay_db_s": [
+    -0.0,
+    -0.02,
+    -0.08,
+    0.04,
+    -0.03,
+    -0.04,
+    0.05,
+    0.03
+   ],
+   "decayed_before_note_off": false,
+   "damper_release_ms": 64.9,
+   "damper_capped": true,
+   "centroid_hz": 5371.0,
+   "tnr_mask": {},
+   "tnr_db": -3.78
+  },
+  {
+   "timbre": "t0",
+   "note": 72,
+   "velocity": 100,
+   "f0_hz": 565.35,
+   "cents_vs_et": 133.97,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 20,
+   "inharmonicity_reliable": true,
+   "partials_hz": [
+    565.43,
+    1130.87,
+    1674.67,
+    2272.91,
+    2816.48,
+    3436.19,
+    4012.09,
+    4587.65,
+    5055.36,
+    5599.41,
+    6219.12,
+    6849.95,
+    7437.0,
+    7852.78,
+    8400.67,
+    9175.94,
+    9512.94,
+    10216.58,
+    10695.98,
+    11371.35
+   ],
+   "partials_db": [
+    0.0,
+    -9.25,
+    9.84,
+    -9.19,
+    -14.38,
+    3.18,
+    -4.72,
+    -10.55,
+    -9.59,
+    -9.17,
+    4.08,
+    -14.34,
+    -0.22,
+    -7.07,
+    -15.77,
+    -9.54,
+    5.09,
+    -12.57,
+    1.19,
+    -14.52
+   ],
+   "body_below_f0_db": -10.28,
+   "peak_dbfs": -5.35,
+   "rms_dbfs": -16.33,
+   "held_peak_dbfs": -15.45,
+   "onset_ms": 0.0,
+   "attack_ms": 5.0,
+   "attack_hf_db": -2.84,
+   "onset_overshoot_db": 1.44,
+   "onset_settle_ms": 362.7,
+   "decay_span_s": 4.989,
+   "decay_db_s": 0.02,
+   "decay_early_db_s": -0.14,
+   "decay_late_db_s": 0.06,
+   "decay_knee_s": 0.738,
+   "partial_decay_db_s": [
+    0.23,
+    -0.09,
+    -0.04,
+    0.1,
+    -0.17,
+    0.44,
+    -0.32,
+    0.28
+   ],
+   "decayed_before_note_off": false,
+   "damper_release_ms": 64.9,
+   "damper_capped": true,
+   "centroid_hz": 5954.1,
+   "tnr_mask": {
+    "fm": [
+     169.001,
+     11.579,
+     11.579
+    ]
+   },
+   "tnr_db": -2.05
+  }
+ ],
+ "summary": {
+  "t0": {
+   "stretch_cents": {
+    "48": -131.65,
+    "60": -185.67,
+    "72": 133.97
+   },
+   "inharmonicity_b": {
+    "48": 0.0003426,
+    "60": 0.0003165,
+    "72": 0.0
+   },
+   "level_dbfs": {
+    "48": {
+     "100": -16.15
+    },
+    "60": {
+     "100": -16.17
+    },
+    "72": {
+     "100": -16.33
+    }
+   },
+   "centroid_hz": {
+    "48": {
+     "100": 4805.5
+    },
+    "60": {
+     "100": 5371.0
+    },
+    "72": {
+     "100": 5954.1
+    }
+   },
+   "decay_db_s": {
+    "48": {
+     "100": -0.02
+    },
+    "60": {
+     "100": -0.02
+    },
+    "72": {
+     "100": 0.02
+    }
+   },
+   "damper_release_ms": {
+    "48": {
+     "100": 64.9
+    },
+    "60": {
+     "100": 64.9
+    },
+    "72": {
+     "100": 64.9
+    }
+   },
+   "tnr_db": {
+    "48": {
+     "100": -4.79
+    },
+    "60": {
+     "100": -3.78
+    },
+    "72": {
+     "100": -2.05
+    }
+   },
+   "velocity_response": {}
+  }
+ }
+}

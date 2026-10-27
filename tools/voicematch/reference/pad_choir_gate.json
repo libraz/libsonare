@@ -12,70 +12,6 @@
   "reference_spread": {},
   "_pitch_ruler": "raised on 2026-10-24 when the held pitch moved from the strongest peak to the power centroid of each partial's lines (metrics_partials.line_centroid_pitch), and every reference was re-measured with it: tnr.abs_median 37.46 -> 48.15, tnr.median 37.46 -> 48.15, stretch.median 1.0 -> 1.693. The old bounds were recorded from a reading that picked one of a partial's detuned lines by the window's beat phase, or placed the windows that the other readings take from f0 on that line.",
   "bounds": {
-    "stretch": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.693,
-      "abs_median": 4.298,
-      "p90": 8.775,
-      "rows": 28
-    },
-    "tnr": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 48.15,
-      "abs_median": 48.15,
-      "p90": 65.185,
-      "rows": 28
-    },
-    "damper": {
-      "floor": 5.0,
-      "floor_from": "guess",
-      "median": 296.875,
-      "abs_median": 296.875,
-      "p90": 1020.625,
-      "rows": 28
-    },
-    "attack": {
-      "floor": 40.0,
-      "floor_from": "guess",
-      "median": 393.75,
-      "abs_median": 393.75,
-      "p90": 756.25,
-      "rows": 28
-    },
-    "stereo": {
-      "floor": 0.27,
-      "floor_from": "guess",
-      "median": 0.279,
-      "abs_median": 0.279,
-      "p90": 0.714,
-      "rows": 28
-    },
-    "balance": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 13.312,
-      "abs_median": 13.312,
-      "p90": 23.901,
-      "rows": 28
-    },
-    "centroid_pct": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 46.558,
-      "abs_median": 46.558,
-      "p90": 122.463,
-      "rows": 28
-    },
-    "body": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 57.744,
-      "abs_median": 57.744,
-      "p90": 77.128,
-      "rows": 20
-    },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -83,14 +19,7 @@
       "abs_median": 1.0,
       "p90": 1.01,
       "rows": 7
-    },
-    "register": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 1.0,
-      "abs_median": 1.269,
-      "p90": 3.013,
-      "rows": 28
     }
-  }
+  },
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `pad_choir_module` (stretch, tnr, damper, attack, stereo, balance, centroid_pct, body, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
 }

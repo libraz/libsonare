@@ -43,21 +43,23 @@
       "slot_channel": 7
     }
   ],
-  "_dimensions": "All 10 a sustained voice can be judged on, with none excused. `stereo` is kept and is real here rather than nominal: the two channels differ by -1.9 dB relative to the signal, which is an image rather than the render noise a dual-mono slot shows at -570.",
+  "_dimensions": "Velocity only, the same split the standard kit takes: `policy.json` aims a machine-defined slot at the module on both axes, and the module holds one recording per note, so how the sound moves with velocity is the one thing its recordings cannot answer. Colour and behaviour are gated on `synth_voice_module`. What this capture measured before the split stays in its reference profile.",
   "dimensions": [
-    "stretch",
-    "body",
-    "attack",
-    "stereo",
-    "damper",
-    "balance",
-    "centroid_pct",
-    "tnr",
-    "vel_range",
-    "register"
+    "vel_range"
   ],
   "_history": "This voice was previously recorded as unusable because its samples were said to stop while the key is still down. Re-measured, they do not: it holds 12.0 dB under its peak at the end of an eight-second gate, and the steepest single 10 ms step anywhere inside the held note is 3.9 dB, which is the instrument's own movement. A sample running out reads quite differently -- the two voices on the neighbouring racks that genuinely do it step 47 and 53 dB in one window and are at the noise floor immediately after.",
   "source_class": "library",
   "_identity": "Which product this is captured from lives in the untracked sibling `synth_voice.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/synth_voice.json` and need nothing.",
-  "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements: six of its sixteen slots were captured in an earlier round. Rendered under that capture's own gate at a cell its profile holds, slot 9 returns a peak of -13.58 dBFS against a committed -13.58, which fixes slot n as GM program 47+n. Every slot of this rack near this one was compared against its neighbours at both ends of this grid and at its middle, and all are distinct audio -- the sample sharing that three slots of another rack show outside their instruments' ranges does not happen here."
+  "_slots": "Slot identity is measured, never taken from a name or a position, and on this rack it is checkable against the repository's own committed measurements: six of its sixteen slots were captured in an earlier round. Rendered under that capture's own gate at a cell its profile holds, slot 9 returns a peak of -13.58 dBFS against a committed -13.58, which fixes slot n as GM program 47+n. Every slot of this rack near this one was compared against its neighbours at both ends of this grid and at its middle, and all are distinct audio -- the sample sharing that three slots of another rack show outside their instruments' ranges does not happen here.",
+  "dimensions_na": {
+    "stretch": "colour, which `policy.json` assigns to the module for a machine-defined slot on both axes. `synth_voice_module` gates it from the module's own recording of this tone; a bound recorded here would hold the voice to a sample library's idea of a sound the machine invented. Still measured on every row here -- what is withheld is the bound, never the measurement",
+    "body": "colour, which `policy.json` assigns to the module for a machine-defined slot on both axes. `synth_voice_module` gates it from the module's own recording of this tone; a bound recorded here would hold the voice to a sample library's idea of a sound the machine invented. Still measured on every row here -- what is withheld is the bound, never the measurement",
+    "attack": "behaviour, which `policy.json` assigns to the module for a machine-defined slot on both axes. `synth_voice_module` gates it from the module's own recording of this tone; a bound recorded here would hold the voice to a sample library's idea of a sound the machine invented. Still measured on every row here -- what is withheld is the bound, never the measurement",
+    "stereo": "behaviour, which `policy.json` assigns to the module for a machine-defined slot, and the module cannot carry it: the module's recordings are mono with no `pan`. A bound recorded from this capture would hold the voice to a sample library's behaviour instead, so it stays unbounded on both",
+    "damper": "behaviour, which `policy.json` assigns to the module for a machine-defined slot, and the module cannot carry it: the recordings run on 0.46 to 0.52 s past the 5000 ms gate, and none falls the 40 dB below the level held there that the release reading is taken to (the most any falls is 33 dB), so every cell would report a capped release rather than a time. A bound recorded from this capture would hold the voice to a sample library's behaviour instead, so it stays unbounded on both",
+    "balance": "colour, which `policy.json` assigns to the module for a machine-defined slot on both axes. `synth_voice_module` gates it from the module's own recording of this tone; a bound recorded here would hold the voice to a sample library's idea of a sound the machine invented. Still measured on every row here -- what is withheld is the bound, never the measurement",
+    "centroid_pct": "colour, which `policy.json` assigns to the module for a machine-defined slot on both axes. `synth_voice_module` gates it from the module's own recording of this tone; a bound recorded here would hold the voice to a sample library's idea of a sound the machine invented. Still measured on every row here -- what is withheld is the bound, never the measurement",
+    "tnr": "colour, which `policy.json` assigns to the module for a machine-defined slot on both axes. `synth_voice_module` gates it from the module's own recording of this tone; a bound recorded here would hold the voice to a sample library's idea of a sound the machine invented. Still measured on every row here -- what is withheld is the bound, never the measurement",
+    "register": "behaviour, which `policy.json` assigns to the module for a machine-defined slot, and the module cannot carry it: the module sets no `initialAttenuation` on this tone. A bound recorded from this capture would hold the voice to a sample library's behaviour instead, so it stays unbounded on both"
+  }
 }

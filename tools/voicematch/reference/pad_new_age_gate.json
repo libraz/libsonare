@@ -12,62 +12,6 @@
   "reference_spread": {},
   "_pitch_ruler": "raised on 2026-10-24 when the held pitch moved from the strongest peak to the power centroid of each partial's lines (metrics_partials.line_centroid_pitch), and every reference was re-measured with it: tnr.median 12.32 -> 24.762. The old bounds were recorded from a reading that picked one of a partial's detuned lines by the window's beat phase, or placed the windows that the other readings take from f0 on that line.",
   "bounds": {
-    "stretch": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.38,
-      "abs_median": 2.399,
-      "p90": 6.207,
-      "rows": 28
-    },
-    "tnr": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 24.762,
-      "abs_median": 23.219,
-      "p90": 44.357,
-      "rows": 28
-    },
-    "attack": {
-      "floor": 40.0,
-      "floor_from": "guess",
-      "median": 175.0,
-      "abs_median": 175.0,
-      "p90": 268.75,
-      "rows": 28
-    },
-    "balance": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 16.48,
-      "abs_median": 16.48,
-      "p90": 28.288,
-      "rows": 28
-    },
-    "centroid_pct": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 116.395,
-      "abs_median": 116.395,
-      "p90": 180.817,
-      "rows": 28
-    },
-    "body": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 61.644,
-      "abs_median": 61.644,
-      "p90": 81.189,
-      "rows": 20
-    },
-    "damper": {
-      "floor": 5.0,
-      "floor_from": "guess",
-      "median": 1228.125,
-      "abs_median": 1228.125,
-      "p90": 1243.75,
-      "rows": 8
-    },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -75,14 +19,7 @@
       "abs_median": 1.0,
       "p90": 1.215,
       "rows": 7
-    },
-    "register": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 1.0,
-      "abs_median": 1.138,
-      "p90": 2.154,
-      "rows": 28
     }
-  }
+  },
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `pad_new_age_module` (stretch, tnr, attack, balance, centroid_pct, body, damper, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
 }

@@ -10,73 +10,9 @@
     "stale": false
   },
   "reference_spread": {},
-  "_pitch_motion_reading": "balance.median (was 0.945) deleted 2026-10-23 and re-recorded when the tone-to-noise mask and the partial-level windows began widening, where no vibrato line is read, by the held excursion of the demodulated fundamental: twice the 99th percentile of its power-weighted distance from the mean pitch over the note's held part (0.3 s in to 0.15 s before the end), at the rate under which nine tenths of the motion lies, and 10 cents peak to peak at least. model-only motion: 20/28 model rows read an excursion of 20\u201330 c, the reference holds still (3/28 rows); a model defect, not a reference reading.",
+  "_pitch_motion_reading": "balance.median (was 0.945) deleted 2026-10-23 and re-recorded when the tone-to-noise mask and the partial-level windows began widening, where no vibrato line is read, by the held excursion of the demodulated fundamental: twice the 99th percentile of its power-weighted distance from the mean pitch over the note's held part (0.3 s in to 0.15 s before the end), at the rate under which nine tenths of the motion lies, and 10 cents peak to peak at least. model-only motion: 20/28 model rows read an excursion of 20–30 c, the reference holds still (3/28 rows); a model defect, not a reference reading.",
   "_beat_phase": "balance.abs_median 3.09 -> 4.332 and centroid_pct.p90 35.231 -> 49.502 on 2026-10-24, when the voice went from three saws 12 cents apart to the reference's two lines 8 cents apart. Two lines that close beat slower than the 1.5 s window below E3 (C2's period is 3.3 s), so each note's h1 level, and with it the stack and the centroid, is set by where the window falls in the beat: one note's four velocities read brightness -47 % to -3 % against the reference, and the reference's own takes move the same way. The old bounds held the three-saw model's beats, fast enough to average inside the window, rather than agreement with the reference. The same change took tnr from -29.9 to -11.0 dB and stretch.abs_median from 0.45 to 0.20 cents.",
   "bounds": {
-    "stretch": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.0,
-      "abs_median": 1.0,
-      "p90": 1.0,
-      "rows": 28
-    },
-    "tnr": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 13.756,
-      "abs_median": 14.187,
-      "p90": 40.696,
-      "rows": 28
-    },
-    "damper": {
-      "floor": 5.0,
-      "floor_from": "guess",
-      "median": 143.75,
-      "abs_median": 143.75,
-      "p90": 162.5,
-      "rows": 28
-    },
-    "attack": {
-      "floor": 40.0,
-      "floor_from": "guess",
-      "median": 40.0,
-      "abs_median": 40.0,
-      "p90": 750.625,
-      "rows": 28
-    },
-    "stereo": {
-      "floor": 0.27,
-      "floor_from": "guess",
-      "median": 0.531,
-      "abs_median": 0.531,
-      "p90": 0.56,
-      "rows": 28
-    },
-    "balance": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 1.352,
-      "abs_median": 4.332,
-      "p90": 12.958,
-      "rows": 28
-    },
-    "centroid_pct": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 4.893,
-      "abs_median": 8.947,
-      "p90": 49.502,
-      "rows": 28
-    },
-    "body": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 40.644,
-      "abs_median": 40.644,
-      "p90": 42.397,
-      "rows": 20
-    },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -84,14 +20,7 @@
       "abs_median": 1.0,
       "p90": 1.305,
       "rows": 7
-    },
-    "register": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 1.0,
-      "abs_median": 1.0,
-      "p90": 1.547,
-      "rows": 28
     }
-  }
+  },
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `lead_saw_module` (stretch, tnr, damper, attack, stereo, balance, centroid_pct, body, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
 }

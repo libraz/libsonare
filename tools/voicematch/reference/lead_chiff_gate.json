@@ -11,62 +11,6 @@
   },
   "reference_spread": {},
   "bounds": {
-    "stretch": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.0,
-      "abs_median": 1.0,
-      "p90": 1.428,
-      "rows": 28
-    },
-    "tnr": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 3.031,
-      "abs_median": 3.944,
-      "p90": 8.102,
-      "rows": 28
-    },
-    "damper": {
-      "floor": 5.0,
-      "floor_from": "guess",
-      "median": 150.0,
-      "abs_median": 150.0,
-      "p90": 162.5,
-      "rows": 28
-    },
-    "attack": {
-      "floor": 40.0,
-      "floor_from": "guess",
-      "median": 40.0,
-      "abs_median": 40.0,
-      "p90": 118.75,
-      "rows": 28
-    },
-    "balance": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 2.963,
-      "abs_median": 5.232,
-      "p90": 14.161,
-      "rows": 28
-    },
-    "centroid_pct": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 2.302,
-      "abs_median": 10.265,
-      "p90": 33.085,
-      "rows": 28
-    },
-    "body": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 2.069,
-      "abs_median": 5.6,
-      "p90": 11.145,
-      "rows": 20
-    },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -74,14 +18,7 @@
       "abs_median": 1.0,
       "p90": 5.275,
       "rows": 7
-    },
-    "register": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 1.0,
-      "abs_median": 1.0,
-      "p90": 2.477,
-      "rows": 28
     }
-  }
+  },
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `lead_chiff_module` (stretch, tnr, damper, attack, balance, centroid_pct, body, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
 }

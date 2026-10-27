@@ -11,38 +11,6 @@
   },
   "reference_spread": {},
   "bounds": {
-    "decay": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 2.462,
-      "abs_median": 2.462,
-      "p90": 2.662,
-      "rows": 14
-    },
-    "attack": {
-      "floor": 40.0,
-      "floor_from": "guess",
-      "median": 1237.5,
-      "abs_median": 1237.5,
-      "p90": 1306.25,
-      "rows": 15
-    },
-    "stereo": {
-      "floor": 0.27,
-      "floor_from": "guess",
-      "median": 1.232,
-      "abs_median": 1.232,
-      "p90": 1.235,
-      "rows": 15
-    },
-    "centroid_pct": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 37.08,
-      "abs_median": 37.08,
-      "p90": 49.228,
-      "rows": 15
-    },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -51,5 +19,6 @@
       "p90": 1.0,
       "rows": 3
     }
-  }
+  },
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `helicopter_module` (decay, attack, stereo, centroid_pct); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
 }

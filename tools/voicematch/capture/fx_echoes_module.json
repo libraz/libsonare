@@ -1,0 +1,63 @@
+{
+  "id": "fx_echoes_module",
+  "label": "FX 7 (echoes), the GS capital tone, read out of a module's own recordings",
+  "program": 102,
+  "takes": "sustained",
+  "audition_title": "libsonare fx 7 (echoes) vs the module's own recordings",
+  "_notes": "The capital of program 102, which carries no `bank` key because a variation is recognised by a non-zero bank and the capital is the absence of one. The grid spans 48 to 72, the register the library capture `fx_echoes` probes this slot on, but sits on the source's own lattice -- one recording every three semitones from 24 to 96 and nothing between -- so no cell here is a resampled neighbour. Every 3 semitones.",
+  "notes": [
+    48,
+    51,
+    54,
+    57,
+    60,
+    63,
+    66,
+    69,
+    72
+  ],
+  "_velocities": "One, and 100 is a label rather than a measurement: the source sets `velRange` on none of this tone's zones, so it holds one recording per note at a velocity it does not state, and the importer refuses a grid asking for more than one layer.",
+  "velocities": [
+    100
+  ],
+  "_dry": "Nothing played this, so nothing was switched off. What the file holds is the module's own PCM with no effect in front of it, which is what `source_class: module` asks for.",
+  "dry": false,
+  "params": [],
+  "_stimulus": "The gate is the key lift, read off the recordings themselves: the source holds each sustained note for 5.0 s and then either cuts it there or keeps the release that follows. Over this grid the cells run 6.51 to 6.52 s, so 5000 ms is the lift.",
+  "gate_ms": 5000,
+  "tail": "0s",
+  "_realtime": "Read rather than played: `import_sf2.py` extracts the recorded frames, so there is no host to settle and no lead-in to strip. `preroll_ms` is 0 because a recording begins at its own first frame.",
+  "realtime": false,
+  "warmup": false,
+  "settle_ms": 0,
+  "preroll_ms": 0,
+  "sample_rate": 44100,
+  "_timbres": "One. The source holds exactly one recording per note of this tone, so there is no second of it to disagree with.",
+  "timbres": [
+    {
+      "id": "t0",
+      "label": "FX 7 (echoes), module recording"
+    }
+  ],
+  "_dimensions": "Coverage is read against `toneclass.canonical_dimensions` for program 102. What is excused below is what this source cannot carry, each argued from what it sets on this tone rather than from its being a font.",
+  "dimensions_na": {
+    "vel_range": "`velRange` is set on none of this tone's zones, so it holds one recording per note at a velocity it does not state. A grid asking for more than one would write that recording into every row of the axis a dynamics fit reads; the velocity bound stays on the library capture of this program, which is the one thing these recordings cannot answer",
+    "stereo": "every recording of this tone is mono (`sampleType` 1) and no `pan` is set, so the image is absent by construction rather than by voicing",
+    "register": "no `initialAttenuation` is set on this tone, so the level relation between one note and the next is not in the source; each recording sits in the headroom it was normalised into",
+    "damper": "the recordings run on 1.51 to 1.52 s past the 5000 ms gate, and none falls the 40 dB below the level held there that the release reading is taken to (the most any falls is 34 dB), so every cell would report a capped release rather than a time"
+  },
+  "dimensions": [
+    "stretch",
+    "body",
+    "attack",
+    "balance",
+    "centroid_pct",
+    "tnr"
+  ],
+  "rig": "none",
+  "room": "none",
+  "_room": "The module is recorded with reverb, chorus, delay and the insertion effect all off, and `import_sf2.py --report` plus its own dryness check measure the imported corpus rather than taking this declaration's word for it.",
+  "source_class": "module",
+  "_identity": "Which file and which of its presets answered this timbre lives in the untracked sibling `fx_echoes_module.local.json`. Everything here is the method; scoring, fitting and diagnosing read `reference/fx_echoes_module.json`.",
+  "_slots": "The source flattens the GS `(program, bank)` map into sequential presets, one run per program with the capital at its head, and names each preset with the module's own tone name. This tone heads the run for this program and carries the capital's name, and the run head is the only reading of a flattened map that a position can be trusted for."
+}

@@ -11,62 +11,6 @@
   },
   "reference_spread": {},
   "bounds": {
-    "stretch": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.0,
-      "abs_median": 1.0,
-      "p90": 1.0,
-      "rows": 28
-    },
-    "tnr": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 7.95,
-      "abs_median": 11.775,
-      "p90": 27.524,
-      "rows": 28
-    },
-    "damper": {
-      "floor": 5.0,
-      "floor_from": "guess",
-      "median": 150.0,
-      "abs_median": 150.0,
-      "p90": 156.25,
-      "rows": 28
-    },
-    "attack": {
-      "floor": 40.0,
-      "floor_from": "guess",
-      "median": 40.0,
-      "abs_median": 40.0,
-      "p90": 40.0,
-      "rows": 28
-    },
-    "balance": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 8.216,
-      "abs_median": 10.503,
-      "p90": 31.983,
-      "rows": 28
-    },
-    "centroid_pct": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 44.908,
-      "abs_median": 44.908,
-      "p90": 77.16,
-      "rows": 28
-    },
-    "body": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 13.937,
-      "abs_median": 13.937,
-      "p90": 49.054,
-      "rows": 20
-    },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -74,14 +18,7 @@
       "abs_median": 1.0,
       "p90": 1.905,
       "rows": 7
-    },
-    "register": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 1.0,
-      "abs_median": 1.775,
-      "p90": 2.893,
-      "rows": 28
     }
-  }
+  },
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `lead_charang_module` (stretch, tnr, damper, attack, balance, centroid_pct, body, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
 }

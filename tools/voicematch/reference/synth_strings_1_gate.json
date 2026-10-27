@@ -17,62 +17,6 @@
   "_vibrato_reading": "tnr.p90 (was 15.995) deleted 2026-10-23 and re-recorded when the measurement moved on both sides at once: under a vibrato the tuning is the fundamental's mean pitch, demodulated under its own FM extent, rather than the strongest spectral line within 80 c; a partial's level is its power summed over that FM extent rather than its peak bin; and a vibrato whose rate wanders, or whose line shares the pitch track with fast FM, now widens the tone-to-noise mask and is read at the band's RMS depth over its rate span. The reference was re-measured and the model is read with the same ruler, so these bounds were recorded under a ruler that no longer exists. A still tone reads as it did.",
   "_pitch_ruler": "raised on 2026-10-24 when the held pitch moved from the strongest peak to the power centroid of each partial's lines (metrics_partials.line_centroid_pitch), and every reference was re-measured with it: tnr.median 5.44 -> 10.175. The old bounds were recorded from a reading that picked one of a partial's detuned lines by the window's beat phase, or placed the windows that the other readings take from f0 on that line.",
   "bounds": {
-    "stretch": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.0,
-      "abs_median": 3.337,
-      "p90": 5.864,
-      "rows": 35
-    },
-    "tnr": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 10.175,
-      "abs_median": 9.188,
-      "p90": 21.442,
-      "rows": 35
-    },
-    "attack": {
-      "floor": 40.0,
-      "floor_from": "guess",
-      "median": 331.25,
-      "abs_median": 368.75,
-      "p90": 1173.75,
-      "rows": 35
-    },
-    "body": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 30.562,
-      "abs_median": 30.562,
-      "p90": 41.457,
-      "rows": 35
-    },
-    "stereo": {
-      "floor": 0.27,
-      "floor_from": "guess",
-      "median": 0.716,
-      "abs_median": 0.716,
-      "p90": 0.756,
-      "rows": 35
-    },
-    "balance": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 1.7,
-      "abs_median": 1.7,
-      "p90": 4.817,
-      "rows": 35
-    },
-    "centroid_pct": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 6.118,
-      "abs_median": 8.787,
-      "p90": 25.953,
-      "rows": 35
-    },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -80,14 +24,7 @@
       "abs_median": 1.0,
       "p90": 1.0,
       "rows": 7
-    },
-    "register": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 1.0,
-      "abs_median": 1.0,
-      "p90": 1.575,
-      "rows": 35
     }
-  }
+  },
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `synth_strings_1_module` (stretch, tnr, attack, body, stereo, balance, centroid_pct, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
 }

@@ -1,0 +1,63 @@
+{
+  "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
+  "timbre": "t0",
+  "margin": 1.25,
+  "reference_measured_utc": "2026-10-25T20:12:27+00:00",
+  "recorded_utc": "2026-10-25T20:12:31+00:00",
+  "model_build": {
+    "built_utc": "2026-10-25T18:14:29Z",
+    "newest_source_utc": "2026-10-25T18:13:35Z",
+    "stale": false
+  },
+  "reference_spread": {},
+  "bounds": {
+    "stretch": {
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 4.631,
+      "abs_median": 4.631,
+      "p90": 5.434,
+      "rows": 9
+    },
+    "tnr": {
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 11.137,
+      "abs_median": 11.137,
+      "p90": 17.81,
+      "rows": 9
+    },
+    "attack": {
+      "floor": 40.0,
+      "floor_from": "guess",
+      "median": 99.75,
+      "abs_median": 99.75,
+      "p90": 470.2,
+      "rows": 9
+    },
+    "balance": {
+      "floor": 0.5,
+      "floor_from": "guess",
+      "median": 7.773,
+      "abs_median": 7.773,
+      "p90": 8.938,
+      "rows": 9
+    },
+    "centroid_pct": {
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 7.593,
+      "abs_median": 7.593,
+      "p90": 19.376,
+      "rows": 9
+    },
+    "body": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 4.775,
+      "abs_median": 4.775,
+      "p90": 10.687,
+      "rows": 7
+    }
+  }
+}

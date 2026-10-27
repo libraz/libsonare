@@ -11,70 +11,6 @@
   },
   "reference_spread": {},
   "bounds": {
-    "stretch": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.0,
-      "abs_median": 6.324,
-      "p90": 7.955,
-      "rows": 28
-    },
-    "tnr": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.875,
-      "abs_median": 2.919,
-      "p90": 5.576,
-      "rows": 28
-    },
-    "damper": {
-      "floor": 5.0,
-      "floor_from": "guess",
-      "median": 325.0,
-      "abs_median": 325.0,
-      "p90": 356.25,
-      "rows": 28
-    },
-    "attack": {
-      "floor": 40.0,
-      "floor_from": "guess",
-      "median": 62.5,
-      "abs_median": 62.5,
-      "p90": 197.5,
-      "rows": 28
-    },
-    "stereo": {
-      "floor": 0.27,
-      "floor_from": "guess",
-      "median": 0.645,
-      "abs_median": 0.645,
-      "p90": 0.973,
-      "rows": 28
-    },
-    "balance": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 6.015,
-      "abs_median": 6.015,
-      "p90": 10.447,
-      "rows": 28
-    },
-    "centroid_pct": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.972,
-      "abs_median": 8.064,
-      "p90": 59.941,
-      "rows": 28
-    },
-    "body": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 3.769,
-      "abs_median": 3.769,
-      "p90": 9.604,
-      "rows": 20
-    },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -82,14 +18,7 @@
       "abs_median": 1.0,
       "p90": 1.0,
       "rows": 7
-    },
-    "register": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 1.0,
-      "abs_median": 1.0,
-      "p90": 2.448,
-      "rows": 28
     }
-  }
+  },
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `lead_voice_module` (stretch, tnr, damper, attack, stereo, balance, centroid_pct, body, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
 }

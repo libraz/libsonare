@@ -1,0 +1,346 @@
+{
+ "id": "helicopter_module",
+ "label": "Helicopter, the GS capital tone, read out of a module's own recordings",
+ "measured_utc": "2026-10-25T20:14:24+00:00",
+ "capture": {
+  "program": 125,
+  "params": [],
+  "sample_rate": 44100,
+  "gate_ms": 5000,
+  "tail": "0s",
+  "preroll_ms": 0,
+  "timbres": [
+   {
+    "id": "t0",
+    "label": "Helicopter, module recording"
+   }
+  ],
+  "notes": [
+   48,
+   60,
+   72
+  ],
+  "velocities": [
+   100
+  ],
+  "band_edge_hz": null
+ },
+ "rows": [
+  {
+   "timbre": "t0",
+   "note": 48,
+   "velocity": 100,
+   "f0_hz": 139.274,
+   "cents_vs_et": 108.51,
+   "inharmonicity_b": 0.0001622,
+   "partials_fit": 20,
+   "inharmonicity_reliable": true,
+   "partials_hz": [
+    139.57,
+    282.45,
+    419.87,
+    551.94,
+    700.22,
+    849.66,
+    969.15,
+    1124.77,
+    1274.35,
+    1424.33,
+    1528.55,
+    1695.38,
+    1847.34,
+    1964.56,
+    2100.8,
+    2246.01,
+    2422.79,
+    2586.08,
+    2717.99,
+    2869.94
+   ],
+   "partials_db": [
+    0.0,
+    -17.94,
+    -10.71,
+    -5.0,
+    -18.19,
+    -22.62,
+    -21.71,
+    -24.31,
+    -24.43,
+    -25.61,
+    -29.02,
+    -25.43,
+    -24.03,
+    -30.08,
+    -22.19,
+    -28.59,
+    -24.04,
+    -22.51,
+    -20.29,
+    -18.42
+   ],
+   "body_below_f0_db": -9.68,
+   "peak_dbfs": -4.49,
+   "rms_dbfs": -24.17,
+   "held_peak_dbfs": -14.8,
+   "onset_ms": 0.0,
+   "attack_ms": 1506.6,
+   "attack_hf_db": -14.8,
+   "decay_span_s": 3.382,
+   "decay_db_s": 0.18,
+   "decay_early_db_s": 0.07,
+   "decay_late_db_s": -0.26,
+   "decay_knee_s": 0.494,
+   "partial_decay_db_s": [
+    2.32,
+    2.34,
+    2.45,
+    2.43,
+    2.39,
+    2.32,
+    2.45,
+    2.4
+   ],
+   "decayed_before_note_off": false,
+   "damper_release_ms": 374.2,
+   "damper_capped": false,
+   "centroid_hz": 608.7,
+   "tnr_mask": {},
+   "tnr_db": -7.77
+  },
+  {
+   "timbre": "t0",
+   "note": 60,
+   "velocity": 100,
+   "f0_hz": 239.244,
+   "cents_vs_et": -154.82,
+   "inharmonicity_b": 0.0003939,
+   "partials_fit": 20,
+   "inharmonicity_reliable": true,
+   "partials_hz": [
+    238.8,
+    482.91,
+    725.5,
+    964.51,
+    1200.6,
+    1453.06,
+    1673.22,
+    1935.47,
+    2212.02,
+    2410.8,
+    2682.49,
+    2915.77,
+    3252.56,
+    3519.88,
+    3720.16,
+    4060.51,
+    4287.35,
+    4547.36,
+    4870.12,
+    5211.98
+   ],
+   "partials_db": [
+    0.0,
+    -9.44,
+    -15.34,
+    -20.47,
+    -23.25,
+    -23.77,
+    -31.91,
+    -27.68,
+    -21.88,
+    -29.82,
+    -21.51,
+    -22.36,
+    -22.41,
+    -22.94,
+    -24.28,
+    -28.14,
+    -23.64,
+    -27.51,
+    -27.89,
+    -27.43
+   ],
+   "body_below_f0_db": 0.83,
+   "peak_dbfs": -4.59,
+   "rms_dbfs": -24.08,
+   "held_peak_dbfs": -14.51,
+   "onset_ms": 0.0,
+   "attack_ms": 1681.2,
+   "attack_hf_db": -14.23,
+   "decay_span_s": 3.123,
+   "decay_db_s": -0.02,
+   "decay_early_db_s": 4.72,
+   "decay_late_db_s": 0.06,
+   "decay_knee_s": 0.569,
+   "partial_decay_db_s": [
+    1.7,
+    1.52,
+    1.42,
+    1.63,
+    2.18,
+    1.68,
+    2.3,
+    2.27
+   ],
+   "decayed_before_note_off": false,
+   "damper_release_ms": 414.1,
+   "damper_capped": true,
+   "centroid_hz": 642.3,
+   "tnr_mask": {},
+   "tnr_db": -7.63
+  },
+  {
+   "timbre": "t0",
+   "note": 72,
+   "velocity": 100,
+   "f0_hz": 528.446,
+   "cents_vs_et": 17.1,
+   "inharmonicity_b": 0.001222,
+   "partials_fit": 20,
+   "inharmonicity_reliable": true,
+   "partials_hz": [
+    526.64,
+    1045.94,
+    1576.57,
+    2132.5,
+    2712.63,
+    3226.86,
+    3826.39,
+    4356.85,
+    5014.53,
+    5563.41,
+    6254.23,
+    6974.8,
+    7548.01,
+    8121.32,
+    8846.73,
+    9816.18,
+    10306.89,
+    11088.47,
+    12068.28,
+    12949.21
+   ],
+   "partials_db": [
+    0.0,
+    -14.67,
+    -14.62,
+    -12.89,
+    -18.95,
+    -11.37,
+    -10.79,
+    -18.79,
+    -16.57,
+    -17.96,
+    -18.05,
+    -18.11,
+    -22.32,
+    -23.3,
+    -24.81,
+    -26.81,
+    -28.32,
+    -31.02,
+    -31.59,
+    -25.1
+   ],
+   "body_below_f0_db": 6.4,
+   "peak_dbfs": -4.41,
+   "rms_dbfs": -24.11,
+   "held_peak_dbfs": -14.83,
+   "onset_ms": 0.0,
+   "attack_ms": 1661.2,
+   "attack_hf_db": -13.63,
+   "decay_span_s": 3.243,
+   "decay_db_s": 0.11,
+   "decay_early_db_s": -1.65,
+   "decay_late_db_s": -0.21,
+   "decay_knee_s": 0.429,
+   "partial_decay_db_s": [
+    2.36,
+    2.43,
+    2.22,
+    2.15,
+    2.38,
+    2.37,
+    2.41,
+    2.2
+   ],
+   "decayed_before_note_off": false,
+   "damper_release_ms": 404.1,
+   "damper_capped": true,
+   "centroid_hz": 676.7,
+   "tnr_mask": {},
+   "tnr_db": -8.83
+  }
+ ],
+ "summary": {
+  "t0": {
+   "stretch_cents": {
+    "48": 108.51,
+    "60": -154.82,
+    "72": 17.1
+   },
+   "inharmonicity_b": {
+    "48": 0.0001622,
+    "60": 0.0003939,
+    "72": 0.001222
+   },
+   "level_dbfs": {
+    "48": {
+     "100": -24.17
+    },
+    "60": {
+     "100": -24.08
+    },
+    "72": {
+     "100": -24.11
+    }
+   },
+   "centroid_hz": {
+    "48": {
+     "100": 608.7
+    },
+    "60": {
+     "100": 642.3
+    },
+    "72": {
+     "100": 676.7
+    }
+   },
+   "decay_db_s": {
+    "48": {
+     "100": 0.18
+    },
+    "60": {
+     "100": -0.02
+    },
+    "72": {
+     "100": 0.11
+    }
+   },
+   "damper_release_ms": {
+    "48": {
+     "100": 374.2
+    },
+    "60": {
+     "100": 414.1
+    },
+    "72": {
+     "100": 404.1
+    }
+   },
+   "tnr_db": {
+    "48": {
+     "100": -7.77
+    },
+    "60": {
+     "100": -7.63
+    },
+    "72": {
+     "100": -8.83
+    }
+   },
+   "velocity_response": {}
+  }
+ }
+}

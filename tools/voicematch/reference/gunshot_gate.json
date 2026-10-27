@@ -11,30 +11,6 @@
   },
   "reference_spread": {},
   "bounds": {
-    "decay": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 34.588,
-      "abs_median": 34.588,
-      "p90": 42.228,
-      "rows": 10
-    },
-    "attack": {
-      "floor": 40.0,
-      "floor_from": "guess",
-      "median": 40.0,
-      "abs_median": 40.0,
-      "p90": 40.0,
-      "rows": 15
-    },
-    "centroid_pct": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 433.62,
-      "abs_median": 433.62,
-      "p90": 696.359,
-      "rows": 15
-    },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -43,5 +19,6 @@
       "p90": 1.0,
       "rows": 3
     }
-  }
+  },
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `gunshot_module` (decay, attack, centroid_pct); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
 }

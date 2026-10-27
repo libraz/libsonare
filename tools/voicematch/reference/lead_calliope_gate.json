@@ -12,62 +12,6 @@
   "reference_spread": {},
   "_tnr_mask_reading": "tnr.median (was 1.29), tnr.abs_median (was 3.67), tnr.p90 (was 13.76) deleted 2026-10-23 and re-recorded when the model's tone-to-noise ratio came to be read through its reference's mask: each reference row records the pitch motion and tremolo its own mask was widened by, and the model note is measured through that record rather than its own, so the same bins count as tone on both sides. The reference's own ratio did not move.",
   "bounds": {
-    "stretch": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.0,
-      "abs_median": 1.0,
-      "p90": 2.966,
-      "rows": 28
-    },
-    "tnr": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 2.913,
-      "abs_median": 4.094,
-      "p90": 8.61,
-      "rows": 28
-    },
-    "damper": {
-      "floor": 5.0,
-      "floor_from": "guess",
-      "median": 6.25,
-      "abs_median": 6.25,
-      "p90": 12.5,
-      "rows": 28
-    },
-    "attack": {
-      "floor": 40.0,
-      "floor_from": "guess",
-      "median": 75.0,
-      "abs_median": 75.0,
-      "p90": 193.75,
-      "rows": 28
-    },
-    "balance": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 0.5,
-      "abs_median": 2.839,
-      "p90": 11.952,
-      "rows": 28
-    },
-    "centroid_pct": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 6.639,
-      "abs_median": 7.135,
-      "p90": 11.583,
-      "rows": 28
-    },
-    "body": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 1.812,
-      "abs_median": 4.206,
-      "p90": 11.82,
-      "rows": 20
-    },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -75,14 +19,7 @@
       "abs_median": 1.0,
       "p90": 1.0,
       "rows": 7
-    },
-    "register": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 1.0,
-      "abs_median": 1.0,
-      "p90": 1.0,
-      "rows": 28
     }
-  }
+  },
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `lead_calliope_module` (stretch, tnr, damper, attack, balance, centroid_pct, body, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
 }

@@ -12,70 +12,6 @@
   "reference_spread": {},
   "_pitch_motion_reading": "balance.abs_median (was 2.358), balance.median (was 1.782) deleted 2026-10-23 and re-recorded when the tone-to-noise mask and the partial-level windows began widening, where no vibrato line is read, by the held excursion of the demodulated fundamental: twice the 99th percentile of its power-weighted distance from the mean pitch over the note's held part (0.3 s in to 0.15 s before the end), at the rate under which nine tenths of the motion lies, and 10 cents peak to peak at least. This reference's held pitch moves: an excursion reads on 35 of 35 rows, median 62 c at 8.5 Hz, detuned layers beating. The held pitch is not moved by it, so a still tone, a drift, a vibrato and the tuning read as they did.",
   "bounds": {
-    "stretch": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 2.156,
-      "abs_median": 3.394,
-      "p90": 5.229,
-      "rows": 35
-    },
-    "tnr": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.0,
-      "abs_median": 1.0,
-      "p90": 2.635,
-      "rows": 35
-    },
-    "damper": {
-      "floor": 5.0,
-      "floor_from": "guess",
-      "median": 231.25,
-      "abs_median": 231.25,
-      "p90": 266.25,
-      "rows": 35
-    },
-    "attack": {
-      "floor": 40.0,
-      "floor_from": "guess",
-      "median": 40.0,
-      "abs_median": 40.0,
-      "p90": 310.0,
-      "rows": 35
-    },
-    "body": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 1.0,
-      "abs_median": 3.1,
-      "p90": 6.435,
-      "rows": 35
-    },
-    "stereo": {
-      "floor": 0.27,
-      "floor_from": "guess",
-      "median": 0.348,
-      "abs_median": 0.348,
-      "p90": 0.437,
-      "rows": 35
-    },
-    "balance": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 5.522,
-      "abs_median": 5.522,
-      "p90": 13.291,
-      "rows": 35
-    },
-    "centroid_pct": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.0,
-      "abs_median": 9.333,
-      "p90": 22.826,
-      "rows": 35
-    },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -83,14 +19,7 @@
       "abs_median": 1.0,
       "p90": 1.78,
       "rows": 7
-    },
-    "register": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 1.0,
-      "abs_median": 1.275,
-      "p90": 6.962,
-      "rows": 35
     }
-  }
+  },
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `fx_atmosphere_module` (stretch, tnr, damper, attack, body, stereo, balance, centroid_pct, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
 }

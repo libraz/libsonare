@@ -11,62 +11,6 @@
   },
   "reference_spread": {},
   "bounds": {
-    "stretch": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.312,
-      "abs_median": 1.312,
-      "p90": 3.285,
-      "rows": 35
-    },
-    "tnr": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.375,
-      "abs_median": 10.35,
-      "p90": 33.005,
-      "rows": 35
-    },
-    "attack": {
-      "floor": 40.0,
-      "floor_from": "guess",
-      "median": 40.0,
-      "abs_median": 40.0,
-      "p90": 215.0,
-      "rows": 35
-    },
-    "body": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 44.038,
-      "abs_median": 44.038,
-      "p90": 73.273,
-      "rows": 35
-    },
-    "stereo": {
-      "floor": 0.27,
-      "floor_from": "guess",
-      "median": 0.64,
-      "abs_median": 0.64,
-      "p90": 1.164,
-      "rows": 35
-    },
-    "balance": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 3.678,
-      "abs_median": 4.865,
-      "p90": 10.207,
-      "rows": 35
-    },
-    "centroid_pct": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 26.984,
-      "abs_median": 26.984,
-      "p90": 54.693,
-      "rows": 35
-    },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -74,14 +18,7 @@
       "abs_median": 1.0,
       "p90": 4.885,
       "rows": 7
-    },
-    "register": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 1.0,
-      "abs_median": 3.25,
-      "p90": 5.45,
-      "rows": 35
     }
-  }
+  },
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `fx_crystal_module` (stretch, tnr, attack, body, stereo, balance, centroid_pct, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
 }

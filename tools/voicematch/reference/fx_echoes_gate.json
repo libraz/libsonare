@@ -14,70 +14,6 @@
   "_balance_population": "balance.p90 raised 13.727 -> 17.787 on 2026-10-23 when the voice gained an octave and a noise floor. The old bound was recorded while the model's triangle had no even partials, so its h2, h4 and h6 bins were rejected by the ladder and the model's stack was the mean of h3 and h5 against the reference's h2-h6. With the floor present those bins read, and the residual is the reference's h4 (about -25 dB), which a triangle and its octave cannot produce, plus n52, whose stack sits 7 dB above its neighbours.",
   "_pitch_ruler": "raised on 2026-10-24 when the held pitch moved from the strongest peak to the power centroid of each partial's lines (metrics_partials.line_centroid_pitch), and every reference was re-measured with it: tnr.median 2.48 -> 3.45. The old bounds were recorded from a reading that picked one of a partial's detuned lines by the window's beat phase, or placed the windows that the other readings take from f0 on that line.",
   "bounds": {
-    "stretch": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.0,
-      "abs_median": 3.775,
-      "p90": 7.56,
-      "rows": 35
-    },
-    "tnr": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 3.45,
-      "abs_median": 4.0,
-      "p90": 10.973,
-      "rows": 35
-    },
-    "damper": {
-      "floor": 5.0,
-      "floor_from": "guess",
-      "median": 125.0,
-      "abs_median": 143.75,
-      "p90": 356.25,
-      "rows": 35
-    },
-    "attack": {
-      "floor": 40.0,
-      "floor_from": "guess",
-      "median": 50.0,
-      "abs_median": 93.75,
-      "p90": 306.25,
-      "rows": 35
-    },
-    "body": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 2.4,
-      "abs_median": 7.713,
-      "p90": 24.268,
-      "rows": 35
-    },
-    "stereo": {
-      "floor": 0.27,
-      "floor_from": "guess",
-      "median": 0.27,
-      "abs_median": 0.27,
-      "p90": 0.476,
-      "rows": 35
-    },
-    "balance": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 0.873,
-      "abs_median": 4.132,
-      "p90": 17.787,
-      "rows": 35
-    },
-    "centroid_pct": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 3.237,
-      "abs_median": 14.808,
-      "p90": 38.797,
-      "rows": 35
-    },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -85,14 +21,7 @@
       "abs_median": 1.0,
       "p90": 1.102,
       "rows": 7
-    },
-    "register": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 1.0,
-      "abs_median": 1.0,
-      "p90": 6.125,
-      "rows": 35
     }
-  }
+  },
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `fx_echoes_module` (stretch, tnr, damper, attack, body, stereo, balance, centroid_pct, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
 }

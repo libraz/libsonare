@@ -11,30 +11,6 @@
   },
   "reference_spread": {},
   "bounds": {
-    "decay": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 1.225,
-      "abs_median": 1.338,
-      "p90": 2.328,
-      "rows": 15
-    },
-    "attack": {
-      "floor": 40.0,
-      "floor_from": "guess",
-      "median": 137.5,
-      "abs_median": 168.75,
-      "p90": 225.0,
-      "rows": 15
-    },
-    "centroid_pct": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 111.676,
-      "abs_median": 111.676,
-      "p90": 115.887,
-      "rows": 15
-    },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -43,5 +19,6 @@
       "p90": 2.072,
       "rows": 3
     }
-  }
+  },
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `bird_tweet_module` (decay, attack, centroid_pct); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
 }

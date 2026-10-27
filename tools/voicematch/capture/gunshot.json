@@ -39,16 +39,16 @@
       "slot_channel": 16
     }
   ],
-  "_dimensions": "4 of the 5 a voice with no pitch can be judged on. `centroid_pct` carries most of the identity here -- with no partials to place, where the energy sits and how it moves with the key is most of what distinguishes this from its neighbours -- and `vel_range` is live at 16.7 dB between velocity 16 and 100.",
+  "_dimensions": "Velocity only, the same split the standard kit takes: `policy.json` aims a machine-defined slot at the module on both axes, and the module holds one recording per note, so how the sound moves with velocity is the one thing its recordings cannot answer. Colour and behaviour are gated on `gunshot_module`. What this capture measured before the split stays in its reference profile.",
   "dimensions": [
-    "attack",
-    "centroid_pct",
-    "vel_range",
-    "decay"
+    "vel_range"
   ],
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap.",
   "dimensions_na": {
-    "stereo": "the slot renders dual mono: the two channels are bit-identical sample for sample, 550 dB under the signal, so the width is zero by construction rather than by voicing"
+    "stereo": "the slot renders dual mono: the two channels are bit-identical sample for sample, 550 dB under the signal, so the width is zero by construction rather than by voicing",
+    "attack": "behaviour, which `policy.json` assigns to the module for a machine-defined slot on both axes. `gunshot_module` gates it from the module's own recording of this tone; a bound recorded here would hold the voice to a sample library's idea of a sound the machine invented. Still measured on every row here -- what is withheld is the bound, never the measurement",
+    "centroid_pct": "colour, which `policy.json` assigns to the module for a machine-defined slot on both axes. `gunshot_module` gates it from the module's own recording of this tone; a bound recorded here would hold the voice to a sample library's idea of a sound the machine invented. Still measured on every row here -- what is withheld is the bound, never the measurement",
+    "decay": "behaviour, which `policy.json` assigns to the module for a machine-defined slot on both axes. `gunshot_module` gates it from the module's own recording of this tone; a bound recorded here would hold the voice to a sample library's idea of a sound the machine invented. Still measured on every row here -- what is withheld is the bound, never the measurement"
   },
   "source_class": "library",
   "_identity": "Which product this is captured from lives in the untracked sibling `gunshot.local.json`: the plugin's component triple and the slot's preset. Everything here is the method. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/gunshot.json` and need nothing.",

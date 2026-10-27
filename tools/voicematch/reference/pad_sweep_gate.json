@@ -11,70 +11,6 @@
   },
   "reference_spread": {},
   "bounds": {
-    "stretch": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.2,
-      "abs_median": 1.888,
-      "p90": 4.083,
-      "rows": 28
-    },
-    "tnr": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.0,
-      "abs_median": 19.3,
-      "p90": 36.438,
-      "rows": 28
-    },
-    "damper": {
-      "floor": 5.0,
-      "floor_from": "guess",
-      "median": 12.5,
-      "abs_median": 225.0,
-      "p90": 337.5,
-      "rows": 28
-    },
-    "attack": {
-      "floor": 40.0,
-      "floor_from": "guess",
-      "median": 325.0,
-      "abs_median": 325.0,
-      "p90": 2068.75,
-      "rows": 28
-    },
-    "stereo": {
-      "floor": 0.27,
-      "floor_from": "guess",
-      "median": 0.27,
-      "abs_median": 0.27,
-      "p90": 0.27,
-      "rows": 28
-    },
-    "balance": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 6.825,
-      "abs_median": 6.825,
-      "p90": 14.59,
-      "rows": 28
-    },
-    "centroid_pct": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 23.905,
-      "abs_median": 23.905,
-      "p90": 62.437,
-      "rows": 28
-    },
-    "body": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 59.875,
-      "abs_median": 59.875,
-      "p90": 70.562,
-      "rows": 20
-    },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -82,14 +18,7 @@
       "abs_median": 1.0,
       "p90": 1.0,
       "rows": 7
-    },
-    "register": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 2.519,
-      "abs_median": 2.519,
-      "p90": 5.037,
-      "rows": 28
     }
-  }
+  },
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `pad_sweep_module` (stretch, tnr, damper, attack, stereo, balance, centroid_pct, body, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
 }

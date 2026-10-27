@@ -14,62 +14,6 @@
   "_pitch_ruler": "raised on 2026-10-24 when the held pitch moved from the strongest peak to the power centroid of each partial's lines (metrics_partials.line_centroid_pitch), and every reference was re-measured with it: tnr.abs_median 19.2 -> 24.056, stretch.abs_median 5.35 -> 8.498, stretch.median 1.2 -> 3.439. The old bounds were recorded from a reading that picked one of a partial's detuned lines by the window's beat phase, or placed the windows that the other readings take from f0 on that line.",
   "_beat_phase_arrival": "attack.abs_median (was 50.0) deleted 2026-10-25 and re-recorded when the pad became two layers of a chorused narrow pulse. Both sides beat through the held note, 3.1-3.4 dB (reference) and 2.6-3.2 dB (model) around their own trend, as deep as the 3 dB slack the arrival is read within, so the arrival lands on whichever beat crest comes first: moving the attack 120 -> 130 ms flips C6 from -135 to +60 ms. The signed median stays inside its bound.",
   "bounds": {
-    "stretch": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 2.348,
-      "abs_median": 2.386,
-      "p90": 12.189,
-      "rows": 28
-    },
-    "tnr": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 11.775,
-      "abs_median": 13.944,
-      "p90": 31.538,
-      "rows": 28
-    },
-    "damper": {
-      "floor": 5.0,
-      "floor_from": "guess",
-      "median": 62.5,
-      "abs_median": 68.75,
-      "p90": 325.0,
-      "rows": 28
-    },
-    "attack": {
-      "floor": 40.0,
-      "floor_from": "guess",
-      "median": 40.0,
-      "abs_median": 112.5,
-      "p90": 150.0,
-      "rows": 28
-    },
-    "balance": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 0.613,
-      "abs_median": 1.948,
-      "p90": 4.574,
-      "rows": 28
-    },
-    "centroid_pct": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 15.079,
-      "abs_median": 15.079,
-      "p90": 19.243,
-      "rows": 28
-    },
-    "body": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 57.987,
-      "abs_median": 57.987,
-      "p90": 73.989,
-      "rows": 20
-    },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -77,14 +21,7 @@
       "abs_median": 1.0,
       "p90": 1.0,
       "rows": 7
-    },
-    "register": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 1.0,
-      "abs_median": 1.0,
-      "p90": 1.791,
-      "rows": 28
     }
-  }
+  },
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `pad_metallic_module` (stretch, tnr, damper, attack, balance, centroid_pct, body, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
 }

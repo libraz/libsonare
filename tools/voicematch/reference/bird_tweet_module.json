@@ -1,0 +1,342 @@
+{
+ "id": "bird_tweet_module",
+ "label": "Bird Tweet, the GS capital tone, read out of a module's own recordings",
+ "measured_utc": "2026-10-25T20:14:18+00:00",
+ "capture": {
+  "program": 123,
+  "params": [],
+  "sample_rate": 44100,
+  "gate_ms": 5000,
+  "tail": "0s",
+  "preroll_ms": 0,
+  "timbres": [
+   {
+    "id": "t0",
+    "label": "Bird Tweet, module recording"
+   }
+  ],
+  "notes": [
+   48,
+   60,
+   72
+  ],
+  "velocities": [
+   100
+  ],
+  "band_edge_hz": null
+ },
+ "rows": [
+  {
+   "timbre": "t0",
+   "note": 48,
+   "velocity": 100,
+   "f0_hz": 131.206,
+   "cents_vs_et": 5.19,
+   "inharmonicity_b": 0.0004595,
+   "partials_fit": 20,
+   "inharmonicity_reliable": true,
+   "partials_hz": [
+    132.78,
+    265.97,
+    390.52,
+    521.88,
+    657.17,
+    792.39,
+    919.9,
+    1079.29,
+    1215.08,
+    1351.7,
+    1503.44,
+    1605.34,
+    1780.98,
+    1890.77,
+    2086.65,
+    2188.13,
+    2406.68,
+    2563.42,
+    2717.25,
+    2819.91
+   ],
+   "partials_db": [
+    0.0,
+    -1.25,
+    -0.81,
+    -2.02,
+    0.64,
+    1.97,
+    16.95,
+    26.73,
+    40.63,
+    42.29,
+    33.32,
+    40.92,
+    40.69,
+    48.39,
+    50.36,
+    41.73,
+    37.07,
+    41.04,
+    40.62,
+    37.74
+   ],
+   "body_below_f0_db": 1.9,
+   "peak_dbfs": -4.92,
+   "rms_dbfs": -21.94,
+   "held_peak_dbfs": -8.84,
+   "onset_ms": 0.0,
+   "attack_ms": 99.8,
+   "attack_hf_db": -25.39,
+   "onset_overshoot_db": -1.46,
+   "onset_settle_ms": 276.4,
+   "decay_span_s": 4.664,
+   "decay_db_s": -9.16,
+   "decay_early_db_s": -8.7,
+   "decay_late_db_s": -7.76,
+   "decay_knee_s": 2.155,
+   "partial_decay_db_s": [
+    -9.08,
+    -8.31,
+    -9.02,
+    -8.77,
+    -8.84,
+    -9.35,
+    -8.82,
+    -4.16
+   ],
+   "decayed_before_note_off": true,
+   "centroid_hz": 2113.8,
+   "tnr_mask": {},
+   "tnr_db": -0.89
+  },
+  {
+   "timbre": "t0",
+   "note": 60,
+   "velocity": 100,
+   "f0_hz": 243.505,
+   "cents_vs_et": -124.26,
+   "inharmonicity_b": 0.001425,
+   "partials_fit": 20,
+   "inharmonicity_reliable": true,
+   "partials_hz": [
+    244.84,
+    491.17,
+    733.52,
+    991.71,
+    1238.97,
+    1506.46,
+    1743.93,
+    2045.69,
+    2323.8,
+    2574.62,
+    2935.93,
+    3202.68,
+    3477.87,
+    3804.15,
+    4209.06,
+    4494.28,
+    4916.2,
+    5306.69,
+    5712.83,
+    6099.71
+   ],
+   "partials_db": [
+    0.0,
+    -6.66,
+    -6.8,
+    -5.98,
+    24.48,
+    34.08,
+    26.07,
+    34.18,
+    41.72,
+    40.93,
+    30.07,
+    34.67,
+    31.07,
+    19.0,
+    18.87,
+    22.85,
+    23.22,
+    20.82,
+    27.75,
+    16.76
+   ],
+   "body_below_f0_db": 8.04,
+   "peak_dbfs": -4.46,
+   "rms_dbfs": -21.84,
+   "held_peak_dbfs": -8.57,
+   "onset_ms": 0.0,
+   "attack_ms": 84.8,
+   "attack_hf_db": -26.29,
+   "onset_overshoot_db": -1.11,
+   "onset_settle_ms": 226.0,
+   "decay_span_s": 4.739,
+   "decay_db_s": -9.17,
+   "decay_early_db_s": -7.86,
+   "decay_late_db_s": -7.7,
+   "decay_knee_s": 1.926,
+   "partial_decay_db_s": [
+    -8.0,
+    -8.85,
+    -9.3,
+    -9.6,
+    -2.77,
+    -2.41,
+    -6.87,
+    -9.9
+   ],
+   "decayed_before_note_off": false,
+   "damper_release_ms": 59.9,
+   "damper_capped": true,
+   "centroid_hz": 2552.5,
+   "tnr_mask": {},
+   "tnr_db": -1.18
+  },
+  {
+   "timbre": "t0",
+   "note": 72,
+   "velocity": 100,
+   "f0_hz": 521.873,
+   "cents_vs_et": -4.57,
+   "inharmonicity_b": 0.0001956,
+   "partials_fit": 20,
+   "inharmonicity_reliable": true,
+   "partials_hz": [
+    518.9,
+    1043.93,
+    1550.39,
+    2071.85,
+    2601.52,
+    3157.39,
+    3701.11,
+    4150.1,
+    4724.1,
+    5327.88,
+    5867.36,
+    6263.32,
+    6806.44,
+    7351.29,
+    7887.52,
+    8613.33,
+    9092.68,
+    9700.51,
+    10116.15,
+    10699.38
+   ],
+   "partials_db": [
+    0.0,
+    -0.39,
+    23.83,
+    36.08,
+    40.35,
+    47.88,
+    38.6,
+    40.23,
+    28.36,
+    30.47,
+    35.29,
+    22.91,
+    21.95,
+    12.82,
+    6.07,
+    3.91,
+    -0.44,
+    10.16,
+    1.32,
+    -0.67
+   ],
+   "body_below_f0_db": 12.25,
+   "peak_dbfs": -4.09,
+   "rms_dbfs": -21.74,
+   "held_peak_dbfs": -8.72,
+   "onset_ms": 0.0,
+   "attack_ms": 64.9,
+   "attack_hf_db": -27.62,
+   "onset_overshoot_db": -1.14,
+   "onset_settle_ms": 142.7,
+   "decay_span_s": 4.789,
+   "decay_db_s": -9.35,
+   "decay_early_db_s": -2.67,
+   "decay_late_db_s": -8.87,
+   "decay_knee_s": 1.147,
+   "partial_decay_db_s": [
+    -9.23,
+    -8.56,
+    -3.52,
+    -5.78,
+    -10.79,
+    -17.07,
+    -9.15,
+    -6.8
+   ],
+   "decayed_before_note_off": true,
+   "centroid_hz": 3161.5,
+   "tnr_mask": {},
+   "tnr_db": -3.27
+  }
+ ],
+ "summary": {
+  "t0": {
+   "stretch_cents": {
+    "48": 5.19,
+    "60": -124.26,
+    "72": -4.57
+   },
+   "inharmonicity_b": {
+    "48": 0.0004595,
+    "60": 0.001425,
+    "72": 0.0001956
+   },
+   "level_dbfs": {
+    "48": {
+     "100": -21.94
+    },
+    "60": {
+     "100": -21.84
+    },
+    "72": {
+     "100": -21.74
+    }
+   },
+   "centroid_hz": {
+    "48": {
+     "100": 2113.8
+    },
+    "60": {
+     "100": 2552.5
+    },
+    "72": {
+     "100": 3161.5
+    }
+   },
+   "decay_db_s": {
+    "48": {
+     "100": -9.16
+    },
+    "60": {
+     "100": -9.17
+    },
+    "72": {
+     "100": -9.35
+    }
+   },
+   "damper_release_ms": {
+    "60": {
+     "100": 59.9
+    }
+   },
+   "tnr_db": {
+    "48": {
+     "100": -0.89
+    },
+    "60": {
+     "100": -1.18
+    },
+    "72": {
+     "100": -3.27
+    }
+   },
+   "velocity_response": {}
+  }
+ }
+}

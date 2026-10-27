@@ -11,78 +11,6 @@
   },
   "reference_spread": {},
   "bounds": {
-    "stretch": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.0,
-      "abs_median": 1.0,
-      "p90": 1.418,
-      "rows": 35
-    },
-    "tnr": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.0,
-      "abs_median": 1.0,
-      "p90": 3.632,
-      "rows": 35
-    },
-    "damper": {
-      "floor": 5.0,
-      "floor_from": "guess",
-      "median": 31.25,
-      "abs_median": 31.25,
-      "p90": 50.0,
-      "rows": 35
-    },
-    "attack": {
-      "floor": 40.0,
-      "floor_from": "guess",
-      "median": 40.0,
-      "abs_median": 40.0,
-      "p90": 40.0,
-      "rows": 35
-    },
-    "attack_hf": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 36.125,
-      "abs_median": 36.125,
-      "p90": 60.555,
-      "rows": 35
-    },
-    "balance": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 1.585,
-      "abs_median": 7.803,
-      "p90": 11.638,
-      "rows": 35
-    },
-    "partial_tilt": {
-      "floor": 3.0,
-      "floor_from": "guess",
-      "median": 3.0,
-      "abs_median": 3.0,
-      "p90": 3.0,
-      "rows": 35
-    },
-    "centroid_pct": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 5.531,
-      "abs_median": 5.531,
-      "p90": 19.934,
-      "rows": 35
-    },
-    "body": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 10.813,
-      "abs_median": 10.813,
-      "p90": 17.51,
-      "rows": 10
-    },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -90,22 +18,7 @@
       "abs_median": 1.0,
       "p90": 1.0,
       "rows": 7
-    },
-    "attack_hf_swing": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 1.0,
-      "abs_median": 1.0,
-      "p90": 7.84,
-      "rows": 7
-    },
-    "register": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 1.0,
-      "abs_median": 1.0,
-      "p90": 1.265,
-      "rows": 35
     }
-  }
+  },
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `synth_bass_1_module` (stretch, tnr, damper, attack, attack_hf, balance, partial_tilt, centroid_pct, body, attack_hf_swing, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
 }

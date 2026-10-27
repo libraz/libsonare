@@ -10,72 +10,8 @@
     "stale": false
   },
   "reference_spread": {},
-  "_pitch_motion_reading": "balance.p90 (was 17.249) deleted 2026-10-23 and re-recorded when the tone-to-noise mask and the partial-level windows began widening, where no vibrato line is read, by the held excursion of the demodulated fundamental: twice the 99th percentile of its power-weighted distance from the mean pitch over the note's held part (0.3 s in to 0.15 s before the end), at the rate under which nine tenths of the motion lies, and 10 cents peak to peak at least. model-only motion: 16/28 model rows read an excursion of 25\u201330 c, the reference holds still (4/28 rows); a model defect, not a reference reading.",
+  "_pitch_motion_reading": "balance.p90 (was 17.249) deleted 2026-10-23 and re-recorded when the tone-to-noise mask and the partial-level windows began widening, where no vibrato line is read, by the held excursion of the demodulated fundamental: twice the 99th percentile of its power-weighted distance from the mean pitch over the note's held part (0.3 s in to 0.15 s before the end), at the rate under which nine tenths of the motion lies, and 10 cents peak to peak at least. model-only motion: 16/28 model rows read an excursion of 25–30 c, the reference holds still (4/28 rows); a model defect, not a reference reading.",
   "bounds": {
-    "stretch": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.0,
-      "abs_median": 1.025,
-      "p90": 1.999,
-      "rows": 28
-    },
-    "tnr": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 2.65,
-      "abs_median": 2.869,
-      "p90": 11.549,
-      "rows": 28
-    },
-    "damper": {
-      "floor": 5.0,
-      "floor_from": "guess",
-      "median": 40.625,
-      "abs_median": 128.125,
-      "p90": 231.25,
-      "rows": 28
-    },
-    "attack": {
-      "floor": 40.0,
-      "floor_from": "guess",
-      "median": 150.0,
-      "abs_median": 150.0,
-      "p90": 893.75,
-      "rows": 28
-    },
-    "stereo": {
-      "floor": 0.27,
-      "floor_from": "guess",
-      "median": 0.27,
-      "abs_median": 0.27,
-      "p90": 0.27,
-      "rows": 28
-    },
-    "balance": {
-      "floor": 0.5,
-      "floor_from": "guess",
-      "median": 1.29,
-      "abs_median": 2.744,
-      "p90": 6.895,
-      "rows": 28
-    },
-    "centroid_pct": {
-      "floor": 1.0,
-      "floor_from": "guess",
-      "median": 1.396,
-      "abs_median": 8.122,
-      "p90": 14.496,
-      "rows": 28
-    },
-    "body": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 11.738,
-      "abs_median": 11.738,
-      "p90": 36.351,
-      "rows": 20
-    },
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
@@ -83,14 +19,7 @@
       "abs_median": 1.0,
       "p90": 6.627,
       "rows": 7
-    },
-    "register": {
-      "floor": 1.0,
-      "floor_from": "default",
-      "median": 1.0,
-      "abs_median": 1.0,
-      "p90": 1.879,
-      "rows": 28
     }
-  }
+  },
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `pad_warm_module` (stretch, tnr, damper, attack, stereo, balance, centroid_pct, body, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
 }
