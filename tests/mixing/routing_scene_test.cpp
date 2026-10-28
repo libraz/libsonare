@@ -712,6 +712,58 @@ TEST_CASE("Scene arrays refuse a wrong-typed container or element with InvalidFo
   CHECK(sonare::mixing::api::scene_from_json(R"({"version":1})").strips.empty());
 }
 
+TEST_CASE("Scene scalar and nested-object fields refuse a wrong type, naming the field path",
+          "[mixing][routing]") {
+  using Catch::Matchers::ContainsSubstring;
+  struct Case {
+    const char* json;
+    const char* path;
+  };
+  const Case cases[] = {
+      {R"({"version":1,"strips":[{"id":"a","faderDb":"loud"}]})", "strips[0].faderDb"},
+      {R"({"version":1,"strips":[{"id":"a","fader_db":"loud"}]})", "strips[0].fader_db"},
+      {R"({"version":1,"strips":[{"id":"a","pan":null}]})", "strips[0].pan"},
+      {R"({"version":1,"strips":[{"id":"a"},{"id":"b","muted":1}]})", "strips[1].muted"},
+      {R"({"version":1,"strips":[{"id":"a","soloSafe":"yes"}]})", "strips[0].soloSafe"},
+      {R"({"version":1,"strips":[{"id":"a","panLaw":"equal"}]})", "strips[0].panLaw"},
+      {R"({"version":1,"strips":[{"id":7}]})", "strips[0].id"},
+      {R"({"version":1,"strips":[{"id":"a","metering":{"truePeakOversample":"8"}}]})",
+       "strips[0].metering.truePeakOversample"},
+      {R"({"version":1,"strips":[{"id":"a","metering":3}]})", "strips[0].metering"},
+      {R"({"version":1,"strips":[{"id":"a","surroundPan":{"azimuth":true}}]})",
+       "strips[0].surroundPan.azimuth"},
+      {R"({"version":1,"strips":[{"id":"a","eq":{"enabled":"on"}}]})", "strips[0].eq.enabled"},
+      {R"({"version":1,"strips":[{"id":"a","eq":[]}]})", "strips[0].eq"},
+      {R"({"version":1,"strips":[{"id":"a","eq":{"bands":{}}}]})", "strips[0].eq.bands"},
+      {R"({"version":1,"strips":[{"id":"a","sends":[{"sendDb":"x"}]}]})",
+       "strips[0].sends[0].sendDb"},
+      {R"({"version":1,"strips":[{"id":"a","inserts":[{"processor":5}]}]})",
+       "strips[0].inserts[0].processor"},
+      {R"({"version":1,"buses":[{"id":"m","role":"master","width":"wide"}]})", "buses[0].width"},
+      {R"({"version":1,"vcaGroups":[{"id":"g","gainDb":[]}]})", "vcaGroups[0].gainDb"},
+      {R"({"version":1,"vcaGroups":[{"id":"g","members":["a",2]}]})", "vcaGroups[0].members[1]"},
+      {R"({"version":1,"vcaGroups":[{"id":"g","members":"a"}]})", "vcaGroups[0].members"},
+      {R"({"version":"1"})", "version"},
+      {R"({"version":1,"connections":[{"source":1}]})", "connections[0].source"},
+  };
+  for (const auto& c : cases) {
+    CAPTURE(c.json);
+    try {
+      (void)sonare::mixing::api::scene_from_json(c.json);
+      FAIL("a wrong-typed scene field was accepted");
+    } catch (const sonare::SonareException& e) {
+      CHECK(e.code() == sonare::ErrorCode::InvalidFormat);
+      CHECK_THAT(std::string(e.what()), ContainsSubstring(c.path));
+    }
+  }
+  // Control: right types parse to their values, and absent keys keep their defaults.
+  const auto scene = sonare::mixing::api::scene_from_json(
+      R"({"version":1,"strips":[{"id":"a","faderDb":-6,"muted":true},{"id":"b"}]})");
+  CHECK(scene.strips[0].fader_db == -6.0f);
+  CHECK(scene.strips[0].muted);
+  CHECK(scene.strips[1].fader_db == sonare::mixing::api::Strip{}.fader_db);
+}
+
 TEST_CASE("Scene bus trim/width/polarity round-trip and omit at defaults", "[mixing][routing]") {
   // A bus that engages its output trim, width, and polarity serializes those
   // fields and parses them back; a default bus emits none of them so an existing

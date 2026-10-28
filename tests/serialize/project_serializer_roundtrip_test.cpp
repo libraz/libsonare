@@ -1636,27 +1636,23 @@ TEST_CASE("project deserialize bounds dangling-reference diagnostics", "[seriali
   CHECK(result.diagnostics.back().message.find("132") != std::string::npos);
 }
 
-TEST_CASE("wrong-typed scene enum fields fall back instead of aborting the load", "[serialize]") {
-  // int_or_any now matches num_or_any/str_or_any/bool_or_any: a present-but-
-  // wrong-typed (non-numeric) panMode/panLaw/channelDelaySamples falls back to the
-  // default rather than rejecting an otherwise-valid project. A numeric-but-
-  // fractional value is still a genuine error (covered above), so the guard only
-  // relaxes the type-mismatch case.
-  const std::vector<std::string> documents = {
-      R"({"version":1,"scene":{"version":1,"strips":[{"id":"s","panMode":"stereo"}]}})",
-      R"({"version":1,"scene":{"version":1,"strips":[{"id":"s","panLaw":true}]}})",
-      R"({"version":1,"scene":{"version":1,"strips":[{"id":"s","channelDelaySamples":"none"}]}})",
+TEST_CASE("wrong-typed scene enum fields are refused by name", "[serialize]") {
+  // A present field of the wrong type is refused like a wrong-typed container,
+  // never loaded as its default.
+  const std::vector<std::pair<std::string, std::string>> documents = {
+      {R"({"version":1,"scene":{"version":1,"strips":[{"id":"s","panMode":"stereo"}]}})",
+       "panMode"},
+      {R"({"version":1,"scene":{"version":1,"strips":[{"id":"s","panLaw":true}]}})", "panLaw"},
+      {R"({"version":1,"scene":{"version":1,"strips":[{"id":"s","channelDelaySamples":"none"}]}})",
+       "channelDelaySamples"},
   };
-  for (const auto& document : documents) {
+  for (const auto& [document, field] : documents) {
     INFO(document);
     const auto result = project_from_json(document);
-    REQUIRE(result.ok());
-    REQUIRE(result.project->scene().strips.size() == 1);
-    // The wrong-typed field took its default (0), and the strip id still loaded.
-    CHECK(result.project->scene().strips[0].id == "s");
-    CHECK(result.project->scene().strips[0].pan_mode == 0);
-    CHECK(result.project->scene().strips[0].pan_law == 0);
-    CHECK(result.project->scene().strips[0].channel_delay_samples == 0);
+    REQUIRE_FALSE(result.ok());
+    REQUIRE_FALSE(result.diagnostics.empty());
+    CHECK(result.diagnostics.back().code == "invalid_format");
+    CHECK(result.diagnostics.back().message.find(field) != std::string::npos);
   }
 }
 

@@ -1,6 +1,8 @@
 /// @file voice_changer_limiter_json_test.cpp
 /// @brief Realtime voice changer limiter and JSON edge-case tests.
 
+#include <catch2/matchers/catch_matchers_string.hpp>
+
 #include "voice_changer_test_helpers.h"
 
 TEST_CASE("RealtimeVoiceChanger silent input produces silence with aggressive gate",
@@ -689,6 +691,33 @@ TEST_CASE("RealtimeVoiceChanger JSON clamps out-of-int-range reverb seed", "[voi
     }
     for (float sample : output) REQUIRE(std::isfinite(sample));
   }
+}
+
+TEST_CASE("RealtimeVoiceChanger JSON refuses a present field of the wrong type",
+          "[voice_changer]") {
+  using Catch::Matchers::ContainsSubstring;
+  struct Case {
+    const char* json;
+    const char* path;
+  };
+  const Case cases[] = {
+      {R"({"dsp":{"wetMix":"loud"}})", "wetMix"},
+      {R"({"dsp":{"reverb":{"mix":null}}})", "reverb.mix"},
+      {R"({"dsp":{"reverb":{"seed":"7"}}})", "reverb.seed"},
+      {R"({"dsp":{"limiter":{"enableIspLimiter":1}}})", "limiter.enableIspLimiter"},
+      {R"({"dsp":{"formant":{"mode":3}}})", "formant.mode"},
+      {R"({"dsp":{"eq":[]}})", "eq must be an object"},
+      {R"({"dsp":5})", "dsp must be an object"},
+      {R"({"retuneSemitones":0,"retuneMix":"x"})", "retuneMix"},
+  };
+  for (const auto& c : cases) {
+    CAPTURE(c.json);
+    REQUIRE_THROWS_WITH(realtime_voice_changer_config_from_json(c.json), ContainsSubstring(c.path));
+  }
+  // Control: right types load, and an absent field keeps its default.
+  const auto config = realtime_voice_changer_config_from_json(R"({"dsp":{"wetMix":0.5}})");
+  REQUIRE(config.wet_mix == 0.5f);
+  REQUIRE(config.reverb.mix == RealtimeVoiceChangerConfig{}.reverb.mix);
 }
 
 TEST_CASE("ISP limiter bounds the original sample peaks, not only the reconstruction",

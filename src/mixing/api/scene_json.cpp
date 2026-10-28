@@ -100,18 +100,10 @@ std::string child_path(const std::string& path, const char* key) {
   return path.empty() ? std::string(key) : path + "." + key;
 }
 
-float number_or(const JsonValue& object, const char* key, float fallback,
-                const char* field_path = nullptr) {
-  const auto* value = object.find(key);
-  if (!value || !value->is_number()) return fallback;
-  float converted = 0.0f;
-  if (!numeric::checked_float_cast(value->as_number(), &converted)) {
-    throw SonareException(
-        ErrorCode::InvalidFormat,
-        std::string("floating-point field is non-finite or out of float range: ") +
-            (field_path != nullptr ? field_path : key));
-  }
-  return converted;
+// A present key of the wrong type (a JSON null included) is refused naming its path, as a
+// container of the wrong type is; only an absent key keeps the fallback.
+[[noreturn]] void refuse_type(const std::string& path, const char* key, const char* expected) {
+  throw SonareException(ErrorCode::InvalidFormat, child_path(path, key) + " must be " + expected);
 }
 
 const JsonValue* value_or_legacy(const JsonValue& object, const char* key, const char* legacy_key) {
@@ -119,18 +111,45 @@ const JsonValue* value_or_legacy(const JsonValue& object, const char* key, const
   return object.find(legacy_key);
 }
 
-float number_or_legacy(const JsonValue& object, const char* key, const char* legacy_key,
-                       float fallback, const char* field_path = nullptr) {
-  const auto* value = value_or_legacy(object, key, legacy_key);
-  if (!value || !value->is_number()) return fallback;
+// The spelling a present value was written under, for the refusal's path.
+const char* spelling_of(const JsonValue& object, const char* key, const char* legacy_key) {
+  return object.find(key) ? key : legacy_key;
+}
+
+float float_from(const JsonValue& value, const char* key, const char* field_path) {
   float converted = 0.0f;
-  if (!numeric::checked_float_cast(value->as_number(), &converted)) {
+  if (!numeric::checked_float_cast(value.as_number(), &converted)) {
     throw SonareException(
         ErrorCode::InvalidFormat,
         std::string("floating-point field is non-finite or out of float range: ") +
             (field_path != nullptr ? field_path : key));
   }
   return converted;
+}
+
+int int_from(const JsonValue& value, const char* key) {
+  int converted = 0;
+  if (!numeric::checked_integral_cast(value.as_number(), &converted)) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          std::string("integer field is fractional or out of range: ") + key);
+  }
+  return converted;
+}
+
+float number_or(const JsonValue& object, const std::string& path, const char* key, float fallback,
+                const char* field_path = nullptr) {
+  const auto* value = object.find(key);
+  if (!value) return fallback;
+  if (!value->is_number()) refuse_type(path, key, "a number");
+  return float_from(*value, key, field_path);
+}
+
+float number_or_legacy(const JsonValue& object, const std::string& path, const char* key,
+                       const char* legacy_key, float fallback, const char* field_path = nullptr) {
+  const auto* value = value_or_legacy(object, key, legacy_key);
+  if (!value) return fallback;
+  if (!value->is_number()) refuse_type(path, spelling_of(object, key, legacy_key), "a number");
+  return float_from(*value, key, field_path);
 }
 
 // Pan and width are refused outside their documented domains, naming the field.
@@ -150,51 +169,49 @@ float checked_width(float value, const char* field_path) {
   return value;
 }
 
-int int_or_legacy(const JsonValue& object, const char* key, const char* legacy_key, int fallback) {
+int int_or_legacy(const JsonValue& object, const std::string& path, const char* key,
+                  const char* legacy_key, int fallback) {
   const auto* value = value_or_legacy(object, key, legacy_key);
-  if (!value || !value->is_number()) return fallback;
-  int converted = 0;
-  if (!numeric::checked_integral_cast(value->as_number(), &converted)) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          std::string("integer field is fractional or out of range: ") + key);
-  }
-  return converted;
+  if (!value) return fallback;
+  if (!value->is_number()) refuse_type(path, spelling_of(object, key, legacy_key), "an integer");
+  return int_from(*value, key);
 }
 
-bool bool_or_legacy(const JsonValue& object, const char* key, const char* legacy_key,
-                    bool fallback) {
+bool bool_or_legacy(const JsonValue& object, const std::string& path, const char* key,
+                    const char* legacy_key, bool fallback) {
   const auto* value = value_or_legacy(object, key, legacy_key);
-  if (!value || !value->is_bool()) return fallback;
+  if (!value) return fallback;
+  if (!value->is_bool()) refuse_type(path, spelling_of(object, key, legacy_key), "a boolean");
   return value->as_bool();
 }
 
-int int_or(const JsonValue& object, const char* key, int fallback) {
+int int_or(const JsonValue& object, const std::string& path, const char* key, int fallback) {
   const auto* value = object.find(key);
-  if (!value || !value->is_number()) return fallback;
-  int converted = 0;
-  if (!numeric::checked_integral_cast(value->as_number(), &converted)) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          std::string("integer field is fractional or out of range: ") + key);
-  }
-  return converted;
+  if (!value) return fallback;
+  if (!value->is_number()) refuse_type(path, key, "an integer");
+  return int_from(*value, key);
 }
 
-bool bool_or(const JsonValue& object, const char* key, bool fallback) {
+bool bool_or(const JsonValue& object, const std::string& path, const char* key, bool fallback) {
   const auto* value = object.find(key);
-  if (!value || !value->is_bool()) return fallback;
+  if (!value) return fallback;
+  if (!value->is_bool()) refuse_type(path, key, "a boolean");
   return value->as_bool();
 }
 
-std::string string_or(const JsonValue& object, const char* key, const std::string& fallback) {
+std::string string_or(const JsonValue& object, const std::string& path, const char* key,
+                      const std::string& fallback) {
   const auto* value = object.find(key);
-  if (!value || !value->is_string()) return fallback;
+  if (!value) return fallback;
+  if (!value->is_string()) refuse_type(path, key, "a string");
   return value->as_string();
 }
 
-std::string string_or_legacy(const JsonValue& object, const char* key, const char* legacy_key,
-                             const std::string& fallback) {
+std::string string_or_legacy(const JsonValue& object, const std::string& path, const char* key,
+                             const char* legacy_key, const std::string& fallback) {
   const auto* value = value_or_legacy(object, key, legacy_key);
-  if (!value || !value->is_string()) return fallback;
+  if (!value) return fallback;
+  if (!value->is_string()) refuse_type(path, spelling_of(object, key, legacy_key), "a string");
   return value->as_string();
 }
 
@@ -212,7 +229,7 @@ Insert insert_from_value(const JsonValue& object, const std::string& path,
     insert.slot = insert_slot_from_string(slot->as_string());
   }
   insert.processor_name = mastering::api::canonical_processor_id(
-      string_or_legacy(object, "processor", "processor_name", insert.processor_name));
+      string_or_legacy(object, path, "processor", "processor_name", insert.processor_name));
   // The writer embeds the params bag as an object; the string form is what every
   // project file saved before that carries, so both load into the same text.
   if (const auto* params = value_or_legacy(object, "params", "params_json")) {
@@ -228,7 +245,7 @@ Insert insert_from_value(const JsonValue& object, const std::string& path,
   insert.params_json =
       mastering::api::canonical_insert_params_text(insert.processor_name, insert.params_json);
   insert.sidechain_key =
-      string_or_legacy(object, "sidechainKey", "sidechain_key", insert.sidechain_key);
+      string_or_legacy(object, path, "sidechainKey", "sidechain_key", insert.sidechain_key);
   return insert;
 }
 
@@ -267,11 +284,11 @@ Send send_from_value(const JsonValue& object, const std::string& path,
   static const KeySet kKnown = known_keys("strips[].sends[]", {"destination_bus_id", "send_db"});
   report_unknown_keys(object, path, kKnown, warnings);
   Send send;
-  send.id = string_or(object, "id", send.id);
-  send.destination_bus_id =
-      string_or_legacy(object, "destinationBusId", "destination_bus_id", send.destination_bus_id);
-  send.send_db =
-      number_or_legacy(object, "sendDb", "send_db", send.send_db, "scene.strips[].sends[].sendDb");
+  send.id = string_or(object, path, "id", send.id);
+  send.destination_bus_id = string_or_legacy(object, path, "destinationBusId", "destination_bus_id",
+                                             send.destination_bus_id);
+  send.send_db = number_or_legacy(object, path, "sendDb", "send_db", send.send_db,
+                                  "scene.strips[].sends[].sendDb");
   if (const auto* timing = object.find("timing")) {
     if (!timing->is_string()) {
       throw SonareException(ErrorCode::InvalidParameter,
@@ -297,12 +314,18 @@ StripEq eq_from_value(const JsonValue& object, const char* field_prefix, const s
                                  mastering::eq::eq_band_known_keys().end());
   StripEq eq;
   const auto* eq_value = object.find("eq");
-  if (!eq_value || !eq_value->is_object()) return eq;
+  if (!eq_value) return eq;
   const std::string eq_path = child_path(path, "eq");
+  if (!eq_value->is_object()) {
+    throw SonareException(ErrorCode::InvalidFormat, eq_path + " must be an object");
+  }
   report_unknown_keys(*eq_value, eq_path, kKnownEq, warnings);
-  eq.enabled = bool_or(*eq_value, "enabled", eq.enabled);
+  eq.enabled = bool_or(*eq_value, eq_path, "enabled", eq.enabled);
   const auto* bands = eq_value->find("bands");
-  if (!bands || !bands->is_array()) return eq;
+  if (!bands) return eq;
+  if (!bands->is_array()) {
+    throw SonareException(ErrorCode::InvalidFormat, eq_path + ".bands must be an array");
+  }
   const auto& array = bands->as_array();
   if (array.size() > mastering::eq::ParametricEq::kMaxBands) {
     throw SonareException(ErrorCode::InvalidFormat,
@@ -340,60 +363,65 @@ Strip strip_from_value(const JsonValue& object, const std::string& path,
   static const KeySet kKnownMetering = known_keys("strips[].metering", {});
   report_unknown_keys(object, path, kKnown, warnings);
   Strip strip;
-  strip.id = string_or(object, "id", strip.id);
-  strip.input_trim_db = number_or_legacy(object, "inputTrimDb", "input_trim_db",
+  strip.id = string_or(object, path, "id", strip.id);
+  strip.input_trim_db = number_or_legacy(object, path, "inputTrimDb", "input_trim_db",
                                          strip.input_trim_db, "scene.strips[].inputTrimDb");
-  strip.fader_db =
-      number_or_legacy(object, "faderDb", "fader_db", strip.fader_db, "scene.strips[].faderDb");
-  strip.vca_offset_db = number_or_legacy(object, "vcaOffsetDb", "vca_offset_db",
+  strip.fader_db = number_or_legacy(object, path, "faderDb", "fader_db", strip.fader_db,
+                                    "scene.strips[].faderDb");
+  strip.vca_offset_db = number_or_legacy(object, path, "vcaOffsetDb", "vca_offset_db",
                                          strip.vca_offset_db, "scene.strips[].vcaOffsetDb");
   // Pan and width outside their domains are refused, like the enums and counts below.
-  strip.pan =
-      checked_pan(number_or(object, "pan", strip.pan, "scene.strips[].pan"), "scene.strips[].pan");
-  strip.width = checked_width(number_or(object, "width", strip.width, "scene.strips[].width"),
+  strip.pan = checked_pan(number_or(object, path, "pan", strip.pan, "scene.strips[].pan"),
+                          "scene.strips[].pan");
+  strip.width = checked_width(number_or(object, path, "width", strip.width, "scene.strips[].width"),
                               "scene.strips[].width");
-  strip.muted = bool_or(object, "muted", strip.muted);
-  strip.soloed = bool_or(object, "soloed", strip.soloed);
-  strip.solo_safe = bool_or_legacy(object, "soloSafe", "solo_safe", strip.solo_safe);
-  strip.pan_mode = int_or_legacy(object, "panMode", "pan_mode", strip.pan_mode);
+  strip.muted = bool_or(object, path, "muted", strip.muted);
+  strip.soloed = bool_or(object, path, "soloed", strip.soloed);
+  strip.solo_safe = bool_or_legacy(object, path, "soloSafe", "solo_safe", strip.solo_safe);
+  strip.pan_mode = int_or_legacy(object, path, "panMode", "pan_mode", strip.pan_mode);
   // Reject out-of-range enum/count values in the one canonical scene walker,
   // so standalone mixer JSON and project-embedded scene JSON stay identical.
   if (strip.pan_mode < 0 || strip.pan_mode > 2) {
     throw SonareException(ErrorCode::InvalidFormat, "panMode enum is out of range");
   }
   strip.dual_pan_left =
-      checked_pan(number_or_legacy(object, "dualPanLeft", "dual_pan_left", strip.dual_pan_left,
-                                   "scene.strips[].dualPanLeft"),
+      checked_pan(number_or_legacy(object, path, "dualPanLeft", "dual_pan_left",
+                                   strip.dual_pan_left, "scene.strips[].dualPanLeft"),
                   "scene.strips[].dualPanLeft");
   strip.dual_pan_right =
-      checked_pan(number_or_legacy(object, "dualPanRight", "dual_pan_right", strip.dual_pan_right,
-                                   "scene.strips[].dualPanRight"),
+      checked_pan(number_or_legacy(object, path, "dualPanRight", "dual_pan_right",
+                                   strip.dual_pan_right, "scene.strips[].dualPanRight"),
                   "scene.strips[].dualPanRight");
-  strip.polarity_invert_left = bool_or_legacy(object, "polarityInvertLeft", "polarity_invert_left",
-                                              strip.polarity_invert_left);
+  strip.polarity_invert_left = bool_or_legacy(object, path, "polarityInvertLeft",
+                                              "polarity_invert_left", strip.polarity_invert_left);
   strip.polarity_invert_right = bool_or_legacy(
-      object, "polarityInvertRight", "polarity_invert_right", strip.polarity_invert_right);
-  strip.pan_law = int_or_legacy(object, "panLaw", "pan_law", strip.pan_law);
+      object, path, "polarityInvertRight", "polarity_invert_right", strip.polarity_invert_right);
+  strip.pan_law = int_or_legacy(object, path, "panLaw", "pan_law", strip.pan_law);
   if (strip.pan_law < 0 || strip.pan_law >= kPanLawCount) {
     throw SonareException(ErrorCode::InvalidFormat, "panLaw enum is out of range");
   }
-  strip.channel_delay_samples = int_or_legacy(object, "channelDelaySamples",
+  strip.channel_delay_samples = int_or_legacy(object, path, "channelDelaySamples",
                                               "channel_delay_samples", strip.channel_delay_samples);
   if (strip.channel_delay_samples < 0 || strip.channel_delay_samples > kMaxAlignmentDelaySamples) {
     throw SonareException(ErrorCode::InvalidFormat, "channelDelaySamples must be in [0, 192000]");
   }
   strip.source_layout = channel_layout_or(object, "sourceLayout", strip.source_layout);
-  if (const auto* sp = object.find("surroundPan"); sp && sp->is_object()) {
-    report_unknown_keys(*sp, child_path(path, "surroundPan"), kKnownSurround, warnings);
+  if (const auto* sp = object.find("surroundPan")) {
+    const std::string surround_path = child_path(path, "surroundPan");
+    if (!sp->is_object()) {
+      throw SonareException(ErrorCode::InvalidFormat, surround_path + " must be an object");
+    }
+    report_unknown_keys(*sp, surround_path, kKnownSurround, warnings);
     SurroundPanParams parsed;
-    parsed.azimuth =
-        number_or(*sp, "azimuth", strip.surround_pan.azimuth, "scene.strips[].surroundPan.azimuth");
-    parsed.elevation = number_or(*sp, "elevation", strip.surround_pan.elevation,
+    parsed.azimuth = number_or(*sp, surround_path, "azimuth", strip.surround_pan.azimuth,
+                               "scene.strips[].surroundPan.azimuth");
+    parsed.elevation = number_or(*sp, surround_path, "elevation", strip.surround_pan.elevation,
                                  "scene.strips[].surroundPan.elevation");
-    parsed.divergence = number_or(*sp, "divergence", strip.surround_pan.divergence,
+    parsed.divergence = number_or(*sp, surround_path, "divergence", strip.surround_pan.divergence,
                                   "scene.strips[].surroundPan.divergence");
-    parsed.lfe = number_or(*sp, "lfe", strip.surround_pan.lfe, "scene.strips[].surroundPan.lfe");
-    parsed.distance = number_or(*sp, "distance", strip.surround_pan.distance,
+    parsed.lfe = number_or(*sp, surround_path, "lfe", strip.surround_pan.lfe,
+                           "scene.strips[].surroundPan.lfe");
+    parsed.distance = number_or(*sp, surround_path, "distance", strip.surround_pan.distance,
                                 "scene.strips[].surroundPan.distance");
     // Same rule as pan/width, through the panner's own clamp.
     const SurroundPanParams stored = clamp_surround_pan_params(parsed);
@@ -403,13 +431,18 @@ Strip strip_from_value(const JsonValue& object, const std::string& path,
     strip.surround_pan.lfe = stored.lfe;
     strip.surround_pan.distance = stored.distance;
   }
-  if (const auto* metering = object.find("metering"); metering && metering->is_object()) {
-    report_unknown_keys(*metering, child_path(path, "metering"), kKnownMetering, warnings);
-    strip.metering.enabled = bool_or(*metering, "enabled", strip.metering.enabled);
-    strip.metering.lufs = bool_or(*metering, "lufs", strip.metering.lufs);
-    strip.metering.true_peak = bool_or(*metering, "truePeak", strip.metering.true_peak);
+  if (const auto* metering = object.find("metering")) {
+    const std::string metering_path = child_path(path, "metering");
+    if (!metering->is_object()) {
+      throw SonareException(ErrorCode::InvalidFormat, metering_path + " must be an object");
+    }
+    report_unknown_keys(*metering, metering_path, kKnownMetering, warnings);
+    strip.metering.enabled = bool_or(*metering, metering_path, "enabled", strip.metering.enabled);
+    strip.metering.lufs = bool_or(*metering, metering_path, "lufs", strip.metering.lufs);
+    strip.metering.true_peak =
+        bool_or(*metering, metering_path, "truePeak", strip.metering.true_peak);
     strip.metering.true_peak_oversample =
-        int_or(*metering, "truePeakOversample", strip.metering.true_peak_oversample);
+        int_or(*metering, metering_path, "truePeakOversample", strip.metering.true_peak_oversample);
     // The realtime meter's own rule, so a scene never stores a factor it cannot run.
     if (!is_realtime_true_peak_oversample(strip.metering.true_peak_oversample)) {
       throw SonareException(ErrorCode::InvalidFormat,
@@ -438,33 +471,33 @@ Bus bus_from_value(const JsonValue& object, const std::string& path,
                              "pan_mode", "dual_pan_left", "dual_pan_right", "pan_law"});
   report_unknown_keys(object, path, kKnown, warnings);
   Bus bus;
-  bus.id = string_or(object, "id", bus.id);
-  bus.role = string_or(object, "role", bus.role);
+  bus.id = string_or(object, path, "id", bus.id);
+  bus.role = string_or(object, path, "role", bus.role);
   bus.layout = channel_layout_or(object, "layout", bus.layout);
-  bus.input_trim_db = number_or_legacy(object, "inputTrimDb", "input_trim_db", bus.input_trim_db,
-                                       "scene.buses[].inputTrimDb");
+  bus.input_trim_db = number_or_legacy(object, path, "inputTrimDb", "input_trim_db",
+                                       bus.input_trim_db, "scene.buses[].inputTrimDb");
   // Same domain as scene.strips[].width above.
-  bus.width = checked_width(number_or(object, "width", bus.width, "scene.buses[].width"),
+  bus.width = checked_width(number_or(object, path, "width", bus.width, "scene.buses[].width"),
                             "scene.buses[].width");
-  bus.polarity_invert_left = bool_or_legacy(object, "polarityInvertLeft", "polarity_invert_left",
-                                            bus.polarity_invert_left);
-  bus.polarity_invert_right = bool_or_legacy(object, "polarityInvertRight", "polarity_invert_right",
-                                             bus.polarity_invert_right);
+  bus.polarity_invert_left = bool_or_legacy(object, path, "polarityInvertLeft",
+                                            "polarity_invert_left", bus.polarity_invert_left);
+  bus.polarity_invert_right = bool_or_legacy(object, path, "polarityInvertRight",
+                                             "polarity_invert_right", bus.polarity_invert_right);
   // Pan: same field names and ranges as Strip's above.
-  bus.pan =
-      checked_pan(number_or(object, "pan", bus.pan, "scene.buses[].pan"), "scene.buses[].pan");
-  bus.pan_mode = int_or_legacy(object, "panMode", "pan_mode", bus.pan_mode);
+  bus.pan = checked_pan(number_or(object, path, "pan", bus.pan, "scene.buses[].pan"),
+                        "scene.buses[].pan");
+  bus.pan_mode = int_or_legacy(object, path, "panMode", "pan_mode", bus.pan_mode);
   if (bus.pan_mode < 0 || bus.pan_mode > 2) {
     throw SonareException(ErrorCode::InvalidFormat, "panMode enum is out of range");
   }
-  bus.dual_pan_left = checked_pan(number_or_legacy(object, "dualPanLeft", "dual_pan_left",
+  bus.dual_pan_left = checked_pan(number_or_legacy(object, path, "dualPanLeft", "dual_pan_left",
                                                    bus.dual_pan_left, "scene.buses[].dualPanLeft"),
                                   "scene.buses[].dualPanLeft");
   bus.dual_pan_right =
-      checked_pan(number_or_legacy(object, "dualPanRight", "dual_pan_right", bus.dual_pan_right,
-                                   "scene.buses[].dualPanRight"),
+      checked_pan(number_or_legacy(object, path, "dualPanRight", "dual_pan_right",
+                                   bus.dual_pan_right, "scene.buses[].dualPanRight"),
                   "scene.buses[].dualPanRight");
-  bus.pan_law = int_or_legacy(object, "panLaw", "pan_law", bus.pan_law);
+  bus.pan_law = int_or_legacy(object, path, "panLaw", "pan_law", bus.pan_law);
   if (bus.pan_law < 0 || bus.pan_law >= kPanLawCount) {
     throw SonareException(ErrorCode::InvalidFormat, "panLaw enum is out of range");
   }
@@ -509,13 +542,23 @@ VcaGroup vca_group_from_value(const JsonValue& object, const std::string& path,
   static const KeySet kKnown = known_keys("vcaGroups[]", {"gain_db"});
   report_unknown_keys(object, path, kKnown, warnings);
   VcaGroup group;
-  group.id = string_or(object, "id", group.id);
-  group.gain_db =
-      number_or_legacy(object, "gainDb", "gain_db", group.gain_db, "scene.vcaGroups[].gainDb");
-  if (const auto* members = object.find("members"); members && members->is_array()) {
+  group.id = string_or(object, path, "id", group.id);
+  group.gain_db = number_or_legacy(object, path, "gainDb", "gain_db", group.gain_db,
+                                   "scene.vcaGroups[].gainDb");
+  if (const auto* members = object.find("members")) {
+    const std::string members_path = child_path(path, "members");
+    if (!members->is_array()) {
+      throw SonareException(ErrorCode::InvalidFormat, members_path + " must be an array");
+    }
     group.members.reserve(members->as_array().size());
+    size_t index = 0;
     for (const auto& entry : members->as_array()) {
-      if (entry.is_string()) group.members.push_back(entry.as_string());
+      if (!entry.is_string()) {
+        throw SonareException(ErrorCode::InvalidFormat,
+                              members_path + "[" + std::to_string(index) + "] must be a string");
+      }
+      group.members.push_back(entry.as_string());
+      ++index;
     }
   }
   return group;
@@ -531,8 +574,8 @@ Connection connection_from_value(const JsonValue& object, const std::string& pat
   static const KeySet kKnown = known_keys("connections[]", {});
   report_unknown_keys(object, path, kKnown, warnings);
   Connection connection;
-  connection.source = string_or(object, "source", connection.source);
-  connection.destination = string_or(object, "destination", connection.destination);
+  connection.source = string_or(object, path, "source", connection.source);
+  connection.destination = string_or(object, path, "destination", connection.destination);
   return connection;
 }
 
@@ -910,7 +953,7 @@ Scene scene_from_value(const JsonValue& root, std::vector<std::string>* warnings
   static const KeySet kKnownRoot = known_keys("", {"vca_groups"});
   report_unknown_keys(root, "", kKnownRoot, warnings);
   Scene scene;
-  scene.version = int_or(root, "version", 1);
+  scene.version = int_or(root, std::string(), "version", 1);
   if (scene.version != 1) {
     throw SonareException(ErrorCode::InvalidParameter, "unsupported scene JSON version");
   }

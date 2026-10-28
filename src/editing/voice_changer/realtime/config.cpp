@@ -19,15 +19,34 @@ float finite_or(float value, float fallback) noexcept {
   return std::isfinite(value) ? value : fallback;
 }
 
-float object_number(const sonare::util::json::Value& object, const char* key, float fallback) {
+// A present key of the wrong type (a JSON null included) is refused naming its path; only an
+// absent key keeps the fallback. `section` is the enclosing object's key, "" at the top level.
+[[noreturn]] void refuse_type(const char* section, const char* key, const char* expected) {
+  const std::string path = section[0] == '\0' ? std::string(key) : std::string(section) + "." + key;
+  throw SonareException(ErrorCode::InvalidParameter, path + " must be " + expected);
+}
+
+// The nested object under @p key, or null when absent; a present non-object is refused.
+const sonare::util::json::Value* object_section(const sonare::util::json::Value& object,
+                                                const char* key) {
   const auto* value = object.find(key);
-  if (!value || !value->is_number()) return fallback;
+  if (value != nullptr && !value->is_object()) refuse_type("", key, "an object");
+  return value;
+}
+
+float object_number(const sonare::util::json::Value& object, const char* section, const char* key,
+                    float fallback) {
+  const auto* value = object.find(key);
+  if (!value) return fallback;
+  if (!value->is_number()) refuse_type(section, key, "a number");
   return finite_or(value->as_float(), fallback);
 }
 
-int object_int(const sonare::util::json::Value& object, const char* key, int fallback) {
+int object_int(const sonare::util::json::Value& object, const char* section, const char* key,
+               int fallback) {
   const auto* value = object.find(key);
-  if (!value || !value->is_number()) return fallback;
+  if (!value) return fallback;
+  if (!value->is_number()) refuse_type(section, key, "a number");
   const double n = value->as_number();
   if (!std::isfinite(n)) return fallback;
   // Clamp to the representable int range BEFORE the cast: a finite JSON number
@@ -38,16 +57,19 @@ int object_int(const sonare::util::json::Value& object, const char* key, int fal
   return static_cast<int>(clamped);
 }
 
-FormantMode object_formant_mode(const sonare::util::json::Value& object, const char* key,
-                                FormantMode fallback) {
+FormantMode object_formant_mode(const sonare::util::json::Value& object, const char* section,
+                                const char* key, FormantMode fallback) {
   const auto* value = object.find(key);
-  if (!value || !value->is_string()) return fallback;
+  if (!value) return fallback;
+  if (!value->is_string()) refuse_type(section, key, "a string");
   return parse_formant_mode(value->as_string());
 }
 
-bool object_bool(const sonare::util::json::Value& object, const char* key, bool fallback) {
+bool object_bool(const sonare::util::json::Value& object, const char* section, const char* key,
+                 bool fallback) {
   const auto* value = object.find(key);
-  if (!value || !value->is_bool()) return fallback;
+  if (!value) return fallback;
+  if (!value->is_bool()) refuse_type(section, key, "a boolean");
   return value->as_bool();
 }
 
@@ -712,106 +734,114 @@ RealtimeVoiceChangerConfig parse_config_json(std::string_view text) {
     }
     return c;
   }
-  const auto& object = (dsp && dsp->is_object()) ? *dsp : root;
-  c.input_gain_db = object_number(object, "inputGainDb", c.input_gain_db);
-  c.output_gain_db = object_number(object, "outputGainDb", c.output_gain_db);
-  c.wet_mix = object_number(object, "wetMix", c.wet_mix);
+  if (dsp != nullptr && !dsp->is_object()) refuse_type("", "dsp", "an object");
+  const auto& object = dsp ? *dsp : root;
+  c.input_gain_db = object_number(object, "", "inputGainDb", c.input_gain_db);
+  c.output_gain_db = object_number(object, "", "outputGainDb", c.output_gain_db);
+  c.wet_mix = object_number(object, "", "wetMix", c.wet_mix);
 
   // JS bindings expose preset configs as a flat POD for efficient FFI. Accept
   // that camelCase shape here, at the one parser shared by C ABI, Node, and
   // WASM, rather than making every binding hand-expand it into nested JSON.
   if (object.find("retuneSemitones") != nullptr) {
-    c.retune.semitones = object_number(object, "retuneSemitones", c.retune.semitones);
-    c.retune.mix = object_number(object, "retuneMix", c.retune.mix);
-    c.retune.grain_size = object_int(object, "retuneGrainSize", c.retune.grain_size);
-    c.formant.factor = object_number(object, "formantFactor", c.formant.factor);
-    c.formant.amount = object_number(object, "formantAmount", c.formant.amount);
-    c.formant.body = object_number(object, "formantBody", c.formant.body);
-    c.formant.brightness = object_number(object, "formantBrightness", c.formant.brightness);
-    c.formant.nasal = object_number(object, "formantNasal", c.formant.nasal);
-    c.formant_mode = object_formant_mode(object, "formantMode", c.formant_mode);
-    c.eq.highpass_hz = object_number(object, "eqHighpassHz", c.eq.highpass_hz);
-    c.eq.body_db = object_number(object, "eqBodyDb", c.eq.body_db);
-    c.eq.presence_db = object_number(object, "eqPresenceDb", c.eq.presence_db);
-    c.eq.air_db = object_number(object, "eqAirDb", c.eq.air_db);
-    c.gate.threshold_db = object_number(object, "gateThresholdDb", c.gate.threshold_db);
-    c.gate.attack_ms = object_number(object, "gateAttackMs", c.gate.attack_ms);
-    c.gate.release_ms = object_number(object, "gateReleaseMs", c.gate.release_ms);
-    c.gate.range_db = object_number(object, "gateRangeDb", c.gate.range_db);
+    c.retune.semitones = object_number(object, "", "retuneSemitones", c.retune.semitones);
+    c.retune.mix = object_number(object, "", "retuneMix", c.retune.mix);
+    c.retune.grain_size = object_int(object, "", "retuneGrainSize", c.retune.grain_size);
+    c.formant.factor = object_number(object, "", "formantFactor", c.formant.factor);
+    c.formant.amount = object_number(object, "", "formantAmount", c.formant.amount);
+    c.formant.body = object_number(object, "", "formantBody", c.formant.body);
+    c.formant.brightness = object_number(object, "", "formantBrightness", c.formant.brightness);
+    c.formant.nasal = object_number(object, "", "formantNasal", c.formant.nasal);
+    c.formant_mode = object_formant_mode(object, "", "formantMode", c.formant_mode);
+    c.eq.highpass_hz = object_number(object, "", "eqHighpassHz", c.eq.highpass_hz);
+    c.eq.body_db = object_number(object, "", "eqBodyDb", c.eq.body_db);
+    c.eq.presence_db = object_number(object, "", "eqPresenceDb", c.eq.presence_db);
+    c.eq.air_db = object_number(object, "", "eqAirDb", c.eq.air_db);
+    c.gate.threshold_db = object_number(object, "", "gateThresholdDb", c.gate.threshold_db);
+    c.gate.attack_ms = object_number(object, "", "gateAttackMs", c.gate.attack_ms);
+    c.gate.release_ms = object_number(object, "", "gateReleaseMs", c.gate.release_ms);
+    c.gate.range_db = object_number(object, "", "gateRangeDb", c.gate.range_db);
     c.compressor.threshold_db =
-        object_number(object, "compressorThresholdDb", c.compressor.threshold_db);
-    c.compressor.ratio = object_number(object, "compressorRatio", c.compressor.ratio);
-    c.compressor.attack_ms = object_number(object, "compressorAttackMs", c.compressor.attack_ms);
-    c.compressor.release_ms = object_number(object, "compressorReleaseMs", c.compressor.release_ms);
+        object_number(object, "", "compressorThresholdDb", c.compressor.threshold_db);
+    c.compressor.ratio = object_number(object, "", "compressorRatio", c.compressor.ratio);
+    c.compressor.attack_ms =
+        object_number(object, "", "compressorAttackMs", c.compressor.attack_ms);
+    c.compressor.release_ms =
+        object_number(object, "", "compressorReleaseMs", c.compressor.release_ms);
     c.compressor.makeup_gain_db =
-        object_number(object, "compressorMakeupGainDb", c.compressor.makeup_gain_db);
-    c.deesser.frequency_hz = object_number(object, "deesserFrequencyHz", c.deesser.frequency_hz);
-    c.deesser.threshold_db = object_number(object, "deesserThresholdDb", c.deesser.threshold_db);
-    c.deesser.ratio = object_number(object, "deesserRatio", c.deesser.ratio);
-    c.deesser.range_db = object_number(object, "deesserRangeDb", c.deesser.range_db);
-    c.reverb.mix = object_number(object, "reverbMix", c.reverb.mix);
-    c.reverb.time_ms = object_number(object, "reverbTimeMs", c.reverb.time_ms);
-    c.reverb.damping = object_number(object, "reverbDamping", c.reverb.damping);
-    c.reverb.seed = object_int(object, "reverbSeed", c.reverb.seed);
-    c.limiter.ceiling_db = object_number(object, "limiterCeilingDb", c.limiter.ceiling_db);
-    c.limiter.release_ms = object_number(object, "limiterReleaseMs", c.limiter.release_ms);
+        object_number(object, "", "compressorMakeupGainDb", c.compressor.makeup_gain_db);
+    c.deesser.frequency_hz =
+        object_number(object, "", "deesserFrequencyHz", c.deesser.frequency_hz);
+    c.deesser.threshold_db =
+        object_number(object, "", "deesserThresholdDb", c.deesser.threshold_db);
+    c.deesser.ratio = object_number(object, "", "deesserRatio", c.deesser.ratio);
+    c.deesser.range_db = object_number(object, "", "deesserRangeDb", c.deesser.range_db);
+    c.reverb.mix = object_number(object, "", "reverbMix", c.reverb.mix);
+    c.reverb.time_ms = object_number(object, "", "reverbTimeMs", c.reverb.time_ms);
+    c.reverb.damping = object_number(object, "", "reverbDamping", c.reverb.damping);
+    c.reverb.seed = object_int(object, "", "reverbSeed", c.reverb.seed);
+    c.limiter.ceiling_db = object_number(object, "", "limiterCeilingDb", c.limiter.ceiling_db);
+    c.limiter.release_ms = object_number(object, "", "limiterReleaseMs", c.limiter.release_ms);
     c.limiter.enable_isp_limiter =
-        object_bool(object, "limiterEnableIspLimiter", c.limiter.enable_isp_limiter);
+        object_bool(object, "", "limiterEnableIspLimiter", c.limiter.enable_isp_limiter);
     c.limiter.isp_ceiling_dbtp =
-        object_number(object, "limiterIspCeilingDbtp", c.limiter.isp_ceiling_dbtp);
+        object_number(object, "", "limiterIspCeilingDbtp", c.limiter.isp_ceiling_dbtp);
     return c;
   }
 
-  if (const auto* v = object.find("retune")) {
-    c.retune.semitones = object_number(*v, "semitones", c.retune.semitones);
-    c.retune.mix = object_number(*v, "mix", c.retune.mix);
-    c.retune.grain_size = object_int(*v, "grainSize", c.retune.grain_size);
+  if (const auto* v = object_section(object, "retune")) {
+    c.retune.semitones = object_number(*v, "retune", "semitones", c.retune.semitones);
+    c.retune.mix = object_number(*v, "retune", "mix", c.retune.mix);
+    c.retune.grain_size = object_int(*v, "retune", "grainSize", c.retune.grain_size);
   }
-  if (const auto* v = object.find("formant")) {
-    c.formant.factor = object_number(*v, "factor", c.formant.factor);
-    c.formant.amount = object_number(*v, "amount", c.formant.amount);
-    c.formant.body = object_number(*v, "body", c.formant.body);
-    c.formant.brightness = object_number(*v, "brightness", c.formant.brightness);
-    c.formant.nasal = object_number(*v, "nasal", c.formant.nasal);
-    c.formant_mode = object_formant_mode(*v, "mode", c.formant_mode);
+  if (const auto* v = object_section(object, "formant")) {
+    c.formant.factor = object_number(*v, "formant", "factor", c.formant.factor);
+    c.formant.amount = object_number(*v, "formant", "amount", c.formant.amount);
+    c.formant.body = object_number(*v, "formant", "body", c.formant.body);
+    c.formant.brightness = object_number(*v, "formant", "brightness", c.formant.brightness);
+    c.formant.nasal = object_number(*v, "formant", "nasal", c.formant.nasal);
+    c.formant_mode = object_formant_mode(*v, "formant", "mode", c.formant_mode);
   }
-  if (const auto* v = object.find("eq")) {
-    c.eq.highpass_hz = object_number(*v, "highpassHz", c.eq.highpass_hz);
-    c.eq.body_db = object_number(*v, "bodyDb", c.eq.body_db);
-    c.eq.presence_db = object_number(*v, "presenceDb", c.eq.presence_db);
-    c.eq.air_db = object_number(*v, "airDb", c.eq.air_db);
+  if (const auto* v = object_section(object, "eq")) {
+    c.eq.highpass_hz = object_number(*v, "eq", "highpassHz", c.eq.highpass_hz);
+    c.eq.body_db = object_number(*v, "eq", "bodyDb", c.eq.body_db);
+    c.eq.presence_db = object_number(*v, "eq", "presenceDb", c.eq.presence_db);
+    c.eq.air_db = object_number(*v, "eq", "airDb", c.eq.air_db);
   }
-  if (const auto* v = object.find("gate")) {
-    c.gate.threshold_db = object_number(*v, "thresholdDb", c.gate.threshold_db);
-    c.gate.attack_ms = object_number(*v, "attackMs", c.gate.attack_ms);
-    c.gate.release_ms = object_number(*v, "releaseMs", c.gate.release_ms);
-    c.gate.range_db = object_number(*v, "rangeDb", c.gate.range_db);
+  if (const auto* v = object_section(object, "gate")) {
+    c.gate.threshold_db = object_number(*v, "gate", "thresholdDb", c.gate.threshold_db);
+    c.gate.attack_ms = object_number(*v, "gate", "attackMs", c.gate.attack_ms);
+    c.gate.release_ms = object_number(*v, "gate", "releaseMs", c.gate.release_ms);
+    c.gate.range_db = object_number(*v, "gate", "rangeDb", c.gate.range_db);
   }
-  if (const auto* v = object.find("compressor")) {
-    c.compressor.threshold_db = object_number(*v, "thresholdDb", c.compressor.threshold_db);
-    c.compressor.ratio = object_number(*v, "ratio", c.compressor.ratio);
-    c.compressor.attack_ms = object_number(*v, "attackMs", c.compressor.attack_ms);
-    c.compressor.release_ms = object_number(*v, "releaseMs", c.compressor.release_ms);
-    c.compressor.makeup_gain_db = object_number(*v, "makeupGainDb", c.compressor.makeup_gain_db);
+  if (const auto* v = object_section(object, "compressor")) {
+    c.compressor.threshold_db =
+        object_number(*v, "compressor", "thresholdDb", c.compressor.threshold_db);
+    c.compressor.ratio = object_number(*v, "compressor", "ratio", c.compressor.ratio);
+    c.compressor.attack_ms = object_number(*v, "compressor", "attackMs", c.compressor.attack_ms);
+    c.compressor.release_ms = object_number(*v, "compressor", "releaseMs", c.compressor.release_ms);
+    c.compressor.makeup_gain_db =
+        object_number(*v, "compressor", "makeupGainDb", c.compressor.makeup_gain_db);
   }
-  if (const auto* v = object.find("deesser")) {
-    c.deesser.frequency_hz = object_number(*v, "frequencyHz", c.deesser.frequency_hz);
-    c.deesser.threshold_db = object_number(*v, "thresholdDb", c.deesser.threshold_db);
-    c.deesser.ratio = object_number(*v, "ratio", c.deesser.ratio);
-    c.deesser.range_db = object_number(*v, "rangeDb", c.deesser.range_db);
+  if (const auto* v = object_section(object, "deesser")) {
+    c.deesser.frequency_hz = object_number(*v, "deesser", "frequencyHz", c.deesser.frequency_hz);
+    c.deesser.threshold_db = object_number(*v, "deesser", "thresholdDb", c.deesser.threshold_db);
+    c.deesser.ratio = object_number(*v, "deesser", "ratio", c.deesser.ratio);
+    c.deesser.range_db = object_number(*v, "deesser", "rangeDb", c.deesser.range_db);
   }
-  if (const auto* v = object.find("reverb")) {
-    c.reverb.mix = object_number(*v, "mix", c.reverb.mix);
-    c.reverb.time_ms = object_number(*v, "timeMs", c.reverb.time_ms);
-    c.reverb.damping = object_number(*v, "damping", c.reverb.damping);
-    c.reverb.seed = object_int(*v, "seed", c.reverb.seed);
+  if (const auto* v = object_section(object, "reverb")) {
+    c.reverb.mix = object_number(*v, "reverb", "mix", c.reverb.mix);
+    c.reverb.time_ms = object_number(*v, "reverb", "timeMs", c.reverb.time_ms);
+    c.reverb.damping = object_number(*v, "reverb", "damping", c.reverb.damping);
+    c.reverb.seed = object_int(*v, "reverb", "seed", c.reverb.seed);
   }
-  if (const auto* v = object.find("limiter")) {
-    c.limiter.ceiling_db = object_number(*v, "ceilingDb", c.limiter.ceiling_db);
-    c.limiter.release_ms = object_number(*v, "releaseMs", c.limiter.release_ms);
+  if (const auto* v = object_section(object, "limiter")) {
+    c.limiter.ceiling_db = object_number(*v, "limiter", "ceilingDb", c.limiter.ceiling_db);
+    c.limiter.release_ms = object_number(*v, "limiter", "releaseMs", c.limiter.release_ms);
     c.limiter.enable_isp_limiter =
-        object_bool(*v, "enableIspLimiter", c.limiter.enable_isp_limiter);
-    c.limiter.isp_ceiling_dbtp = object_number(*v, "ispCeilingDbtp", c.limiter.isp_ceiling_dbtp);
+        object_bool(*v, "limiter", "enableIspLimiter", c.limiter.enable_isp_limiter);
+    c.limiter.isp_ceiling_dbtp =
+        object_number(*v, "limiter", "ispCeilingDbtp", c.limiter.isp_ceiling_dbtp);
   }
   return c;
 }
