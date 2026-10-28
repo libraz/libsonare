@@ -2,15 +2,16 @@ import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   capabilities,
+  ErrorCode,
   HrtfSet,
   init,
+  isSonareError,
   PlaybackLoudnessMeter,
   PlaybackRenderer,
   type PlaybackRendererConfig,
   renderPlayback,
   SonareError,
 } from '../dist/index.js';
-import { expectArgumentRefusal } from './_helpers';
 
 const SR = 48000;
 const packageRoot = new URL('../', import.meta.url);
@@ -89,7 +90,10 @@ describe('playback renderer (WASM)', () => {
     } catch (error) {
       caught = error;
     }
-    expectArgumentRefusal(caught);
+    // A malformed set is a content defect of the bytes: InvalidFormat, not a refused argument.
+    expect(isSonareError(caught)).toBe(true);
+    expect((caught as { code: number }).code).toBe(ErrorCode.InvalidFormat);
+    expect((caught as Error).message).toContain('SHRF data is smaller than the 36-byte header');
   });
 
   it('refuses a headphones target without an HRTF set by name', () => {

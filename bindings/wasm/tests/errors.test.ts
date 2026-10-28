@@ -43,8 +43,10 @@ describe('SonareError', () => {
     const malformed = load('not json');
     expect(malformed.code).toBe(ErrorCode.InvalidFormat);
     expect(malformed.message).toContain('failed to build mixer from scene JSON');
-    // An unsupported version is a refused argument value: a RangeError, not a coded SonareError.
-    expect(load('{"version":999}')).toBeInstanceOf(RangeError);
+    // An unsupported version is a content defect of the document: also InvalidFormat.
+    const unsupported = load('{"version":999}');
+    expect(unsupported.code).toBe(ErrorCode.InvalidFormat);
+    expect(unsupported.message).toContain('unsupported scene JSON version');
   });
 
   it('rethrows a native C++ exception as a coded SonareError', () => {

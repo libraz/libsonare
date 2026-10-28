@@ -158,6 +158,7 @@ describe('detectBoundaries', () => {
       expect.unreachable('expected a refusal');
     } catch (error) {
       expect(error).toBeInstanceOf(RangeError);
+      expect((error as Error).message).toBe('detectBoundaries: require useMfcc or useChroma');
     }
   });
 

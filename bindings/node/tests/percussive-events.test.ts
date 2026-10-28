@@ -299,10 +299,16 @@ function capture(run: () => unknown): unknown {
   }
 }
 
+/**
+ * The core refused it. A refused argument is a RangeError whichever layer
+ * refuses it, so the wording says which one did: the core's guards carry no
+ * detail or say `StftConfig: ...`, where the addon's own readers name the field.
+ */
 function expectInvalidParameter(run: () => unknown): void {
   const error = capture(run);
   expect(error).toBeInstanceOf(RangeError);
   expect(isSonareError(error)).toBe(false);
+  expect((error as Error).message).toMatch(/^(Invalid parameter|StftConfig: )/);
 }
 
 /**
@@ -456,7 +462,11 @@ describe('extractPercussiveEvents', () => {
         const events = extractPercussiveEvents({ samples: three, sampleRate: SR, onsetWait });
         return `ok:${JSON.stringify(measuredSet(events))}`;
       }
-      return error instanceof RangeError ? 'refused:RangeError' : 'threw other';
+      // The addon's own reader answers: it names the field, which the core's plain
+      // refusal would not.
+      return error instanceof RangeError && /onsetWait must be an integer/.test(error.message)
+        ? 'refused:RangeError'
+        : 'threw other';
     });
     expect(outcomes).toEqual(fractional.map(() => 'refused:RangeError'));
   });
@@ -676,6 +686,8 @@ describe('renderPercussiveEvents', () => {
       expect(caught, `expected a RangeError for ${JSON.stringify(event)}`).toBeInstanceOf(
         RangeError,
       );
+      // The addon's event reader names the field; the core's refusal does not.
+      expect((caught as Error).message).toMatch(/^renderPercussiveEvents event\.\w+ /);
     }
 
     // The control. A reader that had started refusing every event would satisfy

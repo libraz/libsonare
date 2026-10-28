@@ -239,6 +239,8 @@ class TestNormalizeStereoPairRefusals:
         with pytest.raises(SonareValueError) as caught:
             call(left, right, 0)  # type: ignore[operator]
         assert caught.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)
+        # A facade refusal names the argument ("sample_rate must be ...").
+        assert str(caught.value) == "Invalid parameter"
 
     @pytest.mark.parametrize("call", [libsonare.normalize_stereo, libsonare.normalize_rms_stereo])
     def test_a_positive_target_is_refused_by_name(self, call: object) -> None:
@@ -269,7 +271,8 @@ class TestNormalizeStereoPairRefusals:
         spoiled[7] = np.nan
         with pytest.raises(SonareValueError) as caught:
             call(left, spoiled, SR, validate=False)  # type: ignore[operator]
-        assert "index" not in str(caught.value)
+        assert "at index" not in str(caught.value)
+        assert str(caught.value) == "Invalid parameter"
 
         # Control: the same call on a clean pair is accepted with the flag off,
         # so the refusal above is about the NaN rather than about validate=False.

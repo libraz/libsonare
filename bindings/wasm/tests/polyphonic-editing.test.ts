@@ -386,7 +386,7 @@ describe('PolyphonicAnalysis.render', () => {
     // The C ABI checks an edit where the render checks it, so setting it is not
     // the refusal.
     edited.setNoteEdit(lower, { amplitudeEnvelope: new Float32Array([1, -1]) });
-    expectRefusalOf(() => edited.render());
+    expect(expectRefusalOf(() => edited.render()).message).toBe('Invalid parameter');
     edited.setNoteEdit(lower, { amplitudeEnvelope: new Float32Array([1, 0.25]) });
     expectEdited(edited.render(), identity);
     edited.setNoteEdit(lower, {});
@@ -419,7 +419,10 @@ describe('PolyphonicAnalysis config', () => {
 
   it('rejects a config value the chain refuses', () => {
     // 64 is the cap on voices per frame, and the estimator owns the bound.
-    expectRefusalOf(() => analyzePolyphonic({ samples, sampleRate, maxPolyphony: 65 }));
+    const error = expectRefusalOf(() =>
+      analyzePolyphonic({ samples, sampleRate, maxPolyphony: 65 }),
+    );
+    expect(error.message).toBe('Invalid parameter');
   });
 });
 
@@ -453,7 +456,10 @@ describe('PolyphonicAnalysis reattackRatio', () => {
 
   it('refuses a value the ridge tracker refuses', () => {
     for (const bad of [-1, 0.5, 1]) {
-      expectRefusalOf(() => analyzePolyphonic({ samples, sampleRate, reattackRatio: bad }));
+      const error = expectRefusalOf(() =>
+        analyzePolyphonic({ samples, sampleRate, reattackRatio: bad }),
+      );
+      expect(error.message).toBe('Invalid parameter');
     }
   });
 });

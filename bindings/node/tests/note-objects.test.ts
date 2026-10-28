@@ -1137,6 +1137,8 @@ describe('splitNote and mergeNotes', () => {
         caught = error;
       }
       expect(caught).toBeInstanceOf(RangeError);
+      // The extractor's own refusal; the length mismatch above is the facade's.
+      expect((caught as Error).message).toBe('Invalid parameter');
     }
   });
 

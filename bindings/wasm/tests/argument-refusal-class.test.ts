@@ -116,15 +116,20 @@ describe('argument refusal error class', () => {
     });
   });
 
-  it('keeps a library failure a coded SonareError', () => {
+  it('keeps an object-state failure a coded SonareError, and an unknown bus a refusal', () => {
     const mixer = Mixer.fromSceneJson(mixingScenePresetJson('drumBusSubgroup'));
     try {
-      const error = thrown(() => mixer.busMeter('no-such-bus'));
-      expect(isSonareError(error)).toBe(true);
-      expect((error as { code: number }).code).toBe(ErrorCode.InvalidState);
+      // The library reports INVALID_PARAMETER for an unknown bus: refused by cause.
+      const refusal = thrown(() => mixer.busMeter('no-such-bus'));
+      expect(refusal).toBeInstanceOf(RangeError);
+      expect(isSonareError(refusal)).toBe(false);
+      expect((refusal as Error).message).toBe('failed to read bus meter: Invalid parameter');
     } finally {
       mixer.destroy();
     }
+    const state = thrown(() => mixer.busMeter('no-such-bus'));
+    expect(isSonareError(state)).toBe(true);
+    expect((state as { code: number }).code).toBe(ErrorCode.InvalidState);
   });
 });
 

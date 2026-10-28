@@ -77,6 +77,8 @@ describe('alignTakeToReference', () => {
         caught = e;
       }
       expect(caught, `binsPerOctave ${binsPerOctave} should be refused`).toBeInstanceOf(RangeError);
+      // The chroma front-end's own refusal, not an addon reader's wording.
+      expect((caught as Error).message).toBe('Invalid parameter');
     }
     // The control: the neighbouring multiples this brackets are accepted at this
     // sample rate, so the refusals above are the divisibility rule rather than a
@@ -162,6 +164,7 @@ describe('alignTakeToReference', () => {
       caught = e;
     }
     expect(caught).toBeInstanceOf(RangeError);
+    expect((caught as Error).message).toBe('Invalid parameter');
   });
 
   describe('a take recorded at another rate', () => {

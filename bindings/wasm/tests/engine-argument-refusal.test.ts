@@ -87,8 +87,11 @@ describe('RealtimeEngine value refusals are RangeErrors', () => {
       expect(isSonareError(patch)).toBe(false);
       expect((patch as Error).message).toContain('noSuchKey');
       const typo = '{"version":1,"strips":[{"id":"s","faderDB":-3}],"buses":[]}';
-      const strip = expectRefusalOf(() => engine.setTrackStripJson(10, typo));
-      expect(strip.message).toContain('faderDB');
+      // A document content defect is the loader's InvalidFormat, a coded SonareError.
+      const strip = thrown(() => engine.setTrackStripJson(10, typo));
+      expect(isSonareError(strip)).toBe(true);
+      expect((strip as { code: number }).code).toBe(ErrorCode.InvalidFormat);
+      expect((strip as Error).message).toContain("unknown strip key 'strips[0].faderDB'");
     });
   });
 

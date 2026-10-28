@@ -290,6 +290,21 @@ function expectRangeRefusal(action: () => void): void {
   expectRefusalOf(action);
 }
 
+/**
+ * Asserts that @p action is refused by the core rather than by the binding. Both
+ * arrive as a RangeError, so the wording says which answered: the core's guards
+ * either carry no detail (`Invalid parameter`) or say `StftConfig: ...`, while the
+ * binding's own refusals name the entry point or the field.
+ */
+function expectCoreRefusal(action: () => void, wording: string | RegExp = 'Invalid parameter') {
+  const error = expectRefusalOf(action);
+  if (typeof wording === 'string') {
+    expect(error.message).toContain(wording);
+  } else {
+    expect(error.message).toMatch(wording);
+  }
+}
+
 /** Asserts that @p action throws a TypeError: a wrong-typed argument. */
 function expectTypeRefusal(action: () => void): void {
   expectRefusalOf(action, TypeError);
@@ -312,6 +327,19 @@ const brokenFramings: readonly { nFft: number; hopLength: number }[] = [
   { nFft: 1024, hopLength: 513 }, // the same bound at another size
   { nFft: 2048, hopLength: 2048 }, // no overlap at all
 ];
+
+/**
+ * Refuses a broken framing: a negative size is the binding's own refusal, every
+ * other break is the STFT configuration's, worded `StftConfig: ...` by the core.
+ */
+function expectBrokenFraming(framing: { nFft: number; hopLength: number }, run: () => void) {
+  if (framing.nFft < 0 || framing.hopLength < 0) {
+    expectRefusalOf(run);
+    expect(() => run()).toThrow(/must not be negative/);
+  } else {
+    expectCoreRefusal(run, /^StftConfig: /);
+  }
+}
 
 /** Framings inside the rule, including its inclusive end. */
 const validFramings: readonly { nFft: number; hopLength: number }[] = [
@@ -638,7 +666,7 @@ describe('extractPercussiveEvents', () => {
     // A framing that cannot be overlap-added back is an error, because the
     // separation inverts an STFT.
     for (const framing of brokenFramings) {
-      expectRangeRefusal(() => extractPercussiveEvents({ ...base, ...framing }));
+      expectBrokenFraming(framing, () => extractPercussiveEvents({ ...base, ...framing }));
     }
 
     // A median kernel is rejected rather than rounded when it is even, and 0 is
@@ -649,7 +677,7 @@ describe('extractPercussiveEvents', () => {
       { hpssKernelHarmonic: 32 },
       { hpssKernelPercussive: 2 },
     ]) {
-      expectRangeRefusal(() => extractPercussiveEvents({ ...base, ...options }));
+      expectCoreRefusal(() => extractPercussiveEvents({ ...base, ...options }));
     }
 
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
@@ -960,14 +988,14 @@ describe('renderPercussiveEvents', () => {
 
     // An empty span has nothing to lift, a reversed one is not a span, and
     // neither end may sit outside the audio.
-    expectRangeRefusal(() => render([edited(4410, 4410)]));
-    expectRangeRefusal(() => render([edited(15435, 4410)]));
+    expectCoreRefusal(() => render([edited(4410, 4410)]));
+    expectCoreRefusal(() => render([edited(15435, 4410)]));
     expectRangeRefusal(() => render([edited(-512, 4410)]));
-    expectRangeRefusal(() => render([edited(4410, length + 1)]));
-    expectRangeRefusal(() => render([edited(length, length + 4410)]));
+    expectCoreRefusal(() => render([edited(4410, length + 1)]));
+    expectCoreRefusal(() => render([edited(length, length + 4410)]));
 
     // Overlapping source spans are not a renderable set; touching ones are.
-    expectRangeRefusal(() => render([edited(0, 22050), edited(11025, 33075)]));
+    expectCoreRefusal(() => render([edited(0, 22050), edited(11025, 33075)]));
     expect(() => render([edited(0, 22050), edited(22050, 33075)])).not.toThrow();
 
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
@@ -982,10 +1010,12 @@ describe('renderPercussiveEvents', () => {
       { hopLength: -512 },
       { hpssKernelHarmonic: -1 },
       { hpssKernelPercussive: -1 },
-      { hpssKernelHarmonic: 4 },
-      { hpssKernelPercussive: 4 },
     ]) {
       expectRangeRefusal(() => render([edited(4410, 15435)], options));
+      expect(() => render([edited(4410, 15435)], options)).toThrow(/must not be negative/);
+    }
+    for (const options of [{ hpssKernelHarmonic: 4 }, { hpssKernelPercussive: 4 }]) {
+      expectCoreRefusal(() => render([edited(4410, 15435)], options));
     }
 
     // A zero-length fade is the default here rather than the hard cut the core
@@ -1006,10 +1036,10 @@ describe('renderPercussiveEvents', () => {
     expect(renderPercussiveEvents({ samples: three, sampleRate, events: identity })).toEqual(three);
 
     for (const framing of brokenFramings) {
-      expectRangeRefusal(() =>
+      expectBrokenFraming(framing, () =>
         renderPercussiveEvents({ samples: three, sampleRate, events: identity, ...framing }),
       );
-      expectRangeRefusal(() =>
+      expectBrokenFraming(framing, () =>
         renderPercussiveEvents({ samples: three, sampleRate, events: [], ...framing }),
       );
     }
@@ -1036,14 +1066,14 @@ describe('renderPercussiveEvents', () => {
     const render = (events: readonly PercussiveEventInput[]): Float32Array =>
       renderPercussiveEvents({ samples: three, sampleRate, events });
 
-    expectRangeRefusal(() => render([span(4410, 4410)]));
-    expectRangeRefusal(() => render([span(15435, 4410)]));
+    expectCoreRefusal(() => render([span(4410, 4410)]));
+    expectCoreRefusal(() => render([span(15435, 4410)]));
     expectRangeRefusal(() => render([span(-512, 4410)]));
-    expectRangeRefusal(() => render([span(4410, three.length + 1)]));
-    expectRangeRefusal(() => render([span(0, 22050), span(11025, 33075)]));
+    expectCoreRefusal(() => render([span(4410, three.length + 1)]));
+    expectCoreRefusal(() => render([span(0, 22050), span(11025, 33075)]));
     // One bad event poisons a set that is otherwise renderable and otherwise
     // entirely identity.
-    expectRangeRefusal(() => render([span(0, 11025), span(22050, 11025)]));
+    expectCoreRefusal(() => render([span(0, 11025), span(22050, 11025)]));
   });
 
   it('round-trips an extracted set through an edit and back', () => {

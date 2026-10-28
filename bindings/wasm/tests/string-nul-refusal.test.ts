@@ -291,6 +291,7 @@ describe('embedded NUL refusal, std::string entry points', () => {
   it('an unknown voice preset name is a RangeError', () => {
     const error = refusal(() => realtimeVoiceChangerPresetConfig('no-such-preset' as never));
     expect(error).toBeInstanceOf(RangeError);
+    expect(error.message).toContain('Unknown voice character preset: no-such-preset');
   });
 });
 

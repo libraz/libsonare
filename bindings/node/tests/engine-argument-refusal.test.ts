@@ -27,14 +27,6 @@ describe('RealtimeEngine value refusals are RangeError, not SonareError', () => 
     ['setBusStripPan on an unknown bus', (e) => e.setBusStripPan(UNKNOWN_ID, 0)],
     ['setBusStripPan with a non-finite value', (e) => e.setBusStripPan(1, Number.NaN)],
     [
-      'setTrackStripJson with an unknown strip key',
-      (e) =>
-        e.setTrackStripJson(
-          10,
-          '{"version":1,"strips":[{"id":"s","faderDB":-3}],"buses":[],"connections":[]}',
-        ),
-    ],
-    [
       'setTrackStripInsertBypassed past the insert count',
       (e) => {
         e.setTrackStripJson(10, '{"version":1,"strips":[{"id":"s"}],"buses":[],"connections":[]}');
@@ -79,6 +71,17 @@ describe('RealtimeEngine state refusals stay coded SonareError', () => {
       expect(() => engine.resolveMasterInsertAutomationId(0, 'thresholdDb')).toThrow(
         expect.objectContaining({ code: ErrorCode.InvalidState }),
       );
+    });
+  });
+
+  it('an unknown strip key is a document content defect, coded InvalidFormat', () => {
+    withEngine((engine) => {
+      expect(() =>
+        engine.setTrackStripJson(
+          10,
+          '{"version":1,"strips":[{"id":"s","faderDB":-3}],"buses":[],"connections":[]}',
+        ),
+      ).toThrow(expect.objectContaining({ code: ErrorCode.InvalidFormat }));
     });
   });
 

@@ -171,6 +171,7 @@ describe('analyzeMelody reports invalid params as a RangeError (WASM)', () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(RangeError);
+    expect((caught as Error).message).toBe('analyzeMelody: fmin must be positive');
   });
 });
 
@@ -243,7 +244,10 @@ describe('enum-code helpers reject unknown strings instead of silently defaultin
 
 describe('metering true peak validation', () => {
   it('rejects an invalid oversample factor as RangeError', () => {
-    expectRefusalOf(() => meteringTruePeakDb(new Float32Array([0.5]), 22050, 3));
+    const error = expectRefusalOf(() => meteringTruePeakDb(new Float32Array([0.5]), 22050, 3));
+    expect(error.message).toBe(
+      'meteringTruePeakDb: oversampleFactor must be 0 or a power of two from 1 to 16',
+    );
   });
 });
 

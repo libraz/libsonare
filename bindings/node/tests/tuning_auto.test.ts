@@ -78,6 +78,10 @@ describe("tuning: 'auto'", () => {
       /tuning must be a number or 'auto'/,
     );
     expect(() => detectKey({ samples: loop, sampleRate, tuning: 0.7 })).toThrow(RangeError);
+    // The core's KeyConfig guard, which the facade deliberately does not mirror.
+    expect(() => detectKey({ samples: loop, sampleRate, tuning: 0.7 })).toThrow(
+      /^KeyConfig: tuning must be/,
+    );
   });
 });
 
@@ -94,9 +98,17 @@ describe('tuning converters', () => {
 
   it('refuse values outside their domain', () => {
     expect(() => tuningToReferenceHz(Number.NaN)).toThrow();
-    expect(() => tuningToReferenceHz(0, 0)).toThrow(RangeError);
-    expect(() => referenceHzToTuning(-1)).toThrow(RangeError);
-    expect(() => referenceHzToTuning(440, 0)).toThrow(RangeError);
+    // The core's plain refusal for each.
+    expect(() => tuningToReferenceHz(0, 0)).toThrow(/^Invalid parameter$/);
+    expect(() => referenceHzToTuning(-1)).toThrow(/^Invalid parameter$/);
+    expect(() => referenceHzToTuning(440, 0)).toThrow(/^Invalid parameter$/);
+    for (const refuse of [
+      () => tuningToReferenceHz(0, 0),
+      () => referenceHzToTuning(-1),
+      () => referenceHzToTuning(440, 0),
+    ]) {
+      expect(refuse).toThrow(RangeError);
+    }
   });
 });
 

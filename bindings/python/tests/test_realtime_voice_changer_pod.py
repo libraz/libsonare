@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 import libsonare
-from libsonare import SonareValueError
+from libsonare import ErrorCode, SonareError, SonareValueError
 from libsonare._ffi import SonareRealtimeVoiceChangerConfig
 
 from ._helpers import LIB_AVAILABLE
@@ -261,8 +261,11 @@ def test_formant_mode_is_fixed_when_the_changer_is_created() -> None:
 def test_unreachable_absolute_warp_is_refused_with_the_reachable_range() -> None:
     base = libsonare.realtime_voice_changer_preset_config("neutral-monitor")
     unreachable = dataclasses.replace(base, formant_mode="absolute", retune_semitones=-9.0)
-    with pytest.raises(ValueError, match=r"\[0\.55, 0\.9811\]"):
+    # The creation document is a JSON entry point: its content defect is InvalidFormat.
+    with pytest.raises(SonareError, match=r"\[0\.55, 0\.9811\]") as refused:
         libsonare.RealtimeVoiceChanger(48000, _flat(unreachable))
+    assert not isinstance(refused.value, SonareValueError)
+    assert refused.value.code == int(ErrorCode.INVALID_FORMAT)
 
 
 def test_out_of_range_field_is_refused_and_the_previous_config_kept() -> None:
@@ -275,5 +278,7 @@ def test_out_of_range_field_is_refused_and_the_previous_config_kept() -> None:
         with pytest.raises(SonareValueError, match=r"limiter\.ceilingDb out of range"):
             changer.set_config_pod(dataclasses.replace(base, limiter_ceiling_db=0.5))
         assert changer.config_pod() == before
-    with pytest.raises(SonareValueError, match="out of range"):
+    with pytest.raises(SonareError, match="out of range") as created:
         libsonare.RealtimeVoiceChanger(48000, _flat(dataclasses.replace(base, formant_factor=3.0)))
+    assert not isinstance(created.value, SonareValueError)
+    assert created.value.code == int(ErrorCode.INVALID_FORMAT)

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, isSonareError, Project, RealtimeEngine } from '../dist/index.js';
+import { ErrorCode, init, isSonareError, Project, RealtimeEngine } from '../dist/index.js';
 
 describe('unknown mixing scene keys (WASM)', () => {
   beforeAll(async () => {
@@ -33,8 +33,8 @@ describe('unknown mixing scene keys (WASM)', () => {
         } catch (caught) {
           error = caught;
         }
-        expect(error).toBeInstanceOf(RangeError);
-        expect(isSonareError(error)).toBe(false);
+        expect(isSonareError(error)).toBe(true);
+        expect((error as { code: number }).code).toBe(ErrorCode.InvalidFormat);
         expect((error as Error).message).toContain("unknown strip key 'strips[0].faderDB'");
       }
       const annotated = '{"$schema":"s","version":1,"strips":[{"id":"s","faderDb":-3,"x-t":1}]}';

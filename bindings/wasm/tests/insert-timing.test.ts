@@ -102,11 +102,11 @@ describe('the causal repair stages reach the generic insert path (WASM)', () => 
     expect(mode?.choices?.map((choice) => choice.name)).toEqual(['median']);
     expect(() =>
       masteringInsertTiming('repair.dereverbClassical', { wpeEnabled: true }, 48000),
-    ).toThrow(RangeError);
+    ).toThrow(/wpe_enabled must be false/);
     // The quantile estimator (0) ranks a whole signal; the insert defaults to spp.
     expect(() =>
       masteringInsertTiming('repair.denoiseClassical', { noiseEstimator: 0 }, 48000),
-    ).toThrow(RangeError);
+    ).toThrow(/noise_estimator must not be Quantile/);
     const estimator = masteringInsertParamInfo('repair.denoiseClassical').find(
       (param) => param.name === 'noiseEstimator',
     );

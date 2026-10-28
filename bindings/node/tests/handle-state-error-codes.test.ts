@@ -202,23 +202,38 @@ describe('setAssistSidecar validates before it commits', () => {
 
 describe('streaming constructors refuse a refused argument as a RangeError', () => {
   it('StreamingEqualizer refusals are RangeErrors', () => {
-    for (const config of [{ sampleRate: 0 }, { sampleRate: -48000 }, { maxBlockSize: -1 }]) {
+    // The core's snake_case wording, where the addon's readers name the camelCase key.
+    const configs: Array<[Record<string, number>, RegExp]> = [
+      [{ sampleRate: 0 }, /^sample_rate must be positive/],
+      [{ sampleRate: -48000 }, /^sample_rate must be positive/],
+      [{ maxBlockSize: -1 }, /max_block_size must be non-negative/],
+    ];
+    for (const [config, wording] of configs) {
       const error = capture(() => new addon.StreamingEqualizer(config));
       expect(error, JSON.stringify(config)).toBeInstanceOf(RangeError);
       expect(codeOf(error), JSON.stringify(config)).toBeUndefined();
+      expect((error as Error).message, JSON.stringify(config)).toMatch(wording);
     }
   });
 
   it('StreamingMasteringChain refusals are RangeErrors', () => {
-    const configs = [
-      { loudness: { enabled: true } },
-      { loudness: { truePeakOversample: 3 } },
-      { loudness: { maxLimiterGainReductionDb: -1 } },
+    // The chain's own constraint wording, not a reader's type refusal.
+    const configs: Array<[Record<string, unknown>, RegExp]> = [
+      [{ loudness: { enabled: true } }, /loudness_static_gain_db is not finite/],
+      [
+        { loudness: { truePeakOversample: 3 } },
+        /truePeakOversample must be one of 1, 2, 4, 8, or 16/,
+      ],
+      [
+        { loudness: { maxLimiterGainReductionDb: -1 } },
+        /maxLimiterGainReductionDb must be finite and >= 0/,
+      ],
     ];
-    for (const config of configs) {
+    for (const [config, wording] of configs) {
       const error = capture(() => new addon.StreamingMasteringChain(config));
       expect(error, JSON.stringify(config)).toBeInstanceOf(RangeError);
       expect(codeOf(error), JSON.stringify(config)).toBeUndefined();
+      expect((error as Error).message, JSON.stringify(config)).toMatch(wording);
     }
   });
 

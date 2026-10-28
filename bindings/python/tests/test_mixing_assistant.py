@@ -452,17 +452,20 @@ def test_tempo_outside_the_musical_range_is_rejected(tempo):
     The range is the core's and is deliberately not mirrored here, so the
     refusal arrives as the plain core error the sibling options raise for a
     value they cannot use (``n_fft=-4`` is the same shape). The binding's own
-    argument validation would raise the same class, so a second copy of the bounds on this
-    side is exactly what must not appear.
+    argument validation raises the same class but spells the field ``tempo_bpm``,
+    which is what tells a second copy of the bounds on this side apart.
     """
     from libsonare import MixTrackInput, SonareValueError, suggest_mix_scene
 
-    with pytest.raises(SonareValueError, match="tempoBpm"):
+    with pytest.raises(SonareValueError, match="tempoBpm") as caught:
         suggest_mix_scene(
             [MixTrackInput("bass", _tone(110.0))],
             sample_rate=SAMPLE_RATE,
             tempo_bpm=tempo,
         )
+    # The core names the field in its wire spelling; the facade's own check says
+    # ``tempo_bpm``.
+    assert "tempo_bpm" not in str(caught.value)
 
 
 def test_zero_tempo_selects_the_transport_fallback():

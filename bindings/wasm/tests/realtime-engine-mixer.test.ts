@@ -774,10 +774,16 @@ describe('Sonare WASM Module', () => {
       try {
         engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
         engine.setTrackLanes([{ trackId: 10 }]);
-        // The reader's InvalidParameter is an argument refusal, a RangeError as on Node.
-        expectRefusalOf(() => engine.setBusStripJson(1, scene('buses', '1', 'sideways')));
-        expectRefusalOf(() => engine.setTrackStripJson(10, scene('strips', 't', 'sideways')));
-        expectRefusalOf(() => engine.setMasterStripJson(scene('strips', 'm', 'sideways')));
+        // A bad slot name is a content defect of the document, coded InvalidFormat.
+        expect(codeOf(() => engine.setBusStripJson(1, scene('buses', '1', 'sideways')))).toBe(
+          ErrorCode.InvalidFormat,
+        );
+        expect(codeOf(() => engine.setTrackStripJson(10, scene('strips', 't', 'sideways')))).toBe(
+          ErrorCode.InvalidFormat,
+        );
+        expect(codeOf(() => engine.setMasterStripJson(scene('strips', 'm', 'sideways')))).toBe(
+          ErrorCode.InvalidFormat,
+        );
         // A non-object element is a structural failure the reader codes InvalidFormat.
         const nonObject = JSON.stringify({ version: 1, strips: [7], buses: [], connections: [] });
         expect(codeOf(() => engine.setMasterStripJson(nonObject))).toBe(ErrorCode.InvalidFormat);

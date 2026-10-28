@@ -199,6 +199,8 @@ describe('the facade and the reader refuse the same inputs', () => {
     value: number;
     refused: boolean;
     why: string;
+    /** Who refuses on the facade layer: its own check (prefixed with the entry name), or the reader behind it (range). */
+    facade?: 'range';
   }> = [
     { value: 1024, refused: false, why: 'an ordinary legal size' },
     { value: 0, refused: false, why: 'the documented keep-the-default sentinel' },
@@ -206,11 +208,12 @@ describe('the facade and the reader refuse the same inputs', () => {
     { value: -0.5, refused: true, why: 'fractional, truncates onto the default' },
     { value: Number.NaN, refused: true, why: 'not finite' },
     { value: Number.POSITIVE_INFINITY, refused: true, why: 'not finite' },
-    { value: 2 ** 32, refused: true, why: 'integral but past the 32-bit range' },
+    { value: 2 ** 32, refused: true, why: 'integral but past the 32-bit range', facade: 'range' },
     {
       value: 2 ** 53,
       refused: true,
       why: 'integral, and the largest exact JS integer step',
+      facade: 'range',
     },
   ];
 
@@ -218,7 +221,7 @@ describe('the facade and the reader refuse the same inputs', () => {
     i % 2205 < 200 ? Math.sin((2 * Math.PI * 900 * i) / sampleRate) : 0,
   );
 
-  for (const { value, refused, why } of PROBES) {
+  for (const { value, refused, why, facade } of PROBES) {
     it(`${refused ? 'refuses' : 'accepts'} nFft = ${value} on both layers (${why})`, () => {
       const facadeChecked = capture(() =>
         extractPercussiveEvents({ samples: hits, sampleRate, nFft: value }),
@@ -227,8 +230,19 @@ describe('the facade and the reader refuse the same inputs', () => {
       expect(facadeChecked === undefined).toBe(!refused);
       expect(readerOnly === undefined).toBe(!refused);
       if (refused) {
-        expectParameterRefusal(facadeChecked);
-        expectParameterRefusal(readerOnly);
+        const facadeError = expectParameterRefusal(facadeChecked);
+        const readerError = expectParameterRefusal(readerOnly);
+        // Both layers refuse as a RangeError, so the wording says which one
+        // answered: the facade's message carries the entry name, the reader's
+        // does not.
+        if (facade === 'range') {
+          expect(facadeError.message).not.toContain('extractPercussiveEvents: nFft');
+          expect(facadeError.message).toContain('within the 32-bit integer range');
+        } else {
+          expect(facadeError.message).toContain('extractPercussiveEvents: nFft must be an integer');
+        }
+        expect(readerError.message).toContain('nFft');
+        expect(readerError.message).not.toContain('meteringSpectrum: nFft');
       }
     });
   }

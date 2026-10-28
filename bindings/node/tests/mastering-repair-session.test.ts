@@ -133,14 +133,15 @@ describe('masteringRepairApply', () => {
 
   it('refuses a repeated stage, an unknown stage and an unknown setting', () => {
     const channels = [material(440, 12)];
-    const refused = RangeError;
+    // The session's own refusals, worded by the core; a reader-side refusal
+    // would say "takes a number" or name the 32-bit float range instead.
     expect(() =>
       masteringRepairApply({
         channels,
         sampleRate: SR,
         stages: [{ stage: 'declick' }, { stage: 'declick' }],
       }),
-    ).toThrow(refused);
+    ).toThrow(/stage 'declick' appears twice/);
     expect(() =>
       masteringRepairApply({
         channels,
@@ -148,14 +149,14 @@ describe('masteringRepairApply', () => {
         // @ts-expect-error trim is not a repair stage of this application
         stages: [{ stage: 'trimSilence' }],
       }),
-    ).toThrow(refused);
+    ).toThrow(/unknown stage 'trimSilence'/);
     expect(() =>
       masteringRepairApply({
         channels,
         sampleRate: SR,
         stages: [{ stage: 'declick', lpcOdrer: 8 }],
       }),
-    ).toThrow(refused);
+    ).toThrow(/declick: unknown setting 'lpcOdrer'/);
     expect(() =>
       // @ts-expect-error stages is required
       masteringRepairApply({ channels, sampleRate: SR }),

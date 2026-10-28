@@ -54,6 +54,11 @@ const expectRangeRefusal = (fn: () => unknown): void => {
   expectRefusalOf(fn);
 };
 
+/** The core's `MusicAnalyzerConfig` guard answered, not a facade or reader of the binding. */
+const expectConfigRefusal = (fn: () => unknown): void => {
+  expect(expectRefusalOf(fn).message).toMatch(/^MusicAnalyzerConfig: /);
+};
+
 const expectTypeRefusal = (fn: () => unknown): void => {
   expectRefusalOf(fn, TypeError);
 };
@@ -148,7 +153,7 @@ describe('analyze rejects the same configurations as the C ABI', () => {
 
   for (const [label, options] of rejected) {
     it(`rejects ${label}`, () => {
-      expectRangeRefusal(() => analyze(samples, SR, options));
+      expectConfigRefusal(() => analyze(samples, SR, options));
     });
   }
 
@@ -158,7 +163,7 @@ describe('analyze rejects the same configurations as the C ABI', () => {
   });
 
   it('rejects an odd nFft, which has no n_fft/2 + 1 bin layout', () => {
-    expectRangeRefusal(() => analyze(samples, SR, { nFft: 2047 }));
+    expectConfigRefusal(() => analyze(samples, SR, { nFft: 2047 }));
   });
 });
 

@@ -796,6 +796,7 @@ describe('unit conversions', () => {
     'noteToHz(%j) is refused with a RangeError',
     (name) => {
       expect(() => noteToHz(name)).toThrow(RangeError);
+      expect(() => noteToHz(name)).toThrow(/^note_to_hz: /);
     },
   );
 
@@ -808,6 +809,7 @@ describe('unit conversions', () => {
     'hzToNote(%d) is refused with a RangeError',
     (hz) => {
       expect(() => hzToNote(hz)).toThrow(RangeError);
+      expect(() => hzToNote(hz)).toThrow(/^hz_to_note: hz must be finite and positive/);
     },
   );
 

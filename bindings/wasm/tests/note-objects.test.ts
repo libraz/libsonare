@@ -228,6 +228,18 @@ function expectRangeRefusal(action: () => void): void {
   expectRefusalOf(action);
 }
 
+/**
+ * Asserts that @p action is refused by the core rather than by the binding. Both
+ * are a RangeError, so the wording says which answered: the note model's guards
+ * carry no detail (`Invalid parameter`) or one of its two fixed phrases, while
+ * the binding's own refusals name the entry point and the field.
+ */
+const CORE_NOTE_REFUSAL =
+  /^(Invalid parameter|re-derived note has no positive sample span|terminal note repair would make a predecessor empty)$/;
+function expectCoreRefusal(action: () => void): void {
+  expect(expectRefusalOf(action).message).toMatch(CORE_NOTE_REFUSAL);
+}
+
 /** Asserts that @p action throws a TypeError: a wrong-typed argument. */
 function expectTypeRefusal(action: () => void): void {
   expectRefusalOf(action, TypeError);
@@ -572,10 +584,10 @@ describe('renderNotes', () => {
         notes: [{ offsetSample: 8192 } as unknown as NoteObjectInput],
       }),
     );
-    expectRangeRefusal(() =>
+    expectCoreRefusal(() =>
       renderNotes({ samples, sampleRate, notes: [{ onsetSample: 8192, offsetSample: 4096 }] }),
     );
-    expectRangeRefusal(() =>
+    expectCoreRefusal(() =>
       renderNotes({
         samples,
         sampleRate,
@@ -586,7 +598,7 @@ describe('renderNotes', () => {
       }),
     );
     expectRangeRefusal(() => renderNotes({ samples, sampleRate, notes, fadeMs: -1 }));
-    expectRangeRefusal(() =>
+    expectCoreRefusal(() =>
       renderNotes({
         samples,
         sampleRate,
@@ -837,7 +849,7 @@ describe('renderNotes refuses a note that omits a sample bound', () => {
       { frameStart: 1, frameEnd: 2 },
       { frameStart: 2, frameEnd: 3 },
     ];
-    expectRangeRefusal(() => mergeNotes({ ...source, notes: entries, first: 0, last: 1 }));
+    expectCoreRefusal(() => mergeNotes({ ...source, notes: entries, first: 0, last: 1 }));
   });
 });
 
@@ -851,14 +863,14 @@ describe('note input validation', () => {
       onsetSample: 6399,
       offsetSample: 6401,
     };
-    expectRangeRefusal(() => renderNotes({ ...loudSource, notes: [outside] }));
+    expectCoreRefusal(() => renderNotes({ ...loudSource, notes: [outside] }));
 
     const positiveExtreme: NoteObjectInput = {
       ...handNote(0, 6400),
       onsetSample: Number.MAX_SAFE_INTEGER - 1,
       offsetSample: Number.MAX_SAFE_INTEGER,
     };
-    expectRangeRefusal(() => renderNotes({ ...loudSource, notes: [positiveExtreme] }));
+    expectCoreRefusal(() => renderNotes({ ...loudSource, notes: [positiveExtreme] }));
 
     const negativeExtreme: NoteObjectInput = {
       ...handNote(0, 6400),
@@ -878,17 +890,17 @@ describe('note input validation', () => {
     expectRangeRefusal(() => renderNotes({ ...loudSource, notes: [outsideInt64] }));
 
     // A bad pass-through row must be validated along with the selected row.
-    expectRangeRefusal(() => renderNotes({ ...loudSource, notes: [handNote(0, 3200), outside] }));
+    expectCoreRefusal(() => renderNotes({ ...loudSource, notes: [handNote(0, 3200), outside] }));
   });
 
   it('rejects finite gain and envelope edits that would produce non-finite samples', () => {
-    expectRangeRefusal(() =>
+    expectCoreRefusal(() =>
       renderNotes({
         ...loudSource,
         notes: [{ ...handNote(0, 6400), edit: { gainDb: 1000 } }],
       }),
     );
-    expectRangeRefusal(() =>
+    expectCoreRefusal(() =>
       renderNotes({
         ...loudSource,
         notes: [
@@ -1070,7 +1082,7 @@ describe('renderNotes amplitude envelope', () => {
 
   it('rejects an envelope value that is not a usable linear gain', () => {
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1]) {
-      expectRangeRefusal(() =>
+      expectCoreRefusal(() =>
         renderNotes({
           samples: source,
           sampleRate: fixtureRate,
@@ -2023,7 +2035,7 @@ describe('splitNote', () => {
     // Strictly inside the note's own span, so neither of its boundaries is a
     // legal cut and neither is a frame belonging to another note.
     for (const frame of [12, 25, 5, 30, -1, 100]) {
-      expectRangeRefusal(() => splitNote({ ...source, notes: before, index: 1, frame }));
+      expectCoreRefusal(() => splitNote({ ...source, notes: before, index: 1, frame }));
     }
 
     // A note the set cannot describe: an empty span, and one running past the
@@ -2031,11 +2043,11 @@ describe('splitNote', () => {
     const emptySpan = before.map((note, index) =>
       index === 1 ? { ...note, frameEnd: note.frameStart } : note,
     );
-    expectRangeRefusal(() => splitNote({ ...source, notes: emptySpan, index: 0, frame: 5 }));
+    expectCoreRefusal(() => splitNote({ ...source, notes: emptySpan, index: 0, frame: 5 }));
     const beyond = before.map((note, index) =>
       index === 2 ? { ...note, frameEnd: fixtureFrames + 1 } : note,
     );
-    expectRangeRefusal(() => splitNote({ ...source, notes: beyond, index: 0, frame: 5 }));
+    expectCoreRefusal(() => splitNote({ ...source, notes: beyond, index: 0, frame: 5 }));
 
     // The track arguments extraction itself rejects.
     expectRangeRefusal(() =>
@@ -2148,11 +2160,11 @@ describe('mergeNotes', () => {
     const emptySpan = before.map((note, index) =>
       index === 2 ? { ...note, frameEnd: note.frameStart } : note,
     );
-    expectRangeRefusal(() => mergeNotes({ ...source, notes: emptySpan, first: 0, last: 1 }));
+    expectCoreRefusal(() => mergeNotes({ ...source, notes: emptySpan, first: 0, last: 1 }));
     const beyond = before.map((note, index) =>
       index === 2 ? { ...note, frameEnd: fixtureFrames + 1 } : note,
     );
-    expectRangeRefusal(() => mergeNotes({ ...source, notes: beyond, first: 0, last: 1 }));
+    expectCoreRefusal(() => mergeNotes({ ...source, notes: beyond, first: 0, last: 1 }));
 
     // The track arguments extraction itself rejects.
     expectRangeRefusal(() =>

@@ -95,3 +95,4 @@ class TestNoiseBandBins:
             libsonare.mastering_repair_noise_band_bins(n_fft=N_FFT, sample_rate=0)
 
         assert excinfo.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)
+        assert str(excinfo.value) == "Invalid parameter"

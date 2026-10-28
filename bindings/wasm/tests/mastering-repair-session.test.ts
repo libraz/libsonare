@@ -129,21 +129,22 @@ describe('masteringRepairApply', () => {
 
   it('refuses a repeated stage and an unknown setting as RangeErrors', () => {
     const channels = [material(440, 11)];
-    const refused = RangeError;
+    // The session's own refusals, worded by the core; a binding reader would
+    // name the key in its own terms ("takes a number").
     expect(() =>
       masteringRepairApply({
         channels,
         sampleRate: SR,
         stages: [{ stage: 'declick' }, { stage: 'declick' }],
       }),
-    ).toThrow(refused);
+    ).toThrow(/stage 'declick' appears twice/);
     expect(() =>
       masteringRepairApply({
         channels,
         sampleRate: SR,
         stages: [{ stage: 'declick', lpcOdrer: 8 }],
       }),
-    ).toThrow(refused);
+    ).toThrow(/declick: unknown setting 'lpcOdrer'/);
   });
 
   it('reports progress per stage and stops when cancelled', () => {

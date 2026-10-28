@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from libsonare import Project, RealtimeEngine, SonareValueError
+from libsonare import ErrorCode, Project, RealtimeEngine, SonareError, SonareValueError
 
 _TYPO_SCENE = (
     '{"version":1,"$schema":"s","strips":[{"id":"lead","faderDB":-3,"x-note":1}],"buses":[]}'
@@ -25,9 +25,10 @@ def test_engine_strip_setters_refuse_an_unknown_key() -> None:
             lambda: engine.set_track_strip_json(10, _TYPO_STRIP),
             lambda: engine.set_master_strip_json(_TYPO_STRIP),
         ):
-            with pytest.raises(SonareValueError) as refused:
+            with pytest.raises(SonareError) as refused:
                 call()
-            assert refused.value.code == 4
+            assert not isinstance(refused.value, SonareValueError)
+            assert refused.value.code == int(ErrorCode.INVALID_FORMAT)
             assert "unknown strip key 'strips[0].faderDB'" in str(refused.value)
         annotated = '{"$schema":"s","version":1,"strips":[{"id":"s","faderDb":-3,"x-t":1}]}'
         engine.set_track_strip_json(10, annotated)

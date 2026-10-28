@@ -70,18 +70,23 @@ describe('failure class follows the cause', () => {
   // a wrong sample rate no longer do: the facade refuses them on its own
   // authority. These reach the core with arguments the facade has nothing to say about.
   const badHop = { samples: sine(22050), sampleRate: 22050, hopLength: 0 };
-  const refusals: ReadonlyArray<[string, () => unknown]> = [
-    ['analyze (sync)', () => analyze(badHop)],
-    ['synthPresetPatch', () => synthPresetPatch('definitely-not-a-real-preset')],
+  const refusals: ReadonlyArray<[string, () => unknown, RegExp]> = [
+    ['analyze (sync)', () => analyze(badHop), /^MusicAnalyzerConfig: hopLength must be positive/],
+    [
+      'synthPresetPatch',
+      () => synthPresetPatch('definitely-not-a-real-preset'),
+      /^unknown synth preset name$/,
+    ],
   ];
 
-  for (const [label, run] of refusals) {
+  for (const [label, run, wording] of refusals) {
     it(`${label} refuses its argument with a plain RangeError`, () => {
       const caught = capture(run);
       expect(caught, `${label} should have thrown`).toBeDefined();
       expect(caught).toBeInstanceOf(RangeError);
       expect(isSonareError(caught), `${label} threw a coded SonareError`).toBe(false);
-      expect((caught as Error).message.length).toBeGreaterThan(0);
+      // The core's own wording, which no addon reader produces.
+      expect((caught as Error).message).toMatch(wording);
     });
   }
 

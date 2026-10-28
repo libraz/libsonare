@@ -5,7 +5,14 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { PART_RIG_ALL_PARTS, PART_RIG_MODES, Project, RealtimeEngine } from '../src/index.js';
+import {
+  ErrorCode,
+  isSonareError,
+  PART_RIG_ALL_PARTS,
+  PART_RIG_MODES,
+  Project,
+  RealtimeEngine,
+} from '../src/index.js';
 
 /** The `codeName` of the SonareError a call throws, or a marker when it does not. */
 const codeNameOf = (call: () => unknown): string => {
@@ -106,14 +113,25 @@ describe('part rig on a project', () => {
       })(),
     ).toThrow(/params/);
     expect(set({ part: 16 })).toThrow(RangeError);
-    expect(set({ mode: 'chain', inserts: [] })).toThrow(RangeError);
-    expect(set({ mode: 'chain', inserts: [{ processor: 'no.such', params: {} }] })).toThrow(
-      RangeError,
-    );
+    // Content defects of the rig document are the loader's InvalidFormat, a coded SonareError.
+    const invalidFormat = (request: object) => {
+      let caught: unknown;
+      try {
+        set(request)();
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).not.toBeInstanceOf(RangeError);
+      expect(isSonareError(caught)).toBe(true);
+      expect((caught as { code: number }).code).toBe(ErrorCode.InvalidFormat);
+    };
+    invalidFormat({ mode: 'chain', inserts: [] });
+    invalidFormat({ mode: 'chain', inserts: [{ processor: 'no.such', params: {} }] });
+    invalidFormat({
+      mode: 'chain',
+      inserts: [{ processor: 'saturation.overdrive', params: '{' }],
+    });
     expect(set({ mode: 'none', inserts: chain })).toThrow(RangeError);
-    expect(
-      set({ mode: 'chain', inserts: [{ processor: 'saturation.overdrive', params: '{' }] }),
-    ).toThrow(RangeError);
     expect(project.getPartRig({ destinationId: 4, part: 0 })).toBeNull();
   });
 });

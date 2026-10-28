@@ -216,11 +216,13 @@ class TestValidateFalseStillHasCAbiBackstop:
         with pytest.raises(SonareValueError) as exc_info:
             lufs(_with_nan(), SR, validate=False)
         assert exc_info.value.code == 4
+        assert "at index" not in str(exc_info.value)
 
     def test_mastering_dynamics_compressor_validate_false(self):
         with pytest.raises(SonareValueError) as exc_info:
             mastering_dynamics_compressor(_with_nan(), SR, validate=False)
         assert exc_info.value.code == 4
+        assert "at index" not in str(exc_info.value)
 
     def test_waveform_peaks_validate_false(self):
         # The pair is the point: a silent buffer answers 0/0 and a non-finite
@@ -233,6 +235,8 @@ class TestValidateFalseStillHasCAbiBackstop:
         with pytest.raises(SonareValueError) as exc_info:
             waveform_peaks(_with_nan(), 1, samples_per_bucket=256, validate=False)
         assert exc_info.value.code == 4
+        # The Python preflight names the offending index; the core's refusal does not.
+        assert "at index" not in str(exc_info.value)
 
     def test_waveform_peak_pyramid_validate_false(self):
         with pytest.raises(SonareValueError) as exc_info:
@@ -240,6 +244,7 @@ class TestValidateFalseStillHasCAbiBackstop:
                 _with_nan(), 1, samples_per_bucket_levels=[256, 512], validate=False
             )
         assert exc_info.value.code == 4
+        assert "at index" not in str(exc_info.value)
 
 
 class TestPitchCAbiValidation:
@@ -258,6 +263,8 @@ class TestPitchCAbiValidation:
         with pytest.raises(SonareValueError) as exc_info:
             pitch(_sine(SR), sample_rate=0)
         assert exc_info.value.code == 4
+        # The core's plain refusal; the facade's own argument errors say "must be".
+        assert "must be" not in str(exc_info.value)
 
     @pytest.mark.parametrize("pitch", [pitch_yin, pitch_pyin], ids=["yin", "pyin"])
     def test_normal_audio_returns_pitch_result(self, pitch):

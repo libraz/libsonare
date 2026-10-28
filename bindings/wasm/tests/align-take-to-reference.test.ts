@@ -139,7 +139,9 @@ describe('WASM alignTakeToReference', () => {
       thrown = error;
     }
     expect(thrown).toBeDefined();
-    expectArgumentRefusal(thrown);
+    expect(expectArgumentRefusal(thrown).message).toBe(
+      'failed to align take to reference: Invalid parameter',
+    );
   });
 
   it('reads an absent resolution field as the library value however absence is spelled', () => {
@@ -249,7 +251,10 @@ describe('WASM alignTakeToReference', () => {
         thrown = error;
       }
       expect(thrown, name).toBeDefined();
-      expectArgumentRefusal(thrown, RangeError, name);
+      // The core's refusal, which cannot say which argument carried the value.
+      expect(expectArgumentRefusal(thrown, RangeError, name).message, name).toBe(
+        'failed to align take to reference: Invalid parameter',
+      );
     }
   });
 

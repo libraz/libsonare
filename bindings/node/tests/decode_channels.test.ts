@@ -71,6 +71,8 @@ describe('decodeChannels', () => {
   it('refuses bytes that are not audio and empty input', () => {
     expect(() => decodeChannels(Buffer.from('garbage'))).toThrow();
     expect(() => decodeChannels(new Uint8Array(0))).toThrow(RangeError);
+    // The decoder's own refusal, not the facade's wording.
+    expect(() => decodeChannels(new Uint8Array(0))).toThrow(/^Invalid parameter$/);
     expect(() => decodeChannels('nope' as unknown as Uint8Array)).toThrow(TypeError);
   });
 });

@@ -40,7 +40,7 @@ beforeAll(async () => {
 });
 
 /** Analyzer fields whose domain guard lives in the binding rather than the core. */
-const _BINDING_GUARDS = new Set(['window', 'outputFormat']);
+const BINDING_GUARDS = new Set(['window', 'outputFormat']);
 
 /** An argument refusal: a native `RangeError`, not a coded `SonareError`. */
 function refusalFor(fn: () => unknown): Error {
@@ -308,6 +308,16 @@ describe('a narrowed constructor position refuses what a wrap made legal', () =>
       // the narrowing check had grown into a domain check it does not own.
       const error = refusalFor(() => slot.construct(-1));
       expect(error.message).toContain(slot.domainRefusal);
+      // Both layers refuse as a RangeError, so the wording says whose guard it was:
+      // the engine's and the two ordinal guards are the binding's own, the
+      // analyzer's other guards are the core's StreamConfig validation.
+      if (slot.entry.startsWith('RealtimeEngine')) {
+        expect(error.message).toMatch(/^prepare: /);
+      } else if (BINDING_GUARDS.has(slot.field)) {
+        expect(error.message).not.toMatch(/^StreamConfig: /);
+      } else {
+        expect(error.message).toMatch(/^StreamConfig: /);
+      }
       expect(error.message).not.toContain(READER_RANGE);
       expect(error.message).not.toContain(READER_FRACTIONAL);
     });

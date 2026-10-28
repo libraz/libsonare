@@ -552,6 +552,7 @@ class TestMonoRefusals:
         with pytest.raises(libsonare.SonareValueError) as excinfo:
             entry(tone, 0)
         assert excinfo.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)
+        assert str(excinfo.value) == "Invalid parameter"
 
         assert entry(tone, SR) is not None
 
@@ -706,5 +707,6 @@ class TestStereoRefusals:
         with pytest.raises(libsonare.SonareValueError) as excinfo:
             libsonare.mastering_repair_detect_trim_range_stereo(burst, burst, 0)
         assert excinfo.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)
+        assert str(excinfo.value) == "Invalid parameter"
 
         assert libsonare.mastering_repair_detect_trim_range_stereo(burst, burst, SR) is not None

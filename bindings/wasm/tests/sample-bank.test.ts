@@ -54,6 +54,15 @@ function expectRangeRefusal(action: () => void): void {
   expectRefusalOf(action);
 }
 
+/**
+ * Asserts that @p action is refused by the core's zone check rather than the
+ * binding's field readers: both are a RangeError, and only the core's refusal
+ * carries the add-zone context from the C-ABI call.
+ */
+function expectCoreRefusal(action: () => void): void {
+  expect(expectRefusalOf(action).message).toMatch(/^failed to add a zone to the sample bank: /);
+}
+
 /** Asserts that @p action throws a TypeError: a wrong-typed argument. */
 function expectTypeRefusal(action: () => void): void {
   expectRefusalOf(action, TypeError);
@@ -105,12 +114,12 @@ describe('Sonare WASM sample bank', () => {
       expect(bank.addSample(pcm, { loopMode: 'key-down' })).toBe(2);
       expect(bank.sampleCount()).toBe(3);
 
-      expectRangeRefusal(() => bank.addZone({ sampleIndex: 9 }));
-      expectRangeRefusal(() => bank.addZone({ setIndex: 4096, sampleIndex: 0 }));
+      expectCoreRefusal(() => bank.addZone({ sampleIndex: 9 }));
+      expectCoreRefusal(() => bank.addZone({ setIndex: 4096, sampleIndex: 0 }));
       // Genuinely inverted, both edges given: a rejection the per-bound
       // defaults cannot explain away.
-      expectRangeRefusal(() => bank.addZone({ keyLo: 80, keyHi: 20 }));
-      expectRangeRefusal(() => bank.addZone({ velLo: 100, velHi: 10 }));
+      expectCoreRefusal(() => bank.addZone({ keyLo: 80, keyHi: 20 }));
+      expectCoreRefusal(() => bank.addZone({ velLo: 100, velHi: 10 }));
       expectRangeRefusal(() => bank.addZone({ setIndex: -1 }));
       expectRangeRefusal(() => bank.addZone({ keyLo: 200 }));
       expect(bank.setCount()).toBe(0);

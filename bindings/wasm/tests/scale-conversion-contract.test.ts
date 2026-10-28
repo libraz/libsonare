@@ -149,7 +149,8 @@ describe('the note-name conversions refuse', () => {
       } catch (error) {
         thrown = error;
       }
-      expectArgumentRefusal(thrown, RangeError, String(hz));
+      const error = expectArgumentRefusal(thrown, RangeError, String(hz));
+      expect(error.message, String(hz)).toMatch(/^hz_to_note: hz must be finite and positive/);
     }
   });
 });

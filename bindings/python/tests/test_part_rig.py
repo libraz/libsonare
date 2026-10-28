@@ -91,6 +91,7 @@ def test_invalid_input_is_refused():
     with _project() as project:
         with pytest.raises(SonareValueError, match="mode"):
             project.set_part_rig(DESTINATION, 0, mode="wet")
+        # Refused by the facade before any document reaches the library.
         with pytest.raises(SonareValueError, match="processor"):
             project.set_part_rig(DESTINATION, 0, mode="chain", inserts=[{"params": {}}])
         with pytest.raises(SonareValueError, match="part"):
@@ -100,18 +101,20 @@ def test_invalid_input_is_refused():
             project.set_part_rig(DESTINATION, 16, mode="none")
         assert bad_part.value.code == int(ErrorCode.INVALID_PARAMETER)
 
-        with pytest.raises(SonareValueError) as empty_chain:
+        with pytest.raises(SonareError) as empty_chain:
             project.set_part_rig(DESTINATION, 0, mode="chain", inserts=[])
-        assert empty_chain.value.code == int(ErrorCode.INVALID_PARAMETER)
+        assert not isinstance(empty_chain.value, SonareValueError)
+        assert empty_chain.value.code == int(ErrorCode.INVALID_FORMAT)
 
-        with pytest.raises(SonareValueError) as bad_json:
+        with pytest.raises(SonareError) as bad_json:
             project.set_part_rig(
                 DESTINATION,
                 0,
                 mode="chain",
                 inserts=[{"processor": "saturation.softClipper", "params": "{not json"}],
             )
-        assert bad_json.value.code == int(ErrorCode.INVALID_PARAMETER)
+        assert not isinstance(bad_json.value, SonareValueError)
+        assert bad_json.value.code == int(ErrorCode.INVALID_FORMAT)
         assert project.get_part_rig(DESTINATION, 0) is None
 
 

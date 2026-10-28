@@ -80,10 +80,17 @@ describe('Audio.fromFileChannel', () => {
       writePcm16Wav(stereo, [left, right], SR);
       writePcm16Wav(mono, [left], SR);
 
-      const outOfRange = RangeError;
-      expect(() => Audio.fromFileChannel(stereo, 2)).toThrow(outOfRange);
-      expect(() => Audio.fromFileChannel(stereo, -1)).toThrow(outOfRange);
-      expect(() => Audio.fromFileChannel(mono, 1)).toThrow(outOfRange);
+      // The decoder's own refusal, not the facade's argument wording.
+      const outOfRange =
+        /^(Audio::from_file_channel: channel index is outside the file's channels|Invalid parameter)$/;
+      for (const call of [
+        () => Audio.fromFileChannel(stereo, 2),
+        () => Audio.fromFileChannel(stereo, -1),
+        () => Audio.fromFileChannel(mono, 1),
+      ]) {
+        expect(call).toThrow(RangeError);
+        expect(call).toThrow(outOfRange);
+      }
 
       // The refusals above are the file's channel count talking, not a blanket
       // rejection: the channels the file does have still load.
