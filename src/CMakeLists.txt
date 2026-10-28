@@ -822,10 +822,16 @@ endif()
 
 if(BUILD_VOICE_CHANGER)
   add_library(sonare_voice_changer STATIC
+    editing/voice_changer/channel_vocoder.cpp
+    editing/voice_changer/character_stage.cpp
     editing/voice_changer/isp_limiter.cpp
+    editing/voice_changer/pitch_target.cpp
+    editing/voice_changer/psola_shifter.cpp
     editing/voice_changer/realtime_voice_changer.cpp
     editing/voice_changer/realtime/config.cpp
     editing/voice_changer/realtime/processing.cpp
+    editing/voice_changer/space_stage.cpp
+    editing/voice_changer/streaming_f0.cpp
     editing/voice_changer/streaming_formant.cpp
     editing/voice_changer/streaming_retune.cpp
     editing/voice_changer/streaming_reverb.cpp

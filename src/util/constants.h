@@ -97,6 +97,8 @@ inline constexpr int kDefaultNMels = 128;
 inline constexpr double kDefaultDawSampleRate = 48000.0;
 /// Default musical tempo in beats per minute.
 inline constexpr double kDefaultBpm = 120.0;
+/// Seconds in a minute, for turning a tempo in beats per minute into a period.
+inline constexpr double kSecondsPerMinute = 60.0;
 
 }  // namespace constants
 }  // namespace sonare

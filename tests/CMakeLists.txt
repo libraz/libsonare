@@ -593,6 +593,17 @@ if(BUILD_VOICE_CHANGER)
     editing/voice_changer_realtime_dsp_test.cpp
     editing/voice_changer_limiter_json_test.cpp
     editing/voice_changer_insert_test.cpp
+    editing/voice_quality_harness_test.cpp
+    editing/voice_f0_tracker_test.cpp
+    editing/voice_psola_test.cpp
+    editing/voice_pitch_target_test.cpp
+    editing/voice_vocoder_test.cpp
+    editing/voice_character_test.cpp
+    editing/voice_space_test.cpp
+    editing/voice_transform_quality_test.cpp
+    api/sonare_c_voice_transform_test.cpp
+    ${PROJECT_SOURCE_DIR}/tools/voicelab/synthetic_voice.cpp
+    ${PROJECT_SOURCE_DIR}/tools/voicelab/metrics.cpp
   )
   target_sources(sonare_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_voice_changer.cpp)
   target_link_libraries(sonare_tests PRIVATE sonare_voice_changer)

@@ -54,6 +54,20 @@ endif()
 if(BUILD_VOICE_CHANGER)
   target_link_libraries(sonare PRIVATE sonare_voice_changer)
   target_compile_definitions(sonare PRIVATE SONARE_WITH_VOICE_CHANGER=1)
+
+  # External-device loopback measurement and analysis harness.
+  add_executable(sonare_voicelab
+    voicelab/voicelab_main.cpp
+    voicelab/synthetic_voice.cpp
+    voicelab/metrics.cpp
+  )
+  target_link_libraries(sonare_voicelab PRIVATE sonare_voice_changer sonare_core)
+  target_compile_options(sonare_voicelab PRIVATE ${SONARE_WARNING_FLAGS})
+  target_include_directories(sonare_voicelab PRIVATE
+    ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/src
+    ${PROJECT_SOURCE_DIR}/tools
+  )
 endif()
 if(BUILD_ACOUSTIC_SIM AND BUILD_FX)
   # RIR synthesis + room estimation (acoustic) and the offline morph (fx).
