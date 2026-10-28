@@ -1874,7 +1874,7 @@ const ROWS: Row[] = [
     values: {
       samples: STEREO,
       sampleRate: ALT_SR,
-      preset: 'bright-idol',
+      preset: 'choir-harmony',
       options: { channels: 2 },
     },
     invalid: { sampleRate: 0 },

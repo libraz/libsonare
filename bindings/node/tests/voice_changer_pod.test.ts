@@ -50,7 +50,11 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
   });
 
   it('carries the formant mode, fixed when the changer is created', () => {
-    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    // The grain engine is where the absolute warp adds its analysis frame of latency.
+    const pod = {
+      ...realtimeVoiceChangerPresetConfig('neutral-monitor'),
+      voiceEngineEngine: 'grain' as const,
+    };
     expect(pod.formantMode).toBe('relative');
     const relative = new RealtimeVoiceChanger({ sampleRate: 48000, preset: pod });
     const absolute = new RealtimeVoiceChanger({
@@ -91,7 +95,10 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
   });
 
   it('refuses an unreachable absolute warp and names the formant factor range', () => {
-    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    const pod = {
+      ...realtimeVoiceChangerPresetConfig('neutral-monitor'),
+      voiceEngineEngine: 'grain' as const,
+    };
     const unreachable = { ...pod, formantMode: 'absolute' as const, retuneSemitones: -9 };
     expect(() => new RealtimeVoiceChanger({ sampleRate: 48000, preset: unreachable })).toThrow(
       /\[0\.55, 0\.9811\]/,

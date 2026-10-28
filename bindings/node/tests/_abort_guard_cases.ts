@@ -1717,6 +1717,50 @@ export const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'RealtimeVoiceChanger.noteOn',
+    missingRequired: [],
+    // The note is read before the velocity; a wrong-typed velocity must not fall back to
+    // full strength, and a note past the signed range must not wrap onto a legal one.
+    rejectsArgument: [
+      {
+        argument: 'note',
+        call: () => new addon.RealtimeVoiceChanger('neutral-monitor').noteOn('60'),
+        message: /note/,
+      },
+      {
+        argument: 'omitted note',
+        call: () => new addon.RealtimeVoiceChanger('neutral-monitor').noteOn(),
+        message: /note/,
+      },
+      {
+        argument: 'velocity',
+        call: () => new addon.RealtimeVoiceChanger('neutral-monitor').noteOn(60, true),
+        message: /velocity/,
+      },
+      {
+        argument: 'note past the signed range',
+        call: () => new addon.RealtimeVoiceChanger('neutral-monitor').noteOn(2 ** 32 + 60),
+        error: RangeError,
+      },
+    ],
+  },
+  {
+    name: 'RealtimeVoiceChanger.noteOff',
+    missingRequired: [],
+    rejectsArgument: [
+      {
+        argument: 'note',
+        call: () => new addon.RealtimeVoiceChanger('neutral-monitor').noteOff('60'),
+        message: /note/,
+      },
+      {
+        argument: 'note past the signed range',
+        call: () => new addon.RealtimeVoiceChanger('neutral-monitor').noteOff(2 ** 32 + 60),
+        error: RangeError,
+      },
+    ],
+  },
+  {
     name: 'SonareWrap.voiceChange',
     missingRequired: [],
     // The optional formant mode is the positional read; a wrong type must not

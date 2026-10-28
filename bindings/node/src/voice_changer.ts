@@ -50,7 +50,7 @@ export class RealtimeVoiceChanger {
 
   setConfig(config: RealtimeVoiceChangerConfigInput | RealtimeVoiceChangerConfig): void {
     // The shared native parser recognizes the flat POD produced by
-    // realtimeVoiceChangerPresetConfig, so bindings never duplicate its 37-field mapping.
+    // realtimeVoiceChangerPresetConfig, so bindings never duplicate its 70-field mapping.
     requirePodFormantMode(config);
     this.native.setConfig(config);
   }
@@ -94,6 +94,76 @@ export class RealtimeVoiceChanger {
 
   processMono(input: Float32Array): Float32Array {
     return this.native.processMono(input);
+  }
+
+  /**
+   * Like {@link processMono}, with the external vocoder carrier (`vocoderCarrierSource:
+   * 'external'`). `carrier` must be as long as `input`; it is read only while the vocoder is on
+   * with an external carrier and ignored otherwise. The carrier-less process methods throw a
+   * `SonareError` (`InvalidState`) while an external carrier is configured.
+   */
+  processMonoWithCarrier(input: Float32Array, carrier: Float32Array): Float32Array {
+    return this.native.processMonoWithCarrier(input, carrier);
+  }
+
+  processMonoWithCarrierInto(
+    input: Float32Array,
+    carrier: Float32Array,
+    output: Float32Array,
+  ): void {
+    this.native.processMonoWithCarrierInto(input, carrier, output);
+  }
+
+  /** {@link processInterleaved} with one mono `carrier` of `frames` samples shared by every channel. */
+  processInterleavedWithCarrier(
+    input: Float32Array,
+    channels: 1 | 2,
+    carrier: Float32Array,
+  ): Float32Array {
+    return this.native.processInterleavedWithCarrier(input, channels, carrier);
+  }
+
+  processInterleavedWithCarrierInto(
+    input: Float32Array,
+    channels: 1 | 2,
+    carrier: Float32Array,
+    output: Float32Array,
+  ): void {
+    this.native.processInterleavedWithCarrierInto(input, channels, carrier, output);
+  }
+
+  /** {@link processPlanarStereo} with one mono `carrier` shared by both channels. */
+  processPlanarStereoWithCarrier(
+    left: Float32Array,
+    right: Float32Array,
+    carrier: Float32Array,
+  ): void {
+    this.native.processPlanarStereoWithCarrier(left, right, carrier);
+  }
+
+  /**
+   * Holds MIDI note `note` from the start of the next processed block. Held notes become the
+   * voices' pitch targets whatever the pitch correction mode, the newest leading, up to
+   * `1 + harmonyVoices` of them. Holding a held note again refreshes it.
+   *
+   * @param note MIDI note, an integer in [0, 127] (`RangeError` otherwise).
+   * @param velocity Strength in (0, 1], default 1 (`RangeError` for 0, NaN or above 1; release a
+   *   note with {@link noteOff}).
+   * @throws SonareError `InvalidState` on a grain-engine changer, a destroyed one, or when the
+   *   note queue is full (the event is dropped).
+   */
+  noteOn(note: number, velocity = 1.0): void {
+    this.native.noteOn(note, velocity);
+  }
+
+  /** Releases MIDI note `note` from the start of the next block; an unheld note is a no-op. */
+  noteOff(note: number): void {
+    this.native.noteOff(note);
+  }
+
+  /** Releases every held note, including one kept by `midiRelease: 'hold'`. Always succeeds. */
+  allNotesOff(): void {
+    this.native.allNotesOff();
   }
 
   processMonoInto(input: Float32Array, output: Float32Array): void {
@@ -263,6 +333,12 @@ const VOICE_PRESET_ORDINALS: Record<VoicePresetId, number> = {
   'deep-narrator': 3,
   'robot-mascot': 4,
   'dark-villain': 5,
+  'hard-tune': 6,
+  'robot-monotone': 7,
+  'choir-harmony': 8,
+  'vocoder-strings': 9,
+  megaphone: 10,
+  'radio-voice': 11,
 };
 
 function resolveVoicePresetOrdinal(preset: VoicePresetId | number): number {

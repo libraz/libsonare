@@ -178,7 +178,20 @@ class RealtimeVoiceChangerWrap : public Napi::ObjectWrap<RealtimeVoiceChangerWra
   Napi::Value ProcessInterleaved(const Napi::CallbackInfo& info);
   Napi::Value ProcessInterleavedInto(const Napi::CallbackInfo& info);
   Napi::Value ProcessPlanarStereo(const Napi::CallbackInfo& info);
+  Napi::Value ProcessMonoWithCarrier(const Napi::CallbackInfo& info);
+  Napi::Value ProcessMonoWithCarrierInto(const Napi::CallbackInfo& info);
+  Napi::Value ProcessInterleavedWithCarrier(const Napi::CallbackInfo& info);
+  Napi::Value ProcessInterleavedWithCarrierInto(const Napi::CallbackInfo& info);
+  Napi::Value ProcessPlanarStereoWithCarrier(const Napi::CallbackInfo& info);
+  Napi::Value NoteOn(const Napi::CallbackInfo& info);
+  Napi::Value NoteOff(const Napi::CallbackInfo& info);
+  Napi::Value AllNotesOff(const Napi::CallbackInfo& info);
   Napi::Value Destroy(const Napi::CallbackInfo& info);
+  /// Shared bodies of the process methods; @p with_carrier adds the external vocoder carrier
+  /// argument and @p into writes to a caller-supplied output instead of returning one.
+  Napi::Value ProcessMonoImpl(const Napi::CallbackInfo& info, bool with_carrier, bool into);
+  Napi::Value ProcessInterleavedImpl(const Napi::CallbackInfo& info, bool with_carrier, bool into);
+  Napi::Value ProcessPlanarStereoImpl(const Napi::CallbackInfo& info, bool with_carrier);
   bool EnsureAlive(Napi::Env env) const;
   void ReleaseNative() noexcept;
 

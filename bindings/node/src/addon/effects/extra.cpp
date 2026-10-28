@@ -161,6 +161,53 @@ Napi::Value SonareWrap::RealtimeVoiceChangerPresetConfig(const Napi::CallbackInf
   out.Set("limiterEnableIspLimiter",
           Napi::Boolean::New(env, config.limiter_enable_isp_limiter != 0));
   out.Set("limiterIspCeilingDbtp", Napi::Number::New(env, config.limiter_isp_ceiling_dbtp));
+  // Enums are the snake_case spellings the flat-config parser reads.
+  const auto number = [&env](auto value) { return Napi::Number::New(env, value); };
+  const auto name = [&env](const char* value) { return Napi::String::New(env, value); };
+  out.Set("voiceEngineEngine",
+          name(config.voice_engine_engine == SONARE_PITCH_ENGINE_GRAIN ? "grain" : "psola"));
+  out.Set("voiceEngineF0MinHz", number(config.voice_engine_f0_min_hz));
+  static constexpr const char* kCorrectionModes[] = {"off", "auto", "robot"};
+  out.Set("pitchCorrectionMode", name(kCorrectionModes[config.pitch_correction_mode]));
+  out.Set("pitchCorrectionAmount", number(config.pitch_correction_amount));
+  out.Set("pitchCorrectionSpeedMs", number(config.pitch_correction_speed_ms));
+  out.Set("pitchCorrectionKeyRoot", number(config.pitch_correction_key_root));
+  static constexpr const char* kScales[] = {"major", "natural_minor", "chromatic"};
+  out.Set("pitchCorrectionScale", name(kScales[config.pitch_correction_scale]));
+  out.Set("pitchCorrectionRobotOctave", number(config.pitch_correction_robot_octave));
+  out.Set("harmonyVoices", number(config.harmony_voices));
+  out.Set("harmonyStep1", number(config.harmony_steps[0]));
+  out.Set("harmonyStep2", number(config.harmony_steps[1]));
+  out.Set("harmonyStep3", number(config.harmony_steps[2]));
+  out.Set("harmonyLevel", number(config.harmony_level));
+  out.Set("harmonyLeadLevel", number(config.harmony_lead_level));
+  out.Set("harmonyDetuneCents", number(config.harmony_detune_cents));
+  out.Set("harmonyDelayMs", number(config.harmony_delay_ms));
+  out.Set("vocoderEnabled", Napi::Boolean::New(env, config.vocoder_enabled != 0));
+  out.Set("vocoderBands", number(config.vocoder_bands));
+  out.Set("vocoderAttackMs", number(config.vocoder_attack_ms));
+  out.Set("vocoderReleaseMs", number(config.vocoder_release_ms));
+  out.Set("vocoderSibilance", number(config.vocoder_sibilance));
+  out.Set("vocoderCarrierSource",
+          name(config.vocoder_carrier_source == SONARE_VOCODER_CARRIER_EXTERNAL ? "external"
+                                                                                : "internal"));
+  static constexpr const char* kCarrierWaves[] = {"saw", "pulse", "ensemble"};
+  out.Set("vocoderCarrierWave", name(kCarrierWaves[config.vocoder_carrier_wave]));
+  out.Set("vocoderEnsembleDetuneCents", number(config.vocoder_ensemble_detune_cents));
+  out.Set("vocoderLevel", number(config.vocoder_level));
+  static constexpr const char* kCharacters[] = {"none", "megaphone", "radio", "bbd_chorus",
+                                                "strobo"};
+  out.Set("characterType", name(kCharacters[config.character_type]));
+  out.Set("characterAmount", number(config.character_amount));
+  out.Set("characterTone", number(config.character_tone));
+  static constexpr const char* kVariations[] = {"reverb", "echo", "tempo_delay", "dub_echo"};
+  out.Set("reverbVariationVariation", name(kVariations[config.reverb_variation_variation]));
+  out.Set("reverbVariationDelayMs", number(config.reverb_variation_delay_ms));
+  out.Set("reverbVariationFeedback", number(config.reverb_variation_feedback));
+  out.Set("reverbVariationTempoBpm", number(config.reverb_variation_tempo_bpm));
+  static constexpr const char* kDivisions[] = {"quarter", "eighth", "dotted_eighth", "sixteenth"};
+  out.Set("reverbVariationDivision", name(kDivisions[config.reverb_variation_division]));
+  out.Set("midiRelease", name(config.midi_release == SONARE_MIDI_RELEASE_INPUT ? "input" : "hold"));
   return out;
   SONARE_NODE_CATCH(env)
 }
