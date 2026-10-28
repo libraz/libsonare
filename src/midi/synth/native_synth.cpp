@@ -21,7 +21,7 @@ namespace {
 
 /// Sympathetic-string bank t60 (seconds): how long the plucked-string sound
 /// halo rings. Shared by the bank tuning (prepare_custom) and the tail estimate.
-constexpr float kKsSympatheticRingS = 1.5f;
+constexpr float kKsSympatheticRingS = PianoResonanceBank::kGuitarHaloRingT60S;
 
 /// Shared-bus residual attribution memory: how quickly a source's learned
 /// share of the bus-wide residual (body/reverb tail after its dry voice

@@ -1611,7 +1611,9 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.ks.harmonic_node, 0.0f), 0.0f, 8.0f);
   p.ks.keyoff_noise = patch_clamp_detail::sanitize(p.ks.keyoff_noise, 0.0f);
   p.ks.pick_noise = patch_clamp_detail::sanitize(p.ks.pick_noise, 0.0f);
-  p.ks.halo_damp_s = std::clamp(patch_clamp_detail::sanitize(p.ks.halo_damp_s, 0.0f), 0.0f, 10.0f);
+  // At the halo bank's own ring a damping t60 changes nothing, so that is where the range ends.
+  p.ks.halo_damp_s = std::clamp(patch_clamp_detail::sanitize(p.ks.halo_damp_s, 0.0f), 0.0f,
+                                PianoResonanceBank::kGuitarHaloRingT60S);
   p.ks.body_air_hz = std::clamp(patch_clamp_detail::sanitize(p.ks.body_air_hz, 0.0f), 0.0f, 400.0f);
   p.ks.body_air_t60_s =
       std::clamp(patch_clamp_detail::sanitize(p.ks.body_air_t60_s, 0.0f), 0.0f, 2.0f);

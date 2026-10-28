@@ -281,7 +281,7 @@ void PianoResonanceBank::prepare_guitar_sympathetic(double sample_rate) noexcept
   for (int i = 0; i < 4; ++i) freqs[n++] = 3.0f * note_to_hz(kOpenStrings[i]);
   // Open guitar/harp strings ring for seconds; a ~1.5 s bank t60 keeps the
   // halo audible without a runaway tail, at a weak coupling level.
-  prepare_custom(sample_rate, freqs, n, /*ring_t60_s=*/1.5f, /*out_gain=*/0.05f, kHaloFloor);
+  prepare_custom(sample_rate, freqs, n, kGuitarHaloRingT60S, /*out_gain=*/0.05f, kHaloFloor);
 }
 
 void PianoResonanceBank::reset() noexcept {

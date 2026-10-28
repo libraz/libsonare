@@ -624,9 +624,8 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // than treble) and a pickup-ish lowpass on the electric members. Fingerstyle
   // plucks nearer the neck (rounder), the pick nearer the bridge (brighter
   // attack); the acoustic upright keeps a large resonating body. Slap/pop
-  // (36-37) needs the dedicated bass excitation core and stays on the
-  // subtractive family until it lands; synth bass (38-39) is subtractive by
-  // design.
+  // (36-37) derive from the pick voicing below; synth bass (38-39) is
+  // subtractive by design.
   NativeSynthPatch bass{};
   bass.mode = SynthEngineMode::kKarplusStrong;
   bass.amp_env = fallback_env(1.0f, 0.0f, 1.0f, 200.0f);

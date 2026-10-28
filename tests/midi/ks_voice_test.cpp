@@ -19,6 +19,8 @@
 #include "midi/midi_event.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/patch_tuning.h"
+#include "midi/synth/piano_resonance.h"
 #include "midi/synth/pitch.h"
 #include "midi/synth/synth_presets.h"
 #include "midi/ump.h"
@@ -1272,6 +1274,19 @@ TEST_CASE("halo hand damping leaves a pedal-held halo and an out-of-range value 
   const std::vector<float> released = render_at_rate(halo_patch(0.0f), kRate, 1.0, 0.4);
   REQUIRE(render_at_rate(halo_patch(1.5f), kRate, 1.0, 0.4) == released);
   REQUIRE(render_at_rate(halo_patch(0.2f), kRate, 1.0, 0.4) != released);
+}
+
+TEST_CASE("the published halo damping range ends at the halo bank's own ring",
+          "[midi][synth][ks]") {
+  const auto descriptors = sonare::midi::synth::engine_param_descriptors(halo_patch(0.0f));
+  const auto it = std::find_if(descriptors.begin(), descriptors.end(),
+                               [](const auto& d) { return d.key == "haloDampS"; });
+  REQUIRE(it != descriptors.end());
+  REQUIRE(it->bounded);
+  CHECK(it->lo == 0.0f);
+  CHECK(it->hi == sonare::midi::synth::PianoResonanceBank::kGuitarHaloRingT60S);
+  // Above the ceiling the patch is clamped onto it, which is a bank left undamped.
+  CHECK(sonare::midi::synth::clamp_synth_patch(halo_patch(10.0f)).ks.halo_damp_s == it->hi);
 }
 
 TEST_CASE("the pluck strikes the guitar body's air mode at the asked frequency, t60 and level",

@@ -34,6 +34,10 @@ inline constexpr float kPianoBodyRingS = 6.0f;
 /// and deterministic. Resonators ring out with extra damping as dampers fall.
 class PianoResonanceBank {
  public:
+  /// Ring t60 (seconds) of the bank prepare_guitar_sympathetic() tunes. A hand-damping t60 at or
+  /// above it leaves the bank undamped, so it is also the ceiling of the published `halo_damp_s`.
+  static constexpr float kGuitarHaloRingT60S = 1.5f;
+
   /// Tunes the mode bank for @p sample_rate and clears the state.
   void prepare(double sample_rate) noexcept;
   /// Tunes the bank from an explicit set of @p count mode frequencies (Hz;
@@ -46,7 +50,7 @@ class PianoResonanceBank {
                       float out_gain, float floor) noexcept;
   /// prepare_custom() preset for the plucked-string "sound halo": the bank is
   /// tuned to the standard-tuning open guitar strings (E2 A2 D3 G3 B3 E4) plus
-  /// their low harmonics, ringing ~1.5 s at a weak coupling. Shared by every
+  /// their low harmonics, ringing kGuitarHaloRingT60S at a weak coupling. Shared by every
   /// host that voices a ks.sympathetic patch.
   void prepare_guitar_sympathetic(double sample_rate) noexcept;
   /// Re-states the t60 in seconds the bank's stored ring falls at while no hand holds it
