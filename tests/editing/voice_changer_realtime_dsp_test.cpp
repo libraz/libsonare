@@ -314,12 +314,15 @@ TEST_CASE("RealtimeVoiceChanger C API preset_config round-trips all presets",
     }
     if (!current.empty()) preset_ids.push_back(current);
   }
-  REQUIRE(preset_ids.size() == 6);
+  REQUIRE(preset_ids.size() == 12);
 
-  static constexpr std::array<SonareVoiceCharacterPreset, 6> kCEnumValues = {
+  static constexpr std::array<SonareVoiceCharacterPreset, 12> kCEnumValues = {
       SONARE_VC_PRESET_NEUTRAL_MONITOR, SONARE_VC_PRESET_BRIGHT_IDOL,
       SONARE_VC_PRESET_SOFT_WHISPER,    SONARE_VC_PRESET_DEEP_NARRATOR,
       SONARE_VC_PRESET_ROBOT_MASCOT,    SONARE_VC_PRESET_DARK_VILLAIN,
+      SONARE_VC_PRESET_HARD_TUNE,       SONARE_VC_PRESET_ROBOT_MONOTONE,
+      SONARE_VC_PRESET_CHOIR_HARMONY,   SONARE_VC_PRESET_VOCODER_STRINGS,
+      SONARE_VC_PRESET_MEGAPHONE,       SONARE_VC_PRESET_RADIO_VOICE,
   };
 
   for (std::size_t i = 0; i < kCEnumValues.size(); ++i) {
@@ -403,6 +406,7 @@ TEST_CASE("RealtimeVoiceChanger latency_samples matches observed impulse delay",
 
   // Neutralize every DSP stage except the retune grain (the only latency source).
   RealtimeVoiceChangerConfig cfg;
+  cfg.voice_engine.engine = PitchEngine::Grain;
   cfg.wet_mix = 1.0f;
   cfg.retune = {0.0f, 1.0f, 0};  // 0 semitones, fully wet, auto grain
   cfg.formant = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
@@ -508,6 +512,7 @@ TEST_CASE("RealtimeVoiceChanger config reports resolved retune grain size",
   // Requested grain 0 => derive from sample rate. Before prepare() config()
   // still reports the request; after prepare() it reports the effective grain.
   RealtimeVoiceChangerConfig cfg;
+  cfg.voice_engine.engine = PitchEngine::Grain;
   cfg.retune = {0.0f, 1.0f, 0};
   cfg.limiter.enable_isp_limiter = false;  // isolate grain as the only latency term
   RealtimeVoiceChanger changer(cfg);
@@ -530,6 +535,7 @@ TEST_CASE("RealtimeVoiceChanger config reports resolved retune grain size",
   // An explicit grain honored at prepare() is reported verbatim (500 is already
   // a multiple of 4, so resolve_grain_size leaves it unchanged).
   RealtimeVoiceChangerConfig cfg3;
+  cfg3.voice_engine.engine = PitchEngine::Grain;
   cfg3.retune = {0.0f, 1.0f, 500};
   RealtimeVoiceChanger changer3(cfg3);
   changer3.prepare(sample_rate, block, 1);
@@ -547,6 +553,7 @@ TEST_CASE("RealtimeVoiceChanger latency is fixed when retune.mix is zero",
   constexpr int block = 128;
 
   RealtimeVoiceChangerConfig cfg;
+  cfg.voice_engine.engine = PitchEngine::Grain;
   cfg.wet_mix = 1.0f;                      // fully wet path...
   cfg.retune = {0.0f, 0.0f, 0};            // ...but retune fully bypassed (mix=0)
   cfg.limiter.enable_isp_limiter = false;  // isolate the retune term

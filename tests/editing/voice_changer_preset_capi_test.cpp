@@ -15,9 +15,9 @@ TEST_CASE("Factory presets JSON matches in-code definitions", "[voice_changer][p
   const auto root = sonare::util::json::parse(buffer.str());
   REQUIRE(root.is_object());
   REQUIRE(root["packId"].as_string() == "factory");
-  REQUIRE(root["schemaVersion"].as_int() == 1);
+  REQUIRE(root["schemaVersion"].as_int() == kVoiceChangerPresetSchemaVersion);
   const auto& presets = root["presets"].as_array();
-  REQUIRE(presets.size() == 6);
+  REQUIRE(presets.size() == 12);
 
   auto field = [](const sonare::util::json::Value& obj, const char* key) -> float {
     return obj[key].as_float();
@@ -80,6 +80,15 @@ TEST_CASE("Factory presets JSON matches in-code definitions", "[voice_changer][p
     const auto& limiter = dsp["limiter"];
     REQUIRE(field(limiter, "ceilingDb") == code.limiter.ceiling_db);
     REQUIRE(field(limiter, "releaseMs") == code.limiter.release_ms);
+
+    // The voice transformer sections: the pack holds what the code builds.
+    REQUIRE(preset_json["schemaVersion"].as_int() == kVoiceChangerPresetSchemaVersion);
+    RealtimeVoiceChangerConfig from_pack;
+    std::string error;
+    REQUIRE(realtime_voice_changer_config_from_input(sonare::util::json::dump(preset_json),
+                                                     &from_pack, &error));
+    REQUIRE(realtime_voice_changer_config_to_json(from_pack) ==
+            realtime_voice_changer_config_to_json(code));
   }
 }
 
@@ -87,7 +96,7 @@ TEST_CASE("Voice changer schemaVersion constant matches emitted JSON", "[voice_c
   // The constant in realtime_voice_changer.h is the single source of truth for
   // the preset schema version. Any change here MUST be accompanied by an update
   // of the JSON Schema files under schemas/ and by a binding-side migration.
-  REQUIRE(kVoiceChangerPresetSchemaVersion == 1);
+  REQUIRE(kVoiceChangerPresetSchemaVersion == 2);
 
   const auto json = realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor);
   const auto root = sonare::util::json::parse(json);
@@ -165,16 +174,48 @@ TEST_CASE("Voice changer schemaVersion validator rejects future versions",
   // The validator should reject it rather than silently accepting (bindings
   // depend on this to refuse incompatible third-party preset packs).
   const auto baseline = realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor);
-  const std::string needle = "\"schemaVersion\":1";
+  const std::string needle = "\"schemaVersion\":2";
   REQUIRE(baseline.find(needle) != std::string::npos);
   std::string bumped = baseline;
   const auto pos = bumped.find(needle);
-  bumped.replace(pos, needle.size(), "\"schemaVersion\":2");
+  bumped.replace(pos, needle.size(), "\"schemaVersion\":3");
 
   std::string normalized;
   std::string error;
   REQUIRE_FALSE(validate_realtime_voice_changer_preset_json(bumped, &normalized, &error));
   REQUIRE(error.find("schemaVersion") != std::string::npos);
+}
+
+TEST_CASE("Voice changer preset schema version 1 loads without the transformer sections",
+          "[voice_changer][json]") {
+  // A version 2 document without one transformer section is refused; the same document as
+  // version 1, with every transformer section removed, validates and loads with their defaults.
+  auto document = sonare::util::json::parse_strict(
+      realtime_voice_changer_preset_json(VoiceCharacterPreset::BrightIdol));
+  auto& dsp = document.as_object().at("dsp").as_object();
+  dsp.erase("midi");
+  std::string error;
+  REQUIRE_FALSE(validate_realtime_voice_changer_preset_json(sonare::util::json::dump(document),
+                                                            nullptr, &error));
+  REQUIRE(error.find("dsp.midi") != std::string::npos);
+
+  for (const char* key :
+       {"voiceEngine", "pitchCorrection", "harmony", "vocoder", "character", "reverbVariation"}) {
+    dsp.erase(key);
+  }
+  document.as_object().at("schemaVersion") = sonare::util::json::Value(1.0);
+  const std::string v1 = sonare::util::json::dump(document);
+  std::string normalized;
+  REQUIRE(validate_realtime_voice_changer_preset_json(v1, &normalized, &error));
+  // The normalized document is written at the current version, sections included.
+  REQUIRE(normalized.find("\"schemaVersion\":2") != std::string::npos);
+  REQUIRE(normalized.find("\"voiceEngine\"") != std::string::npos);
+  RealtimeVoiceChangerConfig loaded;
+  REQUIRE(realtime_voice_changer_config_from_input(v1, &loaded, &error));
+  const RealtimeVoiceChangerConfig expected =
+      realtime_voice_changer_preset(VoiceCharacterPreset::BrightIdol);
+  REQUIRE(realtime_voice_changer_config_to_json(loaded) ==
+          realtime_voice_changer_config_to_json(expected));
 }
 
 TEST_CASE("Voice changer preset validator requires deesser ratio", "[voice_changer][json]") {
@@ -235,7 +276,7 @@ TEST_CASE("preset JSON validator rejects non-integer schemaVersion", "[voice_cha
   // check let fractional values through. Also exercises the type-check path
   // when schemaVersion is a string rather than a number.
   const auto baseline = realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor);
-  const std::string needle = "\"schemaVersion\":1";
+  const std::string needle = "\"schemaVersion\":2";
   REQUIRE(baseline.find(needle) != std::string::npos);
 
   {
@@ -247,7 +288,7 @@ TEST_CASE("preset JSON validator rejects non-integer schemaVersion", "[voice_cha
   }
   {
     std::string string_version = baseline;
-    string_version.replace(string_version.find(needle), needle.size(), "\"schemaVersion\":\"1\"");
+    string_version.replace(string_version.find(needle), needle.size(), "\"schemaVersion\":\"2\"");
     std::string error;
     REQUIRE_FALSE(validate_realtime_voice_changer_preset_json(string_version, nullptr, &error));
     REQUIRE(error.find("schemaVersion") != std::string::npos);
@@ -483,10 +524,13 @@ TEST_CASE("Voice preset metadata table is consistent across surfaces", "[voice_c
   REQUIRE(macro_ids == joined);
 
   // Every C enum value must also map to a known preset id via the C-API.
-  static constexpr std::array<SonareVoiceCharacterPreset, 6> kCEnumValues = {
+  static constexpr std::array<SonareVoiceCharacterPreset, 12> kCEnumValues = {
       SONARE_VC_PRESET_NEUTRAL_MONITOR, SONARE_VC_PRESET_BRIGHT_IDOL,
       SONARE_VC_PRESET_SOFT_WHISPER,    SONARE_VC_PRESET_DEEP_NARRATOR,
       SONARE_VC_PRESET_ROBOT_MASCOT,    SONARE_VC_PRESET_DARK_VILLAIN,
+      SONARE_VC_PRESET_HARD_TUNE,       SONARE_VC_PRESET_ROBOT_MONOTONE,
+      SONARE_VC_PRESET_CHOIR_HARMONY,   SONARE_VC_PRESET_VOCODER_STRINGS,
+      SONARE_VC_PRESET_MEGAPHONE,       SONARE_VC_PRESET_RADIO_VOICE,
   };
   REQUIRE(kCEnumValues.size() == names.size());
   for (std::size_t i = 0; i < kCEnumValues.size(); ++i) {
@@ -513,7 +557,10 @@ TEST_CASE("Voice changer POD ↔ C++ round-trip preserves every field", "[voice_
   // Build a POD that does NOT match any preset so each field is uniquely
   // identifiable. Values are chosen within each field's documented range so
   // the validator accepts them unchanged.
+  // The transformer fields keep their defaults here; their round trip is in
+  // sonare_c_voice_transform_test.cpp.
   SonareRealtimeVoiceChangerConfig pod_in{};
+  REQUIRE(sonare_realtime_voice_changer_config_default(&pod_in) == SONARE_OK);
   pod_in.input_gain_db = 1.5f;
   pod_in.output_gain_db = -2.25f;
   pod_in.wet_mix = 0.875f;
@@ -593,6 +640,7 @@ TEST_CASE("Voice changer POD ↔ C++ round-trip preserves every field", "[voice_
   REQUIRE(pod_out.reverb_seed == pod_in.reverb_seed);
   REQUIRE(pod_out.limiter_ceiling_db == pod_in.limiter_ceiling_db);
   REQUIRE(pod_out.limiter_release_ms == pod_in.limiter_release_ms);
+  REQUIRE(pod_out.struct_version == 2);
 
   sonare_realtime_voice_changer_destroy(handle);
 }
@@ -611,6 +659,8 @@ TEST_CASE(
   REQUIRE(sonare_realtime_voice_changer_preset_config(SONARE_VC_PRESET_NEUTRAL_MONITOR, &config) ==
           SONARE_OK);
   REQUIRE(config.retune_mix == 0.0f);
+  // The OLA alignment belongs to the grain engine; psola aligns to its own, shorter delay.
+  config.voice_engine_engine = SONARE_PITCH_ENGINE_GRAIN;
 
   SonareRealtimeVoiceChanger* handle = nullptr;
   REQUIRE(sonare_realtime_voice_changer_create(&config, sample_rate, 256, 1, &handle) == SONARE_OK);
@@ -964,8 +1014,10 @@ TEST_CASE("The POD config carries the formant mode, fixed at creation",
           "[voice_changer][c-api][formant_mode]") {
   SonareRealtimeVoiceChangerConfig config{};
   REQUIRE(sonare_realtime_voice_changer_config_default(&config) == SONARE_OK);
-  CHECK(config.struct_version == 1);
+  CHECK(config.struct_version == 2);
   CHECK(config.formant_mode == SONARE_FORMANT_MODE_RELATIVE);
+  // The formant warp ahead of the retune belongs to the grain engine.
+  config.voice_engine_engine = SONARE_PITCH_ENGINE_GRAIN;
 
   SonareRealtimeVoiceChanger* relative = nullptr;
   REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &relative) == SONARE_OK);
@@ -1004,6 +1056,7 @@ TEST_CASE("The POD config refuses an unreachable warp, a bad mode and a bad layo
           "[voice_changer][c-api][formant_mode]") {
   SonareRealtimeVoiceChangerConfig config{};
   REQUIRE(sonare_realtime_voice_changer_config_default(&config) == SONARE_OK);
+  config.voice_engine_engine = SONARE_PITCH_ENGINE_GRAIN;
   config.formant_mode = SONARE_FORMANT_MODE_ABSOLUTE;
   config.retune_semitones = -9.0f;
   config.formant_factor = 1.0f;
@@ -1019,10 +1072,12 @@ TEST_CASE("The POD config refuses an unreachable warp, a bad mode and a bad layo
   CHECK(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) ==
         SONARE_ERROR_INVALID_PARAMETER);
   config.formant_mode = SONARE_FORMANT_MODE_RELATIVE;
+  for (const int32_t version : {0, 1, 3}) {
+    config.struct_version = version;
+    CHECK(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  }
   config.struct_version = 2;
-  CHECK(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) ==
-        SONARE_ERROR_INVALID_PARAMETER);
-  config.struct_version = 0;
   REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) == SONARE_OK);
   sonare_realtime_voice_changer_destroy(handle);
 }

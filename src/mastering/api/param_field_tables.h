@@ -35,6 +35,7 @@
 #include "effects/reverb/dattorro_reverb.h"
 #ifdef SONARE_WITH_VOICE_CHANGER
 #include "editing/voice_changer/voice_changer.h"
+#include "editing/voice_changer/voice_transform_types.h"
 #endif
 #include "mastering/dynamics/compressor.h"
 #include "mastering/eq/cut_filter.h"
@@ -407,6 +408,116 @@ constexpr const char* enum_choice_name(sonare::editing::voice_changer::FormantMo
       return "relative";
     case sonare::editing::voice_changer::FormantMode::Absolute:
       return "absolute";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::editing::voice_changer::PitchEngine value) {
+  switch (value) {
+    case sonare::editing::voice_changer::PitchEngine::Grain:
+      return "grain";
+    case sonare::editing::voice_changer::PitchEngine::Psola:
+      return "psola";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::editing::voice_changer::PitchCorrectionMode value) {
+  switch (value) {
+    case sonare::editing::voice_changer::PitchCorrectionMode::Off:
+      return "off";
+    case sonare::editing::voice_changer::PitchCorrectionMode::Auto:
+      return "auto";
+    case sonare::editing::voice_changer::PitchCorrectionMode::Robot:
+      return "robot";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::editing::voice_changer::ScaleKind value) {
+  switch (value) {
+    case sonare::editing::voice_changer::ScaleKind::Major:
+      return "major";
+    case sonare::editing::voice_changer::ScaleKind::NaturalMinor:
+      return "naturalMinor";
+    case sonare::editing::voice_changer::ScaleKind::Chromatic:
+      return "chromatic";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::editing::voice_changer::VocoderCarrierSource value) {
+  switch (value) {
+    case sonare::editing::voice_changer::VocoderCarrierSource::Internal:
+      return "internal";
+    case sonare::editing::voice_changer::VocoderCarrierSource::External:
+      return "external";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::editing::voice_changer::VocoderCarrierWave value) {
+  switch (value) {
+    case sonare::editing::voice_changer::VocoderCarrierWave::Saw:
+      return "saw";
+    case sonare::editing::voice_changer::VocoderCarrierWave::Pulse:
+      return "pulse";
+    case sonare::editing::voice_changer::VocoderCarrierWave::Ensemble:
+      return "ensemble";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::editing::voice_changer::CharacterType value) {
+  switch (value) {
+    case sonare::editing::voice_changer::CharacterType::None:
+      return "none";
+    case sonare::editing::voice_changer::CharacterType::Megaphone:
+      return "megaphone";
+    case sonare::editing::voice_changer::CharacterType::Radio:
+      return "radio";
+    case sonare::editing::voice_changer::CharacterType::BbdChorus:
+      return "bbdChorus";
+    case sonare::editing::voice_changer::CharacterType::Strobo:
+      return "strobo";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::editing::voice_changer::ReverbVariation value) {
+  switch (value) {
+    case sonare::editing::voice_changer::ReverbVariation::Reverb:
+      return "reverb";
+    case sonare::editing::voice_changer::ReverbVariation::Echo:
+      return "echo";
+    case sonare::editing::voice_changer::ReverbVariation::TempoDelay:
+      return "tempoDelay";
+    case sonare::editing::voice_changer::ReverbVariation::DubEcho:
+      return "dubEcho";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::editing::voice_changer::NoteDivision value) {
+  switch (value) {
+    case sonare::editing::voice_changer::NoteDivision::Quarter:
+      return "quarter";
+    case sonare::editing::voice_changer::NoteDivision::Eighth:
+      return "eighth";
+    case sonare::editing::voice_changer::NoteDivision::DottedEighth:
+      return "dottedEighth";
+    case sonare::editing::voice_changer::NoteDivision::Sixteenth:
+      return "sixteenth";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::editing::voice_changer::MidiRelease value) {
+  switch (value) {
+    case sonare::editing::voice_changer::MidiRelease::Hold:
+      return "hold";
+    case sonare::editing::voice_changer::MidiRelease::Input:
+      return "input";
   }
   return nullptr;
 }
@@ -1263,41 +1374,75 @@ inline double field_as_double(Enum value) {
 // cannot count them; insert_factory.cpp sums the stages' own arity instead. The display ranges
 // sit inside the accepted ones the insert measures from construction.
 
-#define SONARE_FIELDS_VOICE_CHANGER(X)                                                \
-  X("inputGainDb", input_gain_db, display_range(kDb, -12, 12))                        \
-  X("outputGainDb", output_gain_db, display_range(kDb, -24, 12))                      \
-  X("wetMix", wet_mix, display_range(kNone, 0, 1))                                    \
-  X("retuneSemitones", retune.semitones, display_range(kSemitones, -12, 12))          \
-  X("retuneMix", retune.mix, display_range(kNone, 0, 1))                              \
-  X("retuneGrainSize", retune.grain_size, display_range(kSamples, 0, 4096))           \
-  X("formantFactor", formant.factor, display_range(kRatio, 0.55, 1.65))               \
-  X("formantAmount", formant.amount, display_range(kNone, 0, 1))                      \
-  X("formantBody", formant.body, display_range(kNone, -1, 1))                         \
-  X("formantBrightness", formant.brightness, display_range(kNone, -1, 1))             \
-  X("formantNasal", formant.nasal, display_range(kNone, -1, 1))                       \
-  X("formantMode", formant_mode, kNone)                                               \
-  X("eqHighpassHz", eq.highpass_hz, display_range(kHzLog, 20, 300))                   \
-  X("eqBodyDb", eq.body_db, display_range(kDb, -12, 12))                              \
-  X("eqPresenceDb", eq.presence_db, display_range(kDb, -12, 12))                      \
-  X("eqAirDb", eq.air_db, display_range(kDb, -12, 12))                                \
-  X("gateThresholdDb", gate.threshold_db, display_range(kDb, -90, -12))               \
-  X("gateAttackMs", gate.attack_ms, display_range(kMsLog, 0.1, 100))                  \
-  X("gateReleaseMs", gate.release_ms, display_range(kMsLog, 5, 1000))                 \
-  X("gateRangeDb", gate.range_db, display_range(kDb, 0, 60))                          \
-  X("compressorThresholdDb", compressor.threshold_db, display_range(kDb, -60, 0))     \
-  X("compressorRatio", compressor.ratio, display_range(kRatio, 1, 20))                \
-  X("compressorAttackMs", compressor.attack_ms, display_range(kMsLog, 0.1, 100))      \
-  X("compressorReleaseMs", compressor.release_ms, display_range(kMsLog, 5, 1000))     \
-  X("compressorMakeupGainDb", compressor.makeup_gain_db, display_range(kDb, -12, 12)) \
-  X("deesserFrequencyHz", deesser.frequency_hz, display_range(kHzLog, 3000, 12000))   \
-  X("deesserThresholdDb", deesser.threshold_db, display_range(kDb, -60, -6))          \
-  X("deesserRatio", deesser.ratio, display_range(kRatio, 1, 20))                      \
-  X("deesserRangeDb", deesser.range_db, display_range(kDb, 0, 24))                    \
-  X("reverbMix", reverb.mix, display_range(kNone, 0, 0.45))                           \
-  X("reverbTimeMs", reverb.time_ms, display_range(kMsLog, 40, 1800))                  \
-  X("reverbDamping", reverb.damping, display_range(kNone, 0, 1))                      \
-  X("reverbSeed", reverb.seed, kNone)                                                 \
-  X("limiterCeilingDb", limiter.ceiling_db, display_range(kDbfs, -12, -1))            \
-  X("limiterReleaseMs", limiter.release_ms, display_range(kMsLog, 1, 500))            \
-  X("limiterEnableIspLimiter", limiter.enable_isp_limiter, kNone)                     \
-  X("limiterIspCeilingDbtp", limiter.isp_ceiling_dbtp, display_range(kDbfs, -12, 0))
+#define SONARE_FIELDS_VOICE_CHANGER(X)                                                         \
+  X("inputGainDb", input_gain_db, display_range(kDb, -12, 12))                                 \
+  X("outputGainDb", output_gain_db, display_range(kDb, -24, 12))                               \
+  X("wetMix", wet_mix, display_range(kNone, 0, 1))                                             \
+  X("retuneSemitones", retune.semitones, display_range(kSemitones, -12, 12))                   \
+  X("retuneMix", retune.mix, display_range(kNone, 0, 1))                                       \
+  X("retuneGrainSize", retune.grain_size, display_range(kSamples, 0, 4096))                    \
+  X("formantFactor", formant.factor, display_range(kRatio, 0.55, 1.65))                        \
+  X("formantAmount", formant.amount, display_range(kNone, 0, 1))                               \
+  X("formantBody", formant.body, display_range(kNone, -1, 1))                                  \
+  X("formantBrightness", formant.brightness, display_range(kNone, -1, 1))                      \
+  X("formantNasal", formant.nasal, display_range(kNone, -1, 1))                                \
+  X("formantMode", formant_mode, kNone)                                                        \
+  X("eqHighpassHz", eq.highpass_hz, display_range(kHzLog, 20, 300))                            \
+  X("eqBodyDb", eq.body_db, display_range(kDb, -12, 12))                                       \
+  X("eqPresenceDb", eq.presence_db, display_range(kDb, -12, 12))                               \
+  X("eqAirDb", eq.air_db, display_range(kDb, -12, 12))                                         \
+  X("gateThresholdDb", gate.threshold_db, display_range(kDb, -90, -12))                        \
+  X("gateAttackMs", gate.attack_ms, display_range(kMsLog, 0.1, 100))                           \
+  X("gateReleaseMs", gate.release_ms, display_range(kMsLog, 5, 1000))                          \
+  X("gateRangeDb", gate.range_db, display_range(kDb, 0, 60))                                   \
+  X("compressorThresholdDb", compressor.threshold_db, display_range(kDb, -60, 0))              \
+  X("compressorRatio", compressor.ratio, display_range(kRatio, 1, 20))                         \
+  X("compressorAttackMs", compressor.attack_ms, display_range(kMsLog, 0.1, 100))               \
+  X("compressorReleaseMs", compressor.release_ms, display_range(kMsLog, 5, 1000))              \
+  X("compressorMakeupGainDb", compressor.makeup_gain_db, display_range(kDb, -12, 12))          \
+  X("deesserFrequencyHz", deesser.frequency_hz, display_range(kHzLog, 3000, 12000))            \
+  X("deesserThresholdDb", deesser.threshold_db, display_range(kDb, -60, -6))                   \
+  X("deesserRatio", deesser.ratio, display_range(kRatio, 1, 20))                               \
+  X("deesserRangeDb", deesser.range_db, display_range(kDb, 0, 24))                             \
+  X("reverbMix", reverb.mix, display_range(kNone, 0, 0.45))                                    \
+  X("reverbTimeMs", reverb.time_ms, display_range(kMsLog, 40, 1800))                           \
+  X("reverbDamping", reverb.damping, display_range(kNone, 0, 1))                               \
+  X("reverbSeed", reverb.seed, kNone)                                                          \
+  X("limiterCeilingDb", limiter.ceiling_db, display_range(kDbfs, -12, -1))                     \
+  X("limiterReleaseMs", limiter.release_ms, display_range(kMsLog, 1, 500))                     \
+  X("limiterEnableIspLimiter", limiter.enable_isp_limiter, kNone)                              \
+  X("limiterIspCeilingDbtp", limiter.isp_ceiling_dbtp, display_range(kDbfs, -12, 0))           \
+  X("voiceEngineEngine", voice_engine.engine, kNone)                                           \
+  X("voiceEngineF0MinHz", voice_engine.f0_min_hz, display_range(kHzLog, 50, 200))              \
+  X("pitchCorrectionMode", pitch_correction.mode, kNone)                                       \
+  X("pitchCorrectionAmount", pitch_correction.amount, display_range(kNone, 0, 1))              \
+  X("pitchCorrectionSpeedMs", pitch_correction.speed_ms, display_range(kMs, 0, 400))           \
+  X("pitchCorrectionKeyRoot", pitch_correction.key_root, display_range(kNone, 0, 11))          \
+  X("pitchCorrectionScale", pitch_correction.scale, kNone)                                     \
+  X("pitchCorrectionRobotOctave", pitch_correction.robot_octave, display_range(kNone, -1, 1))  \
+  X("harmonyVoices", harmony.voices, display_range(kCount, 0, 3))                              \
+  X("harmonyStep1", harmony.steps[0], display_range(kNone, -7, 7))                             \
+  X("harmonyStep2", harmony.steps[1], display_range(kNone, -7, 7))                             \
+  X("harmonyStep3", harmony.steps[2], display_range(kNone, -7, 7))                             \
+  X("harmonyLevel", harmony.level, display_range(kNone, 0, 1))                                 \
+  X("harmonyLeadLevel", harmony.lead_level, display_range(kNone, 0, 1))                        \
+  X("harmonyDetuneCents", harmony.detune_cents, display_range(kCents, 0, 30))                  \
+  X("harmonyDelayMs", harmony.delay_ms, display_range(kMs, 0, 40))                             \
+  X("vocoderEnabled", vocoder.enabled, kNone)                                                  \
+  X("vocoderBands", vocoder.bands, display_range(kCount, 8, 32))                               \
+  X("vocoderAttackMs", vocoder.attack_ms, display_range(kMsLog, 0.5, 50))                      \
+  X("vocoderReleaseMs", vocoder.release_ms, display_range(kMsLog, 2, 300))                     \
+  X("vocoderSibilance", vocoder.sibilance, display_range(kNone, 0, 1))                         \
+  X("vocoderCarrierSource", vocoder.carrier_source, kNone)                                     \
+  X("vocoderCarrierWave", vocoder.carrier_wave, kNone)                                         \
+  X("vocoderEnsembleDetuneCents", vocoder.ensemble_detune_cents, display_range(kCents, 0, 30)) \
+  X("vocoderLevel", vocoder.level, display_range(kNone, 0, 1))                                 \
+  X("characterType", character.type, kNone)                                                    \
+  X("characterAmount", character.amount, display_range(kNone, 0, 1))                           \
+  X("characterTone", character.tone, display_range(kNone, -1, 1))                              \
+  X("reverbVariationVariation", reverb_variation.variation, kNone)                             \
+  X("reverbVariationDelayMs", reverb_variation.delay_ms, display_range(kMsLog, 1, 3000))       \
+  X("reverbVariationFeedback", reverb_variation.feedback, display_range(kNone, 0, 0.95))       \
+  X("reverbVariationTempoBpm", reverb_variation.tempo_bpm, display_range(kNone, 30, 300))      \
+  X("reverbVariationDivision", reverb_variation.division, kNone)                               \
+  X("midiRelease", midi.release, kNone)

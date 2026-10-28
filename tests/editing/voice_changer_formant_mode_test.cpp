@@ -445,6 +445,8 @@ namespace {
 // Everything but the pitch and formant stages set to transparent.
 RealtimeVoiceChangerConfig bare_chain_config(float semitones, float factor, FormantMode mode) {
   RealtimeVoiceChangerConfig cfg;
+  // The formant warp ahead of the retune belongs to the grain engine.
+  cfg.voice_engine.engine = PitchEngine::Grain;
   cfg.wet_mix = 1.0f;
   cfg.retune = {semitones, 1.0f, 0};
   cfg.formant = {factor, 1.0f, 0.0f, 0.0f, 0.0f};

@@ -259,6 +259,7 @@ TEST_CASE("RealtimeVoiceChanger aligns whole-chain dry and wet impulse peaks", "
 
   auto peak_position = [&](float wet_mix) {
     RealtimeVoiceChangerConfig config;
+    config.voice_engine.engine = PitchEngine::Grain;  // the alignment is one retune grain
     config.wet_mix = wet_mix;
     config.retune = {0.0f, 1.0f, grain};
     config.formant = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f};

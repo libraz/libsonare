@@ -28,6 +28,7 @@ namespace {
 namespace json = sonare::util::json;
 using sonare::ErrorCode;
 using sonare::SonareException;
+using sonare::editing::voice_changer::PitchEngine;
 using sonare::editing::voice_changer::RealtimeVoiceChanger;
 using sonare::editing::voice_changer::RealtimeVoiceChangerConfig;
 using sonare::editing::voice_changer::VoiceChangerInsert;
@@ -206,10 +207,16 @@ TEST_CASE("voice.changer refuses out-of-domain fields at construction", "[voice_
 TEST_CASE("voice.changer publishes real bounds and says what is construction-only",
           "[voice_changer][insert][catalog]") {
   const json::Array params = catalog_params();
-  REQUIRE(params.size() == 37);
+  REQUIRE(params.size() == 71);
 
-  const std::vector<std::string> construction_only = {"retuneGrainSize", "formantMode",
-                                                      "reverbSeed", "limiterEnableIspLimiter"};
+  const std::vector<std::string> construction_only = {
+      "retuneGrainSize",   "formantMode",        "reverbSeed",   "limiterEnableIspLimiter",
+      "voiceEngineEngine", "voiceEngineF0MinHz", "vocoderBands", "vocoderCarrierSource"};
+  const std::vector<std::string> enums = {
+      "formantMode",          "voiceEngineEngine",        "pitchCorrectionMode",
+      "pitchCorrectionScale", "vocoderCarrierSource",     "vocoderCarrierWave",
+      "characterType",        "reverbVariationVariation", "reverbVariationDivision",
+      "midiRelease"};
   VoiceChangerInsert probe;
   size_t automatable = 0;
   for (const json::Value& param : params) {
@@ -223,7 +230,7 @@ TEST_CASE("voice.changer publishes real bounds and says what is construction-onl
     const std::string type = param.find("type")->as_string();
     if (type == "boolean") continue;
     if (type == "enum") {
-      CHECK(name == "formantMode");
+      CHECK(std::find(enums.begin(), enums.end(), name) != enums.end());
       continue;
     }
     CHECK_FALSE(param.find("unit")->is_null());
@@ -263,13 +270,34 @@ TEST_CASE("voice.changer factory refuses a published bound's far side",
 TEST_CASE(
     "voice.changer realtime parameters reach the field a key names and refuse out-of-range values",
     "[voice_changer][insert]") {
+  // Whole-number parameters take the middle rounded to a whole number.
+  const std::vector<std::string> integers = {"pitchCorrectionKeyRoot", "pitchCorrectionRobotOctave",
+                                             "harmonyVoices",          "harmonyStep1",
+                                             "harmonyStep2",           "harmonyStep3"};
   for (const json::Value& param : catalog_params()) {
     if (param.find("id")->is_null()) continue;
     const std::string name = param.find("name")->as_string();
     CAPTURE(name);
-    const double min = param.find("min")->as_number();
-    const double max = param.find("max")->as_number();
-    const double middle = 0.5 * (min + max);
+    // A switch is driven on; a choice takes its last value; a number its middle.
+    double min = 0.0;
+    double max = 1.0;
+    double middle = 1.0;
+    if (param.find("type")->as_string() != "boolean") {
+      if (!param.find("choices")->is_null()) {
+        const json::Array& choices = param.find("choices")->as_array();
+        REQUIRE_FALSE(choices.empty());
+        min = choices.front().find("value")->as_number();
+        max = choices.back().find("value")->as_number();
+        middle = max;
+      } else {
+        min = param.find("min")->as_number();
+        max = param.find("max")->as_number();
+        middle = 0.5 * (min + max);
+        if (std::find(integers.begin(), integers.end(), name) != integers.end()) {
+          middle = std::round(middle);
+        }
+      }
+    }
 
     json::Object params;
     params.emplace(name, json::Value(middle));
@@ -317,10 +345,43 @@ TEST_CASE(
     CHECK(a.limiter.ceiling_db == b.limiter.ceiling_db);
     CHECK(a.limiter.release_ms == b.limiter.release_ms);
     CHECK(a.limiter.isp_ceiling_dbtp == b.limiter.isp_ceiling_dbtp);
+    CHECK(a.pitch_correction.mode == b.pitch_correction.mode);
+    CHECK(a.pitch_correction.amount == b.pitch_correction.amount);
+    CHECK(a.pitch_correction.speed_ms == b.pitch_correction.speed_ms);
+    CHECK(a.pitch_correction.key_root == b.pitch_correction.key_root);
+    CHECK(a.pitch_correction.scale == b.pitch_correction.scale);
+    CHECK(a.pitch_correction.robot_octave == b.pitch_correction.robot_octave);
+    CHECK(a.harmony.voices == b.harmony.voices);
+    CHECK(a.harmony.steps[0] == b.harmony.steps[0]);
+    CHECK(a.harmony.steps[1] == b.harmony.steps[1]);
+    CHECK(a.harmony.steps[2] == b.harmony.steps[2]);
+    CHECK(a.harmony.level == b.harmony.level);
+    CHECK(a.harmony.lead_level == b.harmony.lead_level);
+    CHECK(a.harmony.detune_cents == b.harmony.detune_cents);
+    CHECK(a.harmony.delay_ms == b.harmony.delay_ms);
+    CHECK(a.vocoder.enabled == b.vocoder.enabled);
+    CHECK(a.vocoder.attack_ms == b.vocoder.attack_ms);
+    CHECK(a.vocoder.release_ms == b.vocoder.release_ms);
+    CHECK(a.vocoder.sibilance == b.vocoder.sibilance);
+    CHECK(a.vocoder.carrier_wave == b.vocoder.carrier_wave);
+    CHECK(a.vocoder.ensemble_detune_cents == b.vocoder.ensemble_detune_cents);
+    CHECK(a.vocoder.level == b.vocoder.level);
+    CHECK(a.character.type == b.character.type);
+    CHECK(a.character.amount == b.character.amount);
+    CHECK(a.character.tone == b.character.tone);
+    CHECK(a.reverb_variation.variation == b.reverb_variation.variation);
+    CHECK(a.reverb_variation.delay_ms == b.reverb_variation.delay_ms);
+    CHECK(a.reverb_variation.feedback == b.reverb_variation.feedback);
+    CHECK(a.reverb_variation.tempo_bpm == b.reverb_variation.tempo_bpm);
+    CHECK(a.reverb_variation.division == b.reverb_variation.division);
+    CHECK(a.midi.release == b.midi.release);
 
-    // Past either bound the automation path refuses and leaves the configuration alone.
-    CHECK_FALSE(automated.set_parameter(id, static_cast<float>(max + 10.0 * (max - min))));
-    CHECK_FALSE(automated.set_parameter(id, static_cast<float>(min - 10.0 * (max - min))));
+    // Past either bound the automation path refuses and leaves the configuration alone; a
+    // switch has no bound, only a refused NaN.
+    if (param.find("type")->as_string() != "boolean") {
+      CHECK_FALSE(automated.set_parameter(id, static_cast<float>(max + 10.0 * (max - min) + 1.0)));
+      CHECK_FALSE(automated.set_parameter(id, static_cast<float>(min - 10.0 * (max - min) - 1.0)));
+    }
     CHECK(automated.config().formant.factor == b.formant.factor);
     CHECK_FALSE(automated.set_parameter(id, std::numeric_limits<float>::quiet_NaN()));
   }
@@ -673,6 +734,7 @@ TEST_CASE("voice.changer is silent after its reported latency and tail",
 
     // A retune held at -5 semitones and returned to unity keeps reading its source history.
     RealtimeVoiceChangerConfig retuned = reverberant_config(320.0f);
+    retuned.voice_engine.engine = PitchEngine::Grain;  // the retune's own source history
     retuned.reverb.mix = 0.0f;
     retuned.retune.mix = 1.0f;
     retuned.retune.semitones = -5.0f;
@@ -708,8 +770,10 @@ TEST_CASE("voice.changer is silent after its reported tail at long decay times",
 }
 
 TEST_CASE("voice.changer takes its formant mode at construction only", "[voice_changer][insert]") {
+  // The warp frame is the grain engine's; psola resamples its grains instead.
   RealtimeVoiceChangerConfig relative;
-  RealtimeVoiceChangerConfig absolute;
+  relative.voice_engine.engine = PitchEngine::Grain;
+  RealtimeVoiceChangerConfig absolute = relative;
   absolute.formant_mode = sonare::editing::voice_changer::FormantMode::Absolute;
   absolute.formant.factor = 1.1f;
   VoiceChangerInsert plain(relative);
@@ -735,7 +799,7 @@ TEST_CASE("voice.changer takes its formant mode at construction only", "[voice_c
     CHECK(param.find("rtSafe")->as_bool() == false);
   }
   CHECK(found);
-  const auto built = make_insert("voice.changer", R"({"formantMode":1})");
+  const auto built = make_insert("voice.changer", R"({"formantMode":1,"voiceEngineEngine":0})");
   REQUIRE(built != nullptr);
   built->prepare(kRate, kBlock);
   CHECK(built->latency_samples() == warped.latency_samples());
@@ -744,6 +808,7 @@ TEST_CASE("voice.changer takes its formant mode at construction only", "[voice_c
 TEST_CASE("voice.changer refuses an unreachable absolute warp at construction and under automation",
           "[voice_changer][insert]") {
   RealtimeVoiceChangerConfig config;
+  config.voice_engine.engine = PitchEngine::Grain;  // only the grain engine warps ahead
   config.formant_mode = sonare::editing::voice_changer::FormantMode::Absolute;
   config.retune.semitones = -9.0f;
   config.formant.factor = 1.0f;

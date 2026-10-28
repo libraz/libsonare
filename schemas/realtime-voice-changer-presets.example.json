@@ -4,6 +4,11 @@
   "presets": [
     {
       "dsp": {
+        "character": {
+          "amount": 0.5,
+          "tone": 0,
+          "type": "none"
+        },
         "compressor": {
           "attackMs": 8,
           "makeupGainDb": 0.5,
@@ -36,12 +41,35 @@
           "releaseMs": 100,
           "thresholdDb": -55
         },
+        "harmony": {
+          "delayMs": 12,
+          "detuneCents": 6,
+          "leadLevel": 1,
+          "level": 0.7,
+          "steps": [
+            2,
+            4,
+            -3
+          ],
+          "voices": 0
+        },
         "inputGainDb": 0,
         "limiter": {
           "ceilingDb": -1,
           "releaseMs": 50
         },
+        "midi": {
+          "release": "hold"
+        },
         "outputGainDb": 0,
+        "pitchCorrection": {
+          "amount": 1,
+          "keyRoot": 0,
+          "mode": "off",
+          "robotOctave": 0,
+          "scale": "major",
+          "speedMs": 20
+        },
         "retune": {
           "grainSize": 0,
           "mix": 0,
@@ -53,15 +81,42 @@
           "seed": 1,
           "timeMs": 320
         },
+        "reverbVariation": {
+          "delayMs": 250,
+          "division": "eighth",
+          "feedback": 0.35,
+          "tempoBpm": 120,
+          "variation": "reverb"
+        },
+        "vocoder": {
+          "attackMs": 2,
+          "bands": 20,
+          "carrierSource": "internal",
+          "carrierWave": "saw",
+          "enabled": false,
+          "ensembleDetuneCents": 12,
+          "level": 1,
+          "releaseMs": 20,
+          "sibilance": 0.3
+        },
+        "voiceEngine": {
+          "engine": "psola",
+          "f0MinHz": 70
+        },
         "wetMix": 1
       },
       "id": "neutral-monitor",
       "name": "Neutral Monitor",
       "category": "monitor",
-      "schemaVersion": 1
+      "schemaVersion": 2
     },
     {
       "dsp": {
+        "character": {
+          "amount": 0.5,
+          "tone": 0,
+          "type": "none"
+        },
         "compressor": {
           "attackMs": 4.5,
           "makeupGainDb": 2,
@@ -94,12 +149,35 @@
           "releaseMs": 80,
           "thresholdDb": -50
         },
+        "harmony": {
+          "delayMs": 12,
+          "detuneCents": 6,
+          "leadLevel": 1,
+          "level": 0.7,
+          "steps": [
+            2,
+            4,
+            -3
+          ],
+          "voices": 0
+        },
         "inputGainDb": 0,
         "limiter": {
           "ceilingDb": -1,
           "releaseMs": 50
         },
+        "midi": {
+          "release": "hold"
+        },
         "outputGainDb": 2.2,
+        "pitchCorrection": {
+          "amount": 1,
+          "keyRoot": 0,
+          "mode": "off",
+          "robotOctave": 0,
+          "scale": "major",
+          "speedMs": 20
+        },
         "retune": {
           "grainSize": 0,
           "mix": 1,
@@ -111,15 +189,42 @@
           "seed": 7,
           "timeMs": 380
         },
+        "reverbVariation": {
+          "delayMs": 250,
+          "division": "eighth",
+          "feedback": 0.35,
+          "tempoBpm": 120,
+          "variation": "reverb"
+        },
+        "vocoder": {
+          "attackMs": 2,
+          "bands": 20,
+          "carrierSource": "internal",
+          "carrierWave": "saw",
+          "enabled": false,
+          "ensembleDetuneCents": 12,
+          "level": 1,
+          "releaseMs": 20,
+          "sibilance": 0.3
+        },
+        "voiceEngine": {
+          "engine": "psola",
+          "f0MinHz": 70
+        },
         "wetMix": 1
       },
       "id": "bright-idol",
       "name": "Bright Idol",
       "category": "bright",
-      "schemaVersion": 1
+      "schemaVersion": 2
     },
     {
       "dsp": {
+        "character": {
+          "amount": 0.5,
+          "tone": 0,
+          "type": "none"
+        },
         "compressor": {
           "attackMs": 12,
           "makeupGainDb": 3,
@@ -152,12 +257,35 @@
           "releaseMs": 90,
           "thresholdDb": -62
         },
+        "harmony": {
+          "delayMs": 12,
+          "detuneCents": 6,
+          "leadLevel": 1,
+          "level": 0.7,
+          "steps": [
+            2,
+            4,
+            -3
+          ],
+          "voices": 0
+        },
         "inputGainDb": 0,
         "limiter": {
           "ceilingDb": -1,
           "releaseMs": 50
         },
+        "midi": {
+          "release": "hold"
+        },
         "outputGainDb": 3,
+        "pitchCorrection": {
+          "amount": 1,
+          "keyRoot": 0,
+          "mode": "off",
+          "robotOctave": 0,
+          "scale": "major",
+          "speedMs": 20
+        },
         "retune": {
           "grainSize": 0,
           "mix": 1,
@@ -169,15 +297,42 @@
           "seed": 11,
           "timeMs": 520
         },
+        "reverbVariation": {
+          "delayMs": 250,
+          "division": "eighth",
+          "feedback": 0.35,
+          "tempoBpm": 120,
+          "variation": "reverb"
+        },
+        "vocoder": {
+          "attackMs": 2,
+          "bands": 20,
+          "carrierSource": "internal",
+          "carrierWave": "saw",
+          "enabled": false,
+          "ensembleDetuneCents": 12,
+          "level": 1,
+          "releaseMs": 20,
+          "sibilance": 0.3
+        },
+        "voiceEngine": {
+          "engine": "psola",
+          "f0MinHz": 70
+        },
         "wetMix": 1
       },
       "id": "soft-whisper",
       "name": "Soft Whisper",
       "category": "soft",
-      "schemaVersion": 1
+      "schemaVersion": 2
     },
     {
       "dsp": {
+        "character": {
+          "amount": 0.5,
+          "tone": 0,
+          "type": "none"
+        },
         "compressor": {
           "attackMs": 14,
           "makeupGainDb": 1.2,
@@ -210,12 +365,35 @@
           "releaseMs": 120,
           "thresholdDb": -52
         },
+        "harmony": {
+          "delayMs": 12,
+          "detuneCents": 6,
+          "leadLevel": 1,
+          "level": 0.7,
+          "steps": [
+            2,
+            4,
+            -3
+          ],
+          "voices": 0
+        },
         "inputGainDb": 0,
         "limiter": {
           "ceilingDb": -1,
           "releaseMs": 50
         },
+        "midi": {
+          "release": "hold"
+        },
         "outputGainDb": 3.5,
+        "pitchCorrection": {
+          "amount": 1,
+          "keyRoot": 0,
+          "mode": "off",
+          "robotOctave": 0,
+          "scale": "major",
+          "speedMs": 20
+        },
         "retune": {
           "grainSize": 0,
           "mix": 1,
@@ -227,15 +405,42 @@
           "seed": 13,
           "timeMs": 650
         },
+        "reverbVariation": {
+          "delayMs": 250,
+          "division": "eighth",
+          "feedback": 0.35,
+          "tempoBpm": 120,
+          "variation": "reverb"
+        },
+        "vocoder": {
+          "attackMs": 2,
+          "bands": 20,
+          "carrierSource": "internal",
+          "carrierWave": "saw",
+          "enabled": false,
+          "ensembleDetuneCents": 12,
+          "level": 1,
+          "releaseMs": 20,
+          "sibilance": 0.3
+        },
+        "voiceEngine": {
+          "engine": "psola",
+          "f0MinHz": 70
+        },
         "wetMix": 1
       },
       "id": "deep-narrator",
       "name": "Deep Narrator",
       "category": "deep",
-      "schemaVersion": 1
+      "schemaVersion": 2
     },
     {
       "dsp": {
+        "character": {
+          "amount": 0.5,
+          "tone": 0,
+          "type": "none"
+        },
         "compressor": {
           "attackMs": 2,
           "makeupGainDb": 2.5,
@@ -268,12 +473,35 @@
           "releaseMs": 55,
           "thresholdDb": -45
         },
+        "harmony": {
+          "delayMs": 12,
+          "detuneCents": 6,
+          "leadLevel": 1,
+          "level": 0.7,
+          "steps": [
+            2,
+            4,
+            -3
+          ],
+          "voices": 0
+        },
         "inputGainDb": 0,
         "limiter": {
           "ceilingDb": -1,
           "releaseMs": 50
         },
+        "midi": {
+          "release": "hold"
+        },
         "outputGainDb": 4,
+        "pitchCorrection": {
+          "amount": 1,
+          "keyRoot": 0,
+          "mode": "off",
+          "robotOctave": 0,
+          "scale": "major",
+          "speedMs": 20
+        },
         "retune": {
           "grainSize": 0,
           "mix": 1,
@@ -285,15 +513,42 @@
           "seed": 17,
           "timeMs": 260
         },
+        "reverbVariation": {
+          "delayMs": 250,
+          "division": "eighth",
+          "feedback": 0.35,
+          "tempoBpm": 120,
+          "variation": "reverb"
+        },
+        "vocoder": {
+          "attackMs": 2,
+          "bands": 20,
+          "carrierSource": "internal",
+          "carrierWave": "saw",
+          "enabled": false,
+          "ensembleDetuneCents": 12,
+          "level": 1,
+          "releaseMs": 20,
+          "sibilance": 0.3
+        },
+        "voiceEngine": {
+          "engine": "psola",
+          "f0MinHz": 70
+        },
         "wetMix": 1
       },
       "id": "robot-mascot",
       "name": "Robot Mascot",
       "category": "robot",
-      "schemaVersion": 1
+      "schemaVersion": 2
     },
     {
       "dsp": {
+        "character": {
+          "amount": 0.5,
+          "tone": 0,
+          "type": "none"
+        },
         "compressor": {
           "attackMs": 8,
           "makeupGainDb": 1,
@@ -326,12 +581,35 @@
           "releaseMs": 110,
           "thresholdDb": -50
         },
+        "harmony": {
+          "delayMs": 12,
+          "detuneCents": 6,
+          "leadLevel": 1,
+          "level": 0.7,
+          "steps": [
+            2,
+            4,
+            -3
+          ],
+          "voices": 0
+        },
         "inputGainDb": 0,
         "limiter": {
           "ceilingDb": -1,
           "releaseMs": 50
         },
+        "midi": {
+          "release": "hold"
+        },
         "outputGainDb": 4.5,
+        "pitchCorrection": {
+          "amount": 1,
+          "keyRoot": 0,
+          "mode": "off",
+          "robotOctave": 0,
+          "scale": "major",
+          "speedMs": 20
+        },
         "retune": {
           "grainSize": 0,
           "mix": 1,
@@ -343,13 +621,695 @@
           "seed": 19,
           "timeMs": 820
         },
+        "reverbVariation": {
+          "delayMs": 250,
+          "division": "eighth",
+          "feedback": 0.35,
+          "tempoBpm": 120,
+          "variation": "reverb"
+        },
+        "vocoder": {
+          "attackMs": 2,
+          "bands": 20,
+          "carrierSource": "internal",
+          "carrierWave": "saw",
+          "enabled": false,
+          "ensembleDetuneCents": 12,
+          "level": 1,
+          "releaseMs": 20,
+          "sibilance": 0.3
+        },
+        "voiceEngine": {
+          "engine": "psola",
+          "f0MinHz": 70
+        },
         "wetMix": 1
       },
       "id": "dark-villain",
       "name": "Dark Villain",
       "category": "dark",
-      "schemaVersion": 1
+      "schemaVersion": 2
+    },
+    {
+      "dsp": {
+        "character": {
+          "amount": 0.5,
+          "tone": 0,
+          "type": "none"
+        },
+        "compressor": {
+          "attackMs": 5,
+          "makeupGainDb": 1.5,
+          "ratio": 3,
+          "releaseMs": 80,
+          "thresholdDb": -24
+        },
+        "deesser": {
+          "frequencyHz": 7400,
+          "rangeDb": 7,
+          "ratio": 4,
+          "thresholdDb": -30
+        },
+        "eq": {
+          "airDb": 2,
+          "bodyDb": 0,
+          "highpassHz": 90,
+          "presenceDb": 2.5
+        },
+        "formant": {
+          "amount": 0,
+          "body": 0,
+          "brightness": 0.2,
+          "factor": 1,
+          "nasal": 0
+        },
+        "gate": {
+          "attackMs": 2,
+          "rangeDb": 18,
+          "releaseMs": 100,
+          "thresholdDb": -55
+        },
+        "harmony": {
+          "delayMs": 12,
+          "detuneCents": 6,
+          "leadLevel": 1,
+          "level": 0.7,
+          "steps": [
+            2,
+            4,
+            -3
+          ],
+          "voices": 0
+        },
+        "inputGainDb": 0,
+        "limiter": {
+          "ceilingDb": -1,
+          "enableIspLimiter": true,
+          "ispCeilingDbtp": -1,
+          "releaseMs": 50
+        },
+        "midi": {
+          "release": "hold"
+        },
+        "outputGainDb": 1.5,
+        "pitchCorrection": {
+          "amount": 1,
+          "keyRoot": 0,
+          "mode": "auto",
+          "robotOctave": 0,
+          "scale": "major",
+          "speedMs": 0
+        },
+        "retune": {
+          "grainSize": 0,
+          "mix": 1,
+          "semitones": 0
+        },
+        "reverb": {
+          "damping": 0.4,
+          "mix": 0.08,
+          "seed": 23,
+          "timeMs": 420
+        },
+        "reverbVariation": {
+          "delayMs": 250,
+          "division": "eighth",
+          "feedback": 0.35,
+          "tempoBpm": 120,
+          "variation": "reverb"
+        },
+        "vocoder": {
+          "attackMs": 2,
+          "bands": 20,
+          "carrierSource": "internal",
+          "carrierWave": "saw",
+          "enabled": false,
+          "ensembleDetuneCents": 12,
+          "level": 1,
+          "releaseMs": 20,
+          "sibilance": 0.3
+        },
+        "voiceEngine": {
+          "engine": "psola",
+          "f0MinHz": 70
+        },
+        "wetMix": 1
+      },
+      "id": "hard-tune",
+      "name": "Hard Tune",
+      "category": "tune",
+      "schemaVersion": 2
+    },
+    {
+      "dsp": {
+        "character": {
+          "amount": 0.5,
+          "tone": 0,
+          "type": "none"
+        },
+        "compressor": {
+          "attackMs": 3,
+          "makeupGainDb": 2,
+          "ratio": 4,
+          "releaseMs": 70,
+          "thresholdDb": -26
+        },
+        "deesser": {
+          "frequencyHz": 7800,
+          "rangeDb": 7,
+          "ratio": 4,
+          "thresholdDb": -30
+        },
+        "eq": {
+          "airDb": 1,
+          "bodyDb": -3,
+          "highpassHz": 180,
+          "presenceDb": 4
+        },
+        "formant": {
+          "amount": 0,
+          "body": -0.2,
+          "brightness": 0.4,
+          "factor": 1.05,
+          "nasal": 0.2
+        },
+        "gate": {
+          "attackMs": 2,
+          "rangeDb": 18,
+          "releaseMs": 100,
+          "thresholdDb": -55
+        },
+        "harmony": {
+          "delayMs": 12,
+          "detuneCents": 6,
+          "leadLevel": 1,
+          "level": 0.7,
+          "steps": [
+            2,
+            4,
+            -3
+          ],
+          "voices": 0
+        },
+        "inputGainDb": 0,
+        "limiter": {
+          "ceilingDb": -1,
+          "enableIspLimiter": true,
+          "ispCeilingDbtp": -1,
+          "releaseMs": 50
+        },
+        "midi": {
+          "release": "hold"
+        },
+        "outputGainDb": 2,
+        "pitchCorrection": {
+          "amount": 1,
+          "keyRoot": 0,
+          "mode": "robot",
+          "robotOctave": 0,
+          "scale": "major",
+          "speedMs": 0
+        },
+        "retune": {
+          "grainSize": 0,
+          "mix": 1,
+          "semitones": 0
+        },
+        "reverb": {
+          "damping": 0.4,
+          "mix": 0.06,
+          "seed": 25,
+          "timeMs": 300
+        },
+        "reverbVariation": {
+          "delayMs": 250,
+          "division": "eighth",
+          "feedback": 0.35,
+          "tempoBpm": 120,
+          "variation": "reverb"
+        },
+        "vocoder": {
+          "attackMs": 2,
+          "bands": 20,
+          "carrierSource": "internal",
+          "carrierWave": "saw",
+          "enabled": false,
+          "ensembleDetuneCents": 12,
+          "level": 1,
+          "releaseMs": 20,
+          "sibilance": 0.3
+        },
+        "voiceEngine": {
+          "engine": "psola",
+          "f0MinHz": 70
+        },
+        "wetMix": 1
+      },
+      "id": "robot-monotone",
+      "name": "Robot Monotone",
+      "category": "tune",
+      "schemaVersion": 2
+    },
+    {
+      "dsp": {
+        "character": {
+          "amount": 0.5,
+          "tone": 0,
+          "type": "none"
+        },
+        "compressor": {
+          "attackMs": 8,
+          "makeupGainDb": 1,
+          "ratio": 2.5,
+          "releaseMs": 120,
+          "thresholdDb": -24
+        },
+        "deesser": {
+          "frequencyHz": 7200,
+          "rangeDb": 8,
+          "ratio": 4,
+          "thresholdDb": -28
+        },
+        "eq": {
+          "airDb": 2,
+          "bodyDb": 0.5,
+          "highpassHz": 100,
+          "presenceDb": 1.5
+        },
+        "formant": {
+          "amount": 0,
+          "body": 0.1,
+          "brightness": 0.2,
+          "factor": 1,
+          "nasal": 0
+        },
+        "gate": {
+          "attackMs": 2,
+          "rangeDb": 18,
+          "releaseMs": 100,
+          "thresholdDb": -55
+        },
+        "harmony": {
+          "delayMs": 18,
+          "detuneCents": 8,
+          "leadLevel": 1,
+          "level": 0.6,
+          "steps": [
+            2,
+            4,
+            -3
+          ],
+          "voices": 3
+        },
+        "inputGainDb": 0,
+        "limiter": {
+          "ceilingDb": -1,
+          "enableIspLimiter": true,
+          "ispCeilingDbtp": -1,
+          "releaseMs": 50
+        },
+        "midi": {
+          "release": "hold"
+        },
+        "outputGainDb": 1,
+        "pitchCorrection": {
+          "amount": 0.5,
+          "keyRoot": 0,
+          "mode": "auto",
+          "robotOctave": 0,
+          "scale": "major",
+          "speedMs": 60
+        },
+        "retune": {
+          "grainSize": 0,
+          "mix": 1,
+          "semitones": 0
+        },
+        "reverb": {
+          "damping": 0.6,
+          "mix": 0.2,
+          "seed": 29,
+          "timeMs": 1100
+        },
+        "reverbVariation": {
+          "delayMs": 250,
+          "division": "eighth",
+          "feedback": 0.35,
+          "tempoBpm": 120,
+          "variation": "reverb"
+        },
+        "vocoder": {
+          "attackMs": 2,
+          "bands": 20,
+          "carrierSource": "internal",
+          "carrierWave": "saw",
+          "enabled": false,
+          "ensembleDetuneCents": 12,
+          "level": 1,
+          "releaseMs": 20,
+          "sibilance": 0.3
+        },
+        "voiceEngine": {
+          "engine": "psola",
+          "f0MinHz": 70
+        },
+        "wetMix": 1
+      },
+      "id": "choir-harmony",
+      "name": "Choir Harmony",
+      "category": "harmony",
+      "schemaVersion": 2
+    },
+    {
+      "dsp": {
+        "character": {
+          "amount": 0.5,
+          "tone": 0,
+          "type": "none"
+        },
+        "compressor": {
+          "attackMs": 6,
+          "makeupGainDb": 1,
+          "ratio": 3,
+          "releaseMs": 100,
+          "thresholdDb": -24
+        },
+        "deesser": {
+          "frequencyHz": 7200,
+          "rangeDb": 8,
+          "ratio": 4,
+          "thresholdDb": -28
+        },
+        "eq": {
+          "airDb": 1,
+          "bodyDb": 0,
+          "highpassHz": 120,
+          "presenceDb": 1.5
+        },
+        "formant": {
+          "amount": 0,
+          "body": 0,
+          "brightness": 0,
+          "factor": 1,
+          "nasal": 0
+        },
+        "gate": {
+          "attackMs": 2,
+          "rangeDb": 18,
+          "releaseMs": 100,
+          "thresholdDb": -55
+        },
+        "harmony": {
+          "delayMs": 12,
+          "detuneCents": 6,
+          "leadLevel": 1,
+          "level": 0.7,
+          "steps": [
+            2,
+            4,
+            -3
+          ],
+          "voices": 0
+        },
+        "inputGainDb": 0,
+        "limiter": {
+          "ceilingDb": -1,
+          "enableIspLimiter": true,
+          "ispCeilingDbtp": -1,
+          "releaseMs": 50
+        },
+        "midi": {
+          "release": "hold"
+        },
+        "outputGainDb": 2,
+        "pitchCorrection": {
+          "amount": 1,
+          "keyRoot": 0,
+          "mode": "off",
+          "robotOctave": 0,
+          "scale": "major",
+          "speedMs": 20
+        },
+        "retune": {
+          "grainSize": 0,
+          "mix": 1,
+          "semitones": 0
+        },
+        "reverb": {
+          "damping": 0.5,
+          "mix": 0.15,
+          "seed": 31,
+          "timeMs": 900
+        },
+        "reverbVariation": {
+          "delayMs": 250,
+          "division": "eighth",
+          "feedback": 0.35,
+          "tempoBpm": 120,
+          "variation": "reverb"
+        },
+        "vocoder": {
+          "attackMs": 4,
+          "bands": 20,
+          "carrierSource": "internal",
+          "carrierWave": "ensemble",
+          "enabled": true,
+          "ensembleDetuneCents": 12,
+          "level": 1,
+          "releaseMs": 60,
+          "sibilance": 0.25
+        },
+        "voiceEngine": {
+          "engine": "psola",
+          "f0MinHz": 70
+        },
+        "wetMix": 1
+      },
+      "id": "vocoder-strings",
+      "name": "Vocoder Strings",
+      "category": "vocoder",
+      "schemaVersion": 2
+    },
+    {
+      "dsp": {
+        "character": {
+          "amount": 0.6,
+          "tone": 0,
+          "type": "megaphone"
+        },
+        "compressor": {
+          "attackMs": 2,
+          "makeupGainDb": 3,
+          "ratio": 6,
+          "releaseMs": 60,
+          "thresholdDb": -28
+        },
+        "deesser": {
+          "frequencyHz": 7200,
+          "rangeDb": 8,
+          "ratio": 4,
+          "thresholdDb": -28
+        },
+        "eq": {
+          "airDb": -6,
+          "bodyDb": -4,
+          "highpassHz": 300,
+          "presenceDb": 3
+        },
+        "formant": {
+          "amount": 0,
+          "body": 0,
+          "brightness": 0,
+          "factor": 1,
+          "nasal": 0
+        },
+        "gate": {
+          "attackMs": 2,
+          "rangeDb": 18,
+          "releaseMs": 100,
+          "thresholdDb": -55
+        },
+        "harmony": {
+          "delayMs": 12,
+          "detuneCents": 6,
+          "leadLevel": 1,
+          "level": 0.7,
+          "steps": [
+            2,
+            4,
+            -3
+          ],
+          "voices": 0
+        },
+        "inputGainDb": 0,
+        "limiter": {
+          "ceilingDb": -1,
+          "enableIspLimiter": true,
+          "ispCeilingDbtp": -1,
+          "releaseMs": 50
+        },
+        "midi": {
+          "release": "hold"
+        },
+        "outputGainDb": 1,
+        "pitchCorrection": {
+          "amount": 1,
+          "keyRoot": 0,
+          "mode": "off",
+          "robotOctave": 0,
+          "scale": "major",
+          "speedMs": 20
+        },
+        "retune": {
+          "grainSize": 0,
+          "mix": 1,
+          "semitones": 0
+        },
+        "reverb": {
+          "damping": 0.5,
+          "mix": 0.05,
+          "seed": 37,
+          "timeMs": 250
+        },
+        "reverbVariation": {
+          "delayMs": 250,
+          "division": "eighth",
+          "feedback": 0.35,
+          "tempoBpm": 120,
+          "variation": "reverb"
+        },
+        "vocoder": {
+          "attackMs": 2,
+          "bands": 20,
+          "carrierSource": "internal",
+          "carrierWave": "saw",
+          "enabled": false,
+          "ensembleDetuneCents": 12,
+          "level": 1,
+          "releaseMs": 20,
+          "sibilance": 0.3
+        },
+        "voiceEngine": {
+          "engine": "psola",
+          "f0MinHz": 70
+        },
+        "wetMix": 1
+      },
+      "id": "megaphone",
+      "name": "Megaphone",
+      "category": "character",
+      "schemaVersion": 2
+    },
+    {
+      "dsp": {
+        "character": {
+          "amount": 0.4,
+          "tone": 0,
+          "type": "radio"
+        },
+        "compressor": {
+          "attackMs": 3,
+          "makeupGainDb": 2,
+          "ratio": 5,
+          "releaseMs": 80,
+          "thresholdDb": -26
+        },
+        "deesser": {
+          "frequencyHz": 7200,
+          "rangeDb": 8,
+          "ratio": 4,
+          "thresholdDb": -28
+        },
+        "eq": {
+          "airDb": -4,
+          "bodyDb": -2,
+          "highpassHz": 200,
+          "presenceDb": 2
+        },
+        "formant": {
+          "amount": 0,
+          "body": 0,
+          "brightness": 0,
+          "factor": 1,
+          "nasal": 0
+        },
+        "gate": {
+          "attackMs": 2,
+          "rangeDb": 18,
+          "releaseMs": 100,
+          "thresholdDb": -55
+        },
+        "harmony": {
+          "delayMs": 12,
+          "detuneCents": 6,
+          "leadLevel": 1,
+          "level": 0.7,
+          "steps": [
+            2,
+            4,
+            -3
+          ],
+          "voices": 0
+        },
+        "inputGainDb": 0,
+        "limiter": {
+          "ceilingDb": -1,
+          "enableIspLimiter": true,
+          "ispCeilingDbtp": -1,
+          "releaseMs": 50
+        },
+        "midi": {
+          "release": "hold"
+        },
+        "outputGainDb": 1,
+        "pitchCorrection": {
+          "amount": 1,
+          "keyRoot": 0,
+          "mode": "off",
+          "robotOctave": 0,
+          "scale": "major",
+          "speedMs": 20
+        },
+        "retune": {
+          "grainSize": 0,
+          "mix": 1,
+          "semitones": 0
+        },
+        "reverb": {
+          "damping": 0.5,
+          "mix": 0,
+          "seed": 41,
+          "timeMs": 320
+        },
+        "reverbVariation": {
+          "delayMs": 250,
+          "division": "eighth",
+          "feedback": 0.35,
+          "tempoBpm": 120,
+          "variation": "reverb"
+        },
+        "vocoder": {
+          "attackMs": 2,
+          "bands": 20,
+          "carrierSource": "internal",
+          "carrierWave": "saw",
+          "enabled": false,
+          "ensembleDetuneCents": 12,
+          "level": 1,
+          "releaseMs": 20,
+          "sibilance": 0.3
+        },
+        "voiceEngine": {
+          "engine": "psola",
+          "f0MinHz": 70
+        },
+        "wetMix": 1
+      },
+      "id": "radio-voice",
+      "name": "Radio Voice",
+      "category": "character",
+      "schemaVersion": 2
     }
   ],
-  "schemaVersion": 1
+  "schemaVersion": 2
 }

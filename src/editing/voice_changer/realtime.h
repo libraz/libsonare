@@ -3,6 +3,8 @@
 /// @file realtime_voice_changer.h
 /// @brief Integrated realtime DSP chain for character voice changing.
 
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -11,17 +13,25 @@
 #include <string_view>
 #include <vector>
 
+#include "editing/voice_changer/channel_vocoder.h"
+#include "editing/voice_changer/character_stage.h"
 #include "editing/voice_changer/control_cadence.h"
 #include "editing/voice_changer/isp_limiter.h"
+#include "editing/voice_changer/pitch_target.h"
+#include "editing/voice_changer/psola_shifter.h"
+#include "editing/voice_changer/space_stage.h"
+#include "editing/voice_changer/streaming_f0.h"
 #include "editing/voice_changer/streaming_formant.h"
 #include "editing/voice_changer/streaming_retune.h"
 #include "editing/voice_changer/streaming_reverb.h"
 #include "editing/voice_changer/voice_changer.h"
+#include "editing/voice_changer/voice_transform_types.h"
 #include "effects/formant_warp.h"
 #include "rt/biquad_design.h"
 #include "rt/overflow_counter.h"
 #include "rt/param_smoother.h"
 #include "rt/seqlock_cell.h"
+#include "rt/spsc_queue.h"
 #include "rt/stage_gate.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
@@ -33,8 +43,10 @@ namespace sonare::editing::voice_changer {
 ///          fields, range tightening that rejects previously-valid documents).
 ///          Mirrored by the JSON Schema files under @c schemas/ and by the
 ///          @c "schemaVersion" literal emitted by @ref
-///          realtime_voice_changer_config_to_json.
-inline constexpr int kVoiceChangerPresetSchemaVersion = 1;
+///          realtime_voice_changer_config_to_json. Version 2 adds the voice
+///          transformer sections; a version 1 document (which has none of them)
+///          still validates and loads with those sections at their defaults.
+inline constexpr int kVoiceChangerPresetSchemaVersion = 2;
 
 /// @brief ABI version of the realtime voice changer POD config struct.
 /// @details Bumped whenever @ref SonareRealtimeVoiceChangerConfig
@@ -48,12 +60,16 @@ inline constexpr int kVoiceChangerPresetSchemaVersion = 1;
 // v2: added limiter_enable_isp_limiter (int) and limiter_isp_ceiling_dbtp
 //     (float) to SonareRealtimeVoiceChangerConfig.
 // v3: added struct_version (first) and formant_mode to SonareRealtimeVoiceChangerConfig.
-inline constexpr std::uint32_t kVoiceChangerAbiVersion = 3u;
+// v4: appended the voice transformer sections (struct_version 2); added the note and
+//     carrier entry points.
+inline constexpr std::uint32_t kVoiceChangerAbiVersion = 4u;
 
 /// @brief Lowest input high-pass corner the configuration accepts, in hertz.
 inline constexpr float kVoiceHighpassMinHz = 20.0f;
 /// @brief Largest output EQ boost or cut the configuration accepts, in dB.
 inline constexpr float kVoiceEqGainLimitDb = 12.0f;
+/// @brief Longest harmony voice delay the configuration accepts, in milliseconds.
+inline constexpr float kHarmonyMaxDelayMs = 40.0f;
 
 enum class VoiceCharacterPreset {
   NeutralMonitor,
@@ -62,6 +78,12 @@ enum class VoiceCharacterPreset {
   DeepNarrator,
   RobotMascot,
   DarkVillain,
+  HardTune,
+  RobotMonotone,
+  ChoirHarmony,
+  VocoderStrings,
+  Megaphone,
+  RadioVoice,
 };
 
 struct CharacterEqConfig {
@@ -149,6 +171,18 @@ struct RealtimeVoiceChangerConfig {
   VoiceDeesserConfig deesser;
   ReverbConfig reverb;
   LimiterConfig limiter;
+  /// @brief Pitch engine and lowest tracked f0; both fixed when the chain is prepared.
+  /// @details Psola (the default) tracks f0 and shifts pitch-synchronously; grain is the SOLA
+  ///          retune, which has no f0 and so refuses pitch correction, harmony and the vocoder.
+  VoiceEngineConfig voice_engine;
+  PitchCorrectionConfig pitch_correction;
+  HarmonyConfig harmony;
+  /// @brief Channel vocoder; @ref VocoderConfig::bands is fixed when the chain is prepared.
+  VocoderConfig vocoder;
+  CharacterConfig character;
+  /// @brief Space effect of the reverb stage; every variation shares @ref ReverbConfig::mix.
+  ReverbVariationConfig reverb_variation;
+  MidiConfig midi;
 };
 
 class RealtimeVoiceChanger {
@@ -172,8 +206,8 @@ class RealtimeVoiceChanger {
   /// @brief Publishes a new configuration to the realtime processing chain.
   /// @throws SonareException InvalidParameter when @ref validate_realtime_voice_changer_config
   ///         refuses @p config (the previous configuration stays in effect), or when the chain is
-  ///         prepared and @p config changes @ref RealtimeVoiceChangerConfig::formant_mode, which is
-  ///         fixed at prepare().
+  ///         prepared and @p config changes a field fixed at prepare(): the formant mode, the pitch
+  ///         engine, the lowest tracked f0 or the vocoder band count.
   /// @details Safe to call concurrently with @ref process_block on the same
   ///          instance: the validated configuration is stored into a
   ///          lock-free single-writer/single-reader cell (see @c
@@ -206,17 +240,56 @@ class RealtimeVoiceChanger {
   ///          throwing. When @p sample_rate_ is zero the @p output buffer is
   ///          zero-filled for @p num_samples samples so callers always observe
   ///          a defined buffer state.
-  void process_block(const float* input, float* output, int num_samples) noexcept;
+  /// @return true when the block was processed. False for a pre-condition violation, or when the
+  ///         adopted configuration takes an external vocoder carrier, which this overload has
+  ///         none of; @p output is then not written.
+  bool process_block(const float* input, float* output, int num_samples) noexcept;
+  /// @brief Process a mono block with an external vocoder carrier of @p num_samples samples.
+  /// @details The carrier is read only while the vocoder is on with an external carrier source;
+  ///          otherwise it is ignored and the call behaves as the carrier-less overload.
+  /// @return false for the pre-condition violations of the carrier-less overload or a null
+  ///         @p carrier while the external carrier is in use; @p output is then not written.
+  bool process_block(const float* input, const float* carrier, float* output,
+                     int num_samples) noexcept;
   /// @brief Process a planar multi-channel block. RT-safe and @c noexcept.
   /// @details Pre-condition violations (no @ref prepare, @p num_samples > @c
   ///          max_block_size_, bad channel count, null pointers) cause a
   ///          silent no-op rather than throwing. Caller-owned buffers are left
   ///          untouched in that case.
-  void process_block(float* const* channels, int num_channels, int num_samples) noexcept;
+  /// @return false for a pre-condition violation or a missing external carrier, in which case
+  ///         the buffers are left untouched.
+  bool process_block(float* const* channels, int num_channels, int num_samples) noexcept;
+  /// @brief Process a planar block with one external vocoder carrier shared by every channel.
+  bool process_block(float* const* channels, int num_channels, const float* carrier,
+                     int num_samples) noexcept;
+  /// @brief Holds MIDI note @p note at @p velocity from the start of the next block.
+  /// @details Control thread, single producer shared with @ref note_off. The held notes become the
+  ///          voices' targets whatever the pitch correction mode (the newest is the lead), up to
+  ///          1 + harmony.voices of them. Holding a held note again refreshes it.
+  /// @return false, with the event dropped, for a note outside [0, 127], a velocity outside
+  ///         (0, 1], an unprepared chain, a grain engine, or a full event queue.
+  bool note_on(int note, float velocity) noexcept;
+  /// @brief Releases MIDI note @p note from the start of the next block; an unheld note is a no-op.
+  /// @return false for a note outside [0, 127], an unprepared chain, a grain engine, or a full
+  ///         event queue.
+  bool note_off(int note) noexcept;
+  /// @brief Releases every held note, including one kept by @ref MidiRelease::Hold, from the
+  ///        start of the next block. Always accepted: it does not pass through the event queue,
+  ///        and events queued before it are applied before it.
+  void all_notes_off() noexcept;
+  /// @brief Whether @p note is a MIDI note number the note API accepts.
+  static constexpr bool is_valid_note(int note) noexcept { return note >= 0 && note <= 127; }
+  /// @brief Whether @p velocity is a note-on velocity the note API accepts: (0, 1].
+  static constexpr bool is_valid_velocity(float velocity) noexcept {
+    return velocity > 0.0f && velocity <= 1.0f;
+  }
   /// @brief Reports the prepared chain's processing latency in samples.
-  /// @details Dry and wet paths are both aligned to the retune OLA's fixed
+  /// @details With the psola engine the dry path, the voice stage and the vocoder are all aligned
+  ///          to max(ceil(sr / f0_min_hz), the vocoder's group delay at its lowest band), so the
+  ///          value does not change when the vocoder is switched on or off. With the grain engine
+  ///          dry and wet paths are both aligned to the retune OLA's fixed
   ///          one-grain delay plus, in absolute formant mode, the formant warp's
-  ///          one-frame delay, so this value never changes when @c wet_mix or
+  ///          one-frame delay. Either way this value never changes when @c wet_mix or
   ///          @c retune.mix changes. When @ref LimiterConfig::enable_isp_limiter
   ///          is @c true, the final ISP limiter runs after the aligned mix and
   ///          adds @c IspLimiter::latency_samples: a 6-sample FIR group delay
@@ -264,6 +337,28 @@ class RealtimeVoiceChanger {
   }
 
  private:
+  /// Integer delay line; empty means no delay.
+  struct FixedDelay {
+    std::vector<float> line;
+    std::size_t pos = 0;
+    float process(float x) noexcept {
+      if (line.empty()) return x;
+      const float y = line[pos];
+      line[pos] = x;
+      pos = pos + 1 == line.size() ? 0 : pos + 1;
+      return y;
+    }
+    void clear() noexcept {
+      std::fill(line.begin(), line.end(), 0.0f);
+      pos = 0;
+    }
+  };
+  /// Ring read at a fractional, smoothed delay.
+  struct DelayRing {
+    std::vector<float> line;
+    std::size_t write = 0;
+  };
+
   struct ChannelState {
     /// Resets the channel when a block includes it again after leaving it out.
     rt::StageGate gate;
@@ -357,6 +452,36 @@ class RealtimeVoiceChanger {
     /// LimiterConfig::enable_isp_limiter is true. Always prepared so toggling
     /// the flag at runtime never re-allocates from the audio thread.
     IspLimiter isp_limiter;
+    /// Colouration after the voice stage and the echo-family space effects; both engines.
+    CharacterStage character;
+    SpaceStage space;
+    /// Variation adopted with the last snapshot; reverb runs through @c reverb above.
+    ReverbVariation variation = ReverbVariation::Reverb;
+    // Psola voice stage; prepared only for that engine.
+    StreamingF0Tracker tracker;
+    PsolaShifter shifter;
+    PitchTargetController targets;
+    ChannelVocoder vocoder;
+    std::vector<F0Estimate> estimates;
+    std::array<std::vector<float>, kMaxVoices> voice_out;
+    std::vector<float> vocoder_out;
+    /// Harmony voices are delayed after the shifter; the lead is not.
+    std::array<DelayRing, kMaxHarmonyVoices> harmony_delay;
+    std::array<rt::ParamSmoother, kMaxHarmonyVoices> harmony_delay_samples;
+    std::array<rt::ParamSmoother, kMaxVoices> voice_gain;
+    /// Wet share of the shift (retune.mix); the rest is the gated input delayed to the shifter.
+    rt::ParamSmoother shift_mix{1.0f, 10.0f, ::sonare::constants::kDefaultDawSampleRate};
+    FixedDelay unshifted;
+    /// Compensation on whichever of the voice stage and the vocoder is the shorter path.
+    FixedDelay voice_compensation;
+    FixedDelay vocoder_compensation;
+    bool vocoder_running = false;
+    /// Set when a transformer stage produced a non-finite value, cleared by
+    /// discard_non_finite_state, which then resets those stages. Audio thread only.
+    bool transform_substituted = false;
+    /// Set when a non-finite value was kept out of the psola voice stage, cleared by
+    /// discard_non_finite_state, which reports the block. Audio thread only.
+    bool voice_input_substituted = false;
   };
 
   /// @brief Recomputes sample-rate-derived detector state.
@@ -367,6 +492,8 @@ class RealtimeVoiceChanger {
   void update_derived();
   /// @brief Allocates per-channel buffers. MUST only be called from prepare().
   void allocate_channel(ChannelState& state);
+  /// @brief Allocates the psola voice stage and the vocoder; returns their aligned latency.
+  int allocate_transform(ChannelState& state);
   /// @brief Applies @p config to per-channel DSP coefficients / sub-stage
   ///        configs. Realtime-safe: never resizes any buffers, so it is safe
   ///        to call from the audio thread between blocks.
@@ -402,6 +529,22 @@ class RealtimeVoiceChanger {
   /// @brief Publishes the latency-report atomic mirrors from @c config_.
   ///        Control-thread only (constructor / prepare / set_config).
   void update_latency_mirrors() noexcept;
+  /// @brief Runs the psola voice stage (and the vocoder when on) over the gated block in
+  ///        @c scratch_, leaving the aligned wet signal there.
+  void process_transform(ChannelState& state, const RealtimeVoiceChangerConfig& config,
+                         const float* carrier, int num_samples) noexcept;
+  /// @brief Applies the note events and the all-notes-off request queued since the last block.
+  void drain_note_events() noexcept;
+  /// @brief Processes a block whose pre-conditions were checked and whose snapshot @p config
+  ///        was adopted; @p carrier may be null when the configuration takes none.
+  void run_block(float* const* channels, int num_channels, const float* carrier, int num_samples,
+                 const RealtimeVoiceChangerConfig& config) noexcept;
+  /// @brief Whether @p config makes the vocoder read the caller's carrier.
+  bool takes_external_carrier(const RealtimeVoiceChangerConfig& config) const noexcept {
+    return prepared_engine_ == PitchEngine::Psola && config.vocoder.enabled &&
+           config.vocoder.carrier_source == VocoderCarrierSource::External;
+  }
+  bool push_note(NoteEvent event) noexcept;
   float process_input_stage(ChannelState& state, float input, bool control_update) noexcept;
   float process_output_stage(ChannelState& state, float input, bool control_update) noexcept;
   void ensure_scratch(int num_samples) noexcept;
@@ -466,6 +609,21 @@ class RealtimeVoiceChanger {
 
   /// Formant mode the chain was prepared with; the warp stage exists only in absolute mode.
   FormantMode prepared_formant_mode_ = FormantMode::Relative;
+  /// Construction-fixed voice-stage settings the chain was prepared with.
+  PitchEngine prepared_engine_ = PitchEngine::Psola;
+  float prepared_f0_min_hz_ = 0.0f;
+  int prepared_vocoder_bands_ = 0;
+  /// Psola alignment: max(shifter latency, vocoder group delay), fixed at prepare().
+  int transform_latency_ = 0;
+
+  /// Note events from the control thread, drained at the start of each block.
+  rt::SpscQueue<NoteEvent> note_queue_;
+  /// Events pushed so far (producer side) and applied so far (audio thread).
+  std::atomic<std::uint64_t> notes_pushed_{0};
+  std::uint64_t notes_applied_ = 0;
+  /// Pending all-notes-off and the push count it was requested at.
+  std::atomic<bool> all_notes_off_pending_{false};
+  std::atomic<std::uint64_t> all_notes_off_at_{0};
 
   /// Written by the audio thread, polled by a host thread; see
   /// non_finite_discard_count().
@@ -500,9 +658,11 @@ bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::st
 /// @brief Validates a configuration: every field finite and inside its documented range.
 /// @details Returns false (with @p error naming the field, its range and the value, e.g.
 ///          "formant.factor out of range [0.55, 1.65], got 3") for a non-finite or out-of-range
-///          field, an unknown formant mode, or an unreachable absolute formant warp. Nothing is
-///          clamped. On success @p normalized equals @p config; on failure it is default
-///          constructed. Allocates only when it fails and @p error is non-null.
+///          field, an unknown formant mode or other enum value, a grain engine asked for pitch
+///          correction, harmony or the vocoder, an echo-family delay past kMaxSpaceDelayMs, or
+///          (grain engine only) an unreachable absolute formant warp. Nothing is clamped. On
+///          success @p normalized equals @p config; on failure it is default constructed. Allocates
+///          only when it fails and @p error is non-null.
 bool validate_realtime_voice_changer_config(const RealtimeVoiceChangerConfig& config,
                                             RealtimeVoiceChangerConfig* normalized,
                                             std::string* error);

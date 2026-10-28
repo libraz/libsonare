@@ -1292,7 +1292,7 @@ TEST_CASE("CLI voice-preset-validate rejects an invalid preset document",
   REQUIRE(input.good());
   const std::string baseline((std::istreambuf_iterator<char>(input)),
                              std::istreambuf_iterator<char>());
-  const std::string needle = "\"schemaVersion\":1";
+  const std::string needle = "\"schemaVersion\":2";
   const auto version = baseline.find(needle);
   REQUIRE(version != std::string::npos);
   {

@@ -4,6 +4,7 @@
 #include <limits>
 
 #include "editing/voice_changer/realtime.h"
+#include "rt/fractional_delay.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
@@ -104,7 +105,10 @@ float RealtimeVoiceChanger::process_output_stage(ChannelState& state, float inpu
     }
   }
 
-  float x = input;
+  // Character colouration ahead of the EQ. A non-finite value leaving it marks its state for a
+  // reset; the value itself continues to the limiter, which handles it as before.
+  float x = state.character.process_sample(input);
+  if (!std::isfinite(x)) state.transform_substituted = true;
   x = state.body.process(x);
   x = state.presence.process(x);
   x = state.air.process(x);
@@ -168,8 +172,14 @@ float RealtimeVoiceChanger::process_output_stage(ChannelState& state, float inpu
 
   // Reverb: variable-length Schroeder reverb (2 combs + 1 series allpass).
   // Implementation lives in streaming_reverb.{h,cpp}; the helper handles
-  // wet/dry mix internally and returns the mixed signal.
-  x = state.reverb.process_sample(x);
+  // wet/dry mix internally and returns the mixed signal. The echo-family
+  // variations run in the space stage instead, with the same mix.
+  if (state.variation == ReverbVariation::Reverb) {
+    x = state.reverb.process_sample(x);
+  } else {
+    x = state.space.process_sample(x);
+    if (!std::isfinite(x)) state.transform_substituted = true;
+  }
 
   // Output gain + simple peak limiter. Not a true-peak (inter-sample) limiter
   // — the schema cap on ceilingDb keeps typical material safe without 4x
@@ -210,19 +220,99 @@ void RealtimeVoiceChanger::ensure_scratch(int num_samples) noexcept {
   (void)num_samples;
 }
 
-void RealtimeVoiceChanger::process_block(const float* input, float* output,
+void RealtimeVoiceChanger::process_transform(ChannelState& state,
+                                             const RealtimeVoiceChangerConfig& config,
+                                             const float* carrier, int num_samples) noexcept {
+  float* x = scratch_.data();
+  // The tracker, the shifter and the vocoder all keep history; keep a non-finite value out. The
+  // substitution is reported for the block, and the stages need no reset: none of them saw it.
+  for (int i = 0; i < num_samples; ++i) {
+    if (!std::isfinite(x[i])) {
+      x[i] = 0.0f;
+      state.voice_input_substituted = true;
+    }
+  }
+  const int estimates = state.tracker.process(x, num_samples, state.estimates.data(),
+                                              static_cast<int>(state.estimates.size()));
+  state.shifter.push_estimates(state.estimates.data(), estimates);
+  const VoiceTargets targets = state.targets.update(state.estimates.data(), estimates, num_samples);
+  float* voice_out[kMaxVoices];
+  for (int v = 0; v < kMaxVoices; ++v)
+    voice_out[v] = state.voice_out[static_cast<size_t>(v)].data();
+  state.shifter.process(x, targets, voice_out, num_samples);
+
+  const bool vocoder_on = config.vocoder.enabled;
+  if (vocoder_on && !state.vocoder_running) {
+    // Switched on: the bank and its alignment line start from rest.
+    state.vocoder.reset();
+    state.vocoder_compensation.clear();
+  }
+  state.vocoder_running = vocoder_on;
+  if (vocoder_on) {
+    const float* external =
+        config.vocoder.carrier_source == VocoderCarrierSource::External ? carrier : nullptr;
+    state.vocoder.process(x, external, targets, state.vocoder_out.data(), num_samples);
+  }
+
+  const int count = std::clamp(targets.count, 0, kMaxVoices);
+  for (int v = 0; v < kMaxVoices; ++v) {
+    const VoiceTarget& target = targets.voices[v];
+    state.voice_gain[static_cast<size_t>(v)].set_target(v < count && target.active ? target.gain
+                                                                                   : 0.0f);
+  }
+  for (int h = 0; h < kMaxHarmonyVoices; ++h) {
+    if (h + 1 < count) {
+      state.harmony_delay_samples[static_cast<size_t>(h)].set_target(static_cast<float>(
+          static_cast<double>(targets.voices[h + 1].delay_ms) * 1e-3 * sample_rate_));
+    }
+  }
+
+  for (int k = 0; k < num_samples; ++k) {
+    float sum = state.voice_gain[0].process() * (count > 0 ? voice_out[0][k] : 0.0f);
+    for (int h = 0; h < kMaxHarmonyVoices; ++h) {
+      DelayRing& ring = state.harmony_delay[static_cast<size_t>(h)];
+      // A voice beyond the count feeds silence, so its delayed tail fades with its gain.
+      ring.line[ring.write] = h + 1 < count ? voice_out[h + 1][k] : 0.0f;
+      const float delay = state.harmony_delay_samples[static_cast<size_t>(h)].process();
+      const float delayed = rt::lagrange3_read(ring.line.data(), ring.line.size(), ring.write,
+                                               static_cast<int>(std::lround(delay * 256.0f)));
+      ring.write = ring.write + 1 == ring.line.size() ? 0 : ring.write + 1;
+      sum += state.voice_gain[static_cast<size_t>(h + 1)].process() * delayed;
+    }
+    const float mix = state.shift_mix.process();
+    const float unshifted = state.unshifted.process(x[k]);
+    const float voice = state.voice_compensation.process(mix * sum + (1.0f - mix) * unshifted);
+    float y = vocoder_on ? state.vocoder_compensation.process(state.vocoder_out[k]) : voice;
+    if (!std::isfinite(y)) {
+      y = 0.0f;
+      state.transform_substituted = true;
+    }
+    x[k] = y;
+  }
+}
+
+bool RealtimeVoiceChanger::process_block(const float* input, float* output,
+                                         int num_samples) noexcept {
+  return process_block(input, nullptr, output, num_samples);
+}
+
+bool RealtimeVoiceChanger::process_block(const float* input, const float* carrier, float* output,
                                          int num_samples) noexcept {
   rt::ScopedNoDenormals no_denormals;
   // Pre-condition violations are silent no-ops to keep this RT-safe (no throw,
   // no allocation). When sample_rate_ is unset we still zero-fill the output
   // so callers observe a defined buffer state rather than uninitialised memory.
-  if (num_samples <= 0) return;
+  if (num_samples == 0) return true;
+  if (num_samples < 0) return false;
   if (sample_rate_ <= 0.0) {
     if (output != nullptr) std::fill_n(output, num_samples, 0.0f);
-    return;
+    return false;
   }
-  if (num_samples > max_block_size_) return;
-  if (input == nullptr || output == nullptr) return;
+  if (num_samples > max_block_size_) return false;
+  if (input == nullptr || output == nullptr) return false;
+  const RealtimeVoiceChangerConfig& config = adopt_snapshot_for_block();
+  // Refused before the output is touched: the caller's buffer keeps what it held.
+  if (takes_external_carrier(config) && carrier == nullptr) return false;
   // Reuse the multi-channel path with channels=1 by staging the dry input in
   // the output buffer and passing that as the channel pointer. The
   // multi-channel path uses its own internal scratch_, so reading the
@@ -232,26 +322,42 @@ void RealtimeVoiceChanger::process_block(const float* input, float* output,
     std::copy_n(input, num_samples, output);
   }
   float* channel_ptr = output;
-  process_block(&channel_ptr, 1, num_samples);
+  run_block(&channel_ptr, 1, carrier, num_samples, config);
+  return true;
 }
 
-void RealtimeVoiceChanger::process_block(float* const* channels, int num_channels,
+bool RealtimeVoiceChanger::process_block(float* const* channels, int num_channels,
                                          int num_samples) noexcept {
+  return process_block(channels, num_channels, nullptr, num_samples);
+}
+
+bool RealtimeVoiceChanger::process_block(float* const* channels, int num_channels,
+                                         const float* carrier, int num_samples) noexcept {
   rt::ScopedNoDenormals no_denormals;
   // Pre-condition violations are silent no-ops; caller-owned planar buffers
   // are left untouched (we do not know their channel layout to safely zero).
-  if (num_samples <= 0) return;
-  if (sample_rate_ <= 0.0) return;
-  if (channels == nullptr) return;
-  if (num_channels < 1 || num_channels > num_channels_) return;
-  if (num_samples > max_block_size_) return;
-  ensure_scratch(num_samples);
+  if (num_samples == 0) return true;
+  if (num_samples < 0) return false;
+  if (sample_rate_ <= 0.0) return false;
+  if (channels == nullptr) return false;
+  if (num_channels < 1 || num_channels > num_channels_) return false;
+  if (num_samples > max_block_size_) return false;
   // Adopt the latest published configuration snapshot exactly once at block
   // start. After this point the per-sample loop reads from a stable const
   // reference; the control thread cannot mutate any field the loop touches
   // because set_config() only writes to config_ + publishes a NEW snapshot
   // (the audio thread keeps owning the previously-adopted one).
   const RealtimeVoiceChangerConfig& config = adopt_snapshot_for_block();
+  if (takes_external_carrier(config) && carrier == nullptr) return false;
+  run_block(channels, num_channels, carrier, num_samples, config);
+  return true;
+}
+
+void RealtimeVoiceChanger::run_block(float* const* channels, int num_channels, const float* carrier,
+                                     int num_samples,
+                                     const RealtimeVoiceChangerConfig& config) noexcept {
+  ensure_scratch(num_samples);
+  const bool psola = prepared_engine_ == PitchEngine::Psola;
   bool discarded = false;
   float deepest_reduction_linear = 1.0f;
   // A channel this block leaves out re-enters from rest instead of resuming its old history.
@@ -260,6 +366,8 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
     const bool active = ch < num_channels && channels[ch] != nullptr;
     channel.gate.admit(active, [&] { reset_channel(channel); });
   }
+  // Note events take effect at the block boundary, after a re-entering channel was reset.
+  if (psola) drain_note_events();
   for (int ch = 0; ch < num_channels; ++ch) {
     // Skip null channel pointers (caller's responsibility) rather than aborting
     // the whole block: a null right pointer must not leave the left output
@@ -287,11 +395,18 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
       const bool control_update = channel.control_cadence.advance();
       scratch_[i] = process_input_stage(channel, clean, control_update);
     }
-    if (prepared_formant_mode_ == FormantMode::Absolute) {
-      channel.warp.process(scratch_.data(), scratch_.data(), num_samples);
+    if (psola) {
+      process_transform(channel, config, carrier, num_samples);
+    } else {
+      if (prepared_formant_mode_ == FormantMode::Absolute) {
+        channel.warp.process(scratch_.data(), scratch_.data(), num_samples);
+      }
+      channel.retune.process_block(scratch_.data(), scratch_.data(), num_samples);
     }
-    channel.retune.process_block(scratch_.data(), scratch_.data(), num_samples);
-    channel.formant.process_block(scratch_.data(), scratch_.data(), num_samples);
+    // The vocoder replaces the voice stage, formant colour included.
+    if (!(psola && config.vocoder.enabled)) {
+      channel.formant.process_block(scratch_.data(), scratch_.data(), num_samples);
+    }
     float lowest_dynamics_gain = std::numeric_limits<float>::infinity();
     for (int i = 0; i < num_samples; ++i) {
       float delayed_dry = channels[ch][i];
@@ -372,6 +487,21 @@ bool RealtimeVoiceChanger::discard_non_finite_state(ChannelState& state) noexcep
   // The reverb's bound is one comb delay period rather than this block; see
   // StreamingReverb::discard_non_finite.
   discarded |= state.reverb.discard_non_finite();
+  if (state.voice_input_substituted) {
+    state.voice_input_substituted = false;
+    discarded = true;
+  }
+  // The transformer stages own their history without a discard of their own, so a non-finite
+  // value that one of them produced returns all of them to rest.
+  if (state.transform_substituted) {
+    state.transform_substituted = false;
+    state.character.reset();
+    state.space.reset();
+    state.tracker.reset();
+    state.shifter.reset();
+    state.vocoder.reset();
+    discarded = true;
+  }
   return discarded;
 }
 
@@ -379,8 +509,11 @@ int RealtimeVoiceChanger::latency_samples() const noexcept {
   if (channels_.empty()) return 0;
   // Both retune and whole-chain dry paths are aligned to the OLA latency, so
   // hosts see one fixed delay regardless of either mix control. Biquad/formant
-  // group delays are intentionally omitted (<= 8 samples combined).
-  int latency = channels_[0].retune.latency_samples() + channels_[0].warp.latency_samples();
+  // group delays are intentionally omitted (<= 8 samples combined). The psola
+  // voice stage and the vocoder are aligned to the longer of their two delays.
+  int latency = prepared_engine_ == PitchEngine::Psola
+                    ? transform_latency_
+                    : channels_[0].retune.latency_samples() + channels_[0].warp.latency_samples();
   if (latency_isp_enabled_.load(std::memory_order_relaxed)) {
     latency += channels_[0].isp_limiter.latency_samples();
   }

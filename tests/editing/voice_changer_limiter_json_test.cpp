@@ -757,3 +757,300 @@ TEST_CASE("ISP limiter bounds the original sample peaks, not only the reconstruc
     }
   }
 }
+
+namespace {
+
+// Every voice transformer field away from its default, valid on the psola engine.
+RealtimeVoiceChangerConfig transformer_config() {
+  RealtimeVoiceChangerConfig c;
+  c.voice_engine = {PitchEngine::Psola, 90.0f};
+  c.pitch_correction = {PitchCorrectionMode::Robot, 0.75f, 35.0f, 7, ScaleKind::NaturalMinor, -1};
+  c.harmony.voices = 2;
+  c.harmony.steps[0] = -2;
+  c.harmony.steps[1] = 5;
+  c.harmony.steps[2] = 7;
+  c.harmony.level = 0.4f;
+  c.harmony.lead_level = 0.9f;
+  c.harmony.detune_cents = 11.0f;
+  c.harmony.delay_ms = 30.0f;
+  c.vocoder = {
+      true,  24,  1.5f, 80.0f, 0.6f, VocoderCarrierSource::External, VocoderCarrierWave::Ensemble,
+      20.0f, 0.8f};
+  c.character = {CharacterType::BbdChorus, 0.25f, -0.5f};
+  c.reverb_variation = {ReverbVariation::TempoDelay, 400.0f, 0.6f, 96.0f,
+                        NoteDivision::DottedEighth};
+  c.midi.release = MidiRelease::Input;
+  return c;
+}
+
+void require_same_transformer_fields(const RealtimeVoiceChangerConfig& a,
+                                     const RealtimeVoiceChangerConfig& b) {
+  CHECK(a.voice_engine.engine == b.voice_engine.engine);
+  CHECK(a.voice_engine.f0_min_hz == b.voice_engine.f0_min_hz);
+  CHECK(a.pitch_correction.mode == b.pitch_correction.mode);
+  CHECK(a.pitch_correction.amount == b.pitch_correction.amount);
+  CHECK(a.pitch_correction.speed_ms == b.pitch_correction.speed_ms);
+  CHECK(a.pitch_correction.key_root == b.pitch_correction.key_root);
+  CHECK(a.pitch_correction.scale == b.pitch_correction.scale);
+  CHECK(a.pitch_correction.robot_octave == b.pitch_correction.robot_octave);
+  CHECK(a.harmony.voices == b.harmony.voices);
+  for (int i = 0; i < kMaxHarmonyVoices; ++i) CHECK(a.harmony.steps[i] == b.harmony.steps[i]);
+  CHECK(a.harmony.level == b.harmony.level);
+  CHECK(a.harmony.lead_level == b.harmony.lead_level);
+  CHECK(a.harmony.detune_cents == b.harmony.detune_cents);
+  CHECK(a.harmony.delay_ms == b.harmony.delay_ms);
+  CHECK(a.vocoder.enabled == b.vocoder.enabled);
+  CHECK(a.vocoder.bands == b.vocoder.bands);
+  CHECK(a.vocoder.attack_ms == b.vocoder.attack_ms);
+  CHECK(a.vocoder.release_ms == b.vocoder.release_ms);
+  CHECK(a.vocoder.sibilance == b.vocoder.sibilance);
+  CHECK(a.vocoder.carrier_source == b.vocoder.carrier_source);
+  CHECK(a.vocoder.carrier_wave == b.vocoder.carrier_wave);
+  CHECK(a.vocoder.ensemble_detune_cents == b.vocoder.ensemble_detune_cents);
+  CHECK(a.vocoder.level == b.vocoder.level);
+  CHECK(a.character.type == b.character.type);
+  CHECK(a.character.amount == b.character.amount);
+  CHECK(a.character.tone == b.character.tone);
+  CHECK(a.reverb_variation.variation == b.reverb_variation.variation);
+  CHECK(a.reverb_variation.delay_ms == b.reverb_variation.delay_ms);
+  CHECK(a.reverb_variation.feedback == b.reverb_variation.feedback);
+  CHECK(a.reverb_variation.tempo_bpm == b.reverb_variation.tempo_bpm);
+  CHECK(a.reverb_variation.division == b.reverb_variation.division);
+  CHECK(a.midi.release == b.midi.release);
+}
+
+}  // namespace
+
+TEST_CASE("RealtimeVoiceChanger JSON round-trips the voice transformer sections",
+          "[voice_changer][json]") {
+  const RealtimeVoiceChangerConfig config = transformer_config();
+  REQUIRE(validate_realtime_voice_changer_config(config, nullptr, nullptr));
+  const std::string json = realtime_voice_changer_config_to_json(config);
+  CHECK_THAT(json, Catch::Matchers::ContainsSubstring("\"schemaVersion\":2"));
+  CHECK_THAT(json, Catch::Matchers::ContainsSubstring("\"scale\":\"natural_minor\""));
+  CHECK_THAT(json, Catch::Matchers::ContainsSubstring("\"type\":\"bbd_chorus\""));
+  CHECK_THAT(json, Catch::Matchers::ContainsSubstring("\"division\":\"dotted_eighth\""));
+  CHECK_THAT(json, Catch::Matchers::ContainsSubstring("\"steps\":[-2,5,7]"));
+  RealtimeVoiceChangerConfig strict;
+  std::string error;
+  REQUIRE(realtime_voice_changer_config_from_input(json, &strict, &error));
+  require_same_transformer_fields(strict, config);
+  require_same_transformer_fields(realtime_voice_changer_config_from_json(json), config);
+  CHECK(realtime_voice_changer_config_to_json(strict) == json);
+}
+
+TEST_CASE("RealtimeVoiceChanger flat POD carries the voice transformer keys",
+          "[voice_changer][json]") {
+  const std::string base = R"json({
+    "inputGainDb": 0, "outputGainDb": 0, "wetMix": 1,
+    "retuneSemitones": 0, "retuneMix": 1, "retuneGrainSize": 0,
+    "formantFactor": 1, "formantAmount": 1, "formantBody": 0,
+    "formantBrightness": 0, "formantNasal": 0,
+    "eqHighpassHz": 80, "eqBodyDb": 0, "eqPresenceDb": 1, "eqAirDb": 0,
+    "gateThresholdDb": -55, "gateAttackMs": 2, "gateReleaseMs": 100, "gateRangeDb": 18,
+    "compressorThresholdDb": -22, "compressorRatio": 2.5, "compressorAttackMs": 6,
+    "compressorReleaseMs": 90, "compressorMakeupGainDb": 1,
+    "deesserFrequencyHz": 7200, "deesserThresholdDb": -28, "deesserRatio": 4,
+    "deesserRangeDb": 8, "reverbMix": 0.04, "reverbTimeMs": 320, "reverbDamping": 0.55,
+    "reverbSeed": 1, "limiterCeilingDb": -1, "limiterReleaseMs": 50,
+    "limiterEnableIspLimiter": true, "limiterIspCeilingDbtp": -1)json";
+  const std::string transformer = R"json(,
+    "voiceEngineEngine": "psola", "voiceEngineF0MinHz": 90,
+    "pitchCorrectionMode": "robot", "pitchCorrectionAmount": 0.75, "pitchCorrectionSpeedMs": 35,
+    "pitchCorrectionKeyRoot": 7, "pitchCorrectionScale": "natural_minor",
+    "pitchCorrectionRobotOctave": -1,
+    "harmonyVoices": 2, "harmonyStep1": -2, "harmonyStep2": 5, "harmonyStep3": 7,
+    "harmonyLevel": 0.4, "harmonyLeadLevel": 0.9, "harmonyDetuneCents": 11, "harmonyDelayMs": 30,
+    "vocoderEnabled": true, "vocoderBands": 24, "vocoderAttackMs": 1.5, "vocoderReleaseMs": 80,
+    "vocoderSibilance": 0.6, "vocoderCarrierSource": "external", "vocoderCarrierWave": "ensemble",
+    "vocoderEnsembleDetuneCents": 20, "vocoderLevel": 0.8,
+    "characterType": "bbd_chorus", "characterAmount": 0.25, "characterTone": -0.5,
+    "reverbVariationVariation": "tempo_delay", "reverbVariationDelayMs": 400,
+    "reverbVariationFeedback": 0.6, "reverbVariationTempoBpm": 96,
+    "reverbVariationDivision": "dotted_eighth", "midiRelease": "input")json";
+
+  RealtimeVoiceChangerConfig parsed;
+  std::string error;
+  const std::string complete = base + transformer + "}";
+  REQUIRE(realtime_voice_changer_config_from_input(complete, &parsed, &error));
+  require_same_transformer_fields(parsed, transformer_config());
+  // The flat shape is complete or refused: a 36-key object misses the transformer keys.
+  REQUIRE_FALSE(realtime_voice_changer_config_from_input(base + "}", &parsed, &error));
+  CHECK(error == "missing field: $.voiceEngineEngine");
+  SonareRealtimeVoiceChanger* handle = nullptr;
+  CHECK(sonare_realtime_voice_changer_create_json((base + "}").c_str(), 48000, 128, 1, &handle) ==
+        SONARE_ERROR_INVALID_FORMAT);
+  CHECK(handle == nullptr);
+
+  // One key of the complete object changed at a time.
+  struct Refusal {
+    const char* from;
+    const char* to;
+    const char* named;
+  };
+  const Refusal refusals[] = {
+      {R"("vocoderEnabled": true)", R"("vocoderEnabled": 1)", "vocoderEnabled"},
+      {R"("characterType": "bbd_chorus")", R"("characterType": 2)", "characterType"},
+      {R"("characterType": "bbd_chorus")", R"("characterType": "telephone")", "characterType"},
+      {R"("harmonyStep2": 5)", R"("harmonyStep2": "5")", "harmonyStep2"},
+      {R"("vocoderBands": 24)", R"("vocoderBands": 20.5)", "vocoderBands"},
+      {R"("harmonyVoices": 2)", R"("harmonyVoices": 4)", "harmony.voices"},
+      {R"("voiceEngineF0MinHz": 90)", R"("voiceEngineF0MinHz": 40)", "voiceEngine.f0MinHz"},
+      {R"("dotted_eighth", "midiRelease": "input")", R"("dotted_eighth")",
+       "missing field: $.midiRelease"},
+  };
+  for (const Refusal& r : refusals) {
+    CAPTURE(r.to);
+    std::string changed = complete;
+    const auto at = changed.find(r.from);
+    REQUIRE(at != std::string::npos);
+    changed.replace(at, std::string(r.from).size(), r.to);
+    REQUIRE_FALSE(realtime_voice_changer_config_from_input(changed, &parsed, &error));
+    CHECK_THAT(error, Catch::Matchers::ContainsSubstring(r.named));
+  }
+}
+
+TEST_CASE("RealtimeVoiceChanger JSON refuses a malformed transformer section as InvalidFormat",
+          "[voice_changer][json]") {
+  using Catch::Matchers::ContainsSubstring;
+  struct Case {
+    const char* json;
+    const char* path;
+  };
+  const Case cases[] = {
+      {R"({"dsp":{"vocoder":{"enabled":1}}})", "vocoder.enabled"},
+      {R"({"dsp":{"vocoder":{"bands":"20"}}})", "vocoder.bands"},
+      {R"({"dsp":{"harmony":{"steps":[1,"2"]}}})", "harmony.steps"},
+      {R"({"dsp":{"harmony":{"steps":[1,2,3,4]}}})", "harmony.steps"},
+      {R"({"dsp":{"harmony":{"steps":2}}})", "harmony.steps"},
+      {R"({"dsp":{"voiceEngine":{"engine":"phase"}}})", "voiceEngine.engine"},
+      {R"({"dsp":{"pitchCorrection":{"scale":1}}})", "pitchCorrection.scale"},
+      {R"({"dsp":{"character":null}})", "character must be an object"},
+      {R"({"dsp":{"reverbVariation":[]}})", "reverbVariation must be an object"},
+      {R"({"dsp":{"midi":{"release":null}}})", "midi.release"},
+      {R"({"retuneSemitones":0,"reverbVariationVariation":"spring"})", "reverbVariationVariation"},
+  };
+  for (const auto& c : cases) {
+    CAPTURE(c.json);
+    try {
+      (void)realtime_voice_changer_config_from_json(c.json);
+      FAIL("expected a refusal");
+    } catch (const sonare::SonareException& e) {
+      CHECK(e.code() == sonare::ErrorCode::InvalidFormat);
+      CHECK_THAT(std::string(e.what()), ContainsSubstring(c.path));
+    }
+  }
+  // The C ABI JSON entry reports a type error and an out-of-range value as InvalidFormat alike.
+  auto document = sonare::util::json::parse_strict(
+      realtime_voice_changer_preset_json(VoiceCharacterPreset::NeutralMonitor));
+  auto& dsp = document.as_object().at("dsp").as_object();
+  dsp.at("vocoder").as_object().at("bands") = sonare::util::json::Value(64.0);
+  SonareRealtimeVoiceChanger* handle = nullptr;
+  CHECK(sonare_realtime_voice_changer_create_json(sonare::util::json::dump(document).c_str(), 48000,
+                                                  128, 1, &handle) == SONARE_ERROR_INVALID_FORMAT);
+  CHECK(handle == nullptr);
+  dsp.at("vocoder").as_object().at("bands") = sonare::util::json::Value(std::string("20"));
+  CHECK(sonare_realtime_voice_changer_create_json(sonare::util::json::dump(document).c_str(), 48000,
+                                                  128, 1, &handle) == SONARE_ERROR_INVALID_FORMAT);
+  CHECK(handle == nullptr);
+}
+
+TEST_CASE("RealtimeVoiceChanger validation bounds every transformer field",
+          "[voice_changer][config]") {
+  struct Bound {
+    const char* name;
+    std::function<void(RealtimeVoiceChangerConfig&)> outside;
+    std::function<void(RealtimeVoiceChangerConfig&)> edge;
+  };
+  const std::vector<Bound> bounds = {
+      {"voiceEngine.f0MinHz", [](auto& c) { c.voice_engine.f0_min_hz = 49.0f; },
+       [](auto& c) { c.voice_engine.f0_min_hz = 200.0f; }},
+      {"pitchCorrection.speedMs", [](auto& c) { c.pitch_correction.speed_ms = 401.0f; },
+       [](auto& c) { c.pitch_correction.speed_ms = 0.0f; }},
+      {"pitchCorrection.keyRoot", [](auto& c) { c.pitch_correction.key_root = 12; },
+       [](auto& c) { c.pitch_correction.key_root = 11; }},
+      {"pitchCorrection.robotOctave", [](auto& c) { c.pitch_correction.robot_octave = -2; },
+       [](auto& c) { c.pitch_correction.robot_octave = -1; }},
+      {"harmony.voices", [](auto& c) { c.harmony.voices = 4; },
+       [](auto& c) { c.harmony.voices = 3; }},
+      {"harmony.steps[1]", [](auto& c) { c.harmony.steps[1] = 8; },
+       [](auto& c) { c.harmony.steps[1] = -7; }},
+      {"harmony.detuneCents", [](auto& c) { c.harmony.detune_cents = 30.5f; },
+       [](auto& c) { c.harmony.detune_cents = 30.0f; }},
+      {"harmony.delayMs", [](auto& c) { c.harmony.delay_ms = 41.0f; },
+       [](auto& c) { c.harmony.delay_ms = 40.0f; }},
+      {"vocoder.bands", [](auto& c) { c.vocoder.bands = 7; },
+       [](auto& c) { c.vocoder.bands = 32; }},
+      {"vocoder.attackMs", [](auto& c) { c.vocoder.attack_ms = 0.4f; },
+       [](auto& c) { c.vocoder.attack_ms = 0.5f; }},
+      {"vocoder.releaseMs", [](auto& c) { c.vocoder.release_ms = 301.0f; },
+       [](auto& c) { c.vocoder.release_ms = 300.0f; }},
+      {"character.tone", [](auto& c) { c.character.tone = -1.1f; },
+       [](auto& c) { c.character.tone = -1.0f; }},
+      {"reverbVariation.delayMs", [](auto& c) { c.reverb_variation.delay_ms = 3001.0f; },
+       [](auto& c) { c.reverb_variation.delay_ms = 3000.0f; }},
+      {"reverbVariation.feedback", [](auto& c) { c.reverb_variation.feedback = 0.96f; },
+       [](auto& c) { c.reverb_variation.feedback = 0.95f; }},
+      {"reverbVariation.tempoBpm", [](auto& c) { c.reverb_variation.tempo_bpm = 29.0f; },
+       [](auto& c) { c.reverb_variation.tempo_bpm = 30.0f; }},
+      {"character.type", [](auto& c) { c.character.type = static_cast<CharacterType>(9); },
+       [](auto& c) { c.character.type = CharacterType::Strobo; }},
+      {"pitchCorrection.amount",
+       [](auto& c) { c.pitch_correction.amount = std::numeric_limits<float>::quiet_NaN(); },
+       [](auto& c) { c.pitch_correction.amount = 0.0f; }},
+  };
+  for (const Bound& b : bounds) {
+    CAPTURE(b.name);
+    RealtimeVoiceChangerConfig edge;
+    b.edge(edge);
+    CHECK(validate_realtime_voice_changer_config(edge, nullptr, nullptr));
+    RealtimeVoiceChangerConfig outside;
+    b.outside(outside);
+    std::string error;
+    CHECK_FALSE(validate_realtime_voice_changer_config(outside, nullptr, &error));
+    CHECK_THAT(error, Catch::Matchers::ContainsSubstring(b.name));
+    CHECK_THROWS_AS(RealtimeVoiceChanger(outside), sonare::SonareException);
+  }
+  // A slow tempo at a quarter note stays inside the delay line; the refusal names the line.
+  RealtimeVoiceChangerConfig tempo;
+  tempo.reverb_variation.variation = ReverbVariation::TempoDelay;
+  tempo.reverb_variation.tempo_bpm = 30.0f;
+  tempo.reverb_variation.division = NoteDivision::Quarter;
+  CHECK(validate_realtime_voice_changer_config(tempo, nullptr, nullptr));
+  CHECK_FALSE(space_delay_exceeds_limit(tempo.reverb_variation));
+}
+
+TEST_CASE("RealtimeVoiceChanger refuses a live change of a construction-fixed transformer field",
+          "[voice_changer][config]") {
+  RealtimeVoiceChanger changer;
+  RealtimeVoiceChangerConfig before_prepare;
+  before_prepare.vocoder.bands = 24;
+  // Unprepared, nothing depends on them yet.
+  REQUIRE_NOTHROW(changer.set_config(before_prepare));
+  changer.prepare(48000.0, 128, 1);
+  const int latency = changer.latency_samples();
+  for (const auto& mutate : std::vector<std::function<void(RealtimeVoiceChangerConfig&)>>{
+           [](auto& c) { c.voice_engine.engine = PitchEngine::Grain; },
+           [](auto& c) { c.voice_engine.f0_min_hz = 100.0f; },
+           [](auto& c) { c.vocoder.bands = 20; }}) {
+    RealtimeVoiceChangerConfig changed = changer.config();
+    mutate(changed);
+    try {
+      changer.set_config(changed);
+      FAIL("expected a refusal");
+    } catch (const sonare::SonareException& e) {
+      CHECK(e.code() == sonare::ErrorCode::InvalidParameter);
+    }
+  }
+  CHECK(changer.config().vocoder.bands == 24);
+  CHECK(changer.latency_samples() == latency);
+  // Everything else is live.
+  RealtimeVoiceChangerConfig live = changer.config();
+  live.vocoder.enabled = true;
+  live.harmony.voices = 3;
+  live.pitch_correction.mode = PitchCorrectionMode::Auto;
+  live.character.type = CharacterType::Radio;
+  live.reverb_variation.variation = ReverbVariation::DubEcho;
+  REQUIRE_NOTHROW(changer.set_config(live));
+  CHECK(changer.latency_samples() == latency);
+}

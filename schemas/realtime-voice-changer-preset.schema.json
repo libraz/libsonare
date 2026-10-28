@@ -6,11 +6,23 @@
   "additionalProperties": false,
   "required": ["schemaVersion", "id", "name", "category"],
   "oneOf": [{"required": ["dsp"]}, {"required": ["macros"]}],
+  "allOf": [
+    {
+      "if": {"properties": {"schemaVersion": {"const": 2}}, "required": ["schemaVersion", "dsp"]},
+      "then": {
+        "properties": {
+          "dsp": {
+            "required": ["voiceEngine", "pitchCorrection", "harmony", "vocoder", "character", "reverbVariation", "midi"]
+          }
+        }
+      }
+    }
+  ],
   "properties": {
     "schemaVersion": {
       "type": "integer",
-      "const": 1,
-      "description": "Preset schema version. Must be 1 in the current libsonare release. Future versions will widen this constant to a range and add an explicit upgrade path in validate_realtime_voice_changer_preset_json (see src/editing/voice_changer/realtime_voice_changer.cpp). Bumping this without a migration is a breaking change."
+      "enum": [1, 2],
+      "description": "Preset schema version. 2 is current and requires the voice transformer sections of dsp (voiceEngine, pitchCorrection, harmony, vocoder, character, reverbVariation, midi). 1 predates them: a version 1 document omits them and loads with their defaults. Writers emit 2."
     },
     "id": {
       "type": "string",
@@ -22,7 +34,7 @@
     "description": { "type": "string", "maxLength": 512 },
     "category": {
       "type": "string",
-      "enum": ["monitor", "bright", "soft", "deep", "robot", "dark", "custom"]
+      "enum": ["monitor", "bright", "soft", "deep", "robot", "dark", "tune", "harmony", "vocoder", "character", "custom"]
     },
     "macros": {
       "type": "object",
@@ -138,6 +150,94 @@
             "releaseMs": { "type": "number", "minimum": 1.0, "maximum": 500.0 },
             "enableIspLimiter": { "type": "boolean" },
             "ispCeilingDbtp": { "type": "number", "minimum": -12.0, "maximum": 0.0 }
+          }
+        },
+        "voiceEngine": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["engine", "f0MinHz"],
+          "description": "Both fields are fixed when the changer is prepared. grain has no f0, so it refuses pitch correction, harmony and the vocoder.",
+          "properties": {
+            "engine": { "type": "string", "enum": ["grain", "psola"] },
+            "f0MinHz": { "type": "number", "minimum": 50.0, "maximum": 200.0 }
+          }
+        },
+        "pitchCorrection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "amount", "speedMs", "keyRoot", "scale", "robotOctave"],
+          "properties": {
+            "mode": { "type": "string", "enum": ["off", "auto", "robot"] },
+            "amount": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "speedMs": { "type": "number", "minimum": 0.0, "maximum": 400.0 },
+            "keyRoot": { "type": "integer", "minimum": 0, "maximum": 11 },
+            "scale": { "type": "string", "enum": ["major", "natural_minor", "chromatic"] },
+            "robotOctave": { "type": "integer", "minimum": -1, "maximum": 1 }
+          }
+        },
+        "harmony": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["voices", "steps", "level", "leadLevel", "detuneCents", "delayMs"],
+          "properties": {
+            "voices": { "type": "integer", "minimum": 0, "maximum": 3 },
+            "steps": {
+              "type": "array",
+              "maxItems": 3,
+              "items": { "type": "integer", "minimum": -7, "maximum": 7 },
+              "description": "Scale degrees of the harmony voices from the lead (0 = unison, 2 = a third up); at least one entry per voice."
+            },
+            "level": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "leadLevel": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "detuneCents": { "type": "number", "minimum": 0.0, "maximum": 30.0 },
+            "delayMs": { "type": "number", "minimum": 0.0, "maximum": 40.0 }
+          }
+        },
+        "vocoder": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "bands", "attackMs", "releaseMs", "sibilance", "carrierSource", "carrierWave", "ensembleDetuneCents", "level"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "bands": { "type": "integer", "minimum": 8, "maximum": 32, "description": "Fixed when the changer is prepared." },
+            "attackMs": { "type": "number", "minimum": 0.5, "maximum": 50.0 },
+            "releaseMs": { "type": "number", "minimum": 2.0, "maximum": 300.0 },
+            "sibilance": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "carrierSource": { "type": "string", "enum": ["internal", "external"] },
+            "carrierWave": { "type": "string", "enum": ["saw", "pulse", "ensemble"] },
+            "ensembleDetuneCents": { "type": "number", "minimum": 0.0, "maximum": 30.0 },
+            "level": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+          }
+        },
+        "character": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "amount", "tone"],
+          "properties": {
+            "type": { "type": "string", "enum": ["none", "megaphone", "radio", "bbd_chorus", "strobo"] },
+            "amount": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "tone": { "type": "number", "minimum": -1.0, "maximum": 1.0 }
+          }
+        },
+        "reverbVariation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["variation", "delayMs", "feedback", "tempoBpm", "division"],
+          "description": "Every variation mixes at reverb.mix. A computed delay (tempo_delay: 60000 / tempoBpm times the note value) beyond 3000 ms is refused.",
+          "properties": {
+            "variation": { "type": "string", "enum": ["reverb", "echo", "tempo_delay", "dub_echo"] },
+            "delayMs": { "type": "number", "minimum": 1.0, "maximum": 3000.0 },
+            "feedback": { "type": "number", "minimum": 0.0, "maximum": 0.95 },
+            "tempoBpm": { "type": "number", "minimum": 30.0, "maximum": 300.0 },
+            "division": { "type": "string", "enum": ["quarter", "eighth", "dotted_eighth", "sixteenth"] }
+          }
+        },
+        "midi": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["release"],
+          "properties": {
+            "release": { "type": "string", "enum": ["hold", "input"] }
           }
         }
       }

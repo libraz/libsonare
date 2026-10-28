@@ -52,7 +52,7 @@ TEST_CASE("RealtimeVoiceChanger preset JSON is tolerant and clamps values", "[vo
   const auto roundtrip = realtime_voice_changer_config_from_json("\n  " + json + "\n");
   REQUIRE(roundtrip.retune.semitones == config.retune.semitones);
 
-  REQUIRE(realtime_voice_changer_preset_names().size() == 6);
+  REQUIRE(realtime_voice_changer_preset_names().size() == 12);
   REQUIRE_NOTHROW(realtime_voice_changer_config_from_json("bright-idol"));
 
   std::string normalized;
@@ -116,8 +116,8 @@ TEST_CASE("RealtimeVoiceChanger parser expands every flat POD field", "[voice_ch
     "deesserFrequencyHz": 6000, "deesserThresholdDb": -22, "deesserRatio": 2,
     "deesserRangeDb": 3, "reverbMix": 0.2, "reverbTimeMs": 900, "reverbDamping": 0.6,
     "reverbSeed": 17, "limiterCeilingDb": -3, "limiterReleaseMs": 90,
-    "limiterEnableIspLimiter": false, "limiterIspCeilingDbtp": -2
-  })json";
+    "limiterEnableIspLimiter": false, "limiterIspCeilingDbtp": -2)json" +
+                                    std::string(kFlatTransformDefaults) + "}";
   const auto config = realtime_voice_changer_config_from_json(flat_pod_json);
 
   REQUIRE(config.input_gain_db == 1.0f);
@@ -568,7 +568,8 @@ TEST_CASE("realtime_voice_changer_config_from_input refuses an out-of-range flat
     "compressorReleaseMs":90,"compressorMakeupGainDb":1,"deesserFrequencyHz":7200,
     "deesserThresholdDb":-28,"deesserRatio":4,"deesserRangeDb":8,"reverbMix":0.04,
     "reverbTimeMs":320,"reverbDamping":0.55,"reverbSeed":0,"limiterCeilingDb":-1,
-    "limiterReleaseMs":50,"limiterEnableIspLimiter":true,"limiterIspCeilingDbtp":-1})";
+    "limiterReleaseMs":50,"limiterEnableIspLimiter":true,"limiterIspCeilingDbtp":-1)" +
+                           std::string(kFlatTransformDefaults) + "}";
   REQUIRE_FALSE(realtime_voice_changer_config_from_input(flat, &parsed, &error));
   REQUIRE(error == "formant.factor out of range [0.55, 1.65], got 3");
 
@@ -619,6 +620,13 @@ TEST_CASE("RealtimeVoiceChanger process_block overloads are realtime-safe (noexc
                 "mono process_block must be noexcept for RT safety");
   static_assert(noexcept(changer.process_block(channels, 1, 0)),
                 "planar process_block must be noexcept for RT safety");
+  static_assert(noexcept(changer.process_block(&buf_in, &buf_in, &buf_out, 0)),
+                "mono process_block with a carrier must be noexcept for RT safety");
+  static_assert(noexcept(changer.process_block(channels, 1, &buf_in, 0)),
+                "planar process_block with a carrier must be noexcept for RT safety");
+  static_assert(noexcept(changer.note_on(60, 1.0f)) && noexcept(changer.note_off(60)) &&
+                    noexcept(changer.all_notes_off()),
+                "the note API must be noexcept for RT safety");
 }
 
 TEST_CASE("RealtimeVoiceChanger set_config keeps buffer footprint across grain sizes",
@@ -994,6 +1002,7 @@ TEST_CASE("RealtimeVoiceChanger output EQ controls are invariant to caller chunk
   constexpr int rendered = 192;
 
   RealtimeVoiceChangerConfig initial;
+  initial.voice_engine.engine = PitchEngine::Grain;  // a 64-sample grain keeps the render short
   initial.wet_mix = 1.0f;
   initial.retune = {0.0f, 0.0f, 64};
   initial.formant = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
@@ -1475,6 +1484,7 @@ TEST_CASE("RealtimeVoiceChanger keeps the requested retune grain across config r
           "[voice_changer][retune][config]") {
   constexpr int kBlock = 512;
   RealtimeVoiceChangerConfig base;
+  base.voice_engine.engine = PitchEngine::Grain;  // the latency is the retune grain
   base.wet_mix = 0.0f;
   base.retune.mix = 0.0f;
   base.limiter.enable_isp_limiter = false;

@@ -21,6 +21,18 @@ constexpr float kFastDetectorHz = 200.0f;
 constexpr float kLimiterAttackMs = 0.1f;
 /// Glide time of the dry/wet mix.
 constexpr float kWetMixGlideMs = 10.0f;
+/// Glide time of a voice's gain when the voice count or its level changes.
+constexpr float kVoiceGainGlideMs = 10.0f;
+/// Interpolator margin past the longest harmony delay.
+constexpr std::size_t kHarmonyRingMargin = 8;
+/// The shifter's history reach past its latency: grains read up to eight of the longest periods
+/// back, plus four unvoiced grain spacings of 5 ms.
+constexpr double kShifterHistoryPeriods = 8.0;
+constexpr double kShifterHistoryUnvoicedS = 0.020;
+/// The vocoder's band filters keep ringing for a few of their own group delays.
+constexpr double kVocoderRingGroupDelays = 8.0;
+/// Bound on how long any character type rings (the 4th-order radio corners are the longest).
+constexpr double kCharacterTailS = 0.05;
 
 float db_to_gain(float db) noexcept { return sonare::db_to_linear(db); }
 
@@ -61,6 +73,7 @@ RealtimeVoiceChanger::RealtimeVoiceChanger(RealtimeVoiceChangerConfig config)
   // branch inside update_derived() is guarded and will be re-run by prepare().
   update_derived();
   update_latency_mirrors();
+  note_queue_.reserve(static_cast<std::size_t>(kNoteQueueCapacity));
   // Publish the initial value so the audio thread can adopt it on the first
   // process_block() call even if set_config() is never invoked.
   config_cell_.store(config_);
@@ -79,6 +92,15 @@ void RealtimeVoiceChanger::prepare(double sample_rate, int max_block_size, int n
   max_block_size_ = max_block_size;
   num_channels_ = num_channels;
   prepared_formant_mode_ = config_.formant_mode;
+  prepared_engine_ = config_.voice_engine.engine;
+  prepared_f0_min_hz_ = config_.voice_engine.f0_min_hz;
+  prepared_vocoder_bands_ = config_.vocoder.bands;
+  // Events queued for the previous preparation do not carry over.
+  note_queue_.reserve(static_cast<std::size_t>(kNoteQueueCapacity));
+  notes_pushed_.store(0, std::memory_order_relaxed);
+  notes_applied_ = 0;
+  all_notes_off_pending_.store(false, std::memory_order_relaxed);
+  all_notes_off_at_.store(0, std::memory_order_relaxed);
   channels_.resize(static_cast<std::size_t>(num_channels_));
   scratch_.assign(static_cast<std::size_t>(std::max(1, max_block_size_)), 0.0f);
   // Allocation phase: this is the only place buffers may be (re)sized.
@@ -139,6 +161,13 @@ void RealtimeVoiceChanger::set_config(const RealtimeVoiceChangerConfig& config) 
     throw SonareException(ErrorCode::InvalidParameter,
                           "formant mode is fixed at prepare(); it cannot change on a live chain");
   }
+  if (!channels_.empty() && (accepted.voice_engine.engine != prepared_engine_ ||
+                             accepted.voice_engine.f0_min_hz != prepared_f0_min_hz_ ||
+                             accepted.vocoder.bands != prepared_vocoder_bands_)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "voiceEngine.engine, voiceEngine.f0MinHz and vocoder.bands are fixed at "
+                          "prepare(); they cannot change on a live chain");
+  }
   config_ = accepted;
   // Record the request before the effective-value mirror below lands on the
   // same field; prepare() seeds the retune stages from this, not from config_.
@@ -193,11 +222,15 @@ void RealtimeVoiceChanger::allocate_channel(ChannelState& state) {
   state.retune.set_config(retune_config);
   state.retune.prepare(sample_rate_, max_block_size_);
   int aligned_latency = state.retune.latency_samples();
-  if (prepared_formant_mode_ == FormantMode::Absolute) {
+  if (prepared_engine_ == PitchEngine::Psola) {
+    aligned_latency = allocate_transform(state);
+  } else if (prepared_formant_mode_ == FormantMode::Absolute) {
     const int rate = static_cast<int>(std::lround(sample_rate_));
     state.warp.prepare(formant_warp_frame_size(rate), formant_warp_lpc_order(rate));
     aligned_latency += state.warp.latency_samples();
   }
+  state.character.prepare(sample_rate_);
+  state.space.prepare(sample_rate_);
   state.dry_delay.assign(static_cast<std::size_t>(aligned_latency), 0.0f);
   state.dry_delay_pos = 0;
   state.formant.prepare(sample_rate_, max_block_size_);
@@ -231,6 +264,41 @@ void RealtimeVoiceChanger::allocate_channel(ChannelState& state) {
   state.isp_limiter.prepare(sample_rate_, max_block_size_);
 }
 
+int RealtimeVoiceChanger::allocate_transform(ChannelState& state) {
+  const int block = std::max(1, max_block_size_);
+  state.tracker.prepare(sample_rate_, block, prepared_f0_min_hz_);
+  state.shifter.prepare(sample_rate_, block, prepared_f0_min_hz_);
+  state.targets.prepare(sample_rate_);
+  state.vocoder.prepare(sample_rate_, block, prepared_vocoder_bands_);
+  const int hop = std::max(1, state.tracker.hop_input_samples());
+  state.estimates.assign(static_cast<std::size_t>(block / hop + 2), F0Estimate{});
+  for (auto& voice : state.voice_out) voice.assign(static_cast<std::size_t>(block), 0.0f);
+  state.vocoder_out.assign(static_cast<std::size_t>(block), 0.0f);
+  const auto ring = static_cast<std::size_t>(
+                        std::ceil(static_cast<double>(kHarmonyMaxDelayMs) * 1e-3 * sample_rate_)) +
+                    kHarmonyRingMargin;
+  for (auto& delay : state.harmony_delay) {
+    delay.line.assign(ring, 0.0f);
+    delay.write = 0;
+  }
+  for (auto& delay : state.harmony_delay_samples) delay.prepare(sample_rate_, kParamSmoothingMs);
+  for (auto& gain : state.voice_gain) gain.prepare(sample_rate_, kVoiceGainGlideMs);
+  state.shift_mix.prepare(sample_rate_, kParamSmoothingMs);
+  // Both paths land on the longer of the two delays, so switching the vocoder keeps the latency.
+  const int shifter = state.shifter.latency_samples();
+  const int vocoder = state.vocoder.group_delay_samples();
+  state.unshifted.line.assign(static_cast<std::size_t>(shifter), 0.0f);
+  state.voice_compensation.line.assign(static_cast<std::size_t>(std::max(0, vocoder - shifter)),
+                                       0.0f);
+  state.vocoder_compensation.line.assign(static_cast<std::size_t>(std::max(0, shifter - vocoder)),
+                                         0.0f);
+  state.unshifted.pos = 0;
+  state.voice_compensation.pos = 0;
+  state.vocoder_compensation.pos = 0;
+  transform_latency_ = std::max(shifter, vocoder);
+  return transform_latency_;
+}
+
 void RealtimeVoiceChanger::apply_channel_config(ChannelState& state, int channel_index,
                                                 const RealtimeVoiceChangerConfig& config) {
   // Sub-component coefficient updates (no buffer resizing). The grain is structural and the
@@ -238,7 +306,24 @@ void RealtimeVoiceChanger::apply_channel_config(ChannelState& state, int channel
   StreamingRetuneConfig retune = config.retune;
   retune.grain_size = state.retune.grain_size();
   state.retune.set_config(retune);
-  if (prepared_formant_mode_ == FormantMode::Absolute) {
+  if (prepared_engine_ == PitchEngine::Psola) {
+    // The grain resampling carries the formant factor, so the colour stage keeps only its tones.
+    StreamingFormantConfig colour = config.formant;
+    colour.factor = 1.0f;
+    colour.amount = 1.0f;
+    state.formant.set_config(colour);
+    const float factor =
+        config.formant_mode == FormantMode::Absolute
+            ? config.formant.factor
+            : effective_formant_factor(config.formant.factor, config.formant.amount);
+    state.targets.set_config(config.pitch_correction, config.harmony, config.midi,
+                             config.retune.semitones, factor, config.formant_mode);
+    state.vocoder.set_config(config.vocoder, factor);
+    state.shift_mix.set_target(std::clamp(config.retune.mix, 0.0f, 1.0f));
+    const float delay =
+        static_cast<float>(static_cast<double>(config.harmony.delay_ms) * 1e-3 * sample_rate_);
+    for (auto& smoother : state.harmony_delay_samples) smoother.set_target(delay);
+  } else if (prepared_formant_mode_ == FormantMode::Absolute) {
     // The warp carries the factor, so the colour stage stays neutral; amount does not apply.
     StreamingFormantConfig colour = config.formant;
     colour.factor = 1.0f;
@@ -253,6 +338,18 @@ void RealtimeVoiceChanger::apply_channel_config(ChannelState& state, int channel
     state.formant.set_config(config.formant);
   }
   state.reverb.set_config(config.reverb, channel_index);
+  // A stage that sat out while the other variation ran resumes from rest, not from its old tail.
+  const ReverbVariation variation = config.reverb_variation.variation;
+  if (variation != state.variation) {
+    if (variation == ReverbVariation::Reverb) {
+      state.reverb.reset();
+    } else if (state.variation == ReverbVariation::Reverb) {
+      state.space.reset();
+    }
+    state.variation = variation;
+  }
+  state.space.set_config(config.reverb, config.reverb_variation);
+  state.character.set_config(config.character);
   state.input_gain.set_target(db_to_gain(config.input_gain_db));
   state.output_gain.set_target(db_to_gain(config.output_gain_db));
   state.wet_mix.set_target(std::clamp(config.wet_mix, 0.0f, 1.0f));
@@ -356,11 +453,30 @@ rt::TailBudget RealtimeVoiceChanger::tail_budget() const noexcept {
   // The high-pass corner glides down to the lowest accepted one, where it rings longest.
   wet.then(ring(input_highpass(sample_rate_, kVoiceHighpassMinHz)));
   const ChannelState& channel = channels_[0];
-  if (prepared_formant_mode_ == FormantMode::Absolute) {
-    wet.delay(static_cast<double>(channel.warp.latency_samples()));
+  if (prepared_engine_ == PitchEngine::Psola) {
+    rt::TailBudget voice;
+    voice.delay(kShifterHistoryPeriods * channel.shifter.latency_samples() +
+                kShifterHistoryUnvoicedS * sample_rate_);
+    voice.delay(static_cast<double>(kHarmonyMaxDelayMs) * 1e-3 * sample_rate_);
+    if (config_.vocoder.enabled) {
+      // Each band envelope falls at its release once the modulator stops.
+      rt::TailBudget vocoded;
+      vocoded.delay(kVocoderRingGroupDelays * channel.vocoder.group_delay_samples());
+      vocoded.decay(1.0 - time_to_attack_release_rate(sample_rate_, config_.vocoder.release_ms));
+      voice.alongside(vocoded);
+    }
+    wet.then(voice);
+  } else {
+    if (prepared_formant_mode_ == FormantMode::Absolute) {
+      wet.delay(static_cast<double>(channel.warp.latency_samples()));
+    }
+    wet.then(channel.retune.tail());
   }
-  wet.then(channel.retune.tail());
   wet.then(StreamingFormant::tail(sample_rate_));
+  if (config_.character.type != CharacterType::None) {
+    rt::TailBudget character;
+    wet.then(character.seconds(kCharacterTailS, sample_rate_));
+  }
   rt::TailBudget body;
   rt::TailBudget presence;
   rt::TailBudget air;
@@ -370,7 +486,17 @@ rt::TailBudget RealtimeVoiceChanger::tail_budget() const noexcept {
     air.alongside(ring(air_shelf(sample_rate_, gain_db)));
   }
   wet.then(body).then(presence).then(air);
-  wet.then(StreamingReverb::tail(config_.reverb, sample_rate_, num_channels_, scale));
+  if (config_.reverb_variation.variation == ReverbVariation::Reverb) {
+    wet.then(StreamingReverb::tail(config_.reverb, sample_rate_, num_channels_, scale));
+  } else {
+    // Each pass of the echo loop is scaled by the feedback; the first is heard at the mix.
+    const double delay =
+        static_cast<double>(space_delay_ms(config_.reverb_variation)) * 1e-3 * sample_rate_;
+    rt::TailBudget echo;
+    echo.delay(delay).recirculation(delay, static_cast<double>(config_.reverb_variation.feedback),
+                                    scale * static_cast<double>(config_.reverb.mix));
+    wet.then(echo);
+  }
   if (config_.wet_mix > 0.0f) return wet;
   // A mix gliding to zero still lets the wet path through until it lands.
   rt::TailBudget glide;
@@ -445,6 +571,69 @@ void RealtimeVoiceChanger::reset_channel(ChannelState& state) {
   std::fill(state.dry_delay.begin(), state.dry_delay.end(), 0.0f);
   state.dry_delay_pos = 0;
   state.isp_limiter.reset();
+  state.character.reset();
+  state.space.reset();
+  state.tracker.reset();
+  state.shifter.reset();
+  state.targets.reset();
+  state.vocoder.reset();
+  for (auto& delay : state.harmony_delay) {
+    std::fill(delay.line.begin(), delay.line.end(), 0.0f);
+    delay.write = 0;
+  }
+  for (auto& delay : state.harmony_delay_samples) delay.reset(delay.target());
+  // Voices enter from silence; the first block's targets raise the gains.
+  for (auto& gain : state.voice_gain) gain.reset(0.0f);
+  state.shift_mix.reset(state.shift_mix.target());
+  state.unshifted.clear();
+  state.voice_compensation.clear();
+  state.vocoder_compensation.clear();
+  state.vocoder_running = false;
+  state.transform_substituted = false;
+  state.voice_input_substituted = false;
+}
+
+bool RealtimeVoiceChanger::push_note(NoteEvent event) noexcept {
+  if (channels_.empty() || prepared_engine_ != PitchEngine::Psola) return false;
+  if (!note_queue_.push(event)) return false;
+  notes_pushed_.fetch_add(1, std::memory_order_release);
+  return true;
+}
+
+bool RealtimeVoiceChanger::note_on(int note, float velocity) noexcept {
+  if (!is_valid_note(note) || !is_valid_velocity(velocity)) return false;
+  return push_note(NoteEvent{NoteEvent::Kind::On, note, velocity});
+}
+
+bool RealtimeVoiceChanger::note_off(int note) noexcept {
+  if (!is_valid_note(note)) return false;
+  return push_note(NoteEvent{NoteEvent::Kind::Off, note, 0.0f});
+}
+
+void RealtimeVoiceChanger::all_notes_off() noexcept {
+  // Stamped with the events pushed so far: those apply first, later ones after the release.
+  all_notes_off_at_.store(notes_pushed_.load(std::memory_order_acquire), std::memory_order_release);
+  all_notes_off_pending_.store(true, std::memory_order_release);
+}
+
+void RealtimeVoiceChanger::drain_note_events() noexcept {
+  const bool release_pending = all_notes_off_pending_.exchange(false, std::memory_order_acq_rel);
+  const std::uint64_t release_at =
+      release_pending ? all_notes_off_at_.load(std::memory_order_acquire) : 0;
+  bool released = !release_pending;
+  const auto release_all = [this] {
+    for (auto& channel : channels_) channel.targets.all_notes_off();
+  };
+  NoteEvent event{};
+  while (note_queue_.pop(event)) {
+    if (!released && notes_applied_ >= release_at) {
+      release_all();
+      released = true;
+    }
+    for (auto& channel : channels_) channel.targets.apply_note(event);
+    ++notes_applied_;
+  }
+  if (!released) release_all();
 }
 
 }  // namespace sonare::editing::voice_changer

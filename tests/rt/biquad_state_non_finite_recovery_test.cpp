@@ -337,8 +337,11 @@ TEST_CASE("the realtime voice changer bounds a non-finite sample to its own bloc
   using sonare::editing::voice_changer::RealtimeVoiceChanger;
   using sonare::editing::voice_changer::RealtimeVoiceChangerConfig;
 
+  // The bounds below reason from the grain engine's retune ring; the psola engine has its own
+  // section at the end.
   const auto base_config = []() {
     RealtimeVoiceChangerConfig config;
+    config.voice_engine.engine = sonare::editing::voice_changer::PitchEngine::Grain;
     config.eq.body_db = 3.0f;
     config.eq.air_db = 4.0f;
     // The reverb follows the rule too, but to a weaker bound — one comb delay
@@ -517,6 +520,48 @@ TEST_CASE("the realtime voice changer bounds a non-finite sample to its own bloc
     INFO("discards " << poisoned_changer->non_finite_discard_count());
     REQUIRE(poisoned_changer->non_finite_discard_count() > 0u);
     REQUIRE(residual_from(control, poisoned, kVoiceChangerRecoveryBlocks) < kVoiceChangerResidual);
+  }
+
+  SECTION("on the psola engine") {
+    // The voice stage keeps a non-finite value out of its tracker and shifter and reports the
+    // block. The overflowing high-pass output that is still finite travels through the shifter
+    // and overflows the output stage one latency later, where the chain's discard catches it.
+    RealtimeVoiceChangerConfig config = linear_config();
+    config.voice_engine.engine = sonare::editing::voice_changer::PitchEngine::Psola;
+    auto control_changer = prepared(config);
+    const auto control = run_stream(block_processor(control_changer), block_count, 0.0f, false);
+    REQUIRE(control_effect(control) > 0.0f);
+    REQUIRE(control_changer->non_finite_discard_count() == 0u);
+    const int latency = control_changer->latency_samples();
+    const int psola_last_affected = kPoisonBlock + 1 + (latency + kBlockSize - 1) / kBlockSize;
+
+    auto poisoned_changer = prepared(config);
+    const auto poisoned =
+        run_stream(block_processor(poisoned_changer), block_count, poison_value, true);
+    INFO("discards " << poisoned_changer->non_finite_discard_count());
+    REQUIRE(poisoned_changer->non_finite_discard_count() > 0u);
+    require_non_finite_bounded(poisoned, psola_last_affected);
+
+    // The shifter keeps no non-finite value, but it does remember that its input went silent from
+    // the poisoned sample to the end of the block (the high-pass is discarded there): a voicing
+    // gap moves its marks for good. The control is that same gap made of zeros, which involves
+    // no non-finite value at all; the poisoned run may differ from its control by no more.
+    auto gap_changer = prepared(config);
+    std::vector<std::vector<float>> gapped;
+    for (int k = 0; k < block_count; ++k) {
+      std::vector<float> block = stream_block(k);
+      if (k == kPoisonBlock) {
+        std::fill(block.begin() + kPoisonIndex, block.end(), 0.0f);
+      }
+      float* channels[] = {block.data()};
+      gap_changer->process_block(channels, 1, kBlockSize);
+      gapped.push_back(std::move(block));
+    }
+    REQUIRE(gap_changer->non_finite_discard_count() == 0u);
+    const double gap_residual = residual_from(control, gapped, kVoiceChangerRecoveryBlocks);
+    INFO("zero-gap residual " << gap_residual);
+    REQUIRE(gap_residual > 0.0);
+    REQUIRE(residual_from(control, poisoned, kVoiceChangerRecoveryBlocks) < 2.0 * gap_residual);
   }
 }
 

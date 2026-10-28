@@ -1198,9 +1198,9 @@ std::unique_ptr<Processor> build_gs_efx(const ParamMap& params) {
 #ifdef SONARE_WITH_VOICE_CHANGER
 using sonare::editing::voice_changer::RealtimeVoiceChangerConfig;
 
-// The config is three top-level gains, the formant mode and eight stage structs; every leaf field
-// has a table row.
-SONARE_ASSERT_EVERY_FIELD_IS_WIRED(RealtimeVoiceChangerConfig, 12);
+// The config is three top-level gains, the formant mode, eight stage structs and seven voice
+// transformer structs; every leaf field has a table row (the three harmony steps one each).
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(RealtimeVoiceChangerConfig, 19);
 static_assert(
     SONARE_FIELD_TABLE_SIZE(SONARE_FIELDS_VOICE_CHANGER) ==
         4 + detail::field_count<sonare::editing::voice_changer::StreamingRetuneConfig>() +
@@ -1210,14 +1210,25 @@ static_assert(
             detail::field_count<sonare::editing::voice_changer::VoiceCompressorConfig>() +
             detail::field_count<sonare::editing::voice_changer::VoiceDeesserConfig>() +
             detail::field_count<sonare::editing::voice_changer::ReverbConfig>() +
-            detail::field_count<sonare::editing::voice_changer::LimiterConfig>(),
+            detail::field_count<sonare::editing::voice_changer::LimiterConfig>() +
+            detail::field_count<sonare::editing::voice_changer::VoiceEngineConfig>() +
+            detail::field_count<sonare::editing::voice_changer::PitchCorrectionConfig>() +
+            detail::field_count<sonare::editing::voice_changer::HarmonyConfig>() +
+            detail::field_count<sonare::editing::voice_changer::VocoderConfig>() +
+            detail::field_count<sonare::editing::voice_changer::CharacterConfig>() +
+            detail::field_count<sonare::editing::voice_changer::ReverbVariationConfig>() +
+            detail::field_count<sonare::editing::voice_changer::MidiConfig>(),
     "SONARE_FIELDS_VOICE_CHANGER does not account for every voice changer field");
 
 std::unique_ptr<Processor> build_voice(const std::string& name, const ParamMap& params) {
   if (name != "voice.changer") return nullptr;
   RealtimeVoiceChangerConfig config;
   SONARE_FIELDS_VOICE_CHANGER(SONARE_READ_FIELD)
-  params.note_coupled("retuneSemitones", "formantMode");
+  // Only the grain engine warps the formants ahead of the retune, so only there does the formant
+  // mode bound the shift; psola resamples its grains and takes every shift in either mode.
+  if (config.voice_engine.engine == sonare::editing::voice_changer::PitchEngine::Grain) {
+    params.note_coupled("retuneSemitones", "formantMode");
+  }
   return make<sonare::editing::voice_changer::VoiceChangerInsert>(config);
 }
 #endif  // SONARE_WITH_VOICE_CHANGER

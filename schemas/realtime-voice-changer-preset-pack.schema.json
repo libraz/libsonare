@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": ["schemaVersion", "presets"],
   "properties": {
-    "schemaVersion": { "type": "integer", "const": 1 },
+    "schemaVersion": { "type": "integer", "enum": [1, 2] },
     "packId": {
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9._-]*$",

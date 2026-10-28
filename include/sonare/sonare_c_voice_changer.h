@@ -42,11 +42,14 @@ extern "C" {
 ///        for C callers that want to avoid the JSON round-trip.
 /// @details Field ordering follows the nested C++ struct (top-level →
 ///          retune → formant → eq → gate → compressor → deesser → reverb →
-///          limiter). A non-finite or out-of-range entry is refused with
+///          limiter → voice engine → pitch correction → harmony → vocoder →
+///          character → reverb variation → midi). Enum fields hold the ordinals of the
+///          matching Sonare* enums; an unknown ordinal is refused. A non-finite or out-of-range
+///          entry is refused with
 ///          @c SONARE_ERROR_INVALID_PARAMETER (the message names the field, its range and the
 ///          value) and the handle keeps its previous configuration, as the JSON entry points do.
 typedef struct {
-  /// @brief Layout version; 0 and 1 both select this layout, anything else is refused.
+  /// @brief Layout version; must be 2. Earlier layouts are refused.
   int32_t struct_version;
 
   float input_gain_db;
@@ -113,6 +116,62 @@ typedef struct {
   ///        editing::voice_changer::LimiterConfig::isp_ceiling_dbtp. Defaults to
   ///        -1.0 dBTP.
   float limiter_isp_ceiling_dbtp;
+
+  /// @brief A @ref SonarePitchEngine. Psola (the default) tracks f0; grain is the f0-less SOLA
+  ///        retune and refuses pitch correction, harmony and the vocoder. Fixed at creation.
+  int32_t voice_engine_engine;
+  /// @brief Lowest tracked f0 in Hz, [50, 200]; sets the psola latency. Fixed at creation.
+  float voice_engine_f0_min_hz;
+
+  /// @brief A @ref SonarePitchCorrectionMode.
+  int32_t pitch_correction_mode;
+  float pitch_correction_amount;
+  float pitch_correction_speed_ms;
+  /// @brief Scale root, 0 = C .. 11 = B; validated but unused for a chromatic scale.
+  int32_t pitch_correction_key_root;
+  /// @brief A @ref SonareScaleKind.
+  int32_t pitch_correction_scale;
+  int32_t pitch_correction_robot_octave;
+
+  /// @brief Harmony voices beside the lead, [0, 3].
+  int32_t harmony_voices;
+  /// @brief Scale degrees of each harmony voice from the lead (0 = unison, +2 = a third up).
+  int32_t harmony_steps[3];
+  float harmony_level;
+  float harmony_lead_level;
+  float harmony_detune_cents;
+  float harmony_delay_ms;
+
+  /// @brief Non-zero enables the channel vocoder.
+  int32_t vocoder_enabled;
+  /// @brief Band count, [8, 32]. Fixed at creation.
+  int32_t vocoder_bands;
+  float vocoder_attack_ms;
+  float vocoder_release_ms;
+  float vocoder_sibilance;
+  /// @brief A @ref SonareVocoderCarrierSource. External reads the carrier passed to the
+  ///        *_with_carrier process entries.
+  int32_t vocoder_carrier_source;
+  /// @brief A @ref SonareVocoderCarrierWave.
+  int32_t vocoder_carrier_wave;
+  float vocoder_ensemble_detune_cents;
+  float vocoder_level;
+
+  /// @brief A @ref SonareCharacterType.
+  int32_t character_type;
+  float character_amount;
+  float character_tone;
+
+  /// @brief A @ref SonareReverbVariation; every variation shares @ref reverb_mix.
+  int32_t reverb_variation_variation;
+  float reverb_variation_delay_ms;
+  float reverb_variation_feedback;
+  float reverb_variation_tempo_bpm;
+  /// @brief A @ref SonareNoteDivision for the tempo delay.
+  int32_t reverb_variation_division;
+
+  /// @brief A @ref SonareMidiRelease: what the voices do once every held note is released.
+  int32_t midi_release;
 } SonareRealtimeVoiceChangerConfig;
 
 // Verify the POD struct layout is stable. The ABI version constant
@@ -121,18 +180,18 @@ typedef struct {
 // FFI boundary (Rust FFI, raw C ABI consumers) read this size at compile
 // time and detect ABI drift before a single byte is exchanged.
 //
-// Layout: 34 float fields + 4 int fields, every member is 4 bytes and
-// 4-byte aligned -> no struct padding on any target we ship. Exact equality
-// (not >=) so silent padding insertion fails the check too.
+// Layout: 69 four-byte scalar fields and one 3-element int32 array, every
+// member 4-byte aligned -> no struct padding on any target we ship. Exact
+// equality (not >=) so silent padding insertion fails the check too.
 #ifdef __cplusplus
-static_assert(sizeof(SonareRealtimeVoiceChangerConfig) == 38u * sizeof(float),
+static_assert(sizeof(SonareRealtimeVoiceChangerConfig) == 72u * sizeof(float),
               "SonareRealtimeVoiceChangerConfig unexpected size");
 #endif
 
 /// @brief Compile-time mirror of the runtime ABI version returned by
 ///        @ref sonare_voice_changer_abi_version. Bindings can `static_assert` /
 ///        `assertEqual` the runtime value against this at attach time.
-#define SONARE_VOICE_CHANGER_ABI_VERSION 3u
+#define SONARE_VOICE_CHANGER_ABI_VERSION 4u
 
 /// @brief Returns the runtime ABI version of the
 ///        @ref SonareRealtimeVoiceChangerConfig POD layout.
@@ -227,9 +286,46 @@ SonareError sonare_realtime_voice_changer_process_interleaved(SonareRealtimeVoic
 SonareError sonare_realtime_voice_changer_process_planar_stereo(SonareRealtimeVoiceChanger* handle,
                                                                 float* left, float* right,
                                                                 size_t num_frames);
-/// @brief Reports the prepared chain's processing latency in samples. The dry
-///        and wet paths are aligned to the retune OLA's fixed one-grain delay,
-///        so the value is independent of `wet_mix` and `retune.mix`. When the
+/// @brief Same as @ref sonare_realtime_voice_changer_process_mono, with an external vocoder
+///        carrier of @p num_samples samples.
+/// @details The carrier is read only while the vocoder is enabled with
+///          @c SONARE_VOCODER_CARRIER_EXTERNAL; otherwise it is ignored. A NULL @p carrier is
+///          SONARE_ERROR_INVALID_PARAMETER. The carrier-less process entries return
+///          SONARE_ERROR_INVALID_STATE, writing no output, while an external carrier is configured.
+SonareError sonare_realtime_voice_changer_process_mono_with_carrier(
+    SonareRealtimeVoiceChanger* handle, const float* input, const float* carrier, float* output,
+    size_t num_samples);
+/// @brief Interleaved variant of @ref sonare_realtime_voice_changer_process_mono_with_carrier;
+///        @p carrier is mono, @p num_frames samples, shared by every channel.
+SonareError sonare_realtime_voice_changer_process_interleaved_with_carrier(
+    SonareRealtimeVoiceChanger* handle, const float* input, const float* carrier, float* output,
+    size_t num_frames, int num_channels);
+/// @brief Planar-stereo variant of @ref sonare_realtime_voice_changer_process_mono_with_carrier;
+///        @p carrier is mono, @p num_frames samples, shared by both channels.
+SonareError sonare_realtime_voice_changer_process_planar_stereo_with_carrier(
+    SonareRealtimeVoiceChanger* handle, float* left, float* right, const float* carrier,
+    size_t num_frames);
+/// @brief Holds MIDI note @p note from the start of the next processed block.
+/// @details Held notes become the voices' pitch targets whatever the pitch correction mode, the
+///          newest leading, up to 1 + harmony_voices of them. Realtime-safe and lock-free; one
+///          producer thread for the note entries. @p note outside [0, 127] or @p velocity outside
+///          (0, 1] is SONARE_ERROR_INVALID_PARAMETER. A grain-engine handle, or a full event queue
+///          (the event is dropped), is SONARE_ERROR_INVALID_STATE. Like the process entries it
+///          reports through its return code only.
+SonareError sonare_realtime_voice_changer_note_on(SonareRealtimeVoiceChanger* handle, int note,
+                                                  float velocity);
+/// @brief Releases MIDI note @p note from the start of the next processed block; releasing a note
+///        that is not held succeeds and does nothing. Errors as
+///        @ref sonare_realtime_voice_changer_note_on.
+SonareError sonare_realtime_voice_changer_note_off(SonareRealtimeVoiceChanger* handle, int note);
+/// @brief Releases every held note from the start of the next processed block, bypassing the
+///        event queue, so it succeeds even when the queue is full. Realtime-safe.
+SonareError sonare_realtime_voice_changer_all_notes_off(SonareRealtimeVoiceChanger* handle);
+/// @brief Reports the prepared chain's processing latency in samples. With the
+///        psola engine the dry path, the voice stage and the vocoder are aligned to
+///        max(ceil(sr / voice_engine_f0_min_hz), the vocoder's lowest-band group delay);
+///        with the grain engine to the retune OLA's fixed one-grain delay. Either way
+///        the value is independent of `wet_mix`, `retune.mix` and the vocoder switch. When the
 ///        ISP limiter is enabled, it runs after that aligned mix and adds its
 ///        signal-path latency: a 6-sample FIR group delay plus the samples a
 ///        five-time-constant attack settle needs, 31 in total at 48 kHz. Ask
@@ -276,7 +372,18 @@ const char* sonare_realtime_voice_changer_preset_names(void);
 ///          macro instead of hand-copying the literal strings. The separator
 ///          mirrors @ref sonare_realtime_voice_changer_preset_names.
 #define SONARE_REALTIME_VOICE_CHANGER_PRESET_IDS \
-  "neutral-monitor\nbright-idol\nsoft-whisper\ndeep-narrator\nrobot-mascot\ndark-villain"
+  "neutral-monitor\n"                            \
+  "bright-idol\n"                                \
+  "soft-whisper\n"                               \
+  "deep-narrator\n"                              \
+  "robot-mascot\n"                               \
+  "dark-villain\n"                               \
+  "hard-tune\n"                                  \
+  "robot-monotone\n"                             \
+  "choir-harmony\n"                              \
+  "vocoder-strings\n"                            \
+  "megaphone\n"                                  \
+  "radio-voice"
 /// @brief Returns the canonical id string for a @ref SonareVoiceCharacterPreset enum.
 /// @details Returns NULL for unknown enum values. The pointer is static storage
 ///          and must NOT be freed.

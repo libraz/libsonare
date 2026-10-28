@@ -15,6 +15,7 @@
 #include <complex>
 #include <cstddef>
 #include <fstream>
+#include <functional>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
@@ -48,6 +49,22 @@ using sonare::constants::kPi;
 using sonare::constants::kTwoPi;
 
 namespace {
+
+// The voice transformer keys of the flat camelCase POD at their defaults, to append after the
+// last of the other keys (it starts with a comma, and the caller closes the object).
+[[maybe_unused]] constexpr const char* kFlatTransformDefaults = R"json(,
+    "voiceEngineEngine": "psola", "voiceEngineF0MinHz": 70,
+    "pitchCorrectionMode": "off", "pitchCorrectionAmount": 1, "pitchCorrectionSpeedMs": 20,
+    "pitchCorrectionKeyRoot": 0, "pitchCorrectionScale": "major", "pitchCorrectionRobotOctave": 0,
+    "harmonyVoices": 0, "harmonyStep1": 2, "harmonyStep2": 4, "harmonyStep3": -3,
+    "harmonyLevel": 0.7, "harmonyLeadLevel": 1, "harmonyDetuneCents": 6, "harmonyDelayMs": 12,
+    "vocoderEnabled": false, "vocoderBands": 20, "vocoderAttackMs": 2, "vocoderReleaseMs": 20,
+    "vocoderSibilance": 0.3, "vocoderCarrierSource": "internal", "vocoderCarrierWave": "saw",
+    "vocoderEnsembleDetuneCents": 12, "vocoderLevel": 1,
+    "characterType": "none", "characterAmount": 0.5, "characterTone": 0,
+    "reverbVariationVariation": "reverb", "reverbVariationDelayMs": 250,
+    "reverbVariationFeedback": 0.35, "reverbVariationTempoBpm": 120,
+    "reverbVariationDivision": "eighth", "midiRelease": "hold")json";
 
 [[maybe_unused]] std::vector<float> sine(float frequency_hz, int sample_rate, int samples) {
   std::vector<float> output(static_cast<size_t>(samples), 0.0f);

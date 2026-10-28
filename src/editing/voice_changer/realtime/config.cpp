@@ -42,12 +42,7 @@ float object_number(const sonare::util::json::Value& object, const char* section
   return finite_or(value->as_float(), fallback);
 }
 
-int object_int(const sonare::util::json::Value& object, const char* section, const char* key,
-               int fallback) {
-  const auto* value = object.find(key);
-  if (!value) return fallback;
-  if (!value->is_number()) refuse_type(section, key, "a number");
-  const double n = value->as_number();
+int json_number_to_int(double n, int fallback) noexcept {
   if (!std::isfinite(n)) return fallback;
   // Clamp to the representable int range BEFORE the cast: a finite JSON number
   // outside [INT_MIN, INT_MAX] (e.g. a 1e12 reverb seed) would otherwise be an
@@ -55,6 +50,138 @@ int object_int(const sonare::util::json::Value& object, const char* section, con
   const double clamped = std::clamp(n, static_cast<double>(std::numeric_limits<int>::min()),
                                     static_cast<double>(std::numeric_limits<int>::max()));
   return static_cast<int>(clamped);
+}
+
+int object_int(const sonare::util::json::Value& object, const char* section, const char* key,
+               int fallback) {
+  const auto* value = object.find(key);
+  if (!value) return fallback;
+  if (!value->is_number()) refuse_type(section, key, "a number");
+  return json_number_to_int(value->as_number(), fallback);
+}
+
+// The harmony steps as an array of up to kMaxHarmonyVoices numbers; entries past its end keep
+// their current value.
+void object_steps(const sonare::util::json::Value& object, const char* section, const char* key,
+                  int (&steps)[kMaxHarmonyVoices]) {
+  const auto* value = object.find(key);
+  if (!value) return;
+  if (!value->is_array()) refuse_type(section, key, "an array of numbers");
+  const auto& items = value->as_array();
+  if (items.size() > static_cast<std::size_t>(kMaxHarmonyVoices)) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          std::string(section) + "." + key + " must have at most " +
+                              std::to_string(kMaxHarmonyVoices) + " entries");
+  }
+  for (std::size_t i = 0; i < items.size(); ++i) {
+    if (!items[i].is_number()) refuse_type(section, key, "an array of numbers");
+    steps[i] = json_number_to_int(items[i].as_number(), steps[i]);
+  }
+}
+
+// Spellings of the voice transformer enums in JSON documents: each enumerator in snake_case.
+struct EnumName {
+  int value;
+  std::string_view name;
+};
+
+template <typename Enum>
+struct EnumNames;
+
+template <>
+struct EnumNames<PitchEngine> {
+  static constexpr std::array<EnumName, 2> kNames = {{{0, "grain"}, {1, "psola"}}};
+};
+template <>
+struct EnumNames<PitchCorrectionMode> {
+  static constexpr std::array<EnumName, 3> kNames = {{{0, "off"}, {1, "auto"}, {2, "robot"}}};
+};
+template <>
+struct EnumNames<ScaleKind> {
+  static constexpr std::array<EnumName, 3> kNames = {
+      {{0, "major"}, {1, "natural_minor"}, {2, "chromatic"}}};
+};
+template <>
+struct EnumNames<VocoderCarrierSource> {
+  static constexpr std::array<EnumName, 2> kNames = {{{0, "internal"}, {1, "external"}}};
+};
+template <>
+struct EnumNames<VocoderCarrierWave> {
+  static constexpr std::array<EnumName, 3> kNames = {{{0, "saw"}, {1, "pulse"}, {2, "ensemble"}}};
+};
+template <>
+struct EnumNames<CharacterType> {
+  static constexpr std::array<EnumName, 5> kNames = {
+      {{0, "none"}, {1, "megaphone"}, {2, "radio"}, {3, "bbd_chorus"}, {4, "strobo"}}};
+};
+template <>
+struct EnumNames<ReverbVariation> {
+  static constexpr std::array<EnumName, 4> kNames = {
+      {{0, "reverb"}, {1, "echo"}, {2, "tempo_delay"}, {3, "dub_echo"}}};
+};
+template <>
+struct EnumNames<NoteDivision> {
+  static constexpr std::array<EnumName, 4> kNames = {
+      {{0, "quarter"}, {1, "eighth"}, {2, "dotted_eighth"}, {3, "sixteenth"}}};
+};
+template <>
+struct EnumNames<MidiRelease> {
+  static constexpr std::array<EnumName, 2> kNames = {{{0, "hold"}, {1, "input"}}};
+};
+
+template <typename Enum>
+bool enum_is_declared(Enum value) noexcept {
+  for (const EnumName& row : EnumNames<Enum>::kNames) {
+    if (row.value == static_cast<int>(value)) return true;
+  }
+  return false;
+}
+
+/// The document spelling of @p value; the first spelling for an undeclared value.
+template <typename Enum>
+const char* enum_spelling(Enum value) noexcept {
+  for (const EnumName& row : EnumNames<Enum>::kNames) {
+    if (row.value == static_cast<int>(value)) return row.name.data();
+  }
+  return EnumNames<Enum>::kNames[0].name.data();
+}
+
+template <typename Enum>
+bool enum_from_spelling(std::string_view name, Enum* out) noexcept {
+  for (const EnumName& row : EnumNames<Enum>::kNames) {
+    if (row.name == name) {
+      *out = static_cast<Enum>(row.value);
+      return true;
+    }
+  }
+  return false;
+}
+
+/// "'a', 'b' or 'c'" over every spelling of @p Enum.
+template <typename Enum>
+std::string enum_spelling_list() {
+  std::string out;
+  const auto& names = EnumNames<Enum>::kNames;
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    if (i > 0) out += i + 1 == names.size() ? " or " : ", ";
+    out += '\'';
+    out += names[i].name;
+    out += '\'';
+  }
+  return out;
+}
+
+template <typename Enum>
+Enum object_enum(const sonare::util::json::Value& object, const char* section, const char* key,
+                 Enum fallback) {
+  const auto* value = object.find(key);
+  if (!value) return fallback;
+  if (!value->is_string()) refuse_type(section, key, "a string");
+  Enum parsed = fallback;
+  if (!enum_from_spelling(value->as_string(), &parsed)) {
+    refuse_type(section, key, enum_spelling_list<Enum>().c_str());
+  }
+  return parsed;
 }
 
 FormantMode object_formant_mode(const sonare::util::json::Value& object, const char* section,
@@ -94,6 +221,15 @@ void dump_int_field(std::string& out, const char* key, int value, bool last = fa
   out += key;
   out += "\":";
   out += std::to_string(value);
+  if (!last) out += ',';
+}
+
+void dump_string_field(std::string& out, const char* key, const char* value, bool last = false) {
+  out += '"';
+  out += key;
+  out += "\":\"";
+  out += value;
+  out += '"';
   if (!last) out += ',';
 }
 
@@ -153,6 +289,50 @@ void dump_dsp_section(std::string& out, const RealtimeVoiceChangerConfig& c) {
   dump_field(out, "releaseMs", c.limiter.release_ms);
   dump_bool_field(out, "enableIspLimiter", c.limiter.enable_isp_limiter);
   dump_field(out, "ispCeilingDbtp", c.limiter.isp_ceiling_dbtp, true);
+  out += "},\"voiceEngine\":{";
+  dump_string_field(out, "engine", enum_spelling(c.voice_engine.engine));
+  dump_field(out, "f0MinHz", c.voice_engine.f0_min_hz, true);
+  out += "},\"pitchCorrection\":{";
+  dump_string_field(out, "mode", enum_spelling(c.pitch_correction.mode));
+  dump_field(out, "amount", c.pitch_correction.amount);
+  dump_field(out, "speedMs", c.pitch_correction.speed_ms);
+  dump_int_field(out, "keyRoot", c.pitch_correction.key_root);
+  dump_string_field(out, "scale", enum_spelling(c.pitch_correction.scale));
+  dump_int_field(out, "robotOctave", c.pitch_correction.robot_octave, true);
+  out += "},\"harmony\":{";
+  dump_int_field(out, "voices", c.harmony.voices);
+  out += "\"steps\":[";
+  for (int i = 0; i < kMaxHarmonyVoices; ++i) {
+    if (i > 0) out += ',';
+    out += std::to_string(c.harmony.steps[i]);
+  }
+  out += "],";
+  dump_field(out, "level", c.harmony.level);
+  dump_field(out, "leadLevel", c.harmony.lead_level);
+  dump_field(out, "detuneCents", c.harmony.detune_cents);
+  dump_field(out, "delayMs", c.harmony.delay_ms, true);
+  out += "},\"vocoder\":{";
+  dump_bool_field(out, "enabled", c.vocoder.enabled);
+  dump_int_field(out, "bands", c.vocoder.bands);
+  dump_field(out, "attackMs", c.vocoder.attack_ms);
+  dump_field(out, "releaseMs", c.vocoder.release_ms);
+  dump_field(out, "sibilance", c.vocoder.sibilance);
+  dump_string_field(out, "carrierSource", enum_spelling(c.vocoder.carrier_source));
+  dump_string_field(out, "carrierWave", enum_spelling(c.vocoder.carrier_wave));
+  dump_field(out, "ensembleDetuneCents", c.vocoder.ensemble_detune_cents);
+  dump_field(out, "level", c.vocoder.level, true);
+  out += "},\"character\":{";
+  dump_string_field(out, "type", enum_spelling(c.character.type));
+  dump_field(out, "amount", c.character.amount);
+  dump_field(out, "tone", c.character.tone, true);
+  out += "},\"reverbVariation\":{";
+  dump_string_field(out, "variation", enum_spelling(c.reverb_variation.variation));
+  dump_field(out, "delayMs", c.reverb_variation.delay_ms);
+  dump_field(out, "feedback", c.reverb_variation.feedback);
+  dump_field(out, "tempoBpm", c.reverb_variation.tempo_bpm);
+  dump_string_field(out, "division", enum_spelling(c.reverb_variation.division), true);
+  out += "},\"midi\":{";
+  dump_string_field(out, "release", enum_spelling(c.midi.release), true);
   out += "}}";
 }
 
@@ -177,6 +357,9 @@ struct Range {
   double lo;
   double hi;
 };
+
+// Version 1 documents predate the voice transformer sections and still validate.
+constexpr int kOldestPresetSchemaVersion = 1;
 
 // The accepted ranges: the one definition behind validation, normalization and the preset schema.
 constexpr Range kUnit{0.0, 1.0};
@@ -210,6 +393,20 @@ constexpr Range kLimiterReleaseMs{1.0, 500.0};
 // The ISP stage detects peaks at 4x oversampling, so its ceiling may reach 0 dBTP.
 constexpr Range kIspCeilingDbtp{-12.0, 0.0};
 constexpr Range kReverbSeed{-2147483648.0, 2147483647.0};
+constexpr Range kF0MinHz{50.0, 200.0};
+constexpr Range kCorrectionSpeedMs{0.0, 400.0};
+constexpr Range kKeyRoot{0.0, 11.0};
+constexpr Range kRobotOctave{-1.0, 1.0};
+constexpr Range kHarmonyVoices{0.0, static_cast<double>(kMaxHarmonyVoices)};
+constexpr Range kHarmonyStep{-7.0, 7.0};
+constexpr Range kDetuneCents{0.0, 30.0};
+constexpr Range kHarmonyDelayMs{0.0, static_cast<double>(kHarmonyMaxDelayMs)};
+constexpr Range kVocoderBands{8.0, 32.0};
+constexpr Range kVocoderAttackMs{0.5, 50.0};
+constexpr Range kVocoderReleaseMs{2.0, 300.0};
+constexpr Range kSpaceDelayMs{1.0, static_cast<double>(kMaxSpaceDelayMs)};
+constexpr Range kSpaceFeedback{0.0, 0.95};
+constexpr Range kTempoBpm{30.0, 300.0};
 
 /// Calls @p v(path, field, range, fallback) for every float field; fallback replaces a non-finite
 /// one.
@@ -248,6 +445,55 @@ void visit_scalar_fields(Config& c, Visit&& v) {
   v("limiter.ceilingDb", c.limiter.ceiling_db, kLimiterCeilingDb, -1.0f);
   v("limiter.releaseMs", c.limiter.release_ms, kLimiterReleaseMs, 50.0f);
   v("limiter.ispCeilingDbtp", c.limiter.isp_ceiling_dbtp, kIspCeilingDbtp, -1.0f);
+  v("voiceEngine.f0MinHz", c.voice_engine.f0_min_hz, kF0MinHz, 70.0f);
+  v("pitchCorrection.amount", c.pitch_correction.amount, kUnit, 1.0f);
+  v("pitchCorrection.speedMs", c.pitch_correction.speed_ms, kCorrectionSpeedMs, 20.0f);
+  v("harmony.level", c.harmony.level, kUnit, 0.7f);
+  v("harmony.leadLevel", c.harmony.lead_level, kUnit, 1.0f);
+  v("harmony.detuneCents", c.harmony.detune_cents, kDetuneCents, 6.0f);
+  v("harmony.delayMs", c.harmony.delay_ms, kHarmonyDelayMs, 12.0f);
+  v("vocoder.attackMs", c.vocoder.attack_ms, kVocoderAttackMs, 2.0f);
+  v("vocoder.releaseMs", c.vocoder.release_ms, kVocoderReleaseMs, 20.0f);
+  v("vocoder.sibilance", c.vocoder.sibilance, kUnit, 0.3f);
+  v("vocoder.ensembleDetuneCents", c.vocoder.ensemble_detune_cents, kDetuneCents, 12.0f);
+  v("vocoder.level", c.vocoder.level, kUnit, 1.0f);
+  v("character.amount", c.character.amount, kUnit, 0.5f);
+  v("character.tone", c.character.tone, kBipolar, 0.0f);
+  v("reverbVariation.delayMs", c.reverb_variation.delay_ms, kSpaceDelayMs, 250.0f);
+  v("reverbVariation.feedback", c.reverb_variation.feedback, kSpaceFeedback, 0.35f);
+  v("reverbVariation.tempoBpm", c.reverb_variation.tempo_bpm, kTempoBpm, 120.0f);
+}
+
+/// Calls @p v(path, field, range) for every integer field of the voice transformer sections.
+template <class Config, class Visit>
+void visit_integer_fields(Config& c, Visit&& v) {
+  v("pitchCorrection.keyRoot", c.pitch_correction.key_root, kKeyRoot);
+  v("pitchCorrection.robotOctave", c.pitch_correction.robot_octave, kRobotOctave);
+  v("harmony.voices", c.harmony.voices, kHarmonyVoices);
+  v("harmony.steps[0]", c.harmony.steps[0], kHarmonyStep);
+  v("harmony.steps[1]", c.harmony.steps[1], kHarmonyStep);
+  v("harmony.steps[2]", c.harmony.steps[2], kHarmonyStep);
+  v("vocoder.bands", c.vocoder.bands, kVocoderBands);
+}
+
+/// Calls @p v(path, declared) for every enum field; @p declared says whether its value is named.
+template <class Config, class Visit>
+void visit_enum_fields(Config& c, Visit&& v) {
+  v("voiceEngine.engine", enum_is_declared(c.voice_engine.engine));
+  v("pitchCorrection.mode", enum_is_declared(c.pitch_correction.mode));
+  v("pitchCorrection.scale", enum_is_declared(c.pitch_correction.scale));
+  v("vocoder.carrierSource", enum_is_declared(c.vocoder.carrier_source));
+  v("vocoder.carrierWave", enum_is_declared(c.vocoder.carrier_wave));
+  v("character.type", enum_is_declared(c.character.type));
+  v("reverbVariation.variation", enum_is_declared(c.reverb_variation.variation));
+  v("reverbVariation.division", enum_is_declared(c.reverb_variation.division));
+  v("midi.release", enum_is_declared(c.midi.release));
+}
+
+/// Returns an undeclared enum value to the field's default.
+template <typename Enum>
+void default_if_undeclared(Enum& value, Enum fallback) noexcept {
+  if (!enum_is_declared(value)) value = fallback;
 }
 
 /// Forces @p input into range (non-finite fields take their default); only preset construction and
@@ -260,6 +506,19 @@ RealtimeVoiceChangerConfig normalize_config(const RealtimeVoiceChangerConfig& in
   });
   c.retune.grain_size = std::clamp(c.retune.grain_size, 0, kMaxRetuneGrainSize);
   if (c.formant_mode != FormantMode::Absolute) c.formant_mode = FormantMode::Relative;
+  visit_integer_fields(c, [](const char*, int& v, const Range& r) {
+    v = std::clamp(v, static_cast<int>(r.lo), static_cast<int>(r.hi));
+  });
+  const RealtimeVoiceChangerConfig defaults;
+  default_if_undeclared(c.voice_engine.engine, defaults.voice_engine.engine);
+  default_if_undeclared(c.pitch_correction.mode, defaults.pitch_correction.mode);
+  default_if_undeclared(c.pitch_correction.scale, defaults.pitch_correction.scale);
+  default_if_undeclared(c.vocoder.carrier_source, defaults.vocoder.carrier_source);
+  default_if_undeclared(c.vocoder.carrier_wave, defaults.vocoder.carrier_wave);
+  default_if_undeclared(c.character.type, defaults.character.type);
+  default_if_undeclared(c.reverb_variation.variation, defaults.reverb_variation.variation);
+  default_if_undeclared(c.reverb_variation.division, defaults.reverb_variation.division);
+  default_if_undeclared(c.midi.release, defaults.midi.release);
   return c;
 }
 
@@ -298,20 +557,26 @@ struct PresetMetadata {
   std::string_view category;      ///< Schema category emitted with the preset document.
 };
 
-constexpr std::array<PresetMetadata, 6> kPresetMetadata = {{
+constexpr std::array<PresetMetadata, 12> kPresetMetadata = {{
     {VoiceCharacterPreset::NeutralMonitor, "neutral-monitor", "Neutral Monitor", "monitor"},
     {VoiceCharacterPreset::BrightIdol, "bright-idol", "Bright Idol", "bright"},
     {VoiceCharacterPreset::SoftWhisper, "soft-whisper", "Soft Whisper", "soft"},
     {VoiceCharacterPreset::DeepNarrator, "deep-narrator", "Deep Narrator", "deep"},
     {VoiceCharacterPreset::RobotMascot, "robot-mascot", "Robot Mascot", "robot"},
     {VoiceCharacterPreset::DarkVillain, "dark-villain", "Dark Villain", "dark"},
+    {VoiceCharacterPreset::HardTune, "hard-tune", "Hard Tune", "tune"},
+    {VoiceCharacterPreset::RobotMonotone, "robot-monotone", "Robot Monotone", "tune"},
+    {VoiceCharacterPreset::ChoirHarmony, "choir-harmony", "Choir Harmony", "harmony"},
+    {VoiceCharacterPreset::VocoderStrings, "vocoder-strings", "Vocoder Strings", "vocoder"},
+    {VoiceCharacterPreset::Megaphone, "megaphone", "Megaphone", "character"},
+    {VoiceCharacterPreset::RadioVoice, "radio-voice", "Radio Voice", "character"},
 }};
 
 // Compile-time check that every enumerator gets a metadata row. Adding a new
 // preset value to VoiceCharacterPreset without updating the table now fails
 // the build rather than silently falling back to NeutralMonitor at runtime.
 static_assert(kPresetMetadata.size() ==
-                  static_cast<std::size_t>(VoiceCharacterPreset::DarkVillain) + 1,
+                  static_cast<std::size_t>(VoiceCharacterPreset::RadioVoice) + 1,
               "kPresetMetadata is out of sync with VoiceCharacterPreset");
 
 const PresetMetadata& preset_metadata(VoiceCharacterPreset preset) noexcept {
@@ -326,17 +591,181 @@ const char* realtime_voice_changer_preset_display_name(VoiceCharacterPreset pres
   return preset_metadata(preset).display_name.data();
 }
 
-bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* error) {
-  if (!has_allowed_keys(dsp,
-                        {"inputGainDb", "outputGainDb", "wetMix", "retune", "formant", "eq", "gate",
-                         "compressor", "deesser", "reverb", "limiter"},
-                        "dsp", error)) {
+template <typename Enum>
+bool require_enum(const sonare::util::json::Value& object, const char* key, const char* path,
+                  std::string* error) {
+  const auto* value = object.find(key);
+  Enum parsed{};
+  if (value != nullptr && value->is_string() && enum_from_spelling(value->as_string(), &parsed)) {
+    return true;
+  }
+  if (error) {
+    *error = "field must be " + enum_spelling_list<Enum>() + ": " + path + "." + key;
+  }
+  return false;
+}
+
+bool require_bool(const sonare::util::json::Value& object, const char* key, const char* path,
+                  std::string* error) {
+  const auto* value = object.find(key);
+  if (value != nullptr && value->is_bool()) return true;
+  if (error) *error = std::string("field must be a boolean: ") + path + "." + key;
+  return false;
+}
+
+// Every key of a voice transformer section is required once the section is present.
+bool require_section_keys(const sonare::util::json::Value& section,
+                          std::initializer_list<const char*> keys, const char* path,
+                          std::string* error) {
+  for (const char* key : keys) {
+    if (!require_key(section, key, path, error)) return false;
+  }
+  return true;
+}
+
+// The voice transformer sections of a dsp object. Present sections are validated in full.
+bool validate_transform_sections(const sonare::util::json::Value& dsp, std::string* error) {
+  if (const auto* section = dsp.find("voiceEngine")) {
+    constexpr const char* kPath = "dsp.voiceEngine";
+    if (!has_allowed_keys(*section, {"engine", "f0MinHz"}, kPath, error) ||
+        !require_section_keys(*section, {"engine", "f0MinHz"}, kPath, error) ||
+        !require_enum<PitchEngine>(*section, "engine", kPath, error) ||
+        !require_in(*section, "f0MinHz", kF0MinHz, kPath, error)) {
+      return false;
+    }
+  }
+  if (const auto* section = dsp.find("pitchCorrection")) {
+    constexpr const char* kPath = "dsp.pitchCorrection";
+    if (!has_allowed_keys(*section,
+                          {"mode", "amount", "speedMs", "keyRoot", "scale", "robotOctave"}, kPath,
+                          error) ||
+        !require_section_keys(*section,
+                              {"mode", "amount", "speedMs", "keyRoot", "scale", "robotOctave"},
+                              kPath, error) ||
+        !require_enum<PitchCorrectionMode>(*section, "mode", kPath, error) ||
+        !require_in(*section, "amount", kUnit, kPath, error) ||
+        !require_in(*section, "speedMs", kCorrectionSpeedMs, kPath, error) ||
+        !require_in(*section, "keyRoot", kKeyRoot, kPath, error, true) ||
+        !require_enum<ScaleKind>(*section, "scale", kPath, error) ||
+        !require_in(*section, "robotOctave", kRobotOctave, kPath, error, true)) {
+      return false;
+    }
+  }
+  if (const auto* section = dsp.find("harmony")) {
+    constexpr const char* kPath = "dsp.harmony";
+    if (!has_allowed_keys(*section,
+                          {"voices", "steps", "level", "leadLevel", "detuneCents", "delayMs"},
+                          kPath, error) ||
+        !require_section_keys(*section,
+                              {"voices", "steps", "level", "leadLevel", "detuneCents", "delayMs"},
+                              kPath, error) ||
+        !require_in(*section, "voices", kHarmonyVoices, kPath, error, true) ||
+        !require_in(*section, "level", kUnit, kPath, error) ||
+        !require_in(*section, "leadLevel", kUnit, kPath, error) ||
+        !require_in(*section, "detuneCents", kDetuneCents, kPath, error) ||
+        !require_in(*section, "delayMs", kHarmonyDelayMs, kPath, error)) {
+      return false;
+    }
+    // One step per harmony voice at least, three at most.
+    const auto& steps = *section->find("steps");
+    const auto voices = static_cast<std::size_t>(section->find("voices")->as_number());
+    bool steps_ok = steps.is_array() && steps.as_array().size() >= voices &&
+                    steps.as_array().size() <= static_cast<std::size_t>(kMaxHarmonyVoices);
+    if (steps_ok) {
+      for (const auto& step : steps.as_array()) {
+        const double n = step.is_number() ? step.as_number() : kHarmonyStep.hi + 1.0;
+        steps_ok = steps_ok && std::floor(n) == n && n >= kHarmonyStep.lo && n <= kHarmonyStep.hi;
+      }
+    }
+    if (!steps_ok) {
+      if (error) {
+        *error = "field must be an array of voices to 3 integers in [-7, 7]: dsp.harmony.steps";
+      }
+      return false;
+    }
+  }
+  if (const auto* section = dsp.find("vocoder")) {
+    constexpr const char* kPath = "dsp.vocoder";
+    if (!has_allowed_keys(*section,
+                          {"enabled", "bands", "attackMs", "releaseMs", "sibilance",
+                           "carrierSource", "carrierWave", "ensembleDetuneCents", "level"},
+                          kPath, error) ||
+        !require_section_keys(*section,
+                              {"enabled", "bands", "attackMs", "releaseMs", "sibilance",
+                               "carrierSource", "carrierWave", "ensembleDetuneCents", "level"},
+                              kPath, error) ||
+        !require_bool(*section, "enabled", kPath, error) ||
+        !require_in(*section, "bands", kVocoderBands, kPath, error, true) ||
+        !require_in(*section, "attackMs", kVocoderAttackMs, kPath, error) ||
+        !require_in(*section, "releaseMs", kVocoderReleaseMs, kPath, error) ||
+        !require_in(*section, "sibilance", kUnit, kPath, error) ||
+        !require_enum<VocoderCarrierSource>(*section, "carrierSource", kPath, error) ||
+        !require_enum<VocoderCarrierWave>(*section, "carrierWave", kPath, error) ||
+        !require_in(*section, "ensembleDetuneCents", kDetuneCents, kPath, error) ||
+        !require_in(*section, "level", kUnit, kPath, error)) {
+      return false;
+    }
+  }
+  if (const auto* section = dsp.find("character")) {
+    constexpr const char* kPath = "dsp.character";
+    if (!has_allowed_keys(*section, {"type", "amount", "tone"}, kPath, error) ||
+        !require_section_keys(*section, {"type", "amount", "tone"}, kPath, error) ||
+        !require_enum<CharacterType>(*section, "type", kPath, error) ||
+        !require_in(*section, "amount", kUnit, kPath, error) ||
+        !require_in(*section, "tone", kBipolar, kPath, error)) {
+      return false;
+    }
+  }
+  if (const auto* section = dsp.find("reverbVariation")) {
+    constexpr const char* kPath = "dsp.reverbVariation";
+    if (!has_allowed_keys(*section, {"variation", "delayMs", "feedback", "tempoBpm", "division"},
+                          kPath, error) ||
+        !require_section_keys(
+            *section, {"variation", "delayMs", "feedback", "tempoBpm", "division"}, kPath, error) ||
+        !require_enum<ReverbVariation>(*section, "variation", kPath, error) ||
+        !require_in(*section, "delayMs", kSpaceDelayMs, kPath, error) ||
+        !require_in(*section, "feedback", kSpaceFeedback, kPath, error) ||
+        !require_in(*section, "tempoBpm", kTempoBpm, kPath, error) ||
+        !require_enum<NoteDivision>(*section, "division", kPath, error)) {
+      return false;
+    }
+  }
+  if (const auto* section = dsp.find("midi")) {
+    constexpr const char* kPath = "dsp.midi";
+    if (!has_allowed_keys(*section, {"release"}, kPath, error) ||
+        !require_section_keys(*section, {"release"}, kPath, error) ||
+        !require_enum<MidiRelease>(*section, "release", kPath, error)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+constexpr std::array<const char*, 7> kTransformSections = {
+    "voiceEngine", "pitchCorrection", "harmony", "vocoder", "character", "reverbVariation", "midi"};
+
+// A version 1 document predates the voice transformer sections and may omit them; version 2
+// requires them.
+bool validate_dsp_section(const sonare::util::json::Value& dsp, int schema_version,
+                          std::string* error) {
+  if (!has_allowed_keys(
+          dsp,
+          {"inputGainDb", "outputGainDb", "wetMix", "retune", "formant", "eq", "gate", "compressor",
+           "deesser", "reverb", "limiter", "voiceEngine", "pitchCorrection", "harmony", "vocoder",
+           "character", "reverbVariation", "midi"},
+          "dsp", error)) {
     return false;
   }
   for (const char* key :
        {"retune", "formant", "eq", "gate", "compressor", "deesser", "reverb", "limiter"}) {
     if (!require_key(dsp, key, "dsp", error)) return false;
   }
+  if (schema_version >= 2) {
+    for (const char* key : kTransformSections) {
+      if (!require_key(dsp, key, "dsp", error)) return false;
+    }
+  }
+  if (!validate_transform_sections(dsp, error)) return false;
   if (dsp.find("inputGainDb") && !require_in(dsp, "inputGainDb", kInputGainDb, "dsp", error)) {
     return false;
   }
@@ -575,7 +1004,55 @@ bool validate_realtime_voice_changer_config(const RealtimeVoiceChangerConfig& co
       *error = text;
     }
   }
-  if (ok && !formant_warp_is_reachable(config, error)) ok = false;
+  visit_enum_fields(config, [&](const char* name, bool declared) {
+    if (!ok || declared) return;
+    ok = false;
+    if (error) *error = std::string("config field names no declared value: ") + name;
+  });
+  visit_integer_fields(config, [&](const char* name, const int& v, const Range& r) {
+    if (!ok || (v >= static_cast<int>(r.lo) && v <= static_cast<int>(r.hi))) return;
+    ok = false;
+    if (error) {
+      char text[160];
+      std::snprintf(text, sizeof(text), "%s out of range [%d, %d], got %d", name,
+                    static_cast<int>(r.lo), static_cast<int>(r.hi), v);
+      *error = text;
+    }
+  });
+  // The grain engine has no f0, so nothing that needs one can run on it.
+  if (ok && config.voice_engine.engine == PitchEngine::Grain) {
+    const char* needs_f0 = nullptr;
+    if (config.pitch_correction.mode != PitchCorrectionMode::Off) {
+      needs_f0 = "pitchCorrection.mode other than 'off'";
+    } else if (config.harmony.voices > 0) {
+      needs_f0 = "harmony.voices above 0";
+    } else if (config.vocoder.enabled) {
+      needs_f0 = "vocoder.enabled";
+    }
+    if (needs_f0 != nullptr) {
+      ok = false;
+      if (error) {
+        *error = std::string(needs_f0) +
+                 " needs voiceEngine.engine 'psola': the grain engine tracks no f0";
+      }
+    }
+  }
+  if (ok && space_delay_exceeds_limit(config.reverb_variation)) {
+    ok = false;
+    if (error) {
+      char text[200];
+      std::snprintf(text, sizeof(text),
+                    "reverbVariation delay out of range: %.6g ms exceeds the %.6g ms delay line",
+                    static_cast<double>(space_delay_ms(config.reverb_variation)),
+                    static_cast<double>(kMaxSpaceDelayMs));
+      *error = text;
+    }
+  }
+  // Only the grain engine warps the formants ahead of the shift; psola resamples its grains.
+  if (ok && config.voice_engine.engine == PitchEngine::Grain &&
+      !formant_warp_is_reachable(config, error)) {
+    ok = false;
+  }
   if (normalized) *normalized = ok ? config : RealtimeVoiceChangerConfig{};
   return ok;
 }
@@ -685,6 +1162,72 @@ RealtimeVoiceChangerConfig realtime_voice_changer_preset(VoiceCharacterPreset pr
       c.compressor = {-25.0f, 4.2f, 8.0f, 120.0f, 1.0f};
       c.deesser = {6100.0f, -24.0f, 3.0f, 4.0f};
       c.reverb = {0.13f, 820.0f, 0.9f, 19};
+      break;
+    case VoiceCharacterPreset::HardTune:
+      c.output_gain_db = 1.5f;
+      c.retune = {0.0f, 1.0f, 0};
+      c.formant = {1.0f, 0.0f, 0.0f, 0.2f, 0.0f};
+      c.eq = {90.0f, 0.0f, 2.5f, 2.0f};
+      c.compressor = {-24.0f, 3.0f, 5.0f, 80.0f, 1.5f};
+      c.deesser = {7400.0f, -30.0f, 4.0f, 7.0f};
+      c.reverb = {0.08f, 420.0f, 0.4f, 23};
+      // Instant snap to C major: the audible stepping is the effect.
+      c.pitch_correction = {PitchCorrectionMode::Auto, 1.0f, 0.0f, 0, ScaleKind::Major, 0};
+      break;
+    case VoiceCharacterPreset::RobotMonotone:
+      c.output_gain_db = 2.0f;
+      c.retune = {0.0f, 1.0f, 0};
+      c.formant = {1.05f, 0.0f, -0.2f, 0.4f, 0.2f};
+      c.eq = {180.0f, -3.0f, 4.0f, 1.0f};
+      c.compressor = {-26.0f, 4.0f, 3.0f, 70.0f, 2.0f};
+      c.deesser = {7800.0f, -30.0f, 4.0f, 7.0f};
+      c.reverb = {0.06f, 300.0f, 0.4f, 25};
+      c.pitch_correction = {PitchCorrectionMode::Robot, 1.0f, 0.0f, 0, ScaleKind::Major, 0};
+      break;
+    case VoiceCharacterPreset::ChoirHarmony:
+      c.output_gain_db = 1.0f;
+      c.retune = {0.0f, 1.0f, 0};
+      c.formant = {1.0f, 0.0f, 0.1f, 0.2f, 0.0f};
+      c.eq = {100.0f, 0.5f, 1.5f, 2.0f};
+      c.compressor = {-24.0f, 2.5f, 8.0f, 120.0f, 1.0f};
+      c.reverb = {0.2f, 1100.0f, 0.6f, 29};
+      // Light correction keeps the stacked voices in tune with each other.
+      c.pitch_correction = {PitchCorrectionMode::Auto, 0.5f, 60.0f, 0, ScaleKind::Major, 0};
+      c.harmony.voices = 3;
+      c.harmony.level = 0.6f;
+      c.harmony.detune_cents = 8.0f;
+      c.harmony.delay_ms = 18.0f;
+      break;
+    case VoiceCharacterPreset::VocoderStrings:
+      c.output_gain_db = 2.0f;
+      c.retune = {0.0f, 1.0f, 0};
+      c.formant = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+      c.eq = {120.0f, 0.0f, 1.5f, 1.0f};
+      c.compressor = {-24.0f, 3.0f, 6.0f, 100.0f, 1.0f};
+      c.reverb = {0.15f, 900.0f, 0.5f, 31};
+      c.vocoder.enabled = true;
+      c.vocoder.attack_ms = 4.0f;
+      c.vocoder.release_ms = 60.0f;
+      c.vocoder.sibilance = 0.25f;
+      c.vocoder.carrier_wave = VocoderCarrierWave::Ensemble;
+      break;
+    case VoiceCharacterPreset::Megaphone:
+      c.output_gain_db = 1.0f;
+      c.retune = {0.0f, 1.0f, 0};
+      c.formant = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+      c.eq = {300.0f, -4.0f, 3.0f, -6.0f};
+      c.compressor = {-28.0f, 6.0f, 2.0f, 60.0f, 3.0f};
+      c.reverb = {0.05f, 250.0f, 0.5f, 37};
+      c.character = {CharacterType::Megaphone, 0.6f, 0.0f};
+      break;
+    case VoiceCharacterPreset::RadioVoice:
+      c.output_gain_db = 1.0f;
+      c.retune = {0.0f, 1.0f, 0};
+      c.formant = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+      c.eq = {200.0f, -2.0f, 2.0f, -4.0f};
+      c.compressor = {-26.0f, 5.0f, 3.0f, 80.0f, 2.0f};
+      c.reverb = {0.0f, 320.0f, 0.5f, 41};
+      c.character = {CharacterType::Radio, 0.4f, 0.0f};
       break;
   }
   return normalize_config(c);
@@ -796,6 +1339,55 @@ RealtimeVoiceChangerConfig parse_config_json(std::string_view text) {
         object_bool(object, "", "limiterEnableIspLimiter", c.limiter.enable_isp_limiter);
     c.limiter.isp_ceiling_dbtp =
         object_number(object, "", "limiterIspCeilingDbtp", c.limiter.isp_ceiling_dbtp);
+    c.voice_engine.engine = object_enum(object, "", "voiceEngineEngine", c.voice_engine.engine);
+    c.voice_engine.f0_min_hz =
+        object_number(object, "", "voiceEngineF0MinHz", c.voice_engine.f0_min_hz);
+    c.pitch_correction.mode =
+        object_enum(object, "", "pitchCorrectionMode", c.pitch_correction.mode);
+    c.pitch_correction.amount =
+        object_number(object, "", "pitchCorrectionAmount", c.pitch_correction.amount);
+    c.pitch_correction.speed_ms =
+        object_number(object, "", "pitchCorrectionSpeedMs", c.pitch_correction.speed_ms);
+    c.pitch_correction.key_root =
+        object_int(object, "", "pitchCorrectionKeyRoot", c.pitch_correction.key_root);
+    c.pitch_correction.scale =
+        object_enum(object, "", "pitchCorrectionScale", c.pitch_correction.scale);
+    c.pitch_correction.robot_octave =
+        object_int(object, "", "pitchCorrectionRobotOctave", c.pitch_correction.robot_octave);
+    c.harmony.voices = object_int(object, "", "harmonyVoices", c.harmony.voices);
+    c.harmony.steps[0] = object_int(object, "", "harmonyStep1", c.harmony.steps[0]);
+    c.harmony.steps[1] = object_int(object, "", "harmonyStep2", c.harmony.steps[1]);
+    c.harmony.steps[2] = object_int(object, "", "harmonyStep3", c.harmony.steps[2]);
+    c.harmony.level = object_number(object, "", "harmonyLevel", c.harmony.level);
+    c.harmony.lead_level = object_number(object, "", "harmonyLeadLevel", c.harmony.lead_level);
+    c.harmony.detune_cents =
+        object_number(object, "", "harmonyDetuneCents", c.harmony.detune_cents);
+    c.harmony.delay_ms = object_number(object, "", "harmonyDelayMs", c.harmony.delay_ms);
+    c.vocoder.enabled = object_bool(object, "", "vocoderEnabled", c.vocoder.enabled);
+    c.vocoder.bands = object_int(object, "", "vocoderBands", c.vocoder.bands);
+    c.vocoder.attack_ms = object_number(object, "", "vocoderAttackMs", c.vocoder.attack_ms);
+    c.vocoder.release_ms = object_number(object, "", "vocoderReleaseMs", c.vocoder.release_ms);
+    c.vocoder.sibilance = object_number(object, "", "vocoderSibilance", c.vocoder.sibilance);
+    c.vocoder.carrier_source =
+        object_enum(object, "", "vocoderCarrierSource", c.vocoder.carrier_source);
+    c.vocoder.carrier_wave = object_enum(object, "", "vocoderCarrierWave", c.vocoder.carrier_wave);
+    c.vocoder.ensemble_detune_cents =
+        object_number(object, "", "vocoderEnsembleDetuneCents", c.vocoder.ensemble_detune_cents);
+    c.vocoder.level = object_number(object, "", "vocoderLevel", c.vocoder.level);
+    c.character.type = object_enum(object, "", "characterType", c.character.type);
+    c.character.amount = object_number(object, "", "characterAmount", c.character.amount);
+    c.character.tone = object_number(object, "", "characterTone", c.character.tone);
+    c.reverb_variation.variation =
+        object_enum(object, "", "reverbVariationVariation", c.reverb_variation.variation);
+    c.reverb_variation.delay_ms =
+        object_number(object, "", "reverbVariationDelayMs", c.reverb_variation.delay_ms);
+    c.reverb_variation.feedback =
+        object_number(object, "", "reverbVariationFeedback", c.reverb_variation.feedback);
+    c.reverb_variation.tempo_bpm =
+        object_number(object, "", "reverbVariationTempoBpm", c.reverb_variation.tempo_bpm);
+    c.reverb_variation.division =
+        object_enum(object, "", "reverbVariationDivision", c.reverb_variation.division);
+    c.midi.release = object_enum(object, "", "midiRelease", c.midi.release);
     return c;
   }
 
@@ -852,6 +1444,59 @@ RealtimeVoiceChangerConfig parse_config_json(std::string_view text) {
         object_bool(*v, "limiter", "enableIspLimiter", c.limiter.enable_isp_limiter);
     c.limiter.isp_ceiling_dbtp =
         object_number(*v, "limiter", "ispCeilingDbtp", c.limiter.isp_ceiling_dbtp);
+  }
+  // Voice transformer sections; a document without them (schema version 1) keeps the defaults.
+  if (const auto* v = object_section(object, "voiceEngine")) {
+    c.voice_engine.engine = object_enum(*v, "voiceEngine", "engine", c.voice_engine.engine);
+    c.voice_engine.f0_min_hz =
+        object_number(*v, "voiceEngine", "f0MinHz", c.voice_engine.f0_min_hz);
+  }
+  if (const auto* v = object_section(object, "pitchCorrection")) {
+    PitchCorrectionConfig& pc = c.pitch_correction;
+    pc.mode = object_enum(*v, "pitchCorrection", "mode", pc.mode);
+    pc.amount = object_number(*v, "pitchCorrection", "amount", pc.amount);
+    pc.speed_ms = object_number(*v, "pitchCorrection", "speedMs", pc.speed_ms);
+    pc.key_root = object_int(*v, "pitchCorrection", "keyRoot", pc.key_root);
+    pc.scale = object_enum(*v, "pitchCorrection", "scale", pc.scale);
+    pc.robot_octave = object_int(*v, "pitchCorrection", "robotOctave", pc.robot_octave);
+  }
+  if (const auto* v = object_section(object, "harmony")) {
+    HarmonyConfig& hm = c.harmony;
+    hm.voices = object_int(*v, "harmony", "voices", hm.voices);
+    object_steps(*v, "harmony", "steps", hm.steps);
+    hm.level = object_number(*v, "harmony", "level", hm.level);
+    hm.lead_level = object_number(*v, "harmony", "leadLevel", hm.lead_level);
+    hm.detune_cents = object_number(*v, "harmony", "detuneCents", hm.detune_cents);
+    hm.delay_ms = object_number(*v, "harmony", "delayMs", hm.delay_ms);
+  }
+  if (const auto* v = object_section(object, "vocoder")) {
+    VocoderConfig& vc = c.vocoder;
+    vc.enabled = object_bool(*v, "vocoder", "enabled", vc.enabled);
+    vc.bands = object_int(*v, "vocoder", "bands", vc.bands);
+    vc.attack_ms = object_number(*v, "vocoder", "attackMs", vc.attack_ms);
+    vc.release_ms = object_number(*v, "vocoder", "releaseMs", vc.release_ms);
+    vc.sibilance = object_number(*v, "vocoder", "sibilance", vc.sibilance);
+    vc.carrier_source = object_enum(*v, "vocoder", "carrierSource", vc.carrier_source);
+    vc.carrier_wave = object_enum(*v, "vocoder", "carrierWave", vc.carrier_wave);
+    vc.ensemble_detune_cents =
+        object_number(*v, "vocoder", "ensembleDetuneCents", vc.ensemble_detune_cents);
+    vc.level = object_number(*v, "vocoder", "level", vc.level);
+  }
+  if (const auto* v = object_section(object, "character")) {
+    c.character.type = object_enum(*v, "character", "type", c.character.type);
+    c.character.amount = object_number(*v, "character", "amount", c.character.amount);
+    c.character.tone = object_number(*v, "character", "tone", c.character.tone);
+  }
+  if (const auto* v = object_section(object, "reverbVariation")) {
+    ReverbVariationConfig& rv = c.reverb_variation;
+    rv.variation = object_enum(*v, "reverbVariation", "variation", rv.variation);
+    rv.delay_ms = object_number(*v, "reverbVariation", "delayMs", rv.delay_ms);
+    rv.feedback = object_number(*v, "reverbVariation", "feedback", rv.feedback);
+    rv.tempo_bpm = object_number(*v, "reverbVariation", "tempoBpm", rv.tempo_bpm);
+    rv.division = object_enum(*v, "reverbVariation", "division", rv.division);
+  }
+  if (const auto* v = object_section(object, "midi")) {
+    c.midi.release = object_enum(*v, "midi", "release", c.midi.release);
   }
   return c;
 }
@@ -913,24 +1558,27 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
     for (const char* key : {"schemaVersion", "id", "name", "category"}) {
       if (!require_key(root, key, "$", error)) return false;
     }
-    // schemaVersion: JSON-Schema "type: integer, const: 1" demands an
+    // schemaVersion: JSON-Schema "type: integer, enum: [1, 2]" demands an
     // *exact* integer. as_int() silently truncates 1.5 -> 1, so check the
-    // raw double for both integral-ness and equality before comparing.
+    // raw double for both integral-ness and range before comparing.
     const auto* schema = root.find("schemaVersion");
     if (!schema || !schema->is_number()) {
       if (error) *error = "field is not a valid schemaVersion: $.schemaVersion (must be integer)";
       return false;
     }
+    int schema_version = 0;
     {
       const double n = schema->as_number();
-      if (!std::isfinite(n) || std::floor(n) != n ||
-          n != static_cast<double>(kVoiceChangerPresetSchemaVersion)) {
+      if (!std::isfinite(n) || std::floor(n) != n || n < kOldestPresetSchemaVersion ||
+          n > static_cast<double>(kVoiceChangerPresetSchemaVersion)) {
         if (error) {
-          *error = "field is not a valid schemaVersion: $.schemaVersion (must be integer == " +
+          *error = "field is not a valid schemaVersion: $.schemaVersion (must be an integer from " +
+                   std::to_string(kOldestPresetSchemaVersion) + " to " +
                    std::to_string(kVoiceChangerPresetSchemaVersion) + ")";
         }
         return false;
       }
+      schema_version = static_cast<int>(n);
     }
     // id: schema regex ^[a-z0-9][a-z0-9._-]*$ + length 1..96. The C++ validator
     // historically accepted any non-empty string up to 96 bytes, which let
@@ -947,8 +1595,9 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
     }
     if (!require_string(root, "category", 1, 16, "$", error)) return false;
     {
-      static constexpr std::array<std::string_view, 7> kCategories = {
-          "monitor", "bright", "soft", "deep", "robot", "dark", "custom"};
+      static constexpr std::array<std::string_view, 11> kCategories = {
+          "monitor", "bright",  "soft",    "deep",      "robot", "dark",
+          "tune",    "harmony", "vocoder", "character", "custom"};
       const auto& category = root.find("category")->as_string();
       if (std::find(kCategories.begin(), kCategories.end(), category) == kCategories.end()) {
         if (error) *error = "preset category is invalid";
@@ -961,7 +1610,7 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
       if (error) *error = "preset must contain exactly one of dsp or macros";
       return false;
     }
-    if (dsp != nullptr && !validate_dsp_section(*dsp, error)) return false;
+    if (dsp != nullptr && !validate_dsp_section(*dsp, schema_version, error)) return false;
     RealtimeVoiceChangerConfig macro_config;
     if (macros != nullptr && !apply_macro_section(*macros, &macro_config, error)) return false;
     const auto config = realtime_voice_changer_config_from_json(trim_copy(json));
@@ -1023,7 +1672,7 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
       return true;
     }
 
-    // Public JS bindings also pass the 36-field camelCase POD returned by
+    // Public JS bindings also pass the 70-field camelCase POD returned by
     // realtimeVoiceChangerPresetConfig(). It is intentionally not a preset
     // document, but must be complete and type-correct so a partial object
     // cannot silently fall back to unrelated defaults.
@@ -1067,6 +1716,56 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
           "limiterEnableIspLimiter",
           "limiterIspCeilingDbtp",
       };
+      // The voice transformer keys are part of the same complete shape: the bindings build
+      // this object at runtime from the whole POD and never persist it, so a missing key is
+      // refused like any other. Each carries its own type.
+      static constexpr std::array<const char*, 34> kTransformKeys = {
+          "voiceEngineEngine",
+          "voiceEngineF0MinHz",
+          "pitchCorrectionMode",
+          "pitchCorrectionAmount",
+          "pitchCorrectionSpeedMs",
+          "pitchCorrectionKeyRoot",
+          "pitchCorrectionScale",
+          "pitchCorrectionRobotOctave",
+          "harmonyVoices",
+          "harmonyStep1",
+          "harmonyStep2",
+          "harmonyStep3",
+          "harmonyLevel",
+          "harmonyLeadLevel",
+          "harmonyDetuneCents",
+          "harmonyDelayMs",
+          "vocoderEnabled",
+          "vocoderBands",
+          "vocoderAttackMs",
+          "vocoderReleaseMs",
+          "vocoderSibilance",
+          "vocoderCarrierSource",
+          "vocoderCarrierWave",
+          "vocoderEnsembleDetuneCents",
+          "vocoderLevel",
+          "characterType",
+          "characterAmount",
+          "characterTone",
+          "reverbVariationVariation",
+          "reverbVariationDelayMs",
+          "reverbVariationFeedback",
+          "reverbVariationTempoBpm",
+          "reverbVariationDivision",
+          "midiRelease",
+      };
+      static constexpr std::array<std::string_view, 9> kTransformEnumKeys = {
+          "voiceEngineEngine",        "pitchCorrectionMode",     "pitchCorrectionScale",
+          "vocoderCarrierSource",     "vocoderCarrierWave",      "characterType",
+          "reverbVariationVariation", "reverbVariationDivision", "midiRelease"};
+      static constexpr std::array<std::string_view, 9> kIntegerKeys = {
+          "retuneGrainSize", "reverbSeed",   "pitchCorrectionKeyRoot", "pitchCorrectionRobotOctave",
+          "harmonyVoices",   "harmonyStep1", "harmonyStep2",           "harmonyStep3",
+          "vocoderBands"};
+      const auto listed = [](const auto& keys, std::string_view key) {
+        return std::find(keys.begin(), keys.end(), key) != keys.end();
+      };
       for (const auto& [key, _value] : root.as_object()) {
         bool allowed = false;
         for (const char* allowed_key : kFlatPodKeys) {
@@ -1074,6 +1773,17 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
             allowed = true;
             break;
           }
+        }
+        for (const char* transform_key : kTransformKeys) {
+          if (key != transform_key) continue;
+          const bool typed = listed(kTransformEnumKeys, key) ? _value.is_string()
+                             : key == "vocoderEnabled"       ? _value.is_bool()
+                                                             : _value.is_number();
+          if (!typed) {
+            if (error) *error = "flat voice changer POD has an invalid field: $." + key;
+            return false;
+          }
+          allowed = true;
         }
         // formantMode is optional: documents written before the mode existed omit it.
         if (key == "formantMode") {
@@ -1097,14 +1807,21 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
           return false;
         }
       }
+      for (const char* key : kTransformKeys) {
+        if (!require_key(root, key, "$", error)) return false;
+      }
       for (const auto& [key, value] : root.as_object()) {
         if (!value.is_number()) continue;
         const double n = value.as_number();
-        const bool is_int_key = key == "retuneGrainSize" || key == "reverbSeed";
+        const bool is_int_key = listed(kIntegerKeys, key);
         const bool fits = is_int_key ? (n >= kReverbSeed.lo && n <= kReverbSeed.hi)
                                      : std::fabs(n) <= std::numeric_limits<float>::max();
         if (!fits) {
           if (error) *error = "flat voice changer POD field is out of range: $." + key;
+          return false;
+        }
+        if (is_int_key && std::floor(n) != n) {
+          if (error) *error = "flat voice changer POD field must be a whole number: $." + key;
           return false;
         }
       }
@@ -1119,7 +1836,9 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
     std::string normalized_json;
     if (!validate_realtime_voice_changer_preset_json(input, &normalized_json, error)) return false;
     *config = realtime_voice_changer_config_from_json(normalized_json);
-    if (!formant_warp_is_reachable(*config, error)) {
+    // The document's ranges were checked above; what remains is what only the whole
+    // configuration can say (a grain engine asked for f0 work, an unreachable warp).
+    if (!validate_realtime_voice_changer_config(*config, nullptr, error)) {
       *config = {};
       return false;
     }

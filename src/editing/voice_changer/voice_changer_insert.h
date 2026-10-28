@@ -17,20 +17,26 @@ namespace sonare::editing::voice_changer {
 ///          bounds are real. Automation refuses an out-of-range value the same way, by returning
 ///          false and leaving the configuration unchanged.
 ///
-///          The retune grain size, the reverb seed, the formant mode and the inter-sample-peak
-///          limiter switch are construction-time only: the grain size, the formant mode and the
-///          switch change the reported latency, and a delay compensated by a host must not move
-///          while it runs. In absolute formant mode (@c formantMode, @c relative or @c absolute)
-///          @c formantAmount is ignored; construction refuses a @c formantFactor the warp cannot
-///          reach at the configured @c retuneSemitones, and automation refuses a value that
-///          would leave the warp out of reach. Every other numeric field
-///          is an automatable parameter (see @ref parameter_descriptors).
+///          The retune grain size, the reverb seed, the formant mode, the inter-sample-peak
+///          limiter switch, the pitch engine, the lowest tracked f0 and the vocoder band count are
+///          construction-time only: all but the seed change the reported latency, and a delay
+///          compensated by a host must not move while it runs. The insert has no MIDI or carrier
+///          input, so the vocoder carrier source is construction-time only too and must be
+///          internal; the vocoder then plays the voices' own targets. In absolute formant mode
+///          (@c formantMode, @c relative or @c absolute) @c formantAmount is ignored; with the
+///          grain engine construction refuses a @c formantFactor the warp cannot reach at the
+///          configured @c retuneSemitones, and automation refuses a value that would leave the
+///          warp out of reach. Every other field is an automatable parameter (see
+///          @ref parameter_descriptors); an integer, enum or switch takes its wire value, and a
+///          fraction is refused.
 ///
-///          Latency is one retune grain plus, in absolute formant mode, one warp frame plus, when
-///          the limiter switch is on, the limiter's look-ahead. The tail is
-///          RealtimeVoiceChanger::tail_budget(): the filters, the retune history and the reverb
-///          down to the project's tail floor. Gain reduction covers the compressor, de-esser and
-///          sample limiter.
+///          Latency with the psola engine is the longer of the shifter latency and the vocoder's
+///          group delay; with the grain engine it is one retune grain plus, in absolute formant
+///          mode, one warp frame. Either way, when the limiter switch is on, the limiter's
+///          look-ahead is added. The tail is RealtimeVoiceChanger::tail_budget(): the filters,
+///          the voice-stage history, the character and space stages and the reverb down to the
+///          project's tail floor. Gain reduction covers the compressor, de-esser and sample
+///          limiter.
 class VoiceChangerInsert : public rt::ProcessorBase {
  public:
   /// @throws SonareException (InvalidParameter) when a field of @p config is non-finite or
