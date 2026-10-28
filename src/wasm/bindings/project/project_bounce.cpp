@@ -243,7 +243,7 @@ JsInstrumentSlot instrumentSlotFromVal(const val& desc, InstrumentFailure* failu
 
 SampleBankWasm::SampleBankWasm() : bank_(sonare_sample_bank_create()), id_(nextSampleBankId()) {
   if (bank_ == nullptr) {
-    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory, "failed to create sample bank");
+    throwLastCError("failed to create sample bank: ", SONARE_ERROR_OUT_OF_MEMORY);
   }
   sampleBankRegistry().emplace(id_, bank_);
 }

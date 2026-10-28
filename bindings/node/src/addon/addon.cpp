@@ -448,33 +448,13 @@ Napi::Value MidiRouteEvents(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
-// Splits a '\n'-joined C-ABI catalog string into a JS string[]. Every catalog
-// the addon exposes goes through here so the empty-input and trailing-separator
-// handling stays identical across them.
-Napi::Array SplitJoinedNames(Napi::Env env, const char* joined) {
-  Napi::Array out = Napi::Array::New(env);
-  if (joined == nullptr || joined[0] == '\0') return out;
-  std::string names(joined);
-  uint32_t index = 0;
-  size_t start = 0;
-  while (start <= names.size()) {
-    const size_t end = names.find('\n', start);
-    if (end == std::string::npos) {
-      out.Set(index++, Napi::String::New(env, names.substr(start)));
-      break;
-    }
-    out.Set(index++, Napi::String::New(env, names.substr(start, end - start)));
-    start = end + 1;
-  }
-  return out;
-}
-
 // NativeSynth preset catalog: '\n'-joined program-lifetime string from the C
 // ABI, split into a JS string[] like masteringInsertNames.
 Napi::Value SynthPresetNames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  return SplitJoinedNames(info.Env(), sonare_synth_preset_names());
+  return sonare_node::JoinedNamesToArray(info.Env(), sonare_synth_preset_names(),
+                                         "synth preset names");
   SONARE_NODE_CATCH(env)
 }
 
@@ -517,7 +497,8 @@ Napi::Value SynthGsVariationIsVoicedApart(const Napi::CallbackInfo& info) {
 Napi::Value ControllerProfileNames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  return SplitJoinedNames(info.Env(), sonare_controller_profile_names());
+  return sonare_node::JoinedNamesToArray(info.Env(), sonare_controller_profile_names(),
+                                         "controller profile names");
   SONARE_NODE_CATCH(env)
 }
 
@@ -549,41 +530,64 @@ Napi::Value SynthEnumTables(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   Napi::Object out = Napi::Object::New(env);
   out.Set("engineModes",
-          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_ENGINE_MODE)));
+          sonare_node::JoinedNamesToArray(
+              env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_ENGINE_MODE), "synth enum names"));
   out.Set("waveforms",
-          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_OSC_WAVEFORM)));
-  out.Set("builtinWaveforms",
-          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_BUILTIN_WAVEFORM)));
+          sonare_node::JoinedNamesToArray(
+              env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_OSC_WAVEFORM), "synth enum names"));
+  out.Set("builtinWaveforms", sonare_node::JoinedNamesToArray(
+                                  env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_BUILTIN_WAVEFORM),
+                                  "synth enum names"));
   out.Set("filterModels",
-          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_MODEL)));
+          sonare_node::JoinedNamesToArray(
+              env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_MODEL), "synth enum names"));
   out.Set("filterOutputs",
-          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_OUTPUT)));
-  out.Set("bodyTypes", SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_BODY_TYPE)));
+          sonare_node::JoinedNamesToArray(
+              env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_FILTER_OUTPUT), "synth enum names"));
+  out.Set("bodyTypes",
+          sonare_node::JoinedNamesToArray(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_BODY_TYPE),
+                                          "synth enum names"));
   out.Set("modSources",
-          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_SOURCE)));
+          sonare_node::JoinedNamesToArray(
+              env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_SOURCE), "synth enum names"));
   out.Set("modDestinations",
-          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_DESTINATION)));
-  out.Set("controllerInputs",
-          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_CONTROLLER_INPUT)));
+          sonare_node::JoinedNamesToArray(
+              env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_MOD_DESTINATION), "synth enum names"));
+  out.Set("controllerInputs", sonare_node::JoinedNamesToArray(
+                                  env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_CONTROLLER_INPUT),
+                                  "synth enum names"));
   out.Set("controllerAxes",
-          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_CONTROLLER_AXIS)));
+          sonare_node::JoinedNamesToArray(
+              env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_CONTROLLER_AXIS), "synth enum names"));
   out.Set("articulations",
-          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_ARTICULATION)));
+          sonare_node::JoinedNamesToArray(
+              env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_ARTICULATION), "synth enum names"));
   out.Set("mpeDimensions",
-          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_MPE_DIMENSION)));
+          sonare_node::JoinedNamesToArray(
+              env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_MPE_DIMENSION), "synth enum names"));
   out.Set("noteTrackings",
-          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_NOTE_TRACKING)));
-  out.Set("sampleLoopModes",
-          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_LOOP_MODE)));
-  out.Set("sampleKeyTracks",
-          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_KEY_TRACK)));
+          sonare_node::JoinedNamesToArray(
+              env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_NOTE_TRACKING), "synth enum names"));
+  out.Set("sampleLoopModes", sonare_node::JoinedNamesToArray(
+                                 env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_LOOP_MODE),
+                                 "synth enum names"));
+  out.Set("sampleKeyTracks", sonare_node::JoinedNamesToArray(
+                                 env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_KEY_TRACK),
+                                 "synth enum names"));
   out.Set("retriggers",
-          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_RETRIGGER)));
-  out.Set("lfoShapes", SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_LFO_SHAPE)));
+          sonare_node::JoinedNamesToArray(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_RETRIGGER),
+                                          "synth enum names"));
+  out.Set("lfoShapes",
+          sonare_node::JoinedNamesToArray(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_LFO_SHAPE),
+                                          "synth enum names"));
   out.Set("partRigModes",
-          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_PART_RIG_MODE)));
+          sonare_node::JoinedNamesToArray(
+              env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_PART_RIG_MODE), "synth enum names"));
   out.Set("sampleDescLoopModes",
-          SplitJoinedNames(env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_DESC_LOOP_MODE)));
+          sonare_node::JoinedNamesToArray(
+              env, sonare_synth_enum_names(SONARE_SYNTH_ENUM_SAMPLE_DESC_LOOP_MODE),
+              "synth enum names"));
+  if (env.IsExceptionPending()) return env.Undefined();
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -612,7 +616,7 @@ Napi::Value SynthEngineParamInfo(const Napi::CallbackInfo& info) {
   }
   const char* json = sonare_synth_engine_param_info(mode);
   if (json == nullptr) {
-    sonare_node::ThrowLastSonareError(env, "", SONARE_ERROR_INVALID_PARAMETER);
+    sonare_node::ThrowLastSonareError(env, "synth engine param info: ");
     return env.Undefined();
   }
   return Napi::String::New(env, json);
@@ -625,7 +629,7 @@ Napi::Value SynthPatchParamInfo(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   const char* json = sonare_synth_patch_param_info();
   if (json == nullptr) {
-    sonare_node::ThrowLastSonareError(env, "", SONARE_ERROR_INVALID_PARAMETER);
+    sonare_node::ThrowLastSonareError(env, "synth patch param info: ");
     return env.Undefined();
   }
   return Napi::String::New(env, json);

@@ -121,6 +121,7 @@ from ._runtime import (
     _check,
     _curve_value,
     _get_lib,
+    _joined_names,
     _last_error,
     _resolve_enum,
     _to_c_int,
@@ -1096,10 +1097,7 @@ def synth_preset_names() -> list[str]:
     lib = _get_lib()
     if not hasattr(lib, "sonare_synth_preset_names"):
         raise _not_supported("libsonare was built without the NativeSynth ABI")
-    raw = lib.sonare_synth_preset_names()
-    if not raw:
-        return []
-    return [name for name in raw.decode("utf-8").split("\n") if name]
+    return _joined_names(lib.sonare_synth_preset_names(), "synth preset names")
 
 
 def _synth_param_info(raw: bytes | None, what: str) -> list[SynthParamInfo]:
@@ -1207,10 +1205,7 @@ def controller_profile_names() -> list[str]:
     lib = _get_lib()
     if not hasattr(lib, "sonare_controller_profile_names"):
         raise _not_supported("libsonare was built without the controller-profile ABI")
-    raw = lib.sonare_controller_profile_names()
-    if not raw:
-        return []
-    return [name for name in raw.decode("utf-8").split("\n") if name]
+    return _joined_names(lib.sonare_controller_profile_names(), "controller profile names")
 
 
 def synth_preset_patch(name: str) -> SynthPatch:

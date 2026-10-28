@@ -11,28 +11,6 @@ using namespace sonare_node;
 
 namespace {
 
-// Splits a '\n'-joined, caller-borrowed C string (program- or thread-lifetime,
-// never freed) into a JS string[]. An empty string yields an empty array.
-Napi::Array JoinedNamesToArray(Napi::Env env, const char* joined) {
-  Napi::Array out = Napi::Array::New(env);
-  if (joined == nullptr || joined[0] == '\0') {
-    return out;
-  }
-  const std::string names(joined);
-  uint32_t index = 0;
-  size_t start = 0;
-  while (start <= names.size()) {
-    const size_t end = names.find('\n', start);
-    if (end == std::string::npos) {
-      out.Set(index++, Napi::String::New(env, names.substr(start)));
-      break;
-    }
-    out.Set(index++, Napi::String::New(env, names.substr(start, end - start)));
-    start = end + 1;
-  }
-  return out;
-}
-
 // Planar per-track input marshalled from the JS arrays, in the parallel-array
 // shape the assistant entry points take. The Float32Array handles and the id /
 // name strings are held here for the duration of the native call because the
@@ -244,7 +222,8 @@ Napi::Value SonareWrap::MixingAssistantSourceClassNames(const Napi::CallbackInfo
   // sonare_mixing_assistant_source_class_names() returns a thread-local
   // '\n'-joined const char* (NOT to be freed); split it into a JS string[] like
   // the other *_names getters.
-  return JoinedNamesToArray(info.Env(), sonare_mixing_assistant_source_class_names());
+  return JoinedNamesToArray(info.Env(), sonare_mixing_assistant_source_class_names(),
+                            "mixing assistant source class names");
   SONARE_NODE_CATCH(env)
 }
 

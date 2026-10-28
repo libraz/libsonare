@@ -20,11 +20,13 @@ from ._ffi import (
     SonareStringArray,
 )
 from ._runtime import (
+    ErrorCode,
     SonareValueError,
     _check,
     _float_array_result,
     _get_lib,
     _guard_buffer,
+    _last_error,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -644,7 +646,9 @@ def capabilities() -> Capabilities:
         )
     payload = lib.sonare_capabilities_json()
     if not payload:
-        raise _unknown_error("libsonare returned an empty capabilities descriptor")
+        raise _last_error(
+            int(ErrorCode.NOT_SUPPORTED), "libsonare returned an empty capabilities descriptor"
+        )
     descriptor = json.loads(payload.decode("utf-8"))
     if not isinstance(descriptor, dict):
         raise _unknown_error("libsonare returned a non-object capabilities descriptor")

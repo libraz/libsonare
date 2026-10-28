@@ -109,11 +109,8 @@ val MixerWasm::sceneWarnings() const {
 std::string MixerWasm::presetJson(std::string name) {
   char* json = nullptr;
   SonareError err = sonare_mixing_scene_preset_json(wasmCString(name, "name"), &json);
-  if (err != SONARE_OK || json == nullptr) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("failed to get mixing scene preset JSON: ") + sonare_error_message(err));
-  }
+  if (err != SONARE_OK) throwCodedCError(err, "failed to get mixing scene preset JSON");
+  if (json == nullptr) throwLastCError("failed to get mixing scene preset JSON: ");
   std::string out(json);
   sonare_free_string(json);
   return out;
@@ -136,8 +133,7 @@ size_t MixerWasm::stripCount() const { return sonare_mixer_strip_count(mixer_); 
 SonareStrip* MixerWasm::stripAt(unsigned int strip_index) {
   SonareStrip* strip = sonare_mixer_strip_at(mixer_, static_cast<size_t>(strip_index));
   if (strip == nullptr) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  "mixer strip index out of range");
+    throwLastCError("mixer strip index out of range: ");
   }
   return strip;
 }
@@ -160,10 +156,7 @@ int MixerWasm::stripById(std::string id) {
 }
 
 void MixerWasm::checkStripError(SonareError err, const char* what) {
-  if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  std::string(what) + ": " + sonare_error_message(err));
-  }
+  if (err != SONARE_OK) throwCodedCError(err, what);
 }
 
 void MixerWasm::checkStripValueError(SonareError err, const char* what) {
@@ -397,7 +390,7 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
     for (int index = 0; index < count; ++index) {
       SonareStrip* strip = sonare_mixer_add_strip(mixer, ("strip" + std::to_string(index)).c_str());
       if (strip == nullptr) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to add mixer strip");
+        throwLastCError("failed to add mixer strip: ");
       }
       strips.push_back(strip);
 

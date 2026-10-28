@@ -113,22 +113,7 @@ Napi::Object MixMeterToObject(Napi::Env env, const SonareMixMeterSnapshot& snaps
 Napi::Value SonareWrap::MixingScenePresetNames(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  const char* raw = sonare_mixing_scene_preset_names();
-  Napi::Array out = Napi::Array::New(env);
-  if (raw == nullptr || raw[0] == '\0') {
-    return out;
-  }
-  std::string names(raw);
-  size_t index = 0;
-  size_t start = 0;
-  while (start <= names.size()) {
-    const size_t end = names.find('\n', start);
-    out.Set(index++,
-            names.substr(start, end == std::string::npos ? std::string::npos : end - start));
-    if (end == std::string::npos) break;
-    start = end + 1;
-  }
-  return out;
+  return JoinedNamesToArray(env, sonare_mixing_scene_preset_names(), "mixing scene preset names");
   SONARE_NODE_CATCH(env)
 }
 
@@ -229,10 +214,9 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
   SonareMixer* mixer =
       sonare_mixer_create(sample_rate, static_cast<int>(std::max<size_t>(1, length)));
   if (mixer == nullptr) {
-    // sonare_mixer_create only returns null on a rejected sample_rate /
-    // block size or an allocation failure; the rejected-argument case is the one
-    // reported (as a RangeError).
-    sonare_node::ThrowSonareError(env, SONARE_ERROR_INVALID_PARAMETER);
+    // Null is a rejected sample_rate / block size or an allocation failure;
+    // the C ABI records which.
+    sonare_node::ThrowLastSonareError(env, "mixStereo: failed to create mixer: ");
     return env.Undefined();
   }
 
@@ -249,8 +233,8 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
   for (size_t index = 0; index < count; ++index) {
     SonareStrip* strip = sonare_mixer_add_strip(mixer, ("strip" + std::to_string(index)).c_str());
     if (strip == nullptr) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "failed to add mixer strip");
+      sonare_node::ThrowLastSonareError(env, "mixStereo: failed to add mixer strip: ");
+      return env.Undefined();
     }
     strips.push_back(strip);
     Napi::Value inputTrim = OptionAt(env, options, "inputTrimDb", index);

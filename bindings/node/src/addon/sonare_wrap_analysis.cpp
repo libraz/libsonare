@@ -1154,8 +1154,7 @@ Napi::Value SonareWrap::Capabilities(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   const char* json = sonare_capabilities_json();
   if (json == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_NOT_SUPPORTED,
-                                         "Native capabilities JSON is unavailable");
+    sonare_node::ThrowLastSonareError(env, "capabilities: ", SONARE_ERROR_NOT_SUPPORTED);
     return env.Undefined();
   }
 

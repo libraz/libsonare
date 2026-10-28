@@ -24,6 +24,7 @@ from ._runtime import (
     _curve_value,
     _float_array_result,
     _get_lib,
+    _joined_names,
     _last_error,
     _meter_tap_value,
     _mix_meter_from_c,
@@ -74,8 +75,7 @@ def mixing_scene_preset_names() -> list[str]:
     lib = _get_lib()
     if not hasattr(lib, "sonare_mixing_scene_preset_names"):
         raise _not_supported("libsonare was built without mixing support")
-    raw = lib.sonare_mixing_scene_preset_names()
-    return raw.decode("utf-8").split("\n") if raw else []
+    return _joined_names(lib.sonare_mixing_scene_preset_names(), "mixing scene preset names")
 
 
 def mixing_scene_preset_json(preset_name: str) -> str:

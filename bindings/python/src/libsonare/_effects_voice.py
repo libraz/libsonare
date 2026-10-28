@@ -27,6 +27,7 @@ from ._ffi import (
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
+    ErrorCode,
     SonareValueError,
     _as_float32_buffer,
     _check,
@@ -34,6 +35,7 @@ from ._runtime import (
     _float_array_result,
     _from_c_float_array,
     _get_lib,
+    _last_error,
     _narrow_int,
     _out_float_array,
     _to_c_double,
@@ -723,7 +725,7 @@ class StreamingRetune:
             _to_c_int(grain_size, "grain_size"),
         )
         if not handle:
-            raise SonareValueError("streaming retune: semitones and mix must be finite")
+            raise _last_error(int(ErrorCode.INVALID_PARAMETER), "failed to create StreamingRetune")
         self._handle = ctypes.c_void_p(handle)
         # The grain size the caller last ASKED for. ``config()`` reports the
         # EFFECTIVE grain once prepared, so seeding an omitted ``grain_size``

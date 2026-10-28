@@ -36,6 +36,7 @@
 #include "analysis/section_analyzer.h"
 #include "analysis/timbre_analyzer.h"
 #include "automation/parameter.h"
+#include "c_api/sonare_c_error_mapping.h"
 #include "core/audio.h"
 #include "core/convert.h"
 #include "core/db_convert.h"
@@ -201,6 +202,37 @@ const char* wasmCString(const std::string& text, const char* subject);
 ///        and stays a @c std::string, so the refusal lands at the read.
 /// @throws WasmRangeError when @p text contains a NUL.
 void wasmRefuseEmbeddedNul(const std::string& text, const char* subject);
+
+/// @brief "<context>: <C detail, or the code's generic text>".
+inline std::string cErrorMessage(SonareError err, const char* context) {
+  const char* detail = sonare_last_error_message();
+  const char* fallback = sonare_error_message(err);
+  std::string message = context != nullptr ? context : "C API call failed";
+  message += ": ";
+  message += detail != nullptr && detail[0] != '\0' ? detail : fallback;
+  return message;
+}
+
+/// @brief Throws the returned @p err as its SonareException with
+///        cErrorMessage(@p err, @p context).
+[[noreturn]] inline void throwCodedCError(SonareError err, const char* context) {
+  throw sonare::SonareException(sonare_c_detail::error_code_from_c_error(err),
+                                cErrorMessage(err, context));
+}
+
+/// @brief Throws the failure recorded by a C-ABI call that returned NULL
+///        (a handle, or a descriptor / JSON string): the thread-local code with
+///        @p context and the recorded detail as the message.
+/// @param fallback Code used when the library recorded none (the code reads Ok).
+[[noreturn]] inline void throwLastCError(const char* context,
+                                         SonareError fallback = SONARE_ERROR_INVALID_STATE) {
+  SonareError code = sonare_last_error_code();
+  if (code == SONARE_OK) code = fallback;
+  const char* detail = sonare_last_error_message();
+  const char* text = detail != nullptr && detail[0] != '\0' ? detail : sonare_error_message(code);
+  throw sonare::SonareException(sonare_c_detail::error_code_from_c_error(code),
+                                std::string(context) + text);
+}
 
 /// Conservative wasm32 budget for caller-owned Float32Array data copied into
 /// the linear-memory heap. Keeping this below the native offline ceiling leaves

@@ -117,6 +117,28 @@ void ThrowLastSonareError(Napi::Env env, const std::string& prefix, SonareError 
   ThrowSonareErrorMessage(env, code, prefix + text);
 }
 
+Napi::Value JoinedNamesToArray(Napi::Env env, const char* joined, const std::string& what) {
+  Napi::Array out = Napi::Array::New(env);
+  if (joined == nullptr || joined[0] == '\0') {
+    if (sonare_last_error_code() != SONARE_OK) {
+      ThrowLastSonareError(env, what + ": ", SONARE_ERROR_UNKNOWN);
+      return env.Undefined();
+    }
+    return out;
+  }
+  const std::string names(joined);
+  uint32_t index = 0;
+  size_t start = 0;
+  while (start <= names.size()) {
+    const size_t end = names.find('\n', start);
+    out.Set(index++,
+            names.substr(start, end == std::string::npos ? std::string::npos : end - start));
+    if (end == std::string::npos) break;
+    start = end + 1;
+  }
+  return out;
+}
+
 void ThrowStdException(Napi::Env env, const std::exception& e) {
   if (const auto* coded = dynamic_cast<const sonare::SonareException*>(&e)) {
     ThrowSonareErrorMessage(env, CErrorFromException(*coded), e.what());

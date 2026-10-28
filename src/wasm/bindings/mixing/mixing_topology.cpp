@@ -42,19 +42,12 @@ void MixerWasm::addStrip(std::string id, val metering) {
 void MixerWasm::addBus(std::string id, std::string role) {
   SonareError err = sonare_mixer_add_bus(mixer_, wasmCString(id, "id"),
                                          role.empty() ? nullptr : wasmCString(role, "role"));
-  if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  std::string("failed to add bus: ") + sonare_error_message(err));
-  }
+  if (err != SONARE_OK) throwCodedCError(err, "failed to add bus");
 }
 
 void MixerWasm::removeBus(std::string id) {
   SonareError err = sonare_mixer_remove_bus(mixer_, wasmCString(id, "id"));
-  if (err != SONARE_OK) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("failed to remove bus: ") + sonare_error_message(err));
-  }
+  if (err != SONARE_OK) throwCodedCError(err, "failed to remove bus");
 }
 
 // Re-routes a strip or non-master bus into a bus or the master. Validation is the

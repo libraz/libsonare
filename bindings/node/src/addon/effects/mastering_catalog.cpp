@@ -97,8 +97,12 @@ Napi::Value SonareWrap::MasteringInsertNames(const Napi::CallbackInfo& info) {
   // const char* (NOT to be freed); split it into a JS string[] like the other
   // *_names getters. An empty string yields an empty array.
   const char* joined = sonare_mastering_insert_names();
+  if (joined == nullptr) {
+    ThrowLastSonareError(env, "mastering insert names: ", SONARE_ERROR_UNKNOWN);
+    return env.Undefined();
+  }
   Napi::Array out = Napi::Array::New(env);
-  if (joined == nullptr || joined[0] == '\0') {
+  if (joined[0] == '\0') {
     return out;
   }
   std::string names(joined);
@@ -129,8 +133,12 @@ Napi::Value SonareWrap::MasteringInsertParamNames(const Napi::CallbackInfo& info
   // getters. An unknown name yields an empty string -> empty array.
   const std::string name = node_narrow_string(env, info[0], "name");
   const char* joined = sonare_mastering_insert_param_names(name.c_str());
+  if (joined == nullptr) {
+    ThrowLastSonareError(env, "mastering insert param names: ", SONARE_ERROR_UNKNOWN);
+    return env.Undefined();
+  }
   Napi::Array out = Napi::Array::New(env);
-  if (joined == nullptr || joined[0] == '\0') {
+  if (joined[0] == '\0') {
     return out;
   }
   std::string names(joined);
@@ -163,13 +171,17 @@ Napi::Value SonareWrap::MasteringInsertParamInfo(const Napi::CallbackInfo& info)
   const std::string name = node_narrow_string(env, info[0], "name");
   if (info[1].IsUndefined() || info[1].IsNull()) {
     const char* json = sonare_mastering_insert_param_info(name.c_str());
-    return Napi::String::New(env, json != nullptr ? json : "[]");
+    if (json == nullptr) {
+      ThrowLastSonareError(env, "mastering insert param info: ");
+      return env.Undefined();
+    }
+    return Napi::String::New(env, json);
   }
   int sample_rate = 0;
   if (!RequiredIntArg(env, info, 1, "sampleRate", &sample_rate)) return env.Undefined();
   const char* json = sonare_mastering_insert_param_info_at_rate(name.c_str(), sample_rate);
   if (json == nullptr) {
-    ThrowLastSonareError(env, "", SONARE_ERROR_INVALID_PARAMETER);
+    ThrowLastSonareError(env, "mastering insert param info: ");
     return env.Undefined();
   }
   return Napi::String::New(env, json);
@@ -235,7 +247,11 @@ Napi::Value SonareWrap::MasteringProcessorCatalog(const Napi::CallbackInfo& info
   // string (NOT to be freed). The TS facade parses it into the typed
   // MasteringProcessorCatalogEntry[].
   const char* json = sonare_mastering_processor_catalog();
-  return Napi::String::New(env, json != nullptr ? json : "[]");
+  if (json == nullptr) {
+    ThrowLastSonareError(env, "mastering processor catalog: ", SONARE_ERROR_UNKNOWN);
+    return env.Undefined();
+  }
+  return Napi::String::New(env, json);
   SONARE_NODE_CATCH(env)
 }
 
@@ -243,10 +259,14 @@ Napi::Value SonareWrap::MasteringAmpPresetCatalog(const Napi::CallbackInfo& info
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   // sonare_mastering_amp_preset_catalog() returns a thread-local JSON array
-  // string (NOT to be freed); "[]" for a NULL result. The TS facade parses it
+  // string (NOT to be freed). The TS facade parses it
   // into the typed MasteringAmpPresetCatalogEntry[].
   const char* json = sonare_mastering_amp_preset_catalog();
-  return Napi::String::New(env, json != nullptr ? json : "[]");
+  if (json == nullptr) {
+    ThrowLastSonareError(env, "mastering amp preset catalog: ", SONARE_ERROR_UNKNOWN);
+    return env.Undefined();
+  }
+  return Napi::String::New(env, json);
   SONARE_NODE_CATCH(env)
 }
 
@@ -257,8 +277,7 @@ Napi::Value SonareWrap::CapabilityCatalog(const Napi::CallbackInfo& info) {
   // facade parses it so each language receives the same catalog shape.
   const char* json = sonare_capability_catalog_json();
   if (json == nullptr) {
-    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_NOT_SUPPORTED,
-                                         "Native capability catalog JSON is unavailable");
+    sonare_node::ThrowLastSonareError(env, "capability catalog: ", SONARE_ERROR_NOT_SUPPORTED);
     return env.Undefined();
   }
   return Napi::String::New(env, json);

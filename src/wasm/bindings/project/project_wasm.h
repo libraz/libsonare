@@ -73,23 +73,8 @@ inline sonare::ErrorCode codeFromCError(SonareError err) {
   throw sonare::SonareException(codeFromCError(err), message);
 }
 
-/// "<context>: <C detail, or the code's generic text>".
-inline std::string cErrorMessage(SonareError err, const char* context) {
-  const char* detail = sonare_last_error_message();
-  const char* fallback = sonare_error_message(err);
-  std::string message = context != nullptr ? context : "C API call failed";
-  message += ": ";
-  message += detail != nullptr && detail[0] != '\0' ? detail : fallback;
-  return message;
-}
-
 [[noreturn]] inline void throwCError(SonareError err, const char* context) {
   throwCErrorMessage(err, cErrorMessage(err, context));
-}
-
-/// throwCError for the free functions and helper classes sharing these units.
-[[noreturn]] inline void throwCodedCError(SonareError err, const char* context) {
-  throw sonare::SonareException(codeFromCError(err), cErrorMessage(err, context));
 }
 
 /// Throws via throwCodedCError unless @p err is SONARE_OK.

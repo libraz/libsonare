@@ -25,8 +25,7 @@ void MixerWasm::scheduleInsertAutomation(const val& strip_index_val, const val& 
   const int curve = checkedIntFromVal(curve_val, "curve");
   SonareStrip* strip = sonare_mixer_strip_at(mixer_, static_cast<size_t>(strip_index));
   if (strip == nullptr) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  "mixer strip index out of range");
+    throwLastCError("mixer strip index out of range: ");
   }
   SonareError err = sonare_strip_schedule_insert_automation(
       strip, insert_index, param_id, static_cast<int64_t>(sample_pos), value, curve);

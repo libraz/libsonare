@@ -115,6 +115,20 @@ def _last_error(default_code: int, fallback_message: str) -> SonareError:
     return _coded_error(code if code != SONARE_OK else default_code, message)
 
 
+def _joined_names(raw: bytes | None, what: str) -> list[str]:
+    """Split the ``\n``-joined list a never-NULL C name getter returned.
+
+    Those getters return an empty string on failure as well as for an empty set,
+    so an empty result with a recorded error raises it. Call it directly after
+    the getter, before any other C-ABI call.
+    """
+    if not raw:
+        if int(_get_lib().sonare_last_error_code()) != SONARE_OK:
+            raise _last_error(int(ErrorCode.UNKNOWN), what)
+        return []
+    return [name for name in raw.decode("utf-8").split("\n") if name]
+
+
 def _check_realtime(rc: int) -> None:
     """Check a return code from an audio-thread C entry point.
 

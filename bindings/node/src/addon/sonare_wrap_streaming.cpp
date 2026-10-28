@@ -876,7 +876,7 @@ StreamingRetuneWrap::StreamingRetuneWrap(const Napi::CallbackInfo& info)
   requested_grain_size_ = grain_size;
   retune_ = sonare_streaming_retune_create(semitones, mix, grain_size);
   if (retune_ == nullptr) {
-    ThrowSonareError(env, SONARE_ERROR_INVALID_PARAMETER, "StreamingRetune: ");
+    sonare_node::ThrowLastSonareError(env, "StreamingRetune: ");
   }
   SONARE_NODE_CATCH_VOID(env)
 }

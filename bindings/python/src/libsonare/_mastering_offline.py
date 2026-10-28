@@ -9,7 +9,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any, cast
 
 from ._cancellation import CancellationState, make_cancel_trampoline
-from ._errors import ErrorCode, _not_supported, _unknown_error
+from ._errors import ErrorCode, _not_supported
 from ._ffi import (
     SonareMasteringChainResult,
     SonareMasteringChainStereoResult,
@@ -287,6 +287,8 @@ def mastering_insert_names() -> list[str]:
     if not hasattr(lib, "sonare_mastering_insert_names"):
         raise _not_supported("libsonare was built without mastering support")
     raw = lib.sonare_mastering_insert_names()
+    if raw is None:
+        raise _last_error(int(ErrorCode.UNKNOWN), "failed to list mastering inserts")
     return raw.decode("utf-8").splitlines() if raw else []
 
 
@@ -307,6 +309,8 @@ def mastering_insert_param_names(name: str) -> list[str]:
     if not hasattr(lib, "sonare_mastering_insert_param_names"):
         raise _not_supported("libsonare was built without mastering support")
     raw = lib.sonare_mastering_insert_param_names(_utf8_arg(name, "name"))
+    if raw is None:
+        raise _last_error(int(ErrorCode.UNKNOWN), "failed to list mastering insert params")
     return raw.decode("utf-8").splitlines() if raw else []
 
 
@@ -345,8 +349,8 @@ def mastering_insert_param_info(
         raw = lib.sonare_mastering_insert_param_info_at_rate(
             _utf8_arg(name, "name"), _to_c_int(sample_rate, "sample_rate")
         )
-        if raw is None:
-            raise _last_error(int(ErrorCode.INVALID_PARAMETER), "sample_rate is out of range")
+    if raw is None:
+        raise _last_error(int(ErrorCode.INVALID_PARAMETER), "mastering insert param info failed")
     if not raw:
         return []
     parsed = json.loads(raw.decode("utf-8"))
@@ -421,6 +425,8 @@ def mastering_processor_catalog() -> list[MasteringProcessorCatalogEntry]:
     if not hasattr(lib, "sonare_mastering_processor_catalog"):
         return []
     raw = lib.sonare_mastering_processor_catalog()
+    if raw is None:
+        raise _last_error(int(ErrorCode.UNKNOWN), "failed to read the mastering processor catalog")
     if not raw:
         return []
     parsed = json.loads(raw.decode("utf-8"))
@@ -444,6 +450,8 @@ def mastering_amp_preset_catalog() -> list[MasteringAmpPresetCatalogEntry]:
     if not hasattr(lib, "sonare_mastering_amp_preset_catalog"):
         return []
     raw = lib.sonare_mastering_amp_preset_catalog()
+    if raw is None:
+        raise _last_error(int(ErrorCode.UNKNOWN), "failed to read the mastering amp preset catalog")
     if not raw:
         return []
     parsed = json.loads(raw.decode("utf-8"))
@@ -461,7 +469,9 @@ def capability_catalog() -> CapabilityCatalog:
         raise _not_supported("libsonare was built without capability catalog support")
     raw = lib.sonare_capability_catalog_json()
     if not raw:
-        raise _unknown_error("native capability catalog JSON is unavailable")
+        raise _last_error(
+            int(ErrorCode.NOT_SUPPORTED), "native capability catalog JSON is unavailable"
+        )
     return cast("CapabilityCatalog", json.loads(raw.decode("utf-8")))
 
 

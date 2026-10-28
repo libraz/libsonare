@@ -90,7 +90,7 @@ SampleBankWrap::SampleBankWrap(const Napi::CallbackInfo& info)
   SONARE_NODE_TRY
   bank_ = sonare_sample_bank_create();
   if (bank_ == nullptr) {
-    sonare_node::ThrowSonareError(env, SONARE_ERROR_OUT_OF_MEMORY);
+    sonare_node::ThrowLastSonareError(env, "SampleBank: ");
   }
   SONARE_NODE_CATCH_VOID(env)
 }

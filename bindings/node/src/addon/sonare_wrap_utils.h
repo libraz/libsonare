@@ -62,6 +62,12 @@ void ThrowCurrentException(Napi::Env env);
 void ThrowLastSonareError(Napi::Env env, const std::string& prefix,
                           SonareError fallback = SONARE_ERROR_INVALID_STATE);
 
+/// @brief Splits a '\n'-joined name list a never-NULL C name getter returned
+///        into a JS string[]. Those getters return "" on failure as well as for
+///        an empty set, so an empty string with a recorded error throws it.
+///        Call it directly after the getter, before any other C-ABI call.
+Napi::Value JoinedNamesToArray(Napi::Env env, const char* joined, const std::string& what);
+
 /// @brief Throw @p e classified through the shared std::exception classifier.
 void ThrowStdException(Napi::Env env, const std::exception& e);
 

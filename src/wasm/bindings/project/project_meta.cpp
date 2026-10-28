@@ -525,14 +525,14 @@ unsigned js_key_mode_from_analysis(const val& mode_val) {
 std::string js_synth_engine_param_info(const val& engine_mode) {
   const char* json = sonare_synth_engine_param_info(checkedIntFromVal(engine_mode, "engineMode"));
   if (json == nullptr)
-    throwCodedCError(SONARE_ERROR_INVALID_PARAMETER, "failed to describe engine");
+    throwLastCError("failed to describe engine: ", SONARE_ERROR_INVALID_PARAMETER);
   return json;
 }
 
 std::string js_synth_patch_param_info() {
   const char* json = sonare_synth_patch_param_info();
   if (json == nullptr)
-    throwCodedCError(SONARE_ERROR_NOT_SUPPORTED, "failed to describe synth patch");
+    throwLastCError("failed to describe synth patch: ", SONARE_ERROR_NOT_SUPPORTED);
   return json;
 }
 

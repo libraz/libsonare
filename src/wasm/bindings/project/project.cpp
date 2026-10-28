@@ -11,10 +11,8 @@
 ProjectWasm::ProjectWasm() {
   SonareProject* handle = nullptr;
   const SonareError err = sonare_project_create(&handle);
-  if (err != SONARE_OK || handle == nullptr) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  "failed to create headless project");
-  }
+  if (err != SONARE_OK) throwCodedCError(err, "failed to create headless project");
+  if (handle == nullptr) throwLastCError("failed to create headless project: ");
   project_ = std::shared_ptr<SonareProject>(handle, sonare_project_destroy);
 }
 
@@ -26,7 +24,8 @@ std::string ProjectWasm::toJson() const {
   const SonareError err = sonare_project_serialize(project_.get(), &json, &len);
   if (err != SONARE_OK || json == nullptr) {
     sonare_free_string(json);
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState, "failed to serialize project");
+    if (err != SONARE_OK) throwCodedCError(err, "failed to serialize project");
+    throwLastCError("failed to serialize project: ");
   }
   std::string out(json, len);
   sonare_free_string(json);

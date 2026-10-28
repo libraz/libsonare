@@ -29,6 +29,7 @@ from ._runtime import (
     _as_float32_buffer,
     _check,
     _get_lib,
+    _joined_names,
     _narrow_int,
     _to_c_float_array,
     _to_c_int,
@@ -454,8 +455,9 @@ def mix_source_class_names() -> list[str]:
             list, which is the one answer that cannot be a real taxonomy.
     """
     lib = _get_lib()
-    raw = lib.sonare_mixing_assistant_source_class_names()
-    names = raw.decode("utf-8").splitlines() if raw else []
+    names = _joined_names(
+        lib.sonare_mixing_assistant_source_class_names(), "mixing assistant source class names"
+    )
     if not names:
         raise _not_supported("libsonare was built without mixing assistant support")
     return names

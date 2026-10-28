@@ -25,8 +25,9 @@ from ._runtime import (
     ErrorCode,
     SonareValueError,
     _check,
-    _generic_error,
     _get_lib,
+    _joined_names,
+    _last_error,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -261,10 +262,7 @@ def synth_enum_tables() -> dict[str, tuple[str, ...]]:
     out: dict[str, tuple[str, ...]] = {}
     for key, kind in _SYNTH_ENUM_KINDS.items():
         raw = lib.sonare_synth_enum_names(_to_c_int(kind, "kind"))
-        if not raw:
-            out[key] = ()
-            continue
-        out[key] = tuple(name for name in raw.decode("utf-8").split("\n") if name)
+        out[key] = tuple(_joined_names(raw, "synth enum names"))
     return out
 
 
@@ -404,7 +402,7 @@ class SampleBank:
             raise _not_supported("libsonare was built without the sample-bank ABI")
         handle = lib.sonare_sample_bank_create()
         if not handle:
-            raise _generic_error(int(ErrorCode.OUT_OF_MEMORY))
+            raise _last_error(int(ErrorCode.OUT_OF_MEMORY), "failed to create SampleBank")
         self._handle = ctypes.c_void_p(handle)
 
     # -- lifecycle ----------------------------------------------------------
