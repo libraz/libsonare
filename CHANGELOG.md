@@ -7,12 +7,22 @@
 #### Now refused
 
 - Every argument the library refuses (C `SONARE_ERROR_INVALID_PARAMETER`) is a `RangeError` on Node and WASM and a `SonareValueError` on Python, whichever layer refused it. Entry points that still raised a coded `InvalidParameter` `SonareError` follow, among them the one-shot named-processor calls refusing an unread key, `mixStereo` pan out of range, `Mixer.addStrip` `truePeakOversample` (now the same class as `configureMeter`), `masteringInsertTiming`, `hzToNote` and `noteToHz`. A Node or WASM `SonareError` handler no longer catches them; Python's `except SonareError` still does, and the message no longer carries a `[4]` prefix.
+- A loader refusing the content of a document it was handed reports `InvalidFormat` (C `SONARE_ERROR_INVALID_FORMAT`), a coded `SonareError` on every surface, as the project loader already did: mixer scene JSON (including its inserts and strips), HRTF set bytes, renderer config JSON, mastering chain JSON, EQ band JSON, realtime voice-changer config JSON, MIDI FX JSON, part rig JSON and repair-session stage and analysis JSON. A null pointer or a separate argument of the same call stays a refused argument.
 - A `StreamAnalyzer` asked for `computeMagnitude` reports `NotSupported` (C `SONARE_ERROR_NOT_SUPPORTED`) on every surface instead of `InvalidParameter`.
 - Reverb inserts refuse an out-of-range tail length instead of clamping it, and `capabilityCatalog()` publishes the range: `effects.reverb.convolution` `decaySec` [0, 12], `effects.reverb.fdn` `decaySec` [0, 15], `effects.reverb.velvet` `decaySec` and `reverbTimeS`, `effects.reverb.dattorro` `decaySec`. A negative `seed` on the room, room-morph and convolution reverbs is refused instead of read as 0.
 - Karplus-Strong `haloDampS` publishes 0–1.5 s, the halo's own ring time, instead of 0–10 s; a value at or above 1.5 s already left the halo undamped, so no sound changes.
 - Loading a mixer scene or a realtime voice-changer config refuses a present key of the wrong type, including `null`, naming the field, instead of loading the default (`faderDb: "loud"` on a scene strip, for example). An absent key keeps its default.
 
 ### Fixes
+
+#### Errors
+
+- Null-returning constructors and catalog getters report the code the library recorded (an allocation failure as `OutOfMemory`) instead of a fixed code on Node, WASM and Python, and catalogs that returned an empty list after a failure raise it.
+- WASM mixer and project calls report the library's code instead of `InvalidState`, so an out-of-range strip index is a `RangeError` as on Node.
+
+#### Playback renderer
+
+- Node `PlaybackLoudnessMeter.pushInterleaved` passed the sample count where the library expects frames, reading past the end of a multichannel array; it now passes frames and refuses an array that is not a whole number of frames with a `RangeError`, as WASM and Python do.
 
 #### Realtime engine and project
 
