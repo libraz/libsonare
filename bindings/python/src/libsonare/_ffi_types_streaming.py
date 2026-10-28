@@ -12,13 +12,20 @@ SONARE_VC_PRESET_SOFT_WHISPER = 2
 SONARE_VC_PRESET_DEEP_NARRATOR = 3
 SONARE_VC_PRESET_ROBOT_MASCOT = 4
 SONARE_VC_PRESET_DARK_VILLAIN = 5
+SONARE_VC_PRESET_HARD_TUNE = 6
+SONARE_VC_PRESET_ROBOT_MONOTONE = 7
+SONARE_VC_PRESET_CHOIR_HARMONY = 8
+SONARE_VC_PRESET_VOCODER_STRINGS = 9
+SONARE_VC_PRESET_MEGAPHONE = 10
+SONARE_VC_PRESET_RADIO_VOICE = 11
 
 
 class SonareRealtimeVoiceChangerConfig(CStruct):
     """Flat POD mirror of editing::voice_changer::RealtimeVoiceChangerConfig.
 
-    Layout matches sonare_c.h exactly: 34 float fields + 4 int fields, no
-    padding. ``sizeof`` must equal ``38 * sizeof(c_float)`` (ABI version 3).
+    Layout matches sonare_c.h exactly: 4-byte scalar fields plus the 3-element
+    ``harmony_steps`` array, no padding. ``sizeof`` must equal
+    ``72 * sizeof(c_float)`` (struct_version 2).
     """
 
     _fields_ = [
@@ -61,6 +68,38 @@ class SonareRealtimeVoiceChangerConfig(CStruct):
         # Appended in ABI version 2 (must stay at the END to match the C layout).
         ("limiter_enable_isp_limiter", ctypes.c_int),
         ("limiter_isp_ceiling_dbtp", ctypes.c_float),
+        ("voice_engine_engine", ctypes.c_int32),
+        ("voice_engine_f0_min_hz", ctypes.c_float),
+        ("pitch_correction_mode", ctypes.c_int32),
+        ("pitch_correction_amount", ctypes.c_float),
+        ("pitch_correction_speed_ms", ctypes.c_float),
+        ("pitch_correction_key_root", ctypes.c_int32),
+        ("pitch_correction_scale", ctypes.c_int32),
+        ("pitch_correction_robot_octave", ctypes.c_int32),
+        ("harmony_voices", ctypes.c_int32),
+        ("harmony_steps", ctypes.c_int32 * 3),
+        ("harmony_level", ctypes.c_float),
+        ("harmony_lead_level", ctypes.c_float),
+        ("harmony_detune_cents", ctypes.c_float),
+        ("harmony_delay_ms", ctypes.c_float),
+        ("vocoder_enabled", ctypes.c_int32),
+        ("vocoder_bands", ctypes.c_int32),
+        ("vocoder_attack_ms", ctypes.c_float),
+        ("vocoder_release_ms", ctypes.c_float),
+        ("vocoder_sibilance", ctypes.c_float),
+        ("vocoder_carrier_source", ctypes.c_int32),
+        ("vocoder_carrier_wave", ctypes.c_int32),
+        ("vocoder_ensemble_detune_cents", ctypes.c_float),
+        ("vocoder_level", ctypes.c_float),
+        ("character_type", ctypes.c_int32),
+        ("character_amount", ctypes.c_float),
+        ("character_tone", ctypes.c_float),
+        ("reverb_variation_variation", ctypes.c_int32),
+        ("reverb_variation_delay_ms", ctypes.c_float),
+        ("reverb_variation_feedback", ctypes.c_float),
+        ("reverb_variation_tempo_bpm", ctypes.c_float),
+        ("reverb_variation_division", ctypes.c_int32),
+        ("midi_release", ctypes.c_int32),
     ]
 
 

@@ -427,7 +427,7 @@ def synthesize_rir(
     max_seconds: float = 0.0,
     mixing_time_ms: float = 0.0,
     crossfade_ms: float = 0.0,
-    air_absorption_enabled: bool = False,
+    air_absorption_enabled: bool = True,
     air_temperature_c: float = 0.0,
     air_humidity_percent: float = 0.0,
 ) -> RirResult: ...
@@ -471,7 +471,7 @@ def room_morph(
     max_seconds: float = 0.0,
     mixing_time_ms: float = 0.0,
     crossfade_ms: float = 0.0,
-    air_absorption_enabled: bool = False,
+    air_absorption_enabled: bool = True,
     air_temperature_c: float = 0.0,
     air_humidity_percent: float = 0.0,
 ) -> RoomMorphResult: ...
@@ -498,7 +498,7 @@ def room_morph_stereo(
     max_seconds: float = 0.0,
     mixing_time_ms: float = 0.0,
     crossfade_ms: float = 0.0,
-    air_absorption_enabled: bool = False,
+    air_absorption_enabled: bool = True,
     air_temperature_c: float = 0.0,
     air_humidity_percent: float = 0.0,
 ) -> RoomMorphStereoResult: ...
@@ -1044,6 +1044,16 @@ def spectral_edit(
     heal_radius_frames: int = 2,
 ) -> list[float]: ...
 
+VoiceEngineName: TypeAlias = Literal["grain", "psola"]
+PitchCorrectionModeName: TypeAlias = Literal["off", "auto", "robot"]
+ScaleKindName: TypeAlias = Literal["major", "natural_minor", "chromatic"]
+VocoderCarrierSourceName: TypeAlias = Literal["internal", "external"]
+VocoderCarrierWaveName: TypeAlias = Literal["saw", "pulse", "ensemble"]
+CharacterTypeName: TypeAlias = Literal["none", "megaphone", "radio", "bbd_chorus", "strobo"]
+ReverbVariationName: TypeAlias = Literal["reverb", "echo", "tempo_delay", "dub_echo"]
+NoteDivisionName: TypeAlias = Literal["quarter", "eighth", "dotted_eighth", "sixteenth"]
+MidiReleaseName: TypeAlias = Literal["hold", "input"]
+
 class RealtimeVoiceChangerConfig:
     input_gain_db: float
     output_gain_db: float
@@ -1082,6 +1092,38 @@ class RealtimeVoiceChangerConfig:
     limiter_release_ms: float
     limiter_enable_isp_limiter: int
     limiter_isp_ceiling_dbtp: float
+    voice_engine_engine: VoiceEngineName
+    voice_engine_f0_min_hz: float
+    pitch_correction_mode: PitchCorrectionModeName
+    pitch_correction_amount: float
+    pitch_correction_speed_ms: float
+    pitch_correction_key_root: int
+    pitch_correction_scale: ScaleKindName
+    pitch_correction_robot_octave: int
+    harmony_voices: int
+    harmony_steps: tuple[int, int, int]
+    harmony_level: float
+    harmony_lead_level: float
+    harmony_detune_cents: float
+    harmony_delay_ms: float
+    vocoder_enabled: int
+    vocoder_bands: int
+    vocoder_attack_ms: float
+    vocoder_release_ms: float
+    vocoder_sibilance: float
+    vocoder_carrier_source: VocoderCarrierSourceName
+    vocoder_carrier_wave: VocoderCarrierWaveName
+    vocoder_ensemble_detune_cents: float
+    vocoder_level: float
+    character_type: CharacterTypeName
+    character_amount: float
+    character_tone: float
+    reverb_variation_variation: ReverbVariationName
+    reverb_variation_delay_ms: float
+    reverb_variation_feedback: float
+    reverb_variation_tempo_bpm: float
+    reverb_variation_division: NoteDivisionName
+    midi_release: MidiReleaseName
     def __init__(self, **kwargs: object) -> None: ...
     @classmethod
     def from_pod(cls, pod: object) -> RealtimeVoiceChangerConfig: ...
@@ -1113,6 +1155,18 @@ class RealtimeVoiceChanger:
     def process_planar_stereo(
         self, left: FloatSamples, right: FloatSamples
     ) -> tuple[np.ndarray, np.ndarray]: ...
+    def process_mono_with_carrier(
+        self, samples: FloatSamples, carrier: FloatSamples
+    ) -> np.ndarray: ...
+    def process_interleaved_with_carrier(
+        self, samples: FloatSamples, carrier: FloatSamples, channels: int | None = None
+    ) -> np.ndarray: ...
+    def process_planar_stereo_with_carrier(
+        self, left: FloatSamples, right: FloatSamples, carrier: FloatSamples
+    ) -> tuple[np.ndarray, np.ndarray]: ...
+    def note_on(self, note: int, velocity: float = 1.0) -> None: ...
+    def note_off(self, note: int) -> None: ...
+    def all_notes_off(self) -> None: ...
 
 class StreamingRetune:
     def __init__(

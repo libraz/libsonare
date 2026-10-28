@@ -49,9 +49,7 @@ def _fixture_set(sample_rate: int, seconds: float) -> dict[str, list[float]]:
 
         burst_phase = t % 0.75
         if burst_phase < 0.025:
-            plosive[i] += 0.22 * math.exp(-burst_phase * 95.0) * (
-                2.0 * rng.random() - 1.0
-            )
+            plosive[i] += 0.22 * math.exp(-burst_phase * 95.0) * (2.0 * rng.random() - 1.0)
 
     return {
         "synthetic-harmonic": _tone(sample_rate, seconds, 160.0),
@@ -80,11 +78,17 @@ def main() -> int:
     # the center here together with the C++ preset definition.
     per_preset_lufs_band = {
         "neutral-monitor": (-23.5, -17.5),
-        "bright-idol": (-24.0, -18.0),
+        "bright-idol": (-22.5, -16.5),
         "soft-whisper": (-22.5, -16.5),
-        "deep-narrator": (-23.5, -17.5),
-        "robot-mascot": (-23.0, -17.0),
-        "dark-villain": (-25.0, -19.0),
+        "deep-narrator": (-21.5, -15.5),
+        "robot-mascot": (-21.5, -15.5),
+        "dark-villain": (-23.5, -17.5),
+        "hard-tune": (-24.0, -18.0),
+        "robot-monotone": (-26.0, -20.0),
+        "choir-harmony": (-24.0, -18.0),
+        "vocoder-strings": (-27.0, -21.0),
+        "megaphone": (-26.5, -20.5),
+        "radio-voice": (-26.0, -20.0),
     }
 
     report: dict[str, object] = {"fixtures": {}, "presets": {}}

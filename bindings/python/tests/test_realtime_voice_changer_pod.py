@@ -25,8 +25,8 @@ pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared libr
 
 
 def test_pod_struct_size_matches_c_abi() -> None:
-    """sonare_c.h pins sizeof == 38 * sizeof(float) (ABI v3)."""
-    assert ctypes.sizeof(SonareRealtimeVoiceChangerConfig) == 38 * ctypes.sizeof(ctypes.c_float)
+    """sonare_c.h pins sizeof == 72 * sizeof(float) (struct_version 2)."""
+    assert ctypes.sizeof(SonareRealtimeVoiceChangerConfig) == 72 * ctypes.sizeof(ctypes.c_float)
 
 
 def test_pod_dataclass_has_one_field_per_pod_field() -> None:
@@ -226,7 +226,13 @@ def _flat(config: libsonare.RealtimeVoiceChangerConfig) -> dict[str, object]:
             part if i == 0 else part.capitalize() for i, part in enumerate(f.name.split("_"))
         )
         value = getattr(config, f.name)
-        out[camel] = bool(value) if camel == "limiterEnableIspLimiter" else value
+        if f.name == "harmony_steps":
+            for index, step in enumerate(value, start=1):
+                out[f"harmonyStep{index}"] = step
+        elif camel in ("limiterEnableIspLimiter", "vocoderEnabled"):
+            out[camel] = bool(value)
+        else:
+            out[camel] = value
     return out
 
 
@@ -234,7 +240,7 @@ def test_formant_mode_is_a_string_field_defaulting_to_relative() -> None:
     cfg = libsonare.realtime_voice_changer_preset_config("neutral-monitor")
     assert cfg.formant_mode == "relative"
     pod = dataclasses.replace(cfg, formant_mode="absolute").to_pod()
-    assert pod.struct_version == 1
+    assert pod.struct_version == 2
     assert pod.formant_mode == 1
     assert libsonare.RealtimeVoiceChangerConfig.from_pod(pod).formant_mode == "absolute"
     with pytest.raises(ValueError, match="formant_mode"):
@@ -242,7 +248,12 @@ def test_formant_mode_is_a_string_field_defaulting_to_relative() -> None:
 
 
 def test_formant_mode_is_fixed_when_the_changer_is_created() -> None:
-    base = libsonare.realtime_voice_changer_preset_config("neutral-monitor")
+    # The grain engine is selected explicitly: it is the one whose absolute mode adds
+    # exactly one analysis frame of latency.
+    base = dataclasses.replace(
+        libsonare.realtime_voice_changer_preset_config("neutral-monitor"),
+        voice_engine_engine="grain",
+    )
     absolute = dataclasses.replace(base, formant_mode="absolute", formant_factor=1.1)
     with (
         libsonare.RealtimeVoiceChanger(48000, _flat(base)) as relative,
@@ -260,7 +271,9 @@ def test_formant_mode_is_fixed_when_the_changer_is_created() -> None:
 
 def test_unreachable_absolute_warp_is_refused_with_the_reachable_range() -> None:
     base = libsonare.realtime_voice_changer_preset_config("neutral-monitor")
-    unreachable = dataclasses.replace(base, formant_mode="absolute", retune_semitones=-9.0)
+    unreachable = dataclasses.replace(
+        base, voice_engine_engine="grain", formant_mode="absolute", retune_semitones=-9.0
+    )
     # The creation document is a JSON entry point: its content defect is InvalidFormat.
     with pytest.raises(SonareError, match=r"\[0\.55, 0\.9811\]") as refused:
         libsonare.RealtimeVoiceChanger(48000, _flat(unreachable))

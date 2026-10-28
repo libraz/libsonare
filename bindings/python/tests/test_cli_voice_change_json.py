@@ -200,6 +200,8 @@ def test_voice_change_preset_json_reports_resolved_chain_latency(tmp_path: Path)
         "--preset",
         "bright-idol",
         "--set",
+        "dsp.voiceEngine.engine=grain",
+        "--set",
         "dsp.retune.grainSize=64",
         "--json",
     )
@@ -236,6 +238,7 @@ def test_voice_change_custom_preset_json_omits_inferred_preset_id(tmp_path: Path
     preset["id"] = "custom-grain"
     preset["name"] = "Custom Grain"
     preset["category"] = "custom"
+    preset["dsp"]["voiceEngine"]["engine"] = "grain"
     preset["dsp"]["retune"]["grainSize"] = 64
     preset_path.write_text(json.dumps(preset), encoding="utf-8")
 
@@ -376,3 +379,29 @@ def test_synthesize_rir_json_reports_sample_rate(tmp_path: Path) -> None:
     assert payload["sample_rate"] == 44_100
     with wave.open(str(output), "rb") as rendered:
         assert rendered.getframerate() == 44_100
+
+
+@pytest.mark.parametrize(
+    "preset",
+    ["hard-tune", "robot-monotone", "choir-harmony", "vocoder-strings", "megaphone", "radio-voice"],
+)
+def test_voice_change_renders_the_new_presets_and_voice_preset_writes_schema_v2(
+    tmp_path: Path, preset: str
+) -> None:
+    sample_rate = 48_000
+    input_length = 4_800
+    source = tmp_path / "input.wav"
+    output = tmp_path / f"{preset}.wav"
+    _write_tone(source, sample_rate=sample_rate, length=input_length)
+
+    result = _run_cli(
+        "voice-change", str(source), "--output", str(output), "--preset", preset, "--json"
+    )
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["preset"] == preset
+    assert payload["length"] == input_length
+
+    generated = _run_cli("voice-preset", "--preset", preset)
+    assert generated.returncode == 0, generated.stderr
+    assert json.loads(generated.stdout)["schemaVersion"] == 2

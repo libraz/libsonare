@@ -891,6 +891,38 @@ def test_voice_preset_validate_normalizes_a_preset_file() -> None:
         assert isinstance(payload, dict)
 
 
+def test_voice_preset_validate_accepts_a_new_preset_and_a_v1_document() -> None:
+    """A new preset validates, and a schema v1 document without the new sections still does."""
+    preset = _run_cli(["voice-preset", "--preset", "hard-tune", "--json"])
+    assert preset.returncode == 0, preset.stderr
+    document = json.loads(preset.stdout)
+    assert document["schemaVersion"] == 2
+    legacy = dict(document)
+    legacy["schemaVersion"] = 1
+    legacy["dsp"] = {
+        key: value
+        for key, value in document["dsp"].items()
+        if key
+        not in (
+            "voiceEngine",
+            "pitchCorrection",
+            "harmony",
+            "vocoder",
+            "character",
+            "reverbVariation",
+            "midi",
+        )
+    }
+    legacy["category"] = "custom"
+    with tempfile.TemporaryDirectory() as tmpdir:
+        for name, content in (("v2.json", document), ("v1.json", legacy)):
+            preset_path = os.path.join(tmpdir, name)
+            with open(preset_path, "w", encoding="utf-8") as fh:
+                json.dump(content, fh)
+            result = _run_cli(["voice-preset-validate", preset_path, "--json"])
+            assert result.returncode == 0, (name, result.stderr)
+
+
 def test_voice_preset_validate_accepts_native_preset_json_alias() -> None:
     """The native CLI's ``--preset-json`` spelling remains cross-CLI compatible."""
     preset = _run_cli(["voice-preset", "--preset", "neutral-monitor", "--json"])

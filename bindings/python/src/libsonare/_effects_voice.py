@@ -16,11 +16,17 @@ from ._errors import _not_supported, _require_open
 from ._ffi import (
     SONARE_OK,
     SONARE_VC_PRESET_BRIGHT_IDOL,
+    SONARE_VC_PRESET_CHOIR_HARMONY,
     SONARE_VC_PRESET_DARK_VILLAIN,
     SONARE_VC_PRESET_DEEP_NARRATOR,
+    SONARE_VC_PRESET_HARD_TUNE,
+    SONARE_VC_PRESET_MEGAPHONE,
     SONARE_VC_PRESET_NEUTRAL_MONITOR,
+    SONARE_VC_PRESET_RADIO_VOICE,
     SONARE_VC_PRESET_ROBOT_MASCOT,
+    SONARE_VC_PRESET_ROBOT_MONOTONE,
     SONARE_VC_PRESET_SOFT_WHISPER,
+    SONARE_VC_PRESET_VOCODER_STRINGS,
     SonareRealtimeVoiceChangerConfig,
     SonareVoiceChangeConfig,
 )
@@ -49,8 +55,39 @@ from ._runtime import (
 
 _VOICE_CHANGE_STRUCT_VERSION = 1
 _FORMANT_MODES = {"relative": 0, "absolute": 1}
-_FORMANT_MODE_NAMES = {value: name for name, value in _FORMANT_MODES.items()}
-_REALTIME_CONFIG_STRUCT_VERSION = 1
+_REALTIME_CONFIG_STRUCT_VERSION = 2
+
+# Enum-valued POD fields: snake_case spellings in the order of the C ordinals.
+_ENUM_FIELD_NAMES: dict[str, tuple[str, ...]] = {
+    "formant_mode": ("relative", "absolute"),
+    "voice_engine_engine": ("grain", "psola"),
+    "pitch_correction_mode": ("off", "auto", "robot"),
+    "pitch_correction_scale": ("major", "natural_minor", "chromatic"),
+    "vocoder_carrier_source": ("internal", "external"),
+    "vocoder_carrier_wave": ("saw", "pulse", "ensemble"),
+    "character_type": ("none", "megaphone", "radio", "bbd_chorus", "strobo"),
+    "reverb_variation_variation": ("reverb", "echo", "tempo_delay", "dub_echo"),
+    "reverb_variation_division": ("quarter", "eighth", "dotted_eighth", "sixteenth"),
+    "midi_release": ("hold", "input"),
+}
+_HARMONY_STEP_COUNT = 3
+
+
+def _enum_ordinal(field: str, value: object) -> int:
+    """Map an enum spelling to its C ordinal, refusing an unknown spelling."""
+    names = _ENUM_FIELD_NAMES[field]
+    if not isinstance(value, str) or value not in names:
+        expected = ", ".join(repr(n) for n in names)
+        raise SonareValueError(f"{field} must be one of {expected}, got {value!r}")
+    return names.index(value)
+
+
+def _enum_name(field: str, ordinal: int) -> str:
+    """Map a C ordinal read from the library to its spelling."""
+    names = _ENUM_FIELD_NAMES[field]
+    if not 0 <= int(ordinal) < len(names):
+        raise SonareValueError(f"unknown {field} ordinal: {ordinal}")
+    return names[int(ordinal)]
 
 
 def voice_change(
@@ -278,7 +315,28 @@ class RealtimeVoiceChanger:
         (the caller must chunk). Keep this in mind when porting realtime code
         between surfaces.
         """
+        return self._process_mono(_as_float32_buffer(samples), None)
+
+    def process_mono_with_carrier(
+        self,
+        samples: Sequence[float] | list[float] | np.ndarray,
+        carrier: Sequence[float] | list[float] | np.ndarray,
+    ) -> np.ndarray:
+        """Process a mono buffer with an external vocoder ``carrier`` of equal length.
+
+        The carrier is read only while the vocoder runs with the ``"external"``
+        carrier source; with ``"internal"`` it is ignored. A carrier of a
+        different length raises ``SonareValueError``. With an external carrier
+        configured, the carrier-less ``process_*`` methods raise ``SonareError``
+        (invalid state) and write nothing.
+        """
         in_buf = _as_float32_buffer(samples)
+        carrier_buf = _as_float32_buffer(carrier, arg_name="carrier")
+        if int(carrier_buf.shape[0]) != int(in_buf.shape[0]):
+            raise SonareValueError("carrier must have the same length as samples")
+        return self._process_mono(in_buf, carrier_buf)
+
+    def _process_mono(self, in_buf: np.ndarray, carrier_buf: np.ndarray | None) -> np.ndarray:
         total = int(in_buf.shape[0])
         out_buf = np.empty(total, dtype=np.float32)
         step = self._max_block_size
@@ -290,9 +348,15 @@ class RealtimeVoiceChanger:
             # contiguous 1-D float32 array are guaranteed contiguous.
             c_in = (ctypes.c_float * length).from_buffer(in_block)
             c_out = (ctypes.c_float * length).from_buffer(out_block)
-            rc = self._lib.sonare_realtime_voice_changer_process_mono(
-                self._require_handle(), c_in, c_out, _to_c_size_t(length, "length")
-            )
+            if carrier_buf is None:
+                rc = self._lib.sonare_realtime_voice_changer_process_mono(
+                    self._require_handle(), c_in, c_out, _to_c_size_t(length, "length")
+                )
+            else:
+                c_carrier = (ctypes.c_float * length).from_buffer(carrier_buf[pos : pos + length])
+                rc = self._lib.sonare_realtime_voice_changer_process_mono_with_carrier(
+                    self._require_handle(), c_in, c_carrier, c_out, _to_c_size_t(length, "length")
+                )
             _check_realtime(rc)
         return out_buf
 
@@ -306,6 +370,27 @@ class RealtimeVoiceChanger:
         Returns a ``numpy.ndarray`` of dtype ``float32`` in the same
         interleaved layout as the input.
         """
+        return self._process_interleaved(samples, channels, None)
+
+    def process_interleaved_with_carrier(
+        self,
+        samples: Sequence[float] | list[float] | np.ndarray,
+        carrier: Sequence[float] | list[float] | np.ndarray,
+        channels: int | None = None,
+    ) -> np.ndarray:
+        """Process an interleaved buffer with a mono external vocoder ``carrier``.
+
+        ``carrier`` has one sample per frame and is shared by every channel; a
+        different length raises ``SonareValueError``.
+        """
+        return self._process_interleaved(samples, channels, carrier)
+
+    def _process_interleaved(
+        self,
+        samples: Sequence[float] | list[float] | np.ndarray,
+        channels: int | None,
+        carrier: Sequence[float] | list[float] | np.ndarray | None,
+    ) -> np.ndarray:
         # Narrowed rather than coerced: int() takes 2.7 as 2, which lays the
         # buffer out as a stereo interleave nobody asked for.
         ch = (
@@ -318,6 +403,9 @@ class RealtimeVoiceChanger:
         if ch <= 0 or total_samples % ch != 0:
             raise SonareValueError("interleaved samples length must be divisible by channels")
         frames = total_samples // ch
+        carrier_buf = None if carrier is None else _as_float32_buffer(carrier, arg_name="carrier")
+        if carrier_buf is not None and int(carrier_buf.shape[0]) != frames:
+            raise SonareValueError("carrier must hold one sample per frame of samples")
         out_buf = np.empty(total_samples, dtype=np.float32)
         step = self._max_block_size
         for frame in range(0, frames, step):
@@ -328,13 +416,26 @@ class RealtimeVoiceChanger:
             out_block = out_buf[start:end]
             c_in = (ctypes.c_float * (block_frames * ch)).from_buffer(in_block)
             c_out = (ctypes.c_float * (block_frames * ch)).from_buffer(out_block)
-            rc = self._lib.sonare_realtime_voice_changer_process_interleaved(
-                self._require_handle(),
-                c_in,
-                c_out,
-                _to_c_size_t(block_frames, "block_frames"),
-                _to_c_int(ch, "ch"),
-            )
+            if carrier_buf is None:
+                rc = self._lib.sonare_realtime_voice_changer_process_interleaved(
+                    self._require_handle(),
+                    c_in,
+                    c_out,
+                    _to_c_size_t(block_frames, "block_frames"),
+                    _to_c_int(ch, "ch"),
+                )
+            else:
+                c_carrier = (ctypes.c_float * block_frames).from_buffer(
+                    carrier_buf[frame : frame + block_frames]
+                )
+                rc = self._lib.sonare_realtime_voice_changer_process_interleaved_with_carrier(
+                    self._require_handle(),
+                    c_in,
+                    c_carrier,
+                    c_out,
+                    _to_c_size_t(block_frames, "block_frames"),
+                    _to_c_int(ch, "ch"),
+                )
             _check_realtime(rc)
         return out_buf
 
@@ -350,11 +451,34 @@ class RealtimeVoiceChanger:
         ``(left, right)`` tuple of ``numpy.ndarray`` (dtype ``float32``)
         processed in place.
         """
+        return self._process_planar_stereo(left, right, None)
+
+    def process_planar_stereo_with_carrier(
+        self,
+        left: Sequence[float] | list[float] | np.ndarray,
+        right: Sequence[float] | list[float] | np.ndarray,
+        carrier: Sequence[float] | list[float] | np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Process planar stereo with a mono external vocoder ``carrier``.
+
+        ``carrier`` is shared by both channels and must match their length.
+        """
+        return self._process_planar_stereo(left, right, carrier)
+
+    def _process_planar_stereo(
+        self,
+        left: Sequence[float] | list[float] | np.ndarray,
+        right: Sequence[float] | list[float] | np.ndarray,
+        carrier: Sequence[float] | list[float] | np.ndarray | None,
+    ) -> tuple[np.ndarray, np.ndarray]:
         left_buf = _as_float32_buffer(left, arg_name="left")
         right_buf = _as_float32_buffer(right, arg_name="right")
         total = int(left_buf.shape[0])
         if total != int(right_buf.shape[0]):
             raise SonareValueError("left and right channels must have equal length")
+        carrier_buf = None if carrier is None else _as_float32_buffer(carrier, arg_name="carrier")
+        if carrier_buf is not None and int(carrier_buf.shape[0]) != total:
+            raise SonareValueError("carrier must have the same length as the channels")
         # Copy into fresh contiguous output buffers; the C call mutates in place.
         out_left = np.array(left_buf, dtype=np.float32, copy=True)
         out_right = np.array(right_buf, dtype=np.float32, copy=True)
@@ -365,11 +489,50 @@ class RealtimeVoiceChanger:
             r_block = out_right[pos : pos + length]
             c_left = (ctypes.c_float * length).from_buffer(l_block)
             c_right = (ctypes.c_float * length).from_buffer(r_block)
-            rc = self._lib.sonare_realtime_voice_changer_process_planar_stereo(
-                self._require_handle(), c_left, c_right, _to_c_size_t(length, "length")
-            )
+            if carrier_buf is None:
+                rc = self._lib.sonare_realtime_voice_changer_process_planar_stereo(
+                    self._require_handle(), c_left, c_right, _to_c_size_t(length, "length")
+                )
+            else:
+                c_carrier = (ctypes.c_float * length).from_buffer(carrier_buf[pos : pos + length])
+                rc = self._lib.sonare_realtime_voice_changer_process_planar_stereo_with_carrier(
+                    self._require_handle(),
+                    c_left,
+                    c_right,
+                    c_carrier,
+                    _to_c_size_t(length, "length"),
+                )
             _check_realtime(rc)
         return out_left, out_right
+
+    def note_on(self, note: int, velocity: float = 1.0) -> None:
+        """Hold MIDI ``note`` from the start of the next processed block.
+
+        Held notes become the voices' pitch targets, the newest leading, up to
+        ``1 + harmony_voices`` of them. ``note`` outside [0, 127] or
+        ``velocity`` outside (0, 1] raises ``SonareValueError``. A grain-engine
+        handle, or a full event queue (the event is dropped), raises
+        ``SonareError`` (invalid state).
+        """
+        rc = self._lib.sonare_realtime_voice_changer_note_on(
+            self._require_handle(),
+            _to_c_int(note, "note"),
+            _to_c_float(velocity, "velocity"),
+        )
+        _check_realtime(rc)
+
+    def note_off(self, note: int) -> None:
+        """Release MIDI ``note``; releasing a note that is not held does nothing."""
+        rc = self._lib.sonare_realtime_voice_changer_note_off(
+            self._require_handle(), _to_c_int(note, "note")
+        )
+        _check_realtime(rc)
+
+    def all_notes_off(self) -> None:
+        """Release every held note; succeeds even when the event queue is full."""
+        _check_realtime(
+            self._lib.sonare_realtime_voice_changer_all_notes_off(self._require_handle())
+        )
 
 
 def voice_change_realtime(
@@ -467,6 +630,12 @@ _VC_PRESET_NAME_TO_ORDINAL: dict[str, int] = {
     "deep-narrator": SONARE_VC_PRESET_DEEP_NARRATOR,
     "robot-mascot": SONARE_VC_PRESET_ROBOT_MASCOT,
     "dark-villain": SONARE_VC_PRESET_DARK_VILLAIN,
+    "hard-tune": SONARE_VC_PRESET_HARD_TUNE,
+    "robot-monotone": SONARE_VC_PRESET_ROBOT_MONOTONE,
+    "choir-harmony": SONARE_VC_PRESET_CHOIR_HARMONY,
+    "vocoder-strings": SONARE_VC_PRESET_VOCODER_STRINGS,
+    "megaphone": SONARE_VC_PRESET_MEGAPHONE,
+    "radio-voice": SONARE_VC_PRESET_RADIO_VOICE,
 }
 
 
@@ -488,7 +657,7 @@ def voice_character_preset_id(preset: int) -> str | None:
 
 
 @functools.lru_cache(maxsize=1)
-def _neutral_monitor_defaults() -> dict[str, float]:
+def _neutral_monitor_defaults() -> dict[str, Any]:
     """Field values of the built-in ``neutral-monitor`` preset.
 
     These are the single source of truth for the default-constructed
@@ -504,7 +673,15 @@ def _neutral_monitor_defaults() -> dict[str, float]:
             ctypes.byref(pod),
         )
     )
-    return {name: getattr(pod, name) for name, *_ in pod._fields_}
+    values: dict[str, Any] = {}
+    for name, *_ in pod._fields_:
+        value = getattr(pod, name)
+        if name == "harmony_steps":
+            value = tuple(int(step) for step in value)
+        elif name in _ENUM_FIELD_NAMES:
+            value = _enum_name(name, value)
+        values[name] = value
+    return values
 
 
 def _neutral_default(name: str) -> Callable[[], Any]:
@@ -518,7 +695,7 @@ def _neutral_default(name: str) -> Callable[[], Any]:
 
 @dataclasses.dataclass
 class RealtimeVoiceChangerConfig:
-    """Flat mirror of :class:`SonareRealtimeVoiceChangerConfig` (37 fields).
+    """Flat mirror of :class:`SonareRealtimeVoiceChangerConfig`.
 
     Field order matches the C POD struct in ``sonare_c.h``. The default value of
     every field is seeded from the built-in ``neutral-monitor`` preset (fetched
@@ -535,6 +712,14 @@ class RealtimeVoiceChangerConfig:
     analysis frame of latency is added, and a configuration whose warp
     ``formant_factor / 2**(retune_semitones / 12)`` leaves [0.55, 1.65] raises
     a ``SonareValueError`` naming the reachable ``formant_factor`` range.
+
+    The enum-valued fields hold snake_case spellings: ``voice_engine_engine``
+    (``"grain"`` or ``"psola"``, fixed at creation), ``pitch_correction_mode``,
+    ``pitch_correction_scale``, ``vocoder_carrier_source``,
+    ``vocoder_carrier_wave``, ``character_type``, ``reverb_variation_variation``,
+    ``reverb_variation_division`` and ``midi_release``. ``harmony_steps`` holds
+    exactly three scale-degree offsets. An unknown spelling raises
+    ``SonareValueError``.
 
     The gate, compressor and limiter ``*_attack_ms`` / ``*_release_ms`` times are
     one time constant: about 63% of the way at the set time.
@@ -557,7 +742,7 @@ class RealtimeVoiceChangerConfig:
         default_factory=_neutral_default("formant_brightness")
     )
     formant_nasal: float = dataclasses.field(default_factory=_neutral_default("formant_nasal"))
-    formant_mode: str = "relative"
+    formant_mode: str = dataclasses.field(default_factory=_neutral_default("formant_mode"))
     eq_highpass_hz: float = dataclasses.field(default_factory=_neutral_default("eq_highpass_hz"))
     eq_body_db: float = dataclasses.field(default_factory=_neutral_default("eq_body_db"))
     eq_presence_db: float = dataclasses.field(default_factory=_neutral_default("eq_presence_db"))
@@ -610,32 +795,126 @@ class RealtimeVoiceChangerConfig:
     limiter_isp_ceiling_dbtp: float = dataclasses.field(
         default_factory=_neutral_default("limiter_isp_ceiling_dbtp")
     )
+    voice_engine_engine: str = dataclasses.field(
+        default_factory=_neutral_default("voice_engine_engine")
+    )
+    voice_engine_f0_min_hz: float = dataclasses.field(
+        default_factory=_neutral_default("voice_engine_f0_min_hz")
+    )
+    pitch_correction_mode: str = dataclasses.field(
+        default_factory=_neutral_default("pitch_correction_mode")
+    )
+    pitch_correction_amount: float = dataclasses.field(
+        default_factory=_neutral_default("pitch_correction_amount")
+    )
+    pitch_correction_speed_ms: float = dataclasses.field(
+        default_factory=_neutral_default("pitch_correction_speed_ms")
+    )
+    pitch_correction_key_root: int = dataclasses.field(
+        default_factory=_neutral_default("pitch_correction_key_root")
+    )
+    pitch_correction_scale: str = dataclasses.field(
+        default_factory=_neutral_default("pitch_correction_scale")
+    )
+    pitch_correction_robot_octave: int = dataclasses.field(
+        default_factory=_neutral_default("pitch_correction_robot_octave")
+    )
+    harmony_voices: int = dataclasses.field(default_factory=_neutral_default("harmony_voices"))
+    harmony_steps: tuple[int, int, int] = dataclasses.field(
+        default_factory=_neutral_default("harmony_steps")
+    )
+    harmony_level: float = dataclasses.field(default_factory=_neutral_default("harmony_level"))
+    harmony_lead_level: float = dataclasses.field(
+        default_factory=_neutral_default("harmony_lead_level")
+    )
+    harmony_detune_cents: float = dataclasses.field(
+        default_factory=_neutral_default("harmony_detune_cents")
+    )
+    harmony_delay_ms: float = dataclasses.field(
+        default_factory=_neutral_default("harmony_delay_ms")
+    )
+    vocoder_enabled: int = dataclasses.field(default_factory=_neutral_default("vocoder_enabled"))
+    vocoder_bands: int = dataclasses.field(default_factory=_neutral_default("vocoder_bands"))
+    vocoder_attack_ms: float = dataclasses.field(
+        default_factory=_neutral_default("vocoder_attack_ms")
+    )
+    vocoder_release_ms: float = dataclasses.field(
+        default_factory=_neutral_default("vocoder_release_ms")
+    )
+    vocoder_sibilance: float = dataclasses.field(
+        default_factory=_neutral_default("vocoder_sibilance")
+    )
+    vocoder_carrier_source: str = dataclasses.field(
+        default_factory=_neutral_default("vocoder_carrier_source")
+    )
+    vocoder_carrier_wave: str = dataclasses.field(
+        default_factory=_neutral_default("vocoder_carrier_wave")
+    )
+    vocoder_ensemble_detune_cents: float = dataclasses.field(
+        default_factory=_neutral_default("vocoder_ensemble_detune_cents")
+    )
+    vocoder_level: float = dataclasses.field(default_factory=_neutral_default("vocoder_level"))
+    character_type: str = dataclasses.field(default_factory=_neutral_default("character_type"))
+    character_amount: float = dataclasses.field(
+        default_factory=_neutral_default("character_amount")
+    )
+    character_tone: float = dataclasses.field(default_factory=_neutral_default("character_tone"))
+    reverb_variation_variation: str = dataclasses.field(
+        default_factory=_neutral_default("reverb_variation_variation")
+    )
+    reverb_variation_delay_ms: float = dataclasses.field(
+        default_factory=_neutral_default("reverb_variation_delay_ms")
+    )
+    reverb_variation_feedback: float = dataclasses.field(
+        default_factory=_neutral_default("reverb_variation_feedback")
+    )
+    reverb_variation_tempo_bpm: float = dataclasses.field(
+        default_factory=_neutral_default("reverb_variation_tempo_bpm")
+    )
+    reverb_variation_division: str = dataclasses.field(
+        default_factory=_neutral_default("reverb_variation_division")
+    )
+    midi_release: str = dataclasses.field(default_factory=_neutral_default("midi_release"))
 
     @classmethod
     def from_pod(cls, pod: SonareRealtimeVoiceChangerConfig) -> RealtimeVoiceChangerConfig:
         """Copy field-for-field out of a ctypes struct."""
-        values = {
-            name: getattr(pod, name)
-            for name, *_ in pod._fields_
-            if name not in ("struct_version", "formant_mode")
-        }
-        mode = _FORMANT_MODE_NAMES.get(int(pod.formant_mode))
-        if mode is None:
-            raise SonareValueError(f"unknown formant_mode ordinal: {pod.formant_mode}")
-        return cls(formant_mode=mode, **values)
+        values: dict[str, Any] = {}
+        for name, *_ in pod._fields_:
+            if name == "struct_version":
+                continue
+            value = getattr(pod, name)
+            if name == "harmony_steps":
+                value = tuple(int(step) for step in value)
+            elif name in _ENUM_FIELD_NAMES:
+                value = _enum_name(name, value)
+            values[name] = value
+        return cls(**values)
 
     def to_pod(self) -> SonareRealtimeVoiceChangerConfig:
         """Copy field-for-field into a freshly allocated ctypes struct."""
-        if not isinstance(self.formant_mode, str) or self.formant_mode not in _FORMANT_MODES:
-            raise SonareValueError(
-                f"formant_mode must be 'relative' or 'absolute', got {self.formant_mode!r}"
-            )
         out = SonareRealtimeVoiceChangerConfig()
         out.struct_version = _REALTIME_CONFIG_STRUCT_VERSION
-        out.formant_mode = _FORMANT_MODES[self.formant_mode]
         for name, *_ in out._fields_:
-            if name not in ("struct_version", "formant_mode"):
-                setattr(out, name, getattr(self, name))
+            if name == "struct_version":
+                continue
+            value = getattr(self, name)
+            if name == "harmony_steps":
+                # An array element bypasses the struct's field guard, so narrow here.
+                if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+                    raise TypeError("harmony_steps must be a sequence of 3 integers")
+                if len(value) != _HARMONY_STEP_COUNT:
+                    raise SonareValueError(
+                        f"harmony_steps must hold {_HARMONY_STEP_COUNT} integers, got {len(value)}"
+                    )
+                for index, step in enumerate(value):
+                    out.harmony_steps[index] = _narrow_int(
+                        step, f"harmony_steps[{index}]", _C_INT_MIN, _C_INT_MAX
+                    )
+            elif name in _ENUM_FIELD_NAMES:
+                setattr(out, name, _enum_ordinal(name, value))
+            else:
+                setattr(out, name, value)
         return out
 
 
