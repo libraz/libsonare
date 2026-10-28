@@ -438,6 +438,9 @@ wasm = [
   # processPreparedPlanar) suited to AudioWorklet instead of a copy-in
   # process_planar_stereo(left, right); same capability, AudioWorklet-shaped API.
   "realtime_voice_changer_process_planar_stereo",
+  # The external-carrier variant of the same zero-copy planar path
+  # (getCarrierBuffer + processPreparedPlanarWithCarrier).
+  "realtime_voice_changer_process_planar_stereo_with_carrier",
   # See the Node note: this C enum parser is internal to typed facade inputs.
   "synth_builtin_waveform_from_name",
   # See the Node note: WASM also takes the delivery target by name and resolves
@@ -884,6 +887,14 @@ names = []
 # Category 1 (ergonomic rename or fold) and category 2 (array-length derivation).
 # Every entry below was read against both the C header and the facade source.
 fields = [
+  # --- harmony steps spelled as one key per voice ---
+  # The flat voice changer config is also the insert's parameter set, whose keys
+  # are scalars, so the C `harmony_steps[3]` array is spelled harmonyStep1..3.
+  "realtime_voice_changer_config.harmony_steps",
+  "realtime_voice_changer_config.harmony_step1",
+  "realtime_voice_changer_config.harmony_step2",
+  "realtime_voice_changer_config.harmony_step3",
+
   # --- seconds alternatives to the sample fields ---
   # Node and WASM spell a region's time bounds in samples or in seconds; the
   # binding converts seconds to samples at the call's rate, so the C struct keeps

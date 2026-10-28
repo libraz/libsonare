@@ -4,6 +4,12 @@
 
 ### Upgrade notes
 
+#### Realtime voice changer
+
+- Voice changer C ABI 4: `SonareRealtimeVoiceChangerConfig` is `struct_version` 2 with the new fields appended, and `struct_version` 0 and 1 are refused. The aggregate ABI version is `0x06040207`; a binding built against the old one reports `AbiMismatch` at load.
+- The flat camelCase config (Node and WASM) now requires every field; an omitted key is refused. Fractional values for `retuneGrainSize` and `reverbSeed` are refused.
+- Preset schema version 2. Version 1 documents still load; documents are written as version 2, which an older library refuses.
+
 #### Removed and renamed
 
 - The C `SonareRirSynthConfig` and `SonareRoomMorphConfig` field `air_absorption_enabled` is now `air_absorption`, a `SONARE_AIR_ABSORPTION_*` selector: `DEFAULT` (0) and `ON` (1) apply air absorption, `OFF` (2) leaves it out, and any other value is refused. A zero-initialized config therefore applies it. `SONARE_ACOUSTIC_ABI_VERSION` is 6.
@@ -18,6 +24,11 @@
 - Loading a mixer scene or a realtime voice-changer config refuses a present key of the wrong type, including `null`, naming the field, instead of loading the default (`faderDb: "loud"` on a scene strip, for example). An absent key keeps its default.
 
 ### Behaviour changes
+
+#### Realtime voice changer
+
+- The default engine is now `psola`, so the same preset sounds different. Latency drops from 2263 to 717 samples at 48 kHz. `voiceEngine.engine = grain` (`voice_engine_engine="grain"` in Python) keeps the previous processing.
+- Six new presets: `hard-tune`, `robot-monotone`, `choir-harmony`, `vocoder-strings`, `megaphone` and `radio-voice`. The voice changer gains auto pitch and robot, scale harmony, MIDI note input (`noteOn` / `noteOff` / `allNotesOff`, Python `note_on` / `note_off` / `all_notes_off`), a channel vocoder with an internal or external carrier (`process*WithCarrier`, Python `process_*_with_carrier`), megaphone, radio, chorus and strobe character, and echo, tempo delay and dub echo.
 
 #### Room acoustics
 
