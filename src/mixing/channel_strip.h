@@ -318,6 +318,10 @@ class ChannelStrip : public rt::ProcessorBase {
   // out-of-range insert or a param the processor reports non-RT-safe.
   bool apply_insert_parameter(unsigned int insert_index, unsigned int param_id,
                               float value) noexcept;
+  // Whether apply_insert_parameter(insert_index, param_id, value) would succeed,
+  // without applying it. Same thread contract as apply_insert_parameter.
+  bool insert_parameter_accepts(unsigned int insert_index, unsigned int param_id,
+                                float value) noexcept;
   bool constructed_insert_parameter_value(unsigned int insert_index, unsigned int param_id,
                                           float* out) const noexcept;
   bool last_applied_insert_parameter_value(unsigned int insert_index, unsigned int param_id,

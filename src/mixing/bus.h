@@ -59,6 +59,10 @@ class BusProcessor : public rt::ProcessorBase {
   // Mirrors ChannelStrip::apply_insert_parameter.
   bool apply_insert_parameter(unsigned int insert_index, unsigned int param_id,
                               float value) noexcept;
+  // Whether apply_insert_parameter(insert_index, param_id, value) would succeed,
+  // without applying it. Mirrors ChannelStrip::insert_parameter_accepts.
+  bool insert_parameter_accepts(unsigned int insert_index, unsigned int param_id,
+                                float value) noexcept;
   bool constructed_insert_parameter_value(unsigned int insert_index, unsigned int param_id,
                                           float* out) const noexcept {
     return insert_index < inserts_.size() && inserts_[insert_index] != nullptr &&

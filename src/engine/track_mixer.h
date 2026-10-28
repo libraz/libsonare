@@ -440,7 +440,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // advanced once per sub-block (advance_insert_automations) before the strip /
   // bus chain renders, then pushed to the processor, so a stepped breakpoint lane
   // glides instead of zipping. Audio-thread only. Returns false when no slot is
-  // free (overflow telemetry).
+  // free (overflow telemetry) or the processor refuses the value, in which case
+  // the smoother does not move.
   bool route_lane_insert_param_smoothed(size_t lane_index, unsigned int insert_index,
                                         unsigned int param_id, float value) noexcept;
   bool route_bus_insert_param_smoothed(size_t bus_index, unsigned int insert_index,

@@ -4,6 +4,7 @@
 /// @brief Shared control-thread/audio-thread configuration lifecycle for
 ///        realtime processors.
 
+#include <cmath>
 #include <memory>
 #include <utility>
 
@@ -63,6 +64,16 @@ class RtConfigLifecycle : public ProcessorBase {
     Derived::validate_config(config);
     config_ = config;
     publish_current_config();
+  }
+
+  /// @brief The same @c Derived::apply_parameter on a scratch copy of the live
+  ///        config, so a field the apply couples (a close threshold following
+  ///        its threshold) is never left moved by the question.
+  bool parameter_accepts(unsigned int param_id, float value) final {
+    if (!std::isfinite(value)) return false;
+    adopt_snapshot_for_block();
+    ConfigT probe = active_;
+    return static_cast<Derived*>(this)->apply_parameter(probe, param_id, value);
   }
 
  protected:

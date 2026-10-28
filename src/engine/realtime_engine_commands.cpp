@@ -505,7 +505,8 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       // on first touch and glides on repeats -- identical to an automated
       // breakpoint and to the bus path -- instead of zipping. Control-thread
       // resolution already rejected unknown targets, so a false return is a
-      // slot-table overflow, surfaced via kInsertAutomationOverflow telemetry.
+      // slot-table overflow, surfaced via kInsertAutomationOverflow telemetry,
+      // or a value the processor refuses, which this id-less command cannot name.
       const uint32_t packed = command.target_id;
       const size_t lane_index = (packed >> 16) & 0xFFu;
       const unsigned int insert_index = (packed >> 8) & 0xFFu;

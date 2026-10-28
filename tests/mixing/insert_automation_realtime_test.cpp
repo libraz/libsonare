@@ -3,11 +3,14 @@
 ///        (track lane, master, and bus inserts) routed through the reserved
 ///        insert-automation id namespace.
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstdint>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <vector>
@@ -15,6 +18,7 @@
 #include "engine/insert_automation_id.h"
 #include "engine/realtime_engine.h"
 #include "engine/track_mixer.h"
+#include "mastering/dynamics/gate.h"
 #include "mixing/channel_strip.h"
 #include "rt/processor_base.h"
 
@@ -70,6 +74,19 @@ class ProbeGainProcessor final : public sonare::rt::ProcessorBase {
 
  private:
   float gain_ = 1.0f;
+};
+
+// Takes every param id live, for the tests that fill the slot table with more
+// distinct targets than one real insert publishes.
+class AnyParamProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+  bool set_parameter_impl(unsigned int, float) override { return true; }
+  std::vector<sonare::rt::ParamDescriptor> parameter_descriptors() const override {
+    return {{"gain", 0}};
+  }
 };
 
 sonare::engine::ClipSchedule dc_clip(uint32_t clip_id, uint32_t track_id,
@@ -435,6 +452,216 @@ TEST_CASE("Insert parameter setters reject a non-finite value at the engine laye
   }
 }
 
+namespace {
+
+// A gate whose closed-state attenuation (rangeDb, at most 0) is the audible
+// quantity on a source held under its threshold.
+sonare::mixing::api::Strip gate_strip(const char* id) {
+  sonare::mixing::api::Strip strip;
+  strip.id = id;
+  strip.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "dynamics.gate",
+       R"({"thresholdDb":-20,"closeThresholdDb":-30,"holdMs":0,"attackMs":0.1,"releaseMs":5,"rangeDb":-20})"});
+  return strip;
+}
+
+// Renders `blocks` blocks with the mono input held at `level` and returns the
+// master output end to end.
+std::vector<float> render_dc(sonare::engine::RealtimeEngine& engine, int block, int blocks,
+                             float level) {
+  std::vector<float> out;
+  out.reserve(static_cast<size_t>(block) * static_cast<size_t>(blocks));
+  std::vector<float> buffer(static_cast<size_t>(block));
+  for (int b = 0; b < blocks; ++b) {
+    std::fill(buffer.begin(), buffer.end(), level);
+    float* io[] = {buffer.data()};
+    engine.process(io, 1, block);
+    out.insert(out.end(), buffer.begin(), buffer.end());
+  }
+  return out;
+}
+
+float max_abs_difference(const std::vector<float>& a, const std::vector<float>& b) {
+  REQUIRE(a.size() == b.size());
+  float max = 0.0f;
+  for (size_t i = 0; i < a.size(); ++i) max = std::max(max, std::abs(a[i] - b[i]));
+  return max;
+}
+
+// Drains the telemetry queue and sums the kUnknownTarget counts it carried.
+uint32_t drain_unknown_targets(sonare::engine::RealtimeEngine& engine) {
+  uint32_t total = 0;
+  sonare::engine::Telemetry record{};
+  while (engine.pop_telemetry(record)) {
+    if (record.type == sonare::engine::TelemetryType::kError &&
+        record.error == sonare::engine::TelemetryErrorCode::kUnknownTarget) {
+      total += record.value;
+    }
+  }
+  return total;
+}
+
+}  // namespace
+
+TEST_CASE("Insert automation refuses a target the processor refuses instead of gliding toward it",
+          "[mixing][automation]") {
+  // A held lane value outside the parameter's domain used to start the one-pole
+  // glide anyway: every in-range step along the way was applied and the first
+  // out-of-range step was refused with its result discarded, so the processor
+  // settled on whichever in-range value the block cadence happened to produce
+  // (a gate rangeDb lane at +12 rendered like one at -2.3). The target has to
+  // be refused before the smoother moves, and reported like any other value
+  // that was not applied.
+  constexpr int kBlock = 64;
+  constexpr double kSr = 48000.0;
+  constexpr int kBlocks = 24;
+  // -50 dBFS: under the gate threshold, so the closed gate's rangeDb sets the level.
+  constexpr float kQuiet = 0.00316f;
+  constexpr float kLoud = 0.8f;
+  std::array<float, kBlock> quiet{};
+  quiet.fill(kQuiet);
+  const float* quiet_ch[] = {quiet.data()};
+
+  using sonare::engine::RealtimeEngine;
+  using Configure = std::function<void(RealtimeEngine&)>;
+  using Resolve = std::function<int64_t(RealtimeEngine&)>;
+
+  const auto quiet_clip_on_track_10 = [&](RealtimeEngine& engine) {
+    sonare::engine::ClipSchedule clip{1, {quiet_ch, 1, kBlock}, 0.0, 0, 0, kBlock, true, 1.0f, 0,
+                                      0};
+    clip.track_id = 10;
+    engine.set_clips({clip});
+  };
+  const Configure track_gate = [&](RealtimeEngine& engine) {
+    quiet_clip_on_track_10(engine);
+    REQUIRE(engine.set_track_lanes({{10}}));
+    REQUIRE(engine.set_track_strip(10, gate_strip("track")));
+  };
+  const Resolve track_range = [](RealtimeEngine& engine) {
+    return engine.resolve_track_insert_automation_id(10, 0, "rangeDb");
+  };
+  const Configure bus_gate = [&](RealtimeEngine& engine) {
+    quiet_clip_on_track_10(engine);
+    REQUIRE(engine.set_track_buses({{1, 0.0f}}));
+    sonare::engine::TrackLaneConfig lane{10};
+    lane.sends.push_back({1, 0.0f, true});
+    REQUIRE(engine.set_track_lanes({lane}));
+    sonare::mixing::api::Bus bus;
+    bus.id = "1";
+    bus.inserts = gate_strip("bus").inserts;
+    REQUIRE(engine.set_bus_strip(1, bus));
+  };
+  const Resolve bus_range = [](RealtimeEngine& engine) {
+    return engine.resolve_bus_insert_automation_id(1, 0, "rangeDb");
+  };
+  const Configure master_compressor = [](RealtimeEngine& engine) {
+    REQUIRE(engine.set_master_strip(compressor_strip("master")));
+  };
+  const Resolve master_ratio = [](RealtimeEngine& engine) {
+    return engine.resolve_master_insert_automation_id(0, "ratio");
+  };
+
+  struct Rendered {
+    std::vector<float> samples;
+    uint32_t unknown_targets = 0;
+  };
+  // A fresh engine per render, so the three renders of a scenario differ only
+  // in the lane they hold.
+  const auto render = [&](const Configure& configure, const Resolve& resolve,
+                          const float* lane_value, float input_level) {
+    RealtimeEngine engine;
+    engine.prepare(kSr, kBlock);
+    configure(engine);
+    const int64_t id = resolve(engine);
+    REQUIRE(id >= 0);
+    if (lane_value != nullptr) {
+      engine.automation().set_lanes({step_lane(static_cast<uint32_t>(id), *lane_value)});
+    }
+    sonare::rt::Command play{};
+    play.type = sonare::rt::CommandType::kTransportPlay;
+    play.sample_time = -1;
+    REQUIRE(engine.push_command(play));
+    Rendered rendered;
+    rendered.samples = render_dc(engine, kBlock, kBlocks, input_level);
+    rendered.unknown_targets = drain_unknown_targets(engine);
+    return rendered;
+  };
+  const auto check = [&](const Configure& configure, const Resolve& resolve, float refused,
+                         float accepted, float input_level) {
+    CAPTURE(refused, accepted);
+    const Rendered control = render(configure, resolve, nullptr, input_level);
+    const Rendered held_accepted = render(configure, resolve, &accepted, input_level);
+    const Rendered held_refused = render(configure, resolve, &refused, input_level);
+    REQUIRE(control.unknown_targets == 0u);
+    // An accepted lane moves the output, so an identical render below means
+    // the refused lane reached nothing rather than that nothing was measured.
+    REQUIRE(held_accepted.unknown_targets == 0u);
+    REQUIRE(max_abs_difference(held_accepted.samples, control.samples) > 1.0e-5f);
+    // A refused lane leaves the processor exactly as configured and is
+    // reported not applied on every block it is held.
+    REQUIRE(max_abs_difference(held_refused.samples, control.samples) == 0.0f);
+    REQUIRE(held_refused.unknown_targets >= static_cast<uint32_t>(kBlocks));
+  };
+
+  SECTION("track gate rangeDb above its maximum") {
+    check(track_gate, track_range, 12.0f, -6.0f, 0.0f);
+  }
+  SECTION("bus gate rangeDb above its maximum") { check(bus_gate, bus_range, 12.0f, -6.0f, 0.0f); }
+  SECTION("master compressor ratio below its minimum") {
+    check(master_compressor, master_ratio, 0.2f, 2.0f, kLoud);
+  }
+
+  SECTION("the named setters refuse the same value") {
+    const Rendered control = render(track_gate, track_range, nullptr, 0.0f);
+
+    RealtimeEngine engine;
+    engine.prepare(kSr, kBlock);
+    track_gate(engine);
+    const int64_t id = track_range(engine);
+    REQUIRE(id >= 0);
+    // The immediate named setter answers synchronously.
+    REQUIRE_FALSE(engine.apply_track_insert_param_by_name_now(10, 0, "rangeDb", 12.0f));
+    // The queued named setter cannot know on the control thread; the refusal is
+    // reported against the parameter's id when the command is applied.
+    REQUIRE(engine.set_track_insert_param_detailed(10, 0, "rangeDb", 12.0f) ==
+            sonare::engine::InsertParamSetResult::kQueued);
+    sonare::rt::Command play{};
+    play.type = sonare::rt::CommandType::kTransportPlay;
+    play.sample_time = -1;
+    REQUIRE(engine.push_command(play));
+    const std::vector<float> samples = render_dc(engine, kBlock, kBlocks, 0.0f);
+    bool reported_by_id = false;
+    sonare::engine::Telemetry record{};
+    while (engine.pop_telemetry(record)) {
+      reported_by_id =
+          reported_by_id || (record.type == sonare::engine::TelemetryType::kError &&
+                             record.error == sonare::engine::TelemetryErrorCode::kUnknownTarget &&
+                             record.value == static_cast<uint32_t>(id));
+    }
+    REQUIRE(reported_by_id);
+    REQUIRE(max_abs_difference(samples, control.samples) == 0.0f);
+  }
+
+  SECTION("the acceptance probe leaves the configuration untouched") {
+    sonare::mastering::dynamics::GateConfig config;
+    config.threshold_db = -20.0f;
+    config.close_threshold_db = -30.0f;
+    config.hold_ms = 0.0f;
+    config.attack_ms = 0.1f;
+    config.release_ms = 5.0f;
+    config.range_db = -20.0f;
+    sonare::mastering::dynamics::Gate gate(config);
+    gate.prepare(kSr, kBlock);
+    REQUIRE_FALSE(gate.parameter_accepts(3, 12.0f));
+    REQUIRE(gate.parameter_accepts(3, -6.0f));
+    // Applying a threshold pulls the close threshold down with it; asking must not.
+    REQUIRE(gate.parameter_accepts(0, -40.0f));
+    REQUIRE(gate.config().range_db == -20.0f);
+    REQUIRE(gate.config().threshold_db == -20.0f);
+    REQUIRE(gate.config().close_threshold_db == -30.0f);
+  }
+}
+
 TEST_CASE("Master insert automation slot-table overflow surfaces on the telemetry channel",
           "[mixing][automation]") {
   constexpr int kBlock = 64;
@@ -719,18 +946,18 @@ TEST_CASE("Insert automation slot table overflow is reported and existing slots 
   mixer.prepare(48000.0, 64);
   REQUIRE(mixer.set_track_lanes({{10}}));
   sonare::mixing::ChannelStrip strip;
-  strip.add_pre_insert(std::make_unique<ProbeGainProcessor>());
+  strip.add_pre_insert(std::make_unique<AnyParamProcessor>());
   REQUIRE(mixer.bind_track_strip(10, &strip));
 
-  // Claim distinct (insert, param) targets on lane 0 until the slot table is
-  // full. The first request that fails marks the table at capacity; every
-  // earlier request must have succeeded (no early starvation). The table holds
-  // at most a few hundred slots, so this loop is bounded.
+  // Claim distinct param targets on the one insert of lane 0 until the slot
+  // table is full. The first request that fails marks the table at capacity;
+  // every earlier request must have succeeded (no early starvation). The table
+  // holds at most a few hundred slots, so this loop is bounded.
   size_t claimed = 0;
   bool overflowed = false;
   for (size_t i = 0; i < 4096 && !overflowed; ++i) {
-    const bool ok = mixer.route_lane_insert_param_smoothed(
-        0, static_cast<unsigned int>(i / 256), static_cast<unsigned int>(i % 256), 0.1f);
+    const bool ok =
+        mixer.route_lane_insert_param_smoothed(0, 0, static_cast<unsigned int>(i), 0.1f);
     if (ok) {
       ++claimed;
       REQUIRE(mixer.insert_automation_overflow_count() == 0u);
@@ -744,7 +971,7 @@ TEST_CASE("Insert automation slot table overflow is reported and existing slots 
 
   // A second distinct target while full overflows again (advisory counter
   // increments), and is safely rejected.
-  REQUIRE_FALSE(mixer.route_lane_insert_param_smoothed(0, 0xFEu, 0xFEu, 0.2f));
+  REQUIRE_FALSE(mixer.route_lane_insert_param_smoothed(0, 0, 0xFEu, 0.2f));
   REQUIRE(mixer.insert_automation_overflow_count() == 2u);
 
   // An already-claimed target still resolves (retargets its existing slot) even
@@ -760,7 +987,7 @@ TEST_CASE("Settled insert automation slots retire and serve more than table capa
   mixer.prepare(48000.0, kBlock);
   REQUIRE(mixer.set_track_lanes({{10}}));
   sonare::mixing::ChannelStrip strip;
-  strip.add_pre_insert(std::make_unique<ProbeGainProcessor>());
+  strip.add_pre_insert(std::make_unique<AnyParamProcessor>());
   REQUIRE(mixer.bind_track_strip(10, &strip));
 
   std::array<float, kBlock> source{};

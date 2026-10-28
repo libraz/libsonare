@@ -385,6 +385,10 @@ bool TrackMixerRuntime::route_lane_insert_param_smoothed(size_t lane_index,
   if (lane_index >= lane_states_.size() || lane_states_[lane_index].strip == nullptr) {
     return false;
   }
+  // A target the processor refuses claims no slot, so nothing glides toward it.
+  if (!lane_states_[lane_index].strip->insert_parameter_accepts(insert_index, param_id, value)) {
+    return false;
+  }
   InsertAutoSlot* slot =
       find_or_claim_insert_slot(false, lane_index, 0, insert_index, param_id, value);
   if (slot == nullptr) return false;
@@ -397,6 +401,9 @@ bool TrackMixerRuntime::route_bus_insert_param_smoothed(size_t bus_index, unsign
                                                         float value) noexcept {
   if (!std::isfinite(value)) return false;
   if (bus_index >= bus_states_.size() || bus_states_[bus_index].bus == nullptr) {
+    return false;
+  }
+  if (!bus_states_[bus_index].bus->insert_parameter_accepts(insert_index, param_id, value)) {
     return false;
   }
   const uint32_t bus_id = bus_states_[bus_index].bus_id;

@@ -36,6 +36,11 @@ class FxBus : public rt::ProcessorBase {
                               float value) noexcept {
     return bus_.apply_insert_parameter(insert_index, param_id, value);
   }
+  /// Whether the insert would accept the value; forwards to BusProcessor.
+  bool insert_parameter_accepts(unsigned int insert_index, unsigned int param_id,
+                                float value) noexcept {
+    return bus_.insert_parameter_accepts(insert_index, param_id, value);
+  }
   /// Control-thread JSON-key -> param_id resolution; forwards to BusProcessor.
   int insert_parameter_id_for_key(unsigned int insert_index,
                                   const std::string& key) const noexcept {

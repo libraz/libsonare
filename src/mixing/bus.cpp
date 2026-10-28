@@ -154,6 +154,14 @@ bool BusProcessor::apply_insert_parameter(unsigned int insert_index, unsigned in
   return insert->set_parameter(param_id, value);
 }
 
+bool BusProcessor::insert_parameter_accepts(unsigned int insert_index, unsigned int param_id,
+                                            float value) noexcept {
+  if (insert_index >= inserts_.size()) return false;
+  rt::ProcessorBase* insert = inserts_[insert_index].get();
+  return insert != nullptr && insert->parameter_is_realtime_safe(param_id) &&
+         insert->parameter_accepts(param_id, value);
+}
+
 bool BusProcessor::set_insert_bypassed(unsigned int insert_index, bool bypassed,
                                        bool reset_on_bypass) noexcept {
   const size_t index = insert_index;

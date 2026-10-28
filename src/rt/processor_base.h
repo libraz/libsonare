@@ -276,6 +276,23 @@ class ProcessorBase {
     return true;
   }
 
+  // Whether set_parameter(param_id, value) would succeed, leaving the processor
+  // as it is. A smoother asks before it starts a glide, so a refused target
+  // never moves the processor toward some other value. The default applies and
+  // restores the last applied value through set_parameter_impl, exact for the
+  // in-place scalar write a realtime-safe parameter is limited to; a processor
+  // whose apply writes a second field answers from a scratch copy instead. With
+  // no last-applied value to restore, the processor is not touched and the
+  // value is taken as acceptable, so a refusal surfaces at apply time as before.
+  virtual bool parameter_accepts(unsigned int param_id, float value) {
+    if (!std::isfinite(value)) return false;
+    float previous = 0.0f;
+    if (!last_applied_parameter_value(param_id, &previous)) return true;
+    if (!set_parameter_impl(param_id, value)) return false;
+    set_parameter_impl(param_id, previous);
+    return true;
+  }
+
   // Returns whether set_parameter(param_id, ...) is safe to call from an audio
   // processing callback. The default must remain allocation-free and assumes
   // set_parameter performs only in-place scalar updates. Control-thread schedulers

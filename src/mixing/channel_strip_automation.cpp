@@ -195,6 +195,13 @@ bool ChannelStrip::apply_insert_parameter(unsigned int insert_index, unsigned in
   return insert->set_parameter(param_id, value);
 }
 
+bool ChannelStrip::insert_parameter_accepts(unsigned int insert_index, unsigned int param_id,
+                                            float value) noexcept {
+  rt::ProcessorBase* insert = insert_at(insert_index);
+  return insert != nullptr && insert->parameter_is_realtime_safe(param_id) &&
+         insert->parameter_accepts(param_id, value);
+}
+
 bool ChannelStrip::constructed_insert_parameter_value(unsigned int insert_index,
                                                       unsigned int param_id,
                                                       float* out) const noexcept {

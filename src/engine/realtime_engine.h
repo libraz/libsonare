@@ -903,7 +903,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   bool set_track_insert_param(uint32_t track_id, unsigned int insert_index, const std::string& key,
                               float value) noexcept;
   /// Applies a track insert edit directly on the engine's owning thread. This
-  /// retargets the insert smoother without enqueueing a command.
+  /// retargets the insert smoother without enqueueing a command; a value the
+  /// processor refuses returns false and moves nothing.
   bool apply_track_insert_param_by_name_now(uint32_t track_id, unsigned int insert_index,
                                             const std::string& key, float value) noexcept;
   /// Restores a retained track insert value exactly, clearing any matching

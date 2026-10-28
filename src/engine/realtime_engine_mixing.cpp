@@ -1188,8 +1188,10 @@ bool RealtimeEngine::master_insert_target_resolves(unsigned int insert_index,
 bool RealtimeEngine::route_master_insert_param_smoothed(unsigned int insert_index,
                                                         unsigned int param_id, float value,
                                                         uint32_t base_id) noexcept {
-  // A missing strip or insert is refused before a slot is claimed or a base recorded.
-  if (!std::isfinite(value) || !master_insert_target_resolves(insert_index, param_id)) {
+  // A missing strip or insert, or a value the processor refuses, is refused before
+  // a slot is claimed or a base recorded.
+  if (!std::isfinite(value) || !master_insert_target_resolves(insert_index, param_id) ||
+      !owned_master_strip_->insert_parameter_accepts(insert_index, param_id, value)) {
     return false;
   }
   MasterInsertAutoSlot* free_slot = nullptr;

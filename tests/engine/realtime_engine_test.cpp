@@ -2129,12 +2129,25 @@ TEST_CASE("Rejected master insert restore preserves its automation slot",
       "delayTimeLMs", "delayTimeRMs", "feedback",    "pingPong",    "dryWet",      "dampingHz",
       "tap3Ms",       "tap4Ms",       "tap1LevelDb", "tap2LevelDb", "tap3LevelDb", "tap4LevelDb",
       "tap3Pan",      "tap4Pan",      "invertL",     "invertR"};
+  // Each target is driven to its own constructed value: a value the processor
+  // refuses claims no slot, and the slot table is what this case measures.
+  const sonare::mixing::ChannelStrip* strip = engine.mixing().strip();
+  REQUIRE(strip != nullptr);
+  const auto constructed_value = [&](const char* key) {
+    const int param_id = strip->insert_parameter_id_for_key(0, key);
+    REQUIRE(param_id >= 0);
+    float value = 0.0f;
+    REQUIRE(
+        strip->constructed_insert_parameter_value(0, static_cast<unsigned int>(param_id), &value));
+    return value;
+  };
   std::array<int64_t, kSlots> targets{};
   for (size_t i = 0; i < targets.size(); ++i) {
     const int64_t target = engine.resolve_master_insert_automation_id(0, keys[i]);
     REQUIRE(target >= 0);
     targets[i] = target;
-    REQUIRE(engine.automation().set_parameter(static_cast<uint32_t>(target), -12.0f));
+    REQUIRE(engine.automation().set_parameter(static_cast<uint32_t>(target),
+                                              constructed_value(keys[i])));
   }
 
   REQUIRE_FALSE(engine.restore_master_insert_param_by_name(0, "invertL", 0.5f));
@@ -2143,7 +2156,8 @@ TEST_CASE("Rejected master insert restore preserves its automation slot",
   // therefore be refused instead of reusing the slot whose restore failed.
   const int64_t seventeenth = engine.resolve_master_insert_automation_id(0, "modRateHz");
   REQUIRE(seventeenth >= 0);
-  REQUIRE_FALSE(engine.automation().set_parameter(static_cast<uint32_t>(seventeenth), -12.0f));
+  REQUIRE_FALSE(engine.automation().set_parameter(static_cast<uint32_t>(seventeenth),
+                                                  constructed_value("modRateHz")));
   REQUIRE(engine.insert_automation_overflow_count() == 1);
 }
 
