@@ -67,13 +67,13 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
   } catch (const json::JsonError&) {
     return SONARE_ERROR_INVALID_FORMAT;
   }
-  if (!root.is_object()) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!root.is_object()) return SONARE_ERROR_INVALID_FORMAT;
 
   sonare::midi::TransposeConfig transpose;
   if (has_number(root, "transpose_semitones")) {
     transpose.enabled = true;
     if (!int_or(root, "transpose_semitones", 0, &transpose.semitones)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+      return SONARE_ERROR_INVALID_FORMAT;
     }
     chain->set_transpose(transpose);
   }
@@ -87,7 +87,7 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
     if (!float_or(root, "velocity_scale", 1.0f, &velocity.scale) ||
         !float_or(root, "velocity_offset", 0.0f, &velocity.offset) ||
         !float_or(root, "velocity_gamma", 1.0f, &velocity.gamma) || velocity.gamma <= 0.0f) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+      return SONARE_ERROR_INVALID_FORMAT;
     }
     chain->set_velocity_curve(velocity);
   }
@@ -98,7 +98,7 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
     int64_t grid_frames = 0;
     if (!std::isfinite(grid_ppq) || grid_ppq <= 0.0 || !ppq_frames(grid_ppq, &grid_frames) ||
         !std::isfinite(strength) || strength < 0.0 || strength > 1.0) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+      return SONARE_ERROR_INVALID_FORMAT;
     }
     sonare::midi::QuantizeConfig quantize;
     quantize.enabled = true;
@@ -108,39 +108,39 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
   }
 
   if (const json::Value* intervals = root.find("chord_intervals")) {
-    if (!intervals->is_array()) return SONARE_ERROR_INVALID_PARAMETER;
+    if (!intervals->is_array()) return SONARE_ERROR_INVALID_FORMAT;
     sonare::midi::ChordConfig chord;
     chord.enabled = true;
     const auto& values = intervals->as_array();
     if (values.empty() || values.size() > sonare::midi::ChordConfig::kMaxChordNotes) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+      return SONARE_ERROR_INVALID_FORMAT;
     }
     chord.count = values.size();
     for (size_t i = 0; i < values.size(); ++i) {
       if (!values[i].is_number() ||
           !sonare::numeric::checked_integral_cast(values[i].as_number(), &chord.intervals[i])) {
-        return SONARE_ERROR_INVALID_PARAMETER;
+        return SONARE_ERROR_INVALID_FORMAT;
       }
     }
     chain->set_chord(chord);
   }
 
   if (const json::Value* arp_intervals = root.find("arpeggiator_intervals")) {
-    if (!arp_intervals->is_array()) return SONARE_ERROR_INVALID_PARAMETER;
+    if (!arp_intervals->is_array()) return SONARE_ERROR_INVALID_FORMAT;
     const auto& values = arp_intervals->as_array();
     if (values.empty() || values.size() > sonare::midi::ArpeggiatorConfig::kMaxArpSteps) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+      return SONARE_ERROR_INVALID_FORMAT;
     }
     const double step_ppq = number_or(root, "arpeggiator_step_ppq", 0.0);
     int64_t step_frames = 0;
     if (!std::isfinite(step_ppq) || step_ppq <= 0.0 || !ppq_frames(step_ppq, &step_frames)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+      return SONARE_ERROR_INVALID_FORMAT;
     }
     // Gate defaults to a full-length (legato) step when omitted.
     const double gate_ppq = number_or(root, "arpeggiator_gate_ppq", step_ppq);
     int64_t gate_frames = 0;
     if (!std::isfinite(gate_ppq) || gate_ppq <= 0.0 || !ppq_frames(gate_ppq, &gate_frames)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+      return SONARE_ERROR_INVALID_FORMAT;
     }
     sonare::midi::ArpeggiatorConfig arpeggiator;
     arpeggiator.enabled = true;
@@ -148,7 +148,7 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
     for (size_t i = 0; i < values.size(); ++i) {
       if (!values[i].is_number() || !sonare::numeric::checked_integral_cast(
                                         values[i].as_number(), &arpeggiator.intervals[i])) {
-        return SONARE_ERROR_INVALID_PARAMETER;
+        return SONARE_ERROR_INVALID_FORMAT;
       }
     }
     arpeggiator.step_frames = std::max<int64_t>(1, step_frames);
@@ -165,11 +165,11 @@ inline SonareError midi_fx_chain_from_json(const char* config_json,
     int64_t timing_frames = 0;
     if (!int_or(root, "humanize_velocity", 0, &velocity_amount) ||
         !int_or(root, "seed", 0, &seed) || !ppq_frames(timing_ppq, &timing_frames)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+      return SONARE_ERROR_INVALID_FORMAT;
     }
     if (!std::isfinite(timing_ppq) || timing_ppq < 0.0 || velocity_amount < 0 ||
         velocity_amount > 127 || seed < 0) {
-      return SONARE_ERROR_INVALID_PARAMETER;
+      return SONARE_ERROR_INVALID_FORMAT;
     }
     sonare::midi::HumanizeConfig humanize;
     humanize.enabled = true;

@@ -449,16 +449,16 @@ TEST_CASE("a scene JSON entry point separates a malformed document from an inval
 
   REQUIRE(sonare_engine_set_master_strip_json(engine, malformed) == SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_engine_set_master_strip_json(engine, unsupported_version) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_engine_set_master_strip_json(engine, unknown_insert_slot) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_FORMAT);
 
   REQUIRE(sonare_engine_set_track_strip_json(engine, 1, malformed) == SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_engine_set_track_strip_json(engine, 1, unsupported_version) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, malformed) == SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, unsupported_version) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_FORMAT);
 #else
   REQUIRE(sonare_engine_set_master_strip_json(engine, "{}") == SONARE_ERROR_NOT_SUPPORTED);
 #endif
@@ -565,11 +565,11 @@ TEST_CASE("sonare_last_error_code carries the code a NULL handle cannot", "[c_ap
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_FORMAT);
     REQUIRE(std::strlen(sonare_last_error_message()) > 0);
 
-    // A document that parses but breaks a scene rule throws SonareException(InvalidParameter).
+    // A document that parses but breaks a scene rule is the document's defect: InvalidFormat.
     const char* unsupported_version =
         R"({"version":2,"strips":[{"id":"master"}],"buses":[],"connections":[]})";
     REQUIRE(sonare_mixer_from_scene_json(unsupported_version, 48000, 128) == nullptr);
-    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_FORMAT);
 
     REQUIRE(sonare_mixer_from_scene_json(nullptr, 48000, 128) == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);

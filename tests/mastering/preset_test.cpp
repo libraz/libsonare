@@ -89,14 +89,15 @@ void replace_once(std::string& text, const std::string& from, const std::string&
   text.replace(position, from.size(), to);
 }
 
-// The refusal is InvalidParameter carrying exactly @p message.
+// The refusal carries @p code (a refused argument by default) and exactly @p message.
 template <typename Fn>
-void require_refused_with(Fn&& call, const std::string& message) {
+void require_refused_with(Fn&& call, const std::string& message,
+                          sonare::ErrorCode code = sonare::ErrorCode::InvalidParameter) {
   try {
     call();
-    FAIL("expected an InvalidParameter refusal");
+    FAIL("expected a refusal");
   } catch (const sonare::SonareException& error) {
-    CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    CHECK(error.code() == code);
     CHECK(std::string(error.what()) == message);
   }
 }
@@ -446,8 +447,10 @@ TEST_CASE("a multiband chain stage carries between two and 64 bands", "[masterin
   SECTION("the JSON reader") {
     const std::string one_band = v2_document_with_band_count(1);
     REQUIRE(one_band.find("\"cutoffsHz\":[]") != std::string::npos);
-    require_refused_with([&] { chain_config_from_json(one_band); }, too_few);
-    require_refused_with([] { chain_config_from_json(v2_document_with_band_count(65)); }, too_many);
+    require_refused_with([&] { chain_config_from_json(one_band); }, too_few,
+                         sonare::ErrorCode::InvalidFormat);
+    require_refused_with([] { chain_config_from_json(v2_document_with_band_count(65)); }, too_many,
+                         sonare::ErrorCode::InvalidFormat);
     REQUIRE(chain_config_from_json(v2_document_with_band_count(64))
                 .dynamics.multiband_comp.config.bands.size() == 64);
   }
@@ -455,7 +458,8 @@ TEST_CASE("a multiband chain stage carries between two and 64 bands", "[masterin
   SECTION("the flat spelling of a one-band document") {
     require_refused_with([] { chain_config_flat_params(v2_document_with_band_count(1)); },
                          "chain config param 'dynamics.multibandComp.crossover.cutoffsHz' is an "
-                         "empty list, which has no flat spelling");
+                         "empty list, which has no flat spelling",
+                         sonare::ErrorCode::InvalidFormat);
   }
 }
 
@@ -511,30 +515,36 @@ TEST_CASE("a chain config document's flat params parse to the document's config"
 TEST_CASE("chain config flat params refuse what has no flat spelling",
           "[mastering][preset][json]") {
   const std::string no_params = "chain config carries no params block";
-  require_refused_with([] { chain_config_flat_params(R"({"version":1})"); }, no_params);
-  require_refused_with([] { chain_config_flat_params(R"({"version":1,"params":[1]})"); },
-                       no_params);
-  require_refused_with([] { chain_config_flat_params(R"({"version":1,"params":{}})"); }, no_params);
+  require_refused_with([] { chain_config_flat_params(R"({"version":1})"); }, no_params,
+                       sonare::ErrorCode::InvalidFormat);
+  require_refused_with([] { chain_config_flat_params(R"({"version":1,"params":[1]})"); }, no_params,
+                       sonare::ErrorCode::InvalidFormat);
+  require_refused_with([] { chain_config_flat_params(R"({"version":1,"params":{}})"); }, no_params,
+                       sonare::ErrorCode::InvalidFormat);
 
   require_refused_with(
       [] { chain_config_flat_params(R"({"version":1,"params":{"eq.tiltDb":"steep"}})"); },
-      "chain config param 'eq.tiltDb' is not a number or boolean");
+      "chain config param 'eq.tiltDb' is not a number or boolean",
+      sonare::ErrorCode::InvalidFormat);
   require_refused_with(
       [] { chain_config_flat_params(R"({"version":1,"params":{"eq.tiltDb":null}})"); },
-      "chain config param 'eq.tiltDb' is not a number or boolean");
+      "chain config param 'eq.tiltDb' is not a number or boolean",
+      sonare::ErrorCode::InvalidFormat);
   require_refused_with(
       [] {
         chain_config_flat_params(
             R"({"version":2,"params":{"dynamics.multibandComp":{"bands":[{"ratio":"x"}]}}})");
       },
-      "chain config param 'dynamics.multibandComp.bands.0.ratio' is not a number or boolean");
+      "chain config param 'dynamics.multibandComp.bands.0.ratio' is not a number or boolean",
+      sonare::ErrorCode::InvalidFormat);
   require_refused_with(
       [] {
         chain_config_flat_params(
             R"({"version":2,"params":{"dynamics.multibandComp":{"crossover":{"cutoffsHz":[]}}}})");
       },
       "chain config param 'dynamics.multibandComp.crossover.cutoffsHz' is an empty list, which "
-      "has no flat spelling");
+      "has no flat spelling",
+      sonare::ErrorCode::InvalidFormat);
 }
 
 TEST_CASE("chain config flat params resolve an enum name as the validating reader does",
@@ -601,7 +611,7 @@ TEST_CASE("chain config JSON rejects a document exceeding the JSON byte budget",
   } catch (const sonare::SonareException& error) {
     const std::string message = error.what();
     INFO(message);
-    REQUIRE(error.code() == sonare::ErrorCode::InvalidParameter);
+    REQUIRE(error.code() == sonare::ErrorCode::InvalidFormat);
     REQUIRE(message.find("byte budget") != std::string::npos);
   }
 

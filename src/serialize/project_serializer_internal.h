@@ -93,8 +93,8 @@ class BoundedDiagnostics {
 // ===========================================================================
 // Small read helpers. An ABSENT field falls back to the default (that is the
 // forward-compatibility contract); a field that is PRESENT with the wrong JSON
-// type throws InvalidFormat, uniformly across every scalar type. array_at /
-// object_at keep returning null for a wrong-typed container, so an optional
+// type throws InvalidFormat, uniformly across every scalar type and container.
+// array_at / object_at return null only for an absent key, so an optional
 // sub-tree stays optional.
 // ===========================================================================
 

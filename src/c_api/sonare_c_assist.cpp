@@ -234,7 +234,9 @@ std::string build_document(const assist::AssistResult& result) {
 
 SonareError run_assist(SonareProject* project, const char* request_json, bool apply,
                        char** out_json) {
-  if (project == nullptr || out_json == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (project == nullptr || out_json == nullptr || request_json == nullptr) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   *out_json = nullptr;
 
   assist::AssistRequest request;

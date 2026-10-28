@@ -58,7 +58,7 @@ TEST_CASE("sonare_hrtf_set_create_from_memory validates SHRF bytes", "[playback]
   const uint8_t malformed[8] = {'S', 'H', 'R', 'F', 0, 0, 0, 0};
   SonareHrtfSet* set = reinterpret_cast<SonareHrtfSet*>(uintptr_t{1});
   CHECK(sonare_hrtf_set_create_from_memory(malformed, sizeof(malformed), &set) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+        SONARE_ERROR_INVALID_FORMAT);
   CHECK(set == nullptr);
   CHECK(sonare_hrtf_set_create_from_memory(nullptr, 0, &set) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(sonare_hrtf_set_create_from_memory(malformed, sizeof(malformed), nullptr) ==
@@ -77,7 +77,7 @@ TEST_CASE("playback renderer creation rejects malformed configuration", "[playba
 
   renderer = reinterpret_cast<SonarePlaybackRenderer*>(uintptr_t{1});
   CHECK(sonare_playback_renderer_create_json(R"({"not_a_key": 1})", nullptr, 48000, 512,
-                                             &renderer) == SONARE_ERROR_INVALID_PARAMETER);
+                                             &renderer) == SONARE_ERROR_INVALID_FORMAT);
   CHECK(renderer == nullptr);
   CHECK(text_contains(sonare_last_error_message(), "unknown key"));
 }
@@ -92,7 +92,7 @@ TEST_CASE("playback renderer config exceeding the JSON byte budget is refused, n
 
   SonarePlaybackRenderer* renderer = reinterpret_cast<SonarePlaybackRenderer*>(uintptr_t{1});
   CHECK(sonare_playback_renderer_create_json(oversized.c_str(), nullptr, 48000, 512, &renderer) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+        SONARE_ERROR_INVALID_FORMAT);
   CHECK(renderer == nullptr);
   CHECK(text_contains(sonare_last_error_message(), "byte budget"));
 
@@ -100,7 +100,7 @@ TEST_CASE("playback renderer config exceeding the JSON byte budget is refused, n
   // refusal above is the size and not some other change to config handling.
   renderer = create_renderer(headphones_config());
   CHECK(sonare_playback_renderer_set_config_json(renderer, oversized.c_str()) ==
-        SONARE_ERROR_INVALID_PARAMETER);
+        SONARE_ERROR_INVALID_FORMAT);
   CHECK(text_contains(sonare_last_error_message(), "byte budget"));
   sonare_playback_renderer_destroy(renderer);
 }
@@ -349,7 +349,7 @@ TEST_CASE("sonare_playback_render_interleaved renders offline and validates its 
   out_channels = 5;
   CHECK(sonare_playback_render_interleaved(in.data(), 256, 2, 48000, R"({"bad_key": 1})", nullptr,
                                            &out, &out_frames,
-                                           &out_channels) == SONARE_ERROR_INVALID_PARAMETER);
+                                           &out_channels) == SONARE_ERROR_INVALID_FORMAT);
   CHECK(out == nullptr);
   CHECK(out_frames == 0u);
   CHECK(out_channels == 0);

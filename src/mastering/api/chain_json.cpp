@@ -275,7 +275,7 @@ constexpr sonare::resource::ProjectImportResourceLimits kChainJsonLimits{
 };
 
 [[noreturn]] void throw_invalid_json(const std::string& message) {
-  throw SonareException(ErrorCode::InvalidParameter, message);
+  throw SonareException(ErrorCode::InvalidFormat, message);
 }
 
 const sonare::util::json::Object& require_object(const JsonValue& value, std::string_view path) {
@@ -518,26 +518,26 @@ class JsonParamParser {
       // fields are both rejected up front.
       const auto root = sonare::util::json::admit_strict(text_, kChainJsonLimits);
       if (!root.is_object())
-        throw SonareException(ErrorCode::InvalidParameter, "expected chain config JSON object");
+        throw SonareException(ErrorCode::InvalidFormat, "expected chain config JSON object");
       std::string allowed_keys_error;
       if (!sonare::util::json::schema::has_allowed_keys(root, {"version", "params"}, "$",
                                                         &allowed_keys_error)) {
-        throw SonareException(ErrorCode::InvalidParameter, allowed_keys_error);
+        throw SonareException(ErrorCode::InvalidFormat, allowed_keys_error);
       }
       const auto* version = root.find("version");
       const auto* params_value = root.find("params");
       if (!version || !params_value) {
-        throw SonareException(ErrorCode::InvalidParameter,
+        throw SonareException(ErrorCode::InvalidFormat,
                               "chain config JSON requires version and params");
       }
       if (!version->is_number() || !std::isfinite(version->as_number()) ||
           std::floor(version->as_number()) != version->as_number() ||
           (version->as_number() != 1.0 && version->as_number() != 2.0)) {
-        throw SonareException(ErrorCode::InvalidParameter, "unsupported chain config JSON version");
+        throw SonareException(ErrorCode::InvalidFormat, "unsupported chain config JSON version");
       }
       const int version_number = static_cast<int>(version->as_number());
       if (!params_value->is_object())
-        throw SonareException(ErrorCode::InvalidParameter, "params must be a JSON object");
+        throw SonareException(ErrorCode::InvalidFormat, "params must be a JSON object");
       ParsedChainJson parsed;
       parsed.version = version_number;
       parsed.flat_params.reserve(params_value->as_object().size());
@@ -545,7 +545,7 @@ class JsonParamParser {
       for (const auto& [key, value] : params_value->as_object()) {
         if (version_number == 2 && key == "dynamics.multibandComp") {
           if (has_structured_multiband) {
-            throw SonareException(ErrorCode::InvalidParameter,
+            throw SonareException(ErrorCode::InvalidFormat,
                                   "duplicate structured multiband configuration");
           }
           parsed.multiband = parse_multiband_config(value);
@@ -553,7 +553,7 @@ class JsonParamParser {
           continue;
         }
         if (version_number == 2 && key.rfind("dynamics.multibandComp.", 0) == 0) {
-          throw SonareException(ErrorCode::InvalidParameter,
+          throw SonareException(ErrorCode::InvalidFormat,
                                 "v2 multiband configuration must use structured params");
         }
         if (value.is_bool()) {
@@ -565,17 +565,17 @@ class JsonParamParser {
                                           : std::nullopt) {
           parsed.flat_params.push_back(Param{key, *named});
         } else {
-          throw SonareException(ErrorCode::InvalidParameter,
+          throw SonareException(ErrorCode::InvalidFormat,
                                 "params values must be numbers or booleans");
         }
       }
       if (version_number == 2 && !has_structured_multiband) {
-        throw SonareException(ErrorCode::InvalidParameter,
+        throw SonareException(ErrorCode::InvalidFormat,
                               "v2 chain config JSON requires structured multiband params");
       }
       return parsed;
     } catch (const sonare::util::json::JsonError& e) {
-      throw SonareException(ErrorCode::InvalidParameter, e.what());
+      throw SonareException(ErrorCode::InvalidFormat, e.what());
     }
   }
 
@@ -603,14 +603,14 @@ void append_flat_param(std::vector<ChainFlatParam>& out, const std::string& path
     const auto& elements = value.as_array();
     if (elements.empty()) {
       throw SonareException(
-          ErrorCode::InvalidParameter,
+          ErrorCode::InvalidFormat,
           "chain config param '" + path + "' is an empty list, which has no flat spelling");
     }
     for (std::size_t index = 0; index < elements.size(); ++index) {
       append_flat_param(out, path + "." + std::to_string(index), elements[index]);
     }
   } else {
-    throw SonareException(ErrorCode::InvalidParameter,
+    throw SonareException(ErrorCode::InvalidFormat,
                           "chain config param '" + path + "' is not a number or boolean");
   }
 }
@@ -622,7 +622,7 @@ std::vector<ChainFlatParam> chain_config_flat_params(const std::string& chain_co
     const auto root = sonare::util::json::admit_strict(chain_config_json, kChainJsonLimits);
     const JsonValue* params = root.find("params");
     if (!params || !params->is_object() || params->as_object().empty()) {
-      throw SonareException(ErrorCode::InvalidParameter, "chain config carries no params block");
+      throw SonareException(ErrorCode::InvalidFormat, "chain config carries no params block");
     }
     std::vector<ChainFlatParam> flat;
     for (const auto& [key, value] : params->as_object()) {
@@ -630,7 +630,7 @@ std::vector<ChainFlatParam> chain_config_flat_params(const std::string& chain_co
     }
     return flat;
   } catch (const sonare::util::json::JsonError& e) {
-    throw SonareException(ErrorCode::InvalidParameter, e.what());
+    throw SonareException(ErrorCode::InvalidFormat, e.what());
   }
 }
 
@@ -672,13 +672,20 @@ std::string chain_config_to_json(const MasteringChainConfig& config) {
 MasteringChainConfig chain_config_from_json(const std::string& json) {
   JsonParamParser parser(json);
   ParsedChainJson parsed = parser.parse();
-  MasteringChainConfig config =
-      parse_chain_config_params(parsed.flat_params.data(), parsed.flat_params.size());
-  if (parsed.version == 2) {
-    config.dynamics.multiband_comp = *parsed.multiband;
+  // The flat-param parser and the config validator are shared with the key/value and struct entry
+  // points, where a refusal is the caller's argument. Here the values come from the document.
+  try {
+    MasteringChainConfig config =
+        parse_chain_config_params(parsed.flat_params.data(), parsed.flat_params.size());
+    if (parsed.version == 2) {
+      config.dynamics.multiband_comp = *parsed.multiband;
+    }
+    validate_mastering_chain_config(config);
+    return config;
+  } catch (const SonareException& e) {
+    if (e.code() != ErrorCode::InvalidParameter) throw;
+    throw SonareException(ErrorCode::InvalidFormat, e.what());
   }
-  validate_mastering_chain_config(config);
-  return config;
 }
 
 }  // namespace sonare::mastering::api

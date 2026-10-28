@@ -141,7 +141,7 @@ TEST_CASE("part rig set refuses malformed input", "[serialize][part_rig]") {
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_NONE, kChainJson) == bad);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_BANK, kChainJson) == bad);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, nullptr) == bad);
-  CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, "[]") == bad);
+  CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, "[]") == bad_format);
   // Malformed documents.
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, "not json") == bad_format);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, "{}") == bad_format);
@@ -152,7 +152,7 @@ TEST_CASE("part rig set refuses malformed input", "[serialize][part_rig]") {
             R"([{"processor":"saturation.softClipper","params":{"drive":0.5}}])") == bad_format);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, "[1]") == bad_format);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, R"([{"processor":""}])") ==
-        bad);
+        bad_format);
 
   // More stages than a chain may hold.
   std::string nine = "[";
@@ -161,14 +161,15 @@ TEST_CASE("part rig set refuses malformed input", "[serialize][part_rig]") {
     nine += R"({"processor":"saturation.softClipper","params":"{}"})";
   }
   nine += "]";
-  CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, nine.c_str()) == bad);
+  CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN, nine.c_str()) == bad_format);
 
 #if defined(SONARE_WITH_MASTERING)
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN,
-                                    R"([{"processor":"no.such.processor","params":"{}"}])") == bad);
+                                    R"([{"processor":"no.such.processor","params":"{}"}])") ==
+        bad_format);
   CHECK(sonare_project_set_part_rig(h.p, 1, 0, SONARE_PART_RIG_CHAIN,
                                     R"([{"processor":"saturation.softClipper","params":"{"}])") ==
-        bad);
+        bad_format);
 #endif
 
   CHECK(serialize(h.p) == before);

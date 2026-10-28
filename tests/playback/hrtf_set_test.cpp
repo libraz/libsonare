@@ -39,7 +39,7 @@ ThrowResult run(const std::function<void()>& action) {
 void check_invalid(const std::function<void()>& action, const char* violation_substring) {
   const ThrowResult result = run(action);
   CHECK(result.threw);
-  CHECK(result.code == sonare::ErrorCode::InvalidParameter);
+  CHECK(result.code == sonare::ErrorCode::InvalidFormat);
   CHECK(result.message.find(violation_substring) != std::string::npos);
 }
 

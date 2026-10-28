@@ -15,7 +15,7 @@ namespace {
 using JsonValue = sonare::util::json::Value;
 
 [[noreturn]] void invalid_band(const char* context, const std::string& message) {
-  throw SonareException(ErrorCode::InvalidParameter, context + message);
+  throw SonareException(ErrorCode::InvalidFormat, context + message);
 }
 
 const JsonValue* find_json_value(const JsonValue& object, const char* key) {

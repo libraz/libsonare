@@ -3297,9 +3297,9 @@ TEST_CASE("sonare_engine_set_part_rig refuses what it cannot apply", "[engine][m
   // Valid shape, unknown processor, an empty chain, and an unbound destination.
   REQUIRE(sonare_engine_set_part_rig(engine, 1, 0, SONARE_PART_RIG_CHAIN,
                                      R"([{"processor":"no.such.insert"}])") ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_engine_set_part_rig(engine, 1, 0, SONARE_PART_RIG_CHAIN, "[]") ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_engine_set_part_rig(engine, 99, 0, SONARE_PART_RIG_NONE, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   sonare_engine_destroy(engine);

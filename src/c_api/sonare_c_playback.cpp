@@ -51,7 +51,7 @@ SonareError sonare_hrtf_set_create_from_memory(const uint8_t* data, size_t size,
   SONARE_C_API_ENTRY;
   if (out) *out = nullptr;
 #if defined(SONARE_WITH_PLAYBACK)
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out || !data) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
   auto handle = std::make_unique<SonareHrtfSet>();
   handle->set = std::make_unique<playback::HrtfSet>(playback::HrtfSet::from_memory(data, size));

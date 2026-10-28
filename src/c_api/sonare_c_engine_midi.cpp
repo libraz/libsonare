@@ -532,9 +532,10 @@ SonareError sonare_engine_set_part_rig(SonareRealtimeEngine* engine, uint32_t de
     const SonareError parsed = parse_part_rig_inserts(inserts_json, &rig.stages);
     if (parsed != SONARE_OK) return parsed;
   }
-  if (!sonare::midi::validate_part_rig(part, rig)) return SONARE_ERROR_INVALID_PARAMETER;
+  // The part was admitted above, so what is left to refuse is the content of inserts_json.
+  if (!sonare::midi::validate_part_rig(part, rig)) return SONARE_ERROR_INVALID_FORMAT;
 #if defined(SONARE_WITH_MASTERING)
-  if (!validate_part_rig_chain(rig.stages)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!validate_part_rig_chain(rig.stages)) return SONARE_ERROR_INVALID_FORMAT;
 #else
   if (rig.mode == sonare::midi::PartRigMode::kChain) {
     set_last_error(SONARE_ERROR_NOT_SUPPORTED, "chain part rigs require a build with mastering");

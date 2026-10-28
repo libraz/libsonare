@@ -31,13 +31,13 @@ const char* to_string(SendTiming timing) { return timing == SendTiming::PreFader
 InsertSlot insert_slot_from_string(const std::string& value) {
   if (value == "pre") return InsertSlot::PreFader;
   if (value == "post") return InsertSlot::PostFader;
-  throw SonareException(ErrorCode::InvalidParameter, "unknown insert slot: " + value);
+  throw SonareException(ErrorCode::InvalidFormat, "unknown insert slot: " + value);
 }
 
 SendTiming send_timing_from_string(const std::string& value) {
   if (value == "pre") return SendTiming::PreFader;
   if (value == "post") return SendTiming::PostFader;
-  throw SonareException(ErrorCode::InvalidParameter, "unknown send timing: " + value);
+  throw SonareException(ErrorCode::InvalidFormat, "unknown send timing: " + value);
 }
 
 // Reads an optional channel-layout string field. Absent -> fallback (so old
@@ -47,12 +47,12 @@ ChannelLayout channel_layout_or(const JsonValue& object, const char* key, Channe
   const auto* value = object.find(key);
   if (!value) return fallback;
   if (!value->is_string()) {
-    throw SonareException(ErrorCode::InvalidParameter,
+    throw SonareException(ErrorCode::InvalidFormat,
                           std::string("channel layout must be a string: ") + key);
   }
   ChannelLayout layout = fallback;
   if (!channel_layout_from_string(value->as_string(), layout)) {
-    throw SonareException(ErrorCode::InvalidParameter,
+    throw SonareException(ErrorCode::InvalidFormat,
                           "unknown channel layout: " + value->as_string());
   }
   return layout;
@@ -155,7 +155,7 @@ float number_or_legacy(const JsonValue& object, const std::string& path, const c
 // Pan and width are refused outside their documented domains, naming the field.
 float checked_pan(float value, const char* field_path) {
   if (!pan_in_range(value)) {
-    throw SonareException(ErrorCode::InvalidParameter,
+    throw SonareException(ErrorCode::InvalidFormat,
                           std::string(field_path) + " must be within [-1, 1]");
   }
   return value;
@@ -163,7 +163,7 @@ float checked_pan(float value, const char* field_path) {
 
 float checked_width(float value, const char* field_path) {
   if (!width_in_range(value)) {
-    throw SonareException(ErrorCode::InvalidParameter,
+    throw SonareException(ErrorCode::InvalidFormat,
                           std::string(field_path) + " must be within [0, 2]");
   }
   return value;
@@ -223,7 +223,7 @@ Insert insert_from_value(const JsonValue& object, const std::string& path,
   Insert insert;
   if (const auto* slot = object.find("slot")) {
     if (!slot->is_string()) {
-      throw SonareException(ErrorCode::InvalidParameter,
+      throw SonareException(ErrorCode::InvalidFormat,
                             "insert slot must be a string (\"pre\" or \"post\")");
     }
     insert.slot = insert_slot_from_string(slot->as_string());
@@ -238,7 +238,7 @@ Insert insert_from_value(const JsonValue& object, const std::string& path,
     } else if (params->is_string()) {
       insert.params_json = params->as_string();
     } else {
-      throw SonareException(ErrorCode::InvalidParameter,
+      throw SonareException(ErrorCode::InvalidFormat,
                             "insert params must be a JSON object (or the legacy JSON string)");
     }
   }
@@ -291,7 +291,7 @@ Send send_from_value(const JsonValue& object, const std::string& path,
                                   "scene.strips[].sends[].sendDb");
   if (const auto* timing = object.find("timing")) {
     if (!timing->is_string()) {
-      throw SonareException(ErrorCode::InvalidParameter,
+      throw SonareException(ErrorCode::InvalidFormat,
                             "send timing must be a string (\"pre\" or \"post\")");
     }
     send.timing = send_timing_from_string(timing->as_string());
@@ -345,7 +345,7 @@ StripEq eq_from_value(const JsonValue& object, const char* field_prefix, const s
     if (band.type == mastering::eq::EqBandType::TiltShelf ||
         band.type == mastering::eq::EqBandType::FlatTilt) {
       throw SonareException(
-          ErrorCode::InvalidParameter,
+          ErrorCode::InvalidFormat,
           band_context + "TiltShelf/FlatTilt is not supported on a strip or bus EQ");
     }
     eq.bands.push_back(band);
@@ -520,9 +520,9 @@ Bus bus_from_value(const JsonValue& object, const std::string& path,
       offending = "dualPanRight";
     }
     if (offending != nullptr) {
-      throw SonareException(ErrorCode::InvalidParameter, "bus '" + bus.id + "' has a non-default " +
-                                                             offending +
-                                                             " on a surround (>2 channel) layout");
+      throw SonareException(ErrorCode::InvalidFormat, "bus '" + bus.id + "' has a non-default " +
+                                                          offending +
+                                                          " on a surround (>2 channel) layout");
     }
   }
   bus.eq = eq_from_value(object, "scene.buses[]", path, warnings);
@@ -948,14 +948,14 @@ const std::vector<std::string>& scene_schema_paths() {
 
 Scene scene_from_value(const JsonValue& root, std::vector<std::string>* warnings) {
   if (!root.is_object()) {
-    throw SonareException(ErrorCode::InvalidParameter, "scene JSON must be an object");
+    throw SonareException(ErrorCode::InvalidFormat, "scene JSON must be an object");
   }
   static const KeySet kKnownRoot = known_keys("", {"vca_groups"});
   report_unknown_keys(root, "", kKnownRoot, warnings);
   Scene scene;
   scene.version = int_or(root, std::string(), "version", 1);
   if (scene.version != 1) {
-    throw SonareException(ErrorCode::InvalidParameter, "unsupported scene JSON version");
+    throw SonareException(ErrorCode::InvalidFormat, "unsupported scene JSON version");
   }
   if (const auto* strips = root.find("strips"))
     scene.strips = strips_from_value(*strips, "strips", warnings);
@@ -981,7 +981,7 @@ void refuse_unknown_strip_keys(const std::vector<std::string>& warnings) {
   if (warnings.empty()) return;
   std::string message = "unknown strip key '" + unknown_scene_key_path(warnings.front()) + "'";
   if (warnings.size() > 1) message += " (and " + std::to_string(warnings.size() - 1) + " more)";
-  throw SonareException(ErrorCode::InvalidParameter, message);
+  throw SonareException(ErrorCode::InvalidFormat, message);
 }
 
 Scene scene_from_json(const std::string& json, std::vector<std::string>* warnings) {

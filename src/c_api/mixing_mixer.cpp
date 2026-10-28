@@ -12,6 +12,22 @@ using namespace sonare_c_mixing_detail;
 
 namespace {
 
+// Builds an insert from a loaded scene. make_insert refuses with InvalidParameter because its
+// params are the caller's argument elsewhere; here they are scene content, so the refusal is
+// InvalidFormat.
+std::unique_ptr<sonare::rt::ProcessorBase> make_scene_insert(
+    const sonare::mixing::api::Insert& insert, std::vector<std::string>* unknown_keys,
+    int sample_rate) {
+  try {
+    return sonare::mastering::api::make_insert(
+        insert.processor_name, insert.params_json, unknown_keys,
+        sonare::resource::kDefaultProjectImportResourceLimits, static_cast<double>(sample_rate));
+  } catch (const sonare::SonareException& e) {
+    if (e.code() != sonare::ErrorCode::InvalidParameter) throw;
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, e.what());
+  }
+}
+
 std::vector<std::string> unique_vca_members(const std::vector<std::string>& members) {
   std::vector<std::string> unique;
   unique.reserve(members.size());
@@ -495,6 +511,10 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
         scene_strip.metering.lufs ? 1 : 0, scene_strip.metering.true_peak ? 1 : 0,
         scene_strip.metering.true_peak_oversample);
     if (!strip) {
+      // The strip's id and metering came from the scene, so the refusal is the document's.
+      if (sonare_c_detail::last_error_code_storage() == SONARE_ERROR_INVALID_PARAMETER) {
+        sonare_c_detail::last_error_code_storage() = SONARE_ERROR_INVALID_FORMAT;
+      }
       return nullptr;
     }
     strip->scene_strip = scene_strip;
@@ -522,12 +542,9 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
     sonare::mixing::apply_strip_eq(strip->strip, scene_strip.eq, nullptr);
     for (const auto& insert : scene_strip.inserts) {
       std::vector<std::string> unknown_keys;
-      auto processor = sonare::mastering::api::make_insert(
-          insert.processor_name, insert.params_json, &unknown_keys,
-          sonare::resource::kDefaultProjectImportResourceLimits,
-          static_cast<double>(mixer->sample_rate));
+      auto processor = make_scene_insert(insert, &unknown_keys, mixer->sample_rate);
       if (!processor) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+        throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
                                       "unknown insert processor: " + insert.processor_name +
                                           " (strip " + scene_strip.id + ")");
       }
@@ -601,13 +618,10 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
     sonare::mixing::apply_eq(dsp->eq, dsp->eq_enabled, bus.eq, nullptr);
     for (const auto& insert : bus.inserts) {
       std::vector<std::string> unknown_keys;
-      auto processor = sonare::mastering::api::make_insert(
-          insert.processor_name, insert.params_json, &unknown_keys,
-          sonare::resource::kDefaultProjectImportResourceLimits,
-          static_cast<double>(mixer->sample_rate));
+      auto processor = make_scene_insert(insert, &unknown_keys, mixer->sample_rate);
       if (!processor) {
         throw sonare::SonareException(
-            sonare::ErrorCode::InvalidParameter,
+            sonare::ErrorCode::InvalidFormat,
             "unknown bus insert processor: " + insert.processor_name + " (bus " + bus.id + ")");
       }
       if (!unknown_keys.empty()) {

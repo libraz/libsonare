@@ -358,25 +358,33 @@ const char* room_preset_name(RoomPreset preset) noexcept {
 }
 
 RendererConfig parse_renderer_config(std::string_view json) {
-  Value root;
+  // The field readers and validate_renderer_config also serve callers that hand over a
+  // RendererConfig struct, where a refusal is the caller's argument. Everything refused while
+  // reading this document is its content.
   try {
-    root = util::json::admit_strict(std::string(json));
-  } catch (const util::json::JsonError& e) {
-    fail(std::string("invalid configuration JSON: ") + e.what());
+    Value root;
+    try {
+      root = util::json::admit_strict(std::string(json));
+    } catch (const util::json::JsonError& e) {
+      fail(std::string("invalid configuration JSON: ") + e.what());
+    }
+    check_keys(root, "",
+               {"input", "target", "lfe_mix_db", "upmix", "dialogue_level_db", "loudness",
+                "night_mode", "room", "head_tracking", "output_limiter"});
+    RendererConfig config;
+    if (const Value* input = root.find("input")) parse_input(*input, config.prepare);
+    if (const Value* target = root.find("target")) {
+      parse_target(*target, config);
+    } else {
+      parse_target(Value(util::json::Object{}), config);
+    }
+    parse_sections(root, config);
+    validate_renderer_config(config);
+    return config;
+  } catch (const SonareException& e) {
+    if (e.code() != ErrorCode::InvalidParameter) throw;
+    throw SonareException(ErrorCode::InvalidFormat, e.what());
   }
-  check_keys(root, "",
-             {"input", "target", "lfe_mix_db", "upmix", "dialogue_level_db", "loudness",
-              "night_mode", "room", "head_tracking", "output_limiter"});
-  RendererConfig config;
-  if (const Value* input = root.find("input")) parse_input(*input, config.prepare);
-  if (const Value* target = root.find("target")) {
-    parse_target(*target, config);
-  } else {
-    parse_target(Value(util::json::Object{}), config);
-  }
-  parse_sections(root, config);
-  validate_renderer_config(config);
-  return config;
 }
 
 std::string serialize_renderer_config(const RendererConfig& config) {

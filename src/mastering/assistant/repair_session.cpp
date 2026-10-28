@@ -85,12 +85,18 @@ std::optional<Stage> stage_from_name(const std::string& name) {
   throw SonareException(ErrorCode::InvalidParameter, message);
 }
 
+/// Refuses the content of a request document (the stages or analysis JSON), as opposed to the
+/// call's own arguments.
+[[noreturn]] void refuse_document(const std::string& message) {
+  throw SonareException(ErrorCode::InvalidFormat, message);
+}
+
 /// Parses @p text, refusing malformed JSON and a repeated key as an invalid request.
 json::Value parse_request(const std::string& text, const char* subject) {
   try {
     return json::parse_strict(text);
   } catch (const json::JsonError& e) {
-    refuse(std::string(subject) + " is not valid JSON: " + e.what());
+    refuse_document(std::string(subject) + " is not valid JSON: " + e.what());
   }
 }
 
@@ -172,27 +178,36 @@ auto read_settings(const json::Object& object, Stage stage, Reader reader) {
   ParamMap map;
   for (const auto& [key, value] : object) {
     if (key == "stage") continue;
-    if (declared.probed_keys().count(key) == 0) refuse(subject + "unknown setting '" + key + "'");
+    if (declared.probed_keys().count(key) == 0)
+      refuse_document(subject + "unknown setting '" + key + "'");
     if (value.is_bool()) {
       map[key] = value.as_bool() ? 1.0 : 0.0;
     } else if (value.is_number()) {
       map[key] = value.as_number();
     } else if (value.is_string()) {
       const auto choices = declared.probed_choices().find(key);
-      if (choices == declared.probed_choices().end()) refuse(subject + key + " takes a number");
+      if (choices == declared.probed_choices().end())
+        refuse_document(subject + key + " takes a number");
       const std::string& name = value.as_string();
       const auto choice =
           std::find_if(choices->second.begin(), choices->second.end(),
                        [&name](const api::detail::EnumChoice& c) { return c.name == name; });
       if (choice == choices->second.end()) {
-        refuse(subject + key + " has no choice '" + name + "'");
+        refuse_document(subject + key + " has no choice '" + name + "'");
       }
       map[key] = static_cast<double>(choice->value);
     } else {
-      refuse(subject + key + " must be a number, a boolean or a choice name");
+      refuse_document(subject + key + " must be a number, a boolean or a choice name");
     }
   }
-  return reader(map);
+  // The catalog builder refuses a value outside its range as an argument; here it is document
+  // content.
+  try {
+    return reader(map);
+  } catch (const SonareException& e) {
+    if (e.code() != ErrorCode::InvalidParameter) throw;
+    throw SonareException(ErrorCode::InvalidFormat, e.what());
+  }
 }
 
 /// The stages one apply call runs, each present at most once.
@@ -225,19 +240,21 @@ struct StagePlan {
 
 StagePlan parse_stages(const std::string& stages_json) {
   const json::Value root = parse_request(stages_json.empty() ? "[]" : stages_json, "stages");
-  if (!root.is_array()) refuse("stages must be an array");
+  if (!root.is_array()) refuse_document("stages must be an array");
   StagePlan plan;
   for (const json::Value& entry : root.as_array()) {
-    if (!entry.is_object()) refuse("each stage must be an object");
+    if (!entry.is_object()) refuse_document("each stage must be an object");
     const json::Object& object = entry.as_object();
     const auto name = object.find("stage");
-    if (name == object.end() || !name->second.is_string()) refuse("each stage must name its stage");
+    if (name == object.end() || !name->second.is_string())
+      refuse_document("each stage must name its stage");
     const std::optional<Stage> stage = stage_from_name(name->second.as_string());
     if (!stage) {
-      refuse("unknown stage '" + name->second.as_string() +
-             "'; expected declip, declick, decrackle, dehum, denoise or dereverb");
+      refuse_document("unknown stage '" + name->second.as_string() +
+                      "'; expected declip, declick, decrackle, dehum, denoise or dereverb");
     }
-    if (plan.has(*stage)) refuse(std::string("stage '") + stage_name(*stage) + "' appears twice");
+    if (plan.has(*stage))
+      refuse_document(std::string("stage '") + stage_name(*stage) + "' appears twice");
     switch (*stage) {
       case Stage::Declip:
         plan.declip = read_settings(object, *stage, api::detail::declip_config);
@@ -426,10 +443,10 @@ AssistantConfig read_analyze_request(const std::string& request_json) {
   AssistantConfig config;
   if (request_json.empty()) return config;
   const json::Value root = parse_request(request_json, "the analysis request");
-  if (!root.is_object()) refuse("the analysis request must be an object");
+  if (!root.is_object()) refuse_document("the analysis request must be an object");
   for (const auto& [key, value] : root.as_object()) {
-    if (key != "preferStreamingSafe") refuse("unknown analysis option '" + key + "'");
-    if (!value.is_bool()) refuse("preferStreamingSafe must be a boolean");
+    if (key != "preferStreamingSafe") refuse_document("unknown analysis option '" + key + "'");
+    if (!value.is_bool()) refuse_document("preferStreamingSafe must be a boolean");
     config.prefer_streaming_safe = value.as_bool();
   }
   return config;

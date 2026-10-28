@@ -236,7 +236,7 @@ TEST_CASE("repair apply refuses a repeated stage, an unknown stage and an unknow
     try {
       run_apply(planes, stages);
     } catch (const SonareException& e) {
-      return e.code() == ErrorCode::InvalidParameter;
+      return e.code() == ErrorCode::InvalidFormat;
     }
     return false;
   };

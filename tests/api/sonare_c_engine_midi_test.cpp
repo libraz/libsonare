@@ -837,13 +837,13 @@ TEST_CASE("sonare_engine exposes live non-destructive MIDI FX inserts", "[c_api]
   REQUIRE(sonare_engine_clear_midi_fx(engine, 5) == SONARE_OK);
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{bad json") == SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"quantize_ppq\":0}") ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"quantize_ppq\":1e300}") ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"transpose_semitones\":1e100}") ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_engine_set_midi_fx(engine, 5, "{\"chord_intervals\":[0,7.5]}") ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_FORMAT);
   // The three velocity-curve fields are narrowed to float from a full JSON
   // double, so a value outside float range is refused rather than cast first
   // and inspected as +inf afterwards.
@@ -851,10 +851,8 @@ TEST_CASE("sonare_engine exposes live non-destructive MIDI FX inserts", "[c_api]
     const std::string too_large = std::string("{\"") + key + "\":1e39}";
     const std::string too_small = std::string("{\"") + key + "\":-1e39}";
     INFO(key);
-    REQUIRE(sonare_engine_set_midi_fx(engine, 5, too_large.c_str()) ==
-            SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_engine_set_midi_fx(engine, 5, too_small.c_str()) ==
-            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_engine_set_midi_fx(engine, 5, too_large.c_str()) == SONARE_ERROR_INVALID_FORMAT);
+    REQUIRE(sonare_engine_set_midi_fx(engine, 5, too_small.c_str()) == SONARE_ERROR_INVALID_FORMAT);
   }
   REQUIRE(
       sonare_engine_set_midi_fx(

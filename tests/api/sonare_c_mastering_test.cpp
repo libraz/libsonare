@@ -28,9 +28,8 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
                                "{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":9,"
                                "\"q\":1,\"enabled\":true,\"coeffMode\":\"Vicanek\","
                                "\"proportionalQ\":true}") == SONARE_OK);
-    // A syntactically malformed document is INVALID_FORMAT, matching every
-    // other JSON-accepting C-ABI entry point; a well-formed document with a bad
-    // field stays INVALID_PARAMETER.
+    // A refused band document, malformed or carrying a bad field, is
+    // INVALID_FORMAT, matching every other JSON-accepting C-ABI entry point.
     REQUIRE(sonare_eq_set_band(eq, 0, "not json") == SONARE_ERROR_INVALID_FORMAT);
     REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Peak\",\"enabled\":truish}") ==
             SONARE_ERROR_INVALID_FORMAT);
@@ -39,11 +38,11 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Peak\",\"type\":\"Notch\"}") ==
             SONARE_ERROR_INVALID_FORMAT);
     REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Unknown\",\"enabled\":true}") ==
-            SONARE_ERROR_INVALID_PARAMETER);
+            SONARE_ERROR_INVALID_FORMAT);
     REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":7,\"enabled\":true}") ==
-            SONARE_ERROR_INVALID_PARAMETER);
+            SONARE_ERROR_INVALID_FORMAT);
     REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Peak\",\"coeffMode\":\"unknown\"}") ==
-            SONARE_ERROR_INVALID_PARAMETER);
+            SONARE_ERROR_INVALID_FORMAT);
     REQUIRE(sonare_eq_set_band(eq, 0,
                                "{\"x-note\":\"\\\"type\\\":\\\"Unknown\\\"\","
                                "\"type\":\"Peak\",\"frequency_hz\":1000,\"gain_db\":9,"
@@ -1744,10 +1743,10 @@ TEST_CASE("sonare_eq_set_band refuses a band that would design non-finite taps",
   // have to be refused before the band is installed, not absorbed as +inf.
   REQUIRE(sonare_eq_set_band(eq, 0,
                              "{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":1e39,\"q\":1,"
-                             "\"enabled\":true}") == SONARE_ERROR_INVALID_PARAMETER);
+                             "\"enabled\":true}") == SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_eq_set_band(eq, 0,
                              "{\"type\":\"Peak\",\"frequencyHz\":1000,\"gainDb\":20000,\"q\":1,"
-                             "\"enabled\":true}") == SONARE_ERROR_INVALID_PARAMETER);
+                             "\"enabled\":true}") == SONARE_ERROR_INVALID_FORMAT);
 
   // The refused bands left no infinite tap behind: the still-installed band
   // must produce finite audio.

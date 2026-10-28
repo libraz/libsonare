@@ -42,7 +42,8 @@ SonareError sonare_project_set_part_rig(SonareProject* project, uint32_t destina
   if (!project || !ordinal_to_enum(mode, SONARE_PART_RIG_BANK, SONARE_PART_RIG_CHAIN, &rig.mode)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  if ((rig.mode == midi::PartRigMode::kChain) != (inserts_json != nullptr)) {
+  if ((rig.mode == midi::PartRigMode::kChain) != (inserts_json != nullptr) ||
+      (part >= 16 && part != SONARE_PART_RIG_ALL_PARTS)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
@@ -50,9 +51,10 @@ SonareError sonare_project_set_part_rig(SonareProject* project, uint32_t destina
     const SonareError parsed = sonare_c_detail::parse_part_rig_inserts(inserts_json, &rig.stages);
     if (parsed != SONARE_OK) return parsed;
   }
-  if (!midi::validate_part_rig(part, rig)) return SONARE_ERROR_INVALID_PARAMETER;
+  // The part was admitted above, so what is left to refuse is the content of inserts_json.
+  if (!midi::validate_part_rig(part, rig)) return SONARE_ERROR_INVALID_FORMAT;
 #if defined(SONARE_WITH_MASTERING)
-  if (!sonare_c_detail::validate_part_rig_chain(rig.stages)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!sonare_c_detail::validate_part_rig_chain(rig.stages)) return SONARE_ERROR_INVALID_FORMAT;
 #else
   if (rig.mode == midi::PartRigMode::kChain) return SONARE_ERROR_NOT_SUPPORTED;
 #endif

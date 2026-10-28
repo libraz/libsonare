@@ -16,9 +16,9 @@ namespace {
                                          "sonare_eq_set_band: " + message);
 }
 
-// A syntactically malformed document exits as InvalidFormat across the whole C
-// ABI (midi_fx_json.h, parse_scene_json); a well-formed document carrying a bad
-// field stays InvalidParameter.
+// A refused band document, malformed or carrying a bad field, exits as InvalidFormat across the
+// whole C ABI (midi_fx_json.h, parse_scene_json); only the caller's own arguments are
+// InvalidParameter.
 [[noreturn]] void malformed_eq_json(const std::string& message) {
   throw sonare_c_detail::SonareException(sonare::ErrorCode::InvalidFormat,
                                          "sonare_eq_set_band: " + message);
@@ -41,7 +41,7 @@ void refuse_unknown_band_keys(const sonare::util::json::Value& json) {
   if (unknown.empty()) return;
   std::string message = "unknown band key '" + unknown.front() + "'";
   if (unknown.size() > 1) message += " (and " + std::to_string(unknown.size() - 1) + " more)";
-  invalid_eq_json(message);
+  malformed_eq_json(message);
 }
 
 }  // namespace
@@ -58,8 +58,7 @@ sonare::mastering::eq::EqBand parse_eq_band_json(const char* band_json) {
   }
   refuse_unknown_band_keys(json);
   // Field parsing and validation are shared with the scene walker; this call
-  // keeps the "sonare_eq_set_band: " prefix and the InvalidParameter code every
-  // existing caller already handles.
+  // keeps the "sonare_eq_set_band: " prefix.
   return sonare::mastering::eq::eq_band_from_value(json, "sonare_eq_set_band: ");
 }
 

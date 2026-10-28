@@ -40,22 +40,29 @@ int16_t read_i16(const uint8_t* data, size_t offset) {
 }
 
 void check_finite(float value, const char* name) {
-  SONARE_CHECK_MSG(std::isfinite(value), ErrorCode::InvalidParameter,
+  SONARE_CHECK_MSG(std::isfinite(value), ErrorCode::InvalidFormat,
                    std::string("SHRF ") + name + " is not finite: " + util::to_text(value));
+}
+
+template <typename T>
+void check_header_range(const char* name, T value, T min_value, T max_value) {
+  SONARE_CHECK_MSG(value >= min_value && value <= max_value, ErrorCode::InvalidFormat,
+                   std::string(name) + " must be in [" + util::to_text(min_value) + ", " +
+                       util::to_text(max_value) + "], got " + util::to_text(value));
 }
 
 }  // namespace
 
 ShrfData parse_shrf(const uint8_t* data, size_t size) {
   SONARE_CHECK_MSG(data != nullptr || size == 0, ErrorCode::InvalidParameter, "SHRF data is null");
-  SONARE_CHECK_MSG(size >= kShrfHeaderBytes, ErrorCode::InvalidParameter,
+  SONARE_CHECK_MSG(size >= kShrfHeaderBytes, ErrorCode::InvalidFormat,
                    "SHRF data is smaller than the " + util::to_text(kShrfHeaderBytes) +
                        "-byte header: " + util::to_text(size) + " bytes");
-  SONARE_CHECK_MSG(std::memcmp(data, "SHRF", 4) == 0, ErrorCode::InvalidParameter,
+  SONARE_CHECK_MSG(std::memcmp(data, "SHRF", 4) == 0, ErrorCode::InvalidFormat,
                    "SHRF magic mismatch");
 
   const uint16_t version = read_u16(data, 4);
-  SONARE_CHECK_MSG(version == kShrfVersion, ErrorCode::InvalidParameter,
+  SONARE_CHECK_MSG(version == kShrfVersion, ErrorCode::InvalidFormat,
                    "SHRF version " + util::to_text(version) + " is not supported (expected " +
                        util::to_text(kShrfVersion) + ")");
 
@@ -63,7 +70,7 @@ ShrfData parse_shrf(const uint8_t* data, size_t size) {
   SONARE_CHECK_MSG(
       quant_byte == static_cast<uint8_t>(ShrfQuant::Float32) ||
           quant_byte == static_cast<uint8_t>(ShrfQuant::Int16),
-      ErrorCode::InvalidParameter,
+      ErrorCode::InvalidFormat,
       "SHRF quant " + util::to_text(quant_byte) + " is neither float32 (0) nor int16 (1)");
   const ShrfQuant quant = static_cast<ShrfQuant>(quant_byte);
 
@@ -84,23 +91,23 @@ ShrfData parse_shrf(const uint8_t* data, size_t size) {
   check_finite(header.el_step_deg, "el_step");
   check_finite(header.scale, "scale");
 
-  SONARE_CHECK_MSG(header.n_az >= kShrfMinAzimuths, ErrorCode::InvalidParameter,
+  SONARE_CHECK_MSG(header.n_az >= kShrfMinAzimuths, ErrorCode::InvalidFormat,
                    "SHRF n_az " + util::to_text(header.n_az) + " is below the minimum " +
                        util::to_text(kShrfMinAzimuths));
-  SONARE_CHECK_MSG(header.n_el >= 1, ErrorCode::InvalidParameter,
+  SONARE_CHECK_MSG(header.n_el >= 1, ErrorCode::InvalidFormat,
                    "SHRF n_el must be at least 1, got " + util::to_text(header.n_el));
-  SONARE_CHECK_RANGE("SHRF taps", header.taps, kShrfMinTaps, kShrfMaxTaps);
-  SONARE_CHECK_RANGE("SHRF sample_rate", header.sample_rate, kShrfMinSampleRate,
+  check_header_range("SHRF taps", header.taps, kShrfMinTaps, kShrfMaxTaps);
+  check_header_range("SHRF sample_rate", header.sample_rate, kShrfMinSampleRate,
                      kShrfMaxSampleRate);
 
   const double azimuth_span =
       static_cast<double>(header.n_az) * static_cast<double>(header.az_step_deg);
   SONARE_CHECK_MSG(
       std::abs(azimuth_span - kDegreesPerTurnD) <= static_cast<double>(kShrfAzimuthSpanTolerance),
-      ErrorCode::InvalidParameter,
+      ErrorCode::InvalidFormat,
       "SHRF n_az * az_step must span 360 degrees, got " + util::to_text(azimuth_span));
 
-  SONARE_CHECK_MSG(header.scale > 0.0f, ErrorCode::InvalidParameter,
+  SONARE_CHECK_MSG(header.scale > 0.0f, ErrorCode::InvalidFormat,
                    "SHRF scale must be positive, got " + util::to_text(header.scale));
 
   // The ITD table is always f32 regardless of `quant`, which governs the HRIR data only.
@@ -111,7 +118,7 @@ ShrfData parse_shrf(const uint8_t* data, size_t size) {
   const uint64_t hrir_bytes =
       direction_count * 2 * static_cast<uint64_t>(header.taps) * bytes_per_sample;
   const uint64_t expected_size = kShrfHeaderBytes + itd_bytes + hrir_bytes;
-  SONARE_CHECK_MSG(static_cast<uint64_t>(size) == expected_size, ErrorCode::InvalidParameter,
+  SONARE_CHECK_MSG(static_cast<uint64_t>(size) == expected_size, ErrorCode::InvalidFormat,
                    "SHRF size mismatch: expected " + util::to_text(expected_size) + " bytes, got " +
                        util::to_text(size));
 

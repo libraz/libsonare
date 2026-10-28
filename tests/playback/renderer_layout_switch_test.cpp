@@ -450,7 +450,7 @@ TEST_CASE("an unsupported channel count is refused without advancing",
   } catch (const sonare::SonareException& e) {
     code = e.code();
   }
-  CHECK(code == sonare::ErrorCode::InvalidParameter);
+  CHECK(code == sonare::ErrorCode::InvalidFormat);
 }
 
 TEST_CASE("process refuses aliased buffers and replaces non-finite input",

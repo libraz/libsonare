@@ -11,12 +11,12 @@ using namespace sonare::playback;
 
 namespace {
 
-/// Message of the InvalidParameter a document is refused with; empty when it parses.
+/// Message of the InvalidFormat a document is refused with; empty when it parses.
 std::string refusal(const std::string& json) {
   try {
     parse_renderer_config(json);
   } catch (const sonare::SonareException& e) {
-    CHECK(e.code() == sonare::ErrorCode::InvalidParameter);
+    CHECK(e.code() == sonare::ErrorCode::InvalidFormat);
     return e.what();
   }
   return {};

@@ -858,11 +858,12 @@ void RealtimeEngineWasm::setPartRig(const val& destination_id_val, const val& pa
     }
   }
   if (!sonare::midi::validate_part_rig(static_cast<uint8_t>(part), rig)) {
-    throw WasmRangeError("invalid part rig");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, "invalid part rig");
   }
 #if defined(SONARE_WITH_MASTERING)
   if (!sonare_c_detail::validate_part_rig_chain(rig.stages)) {
-    throw WasmRangeError("invalid part rig insert chain");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
+                                  "invalid part rig insert chain");
   }
 #else
   if (rig.mode == sonare::midi::PartRigMode::kChain) {

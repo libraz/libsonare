@@ -1186,7 +1186,7 @@ TEST_CASE("project C surface set_midi_fx transforms stored MIDI events", "[proje
 
   REQUIRE(sonare_project_set_midi_fx(project, clip, "{bad json") == SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_project_set_midi_fx(project, clip, "{\"quantize_ppq\":0}") ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_project_bake_midi_fx(project, clip, "{bad json") == SONARE_ERROR_INVALID_FORMAT);
 
   sonare_free_bytes(bytes);
@@ -1498,10 +1498,10 @@ TEST_CASE("project C surface bakes an arpeggiator into gated steps", "[project]"
   // An empty interval list and a non-positive step are rejected by the parser.
   REQUIRE(sonare_project_set_midi_fx(
               project, clip, "{\"arpeggiator_intervals\":[],\"arpeggiator_step_ppq\":0.25}") ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_FORMAT);
   REQUIRE(sonare_project_set_midi_fx(
               project, clip, "{\"arpeggiator_intervals\":[0],\"arpeggiator_step_ppq\":0}") ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_FORMAT);
 
   sonare_free_bytes(bytes);
   sonare_project_destroy(project);
