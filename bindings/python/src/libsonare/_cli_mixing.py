@@ -24,6 +24,7 @@ from ._cli_common import (
     _json_key_to_snake_case,
     _load_channels_or_downmix,
     _parse_kv_params,
+    _PcmQuantizer,
     _resample,
     _strict_json_dumps,
     _write_channel_output,
@@ -322,22 +323,37 @@ def cmd_mix(args: argparse.Namespace) -> int:
             # progress, so it is safe to read here to size the write up front.
             total_frames = (length or 0) + mixer.tail_samples()
             with _atomic_wav_writer(args.output, 2, args.sample_rate, frames=total_frames) as wav:
+                # Whether the stream is dithered depends on every sample of it, so
+                # the blocks are held (as float32) until the render has finished.
+                blocks: list[tuple[np.ndarray, np.ndarray]] = []
                 for offset in range(0, length or 0, args.block_size):
                     end = min(offset + args.block_size, length or 0)
                     result = mixer.process_stereo(
                         [channel[offset:end] for channel in left_channels],
                         [channel[offset:end] for channel in right_channels],
                     )
-                    _write_wav_stereo_frames(wav, result.left, result.right)
+                    blocks.append(
+                        (np.asarray(result.left, np.float32), np.asarray(result.right, np.float32))
+                    )
                     rendered_samples += len(result.left)
 
                 tail_remaining = mixer.tail_samples()
                 while tail_remaining > 0:
                     count = min(tail_remaining, args.block_size)
                     result = mixer.drain_tail_stereo(count)
-                    _write_wav_stereo_frames(wav, result.left, result.right)
+                    blocks.append(
+                        (np.asarray(result.left, np.float32), np.asarray(result.right, np.float32))
+                    )
                     rendered_samples += len(result.left)
                     tail_remaining -= count
+
+                quantizer = _PcmQuantizer.for_stream(
+                    16, 2, (plane for block in blocks for plane in block)
+                )
+                first_frame = 0
+                for left_block, right_block in blocks:
+                    _write_wav_stereo_frames(wav, left_block, right_block, quantizer, first_frame)
+                    first_frame += min(len(left_block), len(right_block))
 
         if args.json:
             payload: dict[str, object] = {

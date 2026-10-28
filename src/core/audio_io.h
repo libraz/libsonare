@@ -140,6 +140,11 @@ AudioLoadResult load_buffer(const uint8_t* data, size_t size);
 InterleavedAudioLoadResult load_buffer_interleaved(const uint8_t* data, size_t size);
 
 /// @brief Saves audio samples to a WAV file.
+/// @details Samples already on the target word length's grid (decoded from, or
+///          finalized to, that depth) are written code for code. Anything else
+///          is TPDF-dithered (deterministic, per channel) before rounding, so a
+///          fading reverb tail ends in noise rather than truncation distortion;
+///          an exact zero stays digital silence.
 /// @param path Output file path
 /// @param samples Audio samples (mono, normalized to [-1,1])
 /// @param sample_rate Sample rate in Hz
@@ -169,7 +174,8 @@ void save_wav(const std::string& path, const std::vector<float>& samples, int sa
 
 /// @brief Saves interleaved multichannel audio to a WAV file.
 /// @details Mono/stereo are written as plain WAVE_FORMAT_PCM (bit-identical to
-///          the mono/stereo helpers). Surround layouts (channel_count > 2) are
+///          the mono/stereo helpers) and quantized as @ref save_wav describes,
+///          each channel with its own dither stream. Surround layouts (channel_count > 2) are
 ///          written with a hand-built WAVE_FORMAT_EXTENSIBLE header carrying the
 ///          layout's speaker mask, since the pinned dr_wav cannot emit
 ///          EXTENSIBLE. Plane/interleave order follows the canonical

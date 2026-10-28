@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <chrono>
@@ -1924,32 +1925,111 @@ TEST_CASE("save_wav_multichannel writes the 7.1 mask and validates arguments", "
   std::filesystem::remove_all(mono_path.parent_path());
 }
 
-TEST_CASE("save_wav quantizes 16-bit PCM by rounding to nearest, not truncating", "[audio_io]") {
-  // Pick float samples whose scaled magnitude has a fractional part > 0.5 so
-  // round-half-away-from-zero and toward-zero truncation disagree. The old
-  // writer truncated (static_cast), losing up to a full LSB and ~3 dB SNR vs a
-  // libsndfile-style nearest-neighbor encoder.
-  const std::vector<float> original = {
-      100.7f / 32768.0f,   // +: trunc 100, round 101
-      -100.7f / 32768.0f,  // -: trunc -100, round -101 (away from zero)
-      50.2f / 32768.0f,    // control: trunc == round == 50
-      0.0f,
-  };
-  const std::vector<int16_t> expected = {101, -101, 50, 0};
+namespace {
 
-  const std::string path = "test_pcm16_rounding.wav";
-  save_wav(path, original, 48000, 16);
-  auto [loaded, loaded_sr] = load_wav(path);
-  std::remove(path.c_str());
-
-  REQUIRE(loaded_sr == 48000);
-  REQUIRE(loaded.size() == original.size());
-  // dr_wav reconstructs int16 V as V / 32768, so the stored integer is
-  // recoverable exactly by rounding the loaded float back.
-  for (size_t i = 0; i < expected.size(); ++i) {
-    const long stored = std::lround(static_cast<double>(loaded[i]) * 32768.0);
-    REQUIRE(stored == expected[i]);
+// PCM codes a saved stream holds: dr_wav decodes code V as V / scale exactly.
+std::vector<long> saved_codes(const std::vector<float>& samples, int channels, int bits,
+                              const std::string& path) {
+  if (channels == 1) {
+    save_wav(path, samples, 48000, bits);
+  } else {
+    save_wav_multichannel(path, samples.data(), samples.size() / 2, 2, ChannelLayout::Stereo, 48000,
+                          bits);
   }
+  auto [loaded, sr, loaded_channels] = load_audio_interleaved(path);
+  std::remove(path.c_str());
+  REQUIRE(sr == 48000);
+  REQUIRE(loaded_channels == channels);
+  REQUIRE(loaded.size() == samples.size());
+  const double scale = bits == 16 ? 32768.0 : 8388608.0;
+  std::vector<long> codes(loaded.size());
+  for (size_t i = 0; i < loaded.size(); ++i) {
+    codes[i] = std::lround(static_cast<double>(loaded[i]) * scale);
+  }
+  return codes;
+}
+
+}  // namespace
+
+TEST_CASE("save_wav writes a stream already on the target grid code for code", "[audio_io]") {
+  const int bits = GENERATE(16, 24);
+  const double scale = bits == 16 ? 32768.0 : 8388608.0;
+  const long top = static_cast<long>(scale) - 1;
+  const std::vector<long> codes = {0, 1, -1, 101, -101, top, -static_cast<long>(scale), 7};
+  std::vector<float> samples;
+  for (long c : codes) samples.push_back(static_cast<float>(c / scale));
+  REQUIRE(saved_codes(samples, 1, bits, "test_pcm_on_grid.wav") == codes);
+}
+
+TEST_CASE("save_wav TPDF-dithers an off-grid stream instead of truncating its last bits",
+          "[audio_io]") {
+  const int bits = GENERATE(16, 24);
+  const double scale = bits == 16 ? 32768.0 : 8388608.0;
+  // A 0.4 LSB tone: plain rounding writes it as digital silence.
+  constexpr size_t kFrames = 48000;
+  constexpr double kAmplitudeLsb = 0.4;
+  std::vector<float> samples(kFrames);
+  std::vector<double> reference(kFrames);
+  for (size_t i = 0; i < kFrames; ++i) {
+    reference[i] = std::sin(constants::kTwoPiD * 997.0 * static_cast<double>(i) / 48000.0);
+    samples[i] = static_cast<float>(kAmplitudeLsb * reference[i] / scale);
+  }
+  const std::vector<long> codes = saved_codes(samples, 1, bits, "test_pcm_dither.wav");
+
+  double projection = 0.0;
+  double error_mean = 0.0;
+  double error_power = 0.0;
+  double error_signal = 0.0;
+  for (size_t i = 0; i < kFrames; ++i) {
+    const double error = static_cast<double>(codes[i]) - kAmplitudeLsb * reference[i];
+    REQUIRE(std::fabs(error) <= 1.5);
+    projection += 2.0 * static_cast<double>(codes[i]) * reference[i] / kFrames;
+    error_mean += error / kFrames;
+    error_power += error * error / kFrames;
+    error_signal += error * reference[i] / kFrames;
+  }
+  CAPTURE(projection, error_mean, error_power, error_signal);
+  // The tone survives at its level; nearest rounding of TPDF-dithered input leaves no bias
+  // (truncation toward zero would) and the error power is 1/6 + 1/12 LSB^2, independent of
+  // the signal.
+  REQUIRE(std::fabs(projection - kAmplitudeLsb) < 0.03);
+  REQUIRE(std::fabs(error_mean) < 0.01);
+  REQUIRE(std::fabs(error_power - 0.25) < 0.02);
+  REQUIRE(std::fabs(error_signal) < 0.01);
+}
+
+TEST_CASE("save_wav keeps exact silence undithered inside a dithered stream", "[audio_io]") {
+  std::vector<float> samples(4000, 0.0f);
+  for (size_t i = 2000; i < samples.size(); ++i) samples[i] = 0.1234567f;
+  const std::vector<long> codes = saved_codes(samples, 1, 16, "test_pcm_silence.wav");
+  for (size_t i = 0; i < 2000; ++i) REQUIRE(codes[i] == 0);
+  bool varied = false;
+  for (size_t i = 2001; i < codes.size(); ++i) varied = varied || codes[i] != codes[2000];
+  REQUIRE(varied);  // the signal half was dithered
+}
+
+TEST_CASE("save_wav dither is deterministic and independent per channel", "[audio_io]") {
+  constexpr size_t kFrames = 20000;
+  std::vector<float> stereo(2 * kFrames);
+  for (size_t i = 0; i < kFrames; ++i) {
+    const float v = static_cast<float>(0.3 * std::sin(0.01 * static_cast<double>(i)));
+    stereo[2 * i] = v;
+    stereo[2 * i + 1] = v;
+  }
+  const std::vector<long> first = saved_codes(stereo, 2, 16, "test_pcm_dither_a.wav");
+  const std::vector<long> second = saved_codes(stereo, 2, 16, "test_pcm_dither_b.wav");
+  REQUIRE(first == second);
+  double cross = 0.0;
+  double power = 0.0;
+  for (size_t i = 0; i < kFrames; ++i) {
+    const double exact = static_cast<double>(stereo[2 * i]) * 32768.0;
+    const double left = static_cast<double>(first[2 * i]) - exact;
+    const double right = static_cast<double>(first[2 * i + 1]) - exact;
+    cross += left * right;
+    power += left * left;
+  }
+  CAPTURE(cross, power);
+  REQUIRE(std::fabs(cross / power) < 0.05);
 }
 
 TEST_CASE("a non-finite sample is written as silence and counted, not as full scale",

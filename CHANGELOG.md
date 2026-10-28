@@ -36,6 +36,10 @@
 - Below the room's Schroeder frequency the late tail is built from the shoebox's own standing waves instead of noise. The bass rings at the room's mode frequencies, decays at the room's RT60 there and changes with source and listener position; a listener on a mode's pressure node no longer hears that mode. On average over positions the bass carries the energy the noise tail did.
 - `estimateRoom` (`estimate_room`) removes the reference-climate air absorption from its per-band absorptions and anchors the volume on the 500 Hz and 1 kHz bands, so an estimate resynthesizes to the measured decay.
 
+#### Audio files
+
+- Writing 16- or 24-bit WAV (`save_wav`, the command lines, bounce output) applies deterministic TPDF dither, independent per channel, to a stream that is not already on the target grid, so a fading reverb tail ends in noise instead of truncation distortion and a cut to silence. A stream already at that word length (a decoded file, a mastering-dithered master) is written code for code, and exact zeros stay digital silence. The same input still writes the same bytes on every platform and on both command lines.
+
 ### Fixes
 
 #### Errors

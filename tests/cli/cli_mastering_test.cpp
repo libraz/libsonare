@@ -666,6 +666,10 @@ TEST_CASE("CLI mastering-processor acts on the image a stereo file carries", "[c
     const float t = static_cast<float>(frame) / kRate;
     left[frame] = 0.6f * std::sin(two_pi * 440.0f * t);
     right[frame] = 0.45f * std::sin(two_pi * 277.0f * t) + 0.2f * std::sin(two_pi * 93.0f * t);
+    // On the 16-bit grid, so the writer stores each code as is: dithering off-grid samples
+    // per channel would stop B's codes from being A's swapped.
+    left[frame] = std::round(left[frame] * 32768.0f) / 32768.0f;
+    right[frame] = std::round(right[frame] * 32768.0f) / 32768.0f;
   }
   const auto write_pair = [&](const std::string& path, const std::vector<float>& a,
                               const std::vector<float>& b) {

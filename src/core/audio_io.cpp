@@ -27,6 +27,7 @@
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 #include "util/resource_limits.h"
+#include "util/splitmix64.h"
 
 #ifdef SONARE_WITH_FFMPEG
 #include "core/audio_io_ffmpeg.h"
@@ -895,40 +896,57 @@ int audio_channel_count(const std::string& path, const AudioLoadOptions& options
 
 namespace {
 
-/// Quantizes a normalized float sample to signed 16-bit PCM using
-/// round-half-away-from-zero (@c std::lroundf), the nearest-neighbor rounding
-/// libsndfile and other reference encoders use, instead of C++'s default
-/// toward-zero truncation. The scale is 2^15, the grid the decoder divides by
-/// and the final bit-depth stage quantizes to, so a decoded or finalized code
-/// is written back unchanged. The input is clamped to [-1, 1] and the rounded
-/// result to the int16 range, so +1.0 lands on the positive ceiling 32767.
-///
-/// A non-finite sample has no PCM image, so it is written as digital silence
-/// and counted in @p non_finite. The clamp cannot stand in for that check: a
-/// comparison against a non-finite value is false, so std::min returns its
-/// other argument and the sample would reach the file as positive full scale,
-/// indistinguishable from a peak the encoder meant to produce.
-int16_t float_to_pcm16(float sample, size_t& non_finite) {
-  if (!std::isfinite(sample)) {
-    ++non_finite;
-    return 0;
-  }
-  const float clamped = std::max(-1.0f, std::min(1.0f, sample));
-  const long v = std::lroundf(clamped * 32768.0f);
-  return static_cast<int16_t>(std::max<long>(-32768, std::min<long>(32767, v)));
+/// Seed of channel 0's PCM-writer dither stream; channel c's seed is this XOR
+/// c * kSplitMix64Gamma. Mirrored by the Python CLI writer (_cli_common.py).
+constexpr uint64_t kPcmDitherSeed = 0x5043'4D44'4954'4852ull;
+
+/// TPDF dither, in LSBs, for one sample: the difference of two 24-bit uniforms
+/// drawn at (2 * frame, 2 * frame + 1) of the channel's SplitMix64 stream. Both
+/// uniforms and their difference are exact in float, so every writer that
+/// follows this recipe produces the same codes.
+float pcm_tpdf_lsb(uint64_t channel_seed, uint64_t frame) noexcept {
+  constexpr float kUnit = 1.0f / 16777216.0f;
+  const float a = static_cast<float>(splitmix64_at(channel_seed, 2 * frame) >> 40) * kUnit;
+  const float b = static_cast<float>(splitmix64_at(channel_seed, 2 * frame + 1) >> 40) * kUnit;
+  return a - b;
 }
 
-/// Quantizes a normalized float sample to a signed 24-bit PCM value (held in an
-/// int32) on the 2^23 grid, with the same rounding, clamping and non-finite
-/// handling as @ref float_to_pcm16.
-int32_t float_to_pcm24(float sample, size_t& non_finite) {
+/// Quantizes a normalized float sample onto a signed PCM grid of @p scale codes
+/// per unit, with @p dither_lsb added before the nearest-code rounding
+/// (round-half-away-from-zero, @c std::lroundf, as libsndfile and other
+/// reference encoders round). The scale is a power of two, so the scaled sample
+/// is exact and the only rounding is the final one. The input is clamped to
+/// [-1, 1] and the code to [min_code, max_code], so +1.0 lands on the positive
+/// ceiling.
+///
+/// An exact zero is digital silence and stays code 0, undithered, so a muted
+/// passage is not filled with hiss. A non-finite sample has no PCM image, so it
+/// is written as digital silence and counted in @p non_finite. The clamp cannot stand in for that
+/// check: a comparison against a non-finite value is false, so std::min returns its other argument
+/// and the sample would reach the file as positive full scale, indistinguishable from a peak the
+/// encoder meant to produce.
+long quantize_pcm(float sample, float scale, long min_code, long max_code, float dither_lsb,
+                  size_t& non_finite) {
   if (!std::isfinite(sample)) {
     ++non_finite;
     return 0;
   }
+  if (sample == 0.0f) return 0;
   const float clamped = std::max(-1.0f, std::min(1.0f, sample));
-  const long v = std::lroundf(clamped * 8388608.0f);
-  return static_cast<int32_t>(std::max<long>(-8388608, std::min<long>(8388607, v)));
+  const long v = std::lroundf(clamped * scale + dither_lsb);
+  return std::max(min_code, std::min(max_code, v));
+}
+
+/// True when every finite sample already sits on the PCM grid of @p scale, i.e.
+/// the stream was decoded from, or finalized to, this word length. Such a
+/// stream is written back code for code; dither is for requantization only.
+bool on_pcm_grid(const float* samples, size_t n_samples, float scale) noexcept {
+  for (size_t i = 0; i < n_samples; ++i) {
+    if (!std::isfinite(samples[i])) continue;
+    const float scaled = std::max(-1.0f, std::min(1.0f, samples[i])) * scale;
+    if (scaled != std::floor(scaled)) return false;
+  }
+  return true;
 }
 
 #ifndef __EMSCRIPTEN__
@@ -985,25 +1003,29 @@ void check_riff_size_fits(size_t n_frames, int channel_count, int bits_per_sampl
 
 namespace {
 
-/// Packs normalized float samples into the on-disk PCM byte stream: 16-bit
-/// little-endian int16 or 24-bit tightly-packed 3-byte little-endian, clamped to
-/// [-1, 1]. Non-finite samples are quantized and counted into @p non_finite by
-/// the quantizers.
-std::vector<uint8_t> pack_pcm_bytes(const float* samples, size_t n_samples, int bits_per_sample,
-                                    size_t& non_finite) {
-  std::vector<uint8_t> bytes(n_samples * static_cast<size_t>(bits_per_sample / 8));
-  if (bits_per_sample == 16) {
-    for (size_t i = 0; i < n_samples; ++i) {
-      auto v = float_to_pcm16(samples[i], non_finite);
-      bytes[i * 2 + 0] = static_cast<uint8_t>(v & 0xFF);
-      bytes[i * 2 + 1] = static_cast<uint8_t>((v >> 8) & 0xFF);
-    }
-  } else {  // 24-bit
-    for (size_t i = 0; i < n_samples; ++i) {
-      auto v = float_to_pcm24(samples[i], non_finite);
-      bytes[i * 3 + 0] = static_cast<uint8_t>(v & 0xFF);
-      bytes[i * 3 + 1] = static_cast<uint8_t>((v >> 8) & 0xFF);
-      bytes[i * 3 + 2] = static_cast<uint8_t>((v >> 16) & 0xFF);
+/// Packs interleaved normalized float samples into the on-disk PCM byte stream:
+/// 16-bit little-endian int16 or 24-bit tightly-packed 3-byte little-endian.
+/// A stream not already on the target grid is TPDF-dithered per channel before
+/// rounding, so a decaying tail fades into noise at the last bits instead of
+/// turning into truncation distortion and then hard silence. Non-finite samples
+/// are counted into @p non_finite by the quantizer.
+std::vector<uint8_t> pack_pcm_bytes(const float* samples, size_t n_samples, int channel_count,
+                                    int bits_per_sample, size_t& non_finite) {
+  const bool sixteen = bits_per_sample == 16;
+  const float scale = sixteen ? 32768.0f : 8388608.0f;
+  const long min_code = sixteen ? -32768 : -8388608;
+  const long max_code = sixteen ? 32767 : 8388607;
+  const bool dither = !on_pcm_grid(samples, n_samples, scale);
+  const auto channels = static_cast<size_t>(channel_count);
+  const size_t width = static_cast<size_t>(bits_per_sample / 8);
+  std::vector<uint8_t> bytes(n_samples * width);
+  for (size_t i = 0; i < n_samples; ++i) {
+    const uint64_t channel_seed = kPcmDitherSeed ^ (uint64_t{i % channels} * kSplitMix64Gamma);
+    const float d = dither ? pcm_tpdf_lsb(channel_seed, i / channels) : 0.0f;
+    const long v = quantize_pcm(samples[i], scale, min_code, max_code, d, non_finite);
+    for (size_t b = 0; b < width; ++b) {
+      bytes[i * width + b] =
+          static_cast<uint8_t>((static_cast<unsigned long>(v) >> (8 * b)) & 0xFF);
     }
   }
   return bytes;
@@ -1060,8 +1082,9 @@ std::vector<uint8_t> encode_pcm_wav(const float* interleaved, size_t n_frames, i
                                     int sample_rate, int bits_per_sample,
                                     size_t* non_finite_samples) {
   size_t non_finite = 0;
-  const std::vector<uint8_t> pcm = pack_pcm_bytes(
-      interleaved, n_frames * static_cast<size_t>(channel_count), bits_per_sample, non_finite);
+  const std::vector<uint8_t> pcm =
+      pack_pcm_bytes(interleaved, n_frames * static_cast<size_t>(channel_count), channel_count,
+                     bits_per_sample, non_finite);
   if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
 
   const auto data_size = static_cast<uint32_t>(pcm.size());
@@ -1100,7 +1123,7 @@ std::vector<uint8_t> encode_extensible_wav(const float* interleaved, size_t n_fr
   const size_t n_samples = n_frames * static_cast<size_t>(channel_count);
   size_t non_finite = 0;
   const std::vector<uint8_t> pcm =
-      pack_pcm_bytes(interleaved, n_samples, bits_per_sample, non_finite);
+      pack_pcm_bytes(interleaved, n_samples, channel_count, bits_per_sample, non_finite);
   if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
 
   const auto data_size = static_cast<uint32_t>(pcm.size());

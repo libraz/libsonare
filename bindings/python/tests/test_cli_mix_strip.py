@@ -229,8 +229,9 @@ def test_the_first_block_opens_at_the_configured_gain(tmp_path: Path) -> None:
     # The control: the fader did reach the signal at all.
     assert max(abs(code) for code in tail) < 0.5 * 32767 * 0.9
     assert max(abs(code) for code in tail) > 100
-    assert max(head) - min(head) <= 1
-    assert abs(max(head) - max(tail)) <= 1
+    # A constant off-grid level is TPDF-dithered over at most three adjacent codes.
+    assert max(head) - min(head) <= 2
+    assert abs(max(head) - max(tail)) <= 2
 
 
 def test_json_payload_shape(stereo_wav: Path, tmp_path: Path) -> None:

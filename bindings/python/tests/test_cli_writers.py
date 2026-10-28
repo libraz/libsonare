@@ -198,7 +198,7 @@ def test_atomic_wav_writer_preserves_old_output_at_every_failure_stage(
         monkeypatch.setattr(
             implementation,
             "_write_wav_mono_frames",
-            lambda _wav, _samples: (_ for _ in ()).throw(OSError("injected write failure")),
+            lambda *_args: (_ for _ in ()).throw(OSError("injected write failure")),
         )
     elif stage == "close":
         original_wave_open = wave.open
@@ -307,11 +307,15 @@ def test_wav_export_completes_over_a_sample_no_32_bit_float_can_hold(tmp_path) -
     [(16, (32767, -32768, 32735, 0)), (24, (8388607, -8388608, 8380220, 0))],
 )
 def test_wav_writer_keeps_finite_codes_at_and_below_full_scale(tmp_path, bits, expected) -> None:
-    """Silencing a non-finite sample must not move any finite one."""
+    """Silencing a non-finite sample must not move any finite one.
+
+    The inputs sit on the PCM grid, so the stream is written code for code.
+    """
     from libsonare import cli
 
     output = tmp_path / f"finite-{bits}.wav"
-    cli._write_wav(str(output), [1.0, -1.0, 0.999, 0.0], 48000, bits)
+    near_full_scale = expected[2] / (32768 if bits == 16 else 8388608)
+    cli._write_wav(str(output), [1.0, -1.0, near_full_scale, 0.0], 48000, bits)
 
     assert _read_codes(output, bits) == expected
 
@@ -484,6 +488,39 @@ def test_vectorized_quantizer_matches_the_scalar_one_over_random_and_edge_sample
         assert int(code) == _quantize_sample(float(sample), full_scale, minimum, maximum), sample
 
 
+@pytest.mark.parametrize("bits", [16, 24])
+@pytest.mark.parametrize("channels", [1, 2, 4])
+def test_vectorized_quantizer_matches_the_scalar_one_with_dither(bits: int, channels: int) -> None:
+    """The dithered vector path and the scalar path pack identical bytes.
+
+    Starts at a non-zero frame so the (channel, absolute frame) noise indexing
+    is exercised, and includes non-finite and out-of-range samples.
+    """
+    import numpy as np
+
+    from libsonare._cli_common import _PcmQuantizer
+
+    rng = np.random.default_rng(7)
+    frames = 3000
+    samples = rng.uniform(-1.2, 1.2, frames * channels)
+    samples[::97] = float("nan")
+    samples[5::211] = float("inf")
+    quantizer = _PcmQuantizer(bits, channels, dither=True)
+    first_frame = 8192 * 3 + 5
+    vectorized = quantizer.pack(samples, first_frame)
+    scalar = b"".join(
+        quantizer.pack_scalar(float(value), i % channels, first_frame + i // channels)
+        for i, value in enumerate(samples)
+    )
+    assert vectorized == scalar
+    # Dither is a function of (channel, frame): a chunk split mid-stream agrees.
+    half = (frames // 2) * channels
+    split = quantizer.pack(samples[:half], first_frame) + quantizer.pack(
+        samples[half:], first_frame + frames // 2
+    )
+    assert split == vectorized
+
+
 def test_interleave_planes_matches_the_manual_frame_major_order() -> None:
     from libsonare._cli_playback import _interleave_planes
 
@@ -535,3 +572,247 @@ def test_frame_major_wav_writer_handles_ten_seconds_of_six_channel_audio_quickly
         header = handle.read(24)
     assert struct.unpack("<H", header[22:24])[0] == channels
     assert output.stat().st_size >= frames * channels * 2  # 16-bit PCM, plus header
+
+
+# ---------------------------------------------------------------------------
+# TPDF dither on write (recipe: src/core/audio_io.cpp pack_pcm_bytes).
+# ---------------------------------------------------------------------------
+
+_CHUNK = 8192
+
+
+def _data_chunk(path: Path) -> bytes:
+    """The raw ``data`` chunk payload of a WAV (plain PCM or EXTENSIBLE)."""
+    blob = path.read_bytes()
+    offset = 12
+    while offset + 8 <= len(blob):
+        tag = blob[offset : offset + 4]
+        size = struct.unpack("<I", blob[offset + 4 : offset + 8])[0]
+        if tag == b"data":
+            return blob[offset + 8 : offset + 8 + size]
+        offset += 8 + size + (size & 1)
+    raise AssertionError("no data chunk")
+
+
+def _reference_pcm(samples, channels: int, bits: int) -> bytes:
+    """Spec-literal transcription of the native recipe, independent of the module."""
+    import math
+
+    def f32(x: float) -> float:
+        return struct.unpack("<f", struct.pack("<f", x))[0]
+
+    mask = (1 << 64) - 1
+    gamma = 0x9E3779B97F4A7C15
+
+    def at(seed: int, k: int) -> int:
+        z = (seed + (k + 1) * gamma) & mask
+        z = ((z ^ (z >> 30)) * 0xBF58476D1CE4E5B9) & mask
+        z = ((z ^ (z >> 27)) * 0x94D049BB133111EB) & mask
+        return z ^ (z >> 31)
+
+    scale = 32768.0 if bits == 16 else 8388608.0
+    lo, hi = -int(scale), int(scale) - 1
+    narrowed = [f32(float(x)) for x in samples]
+    on_grid = all(
+        f32(max(-1.0, min(1.0, x))) * scale == math.floor(f32(max(-1.0, min(1.0, x))) * scale)
+        for x in narrowed
+        if math.isfinite(x)
+    )
+    out = bytearray()
+    for i, x in enumerate(narrowed):
+        c, n = i % channels, i // channels
+        if not math.isfinite(x) or x == 0.0:
+            code = 0
+        else:
+            tpdf = 0.0
+            if not on_grid:
+                seed = 0x50434D4449544852 ^ ((c * gamma) & mask)
+                tpdf = (at(seed, 2 * n) >> 40) * 2.0**-24 - (at(seed, 2 * n + 1) >> 40) * 2.0**-24
+            v = f32(f32(max(-1.0, min(1.0, x)) * scale) + tpdf)
+            code = int(math.floor(v + 0.5)) if v >= 0 else int(math.ceil(v - 0.5))
+            code = max(lo, min(hi, code))
+        out += code.to_bytes(bits // 8, "little", signed=True)
+    return bytes(out)
+
+
+def _noise(frames: int, channels: int, seed: int = 11):
+    import numpy as np
+
+    return np.random.default_rng(seed).uniform(-1.1, 1.1, (frames, channels))
+
+
+@pytest.mark.parametrize("bits", [16, 24])
+def test_on_grid_input_round_trips_code_for_code_without_dither(tmp_path, bits) -> None:
+    import numpy as np
+
+    from libsonare import cli
+    from libsonare._cli_common import _write_frame_major_wav
+
+    scale = 32768 if bits == 16 else 8388608
+    frames = _CHUNK + 777
+    codes = np.random.default_rng(3).integers(-scale, scale, frames * 2)
+    values = codes / scale
+
+    mono = tmp_path / "mono.wav"
+    cli._write_wav(str(mono), values[:frames], 48000, bits)
+    assert _read_codes(mono, bits) == tuple(int(c) for c in codes[:frames])
+
+    stereo = tmp_path / "stereo.wav"
+    cli._write_wav_stereo(str(stereo), values[:frames], values[frames:], 48000, bits)
+    expected = np.empty(frames * 2, dtype=np.int64)
+    expected[0::2], expected[1::2] = codes[:frames], codes[frames:]
+    assert _read_codes(stereo, bits) == tuple(int(c) for c in expected)
+
+    multi = tmp_path / "multi.wav"
+    whole = len(codes) // 4 * 4
+    _write_frame_major_wav(str(multi), values[:whole].reshape(-1, 4), 48000, bits)
+    assert _data_chunk(multi) == b"".join(
+        int(c).to_bytes(bits // 8, "little", signed=True) for c in codes[:whole]
+    )
+
+
+@pytest.mark.parametrize("bits", [16, 24])
+@pytest.mark.parametrize("channels", [1, 2, 4])
+def test_off_grid_input_matches_the_dither_recipe_across_chunks(tmp_path, bits, channels) -> None:
+    """Writer bytes equal the spec transcription for a stream crossing chunk bounds."""
+    from libsonare import cli
+    from libsonare._cli_common import _write_frame_major_wav
+
+    frames = _CHUNK * 2 + 123
+    audio = _noise(frames, channels)
+    output = tmp_path / "out.wav"
+    if channels == 1:
+        cli._write_wav(str(output), audio[:, 0], 48000, bits)
+    elif channels == 2:
+        cli._write_wav_stereo(str(output), audio[:, 0], audio[:, 1], 48000, bits)
+    else:
+        _write_frame_major_wav(str(output), audio, 48000, bits)
+    assert _data_chunk(output) == _reference_pcm(audio.ravel(), channels, bits)
+
+
+@pytest.mark.parametrize("bits", [16, 24])
+def test_dither_decision_covers_the_whole_stream(tmp_path, bits) -> None:
+    """One off-grid sample in the last chunk dithers the on-grid chunks before it."""
+    import numpy as np
+
+    from libsonare import cli
+
+    frames = _CHUNK * 2 + 10
+    scale = 32768 if bits == 16 else 8388608
+    values = np.full(frames, 3 / scale)  # on the grid, and not silence, which stays undithered
+    values[-1] = 0.1234567
+    output = tmp_path / "late.wav"
+    cli._write_wav(str(output), values, 48000, bits)
+    assert _data_chunk(output) == _reference_pcm(values, 1, bits)
+    assert any(code != 3 for code in _read_codes(output, bits)[:_CHUNK])
+
+
+@pytest.mark.parametrize("bits", [16, 24])
+def test_exact_silence_stays_undithered_in_a_dithered_stream(tmp_path, bits) -> None:
+    import numpy as np
+
+    from libsonare import cli
+
+    values = np.zeros(_CHUNK + 100)
+    values[_CHUNK:] = 0.1234567
+    output = tmp_path / "silence.wav"
+    cli._write_wav(str(output), values, 48000, bits)
+    assert _data_chunk(output) == _reference_pcm(values, 1, bits)
+    assert not any(_read_codes(output, bits)[:_CHUNK])
+
+
+@pytest.mark.parametrize("bits", [16, 24])
+@pytest.mark.parametrize("on_grid", [True, False])
+def test_ragged_rows_agree_with_the_ndarray_fast_path(tmp_path, bits, on_grid) -> None:
+    import numpy as np
+
+    from libsonare._cli_common import _write_frame_major_wav
+
+    frames = _CHUNK + 300
+    if on_grid:
+        scale = 32768 if bits == 16 else 8388608
+        audio = np.random.default_rng(5).integers(-scale, scale, (frames, 3)) / scale
+    else:
+        audio = _noise(frames, 3, seed=9)
+    ragged = [list(map(float, row)) for row in audio]
+    ragged[10] = ragged[10][:1]
+    ragged[_CHUNK + 5] = ragged[_CHUNK + 5][:2]
+    padded = audio.copy()
+    padded[10, 1:] = 0.0
+    padded[_CHUNK + 5, 2:] = 0.0
+
+    fast = tmp_path / "fast.wav"
+    slow = tmp_path / "slow.wav"
+    _write_frame_major_wav(str(fast), padded, 48000, bits)
+    _write_frame_major_wav(str(slow), ragged, 48000, bits)
+    assert _data_chunk(fast) == _data_chunk(slow)
+
+
+def _native_cli() -> Path | None:
+    import os
+
+    root = Path(__file__).resolve().parents[3]
+    candidates = [os.environ.get("SONARE_NATIVE_CLI"), str(root / "build/bin/sonare-cli")]
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            return Path(candidate)
+    return None
+
+
+def _write_pcm16_input(path: Path, channels: int, frames: int) -> None:
+    import numpy as np
+
+    rng = np.random.default_rng(channels)
+    t = np.arange(frames) / 22050.0
+    planes = [
+        0.3 * np.sin(2 * np.pi * (110.0 * (c + 1)) * t) + 0.02 * rng.standard_normal(frames)
+        for c in range(channels)
+    ]
+    pcm = np.clip(np.stack(planes, axis=1) * 32767.0, -32768, 32767).astype("<i2")
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(channels)
+        wav.setsampwidth(2)
+        wav.setframerate(22050)
+        wav.writeframes(pcm.tobytes())
+
+
+@pytest.mark.parametrize(
+    ("channels", "command"),
+    [
+        (1, ["normalize", "--target-db", "-3"]),
+        (2, ["normalize", "--target-db", "-3"]),
+        (6, ["playback"]),
+    ],
+)
+def test_python_cli_wav_data_matches_the_native_cli_byte_for_byte(
+    tmp_path, channels, command
+) -> None:
+    """Both front ends write one rendering of the same input: dithered bytes agree.
+
+    The native writer is not reachable in-process, so the comparison goes through
+    the native CLI binary. 24-bit output has no native CLI route that avoids
+    other processing; it is covered by the recipe transcription above.
+    """
+    import subprocess
+    import sys
+
+    native = _native_cli()
+    if native is None:
+        pytest.skip("native sonare-cli binary not found; set SONARE_NATIVE_CLI")
+    source = tmp_path / "in.wav"
+    _write_pcm16_input(source, channels, _CHUNK + 5000)
+    outputs = {}
+    for name, argv in (
+        ("native", [str(native)]),
+        ("python", [sys.executable, "-m", "libsonare.cli"]),
+    ):
+        out = tmp_path / f"{name}.wav"
+        result = subprocess.run(
+            [*argv, command[0], str(source), "-o", str(out), *command[1:]],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        outputs[name] = _data_chunk(out)
+    assert len(outputs["native"]) > 0
+    assert outputs["python"] == outputs["native"]
