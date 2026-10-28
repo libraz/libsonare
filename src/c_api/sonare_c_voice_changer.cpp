@@ -438,8 +438,8 @@ SonareError sonare_realtime_voice_changer_create_json(const char* preset_or_conf
   std::string error;
   if (!editing::voice_changer::realtime_voice_changer_config_from_input(config_text, &config,
                                                                         &error)) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER, error.c_str());
-    return SONARE_ERROR_INVALID_PARAMETER;
+    set_last_error(SONARE_ERROR_INVALID_FORMAT, error.c_str());
+    return SONARE_ERROR_INVALID_FORMAT;
   }
   auto handle = std::make_unique<SonareRealtimeVoiceChanger>();
   handle->changer.set_config(config);
@@ -488,8 +488,8 @@ SonareError sonare_realtime_voice_changer_set_config_json(SonareRealtimeVoiceCha
   std::string error;
   if (!editing::voice_changer::realtime_voice_changer_config_from_input(preset_or_config_json,
                                                                         &config, &error)) {
-    set_last_error(SONARE_ERROR_INVALID_PARAMETER, error.c_str());
-    return SONARE_ERROR_INVALID_PARAMETER;
+    set_last_error(SONARE_ERROR_INVALID_FORMAT, error.c_str());
+    return SONARE_ERROR_INVALID_FORMAT;
   }
   handle->changer.set_config(config);
   return SONARE_OK;
@@ -701,7 +701,7 @@ SonareError sonare_realtime_voice_changer_validate_preset_json(const char* json,
   if (!editing::voice_changer::validate_realtime_voice_changer_preset_json(json, &normalized,
                                                                            &error)) {
     *out_error = copy_string(error.empty() ? "invalid preset JSON" : error);
-    return SONARE_ERROR_INVALID_PARAMETER;
+    return SONARE_ERROR_INVALID_FORMAT;
   }
   *out_normalized_json = copy_string(normalized);
   return SONARE_OK;

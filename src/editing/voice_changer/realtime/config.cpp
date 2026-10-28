@@ -23,7 +23,7 @@ float finite_or(float value, float fallback) noexcept {
 // absent key keeps the fallback. `section` is the enclosing object's key, "" at the top level.
 [[noreturn]] void refuse_type(const char* section, const char* key, const char* expected) {
   const std::string path = section[0] == '\0' ? std::string(key) : std::string(section) + "." + key;
-  throw SonareException(ErrorCode::InvalidParameter, path + " must be " + expected);
+  throw SonareException(ErrorCode::InvalidFormat, path + " must be " + expected);
 }
 
 // The nested object under @p key, or null when absent; a present non-object is refused.
@@ -694,11 +694,21 @@ const char* realtime_voice_changer_preset_id(VoiceCharacterPreset preset) noexce
   return preset_metadata(preset).id.data();
 }
 
-VoiceCharacterPreset realtime_voice_changer_preset_from_id(std::string_view id) {
+namespace {
+
+// A bare preset name inside a config document is document content; the public lookup below takes
+// the name as the caller's own argument. The two differ only in the code they refuse with.
+VoiceCharacterPreset preset_from_id_or_throw(std::string_view id, ErrorCode code) {
   for (const auto& row : kPresetMetadata) {
     if (row.id == id) return row.preset;
   }
-  throw SonareException(ErrorCode::InvalidParameter, "unknown realtime voice changer preset");
+  throw SonareException(code, "unknown realtime voice changer preset");
+}
+
+}  // namespace
+
+VoiceCharacterPreset realtime_voice_changer_preset_from_id(std::string_view id) {
+  return preset_from_id_or_throw(id, ErrorCode::InvalidParameter);
 }
 
 std::vector<std::string> realtime_voice_changer_preset_names() {
@@ -717,20 +727,20 @@ RealtimeVoiceChangerConfig parse_config_json(std::string_view text) {
   const std::string input = trim_copy(text);
   if (input.empty()) return realtime_voice_changer_preset(VoiceCharacterPreset::NeutralMonitor);
   if (input.front() != '{')
-    return realtime_voice_changer_preset(realtime_voice_changer_preset_from_id(input));
+    return realtime_voice_changer_preset(preset_from_id_or_throw(input, ErrorCode::InvalidFormat));
 
   const auto root = sonare::util::json::admit(input);
   RealtimeVoiceChangerConfig c;
   const auto* dsp = root.find("dsp");
   const auto* macros = root.find("macros");
   if (dsp != nullptr && macros != nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter,
+    throw SonareException(ErrorCode::InvalidFormat,
                           "preset must contain exactly one of dsp or macros");
   }
   if (macros != nullptr) {
     std::string error;
     if (!apply_macro_section(*macros, &c, &error)) {
-      throw SonareException(ErrorCode::InvalidParameter, error);
+      throw SonareException(ErrorCode::InvalidFormat, error);
     }
     return c;
   }

@@ -155,7 +155,7 @@ TEST_CASE("Voice changer preset rejects simultaneous DSP and macros", "[voice_ch
     (void)realtime_voice_changer_config_from_json(with_macro);
     FAIL("expected a preset containing both dsp and macros to be rejected");
   } catch (const sonare::SonareException& ex) {
-    REQUIRE(ex.code() == sonare::ErrorCode::InvalidParameter);
+    REQUIRE(ex.code() == sonare::ErrorCode::InvalidFormat);
   }
 }
 
@@ -783,7 +783,7 @@ TEST_CASE("sonare_realtime_voice_changer_validate_preset_json returns a code on 
     char* error = reinterpret_cast<char*>(0x1);
     const SonareError err =
         sonare_realtime_voice_changer_validate_preset_json(json.c_str(), &normalized, &error);
-    REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(err == SONARE_ERROR_INVALID_FORMAT);
     REQUIRE(normalized == nullptr);
     REQUIRE(error != nullptr);
     REQUIRE(error[0] != '\0');
