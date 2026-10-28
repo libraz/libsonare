@@ -88,7 +88,7 @@ val js_note_segments(val f0_hz, val voiced_prob, const val& frame_rate_val, val 
       sonare_note_segments(f0.data(), f0.size(), probabilities.data(), probabilities.size(),
                            frame_rate, &config, &result);
   if (error != SONARE_OK) {
-    throw SonareException(static_cast<ErrorCode>(error), sonare_last_error_message());
+    throwCodedCError(error, "noteSegments");
   }
 
   val out = val::array();
@@ -137,7 +137,7 @@ float js_tuning_to_reference_hz(const val& tuning_val, const val& a4_val) {
   float hz = 0.0f;
   const SonareError error = sonare_tuning_to_reference_hz(tuning, a4, &hz);
   if (error != SONARE_OK) {
-    throw SonareException(static_cast<ErrorCode>(error), sonare_last_error_message());
+    throwCodedCError(error, "tuningToReferenceHz");
   }
   return hz;
 }
@@ -148,7 +148,7 @@ float js_reference_hz_to_tuning(const val& hz_val, const val& a4_val) {
   float tuning = 0.0f;
   const SonareError error = sonare_reference_hz_to_tuning(hz, a4, &tuning);
   if (error != SONARE_OK) {
-    throw SonareException(static_cast<ErrorCode>(error), sonare_last_error_message());
+    throwCodedCError(error, "referenceHzToTuning");
   }
   return tuning;
 }

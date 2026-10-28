@@ -31,6 +31,7 @@
 
 - Null-returning constructors and catalog getters report the code the library recorded (an allocation failure as `OutOfMemory`) instead of a fixed code on Node, WASM and Python, and catalogs that returned an empty list after a failure raise it.
 - WASM mixer and project calls report the library's code instead of `InvalidState`, so an out-of-range strip index is a `RangeError` as on Node.
+- WASM `tuningToReferenceHz`, `referenceHzToTuning` and `noteSegments` refusals carry a readable message instead of a native pointer.
 
 #### Playback renderer
 

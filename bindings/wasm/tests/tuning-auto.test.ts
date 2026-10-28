@@ -99,8 +99,9 @@ describe('tuning converters', () => {
 
   it('refuse values outside their domain', () => {
     expect(() => tuningToReferenceHz(Number.NaN)).toThrow();
-    expect(() => tuningToReferenceHz(0, 0)).toThrow();
-    expect(() => referenceHzToTuning(-1)).toThrow();
+    expect(() => tuningToReferenceHz(0, 0)).toThrow(RangeError);
+    expect(() => tuningToReferenceHz(0, 0)).toThrow(/^tuningToReferenceHz: Invalid parameter/);
+    expect(() => referenceHzToTuning(-1)).toThrow(RangeError);
     let thrown: unknown;
     try {
       referenceHzToTuning(440, 0);
@@ -108,6 +109,7 @@ describe('tuning converters', () => {
       thrown = error;
     }
     expect(thrown).toBeInstanceOf(RangeError);
+    expect((thrown as Error).message).toMatch(/^referenceHzToTuning: Invalid parameter/);
   });
 });
 
