@@ -56,6 +56,10 @@
 
 - An insert automation lane or parameter setter whose value the processor refuses (a gate `rangeDb` above 0, a compressor `ratio` below 1) is reported not applied and leaves the processor unchanged on track, bus and master strips. It used to glide toward the value and stop at the last step the processor accepted, so `rangeDb` 12 rendered as about −2.3.
 
+#### Vocal editing
+
+- Vocal edit analysis reads a note whose glides leave fewer than two clear vibrato peaks (a short note, or one the next glide cuts into) from a vibrato fitted to its held frames instead of their plain mean, which was off by the partial cycle at either end: 1–3 cents on a ±25-cent vibrato. `centerMidi` (`center_midi`) and a `center` retune move by that much on such notes.
+
 ## v1.10.0 (2026-10-26)
 
 This release tightens argument validation on every surface: values that used to be clamped, ignored or read as a default are refused by name, a refused argument is a `RangeError` / `SonareValueError` / `TypeError` rather than a coded `InvalidParameter`, and failures caused by earlier configuration or a released object are `InvalidState`. The synthesizer gains a subtractive engine section, LFO shapes, a 4-pole state-variable filter, 16 modal modes and many physical-engine parameters, and the GM fallback bank's physical voices are revoiced. It also adds offline rendering through an existing playback renderer and a 32-lane track cap, and analysis windows, tempo and key choices, effect tails and project bounces give different results. No ABI counter moved since v1.9.1; `SonareSynthPatch` is struct version 10 with its 64-bit size unchanged.

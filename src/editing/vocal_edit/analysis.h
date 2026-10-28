@@ -57,8 +57,9 @@ std::vector<VocalNote> extract_vocal_notes(const Audio& source, const VocalAnaly
 /// extraction, split and merge operations.
 ///
 /// centre_midi is the mean of the refined contour over a whole number of
-/// vibrato cycles, excluding the glide frames at either end; median_hz is the
-/// same centre in hertz.
+/// vibrato cycles, excluding the glide frames at either end, or the centre of a
+/// vibrato fitted to those frames when they hold fewer than two clear peaks;
+/// median_hz is the same centre in hertz.
 VocalNote measure_vocal_note(const Audio& source, const VocalAnalysisData& analysis, VocalNoteId id,
                              SampleRange source_range);
 

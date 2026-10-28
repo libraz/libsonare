@@ -1,6 +1,7 @@
 // SONARE_WASM_EXCEPTION_UNWIND: release analysis and segmentation buffers when validation throws.
 #include "editing/vocal_edit/analysis.h"
 
+#include <Eigen/Dense>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -188,23 +189,78 @@ std::vector<pitch_editor::NoteRegion> segment_contour(const VocalAnalysisData& a
 // on a flat note every noise peak is alike and all of them count.
 constexpr double kProminentPeakFraction = 0.5;
 
-/// @brief Pitch centre of a note from its refined per-frame MIDI contour, in frame order.
+// Vibrato rates the fallback fit searches, and its grid step.
+constexpr double kVibratoRateMinHz = 3.5;
+constexpr double kVibratoRateMaxHz = 8.5;
+constexpr double kVibratoRateStepHz = 0.05;
+// Below two cycles a growing amplitude is not separable from the centre (fit outliers of 80 cents).
+constexpr double kGrowthFitMinCycles = 2.0;
+
+/// @brief Constant term of the least-squares fit c + a sin(wt) + b cos(wt), plus t-scaled
+/// sine and cosine when @p growth, over the rates the body spans at least one cycle of.
+/// Returns false when no rate fits or there are too few frames for the model.
+bool fit_vibrato(const std::vector<double>& seconds, const std::vector<double>& values, bool growth,
+                 double* centre, double* rate_hz) {
+  const size_t columns = growth ? 5 : 3;
+  const size_t n = values.size();
+  const double span = seconds.back() - seconds.front();
+  if (n <= columns + 1 || !(span > 0.0)) return false;
+  const double lowest = std::max(kVibratoRateMinHz, 1.0 / span);
+  double best_rss = std::numeric_limits<double>::infinity();
+  Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> design(n, columns);
+  const Eigen::Map<const Eigen::VectorXd> target(values.data(), static_cast<Eigen::Index>(n));
+  for (int step = 0;; ++step) {
+    const double rate = lowest + step * kVibratoRateStepHz;
+    if (rate > kVibratoRateMaxHz + 1e-9) break;
+    const double omega = sonare::constants::kTwoPiD * rate;
+    for (size_t k = 0; k < n; ++k) {
+      const double t = seconds[k];
+      const auto row = static_cast<Eigen::Index>(k);
+      design(row, 0) = 1.0;
+      design(row, 1) = std::sin(omega * t);
+      design(row, 2) = std::cos(omega * t);
+      if (growth) {
+        design(row, 3) = t * design(row, 1);
+        design(row, 4) = t * design(row, 2);
+      }
+    }
+    const Eigen::VectorXd coefficients = design.colPivHouseholderQr().solve(target);
+    const double rss = (design * coefficients - target).squaredNorm();
+    if (rss < best_rss) {
+      best_rss = rss;
+      *centre = coefficients(0);
+      *rate_hz = rate;
+    }
+  }
+  return std::isfinite(best_rss);
+}
+
+/// @brief Pitch centre of a note from its refined per-frame MIDI contour.
 ///
-/// Body: the frames within the threshold of the median, less the monotonic run at either end
-/// (the glide in or out). Centre: the piecewise-linear body integrated from its first to its
-/// last vibrato peak, each the parabolic maximum of one excursion above the body mean. A peak
-/// sits at the same phase whatever the amplitude, so a vibrato still growing in integrates to
-/// zero over a cycle; a level crossing does not (asin(level / amplitude)), and a frame median
-/// is off by the partial cycle at either end (measured 2.6 cents at 5.5 Hz, +-25 cents). With
-/// fewer than two peaks the body mean stands in.
-double contour_centre(const std::vector<double>& midi, double threshold_semitones) {
+/// @p frames holds each value's analysis frame, ascending. Body: the frames within the threshold
+/// of the median, from the first to the last turning point, so the glides at either end are left
+/// out; a turning point needs both neighbours on adjacent frames, since a gap left by the band is
+/// no turn. Centre: the piecewise-linear body integrated from its first to its last vibrato peak,
+/// each the parabolic maximum of one excursion above the body mean. A peak sits at the same phase
+/// whatever the amplitude, so a vibrato still growing in integrates to zero over a cycle; a level
+/// crossing does not (asin(level / amplitude)), and a frame median is off by the partial cycle at
+/// either end (measured 2.6 cents at 5.5 Hz, +-25 cents). A peak on the body's edge is left out,
+/// since a glide cutting the vibrato short makes one there. With fewer than two peaks the centre
+/// is the constant term of a vibrato fit to the body (fit_vibrato), its amplitude growing linearly
+/// once the body spans kGrowthFitMinCycles; the body mean stands in when nothing fits.
+double contour_centre(const std::vector<double>& midi, const std::vector<uint32_t>& frames,
+                      double threshold_semitones, double seconds_per_frame) {
   std::vector<double> sorted(midi);
   std::sort(sorted.begin(), sorted.end());
   const double median = median_of_sorted(sorted);
   std::vector<double> in_band;
+  std::vector<uint32_t> frame_of;
   in_band.reserve(midi.size());
-  for (const double value : midi) {
-    if (std::abs(value - median) <= threshold_semitones) in_band.push_back(value);
+  frame_of.reserve(midi.size());
+  for (size_t i = 0; i < midi.size(); ++i) {
+    if (std::abs(midi[i] - median) > threshold_semitones) continue;
+    in_band.push_back(midi[i]);
+    frame_of.push_back(frames[i]);
   }
   const auto mean_of = [](const std::vector<double>& values) {
     return std::accumulate(values.begin(), values.end(), 0.0) / static_cast<double>(values.size());
@@ -214,6 +270,7 @@ double contour_centre(const std::vector<double>& midi, double threshold_semitone
   size_t first_turn = in_band.size();
   size_t last_turn = 0;
   for (size_t i = 1; i + 1 < in_band.size(); ++i) {
+    if (frame_of[i] != frame_of[i - 1] + 1 || frame_of[i + 1] != frame_of[i] + 1) continue;
     if ((in_band[i] - in_band[i - 1]) * (in_band[i + 1] - in_band[i]) > 0.0) continue;
     if (first_turn == in_band.size()) first_turn = i;
     last_turn = i;
@@ -223,6 +280,25 @@ double contour_centre(const std::vector<double>& midi, double threshold_semitone
                                  in_band.begin() + static_cast<std::ptrdiff_t>(last_turn + 1));
 
   const double level = mean_of(body);
+
+  const auto fitted_centre = [&]() {
+    std::vector<double> seconds(body.size());
+    const double middle_frame = 0.5 * (static_cast<double>(frame_of[first_turn]) +
+                                       static_cast<double>(frame_of[last_turn]));
+    for (size_t k = 0; k < body.size(); ++k) {
+      seconds[k] =
+          (static_cast<double>(frame_of[first_turn + k]) - middle_frame) * seconds_per_frame;
+    }
+    double centre = level;
+    double rate_hz = 0.0;
+    if (!fit_vibrato(seconds, body, false, &centre, &rate_hz)) return level;
+    if (rate_hz * (seconds.back() - seconds.front()) >= kGrowthFitMinCycles) {
+      double grown = centre;
+      if (fit_vibrato(seconds, body, true, &grown, &rate_hz)) centre = grown;
+    }
+    return centre;
+  };
+
   struct Peak {
     double position;
     double height;
@@ -250,7 +326,7 @@ double contour_centre(const std::vector<double>& midi, double threshold_semitone
     }
     i = end;
   }
-  if (peaks.size() < 2) return level;
+  if (peaks.size() < 2) return fitted_centre();
   std::vector<double> heights;
   heights.reserve(peaks.size());
   for (const auto& peak : peaks) heights.push_back(peak.height);
@@ -263,7 +339,7 @@ double contour_centre(const std::vector<double>& midi, double threshold_semitone
     if (first < 0.0) first = peak.position;
     last = peak.position;
   }
-  if (first < 0.0 || !(last > first)) return level;
+  if (first < 0.0 || !(last > first)) return fitted_centre();
   // Trapezoid integral of the piecewise-linear body between the two peaks.
   const auto value_at = [&](double x) {
     const size_t k = static_cast<size_t>(std::floor(x));
@@ -283,13 +359,15 @@ double contour_centre(const std::vector<double>& midi, double threshold_semitone
 }
 
 /// @brief Measures a note whose refined contour for [frame_start, frame_end) is already known.
-VocalNote measure_from_contour(const VocalAnalysisData& analysis, VocalNoteId id,
+VocalNote measure_from_contour(const VocalAnalysisData& analysis, int source_rate, VocalNoteId id,
                                SampleRange source_range, uint32_t frame_start, uint32_t frame_end,
                                const std::vector<float>& refined_f0) {
   std::vector<double> midi;
+  std::vector<uint32_t> frames;
   for (uint32_t frame = frame_start; frame < frame_end; ++frame) {
     if (usable_frame(analysis, static_cast<size_t>(frame))) {
       midi.push_back(midi_from_hz(refined_f0[static_cast<size_t>(frame - frame_start)]));
+      frames.push_back(frame);
     }
   }
   VocalNote note;
@@ -305,7 +383,9 @@ VocalNote measure_from_contour(const VocalAnalysisData& analysis, VocalNoteId id
   } else {
     const double threshold_semitones =
         analysis.settings.segmentation_threshold_cents / kCentsPerSemitone;
-    note.centre_midi = contour_centre(midi, threshold_semitones);
+    note.centre_midi =
+        contour_centre(midi, frames, threshold_semitones,
+                       analysis.grid.samples_per_frame / static_cast<double>(source_rate));
     note.median_hz = kA4Hz * std::pow(2.0, (note.centre_midi - kMidiA4) / kSemitonesPerOctave);
     double mad = 0.0;
     for (const double value : midi) mad += std::abs(value - note.centre_midi);
@@ -534,8 +614,9 @@ std::vector<VocalNote> extract_vocal_notes(const Audio& source, const VocalAnaly
     const auto frame_start = static_cast<uint32_t>(region.frame_start);
     const auto frame_end = static_cast<uint32_t>(region.frame_end);
     const std::vector<float> region_f0(refined.begin() + frame_start, refined.begin() + frame_end);
-    notes.push_back(measure_from_contour(analysis, static_cast<VocalNoteId>(notes.size() + 1),
-                                         {start, end}, frame_start, frame_end, region_f0));
+    notes.push_back(measure_from_contour(analysis, source.sample_rate(),
+                                         static_cast<VocalNoteId>(notes.size() + 1), {start, end},
+                                         frame_start, frame_end, region_f0));
   }
   return notes;
 }
@@ -575,8 +656,8 @@ VocalNote measure_vocal_note(const Audio& source, const VocalAnalysisData& analy
   const uint32_t frame_start = frame_boundary(source_range.start);
   const uint32_t frame_end = std::max(frame_start, frame_boundary(source_range.end));
   if (frame_end <= frame_start) invalid("source_range", "source span contains no analysis frame");
-  return measure_from_contour(analysis, id, source_range, frame_start, frame_end,
-                              refine_f0_range(source, analysis, frame_start, frame_end));
+  return measure_from_contour(analysis, source.sample_rate(), id, source_range, frame_start,
+                              frame_end, refine_f0_range(source, analysis, frame_start, frame_end));
 }
 
 }  // namespace sonare::editing::vocal_edit

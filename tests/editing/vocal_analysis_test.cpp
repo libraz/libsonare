@@ -150,6 +150,26 @@ TEST_CASE("a held note stays one note across vibrato rates, depths and starting 
   }
 }
 
+TEST_CASE("a short note between glides reads its centre with under two vibrato peaks",
+          "[vocal_analysis]") {
+  // Both glides cut the vibrato's edges, leaving one clear peak; a body mean is off by the partial
+  // cycles at either end.
+  struct Case {
+    double seconds;
+    double glide;
+    Vibrato vibrato;
+  };
+  const Case cases[] = {{0.45, 0.1, {5.0, 35.0, 0.2}}, {0.4, 0.06, {5.5, 25.0, 0.2}}};
+  for (const auto& c : cases) {
+    const auto notes =
+        notes_of(sing({{6700.0, 0.6}, {6475.0, c.seconds}, {6000.0, 0.6}}, c.glide, c.vibrato));
+    INFO("vibrato " << c.vibrato.rate_hz << " Hz +-" << c.vibrato.depth_cents << " cents, glide "
+                    << c.glide * 1000 << " ms; notes:" << describe(notes));
+    REQUIRE(notes.size() == 3);
+    CHECK(cents_from(notes[1], 64.0) == Catch::Approx(75.0).margin(1.0));
+  }
+}
+
 TEST_CASE("the glide into a note belongs to it", "[vocal_analysis]") {
   // Without vibrato the mid-glide reference frame left a 30-50 ms glide fragment as a third note.
   for (const double glide : {0.06, 0.1}) {
