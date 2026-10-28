@@ -19,6 +19,10 @@ namespace {
 // coefficients rather than an independently-rounded literal.
 constexpr double kSabineCoeff = static_cast<double>(sonare::acoustic::kSabineCoeff);
 
+// Octave bands (125 Hz for band 0) averaged into ISO 3382's T_mid: 500 Hz and 1 kHz.
+constexpr size_t kTmidLowBand = 2;
+constexpr size_t kTmidHighBand = 3;
+
 // Direct-to-reverberant ratio (dB): energy within +/- 2.5 ms of the strongest
 // peak versus all energy outside that direct window (both the tail after it and
 // any build-up before it, per the ISO 3382 split). Meaningful for impulse-like
@@ -104,10 +108,30 @@ RoomEstimate estimate_room(const Audio& recording, const RoomEstimateConfig& con
   const bool use_eyring = config.prefer_eyring;
   const double a0 = std::clamp(static_cast<double>(config.reference_absorption), 0.01, 0.99);
   const double absn0 = use_eyring ? -std::log(1.0 - a0) : a0;
-  // Sabine:  RT = kSab*kV*L / (2*kS*a0)
-  // Eyring:  RT = kSab*kV*L / (2*kS*(-ln(1-a0)))
-  //   => L = RT * 2*kS*absn0 / (kSab*kV)
-  const double length = static_cast<double>(rt60_bb) * 2.0 * kS * absn0 / (kSabineCoeff * kV);
+  // The air term the synthesis adds by default (ISO reference climate) is part of every decay.
+  const acoustic::AirAbsorption reference_air{};
+  const auto air_m = [&](size_t band) {
+    return static_cast<double>(acoustic::air_absorption_m_per_meter(
+        acoustic::octave_center_hz(static_cast<int>(band)), reference_air.temperature_c,
+        reference_air.humidity_percent));
+  };
+  // With the air term: RT = kSab*kV*L / (2*kS*absn0 + 4*m*kV*L)
+  //   => L = RT * 2*kS*absn0 / (kV * (kSab - 4*m*RT))
+  // The anchor is T_mid (the 500 Hz and 1 kHz octaves), each inverted with its own air term;
+  // the broadband RT60 without an air term stands in when neither band is measurable.
+  double length_sum = 0.0;
+  int anchors = 0;
+  for (const size_t band : {kTmidLowBand, kTmidHighBand}) {
+    if (band >= est.rt60_bands.size()) continue;
+    const double rt = static_cast<double>(est.rt60_bands[band]);
+    const double denominator = kV * (kSabineCoeff - 4.0 * air_m(band) * rt);
+    if (!(rt > 0.0) || !std::isfinite(rt) || !(denominator > 0.0)) continue;
+    length_sum += rt * 2.0 * kS * absn0 / denominator;
+    ++anchors;
+  }
+  const double length = anchors > 0
+                            ? length_sum / anchors
+                            : static_cast<double>(rt60_bb) * 2.0 * kS * absn0 / (kSabineCoeff * kV);
   const double volume = kV * length * length * length;
   const double surface = 2.0 * kS * length * length;
 
@@ -116,8 +140,10 @@ RoomEstimate estimate_room(const Audio& recording, const RoomEstimateConfig& con
   est.dims.width = static_cast<float>(length / r_lw);
   est.dims.height = static_cast<float>(length / r_lh);
 
-  // Per-band mean absorption solved at the fixed (V, S). Sabine gives A/S
-  // directly; Eyring corrects the diffuse-field reflection statistics.
+  // Per-band mean wall absorption solved at the fixed (V, S). Sabine gives A/S
+  // directly; Eyring corrects the diffuse-field reflection statistics. The air
+  // term the synthesis adds by default (ISO reference climate) is taken out first,
+  // so resynthesizing the estimate does not count the air twice.
   const size_t n_bands = est.rt60_bands.size();
   est.absorption_bands.assign(n_bands, 0.0f);
   int valid = 0;
@@ -127,7 +153,9 @@ RoomEstimate estimate_room(const Audio& recording, const RoomEstimateConfig& con
   for (size_t b = 0; b < n_bands; ++b) {
     const float rt = est.rt60_bands[b];
     if (!(rt > 0.0f) || !std::isfinite(rt)) continue;
-    const double sab = kSabineCoeff * volume / (surface * static_cast<double>(rt));  // A/S
+    const double air_term = 4.0 * volume * air_m(b);
+    const double sab =
+        (kSabineCoeff * volume / static_cast<double>(rt) - air_term) / surface;  // A_wall/S
     const double a = use_eyring ? (1.0 - std::exp(-sab)) : sab;
     const double a_cl = std::clamp(a, 0.0, 0.99);
     if (a_cl != a) ++clamped;

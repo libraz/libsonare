@@ -762,6 +762,7 @@ if(BUILD_ACOUSTIC_SIM)
     acoustic/room_model.cpp
     acoustic/image_source.cpp
     acoustic/late_reverb.cpp
+    acoustic/room_modes.cpp
     acoustic/rir_synthesizer.cpp
     analysis/room_estimator.cpp
   )

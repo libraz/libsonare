@@ -276,7 +276,7 @@ def test_synthesize_rir_routes_air_absorption_through_the_c_abi() -> None:
         ism_order=2,
         seed=3,
     )
-    off = libsonare.synthesize_rir(**hall)
+    off = libsonare.synthesize_rir(**hall, air_absorption_enabled=False)
     iso = libsonare.synthesize_rir(
         **hall,
         air_absorption_enabled=True,
@@ -292,6 +292,9 @@ def test_synthesize_rir_routes_air_absorption_through_the_c_abi() -> None:
     # crossfade_ms convention the rest of this config already follows.
     implicit = libsonare.synthesize_rir(**hall, air_absorption_enabled=True)
     assert implicit.rir == iso.rir
+
+    # Air absorption is on by default; False is the geometry-only RIR.
+    assert libsonare.synthesize_rir(**hall).rir == iso.rir
 
     # Both climate values are read individually.
     warm = libsonare.synthesize_rir(
@@ -311,7 +314,7 @@ def test_synthesize_rir_raises_on_an_implausible_air_climate() -> None:
     with pytest.raises(libsonare.SonareError, match="acoustic.invalid_air_absorption"):
         libsonare.synthesize_rir(**hall, air_absorption_enabled=True, air_temperature_c=-500.0)
     # The same implausible value is ignored while the flag is off.
-    libsonare.synthesize_rir(**hall, air_temperature_c=-500.0)
+    libsonare.synthesize_rir(**hall, air_absorption_enabled=False, air_temperature_c=-500.0)
 
 
 @acoustic
@@ -327,7 +330,9 @@ def test_room_morph_routes_air_absorption_and_rejects_a_bad_climate() -> None:
         ism_order=2,
         seed=3,
     )
-    off = libsonare.room_morph(samples, 48000, 30.0, 24.0, 15.0, **target).audio
+    off = libsonare.room_morph(
+        samples, 48000, 30.0, 24.0, 15.0, **target, air_absorption_enabled=False
+    ).audio
     on = libsonare.room_morph(
         samples,
         48000,

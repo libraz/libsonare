@@ -49,6 +49,23 @@ bool late_model_from_c(int selector, sonare::acoustic::ReverbModel* model) {
                                           SONARE_REVERB_MODEL_EYRING, model, 1);
 }
 
+// SONARE_AIR_ABSORPTION_DEFAULT (0) leaves @p enabled at the library default; ON / OFF
+// set it. False for any other selector, which the caller refuses.
+bool air_absorption_from_c(int selector, bool* enabled) {
+  switch (selector) {
+    case SONARE_AIR_ABSORPTION_DEFAULT:
+      return true;
+    case SONARE_AIR_ABSORPTION_ON:
+      *enabled = true;
+      return true;
+    case SONARE_AIR_ABSORPTION_OFF:
+      *enabled = false;
+      return true;
+    default:
+      return false;
+  }
+}
+
 // The material selector set make_room maps; anything else is refused.
 bool valid_material_preset(int selector) {
   return sonare_c_detail::valid_c_enum(selector, SONARE_MATERIAL_PRESET_NONE,
@@ -213,7 +230,8 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   sonare::acoustic::RirSynthConfig rc;
-  if (!late_model_from_c(config->late_model, &rc.late_model)) {
+  if (!late_model_from_c(config->late_model, &rc.late_model) ||
+      !air_absorption_from_c(config->air_absorption, &rc.air_absorption_enabled)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   for (size_t i = 0; i < config->absorption_band_count; ++i) {
@@ -241,7 +259,6 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   // not a useful synthesis setting, so a zeroed POD preserves the C++ default.
   // The range check above ran on the caller's value, before this substitution.
   rc.crossfade_ms = sonare::ZeroIsDefault(config->crossfade_ms).or_default(rc.crossfade_ms);
-  rc.air_absorption_enabled = config->air_absorption_enabled != 0;
   // Zero climate values keep the ISO reference (20 degC / 50 % RH) on the same
   // "0 means the library default" rule as seed and crossfade_ms, so enabling
   // air absorption on an otherwise zeroed POD gives the documented climate
@@ -371,6 +388,8 @@ bool room_morph_config_is_valid(const SonareRoomMorphConfig& config) {
   }
   sonare::acoustic::ReverbModel late_model{};
   if (!late_model_from_c(config.late_model, &late_model)) return false;
+  bool air_absorption = false;
+  if (!air_absorption_from_c(config.air_absorption, &air_absorption)) return false;
   for (size_t i = 0; i < config.absorption_band_count; ++i) {
     if (!unit(config.absorption_bands[i])) return false;
   }
@@ -406,7 +425,8 @@ sonare::effects::acoustic::RoomMorphConfig room_morph_config_from(
   // reference, exactly as in synthesize_rir above. Here the core rejects an
   // implausible climate by throwing, which the entry maps to
   // SONARE_ERROR_INVALID_PARAMETER.
-  cfg.air_absorption_enabled = config.air_absorption_enabled != 0;
+  // room_morph_config_is_valid admitted the selector; 0 keeps the library default.
+  (void)air_absorption_from_c(config.air_absorption, &cfg.air_absorption_enabled);
   cfg.air.temperature_c =
       sonare::ZeroIsDefault(config.air_temperature_c).or_default(cfg.air.temperature_c);
   cfg.air.humidity_percent =

@@ -457,6 +457,7 @@ TEST_CASE("room_morph exposes air absorption controls", "[effects][acoustic][roo
   // magnitude itself is covered by the dedicated rir_synthesizer_test.cpp and
   // insert_factory_extra_test.cpp cases.
   without_air.max_seconds = 0.3f;
+  without_air.air_absorption_enabled = false;
 
   RoomMorphConfig with_air = without_air;
   with_air.air_absorption_enabled = true;

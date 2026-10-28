@@ -306,3 +306,26 @@ TEST_CASE("low-cutoff Butterworth sections keep their passband and decay", "[iir
   REQUIRE(std::isfinite(late));
   REQUIRE(late < early * 0.5f);
 }
+
+TEST_CASE("butterworth_zero_phase_gain is the gain butterworth_zero_phase applies", "[iir]") {
+  const int sr = 48000;
+  const float cutoff = 180.0f;
+  for (const bool highpass : {false, true}) {
+    for (const double hz : {60.0, 180.0, 360.0}) {
+      // A sine long enough that the zero-phase edges do not reach the measured middle.
+      std::vector<float> x(static_cast<size_t>(sr));
+      for (size_t i = 0; i < x.size(); ++i) {
+        x[i] = static_cast<float>(std::sin(sonare::constants::kTwoPiD * hz * i / sr));
+      }
+      sonare::butterworth_zero_phase(x, cutoff, sr, 4, highpass);
+      double power = 0.0;
+      const size_t lo = x.size() / 4;
+      const size_t hi = 3 * x.size() / 4;
+      for (size_t i = lo; i < hi; ++i) power += static_cast<double>(x[i]) * x[i];
+      const double measured = std::sqrt(2.0 * power / static_cast<double>(hi - lo));
+      const double predicted = sonare::butterworth_zero_phase_gain(hz, cutoff, sr, 4, highpass);
+      CAPTURE(highpass, hz, measured, predicted);
+      REQUIRE(std::fabs(measured - predicted) < 2e-3);
+    }
+  }
+}

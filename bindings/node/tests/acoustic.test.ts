@@ -361,7 +361,7 @@ describe('geometric room acoustics', () => {
   };
 
   it('routes air absorption into the synthesized tail', () => {
-    const off = synthesizeRir(airHall);
+    const off = synthesizeRir({ ...airHall, airAbsorptionEnabled: false });
     const iso = synthesizeRir({
       ...airHall,
       airAbsorptionEnabled: true,
@@ -376,6 +376,9 @@ describe('geometric room acoustics', () => {
     // seed and crossfadeMs convention these options already follow.
     const implicitIso = synthesizeRir({ ...airHall, airAbsorptionEnabled: true });
     expect(Array.from(implicitIso.rir)).toEqual(Array.from(iso.rir));
+
+    // Air absorption is on by default.
+    expect(Array.from(synthesizeRir(airHall).rir)).toEqual(Array.from(iso.rir));
 
     // Both climate values are read individually.
     const warm = synthesizeRir({
@@ -395,7 +398,12 @@ describe('geometric room acoustics', () => {
     expect(Array.from(warm.rir)).not.toEqual(Array.from(humid.rir));
 
     // The climate is ignored while the flag is off.
-    const ignored = synthesizeRir({ ...airHall, airTemperatureC: 35, airHumidityPercent: 90 });
+    const ignored = synthesizeRir({
+      ...airHall,
+      airAbsorptionEnabled: false,
+      airTemperatureC: 35,
+      airHumidityPercent: 90,
+    });
     expect(Array.from(ignored.rir)).toEqual(Array.from(off.rir));
   });
 
@@ -414,7 +422,7 @@ describe('geometric room acoustics', () => {
     const samples = new Float32Array(4000);
     samples[0] = 1.0;
     const target = { ...airHall, maxSeconds: 0.3, wet: 1.0, sourceTailSuppression: 0.5 };
-    const off = roomMorph(samples, 48000, target);
+    const off = roomMorph(samples, 48000, { ...target, airAbsorptionEnabled: false });
     const on = roomMorph(samples, 48000, {
       ...target,
       airAbsorptionEnabled: true,
@@ -619,5 +627,7 @@ describe('roomMorphStereo', () => {
         listenerZ: 1.5,
       });
     expect(attempt).toThrow(RangeError);
+    // The core's receiver-pair check, not the facade's listenerX/Y/Z reader.
+    expect(attempt).toThrow(/receiver pair is invalid: acoustic\.receiver_outside_room/);
   });
 });

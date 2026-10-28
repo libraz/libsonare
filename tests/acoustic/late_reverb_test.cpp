@@ -453,3 +453,16 @@ TEST_CASE("late-tail pair band correlation matches the published coherence",
     REQUIRE_THAT(rho, Catch::Matchers::WithinAbs(late_tail_pair_coherence(k, spacing, sr), 0.1));
   }
 }
+
+TEST_CASE("rt60_at_hz interpolates the octave RT60 grid log-log and holds its ends",
+          "[acoustic][late_reverb]") {
+  ReverbTime rt;
+  rt.rt60_bands = {2.0f, 1.0f, 0.5f};
+  REQUIRE(rt60_at_hz(rt, 125.0f) == 2.0f);
+  REQUIRE(rt60_at_hz(rt, 250.0f) == 1.0f);
+  REQUIRE(rt60_at_hz(rt, 40.0f) == 2.0f);
+  REQUIRE(rt60_at_hz(rt, 4000.0f) == 0.5f);
+  // Half an octave above 125 Hz sits half-way in log RT60: sqrt(2 * 1).
+  REQUIRE_THAT(rt60_at_hz(rt, 125.0f * std::sqrt(2.0f)), WithinRel(std::sqrt(2.0f), 1e-5f));
+  REQUIRE(rt60_at_hz(ReverbTime{}, 500.0f) == 0.0f);
+}

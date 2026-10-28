@@ -883,12 +883,14 @@ TEST_CASE("sonare acoustic C API routes air absorption into the synthesized tail
   // core fails here rather than hiding behind the other two.
   const SonareRirSynthConfig base = air_hall_config();
 
+  SonareRirSynthConfig geometry_only = base;
+  geometry_only.air_absorption = SONARE_AIR_ABSORPTION_OFF;
   SonareRirSynthConfig iso = base;
-  iso.air_absorption_enabled = 1;
+  iso.air_absorption = SONARE_AIR_ABSORPTION_ON;
   iso.air_temperature_c = 20.0f;
   iso.air_humidity_percent = 50.0f;
 
-  SonareRirSynthResult off = synthesized(base);
+  SonareRirSynthResult off = synthesized(geometry_only);
   SonareRirSynthResult on = synthesized(iso);
 
   SECTION("enabling it changes the tail and removes energy from it") {
@@ -904,7 +906,7 @@ TEST_CASE("sonare acoustic C API routes air absorption into the synthesized tail
 
   SECTION("a zeroed climate resolves to the ISO reference, like seed and crossfade_ms") {
     SonareRirSynthConfig zeroed = base;
-    zeroed.air_absorption_enabled = 1;  // temperature/humidity left at 0
+    zeroed.air_absorption = SONARE_AIR_ABSORPTION_ON;  // temperature/humidity left at 0
     SonareRirSynthResult implicit_iso = synthesized(zeroed);
     REQUIRE(same_rir(implicit_iso, on));
     sonare_free_rir_synth_result(&implicit_iso);
@@ -926,7 +928,7 @@ TEST_CASE("sonare acoustic C API routes air absorption into the synthesized tail
 
   SECTION("the climate is ignored while the flag is off") {
     SonareRirSynthConfig off_but_set = base;
-    off_but_set.air_absorption_enabled = 0;
+    off_but_set.air_absorption = SONARE_AIR_ABSORPTION_OFF;
     off_but_set.air_temperature_c = 35.0f;
     off_but_set.air_humidity_percent = 90.0f;
     SonareRirSynthResult ignored = synthesized(off_but_set);
@@ -941,7 +943,7 @@ TEST_CASE("sonare acoustic C API routes air absorption into the synthesized tail
 TEST_CASE("sonare acoustic C API reports an implausible air climate", "[c_api][acoustic]") {
   SECTION("RIR synthesis surfaces it as a diagnostic, not a call failure") {
     SonareRirSynthConfig cfg = air_hall_config();
-    cfg.air_absorption_enabled = 1;
+    cfg.air_absorption = SONARE_AIR_ABSORPTION_ON;
     cfg.air_temperature_c = -500.0f;  // below absolute zero
     SonareRirSynthResult out{};
     REQUIRE(sonare_synthesize_rir(&cfg, 48000, &out) == SONARE_OK);
@@ -971,7 +973,7 @@ TEST_CASE("sonare acoustic C API reports an implausible air climate", "[c_api][a
     cfg.wet = 0.7f;
     cfg.max_seconds = 0.1f;
     cfg.ism_order = 2;
-    cfg.air_absorption_enabled = 1;
+    cfg.air_absorption = SONARE_AIR_ABSORPTION_ON;
     cfg.air_humidity_percent = 150.0f;  // outside [0, 100]
     float* out = nullptr;
     size_t out_length = 0;
@@ -1014,14 +1016,16 @@ TEST_CASE("sonare acoustic C API routes air absorption into the morph target roo
     return copy;
   };
 
+  SonareRoomMorphConfig geometry_only = base;
+  geometry_only.air_absorption = SONARE_AIR_ABSORPTION_OFF;
   SonareRoomMorphConfig iso = base;
-  iso.air_absorption_enabled = 1;
+  iso.air_absorption = SONARE_AIR_ABSORPTION_ON;
   iso.air_temperature_c = 20.0f;
   iso.air_humidity_percent = 50.0f;
   SonareRoomMorphConfig zeroed_climate = base;
-  zeroed_climate.air_absorption_enabled = 1;
+  zeroed_climate.air_absorption = SONARE_AIR_ABSORPTION_ON;
 
-  const std::vector<float> off = morph(base);
+  const std::vector<float> off = morph(geometry_only);
   const std::vector<float> on = morph(iso);
   const std::vector<float> implicit_iso = morph(zeroed_climate);
 
@@ -1033,6 +1037,49 @@ TEST_CASE("sonare acoustic C API routes air absorption into the morph target roo
   REQUIRE(differs);
   // The same zero-means-ISO-reference rule the synthesis path follows.
   REQUIRE(implicit_iso == on);
+}
+
+TEST_CASE("sonare acoustic C API air absorption selector", "[c_api][acoustic]") {
+  SECTION("a zeroed selector equals an explicit ON") {
+    SonareRirSynthConfig implicit_cfg = air_hall_config();
+    SonareRirSynthConfig on_cfg = implicit_cfg;
+    on_cfg.air_absorption = SONARE_AIR_ABSORPTION_ON;
+    SonareRirSynthResult implicit_rir = synthesized(implicit_cfg);
+    SonareRirSynthResult on_rir = synthesized(on_cfg);
+    REQUIRE(same_rir(implicit_rir, on_rir));
+    sonare_free_rir_synth_result(&implicit_rir);
+    sonare_free_rir_synth_result(&on_rir);
+  }
+
+  SECTION("an out-of-range selector is refused by synthesis and by the morph") {
+    SonareRirSynthConfig cfg = air_hall_config();
+    cfg.air_absorption = 3;
+    SonareRirSynthResult out{};
+    REQUIRE(sonare_synthesize_rir(&cfg, 48000, &out) == SONARE_ERROR_INVALID_PARAMETER);
+    sonare_free_rir_synth_result(&out);
+
+    std::vector<float> input(4000, 0.0f);
+    input[0] = 1.0f;
+    SonareRoomMorphConfig morph_cfg{};
+    morph_cfg.length_m = 12.0f;
+    morph_cfg.width_m = 9.0f;
+    morph_cfg.height_m = 5.0f;
+    morph_cfg.source_x = 2.0f;
+    morph_cfg.source_y = 2.0f;
+    morph_cfg.source_z = 1.5f;
+    morph_cfg.listener_x = 8.0f;
+    morph_cfg.listener_y = 6.0f;
+    morph_cfg.listener_z = 1.7f;
+    morph_cfg.absorption = 0.08f;
+    morph_cfg.max_seconds = 0.1f;
+    morph_cfg.ism_order = 2;
+    morph_cfg.air_absorption = 3;
+    float* morphed = nullptr;
+    size_t morphed_length = 0;
+    REQUIRE(sonare_room_morph(input.data(), input.size(), 48000, &morph_cfg, &morphed,
+                              &morphed_length) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(morphed == nullptr);
+  }
 }
 
 TEST_CASE("sonare acoustic C API zero-init estimate config matches the binding defaults",

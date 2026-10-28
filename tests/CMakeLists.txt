@@ -509,6 +509,7 @@ if(BUILD_ACOUSTIC_SIM)
     acoustic/image_source_test.cpp
     acoustic/rir_plan_length_test.cpp
     acoustic/late_reverb_test.cpp
+    acoustic/room_modes_test.cpp
     acoustic/rir_synthesizer_test.cpp
     acoustic/rir_robustness_test.cpp
     acoustic/room_estimator_test.cpp

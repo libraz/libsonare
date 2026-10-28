@@ -231,6 +231,31 @@ void butterworth_zero_phase(std::vector<float>& x, float cutoff_hz, int sr, int 
   }
 }
 
+double butterworth_zero_phase_gain(double freq_hz, float cutoff_hz, int sr, int order,
+                                   bool highpass) {
+  SONARE_CHECK(cutoff_hz > 0 && sr > 0 && cutoff_hz < sr / 2.0f, ErrorCode::InvalidParameter);
+  SONARE_CHECK(order >= 2 && order % 2 == 0, ErrorCode::InvalidParameter);
+  const double w = sonare::constants::kTwoPiD * freq_hz / static_cast<double>(sr);
+  const double c1 = std::cos(w);
+  const double s1 = std::sin(w);
+  const double c2 = std::cos(2.0 * w);
+  const double s2 = std::sin(2.0 * w);
+  double gain = 1.0;
+  for (int pair = 0; pair < order / 2; ++pair) {
+    const double q = static_cast<double>(rt::butterworth_stage_q(order, pair));
+    const rt::BiquadCoeffsD c =
+        highpass ? rt::rbj_highpass_d(static_cast<double>(cutoff_hz), static_cast<double>(sr), q)
+                 : rt::rbj_lowpass_d(static_cast<double>(cutoff_hz), static_cast<double>(sr), q);
+    // |B(e^jw)|^2 / |A(e^jw)|^2 with e^-jw = cos w - j sin w.
+    const double br = c.b0 + c.b1 * c1 + c.b2 * c2;
+    const double bi = -(c.b1 * s1 + c.b2 * s2);
+    const double ar = 1.0 + c.a1 * c1 + c.a2 * c2;
+    const double ai = -(c.a1 * s1 + c.a2 * s2);
+    gain *= (br * br + bi * bi) / (ar * ar + ai * ai);
+  }
+  return gain;
+}
+
 std::vector<float> preemphasis_zero_initial_state(const float* input, size_t size, float coeff) {
   return sonare::preemphasis(input, size, coeff, 0.0f);
 }

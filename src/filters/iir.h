@@ -111,6 +111,11 @@ std::vector<float> apply_cascade_filtfilt(const float* input, size_t size,
 void butterworth_zero_phase(std::vector<float>& x, float cutoff_hz, int sr, int order,
                             bool highpass);
 
+/// @brief Amplitude gain @ref butterworth_zero_phase applies at @p freq_hz (the product of
+///        each section's |H(e^jw)|^2, from the same coefficients).
+double butterworth_zero_phase_gain(double freq_hz, float cutoff_hz, int sr, int order,
+                                   bool highpass);
+
 /// @brief Applies a zero-initial-state pre-emphasis filter to audio signal.
 /// @details Internal legacy helper. Unlike effects/preemphasis.h this starts
 /// at zero state, so its distinct name prevents accidental overload selection.

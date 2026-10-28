@@ -50,6 +50,10 @@ _REVERB_MODEL_DEFAULT = 0
 _REVERB_MODEL_SABINE = 1
 _REVERB_MODEL_EYRING = 2
 
+# SonareRirSynthConfig / SonareRoomMorphConfig.air_absorption selector (0 = library default).
+_AIR_ABSORPTION_ON = 1
+_AIR_ABSORPTION_OFF = 2
+
 # SonareDiagnosticSeverity ordinals (sonare_c_types_enums.h), mapped to the
 # strings Node and WASM put on RirDiagnostic.severity.
 _DIAGNOSTIC_SEVERITIES = ("info", "warning", "error")
@@ -172,7 +176,7 @@ def synthesize_rir(
     max_seconds: float = 0.0,
     mixing_time_ms: float = 0.0,
     crossfade_ms: float = 0.0,
-    air_absorption_enabled: bool = False,
+    air_absorption_enabled: bool = True,
     air_temperature_c: float = 0.0,
     air_humidity_percent: float = 0.0,
 ) -> RirResult:
@@ -211,8 +215,9 @@ def synthesize_rir(
         crossfade_ms: Equal-power crossfade width around the mixing time in ms
             (0 = library default).
         air_absorption_enabled: Add the ISO 9613-1 atmospheric-absorption term
-            to the late tail's per-band RT60. Off by default so the RIR is
-            unchanged; it mainly shortens the high bands of a large room.
+            to the late tail's per-band RT60. On by default; it mainly shortens
+            the high bands of a large room. ``False`` gives the geometry-only
+            RT60.
         air_temperature_c: Air temperature in degrees Celsius (0 = the ISO
             reference climate's 20 degC). A literal 0 degC is not
             distinguishable from unset here; use 0.01 for a freezing room.
@@ -255,7 +260,7 @@ def synthesize_rir(
         ism_order=ism_order,
         late_model=_late_model(prefer_eyring),
         seed=_checked_seed(seed),
-        air_absorption_enabled=1 if air_absorption_enabled else 0,
+        air_absorption=_AIR_ABSORPTION_ON if air_absorption_enabled else _AIR_ABSORPTION_OFF,
         air_temperature_c=air_temperature_c,
         air_humidity_percent=air_humidity_percent,
         absorption_bands=bands_ptr,
@@ -492,7 +497,7 @@ def _room_morph_config(
         ism_order=ism_order,
         late_model=_late_model(prefer_eyring),
         seed=_checked_seed(seed),
-        air_absorption_enabled=1 if air_absorption_enabled else 0,
+        air_absorption=_AIR_ABSORPTION_ON if air_absorption_enabled else _AIR_ABSORPTION_OFF,
         air_temperature_c=air_temperature_c,
         air_humidity_percent=air_humidity_percent,
         absorption_bands=bands_ptr,
@@ -527,7 +532,7 @@ def room_morph(
     max_seconds: float = 0.0,
     mixing_time_ms: float = 0.0,
     crossfade_ms: float = 0.0,
-    air_absorption_enabled: bool = False,
+    air_absorption_enabled: bool = True,
     air_temperature_c: float = 0.0,
     air_humidity_percent: float = 0.0,
 ) -> RoomMorphResult:
@@ -554,7 +559,8 @@ def room_morph(
         crossfade_ms: Equal-power crossfade width around the mixing time in ms
             (0 = library default).
         air_absorption_enabled: Add the ISO 9613-1 atmospheric-absorption term
-            to the target room's late tail (off by default).
+            to the target room's late tail (on by default; ``False`` gives the
+            geometry-only RT60).
         air_temperature_c: Air temperature in degrees Celsius (0 = the ISO
             reference 20 degC); see :func:`synthesize_rir`.
         air_humidity_percent: Relative humidity in percent (0 = the ISO
@@ -636,7 +642,7 @@ def room_morph_stereo(
     max_seconds: float = 0.0,
     mixing_time_ms: float = 0.0,
     crossfade_ms: float = 0.0,
-    air_absorption_enabled: bool = False,
+    air_absorption_enabled: bool = True,
     air_temperature_c: float = 0.0,
     air_humidity_percent: float = 0.0,
 ) -> RoomMorphStereoResult:

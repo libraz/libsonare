@@ -9,6 +9,7 @@
 
 #include "acoustic/image_source.h"
 #include "acoustic/late_reverb.h"
+#include "acoustic/room_modes.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
@@ -422,6 +423,25 @@ LateReverbConfig late_config_for(const RirPlan& plan, const RirSynthConfig& conf
   return late_cfg;
 }
 
+// The late tail with its band below the room's Schroeder frequency rebuilt from the room's
+// modes at @p placement; @p level is the mode scale (from the plan's reference stream).
+Audio with_room_modes(const Audio& late_audio, const ModalPlan& modes, float level,
+                      const ShoeboxRoom& room, const SourceListener& placement, int sample_rate) {
+  if (modes.modes.empty() || late_audio.empty()) return late_audio;
+  std::vector<float> late(late_audio.data(), late_audio.data() + late_audio.size());
+  remove_modal_band(late, modes, sample_rate);
+  add_room_modes(late, modes, room, placement, level, sample_rate);
+  return Audio::from_vector(std::move(late), sample_rate);
+}
+
+// Mode scale that matches the modal band's position-averaged energy to @p late_audio's.
+float room_mode_level(const Audio& late_audio, const ModalPlan& modes, int sample_rate) {
+  if (modes.modes.empty() || late_audio.empty()) return 0.0f;
+  std::vector<float> late(late_audio.data(), late_audio.data() + late_audio.size());
+  const double band_energy = remove_modal_band(late, modes, sample_rate);
+  return modal_level(modes, band_energy, late.size(), sample_rate);
+}
+
 // Fixed-point coordinates for a receiver diagnostic message.
 std::string format_point(const Vec3& p) {
   char buffer[96];
@@ -474,7 +494,11 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   const Audio late_audio =
       synthesize_late_tail(plan.rt, sample_rate, late_config_for(plan, config));
   const float scale = level_match_scale(plan, late_audio);
-  result.rir = assemble_rir(plan, late_audio, scale, config, sample_rate, result.diagnostics);
+  const ModalPlan modes = plan_room_modes(room, plan.rt, sample_rate, late_audio.size());
+  const Audio modal_late =
+      with_room_modes(late_audio, modes, room_mode_level(late_audio, modes, sample_rate), room,
+                      placement, sample_rate);
+  result.rir = assemble_rir(plan, modal_late, scale, config, sample_rate, result.diagnostics);
   return result;
 }
 
@@ -552,8 +576,15 @@ RirPairResult synthesize_rir_pair(const ShoeboxRoom& room, const SourceListener&
         synthesize_late_tail_pair(left.rt, sample_rate, late_config_for(left, config), spacing_m);
     // One scale for both channels, taken at the centre listener against the mono-stream tail.
     const float scale = level_match_scale(centre, late.left);
-    left_rir = assemble_rir(left, late.left, scale, config, sample_rate, left_diagnostics);
-    right_rir = assemble_rir(right, late.right, scale, config, sample_rate, right_diagnostics);
+    // One mode scale too; each receiver hears the modes through its own position.
+    const ModalPlan modes = plan_room_modes(room, left.rt, sample_rate, late.left.size());
+    const float mode_level = room_mode_level(late.left, modes, sample_rate);
+    left_rir = assemble_rir(
+        left, with_room_modes(late.left, modes, mode_level, room, left_placement, sample_rate),
+        scale, config, sample_rate, left_diagnostics);
+    right_rir = assemble_rir(
+        right, with_room_modes(late.right, modes, mode_level, room, right_placement, sample_rate),
+        scale, config, sample_rate, right_diagnostics);
   }
 
   const std::size_t length = std::max(left_rir.size(), right_rir.size());

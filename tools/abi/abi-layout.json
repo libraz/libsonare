@@ -7729,9 +7729,201 @@
         "name": "limiter_isp_ceiling_dbtp",
         "offset": 148,
         "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "voice_engine_engine",
+        "offset": 152,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "voice_engine_f0_min_hz",
+        "offset": 156,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "pitch_correction_mode",
+        "offset": 160,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "pitch_correction_amount",
+        "offset": 164,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "pitch_correction_speed_ms",
+        "offset": 168,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "pitch_correction_key_root",
+        "offset": 172,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "pitch_correction_scale",
+        "offset": 176,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "pitch_correction_robot_octave",
+        "offset": 180,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "harmony_voices",
+        "offset": 184,
+        "size": 4
+      },
+      {
+        "kind": "aggregate",
+        "name": "harmony_steps",
+        "offset": 188,
+        "size": 12
+      },
+      {
+        "kind": "float",
+        "name": "harmony_level",
+        "offset": 200,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "harmony_lead_level",
+        "offset": 204,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "harmony_detune_cents",
+        "offset": 208,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "harmony_delay_ms",
+        "offset": 212,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "vocoder_enabled",
+        "offset": 216,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "vocoder_bands",
+        "offset": 220,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "vocoder_attack_ms",
+        "offset": 224,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "vocoder_release_ms",
+        "offset": 228,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "vocoder_sibilance",
+        "offset": 232,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "vocoder_carrier_source",
+        "offset": 236,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "vocoder_carrier_wave",
+        "offset": 240,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "vocoder_ensemble_detune_cents",
+        "offset": 244,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "vocoder_level",
+        "offset": 248,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "character_type",
+        "offset": 252,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "character_amount",
+        "offset": 256,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "character_tone",
+        "offset": 260,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "reverb_variation_variation",
+        "offset": 264,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "reverb_variation_delay_ms",
+        "offset": 268,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "reverb_variation_feedback",
+        "offset": 272,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "reverb_variation_tempo_bpm",
+        "offset": 276,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "reverb_variation_division",
+        "offset": 280,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "midi_release",
+        "offset": 284,
+        "size": 4
       }
     ],
-    "size": 152
+    "size": 288
   },
   "SonareReassignedSpectrogramResult": {
     "align": 8,
@@ -7972,7 +8164,7 @@
       },
       {
         "kind": "signed",
-        "name": "air_absorption_enabled",
+        "name": "air_absorption",
         "offset": 100,
         "size": 4
       },
@@ -8278,7 +8470,7 @@
       },
       {
         "kind": "signed",
-        "name": "air_absorption_enabled",
+        "name": "air_absorption",
         "offset": 108,
         "size": 4
       },

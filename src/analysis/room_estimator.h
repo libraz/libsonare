@@ -18,7 +18,9 @@
 /// one -- the inverse Sabine/Eyring problem is rank deficient by exactly one
 /// degree of freedom. We close it with a configurable
 /// mean-absorption prior (`reference_absorption`) that anchors the volume
-/// scale, plus a room-shape prior (`aspect_hint_*`). The returned `confidence`
+/// scale at T_mid (500 Hz / 1 kHz), plus a room-shape prior (`aspect_hint_*`).
+/// Both the anchor and the per-band absorptions take out the ISO-reference air
+/// absorption the synthesis adds by default. The returned `confidence`
 /// reports how well the data actually support the estimate -- excitation
 /// adequacy, per-band consistency, and the physical plausibility of the
 /// recovered absorptions. This is a creative-FX estimate, not a metrological
@@ -36,7 +38,8 @@ namespace sonare {
 struct RoomEstimate {
   float volume = 0.0f;                  ///< equivalent interior volume V (m^3); NaN if unmeasurable
   RoomDimensions dims;                  ///< representative shoebox dimensions (m); NaN likewise
-  std::vector<float> absorption_bands;  ///< per-octave-band mean absorption alpha-bar(f), [0,1)
+  std::vector<float> absorption_bands;  ///< per-octave-band mean wall absorption alpha-bar(f),
+                                        ///< [0,1), ISO-reference air removed
   float drr_db = 0.0f;                  ///< direct-to-reverberant ratio (dB)
   std::vector<float> rt60_bands;        ///< per-band RT60 (s), straight from the analyzer
   float confidence = 0.0f;              ///< honest [0,1] support for the estimate

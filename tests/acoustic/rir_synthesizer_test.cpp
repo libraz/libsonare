@@ -291,12 +291,14 @@ TEST_CASE("synthesized RIR round-trips RT60 within 10%", "[acoustic][rir]") {
   const ShoeboxRoom room = uniform_room(8.0f, 6.0f, 3.5f, 0.12f);
   const SourceListener pl{{2.0f, 1.5f, 1.5f}, {6.0f, 4.5f, 1.8f}};
 
-  const RirSynthResult res = synthesize_rir(room, pl, sr, {/*ism_order=*/3});
-  REQUIRE_FALSE(has_error(res.diagnostics));
-
-  // Design target: uniform absorption -> identical per-band RT60.
+  // Design target: the analyzer's broadband RT60 sits on the 1-4 kHz bands, which the default
+  // air term shortens; with it off a uniform room has one RT60 at every band.
+  RirSynthConfig geometry_only{/*ism_order=*/3};
+  geometry_only.air_absorption_enabled = false;
   const ReverbTime rt = shoebox_reverb_time(room, ReverbModel::Eyring);
   const float target = rt.rt60_bands.front();
+  const RirSynthResult res = synthesize_rir(room, pl, sr, geometry_only);
+  REQUIRE_FALSE(has_error(res.diagnostics));
 
   const AcousticParameters params = AcousticAnalyzer::from_impulse_response(res.rir).parameters();
   REQUIRE(std::isfinite(params.rt60));
@@ -306,26 +308,35 @@ TEST_CASE("synthesized RIR round-trips RT60 within 10%", "[acoustic][rir]") {
   REQUIRE(std::isfinite(params.d50));
 }
 
-TEST_CASE("synthesize_rir leaves the RIR unchanged when air absorption is left disabled",
+TEST_CASE("synthesize_rir applies air absorption at the ISO reference climate by default",
           "[acoustic][rir]") {
-  // RirSynthConfig::air_absorption_enabled defaults to false specifically so an
-  // existing caller's RIR is unchanged byte for byte by this option's addition.
   const int sr = 48000;
   const ShoeboxRoom hall = uniform_room(30.0f, 24.0f, 15.0f, 0.08f);
   const SourceListener pl{{5.0f, 5.0f, 1.5f}, {20.0f, 15.0f, 1.7f}};
 
-  RirSynthConfig without_field;
-  without_field.ism_order = 2;
-  without_field.seed = 3u;
-  RirSynthConfig with_field_off = without_field;
-  with_field_off.air_absorption_enabled = false;
-  with_field_off.air = AirAbsorption{35.0f, 90.0f};  // ignored while disabled
+  RirSynthConfig by_default;
+  by_default.ism_order = 2;
+  by_default.seed = 3u;
+  RirSynthConfig iso = by_default;
+  iso.air_absorption_enabled = true;
+  iso.air = AirAbsorption{20.0f, 50.0f};
+  RirSynthConfig off = by_default;
+  off.air_absorption_enabled = false;
+  off.air = AirAbsorption{35.0f, 90.0f};  // ignored while disabled
+  RirSynthConfig off_plain = off;
+  off_plain.air = AirAbsorption{};
 
-  const RirSynthResult a = synthesize_rir(hall, pl, sr, without_field);
-  const RirSynthResult b = synthesize_rir(hall, pl, sr, with_field_off);
+  const RirSynthResult a = synthesize_rir(hall, pl, sr, by_default);
+  const RirSynthResult b = synthesize_rir(hall, pl, sr, iso);
   REQUIRE_FALSE(has_error(a.diagnostics));
   REQUIRE(a.rir.size() == b.rir.size());
   for (size_t i = 0; i < a.rir.size(); ++i) REQUIRE(a.rir[i] == b.rir[i]);
+
+  const RirSynthResult c = synthesize_rir(hall, pl, sr, off);
+  const RirSynthResult d = synthesize_rir(hall, pl, sr, off_plain);
+  REQUIRE(c.rir.size() == d.rir.size());
+  for (size_t i = 0; i < c.rir.size(); ++i) REQUIRE(c.rir[i] == d.rir[i]);
+  REQUIRE(c.rir.size() > a.rir.size());  // the dry hall's tail is sized from its longer RT60
 }
 
 TEST_CASE("synthesize_rir air absorption shortens the round-tripped high-band RT60",
@@ -344,6 +355,7 @@ TEST_CASE("synthesize_rir air absorption shortens the round-tripped high-band RT
   RirSynthConfig config;
   config.ism_order = 3;
   config.seed = 3u;
+  config.air_absorption_enabled = false;
   const RirSynthResult dry = synthesize_rir(hall, pl, sr, config);
   config.air_absorption_enabled = true;
   config.air = AirAbsorption{};  // ISO reference climate (20 degC, 50% RH)
@@ -548,7 +560,8 @@ TEST_CASE("synthesize_rir preserves early reflections past the late tail", "[aco
 
   const std::vector<ImageSource> images = shoebox_image_sources(room, pl, cfg.ism_order);
   const Audio early = synthesize_early_ir(images, sr);
-  const ReverbTime rt = shoebox_reverb_time(room, cfg.late_model);
+  const ReverbTime rt =
+      shoebox_reverb_time(room, cfg.late_model, cfg.air_absorption_enabled ? &cfg.air : nullptr);
   const Audio late = synthesize_late_tail(rt, sr, {});
   const size_t late_n = late.size();
   const size_t early_n = early.size();
@@ -674,7 +687,8 @@ TEST_CASE("synthesize_rir reports a clamp when max_seconds truncates the early r
   probe.ism_order = 10;
   const std::vector<ImageSource> images = shoebox_image_sources(room, pl, probe.ism_order);
   const Audio early = synthesize_early_ir(images, sr);
-  const ReverbTime rt = shoebox_reverb_time(room, probe.late_model);
+  const ReverbTime rt = shoebox_reverb_time(room, probe.late_model,
+                                            probe.air_absorption_enabled ? &probe.air : nullptr);
   const Audio late = synthesize_late_tail(rt, sr, {});
   REQUIRE(early.size() > late.size());  // exercise early-past-late truncation
 
@@ -705,15 +719,18 @@ struct MeasuredRir {
 };
 
 MeasuredRir measure_rir(const ShoeboxRoom& room, const SourceListener& pl, int sr,
-                        float max_seconds = 0.0f) {
+                        float max_seconds = 0.0f, bool air_absorption = true) {
   RirSynthConfig cfg;
   cfg.max_seconds = max_seconds;
+  cfg.air_absorption_enabled = air_absorption;
   RirSynthResult res = synthesize_rir(room, pl, sr, cfg);
   REQUIRE_FALSE(has_error(res.diagnostics));
   AcousticConfig ac;
   ac.n_octave_bands = kDefaultOctaveBands;
   return {AcousticAnalyzer::from_impulse_response(res.rir, ac).parameters(),
-          shoebox_reverb_time(room, cfg.late_model).rt60_bands, std::move(res.diagnostics)};
+          shoebox_reverb_time(room, cfg.late_model, cfg.air_absorption_enabled ? &cfg.air : nullptr)
+              .rt60_bands,
+          std::move(res.diagnostics)};
 }
 }  // namespace
 
@@ -757,8 +774,9 @@ TEST_CASE("a max_seconds cut inside the longest RT60 is warned and not measured"
   // A concrete hall cut at 12 s ends its 14-43 s bands on signal. The analyzer used to take
   // the last 10% as noise and report 0.02-0.04 s for every band.
   const SourceListener pl{{2.0f, 2.0f, 1.5f}, {14.0f, 9.0f, 1.5f}};
-  const MeasuredRir m =
-      measure_rir(preset_room(24.0f, 16.0f, 12.0f, MaterialPreset::Concrete), pl, 48000, 12.0f);
+  // Geometry-only decays: the air term would shorten the 1-2 kHz bands past the cut.
+  const MeasuredRir m = measure_rir(preset_room(24.0f, 16.0f, 12.0f, MaterialPreset::Concrete), pl,
+                                    48000, 12.0f, false);
   REQUIRE(has_code(m.diagnostics, "acoustic.rir_tail_truncated"));
   CAPTURE(m.params.rt60_bands, m.design);
   for (size_t b = 0; b + 1 < m.design.size(); ++b) REQUIRE(std::isnan(m.params.rt60_bands[b]));

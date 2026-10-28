@@ -123,6 +123,11 @@ struct ReverbTime {
   std::vector<float> rt60_bands;
 };
 
+/// @brief RT60 (s) at @p hz: log-log interpolated between octave centres, as the late tail's
+///        third-octave bands are, and held at the outermost band beyond the grid. A band with
+///        an unbounded decay reads as the 60 s sizing ceiling; 0 for an empty band list.
+float rt60_at_hz(const ReverbTime& rt, float hz) noexcept;
+
 /// @brief Per-band RT60 of a shoebox from its geometry and wall materials.
 ///
 /// The absorption area of each band is the sum over the six walls of

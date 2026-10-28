@@ -95,8 +95,8 @@ export interface RoomGeometryOptions {
   maxSeconds?: number;
   /**
    * Add the ISO 9613-1 atmospheric-absorption term to the late tail's per-band
-   * RT60. Off by default so the RIR is unchanged; it mainly shortens the high
-   * bands of a large room.
+   * RT60. On by default; it mainly shortens the high bands of a large room.
+   * `false` gives the geometry-only RT60.
    */
   airAbsorptionEnabled?: boolean;
   /**

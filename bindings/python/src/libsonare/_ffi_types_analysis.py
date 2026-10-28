@@ -153,7 +153,7 @@ class SonareRirSynthConfig(CStruct):
         # ISO reference (20 degC / 50 % RH) at 0, like seed and crossfade_ms.
         # Placed after the optional tail to match the C header, which appends
         # them there so the pointer offsets stay pointer-width agnostic.
-        ("air_absorption_enabled", ctypes.c_int),
+        ("air_absorption", ctypes.c_int),
         ("air_temperature_c", ctypes.c_float),
         ("air_humidity_percent", ctypes.c_float),
     ]
@@ -230,7 +230,7 @@ class SonareRoomMorphConfig(CStruct):
         ("scattering_band_count", ctypes.c_size_t),
         ("material_preset", ctypes.c_int),
         # Air absorption on the target room; see SonareRirSynthConfig.
-        ("air_absorption_enabled", ctypes.c_int),
+        ("air_absorption", ctypes.c_int),
         ("air_temperature_c", ctypes.c_float),
         ("air_humidity_percent", ctypes.c_float),
         # Read by sonare_room_morph_stereo only; 0 = library default (0.5 m).

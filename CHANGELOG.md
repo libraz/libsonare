@@ -4,6 +4,10 @@
 
 ### Upgrade notes
 
+#### Removed and renamed
+
+- The C `SonareRirSynthConfig` and `SonareRoomMorphConfig` field `air_absorption_enabled` is now `air_absorption`, a `SONARE_AIR_ABSORPTION_*` selector: `DEFAULT` (0) and `ON` (1) apply air absorption, `OFF` (2) leaves it out, and any other value is refused. A zero-initialized config therefore applies it. `SONARE_ACOUSTIC_ABI_VERSION` is 6.
+
 #### Now refused
 
 - Every argument the library refuses (C `SONARE_ERROR_INVALID_PARAMETER`) is a `RangeError` on Node and WASM and a `SonareValueError` on Python, whichever layer refused it. Entry points that still raised a coded `InvalidParameter` `SonareError` follow, among them the one-shot named-processor calls refusing an unread key, `mixStereo` pan out of range, `Mixer.addStrip` `truePeakOversample` (now the same class as `configureMeter`), `masteringInsertTiming`, `hzToNote` and `noteToHz`. A Node or WASM `SonareError` handler no longer catches them; Python's `except SonareError` still does, and the message no longer carries a `[4]` prefix.
@@ -12,6 +16,14 @@
 - Reverb inserts refuse an out-of-range tail length instead of clamping it, and `capabilityCatalog()` publishes the range: `effects.reverb.convolution` `decaySec` [0, 12], `effects.reverb.fdn` `decaySec` [0, 15], `effects.reverb.velvet` `decaySec` and `reverbTimeS`, `effects.reverb.dattorro` `decaySec`. A negative `seed` on the room, room-morph and convolution reverbs is refused instead of read as 0.
 - Karplus-Strong `haloDampS` publishes 0–1.5 s, the halo's own ring time, instead of 0–10 s; a value at or above 1.5 s already left the halo undamped, so no sound changes.
 - Loading a mixer scene or a realtime voice-changer config refuses a present key of the wrong type, including `null`, naming the field, instead of loading the default (`faderDb: "loud"` on a scene strip, for example). An absent key keeps its default.
+
+### Behaviour changes
+
+#### Room acoustics
+
+- Synthesized room impulse responses, the room reverb and the room morph apply ISO 9613-1 air absorption at the reference climate (20 °C, 50 % RH) by default, which shortens the high-band decay of large rooms. Pass `airAbsorptionEnabled: false` (Python `air_absorption_enabled=False`) for the geometry-only decay.
+- Below the room's Schroeder frequency the late tail is built from the shoebox's own standing waves instead of noise. The bass rings at the room's mode frequencies, decays at the room's RT60 there and changes with source and listener position; a listener on a mode's pressure node no longer hears that mode. On average over positions the bass carries the energy the noise tail did.
+- `estimateRoom` (`estimate_room`) removes the reference-climate air absorption from its per-band absorptions and anchors the volume on the 500 Hz and 1 kHz bands, so an estimate resynthesizes to the measured decay.
 
 ### Fixes
 

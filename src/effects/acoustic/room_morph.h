@@ -59,12 +59,10 @@ struct RoomMorphConfig {
       sonare::acoustic::ReverbModel::Eyring;  ///< statistical tail RT60 model
   float mixing_time_ms = 0.0f;                ///< early/late crossover; 0 = auto (~sqrt(V) ms)
   float crossfade_ms = 5.0f;                  ///< equal-power crossfade width around mixing time
-  /// Disabled by default so an existing config's target RIR is unchanged byte
-  /// for byte. When enabled, the target late tail's per-band RT60 gains the
-  /// ISO 9613-1 atmospheric-absorption term (see
-  /// acoustic::shoebox_reverb_time); `air` supplies the temperature/humidity
-  /// and defaults to the ISO reference climate.
-  bool air_absorption_enabled = false;
+  /// The target late tail's per-band RT60 gains the ISO 9613-1
+  /// atmospheric-absorption term (see acoustic::shoebox_reverb_time); `air`
+  /// supplies the temperature/humidity and defaults to the ISO reference climate.
+  bool air_absorption_enabled = true;
   sonare::acoustic::AirAbsorption air{};
   /// Spacing (m) of the omnidirectional receiver pair centred on the listener, in (0, 4].
   /// Read only by the stereo layout (`ReceiverLayout::MonoAndPair`).

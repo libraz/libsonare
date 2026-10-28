@@ -918,7 +918,7 @@ TEST_CASE("effects.reverb.room air absorption shortens the round-tripped high-ba
   constexpr const char* kDry =
       R"({"lengthM":30,"widthM":24,"heightM":15,"absorption":0.2,"sourceX":3,"sourceY":3,)"
       R"("sourceZ":1.5,"listenerX":10,"listenerY":8,"listenerZ":1.7,"ismOrder":3,"dryWet":1,)"
-      R"("seed":3})";
+      R"("seed":3,"airAbsorptionEnabled":0})";
   constexpr const char* kWet =
       R"({"lengthM":30,"widthM":24,"heightM":15,"absorption":0.2,"sourceX":3,"sourceY":3,)"
       R"("sourceZ":1.5,"listenerX":10,"listenerY":8,"listenerZ":1.7,"ismOrder":3,"dryWet":1,)"

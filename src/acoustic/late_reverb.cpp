@@ -8,6 +8,7 @@
 #include "acoustic/image_source.h"
 #include "filters/iir.h"
 #include "util/constants.h"
+#include "util/splitmix64.h"
 
 namespace sonare::acoustic {
 
@@ -47,48 +48,29 @@ float third_octave_upper_edge_hz(int k) noexcept {
   return 125.0f * std::pow(2.0f, (static_cast<float>(k) + 0.5f) / kThirdsPerOctave);
 }
 
-// RT60 of third-octave band @p k, log-log interpolated between its octave neighbours; a band
-// beside a NaN (no measurement) octave takes the nearer octave's value.
-float third_octave_rt60(const std::vector<float>& octave_rt60, int k) noexcept {
-  const int lower = k / kThirdsPerOctave;
-  const int step = k % kThirdsPerOctave;
+// RT60 a fraction @p frac of the way from octave band @p lower to the next, log-log; when either
+// side has no measurement the nearer octave's value is taken.
+float interpolate_octave_rt60(const std::vector<float>& octave_rt60, int lower,
+                              float frac) noexcept {
   const float lo = unbounded_rt60_as_max(octave_rt60[static_cast<size_t>(lower)]);
-  if (step == 0) return lo;
+  if (!(frac > 0.0f)) return lo;
   const float hi = unbounded_rt60_as_max(octave_rt60[static_cast<size_t>(lower + 1)]);
   if (!(lo > 0.0f) || !(hi > 0.0f) || !std::isfinite(lo) || !std::isfinite(hi)) {
-    return 2 * step < kThirdsPerOctave ? lo : hi;
+    return 2.0f * frac < 1.0f ? lo : hi;
   }
-  const float frac = static_cast<float>(step) / kThirdsPerOctave;
   return std::exp(std::log(lo) + frac * (std::log(hi) - std::log(lo)));
 }
 
-// Deterministic, platform-independent PRNG (SplitMix64) so synthesized tails are
-// bit-reproducible from the seed alone, never relying on std distribution
-// implementations or any platform RNG.
-class SplitMix64 {
- public:
-  explicit SplitMix64(std::uint64_t seed) noexcept : state_(seed) {}
-
-  std::uint64_t next() noexcept {
-    state_ += 0x9E3779B97F4A7C15ull;
-    std::uint64_t z = state_;
-    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
-    z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
-    return z ^ (z >> 31);
-  }
-
-  // Uniform double in [0, 1) from the top 53 bits.
-  double uniform() noexcept {
-    return static_cast<double>(next() >> 11) * (1.0 / 9007199254740992.0);
-  }
-
- private:
-  std::uint64_t state_;
-};
+// RT60 of third-octave band @p k, log-log interpolated between its octave neighbours.
+float third_octave_rt60(const std::vector<float>& octave_rt60, int k) noexcept {
+  const int step = k % kThirdsPerOctave;
+  return interpolate_octave_rt60(octave_rt60, k / kThirdsPerOctave,
+                                 static_cast<float>(step) / kThirdsPerOctave);
+}
 
 // Standard-normal sample via the Box–Muller transform (self-contained so the
 // result is identical across compilers given identical float behaviour).
-float gaussian(SplitMix64& rng) noexcept {
+float gaussian(sonare::SplitMix64& rng) noexcept {
   double u1 = rng.uniform();
   const double u2 = rng.uniform();
   if (u1 < 1e-12) u1 = 1e-12;  // guard log(0)
@@ -98,7 +80,7 @@ float gaussian(SplitMix64& rng) noexcept {
 // One white Gaussian stream of @p length samples.
 std::vector<float> white_stream(std::uint64_t seed, int length) {
   std::vector<float> stream(static_cast<size_t>(length));
-  SplitMix64 rng(seed);
+  sonare::SplitMix64 rng(seed);
   for (float& s : stream) s = gaussian(rng);
   return stream;
 }
@@ -177,6 +159,18 @@ LateTailResolution resolve_late_tail_with_cap(const ReverbTime& rt, int sample_r
 
 // Octave-band centres matching the analyzer's split (kDefaultOctaveBands = 6:
 // 125 .. 4000 Hz); higher band counts continue up by octaves.
+float rt60_at_hz(const ReverbTime& rt, float hz) noexcept {
+  const int bands = static_cast<int>(rt.rt60_bands.size());
+  if (bands == 0) return 0.0f;
+  const float position = hz > 0.0f ? std::log2(hz / octave_center_hz(0)) : 0.0f;
+  if (!(position > 0.0f)) return unbounded_rt60_as_max(rt.rt60_bands[0]);
+  if (position >= static_cast<float>(bands - 1)) {
+    return unbounded_rt60_as_max(rt.rt60_bands[static_cast<size_t>(bands - 1)]);
+  }
+  const int lower = static_cast<int>(position);
+  return interpolate_octave_rt60(rt.rt60_bands, lower, position - static_cast<float>(lower));
+}
+
 float octave_center_hz(int band) noexcept {
   return 125.0f * std::pow(2.0f, static_cast<float>(band));
 }

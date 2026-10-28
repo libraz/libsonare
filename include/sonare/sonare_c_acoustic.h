@@ -15,7 +15,7 @@
 #include "sonare_c_types.h"
 
 /// ABI version of the flat acoustic POD structs below. Bump on any layout change.
-#define SONARE_ACOUSTIC_ABI_VERSION 5u
+#define SONARE_ACOUSTIC_ABI_VERSION 6u
 
 /// Statistical late-reverberation RT60 model for RIR synthesis / room morph
 /// (SonareRirSynthConfig::late_model, SonareRoomMorphConfig::late_model).
@@ -28,6 +28,16 @@
 #define SONARE_REVERB_MODEL_DEFAULT 0
 #define SONARE_REVERB_MODEL_SABINE 1
 #define SONARE_REVERB_MODEL_EYRING 2
+
+/// Atmospheric-absorption selector for the late tail
+/// (SonareRirSynthConfig::air_absorption, SonareRoomMorphConfig::air_absorption).
+/// SONARE_AIR_ABSORPTION_DEFAULT is 0 so a zero-initialized config selects the
+/// library default (on), matching the C++ struct defaults and every high-level
+/// binding's airAbsorptionEnabled=true default. ON/OFF select it explicitly.
+/// Any other value is refused with SONARE_ERROR_INVALID_PARAMETER.
+#define SONARE_AIR_ABSORPTION_DEFAULT 0
+#define SONARE_AIR_ABSORPTION_ON 1
+#define SONARE_AIR_ABSORPTION_OFF 2
 
 /// Building-material preset selector for the uniform-room wall material
 /// (SonareRirSynthConfig::material_preset / SonareRoomMorphConfig::material_preset).
@@ -102,10 +112,9 @@ typedef struct {
   const float* scattering_bands;
   size_t scattering_band_count;
   int material_preset; /* SONARE_MATERIAL_PRESET_* ; NONE (0) = use bands/scalar */
-  /* Optional ISO 9613-1 atmospheric absorption on the late tail. Off (0) by
-   * default so a zero-initialized config produces the RIR it always did; when
-   * non-zero, the per-band late RT60 gains the `4 m V` air term, which mainly
-   * shortens the high bands of a large room.
+  /* ISO 9613-1 atmospheric absorption on the late tail, a SONARE_AIR_ABSORPTION_*
+   * selector; DEFAULT (0) = on. While on, the per-band late RT60 gains the
+   * `4 m V` air term, which mainly shortens the high bands of a large room.
    *
    * The climate pair follows this ABI's `seed` / `crossfade_ms` convention:
    * 0 selects the library value, here the ISO reference climate (20 degC,
@@ -121,7 +130,7 @@ typedef struct {
    * odd count, which pads before the pointer on a 64-bit target but not on
    * wasm32. Appending here keeps every existing offset identical on both and
    * costs no padding at all. */
-  int air_absorption_enabled;
+  int air_absorption;
   float air_temperature_c;
   float air_humidity_percent;
 } SonareRirSynthConfig;
@@ -216,11 +225,11 @@ typedef struct {
   const float* scattering_bands;
   size_t scattering_band_count;
   int material_preset; /* SONARE_MATERIAL_PRESET_* ; NONE (0) = use bands/scalar */
-  /* Optional atmospheric absorption on the target room's late tail; the enable
-   * flag, the zero-means-ISO-reference climate rule, the physical bounds and
-   * the reason this group sits after the tail are all as documented on
+  /* Atmospheric absorption on the target room's late tail; the selector, the
+   * zero-means-ISO-reference climate rule, the physical bounds and the reason
+   * this group sits after the tail are all as documented on
    * SonareRirSynthConfig. */
-  int air_absorption_enabled;
+  int air_absorption;
   float air_temperature_c;
   float air_humidity_percent;
   /* Receiver spacing in metres for sonare_room_morph_stereo, in (0, 4]; 0 = library default
@@ -255,7 +264,7 @@ static_assert(offsetof(SonareRirSynthConfig, material_preset) ==
 // The air-absorption group follows material_preset as a packed 4-byte run, on
 // every target: pinning it member-relative keeps the check pointer-width
 // agnostic (a size_t/pointer is 8 bytes natively and 4 on wasm32).
-static_assert(offsetof(SonareRirSynthConfig, air_absorption_enabled) ==
+static_assert(offsetof(SonareRirSynthConfig, air_absorption) ==
                   offsetof(SonareRirSynthConfig, material_preset) + sizeof(int),
               "SonareRirSynthConfig air-absorption layout changed");
 static_assert(offsetof(SonareRirSynthConfig, air_humidity_percent) ==
@@ -273,7 +282,7 @@ static_assert(offsetof(SonareRoomMorphConfig, scattering_bands) ==
 static_assert(offsetof(SonareRoomMorphConfig, material_preset) ==
                   offsetof(SonareRoomMorphConfig, scattering_band_count) + sizeof(size_t),
               "SonareRoomMorphConfig optional tail layout changed");
-static_assert(offsetof(SonareRoomMorphConfig, air_absorption_enabled) ==
+static_assert(offsetof(SonareRoomMorphConfig, air_absorption) ==
                   offsetof(SonareRoomMorphConfig, material_preset) + sizeof(int),
               "SonareRoomMorphConfig air-absorption layout changed");
 static_assert(offsetof(SonareRoomMorphConfig, air_humidity_percent) ==

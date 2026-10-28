@@ -3401,7 +3401,7 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": false,
+          "default": true,
           "dependsOn": [],
           "id": null,
           "max": null,
@@ -3912,7 +3912,7 @@
       "realtimeInsertable": true,
       "slots": [],
       "stereoOnly": false,
-      "tailSamples": 51217
+      "tailSamples": 51149
     },
     {
       "category": "effects",
@@ -8257,7 +8257,7 @@
         {
           "choices": null,
           "coupledWith": [],
-          "default": false,
+          "default": true,
           "dependsOn": [],
           "id": null,
           "max": null,
@@ -8648,7 +8648,7 @@
       "realtimeInsertable": true,
       "slots": [],
       "stereoOnly": false,
-      "tailSamples": 51217
+      "tailSamples": 51149
     },
     {
       "category": "effects",
