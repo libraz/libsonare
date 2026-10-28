@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Upgrade notes
+
+#### Now refused
+
+- Every argument the library refuses (C `SONARE_ERROR_INVALID_PARAMETER`) is a `RangeError` on Node and WASM and a `SonareValueError` on Python, whichever layer refused it. Entry points that still raised a coded `InvalidParameter` `SonareError` follow, among them the one-shot named-processor calls refusing an unread key, `mixStereo` pan out of range, `Mixer.addStrip` `truePeakOversample` (now the same class as `configureMeter`), `masteringInsertTiming`, `hzToNote` and `noteToHz`. A Node or WASM `SonareError` handler no longer catches them; Python's `except SonareError` still does, and the message no longer carries a `[4]` prefix.
+- A `StreamAnalyzer` asked for `computeMagnitude` reports `NotSupported` (C `SONARE_ERROR_NOT_SUPPORTED`) on every surface instead of `InvalidParameter`.
+- Reverb inserts refuse an out-of-range tail length instead of clamping it, and `capabilityCatalog()` publishes the range: `effects.reverb.convolution` `decaySec` [0, 12], `effects.reverb.fdn` `decaySec` [0, 15], `effects.reverb.velvet` `decaySec` and `reverbTimeS`, `effects.reverb.dattorro` `decaySec`. A negative `seed` on the room, room-morph and convolution reverbs is refused instead of read as 0.
+- Karplus-Strong `haloDampS` publishes 0–1.5 s, the halo's own ring time, instead of 0–10 s; a value at or above 1.5 s already left the halo undamped, so no sound changes.
+- Loading a mixer scene or a realtime voice-changer config refuses a present key of the wrong type, including `null`, naming the field, instead of loading the default (`faderDb: "loud"` on a scene strip, for example). An absent key keeps its default.
+
+### Fixes
+
+#### Realtime engine and project
+
+- An insert automation lane or parameter setter whose value the processor refuses (a gate `rangeDb` above 0, a compressor `ratio` below 1) is reported not applied and leaves the processor unchanged on track, bus and master strips. It used to glide toward the value and stop at the last step the processor accepted, so `rangeDb` 12 rendered as about −2.3.
+
 ## v1.10.0 (2026-10-26)
 
 This release tightens argument validation on every surface: values that used to be clamped, ignored or read as a default are refused by name, a refused argument is a `RangeError` / `SonareValueError` / `TypeError` rather than a coded `InvalidParameter`, and failures caused by earlier configuration or a released object are `InvalidState`. The synthesizer gains a subtractive engine section, LFO shapes, a 4-pole state-variable filter, 16 modal modes and many physical-engine parameters, and the GM fallback bank's physical voices are revoiced. It also adds offline rendering through an existing playback renderer and a 32-lane track cap, and analysis windows, tempo and key choices, effect tails and project bounces give different results. No ABI counter moved since v1.9.1; `SonareSynthPatch` is struct version 10 with its 64-bit size unchanged.
