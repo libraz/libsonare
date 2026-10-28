@@ -29,6 +29,7 @@ PlaybackLoudnessMeterWrap::PlaybackLoudnessMeterWrap(const Napi::CallbackInfo& i
   }
   sonare_node::ThrowIfError(env,
                             sonare_playback_loudness_meter_create(channels, sample_rate, &meter_));
+  channels_ = channels;
   SONARE_NODE_CATCH_VOID(env)
 }
 
@@ -60,8 +61,17 @@ Napi::Value PlaybackLoudnessMeterWrap::PushInterleaved(const Napi::CallbackInfo&
   }
   SONARE_NODE_TRY
   Napi::Float32Array samples = info[0].As<Napi::Float32Array>();
+  const size_t channels = static_cast<size_t>(channels_);
+  if (samples.ElementLength() % channels != 0) {
+    Napi::RangeError::New(env,
+                          "PlaybackLoudnessMeter.pushInterleaved: interleaved sample count "
+                          "must be a whole number of frames")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  // The C entry counts frames, not samples.
   sonare_node::ThrowIfError(env, sonare_playback_loudness_meter_push_interleaved(
-                                     meter_, samples.Data(), samples.ElementLength()));
+                                     meter_, samples.Data(), samples.ElementLength() / channels));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

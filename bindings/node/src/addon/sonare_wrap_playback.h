@@ -110,6 +110,7 @@ class PlaybackLoudnessMeterWrap : public Napi::ObjectWrap<PlaybackLoudnessMeterW
   bool EnsureAlive(Napi::Env env) const;
 
   SonarePlaybackLoudnessMeter* meter_ = nullptr;
+  int channels_ = 0;
 };
 
 namespace sonare_node {

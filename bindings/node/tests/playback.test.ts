@@ -272,6 +272,28 @@ describe('PlaybackLoudnessMeter', () => {
     expect(Number.isFinite(meter.integratedLufs())).toBe(true);
   });
 
+  it('reads only the frames the array holds, not its element count as frames', () => {
+    // A view over a larger, louder buffer: counting samples as frames reads twice
+    // the view for stereo and measures the loud tail too.
+    const [l, r] = stereoBlock(48000);
+    const backing = new Float32Array(l.length * 4).fill(0.9);
+    const view = backing.subarray(0, l.length * 2);
+    for (let i = 0; i < l.length; i++) {
+      view[i * 2] = l[i];
+      view[i * 2 + 1] = r[i];
+    }
+    using fromView = new PlaybackLoudnessMeter(2, 48000);
+    fromView.pushInterleaved(view);
+    using fromCopy = new PlaybackLoudnessMeter(2, 48000);
+    fromCopy.pushInterleaved(view.slice());
+    expect(fromView.integratedLufs()).toBeCloseTo(fromCopy.integratedLufs(), 6);
+  });
+
+  it('refuses an interleaved array that is not a whole number of frames', () => {
+    using meter = new PlaybackLoudnessMeter(2, 48000);
+    expect(() => meter.pushInterleaved(new Float32Array(3))).toThrow(RangeError);
+  });
+
   it('rejects a non-number channels or sampleRate argument', () => {
     expect(() => new PlaybackLoudnessMeter('two' as unknown as number, 48000)).toThrow();
     expect(() => new PlaybackLoudnessMeter(2, 'fast' as unknown as number)).toThrow();
@@ -367,6 +389,7 @@ describe('PlaybackRenderer.renderOffline', () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(RangeError);
+    expect((caught as Error).message).toMatch(/^in_channels 3 does not match the input layout/);
 
     const bad = interleavedStereo(64);
     bad[10] = Number.NaN;
