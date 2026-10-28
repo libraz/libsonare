@@ -127,7 +127,7 @@ TEST_CASE("formant evaluator is within 2% at partial spacings 110 and 220 Hz", "
 
 TEST_CASE("log-spectral distance self-error at 440 Hz partial spacing is at most 1 dB",
           "[voice_quality]") {
-  // The same vowel at 220 Hz spacing is the reference envelope (D32).
+  // The same vowel at 220 Hz spacing is the reference envelope.
   for (int vowel = 0; vowel < 5; ++vowel) {
     const std::vector<float> reference = vl::synthesize_voice({steady(0.5, 220.0f, vowel)}, kSr);
     const std::vector<float> test = vl::synthesize_voice({steady(0.5, 440.0f, vowel)}, kSr);
@@ -148,7 +148,7 @@ TEST_CASE("log-spectral distance follows the reference warp", "[voice_quality]")
   const float unwarped =
       vl::log_spectral_distance_db(reference.data(), scaled.data(), n, kSr, 1.0f);
   INFO("warped " << warped << " dB, unwarped " << unwarped << " dB");
-  // S3's 3 dB bound: the correctly warped comparison passes it and the unwarped one fails it.
+  // The 3 dB envelope bound: the warped comparison passes it, the unwarped one fails it.
   CHECK(warped <= 3.0f);
   CHECK(unwarped > 3.0f);
 }
@@ -212,14 +212,14 @@ TEST_CASE("latency estimate recovers a known delay within one sample", "[voice_q
                   << env_shifted);
     CHECK(std::abs(wave - delay) <= 1);
     CHECK(std::abs(env - delay) <= 1);
-    // S1's envelope tolerance for a +-7 semitone output.
+    // Envelope tolerance for a +-7 semitone output.
     CHECK(std::abs(env_shifted - delay) <= 48);
   }
 }
 
-TEST_CASE("click counter reads the dry S5 stimulus as clean and finds injected clicks",
+TEST_CASE("click counter reads alternating voice and noise as clean and finds injected clicks",
           "[voice_quality]") {
-  // S5: 10 s of 200 ms voiced vowel / equal-RMS white noise, 5 ms raised-cosine edges.
+  // 10 s of 200 ms voiced vowel / equal-RMS white noise, 5 ms raised-cosine edges.
   std::vector<VoiceSegment> segments;
   for (int i = 0; i < 50; ++i) {
     segments.push_back({0.2, 220.0f, 220.0f, 0.0f, 0.0f, i % 2 == 0, kVowelA, kLevelDb, 5.0f});

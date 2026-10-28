@@ -19,17 +19,17 @@ using constants::kTwoPiD;
 
 namespace {
 
-// YIN search range (D19).
+// YIN search range.
 constexpr double kF0MinHz = 40.0;
 constexpr double kF0MaxHz = 1600.0;
-// The fine pass integrates over this many periods of the coarse estimate (D19).
+// The fine pass integrates over this many periods of the coarse estimate.
 constexpr int kF0WindowPeriods = 4;
 constexpr float kYinThreshold = 0.1f;
 constexpr float kYinVoicedMax = 0.2f;
 // Frames quieter than -100 dBFS RMS carry no pitch.
 constexpr double kF0MinFrameRms = 1e-5;
 
-// Formant / envelope analysis (D32): discrete all-pole fit to harmonic amplitudes read up to
+// Formant / envelope analysis: discrete all-pole fit to harmonic amplitudes read up to
 // 5.5 kHz, on the 11.025 kHz-rate frequency axis, order 12.
 constexpr double kDapRate = 11025.0;
 constexpr double kDapMaxHz = 5500.0;
@@ -46,7 +46,7 @@ constexpr double kEvaluatorHopS = 0.010;
 // Bins either side of k * f0 searched for a harmonic's spectral peak.
 constexpr int kHarmonicSearchBins = 2;
 
-// S4: 8192-point 4-term Blackman-Harris, +-4 bins around each multiple of f0.
+// Inharmonic energy: 8192-point 4-term Blackman-Harris, +-4 bins around each multiple of f0.
 constexpr int kInharmonicFft = 8192;
 constexpr double kInharmonicGuardBins = 4.0;
 constexpr std::array<double, 4> kBlackmanHarris4 = {0.35875, 0.48829, 0.14128, 0.01168};
@@ -56,7 +56,7 @@ constexpr int kEnvelopeSmoothing = 1024;
 // Lags around the FFT peak that are re-evaluated exactly in double precision.
 constexpr int kLatencyRefineRadius = 8;
 
-// S5 click rule (D33): centred +-10 ms reference window without its central +-1 ms.
+// Click rule: centred +-10 ms reference window without its central +-1 ms.
 constexpr double kClickWindowS = 0.010;
 constexpr double kClickExcludeS = 0.001;
 constexpr double kClickLocalFactor = 8.0;
