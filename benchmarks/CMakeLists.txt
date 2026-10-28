@@ -139,3 +139,12 @@ if(BUILD_PLAYBACK)
     )
   endif()
 endif()
+
+if(BUILD_VOICE_CHANGER)
+  add_executable(sonare_voice_changer_bench voice_changer_bench.cpp)
+  target_link_libraries(sonare_voice_changer_bench PRIVATE sonare_voice_changer)
+  target_compile_options(sonare_voice_changer_bench PRIVATE ${SONARE_WARNING_FLAGS})
+  target_include_directories(sonare_voice_changer_bench PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+  )
+endif()
