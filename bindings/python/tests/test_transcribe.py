@@ -110,7 +110,7 @@ def test_polyphonic_default_range_retains_low_notes(frequency: float, midi_note:
 def test_partial_range_uses_the_selected_tracker_default() -> None:
     audio = _tone(440.0)
     libsonare.transcribe(audio, SR, tempo_bpm=120.0, fmin=1800.0)
-    with pytest.raises(libsonare.SonareError, match="fmax") as failure:
+    with pytest.raises(libsonare.SonareValueError, match="fmax") as failure:
         libsonare.transcribe(audio, SR, polyphonic=True, tempo_bpm=120.0, fmin=1800.0)
     assert failure.value.code == 4  # InvalidParameter from the core range resolver.
 

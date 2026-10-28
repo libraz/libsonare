@@ -137,7 +137,7 @@ export interface RirResult {
   sampleRate: number;
   /**
    * Every diagnostic the synthesizer reported, in order. A refused synthesis
-   * throws a coded `SonareError` instead, so every entry is a warning — a
+   * throws instead, so every entry is a warning — a
    * `maxSeconds` clamp that cut the tail is one, and is otherwise
    * indistinguishable from an untruncated RIR.
    */

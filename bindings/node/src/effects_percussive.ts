@@ -19,10 +19,9 @@ import {
  * before the addon narrows it. Every field defaults at 0 here, so a value that
  * wrapped to 0 would select the default and report success.
  *
- * Split the way the WASM facade and options reader split it: a value that is
- * not an integer is refused with the coded `InvalidParameter`, and an integer
- * past the 32-bit range is an argument refusal, a `RangeError`, as the WASM
- * reader raises it and Python raises `SonareValueError`.
+ * Either refusal is an argument refusal, a `RangeError`, as the WASM reader
+ * raises it and Python raises `SonareValueError`; the integer past the 32-bit
+ * range just gets its own wording.
  */
 function assertPercussiveSeparation(fnName: string, options: PercussiveSeparationOptions): void {
   const fields = ['nFft', 'hopLength', 'hpssKernelHarmonic', 'hpssKernelPercussive'] as const;

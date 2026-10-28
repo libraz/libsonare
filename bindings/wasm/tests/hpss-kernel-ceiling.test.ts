@@ -27,14 +27,11 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
-  ErrorCode,
   extractPercussiveEvents,
   hpss,
   hpssWithResidual,
   init,
-  isSonareError,
   renderPercussiveEvents,
-  type SonareError,
 } from '../dist/index.js';
 import { expectArgumentRefusal } from './_helpers';
 
@@ -161,19 +158,10 @@ const capture = (run: () => unknown): unknown => {
 };
 
 /** Every refusal below is a parameter refusal, never an allocation failure. */
-function expectParameterRefusal(caught: unknown): SonareError {
-  expect(isSonareError(caught)).toBe(true);
-  const error = caught as SonareError;
-  expect(error.name).toBe('SonareError');
-  expect(error.code).toBe(ErrorCode.InvalidParameter);
-  expect(error.codeName).toBe('InvalidParameter');
-  // Stated separately from the equality above because these two are the
-  // outcomes the ceiling guard exists to make unreachable on a bounded heap,
-  // and a regression that reintroduced either would be a different defect from
-  // a wrong code.
-  expect(error.code).not.toBe(ErrorCode.OutOfMemory);
-  expect(error.code).not.toBe(ErrorCode.Unknown);
-  return error;
+function expectParameterRefusal(caught: unknown): Error {
+  // A RangeError is not a coded SonareError, so an allocation failure
+  // (OutOfMemory) or an unclassified one (Unknown) cannot satisfy this.
+  return expectArgumentRefusal(caught);
 }
 
 /** The binding's own reader refused the value before the core saw it: a `RangeError`. */

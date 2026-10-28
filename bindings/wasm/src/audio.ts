@@ -205,8 +205,9 @@ export interface DownmixOptions {
  *
  * @param bytes - Encoded audio bytes such as WAV or MP3.
  * @throws SonareError with `codeName: 'DecodeFailed'` for an empty decode or a
- *   non-finite sample, `'InvalidFormat'` for a declared rate outside the
- *   supported range, and `'InvalidParameter'` for empty input.
+ *   non-finite sample and `'InvalidFormat'` for a declared rate outside the
+ *   supported range.
+ * @throws RangeError for empty input.
  *
  * @example
  * ```typescript
@@ -240,8 +241,7 @@ export function decodeChannels(bytes: Uint8Array): DecodedChannels {
  * @param options - `normalize` scales the fold so the worst case (every input
  *   at full scale, in phase) cannot exceed unity; `includeLfe` folds the LFE
  *   plane in at -3 dB instead of dropping it. Both default to `false`.
- * @throws SonareError with `codeName: 'InvalidParameter'` for an upmix or an
- *   unknown layout.
+ * @throws RangeError for an upmix or an unknown layout.
  * @throws RangeError for no channels, or channels of differing length.
  * @throws TypeError for an `options` that is not an object or a non-boolean option.
  * @returns One `Float32Array` per channel of the target layout.

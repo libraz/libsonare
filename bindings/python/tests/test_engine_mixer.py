@@ -16,6 +16,7 @@ from libsonare import (
     EngineTrackMonitorMode,
     RealtimeEngine,
     SonareError,
+    SonareValueError,
 )
 from libsonare._engine_conversions import _track_monitor_mode_value
 
@@ -124,7 +125,7 @@ def test_engine_track_lanes_route_clips_and_lane_commands() -> None:
             ]
         )
         engine.set_track_lanes([10, 20])
-        with pytest.raises(SonareError) as duplicate_lane_error:
+        with pytest.raises(SonareValueError) as duplicate_lane_error:
             engine.set_track_lanes([10, 10])
         assert duplicate_lane_error.value.code == 4
         engine.set_track_lanes([10, 20])
@@ -161,7 +162,7 @@ def test_engine_track_buses_route_lane_sends() -> None:
             ]
         )
         engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}])
-        with pytest.raises(SonareError) as duplicate_bus_error:
+        with pytest.raises(SonareValueError) as duplicate_bus_error:
             engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}, {"bus_id": 1, "gain_db": 0.0}])
         assert duplicate_bus_error.value.code == 4
 
@@ -201,7 +202,7 @@ def test_engine_track_buses_route_lane_sends() -> None:
             {"track_id": 10, "sends": [{"bus_id": 1, "level_db": 99.0}]},
         ]
         for lane in bad_lanes:
-            with pytest.raises(SonareError) as lane_error:
+            with pytest.raises(SonareValueError) as lane_error:
                 engine.set_track_lanes([lane])
             assert lane_error.value.code == 4
 
@@ -267,14 +268,14 @@ def test_engine_track_strip_json_routes_lane_strip() -> None:
         with pytest.raises(SonareError) as bad_json_error:
             engine.set_track_strip_json(10, "{bad json")
         assert bad_json_error.value.code == 2
-        with pytest.raises(SonareError) as bad_processor_error:
+        with pytest.raises(SonareValueError) as bad_processor_error:
             engine.set_track_strip_json(
                 10,
                 '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
                 '"processor":"missing.processor","params":"{}"}]}],"buses":[],"connections":[]}',
             )
         assert bad_processor_error.value.code == 4
-        with pytest.raises(SonareError) as bad_param_error:
+        with pytest.raises(SonareValueError) as bad_param_error:
             engine.set_track_strip_json(
                 10,
                 '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
@@ -332,7 +333,7 @@ def test_engine_track_strip_insert_bypass_toggles_insert() -> None:
             '\\"band0.frequencyHz\\":1000,\\"band0.gainDb\\":12,\\"band0.enabled\\":1}"}]}],'
             '"buses":[],"connections":[]}',
         )
-        with pytest.raises(SonareError) as bad_index_error:
+        with pytest.raises(SonareValueError) as bad_index_error:
             engine.set_track_strip_insert_bypassed(10, 7, True)
         assert bad_index_error.value.code == 4
 
@@ -368,7 +369,7 @@ def test_engine_track_strip_eq_band_updates_embedded_eq() -> None:
             10,
             '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
         )
-        with pytest.raises(SonareError) as bad_index_error:
+        with pytest.raises(SonareValueError) as bad_index_error:
             engine.set_track_strip_eq_band(10, 99, {"type": "Peak", "enabled": True})
         assert bad_index_error.value.code == 4
 
@@ -421,14 +422,14 @@ def test_engine_master_strip_json_routes_master_strip() -> None:
         with pytest.raises(SonareError) as bad_json_error:
             engine.set_master_strip_json("{bad json")
         assert bad_json_error.value.code == 2
-        with pytest.raises(SonareError) as bad_param_error:
+        with pytest.raises(SonareValueError) as bad_param_error:
             engine.set_master_strip_json(
                 '{"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre",'
                 '"processor":"eq.parametric","params":"{\\"band0.gainDb\\":\\"loud\\"}"}]}],'
                 '"buses":[],"connections":[]}'
             )
         assert bad_param_error.value.code == 4
-        with pytest.raises(SonareError) as bad_bypass_error:
+        with pytest.raises(SonareValueError) as bad_bypass_error:
             engine.set_master_strip_insert_bypassed(0, True)
         assert bad_bypass_error.value.code == 4
 
@@ -453,13 +454,13 @@ def test_engine_refuses_a_reserved_mixer_id_that_names_no_strip() -> None:
         points = [AutomationPoint(ppq=0.0, value=-6.0)]
         # The retired positional encoding, for the lane that now holds track 7.
         for positional in (0x4D580101, 0x4D580001, 0x4D58FE00):
-            with pytest.raises(SonareError) as smoothed:
+            with pytest.raises(SonareValueError) as smoothed:
                 engine.set_parameter_smoothed(positional, -6.0)
             assert smoothed.value.code == 4
-            with pytest.raises(SonareError) as immediate:
+            with pytest.raises(SonareValueError) as immediate:
                 engine.set_parameter(positional, -6.0)
             assert immediate.value.code == 4
-            with pytest.raises(SonareError) as lane:
+            with pytest.raises(SonareValueError) as lane:
                 engine.set_automation_lane(positional, points)
             assert lane.value.code == 4
         lane_fader = engine.resolve_track_lane_automation_id(7, "faderDb")
@@ -486,7 +487,7 @@ def test_engine_master_strip_eq_band_updates_embedded_eq() -> None:
         engine.set_master_strip_json(
             '{"version":1,"strips":[{"id":"master"}],"buses":[],"connections":[]}'
         )
-        with pytest.raises(SonareError) as bad_index_error:
+        with pytest.raises(SonareValueError) as bad_index_error:
             engine.set_master_strip_eq_band(99, {"type": "Peak", "enabled": True})
         assert bad_index_error.value.code == 4
 
@@ -542,7 +543,7 @@ def test_engine_track_strip_pan_and_send_setters() -> None:
         )
 
         # An unknown / zero track id is rejected by every setter.
-        with pytest.raises(SonareError) as bad_pan_error:
+        with pytest.raises(SonareValueError) as bad_pan_error:
             engine.set_track_strip_pan(0, -1.0)
         assert bad_pan_error.value.code == 4
         with pytest.raises(SonareError):
@@ -639,7 +640,7 @@ def test_engine_bus_strip_pan_and_send_setters() -> None:
         )
 
         # An unknown / zero bus id is rejected by every setter.
-        with pytest.raises(SonareError) as bad_pan_error:
+        with pytest.raises(SonareValueError) as bad_pan_error:
             engine.set_bus_strip_pan(0, -1.0)
         assert bad_pan_error.value.code == 4
         with pytest.raises(SonareError):
@@ -648,7 +649,7 @@ def test_engine_bus_strip_pan_and_send_setters() -> None:
             engine.set_bus_strip_pan_mode(0, "balance")
         with pytest.raises(SonareError):
             engine.set_bus_strip_dual_pan(0, -1.0, 1.0)
-        with pytest.raises(SonareError) as unknown_bus_error:
+        with pytest.raises(SonareValueError) as unknown_bus_error:
             engine.set_bus_strip_pan(99, 0.0)
         assert unknown_bus_error.value.code == 4
 
@@ -690,7 +691,7 @@ def test_engine_bus_strip_pan_rejects_surround_bus() -> None:
             1,
             '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
         )
-        with pytest.raises(SonareError) as surround_pan_error:
+        with pytest.raises(SonareValueError) as surround_pan_error:
             engine.set_bus_strip_pan(1, 0.0)
         assert surround_pan_error.value.code == 4
         with pytest.raises(SonareError):
@@ -725,7 +726,7 @@ def test_engine_bus_strip_eq_band_updates_embedded_eq() -> None:
             1,
             '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
         )
-        with pytest.raises(SonareError) as bad_index_error:
+        with pytest.raises(SonareValueError) as bad_index_error:
             engine.set_bus_strip_eq_band(1, 99, {"type": "Peak", "enabled": True})
         assert bad_index_error.value.code == 4
 

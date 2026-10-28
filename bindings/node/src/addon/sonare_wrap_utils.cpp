@@ -71,16 +71,21 @@ void SetSonareErrorProperties(Napi::Env env, Napi::Object error, SonareError err
 }  // namespace
 
 Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& message) {
+  if (err == SONARE_ERROR_INVALID_PARAMETER) {
+    return Napi::RangeError::New(env, message);
+  }
   Napi::Error error = Napi::Error::New(env, message);
   SetSonareErrorProperties(env, error.Value(), err);
   return error;
 }
 
 void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix) {
+  if (env.IsExceptionPending()) return;
   MakeSonareError(env, err, prefix + ErrorMessageForCode(err)).ThrowAsJavaScriptException();
 }
 
 void ThrowSonareErrorMessage(Napi::Env env, SonareError err, const std::string& message) {
+  if (env.IsExceptionPending()) return;
   MakeSonareError(env, err, message).ThrowAsJavaScriptException();
 }
 
@@ -122,6 +127,17 @@ void ThrowStdException(Napi::Env env, const std::exception& e) {
 }
 
 void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err) {
+  if (err == SONARE_ERROR_INVALID_PARAMETER) {
+    // The async worker built a plain Error; re-class it as the RangeError the
+    // synchronous path throws, so both report a refused argument alike.
+    Napi::Object range_error_proto =
+        env.Global().Get("RangeError").As<Napi::Object>().Get("prototype").As<Napi::Object>();
+    Napi::Object object_ctor = env.Global().Get("Object").As<Napi::Object>();
+    object_ctor.Get("setPrototypeOf")
+        .As<Napi::Function>()
+        .Call(object_ctor, {error, range_error_proto});
+    return;
+  }
   SetSonareErrorProperties(env, error, err);
 }
 
@@ -583,8 +599,8 @@ Napi::Value FullAnalysisJsonToObject(Napi::Env env, const float* data, size_t le
   SonareError err = options ? sonare_analyze_json_ex(data, length, sample_rate, options, &json_str)
                             : sonare_analyze_json(data, length, sample_rate, &json_str);
   if (err != SONARE_OK) {
-    // A C-ABI failure must carry the SonareError code so the synchronous and
-    // async analyze paths classify the same input identically.
+    // Same classification as the async analyze path (RangeError for a refused
+    // argument, coded SonareError otherwise).
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }

@@ -281,7 +281,7 @@ Napi::Value MixerWrap::SchedulePanAutomation(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 3, "curve", 0, &curve)) return env.Undefined();
   SonareError err = sonare_strip_schedule_pan_automation(strip, sample_pos, pan, curve);
   if (err != SONARE_OK) {
-    sonare_node::ThrowStripValueError(env, err, "failed to schedule pan automation: ");
+    sonare_node::ThrowSonareError(env, err, "failed to schedule pan automation: ");
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -305,7 +305,7 @@ Napi::Value MixerWrap::ScheduleWidthAutomation(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 3, "curve", 0, &curve)) return env.Undefined();
   SonareError err = sonare_strip_schedule_width_automation(strip, sample_pos, width, curve);
   if (err != SONARE_OK) {
-    sonare_node::ThrowStripValueError(env, err, "failed to schedule width automation: ");
+    sonare_node::ThrowSonareError(env, err, "failed to schedule width automation: ");
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)

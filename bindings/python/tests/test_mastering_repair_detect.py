@@ -543,15 +543,15 @@ class TestMonoRefusals:
     def test_the_native_layer_refuses_an_out_of_range_sample_rate(
         self, name: str, entry: Callable[..., Any]
     ) -> None:
-        """Validated natively, so the refusal is a ``SonareError`` and not the
-        facade's own ``SonareValueError``. The following call proves the refused
-        one left nothing behind: the out-struct is zeroed before the argument
-        checks, so there is no half-filled result to carry over."""
+        """Validated natively, so the refusal is the core's own plain message. The
+        following call proves the refused one left nothing behind: the out-struct
+        is zeroed before the argument checks, so there is no half-filled result
+        to carry over."""
         tone = _tone()
 
-        with pytest.raises(libsonare.SonareError) as excinfo:
+        with pytest.raises(libsonare.SonareValueError) as excinfo:
             entry(tone, 0)
-        assert not isinstance(excinfo.value, libsonare.SonareValueError)
+        assert excinfo.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)
 
         assert entry(tone, SR) is not None
 
@@ -703,8 +703,8 @@ class TestStereoRefusals:
     def test_the_native_layer_refuses_an_out_of_range_sample_rate(self) -> None:
         burst = _burst()
 
-        with pytest.raises(libsonare.SonareError) as excinfo:
+        with pytest.raises(libsonare.SonareValueError) as excinfo:
             libsonare.mastering_repair_detect_trim_range_stereo(burst, burst, 0)
-        assert not isinstance(excinfo.value, libsonare.SonareValueError)
+        assert excinfo.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)
 
         assert libsonare.mastering_repair_detect_trim_range_stereo(burst, burst, SR) is not None

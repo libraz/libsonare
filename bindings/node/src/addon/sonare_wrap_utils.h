@@ -28,11 +28,16 @@ SonareError CErrorFromException(const sonare::SonareException& e);
 ///        so a C-ABI failure can be re-raised as a code-carrying exception.
 sonare::ErrorCode CodeFromCError(SonareError err);
 
-/// @brief Build (without throwing) a JS Error carrying
-///        { name: 'SonareError', code, codeName } and @p message.
+/// @brief Build (without throwing) a JS Error for @p err with @p message.
+///
+/// The class follows the cause, not the layer that refused: INVALID_PARAMETER is
+/// always a refused caller argument and becomes a plain RangeError, while every
+/// other code is an Error carrying { name: 'SonareError', code, codeName }.
+/// This is the single point a C code or SonareException becomes a JS error, so
+/// every Throw* helper below inherits the rule.
 Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& message);
 
-/// @brief Throw a JS Error carrying { name: 'SonareError', code, codeName }.
+/// @brief Throw MakeSonareError(@p err, ...) unless an exception is already pending.
 ///        The detail message is @p prefix + the thread-local / generic message.
 void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix = "");
 
@@ -60,7 +65,8 @@ void ThrowLastSonareError(Napi::Env env, const std::string& prefix,
 /// @brief Throw @p e classified through the shared std::exception classifier.
 void ThrowStdException(Napi::Env env, const std::exception& e);
 
-/// @brief Add the public SonareError shape to an existing JavaScript Error.
+/// @brief Add the public SonareError shape to an existing JavaScript Error, or
+/// re-class it as a RangeError for INVALID_PARAMETER (see MakeSonareError).
 /// Used by AsyncWorker completion handlers before rejecting their Promise.
 void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err);
 
@@ -119,9 +125,9 @@ struct HpssArguments {
 ///
 /// Nothing else is re-checked here. The core refuses a non-positive or
 /// odd nFft, a non-positive hop, a hop past nFft / 2, and every kernel outside
-/// the parity and ceiling rules, reporting each as a code-carrying SonareError
+/// the parity and ceiling rules, reporting each as a RangeError
 /// naming the constraint it broke. An addon-side copy of any of those would be
-/// redundant and would answer with a vaguer message and no code.
+/// redundant and would answer with a vaguer message.
 ///
 /// @return false with exactly one pending JS exception on rejection; the caller
 ///         must return before any further N-API call.
@@ -171,40 +177,6 @@ inline void ThrowIfError(Napi::Env env, SonareError err) {
   if (err != SONARE_OK) {
     ThrowSonareError(env, err);
   }
-}
-
-/// @brief Throw @p err with @p message: INVALID_PARAMETER (the caller's value
-///        was refused) as a plain RangeError, every other code as the coded
-///        SonareError. Same pending-exception backstop as ThrowIfError.
-inline void ThrowArgumentErrorMessage(Napi::Env env, SonareError err, const std::string& message) {
-  if (env.IsExceptionPending()) return;
-  if (err == SONARE_ERROR_INVALID_PARAMETER) {
-    Napi::RangeError::New(env, message).ThrowAsJavaScriptException();
-    return;
-  }
-  ThrowSonareErrorMessage(env, err, message);
-}
-
-/// @brief ThrowIfError for calls whose INVALID_PARAMETER means an argument
-///        refusal: that code becomes a RangeError carrying the C detail message,
-///        any other code (INVALID_STATE, NOT_SUPPORTED, ...) the coded SonareError.
-inline void ThrowIfArgumentError(Napi::Env env, SonareError err) {
-  if (env.IsExceptionPending() || err == SONARE_OK) return;
-  const char* detail = sonare_last_error_message();
-  ThrowArgumentErrorMessage(
-      env, err, (detail != nullptr && detail[0] != '\0') ? detail : sonare_error_message(err));
-}
-
-/// @brief ThrowLastSonareError for calls whose INVALID_PARAMETER means an
-///        argument refusal: the code is read from the library's last error,
-///        @p fallback when it recorded none.
-inline void ThrowLastArgumentError(Napi::Env env, SonareError fallback) {
-  if (env.IsExceptionPending()) return;
-  SonareError code = sonare_last_error_code();
-  if (code == SONARE_OK) code = fallback;
-  const char* detail = sonare_last_error_message();
-  ThrowArgumentErrorMessage(
-      env, code, (detail != nullptr && detail[0] != '\0') ? detail : sonare_error_message(code));
 }
 
 /// @brief ThrowIfError's audio-thread counterpart: reports @p err from the code

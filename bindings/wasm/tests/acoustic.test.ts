@@ -6,7 +6,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   detectAcoustic,
-  ErrorCode,
   estimateRoom,
   init,
   roomGeometryFromEstimate,
@@ -27,10 +26,10 @@ describe('geometric room acoustics', () => {
     expect(Array.from(result.rir).some((s) => Math.abs(s) > 0)).toBe(true);
   });
 
-  it('throws a coded SonareError for invalid geometry', () => {
+  it('throws a RangeError for invalid geometry', () => {
     const attempt = () => synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, sourceX: 99 });
     expect(attempt).toThrow(/acoustic\.source_outside_room/);
-    expect(attempt).toThrow(expect.objectContaining({ code: ErrorCode.InvalidParameter }));
+    expect(attempt).toThrow(RangeError);
   });
 
   it('round-trips a known shoebox within tolerance', () => {
@@ -548,10 +547,8 @@ describe('named selectors and estimate-to-geometry', () => {
   it('refuses an estimate with no measurable room', () => {
     const silent = estimateRoom(new Float32Array(48000), 48000);
     expect(Number.isNaN(silent.lengthM)).toBe(true);
-    // The same coded library failure the C ABI and Node report, not an argument refusal.
-    expect(() => roomGeometryFromEstimate(silent)).toThrow(
-      expect.objectContaining({ code: ErrorCode.InvalidParameter }),
-    );
+    // The library refuses the estimate's non-finite geometry as a refused argument.
+    expect(() => roomGeometryFromEstimate(silent)).toThrow(RangeError);
   });
 });
 
@@ -619,6 +616,6 @@ describe('roomMorphStereo', () => {
         listenerY: 3,
         listenerZ: 1.5,
       });
-    expect(attempt).toThrow(expect.objectContaining({ code: ErrorCode.InvalidParameter }));
+    expect(attempt).toThrow(RangeError);
   });
 });

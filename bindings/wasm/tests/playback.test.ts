@@ -10,6 +10,7 @@ import {
   renderPlayback,
   SonareError,
 } from '../dist/index.js';
+import { expectArgumentRefusal } from './_helpers';
 
 const SR = 48000;
 const packageRoot = new URL('../', import.meta.url);
@@ -88,8 +89,7 @@ describe('playback renderer (WASM)', () => {
     } catch (error) {
       caught = error;
     }
-    expect(caught).toBeInstanceOf(SonareError);
-    expect((caught as SonareError).codeName).toBe('InvalidParameter');
+    expectArgumentRefusal(caught);
   });
 
   it('refuses a headphones target without an HRTF set by name', () => {
@@ -264,7 +264,7 @@ describe('playback renderer (WASM)', () => {
       expect(renderer.inputChannels()).toBe(6);
       renderer.processPlanar(noisePlanes(8, 128));
       expect(renderer.inputChannels()).toBe(8);
-      expect(() => renderer.processPlanar(noisePlanes(3, 128))).toThrow(SonareError);
+      expect(() => renderer.processPlanar(noisePlanes(3, 128))).toThrow(RangeError);
       const diagnostics = renderer.diagnostics();
       expect(Object.getPrototypeOf(diagnostics)).toBe(Object.prototype);
       expect(diagnostics.layout_switches).toBe(2);
@@ -454,7 +454,7 @@ describe('playback renderer (WASM)', () => {
     } finally {
       meter.delete();
     }
-    expect(() => new PlaybackLoudnessMeter(3, SR)).toThrow(SonareError);
+    expect(() => new PlaybackLoudnessMeter(3, SR)).toThrow(RangeError);
   });
 
   it('renders a whole buffer offline through an existing renderer like renderPlayback', () => {
@@ -487,12 +487,12 @@ describe('playback renderer (WASM)', () => {
       sampleRate: SR,
     });
     try {
-      expect(() => renderer.renderOffline(new Float32Array(600), 6)).toThrow(SonareError);
+      expect(() => renderer.renderOffline(new Float32Array(600), 6)).toThrow(RangeError);
       expect(() => renderer.renderOffline(new Float32Array(7), 2)).toThrow(RangeError);
       const bad = new Float32Array(512);
       bad[100] = Number.NaN;
-      expect(() => renderer.renderOffline(bad, 2)).toThrow(SonareError);
-      expect(() => renderer.renderOffline(new Float32Array(0), 2)).toThrow(SonareError);
+      expect(() => renderer.renderOffline(bad, 2)).toThrow(RangeError);
+      expect(() => renderer.renderOffline(new Float32Array(0), 2)).toThrow(RangeError);
     } finally {
       renderer.delete();
     }

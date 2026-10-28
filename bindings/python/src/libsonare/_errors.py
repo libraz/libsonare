@@ -65,11 +65,12 @@ class SonareValueError(SonareError, ValueError):
     and by ``except SonareError`` (the binding's own error hierarchy), so
     neither style of caller needs to know which one a given entry point picks.
 
-    Unlike :class:`SonareError`, the message is the plain validation text with
-    no ``[code]`` prefix, since the failure never reached the C ABI.
-    :attr:`code` defaults to :attr:`ErrorCode.INVALID_PARAMETER` so error-class
-    and exit-code mapping treat it exactly like the C-ABI rejection it stands
-    in for.
+    Every refused caller argument is this class, whether the binding caught it
+    or the C ABI answered ``INVALID_PARAMETER``; the refusal contract is by
+    cause, not by layer. Unlike :class:`SonareError`, the message is the plain
+    validation text with no ``[code]`` prefix. :attr:`code` defaults to
+    :attr:`ErrorCode.INVALID_PARAMETER` so error-class and exit-code mapping
+    treat both origins identically.
     """
 
     def __init__(self, message: str, code: int = int(ErrorCode.INVALID_PARAMETER)) -> None:

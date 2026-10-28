@@ -451,20 +451,18 @@ def test_tempo_outside_the_musical_range_is_rejected(tempo):
 
     The range is the core's and is deliberately not mirrored here, so the
     refusal arrives as the plain core error the sibling options raise for a
-    value they cannot use (``n_fft=-4`` is the same shape). Asserting that it is
-    *not* a :class:`SonareValueError` is what pins that: the binding's own
-    argument validation would raise one, and a second copy of the bounds on this
+    value they cannot use (``n_fft=-4`` is the same shape). The binding's own
+    argument validation would raise the same class, so a second copy of the bounds on this
     side is exactly what must not appear.
     """
-    from libsonare import MixTrackInput, SonareError, SonareValueError, suggest_mix_scene
+    from libsonare import MixTrackInput, SonareValueError, suggest_mix_scene
 
-    with pytest.raises(SonareError, match="tempoBpm") as caught:
+    with pytest.raises(SonareValueError, match="tempoBpm"):
         suggest_mix_scene(
             [MixTrackInput("bass", _tone(110.0))],
             sample_rate=SAMPLE_RATE,
             tempo_bpm=tempo,
         )
-    assert not isinstance(caught.value, SonareValueError)
 
 
 def test_zero_tempo_selects_the_transport_fallback():

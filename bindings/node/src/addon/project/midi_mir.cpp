@@ -72,7 +72,7 @@ Napi::Value ProjectWrap::SetMidiEvents(const Napi::CallbackInfo& info) {
       events.push_back(ev);
     }
   }
-  ThrowIfArgumentError(
+  ThrowIfError(
       env, sonare_project_set_midi_events(project_, clip_id,
                                           events.empty() ? nullptr : events.data(), events.size()));
   return env.Undefined();
@@ -99,7 +99,7 @@ Napi::Value ProjectWrap::ImportSmf(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   uint32_t out_id = 0;
-  ThrowIfArgumentError(env, sonare_project_import_smf(project_, bytes, len, &out_id));
+  ThrowIfError(env, sonare_project_import_smf(project_, bytes, len, &out_id));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_id);
   SONARE_NODE_CATCH(env)
@@ -111,7 +111,7 @@ Napi::Value ProjectWrap::ExportSmf(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   uint8_t* bytes = nullptr;
   size_t len = 0;
-  ThrowIfArgumentError(env, sonare_project_export_smf(project_, &bytes, &len));
+  ThrowIfError(env, sonare_project_export_smf(project_, &bytes, &len));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Buffer<uint8_t> out = Napi::Buffer<uint8_t>::Copy(env, bytes != nullptr ? bytes : nullptr,
                                                           bytes != nullptr ? len : 0);
@@ -140,7 +140,7 @@ Napi::Value ProjectWrap::ImportClipFile(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   uint32_t out_id = 0;
-  ThrowIfArgumentError(env, sonare_project_import_clip_file(project_, bytes, len, &out_id));
+  ThrowIfError(env, sonare_project_import_clip_file(project_, bytes, len, &out_id));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_id);
   SONARE_NODE_CATCH(env)
@@ -152,7 +152,7 @@ Napi::Value ProjectWrap::ExportClipFile(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   uint8_t* bytes = nullptr;
   size_t len = 0;
-  ThrowIfArgumentError(env, sonare_project_export_clip_file(project_, &bytes, &len));
+  ThrowIfError(env, sonare_project_export_clip_file(project_, &bytes, &len));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Buffer<uint8_t> out = Napi::Buffer<uint8_t>::Copy(env, bytes != nullptr ? bytes : nullptr,
                                                           bytes != nullptr ? len : 0);
@@ -173,7 +173,7 @@ Napi::Value ProjectWrap::SetProgram(const Napi::CallbackInfo& info) {
       !Int32Arg(env, info, 2, "bank", 0, &bank)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_project_set_program(project_, clip_id, program, bank));
+  ThrowIfError(env, sonare_project_set_program(project_, clip_id, program, bank));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -198,7 +198,7 @@ Napi::Value ProjectWrap::SetProgramOnChannel(const Napi::CallbackInfo& info) {
       !Int32Arg(env, info, 4, "bank", -1, &bank)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(
+  ThrowIfError(
       env, sonare_project_set_program_on_channel(project_, clip_id, group, channel, program, bank));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -212,7 +212,7 @@ Napi::Value ProjectWrap::BakeMidiFx(const Napi::CallbackInfo& info) {
   if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id)) return env.Undefined();
   std::string config;
   if (!OptionalStringArg(env, info, 1, "config", "", &config)) return env.Undefined();
-  ThrowIfArgumentError(env, sonare_project_bake_midi_fx(project_, clip_id, config.c_str()));
+  ThrowIfError(env, sonare_project_bake_midi_fx(project_, clip_id, config.c_str()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -228,12 +228,12 @@ Napi::Value ProjectWrap::BakeMidiFxWithSourceIndex(const Napi::CallbackInfo& inf
   // Size the provenance buffer from the non-destructive preview so the bake
   // runs once with an exactly-fitting buffer.
   size_t expected = 0;
-  ThrowIfArgumentError(
-      env, sonare_project_preview_midi_fx_count(project_, clip_id, config.c_str(), &expected));
+  ThrowIfError(env,
+               sonare_project_preview_midi_fx_count(project_, clip_id, config.c_str(), &expected));
   if (env.IsExceptionPending()) return env.Undefined();
   std::vector<int32_t> source_index(expected, -1);
   size_t written = 0;
-  ThrowIfArgumentError(
+  ThrowIfError(
       env, sonare_project_bake_midi_fx_ex(project_, clip_id, config.c_str(), source_index.data(),
                                           source_index.size(), &written));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -253,8 +253,8 @@ Napi::Value ProjectWrap::PreviewMidiFxCount(const Napi::CallbackInfo& info) {
   std::string config;
   if (!OptionalStringArg(env, info, 1, "config", "", &config)) return env.Undefined();
   size_t count = 0;
-  ThrowIfArgumentError(
-      env, sonare_project_preview_midi_fx_count(project_, clip_id, config.c_str(), &count));
+  ThrowIfError(env,
+               sonare_project_preview_midi_fx_count(project_, clip_id, config.c_str(), &count));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(count));
   SONARE_NODE_CATCH(env)
@@ -274,7 +274,7 @@ Napi::Value ProjectWrap::ValidateMidiNotes(const Napi::CallbackInfo& info) {
   uint32_t clip_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id)) return env.Undefined();
   SonareNotePairValidation out{};
-  ThrowIfArgumentError(env, sonare_project_validate_midi_notes(project_, clip_id, &out));
+  ThrowIfError(env, sonare_project_validate_midi_notes(project_, clip_id, &out));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object result = Napi::Object::New(env);
   result.Set("ok", Napi::Boolean::New(env, out.ok != 0));
@@ -332,10 +332,9 @@ Napi::Value ProjectWrap::AutoTempo(const Napi::CallbackInfo& info) {
   float out_bpm = 0.0f;
   const SonareProjectTempoOptions options =
       TempoOptionsFrom(info.Length() > 4 ? info[4] : env.Undefined());
-  ThrowIfArgumentError(
-      env, sonare_project_auto_tempo_with_options(project_, audio.Data(), audio.ElementLength(),
-                                                  sample_rate, &options, candidate_index,
-                                                  apply_time_signatures ? 1 : 0, &out_bpm));
+  ThrowIfError(env, sonare_project_auto_tempo_with_options(
+                        project_, audio.Data(), audio.ElementLength(), sample_rate, &options,
+                        candidate_index, apply_time_signatures ? 1 : 0, &out_bpm));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_bpm);
   SONARE_NODE_CATCH(env)
@@ -357,9 +356,9 @@ Napi::Value ProjectWrap::AnalyzeTempo(const Napi::CallbackInfo& info) {
   size_t count = 0;
   const SonareProjectTempoOptions options =
       TempoOptionsFrom(info.Length() > 2 ? info[2] : env.Undefined());
-  ThrowIfArgumentError(env, sonare_project_analyze_tempo_with_options(
-                                project_, audio.Data(), audio.ElementLength(), sample_rate,
-                                &options, candidates, std::size(candidates), &count));
+  ThrowIfError(env, sonare_project_analyze_tempo_with_options(
+                        project_, audio.Data(), audio.ElementLength(), sample_rate, &options,
+                        candidates, std::size(candidates), &count));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Array output =
       Napi::Array::New(env, static_cast<uint32_t>(std::min(count, std::size(candidates))));
@@ -399,8 +398,7 @@ Napi::Value ProjectWrap::SnapToGrid(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   double out_ppq = 0.0;
-  ThrowIfArgumentError(env,
-                       sonare_project_snap_to_grid_ex(project_, ppq, strength, division, &out_ppq));
+  ThrowIfError(env, sonare_project_snap_to_grid_ex(project_, ppq, strength, division, &out_ppq));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_ppq);
   SONARE_NODE_CATCH(env)
@@ -430,8 +428,8 @@ Napi::Value ProjectWrap::AnnotateKeys(const Napi::CallbackInfo& info) {
     seg.mode = Uint32Property(obj, "mode", 0);
     keys.push_back(seg);
   }
-  ThrowIfArgumentError(env, sonare_project_annotate_keys(
-                                project_, keys.empty() ? nullptr : keys.data(), keys.size()));
+  ThrowIfError(env, sonare_project_annotate_keys(project_, keys.empty() ? nullptr : keys.data(),
+                                                 keys.size()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -490,8 +488,8 @@ Napi::Value ProjectWrap::AnnotateChords(const Napi::CallbackInfo& info) {
     if (env.IsExceptionPending()) return env.Undefined();
     chords.push_back(chord);
   }
-  ThrowIfArgumentError(env, sonare_project_annotate_chords(
-                                project_, chords.empty() ? nullptr : chords.data(), chords.size()));
+  ThrowIfError(env, sonare_project_annotate_chords(
+                        project_, chords.empty() ? nullptr : chords.data(), chords.size()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -531,10 +529,10 @@ Napi::Value ProjectWrap::SetAssistSidecar(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  ThrowIfArgumentError(
-      env, sonare_project_set_assist_sidecar(
-               project_, module_id.c_str(), schema_version, target_track_id, region_start_ppq,
-               region_end_ppq, payload.empty() ? nullptr : payload.data(), payload.size()));
+  ThrowIfError(env,
+               sonare_project_set_assist_sidecar(
+                   project_, module_id.c_str(), schema_version, target_track_id, region_start_ppq,
+                   region_end_ppq, payload.empty() ? nullptr : payload.data(), payload.size()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -554,7 +552,7 @@ Napi::Value ProjectWrap::GetAssistSidecar(const Napi::CallbackInfo& info) {
   size_t index = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
   SonareProjectAssistSidecar sidecar{};
-  ThrowIfArgumentError(env, sonare_project_get_assist_sidecar(project_, index, &sidecar));
+  ThrowIfError(env, sonare_project_get_assist_sidecar(project_, index, &sidecar));
   if (env.IsExceptionPending()) return env.Undefined();
   return AssistSidecarToObject(env, &sidecar);
   SONARE_NODE_CATCH(env)
@@ -568,7 +566,7 @@ Napi::Value ProjectWrap::AssistSidecars(const Napi::CallbackInfo& info) {
   Napi::Array out = Napi::Array::New(env, count);
   for (size_t i = 0; i < count; ++i) {
     SonareProjectAssistSidecar sidecar{};
-    ThrowIfArgumentError(env, sonare_project_get_assist_sidecar(project_, i, &sidecar));
+    ThrowIfError(env, sonare_project_get_assist_sidecar(project_, i, &sidecar));
     if (env.IsExceptionPending()) return env.Undefined();
     out.Set(static_cast<uint32_t>(i), AssistSidecarToObject(env, &sidecar));
   }

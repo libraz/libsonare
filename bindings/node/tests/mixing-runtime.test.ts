@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ErrorCode, isSonareError, Mixer, mixingScenePresetJson } from '../src/index.js';
+import { Mixer, mixingScenePresetJson } from '../src/index.js';
 
 const BLOCK_SIZE = 8;
 const SAMPLE_RATE = 48000;
@@ -493,19 +493,15 @@ describe('Mixer.setOutputBus', () => {
     return Mixer.fromSceneJson(JSON.stringify({ version: 1 }), SAMPLE_RATE, BLOCK_SIZE);
   }
 
-  function refusal(call: () => void): Error & { code?: number } {
+  function refusal(call: () => void): Error {
     let error: unknown;
     try {
       call();
     } catch (thrown) {
       error = thrown;
     }
-    expect(isSonareError(error)).toBe(true);
-    if (!isSonareError(error)) {
-      throw new Error('expected SonareError');
-    }
-    expect(error.code).toBe(ErrorCode.InvalidParameter);
-    return error;
+    expect(error).toBeInstanceOf(RangeError);
+    return error as Error;
   }
 
   it('sends a strip into a submix, then on to the master', () => {

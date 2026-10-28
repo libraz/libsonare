@@ -272,13 +272,11 @@ class PolyphonicAnalysis:
 
         Raises:
             SonareValueError: If ``samples`` is empty, non-finite, or not a
-                one-dimensional numeric buffer.
-            SonareError: If the C call rejects the request, including
-                ``ErrorCode.INVALID_PARAMETER`` for audio too short for two STFT
+                one-dimensional numeric buffer, or is too short for two STFT
                 frames at the configured ``n_fft``/``hop_length`` (roughly one
-                ``hop_length``, ~512 samples at the default) and
-                ``ErrorCode.NOT_SUPPORTED`` when the library was built without
-                the pitch editor.
+                ``hop_length``, ~512 samples at the default).
+            SonareError: ``ErrorCode.NOT_SUPPORTED`` when the library was built
+                without the pitch editor, or another coded C-call failure.
         """
         self._sample_rate = sample_rate
         buf = _validate_samples("PolyphonicAnalysis", samples)

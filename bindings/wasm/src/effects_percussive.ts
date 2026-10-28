@@ -144,7 +144,7 @@ export interface RenderPercussiveEventsRequest
  *   size that is negative or outside that range, an `onsetWait` that is
  *   fractional, negative or non-finite, a negative or non-finite `onsetDelta` /
  *   `maxEventMs`, or a `minPercussiveRatio` outside `[0, 1]`
- * @throws SonareError (`InvalidParameter`) on an even or non-positive kernel, or
+ * @throws RangeError on an even or non-positive kernel, or
  *   a framing that breaks constant overlap-add
  *
  * @example
@@ -196,7 +196,7 @@ export function extractPercussiveEvents(
  * @throws RangeError when the samples or sample rate fail the shared input checks,
  *   or on a non-finite `gainDb`, a kernel size that is not an integer within the
  *   32-bit range, a negative framing size, or a negative or non-finite `fadeMs`
- * @throws SonareError (`InvalidParameter`) on an event whose span is empty,
+ * @throws RangeError on an event whose span is empty,
  *   reversed or outside the audio, overlapping source spans, an even or
  *   non-positive kernel, or a framing that breaks constant overlap-add
  *

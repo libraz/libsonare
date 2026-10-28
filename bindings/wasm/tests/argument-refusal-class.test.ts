@@ -1,10 +1,13 @@
 /**
  * The error class of a refused argument.
  *
- * An argument the binding refuses itself is a native `TypeError` (wrong type) or
- * `RangeError` (out of domain), never a coded `SonareError`; a failure the library
- * or an object's state reports keeps its code. The C++ readers decide the class,
- * `sonareExceptionInfo` names it and the module wrapper rebuilds it.
+ * The contract is by cause, not by which layer refused: a refused argument is a
+ * native `TypeError` (wrong type) or `RangeError` (out of domain), whether the
+ * binding or the library refused it, so every library `InvalidParameter` is a
+ * `RangeError`. A failure that is not an argument (object state, unsupported,
+ * allocation, decode, cancellation) keeps its code as a `SonareError`. The C++
+ * readers or `sonareExceptionInfo` decide the class and the module wrapper
+ * rebuilds it.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -21,6 +24,8 @@ import {
   init,
   isSonareError,
   Mixer,
+  masteringInsertTiming,
+  masteringProcess,
   masteringRepairDereverbConfigForRoom,
   masteringRepairNoiseBandBins,
   melToAudio,
@@ -209,10 +214,43 @@ describe('argument refusal classes shared with the Node surface', () => {
     }
   });
 
-  it('reports StreamAnalyzer computeMagnitude as a coded InvalidParameter SonareError', () => {
+  it('refuses an unread key of a solo mastering processor with a RangeError', () => {
+    const error = thrown(() =>
+      masteringProcess('utility.gain', new Float32Array(2205), 48000, { gainDb: 3 } as never),
+    );
+    expect(error).toBeInstanceOf(RangeError);
+    expect(isSonareError(error)).toBe(false);
+  });
+
+  it('refuses an out-of-range mixStereo pan with a RangeError', () => {
+    const channel = [new Float32Array(2205).fill(0.1)];
+    const error = thrown(() => mixStereo(channel, channel, 48000, { pan: [2] }));
+    expect(error).toBeInstanceOf(RangeError);
+    expect(isSonareError(error)).toBe(false);
+  });
+
+  it('refuses a bad truePeakOversample with the same class on addStrip and configureMeter', () => {
+    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('drumBusSubgroup'));
+    try {
+      const strip = thrown(() => mixer.addStrip('extra', { truePeakOversample: 3 }));
+      const meter = thrown(() => mixer.configureMeter(true, 3));
+      expect(strip).toBeInstanceOf(RangeError);
+      expect(meter).toBeInstanceOf(RangeError);
+    } finally {
+      mixer.destroy();
+    }
+  });
+
+  it('refuses an unknown masteringInsertTiming parameter key with a RangeError', () => {
+    const error = thrown(() => masteringInsertTiming('utility.gain', { bogus: 1 } as never, 48000));
+    expect(error).toBeInstanceOf(RangeError);
+    expect(isSonareError(error)).toBe(false);
+  });
+
+  it('reports StreamAnalyzer computeMagnitude as a coded NotSupported SonareError', () => {
     const error = thrown(() => new StreamAnalyzer({ sampleRate: 22050, computeMagnitude: true }));
     expect(isSonareError(error)).toBe(true);
-    expect((error as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+    expect((error as { code: number }).code).toBe(ErrorCode.NotSupported);
     expect((error as Error).message).toMatch(/computeMagnitude is not supported/);
   });
 

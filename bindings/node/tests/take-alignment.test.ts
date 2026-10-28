@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AlignTakeToReferenceRequest } from '../src/index.js';
-import { alignTakeToReference, ErrorCode, isSonareError, Project } from '../src/index.js';
+import { alignTakeToReference, Project } from '../src/index.js';
 import { glide } from './_helpers.js';
 
 const SR = 22050;
@@ -76,8 +76,7 @@ describe('alignTakeToReference', () => {
       } catch (e) {
         caught = e;
       }
-      expect(isSonareError(caught), `binsPerOctave ${binsPerOctave} should be refused`).toBe(true);
-      expect((caught as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+      expect(caught, `binsPerOctave ${binsPerOctave} should be refused`).toBeInstanceOf(RangeError);
     }
     // The control: the neighbouring multiples this brackets are accepted at this
     // sample rate, so the refusals above are the divisibility rule rather than a
@@ -162,8 +161,7 @@ describe('alignTakeToReference', () => {
     } catch (e) {
       caught = e;
     }
-    expect(isSonareError(caught)).toBe(true);
-    expect((caught as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+    expect(caught).toBeInstanceOf(RangeError);
   });
 
   describe('a take recorded at another rate', () => {

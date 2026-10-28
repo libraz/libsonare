@@ -118,7 +118,7 @@ from ._runtime import (
     SonareSynthModRouting,
     SonareSynthPatch,
     SonareValueError,
-    _check_argument,
+    _check,
     _curve_value,
     _get_lib,
     _last_error,
@@ -313,7 +313,7 @@ def _automation_lane_args(
 def _fade_curve_value(curve: str | int) -> int:
     if isinstance(curve, str):
         out = ctypes.c_uint32()
-        _check_argument(
+        _check(
             _get_lib().sonare_project_fade_curve_from_name(
                 _utf8_arg(curve, "curve"), ctypes.byref(out)
             )
@@ -1222,7 +1222,7 @@ def synth_preset_patch(name: str) -> SynthPatch:
     if not hasattr(lib, "sonare_synth_preset_patch"):
         raise _not_supported("libsonare was built without the NativeSynth ABI")
     out = SonareSynthPatch()
-    _check_argument(
+    _check(
         lib.sonare_synth_preset_patch(_utf8_arg(_strip_va_prefix(name), "name"), ctypes.byref(out))
     )
     return SynthPatch._from_c(out)
@@ -1407,7 +1407,7 @@ def _midi_event_tuple(name: str, *args: float | ctypes._SimpleCData[int]) -> tup
     lib = _get_lib()
     event = SonareMidiEventPod()
     fn = getattr(lib, name)
-    _check_argument(fn(*args, ctypes.byref(event)))
+    _check(fn(*args, ctypes.byref(event)))
     return (float(event.ppq), int(event.data0), int(event.data1))
 
 

@@ -184,11 +184,10 @@ def test_validate_false_skips_the_facade_scan_but_not_the_core_guard() -> None:
     facade and accepts the buffer.
     """
     inside = FRAME_OFFSET + 200
-    with pytest.raises(SonareError) as excinfo:
+    with pytest.raises(SonareValueError) as excinfo:
         libsonare.metering_spectrum_frame(
             _with(inside, math.nan), SR, FRAME_OFFSET, N_FFT, validate=False
         )
-    assert not isinstance(excinfo.value, SonareValueError)
     assert "Invalid parameter" in str(excinfo.value)
     assert str(inside) not in str(excinfo.value)
 

@@ -37,7 +37,6 @@ import {
   reassignedSpectrogram,
   resample,
   rmsEnergy,
-  SonareError,
   samplesToFrames,
   segmentAgglomerative,
   segmentCrossSimilarity,
@@ -749,9 +748,9 @@ describe('Feature API precision (reference compatibility)', () => {
         new RangeError('timeStretch: rate must be a finite number'),
       );
       // Finite, so the facade passes it on and the core refuses the projected
-      // length instead. The two rejections are different layers, and keeping
-      // them distinguishable here is the point.
-      expect(() => timeStretch(tone, SR, 1.1754943508222875e-38)).toThrow(SonareError);
+      // length instead: the same class, told apart by the core's own wording.
+      expect(() => timeStretch(tone, SR, 1.1754943508222875e-38)).toThrow(RangeError);
+      expect(() => timeStretch(tone, SR, 1.1754943508222875e-38)).not.toThrow(/finite number/);
       expect(Array.from(timeStretch(tone, SR, 1)).every(Number.isFinite)).toBe(true);
     });
 
@@ -848,16 +847,12 @@ describe('Feature API precision (reference compatibility)', () => {
       expect(withinRel(noteToHz('A4'), 440.0, 1e-4)).toBe(true);
     });
 
-    it('noteToHz refuses an unknown name with InvalidParameter', () => {
-      expect(() => noteToHz('H4')).toThrow(
-        expect.objectContaining({ code: ErrorCode.InvalidParameter }),
-      );
+    it('noteToHz refuses an unknown name with a RangeError', () => {
+      expect(() => noteToHz('H4')).toThrow(RangeError);
     });
 
-    it('hzToNote refuses a non-positive frequency with InvalidParameter', () => {
-      expect(() => hzToNote(0)).toThrow(
-        expect.objectContaining({ code: ErrorCode.InvalidParameter }),
-      );
+    it('hzToNote refuses a non-positive frequency with a RangeError', () => {
+      expect(() => hzToNote(0)).toThrow(RangeError);
     });
 
     it('framesToTime should compute correct time', () => {

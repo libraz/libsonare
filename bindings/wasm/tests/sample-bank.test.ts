@@ -9,11 +9,9 @@ import type { SampleZoneDesc, SynthPatch } from '../dist/index.js';
 import {
   ErrorCode,
   init,
-  isSonareError,
   Project,
   RealtimeEngine,
   SampleBank,
-  type SonareError,
   SYNTH_ENGINE_MODES,
   synthEnumTables,
 } from '../dist/index.js';
@@ -59,18 +57,6 @@ function expectRangeRefusal(action: () => void): void {
 /** Asserts that @p action throws a TypeError: a wrong-typed argument. */
 function expectTypeRefusal(action: () => void): void {
   expectRefusalOf(action, TypeError);
-}
-
-/** Asserts that @p action throws a SonareError carrying InvalidParameter (the library's answer). */
-function expectCodedInvalidParameter(action: () => void): void {
-  let caught: unknown;
-  try {
-    action();
-  } catch (error) {
-    caught = error;
-  }
-  expect(isSonareError(caught)).toBe(true);
-  expect((caught as SonareError).code).toBe(ErrorCode.InvalidParameter);
 }
 
 describe('Sonare WASM sample bank', () => {
@@ -119,12 +105,12 @@ describe('Sonare WASM sample bank', () => {
       expect(bank.addSample(pcm, { loopMode: 'key-down' })).toBe(2);
       expect(bank.sampleCount()).toBe(3);
 
-      expectCodedInvalidParameter(() => bank.addZone({ sampleIndex: 9 }));
-      expectCodedInvalidParameter(() => bank.addZone({ setIndex: 4096, sampleIndex: 0 }));
+      expectRangeRefusal(() => bank.addZone({ sampleIndex: 9 }));
+      expectRangeRefusal(() => bank.addZone({ setIndex: 4096, sampleIndex: 0 }));
       // Genuinely inverted, both edges given: a rejection the per-bound
       // defaults cannot explain away.
-      expectCodedInvalidParameter(() => bank.addZone({ keyLo: 80, keyHi: 20 }));
-      expectCodedInvalidParameter(() => bank.addZone({ velLo: 100, velHi: 10 }));
+      expectRangeRefusal(() => bank.addZone({ keyLo: 80, keyHi: 20 }));
+      expectRangeRefusal(() => bank.addZone({ velLo: 100, velHi: 10 }));
       expectRangeRefusal(() => bank.addZone({ setIndex: -1 }));
       expectRangeRefusal(() => bank.addZone({ keyLo: 200 }));
       expect(bank.setCount()).toBe(0);

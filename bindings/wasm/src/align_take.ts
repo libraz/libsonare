@@ -40,7 +40,7 @@ import { assertAudioInput, requestObject } from './validation.js';
  * @returns The anchors and how well the alignment was conditioned
  * @throws {RangeError} on an empty buffer, a non-finite sample, or a `sampleRate`
  *   or `takeSampleRate` outside `[8000, 384000]`
- * @throws {SonareError} `InvalidParameter` on a non-positive `hopLength` or
+ * @throws {RangeError} on a non-positive `hopLength` or
  *   `binsPerOctave`, on a `binsPerOctave` that is not a multiple of 12, on a
  *   signal too short to measure two chroma frames, or when the two signals produce
  *   no pair of distinct anchors — which is what an unalignable pair looks like,

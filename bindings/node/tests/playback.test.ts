@@ -358,7 +358,7 @@ describe('PlaybackRenderer.renderOffline', () => {
     expect(Array.from(out)).toEqual(Array.from(expected.samples));
   });
 
-  it('refuses a mismatched channel count as a coded error and non-finite input as a RangeError', () => {
+  it('refuses a mismatched channel count and non-finite input as a RangeError', () => {
     using renderer = new PlaybackRenderer({ config: unequalSpeakers, sampleRate: 48000 });
     let caught: unknown;
     try {
@@ -366,8 +366,7 @@ describe('PlaybackRenderer.renderOffline', () => {
     } catch (error) {
       caught = error;
     }
-    expect(isSonareError(caught)).toBe(true);
-    expect((caught as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+    expect(caught).toBeInstanceOf(RangeError);
 
     const bad = interleavedStereo(64);
     bad[10] = Number.NaN;

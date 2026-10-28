@@ -16,7 +16,7 @@ from ._runtime import (
     _INT64_MIN,
     ClipPageRequest,
     SonareValueError,
-    _check_argument,
+    _check,
     _get_lib,
     _narrow_int,
     _planar_channel_arrays,
@@ -34,7 +34,7 @@ class ClipPageProvider:
     def __init__(self, num_channels: int, num_samples: int, page_frames: int) -> None:
         self._handle: ctypes.c_void_p | None = None
         handle = ctypes.c_void_p()
-        _check_argument(
+        _check(
             _get_lib().sonare_clip_page_provider_create(
                 _to_c_int(num_channels, "num_channels"),
                 _to_c_int64(num_samples, "num_samples"),
@@ -67,7 +67,7 @@ class ClipPageProvider:
 
     def supply(self, page_index: int, channels: Sequence[Sequence[float]]) -> None:
         arrays, ptrs, frames = _planar_channel_arrays(channels)
-        _check_argument(
+        _check(
             _get_lib().sonare_clip_page_provider_supply(
                 self._require_handle(),
                 _to_c_int64(page_index, "page_index"),
@@ -78,7 +78,7 @@ class ClipPageProvider:
         )
 
     def clear(self, page_index: int) -> None:
-        _check_argument(
+        _check(
             _get_lib().sonare_clip_page_provider_clear(
                 self._require_handle(), _to_c_int64(page_index, "page_index")
             )

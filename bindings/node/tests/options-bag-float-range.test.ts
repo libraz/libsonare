@@ -31,7 +31,7 @@ import {
   masteringRepairDereverbConfigForRoom as wasmDereverbConfigForRoom,
   init as wasmInit,
 } from '../../wasm/dist/index.js';
-import { ErrorCode, isSonareError, meteringSpectrum } from '../src/index.js';
+import { meteringSpectrum } from '../src/index.js';
 import { addon } from '../src/native.js';
 
 /** The suffix the refusal message ends with, whatever the key is. */
@@ -110,8 +110,8 @@ describe('the addon float option reader refuses a value no float can hold', () =
     // shape, because the two are different reports of the same input.
     for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
       const caught = capture(() => spectrumDb(value));
-      expect(isSonareError(caught), `dbRef ${value}`).toBe(true);
-      expect((caught as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+      expect(caught, `dbRef ${value}`).toBeInstanceOf(RangeError);
+      expect((caught as Error).message).not.toContain(RANGE_MESSAGE);
     }
   });
 

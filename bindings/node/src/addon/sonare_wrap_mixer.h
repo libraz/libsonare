@@ -10,16 +10,6 @@
 
 namespace sonare_node {
 
-/// Throws a strip pan/width setter failure: an out-of-domain value (the C ABI's
-/// INVALID_PARAMETER) is a RangeError, any other code the coded SonareError.
-inline void ThrowStripValueError(Napi::Env env, SonareError err, const std::string& prefix) {
-  if (err == SONARE_ERROR_INVALID_PARAMETER) {
-    Napi::RangeError::New(env, prefix + sonare_error_message(err)).ThrowAsJavaScriptException();
-    return;
-  }
-  ThrowSonareError(env, err, prefix);
-}
-
 /// @brief N-API wrapper around the scene-based C mixer API (sonare_mixer_*).
 ///
 /// Persistent stereo mixer built from a scene JSON string. Routes per-strip

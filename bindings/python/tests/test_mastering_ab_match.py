@@ -14,7 +14,6 @@ import pytest
 from libsonare import (
     ErrorCode,
     LoudnessMatch,
-    SonareError,
     SonareValueError,
     lufs,
     mastering_ab_match_loudness,
@@ -74,7 +73,7 @@ def test_silent_source_reports_non_finite_loudness_and_no_gain() -> None:
 
 
 def test_invalid_sample_rate_is_rejected_by_the_c_abi() -> None:
-    with pytest.raises(SonareError) as excinfo:
+    with pytest.raises(SonareValueError) as excinfo:
         mastering_ab_match_loudness(SOURCE, REFERENCE, 0)
     assert excinfo.value.code == int(ErrorCode.INVALID_PARAMETER)
 

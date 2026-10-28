@@ -554,7 +554,7 @@ def test_synth_patch_field_outside_the_published_range_is_refused_by_name() -> N
         ]
         for patch, key in cases:
             expected = f"synth patch field '{key}': out of range"
-            with pytest.raises(SonareError, match=expected) as err:
+            with pytest.raises(SonareValueError, match=expected) as err:
                 project.bounce_with_synth_instrument(patch, total_frames=128)
             assert err.value.code == 4
         # The published ends are accepted.
@@ -946,7 +946,7 @@ def test_engine_params_refusals_are_coded_errors_naming_the_key() -> None:
             ("percussion", {"numModes": 2.5}, "numModes"),
         ]
         for engine_mode, params, key in cases:
-            with pytest.raises(SonareError, match=key) as err:
+            with pytest.raises(SonareValueError, match=key) as err:
                 project.bounce_with_synth_instrument(
                     SynthPatch(engine_mode=engine_mode, engine_params=params), total_frames=128
                 )

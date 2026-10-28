@@ -22,14 +22,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  ErrorCode,
-  extractPercussiveEvents,
-  hpss,
-  hpssWithResidual,
-  isSonareError,
-  type SonareError,
-} from '../src/index.js';
+import { extractPercussiveEvents, hpss, hpssWithResidual, isSonareError } from '../src/index.js';
 
 const sampleRate = 22050;
 
@@ -137,18 +130,13 @@ const capture = (run: () => unknown): unknown => {
 };
 
 /** Every refusal below is a parameter refusal, never an allocation failure. */
-function expectParameterRefusal(caught: unknown): SonareError {
-  expect(isSonareError(caught)).toBe(true);
-  const error = caught as SonareError;
-  expect(error.name).toBe('SonareError');
-  expect(error.code).toBe(ErrorCode.InvalidParameter);
-  expect(error.codeName).toBe('InvalidParameter');
-  // Stated separately from the equality above because these two are the
-  // outcomes the ceiling guard exists to make unreachable, and a regression
-  // that reintroduced either would be a different defect from a wrong code.
-  expect(error.code).not.toBe(ErrorCode.OutOfMemory);
-  expect(error.code).not.toBe(ErrorCode.Unknown);
-  return error;
+function expectParameterRefusal(caught: unknown): Error {
+  expect(caught).toBeInstanceOf(RangeError);
+  // These two are the outcomes the ceiling guard exists to make unreachable, and
+  // a regression that reintroduced either would be a different defect from a
+  // wrong class.
+  expect(isSonareError(caught)).toBe(false);
+  return caught as Error;
 }
 
 /** The refusal names the filter, the value passed, and the ceiling. */

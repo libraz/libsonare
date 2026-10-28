@@ -354,7 +354,7 @@ Napi::Value ProjectWrap::ApplyVocalEdit(const Napi::CallbackInfo& info) {
   SonareProjectVocalEditApplyResult result{};
   sonare_project_vocal_edit_apply_result_init(&result);
   const SonareError error = sonare_project_apply_vocal_edit(project_, &storage.desc, &result);
-  ThrowIfArgumentError(env, error);
+  ThrowIfError(env, error);
   if (env.IsExceptionPending()) return env.Undefined();
   return ApplyResultToObject(env, result);
   SONARE_NODE_CATCH(env)
@@ -371,7 +371,7 @@ Napi::Value ProjectWrap::GetVocalEditDependencies(const Napi::CallbackInfo& info
   }
   DependenciesGuard result;
   const SonareError error = sonare_project_get_vocal_edit_dependencies(project_, &result.value);
-  ThrowIfArgumentError(env, error);
+  ThrowIfError(env, error);
   if (env.IsExceptionPending()) return env.Undefined();
   if (!ResultCountValid(env, result.value.dependency_count, "dependency") ||
       !ResultPointerValid(env, result.value.dependencies, result.value.dependency_count,
@@ -417,7 +417,7 @@ Napi::Value ProjectWrap::RehydrateVocalEdits(const Napi::CallbackInfo& info) {
       project_, storage.rows.empty() ? nullptr : storage.rows.data(), storage.rows.size(),
       has_cancel ? &VocalProjectCancel : nullptr, has_cancel ? &cancel : nullptr, &result.value);
   if (env.IsExceptionPending()) return env.Undefined();
-  ThrowIfArgumentError(env, error);
+  ThrowIfError(env, error);
   if (env.IsExceptionPending()) return env.Undefined();
   if (!ResultCountValid(env, result.value.item_count, "rehydrate") ||
       !ResultPointerValid(env, result.value.items, result.value.item_count, "rehydrate")) {

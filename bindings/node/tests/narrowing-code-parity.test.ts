@@ -128,8 +128,9 @@ describe('a kernel past the signed range is refused alike on every surface', () 
       wasm: (kernel: number) => wasmHpss({ samples: tone, sampleRate, kernelHarmonic: kernel }),
       python: (kernel: number) =>
         `libsonare.hpss([0.0] * 4096, ${sampleRate}, kernel_harmonic=${kernel})`,
-      // A positional kernel: both JS facades pre-empt the native refusal with its code.
-      expected: { node: ErrorCode.InvalidParameter, wasm: ErrorCode.InvalidParameter },
+      // A positional kernel: both JS facades pre-empt the native refusal as the
+      // argument refusal it is, a RangeError.
+      expected: { node: 'RangeError' as const, wasm: 'RangeError' as const },
     },
     {
       name: 'extractPercussiveEvents hpssKernelPercussive',

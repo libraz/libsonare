@@ -103,7 +103,7 @@ def test_the_conductor_track_is_not_counted_in_the_track_index() -> None:
     data = _two_quarter_notes_smf()
 
     assert len(libsonare.note_targets_from_smf(data, track_index=0)) == 2
-    with pytest.raises(SonareError) as caught:
+    with pytest.raises(SonareValueError) as caught:
         libsonare.note_targets_from_smf(data, track_index=1)
     assert caught.value.code == ErrorCode.INVALID_PARAMETER
 

@@ -243,7 +243,7 @@ Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
   }
-  ThrowIfArgumentError(env, sonare_engine_set_clips(engine_, clips.data(), clips.size()));
+  ThrowIfError(env, sonare_engine_set_clips(engine_, clips.data(), clips.size()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -259,7 +259,7 @@ Napi::Value RealtimeEngineWrap::UpsertClip(const Napi::CallbackInfo& info) {
   ClipStorage storage;
   SonareEngineClip clip{};
   if (!ReadClip(env, info[0], clip_page_providers_, &storage, &clip)) return env.Undefined();
-  ThrowIfArgumentError(env, sonare_engine_upsert_clip(engine_, &clip));
+  ThrowIfError(env, sonare_engine_upsert_clip(engine_, &clip));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -270,7 +270,7 @@ Napi::Value RealtimeEngineWrap::RemoveClip(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   uint32_t clip_id = 0;
   if (!RequiredUint32Arg(env, info, 0, "clipId", &clip_id)) return env.Undefined();
-  ThrowIfArgumentError(env, sonare_engine_remove_clip(engine_, clip_id));
+  ThrowIfError(env, sonare_engine_remove_clip(engine_, clip_id));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -334,7 +334,7 @@ Napi::Value RealtimeEngineWrap::SetTrackLanes(const Napi::CallbackInfo& info) {
     }
     lanes.push_back(lane);
   }
-  ThrowIfArgumentError(env, sonare_engine_set_track_lanes(engine_, lanes.data(), lanes.size()));
+  ThrowIfError(env, sonare_engine_set_track_lanes(engine_, lanes.data(), lanes.size()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -354,7 +354,7 @@ Napi::Value RealtimeEngineWrap::SetTrackSends(const Napi::CallbackInfo& info) {
   const SonareError err =
       sonare_engine_set_track_sends(engine_, track_id, sends.data(), sends.size());
   if (err != SONARE_OK) {
-    sonare_node::ThrowLastArgumentError(env, err);
+    sonare_node::ThrowLastSonareError(env, "", err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -370,7 +370,7 @@ Napi::Value RealtimeEngineWrap::SetTrackOutputBus(const Napi::CallbackInfo& info
   if (!RequiredUint32Arg(env, info, 1, "busId", &bus_id)) return env.Undefined();
   const SonareError err = sonare_engine_set_track_output_bus(engine_, track_id, bus_id);
   if (err != SONARE_OK) {
-    sonare_node::ThrowLastArgumentError(env, err);
+    sonare_node::ThrowLastSonareError(env, "", err);
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -385,7 +385,7 @@ Napi::Value RealtimeEngineWrap::SetLaneSidechain(const Napi::CallbackInfo& info)
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  ThrowIfArgumentError(
+  ThrowIfError(
       env,
       sonare_engine_set_lane_sidechain(
           engine_,
@@ -402,7 +402,7 @@ Napi::Value RealtimeEngineWrap::ApplyProjectTimeline(const Napi::CallbackInfo& i
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   const SonareProjectTimeline* timeline = nullptr;
   if (!ProjectTimelineWrap::ReadHandle(env, info[0], &timeline)) return env.Undefined();
-  ThrowIfArgumentError(env, sonare_engine_apply_project_timeline(engine_, timeline));
+  ThrowIfError(env, sonare_engine_apply_project_timeline(engine_, timeline));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -455,7 +455,7 @@ Napi::Value RealtimeEngineWrap::SetTrackBuses(const Napi::CallbackInfo& info) {
     }
     buses.push_back(bus);
   }
-  ThrowIfArgumentError(env, sonare_engine_set_track_buses(engine_, buses.data(), buses.size()));
+  ThrowIfError(env, sonare_engine_set_track_buses(engine_, buses.data(), buses.size()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -470,7 +470,7 @@ Napi::Value RealtimeEngineWrap::SetBusSidechain(const Napi::CallbackInfo& info) 
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  ThrowIfArgumentError(
+  ThrowIfError(
       env,
       sonare_engine_set_bus_sidechain(
           engine_,
@@ -491,7 +491,7 @@ Napi::Value RealtimeEngineWrap::SetMasterSidechain(const Napi::CallbackInfo& inf
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  ThrowIfArgumentError(
+  ThrowIfError(
       env,
       sonare_engine_set_master_sidechain(
           engine_,
@@ -515,8 +515,8 @@ Napi::Value RealtimeEngineWrap::CanSetLaneSidechain(const Napi::CallbackInfo& in
     return env.Undefined();
   }
   int refusal = 0;
-  ThrowIfArgumentError(env, sonare_engine_can_set_lane_sidechain(engine_, track_id, insert_index,
-                                                                 source_track_id, &refusal));
+  ThrowIfError(env, sonare_engine_can_set_lane_sidechain(engine_, track_id, insert_index,
+                                                         source_track_id, &refusal));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(refusal));
   SONARE_NODE_CATCH(env)
@@ -537,8 +537,8 @@ Napi::Value RealtimeEngineWrap::CanSetBusSidechain(const Napi::CallbackInfo& inf
     return env.Undefined();
   }
   int refusal = 0;
-  ThrowIfArgumentError(env, sonare_engine_can_set_bus_sidechain(engine_, bus_id, insert_index,
-                                                                source_kind, source_id, &refusal));
+  ThrowIfError(env, sonare_engine_can_set_bus_sidechain(engine_, bus_id, insert_index, source_kind,
+                                                        source_id, &refusal));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(refusal));
   SONARE_NODE_CATCH(env)
@@ -557,8 +557,8 @@ Napi::Value RealtimeEngineWrap::CanSetMasterSidechain(const Napi::CallbackInfo& 
     return env.Undefined();
   }
   int refusal = 0;
-  ThrowIfArgumentError(env, sonare_engine_can_set_master_sidechain(
-                                engine_, insert_index, source_kind, source_id, &refusal));
+  ThrowIfError(env, sonare_engine_can_set_master_sidechain(engine_, insert_index, source_kind,
+                                                           source_id, &refusal));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(refusal));
   SONARE_NODE_CATCH(env)
@@ -569,7 +569,7 @@ Napi::Value RealtimeEngineWrap::ClipCount(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   size_t count = 0;
-  ThrowIfArgumentError(env, sonare_engine_clip_count(engine_, &count));
+  ThrowIfError(env, sonare_engine_clip_count(engine_, &count));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(count));
   SONARE_NODE_CATCH(env)
@@ -588,8 +588,8 @@ Napi::Value RealtimeEngineWrap::CreateClipPageProvider(const Napi::CallbackInfo&
     return env.Undefined();
   }
   SonareClipPageProvider* provider = nullptr;
-  ThrowIfArgumentError(
-      env, sonare_clip_page_provider_create(num_channels, num_samples, page_frames, &provider));
+  ThrowIfError(env,
+               sonare_clip_page_provider_create(num_channels, num_samples, page_frames, &provider));
   if (env.IsExceptionPending()) return env.Undefined();
   const int id = next_clip_page_provider_id_++;
   clip_page_providers_[id] = provider;
@@ -641,9 +641,9 @@ Napi::Value RealtimeEngineWrap::SupplyClipPage(const Napi::CallbackInfo& info) {
     storage.emplace_back(channel.Data(), channel.Data() + channel.ElementLength());
     ptrs.push_back(storage.back().data());
   }
-  ThrowIfArgumentError(env, sonare_clip_page_provider_supply(provider, page_index, ptrs.data(),
-                                                             static_cast<int>(ptrs.size()),
-                                                             static_cast<int64_t>(frames)));
+  ThrowIfError(env, sonare_clip_page_provider_supply(provider, page_index, ptrs.data(),
+                                                     static_cast<int>(ptrs.size()),
+                                                     static_cast<int64_t>(frames)));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -663,7 +663,7 @@ Napi::Value RealtimeEngineWrap::ClearClipPage(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "pageProvider is not live").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_clip_page_provider_clear(provider, page_index));
+  ThrowIfError(env, sonare_clip_page_provider_clear(provider, page_index));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -688,7 +688,7 @@ Napi::Value RealtimeEngineWrap::PopClipPageRequest(const Napi::CallbackInfo& inf
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   SonareClipPageRequest request{};
   int has_request = 0;
-  ThrowIfArgumentError(env, sonare_engine_pop_clip_page_request(engine_, &request, &has_request));
+  ThrowIfError(env, sonare_engine_pop_clip_page_request(engine_, &request, &has_request));
   if (!has_request) return env.Null();
   Napi::Object out = Napi::Object::New(env);
   out.Set("clipId", Napi::Number::New(env, request.clip_id));
@@ -709,8 +709,8 @@ Napi::Value RealtimeEngineWrap::SetClipPagePrefetchFrames(const Napi::CallbackIn
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  ThrowIfArgumentError(
-      env, sonare_engine_set_clip_page_prefetch_frames(engine_, static_cast<int64_t>(frames)));
+  ThrowIfError(env,
+               sonare_engine_set_clip_page_prefetch_frames(engine_, static_cast<int64_t>(frames)));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -720,7 +720,7 @@ Napi::Value RealtimeEngineWrap::ClipPagePrefetchFrames(const Napi::CallbackInfo&
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   int64_t frames = 0;
-  ThrowIfArgumentError(env, sonare_engine_clip_page_prefetch_frames(engine_, &frames));
+  ThrowIfError(env, sonare_engine_clip_page_prefetch_frames(engine_, &frames));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(frames));
   SONARE_NODE_CATCH(env)
@@ -741,7 +741,7 @@ void RealtimeEngineWrap::InstallCaptureBuffers(Napi::Env env,
   buffer.channels = capture_ptrs_.data();
   buffer.num_channels = static_cast<int>(capture_ptrs_.size());
   buffer.capacity_frames = frames;
-  ThrowIfArgumentError(env, sonare_engine_set_capture_buffer(engine_, &buffer));
+  ThrowIfError(env, sonare_engine_set_capture_buffer(engine_, &buffer));
   if (env.IsExceptionPending()) return;
   capture_capacity_frames_ = frames;
 }
@@ -834,7 +834,7 @@ Napi::Value RealtimeEngineWrap::ArmCapture(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   bool armed = true;
   if (!OptionalBoolArg(env, info, 0, "armed", true, &armed)) return env.Undefined();
-  ThrowIfArgumentError(env, sonare_engine_arm_capture(engine_, armed ? 1 : 0));
+  ThrowIfError(env, sonare_engine_arm_capture(engine_, armed ? 1 : 0));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -851,8 +851,8 @@ Napi::Value RealtimeEngineWrap::SetCapturePunch(const Napi::CallbackInfo& info) 
       !OptionalBoolArg(env, info, 2, "enabled", true, &enabled)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(
-      env, sonare_engine_set_capture_punch(engine_, start_sample, end_sample, enabled ? 1 : 0));
+  ThrowIfError(env,
+               sonare_engine_set_capture_punch(engine_, start_sample, end_sample, enabled ? 1 : 0));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -868,7 +868,7 @@ Napi::Value RealtimeEngineWrap::SetCaptureSource(const Napi::CallbackInfo& info)
   }
   const SonareEngineCaptureSource source = ParseCaptureSource(env, info[0]);
   if (env.IsExceptionPending()) return env.Undefined();
-  ThrowIfArgumentError(env, sonare_engine_set_capture_source(engine_, source));
+  ThrowIfError(env, sonare_engine_set_capture_source(engine_, source));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -879,7 +879,7 @@ Napi::Value RealtimeEngineWrap::SetRecordOffsetSamples(const Napi::CallbackInfo&
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   int64_t offset_samples = 0;
   if (!OptionalInt64Arg(env, info, 0, "offsetSamples", 0, &offset_samples)) return env.Undefined();
-  ThrowIfArgumentError(env, sonare_engine_set_record_offset_samples(engine_, offset_samples));
+  ThrowIfError(env, sonare_engine_set_record_offset_samples(engine_, offset_samples));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -894,7 +894,7 @@ Napi::Value RealtimeEngineWrap::SetInputMonitor(const Napi::CallbackInfo& info) 
       !OptionalFloatArg(env, info, 1, "gain", 1.0f, &gain)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_engine_set_input_monitor(engine_, enabled ? 1 : 0, gain));
+  ThrowIfError(env, sonare_engine_set_input_monitor(engine_, enabled ? 1 : 0, gain));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -903,7 +903,7 @@ Napi::Value RealtimeEngineWrap::ResetCapture(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  ThrowIfArgumentError(env, sonare_engine_reset_capture(engine_));
+  ThrowIfError(env, sonare_engine_reset_capture(engine_));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -913,7 +913,7 @@ Napi::Value RealtimeEngineWrap::CaptureStatus(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   SonareEngineCaptureStatus status{};
-  ThrowIfArgumentError(env, sonare_engine_capture_status(engine_, &status));
+  ThrowIfError(env, sonare_engine_capture_status(engine_, &status));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
   out.Set("capturedFrames", Napi::Number::New(env, static_cast<double>(status.captured_frames)));
@@ -932,7 +932,7 @@ Napi::Value RealtimeEngineWrap::CapturedAudio(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   SonareEngineCaptureStatus status{};
-  ThrowIfArgumentError(env, sonare_engine_capture_status(engine_, &status));
+  ThrowIfError(env, sonare_engine_capture_status(engine_, &status));
   if (env.IsExceptionPending()) return env.Undefined();
 
   // Clamp the captured frame count to the installed capacity so that we never

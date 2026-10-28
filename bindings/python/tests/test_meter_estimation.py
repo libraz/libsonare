@@ -12,7 +12,7 @@ import math
 import pytest
 
 import libsonare
-from libsonare import ErrorCode, SonareError, SonareValueError
+from libsonare import ErrorCode, SonareValueError
 
 from ._helpers import LIB_AVAILABLE
 
@@ -133,7 +133,7 @@ def test_negative_beat_times_still_reach_the_core_check() -> None:
     It only rejects empty and non-finite input, so the core's own domain rule
     stays reachable and keeps reporting under its own wording.
     """
-    with pytest.raises(SonareError, match="beatTimes") as excinfo:
+    with pytest.raises(SonareValueError, match="beatTimes") as excinfo:
         libsonare.estimate_meter([-1.0, 0.5], [1.0, 1.0])
     assert excinfo.value.code == int(ErrorCode.INVALID_PARAMETER)
 
@@ -197,7 +197,7 @@ def test_empty_candidate_numerators_is_rejected_by_the_core() -> None:
     """A cleared candidate list is an error, not a request for the default set."""
     times, strengths = _beat_series(4)
 
-    with pytest.raises(SonareError) as excinfo:
+    with pytest.raises(SonareValueError) as excinfo:
         libsonare.estimate_meter(times, strengths, candidate_numerators=[])
     assert excinfo.value.code == int(ErrorCode.INVALID_PARAMETER)
 

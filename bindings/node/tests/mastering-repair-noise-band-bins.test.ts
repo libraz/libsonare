@@ -10,11 +10,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  ErrorCode,
-  masteringRepairDetectNoiseFloor,
-  masteringRepairNoiseBandBins,
-} from '../src/index.js';
+import { masteringRepairDetectNoiseFloor, masteringRepairNoiseBandBins } from '../src/index.js';
 
 /** Bands in the grid; the returned array is one longer. */
 const BAND_COUNT = 32;
@@ -109,22 +105,21 @@ describe('masteringRepairNoiseBandBins', () => {
 
   it('refuses an nFft that is not a positive power of two', () => {
     for (const nFft of [1000, 0, -1024]) {
-      let caught: { code?: number } | undefined;
+      let caught: unknown;
       try {
         masteringRepairNoiseBandBins({ nFft });
       } catch (error) {
-        caught = error as { code?: number };
+        caught = error;
       }
-      expect(caught, `nFft ${nFft} should be refused`).toBeDefined();
-      expect(caught?.code).toBe(ErrorCode.InvalidParameter);
+      expect(caught, `nFft ${nFft} should be refused`).toBeInstanceOf(RangeError);
+      expect((caught as Error).message).not.toMatch(/sampleRate must be/);
     }
   });
 
   it('refuses a non-positive sampleRate on its own authority', () => {
-    // A RangeError rather than the addon's coded refusal: the facade checks the
-    // rate before the request leaves it. The nFft case above is untouched and
-    // still carries the code, so this cannot read as the entry point having
-    // stopped refusing altogether.
+    // Worded by the facade, which checks the rate before the request leaves it.
+    // The nFft case above is the core's refusal, so this cannot read as the
+    // entry point having stopped refusing altogether.
     for (const sampleRate of [0, -48000]) {
       expect(
         () => masteringRepairNoiseBandBins({ sampleRate }),

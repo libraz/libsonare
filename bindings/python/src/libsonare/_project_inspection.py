@@ -32,7 +32,7 @@ from ._runtime import (
     SonareProjectTimeSignatureSegment,
     SonareProjectTrack,
     SonareValueError,
-    _check_argument,
+    _check,
     _get_lib,
     _guard_buffer,
     _narrow_int,
@@ -120,7 +120,7 @@ class _ProjectInspectionMixin:
             ramp_threshold,
             include_octave_candidates,
         )
-        _check_argument(
+        _check(
             _get_lib().sonare_project_analyze_tempo_with_options(
                 self._require_handle(),
                 c_array,
@@ -182,7 +182,7 @@ class _ProjectInspectionMixin:
             ramp_threshold,
             include_octave_candidates,
         )
-        _check_argument(
+        _check(
             _get_lib().sonare_project_auto_tempo_with_options(
                 self._require_handle(),
                 c_array,
@@ -204,7 +204,7 @@ class _ProjectInspectionMixin:
         is in ``[0, 1]`` (0 = no snap, 1 = exact grid line).
         """
         out_ppq = ctypes.c_double()
-        _check_argument(
+        _check(
             _get_lib().sonare_project_snap_to_grid_ex(
                 self._require_handle(),
                 _narrow_double(ppq, "ppq"),
@@ -241,7 +241,7 @@ class _ProjectInspectionMixin:
                 # caller value; int() would truncate a fraction past it.
                 c_keys[i].tonic_pc = seq[2]
                 c_keys[i].mode = seq[3]
-        _check_argument(
+        _check(
             _get_lib().sonare_project_annotate_keys(
                 self._require_handle(), c_keys, _to_c_size_t(count, "count")
             )
@@ -297,7 +297,7 @@ class _ProjectInspectionMixin:
                 c_chords[i].slash_bass_pc = c.get("slash_bass_pc", 255)
                 c_chords[i].roman_numeral = roman_bytes
                 c_chords[i].modulation_boundary = 1 if c.get("modulation_boundary") else 0
-        _check_argument(
+        _check(
             _get_lib().sonare_project_annotate_chords(
                 self._require_handle(), c_chords, _to_c_size_t(count, "count")
             )
@@ -367,7 +367,7 @@ class _ProjectInspectionMixin:
             raise SonareValueError("module_id must be a non-empty string")
         raw = bytes(payload)
         buf = (ctypes.c_uint8 * len(raw)).from_buffer_copy(raw) if raw else None
-        _check_argument(
+        _check(
             _get_lib().sonare_project_set_assist_sidecar(
                 self._require_handle(),
                 _utf8_arg(module_id, "module_id"),
@@ -388,7 +388,7 @@ class _ProjectInspectionMixin:
         """Read one assist sidecar by stable project order as an :class:`AssistSidecar`."""
         lib = _get_lib()
         raw = SonareProjectAssistSidecar()
-        _check_argument(
+        _check(
             lib.sonare_project_get_assist_sidecar(
                 self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
@@ -419,22 +419,20 @@ class _ProjectInspectionMixin:
     def get_sample_rate(self) -> float:
         """Return the project sample rate in Hz."""
         out = ctypes.c_double()
-        _check_argument(
-            _get_lib().sonare_project_get_sample_rate(self._require_handle(), ctypes.byref(out))
-        )
+        _check(_get_lib().sonare_project_get_sample_rate(self._require_handle(), ctypes.byref(out)))
         return float(out.value)
 
     def get_overlap_policy(self) -> int:
         """Return the project's clip-overlap policy ordinal."""
         out = ctypes.c_uint32()
-        _check_argument(
+        _check(
             _get_lib().sonare_project_get_overlap_policy(self._require_handle(), ctypes.byref(out))
         )
         return int(out.value)
 
     def set_overlap_policy(self, policy: int) -> None:
         """Set the project's clip-overlap policy ordinal."""
-        _check_argument(
+        _check(
             _get_lib().sonare_project_set_overlap_policy(
                 self._require_handle(), _to_c_uint32(policy, "policy")
             )
@@ -446,7 +444,7 @@ class _ProjectInspectionMixin:
         Pass ``marker_id == 0`` to allocate a new marker id.
         """
         out_id = ctypes.c_uint32()
-        _check_argument(
+        _check(
             _get_lib().sonare_project_set_marker(
                 self._require_handle(),
                 _to_c_uint32(marker_id, "marker_id"),
@@ -473,7 +471,7 @@ class _ProjectInspectionMixin:
         raw.key_minor = 1 if marker.key_minor else 0
         raw.ppq = _narrow_double(marker.ppq, "marker.ppq")
         out_id = ctypes.c_uint32()
-        _check_argument(
+        _check(
             _get_lib().sonare_project_set_marker_ex_name(
                 self._require_handle(),
                 ctypes.byref(raw),
@@ -486,14 +484,14 @@ class _ProjectInspectionMixin:
     def marker_by_index(self, index: int) -> ProjectMarker:
         """Read a marker by 0-based stored index, including its kind / key."""
         raw = SonareProjectMarker()
-        _check_argument(
+        _check(
             _get_lib().sonare_project_marker_by_index(
                 self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
         )
         full_name = ctypes.c_char_p()
         lib = _get_lib()
-        _check_argument(
+        _check(
             lib.sonare_project_marker_name_by_index(
                 self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(full_name)
             )
@@ -514,7 +512,7 @@ class _ProjectInspectionMixin:
     def track_by_index(self, index: int) -> ProjectTrack:
         """Read a stored project track by 0-based index."""
         raw = SonareProjectTrack()
-        _check_argument(
+        _check(
             _get_lib().sonare_project_track_by_index(
                 self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
@@ -533,7 +531,7 @@ class _ProjectInspectionMixin:
     def clip_by_index(self, index: int) -> ProjectClip:
         """Read a stored project clip by 0-based index."""
         raw = SonareProjectClip()
-        _check_argument(
+        _check(
             _get_lib().sonare_project_clip_by_index(
                 self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
@@ -554,7 +552,7 @@ class _ProjectInspectionMixin:
     def source_by_index(self, index: int) -> ProjectSource:
         """Read a stored project source by 0-based index."""
         raw = SonareProjectSource()
-        _check_argument(
+        _check(
             _get_lib().sonare_project_source_by_index(
                 self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
@@ -575,7 +573,7 @@ class _ProjectInspectionMixin:
             ):
                 metadata = SonareProjectAudioSourceMetadata()
                 try:
-                    _check_argument(
+                    _check(
                         lib.sonare_project_get_audio_source_metadata(
                             self._require_handle(),
                             _to_c_uint32(raw.id, "source_id"),
@@ -595,7 +593,7 @@ class _ProjectInspectionMixin:
         if int(raw.kind) == 0 and hasattr(lib, "sonare_project_get_audio_source_uri"):
             uri = ctypes.c_char_p()
             try:
-                _check_argument(
+                _check(
                     lib.sonare_project_get_audio_source_uri(
                         self._require_handle(),
                         _to_c_uint32(raw.id, "source_id"),
@@ -627,7 +625,7 @@ class _ProjectInspectionMixin:
         consumed.
         """
         lib = _get_lib()
-        _check_argument(
+        _check(
             lib.sonare_project_set_mixer_scene_json(
                 self._require_handle(),
                 _utf8_arg(scene_json, "scene_json"),
@@ -667,7 +665,7 @@ class _ProjectInspectionMixin:
             c_segments[i].start_ppq = start_ppq
             c_segments[i].bpm = bpm
             c_segments[i].end_bpm = end_bpm
-        _check_argument(
+        _check(
             _get_lib().sonare_project_set_tempo_segments(
                 self._require_handle(), c_segments, _to_c_size_t(count, "count")
             )
@@ -707,7 +705,7 @@ class _ProjectInspectionMixin:
             c_segments[i].start_ppq = start_ppq
             c_segments[i].numerator = numerator
             c_segments[i].denominator = denominator
-        _check_argument(
+        _check(
             _get_lib().sonare_project_set_time_signatures(
                 self._require_handle(), c_segments, _to_c_size_t(count, "count")
             )
@@ -715,7 +713,7 @@ class _ProjectInspectionMixin:
 
     def _count(self, fn_name: str) -> int:
         out = ctypes.c_size_t()
-        _check_argument(getattr(_get_lib(), fn_name)(self._require_handle(), ctypes.byref(out)))
+        _check(getattr(_get_lib(), fn_name)(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
     def marker_count(self) -> int:
@@ -750,7 +748,7 @@ class _ProjectInspectionMixin:
             SonareValueError: If ``index`` is at or past :meth:`tempo_segment_count`.
         """
         raw = SonareProjectTempoSegment()
-        _check_argument(
+        _check(
             _get_lib().sonare_project_tempo_segment_by_index(
                 self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
@@ -768,7 +766,7 @@ class _ProjectInspectionMixin:
             SonareValueError: If ``index`` is at or past :meth:`time_signature_count`.
         """
         raw = SonareProjectTimeSignatureSegment()
-        _check_argument(
+        _check(
             _get_lib().sonare_project_time_signature_by_index(
                 self._require_handle(), _to_c_size_t(index, "index"), ctypes.byref(raw)
             )
@@ -800,7 +798,7 @@ class _ProjectInspectionMixin:
         """
         lib = _get_lib()
         result = SonareProjectCompileResult()
-        _check_argument(
+        _check(
             lib.sonare_project_last_bounce_compile_result(
                 self._require_handle(), ctypes.byref(result)
             )

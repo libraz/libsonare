@@ -326,10 +326,10 @@ def test_engine_bus_and_master_sidechain_reject_invalid_source_kind() -> None:
             engine.set_master_sidechain(0, "lane", 30)
         # An out-of-range ordinal reaches the C ABI's own source_kind check.
         for bad_kind in (2, -1):
-            with pytest.raises(SonareError) as bus_exc:
+            with pytest.raises(SonareValueError) as bus_exc:
                 engine.set_bus_sidechain(2, 0, bad_kind, 30)
             assert bus_exc.value.code == 4
-            with pytest.raises(SonareError) as master_exc:
+            with pytest.raises(SonareValueError) as master_exc:
                 engine.set_master_sidechain(0, bad_kind, 30)
             assert master_exc.value.code == 4
     finally:
@@ -418,7 +418,7 @@ def test_engine_midi_clip_fade_out_on_open_ended_clip_is_refused() -> None:
             events=events,
             fade_out_samples=256,
         )
-        with pytest.raises(SonareError) as exc:
+        with pytest.raises(SonareValueError) as exc:
             engine.set_midi_clips([clip])
         assert exc.value.code == 4
 

@@ -26,14 +26,11 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   detectOnsets,
-  ErrorCode,
   extractPercussiveEvents,
   init,
-  isSonareError,
   meteringSpectrum,
   meteringSpectrumFrame,
   pcen,
-  type SonareError,
 } from '../dist/index.js';
 import { expectArgumentRefusal } from './_helpers';
 
@@ -60,12 +57,6 @@ const capture = (run: () => unknown): unknown => {
 
 function expectParameterRefusal(caught: unknown): Error {
   return expectArgumentRefusal(caught);
-}
-
-/** The facade's own check answers before the binding is reached: a coded `SonareError`. */
-function expectFacadeRefusal(caught: unknown): void {
-  expect(isSonareError(caught)).toBe(true);
-  expect((caught as SonareError).code).toBe(ErrorCode.InvalidParameter);
 }
 
 /** One options-bag field, with the call that reaches it. */
@@ -208,8 +199,6 @@ describe('the facade and the reader refuse the same inputs', () => {
     value: number;
     refused: boolean;
     why: string;
-    /** Who refuses on the facade layer: its own check (coded), or the reader behind it (range). */
-    facade?: 'range';
   }> = [
     { value: 1024, refused: false, why: 'an ordinary legal size' },
     { value: 0, refused: false, why: 'the documented keep-the-default sentinel' },
@@ -217,12 +206,11 @@ describe('the facade and the reader refuse the same inputs', () => {
     { value: -0.5, refused: true, why: 'fractional, truncates onto the default' },
     { value: Number.NaN, refused: true, why: 'not finite' },
     { value: Number.POSITIVE_INFINITY, refused: true, why: 'not finite' },
-    { value: 2 ** 32, refused: true, why: 'integral but past the 32-bit range', facade: 'range' },
+    { value: 2 ** 32, refused: true, why: 'integral but past the 32-bit range' },
     {
       value: 2 ** 53,
       refused: true,
       why: 'integral, and the largest exact JS integer step',
-      facade: 'range',
     },
   ];
 
@@ -230,7 +218,7 @@ describe('the facade and the reader refuse the same inputs', () => {
     i % 2205 < 200 ? Math.sin((2 * Math.PI * 900 * i) / sampleRate) : 0,
   );
 
-  for (const { value, refused, why, facade } of PROBES) {
+  for (const { value, refused, why } of PROBES) {
     it(`${refused ? 'refuses' : 'accepts'} nFft = ${value} on both layers (${why})`, () => {
       const facadeChecked = capture(() =>
         extractPercussiveEvents({ samples: hits, sampleRate, nFft: value }),
@@ -239,11 +227,7 @@ describe('the facade and the reader refuse the same inputs', () => {
       expect(facadeChecked === undefined).toBe(!refused);
       expect(readerOnly === undefined).toBe(!refused);
       if (refused) {
-        if (facade === 'range') {
-          expectParameterRefusal(facadeChecked);
-        } else {
-          expectFacadeRefusal(facadeChecked);
-        }
+        expectParameterRefusal(facadeChecked);
         expectParameterRefusal(readerOnly);
       }
     });

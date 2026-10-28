@@ -213,12 +213,12 @@ class TestValidateFalseStillHasCAbiBackstop:
     def test_lufs_validate_false(self):
         # validate=False skips only the Python preflight; C-ABI validation is
         # mandatory and must still reject NaN input.
-        with pytest.raises(SonareError) as exc_info:
+        with pytest.raises(SonareValueError) as exc_info:
             lufs(_with_nan(), SR, validate=False)
         assert exc_info.value.code == 4
 
     def test_mastering_dynamics_compressor_validate_false(self):
-        with pytest.raises(SonareError) as exc_info:
+        with pytest.raises(SonareValueError) as exc_info:
             mastering_dynamics_compressor(_with_nan(), SR, validate=False)
         assert exc_info.value.code == 4
 
@@ -230,20 +230,16 @@ class TestValidateFalseStillHasCAbiBackstop:
         )
         assert quiet.min[0] == 0.0
         assert quiet.max[0] == 0.0
-        with pytest.raises(SonareError) as exc_info:
+        with pytest.raises(SonareValueError) as exc_info:
             waveform_peaks(_with_nan(), 1, samples_per_bucket=256, validate=False)
         assert exc_info.value.code == 4
-        # SonareValueError subclasses SonareError, so without this the test
-        # would keep passing if the Python preflight started answering instead.
-        assert not isinstance(exc_info.value, SonareValueError)
 
     def test_waveform_peak_pyramid_validate_false(self):
-        with pytest.raises(SonareError) as exc_info:
+        with pytest.raises(SonareValueError) as exc_info:
             waveform_peak_pyramid(
                 _with_nan(), 1, samples_per_bucket_levels=[256, 512], validate=False
             )
         assert exc_info.value.code == 4
-        assert not isinstance(exc_info.value, SonareValueError)
 
 
 class TestPitchCAbiValidation:
@@ -259,7 +255,7 @@ class TestPitchCAbiValidation:
 
     @pytest.mark.parametrize("pitch", [pitch_yin, pitch_pyin], ids=["yin", "pyin"])
     def test_invalid_sample_rate_keeps_sonare_error_code(self, pitch):
-        with pytest.raises(SonareError) as exc_info:
+        with pytest.raises(SonareValueError) as exc_info:
             pitch(_sine(SR), sample_rate=0)
         assert exc_info.value.code == 4
 
@@ -396,7 +392,7 @@ class TestSonareValueErrorCatchContract:
 
 
 # Spectral transforms whose buffer used to reach the C ABI unchecked, so an
-# empty or non-finite input surfaced as a bare ``[4] Invalid parameter``.
+# empty or non-finite input surfaced as a bare ``Invalid parameter``.
 _SPECTRAL_TRANSFORMS = {
     "mel_spectrogram": mel_spectrogram,
     "mfcc": mfcc,
@@ -439,9 +435,9 @@ class TestSpectralTransformsMatchSiblingGuards:
     @pytest.mark.parametrize("name", sorted(_SPECTRAL_TRANSFORMS))
     def test_invalid_sample_rate_keeps_sonare_error_code(self, name):
         # Preflight covers the buffer only; scalar arguments stay the C ABI's job.
-        with pytest.raises(SonareError) as exc_info:
+        with pytest.raises(SonareValueError) as exc_info:
             _SPECTRAL_TRANSFORMS[name](_sine(SR), sample_rate=0)
-        assert type(exc_info.value) is SonareError
+        assert str(exc_info.value) == "Invalid parameter"
         assert exc_info.value.code == 4
 
 
@@ -685,11 +681,11 @@ class TestRealtimeFailuresDoNotBorrowAnEarlierMessage:
             assert "FFT size" in stale, "the control-thread call must leave a detail behind"
 
             block = np.zeros(128, dtype=np.float32)
-            with pytest.raises(SonareError) as exc_info:
+            with pytest.raises(SonareValueError) as exc_info:
                 # A mono handle cannot serve the planar-stereo entry point.
                 changer.process_planar_stereo(block, block.copy())
         assert exc_info.value.code == 4
-        assert str(exc_info.value) == "[4] Invalid parameter"
+        assert str(exc_info.value) == "Invalid parameter"
         assert "FFT size" not in str(exc_info.value)
 
     def test_the_return_code_mapping_has_a_single_definition(self):

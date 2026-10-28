@@ -352,7 +352,7 @@ export class Mixer {
    * mixer.setOutputBus('sub', 'master');
    * mixer.compile();
    *
-   * @throws SonareError `InvalidParameter` naming the ids (and the path, for a
+   * @throws RangeError naming the ids (and the path, for a
    *   cycle) for an unknown source or destination, a destination that is not a
    *   bus, the master as source, a self-route, or an edit that closes a cycle
    *   through connections or sends; the scene is unchanged after a refusal

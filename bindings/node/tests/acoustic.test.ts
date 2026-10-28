@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ErrorCode,
   estimateRoom,
   roomGeometryFromEstimate,
   roomMorph,
@@ -16,10 +15,10 @@ describe('geometric room acoustics', () => {
     expect(Array.from(result.rir).some((s) => Math.abs(s) > 0)).toBe(true);
   });
 
-  it('throws a coded SonareError for invalid geometry', () => {
+  it('throws a RangeError for invalid geometry', () => {
     const attempt = () => synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, sourceX: 99 });
     expect(attempt).toThrow(/acoustic\.source_outside_room/);
-    expect(attempt).toThrow(expect.objectContaining({ code: ErrorCode.InvalidParameter }));
+    expect(attempt).toThrow(RangeError);
   });
 
   it('round-trips a known shoebox within tolerance', () => {
@@ -619,6 +618,6 @@ describe('roomMorphStereo', () => {
         listenerY: 3,
         listenerZ: 1.5,
       });
-    expect(attempt).toThrow(expect.objectContaining({ code: ErrorCode.InvalidParameter }));
+    expect(attempt).toThrow(RangeError);
   });
 });

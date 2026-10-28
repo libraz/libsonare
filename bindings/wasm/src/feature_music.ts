@@ -1,6 +1,5 @@
 import { validatePositiveIntegers } from './_feature_validation.js';
 import { resolveFftOptions } from './_fft_options.js';
-import { ErrorCode, SonareError } from './errors.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AnalyzeSectionsOptions,
@@ -605,7 +604,7 @@ export function analyzeSections(
  *
  * @param request - Samples, sample rate and {@link BoundaryOptions}
  * @returns The boundaries, the novelty curve, and the analysis grid they live on
- * @throws {@link SonareError} with `InvalidParameter` when both `useMfcc` and
+ * @throws {@link RangeError} when both `useMfcc` and
  * `useChroma` are `false`: the two feature streams are combined frame-for-frame,
  * so with neither enabled there is nothing to combine.
  *
@@ -654,11 +653,7 @@ export function detectBoundaries(request: DetectBoundariesRequest): BoundaryResu
   // Only an explicit pair of falses; either one omitted leaves the other stream
   // on, so there is still something to combine.
   if (request.useMfcc === false && request.useChroma === false) {
-    throw new SonareError(
-      ErrorCode.InvalidParameter,
-      'InvalidParameter',
-      'detectBoundaries: require useMfcc or useChroma',
-    );
+    throw new RangeError('detectBoundaries: require useMfcc or useChroma');
   }
   const result = requireModule().detectBoundaries(samples, sampleRate, request);
   // Re-root the embind array as a plain Array, for the reason analyzeSections
@@ -738,11 +733,7 @@ export function analyzeMelody(
   // validateFrequencyBounds only guards fmin >= 0, so enforce strict positivity
   // here and report the same branded error the Node/Python surfaces raise.
   if (fmin <= 0) {
-    throw new SonareError(
-      ErrorCode.InvalidParameter,
-      'InvalidParameter',
-      'analyzeMelody: fmin must be positive',
-    );
+    throw new RangeError('analyzeMelody: fmin must be positive');
   }
   validatePositiveIntegers('analyzeMelody', {
     frameLength: options.frameLength ?? 2048,
@@ -751,11 +742,7 @@ export function analyzeMelody(
   const threshold = options.threshold ?? 0.1;
   assertFiniteScalar('analyzeMelody', threshold, 'threshold');
   if (threshold <= 0) {
-    throw new SonareError(
-      ErrorCode.InvalidParameter,
-      'InvalidParameter',
-      'analyzeMelody: threshold must be positive',
-    );
+    throw new RangeError('analyzeMelody: threshold must be positive');
   }
   return requireModule().analyzeMelody(
     samples,

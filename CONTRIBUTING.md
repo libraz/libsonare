@@ -96,7 +96,7 @@ This is what a change looks like by the time it is merged. The maintainer checks
 - Update the type declarations in the same change as the code: the `.pyi` files, `bindings/node/src/types.ts` and `bindings/wasm/src/public_types.ts`.
 - Before a rename, find every caller in two passes: a language server for the C++ tree, and a grep of the whole tree for the bindings, `benchmarks/` and `tools/`.
 - In the Node addon, read every argument and options key through the shared readers in `sonare_wrap_options.h` (`*Property`, `Optional*Arg`, `Required*Arg`). Never substitute a default for a value of the wrong type.
-- Report a failure that comes from the library or from an object's state as a `SonareError` carrying the C-ABI code; report an argument the binding refuses itself as a `TypeError`, a `RangeError`, or in Python a `SonareValueError`.
+- Choose the error class by cause, not by which layer refused: a refused argument is a `TypeError` (wrong type) or a `RangeError` (in Python a `SonareValueError`), whether the binding or the library refused it, so every C-ABI `INVALID_PARAMETER` surfaces that way; any other failure (object state, unsupported feature, allocation, decoding) is a `SonareError` carrying the C-ABI code.
 - Read a null-handle constructor's error code from `sonare_last_error_code()`; never hard-code one.
 - Give Python APIs keyword arguments and high-level JS/TS entry points a request object, with field names and defaults matching across surfaces.
 - Express "not given" as absence (omitted on Node and WASM, `None` in Python). Refuse a negative position rather than reading it as a sentinel.

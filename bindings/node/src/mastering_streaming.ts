@@ -380,8 +380,8 @@ export class StreamAnalyzer {
    *
    * `gain` is a linear factor within 0.01..100, assuming input in the
    * conventional ±1 float domain. A value outside that range throws
-   * `InvalidParameter` instead of being clamped, and a non-finite one (or one
-   * past the 32-bit float range) a `RangeError` naming the argument; either way
+   * a `RangeError` instead of being clamped, as does a non-finite one (or one
+   * past the 32-bit float range); either way
    * the previous gain is kept. The usual recipe
    * (`targetLevel / measuredLevel`) easily lands outside it for a buffer on
    * another scale: an integer-scaled one asks for about 3e-4. Since no getter

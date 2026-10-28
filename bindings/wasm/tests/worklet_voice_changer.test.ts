@@ -533,10 +533,9 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
       // The contract is not implementation-dependent: the preset lookup in the
       // core throws SonareException(InvalidParameter) for an id it does not
       // recognize, the embind wrapper rethrows, and -fexceptions carries it to
-      // JS as a catchable SonareError. Constructing with an unknown id must
+      // JS as a catchable RangeError. Constructing with an unknown id must
       // therefore fail rather than fall back to a default voice, which would
       // send a performer's audio through the wrong processing chain silently.
-      const { ErrorCode, isSonareError } = await import('../dist/index.js');
       let caught: unknown;
       try {
         new SonareRealtimeVoiceChangerWorkletProcessor({
@@ -547,8 +546,7 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
         caught = error;
       }
       expect(caught, 'an unknown preset id must not construct silently').toBeDefined();
-      expect(isSonareError(caught)).toBe(true);
-      expect((caught as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+      expect(caught).toBeInstanceOf(RangeError);
       expect((caught as Error).message).toContain('unknown realtime voice changer preset');
     });
   });

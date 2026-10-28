@@ -82,7 +82,7 @@ def test_bank_without_bank_valid_is_refused(bank_msb: int, bank_lsb: int) -> Non
         with pytest.raises(SonareValueError, match=f"push_midi_input_program: {bank_rule}"):
             engine.push_midi_input_program(0, 0, 0, False, bank_msb, bank_lsb)
         assert engine.midi_input_pending_count() == 0
-    with pytest.raises(SonareError) as builder:
+    with pytest.raises(SonareValueError) as builder:
         Project.midi2_program(0.0, 0, 0, 0, False, bank_msb, bank_lsb)
     assert builder.value.code == int(ErrorCode.INVALID_PARAMETER)
 

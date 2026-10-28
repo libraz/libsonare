@@ -91,7 +91,7 @@ class TestNoiseBandBins:
 
     def test_refuses_a_non_positive_sample_rate(self) -> None:
         """The C layer's own refusal; nothing on this side screens the rate."""
-        with pytest.raises(libsonare.SonareError) as excinfo:
+        with pytest.raises(libsonare.SonareValueError) as excinfo:
             libsonare.mastering_repair_noise_band_bins(n_fft=N_FFT, sample_rate=0)
 
-        assert not isinstance(excinfo.value, libsonare.SonareValueError)
+        assert excinfo.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)

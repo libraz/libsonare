@@ -223,7 +223,7 @@ export class PolyphonicAnalysis {
    * cannot tell from two renders whether a claim set divided the energy correctly.
    *
    * @throws {RangeError} on a negative or non-finite `fadeMs` or `vibratoCutoffHz`
-   * @throws {SonareError} `InvalidParameter` on an edit field the renderer
+   * @throws {RangeError} on an edit field the renderer
    *   rejects — a non-positive stretch ratio, a negative or non-finite envelope
    *   point, or a vibrato or drift edit on a note carrying no usable pitch curve
    */
@@ -275,7 +275,7 @@ export class PolyphonicAnalysis {
  *
  * @throws {RangeError} on empty samples, a non-finite sample, or a `sampleRate`
  *   outside `[8000, 384000]`
- * @throws {SonareError} `InvalidParameter` on a config value the chain rejects,
+ * @throws {RangeError} on a config value the chain rejects,
  *   or on audio too short for two STFT frames at the configured `nFft`/`hopLength`
  *   (roughly one `hopLength`, 512 samples at 44100 Hz by default, converted to the input rate)
  *

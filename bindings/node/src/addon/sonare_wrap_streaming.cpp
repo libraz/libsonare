@@ -887,7 +887,7 @@ StreamingRetuneWrap::~StreamingRetuneWrap() {
 }
 
 // Releases the native handle now instead of at GC; every method below guards on
-// a null retune_, so a call after destroy() is a clean InvalidParameter.
+// a null retune_, so a call after destroy() is refused.
 Napi::Value StreamingRetuneWrap::Destroy(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

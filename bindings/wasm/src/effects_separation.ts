@@ -60,7 +60,7 @@ export interface PercussiveRequest extends ValidateOptions {
  * @param kernelPercussive - Vertical median filter size in STFT bins, under the
  *   same rule (default: 31)
  * @returns Separated harmonic and percussive components
- * @throws SonareError (`InvalidParameter`) on a kernel that is not an integer
+ * @throws RangeError on a kernel that is not an integer
  *   within the signed 32-bit range, or one the core rejects as even,
  *   non-positive or above its ceiling
  */

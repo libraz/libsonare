@@ -105,7 +105,7 @@ export interface NormalizeStereoResult {
  *   for `mode: 'peak'` and -20 for `mode: 'rms'`.
  * @param request.mode `'peak'` (default) or `'rms'`.
  * @returns The normalized pair and the gain that was applied.
- * @throws SonareError with `code` `ErrorCode.InvalidParameter` for a pair that
+ * @throws `RangeError` for a pair that
  *   cannot be processed together — either channel empty, or the two channels of
  *   unequal length — and for a `targetDb` that is not finite or sits above
  *   0 dBFS.

@@ -127,8 +127,7 @@ def tuning_to_reference_hz(tuning: float, a4: float = 440.0) -> float:
         The reference frequency in Hz.
 
     Raises:
-        SonareError: ``INVALID_PARAMETER`` for a non-finite ``tuning`` or a
-            non-positive ``a4``.
+        SonareValueError: For a non-finite ``tuning`` or a non-positive ``a4``.
     """
     out = ctypes.c_float(0.0)
     _check(
@@ -152,7 +151,7 @@ def reference_hz_to_tuning(hz: float, a4: float = 440.0) -> float:
         The tuning in fractions of a semitone.
 
     Raises:
-        SonareError: ``INVALID_PARAMETER`` for a non-positive ``hz`` or ``a4``.
+        SonareValueError: For a non-positive ``hz`` or ``a4``.
     """
     out = ctypes.c_float(0.0)
     _check(

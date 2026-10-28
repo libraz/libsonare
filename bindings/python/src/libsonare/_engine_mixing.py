@@ -18,7 +18,7 @@ from ._runtime import (
     SonareEngineBus,
     SonareEngineTrackLane,
     SonareEngineTrackSend,
-    _check_argument,
+    _check,
     _get_lib,
     _narrow_int,
     _pan_law_value,
@@ -126,9 +126,7 @@ class _EngineMixingMixin:
                     )
             else:
                 raw[i].track_id = lane
-        _check_argument(
-            _get_lib().sonare_engine_set_track_lanes(self._require_handle(), raw, len(lanes))
-        )
+        _check(_get_lib().sonare_engine_set_track_lanes(self._require_handle(), raw, len(lanes)))
 
     def set_track_sends(self, track_id: int, sends: Sequence[Mapping[str, object]]) -> None:
         """Replace one track lane's sends, leaving its output bus and every other lane as published.
@@ -142,7 +140,7 @@ class _EngineMixingMixin:
         Control thread only; not concurrent with processing.
         """
         send_array = _marshal_sends(sends) if sends else None
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_track_sends(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -158,7 +156,7 @@ class _EngineMixingMixin:
         for an unknown track or an undeclared bus. Control thread only; not concurrent
         with processing.
         """
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_track_output_bus(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -178,7 +176,7 @@ class _EngineMixingMixin:
         binding table, or an alignment past the delay ceiling. Control thread
         only; not concurrent with processing.
         """
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_lane_sidechain(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -195,7 +193,7 @@ class _EngineMixingMixin:
         Changes nothing; same threading contract as the setter.
         """
         refusal = ctypes.c_int()
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_can_set_lane_sidechain(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -215,7 +213,7 @@ class _EngineMixingMixin:
     ) -> SidechainCheck:
         """Report whether :meth:`set_bus_sidechain` would accept a binding."""
         refusal = ctypes.c_int()
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_can_set_bus_sidechain(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
@@ -232,7 +230,7 @@ class _EngineMixingMixin:
     ) -> SidechainCheck:
         """Report whether :meth:`set_master_sidechain` would accept a binding."""
         refusal = ctypes.c_int()
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_can_set_master_sidechain(
                 self._require_handle(),
                 _to_c_uint(insert_index, "insert_index"),
@@ -257,7 +255,7 @@ class _EngineMixingMixin:
         removes the binding. Control-thread-only: do not call concurrently
         with :meth:`process`.
         """
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_bus_sidechain(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
@@ -274,7 +272,7 @@ class _EngineMixingMixin:
 
         Master-strip counterpart of :meth:`set_bus_sidechain`.
         """
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_master_sidechain(
                 self._require_handle(),
                 _to_c_uint(insert_index, "insert_index"),
@@ -336,12 +334,10 @@ class _EngineMixingMixin:
                 0,
                 _UINT32_MAX,
             )
-        _check_argument(
-            _get_lib().sonare_engine_set_track_buses(self._require_handle(), raw, len(buses))
-        )
+        _check(_get_lib().sonare_engine_set_track_buses(self._require_handle(), raw, len(buses)))
 
     def set_bus_strip_json(self, bus_id: int, scene_json: str) -> None:
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_bus_strip_json(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
@@ -356,7 +352,7 @@ class _EngineMixingMixin:
 
         Bus-strip counterpart of :meth:`set_track_strip_eq_band`.
         """
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_bus_strip_eq_band_json(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
@@ -366,7 +362,7 @@ class _EngineMixingMixin:
         )
 
     def set_bus_strip_eq_band_json(self, bus_id: int, band_index: int, band_json: str) -> None:
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_bus_strip_eq_band_json(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
@@ -376,7 +372,7 @@ class _EngineMixingMixin:
         )
 
     def set_track_strip_json(self, track_id: int, scene_json: str) -> None:
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_track_strip_json(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -387,7 +383,7 @@ class _EngineMixingMixin:
     def set_track_strip_eq_band(
         self, track_id: int, band_index: int, band: Mapping[str, object] | str
     ) -> None:
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_track_strip_eq_band_json(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -397,7 +393,7 @@ class _EngineMixingMixin:
         )
 
     def set_track_strip_eq_band_json(self, track_id: int, band_index: int, band_json: str) -> None:
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_track_strip_eq_band_json(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -409,7 +405,7 @@ class _EngineMixingMixin:
     def set_track_strip_insert_bypassed(
         self, track_id: int, insert_index: int, bypassed: bool, reset_on_bypass: bool = False
     ) -> None:
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_track_strip_insert_bypassed(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -422,7 +418,7 @@ class _EngineMixingMixin:
     def set_track_strip_insert_param_by_name(
         self, track_id: int, insert_index: int, param_name: str, value: float
     ) -> None:
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_track_strip_insert_param_by_name(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -434,7 +430,7 @@ class _EngineMixingMixin:
 
     def set_track_strip_pan(self, track_id: int, pan: float) -> None:
         """Set a track strip's pan position (-1.0 hard left .. 1.0 hard right)."""
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_track_strip_pan(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -449,7 +445,7 @@ class _EngineMixingMixin:
         taper; stereo-pan and dual-pan modes take the law's centre attenuation.
         A mono source is unity at centre under every law (see :class:`PanLaw`).
         """
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_track_strip_pan_law(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -459,7 +455,7 @@ class _EngineMixingMixin:
 
     def set_track_strip_pan_mode(self, track_id: int, pan_mode: str | int) -> None:
         """Set a track strip's pan mode (name 'balance'/'stereo-pan'/'dual-pan', or int 0..2)."""
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_track_strip_pan_mode(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -469,7 +465,7 @@ class _EngineMixingMixin:
 
     def set_track_strip_dual_pan(self, track_id: int, left_pan: float, right_pan: float) -> None:
         """Set a track strip's dual-pan positions for the left and right channels."""
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_track_strip_dual_pan(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -501,7 +497,7 @@ class _EngineMixingMixin:
             lfe=_to_c_float(lfe, "lfe"),
             distance=_to_c_float(distance, "distance"),
         )
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_track_strip_surround_pan(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -511,7 +507,7 @@ class _EngineMixingMixin:
 
     def set_track_strip_channel_delay_samples(self, track_id: int, delay_samples: int) -> None:
         """Set a track strip's alignment delay in samples, moving it later than the other lanes."""
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_track_strip_channel_delay_samples(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -520,7 +516,7 @@ class _EngineMixingMixin:
         )
 
     def set_master_strip_json(self, scene_json: str) -> None:
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_master_strip_json(
                 self._require_handle(),
                 _utf8_arg(scene_json, "scene_json"),
@@ -528,7 +524,7 @@ class _EngineMixingMixin:
         )
 
     def set_master_strip_eq_band(self, band_index: int, band: Mapping[str, object] | str) -> None:
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_master_strip_eq_band_json(
                 self._require_handle(),
                 _to_c_int(band_index, "band_index"),
@@ -537,7 +533,7 @@ class _EngineMixingMixin:
         )
 
     def set_master_strip_eq_band_json(self, band_index: int, band_json: str) -> None:
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_master_strip_eq_band_json(
                 self._require_handle(),
                 _to_c_int(band_index, "band_index"),
@@ -548,7 +544,7 @@ class _EngineMixingMixin:
     def set_master_strip_insert_bypassed(
         self, insert_index: int, bypassed: bool, reset_on_bypass: bool = False
     ) -> None:
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_master_strip_insert_bypassed(
                 self._require_handle(),
                 _to_c_uint(insert_index, "insert_index"),
@@ -560,7 +556,7 @@ class _EngineMixingMixin:
     def set_master_strip_insert_param_by_name(
         self, insert_index: int, param_name: str, value: float
     ) -> None:
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_master_strip_insert_param_by_name(
                 self._require_handle(),
                 _to_c_uint(insert_index, "insert_index"),
@@ -577,7 +573,7 @@ class _EngineMixingMixin:
         Bus-strip counterpart of :meth:`set_track_strip_insert_param_by_name`;
         ``bus_id`` must carry a strip configured via :meth:`set_bus_strip_json`.
         """
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_bus_strip_insert_param_by_name(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
@@ -599,7 +595,7 @@ class _EngineMixingMixin:
         concurrently with :meth:`process`.
         """
         out_applied = ctypes.c_int()
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_apply_track_strip_insert_param_by_name_now(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -616,7 +612,7 @@ class _EngineMixingMixin:
     ) -> bool:
         """Master-strip counterpart of :meth:`apply_track_strip_insert_param_by_name_now`."""
         out_applied = ctypes.c_int()
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_apply_master_strip_insert_param_by_name_now(
                 self._require_handle(),
                 _to_c_uint(insert_index, "insert_index"),
@@ -632,7 +628,7 @@ class _EngineMixingMixin:
     ) -> bool:
         """Bus-strip counterpart of :meth:`apply_track_strip_insert_param_by_name_now`."""
         out_applied = ctypes.c_int()
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_apply_bus_strip_insert_param_by_name_now(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
@@ -654,7 +650,7 @@ class _EngineMixingMixin:
         :meth:`set_track_strip_json` replaced the strip. Raises if the track,
         insert, or name is unknown; not safe concurrently with :meth:`process`.
         """
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_restore_track_strip_insert_param_by_name(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -668,7 +664,7 @@ class _EngineMixingMixin:
         self, insert_index: int, param_name: str, value: float
     ) -> None:
         """Master-strip counterpart of :meth:`restore_track_strip_insert_param_by_name`."""
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_restore_master_strip_insert_param_by_name(
                 self._require_handle(),
                 _to_c_uint(insert_index, "insert_index"),
@@ -681,7 +677,7 @@ class _EngineMixingMixin:
         self, bus_id: int, insert_index: int, param_name: str, value: float
     ) -> None:
         """Bus-strip counterpart of :meth:`restore_track_strip_insert_param_by_name`."""
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_restore_bus_strip_insert_param_by_name(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
@@ -700,7 +696,7 @@ class _EngineMixingMixin:
         edit may already target the new chain. Raises if the track is not a published
         lane; not safe concurrently with :meth:`process`.
         """
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_clear_track_insert_parameter_bases(
                 self._require_handle(), _to_c_uint32(track_id, "track_id")
             )
@@ -708,9 +704,7 @@ class _EngineMixingMixin:
 
     def clear_master_insert_parameter_bases(self) -> None:
         """Master-strip counterpart of :meth:`clear_track_insert_parameter_bases`."""
-        _check_argument(
-            _get_lib().sonare_engine_clear_master_insert_parameter_bases(self._require_handle())
-        )
+        _check(_get_lib().sonare_engine_clear_master_insert_parameter_bases(self._require_handle()))
 
     def clear_bus_insert_parameter_bases(self, bus_id: int) -> None:
         """Bus-strip counterpart of :meth:`clear_track_insert_parameter_bases`.
@@ -718,7 +712,7 @@ class _EngineMixingMixin:
         Also accepts a bus identity that was already removed, covering every
         selector the identity held across remove/re-add.
         """
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_clear_bus_insert_parameter_bases(
                 self._require_handle(), _to_c_uint32(bus_id, "bus_id")
             )
@@ -732,7 +726,7 @@ class _EngineMixingMixin:
         Bus-strip counterpart of :meth:`set_track_strip_insert_bypassed`;
         ``bus_id`` must carry a strip configured via :meth:`set_bus_strip_json`.
         """
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_bus_strip_insert_bypassed(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
@@ -748,7 +742,7 @@ class _EngineMixingMixin:
         Bus-strip counterpart of :meth:`set_track_strip_pan`; rejected on a
         surround bus.
         """
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_bus_strip_pan(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
@@ -761,7 +755,7 @@ class _EngineMixingMixin:
 
         Bus-strip counterpart of :meth:`set_track_strip_pan_law`.
         """
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_bus_strip_pan_law(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
@@ -774,7 +768,7 @@ class _EngineMixingMixin:
 
         Bus-strip counterpart of :meth:`set_track_strip_pan_mode`.
         """
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_bus_strip_pan_mode(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
@@ -787,7 +781,7 @@ class _EngineMixingMixin:
 
         Bus-strip counterpart of :meth:`set_track_strip_dual_pan`.
         """
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_bus_strip_dual_pan(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
@@ -829,7 +823,7 @@ class _EngineMixingMixin:
         that would take the engine past its 8192 insert-id entries is refused.
         """
         out_id = ctypes.c_uint32()
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_resolve_track_insert_automation_id(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -851,7 +845,7 @@ class _EngineMixingMixin:
         is neither.
         """
         out_id = ctypes.c_uint32()
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_resolve_track_lane_automation_id(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
@@ -872,7 +866,7 @@ class _EngineMixingMixin:
         the bus is not configured or the name is not ``"faderDb"``.
         """
         out_id = ctypes.c_uint32()
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_resolve_bus_automation_id(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
@@ -890,7 +884,7 @@ class _EngineMixingMixin:
         of the three.
         """
         out_id = ctypes.c_uint32()
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_resolve_master_automation_id(
                 self._require_handle(),
                 _utf8_arg(param_name, "param_name"),
@@ -905,7 +899,7 @@ class _EngineMixingMixin:
         Master-strip counterpart of :meth:`resolve_track_insert_automation_id`.
         """
         out_id = ctypes.c_uint32()
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_resolve_master_insert_automation_id(
                 self._require_handle(),
                 _to_c_uint(insert_index, "insert_index"),
@@ -924,7 +918,7 @@ class _EngineMixingMixin:
         ``bus_id`` must carry a strip configured via :meth:`set_bus_strip_json`.
         """
         out_id = ctypes.c_uint32()
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_resolve_bus_insert_automation_id(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),

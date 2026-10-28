@@ -659,7 +659,7 @@ export interface SynthModRouting {
  * keeps the base value; supplying one overrides it, including an explicit `0` such as
  * `stereoSpread: 0`. A value that is non-finite or outside the range
  * {@link synthPatchParamInfo} publishes for its field, and more than 8
- * `modRoutings`, are refused with a coded `SonareError` naming the field. The enum fields
+ * `modRoutings`, are refused with a `RangeError` naming the field. The enum fields
  * reserve `'default'` as keep. A `modRoutings` array REPLACES the base mod
  * matrix, and an empty array clears it, while omitting the key keeps it.
  *
@@ -697,7 +697,7 @@ export interface SynthPatch {
    * the wrapper fields, nothing is clamped or ignored: an unknown key, a key of
    * another engine's section, a non-finite value, a fractional value for a
    * whole-number field or a value outside a bounded field's range throws a
-   * `SonareError` (`InvalidParameter`) naming the key. Absent keys keep the
+   * `RangeError` naming the key. Absent keys keep the
    * engine section's base (the named preset's, or the engine's base preset's).
    * Not returned by {@link synthPresetPatch}.
    */

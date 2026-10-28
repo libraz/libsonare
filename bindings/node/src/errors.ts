@@ -23,6 +23,11 @@ export enum ErrorCode {
  * is `'SonareError'`, augmented with a numeric `code` (one of
  * {@link ErrorCode}) and its canonical `codeName`.
  *
+ * A refused caller argument is not a `SonareError`: the C ABI's
+ * `InvalidParameter` surfaces as a `RangeError` (a wrong JS type stays a
+ * `TypeError`), so a coded `SonareError` always means a library or object-state
+ * failure. `ErrorCode.InvalidParameter` stays for parity with the C ABI numbering.
+ *
  * Narrow a caught value with {@link isSonareError} or with `instanceof`; both
  * accept the same values. This class exists as a runtime value so the WASM
  * package and this one export the same *kind* of thing under this name — a

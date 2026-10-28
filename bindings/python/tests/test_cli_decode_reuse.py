@@ -11,7 +11,7 @@ import pytest
 
 from libsonare import _cli_common as common
 from libsonare import audio, cli
-from libsonare._errors import SonareError
+from libsonare._errors import SonareError, SonareValueError
 
 
 class _FakeAudio:
@@ -182,12 +182,12 @@ def test_known_regular_oversize_preserves_native_error(monkeypatch, tmp_path) ->
         ),
     )
 
-    with pytest.raises(SonareError) as caught:
+    with pytest.raises(SonareValueError) as caught:
         common._read_audio_bounded(path)
 
     assert caught.value.code == common.SONARE_ERROR_INVALID_PARAMETER
     assert str(caught.value) == (
-        f"[{caught.value.code}] File too large: {common._MAX_AUDIO_FILE_BYTES + 1} bytes "
+        f"File too large: {common._MAX_AUDIO_FILE_BYTES + 1} bytes "
         f"(max: {common._MAX_AUDIO_FILE_BYTES} bytes)"
     )
 
@@ -221,11 +221,11 @@ def test_streaming_oversize_uses_64k_chunks_and_stream_error(monkeypatch, tmp_pa
     stream = FakeStream()
     monkeypatch.setattr("builtins.open", lambda _path, _mode: stream)
 
-    with pytest.raises(SonareError) as caught:
+    with pytest.raises(SonareValueError) as caught:
         common._read_audio_bounded(path)
 
     assert caught.value.code == common.SONARE_ERROR_INVALID_PARAMETER
-    assert str(caught.value) == f"[{caught.value.code}] File too large: exceeds {chunk_limit} bytes"
+    assert str(caught.value) == f"File too large: exceeds {chunk_limit} bytes"
     assert stream.read_sizes == [common._AUDIO_READ_CHUNK_BYTES] * 3
     assert stream.closed
 

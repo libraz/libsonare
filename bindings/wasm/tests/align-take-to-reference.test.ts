@@ -13,7 +13,8 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { AlignTakeToReferenceRequest, AlignTakeToReferenceResult } from '../src/index';
-import { alignTakeToReference, ErrorCode, init, isSonareError } from '../src/index';
+import { alignTakeToReference, init } from '../src/index';
+import { expectArgumentRefusal } from './_helpers';
 
 const sampleRate = 22050;
 /** 2.0 s of reference against 2.6 s of take. Neither is a multiple of a hop below. */
@@ -138,7 +139,7 @@ describe('WASM alignTakeToReference', () => {
       thrown = error;
     }
     expect(thrown).toBeDefined();
-    expect(isSonareError(thrown) && thrown.code).toBe(ErrorCode.InvalidParameter);
+    expectArgumentRefusal(thrown);
   });
 
   it('reads an absent resolution field as the library value however absence is spelled', () => {
@@ -248,7 +249,7 @@ describe('WASM alignTakeToReference', () => {
         thrown = error;
       }
       expect(thrown, name).toBeDefined();
-      expect(isSonareError(thrown) && thrown.code, name).toBe(ErrorCode.InvalidParameter);
+      expectArgumentRefusal(thrown, RangeError, name);
     }
   });
 
@@ -348,6 +349,6 @@ describe('WASM alignTakeToReference', () => {
       thrown = error;
     }
     expect(thrown).toBeDefined();
-    expect(isSonareError(thrown) && thrown.code).toBe(ErrorCode.InvalidParameter);
+    expectArgumentRefusal(thrown);
   });
 });

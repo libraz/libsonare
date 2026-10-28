@@ -483,7 +483,7 @@ export function remixAlignedIntervals(
  * // hard.residual carries what neither component claimed
  * ```
  *
- * @throws SonareError (`InvalidParameter`) on a kernel that is not an integer
+ * @throws RangeError on a kernel that is not an integer
  *   within the signed 32-bit range, or one the core rejects as even,
  *   non-positive or above its ceiling
  */

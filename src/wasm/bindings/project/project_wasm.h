@@ -67,10 +67,9 @@ inline sonare::ErrorCode codeFromCError(SonareError err) {
   return sonare_c_detail::error_code_from_c_error(err);
 }
 
-/// Throws a refused caller value (SONARE_ERROR_INVALID_PARAMETER) as a RangeError and every other
-/// C code as the coded SonareException.
+/// Throws the C code as its SonareException; sonareExceptionInfo surfaces INVALID_PARAMETER as a
+/// RangeError.
 [[noreturn]] inline void throwCErrorMessage(SonareError err, const std::string& message) {
-  if (err == SONARE_ERROR_INVALID_PARAMETER) throw WasmRangeError(message);
   throw sonare::SonareException(codeFromCError(err), message);
 }
 
@@ -88,8 +87,7 @@ inline std::string cErrorMessage(SonareError err, const char* context) {
   throwCErrorMessage(err, cErrorMessage(err, context));
 }
 
-/// throwCError for the free functions and helper classes sharing these units, which keep
-/// every C code, INVALID_PARAMETER included, as the coded SonareException.
+/// throwCError for the free functions and helper classes sharing these units.
 [[noreturn]] inline void throwCodedCError(SonareError err, const char* context) {
   throw sonare::SonareException(codeFromCError(err), cErrorMessage(err, context));
 }

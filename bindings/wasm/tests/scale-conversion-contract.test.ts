@@ -25,12 +25,10 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
-  ErrorCode,
   hzToMel,
   hzToMidi,
   hzToNote,
   init,
-  isSonareError,
   melToHz,
   midiToHz,
   timeToFrames,
@@ -142,8 +140,8 @@ describe('the scale conversions stay total', () => {
   });
 });
 
-describe('the note-name conversions refuse by code', () => {
-  it('refuses a frequency with no note name by code rather than answering "?"', () => {
+describe('the note-name conversions refuse', () => {
+  it('refuses a frequency with no note name rather than answering "?"', () => {
     for (const hz of [0, -440, 1e39, Number.NaN, Number.POSITIVE_INFINITY]) {
       let thrown: unknown;
       try {
@@ -151,8 +149,7 @@ describe('the note-name conversions refuse by code', () => {
       } catch (error) {
         thrown = error;
       }
-      expect(isSonareError(thrown), String(hz)).toBe(true);
-      expect((thrown as { code: number }).code, String(hz)).toBe(ErrorCode.InvalidParameter);
+      expectArgumentRefusal(thrown, RangeError, String(hz));
     }
   });
 });

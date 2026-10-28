@@ -18,6 +18,7 @@ from libsonare import (
     ErrorCode,
     RealtimeEngine,
     SonareError,
+    SonareValueError,
 )
 
 from ._helpers import _midi1_word
@@ -273,7 +274,7 @@ def test_prime_offline_parameters_accepts_the_prepared_shape_and_refuses_others(
 def test_offline_entry_points_refuse_a_block_above_the_prepared_block() -> None:
     frames = 256
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
-        with pytest.raises(SonareError) as render_error:
+        with pytest.raises(SonareValueError) as render_error:
             engine.render_offline([[0.0] * frames, [0.0] * frames], block_size=129)
         assert render_error.value.code == ErrorCode.INVALID_PARAMETER
         with pytest.raises(SonareError):

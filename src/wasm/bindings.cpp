@@ -212,8 +212,10 @@ val js_capabilities() {
 // raw exception-object pointer (a number). Given that pointer, surface a
 // structured { code, codeName, message } so the JS glue can rebuild a
 // SonareError whose numeric code matches the C ABI / Node / Python surfaces.
-// A WasmArgumentError adds a `kind` ("TypeError" / "RangeError") and is rebuilt
-// as that JS class instead.
+// The refusal contract is by cause: a WasmArgumentError carries its own `kind`
+// ("TypeError" / "RangeError") and every other InvalidParameter failure, from the
+// library or the C ABI, is a refused caller argument and gets kind "RangeError";
+// both are rebuilt as that JS class instead of a coded SonareError.
 // The integer codes mirror the C ABI SonareError enum (the C-ABI TU is not
 // linked into WASM, so the values are written out here rather than referenced).
 // The switch carries no default:, so a new ErrorCode enumerator fails the build
@@ -226,8 +228,8 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
   auto* base = reinterpret_cast<std::exception*>(exception_ptr);
   if (base != nullptr) {
     message = base->what();
-    // An argument the binding refused itself surfaces as the native JS class, not
-    // a coded SonareError; code and codeName below still read InvalidParameter.
+    // A refused argument surfaces as the native JS class, not a coded SonareError;
+    // code and codeName below still read InvalidParameter.
     if (const auto* argument = dynamic_cast<const WasmArgumentError*>(base)) {
       info.set("kind",
                std::string(argument->kind() == WasmArgumentError::Kind::Type ? "TypeError"
@@ -298,6 +300,9 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
       }
     }
   }
+  // Any other InvalidParameter (a library SonareException or a std::invalid_argument-class
+  // exception) is a refused caller argument.
+  if (code == 4 && !info.hasOwnProperty("kind")) info.set("kind", std::string("RangeError"));
   info.set("code", code);
   info.set("codeName", std::string(code_name));
   info.set("message", message);

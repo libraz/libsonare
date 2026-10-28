@@ -61,9 +61,22 @@ def _get_lib() -> ctypes.CDLL:
 
 
 def _generic_error(rc: int) -> SonareError:
-    """Build a :class:`SonareError` from the code's own generic string."""
+    """Build the exception for ``rc`` from the code's own generic string."""
     msg = _get_lib().sonare_error_message(_to_c_int32(rc, "rc"))
-    return SonareError(rc, msg.decode("utf-8") if msg else f"sonare error {rc}")
+    text = msg.decode("utf-8") if msg else f"sonare error {rc}"
+    return _coded_error(rc, text)
+
+
+def _coded_error(code: int, message: str) -> SonareError:
+    """Build the exception for a C-ABI failure, split by cause.
+
+    InvalidParameter is always a refused caller argument, so it is a
+    :class:`SonareValueError` with the plain message; every other code is a coded
+    :class:`SonareError`.
+    """
+    if code == int(ErrorCode.INVALID_PARAMETER):
+        return SonareValueError(message)
+    return SonareError(code, message)
 
 
 def _check(rc: int) -> None:
@@ -82,22 +95,8 @@ def _check(rc: int) -> None:
         detail = lib.sonare_last_error_message()
         detail_str = detail.decode("utf-8") if detail else ""
         if detail_str:
-            raise SonareError(rc, detail_str)
+            raise _coded_error(rc, detail_str)
         raise _generic_error(rc)
-
-
-def _check_argument(rc: int) -> None:
-    """Like :func:`_check`, but a refused argument (InvalidParameter) is a ``SonareValueError``.
-
-    For calls whose only InvalidParameter cause is a caller-supplied value, such as an unknown
-    name or an out-of-range factor.
-    """
-    try:
-        _check(rc)
-    except SonareError as exc:
-        if exc.code == int(ErrorCode.INVALID_PARAMETER):
-            raise SonareValueError(str(exc).split("] ", 1)[-1]) from exc
-        raise
 
 
 def _last_error(default_code: int, fallback_message: str) -> SonareError:
@@ -113,7 +112,7 @@ def _last_error(default_code: int, fallback_message: str) -> SonareError:
     raw = lib.sonare_last_error_message()
     detail = raw.decode("utf-8", errors="replace") if raw else ""
     message = f"{fallback_message}: {detail}" if detail else fallback_message
-    return SonareError(code if code != SONARE_OK else default_code, message)
+    return _coded_error(code if code != SONARE_OK else default_code, message)
 
 
 def _check_realtime(rc: int) -> None:

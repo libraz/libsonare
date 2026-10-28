@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   capabilityCatalog,
-  ErrorCode,
   Mixer,
   masteringAmpPresetCatalog,
   masteringInsertParamInfo,
@@ -144,11 +143,11 @@ describe('the causal repair stages reach the generic insert path', () => {
     expect(mode?.choices?.map((choice) => choice.name)).toEqual(['median']);
     expect(() =>
       masteringInsertTiming('repair.dereverbClassical', { wpeEnabled: true }, 48000),
-    ).toThrow(expect.objectContaining({ code: ErrorCode.InvalidParameter }));
+    ).toThrow(RangeError);
     // The quantile estimator (0) ranks a whole signal; the insert defaults to spp.
     expect(() =>
       masteringInsertTiming('repair.denoiseClassical', { noiseEstimator: 0 }, 48000),
-    ).toThrow(expect.objectContaining({ code: ErrorCode.InvalidParameter }));
+    ).toThrow(RangeError);
     const estimator = masteringInsertParamInfo('repair.denoiseClassical').find(
       (param) => param.name === 'noiseEstimator',
     );

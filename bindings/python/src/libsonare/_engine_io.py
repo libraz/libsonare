@@ -57,7 +57,7 @@ from ._runtime import (
     MeterTelemetryRecordWide,
     ScopeTelemetryRecord,
     SonareValueError,
-    _check_argument,
+    _check,
     _check_realtime,
     _float_array_result,
     _from_c_float_array,
@@ -109,14 +109,12 @@ class _EngineIoMixin:
         )
         raw.num_channels = channel_count
         raw.capacity_frames = frame_capacity
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_capture_buffer(self._require_handle(), ctypes.byref(raw))
         )
 
     def arm_capture(self, armed: bool = True) -> None:
-        _check_argument(
-            _get_lib().sonare_engine_arm_capture(self._require_handle(), 1 if armed else 0)
-        )
+        _check(_get_lib().sonare_engine_arm_capture(self._require_handle(), 1 if armed else 0))
 
     def set_capture_punch(
         self,
@@ -143,7 +141,7 @@ class _EngineIoMixin:
                 "set_capture_punch needs both bounds (start_sample or start_sec, "
                 "end_sample or end_sec)"
             )
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_capture_punch(
                 self._require_handle(),
                 _to_c_int64(start, "start_sample"),
@@ -153,7 +151,7 @@ class _EngineIoMixin:
         )
 
     def set_capture_source(self, source: str | int) -> None:
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_capture_source(
                 self._require_handle(), _to_c_int(_capture_source_value(source), "source")
             )
@@ -165,27 +163,25 @@ class _EngineIoMixin:
         Input arriving within the offset after a loop wrap belongs to the end of
         the pass played before it, so every pass captures the whole loop range.
         """
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_record_offset_samples(
                 self._require_handle(), _to_c_int64(offset_samples, "offset_samples")
             )
         )
 
     def set_input_monitor(self, enabled: bool, gain: float = 1.0) -> None:
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_set_input_monitor(
                 self._require_handle(), 1 if enabled else 0, _to_c_float(gain, "gain")
             )
         )
 
     def reset_capture(self) -> None:
-        _check_argument(_get_lib().sonare_engine_reset_capture(self._require_handle()))
+        _check(_get_lib().sonare_engine_reset_capture(self._require_handle()))
 
     def capture_status(self) -> EngineCaptureStatus:
         raw = SonareEngineCaptureStatus()
-        _check_argument(
-            _get_lib().sonare_engine_capture_status(self._require_handle(), ctypes.byref(raw))
-        )
+        _check(_get_lib().sonare_engine_capture_status(self._require_handle(), ctypes.byref(raw)))
         return EngineCaptureStatus(
             captured_frames=int(raw.captured_frames),
             overflow_count=int(raw.overflow_count),
@@ -224,20 +220,16 @@ class _EngineIoMixin:
         # Assigned unconverted so the struct's own narrowing sees the caller's
         # value; int() would truncate a fraction past it.
         raw.num_channels = spec.num_channels
-        _check_argument(
-            _get_lib().sonare_engine_set_graph(self._require_handle(), ctypes.byref(raw))
-        )
+        _check(_get_lib().sonare_engine_set_graph(self._require_handle(), ctypes.byref(raw)))
 
     def graph_node_count(self) -> int:
         out = ctypes.c_size_t()
-        _check_argument(
-            _get_lib().sonare_engine_graph_node_count(self._require_handle(), ctypes.byref(out))
-        )
+        _check(_get_lib().sonare_engine_graph_node_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
     def graph_connection_count(self) -> int:
         out = ctypes.c_size_t()
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_graph_connection_count(
                 self._require_handle(), ctypes.byref(out)
             )
@@ -310,7 +302,7 @@ class _EngineIoMixin:
         only bit-identity is lost.
         """
         arrays, ptrs, frame_count = self._channel_arrays(channels)
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_render_offline_ex(
                 self._require_handle(),
                 ptrs,
@@ -336,7 +328,7 @@ class _EngineIoMixin:
         emitted here are the only ones the receiving device will get and the
         notes otherwise hang outside the engine.
         """
-        _check_argument(_get_lib().sonare_engine_finish_offline_render(self._require_handle()))
+        _check(_get_lib().sonare_engine_finish_offline_render(self._require_handle()))
 
     def bounce_offline(self, options: EngineBounceOptions) -> EngineBounceResult:
         """Render the whole span in one call and return the interleaved mix.
@@ -370,7 +362,7 @@ class _EngineIoMixin:
         # EngineBounceOptions dataclass defaults are the authority, not the C
         # ones; test_bounce_dataclass_defaults_match_the_native_defaults keeps
         # the two from diverging.
-        _check_argument(lib.sonare_engine_bounce_options_default(ctypes.byref(raw_options)))
+        _check(lib.sonare_engine_bounce_options_default(ctypes.byref(raw_options)))
         # Assigned unconverted so the struct's own narrowing sees each caller
         # value; int() would truncate a fraction past it. normalize_lufs is the
         # one exception -- it is a documented bool, spelled 0/1 here.
@@ -390,7 +382,7 @@ class _EngineIoMixin:
         )
         raw_options.dither_seed = options.dither_seed
         raw_result = SonareEngineBounceResult()
-        _check_argument(
+        _check(
             lib.sonare_engine_bounce_offline(
                 self._require_handle(), ctypes.byref(raw_options), ctypes.byref(raw_result)
             )
@@ -428,7 +420,7 @@ class _EngineIoMixin:
         raw_options.start_ppq = _narrow_double(options.start_ppq, "options.start_ppq")
         raw_options.gain = _narrow_double(options.gain, "options.gain")
         raw_result = SonareEngineFreezeResult()
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_freeze_offline(
                 self._require_handle(), ctypes.byref(raw_options), ctypes.byref(raw_result)
             )
@@ -445,7 +437,7 @@ class _EngineIoMixin:
         capacity = _to_c_size_t(max_records, "max_records")
         raw = (SonareEngineTelemetry * capacity.value)()
         written = ctypes.c_size_t()
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_drain_telemetry(
                 self._require_handle(), raw, capacity, ctypes.byref(written)
             )
@@ -457,7 +449,7 @@ class _EngineIoMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_reset_master_loudness_meter"):
             raise _not_supported("libsonare was built without master-meter reset support")
-        _check_argument(
+        _check(
             lib.sonare_engine_reset_master_loudness_meter(
                 self._require_handle(),
                 _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
@@ -475,7 +467,7 @@ class _EngineIoMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_reset_processor_state"):
             raise _not_supported("libsonare was built without processor-state reset support")
-        _check_argument(
+        _check(
             lib.sonare_engine_reset_processor_state(
                 self._require_handle(),
                 _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
@@ -485,7 +477,7 @@ class _EngineIoMixin:
     def pop_clip_page_request(self) -> ClipPageRequest | None:
         raw = SonareClipPageRequest()
         has_request = ctypes.c_int()
-        _check_argument(
+        _check(
             _get_lib().sonare_engine_pop_clip_page_request(
                 self._require_handle(), ctypes.byref(raw), ctypes.byref(has_request)
             )
@@ -517,7 +509,7 @@ class _EngineIoMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_clip_page_prefetch_frames"):
             raise _not_supported("libsonare was built without clip-page look-ahead support")
-        _check_argument(
+        _check(
             lib.sonare_engine_set_clip_page_prefetch_frames(
                 self._require_handle(), _to_c_int64(frames, "frames")
             )
@@ -529,7 +521,7 @@ class _EngineIoMixin:
         if not hasattr(lib, "sonare_engine_clip_page_prefetch_frames"):
             raise _not_supported("libsonare was built without clip-page look-ahead support")
         out = ctypes.c_int64()
-        _check_argument(
+        _check(
             lib.sonare_engine_clip_page_prefetch_frames(self._require_handle(), ctypes.byref(out))
         )
         return int(out.value)
@@ -548,7 +540,7 @@ class _EngineIoMixin:
         capacity = _to_c_size_t(max_records, "max_records")
         raw = (SonareMeterTelemetryRecordV2 * capacity.value)()
         written = ctypes.c_size_t()
-        _check_argument(
+        _check(
             lib.sonare_engine_drain_meter_telemetry_v2(
                 self._require_handle(), raw, capacity, ctypes.byref(written)
             )
@@ -570,7 +562,7 @@ class _EngineIoMixin:
         capacity = _to_c_size_t(max_records, "max_records")
         raw = (SonareMeterTelemetryRecordWideV2 * capacity.value)()
         written = ctypes.c_size_t()
-        _check_argument(
+        _check(
             lib.sonare_engine_drain_meter_telemetry_wide_v2(
                 self._require_handle(), raw, capacity, ctypes.byref(written)
             )
@@ -590,7 +582,7 @@ class _EngineIoMixin:
             raise _not_supported("libsonare was built without insert gain-reduction support")
         raw = (ctypes.c_float * SONARE_METER_MAX_INSERTS)()
         count = ctypes.c_size_t()
-        _check_argument(
+        _check(
             lib.sonare_engine_meter_target_insert_gain_reduction(
                 self._require_handle(),
                 _to_c_uint(target_id, "target_id"),
@@ -607,7 +599,7 @@ class _EngineIoMixin:
         if not hasattr(lib, "sonare_engine_insert_parameter_constructed_value"):
             raise _not_supported("libsonare was built without insert constructed-value support")
         out_value = ctypes.c_float()
-        _check_argument(
+        _check(
             lib.sonare_engine_insert_parameter_constructed_value(
                 self._require_handle(), _to_c_uint(param_id, "param_id"), ctypes.byref(out_value)
             )
@@ -625,7 +617,7 @@ class _EngineIoMixin:
         if not hasattr(lib, "sonare_engine_configure_scope_telemetry"):
             raise _not_supported("libsonare was built without scope-telemetry support")
         applied = ctypes.c_uint()
-        _check_argument(
+        _check(
             lib.sonare_engine_configure_scope_telemetry(
                 self._require_handle(),
                 _to_c_int(interval_frames, "interval_frames"),
@@ -645,7 +637,7 @@ class _EngineIoMixin:
         capacity = _to_c_size_t(max_records, "max_records")
         raw = (SonareScopeTelemetryRecord * capacity.value)()
         written = ctypes.c_size_t()
-        _check_argument(
+        _check(
             lib.sonare_engine_drain_scope_telemetry(
                 self._require_handle(), raw, capacity, ctypes.byref(written)
             )

@@ -30,7 +30,6 @@ from ._runtime import (
     SonareValueError,
     _as_float32_buffer,
     _check,
-    _check_argument,
     _check_realtime,
     _float_array_result,
     _from_c_float_array,
@@ -107,7 +106,7 @@ def voice_change(
             ctypes.byref(out_length),
         )
         # A refused factor is an argument refusal in either formant mode.
-        _check_argument(rc)
+        _check(rc)
         return _float_array_result(out, out_length.value)
 
 
@@ -144,7 +143,7 @@ class RealtimeVoiceChanger:
             _to_c_int(channels, "channels"),
             ctypes.byref(self._handle),
         )
-        _check_argument(rc)
+        _check(rc)
 
     def close(self) -> None:
         if self._handle:
@@ -172,7 +171,7 @@ class RealtimeVoiceChanger:
         rc = self._lib.sonare_realtime_voice_changer_set_config_json(
             self._require_handle(), _voice_config_to_json(preset)
         )
-        _check_argument(rc)
+        _check(rc)
 
     def latency_samples(self) -> int:
         out = ctypes.c_int()
@@ -259,7 +258,7 @@ class RealtimeVoiceChanger:
         rc = self._lib.sonare_realtime_voice_changer_set_config(
             self._require_handle(), ctypes.byref(pod)
         )
-        _check_argument(rc)
+        _check(rc)
 
     def process_mono(self, samples: Sequence[float] | list[float] | np.ndarray) -> np.ndarray:
         """Process a mono buffer block-by-block and return the result as ndarray.

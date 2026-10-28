@@ -17,17 +17,14 @@ import {
   detectKeyCandidates,
   type EngineAutomationPoint,
   type EngineMidiEvent,
-  ErrorCode,
   fixFrames,
   init,
-  isSonareError,
   Mixer,
   masteringStreamingPreview,
   mixingScenePresetJson,
   Project,
   RealtimeEngine,
   RealtimeVoiceChanger,
-  type SonareError,
   type SpectralRegionOp,
   spectralEdit,
   waveformPeakPyramid,
@@ -51,18 +48,6 @@ function makeSine(seconds: number, freq: number, sampleRate = SR): Float32Array 
     out[i] = 0.25 * Math.sin((2 * Math.PI * freq * i) / sampleRate);
   }
   return out;
-}
-
-function expectInvalidParameter(fn: () => unknown): void {
-  let caught: unknown;
-  try {
-    fn();
-  } catch (e) {
-    caught = e;
-  }
-  expect(caught, 'expected a SonareError, got no throw').toBeDefined();
-  expect(isSonareError(caught)).toBe(true);
-  expect((caught as SonareError).code).toBe(ErrorCode.InvalidParameter);
 }
 
 const expectRangeRefusal = (fn: () => unknown): void => {
@@ -163,7 +148,7 @@ describe('analyze rejects the same configurations as the C ABI', () => {
 
   for (const [label, options] of rejected) {
     it(`rejects ${label}`, () => {
-      expectInvalidParameter(() => analyze(samples, SR, options));
+      expectRangeRefusal(() => analyze(samples, SR, options));
     });
   }
 
@@ -173,7 +158,7 @@ describe('analyze rejects the same configurations as the C ABI', () => {
   });
 
   it('rejects an odd nFft, which has no n_fft/2 + 1 bin layout', () => {
-    expectInvalidParameter(() => analyze(samples, SR, { nFft: 2047 }));
+    expectRangeRefusal(() => analyze(samples, SR, { nFft: 2047 }));
   });
 });
 

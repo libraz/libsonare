@@ -702,10 +702,10 @@ describe('a gamma keeps its NaN, which selects the automatic ERB value', () => {
         expect(() => argument.call(value), `${argument.name} ${value}`).toThrow(RangeError);
       }
       // An infinity is refused by the core's own finiteness check rather than by
-      // the reader, so it is NOT a RangeError. This is why the discriminating
-      // value above has to be a finite 1e39.
-      expect(() => argument.call(Number.POSITIVE_INFINITY)).toThrow();
-      expect(() => argument.call(Number.POSITIVE_INFINITY)).not.toThrow(RangeError);
+      // the reader, so it does not carry the reader's wording. This is why the
+      // discriminating value above has to be a finite 1e39.
+      expect(() => argument.call(Number.POSITIVE_INFINITY)).toThrow(RangeError);
+      expect(() => argument.call(Number.POSITIVE_INFINITY)).not.toThrow(/32-bit float range/);
     },
   );
 });
@@ -741,8 +741,8 @@ describe('the table covers the whole reader population', () => {
  *
  * Most of this population is already refused somewhere downstream — the mixer's
  * C ABI guards `finite()` on every setter, the streaming analyzer throws
- * `InvalidParameter`, `sonare_engine_set_automation_lane` rejects a non-finite
- * breakpoint. For those the repair is the error class and the name, not the
+ * a refusal, `sonare_engine_set_automation_lane` rejects a non-finite
+ * breakpoint. For those the repair is the error wording and the name, not the
  * outcome. It is exactly why the discriminating value has to be the finite
  * `1e39`: an `Infinity` would be refused by the core with no reader in front of
  * it, and the assertion would pass against unrepaired code.
@@ -1222,7 +1222,7 @@ describe('a required float state setter is refused rather than saturated', () =>
  * What stands in for one is a differential rejection against the core's own
  * domain — a non-negative duration is accepted and a negative one is refused —
  * which is what an entry point that never read its argument could not do. The
- * reader's own refusal is then distinguishable from the core's by class.
+ * reader's own refusal is then distinguishable from the core's by its wording.
  */
 describe('setExpectedDuration reaches the core, and 1e39 does not reach it at all', () => {
   /* biome-ignore lint/suspicious/noExplicitAny: the addon is untyped here on purpose. */
@@ -1232,10 +1232,10 @@ describe('setExpectedDuration reaches the core, and 1e39 does not reach it at al
 
   it('streaming/stream_analyzer.cpp SetExpectedDuration durationSeconds', () => {
     expect(() => analyzer().setExpectedDuration(30)).not.toThrow();
-    // The core owns the non-negative half of the domain and reports it as a
-    // SonareError, so the argument demonstrably arrives.
-    expect(() => analyzer().setExpectedDuration(-1)).toThrow();
-    expect(() => analyzer().setExpectedDuration(-1)).not.toThrow(RangeError);
+    // The core owns the non-negative half of the domain, so the argument
+    // demonstrably arrives: its refusal lacks the reader's float-range wording.
+    expect(() => analyzer().setExpectedDuration(-1)).toThrow(RangeError);
+    expect(() => analyzer().setExpectedDuration(-1)).not.toThrow(/32-bit float range/);
     for (const value of [...PAST_FLOAT_RANGE, ...NON_FINITE]) {
       expect(() => analyzer().setExpectedDuration(value), `${value}`).toThrow(RangeError);
     }
@@ -1468,7 +1468,7 @@ describe('a unit conversion keeps the C ABI conversion rather than refusing', ()
  * of this case would pass against a track that never exercised it.
  */
 describe('the default pyin track maps through hzToNote once its unvoiced frames are dropped', () => {
-  it('produces NaN frames, refuses them by code, and names the voiced ones', () => {
+  it('produces NaN frames, refuses them as a RangeError, and names the voiced ones', () => {
     const voicedThenSilent = new Float32Array(Math.round(SAMPLE_RATE * 0.25));
     for (let i = 0; i < voicedThenSilent.length / 2; i++) {
       voicedThenSilent[i] = 0.4 * Math.sin((2 * Math.PI * 220 * i) / SAMPLE_RATE);
@@ -1479,7 +1479,7 @@ describe('the default pyin track maps through hzToNote once its unvoiced frames 
     const voiced = track.filter((hz) => Number.isFinite(hz) && hz > 0);
     expect(voiced.length).toBeGreaterThan(0);
 
-    expect(() => native.hzToNote(Number.NaN)).toThrow(expect.objectContaining({ code: 4 }));
+    expect(() => native.hzToNote(Number.NaN)).toThrow(RangeError);
     for (const hz of voiced) {
       expect(native.hzToNote(hz)).not.toBe('');
     }

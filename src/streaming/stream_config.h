@@ -161,16 +161,15 @@ struct StreamConfig {
 ///          the C ABI validates before constructing, while Node and WASM
 ///          construct StreamAnalyzer directly. Node accepted
 ///          @ref StreamConfig::compute_magnitude where the others refused it, so
-///          one options object was valid on one surface and an InvalidParameter
-///          on the rest, buying a per-frame copy no read method there returns.
-///          Only that field is in scope:
+///          one options object was valid on one surface and refused on the rest, buying a per-frame
+///          copy no read method there returns. Only that field is in scope:
 ///          @ref StreamConfig::magnitude_downsample is unused with magnitude
 ///          off, so refusing it would reject a default config round trip.
-/// @throws SonareException(InvalidParameter) when the config asks for a result
+/// @throws SonareException(NotImplemented) when the config asks for a result
 ///         the caller's read paths could never return.
 inline void validate_soa_stream_config(const StreamConfig& config) {
   if (config.compute_magnitude) {
-    throw SonareException(ErrorCode::InvalidParameter,
+    throw SonareException(ErrorCode::NotImplemented,
                           "computeMagnitude is not supported because magnitude frames are not "
                           "exposed by StreamAnalyzer read paths");
   }

@@ -67,7 +67,7 @@ def test_synthesize_rir_produces_decaying_response() -> None:
 @acoustic
 def test_synthesize_rir_raises_for_invalid_geometry() -> None:
     # Source outside the room => geometry validation error => coded SonareError.
-    with pytest.raises(libsonare.SonareError, match="acoustic.source_outside_room") as caught:
+    with pytest.raises(libsonare.SonareValueError, match="acoustic.source_outside_room") as caught:
         libsonare.synthesize_rir(7.0, 5.0, 3.0, source=(99.0, 1.0, 1.2))
     assert caught.value.code == libsonare.ErrorCode.INVALID_PARAMETER
 

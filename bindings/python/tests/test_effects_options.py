@@ -13,7 +13,7 @@ import libsonare._effects_repair_noise as repair_noise
 import libsonare._effects_separation as separation
 import libsonare._effects_spectral as spectral
 import libsonare._effects_timepitch as timepitch
-from libsonare import ErrorCode, SonareError
+from libsonare import ErrorCode, SonareError, SonareValueError
 from libsonare._runtime import _get_lib
 
 
@@ -245,7 +245,7 @@ def test_effects_reject_a_hop_below_the_half_window_overlap_contract() -> None:
         lambda: timepitch.pitch_shift(samples, semitones=3.0, n_fft=1024, hop_length=1024),
         lambda: separation.phase_vocoder(samples, rate=1.2, n_fft=1024, hop_length=1024),
     ):
-        with pytest.raises(SonareError) as error:
+        with pytest.raises(SonareValueError) as error:
             call()
         assert error.value.code == ErrorCode.INVALID_PARAMETER
 

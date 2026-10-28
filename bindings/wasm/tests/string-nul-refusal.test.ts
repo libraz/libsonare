@@ -27,7 +27,6 @@ import {
   realtimeVoiceChangerPresetConfig,
   realtimeVoiceChangerPresetJson,
   realtimeVoiceChangerPresetNames,
-  SonareError,
   validateRealtimeVoiceChangerPresetJson,
 } from '../dist/index.js';
 import { getSonareModule, setSonareModule } from '../src/module_state.js';
@@ -289,10 +288,9 @@ describe('embedded NUL refusal, std::string entry points', () => {
     expectNulRefusal(() => validateRealtimeVoiceChangerPresetJson(`{}${NUL}junk`), 'json');
   });
 
-  it('an unknown voice preset name is a coded SonareError', () => {
+  it('an unknown voice preset name is a RangeError', () => {
     const error = refusal(() => realtimeVoiceChangerPresetConfig('no-such-preset' as never));
-    expect(error).toBeInstanceOf(SonareError);
-    expect((error as SonareError).codeName).toBe('InvalidParameter');
+    expect(error).toBeInstanceOf(RangeError);
   });
 });
 

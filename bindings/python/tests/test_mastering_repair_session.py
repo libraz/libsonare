@@ -121,7 +121,7 @@ class TestApply:
         ],
     )
     def test_refuses_a_bad_stage_list(self, stages: list[dict[str, object]]) -> None:
-        with pytest.raises(libsonare.SonareError) as excinfo:
+        with pytest.raises(libsonare.SonareValueError) as excinfo:
             libsonare.mastering_repair_apply([_material(440.0, 10)], SR, stages=stages)
         assert excinfo.value.code == libsonare.ErrorCode.INVALID_PARAMETER
 

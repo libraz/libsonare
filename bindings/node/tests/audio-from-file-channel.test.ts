@@ -80,10 +80,7 @@ describe('Audio.fromFileChannel', () => {
       writePcm16Wav(stereo, [left, right], SR);
       writePcm16Wav(mono, [left], SR);
 
-      const outOfRange = expect.objectContaining({
-        name: 'SonareError',
-        codeName: 'InvalidParameter',
-      });
+      const outOfRange = RangeError;
       expect(() => Audio.fromFileChannel(stereo, 2)).toThrow(outOfRange);
       expect(() => Audio.fromFileChannel(stereo, -1)).toThrow(outOfRange);
       expect(() => Audio.fromFileChannel(mono, 1)).toThrow(outOfRange);

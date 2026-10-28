@@ -7,7 +7,7 @@ import {
   sidechainSourceKindCode,
   trackMonitorModeCode,
 } from './codes.js';
-import { ErrorCode, isSonareError, SonareError } from './errors.js';
+import { ErrorCode, SonareError } from './errors.js';
 import { getSonareModule } from './module_state.js';
 import type {
   Articulation,
@@ -330,45 +330,6 @@ export function engineCapabilities(): EngineCapabilities {
   };
 }
 
-/**
- * The error an engine call surfaces: a library `InvalidParameter` refusal is the
- * caller's argument, so it is rebuilt as a `RangeError` (the Node binding maps
- * the C ABI's INVALID_PARAMETER the same way); every other error passes through.
- */
-function engineCallError(error: unknown): unknown {
-  if (isSonareError(error) && error.code === ErrorCode.InvalidParameter) {
-    return new RangeError(error.message);
-  }
-  return error;
-}
-
-/** Routes every method of the native engine through {@link engineCallError}. */
-function withEngineArgumentRefusals(handle: WasmRealtimeEngine): WasmRealtimeEngine {
-  const methods = new Map<PropertyKey, unknown>();
-  return new Proxy(handle, {
-    get(target, prop) {
-      const member = Reflect.get(target, prop);
-      if (typeof member !== 'function') {
-        return member;
-      }
-      const cached = methods.get(prop);
-      if (cached) {
-        return cached;
-      }
-      const method = member as (...args: unknown[]) => unknown;
-      const wrapped = (...args: unknown[]): unknown => {
-        try {
-          return Reflect.apply(method, target, args);
-        } catch (error) {
-          throw engineCallError(error);
-        }
-      };
-      methods.set(prop, wrapped);
-      return wrapped;
-    },
-  });
-}
-
 /** The clip shape the embind layer reads: a page provider travels as its id. */
 function nativeClip(clip: EngineClip): WasmEngineClip {
   return {
@@ -425,19 +386,13 @@ export class RealtimeEngine {
       );
     }
     this.sampleRate = sampleRate;
-    let handle: WasmRealtimeEngine;
-    try {
-      handle = new module.RealtimeEngine(
-        sampleRate,
-        maxBlockSize,
-        commandCapacity,
-        telemetryCapacity,
-        maxChannels,
-      );
-    } catch (error) {
-      throw engineCallError(error);
-    }
-    this.nativeHandle = withEngineArgumentRefusals(handle);
+    this.nativeHandle = new module.RealtimeEngine(
+      sampleRate,
+      maxBlockSize,
+      commandCapacity,
+      telemetryCapacity,
+      maxChannels,
+    );
   }
 
   /**

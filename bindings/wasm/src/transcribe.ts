@@ -9,11 +9,10 @@ import { assertAudioInput, requestObject } from './validation.js';
  * that skipping the JS-side scan is safe because the native layer re-validates
  * with an equivalent result -- and here it would not be equivalent: the
  * transcription C ABI (`sonare_transcribe`) does re-validate the buffer,
- * including a non-finite scan, but a rejection there surfaces as a
- * `SonareError` `InvalidParameter`, not the `RangeError` this function
- * documents and every other empty/non-finite/rate check on this surface
- * raises. A `{ validate: false }` here would silently change the thrown error
- * class instead of skipping a redundant check. The scan is also nearly free
+ * including a non-finite scan, but a rejection there is a
+ * `RangeError` too, but with the native layer's wording, not the facade's.
+ * A `{ validate: false }` here would silently change the thrown message
+ * instead of skipping a redundant check. The scan is also nearly free
  * against this pipeline, which already reads every sample several times.
  */
 export interface TranscribeRequest extends TranscribeOptions {
@@ -69,9 +68,9 @@ export interface TranscribeRequest extends TranscribeOptions {
  * @throws {RangeError} also on an option outside its domain that the reader
  *   refuses — a non-negative `velocityFloorDb`, a `fixedVelocity` outside
  *   `[1, 127]`, or a written `0` on any field but `group` and `channel`
- * @throws {SonareError} `InvalidParameter` on a `group` or `channel` outside
- *   `[0, 15]` or an `fmax` at or below `fmin`, which the C ABI refuses, or
- *   `NotSupported` when the library was built without the pitch editor
+ * @throws {RangeError} on a `group` or `channel` outside
+ *   `[0, 15]` or an `fmax` at or below `fmin`, which the C ABI refuses
+ * @throws {SonareError} `NotSupported` when the library was built without the pitch editor
  *
  * @example
  * ```typescript

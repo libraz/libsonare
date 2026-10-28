@@ -1,4 +1,3 @@
-import { ErrorCode, SonareError } from './errors.js';
 import { REQUEST_SHAPES } from './request_keys.js';
 
 /**
@@ -218,22 +217,13 @@ export const C_INT_MAX = 2147483647;
  * `checkedIntFromVal`, which refuses the same inputs in the module; this is the
  * positional path's equivalent.)
  *
- * Reported as the branded `SonareError` carrying `InvalidParameter` rather than
- * a `RangeError`, because the class follows what the rejection stands in for: a
- * `RangeError` is this surface refusing an argument on its own authority, while
- * this one pre-empts a native refusal the caller would have received under that
- * code had the narrowing not wrapped the value into the accepted domain first.
- * The agreement with the Node and Python surfaces is asserted by the Node
- * package's `tests/narrowing-code-parity.test.ts`, which drives one value
- * through all three — weakening this check turns that red.
+ * Reported as a `RangeError`, like every refused argument: the check pre-empts a
+ * native refusal the caller would have received had the narrowing not wrapped the
+ * value into the accepted domain first.
  */
 export function assertInt32(fnName: string, value: number, argName: string): void {
   if (!Number.isInteger(value) || value < C_INT_MIN || value > C_INT_MAX) {
-    throw new SonareError(
-      ErrorCode.InvalidParameter,
-      'InvalidParameter',
-      `${fnName}: ${argName} must be an integer within the signed 32-bit range`,
-    );
+    throw new RangeError(`${fnName}: ${argName} must be an integer within the signed 32-bit range`);
   }
 }
 
@@ -260,11 +250,7 @@ export function assertHpssKernels(
 
 function assertIntegralField(fnName: string, value: number, argName: string): void {
   if (!Number.isInteger(value)) {
-    throw new SonareError(
-      ErrorCode.InvalidParameter,
-      'InvalidParameter',
-      `${fnName}: ${argName} must be an integer`,
-    );
+    throw new RangeError(`${fnName}: ${argName} must be an integer`);
   }
 }
 

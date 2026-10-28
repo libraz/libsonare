@@ -24,6 +24,7 @@ from libsonare import (
     RealtimeEngine,
     ScopeTelemetryRecord,
     SonareError,
+    SonareValueError,
 )
 
 
@@ -131,12 +132,12 @@ def test_engine_set_track_strip_surround_pan_moves_lane_between_planes() -> None
         # A constant-power pan keeps the summed plane power through the move.
         assert sum(after) == pytest.approx(total_before, rel=0.05)
 
-        with pytest.raises(SonareError) as nan_error:
+        with pytest.raises(SonareValueError) as nan_error:
             engine.set_track_strip_surround_pan(10, azimuth=math.nan)
         assert nan_error.value.code == 4
         with pytest.raises(SonareError):
             engine.set_track_strip_surround_pan(10, lfe=math.inf)
-        with pytest.raises(SonareError) as unknown_error:
+        with pytest.raises(SonareValueError) as unknown_error:
             engine.set_track_strip_surround_pan(99, azimuth=0.0)
         assert unknown_error.value.code == 4
 
@@ -157,7 +158,7 @@ def test_realtime_engine_process_and_telemetry() -> None:
         assert engine.metronome().click_samples == 16
         assert engine.count_in_end_sample(0, 2) == 288000
         assert engine.sample_at_ppq(1.5) == 72000
-        with pytest.raises(SonareError) as bad_ppq_error:
+        with pytest.raises(SonareValueError) as bad_ppq_error:
             engine.sample_at_ppq(math.nan)
         assert bad_ppq_error.value.code == 4
         with pytest.raises(SonareError):
@@ -284,7 +285,7 @@ def test_realtime_engine_process_and_telemetry() -> None:
         monitored = engine.process([[0.25] * 128, [-0.25] * 128])
         assert all(math.isclose(sample, 0.5, abs_tol=0.0001) for sample in monitored[0])
         assert all(math.isclose(sample, -0.5, abs_tol=0.0001) for sample in monitored[1])
-        with pytest.raises(SonareError) as bad_monitor_gain_error:
+        with pytest.raises(SonareValueError) as bad_monitor_gain_error:
             engine.set_input_monitor(True, math.nan)
         assert bad_monitor_gain_error.value.code == 4
 

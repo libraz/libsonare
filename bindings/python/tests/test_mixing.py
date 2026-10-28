@@ -613,7 +613,7 @@ def test_set_output_bus_routes_a_strip_through_a_submix_to_the_master() -> None:
 
 
 def test_set_output_bus_refusals_name_the_ids_and_leave_the_scene_unchanged() -> None:
-    from libsonare import ErrorCode, SonareError
+    from libsonare import ErrorCode
 
     mixer = _empty_mixer()
     try:
@@ -630,13 +630,13 @@ def test_set_output_bus_refusals_name_the_ids_and_leave_the_scene_unchanged() ->
             ("sub2", "sub", "sub2"),
         ]
         for source, destination, named in cases:
-            with pytest.raises(SonareError, match=named) as info:
+            with pytest.raises(SonareValueError, match=named) as info:
                 mixer.set_output_bus(source, destination)
             assert info.value.code == int(ErrorCode.INVALID_PARAMETER)
             assert mixer.to_scene_json() == before
         # No refused call compiled the graph: a bus never compiled still reports
         # an invalid parameter rather than a discard count.
-        with pytest.raises(SonareError) as info:
+        with pytest.raises(SonareValueError) as info:
             mixer.bus_non_finite_discard_count("sub")
         assert info.value.code == int(ErrorCode.INVALID_PARAMETER)
     finally:

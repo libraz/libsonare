@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { NoteObject, NoteObjectInput, NoteSetEntry } from '../src/index.js';
 import {
   decomposeNotePitch,
-  ErrorCode,
   extractNotes,
-  isSonareError,
   mergeNotes,
   pitchPyin,
   renderNotes,
@@ -435,10 +433,9 @@ describe('renderNotes', () => {
 
     for (const [note, fragment] of malformed) {
       const caught = missing(note);
-      expect(isSonareError(caught), `expected a SonareError for ${JSON.stringify(note)}`).toBe(
-        true,
+      expect(caught, `expected a RangeError for ${JSON.stringify(note)}`).toBeInstanceOf(
+        RangeError,
       );
-      expect((caught as { code: number }).code).toBe(ErrorCode.InvalidParameter);
       expect((caught as { message: string }).message).toContain(`renderNotes ${fragment}`);
     }
 
@@ -1139,8 +1136,7 @@ describe('splitNote and mergeNotes', () => {
       } catch (error) {
         caught = error;
       }
-      expect(isSonareError(caught)).toBe(true);
-      expect((caught as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+      expect(caught).toBeInstanceOf(RangeError);
     }
   });
 

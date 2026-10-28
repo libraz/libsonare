@@ -15,7 +15,7 @@ import ctypes
 import math
 from collections.abc import Sequence
 
-from ._errors import ErrorCode, SonareError, SonareValueError, _not_supported
+from ._errors import SonareValueError, _not_supported
 from ._narrowing import _narrow_double
 from ._runtime import (
     SonareRirSynthConfig,
@@ -274,10 +274,7 @@ def synthesize_rir(
     try:
         if out.has_error:
             detail = lib.sonare_last_error_message()
-            raise SonareError(
-                ErrorCode.INVALID_PARAMETER,
-                detail.decode("utf-8") if detail else "invalid room geometry",
-            )
+            raise SonareValueError(detail.decode("utf-8") if detail else "invalid room geometry")
         # Non-fatal diagnostics are recorded on success too -- a max_seconds clamp
         # that cut the tail, or a request degraded to early reflections only.
         # Read before any later C ABI call can overwrite the thread-local list.

@@ -3,14 +3,8 @@ import type {
   PercussiveEvent,
   PercussiveEventInput,
   PercussiveSeparationOptions,
-  SonareError,
 } from '../src/index.js';
-import {
-  ErrorCode,
-  extractPercussiveEvents,
-  isSonareError,
-  renderPercussiveEvents,
-} from '../src/index.js';
+import { extractPercussiveEvents, isSonareError, renderPercussiveEvents } from '../src/index.js';
 
 const SR = 22050;
 /** The default framing, which every fixture position below is reasoned in. */
@@ -307,9 +301,8 @@ function capture(run: () => unknown): unknown {
 
 function expectInvalidParameter(run: () => unknown): void {
   const error = capture(run);
-  expect(isSonareError(error)).toBe(true);
-  expect((error as SonareError).code).toBe(ErrorCode.InvalidParameter);
-  expect((error as SonareError).codeName).toBe('InvalidParameter');
+  expect(error).toBeInstanceOf(RangeError);
+  expect(isSonareError(error)).toBe(false);
 }
 
 /**
@@ -463,9 +456,9 @@ describe('extractPercussiveEvents', () => {
         const events = extractPercussiveEvents({ samples: three, sampleRate: SR, onsetWait });
         return `ok:${JSON.stringify(measuredSet(events))}`;
       }
-      return isSonareError(error) ? `refused:${(error as SonareError).code}` : 'threw non-Sonare';
+      return error instanceof RangeError ? 'refused:RangeError' : 'threw other';
     });
-    expect(outcomes).toEqual(fractional.map(() => `refused:${ErrorCode.InvalidParameter}`));
+    expect(outcomes).toEqual(fractional.map(() => 'refused:RangeError'));
   });
 
   it('raises the detector threshold with onsetDelta', () => {
@@ -680,10 +673,9 @@ describe('renderPercussiveEvents', () => {
       { onsetSample: '0', offsetSample: 22050 },
     ]) {
       const caught = attempt(event);
-      expect(isSonareError(caught), `expected a SonareError for ${JSON.stringify(event)}`).toBe(
-        true,
+      expect(caught, `expected a RangeError for ${JSON.stringify(event)}`).toBeInstanceOf(
+        RangeError,
       );
-      expect((caught as SonareError).code).toBe(ErrorCode.InvalidParameter);
     }
 
     // The control. A reader that had started refusing every event would satisfy

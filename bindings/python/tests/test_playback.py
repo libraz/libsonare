@@ -408,7 +408,7 @@ def test_render_offline_rejects_bad_input() -> None:
     good = _offline_burst(480)
     with PlaybackRenderer(_UNEQUAL_DISTANCE_CONFIG, sample_rate=SR, max_block_size=BLOCK) as r:
         # A layout mismatch is refused by the library, as render_playback refuses it.
-        with pytest.raises(SonareError, match="does not match the input layout") as raised:
+        with pytest.raises(SonareValueError, match="does not match the input layout") as raised:
             r.render_offline(good, 3)
         assert raised.value.code == 4
         with pytest.raises(SonareValueError):

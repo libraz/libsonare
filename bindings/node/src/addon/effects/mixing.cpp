@@ -230,8 +230,8 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
       sonare_mixer_create(sample_rate, static_cast<int>(std::max<size_t>(1, length)));
   if (mixer == nullptr) {
     // sonare_mixer_create only returns null on a rejected sample_rate /
-    // block size or an allocation failure, so this is a C-ABI failure and must
-    // carry the SonareError code like every other one.
+    // block size or an allocation failure; the rejected-argument case is the one
+    // reported (as a RangeError).
     sonare_node::ThrowSonareError(env, SONARE_ERROR_INVALID_PARAMETER);
     return env.Undefined();
   }

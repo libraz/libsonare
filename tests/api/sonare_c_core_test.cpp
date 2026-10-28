@@ -915,6 +915,14 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(analyzer == nullptr);
   }
 
+  SECTION("reports compute_magnitude as unsupported, not as a refused argument") {
+    SonareStreamConfig bad = config;
+    bad.compute_magnitude = 1;
+    SonareStreamAnalyzer* analyzer = nullptr;
+    REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_NOT_SUPPORTED);
+    REQUIRE(analyzer == nullptr);
+  }
+
   SECTION("rejects invalid intervals and mel range") {
     SonareStreamConfig bad = config;
     bad.key_update_interval_sec = 0.0f;

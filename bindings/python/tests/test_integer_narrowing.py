@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 import libsonare as ls
-from libsonare import SonareError, SonareValueError
+from libsonare import SonareValueError
 
 SAMPLE_RATE = 22050
 
@@ -595,9 +595,8 @@ def test_a_packer_still_refuses_at_the_midi_bound_the_core_owns() -> None:
     ):
         with pytest.raises(SonareValueError) as raised:
             call()
-        # A core refusal is raised from the C call's coded error; the facade's
-        # own narrowing raises with no cause.
-        assert isinstance(raised.value.__cause__, SonareError)
+        # The core's refusal does not carry the facade narrowing's "<name> must be" text.
+        assert not re.match(r"^\w+ must be", str(raised.value))
 
 
 def test_a_pitch_bend_keeps_the_range_its_own_width_carries() -> None:

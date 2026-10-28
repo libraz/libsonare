@@ -36,7 +36,6 @@ from ._runtime import (
     ErrorCode,
     SonareValueError,
     _check,
-    _check_argument,
     _get_lib,
     _resolve_render_frame,
     _to_c_float,
@@ -142,7 +141,7 @@ class _EngineMidiMixin:
             ("controller", c_controller.value, _MAX_7),
             ("value", c_value.value, _MAX_7),
         )
-        _check_argument(
+        _check(
             lib.sonare_engine_push_midi_cc(
                 handle,
                 c_destination,
@@ -177,7 +176,7 @@ class _EngineMidiMixin:
         if not buf:
             raise SonareValueError("SysEx data must not be empty")
         c_data = (ctypes.c_uint8 * len(buf)).from_buffer_copy(buf)
-        _check_argument(
+        _check(
             lib.sonare_engine_push_midi_sysex(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
@@ -268,7 +267,7 @@ class _EngineMidiMixin:
         _refuse_live_program_args(
             "push_midi_program", c_group, c_channel, c_program, bank_valid, c_bank_msb, c_bank_lsb
         )
-        _check_argument(
+        _check(
             lib.sonare_engine_push_midi_program(
                 handle,
                 c_destination,
@@ -290,7 +289,7 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_panic"):
             raise _not_supported("libsonare was built without live-MIDI support")
-        _check_argument(
+        _check(
             lib.sonare_engine_push_midi_panic(
                 self._require_handle(),
                 _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
@@ -312,7 +311,7 @@ class _EngineMidiMixin:
         if not hasattr(lib, "sonare_engine_set_builtin_instrument"):
             raise _not_supported("libsonare was built without live-MIDI support")
         cfg = (config if config is not None else BuiltinSynthConfig())._to_c()
-        _check_argument(
+        _check(
             lib.sonare_engine_set_builtin_instrument(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
@@ -368,7 +367,7 @@ class _EngineMidiMixin:
         binding.patch = c_patch
         binding.use_gm_programs = 1 if resolved.use_gm_programs else 0
         binding.sample_bank = bank._require_handle() if bank is not None else None
-        _check_argument(
+        _check(
             lib.sonare_engine_set_synth_instrument_binding(
                 self._require_handle(),
                 ctypes.byref(binding),
@@ -414,7 +413,7 @@ class _EngineMidiMixin:
         if not hasattr(lib, "sonare_engine_resolve_instrument_automation_id"):
             raise _not_supported("libsonare was built without live-MIDI support")
         out_id = ctypes.c_uint32()
-        _check_argument(
+        _check(
             lib.sonare_engine_resolve_instrument_automation_id(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
@@ -439,7 +438,7 @@ class _EngineMidiMixin:
         if not buf:
             raise SonareValueError("SoundFont data must not be empty")
         c_data = (ctypes.c_uint8 * len(buf)).from_buffer_copy(buf)
-        _check_argument(
+        _check(
             lib.sonare_engine_load_soundfont(
                 self._require_handle(), c_data, ctypes.c_size_t(len(buf))
             )
@@ -462,7 +461,7 @@ class _EngineMidiMixin:
         if not hasattr(lib, "sonare_engine_set_sf2_instrument"):
             raise _not_supported("libsonare was built without live-MIDI support")
         cfg = (config if config is not None else Sf2InstrumentConfig())._to_c()
-        _check_argument(
+        _check(
             lib.sonare_engine_set_sf2_instrument(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
@@ -475,7 +474,7 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_clear_midi_instrument"):
             raise _not_supported("libsonare was built without live-MIDI support")
-        _check_argument(
+        _check(
             lib.sonare_engine_clear_midi_instrument(
                 self._require_handle(), _to_c_uint32(destination_id, "destination_id")
             )
@@ -487,9 +486,7 @@ class _EngineMidiMixin:
         if not hasattr(lib, "sonare_engine_midi_instrument_count"):
             raise _not_supported("libsonare was built without live-MIDI support")
         out = ctypes.c_size_t()
-        _check_argument(
-            lib.sonare_engine_midi_instrument_count(self._require_handle(), ctypes.byref(out))
-        )
+        _check(lib.sonare_engine_midi_instrument_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
     # -- controller profiles -------------------------------------------------
@@ -511,7 +508,7 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_controller_profile"):
             raise _not_supported("libsonare was built without the controller-profile ABI")
-        _check_argument(
+        _check(
             lib.sonare_engine_set_controller_profile(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
@@ -569,7 +566,7 @@ class _EngineMidiMixin:
             hi=hi,
             curve=curve,
         )
-        _check_argument(
+        _check(
             lib.sonare_engine_bind_controller(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
@@ -586,7 +583,7 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_clear_controller_bindings"):
             raise _not_supported("libsonare was built without the controller-profile ABI")
-        _check_argument(
+        _check(
             lib.sonare_engine_clear_controller_bindings(
                 self._require_handle(), _to_c_uint32(destination_id, "destination_id")
             )
@@ -598,7 +595,7 @@ class _EngineMidiMixin:
         if not hasattr(lib, "sonare_engine_controller_binding_count"):
             raise _not_supported("libsonare was built without the controller-profile ABI")
         out = ctypes.c_size_t()
-        _check_argument(
+        _check(
             lib.sonare_engine_controller_binding_count(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
@@ -618,7 +615,7 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_controller_velocity_meaningful"):
             raise _not_supported("libsonare was built without the controller-profile ABI")
-        _check_argument(
+        _check(
             lib.sonare_engine_set_controller_velocity_meaningful(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
@@ -632,7 +629,7 @@ class _EngineMidiMixin:
         if not hasattr(lib, "sonare_engine_controller_velocity_meaningful"):
             raise _not_supported("libsonare was built without the controller-profile ABI")
         out = ctypes.c_int()
-        _check_argument(
+        _check(
             lib.sonare_engine_controller_velocity_meaningful(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
@@ -670,7 +667,7 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_controller_note_tracking"):
             raise _not_supported("libsonare was built without the controller-profile ABI")
-        _check_argument(
+        _check(
             lib.sonare_engine_set_controller_note_tracking(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
@@ -689,7 +686,7 @@ class _EngineMidiMixin:
         if not hasattr(lib, "sonare_engine_controller_note_tracking"):
             raise _not_supported("libsonare was built without the controller-profile ABI")
         out = ctypes.c_int()
-        _check_argument(
+        _check(
             lib.sonare_engine_controller_note_tracking(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
@@ -732,7 +729,7 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_articulation"):
             raise _not_supported("libsonare was built without the articulation ABI")
-        _check_argument(
+        _check(
             lib.sonare_engine_set_articulation(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
@@ -765,7 +762,7 @@ class _EngineMidiMixin:
         if not hasattr(lib, "sonare_engine_set_part_rig"):
             raise _not_supported("libsonare was built without the part rig ABI")
         mode_value = _part_rig_mode_value(mode)
-        _check_argument(
+        _check(
             lib.sonare_engine_set_part_rig(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
@@ -785,7 +782,7 @@ class _EngineMidiMixin:
         if not hasattr(lib, "sonare_engine_articulation"):
             raise _not_supported("libsonare was built without the articulation ABI")
         out = ctypes.c_int()
-        _check_argument(
+        _check(
             lib.sonare_engine_articulation(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
@@ -815,7 +812,7 @@ class _EngineMidiMixin:
         if not hasattr(lib, "sonare_engine_legato_fallback_count"):
             raise _not_supported("libsonare was built without the articulation ABI")
         out = ctypes.c_uint32()
-        _check_argument(
+        _check(
             lib.sonare_engine_legato_fallback_count(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
@@ -840,7 +837,7 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_bind_midi_cc"):
             raise _not_supported("libsonare was built without live-MIDI support")
-        _check_argument(
+        _check(
             lib.sonare_engine_bind_midi_cc(
                 self._require_handle(),
                 _to_c_uint8(channel, "channel"),
@@ -857,7 +854,7 @@ class _EngineMidiMixin:
         if not hasattr(lib, "sonare_engine_bind_midi_cc_binding"):
             raise _not_supported("libsonare was built without full live-MIDI binding support")
         c_binding = _cc_binding_to_c(binding)
-        _check_argument(
+        _check(
             lib.sonare_engine_bind_midi_cc_binding(self._require_handle(), ctypes.byref(c_binding))
         )
 
@@ -866,7 +863,7 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_clear_midi_cc_bindings"):
             raise _not_supported("libsonare was built without live-MIDI support")
-        _check_argument(lib.sonare_engine_clear_midi_cc_bindings(self._require_handle()))
+        _check(lib.sonare_engine_clear_midi_cc_bindings(self._require_handle()))
 
     def midi_cc_binding_count(self) -> int:
         """Return the number of live MIDI CC bindings."""
@@ -874,9 +871,7 @@ class _EngineMidiMixin:
         if not hasattr(lib, "sonare_engine_midi_cc_binding_count"):
             raise _not_supported("libsonare was built without live-MIDI support")
         out = ctypes.c_size_t()
-        _check_argument(
-            lib.sonare_engine_midi_cc_binding_count(self._require_handle(), ctypes.byref(out))
-        )
+        _check(lib.sonare_engine_midi_cc_binding_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
     def set_midi_fx(self, destination_id: int, config_json: str) -> None:
@@ -889,7 +884,7 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_midi_fx"):
             raise _not_supported("libsonare was built without live-MIDI support")
-        _check_argument(
+        _check(
             lib.sonare_engine_set_midi_fx(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
@@ -902,7 +897,7 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_clear_midi_fx"):
             raise _not_supported("libsonare was built without live-MIDI support")
-        _check_argument(
+        _check(
             lib.sonare_engine_clear_midi_fx(
                 self._require_handle(), _to_c_uint32(destination_id, "destination_id")
             )
@@ -919,7 +914,7 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_midi_input_source"):
             raise _not_supported("libsonare was built without live-MIDI support")
-        _check_argument(
+        _check(
             lib.sonare_engine_set_midi_input_source(
                 self._require_handle(), _to_c_uint32(destination_id, "destination_id")
             )
@@ -930,7 +925,7 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_clear_midi_input_source"):
             raise _not_supported("libsonare was built without live-MIDI support")
-        _check_argument(lib.sonare_engine_clear_midi_input_source(self._require_handle()))
+        _check(lib.sonare_engine_clear_midi_input_source(self._require_handle()))
 
     def midi_input_pending_count(self) -> int:
         """Number of queued events in the engine-owned live MIDI input source."""
@@ -938,7 +933,7 @@ class _EngineMidiMixin:
         if not hasattr(lib, "sonare_engine_midi_input_pending_count"):
             raise _not_supported("libsonare was built without live-MIDI support")
         out = ctypes.c_size_t()
-        _check_argument(
+        _check(
             lib.sonare_engine_midi_input_pending_count(self._require_handle(), ctypes.byref(out))
         )
         return int(out.value)
@@ -973,7 +968,7 @@ class _EngineMidiMixin:
             ("note", c_note.value, _MAX_7),
             ("velocity", c_velocity.value, _MAX_7),
         )
-        _check_argument(
+        _check(
             lib.sonare_engine_push_midi_input_note_on(
                 handle,
                 c_group,
@@ -1014,7 +1009,7 @@ class _EngineMidiMixin:
             ("note", c_note.value, _MAX_7),
             ("velocity", c_velocity.value, _MAX_7),
         )
-        _check_argument(
+        _check(
             lib.sonare_engine_push_midi_input_note_off(
                 handle,
                 c_group,
@@ -1055,7 +1050,7 @@ class _EngineMidiMixin:
             ("controller", c_controller.value, _MAX_7),
             ("value", c_value.value, _MAX_7),
         )
-        _check_argument(
+        _check(
             lib.sonare_engine_push_midi_input_cc(
                 handle,
                 c_group,
@@ -1098,7 +1093,7 @@ class _EngineMidiMixin:
             ("channel", c_channel.value, _MAX_NIBBLE),
             ("bend14", c_bend14.value, _MAX_14),
         )
-        _check_argument(
+        _check(
             lib.sonare_engine_push_midi_input_pitch_bend(
                 handle,
                 c_group,
@@ -1138,7 +1133,7 @@ class _EngineMidiMixin:
             ("channel", c_channel.value, _MAX_NIBBLE),
             ("pressure", c_pressure.value, _MAX_7),
         )
-        _check_argument(
+        _check(
             lib.sonare_engine_push_midi_input_channel_pressure(
                 handle,
                 c_group,
@@ -1182,7 +1177,7 @@ class _EngineMidiMixin:
             ("note", c_note.value, _MAX_7),
             ("pressure", c_pressure.value, _MAX_7),
         )
-        _check_argument(
+        _check(
             lib.sonare_engine_push_midi_input_poly_pressure(
                 handle,
                 c_group,
@@ -1270,7 +1265,7 @@ class _EngineMidiMixin:
             c_bank_msb,
             c_bank_lsb,
         )
-        _check_argument(
+        _check(
             lib.sonare_engine_push_midi_input_program(
                 handle,
                 c_group,
@@ -1313,7 +1308,7 @@ class _EngineMidiMixin:
             ("note", c_note.value, _MAX_7),
             ("velocity", c_velocity.value, _MAX_7),
         )
-        _check_argument(
+        _check(
             lib.sonare_engine_push_midi_note_on(
                 handle,
                 c_destination,
@@ -1355,7 +1350,7 @@ class _EngineMidiMixin:
             ("note", c_note.value, _MAX_7),
             ("velocity", c_velocity.value, _MAX_7),
         )
-        _check_argument(
+        _check(
             lib.sonare_engine_push_midi_note_off(
                 handle,
                 c_destination,
@@ -1397,7 +1392,7 @@ class _EngineMidiMixin:
             ("channel", c_channel.value, _MAX_NIBBLE),
             ("bend14", c_bend14.value, _MAX_14),
         )
-        _check_argument(
+        _check(
             lib.sonare_engine_push_midi_pitch_bend(
                 handle,
                 c_destination,
@@ -1436,7 +1431,7 @@ class _EngineMidiMixin:
             ("channel", c_channel.value, _MAX_NIBBLE),
             ("pressure", c_pressure.value, _MAX_7),
         )
-        _check_argument(
+        _check(
             lib.sonare_engine_push_midi_channel_pressure(
                 handle,
                 c_destination,
@@ -1479,7 +1474,7 @@ class _EngineMidiMixin:
             ("note", c_note.value, _MAX_7),
             ("pressure", c_pressure.value, _MAX_7),
         )
-        _check_argument(
+        _check(
             lib.sonare_engine_push_midi_poly_pressure(
                 handle,
                 c_destination,

@@ -9,7 +9,7 @@ import math
 import pytest
 
 import libsonare
-from libsonare import ErrorCode, SonareError
+from libsonare import ErrorCode, SonareError, SonareValueError
 
 from ._helpers import LIB_AVAILABLE
 
@@ -89,7 +89,7 @@ def test_tuning_out_of_range_is_invalid(detuned: list[float]) -> None:
             detuned[:_SR], libsonare.PitchClass.C, tuning=0.5
         ),
     ):
-        with pytest.raises(SonareError) as info:
+        with pytest.raises(SonareValueError) as info:
             call()
         assert info.value.code == ErrorCode.INVALID_PARAMETER
 

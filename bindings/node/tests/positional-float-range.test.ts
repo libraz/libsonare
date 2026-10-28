@@ -21,8 +21,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   analyzeBpm,
-  ErrorCode,
-  isSonareError,
   type NoteEditInput,
   onsetEnvelope,
   peakPick,
@@ -31,6 +29,15 @@ import {
 
 /** The suffix every refusal from the float narrowing ends with. */
 const RANGE_MESSAGE = 'must be a finite number within the 32-bit float range';
+
+/**
+ * The core's own refusal of a value the reader let through. It is a RangeError
+ * like the reader's, so what tells the two apart is the reader's wording.
+ */
+function expectCoreRefusal(caught: unknown): void {
+  expect(caught).toBeInstanceOf(RangeError);
+  expect((caught as Error).message).not.toContain(RANGE_MESSAGE);
+}
 
 /** Largest magnitude a 32-bit float holds: the last value that must be accepted. */
 const FLOAT_MAX = 3.4028234663852886e38;
@@ -100,8 +107,7 @@ describe('analyzeBpm narrows the bpmMin positional argument', () => {
     // one of them.
     for (const value of [Number.POSITIVE_INFINITY, Number.NaN]) {
       const caught = capture(() => run(value));
-      expect(isSonareError(caught), `bpmMin ${value}`).toBe(true);
-      expect((caught as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+      expectCoreRefusal(caught);
     }
   });
 
@@ -109,8 +115,8 @@ describe('analyzeBpm narrows the bpmMin positional argument', () => {
     const overflow = capture(() => run(1e300));
     const infinite = capture(() => run(Number.POSITIVE_INFINITY));
     expect(overflow).toBeInstanceOf(RangeError);
-    expect(isSonareError(overflow)).toBe(false);
-    expect(isSonareError(infinite)).toBe(true);
+    expect((overflow as Error).message).toContain(RANGE_MESSAGE);
+    expectCoreRefusal(infinite);
     expect((overflow as Error).message).not.toBe((infinite as Error).message);
   });
 
@@ -118,8 +124,7 @@ describe('analyzeBpm narrows the bpmMin positional argument', () => {
     // Accepted by the reader: the answer is the core's own refusal of an absurd
     // tempo floor, not the narrowing's RangeError.
     const held = capture(() => run(FLOAT_MAX));
-    expect(held).not.toBeInstanceOf(RangeError);
-    expect(isSonareError(held)).toBe(true);
+    expectCoreRefusal(held);
     expect(capture(() => run(nextUp(FLOAT_MAX)))).toBeInstanceOf(RangeError);
   });
 });
@@ -232,9 +237,7 @@ describe('renderNotes narrows every amplitudeEnvelope element', () => {
     expect((plain as RangeError).message).toBe(`amplitudeEnvelope[2] ${RANGE_MESSAGE}`);
     // Not refused by the reader: the typed element reaches the core as the
     // infinity it became, and is answered there exactly as a written one is.
-    expect(typed).not.toBeInstanceOf(RangeError);
-    expect(isSonareError(typed)).toBe(true);
-    expect((typed as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+    expectCoreRefusal(typed);
     const written = capture(() => render(Float32Array.from([1, 1, Number.POSITIVE_INFINITY])));
     expect((typed as Error).message).toBe((written as Error).message);
   });
@@ -244,8 +247,7 @@ describe('renderNotes narrows every amplitudeEnvelope element', () => {
     // element is answered wherever a written NaN is answered.
     const text = capture(() => render([1, 1, 'x']));
     const nan = capture(() => render([1, 1, Number.NaN]));
-    expect(text).not.toBeInstanceOf(RangeError);
-    expect(isSonareError(text)).toBe(true);
+    expectCoreRefusal(text);
     expect((text as Error).message).toBe((nan as Error).message);
   });
 
@@ -255,7 +257,7 @@ describe('renderNotes narrows every amplitudeEnvelope element', () => {
     // being non-negative, so there the reader shows by not being the one to answer.
     expect(render([1, 1, FLOAT_MAX])).toBeGreaterThan(render([1, 1, 1]));
     expect(capture(() => render([1, 1, nextUp(FLOAT_MAX)]))).toBeInstanceOf(RangeError);
-    expect(capture(() => render([1, 1, -FLOAT_MAX]))).not.toBeInstanceOf(RangeError);
+    expectCoreRefusal(capture(() => render([1, 1, -FLOAT_MAX])));
     expect(capture(() => render([1, 1, -nextUp(FLOAT_MAX)]))).toBeInstanceOf(RangeError);
   });
 });

@@ -2,13 +2,11 @@ import { readFileSync } from 'node:fs';
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { meterTapCode, panLawCode, panModeCode, sendTimingCode } from '../src/codes';
-import { ErrorCode } from '../src/errors';
 import {
   analyzeMelody,
   harmonic,
   hpss,
   init,
-  isSonareError,
   mixStereo,
   normalize,
   pitchCorrectTimevarying,
@@ -27,6 +25,7 @@ import {
   projectWarpModeValue,
 } from '../src/project_internal';
 import type { PanLawInput, VoicePresetId } from '../src/public_types';
+import { expectRefusalOf } from './_helpers';
 
 const sampleRate = 22050;
 
@@ -162,8 +161,8 @@ describe('transform sampleRate defaults to 22050 (WASM parity with Node/Python)'
   });
 });
 
-describe('analyzeMelody reports invalid params as a branded SonareError (WASM)', () => {
-  it('throws a SonareError (not a bare RangeError) for a non-positive fmin', () => {
+describe('analyzeMelody reports invalid params as a RangeError (WASM)', () => {
+  it('throws a RangeError for a non-positive fmin', () => {
     const samples = sine();
     let caught: unknown;
     try {
@@ -171,7 +170,7 @@ describe('analyzeMelody reports invalid params as a branded SonareError (WASM)',
     } catch (error) {
       caught = error;
     }
-    expect(isSonareError(caught)).toBe(true);
+    expect(caught).toBeInstanceOf(RangeError);
   });
 });
 
@@ -243,19 +242,8 @@ describe('enum-code helpers reject unknown strings instead of silently defaultin
 });
 
 describe('metering true peak validation', () => {
-  it('rejects an invalid oversample factor as SonareError', () => {
-    let caught: unknown;
-    try {
-      meteringTruePeakDb(new Float32Array([0.5]), 22050, 3);
-    } catch (error) {
-      caught = error;
-    }
-    expect(isSonareError(caught)).toBe(true);
-    if (!isSonareError(caught)) {
-      throw new Error('expected SonareError');
-    }
-    expect(caught.code).toBe(ErrorCode.InvalidParameter);
-    expect(caught.codeName).toBe('InvalidParameter');
+  it('rejects an invalid oversample factor as RangeError', () => {
+    expectRefusalOf(() => meteringTruePeakDb(new Float32Array([0.5]), 22050, 3));
   });
 });
 

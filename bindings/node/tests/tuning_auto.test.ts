@@ -5,7 +5,6 @@ import {
   detectKey,
   estimateTuning,
   referenceHzToTuning,
-  SonareError,
   transcribe,
   tuningToReferenceHz,
 } from '../src/index.js';
@@ -78,7 +77,7 @@ describe("tuning: 'auto'", () => {
     expect(() => detectKey({ samples: loop, sampleRate, tuning: 'other' as never })).toThrow(
       /tuning must be a number or 'auto'/,
     );
-    expect(() => detectKey({ samples: loop, sampleRate, tuning: 0.7 })).toThrow(SonareError);
+    expect(() => detectKey({ samples: loop, sampleRate, tuning: 0.7 })).toThrow(RangeError);
   });
 });
 
@@ -95,9 +94,9 @@ describe('tuning converters', () => {
 
   it('refuse values outside their domain', () => {
     expect(() => tuningToReferenceHz(Number.NaN)).toThrow();
-    expect(() => tuningToReferenceHz(0, 0)).toThrow(SonareError);
-    expect(() => referenceHzToTuning(-1)).toThrow(SonareError);
-    expect(() => referenceHzToTuning(440, 0)).toThrow(SonareError);
+    expect(() => tuningToReferenceHz(0, 0)).toThrow(RangeError);
+    expect(() => referenceHzToTuning(-1)).toThrow(RangeError);
+    expect(() => referenceHzToTuning(440, 0)).toThrow(RangeError);
   });
 });
 

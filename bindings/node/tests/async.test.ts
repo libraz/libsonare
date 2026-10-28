@@ -10,7 +10,6 @@ import { describe, expect, it } from 'vitest';
 import {
   analyze,
   analyzeAsync,
-  ErrorCode,
   isSonareError,
   masterAudio,
   masterAudioAsync,
@@ -78,7 +77,7 @@ describe('Node async API', () => {
       }
     });
 
-    it('rejects C-ABI failures as SonareError', async () => {
+    it('rejects a refused argument as RangeError', async () => {
       let caught: unknown;
       try {
         // A bad hop rather than empty audio or a wrong sample rate: the facade
@@ -87,19 +86,14 @@ describe('Node async API', () => {
       } catch (error) {
         caught = error;
       }
-      expect(isSonareError(caught)).toBe(true);
-      if (!isSonareError(caught)) {
-        throw new Error('expected SonareError');
-      }
-      expect(caught.code).toBe(ErrorCode.InvalidParameter);
-      expect(caught.codeName).toBe('InvalidParameter');
+      expect(caught).toBeInstanceOf(RangeError);
+      expect(isSonareError(caught)).toBe(false);
     });
 
     it('forwards MusicAnalyzeOptions to the worker', async () => {
-      await expect(analyzeAsync(generateSine(440, 0.1), SR, { nFft: 1 })).rejects.toMatchObject({
-        name: 'SonareError',
-        code: ErrorCode.InvalidParameter,
-      });
+      await expect(analyzeAsync(generateSine(440, 0.1), SR, { nFft: 1 })).rejects.toBeInstanceOf(
+        RangeError,
+      );
     });
 
     it('does not block the JS event loop while running', async () => {
@@ -127,19 +121,15 @@ describe('Node async API', () => {
       expect(result.stages.length).toBeGreaterThan(0);
     });
 
-    it('rejects worker failures as SonareError', async () => {
+    it('rejects a refused preset as RangeError', async () => {
       let caught: unknown;
       try {
         await masterAudioAsync(generateSine(220, 0.1), SR, 'not-a-preset' as never);
       } catch (error) {
         caught = error;
       }
-      expect(isSonareError(caught)).toBe(true);
-      if (!isSonareError(caught)) {
-        throw new Error('expected SonareError');
-      }
-      expect(caught.code).toBe(ErrorCode.InvalidParameter);
-      expect(caught.codeName).toBe('InvalidParameter');
+      expect(caught).toBeInstanceOf(RangeError);
+      expect(isSonareError(caught)).toBe(false);
     });
 
     it('stereo variant resolves to a mastered StereoChainResult', async () => {

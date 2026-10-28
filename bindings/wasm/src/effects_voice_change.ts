@@ -1,4 +1,3 @@
-import { ErrorCode } from './errors.js';
 import { getSonareModule } from './module_state.js';
 import type { RealtimeVoiceChangerConfigInput } from './public_types.js';
 import type { ValidateOptions } from './validation.js';
@@ -64,22 +63,13 @@ export function voiceChange(
   assertAudioInput('voiceChange', request.samples, request.sampleRate ?? 22050, request);
   const formantMode = request.formantMode ?? 'relative';
   assertString('voiceChange', formantMode, 'formantMode');
-  try {
-    return requireModule().voiceChange(
-      request.samples,
-      request.sampleRate ?? 22050,
-      request.pitchSemitones ?? 0.0,
-      request.formantFactor ?? 1.0,
-      formantMode,
-    );
-  } catch (error) {
-    // voiceChange's InvalidParameter is always an argument refusal (an out-of-range factor in
-    // either formant mode, or an unknown mode), so it is a RangeError in every mode.
-    if ((error as { code?: unknown }).code === ErrorCode.InvalidParameter) {
-      throw new RangeError((error as Error).message);
-    }
-    throw error;
-  }
+  return requireModule().voiceChange(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.pitchSemitones ?? 0.0,
+    request.formantFactor ?? 1.0,
+    formantMode,
+  );
 }
 
 /** Options for the offline {@link voiceChangeRealtime} convenience wrapper. */

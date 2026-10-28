@@ -955,9 +955,7 @@ class VocalRenderAsyncWorker final : public Napi::AsyncWorker {
     Napi::HandleScope scope(Env());
     DetachSignal();
     Napi::Object value = error.Value();
-    value.Set("name", "SonareError");
-    value.Set("code", Napi::Number::New(Env(), static_cast<int>(error_code_)));
-    value.Set("codeName", sonare_node::ErrorCodeName(error_code_));
+    sonare_node::DecorateSonareError(Env(), value, error_code_);
     value.Set("reason", detail_.reason);
     value.Set("field", detail_.field);
     value.Set("expected", detail_.expected_text[0] == '\0' ? Uint64String(detail_.expected)

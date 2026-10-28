@@ -124,6 +124,7 @@ function indexOfPitch(notes: readonly NoteObject[], hz: number): number {
 }
 
 /** Asserts `action` throws a SonareError carrying `code`. */
+
 function expectSonareError(action: () => unknown, code: ErrorCode): void {
   let caught: unknown;
   try {
@@ -385,7 +386,7 @@ describe('PolyphonicAnalysis.render', () => {
     // The C ABI checks an edit where the render checks it, so setting it is not
     // the refusal.
     edited.setNoteEdit(lower, { amplitudeEnvelope: new Float32Array([1, -1]) });
-    expectSonareError(() => edited.render(), ErrorCode.InvalidParameter);
+    expectRefusalOf(() => edited.render());
     edited.setNoteEdit(lower, { amplitudeEnvelope: new Float32Array([1, 0.25]) });
     expectEdited(edited.render(), identity);
     edited.setNoteEdit(lower, {});
@@ -418,10 +419,7 @@ describe('PolyphonicAnalysis config', () => {
 
   it('rejects a config value the chain refuses', () => {
     // 64 is the cap on voices per frame, and the estimator owns the bound.
-    expectSonareError(
-      () => analyzePolyphonic({ samples, sampleRate, maxPolyphony: 65 }),
-      ErrorCode.InvalidParameter,
-    );
+    expectRefusalOf(() => analyzePolyphonic({ samples, sampleRate, maxPolyphony: 65 }));
   });
 });
 
@@ -455,10 +453,7 @@ describe('PolyphonicAnalysis reattackRatio', () => {
 
   it('refuses a value the ridge tracker refuses', () => {
     for (const bad of [-1, 0.5, 1]) {
-      expectSonareError(
-        () => analyzePolyphonic({ samples, sampleRate, reattackRatio: bad }),
-        ErrorCode.InvalidParameter,
-      );
+      expectRefusalOf(() => analyzePolyphonic({ samples, sampleRate, reattackRatio: bad }));
     }
   });
 });

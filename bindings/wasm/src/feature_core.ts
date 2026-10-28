@@ -394,7 +394,7 @@ export function midiToHz(midi: number): number {
  *
  * @param hz - Frequency in Hz
  * @returns Note name (e.g., "A4", "C#5")
- * @throws {@link SonareError} with `InvalidParameter` for a frequency with no
+ * @throws {@link RangeError} for a frequency with no
  * note: zero, negative, past the representable MIDI range, and non-finite alike.
  */
 export function hzToNote(hz: number): string {
@@ -407,7 +407,7 @@ export function hzToNote(hz: number): string {
  *
  * @param note - Note name (e.g., "A4", "C#5")
  * @returns Frequency in Hz
- * @throws {@link SonareError} with `InvalidParameter` for a name that does not
+ * @throws {@link RangeError} for a name that does not
  * parse or whose octave is out of range.
  */
 export function noteToHz(note: string): number {

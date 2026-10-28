@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+  Audio,
   analyze,
   analyzeAsync,
   ErrorCode,
@@ -9,6 +10,13 @@ import {
   synthPresetPatch,
 } from '../src/index.js';
 import { addonSources, addonSourceText } from './_addon_sources.js';
+
+/** A failure that is the library's own, not a refused argument: a released handle. */
+function destroyedAudioFailure(): void {
+  const audio = Audio.fromBuffer(new Float32Array(2205), 22050);
+  audio.destroy();
+  audio.rmsDb();
+}
 
 describe('SonareError', () => {
   it('exposes an ErrorCode enum aligned with the C ABI', () => {
@@ -21,10 +29,10 @@ describe('SonareError', () => {
     expect(ErrorCode.Unknown).toBe(99);
   });
 
-  it('carries name, numeric code, and codeName on a C-ABI failure', () => {
+  it('carries name, numeric code, and codeName on a library failure', () => {
     let caught: unknown;
     try {
-      synthPresetPatch('definitely-not-a-real-preset');
+      destroyedAudioFailure();
     } catch (e) {
       caught = e;
     }
@@ -33,20 +41,19 @@ describe('SonareError', () => {
 
     const err = caught as SonareError;
     expect(err.name).toBe('SonareError');
-    expect(err.code).toBe(ErrorCode.InvalidParameter);
-    expect(err.codeName).toBe('InvalidParameter');
+    expect(err.code).toBe(ErrorCode.InvalidState);
+    expect(err.codeName).toBe('InvalidState');
     expect(typeof err.message).toBe('string');
     expect(err.message.length).toBeGreaterThan(0);
   });
 });
 
 /**
- * errors.ts promises that EVERY C-ABI failure surfaces as a SonareError with
- * the numeric C ordinal, so the same failure reports the same code on every
- * path and every surface. A path that throws a bare Error breaks that promise
- * silently — the caller's `error.code` is simply `undefined`.
+ * The failure class follows the cause: a library or object-state failure is a
+ * SonareError carrying the numeric C ordinal, and a refused caller argument (the
+ * C ABI's InvalidParameter) is a RangeError on every path, sync and async.
  */
-describe('every C-ABI failure carries the SonareError code', () => {
+describe('failure class follows the cause', () => {
   const sine = (n: number): Float32Array =>
     new Float32Array(n).map((_, i) => 0.25 * Math.sin((2 * Math.PI * 440 * i) / 22050));
 
@@ -59,31 +66,33 @@ describe('every C-ABI failure carries the SonareError code', () => {
     }
   };
 
-  // Each input has to fail INSIDE the core. Empty or non-finite audio and a
-  // wrong sample rate no longer do: the facade refuses them on its own authority
-  // as a RangeError, which is what this surface documents. These reach the core
-  // with arguments the facade has nothing to say about.
+  // Each refusal has to come from INSIDE the core. Empty or non-finite audio and
+  // a wrong sample rate no longer do: the facade refuses them on its own
+  // authority. These reach the core with arguments the facade has nothing to say about.
   const badHop = { samples: sine(22050), sampleRate: 22050, hopLength: 0 };
-  const cases: ReadonlyArray<[string, () => unknown, ErrorCode]> = [
-    ['analyze (sync)', () => analyze(badHop), ErrorCode.InvalidParameter],
-    [
-      'synthPresetPatch',
-      () => synthPresetPatch('definitely-not-a-real-preset'),
-      ErrorCode.InvalidParameter,
-    ],
+  const refusals: ReadonlyArray<[string, () => unknown]> = [
+    ['analyze (sync)', () => analyze(badHop)],
+    ['synthPresetPatch', () => synthPresetPatch('definitely-not-a-real-preset')],
   ];
 
-  for (const [label, run, expected] of cases) {
-    it(`${label} throws a SonareError with code ${expected}`, () => {
+  for (const [label, run] of refusals) {
+    it(`${label} refuses its argument with a plain RangeError`, () => {
       const caught = capture(run);
       expect(caught, `${label} should have thrown`).toBeDefined();
-      expect(isSonareError(caught), `${label} threw a bare Error, not a SonareError`).toBe(true);
-      expect((caught as SonareError).code).toBe(expected);
-      expect((caught as SonareError).name).toBe('SonareError');
+      expect(caught).toBeInstanceOf(RangeError);
+      expect(isSonareError(caught), `${label} threw a coded SonareError`).toBe(false);
+      expect((caught as Error).message.length).toBeGreaterThan(0);
     });
   }
 
-  it('reports the same code for analyze and analyzeAsync on the same input', async () => {
+  it('reports a released handle as a SonareError with InvalidState', () => {
+    const caught = capture(destroyedAudioFailure);
+    expect(isSonareError(caught)).toBe(true);
+    expect((caught as SonareError).code).toBe(ErrorCode.InvalidState);
+    expect((caught as SonareError).name).toBe('SonareError');
+  });
+
+  it('reports the same class for analyze and analyzeAsync on the same input', async () => {
     const sync = capture(() => analyze(badHop));
     let async: unknown;
     try {
@@ -91,10 +100,9 @@ describe('every C-ABI failure carries the SonareError code', () => {
     } catch (error) {
       async = error;
     }
-    expect(isSonareError(sync)).toBe(true);
-    expect(isSonareError(async)).toBe(true);
-    expect((sync as SonareError).code).toBe((async as SonareError).code);
-    expect((sync as SonareError).codeName).toBe((async as SonareError).codeName);
+    expect(sync).toBeInstanceOf(RangeError);
+    expect(async).toBeInstanceOf(RangeError);
+    expect(isSonareError(async)).toBe(false);
   });
 });
 
@@ -116,7 +124,7 @@ describe('SonareError is a value class with brand-based instanceof', () => {
   it('narrows a native failure through instanceof as well as isSonareError', () => {
     let caught: unknown;
     try {
-      synthPresetPatch('definitely-not-a-real-preset');
+      destroyedAudioFailure();
     } catch (e) {
       caught = e;
     }

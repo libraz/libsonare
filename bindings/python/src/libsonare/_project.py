@@ -73,7 +73,6 @@ from ._runtime import (
     SonareProjectCompileResult,
     SonareValueError,
     _check,
-    _check_argument,
     _get_lib,
     _utf8_arg,
 )
@@ -217,7 +216,7 @@ class Project(
         lib = _get_lib()
         result = SonareProjectCompileResult()
         timeline = ctypes.c_void_p()
-        _check_argument(
+        _check(
             lib.sonare_project_compile_timeline(
                 self._require_handle(), ctypes.byref(result), ctypes.byref(timeline)
             )
@@ -252,7 +251,7 @@ class Project(
         lib = _get_lib()
         out = ctypes.c_char_p()
         out_len = ctypes.c_size_t()
-        _check_argument(
+        _check(
             lib.sonare_project_serialize(
                 self._require_handle(), ctypes.byref(out), ctypes.byref(out_len)
             )

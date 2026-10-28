@@ -152,7 +152,7 @@ def test_causal_repair_stages_reach_the_generic_insert_path() -> None:
 
     mode = {p["name"]: p for p in libsonare.mastering_insert_param_info("repair.decrackle")}["mode"]
     assert [choice["name"] for choice in mode["choices"] or []] == ["median"]
-    with pytest.raises(libsonare.SonareError) as excinfo:
+    with pytest.raises(libsonare.SonareValueError) as excinfo:
         libsonare.mastering_insert_timing("repair.dereverbClassical", {"wpeEnabled": True}, 48000)
     assert excinfo.value.code == libsonare.ErrorCode.INVALID_PARAMETER
     # The quantile estimator (0) ranks a whole signal; the insert defaults to spp.

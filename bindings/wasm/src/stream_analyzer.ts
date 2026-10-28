@@ -70,8 +70,8 @@ export class StreamAnalyzer {
   constructor(config: StreamConfig = {}) {
     if (config.computeMagnitude) {
       throw new SonareError(
-        ErrorCode.InvalidParameter,
-        'InvalidParameter',
+        ErrorCode.NotSupported,
+        'NotSupported',
         'computeMagnitude is not supported because magnitude frames are not exposed by StreamAnalyzer read paths.',
       );
     }

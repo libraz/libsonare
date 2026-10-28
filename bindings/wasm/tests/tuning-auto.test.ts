@@ -5,7 +5,6 @@ import {
   detectKey,
   estimateTuning,
   init,
-  isSonareError,
   referenceHzToTuning,
   transcribe,
   tuningToReferenceHz,
@@ -108,7 +107,7 @@ describe('tuning converters', () => {
     } catch (error) {
       thrown = error;
     }
-    expect(isSonareError(thrown)).toBe(true);
+    expect(thrown).toBeInstanceOf(RangeError);
   });
 });
 

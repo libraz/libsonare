@@ -30,7 +30,7 @@ from ._runtime import (
     SonareSf2ProgramStatus,
     SonareSynthInstrumentBinding,
     SonareValueError,
-    _check_argument,
+    _check,
     _from_c_float_array,
     _get_lib,
     _out_float_array,
@@ -80,7 +80,7 @@ class _ProjectRenderMixin:
         """
         lib = _get_lib()
         result = SonareProjectCompileResult()
-        _check_argument(lib.sonare_project_compile(self._require_handle(), ctypes.byref(result)))
+        _check(lib.sonare_project_compile(self._require_handle(), ctypes.byref(result)))
         try:
             return ProjectCompileResult(*_compile_result_fields(result))
         finally:
@@ -118,7 +118,7 @@ class _ProjectRenderMixin:
             instrument_latency_samples=instrument_latency_samples,
         )
         with _out_float_array(lib) as (out, out_len):
-            _check_argument(
+            _check(
                 lib.sonare_project_bounce(
                     self._require_handle(),
                     ctypes.byref(options),
@@ -187,7 +187,7 @@ class _ProjectRenderMixin:
             instrument_latency_samples=instrument_latency_samples,
         )
         with _out_float_array(lib) as (out, out_len):
-            _check_argument(
+            _check(
                 lib.sonare_project_bounce_with_builtin_instruments(
                     self._require_handle(),
                     ctypes.byref(options),
@@ -287,7 +287,7 @@ class _ProjectRenderMixin:
             instrument_latency_samples=instrument_latency_samples,
         )
         with _out_float_array(lib) as (out, out_len):
-            _check_argument(
+            _check(
                 lib.sonare_project_bounce_with_synth_instruments(
                     self._require_handle(),
                     ctypes.byref(options),
@@ -315,7 +315,7 @@ class _ProjectRenderMixin:
         if not buf:
             raise SonareValueError("SoundFont data must not be empty")
         c_data = (ctypes.c_uint8 * len(buf)).from_buffer_copy(buf)
-        _check_argument(
+        _check(
             lib.sonare_project_load_soundfont(
                 self._require_handle(), c_data, ctypes.c_size_t(len(buf))
             )
@@ -326,7 +326,7 @@ class _ProjectRenderMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_project_clear_soundfont"):
             raise _not_supported("libsonare was built without the SoundFont ABI")
-        _check_argument(lib.sonare_project_clear_soundfont(self._require_handle()))
+        _check(lib.sonare_project_clear_soundfont(self._require_handle()))
 
     def soundfont_preset_count(self) -> int:
         """Number of presets in the loaded SoundFont (0 when none is loaded)."""
@@ -334,9 +334,7 @@ class _ProjectRenderMixin:
         if not hasattr(lib, "sonare_project_soundfont_preset_count"):
             raise _not_supported("libsonare was built without the SoundFont ABI")
         out = ctypes.c_size_t()
-        _check_argument(
-            lib.sonare_project_soundfont_preset_count(self._require_handle(), ctypes.byref(out))
-        )
+        _check(lib.sonare_project_soundfont_preset_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
     def soundfont_manifest(self) -> list[Sf2ProgramStatus]:
@@ -354,12 +352,12 @@ class _ProjectRenderMixin:
             raise _not_supported("libsonare was built without the SoundFont ABI")
         handle = self._require_handle()
         total = ctypes.c_size_t()
-        _check_argument(lib.sonare_project_soundfont_manifest(handle, None, 0, ctypes.byref(total)))
+        _check(lib.sonare_project_soundfont_manifest(handle, None, 0, ctypes.byref(total)))
         count = int(total.value)
         if count == 0:
             return []
         entries = (SonareSf2ProgramStatus * count)()
-        _check_argument(
+        _check(
             lib.sonare_project_soundfont_manifest(
                 handle, entries, _to_c_size_t(count, "count"), ctypes.byref(total)
             )
@@ -436,7 +434,7 @@ class _ProjectRenderMixin:
             instrument_latency_samples=instrument_latency_samples,
         )
         with _out_float_array(lib) as (out, out_len):
-            _check_argument(
+            _check(
                 lib.sonare_project_bounce_with_sf2_instruments(
                     self._require_handle(),
                     ctypes.byref(options),
@@ -534,7 +532,7 @@ class _ProjectRenderMixin:
             )
             # `keepalive` pins the ctypes trampolines until the bounce returns.
             keepalive.clear()
-            _check_argument(rc)
+            _check(rc)
             if errors:
                 raise errors[0]
             interleaved = _from_c_float_array(out, int(out_len.value))

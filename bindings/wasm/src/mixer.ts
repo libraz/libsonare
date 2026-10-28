@@ -405,7 +405,7 @@ export class Mixer {
    * bus. Lazy like {@link addBus}: call {@link compile} (or
    * {@link processStereo}) to rebuild. An unknown id, a destination that is not
    * a bus, the master as source, a self-route or an edit that would close a
-   * cycle throws a coded `SonareError` (`InvalidParameter`) naming the ids and
+   * cycle throws a `RangeError` naming the ids and
    * leaves the topology unchanged.
    */
   setOutputBus(sourceId: string, busId: string): void {

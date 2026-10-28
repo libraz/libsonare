@@ -3,7 +3,7 @@
 `_guard_buffer` (and the older in-body `_validate_samples` calls) exist so that
 an empty or non-finite buffer is rejected by the facade, naming the function the
 caller invoked and the offending argument, instead of surfacing the C ABI's
-generic ``[4] Invalid parameter``. Applying that guard is a per-function edit,
+generic ``Invalid parameter``. Applying that guard is a per-function edit,
 which makes the set of guarded entry points a hand-maintained list — and a
 hand-maintained list drifts the moment a new buffer-taking function is added.
 
@@ -327,7 +327,7 @@ _REALTIME_BLOCK_PATH = {
     ),
     "RealtimeVoiceChanger.process_planar_stereo": (
         "unnamed: the caller owns the finite check on an audio-thread block call; "
-        "the non-finite block is refused as a bare [4] Invalid parameter"
+        "the non-finite block is refused as a bare Invalid parameter"
     ),
     "StreamAnalyzer.process": (
         "silent: the caller owns the finite check on a streaming block call; the "

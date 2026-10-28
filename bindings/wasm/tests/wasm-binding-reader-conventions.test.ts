@@ -103,7 +103,7 @@ describe('WASM binding sources budget every caller-supplied array length', () =>
   it('the entry points that size an allocation from `.length` use the shared guard', () => {
     // A fabricated, negative, fractional, or non-finite `.length` used to reach
     // a reserve/resize directly here. These read through wasmArrayLikeLength,
-    // which rejects all of those as an InvalidParameter SonareError before any
+    // which rejects all of those as a RangeError before any
     // allocation happens.
     const guarded = ['features/core.cpp', 'metering/metering.cpp', 'realtime/params.cpp'];
     const sites = bareArrayLengthReadSites().filter((s) => guarded.includes(s.file));

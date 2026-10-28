@@ -202,13 +202,10 @@ function expectNativeStillWorks(): void {
  * it into a different, legal kernel. Asserted by result rather than by "it did
  * not throw", so a default that quietly selected something else fails too.
  */
-/** The shape a C-ABI-coded refusal reaches JS as; the addon never constructs a class. */
+/** The shape a thrown addon error reaches JS as; a refused argument carries no `code`. */
 interface SonareErrorShape extends Error {
   code?: number;
 }
-
-/** Mirrors the C ABI's SONARE_ERROR_INVALID_PARAMETER, which is what `.code` carries. */
-const INVALID_PARAMETER = 4;
 
 const captureError = (run: () => unknown): SonareErrorShape | undefined => {
   try {
@@ -269,18 +266,16 @@ describe('the HPSS positional readers default only an omitted argument', () => {
     });
 
     // A well-formed number the library does not accept is the core's to refuse,
-    // and it answers with a code-carrying SonareError naming the constraint it
-    // broke. An addon-side copy of that rule would be redundant and would
-    // downgrade the refusal: a caller switching on `.code` cannot classify a
-    // bare RangeError, which is what one entry point used to hand back here.
+    // and it answers with a RangeError naming the constraint it broke. An
+    // addon-side copy of that rule would be redundant and would word it vaguer.
     for (const [index, argument] of ['nFft', 'hopLength'].entries()) {
       for (const bad of [0, -2048]) {
-        it(`${entry.name}: a ${argument} of ${bad} is refused by the core with a code`, () => {
+        it(`${entry.name}: a ${argument} of ${bad} is refused by the core as a RangeError`, () => {
           const args = [...DEFAULTS];
           args[index + 2] = bad;
           const error = captureError(() => entry.run(...args)) as SonareErrorShape;
-          expect(error?.name).toBe('SonareError');
-          expect(error?.code).toBe(INVALID_PARAMETER);
+          expect(error).toBeInstanceOf(RangeError);
+          expect(error?.code).toBeUndefined();
           // Which of the two was wrong, not merely that one of them was.
           expect(error?.message).toContain(argument);
         });

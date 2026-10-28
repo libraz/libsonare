@@ -4,7 +4,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { detectBoundaries, ErrorCode, init, SonareError } from '../dist/index.js';
+import { detectBoundaries, init } from '../dist/index.js';
 
 const SAMPLE_RATE = 22050;
 const HOP = 512;
@@ -147,7 +147,7 @@ describe('detectBoundaries', () => {
         useMfcc: false,
         useChroma: false,
       }),
-    ).toThrow(SonareError);
+    ).toThrow(RangeError);
     try {
       detectBoundaries({
         samples: tone(220, 1),
@@ -157,7 +157,7 @@ describe('detectBoundaries', () => {
       });
       expect.unreachable('expected a refusal');
     } catch (error) {
-      expect((error as SonareError).code).toBe(ErrorCode.InvalidParameter);
+      expect(error).toBeInstanceOf(RangeError);
     }
   });
 

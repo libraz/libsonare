@@ -133,7 +133,7 @@ describe('masteringRepairApply', () => {
 
   it('refuses a repeated stage, an unknown stage and an unknown setting', () => {
     const channels = [material(440, 12)];
-    const refused = expect.objectContaining({ code: ErrorCode.InvalidParameter });
+    const refused = RangeError;
     expect(() =>
       masteringRepairApply({
         channels,

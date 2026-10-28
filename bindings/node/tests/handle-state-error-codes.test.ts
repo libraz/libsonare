@@ -200,15 +200,16 @@ describe('setAssistSidecar validates before it commits', () => {
   });
 });
 
-describe('streaming constructors report the library code', () => {
-  it('StreamingEqualizer refusals keep InvalidParameter', () => {
+describe('streaming constructors refuse a refused argument as a RangeError', () => {
+  it('StreamingEqualizer refusals are RangeErrors', () => {
     for (const config of [{ sampleRate: 0 }, { sampleRate: -48000 }, { maxBlockSize: -1 }]) {
       const error = capture(() => new addon.StreamingEqualizer(config));
-      expect(codeOf(error), JSON.stringify(config)).toBe(ErrorCode.InvalidParameter);
+      expect(error, JSON.stringify(config)).toBeInstanceOf(RangeError);
+      expect(codeOf(error), JSON.stringify(config)).toBeUndefined();
     }
   });
 
-  it('StreamingMasteringChain refusals keep InvalidParameter', () => {
+  it('StreamingMasteringChain refusals are RangeErrors', () => {
     const configs = [
       { loudness: { enabled: true } },
       { loudness: { truePeakOversample: 3 } },
@@ -216,7 +217,8 @@ describe('streaming constructors report the library code', () => {
     ];
     for (const config of configs) {
       const error = capture(() => new addon.StreamingMasteringChain(config));
-      expect(codeOf(error), JSON.stringify(config)).toBe(ErrorCode.InvalidParameter);
+      expect(error, JSON.stringify(config)).toBeInstanceOf(RangeError);
+      expect(codeOf(error), JSON.stringify(config)).toBeUndefined();
     }
   });
 

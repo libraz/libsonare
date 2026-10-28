@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { NoteObject, PolyphonicAnalysis, PolyphonicAnalysisOptions } from '../src/index.js';
-import { analyzePolyphonic, ErrorCode, isSonareError } from '../src/index.js';
+import { analyzePolyphonic, isSonareError } from '../src/index.js';
 
 const SR = 44100;
 const LENGTH = 22050;
@@ -104,11 +104,9 @@ function caught(body: () => unknown): unknown {
   return undefined;
 }
 
-function expectSonareError(error: unknown, code: ErrorCode): void {
-  expect(isSonareError(error)).toBe(true);
-  if (isSonareError(error)) {
-    expect(error.code).toBe(code);
-  }
+function expectRefusal(error: unknown, errorClass: ErrorConstructor = RangeError): void {
+  expect(error).toBeInstanceOf(errorClass);
+  expect(isSonareError(error)).toBe(false);
 }
 
 describe('analyzePolyphonic', () => {
@@ -228,13 +226,12 @@ describe('analyzePolyphonic', () => {
   it('refuses an integer tuning field the narrowing would wrap', () => {
     // 2 ** 32 narrows to 0, which selects the default, so the analysis would
     // otherwise succeed at a framing the caller never asked for. The facade
-    // pre-empts that as the library's own InvalidParameter; a wrong TYPE on the
-    // same field is the same check and reports the same way.
-    expectSonareError(
+    // pre-empts that as a RangeError; a wrong TYPE on the
+    // same field is the same check and reports a TypeError.
+    expectRefusal(
       caught(() => analyzePolyphonic({ samples: CHORD, sampleRate: SR, hopLength: 2 ** 32 })),
-      ErrorCode.InvalidParameter,
     );
-    expectSonareError(
+    expectRefusal(
       caught(() =>
         analyzePolyphonic({
           samples: CHORD,
@@ -242,7 +239,7 @@ describe('analyzePolyphonic', () => {
           hopLength: '1024' as unknown as number,
         }),
       ),
-      ErrorCode.InvalidParameter,
+      TypeError,
     );
   });
 
@@ -384,28 +381,13 @@ describe('the polyphonic surface refuses what it cannot do', () => {
   it('rejects a note index the analysis does not have', () => {
     withAnalysis((analysis) => {
       const past = analysis.noteCount;
-      expectSonareError(
-        caught(() => analysis.setNoteEdit(past, { gainDb: -6 })),
-        ErrorCode.InvalidParameter,
-      );
-      expectSonareError(
-        caught(() => analysis.noteF0(past)),
-        ErrorCode.InvalidParameter,
-      );
-      expectSonareError(
-        caught(() => analysis.noteAmplitude(past)),
-        ErrorCode.InvalidParameter,
-      );
-      expectSonareError(
-        caught(() => analysis.noteSalience(past)),
-        ErrorCode.InvalidParameter,
-      );
+      expectRefusal(caught(() => analysis.setNoteEdit(past, { gainDb: -6 })));
+      expectRefusal(caught(() => analysis.noteF0(past)));
+      expectRefusal(caught(() => analysis.noteAmplitude(past)));
+      expectRefusal(caught(() => analysis.noteSalience(past)));
       // The envelope sizes its buffer from the note rather than from the span, so
       // its out-of-range path is its own and is asserted rather than assumed.
-      expectSonareError(
-        caught(() => analysis.noteEnvelope(past)),
-        ErrorCode.InvalidParameter,
-      );
+      expectRefusal(caught(() => analysis.noteEnvelope(past)));
       // The refusals left the handle usable.
       expect(analysis.notes()).toHaveLength(past);
     });

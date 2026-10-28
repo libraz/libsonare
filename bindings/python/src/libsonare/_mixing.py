@@ -21,7 +21,6 @@ from ._runtime import (
     SonareMixMeterSnapshot,
     SonareValueError,
     _check,
-    _check_argument,
     _curve_value,
     _float_array_result,
     _get_lib,
@@ -267,8 +266,8 @@ class Mixer:
         ``source_id`` is replaced, including a strip-to-strip edge authored in
         scene JSON. Lazy like :meth:`add_bus`: nothing compiles in this call, so
         call :meth:`compile` afterwards. A refused call (unknown id, master as
-        source, self-route, an edit closing a cycle) raises ``SonareError``
-        ``INVALID_PARAMETER`` naming the ids and leaves the topology unchanged.
+        source, self-route, an edit closing a cycle) raises ``SonareValueError``
+        naming the ids and leaves the topology unchanged.
         Control thread only.
 
         Two calls route a strip through a submix to the master::
@@ -470,7 +469,7 @@ class Mixer:
             SonareValueError: If either position is outside [-1, 1] or non-finite.
         """
         handle = self._strip_handle(strip)
-        _check_argument(
+        _check(
             _get_lib().sonare_strip_set_dual_pan(
                 handle, _to_c_float(left, "left"), _to_c_float(right, "right")
             )
@@ -536,7 +535,7 @@ class Mixer:
         """
         handle = self._strip_handle(strip)
         mode = -1 if pan_mode is None else _pan_mode_value(pan_mode)
-        _check_argument(
+        _check(
             _get_lib().sonare_strip_set_pan(
                 handle, _to_c_float(pan, "pan"), _to_c_int(mode, "mode")
             )
@@ -549,7 +548,7 @@ class Mixer:
             SonareValueError: If ``width`` is outside [0, 2] or non-finite.
         """
         handle = self._strip_handle(strip)
-        _check_argument(_get_lib().sonare_strip_set_width(handle, _to_c_float(width, "width")))
+        _check(_get_lib().sonare_strip_set_width(handle, _to_c_float(width, "width")))
 
     def set_muted(self, strip: StripRef, muted: bool) -> None:
         """Set a strip's mute state (takes effect without a recompile)."""
@@ -794,7 +793,7 @@ class Mixer:
     ) -> None:
         """Schedule a sample-accurate pan automation event on a strip."""
         handle = self._strip_handle(strip)
-        _check_argument(
+        _check(
             _get_lib().sonare_strip_schedule_pan_automation(
                 handle,
                 _to_c_int64(sample_pos, "sample_pos"),
@@ -812,7 +811,7 @@ class Mixer:
     ) -> None:
         """Schedule a sample-accurate stereo-width automation event on a strip."""
         handle = self._strip_handle(strip)
-        _check_argument(
+        _check(
             _get_lib().sonare_strip_schedule_width_automation(
                 handle,
                 _to_c_int64(sample_pos, "sample_pos"),

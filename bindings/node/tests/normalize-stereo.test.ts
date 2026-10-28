@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ErrorCode, normalize, normalizeStereo } from '../src/index.js';
+import { normalize, normalizeStereo } from '../src/index.js';
 
 const SR = 22050;
 const LENGTH = 4096;
@@ -161,8 +161,7 @@ describe('normalizeStereo refusals', () => {
     } catch (error) {
       caught = error;
     }
-    expect(caught).toBeInstanceOf(Error);
-    expect((caught as { code?: number }).code).toBe(ErrorCode.InvalidParameter);
+    expect(caught).toBeInstanceOf(RangeError);
     return caught as Error;
   };
 

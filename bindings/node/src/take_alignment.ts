@@ -45,8 +45,8 @@ import { assertAudioInput, assertSampleRate, requestObject } from './validation.
  *
  * @throws `RangeError` when either buffer is empty or carries a non-finite
  *         sample, or when `sampleRate` or `takeSampleRate` is out of range; `TypeError` when
- *         `hopLength` or `binsPerOctave` carries the wrong type; and a
- *         `SonareError` with `InvalidParameter` for a `binsPerOctave` that is not
+ *         `hopLength` or `binsPerOctave` carries the wrong type; and
+ *         for a `binsPerOctave` that is not
  *         a multiple of 12 or that `sampleRate` cannot carry, and when the two
  *         signals produce no pair of distinct anchors — which is what an
  *         unalignable pair looks like, and is reported rather than answered with

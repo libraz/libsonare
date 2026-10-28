@@ -18,7 +18,7 @@ Napi::Value RealtimeEngineWrap::SetBusStripJson(const Napi::CallbackInfo& info) 
       !OptionalStringArg(env, info, 1, "sceneJson", "", &scene_json)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_engine_set_bus_strip_json(engine_, bus_id, scene_json.c_str()));
+  ThrowIfError(env, sonare_engine_set_bus_strip_json(engine_, bus_id, scene_json.c_str()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -35,8 +35,8 @@ Napi::Value RealtimeEngineWrap::SetBusStripEqBandJson(const Napi::CallbackInfo& 
       !OptionalStringArg(env, info, 2, "bandJson", "", &band_json)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_engine_set_bus_strip_eq_band_json(engine_, bus_id, band_index,
-                                                                     band_json.c_str()));
+  ThrowIfError(env, sonare_engine_set_bus_strip_eq_band_json(engine_, bus_id, band_index,
+                                                             band_json.c_str()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -51,8 +51,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripJson(const Napi::CallbackInfo& info
       !OptionalStringArg(env, info, 1, "sceneJson", "", &scene_json)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env,
-                       sonare_engine_set_track_strip_json(engine_, track_id, scene_json.c_str()));
+  ThrowIfError(env, sonare_engine_set_track_strip_json(engine_, track_id, scene_json.c_str()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -69,8 +68,8 @@ Napi::Value RealtimeEngineWrap::SetTrackStripEqBandJson(const Napi::CallbackInfo
       !OptionalStringArg(env, info, 2, "bandJson", "", &band_json)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_engine_set_track_strip_eq_band_json(
-                                engine_, track_id, band_index, band_json.c_str()));
+  ThrowIfError(env, sonare_engine_set_track_strip_eq_band_json(engine_, track_id, band_index,
+                                                               band_json.c_str()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -89,9 +88,9 @@ Napi::Value RealtimeEngineWrap::SetTrackStripInsertBypassed(const Napi::Callback
       !OptionalBoolArg(env, info, 3, "resetOnBypass", false, &reset_on_bypass)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(
-      env, sonare_engine_set_track_strip_insert_bypassed(
-               engine_, track_id, insert_index, bypassed ? 1 : 0, reset_on_bypass ? 1 : 0));
+  ThrowIfError(env,
+               sonare_engine_set_track_strip_insert_bypassed(
+                   engine_, track_id, insert_index, bypassed ? 1 : 0, reset_on_bypass ? 1 : 0));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -102,7 +101,7 @@ Napi::Value RealtimeEngineWrap::SetMasterStripJson(const Napi::CallbackInfo& inf
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
   std::string scene_json;
   if (!OptionalStringArg(env, info, 0, "sceneJson", "", &scene_json)) return env.Undefined();
-  ThrowIfArgumentError(env, sonare_engine_set_master_strip_json(engine_, scene_json.c_str()));
+  ThrowIfError(env, sonare_engine_set_master_strip_json(engine_, scene_json.c_str()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -117,8 +116,8 @@ Napi::Value RealtimeEngineWrap::SetMasterStripEqBandJson(const Napi::CallbackInf
       !OptionalStringArg(env, info, 1, "bandJson", "", &band_json)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(
-      env, sonare_engine_set_master_strip_eq_band_json(engine_, band_index, band_json.c_str()));
+  ThrowIfError(env,
+               sonare_engine_set_master_strip_eq_band_json(engine_, band_index, band_json.c_str()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -135,8 +134,8 @@ Napi::Value RealtimeEngineWrap::SetMasterStripInsertBypassed(const Napi::Callbac
       !OptionalBoolArg(env, info, 2, "resetOnBypass", false, &reset_on_bypass)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_engine_set_master_strip_insert_bypassed(
-                                engine_, insert_index, bypassed ? 1 : 0, reset_on_bypass ? 1 : 0));
+  ThrowIfError(env, sonare_engine_set_master_strip_insert_bypassed(
+                        engine_, insert_index, bypassed ? 1 : 0, reset_on_bypass ? 1 : 0));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -155,8 +154,8 @@ Napi::Value RealtimeEngineWrap::SetTrackStripInsertParamByName(const Napi::Callb
       !OptionalFloatArg(env, info, 3, "value", 0.0f, &value)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_engine_set_track_strip_insert_param_by_name(
-                                engine_, track_id, insert_index, param_name.c_str(), value));
+  ThrowIfError(env, sonare_engine_set_track_strip_insert_param_by_name(
+                        engine_, track_id, insert_index, param_name.c_str(), value));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -173,8 +172,8 @@ Napi::Value RealtimeEngineWrap::SetMasterStripInsertParamByName(const Napi::Call
       !OptionalFloatArg(env, info, 2, "value", 0.0f, &value)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_engine_set_master_strip_insert_param_by_name(
-                                engine_, insert_index, param_name.c_str(), value));
+  ThrowIfError(env, sonare_engine_set_master_strip_insert_param_by_name(engine_, insert_index,
+                                                                        param_name.c_str(), value));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -193,8 +192,8 @@ Napi::Value RealtimeEngineWrap::SetBusStripInsertParamByName(const Napi::Callbac
       !OptionalFloatArg(env, info, 3, "value", 0.0f, &value)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_engine_set_bus_strip_insert_param_by_name(
-                                engine_, bus_id, insert_index, param_name.c_str(), value));
+  ThrowIfError(env, sonare_engine_set_bus_strip_insert_param_by_name(engine_, bus_id, insert_index,
+                                                                     param_name.c_str(), value));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -215,9 +214,8 @@ Napi::Value RealtimeEngineWrap::ApplyTrackStripInsertParamByNameNow(
     return env.Undefined();
   }
   int applied = 0;
-  ThrowIfArgumentError(env,
-                       sonare_engine_apply_track_strip_insert_param_by_name_now(
-                           engine_, track_id, insert_index, param_name.c_str(), value, &applied));
+  ThrowIfError(env, sonare_engine_apply_track_strip_insert_param_by_name_now(
+                        engine_, track_id, insert_index, param_name.c_str(), value, &applied));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Boolean::New(env, applied != 0);
   SONARE_NODE_CATCH(env)
@@ -237,8 +235,8 @@ Napi::Value RealtimeEngineWrap::RestoreTrackStripInsertParamByName(const Napi::C
       !OptionalFloatArg(env, info, 3, "value", 0.0f, &value)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_engine_restore_track_strip_insert_param_by_name(
-                                engine_, track_id, insert_index, param_name.c_str(), value));
+  ThrowIfError(env, sonare_engine_restore_track_strip_insert_param_by_name(
+                        engine_, track_id, insert_index, param_name.c_str(), value));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -257,8 +255,8 @@ Napi::Value RealtimeEngineWrap::ApplyMasterStripInsertParamByNameNow(
     return env.Undefined();
   }
   int applied = 0;
-  ThrowIfArgumentError(env, sonare_engine_apply_master_strip_insert_param_by_name_now(
-                                engine_, insert_index, param_name.c_str(), value, &applied));
+  ThrowIfError(env, sonare_engine_apply_master_strip_insert_param_by_name_now(
+                        engine_, insert_index, param_name.c_str(), value, &applied));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Boolean::New(env, applied != 0);
   SONARE_NODE_CATCH(env)
@@ -277,8 +275,8 @@ Napi::Value RealtimeEngineWrap::RestoreMasterStripInsertParamByName(
       !OptionalFloatArg(env, info, 2, "value", 0.0f, &value)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_engine_restore_master_strip_insert_param_by_name(
-                                engine_, insert_index, param_name.c_str(), value));
+  ThrowIfError(env, sonare_engine_restore_master_strip_insert_param_by_name(
+                        engine_, insert_index, param_name.c_str(), value));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -298,9 +296,8 @@ Napi::Value RealtimeEngineWrap::ApplyBusStripInsertParamByNameNow(const Napi::Ca
     return env.Undefined();
   }
   int applied = 0;
-  ThrowIfArgumentError(env,
-                       sonare_engine_apply_bus_strip_insert_param_by_name_now(
-                           engine_, bus_id, insert_index, param_name.c_str(), value, &applied));
+  ThrowIfError(env, sonare_engine_apply_bus_strip_insert_param_by_name_now(
+                        engine_, bus_id, insert_index, param_name.c_str(), value, &applied));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Boolean::New(env, applied != 0);
   SONARE_NODE_CATCH(env)
@@ -320,8 +317,8 @@ Napi::Value RealtimeEngineWrap::RestoreBusStripInsertParamByName(const Napi::Cal
       !OptionalFloatArg(env, info, 3, "value", 0.0f, &value)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_engine_restore_bus_strip_insert_param_by_name(
-                                engine_, bus_id, insert_index, param_name.c_str(), value));
+  ThrowIfError(env, sonare_engine_restore_bus_strip_insert_param_by_name(
+                        engine_, bus_id, insert_index, param_name.c_str(), value));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -334,7 +331,7 @@ Napi::Value RealtimeEngineWrap::ClearTrackInsertParameterBases(const Napi::Callb
   if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_engine_clear_track_insert_parameter_bases(engine_, track_id));
+  ThrowIfError(env, sonare_engine_clear_track_insert_parameter_bases(engine_, track_id));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -343,7 +340,7 @@ Napi::Value RealtimeEngineWrap::ClearMasterInsertParameterBases(const Napi::Call
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  ThrowIfArgumentError(env, sonare_engine_clear_master_insert_parameter_bases(engine_));
+  ThrowIfError(env, sonare_engine_clear_master_insert_parameter_bases(engine_));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -356,7 +353,7 @@ Napi::Value RealtimeEngineWrap::ClearBusInsertParameterBases(const Napi::Callbac
   if (!OptionalUint32Arg(env, info, 0, "busId", 0, &bus_id)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_engine_clear_bus_insert_parameter_bases(engine_, bus_id));
+  ThrowIfError(env, sonare_engine_clear_bus_insert_parameter_bases(engine_, bus_id));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -375,9 +372,8 @@ Napi::Value RealtimeEngineWrap::SetBusStripInsertBypassed(const Napi::CallbackIn
       !OptionalBoolArg(env, info, 3, "resetOnBypass", false, &reset_on_bypass)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(
-      env, sonare_engine_set_bus_strip_insert_bypassed(engine_, bus_id, insert_index,
-                                                       bypassed ? 1 : 0, reset_on_bypass ? 1 : 0));
+  ThrowIfError(env, sonare_engine_set_bus_strip_insert_bypassed(
+                        engine_, bus_id, insert_index, bypassed ? 1 : 0, reset_on_bypass ? 1 : 0));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -531,7 +527,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripPan(const Napi::CallbackInfo& info)
       !OptionalFloatArg(env, info, 1, "pan", 0.0f, &pan)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_engine_set_track_strip_pan(engine_, track_id, pan));
+  ThrowIfError(env, sonare_engine_set_track_strip_pan(engine_, track_id, pan));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -546,7 +542,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripPanLaw(const Napi::CallbackInfo& in
       !OptionalIntArg(env, info, 1, "panLaw", 0, &pan_law)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_engine_set_track_strip_pan_law(engine_, track_id, pan_law));
+  ThrowIfError(env, sonare_engine_set_track_strip_pan_law(engine_, track_id, pan_law));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -561,7 +557,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripPanMode(const Napi::CallbackInfo& i
       !OptionalIntArg(env, info, 1, "panMode", 0, &pan_mode)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_engine_set_track_strip_pan_mode(engine_, track_id, pan_mode));
+  ThrowIfError(env, sonare_engine_set_track_strip_pan_mode(engine_, track_id, pan_mode));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -578,8 +574,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripDualPan(const Napi::CallbackInfo& i
       !OptionalFloatArg(env, info, 2, "rightPan", 0.0f, &right_pan)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(
-      env, sonare_engine_set_track_strip_dual_pan(engine_, track_id, left_pan, right_pan));
+  ThrowIfError(env, sonare_engine_set_track_strip_dual_pan(engine_, track_id, left_pan, right_pan));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -604,7 +599,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripSurroundPan(const Napi::CallbackInf
   pan.lfe = FloatProperty(obj, "lfe", 0.0f);
   pan.distance = FloatProperty(obj, "distance", 1.0f);
   if (env.IsExceptionPending()) return env.Undefined();
-  ThrowIfArgumentError(env, sonare_engine_set_track_strip_surround_pan(engine_, track_id, &pan));
+  ThrowIfError(env, sonare_engine_set_track_strip_surround_pan(engine_, track_id, &pan));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -619,7 +614,7 @@ Napi::Value RealtimeEngineWrap::SetBusStripPan(const Napi::CallbackInfo& info) {
       !OptionalFloatArg(env, info, 1, "pan", 0.0f, &pan)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_engine_set_bus_strip_pan(engine_, bus_id, pan));
+  ThrowIfError(env, sonare_engine_set_bus_strip_pan(engine_, bus_id, pan));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -634,7 +629,7 @@ Napi::Value RealtimeEngineWrap::SetBusStripPanLaw(const Napi::CallbackInfo& info
       !OptionalIntArg(env, info, 1, "panLaw", 0, &pan_law)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_engine_set_bus_strip_pan_law(engine_, bus_id, pan_law));
+  ThrowIfError(env, sonare_engine_set_bus_strip_pan_law(engine_, bus_id, pan_law));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -649,7 +644,7 @@ Napi::Value RealtimeEngineWrap::SetBusStripPanMode(const Napi::CallbackInfo& inf
       !OptionalIntArg(env, info, 1, "panMode", 0, &pan_mode)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_engine_set_bus_strip_pan_mode(engine_, bus_id, pan_mode));
+  ThrowIfError(env, sonare_engine_set_bus_strip_pan_mode(engine_, bus_id, pan_mode));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -666,8 +661,7 @@ Napi::Value RealtimeEngineWrap::SetBusStripDualPan(const Napi::CallbackInfo& inf
       !OptionalFloatArg(env, info, 2, "rightPan", 0.0f, &right_pan)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env,
-                       sonare_engine_set_bus_strip_dual_pan(engine_, bus_id, left_pan, right_pan));
+  ThrowIfError(env, sonare_engine_set_bus_strip_dual_pan(engine_, bus_id, left_pan, right_pan));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -682,7 +676,7 @@ Napi::Value RealtimeEngineWrap::SetTrackStripChannelDelaySamples(const Napi::Cal
       !OptionalIntArg(env, info, 1, "delaySamples", 0, &delay_samples)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(
+  ThrowIfError(
       env, sonare_engine_set_track_strip_channel_delay_samples(engine_, track_id, delay_samples));
   return env.Undefined();
   SONARE_NODE_CATCH(env)

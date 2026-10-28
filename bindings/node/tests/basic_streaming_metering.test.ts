@@ -6,6 +6,7 @@ import {
   ErrorCode,
   ebur128LoudnessRange,
   fourierTempogram,
+  isSonareError,
   lufs,
   masterAudio,
   masterAudioStereo,
@@ -904,7 +905,8 @@ describe('StreamAnalyzer quantize-config override', () => {
     } catch (error) {
       caught = error;
     }
-    expect(caught).toBeDefined();
+    expect(isSonareError(caught)).toBe(true);
+    expect((caught as { code: number }).code).toBe(ErrorCode.NotSupported);
     expect((caught as Error).message).toMatch(/computeMagnitude is not supported/);
     // An explicit false is still the default and stays accepted.
     const analyzer = new StreamAnalyzer({ sampleRate: SR, computeMagnitude: false });

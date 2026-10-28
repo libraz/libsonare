@@ -35,7 +35,7 @@ function requireModule() {
 // Shared input checks of the entry points that take audio plus a whole F0 track,
 // returning the voicing flags in the Float32Array form the embind layer reads. A
 // companion array of the wrong length is a RangeError here because the native
-// side can only report it as a flat InvalidParameter.
+// side can only report it as a flat refusal without the argument's name.
 function assertNoteTrack(
   fnName: string,
   request: ExtractNotesRequest | NoteSetRequest,
@@ -416,7 +416,7 @@ export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
  * @throws TypeError on a note whose span is missing or not a number
  * @throws RangeError on a non-finite or out-of-range edit field, a negative or
  *   non-finite `fadeMs` or `vibratoCutoffHz`, or a frame span outside `f0Hz`
- * @throws SonareError (`InvalidParameter`) on a note whose span is empty or
+ * @throws RangeError on a note whose span is empty or
  *   reversed, overlapping source spans, a negative or non-finite envelope value,
  *   or a `vibratoDepthChange` / `driftChange` on a note with no usable pitch
  *   curve to apply it to
@@ -556,7 +556,7 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
  *   length (`voiced`, or `voicedProb` when `voiced` is omitted or `null`), or the
  *   samples/sample rate fail the shared input checks
  * @throws RangeError on the track arguments {@link extractNotes} itself rejects
- * @throws SonareError (`InvalidParameter`) on an out-of-range `index`, a `frame`
+ * @throws RangeError on an out-of-range `index`, a `frame`
  *   that is not strictly inside that note's own span, or a note whose frame span
  *   is empty or runs past the track
  *
@@ -616,7 +616,7 @@ export function splitNote(request: SplitNoteRequest): NoteObject[] {
  *   length (`voiced`, or `voicedProb` when `voiced` is omitted or `null`), or the
  *   samples/sample rate fail the shared input checks
  * @throws RangeError on the track arguments {@link extractNotes} itself rejects
- * @throws SonareError (`InvalidParameter`) unless `first < last < notes.length`,
+ * @throws RangeError unless `first < last < notes.length`,
  *   or on a note whose frame span is empty or runs past the track
  *
  * @example
@@ -673,7 +673,7 @@ export function mergeNotes(request: MergeNotesRequest): NoteObject[] {
  *   track with no closed note, which is a measurement that came up empty rather
  *   than an error
  * @throws SonareError (`InvalidFormat`) when the bytes are not a readable SMF
- * @throws SonareError (`InvalidParameter`) when `trackIndex` names no
+ * @throws RangeError when `trackIndex` names no
  *   MIDI-bearing track
  *
  * @example

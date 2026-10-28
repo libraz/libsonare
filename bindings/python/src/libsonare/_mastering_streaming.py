@@ -147,7 +147,7 @@ class StreamingMasteringChain:
     only), maximizer.truePeakLimiter. Configurations that enable any of the five
     whole-signal repair stages (``repair.declick``, ``repair.declip``,
     ``repair.decrackle``, ``repair.dehum``, ``repair.dereverb``) or
-    ``loudness`` raise :class:`SonareError` (code ``INVALID_PARAMETER``).
+    ``loudness`` raise :class:`SonareValueError`.
 
     ``repair.denoise`` runs here, but only with a noise estimator that is
     recursive in time. A stream defaults it to ``"spp"`` (``3``), so

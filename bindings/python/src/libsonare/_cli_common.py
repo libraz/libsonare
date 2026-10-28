@@ -297,9 +297,8 @@ def _read_audio_bounded(path: str) -> bytes:
         # native path loader for a path whose metadata cannot be inspected.
         file_size = 0
     if file_size > _MAX_AUDIO_FILE_BYTES:
-        raise SonareError(
-            SONARE_ERROR_INVALID_PARAMETER,
-            f"File too large: {file_size} bytes (max: {_MAX_AUDIO_FILE_BYTES} bytes)",
+        raise SonareValueError(
+            f"File too large: {file_size} bytes (max: {_MAX_AUDIO_FILE_BYTES} bytes)"
         )
 
     try:
@@ -330,10 +329,7 @@ def _read_audio_bounded(path: str) -> bytes:
                 if not chunk:
                     break
                 if len(chunk) > _MAX_AUDIO_FILE_BYTES - len(data):
-                    raise SonareError(
-                        SONARE_ERROR_INVALID_PARAMETER,
-                        f"File too large: exceeds {_MAX_AUDIO_FILE_BYTES} bytes",
-                    )
+                    raise SonareValueError(f"File too large: exceeds {_MAX_AUDIO_FILE_BYTES} bytes")
                 data.extend(chunk)
     except SonareError:
         raise
@@ -567,12 +563,11 @@ def _check_wav_frame_count(path: str, frames: int, channels: int, bits_per_sampl
     verdict, with the same error class, before either touches the filesystem.
     """
     if frames <= 0:
-        raise SonareError(SONARE_ERROR_INVALID_PARAMETER, f"No frames to save: {path}")
+        raise SonareValueError(f"No frames to save: {path}")
     block_align = channels * (bits_per_sample // 8)
     if block_align <= 0 or frames > _MAX_WAV_DATA_BYTES // block_align:
-        raise SonareError(
-            SONARE_ERROR_INVALID_PARAMETER,
-            f"WAV data exceeds RIFF 32-bit size limit; use a chunked container: {path}",
+        raise SonareValueError(
+            f"WAV data exceeds RIFF 32-bit size limit; use a chunked container: {path}"
         )
 
 

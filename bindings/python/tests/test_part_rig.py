@@ -96,15 +96,15 @@ def test_invalid_input_is_refused():
         with pytest.raises(SonareValueError, match="part"):
             project.set_part_rig(DESTINATION, 256, mode="none")
 
-        with pytest.raises(SonareError) as bad_part:
+        with pytest.raises(SonareValueError) as bad_part:
             project.set_part_rig(DESTINATION, 16, mode="none")
         assert bad_part.value.code == int(ErrorCode.INVALID_PARAMETER)
 
-        with pytest.raises(SonareError) as empty_chain:
+        with pytest.raises(SonareValueError) as empty_chain:
             project.set_part_rig(DESTINATION, 0, mode="chain", inserts=[])
         assert empty_chain.value.code == int(ErrorCode.INVALID_PARAMETER)
 
-        with pytest.raises(SonareError) as bad_json:
+        with pytest.raises(SonareValueError) as bad_json:
             project.set_part_rig(
                 DESTINATION,
                 0,
@@ -160,7 +160,7 @@ def test_engine_refuses_builtin_instrument():
 def test_engine_refuses_unbound_destination():
     with RealtimeEngine() as engine:
         engine.prepare(48000.0, 128, 16, 16)
-        with pytest.raises(SonareError) as refusal:
+        with pytest.raises(SonareValueError) as refusal:
             engine.set_part_rig(DESTINATION, 0, mode="none")
         assert refusal.value.code == int(ErrorCode.INVALID_PARAMETER)
         with pytest.raises(SonareValueError, match="mode"):

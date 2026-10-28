@@ -24,7 +24,7 @@ bool ClipFadeFromObject(Napi::Env env, const Napi::Object& obj, SonareProjectCli
     const SonareError err = sonare_project_fade_curve_from_name(name.c_str(), &fade.curve);
     if (err != SONARE_OK) {
       const char* detail = sonare_last_error_message();
-      sonare_node::ThrowArgumentErrorMessage(
+      sonare_node::ThrowSonareErrorMessage(
           env, err,
           std::string("Invalid project fade curve: ") +
               ((detail != nullptr && detail[0] != '\0') ? detail : sonare_error_message(err)));
@@ -255,7 +255,7 @@ Napi::Value ProjectWrap::AddTrack(const Napi::CallbackInfo& info) {
   }
   desc.name = has_name ? name.c_str() : nullptr;
   uint32_t out_id = 0;
-  ThrowIfArgumentError(env, sonare_project_add_track(project_, &desc, &out_id));
+  ThrowIfError(env, sonare_project_add_track(project_, &desc, &out_id));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_id);
   SONARE_NODE_CATCH(env)
@@ -306,7 +306,7 @@ Napi::Value ProjectWrap::AddClip(const Napi::CallbackInfo& info) {
   }
 
   uint32_t out_id = 0;
-  ThrowIfArgumentError(env, sonare_project_add_clip(project_, &desc, &out_id));
+  ThrowIfError(env, sonare_project_add_clip(project_, &desc, &out_id));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_id);
   SONARE_NODE_CATCH(env)
@@ -354,7 +354,7 @@ Napi::Value ProjectWrap::AddLoopRecordingTakes(const Napi::CallbackInfo& info) {
 
   uint32_t out_clip_id = 0;
   size_t out_take_count = 0;
-  ThrowIfArgumentError(
+  ThrowIfError(
       env, sonare_project_add_loop_recording_takes(project_, &desc, &out_clip_id, &out_take_count));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
@@ -376,7 +376,7 @@ Napi::Value ProjectWrap::AddMidiClip(const Napi::CallbackInfo& info) {
   }
   uint32_t out_track = 0;
   uint32_t out_clip = 0;
-  ThrowIfArgumentError(
+  ThrowIfError(
       env, sonare_project_add_midi_clip(project_, start_ppq, length_ppq, &out_track, &out_clip));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
@@ -397,7 +397,7 @@ Napi::Value ProjectWrap::SplitClip(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   uint32_t out_id = 0;
-  ThrowIfArgumentError(env, sonare_project_split_clip(project_, clip_id, ppq, &out_id));
+  ThrowIfError(env, sonare_project_split_clip(project_, clip_id, ppq, &out_id));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_id);
   SONARE_NODE_CATCH(env)
@@ -415,7 +415,7 @@ Napi::Value ProjectWrap::TrimClip(const Napi::CallbackInfo& info) {
       !OptionalDoubleArg(env, info, 2, "newLengthPpq", 0.0, &length_ppq)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_project_trim_clip(project_, clip_id, start_ppq, length_ppq));
+  ThrowIfError(env, sonare_project_trim_clip(project_, clip_id, start_ppq, length_ppq));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -432,7 +432,7 @@ Napi::Value ProjectWrap::MoveClip(const Napi::CallbackInfo& info) {
       !OptionalUint32Arg(env, info, 2, "newTrackId", 0, &track_id)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_project_move_clip(project_, clip_id, start_ppq, track_id));
+  ThrowIfError(env, sonare_project_move_clip(project_, clip_id, start_ppq, track_id));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -447,7 +447,7 @@ Napi::Value ProjectWrap::SetTrackKind(const Napi::CallbackInfo& info) {
       !OptionalUint32Arg(env, info, 1, "kind", 0, &kind)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_project_set_track_kind(project_, track_id, kind));
+  ThrowIfError(env, sonare_project_set_track_kind(project_, track_id, kind));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -462,7 +462,7 @@ Napi::Value ProjectWrap::SetClipWarpRef(const Napi::CallbackInfo& info) {
       !OptionalUint32Arg(env, info, 1, "warpRefId", 0, &warp_ref_id)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_project_set_clip_warp_ref(project_, clip_id, warp_ref_id));
+  ThrowIfError(env, sonare_project_set_clip_warp_ref(project_, clip_id, warp_ref_id));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -477,8 +477,8 @@ Napi::Value ProjectWrap::SetClipWarpMode(const Napi::CallbackInfo& info) {
       !OptionalUint32Arg(env, info, 1, "mode", 0, &mode)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_project_set_clip_warp_mode(
-                                project_, clip_id, static_cast<SonareProjectWarpMode>(mode)));
+  ThrowIfError(env, sonare_project_set_clip_warp_mode(project_, clip_id,
+                                                      static_cast<SonareProjectWarpMode>(mode)));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -497,7 +497,7 @@ Napi::Value ProjectWrap::SetWarpMap(const Napi::CallbackInfo& info) {
   const std::string name_storage = StringProperty(obj, "name", "");
   if (!FillWarpMapDesc(env, obj, &anchors, &desc)) return env.Undefined();
   desc.name = name_storage.empty() ? nullptr : name_storage.c_str();
-  ThrowIfArgumentError(env, sonare_project_set_warp_map(project_, &desc));
+  ThrowIfError(env, sonare_project_set_warp_map(project_, &desc));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -508,7 +508,7 @@ Napi::Value ProjectWrap::RemoveWarpMap(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   uint32_t warp_ref_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "warpRefId", 0, &warp_ref_id)) return env.Undefined();
-  ThrowIfArgumentError(env, sonare_project_remove_warp_map(project_, warp_ref_id));
+  ThrowIfError(env, sonare_project_remove_warp_map(project_, warp_ref_id));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -523,8 +523,7 @@ Napi::Value ProjectWrap::SetTrackMidiDestination(const Napi::CallbackInfo& info)
       !OptionalUint32Arg(env, info, 1, "destinationId", 0, &destination_id)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(
-      env, sonare_project_set_track_midi_destination(project_, track_id, destination_id));
+  ThrowIfError(env, sonare_project_set_track_midi_destination(project_, track_id, destination_id));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -545,8 +544,7 @@ Napi::Value ProjectWrap::SetPartRig(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const char* json = info[3].IsString() ? inserts_json.c_str() : nullptr;
-  ThrowIfArgumentError(env,
-                       sonare_project_set_part_rig(project_, destination_id, part, mode, json));
+  ThrowIfError(env, sonare_project_set_part_rig(project_, destination_id, part, mode, json));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -564,7 +562,7 @@ Napi::Value ProjectWrap::GetPartRig(const Napi::CallbackInfo& info) {
   int mode = 0;
   int present = 0;
   char* inserts = nullptr;
-  ThrowIfArgumentError(
+  ThrowIfError(
       env, sonare_project_get_part_rig(project_, destination_id, part, &mode, &inserts, &present));
   std::string inserts_json = inserts != nullptr ? inserts : "";
   const bool has_inserts = inserts != nullptr;
@@ -589,7 +587,7 @@ Napi::Value ProjectWrap::ClearPartRig(const Napi::CallbackInfo& info) {
       !sonare_node::RequiredMidiByteValue(env, info[1], "part", &part)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_project_clear_part_rig(project_, destination_id, part));
+  ThrowIfError(env, sonare_project_clear_part_rig(project_, destination_id, part));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -604,7 +602,7 @@ Napi::Value ProjectWrap::SetTrackGain(const Napi::CallbackInfo& info) {
       !OptionalFloatArg(env, info, 1, "gain", 1.0f, &gain)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_project_set_track_gain(project_, track_id, gain));
+  ThrowIfError(env, sonare_project_set_track_gain(project_, track_id, gain));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -619,7 +617,7 @@ Napi::Value ProjectWrap::SetTrackMute(const Napi::CallbackInfo& info) {
       !RequiredBoolArg(env, info, 1, "mute", &mute)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_project_set_track_mute(project_, track_id, mute ? 1 : 0));
+  ThrowIfError(env, sonare_project_set_track_mute(project_, track_id, mute ? 1 : 0));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -634,7 +632,7 @@ Napi::Value ProjectWrap::SetTrackSolo(const Napi::CallbackInfo& info) {
       !RequiredBoolArg(env, info, 1, "solo", &solo)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_project_set_track_solo(project_, track_id, solo ? 1 : 0));
+  ThrowIfError(env, sonare_project_set_track_solo(project_, track_id, solo ? 1 : 0));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -649,7 +647,7 @@ Napi::Value ProjectWrap::SetTrackPan(const Napi::CallbackInfo& info) {
       !OptionalFloatArg(env, info, 1, "pan", 0.0f, &pan)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_project_set_track_pan(project_, track_id, pan));
+  ThrowIfError(env, sonare_project_set_track_pan(project_, track_id, pan));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -660,7 +658,7 @@ Napi::Value ProjectWrap::RemoveClip(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   uint32_t clip_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id)) return env.Undefined();
-  ThrowIfArgumentError(env, sonare_project_remove_clip(project_, clip_id));
+  ThrowIfError(env, sonare_project_remove_clip(project_, clip_id));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -675,7 +673,7 @@ Napi::Value ProjectWrap::SetClipGain(const Napi::CallbackInfo& info) {
       !OptionalFloatArg(env, info, 1, "gain", 1.0f, &gain)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_project_set_clip_gain(project_, clip_id, gain));
+  ThrowIfError(env, sonare_project_set_clip_gain(project_, clip_id, gain));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -697,7 +695,7 @@ Napi::Value ProjectWrap::SetClipFade(const Napi::CallbackInfo& info) {
   if (info.Length() > 2 && info[2].IsObject()) {
     if (!ClipFadeFromObject(env, info[2].As<Napi::Object>(), &fade_out)) return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_project_set_clip_fade(project_, clip_id, &fade_in, &fade_out));
+  ThrowIfError(env, sonare_project_set_clip_fade(project_, clip_id, &fade_in, &fade_out));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -717,7 +715,7 @@ Napi::Value ProjectWrap::SetClipTakes(const Napi::CallbackInfo& info) {
   if (!ParseClipTakes(env, info.Length() > 1 ? info[1] : env.Undefined(), &takes, &name_storage)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(
+  ThrowIfError(
       env, sonare_project_set_clip_takes(project_, clip_id, takes.empty() ? nullptr : takes.data(),
                                          takes.size(), active_take_id));
   return env.Undefined();
@@ -734,7 +732,7 @@ Napi::Value ProjectWrap::SetClipCompSegments(const Napi::CallbackInfo& info) {
   if (!ParseClipCompSegments(env, info.Length() > 1 ? info[1] : env.Undefined(), &segments)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(
+  ThrowIfError(
       env, sonare_project_set_clip_comp_segments(
                project_, clip_id, segments.empty() ? nullptr : segments.data(), segments.size()));
   return env.Undefined();
@@ -755,8 +753,8 @@ Napi::Value ProjectWrap::SetClipLoop(const Napi::CallbackInfo& info) {
       !OptionalDoubleArg(env, info, 3, "loopCrossfadePpq", 0.0, &loop_crossfade_ppq)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_project_set_clip_loop(project_, clip_id, loop_mode,
-                                                         loop_length_ppq, loop_crossfade_ppq));
+  ThrowIfError(env, sonare_project_set_clip_loop(project_, clip_id, loop_mode, loop_length_ppq,
+                                                 loop_crossfade_ppq));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -771,7 +769,7 @@ Napi::Value ProjectWrap::SetClipSource(const Napi::CallbackInfo& info) {
       !OptionalUint32Arg(env, info, 1, "sourceId", 0, &source_id)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env, sonare_project_set_clip_source(project_, clip_id, source_id));
+  ThrowIfError(env, sonare_project_set_clip_source(project_, clip_id, source_id));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -791,9 +789,8 @@ Napi::Value ProjectWrap::SetAudioSourceMetadata(const Napi::CallbackInfo& info) 
   const std::string content_hash = sonare_node::node_narrow_string(env, info[1], "contentHash");
   const std::string external_stem_role =
       sonare_node::node_narrow_string(env, info[2], "externalStemRole");
-  ThrowIfArgumentError(
-      env, sonare_project_set_audio_source_metadata(project_, source_id, content_hash.c_str(),
-                                                    external_stem_role.c_str()));
+  ThrowIfError(env, sonare_project_set_audio_source_metadata(
+                        project_, source_id, content_hash.c_str(), external_stem_role.c_str()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -809,7 +806,7 @@ Napi::Value ProjectWrap::DuplicateClip(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   uint32_t out_id = 0;
-  ThrowIfArgumentError(env, sonare_project_duplicate_clip(project_, clip_id, start_ppq, &out_id));
+  ThrowIfError(env, sonare_project_duplicate_clip(project_, clip_id, start_ppq, &out_id));
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, out_id);
   SONARE_NODE_CATCH(env)
@@ -821,7 +818,7 @@ Napi::Value ProjectWrap::RemoveTrack(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   uint32_t track_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id)) return env.Undefined();
-  ThrowIfArgumentError(env, sonare_project_remove_track(project_, track_id));
+  ThrowIfError(env, sonare_project_remove_track(project_, track_id));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -839,7 +836,7 @@ Napi::Value ProjectWrap::RenameTrack(const Napi::CallbackInfo& info) {
   std::string name;
   if (has_name && !OptionalStringArg(env, info, 1, "name", "", &name)) return env.Undefined();
   const char* name_ptr = has_name ? name.c_str() : nullptr;
-  ThrowIfArgumentError(env, sonare_project_rename_track(project_, track_id, name_ptr));
+  ThrowIfError(env, sonare_project_rename_track(project_, track_id, name_ptr));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -862,8 +859,7 @@ Napi::Value ProjectWrap::SetTrackRoute(const Napi::CallbackInfo& info) {
   }
   const char* strip_ptr = has_strip ? strip.c_str() : nullptr;
   const char* output_ptr = has_output ? output.c_str() : nullptr;
-  ThrowIfArgumentError(env,
-                       sonare_project_set_track_route(project_, track_id, strip_ptr, output_ptr));
+  ThrowIfError(env, sonare_project_set_track_route(project_, track_id, strip_ptr, output_ptr));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -893,7 +889,7 @@ Napi::Value ProjectWrap::AddAutomationLane(const Napi::CallbackInfo& info) {
   }
   uint32_t out_target_param_id = 0;
   if (!has_target_kind) {
-    ThrowIfArgumentError(
+    ThrowIfError(
         env, sonare_project_add_automation_lane(project_, track_id, &desc, &out_target_param_id));
   } else {
     SonareAutomationLaneDescEx desc_ex{};
@@ -901,8 +897,8 @@ Napi::Value ProjectWrap::AddAutomationLane(const Napi::CallbackInfo& info) {
     desc_ex.target_kind = static_cast<SonareAutomationTargetKind>(target_kind);
     desc_ex.points = desc.points;
     desc_ex.point_count = desc.point_count;
-    ThrowIfArgumentError(env, sonare_project_add_automation_lane_ex(project_, track_id, &desc_ex,
-                                                                    &out_target_param_id));
+    ThrowIfError(env, sonare_project_add_automation_lane_ex(project_, track_id, &desc_ex,
+                                                            &out_target_param_id));
   }
   if (env.IsExceptionPending()) return env.Undefined();
   return Napi::Number::New(env, static_cast<double>(out_target_param_id));
@@ -937,15 +933,15 @@ Napi::Value ProjectWrap::EditAutomationLane(const Napi::CallbackInfo& info) {
     return env.Undefined();  // exception already pending
   }
   if (!has_target_kind) {
-    ThrowIfArgumentError(
-        env, sonare_project_edit_automation_lane(project_, track_id, target_param_id, &desc));
+    ThrowIfError(env,
+                 sonare_project_edit_automation_lane(project_, track_id, target_param_id, &desc));
   } else {
     SonareAutomationLaneDescEx desc_ex{};
     desc_ex.target_param_id = desc.target_param_id;
     desc_ex.target_kind = static_cast<SonareAutomationTargetKind>(target_kind);
     desc_ex.points = desc.points;
     desc_ex.point_count = desc.point_count;
-    ThrowIfArgumentError(
+    ThrowIfError(
         env, sonare_project_edit_automation_lane_ex(project_, track_id, target_param_id, &desc_ex));
   }
   return env.Undefined();
@@ -962,8 +958,7 @@ Napi::Value ProjectWrap::RemoveAutomationLane(const Napi::CallbackInfo& info) {
       !OptionalUint32Arg(env, info, 1, "targetParamId", 0, &target_param_id)) {
     return env.Undefined();
   }
-  ThrowIfArgumentError(env,
-                       sonare_project_remove_automation_lane(project_, track_id, target_param_id));
+  ThrowIfError(env, sonare_project_remove_automation_lane(project_, track_id, target_param_id));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -972,7 +967,7 @@ Napi::Value ProjectWrap::Undo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
-  ThrowIfArgumentError(env, sonare_project_undo(project_));
+  ThrowIfError(env, sonare_project_undo(project_));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -981,7 +976,7 @@ Napi::Value ProjectWrap::Redo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
-  ThrowIfArgumentError(env, sonare_project_redo(project_));
+  ThrowIfError(env, sonare_project_redo(project_));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -990,7 +985,7 @@ Napi::Value ProjectWrap::ClearHistory(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
-  ThrowIfArgumentError(env, sonare_project_clear_history(project_));
+  ThrowIfError(env, sonare_project_clear_history(project_));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -1005,7 +1000,7 @@ Napi::Value ProjectWrap::SetMaxUndoDepth(const Napi::CallbackInfo& info) {
   // check has to happen here, before any native state is touched.
   size_t depth = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "depth", &depth)) return env.Undefined();
-  ThrowIfArgumentError(env, sonare_project_set_max_undo_depth(project_, depth));
+  ThrowIfError(env, sonare_project_set_max_undo_depth(project_, depth));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -1016,7 +1011,7 @@ Napi::Value ProjectWrap::SetMaxHistoryBytes(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   size_t bytes = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "bytes", &bytes)) return env.Undefined();
-  ThrowIfArgumentError(env, sonare_project_set_max_history_bytes(project_, bytes));
+  ThrowIfError(env, sonare_project_set_max_history_bytes(project_, bytes));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

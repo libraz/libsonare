@@ -23,7 +23,7 @@ import pytest
 from numpy.typing import NDArray
 
 import libsonare
-from libsonare import SonareError, SonareValueError
+from libsonare import SonareValueError
 
 from ._helpers import LIB_AVAILABLE, sine
 
@@ -232,15 +232,13 @@ class TestNormalizeStereoPairRefusals:
     def test_a_non_positive_sample_rate_is_refused_by_the_c_layer(self, call: object) -> None:
         """And it is the C layer refusing it, not a Python-side guard.
 
-        The negative type assertion matters because ``SonareValueError``
-        subclasses ``SonareError``: a bare ``pytest.raises(SonareError)`` would
-        stay green if this ever started being caught in the facade, which would
-        mean the C validation had stopped being exercised at all.
+        Nothing on the Python side screens the rate, so the plain C-layer
+        message is what arrives.
         """
         left, right = _pair()
-        with pytest.raises(SonareError) as caught:
+        with pytest.raises(SonareValueError) as caught:
             call(left, right, 0)  # type: ignore[operator]
-        assert not isinstance(caught.value, SonareValueError)
+        assert caught.value.code == int(libsonare.ErrorCode.INVALID_PARAMETER)
 
     @pytest.mark.parametrize("call", [libsonare.normalize_stereo, libsonare.normalize_rms_stereo])
     def test_a_positive_target_is_refused_by_name(self, call: object) -> None:
@@ -262,16 +260,16 @@ class TestNormalizeStereoPairRefusals:
 
         The scan the flag skips is the one that reports an index; the C entry
         runs its own finite check, so a NaN is still refused -- without the
-        index, and as the base ``SonareError``. The negative type assertion is
-        what proves the flag was honoured: were the facade still scanning, this
+        index. The missing index is what proves the flag was honoured: were the
+        facade still scanning, this
         would arrive as ``SonareValueError`` and the test would pass anyway.
         """
         left, right = _pair()
         spoiled = right.copy()
         spoiled[7] = np.nan
-        with pytest.raises(SonareError) as caught:
+        with pytest.raises(SonareValueError) as caught:
             call(left, spoiled, SR, validate=False)  # type: ignore[operator]
-        assert not isinstance(caught.value, SonareValueError)
+        assert "index" not in str(caught.value)
 
         # Control: the same call on a clean pair is accepted with the flag off,
         # so the refusal above is about the NaN rather than about validate=False.

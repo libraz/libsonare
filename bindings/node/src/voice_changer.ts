@@ -1,4 +1,3 @@
-import { ErrorCode } from './errors.js';
 import { addon } from './native.js';
 import type {
   RealtimeVoiceChangerConfig,
@@ -8,21 +7,6 @@ import type {
 } from './types.js';
 import type { ValidateOptions } from './validation.js';
 import { assertAudioInput, optionsBag, requestObject } from './validation.js';
-
-/**
- * The core refuses an out-of-range or non-finite field, an unreachable absolute formant warp and
- * a live formant-mode change with a coded library failure; at this facade they are argument
- * refusals, so they are a RangeError like every other out-of-domain argument.
- */
-function configRefusal(error: unknown): unknown {
-  if (
-    (error as { code?: unknown }).code === ErrorCode.InvalidParameter &&
-    /formant (mode|factor)|out of range|must be finite/.test((error as Error).message)
-  ) {
-    return new RangeError((error as Error).message);
-  }
-  return error;
-}
 
 /**
  * The flat POD shape (recognised by its `retuneSemitones` key) must carry `formantMode`,
@@ -48,11 +32,7 @@ export class RealtimeVoiceChanger {
 
   constructor(options: RealtimeVoiceChangerOptions) {
     requirePodFormantMode(options.preset);
-    try {
-      this.native = new addon.RealtimeVoiceChanger(options.preset ?? 'neutral-monitor');
-    } catch (error) {
-      throw configRefusal(error);
-    }
+    this.native = new addon.RealtimeVoiceChanger(options.preset ?? 'neutral-monitor');
     try {
       this.native.prepare(options.sampleRate, options.maxBlockSize ?? 128, options.channels ?? 1);
     } catch (error) {
@@ -72,11 +52,7 @@ export class RealtimeVoiceChanger {
     // The shared native parser recognizes the flat POD produced by
     // realtimeVoiceChangerPresetConfig, so bindings never duplicate its 37-field mapping.
     requirePodFormantMode(config);
-    try {
-      this.native.setConfig(config);
-    } catch (error) {
-      throw configRefusal(error);
-    }
+    this.native.setConfig(config);
   }
 
   configJson(): string {
@@ -208,22 +184,13 @@ export function voiceChange(
       : requestObject('voiceChange', samples);
   assertAudioInput('voiceChange', request.samples, request.sampleRate ?? 22050, request);
   const formantMode = request.formantMode ?? 'relative';
-  try {
-    return addon.voiceChange(
-      request.samples,
-      request.sampleRate ?? 22050,
-      request.pitchSemitones ?? 0.0,
-      request.formantFactor ?? 1.0,
-      formantMode,
-    );
-  } catch (error) {
-    // The core refuses only on an argument (non-finite, out-of-range factor, unreachable absolute
-    // request, unknown mode), so it is a RangeError in every formant mode.
-    if ((error as { code?: unknown }).code === ErrorCode.InvalidParameter) {
-      throw new RangeError((error as Error).message);
-    }
-    throw error;
-  }
+  return addon.voiceChange(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request.pitchSemitones ?? 0.0,
+    request.formantFactor ?? 1.0,
+    formantMode,
+  );
 }
 
 export interface VoiceChangeRealtimeOptions extends ValidateOptions {

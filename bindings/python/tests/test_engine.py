@@ -15,6 +15,7 @@ from libsonare import (
     ParameterInfo,
     RealtimeEngine,
     SonareError,
+    SonareValueError,
     engine_abi_version,
     voice_changer_abi_version,
 )
@@ -242,7 +243,7 @@ def test_engine_resolve_and_set_bus_master_insert_automation_ids() -> None:
         engine.set_bus_strip_insert_param_by_name(1, 0, "band0.gainDb", -3.0)
 
         # Unknown bus / insert / name are rejected.
-        with pytest.raises(SonareError) as bad_bus_error:
+        with pytest.raises(SonareValueError) as bad_bus_error:
             engine.resolve_bus_insert_automation_id(9, 0, "band0.gainDb")
         assert bad_bus_error.value.code == 4
         with pytest.raises(SonareError):

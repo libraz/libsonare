@@ -301,7 +301,6 @@ using sonare_node::RequiredUint32Arg;
 using sonare_node::RequiredUint32Property;
 using sonare_node::RequiredWordValue;
 using sonare_node::StringProperty;
-using sonare_node::ThrowIfArgumentError;
 using sonare_node::ThrowIfError;
 using sonare_node::ThrowIfRealtimeError;
 using sonare_node::Uint32Property;

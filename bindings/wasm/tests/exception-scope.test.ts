@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ErrorCode, init, isSonareError, noteToHz, RealtimeEngine } from '../dist/index.js';
+import { expectArgumentRefusal } from './_helpers';
 
 // emscripten defaults to DISABLE_EXCEPTION_CATCHING=1, which elides landing
 // pads while compiling, so a `catch` in a unit built without -fexceptions is
@@ -27,8 +28,7 @@ describe('WASM exception scope', () => {
       } catch (error) {
         thrown = error;
       }
-      expect(isSonareError(thrown), name).toBe(true);
-      expect((thrown as { code: number }).code, name).toBe(ErrorCode.InvalidParameter);
+      expectArgumentRefusal(thrown, RangeError, name);
     }
   });
 

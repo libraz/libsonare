@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 
 import libsonare
-from libsonare import ErrorCode, SonareError, SonareValueError
+from libsonare import ErrorCode, SonareValueError
 
 from ._helpers import LIB_AVAILABLE
 
@@ -131,7 +131,7 @@ def test_invalid_meter_options_are_rejected(kwargs: dict[str, Any], reason: str)
     carry the same error code.
     """
     samples = _accented_signal(bars=1)
-    with pytest.raises(SonareError) as excinfo:
+    with pytest.raises(SonareValueError) as excinfo:
         libsonare.analyze(samples, sample_rate=22050, **kwargs)
     assert excinfo.value.code == int(ErrorCode.INVALID_PARAMETER), reason
 

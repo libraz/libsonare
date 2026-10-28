@@ -151,12 +151,15 @@ val vectorToInt32Array(const std::vector<int>& vec);
 val vectorToUint8Array(const uint8_t* data, std::size_t n);
 val vectorToUint8Array(const std::vector<uint8_t>& vec);
 /// @brief An argument the binding layer refused itself, before any library call.
-/// @details The refusal contract of the JS surface: a wrong-typed argument is a
-///   JS `TypeError` and an out-of-domain one a `RangeError`, while a failure the
-///   library or an object's state reports stays a coded `SonareError`. This base
-///   is mapped to the JS class by @c sonareExceptionInfo through @ref kind. It
-///   derives from SonareException(InvalidParameter) so a C++ handler that catches
-///   the library exception keeps catching it.
+/// @details The refusal contract of the JS surface is by cause, not by which layer
+///   refused: a wrong-typed argument is a JS `TypeError` and an out-of-domain one a
+///   `RangeError`, whether this layer or the library refused it. Every
+///   SonareException carrying InvalidParameter is such a refusal and
+///   @c sonareExceptionInfo surfaces it as a `RangeError`; this base only chooses
+///   the class (@ref kind), so a `TypeError` is possible. Failures that are not
+///   an argument (state, unsupported, allocation, decode, cancellation) stay a
+///   coded `SonareError`. It derives from SonareException(InvalidParameter) so a
+///   C++ handler that catches the library exception keeps catching it.
 class WasmArgumentError : public sonare::SonareException {
  public:
   /// @brief The JS error class a refusal surfaces as.

@@ -18,7 +18,6 @@
  * ```
  */
 
-import { ErrorCode, SonareError } from './errors.js';
 import './lifetime.js';
 import {
   assertAbiCompatible,
@@ -1309,11 +1308,7 @@ function resolveVoicePresetOrdinal(preset: VoicePresetId | number): number {
   }
   const ordinal = VOICE_PRESET_ORDINALS.indexOf(preset);
   if (ordinal < 0) {
-    throw new SonareError(
-      ErrorCode.InvalidParameter,
-      'InvalidParameter',
-      `Unknown voice character preset: ${preset}`,
-    );
+    throw new RangeError(`Unknown voice character preset: ${preset}`);
   }
   return ordinal;
 }

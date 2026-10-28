@@ -41,7 +41,6 @@ from ._runtime import (
     SonareValueError,
     _call_float_transform,
     _check,
-    _check_argument,
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
@@ -805,11 +804,10 @@ def note_targets_from_smf(data: bytes | bytearray, *, track_index: int = 0) -> l
 
     Raises:
         SonareValueError: If ``track_index`` is not a whole number fitting in a C
-            ``int``.
+            ``int``, or the file has no MIDI-bearing track at ``track_index``.
         SonareError: ``INVALID_FORMAT`` when the bytes are not a readable SMF,
-            ``INVALID_PARAMETER`` when the file has no MIDI-bearing track at
-            ``track_index``, or ``NOT_SUPPORTED`` when the library was built
-            without the arrangement subsystem.
+            or ``NOT_SUPPORTED`` when the library was built without the
+            arrangement subsystem.
 
     Example:
         >>> targets = libsonare.note_targets_from_smf(Path("melody.mid").read_bytes())
@@ -1127,7 +1125,7 @@ def transcribe(
 
     out = SonareTranscribeResult()
     try:
-        _check_argument(
+        _check(
             lib.sonare_transcribe(
                 c_array,
                 _to_c_size_t(length, "length"),

@@ -6,15 +6,13 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
-  ErrorCode,
   init,
-  isSonareError,
   Mixer,
   meteringTruePeakDb,
   mixingScenePresetJson,
   mixStereo,
 } from '../dist/index.js';
-import { assertStripIndex, sine } from './_helpers';
+import { assertStripIndex, expectRefusalOf, sine } from './_helpers';
 
 const SR = 48000;
 const BLOCK = 512;
@@ -537,15 +535,8 @@ describe('Mixer runtime controls (WASM)', () => {
       return (JSON.parse(mixer.toSceneJson()) as { connections: never[] }).connections;
     }
 
-    function refusal(call: () => void): { code: number; message: string } {
-      try {
-        call();
-      } catch (error) {
-        expect(isSonareError(error)).toBe(true);
-        const coded = error as { code: number; message: string };
-        return { code: coded.code, message: coded.message };
-      }
-      throw new Error('expected the call to throw');
+    function refusal(call: () => void): { message: string } {
+      return { message: expectRefusalOf(call).message };
     }
 
     // Runs a few blocks so the bus meter and master output have settled.
@@ -580,7 +571,7 @@ describe('Mixer runtime controls (WASM)', () => {
       }
     });
 
-    it('refuses an invalid edit with InvalidParameter naming the ids and changes nothing', () => {
+    it('refuses an invalid edit with a RangeError naming the ids and changes nothing', () => {
       const mixer = Mixer.fromSceneJson(emptyScene, SR, BLOCK);
       try {
         mixer.addStrip('a');
@@ -596,8 +587,7 @@ describe('Mixer runtime controls (WASM)', () => {
           ['sub2', 'sub', /sub2.*sub|sub.*sub2/],
         ];
         for (const [source, bus, pattern] of cases) {
-          const { code, message } = refusal(() => mixer.setOutputBus(source, bus));
-          expect(code, `${source} -> ${bus}`).toBe(ErrorCode.InvalidParameter);
+          const { message } = refusal(() => mixer.setOutputBus(source, bus));
           expect(message, `${source} -> ${bus}`).toMatch(pattern);
           expect(mixer.toSceneJson()).toBe(before);
         }

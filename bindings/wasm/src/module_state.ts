@@ -44,9 +44,10 @@ export function nativeExceptionPtr(error: unknown): number | null {
 
 /**
  * Turn a thrown native exception pointer into a {@link SonareError}, or into a
- * `TypeError` / `RangeError` when the binding refused an argument itself (a
- * wrong-typed or out-of-domain value, as opposed to a library or object-state
- * failure, which stays a coded `SonareError`). The bound `sonareExceptionInfo`
+ * `TypeError` / `RangeError` when an argument was refused (a wrong-typed or
+ * out-of-domain value, whether the binding or the library refused it, as opposed
+ * to an object-state or other non-argument failure, which stays a coded
+ * `SonareError`). The bound `sonareExceptionInfo`
  * decodes the pointer back into { code, codeName, message, kind }, then
  * `sonareReleaseException` drops the reference emscripten's `__cxa_throw` took
  * before rethrowing the pointer into JS.

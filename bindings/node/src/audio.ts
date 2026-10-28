@@ -124,7 +124,7 @@ export class Audio {
    *
    * @param path - Source file path.
    * @param channelIndex - Zero-based channel to load.
-   * @throws SonareError with `codeName: 'InvalidParameter'` when
+   * @throws RangeError when
    *   `channelIndex` is negative or names no channel the file has, and the same
    *   load errors {@link fromFile} raises.
    *
