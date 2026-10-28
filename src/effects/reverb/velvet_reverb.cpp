@@ -20,7 +20,7 @@ constexpr float kShelfHighGain = 0.5f;
 constexpr float kT60Drop = 1000.0f;  // 60 dB amplitude ratio for T60.
 
 // Field domains read by validate_config and by live automation.
-constexpr float kMinReverbTimeSeconds = 0.05f;
+constexpr float kMinReverbTimeSeconds = VelvetReverbConfig::kMinReverbTimeSeconds;
 constexpr float kMinDensityHz = 1000.0f;
 constexpr float kMaxDensityHz = 3000.0f;
 

@@ -14,7 +14,11 @@
 namespace sonare::effects::reverb {
 
 struct FdnReverbConfig {
-  float decay = 0.55f;      ///< T60_lf = max(0.01, decay*10) seconds, [0, 1.5].
+  /// Maximum accepted decay (T60_lf of 15 s). Shared with the insert factory, which derives
+  /// the {decaySec} ceiling from it.
+  static constexpr float kMaxDecay = 1.5f;
+
+  float decay = 0.55f;      ///< T60_lf = max(0.01, decay*10) seconds, [0, kMaxDecay].
   float hf_damping = 0.5f;  ///< HF decay shortening, [0, 1].
   float dry_wet = 0.35f;    ///< [0, 1].
 };

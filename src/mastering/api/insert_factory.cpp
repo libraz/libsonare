@@ -96,6 +96,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "effects/common/control_ranges.h"
+#include "effects/common/field_domain.h"
 #include "effects/delay/stereo_delay.h"
 #include "effects/filter/vowel_filter.h"
 #include "effects/modulation/auto_wah.h"
@@ -706,6 +708,16 @@ void note_room_coupling(const ParamMap& params) {
 }
 #endif
 
+// A seed is an unsigned field read through a signed key, so a negative one is refused
+// by name rather than wrapped or raised to zero.
+unsigned non_negative_seed(const ParamMap& params, unsigned fallback) {
+  const int seed = detail::i(params, "seed", static_cast<int>(fallback), kNone);
+  if (seed < 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "seed must be non-negative");
+  }
+  return static_cast<unsigned>(seed);
+}
+
 std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap& params,
                                          const Value* json_root) {
   using namespace sonare::effects::reverb;
@@ -729,9 +741,14 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     params.note_meta("preDelayMs", kMs);
     if (params.find("decaySec") != params.end()) {
       constexpr float kTankLoopSeconds = 21589.0f / 29761.0f;  // both halves at ref rate
-      const float decay_sec = std::max(0.05f, f(params, "decaySec", 5.0f, kSecondsLog));
-      const float feedback = std::exp(-6.907755f * kTankLoopSeconds / (4.0f * decay_sec));
-      config.decay = std::min(0.98f, std::max(0.0f, feedback));
+      constexpr float kMinDecaySeconds = 0.05f;
+      // The tank feedback reaches the core's ceiling at this tail length.
+      const float max_decay_sec =
+          -6.907755f * kTankLoopSeconds / (4.0f * std::log(effects::common::kMaxFeedback));
+      const float decay_sec = f(params, "decaySec", 5.0f, kSecondsLog);
+      effects::common::require_in_domain(name.c_str(), "decaySec", decay_sec, kMinDecaySeconds,
+                                         max_decay_sec);
+      config.decay = std::exp(-6.907755f * kTankLoopSeconds / (4.0f * decay_sec));
     } else {
       config.decay = f(params, "decay", config.decay, kNone);
     }
@@ -773,12 +790,13 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     params.note_meta("decaySec", kSecondsLog);
     if (params.find("decaySec") != params.end()) {
       // decaySec is the approximate RT60 tail length in seconds. The FDN's
-      // T60_lf = max(0.01, clamp(decay, 0, 1.5) * 10), so decaySec maps to
-      // T60 directly via decay = decaySec / 10. The core clamps decay to 1.5
-      // (T60 = 15 s); clamp here too so an out-of-range request like
-      // {decaySec:40} resolves to the documented 15 s ceiling rather than being
-      // silently truncated only after construction.
-      config.decay = std::clamp(f(params, "decaySec", 5.5f, kSecondsLog) / 10.0f, 0.0f, 1.5f);
+      // T60_lf = max(0.01, decay * 10), so decaySec maps to T60 directly via
+      // decay = decaySec / 10, and the core's decay ceiling is the tail ceiling.
+      constexpr float kDecayPerSecond = 0.1f;
+      const float decay_sec = f(params, "decaySec", 5.5f, kSecondsLog);
+      effects::common::require_in_domain(name.c_str(), "decaySec", decay_sec, 0.0f,
+                                         FdnReverbConfig::kMaxDecay / kDecayPerSecond);
+      config.decay = decay_sec * kDecayPerSecond;
     } else {
       config.decay = f(params, "decay", config.decay, kNone);
     }
@@ -798,14 +816,19 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
       // Velvet's effective T60 = reverb_time_s * (0.5 + decay). To make decaySec
       // mean approximately the same RT60 as FDN (decaySec == ~T60), set
       // reverb_time_s = decaySec / (0.5 + decay) so the product lands on decaySec.
-      const float decay_factor = 0.5f + std::clamp(config.decay, 0.0f, 1.0f);
-      config.reverb_time_s =
-          std::clamp(std::max(0.0f, f(params, "decaySec", config.reverb_time_s, kSecondsLog)) /
-                         std::max(0.01f, decay_factor),
-                     0.05f, VelvetReverbConfig::kMaxReverbTimeSeconds);
+      const float decay_factor = 0.5f + config.decay;
+      const float decay_sec = f(params, "decaySec", config.reverb_time_s, kSecondsLog);
+      // A decay outside its own domain is refused by the core; the derived tail
+      // is only checked against the range it implies for a valid one.
+      if (effects::common::in_domain(config.decay, 0.0f, 1.0f)) {
+        effects::common::require_in_domain(
+            name.c_str(), "decaySec", decay_sec,
+            VelvetReverbConfig::kMinReverbTimeSeconds * decay_factor,
+            VelvetReverbConfig::kMaxReverbTimeSeconds * decay_factor);
+      }
+      config.reverb_time_s = decay_sec / decay_factor;
     } else {
-      config.reverb_time_s = std::clamp(f(params, "reverbTimeS", config.reverb_time_s, kSecondsLog),
-                                        0.05f, VelvetReverbConfig::kMaxReverbTimeSeconds);
+      config.reverb_time_s = f(params, "reverbTimeS", config.reverb_time_s, kSecondsLog);
     }
     params.note_effective("reverbTimeS", config.reverb_time_s);
     config.density_hz = f(params, "densityHz", config.density_hz, kHz);
@@ -826,15 +849,15 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     params.note_kind("decaySec", ParamKind::Number);
     params.note_meta("decaySec", kSecondsLog);
     if (params.find("decaySec") != params.end()) {
-      // Clamp to the synthesizer's ceiling at construction so an out-of-range
-      // request like {decaySec:40} resolves to the documented maximum tail
-      // rather than being silently truncated only later in prepare().
-      config.decay_sec = std::clamp(f(params, "decaySec", config.decay_sec, kSecondsLog), 0.0f,
-                                    ConvolutionReverbConfig::kMaxDecaySeconds);
+      // An out-of-range request like {decaySec:40} is refused by key, not truncated
+      // to the ceiling.
+      config.decay_sec = f(params, "decaySec", config.decay_sec, kSecondsLog);
+      effects::common::require_in_domain(name.c_str(), "decaySec", config.decay_sec, 0.0f,
+                                         ConvolutionReverbConfig::kMaxDecaySeconds);
     }
     config.pre_delay_ms = f(params, "preDelayMs", config.pre_delay_ms, kMs);
     config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
-    config.seed = static_cast<uint32_t>(std::max(0, detail::i(params, "seed", config.seed, kNone)));
+    config.seed = non_negative_seed(params, config.seed);
     auto reverb = std::make_unique<ConvolutionReverb>(config);
     const std::vector<float> ir = read_ir_f32_base64_key(json_root, "irF32Base64");
     if (!ir.empty()) {
@@ -863,9 +886,8 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     // built offline or as an insert.
     config.absorption = f(params, "absorption", config.absorption, kNone);
     sonare::acoustic::validate_material_coefficient(config.absorption, "absorption");
-    config.ism_order = std::max(0, detail::i(params, "ismOrder", config.ism_order, kCount));
-    config.seed = static_cast<unsigned>(
-        std::max(0, detail::i(params, "seed", static_cast<int>(config.seed), kNone)));
+    config.ism_order = detail::i(params, "ismOrder", config.ism_order, kCount);
+    config.seed = non_negative_seed(params, config.seed);
     config.max_seconds = f(params, "maxSeconds", config.max_seconds, kSeconds);
     config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
     config.air_absorption_enabled =
@@ -906,8 +928,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
         f(params, "sourceTailSuppression", config.source_tail_suppression, kNone);
     config.wet = f(params, "dryWet", config.wet, kNone);
     config.ism_order = detail::i(params, "ismOrder", config.ism_order, kCount);
-    config.seed = static_cast<unsigned>(
-        std::max(0, detail::i(params, "seed", static_cast<int>(config.seed), kNone)));
+    config.seed = non_negative_seed(params, config.seed);
     config.max_seconds = f(params, "maxSeconds", config.max_seconds, kSeconds);
     config.late_model = b(params, "preferEyring", true) ? sonare::acoustic::ReverbModel::Eyring
                                                         : sonare::acoustic::ReverbModel::Sabine;

@@ -14,6 +14,8 @@
 namespace sonare::effects::reverb {
 
 struct VelvetReverbConfig {
+  /// Minimum accepted base reverb time.
+  static constexpr float kMinReverbTimeSeconds = 0.05f;
   /// Maximum accepted base reverb time. Keeps ring-buffer allocation bounded.
   static constexpr float kMaxReverbTimeSeconds = 12.0f;
   /// Maximum taps per channel. Only taps inside the early partition are summed
@@ -26,9 +28,10 @@ struct VelvetReverbConfig {
   static constexpr int kMaxTapCount = 65536;
 
   /// @brief Scales reverb_time_s: effective T60 = reverb_time_s * (0.5 + decay).
-  float decay = 0.45f;         ///< [0, 1].
-  float dry_wet = 0.3f;        ///< [0, 1].
-  float reverb_time_s = 1.5f;  ///< Base T60 in seconds, [0.05, kMaxReverbTimeSeconds].
+  float decay = 0.45f;   ///< [0, 1].
+  float dry_wet = 0.3f;  ///< [0, 1].
+  float reverb_time_s =
+      1.5f;  ///< Base T60 in seconds, [kMinReverbTimeSeconds, kMaxReverbTimeSeconds].
   float density_hz = 2000.0f;  ///< Velvet pulse density, [1000, 3000].
   bool enable_shelf = true;    ///< Post one-pole high-shelf HF damping at 6 kHz.
 };

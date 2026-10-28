@@ -18,7 +18,7 @@ using constants::kDefaultDawSampleRate;
 using sonare::constants::kEpsilon;
 
 namespace {
-constexpr float kMaxDecay = 1.5f;  // T60_lf of 15 s.
+constexpr float kMaxDecay = FdnReverbConfig::kMaxDecay;
 }  // namespace
 
 void FdnReverb::validate_config(const FdnReverbConfig& config) {

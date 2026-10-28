@@ -9,8 +9,10 @@
 
 #include <algorithm>
 #include <array>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -1526,14 +1528,68 @@ TEST_CASE("processor_names() lists every effects insert the apply path dispatche
 }
 
 #ifdef SONARE_WITH_FX
-TEST_CASE("velvet insert factory bounds excessive reverb time",
+TEST_CASE("velvet insert factory refuses an out-of-range reverb time",
           "[mastering][insert_factory][reverb]") {
+  REQUIRE_THROWS_AS(
+      make_insert("effects.reverb.velvet", R"({"reverbTimeS":40,"densityHz":3000,"decay":1})"),
+      sonare::SonareException);
   auto processor =
-      make_insert("effects.reverb.velvet", R"({"reverbTimeS":40,"densityHz":3000,"decay":1})");
+      make_insert("effects.reverb.velvet", R"({"reverbTimeS":12,"densityHz":3000,"decay":1})");
   REQUIRE(processor != nullptr);
   processor->prepare(48000.0, 512);
-  // The 18 s cap, followed by the 20 Hz DC blocker's ring (under 100 ms).
+  // The 18 s effective T60 at the cap, followed by the 20 Hz DC blocker's ring (under 100 ms).
   REQUIRE(processor->tail_samples() <= 18 * 48000 + 48000 / 10);
+}
+
+TEST_CASE("reverb inserts refuse an out-of-range decaySec by key and accept the ceiling",
+          "[mastering][insert_factory][reverb]") {
+  using Catch::Matchers::ContainsSubstring;
+  struct Case {
+    const char* name;
+    const char* too_low;
+    const char* too_high;
+    const char* at_ceiling;
+  };
+  // Ceilings: convolution 12 s, fdn 15 s, velvet 12 s * (0.5 + 0.45), dattorro ~62 s.
+  const Case cases[] = {
+      {"effects.reverb.convolution", R"({"decaySec":-1})", R"({"decaySec":12.5})",
+       R"({"decaySec":12})"},
+      {"effects.reverb.fdn", R"({"decaySec":-1})", R"({"decaySec":40})", R"({"decaySec":15})"},
+      {"effects.reverb.velvet", R"({"decaySec":0.01})", R"({"decaySec":12})", R"({"decaySec":11})"},
+      {"effects.reverb.dattorro", R"({"decaySec":0.01})", R"({"decaySec":200})",
+       R"({"decaySec":60})"},
+  };
+  for (const auto& c : cases) {
+    INFO(c.name);
+    REQUIRE_THROWS_WITH(make_insert(c.name, c.too_low), ContainsSubstring("decaySec"));
+    REQUIRE_THROWS_WITH(make_insert(c.name, c.too_high), ContainsSubstring("decaySec"));
+    REQUIRE(make_insert(c.name, c.at_ceiling) != nullptr);
+    REQUIRE(make_insert(c.name, "{}") != nullptr);
+  }
+  REQUIRE_THROWS_AS(make_insert("effects.reverb.fdn", R"({"decaySec":40})"),
+                    sonare::SonareException);
+}
+
+TEST_CASE("reverb inserts publish the decaySec range they enforce",
+          "[mastering][insert_factory][reverb][catalog]") {
+  const auto params =
+      sonare::util::json::parse(insert_param_info_json("effects.reverb.convolution"));
+  bool found = false;
+  for (const auto& param : params.as_array()) {
+    if (param["name"].as_string() != "decaySec") continue;
+    found = true;
+    REQUIRE(param["min"].as_float() == 0.0f);
+    REQUIRE(param["max"].as_float() ==
+            Catch::Approx(sonare::effects::reverb::ConvolutionReverbConfig::kMaxDecaySeconds)
+                .margin(0.01));
+  }
+  REQUIRE(found);
+}
+
+TEST_CASE("room reverb inserts refuse a negative seed", "[mastering][insert_factory][reverb]") {
+  REQUIRE_THROWS_AS(make_insert("effects.reverb.convolution", R"({"seed":-1})"),
+                    sonare::SonareException);
+  REQUIRE(make_insert("effects.reverb.convolution", R"({"seed":7})") != nullptr);
 }
 #endif  // SONARE_WITH_FX
 

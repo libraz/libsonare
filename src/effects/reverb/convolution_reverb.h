@@ -26,8 +26,8 @@ namespace sonare::effects::reverb {
 struct ConvolutionReverbConfig {
   /// Upper bound on the synthesized IR length so prepare() stays cheap and the
   /// convolver never allocates an unbounded partition set. Requests above this
-  /// are refused by validate_config. Shared with the insert factory, which resolves an
-  /// out-of-range {decaySec} to the ceiling before construction.
+  /// are refused by validate_config. Shared with the insert factory, whose {decaySec}
+  /// ceiling it is.
   static constexpr float kMaxDecaySeconds = 12.0f;
   /// Approximate RT60 tail length in seconds (matched to FDN/velvet, where
   /// decaySec maps to the ~T60 reverberation time). [0, kMaxDecaySeconds].
