@@ -1,4 +1,5 @@
 import type { RealtimeVoiceChangerPodConfig } from '../src/public_types';
+import { isRealtimeVoiceChangerMessage } from '../src/worklet/guards';
 import {
   countFloat32Subarrays,
   describe,
@@ -48,7 +49,65 @@ function workletPod(): RealtimeVoiceChangerPodConfig {
     limiterReleaseMs: 50,
     limiterEnableIspLimiter: true,
     limiterIspCeilingDbtp: -1,
+    voiceEngineEngine: 'psola',
+    voiceEngineF0MinHz: 70,
+    pitchCorrectionMode: 'off',
+    pitchCorrectionAmount: 1,
+    pitchCorrectionSpeedMs: 20,
+    pitchCorrectionKeyRoot: 0,
+    pitchCorrectionScale: 'major',
+    pitchCorrectionRobotOctave: 0,
+    harmonyVoices: 0,
+    harmonyStep1: 2,
+    harmonyStep2: 4,
+    harmonyStep3: -3,
+    harmonyLevel: 0.7,
+    harmonyLeadLevel: 1,
+    harmonyDetuneCents: 6,
+    harmonyDelayMs: 12,
+    vocoderEnabled: false,
+    vocoderBands: 20,
+    vocoderAttackMs: 2,
+    vocoderReleaseMs: 20,
+    vocoderSibilance: 0.3,
+    vocoderCarrierSource: 'internal',
+    vocoderCarrierWave: 'saw',
+    vocoderEnsembleDetuneCents: 12,
+    vocoderLevel: 1,
+    characterType: 'none',
+    characterAmount: 0.5,
+    characterTone: 0,
+    reverbVariationVariation: 'reverb',
+    reverbVariationDelayMs: 250,
+    reverbVariationFeedback: 0.35,
+    reverbVariationTempoBpm: 120,
+    reverbVariationDivision: 'eighth',
+    midiRelease: 'hold',
   };
+}
+
+function sine(frames: number, hz: number, gain: number): Float32Array {
+  const out = new Float32Array(frames);
+  for (let i = 0; i < frames; i++) {
+    out[i] = gain * Math.sin((2 * Math.PI * hz * i) / 48000);
+  }
+  return out;
+}
+
+function sawtooth(frames: number, hz: number, gain: number): Float32Array {
+  const out = new Float32Array(frames);
+  for (let i = 0; i < frames; i++) {
+    out[i] = gain * (2 * (((hz * i) / 48000) % 1) - 1);
+  }
+  return out;
+}
+
+function energy(samples: Float32Array): number {
+  let sum = 0;
+  for (const sample of samples) {
+    sum += sample * sample;
+  }
+  return sum;
 }
 
 describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
@@ -527,6 +586,108 @@ describe('SonareRealtimeVoiceChangerWorkletProcessor', () => {
         (globalThis as { Float32Array: typeof Float32Array }).Float32Array = original;
         processor.destroy();
       }
+    });
+
+    it('reads the external vocoder carrier from the second input', () => {
+      const blockSize = 128;
+      const voice = sine(blockSize, 220, 0.3);
+      const carrier = sawtooth(blockSize, 110, 0.3);
+      const run = (withCarrier: boolean): number => {
+        const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
+          preset: 'neutral-monitor',
+          sampleRate: 48000,
+          blockSize,
+          channelCount: 1,
+        });
+        try {
+          processor.receiveMessage({
+            type: 'setConfig',
+            config: {
+              ...workletPod(),
+              vocoderEnabled: true,
+              vocoderCarrierSource: 'external',
+              limiterEnableIspLimiter: false,
+            },
+          });
+          let total = 0;
+          for (let block = 0; block < 60; block++) {
+            const output = new Float32Array(blockSize);
+            const inputs = withCarrier ? [[voice], [carrier]] : [[voice]];
+            expect(processor.process(inputs, [[output]])).toBe(true);
+            total += energy(output);
+          }
+          return total;
+        } finally {
+          processor.destroy();
+        }
+      };
+      const withCarrier = run(true);
+      const withoutCarrier = run(false);
+      expect(withCarrier).toBeGreaterThan(0);
+      expect(withCarrier).toBeGreaterThan(withoutCarrier);
+    });
+
+    it('applies note messages and leaves process() untouched by them', () => {
+      const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
+        preset: 'neutral-monitor',
+        sampleRate: 48000,
+        blockSize: 128,
+        channelCount: 1,
+      });
+      try {
+        processor.receiveMessage({ type: 'setConfig', config: workletPod() });
+        const changer = (
+          processor as unknown as {
+            changer: {
+              noteOn: (note: number, velocity?: number) => void;
+              noteOff: (note: number) => void;
+              allNotesOff: () => void;
+            };
+          }
+        ).changer;
+        const calls: string[] = [];
+        const noteOn = changer.noteOn.bind(changer);
+        const noteOff = changer.noteOff.bind(changer);
+        const allNotesOff = changer.allNotesOff.bind(changer);
+        changer.noteOn = (note, velocity) => {
+          calls.push(`on ${note} ${velocity}`);
+          noteOn(note, velocity);
+        };
+        changer.noteOff = (note) => {
+          calls.push(`off ${note}`);
+          noteOff(note);
+        };
+        changer.allNotesOff = () => {
+          calls.push('all');
+          allNotesOff();
+        };
+        processor.receiveMessage({ type: 'noteOn', note: 60, velocity: 0.5 });
+        processor.receiveMessage({ type: 'noteOn', note: 64 });
+        processor.receiveMessage({ type: 'noteOff', note: 60 });
+        processor.receiveMessage({ type: 'allNotesOff' });
+        expect(calls).toEqual(['on 60 0.5', 'on 64 undefined', 'off 60', 'all']);
+        expect(() => processor.receiveMessage({ type: 'noteOn', note: 128 })).toThrow(RangeError);
+        const before = calls.length;
+        const output = new Float32Array(128);
+        expect(processor.process([[new Float32Array(128)]], [[output]])).toBe(true);
+        expect(calls).toHaveLength(before);
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('admits note messages through the control-plane guard and refuses malformed ones', () => {
+      expect(isRealtimeVoiceChangerMessage({ type: 'noteOn', note: 60 })).toBe(true);
+      expect(isRealtimeVoiceChangerMessage({ type: 'noteOn', note: 60, velocity: 0.5 })).toBe(true);
+      expect(isRealtimeVoiceChangerMessage({ type: 'noteOff', note: 60 })).toBe(true);
+      expect(isRealtimeVoiceChangerMessage({ type: 'allNotesOff' })).toBe(true);
+      expect(isRealtimeVoiceChangerMessage({ type: 'noteOn' })).toBe(false);
+      expect(isRealtimeVoiceChangerMessage({ type: 'noteOn', note: '60' })).toBe(false);
+      expect(isRealtimeVoiceChangerMessage({ type: 'noteOn', note: 60, velocity: '1' })).toBe(
+        false,
+      );
+      expect(isRealtimeVoiceChangerMessage({ type: 'noteOff' })).toBe(false);
+      expect(isRealtimeVoiceChangerMessage({ type: 'unknown' })).toBe(false);
     });
 
     it('rejects an unknown preset id at construction', async () => {

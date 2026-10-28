@@ -141,7 +141,13 @@ export type VoicePresetId =
   | 'soft-whisper'
   | 'deep-narrator'
   | 'robot-mascot'
-  | 'dark-villain';
+  | 'dark-villain'
+  | 'hard-tune'
+  | 'robot-monotone'
+  | 'choir-harmony'
+  | 'vocoder-strings'
+  | 'megaphone'
+  | 'radio-voice';
 
 export type VoicePresetCategory =
   | 'monitor'
@@ -150,10 +156,14 @@ export type VoicePresetCategory =
   | 'deep'
   | 'robot'
   | 'dark'
+  | 'tune'
+  | 'harmony'
+  | 'vocoder'
+  | 'character'
   | 'custom';
 
 export interface RealtimeVoiceChangerPresetMetadata {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   id: string;
   name: string;
   description?: string;
@@ -171,6 +181,33 @@ export type RealtimeVoiceChangerPreset =
     });
 
 export type RealtimeVoiceChangerConfigInput = VoicePresetId | RealtimeVoiceChangerPreset;
+
+/** Pitch engine of the voice stage. Fixed when the changer is created. */
+export type VoicePitchEngine = 'grain' | 'psola';
+
+/** How the target pitch is chosen. */
+export type VoicePitchCorrectionMode = 'off' | 'auto' | 'robot';
+
+/** Scale used by auto pitch and harmony. */
+export type VoiceScaleKind = 'major' | 'natural_minor' | 'chromatic';
+
+/** Where the vocoder carrier comes from. */
+export type VoiceVocoderCarrierSource = 'internal' | 'external';
+
+/** Waveform of the internal vocoder carrier. */
+export type VoiceVocoderCarrierWave = 'saw' | 'pulse' | 'ensemble';
+
+/** Colouration applied after the voice stage. */
+export type VoiceCharacterType = 'none' | 'megaphone' | 'radio' | 'bbd_chorus' | 'strobo';
+
+/** Space effect selected by the reverb stage. */
+export type VoiceReverbVariation = 'reverb' | 'echo' | 'tempo_delay' | 'dub_echo';
+
+/** Note value of the tempo-synced delay. */
+export type VoiceNoteDivision = 'quarter' | 'eighth' | 'dotted_eighth' | 'sixteenth';
+
+/** What the voices do once every held MIDI note has been released. */
+export type VoiceMidiRelease = 'hold' | 'input';
 
 /**
  * Flat (POD) realtime voice-changer configuration. Keys are camelCase to match
@@ -231,6 +268,62 @@ export interface RealtimeVoiceChangerPodConfig {
   limiterEnableIspLimiter: boolean;
   /** True-peak ceiling in dBTP applied by the ISP limiter (default -1.0). */
   limiterIspCeilingDbtp: number;
+  /**
+   * Pitch engine. `'psola'` tracks f0; `'grain'` is the f0-less retune and refuses pitch
+   * correction, harmony and the vocoder. Fixed when the changer is created.
+   */
+  voiceEngineEngine: VoicePitchEngine;
+  /** Lowest tracked f0 in Hz, [50, 200]; sets the psola latency. Fixed at creation. */
+  voiceEngineF0MinHz: number;
+  pitchCorrectionMode: VoicePitchCorrectionMode;
+  /** Correction strength in [0, 1]. */
+  pitchCorrectionAmount: number;
+  /** Glide time to the target in ms, [0, 400]. */
+  pitchCorrectionSpeedMs: number;
+  /** Scale root, 0 = C .. 11 = B; validated but unused for a chromatic scale. */
+  pitchCorrectionKeyRoot: number;
+  pitchCorrectionScale: VoiceScaleKind;
+  /** Octave shift of the robot target, [-1, 1]. */
+  pitchCorrectionRobotOctave: number;
+  /** Harmony voices beside the lead, [0, 3]. */
+  harmonyVoices: number;
+  /** Scale degrees of harmony voice 1 from the lead, [-7, 7] (0 = unison, +2 = a third up). */
+  harmonyStep1: number;
+  harmonyStep2: number;
+  harmonyStep3: number;
+  harmonyLevel: number;
+  harmonyLeadLevel: number;
+  /** Detune of the harmony voices in cents, [0, 30]. */
+  harmonyDetuneCents: number;
+  /** Delay of the harmony voices in ms, [0, 40]. */
+  harmonyDelayMs: number;
+  vocoderEnabled: boolean;
+  /** Band count, [8, 32]. Fixed at creation. */
+  vocoderBands: number;
+  vocoderAttackMs: number;
+  vocoderReleaseMs: number;
+  vocoderSibilance: number;
+  /**
+   * `'external'` reads the carrier passed to the `*WithCarrier` process methods (the worklet's
+   * second input); a carrier-less process call is then refused with an `InvalidState` error.
+   */
+  vocoderCarrierSource: VoiceVocoderCarrierSource;
+  vocoderCarrierWave: VoiceVocoderCarrierWave;
+  vocoderEnsembleDetuneCents: number;
+  vocoderLevel: number;
+  characterType: VoiceCharacterType;
+  characterAmount: number;
+  /** Tone tilt in [-1, 1]. */
+  characterTone: number;
+  reverbVariationVariation: VoiceReverbVariation;
+  /** Echo delay in ms, [1, 3000]. */
+  reverbVariationDelayMs: number;
+  /** Echo feedback in [0, 0.95]. */
+  reverbVariationFeedback: number;
+  /** Tempo of the tempo-synced delay, [30, 300]. */
+  reverbVariationTempoBpm: number;
+  reverbVariationDivision: VoiceNoteDivision;
+  midiRelease: VoiceMidiRelease;
 }
 
 /** One raw UMP message: 1 to 4 words, most significant word first. */

@@ -28,6 +28,8 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
   // audio-thread process() never crosses an allocation boundary.
   private monoInput: Float32Array;
   private monoOutput: Float32Array;
+  // Mono external vocoder carrier, filled from the second input every block.
+  private carrierInput: Float32Array;
   private bufferGeneration: number;
   // Planar heap-backed views (one Float32Array per channel) used by the
   // multi-channel path. AudioWorklet inputs/outputs are already planar
@@ -52,6 +54,7 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
     // process() than blockSize, we clamp (see ensure*Capacity).
     this.monoInput = this.changer.getMonoInputBuffer(this.blockSize);
     this.monoOutput = this.changer.getMonoOutputBuffer(this.blockSize);
+    this.carrierInput = this.changer.getCarrierBuffer(this.blockSize);
     this.bufferGeneration = this.changer.bufferGeneration();
     this.planarChannels = [];
     if (this.channelCount > 1) {
@@ -72,6 +75,12 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
     }
     if (message.type === 'setConfig') {
       this.changer.setPodConfig(message.config);
+    } else if (message.type === 'noteOn') {
+      this.changer.noteOn(message.note, message.velocity);
+    } else if (message.type === 'noteOff') {
+      this.changer.noteOff(message.note);
+    } else if (message.type === 'allNotesOff') {
+      this.changer.allNotesOff();
     } else if (message.type === 'reset') {
       this.changer.reset();
     } else if (message.type === 'destroy') {
@@ -91,12 +100,14 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
     // is a cheap branch with no allocation.
     if (
       this.bufferGeneration !== this.changer.bufferGeneration() ||
-      this.monoInput.byteLength === 0
+      this.monoInput.byteLength === 0 ||
+      this.carrierInput.byteLength === 0
     ) {
       this.reacquireBuffers();
     }
 
     const input = inputs[0];
+    const carrier = inputs[1]?.[0];
     const requestedFrames = output[0]?.length ?? 0;
     const requestedChannels = Math.min(this.channelCount, output.length);
     if (requestedFrames === 0 || requestedChannels === 0) {
@@ -113,7 +124,8 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
       } else {
         this.monoInput.fill(0, 0, frames);
       }
-      this.changer.processPreparedMono(frames);
+      this.loadCarrier(carrier, frames);
+      this.changer.processPreparedMonoWithCarrier(frames);
       // One plane fans out to every output channel and anything it does not
       // fill is zeroed. Writing only output[0] left a stereo host hard-panned
       // left -- the default `channelCount` here is 1 while AudioWorkletNode's
@@ -142,7 +154,8 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
         dst.fill(0, 0, frames);
       }
     }
-    this.changer.processPreparedPlanar(frames);
+    this.loadCarrier(carrier, frames);
+    this.changer.processPreparedPlanarWithCarrier(frames);
     // Same rule as the mono branch: an output channel past the last processed
     // plane is silence rather than a duplicate of plane 0, and the tail past
     // `frames` is zeroed.
@@ -165,12 +178,26 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
   private reacquireBuffers(): void {
     this.monoInput = this.changer.getMonoInputBuffer(this.blockSize);
     this.monoOutput = this.changer.getMonoOutputBuffer(this.blockSize);
+    this.carrierInput = this.changer.getCarrierBuffer(this.blockSize);
     if (this.channelCount > 1) {
       for (let ch = 0; ch < this.channelCount; ch++) {
         this.planarChannels[ch] = this.changer.getPlanarChannelBuffer(ch, this.blockSize);
       }
     }
     this.bufferGeneration = this.changer.bufferGeneration();
+  }
+
+  // A missing or short carrier plane is silence; the carrier is only read for an external source.
+  private loadCarrier(source: Float32Array | undefined, frames: number): void {
+    if (source) {
+      const copied = Math.min(source.length, frames);
+      this.carrierInput.set(leadingSamples(source, copied));
+      if (copied < frames) {
+        this.carrierInput.fill(0, copied, frames);
+      }
+    } else {
+      this.carrierInput.fill(0, 0, frames);
+    }
   }
 
   /**

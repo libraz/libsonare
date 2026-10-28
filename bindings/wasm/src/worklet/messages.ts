@@ -111,6 +111,11 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
   cueOutput?: boolean;
 }
 
+/**
+ * The processor reads an external vocoder carrier from the first channel of its second input
+ * (`inputs[1]`); a missing second input is a silent carrier. The carrier is ignored unless the
+ * configuration selects `vocoderCarrierSource: 'external'`.
+ */
 export interface SonareRealtimeVoiceChangerWorkletProcessorOptions {
   preset?: RealtimeVoiceChangerConfigInput;
   /**
@@ -136,10 +141,29 @@ export interface SonareRealtimeVoiceChangerDestroyMessage {
   type: 'destroy';
 }
 
+/** Holds a MIDI note. `velocity` is in (0, 1] and defaults to 1. */
+export interface SonareRealtimeVoiceChangerNoteOnMessage {
+  type: 'noteOn';
+  note: number;
+  velocity?: number;
+}
+
+export interface SonareRealtimeVoiceChangerNoteOffMessage {
+  type: 'noteOff';
+  note: number;
+}
+
+export interface SonareRealtimeVoiceChangerAllNotesOffMessage {
+  type: 'allNotesOff';
+}
+
 export type SonareRealtimeVoiceChangerMessage =
   | SonareRealtimeVoiceChangerSetConfigMessage
   | SonareRealtimeVoiceChangerResetMessage
-  | SonareRealtimeVoiceChangerDestroyMessage;
+  | SonareRealtimeVoiceChangerDestroyMessage
+  | SonareRealtimeVoiceChangerNoteOnMessage
+  | SonareRealtimeVoiceChangerNoteOffMessage
+  | SonareRealtimeVoiceChangerAllNotesOffMessage;
 
 export interface SonareStreamAnalyzerWorkletProcessorOptions {
   /** Mono samples per posted chunk. Integer of at least 128. Default 4096. */

@@ -334,57 +334,16 @@ uint32_t js_engine_abi_version() { return sonare::rt::kEngineAbiVersion; }
 uint32_t js_voice_changer_abi_version() { return SONARE_VOICE_CHANGER_ABI_VERSION; }
 
 #if !defined(SONARE_WASM_ANALYSIS_ONLY)
-// POD-flat ↔ nested C++ field bridge for the realtime voice-changer config.
-// X(cpp_path, js_key) — cpp_path is the dotted member on the C++
-// RealtimeVoiceChangerConfig; js_key is the camelCase key exposed to JS,
-// matching the Node addon getter (bindings/node/src/addon/effects/extra.cpp)
-// so a config reads identically across both JS surfaces. Calling the C++
-// accessors directly keeps this binding self-contained: the C-ABI translation
-// unit is not linked into WASM.
-#define SONARE_WASM_VC_FIELDS(X)                         \
-  X(input_gain_db, inputGainDb)                          \
-  X(output_gain_db, outputGainDb)                        \
-  X(wet_mix, wetMix)                                     \
-  X(retune.semitones, retuneSemitones)                   \
-  X(retune.mix, retuneMix)                               \
-  X(retune.grain_size, retuneGrainSize)                  \
-  X(formant.factor, formantFactor)                       \
-  X(formant.amount, formantAmount)                       \
-  X(formant.body, formantBody)                           \
-  X(formant.brightness, formantBrightness)               \
-  X(formant.nasal, formantNasal)                         \
-  X(eq.highpass_hz, eqHighpassHz)                        \
-  X(eq.body_db, eqBodyDb)                                \
-  X(eq.presence_db, eqPresenceDb)                        \
-  X(eq.air_db, eqAirDb)                                  \
-  X(gate.threshold_db, gateThresholdDb)                  \
-  X(gate.attack_ms, gateAttackMs)                        \
-  X(gate.release_ms, gateReleaseMs)                      \
-  X(gate.range_db, gateRangeDb)                          \
-  X(compressor.threshold_db, compressorThresholdDb)      \
-  X(compressor.ratio, compressorRatio)                   \
-  X(compressor.attack_ms, compressorAttackMs)            \
-  X(compressor.release_ms, compressorReleaseMs)          \
-  X(compressor.makeup_gain_db, compressorMakeupGainDb)   \
-  X(deesser.frequency_hz, deesserFrequencyHz)            \
-  X(deesser.threshold_db, deesserThresholdDb)            \
-  X(deesser.ratio, deesserRatio)                         \
-  X(deesser.range_db, deesserRangeDb)                    \
-  X(reverb.mix, reverbMix)                               \
-  X(reverb.time_ms, reverbTimeMs)                        \
-  X(reverb.damping, reverbDamping)                       \
-  X(reverb.seed, reverbSeed)                             \
-  X(limiter.ceiling_db, limiterCeilingDb)                \
-  X(limiter.release_ms, limiterReleaseMs)                \
-  X(limiter.enable_isp_limiter, limiterEnableIspLimiter) \
-  X(limiter.isp_ceiling_dbtp, limiterIspCeilingDbtp)
+// Flat camelCase POD of a voice-changer config; defined next to the AudioWorklet POD reader in
+// bindings/effects/realtime_voice_changer.cpp so both directions share one key list.
+val realtimeVoiceChangerPodVal(const editing::voice_changer::RealtimeVoiceChangerConfig& cfg);
 
 // Validates a preset ordinal against the C++ VoiceCharacterPreset enum range.
 // The C-ABI and C++ enumerators share an identical ordering, so the integer
 // ordinal exposed to JS maps straight onto the C++ enum.
 bool vc_preset_in_range(int preset) {
   return preset >= 0 &&
-         preset <= static_cast<int>(editing::voice_changer::VoiceCharacterPreset::DarkVillain);
+         preset <= static_cast<int>(editing::voice_changer::VoiceCharacterPreset::RadioVoice);
 }
 
 // Maps a voice-character preset ordinal to its canonical id string (e.g.
@@ -412,14 +371,8 @@ val js_realtime_voice_changer_preset_config(const val& preset_val) {
   }
   const auto cfg = editing::voice_changer::realtime_voice_changer_preset(
       static_cast<editing::voice_changer::VoiceCharacterPreset>(preset));
-  val out = val::object();
-#define X(cpp_path, pod_field) out.set(#pod_field, cfg.cpp_path);
-  SONARE_WASM_VC_FIELDS(X)
-#undef X
-  out.set("formantMode", std::string(editing::voice_changer::formant_mode_name(cfg.formant_mode)));
-  return out;
+  return realtimeVoiceChangerPodVal(cfg);
 }
-#undef SONARE_WASM_VC_FIELDS
 #endif
 
 val js_audio_from_memory(val bytes) {

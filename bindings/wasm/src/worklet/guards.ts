@@ -290,7 +290,21 @@ export function isRealtimeVoiceChangerMessage(
   if (!isRecord(value) || typeof value.type !== 'string') {
     return false;
   }
-  return value.type === 'setConfig' || value.type === 'reset' || value.type === 'destroy';
+  if (value.type === 'noteOn') {
+    return (
+      typeof value.note === 'number' &&
+      (value.velocity === undefined || typeof value.velocity === 'number')
+    );
+  }
+  if (value.type === 'noteOff') {
+    return typeof value.note === 'number';
+  }
+  return (
+    value.type === 'setConfig' ||
+    value.type === 'reset' ||
+    value.type === 'destroy' ||
+    value.type === 'allNotesOff'
+  );
 }
 
 export function isStreamAnalyzerMessage(value: unknown): value is SonareStreamAnalyzerMessage {

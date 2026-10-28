@@ -955,8 +955,17 @@ export type {
   TrimReport,
   TypedJson,
   UmpWords,
+  VoiceCharacterType,
   VoicedFlags,
+  VoiceMidiRelease,
+  VoiceNoteDivision,
+  VoicePitchCorrectionMode,
+  VoicePitchEngine,
   VoicePresetId,
+  VoiceReverbVariation,
+  VoiceScaleKind,
+  VoiceVocoderCarrierSource,
+  VoiceVocoderCarrierWave,
 } from './public_types.js';
 export {
   ChordQuality,
@@ -1294,6 +1303,12 @@ const VOICE_PRESET_ORDINALS: readonly VoicePresetId[] = [
   'deep-narrator',
   'robot-mascot',
   'dark-villain',
+  'hard-tune',
+  'robot-monotone',
+  'choir-harmony',
+  'vocoder-strings',
+  'megaphone',
+  'radio-voice',
 ];
 
 function resolveVoicePresetOrdinal(preset: VoicePresetId | number): number {

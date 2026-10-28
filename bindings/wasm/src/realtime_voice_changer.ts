@@ -120,7 +120,7 @@ export class RealtimeVoiceChanger {
 
   setConfig(config: RealtimeVoiceChangerConfigInput | RealtimeVoiceChangerPodConfig): void {
     // The shared native parser recognizes the flat POD produced by
-    // realtimeVoiceChangerPresetConfig, so bindings never duplicate its 36-field mapping.
+    // realtimeVoiceChangerPresetConfig, so bindings never duplicate its field mapping.
     requirePodFormantMode(config);
     this.changer.setConfig(config as Record<string, unknown> | string);
   }
@@ -196,6 +196,88 @@ export class RealtimeVoiceChanger {
 
   processInterleavedInto(samples: Float32Array, channels: number, output: Float32Array): void {
     this.changer.processInterleavedInto(samples, channels, output);
+  }
+
+  /**
+   * Mono block with an external vocoder carrier of the same length. The carrier is read only
+   * while the vocoder is enabled with `vocoderCarrierSource: 'external'`; otherwise it is ignored.
+   *
+   * @throws RangeError when `carrier.length` differs from `samples.length`.
+   */
+  processMonoWithCarrier(samples: Float32Array, carrier: Float32Array): Float32Array {
+    return this.changer.processMonoWithCarrier(samples, carrier);
+  }
+
+  processMonoWithCarrierInto(
+    samples: Float32Array,
+    carrier: Float32Array,
+    output: Float32Array,
+  ): void {
+    this.changer.processMonoWithCarrierInto(samples, carrier, output);
+  }
+
+  /** Interleaved block with a mono carrier of one sample per frame, shared by every channel. */
+  processInterleavedWithCarrier(
+    samples: Float32Array,
+    carrier: Float32Array,
+    channels: number,
+  ): Float32Array {
+    return this.changer.processInterleavedWithCarrier(samples, carrier, channels);
+  }
+
+  processInterleavedWithCarrierInto(
+    samples: Float32Array,
+    carrier: Float32Array,
+    channels: number,
+    output: Float32Array,
+  ): void {
+    this.changer.processInterleavedWithCarrierInto(samples, carrier, channels, output);
+  }
+
+  /**
+   * Holds MIDI note `note` from the start of the next processed block. Held notes become the
+   * voices' pitch targets, the newest leading, up to `1 + harmonyVoices` of them.
+   *
+   * @param note MIDI note number, integer in [0, 127].
+   * @param velocity In (0, 1]; default 1.
+   * @throws SonareError with code `InvalidState` on a grain-engine changer or a full event queue.
+   */
+  noteOn(note: number, velocity = 1.0): void {
+    this.changer.noteOn(note, velocity);
+  }
+
+  /** Releases `note`; releasing a note that is not held does nothing. */
+  noteOff(note: number): void {
+    this.changer.noteOff(note);
+  }
+
+  /** Releases every held note, including one kept by `midiRelease: 'hold'`. */
+  allNotesOff(): void {
+    this.changer.allNotesOff();
+  }
+
+  /**
+   * Mono carrier view for the prepared path: fill it, then call
+   * {@link processPreparedMonoWithCarrier}, {@link processPreparedInterleavedWithCarrier} or
+   * {@link processPreparedPlanarWithCarrier}. Re-acquire it after {@link bufferGeneration} changes.
+   */
+  getCarrierBuffer(numFrames: number): Float32Array {
+    return this.changer.getCarrierBuffer(numFrames);
+  }
+
+  /** {@link processPreparedMono} reading the external carrier from {@link getCarrierBuffer}. */
+  processPreparedMonoWithCarrier(numSamples: number): void {
+    this.changer.processPreparedMonoWithCarrier(numSamples);
+  }
+
+  /** {@link processPreparedInterleaved} reading the external carrier from {@link getCarrierBuffer}. */
+  processPreparedInterleavedWithCarrier(numFrames: number, numChannels: number): void {
+    this.changer.processPreparedInterleavedWithCarrier(numFrames, numChannels);
+  }
+
+  /** {@link processPreparedPlanar} reading the external carrier from {@link getCarrierBuffer}. */
+  processPreparedPlanarWithCarrier(numFrames: number): void {
+    this.changer.processPreparedPlanarWithCarrier(numFrames);
   }
 
   /**

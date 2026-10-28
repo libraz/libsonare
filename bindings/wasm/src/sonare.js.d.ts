@@ -94,6 +94,40 @@ export interface WasmRealtimeVoiceChangerPodConfig {
   limiterReleaseMs: number;
   limiterEnableIspLimiter: boolean;
   limiterIspCeilingDbtp: number;
+  voiceEngineEngine: 'grain' | 'psola';
+  voiceEngineF0MinHz: number;
+  pitchCorrectionMode: 'off' | 'auto' | 'robot';
+  pitchCorrectionAmount: number;
+  pitchCorrectionSpeedMs: number;
+  pitchCorrectionKeyRoot: number;
+  pitchCorrectionScale: 'major' | 'natural_minor' | 'chromatic';
+  pitchCorrectionRobotOctave: number;
+  harmonyVoices: number;
+  harmonyStep1: number;
+  harmonyStep2: number;
+  harmonyStep3: number;
+  harmonyLevel: number;
+  harmonyLeadLevel: number;
+  harmonyDetuneCents: number;
+  harmonyDelayMs: number;
+  vocoderEnabled: boolean;
+  vocoderBands: number;
+  vocoderAttackMs: number;
+  vocoderReleaseMs: number;
+  vocoderSibilance: number;
+  vocoderCarrierSource: 'internal' | 'external';
+  vocoderCarrierWave: 'saw' | 'pulse' | 'ensemble';
+  vocoderEnsembleDetuneCents: number;
+  vocoderLevel: number;
+  characterType: 'none' | 'megaphone' | 'radio' | 'bbd_chorus' | 'strobo';
+  characterAmount: number;
+  characterTone: number;
+  reverbVariationVariation: 'reverb' | 'echo' | 'tempo_delay' | 'dub_echo';
+  reverbVariationDelayMs: number;
+  reverbVariationFeedback: number;
+  reverbVariationTempoBpm: number;
+  reverbVariationDivision: 'quarter' | 'eighth' | 'dotted_eighth' | 'sixteenth';
+  midiRelease: 'hold' | 'input';
 }
 
 export interface WasmBeatResult {
@@ -3852,6 +3886,31 @@ export interface WasmRealtimeVoiceChanger {
   processMonoInto: (samples: Float32Array, output: Float32Array) => void;
   processInterleaved: (samples: Float32Array, channels: number) => Float32Array;
   processInterleavedInto: (samples: Float32Array, channels: number, output: Float32Array) => void;
+  // External-carrier variants: the carrier is mono and as long as the input (frames).
+  processMonoWithCarrier: (samples: Float32Array, carrier: Float32Array) => Float32Array;
+  processMonoWithCarrierInto: (
+    samples: Float32Array,
+    carrier: Float32Array,
+    output: Float32Array,
+  ) => void;
+  processInterleavedWithCarrier: (
+    samples: Float32Array,
+    carrier: Float32Array,
+    channels: number,
+  ) => Float32Array;
+  processInterleavedWithCarrierInto: (
+    samples: Float32Array,
+    carrier: Float32Array,
+    channels: number,
+    output: Float32Array,
+  ) => void;
+  noteOn: (note: number, velocity: number) => void;
+  noteOff: (note: number) => void;
+  allNotesOff: () => void;
+  getCarrierBuffer: (numFrames: number) => Float32Array;
+  processPreparedMonoWithCarrier: (numSamples: number) => void;
+  processPreparedInterleavedWithCarrier: (numFrames: number, numChannels: number) => void;
+  processPreparedPlanarWithCarrier: (numFrames: number) => void;
   // Zero-copy "prepared" path. The returned Float32Array is a typed_memory_view
   // backed by the WASM heap; it is only valid until the next call to a method
   // that may grow the underlying scratch buffer (i.e. another get*Buffer with a
