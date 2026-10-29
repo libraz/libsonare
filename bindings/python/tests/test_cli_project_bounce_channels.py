@@ -90,7 +90,7 @@ def test_bounce_renders_channels_up_to_a_surround_masters_width(tmp_path: Path) 
 
     # --frames is required: the project has no tracks or clips, so the
     # auto-derive-from-arrangement default (omitting --frames) renders 0
-    # frames, which the shared _check_wav_frame_count guard now refuses
+    # frames, which the shared _check_wav_request guard now refuses
     # (consolidation-016) instead of silently writing an empty WAV. Matches
     # the native CLI's own mirror of this case (cli_project_test.cpp, "bounce
     # renders 6/8 channels up to a surround master's own width"), which

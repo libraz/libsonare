@@ -390,7 +390,7 @@ bool contains_mpeg_audio_stream(const uint8_t* data, size_t size) {
 }  // namespace
 
 AudioFormat detect_format(const uint8_t* data, size_t size) {
-  if (size < 12) {
+  if (data == nullptr || size < 12) {
     return AudioFormat::Unknown;
   }
 
@@ -406,6 +406,11 @@ AudioFormat detect_format(const uint8_t* data, size_t size) {
 }
 
 namespace {
+
+void validate_buffer_pointer(const uint8_t* data, size_t size) {
+  SONARE_CHECK_MSG(data != nullptr || size == 0, ErrorCode::InvalidParameter,
+                   "Audio buffer pointer is null for non-empty input");
+}
 
 #ifdef SONARE_WITH_FFMPEG
 /// Whether the built-in WAV decoder can handle the codec a RIFF/WAVE declares.
@@ -678,6 +683,7 @@ DecodedInputData decode_builtin_mp3(const uint8_t* data, size_t size, RetainChan
 DecodedInputData decode_builtin_input(const uint8_t* data, size_t size, AudioFormat format,
                                       RetainChannels retention, bool include_mono,
                                       bool defer_retained_errors) {
+  validate_buffer_pointer(data, size);
   if (format == AudioFormat::WAV) {
     return decode_builtin_wav(data, size, retention, include_mono, defer_retained_errors);
   }
@@ -706,6 +712,7 @@ InterleavedAudioLoadResult load_buffer_interleaved_bounded(const uint8_t* data, 
   SONARE_CHECK_MSG(max_bytes == 0 || size <= max_bytes, ErrorCode::InvalidParameter,
                    "Audio buffer too large: " + std::to_string(size) +
                        " bytes (max: " + std::to_string(max_bytes) + ")");
+  validate_buffer_pointer(data, size);
   switch (detect_format(data, size)) {
     case AudioFormat::WAV:
 #ifdef SONARE_WITH_FFMPEG
@@ -805,6 +812,7 @@ AudioLoadResult load_buffer_bounded(const uint8_t* data, size_t size, size_t max
   SONARE_CHECK_MSG(max_bytes == 0 || size <= max_bytes, ErrorCode::InvalidParameter,
                    "Audio buffer too large: " + std::to_string(size) +
                        " bytes (max: " + std::to_string(max_bytes) + " bytes)");
+  validate_buffer_pointer(data, size);
   AudioFormat format = detect_format(data, size);
 
   switch (format) {
@@ -979,6 +987,26 @@ struct TmpFileGuard {
   }
 };
 
+struct WavFormatFields {
+  uint16_t block_align;
+  uint32_t byte_rate;
+};
+
+WavFormatFields make_wav_format_fields(int sample_rate, int channel_count, int bits_per_sample) {
+  // Entry points validate sample rate and bit depth first; this checks the
+  // derived header fields, which a narrowing cast would otherwise truncate.
+  SONARE_CHECK_MSG(channel_count > 0, ErrorCode::InvalidParameter, "Invalid channel count");
+
+  const uint64_t wide_block_align =
+      static_cast<uint64_t>(channel_count) * static_cast<uint64_t>(bits_per_sample / 8);
+  SONARE_CHECK_MSG(wide_block_align > 0 && wide_block_align <= std::numeric_limits<uint16_t>::max(),
+                   ErrorCode::InvalidParameter, "WAV block alignment exceeds header range");
+  const uint64_t wide_byte_rate = static_cast<uint64_t>(sample_rate) * wide_block_align;
+  SONARE_CHECK_MSG(wide_byte_rate <= std::numeric_limits<uint32_t>::max(),
+                   ErrorCode::InvalidParameter, "WAV byte rate exceeds header range");
+  return {static_cast<uint16_t>(wide_block_align), static_cast<uint32_t>(wide_byte_rate)};
+}
+
 // RIFF stores both the data chunk and the enclosing file size in uint32. Every
 // WAV writer applies this before it packs or allocates anything: past the bound
 // the header is truncated to a value that reads as a corrupt short file, and
@@ -987,9 +1015,8 @@ struct TmpFileGuard {
 // enforces the same effective length whichever entry point produced it -- the
 // two are documented as bit-identical, and a limit that differed between them
 // would make that true of the bytes and false of the acceptable inputs.
-void check_riff_size_fits(size_t n_frames, int channel_count, int bits_per_sample) {
-  const size_t bytes_per_frame =
-      static_cast<size_t>(channel_count) * static_cast<size_t>(bits_per_sample / 8);
+void check_riff_size_fits(size_t n_frames, uint16_t block_align) {
+  const size_t bytes_per_frame = static_cast<size_t>(block_align);
   constexpr size_t kExtensibleHeaderBytes = 68;
   const size_t max_data_bytes =
       static_cast<size_t>(std::numeric_limits<uint32_t>::max()) - (kExtensibleHeaderBytes - 8);
@@ -1080,6 +1107,7 @@ void write_wav_image_atomic(const std::string& path, const std::vector<uint8_t>&
 /// header, the samples, and the RIFF pad byte after an odd-sized data chunk.
 std::vector<uint8_t> encode_pcm_wav(const float* interleaved, size_t n_frames, int channel_count,
                                     int sample_rate, int bits_per_sample,
+                                    const WavFormatFields& format_fields,
                                     size_t* non_finite_samples) {
   size_t non_finite = 0;
   const std::vector<uint8_t> pcm =
@@ -1089,7 +1117,7 @@ std::vector<uint8_t> encode_pcm_wav(const float* interleaved, size_t n_frames, i
 
   const auto data_size = static_cast<uint32_t>(pcm.size());
   const uint32_t pad = data_size % 2;
-  const auto block_align = static_cast<uint16_t>(channel_count * (bits_per_sample / 8));
+  const auto block_align = format_fields.block_align;
   const uint32_t fmt_size = 16;
 
   std::vector<uint8_t> image;
@@ -1102,7 +1130,7 @@ std::vector<uint8_t> encode_pcm_wav(const float* interleaved, size_t n_frames, i
   append_le16(image, 1);  // WAVE_FORMAT_PCM
   append_le16(image, static_cast<uint16_t>(channel_count));
   append_le32(image, static_cast<uint32_t>(sample_rate));
-  append_le32(image, static_cast<uint32_t>(sample_rate) * block_align);
+  append_le32(image, format_fields.byte_rate);
   append_le16(image, block_align);
   append_le16(image, static_cast<uint16_t>(bits_per_sample));
   append_tag(image, "data");
@@ -1118,8 +1146,8 @@ std::vector<uint8_t> encode_pcm_wav(const float* interleaved, size_t n_frames, i
 std::vector<uint8_t> encode_extensible_wav(const float* interleaved, size_t n_frames,
                                            int channel_count, uint32_t channel_mask,
                                            int sample_rate, int bits_per_sample,
+                                           const WavFormatFields& format_fields,
                                            size_t* non_finite_samples) {
-  const int bytes_per_sample = bits_per_sample / 8;
   const size_t n_samples = n_frames * static_cast<size_t>(channel_count);
   size_t non_finite = 0;
   const std::vector<uint8_t> pcm =
@@ -1127,8 +1155,7 @@ std::vector<uint8_t> encode_extensible_wav(const float* interleaved, size_t n_fr
   if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
 
   const auto data_size = static_cast<uint32_t>(pcm.size());
-  const auto block_align = static_cast<uint16_t>(channel_count * bytes_per_sample);
-  const auto byte_rate = static_cast<uint32_t>(sample_rate) * block_align;
+  const auto block_align = format_fields.block_align;
   const uint32_t fmt_size = 40;  // 16 base + 2 (cbSize) + 22 (extension)
   const uint32_t riff_size = 4 + (8 + fmt_size) + (8 + data_size);
 
@@ -1148,7 +1175,7 @@ std::vector<uint8_t> encode_extensible_wav(const float* interleaved, size_t n_fr
   append_le16(image, 0xFFFE);  // WAVE_FORMAT_EXTENSIBLE
   append_le16(image, static_cast<uint16_t>(channel_count));
   append_le32(image, static_cast<uint32_t>(sample_rate));
-  append_le32(image, byte_rate);
+  append_le32(image, format_fields.byte_rate);
   append_le16(image, block_align);
   append_le16(image, static_cast<uint16_t>(bits_per_sample));
   append_le16(image, 22);                                      // cbSize
@@ -1171,9 +1198,10 @@ void save_wav(const std::string& path, const float* samples, size_t n_samples, i
   SONARE_CHECK_MSG(sample_rate > 0, ErrorCode::InvalidParameter, "Invalid sample rate");
   SONARE_CHECK_MSG(bits_per_sample == 16 || bits_per_sample == 24, ErrorCode::InvalidParameter,
                    "bits_per_sample must be 16 or 24");
-  check_riff_size_fits(n_samples, 1, bits_per_sample);
+  const WavFormatFields format_fields = make_wav_format_fields(sample_rate, 1, bits_per_sample);
+  check_riff_size_fits(n_samples, format_fields.block_align);
   write_wav_image_atomic(path, encode_pcm_wav(samples, n_samples, 1, sample_rate, bits_per_sample,
-                                              non_finite_samples));
+                                              format_fields, non_finite_samples));
 }
 
 void save_wav(const std::string& path, const std::vector<float>& samples, int sample_rate,
@@ -1192,16 +1220,19 @@ void save_wav_multichannel(const std::string& path, const float* interleaved, si
   SONARE_CHECK_MSG(channel_count == sonare::channel_count(layout), ErrorCode::InvalidParameter,
                    "channel_count does not match the layout");
 
-  check_riff_size_fits(n_frames, channel_count, bits_per_sample);
+  const WavFormatFields format_fields =
+      make_wav_format_fields(sample_rate, channel_count, bits_per_sample);
+  check_riff_size_fits(n_frames, format_fields.block_align);
 
   // Plain WAVE_FORMAT_PCM for mono/stereo (maximum compatibility, and
   // bit-identical to the mono writer); EXTENSIBLE with a channel mask above that.
   write_wav_image_atomic(
-      path, channel_count <= 2 ? encode_pcm_wav(interleaved, n_frames, channel_count, sample_rate,
-                                                bits_per_sample, non_finite_samples)
-                               : encode_extensible_wav(interleaved, n_frames, channel_count,
-                                                       wave_channel_mask(layout), sample_rate,
-                                                       bits_per_sample, non_finite_samples));
+      path,
+      channel_count <= 2
+          ? encode_pcm_wav(interleaved, n_frames, channel_count, sample_rate, bits_per_sample,
+                           format_fields, non_finite_samples)
+          : encode_extensible_wav(interleaved, n_frames, channel_count, wave_channel_mask(layout),
+                                  sample_rate, bits_per_sample, format_fields, non_finite_samples));
 }
 #endif  // !__EMSCRIPTEN__
 

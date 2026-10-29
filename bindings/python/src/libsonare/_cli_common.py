@@ -668,17 +668,24 @@ _WAV_CHUNK_FRAMES = 8192
 _MAX_WAV_DATA_BYTES = 0xFFFFFFFF - 60
 
 
-def _check_wav_frame_count(path: str, frames: int, channels: int, bits_per_sample: int) -> None:
-    """Refuse an empty or RIFF-size-exceeding WAV write before any bytes move.
+def _check_wav_request(
+    path: str, frames: int, channels: int, sample_rate: int, bits_per_sample: int
+) -> None:
+    """Refuse an empty, RIFF-size-exceeding or unrepresentable WAV write before any bytes move.
 
-    Mirrors the native writer's two checks (save_wav / save_wav_multichannel's
-    ``n_frames > 0`` and ``check_riff_size_fits``) so both CLIs reach the same
-    verdict, with the same error class, before either touches the filesystem.
+    Mirrors the native writer's checks (save_wav / save_wav_multichannel's
+    ``n_frames > 0``, ``make_wav_format_fields`` and ``check_riff_size_fits``)
+    so both CLIs reach the same verdict, with the same error class, before
+    either touches the filesystem.
     """
     if frames <= 0:
         raise SonareValueError(f"No frames to save: {path}")
     block_align = channels * (bits_per_sample // 8)
-    if block_align <= 0 or frames > _MAX_WAV_DATA_BYTES // block_align:
+    if block_align <= 0 or block_align > 0xFFFF:
+        raise SonareValueError(f"WAV block alignment exceeds header range: {path}")
+    if int(sample_rate) * block_align > 0xFFFFFFFF:
+        raise SonareValueError(f"WAV byte rate exceeds header range: {path}")
+    if frames > _MAX_WAV_DATA_BYTES // block_align:
         raise SonareValueError(
             f"WAV data exceeds RIFF 32-bit size limit; use a chunked container: {path}"
         )
@@ -691,14 +698,14 @@ def _atomic_wav_writer(
     """Yield a WAV writer whose completed file atomically replaces ``path``.
 
     ``frames`` is the total frame count the caller intends to write, checked
-    up front by @ref _check_wav_frame_count -- before the temp file even
+    up front by @ref _check_wav_request -- before the temp file even
     exists, so a refused request touches neither it nor ``path``.
     """
     import wave
 
     if bits_per_sample not in (16, 24):
         raise ValueError("WAV bits must be 16 or 24")
-    _check_wav_frame_count(path, frames, channels, bits_per_sample)
+    _check_wav_request(path, frames, channels, sample_rate, bits_per_sample)
     target = os.path.abspath(path)
     directory = os.path.dirname(target)
     # Creating the scratch file, writing it, and replacing the destination with
@@ -826,11 +833,11 @@ def _atomic_wav_writer_multichannel(
     for those widths.
 
     ``frames`` is checked up front the same way ``_atomic_wav_writer`` checks
-    it; see @ref _check_wav_frame_count.
+    it; see @ref _check_wav_request.
     """
     if bits_per_sample not in (16, 24):
         raise ValueError("WAV bits must be 16 or 24")
-    _check_wav_frame_count(path, frames, channels, bits_per_sample)
+    _check_wav_request(path, frames, channels, sample_rate, bits_per_sample)
     target = os.path.abspath(path)
     directory = os.path.dirname(target)
     try:

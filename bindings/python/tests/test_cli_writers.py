@@ -386,6 +386,43 @@ def test_atomic_wav_writer_accepts_the_legal_edge_of_the_riff_32_bit_size_limit(
     assert output.exists()
 
 
+@pytest.mark.parametrize(
+    ("writer_name", "channels", "bits"),
+    [
+        ("_atomic_wav_writer", 1, 16),
+        ("_atomic_wav_writer", 2, 24),
+        ("_atomic_wav_writer_multichannel", 6, 16),
+        ("_atomic_wav_writer_multichannel", 8, 24),
+    ],
+)
+def test_wav_writers_refuse_a_byte_rate_past_the_32_bit_header_field(
+    tmp_path, writer_name: str, channels: int, bits: int
+) -> None:
+    """The native writer's byte-rate check, refused before a temp file exists."""
+    import libsonare._cli_common as implementation
+    from libsonare import cli
+    from libsonare._cli_common import EXIT_INVALID_PARAMETER
+    from libsonare._runtime import SonareError
+
+    writer = getattr(implementation, writer_name)
+    max_rate = 0xFFFFFFFF // (channels * (bits // 8))
+
+    edge = tmp_path / "edge.wav"
+    with writer(str(edge), channels, max_rate, bits, frames=1):
+        pass
+    assert edge.exists()
+
+    output = tmp_path / "overflow.wav"
+    with (
+        pytest.raises(SonareError) as raised,
+        writer(str(output), channels, max_rate + 1, bits, frames=1),
+    ):
+        pass
+    assert cli._exit_code_for(raised.value) == EXIT_INVALID_PARAMETER
+    assert not output.exists()
+    assert list(tmp_path.iterdir()) == [edge]
+
+
 def test_atomic_wav_writer_multichannel_refuses_an_empty_frame_count(tmp_path) -> None:
     """The same check on the WAVE_FORMAT_EXTENSIBLE (>2 channel) writer."""
     import libsonare._cli_common as implementation
