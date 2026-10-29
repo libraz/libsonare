@@ -67,10 +67,7 @@ float median(const float* data, size_t size) {
   (void)resolve_non_finite_run(SampleDestination::kOrderedContainer, sorted.data(), sorted.size());
   std::sort(sorted.begin(), sorted.end());
 
-  if (size % 2 == 0) {
-    return (sorted[size / 2 - 1] + sorted[size / 2]) / 2.0f;
-  }
-  return sorted[size / 2];
+  return static_cast<float>(percentile_sorted(sorted, 0.5));
 }
 
 AutocorrelationWorkspace::AutocorrelationWorkspace() = default;
