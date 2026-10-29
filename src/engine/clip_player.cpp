@@ -103,7 +103,7 @@ void ClipBoundaryList::sort_unique() noexcept {
 }
 
 void ClipPlayer::prepare(double sample_rate, int max_block_size) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
+  sample_rate_ = numeric::finite_positive(sample_rate) ? sample_rate : kDefaultDawSampleRate;
   max_block_size_ = std::max(max_block_size, 1);
   // Every stretcher buffer is sized here so the audio thread never allocates.
   stretch_scratch_capacity_ = max_block_size_;

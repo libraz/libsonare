@@ -11,6 +11,7 @@
 #include "graph/connection.h"
 #include "graph/node.h"
 #include "rt/delay_line.h"
+#include "util/constants.h"
 
 namespace sonare::graph {
 
@@ -96,7 +97,7 @@ class Graph {
   std::vector<std::string> topo_order_ids_;
   std::unordered_map<std::string, int> topo_index_;
   std::unordered_map<std::string, int> node_latency_q8_;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   bool compiled_ = false;
 };

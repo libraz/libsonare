@@ -7,6 +7,7 @@
 
 #include "rt/fractional_delay.h"
 #include "rt/scoped_no_denormals.h"
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 #include "util/numeric_validation.h"
@@ -96,8 +97,11 @@ bool Graph::disconnect(const std::string& source_node, int source_port,
                                              connection.dest_port == dest_port;
                                     }),
                      connections_.end());
-  compiled_ = false;
-  return connections_.size() != old_size;
+  const bool changed = connections_.size() != old_size;
+  if (changed) {
+    compiled_ = false;
+  }
+  return changed;
 }
 
 bool Graph::set_node_sidechain_ports(const std::string& node_id, int first_port,
@@ -106,16 +110,17 @@ bool Graph::set_node_sidechain_ports(const std::string& node_id, int first_port,
   if (target == nullptr) {
     return false;
   }
-  const bool changed = target->set_sidechain_ports(first_port, num_ports);
-  // Sidechain port assignment is a routing change: invalidate the compiled
-  // topology so it is rebuilt before the next process pass, consistent with
-  // connect/disconnect above. (Today sidechains are resolved at process time
-  // and do not affect topo order, so this is currently latent — but keeping the
-  // invariant avoids a stale-topology bug if that ever changes.)
-  if (changed) {
+  const int previous_first_port = target->sidechain_first_port();
+  const int previous_num_ports = target->sidechain_num_ports();
+  if (!target->set_sidechain_ports(first_port, num_ports)) {
+    return false;
+  }
+  // Routing changes invalidate the plan even though sidechains resolve at process time.
+  if (target->sidechain_first_port() != previous_first_port ||
+      target->sidechain_num_ports() != previous_num_ports) {
     compiled_ = false;
   }
-  return changed;
+  return true;
 }
 
 bool Graph::compile() {
@@ -278,7 +283,8 @@ void Graph::prepare(double sample_rate, int max_block_size) {
   if (max_block_size <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be positive");
   }
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ =
+      numeric::finite_positive(sample_rate) ? sample_rate : constants::kDefaultDawSampleRate;
   max_block_size_ = max_block_size;
   for (auto& node_ptr : nodes_) {
     node_ptr->prepare(sample_rate_, max_block_size_);

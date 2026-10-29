@@ -11,6 +11,7 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::engine {
 
@@ -20,7 +21,7 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
                              size_t telemetry_capacity, int max_channels) {
   // Installed timeline clips are frame-addressed; refuse a new rate before any teardown.
   const double effective_sample_rate =
-      sample_rate > 0.0 ? sample_rate : constants::kDefaultDawSampleRate;
+      numeric::finite_positive(sample_rate) ? sample_rate : kDefaultDawSampleRate;
   if (applied_timeline_sample_rate_ > 0.0 &&
       effective_sample_rate != applied_timeline_sample_rate_) {
     throw SonareException(ErrorCode::InvalidState,
@@ -29,7 +30,7 @@ void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t comm
 
   bool clip_sysex_prepared = true;
   try {
-    clip_sysex_prepared = prepare_impl(sample_rate, max_block_size, command_capacity,
+    clip_sysex_prepared = prepare_impl(effective_sample_rate, max_block_size, command_capacity,
                                        telemetry_capacity, max_channels);
   } catch (...) {
     // Roll forward rather than back. The sequence below adopts the new sample
@@ -114,7 +115,7 @@ bool RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
   telemetry_capacity = std::min(telemetry_capacity, kMaxTelemetryCapacity);
   max_block_size_ = std::max(max_block_size, 1);
   prepared_channels_ = std::clamp(max_channels, 1, static_cast<int>(kMaxAudioChannels));
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
+  sample_rate_ = sample_rate;
   tempo_map_.prepare(sample_rate);
   publish_tempo_map_snapshot();
   tempo_map_snapshot_.acquire();
