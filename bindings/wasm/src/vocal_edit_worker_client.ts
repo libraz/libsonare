@@ -1,5 +1,5 @@
-import { releasedHandleError } from './_handle_guard.js';
 import { SonareError } from './errors.js';
+import { releasedHandleError } from './internal/handle_guard.js';
 import type {
   VocalAnalysis,
   VocalApplyRequest,

@@ -1,4 +1,3 @@
-import { assertHandleLive, releasedHandleError } from './_handle_guard.js';
 import {
   panLawCode,
   panModeCode,
@@ -8,6 +7,7 @@ import {
   trackMonitorModeCode,
 } from './codes.js';
 import { ErrorCode, SonareError } from './errors.js';
+import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
   Articulation,

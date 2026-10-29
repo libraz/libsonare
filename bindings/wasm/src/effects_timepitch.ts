@@ -3,9 +3,9 @@
  * correction onto a target pitch.
  */
 
-import { assertPitchTrackLengths, toVoicedFloat32 } from './_effects_common.js';
-import { resolveEffectFftOptions } from './_fft_options.js';
 import { keyModeName } from './analysis_helpers.js';
+import { assertPitchTrackLengths, toVoicedFloat32 } from './internal/effects_common.js';
+import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AutoTuneKey,

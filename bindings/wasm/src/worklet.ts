@@ -6,13 +6,13 @@
 
 import './lifetime.js';
 
-export type { SonareFailurePayload } from './_failure_payload.js';
 export type { OpfsClipStream, OpfsClipStreamOptions } from './clip_page_streamer.js';
 export { attachOpfsClipStream } from './clip_page_streamer.js';
 // With code-splitting disabled, the worklet bundle carries its own copy of the
 // module singleton. Re-export the lifecycle so that realm can initialize its
 // own wasm instance, independent of the main-thread `index` module.
 export { EXPECTED_ABI_VERSION, init, isInitialized } from './index.js';
+export type { SonareFailurePayload } from './internal/failure_payload.js';
 // Host-side mastering preview inside the worklet realm. Kept here rather than
 // left main-thread-only so a live preview does not have to round-trip audio to
 // the main thread; see the class doc for the prepare/loudness/latency contract.

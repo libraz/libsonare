@@ -2,7 +2,7 @@ import {
   assertEvenIntegerAtLeast,
   assertIntegerValue,
   assertPositiveInteger,
-} from './validation.js';
+} from '../validation.js';
 
 /**
  * The facade's single FFT-size/hop domain.

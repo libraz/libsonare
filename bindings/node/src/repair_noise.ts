@@ -2,7 +2,10 @@
  * Broadband and tonal noise repair: denoise and dehum, with their detectors.
  */
 
-import { assertRepairGeometry, type MasteringRepairSamplesRequest } from './_repair_common.js';
+import {
+  assertRepairGeometry,
+  type MasteringRepairSamplesRequest,
+} from './internal/repair_common.js';
 import { addon } from './native.js';
 import type {
   DehumStereoResult,

@@ -3,7 +3,7 @@
  * STFT and resynthesized.
  */
 
-import type { EffectSamplesRequest } from './_effects_common.js';
+import type { EffectSamplesRequest } from './internal/effects_common.js';
 import { addon } from './native.js';
 import type { SpectralEditOptions, SpectralRegionOp } from './types.js';
 import {

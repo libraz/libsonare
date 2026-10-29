@@ -1,6 +1,6 @@
-import { failurePayload } from '../_failure_payload.js';
 import type { EngineClip } from '../index.js';
 import { RealtimeEngine } from '../index.js';
+import { failurePayload } from '../internal/failure_payload.js';
 import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types.js';
 import { buildCaptureConfig } from './engine-offline.js';
 import {

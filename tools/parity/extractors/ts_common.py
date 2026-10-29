@@ -29,7 +29,7 @@ transitively, cycle-safe and deduplicated -- not a glob of the source tree,
 which would sweep in internal-only modules the index never re-exports.
 
 An edge in that closure carries either values or only types, and the two reach
-different things. ``export type { EffectSamplesRequest } from './_effects_common'``
+different things. ``export type { EffectSamplesRequest } from './internal/effects_common'``
 publishes one type; the helper functions in that module stay importable only by
 its siblings, so they are not surface symbols and a coverage check that treats
 them as such reports a gap no caller could ever hit. Value reachability is

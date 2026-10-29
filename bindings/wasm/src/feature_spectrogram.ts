@@ -3,9 +3,12 @@
  * their input checks.
  */
 
-import type { GuardedOptions } from './_feature_validation.js';
-import { validateMelFrequencyRange, validatePositiveIntegers } from './_feature_validation.js';
-import { resolveFftOptions } from './_fft_options.js';
+import type { GuardedOptions } from './internal/feature_validation.js';
+import {
+  validateMelFrequencyRange,
+  validatePositiveIntegers,
+} from './internal/feature_validation.js';
+import { resolveFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type {
   ChromaResult,

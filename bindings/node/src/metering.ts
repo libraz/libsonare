@@ -1,4 +1,4 @@
-import { resolvePositiveIntegerOption } from './_feature_options.js';
+import { resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { addon } from './native.js';
 import type { ValidateOptions } from './validation.js';
 import {

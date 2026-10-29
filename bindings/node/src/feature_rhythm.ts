@@ -1,6 +1,6 @@
-import { resolveFftOptions } from './_fft_options.js';
 import type { MelSpectrogramRequest } from './feature_spectral.js';
 import type { ValuesRequest } from './feature_units.js';
+import { resolveFftOptions } from './internal/fft_options.js';
 import { addon } from './native.js';
 import type { TempogramMode } from './types.js';
 import {

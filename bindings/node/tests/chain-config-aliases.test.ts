@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { flattenChainConfig, STREAMING_ONLY_CONFIG_KEYS } from '../src/_chain_config.js';
 import { StreamingMasteringChain } from '../src/index.js';
+import { flattenChainConfig, STREAMING_ONLY_CONFIG_KEYS } from '../src/internal/chain_config.js';
 import type { MasteringChainConfig } from '../src/types.js';
 import { streamingSkippedConfigKeys } from './_addon_sources.js';
 

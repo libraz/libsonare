@@ -3,7 +3,7 @@
  * that return a single component.
  */
 
-import { resolveEffectFftOptions } from './_fft_options.js';
+import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type { HpssResult } from './public_types.js';
 import type { ValidateOptions } from './validation.js';

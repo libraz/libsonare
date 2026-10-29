@@ -1,8 +1,8 @@
-import { failureFromPayload, isFailurePayload } from '../_failure_payload.js';
-import { assertHandleLive, releasedHandleError } from '../_handle_guard.js';
 import { ErrorCode, SonareError } from '../errors.js';
 import type { EngineCaptureStatus, EngineTransportState } from '../index.js';
 import { engineCapabilities } from '../index.js';
+import { failureFromPayload, isFailurePayload } from '../internal/failure_payload.js';
+import { assertHandleLive, releasedHandleError } from '../internal/handle_guard.js';
 import { OwnerEpoch } from '../owner_epoch.js';
 import { resolveRenderFrame } from '../validation.js';
 import {

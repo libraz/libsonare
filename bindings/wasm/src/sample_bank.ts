@@ -1,5 +1,5 @@
-import { assertHandleLive } from './_handle_guard.js';
 import type { SampleDesc, SampleZoneDesc } from './instrument_types.js';
+import { assertHandleLive } from './internal/handle_guard.js';
 import { projectModule, type WasmSampleBank } from './project_internal.js';
 
 /**

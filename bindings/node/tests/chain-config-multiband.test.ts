@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { flattenChainConfig } from '../src/_chain_config.js';
 import {
   type MasteringChainConfig,
   masterAudio,
@@ -7,6 +6,7 @@ import {
   masteringChainStereo,
   StreamingMasteringChain,
 } from '../src/index.js';
+import { flattenChainConfig } from '../src/internal/chain_config.js';
 import { addon } from '../src/native.js';
 
 type StreamingConfig = ConstructorParameters<typeof StreamingMasteringChain>[0];

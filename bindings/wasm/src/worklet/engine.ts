@@ -1,4 +1,3 @@
-import { releasedHandleError } from '../_handle_guard.js';
 import {
   ClipPageStreamer,
   type ClipPageStreamerRequest,
@@ -32,6 +31,7 @@ import type {
   UmpWords,
 } from '../index.js';
 import { RealtimeEngine } from '../index.js';
+import { releasedHandleError } from '../internal/handle_guard.js';
 import {
   createOpfsClipPageProvider,
   type OpfsClipPageProviderBinding,

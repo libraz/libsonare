@@ -1,4 +1,4 @@
-import { resolveFftOptions } from './_fft_options.js';
+import { resolveFftOptions } from './internal/fft_options.js';
 import { addon } from './native.js';
 import { MUSIC_ANALYZE_OPTIONS_KEYS } from './request_keys.js';
 import type {

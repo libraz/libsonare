@@ -1,6 +1,6 @@
-import { failureFromPayload } from './_failure_payload.js';
-import { releasedHandleError } from './_handle_guard.js';
 import { ErrorCode } from './errors.js';
+import { failureFromPayload } from './internal/failure_payload.js';
+import { releasedHandleError } from './internal/handle_guard.js';
 import type { MasterAudioRequest, MasterAudioStereoRequest } from './mastering_chain.js';
 import type {
   DetectChordsRequest,

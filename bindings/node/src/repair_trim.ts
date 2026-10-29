@@ -2,7 +2,7 @@
  * Silence trimming, with the range detector it shares its geometry with.
  */
 
-import type { MasteringRepairSamplesRequest } from './_repair_common.js';
+import type { MasteringRepairSamplesRequest } from './internal/repair_common.js';
 import { addon } from './native.js';
 import type { TrimRange, TrimSilenceStereoResult } from './types.js';
 import { assertAudioInput, optionsBag, requestObject, resolveSampleBound } from './validation.js';

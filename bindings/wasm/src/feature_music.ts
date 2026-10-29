@@ -1,5 +1,5 @@
-import { validatePositiveIntegers } from './_feature_validation.js';
-import { resolveFftOptions } from './_fft_options.js';
+import { validatePositiveIntegers } from './internal/feature_validation.js';
+import { resolveFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AnalyzeSectionsOptions,

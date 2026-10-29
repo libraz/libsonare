@@ -1,4 +1,4 @@
-import { flattenChainConfig, STREAMING_ONLY_CONFIG_KEYS } from './_chain_config.js';
+import { flattenChainConfig, STREAMING_ONLY_CONFIG_KEYS } from './internal/chain_config.js';
 import { addon } from './native.js';
 import type {
   EqBandInput,

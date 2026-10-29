@@ -3,8 +3,12 @@
  * rendering an edited set back, and the split/merge operations over it.
  */
 
-import type { EffectSamplesRequest } from './_effects_common.js';
-import { assertPitchTrackLengths, resolveEntryTimes, toVoicedInt32 } from './_effects_common.js';
+import type { EffectSamplesRequest } from './internal/effects_common.js';
+import {
+  assertPitchTrackLengths,
+  resolveEntryTimes,
+  toVoicedInt32,
+} from './internal/effects_common.js';
 import { addon } from './native.js';
 import type {
   AssignNoteTargetsResult,

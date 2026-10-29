@@ -3,10 +3,13 @@
  * or MFCC representation, and the phase reconstruction they share.
  */
 
-import type { GuardedOptions } from './_feature_validation.js';
-import { validateMelFrequencyRange, validatePositiveIntegers } from './_feature_validation.js';
-import { resolveFftOptions } from './_fft_options.js';
 import type { SpectralFrameRequest } from './feature_spectral.js';
+import type { GuardedOptions } from './internal/feature_validation.js';
+import {
+  validateMelFrequencyRange,
+  validatePositiveIntegers,
+} from './internal/feature_validation.js';
+import { resolveFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type {
   MelPowerResult,

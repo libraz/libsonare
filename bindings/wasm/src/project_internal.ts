@@ -1,4 +1,3 @@
-import { releasedHandleError } from './_handle_guard.js';
 import { projectAutomationCurveCode, resolveEnumOrdinal } from './codes.js';
 import { ErrorCode, SonareError } from './errors.js';
 import type {
@@ -16,6 +15,7 @@ import type {
   SynthEnumTables,
   SynthPatch,
 } from './instrument_types.js';
+import { releasedHandleError } from './internal/handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AlignTakeToReferenceRequest,

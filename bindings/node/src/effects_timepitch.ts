@@ -3,10 +3,10 @@
  * correction onto a target pitch.
  */
 
-import type { EffectSamplesRequest } from './_effects_common.js';
-import { assertPitchTrackLengths, toVoicedInt32 } from './_effects_common.js';
-import { resolvePositiveIntegerOption } from './_feature_options.js';
-import { resolveEffectFftOptions } from './_fft_options.js';
+import type { EffectSamplesRequest } from './internal/effects_common.js';
+import { assertPitchTrackLengths, toVoicedInt32 } from './internal/effects_common.js';
+import { resolvePositiveIntegerOption } from './internal/feature_options.js';
+import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { addon } from './native.js';
 import type {
   AutoTuneKey,

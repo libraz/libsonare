@@ -1,4 +1,4 @@
-import { resolveInsertParams, resolveProcessorParams } from './_processor_params.js';
+import { resolveInsertParams, resolveProcessorParams } from './internal/processor_params.js';
 import { getSonareModule } from './module_state.js';
 import type {
   LoudnessMatchResult,

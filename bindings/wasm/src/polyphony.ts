@@ -1,4 +1,4 @@
-import { releasedHandleError } from './_handle_guard.js';
+import { releasedHandleError } from './internal/handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
   NoteEditInput,

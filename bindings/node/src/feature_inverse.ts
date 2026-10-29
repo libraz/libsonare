@@ -1,5 +1,5 @@
-import { resolvePositiveIntegerOption } from './_feature_options.js';
 import type { FeatureSamplesRequest } from './feature_spectral.js';
+import { resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { addon } from './native.js';
 import type {
   InverseMelResult,

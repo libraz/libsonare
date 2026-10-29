@@ -1,4 +1,4 @@
-import { isSonareError, SonareError } from './errors.js';
+import { isSonareError, SonareError } from '../errors.js';
 
 /** A failure as it crosses a postMessage boundary: class name, message and any SonareError code. */
 export interface SonareFailurePayload {

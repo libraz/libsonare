@@ -1,5 +1,5 @@
-import { getSonareModule } from './module_state.js';
-import type { MasteringChainConfig } from './public_types.js';
+import { getSonareModule } from '../module_state.js';
+import type { MasteringChainConfig } from '../public_types.js';
 
 type ChainSection = { [key: string]: number | boolean | string | ChainSection | undefined };
 

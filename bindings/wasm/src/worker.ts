@@ -7,7 +7,7 @@
  * make ownership and `delete()` semantics unsound.
  */
 
-import { failurePayload } from './_failure_payload.js';
+import { failurePayload } from './internal/failure_payload.js';
 import './lifetime.js';
 import { ErrorCode, SonareError } from './errors.js';
 import { init } from './index.js';

@@ -3,7 +3,7 @@
  * the masks built over it, and the recurrence structure of a track.
  */
 
-import { resolveEffectFftOptions } from './_fft_options.js';
+import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type { SegmentMatrix } from './public_types.js';
 import type {

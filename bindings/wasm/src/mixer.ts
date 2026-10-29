@@ -1,4 +1,3 @@
-import { assertHandleLive } from './_handle_guard.js';
 import {
   automationCurveCode,
   meterTapCode,
@@ -6,6 +5,7 @@ import {
   panModeCode,
   sendTimingCode,
 } from './codes.js';
+import { assertHandleLive } from './internal/handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AutomationCurve,

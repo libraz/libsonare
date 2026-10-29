@@ -1,5 +1,5 @@
-import { addon } from './native.js';
-import type { MasteringChainConfig, MasteringChainSection } from './types.js';
+import { addon } from '../native.js';
+import type { MasteringChainConfig, MasteringChainSection } from '../types.js';
 
 /**
  * Top-level keys of the streaming chain's config that the streaming chain reads

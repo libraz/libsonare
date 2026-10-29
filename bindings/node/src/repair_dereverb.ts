@@ -2,7 +2,10 @@
  * Reverberation repair, with its detector and the room-driven configuration.
  */
 
-import { assertRepairGeometry, type MasteringRepairSamplesRequest } from './_repair_common.js';
+import {
+  assertRepairGeometry,
+  type MasteringRepairSamplesRequest,
+} from './internal/repair_common.js';
 import { addon } from './native.js';
 import type {
   DereverbLinkedResult,

@@ -1,4 +1,3 @@
-import type { SonareFailurePayload } from '../_failure_payload.js';
 import type {
   EngineAutomationPoint,
   EngineBus,
@@ -19,6 +18,7 @@ import type {
   StreamConfig,
   UmpWords,
 } from '../index.js';
+import type { SonareFailurePayload } from '../internal/failure_payload.js';
 import type { AutomationCurve, SurroundPan } from '../public_types.js';
 import type {
   SonareEngineCommandRecord,

@@ -1,4 +1,4 @@
-import { assertHandleLive } from './_handle_guard.js';
+import { assertHandleLive } from './internal/handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
   RealtimeVoiceChangerConfigInput,

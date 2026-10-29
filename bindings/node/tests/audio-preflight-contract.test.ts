@@ -785,7 +785,7 @@ describe('Node and WASM validators answer one boundary corpus identically', () =
 
   it('keeps the FFT option resolver byte-identical, since it calls only these validators', () => {
     const source = (pkg: string): string =>
-      readFileSync(new URL(`../../${pkg}/src/_fft_options.ts`, import.meta.url), 'utf8');
+      readFileSync(new URL(`../../${pkg}/src/internal/fft_options.ts`, import.meta.url), 'utf8');
     expect(source('wasm')).toBe(source('node'));
   });
 

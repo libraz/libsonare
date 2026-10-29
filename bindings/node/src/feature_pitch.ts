@@ -1,6 +1,6 @@
-import { resolvePositiveIntegerOption } from './_feature_options.js';
-import { resolveFftOptions } from './_fft_options.js';
 import type { FeatureSamplesRequest, StftRequest } from './feature_spectral.js';
+import { resolvePositiveIntegerOption } from './internal/feature_options.js';
+import { resolveFftOptions } from './internal/fft_options.js';
 import { addon } from './native.js';
 import type { ChromaResult, CqtResult, NoteSegment, PiptrackResult, PitchResult } from './types.js';
 import {

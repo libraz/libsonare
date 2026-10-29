@@ -1,5 +1,8 @@
-import { flattenChainConfig } from './_chain_config.js';
-import { type MasteringSoloProcessorParams, resolveProcessorParams } from './_processor_params.js';
+import { flattenChainConfig } from './internal/chain_config.js';
+import {
+  type MasteringSoloProcessorParams,
+  resolveProcessorParams,
+} from './internal/processor_params.js';
 import { addon } from './native.js';
 import type {
   LoudnessMatchResult,

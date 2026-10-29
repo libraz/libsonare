@@ -94,6 +94,7 @@ This is what a change looks like by the time it is merged. The maintainer checks
 
 - For a signature, enum or struct change, change `include/sonare/` first and bring the bindings to it.
 - Update the type declarations in the same change as the code: the `.pyi` files, `bindings/node/src/types.ts` and `bindings/wasm/src/public_types.ts`.
+- Put a JS/TS helper module that no entry point re-exports under `bindings/{node,wasm}/src/internal/`, never as a top-level `src/_name.ts`: its declaration still ships in `dist/`, and the leading underscore is a Python convention, not a TypeScript one.
 - Before a rename, find every caller in two passes: a language server for the C++ tree, and a grep of the whole tree for the bindings, `benchmarks/` and `tools/`.
 - In the Node addon, read every argument and options key through the shared readers in `sonare_wrap_options.h` (`*Property`, `Optional*Arg`, `Required*Arg`). Never substitute a default for a value of the wrong type.
 - Choose the error class by cause, not by which layer refused: a refused argument is a `TypeError` (wrong type) or a `RangeError` (in Python a `SonareValueError`), whether the binding or the library refused it, so every C-ABI `INVALID_PARAMETER` surfaces that way; any other failure (object state, unsupported feature, allocation, decoding) is a `SonareError` carrying the C-ABI code. A loader refusing the content of a document it was handed (scene, config or chain JSON, HRTF bytes) reports `INVALID_FORMAT`, not `INVALID_PARAMETER`.

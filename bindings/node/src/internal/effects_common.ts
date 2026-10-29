@@ -2,8 +2,8 @@
  * Input shape and checks the effect families share.
  */
 
-import type { VoicedFlags } from './types.js';
-import { assertInt64, resolveSampleBound } from './validation.js';
+import type { VoicedFlags } from '../types.js';
+import { assertInt64, resolveSampleBound } from '../validation.js';
 
 // The addon reads the companion voicing array as an Int32Array and silently
 // ignores any other type, so validate and normalize here rather than at the

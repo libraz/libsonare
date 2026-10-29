@@ -3,7 +3,7 @@
  * edited set of them back.
  */
 
-import { resolveEntryTimes } from './_effects_common.js';
+import { resolveEntryTimes } from './internal/effects_common.js';
 import { getSonareModule } from './module_state.js';
 import type { PercussiveEvent, PercussiveEventInput } from './public_types.js';
 import type { ValidateOptions } from './validation.js';

@@ -1,4 +1,4 @@
-import { type MasteringInsertParams, resolveInsertParams } from './_processor_params.js';
+import { type MasteringInsertParams, resolveInsertParams } from './internal/processor_params.js';
 import { addon } from './native.js';
 import type {
   MasteringInsertParamChoice,

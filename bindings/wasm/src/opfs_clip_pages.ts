@@ -1,5 +1,5 @@
-import { releasedHandleError } from './_handle_guard.js';
 import { ErrorCode, SonareError } from './errors.js';
+import { releasedHandleError } from './internal/handle_guard.js';
 import type { ClipPageProvider, ClipPageRequest, RealtimeEngine } from './realtime_engine.js';
 
 export interface OpfsClipPageProviderOptions {

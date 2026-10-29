@@ -3,8 +3,8 @@
  * that return a single component.
  */
 
-import type { EffectSamplesRequest } from './_effects_common.js';
-import { resolveEffectFftOptions } from './_fft_options.js';
+import type { EffectSamplesRequest } from './internal/effects_common.js';
+import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { addon } from './native.js';
 import type { HpssResult } from './types.js';
 import { assertAudioInput, assertHpssKernels, requestObject } from './validation.js';

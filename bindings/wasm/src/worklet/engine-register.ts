@@ -1,4 +1,4 @@
-import { failurePayload } from '../_failure_payload.js';
+import { failurePayload } from '../internal/failure_payload.js';
 import type { WorkletInput, WorkletOutput } from './audio_types.js';
 import { initializeEmbindInWorklet } from './embind-init.js';
 import { SonareRealtimeEngineWorkletProcessor } from './engine-processor.js';

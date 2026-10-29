@@ -1,4 +1,4 @@
-import { ErrorCode, SonareError } from './errors.js';
+import { ErrorCode, SonareError } from '../errors.js';
 
 /**
  * Builds the `InvalidState` error every handle, client and engine reports once

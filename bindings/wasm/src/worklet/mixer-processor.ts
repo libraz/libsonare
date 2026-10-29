@@ -1,6 +1,6 @@
-import { failurePayload } from '../_failure_payload.js';
 import type { MixerRealtimeBuffer } from '../index.js';
 import { Mixer } from '../index.js';
+import { failurePayload } from '../internal/failure_payload.js';
 import { leadingSamples, type WorkletInput, type WorkletOutput } from './audio_types.js';
 import { initializeEmbindInWorklet, isEmbindReady } from './embind-init.js';
 import { isWorkletMessage, requireIntegerOption, resolveScopeSampleRate } from './guards.js';

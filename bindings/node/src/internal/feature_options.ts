@@ -1,9 +1,9 @@
-import { assertIntegerValue, assertPositiveInteger } from './validation.js';
+import { assertIntegerValue, assertPositiveInteger } from '../validation.js';
 
 /**
  * Option resolvers shared by more than one feature module.
  *
- * Deliberately internal, like `_fft_options.ts`: the `feature_*` modules import
+ * Deliberately internal, like `fft_options.ts`: the `feature_*` modules import
  * it, but the `features.js` barrel does not re-export it, so it stays out of the
  * package entry point.
  */

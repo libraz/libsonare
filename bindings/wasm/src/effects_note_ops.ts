@@ -3,8 +3,12 @@
  * rendering an edited set back, and the split/merge operations over it.
  */
 
-import { assertPitchTrackLengths, resolveEntryTimes, toVoicedFloat32 } from './_effects_common.js';
 import { ErrorCode, SonareError } from './errors.js';
+import {
+  assertPitchTrackLengths,
+  resolveEntryTimes,
+  toVoicedFloat32,
+} from './internal/effects_common.js';
 import { getSonareModule } from './module_state.js';
 import type {
   NoteExtractorOptions,

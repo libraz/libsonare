@@ -1,4 +1,4 @@
-import { releasedHandleError } from './_handle_guard.js';
+import { releasedHandleError } from './internal/handle_guard.js';
 import {
   createOpfsClipPageProvider,
   type OpfsClipPageProviderBinding,

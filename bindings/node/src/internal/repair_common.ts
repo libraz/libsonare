@@ -2,7 +2,7 @@
  * Input shape and geometry check the repair families share.
  */
 
-import { assertIntegerValue, assertPositiveInteger } from './validation.js';
+import { assertIntegerValue, assertPositiveInteger } from '../validation.js';
 
 /**
  * Check the STFT geometry the denoise and dereverb entries share, before the

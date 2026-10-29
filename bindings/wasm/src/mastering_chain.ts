@@ -1,4 +1,4 @@
-import { flattenChainConfig } from './_chain_config.js';
+import { flattenChainConfig } from './internal/chain_config.js';
 import { getSonareModule } from './module_state.js';
 import type {
   MasteringChainConfig,

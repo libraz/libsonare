@@ -2,7 +2,7 @@
  * Impulsive-defect repair: declick, declip and decrackle, with their detectors.
  */
 
-import type { MasteringRepairSamplesRequest } from './_repair_common.js';
+import type { MasteringRepairSamplesRequest } from './internal/repair_common.js';
 import { addon } from './native.js';
 import type {
   ClickDetection,

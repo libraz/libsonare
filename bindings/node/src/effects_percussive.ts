@@ -3,7 +3,7 @@
  * edited set of them back.
  */
 
-import { resolveEntryTimes, toSamples } from './_effects_common.js';
+import { resolveEntryTimes, toSamples } from './internal/effects_common.js';
 import { addon } from './native.js';
 import type { PercussiveEvent, PercussiveEventInput } from './types.js';
 import {

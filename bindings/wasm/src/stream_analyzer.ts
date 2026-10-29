@@ -1,6 +1,6 @@
-import { assertHandleLive } from './_handle_guard.js';
 import { resolveOrdinalInRange } from './codes.js';
 import { ErrorCode, SonareError } from './errors.js';
+import { assertHandleLive } from './internal/handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type { ChordQuality, PitchClass } from './public_types.js';
 import type { WasmStreamAnalyzer } from './sonare.js';

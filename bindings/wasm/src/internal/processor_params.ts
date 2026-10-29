@@ -1,17 +1,6 @@
-import { addon } from './native.js';
-import { assertFiniteScalar } from './validation.js';
-
-/** A per-processor parameter value: an enum-valued key may be given by its name. */
-export type MasteringSoloProcessorParamValue = number | boolean | string;
-
-/** Flat per-processor parameters, keyed as in `masteringInsertParamInfo`. */
-export type MasteringSoloProcessorParams = Record<string, MasteringSoloProcessorParamValue>;
-
-/** An insert parameter value: a solo value, or a list of numbers for an array-typed key. */
-export type MasteringInsertParamValue = MasteringSoloProcessorParamValue | readonly number[];
-
-/** Insert parameters, keyed as in `masteringInsertParamInfo`; the shape an insert is built from. */
-export type MasteringInsertParams = Record<string, MasteringInsertParamValue>;
+import { getSonareModule } from '../module_state.js';
+import type { MasteringInsertParams, MasteringSoloProcessorParams } from '../public_types.js';
+import { assertFiniteScalar } from '../validation.js';
 
 /**
  * Replaces each enum name in `params` with the number the flat parameter lists
@@ -29,7 +18,7 @@ export function resolveProcessorParams(
     if (typeof value !== 'string') {
       continue;
     }
-    const number = addon.masteringEnumValue(processor, key, value) as number | null;
+    const number = getSonareModule().masteringEnumValue(processor, key, value);
     if (number === null) {
       throw new TypeError(`Parameter '${key}' must be a number or boolean (got a string).`);
     }
@@ -53,12 +42,12 @@ export function resolveInsertParams(
   processor: string,
   params: MasteringInsertParams,
 ): Record<string, number | boolean | string | number[]> {
-  const info = JSON.parse(addon.masteringInsertParamInfo(processor) as string) as {
+  const info = JSON.parse(getSonareModule().masteringInsertParamInfo(processor)) as {
     name: string;
     type: string;
   }[];
   const kinds = new Map(info.map((param) => [param.name, param.type]));
-  const scalars: Record<string, MasteringSoloProcessorParamValue> = {};
+  const scalars: MasteringSoloProcessorParams = {};
   const out: Record<string, number | boolean | string | number[]> = {};
   for (const [key, value] of Object.entries(params)) {
     const kind = kinds.get(key);
