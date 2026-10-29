@@ -17,6 +17,7 @@ void PhaseAlign::prepare(double sample_rate, int max_block_size) {
   validate_prepare_args(sample_rate, max_block_size);
   prepared_ = true;
   rebuild_delay();
+  stage_.close();
 }
 
 void PhaseAlign::process(float* const* channels, int num_channels, int num_samples) {
@@ -25,8 +26,9 @@ void PhaseAlign::process(float* const* channels, int num_channels, int num_sampl
   if (!validate_process_buffers(channels, num_channels, num_samples)) {
     return;
   }
-  if (num_channels < 2 ||
-      (config_.delay_samples == 0 && config_.fractional_delay_samples == 0.0f)) {
+  const bool active =
+      num_channels >= 2 && (config_.delay_samples != 0 || config_.fractional_delay_samples != 0.0f);
+  if (!stage_.admit(active, [this] { reset(); })) {
     return;
   }
 
@@ -37,7 +39,10 @@ void PhaseAlign::process(float* const* channels, int num_channels, int num_sampl
   }
 }
 
-void PhaseAlign::reset() { delay_.clear(); }
+void PhaseAlign::reset() {
+  delay_.clear();
+  stage_.close();
+}
 
 int PhaseAlign::tail_samples() const noexcept {
   rt::TailBudget tail;

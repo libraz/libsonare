@@ -7,6 +7,7 @@
 
 #include "mastering/stereo/cross_channel_delay.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 
 namespace sonare::mastering::stereo {
 
@@ -46,6 +47,7 @@ class PhaseAlign : public rt::ProcessorBase {
   PhaseAlignConfig config_{};
   CrossChannelDelay delay_;
   bool prepared_ = false;
+  rt::StageGate stage_;
 };
 
 }  // namespace sonare::mastering::stereo

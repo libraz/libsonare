@@ -20,6 +20,7 @@
 
 #include "rt/biquad_design.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::stereo {
@@ -67,6 +68,7 @@ class BinauralPanner : public rt::ProcessorBase {
   static void validate_config(const BinauralPannerConfig& config);
   void design_canceller();
   void advance_position() noexcept;
+  void reset_audio_history();
 
   BinauralPannerConfig config_{};
   bool prepared_ = false;
@@ -109,6 +111,7 @@ class BinauralPanner : public rt::ProcessorBase {
   /// Dry input delayed by the latency, per channel.
   std::vector<float> dry_[2];
   size_t dry_pos_ = 0;
+  rt::StageGate stage_;
 };
 
 }  // namespace sonare::mastering::stereo

@@ -196,7 +196,7 @@ void BinauralPanner::design_canceller() {
   }
 }
 
-void BinauralPanner::reset() {
+void BinauralPanner::reset_audio_history() {
   std::fill(mono_.begin(), mono_.end(), 0.0f);
   mono_write_ = 0;
   for (auto& history : ear_history_) std::fill(history.begin(), history.end(), 0.0f);
@@ -211,8 +211,13 @@ void BinauralPanner::reset() {
       high_[ch][stage].reset();
     }
   }
+}
+
+void BinauralPanner::reset() {
+  reset_audio_history();
   ramp_remaining_ = 0;
   primed_ = false;
+  stage_.close();
 }
 
 int BinauralPanner::tail_samples() const noexcept {
@@ -250,7 +255,7 @@ void BinauralPanner::process(float* const* channels, int num_channels, int num_s
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "BinauralPanner");
   if (!validate_process_buffers(channels, num_channels, num_samples)) return;
-  if (num_channels < 2) return;
+  if (!stage_.admit(num_channels >= 2, [this] { reset_audio_history(); })) return;
 
   const float speakers_target = config_.output == BinauralOutput::kSpeakers ? 1.0f : 0.0f;
   if (!primed_) {
