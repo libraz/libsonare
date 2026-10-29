@@ -66,6 +66,17 @@ LEGITIMATE = (0.1, -6.25, 2.5, 3, True)
 SCALAR_PATHS = ("setattr", "keyword", "positional")
 
 
+def _ctypes_value_snapshot(value: object) -> object:
+    """Recursively snapshot ctypes containers by value for exact comparisons."""
+    if isinstance(value, ctypes.Array):
+        return tuple(_ctypes_value_snapshot(element) for element in value)
+    if isinstance(value, (ctypes.Structure, ctypes.Union)):
+        return tuple(
+            (field[0], _ctypes_value_snapshot(getattr(value, field[0]))) for field in value._fields_
+        )
+    return value
+
+
 def assign(path: str, field: str, value: object) -> Probe:
     """Deliver ``value`` to ``field`` by ``path``, returning the struct it landed in."""
     if path == "setattr":
@@ -165,6 +176,17 @@ def test_an_array_element_is_not_reached_by_the_field_guard() -> None:
     assert probe.bands[0] == float("inf")
 
 
+def test_ctypes_snapshot_compares_array_contents() -> None:
+    """Equal independent arrays compare by value and a changed element is visible."""
+    first = (ctypes.c_int * ARRAY_LENGTH)(1, 2, 3)
+    equal = (ctypes.c_int * ARRAY_LENGTH)(1, 2, 3)
+    different = (ctypes.c_int * ARRAY_LENGTH)(1, 2, 4)
+
+    assert first is not equal
+    assert _ctypes_value_snapshot(first) == _ctypes_value_snapshot(equal)
+    assert _ctypes_value_snapshot(first) != _ctypes_value_snapshot(different)
+
+
 def test_a_shipped_config_refuses_a_folding_value_on_the_field_that_carried_it() -> None:
     """The guard reaches the declared fields of a real struct, not only a probe."""
     assert ls.RealtimeVoiceChangerConfig(input_gain_db=-6.25).to_pod().input_gain_db == -6.25
@@ -180,5 +202,4 @@ def test_a_shipped_config_round_trips_the_defaults_the_library_supplies() -> Non
     """A value the C side produced is written back, so the guard has to accept it."""
     pod = ls.RealtimeVoiceChangerConfig().to_pod()
     again = ls.RealtimeVoiceChangerConfig.from_pod(pod).to_pod()
-    names = [name for name, *_ in pod._fields_]
-    assert [getattr(again, name) for name in names] == [getattr(pod, name) for name in names]
+    assert _ctypes_value_snapshot(again) == _ctypes_value_snapshot(pod)

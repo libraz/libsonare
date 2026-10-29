@@ -6789,6 +6789,25 @@
           "stdout": "json"
         },
         {
+          "id": "preset_grain",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--preset",
+            "bright-idol",
+            "--set",
+            "dsp.voiceEngine.engine=grain",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "preset",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
           "id": "custom",
           "argv": [
             "voice-change",
@@ -7459,7 +7478,7 @@
           "placeholder": "rir_output",
           "kind": "wav",
           "sample_rate_key": "sample_rate",
-          "sha256": "8548c2666ae2630b452d47fbdc4a77a962ef7b161a74db08ab0b5ed50a464ae2"
+          "sha256": "3f1e0147860824343bff007511365f84abd91d984b8472fafd35614e23c2b78f"
         }
       }
     },
@@ -17477,6 +17496,10 @@
             "grainSize": 64,
             "mix": 0,
             "semitones": 0
+          },
+          "voiceEngine": {
+            "engine": "grain",
+            "f0MinHz": 70
           },
           "reverb": {
             "damping": 0.55,

@@ -156,7 +156,7 @@ _CLASS_INSTANCES: dict[str, Callable[[], Any]] = {
     "PlaybackLoudnessMeter": lambda: libsonare.PlaybackLoudnessMeter(1, 22050),
     "PlaybackRenderer": lambda: libsonare.PlaybackRenderer({}, max_block_size=128),
     "Project": lambda: libsonare.Project(),
-    "RealtimeVoiceChanger": lambda: libsonare.RealtimeVoiceChanger(22050),
+    "RealtimeVoiceChanger": lambda: libsonare.RealtimeVoiceChanger(22050, channels=2),
     "SampleBank": lambda: libsonare.SampleBank(),
     "StreamAnalyzer": lambda: libsonare.StreamAnalyzer(),
     "StreamingEqualizer": lambda: libsonare.StreamingEqualizer(),
@@ -186,6 +186,7 @@ _MATRIX_COL_ARGS = ("cols", "n_frames", "n_lags", "x_cols", "y_cols")
 # Parameters that are themselves buffers, and take the same probe input.
 _BUFFER_ARGS = (
     "right",
+    "carrier",
     "y",
     "source",
     "reference",
@@ -285,6 +286,15 @@ _ENTRY_POINTS = _buffer_entry_points()
 _METHOD_ENTRY_POINTS = {
     name: entry for name, entry in _ENTRY_POINTS.items() if entry.owner is not None
 }
+
+# RealtimeVoiceChanger process methods deliberately accept zero-frame input and
+# sanitize non-finite audio in the processing core. Their profiles live with
+# their affirmative tests, rather than the offline facade's empty/finite rule.
+_DISCOVERED_REALTIME_VOICE_PROCESS_ENTRY_POINTS = {
+    name
+    for name, entry in _ENTRY_POINTS.items()
+    if entry.owner == "RealtimeVoiceChanger" and name.rsplit(".", 1)[-1].startswith("process_")
+}
 # Entry points whose leading buffer is an F0 contour. A frame carrying no pitch
 # is spelled zero, negative or non-finite there -- pitch_pyin leaves NaN unless
 # asked to fill it -- so a value scan would refuse a measurement rather than a
@@ -316,18 +326,6 @@ _REALTIME_BLOCK_PATH = {
         "(it goes through _check_realtime, not _check); output stays finite (measured "
         "zeros) rather than carrying the input's NaNs through, and an empty block is "
         "accepted as a legitimate zero-frame no-op"
-    ),
-    "RealtimeVoiceChanger.process_interleaved": (
-        "silent: the caller owns the finite check on an audio-thread block call; "
-        "output stays finite but is perturbed from the latency boundary onwards"
-    ),
-    "RealtimeVoiceChanger.process_mono": (
-        "silent: the caller owns the finite check on an audio-thread block call; "
-        "output stays finite but is perturbed from the latency boundary onwards"
-    ),
-    "RealtimeVoiceChanger.process_planar_stereo": (
-        "unnamed: the caller owns the finite check on an audio-thread block call; "
-        "the non-finite block is refused as a bare Invalid parameter"
     ),
     "StreamAnalyzer.process": (
         "silent: the caller owns the finite check on a streaming block call; the "
@@ -361,12 +359,13 @@ _REALTIME_BLOCK_PATH = {
 
 
 def _guard_parameters() -> list[Any]:
-    """``_GUARDED`` as parametrize arguments, block-path methods strictly xfailed."""
+    """Offline guards, leaving documented realtime voice methods to their own tests."""
     return [
         pytest.param(name, marks=pytest.mark.xfail(strict=True, reason=_REALTIME_BLOCK_PATH[name]))
         if name in _REALTIME_BLOCK_PATH
         else name
         for name in _GUARDED
+        if name not in _DISCOVERED_REALTIME_VOICE_PROCESS_ENTRY_POINTS
     ]
 
 
@@ -398,7 +397,11 @@ def _invoke(name: str, entry: _EntryPoint, args: list[Any], kwargs: dict[str, An
             close()
 
 
-def _probe_value(name: str, parameter: inspect.Parameter, buffer: np.ndarray) -> Any:
+def _probe_value(
+    name: str,
+    parameter: inspect.Parameter,
+    buffer: np.ndarray,
+) -> Any:
     """The probe value for one required parameter, by name/shape lookup."""
     if parameter.name in _BUFFER_ARGS:
         return buffer
@@ -457,6 +460,16 @@ def test_buffer_entry_point_floor() -> None:
     # own: a mixin reshuffle or a Protocol check that catches too much would
     # empty it while the module-level count stays comfortably over its floor.
     assert len(_METHOD_ENTRY_POINTS) >= 15, sorted(_METHOD_ENTRY_POINTS)
+
+
+def test_realtime_voice_process_profiles_match_discovered_methods() -> None:
+    """The six profiled raw process methods stay in the derived, guarded family."""
+    assert len(_DISCOVERED_REALTIME_VOICE_PROCESS_ENTRY_POINTS) == 6
+    assert set(_GUARDED) >= _DISCOVERED_REALTIME_VOICE_PROCESS_ENTRY_POINTS
+    assert _DISCOVERED_REALTIME_VOICE_PROCESS_ENTRY_POINTS.isdisjoint(
+        set(_EMPTY_INPUT_IS_DEFINED) | _NO_PITCH_IS_A_VALUE
+    )
+    assert _DISCOVERED_REALTIME_VOICE_PROCESS_ENTRY_POINTS.isdisjoint(_REALTIME_BLOCK_PATH)
 
 
 def test_every_exemption_is_live() -> None:

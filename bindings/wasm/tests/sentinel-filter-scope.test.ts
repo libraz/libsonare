@@ -470,6 +470,10 @@ const NOT_SENTINEL_FILTERS: ReadonlyMap<string, string> = new Map([
     'A loop index selecting whether a warp anchor has a predecessor to be ordered against.',
   ],
   [
+    'src/wasm/bindings/effects/realtime_voice_changer.cpp:i',
+    'vcParseEnum iterates its static VcEnumName table and uses i only to choose comma/or separators while formatting rejected enum values; it is not caller input or a default sentinel.',
+  ],
+  [
     'src/wasm/bindings/features/spectral.cpp:rows',
     'A divisor guard over a row count the core returned; the false branch reports an empty shape.',
   ],

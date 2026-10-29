@@ -792,7 +792,7 @@ def _validate_voice_case_relationships(
 
     expected_length = manifest["fixtures"]["audio"]["frames"]
     expected_rate = manifest["fixtures"]["audio"]["sample_rate"]
-    for case_id in ("simple", "preset", "custom"):
+    for case_id in ("simple", "preset", "custom", "preset_grain"):
         payload = payloads.get(("voice-change", case_id))
         if not isinstance(payload, dict):
             continue
@@ -828,24 +828,26 @@ def _validate_voice_case_relationships(
             )
             if mismatch:
                 report.append(("fail", mismatch))
-    preset = payloads.get(("voice-change", "preset"))
-    if isinstance(preset, dict):
+    for case_id, latency in (("preset", 333), ("preset_grain", 1042)):
+        preset = payloads.get(("voice-change", case_id))
+        if not isinstance(preset, dict):
+            continue
         if preset.get("preset") != "bright-idol":
             report.append(
                 (
                     "fail",
                     (
-                        f"{surface}.voice-change.preset.preset: expected 'bright-idol', "
+                        f"{surface}.voice-change.{case_id}.preset: expected 'bright-idol', "
                         f"got {preset.get('preset')!r}"
                     ),
                 )
             )
-        if preset.get("latency_samples") != 1042:
+        if preset.get("latency_samples") != latency:
             report.append(
                 (
                     "fail",
                     (
-                        f"{surface}.voice-change.preset.latency_samples: expected 1042, "
+                        f"{surface}.voice-change.{case_id}.latency_samples: expected {latency}, "
                         f"got {preset.get('latency_samples')!r}"
                     ),
                 )

@@ -435,16 +435,21 @@ describe('editing effects', () => {
     expect(changer.configJson()).toContain('retune');
     changer.destroy();
 
-    const offline = voiceChangeRealtime(tone.subarray(0, 512), SR, 'soft-whisper');
+    // The latency comparison below is a grain-engine property; the preset defaults to PSOLA.
+    const grainPreset = {
+      ...realtimeVoiceChangerPresetConfig('soft-whisper'),
+      voiceEngineEngine: 'grain' as const,
+    };
+    const offline = voiceChangeRealtime(tone.subarray(0, 512), SR, grainPreset);
     expect(offline).toBeInstanceOf(Float32Array);
     expect(offline.length).toBe(512);
-    expect(voiceChangeRealtime(tone.subarray(0, 512), SR, 'soft-whisper')).toEqual(offline);
+    expect(voiceChangeRealtime(tone.subarray(0, 512), SR, grainPreset)).toEqual(offline);
 
     const uncompensated = new RealtimeVoiceChanger({
       sampleRate: SR,
       maxBlockSize: 512,
       channels: 1,
-      preset: 'soft-whisper',
+      preset: grainPreset,
     });
     const latency = uncompensated.latencySamples();
     expect(latency).toBeGreaterThan(0);
