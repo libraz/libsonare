@@ -100,7 +100,7 @@ TEST_CASE("Viterbi transition precomputation preserves seeded reference paths", 
     state = state * 1664525u + 1013904223u;
     return static_cast<float>((state >> 8) % 1000u) / 1000.0f;
   };
-  for (const auto [states, steps] : {std::pair{2, 2}, std::pair{4, 13}, std::pair{9, 31}}) {
+  for (const auto& [states, steps] : {std::pair{2, 2}, std::pair{4, 13}, std::pair{9, 31}}) {
     CAPTURE(states, steps);
     std::vector<float> emissions(static_cast<size_t>(states) * steps);
     std::vector<float> transition(static_cast<size_t>(states) * states);
