@@ -362,21 +362,6 @@ void add_range(std::vector<SampleRange>& ranges, SampleRange range) {
   if (range.start < range.end) ranges.push_back(range);
 }
 
-void normalize_ranges(std::vector<SampleRange>& ranges) {
-  insertion_sort(ranges.begin(), ranges.end(), [](SampleRange lhs, SampleRange rhs) {
-    return lhs.start < rhs.start || (lhs.start == rhs.start && lhs.end < rhs.end);
-  });
-  std::vector<SampleRange> merged;
-  for (const auto range : ranges) {
-    if (!merged.empty() && range.start <= merged.back().end) {
-      merged.back().end = std::max(merged.back().end, range.end);
-    } else {
-      merged.push_back(range);
-    }
-  }
-  ranges = std::move(merged);
-}
-
 }  // namespace
 
 float detail::stretch_rate_for_length(std::size_t input_size, std::size_t output_size) {
@@ -656,7 +641,7 @@ bool VocalRenderJob::next(const VocalCancelProbe& cancel) {
             impl_->plans[i].diagnostics.limited_correction_frames;
         impl_->result.diagnostics.dry_passed_frames += impl_->artifacts[i]->dry_passed_frames;
       }
-      normalize_ranges(impl_->processed_ranges);
+      detail::normalize_sample_ranges(impl_->processed_ranges);
       impl_->result.processed_ranges = impl_->processed_ranges;
       impl_->result.cache_hit_units = impl_->cache_hits;
       impl_->state = VocalRenderJobState::kComplete;

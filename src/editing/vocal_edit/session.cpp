@@ -409,24 +409,6 @@ std::vector<float> split_envelope(const std::vector<float>& envelope, double fra
   return result;
 }
 
-void normalize_ranges(std::vector<SampleRange>& ranges) {
-  ranges.erase(std::remove_if(ranges.begin(), ranges.end(),
-                              [](const SampleRange& range) { return range.start >= range.end; }),
-               ranges.end());
-  insertion_sort(ranges.begin(), ranges.end(), [](const SampleRange& lhs, const SampleRange& rhs) {
-    return lhs.start < rhs.start || (lhs.start == rhs.start && lhs.end < rhs.end);
-  });
-  std::vector<SampleRange> merged;
-  for (const auto& range : ranges) {
-    if (!merged.empty() && range.start <= merged.back().end) {
-      merged.back().end = std::max(merged.back().end, range.end);
-    } else {
-      merged.push_back(range);
-    }
-  }
-  ranges = std::move(merged);
-}
-
 void sort_transitions(VocalEditState& state) {
   insertion_sort(state.transitions.begin(), state.transitions.end(),
                  [](const PitchTransition& lhs, const PitchTransition& rhs) {
@@ -527,7 +509,7 @@ std::vector<SampleRange> dirty_ranges_for_states(const VocalEditState& old_state
     range.start = std::clamp<int64_t>(range.start, 0, output_length);
     range.end = std::clamp<int64_t>(range.end, 0, output_length);
   }
-  normalize_ranges(ranges);
+  detail::normalize_sample_ranges(ranges);
   return ranges;
 }
 

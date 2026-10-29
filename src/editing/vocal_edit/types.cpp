@@ -1,8 +1,12 @@
 // SONARE_WASM_EXCEPTION_UNWIND: release edit vectors when validation throws.
 #include "editing/vocal_edit/types.h"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
+#include <utility>
+
+#include "util/insertion_sort.h"
 
 namespace sonare::editing::vocal_edit {
 namespace {
@@ -26,6 +30,28 @@ ErrorCode error_code_for(VocalReason reason) {
 }
 
 }  // namespace
+
+namespace detail {
+
+void normalize_sample_ranges(std::vector<SampleRange>& ranges) {
+  ranges.erase(std::remove_if(ranges.begin(), ranges.end(),
+                              [](const SampleRange& range) { return range.start >= range.end; }),
+               ranges.end());
+  insertion_sort(ranges.begin(), ranges.end(), [](const SampleRange& lhs, const SampleRange& rhs) {
+    return lhs.start < rhs.start || (lhs.start == rhs.start && lhs.end < rhs.end);
+  });
+  std::vector<SampleRange> merged;
+  for (const auto& range : ranges) {
+    if (!merged.empty() && range.start <= merged.back().end) {
+      merged.back().end = std::max(merged.back().end, range.end);
+    } else {
+      merged.push_back(range);
+    }
+  }
+  ranges = std::move(merged);
+}
+
+}  // namespace detail
 
 VocalNoteEdit VocalNoteEdit::identity_for(const SampleRange source_range) {
   if (source_range.start < 0 || source_range.end <= source_range.start) {

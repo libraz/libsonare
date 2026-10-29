@@ -56,6 +56,44 @@ VocalSessionCreateOptions options() {
 
 }  // namespace
 
+TEST_CASE("vocal sample ranges normalize to their ordered interval union",
+          "[vocal_state][vocal_ranges]") {
+  using sonare::editing::vocal_edit::detail::normalize_sample_ranges;
+
+  std::vector<SampleRange> empty;
+  normalize_sample_ranges(empty);
+  CHECK(empty.empty());
+
+  std::vector<SampleRange> invalid = {{2, 2}, {5, 1}};
+  normalize_sample_ranges(invalid);
+  CHECK(invalid.empty());
+
+  std::vector<SampleRange> ranges = {{5, 5},   {8, 3},   {4, 8},   {1, 3},   {3, 4},  {10, 14},
+                                     {10, 12}, {12, 14}, {11, 20}, {22, 24}, {26, 27}};
+  for (int64_t index = 39; index >= 0; --index) {
+    const int64_t start = 100 + index * 3;
+    ranges.push_back({start, start + 1});
+  }
+
+  normalize_sample_ranges(ranges);
+
+  REQUIRE(ranges.size() == 44);
+  CHECK(ranges[0].start == 1);
+  CHECK(ranges[0].end == 8);
+  CHECK(ranges[1].start == 10);
+  CHECK(ranges[1].end == 20);
+  CHECK(ranges[2].start == 22);
+  CHECK(ranges[2].end == 24);
+  CHECK(ranges[3].start == 26);
+  CHECK(ranges[3].end == 27);
+  for (int64_t index = 0; index < 40; ++index) {
+    const auto& range = ranges[static_cast<std::size_t>(index + 4)];
+    const int64_t start = 100 + index * 3;
+    CHECK(range.start == start);
+    CHECK(range.end == start + 1);
+  }
+}
+
 TEST_CASE("vocal restore hash diagnostics are independent of the global locale",
           "[vocal_state][vocal_hash_locale]") {
   struct GroupedHex : std::numpunct<char> {

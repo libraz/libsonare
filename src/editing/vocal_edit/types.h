@@ -74,6 +74,13 @@ struct SampleRange {
   bool empty() const noexcept { return start >= end; }
 };
 
+namespace detail {
+
+/// Sort and merge sample ranges into their ordered interval union.
+void normalize_sample_ranges(std::vector<SampleRange>& ranges);
+
+}  // namespace detail
+
 struct AnalysisGrid {
   double frame_origin_sample = 0.0;
   double samples_per_frame = 512.0;
