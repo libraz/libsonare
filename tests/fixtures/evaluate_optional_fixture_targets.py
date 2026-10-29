@@ -10,6 +10,7 @@ from statistics import mean
 from typing import Any
 
 from json_safe import dumps_strict, write_json_strict
+from observation_values import require_correct
 
 DEFAULT_TARGETS = {
     "bpm": {"pass_rate_min": 0.85, "octave_error_rate_max": 0.05, "min_count": 50},
@@ -61,7 +62,7 @@ def metric_value(item: dict[str, Any]) -> float | None:
     if metric == "bpm":
         return float(item["relative_error_percent"])
     if metric == "key":
-        return 1.0 if bool(item.get("correct")) else 0.0
+        return 1.0 if require_correct(item) else 0.0
     if metric == "key_mirex":
         score = item.get("mirex_score")
         return float(score) if score is not None else None
@@ -72,7 +73,7 @@ def metric_value(item: dict[str, Any]) -> float | None:
         rank = item.get("expected_rank")
         return 1.0 if rank is not None and int(rank) > 0 and int(rank) <= 5 else 0.0
     if metric == "meter" or str(metric).startswith("meter_"):
-        return 1.0 if bool(item.get("correct")) else 0.0
+        return 1.0 if require_correct(item) else 0.0
     if metric == "beat_improvement":
         return float(item["improvement"])
     if metric in ("beat", "downbeat") or str(metric).startswith("downbeat_"):
@@ -106,7 +107,7 @@ def metric_pass(item: dict[str, Any]) -> bool | None:
     if metric == "bpm":
         return float(item["relative_error_percent"]) <= float(item["tolerance_percent"])
     if metric == "key":
-        return bool(item.get("correct")) if item.get("expected_root") is not None else None
+        return require_correct(item) if item.get("expected_root") is not None else None
     if metric == "key_mirex":
         return None
     if metric == "key_top3":
@@ -116,7 +117,7 @@ def metric_pass(item: dict[str, Any]) -> bool | None:
         rank = item.get("expected_rank")
         return int(rank) > 0 and int(rank) <= 5 if rank is not None else None
     if metric == "meter" or str(metric).startswith("meter_"):
-        return bool(item.get("correct"))
+        return require_correct(item)
     if metric == "beat_improvement":
         threshold = item.get("threshold")
         return float(item["improvement"]) >= float(threshold) if threshold is not None else None

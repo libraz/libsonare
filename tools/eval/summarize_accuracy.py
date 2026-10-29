@@ -28,6 +28,13 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
+_FIXTURE_HELPERS = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
+if str(_FIXTURE_HELPERS) not in sys.path:
+    sys.path.insert(0, str(_FIXTURE_HELPERS))
+
+# Standalone invocation needs the helper path above before importing it.
+from observation_values import require_correct
+
 # Relative BPM error counted as correct, the MIREX Acc1 convention.
 BPM_ACCURACY_TOLERANCE = 0.04
 
@@ -79,7 +86,7 @@ def summarize_key(observations: list[dict[str, Any]]) -> dict[str, Any]:
         category = str(item.get("mirex_category", "other"))
         categories[category] = categories.get(category, 0) + 1
     return {
-        "accuracy": fraction(bool(item.get("correct")) for item in observations),
+        "accuracy": fraction(require_correct(item) for item in observations),
         "mirex_score": mean(
             float(item["mirex_score"])
             for item in observations
@@ -108,7 +115,7 @@ def summarize_events(observations: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def summarize_meter(observations: list[dict[str, Any]]) -> dict[str, Any]:
-    return {"accuracy": fraction(bool(item.get("correct")) for item in observations)}
+    return {"accuracy": fraction(require_correct(item) for item in observations)}
 
 
 def summarize_chord(observations: list[dict[str, Any]]) -> dict[str, Any]:

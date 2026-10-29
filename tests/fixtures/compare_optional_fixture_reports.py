@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from json_safe import dumps_strict, json_safe, write_json_strict
+from observation_values import require_correct
 
 
 def observation_metric(item: dict[str, Any]) -> str:
@@ -34,7 +35,7 @@ def key_score(item: dict[str, Any]) -> float | tuple[int, int]:
     if item.get("mirex_score") is not None:
         return float(item["mirex_score"])
     if item.get("expected_root") is not None and item.get("expected_mode") is not None:
-        return 1.0 if bool(item.get("correct")) else 0.0
+        return 1.0 if require_correct(item) else 0.0
     return int(item["measured_root"]), int(item["measured_mode"])
 
 

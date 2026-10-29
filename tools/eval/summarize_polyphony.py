@@ -23,6 +23,13 @@ from typing import Any
 MARKER = "POLYF0_EVAL "
 
 
+def non_negative_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be non-negative")
+    return parsed
+
+
 def parse(stream: Any) -> list[dict[str, Any]]:
     """Every marked line, in the order the run produced them."""
     out = []
@@ -55,7 +62,7 @@ def main() -> int:
     ap.add_argument("path", nargs="?", help="run output; stdin when omitted")
     ap.add_argument(
         "--require",
-        type=int,
+        type=non_negative_int,
         default=0,
         metavar="N",
         help="fail when fewer than N items were observed, so a corpus that "

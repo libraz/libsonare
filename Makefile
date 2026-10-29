@@ -893,6 +893,7 @@ conformance:
 	python3 tools/parity/test_comparison_reach.py
 	python3 tools/parity/test_c_return_type_coverage.py
 	python3 tools/eval/test_summarize_accuracy.py
+	python3 -m unittest tests/conformance/test_report_input_validation.py
 	python3 tools/audition/test_serve.py
 	python3 tools/audition/test_page.py
 	python3 tools/parity/surface_coverage.py --check
