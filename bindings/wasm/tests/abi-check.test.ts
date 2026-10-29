@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import * as analysis from '../dist/analysis.js';
 import * as full from '../dist/index.js';
+import createSonareModule from '../dist/sonare.js';
 import * as worklet from '../dist/worklet.js';
 
 type Entry = typeof full | typeof analysis;
@@ -8,6 +9,15 @@ type Factory = NonNullable<Parameters<Entry['init']>[0]>['moduleFactory'];
 
 const wrongAbi = (async () => ({ abiVersion: () => 0x01010101 })) as unknown as Factory;
 const noAbi = (async () => ({})) as unknown as Factory;
+let actualAbiVersion: number;
+
+beforeAll(async () => {
+  actualAbiVersion = (await createSonareModule()).abiVersion();
+});
+
+function abiVersionHex(version: number): string {
+  return `0x${version.toString(16).padStart(8, '0')}`;
+}
 
 describe.each([
   ['index', full],
@@ -20,7 +30,7 @@ describe.each([
     expect(sonare.code).toBe(entry.ErrorCode.AbiMismatch);
     expect(sonare.codeName).toBe('AbiMismatch');
     expect(sonare.message).toContain('0x01010101');
-    expect(sonare.message).toContain('0x05030207');
+    expect(sonare.message).toContain(abiVersionHex(actualAbiVersion));
     expect(sonare.message).toMatch(/wasmBinary.*locateFile.*moduleFactory/);
     expect(entry.isInitialized()).toBe(false);
 
@@ -34,9 +44,9 @@ describe.each([
 });
 
 describe('EXPECTED_ABI_VERSION', () => {
-  it('is exported from every entry that takes a moduleFactory', () => {
-    expect(full.EXPECTED_ABI_VERSION).toBe(0x05030207);
-    expect(analysis.EXPECTED_ABI_VERSION).toBe(full.EXPECTED_ABI_VERSION);
-    expect(worklet.EXPECTED_ABI_VERSION).toBe(full.EXPECTED_ABI_VERSION);
+  it('matches the version reported by the generated WASM module', () => {
+    expect(full.EXPECTED_ABI_VERSION).toBe(actualAbiVersion);
+    expect(analysis.EXPECTED_ABI_VERSION).toBe(actualAbiVersion);
+    expect(worklet.EXPECTED_ABI_VERSION).toBe(actualAbiVersion);
   });
 });
