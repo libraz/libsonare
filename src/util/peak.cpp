@@ -5,7 +5,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
+#include <cstdint>
+#include <limits>
 
 #include "util/exception.h"
 
@@ -24,16 +25,22 @@ std::vector<int> peak_pick(const float* x, std::size_t n, int pre_max, int post_
   }
   std::vector<int> peaks;
   if (n == 0) return peaks;
+  if (n > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "peak_pick: input length exceeds the peak index range");
+  }
 
   const int N = static_cast<int>(n);
-  int last_peak = -wait - 1;  // ensures first candidate is allowed
+  // Wide so the distance i - last_peak from the -wait-1 sentinel cannot overflow int.
+  int64_t last_peak = -static_cast<int64_t>(wait) - 1;  // allows the first candidate
   for (int i = 0; i < N; ++i) {
     // Local max window, matching librosa's x[i - pre_max : i + post_max] slice:
     // the high end i + post_max is EXCLUSIVE, so the inclusive upper index is
     // i + post_max - 1 (an inclusive i + post_max would scan one sample too far
     // and pass spurious peaks on a plateau's trailing edge).
-    const int max_lo = std::max(0, i - pre_max);
-    const int max_hi = std::min(N - 1, i + post_max - 1);
+    const int max_lo = pre_max >= i ? 0 : i - pre_max;
+    const int max_remaining = N - 1 - i;
+    const int max_hi = post_max - 1 >= max_remaining ? N - 1 : i + post_max - 1;
     bool is_max = true;
     for (int k = max_lo; k <= max_hi; ++k) {
       if (x[k] > x[i]) {
@@ -45,15 +52,16 @@ std::vector<int> peak_pick(const float* x, std::size_t n, int pre_max, int post_
 
     // Moving average baseline over librosa's x[i - pre_avg : i + post_avg] slice
     // (high end exclusive -> inclusive i + post_avg - 1).
-    const int avg_lo = std::max(0, i - pre_avg);
-    const int avg_hi = std::min(N - 1, i + post_avg - 1);
+    const int avg_lo = pre_avg >= i ? 0 : i - pre_avg;
+    const int avg_remaining = N - 1 - i;
+    const int avg_hi = post_avg - 1 >= avg_remaining ? N - 1 : i + post_avg - 1;
     double sum = 0.0;
     for (int k = avg_lo; k <= avg_hi; ++k) sum += x[k];
     const int avg_count = avg_hi - avg_lo + 1;
     const float avg = static_cast<float>(sum / static_cast<double>(avg_count));
 
     if (x[i] < avg + delta) continue;
-    if (i - last_peak <= wait) continue;
+    if (static_cast<int64_t>(i) - last_peak <= static_cast<int64_t>(wait)) continue;
     peaks.push_back(i);
     last_peak = i;
   }
