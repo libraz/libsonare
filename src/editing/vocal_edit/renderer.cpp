@@ -453,6 +453,7 @@ struct VocalRenderJob::Impl {
   bool result_taken = false;
   bool active_call = false;
   int64_t assembly_cursor = 0;
+  std::vector<float> assembly_tile;
   std::shared_ptr<std::atomic<uint32_t>> job_count;
   void release_job() noexcept {
     if (job_count) {
@@ -606,7 +607,8 @@ bool VocalRenderJob::next(const VocalCancelProbe& cancel) {
           impl_->assembly_cursor,
           impl_->assembly_cursor + std::min<int64_t>(kAssemblyTileSamples, remaining)};
       const std::size_t output_size = checked_size(request.length(), "request.range");
-      std::vector<float> tile(output_size);
+      impl_->assembly_tile.resize(output_size);
+      std::vector<float>& tile = impl_->assembly_tile;
       const Audio& source = data.source;
       for (std::size_t i = 0; i < output_size; ++i) {
         const int64_t sample = request.start + static_cast<int64_t>(i);

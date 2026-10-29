@@ -52,6 +52,8 @@ add_executable(sonare_tests
   util/synthesis_test.cpp
   util/remix_test.cpp
   util/audio_ops_test.cpp
+  util/mu_quantization_domain_test.cpp
+  util/lpc_order_domain_test.cpp
   util/nnls_test.cpp
   core/harmonic_lookup_equivalence_test.cpp
   util/harmonic_test.cpp
@@ -76,6 +78,7 @@ add_executable(sonare_tests
   filters/chroma_domain_test.cpp
   filters/chroma_test.cpp
   filters/dct_test.cpp
+  filters/dct_dimension_domain_test.cpp
   filters/iir_test.cpp
   feature/duration_range_test.cpp
   feature/mel_spectrogram_test.cpp
@@ -130,6 +133,7 @@ add_executable(sonare_tests
   analysis/music_analyzer_rate_test.cpp
   analysis/analysis_tuning_test.cpp
   editing/percussive_event_test.cpp
+  editing/event_render_domain_test.cpp
   editing/polyphonic_f0_test.cpp
   editing/polyphonic_inharmonicity_test.cpp
   editing/polyphonic_mask_test.cpp
@@ -557,6 +561,9 @@ if(BUILD_ACOUSTIC_SIM)
 endif()
 
 if(BUILD_PITCH_EDITOR)
+  if(BUILD_MIXING)
+    target_sources(sonare_tests PRIVATE editing/vocal_assembly_alloc_test.cpp)
+  endif()
   target_sources(sonare_tests PRIVATE editing/note_model_test.cpp
                                       editing/vocal_origin_test.cpp
                                       editing/vocal_pitch_plan_test.cpp
