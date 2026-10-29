@@ -298,7 +298,7 @@ describe('RealtimeVoiceChanger voice transformer', () => {
           frames[i * 2] = left[i];
           frames[i * 2 + 1] = right[i];
         }
-        let interleavedOut = new Float32Array(0);
+        let interleavedOut: Float32Array<ArrayBufferLike> = new Float32Array(0);
         let planarLeft = new Float32Array(0);
         let planarRight = new Float32Array(0);
         const planarCarrier = planar.getCarrierBuffer(BLOCK);

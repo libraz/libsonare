@@ -19,12 +19,12 @@ beforeAll(async () => {
   await init();
 });
 
-const OPTIONS: ProjectBounceOptions = {
+const OPTIONS = {
   totalFrames: 48000,
   blockSize: 128,
   numChannels: 2,
   sampleRate: 48000,
-};
+} satisfies ProjectBounceOptions;
 
 /** One sustained note routed to destination 0. */
 function midiProject(): Project {
@@ -244,7 +244,7 @@ describe('bounceWithInstruments', () => {
         ),
       ).toThrow('once');
       expect(project.bounceWithInstruments([new ConstantInstrument()], OPTIONS)).toHaveLength(
-        OPTIONS.totalFrames! * 2,
+        OPTIONS.totalFrames * 2,
       );
     });
   });
@@ -332,7 +332,7 @@ describe('bounceWithInstruments', () => {
     }
     // The refusals changed nothing: the project still bounces and keeps its rate.
     expect(project.getSampleRate()).toBe(48000);
-    expect(project.bounce(OPTIONS)).toHaveLength(OPTIONS.totalFrames! * 2);
+    expect(project.bounce(OPTIONS)).toHaveLength(OPTIONS.totalFrames * 2);
   });
 
   it('reports a native failure ahead of a callback error', () => {
@@ -381,7 +381,7 @@ describe('bounceWithInstruments', () => {
       ],
       OPTIONS,
     );
-    expect(audio).toHaveLength(OPTIONS.totalFrames! * 2);
+    expect(audio).toHaveLength(OPTIONS.totalFrames * 2);
     expect(audio.every(Number.isFinite)).toBe(true);
   });
 
