@@ -2,11 +2,13 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
 #include "midi/control_value.h"
 #include "midi/midi_clip.h"
 #include "midi/note_fx_shared.h"
 #include "util/numeric_validation.h"
+#include "util/splitmix64.h"
 
 namespace sonare::midi {
 namespace {
@@ -18,36 +20,22 @@ using fx_shared::groove_index;
 using fx_shared::retune_note_event;
 using fx_shared::with_note_number;
 
-// ---------------------------------------------------------------------------
-// Deterministic PRNG: SplitMix64.
-//
-// We use SplitMix64 (a public-domain mixing function by Sebastiano Vigna) as the
-// per-event deterministic generator. It is tiny, alloc-free, branch-free and
-// produces well-distributed 64-bit outputs from a 64-bit state, which makes it
-// ideal for RT-safe humanize jitter: the same seed always yields the same
-// sequence, and no std::rand / clock is involved.
-class SplitMix64 {
+class HumanizeRandom {
  public:
-  explicit SplitMix64(uint64_t seed) noexcept : state_(seed) {}
-
-  uint64_t next() noexcept {
-    state_ += 0x9E3779B97F4A7C15ull;
-    uint64_t z = state_;
-    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
-    z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
-    return z ^ (z >> 31);
-  }
+  explicit HumanizeRandom(uint64_t seed) noexcept : stream_(seed) {}
 
   // Uniform integer in [-amount, +amount]. amount must be >= 0.
   int64_t symmetric(int64_t amount) noexcept {
     if (amount <= 0) return 0;
     const uint64_t span = static_cast<uint64_t>(amount) * 2ull + 1ull;
-    const int64_t v = static_cast<int64_t>(next() % span);
-    return v - amount;
+    const uint64_t draw = stream_.next() % span;
+    const uint64_t magnitude = static_cast<uint64_t>(amount);
+    if (draw >= magnitude) return static_cast<int64_t>(draw - magnitude);
+    return -static_cast<int64_t>(magnitude - draw);
   }
 
  private:
-  uint64_t state_;
+  ::sonare::SplitMix64 stream_;
 };
 
 // Mix the chain seed with an event ordinal so each event in the block gets an
@@ -56,20 +44,20 @@ uint64_t seed_for(uint32_t base_seed, size_t ordinal) noexcept {
   return (static_cast<uint64_t>(base_seed) << 32) ^ (0xD1B54A32D192ED03ull * (ordinal + 1));
 }
 
-int clamp_note(int note) noexcept {
+int clamp_note(int64_t note) noexcept {
   if (note < 0) return 0;
   if (note > 127) return 127;
   return note;
 }
 
-int clamp_velocity_on(int velocity) noexcept {
+int clamp_velocity_on(int64_t velocity) noexcept {
   // A note-on keeps at least velocity 1 so it never degrades into a note-off.
   if (velocity < 1) return 1;
   if (velocity > 127) return 127;
   return velocity;
 }
 
-int clamp_velocity16_on(int velocity) noexcept {
+int clamp_velocity16_on(int64_t velocity) noexcept {
   // MIDI 2.0 equivalent of clamp_velocity_on: keep at least 1 (never a
   // note-off) and cap at the full 16-bit range.
   if (velocity < 1) return 1;
@@ -77,39 +65,67 @@ int clamp_velocity16_on(int velocity) noexcept {
   return velocity;
 }
 
+int64_t saturated_product_positive(int64_t lhs, int64_t rhs) noexcept {
+  if (rhs <= 0) return 0;
+  if (lhs > 0 && lhs > std::numeric_limits<int64_t>::max() / rhs) {
+    return std::numeric_limits<int64_t>::max();
+  }
+  if (lhs < 0 && lhs < std::numeric_limits<int64_t>::min() / rhs) {
+    return std::numeric_limits<int64_t>::min();
+  }
+  return lhs * rhs;
+}
+
+int64_t rounded_frame(double value) noexcept {
+  constexpr double kMax = static_cast<double>(std::numeric_limits<int64_t>::max());
+  constexpr double kMin = static_cast<double>(std::numeric_limits<int64_t>::min());
+  if (value >= kMax) return std::numeric_limits<int64_t>::max();
+  if (value <= kMin) return std::numeric_limits<int64_t>::min();
+  if (!std::isfinite(value)) return value > 0.0 ? std::numeric_limits<int64_t>::max() : 0;
+  return static_cast<int64_t>(std::llround(value));
+}
+
+uint64_t distance(int64_t a, int64_t b) noexcept {
+  return a >= b ? static_cast<uint64_t>(a) - static_cast<uint64_t>(b)
+                : static_cast<uint64_t>(b) - static_cast<uint64_t>(a);
+}
+
 int64_t swung_grid_frame(int64_t line, int64_t grid, const QuantizeConfig& config) noexcept {
-  int64_t frame = line * grid;
+  int64_t frame = saturated_product_positive(line, grid);
   const float swing = clamp01(config.swing);
   if ((line & 1ll) != 0) {
-    frame += static_cast<int64_t>(
-        std::llround(static_cast<double>(grid) * 0.5 * static_cast<double>(swing)));
+    const int64_t swing_offset = rounded_frame(static_cast<double>(grid) * 0.5 * swing);
+    frame = numeric::saturating_add(frame, swing_offset);
   }
   const size_t steps = bounded_groove_steps(config);
   if (steps > 0) {
     const float offset = clamp_groove_offset(config.groove_offsets[groove_index(line, steps)]);
-    frame +=
-        static_cast<int64_t>(std::llround(static_cast<double>(grid) * static_cast<double>(offset)));
+    frame = numeric::saturating_add(
+        frame, rounded_frame(static_cast<double>(grid) * static_cast<double>(offset)));
   }
   return frame;
 }
 
-int64_t abs_i64(int64_t v) noexcept { return v < 0 ? -v : v; }
-
 int64_t nearest_quantized_frame(int64_t frame, int64_t grid,
                                 const QuantizeConfig& config) noexcept {
   if (grid <= 0) return frame;
-  const int64_t base = frame >= 0 ? frame / grid : -(((-frame) + grid - 1) / grid);
-  int64_t best = swung_grid_frame(base - 2, grid, config);
-  int64_t best_dist = abs_i64(frame - best);
-  for (int64_t line = base - 1; line <= base + 3; ++line) {
+  int64_t base = frame / grid;
+  if (frame % grid < 0) --base;
+  bool found = false;
+  int64_t best = frame;
+  uint64_t best_dist = 0;
+  for (int offset = -2; offset <= 3; ++offset) {
+    int64_t line = 0;
+    if (!numeric::checked_add(base, static_cast<int64_t>(offset), &line)) continue;
     const int64_t candidate = swung_grid_frame(line, grid, config);
-    const int64_t dist = abs_i64(frame - candidate);
-    if (dist < best_dist || (dist == best_dist && candidate < best)) {
+    const uint64_t dist = distance(frame, candidate);
+    if (!found || dist < best_dist || (dist == best_dist && candidate < best)) {
       best = candidate;
       best_dist = dist;
+      found = true;
     }
   }
-  return best;
+  return found ? best : frame;
 }
 
 bool is_midi2_note_addressed_form(const Ump& ump) noexcept {
@@ -222,9 +238,10 @@ size_t MidiFxChain::find_earliest_note_timing(const MidiEvent& event, bool from_
                                               const int64_t* shaped_on_frame) const noexcept {
   size_t match = active_note_timing_count_;
   uint64_t earliest = UINT64_MAX;
+  const uint8_t group = ump_group_from_word0(event.ump.words[0]);
   for (size_t i = 0; i < active_note_timing_count_; ++i) {
     const ActiveNoteTiming& timing = active_note_timings_[i];
-    if (timing.group == event.ump.group && timing.channel == event.ump.channel() &&
+    if (timing.group == group && timing.channel == event.ump.channel() &&
         timing.note == event.ump.note_number() && timing.source_track_id == event.source_track_id &&
         timing.from_clip == from_clip && timing.clip_id == clip_id &&
         (shaped_on_frame == nullptr || timing.shaped_on_frame == *shaped_on_frame) &&
@@ -255,7 +272,7 @@ void MidiFxChain::push_note_timing(const MidiEvent& event, int64_t frame_shift,
     return;
   }
   ActiveNoteTiming& timing = active_note_timings_[active_note_timing_count_++];
-  timing.group = event.ump.group;
+  timing.group = ump_group_from_word0(event.ump.words[0]);
   timing.channel = event.ump.channel();
   timing.note = event.ump.note_number();
   timing.source_track_id = event.source_track_id;
@@ -295,6 +312,7 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
       push_or_overflow(ev, out);
       continue;
     }
+    ev.ump.group = ump_group_from_word0(ev.ump.words[0]);
     const bool channel_voice = is_channel_voice(ev.ump);
     const bool note_on = channel_voice && ev.ump.is_note_on();
     const bool note_off = channel_voice && ev.ump.is_note_off();
@@ -306,7 +324,8 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
     // Every note-addressed message shifts by the same amount: aftertouch left on
     // the source note number would address a note the shifted voice never played.
     if (transpose_.enabled && (note_on || note_off || note_addressed || poly_pressure)) {
-      const int shifted = clamp_note(static_cast<int>(ev.ump.note_number()) + transpose_.semitones);
+      const int shifted = clamp_note(static_cast<int64_t>(ev.ump.note_number()) +
+                                     static_cast<int64_t>(transpose_.semitones));
       ev.ump = with_note_number(ev.ump, static_cast<uint8_t>(shifted));
     }
 
@@ -325,12 +344,16 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
         normalized = std::pow(normalized, velocity_.gamma);
       }
       const float shaped = normalized * velocity_.scale + velocity_.offset / 127.0f;
+      const float bounded_shaped =
+          std::isnan(shaped) || shaped <= 0.0f ? 0.0f : (shaped >= 1.0f ? 1.0f : shaped);
       if (midi2) {
-        const int mapped = clamp_velocity16_on(static_cast<int>(std::lround(shaped * 65535.0f)));
+        const int mapped =
+            clamp_velocity16_on(static_cast<int64_t>(std::lround(bounded_shaped * 65535.0f)));
         ev.ump = make_midi2_note_on_velocity16(ev.ump, ev.ump.note_number(),
                                                static_cast<uint16_t>(mapped));
       } else {
-        const int mapped = clamp_velocity_on(static_cast<int>(std::lround(shaped * 127.0f)));
+        const int mapped =
+            clamp_velocity_on(static_cast<int64_t>(std::lround(bounded_shaped * 127.0f)));
         ev.ump = make_note(ev.ump, true, ev.ump.note_number(),
                            Velocity16::from7(static_cast<uint8_t>(mapped)));
       }
@@ -349,8 +372,8 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
     const bool can_fan_out = note_on || note_off || note_addressed;
     if (chord_.enabled && can_fan_out && chord_.count > 0) {
       for (size_t c = 0; c < chord_.count && c < ChordConfig::kMaxChordNotes; ++c) {
-        notes[note_count++] =
-            static_cast<uint8_t>(clamp_note(static_cast<int>(base_note) + chord_.intervals[c]));
+        notes[note_count++] = static_cast<uint8_t>(clamp_note(
+            static_cast<int64_t>(base_note) + static_cast<int64_t>(chord_.intervals[c])));
       }
     } else {
       notes[note_count++] = base_note;
@@ -366,10 +389,9 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
         // A note's gate is a duration, not a second grid event. Apply the exact
         // shift chosen for its note-on so a short note cannot quantize to
         // off-before-on (or off/on at the same frame after sorting).
-        shaped.render_frame = original_frame + paired_timing.frame_shift;
-        if (shaped.render_frame <= paired_timing.shaped_on_frame &&
-            paired_timing.shaped_on_frame < INT64_MAX) {
-          shaped.render_frame = paired_timing.shaped_on_frame + 1;
+        shaped.render_frame = numeric::saturating_add(original_frame, paired_timing.frame_shift);
+        if (shaped.render_frame <= paired_timing.shaped_on_frame) {
+          shaped.render_frame = numeric::saturating_add(paired_timing.shaped_on_frame, int64_t{1});
         }
       } else if (shaped.ump.is_note_on() && quantize_.enabled && quantize_.grid_frames > 0) {
         // Only note-ons snap; controllers and other events keep their position.
@@ -379,13 +401,31 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
             nearest_quantized_frame(numeric::saturating_sub(f, grid_origin_frame), grid, quantize_),
             grid_origin_frame);
         const float strength = clamp01(quantize_.strength);
-        const int64_t delta = snapped - f;
-        shaped.render_frame = f + static_cast<int64_t>(std::llround(static_cast<double>(delta) *
-                                                                    static_cast<double>(strength)));
+        if (strength <= 0.0f) {
+          shaped.render_frame = f;
+        } else if (strength >= 1.0f) {
+          shaped.render_frame = snapped;
+        } else {
+          bool delta_overflow = false;
+          if (f < 0 && snapped > std::numeric_limits<int64_t>::max() + f) {
+            delta_overflow = true;
+          } else if (f > 0 && snapped < std::numeric_limits<int64_t>::min() + f) {
+            delta_overflow = true;
+          }
+          if (delta_overflow) {
+            const double position =
+                static_cast<double>(f) * (1.0 - strength) + static_cast<double>(snapped) * strength;
+            shaped.render_frame = rounded_frame(position);
+          } else {
+            const int64_t delta = snapped - f;
+            const int64_t adjustment = rounded_frame(static_cast<double>(delta) * strength);
+            shaped.render_frame = numeric::saturating_add(f, adjustment);
+          }
+        }
       }
       // ---- 6. Humanize (timing + velocity), deterministic from seed ----
       if (humanize_.enabled) {
-        SplitMix64 rng(seed_for(humanize_.seed, ordinal));
+        HumanizeRandom rng(seed_for(humanize_.seed, ordinal));
         if (!paired_note_off && humanize_.timing_frames > 0) {
           // Apply the deterministic timing jitter, but never move an event to a
           // negative render frame. A hard clamp-to-0 would collapse several
@@ -395,8 +435,9 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
           // event at its original (non-negative) frame; this preserves the
           // relative order of all events. Positive jitter is always applied.
           const int64_t jitter = rng.symmetric(humanize_.timing_frames);
-          if (jitter >= 0 || shaped.render_frame + jitter >= 0) {
-            shaped.render_frame += jitter;
+          const int64_t moved = numeric::saturating_add(shaped.render_frame, jitter);
+          if (jitter >= 0 || moved >= 0) {
+            shaped.render_frame = moved;
           }
         }
         if (humanize_.velocity_amount > 0 && is_channel_voice(shaped.ump) &&
@@ -405,15 +446,16 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
           // are jittered in the full 16-bit domain (no 7-bit round-trip) so the
           // resolution is preserved, matching the velocity-curve stage above;
           // MIDI 1.0 notes stay in the 7-bit domain.
-          const int jitter7 = static_cast<int>(rng.symmetric(humanize_.velocity_amount));
+          const int64_t jitter7 = rng.symmetric(humanize_.velocity_amount);
           if (shaped.ump.message_type() == UmpMessageType::kMidi2ChannelVoice) {
-            const int jitter16 = jitter7 * 65535 / 127;
+            const int64_t jitter16 = jitter7 * 65535 / 127;
             const int v16 =
-                clamp_velocity16_on(static_cast<int>(note_velocity16(shaped.ump)) + jitter16);
+                clamp_velocity16_on(static_cast<int64_t>(note_velocity16(shaped.ump)) + jitter16);
             shaped.ump = make_midi2_note_on_velocity16(shaped.ump, shaped.ump.note_number(),
                                                        static_cast<uint16_t>(v16));
           } else {
-            const int v = clamp_velocity_on(static_cast<int>(note_velocity7(shaped.ump)) + jitter7);
+            const int v =
+                clamp_velocity_on(static_cast<int64_t>(note_velocity7(shaped.ump)) + jitter7);
             shaped.ump = make_note(shaped.ump, true, shaped.ump.note_number(),
                                    Velocity16::from7(static_cast<uint8_t>(v)));
           }
@@ -422,8 +464,8 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
       const bool moves_time = (quantize_.enabled && quantize_.grid_frames > 0) ||
                               (humanize_.enabled && humanize_.timing_frames > 0);
       if (shaped.ump.is_note_on() && moves_time) {
-        push_note_timing(shaped, shaped.render_frame - original_frame, shaped.render_frame,
-                         from_clip, clip_id);
+        push_note_timing(shaped, numeric::saturating_sub(shaped.render_frame, original_frame),
+                         shaped.render_frame, from_clip, clip_id);
       }
       push_or_overflow(shaped, out);
     };
@@ -439,9 +481,11 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
       size_t ordinal = input_ordinal;
       for (size_t n = 0; n < note_count; ++n) {
         for (size_t s = 0; s < arpeggiator_.steps && s < ArpeggiatorConfig::kMaxArpSteps; ++s) {
-          const int arp_note = clamp_note(static_cast<int>(notes[n]) + arpeggiator_.intervals[s]);
-          const int64_t onset =
-              ev.render_frame + static_cast<int64_t>(s) * arpeggiator_.step_frames;
+          const int arp_note = clamp_note(static_cast<int64_t>(notes[n]) +
+                                          static_cast<int64_t>(arpeggiator_.intervals[s]));
+          const int64_t onset = numeric::saturating_add(
+              ev.render_frame,
+              saturated_product_positive(static_cast<int64_t>(s), arpeggiator_.step_frames));
 
           MidiEvent on_ev;
           on_ev.render_frame = onset;
@@ -463,7 +507,7 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
           shape_and_push(on_ev, note_ordinal);
 
           MidiEvent off_ev;
-          off_ev.render_frame = onset + gate;
+          off_ev.render_frame = numeric::saturating_add(onset, gate);
           off_ev.source_track_id = ev.source_track_id;
           off_ev.ump =
               make_note(ev.ump, false, static_cast<uint8_t>(arp_note), Velocity16::from_raw(0));

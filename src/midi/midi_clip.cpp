@@ -135,7 +135,7 @@ NotePairValidation MidiClip::validate_note_pairs() const {
   std::array<std::array<std::array<int, 128>, 16>, 16> open{};
 
   for (const MidiClipEvent& ev : events_) {
-    const uint8_t group = ev.ump.group;
+    const uint8_t group = ump_group_from_word0(ev.ump.words[0]);
     const uint8_t channel = ev.ump.channel();
     const uint8_t note = ev.ump.note_number();
     if (group >= 16 || channel >= 16 || note >= 128) continue;

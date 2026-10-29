@@ -1094,8 +1094,9 @@ Smf2ExportResult export_clip_file(
       }
       // Every body byte is emitted; one above 7F selects SysEx8.
       const SysExBody body = sysex_body(*payload);
-      const bool emitted = body.is_7bit() ? emit_sysex7(&items, tick, body, ev.ump.group)
-                                          : emit_sysex8(&items, tick, body, ev.ump.group);
+      const uint8_t group = ump_group_from_word0(ev.ump.words[0]);
+      const bool emitted = body.is_7bit() ? emit_sysex7(&items, tick, body, group)
+                                          : emit_sysex8(&items, tick, body, group);
       if (!emitted) {
         ++result.skipped_events;
       }

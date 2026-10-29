@@ -543,6 +543,7 @@ Ump midi1_to_midi2(const Ump& ump) noexcept {
   if (ump.message_type() != UmpMessageType::kMidi1ChannelVoice) {
     return ump;
   }
+  const uint8_t group = ump_group_from_word0(ump.words[0]);
   const uint8_t status = ump.status_nibble();
   const uint8_t channel = ump.channel();
   const uint8_t d1 = static_cast<uint8_t>((ump.words[0] >> 8u) & 0x7Fu);
@@ -551,22 +552,22 @@ Ump midi1_to_midi2(const Ump& ump) noexcept {
     case UmpStatus::kNoteOn:
       // Velocity 0 is a note-off; D.3.1 fixes its release velocity at 0x8000.
       if (d2 == 0) {
-        return make_midi2_note_off(ump.group, channel, d1, 0x8000u);
+        return make_midi2_note_off(group, channel, d1, 0x8000u);
       }
-      return make_midi2_note_on(ump.group, channel, d1, scale_velocity_7_to_16(d2));
+      return make_midi2_note_on(group, channel, d1, scale_velocity_7_to_16(d2));
     case UmpStatus::kNoteOff:
-      return make_midi2_note_off(ump.group, channel, d1, scale_velocity_7_to_16(d2));
+      return make_midi2_note_off(group, channel, d1, scale_velocity_7_to_16(d2));
     case UmpStatus::kPolyPressure:
-      return make_midi2_poly_pressure(ump.group, channel, d1, scale_cc_7_to_32(d2));
+      return make_midi2_poly_pressure(group, channel, d1, scale_cc_7_to_32(d2));
     case UmpStatus::kControlChange:
-      return make_midi2_control_change(ump.group, channel, d1, scale_cc_7_to_32(d2));
+      return make_midi2_control_change(group, channel, d1, scale_cc_7_to_32(d2));
     case UmpStatus::kProgramChange:
-      return make_midi2_program_change(ump.group, channel, d1, 0, 0, false);
+      return make_midi2_program_change(group, channel, d1, 0, 0, false);
     case UmpStatus::kChannelPressure:
-      return make_midi2_channel_pressure(ump.group, channel, scale_cc_7_to_32(d1));
+      return make_midi2_channel_pressure(group, channel, scale_cc_7_to_32(d1));
     case UmpStatus::kPitchBend: {
       const uint16_t bend14 = static_cast<uint16_t>((static_cast<uint16_t>(d2) << 7u) | d1);
-      return make_midi2_pitch_bend(ump.group, channel, scale_bend_14_to_32(bend14));
+      return make_midi2_pitch_bend(group, channel, scale_bend_14_to_32(bend14));
     }
     default:
       return ump;
@@ -577,30 +578,30 @@ Ump midi2_to_midi1(const Ump& ump) noexcept {
   if (ump.message_type() != UmpMessageType::kMidi2ChannelVoice) {
     return ump;
   }
+  const uint8_t group = ump_group_from_word0(ump.words[0]);
   const uint8_t status = ump.status_nibble();
   const uint8_t channel = ump.channel();
   const uint8_t note = static_cast<uint8_t>((ump.words[0] >> 8u) & 0x7Fu);
   switch (static_cast<UmpStatus>(status)) {
     case UmpStatus::kNoteOn: {
       const uint16_t velocity16 = static_cast<uint16_t>(ump.words[1] >> 16u);
-      return make_midi1_note_on(ump.group, channel, note,
-                                scale_note_on_velocity_16_to_7(velocity16));
+      return make_midi1_note_on(group, channel, note, scale_note_on_velocity_16_to_7(velocity16));
     }
     case UmpStatus::kNoteOff: {
       const uint16_t velocity16 = static_cast<uint16_t>(ump.words[1] >> 16u);
-      return make_midi1_note_off(ump.group, channel, note, scale_velocity_16_to_7(velocity16));
+      return make_midi1_note_off(group, channel, note, scale_velocity_16_to_7(velocity16));
     }
     case UmpStatus::kControlChange:
-      return make_midi1_control_change(ump.group, channel, note, scale_cc_32_to_7(ump.words[1]));
+      return make_midi1_control_change(group, channel, note, scale_cc_32_to_7(ump.words[1]));
     case UmpStatus::kProgramChange:
-      return make_midi1_program_change(ump.group, channel,
+      return make_midi1_program_change(group, channel,
                                        static_cast<uint8_t>((ump.words[1] >> 24u) & 0x7Fu));
     case UmpStatus::kPolyPressure:
-      return make_midi1_poly_pressure(ump.group, channel, note, scale_cc_32_to_7(ump.words[1]));
+      return make_midi1_poly_pressure(group, channel, note, scale_cc_32_to_7(ump.words[1]));
     case UmpStatus::kChannelPressure:
-      return make_midi1_channel_pressure(ump.group, channel, scale_cc_32_to_7(ump.words[1]));
+      return make_midi1_channel_pressure(group, channel, scale_cc_32_to_7(ump.words[1]));
     case UmpStatus::kPitchBend:
-      return make_midi1_pitch_bend(ump.group, channel, scale_bend_32_to_14(ump.words[1]));
+      return make_midi1_pitch_bend(group, channel, scale_bend_32_to_14(ump.words[1]));
     case UmpStatus::kRegisteredPerNoteController:
     case UmpStatus::kAssignablePerNoteController:
     case UmpStatus::kRegisteredController:
@@ -624,12 +625,14 @@ Midi1MessageList midi2_to_midi1_messages(const Ump& ump) noexcept {
   Midi1MessageList out;
   if (ump.message_type() == UmpMessageType::kMidi1ChannelVoice && ump.word_count != 0) {
     out.messages[0] = ump;
+    out.messages[0].group = ump_group_from_word0(ump.words[0]);
     out.count = 1;
     return out;
   }
   if (ump.message_type() != UmpMessageType::kMidi2ChannelVoice) {
     return out;
   }
+  const uint8_t group = ump_group_from_word0(ump.words[0]);
 
   const uint8_t status = ump.status_nibble();
   const uint8_t channel = ump.channel();
@@ -639,9 +642,9 @@ Midi1MessageList midi2_to_midi1_messages(const Ump& ump) noexcept {
     if (bank_valid) {
       const uint8_t bank_msb = static_cast<uint8_t>((ump.words[1] >> 8u) & 0x7Fu);
       const uint8_t bank_lsb = static_cast<uint8_t>(ump.words[1] & 0x7Fu);
-      out.messages[0] = make_midi1_control_change(ump.group, channel, 0, bank_msb);
-      out.messages[1] = make_midi1_control_change(ump.group, channel, 32, bank_lsb);
-      out.messages[2] = make_midi1_program_change(ump.group, channel, program);
+      out.messages[0] = make_midi1_control_change(group, channel, cc::kBankSelectMsb, bank_msb);
+      out.messages[1] = make_midi1_control_change(group, channel, cc::kBankSelectLsb, bank_lsb);
+      out.messages[2] = make_midi1_program_change(group, channel, program);
       out.count = 3;
       return out;
     }
@@ -653,10 +656,12 @@ Midi1MessageList midi2_to_midi1_messages(const Ump& ump) noexcept {
     const uint8_t index = static_cast<uint8_t>(ump.words[0] & 0x7Fu);
     const uint8_t data_msb = static_cast<uint8_t>((ump.words[1] >> 25u) & 0x7Fu);
     const uint8_t data_lsb = static_cast<uint8_t>((ump.words[1] >> 18u) & 0x7Fu);
-    out.messages[0] = make_midi1_control_change(ump.group, channel, registered ? 101 : 99, bank);
-    out.messages[1] = make_midi1_control_change(ump.group, channel, registered ? 100 : 98, index);
-    out.messages[2] = make_midi1_control_change(ump.group, channel, 6, data_msb);
-    out.messages[3] = make_midi1_control_change(ump.group, channel, 38, data_lsb);
+    out.messages[0] =
+        make_midi1_control_change(group, channel, registered ? cc::kRpnMsb : cc::kNrpnMsb, bank);
+    out.messages[1] =
+        make_midi1_control_change(group, channel, registered ? cc::kRpnLsb : cc::kNrpnLsb, index);
+    out.messages[2] = make_midi1_control_change(group, channel, cc::kDataEntryMsb, data_msb);
+    out.messages[3] = make_midi1_control_change(group, channel, cc::kDataEntryLsb, data_lsb);
     out.count = 4;
     return out;
   }
@@ -679,8 +684,8 @@ Midi2MessageList Midi1ToMidi2Translator::translate(const Ump& ump) noexcept {
     emit(ump);
     return out;
   }
-  Channel& ch = channels[static_cast<size_t>(ump.group & 0x0Fu) * 16 + ump.channel()];
-  const uint8_t group = ump.group;
+  const uint8_t group = ump_group_from_word0(ump.words[0]);
+  Channel& ch = channels[static_cast<size_t>(group) * 16 + ump.channel()];
   const uint8_t channel = ump.channel();
   const uint8_t d1 = static_cast<uint8_t>((ump.words[0] >> 8u) & 0x7Fu);
   const uint8_t d2 = static_cast<uint8_t>(ump.words[0] & 0x7Fu);

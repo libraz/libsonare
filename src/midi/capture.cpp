@@ -151,8 +151,9 @@ size_t MidiCapture::drain(const CaptureConfig& config, MidiClip* clip) {
   }
 
   auto find_active_note_shift = [&](const MidiEvent& event) -> ActiveNoteShift* {
+    const uint8_t group = ump_group_from_word0(event.ump.words[0]);
     for (ActiveNoteShift& note : active_note_shifts_) {
-      if (note.group == event.ump.group && note.channel == event.ump.channel() &&
+      if (note.group == group && note.channel == event.ump.channel() &&
           note.note == event.ump.note_number() && note.source_track_id == event.source_track_id) {
         return &note;
       }
@@ -166,7 +167,7 @@ size_t MidiCapture::drain(const CaptureConfig& config, MidiClip* clip) {
       return;
     }
     ActiveNoteShift note;
-    note.group = event.ump.group;
+    note.group = ump_group_from_word0(event.ump.words[0]);
     note.channel = event.ump.channel();
     note.note = event.ump.note_number();
     note.source_track_id = event.source_track_id;
@@ -237,6 +238,7 @@ size_t MidiCapture::drain(const CaptureConfig& config, MidiClip* clip) {
     MidiClipEvent clip_event;
     clip_event.ppq = rel_ppq;
     clip_event.ump = captured.event.ump;
+    clip_event.ump.group = ump_group_from_word0(clip_event.ump.words[0]);
     clip_event.sysex_payload = captured.event.sysex_payload;
     clip_event.sysex_payload_size = captured.event.sysex_payload_size;
     clip->add_event(clip_event);
