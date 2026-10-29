@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/common/hysteresis_tail.h"
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
@@ -93,30 +94,8 @@ int Transformer::tail_samples() const noexcept {
   if (!(transformer_config_.mix > 0.0f)) return 0;
   if (transformer_config_.asymmetry != 0.0f) return rt::TailBudget::kUnbounded;
 
-  const common::JilesAthertonConfig& ja = hysteresis_.config();
-  const float coupling =
-      ja.mean_field_coupling * ja.saturation_magnetization / (3.0f * ja.anhysteretic_shape);
-  if (!(ja.viscosity_time_constant_s > 0.0f) || !(sample_rate_ > 0.0) ||
-      !std::isfinite(sample_rate_) || !(coupling < 1.0f)) {
-    return rt::TailBudget::kUnbounded;
-  }
-
-  // Match the float relaxation arithmetic in JilesAtherton::process().
-  const float rate = static_cast<float>(sample_rate_);
-  const float relax_rate =
-      static_cast<float>(rt::one_pole_alpha_from_seconds_d(ja.viscosity_time_constant_s, rate));
-  const float relax_pole = 1.0f - relax_rate * (1.0f - coupling);
-  if (!(relax_pole > 0.0f)) return 1;
-  if (!(relax_pole < 1.0f) || !std::isfinite(relax_pole)) {
-    return rt::TailBudget::kUnbounded;
-  }
-
-  // The output bound includes magnetization scale and one field-transition sample.
-  const double scale = 2.4 * static_cast<double>(ja.saturation_magnetization) *
-                       static_cast<double>(transformer_config_.mix);
-  rt::TailBudget tail;
-  tail.delay(1.0).decay(static_cast<double>(relax_pole), scale);
-  return tail.samples();
+  return common::hysteresis_relaxation_tail_samples(hysteresis_.config(), sample_rate_,
+                                                    static_cast<double>(transformer_config_.mix));
 }
 
 void Transformer::set_config(const TransformerConfig& config) {

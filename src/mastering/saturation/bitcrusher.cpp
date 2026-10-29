@@ -59,6 +59,10 @@ bool valid_hz(float hz) noexcept { return std::isfinite(hz) && hz >= 0.0f; }
 bool valid_level(float level) noexcept {
   return std::isfinite(level) && level >= 0.0f && level <= 1.0f;
 }
+bool noise_sources_active(const BitCrusherConfig& config) noexcept {
+  return config.radio_noise_level * config.noise_detune > 0.0f || config.wp_noise_level > 0.0f ||
+         config.disc_noise_level > 0.0f || config.hum_level > 0.0f;
+}
 
 }  // namespace
 
@@ -108,9 +112,7 @@ void BitCrusher::process(float* const* channels, int num_channels, int num_sampl
   const bool highpass = config_.filter_type == BitCrusherFilterType::kHighpass;
   const effects::common::MixGains mix =
       effects::common::mix_gains(config_.mix_law, std::clamp(config_.mix, 0.0f, 1.0f));
-  const bool noisy = config_.radio_noise_level * config_.noise_detune > 0.0f ||
-                     config_.wp_noise_level > 0.0f || config_.disc_noise_level > 0.0f ||
-                     config_.hum_level > 0.0f;
+  const bool noisy = noise_sources_active(config_);
   bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr)
@@ -349,6 +351,10 @@ int BitCrusher::tail_samples() const noexcept {
       effects::common::mix_gains(config_.mix_law, std::clamp(config_.mix, 0.0f, 1.0f));
   const double scale = std::abs(static_cast<double>(mix.wet));
   if (!(scale > 0.0)) return 0;
+  if (noise_sources_active(config_) || (config_.quantizer_mode != QuantizerMode::kOff &&
+                                        config_.dither_type != final::DitherType::None)) {
+    return rt::TailBudget::kUnbounded;
+  }
   // A trapezoidal one-pole with gain g has its pole at 1 - 2g.
   rt::TailBudget tail;
   if (pre_gain_ > 0.0) tail.decay(std::abs(1.0 - 2.0 * pre_gain_), scale);

@@ -4,10 +4,12 @@
 #include <cmath>
 #include <limits>
 
+#include "mastering/common/hysteresis_tail.h"
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -154,6 +156,27 @@ bool Tape::discard_non_finite_state(size_t channel) noexcept {
   discarded |= discard_group_if_non_finite(filter.z1, filter.z2);
   discarded |= sonare::discard_if_non_finite(gap_state_[channel], 0.0f);
   return discarded;
+}
+
+int Tape::tail_samples() const noexcept {
+  const float output_gain = db_to_linear(config_.output_gain_db);
+  if (config_.bias != 0.0f && output_gain != 0.0f) {
+    return rt::TailBudget::kUnbounded;
+  }
+
+  const int factor = std::max(1, config_.oversample_factor);
+  const float ja_rate = static_cast<float>(sample_rate_ * static_cast<double>(factor));
+  const double heard_scale =
+      static_cast<double>(output_gain) * static_cast<double>(db_to_linear(config_.head_bump_db));
+  const int core_tail = common::hysteresis_relaxation_tail_samples(
+      hysteresis_.config(), static_cast<double>(ja_rate), heard_scale);
+  if (core_tail == rt::TailBudget::kUnbounded) return core_tail;
+
+  rt::TailBudget tail;
+  if (factor > 1) tail.delay(oversampler_.streaming_round_trip_latency_samples());
+  tail.delay(std::ceil(static_cast<double>(core_tail) / factor));
+  tail.section(head_bump_coeffs_.c).decay(1.0 - gap_loss_coeff_);
+  return tail.samples();
 }
 
 void Tape::reset() {

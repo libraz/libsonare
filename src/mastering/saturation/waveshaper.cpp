@@ -240,6 +240,12 @@ void Waveshaper::declare_path_latencies() {
 }
 
 int Waveshaper::tail_samples() const noexcept {
+  const float steady_wet =
+      apply_curve(config_.bias, config_.curve) * db_to_linear(config_.output_gain_db);
+  if (config_.mix > 0.0f && steady_wet != 0.0f) {
+    return sonare::rt::TailBudget::kUnbounded;
+  }
+
   const sonare::rt::TailBudget tail = sonare::rt::aliasing_tail(
       config_.aliasing, oversampler_.streaming_round_trip_latency_samples());
   return tail.samples();

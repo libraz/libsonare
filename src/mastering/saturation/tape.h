@@ -9,7 +9,6 @@
 #include "rt/biquad_design.h"
 #include "rt/oversampler.h"
 #include "rt/processor_base.h"
-#include "rt/tail_budget.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::saturation {
@@ -57,16 +56,8 @@ class Tape : public rt::ProcessorBase {
   int latency_samples() const noexcept override {
     return config_.oversample_factor > 1 ? oversampler_.streaming_round_trip_latency_samples() : 0;
   }
-  /// The oversampled path's FIR rings past its latency, then the base-rate filters.
-  int tail_samples() const noexcept override {
-    rt::TailBudget tail;
-    if (config_.oversample_factor > 1) {
-      tail.delay(oversampler_.streaming_round_trip_latency_samples());
-    }
-    // Then the head bump section and the gap-loss low-pass at base rate.
-    tail.section(head_bump_coeffs_.c).decay(1.0 - gap_loss_coeff_);
-    return tail.samples();
-  }
+  /// The J-A core's relaxation followed by the oversampling FIR, head bump and gap-loss filter.
+  int tail_samples() const noexcept override;
   void set_config(const TapeConfig& config);
   const TapeConfig& config() const { return config_; }
 
