@@ -39,6 +39,13 @@ function uint32(value: unknown, field: string, allowZero = true): number {
   return value;
 }
 
+function requestUint32(value: unknown, field: string, allowZero = true): number {
+  if (typeof value !== 'number') {
+    throw new TypeError(`${field} must be a number`);
+  }
+  return uint32(value, field, allowZero);
+}
+
 function nativeUint32(value: unknown, field: string): number {
   if (
     typeof value !== 'number' ||
@@ -59,14 +66,20 @@ function nativeInt64(value: unknown, field: string): number {
 }
 
 function positiveSampleCount(value: unknown, field: string): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
+  if (typeof value !== 'number') {
+    throw new TypeError(`${field} must be a number`);
+  }
+  if (!Number.isSafeInteger(value) || value <= 0) {
     throw new RangeError(`${field} must be a positive safe integer`);
   }
   return value;
 }
 
 function finite(value: unknown, field: string): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
+  if (typeof value !== 'number') {
+    throw new TypeError(`${field} must be a number`);
+  }
+  if (!Number.isFinite(value)) {
     throw new RangeError(`${field} must be finite`);
   }
   return value;
@@ -119,7 +132,7 @@ function copyToken(value: unknown): VocalStateToken {
     draftId: decimalUint64(source.draftId, 'renderToken.draftId'),
     generation: decimalUint64(source.generation, 'renderToken.generation'),
     requestId: decimalUint64(source.requestId, 'renderToken.requestId'),
-    profileId: uint32(source.profileId, 'renderToken.profileId'),
+    profileId: requestUint32(source.profileId, 'renderToken.profileId'),
   };
 }
 
@@ -146,6 +159,9 @@ function copyApplyRequest(request: ProjectVocalEditApplyRequest): ProjectVocalEd
     throw new RangeError('renderedSampleRate must equal expectedSourceSampleRate');
   }
   const renderedStartSample = source.renderedStartSample ?? 0;
+  if (typeof renderedStartSample !== 'number') {
+    throw new TypeError('renderedStartSample must be a number');
+  }
   if (renderedStartSample !== 0) {
     throw new RangeError('renderedStartSample must be zero for the v1 Project vocal API');
   }
@@ -154,9 +170,9 @@ function copyApplyRequest(request: ProjectVocalEditApplyRequest): ProjectVocalEd
     throw new RangeError('renderToken must be a committed session token');
   }
   return {
-    clipId: uint32(source.clipId, 'clipId', false),
-    takeId: uint32(source.takeId ?? 0, 'takeId'),
-    expectedSourceId: uint32(source.expectedSourceId, 'expectedSourceId', false),
+    clipId: requestUint32(source.clipId, 'clipId', false),
+    takeId: requestUint32(source.takeId ?? 0, 'takeId'),
+    expectedSourceId: requestUint32(source.expectedSourceId, 'expectedSourceId', false),
     expectedSourceSampleRate,
     expectedSourceSampleCount,
     expectedSourceSha256: hexSha256(source.expectedSourceSha256, 'expectedSourceSha256'),
@@ -240,7 +256,7 @@ function copyOriginalSources(
   const seen = new Set<number>();
   return originals.map((original, index) => {
     const source = requireObject(original, `originals[${index}]`);
-    const sourceId = uint32(source.sourceId, `originals[${index}].sourceId`, false);
+    const sourceId = requestUint32(source.sourceId, `originals[${index}].sourceId`, false);
     if (seen.has(sourceId)) {
       throw new RangeError(`originals contains duplicate sourceId ${sourceId}`);
     }

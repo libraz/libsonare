@@ -38,8 +38,11 @@ function arrayValue(value: unknown, field: string): readonly unknown[] {
 }
 
 function finiteNumber(value: unknown, field: string): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new TypeError(`${field} must be a finite number`);
+  if (typeof value !== 'number') {
+    throw new TypeError(`${field} must be a number`);
+  }
+  if (!Number.isFinite(value)) {
+    throw new RangeError(`${field} must be a finite number`);
   }
   return value;
 }
@@ -63,6 +66,26 @@ function safeInteger(
 
 function uint32(value: unknown, field: string): number {
   return safeInteger(value, field, 0, UINT32_MAX);
+}
+
+function requestSafeInteger(
+  value: unknown,
+  field: string,
+  minimum = 0,
+  maximum = Number.MAX_SAFE_INTEGER,
+): number {
+  if (typeof value !== 'number') {
+    throw new TypeError(`${field} must be a number`);
+  }
+  return safeInteger(value, field, minimum, maximum);
+}
+
+function requestUint32(value: unknown, field: string, allowZero = true): number {
+  return requestSafeInteger(value, field, allowZero ? 0 : 1, UINT32_MAX);
+}
+
+function requestProjectId(value: unknown, field: string, allowZero = false): number {
+  return requestSafeInteger(value, field, allowZero ? 0 : 1, MAX_PROJECT_ID);
 }
 
 function projectId(value: unknown, field: string, allowZero = false): number {
@@ -119,7 +142,7 @@ function tokenCopy(value: unknown, field: string): VocalStateToken {
     draftId: uint64String(token.draftId, `${field}.draftId`),
     generation: uint64String(token.generation, `${field}.generation`),
     requestId: uint64String(token.requestId, `${field}.requestId`),
-    profileId: uint32(token.profileId, `${field}.profileId`),
+    profileId: requestUint32(token.profileId, `${field}.profileId`),
   };
 }
 
@@ -129,7 +152,7 @@ function normalizeApplyRequest(
   const input = objectValue(request, 'request');
   const renderedMono = float32Copy(input.renderedMono, 'request.renderedMono');
   const sve1 = uint8Copy(input.sve1, 'request.sve1');
-  const expectedSourceSampleCount = safeInteger(
+  const expectedSourceSampleCount = requestSafeInteger(
     input.expectedSourceSampleCount,
     'request.expectedSourceSampleCount',
     1,
@@ -139,13 +162,13 @@ function normalizeApplyRequest(
       'request.renderedMono length must equal request.expectedSourceSampleCount',
     );
   }
-  const expectedSourceSampleRate = safeInteger(
+  const expectedSourceSampleRate = requestSafeInteger(
     input.expectedSourceSampleRate,
     'request.expectedSourceSampleRate',
     MIN_SAMPLE_RATE,
     MAX_SAMPLE_RATE,
   );
-  const renderedSampleRate = safeInteger(
+  const renderedSampleRate = requestSafeInteger(
     input.renderedSampleRate,
     'request.renderedSampleRate',
     MIN_SAMPLE_RATE,
@@ -154,7 +177,7 @@ function normalizeApplyRequest(
   if (renderedSampleRate !== expectedSourceSampleRate) {
     throw new RangeError('request.renderedSampleRate must equal request.expectedSourceSampleRate');
   }
-  const renderedStartSample = safeInteger(
+  const renderedStartSample = requestSafeInteger(
     input.renderedStartSample ?? 0,
     'request.renderedStartSample',
   );
@@ -166,9 +189,9 @@ function normalizeApplyRequest(
     throw new RangeError('request.renderToken must be a committed session token');
   }
   return {
-    clipId: projectId(input.clipId, 'request.clipId'),
-    takeId: projectId(input.takeId ?? 0, 'request.takeId', true),
-    expectedSourceId: projectId(input.expectedSourceId, 'request.expectedSourceId'),
+    clipId: requestProjectId(input.clipId, 'request.clipId'),
+    takeId: requestProjectId(input.takeId ?? 0, 'request.takeId', true),
+    expectedSourceId: requestProjectId(input.expectedSourceId, 'request.expectedSourceId'),
     expectedSourceSampleRate,
     expectedSourceSampleCount,
     expectedSourceSha256: digest(input.expectedSourceSha256, 'request.expectedSourceSha256'),
@@ -265,14 +288,14 @@ function booleanValue(value: unknown, field: string): boolean {
 function originalSource(value: unknown, index: number): ProjectVocalOriginalSource {
   const source = objectValue(value, `originals[${index}]`);
   const mono = float32Copy(source.mono, `originals[${index}].mono`);
-  const sampleRate = safeInteger(
+  const sampleRate = requestSafeInteger(
     source.sampleRate,
     `originals[${index}].sampleRate`,
     MIN_SAMPLE_RATE,
     MAX_SAMPLE_RATE,
   );
   return {
-    sourceId: projectId(source.sourceId, `originals[${index}].sourceId`),
+    sourceId: requestProjectId(source.sourceId, `originals[${index}].sourceId`),
     mono,
     sampleRate,
   };
