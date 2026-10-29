@@ -4,6 +4,7 @@
 #include "util/frame.h"
 
 #include <cstring>
+#include <limits>
 
 #include "util/exception.h"
 
@@ -12,9 +13,11 @@ namespace sonare {
 int frame_count(std::size_t n, int frame_length, int hop_length) {
   if (frame_length <= 0 || hop_length <= 0) return 0;
   if (n < static_cast<std::size_t>(frame_length)) return 0;
-  return static_cast<int>((n - static_cast<std::size_t>(frame_length)) /
-                          static_cast<std::size_t>(hop_length)) +
-         1;
+  const std::size_t count =
+      (n - static_cast<std::size_t>(frame_length)) / static_cast<std::size_t>(hop_length) + 1;
+  SONARE_CHECK_MSG(count <= static_cast<std::size_t>(std::numeric_limits<int>::max()),
+                   ErrorCode::InvalidParameter, "frame_count: frame count exceeds int range");
+  return static_cast<int>(count);
 }
 
 std::vector<float> frame(const float* x, std::size_t n, int frame_length, int hop_length) {

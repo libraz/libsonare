@@ -28,6 +28,7 @@ std::vector<float> frame(const std::vector<float>& x, int frame_length, int hop_
 
 /// @brief Compute the number of frames that frame() would produce.
 /// @return floor((n - frame_length) / hop_length) + 1 when n >= frame_length, else 0.
+/// @throws SonareException(InvalidParameter) if the count exceeds int range.
 int frame_count(std::size_t n, int frame_length, int hop_length);
 
 }  // namespace sonare
