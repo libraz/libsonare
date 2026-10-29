@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 
+#include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "mastering/eq/band_frequency.h"
 #include "mastering/eq/dynamic_detector.h"
@@ -69,12 +70,26 @@ void DynamicEq::process(float* const* channels, int num_channels, int num_sample
     return;
   }
 
+  // The view buffer is sized in prepare() and never grows on the audio thread; reject a wider
+  // block before the detector, band gates or gain state can advance.
+  if (static_cast<size_t>(num_channels) > sub_channels_.size()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels exceeds prepared DynamicEq view capacity");
+  }
+
   validate_sidechain(num_samples);
   const float* const* detector_channels = sidechain_channels_ != nullptr
                                               ? sidechain_channels_
                                               : const_cast<const float* const*>(channels);
   const int detector_num_channels =
       sidechain_channels_ != nullptr ? sidechain_num_channels_ : num_channels;
+  // Only enabled detectors need channel state; preflight them before metering.
+  for (size_t i = 0; i < kMaxBands; ++i) {
+    if (bands_[i].enabled) {
+      sonare::mastering::require_prepared_channels(
+          detector_num_channels, detectors_[i].channels.size(), "DynamicEq detector");
+    }
+  }
   // A key shorter than the block reads as zero-padded; the detector still advances on silence.
   const int readable = sidechain_channels_ != nullptr ? sidechain_num_samples_ : num_samples;
   // The host's excluded plane (an LFE) is left out of the main-input detector;
@@ -112,12 +127,6 @@ void DynamicEq::process(float* const* channels, int num_channels, int num_sample
         dynamic_band.static_gain_db + dynamic_gain_delta(dynamic_band, last_band_detector_db_[i]);
   }
 
-  // Reusable view buffer is fixed to the common realtime channel capacity in
-  // prepare(); reject a wider block instead of resizing on the audio thread.
-  if (static_cast<size_t>(num_channels) > sub_channels_.size()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels exceeds prepared DynamicEq view capacity");
-  }
   for (int offset = 0; offset < num_samples; offset += kCoeffUpdateInterval) {
     const int chunk = std::min(kCoeffUpdateInterval, num_samples - offset);
     for (size_t i = 0; i < kMaxBands; ++i) {
@@ -391,12 +400,9 @@ void DynamicEq::ensure_detector(size_t index, int num_channels) {
   DetectorState& state = detectors_[index];
   const DynamicEqBand& band = bands_[index];
 
-  // Reject blocks wider than the prepared per-channel state; the audio thread
-  // never resizes (which would malloc), matching the limiter pattern.
-  if (static_cast<size_t>(num_channels) > state.channels.size()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "num_channels exceeds prepared DynamicEq detector state");
-  }
+  // Keep the local capacity check for callers outside the process() preflight.
+  sonare::mastering::require_prepared_channels(num_channels, state.channels.size(),
+                                               "DynamicEq detector");
 
   // (Re)design the bandpass prototype and timing only when the relevant band
   // fields change — coefficient design is double-precision and not free.

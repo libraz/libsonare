@@ -59,6 +59,7 @@ add_executable(sonare_tests
   util/harmonic_test.cpp
   util/wavelet_test.cpp
   util/segment_test.cpp
+  util/recurrence_width_domain_test.cpp
   util/viterbi_transition_equivalence_test.cpp
   util/sequence_test.cpp
   util/decompose_test.cpp
@@ -70,6 +71,7 @@ add_executable(sonare_tests
   core/window_test.cpp
   core/fft_test.cpp
   core/audio_io_test.cpp
+  core/audio_io_header_domain_test.cpp
   core/audio_io_ffmpeg_test.cpp
   core/audio_test.cpp
   core/resample_test.cpp
@@ -271,6 +273,7 @@ if(BUILD_MASTERING)
     mastering/dynamics/parallel_comp_test.cpp
     mastering/dynamics/sidechain_router_test.cpp
     mastering/eq/dynamic_eq_detector_delay_test.cpp
+    mastering/eq/dynamic_eq_capacity_test.cpp
     mastering/eq/dynamic_detector_shared_test.cpp
     mastering/eq/tilt_test.cpp
     mastering/final/dither_noise_shaping_rate_test.cpp
