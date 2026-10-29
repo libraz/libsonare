@@ -17,6 +17,8 @@
 
 namespace sonare::midi::synth {
 
+using sonare::constants::kDefaultDawSampleRate;
+
 namespace {
 
 /// Sympathetic-string bank t60 (seconds): how long the plucked-string sound
@@ -166,7 +168,7 @@ EnvelopeTimeScales NativeSynth::gs_tail_scales() const noexcept {
 }
 
 void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   residual_splitter_.configure(sample_rate_, kResidualTauSeconds);
   residual_splitter_.reset();
   piano_residual_splitter_.configure(sample_rate_, kResidualTauSeconds);

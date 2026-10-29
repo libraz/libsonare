@@ -7,6 +7,8 @@
 
 namespace sonare::midi::synth {
 
+using sonare::constants::kDefaultDawSampleRate;
+
 namespace {
 
 using sonare::discard_group_if_non_finite;
@@ -32,7 +34,7 @@ bool gs_master_eq_is_flat(const GsMasterEq& eq) noexcept {
 }
 
 void GsMasterEqFilter::prepare(double sample_rate) noexcept {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   reset();
   set(GsMasterEq{});
 }

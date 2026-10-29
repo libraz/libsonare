@@ -315,7 +315,7 @@ class ReedVoiceCore {
   float sign_ = -1.0f;
   // Rate the loop runs at (host rate times the oversampling factor): refresh_excitation_targets()
   // needs it on a live CC74 write, which carries no sample-rate parameter of its own.
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = ::sonare::constants::kDefaultDawSampleRate;
   // Brings the oversampled loop back to the host rate; the identity at factor 1.
   LoopDecimator decimator_;
 

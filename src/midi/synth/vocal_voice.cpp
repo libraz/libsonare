@@ -14,6 +14,7 @@ namespace sonare::midi::synth {
 
 namespace {
 
+using sonare::constants::kDefaultDawSampleRate;
 using sonare::constants::kTwoPi;
 
 /// One vowel formant: centre frequency, level relative to F1, and bandwidth.
@@ -106,7 +107,7 @@ constexpr float kCtrlSettle = 1.0e-6f;
 
 void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, uint8_t note,
                            Velocity16 velocity, uint64_t seed) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double sr = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   sample_rate_ = sr;
   noise_ = VoiceRandomSequence(seed);
   drive_index_ = 0;

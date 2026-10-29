@@ -19,17 +19,23 @@ add_executable(sonare_tests
   ${PROJECT_SOURCE_DIR}/tools/cli/sonare_cli_json.cpp
   ${PROJECT_SOURCE_DIR}/tools/cli/sonare_cli_option_validation.cpp
   ${PROJECT_SOURCE_DIR}/tools/cli/sonare_cli_registry.cpp
+  util/median_range_test.cpp
+  util/peak_range_test.cpp
   util/math_utils_test.cpp
   util/sha256_test.cpp
   util/non_finite_sample_test.cpp
   util/numeric_overflow_guard_test.cpp
   util/time_map_test.cpp
   util/types_test.cpp
+  util/lru_zero_capacity_test.cpp
   util/lru_cache_test.cpp
   rt/tail_budget_test.cpp
+  util/reflect_padding_equivalence_test.cpp
+  util/base64_validation_test.cpp
   util/json_test.cpp
   util/number_format_test.cpp
   util/insertion_sort_test.cpp
+  util/frame_count_range_test.cpp
   util/frame_test.cpp
   util/padding_test.cpp
   util/peak_test.cpp
@@ -47,9 +53,11 @@ add_executable(sonare_tests
   util/remix_test.cpp
   util/audio_ops_test.cpp
   util/nnls_test.cpp
+  core/harmonic_lookup_equivalence_test.cpp
   util/harmonic_test.cpp
   util/wavelet_test.cpp
   util/segment_test.cpp
+  util/viterbi_transition_equivalence_test.cpp
   util/sequence_test.cpp
   util/decompose_test.cpp
   util/reassigned_test.cpp
@@ -65,11 +73,14 @@ add_executable(sonare_tests
   core/resample_test.cpp
   core/spectrum_test.cpp
   filters/mel_test.cpp
+  filters/chroma_domain_test.cpp
   filters/chroma_test.cpp
   filters/dct_test.cpp
   filters/iir_test.cpp
+  feature/duration_range_test.cpp
   feature/mel_spectrogram_test.cpp
   feature/chroma_test.cpp
+  feature/nnls_chroma_pitch_domain_test.cpp
   feature/nnls_chroma_test.cpp
   feature/spectral_test.cpp
   feature/onset_test.cpp
@@ -147,11 +158,13 @@ add_executable(sonare_tests
   engine/clip_fade_bounds_test.cpp
   engine/metronome_test.cpp
   engine/channel_delay_test.cpp
+  engine/sample_rate_contract_test.cpp
   engine/realtime_engine_test.cpp
   engine/realtime_engine_concurrency_test.cpp
   engine/telemetry_test.cpp
   engine/tempo_sync_test.cpp
   transport/marker_test.cpp
+  transport/musical_time_domain_test.cpp
   transport/transport_test.cpp
   api/quick_test.cpp
   api/core_common_fill_test.cpp
@@ -353,6 +366,10 @@ if(BUILD_MASTERING)
   endif()
 endif()
 
+if(BUILD_MASTERING AND BUILD_MIXING)
+  target_sources(sonare_tests PRIVATE mastering/multiband_saturation_config_alloc_test.cpp)
+endif()
+
 if(BUILD_MIXING)
   target_sources(sonare_tests PRIVATE
     engine/meter_telemetry_test.cpp
@@ -439,6 +456,7 @@ if(BUILD_GRAPH)
   target_sources(sonare_tests PRIVATE
     engine/graph_runtime_test.cpp
     engine/sysex_seqlock_test.cpp
+    graph/graph_mutation_contract_test.cpp
     graph/graph_test.cpp
   )
   target_compile_definitions(sonare_tests PRIVATE SONARE_WITH_GRAPH=1)
@@ -788,6 +806,11 @@ if(BUILD_ARRANGEMENT)
     midi/smf2_roundtrip_test.cpp
     midi/smf_parser_robustness_test.cpp
     midi/sysex_framing_test.cpp
+    midi/clock_sync_domain_test.cpp
+    midi/shared_voice_constants_test.cpp
+    midi/ump_group_authority_test.cpp
+    midi/midi_fx_range_test.cpp
+    midi/midi_fx_group_authority_test.cpp
     midi/midi_fx_test.cpp
     midi/midi_fx_nan_config_test.cpp
     midi/sequencer_chase_test.cpp
@@ -797,6 +820,7 @@ if(BUILD_ARRANGEMENT)
     midi/gm_gs_resolution_test.cpp
     midi/midi_routing_test.cpp
     mir/grid_snap_bar_length_test.cpp
+    mir/tempo_ramp_boundaries_test.cpp
     mir/mir_tempo_grid_test.cpp
     mir/tempo_octave_evidence_outlier_test.cpp
     mir/mir_warp_test.cpp

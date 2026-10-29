@@ -28,6 +28,7 @@
 
 #include "midi/control_value.h"
 #include "midi/synth/contact_force.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -111,7 +112,7 @@ class ModalVoiceCore {
 
   std::array<Mode, kMaxModalModes> modes_{};
   int num_modes_ = 0;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = ::sonare::constants::kDefaultDawSampleRate;
   float cached_ratio_ = 0.0f;
   /// Per-sample damp radius cap installed by release().
   double release_r_ = 1.0;

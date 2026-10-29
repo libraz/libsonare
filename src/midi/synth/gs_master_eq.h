@@ -20,6 +20,7 @@
 
 #include "rt/biquad_design.h"
 #include "rt/overflow_counter.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -98,7 +99,7 @@ class GsMasterEqFilter {
     }
   }
 
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = ::sonare::constants::kDefaultDawSampleRate;
   bool low_active_ = false;
   bool high_active_ = false;
   rt::BiquadState low_[2];

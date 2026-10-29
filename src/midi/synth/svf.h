@@ -114,7 +114,7 @@ class TptSvf {
   }
 
  private:
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = ::sonare::constants::kDefaultDawSampleRate;
   float cutoff_hz_ = 1000.0f;
   float q_ = constants::kButterworthQ;
   float k_ = constants::kSqrt2;

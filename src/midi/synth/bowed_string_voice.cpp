@@ -15,7 +15,9 @@ namespace sonare::midi::synth {
 
 namespace {
 
+using sonare::constants::kDefaultDawSampleRate;
 using sonare::constants::kEpsilon;
+using sonare::constants::kLn1000D;
 using sonare::constants::kPi;
 using sonare::constants::kTwoPi;
 
@@ -135,7 +137,7 @@ constexpr float kStringLossAnchorHz = 220.0f;
 
 void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sample_rate,
                                  uint8_t note, Velocity16 velocity, uint64_t seed) noexcept {
-  const double host_sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double host_sr = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   // The loop runs at the smallest multiple of the host rate whose lines all clear their floor;
   // everything below is built for that internal rate.
   const int factor = settle_loop_oversample(
@@ -332,7 +334,7 @@ LoopBudget BowedStringVoiceCore::configure(const BowedStringPatchParams& params,
   sympathetic_mix_ = sympathetic > 0.0f ? kSympatheticOutGain * sympathetic : 0.0f;
   if (sympathetic_mix_ > 0.0f) {
     const float srf = static_cast<float>(sr);
-    const float r = std::exp(-6.907755279f / (srf * kSympatheticRingS));
+    const float r = std::exp(-static_cast<float>(kLn1000D) / (srf * kSympatheticRingS));
     for (int i = 0; i < kSympatheticModes_; ++i) {
       SympatheticMode& m = sympathetic_[static_cast<size_t>(i)];
       const float freq = note_to_hz(static_cast<uint8_t>(kSympatheticNotes[i]));

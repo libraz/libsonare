@@ -38,7 +38,7 @@ namespace sonare::midi::synth {
 inline float string_loop_gain_for(float period_samples, double sample_rate, float t60_s) noexcept {
   const float loops_to_t60 =
       static_cast<float>(sample_rate) * std::max(0.01f, t60_s) / std::max(1.0f, period_samples);
-  return std::exp(-6.907755279f / loops_to_t60);
+  return std::exp(-static_cast<float>(::sonare::constants::kLn1000D) / loops_to_t60);
 }
 
 /// The sample rate every shipped loss coefficient and seeded noise level in

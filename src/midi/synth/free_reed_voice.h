@@ -35,6 +35,7 @@
 #include "midi/synth/excitation_axes.h"
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_breath.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -187,7 +188,7 @@ class FreeReedVoiceCore {
   /// slot_swing is set, else the hump pair.
   float slot_flow_at(float phase) const noexcept;
 
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = ::sonare::constants::kDefaultDawSampleRate;
   float base_freq_hz_ = 220.0f;
 
   /// A musette tongue beside the in-tune one: its oscillator and its own copy of

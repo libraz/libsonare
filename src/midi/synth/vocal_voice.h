@@ -34,13 +34,14 @@
 #include "midi/synth/section_stage.h"
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_breath.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
 /// Section history the host must allocate per voice slot (samples): the seat
 /// span plus the widest, slowest wander the clamp admits, at @p sample_rate.
 inline int vocal_slab_capacity(double sample_rate) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
   return static_cast<int>(sr * 0.03) + 8;
 }
 
@@ -150,7 +151,7 @@ class VocalVoiceCore {
   /// Re-derives tilt_alpha_ and form_gain_[] from the live brightness.
   void apply_excitation() noexcept;
 
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = ::sonare::constants::kDefaultDawSampleRate;
   float base_freq_hz_ = 220.0f;
 
   // Glottal source: a PolyBLEP sawtooth with a one-pole spectral tilt (the

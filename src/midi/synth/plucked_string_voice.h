@@ -31,6 +31,7 @@
 #include "midi/control_value.h"
 #include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -41,7 +42,7 @@ inline constexpr float kPluckedStringMinFundamentalHz = 20.0f;
 /// Per-LINE delay-buffer capacity (samples): one string span. attach() carves
 /// the slab into spans of this size.
 inline int plucked_string_buffer_capacity(double sample_rate) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
   return static_cast<int>(sr / kPluckedStringMinFundamentalHz) + 8;
 }
 

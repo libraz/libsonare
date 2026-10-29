@@ -14,6 +14,8 @@
 
 namespace sonare::midi::synth {
 
+using sonare::constants::kDefaultDawSampleRate;
+
 namespace {
 
 using sonare::constants::kPi;
@@ -202,7 +204,7 @@ SONARE_TUNABLE(kLip2Couple, 1.5f);
 
 void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, uint8_t note,
                            Velocity16 velocity, uint64_t seed) noexcept {
-  const double host_sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double host_sr = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   // A bore too short to hold its pitch at the host rate runs its loop at a multiple of it;
   // everything below is built for that internal rate.
   const int factor = settle_loop_oversample(

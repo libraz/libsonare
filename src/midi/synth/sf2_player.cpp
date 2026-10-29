@@ -21,6 +21,8 @@
 
 namespace sonare::midi::synth {
 
+using sonare::constants::kDefaultDawSampleRate;
+
 namespace {
 
 constexpr uint8_t kDrumChannel = 9;  // MIDI channel 10
@@ -367,7 +369,7 @@ int64_t Sf2Player::tail_bound() const noexcept {
 void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   ++prepared_domain_;
   release_prepared_nodes();
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   residual_splitter_.configure(sample_rate_, kResidualTauSeconds);
   residual_splitter_.reset();
   for (SourceResidualSplitter& s : part_bus_splitters_) {

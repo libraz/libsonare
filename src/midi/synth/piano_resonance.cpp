@@ -12,6 +12,8 @@
 
 namespace sonare::midi::synth {
 
+using sonare::constants::kLn1000D;
+
 namespace {
 
 using sonare::constants::kSemitonesPerOctave;
@@ -167,7 +169,7 @@ void PianoResonanceBank::prepare(double sample_rate) noexcept {
       const float oct = static_cast<float>(note - top_lo) / kSemitonesPerOctave;
       const float t60 = std::max(0.05f, kSympTopT60S * std::exp2(-kSympTopT60Oct * oct));
       const float w = kTwoPi * f / sr;
-      const float r = std::exp(-6.907755279f / (sr * t60));
+      const float r = std::exp(-static_cast<float>(kLn1000D) / (sr * t60));
       Mode& m = modes_[static_cast<size_t>(n++)];
       m.a1 = 2.0f * r * std::cos(w);
       m.a2 = -r * r;
@@ -194,7 +196,7 @@ void PianoResonanceBank::prepare(double sample_rate) noexcept {
       // the higher the partial the shorter the ring.
       const float t60 = std::max(0.02f, ring * std::pow(kf, -pdamp));
       const float w = kTwoPi * f / sr;
-      const float r = std::exp(-6.907755279f / (sr * t60));
+      const float r = std::exp(-static_cast<float>(kLn1000D) / (sr * t60));
       Mode& m = modes_[static_cast<size_t>(n++)];
       m.a1 = 2.0f * r * std::cos(w);
       m.a2 = -r * r;
@@ -213,7 +215,7 @@ void PianoResonanceBank::prepare(double sample_rate) noexcept {
   gate_open_coeff_ = 1.0f - std::exp(-1.0f / (0.010f * sr));
   gate_close_coeff_ = 1.0f - std::exp(-1.0f / (0.060f * sr));
   // Extra ring-out applied while the dampers are falling (~0.15 s t60).
-  ringout_ = std::exp(-6.907755279f / (sr * 0.15f));
+  ringout_ = std::exp(-static_cast<float>(kLn1000D) / (sr * 0.15f));
   // Weak sympathetic coupling (the played string still dominates).
   out_gain_ = std::max(0.0f, kSympCoupling);
   floor_ = kDuplexFloor;
@@ -231,7 +233,7 @@ void PianoResonanceBank::prepare_custom(double sample_rate, const float* freqs, 
   // the bank, not just the ones a piano would leave ungated.
   ungated_count_ = 0;
   const float t60 = std::max(0.02f, ring_t60_s);
-  const float r = std::exp(-6.907755279f / (sr * t60));
+  const float r = std::exp(-static_cast<float>(kLn1000D) / (sr * t60));
   for (int i = 0; i < kResonanceModes; ++i) {
     Mode& m = modes_[static_cast<size_t>(i)];
     const float f = (i < n && freqs != nullptr) ? freqs[i] : 0.0f;
@@ -252,7 +254,7 @@ void PianoResonanceBank::prepare_custom(double sample_rate, const float* freqs, 
   // Same lift/fall smoothing as the piano board (~10 ms open, ~60 ms close).
   gate_open_coeff_ = 1.0f - std::exp(-1.0f / (0.010f * sr));
   gate_close_coeff_ = 1.0f - std::exp(-1.0f / (0.060f * sr));
-  ringout_ = std::exp(-6.907755279f / (sr * 0.15f));
+  ringout_ = std::exp(-static_cast<float>(kLn1000D) / (sr * 0.15f));
   out_gain_ = std::max(0.0f, out_gain);
   floor_ = floor;
   hand_damp_ = 1.0f;
@@ -374,7 +376,7 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
     // Damping rises with frequency: low body modes ring ~0.45 s, high modes are brief.
     const float t60 =
         std::clamp(kBoardT60Base * std::pow(kFLow / f, kBoardT60Slope), 0.04f, kBoardT60Max);
-    const float r = std::exp(-6.907755279f / (sr * t60));
+    const float r = std::exp(-static_cast<float>(kLn1000D) / (sr * t60));
     m.a1 = 2.0f * r * std::cos(w);
     m.a2 = -r * r;
     // Radiation envelope: a low-mid tilt plus a broad bridge formant near
@@ -412,7 +414,7 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
     const float w = kTwoPi * f / sr;
     const float t60 =
         std::max(0.05f, kFrameT60S * std::pow(kFrameFLow / f, std::max(0.0f, kFrameT60Slope)));
-    const float r = std::exp(-6.907755279f / (sr * t60));
+    const float r = std::exp(-static_cast<float>(kLn1000D) / (sr * t60));
     m.a1 = 2.0f * r * std::cos(w);
     m.a2 = -r * r;
     const float d_re = 1.0f - m.a1 * std::cos(w) - m.a2 * std::cos(2.0f * w);
@@ -465,8 +467,8 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
         const float u = static_cast<float>(i) / static_cast<float>(kCaseLines - 1);
         t60 *= std::pow(std::max(0.01f, kCaseT60Spread), u);
       }
-      case_g_[i] = std::min(
-          0.9999f, std::exp(-6.907755279f * static_cast<float>(len + ap_len) / (sr_case * t60)));
+      case_g_[i] = std::min(0.9999f, std::exp(-static_cast<float>(kLn1000D) *
+                                              static_cast<float>(len + ap_len) / (sr_case * t60)));
       case_lp_[i] = 0.0f;
     }
     case_buf_.fill(0.0f);

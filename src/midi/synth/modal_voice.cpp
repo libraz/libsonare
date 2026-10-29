@@ -9,6 +9,9 @@
 
 namespace sonare::midi::synth {
 
+using sonare::constants::kDefaultDawSampleRate;
+using sonare::constants::kLn1000D;
+
 namespace {
 
 using sonare::constants::kMidiA4;
@@ -18,14 +21,14 @@ using sonare::constants::kTwoPiD;
 
 /// Per-sample decay radius reaching -60 dB after @p t60_s.
 double radius_for(double sample_rate, double t60_s) noexcept {
-  return std::exp(-6.9077552789821370521 / (sample_rate * std::max(0.01, t60_s)));
+  return std::exp(-kLn1000D / (sample_rate * std::max(0.01, t60_s)));
 }
 
 }  // namespace
 
 void ModalVoiceCore::start(const ModalPatchParams& params, double sample_rate, uint8_t note,
                            Velocity16 velocity, uint64_t seed) noexcept {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   const double f0 = static_cast<double>(note_to_hz(note));
 
   // Mallet hardness: velocity opens the upper-mode excitation.

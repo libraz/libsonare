@@ -11,6 +11,8 @@
 
 namespace sonare::midi::synth {
 
+using sonare::constants::kDefaultDawSampleRate;
+
 namespace {
 
 using sonare::constants::kTwoPi;
@@ -34,7 +36,7 @@ SONARE_TUNABLE(kControlSmoothMs, 8.0f);
 
 void AdditiveVoiceCore::start(const AdditivePatchParams& params, double sample_rate, uint8_t note,
                               Velocity16 velocity, uint64_t seed, bool percussion) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double sr = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   const float f0 = note_to_hz(note);
   noise_ = VoiceRandomSequence(seed);
 

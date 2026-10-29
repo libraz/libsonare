@@ -19,6 +19,8 @@ namespace sonare::midi::synth {
 
 using namespace piano_detail;
 using sonare::constants::kButterworthQ;
+using sonare::constants::kDefaultDawSampleRate;
+using sonare::constants::kLn1000D;
 using sonare::constants::kMidiA4;
 using sonare::constants::kPi;
 using sonare::constants::kSemitonesPerOctave;
@@ -52,7 +54,7 @@ float dispersion_allpass_a(float b_coeff, float w0, float lp_a, int stages,
 float loop_gain_for(float period_samples, double sample_rate, float t60_s) noexcept {
   const float loops_to_t60 =
       static_cast<float>(sample_rate) * std::max(0.01f, t60_s) / std::max(1.0f, period_samples);
-  return std::exp(-6.907755279f / loops_to_t60);
+  return std::exp(-static_cast<float>(kLn1000D) / loops_to_t60);
 }
 
 /// Per-loop gain for a damper resting partially on the string: the decay time
@@ -73,7 +75,7 @@ float partial_damp_gain(float natural, float damped, float strength) noexcept {
 
 void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, uint8_t note,
                            Velocity16 velocity, uint64_t seed, bool una_corda) noexcept {
-  const double host_sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double host_sr = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   // Strings too short to hold their pitch and decay at the host rate run at a multiple of it;
   // everything below is built for that internal rate.
   const int factor = settle_loop_oversample(
@@ -356,7 +358,7 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
   modal_mix_ = cross_x * cross_x * (3.0f - 2.0f * cross_x);
   modal_env_ = 1.0f;
   modal_damp_ = 1.0f;
-  modal_release_ = std::exp(-6.907755279f / (static_cast<float>(sr) * release_t60));
+  modal_release_ = std::exp(-static_cast<float>(kLn1000D) / (static_cast<float>(sr) * release_t60));
   // The prompt stage, at the rate the loop's own two t60s already imply. Their
   // reciprocals differ by exactly the extra damping the fast stage applies, so
   // the envelope's time constant falls out of the pair with nothing fitted: at
@@ -366,7 +368,9 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
   modal_residue_ = std::clamp(kModalResidue, 0.0f, 1.0f);
   const float prompt_rate = std::max(0.0f, 1.0f / t60_fast - 1.0f / t60_slow);
   modal_prompt_r_ =
-      prompt_rate > 0.0f ? std::exp(-6.907755279f * prompt_rate / static_cast<float>(sr)) : 1.0f;
+      prompt_rate > 0.0f
+          ? std::exp(-static_cast<float>(kLn1000D) * prompt_rate / static_cast<float>(sr))
+          : 1.0f;
   num_modal_ = 0;
   modal_active_count_ = 0;
   modal_cached_ratio_ = 1.0f;
@@ -396,7 +400,7 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
         const float w = kTwoPi * fn / static_cast<float>(sr);
         const float t60_n =
             std::max(0.01f, t60_slow * std::pow(fn / std::max(sf0, 1.0f), -damp_pow));
-        const float r = std::exp(-6.907755279f / (static_cast<float>(sr) * t60_n));
+        const float r = std::exp(-static_cast<float>(kLn1000D) / (static_cast<float>(sr) * t60_n));
         ModalMode& m = modal_[static_cast<size_t>(num_modal_++)];
         m.omega0 = w;
         m.r = r;
@@ -634,7 +638,7 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
     const float w = kTwoPi * f / static_cast<float>(sr);
     // The higher modes are lossier, as they are on the transverse side.
     const float t60 = std::max(0.01f, kLongT60S / static_cast<float>(i + 1));
-    const float r = std::exp(-6.907755279f / (static_cast<float>(sr) * t60));
+    const float r = std::exp(-static_cast<float>(kLn1000D) / (static_cast<float>(sr) * t60));
     m.a1 = 2.0f * r * std::cos(w);
     m.a2 = -r * r;
     const float d_re = 1.0f - m.a1 * std::cos(w) - m.a2 * std::cos(2.0f * w);

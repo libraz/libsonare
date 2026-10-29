@@ -59,7 +59,7 @@ inline constexpr float kBowedMinFundamentalHz = 20.0f;
 /// the lowest fundamental (each of the two lines is sized for the whole period
 /// so any bow position — which splits the period between them — fits).
 inline int bowed_string_buffer_capacity(double sample_rate) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
   return static_cast<int>(sr / kBowedMinFundamentalHz) + 8;
 }
 

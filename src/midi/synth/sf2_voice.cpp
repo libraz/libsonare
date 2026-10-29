@@ -7,6 +7,8 @@
 
 namespace sonare::midi::synth {
 
+using sonare::constants::kCentsPerOctave;
+
 namespace {
 
 constexpr bool kAdditive = true;
@@ -157,7 +159,7 @@ void Sf2GenSet::add_relative(const Sf2Zone& zone) noexcept {
 float timecents_to_seconds(int32_t timecents) noexcept {
   // Spec floor: the minimum timecents is 1 ms; treat anything at/below as instantaneous-ish.
   if (timecents <= kMinTimecents) return 0.001f;
-  return std::exp2(static_cast<float>(timecents) / 1200.0f);
+  return std::exp2(static_cast<float>(timecents) / kCentsPerOctave);
 }
 
 const Sf2GenSpec& sf2_gen_spec(uint16_t oper) noexcept {
@@ -174,7 +176,7 @@ float centibel_offset_to_gain(float centibels) noexcept {
   return std::pow(10.0f, centibels / 200.0f);
 }
 
-float abs_cents_to_hz(float cents) noexcept { return 8.176f * std::exp2(cents / 1200.0f); }
+float abs_cents_to_hz(float cents) noexcept { return 8.176f * std::exp2(cents / kCentsPerOctave); }
 
 float sf2_velocity_gain(Velocity16 velocity) noexcept {
   // The spec's concave 960 cB velocity->attenuation modulator reduces to
@@ -227,7 +229,7 @@ Sf2VoiceParams resolve_voice_params(const Sf2GenSet& gens, const Sf2Sample& samp
                        sample.correction;
   const double sr_ratio =
       output_sample_rate > 0.0 ? static_cast<double>(sample.sample_rate) / output_sample_rate : 1.0;
-  p.pitch_increment = sr_ratio * std::exp2(cents / 1200.0);
+  p.pitch_increment = sr_ratio * std::exp2(cents / kCentsPerOctave);
 
   // --- velocity: the generator, when set, replaces the struck velocity for every term ---
   const int32_t velocity_override = gens.get(kGenVelocity);
@@ -369,7 +371,8 @@ float Sf2Voice::render(const Sf2ChannelMod& mod) noexcept {
                             vib_lfo_value * (params.vib_lfo_to_pitch + mod.extra_vibrato_cents) +
                             glide_cents + per_note.cents;
   if (pitch_cents != 0.0f) {
-    reader.advance(params.pitch_increment * std::exp2(static_cast<double>(pitch_cents) / 1200.0));
+    reader.advance(params.pitch_increment *
+                   std::exp2(static_cast<double>(pitch_cents) / kCentsPerOctave));
   } else {
     reader.advance(params.pitch_increment);
   }

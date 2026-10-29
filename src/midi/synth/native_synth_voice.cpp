@@ -7,11 +7,14 @@
 #include "midi/synth/native_synth.h"
 #include "midi/synth/pitch.h"
 #include "midi/synth/voice_random.h"
+#include "util/constants.h"
 #include "util/dsp_primitives.h"
 #include "util/numeric_validation.h"
 #include "util/tunable.h"
 
 namespace sonare::midi::synth {
+
+using sonare::constants::kDefaultDawSampleRate;
 
 namespace {
 
@@ -208,12 +211,12 @@ float pan_scatter_units(float stereo_spread, float scatter) noexcept {
 constexpr float kReleasedSilenceSeconds = 0.064f;
 
 uint32_t released_silence_run(double sample_rate) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double sr = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   return static_cast<uint32_t>(std::ceil(static_cast<double>(kReleasedSilenceSeconds) * sr));
 }
 
 float law_fade_step(double sample_rate) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double sr = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   return static_cast<float>(1.0 / (sr * static_cast<double>(kLawFadeSeconds)));
 }
 

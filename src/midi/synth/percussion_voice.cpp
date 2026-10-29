@@ -14,6 +14,8 @@
 
 namespace sonare::midi::synth {
 
+using sonare::constants::kLn1000D;
+
 namespace {
 
 using sonare::constants::kInvSqrt2;
@@ -61,11 +63,9 @@ constexpr float kSilenceFollowerMs = 40.0f;
 /// How far above full scale a strike's radiated peak is allowed when the ring
 /// bound is taken: in-phase modes and a resonant plate can sum past 1.
 constexpr float kRingPeakHeadroomDb = 20.0f;
-/// t60 per exponential time constant, ln(1000).
-constexpr float kT60PerTau = 6.907755279f;
-
 float radius_for(double sample_rate, float t60_s) noexcept {
-  return std::exp(-6.907755279f / (static_cast<float>(sample_rate) * std::max(0.005f, t60_s)));
+  return std::exp(-static_cast<float>(kLn1000D) /
+                  (static_cast<float>(sample_rate) * std::max(0.005f, t60_s)));
 }
 
 /// Longest a single mode may ring, mirroring the ceiling `mode_decay_s` itself
@@ -574,7 +574,9 @@ bool PercussionVoiceCore::silent() const noexcept {
 float PercussionVoiceCore::ring_bound_s(const PercussionPatchParams& params,
                                         double sample_rate) noexcept {
   const double rate = sample_rate > 0.0 ? sample_rate : constants::kDefaultDawSampleRate;
-  const auto tau_t60 = [](float tau_ms) noexcept { return kT60PerTau * 0.001f * tau_ms; };
+  const auto tau_t60 = [](float tau_ms) noexcept {
+    return static_cast<float>(kLn1000D) * 0.001f * tau_ms;
+  };
   float source_t60 = 0.0f;
   float mode_t60 = 0.0f;
   float particle_t60 = 0.0f;

@@ -11,6 +11,8 @@
 
 namespace sonare::midi::synth {
 
+using sonare::constants::kDefaultDawSampleRate;
+
 namespace {
 
 using sonare::constants::kA4Hz;
@@ -143,7 +145,7 @@ float free_reed_onset_overshoot_db(const FreeReedPatchParams& params, float f0_h
 
 void FreeReedVoiceCore::start(const FreeReedPatchParams& params, double sample_rate, uint8_t note,
                               Velocity16 velocity, uint64_t seed) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double sr = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   sample_rate_ = sr;
   noise_ = VoiceRandomSequence(seed);
   drive_index_ = 1;

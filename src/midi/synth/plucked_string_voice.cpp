@@ -13,6 +13,8 @@
 
 namespace sonare::midi::synth {
 
+using sonare::constants::kDefaultDawSampleRate;
+
 namespace {
 
 using sonare::constants::kMidiA4;
@@ -51,7 +53,7 @@ constexpr float kPluckedPluckQuoteHz = 110.0f;
 
 void PluckedStringVoiceCore::start(const PluckedStringPatchParams& params, double sample_rate,
                                    uint8_t note, Velocity16 velocity, uint64_t seed) noexcept {
-  const double host_sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double host_sr = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   // A loop too short to hold its pitch and decay at the host rate runs at a multiple of it;
   // everything below is built for that internal rate.
   const int factor = settle_loop_oversample(

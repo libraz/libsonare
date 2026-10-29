@@ -15,6 +15,8 @@ namespace sonare::midi::synth {
 namespace {
 
 using sonare::constants::kCentsPerOctave;
+using sonare::constants::kDefaultDawSampleRate;
+using sonare::constants::kLn1000D;
 using sonare::constants::kPi;
 using sonare::constants::kSemitonesPerOctave;
 using sonare::constants::kTwoPi;
@@ -205,7 +207,7 @@ float jet_table(float x, float asym) noexcept {
 
 void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample_rate, uint8_t note,
                                Velocity16 velocity, uint64_t seed) noexcept {
-  const double host_sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double host_sr = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   // Every sounding rank runs at the smallest multiple of the host rate whose bore and jet lines
   // clear their floor; everything below is built for that internal rate.
   const int factor = settle_loop_oversample(
@@ -344,7 +346,8 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
     // pipe stops speaking promptly once the wind is cut.
     const float rel_t60 = std::max(0.02f, params.release_damp_s);
     const float loops_to_t60 = srf * rel_t60 / std::max(1.0f, period);
-    pipe.release_loss = std::min(loss_gain, std::exp(-6.907755279f / std::max(1.0f, loops_to_t60)));
+    pipe.release_loss =
+        std::min(loss_gain, std::exp(-static_cast<float>(kLn1000D) / std::max(1.0f, loops_to_t60)));
 
     // Open-end reflection lowpass: a one-pole whose corner tracks the pitch
     // (corner = corner_mult * f0) so the harmonic damping is consistent across
@@ -747,7 +750,7 @@ void PipeOrganVoiceCore::kill() noexcept {
 
 void OrganWindSupply::prepare(double sample_rate, float tremulant_rate_hz, float tremulant_depth,
                               float wind_sag, bool regulated) noexcept {
-  sr_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sr_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   const float rate = tremulant_rate_hz > 0.0f ? tremulant_rate_hz : 0.0f;
   const float depth = std::clamp(tremulant_depth, 0.0f, 1.0f);
   sag_depth_ = std::clamp(wind_sag, 0.0f, 1.0f);

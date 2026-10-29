@@ -427,7 +427,7 @@ class OrganWindSupply {
 
  private:
   bool active_ = false;
-  double sr_ = 48000.0;
+  double sr_ = ::sonare::constants::kDefaultDawSampleRate;
   // Tremulant LFO (deterministic phase accumulator).
   double trem_phase_ = 0.0;
   double trem_inc_ = 0.0;

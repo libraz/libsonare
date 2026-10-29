@@ -2,18 +2,13 @@
 
 #include "midi/channel_voice_decode.h"
 #include "midi/control_value.h"
+#include "midi/controller_numbers.h"
 
 namespace sonare::midi {
 namespace {
 
 constexpr float kCc7BitMax = 127.0f;
 constexpr float kCc14BitMax = static_cast<float>(kValue14Max);
-constexpr uint8_t kDataEntryMsb = 6;
-constexpr uint8_t kDataEntryLsb = 38;
-constexpr uint8_t kNrpnLsb = 98;
-constexpr uint8_t kNrpnMsb = 99;
-constexpr uint8_t kRpnLsb = 100;
-constexpr uint8_t kRpnMsb = 101;
 
 // A control-change of either protocol, decoded to its UMP group, controller
 // number, channel and value at MIDI 2.0 width.
@@ -245,7 +240,8 @@ bool CcMap::observe_for_learn(const Ump& ump, CcBinding* out_binding) {
   LearnChannelState& state = learn_states_[state_key(group, channel)];
 
   // A selector starts a new RPN/NRPN gesture; drop a provisional 14-bit MSB.
-  const bool is_selector_cc = cc == kRpnMsb || cc == kRpnLsb || cc == kNrpnMsb || cc == kNrpnLsb;
+  const bool is_selector_cc =
+      cc == cc::kRpnMsb || cc == cc::kRpnLsb || cc == cc::kNrpnMsb || cc == cc::kNrpnLsb;
   if (is_selector_cc) {
     state.pending_cc_msb_valid = false;
   }
@@ -314,28 +310,28 @@ bool CcMap::observe_for_learn(const Ump& ump, CcBinding* out_binding) {
     return commit_learned_binding(binding, out_binding);
   }
 
-  if (cc == kRpnMsb) {
+  if (cc == cc::kRpnMsb) {
     state.rpn_msb = value;
     state.rpn_msb_valid = true;
     state.nrpn_msb_valid = false;
     state.nrpn_lsb_valid = false;
     return false;
   }
-  if (cc == kRpnLsb) {
+  if (cc == cc::kRpnLsb) {
     state.rpn_lsb = value;
     state.rpn_lsb_valid = true;
     state.nrpn_msb_valid = false;
     state.nrpn_lsb_valid = false;
     return false;
   }
-  if (cc == kNrpnMsb) {
+  if (cc == cc::kNrpnMsb) {
     state.nrpn_msb = value;
     state.nrpn_msb_valid = true;
     state.rpn_msb_valid = false;
     state.rpn_lsb_valid = false;
     return false;
   }
-  if (cc == kNrpnLsb) {
+  if (cc == cc::kNrpnLsb) {
     state.nrpn_lsb = value;
     state.nrpn_lsb_valid = true;
     state.rpn_msb_valid = false;
@@ -350,13 +346,14 @@ bool CcMap::observe_for_learn(const Ump& ump, CcBinding* out_binding) {
   binding.min_value = learn_min_;
   binding.max_value = learn_max_;
 
-  if ((cc == kDataEntryMsb || cc == kDataEntryLsb) && state.rpn_msb_valid && state.rpn_lsb_valid) {
+  if ((cc == cc::kDataEntryMsb || cc == cc::kDataEntryLsb) && state.rpn_msb_valid &&
+      state.rpn_lsb_valid) {
     binding.kind = CcBindingKind::kRpn;
     binding.selector_msb = state.rpn_msb;
     binding.selector_lsb = state.rpn_lsb;
     return commit_learned_binding(binding, out_binding);
   }
-  if ((cc == kDataEntryMsb || cc == kDataEntryLsb) && state.nrpn_msb_valid &&
+  if ((cc == cc::kDataEntryMsb || cc == cc::kDataEntryLsb) && state.nrpn_msb_valid &&
       state.nrpn_lsb_valid) {
     binding.kind = CcBindingKind::kNrpn;
     binding.selector_msb = state.nrpn_msb;
@@ -495,29 +492,29 @@ bool CcMap::observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit
   };
 
   // RPN/NRPN selector messages address a parameter; they never emit a value.
-  if (cc == kRpnMsb) {
+  if (cc == cc::kRpnMsb) {
     st.rpn_msb = value7;
     st.nrpn_active = false;
     return emit_plain();
   }
-  if (cc == kRpnLsb) {
+  if (cc == cc::kRpnLsb) {
     st.rpn_lsb = value7;
     st.nrpn_active = false;
     return emit_plain();
   }
-  if (cc == kNrpnMsb) {
+  if (cc == cc::kNrpnMsb) {
     st.nrpn_msb = value7;
     st.nrpn_active = true;
     return emit_plain();
   }
-  if (cc == kNrpnLsb) {
+  if (cc == cc::kNrpnLsb) {
     st.nrpn_lsb = value7;
     st.nrpn_active = true;
     return emit_plain();
   }
 
   // Data Entry drives the currently-selected RPN/NRPN binding at 14 bits.
-  if (cc == kDataEntryMsb || cc == kDataEntryLsb) {
+  if (cc == cc::kDataEntryMsb || cc == cc::kDataEntryLsb) {
     const bool nrpn = st.nrpn_active;
     const uint8_t sel_msb = nrpn ? st.nrpn_msb : st.rpn_msb;
     const uint8_t sel_lsb = nrpn ? st.nrpn_lsb : st.rpn_lsb;
@@ -529,7 +526,7 @@ bool CcMap::observe_live_cc(const Ump& ump, uint32_t* out_param, float* out_unit
       return emit_plain();
     }
     uint16_t value14 = 0;
-    if (cc == kDataEntryMsb) {
+    if (cc == cc::kDataEntryMsb) {
       st.data_msb = value7;
       value14 = static_cast<uint16_t>(static_cast<uint16_t>(value7) << 7u);
     } else {

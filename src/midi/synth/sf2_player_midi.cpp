@@ -22,6 +22,7 @@ namespace sonare::midi::synth {
 
 namespace {
 
+using ::sonare::constants::kCentsPerOctave;
 using ::sonare::constants::kCentsPerSemitone;
 using ::sonare::constants::kSemitonesPerOctave;
 
@@ -469,7 +470,8 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, Velocity16 velocity, uint
         // temperament belongs to the keyboard, so a kit piece PLAY NOTE NUMBER
         // redirected to keeps the tuning of the key that asked for it.
         if (route.note_pitch_cents != 0.0f) {
-          params.pitch_increment *= std::exp2(static_cast<double>(route.note_pitch_cents) / 1200.0);
+          params.pitch_increment *=
+              std::exp2(static_cast<double>(route.note_pitch_cents) / kCentsPerOctave);
         }
         // A TVF CUTOFF CONTROL destination engages the filter the way a TONE
         // MODIFY cutoff does, and on the part rather than on the controller: a

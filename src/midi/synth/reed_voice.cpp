@@ -11,6 +11,8 @@
 
 namespace sonare::midi::synth {
 
+using sonare::constants::kDefaultDawSampleRate;
+
 namespace {
 
 using sonare::constants::kEpsilon;
@@ -240,7 +242,7 @@ float solve_valve_drop(float c, float zc, float alpha, float beta) noexcept {
 
 void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uint8_t note,
                           Velocity16 velocity, uint64_t seed) noexcept {
-  const double host_sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double host_sr = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   // The loop runs at the smallest multiple of the host rate whose bore line clears its floor;
   // everything below is built for that internal rate.
   const int factor = settle_loop_oversample(

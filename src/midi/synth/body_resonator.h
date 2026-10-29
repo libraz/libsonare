@@ -512,7 +512,8 @@ class BodyResonator {
   };
   static void configure_mode(Mode& mode, const Spec& spec, float sample_rate) noexcept {
     const float w = sonare::constants::kTwoPi * spec.freq_hz / sample_rate;
-    const float r = std::exp(-6.907755279f / (sample_rate * spec.t60_s));
+    const float r =
+        std::exp(-static_cast<float>(::sonare::constants::kLn1000D) / (sample_rate * spec.t60_s));
     mode.a1 = 2.0f * r * std::cos(w);
     mode.a2 = -r * r;
     mode.sin_w = std::sin(w);

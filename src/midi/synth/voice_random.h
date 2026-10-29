@@ -10,15 +10,12 @@
 
 #include <cstdint>
 
+#include "util/splitmix64.h"
+
 namespace sonare::midi::synth {
 
 /// SplitMix64-style avalanche of a 64-bit seed (Steele/Lea/Flood finalizer).
-inline uint64_t voice_hash(uint64_t seed) noexcept {
-  uint64_t z = seed + 0x9E3779B97F4A7C15ull;
-  z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
-  z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
-  return z ^ (z >> 31);
-}
+inline uint64_t voice_hash(uint64_t seed) noexcept { return ::sonare::splitmix64_at(seed, 0); }
 
 /// Combines the canonical per-voice identifiers into one seed.
 inline uint64_t voice_seed(uint32_t voice_index, uint32_t note, uint64_t age) noexcept {

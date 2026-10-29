@@ -33,6 +33,7 @@
 /// may be called per-sample.
 
 #include "midi/synth/svf.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -73,7 +74,7 @@ class TransistorLadderFilter {
   void settle(float x) noexcept;
 
  private:
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = ::sonare::constants::kDefaultDawSampleRate;
   float last_cutoff_ = -1.0f;
   float last_resonance_ = -1.0f;
   // Coefficients.
@@ -97,7 +98,7 @@ class DiodeLadderFilter {
   void settle(float x) noexcept;
 
  private:
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = ::sonare::constants::kDefaultDawSampleRate;
   float last_cutoff_ = -1.0f;
   float last_resonance_ = -1.0f;
   // Coefficients (AN-6 naming).
@@ -125,7 +126,7 @@ class Korg35Filter {
   void settle(float x) noexcept;
 
  private:
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = ::sonare::constants::kDefaultDawSampleRate;
   float last_cutoff_ = -1.0f;
   float last_resonance_ = -1.0f;
   // Coefficients.
