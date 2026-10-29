@@ -203,9 +203,10 @@ std::vector<rt::ParamDescriptor> VocalRider::parameter_descriptors() const {
 }
 
 void VocalRider::validate_config(const VocalRiderConfig& config) {
-  if (!valid_non_negative(config.max_boost_db) || !valid_non_negative(config.max_cut_db) ||
-      !valid_non_negative(config.attack_ms) || !valid_non_negative(config.release_ms) ||
-      !valid_non_negative(config.gain_smoothing_ms)) {
+  if (!std::isfinite(config.target_db) || !std::isfinite(config.noise_floor_db) ||
+      !std::isfinite(config.output_gain_db) || !valid_non_negative(config.max_boost_db) ||
+      !valid_non_negative(config.max_cut_db) || !valid_non_negative(config.attack_ms) ||
+      !valid_non_negative(config.release_ms) || !valid_non_negative(config.gain_smoothing_ms)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid vocal rider configuration");
   }
   if (!valid_peak_gain(config.max_boost_db, config.output_gain_db)) {

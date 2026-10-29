@@ -184,7 +184,8 @@ std::vector<rt::ParamDescriptor> TransientShaper::parameter_descriptors() const 
 }
 
 void TransientShaper::validate_config(const TransientShaperConfig& config) {
-  if (!valid_non_negative(config.fast_attack_ms) || !valid_non_negative(config.fast_release_ms) ||
+  if (!std::isfinite(config.attack_gain_db) || !std::isfinite(config.sustain_gain_db) ||
+      !valid_non_negative(config.fast_attack_ms) || !valid_non_negative(config.fast_release_ms) ||
       !valid_non_negative(config.slow_attack_ms) || !valid_non_negative(config.slow_release_ms) ||
       !valid_non_negative(config.sensitivity) || !valid_non_negative(config.max_gain_db) ||
       !valid_non_negative(config.gain_smoothing_ms) || !valid_non_negative(config.lookahead_ms)) {
