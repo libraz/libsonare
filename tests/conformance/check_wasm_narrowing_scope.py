@@ -393,8 +393,25 @@ def _declaration_before(readable: str, code: str, open_paren: int) -> tuple[str,
     # `inline`, `static` and the like are not the return type; the last type-ish
     # token before the name is.
     tokens = [t for t in re.split(r"[\s*&]+", prefix.strip()) if t]
-    skip = {"inline", "static", "constexpr", "extern", "virtual", "explicit", "template"}
+    skip = {
+        "const",
+        "constexpr",
+        "extern",
+        "explicit",
+        "inline",
+        "static",
+        "template",
+        "virtual",
+        "volatile",
+    }
     returns = next((t for t in reversed(tokens) if t not in skip), "")
+    # Keep indirection attached to the return type. Without this, `const
+    # float* load_carrier(val)` is reduced to `float` and misclassified as a
+    # scalar reader. Pointer/reference-returning functions still remain
+    # containers, so any narrowing in their bodies is scanned normally.
+    indirection = re.search(r"([*&]+)(?:\s*(?:const|volatile)\b)*\s*$", prefix)
+    if indirection is not None:
+        returns += indirection.group(1)
     return name, returns
 
 

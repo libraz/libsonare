@@ -129,7 +129,7 @@ test: test-cxx
 # clone in about half a minute. Invoked directly, this reports a missing rye as
 # the error it is; `test` is the target that treats it as a skip.
 test-voicematch:
-	$(RYE) run --pyproject bindings/python/pyproject.toml python -m pytest tools/voicematch tools/audition -q
+	$(RYE) run --pyproject bindings/python/pyproject.toml python -m pytest tools/voicematch tools/audition tools/playback -q
 
 # Heavy cases (>~2 s each) are tagged [.][slow] and hidden from the default
 # ctest run; this runs just those. Must run from the repo root (librosa
@@ -831,18 +831,19 @@ gs-efx-coverage: gs-efx-archive-set
 # pinned tool version each live in three files at once; widening one and not the
 # others leaves the gate that runs on a push as narrow as it was, and green.
 conformance:
+	python3 -m unittest tests/conformance/test_measure_accuracy_matching.py tests/conformance/test_size_and_report_tolerances.py
 	python3 tools/conformance/check_public_contracts.py
 	python3 tools/api/check_request_object_coverage.py
 	python3 tools/conformance/check_cli_contract.py --schema
 	python3 tools/conformance/check_repair_cli_param_keys.py
 	python3 tools/conformance/check_lint_scope.py
-	python3 -m unittest tests/conformance/test_cli_contract.py
+	python3 -m unittest tests/conformance/test_cli_contract.py tests/conformance/test_cli_artifact_defaults.py
 	python3 -m unittest tests/conformance/test_playback_cli.py
 	python3 -m unittest tests/conformance/test_wasm_exception_scope.py
 	python3 -m unittest tests/conformance/test_wasm_feature_gate_scope.py
 	python3 -m unittest tests/conformance/test_binding_warning_flags.py
 	python3 tests/conformance/check_wasm_narrowing_scope.py
-	python3 -m unittest tests/conformance/test_wasm_narrowing_scope.py
+	python3 -m unittest tests/conformance/test_wasm_narrowing_scope.py tests/conformance/test_wasm_pointer_return_scope.py
 	python3 tests/conformance/check_python_narrowing_scope.py
 	python3 -m unittest tests/conformance/test_python_narrowing_scope.py
 	python3 tests/conformance/check_public_integer_domains.py

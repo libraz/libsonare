@@ -133,6 +133,8 @@ def is_regression(metric: str, before: Any, after: Any, tolerance: float) -> boo
 
 
 def compare_reports(baseline: dict[str, Any], current: dict[str, Any], tolerance: float) -> dict[str, Any]:
+    if not math.isfinite(tolerance) or tolerance < 0:
+        raise ValueError("tolerance must be finite and non-negative")
     baseline_obs = observations(baseline)
     current_obs = observations(current)
     rows: list[dict[str, Any]] = []
@@ -163,6 +165,13 @@ def compare_reports(baseline: dict[str, Any], current: dict[str, Any], tolerance
     return {"ok": regressions == 0, "regressions": regressions, "comparisons": rows}
 
 
+def parse_tolerance(value: str) -> float:
+    tolerance = float(value)
+    if not math.isfinite(tolerance) or tolerance < 0:
+        raise argparse.ArgumentTypeError("tolerance must be finite and non-negative")
+    return tolerance
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("baseline", type=Path)
@@ -170,7 +179,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, help="Write JSON comparison to this path.")
     parser.add_argument(
         "--tolerance",
-        type=float,
+        type=parse_tolerance,
         default=1e-6,
         help="Numeric tolerance for score changes before flagging a regression.",
     )

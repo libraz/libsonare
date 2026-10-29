@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import subprocess
 import sys
@@ -97,20 +98,24 @@ def chord_root(chord: dict) -> int | None:
 
 
 def beat_f_measure(reference: list[float], estimated: list[float], offset: float = 0.0) -> dict:
-    """Greedy one-to-one match inside the tolerance window, as mir_eval does."""
-    shifted = sorted(t - offset for t in estimated)
-    unused = list(reference)
+    """Maximum one-to-one beat matches inside the tolerance window."""
+    reference_sorted = sorted(t for t in reference if math.isfinite(t))
+    shifted = sorted(t - offset for t in estimated if math.isfinite(t - offset))
     matched = 0
-    for beat in shifted:
-        best_index, best_distance = None, BEAT_TOLERANCE_SEC
-        for index, ref in enumerate(unused):
-            distance = abs(ref - beat)
-            if distance <= best_distance:
-                best_index, best_distance = index, distance
-        if best_index is not None:
+    ref_index = estimate_index = 0
+    while ref_index < len(reference_sorted) and estimate_index < len(shifted):
+        ref = reference_sorted[ref_index]
+        estimate = shifted[estimate_index]
+        distance = estimate - ref
+        if distance < -BEAT_TOLERANCE_SEC:
+            estimate_index += 1
+        elif distance > BEAT_TOLERANCE_SEC:
+            ref_index += 1
+        else:
             matched += 1
-            unused.pop(best_index)
-    precision = matched / len(shifted) if shifted else 0.0
+            ref_index += 1
+            estimate_index += 1
+    precision = matched / len(estimated) if estimated else 0.0
     recall = matched / len(reference) if reference else 0.0
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     return {"precision": precision, "recall": recall, "f1": f1, "matched": matched}

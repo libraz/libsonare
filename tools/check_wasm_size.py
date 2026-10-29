@@ -20,6 +20,7 @@ import argparse
 import gzip
 import hashlib
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -123,8 +124,8 @@ def main() -> int:
     parser.add_argument("--max-increase", type=float, default=0.02)
     args = parser.parse_args()
 
-    if args.max_increase < 0:
-        parser.error("--max-increase must be non-negative")
+    if not math.isfinite(args.max_increase) or args.max_increase < 0:
+        parser.error("--max-increase must be finite and non-negative")
 
     current: dict[str, dict[str, int | str]] = {}
     for name, path in args.artifact:
