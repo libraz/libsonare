@@ -75,6 +75,10 @@ FrameEnergy compute_frame_energy(const float* samples, size_t size, int sample_r
   }
 
   FrameEnergy result;
+  const size_t frame_count =
+      1 + (size - static_cast<size_t>(frame_size)) / static_cast<size_t>(hop_size);
+  result.energy.reserve(frame_count);
+  result.times.reserve(frame_count);
   for (size_t start = 0; start + static_cast<size_t>(frame_size) <= size;
        start += static_cast<size_t>(hop_size)) {
     double sum = 0.0;
