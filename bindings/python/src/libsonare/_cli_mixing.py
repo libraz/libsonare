@@ -399,15 +399,14 @@ def _mix_strip_pan_mode(value: str) -> int:
     return mode
 
 
-def _mix_strip_scene_json(
-    input_trim_db: float, fader_db: float, pan: float, pan_mode: int, width: float
-) -> str:
+def _mix_strip_scene_json(pan_mode: int) -> str:
     """Build the one-strip-to-master scene this command renders through.
 
     The native front-end applies a bare channel strip to the buffer, which this
     surface has no facade for; a single strip routed straight to master with no
     inserts and no sends is the same signal path. Every field the strip carries
-    is spelled out so the scene defaults cannot drift away from the bare strip's.
+    is spelled out so the scene defaults cannot drift away from the bare strip's;
+    the four level controls are neutral here and set through the mixer afterwards.
     """
     return json.dumps(
         {
@@ -417,12 +416,12 @@ def _mix_strip_scene_json(
             "strips": [
                 {
                     "id": "s",
-                    "inputTrimDb": input_trim_db,
-                    "faderDb": fader_db,
-                    "pan": pan,
+                    "inputTrimDb": 0.0,
+                    "faderDb": 0.0,
+                    "pan": 0.0,
                     "panMode": pan_mode,
                     "panLaw": 0,
-                    "width": width,
+                    "width": 1.0,
                     "channelDelaySamples": 0,
                     "dualPanLeft": -1,
                     "dualPanRight": 1,
@@ -446,25 +445,28 @@ def cmd_mix_strip(args: argparse.Namespace) -> int:
     from . import Mixer
 
     width = float(getattr(args, "width", 1.0))
+    input_trim_db = float(getattr(args, "input_trim_db", 0.0))
+    fader_db = float(getattr(args, "fader_db", 0.0))
+    pan = float(getattr(args, "pan", 0.0))
     planes, sample_rate = _load_channels_or_downmix(args.file)
     left = np.array(planes[0], dtype=np.float32)
     right = np.array(planes[1], dtype=np.float32) if len(planes) == 2 else left.copy()
     if len(planes) != 2 and width != 1.0:
         raise ValueError("--width requires a stereo input")
 
-    scene_json = _mix_strip_scene_json(
-        float(getattr(args, "input_trim_db", 0.0)),
-        float(getattr(args, "fader_db", 0.0)),
-        float(getattr(args, "pan", 0.0)),
-        _mix_strip_pan_mode(getattr(args, "pan_mode", "balance")),
-        width,
-    )
+    pan_mode = _mix_strip_pan_mode(getattr(args, "pan_mode", "balance"))
+    scene_json = _mix_strip_scene_json(pan_mode)
 
     # One block covering the whole file, as the native front-end does: the strip
     # is prepared for that block size and processed once.
     frames = len(left)
     mixer = Mixer.from_scene_json(scene_json, sample_rate=sample_rate, block_size=max(frames, 1))
     try:
+        # Setters refuse an out-of-domain option as InvalidParameter (exit 3), as the native does.
+        mixer.set_input_trim_db("s", input_trim_db)
+        mixer.set_fader_db("s", fader_db)
+        mixer.set_pan("s", pan)
+        mixer.set_width("s", width)
         mixer.compile()
         # The native sets every value before prepare(), which snaps the
         # smoothers. A scene applies them after, so without this the first
