@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <numeric>
 
 #include "core/convert.h"
@@ -13,6 +14,16 @@
 namespace sonare {
 
 namespace {
+
+std::int64_t absolute_midi_pitch(int midi_min, int pitch) {
+  return static_cast<std::int64_t>(midi_min) + static_cast<std::int64_t>(pitch);
+}
+
+int midi_pitch_class(std::int64_t midi_pitch) {
+  constexpr auto kPitchClasses = static_cast<std::int64_t>(constants::kSemitonesPerOctave);
+  const std::int64_t remainder = midi_pitch % kPitchClasses;
+  return static_cast<int>(remainder < 0 ? remainder + kPitchClasses : remainder);
+}
 
 float harmonic_weight(int harmonic) {
   static constexpr float kWeights[] = {1.0f, 0.6f, 0.5f, 0.4f, 0.3f, 0.2f};
@@ -65,10 +76,9 @@ void normalize_chroma_frames(std::vector<float>& chroma, int n_chroma, int n_fra
   chroma = normalize_matrix(chroma.data(), n_chroma, n_frames, /*axis=*/0, NormType::Inf);
 }
 
-std::vector<float> cqt_magnitude_to_chroma(const CqtResult& cqt_result, int bins_per_octave) {
+std::vector<float> cqt_magnitude_to_chroma(const CqtResult& cqt_result) {
   const int n_bins = cqt_result.n_bins();
   const int n_frames = cqt_result.n_frames();
-  (void)bins_per_octave;
   std::vector<float> chroma = accumulate_cqt_pitch_classes(cqt_result.magnitude(), n_bins, n_frames,
                                                            12, cqt_result.frequencies(), nullptr);
 
@@ -87,8 +97,8 @@ std::vector<float> build_nnls_harmonic_template(const std::vector<float>& cqt_fr
   std::vector<float> matrix(static_cast<size_t>(n_bins) * config.n_pitches, 0.0f);
 
   for (int pitch = 0; pitch < config.n_pitches; ++pitch) {
-    const float fundamental =
-        tune_cqt_fmin(midi_to_hz(static_cast<float>(config.midi_min + pitch)), config.tuning);
+    const float fundamental = tune_cqt_fmin(
+        midi_to_hz(static_cast<float>(absolute_midi_pitch(config.midi_min, pitch))), config.tuning);
     for (int harmonic = 1; harmonic <= config.n_harmonics; ++harmonic) {
       const float harmonic_freq = fundamental * static_cast<float>(harmonic);
       if (harmonic_freq < cqt_frequencies.front() || harmonic_freq > cqt_frequencies.back()) {
@@ -155,7 +165,7 @@ Chroma nnls_chroma(const Audio& audio, const NnlsChromaConfig& config) {
 
   std::vector<float> chroma(12 * n_frames, 0.0f);
   for (int pitch = 0; pitch < config.n_pitches; ++pitch) {
-    const int chroma_bin = (config.midi_min + pitch) % 12;
+    const int chroma_bin = midi_pitch_class(absolute_midi_pitch(config.midi_min, pitch));
     for (int frame = 0; frame < n_frames; ++frame) {
       chroma[chroma_bin * n_frames + frame] += pitch_salience[pitch * n_frames + frame];
     }
@@ -163,8 +173,7 @@ Chroma nnls_chroma(const Audio& audio, const NnlsChromaConfig& config) {
 
   // Keep direct chroma contributions. This makes the front-end robust on sparse synthetic tones
   // where multiple low fundamentals can explain one observed harmonic equally well.
-  std::vector<float> direct_chroma =
-      cqt_magnitude_to_chroma(cqt_result, config.cqt.bins_per_octave);
+  std::vector<float> direct_chroma = cqt_magnitude_to_chroma(cqt_result);
   if (direct_chroma.size() == chroma.size()) {
     for (size_t i = 0; i < chroma.size(); ++i) {
       chroma[i] = 0.60f * chroma[i] + 0.40f * direct_chroma[i];
