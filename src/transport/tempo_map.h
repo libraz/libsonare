@@ -23,6 +23,8 @@ inline constexpr double kMaxPublicPpq = 1.0e12;
 /// far above a musical tempo while keeping MIDI-clock and beat-grid work
 /// bounded enough for realtime code to enforce a small per-block budget.
 inline constexpr double kMaxPublicTempoBpm = 100000.0;
+/// Effective lower tempo used by TempoMap for interpolation and playback.
+inline constexpr double kMinEffectiveTempoBpm = 1.0e-6;
 
 inline bool valid_public_ppq(double ppq) noexcept { return ppq >= 0.0 && ppq <= kMaxPublicPpq; }
 

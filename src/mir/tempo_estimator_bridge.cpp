@@ -13,9 +13,12 @@ namespace sonare::mir {
 namespace {
 
 using sonare::constants::kEpsilon;
+using sonare::constants::kSecondsPerMinute;
+// Below this relative change log1p keeps the logarithmic mean accurate near b0 == b1.
+constexpr double kLogMeanRelativeChangeLimit = 0.5;
 
 // Period (in seconds) per beat for a given BPM.
-double period_for_bpm(double bpm) { return 60.0 / std::max(bpm, 1.0e-3); }
+double period_for_bpm(double bpm) { return kSecondsPerMinute / std::max(bpm, 1.0e-3); }
 
 // The interval observations and the smoothed tempo decode behind them live in
 // analysis/tempo_curve.h. They are shared rather than local so the
@@ -106,7 +109,7 @@ std::vector<transport::TempoSegment> build_segments(const BeatAnalysisInput& inp
     const size_t count = run_end - run_start;
     if (count == 0 || total_ibi <= 0.0) return std::max(decoded_bpm[run_start] * bpm_scale, 1.0);
     const double mean_ibi = total_ibi / static_cast<double>(count);
-    return std::max((60.0 / mean_ibi) * bpm_scale, 1.0);
+    return std::max((kSecondsPerMinute / mean_ibi) * bpm_scale, 1.0);
   };
 
   // The duration-preserving constant BPM of each emitted segment, kept so a
@@ -144,41 +147,47 @@ std::vector<transport::TempoSegment> build_segments(const BeatAnalysisInput& inp
   // over a fixed ppq span elapses the time of a constant at the logarithmic mean
   // L(b0,b1) = (b1 - b0) / ln(b1/b0), NOT at b0. Leaving the segment's stored
   // `bpm` as the constant therefore over/under-runs the segment at the boundary,
-  // shifting every later beat (the "ramp boundary" quantization defect). We hold
-  // end_bpm = b1 (continuity with the next segment) and solve for the b0 whose
-  // logarithmic mean with b1 equals the calibrated constant M, by bisection
-  // (L is monotonic in b0). Deterministic and bounded-iteration.
+  // shifting every later beat (the "ramp boundary" quantization defect). For a
+  // feasible ramp, hold end_bpm = b1 (continuity with the next segment) and solve
+  // for the b0 whose logarithmic mean with b1 equals the calibrated constant M.
+  // If no valid TempoMap start tempo can preserve that duration, keep this run
+  // constant instead; duration accuracy takes priority over ramp continuity.
   auto log_mean = [](double a, double b) {
-    if (std::abs(a - b) < 1.0e-9) return 0.5 * (a + b);
+    if (a == b) return a;
+    const double relative_change = (b - a) / a;
+    if (std::abs(relative_change) < kLogMeanRelativeChangeLimit) {
+      return (b - a) / std::log1p(relative_change);
+    }
     return (b - a) / (std::log(b) - std::log(a));
   };
-  for (size_t i = 0; i < segments.size(); ++i) {
+  for (size_t i = segments.size(); i-- > 0;) {
     transport::TempoSegment& seg = segments[i];
-    const double m = calibrated_bpm[i];                      // duration-calibrated mean
-    const double b1 = seg.end_bpm;                           // ramp target (next seg start)
-    if (!(b1 > 0.0) || std::abs(b1 - m) < 1.0e-9) continue;  // constant segment
-    // Bisect b0 so that log_mean(b0, b1) == m. log_mean(., b1) is continuous and
-    // strictly increasing in b0 (from 0 as b0->0+ to +inf), so a wide bracket
-    // always contains the unique root.
-    double lo_b = 1.0e-3;
-    double hi_b = std::max(m, b1) * 8.0;
+    const double m = calibrated_bpm[i];      // duration-calibrated mean
+    if (i + 1 == segments.size()) continue;  // final segment has no ramp target
+    const double b1 = segments[i + 1].bpm;   // next segment's final start tempo
+    seg.end_bpm = b1;
+    if (std::abs(b1 - m) < 1.0e-9) continue;  // constant segment
+    const double lo_b = transport::kMinEffectiveTempoBpm;
+    const double hi_b = transport::kMaxPublicTempoBpm;
+    if (m < log_mean(lo_b, b1) || m > log_mean(hi_b, b1)) {
+      seg.bpm = m;
+      seg.end_bpm = 0.0;
+      continue;
+    }
+
+    // log_mean(., b1) is strictly increasing over the valid start-tempo range,
+    // so this bounded bisection finds the unique duration-preserving ramp.
+    double lo = lo_b;
+    double hi = hi_b;
     for (int it = 0; it < 80; ++it) {
-      const double mid = 0.5 * (lo_b + hi_b);
+      const double mid = 0.5 * (lo + hi);
       if (log_mean(mid, b1) < m) {
-        lo_b = mid;
+        lo = mid;
       } else {
-        hi_b = mid;
+        hi = mid;
       }
     }
-    seg.bpm = std::max(0.5 * (lo_b + hi_b), 1.0);
-  }
-
-  // Re-anchoring changes the next segment's start BPM. Refresh every preceding
-  // ramp target afterwards so the two segments meet at exactly the same tempo.
-  for (size_t i = 0; i + 1 < segments.size(); ++i) {
-    if (segments[i].end_bpm > 0.0) {
-      segments[i].end_bpm = segments[i + 1].bpm;
-    }
+    seg.bpm = 0.5 * (lo + hi);
   }
 
   if (!segments.empty()) segments.front().start_sample = 0.0;
@@ -192,7 +201,7 @@ void apply_lead_in(const BeatAnalysisInput& input, TempoEstimate& est) {
   if (input.beats.empty() || est.segments.empty()) return;
   const double first_beat_s = static_cast<double>(input.beats.front().time);
   if (!(first_beat_s > 0.0)) return;
-  const double lead_in_ppq = first_beat_s * est.segments.front().bpm / 60.0;
+  const double lead_in_ppq = first_beat_s * est.segments.front().bpm / kSecondsPerMinute;
   for (transport::TempoSegment& seg : est.segments) seg.start_ppq += lead_in_ppq;
   for (transport::TimeSignatureSegment& sig : est.time_sigs) sig.start_ppq += lead_in_ppq;
 }

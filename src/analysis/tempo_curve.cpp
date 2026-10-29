@@ -12,6 +12,7 @@ namespace sonare {
 namespace {
 
 using sonare::constants::kEpsilon;
+using sonare::constants::kSecondsPerMinute;
 
 // Floor on an observation's weight, so a run of silent beats still has a
 // unique solution: the prior carries across it instead of the system going singular.
@@ -74,7 +75,7 @@ std::vector<double> decode_beat_tempo_curve(
   std::vector<double> rhs(n);
   for (size_t t = 0; t < n; ++t) {
     const double w = std::max(observations[t].weight, kMinObservationWeight);
-    const double y = std::log(60.0 / observations[t].ibi);
+    const double y = std::log(kSecondsPerMinute / observations[t].ibi);
     const double neighbours = (t > 0 ? 1.0 : 0.0) + (t + 1 < n ? 1.0 : 0.0);
     diag[t] = w + lam * neighbours;
     rhs[t] = w * y;
