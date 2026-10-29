@@ -649,7 +649,10 @@ const CONTROL_FLOW_HEAD = /^(?:if|for|while|switch|catch)$/;
 
 /** A function definition with the extent of its body. */
 interface DefinitionSpan {
+  /** Bare function name, used by the enclosing-body and reader scans. */
   name: string;
+  /** Fully qualified name where the definition spells one. */
+  qualifiedName: string;
   params: string;
   /** Offset of the body's opening brace. */
   open: number;
@@ -673,6 +676,8 @@ function definitionSpans(code: string): DefinitionSpan[] {
     if (CONTROL_FLOW_HEAD.test(match[1])) {
       continue;
     }
+    const signature = match[0].slice(0, match[0].indexOf('('));
+    const qualifiedName = /((?:\w+::)*\w+)\s*$/.exec(signature)?.[1] ?? match[1];
     const open = code.indexOf('{', (match.index ?? 0) + match[0].length - 1);
     if (open < 0) {
       continue;
@@ -684,7 +689,7 @@ function definitionSpans(code: string): DefinitionSpan[] {
       } else if (code[i] === '}') {
         depth--;
         if (depth === 0) {
-          spans.push({ name: match[1], params: match[2], open, end: i + 1 });
+          spans.push({ name: match[1], qualifiedName, params: match[2], open, end: i + 1 });
           break;
         }
       }
@@ -787,27 +792,44 @@ const READER_CALL =
   /\b(?:Required\w+|Optional\w+Arg|Int32Arg|Int32Value|\w+Property|NonNegativeSizeT\w+|node_narrow_\w+|node_require_property_type|ReadBuiltinWaveform)\s*\(/;
 
 /**
- * Names whose call can reach {@link READER_CALL}: the family itself plus every
- * addon function whose body calls one, closed over four levels of helpers.
+ * Calls that can reach {@link READER_CALL}, split by whether a helper's own
+ * harness catches them.
  */
-function readerReachingCall(sources: AddonSource[]): RegExp {
-  const bodies = new Map<string, string>();
+interface ReaderReachability {
+  /** Every direct or transitive reader call, including calls inside safe helpers. */
+  all: RegExp;
+  /** Reader calls not protected by a catch in their own helper. */
+  beforeHarness: RegExp;
+  /** Bare helper names safe to call before the entry point's own harness. */
+  safeHelpers: Set<string>;
+  /** Calls to the safe helpers, plus direct readers for conservative checking. */
+  safeHelperCalls: RegExp;
+}
+
+/**
+ * The reader family plus every addon function whose body calls one, closed over
+ * four levels of helpers.
+ */
+function readerReachingCall(sources: AddonSource[]): ReaderReachability {
+  const bodies = new Map<string, string[]>();
   for (const { text } of sources) {
     const code = withoutComments(text);
     for (const span of definitionSpans(code)) {
-      bodies.set(span.name, (bodies.get(span.name) ?? '') + code.slice(span.open, span.end));
+      const functions = bodies.get(span.name) ?? [];
+      functions.push(code.slice(span.open, span.end));
+      bodies.set(span.name, functions);
     }
   }
   const reaching = new Set<string>();
-  const callOf = (): RegExp =>
-    reaching.size === 0
+  const callOf = (names: ReadonlySet<string> = reaching): RegExp =>
+    names.size === 0
       ? READER_CALL
-      : new RegExp(`${READER_CALL.source}|(?<![.>])\\b(?:${[...reaching].join('|')})\\s*\\(`);
+      : new RegExp(`${READER_CALL.source}|(?<![.>])\\b(?:${[...names].join('|')})\\s*\\(`);
   for (let pass = 0; pass < 4; pass++) {
     const callee = callOf();
     let grew = false;
-    for (const [name, body] of bodies) {
-      if (!reaching.has(name) && callee.test(body)) {
+    for (const [name, functions] of bodies) {
+      if (!reaching.has(name) && functions.some((body) => callee.test(body))) {
         reaching.add(name);
         grew = true;
       }
@@ -816,7 +838,26 @@ function readerReachingCall(sources: AddonSource[]): RegExp {
       break;
     }
   }
-  return callOf();
+  const all = callOf();
+  const safeHelpers = new Set<string>();
+  for (const [name, functions] of bodies) {
+    if (
+      functions.length > 0 &&
+      functions.every((body) => {
+        const harness = harnessOffset(body);
+        return harness >= 0 && !all.test(body.slice(0, harness));
+      })
+    ) {
+      safeHelpers.add(name);
+    }
+  }
+  const unguarded = new Set([...reaching].filter((name) => !safeHelpers.has(name)));
+  return {
+    all,
+    beforeHarness: callOf(unguarded),
+    safeHelpers,
+    safeHelperCalls: callOf(safeHelpers),
+  };
 }
 
 /** Offset of the catch harness inside @p body, or -1 when it has none. */
@@ -825,16 +866,155 @@ function harnessOffset(body: string): number {
   return match ? match.index : -1;
 }
 
-/** Entry-point bodies keyed by their bare name, from {@link definitionSpans}. */
-function bodiesByName(sources: AddonSource[]): Map<string, { file: string; body: string }> {
-  const found = new Map<string, { file: string; body: string }>();
+interface NamespaceSpan {
+  name: string;
+  open: number;
+  end: number;
+}
+
+interface ClassSpan {
+  name: string;
+  open: number;
+  end: number;
+}
+
+/** Finds the closing brace while ignoring braces inside ordinary string literals. */
+function closingBrace(code: string, open: number): number {
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+  for (let i = open; i < code.length; i++) {
+    const char = code[i];
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = '';
+      }
+    } else if (char === '"' || char === "'") {
+      quote = char;
+    } else if (char === '{') {
+      depth++;
+    } else if (char === '}' && --depth === 0) {
+      return i + 1;
+    }
+  }
+  return -1;
+}
+
+function scopeSpans(
+  code: string,
+  pattern: RegExp,
+): Array<{ name: string; open: number; end: number }> {
+  const spans: Array<{ name: string; open: number; end: number }> = [];
+  for (const match of code.matchAll(pattern)) {
+    const open = code.indexOf('{', (match.index ?? 0) + match[0].length - 1);
+    const end = closingBrace(code, open);
+    if (end >= 0) {
+      spans.push({ name: match[1], open, end });
+    }
+  }
+  return spans;
+}
+
+/** Named namespace blocks let registrations in another source file resolve by symbol. */
+function namespaceSpans(code: string): NamespaceSpan[] {
+  return scopeSpans(code, /\bnamespace\s+([\w:]+)\s*\{/g);
+}
+
+function namespacePrefixAt(namespaces: NamespaceSpan[], at: number): string {
+  return namespaces
+    .filter((candidate) => candidate.open < at && at < candidate.end)
+    .sort((a, b) => a.open - b.open)
+    .reduce((prefix, candidate) => {
+      if (!prefix || candidate.name.startsWith(`${prefix}::`)) {
+        return candidate.name;
+      }
+      return `${prefix}::${candidate.name}`;
+    }, '');
+}
+
+function qualifySymbol(symbol: string, namespace: string): string {
+  return namespace && !symbol.startsWith(`${namespace}::`) ? `${namespace}::${symbol}` : symbol;
+}
+
+function braceDepthBefore(code: string, end: number): number {
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+  for (let i = 0; i < end; i++) {
+    const char = code[i];
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = '';
+      }
+    } else if (char === '"' || char === "'") {
+      quote = char;
+    } else if (char === '{') {
+      depth++;
+    } else if (char === '}') {
+      depth--;
+    }
+  }
+  return depth;
+}
+
+function globalUsingNamespaces(code: string): Array<{ name: string; offset: number }> {
+  const namespaces: Array<{ name: string; offset: number }> = [];
+  for (const match of code.matchAll(/\busing\s+namespace\s+([\w:]+)\s*;/g)) {
+    const offset = match.index ?? 0;
+    if (braceDepthBefore(code, offset) === 0) {
+      namespaces.push({ name: match[1], offset });
+    }
+  }
+  return namespaces;
+}
+
+/** Class spans qualify inline methods before same-named methods can collide. */
+function classSpans(code: string): ClassSpan[] {
+  return scopeSpans(code, /\b(?:class|struct)\s+([A-Za-z_]\w*)\s*(?:final\s*)?(?::[^;{}]+)?\{/g);
+}
+
+/** Entry-point bodies retain lexical and written qualification for symbol resolution. */
+interface EntryPointBody {
+  file: string;
+  resolvedSymbol: string;
+  body: string;
+}
+
+function entryPointBodies(sources: AddonSource[]): EntryPointBody[] {
+  const found: EntryPointBody[] = [];
   for (const { file, text } of sources) {
     const code = withoutComments(text);
+    const namespaces = namespaceSpans(code);
+    const classes = classSpans(code);
     for (const span of definitionSpans(code)) {
       if (!span.params.includes('CallbackInfo')) {
         continue;
       }
-      found.set(span.name, { file, body: code.slice(span.open, span.end) });
+      const activeClasses = classes
+        .filter((candidate) => candidate.open < span.open && span.open < candidate.end)
+        .sort((a, b) => b.open - a.open);
+      const classPrefix = activeClasses
+        .map((candidate) => candidate.name)
+        .reverse()
+        .join('::');
+      const classQualifiedName =
+        classPrefix && !span.qualifiedName.includes('::')
+          ? `${classPrefix}::${span.qualifiedName}`
+          : span.qualifiedName;
+      const namespacePrefix = namespacePrefixAt(namespaces, span.open);
+      found.push({
+        file,
+        resolvedSymbol: qualifySymbol(classQualifiedName, namespacePrefix),
+        body: code.slice(span.open, span.end),
+      });
     }
   }
   return found;
@@ -853,25 +1033,33 @@ function bodiesByName(sources: AddonSource[]): Map<string, { file: string; body:
  * Takes its sources so the self-tests can drive this exact function.
  */
 export function entryPointGuards(sources: AddonSource[] = addonSources()): EntryPointGuardSite[] {
-  const bodies = bodiesByName(sources);
+  const bodies = entryPointBodies(sources);
   const reaches = readerReachingCall(sources);
   const out: EntryPointGuardSite[] = [];
   const seen = new Set<string>();
-  for (const entry of addonEntryPointRegistrations(sources)) {
-    const bare = entry.symbol.includes('::') ? entry.symbol.split('::')[1] : entry.symbol;
-    const found = bodies.get(bare);
+  for (const entry of addonEntryPointRegistrations(sources, true)) {
+    const matches = bodies.filter((body) => entry.resolvedSymbols.includes(body.resolvedSymbol));
+    const found = matches.length === 1 ? matches[0] : undefined;
     if (!found || seen.has(`${entry.jsName}:${entry.symbol}`)) {
       continue;
     }
     seen.add(`${entry.jsName}:${entry.symbol}`);
     const harness = harnessOffset(found.body);
     const above = harness < 0 ? found.body : found.body.slice(0, harness);
-    const early = reaches.exec(above)?.[0].replace(/\s*\($/, '') ?? '';
+    const early = reaches.beforeHarness.exec(above)?.[0].replace(/\s*\($/, '') ?? '';
+    const delegatedCalls = [...above.matchAll(new RegExp(reaches.safeHelperCalls.source, 'g'))].map(
+      (match) => match[0].replace(/\s*\($/, ''),
+    );
+    const delegatedToSafeHelpers =
+      harness < 0 &&
+      early === '' &&
+      delegatedCalls.length > 0 &&
+      delegatedCalls.every((callee) => reaches.safeHelpers.has(callee));
     out.push({
       jsName: entry.jsName,
       symbol: entry.symbol,
       file: found.file,
-      guarded: harness >= 0 && early === '',
+      guarded: (harness >= 0 && early === '') || delegatedToSafeHelpers,
       readBeforeHarness: early,
     });
   }
@@ -894,19 +1082,46 @@ export function entryPointGuards(sources: AddonSource[] = addonSources()): Entry
  */
 function addonEntryPointRegistrations(
   sources: AddonSource[],
-): Array<{ jsName: string; symbol: string }> {
-  const found: Array<{ jsName: string; symbol: string }> = [];
-  for (const { text } of sources) {
-    const flat = text.replace(/\s+/g, ' ');
-    for (const m of flat.matchAll(
-      /(?:Instance|Static)Method<&([\w:]+)>\s*\(\s*"([A-Za-z0-9_]+)"/g,
+  resolveSymbols = false,
+): Array<{ file: string; jsName: string; symbol: string; resolvedSymbols: string[] }> {
+  const found: Array<{ file: string; jsName: string; symbol: string; resolvedSymbols: string[] }> =
+    [];
+  for (const { file, text } of sources) {
+    const code = resolveSymbols ? withoutComments(text) : text.replace(/\s+/g, ' ');
+    const namespaces = resolveSymbols ? namespaceSpans(code) : [];
+    const importedNamespaces = resolveSymbols ? globalUsingNamespaces(code) : [];
+    const symbolsAt = (symbol: string, at: number): string[] =>
+      resolveSymbols
+        ? [
+            ...new Set([
+              qualifySymbol(symbol, namespacePrefixAt(namespaces, at)),
+              ...importedNamespaces
+                .filter((namespace) => namespace.offset < at)
+                .map(({ name }) => qualifySymbol(symbol, name)),
+            ]),
+          ]
+        : [symbol];
+    for (const m of code.matchAll(
+      /(?:Instance|Static)Method\s*<\s*&([\w:]+)\s*>\s*\(\s*"([A-Za-z0-9_]+)"/g,
     )) {
-      found.push({ jsName: m[2], symbol: m[1] });
+      const symbol = m[1];
+      found.push({
+        file,
+        jsName: m[2],
+        symbol,
+        resolvedSymbols: symbolsAt(symbol, m.index ?? 0),
+      });
     }
-    for (const m of flat.matchAll(
-      /exports\.Set\(\s*"([A-Za-z0-9_]+)"\s*,\s*Napi::Function::New\(\s*env\s*,\s*&?([\w:]+)/g,
+    for (const m of code.matchAll(
+      /exports\.Set\s*\(\s*"([A-Za-z0-9_]+)"\s*,\s*Napi::Function::New\s*\(\s*env\s*,\s*&?([\w:]+)/g,
     )) {
-      found.push({ jsName: m[1], symbol: m[2] });
+      const symbol = m[2];
+      found.push({
+        file,
+        jsName: m[1],
+        symbol,
+        resolvedSymbols: symbolsAt(symbol, m.index ?? 0),
+      });
     }
     // An ObjectWrap class reaches JS as DefineClass plus `exports.Set(name,
     // func)`, so neither spelling above names its CONSTRUCTOR — and a
@@ -917,17 +1132,23 @@ function addonEntryPointRegistrations(
     // spelling an ObjectWrap subclass cannot avoid. The JS name comes from the
     // DefineClass inside that class's own Init, so a file holding several
     // classes still names each one correctly.
-    for (const m of text.matchAll(/\b(\w+)::\1\s*\(\s*const\s+Napi::CallbackInfo/g)) {
+    for (const m of code.matchAll(/\b(\w+)::\1\s*\(\s*const\s+Napi::CallbackInfo/g)) {
       const cls = m[1];
-      const init = text.indexOf(`${cls}::Init`);
+      const init = code.indexOf(`${cls}::Init`);
       const declared =
         init < 0
           ? null
-          : text
+          : code
               .slice(init)
               .replace(/\s+/g, ' ')
               .match(/DefineClass\(\s*env\s*,\s*"([A-Za-z0-9_]+)"/);
-      found.push({ jsName: declared ? declared[1] : cls, symbol: `${cls}::${cls}` });
+      const symbol = `${cls}::${cls}`;
+      found.push({
+        file,
+        jsName: declared ? declared[1] : cls,
+        symbol,
+        resolvedSymbols: symbolsAt(symbol, m.index ?? 0),
+      });
     }
   }
   return found;

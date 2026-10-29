@@ -102,6 +102,201 @@ const readBeforeHarness = (read: string, helper = ''): AddonSource[] => [
   },
 ];
 
+/** A wrapped callback whose reader lives behind a helper-local catch harness. */
+const DELEGATED_READER: AddonSource[] = [
+  {
+    file: 'fake.cpp',
+    text: [
+      'Napi::Value FakeWrap::ProcessImpl(const Napi::CallbackInfo& info) {',
+      '  Napi::Env env = info.Env();',
+      '  SONARE_NODE_TRY',
+      '  int value{};',
+      '  if (!RequiredIntArg(env, info, 0, "value", &value)) return env.Undefined();',
+      '  return env.Undefined();',
+      '  SONARE_NODE_CATCH(env)',
+      '}',
+      'Napi::Value FakeWrap::Process(const Napi::CallbackInfo& info) {',
+      '  return ProcessImpl(info);',
+      '}',
+      'void Init(Napi::Env env, Napi::Object exports) {',
+      '  InstanceMethod<&FakeWrap::Process>("process"),',
+      '}',
+    ].join('\n'),
+  },
+];
+
+/** Same delegation, but the helper calls a throwing reader before its harness. */
+const DELEGATED_READER_BEFORE_HARNESS: AddonSource[] = [
+  {
+    file: 'fake.cpp',
+    text: DELEGATED_READER[0].text.replace(
+      '  SONARE_NODE_TRY\n  int value{};\n  if (!RequiredIntArg(env, info, 0, "value", &value)) return env.Undefined();',
+      '  int value{};\n  if (!RequiredIntArg(env, info, 0, "value", &value)) return env.Undefined();\n  SONARE_NODE_TRY',
+    ),
+  },
+];
+
+/** A protected implementation can still be delegated to when it has no readers. */
+const DELEGATED_NO_READER: AddonSource[] = [
+  {
+    file: 'fake.cpp',
+    text: [
+      'Napi::Value FakeWrap::ProcessImpl(const Napi::CallbackInfo& info) {',
+      '  SONARE_NODE_TRY',
+      '  return info.Env().Undefined();',
+      '  SONARE_NODE_CATCH(info.Env())',
+      '}',
+      'Napi::Value FakeWrap::Process(const Napi::CallbackInfo& info) {',
+      '  return ProcessImpl(info);',
+      '}',
+      'void Init(Napi::Env env, Napi::Object exports) {',
+      '  InstanceMethod<&FakeWrap::Process>("process"),',
+      '}',
+    ].join('\n'),
+  },
+];
+
+/** Two registered `ProcessMono` methods must resolve to their own class bodies. */
+const SAME_NAMED_METHODS: AddonSource[] = [
+  {
+    file: 'fake.cpp',
+    text: [
+      'Napi::Value SafeWrap::ProcessMono(const Napi::CallbackInfo& info) {',
+      '  Napi::Env env = info.Env();',
+      '  SONARE_NODE_TRY',
+      '  int value{};',
+      '  if (!RequiredIntArg(env, info, 0, "value", &value)) return env.Undefined();',
+      '  return env.Undefined();',
+      '  SONARE_NODE_CATCH(env)',
+      '}',
+      'Napi::Value UnsafeWrap::ProcessMono(const Napi::CallbackInfo& info) {',
+      '  Napi::Env env = info.Env();',
+      '  int value{};',
+      '  if (!RequiredIntArg(env, info, 0, "value", &value)) return env.Undefined();',
+      '  SONARE_NODE_TRY',
+      '  return env.Undefined();',
+      '  SONARE_NODE_CATCH(env)',
+      '}',
+      'void Init(Napi::Env env, Napi::Object exports) {',
+      '  InstanceMethod<&SafeWrap::ProcessMono>("safeProcess"),',
+      '  InstanceMethod<&UnsafeWrap::ProcessMono>("unsafeProcess"),',
+      '}',
+    ].join('\n'),
+  },
+];
+
+/** A same-file namesake in another class cannot stand in for a missing method. */
+const SAME_FILE_CROSS_CLASS_COLLISION: AddonSource[] = [
+  {
+    file: 'fake.cpp',
+    text: [
+      'Napi::Value OtherWrap::Process(const Napi::CallbackInfo& info) {',
+      '  int value{};',
+      '  if (!RequiredIntArg(info.Env(), info, 0, "value", &value)) return info.Env().Undefined();',
+      '  SONARE_NODE_TRY',
+      '  return info.Env().Undefined();',
+      '  SONARE_NODE_CATCH(info.Env())',
+      '}',
+      'void Init(Napi::Env env, Napi::Object exports) {',
+      '  InstanceMethod<&FakeWrap::Process>("process"),',
+      '}',
+    ].join('\n'),
+  },
+];
+
+/** A relative method registration and inline definition inherit their namespace. */
+const NAMESPACED_INLINE_METHOD: AddonSource[] = [
+  {
+    file: 'fake.cpp',
+    text: [
+      'namespace ns {',
+      'class SafeWrap {',
+      'public:',
+      '  Napi::Value Process(const Napi::CallbackInfo& info) {',
+      '    SONARE_NODE_TRY',
+      '    return info.Env().Undefined();',
+      '    SONARE_NODE_CATCH(info.Env())',
+      '  }',
+      '};',
+      'void Init(Napi::Env env, Napi::Object exports) {',
+      '  InstanceMethod<&SafeWrap::Process>("process"),',
+      '}',
+      '}',
+    ].join('\n'),
+  },
+];
+
+/** Inline same-named methods in one file retain class-specific guard results. */
+const SAME_NAMED_INLINE_METHODS: AddonSource[] = [
+  {
+    file: 'fake.cpp',
+    text: [
+      'class SafeWrap {',
+      'public:',
+      '  Napi::Value Process(const Napi::CallbackInfo& info) {',
+      '    SONARE_NODE_TRY',
+      '    int value{};',
+      '    if (!RequiredIntArg(info.Env(), info, 0, "value", &value)) return info.Env().Undefined();',
+      '    return info.Env().Undefined();',
+      '    SONARE_NODE_CATCH(info.Env())',
+      '  }',
+      '};',
+      'class UnsafeWrap {',
+      'public:',
+      '  Napi::Value Process(const Napi::CallbackInfo& info) {',
+      '    int value{};',
+      '    if (!RequiredIntArg(info.Env(), info, 0, "value", &value)) return info.Env().Undefined();',
+      '    SONARE_NODE_TRY',
+      '    return info.Env().Undefined();',
+      '    SONARE_NODE_CATCH(info.Env())',
+      '  }',
+      '};',
+      'void Init(Napi::Env env, Napi::Object exports) {',
+      '  InstanceMethod<&SafeWrap::Process>("safeProcess"),',
+      '  InstanceMethod<&UnsafeWrap::Process>("unsafeProcess"),',
+      '}',
+    ].join('\n'),
+  },
+];
+
+/** A global registration cannot resolve to the same-named inline class method. */
+const GLOBAL_INLINE_NAME_COLLISION: AddonSource[] = [
+  {
+    file: 'fake.cpp',
+    text: [
+      'class SafeWrap {',
+      'public:',
+      '  Napi::Value Process(const Napi::CallbackInfo& info) {',
+      '    SONARE_NODE_TRY',
+      '    int value{};',
+      '    if (!RequiredIntArg(info.Env(), info, 0, "value", &value)) return info.Env().Undefined();',
+      '    return info.Env().Undefined();',
+      '    SONARE_NODE_CATCH(info.Env())',
+      '  }',
+      '};',
+      'namespace safe_namespace {',
+      'Napi::Value Process(const Napi::CallbackInfo& info) {',
+      '  SONARE_NODE_TRY',
+      '  int value{};',
+      '  if (!RequiredIntArg(info.Env(), info, 0, "value", &value)) return info.Env().Undefined();',
+      '  return info.Env().Undefined();',
+      '  SONARE_NODE_CATCH(info.Env())',
+      '}',
+      '}',
+      'Napi::Value Process(const Napi::CallbackInfo& info) {',
+      '  int value{};',
+      '  if (!RequiredIntArg(info.Env(), info, 0, "value", &value)) return info.Env().Undefined();',
+      '  SONARE_NODE_TRY',
+      '  return info.Env().Undefined();',
+      '  SONARE_NODE_CATCH(info.Env())',
+      '}',
+      'void Init(Napi::Env env, Napi::Object exports) {',
+      '  exports.Set("process", Napi::Function::New(env, &Process));',
+      '}',
+    ].join('\n'),
+  },
+];
+
 const READER_HELPER = [
   'int ReadRate(const Napi::Object& options) {',
   '  return IntProperty(options, "sampleRate", 0);',
@@ -246,6 +441,59 @@ describe('each narrowing-scope failure class fires on its own', () => {
       'before the harness opens',
     );
     expect(lines).toEqual(['fake.cpp Fn (fn) reads ReadRate() first']);
+  });
+
+  it('accepts a registered callback delegated to a helper with its own harness', () => {
+    const guards = entryPointGuards(DELEGATED_READER);
+    expect(guards.map(({ symbol, guarded }) => [symbol, guarded])).toEqual([
+      ['FakeWrap::Process', true],
+    ]);
+  });
+
+  it('accepts a registered callback delegated to a protected implementation with no readers', () => {
+    const guards = entryPointGuards(DELEGATED_NO_READER);
+    expect(guards.map(({ symbol, guarded }) => [symbol, guarded])).toEqual([
+      ['FakeWrap::Process', true],
+    ]);
+  });
+
+  it('still reports a delegated helper that reads before its own harness', () => {
+    const guards = entryPointGuards(DELEGATED_READER_BEFORE_HARNESS);
+    expect(
+      guards.map(({ symbol, guarded, readBeforeHarness }) => [symbol, guarded, readBeforeHarness]),
+    ).toEqual([['FakeWrap::Process', false, 'ProcessImpl']]);
+  });
+
+  it('matches same-named class callbacks to their own definitions', () => {
+    const guards = entryPointGuards(SAME_NAMED_METHODS);
+    expect(guards.map(({ symbol, guarded }) => [symbol, guarded])).toEqual([
+      ['SafeWrap::ProcessMono', true],
+      ['UnsafeWrap::ProcessMono', false],
+    ]);
+  });
+
+  it('does not resolve a registration to a same-file method on another class', () => {
+    expect(entryPointGuards(SAME_FILE_CROSS_CLASS_COLLISION)).toEqual([]);
+  });
+
+  it('resolves a namespaced registration to its inline class definition', () => {
+    const guards = entryPointGuards(NAMESPACED_INLINE_METHOD);
+    expect(guards.map(({ symbol, guarded }) => [symbol, guarded])).toEqual([
+      ['SafeWrap::Process', true],
+    ]);
+  });
+
+  it('keeps inline same-named class callbacks matched to their own bodies', () => {
+    const guards = entryPointGuards(SAME_NAMED_INLINE_METHODS);
+    expect(guards.map(({ symbol, guarded }) => [symbol, guarded])).toEqual([
+      ['SafeWrap::Process', true],
+      ['UnsafeWrap::Process', false],
+    ]);
+  });
+
+  it('does not resolve a global callback to an inline class method with the same name', () => {
+    const guards = entryPointGuards(GLOBAL_INLINE_NAME_COLLISION);
+    expect(guards.map(({ symbol, guarded }) => [symbol, guarded])).toEqual([['Process', false]]);
   });
 
   it('accepts the same reads once the harness is already open', () => {
