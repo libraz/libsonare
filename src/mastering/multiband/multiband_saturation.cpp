@@ -196,6 +196,19 @@ void MultibandSaturation::set_config(const MultibandSaturationConfig& config) {
   if (prepared_) multiband::Crossover::validate_config(config.crossover, sample_rate_);
   rt::apply_config_diff(
       config_, config, [this](const rt::ConfigDiff<MultibandSaturationConfig>& diff) {
+        bool rebuild_compensation = processors_.size() != config_.bands.size();
+        if (!rebuild_compensation) {
+          for (size_t band = 0; band < processors_.size(); ++band) {
+            const auto& previous_band = diff.held().bands[band];
+            const auto& next_band = config_.bands[band];
+            if (previous_band.type != next_band.type ||
+                previous_band.enabled != next_band.enabled) {
+              rebuild_compensation = true;
+              break;
+            }
+          }
+        }
+
         // The crossover rebuilds (and zeroes) itself only for a changed split.
         if (diff.changed(&MultibandSaturationConfig::crossover)) {
           apply_band_split_config(crossover_, scratch_, config_.crossover, prepared_,
@@ -225,7 +238,7 @@ void MultibandSaturation::set_config(const MultibandSaturationConfig& config) {
           }
         }
         // A band's type sets its delay; unchanged latencies keep their lines.
-        rebuild_band_compensation();
+        if (rebuild_compensation) rebuild_band_compensation();
       });
 }
 
