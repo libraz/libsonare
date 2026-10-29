@@ -77,14 +77,12 @@ size_t encode_spp(uint16_t midi_beats, uint8_t* out, size_t cap) noexcept {
 }
 
 uint16_t ppq_to_spp_beats(double ppq) noexcept {
-  if (ppq < 0.0) {
-    ppq = 0.0;
-  }
+  if (!(ppq > 0.0)) return 0;
   // One sixteenth note = kSppBeatToPpq quarter notes -> SPP beat units.
   const double beats = ppq / kSppBeatToPpq;
   const double truncated = std::floor(beats);
   if (truncated >= static_cast<double>(kValue14Max)) {
-    return 0x3FFFu;
+    return kValue14Max;
   }
   return static_cast<uint16_t>(truncated);
 }
