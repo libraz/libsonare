@@ -10,27 +10,60 @@ namespace sonare {
 
 namespace {
 
-/// @brief Linearly interpolate @p S along the frequency axis at @p target_freq.
-/// @param S Spectrum [n_bins x n_frames] row-major.
-/// @param freqs Bin center frequencies, monotonically increasing.
-float interp_at(const float* S, int n_bins, int n_frames, const std::vector<float>& freqs,
-                float target_freq, int frame, float fill_value) {
+struct InterpolationLocation {
+  enum class Kind { Fill, Single, Lower, Linear } kind = Kind::Fill;
+  int lo = 0;
+  int hi = 0;
+  float weight = 0.0f;
+};
+
+/// @brief Resolves the frequency bracket used to interpolate one bin.
+InterpolationLocation locate_frequency(const std::vector<float>& freqs, int n_bins,
+                                       float target_freq) {
   if (n_bins == 1) {
-    return target_freq == freqs.front() ? S[frame] : fill_value;
+    return {target_freq == freqs.front() ? InterpolationLocation::Kind::Single
+                                         : InterpolationLocation::Kind::Fill,
+            0, 0, 0.0f};
   }
-  if (target_freq < freqs.front() || target_freq > freqs.back()) return fill_value;
+  if (target_freq < freqs.front() || target_freq > freqs.back()) return {};
+
   // Binary-search the upper bound; clamp to [1, n_bins-1] for safe interpolation.
   auto it = std::lower_bound(freqs.begin(), freqs.end(), target_freq);
   int hi = static_cast<int>(it - freqs.begin());
   if (hi <= 0) hi = 1;
   if (hi >= n_bins) hi = n_bins - 1;
-  int lo = hi - 1;
-  float denom = freqs[hi] - freqs[lo];
-  if (denom <= 0.0f) return S[lo * n_frames + frame];
-  float t = (target_freq - freqs[lo]) / denom;
-  float a = S[lo * n_frames + frame];
-  float b = S[hi * n_frames + frame];
-  return a + t * (b - a);
+  const int lo = hi - 1;
+  const float denom = freqs[hi] - freqs[lo];
+  if (denom <= 0.0f) return {InterpolationLocation::Kind::Lower, lo, 0, 0.0f};
+  const float weight = (target_freq - freqs[lo]) / denom;
+  return {InterpolationLocation::Kind::Linear, lo, hi, weight};
+}
+
+float evaluate_location(const float* S, int n_frames, int frame,
+                        const InterpolationLocation& location, float fill_value) {
+  switch (location.kind) {
+    case InterpolationLocation::Kind::Fill:
+      return fill_value;
+    case InterpolationLocation::Kind::Single:
+      return S[frame];
+    case InterpolationLocation::Kind::Lower:
+      return S[location.lo * n_frames + frame];
+    case InterpolationLocation::Kind::Linear: {
+      const float a = S[location.lo * n_frames + frame];
+      const float b = S[location.hi * n_frames + frame];
+      return a + location.weight * (b - a);
+    }
+  }
+  return fill_value;
+}
+
+/// @brief Linearly interpolate @p S along the frequency axis at @p target_freq.
+/// @param S Spectrum [n_bins x n_frames] row-major.
+/// @param freqs Bin center frequencies, monotonically increasing.
+float interp_at(const float* S, int n_bins, int n_frames, const std::vector<float>& freqs,
+                float target_freq, int frame, float fill_value) {
+  return evaluate_location(S, n_frames, frame, locate_frequency(freqs, n_bins, target_freq),
+                           fill_value);
 }
 
 }  // namespace
@@ -51,9 +84,10 @@ std::vector<float> interp_harmonics(const float* x, int n_bins, int n_frames,
     float mult = harmonics[h];
     for (int k = 0; k < n_bins; ++k) {
       float target = mult * freqs[k];
+      const InterpolationLocation location = locate_frequency(freqs, n_bins, target);
       for (int t = 0; t < n_frames; ++t) {
         out[(static_cast<size_t>(h) * n_bins + k) * n_frames + t] =
-            interp_at(x, n_bins, n_frames, freqs, target, t, 0.0f);
+            evaluate_location(x, n_frames, t, location, 0.0f);
       }
     }
   }
@@ -94,13 +128,17 @@ std::vector<float> salience(const float* S, int n_bins, int n_frames,
   }
   const float inv_sum = weight_sum > 0.0f ? 1.0f / weight_sum : 0.0f;
   std::vector<float> out(static_cast<size_t>(n_bins) * n_frames, 0.0f);
+  std::vector<InterpolationLocation> locations(harmonics.size());
   for (int k = 0; k < n_bins; ++k) {
+    for (size_t h = 0; h < harmonics.size(); ++h) {
+      const float target = harmonics[h] * freqs[k];
+      locations[h] = locate_frequency(freqs, n_bins, target);
+    }
     for (int t = 0; t < n_frames; ++t) {
       float acc = 0.0f;
       for (size_t h = 0; h < harmonics.size(); ++h) {
         const float w = weights.empty() ? 1.0f : weights[h];
-        const float target = harmonics[h] * freqs[k];
-        acc += w * interp_at(S, n_bins, n_frames, freqs, target, t, fill_value);
+        acc += w * evaluate_location(S, n_frames, t, locations[h], fill_value);
       }
       out[static_cast<size_t>(k) * n_frames + t] = acc * inv_sum;
     }

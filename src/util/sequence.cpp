@@ -267,6 +267,14 @@ std::vector<int> viterbi(const float* log_prob, int n_states, int n_steps, const
       static_cast<int64_t>(n_states) * static_cast<int64_t>(n_states) > int_max) {
     throw SonareException(ErrorCode::InvalidParameter, "viterbi: trellis too large");
   }
+  // Transition logs are step-invariant; a single-step path never reads them.
+  std::vector<float> log_transition;
+  if (n_steps > 1) {
+    log_transition.resize(static_cast<size_t>(n_states) * n_states);
+    for (size_t i = 0; i < log_transition.size(); ++i) {
+      log_transition[i] = std::log(std::max(transition[i], 1e-30f));
+    }
+  }
   const float minus_inf = -std::numeric_limits<float>::infinity();
   // The update reads step t-1's scores and nothing older, and the backtrack pass reads
   // backpointers rather than scores, so only two score rows are ever live. Backpointers stay
@@ -293,10 +301,9 @@ std::vector<int> viterbi(const float* log_prob, int n_states, int n_steps, const
     std::fill(best_prev.begin(), best_prev.end(), 0);
     for (int p = 0; p < n_states; ++p) {
       const float previous = prev_scores[static_cast<size_t>(p)];
-      const float* row = transition + static_cast<size_t>(p) * n_states;
+      const float* row = log_transition.data() + static_cast<size_t>(p) * n_states;
       for (int s = 0; s < n_states; ++s) {
-        float prob = std::max(row[s], 1e-30f);
-        float score = previous + std::log(prob);
+        float score = previous + row[s];
         if (score > best[static_cast<size_t>(s)]) {
           best[static_cast<size_t>(s)] = score;
           best_prev[static_cast<size_t>(s)] = p;

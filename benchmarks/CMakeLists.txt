@@ -148,3 +148,13 @@ if(BUILD_VOICE_CHANGER)
     ${PROJECT_SOURCE_DIR}/src
   )
 endif()
+
+add_executable(sonare_reflect_padding_bench reflect_padding_bench.cpp)
+target_link_libraries(sonare_reflect_padding_bench PRIVATE sonare_core)
+target_compile_options(sonare_reflect_padding_bench PRIVATE ${SONARE_WARNING_FLAGS})
+target_include_directories(sonare_reflect_padding_bench PRIVATE ${PROJECT_SOURCE_DIR}/src)
+
+add_executable(sonare_harmonic_viterbi_bench harmonic_viterbi_bench.cpp)
+target_link_libraries(sonare_harmonic_viterbi_bench PRIVATE sonare_core)
+target_compile_options(sonare_harmonic_viterbi_bench PRIVATE ${SONARE_WARNING_FLAGS})
+target_include_directories(sonare_harmonic_viterbi_bench PRIVATE ${PROJECT_SOURCE_DIR}/src)
