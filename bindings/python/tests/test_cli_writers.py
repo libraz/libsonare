@@ -459,24 +459,38 @@ def test_vectorized_quantizer_matches_the_scalar_one_over_random_and_edge_sample
         )
     )
     rng = np.random.default_rng(20260928)
+    half_lsb_ties = np.array([-2.5, -1.5, -0.5, 0.5, 1.5, 2.5], dtype=np.float32) / np.float32(
+        full_scale
+    )
+    tie_neighbors = np.concatenate(
+        [
+            np.nextafter(half_lsb_ties, np.float32(-np.inf)),
+            half_lsb_ties,
+            np.nextafter(half_lsb_ties, np.float32(np.inf)),
+        ]
+    )
+    boundary_codes = np.array(
+        [minimum - 1, minimum, minimum + 1, -2, -1, 0, 1, 2, maximum - 1, maximum, maximum + 1],
+        dtype=np.int32,
+    )
     samples = np.concatenate(
         [
             rng.uniform(-1.5, 1.5, 20000).astype(np.float32),
-            # Boundary codes: every integer PCM code +/- 1, converted back to
-            # the float that should round-trip to it.
-            (np.arange(-full_scale - 1, full_scale + 2, 1.0) / full_scale).astype(np.float32),
+            boundary_codes.astype(np.float32) / np.float32(full_scale),
+            tie_neighbors,
             np.array(
                 [
                     0.0,
                     -0.0,
                     1.0,
                     -1.0,
+                    1.25,
+                    -1.25,
                     float("nan"),
                     float("inf"),
                     float("-inf"),
-                    1e39,
-                    -1e39,
-                    3.4e38,
+                    np.finfo(np.float32).max,
+                    -np.finfo(np.float32).max,
                 ],
                 dtype=np.float32,
             ),
@@ -484,8 +498,38 @@ def test_vectorized_quantizer_matches_the_scalar_one_over_random_and_edge_sample
     )
 
     vectorized = _quantize_codes(samples, full_scale, minimum, maximum)
-    for sample, code in zip(samples, vectorized, strict=True):
-        assert int(code) == _quantize_sample(float(sample), full_scale, minimum, maximum), sample
+    scalar = np.fromiter(
+        (_quantize_sample(float(sample), full_scale, minimum, maximum) for sample in samples),
+        dtype=vectorized.dtype,
+        count=samples.size,
+    )
+    np.testing.assert_array_equal(vectorized, scalar)
+
+
+@pytest.mark.parametrize("bits", [16, 24])
+def test_vectorized_quantizer_matches_integer_grid_clamp(bits: int) -> None:
+    """Check every code and both adjacent out-of-range codes against integer clamping."""
+    import numpy as np
+
+    from libsonare._cli_common import _quantize_codes
+
+    full_scale, minimum, maximum = (
+        (32768.0, -32768, 32767)
+        if bits == 16
+        else (
+            8388608.0,
+            -8388608,
+            8388607,
+        )
+    )
+    integer_codes = np.arange(-int(full_scale) - 1, int(full_scale) + 2, dtype=np.int32)
+    # Integer codes in this range are exactly representable in float32, and
+    # division by the power-of-two scale places each input on its PCM grid.
+    samples = integer_codes.astype(np.float32) / np.float32(full_scale)
+    expected = np.clip(integer_codes, minimum, maximum)
+
+    vectorized = _quantize_codes(samples, full_scale, minimum, maximum)
+    np.testing.assert_array_equal(vectorized, expected)
 
 
 @pytest.mark.parametrize("bits", [16, 24])
