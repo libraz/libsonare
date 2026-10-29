@@ -123,6 +123,8 @@ export class StreamingMasteringChain {
    * Emit delayed audio and finite processor tails after the final mono block.
    * Call until an empty array is returned. The first samples are delayed by
    * {@link latencySamples}; discard that many after concatenation for aligned output.
+   * Throws a `NotSupported` error when an enabled stage has an unbounded tail; pass a
+   * bounded number of silent blocks to {@link processMono} instead.
    */
   flushMono(): Float32Array {
     return this.native.flushMono();

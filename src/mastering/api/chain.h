@@ -414,10 +414,16 @@ class StreamingMasteringChain {
   /// block.
   /// @return Number of samples written to each channel; call repeatedly until
   ///         this returns zero. @p max_samples must be <= max_block_size passed
-  ///         to prepare().
+  ///         to prepare(). A zero-capacity call returns zero even when a stage
+  ///         has an unbounded tail.
   /// @details Output includes the chain's reported latency at its start. Hosts
   /// that need time-aligned audio should concatenate normal output and flush
-  /// output, then discard @ref latency_samples leading samples.
+  /// output, then discard @ref latency_samples leading samples. A nonempty call
+  /// throws when any enabled stage has an unbounded tail; to generate a chosen
+  /// finite duration in that case, pass a bounded number of silent blocks to
+  /// @ref process_block.
+  /// @throws SonareException (NotImplemented) when a stage reports an unbounded
+  ///         tail and @p max_samples is nonzero.
   int flush(float* const* channels, int num_channels, int max_samples);
 
   /// @brief Reset all processor state without rebuilding.

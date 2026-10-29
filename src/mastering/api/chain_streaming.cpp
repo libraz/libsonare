@@ -543,9 +543,14 @@ int StreamingMasteringChain::flush(float* const* channels, int num_channels, int
   }
   if (max_samples == 0) return 0;
   rt::ProcessorBase::validate_channel_buffers(channels, num_channels);
+  const int current_tail = tail_samples();
+  if (current_tail == rt::TailBudget::kUnbounded) {
+    throw SonareException(ErrorCode::NotImplemented,
+                          "cannot automatically flush a chain with an unbounded tail");
+  }
   if (!flush_started_) {
     flush_samples_remaining_ = rt::TailBudget::reported(latency_samples())
-                                   .then(rt::TailBudget::reported(tail_samples()))
+                                   .then(rt::TailBudget::reported(current_tail))
                                    .samples();
     flush_started_ = true;
   }

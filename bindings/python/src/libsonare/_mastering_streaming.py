@@ -312,7 +312,13 @@ class StreamingMasteringChain:
 
         Call until an empty list is returned. The initial ``latency_samples`` of
         the concatenated process/flush output are delayed; discard them when a
-        time-aligned result is required.
+        time-aligned result is required. When an enabled stage has an unbounded
+        tail, pass a bounded number of silent blocks to :meth:`process_mono`
+        instead.
+
+        Raises:
+            SonareError: ``NOT_SUPPORTED`` when an enabled stage has an unbounded
+                tail; no output is produced.
         """
         self._ensure_flush_ready()
         block = (ctypes.c_float * self._max_block_size)()

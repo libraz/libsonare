@@ -104,6 +104,7 @@ add_executable(sonare_tests
   analysis/key_profiles_test.cpp
   analysis/chord_templates_test.cpp
   analysis/acoustic_analyzer_test.cpp
+  analysis/frame_energy_allocation_test.cpp
   analysis/bpm_analyzer_test.cpp
   analysis/key_analyzer_test.cpp
   analysis/key_auto_sweep_golden_test.cpp
@@ -279,6 +280,8 @@ if(BUILD_MASTERING)
     mastering/saturation/config_domain_test.cpp
     mastering/saturation/exciter_test.cpp
     mastering/saturation/transformer_test.cpp
+    mastering/saturation/tape_tail_test.cpp
+    mastering/saturation/idle_source_tail_test.cpp
     mastering/spectral/air_band_test.cpp
     mastering/spectral/prepare_domain_test.cpp
     mastering/stereo/imager_test.cpp
@@ -298,6 +301,7 @@ if(BUILD_MASTERING)
     mastering/dynamics_compressor_limiter_test.cpp
     mastering/dynamics_expander_gate_test.cpp
     mastering/dynamics_processors_test.cpp
+    mastering/dynamics_config_finite_test.cpp
     mastering/dynamics_rt_safe_test.cpp
     mastering/dynamics_state_non_finite_recovery_test.cpp
     mastering/eq_golden_test.cpp
@@ -345,6 +349,8 @@ if(BUILD_MASTERING)
     mastering/true_peak_limiter_block_invariance_test.cpp
     mastering/spectral_test.cpp
     mastering/stereo_test.cpp
+    mastering/stereo_delay_resume_test.cpp
+    mastering/streaming_flush_tail_test.cpp
     mastering/stft_stream_test.cpp
     mastering/limiter_ratio_test.cpp
     mastering/amp_cab_models_test.cpp
@@ -649,6 +655,7 @@ target_sources(sonare_tests PRIVATE
 if(BUILD_PLAYBACK)
   target_sources(sonare_tests PRIVATE
     playback/binaural_test.cpp
+    playback/binaural_prepare_domain_test.cpp
     playback/default_hrtf_test.cpp
     playback/hrtf_set_test.cpp
     playback/layout_convert_test.cpp

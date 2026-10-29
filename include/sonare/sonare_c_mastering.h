@@ -1163,12 +1163,20 @@ SonareError sonare_streaming_mastering_chain_process_stereo(SonareStreamingMaste
 /// @details The first emitted samples include @ref
 /// sonare_streaming_mastering_chain_latency_samples leading delayed samples.
 /// Concatenate process and flush output, then discard that many leading samples
-/// when a time-aligned result is required.
+/// when a time-aligned result is required. A zero-capacity call succeeds with
+/// @p samples_written set to zero. A nonempty call with an unbounded processor
+/// tail returns @c SONARE_ERROR_NOT_SUPPORTED, sets @p samples_written to zero,
+/// and leaves the output buffer unchanged. To generate a chosen finite duration
+/// in that case, pass a bounded number of silent blocks to
+/// @ref sonare_streaming_mastering_chain_process_mono.
 SonareError sonare_streaming_mastering_chain_flush_mono(SonareStreamingMasteringChain* handle,
                                                         float* samples, size_t capacity,
                                                         size_t* samples_written);
 
 /// @brief Stereo counterpart of @ref sonare_streaming_mastering_chain_flush_mono.
+/// @details Has the same finite-tail and zero-capacity behavior. To generate a
+///          chosen finite duration for an unbounded tail, pass silent blocks to
+///          @ref sonare_streaming_mastering_chain_process_stereo.
 SonareError sonare_streaming_mastering_chain_flush_stereo(SonareStreamingMasteringChain* handle,
                                                           float* left, float* right,
                                                           size_t capacity, size_t* samples_written);
