@@ -98,10 +98,16 @@ def _fft_resample(x: np.ndarray, out_len: int) -> np.ndarray:
     if out_len > n:
         resized = np.zeros(out_bins, dtype=complex)
         resized[: len(spectrum)] = spectrum
+        if n % 2 == 0:
+            # The old Nyquist bin becomes a conjugate pair on the longer grid;
+            # split its one-sided real-spectrum amplitude between both bins.
+            resized[n // 2] *= 0.5
     else:
         resized = spectrum[:out_bins].copy()
         if out_len % 2 == 0:
-            resized[-1] = resized[-1].real
+            # The output Nyquist bin combines the positive and negative bins
+            # that were separate in the longer input spectrum.
+            resized[-1] = 2.0 * resized[-1].real
     y = np.fft.irfft(resized, n=out_len)
     return y * (out_len / n)
 

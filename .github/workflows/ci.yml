@@ -112,14 +112,14 @@ jobs:
           make parity
 
   voicematch:
-    name: Calibration harness
+    name: Python tools
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Run the calibration harness self-tests
+      - name: Run Python tool tests
         # `tools/` sits outside ctest and outside the drift gates, and this
         # workflow runs ctest directly rather than `make test`, so nothing else
-        # here exercises the harness the instrument bank is calibrated with.
+        # here exercises the calibration harness or the SOFA-to-HRTF converter.
         #
         # The cases read only the tracked capture definitions and reference
         # profiles -- no rendered corpus, no plugin, no built library -- so this
@@ -128,12 +128,12 @@ jobs:
         #
         # Invoked directly rather than through `make test-voicematch`, which
         # wraps the same command in rye for a dylib these cases do not need.
-        # Both versions are the ones resolved in requirements-dev.lock, pinned
+        # These versions are resolved in requirements-dev.lock, pinned
         # for the reason ruff is: an unpinned install lets a new release fail an
         # unrelated pull request.
         run: |
-          python3 -m pip install --disable-pip-version-check pytest==9.1.1 numpy==2.4.6
-          python3 -m pytest tools/voicematch tools/audition -q
+          python3 -m pip install --disable-pip-version-check pytest==9.1.1 numpy==2.4.6 h5py==3.16.0
+          python3 -m pytest tools/voicematch tools/audition tools/playback -q
 
   build-and-test:
     name: Native C++ (${{ matrix.os }})

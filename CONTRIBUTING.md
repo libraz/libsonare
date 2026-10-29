@@ -70,7 +70,7 @@ Every check blocks merging, but a red check on your pull request is not a reason
 | --- | --- | --- |
 | `clang-format` | both | `clang-format --dry-run --Werror` over every tracked `.h` / `.hpp` / `.c` / `.cpp` / `.mm` outside `third_party/` |
 | `lint` | both | Biome over the WASM and Node bindings, a `tsc` type-check of the Node binding, `ruff check .` over the whole repository, and four drift gates: the ABI layout snapshot, the ABI version mirrors, the generated processor types, and cross-surface parity |
-| `Calibration harness` | both | The instrument-bank calibration harness under `tools/voicematch` |
+| `Python tools` | both | The Python tools' own tests: the instrument-bank calibration harness under `tools/voicematch` and `tools/audition`, and the SOFA-to-HRTF converter under `tools/playback` |
 | `Native C++` | both | A Debug build and the default ctest run; Linux on `develop`, Linux and macOS on `main` |
 | `Installed package` | both | Installs into a scratch prefix and links each exported archive on its own |
 | `Examples` | `develop` | The Python and C++ examples |
