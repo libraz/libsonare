@@ -19,8 +19,7 @@
 namespace sonare {
 
 float ChordAnalyzer::analysis_end() const {
-  const float grid_end = static_cast<float>(chroma_.n_frames() * chroma_.hop_length()) /
-                         static_cast<float>(std::max(chroma_.sample_rate(), 1));
+  const float grid_end = chroma_.duration();
   return signal_duration_ > 0.0f ? std::min(grid_end, signal_duration_) : grid_end;
 }
 

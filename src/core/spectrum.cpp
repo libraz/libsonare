@@ -443,7 +443,7 @@ float Spectrogram::duration() const {
   if (sample_rate_ == 0) {
     return 0.0f;
   }
-  return static_cast<float>(n_frames_ * hop_length_) / sample_rate_;
+  return static_cast<float>(static_cast<double>(n_frames_) * hop_length_) / sample_rate_;
 }
 
 MatrixView<std::complex<float>> Spectrogram::complex_view() const {

@@ -65,7 +65,8 @@ float MelSpectrogram::duration() const {
   if (sample_rate_ <= 0 || hop_length_ <= 0) {
     return 0.0f;
   }
-  return static_cast<float>(n_frames_ * hop_length_) / static_cast<float>(sample_rate_);
+  return static_cast<float>(static_cast<double>(n_frames_) * hop_length_) /
+         static_cast<float>(sample_rate_);
 }
 
 MatrixView<float> MelSpectrogram::power() const {
