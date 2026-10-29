@@ -386,6 +386,10 @@ void requireIntegral(double number, const char* key);
 ///          driving the embind classes directly.
 /// @throws WasmArgumentError naming @p key.
 int checkedIntFromVal(const val& value, const char* key);
+/// @brief Reads an integer MIDI note in the 7-bit domain [0, 127].
+/// @param subject Prefix for the type and MIDI-domain errors.
+/// @throws WasmArgumentError naming @p subject for a wrong type or note-domain value.
+int checkedMidiNoteFromVal(const val& note, const char* subject);
 
 /// @brief Resolves a musical mode given as its ordinal (0..6) or its lowercase
 ///        church-mode name ("major", "minor", "dorian", ...).
@@ -571,6 +575,16 @@ inline double requireNumberProperty(const val& object, const char* key, const ch
 inline int64_t requireInt64Property(const val& object, const char* key, const char* subject) {
   const val value = requireTypedProperty(object, key, subject, "number", "a number");
   return checkedInt64FromVal(value, (std::string(subject) + "." + key).c_str());
+}
+
+/// @brief Reads a required integer-valued property from an object.
+/// @details Unlike @ref intProperty, a missing, undefined, or null property is
+///          an error. A present value must be a JS number and pass
+///          @ref checkedIntFromVal without truncation or saturation.
+/// @throws WasmArgumentError naming @p subject and @p key.
+inline int requireIntProperty(const val& object, const char* key, const char* subject) {
+  const val value = requireTypedProperty(object, key, subject, "number", "a number");
+  return checkedIntFromVal(value, (std::string(subject) + "." + key).c_str());
 }
 
 inline bool requireBoolProperty(const val& object, const char* key, const char* subject) {

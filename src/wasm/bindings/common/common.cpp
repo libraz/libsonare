@@ -13,6 +13,7 @@
 #include <limits>
 #include <string>
 
+#include "midi/live_push_args.h"
 #include "util/numeric_validation.h"
 
 // ============================================================================
@@ -468,6 +469,17 @@ int checkedIntFromVal(const val& value, const char* key) {
   }
   requireIntegral(number, key);
   return static_cast<int>(number);
+}
+
+int checkedMidiNoteFromVal(const val& note, const char* subject) {
+  if (note.typeOf().as<std::string>() != "number") {
+    throw WasmTypeError(std::string(subject) + ": note must be a number");
+  }
+  const int note_number = checkedIntFromVal(note, "note");
+  if (const char* error = sonare::midi::live_push_note_error(0, 0, note_number, 0)) {
+    throw WasmRangeError(std::string(subject) + ": " + error);
+  }
+  return note_number;
 }
 
 Mode modeFromVal(const val& value, const char* what) {

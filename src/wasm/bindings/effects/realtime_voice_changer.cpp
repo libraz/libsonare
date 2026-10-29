@@ -127,11 +127,6 @@ const char* vcEnumName(const VcEnumName (&names)[N], Enum value) {
   return names[0].name;
 }
 
-int vcRequireInt(const val& pod, const char* key) {
-  const val value = requireTypedProperty(pod, key, kVcPodSubject, "number", "a number");
-  return checkedIntFromVal(value, (std::string(kVcPodSubject) + "." + key).c_str());
-}
-
 }  // namespace
 
 // The flat camelCase POD of a config: the object realtimeVoiceChangerPresetConfig() returns.
@@ -179,7 +174,7 @@ editing::voice_changer::RealtimeVoiceChangerConfig realtimeVoiceChangerConfigFro
   SONARE_WASM_VC_POD_FIELDS(X)
   SONARE_WASM_VC_POD_TRANSFORM_FLOAT_FIELDS(X)
 #undef X
-#define X(cpp_path, js_key) parsed.cpp_path = vcRequireInt(pod, #js_key);
+#define X(cpp_path, js_key) parsed.cpp_path = requireIntProperty(pod, #js_key, kVcPodSubject);
   SONARE_WASM_VC_POD_TRANSFORM_INT_FIELDS(X)
 #undef X
   parsed.limiter.enable_isp_limiter =
@@ -292,7 +287,7 @@ class RealtimeVoiceChangerWrapper {
   // ---- MIDI notes --------------------------------------------------------
 
   void noteOn(const val& note_val, const val& velocity_val) {
-    const int note = noteFromVal(note_val);
+    const int note = checkedMidiNoteFromVal(note_val, "RealtimeVoiceChanger");
     if (velocity_val.typeOf().as<std::string>() != "number") {
       throw WasmTypeError("RealtimeVoiceChanger.noteOn: velocity must be a number");
     }
@@ -304,7 +299,8 @@ class RealtimeVoiceChangerWrapper {
   }
 
   void noteOff(const val& note_val) {
-    require_note_accepted(changer_.note_off(noteFromVal(note_val)), "noteOff");
+    require_note_accepted(
+        changer_.note_off(checkedMidiNoteFromVal(note_val, "RealtimeVoiceChanger")), "noteOff");
   }
 
   void allNotesOff() { changer_.all_notes_off(); }
@@ -431,17 +427,6 @@ class RealtimeVoiceChangerWrapper {
   }
 
  private:
-  static int noteFromVal(const val& note_val) {
-    if (note_val.typeOf().as<std::string>() != "number") {
-      throw WasmTypeError("RealtimeVoiceChanger: note must be a number");
-    }
-    const int note = checkedIntFromVal(note_val, "note");
-    if (!editing::voice_changer::RealtimeVoiceChanger::is_valid_note(note)) {
-      throw WasmRangeError("RealtimeVoiceChanger: note must be in [0, 127]");
-    }
-    return note;
-  }
-
   static void require_note_accepted(bool accepted, const char* method) {
     if (!accepted) {
       throw sonare::SonareException(
