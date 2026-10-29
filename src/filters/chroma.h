@@ -42,7 +42,8 @@ struct ChromaFilterConfig {
 /// @brief Converts frequency to pitch class (0-11, C=0).
 /// @param hz Frequency in Hz
 /// @param tuning Tuning deviation in semitones
-/// @return Pitch class (0=C, 1=C#, ..., 11=B), or -1 if hz <= 0
+/// @return Pitch class (0=C, 1=C#, ..., 11=B), or -1 if hz <= 0 or the pitch calculation is
+///         non-finite (e.g. non-finite hz/tuning or positive hz underflow during conversion).
 int hz_to_pitch_class(float hz, float tuning = 0.0f);
 
 /// @brief Converts frequency to fractional pitch class.

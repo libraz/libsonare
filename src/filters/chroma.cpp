@@ -79,6 +79,7 @@ int hz_to_pitch_class(float hz, float tuning) {
     return -1;
   }
   float chroma = hz_to_chroma(hz, tuning);
+  if (!std::isfinite(chroma)) return -1;
   return static_cast<int>(chroma) % 12;
 }
 
