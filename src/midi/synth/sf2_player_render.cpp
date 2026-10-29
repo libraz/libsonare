@@ -137,7 +137,7 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
         runtime = prepared_active_nodes_[unit] != nullptr ? &prepared_active_nodes_[unit]->unit_rt
                                                           : &prepared_empty_unit_;
       } else if (efx != nullptr && efx->unit_fed[unit]) {
-        runtime = &efx->units[unit];
+        runtime = &efx->unit(unit);
       }
       PreparedUnitRenderState& state = prepared_unit_render_state_[unit];
       if (state.runtime != runtime) {

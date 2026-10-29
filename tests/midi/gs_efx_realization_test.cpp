@@ -490,7 +490,7 @@ TEST_CASE("queued EFX enable updates survive a unit reset", "[gs-efx-realization
   const uint32_t generation = fx.generation();
   REQUIRE(fx.current() != nullptr);
   // This test owns the quiescent snapshot; reset mutates only its audio state.
-  auto& unit = const_cast<s::Sf2EfxUnitRt&>(fx.current()->units[0]);
+  auto& unit = const_cast<s::Sf2EfxUnitRt&>(fx.current()->unit(0));
   const int index = s::sf2_find_efx_stage(unit, "effects.delay.stereo", 0);
   REQUIRE(index >= 0);
   auto& stage = unit.stages[static_cast<size_t>(index)];
@@ -638,8 +638,10 @@ TEST_CASE("published EFX tails are visible before adoption and reset on a fresh 
   prepare_live_tail_stage(fx);
   REQUIRE(fx.tail_samples() == 64);
 
+  // A publish carries an unchanged unit over, so each graph here is replaced on purpose.
   state->tail = 8192;
   state->next_tail = 8192;
+  fx.discard_unit_runtimes();
   fx.publish();
   REQUIRE(fx.tail_samples() == 8192);
   fx.acquire();
@@ -647,6 +649,7 @@ TEST_CASE("published EFX tails are visible before adoption and reset on a fresh 
 
   state->tail = 64;
   state->next_tail = 64;
+  fx.discard_unit_runtimes();
   fx.publish();
   // The high active graph remains the bound until the low replacement is
   // adopted by the audio side.
@@ -655,7 +658,7 @@ TEST_CASE("published EFX tails are visible before adoption and reset on a fresh 
   REQUIRE(fx.tail_samples() == 64);
 }
 
-TEST_CASE("a queued EFX update from a stale generation cannot raise the new graph",
+TEST_CASE("a queued EFX update for a replaced unit cannot raise the new graph",
           "[gs-efx-realization][gs-efx-tail]") {
   const auto state = std::make_shared<LiveTailState>();
   s::PartFxStage fx(live_tail_config(state));
@@ -668,10 +671,11 @@ TEST_CASE("a queued EFX update from a stale generation cannot raise the new grap
   REQUIRE_FALSE(fx.apply_control_sysex(raise.data(), raise.size()));
   REQUIRE(fx.generation() == old_generation);
 
-  // Publish and adopt a low replacement before the queued old-generation
-  // record is drained. The record must be discarded by its generation check.
+  // Publish and adopt a low replacement before the queued record is drained.
+  // The record names the replaced unit's runtime, so it must be discarded.
   state->tail = 64;
   state->next_tail = 64;
+  fx.discard_unit_runtimes();
   fx.publish();
   fx.acquire();
   state->runtime_update = true;
@@ -709,7 +713,7 @@ TEST_CASE("identical EFX controls keep the live graph and pending delay tail",
   std::array<float, kBlock> left{};
   std::array<float, kBlock> right{};
   left[0] = right[0] = 0.1f;
-  s::sf2_run_efx_unit(initial->units[0], left.data(), right.data(), kBlock);
+  s::sf2_run_efx_unit(initial->unit(0), left.data(), right.data(), kBlock);
   const uint8_t held = fx.efx()[0].params[0];
   const auto update = slot_write(0, held);
   REQUIRE_FALSE(fx.apply_control_sysex(update.data(), update.size()));
@@ -734,7 +738,7 @@ TEST_CASE("identical EFX controls keep the live graph and pending delay tail",
   for (int block = 0; block < 8; ++block) {
     left.fill(0.0f);
     right.fill(0.0f);
-    s::sf2_run_efx_unit(initial->units[0], left.data(), right.data(), kBlock);
+    s::sf2_run_efx_unit(initial->unit(0), left.data(), right.data(), kBlock);
     for (int i = 0; i < kBlock; ++i) {
       tail_peak = std::max(tail_peak, std::max(std::abs(left[static_cast<size_t>(i)]),
                                                std::abs(right[static_cast<size_t>(i)])));

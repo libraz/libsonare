@@ -776,7 +776,7 @@ void NativeSynth::record_render_path() {
   }
   for (size_t u = 0; snapshot != nullptr && u < kGsEfxUnitCount; ++u) {
     if (!snapshot->unit_fed[u]) continue;
-    const Sf2EfxUnitRt& unit_rt = snapshot->units[u];
+    const Sf2EfxUnitRt& unit_rt = snapshot->unit(u);
     RenderPathUnit out;
     out.unit = static_cast<uint8_t>(u);
     out.type = snapshot->gs_efx_state[u].type;

@@ -277,6 +277,8 @@ void Sf2Player::set_soundfont(std::shared_ptr<const Sf2File> soundfont) {
     seed_prepared_from_control_state();
     prepared_audio_domain_ = prepared_domain_;
     recompute_tail();
+    // Every voice stopped with the swap, so no chain or unit carries over it.
+    part_fx_.discard_runtimes();
     realize_gs_efx();
   }
 }
@@ -321,7 +323,7 @@ void Sf2Player::raise_prepared_fx_tail() noexcept {
                     ? &prepared_active_nodes_[static_cast<size_t>(unit)]->unit_rt
                     : &prepared_empty_unit_;
     } else if (snapshot != nullptr && snapshot->unit_fed[static_cast<size_t>(unit)]) {
-      runtime = &snapshot->units[static_cast<size_t>(unit)];
+      runtime = &snapshot->unit(static_cast<size_t>(unit));
     }
     maximum = std::max(maximum, routed_part_tail_samples(chain_tail, runtime));
   }

@@ -813,6 +813,7 @@ if(BUILD_ARRANGEMENT)
     midi/gs_efx_defaults_test.cpp
     midi/gs_efx_parallel_test.cpp
     midi/gs_efx_realization_test.cpp
+    midi/part_fx_runtime_test.cpp
     midi/gs_efx_control_test.cpp
     midi/gs_efx_receiver_range_test.cpp
     midi/gs_efx_controller_settle_test.cpp

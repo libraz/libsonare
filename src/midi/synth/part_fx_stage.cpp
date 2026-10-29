@@ -70,7 +70,45 @@ constexpr std::string_view kAmpStage = "saturation.ampSim";
 constexpr double kPartRigValidationSampleRate = 48000.0;
 constexpr int kPartRigValidationBlockSize = 512;
 
+/// What PartFxSnapshot::unit() answers for a unit nothing feeds.
+const Sf2EfxUnitRt kNoUnitRuntime{};
+
+/// Whether an EFX CONTROL SOURCE byte names a controller; 00 and 62-7F are off.
+bool efx_source_live(uint8_t source) noexcept { return source != 0 && source <= kEfxSourceBend; }
+
+int clamp_tail(int64_t samples) noexcept {
+  return samples > std::numeric_limits<int>::max() ? std::numeric_limits<int>::max()
+                                                   : static_cast<int>(samples);
+}
+
+/// Series stages ring out one after another; parts and units run side by side,
+/// and parts feeding one unit are parallel inputs, so only the longest input
+/// tail extends it.
+int combine_tails(const PartFxSnapshot& snapshot, const std::array<int64_t, 16>& chain_tails,
+                  const std::array<int64_t, kGsEfxUnitCount>& unit_tails) noexcept {
+  int64_t maximum = 0;
+  for (const int64_t tail : chain_tails) maximum = std::max(maximum, tail);
+  std::array<int64_t, kGsEfxUnitCount> unit_input_tails{};
+  for (size_t part = 0; part < snapshot.part_unit.size(); ++part) {
+    const uint8_t unit = snapshot.part_unit[part];
+    if (unit == PartFxSnapshot::kNoUnit || unit >= kGsEfxUnitCount) continue;
+    unit_input_tails[unit] = std::max(unit_input_tails[unit], chain_tails[part]);
+  }
+  for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
+    if (!snapshot.unit_fed[unit]) continue;
+    maximum =
+        std::max(maximum, numeric::saturating_add<int64_t>(unit_input_tails[unit],
+                                                           std::max<int64_t>(0, unit_tails[unit])));
+  }
+  return clamp_tail(maximum);
+}
+
 }  // namespace
+
+const Sf2EfxUnitRt& PartFxSnapshot::unit(size_t unit) const noexcept {
+  const Sf2EfxUnitRt* runtime = unit < unit_runtimes.size() ? unit_runtimes[unit].get() : nullptr;
+  return runtime != nullptr ? *runtime : kNoUnitRuntime;
+}
 
 uint8_t efx_control_byte(const Sf2EfxControlRt& control, float position) noexcept {
   const float span = static_cast<float>(control.hi - control.lo);
@@ -99,8 +137,10 @@ void PartFxStage::acquire() noexcept {
   // The callback overload distinguishes a real graph adoption from a no-op.
   // A no-op must not lower an active graph's bound after an in-place update
   // raised it; only the newly adopted snapshot may reset that bound.
+  // A carried-over unit may ring longer than the tail declared when it was
+  // built, so the adopted bound is measured here, where its processors run.
   pub_->acquire([this](const PartFxSnapshot*, const PartFxSnapshot* next) noexcept {
-    active_tail_samples_->store(next == nullptr ? 0 : next->tail_samples,
+    active_tail_samples_->store(next == nullptr ? 0 : actual_tail_samples(*next),
                                 std::memory_order_relaxed);
   });
 }
@@ -121,6 +161,7 @@ void PartFxStage::settle_block(const PartFxHost& host) noexcept {
 
 void PartFxStage::prepare(double sample_rate) {
   sample_rate_ = sample_rate;
+  discard_runtimes();
   // Allocated only where a factory exists, which is where a chain or a unit can.
   part_bus_.assign(enabled() ? 16 * 2 * static_cast<size_t>(kPartFxChunkFrames) : 0, 0.0f);
   unit_bus_.assign(enabled() ? kGsEfxUnitCount * 2 * static_cast<size_t>(kPartFxChunkFrames) : 0,
@@ -132,21 +173,26 @@ void PartFxStage::clear_mirror() {
   assign_ = {};
   dirty_ = false;
   queue_ = std::make_unique<EfxParamQueue>();
+  discard_runtimes();
+}
+
+void PartFxStage::discard_runtimes() noexcept {
+  ++chain_epoch_;
+  ++unit_epoch_;
 }
 
 void PartFxStage::publish() {
-  std::shared_ptr<PartFxSnapshot> snapshot = build_snapshot();
+  UnitTracks tracks = unit_tracks_;
+  uint64_t next_id = next_runtime_id_;
+  std::shared_ptr<PartFxSnapshot> snapshot = build_snapshot(tracks, next_id);
   snapshot->generation = ++generation_;
-  for (size_t part = 0; part < snapshot->chains.size(); ++part) {
-    const int64_t sum = part_chain_tail_samples(snapshot->chains[part]);
-    snapshot->chain_tail_samples[part] = sum > std::numeric_limits<int>::max()
-                                             ? std::numeric_limits<int>::max()
-                                             : static_cast<int>(sum);
-  }
-  const int bounded_tail = actual_tail_samples(*snapshot);
+  const int bounded_tail = declared_tail_samples(*snapshot, tracks);
   snapshot->tail_samples = bounded_tail;
   published_tail_samples_->store(bounded_tail, std::memory_order_release);
   pub_->publish(std::move(snapshot));
+  // Committed only once published: a throw above leaves the last publication's.
+  unit_tracks_ = tracks;
+  next_runtime_id_ = next_id;
 }
 
 int64_t part_chain_tail_samples(
@@ -165,29 +211,28 @@ int64_t routed_part_tail_samples(int64_t chain_tail, const Sf2EfxUnitRt* unit) n
 }
 
 int PartFxStage::actual_tail_samples(const PartFxSnapshot& snapshot) const noexcept {
-  // Series stages ring out one after another; parts and units run side by side.
-  int64_t maximum = 0;
   std::array<int64_t, 16> chain_tails{};
   for (size_t part = 0; part < snapshot.chains.size(); ++part) {
-    chain_tails[part] = part_chain_tail_samples(snapshot.chains[part]);
-    maximum = std::max(maximum, chain_tails[part]);
+    const PartChainRuntime* chain = snapshot.chains[part].get();
+    chain_tails[part] = chain == nullptr ? 0 : part_chain_tail_samples(chain->procs);
   }
-
-  // Parts feeding the same unit are parallel inputs, so only the longest
-  // input tail extends it.
-  std::array<int64_t, kGsEfxUnitCount> unit_input_tails{};
-  for (size_t part = 0; part < snapshot.part_unit.size(); ++part) {
-    const uint8_t unit = snapshot.part_unit[part];
-    if (unit == PartFxSnapshot::kNoUnit || unit >= kGsEfxUnitCount) continue;
-    unit_input_tails[unit] = std::max(unit_input_tails[unit], chain_tails[part]);
-  }
+  std::array<int64_t, kGsEfxUnitCount> unit_tails{};
   for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
-    if (!snapshot.unit_fed[unit]) continue;
-    maximum =
-        std::max(maximum, routed_part_tail_samples(unit_input_tails[unit], &snapshot.units[unit]));
+    if (snapshot.unit_fed[unit]) unit_tails[unit] = sf2_efx_unit_tail_samples(snapshot.unit(unit));
   }
-  return maximum > std::numeric_limits<int>::max() ? std::numeric_limits<int>::max()
-                                                   : static_cast<int>(maximum);
+  return combine_tails(snapshot, chain_tails, unit_tails);
+}
+
+int PartFxStage::declared_tail_samples(const PartFxSnapshot& snapshot,
+                                       const UnitTracks& tracks) noexcept {
+  std::array<int64_t, 16> chain_tails{};
+  for (size_t part = 0; part < snapshot.chains.size(); ++part) {
+    chain_tails[part] = snapshot.chain_tail_samples[part];
+  }
+  std::array<int64_t, kGsEfxUnitCount> unit_tails{};
+  for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit)
+    unit_tails[unit] = tracks[unit].tail_samples;
+  return combine_tails(snapshot, chain_tails, unit_tails);
 }
 
 void PartFxStage::raise_active_tail(const PartFxSnapshot& snapshot) noexcept {
@@ -423,6 +468,11 @@ bool PartFxStage::apply_control_sysex(const uint8_t* data, size_t size) {
   }
   if (pending_count == 0) return false;
   if (!queue_->push_batch(pending.data(), pending_count)) return true;
+  // Nothing after the push can fail, so the queued bytes are what those units
+  // will hold: a later publish may carry them over.
+  for (size_t unit = 0; unit < efx_.size(); ++unit) {
+    if (changed[unit]) unit_tracks_[unit].params = efx_[unit].params;
+  }
   return false;
 }
 
@@ -445,7 +495,49 @@ Sf2EfxUnitRt PartFxStage::build_unit(const GsEfx& efx) const {
                             kPartFxChunkFrames);
 }
 
-std::shared_ptr<PartFxSnapshot> PartFxStage::build_snapshot() const {
+std::shared_ptr<const PartChainRuntime> PartFxStage::realize_chain(
+    int part, std::vector<std::pair<std::string, std::string>> request,
+    const PartFxSnapshot* previous) const {
+  if (request.empty()) return nullptr;
+  const std::shared_ptr<const PartChainRuntime>* kept =
+      previous != nullptr ? &previous->chains[static_cast<size_t>(part)] : nullptr;
+  if (kept != nullptr && *kept != nullptr && (*kept)->epoch == chain_epoch_ &&
+      (*kept)->request == request) {
+    if (recorder_ != nullptr) {
+      for (const std::string& name : (*kept)->refused) recorder_->note_refused_stage(part, name);
+    }
+    return *kept;
+  }
+  auto chain = std::make_shared<PartChainRuntime>();
+  chain->epoch = chain_epoch_;
+  // A stage the factory declines is skipped, so a partial rig still runs. The
+  // mono pickup runs through the last amplifier built.
+  for (const auto& [name, params] : request) {
+    auto proc = config_.insert_factory(name, params);
+    if (proc == nullptr) {
+      if (recorder_ != nullptr) recorder_->note_refused_stage(part, name);
+      chain->refused.push_back(name);
+      continue;
+    }
+    proc->prepare(sample_rate_, kPartFxChunkFrames);
+    chain->procs.push_back(std::move(proc));
+    chain->names.push_back(name);
+    if (name == kAmpStage) chain->mono_prefix = static_cast<uint8_t>(chain->procs.size());
+  }
+  chain->tail_samples = clamp_tail(part_chain_tail_samples(chain->procs));
+  chain->request = std::move(request);
+  return chain;
+}
+
+bool PartFxStage::unit_track_current(const UnitTrack& track, size_t unit) const noexcept {
+  const GsEfx& efx = efx_[unit];
+  return track.id != 0 && track.epoch == unit_epoch_ && track.type == efx.type &&
+         track.params == efx.params && track.realization == config_.realization &&
+         track.rows == rows_;
+}
+
+std::shared_ptr<PartFxSnapshot> PartFxStage::build_snapshot(UnitTracks& tracks, uint64_t& next_id) {
+  const PartFxSnapshot* previous = pub_->control_current().get();
   auto out = std::make_shared<PartFxSnapshot>();
   out->part_unit.fill(PartFxSnapshot::kNoUnit);
   out->gs_efx_state = efx_;
@@ -456,28 +548,15 @@ std::shared_ptr<PartFxSnapshot> PartFxStage::build_snapshot() const {
     const PartRig* entry = nullptr;
     const PartRigMode mode = effective_mode(part, &entry);
     const uint8_t rig_id = part_rig_id(part);
-    std::vector<std::unique_ptr<rt::ProcessorBase>>& chain = out->chains[p];
-    std::vector<std::string>& names = out->stage_names[p];
-    uint8_t mono_prefix = 0;
-    // Builds one stage; one the factory declines is skipped, so a partial rig
-    // still runs. The mono pickup runs through the last amplifier built.
-    const auto add_stage = [&](std::string_view name, std::string_view params) {
-      auto proc = config_.insert_factory(name, params);
-      if (proc == nullptr) {
-        if (recorder_ != nullptr) recorder_->note_refused_stage(part, name);
-        return;
-      }
-      proc->prepare(sample_rate_, kPartFxChunkFrames);
-      chain.push_back(std::move(proc));
-      names.emplace_back(name);
-      if (name == kAmpStage) mono_prefix = static_cast<uint8_t>(chain.size());
-    };
+    std::vector<std::pair<std::string, std::string>> request;
     // An explicit chain busses the part and runs ahead of the file's EFX rather
     // than instead of it — a part may carry both and they are in series
     // (docs/gs.md), so a guitar with an amplifier still gets the file's chorus.
     const bool explicit_chain = mode == PartRigMode::kChain && enabled();
     if (explicit_chain) {
-      for (const PartRigStage& stage : entry->stages) add_stage(stage.processor, stage.params_json);
+      for (const PartRigStage& stage : entry->stages) {
+        request.emplace_back(stage.processor, stage.params_json);
+      }
     }
     // The unit the file routed this part through, if any. The part merges into
     // it after its own chain; the unit's chain is built once, below.
@@ -494,10 +573,18 @@ std::shared_ptr<PartFxSnapshot> PartFxStage::build_snapshot() const {
     // stage reports no latency and the part stays aligned with every other one.
     const bool default_bank_rig = mode == PartRigMode::kBank && enabled() && rig_id != 0;
     if (default_bank_rig) {
-      for (const GsEfxStage& stage : gm_rig_chain(rig_id)) add_stage(stage.name, stage.params_json);
+      for (const GsEfxStage& stage : gm_rig_chain(rig_id)) {
+        request.emplace_back(stage.name, stage.params_json);
+      }
     }
-    out->mono_prefix[p] = mono_prefix;
-    out->host_part_bussed[p] = explicit_chain || !chain.empty();
+    out->chains[p] = realize_chain(part, std::move(request), previous);
+    const PartChainRuntime* chain = out->chains[p].get();
+    if (chain != nullptr) {
+      out->stage_names[p] = chain->names;
+      out->mono_prefix[p] = chain->mono_prefix;
+      out->chain_tail_samples[p] = chain->tail_samples;
+    }
+    out->host_part_bussed[p] = explicit_chain || (chain != nullptr && !chain->procs.empty());
     // Unaffected parts keep adding straight to the dry mix.
     out->part_bussed[p] = out->host_part_bussed[p] || routed;
     out->any_bussed = out->any_bussed || out->part_bussed[p];
@@ -506,12 +593,36 @@ std::shared_ptr<PartFxSnapshot> PartFxStage::build_snapshot() const {
   // sharing a unit sum into it and it runs once (docs/gs.md). A stage the
   // factory cannot build (an FX stage in a no-FX build) keeps its position with
   // nothing in it, so the rest of the chain still runs and updates stay aligned.
+  // A unit whose build inputs are what its runtime already reflects keeps running.
+  bool unit0_carried = false;
   for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
-    if (!out->unit_fed[unit]) continue;
-    out->units[unit] = build_unit(efx_[unit]);
-    build_legacy_plan(out->units[unit], unit, efx_[unit]);
+    UnitTrack& track = tracks[unit];
+    if (!out->unit_fed[unit]) {
+      track = {};
+      continue;
+    }
+    const bool carry = previous != nullptr && previous->unit_runtimes[unit] != nullptr &&
+                       previous->unit_ids[unit] == track.id && unit_track_current(track, unit);
+    if (carry) {
+      out->unit_runtimes[unit] = previous->unit_runtimes[unit];
+      out->unit_ids[unit] = track.id;
+      if (unit == 0) unit0_carried = true;
+      continue;
+    }
+    auto runtime = std::make_shared<Sf2EfxUnitRt>(build_unit(efx_[unit]));
+    build_legacy_plan(*runtime, unit, efx_[unit]);
+    track.id = ++next_id;
+    track.type = efx_[unit].type;
+    track.params = efx_[unit].params;
+    track.realization = config_.realization;
+    track.rows = rows_;
+    track.epoch = unit_epoch_;
+    track.tail_samples = sf2_efx_unit_tail_samples(*runtime);
+    out->unit_ids[unit] = track.id;
+    out->unit_runtimes[unit] = std::move(runtime);
   }
-  build_controls(*out);
+  out->runtime_id_ceiling = next_id;
+  build_controls(*out, unit0_carried);
   return out;
 }
 
@@ -594,7 +705,7 @@ void PartFxStage::apply_legacy_plan(size_t unit, const GsEfx& target, int contro
       snapshot->gs_efx_state[unit].type != target.type || !snapshot->unit_fed[unit]) {
     return;
   }
-  const Sf2EfxUnitRt& live = snapshot->units[unit];
+  const Sf2EfxUnitRt& live = snapshot->unit(unit);
   if (live.realization == GsEfxRealization::kClassic) {
     if (live.stages.empty() || live.stages.front().proc == nullptr) return;
     rt::ProcessorBase* proc = live.stages.front().proc.get();
@@ -675,10 +786,10 @@ void PartFxStage::apply_legacy_plan(size_t unit, const GsEfx& target, int contro
   }
 }
 
-void PartFxStage::build_controls(PartFxSnapshot& out) const {
+void PartFxStage::build_controls(PartFxSnapshot& out, bool carried_over) const {
   // Only the spec unit has the CONTROL rows, and only a unit that runs has a
   // slot to move.
-  const Sf2EfxUnitRt& unit = out.units[0];
+  const Sf2EfxUnitRt& unit = out.unit(0);
   if (!out.unit_fed[0] || unit.stages.empty()) return;
   // The controllers are the lowest-numbered part's among those the unit takes.
   uint8_t part = 0;
@@ -686,9 +797,10 @@ void PartFxStage::build_controls(PartFxSnapshot& out) const {
   if (part >= 16) return;
   const GsEfx& efx = efx_[0];
   const GsEfxRowView& rows = row_view();
+  // A control whose source is off is still resolved: it holds its slot at the
+  // base, which is what puts a carried-over unit's modulated slot back.
   for (size_t k = 0; k < out.controls.size(); ++k) {
     const uint8_t source = efx.control_source[k];
-    if (source == 0 || source > kEfxSourceBend) continue;
     const Sf2EfxLegacyControlPlan plan = sf2_resolve_efx_control(unit, rows, efx.type, k);
     if (plan.n_dest == 0) continue;
     Sf2EfxControlRt control;
@@ -702,8 +814,10 @@ void PartFxStage::build_controls(PartFxSnapshot& out) const {
     control.n_dest = plan.n_dest;
     control.dest = plan.dest;
     control.base_byte = efx.params[control.slot];
-    // The unit was built at the base, so that is what its destinations hold.
+    // A unit built here holds the base; a carried-over one holds whatever was
+    // last applied, so it is re-applied on the next settle.
     control.applied_byte = control.base_byte;
+    control.dirty = carried_over;
     out.controls[k] = control;
   }
 }
@@ -721,7 +835,7 @@ bool PartFxStage::append_param_updates(size_t unit, const std::array<uint8_t, 20
       !snapshot.unit_fed[unit]) {
     return true;
   }
-  const Sf2EfxUnitRt& live = snapshot.units[unit];
+  const Sf2EfxUnitRt& live = snapshot.unit(unit);
   if (live.realization != config_.realization) return true;
   if (live.stages.empty()) return true;  // Thru / unmapped -> no chain, rebuild
   const GsEfx& efx = efx_[unit];
@@ -733,7 +847,7 @@ bool PartFxStage::append_param_updates(size_t unit, const std::array<uint8_t, 20
     update.stage_index = static_cast<uint8_t>(stage);
     update.param_id = param_id;
     update.value = value;
-    update.generation = snapshot.generation;
+    update.runtime_id = snapshot.unit_ids[unit];
     pending[*pending_count] = update;
     ++*pending_count;
     return true;
@@ -805,14 +919,17 @@ void PartFxStage::drain_param_updates() noexcept {
   // the current published units. set_parameter runs here, serialized with
   // process() on this same thread — the contract it honours — so there is no
   // cross-thread race and no rebuild (the chain objects, and thus their
-  // reverb/delay tails, are preserved). An update resolved against another
-  // generation is dropped: the rebuild that replaced it baked the mirror in.
+  // reverb/delay tails, are preserved). An update for a runtime the current
+  // snapshot no longer holds is dropped: the rebuild that replaced it baked the
+  // mirror in. One for a runtime newer than the snapshot waits, with everything
+  // queued behind it, until that snapshot is adopted.
   const PartFxSnapshot* snapshot = pub_->current();
   bool changed = false;
   EfxParamUpdate update;
-  while (queue_->pop(update)) {
-    if (snapshot == nullptr || update.generation != snapshot->generation ||
-        update.unit >= kGsEfxUnitCount) {
+  while (queue_->peek(update)) {
+    if (snapshot == nullptr || update.runtime_id > snapshot->runtime_id_ceiling) break;
+    queue_->drop_front();
+    if (update.unit >= kGsEfxUnitCount || snapshot->unit_ids[update.unit] != update.runtime_id) {
       continue;
     }
     if (update.kind == EfxUpdateKind::kControlBase) {
@@ -822,7 +939,7 @@ void PartFxStage::drain_param_updates() noexcept {
       control.dirty = true;
       continue;
     }
-    const std::vector<Sf2EfxStageRt>& stages = snapshot->units[update.unit].stages;
+    const std::vector<Sf2EfxStageRt>& stages = snapshot->unit(update.unit).stages;
     if (update.stage_index >= stages.size()) continue;
     const Sf2EfxStageRt& stage = stages[update.stage_index];
     rt::ProcessorBase* proc = stage.proc.get();
@@ -866,11 +983,14 @@ void PartFxStage::apply_controls(const PartFxHost& host) noexcept {
   const PartFxSnapshot* snapshot = pub_->current();
   if (snapshot == nullptr) return;
   bool changed = false;
-  const std::vector<Sf2EfxStageRt>& stages = snapshot->units[0].stages;
+  const std::vector<Sf2EfxStageRt>& stages = snapshot->unit(0).stages;
   for (const Sf2EfxControlRt& control : snapshot->controls) {
     if (control.n_dest == 0) continue;
-    const uint8_t byte =
-        efx_control_byte(control, host.part_controller_position(control.part, control.source));
+    // A control with no source holds its slot at the base.
+    const float position = efx_source_live(control.source)
+                               ? host.part_controller_position(control.part, control.source)
+                               : 0.0f;
+    const uint8_t byte = efx_control_byte(control, position);
     if (!control.dirty && byte == control.applied_byte) continue;
     control.dirty = false;
     control.applied_byte = byte;
@@ -904,9 +1024,11 @@ void PartFxStage::run_part_chains(int n, const std::array<bool, 16>& bussed,
   for (int part = 0; part < 16; ++part) {
     const size_t p = static_cast<size_t>(part);
     if (!bussed[p]) continue;
+    const PartChainRuntime* runtime = snapshot->chains[p].get();
+    if (runtime == nullptr) continue;
     float* left = bus_l(part);
     float* right = bus_r(part);
-    const auto& chain = snapshot->chains[p];
+    const auto& chain = runtime->procs;
     if (mono_prefix[p] == 0) {
       float* chans[2] = {left, right};
       for (const auto& proc : chain) proc->process(chans, 2, n);
@@ -939,7 +1061,7 @@ void PartFxStage::run_units(int n, const std::array<bool, kGsEfxUnitCount>& fed,
   for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
     if (!fed[unit]) continue;
     const Sf2EfxUnitRt* unit_rt = overrides != nullptr ? (*overrides)[unit] : nullptr;
-    if (unit_rt == nullptr && snapshot != nullptr) unit_rt = &snapshot->units[unit];
+    if (unit_rt == nullptr && snapshot != nullptr) unit_rt = &snapshot->unit(unit);
     if (unit_rt != nullptr) sf2_run_efx_unit(*unit_rt, unit_bus_l(unit), unit_bus_r(unit), n);
   }
 }
@@ -949,13 +1071,14 @@ uint64_t PartFxStage::discard_sum(const PartFxUnitOverrides* overrides) const no
   if (snapshot == nullptr) return 0;
   uint64_t total = 0;
   for (const auto& chain : snapshot->chains) {
-    for (const auto& proc : chain) {
+    if (chain == nullptr) continue;
+    for (const auto& proc : chain->procs) {
       if (proc) total += proc->non_finite_discard_count();
     }
   }
   for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
     const Sf2EfxUnitRt* unit_rt = overrides != nullptr ? (*overrides)[unit] : nullptr;
-    if (unit_rt == nullptr) unit_rt = &snapshot->units[unit];
+    if (unit_rt == nullptr) unit_rt = &snapshot->unit(unit);
     for (const Sf2EfxStageRt& stage : unit_rt->stages) {
       if (stage.proc) total += stage.proc->non_finite_discard_count();
     }

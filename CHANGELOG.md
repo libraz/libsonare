@@ -56,6 +56,10 @@
 
 - An insert automation lane or parameter setter whose value the processor refuses (a gate `rangeDb` above 0, a compressor `ratio` below 1) is reported not applied and leaves the processor unchanged on track, bus and master strips. It used to glide toward the value and stop at the last step the processor accepted, so `rangeDb` 12 rendered as about −2.3.
 
+#### Synthesizer
+
+- Changing one part's rig, a GS insertion effect's send, EFX CONTROL source or depth, or a part's EFX assignment no longer resets the other parts' rigs and the insertion units the change does not reach: their delay, reverb and amplifier tails keep ringing. Only the part chain or unit the edit reaches is rebuilt; a parameter edit queued just before such a change is no longer lost. The SF2 player's direct publication of an insertion-effect message still rebuilds every unit.
+
 #### Vocal editing
 
 - Vocal edit analysis reads a note whose glides leave fewer than two clear vibrato peaks (a short note, or one the next glide cuts into) from a vibrato fitted to its held frames instead of their plain mean, which was off by the partial cycle at either end: 1–3 cents on a ±25-cent vibrato. `centerMidi` (`center_midi`) and a `center` retune move by that much on such notes.

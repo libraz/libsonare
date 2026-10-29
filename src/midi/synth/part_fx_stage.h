@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "midi/part_rig.h"
@@ -61,14 +62,31 @@ int64_t part_chain_tail_samples(
 /// after the chain, so the two add. Negative inputs count as zero; saturating.
 int64_t routed_part_tail_samples(int64_t chain_tail, const Sf2EfxUnitRt* unit) noexcept;
 
+/// One part's realised rig chain. A publish that asks for the same stages
+/// shares it with the next snapshot, so its DSP state outlives the publish.
+/// Everything but the processors' own state is fixed once it is built.
+struct PartChainRuntime {
+  std::vector<std::unique_ptr<rt::ProcessorBase>> procs;
+  /// The stages asked for, as (processor, params JSON), in order.
+  std::vector<std::pair<std::string, std::string>> request;
+  /// Names of the stages built, in signal order, and of those the factory declined.
+  std::vector<std::string> names;
+  std::vector<std::string> refused;
+  uint8_t mono_prefix = 0;
+  /// Tail when built. Exact for its lifetime: nothing sets a part chain's parameters.
+  int tail_samples = 0;
+  uint64_t epoch = 0;
+};
+
 /// A realised set of part chains and insertion units, handed to the audio
 /// thread as one immutable-lifetime snapshot. Built entirely on the CONTROL
 /// thread, so the audio thread only reads it (running the processors, which a
 /// `const unique_ptr` still allows) and never allocates, frees, or races the
-/// builder.
+/// builder. A chain or unit the publish did not change is shared with the
+/// previous snapshot; only the CONTROL thread copies or drops those pointers.
 struct PartFxSnapshot {
-  /// The rig chain run in place on each part's bus.
-  std::array<std::vector<std::unique_ptr<rt::ProcessorBase>>, 16> chains{};
+  /// The rig chain run in place on each part's bus; null for none.
+  std::array<std::shared_ptr<const PartChainRuntime>, 16> chains{};
   /// Tail of each part's host rig chain, before any shared GS insertion unit.
   /// This is retained per part so a prepared overlay can add the selected
   /// unit's tail without rebuilding or allocating a speculative snapshot.
@@ -79,12 +97,17 @@ struct PartFxSnapshot {
   std::array<bool, 16> part_bussed{};
   /// The file's insertion effects, one chain per unit rather than one per part:
   /// parts assigned to a unit sum into it and it runs once (docs/gs.md). Unit 0
-  /// is the spec one; 1-15 are the extension's.
-  std::array<Sf2EfxUnitRt, kGsEfxUnitCount> units{};
+  /// is the spec one; 1-15 are the extension's. Null for a unit nothing feeds.
+  std::array<std::shared_ptr<const Sf2EfxUnitRt>, kGsEfxUnitCount> unit_runtimes{};
+  /// Identity of each unit runtime, which a queued update is addressed to; 0
+  /// for none.
+  std::array<uint64_t, kGsEfxUnitCount> unit_ids{};
+  /// The largest runtime id issued when this snapshot was built. An update for
+  /// a larger id targets a snapshot the audio thread has not adopted yet.
+  uint64_t runtime_id_ceiling = 0;
   /// EFX CONTROL 1 and 2, which only unit 0 has.
   std::array<Sf2EfxControlRt, 2> controls{};
-  /// Which build this is. A queued update carries the generation it was
-  /// resolved against and is dropped by any other snapshot.
+  /// Which build this is.
   uint32_t generation = 0;
   /// Tail declared when this immutable graph was published. Processors may
   /// report a larger bound after a realtime parameter update; the stage keeps
@@ -106,6 +129,9 @@ struct PartFxSnapshot {
   /// The GS state the units were built from.
   std::array<GsEfx, kGsEfxUnitCount> gs_efx_state{};
   std::array<uint8_t, 16> gs_part_assign{};
+
+  /// Unit @p unit's runtime, or an empty unit when nothing feeds it.
+  const Sf2EfxUnitRt& unit(size_t unit) const noexcept;
 };
 
 /// Per-unit replacements for the snapshot's units: a non-null entry runs in
@@ -168,11 +194,18 @@ class PartFxStage {
 
   /// CONTROL thread: allocate the buses at @p sample_rate. Allocates.
   void prepare(double sample_rate);
-  /// CONTROL thread at a quiescent boundary: clear the EFX mirror and drop any
-  /// queued parameter update.
+  /// CONTROL thread at a quiescent boundary: clear the EFX mirror, drop any
+  /// queued parameter update, and have the next publish build every chain and
+  /// unit afresh.
   void clear_mirror();
-  /// CONTROL thread: build and publish a fresh snapshot under the next
-  /// generation. Allocates.
+  /// CONTROL thread: the next publish builds every chain and unit afresh.
+  void discard_runtimes() noexcept;
+  /// CONTROL thread: the next publish builds every unit afresh; chains it does
+  /// not change keep running.
+  void discard_unit_runtimes() noexcept { ++unit_epoch_; }
+  /// CONTROL thread: publish a snapshot under the next generation. A chain or
+  /// unit whose realisation did not change is carried over with its DSP state;
+  /// the rest are built. Allocates.
   void publish();
 
   /// CONTROL thread: store @p rig for @p part (kPartRigAllParts for the
@@ -308,15 +341,15 @@ class PartFxStage {
   };
 
   /// A pending GS EFX update handed from the control thread to the audio
-  /// thread, addressed to stage @c stage_index of insertion unit @c unit in the
-  /// snapshot of generation @c generation.
+  /// thread, addressed to stage @c stage_index of the unit runtime
+  /// @c runtime_id in slot @c unit.
   struct EfxParamUpdate {
     EfxUpdateKind kind = EfxUpdateKind::kParam;
     uint8_t unit = 0;
     uint8_t stage_index = 0;
     uint32_t param_id = 0;
     float value = 0.0f;
-    uint32_t generation = 0;
+    uint64_t runtime_id = 0;
   };
 
   /// Wait-free single-producer (control thread) / single-consumer (audio thread)
@@ -349,14 +382,19 @@ class PartFxStage {
       return true;
     }
 
-    /// AUDIO thread. Returns false when the ring is empty.
-    bool pop(EfxParamUpdate& out) noexcept {
+    /// AUDIO thread. Copies the oldest record without consuming it; returns
+    /// false when the ring is empty.
+    bool peek(EfxParamUpdate& out) const noexcept {
       const size_t tail = tail_.load(std::memory_order_relaxed);
       const size_t head = head_.load(std::memory_order_acquire);
       if (head == tail) return false;
       out = slots_[tail & (kCapacity - 1)];
-      tail_.store(tail + 1, std::memory_order_release);
       return true;
+    }
+
+    /// AUDIO thread, after a successful peek(): consume that record.
+    void drop_front() noexcept {
+      tail_.store(tail_.load(std::memory_order_relaxed) + 1, std::memory_order_release);
     }
 
    private:
@@ -376,10 +414,34 @@ class PartFxStage {
   PartRigMode effective_mode(int part, const PartRig** entry) const noexcept;
   /// Recompute bank_parts_ from the entries.
   void refresh_bank_parts() noexcept;
-  std::shared_ptr<PartFxSnapshot> build_snapshot() const;
+  /// What a published unit runtime reflects, kept on the CONTROL thread so a
+  /// publish can tell whether it may carry the runtime over.
+  struct UnitTrack {
+    uint64_t id = 0;  ///< 0: no runtime.
+    uint16_t type = 0;
+    /// The bytes the runtime was built with or has since been sent through the queue.
+    std::array<uint8_t, 20> params{};
+    GsEfxRealization realization = GsEfxRealization::kModern;
+    const GsEfxRowView* rows = nullptr;
+    uint64_t epoch = 0;
+    int tail_samples = 0;  ///< Tail when built.
+  };
+  using UnitTracks = std::array<UnitTrack, kGsEfxUnitCount>;
+
+  /// Build the next snapshot, carrying over the previous one's chains and
+  /// units where nothing changed. @p tracks and @p next_id come in describing
+  /// the last publication and leave describing this one.
+  std::shared_ptr<PartFxSnapshot> build_snapshot(UnitTracks& tracks, uint64_t& next_id);
+  /// The chain for @p request: the previous snapshot's when it asked for the same.
+  std::shared_ptr<const PartChainRuntime> realize_chain(
+      int part, std::vector<std::pair<std::string, std::string>> request,
+      const PartFxSnapshot* previous) const;
+  /// Whether @p track still describes what building unit @p unit would give.
+  bool unit_track_current(const UnitTrack& track, size_t unit) const noexcept;
   /// Resolve unit 0's EFX CONTROL 1/2 onto @p out's unit 0, which must already
-  /// be built.
-  void build_controls(PartFxSnapshot& out) const;
+  /// be built. A carried-over unit's destinations are re-applied on the next
+  /// settle, since they hold whatever was last applied rather than the base.
+  void build_controls(PartFxSnapshot& out, bool carried_over) const;
   /// Retain the realtime-safe subset of a realised unit's binding rows, so a
   /// candidate-less overlay delta can edit it in place.
   void build_legacy_plan(Sf2EfxUnitRt& unit, size_t unit_index, const GsEfx& efx) const;
@@ -392,6 +454,11 @@ class PartFxStage {
   /// Compute the current topology tail without allocating. The processor
   /// tails are read on the audio thread after an in-place update.
   int actual_tail_samples(const PartFxSnapshot& snapshot) const noexcept;
+  /// The tail a publish declares, from the tails recorded when each chain and
+  /// unit was built: a carried-over processor may be running on the audio
+  /// thread, so the CONTROL thread does not ask it.
+  static int declared_tail_samples(const PartFxSnapshot& snapshot,
+                                   const UnitTracks& tracks) noexcept;
   /// Raise the active graph's observed bound; this intentionally never lowers
   /// it while the same snapshot remains active.
   void raise_active_tail(const PartFxSnapshot& snapshot) noexcept;
@@ -413,6 +480,12 @@ class PartFxStage {
   /// 16 units x stereo x kPartFxChunkFrames.
   std::vector<float> unit_bus_;
   uint32_t generation_ = 0;
+  /// What each unit of the last publication reflects, and the last runtime id issued.
+  UnitTracks unit_tracks_{};
+  uint64_t next_runtime_id_ = 0;
+  /// Raised to stop a publish carrying chains or units over.
+  uint64_t chain_epoch_ = 0;
+  uint64_t unit_epoch_ = 0;
   /// Held by unique_ptr because RtPublisher and the atomics are not movable
   /// while the stage is.
   std::unique_ptr<rt::RtPublisher<PartFxSnapshot>> pub_ =

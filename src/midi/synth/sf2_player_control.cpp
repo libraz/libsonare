@@ -1143,7 +1143,7 @@ void Sf2Player::apply_prepared_efx_controls() noexcept {
   if (snapshot == nullptr || !snapshot->unit_fed[0] || snapshot->gs_efx_state[0].type != efx.type) {
     return;
   }
-  apply_controls(snapshot->units[0].legacy_controls, snapshot->units[0].stages);
+  apply_controls(snapshot->unit(0).legacy_controls, snapshot->unit(0).stages);
   raise_prepared_fx_tail();
 }
 
@@ -1374,7 +1374,8 @@ int Sf2Player::gs_efx_control_byte(size_t control) const noexcept {
   const PartFxSnapshot* snapshot = part_fx_.current();
   if (snapshot == nullptr || control >= snapshot->controls.size()) return -1;
   const Sf2EfxControlRt& c = snapshot->controls[control];
-  return c.n_dest == 0 ? -1 : c.applied_byte;
+  const bool live = c.source != 0 && c.source <= kEfxSourceBend;
+  return c.n_dest == 0 || !live ? -1 : c.applied_byte;
 }
 
 void Sf2Player::on_control_sysex(const uint8_t* data, size_t size) noexcept {
@@ -1485,7 +1486,10 @@ void Sf2Player::on_control_sysex(const uint8_t* data, size_t size) noexcept {
       }
       if (rebuilt) {
         // A non-RT custom processor uses the direct full-snapshot publication.
+        // Adopting it drops the overlay, so no unit may come back holding the
+        // state it froze with while overridden.
         try {
+          part_fx_.discard_unit_runtimes();
           realize_gs_efx();
         } catch (...) {
           restore_direct_mirror();
@@ -1505,6 +1509,7 @@ void Sf2Player::on_control_sysex(const uint8_t* data, size_t size) noexcept {
     if (!queued && prepared_ok) {
       // A node that could not be queued falls back to the full-snapshot publication.
       try {
+        part_fx_.discard_unit_runtimes();
         realize_gs_efx();
         for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
           if ((affected_units & (uint32_t{1} << unit)) != 0)
@@ -1730,7 +1735,7 @@ void Sf2Player::record_render_path() {
     const bool fed = overlay ? prepared_unit_fed_[u] : snapshot != nullptr && snapshot->unit_fed[u];
     if (!fed) continue;
     const Sf2EfxUnitRt* unit_rt = overrides[u];
-    if (unit_rt == nullptr && snapshot != nullptr) unit_rt = &snapshot->units[u];
+    if (unit_rt == nullptr && snapshot != nullptr) unit_rt = &snapshot->unit(u);
     if (unit_rt == nullptr) continue;
     RenderPathUnit out;
     out.unit = static_cast<uint8_t>(u);
