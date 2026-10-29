@@ -1731,6 +1731,15 @@ if(BUILD_WASM)
       TARGET_DIRECTORY sonare_voice_changer
       PROPERTIES COMPILE_OPTIONS -fexceptions)
   endif()
+  # Keep the compute core and realtime block processing at Release -O3 while
+  # compiling the remaining JS/WASM glue for size. With emsdk 6.0.10 this saves
+  # about 529 kB raw / 98 kB gzip in the full module and 89 kB / 15 kB in analysis.
+  set(_sonare_wasm_glue_sources "${SONARE_WASM_BINDING_SOURCES}")
+  list(FILTER _sonare_wasm_glue_sources INCLUDE REGEX "^wasm/")
+  list(FILTER _sonare_wasm_glue_sources EXCLUDE REGEX "^wasm/bindings/realtime/processing\\.cpp$")
+  set_property(SOURCE ${_sonare_wasm_glue_sources}
+    TARGET_DIRECTORY sonare APPEND PROPERTY COMPILE_OPTIONS
+    "$<$<CONFIG:Release>:-Oz>")
   target_link_options(sonare PRIVATE
     -msimd128
     # Optimize the linked module for size. The DSP objects are already compiled
