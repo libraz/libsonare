@@ -76,10 +76,11 @@ Audio render_percussive_events(const Audio& audio, const std::vector<PercussiveE
 
   bool all_identity = true;
   for (const PercussiveEvent& event : events) {
-    SONARE_CHECK(
-        event.onset_sample >= 0 && event.length_samples() > 0 && event.offset_sample <= n_samples,
-        ErrorCode::InvalidParameter);
+    SONARE_CHECK(event.onset_sample >= 0 && event.offset_sample > event.onset_sample &&
+                     event.offset_sample <= n_samples,
+                 ErrorCode::InvalidParameter);
     SONARE_CHECK(std::isfinite(event.edit.gain_db), ErrorCode::InvalidParameter);
+    SONARE_CHECK(std::isfinite(db_to_linear(event.edit.gain_db)), ErrorCode::InvalidParameter);
     all_identity = all_identity && event.edit.is_identity();
   }
   check_disjoint_spans(events);
@@ -87,6 +88,7 @@ Audio render_percussive_events(const Audio& audio, const std::vector<PercussiveE
   // Nothing to lift: the source passes through unchanged, bit for bit, and no
   // separation runs at all.
   if (all_identity) {
+    SONARE_CHECK(numeric::all_finite(audio.data(), audio.size()), ErrorCode::InvalidParameter);
     return Audio::from_buffer(audio.data(), audio.size(), audio.sample_rate());
   }
 
@@ -123,6 +125,7 @@ Audio render_percussive_events(const Audio& audio, const std::vector<PercussiveE
     }
   }
 
+  SONARE_CHECK(numeric::all_finite(output.data(), output.size()), ErrorCode::InvalidParameter);
   return Audio::from_vector(std::move(output), sample_rate);
 }
 

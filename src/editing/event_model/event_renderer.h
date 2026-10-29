@@ -48,8 +48,9 @@ struct PercussiveEventRenderConfig {
 ///          is unrenderable whether or not this call would touch it.
 /// @throws SonareException(InvalidParameter) on empty audio, an event whose span
 ///         is empty, reversed or outside the audio, overlapping source spans, a
-///         non-finite gain, a framing that breaks constant overlap-add, or a
-///         non-finite or non-positive @c fade_ms. The framing is checked even
+///         gain that is non-finite in dB or once converted to linear, non-finite
+///         source samples, a rendered sample that overflows, a framing that breaks constant
+///         overlap-add, or a non-finite or non-positive @c fade_ms. The framing is checked even
 ///         when every edit is the identity and no separation runs, so an
 ///         unusable config is an error on every set rather than on some of them.
 Audio render_percussive_events(const Audio& audio, const std::vector<PercussiveEvent>& events,

@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <iterator>
 #include <vector>
 
 #include "util/exception.h"
@@ -12,6 +14,11 @@
 #include "util/math_utils.h"
 
 namespace sonare {
+namespace {
+
+constexpr std::size_t kMaxMaterializedMuEdges = 65536;
+
+}  // namespace
 
 std::vector<float> mu_compress(const float* x, std::size_t n, int mu, bool quantize) {
   if (n > 0 && x == nullptr) {
@@ -38,21 +45,43 @@ std::vector<float> mu_compress(const float* x, std::size_t n, int mu, bool quant
   if (!quantize) return y;
 
   // librosa: np.digitize(x, np.linspace(-1, 1, num=1+mu, endpoint=True), right=True) - (mu+1)//2
-  // linspace(-1, 1, num=1+mu) has mu+1 points, step = 2/mu.
-  // np.digitize right=True returns the index of the first bin edge strictly
-  // greater than x (using inclusive right boundaries). With monotonically
-  // increasing edges, this is equivalent to lower_bound on edges with x.
-  const int n_edges = 1 + mu;
-  std::vector<float> edges(static_cast<std::size_t>(n_edges));
-  for (int k = 0; k < n_edges; ++k) {
-    edges[static_cast<std::size_t>(k)] =
-        -1.0f + 2.0f * static_cast<float>(k) / static_cast<float>(mu);
+  // np.digitize right=True selects the first edge greater than or equal to x.
+  // Materialize the edge table only when the input outnumbers it and it is
+  // bounded; otherwise binary-search the same edge expression in place.
+  const std::size_t edge_count = static_cast<std::size_t>(mu) + 1;
+  const std::size_t offset = (static_cast<std::size_t>(mu) + 1) / 2;
+  const auto edge_at = [mu_f](std::size_t k) {
+    return -1.0f + 2.0f * static_cast<float>(k) / mu_f;
+  };
+
+  if (edge_count <= n && edge_count <= kMaxMaterializedMuEdges) {
+    std::vector<float> edges(edge_count);
+    for (std::size_t k = 0; k < edge_count; ++k) edges[k] = edge_at(k);
+
+    for (float& value : y) {
+      const auto edge = std::lower_bound(edges.begin(), edges.end(), value);
+      const auto index = static_cast<std::size_t>(std::distance(edges.begin(), edge));
+      const auto code = static_cast<std::int64_t>(index) - static_cast<std::int64_t>(offset);
+      value = static_cast<float>(code);
+    }
+    return y;
   }
-  const int offset = (mu + 1) / 2;
-  for (std::size_t i = 0; i < n; ++i) {
-    auto it = std::lower_bound(edges.begin(), edges.end(), y[i]);
-    int idx = static_cast<int>(std::distance(edges.begin(), it));
-    y[i] = static_cast<float>(idx - offset);
+
+  for (float& value : y) {
+    std::size_t first = 0;
+    std::size_t count = edge_count;
+    while (count > 0) {
+      const std::size_t step = count / 2;
+      const std::size_t middle = first + step;
+      if (edge_at(middle) < value) {
+        first = middle + 1;
+        count -= step + 1;
+      } else {
+        count = step;
+      }
+    }
+    const auto code = static_cast<std::int64_t>(first) - static_cast<std::int64_t>(offset);
+    value = static_cast<float>(code);
   }
   return y;
 }
@@ -109,7 +138,7 @@ std::vector<float> lpc(const float* y, std::size_t n, int order) {
   if (n > 0 && y == nullptr) {
     throw SonareException(ErrorCode::InvalidParameter, "lpc: null input with non-zero length");
   }
-  if (n < static_cast<std::size_t>(order + 1)) {
+  if (n <= static_cast<std::size_t>(order)) {
     throw SonareException(ErrorCode::InvalidParameter, "lpc: input length must exceed order");
   }
 
