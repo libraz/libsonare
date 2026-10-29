@@ -37,7 +37,8 @@ namespace sonare {
 template <typename Key, typename Value, typename Hash = std::hash<Key>>
 class LruCache {
  public:
-  /// @param capacity Maximum number of entries retained before eviction.
+  /// @param capacity Maximum number of entries retained before eviction. A
+  /// zero capacity disables retention while still building and returning values.
   explicit LruCache(std::size_t capacity) : capacity_(capacity) {}
 
   /// @brief Returns the value for @p key, building it via @p build on a miss.
@@ -47,6 +48,8 @@ class LruCache {
   /// thread evicts the entry immediately afterward.
   template <typename Build>
   Value get_or_build(const Key& key, Build&& build) {
+    if (capacity_ == 0) return std::forward<Build>(build)();
+
     {
       std::lock_guard<std::mutex> lock(mutex_);
       if (const Value* hit = touch_locked(key)) return *hit;
@@ -69,6 +72,7 @@ class LruCache {
   template <typename Build>
   Value get_or_build_value(const Key& key, Build&& build) {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (capacity_ == 0) return build();
     if (const Value* hit = touch_locked(key)) return *hit;
     return insert_locked(key, build());
   }
