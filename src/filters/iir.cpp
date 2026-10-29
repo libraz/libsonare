@@ -11,6 +11,8 @@
 
 namespace sonare {
 
+using sonare::constants::kButterworth4QHigh;
+using sonare::constants::kButterworth4QLow;
 using sonare::constants::kTwoPi;
 namespace {
 
@@ -47,9 +49,6 @@ BiquadZi lfilter_zi(const BiquadCoeffs& c) {
   zi.z2 = ((1.0f + c.a1) * b1 - c.a2 * b0) / det;
   return zi;
 }
-
-constexpr float kQ1 = 0.5411961f;  // 1/(2*cos(pi/8))
-constexpr float kQ2 = 1.3065630f;  // 1/(2*cos(3*pi/8))
 
 /// @brief Applies a DF2T biquad with explicit initial delay states.
 std::vector<float> apply_biquad_zi(const float* input, size_t size, const BiquadCoeffs& coeffs,
@@ -149,8 +148,8 @@ CascadedBiquad highpass_coeffs_4th(float cutoff_hz, int sr) {
   CascadedBiquad cascade;
   cascade.sections.resize(2);
   const float w0 = normalized_omega(cutoff_hz, sr);
-  cascade.sections[0] = to_filter_coeffs(rt::rbj_highpass(w0, kQ1));
-  cascade.sections[1] = to_filter_coeffs(rt::rbj_highpass(w0, kQ2));
+  cascade.sections[0] = to_filter_coeffs(rt::rbj_highpass(w0, kButterworth4QLow));
+  cascade.sections[1] = to_filter_coeffs(rt::rbj_highpass(w0, kButterworth4QHigh));
 
   return cascade;
 }
@@ -162,8 +161,8 @@ CascadedBiquad lowpass_coeffs_4th(float cutoff_hz, int sr) {
   CascadedBiquad cascade;
   cascade.sections.resize(2);
   const float w0 = normalized_omega(cutoff_hz, sr);
-  cascade.sections[0] = to_filter_coeffs(rt::rbj_lowpass(w0, kQ1));
-  cascade.sections[1] = to_filter_coeffs(rt::rbj_lowpass(w0, kQ2));
+  cascade.sections[0] = to_filter_coeffs(rt::rbj_lowpass(w0, kButterworth4QLow));
+  cascade.sections[1] = to_filter_coeffs(rt::rbj_lowpass(w0, kButterworth4QHigh));
 
   return cascade;
 }

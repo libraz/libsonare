@@ -449,7 +449,7 @@ bool fixed_period_loop_is_exact(const Project& project, const EditClip& clip, do
     bpm = segment.bpm;
   }
   // Same samples-per-quarter expression as the tempo map's.
-  const double period = loop_ppq * (project.sample_rate() * 60.0 / bpm);
+  const double period = loop_ppq * (project.sample_rate() * constants::kSecondsPerMinute / bpm);
   return static_cast<double>(period_samples) == period;
 }
 
