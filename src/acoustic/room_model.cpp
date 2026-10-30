@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 #include <string>
+#include <utility>
 
 #include "util/exception.h"
 
@@ -415,15 +416,19 @@ bool point_inside_mesh(const std::vector<Triangle>& faces, const Vec3& p) noexce
   return (crossings & 1) != 0;
 }
 
-std::vector<Diagnostic> validate_shoebox(const ShoeboxRoom& room, const SourceListener& placement) {
+std::vector<Diagnostic> validate_shoebox(const ShoeboxRoom& room, const SourceListener& placement,
+                                         const ShoeboxFieldNames& names) {
   std::vector<Diagnostic> diags;
-  const bool dims_ok = finite_bounded(room.dims.length) && finite_bounded(room.dims.width) &&
-                       finite_bounded(room.dims.height);
-  if (!dims_ok) {
-    diags.push_back({Diagnostic::Severity::Error, "acoustic.invalid_dimensions",
-                     "shoebox dimensions must be finite, positive and within bounds"});
-    return diags;  // further placement checks are meaningless
+  const std::pair<float, const char*> dims[] = {{room.dims.length, names.length},
+                                                {room.dims.width, names.width},
+                                                {room.dims.height, names.height}};
+  for (const auto& [value, name] : dims) {
+    if (!finite_bounded(value)) {
+      diags.push_back({Diagnostic::Severity::Error, "acoustic.invalid_dimensions",
+                       std::string(name) + " must be finite, positive and within bounds"});
+    }
   }
+  if (!diags.empty()) return diags;  // further placement checks are meaningless
   if (!point_inside_shoebox(room, placement.source)) {
     diags.push_back({Diagnostic::Severity::Error, "acoustic.source_outside_room",
                      "source position lies outside the room"});

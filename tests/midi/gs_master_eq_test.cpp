@@ -394,6 +394,30 @@ TEST_CASE("a part switched out of the master EQ is untouched by every EQ setting
   }
 }
 
+TEST_CASE("a master EQ shelf coming back from flat starts from zero state", "[midi][synth][gs]") {
+  for (const bool low : {true, false}) {
+    sonare::midi::synth::GsMasterEqFilter filter;
+    filter.prepare(kOutRate);
+    GsMasterEq shelf;
+    (low ? shelf.low_gain : shelf.high_gain) = 0x4C;
+    filter.set(shelf);
+    std::vector<float> left(256, 0.8f), right(256, -0.8f);
+    filter.process(left.data(), right.data(), 256);
+    filter.set(GsMasterEq{});
+    filter.process(left.data(), right.data(), 256);
+
+    filter.set(shelf);
+    std::vector<float> silence_l(64, 0.0f), silence_r(64, 0.0f);
+    filter.process(silence_l.data(), silence_r.data(), 64);
+    // With no input and no remembered state the shelf has nothing to ring.
+    for (size_t i = 0; i < silence_l.size(); ++i) {
+      INFO((low ? "low" : "high") << " sample " << i);
+      CHECK(silence_l[i] == 0.0f);
+      CHECK(silence_r[i] == 0.0f);
+    }
+  }
+}
+
 TEST_CASE("each master EQ band moves its own end of the spectrum", "[midi][synth][gs]") {
   const std::array<double, 4> flat = tone_powers(render_tones(EqPoint{}, kToneSamples));
   for (const EqPoint& point : eq_grid()) {

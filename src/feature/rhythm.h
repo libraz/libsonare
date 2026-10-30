@@ -51,6 +51,10 @@ struct TempogramConfig {
 /// @return Tempogram matrix [win_length x n_frames], row-major.
 ///         Row i, frame j is the autocorrelation value at lag i for the window
 ///         centered on frame j of the onset envelope.
+///         With center=false frame j covers env[j : j + win_length] and
+///         n_frames = len - win_length + 1, as librosa frames it; an envelope
+///         shorter than win_length throws InvalidParameter. The same holds for
+///         fourier_tempogram and cyclic_tempogram.
 std::vector<float> tempogram(const std::vector<float>& onset_envelope, int sr,
                              const TempogramConfig& config = TempogramConfig());
 

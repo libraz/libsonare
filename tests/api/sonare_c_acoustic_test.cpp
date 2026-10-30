@@ -111,7 +111,7 @@ TEST_CASE("sonare acoustic C API publishes RIR geometry diagnostics", "[c_api][a
   REQUIRE(result.length == 0);
   const std::string detail = sonare_last_error_message();
   REQUIRE(detail.find("acoustic.invalid_dimensions") != std::string::npos);
-  REQUIRE(detail.find("shoebox dimensions") != std::string::npos);
+  REQUIRE(detail.find("length_m must be finite, positive and within bounds") != std::string::npos);
 
   sonare_free_rir_synth_result(&result);
 }

@@ -956,6 +956,10 @@ void Sf2Player::apply_nrpn(uint8_t channel, uint8_t value) noexcept {
   }
 }
 
+void Sf2Player::reset_drum_map_on_set_change(const ChannelState& st, uint8_t program) noexcept {
+  if (st.is_drum() && st.program != program) drum_params_[st.drum_map_slot()] = {};
+}
+
 void Sf2Player::reset_controllers(uint8_t channel) noexcept {
   // MIDI RP-015: reset performance controllers, keep program/bank/volume/pan.
   const uint8_t ch = channel & 0x0Fu;
@@ -1323,6 +1327,7 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
         note_off(ch, ev.note, event.source_track_id);
         break;
       case ChannelVoiceKind::ProgramChange:
+        reset_drum_map_on_set_change(channels_[ch], ev.program);
         channels_[ch].program = ev.program;
         // A MIDI 2.0 program change carries the bank inside itself, so the two
         // bank-select switches decide these fields as they decide CC0 and CC32:

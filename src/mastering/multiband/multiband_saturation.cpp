@@ -74,7 +74,7 @@ MultibandSaturation::MultibandSaturation(MultibandSaturationConfig config)
     : config_(std::move(config)), crossover_(config_.crossover) {
   validate_config(config_);
   rebuild_processors();
-  rebuild_band_compensation();
+  rebuild_band_compensation(max_working_channels_);
 }
 
 MultibandSaturation::~MultibandSaturation() = default;
@@ -86,25 +86,16 @@ void MultibandSaturation::prepare(double sample_rate, int max_block_size) {
 }
 
 void MultibandSaturation::prepare(double sample_rate, int max_block_size, int max_channels) {
-  validate_prepare_args(sample_rate, max_block_size, max_channels, "MultibandSaturation");
-
-  sample_rate_ = sample_rate;
-  max_block_size_ = max_block_size;
-  max_working_channels_ = max_channels;
-  prepared_ = true;
-  crossover_.prepare(sample_rate_, max_block_size_, max_working_channels_);
-  // Size the caller-owned split buffers to the effective bound. Crossover
-  // scratch accepts at least this many channels, so the process path can reject
-  // an oversized block rather than growing scratch on the audio thread.
-  crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
-  dry_scratch_.assign(static_cast<size_t>(max_working_channels_),
-                      std::vector<float>(static_cast<size_t>(max_block_size_), 0.0f));
-  for (auto& processor : processors_) {
-    processor->prepare(sample_rate_, max_block_size_, max_working_channels_);
-  }
-  // Derived after the sub-processors are prepared, since a stage's latency may
-  // depend on its prepared state.
-  rebuild_band_compensation();
+  prepare_multiband("MultibandSaturation", crossover_, scratch_, sample_rate, max_block_size,
+                    max_channels, sample_rate_, max_block_size_, max_working_channels_, prepared_,
+                    [this](double rate, int block, int channels) {
+                      dry_scratch_.assign(static_cast<size_t>(channels),
+                                          std::vector<float>(static_cast<size_t>(block), 0.0f));
+                      for (auto& processor : processors_) processor->prepare(rate, block, channels);
+                      // Derived after the sub-processors are prepared, since a stage's latency
+                      // may depend on its prepared state.
+                      rebuild_band_compensation(channels);
+                    });
   reset();
 }
 
@@ -238,7 +229,7 @@ void MultibandSaturation::set_config(const MultibandSaturationConfig& config) {
           }
         }
         // A band's type sets its delay; unchanged latencies keep their lines.
-        if (rebuild_compensation) rebuild_band_compensation();
+        if (rebuild_compensation) rebuild_band_compensation(max_working_channels_);
       });
 }
 
@@ -332,11 +323,11 @@ int MultibandSaturation::band_latency_q8(size_t band) const noexcept {
   return processors_[band]->latency_samples_q8();
 }
 
-void MultibandSaturation::rebuild_band_compensation() {
+void MultibandSaturation::rebuild_band_compensation(int channels) {
   std::vector<int> latencies(processors_.size());
   for (size_t band = 0; band < processors_.size(); ++band) latencies[band] = band_latency_q8(band);
   band_paths_.set_path_latencies_q8(std::move(latencies));
-  band_paths_.ensure_channels(static_cast<size_t>(max_working_channels_));
+  band_paths_.ensure_channels(static_cast<size_t>(channels));
   blend_paths_.resize(processors_.size());
   for (size_t band = 0; band < processors_.size(); ++band) {
     auto& blend = blend_paths_[band];
@@ -345,7 +336,7 @@ void MultibandSaturation::rebuild_band_compensation() {
       continue;
     }
     blend.set_path_latencies_q8({0, processors_[band]->latency_samples_q8()});
-    blend.ensure_channels(static_cast<size_t>(max_working_channels_));
+    blend.ensure_channels(static_cast<size_t>(channels));
   }
 }
 

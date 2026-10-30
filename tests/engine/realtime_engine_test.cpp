@@ -1093,6 +1093,54 @@ TEST_CASE("RealtimeEngine applies automation at sub-block boundaries", "[engine]
   REQUIRE(processor.values[1] == 0.5f);
 }
 
+/// Value a lane drove into the processor at each frame of a ramp rendered in @p block frames.
+std::vector<float> render_ramp_series(int block, int total) {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 480);
+  CaptureProcessor processor(&engine.transport());
+  sonare::automation::AutomationLane lane(7);
+  lane.set_points({{0.0, 0.0f, sonare::automation::CurveType::Linear},
+                   {4000.0 / 24000.0, 1.0f, sonare::automation::CurveType::Linear}});
+  engine.automation().set_lanes({lane});
+  engine.automation().bind_target(7, &processor);
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  std::vector<float> scratch(static_cast<size_t>(block));
+  float* io[] = {scratch.data()};
+  for (int done = 0; done < total; done += block) engine.process(io, 1, block);
+
+  std::vector<float> series(static_cast<size_t>(total), 0.0f);
+  int next = 0;
+  float held = 0.0f;
+  for (int frame = 0; frame < total; ++frame) {
+    while (next < processor.count && processor.render_frames[static_cast<size_t>(next)] <= frame) {
+      held = processor.values[static_cast<size_t>(next)];
+      ++next;
+    }
+    series[static_cast<size_t>(frame)] = held;
+  }
+  return series;
+}
+
+TEST_CASE("RealtimeEngine automation output does not depend on the host block size",
+          "[engine][realtime]") {
+  constexpr int kTotal = 1920;
+  const std::vector<float> reference = render_ramp_series(128, kTotal);
+  REQUIRE(reference[kTotal - 1] > 0.3f);
+  for (const int block : {480, 160, 100, 64}) {
+    const std::vector<float> series = render_ramp_series(block, kTotal);
+    for (int frame = 0; frame < kTotal; ++frame) {
+      INFO("block " << block << " frame " << frame);
+      REQUIRE(series[static_cast<size_t>(frame)] ==
+              Catch::Approx(reference[static_cast<size_t>(frame)]).margin(1.0e-6));
+    }
+  }
+}
+
 TEST_CASE("RealtimeEngine reapplies automation after every loop wrap in one block",
           "[engine][realtime]") {
   constexpr double kSampleRate = 48000.0;

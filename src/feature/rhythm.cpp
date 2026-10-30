@@ -43,6 +43,19 @@ std::vector<float> pad_envelope_constant(const std::vector<float>& env, int pad,
   return padded;
 }
 
+/// @brief Frames a tempogram of @p env_size onset frames holds: one per envelope frame when
+///        centered, else one per full window (librosa framing, hop 1).
+int tempogram_frame_count(std::size_t env_size, int win, bool center, const char* name) {
+  if (center) return static_cast<int>(env_size);
+  if (env_size < static_cast<std::size_t>(win)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(name) +
+                              ": onset envelope is shorter than win_length with "
+                              "center disabled");
+  }
+  return static_cast<int>(env_size) - win + 1;
+}
+
 /// @brief Complex Fourier tempogram: STFT of the onset envelope at hop 1.
 /// @details Shared front-end for fourier_tempogram() (which keeps only the
 ///          magnitude) and plp() (which needs the phase to lock the pulse onto
@@ -54,7 +67,8 @@ std::vector<std::complex<float>> fourier_tempogram_complex(const std::vector<flo
   const int n_bins = win / 2 + 1;
   const int half = win / 2;
   const auto padded = pad_envelope_constant(onset_envelope, half, config.center);
-  const int n_frames = static_cast<int>(onset_envelope.size());
+  const int n_frames =
+      tempogram_frame_count(onset_envelope.size(), win, config.center, "fourier_tempogram");
   const auto window = create_window(config.window, win);
 
   // Use kissfft via core/fft.h.
@@ -65,7 +79,7 @@ std::vector<std::complex<float>> fourier_tempogram_complex(const std::vector<flo
   std::vector<float> buf(win);
   std::vector<std::complex<float>> out(n_bins);
   for (int t = 0; t < n_frames; ++t) {
-    const int start = config.center ? t : std::max(0, t - half);
+    const int start = t;
     for (int i = 0; i < win; ++i) {
       const int idx = start + i;
       const float v = (idx >= 0 && idx < static_cast<int>(padded.size())) ? padded[idx] : 0.0f;
@@ -105,7 +119,8 @@ std::vector<float> tempogram(const std::vector<float>& onset_envelope, int sr,
   const int win = config.win_length;
   const int half = win / 2;
   const auto padded = pad_envelope_linear_ramp(onset_envelope, half, config.center);
-  const int n_frames = static_cast<int>(onset_envelope.size());
+  const int n_frames =
+      tempogram_frame_count(onset_envelope.size(), win, config.center, "tempogram");
   const auto window = create_window(config.window, win);
 
   std::vector<float> tg(static_cast<std::size_t>(win) * static_cast<std::size_t>(n_frames), 0.0f);
@@ -113,7 +128,7 @@ std::vector<float> tempogram(const std::vector<float>& onset_envelope, int sr,
   std::vector<double> frame(win);
   std::vector<double> ac(win, 0.0);
   for (int t = 0; t < n_frames; ++t) {
-    const int start = config.center ? t : std::max(0, t - half);
+    const int start = t;
     // Copy windowed onset slice.
     for (int i = 0; i < win; ++i) {
       const int idx = start + i;
@@ -223,8 +238,8 @@ std::vector<float> cyclic_tempogram(const std::vector<float>& onset_envelope, in
   // per-class normalization). librosa resamples onto a log-tempo axis instead,
   // so absolute values and bin alignment differ. See header @warning.
   const std::vector<float> ft = fourier_tempogram(onset_envelope, sr, config);
-  const int n_frames = static_cast<int>(onset_envelope.size());
   const int fourier_bins = config.win_length / 2 + 1;
+  const int n_frames = static_cast<int>(ft.size() / static_cast<std::size_t>(fourier_bins));
   std::vector<float> cyclic(static_cast<std::size_t>(n_bins) * static_cast<std::size_t>(n_frames),
                             0.0f);
 

@@ -1,7 +1,6 @@
 #include <limits>
 
 #include "c_api/features_internal.h"
-#include "util/zero_is_default.h"
 
 namespace {
 
@@ -10,10 +9,9 @@ MelConfig make_mel_config(int n_fft, int hop_length, int n_mels, float fmin, flo
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   config.n_mels = n_mels;
-  // 0.0 keeps the librosa default (fmin 0, fmax sr/2); the Mel core swaps its
-  // own default in for a negative or non-finite bound instead of reporting it.
-  config.fmin = sonare::ZeroIsDefault(fmin).checked_non_negative(config.fmin, "fmin");
-  config.fmax = sonare::ZeroIsDefault(fmax).checked_non_negative(config.fmax, "fmax");
+  validate_mel_bounds(fmin, fmax);
+  config.fmin = fmin;
+  config.fmax = fmax;
   config.htk = htk != 0;
   return config;
 }

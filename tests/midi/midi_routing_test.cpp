@@ -1836,6 +1836,34 @@ TEST_CASE("MidiCapture quantize preserves note length", "[midi]") {
   REQUIRE(events[1].ppq < 0.61);
 }
 
+TEST_CASE("MidiCapture gives a note that lands on one position a minimum length", "[midi]") {
+  for (const bool quantize : {false, true}) {
+    TempoMap map;
+    configure_tempo_map(&map, 120.0);
+    MidiCapture capture;
+    capture.prepare(&map, 64);
+    capture.push(note_on_event(12000, 0, 2, 67));
+    MidiEvent off;
+    off.render_frame = 12000;
+    off.ump = make_midi1_note_off(0, 2, 67, 0);
+    capture.push(off);
+
+    MidiClip clip;
+    sonare::midi::CaptureConfig cfg;
+    cfg.quantize.enabled = quantize;
+    cfg.quantize.grid_ppq = 0.25;
+    cfg.quantize.strength = 1.0;
+    REQUIRE(capture.drain(cfg, &clip) == 2);
+    INFO("quantize " << quantize);
+    const auto& events = clip.events();
+    REQUIRE(events.size() == 2);
+    REQUIRE(events[0].ump.is_note_on());
+    REQUIRE(events[1].ump.is_note_off());
+    REQUIRE(events[1].ppq > events[0].ppq);
+    REQUIRE(clip.validate_note_pairs().ok);
+  }
+}
+
 TEST_CASE("MidiCapture keeps note length when a groove pulls a note-on before zero", "[midi]") {
   // The groove moves the note-on's grid line to -0.125 PPQ, which clamps to 0;
   // the note-off must take the same 0.025 PPQ shift the note-on really got.

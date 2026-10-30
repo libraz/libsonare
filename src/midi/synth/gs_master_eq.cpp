@@ -42,18 +42,27 @@ void GsMasterEqFilter::prepare(double sample_rate) noexcept {
 void GsMasterEqFilter::set(const GsMasterEq& eq) noexcept {
   const float low_db = gs_eq_gain_db(eq.low_gain);
   const float high_db = gs_eq_gain_db(eq.high_gain);
+  // A shelf coming back from flat starts from zero state, not from what it held when it left.
+  const bool low_was_active = low_active_;
+  const bool high_was_active = high_active_;
   low_active_ = low_db != 0.0f;
   high_active_ = high_db != 0.0f;
   if (low_active_) {
     const rt::BiquadCoeffs c = rt::rbj_low_shelf(
         rt::frequency_to_w0(gs_eq_low_freq_hz(eq.low_freq), sample_rate_), kButterworthQ, low_db);
-    for (rt::BiquadState& state : low_) state.set(c);
+    for (rt::BiquadState& state : low_) {
+      if (!low_was_active) state.reset();
+      state.set(c);
+    }
   }
   if (high_active_) {
     const rt::BiquadCoeffs c =
         rt::rbj_high_shelf(rt::frequency_to_w0(gs_eq_high_freq_hz(eq.high_freq), sample_rate_),
                            kButterworthQ, high_db);
-    for (rt::BiquadState& state : high_) state.set(c);
+    for (rt::BiquadState& state : high_) {
+      if (!high_was_active) state.reset();
+      state.set(c);
+    }
   }
 }
 

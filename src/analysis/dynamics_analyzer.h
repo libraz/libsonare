@@ -6,6 +6,8 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -31,6 +33,19 @@ struct DynamicsConfig {
   int hop_length = 512;                ///< Hop length for loudness curve
   float compression_threshold = 6.0f;  ///< Dynamic range below this suggests compression
 };
+
+/// @brief Refuses a DynamicsConfig outside the argument domain every public surface shares.
+/// @throws SonareException(InvalidParameter) unless window_sec is finite and positive, hop_length
+///         is positive, and compression_threshold is finite and non-negative.
+inline void validate_dynamics_config(const DynamicsConfig& config) {
+  SONARE_CHECK_MSG(numeric::finite_positive(config.window_sec), ErrorCode::InvalidParameter,
+                   "DynamicsConfig: window_sec must be finite and positive");
+  SONARE_CHECK_MSG(config.hop_length > 0, ErrorCode::InvalidParameter,
+                   "DynamicsConfig: hop_length must be positive");
+  SONARE_CHECK_MSG(numeric::finite_non_negative(config.compression_threshold),
+                   ErrorCode::InvalidParameter,
+                   "DynamicsConfig: compression_threshold must be finite and non-negative");
+}
 
 /// @brief Dynamics analyzer for loudness and dynamic range.
 class DynamicsAnalyzer {

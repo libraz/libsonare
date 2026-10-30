@@ -168,21 +168,13 @@ TEST_CASE("Dub echo decays faster than echo at equal feedback", "[voice_space]")
   REQUIRE(level[1] < 0.5 * level[0]);
 }
 
-TEST_CASE("Reverb variation matches StreamingReverb alone", "[voice_space]") {
+TEST_CASE("Reverb variation passes through the space stage", "[voice_space]") {
   constexpr double kSr = 48000.0;
-  const StreamingReverbConfig config = reverb_with_mix(0.3f);
-  StreamingReverb reference;
-  reference.prepare(kSr, 512);
-  reference.set_config(config);
   SpaceStage stage;
   stage.prepare(kSr);
-  stage.set_config(config, ReverbVariationConfig{});
+  stage.set_config(reverb_with_mix(0.3f), ReverbVariationConfig{});
   const auto input = noise(4000, 3u, 0.4f);
-  float worst = 0.0f;
-  for (float x : input) {
-    worst = std::max(worst, std::fabs(stage.process_sample(x) - reference.process_sample(x)));
-  }
-  REQUIRE(worst < 1e-6f);
+  for (float x : input) REQUIRE(stage.process_sample(x) == x);
 }
 
 TEST_CASE("Delays beyond 3000 ms are refused", "[voice_space]") {

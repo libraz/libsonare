@@ -69,7 +69,7 @@ class MultibandExciter : public rt::ProcessorBase {
   static void validate_config(const MultibandExciterConfig& config);
   void rebuild_processors();
   /// @brief Declares every band exciter's delay to band_paths_. Control thread.
-  void rebuild_band_compensation();
+  void rebuild_band_compensation(int channels);
 
   MultibandExciterConfig config_{};
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;

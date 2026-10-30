@@ -530,11 +530,6 @@ DeserializeResult project_from_json(const std::string& json_text) {
         }
         if (c.id > max_clip_id) max_clip_id = c.id;
         const uint32_t id = c.id;
-        if (c.gain < 0.0f) {
-          c.gain = 0.0f;
-          decode_diagnostics.warn("clip_gain_clamped", "clip " + std::to_string(id) +
-                                                           " had a negative gain; clamped to zero");
-        }
         // Clip PPQ fields are checked by enforce_edit_api_invariants() below,
         // with the rest of the edit-API value set, so one enumeration covers
         // every clip field no matter which decoder produced it.

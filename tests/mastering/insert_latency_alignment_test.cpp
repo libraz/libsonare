@@ -125,6 +125,9 @@ const std::vector<Exemption>& PeakShiftedConfigurations() {
       {"multiband.dynamicEq", "band*.dyn*.type", "3", "low-pass group delay"},
       {"multiband.dynamicEq", "band*.dyn*.type", "5", "band-pass group delay"},
       {"multiband.dynamicEq", "band*.dyn*.type", "9", "all-pass group delay"},
+      // The megaphone and radio characters band-limit the voice.
+      {"voice.changer", "characterType", "1", "megaphone band-pass group delay"},
+      {"voice.changer", "characterType", "2", "radio band-pass group delay"},
       // An LR8 crossover's steeper bands no longer sum to a single-sample peak.
       {"multiband.compressor", "slope", "2", "LR8 crossover group delay"},
       {"multiband.limiter", "slope", "2", "LR8 crossover group delay"},

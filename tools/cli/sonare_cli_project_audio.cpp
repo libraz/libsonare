@@ -500,7 +500,7 @@ int cmd_project_align_takes(const CliArgs& args) {
   const std::map<uint32_t, std::string> uris = project_audio_source_uris(document);
   const ProjectAlignDocumentFacts facts = project_align_document_facts(document);
 
-  const auto reference_source = static_cast<uint32_t>(args.get_int("reference-source", 0));
+  const uint32_t reference_source = args.get_uint32("reference-source", 0);
   if (uris.count(reference_source) == 0) {
     std::cerr << color::red << "Error: --reference-source " << reference_source << ": "
               << (facts.source_ids.count(reference_source) != 0

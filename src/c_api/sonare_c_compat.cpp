@@ -380,8 +380,10 @@ SonareError sonare_tempogram_with_mode(const float* onset_envelope, size_t lengt
   config.mode =
       mode == SONARE_TEMPOGRAM_COSINE ? TempogramMode::kCosine : TempogramMode::kAutocorrelation;
   std::vector<float> input(onset_envelope, onset_envelope + length);
-  *out_n_frames = static_cast<int>(input.size());
-  return copy_vector(tempogram(input, sample_rate, config), out, out_length);
+  const std::vector<float> result = tempogram(input, sample_rate, config);
+  // The core frames the envelope (one frame per window when not centered), so read the count back.
+  *out_n_frames = static_cast<int>(result.size() / static_cast<std::size_t>(win_length));
+  return copy_vector(result, out, out_length);
   SONARE_C_CATCH
 }
 
@@ -451,8 +453,9 @@ SonareError sonare_fourier_tempogram(const float* onset_envelope, size_t length,
   config.center = center != 0;
   config.norm = norm != 0;
   std::vector<float> input(onset_envelope, onset_envelope + length);
-  *out_n_frames = static_cast<int>(input.size());
-  return copy_vector(fourier_tempogram(input, sr, config), out, out_length);
+  const std::vector<float> result = fourier_tempogram(input, sr, config);
+  *out_n_frames = static_cast<int>(result.size() / static_cast<std::size_t>(win_length / 2 + 1));
+  return copy_vector(result, out, out_length);
   SONARE_C_CATCH
 }
 

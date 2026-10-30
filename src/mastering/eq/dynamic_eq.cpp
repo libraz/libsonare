@@ -54,11 +54,18 @@ void DynamicEq::prepare(double sample_rate, int max_block_size) {
     for (auto& channel : detector.channels) channel.prepare(max_detector_delay_samples_);
   }
   sub_channels_.assign(kRealtimePreparedChannels, nullptr);
+  sidechain_view_.assign(kRealtimePreparedChannels, nullptr);
+  control_phase_ = 0;
+  detector_sum_ = 0.0;
+  detector_count_ = 0.0;
+  band_detector_sum_.fill(0.0);
+  band_detector_count_.fill(0.0);
   prepared_ = true;
   // No band carries gain state into a new prepare; rebuild() seeds them all.
   last_applied_gain_db_.fill(0.0f);
   smoothed_gain_db_.fill(0.0f);
   target_gain_db_.fill(0.0f);
+  reading_seen_.fill(false);
   last_applied_coeff_gain_db_.fill(std::numeric_limits<float>::quiet_NaN());
   rebuild();
 }
@@ -78,11 +85,8 @@ void DynamicEq::process(float* const* channels, int num_channels, int num_sample
   }
 
   validate_sidechain(num_samples);
-  const float* const* detector_channels = sidechain_channels_ != nullptr
-                                              ? sidechain_channels_
-                                              : const_cast<const float* const*>(channels);
-  const int detector_num_channels =
-      sidechain_channels_ != nullptr ? sidechain_num_channels_ : num_channels;
+  const bool external = sidechain_channels_ != nullptr;
+  const int detector_num_channels = external ? sidechain_num_channels_ : num_channels;
   // Only enabled detectors need channel state; preflight them before metering.
   for (size_t i = 0; i < kMaxBands; ++i) {
     if (bands_[i].enabled) {
@@ -90,63 +94,111 @@ void DynamicEq::process(float* const* channels, int num_channels, int num_sample
           detector_num_channels, detectors_[i].channels.size(), "DynamicEq detector");
     }
   }
-  // A key shorter than the block reads as zero-padded; the detector still advances on silence.
-  const int readable = sidechain_channels_ != nullptr ? sidechain_num_samples_ : num_samples;
   // The host's excluded plane (an LFE) is left out of the main-input detector;
   // an external key is the caller's own choice of channels and keeps them all.
-  const int excluded =
-      sidechain_channels_ != nullptr ? -1 : detector_excluded_channel(num_channels);
-  last_detector_db_ =
-      detector_db(detector_channels, detector_num_channels, num_samples, excluded, readable);
+  const int excluded = external ? -1 : detector_excluded_channel(num_channels);
   for (size_t i = 0; i < kMaxBands; ++i) {
-    last_band_detector_db_[i] = admit_band(i)
-                                    ? band_detector_db(detector_channels, detector_num_channels,
-                                                       num_samples, excluded, i, readable)
-                                    : kFloorDb;
-  }
-  // Before the reading reaches a gain target, so a poisoned detector cannot hand
-  // a non-finite gain to a band.
-  discard_non_finite_detector_state();
-
-  // Compute each band's target gain (static + dynamic delta) once per block, then
-  // evolve the applied gain toward that target at SAMPLE rate inside the loop and
-  // refresh the biquad coefficients every kCoeffUpdateInterval samples. Disabled
-  // bands clear their EQ slot and contribute nothing.
-  const double smoothing_samples = std::max(sample_rate_ * 0.005, 1.0);
-  const float per_sample_coeff =
-      prepared_ ? static_cast<float>(1.0 - std::exp(-1.0 / smoothing_samples)) : 1.0f;
-  for (size_t i = 0; i < kMaxBands; ++i) {
-    const auto& dynamic_band = bands_[i];
-    if (!band_gates_[i].active()) {
+    if (!admit_band(i)) {
       eq_.clear_band(i);
       last_applied_gain_db_[i] = 0.0f;
       target_gain_db_[i] = 0.0f;
-      continue;
     }
-    target_gain_db_[i] =
-        dynamic_band.static_gain_db + dynamic_gain_delta(dynamic_band, last_band_detector_db_[i]);
   }
 
-  for (int offset = 0; offset < num_samples; offset += kCoeffUpdateInterval) {
-    const int chunk = std::min(kCoeffUpdateInterval, num_samples - offset);
+  // The gain glides at sample rate (closed form) toward a target refreshed once per control
+  // interval, and each kCoeffUpdateInterval block is filtered with the coefficients of the gain
+  // the glide reaches at its end. Both grids are anchored to the stream position, so a call that
+  // starts or ends mid-block changes nothing about what the block is filtered with.
+  const double smoothing_samples = std::max(sample_rate_ * 0.005, 1.0);
+  const float per_sample_coeff =
+      prepared_ ? static_cast<float>(1.0 - std::exp(-1.0 / smoothing_samples)) : 1.0f;
+  const float interval_decay =
+      std::pow(1.0f - per_sample_coeff, static_cast<float>(kCoeffUpdateInterval));
+  for (int offset = 0; offset < num_samples;) {
+    const bool interval_start = control_phase_ % kCoeffUpdateInterval == 0;
     for (size_t i = 0; i < kMaxBands; ++i) {
-      if (!band_gates_[i].active()) {
-        continue;
+      if (!band_gates_[i].active()) continue;
+      if (interval_start) {
+        smoothed_gain_db_[i] +=
+            (1.0f - interval_decay) * (target_gain_db_[i] - smoothed_gain_db_[i]);
+        apply_band_gain(i, smoothed_gain_db_[i]);
+      } else if (std::isnan(last_applied_coeff_gain_db_[i])) {
+        // A band admitted mid-block is programmed now rather than a block late.
+        apply_band_gain(i, smoothed_gain_db_[i]);
       }
-      // Advance the smoothed gain by `chunk` per-sample one-pole steps toward the
-      // target using the closed form so the sub-block update matches sample-rate
-      // smoothing exactly: g += (1 - (1-c)^chunk) * (target - g).
-      const float decay = std::pow(1.0f - per_sample_coeff, static_cast<float>(chunk));
-      smoothed_gain_db_[i] += (1.0f - decay) * (target_gain_db_[i] - smoothed_gain_db_[i]);
-      apply_band_gain(i, smoothed_gain_db_[i]);
     }
+    const int chunk = std::min(num_samples - offset,
+                               kCoeffUpdateInterval - control_phase_ % kCoeffUpdateInterval);
     for (int ch = 0; ch < num_channels; ++ch) {
       sub_channels_[static_cast<size_t>(ch)] = channels[ch] + offset;
     }
+
+    // Detect on the input before the filters overwrite it. A key shorter than the block reads as
+    // zero-padded; the detector still advances on silence.
+    const float* const* detector_channels = const_cast<const float* const*>(sub_channels_.data());
+    int readable = chunk;
+    if (external) {
+      readable = std::clamp(sidechain_num_samples_ - offset, 0, chunk);
+      for (int ch = 0; ch < sidechain_num_channels_; ++ch) {
+        sidechain_view_[static_cast<size_t>(ch)] =
+            sidechain_channels_[ch] + (readable > 0 ? offset : 0);
+      }
+      detector_channels = sidechain_view_.data();
+    }
+    double broadband = 0.0;
+    int counted = 0;
+    for (int ch = 0; ch < detector_num_channels; ++ch) {
+      if (ch == excluded) continue;
+      ++counted;
+      for (int i = 0; i < readable; ++i) {
+        const double sample = detector_channels[ch][i];
+        broadband += sample * sample;
+      }
+    }
+    detector_sum_ += broadband;
+    detector_count_ += static_cast<double>(counted) * chunk;
+    for (size_t i = 0; i < kMaxBands; ++i) {
+      if (!band_gates_[i].active()) continue;
+      accumulate_band(detector_channels, detector_num_channels, chunk, excluded, i, readable);
+    }
+
     eq_.process(sub_channels_.data(), num_channels, chunk);
+
+    offset += chunk;
+    control_phase_ = (control_phase_ + chunk) % kControlIntervalSamples;
+    if (control_phase_ == 0) settle_control();
   }
 
   clear_sidechain();
+}
+
+void DynamicEq::settle_control() {
+  last_detector_db_ =
+      linear_to_db(static_cast<float>(std::sqrt(detector_sum_ / std::max(detector_count_, 1.0))));
+  for (size_t i = 0; i < kMaxBands; ++i) {
+    last_band_detector_db_[i] =
+        band_gates_[i].active()
+            ? linear_to_db(static_cast<float>(
+                  std::sqrt(band_detector_sum_[i] / std::max(band_detector_count_[i], 1.0))))
+            : kFloorDb;
+  }
+  detector_sum_ = 0.0;
+  detector_count_ = 0.0;
+  band_detector_sum_.fill(0.0);
+  band_detector_count_.fill(0.0);
+  // Before the reading reaches a gain target, so a poisoned detector cannot hand
+  // a non-finite gain to a band.
+  discard_non_finite_detector_state();
+  for (size_t i = 0; i < kMaxBands; ++i) {
+    if (!band_gates_[i].active()) continue;
+    target_gain_db_[i] =
+        bands_[i].static_gain_db + dynamic_gain_delta(bands_[i], last_band_detector_db_[i]);
+    if (!reading_seen_[i]) {
+      // The first reading seeds the glide instead of easing in from the static gain.
+      smoothed_gain_db_[i] = target_gain_db_[i];
+      reading_seen_[i] = true;
+    }
+  }
 }
 
 void DynamicEq::discard_non_finite_detector_state() noexcept {
@@ -202,15 +254,22 @@ void DynamicEq::reset_band(size_t index) noexcept {
   last_applied_coeff_gain_db_[index] = std::numeric_limits<float>::quiet_NaN();
   smoothed_gain_db_[index] = 0.0f;
   target_gain_db_[index] = 0.0f;
+  reading_seen_[index] = false;
 }
 
 void DynamicEq::reset() {
   eq_.reset();
   last_detector_db_ = kFloorDb;
+  control_phase_ = 0;
+  detector_sum_ = 0.0;
+  detector_count_ = 0.0;
+  band_detector_sum_.fill(0.0);
+  band_detector_count_.fill(0.0);
   last_band_detector_db_.fill(kFloorDb);
   last_applied_gain_db_.fill(0.0f);
   smoothed_gain_db_.fill(0.0f);
   target_gain_db_.fill(0.0f);
+  reading_seen_.fill(false);
   // Force the next apply to reprogram every band's coefficients (the steady-
   // state skip must never compare against a stale value across a reset).
   last_applied_coeff_gain_db_.fill(std::numeric_limits<float>::quiet_NaN());
@@ -390,12 +449,6 @@ void DynamicEq::validate_band(const DynamicEqBand& band) {
   }
 }
 
-float DynamicEq::detector_db(const float* const* channels, int num_channels, int num_samples,
-                             int excluded_channel, int readable_samples) {
-  return broadband_detector_db(channels, num_channels, num_samples, excluded_channel,
-                               readable_samples);
-}
-
 void DynamicEq::ensure_detector(size_t index, int num_channels) {
   DetectorState& state = detectors_[index];
   const DynamicEqBand& band = bands_[index];
@@ -429,16 +482,16 @@ void DynamicEq::ensure_detector(size_t index, int num_channels) {
   }
 }
 
-float DynamicEq::band_detector_db(const float* const* channels, int num_channels, int num_samples,
-                                  int excluded_channel, size_t index, int readable_samples) {
-  if (num_samples <= 0 || num_channels <= 0) return kFloorDb;
+void DynamicEq::accumulate_band(const float* const* channels, int num_channels, int num_samples,
+                                int excluded_channel, size_t index, int readable_samples) {
+  if (num_samples <= 0 || num_channels <= 0) return;
   ensure_detector(index, num_channels);
   DetectorState& state = detectors_[index];
 
   // Detector-history continuity (NOT true zero-latency lookahead): each channel's persistent
-  // filters, envelope and delay ring carry over between blocks, so the detector reads a
-  // continuous stream. The audio path stays latency-free, so a transient at a block boundary is
-  // detected up to the detector delay late rather than ahead of time.
+  // filters, envelope and delay ring carry over between calls, so the detector reads a
+  // continuous stream. The audio path stays latency-free, so a transient is detected up to the
+  // detector delay late rather than ahead of time.
   double sum = 0.0;
   int counted = 0;
   for (int ch = 0; ch < num_channels; ++ch) {
@@ -447,7 +500,8 @@ float DynamicEq::band_detector_db(const float* const* channels, int num_channels
     sum += state.channels[static_cast<size_t>(ch)].accumulate(state.design, channels[ch],
                                                               num_samples, readable_samples);
   }
-  return band_detector_level_db(sum, counted, num_samples);
+  band_detector_sum_[index] += sum;
+  band_detector_count_[index] += static_cast<double>(counted) * num_samples;
 }
 
 float DynamicEq::dynamic_gain_delta(const DynamicEqBand& band, float detector_db) {

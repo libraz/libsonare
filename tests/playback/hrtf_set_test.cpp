@@ -129,6 +129,19 @@ TEST_CASE("SHRF validation rejects n_el below the minimum", "[playback][hrtf]") 
   check_invalid([&] { load(make_shrf_fixture(spec)); }, "n_el");
 }
 
+TEST_CASE("SHRF validation rejects a non-ascending elevation grid", "[playback][hrtf]") {
+  for (const float step : {0.0f, -15.0f}) {
+    ShrfFixtureSpec spec;
+    spec.n_el = 3;
+    spec.el_step_deg = step;
+    check_invalid([&] { load(make_shrf_fixture(spec)); }, "el_step");
+  }
+  ShrfFixtureSpec single_row;
+  single_row.n_el = 1;
+  single_row.el_step_deg = 0.0f;
+  REQUIRE_NOTHROW(load(make_shrf_fixture(single_row)));
+}
+
 TEST_CASE("SHRF validation rejects taps outside [16, 1024]", "[playback][hrtf]") {
   ShrfFixtureSpec too_few;
   too_few.taps = 8;

@@ -20,10 +20,13 @@
 #include <array>
 #include <cstddef>
 #include <map>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include "core/audio.h"
+#include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -97,6 +100,38 @@ struct BpmConfig {
   int n_fft = 2048;          ///< Window length in samples at 22050 Hz, rescaled to the input rate
   int hop_length = 512;      ///< Hop length in samples of the input buffer
 };
+
+/// @brief Refuses a tempo search outside the argument domain every public surface shares.
+/// @details The rule @ref validate_bpm_config and validate_rhythm_config both apply.
+/// @param config_name Struct name the refusal message is prefixed with
+/// @throws SonareException(InvalidParameter) unless bpm_min is finite and positive, bpm_max is
+///         finite and above bpm_min, start_bpm is finite and positive, and n_fft and hop_length
+///         are positive.
+inline void validate_tempo_search(const char* config_name, float bpm_min, float bpm_max,
+                                  float start_bpm, int n_fft, int hop_length) {
+  SONARE_CHECK_MSG(
+      numeric::finite_positive(bpm_min) && numeric::finite_ordered_range(bpm_min, bpm_max),
+      ErrorCode::InvalidParameter,
+      std::string(config_name) + ": bpm_min must be finite and positive and bpm_max above it");
+  SONARE_CHECK_MSG(numeric::finite_positive(start_bpm), ErrorCode::InvalidParameter,
+                   std::string(config_name) + ": start_bpm must be finite and positive");
+  SONARE_CHECK_MSG(n_fft > 0 && hop_length > 0, ErrorCode::InvalidParameter,
+                   std::string(config_name) + ": n_fft and hop_length must be positive");
+}
+
+/// @brief Refuses a BpmConfig outside the argument domain every public surface shares.
+/// @throws SonareException(InvalidParameter) as @ref validate_tempo_search describes.
+inline void validate_bpm_config(const BpmConfig& config) {
+  validate_tempo_search("BpmConfig", config.bpm_min, config.bpm_max, config.start_bpm, config.n_fft,
+                        config.hop_length);
+}
+
+/// @brief Refuses a negative candidate count for BpmAnalyzer::candidates, which would clamp it.
+/// @throws SonareException(InvalidParameter) when @p max_candidates is negative.
+inline void validate_bpm_candidate_count(int max_candidates) {
+  SONARE_CHECK_MSG(max_candidates >= 0, ErrorCode::InvalidParameter,
+                   "max_candidates must be non-negative");
+}
 
 /// @brief BPM candidate with confidence score.
 struct BpmCandidate {

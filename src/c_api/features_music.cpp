@@ -1,5 +1,3 @@
-#include <limits>
-
 #include "c_api/features_internal.h"
 #include "util/constants.h"
 
@@ -39,18 +37,15 @@ SonareError run_chroma_cqt_family(const float* samples, size_t length, int sampl
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
-  if (hop_length <= 0 || n_chroma <= 0 || bins_per_octave <= 0 || bins_per_octave % n_chroma != 0 ||
-      bins_per_octave > std::numeric_limits<int>::max() / 7) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  Config config;
+  if (const SonareError err = run_validation([&] {
+        chroma_cqt_base(config) = make_chroma_cqt_config(hop_length, n_chroma, bins_per_octave);
+      });
+      err != SONARE_OK) {
+    return err;
   }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    Config config;
-    ChromaCqtConfig& base = chroma_cqt_base(config);
-    base.cqt.hop_length = hop_length;
-    base.cqt.bins_per_octave = bins_per_octave;
-    base.cqt.n_bins = 7 * bins_per_octave;
-    base.n_chroma = n_chroma;
     Chroma chroma = transform(audio, config);
     return fill_chroma_result(chroma, out);
   });
@@ -186,17 +181,20 @@ SonareError sonare_nnls_chroma_ex2(const float* samples, size_t length, int sr,
   if (out != nullptr) *out = nullptr;
   if (out_length != nullptr) *out_length = 0;
   if (out_n_frames != nullptr) *out_n_frames = 0;
-  if (!out || !out_length || !out_n_frames || !std::isfinite(stft_blend_weight) ||
-      stft_blend_weight < 0.0f || stft_blend_weight > 1.0f || stft_blend_n_fft < 2 ||
-      (stft_blend_n_fft & 1) != 0 || hop_length <= 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out || !out_length || !out_n_frames) return SONARE_ERROR_INVALID_PARAMETER;
+  NnlsChromaConfig config;
+  if (const SonareError err = run_validation([&] {
+        config = NnlsChromaConfig::fast(hop_length);
+        config.enable_stft_blend = enable_stft_blend != 0;
+        config.stft_blend_weight = stft_blend_weight;
+        config.stft_blend_n_fft = stft_blend_n_fft;
+        validate_nnls_chroma_config(config);
+      });
+      err != SONARE_OK) {
+    return err;
   }
 
   return run_offline(samples, length, sr, [&](const Audio& audio) -> SonareError {
-    NnlsChromaConfig config = NnlsChromaConfig::fast(hop_length);
-    config.enable_stft_blend = enable_stft_blend != 0;
-    config.stft_blend_weight = stft_blend_weight;
-    config.stft_blend_n_fft = stft_blend_n_fft;
     Chroma chroma = nnls_chroma(audio, config);
 
     *out_n_frames = chroma.n_frames();

@@ -1127,3 +1127,33 @@ TEST_CASE("sonare_engine_set_graph refuses a connection mix outside 0 and 1", "[
   sonare_engine_destroy(engine);
 }
 #endif
+
+TEST_CASE("Create and prepare entries refuse a rate or block size outside their ceilings",
+          "[c_api][engine][limits]") {
+  constexpr int kBlockCeiling = 1 << 20;
+#if defined(SONARE_WITH_MIXING)
+  for (const int rate : {7999, 384001, 1000000000}) {
+    CAPTURE(rate);
+    REQUIRE(sonare_mixer_create(rate, 128) == nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+  }
+  for (const int block : {0, kBlockCeiling + 1, std::numeric_limits<int>::max()}) {
+    CAPTURE(block);
+    REQUIRE(sonare_mixer_create(48000, block) == nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+  }
+  SonareMixer* mixer = sonare_mixer_create(384000, kBlockCeiling);
+  REQUIRE(mixer != nullptr);
+  sonare_mixer_destroy(mixer);
+#endif  // defined(SONARE_WITH_MIXING)
+
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  for (const int block : {kBlockCeiling + 1, std::numeric_limits<int>::max()}) {
+    CAPTURE(block);
+    REQUIRE(sonare_engine_prepare(engine, 48000.0, block, 1, 1) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, block, 1, 1, 2) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+  }
+  sonare_engine_destroy(engine);
+}

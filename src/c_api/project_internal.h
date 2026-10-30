@@ -543,6 +543,9 @@ SonareError make_smf_clip_from_events(
     }
   }
   out->set_events(std::move(expanded));
+  // Before the sort, as SMF and Clip File export do: a note at or below one tick has no length.
+  uint32_t dropped_events = 0;
+  sonare::midi::drop_zero_length_notes(out, &dropped_events, sonare::midi::kDefaultTicksPerQuarter);
   out->sort_stable();
   release_notes_at_cuts(clip, clip_end, looping, loop_iterations, windowed_off_keys, out);
   return SONARE_OK;

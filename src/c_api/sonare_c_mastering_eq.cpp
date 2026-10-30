@@ -43,9 +43,10 @@ sonare::mastering::eq::StereoPlacement parse_placement(int placement) {
 SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
   SONARE_C_API_ENTRY;
   // The processor admits an infinite sample_rate, which degenerates every band's biquad design.
-  if (!numeric::finite_positive(sample_rate) || max_block_size < 0) {
+  if (!is_valid_realtime_sample_rate(sample_rate) || max_block_size < 0 ||
+      max_block_size > kMaxRealtimeBlockSize) {
     set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                   "EQ: sample_rate must be positive and max_block_size non-negative");
+                   "EQ: sample_rate and max_block_size must be within the supported range");
     return nullptr;
   }
   SONARE_C_TRY

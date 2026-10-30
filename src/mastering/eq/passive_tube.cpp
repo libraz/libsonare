@@ -50,6 +50,7 @@ void PassiveTubeEq::prepare(double sample_rate, int max_block_size) {
   // Preallocate component state so the audio-thread process() never resizes
   // (mirrors the kRealtimePreparedChannels pattern used by ParametricEq/DynamicEq).
   component_state_.assign(kRealtimePreparedChannels, {});
+  component_stage_active_ = false;
   update_component_coefficients();
   rebuild();
 }
@@ -60,6 +61,11 @@ void PassiveTubeEq::process(float* const* channels, int num_channels, int num_sa
   eq_.process(channels, num_channels, num_samples);
   bool discarded = eq_.non_finite_discard_count() != eq_discards;
   if (component_model_ == PassiveTubeComponentModel::CurveOnly && output_drive_ <= 0.0f) {
+    // A skipped stage rests, so switching it back in starts from discharged reactives.
+    if (component_stage_active_) {
+      for (auto& state : component_state_) state = {};
+      component_stage_active_ = false;
+    }
     if (discarded) note_non_finite_discard();
     return;
   }
@@ -68,6 +74,7 @@ void PassiveTubeEq::process(float* const* channels, int num_channels, int num_sa
     return;
   }
   prepare_component_state(num_channels);
+  component_stage_active_ = true;
   for (int ch = 0; ch < num_channels; ++ch) {
     if (channels[ch] == nullptr) continue;
     for (int i = 0; i < num_samples; ++i) {
@@ -97,6 +104,7 @@ int PassiveTubeEq::tail_samples() const noexcept {
 void PassiveTubeEq::reset() {
   eq_.reset();
   for (auto& state : component_state_) state = {};
+  component_stage_active_ = false;
 }
 
 void PassiveTubeEq::set_low_frequency(float frequency_hz) {

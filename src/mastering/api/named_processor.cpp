@@ -122,6 +122,7 @@ using detail::i;
 using detail::limiter_config;
 using detail::make_map;
 using detail::ParamMap;
+using detail::u32;
 
 // The buffers one try_configure_processor() call operates on: a mono buffer, or a
 // stereo pair. Holding both in one value is what lets a single dispatch serve
@@ -597,7 +598,7 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     final::DitherConfig config;
     config.type = checked_enum<final::DitherType>(i(params, "type", 2), "dither type");
     config.target_bits = i(params, "targetBits", config.target_bits);
-    config.seed = static_cast<uint32_t>(i(params, "seed", config.seed));
+    config.seed = u32(params, "seed", config.seed);
     const uint32_t base_seed = config.seed;
     apply_per_channel(channels, sample_rate, [&](const Audio& audio, int channel_index) {
       // Decorrelate the dither noise across stereo channels (no-op for the left

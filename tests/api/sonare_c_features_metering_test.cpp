@@ -306,8 +306,8 @@ TEST_CASE("sonare_tempogram_with_mode", "[c_api]") {
 
   REQUIRE(err == SONARE_OK);
   REQUIRE(data != nullptr);
-  REQUIRE(n_frames == static_cast<int>(env.size()));
-  REQUIRE(out_length == env.size() * 8);
+  REQUIRE(n_frames == static_cast<int>(env.size()) - 8 + 1);
+  REQUIRE(out_length == static_cast<size_t>(n_frames) * 8);
   for (size_t i = 0; i < out_length; ++i) {
     REQUIRE(std::isfinite(data[i]));
     REQUIRE(data[i] >= -1.0f - 1.0e-6f);
@@ -317,6 +317,39 @@ TEST_CASE("sonare_tempogram_with_mode", "[c_api]") {
 
   REQUIRE(sonare_tempogram_with_mode(env.data(), env.size(), 8, 1, 8, 0, 0, 99, &data, &out_length,
                                      &n_frames) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("sonare_tempogram and sonare_fourier_tempogram frame an uncentered envelope per window",
+          "[c_api]") {
+  const std::vector<float> env{0.2f, 1.0f, 0.4f, 0.0f, 0.8f, 0.1f, 0.5f, 0.3f,
+                               0.6f, 0.0f, 0.9f, 0.2f, 0.4f, 0.7f, 0.1f, 0.5f};
+  constexpr int kWin = 8;
+  float* data = nullptr;
+  size_t out_length = 0;
+  int n_frames = 0;
+  REQUIRE(sonare_tempogram(env.data(), env.size(), 8, 1, kWin, 0, 0, &data, &out_length,
+                           &n_frames) == SONARE_OK);
+  REQUIRE(n_frames == static_cast<int>(env.size()) - kWin + 1);
+  REQUIRE(out_length == static_cast<size_t>(n_frames) * kWin);
+  sonare_free_floats(data);
+
+  REQUIRE(sonare_fourier_tempogram(env.data(), env.size(), 8, 1, kWin, 0, 0, &data, &out_length,
+                                   &n_frames) == SONARE_OK);
+  REQUIRE(n_frames == static_cast<int>(env.size()) - kWin + 1);
+  REQUIRE(out_length == static_cast<size_t>(n_frames) * (kWin / 2 + 1));
+  sonare_free_floats(data);
+
+  // A centered envelope keeps one frame per envelope frame.
+  REQUIRE(sonare_tempogram(env.data(), env.size(), 8, 1, kWin, 1, 0, &data, &out_length,
+                           &n_frames) == SONARE_OK);
+  REQUIRE(n_frames == static_cast<int>(env.size()));
+  sonare_free_floats(data);
+
+  // An envelope shorter than the window is refused when not centered.
+  REQUIRE(sonare_tempogram(env.data(), 4, 8, 1, kWin, 0, 0, &data, &out_length, &n_frames) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(data == nullptr);
+  REQUIRE(n_frames == 0);
 }
 
 TEST_CASE("sonare_tempogram_ratio", "[c_api]") {

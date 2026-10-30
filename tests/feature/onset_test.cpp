@@ -10,7 +10,9 @@
 
 #include "core/spectrum.h"
 #include "feature/mel_spectrogram.h"
+#include "feature/rhythm.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -480,5 +482,46 @@ TEST_CASE("splitting the Audio overload at the Mel spectrogram changes nothing",
         center_onset_strength(compute_onset_strength(mismatched_mel, onset_config),
                               stft_config.n_fft, stft_config.hop_length, onset_config.center);
     REQUIRE(mismatched != whole);
+  }
+}
+
+TEST_CASE("tempogram frames an uncentered envelope as librosa does", "[onset][tempogram]") {
+  constexpr int kLength = 100;
+  constexpr int kWin = 16;
+  constexpr int kFrames = kLength - kWin + 1;
+  std::vector<float> env(kLength);
+  for (int i = 0; i < kLength; ++i) {
+    env[static_cast<size_t>(i)] = 0.5f + 0.5f * std::sin(0.37f * static_cast<float>(i * i));
+  }
+  TempogramConfig cfg;
+  cfg.win_length = kWin;
+  cfg.hop_length = 1;
+  cfg.center = false;
+  cfg.norm = false;
+
+  for (const bool fourier : {false, true}) {
+    const auto run = [&](const std::vector<float>& input) {
+      return fourier ? fourier_tempogram(input, 22050, cfg) : tempogram(input, 22050, cfg);
+    };
+    const int rows = fourier ? kWin / 2 + 1 : kWin;
+    const std::vector<float> out = run(env);
+    INFO((fourier ? "fourier" : "autocorrelation"));
+    REQUIRE(out.size() == static_cast<size_t>(rows) * kFrames);
+    for (int j = 0; j < kFrames; ++j) {
+      // Frame j is the one-frame tempogram of its own window env[j : j + win].
+      const std::vector<float> window(env.begin() + j, env.begin() + j + kWin);
+      const std::vector<float> single = run(window);
+      REQUIRE(single.size() == static_cast<size_t>(rows));
+      bool differs_from_previous = j == 0;
+      for (int r = 0; r < rows; ++r) {
+        const float value = out[static_cast<size_t>(r) * kFrames + static_cast<size_t>(j)];
+        REQUIRE_THAT(value, WithinAbs(single[static_cast<size_t>(r)], 1.0e-4));
+        if (j > 0 && value != out[static_cast<size_t>(r) * kFrames + static_cast<size_t>(j - 1)]) {
+          differs_from_previous = true;
+        }
+      }
+      REQUIRE(differs_from_previous);
+    }
+    CHECK_THROWS_AS(run(std::vector<float>(kWin - 1, 1.0f)), SonareException);
   }
 }

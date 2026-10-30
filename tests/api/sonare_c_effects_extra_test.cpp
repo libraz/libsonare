@@ -1251,10 +1251,14 @@ TEST_CASE("C scalar guards reject every non-finite argument", "[c_api][validatio
 }
 
 #ifdef SONARE_WITH_MASTERING
-TEST_CASE("sonare_eq_create rejects a non-finite sample rate", "[c_api][validation]") {
+TEST_CASE("sonare_eq_create rejects a non-finite or out-of-range sample rate",
+          "[c_api][validation]") {
   const double bad_rates[] = {std::numeric_limits<double>::quiet_NaN(),
                               std::numeric_limits<double>::infinity(),
-                              -std::numeric_limits<double>::infinity()};
+                              -std::numeric_limits<double>::infinity(),
+                              7999.0,
+                              384001.0,
+                              1.0e9};
   for (double bad_rate : bad_rates) {
     CAPTURE(bad_rate);
     REQUIRE(sonare_eq_create(bad_rate, 512) == nullptr);
@@ -1272,14 +1276,17 @@ TEST_CASE("sonare_eq_create rejects a non-finite sample rate", "[c_api][validati
 #endif
 
 #ifdef SONARE_WITH_VOICE_CHANGER
-TEST_CASE("sonare_streaming_retune_prepare rejects a non-finite sample rate",
+TEST_CASE("sonare_streaming_retune_prepare rejects a non-finite or out-of-range sample rate",
           "[c_api][validation]") {
   SonareStreamingRetune* retune = sonare_streaming_retune_create(5.0f, 1.0f, 0);
   REQUIRE(retune != nullptr);
 
   const double bad_rates[] = {std::numeric_limits<double>::quiet_NaN(),
                               std::numeric_limits<double>::infinity(),
-                              -std::numeric_limits<double>::infinity()};
+                              -std::numeric_limits<double>::infinity(),
+                              7999.0,
+                              384001.0,
+                              1.0e9};
   for (double bad_rate : bad_rates) {
     CAPTURE(bad_rate);
     REQUIRE(sonare_streaming_retune_prepare(retune, bad_rate, 512) ==

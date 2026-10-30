@@ -513,3 +513,27 @@ TEST_CASE("21 d1-d9 rr are the drum setup parameters stored in the kit", "[midi]
     CHECK(identical(both, map_second));
   }
 }
+
+TEST_CASE("a drum set change clears that map's per-note edits", "[midi][synth][gs]") {
+  const StereoRender room_kit =
+      render([](Sf2Player& player) { program_change(player, kDrumChannel, 8); });
+  const Writes by_nrpn = [](Sf2Player& player) { nrpn(player, 0x1A, kNoteA, 0x28); };
+  const Writes by_sysex = [](Sf2Player& player) {
+    sysex(player, dt1(drum_addr(0, 0x2, kNoteA), {0x28}));
+  };
+  for (const Writes& edit : {by_nrpn, by_sysex}) {
+    // The edit is audible on its own, so the cleared render below is not vacuous.
+    CHECK_FALSE(identical(render(edit), render(nullptr)));
+    CHECK(identical(render([&](Sf2Player& player) {
+                      edit(player);
+                      program_change(player, kDrumChannel, 8);
+                    }),
+                    room_kit));
+  }
+  // Re-sending the program already selected is not a set change.
+  CHECK_FALSE(identical(render([&](Sf2Player& player) {
+                          nrpn(player, 0x1A, kNoteA, 0x28);
+                          program_change(player, kDrumChannel, 0);
+                        }),
+                        render(nullptr)));
+}

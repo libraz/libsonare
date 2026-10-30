@@ -1677,3 +1677,45 @@ TEST_CASE("export_clip_file bounds its output by a fixed tick span", "[midi]") {
     REQUIRE(result.bytes.size() < 64u * 1024u);
   }
 }
+
+TEST_CASE("SMF2 import drops a zero-length note and export counts a sub-tick one", "[midi][smf2]") {
+  MidiClip clip;
+  clip.add_event(MidiClipEvent{0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)});
+  clip.add_event(MidiClipEvent{1.0 / 480.0, sonare::midi::make_midi1_note_off(0, 0, 60, 0)});
+  clip.add_event(MidiClipEvent{1.0, sonare::midi::make_midi1_note_on(0, 0, 62, 100)});
+  clip.add_event(MidiClipEvent{2.0, sonare::midi::make_midi1_note_off(0, 0, 62, 0)});
+  Smf2ExportOptions options;
+  options.ticks_per_quarter = 480;
+  const auto exported = export_clip_file(clip, {}, {}, options);
+  REQUIRE(exported.status == Smf2Status::kOk);
+  CHECK(exported.skipped_events == 0);
+
+  // Move the first note-off onto its note-on's tick by zeroing the delta before it.
+  std::vector<uint8_t> bytes = exported.bytes;
+  bool patched = false;
+  for (size_t i = 8 + 4; i + 4 <= bytes.size(); i += 4) {
+    if (bytes[i] == 0x20 && (bytes[i + 1] & 0xF0u) == 0x80 && bytes[i + 2] == 60 && i >= 4 &&
+        bytes[i - 4] == 0x00 && bytes[i - 3] == 0x40 && bytes[i - 2] == 0x00 &&
+        bytes[i - 1] == 0x01) {
+      bytes[i - 1] = 0x00;
+      patched = true;
+      break;
+    }
+  }
+  REQUIRE(patched);
+  const Smf2ImportResult imported = import_clip_file(bytes);
+  REQUIRE(imported.status == Smf2Status::kOk);
+  REQUIRE(imported.clips.size() == 1);
+  CHECK(imported.skipped_events == 2);
+  CHECK(imported.clips[0].events().size() == 2);
+  CHECK(imported.clips[0].validate_note_pairs().ok);
+
+  // At 24 ticks per quarter the same note is shorter than a tick: counted on export.
+  MidiClip coarse;
+  coarse.add_event(MidiClipEvent{0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)});
+  coarse.add_event(MidiClipEvent{0.01, sonare::midi::make_midi1_note_off(0, 0, 60, 0)});
+  options.ticks_per_quarter = 24;
+  const auto coarse_out = export_clip_file(coarse, {}, {}, options);
+  REQUIRE(coarse_out.status == Smf2Status::kOk);
+  CHECK(coarse_out.skipped_events == 2);
+}

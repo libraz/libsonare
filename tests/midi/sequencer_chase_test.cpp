@@ -2,6 +2,7 @@
 /// @brief MidiSequencer controller chase: after a loop wrap, seek or stop, the
 ///        first rolling dispatch re-sends the channel state clips set before it.
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <vector>
@@ -165,4 +166,51 @@ TEST_CASE("MidiSequencer chases only after a discontinuity", "[midi][chase]") {
   REQUIRE(sink.events.empty());
   seq.dispatch_due(jump_clock(70, 40));
   REQUIRE(words_at(sink.events, 70) == std::vector<uint32_t>{cc(7, 100).words[0]});
+}
+
+TEST_CASE("MidiSequencer chase does not replay values a reset already cleared", "[midi][chase]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  const std::vector<uint8_t> gm_on{0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7};
+  MidiEvent system_reset = at(40, sonare::midi::make_sysex_handle(0, 1));
+  system_reset.sysex_payload = gm_on.data();
+  system_reset.sysex_payload_size = gm_on.size();
+
+  MidiClipSchedule clip;
+  clip.id = 1;
+  clip.destination_id = 3;
+  clip.events = {at(10, cc(1, 100)),     // cleared by the CC121 below
+                 at(12, cc(11, 20, 1)),  // channel 1: untouched by a channel 0 reset
+                 at(15, cc(7, 80)),      // volume survives a reset
+                 at(20, cc(121, 0)),    at(30, cc(11, 60)),  // set after the reset: still chased
+                 at(35, cc(1, 70, 2)),                       // cleared by the system reset
+                 system_reset};
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+
+  SECTION("a channel reset retires only its own channel's earlier values") {
+    seq.release_clip_playback(DeviceFrame{0});
+    seq.dispatch_due(jump_clock(0, 38));
+    const std::vector<uint32_t> expected{cc(7, 80).words[0], cc(11, 20, 1).words[0],
+                                         cc(11, 60).words[0], cc(1, 70, 2).words[0]};
+    std::vector<uint32_t> got = words_at(sink.events, 0);
+    for (const uint32_t word : expected) {
+      INFO("word " << word);
+      CHECK(std::count(got.begin(), got.end(), word) == 1);
+    }
+    CHECK(std::count(got.begin(), got.end(), cc(1, 100).words[0]) == 0);
+  }
+  SECTION("a system reset retires the values of every channel before it") {
+    seq.release_clip_playback(DeviceFrame{0});
+    seq.dispatch_due(jump_clock(0, 45));
+    const std::vector<uint32_t> got = words_at(sink.events, 0);
+    CHECK(std::count(got.begin(), got.end(), cc(1, 100).words[0]) == 0);
+    CHECK(std::count(got.begin(), got.end(), cc(1, 70, 2).words[0]) == 0);
+    CHECK(std::count(got.begin(), got.end(), cc(11, 20, 1).words[0]) == 0);
+    CHECK(std::count(got.begin(), got.end(), cc(11, 60).words[0]) == 0);
+    CHECK(std::count(got.begin(), got.end(), cc(7, 80).words[0]) == 1);
+  }
 }

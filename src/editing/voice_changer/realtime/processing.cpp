@@ -17,6 +17,12 @@ namespace {
 using sonare::discard_group_if_non_finite;
 using sonare::discard_if_non_finite;
 
+/// Gain below which a voice that left the count has finished fading and stops rendering.
+constexpr float kVoiceFadeFloor = 1e-3f;
+
+/// Samples between pitch-target updates in the voice stage.
+constexpr int kTransformControlChunk = 128;
+
 float db_to_gain(float db) noexcept { return sonare::db_to_linear(db); }
 
 float amp_to_db(float amp) noexcept {
@@ -223,7 +229,22 @@ void RealtimeVoiceChanger::ensure_scratch(int num_samples) noexcept {
 void RealtimeVoiceChanger::process_transform(ChannelState& state,
                                              const RealtimeVoiceChangerConfig& config,
                                              const float* carrier, int num_samples) noexcept {
-  float* x = scratch_.data();
+  // Targets advance on a fixed absolute grid, so how the host cuts its blocks moves them by at
+  // most one chunk.
+  for (int done = 0; done < num_samples;) {
+    const int n = std::min(num_samples - done, kTransformControlChunk - state.control_phase);
+    process_transform_chunk(state, config, carrier, done, n);
+    state.control_phase = (state.control_phase + n) % kTransformControlChunk;
+    done += n;
+  }
+}
+
+void RealtimeVoiceChanger::process_transform_chunk(ChannelState& state,
+                                                   const RealtimeVoiceChangerConfig& config,
+                                                   const float* carrier, int offset,
+                                                   int num_samples) noexcept {
+  float* x = scratch_.data() + offset;
+  if (carrier != nullptr) carrier += offset;
   // The tracker, the shifter and the vocoder all keep history; keep a non-finite value out. The
   // substitution is reported for the block, and the stages need no reset: none of them saw it.
   for (int i = 0; i < num_samples; ++i) {
@@ -236,10 +257,24 @@ void RealtimeVoiceChanger::process_transform(ChannelState& state,
                                               static_cast<int>(state.estimates.size()));
   state.shifter.push_estimates(state.estimates.data(), estimates);
   const VoiceTargets targets = state.targets.update(state.estimates.data(), estimates, num_samples);
+  const int count = std::clamp(targets.count, 0, kMaxVoices);
+  // A harmony voice that left the count keeps rendering until its gain has faded out, so its
+  // removal is a decay rather than a step.
+  VoiceTargets rendered = targets;
+  rendered.count = count;
+  for (int v = 0; v < count; ++v) {
+    if (targets.voices[v].active) state.held_voice[static_cast<size_t>(v)] = targets.voices[v];
+  }
+  for (int v = count; v < kMaxVoices; ++v) {
+    if (state.voice_gain[static_cast<size_t>(v)].current() <= kVoiceFadeFloor) continue;
+    rendered.voices[v] = state.held_voice[static_cast<size_t>(v)];
+    rendered.voices[v].active = true;
+    rendered.count = v + 1;
+  }
   float* voice_out[kMaxVoices];
   for (int v = 0; v < kMaxVoices; ++v)
-    voice_out[v] = state.voice_out[static_cast<size_t>(v)].data();
-  state.shifter.process(x, targets, voice_out, num_samples);
+    voice_out[v] = state.voice_out[static_cast<size_t>(v)].data() + offset;
+  state.shifter.process(x, rendered, voice_out, num_samples);
 
   const bool vocoder_on = config.vocoder.enabled;
   if (vocoder_on && !state.vocoder_running) {
@@ -251,10 +286,9 @@ void RealtimeVoiceChanger::process_transform(ChannelState& state,
   if (vocoder_on) {
     const float* external =
         config.vocoder.carrier_source == VocoderCarrierSource::External ? carrier : nullptr;
-    state.vocoder.process(x, external, targets, state.vocoder_out.data(), num_samples);
+    state.vocoder.process(x, external, targets, state.vocoder_out.data() + offset, num_samples);
   }
 
-  const int count = std::clamp(targets.count, 0, kMaxVoices);
   for (int v = 0; v < kMaxVoices; ++v) {
     const VoiceTarget& target = targets.voices[v];
     state.voice_gain[static_cast<size_t>(v)].set_target(v < count && target.active ? target.gain
@@ -268,21 +302,25 @@ void RealtimeVoiceChanger::process_transform(ChannelState& state,
   }
 
   for (int k = 0; k < num_samples; ++k) {
-    float sum = state.voice_gain[0].process() * (count > 0 ? voice_out[0][k] : 0.0f);
+    float sum = state.voice_gain[0].process() * (rendered.count > 0 ? voice_out[0][k] : 0.0f);
     for (int h = 0; h < kMaxHarmonyVoices; ++h) {
       DelayRing& ring = state.harmony_delay[static_cast<size_t>(h)];
-      // A voice beyond the count feeds silence, so its delayed tail fades with its gain.
-      ring.line[ring.write] = h + 1 < count ? voice_out[h + 1][k] : 0.0f;
+      // A voice beyond the rendered count feeds silence, so its delayed tail fades with its gain.
+      ring.line[ring.write] = h + 1 < rendered.count ? voice_out[h + 1][k] : 0.0f;
       const float delay = state.harmony_delay_samples[static_cast<size_t>(h)].process();
       const float delayed = rt::lagrange3_read(ring.line.data(), ring.line.size(), ring.write,
                                                static_cast<int>(std::lround(delay * 256.0f)));
       ring.write = ring.write + 1 == ring.line.size() ? 0 : ring.write + 1;
-      sum += state.voice_gain[static_cast<size_t>(h + 1)].process() * delayed;
+      sum +=
+          state.voice_gain[static_cast<size_t>(h + 1)].process_snapping(kVoiceFadeFloor) * delayed;
     }
     const float mix = state.shift_mix.process();
     const float unshifted = state.unshifted.process(x[k]);
     const float voice = state.voice_compensation.process(mix * sum + (1.0f - mix) * unshifted);
-    float y = vocoder_on ? state.vocoder_compensation.process(state.vocoder_out[k]) : voice;
+    float y =
+        vocoder_on
+            ? state.vocoder_compensation.process(state.vocoder_out[static_cast<size_t>(offset + k)])
+            : voice;
     if (!std::isfinite(y)) {
       y = 0.0f;
       state.transform_substituted = true;

@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include "analysis/key_analyzer.h"
 #include "core/audio.h"
 #include "core/channel_layout.h"
 
@@ -390,9 +391,10 @@ CliValidationError validate_melody_frequency_band(const CliArgs& args) {
 // domain cannot express it because the same hop is fine without the flag.
 CliValidationError validate_key_hpss_hop(const CliArgs& args) {
   if (!args.has("use-hpss") && !args.has("hpss")) return {};
-  if (args.hop_length >= 16) return {};
+  if (args.hop_length >= sonare::kMinKeyHpssHopLength) return {};
   std::ostringstream message;
-  message << "--hop-length must be at least 16 with --use-hpss (got " << args.hop_length << ")";
+  message << "--hop-length must be at least " << sonare::kMinKeyHpssHopLength
+          << " with --use-hpss (got " << args.hop_length << ")";
   return {message.str(), true};
 }
 
@@ -1002,7 +1004,9 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
 #endif
 
     // Metering and scalar utility leaves.
-    add_command(commands, "lufs", true, {flag("series")});
+    // Measures every channel as BS.1770 sums them, the loudness `master` reports for its input.
+    add_command(commands, "lufs", true, {flag("series")}, {}, nullptr, 0,
+                /*preserves_stereo_input=*/false, /*preserves_multichannel_input=*/true);
     add_command(commands, "meter", true,
                 {number_value("clip-threshold", 0.999), int_value("oversample", 4)});
     add_command(commands, "clipping", true,
@@ -1093,7 +1097,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
         "project.align-takes",
         {required_path("in"), required_output(),
          with_domain(int_value("reference-source", true),
-                     at_least(1.0, CliOptionDomainStage::Parameter)),
+                     between(1.0, static_cast<double>(std::numeric_limits<std::uint32_t>::max()),
+                             CliOptionDomainStage::Parameter)),
          string_value("audio", false, true), flag("resolve-audio"),
          with_domain(global_int("hop-length", 0), at_least(0.0, CliOptionDomainStage::Parameter)),
          with_domain(int_value("bins-per-octave", 0),

@@ -452,21 +452,38 @@ std::string format_point(const Vec3& p) {
 
 }  // namespace
 
-std::vector<Diagnostic> validate_rir_synth_config(const RirSynthConfig& config) {
+std::vector<Diagnostic> validate_rir_synth_config(const RirSynthConfig& config,
+                                                  const RirSynthFieldNames& names) {
   std::vector<Diagnostic> diagnostics;
-  if (config.ism_order < 0 ||
-      !numeric::finite_in_closed_range(config.max_seconds, 0.0f, kMaxRirSeconds) ||
-      !numeric::finite_in_closed_range(config.mixing_time_ms, 0.0f, kMaxRirMixingTimeMs) ||
-      !numeric::finite_in_closed_range(config.crossfade_ms, 0.0f, kMaxRirCrossfadeMs)) {
-    diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.invalid_rir_config",
-                           "RIR timing values must be finite and within safe bounds"});
+  const auto refuse = [&](const char* code, const char* name, const std::string& rule) {
+    diagnostics.push_back({Diagnostic::Severity::Error, code, std::string(name) + rule});
+  };
+  const auto bounded = [](float maximum) {
+    char buffer[64];
+    std::snprintf(buffer, sizeof(buffer), " must be finite and within [0, %g]",
+                  static_cast<double>(maximum));
+    return std::string(buffer);
+  };
+  if (config.ism_order < 0) refuse("acoustic.invalid_rir_config", names.ism_order, " must be >= 0");
+  if (!numeric::finite_in_closed_range(config.max_seconds, 0.0f, kMaxRirSeconds)) {
+    refuse("acoustic.invalid_rir_config", names.max_seconds, bounded(kMaxRirSeconds));
   }
-  if (config.air_absorption_enabled &&
-      (!numeric::finite(config.air.temperature_c) ||
-       config.air.temperature_c <= kAbsoluteZeroCelsius ||
-       !numeric::finite_in_closed_range(config.air.humidity_percent, 0.0f, 100.0f))) {
-    diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.invalid_air_absorption",
-                           "air absorption temperature/humidity is outside the physical range"});
+  if (!numeric::finite_in_closed_range(config.mixing_time_ms, 0.0f, kMaxRirMixingTimeMs)) {
+    refuse("acoustic.invalid_rir_config", names.mixing_time_ms, bounded(kMaxRirMixingTimeMs));
+  }
+  if (!numeric::finite_in_closed_range(config.crossfade_ms, 0.0f, kMaxRirCrossfadeMs)) {
+    refuse("acoustic.invalid_rir_config", names.crossfade_ms, bounded(kMaxRirCrossfadeMs));
+  }
+  if (config.air_absorption_enabled) {
+    if (!numeric::finite(config.air.temperature_c) ||
+        config.air.temperature_c <= kAbsoluteZeroCelsius) {
+      refuse("acoustic.invalid_air_absorption", names.air_temperature_c,
+             " must be finite and above absolute zero");
+    }
+    if (!numeric::finite_in_closed_range(config.air.humidity_percent, 0.0f, 100.0f)) {
+      refuse("acoustic.invalid_air_absorption", names.air_humidity_percent,
+             " must be finite and within [0, 100]");
+    }
   }
   return diagnostics;
 }

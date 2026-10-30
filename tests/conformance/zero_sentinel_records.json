@@ -70,12 +70,6 @@
       "reason": "Core response to a negative or non-finite threshold not driven."
     },
     {
-      "file": "src/c_api/mixing_strip.cpp",
-      "value": "pan->distance",
-      "measured": "no",
-      "reason": "Surround pan distance; core response to a negative or non-finite distance not driven."
-    },
-    {
       "file": "src/c_api/project_bounce.cpp",
       "value": "opts.block_size",
       "measured": "no",

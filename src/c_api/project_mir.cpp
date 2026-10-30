@@ -1,6 +1,7 @@
 #include "c_api/project_internal.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
+#include "arrangement/harmonic_limits.h"
 #include "core/resample.h"
 #include "mir/key_context.h"
 #endif
@@ -320,7 +321,8 @@ SonareError sonare_project_annotate_chords(SonareProject* project,
     arr::ChordSymbol chord;
     if (!valid_ppq_span(in.start_ppq, in.end_ppq) || !valid_pitch_class(in.root_pc) ||
         !chord_quality_from_c(in.quality, &chord.quality) || !valid_pitch_class(in.slash_bass_pc) ||
-        (in.extension_count > 0 && !in.extensions) || in.extension_count > 32) {
+        (in.extension_count > 0 && !in.extensions) ||
+        in.extension_count > arr::kMaxChordExtensions) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     chord.start_ppq = in.start_ppq;

@@ -915,6 +915,33 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(analyzer == nullptr);
   }
 
+  SECTION("rejects an out-of-range sample rate and oversized sizing before allocating") {
+    SonareStreamAnalyzer* analyzer = nullptr;
+    for (const int rate : {7999, 384001, 1000000000}) {
+      SonareStreamConfig bad = config;
+      bad.sample_rate = rate;
+      INFO("sample_rate " << rate);
+      REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(analyzer == nullptr);
+    }
+    for (const int rate : {22050, 44100, 48000}) {
+      SonareStreamConfig bad = config;
+      bad.sample_rate = rate;
+      bad.n_fft = 1 << 26;
+      INFO("n_fft at " << rate);
+      REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(analyzer == nullptr);
+    }
+    SonareStreamConfig bad = config;
+    bad.n_fft = std::numeric_limits<int>::max();
+    bad.hop_length = bad.n_fft;
+    REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
+    bad = config;
+    bad.n_mels = 1 << 24;
+    REQUIRE(sonare_stream_analyzer_create(&bad, &analyzer) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(analyzer == nullptr);
+  }
+
   SECTION("reports compute_magnitude as unsupported, not as a refused argument") {
     SonareStreamConfig bad = config;
     bad.compute_magnitude = 1;

@@ -73,8 +73,12 @@ struct RoomMorphConfig {
 /// input (image-source order, timing, air absorption) before source samples or
 /// processor state are changed. Throws ErrorCode::InvalidParameter on any value
 /// RIR synthesis would refuse, since a refused synthesis yields an empty target
-/// RIR that the convolution path would render as dry passthrough.
-void validate_room_morph_config(const RoomMorphConfig& config);
+/// RIR that the convolution path would render as dry passthrough. The message carries the
+/// first refused field, spelled through @p room_names / @p rir_names.
+void validate_room_morph_config(
+    const RoomMorphConfig& config,
+    const sonare::acoustic::ShoeboxFieldNames& room_names = sonare::acoustic::kShoeboxFieldNames,
+    const sonare::acoustic::RirSynthFieldNames& rir_names = sonare::acoustic::kRirSynthFieldNames);
 
 /// @brief A morph and what the target-room synthesis had to change to make it.
 /// @details Shaped like @ref sonare::acoustic::RirSynthResult because the same

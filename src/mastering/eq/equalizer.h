@@ -142,15 +142,21 @@ class EqualizerProcessor : public rt::ProcessorBase {
   static void validate_backend_capacity(const std::array<EqBand, kMaxBands>& bands,
                                         PhaseMode global_phase);
   static void validate_dynamic_params(const DynamicParams& dyn);
-  static float detector_db(const float* const* channels, int num_channels, int num_samples,
-                           int excluded_channel, int readable_samples = -1);
-  // @p excluded_channel (-1 for none) contributes to neither sum nor count.
-  float band_detector_db(size_t band_index, const float* const* channels, int num_channels,
-                         int num_samples, int excluded_channel, double sample_rate,
-                         const EqBand& band, int readable_samples = -1);
-  static float rms_db(const float* const* channels, int num_channels, int num_samples) noexcept;
   static float dynamic_gain_delta(const EqBand& band, float detector_db, float threshold_db);
-  void update_dynamic_state(const float* const* channels, int num_channels, int num_samples);
+  /// Adds @p count samples (starting @p offset into the block) to the interval's detector and
+  /// auto-gain input sums; must run before the filters overwrite the block.
+  void accumulate_control_input(const float* const* channels, int num_channels, int offset,
+                                int count);
+  // @p excluded_channel (-1 for none) contributes to neither sum nor count.
+  void accumulate_band_detector(size_t band_index, const float* const* channels, int num_channels,
+                                int count, int excluded_channel, const EqBand& band,
+                                int readable_samples);
+  void clear_control_accumulators() noexcept;
+  /// Turns the finished interval's sums into detector readings, thresholds, dynamic gains and the
+  /// auto-gain. @return true when a non-finite cell was discarded.
+  bool settle_control();
+  /// Runs the filters and the output stage over one chunk of at most one control interval.
+  void process_chunk(float* const* channels, int num_channels, int num_samples);
   void validate_sidechain(int expected_samples) const;
   // Applies the recursive-cell rule to the detector and gain state that survives
   // a block. O(bands x channels) and independent of block size, so the
@@ -166,8 +172,7 @@ class EqualizerProcessor : public rt::ProcessorBase {
   static EqBand backend_band(EqBand band, PhaseMode global_phase, float gain_scale);
   void process_mono_backend(ParametricEq& backend, float* samples, int num_samples);
   void process_mono_fir(LinearPhaseEq& backend, float* samples, int num_samples);
-  void apply_auto_gain(float* const* channels, int num_channels, int num_samples,
-                       float input_db) noexcept;
+  void apply_auto_gain(float* const* channels, int num_channels, int num_samples) noexcept;
   void apply_output_gain_and_pan(float* const* channels, int num_channels,
                                  int num_samples) noexcept;
   static void capture_stream(const float* const* channels, int num_channels, int num_samples,
@@ -193,6 +198,8 @@ class EqualizerProcessor : public rt::ProcessorBase {
   std::array<float, kMaxBands> smoothed_gain_db_{};
   // True while smoothed_gain_db_ describes a running dynamic band.
   std::array<bool, kMaxBands> dynamic_gain_live_{};
+  // False until a dynamic band has its first detector reading; that reading seeds the glide.
+  std::array<bool, kMaxBands> dynamic_reading_seen_{};
   std::array<float, kMaxBands> auto_threshold_db_{};
   float last_detector_db_ = sonare::constants::kFloorDb;
   bool auto_gain_enabled_ = false;
@@ -201,6 +208,18 @@ class EqualizerProcessor : public rt::ProcessorBase {
   bool has_mid_side_linear_bands_ = false;
   float last_auto_gain_db_ = 0.0f;
   float smoothed_auto_gain_db_ = 0.0f;
+  // Linear gain the auto-gain applies until the next control update.
+  float auto_gain_linear_ = 1.0f;
+  int control_phase_ = 0;
+  double detector_sum_ = 0.0;
+  double detector_count_ = 0.0;
+  std::array<double, kMaxBands> band_detector_sum_{};
+  std::array<double, kMaxBands> band_detector_count_{};
+  double auto_gain_input_sum_ = 0.0;
+  double auto_gain_output_sum_ = 0.0;
+  double auto_gain_count_ = 0.0;
+  std::vector<float*> chunk_channels_;
+  std::vector<const float*> chunk_sidechain_;
   float gain_scale_ = 1.0f;
   float output_gain_db_ = 0.0f;
   float output_pan_ = 0.0f;

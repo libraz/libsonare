@@ -1586,10 +1586,14 @@ TEST_CASE("reverb inserts publish the decaySec range they enforce",
   REQUIRE(found);
 }
 
-TEST_CASE("room reverb inserts refuse a negative seed", "[mastering][insert_factory][reverb]") {
-  REQUIRE_THROWS_AS(make_insert("effects.reverb.convolution", R"({"seed":-1})"),
-                    sonare::SonareException);
+TEST_CASE("room reverb inserts take a seed over the whole uint32 domain",
+          "[mastering][insert_factory][reverb]") {
+  for (const char* bad : {R"({"seed":-1})", R"({"seed":4294967296})", R"({"seed":0.5})"}) {
+    REQUIRE_THROWS_AS(make_insert("effects.reverb.convolution", bad), sonare::SonareException);
+  }
   REQUIRE(make_insert("effects.reverb.convolution", R"({"seed":7})") != nullptr);
+  REQUIRE(make_insert("effects.reverb.convolution", R"({"seed":2147483648})") != nullptr);
+  REQUIRE(make_insert("effects.reverb.convolution", R"({"seed":4294967295})") != nullptr);
 }
 #endif  // SONARE_WITH_FX
 

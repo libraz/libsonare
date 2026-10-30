@@ -8,6 +8,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -416,5 +417,52 @@ TEST_CASE("spectral_edit mutes the whole input to silence at any length", "[spec
     INFO("samples " << samples);
     REQUIRE(out.size() == static_cast<size_t>(samples));
     for (size_t i = 0; i < out.size(); ++i) REQUIRE(out[i] == 0.0f);
+  }
+}
+
+TEST_CASE("spectral_edit never returns non-finite audio for an op field", "[spectral_edit]") {
+  const int samples = kSampleRate / 2;
+  const Audio audio = Audio::from_vector(generate_sine(samples, 1000.0f, 0.3f), kSampleRate);
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  const auto refused = [&](const SpectralRegionOp& op) {
+    try {
+      spectral_edit(audio, default_config(), &op, 1);
+    } catch (const SonareException& error) {
+      return error.code() == ErrorCode::InvalidParameter;
+    }
+    return false;
+  };
+
+  SECTION("a non-finite or overflowing field is refused on every mode that carries it") {
+    for (const float gain : {nan, inf, -inf, 1000.0f}) {
+      INFO("gain_db " << gain);
+      REQUIRE(refused({0, samples, 0.0f, 0.0f, gain, SpectralEditMode::Gain}));
+      REQUIRE(refused({0, samples, 0.0f, 0.0f, gain, SpectralEditMode::Attenuate}));
+    }
+    for (const float edge : {nan, inf, -inf}) {
+      INFO("band edge " << edge);
+      for (const SpectralEditMode mode :
+           {SpectralEditMode::Gain, SpectralEditMode::Mute, SpectralEditMode::Heal}) {
+        REQUIRE(refused({0, samples, edge, 0.0f, 0.0f, mode}));
+        REQUIRE(refused({0, samples, 0.0f, edge, 0.0f, mode}));
+      }
+    }
+    REQUIRE(refused({0, samples, 0.0f, 0.0f, nan, SpectralEditMode::Mute}));
+  }
+
+  SECTION("a finite gain that overflows the output is refused rather than returned") {
+    REQUIRE(refused({0, samples, 0.0f, 0.0f, 760.0f, SpectralEditMode::Gain}));
+  }
+
+  SECTION("an edge past the Nyquist is clamped and a Mute op ignores its gain") {
+    const SpectralRegionOp ops[] = {
+        {0, samples, 1.0e30f, 0.0f, 12.0f, SpectralEditMode::Gain},
+        {0, samples, 0.0f, 1.0e30f, -6.0f, SpectralEditMode::Attenuate},
+        {0, samples, 2000.0f, 4000.0f, 1000.0f, SpectralEditMode::Mute},
+    };
+    const Audio out = spectral_edit(audio, default_config(), ops, 3);
+    REQUIRE(out.size() == audio.size());
+    for (size_t i = 0; i < out.size(); ++i) REQUIRE(std::isfinite(out[i]));
   }
 }

@@ -1146,20 +1146,46 @@ TEST_CASE("RealtimeVoiceChanger counts a block once however many channels carrie
 // for the same preset.
 // ===================================================================
 TEST_CASE("RealtimeVoiceChanger handles 44.1 kHz and 96 kHz", "[voice_changer]") {
+  constexpr float kInputHz = 220.0f;
+  double f0_ratio[2] = {};
+  int index = 0;
   for (int sample_rate : {44100, 96000}) {
+    CAPTURE(sample_rate);
     RealtimeVoiceChanger changer(realtime_voice_changer_preset(VoiceCharacterPreset::DeepNarrator));
     changer.prepare(sample_rate, 256, 1);
-    const auto input = sine(220.0f, sample_rate, 8192);
+    const int total = sample_rate / 2;
+    const auto input = sine(kInputHz, sample_rate, total);
     std::vector<float> output(input.size(), 0.0f);
-    for (int pos = 0; pos < static_cast<int>(input.size()); pos += 256) {
-      const int n = std::min(256, static_cast<int>(input.size()) - pos);
+    for (int pos = 0; pos < total; pos += 256) {
+      const int n = std::min(256, total - pos);
       changer.process_block(input.data() + pos, output.data() + pos, n);
     }
     for (float sample : output) {
       REQUIRE(std::isfinite(sample));
       REQUIRE(std::abs(sample) <= 1.0f);
     }
+
+    // Past the reported latency the output carries energy, and its pitch (positive-going zero
+    // crossings per second) sits below the input's, as the downward retune commands.
+    const int begin = total / 2;
+    double energy = 0.0;
+    int crossings = 0;
+    for (int i = begin; i < total; ++i) {
+      const auto k = static_cast<size_t>(i);
+      energy += static_cast<double>(output[k]) * output[k];
+      if (output[k - 1] < 0.0f && output[k] >= 0.0f) ++crossings;
+    }
+    REQUIRE(begin > changer.latency_samples());
+    const double rms = std::sqrt(energy / (total - begin));
+    const double f0 = crossings * static_cast<double>(sample_rate) / (total - begin);
+    CAPTURE(rms, f0);
+    REQUIRE(rms > 0.01);
+    REQUIRE(f0 < 0.95 * kInputHz);
+    REQUIRE(f0 > 0.4 * kInputHz);
+    f0_ratio[index++] = f0 / kInputHz;
   }
+  // The same preset gives the same pitch shift at both rates.
+  REQUIRE_THAT(f0_ratio[0], WithinRel(f0_ratio[1], 0.06));
 }
 
 // ===================================================================
@@ -1565,4 +1591,110 @@ TEST_CASE("RealtimeVoiceChanger resets a channel a block leaves out", "[voice_ch
   CHECK(run(2, blocks, true) > 0.05f);
   run(1, blocks, false);
   CHECK(run(2, blocks, false) == 0.0f);
+}
+
+namespace {
+
+// A voiced test signal: six harmonics of f0_hz with a falling spectrum.
+std::vector<float> harmonic_voice(float f0_hz, int sample_rate, int samples, int offset = 0) {
+  std::vector<float> out(static_cast<size_t>(samples), 0.0f);
+  for (int i = 0; i < samples; ++i) {
+    double s = 0.0;
+    for (int h = 1; h <= 6; ++h) {
+      s += std::sin(sonare::constants::kTwoPiD * f0_hz * h * static_cast<double>(i + offset) /
+                    sample_rate) /
+           h;
+    }
+    out[static_cast<size_t>(i)] = static_cast<float>(0.25 * s);
+  }
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("RealtimeVoiceChanger removes a harmony voice without a step",
+          "[voice_changer][harmony]") {
+  constexpr int sample_rate = 48000;
+  constexpr int block = 128;
+  constexpr int blocks_before = 80;
+  constexpr int blocks_after = 60;
+  const auto input = harmonic_voice(150.0f, sample_rate, block * (blocks_before + blocks_after));
+
+  for (const float delay_ms : {0.0f, 5.0f, 12.0f, 18.0f}) {
+    CAPTURE(delay_ms);
+    auto config = realtime_voice_changer_preset(VoiceCharacterPreset::NeutralMonitor);
+    config.wet_mix = 1.0f;
+    config.retune.mix = 1.0f;
+    config.harmony.voices = 2;
+    config.harmony.delay_ms = delay_ms;
+    config.harmony.level = 0.7f;
+    auto lowered = config;
+    lowered.harmony.voices = 0;
+
+    const auto render = [&](bool remove) {
+      RealtimeVoiceChanger changer(config);
+      changer.prepare(sample_rate, block, 1);
+      std::vector<float> out(input.size(), 0.0f);
+      for (int b = 0; b < blocks_before + blocks_after; ++b) {
+        if (remove && b == blocks_before) changer.set_config(lowered);
+        const auto offset = static_cast<size_t>(b * block);
+        changer.process_block(input.data() + offset, out.data() + offset, block);
+      }
+      return out;
+    };
+    const auto kept = render(false);
+    const auto removed = render(true);
+
+    // The largest sample-to-sample move after the change, against the same stretch of the run
+    // that kept its voices: a click would stand well clear of it.
+    const auto largest_step = [&](const std::vector<float>& v) {
+      float step = 0.0f;
+      for (size_t i = static_cast<size_t>(blocks_before * block); i < v.size(); ++i) {
+        step = std::max(step, std::abs(v[i] - v[i - 1]));
+      }
+      return step;
+    };
+    REQUIRE(largest_step(kept) > 0.0f);
+    REQUIRE(largest_step(removed) <= 1.25f * largest_step(kept));
+  }
+}
+
+TEST_CASE("RealtimeVoiceChanger pitch correction does not depend on the host block size",
+          "[voice_changer][pitch_correction]") {
+  constexpr int sample_rate = 48000;
+  const int half = sample_rate / 2;
+  auto first = harmonic_voice(150.0f, sample_rate, half);
+  const auto second = harmonic_voice(200.0f, sample_rate, half, half);
+  first.insert(first.end(), second.begin(), second.end());
+
+  auto config = realtime_voice_changer_preset(VoiceCharacterPreset::NeutralMonitor);
+  config.wet_mix = 1.0f;
+  config.retune.mix = 1.0f;
+  config.pitch_correction.mode = PitchCorrectionMode::Auto;
+  config.pitch_correction.amount = 1.0f;
+  config.pitch_correction.speed_ms = 0.0f;
+  config.pitch_correction.scale = ScaleKind::Chromatic;
+
+  const auto render = [&](int block) {
+    RealtimeVoiceChanger changer(config);
+    changer.prepare(sample_rate, 4096, 1);
+    std::vector<float> out(first.size(), 0.0f);
+    for (size_t pos = 0; pos < first.size(); pos += static_cast<size_t>(block)) {
+      const int n = static_cast<int>(std::min(static_cast<size_t>(block), first.size() - pos));
+      changer.process_block(first.data() + pos, out.data() + pos, n);
+    }
+    return out;
+  };
+  const auto small = render(128);
+  const auto large = render(4096);
+
+  double diff = 0.0;
+  double power = 0.0;
+  for (size_t i = 0; i < small.size(); ++i) {
+    const double d = static_cast<double>(small[i]) - large[i];
+    diff += d * d;
+    power += static_cast<double>(small[i]) * small[i];
+  }
+  REQUIRE(power > 0.0);
+  REQUIRE(std::sqrt(diff / power) < 0.1);
 }

@@ -61,7 +61,9 @@ Audio mel_to_audio(const float* M, int n_mels, int n_frames, const MelConfig& me
 ///        value passed to @ref MelSpectrogram::mfcc.
 /// @return Mel power spectrogram [n_mels x n_frames] row-major.
 /// @throw sonare::SonareException (InvalidParameter) on a null @p mfcc, a
-///        negative @p lifter, or any non-finite element of @p mfcc. The
+///        negative or non-finite @p lifter, a @p lifter whose lift window is
+///        (near) zero at a coefficient below @p n_mfcc (lifter 2 with three or
+///        more coefficients), or any non-finite element of @p mfcc. The
 ///        finiteness precondition lives here so every surface reports it
 ///        identically.
 std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int n_mels = 128,

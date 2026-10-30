@@ -61,21 +61,18 @@ void MultibandImager::prepare(double sample_rate, int max_block_size) {
 }
 
 void MultibandImager::prepare(double sample_rate, int max_block_size, int max_channels) {
-  validate_prepare_args(sample_rate, max_block_size, max_channels, "MultibandImager");
-
-  sample_rate_ = sample_rate;
-  max_block_size_ = max_block_size;
-  max_working_channels_ = max_channels;
-  prepared_ = true;
-  prepare_band_split(crossover_, scratch_, sample_rate_, max_block_size_, max_working_channels_);
-  allpass_.resize(config_.bands.size());
-  decorrelation_gates_.assign(config_.bands.size(), rt::StageGate{});
-  for (auto& band_stages : allpass_) {
-    for (int stage = 0; stage < kNumAllpassStages; ++stage) {
-      band_stages[static_cast<size_t>(stage)].coefficient =
-          allpass_coefficient(kDecorrelationFrequenciesHz[stage], sample_rate_);
-    }
-  }
+  prepare_multiband("MultibandImager", crossover_, scratch_, sample_rate, max_block_size,
+                    max_channels, sample_rate_, max_block_size_, max_working_channels_, prepared_,
+                    [this](double rate, int /*block*/, int /*channels*/) {
+                      allpass_.resize(config_.bands.size());
+                      decorrelation_gates_.assign(config_.bands.size(), rt::StageGate{});
+                      for (auto& band_stages : allpass_) {
+                        for (int stage = 0; stage < kNumAllpassStages; ++stage) {
+                          band_stages[static_cast<size_t>(stage)].coefficient =
+                              allpass_coefficient(kDecorrelationFrequenciesHz[stage], rate);
+                        }
+                      }
+                    });
   reset();
 }
 

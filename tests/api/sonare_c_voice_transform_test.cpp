@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <string>
@@ -338,11 +339,32 @@ TEST_CASE("get_config round-trips every transformer field, harmony steps include
   CHECK(out.midi_release == in.midi_release);
 
   // The distinctive config differs from the default in every transformer field, so a field the
-  // bridge drops would read back as the default above.
+  // bridge drops would read back as the default above. The engine is the one exception (psola is
+  // the default); the grain read-back below covers it.
   const Config def = default_config();
-  CHECK(out.harmony_steps[0] != def.harmony_steps[0]);
-  CHECK(out.harmony_steps[1] != def.harmony_steps[1]);
-  CHECK(out.harmony_steps[2] != def.harmony_steps[2]);
+  for (const auto& f : kFloatFields) {
+    INFO(f.path);
+    CHECK(in.*f.member != def.*f.member);
+  }
+  for (const auto& f : kIntFields) {
+    INFO(f.path);
+    CHECK(in.*f.member != def.*f.member);
+  }
+  for (const auto& f : kEnumFields) {
+    INFO(f.name);
+    if (f.member == &Config::voice_engine_engine) continue;
+    CHECK(in.*f.member != def.*f.member);
+  }
+  for (int i = 0; i < 3; ++i) CHECK(in.harmony_steps[i] != def.harmony_steps[i]);
+  CHECK((in.vocoder_enabled != 0) != (def.vocoder_enabled != 0));
+}
+
+TEST_CASE("get_config reads the grain engine back from a grain handle", "[capi][voice_transform]") {
+  Config grain = default_config();
+  REQUIRE(grain.voice_engine_engine == SONARE_PITCH_ENGINE_PSOLA);
+  grain.voice_engine_engine = SONARE_PITCH_ENGINE_GRAIN;
+  const Handle h = make(grain);
+  CHECK(read_config(h).voice_engine_engine == SONARE_PITCH_ENGINE_GRAIN);
 }
 
 TEST_CASE("Every preset round-trips through the POD and agrees with its JSON form",
@@ -747,24 +769,41 @@ TEST_CASE("The note entries on a grain handle give INVALID_STATE", "[capi][voice
 
 TEST_CASE("Held notes reach the output whatever the pitch correction mode",
           "[capi][voice_transform]") {
-  // Off mode, a held note pulls the voice to its pitch: the audio differs from the free run.
-  Config c = default_config();
-  c.pitch_correction_mode = SONARE_PITCH_CORRECTION_OFF;
-  c.wet_mix = 1.0f;
-  c.retune_mix = 1.0f;
+  struct Mode {
+    int32_t mode;
+    float amount;
+  };
   const auto input = voiced(24000, 150.0);
-  const auto free_run = run_mono(make(c), input);
+  std::vector<float> reference;
+  for (const Mode m :
+       {Mode{SONARE_PITCH_CORRECTION_OFF, 1.0f}, Mode{SONARE_PITCH_CORRECTION_AUTO, 0.4f},
+        Mode{SONARE_PITCH_CORRECTION_AUTO, 1.0f}, Mode{SONARE_PITCH_CORRECTION_ROBOT, 1.0f}}) {
+    INFO("mode " << m.mode << " amount " << m.amount);
+    Config c = default_config();
+    c.pitch_correction_mode = m.mode;
+    c.pitch_correction_amount = m.amount;
+    c.wet_mix = 1.0f;
+    c.retune_mix = 1.0f;
+    const auto free_run = run_mono(make(c), input);
 
-  const Handle held = make(c);
-  REQUIRE(sonare_realtime_voice_changer_note_on(held.get(), 67, 1.0f) == SONARE_OK);
-  const auto held_run = run_mono(held, input);
-  REQUIRE(all_finite(held_run));
-  CHECK_FALSE(same_bytes(free_run, held_run));
+    // A held note pulls the voice to its pitch: the audio differs from the free run.
+    const Handle held = make(c);
+    REQUIRE(sonare_realtime_voice_changer_note_on(held.get(), 67, 1.0f) == SONARE_OK);
+    const auto held_run = run_mono(held, input);
+    REQUIRE(all_finite(held_run));
+    CHECK_FALSE(same_bytes(free_run, held_run));
 
-  // Releasing it again restores the free pitch behaviour on a fresh handle's terms: the release
-  // call itself succeeds and the output stays finite.
-  CHECK(sonare_realtime_voice_changer_all_notes_off(held.get()) == SONARE_OK);
-  CHECK(all_finite(run_mono(held, input)));
+    // The note, not the mode, decides the target: every mode renders the same audio.
+    if (reference.empty()) {
+      reference = held_run;
+    } else {
+      CHECK(same_bytes(reference, held_run));
+    }
+
+    // The release call itself succeeds and the output stays finite.
+    CHECK(sonare_realtime_voice_changer_all_notes_off(held.get()) == SONARE_OK);
+    CHECK(all_finite(run_mono(held, input)));
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -852,6 +891,68 @@ TEST_CASE("An internal carrier is never read by the *_with_carrier entries",
     CHECK(all_finite(rb));
     CHECK(same_bytes(la, lb));
     CHECK(same_bytes(ra, rb));
+  }
+}
+
+TEST_CASE("Different external carriers give different output on every layout",
+          "[capi][voice_transform]") {
+  const Config cfg = vocoder_config(SONARE_VOCODER_CARRIER_EXTERNAL);
+  constexpr std::size_t n = 8192;
+  const auto speech = voiced(n, 160.0);
+  const auto saw = [](double hz) {
+    std::vector<float> c(n);
+    for (std::size_t i = 0; i < n; ++i) {
+      c[i] = 0.3f * (2.0f * std::fmod(static_cast<float>(i * hz / kRate), 1.0f) - 1.0f);
+    }
+    return c;
+  };
+  const std::vector<float> low = saw(110.0);
+  const std::vector<float> high = saw(440.0);
+  const std::vector<float> silence(n, 0.0f);
+
+  const auto render_mono = [&](const std::vector<float>& carrier) {
+    return run_mono(make(cfg), speech, &carrier);
+  };
+  const auto render_interleaved = [&](const std::vector<float>& carrier) {
+    const Handle h = make(cfg, 2);
+    std::vector<float> stereo(n * 2);
+    for (std::size_t i = 0; i < n; ++i) stereo[2 * i] = stereo[2 * i + 1] = speech[i];
+    std::vector<float> out(stereo.size());
+    for (std::size_t pos = 0; pos < n; pos += kBlock) {
+      REQUIRE(sonare_realtime_voice_changer_process_interleaved_with_carrier(
+                  h.get(), stereo.data() + 2 * pos, carrier.data() + pos, out.data() + 2 * pos,
+                  kBlock, 2) == SONARE_OK);
+    }
+    return out;
+  };
+  const auto render_planar = [&](const std::vector<float>& carrier) {
+    const Handle h = make(cfg, 2);
+    std::vector<float> left = speech;
+    std::vector<float> right = speech;
+    for (std::size_t pos = 0; pos < n; pos += kBlock) {
+      REQUIRE(sonare_realtime_voice_changer_process_planar_stereo_with_carrier(
+                  h.get(), left.data() + pos, right.data() + pos, carrier.data() + pos, kBlock) ==
+              SONARE_OK);
+    }
+    left.insert(left.end(), right.begin(), right.end());
+    return left;
+  };
+
+  const struct {
+    const char* name;
+    std::function<std::vector<float>(const std::vector<float>&)> render;
+  } layouts[] = {
+      {"mono", render_mono}, {"interleaved", render_interleaved}, {"planar", render_planar}};
+  for (const auto& layout : layouts) {
+    INFO("layout " << layout.name);
+    const auto with_low = layout.render(low);
+    const auto with_high = layout.render(high);
+    const auto with_silence = layout.render(silence);
+    const auto with_speech = layout.render(speech);
+    REQUIRE(all_finite(with_low));
+    CHECK_FALSE(same_bytes(with_low, with_high));
+    CHECK_FALSE(same_bytes(with_low, with_silence));
+    CHECK_FALSE(same_bytes(with_low, with_speech));
   }
 }
 

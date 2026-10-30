@@ -56,6 +56,7 @@ class AdaptiveRelease : public rt::ProcessorBase {
     return limiter_.non_finite_substitution_count();
   }
   int latency_samples() const noexcept override { return limiter_.latency_samples(); }
+  int tail_samples() const noexcept override { return limiter_.tail_samples(); }
 
   // Automatable parameters (RT-safe, no allocation). Most are read directly by
   // the per-sample adaptive-release mapping, so writing config_ is sufficient;

@@ -146,6 +146,10 @@ class CqtKernel {
   std::vector<float> raw_lengths_;  ///< Raw fractional lengths (librosa)
 };
 
+/// @brief Refuses a CQT/VQT minimum frequency that is not finite and positive, naming fmin.
+/// @throws SonareException(InvalidParameter).
+void validate_cqt_fmin(float fmin);
+
 /// @brief Computes Constant-Q Transform.
 /// @param audio Input audio
 /// @param config CQT configuration

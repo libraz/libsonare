@@ -934,6 +934,7 @@ Smf2ImportResult import_clip_file(const uint8_t* data, size_t size,
   }
 
   if (has_events) {
+    drop_zero_length_notes(&clip, &result.skipped_events);
     clip.sort_stable();
     result.clips.push_back(std::move(clip));
     if (canonical_name_present && legacy_name_present) ++result.skipped_events;
@@ -1082,7 +1083,9 @@ Smf2ExportResult export_clip_file(
     item.word_count = 4;
     items.push_back(item);
   }
-  for (const MidiClipEvent& ev : clip.events()) {
+  MidiClip exported = clip;
+  drop_zero_length_notes(&exported, &result.skipped_events, dctpq);
+  for (const MidiClipEvent& ev : exported.events()) {
     const uint64_t tick = ppq_to_tick(ev.ppq, dctpq);
     if (ev.ump.sysex_handle != 0) {
       const std::vector<uint8_t>* payload = options.sysex_store != nullptr

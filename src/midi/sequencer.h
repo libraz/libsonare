@@ -33,7 +33,10 @@
 /// registered/assignable controller values the clips set before that timeline
 /// frame, so every loop pass and every seek starts from the state continuous
 /// playback would have reached. MIDI 1.0 RPN/NRPN sequences (CC 6, 38, 96-101)
-/// and channel-mode messages are not chased.
+/// and channel-mode messages are not chased. A Reset All Controllers or a GM/GS/XG
+/// system reset SysEx (every channel of the destination) drops the modulation,
+/// breath, expression, pedal, pressure and bend values set before it, as playback
+/// through it would have; the release's controller reset already restores them.
 ///
 /// Clock basis
 /// -----------

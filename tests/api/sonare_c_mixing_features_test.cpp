@@ -5,6 +5,8 @@
 
 #if defined(SONARE_WITH_MIXING)
 #include <cstring>
+#include <limits>
+#include <utility>
 #include <vector>
 
 #include "c_api/mixing_internal.h"
@@ -217,6 +219,43 @@ TEST_CASE("sonare_mel_spectrogram_ex exposes a custom Mel range from pure C", "[
 
     REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), sr, n_fft, hop, n_mels, 13, 0.0f, 0.0f,
                            0, 0.0f, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("every inverse entry refuses the band edges the forward transform refuses") {
+    SonareMelResult mel = {};
+    REQUIRE(sonare_mel_spectrogram(samples.data(), samples.size(), sr, n_fft, hop, n_mels, &mel) ==
+            SONARE_OK);
+    SonareMfccResult mfcc = {};
+    REQUIRE(sonare_mfcc(samples.data(), samples.size(), sr, n_fft, hop, n_mels, 13, &mfcc) ==
+            SONARE_OK);
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const std::vector<std::pair<float, float>> bad = {
+        {-1.0f, 0.0f}, {0.0f, -1.0f}, {nan, 0.0f}, {0.0f, nan}};
+    for (const auto& [fmin, fmax] : bad) {
+      INFO("fmin " << fmin << " fmax " << fmax);
+      SonareMelResult forward = {};
+      REQUIRE(sonare_mel_spectrogram_ex(samples.data(), samples.size(), sr, n_fft, hop, n_mels,
+                                        fmin, fmax, 0, &forward) == SONARE_ERROR_INVALID_PARAMETER);
+      SonareInverseResult stft = {};
+      REQUIRE(sonare_mel_to_stft_ex(mel.power, mel.n_mels, mel.n_frames, sr, n_fft, fmin, fmax, 0,
+                                    &stft) == SONARE_ERROR_INVALID_PARAMETER);
+      float* audio = nullptr;
+      size_t audio_length = 0;
+      REQUIRE(sonare_mel_to_audio_ex(mel.power, mel.n_mels, mel.n_frames, sr, n_fft, hop, fmin,
+                                     fmax, 0, 1, &audio,
+                                     &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(audio == nullptr);
+      REQUIRE(sonare_mfcc_to_audio_ex2(mfcc.coefficients, mfcc.n_mfcc, mfcc.n_frames, n_mels, sr,
+                                       n_fft, hop, fmin, fmax, 0, 0.0f, 1, &audio,
+                                       &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
+      REQUIRE(audio == nullptr);
+    }
+    SonareInverseResult stft = {};
+    REQUIRE(sonare_mel_to_stft_ex(mel.power, mel.n_mels, mel.n_frames, sr, n_fft, 0.0f, 0.0f, 0,
+                                  &stft) == SONARE_OK);
+    sonare_free_inverse_result(&stft);
+    sonare_free_mfcc_result(&mfcc);
+    sonare_free_mel_result(&mel);
   }
 }
 

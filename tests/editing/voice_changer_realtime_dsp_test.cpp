@@ -172,6 +172,27 @@ TEST_CASE("RealtimeVoiceChanger prepare rejects invalid arguments",
     RealtimeVoiceChanger changer;
     REQUIRE_THROWS_AS(changer.prepare(48000.0, 128, 3), sonare::SonareException);
   }
+  // Non-finite sample rate
+  {
+    RealtimeVoiceChanger changer;
+    REQUIRE_THROWS_AS(changer.prepare(std::numeric_limits<double>::infinity(), 128, 1),
+                      sonare::SonareException);
+    REQUIRE_THROWS_AS(changer.prepare(std::numeric_limits<double>::quiet_NaN(), 128, 1),
+                      sonare::SonareException);
+  }
+  // Sample rate outside the supported range
+  {
+    RealtimeVoiceChanger changer;
+    REQUIRE_THROWS_AS(changer.prepare(100.0, 128, 1), sonare::SonareException);
+    REQUIRE_THROWS_AS(changer.prepare(1.0e9, 128, 1), sonare::SonareException);
+  }
+  // Zero and oversized max_block_size
+  {
+    RealtimeVoiceChanger changer;
+    REQUIRE_THROWS_AS(changer.prepare(48000.0, 0, 1), sonare::SonareException);
+    REQUIRE_THROWS_AS(changer.prepare(48000.0, std::numeric_limits<int>::max(), 1),
+                      sonare::SonareException);
+  }
   // Valid args must not throw
   {
     RealtimeVoiceChanger changer;
@@ -349,6 +370,41 @@ TEST_CASE("RealtimeVoiceChanger C API preset_config round-trips all presets",
   }
 }
 
+TEST_CASE("RealtimeVoiceChanger refused prepare leaves a live instance untouched",
+          "[voice_changer][prepare][safety]") {
+  constexpr int sample_rate = 48000;
+  constexpr int block = 128;
+  constexpr int blocks = 12;
+  const auto preset = realtime_voice_changer_preset(VoiceCharacterPreset::NeutralMonitor);
+  const std::vector<float> tone = sine(330.0f, sample_rate, block * blocks);
+
+  RealtimeVoiceChanger live(preset);
+  RealtimeVoiceChanger twin(preset);
+  live.prepare(sample_rate, block, 1);
+  twin.prepare(sample_rate, block, 1);
+
+  std::vector<float> live_out(tone.size());
+  std::vector<float> twin_out(tone.size());
+  const auto run = [&](int first, int last) {
+    for (int b = first; b < last; ++b) {
+      const auto offset = static_cast<std::size_t>(b * block);
+      live.process_block(tone.data() + offset, live_out.data() + offset, block);
+      twin.process_block(tone.data() + offset, twin_out.data() + offset, block);
+    }
+  };
+  run(0, blocks / 2);
+
+  const int latency = live.latency_samples();
+  REQUIRE_THROWS_AS(live.prepare(std::numeric_limits<double>::infinity(), block, 1),
+                    sonare::SonareException);
+  REQUIRE_THROWS_AS(live.prepare(sample_rate, 0, 1), sonare::SonareException);
+  REQUIRE_THROWS_AS(live.prepare(sample_rate, block, 3), sonare::SonareException);
+  REQUIRE(live.latency_samples() == latency);
+
+  run(blocks / 2, blocks);
+  REQUIRE(live_out == twin_out);
+}
+
 // ===================================================================
 // Re-prepare with different channel count doesn't corrupt state.
 // ===================================================================
@@ -356,38 +412,48 @@ TEST_CASE("RealtimeVoiceChanger re-prepare with different channel count stays fi
           "[voice_changer][prepare]") {
   constexpr int sample_rate = 48000;
   constexpr int block = 128;
+  constexpr int blocks = 24;
   const auto preset = realtime_voice_changer_preset(VoiceCharacterPreset::NeutralMonitor);
 
   RealtimeVoiceChanger changer(preset);
+  const std::vector<float> tone = sine(440.0f, sample_rate, block * blocks);
 
-  // First: mono prepare + process.
-  changer.prepare(sample_rate, block, 1);
-  {
-    std::vector<float> in(static_cast<std::size_t>(block), 0.1f);
-    std::vector<float> out(static_cast<std::size_t>(block), 0.0f);
-    changer.process_block(in.data(), out.data(), block);
-    for (float s : out) REQUIRE(std::isfinite(s));
-  }
+  // Runs the tone through @p channels channels and checks every channel is finite and carries
+  // energy once the reported latency has passed.
+  const auto run_phase = [&](int channels) {
+    CAPTURE(channels);
+    changer.prepare(sample_rate, block, channels);
+    const int latency = changer.latency_samples();
+    REQUIRE(latency < block * blocks);
+    std::vector<std::vector<float>> out(static_cast<std::size_t>(channels),
+                                        std::vector<float>(tone.size()));
+    for (int b = 0; b < blocks; ++b) {
+      const auto offset = static_cast<std::size_t>(b * block);
+      float* ptrs[2];
+      for (int ch = 0; ch < channels; ++ch) {
+        auto& buffer = out[static_cast<std::size_t>(ch)];
+        std::copy(tone.begin() + static_cast<std::ptrdiff_t>(offset),
+                  tone.begin() + static_cast<std::ptrdiff_t>(offset + block),
+                  buffer.begin() + static_cast<std::ptrdiff_t>(offset));
+        ptrs[ch] = buffer.data() + offset;
+      }
+      REQUIRE(changer.process_block(ptrs, channels, block));
+    }
+    for (int ch = 0; ch < channels; ++ch) {
+      CAPTURE(ch);
+      double energy = 0.0;
+      const auto& buffer = out[static_cast<std::size_t>(ch)];
+      for (float s : buffer) REQUIRE(std::isfinite(s));
+      for (std::size_t i = static_cast<std::size_t>(latency); i < buffer.size(); ++i) {
+        energy += static_cast<double>(buffer[i]) * buffer[i];
+      }
+      REQUIRE(energy > 0.0);
+    }
+  };
 
-  // Re-prepare as stereo.
-  changer.prepare(sample_rate, block, 2);
-  {
-    std::vector<float> left(static_cast<std::size_t>(block), 0.1f);
-    std::vector<float> right(static_cast<std::size_t>(block), 0.1f);
-    float* channels[2] = {left.data(), right.data()};
-    changer.process_block(channels, 2, block);
-    for (float s : left) REQUIRE(std::isfinite(s));
-    for (float s : right) REQUIRE(std::isfinite(s));
-  }
-
-  // Re-prepare back to mono.
-  changer.prepare(sample_rate, block, 1);
-  {
-    std::vector<float> in(static_cast<std::size_t>(block), 0.1f);
-    std::vector<float> out(static_cast<std::size_t>(block), 0.0f);
-    changer.process_block(in.data(), out.data(), block);
-    for (float s : out) REQUIRE(std::isfinite(s));
-  }
+  run_phase(1);
+  run_phase(2);
+  run_phase(1);
 }
 
 // ===================================================================

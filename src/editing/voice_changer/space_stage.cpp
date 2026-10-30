@@ -14,7 +14,6 @@ using constants::kTwoPiD;
 
 namespace {
 
-constexpr int kReverbBlockHint = 512;
 // Interpolator reads up to base + 2 samples back; keep a margin beyond the longest delay.
 constexpr std::size_t kRingMargin = 8;
 
@@ -55,7 +54,6 @@ bool space_delay_exceeds_limit(const ReverbVariationConfig& variation) noexcept 
 
 void SpaceStage::prepare(double sr) {
   sr_ = sr;
-  reverb_.prepare(sr, kReverbBlockHint);
   ring_.assign(static_cast<std::size_t>(std::ceil(kMaxSpaceDelayMs * 0.001 * sr)) + kRingMargin,
                0.0f);
   write_ = 0;
@@ -74,7 +72,6 @@ void SpaceStage::prepare(double sr) {
 }
 
 void SpaceStage::reset() {
-  reverb_.reset();
   std::fill(ring_.begin(), ring_.end(), 0.0f);
   write_ = 0;
   dub_lowpass_.reset();
@@ -82,7 +79,6 @@ void SpaceStage::reset() {
 
 void SpaceStage::set_config(const StreamingReverbConfig& reverb,
                             const ReverbVariationConfig& variation) {
-  reverb_.set_config(reverb);
   if (variation.variation == ReverbVariation::Reverb) {
     variation_ = ReverbVariation::Reverb;
     snap_ = true;
@@ -106,8 +102,7 @@ void SpaceStage::set_config(const StreamingReverbConfig& reverb,
 }
 
 float SpaceStage::process_sample(float x) noexcept {
-  if (variation_ == ReverbVariation::Reverb) return reverb_.process_sample(x);
-  if (ring_.empty()) return x;
+  if (variation_ == ReverbVariation::Reverb || ring_.empty()) return x;
 
   const float delay = delay_samples_.process();
   const float fb = feedback_.process();

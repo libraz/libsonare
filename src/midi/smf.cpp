@@ -268,46 +268,6 @@ int system_common_data_count(uint8_t status) noexcept {
 
 bool is_system_realtime(uint8_t status) noexcept { return status >= 0xF8u && status <= 0xFEu; }
 
-// Drops each note-on whose own note-off follows it at the same tick in file
-// order, with that note-off, counting both in `skipped`. The off-before-on sort
-// at one tick would otherwise reopen the note and leave it sounding. With an
-// earlier note of the key still open, the off closes that one, as the sort reads it.
-void drop_zero_length_notes(MidiClip* clip, uint32_t* skipped) {
-  const std::vector<MidiClipEvent>& events = clip->events();
-  std::vector<bool> dropped(events.size(), false);
-  std::vector<std::vector<size_t>> open(16 * 128);
-  bool any = false;
-  for (size_t i = 0; i < events.size(); ++i) {
-    const Ump& ump = events[i].ump;
-    if (!ump.is_note_on() && !ump.is_note_off()) continue;
-    std::vector<size_t>& keyed = open[ump.channel() * 128u + ump.note_number()];
-    if (ump.is_note_on()) {
-      keyed.push_back(i);
-      continue;
-    }
-    if (keyed.empty()) continue;
-    if (keyed.size() == 1 && events[keyed.back()].ppq == events[i].ppq) {
-      dropped[keyed.back()] = true;
-      dropped[i] = true;
-      keyed.pop_back();
-      any = true;
-    } else {
-      keyed.erase(keyed.begin());
-    }
-  }
-  if (!any) return;
-  std::vector<MidiClipEvent> kept;
-  kept.reserve(events.size());
-  for (size_t i = 0; i < events.size(); ++i) {
-    if (dropped[i]) {
-      ++(*skipped);
-    } else {
-      kept.push_back(events[i]);
-    }
-  }
-  clip->set_events(std::move(kept));
-}
-
 // Imports a single MTrk chunk body of `length` bytes starting at the reader's
 // current position. Appends parsed channel-voice events to `clip` (PPQ-timed),
 // captures track name / markers / tempo / time-sig into the out params, and
@@ -844,6 +804,47 @@ SmfImportResult parse_smf(const uint8_t* data, size_t size,
 
 }  // namespace
 
+void drop_zero_length_notes(MidiClip* clip, uint32_t* skipped, uint16_t ticks_per_quarter) {
+  const std::vector<MidiClipEvent>& events = clip->events();
+  const auto same_position = [ticks_per_quarter](double a, double b) {
+    return ticks_per_quarter == 0
+               ? a == b
+               : smf_ppq_to_ticks(a, ticks_per_quarter) == smf_ppq_to_ticks(b, ticks_per_quarter);
+  };
+  std::vector<bool> dropped(events.size(), false);
+  std::vector<std::vector<size_t>> open(16 * 128);
+  bool any = false;
+  for (size_t i = 0; i < events.size(); ++i) {
+    const Ump& ump = events[i].ump;
+    if (!ump.is_note_on() && !ump.is_note_off()) continue;
+    std::vector<size_t>& keyed = open[ump.channel() * 128u + ump.note_number()];
+    if (ump.is_note_on()) {
+      keyed.push_back(i);
+      continue;
+    }
+    if (keyed.empty()) continue;
+    if (keyed.size() == 1 && same_position(events[keyed.back()].ppq, events[i].ppq)) {
+      dropped[keyed.back()] = true;
+      dropped[i] = true;
+      keyed.pop_back();
+      any = true;
+    } else {
+      keyed.erase(keyed.begin());
+    }
+  }
+  if (!any) return;
+  std::vector<MidiClipEvent> kept;
+  kept.reserve(events.size());
+  for (size_t i = 0; i < events.size(); ++i) {
+    if (dropped[i]) {
+      ++(*skipped);
+    } else {
+      kept.push_back(events[i]);
+    }
+  }
+  clip->set_events(std::move(kept));
+}
+
 SmfImportResult import_smf(const uint8_t* data, size_t size,
                            const resource::MidiImportResourceLimits& limits) {
   SmfImportResult result = parse_smf(data, size, limits);
@@ -1106,6 +1107,7 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
   // -------- One MTrk per clip. --------
   for (size_t ci = 0; ci < clips.size(); ++ci) {
     MidiClip clip = clips[ci];
+    drop_zero_length_notes(&clip, &result.skipped_events, ppqn);
     clip.sort_stable();
     std::vector<uint8_t> body;
 

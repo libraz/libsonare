@@ -1981,6 +1981,27 @@ TEST_CASE("SMF import drops a zero-length note instead of leaving it sounding", 
   }
 }
 
+TEST_CASE("SMF export counts a note shorter than one tick instead of losing it on re-import",
+          "[midi][smf][export]") {
+  MidiClip clip;
+  clip.add_event(MidiClipEvent{0.0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)});
+  clip.add_event(MidiClipEvent{0.01, sonare::midi::make_midi1_note_off(0, 0, 60, 0)});
+  clip.add_event(MidiClipEvent{1.0, sonare::midi::make_midi1_note_on(0, 0, 62, 100)});
+  clip.add_event(MidiClipEvent{2.0, sonare::midi::make_midi1_note_off(0, 0, 62, 0)});
+  SmfExportOptions opts;
+  opts.ticks_per_quarter = 24;
+  const auto exported = export_smf({clip}, {}, {}, {}, opts);
+  REQUIRE(exported.ok());
+  CHECK(exported.skipped_events == 2);
+
+  const SmfImportResult round = import_smf(exported.bytes);
+  REQUIRE(round.ok());
+  REQUIRE(round.clips.size() == 1);
+  CHECK(round.skipped_events == 0);
+  CHECK(round.clips[0].events().size() == 2);
+  CHECK(round.clips[0].validate_note_pairs().ok);
+}
+
 TEST_CASE("SMF export saturates a tick past the int64 range and counts the clamp",
           "[midi][smf][export]") {
   CHECK(sonare::midi::smf_ppq_to_ticks(1e17, 480) == std::numeric_limits<int64_t>::max());

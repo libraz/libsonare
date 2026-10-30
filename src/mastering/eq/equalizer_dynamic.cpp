@@ -8,28 +8,31 @@
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
+#include "util/non_finite_state.h"
 
 namespace sonare::mastering::eq {
 
+using sonare::discard_if_non_finite;
 using sonare::constants::kFloorDb;
 
-float EqualizerProcessor::detector_db(const float* const* channels, int num_channels,
-                                      int num_samples, int excluded_channel, int readable_samples) {
-  return broadband_detector_db(channels, num_channels, num_samples, excluded_channel,
-                               readable_samples);
+namespace {
+
+float level_db(double sum, double count) {
+  return linear_to_db(static_cast<float>(std::sqrt(sum / std::max(count, 1.0))));
 }
 
-float EqualizerProcessor::band_detector_db(size_t band_index, const float* const* channels,
-                                           int num_channels, int num_samples, int excluded_channel,
-                                           double sample_rate, const EqBand& band,
-                                           int readable_samples) {
-  if (num_samples <= 0 || num_channels <= 0) return kFloorDb;
+}  // namespace
+
+void EqualizerProcessor::accumulate_band_detector(size_t band_index, const float* const* channels,
+                                                  int num_channels, int count, int excluded_channel,
+                                                  const EqBand& band, int readable_samples) {
+  if (count <= 0 || num_channels <= 0) return;
 
   const BandDetectorDesign design =
-      design_band_detector(sample_rate, band.frequency_hz, band.dyn.sidechain_freq_hz,
+      design_band_detector(sample_rate_, band.frequency_hz, band.dyn.sidechain_freq_hz,
                            band.dyn.sidechain_q, band.dyn.attack_ms, band.dyn.release_ms);
   const size_t look = static_cast<size_t>(band_detector_delay_samples(
-      sample_rate, band.dyn.detector_delay_ms, max_detector_delay_samples_));
+      sample_rate_, band.dyn.detector_delay_ms, max_detector_delay_samples_));
 
   auto& states = detector_states_[band_index];
   // States are preallocated in prepare(); only grow if a wider channel count is
@@ -45,30 +48,20 @@ float EqualizerProcessor::band_detector_db(size_t band_index, const float* const
     ++counted;
     BandDetectorChannel& state = states[static_cast<size_t>(ch)];
     state.set_delay(look);
-    sum += state.accumulate(design, channels[ch], num_samples, readable_samples);
+    sum += state.accumulate(design, channels[ch], count, readable_samples);
   }
-  return band_detector_level_db(sum, counted, num_samples);
+  band_detector_sum_[band_index] += sum;
+  band_detector_count_[band_index] += static_cast<double>(counted) * count;
 }
 
-float EqualizerProcessor::rms_db(const float* const* channels, int num_channels,
-                                 int num_samples) noexcept {
-  if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
-    return kFloorDb;
-  }
-  double sum = 0.0;
-  size_t count = 0;
-  for (int ch = 0; ch < num_channels; ++ch) {
-    if (channels[ch] == nullptr) {
-      continue;
-    }
-    for (int i = 0; i < num_samples; ++i) {
-      const double sample = channels[ch][i];
-      sum += sample * sample;
-      ++count;
-    }
-  }
-  return count == 0 ? kFloorDb
-                    : linear_to_db(static_cast<float>(std::sqrt(sum / static_cast<double>(count))));
+void EqualizerProcessor::clear_control_accumulators() noexcept {
+  detector_sum_ = 0.0;
+  detector_count_ = 0.0;
+  band_detector_sum_.fill(0.0);
+  band_detector_count_.fill(0.0);
+  auto_gain_input_sum_ = 0.0;
+  auto_gain_output_sum_ = 0.0;
+  auto_gain_count_ = 0.0;
 }
 
 float EqualizerProcessor::dynamic_gain_delta(const EqBand& band, float detector_db,
@@ -80,37 +73,113 @@ float EqualizerProcessor::dynamic_gain_delta(const EqBand& band, float detector_
   return dynamic_compression_delta(detector_db, threshold_db, band.dyn.ratio, band.dyn.range_db);
 }
 
-void EqualizerProcessor::update_dynamic_state(const float* const* channels, int num_channels,
-                                              int num_samples) {
-  // The host's excluded plane (an LFE) is left out of the main-input detector;
-  // an external key is the caller's own choice of channels and keeps them all.
-  const int excluded = detector_excluded_channel(num_channels);
-  last_detector_db_ = detector_db(channels, num_channels, num_samples, excluded);
-  for (size_t i = 0; i < kMaxBands; ++i) {
-    const auto& band = bands_[i];
-    if (band.enabled && band.dyn.enabled) {
-      const bool use_external = band.dyn.external_sidechain && sidechain_channels_ != nullptr;
-      const float* const* detector_channels = use_external ? sidechain_channels_ : channels;
-      const int detector_num_channels = use_external ? sidechain_num_channels_ : num_channels;
-      last_band_detector_db_[i] = band_detector_db(
-          i, detector_channels, detector_num_channels, num_samples, use_external ? -1 : excluded,
-          sample_rate_, band, use_external ? sidechain_num_samples_ : num_samples);
-      if (band.dyn.auto_threshold) {
-        const float target = last_band_detector_db_[i] - 6.0f;
-        if (auto_threshold_db_[i] <= kFloorDb + 1.0f) {
-          auto_threshold_db_[i] = target;
-        } else {
-          const double smoothing_samples = std::max(sample_rate_ * 0.250, 1.0);
-          const float coeff = static_cast<float>(
-              1.0 - std::exp(-static_cast<double>(num_samples) / smoothing_samples));
-          auto_threshold_db_[i] += coeff * (target - auto_threshold_db_[i]);
-        }
+void EqualizerProcessor::accumulate_control_input(const float* const* channels, int num_channels,
+                                                  int offset, int count) {
+  if (has_dynamic_bands_) {
+    // The host's excluded plane (an LFE) is left out of the main-input detector;
+    // an external key is the caller's own choice of channels and keeps them all.
+    const int excluded = detector_excluded_channel(num_channels);
+    double sum = 0.0;
+    int counted = 0;
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (ch == excluded) continue;
+      ++counted;
+      for (int i = 0; i < count; ++i) {
+        const double sample = channels[ch][i];
+        sum += sample * sample;
       }
-    } else {
-      last_band_detector_db_[i] = kFloorDb;
-      last_applied_gain_db_[i] = 0.0f;
+    }
+    detector_sum_ += sum;
+    detector_count_ += static_cast<double>(counted) * count;
+
+    for (size_t i = 0; i < kMaxBands; ++i) {
+      const auto& band = bands_[i];
+      if (!band.enabled || !band.dyn.enabled) continue;
+      const bool use_external = band.dyn.external_sidechain && sidechain_channels_ != nullptr;
+      if (!use_external) {
+        accumulate_band_detector(i, channels, num_channels, count, excluded, band, count);
+        continue;
+      }
+      // A key shorter than the block reads as silence past its end.
+      const int readable = std::clamp(sidechain_num_samples_ - offset, 0, count);
+      for (int ch = 0; ch < sidechain_num_channels_; ++ch) {
+        chunk_sidechain_[static_cast<size_t>(ch)] =
+            sidechain_channels_[ch] + (readable > 0 ? offset : 0);
+      }
+      accumulate_band_detector(i, chunk_sidechain_.data(), sidechain_num_channels_, count, -1, band,
+                               readable);
     }
   }
+  if (auto_gain_enabled_) {
+    double sum = 0.0;
+    for (int ch = 0; ch < num_channels; ++ch) {
+      for (int i = 0; i < count; ++i) {
+        const double sample = channels[ch][i];
+        sum += sample * sample;
+      }
+    }
+    auto_gain_input_sum_ += sum;
+    auto_gain_count_ += static_cast<double>(num_channels) * count;
+  }
+}
+
+bool EqualizerProcessor::settle_control() {
+  bool discarded = false;
+  if (has_dynamic_bands_) {
+    last_detector_db_ = level_db(detector_sum_, detector_count_);
+    for (size_t i = 0; i < kMaxBands; ++i) {
+      const auto& band = bands_[i];
+      if (band.enabled && band.dyn.enabled) {
+        if (!dynamic_reading_seen_[i]) {
+          dynamic_gain_live_[i] = false;
+          dynamic_reading_seen_[i] = true;
+        }
+        last_band_detector_db_[i] = level_db(band_detector_sum_[i], band_detector_count_[i]);
+        if (band.dyn.auto_threshold) {
+          const float target = last_band_detector_db_[i] - 6.0f;
+          if (auto_threshold_db_[i] <= kFloorDb + 1.0f) {
+            auto_threshold_db_[i] = target;
+          } else {
+            const double smoothing_samples = std::max(sample_rate_ * 0.250, 1.0);
+            const float coeff = static_cast<float>(
+                1.0 - std::exp(-static_cast<double>(kControlIntervalSamples) / smoothing_samples));
+            auto_threshold_db_[i] += coeff * (target - auto_threshold_db_[i]);
+          }
+        }
+      } else {
+        dynamic_reading_seen_[i] = false;
+        last_band_detector_db_[i] = kFloorDb;
+        last_applied_gain_db_[i] = 0.0f;
+      }
+    }
+    // Before the detector's reading reaches coefficient design, so a poisoned
+    // detector cannot hand a non-finite gain to a band.
+    discarded |= discard_non_finite_dynamic_state();
+    update_iir_bands_preserving_state(kControlIntervalSamples);
+  }
+  if (auto_gain_enabled_) {
+    const float input_db = level_db(auto_gain_input_sum_, auto_gain_count_);
+    const float output_db = level_db(auto_gain_output_sum_, auto_gain_count_);
+    if (input_db <= kFloorDb + 1.0f || output_db <= kFloorDb + 1.0f) {
+      last_auto_gain_db_ = 0.0f;
+    } else {
+      const float target_db = std::clamp(input_db - output_db, -24.0f, 24.0f);
+      const double smoothing_samples = std::max(sample_rate_ * 0.050, 1.0);
+      const float coeff = static_cast<float>(
+          1.0 - std::exp(-static_cast<double>(kControlIntervalSamples) / smoothing_samples));
+      smoothed_auto_gain_db_ += coeff * (target_db - smoothed_auto_gain_db_);
+      last_auto_gain_db_ = smoothed_auto_gain_db_;
+    }
+    // The smoother is driven by the interval RMS of both the input and the output, so a
+    // non-finite sample reaches it whether or not it survived the filters.
+    const bool smoothed_discarded = discard_if_non_finite(smoothed_auto_gain_db_, 0.0f);
+    if (smoothed_discarded) last_auto_gain_db_ = 0.0f;
+    discarded |= smoothed_discarded;
+    discarded |= discard_if_non_finite(last_auto_gain_db_, 0.0f);
+    auto_gain_linear_ = db_to_linear(last_auto_gain_db_);
+  }
+  clear_control_accumulators();
+  return discarded;
 }
 
 void EqualizerProcessor::validate_sidechain(int expected_samples) const {
@@ -123,28 +192,25 @@ void EqualizerProcessor::validate_sidechain(int expected_samples) const {
   }
 }
 
-void EqualizerProcessor::apply_auto_gain(float* const* channels, int num_channels, int num_samples,
-                                         float input_db) noexcept {
+void EqualizerProcessor::apply_auto_gain(float* const* channels, int num_channels,
+                                         int num_samples) noexcept {
   if (!auto_gain_enabled_ || channels == nullptr || num_channels <= 0 || num_samples <= 0) {
     last_auto_gain_db_ = 0.0f;
+    auto_gain_linear_ = 1.0f;
     return;
   }
-  const float output_db =
-      rms_db(const_cast<const float* const*>(channels), num_channels, num_samples);
-  if (input_db <= kFloorDb + 1.0f || output_db <= kFloorDb + 1.0f) {
-    last_auto_gain_db_ = 0.0f;
-    return;
-  }
-  const float target_db = std::clamp(input_db - output_db, -24.0f, 24.0f);
-  const double smoothing_samples = std::max(sample_rate_ * 0.050, 1.0);
-  const float coeff =
-      static_cast<float>(1.0 - std::exp(-static_cast<double>(num_samples) / smoothing_samples));
-  smoothed_auto_gain_db_ += coeff * (target_db - smoothed_auto_gain_db_);
-  last_auto_gain_db_ = smoothed_auto_gain_db_;
-  const float gain = db_to_linear(last_auto_gain_db_);
+  double sum = 0.0;
   for (int ch = 0; ch < num_channels; ++ch) {
     for (int i = 0; i < num_samples; ++i) {
-      channels[ch][i] *= gain;
+      const double sample = channels[ch][i];
+      sum += sample * sample;
+    }
+  }
+  auto_gain_output_sum_ += sum;
+  if (auto_gain_linear_ == 1.0f) return;
+  for (int ch = 0; ch < num_channels; ++ch) {
+    for (int i = 0; i < num_samples; ++i) {
+      channels[ch][i] *= auto_gain_linear_;
     }
   }
 }

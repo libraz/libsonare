@@ -73,10 +73,10 @@ typedef struct {
   float integrated_lufs;
   float gain_reduction_db;
   /* Inter-sample (true) peak in dBFS, from the ITU-R BS.1770-4 polyphase
-     reconstruction at 4x. This is a STREAMING measurement that runs one
-     reconstruction-filter group delay (a few samples) behind the block, so every
-     value has its whole stencil and the reading does not depend on the block
-     size. sonare_metering_true_peak_db measures a whole signal at once. */
+     reconstruction at the strip's configured oversample factor (4 or 8). This is a STREAMING
+     measurement that runs one reconstruction-filter group delay (a few samples) behind the block,
+     so every value has its whole stencil and the reading does not depend on the block size.
+     sonare_metering_true_peak_db measures a whole signal at once. */
   float true_peak_db_l;
   float true_peak_db_r;
   float max_true_peak_db;
@@ -111,7 +111,8 @@ typedef struct {
   float distance;
 } SonareSurroundPan;
 
-// Returns NULL on an invalid argument or an allocation failure. A non-NULL
+// Returns NULL on an invalid argument or an allocation failure; sample_rate must be
+// in [8000, 384000] and max_block_size in [1, 1048576]. A non-NULL
 // handle is owned by the caller and stays valid until sonare_mixer_destroy,
 // which must be called exactly once.
 SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size);

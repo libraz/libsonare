@@ -415,6 +415,34 @@ inline int i(const ParamMap& params, const char* key, int default_value, ParamMe
   return i(params, key, default_value);
 }
 
+/// @brief Reads a whole number whose domain is the full uint32 range (a seed).
+/// @details @ref i would refuse the upper half and a cast of its result would wrap a negative
+///          onto it, so a negative is refused by name and every uint32 value is accepted.
+inline std::uint32_t u32(const ParamMap& params, const char* key, std::uint32_t default_value) {
+  params.note_kind(key, ParamKind::Integer);
+  params.note_default(key, static_cast<double>(default_value));
+  auto it = params.find(key);
+  if (it == params.end()) {
+    params.note_effective(key, static_cast<double>(default_value));
+    return default_value;
+  }
+  if (it->second < 0.0) {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be non-negative");
+  }
+  std::uint32_t converted = 0;
+  if (!numeric::checked_integral_cast(it->second, &converted)) {
+    reject_integer_param(key, it->second);
+  }
+  params.note_effective(key, static_cast<double>(converted));
+  return converted;
+}
+
+inline std::uint32_t u32(const ParamMap& params, const char* key, std::uint32_t default_value,
+                         ParamMeta meta) {
+  params.note_meta(key, meta);
+  return u32(params, key, default_value);
+}
+
 inline bool b(const ParamMap& params, const char* key, bool default_value) {
   params.note_kind(key, ParamKind::Boolean);
   params.note_default(key, default_value ? 1.0 : 0.0);

@@ -19,6 +19,7 @@
 #include "mastering/multiband/multiband_imager.h"
 #include "mastering/multiband/multiband_limiter.h"
 #include "mastering/multiband/multiband_saturation.h"
+#include "mastering/saturation/multiband_exciter.h"
 #include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
@@ -1791,4 +1792,36 @@ TEST_CASE("Multiband saturation mix refuses out-of-domain values for every algor
       REQUIRE(saturation.config().bands.front().mix == accepted);
     }
   }
+}
+
+TEMPLATE_TEST_CASE("Multiband prepare refused above Nyquist leaves the prior prepared state",
+                   "[mastering][multiband][prepare_atomic]", MultibandCompressor,
+                   MultibandDynamicEq, MultibandExpander, MultibandImager, MultibandLimiter,
+                   MultibandSaturation, sonare::mastering::saturation::MultibandExciter) {
+  constexpr int kBlock = 256;
+  const std::vector<float> input = sine(440.0f, 48000, kBlock, 0.5f);
+
+  // A first prepare that is refused leaves process() refusing as unprepared.
+  TestType never_prepared;
+  REQUIRE_THROWS(never_prepared.prepare(3000.0, kBlock));
+  std::vector<float> scratch = input;
+  float* scratch_channel = scratch.data();
+  REQUIRE_THROWS(never_prepared.process(&scratch_channel, 1, kBlock));
+
+  // A refused re-prepare keeps the 48 kHz state: output matches an untouched twin.
+  TestType refused;
+  TestType twin;
+  refused.prepare(48000.0, kBlock);
+  twin.prepare(48000.0, kBlock);
+  REQUIRE_THROWS(refused.prepare(3000.0, kBlock / 2));
+  std::vector<float> a = input;
+  std::vector<float> b = input;
+  float* a_channel = a.data();
+  float* b_channel = b.data();
+  refused.process(&a_channel, 1, kBlock);
+  twin.process(&b_channel, 1, kBlock);
+  REQUIRE(a == b);
+  std::vector<float> oversized(static_cast<size_t>(kBlock) * 2, 0.1f);
+  float* oversized_channel = oversized.data();
+  REQUIRE_THROWS(refused.process(&oversized_channel, 1, kBlock * 2));
 }

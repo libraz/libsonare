@@ -71,6 +71,8 @@ class PassiveTubeEq : public rt::ProcessorBase {
     float high_charge = 0.0f;
   };
   std::vector<ComponentState> component_state_;
+  // True while the component stage has run since its charges were last at rest.
+  bool component_stage_active_ = false;
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   float low_frequency_hz_ = 60.0f;
   float low_boost_ = 0.0f;

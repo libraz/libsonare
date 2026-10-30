@@ -169,6 +169,23 @@ float checked_width(float value, const char* field_path) {
   return value;
 }
 
+// Surround placement is refused outside its domains with the same rule as the setters.
+float checked_surround_azimuth(float value, const char* field_path) {
+  if (!surround_azimuth_in_range(value)) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          std::string(field_path) + " must be within [-180, 180]");
+  }
+  return value;
+}
+
+float checked_surround_unit(float value, const char* field_path) {
+  if (!surround_unit_in_range(value)) {
+    throw SonareException(ErrorCode::InvalidFormat,
+                          std::string(field_path) + " must be within [0, 1]");
+  }
+  return value;
+}
+
 int int_or_legacy(const JsonValue& object, const std::string& path, const char* key,
                   const char* legacy_key, int fallback) {
   const auto* value = value_or_legacy(object, key, legacy_key);
@@ -413,17 +430,22 @@ Strip strip_from_value(const JsonValue& object, const std::string& path,
     }
     report_unknown_keys(*sp, surround_path, kKnownSurround, warnings);
     SurroundPanParams parsed;
-    parsed.azimuth = number_or(*sp, surround_path, "azimuth", strip.surround_pan.azimuth,
-                               "scene.strips[].surroundPan.azimuth");
+    parsed.azimuth = checked_surround_azimuth(
+        number_or(*sp, surround_path, "azimuth", strip.surround_pan.azimuth,
+                  "scene.strips[].surroundPan.azimuth"),
+        "scene.strips[].surroundPan.azimuth");
     parsed.elevation = number_or(*sp, surround_path, "elevation", strip.surround_pan.elevation,
                                  "scene.strips[].surroundPan.elevation");
-    parsed.divergence = number_or(*sp, surround_path, "divergence", strip.surround_pan.divergence,
-                                  "scene.strips[].surroundPan.divergence");
-    parsed.lfe = number_or(*sp, surround_path, "lfe", strip.surround_pan.lfe,
-                           "scene.strips[].surroundPan.lfe");
+    parsed.divergence = checked_surround_unit(
+        number_or(*sp, surround_path, "divergence", strip.surround_pan.divergence,
+                  "scene.strips[].surroundPan.divergence"),
+        "scene.strips[].surroundPan.divergence");
+    parsed.lfe = checked_surround_unit(number_or(*sp, surround_path, "lfe", strip.surround_pan.lfe,
+                                                 "scene.strips[].surroundPan.lfe"),
+                                       "scene.strips[].surroundPan.lfe");
     parsed.distance = number_or(*sp, surround_path, "distance", strip.surround_pan.distance,
                                 "scene.strips[].surroundPan.distance");
-    // Same rule as pan/width, through the panner's own clamp.
+    // Domains are refused above; the panner's own resolution settles the distance default.
     const SurroundPanParams stored = clamp_surround_pan_params(parsed);
     strip.surround_pan.azimuth = stored.azimuth;
     strip.surround_pan.elevation = stored.elevation;

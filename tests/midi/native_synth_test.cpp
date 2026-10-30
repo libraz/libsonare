@@ -4831,6 +4831,36 @@ TEST_CASE("the accordion amplitude path rises into its held level without a step
   }
 }
 
+TEST_CASE("the accordion onset has no level step in either variation", "[midi][synth][accordion]") {
+  using sonare::midi::synth::gm_fallback_patch;
+  // 10 ms windows: shorter ones ride the pitch period and swing by more than the onset does.
+  constexpr int kWindow = 480;
+  constexpr int kOnsetWindows = 6;
+  const int windows = static_cast<int>(0.6 * sonare::test::kRate) / kWindow;
+  for (const uint8_t variation : {0, 8}) {
+    NativeSynthConfig cfg;
+    cfg.patch = gm_fallback_patch(variation, 21, sonare::midi::synth::GsToneMap::kSc55);
+    NativeSynth synth(cfg);
+    synth.prepare(sonare::test::kRate, kWindow);
+    synth.on_event(0, sonare::test::event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    std::vector<float> rms;
+    for (int w = 0; w < windows; ++w) {
+      const std::vector<float> out = sonare::test::render_left(synth, kWindow);
+      double sum = 0.0;
+      for (const float v : out) sum += static_cast<double>(v) * v;
+      rms.push_back(static_cast<float>(std::sqrt(sum / kWindow)));
+    }
+    const float peak = *std::max_element(rms.begin(), rms.end());
+    float onset_step = rms.front();
+    for (int w = 1; w < kOnsetWindows; ++w) onset_step = std::max(onset_step, rms[w] - rms[w - 1]);
+    INFO("variation " << static_cast<int>(variation));
+    REQUIRE(peak > 0.0f);
+    // The shipped onset rises by about a quarter of the peak per window at most; a level
+    // step puts the first window at the held level, past 0.6 of the peak.
+    CHECK(onset_step <= 0.4f * peak);
+  }
+}
+
 TEST_CASE(
     "a released voice is cut at the same note-relative sample whatever the onset or block size",
     "[midi][synth][release]") {

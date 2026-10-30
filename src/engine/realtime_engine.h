@@ -1363,6 +1363,11 @@ class RealtimeEngine : private ClipPageRequestSink {
   // AUDIO thread: a block refused for its size or channel count still moves the
   // timeline, so its MIDI dispatches without audio and no release inside it is lost.
   void dispatch_midi_without_render(int num_frames) noexcept;
+#endif
+  // AUDIO thread: moves the timeline over a refused block, dispatching MIDI up to
+  // each loop end and releasing clip notes at every wrap.
+  void advance_without_render(int frames) noexcept;
+#if defined(SONARE_WITH_ARRANGEMENT)
   // AUDIO thread: adopt one coherent external-routing snapshot at the block
   // boundary. Changed destinations are released through the old route before
   // the fixed active table is committed.
@@ -1788,6 +1793,14 @@ class RealtimeEngine : private ClipPageRequestSink {
   // ticked once per control period. Fixed-size: no audio-thread allocation.
   static constexpr size_t kMaxSmoothedParams = 64;
   static constexpr int kControlPeriod = 64;
+  // Audio-thread only: where a control period cut by the end of a block resumes and
+  // the timeline sample its automation was evaluated at.
+  struct ControlResume {
+    bool valid = false;
+    int64_t position = 0;
+    int64_t eval_sample = 0;
+  };
+  ControlResume control_resume_{};
   struct SmoothedParam {
     uint32_t target_id = 0;
     bool active = false;

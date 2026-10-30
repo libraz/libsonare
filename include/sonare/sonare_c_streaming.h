@@ -237,7 +237,9 @@ SonareError sonare_stream_analyzer_config_default(SonareStreamConfig* config);
 /// roles to be stopped. sample_rate reads immutable construction state.
 
 /// @brief Creates a streaming analyzer from the given config.
-/// @param config Construction config (must be non-null).
+/// @param config Construction config (must be non-null). A sample_rate outside
+///        [8000, 384000], an n_fft above 524288 or an n_mels above 4096 is
+///        SONARE_ERROR_INVALID_PARAMETER.
 /// @param out Receives the new handle (caller destroys with
 ///        sonare_stream_analyzer_destroy).
 /// @note @p out is a handle, not a sonare_free_* buffer.

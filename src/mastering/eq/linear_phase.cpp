@@ -34,6 +34,9 @@ constexpr int kPreferredPartitionSize = 4096;
 // frequency-domain multiply-accumulate across it — costs more than the smaller
 // transform saves.
 constexpr int kMinimumPreferredPartitionSize = 1024;
+// Partition of the tail convolver behind the direct head used for spans that are not a whole
+// number of partitions; also the number of taps convolved directly per sample.
+constexpr int kRaggedPartitionSize = 64;
 
 LinearPhaseEqConfig resolve_resolution(LinearPhaseEqConfig config) {
   switch (config.resolution) {
@@ -220,18 +223,19 @@ void LinearPhaseEq::process(float* const* channels, int num_channels, int num_sa
         state.convolver_stale = false;
       }
       // Mirror the inputs into the time-domain history before the convolver
-      // overwrites them, so the direct path stays primed with the real
+      // overwrites them, so the ragged path stays primed with the real
       // convolution tail and can take over seamlessly on a later ragged block.
       feed_history(samples, num_samples, state);
+      state.tail_stale = true;
       for (int offset = 0; offset < num_samples; offset += partition_size) {
         state.convolver->process_block(samples + offset, samples + offset);
       }
     } else {
       // A ragged block cannot be fed to the fixed-block convolver, so the
-      // direct path (whose history is always maintained) handles it and the
+      // ragged path (whose history is always maintained) handles it and the
       // convolver is re-primed from that history on the next aligned block.
       if (state.convolver) state.convolver_stale = true;
-      process_direct(samples, num_samples, state);
+      process_ragged(samples, num_samples, state);
     }
   }
 }
@@ -244,6 +248,10 @@ void LinearPhaseEq::reset() {
     // re-prime.
     state.convolver_stale = false;
     if (state.convolver) state.convolver->reset();
+    state.tail_stale = false;
+    state.stage_fill = 0;
+    std::fill(state.tail_out.begin(), state.tail_out.end(), 0.0f);
+    if (state.tail_convolver) state.tail_convolver->reset();
   }
 }
 
@@ -359,6 +367,7 @@ void LinearPhaseEq::rebuild_kernel() {
   latency_samples_ = half;
   for (auto& state : states_) {
     state.convolver_kernel_current = false;
+    state.tail_kernel_current = false;
   }
   ensure_channel_state(static_cast<int>(states_.size()));
 }
@@ -432,7 +441,85 @@ void LinearPhaseEq::ensure_channel_state(int num_channels) {
       state.convolver_stale = false;
       state.prime_scratch.clear();
     }
+    if (config_.use_partitioned_convolution &&
+        kernel_.size() > static_cast<size_t>(kRaggedPartitionSize)) {
+      if (!state.tail_convolver) {
+        state.tail_convolver = std::make_unique<sonare::rt::PartitionedConvolver>(
+            sonare::rt::PartitionedConvolverConfig{kRaggedPartitionSize});
+        state.tail_kernel_current = false;
+      }
+      if (state.stage_in.size() != static_cast<size_t>(kRaggedPartitionSize)) {
+        state.stage_in.assign(kRaggedPartitionSize, 0.0f);
+        state.tail_out.assign(kRaggedPartitionSize, 0.0f);
+        state.stage_fill = 0;
+      }
+      if (!state.tail_kernel_current) {
+        state.tail_convolver->set_impulse_response(
+            std::vector<float>(kernel_.begin() + kRaggedPartitionSize, kernel_.end()));
+        state.tail_kernel_current = true;
+        state.tail_stale = true;
+      }
+    } else {
+      state.tail_convolver.reset();
+      state.tail_kernel_current = false;
+      state.tail_stale = true;
+      state.stage_in.clear();
+      state.tail_out.clear();
+      state.stage_fill = 0;
+    }
   }
+}
+
+void LinearPhaseEq::process_ragged(float* samples, int num_samples, ChannelState& state) const {
+  if (!state.tail_convolver) {
+    process_direct(samples, num_samples, state);
+    return;
+  }
+  if (state.tail_stale) {
+    reprime_tail(state);
+    state.tail_stale = false;
+  }
+  const size_t kernel_size = kernel_.size();
+  for (int i = 0; i < num_samples; ++i) {
+    state.history[state.write_index] = samples[i];
+
+    double y = state.tail_out[static_cast<size_t>(state.stage_fill)];
+    size_t read = state.write_index;
+    for (size_t k = 0; k < static_cast<size_t>(kRaggedPartitionSize); ++k) {
+      y += static_cast<double>(kernel_[k]) * state.history[read];
+      read = (read == 0) ? kernel_size - 1 : read - 1;
+    }
+
+    state.stage_in[static_cast<size_t>(state.stage_fill)] = samples[i];
+    samples[i] = static_cast<float>(y);
+    state.write_index = (state.write_index + 1) % kernel_size;
+    if (++state.stage_fill == kRaggedPartitionSize) {
+      state.tail_convolver->process_block(state.stage_in.data(), state.tail_out.data());
+      state.stage_fill = 0;
+    }
+  }
+}
+
+void LinearPhaseEq::reprime_tail(ChannelState& state) const {
+  auto& convolver = *state.tail_convolver;
+  const int partitions = convolver.num_partitions();
+  const size_t history_size = state.history.size();
+  if (partitions <= 0 || history_size == 0) return;
+
+  // Replays the stream ending at the current position in whole blocks, oldest first; the last
+  // block's output is the tail contribution to the block that starts here.
+  convolver.reset();
+  size_t age = static_cast<size_t>(partitions) * static_cast<size_t>(kRaggedPartitionSize);
+  for (int partition = 0; partition < partitions; ++partition) {
+    for (int i = 0; i < kRaggedPartitionSize; ++i, --age) {
+      state.stage_in[static_cast<size_t>(i)] =
+          age <= history_size
+              ? state.history[(state.write_index + history_size - age) % history_size]
+              : 0.0f;
+    }
+    convolver.process_block(state.stage_in.data(), state.tail_out.data());
+  }
+  state.stage_fill = 0;
 }
 
 void LinearPhaseEq::process_direct(float* samples, int num_samples, ChannelState& state) const {

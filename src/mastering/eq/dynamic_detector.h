@@ -14,6 +14,11 @@
 
 namespace sonare::mastering::eq {
 
+/// Samples between control updates of the dynamic EQs. Detector readings and the gains derived
+/// from them settle once per interval at a stream position, so the output does not depend on how
+/// the caller partitions the stream into process() calls.
+inline constexpr int kControlIntervalSamples = 64;
+
 /// Maximum per-band detector delay the detector rings are preallocated for. A
 /// delay past this bound saturates so the audio-thread path never resizes.
 inline constexpr float kMaxDetectorDelayMs = 20.0f;

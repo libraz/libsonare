@@ -18,7 +18,7 @@ MultibandExciter::MultibandExciter(MultibandExciterConfig config)
     : config_(std::move(config)), crossover_(config_.crossover) {
   validate_config(config_);
   rebuild_processors();
-  rebuild_band_compensation();
+  rebuild_band_compensation(max_working_channels_);
 }
 
 void MultibandExciter::prepare(double sample_rate, int max_block_size) {
@@ -26,15 +26,13 @@ void MultibandExciter::prepare(double sample_rate, int max_block_size) {
 }
 
 void MultibandExciter::prepare(double sample_rate, int max_block_size, int max_channels) {
-  validate_prepare_args(sample_rate, max_block_size, max_channels, "MultibandExciter");
-  sample_rate_ = sample_rate;
-  max_block_size_ = max_block_size;
-  max_working_channels_ = max_channels;
-  prepared_ = true;
-  multiband::prepare_band_split(crossover_, scratch_, sample_rate_, max_block_size_,
-                                max_working_channels_);
-  for (auto& exciter : exciters_) exciter.prepare(sample_rate_, max_block_size_);
-  rebuild_band_compensation();
+  multiband::prepare_multiband("MultibandExciter", crossover_, scratch_, sample_rate,
+                               max_block_size, max_channels, sample_rate_, max_block_size_,
+                               max_working_channels_, prepared_,
+                               [this](double rate, int block, int channels) {
+                                 for (auto& exciter : exciters_) exciter.prepare(rate, block);
+                                 rebuild_band_compensation(channels);
+                               });
   reset();
 }
 
@@ -97,7 +95,7 @@ void MultibandExciter::set_config(const MultibandExciterConfig& config) {
           }
         }
         // Unchanged latencies keep their compensation lines.
-        rebuild_band_compensation();
+        rebuild_band_compensation(max_working_channels_);
       });
 }
 
@@ -142,13 +140,13 @@ void MultibandExciter::validate_config(const MultibandExciterConfig& config) {
   for (const auto& band : config.bands) Exciter::validate_config(band);
 }
 
-void MultibandExciter::rebuild_band_compensation() {
+void MultibandExciter::rebuild_band_compensation(int channels) {
   std::vector<int> latencies(exciters_.size());
   for (size_t band = 0; band < exciters_.size(); ++band) {
     latencies[band] = exciters_[band].latency_samples_q8();
   }
   band_paths_.set_path_latencies_q8(std::move(latencies));
-  band_paths_.ensure_channels(static_cast<size_t>(max_working_channels_));
+  band_paths_.ensure_channels(static_cast<size_t>(channels));
 }
 
 void MultibandExciter::rebuild_processors() {

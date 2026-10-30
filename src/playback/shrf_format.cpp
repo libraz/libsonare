@@ -107,6 +107,11 @@ ShrfData parse_shrf(const uint8_t* data, size_t size) {
       ErrorCode::InvalidFormat,
       "SHRF n_az * az_step must span 360 degrees, got " + util::to_text(azimuth_span));
 
+  // Several rows are indexed by (elevation - el_min) / el_step, so the grid has to ascend.
+  SONARE_CHECK_MSG(
+      header.n_el == 1 || header.el_step_deg > 0.0f, ErrorCode::InvalidFormat,
+      "SHRF el_step must be positive when n_el > 1, got " + util::to_text(header.el_step_deg));
+
   SONARE_CHECK_MSG(header.scale > 0.0f, ErrorCode::InvalidFormat,
                    "SHRF scale must be positive, got " + util::to_text(header.scale));
 

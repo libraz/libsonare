@@ -185,6 +185,13 @@ struct RealtimeVoiceChangerConfig {
   MidiConfig midi;
 };
 
+/// @brief Whether @p config makes the vocoder read a caller-supplied carrier.
+/// @details Such a configuration is valid for the realtime chain, which takes the carrier per
+///          block, but not for a one-shot that has none to give.
+inline bool takes_external_carrier(const RealtimeVoiceChangerConfig& config) noexcept {
+  return config.vocoder.enabled && config.vocoder.carrier_source == VocoderCarrierSource::External;
+}
+
 class RealtimeVoiceChanger {
  public:
   /// @brief Maximum reverb decay time (ms) used to size per-channel comb buffers.
@@ -194,6 +201,11 @@ class RealtimeVoiceChanger {
 
   explicit RealtimeVoiceChanger(RealtimeVoiceChangerConfig config = {});
 
+  /// @brief Sizes the chain for @p sample_rate, blocks up to @p max_block_size frames and
+  ///        @p num_channels (1 or 2).
+  /// @throws SonareException InvalidParameter when @ref prepare_arguments_error refuses the
+  ///         arguments; nothing is modified in that case and the instance keeps its last
+  ///         preparation.
   void prepare(double sample_rate, int max_block_size, int num_channels = 1);
   /// @brief Clears streaming DSP state.
   /// @details Adopts the latest published configuration first, so the state it
@@ -262,8 +274,9 @@ class RealtimeVoiceChanger {
   /// @brief Process a planar block with one external vocoder carrier shared by every channel.
   bool process_block(float* const* channels, int num_channels, const float* carrier,
                      int num_samples) noexcept;
-  /// @brief Holds MIDI note @p note at @p velocity from the start of the next block.
-  /// @details Control thread, single producer shared with @ref note_off. The held notes become the
+  /// @brief Holds MIDI note @p note from the start of the next block.
+  /// @details @p velocity is validated and carried with the event, but the render does not read it.
+  ///          Control thread, single producer shared with @ref note_off. The held notes become the
   ///          voices' targets whatever the pitch correction mode (the newest is the lead), up to
   ///          1 + harmony.voices of them. Holding a held note again refreshes it.
   /// @return false, with the event dropped, for a note outside [0, 127], a velocity outside
@@ -469,6 +482,9 @@ class RealtimeVoiceChanger {
     std::array<DelayRing, kMaxHarmonyVoices> harmony_delay;
     std::array<rt::ParamSmoother, kMaxHarmonyVoices> harmony_delay_samples;
     std::array<rt::ParamSmoother, kMaxVoices> voice_gain;
+    /// Last target each voice ran with, so a harmony voice leaving the count keeps rendering
+    /// while its gain fades out.
+    std::array<VoiceTarget, kMaxVoices> held_voice;
     /// Wet share of the shift (retune.mix); the rest is the gated input delayed to the shifter.
     rt::ParamSmoother shift_mix{1.0f, 10.0f, ::sonare::constants::kDefaultDawSampleRate};
     FixedDelay unshifted;
@@ -476,6 +492,8 @@ class RealtimeVoiceChanger {
     FixedDelay voice_compensation;
     FixedDelay vocoder_compensation;
     bool vocoder_running = false;
+    /// Samples into the current control chunk; chunk edges sit on a fixed absolute grid.
+    int control_phase = 0;
     /// Set when a transformer stage produced a non-finite value, cleared by
     /// discard_non_finite_state, which then resets those stages. Audio thread only.
     bool transform_substituted = false;
@@ -533,6 +551,9 @@ class RealtimeVoiceChanger {
   ///        @c scratch_, leaving the aligned wet signal there.
   void process_transform(ChannelState& state, const RealtimeVoiceChangerConfig& config,
                          const float* carrier, int num_samples) noexcept;
+  /// @brief One control chunk of @ref process_transform, starting @p offset samples into the block.
+  void process_transform_chunk(ChannelState& state, const RealtimeVoiceChangerConfig& config,
+                               const float* carrier, int offset, int num_samples) noexcept;
   /// @brief Applies the note events and the all-notes-off request queued since the last block.
   void drain_note_events() noexcept;
   /// @brief Processes a block whose pre-conditions were checked and whose snapshot @p config
@@ -541,8 +562,7 @@ class RealtimeVoiceChanger {
                  const RealtimeVoiceChangerConfig& config) noexcept;
   /// @brief Whether @p config makes the vocoder read the caller's carrier.
   bool takes_external_carrier(const RealtimeVoiceChangerConfig& config) const noexcept {
-    return prepared_engine_ == PitchEngine::Psola && config.vocoder.enabled &&
-           config.vocoder.carrier_source == VocoderCarrierSource::External;
+    return prepared_engine_ == PitchEngine::Psola && voice_changer::takes_external_carrier(config);
   }
   bool push_note(NoteEvent event) noexcept;
   float process_input_stage(ChannelState& state, float input, bool control_update) noexcept;
@@ -648,6 +668,13 @@ RealtimeVoiceChangerConfig realtime_voice_changer_preset(VoiceCharacterPreset pr
 VoiceCharacterPreset realtime_voice_changer_preset_from_id(std::string_view id);
 const char* realtime_voice_changer_preset_id(VoiceCharacterPreset preset) noexcept;
 std::vector<std::string> realtime_voice_changer_preset_names();
+
+/// @brief Names what is wrong with the arguments of @ref RealtimeVoiceChanger::prepare, or nullptr.
+/// @details The one rule for the sample rate (finite, in the supported range), the block size
+///          (1 up to the realtime ceiling) and the channel count (1 or 2); the C ABI create entries
+///          ask it before they build anything.
+const char* prepare_arguments_error(double sample_rate, int max_block_size,
+                                    int num_channels) noexcept;
 
 /// @brief Checks that @p config's formant warp is within reach.
 /// @details Only absolute mode can fail: the warp is formant factor / 2^(semitones / 12) and the

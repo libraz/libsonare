@@ -1827,6 +1827,28 @@ TEST_CASE("save_wav_multichannel writes WAVE_FORMAT_EXTENSIBLE for 5.1", "[audio
   std::remove(path.c_str());
 }
 
+TEST_CASE("save_wav_multichannel RIFF size covers the whole image at every depth and layout",
+          "[audio_io]") {
+  const std::string path = "test_riff_size.wav";
+  for (const ChannelLayout layout :
+       {ChannelLayout::Stereo, ChannelLayout::FivePointOne, ChannelLayout::SevenPointOne}) {
+    for (const int bits : {16, 24}) {
+      for (const size_t frames : {size_t{1}, size_t{3}, size_t{5}}) {
+        const int channels = sonare::channel_count(layout);
+        std::vector<float> interleaved(frames * static_cast<size_t>(channels), 0.25f);
+        save_wav_multichannel(path, interleaved.data(), frames, channels, layout, 48000, bits);
+        const std::vector<uint8_t> bytes = read_file_bytes(path);
+        INFO("channels " << channels << " bits " << bits << " frames " << frames);
+        // The RIFF size is the image minus its 8-byte preamble, and an odd data
+        // chunk is followed by one pad byte inside it.
+        CHECK(le32(bytes, 4) == bytes.size() - 8);
+        CHECK(bytes.size() % 2 == 0);
+      }
+    }
+  }
+  std::remove(path.c_str());
+}
+
 TEST_CASE("save_wav_multichannel keeps stereo/mono as plain PCM", "[audio_io]") {
   const std::string path = "test_stereo_plain.wav";
   const size_t frames = 8;

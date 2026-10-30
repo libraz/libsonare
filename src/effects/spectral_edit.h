@@ -32,6 +32,11 @@ struct SpectralRegionOp {
   SpectralEditMode mode = SpectralEditMode::Gain;  ///< Edit mode.
 };
 
+/// @brief Refuses a region op whose fields cannot describe a rectangle or a gain.
+/// @throws SonareException(InvalidParameter) for a non-finite low_hz, high_hz or gain_db, or a
+///         Gain/Attenuate gain_db whose linear factor is not a finite float.
+void validate_spectral_region_op(const SpectralRegionOp& op);
+
 /// @brief Largest accepted @ref SpectralEditConfig::n_fft.
 /// @details Past a one-second window a region rectangle cannot address anything shorter
 /// than a phrase. A sample count pins the rate it was derived at -- one second at
@@ -64,7 +69,8 @@ struct SpectralEditConfig {
 /// @return Edited audio, same length and sample rate as @p audio.
 /// @throws SonareException(InvalidParameter) if @p audio is empty, @p n_fft is not
 ///         a power of two in [4, @ref kSpectralEditMaxNFft], @p hop_length is out of
-///         (0, n_fft/2], or @p ops is null with @p n_ops > 0.
+///         (0, n_fft/2], @p ops is null with @p n_ops > 0, an op fails
+///         @ref validate_spectral_region_op, or a gain drives the output past the float range.
 Audio spectral_edit(const Audio& audio, const SpectralEditConfig& config,
                     const SpectralRegionOp* ops, std::size_t n_ops);
 

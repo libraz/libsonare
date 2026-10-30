@@ -1018,8 +1018,9 @@ WavFormatFields make_wav_format_fields(int sample_rate, int channel_count, int b
 void check_riff_size_fits(size_t n_frames, uint16_t block_align) {
   const size_t bytes_per_frame = static_cast<size_t>(block_align);
   constexpr size_t kExtensibleHeaderBytes = 68;
+  // One byte stays free for the pad after an odd-sized data chunk.
   const size_t max_data_bytes =
-      static_cast<size_t>(std::numeric_limits<uint32_t>::max()) - (kExtensibleHeaderBytes - 8);
+      static_cast<size_t>(std::numeric_limits<uint32_t>::max()) - (kExtensibleHeaderBytes - 8) - 1;
   SONARE_CHECK_MSG(bytes_per_frame > 0 && n_frames <= max_data_bytes / bytes_per_frame,
                    ErrorCode::InvalidParameter,
                    "WAV data exceeds RIFF 32-bit size limit; use a chunked container");
@@ -1155,9 +1156,10 @@ std::vector<uint8_t> encode_extensible_wav(const float* interleaved, size_t n_fr
   if (non_finite_samples != nullptr) *non_finite_samples = non_finite;
 
   const auto data_size = static_cast<uint32_t>(pcm.size());
+  const uint32_t pad = data_size % 2;
   const auto block_align = format_fields.block_align;
   const uint32_t fmt_size = 40;  // 16 base + 2 (cbSize) + 22 (extension)
-  const uint32_t riff_size = 4 + (8 + fmt_size) + (8 + data_size);
+  const uint32_t riff_size = 4 + (8 + fmt_size) + (8 + data_size + pad);
 
   // KSDATAFORMAT_SUBTYPE_PCM = {00000001-0000-0010-8000-00AA00389B71}, stored
   // as little-endian Data1/2/3 followed by the 8 Data4 bytes verbatim.
@@ -1165,7 +1167,7 @@ std::vector<uint8_t> encode_extensible_wav(const float* interleaved, size_t n_fr
                                             0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71};
 
   std::vector<uint8_t> image;
-  image.reserve(68 + pcm.size());
+  image.reserve(68 + pcm.size() + pad);
   append_tag(image, "RIFF");
   append_le32(image, riff_size);
   append_tag(image, "WAVE");
@@ -1186,6 +1188,7 @@ std::vector<uint8_t> encode_extensible_wav(const float* interleaved, size_t n_fr
   append_tag(image, "data");
   append_le32(image, data_size);
   image.insert(image.end(), pcm.begin(), pcm.end());
+  if (pad != 0) image.push_back(0);
   return image;
 }
 

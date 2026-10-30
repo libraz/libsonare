@@ -819,6 +819,55 @@ TEST_CASE("Mixing C API preserves surround pan in scene JSON", "[mixing][capi]")
   sonare_mixer_destroy(restored);
 }
 
+TEST_CASE("Mixing C API surround pan refuses an out-of-range field and keeps the previous pan",
+          "[mixing][capi]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 8);
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "surround");
+  REQUIRE(strip != nullptr);
+
+  SonareSurroundPan good{};
+  good.azimuth = -45.0f;
+  good.divergence = 0.25f;
+  good.lfe = 0.5f;
+  good.distance = 1.0f;
+  REQUIRE(sonare_strip_set_surround_pan(strip, &good) == SONARE_OK);
+
+  const auto refused = [&](SonareSurroundPan bad) {
+    REQUIRE(sonare_strip_set_surround_pan(strip, &bad) == SONARE_ERROR_INVALID_PARAMETER);
+    const auto live = strip->strip.surround_pan_params();
+    REQUIRE(live.azimuth == -45.0f);
+    REQUIRE(live.divergence == 0.25f);
+    REQUIRE(live.lfe == 0.5f);
+    REQUIRE(strip->scene_strip.surround_pan.azimuth == -45.0f);
+    REQUIRE(strip->scene_strip.surround_pan.divergence == 0.25f);
+    REQUIRE(strip->scene_strip.surround_pan.lfe == 0.5f);
+  };
+  SonareSurroundPan bad = good;
+  bad.azimuth = 181.0f;
+  refused(bad);
+  bad = good;
+  bad.azimuth = -180.5f;
+  refused(bad);
+  bad = good;
+  bad.divergence = 1.5f;
+  refused(bad);
+  bad = good;
+  bad.divergence = -0.1f;
+  refused(bad);
+  bad = good;
+  bad.lfe = 2.0f;
+  refused(bad);
+
+  // The domain edges are accepted.
+  SonareSurroundPan edge = good;
+  edge.azimuth = 180.0f;
+  edge.divergence = 1.0f;
+  edge.lfe = 0.0f;
+  REQUIRE(sonare_strip_set_surround_pan(strip, &edge) == SONARE_OK);
+  sonare_mixer_destroy(mixer);
+}
+
 TEST_CASE("Mixing C API surround pan zero-init distance keeps the core default", "[mixing][capi]") {
   // A C host that only sets azimuth leaves SonareSurroundPan zero-initialized, so
   // distance arrives as 0. The C ABI must treat distance <= 0 as "keep default"

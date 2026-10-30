@@ -439,6 +439,35 @@ TEST_CASE("held notes become the voices, newest as the lead", "[voice_target]") 
   CHECK(r.block(300.0).count == 4);
 }
 
+TEST_CASE("held notes pin every voice at weight 1 in every pitch correction mode",
+          "[voice_target]") {
+  struct Mode {
+    PitchCorrectionMode mode;
+    float amount;
+  };
+  for (const Mode m :
+       {Mode{PitchCorrectionMode::Off, 1.0f}, Mode{PitchCorrectionMode::Auto, 0.4f},
+        Mode{PitchCorrectionMode::Auto, 1.0f}, Mode{PitchCorrectionMode::Robot, 1.0f}}) {
+    CAPTURE(static_cast<int>(m.mode), m.amount);
+    Rig r;
+    r.pc.mode = m.mode;
+    r.pc.amount = m.amount;
+    r.hm.voices = 2;
+    r.apply();
+    r.run(220.0, 0.3);
+    r.note_on(60);
+    r.note_on(64);
+    r.note_on(67);
+    const VoiceTargets t = r.block(220.0);
+    REQUIRE(t.count == 3);
+    const double expected[3] = {67.0, 64.0, 60.0};
+    for (int i = 0; i < t.count; ++i) {
+      CHECK(t.voices[i].absolute_weight == 1.0f);
+      CHECK(std::fabs(cents(t.voices[i].target_hz, midi_hz(expected[i]))) < 0.01);
+    }
+  }
+}
+
 TEST_CASE("voice count is min(held, 1 + harmony.voices)", "[voice_target]") {
   Rig r;
   r.hm.voices = 1;

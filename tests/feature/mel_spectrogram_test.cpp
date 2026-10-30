@@ -10,6 +10,7 @@
 
 #include "feature/inverse.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using namespace sonare::constants;
@@ -174,6 +175,18 @@ TEST_CASE("MelSpectrogram mfcc with liftering", "[mel_spectrogram]") {
       REQUIRE_THAT(mfcc_lift[k * n_frames + t], WithinAbs(expected, tol));
     }
   }
+}
+
+TEST_CASE("mfcc_to_mel refuses a lifter whose window reaches zero", "[mel_spectrogram][inverse]") {
+  const int n_frames = 3;
+  const std::vector<float> mfcc(static_cast<size_t>(4) * n_frames, 1.0f);
+  // lifter 2: the window 1 + sin(pi * (k + 1) / 2) is zero at k = 2.
+  CHECK_THROWS_AS(mfcc_to_mel(mfcc.data(), 4, n_frames, 8, 2.0f), SonareException);
+  CHECK_THROWS_AS(mfcc_to_mel(mfcc.data(), 4, n_frames, 8, std::nanf("")), SonareException);
+  // Below the zero the window is invertible and the result is finite.
+  const std::vector<float> mel = mfcc_to_mel(mfcc.data(), 2, n_frames, 8, 2.0f);
+  REQUIRE(mel.size() == static_cast<size_t>(8) * n_frames);
+  for (const float v : mel) REQUIRE(std::isfinite(v));
 }
 
 TEST_CASE("mfcc_to_mel inverts MFCC liftering when the lifter is passed back",

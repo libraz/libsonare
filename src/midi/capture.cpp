@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "midi/note_fx_shared.h"
+#include "midi/smf.h"
 #include "util/insertion_sort.h"
 
 namespace sonare::midi {
@@ -213,6 +214,14 @@ size_t MidiCapture::drain(const CaptureConfig& config, MidiClip* clip) {
     return a.order < b.order;
   });
 
+  struct OpenNote {
+    uint8_t group;
+    uint8_t channel;
+    uint8_t note;
+    uint32_t source_track_id;
+    double ppq;
+  };
+  std::vector<OpenNote> open_notes;
   for (const CapturedEvent& captured : events) {
     double rel_ppq = captured.rel_ppq;
     if (config.quantize.enabled) {
@@ -233,6 +242,30 @@ size_t MidiCapture::drain(const CaptureConfig& config, MidiClip* clip) {
       }
       if (rel_ppq < 0.0) {
         rel_ppq = 0.0;
+      }
+    }
+    // A played note keeps a length: an off landing on or before its own on is
+    // pushed out to one grid step, or one tick without a grid.
+    if (captured.event.ump.is_note_on() || captured.event.ump.is_note_off()) {
+      const Ump& note_ump = captured.event.ump;
+      const auto same_note = [&](const OpenNote& open) {
+        return open.group == ump_group_from_word0(note_ump.words[0]) &&
+               open.channel == note_ump.channel() && open.note == note_ump.note_number() &&
+               open.source_track_id == captured.event.source_track_id;
+      };
+      if (note_ump.is_note_on()) {
+        open_notes.push_back({ump_group_from_word0(note_ump.words[0]), note_ump.channel(),
+                              note_ump.note_number(), captured.event.source_track_id, rel_ppq});
+      } else if (const auto open = std::find_if(open_notes.begin(), open_notes.end(), same_note);
+                 open != open_notes.end()) {
+        if (rel_ppq <= open->ppq) {
+          const bool has_grid = config.quantize.enabled &&
+                                std::isfinite(config.quantize.grid_ppq) &&
+                                config.quantize.grid_ppq > 0.0;
+          rel_ppq = open->ppq + (has_grid ? config.quantize.grid_ppq
+                                          : 1.0 / static_cast<double>(kDefaultTicksPerQuarter));
+        }
+        open_notes.erase(open);
       }
     }
     MidiClipEvent clip_event;

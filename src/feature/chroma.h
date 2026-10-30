@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "core/audio.h"
@@ -12,6 +13,7 @@
 #include "feature/cqt.h"
 #include "filters/chroma.h"
 #include "util/constants.h"
+#include "util/exception.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -118,6 +120,28 @@ struct ChromaCensConfig {
   ChromaCqtConfig base;
   int win_len_smooth = 41;  ///< Hann smoothing window length (0 disables smoothing).
 };
+
+/// @brief Octaves the public chroma-from-CQT entry points analyse.
+constexpr int kChromaCqtOctaves = 7;
+
+/// @brief The ChromaCqtConfig a public chroma_cqt / chroma_cens entry point runs with.
+/// @details Spans @ref kChromaCqtOctaves octaves at @p bins_per_octave.
+/// @throws SonareException(InvalidParameter) unless hop_length and n_chroma are positive and
+///         bins_per_octave is a positive multiple of n_chroma whose octave span fits an int.
+inline ChromaCqtConfig make_chroma_cqt_config(int hop_length, int n_chroma, int bins_per_octave) {
+  SONARE_CHECK_MSG(hop_length > 0 && n_chroma > 0, ErrorCode::InvalidParameter,
+                   "chroma CQT: hop_length and n_chroma must be positive");
+  SONARE_CHECK_MSG(bins_per_octave > 0 && bins_per_octave % n_chroma == 0 &&
+                       bins_per_octave <= std::numeric_limits<int>::max() / kChromaCqtOctaves,
+                   ErrorCode::InvalidParameter,
+                   "chroma CQT: bins_per_octave must be a positive multiple of n_chroma");
+  ChromaCqtConfig config;
+  config.cqt.hop_length = hop_length;
+  config.cqt.bins_per_octave = bins_per_octave;
+  config.cqt.n_bins = kChromaCqtOctaves * bins_per_octave;
+  config.n_chroma = n_chroma;
+  return config;
+}
 
 /// @brief Configuration for low-frequency bass chroma extraction.
 struct BassChromaConfig {

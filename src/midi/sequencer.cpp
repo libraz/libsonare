@@ -93,6 +93,72 @@ constexpr uint32_t kChaseKindChannelPressure = 129;
 constexpr uint32_t kChaseKindPitchBend = 130;
 constexpr uint32_t kChaseKindRegistered = 0x10000;
 constexpr uint32_t kChaseKindAssignable = 0x20000;
+// Resets are not states: they only retire the older states they cover. Both flag bits set
+// never occurs in a registered or assignable key, so these cannot collide with one.
+constexpr uint32_t kChaseKindReset = 0x30000;
+constexpr uint32_t kChaseKindSystemReset = 0x30001;
+
+bool is_reset_key(uint32_t key) noexcept {
+  const uint32_t kind = key & ((1u << kChaseKindBits) - 1u);
+  return kind == kChaseKindReset || kind == kChaseKindSystemReset;
+}
+
+/// Whether Reset All Controllers returns the state of @p key to the default the
+/// controller reset a seek or wrap sends already restores.
+bool reset_covers(uint32_t key) noexcept {
+  switch (key & ((1u << kChaseKindBits) - 1u)) {
+    case cc::kModulationWheel:
+    case cc::kBreathController:
+    case cc::kExpression:
+    case cc::kDamperPedal:
+    case cc::kPortamentoOnOff:
+    case cc::kSostenuto:
+    case cc::kSoftPedal:
+    case kChaseKindChannelPressure:
+    case kChaseKindPitchBend:
+      return true;
+    default:
+      return false;
+  }
+}
+
+/// Whether a SysEx payload (F0/F7 framing optional) is a GM, GS or XG system reset.
+bool is_system_reset_sysex(const uint8_t* payload, size_t size) noexcept {
+  if (payload == nullptr) return false;
+  if (size > 0 && payload[0] == 0xF0u) {
+    ++payload;
+    --size;
+  }
+  if (size > 0 && payload[size - 1] == 0xF7u) --size;
+  const bool gm = size == 4 && payload[0] == 0x7Eu && payload[2] == 0x09u &&
+                  (payload[3] == 0x01u || payload[3] == 0x03u);
+  const bool gs = size == 9 && payload[0] == 0x41u && payload[2] == 0x42u && payload[3] == 0x12u &&
+                  payload[4] == 0x40u && payload[5] == 0x00u && payload[6] == 0x7Fu &&
+                  payload[7] == 0x00u && payload[8] == 0x41u;
+  const bool xg = size == 7 && payload[0] == 0x43u && (payload[1] & 0xF0u) == 0x10u &&
+                  payload[2] == 0x4Cu && payload[3] == 0x00u && payload[4] == 0x00u &&
+                  payload[5] == 0x7Eu && payload[6] == 0x00u;
+  return gm || gs || xg;
+}
+
+/// The chase key of an event that resets channel state: Reset All Controllers on its
+/// channel, or a system reset SysEx for the whole destination.
+bool reset_chase_key(const MidiEvent& event, uint32_t* key) noexcept {
+  const Ump& ump = event.ump;
+  if (is_sysex_event(event)) {
+    if (!is_system_reset_sysex(event.sysex_payload, event.sysex_payload_size)) return false;
+    *key = kChaseKindSystemReset;
+    return true;
+  }
+  if (!is_channel_voice(ump) ||
+      static_cast<UmpStatus>(ump.status_nibble()) != UmpStatus::kControlChange ||
+      ump.note_number() != cc::kResetAllControllers) {
+    return false;
+  }
+  *key = ((static_cast<uint32_t>(ump.group & 0x0Fu) << 4 | ump.channel()) << kChaseKindBits) |
+         kChaseKindReset;
+  return true;
+}
 
 /// Controllers whose meaning depends on the messages around them, so no single value is a state.
 bool is_sequence_controller(uint8_t controller) noexcept {
@@ -149,7 +215,9 @@ std::shared_ptr<const MidiClipChaseIndex> build_chase_index(const MidiClipSchedu
   std::vector<std::pair<uint32_t, uint32_t>> keyed;
   for (size_t i = 0; i < clip.events.size(); ++i) {
     uint32_t key = 0;
-    if (chase_key(clip.events[i].ump, &key)) keyed.emplace_back(key, static_cast<uint32_t>(i));
+    if (reset_chase_key(clip.events[i], &key) || chase_key(clip.events[i].ump, &key)) {
+      keyed.emplace_back(key, static_cast<uint32_t>(i));
+    }
   }
   if (keyed.empty()) return nullptr;
   std::sort(keyed.begin(), keyed.end());
@@ -1066,10 +1134,32 @@ void MidiSequencer::chase_clip_state(const std::vector<MidiClipSchedule>& clips,
     }
   }
   if (overflowed) chase_overflow_count_.fetch_add(1, std::memory_order_relaxed);
+  // The newest reset of one (destination, key) the chase found, or nullptr.
+  const auto reset_of = [&](uint32_t destination_id, uint32_t key) noexcept -> const ChasedState* {
+    size_t slot = (key * 2654435761u ^ destination_id * 40503u) & kMask;
+    for (size_t probes = 0; probes < kMaxChasedStates && table[slot].event != nullptr; ++probes) {
+      if (table[slot].destination_id == destination_id && table[slot].key == key) {
+        return &table[slot];
+      }
+      slot = (slot + 1) & kMask;
+    }
+    return nullptr;
+  };
+  // A state set before a reset covering it is not what continuous playback holds.
+  const auto superseded = [&](const ChasedState& state) noexcept {
+    if (!reset_covers(state.key)) return false;
+    const uint32_t channel_reset = (state.key & ~((1u << kChaseKindBits) - 1u)) | kChaseKindReset;
+    for (const uint32_t reset_key : {channel_reset, kChaseKindSystemReset}) {
+      const ChasedState* reset = reset_of(state.destination_id, reset_key);
+      if (reset != nullptr && reset->frame > state.frame) return true;
+    }
+    return false;
+  };
   for (int pass = 0; pass < kChasePasses; ++pass) {
     for (size_t i = 0; i < found; ++i) {
       const ChasedState& state = table[order[i]];
-      if (chase_pass(state.key) != pass) continue;
+      if (is_reset_key(state.key) || chase_pass(state.key) != pass) continue;
+      if (superseded(state)) continue;
       MidiEvent event = *state.event;
       event.render_frame = clock.device.value;
       event.source_track_id = state.track_id;

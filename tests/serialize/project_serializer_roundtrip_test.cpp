@@ -2454,6 +2454,10 @@ TEST_CASE("a scene array with a non-object element is refused, never thinned", "
 // Edit-API invariants enforced on the load path
 // ===========================================================================
 
+/// Thirty-three extension numbers, one more than a chord may carry.
+static const char* const kExtensions =
+    "7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7";
+
 TEST_CASE("a loaded position is never one the C ABI setters would reject", "[serialize]") {
   // `finite_non_negative` gates every position the project edit bridge accepts
   // (sonare_project_set_tempo_segments / _set_time_signatures / _set_marker), so
@@ -2519,10 +2523,29 @@ TEST_CASE("a loaded position is never one the C ABI setters would reject", "[ser
       {"time signature with a non-positive denominator",
        R"({"version":1,"time_signatures":[{"start_ppq":0.0,"numerator":4,"denominator":0}]})",
        "invalid_time_signature"},
+      // The annotation setters admit a span from a non-negative start to an end
+      // after it, and at most 32 extensions per chord.
+      {"annotation key with a negative start",
+       R"({"version":1,"annotation":{"keys":[{"start_ppq":-1.0,"end_ppq":4.0}]}})",
+       "invalid_annotation_key_span"},
+      {"annotation key with an empty span",
+       R"({"version":1,"annotation":{"keys":[{"start_ppq":4.0,"end_ppq":4.0}]}})",
+       "invalid_annotation_key_span"},
+      {"annotation chord with a negative start",
+       R"({"version":1,"annotation":{"chords":[{"start_ppq":-1.0,"end_ppq":4.0}]}})",
+       "invalid_annotation_chord_span"},
+      {"annotation chord ending before it starts",
+       R"({"version":1,"annotation":{"chords":[{"start_ppq":4.0,"end_ppq":2.0}]}})",
+       "invalid_annotation_chord_span"},
+      {"annotation chord with more than 32 extensions",
+       R"({"version":1,"annotation":{"chords":[{"start_ppq":0.0,"end_ppq":4.0,"extensions":[EXT]}]}})",
+       "invalid_annotation_chord_extensions"},
   };
   for (const Case& c : cases) {
+    std::string json = c.json;
+    if (const auto at = json.find("EXT"); at != std::string::npos) json.replace(at, 3, kExtensions);
     INFO(c.what);
-    const auto result = project_from_json(c.json);
+    const auto result = project_from_json(json);
     REQUIRE_FALSE(result.ok());
     REQUIRE(result.has_error());
     REQUIRE(std::any_of(result.diagnostics.begin(), result.diagnostics.end(),
@@ -3023,4 +3046,20 @@ TEST_CASE("orphan MIDI event lists and dangling SysEx handles are dropped on loa
   REQUIRE(add.apply(project, midi));
   CHECK(add.allocated_id() == 2);
   CHECK(midi.events.count(add.allocated_id()) == 0);
+}
+
+TEST_CASE("a negative track or clip gain loads as silence with one warning each", "[serialize]") {
+  const auto result = project_from_json(
+      R"({"version":1,"sources":[{"id":1,"kind":0}],"tracks":[{"id":1,"gain":-0.5}],)"
+      R"("clips":[{"id":1,"track_id":1,"source_id":1,"length_ppq":1,"gain":-2}]})");
+  REQUIRE(result.ok());
+  REQUIRE(result.project->tracks().size() == 1);
+  CHECK(result.project->tracks()[0].gain == 0.0f);
+  CHECK(result.project->clips()[0].gain == 0.0f);
+  const auto count = [&](const char* code) {
+    return std::count_if(result.diagnostics.begin(), result.diagnostics.end(),
+                         [&](const serialize::Diagnostic& d) { return d.code == code; });
+  };
+  CHECK(count("track_gain_clamped") == 1);
+  CHECK(count("clip_gain_clamped") == 1);
 }

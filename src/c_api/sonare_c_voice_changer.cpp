@@ -211,6 +211,13 @@ SonareError sonare_voice_change_realtime(const float* samples, size_t length, in
   std::unique_ptr<SonareRealtimeVoiceChanger, decltype(&sonare_realtime_voice_changer_destroy)>
       handle(raw_handle, sonare_realtime_voice_changer_destroy);
 
+  // The one-shot has no carrier to hand the vocoder, so refuse before any block is processed.
+  if (editing::voice_changer::takes_external_carrier(handle->changer.config())) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "vocoderCarrierSource 'external' needs a carrier; this one-shot supplies none");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
   std::unique_ptr<float[]> output(new float[length]);
   err = process_realtime_voice_change_compensated(handle.get(), samples, length, channels,
                                                   kBlockSize, output.get());
@@ -464,7 +471,10 @@ SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChange
   SONARE_C_API_ENTRY;
   if (out) *out = nullptr;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!out || sample_rate <= 0 || max_block_size <= 0 || num_channels < 1 || num_channels > 2) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const char* refused = editing::voice_changer::prepare_arguments_error(
+          static_cast<double>(sample_rate), max_block_size, num_channels)) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, refused);
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
@@ -542,7 +552,10 @@ SonareError sonare_realtime_voice_changer_create_json(const char* preset_or_conf
   SONARE_C_API_ENTRY;
   if (out) *out = nullptr;
 #if defined(SONARE_WITH_VOICE_CHANGER)
-  if (!out || sample_rate <= 0 || max_block_size <= 0 || num_channels < 1 || num_channels > 2) {
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const char* refused = editing::voice_changer::prepare_arguments_error(
+          static_cast<double>(sample_rate), max_block_size, num_channels)) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, refused);
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY

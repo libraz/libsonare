@@ -14,6 +14,16 @@
 
 namespace sonare::engine {
 
+namespace {
+
+/// Frames from @p position to the next control-grid line (1 .. period).
+int frames_to_control_edge(int64_t position, int period) noexcept {
+  const int64_t phase = ((position % period) + period) % period;
+  return period - static_cast<int>(phase);
+}
+
+}  // namespace
+
 bool RealtimeEngine::is_pushable_midi_ump(const uint32_t* words, size_t count) noexcept {
   if (words == nullptr || count == 0 || count > 4) return false;
   if (count != midi::ump_word_count_for_word0(words[0])) return false;
@@ -28,6 +38,38 @@ void RealtimeEngine::process(float* const* io, int num_channels, int num_frames)
 void RealtimeEngine::process_with_monitor(float* const* io, float* const* monitor_out,
                                           int num_channels, int num_frames) noexcept {
   process_impl(io, monitor_out, num_channels, num_frames, false);
+}
+
+void RealtimeEngine::advance_without_render(int frames) noexcept {
+  control_resume_.valid = false;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const transport::TempoMap& tempo_map = *(active_tempo_map_ ? active_tempo_map_ : &tempo_map_);
+  int remaining = frames;
+  while (remaining > 0) {
+    if (transport_.fold_into_loop()) {
+      midi_sequencer_.release_clip_playback(midi::DeviceFrame{transport_.render_frame()});
+    }
+    // MIDI dispatches only up to the loop end, so no clip event sounds past it.
+    int chunk = remaining;
+    const auto now = transport_.snapshot();
+    if (now.playing && now.looping && now.loop_end_ppq > now.loop_start_ppq) {
+      const int64_t distance =
+          numeric::saturating_sub(tempo_map.ppq_to_sample(now.loop_end_ppq), now.sample_position);
+      if (distance > 0 && distance < chunk) chunk = static_cast<int>(distance);
+    }
+    dispatch_midi_without_render(chunk);
+    const bool rolling = transport_.playing();
+    const int64_t left_position =
+        numeric::saturating_add(transport_.sample_position(), int64_t{chunk});
+    transport_.advance(chunk);
+    if (rolling && transport_.sample_position() != left_position) {
+      midi_sequencer_.release_clip_playback(midi::DeviceFrame{transport_.render_frame()});
+    }
+    remaining -= chunk;
+  }
+#else
+  transport_.advance(frames);
+#endif
 }
 
 void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, int num_channels,
@@ -45,10 +87,7 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     const auto state = transport_.snapshot();
     silence(io, num_channels, frames);
     silence(monitor_out, num_channels, frames);
-#if defined(SONARE_WITH_ARRANGEMENT)
-    dispatch_midi_without_render(frames);
-#endif
-    transport_.advance(frames);
+    advance_without_render(frames);
     enqueue_error(TelemetryErrorCode::kMaxBlockExceeded, state.render_frame, state.sample_position,
                   static_cast<uint32_t>(frames));
     return;
@@ -57,10 +96,7 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     const auto state = transport_.snapshot();
     silence(io, num_channels, frames);
     silence(monitor_out, num_channels, frames);
-#if defined(SONARE_WITH_ARRANGEMENT)
-    dispatch_midi_without_render(frames);
-#endif
-    transport_.advance(frames);
+    advance_without_render(frames);
     enqueue_error(TelemetryErrorCode::kMaxChannelsExceeded, state.render_frame,
                   state.sample_position, static_cast<uint32_t>(num_channels));
     return;
@@ -137,10 +173,12 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   boundary_context.block_timeline_sample = state.sample_position;
   boundary_context.num_frames = frames;
   boundary_splitter_.begin(boundary_context);
+  bool command_at_block_start = false;
   for (const rt::Command& command : pending_) {
     const auto sample_time = command.sample_time;
     if (command_belongs_to_block(sample_time, state.render_frame, frames)) {
       boundary_splitter_.add_command(static_cast<int>(sample_time - state.render_frame));
+      command_at_block_start = command_at_block_start || sample_time <= state.render_frame;
     }
   }
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -155,8 +193,12 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   // Control-period edges re-evaluate automation lanes and engine-level smoothers
   // at a bounded cadence. Boundary storage covers every offset of the prepared
   // block (prepare_impl), so the cadence cannot evict command or MIDI edges.
+  // The grid is anchored to the timeline while rolling (the device clock when
+  // stopped), so how the host splits the stream does not move it.
   if (automation_.lane_count() > 0 || any_smoothed_param_active()) {
-    for (int offset = kControlPeriod; offset < frames; offset += kControlPeriod) {
+    const int64_t grid_base = state.playing ? state.sample_position : state.render_frame;
+    for (int offset = frames_to_control_edge(grid_base, kControlPeriod); offset < frames;
+         offset += kControlPeriod) {
       boundary_splitter_.add_automation(offset);
     }
   }
@@ -227,10 +269,22 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     span = timeline_span(span);
     // A smoother a command started inside this block has no up-front boundary.
     if (any_smoothed_param_active()) {
-      span = std::min(span, kControlPeriod - offset % kControlPeriod);
+      const int64_t grid_position =
+          transport_.playing() ? transport_.sample_position() : render_frame;
+      span = std::min(span, frames_to_control_edge(grid_position, kControlPeriod));
     }
-    // Automation is evaluated at the span start with the transport the commands left.
-    automation_.apply(transport_.snapshot(), 0, span);
+    // Automation is evaluated at the span start with the transport the commands left. A
+    // span that continues a control period the previous block's end cut keeps that period's
+    // evaluation point, so the lanes read the same however the host split the stream.
+    const auto span_state = transport_.snapshot();
+    int eval_offset = 0;
+    if (offset == 0 && control_resume_.valid && span_state.playing &&
+        span_state.sample_position == control_resume_.position && !command_at_block_start) {
+      eval_offset = static_cast<int>(control_resume_.eval_sample - span_state.sample_position);
+    }
+    control_resume_.valid = false;
+    automation_.apply(span_state, eval_offset, span);
+    const int64_t eval_sample = span_state.sample_position + eval_offset;
 #if defined(SONARE_WITH_ARRANGEMENT)
     publish_instrument_transport();
     span = dispatch_midi_span(render_frame, state.render_frame, span);
@@ -245,6 +299,8 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     if (rolling) emit_midi_clock_block(position, render_frame, span);
 #endif
     process_subblock(io, monitor_out, num_channels, offset, span, fold_monitor_to_main);
+    const bool cut_by_block_end =
+        rolling && offset + span == frames && timeline_span(span + 1) > span;
     transport_.advance(span);
     // advance() folds a playhead reaching loop_end, which is the wrap.
     const int64_t left_position = numeric::saturating_add(position, int64_t{span});
@@ -252,6 +308,10 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     if (wrapped) {
       last_loop_wrap_ = {true, transport_.render_frame(), left_position,
                          transport_.sample_position()};
+    } else if (cut_by_block_end && automation_.lane_count() > 0 &&
+               left_position - eval_sample < kControlPeriod &&
+               frames_to_control_edge(left_position, kControlPeriod) != kControlPeriod) {
+      control_resume_ = {true, left_position, eval_sample};
     }
     offset += span;
   }

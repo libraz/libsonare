@@ -100,7 +100,7 @@ class MultibandSaturation : public rt::ProcessorBase {
   int band_latency_q8(size_t band) const noexcept;
   /// @brief Declares every band's delay to band_paths_ so each arrives at the
   ///        sum aligned to the deepest. Control thread only (allocates).
-  void rebuild_band_compensation();
+  void rebuild_band_compensation(int channels);
 
   MultibandSaturationConfig config_{};
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;

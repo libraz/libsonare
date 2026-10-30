@@ -50,9 +50,8 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   /// output_format selector is checked separately below.
   const auto finite_positive = [](float v) { return std::isfinite(v) && v > 0.0f; };
   const auto finite_non_negative = [](float v) { return std::isfinite(v) && v >= 0.0f; };
-  if (config_.sample_rate <= 0)
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "StreamConfig: sample_rate must be positive");
+  if (const char* oversized = stream_config_sizing_error(config_))
+    throw SonareException(ErrorCode::InvalidParameter, oversized);
   if (config_.n_fft <= 0)
     throw SonareException(ErrorCode::InvalidParameter, "StreamConfig: n_fft must be positive");
   if (config_.n_mels <= 0)

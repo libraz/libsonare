@@ -199,12 +199,27 @@ bool point_inside_shoebox(const ShoeboxRoom& room, const Vec3& p) noexcept;
 /// boundary cases.
 bool point_inside_mesh(const std::vector<Triangle>& faces, const Vec3& p) noexcept;
 
+/// @brief The spelling each shoebox dimension has in a caller's vocabulary, so a diagnostic
+///        names the key the caller wrote.
+struct ShoeboxFieldNames {
+  const char* length;
+  const char* width;
+  const char* height;
+};
+
+/// @brief Dimension names as the C ABI and Python spell them.
+constexpr ShoeboxFieldNames kShoeboxFieldNames{"length_m", "width_m", "height_m"};
+
+/// @brief Dimension names as the JavaScript surfaces (Node, WASM) spell them.
+constexpr ShoeboxFieldNames kShoeboxJsFieldNames{"lengthM", "widthM", "heightM"};
+
 /// @brief Validate shoebox geometry and placement; never throws.
 ///
-/// Reports invalid/degenerate dimensions and out-of-room source/listener as
-/// `Diagnostic` (Error/Warning). An empty result (no errors) means the room is
-/// usable by the image-source method.
-std::vector<Diagnostic> validate_shoebox(const ShoeboxRoom& room, const SourceListener& placement);
+/// Reports invalid/degenerate dimensions (each named through @p names) and
+/// out-of-room source/listener as `Diagnostic` (Error/Warning). An empty result
+/// (no errors) means the room is usable by the image-source method.
+std::vector<Diagnostic> validate_shoebox(const ShoeboxRoom& room, const SourceListener& placement,
+                                         const ShoeboxFieldNames& names = kShoeboxFieldNames);
 
 /// @brief Hard upper bound on the polyhedral mesh face count.
 ///

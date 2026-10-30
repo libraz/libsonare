@@ -118,6 +118,7 @@ SonareError sonare_mel_to_stft_ex(const float* mel, int n_mels, int n_frames, in
   }
 
   SONARE_C_TRY
+  validate_mel_bounds(fmin, fmax);
   MelConfig config;
   config.n_mels = n_mels;
   config.n_fft = n_fft;
@@ -147,6 +148,7 @@ SonareError sonare_mel_to_audio_ex(const float* mel, int n_mels, int n_frames, i
   }
 
   SONARE_C_TRY
+  validate_mel_bounds(fmin, fmax);
   MelConfig config;
   config.n_mels = n_mels;
   config.n_fft = n_fft;
@@ -223,6 +225,7 @@ SonareError sonare_mfcc_to_audio_ex2(const float* mfcc, int n_mfcc, int n_frames
   }
 
   SONARE_C_TRY
+  validate_mel_bounds(fmin, fmax);
   MelConfig config;
   config.n_mels = n_mels;
   config.n_fft = n_fft;

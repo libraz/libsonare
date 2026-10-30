@@ -3,9 +3,12 @@
 /// @file onset_analyzer.h
 /// @brief Onset detection and analysis.
 
+#include <string>
 #include <vector>
 
 #include "core/audio.h"
+#include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -35,6 +38,54 @@ struct OnsetDetectConfig {
   ///          Raise it to reproduce the unbounded onset_backtrack() result.
   int backtrack_range = 10;
 };
+
+/// @brief The spelling each OnsetDetectConfig field has in a caller's vocabulary, so a refusal
+///        names the key the caller wrote.
+struct OnsetDetectFieldNames {
+  const char* n_fft;
+  const char* hop_length;
+  const char* threshold;
+  const char* pre_max;
+  const char* post_max;
+  const char* pre_avg;
+  const char* post_avg;
+  const char* delta;
+  const char* wait;
+  const char* backtrack_range;
+};
+
+/// @brief Field names as the C ABI and Python spell them.
+constexpr OnsetDetectFieldNames kOnsetDetectFieldNames{
+    "n_fft",   "hop_length", "threshold", "pre_max", "post_max",
+    "pre_avg", "post_avg",   "delta",     "wait",    "backtrack_range"};
+
+/// @brief Field names as the JavaScript surfaces (Node, WASM) spell them.
+constexpr OnsetDetectFieldNames kOnsetDetectJsFieldNames{
+    "nFft",   "hopLength", "threshold", "preMax", "postMax",
+    "preAvg", "postAvg",   "delta",     "wait",   "backtrackRange"};
+
+/// @brief Refuses an OnsetDetectConfig outside the argument domain every public surface shares.
+/// @throws SonareException(InvalidParameter) naming the field, through @p names, for a
+///         non-positive n_fft or hop_length, a negative peak-picking window, wait or
+///         backtrack_range, a non-finite threshold, or a negative or non-finite delta.
+inline void validate_onset_detect_config(
+    const OnsetDetectConfig& config, const OnsetDetectFieldNames& names = kOnsetDetectFieldNames) {
+  const auto require = [](bool ok, const char* name, const char* rule) {
+    SONARE_CHECK_MSG(ok, ErrorCode::InvalidParameter, std::string(name) + rule);
+  };
+  require(config.n_fft > 0, names.n_fft, " must be positive");
+  require(config.hop_length > 0, names.hop_length, " must be positive");
+  require(numeric::finite(config.threshold), names.threshold, " must be finite");
+  constexpr const char* kFrameCount = " must be a non-negative frame count";
+  require(config.pre_max >= 0, names.pre_max, kFrameCount);
+  require(config.post_max >= 0, names.post_max, kFrameCount);
+  require(config.pre_avg >= 0, names.pre_avg, kFrameCount);
+  require(config.post_avg >= 0, names.post_avg, kFrameCount);
+  require(numeric::finite_non_negative(config.delta), names.delta,
+          " must be finite and non-negative");
+  require(config.wait >= 0, names.wait, kFrameCount);
+  require(config.backtrack_range >= 0, names.backtrack_range, kFrameCount);
+}
 
 /// @brief How the onset envelope's analysis window relates to the input sample rate.
 enum class OnsetFraming {

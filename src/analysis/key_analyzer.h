@@ -10,6 +10,8 @@
 #include "analysis/key_profiles.h"
 #include "core/audio.h"
 #include "feature/chroma.h"
+#include "util/exception.h"
+#include "util/numeric_validation.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -79,6 +81,26 @@ struct KeyConfig {
   /// Read only by the audio constructor; @ref KeyAnalyzer::tuning reports the value used.
   bool auto_tuning = false;
 };
+
+/// @brief Smallest hop length the HPSS front end of key analysis accepts.
+/// @details The separation needs enough frame overlap to resynthesize, which the STFT geometry
+///          check alone does not ensure: at the 4096-point default a hop of 8 passes it.
+constexpr int kMinKeyHpssHopLength = 16;
+
+/// @brief Refuses a KeyConfig outside the argument domain every public surface shares.
+/// @throws SonareException(InvalidParameter) for a non-positive n_fft or hop_length, a
+///         hop_length below @ref kMinKeyHpssHopLength with use_hpss, or a negative or
+///         non-finite high_pass_hz.
+inline void validate_key_config(const KeyConfig& config) {
+  SONARE_CHECK_MSG(config.n_fft > 0 && config.hop_length > 0, ErrorCode::InvalidParameter,
+                   "KeyConfig: n_fft and hop_length must be positive");
+  SONARE_CHECK_MSG(!config.use_hpss || config.hop_length >= kMinKeyHpssHopLength,
+                   ErrorCode::InvalidParameter,
+                   "KeyConfig: hop_length must be at least " +
+                       std::to_string(kMinKeyHpssHopLength) + " when use_hpss is set");
+  SONARE_CHECK_MSG(numeric::finite_non_negative(config.high_pass_hz), ErrorCode::InvalidParameter,
+                   "KeyConfig: high_pass_hz must be finite and non-negative");
+}
 
 /// @brief Key analyzer using chroma correlation.
 class KeyAnalyzer {

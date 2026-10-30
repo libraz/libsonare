@@ -8,9 +8,11 @@ using namespace sonare_c_mixing_detail;
 
 SonareMixer* sonare_mixer_create(int sample_rate, int max_block_size) {
   SONARE_C_API_ENTRY;
-  if (sample_rate <= 0 || max_block_size <= 0) {
-    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER,
-                                    "mixer: sample_rate and max_block_size must be positive");
+  if (!sonare::is_valid_realtime_sample_rate(static_cast<double>(sample_rate)) ||
+      !sonare::is_valid_realtime_block_size(max_block_size)) {
+    sonare_c_detail::set_last_error(
+        SONARE_ERROR_INVALID_PARAMETER,
+        "mixer: sample_rate and max_block_size must be within the supported range");
     return nullptr;
   }
   SONARE_C_TRY
@@ -147,26 +149,23 @@ SonareError sonare_strip_set_dual_pan(SonareStrip* strip, float left_pan, float 
 
 SonareError sonare_strip_set_surround_pan(SonareStrip* strip, const SonareSurroundPan* pan) {
   SONARE_C_API_ENTRY;
-  if (!strip || !pan || !finite(pan->azimuth) || !finite(pan->elevation) ||
-      !finite(pan->divergence) || !finite(pan->lfe) || !finite(pan->distance)) {
+  if (!strip || !pan || !sonare::mixing::surround_azimuth_in_range(pan->azimuth) ||
+      !finite(pan->elevation) || !sonare::mixing::surround_unit_in_range(pan->divergence) ||
+      !sonare::mixing::surround_unit_in_range(pan->lfe) || !finite(pan->distance)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
   // Stored on the scene strip and mirrored onto the live strip below. The
   // engine's track mixer reads it when the lane feeds a >2-channel
   // destination; the stereo-only mixer block entry points do not.
+  // A distance <= 0 (a zero-initialised host struct) resolves to the default 1.0 here.
   const sonare::mixing::SurroundPanParams stored = sonare::mixing::clamp_surround_pan_params(
       {pan->azimuth, pan->elevation, pan->divergence, pan->lfe, pan->distance});
   strip->scene_strip.surround_pan.azimuth = stored.azimuth;
   strip->scene_strip.surround_pan.elevation = stored.elevation;
   strip->scene_strip.surround_pan.divergence = stored.divergence;
   strip->scene_strip.surround_pan.lfe = stored.lfe;
-  // distance is a positive scale with a core default of 1.0; SonareSurroundPan
-  // has no C field initializers, so a zero-initialized struct (a C host that
-  // only sets azimuth) arrives with distance == 0. Treat distance <= 0 as the
-  // "keep default" sentinel so such hosts match the Node/Python facades (which
-  // inject 1.0) instead of persisting a meaningless distance:0 into the scene.
-  strip->scene_strip.surround_pan.distance = pan->distance > 0.0f ? pan->distance : 1.0f;
+  strip->scene_strip.surround_pan.distance = stored.distance;
   sonare::mixing::SurroundPanParams live;
   live.azimuth = strip->scene_strip.surround_pan.azimuth;
   live.elevation = strip->scene_strip.surround_pan.elevation;

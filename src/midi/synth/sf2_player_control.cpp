@@ -251,6 +251,7 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
         if (w.index == 0) {
           st.bank_msb = w.value;
         } else {
+          reset_drum_map_on_set_change(st, w.value);
           st.program = w.value;
         }
         rig_dirty |= static_cast<uint16_t>(1u << (w.part & 0x0Fu));

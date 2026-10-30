@@ -94,6 +94,44 @@ TEST_CASE("LinearPhaseEq stays click-free across mixed (ragged) block sizes", "[
   REQUIRE(max_abs_difference(expected, actual) < 1.0e-3f);
 }
 
+TEST_CASE("LinearPhaseEq short spans at a high-resolution kernel match the direct convolution",
+          "[mastering][eq]") {
+  // Spans that are not a whole partition run through the direct head plus the block-delayed tail;
+  // the stream has to equal the always-direct reference for any partition of it, aligned or not.
+  const EqBand band{EqBandType::HighShelf, 6000.0f, -4.0f, 0.8f, true};
+  LinearPhaseEqConfig direct_config;
+  direct_config.resolution = LinearPhaseEqConfig::Resolution::High;
+  direct_config.use_partitioned_convolution = false;
+  LinearPhaseEq reference(direct_config);
+  reference.prepare(48000.0, 4096);
+  reference.set_band(0, band);
+
+  LinearPhaseEqConfig conv_config;
+  conv_config.resolution = LinearPhaseEqConfig::Resolution::High;
+  LinearPhaseEq chunked(conv_config);
+  chunked.prepare(48000.0, 4096);
+  chunked.set_band(0, band);
+
+  const std::array<int, 12> spans{64, 64, 64, 100, 37, 4096, 64, 64, 1, 2048, 64, 200};
+  int total = 0;
+  for (int span : spans) total += span;
+  const auto input = sine(2000.0f, 48000, total);
+  auto expected = input;
+  auto actual = input;
+  {
+    float* channels[] = {expected.data()};
+    reference.process(channels, 1, total);
+  }
+  int offset = 0;
+  for (int span : spans) {
+    float* channels[] = {actual.data() + offset};
+    chunked.process(channels, 1, span);
+    offset += span;
+  }
+  REQUIRE(peak_abs(expected) > 0.05f);
+  REQUIRE(max_abs_difference(expected, actual) < 1.0e-3f);
+}
+
 TEST_CASE("LinearPhaseEq exposes symmetric FIR kernel and latency", "[mastering][eq]") {
   LinearPhaseEq eq({1024, 257});
   eq.prepare(48000.0, 512);

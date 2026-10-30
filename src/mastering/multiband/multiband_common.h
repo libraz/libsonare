@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <string>
 
+#include "mastering/common/prepare_args.h"
 #include "mastering/multiband/crossover.h"
 #include "rt/parallel_paths.h"
 #include "rt/processor_base.h"
@@ -51,6 +52,28 @@ inline void prepare_band_split(Crossover& crossover, CrossoverScratch& scratch, 
                                int max_block_size, int max_channels) {
   crossover.prepare(sample_rate, max_block_size, max_channels);
   crossover.prepare_scratch(scratch, max_channels, max_block_size);
+}
+
+/// @brief Prepares a multiband processor: validates the arguments and the split against the rate,
+///        prepares the crossover, scratch and members, then commits the bounds and @p prepared.
+/// @details The commit is the last statement, so a refused prepare (a bad argument, a cutoff at or
+///          above Nyquist) leaves the previous bounds and prepared flag untouched.
+/// @param prepare_members Callable taking (sample_rate, max_block_size, max_channels) that
+///        prepares the per-band members from the arguments, not from the not-yet-committed fields.
+template <typename PrepareMembers>
+void prepare_multiband(const char* name, Crossover& crossover, CrossoverScratch& scratch,
+                       double sample_rate, int max_block_size, int max_channels,
+                       double& committed_sample_rate, int& committed_max_block_size,
+                       int& committed_max_channels, bool& committed_prepared,
+                       PrepareMembers&& prepare_members) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, name);
+  Crossover::validate_config(crossover.config(), sample_rate);
+  prepare_band_split(crossover, scratch, sample_rate, max_block_size, max_channels);
+  prepare_members(sample_rate, max_block_size, max_channels);
+  committed_sample_rate = sample_rate;
+  committed_max_block_size = max_block_size;
+  committed_max_channels = max_channels;
+  committed_prepared = true;
 }
 
 /// @brief Applies a new split config; the crossover rebuilds (and zeroes) itself

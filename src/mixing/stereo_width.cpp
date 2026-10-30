@@ -37,10 +37,9 @@ void StereoWidthProcessor::process(float* const* channels, int num_channels, int
   smoother_.set_target(width_target_.load(std::memory_order_relaxed));
   for (int i = 0; i < num_samples; ++i) {
     const float w = smoother_.process();
-    // Standard M/S width law: the mid (mono/center) component is left untouched so
-    // raising the width never attenuates a centered or mono source, and only the side
-    // component is scaled by w. A purely panned or mono signal therefore keeps its
-    // level as width increases, while the stereo difference is widened or narrowed.
+    // M/S width law: the mid component is untouched, so a centred or mono source keeps its level
+    // at any width; the side component is scaled by w, so a panned source changes level and
+    // leaks (with opposite polarity) into the other channel as w moves away from 1.
     const float mid = 0.5f * (channels[0][i] + channels[1][i]);
     const float side = 0.5f * (channels[0][i] - channels[1][i]) * w;
     channels[0][i] = mid + side;

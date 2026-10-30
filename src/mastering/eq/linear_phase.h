@@ -89,6 +89,18 @@ class LinearPhaseEq : public rt::ProcessorBase {
     // Scratch block for that replay, sized to the partition so process() stays
     // allocation-free.
     std::vector<float> prime_scratch;
+    // Ragged spans: the first kRaggedPartitionSize taps run directly, and the rest of the kernel
+    // is delayed by that many samples and convolved a block behind, so a span of any length costs
+    // a fixed head plus the amortised block transforms rather than the whole kernel per sample.
+    std::unique_ptr<sonare::rt::PartitionedConvolver> tail_convolver;
+    bool tail_kernel_current = false;
+    // Set when the tail convolver no longer describes the stream at the current position (an
+    // aligned block bypassed it, or its impulse response was replaced).
+    bool tail_stale = true;
+    int stage_fill = 0;
+    std::vector<float> stage_in;
+    // Contribution of the already-completed blocks to the block being filled.
+    std::vector<float> tail_out;
   };
 
   void rebuild_kernel();
@@ -99,6 +111,9 @@ class LinearPhaseEq : public rt::ProcessorBase {
   void reconfigure();
   void ensure_channel_state(int num_channels);
   void process_direct(float* samples, int num_samples, ChannelState& state) const;
+  // Direct head plus block-delayed tail; falls back to process_direct without a tail convolver.
+  void process_ragged(float* samples, int num_samples, ChannelState& state) const;
+  void reprime_tail(ChannelState& state) const;
   // Push a block of inputs into the time-domain FIR history ring (no output),
   // keeping it in lock-step with the partitioned convolver so process_direct
   // can take over seamlessly on a later ragged block.

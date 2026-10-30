@@ -204,6 +204,27 @@ TEST_CASE("PassiveTubeEq component one-pole corner stays stable at high frequenc
   REQUIRE(ratio < 4.0f);
 }
 
+TEST_CASE("PassiveTubeEq component stage restarts discharged after a curve-only stretch",
+          "[mastering][eq][passive-tube]") {
+  constexpr int sample_rate = 48000;
+  PassiveTubeEq eq;
+  eq.prepare(sample_rate, sample_rate);
+  eq.set_low_boost(8.0f);
+  eq.set_high_attenuation(10000.0f, 4.0f);
+  eq.set_component_model(PassiveTubeComponentModel::WdfCircuit);
+
+  auto loud = sine(120.0f, sample_rate, 4096, 0.8f);
+  process(eq, loud);
+  // The reactive charges are loaded; the curve alone runs while the stage is skipped.
+  eq.set_component_model(PassiveTubeComponentModel::CurveOnly);
+  std::vector<float> rest(sample_rate, 0.0f);
+  process(eq, rest);
+  eq.set_component_model(PassiveTubeComponentModel::WdfCircuit);
+  std::vector<float> silence(4096, 0.0f);
+  process(eq, silence);
+  REQUIRE(peak_abs(silence) < 1.0e-9f);
+}
+
 // ===================================================================
 // Regression (passive-tube corner frequency correctness): the component
 // one-pole low charge is a low-pass with coefficient
@@ -732,5 +753,33 @@ TEST_CASE("EqualizerProcessor edited band keeps smoothing from its current gain"
     REQUIRE_THAT(after, WithinAbs(before, 1.0e-4f));
     REQUIRE(max_abs_difference(out, expected) > 1.0e-2f * peak_abs(expected));
     REQUIRE(max_step(out) <= 1.1f * max_step(expected));
+  }
+}
+
+TEST_CASE("DynamicEq output does not depend on the block size", "[mastering][eq][dynamic-smooth]") {
+  constexpr int sample_rate = 48000;
+  constexpr int total = 16384;
+  const auto render = [&](int block) {
+    DynamicEq eq;
+    eq.prepare(sample_rate, 4096);
+    eq.set_band(0, {EqBandType::Peak, 1000.0f, 0.0f, 1.5f, -36.0f, 8.0f, -18.0f, true});
+    // A quiet stretch followed by a loud one, so the detector and the gain glide both move.
+    std::vector<float> audio(static_cast<size_t>(total));
+    for (int i = 0; i < total; ++i) {
+      const float amp = i < total / 2 ? 0.01f : 0.6f;
+      audio[static_cast<size_t>(i)] =
+          amp * static_cast<float>(std::sin(2.0 * kPiD * 1000.0 * i / sample_rate));
+    }
+    for (int pos = 0; pos < total; pos += block) {
+      float* channels[] = {audio.data() + pos};
+      eq.process(channels, 1, std::min(block, total - pos));
+    }
+    return audio;
+  };
+  const auto whole = render(4096);
+  REQUIRE(peak_abs(whole) > 0.05f);
+  for (const int block : {64, 100, 512}) {
+    CAPTURE(block);
+    REQUIRE(max_abs_difference(render(block), whole) < 1.0e-4f * peak_abs(whole));
   }
 }

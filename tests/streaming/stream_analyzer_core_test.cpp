@@ -621,9 +621,33 @@ TEST_CASE("StreamAnalyzer rejects malformed config geometry", "[streaming][edge]
     c.sample_rate = 0;
     REQUIRE_THROWS_AS(StreamAnalyzer(c), SonareException);
   }
+  SECTION("sample_rate outside the supported range") {
+    for (const int rate : {1, 7999, 384001, 1000000000}) {
+      StreamConfig c = base();
+      c.sample_rate = rate;
+      CAPTURE(rate);
+      REQUIRE_THROWS_AS(StreamAnalyzer(c), SonareException);
+    }
+  }
   SECTION("non-positive n_fft") {
     StreamConfig c = base();
     c.n_fft = 0;
+    REQUIRE_THROWS_AS(StreamAnalyzer(c), SonareException);
+  }
+  SECTION("oversized n_fft is refused at every sample rate") {
+    // The window is a duration, so acceptance cannot depend on which rate branch it lands in.
+    for (const int rate : {22050, 44100, 48000}) {
+      StreamConfig c = base();
+      c.sample_rate = rate;
+      c.n_fft = 1 << 26;
+      c.hop_length = 512;
+      CAPTURE(rate);
+      REQUIRE_THROWS_AS(StreamAnalyzer(c), SonareException);
+    }
+  }
+  SECTION("oversized n_mels") {
+    StreamConfig c = base();
+    c.n_mels = 1 << 24;
     REQUIRE_THROWS_AS(StreamAnalyzer(c), SonareException);
   }
   SECTION("non-positive n_mels") {
@@ -1024,7 +1048,7 @@ TEST_CASE("StreamAnalyzer realtime process path remains allocation free across b
 TEST_CASE("StreamAnalyzer 24-hour-equivalent callback count stays bounded and allocation free",
           "[streaming][long][.][slow][rt]") {
   StreamConfig config;
-  config.sample_rate = 64;
+  config.sample_rate = 8000;
   config.n_fft = 32;
   config.hop_length = 32;
   config.n_mels = 8;

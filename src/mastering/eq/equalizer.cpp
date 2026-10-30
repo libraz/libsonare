@@ -107,6 +107,12 @@ void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
   smoothed_gain_db_.fill(0.0f);
   dynamic_gain_live_.fill(false);
   auto_threshold_db_.fill(kFloorDb);
+  control_phase_ = 0;
+  auto_gain_linear_ = 1.0f;
+  dynamic_reading_seen_.fill(false);
+  clear_control_accumulators();
+  chunk_channels_.assign(static_cast<size_t>(std::max(config_.max_channels, 0)), nullptr);
+  chunk_sidechain_.assign(static_cast<size_t>(std::max(config_.max_channels, 0)), nullptr);
   // Preallocate persistent detector state per band so the audio-thread detector
   // never resizes. Sized to the IIR backend's prepared channel capacity, with
   // each channel's detector-delay ring preallocated to the maximum supported
@@ -144,11 +150,14 @@ void EqualizerProcessor::process(float* const* channels, int num_channels, int n
     throw SonareException(ErrorCode::InvalidParameter,
                           "EqualizerProcessor Mid/Side placement requires stereo input");
   }
+  // Raised before any state moves, like the linear-phase check above.
+  if (has_mid_side_bands_ && num_channels != 2) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "EqualizerProcessor Mid/Side placement requires stereo input");
+  }
   EqualizerSpectrumSnapshot pre_snapshot;
   capture_stream(const_cast<const float* const*>(channels), num_channels, num_samples,
                  pre_snapshot.pre, pre_snapshot.pre_count);
-  const float input_db =
-      rms_db(const_cast<const float* const*>(channels), num_channels, num_samples);
   bool discarded = false;
   // Summed across the IIR planes and read once on either side of the whole
   // block: a plane may run more than once, and the unit is one process() call.
@@ -161,13 +170,37 @@ void EqualizerProcessor::process(float* const* channels, int num_channels, int n
   // The analyser runs inside publish_spectrum_snapshot below, after the filters,
   // so its count is read on either side of that call rather than here.
   const uint32_t spectrum_discards_before = spectrum_analyzer_.non_finite_discard_count();
-  if (has_dynamic_bands_) {
-    update_dynamic_state(const_cast<const float* const*>(channels), num_channels, num_samples);
-    // Before the detector's reading reaches coefficient design, so a poisoned
-    // detector cannot hand a non-finite gain to a band.
-    discarded = discard_non_finite_dynamic_state();
-    update_iir_bands_preserving_state(num_samples);
+
+  if (!has_dynamic_bands_ && !auto_gain_enabled_) {
+    // Nothing is measured, so the stream position only has to keep its phase.
+    clear_control_accumulators();
+    process_chunk(channels, num_channels, num_samples);
+    control_phase_ = static_cast<int>((control_phase_ + static_cast<int64_t>(num_samples)) %
+                                      kControlIntervalSamples);
+  } else {
+    int offset = 0;
+    while (offset < num_samples) {
+      const int count = std::min(num_samples - offset, kControlIntervalSamples - control_phase_);
+      for (int ch = 0; ch < num_channels; ++ch) {
+        chunk_channels_[static_cast<size_t>(ch)] = channels[ch] + offset;
+      }
+      accumulate_control_input(const_cast<const float* const*>(chunk_channels_.data()),
+                               num_channels, offset, count);
+      process_chunk(chunk_channels_.data(), num_channels, count);
+      offset += count;
+      control_phase_ = (control_phase_ + count) % kControlIntervalSamples;
+      if (control_phase_ == 0) discarded |= settle_control();
+    }
   }
+  discarded |= iir_discards() != iir_discards_before;
+  publish_spectrum_snapshot(pre_snapshot, const_cast<const float* const*>(channels), num_channels,
+                            num_samples);
+  discarded |= spectrum_analyzer_.non_finite_discard_count() != spectrum_discards_before;
+  if (discarded) note_non_finite_discard();
+  clear_sidechain();
+}
+
+void EqualizerProcessor::process_chunk(float* const* channels, int num_channels, int num_samples) {
   if (has_lr_linear_bands_) {
     if (num_channels >= 1) {
       process_mono_fir(left_channel_fir_, channels[0], num_samples);
@@ -202,10 +235,6 @@ void EqualizerProcessor::process(float* const* channels, int num_channels, int n
   }
 
   if (has_mid_side_bands_) {
-    if (num_channels != 2) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "EqualizerProcessor Mid/Side placement requires stereo input");
-    }
     for (int i = 0; i < num_samples; ++i) {
       const float left = channels[0][i];
       const float right = channels[1][i];
@@ -221,23 +250,8 @@ void EqualizerProcessor::process(float* const* channels, int num_channels, int n
       channels[1][i] = mid - side;
     }
   }
-  apply_auto_gain(channels, num_channels, num_samples, input_db);
-  // The auto-gain smoother is driven by the block RMS of both the input and the
-  // output, so a non-finite sample reaches it whether or not it survived the
-  // filters.
-  const bool smoothed_discarded = discard_if_non_finite(smoothed_auto_gain_db_, 0.0f);
-  if (smoothed_discarded) {
-    last_auto_gain_db_ = 0.0f;
-  }
-  discarded |= smoothed_discarded;
-  discarded |= discard_if_non_finite(last_auto_gain_db_, 0.0f);
-  discarded |= iir_discards() != iir_discards_before;
+  apply_auto_gain(channels, num_channels, num_samples);
   apply_output_gain_and_pan(channels, num_channels, num_samples);
-  publish_spectrum_snapshot(pre_snapshot, const_cast<const float* const*>(channels), num_channels,
-                            num_samples);
-  discarded |= spectrum_analyzer_.non_finite_discard_count() != spectrum_discards_before;
-  if (discarded) note_non_finite_discard();
-  clear_sidechain();
 }
 
 void EqualizerProcessor::reset() {
@@ -263,6 +277,10 @@ void EqualizerProcessor::reset() {
   auto_threshold_db_.fill(kFloorDb);
   last_auto_gain_db_ = 0.0f;
   smoothed_auto_gain_db_ = 0.0f;
+  auto_gain_linear_ = 1.0f;
+  dynamic_reading_seen_.fill(false);
+  control_phase_ = 0;
+  clear_control_accumulators();
   spectrum_analyzer_.reset();
   clear_sidechain();
 }

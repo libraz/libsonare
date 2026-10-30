@@ -57,11 +57,13 @@ std::vector<float> to_vector(const Audio& audio) {
 constexpr int kMaxSuppressedChannels = 2;
 }  // namespace
 
-void validate_room_morph_config(const RoomMorphConfig& config) {
+void validate_room_morph_config(const RoomMorphConfig& config,
+                                const sonare::acoustic::ShoeboxFieldNames& room_names,
+                                const sonare::acoustic::RirSynthFieldNames& rir_names) {
   const std::vector<Diagnostic> geometry =
-      sonare::acoustic::validate_shoebox(config.target, config.placement);
+      sonare::acoustic::validate_shoebox(config.target, config.placement, room_names);
   SONARE_CHECK_MSG(!has_error(geometry), ErrorCode::InvalidParameter,
-                   "room morph target geometry, placement, or material is invalid");
+                   "room morph target is invalid: " + sonare::acoustic::first_error_text(geometry));
   SONARE_CHECK_MSG(numeric::finite_in_closed_range(config.source_tail_suppression, 0.0f, 1.0f) &&
                        numeric::finite_in_closed_range(config.wet, 0.0f, 1.0f),
                    ErrorCode::InvalidParameter,
@@ -70,9 +72,10 @@ void validate_room_morph_config(const RoomMorphConfig& config) {
   // synthesis returns an empty target RIR, which the convolution path renders as
   // dry passthrough rather than as an error.
   const std::vector<Diagnostic> synthesis =
-      sonare::acoustic::validate_rir_synth_config(rir_config_from(config));
-  SONARE_CHECK_MSG(!has_error(synthesis), ErrorCode::InvalidParameter,
-                   "room morph image-source order, RIR timing, or air absorption is invalid");
+      sonare::acoustic::validate_rir_synth_config(rir_config_from(config), rir_names);
+  SONARE_CHECK_MSG(
+      !has_error(synthesis), ErrorCode::InvalidParameter,
+      "room morph synthesis is invalid: " + sonare::acoustic::first_error_text(synthesis));
 }
 
 RoomMorphProcessor::RoomMorphProcessor(RoomMorphConfig config,

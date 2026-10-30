@@ -130,7 +130,7 @@ struct VoiceTargets {
 struct NoteEvent {
   enum class Kind : int { On, Off } kind;
   int note;
-  float velocity;
+  float velocity;  ///< Validated into (0, 1]; apply_note does not read it.
 };
 
 static_assert(std::is_trivially_copyable<VoiceEngineConfig>::value, "config must be trivial");

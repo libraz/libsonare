@@ -1,7 +1,4 @@
-#include <cmath>
-
 #include "c_api/core_internal.h"
-#include "util/numeric_validation.h"
 
 namespace {
 
@@ -10,14 +7,10 @@ bool valid_chord_options_version(int version) {
   return version == 0 || version == SONARE_CHORD_DETECTION_OPTIONS_VERSION;
 }
 
+// The C-layer fields: the struct version and the integer stand-ins for enums. The numeric
+// fields are the core's rule, applied by check_chord_detection_options.
 bool valid_chord_detection_options(const SonareChordDetectionOptions& options) {
   if (!valid_chord_options_version(options.struct_version)) return false;
-  if (!std::isfinite(options.min_duration) || options.min_duration < 0.0f ||
-      !std::isfinite(options.smoothing_window) || options.smoothing_window <= 0.0f ||
-      !std::isfinite(options.threshold) || options.threshold < 0.0f || options.threshold > 1.0f ||
-      options.n_fft <= 0 || options.hop_length <= 0 || options.hmm_beam_width < 0) {
-    return false;
-  }
   // Reject out-of-range enum-like fields instead of silently mapping them to a
   // default (chroma_method only documents 0 = STFT, 1 = NNLS). When key context
   // is enabled, also require an in-range key_root / key_mode.
@@ -56,6 +49,11 @@ ChordConfig chord_config_from_options(const SonareChordDetectionOptions& options
   return config;
 }
 
+SonareError check_chord_detection_options(const SonareChordDetectionOptions& options) {
+  if (!valid_chord_detection_options(options)) return SONARE_ERROR_INVALID_PARAMETER;
+  return run_validation([&] { validate_chord_config(chord_config_from_options(options)); });
+}
+
 }  // namespace
 
 SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_rate, float bpm_min,
@@ -64,19 +62,21 @@ SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_r
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
-  if (!numeric::finite_positive(bpm_min) || !numeric::finite_ordered_range(bpm_min, bpm_max) ||
-      !numeric::finite_positive(start_bpm) || n_fft <= 0 || hop_length <= 0 || max_candidates < 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  BpmConfig config;
+  config.bpm_min = bpm_min;
+  config.bpm_max = bpm_max;
+  config.start_bpm = start_bpm;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  if (const SonareError err = run_validation([&] {
+        validate_bpm_config(config);
+        validate_bpm_candidate_count(max_candidates);
+      });
+      err != SONARE_OK) {
+    return err;
   }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    BpmConfig config;
-    config.bpm_min = bpm_min;
-    config.bpm_max = bpm_max;
-    config.start_bpm = start_bpm;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-
     BpmAnalyzer analyzer(audio, config);
     StagedOutput<SonareBpmAnalysisResult, &sonare_free_bpm_analysis_result> staged;
     staged->bpm = analyzer.bpm();
@@ -126,14 +126,15 @@ SonareError sonare_analyze_impulse_response_ex(const float* samples, size_t leng
   // garbage. Otherwise sonare_free_acoustic_result(&r) would delete[] an
   // uninitialised pointer.
   *out = {};
-  if (n_octave_bands < 0 || !std::isfinite(min_decay_db) || min_decay_db <= 0.0f) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  AcousticConfig config;
+  config.n_octave_bands = n_octave_bands;
+  config.min_decay_db = min_decay_db;
+  if (const SonareError err = run_validation([&] { validate_acoustic_config(config); });
+      err != SONARE_OK) {
+    return err;
   }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    AcousticConfig config;
-    config.n_octave_bands = n_octave_bands;
-    config.min_decay_db = min_decay_db;
     fill_acoustic_result(sonare::analyze_impulse_response(audio, config), out);
     return SONARE_OK;
   });
@@ -154,19 +155,18 @@ SonareError sonare_detect_acoustic(const float* samples, size_t length, int samp
   // garbage. Otherwise sonare_free_acoustic_result(&r) would delete[] an
   // uninitialised pointer.
   *out = {};
-  if (n_octave_bands < 0 || n_third_octave_subbands < 0 || !std::isfinite(min_decay_db) ||
-      min_decay_db <= 0.0f || !std::isfinite(noise_floor_margin_db) ||
-      noise_floor_margin_db < 0.0f) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  AcousticConfig config;
+  config.mode = AcousticConfig::Mode::Blind;
+  config.n_octave_bands = n_octave_bands;
+  config.n_third_octave_subbands = n_third_octave_subbands;
+  config.min_decay_db = min_decay_db;
+  config.noise_floor_margin_db = noise_floor_margin_db;
+  if (const SonareError err = run_validation([&] { validate_acoustic_config(config); });
+      err != SONARE_OK) {
+    return err;
   }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    AcousticConfig config;
-    config.mode = AcousticConfig::Mode::Blind;
-    config.n_octave_bands = n_octave_bands;
-    config.n_third_octave_subbands = n_third_octave_subbands;
-    config.min_decay_db = min_decay_db;
-    config.noise_floor_margin_db = noise_floor_margin_db;
     fill_acoustic_result(sonare::detect_acoustic(audio, config), out);
     return SONARE_OK;
   });
@@ -183,20 +183,23 @@ SonareError sonare_analyze_rhythm(const float* samples, size_t length, int sampl
   // sonare_free_rhythm_result(&r) would delete[] an uninitialised pointer.
   out->beat_intervals = nullptr;
   out->beat_interval_count = 0;
-  if (!numeric::finite_positive(bpm_min) || !numeric::finite_ordered_range(bpm_min, bpm_max) ||
-      !numeric::finite_positive(start_bpm) || n_fft <= 0 || hop_length <= 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+  // Built inside each guarded call: RhythmConfig allocates, and a throw here must not escape.
+  const auto make_config = [&] {
     RhythmConfig config;
     config.bpm_min = bpm_min;
     config.bpm_max = bpm_max;
     config.start_bpm = start_bpm;
     config.n_fft = n_fft;
     config.hop_length = hop_length;
+    return config;
+  };
+  if (const SonareError err = run_validation([&] { validate_rhythm_config(make_config()); });
+      err != SONARE_OK) {
+    return err;
+  }
 
-    RhythmAnalyzer analyzer(audio, config);
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    RhythmAnalyzer analyzer(audio, make_config());
     RhythmFeatures features = analyzer.features();
     StagedOutput<SonareRhythmResult, &sonare_free_rhythm_result> staged;
     staged->bpm = analyzer.bpm();
@@ -228,17 +231,16 @@ SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sam
   out->loudness_times = nullptr;
   out->loudness_rms_db = nullptr;
   out->loudness_count = 0;
-  if (!numeric::finite_positive(window_sec) || hop_length <= 0 ||
-      !numeric::finite_non_negative(compression_threshold)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  DynamicsConfig config;
+  config.window_sec = window_sec;
+  config.hop_length = hop_length;
+  config.compression_threshold = compression_threshold;
+  if (const SonareError err = run_validation([&] { validate_dynamics_config(config); });
+      err != SONARE_OK) {
+    return err;
   }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    DynamicsConfig config;
-    config.window_sec = window_sec;
-    config.hop_length = hop_length;
-    config.compression_threshold = compression_threshold;
-
     DynamicsAnalyzer analyzer(audio, config);
     const Dynamics& dynamics = analyzer.dynamics();
     out->dynamic_range_db = dynamics.dynamic_range_db;
@@ -280,19 +282,18 @@ SonareError sonare_analyze_timbre(const float* samples, size_t length, int sampl
   out->spectral_rolloff_count = 0;
   out->timbre_over_time = nullptr;
   out->timbre_over_time_count = 0;
-  if (n_fft <= 0 || hop_length <= 0 || n_mels <= 0 || n_mfcc <= 0 ||
-      !numeric::finite_positive(window_sec)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  TimbreConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.n_mels = n_mels;
+  config.n_mfcc = n_mfcc;
+  config.window_sec = window_sec;
+  if (const SonareError err = run_validation([&] { validate_timbre_config(config); });
+      err != SONARE_OK) {
+    return err;
   }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    TimbreConfig config;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-    config.n_mels = n_mels;
-    config.n_mfcc = n_mfcc;
-    config.window_sec = window_sec;
-
     TimbreAnalyzer analyzer(audio, config);
     const Timbre& timbre = analyzer.timbre();
     StagedOutput<SonareTimbreResult, &sonare_free_timbre_result> staged;
@@ -345,22 +346,20 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
   // pointer.
   *out = {};
   out->struct_version = SONARE_CHORD_ANALYSIS_RESULT_VERSION;
-  if (!std::isfinite(min_duration) || min_duration < 0.0f || !std::isfinite(smoothing_window) ||
-      smoothing_window <= 0.0f || !std::isfinite(threshold) || threshold < 0.0f ||
-      threshold > 1.0f || n_fft <= 0 || hop_length <= 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  ChordConfig config;
+  config.min_duration = min_duration;
+  config.smoothing_window = smoothing_window;
+  config.threshold = threshold;
+  config.use_triads_only = use_triads_only != 0;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.use_beat_sync = use_beat_sync != 0;
+  if (const SonareError err = run_validation([&] { validate_chord_config(config); });
+      err != SONARE_OK) {
+    return err;
   }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    ChordConfig config;
-    config.min_duration = min_duration;
-    config.smoothing_window = smoothing_window;
-    config.threshold = threshold;
-    config.use_triads_only = use_triads_only != 0;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-    config.use_beat_sync = use_beat_sync != 0;
-
     std::vector<Chord> chords = detect_chords(audio, config);
     fill_chord_result(chords, config.tuning, out);
     return SONARE_OK;
@@ -380,7 +379,9 @@ SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sam
   *out = {};
   out->struct_version = SONARE_CHORD_ANALYSIS_RESULT_VERSION;
   if (!options) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!valid_chord_detection_options(*options)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = check_chord_detection_options(*options); err != SONARE_OK) {
+    return err;
+  }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     const ChordConfig config = chord_config_from_options(*options);
@@ -451,7 +452,9 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
   functions->items = nullptr;
   functions->count = 0;
   if (!options) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!valid_chord_detection_options(*options)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = check_chord_detection_options(*options); err != SONARE_OK) {
+    return err;
+  }
   // The analysis key drives the Roman-numeral labelling.
   PitchClass label_root = PitchClass::C;
   Mode label_mode = Mode::Major;
@@ -517,15 +520,16 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
   // sonare_free_section_result(&r) would delete[] an uninitialised pointer.
   out->sections = nullptr;
   out->section_count = 0;
-  if (n_fft <= 0 || hop_length <= 0 || !numeric::finite_non_negative(min_section_sec)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  SectionConfig config;
+  config.n_fft = n_fft;
+  config.hop_length = hop_length;
+  config.min_section_sec = min_section_sec;
+  if (const SonareError err = run_validation([&] { validate_section_config(config); });
+      err != SONARE_OK) {
+    return err;
   }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    SectionConfig config;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-    config.min_section_sec = min_section_sec;
     SectionAnalyzer analyzer(audio, config);
     const std::vector<Section>& sections = analyzer.sections();
     if (!sections.empty()) {
@@ -581,37 +585,24 @@ SonareError sonare_detect_boundaries(const float* samples, size_t length, int sa
   out->n_frames = 0;
   out->frame_stride = 0;
   if (!options) return SONARE_ERROR_INVALID_PARAMETER;
-  if (options->n_fft <= 0 || options->hop_length <= 0 || options->kernel_size <= 0 ||
-      options->n_mfcc <= 0 || options->n_chroma <= 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  BoundaryConfig config;
+  config.n_fft = options->n_fft;
+  config.hop_length = options->hop_length;
+  config.kernel_size = options->kernel_size;
+  config.threshold = options->threshold;
+  config.absolute_threshold = options->absolute_threshold;
+  config.n_mfcc = options->n_mfcc;
+  config.n_chroma = options->n_chroma;
+  config.peak_distance = options->peak_distance;
+  config.use_mfcc = options->use_mfcc != 0;
+  config.use_chroma = options->use_chroma != 0;
+  config.reference_window = options->reference_window;
+  if (const SonareError err = run_validation([&] { validate_boundary_config(config); });
+      err != SONARE_OK) {
+    return err;
   }
-  // Both thresholds and the peak spacing are compared against measured values,
-  // so a non-finite one silently accepts or rejects every peak instead of
-  // failing.
-  if (!numeric::finite_non_negative(options->threshold) ||
-      !numeric::finite_non_negative(options->absolute_threshold) ||
-      !numeric::finite_non_negative(options->reference_window) ||
-      !numeric::finite_non_negative(options->peak_distance)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  // The detector combines the two feature streams frame-for-frame; with neither
-  // enabled there is nothing to combine and the novelty curve is undefined.
-  if (!options->use_mfcc && !options->use_chroma) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    BoundaryConfig config;
-    config.n_fft = options->n_fft;
-    config.hop_length = options->hop_length;
-    config.kernel_size = options->kernel_size;
-    config.threshold = options->threshold;
-    config.absolute_threshold = options->absolute_threshold;
-    config.n_mfcc = options->n_mfcc;
-    config.n_chroma = options->n_chroma;
-    config.peak_distance = options->peak_distance;
-    config.use_mfcc = options->use_mfcc != 0;
-    config.use_chroma = options->use_chroma != 0;
-    config.reference_window = options->reference_window;
-
     BoundaryDetector detector(audio, config);
     const std::vector<Boundary>& boundaries = detector.boundaries();
     if (!boundaries.empty()) {
@@ -663,20 +654,20 @@ SonareError sonare_analyze_melody_ex(const float* samples, size_t length, int sa
   // input always leaves a NULL owned pointer; otherwise
   // sonare_free_melody_result(&r) would delete[] an uninitialised pointer.
   *out = {};
-  if (!numeric::finite_positive(fmin) || !numeric::finite_ordered_range(fmin, fmax) ||
-      frame_length <= 0 || hop_length <= 0 || !numeric::finite_positive(threshold)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  MelodyConfig config;
+  config.fmin = fmin;
+  config.fmax = fmax;
+  config.frame_length = frame_length;
+  config.hop_length = hop_length;
+  config.threshold = threshold;
+  config.use_pyin = use_pyin != 0;
+  config.center = center != 0;
+  if (const SonareError err = run_validation([&] { validate_melody_config(config); });
+      err != SONARE_OK) {
+    return err;
   }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    MelodyConfig config;
-    config.fmin = fmin;
-    config.fmax = fmax;
-    config.frame_length = frame_length;
-    config.hop_length = hop_length;
-    config.threshold = threshold;
-    config.use_pyin = use_pyin != 0;
-    config.center = center != 0;
     MelodyAnalyzer analyzer(audio, config);
     const MelodyContour& contour = analyzer.contour();
     out->pitch_range_octaves = contour.pitch_range_octaves;

@@ -11,6 +11,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -36,14 +37,18 @@ RegionWindow resolve_window(const SpectralRegionOp& op, int n_bins, int n_frames
   // Frequency -> bin. bin spacing = sample_rate / n_fft; n_bins = n_fft/2 + 1.
   const double nyquist = static_cast<double>(sample_rate) / 2.0;
   const double bin_scale = static_cast<double>(n_fft) / static_cast<double>(sample_rate);
-  int bin_lo = op.low_hz <= 0.0f
-                   ? 0
-                   : static_cast<int>(std::ceil(static_cast<double>(op.low_hz) * bin_scale));
-  int bin_hi = (op.high_hz <= 0.0f || static_cast<double>(op.high_hz) >= nyquist)
-                   ? n_bins - 1
-                   : static_cast<int>(std::floor(static_cast<double>(op.high_hz) * bin_scale));
-  bin_lo = std::clamp(bin_lo, 0, n_bins - 1);
-  bin_hi = std::clamp(bin_hi, 0, n_bins - 1);
+  // Clamped in double before the cast, so an edge far past the Nyquist never overflows an int.
+  const double last_bin = static_cast<double>(n_bins - 1);
+  const int bin_lo =
+      op.low_hz <= 0.0f
+          ? 0
+          : static_cast<int>(
+                std::clamp(std::ceil(static_cast<double>(op.low_hz) * bin_scale), 0.0, last_bin));
+  const int bin_hi =
+      (op.high_hz <= 0.0f || static_cast<double>(op.high_hz) >= nyquist)
+          ? n_bins - 1
+          : static_cast<int>(
+                std::clamp(std::floor(static_cast<double>(op.high_hz) * bin_scale), 0.0, last_bin));
 
   // Time -> frame. center=true => frame f is centered near input sample f*hop.
   int64_t start = std::clamp<int64_t>(op.start_sample, 0, length);
@@ -174,6 +179,20 @@ void apply_op(std::vector<std::complex<float>>& buf, int n_frames, int n_fft, in
 
 }  // namespace
 
+void validate_spectral_region_op(const SpectralRegionOp& op) {
+  SONARE_CHECK_MSG(numeric::finite(op.low_hz) && numeric::finite(op.high_hz),
+                   ErrorCode::InvalidParameter,
+                   "SpectralRegionOp: low_hz and high_hz must be finite");
+  SONARE_CHECK_MSG(numeric::finite(op.gain_db), ErrorCode::InvalidParameter,
+                   "SpectralRegionOp: gain_db must be finite");
+  const bool applies_gain =
+      op.mode == SpectralEditMode::Gain || op.mode == SpectralEditMode::Attenuate;
+  SONARE_CHECK_MSG(!applies_gain || numeric::finite(db_to_linear(op.gain_db)),
+                   ErrorCode::InvalidParameter,
+                   "SpectralRegionOp: gain_db " + std::to_string(op.gain_db) +
+                       " is past the float range as a linear gain");
+}
+
 Audio spectral_edit(const Audio& audio, const SpectralEditConfig& config,
                     const SpectralRegionOp* ops, std::size_t n_ops) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
@@ -189,6 +208,7 @@ Audio spectral_edit(const Audio& audio, const SpectralEditConfig& config,
   validate_cola_geometry(config.n_fft, config.hop_length);
   SONARE_CHECK(config.heal_radius_frames >= 1, ErrorCode::InvalidParameter);
   SONARE_CHECK(ops != nullptr || n_ops == 0, ErrorCode::InvalidParameter);
+  for (std::size_t i = 0; i < n_ops; ++i) validate_spectral_region_op(ops[i]);
 
   StftConfig stft_config;
   stft_config.n_fft = config.n_fft;
@@ -221,7 +241,11 @@ Audio spectral_edit(const Audio& audio, const SpectralEditConfig& config,
   Spectrogram edited = Spectrogram::from_complex(buf.data(), n_bins, n_frames, config.n_fft,
                                                  config.hop_length, sample_rate, config.window,
                                                  /*center=*/true, spec.win_length());
-  return edited.to_audio(static_cast<int>(audio.size()));
+  Audio out = edited.to_audio(static_cast<int>(audio.size()));
+  // A finite gain can still carry a loud bin past the float range.
+  SONARE_CHECK_MSG(numeric::all_finite(out.data(), out.size()), ErrorCode::InvalidParameter,
+                   "spectral_edit: gain_db drives the output past the float range");
+  return out;
 }
 
 }  // namespace sonare

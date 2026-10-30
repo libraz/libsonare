@@ -836,6 +836,9 @@ SonareError sonare_project_export_clip_file(const SonareProject* project, uint8_
       if (track != nullptr) name = track->name;
     }
   }
+  uint32_t dropped_events = 0;
+  sonare::midi::drop_zero_length_notes(&merged, &dropped_events,
+                                       sonare::midi::kDefaultTicksPerQuarter);
   merged.sort_stable();
 
   sonare::midi::Smf2ExportOptions options;

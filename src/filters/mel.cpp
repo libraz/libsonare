@@ -48,7 +48,8 @@ constexpr size_t kMaxMelCacheSize = 8;
 
 std::vector<float> mel_frequencies(int n_mels, float fmin, float fmax, bool htk) {
   SONARE_CHECK(n_mels > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(fmax > fmin, ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(fmax > fmin, ErrorCode::InvalidParameter,
+                   "mel_frequencies: fmax must be greater than fmin");
 
   /// Convert frequency range to Mel scale
   float mel_min = htk ? hz_to_mel_htk(fmin) : hz_to_mel(fmin);
@@ -89,7 +90,9 @@ std::vector<float> create_mel_filterbank(int sr, int n_fft, const MelFilterConfi
   }
   float fmin = config.fmin;
 
-  SONARE_CHECK(fmax > fmin, ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(fmax > fmin, ErrorCode::InvalidParameter,
+                   "mel filterbank: fmax (0 or above the Nyquist reads as the Nyquist) must be "
+                   "greater than fmin");
 
   /// Get Mel frequency points
   std::vector<float> mel_freqs = mel_frequencies(config.n_mels, fmin, fmax, config.htk);

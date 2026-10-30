@@ -9,6 +9,8 @@
 
 #include "analysis/boundary_detector.h"
 #include "core/audio.h"
+#include "util/exception.h"
+#include "util/numeric_validation.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -45,6 +47,17 @@ struct SectionConfig {
   /// section chroma; 0 is concert A440.
   float tuning = 0.0f;
 };
+
+/// @brief Refuses a SectionConfig outside the argument domain every public surface shares.
+/// @throws SonareException(InvalidParameter) unless n_fft and hop_length are positive and
+///         min_section_sec is finite and non-negative.
+inline void validate_section_config(const SectionConfig& config) {
+  SONARE_CHECK_MSG(config.n_fft > 0 && config.hop_length > 0, ErrorCode::InvalidParameter,
+                   "SectionConfig: n_fft and hop_length must be positive");
+  SONARE_CHECK_MSG(numeric::finite_non_negative(config.min_section_sec),
+                   ErrorCode::InvalidParameter,
+                   "SectionConfig: min_section_sec must be finite and non-negative");
+}
 
 /// @brief Section analyzer producing a heuristic song-structure estimate.
 /// @details Combines boundary detection with energy / chroma / vocal-band

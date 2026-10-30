@@ -18,6 +18,14 @@ namespace sonare {
 
 using sonare::constants::kPi;
 
+namespace {
+
+/// Smallest lift-window magnitude mfcc_to_mel divides by; below it the inverse amplifies a
+/// coefficient by more than a thousand and no longer recovers the spectrum.
+constexpr float kMinLift = 1.0e-3f;
+
+}  // namespace
+
 std::vector<float> mel_to_stft(const float* M, int n_mels, int n_frames,
                                const MelConfig& mel_config, int sr) {
   if (M == nullptr) throw SonareException(ErrorCode::InvalidParameter, "mel_to_stft: M is null");
@@ -86,8 +94,9 @@ std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int 
   if (mfcc == nullptr)
     throw SonareException(ErrorCode::InvalidParameter, "mfcc_to_mel: mfcc is null");
   if (n_mfcc <= 0 || n_frames <= 0 || n_mels <= 0) return {};
-  if (lifter < 0.0f)
-    throw SonareException(ErrorCode::InvalidParameter, "mfcc_to_mel: lifter must be >= 0");
+  if (!std::isfinite(lifter) || lifter < 0.0f)
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "mfcc_to_mel: lifter must be a finite value >= 0");
   // A non-finite coefficient spreads across every Mel band through the inverse
   // DCT, and the dB-to-power conversion turns part of it back into 0 or Inf, so
   // the caller gets a plausible-looking spectrogram with no way to detect it.
@@ -107,6 +116,12 @@ std::vector<float> mfcc_to_mel(const float* mfcc, int n_mfcc, int n_frames, int 
     lift.resize(n_mfcc);
     for (int k = 0; k < n_mfcc; ++k) {
       lift[k] = 1.0f + (lifter / 2.0f) * std::sin(kPi * static_cast<float>(k + 1) / lifter);
+      // A window that reaches zero cannot be divided back out of the coefficient it zeroed.
+      if (std::abs(lift[k]) < kMinLift) {
+        throw SonareException(ErrorCode::InvalidParameter,
+                              "mfcc_to_mel: lifter zeroes the lift window at a coefficient "
+                              "below n_mfcc and cannot be inverted");
+      }
     }
   }
 

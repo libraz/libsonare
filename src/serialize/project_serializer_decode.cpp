@@ -14,6 +14,7 @@
 
 #include "arrangement/edit_command_internal.h"
 #include "arrangement/edit_source.h"
+#include "arrangement/harmonic_limits.h"
 #include "arrangement/harmonic_timeline.h"
 #include "automation/automation_lane.h"
 #include "mixing/api/scene.h"
@@ -33,6 +34,7 @@ namespace sonare::arrangement::detail {
 // mutable range to the installed Project API or changing Project's layout.
 struct ProjectSerializerAccess {
   static std::vector<Track>& tracks(Project& project) noexcept { return project.tracks_; }
+  static std::vector<EditClip>& clips(Project& project) noexcept { return project.clips_; }
 };
 
 }  // namespace sonare::arrangement::detail
@@ -134,7 +136,7 @@ arrangement::Track track_from_json(const Value& v, uint32_t schema_version) {
   t.id = uint_or(v, "id", 0);
   t.name = str_or(v, "name", "");
   t.kind = enum_or(v, "kind", arrangement::Track::Kind::kAudio);
-  t.gain = std::max(0.0f, float_or(v, "gain", 1.0f, "tracks[].gain"));
+  t.gain = float_or(v, "gain", 1.0f, "tracks[].gain");
   t.mute = bool_or(v, "mute", false);
   t.solo = bool_or(v, "solo", false);
   t.pan = float_or(v, "pan", 0.0f, "tracks[].pan");
@@ -441,6 +443,23 @@ bool valid_position_ppq(double ppq) noexcept { return std::isfinite(ppq) && ppq 
 // (`finite_positive` in the project edit bridge).
 bool valid_length_ppq(double ppq) noexcept { return std::isfinite(ppq) && ppq > 0.0; }
 
+// Annotation spans the C ABI setters admit: finite non-negative start, finite end after it.
+bool valid_annotation_span(double start, double end) noexcept {
+  return valid_position_ppq(start) && std::isfinite(end) && end > start;
+}
+
+// Clamps a negative decoded gain to silence and reports it as one warning.
+void clamp_negative_gain(float* gain, const char* owner, uint32_t id,
+                         BoundedDiagnostics* diagnostics) {
+  if (!(*gain < 0.0f)) return;
+  *gain = 0.0f;
+  if (diagnostics != nullptr) {
+    diagnostics->warn(
+        std::string(owner) + "_gain_clamped",
+        std::string(owner) + " " + std::to_string(id) + " had a negative gain; clamped to zero");
+  }
+}
+
 // Entity ids the model admits. 0 is the failure/sentinel value and UINT32_MAX
 // is the exhausted-counter sentinel; the id allocator hands out neither, so a
 // document carrying one describes a project no edit sequence could build.
@@ -493,6 +512,17 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
                                                               BoundedDiagnostics* diagnostics) {
   if (project == nullptr) return std::nullopt;
 
+  // ---- Gains are non-negative ----------------------------------------------
+  // A negative gain has a defined repair (silence), and every one reports it the
+  // same way, whichever object carries the field.
+  for (arrangement::Track& track : arrangement::detail::ProjectSerializerAccess::tracks(*project)) {
+    clamp_negative_gain(&track.gain, "track", track.id, diagnostics);
+  }
+  for (arrangement::EditClip& clip :
+       arrangement::detail::ProjectSerializerAccess::clips(*project)) {
+    clamp_negative_gain(&clip.gain, "clip", clip.id, diagnostics);
+  }
+
   // ---- Positions are non-negative ------------------------------------------
   // The C-ABI setters bound position AND tempo, not merely their sign
   // (sonare_project_set_tempo_segments / _set_time_signatures both run the
@@ -532,6 +562,31 @@ std::optional<InvariantViolation> enforce_edit_api_invariants(arrangement::Proje
       return InvariantViolation{
           "invalid_marker_id",
           "marker id " + std::to_string(m.id) + " is reserved and cannot be addressed or reloaded"};
+    }
+  }
+
+  // ---- Harmonic annotation spans -------------------------------------------
+  // The annotation setters admit a span that starts at or after 0 and ends after it,
+  // and at most kMaxChordExtensions extensions per chord. Clamping would move or
+  // truncate musical content, so a violation is fatal.
+  for (const arrangement::KeySegment& key : project->annotation().keys) {
+    if (!valid_annotation_span(key.start_ppq, key.end_ppq)) {
+      return InvariantViolation{"invalid_annotation_key_span",
+                                "annotation key segment must have a finite non-negative "
+                                "start_ppq and an end_ppq after it"};
+    }
+  }
+  for (const arrangement::ChordSymbol& chord : project->annotation().chords) {
+    if (!valid_annotation_span(chord.start_ppq, chord.end_ppq)) {
+      return InvariantViolation{"invalid_annotation_chord_span",
+                                "annotation chord must have a finite non-negative start_ppq "
+                                "and an end_ppq after it"};
+    }
+    if (chord.extensions.size() > arrangement::kMaxChordExtensions) {
+      return InvariantViolation{"invalid_annotation_chord_extensions",
+                                "annotation chord carries more than " +
+                                    std::to_string(arrangement::kMaxChordExtensions) +
+                                    " extensions"};
     }
   }
 

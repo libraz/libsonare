@@ -993,3 +993,41 @@ TEST_CASE("EqualizerProcessor exhausted external key stays bound and reads as si
   REQUIRE(eq.last_band_detector_db(0) > -32.0f);
   REQUIRE(eq.last_applied_gain_db(0) < -3.0f);
 }
+
+TEST_CASE("EqualizerProcessor dynamic bands and auto-gain do not depend on the block size",
+          "[mastering][eq]") {
+  constexpr int sample_rate = 48000;
+  constexpr int total = 16384;
+  const auto render = [&](int block) {
+    EqualizerProcessor eq({1});
+    eq.prepare(sample_rate, 4096);
+    EqBand cut{EqBandType::Peak, 1000.0f, 0.0f, 2.0f, true};
+    cut.dyn.enabled = true;
+    cut.dyn.auto_threshold = true;
+    cut.dyn.threshold_db = -40.0f;
+    cut.dyn.ratio = 4.0f;
+    cut.dyn.range_db = -12.0f;
+    cut.dyn.attack_ms = 1.0f;
+    cut.dyn.release_ms = 20.0f;
+    eq.set_band(0, cut);
+    eq.set_band(1, EqBand{EqBandType::Peak, 3000.0f, 9.0f, 1.0f, true});
+    eq.set_auto_gain_enabled(true);
+
+    // A quiet stretch followed by a loud one, so the detector and the smoothers move.
+    auto audio = sine(1000.0f, sample_rate, total, 0.002f);
+    const auto loud = sine(1000.0f, sample_rate, total, 0.5f);
+    std::copy(loud.begin() + total / 2, loud.end(), audio.begin() + total / 2);
+    for (int offset = 0; offset < total; offset += block) {
+      float* channels[] = {audio.data() + offset};
+      eq.process(channels, 1, std::min(block, total - offset));
+    }
+    return audio;
+  };
+
+  const auto whole = render(4096);
+  REQUIRE(peak_abs(whole) > 0.05f);
+  for (const int block : {64, 100, 512}) {
+    CAPTURE(block);
+    REQUIRE(max_abs_difference(render(block), whole) < 1.0e-4f * peak_abs(whole));
+  }
+}

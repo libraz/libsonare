@@ -1,12 +1,10 @@
 #include <algorithm>
-#include <cmath>
 #include <memory>
 
 #include "analysis/analysis_json.h"
 #include "analysis/meter_analyzer.h"
 #include "analysis/onset_analyzer.h"
 #include "c_api/core_internal.h"
-#include "util/numeric_validation.h"
 
 namespace {
 
@@ -25,6 +23,18 @@ bool make_key_config(int n_fft, int hop_length, int use_hpss, int loudness_weigh
     out_config->genre_hint = genre_hint;
   }
   return true;
+}
+
+// The fields of KeyConfig the entry takes as scalars, through the core's rule for them.
+SonareError validate_key_arguments(int n_fft, int hop_length, int use_hpss, float high_pass_hz) {
+  return run_validation([&] {
+    KeyConfig config;
+    config.n_fft = n_fft;
+    config.hop_length = hop_length;
+    config.use_hpss = use_hpss != 0;
+    config.high_pass_hz = high_pass_hz;
+    validate_key_config(config);
+  });
 }
 
 }  // namespace
@@ -98,9 +108,9 @@ SonareError sonare_detect_key_with_tuning(const float* samples, size_t length, i
   if (out_tuning != nullptr) *out_tuning = 0.0f;
   if (out_key == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_key = {};
-  if (n_fft <= 0 || hop_length <= 0 || (use_hpss != 0 && hop_length < 16) ||
-      !numeric::finite_non_negative(high_pass_hz)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = validate_key_arguments(n_fft, hop_length, use_hpss, high_pass_hz);
+      err != SONARE_OK) {
+    return err;
   }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -150,9 +160,9 @@ SonareError sonare_detect_key_candidates_with_extended_options(
   if (out_candidates == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_candidates = nullptr;
   *out_count = 0;
-  if (n_fft <= 0 || hop_length <= 0 || (use_hpss != 0 && hop_length < 16) ||
-      !numeric::finite_non_negative(high_pass_hz)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
+  if (const SonareError err = validate_key_arguments(n_fft, hop_length, use_hpss, high_pass_hz);
+      err != SONARE_OK) {
+    return err;
   }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
@@ -231,12 +241,8 @@ SonareError sonare_detect_onsets_ex(const float* samples, size_t length, int sam
   *out_times = nullptr;
   *out_count = 0;
   if (config == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  if (config->n_fft <= 0 || config->hop_length <= 0 || config->pre_max < 0 ||
-      config->post_max < 0 || config->pre_avg < 0 || config->post_avg < 0 || config->wait < 0 ||
-      config->backtrack_range < 0 || config->backtrack > 1 || !std::isfinite(config->threshold) ||
-      !std::isfinite(config->delta) || config->delta < 0.0f) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  // backtrack is a C byte standing in for a bool, so its range is this layer's own.
+  if (config->backtrack > 1) return SONARE_ERROR_INVALID_PARAMETER;
 
   sonare::OnsetDetectConfig native;
   native.n_fft = config->n_fft;
@@ -250,6 +256,10 @@ SonareError sonare_detect_onsets_ex(const float* samples, size_t length, int sam
   native.wait = config->wait;
   native.backtrack = config->backtrack != 0;
   native.backtrack_range = config->backtrack_range;
+  if (const SonareError err = run_validation([&] { validate_onset_detect_config(native); });
+      err != SONARE_OK) {
+    return err;
+  }
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     // Through quick:: rather than the core, so this differs from
     // sonare_detect_onsets only in the configuration. Going direct also dropped

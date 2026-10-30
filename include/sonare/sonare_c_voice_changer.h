@@ -224,7 +224,9 @@ SonareError sonare_realtime_voice_changer_preset_config(SonareVoiceCharacterPres
 SonareError sonare_realtime_voice_changer_config_default(SonareRealtimeVoiceChangerConfig* out);
 
 /// @brief Same as @ref sonare_realtime_voice_changer_create_json but accepts
-///        a flat POD config. Pass NULL to start from the neutral-monitor preset.
+///        a flat POD config. Pass NULL to start from the neutral-monitor preset. A config
+///        refused by validation, a @p sample_rate outside the supported range or a
+///        @p max_block_size outside [1, 1048576] is SONARE_ERROR_INVALID_PARAMETER.
 /// @note Release @p out with @ref sonare_realtime_voice_changer_destroy; it is a handle, not a
 ///       sonare_free_* buffer.
 SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChangerConfig* config,
@@ -252,6 +254,11 @@ SonareError sonare_realtime_voice_changer_get_config(const SonareRealtimeVoiceCh
 ///          handle pre-allocates all internal buffers (including a planar
 ///          deinterleave scratch) so every subsequent process call is
 ///          realtime-safe.
+///          A document whose content is refused (an unknown preset id, a malformed or
+///          out-of-range field, a combination the chain cannot run) is
+///          SONARE_ERROR_INVALID_FORMAT; a @p sample_rate outside the supported range, a
+///          @p max_block_size outside [1, 1048576] or a @p num_channels other than 1 or 2 is
+///          SONARE_ERROR_INVALID_PARAMETER.
 /// @note Release @p out with @ref sonare_realtime_voice_changer_destroy; it is a handle, not a
 ///       sonare_free_* buffer.
 SonareError sonare_realtime_voice_changer_create_json(const char* preset_or_config_json,
@@ -266,6 +273,8 @@ void sonare_realtime_voice_changer_destroy(SonareRealtimeVoiceChanger* handle);
 ///          change, use sonare_realtime_voice_changer_set_config_json instead.
 SonareError sonare_realtime_voice_changer_reset(SonareRealtimeVoiceChanger* handle);
 /// @brief Realtime-safe configuration update; accepts a preset id or a complete JSON config.
+/// @details A document whose content is refused is SONARE_ERROR_INVALID_FORMAT and the previous
+///          configuration stays in effect.
 SonareError sonare_realtime_voice_changer_set_config_json(SonareRealtimeVoiceChanger* handle,
                                                           const char* preset_or_config_json);
 /// @brief Processes a single mono block. @p num_samples must be <= max_block_size.
@@ -309,7 +318,8 @@ SonareError sonare_realtime_voice_changer_process_planar_stereo_with_carrier(
 /// @details Held notes become the voices' pitch targets whatever the pitch correction mode, the
 ///          newest leading, up to 1 + harmony_voices of them. Realtime-safe and lock-free; one
 ///          producer thread for the note entries. @p note outside [0, 127] or @p velocity outside
-///          (0, 1] is SONARE_ERROR_INVALID_PARAMETER. A grain-engine handle, or a full event queue
+///          (0, 1] is SONARE_ERROR_INVALID_PARAMETER; an accepted @p velocity is reserved and
+///          does not change the rendered output. A grain-engine handle, or a full event queue
 ///          (the event is dropped), is SONARE_ERROR_INVALID_STATE. Like the process entries it
 ///          reports through its return code only.
 SonareError sonare_realtime_voice_changer_note_on(SonareRealtimeVoiceChanger* handle, int note,
@@ -395,7 +405,7 @@ SonareError sonare_realtime_voice_changer_preset_json(const char* name, char** o
 /// @brief Validates a preset JSON document.
 /// @details On success (return SONARE_OK), @p out_normalized_json receives a
 ///          canonicalized JSON copy and @p out_error stays NULL. On failure
-///          (return SONARE_ERROR_INVALID_PARAMETER), @p out_error receives a
+///          (return SONARE_ERROR_INVALID_FORMAT), @p out_error receives a
 ///          human-readable message and @p out_normalized_json stays NULL.
 /// @note In every case, any non-NULL pointer returned through @p out_normalized_json
 ///       or @p out_error MUST be released with @ref sonare_free_string by the

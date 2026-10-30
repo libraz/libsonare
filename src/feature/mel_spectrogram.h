@@ -9,6 +9,8 @@
 #include "core/spectrum.h"
 #include "filters/mel.h"
 #include "util/constants.h"
+#include "util/exception.h"
+#include "util/numeric_validation.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -63,6 +65,18 @@ struct MelConfig {
     return config;
   }
 };
+
+/// @brief Refuses mel band edges outside the argument domain every public surface shares.
+/// @details 0 is the default spelling of each (fmax 0 is the Nyquist). The filterbank refuses an
+///          fmax at or below fmin itself, but replaces a negative or non-finite fmax with the
+///          Nyquist and builds bands below 0 Hz for a negative fmin, so those are refused here.
+/// @throws SonareException(InvalidParameter) unless both are finite and non-negative.
+inline void validate_mel_bounds(float fmin, float fmax) {
+  SONARE_CHECK_MSG(numeric::finite_non_negative(fmin), ErrorCode::InvalidParameter,
+                   "MelConfig: fmin must be 0 (the default) or a finite non-negative frequency");
+  SONARE_CHECK_MSG(numeric::finite_non_negative(fmax), ErrorCode::InvalidParameter,
+                   "MelConfig: fmax must be 0 (the default) or a finite non-negative frequency");
+}
 
 /// @brief Mel spectrogram representation with optional MFCC computation.
 /// @details Computes and caches Mel spectrogram from audio or STFT.

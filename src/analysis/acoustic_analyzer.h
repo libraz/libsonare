@@ -6,6 +6,8 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -23,6 +25,22 @@ struct AcousticConfig {
   float min_decay_db = 30.0f;
   float noise_floor_margin_db = 10.0f;
 };
+
+/// @brief Refuses an AcousticConfig outside the argument domain every public surface shares.
+/// @throws SonareException(InvalidParameter) for a negative band or subband count, a
+///         non-finite or non-positive min_decay_db, or a negative or non-finite
+///         noise_floor_margin_db.
+inline void validate_acoustic_config(const AcousticConfig& config) {
+  SONARE_CHECK_MSG(config.n_octave_bands >= 0 && config.n_third_octave_subbands >= 0,
+                   ErrorCode::InvalidParameter,
+                   "AcousticConfig: n_octave_bands and n_third_octave_subbands must be "
+                   "non-negative");
+  SONARE_CHECK_MSG(numeric::finite_positive(config.min_decay_db), ErrorCode::InvalidParameter,
+                   "AcousticConfig: min_decay_db must be finite and positive");
+  SONARE_CHECK_MSG(numeric::finite_non_negative(config.noise_floor_margin_db),
+                   ErrorCode::InvalidParameter,
+                   "AcousticConfig: noise_floor_margin_db must be finite and non-negative");
+}
 
 /// @brief Acoustic room parameters.
 struct AcousticParameters {

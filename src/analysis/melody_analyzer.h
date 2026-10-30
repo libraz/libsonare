@@ -6,6 +6,8 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -44,6 +46,21 @@ struct MelodyConfig {
   ///        aligned, NOT centered).
   bool center = true;
 };
+
+/// @brief Refuses a MelodyConfig outside the argument domain every public surface shares.
+/// @throws SonareException(InvalidParameter) unless fmin is finite and positive, fmax is finite
+///         and above fmin, frame_length and hop_length are positive, and threshold is finite and
+///         positive.
+inline void validate_melody_config(const MelodyConfig& config) {
+  SONARE_CHECK_MSG(numeric::finite_positive(config.fmin) &&
+                       numeric::finite_ordered_range(config.fmin, config.fmax),
+                   ErrorCode::InvalidParameter,
+                   "MelodyConfig: fmin must be finite and positive and fmax above it");
+  SONARE_CHECK_MSG(config.frame_length > 0 && config.hop_length > 0, ErrorCode::InvalidParameter,
+                   "MelodyConfig: frame_length and hop_length must be positive");
+  SONARE_CHECK_MSG(numeric::finite_positive(config.threshold), ErrorCode::InvalidParameter,
+                   "MelodyConfig: threshold must be finite and positive");
+}
 
 /// @brief Melody analyzer using YIN (or, optionally, pYIN) pitch detection.
 /// @details Detects pitch from monophonic audio and extracts melody

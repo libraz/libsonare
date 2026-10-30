@@ -708,16 +708,6 @@ void note_room_coupling(const ParamMap& params) {
 }
 #endif
 
-// A seed is an unsigned field read through a signed key, so a negative one is refused
-// by name rather than wrapped or raised to zero.
-unsigned non_negative_seed(const ParamMap& params, unsigned fallback) {
-  const int seed = detail::i(params, "seed", static_cast<int>(fallback), kNone);
-  if (seed < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "seed must be non-negative");
-  }
-  return static_cast<unsigned>(seed);
-}
-
 std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap& params,
                                          const Value* json_root) {
   using namespace sonare::effects::reverb;
@@ -857,7 +847,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     }
     config.pre_delay_ms = f(params, "preDelayMs", config.pre_delay_ms, kMs);
     config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
-    config.seed = non_negative_seed(params, config.seed);
+    config.seed = detail::u32(params, "seed", config.seed, kNone);
     auto reverb = std::make_unique<ConvolutionReverb>(config);
     const std::vector<float> ir = read_ir_f32_base64_key(json_root, "irF32Base64");
     if (!ir.empty()) {
@@ -887,7 +877,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.absorption = f(params, "absorption", config.absorption, kNone);
     sonare::acoustic::validate_material_coefficient(config.absorption, "absorption");
     config.ism_order = detail::i(params, "ismOrder", config.ism_order, kCount);
-    config.seed = non_negative_seed(params, config.seed);
+    config.seed = detail::u32(params, "seed", config.seed, kNone);
     config.max_seconds = f(params, "maxSeconds", config.max_seconds, kSeconds);
     config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
     config.air_absorption_enabled =
@@ -928,7 +918,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
         f(params, "sourceTailSuppression", config.source_tail_suppression, kNone);
     config.wet = f(params, "dryWet", config.wet, kNone);
     config.ism_order = detail::i(params, "ismOrder", config.ism_order, kCount);
-    config.seed = non_negative_seed(params, config.seed);
+    config.seed = detail::u32(params, "seed", config.seed, kNone);
     config.max_seconds = f(params, "maxSeconds", config.max_seconds, kSeconds);
     config.late_model = b(params, "preferEyring", true) ? sonare::acoustic::ReverbModel::Eyring
                                                         : sonare::acoustic::ReverbModel::Sabine;

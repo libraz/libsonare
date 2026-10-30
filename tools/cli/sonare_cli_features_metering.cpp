@@ -911,10 +911,20 @@ int cmd_nnls_chroma(const CliArgs& args, const Audio& audio) {
   return 0;
 }
 
-int cmd_lufs(const CliArgs& args, const Audio& audio) {
+int cmd_lufs(const CliArgs& args, const Audio&) {
   using namespace sonare::metering;
-  LufsConfig config;
-  LufsResult result = lufs(audio, config);
+  const LufsConfig config;
+  const std::vector<float>& interleaved = cached_interleaved_audio(args);
+  const int channels = args.decoded_input->retained_channels;
+  SONARE_CHECK_MSG(channels > 0 && interleaved.size() % static_cast<size_t>(channels) == 0,
+                   ErrorCode::DecodeFailed, "decoded audio has an inconsistent channel count");
+  const bool series = args.has("series");
+  std::vector<float> momentary_series;
+  std::vector<float> short_term_series;
+  const LufsResult result =
+      lufs_interleaved(interleaved.data(), interleaved.size() / static_cast<size_t>(channels),
+                       channels, args.decoded_input->sample_rate, config,
+                       series ? &momentary_series : nullptr, series ? &short_term_series : nullptr);
 
   if (args.json_output) {
     JsonBuilder json;
@@ -923,9 +933,9 @@ int cmd_lufs(const CliArgs& args, const Audio& audio) {
         .kv("momentary_lufs", result.momentary_lufs)
         .kv("short_term_lufs", result.short_term_lufs)
         .kv("loudness_range", result.loudness_range);
-    if (args.has("series")) {
-      json.key("momentary_series").float_array(momentary_lufs(audio, config));
-      json.key("short_term_series").float_array(short_term_lufs(audio, config));
+    if (series) {
+      json.key("momentary_series").float_array(momentary_series);
+      json.key("short_term_series").float_array(short_term_series);
     }
     json.end_object().print();
   } else {

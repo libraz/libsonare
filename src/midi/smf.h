@@ -35,7 +35,9 @@
 ///     is still consumed, so what follows stays in time.
 ///   - A zero-length note (a note-off following its own note-on at the same
 ///     tick) is dropped with both events counted in `skipped_events`, since the
-///     off-before-on sort at one tick would otherwise leave it sounding.
+///     off-before-on sort at one tick would otherwise leave it sounding. Export
+///     applies the same rule after rounding positions to the file's tick grid,
+///     so a note shorter than one tick is counted rather than lost on re-import.
 ///   - Export writes format 1: track 0 carries the tempo/time-signature map and
 ///     any @ref SmfExportOptions::markers, then one track per MidiClip. SysEx
 ///     handles re-emit only when `SmfExportOptions::sysex_store` is supplied and
@@ -166,6 +168,15 @@ inline SmfImportResult import_smf(const std::vector<uint8_t>& data,
                                   const resource::MidiImportResourceLimits& limits) {
   return import_smf(data.data(), data.size(), limits);
 }
+
+/// Drops each note-on whose own note-off follows it at the same position in
+/// stored order, with that note-off, adding both to @p skipped. Positions compare
+/// exactly when @p ticks_per_quarter is 0, else after rounding to that tick grid.
+/// Run before the clip is sorted: the off-before-on order at one position would
+/// otherwise reopen the note and leave it sounding. With an earlier note of the
+/// key still open, the off closes that one, as the sort reads it. Shared by SMF
+/// and Clip File import and export.
+void drop_zero_length_notes(MidiClip* clip, uint32_t* skipped, uint16_t ticks_per_quarter = 0);
 
 /// Options controlling SMF export.
 struct SmfExportOptions {

@@ -139,14 +139,13 @@ class DynamicEq : public rt::ProcessorBase {
   // @p excluded_channel (-1 for none) contributes to neither sum nor count.
   // Only the first @p readable_samples positions (negative = all) are read; the rest of the
   // block is silence, so a key shorter than the block is zero-padded.
-  static float detector_db(const float* const* channels, int num_channels, int num_samples,
-                           int excluded_channel, int readable_samples = -1);
-  // Updates band `index`'s persistent detector against the supplied sidechain
-  // and returns the block's detector level in dB. Stateful: advances the
-  // bandpass filters, envelope and detector-delay ring so the result is
-  // continuous across blocks.
-  float band_detector_db(const float* const* channels, int num_channels, int num_samples,
-                         int excluded_channel, size_t index, int readable_samples = -1);
+  // Advances band `index`'s persistent detector over @p num_samples of the supplied sidechain and
+  // adds its squared envelope to the interval's sum. Stateful: advances the bandpass filters,
+  // envelope and detector-delay ring so the reading is continuous across calls.
+  void accumulate_band(const float* const* channels, int num_channels, int num_samples,
+                       int excluded_channel, size_t index, int readable_samples);
+  // Turns the finished interval's sums into detector readings and target gains.
+  void settle_control();
   void ensure_detector(size_t index, int num_channels);
   // Applies the recursive-cell rule to the detector and gain state that survives
   // a block. O(bands x channels) and independent of block size, so the
@@ -175,6 +174,8 @@ class DynamicEq : public rt::ProcessorBase {
   std::array<float, kMaxBands> last_applied_gain_db_{};
   std::array<float, kMaxBands> smoothed_gain_db_{};
   std::array<float, kMaxBands> target_gain_db_{};
+  // False until a band has its first detector reading; that reading seeds the glide.
+  std::array<bool, kMaxBands> reading_seen_{};
   // Gain last committed to the underlying biquad coefficients (steady-state
   // skip reference). Seeded to NaN so the first apply always programs the band.
   std::array<float, kMaxBands> last_applied_coeff_gain_db_{};
@@ -182,6 +183,13 @@ class DynamicEq : public rt::ProcessorBase {
   std::array<rt::StageGate, kMaxBands> band_gates_{};
   std::vector<float*> sub_channels_;  // fixed to kRealtimePreparedChannels in prepare()
   float last_detector_db_ = sonare::constants::kFloorDb;
+  // Position in the control interval, and the detector sums accumulated since it began.
+  int control_phase_ = 0;
+  double detector_sum_ = 0.0;
+  double detector_count_ = 0.0;
+  std::array<double, kMaxBands> band_detector_sum_{};
+  std::array<double, kMaxBands> band_detector_count_{};
+  std::vector<const float*> sidechain_view_;  // fixed to kRealtimePreparedChannels in prepare()
   const float* const* sidechain_channels_ = nullptr;
   int sidechain_num_channels_ = 0;
   int sidechain_num_samples_ = 0;

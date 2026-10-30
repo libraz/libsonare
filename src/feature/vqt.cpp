@@ -128,6 +128,7 @@ std::vector<float> vqt_bandwidths(const std::vector<float>& frequencies, int bin
 }
 
 std::unique_ptr<VqtKernel> VqtKernel::create(int sr, const VqtConfig& config) {
+  validate_cqt_fmin(config.fmin);
   SONARE_CHECK(sr > 0 && config.n_bins > 0 && config.bins_per_octave > 0 &&
                    numeric::finite_positive(config.fmin) &&
                    numeric::finite_non_negative(config.gamma) &&
@@ -261,7 +262,7 @@ VqtResult vqt(const Audio& audio, const VqtConfig& config, VqtProgressCallback p
   SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.n_bins > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.bins_per_octave > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(numeric::finite_positive(config.fmin), ErrorCode::InvalidParameter);
+  validate_cqt_fmin(config.fmin);
   SONARE_CHECK(numeric::finite_positive(config.filter_scale), ErrorCode::InvalidParameter);
 
   VqtConfig resolved = config;

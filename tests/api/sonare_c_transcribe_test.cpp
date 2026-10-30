@@ -189,6 +189,35 @@ std::vector<SonareMidiEventPod> clip_events_of(const MidiFixture& fixture) {
   return events;
 }
 
+TEST_CASE("Project MIDI export drops a note at or below one tick like SMF import and export",
+          "[c_api][project_midi]") {
+  const MidiFixture fixture;
+  constexpr double kSubTickPpq = 0.25 / 480.0;
+  SonareMidiEventPod events[6]{};
+  REQUIRE(sonare_midi_note_on(0.0, 0, 0, 60, 100, &events[0]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_off(0.0, 0, 0, 60, 0, &events[1]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_on(1.0, 0, 0, 61, 100, &events[2]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_off(1.0 + kSubTickPpq, 0, 0, 61, 0, &events[3]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_on(2.0, 0, 0, 62, 100, &events[4]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_off(3.0, 0, 0, 62, 0, &events[5]) == SONARE_OK);
+  REQUIRE(sonare_project_set_midi_events(fixture.project(), fixture.clip(), events, 6) ==
+          SONARE_OK);
+
+  uint8_t* bytes = nullptr;
+  size_t len = 0;
+  REQUIRE(sonare_project_export_smf(fixture.project(), &bytes, &len) == SONARE_OK);
+  const auto imported = sonare::midi::import_smf(bytes, len);
+  sonare_free_bytes(bytes);
+  REQUIRE(imported.ok());
+  REQUIRE(imported.clips.size() == 1);
+  const auto& exported = imported.clips[0].events();
+  REQUIRE(exported.size() == 2);
+  CHECK(exported[0].ump.note_number() == 62);
+  CHECK(exported[0].ump.is_note_on());
+  CHECK(exported[1].ump.note_number() == 62);
+  CHECK(exported[1].ump.is_note_off());
+}
+
 }  // namespace
 
 // --- The config door ------------------------------------------------------

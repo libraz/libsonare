@@ -28,12 +28,13 @@ bool space_delay_exceeds_limit(const ReverbVariationConfig& variation) noexcept;
 
 class SpaceStage {
  public:
-  /// @brief Allocates the delay ring and prepares the reverb. NOT realtime-safe.
+  /// @brief Allocates the delay ring. NOT realtime-safe.
   void prepare(double sr);
-  /// @brief Clears all delay, filter and reverb state.
+  /// @brief Clears all delay and filter state.
   void reset();
   /// @brief Applies a configuration; realtime-safe. A delay beyond kMaxSpaceDelayMs is
-  ///        ignored and the previous echo setting stays in force.
+  ///        ignored and the previous echo setting stays in force. The reverb variation is not
+  ///        rendered here (@ref process_sample passes it through).
   void set_config(const StreamingReverbConfig&, const ReverbVariationConfig&);
   float process_sample(float x) noexcept;
 
@@ -43,7 +44,6 @@ class SpaceStage {
   static constexpr float kMaxMix = 0.45f;
 
   double sr_ = 0.0;
-  StreamingReverb reverb_;
   ReverbVariation variation_ = ReverbVariation::Reverb;
   std::vector<float> ring_;
   std::size_t write_ = 0;

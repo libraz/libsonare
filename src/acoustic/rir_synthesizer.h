@@ -45,19 +45,42 @@ struct RirSynthConfig {
   AirAbsorption air{};
 };
 
+/// @brief The spelling each validated RirSynthConfig field has in a caller's vocabulary, so a
+///        diagnostic names the key the caller wrote.
+struct RirSynthFieldNames {
+  const char* ism_order;
+  const char* max_seconds;
+  const char* mixing_time_ms;
+  const char* crossfade_ms;
+  const char* air_temperature_c;
+  const char* air_humidity_percent;
+};
+
+/// @brief Field names as the C ABI and Python spell them.
+constexpr RirSynthFieldNames kRirSynthFieldNames{"ism_order",         "max_seconds",
+                                                 "mixing_time_ms",    "crossfade_ms",
+                                                 "air_temperature_c", "air_humidity_percent"};
+
+/// @brief Field names as the JavaScript surfaces (Node, WASM) spell them.
+constexpr RirSynthFieldNames kRirSynthJsFieldNames{"ismOrder",        "maxSeconds",
+                                                   "mixingTimeMs",    "crossfadeMs",
+                                                   "airTemperatureC", "airHumidityPercent"};
+
 /// @brief Validate the non-geometry half of a RIR synthesis configuration.
 ///
 /// Checks the image-source order, the timing values (`max_seconds`,
 /// `mixing_time_ms`, `crossfade_ms`) and — only when `air_absorption_enabled` —
 /// the atmospheric temperature/humidity, returning one Error Diagnostic per
-/// failing group and an empty vector when the configuration is usable. The
+/// failing field, named through @p names, and an empty vector when the
+/// configuration is usable. The
 /// sample rate is not part of the config and is checked by `synthesize_rir`.
 ///
 /// `synthesize_rir` applies exactly these checks before it synthesizes anything,
 /// so an engine that stores a `RirSynthConfig` can call this at construction and
 /// reject the values up front rather than discovering the empty RIR at prepare()
 /// time, where an empty IR degrades silently into dry passthrough.
-std::vector<Diagnostic> validate_rir_synth_config(const RirSynthConfig& config);
+std::vector<Diagnostic> validate_rir_synth_config(
+    const RirSynthConfig& config, const RirSynthFieldNames& names = kRirSynthFieldNames);
 
 /// @brief A synthesized RIR plus the diagnostics gathered producing it.
 struct RirSynthResult {

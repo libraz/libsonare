@@ -3032,7 +3032,7 @@
             "choices": [],
             "minimum": 1,
             "exclusiveMinimum": false,
-            "maximum": null,
+            "maximum": 4294967295,
             "exclusiveMaximum": false,
             "rejectExit": "invalid_parameter"
           }
@@ -12321,7 +12321,7 @@
             "choices": [],
             "minimum": 1,
             "exclusiveMinimum": false,
-            "maximum": null,
+            "maximum": 4294967295,
             "exclusiveMaximum": false,
             "rejectExit": "invalid_parameter"
           }
@@ -12583,6 +12583,55 @@
           "payload": "none",
           "artifact": "none",
           "stdout": "empty"
+        },
+        {
+          "id": "reference_source_negative",
+          "argv": [
+            "project",
+            "align-takes",
+            "--in",
+            "{project_takes}",
+            "--reference-source",
+            "-1",
+            "--audio",
+            "1={audio}",
+            "--audio",
+            "2={audio_take}",
+            "-o",
+            "{align_takes_finer_output}",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty"
+        },
+        {
+          "id": "reference_source_uint32_max",
+          "argv": [
+            "project",
+            "align-takes",
+            "--in",
+            "{project_takes}",
+            "--reference-source",
+            "4294967295",
+            "--audio",
+            "1={audio}",
+            "--audio",
+            "2={audio_take}",
+            "-o",
+            "{align_takes_finer_output}",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr_contains": [
+            "--reference-source 4294967295: the project has no source"
+          ]
         },
         {
           "id": "reference_not_a_source",

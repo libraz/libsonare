@@ -107,7 +107,8 @@ void sonare_engine_destroy(SonareRealtimeEngine* engine);
 ///          untouched. Both are rounded up to a power of two internally, and 0
 ///          selects the internal minimum rather than disabling the queue.
 ///          @p sample_rate must be a whole number of hertz in [8000, 384000];
-///          a fractional rate returns SONARE_ERROR_INVALID_PARAMETER.
+///          a fractional rate returns SONARE_ERROR_INVALID_PARAMETER, as does a
+///          @p max_block_size outside [1, 1048576].
 /// @return SONARE_ERROR_INVALID_STATE when a bound instrument cannot prepare a
 ///         SysEx in the MIDI clips scheduled earlier; the engine is then
 ///         prepared, but its MIDI clip schedule has been cleared.
@@ -744,11 +745,12 @@ SonareError sonare_engine_set_track_strip_dual_pan(SonareRealtimeEngine* engine,
 /// @brief Realtime change of a track lane strip's surround pan position.
 /// @details Applies when the lane feeds a destination wider than two channels
 ///   (5.1 / 7.1 bus or master); a stereo destination ignores it. Fields follow
-///   @ref SonareSurroundPan: azimuth and divergence and lfe are clamped, distance
-///   <= 0 keeps the default 1, and elevation / distance are reserved. Control-thread
+///   @ref SonareSurroundPan: azimuth must be in [-180, 180] and divergence and lfe in
+///   [0, 1] (refused, never clamped), distance <= 0 keeps the default 1, and
+///   elevation / distance are reserved. Control-thread
 ///   mutation; glitch-free (atomic; a constant-power 5 ms one-pole glide). Returns
 ///   SONARE_ERROR_INVALID_PARAMETER if @p track_id has no bound lane strip,
-///   @p pan is NULL, or a field is not finite.
+///   @p pan is NULL, a field is not finite, or azimuth / divergence / lfe is out of range.
 SonareError sonare_engine_set_track_strip_surround_pan(SonareRealtimeEngine* engine,
                                                        uint32_t track_id,
                                                        const SonareSurroundPan* pan);

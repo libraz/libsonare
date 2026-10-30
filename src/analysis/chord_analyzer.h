@@ -11,6 +11,8 @@
 #include "analysis/chord_templates.h"
 #include "core/audio.h"
 #include "feature/chroma.h"
+#include "util/exception.h"
+#include "util/numeric_validation.h"
 #include "util/types.h"
 
 namespace sonare {
@@ -126,6 +128,23 @@ struct ChordConfig {
   /// used.
   bool auto_tuning = false;
 };
+
+/// @brief Refuses a ChordConfig outside the argument domain every public surface shares.
+/// @throws SonareException(InvalidParameter) unless min_duration is finite and non-negative,
+///         smoothing_window is finite and positive, threshold is finite in [0, 1], n_fft and
+///         hop_length are positive, and hmm_beam_width is non-negative.
+inline void validate_chord_config(const ChordConfig& config) {
+  SONARE_CHECK_MSG(numeric::finite_non_negative(config.min_duration), ErrorCode::InvalidParameter,
+                   "ChordConfig: min_duration must be finite and non-negative");
+  SONARE_CHECK_MSG(numeric::finite_positive(config.smoothing_window), ErrorCode::InvalidParameter,
+                   "ChordConfig: smoothing_window must be finite and positive");
+  SONARE_CHECK_MSG(numeric::finite_in_closed_range(config.threshold, 0.0f, 1.0f),
+                   ErrorCode::InvalidParameter, "ChordConfig: threshold must be finite in [0, 1]");
+  SONARE_CHECK_MSG(config.n_fft > 0 && config.hop_length > 0, ErrorCode::InvalidParameter,
+                   "ChordConfig: n_fft and hop_length must be positive");
+  SONARE_CHECK_MSG(config.hmm_beam_width >= 0, ErrorCode::InvalidParameter,
+                   "ChordConfig: hmm_beam_width must be non-negative");
+}
 
 /// @brief Chord analyzer for detecting chords from audio.
 /// @details Analyzes chroma features to detect chord progressions.

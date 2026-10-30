@@ -141,8 +141,14 @@ const std::complex<float>& CqtResult::at(int bin, int frame) const {
   return data_[bin * n_frames_ + frame];
 }
 
+void validate_cqt_fmin(float fmin) {
+  SONARE_CHECK_MSG(numeric::finite_positive(fmin), ErrorCode::InvalidParameter,
+                   "fmin must be finite and > 0, got " + util::to_text(fmin));
+}
+
 // CqtKernel implementation
 std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
+  validate_cqt_fmin(config.fmin);
   SONARE_CHECK(sr > 0 && config.hop_length > 0 && config.hop_length <= kMaxCqtFftLength / 2 &&
                    config.n_bins > 0 && config.bins_per_octave > 0 && std::isfinite(config.fmin) &&
                    config.fmin > 0.0f && std::isfinite(config.filter_scale) &&
@@ -338,6 +344,7 @@ std::vector<std::complex<float>> apply_sparse_kernel_frames(
 }  // namespace detail
 
 CqtResult cqt(const Audio& audio, const CqtConfig& config, CqtProgressCallback progress_callback) {
+  validate_cqt_fmin(config.fmin);
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.n_bins > 0, ErrorCode::InvalidParameter);
@@ -477,7 +484,7 @@ CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config) {
   SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.n_bins > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.bins_per_octave > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.fmin > 0.0f, ErrorCode::InvalidParameter);
+  validate_cqt_fmin(config.fmin);
 
   const int sr = audio.sample_rate();
   // librosa.pseudo_cqt: |basis| . |Hann STFT| at the kernel's own FFT size,
@@ -528,7 +535,7 @@ CqtResult hybrid_cqt(const Audio& audio, const CqtConfig& config) {
   SONARE_CHECK(config.hop_length > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.n_bins > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.bins_per_octave > 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(config.fmin > 0.0f, ErrorCode::InvalidParameter);
+  validate_cqt_fmin(config.fmin);
 
   const int sr = audio.sample_rate();
   std::vector<float> freqs = cqt_frequencies(config.fmin, config.n_bins, config.bins_per_octave);

@@ -6,12 +6,14 @@
 /// When gamma=0, VQT is equivalent to CQT. A negative or NaN gamma selects
 /// librosa's ERB-derived automatic gamma.
 
+#include <cmath>
 #include <functional>
 #include <memory>
 #include <vector>
 
 #include "core/audio.h"
 #include "feature/cqt.h"
+#include "util/exception.h"
 
 namespace sonare {
 
@@ -31,6 +33,14 @@ struct VqtConfig {
   /// @brief Converts to CQT config (for gamma=0 case).
   CqtConfig to_cqt_config() const;
 };
+
+/// @brief Refuses an infinite gamma, which the automatic sentinel would otherwise absorb.
+/// @details A NaN or negative gamma stays the automatic spelling; -inf is not one of them.
+/// @throws SonareException(InvalidParameter) when @p gamma is infinite.
+inline void validate_vqt_gamma(float gamma) {
+  SONARE_CHECK_MSG(!std::isinf(gamma), ErrorCode::InvalidParameter,
+                   "VqtConfig: gamma must not be infinite (NaN or negative selects automatic)");
+}
 
 /// @brief VQT result (same structure as CQT).
 using VqtResult = CqtResult;

@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "mastering/maximizer/adaptive_release.h"
 #include "metering/true_peak.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
@@ -57,6 +58,19 @@ TEST_CASE("TruePeakLimiter reports a finite streaming tail", "[mastering][stream
   config.apply_gain_at_input_rate = false;
   sonare::mastering::maximizer::TruePeakLimiter processor(config);
   check_tail(processor, "TruePeakLimiter");
+}
+
+TEST_CASE("AdaptiveRelease reports the tail of its inner limiter",
+          "[mastering][streaming][boundary]") {
+  using sonare::mastering::maximizer::AdaptiveRelease;
+  using sonare::mastering::maximizer::AdaptiveReleaseConfig;
+  AdaptiveReleaseConfig config;
+  config.ceiling_db = -12.0f;
+  AdaptiveRelease defaults(config);
+  check_tail(defaults, "AdaptiveRelease default");
+  config.lookahead_ms = 5.0f;
+  AdaptiveRelease lookahead(config);
+  check_tail(lookahead, "AdaptiveRelease lookaheadMs=5");
 }
 
 TEST_CASE("TruePeakLimiter bounds the detector-excluded plane without letting it steer the gain",

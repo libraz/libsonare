@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 
 #include "core/channel_layout.h"
 #include "rt/param_smoother.h"
@@ -31,18 +32,31 @@ struct SurroundPanParams {
   float distance = 1.0f;    ///< reserved (focus/spread), 1 in phase 1
 };
 
+/// Documented azimuth domain (degrees); a position outside it is refused, never clamped.
+inline bool surround_azimuth_in_range(float azimuth) noexcept {
+  return std::isfinite(azimuth) && azimuth >= -sonare::constants::kDegreesPerHalfTurn &&
+         azimuth <= sonare::constants::kDegreesPerHalfTurn;
+}
+
+/// Documented domain of the divergence and LFE scalars; a value outside it is refused.
+inline bool surround_unit_in_range(float value) noexcept {
+  return std::isfinite(value) && value >= 0.0f && value <= 1.0f;
+}
+
 /// @brief The parameters a surround writer will actually store for @p params.
-/// @details Placement is computed from the clamped values, so every writer that
-///          also caches what it was handed - ChannelStrip, the C ABI setter, the
-///          scene walker - resolves through here and a read-back reports what
-///          the panner is using. elevation and distance are reserved and pass
-///          through unclamped, matching the render path.
+/// @details Writers refuse an azimuth, divergence or lfe outside its domain before they get here;
+///          every writer that caches what it was handed - ChannelStrip, the C ABI setter, the
+///          scene walker - resolves through here so a read-back reports what the panner is
+///          using. A distance of zero or less (a zero-initialised host struct) means the default
+///          scale 1.0; elevation is reserved and passes through. The clamps below only bound
+///          the realtime store, which is never handed an out-of-domain value by a setter.
 inline SurroundPanParams clamp_surround_pan_params(const SurroundPanParams& params) noexcept {
   SurroundPanParams out = params;
   out.azimuth = std::clamp(params.azimuth, -sonare::constants::kDegreesPerHalfTurn,
                            sonare::constants::kDegreesPerHalfTurn);
   out.divergence = std::clamp(params.divergence, 0.0f, 1.0f);
   out.lfe = std::clamp(params.lfe, 0.0f, 1.0f);
+  out.distance = params.distance > 0.0f ? params.distance : 1.0f;
   return out;
 }
 

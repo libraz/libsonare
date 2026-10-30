@@ -18,6 +18,7 @@
 #include "host/midi_io.h"
 #include "midi/instrument.h"
 #include "midi/synth/sf2_file.h"
+#include "streaming/realtime_limits.h"
 #endif
 #include <sonare/sonare_c.h>
 
@@ -472,6 +473,18 @@ SonareError run_offline(const float* samples, size_t length, int sample_rate, Fn
   if (err != SONARE_OK) return err;
   Audio audio = Audio::from_buffer(samples, length, sample_rate);
   return body(audio);
+  SONARE_C_CATCH
+}
+
+/// @brief Runs a core argument validator ahead of run_offline and returns its verdict as a status.
+/// @details Lets an entry refuse its parameters through the core's own rule (recording the
+///          core's message as the last error) while keeping that refusal ahead of the audio
+///          checks. @p check throws on a refusal and returns nothing otherwise.
+template <typename Fn>
+SonareError run_validation(Fn check) {
+  SONARE_C_TRY
+  check();
+  return SONARE_OK;
   SONARE_C_CATCH
 }
 

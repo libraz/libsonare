@@ -301,6 +301,35 @@ TEST_CASE("final.dither decorrelates stereo channels", "[mastering][final][param
   REQUIRE(channels_differ);
 }
 
+TEST_CASE("final.dither seed spans the uint32 domain and refuses a negative",
+          "[mastering][final][param_wiring]") {
+  using sonare::mastering::api::apply_named_processor;
+  const std::vector<float> silence(256, 0.0f);
+  const auto run = [&](double seed) {
+    return apply_named_processor("final.dither", silence.data(), silence.size(), 48000,
+                                 {{"type", 2.0}, {"targetBits", 16.0}, {"seed", seed}})
+        .samples;
+  };
+  // Seeds 0 and 2^32 - 1 both run, and reach the generator as distinct seeds rather than as
+  // the wrapped or clamped neighbour of either.
+  const auto low = run(0.0);
+  const auto high = run(4294967295.0);
+  REQUIRE(low.size() == silence.size());
+  REQUIRE(high.size() == silence.size());
+  REQUIRE(low != high);
+  REQUIRE(high != run(2147483647.0));
+
+  for (const double bad : {-1.0, 4294967296.0, 0.5}) {
+    try {
+      run(bad);
+      FAIL("seed " << bad << " was accepted");
+    } catch (const sonare::SonareException& error) {
+      REQUIRE(error.code() == sonare::ErrorCode::InvalidParameter);
+      REQUIRE(std::string(error.what()).find("seed") != std::string::npos);
+    }
+  }
+}
+
 TEST_CASE("final.outputChain decorrelates stereo channels", "[mastering][final][param_wiring]") {
   // outputChain dithers then quantizes; with NoiseShaped dither the per-channel
   // seed must decorrelate L and R the same way final.dither does. Use a low-bit

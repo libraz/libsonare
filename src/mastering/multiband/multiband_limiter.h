@@ -71,7 +71,7 @@ class MultibandLimiter : public rt::ProcessorBase {
   static void validate_config(const MultibandLimiterConfig& config);
   void rebuild_processors();
   /// @brief Declares every band limiter's lookahead to band_paths_. Control thread.
-  void rebuild_band_compensation();
+  void rebuild_band_compensation(int channels);
 
   MultibandLimiterConfig config_{};
   double sample_rate_ = sonare::constants::kDefaultDawSampleRate;

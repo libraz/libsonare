@@ -8,6 +8,8 @@
 #include "core/audio.h"
 #include "core/spectrum.h"
 #include "feature/mel_spectrogram.h"
+#include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -28,6 +30,18 @@ struct TimbreConfig {
   int n_mfcc = 13;          ///< Number of MFCC coefficients
   float window_sec = 0.5f;  ///< Window for time-varying analysis in seconds; finite and positive
 };
+
+/// @brief Refuses a TimbreConfig outside the argument domain every public surface shares.
+/// @throws SonareException(InvalidParameter) unless n_fft, hop_length, n_mels and n_mfcc are
+///         positive and window_sec is finite and positive.
+inline void validate_timbre_config(const TimbreConfig& config) {
+  SONARE_CHECK_MSG(
+      config.n_fft > 0 && config.hop_length > 0 && config.n_mels > 0 && config.n_mfcc > 0,
+      ErrorCode::InvalidParameter,
+      "TimbreConfig: n_fft, hop_length, n_mels and n_mfcc must be positive");
+  SONARE_CHECK_MSG(numeric::finite_positive(config.window_sec), ErrorCode::InvalidParameter,
+                   "TimbreConfig: window_sec must be finite and positive");
+}
 
 /// @brief Timbre analyzer for extracting sound characteristics.
 /// @details Analyzes spectral features to extract perceptual timbral qualities

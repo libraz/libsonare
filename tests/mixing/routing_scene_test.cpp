@@ -548,37 +548,31 @@ TEST_CASE("Scene surround pan round-trips and omits at the default", "[mixing][r
 }
 
 // The scene document is the read-back mechanism a host actually uses, so a
-// value that comes out of it has to be the value the mix is running. Pan and
-// width outside their domains are refused with the field named; the surround
-// parameters are still clamped through the helper the processor uses.
-TEST_CASE("Scene refuses out-of-domain pan and width and clamps surround scalars",
-          "[mixing][routing]") {
+// value that comes out of it has to be the value the mix is running. Pan, width
+// and the surround scalars outside their domains are refused with the field named.
+TEST_CASE("Scene refuses out-of-domain pan, width and surround scalars", "[mixing][routing]") {
   using Catch::Matchers::ContainsSubstring;
   const auto scene = sonare::mixing::api::scene_from_json(
       R"({"version":1,"strips":[{"id":"a","pan":-1.0,"width":2.0,"dualPanLeft":-1.0,)"
-      R"("dualPanRight":1.0,"surroundPan":{"azimuth":5000.0,"divergence":9.0,"lfe":-3.0}}]})");
+      R"("dualPanRight":1.0,"surroundPan":{"azimuth":-180.0,"divergence":1.0,"lfe":0.0,)"
+      R"("distance":0.0}}]})");
   REQUIRE(scene.strips.size() == 1);
   const auto& strip = scene.strips[0];
   CHECK(strip.pan == -1.0f);
   CHECK(strip.width == 2.0f);
   CHECK(strip.dual_pan_left == -1.0f);
   CHECK(strip.dual_pan_right == 1.0f);
-  CHECK(strip.surround_pan.azimuth == 180.0f);
+  CHECK(strip.surround_pan.azimuth == -180.0f);
   CHECK(strip.surround_pan.divergence == 1.0f);
   CHECK(strip.surround_pan.lfe == 0.0f);
-
-  sonare::mixing::ChannelStrip live;
-  live.prepare(48000.0, 512);
-  live.set_surround_pan_params({5000.0f, 0.0f, 9.0f, -3.0f, 1.0f});
-  const auto params = live.surround_pan_params();
-  CHECK(strip.surround_pan.azimuth == params.azimuth);
-  CHECK(strip.surround_pan.divergence == params.divergence);
-  CHECK(strip.surround_pan.lfe == params.lfe);
+  // A distance of zero or less resolves to the default scale, as the setters store it.
+  CHECK(strip.surround_pan.distance == 1.0f);
 
   const auto restored =
       sonare::mixing::api::scene_from_json(sonare::mixing::api::scene_to_json(scene));
   CHECK(restored.strips[0].pan == -1.0f);
   CHECK(restored.strips[0].width == 2.0f);
+  CHECK(restored.strips[0].surround_pan.distance == 1.0f);
 
   const auto load = [](const char* fields) {
     return sonare::mixing::api::scene_from_json(
@@ -590,6 +584,11 @@ TEST_CASE("Scene refuses out-of-domain pan and width and clamps surround scalars
   REQUIRE_THROWS_WITH(load(R"("width":-0.5)"), ContainsSubstring("[0, 2]"));
   REQUIRE_THROWS_WITH(load(R"("dualPanLeft":-9.0)"), ContainsSubstring("dualPanLeft"));
   REQUIRE_THROWS_WITH(load(R"("dualPanRight":9.0)"), ContainsSubstring("dualPanRight"));
+  REQUIRE_THROWS_WITH(load(R"("surroundPan":{"azimuth":181.0})"),
+                      ContainsSubstring("surroundPan.azimuth"));
+  REQUIRE_THROWS_WITH(load(R"("surroundPan":{"divergence":1.5})"),
+                      ContainsSubstring("surroundPan.divergence"));
+  REQUIRE_THROWS_WITH(load(R"("surroundPan":{"lfe":-0.25})"), ContainsSubstring("surroundPan.lfe"));
   // A non-finite number never reaches the range check: the JSON parser refuses it.
   REQUIRE_THROWS(load(R"("pan":1e999)"));
 }

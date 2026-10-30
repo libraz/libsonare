@@ -25,17 +25,12 @@ void MultibandLimiter::prepare(double sample_rate, int max_block_size) {
 }
 
 void MultibandLimiter::prepare(double sample_rate, int max_block_size, int max_channels) {
-  validate_prepare_args(sample_rate, max_block_size, max_channels, "MultibandLimiter");
-
-  sample_rate_ = sample_rate;
-  max_block_size_ = max_block_size;
-  max_working_channels_ = max_channels;
-  prepared_ = true;
-  prepare_band_split(crossover_, scratch_, sample_rate_, max_block_size_, max_working_channels_);
-  for (auto& limiter : limiters_) {
-    limiter.prepare(sample_rate_, max_block_size_);
-  }
-  rebuild_band_compensation();
+  prepare_multiband("MultibandLimiter", crossover_, scratch_, sample_rate, max_block_size,
+                    max_channels, sample_rate_, max_block_size_, max_working_channels_, prepared_,
+                    [this](double rate, int block, int channels) {
+                      for (auto& limiter : limiters_) limiter.prepare(rate, block);
+                      rebuild_band_compensation(channels);
+                    });
   reset();
 }
 
@@ -86,13 +81,13 @@ int MultibandLimiter::latency_samples_q8() const noexcept {
   return (crossover_.latency_samples() << 8) + band_paths_.latency_samples_q8();
 }
 
-void MultibandLimiter::rebuild_band_compensation() {
+void MultibandLimiter::rebuild_band_compensation(int channels) {
   std::vector<int> latencies(limiters_.size());
   for (size_t band = 0; band < limiters_.size(); ++band) {
     latencies[band] = limiters_[band].latency_samples_q8();
   }
   band_paths_.set_path_latencies_q8(std::move(latencies));
-  band_paths_.ensure_channels(static_cast<size_t>(max_working_channels_));
+  band_paths_.ensure_channels(static_cast<size_t>(channels));
 }
 
 void MultibandLimiter::set_config(const MultibandLimiterConfig& config) {
@@ -123,7 +118,7 @@ void MultibandLimiter::set_config(const MultibandLimiterConfig& config) {
             for (auto& limiter : limiters_) limiter.prepare(sample_rate_, max_block_size_);
           }
         }
-        rebuild_band_compensation();
+        rebuild_band_compensation(max_working_channels_);
       });
 }
 

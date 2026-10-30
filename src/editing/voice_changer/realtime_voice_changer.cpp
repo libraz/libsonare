@@ -3,6 +3,7 @@
 #include <string>
 
 #include "editing/voice_changer/realtime.h"
+#include "streaming/realtime_limits.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
@@ -80,13 +81,19 @@ RealtimeVoiceChanger::RealtimeVoiceChanger(RealtimeVoiceChangerConfig config)
   config_version_.fetch_add(1, std::memory_order_release);
 }
 
+const char* prepare_arguments_error(double sample_rate, int max_block_size,
+                                    int num_channels) noexcept {
+  if (!is_valid_realtime_sample_rate(sample_rate))
+    return "sample_rate must be finite and within the supported range";
+  if (!is_valid_realtime_block_size(max_block_size))
+    return "max_block_size must be positive and within the supported maximum";
+  if (num_channels < 1 || num_channels > 2) return "num_channels must be 1 or 2";
+  return nullptr;
+}
+
 void RealtimeVoiceChanger::prepare(double sample_rate, int max_block_size, int num_channels) {
-  if (!(sample_rate > 0.0))
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
-  if (max_block_size < 0)
-    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
-  if (num_channels < 1 || num_channels > 2)
-    throw SonareException(ErrorCode::InvalidParameter, "num_channels must be 1 or 2");
+  if (const char* refused = prepare_arguments_error(sample_rate, max_block_size, num_channels))
+    throw SonareException(ErrorCode::InvalidParameter, refused);
 
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
@@ -102,7 +109,7 @@ void RealtimeVoiceChanger::prepare(double sample_rate, int max_block_size, int n
   all_notes_off_pending_.store(false, std::memory_order_relaxed);
   all_notes_off_at_.store(0, std::memory_order_relaxed);
   channels_.resize(static_cast<std::size_t>(num_channels_));
-  scratch_.assign(static_cast<std::size_t>(std::max(1, max_block_size_)), 0.0f);
+  scratch_.assign(static_cast<std::size_t>(max_block_size_), 0.0f);
   // Allocation phase: this is the only place buffers may be (re)sized.
   for (auto& channel : channels_) allocate_channel(channel);
   update_derived();
@@ -265,7 +272,7 @@ void RealtimeVoiceChanger::allocate_channel(ChannelState& state) {
 }
 
 int RealtimeVoiceChanger::allocate_transform(ChannelState& state) {
-  const int block = std::max(1, max_block_size_);
+  const int block = max_block_size_;
   state.tracker.prepare(sample_rate_, block, prepared_f0_min_hz_);
   state.shifter.prepare(sample_rate_, block, prepared_f0_min_hz_);
   state.targets.prepare(sample_rate_);
@@ -589,6 +596,8 @@ void RealtimeVoiceChanger::reset_channel(ChannelState& state) {
   state.voice_compensation.clear();
   state.vocoder_compensation.clear();
   state.vocoder_running = false;
+  state.control_phase = 0;
+  state.held_voice = {};
   state.transform_substituted = false;
   state.voice_input_substituted = false;
 }

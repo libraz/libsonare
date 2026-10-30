@@ -3536,6 +3536,37 @@ TEST_CASE("RealtimeEngine places MIDI after a loop wrap at its own device frame"
   CHECK(released);
 }
 
+TEST_CASE("RealtimeEngine keeps clip MIDI inside the loop across an oversized block",
+          "[engine][midi]") {
+  constexpr int kBlock = 64;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  engine.set_tempo(120.0);
+  EventLogInstrument log;
+  REQUIRE(engine.set_midi_instrument(0, &log));
+  engine.set_loop(0.0, 128.0 / 24000.0, true);
+  sonare::midi::MidiClipSchedule clip;
+  clip.id = 1;
+  clip.length_samples = 4096;
+  clip.events = {MidiEvent{100, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                 MidiEvent{200, sonare::midi::make_midi1_note_on(0, 0, 62, 100)}};
+  engine.set_midi_clips({clip});
+  push_transport(engine, sonare::rt::CommandType::kTransportPlay, 0);
+  render_blocks(engine, kBlock, kBlock);
+
+  // 256 frames exceed the prepared block: the timeline still wraps twice inside it.
+  std::vector<float> oversized(256, 0.0f);
+  float* io[] = {oversized.data()};
+  engine.process(io, 1, 256);
+
+  const auto on = log.notes(true);
+  REQUIRE(on.size() == 2);
+  for (const auto& entry : on) CHECK(entry.ump.note_number() == 60);
+  CHECK(log.notes(false).size() == 2);
+  CHECK(engine.midi_sequencer().active_note_count() == 0);
+  engine.set_midi_instrument(0, nullptr);
+}
+
 TEST_CASE("RealtimeEngine restores a controller set before the loop at every wrap",
           "[engine][midi]") {
   constexpr int kBlock = 64;

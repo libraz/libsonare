@@ -24,16 +24,11 @@ void MultibandCompressor::prepare(double sample_rate, int max_block_size) {
 }
 
 void MultibandCompressor::prepare(double sample_rate, int max_block_size, int max_channels) {
-  validate_prepare_args(sample_rate, max_block_size, max_channels, "MultibandCompressor");
-
-  sample_rate_ = sample_rate;
-  max_block_size_ = max_block_size;
-  max_working_channels_ = max_channels;
-  prepared_ = true;
-  prepare_band_split(crossover_, scratch_, sample_rate_, max_block_size_, max_working_channels_);
-  for (auto& compressor : compressors_) {
-    compressor.prepare(sample_rate_, max_block_size_);
-  }
+  prepare_multiband("MultibandCompressor", crossover_, scratch_, sample_rate, max_block_size,
+                    max_channels, sample_rate_, max_block_size_, max_working_channels_, prepared_,
+                    [this](double rate, int block, int /*channels*/) {
+                      for (auto& compressor : compressors_) compressor.prepare(rate, block);
+                    });
   reset();
 }
 

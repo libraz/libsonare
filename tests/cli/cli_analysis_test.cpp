@@ -4,6 +4,8 @@
 #include <catch2/catch_approx.hpp>
 
 #include "cli/cli_test_helpers.h"
+#include "metering/lufs.h"
+#include "util/constants.h"
 
 TEST_CASE("CLI info command", "[cli]") {
   create_test_wav(TEST_WAV);
@@ -121,10 +123,59 @@ TEST_CASE("CLI identifies and warns about downmixed stereo input", "[cli]") {
   REQUIRE(info_code == 0);
   REQUIRE_THAT(info_output, ContainsSubstring("\"channels\": 2"));
 
+  auto [meter_code, meter_output] = exec_command(cli + " meter " + path + " --json -q");
+  REQUIRE(meter_code == 0);
+  REQUIRE_THAT(meter_output, ContainsSubstring("downmixed to mono"));
+
+  // lufs measures every channel, so it has nothing to warn about.
   auto [lufs_code, lufs_output] = exec_command(cli + " lufs " + path + " --json -q");
   REQUIRE(lufs_code == 0);
-  REQUIRE_THAT(lufs_output, ContainsSubstring("downmixed to mono"));
+  REQUIRE_THAT(lufs_output, !ContainsSubstring("downmixed"));
   std::remove(path.c_str());
+}
+
+TEST_CASE("CLI lufs reports the BS.1770 channel sum mastering reports for its input", "[cli]") {
+  constexpr int kRate = 44100;
+  constexpr size_t kFrames = 3 * kRate;
+  std::vector<float> interleaved(2 * kFrames);
+  for (size_t i = 0; i < kFrames; ++i) {
+    const float left = 0.25f * std::sin(sonare::constants::kTwoPi * 1000.0f *
+                                        static_cast<float>(i) / static_cast<float>(kRate));
+    interleaved[2 * i] = left;
+    interleaved[2 * i + 1] = 0.8f * left;
+  }
+  const std::string path = unique_temp_path("_lufs_stereo.wav");
+  const std::string out = unique_temp_path("_lufs_stereo_out.wav");
+  save_wav_multichannel(path, interleaved.data(), kFrames, 2, ChannelLayout::Stereo, kRate);
+
+  const auto number_after = [](const std::string& text, const std::string& key) {
+    const size_t at = text.find("\"" + key + "\":");
+    REQUIRE(at != std::string::npos);
+    return std::strtod(text.c_str() + at + key.size() + 3, nullptr);
+  };
+  const double expected =
+      sonare::metering::lufs_interleaved(interleaved.data(), kFrames, 2, kRate).integrated_lufs;
+
+  auto [lufs_code, lufs_output] = exec_command(CLI + " lufs " + path + " --json -q");
+  auto [master_code, master_output] =
+      exec_command(CLI + " mastering " + path + " -o " + out + " --json -q");
+  std::remove(path.c_str());
+  std::remove(out.c_str());
+  CAPTURE(lufs_output, master_output);
+  REQUIRE(lufs_code == 0);
+  REQUIRE(master_code == 0);
+  const double lufs = number_after(lufs_output, "integrated_lufs");
+  REQUIRE(lufs == Catch::Approx(expected).margin(0.01));
+  REQUIRE(lufs == Catch::Approx(number_after(master_output, "input_lufs")).margin(0.01));
+  // The (L+R)/2 downmix measured as one channel sits about 3 dB below the sum.
+  std::vector<float> mono(kFrames);
+  for (size_t i = 0; i < kFrames; ++i) {
+    mono[i] = 0.5f * (interleaved[2 * i] + interleaved[2 * i + 1]);
+  }
+  const double downmixed =
+      sonare::metering::lufs(sonare::Audio::from_buffer(mono.data(), kFrames, kRate))
+          .integrated_lufs;
+  REQUIRE(lufs > downmixed + 2.0);
 }
 
 TEST_CASE("CLI bpm command", "[cli]") {

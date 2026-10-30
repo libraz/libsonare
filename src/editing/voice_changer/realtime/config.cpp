@@ -1614,6 +1614,8 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
     RealtimeVoiceChangerConfig macro_config;
     if (macros != nullptr && !apply_macro_section(*macros, &macro_config, error)) return false;
     const auto config = realtime_voice_changer_config_from_json(trim_copy(json));
+    // What only the whole configuration can say; the same rule create and set_config apply.
+    if (!validate_realtime_voice_changer_config(config, nullptr, error)) return false;
     if (normalized_json) {
       // Re-attach the caller's own preset identity (id/name/description/category)
       // instead of routing through realtime_voice_changer_config_to_json, whose
@@ -1836,12 +1838,6 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
     std::string normalized_json;
     if (!validate_realtime_voice_changer_preset_json(input, &normalized_json, error)) return false;
     *config = realtime_voice_changer_config_from_json(normalized_json);
-    // The document's ranges were checked above; what remains is what only the whole
-    // configuration can say (a grain engine asked for f0 work, an unreachable warp).
-    if (!validate_realtime_voice_changer_config(*config, nullptr, error)) {
-      *config = {};
-      return false;
-    }
     return true;
   } catch (const std::exception& ex) {
     if (error) *error = ex.what();

@@ -296,8 +296,8 @@ class StreamAnalyzer {
  private:
   StreamConfig config_;
 
-  // Internal sample rate for analysis (downsample if input is higher)
-  // Using 44100 Hz internally ensures consistent results regardless of input sample rate
+  // Inputs above kMaxDirectSampleRate are resampled to kInternalSampleRate; slower inputs are
+  // analyzed at their own rate.
   static constexpr int kInternalSampleRate = kStreamInternalSampleRate;
   static constexpr int kMaxDirectSampleRate = kStreamMaxDirectSampleRate;
   int internal_sample_rate_;  // Actual rate used for analysis

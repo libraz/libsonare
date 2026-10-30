@@ -390,20 +390,17 @@ TEST_CASE("RhythmAnalyzer 6/8 secondary accent is not counted as syncopation",
   // which would inflate the score for compound meters.
   Audio audio = create_6_8_pattern(120.0f, 22050, 8.0f);
 
+  // The candidate set is pinned to 6 so the compound-meter rule is the one under test
+  // whatever the approximate meter detection would have chosen for the click track.
   RhythmConfig config;
   config.start_bpm = 120.0f;
+  config.meter_candidate_numerators = {6};
   RhythmAnalyzer analyzer(audio, config);
 
+  REQUIRE(analyzer.time_signature().numerator == 6);
   REQUIRE(analyzer.syncopation() >= 0.0f);
   REQUIRE(analyzer.syncopation() <= 1.0f);
-  // The position-3-is-strong rule only applies when the analyzer actually
-  // detects compound-duple (numerator 6). Meter detection on a synthetic click
-  // track is approximate, so only enforce the "modest syncopation" guarantee
-  // when 6/8 is detected — that is exactly the case the fix governs.
-  if (analyzer.time_signature().numerator == 6) {
-    INFO("detected 6/8: accents on positions 0 and 3 should not read as syncopation");
-    REQUIRE(analyzer.syncopation() < 0.5f);
-  }
+  REQUIRE(analyzer.syncopation() < 0.5f);
 }
 
 TEST_CASE("Meter estimates over the same beats agree", "[rhythm_analyzer]") {

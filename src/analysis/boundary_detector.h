@@ -7,6 +7,8 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -102,6 +104,28 @@ struct BoundaryConfig {
   bool use_mfcc = true;    ///< Use MFCC features
   bool use_chroma = true;  ///< Use chroma features
 };
+
+/// @brief Refuses a BoundaryConfig outside the argument domain every public surface shares.
+/// @throws SonareException(InvalidParameter) unless n_fft, hop_length, kernel_size, n_mfcc and
+///         n_chroma are positive, threshold, absolute_threshold, peak_distance and
+///         reference_window are finite and non-negative, and at least one feature stream is on.
+inline void validate_boundary_config(const BoundaryConfig& config) {
+  SONARE_CHECK_MSG(config.n_fft > 0 && config.hop_length > 0 && config.kernel_size > 0 &&
+                       config.n_mfcc > 0 && config.n_chroma > 0,
+                   ErrorCode::InvalidParameter,
+                   "BoundaryConfig: n_fft, hop_length, kernel_size, n_mfcc and n_chroma must be "
+                   "positive");
+  // Each is compared against measured values, so a non-finite one accepts or rejects every peak.
+  SONARE_CHECK_MSG(numeric::finite_non_negative(config.threshold) &&
+                       numeric::finite_non_negative(config.absolute_threshold) &&
+                       numeric::finite_non_negative(config.peak_distance) &&
+                       numeric::finite_non_negative(config.reference_window),
+                   ErrorCode::InvalidParameter,
+                   "BoundaryConfig: threshold, absolute_threshold, peak_distance and "
+                   "reference_window must be finite and non-negative");
+  SONARE_CHECK_MSG(config.use_mfcc || config.use_chroma, ErrorCode::InvalidParameter,
+                   "BoundaryConfig: use_mfcc or use_chroma must be set");
+}
 
 /// @brief Detected boundary event.
 struct Boundary {

@@ -701,6 +701,8 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   /// preset. Also called for every part from the control thread at prepare(),
   /// set_soundfont() and reset, where the audio thread is quiescent.
   void refresh_part_rig(uint8_t channel) noexcept;
+  /// Selecting a different drum set on a rhythm part re-initialises that map's per-note edits.
+  void reset_drum_map_on_set_change(const ChannelState& st, uint8_t program) noexcept;
   /// Whether @p channel's notes play the synth fallback rather than a preset.
   bool part_plays_model_floor(uint8_t channel) const noexcept;
   /// Offline render thread: hand the recorder the path this block realises.

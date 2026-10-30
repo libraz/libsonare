@@ -970,6 +970,11 @@ SonareError sonare_engine_set_track_strip_surround_pan(SonareRealtimeEngine* eng
   (void)track_id;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
+  if (!sonare::mixing::surround_azimuth_in_range(pan->azimuth) ||
+      !sonare::mixing::surround_unit_in_range(pan->divergence) ||
+      !sonare::mixing::surround_unit_in_range(pan->lfe)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   const sonare::mixing::SurroundPanParams params{pan->azimuth, pan->elevation, pan->divergence,
                                                  pan->lfe, pan->distance};
