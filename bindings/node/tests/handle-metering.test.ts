@@ -13,6 +13,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   Audio,
+  ErrorCode,
   ebur128LoudnessRange,
   meteringCrestFactorDb,
   meteringDcOffset,
@@ -25,7 +26,7 @@ import {
   meteringSpectrumFrame,
   meteringTruePeakDb,
 } from '../src/index.js';
-import { sine } from './_helpers.js';
+import { expectRefusal, sine } from './_helpers.js';
 
 const SR = 22050;
 
@@ -188,8 +189,8 @@ describe('Audio handle-form metering', () => {
   it('a destroyed handle throws rather than segfaulting', () => {
     const audio = Audio.fromBuffer(makeSine(440, 0.5), SR);
     audio.destroy();
-    expect(() => audio.peakDb()).toThrow('Audio has been destroyed');
-    expect(() => audio.detectClipping()).toThrow('Audio has been destroyed');
-    expect(() => audio.spectrumFrame(0)).toThrow('Audio has been destroyed');
+    expectRefusal(() => audio.peakDb(), ErrorCode.InvalidState, /Audio has been destroyed/);
+    expectRefusal(() => audio.detectClipping(), ErrorCode.InvalidState, /Audio has been destroyed/);
+    expectRefusal(() => audio.spectrumFrame(0), ErrorCode.InvalidState, /Audio has been destroyed/);
   });
 });

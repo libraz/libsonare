@@ -64,7 +64,7 @@ export class RealtimeVoiceChanger {
   }
 
   /**
-   * Channel-blocks in which the chain discarded its own state because a
+   * Blocks in which the chain discarded its own state because a
    * non-finite value had reached it.
    *
    * Advisory telemetry, and the only thing that separates a degraded stream
@@ -117,19 +117,19 @@ export class RealtimeVoiceChanger {
   /** {@link processInterleaved} with one mono `carrier` of `frames` samples shared by every channel. */
   processInterleavedWithCarrier(
     input: Float32Array,
-    channels: 1 | 2,
     carrier: Float32Array,
+    channels: 1 | 2,
   ): Float32Array {
-    return this.native.processInterleavedWithCarrier(input, channels, carrier);
+    return this.native.processInterleavedWithCarrier(input, carrier, channels);
   }
 
   processInterleavedWithCarrierInto(
     input: Float32Array,
-    channels: 1 | 2,
     carrier: Float32Array,
+    channels: 1 | 2,
     output: Float32Array,
   ): void {
-    this.native.processInterleavedWithCarrierInto(input, channels, carrier, output);
+    this.native.processInterleavedWithCarrierInto(input, carrier, channels, output);
   }
 
   /** {@link processPlanarStereo} with one mono `carrier` shared by both channels. */
@@ -147,8 +147,8 @@ export class RealtimeVoiceChanger {
    * `1 + harmonyVoices` of them. Holding a held note again refreshes it.
    *
    * @param note MIDI note, an integer in [0, 127] (`RangeError` otherwise).
-   * @param velocity Strength in (0, 1], default 1 (`RangeError` for 0, NaN or above 1; release a
-   *   note with {@link noteOff}).
+   * @param velocity Validated only, in (0, 1], default 1 (`RangeError` for 0, NaN or above 1; release
+   *   a note with {@link noteOff}). It does not change the sound.
    * @throws SonareError `InvalidState` on a grain-engine changer, a destroyed one, or when the
    *   note queue is full (the event is dropped).
    */

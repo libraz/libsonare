@@ -348,8 +348,8 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
       }
       config.scale_mode_mask = named_mask;
     } else {
-      config.scale_mode_mask = static_cast<uint32_t>(sonare_node::IntProperty(
-          opts, "scaleModeMask", static_cast<int>(config.scale_mode_mask)));
+      config.scale_mode_mask =
+          sonare_node::Uint32Property(opts, "scaleModeMask", config.scale_mode_mask);
     }
     config.scale_reference_midi =
         sonare_node::FloatProperty(opts, "referenceMidi", config.scale_reference_midi);

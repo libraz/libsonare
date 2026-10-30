@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Mixer, mixingScenePresetJson } from '../src/index.js';
+import { expectRefusal } from './_helpers.js';
 
 const BLOCK_SIZE = 8;
 const SAMPLE_RATE = 48000;
@@ -105,6 +106,12 @@ describe('Mixer runtime methods', () => {
     expect(host.surroundPan.divergence).toBeCloseTo(0.25, 5);
     expect(host.surroundPan.lfe).toBeCloseTo(0.5, 5);
     expect(host.surroundPan.distance).toBeCloseTo(1, 5);
+  });
+
+  it('refuses an out-of-range surround pan instead of clamping it', () => {
+    for (const pan of [{ azimuth: 181 }, { azimuth: -181 }, { divergence: 1.5 }, { lfe: -0.1 }]) {
+      expectRefusal(() => mixer.setSurroundPan('host', pan), RangeError);
+    }
   });
 
   it('returns a numeric index from addSend and accepts setSendDb', () => {

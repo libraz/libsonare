@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { ErrorCode } from '../src/errors.js';
 import {
   RealtimeVoiceChanger,
+  type RealtimeVoiceChangerConfig,
   realtimeVoiceChangerPresetConfig,
   realtimeVoiceChangerPresetJson,
 } from '../src/index.js';
+import { expectRefusal } from './_helpers.js';
 
 describe('RealtimeVoiceChanger flat POD setConfig', () => {
   it('applies every field of a flat preset POD, not just the root fields', () => {
@@ -39,6 +42,20 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
       /missing field|field must/i,
     );
     vc.destroy();
+  });
+
+  it('reports a refused preset-or-config document as InvalidFormat', () => {
+    const partial = { schemaVersion: 1, dsp: { retune: { semitones: 3 } } } as never;
+    expectRefusal(
+      () => new RealtimeVoiceChanger({ sampleRate: 48000, preset: partial }),
+      ErrorCode.InvalidFormat,
+    );
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000 });
+    try {
+      expectRefusal(() => vc.setConfig(partial), ErrorCode.InvalidFormat);
+    } finally {
+      vc.destroy();
+    }
   });
 
   it('accepts a flat preset POD in the constructor', () => {
@@ -116,6 +133,9 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
     const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
     const { formantMode: _omitted, ...partial } = pod;
     const podWithoutMode = partial as unknown as typeof pod;
+    // @ts-expect-error formantMode is required on the flat POD, as the runtime enforces
+    const typed: RealtimeVoiceChangerConfig = partial;
+    expect(typed).toBe(partial);
     expect(() => new RealtimeVoiceChanger({ sampleRate: 48000, preset: podWithoutMode })).toThrow(
       TypeError,
     );

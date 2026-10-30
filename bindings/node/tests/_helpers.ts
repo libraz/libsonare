@@ -7,6 +7,8 @@
  */
 
 import { writeFileSync } from 'node:fs';
+import { expect } from 'vitest';
+import { type ErrorCode, isSonareError } from '../src/errors.js';
 
 export interface SineOptions {
   /** Sample rate in Hz (default 44100). */
@@ -102,4 +104,36 @@ export function writePcm16Wav(filePath: string, planes: Float32Array[], sampleRa
     }
   }
   writeFileSync(filePath, wav);
+}
+
+/**
+ * Assert that `run` throws the refusal a cause maps to, checking class and code together.
+ *
+ * A refused argument is a plain `TypeError` / `RangeError` with no `SonareError` code; every other
+ * failure is a coded `SonareError`. Pass the error class for the first and the {@link ErrorCode}
+ * for the second, so a wrong class or a wrong code fails the test and a message alone never passes.
+ * `message` additionally pins which refusal of that class fired.
+ */
+export function expectRefusal(
+  run: () => unknown,
+  expected: ErrorConstructor | ErrorCode,
+  message?: RegExp,
+): void {
+  let caught: unknown;
+  try {
+    run();
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught, 'expected the call to throw').toBeDefined();
+  if (message !== undefined) {
+    expect((caught as Error).message).toMatch(message);
+  }
+  if (typeof expected === 'number') {
+    expect(isSonareError(caught)).toBe(true);
+    expect((caught as { code: number }).code).toBe(expected);
+    return;
+  }
+  expect(caught).toBeInstanceOf(expected);
+  expect(isSonareError(caught)).toBe(false);
 }

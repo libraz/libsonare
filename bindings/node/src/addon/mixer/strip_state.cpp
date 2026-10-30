@@ -14,7 +14,7 @@ SonareStrip* MixerWrap::ResolveStrip(const Napi::CallbackInfo& info, const Napi:
   }
   SonareStrip* strip = nullptr;
   if (ref.IsNumber()) {
-    const size_t index = static_cast<size_t>(node_narrow_int64(env, ref, "strip"));
+    const size_t index = node_narrow_uint32(env, ref, "strip");
     strip = sonare_mixer_strip_at(mixer_, index);
     if (strip == nullptr) {
       Napi::RangeError::New(env, "mixer strip index out of range").ThrowAsJavaScriptException();
@@ -36,6 +36,7 @@ SonareStrip* MixerWrap::ResolveStrip(const Napi::CallbackInfo& info, const Napi:
 Napi::Value MixerWrap::SetInputTrimDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 2 || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, db: number)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -56,6 +57,7 @@ Napi::Value MixerWrap::SetInputTrimDb(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::SetFaderDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 2 || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, db: number)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -75,6 +77,7 @@ Napi::Value MixerWrap::SetFaderDb(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::SetPan(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 2 || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, pan: number, panMode?: number)")
         .ThrowAsJavaScriptException();
@@ -100,6 +103,7 @@ Napi::Value MixerWrap::SetPan(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::SetWidth(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 2 || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, width: number)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -119,6 +123,7 @@ Napi::Value MixerWrap::SetWidth(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::SetMuted(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 2 || !info[1].IsBoolean()) {
     Napi::TypeError::New(env, "Expected (strip, muted: boolean)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -138,6 +143,7 @@ Napi::Value MixerWrap::SetMuted(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::SetSoloed(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 2 || !info[1].IsBoolean()) {
     Napi::TypeError::New(env, "Expected (strip, soloed: boolean)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -157,6 +163,7 @@ Napi::Value MixerWrap::SetSoloed(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::SetSoloSafe(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 2 || !info[1].IsBoolean()) {
     Napi::TypeError::New(env, "Expected (strip, soloSafe: boolean)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -176,6 +183,7 @@ Napi::Value MixerWrap::SetSoloSafe(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::SetPolarityInvert(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 3 || !info[1].IsBoolean() || !info[2].IsBoolean()) {
     Napi::TypeError::New(env, "Expected (strip, invertLeft: boolean, invertRight: boolean)")
         .ThrowAsJavaScriptException();
@@ -198,6 +206,7 @@ Napi::Value MixerWrap::SetPolarityInvert(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::SetPanLaw(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 2 || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, panLaw: number)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -218,6 +227,7 @@ Napi::Value MixerWrap::SetPanLaw(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::SetChannelDelaySamples(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 2 || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, delaySamples: number)")
         .ThrowAsJavaScriptException();
@@ -239,6 +249,7 @@ Napi::Value MixerWrap::SetChannelDelaySamples(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::SetVcaOffsetDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 2 || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, offsetDb: number)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -259,6 +270,7 @@ Napi::Value MixerWrap::SetVcaOffsetDb(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::SetDualPan(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 3 || !info[1].IsNumber() || !info[2].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, leftPan: number, rightPan: number)")
         .ThrowAsJavaScriptException();
@@ -281,6 +293,7 @@ Napi::Value MixerWrap::SetDualPan(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::SetSurroundPan(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 2 || !info[1].IsObject()) {
     Napi::TypeError::New(env, "Expected (strip, pan: SurroundPan)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -307,6 +320,7 @@ Napi::Value MixerWrap::SetSurroundPan(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::Settle(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 1) {
     Napi::TypeError::New(env, "Expected (strip)").ThrowAsJavaScriptException();
     return env.Undefined();

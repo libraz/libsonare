@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { masteringRepairDeclick, masteringRepairDenoiseClassical } from '../src/index.js';
+import { expectRefusal } from './_helpers.js';
 
 const SR = 22050;
 
@@ -105,11 +106,21 @@ describe('masteringRepairDenoiseClassical (Node)', () => {
   });
 
   it('rejects unknown string enums', () => {
-    expect(() =>
-      masteringRepairDenoiseClassical(noisy, SR, { mode: 'not-a-mode' as never }),
-    ).toThrow(/unknown denoise mode/i);
-    expect(() =>
-      masteringRepairDenoiseClassical(noisy, SR, { noiseEstimator: 'not-an-estimator' as never }),
-    ).toThrow(/unknown denoise noise estimator/i);
+    expectRefusal(
+      () => masteringRepairDenoiseClassical(noisy, SR, { mode: 'not-a-mode' as never }),
+      RangeError,
+      /mode/,
+    );
+    expectRefusal(
+      () =>
+        masteringRepairDenoiseClassical(noisy, SR, { noiseEstimator: 'not-an-estimator' as never }),
+      RangeError,
+      /noiseEstimator/,
+    );
+    expectRefusal(
+      () => masteringRepairDenoiseClassical(noisy, SR, { mode: 3 as never }),
+      TypeError,
+      /mode/,
+    );
   });
 });

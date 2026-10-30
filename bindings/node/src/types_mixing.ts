@@ -27,7 +27,8 @@ export type PanMode = 'balance' | 'stereoPan' | 'stereo-pan' | 'dualPan' | 'dual
 /**
  * Surround pan position for a strip feeding a >2-channel bus. Phase 1 honors
  * `azimuth`/`divergence`/`lfe`; `elevation`/`distance` are reserved. All fields
- * are optional and default to a centered point source.
+ * are optional and default to a centered point source. A value outside the
+ * documented range is refused with a `RangeError`, not clamped.
  */
 export interface SurroundPan {
   /** -180..180 deg, 0 = front-center, positive = right. */

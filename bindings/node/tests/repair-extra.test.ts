@@ -15,6 +15,7 @@ import {
   masteringRepairDereverbConfigForRoom,
   masteringRepairTrimSilence,
 } from '../src/index.js';
+import { expectRefusal } from './_helpers.js';
 
 const SR = 22050;
 
@@ -80,8 +81,10 @@ describe('masteringRepairDecrackle (Node)', () => {
 
   it('rejects unknown mode', () => {
     const samples = crackledSamples();
-    expect(() => masteringRepairDecrackle(samples, SR, { mode: 'not-a-mode' as never })).toThrow(
-      /unknown decrackle mode/i,
+    expectRefusal(
+      () => masteringRepairDecrackle(samples, SR, { mode: 'not-a-mode' as never }),
+      RangeError,
+      /mode/,
     );
   });
 });
@@ -102,6 +105,19 @@ describe('masteringRepairDehum (Node)', () => {
     const samples = hummingSamples();
     const out = masteringRepairDehum(samples, SR);
     expect(out.length).toBe(samples.length);
+  });
+
+  it('applies the mode on the mono path and refuses an unknown or mistyped one', () => {
+    const samples = hummingSamples();
+    const subtract = masteringRepairDehum(samples, SR, { mode: 'subtract' });
+    const notch = masteringRepairDehum(samples, SR, { mode: 'notch' });
+    expect(notch.some((value, i) => Math.abs(value - (subtract[i] ?? 0)) > 1e-6)).toBe(true);
+    expectRefusal(
+      () => masteringRepairDehum(samples, SR, { mode: 'bogus' as never }),
+      RangeError,
+      /mode/,
+    );
+    expectRefusal(() => masteringRepairDehum(samples, SR, { mode: 3 as never }), TypeError, /mode/);
   });
 
   it('adaptive tracking', () => {
@@ -312,8 +328,10 @@ describe('masteringRepairTrimSilence (Node)', () => {
 
   it('rejects unknown mode and negative padding', () => {
     const samples = withSilence();
-    expect(() => masteringRepairTrimSilence(samples, SR, { mode: 'not-a-mode' as never })).toThrow(
-      /unknown trim silence mode/i,
+    expectRefusal(
+      () => masteringRepairTrimSilence(samples, SR, { mode: 'not-a-mode' as never }),
+      RangeError,
+      /mode/,
     );
     expect(() => masteringRepairTrimSilence(samples, SR, { paddingSamples: -1 })).toThrow(
       /paddingSamples must be non-negative/i,

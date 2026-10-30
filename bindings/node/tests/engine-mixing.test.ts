@@ -234,6 +234,21 @@ describe('RealtimeEngine native binding', () => {
     engine.destroy();
   });
 
+  it('refuses an out-of-range surround pan on a track strip', () => {
+    const engine = new RealtimeEngine(48000, 256);
+    try {
+      engine.setTrackLanes([{ trackId: 10 }]);
+      engine.setTrackStripJson(
+        10,
+        '{"version":1,"strips":[{"id":"s"}],"buses":[],"connections":[]}',
+      );
+      expectArgumentRefusal(() => engine.setTrackStripSurroundPan(10, { azimuth: 200 }));
+      expectArgumentRefusal(() => engine.setTrackStripSurroundPan(10, { lfe: 2 }));
+    } finally {
+      engine.destroy();
+    }
+  });
+
   it('moves a lane across surround planes live with setTrackStripSurroundPan', () => {
     const frames = 256;
     const blocks = 16;

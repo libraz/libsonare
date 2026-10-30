@@ -456,7 +456,7 @@ describe('bounce fields whose value the render cannot report', () => {
     // leaves the caller no way to learn the value was not the one they asked for.
     const call = () => onProject(({ project }) => project.bounce({ blockSize: 0.5 }));
     expect(call).toThrow(RangeError);
-    expect(call).toThrow(/blockSize must be an integer/);
+    expect(call).toThrow(/blockSize must be a whole number/);
   });
 
   it('accepts no sample rate but the project rate, which is what zero selects', () => {

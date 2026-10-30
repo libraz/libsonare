@@ -1,4 +1,4 @@
-import type { MelSpectrogramRequest } from './feature_spectral.js';
+import type { StftRequest } from './feature_spectral.js';
 import type { ValuesRequest } from './feature_units.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { addon } from './native.js';
@@ -41,8 +41,10 @@ export interface PlpRequest {
   tempoMax?: number;
   winLength?: number;
 }
-export interface OnsetEnvelopeRequest extends MelSpectrogramRequest {}
-export interface OnsetStrengthMultiRequest extends MelSpectrogramRequest {
+export interface OnsetEnvelopeRequest extends StftRequest {
+  nMels?: number;
+}
+export interface OnsetStrengthMultiRequest extends OnsetEnvelopeRequest {
   nBands?: number;
 }
 

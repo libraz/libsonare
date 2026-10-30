@@ -169,3 +169,21 @@ describe('enum ordinal coercion', () => {
     });
   });
 });
+
+describe('resolveEnumOrdinal resolves declared names only', () => {
+  const values = { off: 0, on: 1 };
+
+  it('refuses names inherited from the prototype as a RangeError', () => {
+    for (const name of ['toString', 'constructor', '__proto__', 'hasOwnProperty']) {
+      expect(() => resolveEnumOrdinal(name, values, 'mode')).toThrow(RangeError);
+    }
+    expect(resolveEnumOrdinal('on', values, 'mode')).toBe(1);
+  });
+
+  it('refuses an unknown name as RangeError and a non-name, non-ordinal as TypeError', () => {
+    expect(() => resolveEnumOrdinal('nope', values, 'mode')).toThrow(RangeError);
+    for (const bad of [null, undefined, true, {}, []]) {
+      expect(() => resolveEnumOrdinal(bad, values, 'mode')).toThrow(TypeError);
+    }
+  });
+});

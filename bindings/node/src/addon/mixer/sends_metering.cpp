@@ -63,6 +63,7 @@ Napi::Object MeterSnapshotToObject(Napi::Env env, const SonareMixMeterSnapshot& 
 Napi::Value MixerWrap::AddSend(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 3 || !info[1].IsString() || !info[2].IsString()) {
     Napi::TypeError::New(
         env, "Expected (strip, sendId: string, destinationBusId: string, sendDb?, timing?)")
@@ -94,6 +95,7 @@ Napi::Value MixerWrap::AddSend(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::SetSendDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 3 || !info[1].IsNumber() || !info[2].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, sendIndex: number, sendDb: number)")
         .ThrowAsJavaScriptException();
@@ -103,8 +105,7 @@ Napi::Value MixerWrap::SetSendDb(const Napi::CallbackInfo& info) {
   if (strip == nullptr) {
     return env.Undefined();
   }
-  const size_t send_index =
-      static_cast<size_t>(sonare_node::node_narrow_int64(env, info[1], "sendIndex"));
+  const size_t send_index = sonare_node::node_narrow_uint32(env, info[1], "sendIndex");
   SonareError err =
       sonare_strip_set_send_db(strip, send_index, node_narrow_finite_float(env, info[2], "sendDb"));
   if (err != SONARE_OK) {
@@ -117,6 +118,7 @@ Napi::Value MixerWrap::SetSendDb(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::RemoveSend(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 2 || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, sendIndex: number)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -125,8 +127,7 @@ Napi::Value MixerWrap::RemoveSend(const Napi::CallbackInfo& info) {
   if (strip == nullptr) {
     return env.Undefined();
   }
-  const unsigned int send_index = static_cast<unsigned int>(
-      sonare_node::node_narrow_int64(env, info[1], sonare_node::node_arg_label(1).c_str()));
+  const unsigned int send_index = sonare_node::node_narrow_uint32(env, info[1], "sendIndex");
   SonareError err = sonare_strip_remove_send(strip, send_index);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to remove strip send: ");
@@ -138,6 +139,7 @@ Napi::Value MixerWrap::RemoveSend(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::StripMeter(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 1) {
     Napi::TypeError::New(env, "Expected (strip)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -159,6 +161,7 @@ Napi::Value MixerWrap::StripMeter(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::BusMeter(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 1 || !info[0].IsString()) {
     Napi::TypeError::New(env, "Expected (busId: string)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -177,6 +180,7 @@ Napi::Value MixerWrap::BusMeter(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::BusNonFiniteDiscardCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 1 || !info[0].IsString()) {
     Napi::TypeError::New(env, "Expected (busId: string)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -197,6 +201,7 @@ Napi::Value MixerWrap::BusNonFiniteDiscardCount(const Napi::CallbackInfo& info) 
 Napi::Value MixerWrap::MeterTap(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 2 || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, tap: number)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -220,6 +225,7 @@ Napi::Value MixerWrap::MeterTap(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::ReadGoniometerLatest(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 2 || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, maxPoints: number)").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -254,6 +260,7 @@ Napi::Value MixerWrap::ReadGoniometerLatest(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::StripNonFiniteDiscardCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 1) {
     Napi::TypeError::New(env, "Expected (strip)").ThrowAsJavaScriptException();
     return env.Undefined();

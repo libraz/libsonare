@@ -242,6 +242,7 @@ Napi::Value MixerWrap::VcaGroupCount(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::ScheduleFaderAutomation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 3 || !info[1].IsNumber() || !info[2].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, samplePos, faderDb, curve?)")
         .ThrowAsJavaScriptException();
@@ -266,6 +267,7 @@ Napi::Value MixerWrap::ScheduleFaderAutomation(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::SchedulePanAutomation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 3 || !info[1].IsNumber() || !info[2].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, samplePos, pan, curve?)")
         .ThrowAsJavaScriptException();
@@ -290,6 +292,7 @@ Napi::Value MixerWrap::SchedulePanAutomation(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::ScheduleWidthAutomation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 3 || !info[1].IsNumber() || !info[2].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, samplePos, width, curve?)")
         .ThrowAsJavaScriptException();
@@ -314,6 +317,7 @@ Napi::Value MixerWrap::ScheduleWidthAutomation(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::ScheduleSendAutomation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   if (info.Length() < 4 || !info[1].IsNumber() || !info[2].IsNumber() || !info[3].IsNumber()) {
     Napi::TypeError::New(env, "Expected (strip, sendIndex, samplePos, db, curve?)")
         .ThrowAsJavaScriptException();
@@ -323,8 +327,7 @@ Napi::Value MixerWrap::ScheduleSendAutomation(const Napi::CallbackInfo& info) {
   if (strip == nullptr) {
     return env.Undefined();
   }
-  const size_t send_index =
-      static_cast<size_t>(sonare_node::node_narrow_int64(env, info[1], "sendIndex"));
+  const size_t send_index = sonare_node::node_narrow_uint32(env, info[1], "sendIndex");
   const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[2], "samplePos");
   const float db = node_narrow_finite_float(env, info[3], "db");
   int curve{};

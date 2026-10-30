@@ -250,7 +250,7 @@ describe('a bounce option whose zero derives the value', () => {
     const omitted = bounce('blockSize', undefined);
     expect(bounce('blockSize', 64)).toBe(omitted);
     expect(() => bounce('blockSize', 0.5)).toThrow(RangeError);
-    expect(() => bounce('blockSize', 0.5)).toThrow(/blockSize must be an integer/);
+    expect(() => bounce('blockSize', 0.5)).toThrow(/blockSize must be a whole number/);
   });
 });
 

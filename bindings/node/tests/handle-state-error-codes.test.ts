@@ -54,6 +54,20 @@ describe('a destroyed native handle reports InvalidState on every method', () =>
     ['Project', () => new addon.Project()],
     ['RealtimeEngine', () => new addon.RealtimeEngine(48000, 128)],
     ['StreamingRetune', () => new addon.StreamingRetune({})],
+    [
+      'Mixer',
+      () =>
+        new addon.Mixer(
+          JSON.stringify({
+            version: 1,
+            buses: [{ id: 'master', role: 'master', inserts: [] }],
+            connections: [{ source: 's', destination: 'master' }],
+            strips: [{ id: 's', inserts: [], sends: [] }],
+          }),
+          48000,
+          512,
+        ),
+    ],
   ];
 
   for (const [label, make] of handles) {

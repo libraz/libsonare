@@ -84,37 +84,53 @@ std::vector<sonare::mastering::api::Param> ParseChainConfigFromJs(const Napi::Va
 
 sonare::mastering::eq::EqBandType ParseBandType(const std::string& value) {
   const auto parsed = sonare::mastering::eq::band_type_from_string(value);
-  if (!parsed) throw std::runtime_error("unknown EQ band type: " + value);
+  if (!parsed) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "unknown EQ band type: " + value);
+  }
   return *parsed;
 }
 
 sonare::mastering::eq::BiquadCoeffMode ParseCoeffMode(const std::string& value) {
   const auto parsed = sonare::mastering::eq::coeff_mode_from_string(value);
-  if (!parsed) throw std::runtime_error("unknown EQ coefficient mode: " + value);
+  if (!parsed) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "unknown EQ coefficient mode: " + value);
+  }
   return *parsed;
 }
 
 sonare::mastering::eq::StereoPlacement ParsePlacement(const std::string& value) {
   const auto parsed = sonare::mastering::eq::placement_from_string(value);
-  if (!parsed) throw std::runtime_error("unknown EQ placement: " + value);
+  if (!parsed) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "unknown EQ placement: " + value);
+  }
   return *parsed;
 }
 
 sonare::mastering::eq::PhaseMode ParseBandPhase(const std::string& value) {
   const auto parsed = sonare::mastering::eq::phase_mode_from_string(value);
-  if (!parsed) throw std::runtime_error("unknown EQ band phase mode: " + value);
+  if (!parsed) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "unknown EQ band phase mode: " + value);
+  }
   return *parsed;
 }
 
 sonare::mastering::eq::PhaseMode ParsePhaseModeInt(int mode) {
   const auto parsed = sonare::mastering::eq::phase_mode_from_int(mode);
-  if (!parsed) throw std::runtime_error("unknown EQ phase mode");
+  if (!parsed) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown EQ phase mode");
+  }
   return *parsed;
 }
 
 sonare::mastering::eq::StereoPlacement ParsePlacementInt(int placement) {
   const auto parsed = sonare::mastering::eq::placement_from_int(placement);
-  if (!parsed) throw std::runtime_error("unknown EQ band placement");
+  if (!parsed) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown EQ band placement");
+  }
   return *parsed;
 }
 

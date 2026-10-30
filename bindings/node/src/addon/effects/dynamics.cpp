@@ -22,38 +22,27 @@ namespace {
 sonare::mastering::dynamics::DetectorMode parse_compressor_detector(
     Napi::Env env, const Napi::Object& options,
     sonare::mastering::dynamics::DetectorMode fallback) {
+  using sonare::mastering::dynamics::DetectorMode;
+  static constexpr NodeChoice<DetectorMode> kChoices[] = {{"peak", DetectorMode::Peak},
+                                                          {"rms", DetectorMode::Rms},
+                                                          {"log_rms", DetectorMode::LogRms},
+                                                          {"logrms", DetectorMode::LogRms}};
   Napi::Value value = options.Get("detector");
   if (value.IsUndefined() || value.IsNull()) return fallback;
   if (value.IsNumber()) {
-    int mode = node_narrow_int(value.Env(), value, "mode");
-    switch (mode) {
+    switch (node_narrow_int(env, value, "detector")) {
       case 0:
-        return sonare::mastering::dynamics::DetectorMode::Peak;
+        return DetectorMode::Peak;
       case 1:
-        return sonare::mastering::dynamics::DetectorMode::Rms;
+        return DetectorMode::Rms;
       case 2:
-        return sonare::mastering::dynamics::DetectorMode::LogRms;
+        return DetectorMode::LogRms;
       default:
-        throw std::runtime_error("unknown compressor detector mode");
+        throw Napi::RangeError::New(env, "detector must be 0, 1 or 2");
     }
   }
-  if (value.IsString()) {
-    std::string s = node_narrow_string(env, value, "mode");
-    std::transform(s.begin(), s.end(), s.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    if (s == "peak") return sonare::mastering::dynamics::DetectorMode::Peak;
-    if (s == "rms") return sonare::mastering::dynamics::DetectorMode::Rms;
-    if (s == "log_rms" || s == "logrms") return sonare::mastering::dynamics::DetectorMode::LogRms;
-    throw std::runtime_error("unknown compressor detector mode: " +
-                             node_narrow_string(env, value, "mode"));
-  }
-  // Throw rather than ThrowAsJavaScriptException()+return: the latter only
-  // schedules a pending JS exception and lets C++ control fall through, so the
-  // caller would keep running with `fallback` while an exception is pending. The
-  // sibling error paths above all throw std::runtime_error; match them so the
-  // N-API wrapper converts it and stops here.
-  (void)env;
-  throw std::runtime_error("detector must be a string or number");
+  if (!value.IsString()) throw Napi::TypeError::New(env, "detector must be a string or number");
+  return node_narrow_choice(env, value, "detector", kChoices);
 }
 
 template <typename Processor>

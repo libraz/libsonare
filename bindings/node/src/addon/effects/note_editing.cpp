@@ -1,6 +1,5 @@
 #include <cstdint>
 #include <cstring>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -144,7 +143,8 @@ void ReadNotes(const char* fn, const Napi::Array& js_notes, std::vector<SonareNo
   for (uint32_t i = 0; i < count; ++i) {
     Napi::Value item = js_notes.Get(i);
     if (!item.IsObject() || item.IsArray()) {
-      throw std::runtime_error(std::string(fn) + ": each note must be a plain object");
+      throw Napi::TypeError::New(js_notes.Env(),
+                                 std::string(fn) + ": each note must be a plain object");
     }
     Napi::Object note = item.As<Napi::Object>();
     SonareNoteObject& row = (*notes)[i];
@@ -168,7 +168,8 @@ void RequireSliceInRange(const char* fn, const char* field, int64_t offset, int6
                          size_t pool_count) {
   if (span < 0 || offset < 0 ||
       static_cast<uint64_t>(offset) + static_cast<uint64_t>(span) > pool_count) {
-    throw std::runtime_error(std::string(fn) + ": " + field + " slice out of range");
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  std::string(fn) + ": " + field + " slice out of range");
   }
 }
 
@@ -205,7 +206,7 @@ bool ReadNoteTargets(Napi::Env env, const char* fn, const Napi::Array& js_target
   for (uint32_t i = 0; i < count; ++i) {
     Napi::Value item = js_targets.Get(i);
     if (!item.IsObject() || item.IsArray()) {
-      throw std::runtime_error(std::string(fn) + ": each target must be a plain object");
+      throw Napi::TypeError::New(env, std::string(fn) + ": each target must be a plain object");
     }
     Napi::Object target = item.As<Napi::Object>();
     SonareNoteTarget& row = (*targets)[i];
@@ -302,7 +303,8 @@ void ReadPercussiveEventEdit(const char* fn, const Napi::Object& event,
     return;
   }
   if (!edit_value.IsObject() || edit_value.IsArray()) {
-    throw std::runtime_error(std::string(fn) + ": event.edit must be a plain object");
+    throw Napi::TypeError::New(event.Env(),
+                               std::string(fn) + ": event.edit must be a plain object");
   }
   Napi::Object edit = edit_value.As<Napi::Object>();
   out->time_offset_samples = Int64Property(edit, "timeOffsetSamples", 0);
@@ -322,7 +324,8 @@ void ReadPercussiveEvents(const char* fn, const Napi::Array& js_events,
   for (uint32_t i = 0; i < count; ++i) {
     Napi::Value item = js_events.Get(i);
     if (!item.IsObject() || item.IsArray()) {
-      throw std::runtime_error(std::string(fn) + ": each event must be a plain object");
+      throw Napi::TypeError::New(js_events.Env(),
+                                 std::string(fn) + ": each event must be a plain object");
     }
     Napi::Object event = item.As<Napi::Object>();
     SonarePercussiveEvent& row = (*events)[i];
@@ -539,9 +542,7 @@ Napi::Value SonareWrap::SplitNote(const Napi::CallbackInfo& info) {
   auto f0 = info[2].As<Napi::Float32Array>();
   const size_t n_frames = f0.ElementLength();
   const float frame_rate = node_narrow_finite_float(env, info[3], "frameRate");
-  // A negative index arrives as a size_t past every note, which the C ABI
-  // rejects as the out-of-range index it is.
-  const size_t index = static_cast<size_t>(node_narrow_int64(env, info[5], "index"));
+  const size_t index = node_narrow_uint32(env, info[5], "index");
   const int32_t frame = node_narrow_int(env, info[6], "frame");
 
   NoteTrackOptions options;
@@ -589,8 +590,8 @@ Napi::Value SonareWrap::MergeNotes(const Napi::CallbackInfo& info) {
   auto f0 = info[2].As<Napi::Float32Array>();
   const size_t n_frames = f0.ElementLength();
   const float frame_rate = node_narrow_finite_float(env, info[3], "frameRate");
-  const size_t first = static_cast<size_t>(node_narrow_int64(env, info[5], "first"));
-  const size_t last = static_cast<size_t>(node_narrow_int64(env, info[6], "last"));
+  const size_t first = node_narrow_uint32(env, info[5], "first");
+  const size_t last = node_narrow_uint32(env, info[6], "last");
 
   NoteTrackOptions options;
   if (!ReadNoteTrackOptions(env, info[7], n_frames, &options)) {

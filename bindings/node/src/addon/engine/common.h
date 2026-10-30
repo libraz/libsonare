@@ -297,6 +297,7 @@ using sonare_node::RequiredIntArg;
 using sonare_node::RequiredIntProperty;
 using sonare_node::RequiredMidiByteValue;
 using sonare_node::RequiredStringProperty;
+using sonare_node::RequiredStringValue;
 using sonare_node::RequiredUint32Arg;
 using sonare_node::RequiredUint32Property;
 using sonare_node::RequiredWordValue;

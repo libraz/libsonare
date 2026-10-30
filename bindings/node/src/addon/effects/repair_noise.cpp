@@ -1,10 +1,7 @@
 /// @file
 /// @brief Node bindings for the broadband and tonal noise repairs: denoise, dehum.
 
-#include <algorithm>
-#include <cctype>
 #include <cstddef>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -23,51 +20,35 @@ namespace {
 
 sonare::mastering::repair::DenoiseMode parse_denoise_mode(
     const Napi::Object& options, sonare::mastering::repair::DenoiseMode fallback) {
-  Napi::Value value = options.Get("mode");
-  if (value.IsUndefined() || value.IsNull()) return fallback;
-  if (!value.IsString()) throw std::runtime_error("denoise mode must be a string");
-  std::string s = node_narrow_string(value.Env(), value, "mode");
-  std::transform(s.begin(), s.end(), s.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  if (s == "logmmse" || s == "log_mmse" || s == "lsa") {
-    return sonare::mastering::repair::DenoiseMode::LogMmse;
-  }
-  if (s == "mmsestsa" || s == "mmse_stsa" || s == "stsa") {
-    return sonare::mastering::repair::DenoiseMode::MmseStsa;
-  }
-  if (s == "spectralsubtraction" || s == "spectral_subtraction" || s == "ss") {
-    return sonare::mastering::repair::DenoiseMode::SpectralSubtraction;
-  }
-  throw std::runtime_error("unknown denoise mode: " +
-                           node_narrow_string(value.Env(), value, "mode"));
+  using sonare::mastering::repair::DenoiseMode;
+  static constexpr NodeChoice<DenoiseMode> kChoices[] = {
+      {"logmmse", DenoiseMode::LogMmse},
+      {"log_mmse", DenoiseMode::LogMmse},
+      {"lsa", DenoiseMode::LogMmse},
+      {"mmsestsa", DenoiseMode::MmseStsa},
+      {"mmse_stsa", DenoiseMode::MmseStsa},
+      {"stsa", DenoiseMode::MmseStsa},
+      {"spectralsubtraction", DenoiseMode::SpectralSubtraction},
+      {"spectral_subtraction", DenoiseMode::SpectralSubtraction},
+      {"ss", DenoiseMode::SpectralSubtraction}};
+  return ChoiceProperty(options, "mode", kChoices, fallback);
 }
 
 sonare::mastering::repair::DenoiseNoiseEstimator parse_denoise_noise_estimator(
     const Napi::Object& options, sonare::mastering::repair::DenoiseNoiseEstimator fallback) {
-  Napi::Value value = options.Get("noiseEstimator");
-  if (value.IsUndefined() || value.IsNull()) return fallback;
-  if (!value.IsString()) throw std::runtime_error("denoise noise estimator must be a string");
-  std::string s = node_narrow_string(value.Env(), value, "noiseEstimator");
-  std::transform(s.begin(), s.end(), s.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  if (s == "quantile") return sonare::mastering::repair::DenoiseNoiseEstimator::Quantile;
-  if (s == "mcra") return sonare::mastering::repair::DenoiseNoiseEstimator::Mcra;
-  if (s == "imcra") return sonare::mastering::repair::DenoiseNoiseEstimator::Imcra;
-  if (s == "spp") return sonare::mastering::repair::DenoiseNoiseEstimator::Spp;
-  throw std::runtime_error("unknown denoise noise estimator: " +
-                           node_narrow_string(value.Env(), value, "noiseEstimator"));
+  using sonare::mastering::repair::DenoiseNoiseEstimator;
+  static constexpr NodeChoice<DenoiseNoiseEstimator> kChoices[] = {
+      {"quantile", DenoiseNoiseEstimator::Quantile},
+      {"mcra", DenoiseNoiseEstimator::Mcra},
+      {"imcra", DenoiseNoiseEstimator::Imcra},
+      {"spp", DenoiseNoiseEstimator::Spp}};
+  return ChoiceProperty(options, "noiseEstimator", kChoices, fallback);
 }
 
 int parse_dehum_mode(const Napi::Object& options, int fallback) {
-  Napi::Value value = options.Get("mode");
-  if (value.IsUndefined() || value.IsNull()) return fallback;
-  if (!value.IsString()) throw std::runtime_error("dehum mode must be a string");
-  std::string s = node_narrow_string(value.Env(), value, "mode");
-  std::transform(s.begin(), s.end(), s.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  if (s == "subtract") return SONARE_DEHUM_MODE_SUBTRACT;
-  if (s == "notch") return SONARE_DEHUM_MODE_NOTCH;
-  throw std::runtime_error("unknown dehum mode: " + node_narrow_string(value.Env(), value, "mode"));
+  static constexpr NodeChoice<int> kChoices[] = {{"subtract", SONARE_DEHUM_MODE_SUBTRACT},
+                                                 {"notch", SONARE_DEHUM_MODE_NOTCH}};
+  return ChoiceProperty(options, "mode", kChoices, fallback);
 }
 
 // The library default (sonare_c_mastering.h), the base an options bag is read over.
@@ -360,6 +341,8 @@ Napi::Value SonareWrap::MasteringRepairDehum(const Napi::CallbackInfo& info) {
     config.adaptation = FloatProperty(options, "adaptation", config.adaptation);
     config.frame_size = IntProperty(options, "frameSize", config.frame_size);
     config.pll_bandwidth = FloatProperty(options, "pllBandwidth", config.pll_bandwidth);
+    config.mode = static_cast<sonare::mastering::repair::DehumMode>(
+        parse_dehum_mode(options, static_cast<int>(config.mode)));
   }
   sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
   sonare::Audio result = sonare::mastering::repair::dehum(audio, config);

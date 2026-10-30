@@ -48,12 +48,12 @@ export function resolveEnumOrdinal(
     return value;
   }
   if (typeof value === 'string') {
-    const ordinal = values[value];
-    if (ordinal !== undefined) {
-      return ordinal;
+    if (Object.hasOwn(values, value)) {
+      return values[value] as number;
     }
+    throw new RangeError(`Invalid ${enumName}: ${value}`);
   }
-  throw new RangeError(`Invalid ${enumName}: ${String(value)}`);
+  throw new TypeError(`${enumName} must be a name or an ordinal, got ${typeof value}`);
 }
 
 /** Resolve the public per-track monitor mode to its C ABI ordinal. */

@@ -70,8 +70,8 @@ export const READER_NAME_SHAPE = /(?:Property|Option|OptionValue|_option)$/;
  * Every options-bag reader, per surface, and what it does with a present
  * wrong-typed value. Read off the helper's own body, not off its name.
  *
- * The entries that are NOT name-shaped (`onsetWindowFrames`) are the extras: the
- * shape ratchet cannot demand them, so a reader added under an unconventional
+ * An entry that is NOT name-shaped is an extra: the
+ * shape ratchet cannot demand it, so a reader added under an unconventional
  * name is a blind spot rather than a finding. Prefer the conventional spelling.
  */
 export const READER_FAMILIES: Readonly<
@@ -85,6 +85,7 @@ export const READER_FAMILIES: Readonly<
     AutoFiniteFloatProperty: 'refuse',
     FiniteFloatProperty: 'refuse',
     FloatProperty: 'refuse',
+    ChoiceProperty: 'refuse',
     GsEfxRealizationProperty: 'refuse',
     Int8Property: 'refuse',
     Int32Property: 'refuse',
@@ -122,7 +123,7 @@ export const READER_FAMILIES: Readonly<
     gsEfxRealizationProperty: 'refuse',
     int64Property: 'refuse',
     intProperty: 'refuse',
-    onsetWindowFrames: 'refuse', // extra: wraps intProperty, then bounds it
+    repairEnumOption: 'refuse', // enum strings for the repair options bags
     setNumberOption: 'refuse',
     stringProperty: 'refuse',
     uintProperty: 'refuse',
@@ -134,7 +135,6 @@ export const READER_FAMILIES: Readonly<
     hasProperty: 'out-of-scope',
     objectProperty: 'out-of-scope',
     optionAt: 'out-of-scope',
-    repairOptionValue: 'out-of-scope',
     requiredEnumProperty: 'out-of-scope',
     requireInt64Property: 'out-of-scope',
     requireNumberProperty: 'out-of-scope',
@@ -412,7 +412,13 @@ export function evaluateReaderFamilyScope(
  * {@link ungatedTypeGates}, so the chain ends in a real test.
  */
 export const TYPE_GATE_HELPERS: Readonly<Record<'node' | 'wasm', readonly string[]>> = {
-  node: ['node_narrow_uint64', 'Int32Value', 'SynthEnumValue'],
+  node: [
+    'node_narrow_uint64',
+    'node_narrow_string',
+    'node_narrow_choice',
+    'Int32Value',
+    'SynthEnumValue',
+  ],
   wasm: ['typedPropertyValue', 'numberFromVal', 'enumFromVal'],
 };
 
@@ -482,12 +488,24 @@ export function ungatedRefusers(
   return out.sort();
 }
 
-/** {@link TYPE_GATE_HELPERS} members whose own body carries no direct type test. */
+/**
+ * {@link TYPE_GATE_HELPERS} members whose body carries no direct type test and
+ * calls no member that does, so every chain of gates ends in a real test.
+ */
 export function ungatedTypeGates(
   surface: 'node' | 'wasm',
   sources: readonly ReaderSource[] = readerSources(treeOf(surface)),
 ): string[] {
-  return TYPE_GATE_HELPERS[surface]
-    .filter((name) => !definitionBodies(name, sources).some((body) => DIRECT_TYPE_TEST.test(body)))
+  const gates = TYPE_GATE_HELPERS[surface];
+  const direct = gates.filter((name) =>
+    definitionBodies(name, sources).some((body) => DIRECT_TYPE_TEST.test(body)),
+  );
+  const delegates = direct.length > 0 ? callTo(direct) : null;
+  return gates
+    .filter(
+      (name) =>
+        !direct.includes(name) &&
+        !(delegates && definitionBodies(name, sources).some((body) => delegates.test(body))),
+    )
     .sort();
 }

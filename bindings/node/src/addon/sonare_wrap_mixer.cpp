@@ -297,6 +297,7 @@ Napi::Value MixerWrap::StripCount(const Napi::CallbackInfo& info) {
 Napi::Value MixerWrap::SceneWarnings(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  SONARE_NODE_REQUIRE_OPEN(env, mixer_, "Mixer");
   // Split the newline-joined message captured at construction into a string[]
   // (one entry per affected insert); an empty message yields an empty array.
   Napi::Array out = Napi::Array::New(env);
@@ -330,8 +331,7 @@ Napi::Value MixerWrap::ScheduleInsertAutomation(const Napi::CallbackInfo& info) 
     return env.Undefined();
   }
 
-  const size_t strip_index =
-      static_cast<size_t>(sonare_node::node_narrow_int64(env, info[0], "stripIndex"));
+  const size_t strip_index = sonare_node::node_narrow_uint32(env, info[0], "stripIndex");
   const unsigned int insert_index = sonare_node::node_narrow_uint32(env, info[1], "insertIndex");
   const unsigned int param_id = sonare_node::node_narrow_uint32(env, info[2], "paramId");
   const int64_t sample_pos = sonare_node::node_narrow_int64(env, info[3], "samplePos");

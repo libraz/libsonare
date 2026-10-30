@@ -1659,14 +1659,14 @@ Napi::Value VocalRenderSnapshotWrap::RenderAsync(const Napi::CallbackInfo& info)
   if (info.Length() == 0) {
     Napi::TypeError::New(env, "renderAsync(range, requestId?, signal?) requires a range")
         .ThrowAsJavaScriptException();
-    return env.Undefined();
+    return sonare_node::RejectedFromPending(env);
   }
   SonareVocalRange range{};
-  if (!ReadRange(env, info[0], &range)) return env.Undefined();
+  if (!ReadRange(env, info[0], &range)) return sonare_node::RejectedFromPending(env);
   uint64_t request_id = 0;
   if (info.Length() > 1 && !info[1].IsUndefined() && !info[1].IsNull() &&
       !RequiredUint64Value(env, info[1], "requestId", &request_id)) {
-    return env.Undefined();
+    return sonare_node::RejectedFromPending(env);
   }
   SonareVocalRenderJob* job = nullptr;
   const SonareError begin_error = sonare_vocal_render_job_begin(snapshot_, range, request_id, &job);
@@ -1678,17 +1678,17 @@ Napi::Value VocalRenderSnapshotWrap::RenderAsync(const Napi::CallbackInfo& info)
   Napi::Function listener;
   if (info.Length() > 2 && !info[2].IsUndefined() && !info[2].IsNull() &&
       !PrepareAbortSignal(env, info[2], cancelled, &signal, &listener)) {
-    return env.Undefined();
+    return sonare_node::RejectedFromPending(env);
   }
   auto worker = std::make_unique<VocalRenderAsyncWorker>(
       env, job_owner.get(), info.This().As<Napi::Object>(), cancelled, signal, listener);
   job_owner.release();
   Napi::Promise promise = worker->Promise();
   worker->Queue();
-  if (env.IsExceptionPending()) return env.Undefined();
+  if (env.IsExceptionPending()) return sonare_node::RejectedFromPending(env);
   worker.release();
   return promise;
-  SONARE_NODE_CATCH(env)
+  SONARE_NODE_CATCH_REJECT(env)
 }
 
 Napi::Value VocalRenderSnapshotWrap::BeginRenderJob(const Napi::CallbackInfo& info) {

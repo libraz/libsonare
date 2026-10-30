@@ -554,7 +554,11 @@ Napi::Value SonareWrap::MasteringStreamingPreview(const Napi::CallbackInfo& info
   sonare::validate_offline_audio_input(samples.Data(), samples.ElementLength(),
                                        node_narrow_int(env, info[1], node_arg_label(1).c_str()));
   std::vector<sonare::mastering::maximizer::StreamingPlatform> platforms;
-  if (info.Length() >= 3 && info[2].IsArray()) {
+  const bool has_platforms = info.Length() >= 3 && !info[2].IsUndefined() && !info[2].IsNull();
+  if (has_platforms && !info[2].IsArray()) {
+    throw Napi::TypeError::New(env, "platforms must be an array");
+  }
+  if (has_platforms) {
     Napi::Array input = info[2].As<Napi::Array>();
     platforms.reserve(input.Length());
     for (uint32_t index = 0; index < input.Length(); ++index) {

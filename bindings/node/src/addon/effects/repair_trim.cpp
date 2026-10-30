@@ -1,10 +1,7 @@
 /// @file
 /// @brief Node bindings for the silence-trim repair.
 
-#include <algorithm>
-#include <cctype>
 #include <cstddef>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -22,18 +19,13 @@ namespace {
 
 sonare::mastering::repair::TrimSilenceMode parse_trim_silence_mode(
     const Napi::Object& options, sonare::mastering::repair::TrimSilenceMode fallback) {
-  Napi::Value value = options.Get("mode");
-  if (value.IsUndefined() || value.IsNull()) return fallback;
-  if (!value.IsString()) throw std::runtime_error("trim silence mode must be a string");
-  std::string s = node_narrow_string(value.Env(), value, "mode");
-  std::transform(s.begin(), s.end(), s.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  if (s == "peak") return sonare::mastering::repair::TrimSilenceMode::Peak;
-  if (s == "lufsgated" || s == "lufs_gated" || s == "lufs") {
-    return sonare::mastering::repair::TrimSilenceMode::LufsGated;
-  }
-  throw std::runtime_error("unknown trim silence mode: " +
-                           node_narrow_string(value.Env(), value, "mode"));
+  using sonare::mastering::repair::TrimSilenceMode;
+  static constexpr NodeChoice<TrimSilenceMode> kChoices[] = {
+      {"peak", TrimSilenceMode::Peak},
+      {"lufsgated", TrimSilenceMode::LufsGated},
+      {"lufs_gated", TrimSilenceMode::LufsGated},
+      {"lufs", TrimSilenceMode::LufsGated}};
+  return ChoiceProperty(options, "mode", kChoices, fallback);
 }
 
 // The library default (sonare_c_mastering.h), the base an options bag is read over.

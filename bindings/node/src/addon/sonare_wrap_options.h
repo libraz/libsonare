@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <charconv>
 #include <cmath>
 #include <cstddef>
@@ -535,6 +536,42 @@ inline int NamedSelectorProperty(const Napi::Object& obj, const char* key,
       obj.Env(), std::string(key) + " must be one of " + valid + ", got '" + name + "'");
 }
 
+/// @brief One accepted spelling of an enum-string option and the value it selects.
+template <typename T>
+struct NodeChoice {
+  const char* name;
+  T value;
+};
+
+/// @brief Resolve an enum-string option, matching @p choices case-insensitively.
+/// @details Several spellings may map to one value. A non-string is a TypeError and an unknown
+///   name a RangeError listing the accepted spellings, both naming @p name.
+template <typename T, std::size_t N>
+inline T node_narrow_choice(Napi::Env env, const Napi::Value& value, const char* name,
+                            const NodeChoice<T> (&choices)[N]) {
+  const std::string text = node_narrow_string(env, value, name);
+  std::string lowered = text;
+  std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  std::string valid;
+  for (std::size_t i = 0; i < N; ++i) {
+    if (lowered == choices[i].name) return choices[i].value;
+    valid += (i == 0 ? "'" : ", '") + std::string(choices[i].name) + "'";
+  }
+  throw Napi::RangeError::New(
+      env, std::string(name) + " must be one of " + valid + ", got '" + text + "'");
+}
+
+/// @brief Read an enum-string property: undefined/null returns @p fallback, anything else goes
+///        through @ref node_narrow_choice.
+template <typename T, std::size_t N>
+inline T ChoiceProperty(const Napi::Object& obj, const char* key, const NodeChoice<T> (&choices)[N],
+                        T fallback) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  return node_narrow_choice(obj.Env(), value, key, choices);
+}
+
 /// @brief Read a float-array property off a record object (a Float32Array, or a
 ///        plain number array whose non-numeric entries read as NaN).
 /// @details undefined/null is an empty vector rather than an error, so an
@@ -553,13 +590,15 @@ inline std::vector<float> FloatArrayProperty(const Napi::Object& obj, const char
   if (value.IsTypedArray()) {
     auto typed = value.As<Napi::TypedArray>();
     if (typed.TypedArrayType() != napi_float32_array) {
-      throw std::runtime_error(std::string(key) + " must be a Float32Array or a number array");
+      throw Napi::TypeError::New(obj.Env(),
+                                 std::string(key) + " must be a Float32Array or a number array");
     }
     auto floats = value.As<Napi::Float32Array>();
     return std::vector<float>(floats.Data(), floats.Data() + floats.ElementLength());
   }
   if (!value.IsArray()) {
-    throw std::runtime_error(std::string(key) + " must be a Float32Array or a number array");
+    throw Napi::TypeError::New(obj.Env(),
+                               std::string(key) + " must be a Float32Array or a number array");
   }
   auto array = value.As<Napi::Array>();
   std::vector<float> values;

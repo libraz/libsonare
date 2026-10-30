@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
+import { ErrorCode } from '../src/errors.js';
 import type { VoicePresetId } from '../src/index.js';
 import {
   Audio,
@@ -19,6 +20,7 @@ import {
   voiceChangeRealtime,
   voiceCharacterPresetId,
 } from '../src/index.js';
+import { expectRefusal } from './_helpers.js';
 
 const SR = 22050;
 
@@ -65,14 +67,14 @@ describe('editing effects', () => {
   it('rejects out-of-range MIDI / F0 instead of returning garbage', () => {
     // The C ABI and Python reject these; Node previously returned best-effort
     // garbage. Validation now lives in the core (and currentMidi in the wrapper).
-    expect(() => pitchCorrectToMidi(tone, SR, 200, 71)).toThrow(); // currentMidi out of range
-    expect(() => pitchCorrectToMidi(tone, SR, 69, 200)).toThrow(); // targetMidi out of range
-    expect(() => pitchCorrectToMidi(tone, SR, 69, -1)).toThrow();
+    expectRefusal(() => pitchCorrectToMidi(tone, SR, 200, 71), RangeError); // currentMidi out of range
+    expectRefusal(() => pitchCorrectToMidi(tone, SR, 69, 200), RangeError); // targetMidi out of range
+    expectRefusal(() => pitchCorrectToMidi(tone, SR, 69, -1), RangeError);
     const hop = 512;
     const nFrames = Math.floor(tone.length / hop) + 1;
     const badF0 = new Float32Array(nFrames).fill(440);
     badF0[0] = -5; // negative F0
-    expect(() => pitchCorrectToMidiTimevarying(tone, badF0, 71, SR, hop)).toThrow();
+    expectRefusal(() => pitchCorrectToMidiTimevarying(tone, badF0, 71, SR, hop), RangeError);
   });
 
   it('pitchCorrectToMidiTimevarying follows a caller-supplied F0 contour', () => {
@@ -223,23 +225,35 @@ describe('editing effects', () => {
     const short = new Int32Array(nFrames - 1);
     const shortProb = new Float32Array(nFrames - 1);
 
-    expect(() => pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, malformed as never)).toThrow(
+    expectRefusal(
+      () => pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, malformed as never),
+      TypeError,
       /pitchCorrectToMidiTimevarying: voiced must be/,
     );
-    expect(() =>
-      pitchCorrectTimevarying(tone, f0, SR, hop, { voiced: malformed as never }),
-    ).toThrow(/pitchCorrectTimevarying: voiced must be/);
-    expect(() => pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, short)).toThrow(
-      'pitchCorrectToMidiTimevarying: voiced must have the same length as f0Hz',
+    expectRefusal(
+      () => pitchCorrectTimevarying(tone, f0, SR, hop, { voiced: malformed as never }),
+      TypeError,
+      /pitchCorrectTimevarying: voiced must be/,
     );
-    expect(() =>
-      pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, undefined, shortProb),
-    ).toThrow('pitchCorrectToMidiTimevarying: voicedProb must have the same length as f0Hz');
-    expect(() => pitchCorrectTimevarying(tone, f0, SR, hop, { voiced: short })).toThrow(
-      'pitchCorrectTimevarying: voiced must have the same length as f0Hz',
+    expectRefusal(
+      () => pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, short),
+      RangeError,
+      /pitchCorrectToMidiTimevarying: voiced must have the same length as f0Hz/,
     );
-    expect(() => pitchCorrectTimevarying(tone, f0, SR, hop, { voicedProb: shortProb })).toThrow(
-      'pitchCorrectTimevarying: voicedProb must have the same length as f0Hz',
+    expectRefusal(
+      () => pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, undefined, shortProb),
+      RangeError,
+      /pitchCorrectToMidiTimevarying: voicedProb must have the same length as f0Hz/,
+    );
+    expectRefusal(
+      () => pitchCorrectTimevarying(tone, f0, SR, hop, { voiced: short }),
+      RangeError,
+      /pitchCorrectTimevarying: voiced must have the same length as f0Hz/,
+    );
+    expectRefusal(
+      () => pitchCorrectTimevarying(tone, f0, SR, hop, { voicedProb: shortProb }),
+      RangeError,
+      /pitchCorrectTimevarying: voicedProb must have the same length as f0Hz/,
     );
   });
 
@@ -278,22 +292,26 @@ describe('editing effects', () => {
 
     // With no explicit flags, invalid probabilities remain rejected.
     for (const invalid of [Number.NaN, -0.1, 1.1]) {
-      expect(() =>
-        pitchCorrectToMidiTimevarying(
-          tone,
-          f0,
-          71,
-          SR,
-          hop,
-          undefined,
-          new Float32Array(nFrames).fill(invalid),
-        ),
-      ).toThrow();
-      expect(() =>
-        pitchCorrectTimevarying(tone, f0, SR, hop, {
-          voicedProb: new Float32Array(nFrames).fill(invalid),
-        }),
-      ).toThrow();
+      expectRefusal(
+        () =>
+          pitchCorrectToMidiTimevarying(
+            tone,
+            f0,
+            71,
+            SR,
+            hop,
+            undefined,
+            new Float32Array(nFrames).fill(invalid),
+          ),
+        RangeError,
+      );
+      expectRefusal(
+        () =>
+          pitchCorrectTimevarying(tone, f0, SR, hop, {
+            voicedProb: new Float32Array(nFrames).fill(invalid),
+          }),
+        RangeError,
+      );
     }
   });
 
@@ -304,16 +322,24 @@ describe('editing effects', () => {
     const shortVoiced = new Int32Array(nFrames - 1).fill(1);
     const shortProb = new Float32Array(nFrames - 1).fill(1);
 
-    expect(() => pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, shortVoiced)).toThrow(
+    expectRefusal(
+      () => pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, shortVoiced),
+      RangeError,
       /same length/,
     );
-    expect(() =>
-      pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, undefined, shortProb),
-    ).toThrow(/same length/);
-    expect(() => pitchCorrectTimevarying(tone, f0, SR, hop, { voiced: shortVoiced })).toThrow(
+    expectRefusal(
+      () => pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, undefined, shortProb),
+      RangeError,
       /same length/,
     );
-    expect(() => pitchCorrectTimevarying(tone, f0, SR, hop, { voicedProb: shortProb })).toThrow(
+    expectRefusal(
+      () => pitchCorrectTimevarying(tone, f0, SR, hop, { voiced: shortVoiced }),
+      RangeError,
+      /same length/,
+    );
+    expectRefusal(
+      () => pitchCorrectTimevarying(tone, f0, SR, hop, { voicedProb: shortProb }),
+      RangeError,
       /same length/,
     );
   });
@@ -342,22 +368,33 @@ describe('editing effects', () => {
     expect(full.some((x, i) => Math.abs(x - gentle[i]) > 1e-6)).toBe(true);
 
     // Out-of-range knobs are rejected.
-    expect(() =>
-      pitchCorrectTimevarying(tone, f0, SR, hop, { targetMidi: 71, retuneAmount: 2 }),
-    ).toThrow();
-    expect(() => pitchCorrectTimevarying(tone, f0, SR, hop, { targetMidi: 200 })).toThrow();
-    expect(() => pitchCorrectTimevarying(tone, f0, SR, hop, { mode: 'Scale' as never })).toThrow(
+    expectRefusal(
+      () => pitchCorrectTimevarying(tone, f0, SR, hop, { targetMidi: 71, retuneAmount: 2 }),
+      RangeError,
+    );
+    expectRefusal(
+      () => pitchCorrectTimevarying(tone, f0, SR, hop, { targetMidi: 200 }),
+      RangeError,
+    );
+    expectRefusal(
+      () => pitchCorrectTimevarying(tone, f0, SR, hop, { mode: 'Scale' as never }),
+      RangeError,
       /pitch correction mode/,
     );
-    expect(() =>
-      pitchCorrectTimevarying(tone, f0, SR, hop, { maxCorrectionSemitones: -1 }),
-    ).toThrow();
-    expect(() =>
-      pitchCorrectTimevarying(tone, f0, SR, hop, { retuneSpeedMs: Number.NaN }),
-    ).toThrow();
-    expect(() => pitchCorrectTimevarying(tone, f0, SR, hop, { scaleModeMask: 0 })).toThrow();
-    expect(() => pitchCorrectTimevarying(tone, new Float32Array(), SR, hop)).toThrow();
-    expect(() => pitchCorrectTimevarying(tone, f0, SR, 0)).toThrow();
+    expectRefusal(
+      () => pitchCorrectTimevarying(tone, f0, SR, hop, { maxCorrectionSemitones: -1 }),
+      RangeError,
+    );
+    expectRefusal(
+      () => pitchCorrectTimevarying(tone, f0, SR, hop, { retuneSpeedMs: Number.NaN }),
+      RangeError,
+    );
+    expectRefusal(
+      () => pitchCorrectTimevarying(tone, f0, SR, hop, { scaleModeMask: 0 }),
+      RangeError,
+    );
+    expectRefusal(() => pitchCorrectTimevarying(tone, new Float32Array(), SR, hop), RangeError);
+    expectRefusal(() => pitchCorrectTimevarying(tone, f0, SR, 0), RangeError);
   });
 
   it('noteStretch returns a non-empty Float32Array', () => {
@@ -410,7 +447,7 @@ describe('editing effects', () => {
     // 2^(4/12) = 1.2599, so the warp range [0.55, 1.65] reaches [0.693, 2.079].
     const request = { pitchSemitones: 4, formantFactor: 2.5, formantMode: 'absolute' as const };
     expect(() => voiceChange(tone, SR, request)).toThrow(RangeError);
-    expect(() => voiceChange(tone, SR, request)).toThrow(/\[0\.693, 2\.079\]/);
+    expectRefusal(() => voiceChange(tone, SR, request), RangeError, /\[0\.693, 2\.079\]/);
     expect(() =>
       voiceChange(tone, SR, { formantMode: 'sideways' as unknown as 'relative' }),
     ).toThrow(RangeError);
@@ -467,12 +504,16 @@ describe('editing effects', () => {
     }
     const stereoOut = voiceChangeRealtime(stereoIn, SR, 'soft-whisper', { channels: 2 });
     expect(stereoOut.length).toBe(1024);
-    expect(() =>
-      voiceChangeRealtime(new Float32Array(3), SR, 'soft-whisper', { channels: 2 }),
-    ).toThrow(/multiple of 2/);
-    expect(() =>
-      voiceChangeRealtime(stereoIn, SR, 'soft-whisper', { channels: 3 as unknown as 2 }),
-    ).toThrow(/channels must be 1 or 2/);
+    expectRefusal(
+      () => voiceChangeRealtime(new Float32Array(3), SR, 'soft-whisper', { channels: 2 }),
+      RangeError,
+      /multiple of 2/,
+    );
+    expectRefusal(
+      () => voiceChangeRealtime(stereoIn, SR, 'soft-whisper', { channels: 3 as unknown as 2 }),
+      RangeError,
+      /channels must be 1 or 2/,
+    );
     expect(realtimeVoiceChangerPresetNames()).toContain('robot-mascot');
     const presetJson = realtimeVoiceChangerPresetJson('bright-idol');
     expect(presetJson).toContain('bright-idol');
@@ -481,7 +522,9 @@ describe('editing effects', () => {
 
     // Unknown preset name throws (mirrors WASM/Python) rather than passing an
     // undefined ordinal to the native call.
-    expect(() => voiceCharacterPresetId('not-a-preset' as never)).toThrow(
+    expectRefusal(
+      () => voiceCharacterPresetId('not-a-preset' as never),
+      RangeError,
       /Unknown voice character preset/,
     );
   });
@@ -519,11 +562,11 @@ describe('editing effects', () => {
       preset: 'neutral-monitor',
     });
     changer.destroy();
-    expect(() => changer.processMono(new Float32Array(16))).toThrow(/destroyed/);
-    expect(() => changer.reset()).toThrow(/destroyed/);
-    expect(() => changer.configJson()).toThrow(/destroyed/);
-    expect(() => changer.latencySamples()).toThrow(/destroyed/);
-    expect(() => changer.setConfig('neutral-monitor')).toThrow(/destroyed/);
+    expectRefusal(() => changer.processMono(new Float32Array(16)), ErrorCode.InvalidState);
+    expectRefusal(() => changer.reset(), ErrorCode.InvalidState);
+    expectRefusal(() => changer.configJson(), ErrorCode.InvalidState);
+    expectRefusal(() => changer.latencySamples(), ErrorCode.InvalidState);
+    expectRefusal(() => changer.setConfig('neutral-monitor'), ErrorCode.InvalidState);
     expect(() => changer.destroy()).not.toThrow();
     expect(() => changer[Symbol.dispose]()).not.toThrow();
   });
@@ -591,7 +634,7 @@ describe('editing effects', () => {
       try {
         const oversized = new Float32Array(129); // maxBlockSize + 1
         const output = new Float32Array(129);
-        expect(() => changer.processMonoInto(oversized, output)).toThrow(/block/);
+        expectRefusal(() => changer.processMonoInto(oversized, output), RangeError);
       } finally {
         changer.destroy();
       }
@@ -606,7 +649,10 @@ describe('editing effects', () => {
       });
       try {
         // The native C++ JSON parser rejects malformed JSON and throws.
-        expect(() => changer.setConfig('{not valid json}' as unknown as never)).toThrow();
+        expectRefusal(
+          () => changer.setConfig('{not valid json}' as unknown as never),
+          ErrorCode.InvalidFormat,
+        );
       } finally {
         changer.destroy();
       }
@@ -624,7 +670,7 @@ describe('editing effects', () => {
         // 128 * 2 interleaved samples but only 1 channel was prepared — native
         // binding checks channels <= channels_ and rejects.
         const interleaved = new Float32Array(128 * 2);
-        expect(() => changer.processInterleaved(interleaved, 2)).toThrow(/channel/i);
+        expectRefusal(() => changer.processInterleaved(interleaved, 2), RangeError);
       } finally {
         changer.destroy();
       }
@@ -727,7 +773,7 @@ describe('editing effects', () => {
       try {
         const input = new Float32Array(INTERLEAVED);
         const tooSmall = new Float32Array(INTERLEAVED - 2);
-        expect(() => changer.processInterleavedInto(input, CHANNELS, tooSmall)).toThrow(/length/i);
+        expectRefusal(() => changer.processInterleavedInto(input, CHANNELS, tooSmall), RangeError);
       } finally {
         changer.destroy();
       }
@@ -744,11 +790,15 @@ describe('editing effects', () => {
         const input = new Float32Array(INTERLEAVED);
         const output = new Float32Array(INTERLEAVED);
         // channels=0 is invalid; cast to bypass the 1|2 TS literal type.
-        expect(() => changer.processInterleavedInto(input, 0 as unknown as 1 | 2, output)).toThrow(
+        expectRefusal(
+          () => changer.processInterleavedInto(input, 0 as unknown as 1 | 2, output),
+          RangeError,
           /channel/i,
         );
         // channels=3 exceeds prepared (2) and also doesn't divide 256 evenly.
-        expect(() => changer.processInterleavedInto(input, 3 as unknown as 1 | 2, output)).toThrow(
+        expectRefusal(
+          () => changer.processInterleavedInto(input, 3 as unknown as 1 | 2, output),
+          RangeError,
           /channel/i,
         );
       } finally {
@@ -767,7 +817,10 @@ describe('editing effects', () => {
         // (FRAMES + 1) frames * 2 channels exceeds maxBlockSize per-frame budget.
         const oversized = new Float32Array((FRAMES + 1) * CHANNELS);
         const output = new Float32Array((FRAMES + 1) * CHANNELS);
-        expect(() => changer.processInterleavedInto(oversized, CHANNELS, output)).toThrow(/block/);
+        expectRefusal(
+          () => changer.processInterleavedInto(oversized, CHANNELS, output),
+          RangeError,
+        );
       } finally {
         changer.destroy();
       }

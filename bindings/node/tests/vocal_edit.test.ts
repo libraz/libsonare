@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createVocalEditSession,
+  ErrorCode,
   restoreVocalEditSession,
   type VocalCreateRequest,
   type VocalEditSession,
@@ -325,7 +326,49 @@ describe('Node vocal edit facade', () => {
     try {
       const render = snapshot.renderAsync({ signal: controller.signal });
       controller.abort();
-      await expect(render).rejects.toMatchObject({ reason: 5, field: 'render' });
+      await expect(render).rejects.toMatchObject({
+        code: ErrorCode.Cancelled,
+        reason: 5,
+        field: 'render',
+      });
+    } finally {
+      snapshot.dispose();
+      session.dispose();
+    }
+  });
+
+  it('rejects renderAsync failures instead of throwing, and queues no worker for them', async () => {
+    const session = createVocalEditSession(request());
+    const snapshot = session.captureRenderSnapshot();
+    try {
+      let promise: Promise<unknown> | undefined;
+      expect(() => {
+        promise = snapshot.renderAsync({ range: { startSample: -1 } });
+      }).not.toThrow();
+      await expect(promise).rejects.toBeInstanceOf(RangeError);
+    } finally {
+      snapshot.dispose();
+      session.dispose();
+    }
+    let lifecycle: Promise<unknown> | undefined;
+    expect(() => {
+      lifecycle = snapshot.renderAsync({});
+    }).not.toThrow();
+    await expect(lifecycle).rejects.toMatchObject({ code: ErrorCode.InvalidState });
+  });
+
+  it('refuses an already-aborted signal on every render entry point as an AbortError', async () => {
+    const session = createVocalEditSession(request());
+    const snapshot = session.captureRenderSnapshot();
+    try {
+      const signal = AbortSignal.abort();
+      expect(() => snapshot.render({ signal })).toThrow(
+        expect.objectContaining({ name: 'AbortError' }),
+      );
+      expect(() => snapshot.beginRenderJob({ signal })).toThrow(
+        expect.objectContaining({ name: 'AbortError' }),
+      );
+      await expect(snapshot.renderAsync({ signal })).rejects.toMatchObject({ name: 'AbortError' });
     } finally {
       snapshot.dispose();
       session.dispose();

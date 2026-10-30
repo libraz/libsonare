@@ -107,14 +107,14 @@ describe('spectralEdit (Node)', () => {
   it('rejects an unknown mode string', () => {
     const samples = sine(440, 0.1);
     expect(() => spectralEdit(samples, SR, [{ mode: 'not-a-mode' as never }])).toThrow(
-      /unknown mode/i,
+      /op\.mode must be one of/,
     );
   });
 
   it('rejects an unknown window string', () => {
     const samples = sine(440, 0.1);
     expect(() => spectralEdit(samples, SR, [], { window: 'triangle' as never })).toThrow(
-      /unknown window/i,
+      /window must be one of/,
     );
   });
 

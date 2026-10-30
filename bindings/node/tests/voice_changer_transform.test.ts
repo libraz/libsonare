@@ -7,6 +7,7 @@ import {
   realtimeVoiceChangerPresetNames,
   voiceCharacterPresetId,
 } from '../src/index.js';
+import { expectRefusal } from './_helpers.js';
 
 const SR = 48000;
 const NEW_PRESETS = [
@@ -108,7 +109,10 @@ describe('voice transformer presets and flat config', () => {
 
   it('refuses a flat config that lacks a transformer key', () => {
     const { harmonyStep3: _omitted, ...partial } = realtimeVoiceChangerPresetConfig('bright-idol');
-    expect(() => new RealtimeVoiceChanger({ sampleRate: SR, preset: partial as never })).toThrow();
+    expectRefusal(
+      () => new RealtimeVoiceChanger({ sampleRate: SR, preset: partial as never }),
+      RangeError,
+    );
   });
 
   it('refuses out-of-range, fractional and unknown transformer values by name', () => {
@@ -185,7 +189,9 @@ describe('RealtimeVoiceChanger note API', () => {
     });
     const destroyed = new RealtimeVoiceChanger({ sampleRate: SR, preset: psola });
     destroyed.destroy();
-    expect(() => destroyed.noteOn(60)).toThrow();
+    expectRefusal(() => destroyed.noteOn(60), ErrorCode.InvalidState);
+    expectRefusal(() => destroyed.noteOff(60), ErrorCode.InvalidState);
+    expectRefusal(() => destroyed.allNotesOff(), ErrorCode.InvalidState);
   });
 });
 
@@ -227,20 +233,42 @@ describe('RealtimeVoiceChanger external vocoder carrier', () => {
           changer.processMonoWithCarrierInto(block, carrier, into);
         }
         expect(into.some((v) => v !== 0)).toBe(true);
-        expect(changer.processInterleavedWithCarrier(tone(256), 2, carrier)).toHaveLength(256);
+        expect(changer.processInterleavedWithCarrier(tone(256), carrier, 2)).toHaveLength(256);
         const interleavedOut = new Float32Array(256);
-        changer.processInterleavedWithCarrierInto(tone(256), 2, carrier, interleavedOut);
+        changer.processInterleavedWithCarrierInto(tone(256), carrier, 2, interleavedOut);
         const left = tone(128);
         const right = tone(128);
         changer.processPlanarStereoWithCarrier(left, right, carrier);
         expect(() => changer.processMonoWithCarrier(block, new Float32Array(64))).toThrow(
           RangeError,
         );
-        expect(() => changer.processInterleavedWithCarrier(tone(256), 2, tone(256))).toThrow(
+        expect(() => changer.processInterleavedWithCarrier(tone(256), tone(256), 2)).toThrow(
           RangeError,
         );
         expect(() => changer.processPlanarStereoWithCarrier(left, right, tone(64))).toThrow(
           RangeError,
+        );
+      },
+      { channels: 2 },
+    );
+  });
+
+  it('takes the interleaved carrier right after the input, then the channel count', () => {
+    withChanger(
+      external,
+      (changer) => {
+        const carrier = tone(128, 110);
+        expect(changer.processInterleavedWithCarrier(tone(256), carrier, 2)).toHaveLength(256);
+        const out = new Float32Array(256);
+        changer.processInterleavedWithCarrierInto(tone(256), carrier, 2, out);
+        expectRefusal(
+          () => changer.processInterleavedWithCarrier(tone(256), 2 as never, carrier as never),
+          TypeError,
+        );
+        expectRefusal(
+          () =>
+            changer.processInterleavedWithCarrierInto(tone(256), 2 as never, carrier as never, out),
+          TypeError,
         );
       },
       { channels: 2 },

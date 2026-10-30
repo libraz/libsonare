@@ -112,12 +112,13 @@ export function projectAbiVersion(): number {
  * Check the two bounce fields whose zero is a native default, on every entry
  * point that takes the bag.
  *
- * The addon truncates, so `0.5` arrives as the zero that auto-derives the render
- * length / picks the stereo default and the call returns exactly what omitting
- * the field would have. `blockSize` and `sampleRate` are deliberately absent:
- * the render is block-size independent and the only sample rate the core accepts
- * is the project's own, so neither can be told from its default.
- * `instrumentLatencySamples` is a plain quantity whose zero means no latency.
+ * The addon refuses a fraction on every one of these rather than truncating it, so
+ * `0.5` can never arrive as the zero that auto-derives the render length / picks
+ * the stereo default. The checks here name the field before the call. `blockSize`
+ * and `sampleRate` are absent: the render is block-size independent and the only
+ * sample rate the core accepts is the project's own, so the addon's own refusal
+ * of a fraction is all they need. `instrumentLatencySamples` is a plain quantity
+ * whose zero means no latency.
  */
 function assertBounceOptions(fnName: string, options: ProjectBounceOptions): void {
   if (options.totalFrames !== undefined) {

@@ -1,7 +1,4 @@
-#include <algorithm>
-#include <cctype>
 #include <cstring>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -13,15 +10,16 @@ using namespace sonare_node;
 
 namespace {
 
-/// @brief Map a lowercase window string to the SonareWindowType integer.
-/// Returns -1 on an unrecognised name (caller should throw).
-int parse_window_type(const std::string& s) {
-  if (s == "hann") return SONARE_WINDOW_HANN;
-  if (s == "hamming") return SONARE_WINDOW_HAMMING;
-  if (s == "blackman") return SONARE_WINDOW_BLACKMAN;
-  if (s == "rectangular" || s == "rect") return SONARE_WINDOW_RECTANGULAR;
-  return -1;
-}
+constexpr NodeChoice<int> kWindowChoices[] = {{"hann", SONARE_WINDOW_HANN},
+                                              {"hamming", SONARE_WINDOW_HAMMING},
+                                              {"blackman", SONARE_WINDOW_BLACKMAN},
+                                              {"rectangular", SONARE_WINDOW_RECTANGULAR},
+                                              {"rect", SONARE_WINDOW_RECTANGULAR}};
+
+constexpr NodeChoice<int> kEditModeChoices[] = {{"gain", SONARE_SPECTRAL_EDIT_MODE_GAIN},
+                                                {"attenuate", SONARE_SPECTRAL_EDIT_MODE_ATTENUATE},
+                                                {"mute", SONARE_SPECTRAL_EDIT_MODE_MUTE},
+                                                {"heal", SONARE_SPECTRAL_EDIT_MODE_HEAL}};
 
 /// @brief Resolve a window given as a name or as a @ref SonareWindowType ordinal.
 /// @details Both spellings reach the same rejection, matching the C ABI and the
@@ -55,25 +53,7 @@ int read_window_type(Napi::Env env, const Napi::Value& value) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "spectralEdit: window must be a window name or a window ordinal");
   }
-  std::string name = node_narrow_string(env, value, "window");
-  std::transform(name.begin(), name.end(), name.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  const int mapped = parse_window_type(name);
-  if (mapped < 0) {
-    throw std::runtime_error("spectralEdit: unknown window type: " +
-                             node_narrow_string(env, value, "window"));
-  }
-  return mapped;
-}
-
-/// @brief Map a lowercase spectral-edit mode string to SonareSpectralEditMode.
-/// Returns -1 on an unrecognised name (caller should throw).
-int parse_spectral_edit_mode(const std::string& s) {
-  if (s == "gain") return SONARE_SPECTRAL_EDIT_MODE_GAIN;
-  if (s == "attenuate") return SONARE_SPECTRAL_EDIT_MODE_ATTENUATE;
-  if (s == "mute") return SONARE_SPECTRAL_EDIT_MODE_MUTE;
-  if (s == "heal") return SONARE_SPECTRAL_EDIT_MODE_HEAL;
-  return -1;
+  return node_narrow_choice(env, value, "window", kWindowChoices);
 }
 
 }  // namespace
@@ -119,7 +99,7 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
   for (uint32_t i = 0; i < n_ops; ++i) {
     Napi::Value item = js_ops.Get(i);
     if (!item.IsObject()) {
-      throw std::runtime_error("spectralEdit: each op must be a plain object");
+      throw Napi::TypeError::New(env, "spectralEdit: each op must be a plain object");
     }
     Napi::Object op = item.As<Napi::Object>();
     // Every field in this bag now refuses a wrong-typed value by name, matching
@@ -138,18 +118,7 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
     if (mode_val.IsUndefined() || mode_val.IsNull()) {
       ops[i].mode = SONARE_SPECTRAL_EDIT_MODE_GAIN;
     } else {
-      if (!mode_val.IsString()) {
-        throw std::runtime_error("spectralEdit: op.mode must be a string");
-      }
-      std::string mode_str = node_narrow_string(env, mode_val, "op.mode");
-      std::transform(mode_str.begin(), mode_str.end(), mode_str.begin(),
-                     [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-      int mode_int = parse_spectral_edit_mode(mode_str);
-      if (mode_int < 0) {
-        throw std::runtime_error("spectralEdit: unknown mode: " +
-                                 node_narrow_string(env, mode_val, "op.mode"));
-      }
-      ops[i].mode = mode_int;
+      ops[i].mode = node_narrow_choice(env, mode_val, "op.mode", kEditModeChoices);
     }
   }
 

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "analysis/music_analyzer.h"
+#include "analysis/onset_analyzer.h"
 #include "core/audio.h"
 #include "sonare_wrap.h"
 #include "sonare_wrap_key_options.h"
@@ -308,6 +309,19 @@ Napi::Value SonareWrap::DetectOnsets(const Napi::CallbackInfo& info) {
     config.backtrack = BoolProperty(options, "backtrack", false) ? 1 : 0;
     config.backtrack_range = IntProperty(options, "backtrackRange", config.backtrack_range);
   }
+  // The core's rule, so a refusal names the key this caller wrote rather than the C field.
+  sonare::OnsetDetectConfig native;
+  native.n_fft = config.n_fft;
+  native.hop_length = config.hop_length;
+  native.threshold = config.threshold;
+  native.pre_max = config.pre_max;
+  native.post_max = config.post_max;
+  native.pre_avg = config.pre_avg;
+  native.post_avg = config.post_avg;
+  native.delta = config.delta;
+  native.wait = config.wait;
+  native.backtrack_range = config.backtrack_range;
+  sonare::validate_onset_detect_config(native, sonare::kOnsetDetectJsFieldNames);
 
   float* times = nullptr;
   size_t count = 0;

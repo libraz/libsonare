@@ -30,12 +30,18 @@ std::string JsonTextFromJs(const Napi::Value& value) {
   return node_narrow_string(env, stringify.Call(json, {value}), "config");
 }
 
+/// @brief The one place a refused preset-or-config document is coded.
+/// @details A preset id or nested document is InvalidFormat; the flat POD (recognised by its
+///   `retuneSemitones` key) is a per-call parameter bag and stays InvalidParameter.
 sonare::editing::voice_changer::RealtimeVoiceChangerConfig ConfigFromJs(const Napi::Value& value) {
   sonare::editing::voice_changer::RealtimeVoiceChangerConfig config;
   std::string error;
   if (!sonare::editing::voice_changer::realtime_voice_changer_config_from_input(
           JsonTextFromJs(value), &config, &error)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, error);
+    const bool flat_pod =
+        value.IsObject() && !value.As<Napi::Object>().Get("retuneSemitones").IsUndefined();
+    throw sonare::SonareException(
+        flat_pod ? sonare::ErrorCode::InvalidParameter : sonare::ErrorCode::InvalidFormat, error);
   }
   return config;
 }
@@ -266,21 +272,22 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessInterleavedImpl(const Napi::Callbac
     sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE, kNotPreparedMessage);
     return env.Undefined();
   }
-  const size_t carrier_index = 2;
+  const size_t carrier_index = 1;
+  const size_t channels_index = with_carrier ? 2 : 1;
   const size_t output_index = with_carrier ? 3 : 2;
   const size_t required = 2 + (with_carrier ? 1 : 0) + (into ? 1 : 0);
-  if (info.Length() < required || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
+  if (info.Length() < required || !IsFloat32Array(info[0]) || !info[channels_index].IsNumber() ||
       (with_carrier && !IsFloat32Array(info[carrier_index])) ||
       (into && !IsFloat32Array(info[output_index]))) {
-    Napi::TypeError::New(env, std::string("Expected (interleavedFloat32Array, channels") +
-                                  (with_carrier ? ", carrierFloat32Array" : "") +
+    Napi::TypeError::New(env, std::string("Expected (interleavedFloat32Array") +
+                                  (with_carrier ? ", carrierFloat32Array" : "") + ", channels" +
                                   (into ? ", outputInterleavedFloat32Array" : "") + ")")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
   Napi::Float32Array input = info[0].As<Napi::Float32Array>();
-  const int channels = sonare_node::node_narrow_int(env, info[1], "channels");
+  const int channels = sonare_node::node_narrow_int(env, info[channels_index], "channels");
   if (into &&
       info[output_index].As<Napi::Float32Array>().ElementLength() != input.ElementLength()) {
     Napi::RangeError::New(env, "input and output lengths must match").ThrowAsJavaScriptException();

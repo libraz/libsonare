@@ -273,7 +273,7 @@ Napi::Value PolyphonicAnalysisWrap::SetNoteEdit(const Napi::CallbackInfo& info) 
   const Napi::Value edit_value = info[1];
   if (!edit_value.IsUndefined() && !edit_value.IsNull()) {
     if (!edit_value.IsObject() || edit_value.IsArray()) {
-      throw std::runtime_error("setNoteEdit: edit must be a plain object");
+      throw Napi::TypeError::New(info.Env(), "setNoteEdit: edit must be a plain object");
     }
     ReadNoteEditFields(edit_value.As<Napi::Object>(), &envelope, &edit);
   }

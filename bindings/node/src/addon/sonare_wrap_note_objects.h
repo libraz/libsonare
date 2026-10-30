@@ -55,7 +55,7 @@ inline void ReadNoteEdit(const char* fn, const Napi::Object& note, std::vector<f
     return;
   }
   if (!edit_value.IsObject() || edit_value.IsArray()) {
-    throw std::runtime_error(std::string(fn) + ": note.edit must be a plain object");
+    throw Napi::TypeError::New(note.Env(), std::string(fn) + ": note.edit must be a plain object");
   }
   ReadNoteEditFields(edit_value.As<Napi::Object>(), envelopes, out);
 }

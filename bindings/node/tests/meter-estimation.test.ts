@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { analyze, estimateMeter } from '../src/index.js';
+import { expectRefusal } from './_helpers.js';
 
 const SR = 22050;
 
@@ -196,12 +197,16 @@ describe('estimateMeter()', () => {
       // surface decorates the core message differently, but it keeps the field
       // name: a bare "must not be empty" also matches the empty candidate-list
       // guard and would let this pass for the wrong reason.
-      expect(() => estimateMeter({ beatTimes: [], beatStrengths: [] })).toThrow(
+      expectRefusal(
+        () => estimateMeter({ beatTimes: [], beatStrengths: [] }),
+        RangeError,
         /beatTimes must not be empty/,
       );
-      expect(() =>
-        estimateMeter({ beatTimes: new Float32Array(0), beatStrengths: new Float32Array(0) }),
-      ).toThrow(/beatTimes must not be empty/);
+      expectRefusal(
+        () => estimateMeter({ beatTimes: new Float32Array(0), beatStrengths: new Float32Array(0) }),
+        RangeError,
+        /beatTimes must not be empty/,
+      );
     });
 
     it('still answers a single-beat series with the low-confidence default', () => {
@@ -218,37 +223,46 @@ describe('estimateMeter()', () => {
 
     it('rejects mismatched beatTimes and beatStrengths lengths', () => {
       const { beatTimes, beatStrengths } = beatSeries(4, 8);
-      expect(() =>
-        estimateMeter({ beatTimes, beatStrengths: beatStrengths.subarray(0, 5) }),
-      ).toThrow(/same length/);
+      expectRefusal(
+        () => estimateMeter({ beatTimes, beatStrengths: beatStrengths.subarray(0, 5) }),
+        RangeError,
+      );
     });
 
     it('rejects an empty candidateNumerators list', () => {
-      expect(() => estimateMeter({ ...beatSeries(4, 8), candidateNumerators: [] })).toThrow();
+      expectRefusal(
+        () => estimateMeter({ ...beatSeries(4, 8), candidateNumerators: [] }),
+        RangeError,
+      );
     });
 
     it('rejects more than 16 candidateNumerators entries with a RangeError', () => {
-      expect(() =>
-        estimateMeter({ ...beatSeries(4, 8), candidateNumerators: overLongList() }),
-      ).toThrow(RangeError);
-      expect(() =>
-        estimateMeter({ ...beatSeries(4, 8), candidateNumerators: overLongList() }),
-      ).toThrow(/at most 16 entries/);
+      expectRefusal(
+        () => estimateMeter({ ...beatSeries(4, 8), candidateNumerators: overLongList() }),
+        RangeError,
+        /at most 16 entries/,
+      );
     });
 
     it('rejects a candidateNumerators entry outside [2, 32]', () => {
-      expect(() => estimateMeter({ ...beatSeries(4, 8), candidateNumerators: [1] })).toThrow();
-      expect(() => estimateMeter({ ...beatSeries(4, 8), candidateNumerators: [33] })).toThrow();
+      expectRefusal(
+        () => estimateMeter({ ...beatSeries(4, 8), candidateNumerators: [1] }),
+        RangeError,
+      );
+      expectRefusal(
+        () => estimateMeter({ ...beatSeries(4, 8), candidateNumerators: [33] }),
+        RangeError,
+      );
     });
 
     it('rejects a denominator that is not a power of two', () => {
-      expect(() => estimateMeter({ ...beatSeries(4, 8), denominator: 3 })).toThrow();
+      expectRefusal(() => estimateMeter({ ...beatSeries(4, 8), denominator: 3 }), RangeError);
     });
 
     it('rejects beatTimes that decrease', () => {
       const { beatTimes, beatStrengths } = beatSeries(4, 8);
       beatTimes[5] = beatTimes[4] - 1;
-      expect(() => estimateMeter({ beatTimes, beatStrengths })).toThrow();
+      expectRefusal(() => estimateMeter({ beatTimes, beatStrengths }), RangeError);
     });
   });
 });

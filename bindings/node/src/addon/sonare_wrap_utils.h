@@ -56,6 +56,9 @@ void ThrowHandleClosed(Napi::Env env, const char* what);
 ///        Call only from inside a catch block.
 void ThrowCurrentException(Napi::Env env);
 
+/// @brief Reject a new Promise with the JS exception already pending, clearing it.
+Napi::Promise RejectedFromPending(Napi::Env env);
+
 /// @brief Throw the failure of the last C-ABI call that returned a null handle:
 ///        the code from sonare_last_error_code() with @p prefix + the recorded
 ///        detail as the message. @p fallback stands in when the code reads Ok.
@@ -321,6 +324,15 @@ std::vector<SonareMasteringParam> MasteringCParams(
   catch (...) {                              \
     sonare_node::ThrowCurrentException(env); \
     return env.Undefined();                  \
+  }
+
+// Promise-returning sibling of SONARE_NODE_CATCH: the failure arrives as a rejection, never as a
+// synchronous throw.
+#define SONARE_NODE_CATCH_REJECT(env)             \
+  }                                               \
+  catch (...) {                                   \
+    sonare_node::ThrowCurrentException(env);      \
+    return sonare_node::RejectedFromPending(env); \
   }
 
 // Void-returning sibling of SONARE_NODE_CATCH, for the entry points registered

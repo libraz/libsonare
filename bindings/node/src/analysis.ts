@@ -802,7 +802,8 @@ export function analyzeBpm(
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('analyzeBpm', request.samples, resolvedSampleRate, request);
   const fft = resolveFftOptions('analyzeBpm', request.nFft, request.hopLength);
-  assertPositiveInteger('analyzeBpm', request.maxCandidates ?? 5, 'maxCandidates');
+  // The domain (>= 0) is the C ABI's; this only keeps the addon's int narrowing from wrapping.
+  assertInt32('analyzeBpm', request.maxCandidates ?? 5, 'maxCandidates');
   return addon.analyzeBpm(
     request.samples,
     resolvedSampleRate,
@@ -1027,7 +1028,8 @@ function assertChordParams(
   p: ResolvedChordParams,
 ): { nFft: number; hopLength: number } {
   const fft = resolveFftOptions(fnName, p.nFft, p.hopLength);
-  assertPositiveInteger(fnName, p.hmmBeamWidth, 'hmmBeamWidth');
+  // The domain (>= 0) is the C ABI's; this only keeps the addon's int narrowing from wrapping.
+  assertInt32(fnName, p.hmmBeamWidth, 'hmmBeamWidth');
   return fft;
 }
 

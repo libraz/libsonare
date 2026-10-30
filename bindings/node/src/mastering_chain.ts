@@ -413,8 +413,14 @@ export interface MasterAudioStereoRequest {
   cancel?: () => boolean;
 }
 
+/** Request form of {@link masterAudioAsync}: progress and cancellation are not available there. */
+export type MasterAudioAsyncRequest = Omit<MasterAudioRequest, 'onProgress' | 'cancel'>;
+
+/** Request form of {@link masterAudioStereoAsync}. */
+export type MasterAudioStereoAsyncRequest = Omit<MasterAudioStereoRequest, 'onProgress' | 'cancel'>;
+
 function masterAudioRequest(
-  fnName: 'masterAudio' | 'masterAudioAsync',
+  fnName: 'masterAudio',
   requestOrSamples: MasterAudioRequest | Float32Array,
   sampleRate: number,
   preset: MasteringPreset,
@@ -428,7 +434,7 @@ function masterAudioRequest(
 }
 
 function masterAudioStereoRequest(
-  fnName: 'masterAudioStereo' | 'masterAudioStereoAsync',
+  fnName: 'masterAudioStereo',
   requestOrLeft: MasterAudioStereoRequest | Float32Array,
   right: Float32Array | undefined,
   sampleRate: number,
@@ -447,6 +453,31 @@ function masterAudioStereoRequest(
     };
   }
   return requestObject(fnName, requestOrLeft, 'left');
+}
+
+function masterAudioAsyncRequest(
+  requestOrSamples: MasterAudioAsyncRequest | Float32Array,
+  sampleRate: number,
+  preset: MasteringPreset,
+  overrides: MasteringChainConfig,
+): MasterAudioAsyncRequest {
+  if (requestOrSamples instanceof Float32Array) {
+    return { samples: requestOrSamples, sampleRate, preset, overrides };
+  }
+  return requestObject('masterAudioAsync', requestOrSamples);
+}
+
+function masterAudioStereoAsyncRequest(
+  requestOrLeft: MasterAudioStereoAsyncRequest | Float32Array,
+  right: Float32Array | undefined,
+  sampleRate: number,
+  preset: MasteringPreset,
+  overrides: MasteringChainConfig,
+): MasterAudioStereoAsyncRequest {
+  if (requestOrLeft instanceof Float32Array) {
+    return { left: requestOrLeft, right: right as Float32Array, sampleRate, preset, overrides };
+  }
+  return requestObject('masterAudioStereoAsync', requestOrLeft, 'left');
 }
 
 export function masterAudio(request: MasterAudioRequest): MasteringChainResult;
@@ -496,9 +527,7 @@ export function masterAudio(
  * `onProgress`/`cancel` if you need them, or spin up multiple async calls in
  * parallel).
  */
-export function masterAudioAsync(
-  request: Omit<MasterAudioRequest, 'onProgress' | 'cancel'>,
-): Promise<MasteringChainResult>;
+export function masterAudioAsync(request: MasterAudioAsyncRequest): Promise<MasteringChainResult>;
 export function masterAudioAsync(
   samples: Float32Array,
   sampleRate?: number,
@@ -506,7 +535,7 @@ export function masterAudioAsync(
   overrides?: MasteringChainConfig,
 ): Promise<MasteringChainResult>;
 export function masterAudioAsync(
-  samples: Omit<MasterAudioRequest, 'onProgress' | 'cancel'> | Float32Array,
+  samples: MasterAudioAsyncRequest | Float32Array,
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
   overrides: MasteringChainConfig = {},
@@ -521,13 +550,7 @@ export function masterAudioAsync(
   // non-numeric override leaf); route that through the same rejected-Promise
   // contract so `fn(...).catch(h)` sees every validation failure.
   try {
-    const request = masterAudioRequest(
-      'masterAudioAsync',
-      samples,
-      sampleRate,
-      presetName,
-      overrides,
-    );
+    const request = masterAudioAsyncRequest(samples, sampleRate, presetName, overrides);
     const resolvedSampleRate = request.sampleRate ?? 22050;
     assertAudioInput('masterAudioAsync', request.samples, resolvedSampleRate, request);
     return addon.masterAudioAsync(
@@ -595,7 +618,7 @@ export function masterAudioStereo(
  * Asynchronous variant of {@link masterAudioStereo}.
  */
 export function masterAudioStereoAsync(
-  request: Omit<MasterAudioStereoRequest, 'onProgress' | 'cancel'>,
+  request: MasterAudioStereoAsyncRequest,
 ): Promise<MasteringChainStereoResult>;
 export function masterAudioStereoAsync(
   left: Float32Array,
@@ -605,7 +628,7 @@ export function masterAudioStereoAsync(
   overrides?: MasteringChainConfig,
 ): Promise<MasteringChainStereoResult>;
 export function masterAudioStereoAsync(
-  left: Omit<MasterAudioStereoRequest, 'onProgress' | 'cancel'> | Float32Array,
+  left: MasterAudioStereoAsyncRequest | Float32Array,
   right: Float32Array | undefined = undefined,
   sampleRate = 22050,
   presetName: MasteringPreset = 'pop',
@@ -627,14 +650,7 @@ export function masterAudioStereoAsync(
   // non-numeric override leaf); route that through the same rejected-Promise
   // contract so `fn(...).catch(h)` sees every validation failure.
   try {
-    const request = masterAudioStereoRequest(
-      'masterAudioStereoAsync',
-      left,
-      right,
-      sampleRate,
-      presetName,
-      overrides,
-    );
+    const request = masterAudioStereoAsyncRequest(left, right, sampleRate, presetName, overrides);
     const resolvedSampleRate = request.sampleRate ?? 22050;
     assertAudioInput('masterAudioStereoAsync', request.left, resolvedSampleRate, request, 'left');
     assertAudioInput('masterAudioStereoAsync', request.right, resolvedSampleRate, request, 'right');

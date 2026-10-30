@@ -507,7 +507,7 @@ describe('the detectors refuse what they cannot measure', () => {
     expect(() =>
       // biome-ignore lint/suspicious/noExplicitAny: the point of the case is a value the type rejects.
       masteringRepairDetectCrackle({ samples: crackly(), sampleRate: SR, mode: 'nope' as any }),
-    ).toThrow(/unknown decrackle mode/);
+    ).toThrow(/mode must be one of/);
   });
 
   it('refuses a negative padding count by name', () => {

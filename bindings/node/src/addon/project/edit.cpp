@@ -829,9 +829,7 @@ Napi::Value ProjectWrap::RenameTrack(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   uint32_t track_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id)) return env.Undefined();
-  // A supplied name and an omitted one are different requests, so presence is
-  // read separately from the value: nullptr keeps the existing name, an empty
-  // string clears it.
+  // An omitted name goes to the C ABI as nullptr, which it reads as an empty name.
   const bool has_name = info.Length() > 1 && !info[1].IsUndefined() && !info[1].IsNull();
   std::string name;
   if (has_name && !OptionalStringArg(env, info, 1, "name", "", &name)) return env.Undefined();
@@ -847,8 +845,7 @@ Napi::Value ProjectWrap::SetTrackRoute(const Napi::CallbackInfo& info) {
   SONARE_NODE_REQUIRE_OPEN(env, project_, "Project");
   uint32_t track_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id)) return env.Undefined();
-  // As in RenameTrack, presence is read separately from the value: nullptr
-  // keeps the existing route, an empty string clears it.
+  // As in RenameTrack, an omitted field goes as nullptr, which clears it like "".
   const bool has_strip = info.Length() > 1 && !info[1].IsUndefined() && !info[1].IsNull();
   const bool has_output = info.Length() > 2 && !info[2].IsUndefined() && !info[2].IsNull();
   std::string strip;

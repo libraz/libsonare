@@ -325,6 +325,13 @@ export class VocalEditDraft implements Disposable {
   }
 }
 
+/** Refuses a render whose signal is already aborted, as an `AbortError` like the WASM surface. */
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new DOMException('The render was aborted', 'AbortError');
+  }
+}
+
 /** An immutable render view whose lifetime is independent of its session. */
 export class VocalRenderSnapshot implements Disposable {
   private disposed = false;
@@ -341,18 +348,21 @@ export class VocalRenderSnapshot implements Disposable {
 
   render(request: VocalRenderRequest): VocalRenderResult {
     this.requireAlive();
+    throwIfAborted(request.signal);
     return cloneRenderResult(this.native.render(this.resolveRange(request), request.requestId));
   }
 
-  renderAsync(request: VocalRenderRequest): Promise<VocalRenderResult> {
+  async renderAsync(request: VocalRenderRequest): Promise<VocalRenderResult> {
     this.requireAlive();
-    return this.native
-      .renderAsync(this.resolveRange(request), request.requestId, request.signal)
-      .then(cloneRenderResult);
+    throwIfAborted(request.signal);
+    return cloneRenderResult(
+      await this.native.renderAsync(this.resolveRange(request), request.requestId, request.signal),
+    );
   }
 
   beginRenderJob(request: VocalRenderRequest): VocalRenderJob {
     this.requireAlive();
+    throwIfAborted(request.signal);
     return wrapVocalRenderJob(
       this.native.beginRenderJob(this.resolveRange(request), request.requestId),
     );

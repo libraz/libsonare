@@ -91,6 +91,16 @@ SonareDecomposeStemsConfig ReadDecomposeStemsConfig(const Napi::Value& value, st
   return config;
 }
 
+/// @brief Reads a remix `intervals` list, refusing a trailing start with no end.
+/// @throws Napi::RangeError for an odd length.
+std::vector<int> ReadRemixIntervals(Napi::Env env, const Napi::Value& value) {
+  std::vector<int> intervals = IntVectorFromValue(value, "intervals");
+  if (intervals.size() % 2 != 0) {
+    throw Napi::RangeError::New(env, "remix intervals must be (start, end) pairs");
+  }
+  return intervals;
+}
+
 }  // namespace
 
 Napi::Value SonareWrap::VoiceCharacterPresetId(const Napi::CallbackInfo& info) {
@@ -396,12 +406,7 @@ Napi::Value SonareWrap::Remix(const Napi::CallbackInfo& info) {
   }
   SONARE_NODE_TRY
   auto arr = info[0].As<Napi::Float32Array>();
-  std::vector<int> intervals = IntVectorFromValue(info[1], "intervals");
-  if (intervals.size() % 2 != 0) {
-    Napi::TypeError::New(env, "remix intervals must be (start, end) pairs")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  std::vector<int> intervals = ReadRemixIntervals(env, info[1]);
   int sr{};
   if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sr)) return env.Undefined();
   bool align_zeros = false;
@@ -426,12 +431,7 @@ Napi::Value SonareWrap::RemixAlignedIntervals(const Napi::CallbackInfo& info) {
   }
   SONARE_NODE_TRY
   auto arr = info[0].As<Napi::Float32Array>();
-  std::vector<int> intervals = IntVectorFromValue(info[1], "intervals");
-  if (intervals.size() % 2 != 0) {
-    Napi::TypeError::New(env, "remix intervals must be (start, end) pairs")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  std::vector<int> intervals = ReadRemixIntervals(env, info[1]);
   int sr{};
   if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sr)) return env.Undefined();
   bool align_zeros = true;

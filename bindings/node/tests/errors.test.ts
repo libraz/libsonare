@@ -284,12 +284,20 @@ describe('the canonical exception map covers every core ErrorCode', () => {
 describe('SONARE_NODE_CATCH classifies a raw std::exception through the shared classifier', () => {
   it('routes each catch macro through the one translator, which classifies once', () => {
     const text = addonSourceText('sonare_wrap_utils.h');
-    const nodeCatch = text.slice(text.indexOf('#define SONARE_NODE_CATCH('));
-    const tryCatch = nodeCatch.slice(0, nodeCatch.indexOf('#define SONARE_NODE_CATCH_VOID('));
-    const voidCatch = nodeCatch.slice(nodeCatch.indexOf('#define SONARE_NODE_CATCH_VOID('));
+    const macroBody = (name: string) => {
+      const start = text.indexOf(`#define ${name}(`);
+      expect(start).toBeGreaterThanOrEqual(0);
+      const end = text.indexOf('\n\n', start);
+      return text.slice(start, end < 0 ? undefined : end);
+    };
     const hits = (s: string) => (s.match(/ThrowCurrentException/g) ?? []).length;
-    expect(hits(tryCatch)).toBe(1);
-    expect(hits(voidCatch)).toBe(1);
+    for (const name of [
+      'SONARE_NODE_CATCH',
+      'SONARE_NODE_CATCH_REJECT',
+      'SONARE_NODE_CATCH_VOID',
+    ]) {
+      expect(hits(macroBody(name)), name).toBe(1);
+    }
     const helper = addonSourceText('sonare_wrap_utils.cpp');
     expect((helper.match(/error_code_for_std_exception/g) ?? []).length).toBe(1);
   });

@@ -255,6 +255,7 @@ Napi::Value SonareWrap::MelToStft(const Napi::CallbackInfo& info) {
   if (!OptionalFiniteFloatArg(env, info, 5, "fmin", 0.0f, &fmin)) return env.Undefined();
   float fmax{};
   if (!OptionalFiniteFloatArg(env, info, 6, "fmax", 0.0f, &fmax)) return env.Undefined();
+  sonare::validate_mel_bounds(fmin, fmax);
   bool htk = false;
   if (!OptionalBoolArg(env, info, 7, "htk", false, &htk)) {
     return env.Undefined();
@@ -307,6 +308,7 @@ Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
   if (!OptionalFiniteFloatArg(env, info, 6, "fmin", 0.0f, &fmin)) return env.Undefined();
   float fmax{};
   if (!OptionalFiniteFloatArg(env, info, 7, "fmax", 0.0f, &fmax)) return env.Undefined();
+  sonare::validate_mel_bounds(fmin, fmax);
   int n_iter{};
   if (!OptionalIntArg(env, info, 8, "nIter", 32, &n_iter)) return env.Undefined();
   bool htk = false;
@@ -430,6 +432,7 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
   if (!OptionalFiniteFloatArg(env, info, 7, "fmin", 0.0f, &fmin)) return env.Undefined();
   float fmax{};
   if (!OptionalFiniteFloatArg(env, info, 8, "fmax", 0.0f, &fmax)) return env.Undefined();
+  sonare::validate_mel_bounds(fmin, fmax);
   int n_iter{};
   if (!OptionalIntArg(env, info, 9, "nIter", 32, &n_iter)) return env.Undefined();
   bool htk = false;

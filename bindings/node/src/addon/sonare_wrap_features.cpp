@@ -110,6 +110,7 @@ Napi::Value SonareWrap::MelSpectrogramFn(const Napi::CallbackInfo& info) {
   if (!OptionalFloatArg(env, info, 6, "fmax", 0.0f, &fmax)) return env.Undefined();
   bool htk{};
   if (!OptionalBoolArg(env, info, 7, "htk", false, &htk)) return env.Undefined();
+  sonare::validate_mel_bounds(fmin, fmax);
 
   sonare::validate_offline_audio_input(data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);
@@ -170,6 +171,7 @@ Napi::Value SonareWrap::Mfcc(const Napi::CallbackInfo& info) {
   if (!OptionalBoolArg(env, info, 8, "htk", false, &htk)) return env.Undefined();
   float lifter{};
   if (!OptionalFloatArg(env, info, 9, "lifter", 0.0f, &lifter)) return env.Undefined();
+  sonare::validate_mel_bounds(fmin, fmax);
 
   sonare::validate_offline_audio_input(data, length, args.sample_rate);
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, args.sample_rate);

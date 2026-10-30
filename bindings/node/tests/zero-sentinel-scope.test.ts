@@ -160,14 +160,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     '0 is the unset track id, which scopes the sidecar to the project instead of to a track.',
   ],
   [
-    'project/render.cpp:blockSize',
-    'The C ABI reads <= 0 as 128, but the offline render is block-size independent, so no block size — the one 0 selects included — moves the samples.',
-  ],
-  [
-    'project/render.cpp:sampleRate',
-    "The C ABI reads <= 0 as the project's own rate and refuses any other, so the only accepted value is the one 0 selects.",
-  ],
-  [
     'project/render.cpp:instrumentLatencySamples',
     'Host-instrument PDC fed to the compiler. Unsettled rather than inert: a control that moves the render needs a latency-reporting host instrument, so what its zero does here has not been observed.',
   ],
@@ -308,6 +300,7 @@ const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
   ['FiniteFloatProperty', 'Reads a float; truncation is not in play.'],
   ['AutoFiniteFloatProperty', 'Reads a float or the string "auto"; truncation is not in play.'],
   ['StringProperty', 'Reads a string, so it has no numeric fallback at all.'],
+  ['ChoiceProperty', 'Reads an enum name, so it has no numeric fallback at all.'],
   ['GsEfxRealizationProperty', 'Reads a realisation name, so it has no numeric fallback at all.'],
   [
     'NamedSelectorProperty',

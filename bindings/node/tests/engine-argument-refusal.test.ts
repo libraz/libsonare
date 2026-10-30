@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ErrorCode, RealtimeEngine, SonareError } from '../src/index.js';
+import { expectRefusal } from './_helpers.js';
 
 const UNKNOWN_ID = 987654;
 
@@ -102,5 +103,28 @@ describe('RealtimeEngine state refusals stay coded SonareError', () => {
     expect(() => engine.setBusStripPan(1, 0)).toThrow(
       expect.objectContaining({ code: ErrorCode.InvalidState }),
     );
+  });
+});
+
+describe('RealtimeEngine strip controls refuse an omitted required argument', () => {
+  it('names sceneJson when it is missing', () => {
+    withEngine((engine) => {
+      const native = (engine as unknown as { native: Record<string, (...a: unknown[]) => void> })
+        .native;
+      expectRefusal(() => native.setMasterStripJson(undefined), TypeError, /sceneJson/);
+      expectRefusal(() => native.setTrackStripJson(10), TypeError, /sceneJson/);
+    });
+  });
+
+  it('refuses a missing bypassed flag and leaves the insert state alone', () => {
+    withEngine((engine) => {
+      engine.setTrackStripJson(
+        10,
+        '{"version":1,"strips":[{"id":"s"}],"buses":[],"connections":[]}',
+      );
+      const native = (engine as unknown as { native: Record<string, (...a: unknown[]) => void> })
+        .native;
+      expectRefusal(() => native.setTrackStripInsertBypassed(10, 0), TypeError, /bypassed/);
+    });
   });
 });

@@ -1,10 +1,7 @@
 /// @file
 /// @brief Node bindings for the impulsive-defect repairs: declick, declip, decrackle.
 
-#include <algorithm>
-#include <cctype>
 #include <cstddef>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -24,18 +21,13 @@ namespace {
 
 sonare::mastering::repair::DecrackleMode parse_decrackle_mode(
     const Napi::Object& options, sonare::mastering::repair::DecrackleMode fallback) {
-  Napi::Value value = options.Get("mode");
-  if (value.IsUndefined() || value.IsNull()) return fallback;
-  if (!value.IsString()) throw std::runtime_error("decrackle mode must be a string");
-  std::string s = node_narrow_string(value.Env(), value, "mode");
-  std::transform(s.begin(), s.end(), s.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  if (s == "median") return sonare::mastering::repair::DecrackleMode::Median;
-  if (s == "waveletshrinkage" || s == "wavelet_shrinkage" || s == "wavelet") {
-    return sonare::mastering::repair::DecrackleMode::WaveletShrinkage;
-  }
-  throw std::runtime_error("unknown decrackle mode: " +
-                           node_narrow_string(value.Env(), value, "mode"));
+  using sonare::mastering::repair::DecrackleMode;
+  static constexpr NodeChoice<DecrackleMode> kChoices[] = {
+      {"median", DecrackleMode::Median},
+      {"waveletshrinkage", DecrackleMode::WaveletShrinkage},
+      {"wavelet_shrinkage", DecrackleMode::WaveletShrinkage},
+      {"wavelet", DecrackleMode::WaveletShrinkage}};
+  return ChoiceProperty(options, "mode", kChoices, fallback);
 }
 
 // The library default (sonare_c_mastering.h), the base an options bag is read over.

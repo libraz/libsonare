@@ -11,7 +11,8 @@
 
 import { describe, expect, it } from 'vitest';
 import type { NoteObject, PolyphonicAnalysis, PolyphonicAnalysisOptions } from '../src/index.js';
-import { analyzePolyphonic, isSonareError } from '../src/index.js';
+import { analyzePolyphonic, ErrorCode } from '../src/index.js';
+import { expectRefusal } from './_helpers.js';
 
 const SR = 44100;
 const LENGTH = 22050;
@@ -93,20 +94,6 @@ function expectEdited(out: Float32Array, source: Float32Array): void {
 
 function span(note: NoteObject): number {
   return note.frameEnd - note.frameStart;
-}
-
-function caught(body: () => unknown): unknown {
-  try {
-    body();
-  } catch (error) {
-    return error;
-  }
-  return undefined;
-}
-
-function expectRefusal(error: unknown, errorClass: ErrorConstructor = RangeError): void {
-  expect(error).toBeInstanceOf(errorClass);
-  expect(isSonareError(error)).toBe(false);
 }
 
 describe('analyzePolyphonic', () => {
@@ -229,16 +216,16 @@ describe('analyzePolyphonic', () => {
     // pre-empts that as a RangeError; a wrong TYPE on the
     // same field is the same check and reports a TypeError.
     expectRefusal(
-      caught(() => analyzePolyphonic({ samples: CHORD, sampleRate: SR, hopLength: 2 ** 32 })),
+      () => analyzePolyphonic({ samples: CHORD, sampleRate: SR, hopLength: 2 ** 32 }),
+      RangeError,
     );
     expectRefusal(
-      caught(() =>
+      () =>
         analyzePolyphonic({
           samples: CHORD,
           sampleRate: SR,
           hopLength: '1024' as unknown as number,
         }),
-      ),
       TypeError,
     );
   });
@@ -381,13 +368,13 @@ describe('the polyphonic surface refuses what it cannot do', () => {
   it('rejects a note index the analysis does not have', () => {
     withAnalysis((analysis) => {
       const past = analysis.noteCount;
-      expectRefusal(caught(() => analysis.setNoteEdit(past, { gainDb: -6 })));
-      expectRefusal(caught(() => analysis.noteF0(past)));
-      expectRefusal(caught(() => analysis.noteAmplitude(past)));
-      expectRefusal(caught(() => analysis.noteSalience(past)));
+      expectRefusal(() => analysis.setNoteEdit(past, { gainDb: -6 }), RangeError);
+      expectRefusal(() => analysis.noteF0(past), RangeError);
+      expectRefusal(() => analysis.noteAmplitude(past), RangeError);
+      expectRefusal(() => analysis.noteSalience(past), RangeError);
       // The envelope sizes its buffer from the note rather than from the span, so
       // its out-of-range path is its own and is asserted rather than assumed.
-      expectRefusal(caught(() => analysis.noteEnvelope(past)));
+      expectRefusal(() => analysis.noteEnvelope(past), RangeError);
       // The refusals left the handle usable.
       expect(analysis.notes()).toHaveLength(past);
     });
@@ -429,18 +416,56 @@ describe('the polyphonic surface refuses what it cannot do', () => {
     analysis.destroy();
     expect(() => analysis.destroy()).not.toThrow();
 
-    expect(() => analysis.noteCount).toThrow('PolyphonicAnalysis has been destroyed');
-    expect(() => analysis.frameCount).toThrow('PolyphonicAnalysis has been destroyed');
-    expect(() => analysis.notes()).toThrow('PolyphonicAnalysis has been destroyed');
-    expect(() => analysis.polyphony()).toThrow('PolyphonicAnalysis has been destroyed');
-    expect(() => analysis.noteF0(0)).toThrow('PolyphonicAnalysis has been destroyed');
-    expect(() => analysis.noteAmplitude(0)).toThrow('PolyphonicAnalysis has been destroyed');
-    expect(() => analysis.noteSalience(0)).toThrow('PolyphonicAnalysis has been destroyed');
-    expect(() => analysis.noteEnvelope(0)).toThrow('PolyphonicAnalysis has been destroyed');
-    expect(() => analysis.setNoteEdit(0, { gainDb: -6 })).toThrow(
-      'PolyphonicAnalysis has been destroyed',
+    expectRefusal(
+      () => analysis.noteCount,
+      ErrorCode.InvalidState,
+      /PolyphonicAnalysis has been destroyed/,
     );
-    expect(() => analysis.render()).toThrow('PolyphonicAnalysis has been destroyed');
+    expectRefusal(
+      () => analysis.frameCount,
+      ErrorCode.InvalidState,
+      /PolyphonicAnalysis has been destroyed/,
+    );
+    expectRefusal(
+      () => analysis.notes(),
+      ErrorCode.InvalidState,
+      /PolyphonicAnalysis has been destroyed/,
+    );
+    expectRefusal(
+      () => analysis.polyphony(),
+      ErrorCode.InvalidState,
+      /PolyphonicAnalysis has been destroyed/,
+    );
+    expectRefusal(
+      () => analysis.noteF0(0),
+      ErrorCode.InvalidState,
+      /PolyphonicAnalysis has been destroyed/,
+    );
+    expectRefusal(
+      () => analysis.noteAmplitude(0),
+      ErrorCode.InvalidState,
+      /PolyphonicAnalysis has been destroyed/,
+    );
+    expectRefusal(
+      () => analysis.noteSalience(0),
+      ErrorCode.InvalidState,
+      /PolyphonicAnalysis has been destroyed/,
+    );
+    expectRefusal(
+      () => analysis.noteEnvelope(0),
+      ErrorCode.InvalidState,
+      /PolyphonicAnalysis has been destroyed/,
+    );
+    expectRefusal(
+      () => analysis.setNoteEdit(0, { gainDb: -6 }),
+      ErrorCode.InvalidState,
+      /PolyphonicAnalysis has been destroyed/,
+    );
+    expectRefusal(
+      () => analysis.render(),
+      ErrorCode.InvalidState,
+      /PolyphonicAnalysis has been destroyed/,
+    );
   });
 
   it('frees the native analysis via `using`', () => {
@@ -453,7 +478,11 @@ describe('the polyphonic surface refuses what it cannot do', () => {
     // After the block, dispose ran; destroy() is idempotent so a second call must
     // not throw, and the handle is gone.
     expect(() => captured?.destroy()).not.toThrow();
-    expect(() => captured?.notes()).toThrow('PolyphonicAnalysis has been destroyed');
+    expectRefusal(
+      () => captured?.notes(),
+      ErrorCode.InvalidState,
+      /PolyphonicAnalysis has been destroyed/,
+    );
   });
 });
 
@@ -488,7 +517,7 @@ describe('reattackRatio', () => {
 
   it('refuses a ratio outside 0 or above 1', () => {
     for (const reattackRatio of [0.5, 1, -1]) {
-      expect(() => notes({ reattackRatio })).toThrow();
+      expect(() => notes({ reattackRatio })).toThrow(RangeError);
     }
   });
 });

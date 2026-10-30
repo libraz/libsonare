@@ -108,6 +108,12 @@ void ThrowCurrentException(Napi::Env env) {
   }
 }
 
+Napi::Promise RejectedFromPending(Napi::Env env) {
+  Napi::Promise::Deferred deferred = Napi::Promise::Deferred::New(env);
+  deferred.Reject(env.GetAndClearPendingException().Value());
+  return deferred.Promise();
+}
+
 void ThrowLastSonareError(Napi::Env env, const std::string& prefix, SonareError fallback) {
   SonareError code = sonare_last_error_code();
   if (code == SONARE_OK) code = fallback;

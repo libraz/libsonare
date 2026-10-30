@@ -1313,22 +1313,10 @@ const PLP_REQUEST_KEYS = keySet(
   'tempoMax',
   'winLength',
 );
-const ONSET_ENVELOPE_REQUEST_KEYS = keySet(
-  'nMels',
-  'fmin',
-  'fmax',
-  'htk',
-  'nFft',
-  'hopLength',
-  'samples',
-  'sampleRate',
-);
+const ONSET_ENVELOPE_REQUEST_KEYS = keySet('nMels', 'nFft', 'hopLength', 'samples', 'sampleRate');
 const ONSET_STRENGTH_MULTI_REQUEST_KEYS = keySet(
   'nBands',
   'nMels',
-  'fmin',
-  'fmax',
-  'htk',
   'nFft',
   'hopLength',
   'samples',
@@ -1485,6 +1473,7 @@ const MASTER_AUDIO_REQUEST_KEYS = keySet(
   'onProgress',
   'cancel',
 );
+const MASTER_AUDIO_ASYNC_REQUEST_KEYS = keySet('samples', 'sampleRate', 'preset', 'overrides');
 const MASTER_AUDIO_STEREO_REQUEST_KEYS = keySet(
   'left',
   'right',
@@ -1493,6 +1482,14 @@ const MASTER_AUDIO_STEREO_REQUEST_KEYS = keySet(
   'overrides',
   'onProgress',
   'cancel',
+);
+
+const MASTER_AUDIO_STEREO_ASYNC_REQUEST_KEYS = keySet(
+  'left',
+  'right',
+  'sampleRate',
+  'preset',
+  'overrides',
 );
 
 export const MUSIC_ANALYZE_OPTIONS_KEYS = keySet(
@@ -1803,9 +1800,9 @@ export const REQUEST_KEYS = {
   transcribe: TRANSCRIBE_REQUEST_KEYS,
   restoreVocalEditSession: VOCAL_RESTORE_REQUEST_KEYS,
   masterAudio: MASTER_AUDIO_REQUEST_KEYS,
-  masterAudioAsync: MASTER_AUDIO_REQUEST_KEYS,
+  masterAudioAsync: MASTER_AUDIO_ASYNC_REQUEST_KEYS,
   masterAudioStereo: MASTER_AUDIO_STEREO_REQUEST_KEYS,
-  masterAudioStereoAsync: MASTER_AUDIO_STEREO_REQUEST_KEYS,
+  masterAudioStereoAsync: MASTER_AUDIO_STEREO_ASYNC_REQUEST_KEYS,
   analyzeAsync: MUSIC_ANALYZE_REQUEST_KEYS,
   masteringAssistantSuggestStereo: MASTERING_ASSISTANT_SUGGEST_STEREO_REQUEST_KEYS,
   masteringAssistantSuggestChainStereo: MASTERING_ASSISTANT_SUGGEST_STEREO_REQUEST_KEYS,

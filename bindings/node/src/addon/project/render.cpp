@@ -28,9 +28,9 @@ namespace {
 // Fills `options` from a JS bounce-options object (zero-initialized on entry).
 void FillBounceOptions(const Napi::Object& obj, SonareProjectBounceOptions* options) {
   options->total_frames = Int64Property(obj, "totalFrames", kZeroIsSentinel);
-  options->block_size = IntProperty(obj, "blockSize", 0);
+  options->block_size = IntProperty(obj, "blockSize", kZeroIsSentinel);
   options->num_channels = IntProperty(obj, "numChannels", kZeroIsSentinel);
-  options->sample_rate = IntProperty(obj, "sampleRate", 0);
+  options->sample_rate = IntProperty(obj, "sampleRate", kZeroIsSentinel);
   options->instrument_latency_samples = IntProperty(obj, "instrumentLatencySamples", 0);
 }
 
