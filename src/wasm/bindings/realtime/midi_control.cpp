@@ -125,8 +125,7 @@ void RealtimeEngineWasm::bindMidiCc(const val& channel_val, const val& controlle
   (void)param_id_val;
   (void)min_value_val;
   (void)max_value_val;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -165,8 +164,7 @@ void RealtimeEngineWasm::bindMidiCcBinding(val object) {
   }
 #else
   (void)object;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -203,8 +201,7 @@ void RealtimeEngineWasm::setControllerProfile(const val& destination_id_val,
 #else
   (void)destination_id_val;
   (void)preset_name;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -269,8 +266,7 @@ void RealtimeEngineWasm::bindController(const val& destination_id_val, val bindi
 #else
   (void)destination_id_val;
   (void)binding;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -285,8 +281,7 @@ void RealtimeEngineWasm::clearControllerBindings(const val& destination_id_val) 
   wasmInstallControllerProfile(engine_, destination_id, profile);
 #else
   (void)destination_id_val;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -296,8 +291,7 @@ size_t RealtimeEngineWasm::controllerBindingCount(const val& destination_id_val)
   return wasmControllerProfile(engine_, destination_id).binding_count();
 #else
   (void)destination_id_val;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -315,8 +309,7 @@ void RealtimeEngineWasm::setControllerVelocityMeaningful(const val& destination_
 #else
   (void)destination_id_val;
   (void)meaningful;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -326,8 +319,7 @@ bool RealtimeEngineWasm::controllerVelocityMeaningful(const val& destination_id_
   return wasmControllerProfile(engine_, destination_id).velocity_meaningful;
 #else
   (void)destination_id_val;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -356,8 +348,7 @@ void RealtimeEngineWasm::setControllerNoteTracking(const val& destination_id_val
   (void)destination_id_val;
   (void)dimension;
   (void)tracking;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -376,8 +367,7 @@ val RealtimeEngineWasm::controllerNoteTracking(const val& destination_id_val, va
 #else
   (void)destination_id_val;
   (void)dimension;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -409,8 +399,7 @@ void RealtimeEngineWasm::setArticulation(const val& destination_id_val, const va
   (void)destination_id_val;
   (void)channel_val;
   (void)articulation;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -431,8 +420,7 @@ val RealtimeEngineWasm::articulation(const val& destination_id_val, const val& c
 #else
   (void)destination_id_val;
   (void)channel_val;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -455,8 +443,7 @@ uint32_t RealtimeEngineWasm::legatoFallbackCount(const val& destination_id_val) 
   return counted > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(counted);
 #else
   (void)destination_id_val;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -515,8 +502,7 @@ void RealtimeEngineWasm::setPartRig(const val& destination_id_val, const val& pa
   (void)part_val;
   (void)mode;
   (void)inserts_json;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 

@@ -16,6 +16,8 @@
 #include "util/zero_is_default.h"
 #include "wasm/bindings/common/common.h"
 
+namespace {
+
 std::vector<Mode> modesFromVal(val modes) {
   std::vector<Mode> out;
   if (modes.isUndefined() || modes.isNull()) {
@@ -74,26 +76,6 @@ void validateKey(int key_root, int key_mode) {
   }
 }
 
-// Module-local mono/stereo runners. They delegate to the shared latency-
-// compensating helpers in `mastering::api::internal` so the WASM bridge,
-// `MasteringChain`, and `apply_named_processor` all go through the same
-// implementation and stay in sync.
-void processMono(sonare::rt::ProcessorBase& processor, std::vector<float>& samples,
-                 int sample_rate) {
-  mastering::api::internal::run_processor_mono(processor, samples, sample_rate);
-}
-
-void processStereo(sonare::rt::ProcessorBase& processor, std::vector<float>& left,
-                   std::vector<float>& right, int sample_rate) {
-  mastering::api::internal::run_processor_stereo(processor, left, right, sample_rate);
-}
-
-float integratedLufs(const std::vector<float>& samples, int sample_rate) {
-  validate_offline_audio_input(samples.data(), samples.size(), sample_rate);
-  Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
-  return metering::lufs(audio).integrated_lufs;
-}
-
 val chordToVal(const Chord& chord_result) {
   val chord = val::object();
   chord.set("root", static_cast<int>(chord_result.root));
@@ -141,6 +123,8 @@ val numberArrayFromVector(const std::vector<int>& values) {
   }
   return out;
 }
+
+}  // namespace
 
 /// @brief Converts AnalysisResult to JavaScript object.
 /// @param result Analysis result
@@ -330,6 +314,8 @@ val js_detect_key(val samples, const val& sample_rate_val) {
   return result;
 }
 
+namespace {
+
 // A `tuning` value: a semitone fraction, or the string "auto" to measure it from the audio.
 struct TuningArg {
   float tuning = 0.0f;
@@ -348,8 +334,6 @@ TuningArg tuningFromVal(const val& value, const char* key) {
   out.tuning = checkedFloatFromVal(value, key);
   return out;
 }
-
-namespace {
 
 KeyConfig makeKeyConfig(int n_fft, int hop_length, bool use_hpss, bool loudness_weighted,
                         float high_pass_hz, val modes, int profile_type,

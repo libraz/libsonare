@@ -70,8 +70,7 @@ void RealtimeEngineWasm::setBuiltinInstrument(const val& destination_id_val, val
 #else
   (void)destination_id_val;
   (void)config;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -167,8 +166,7 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
   engine_.set_midi_clips(std::move(clips));
 #else
   (void)clips_val;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -207,8 +205,7 @@ void RealtimeEngineWasm::setSynthInstrument(const val& destination_id_val, val p
 #else
   (void)destination_id_val;
   (void)patch;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -255,8 +252,7 @@ void RealtimeEngineWasm::loadSoundFont(val data) {
   soundfont_ = std::move(soundfont);
 #else
   (void)data;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -300,8 +296,7 @@ void RealtimeEngineWasm::setSf2Instrument(const val& destination_id_val, val con
 #else
   (void)destination_id_val;
   (void)config;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -387,8 +382,7 @@ void RealtimeEngineWasm::setMidiFx(const val& destination_id_val, const std::str
 #else
   (void)destination_id_val;
   (void)config_json;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 

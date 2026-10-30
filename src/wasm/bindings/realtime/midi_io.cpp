@@ -19,6 +19,23 @@ void refuseLivePushArg(const char* what, const char* error) {
   if (error != nullptr) throw WasmRangeError(std::string(what) + ": " + error);
 }
 
+// Packs the four scalar fields of a live MIDI command into Command::arg.i
+// (encoding documented in rt/command.h).
+int64_t packMidiScalar(int low, int second, int channel, int group) {
+  const uint64_t packed = static_cast<uint64_t>(low) | (static_cast<uint64_t>(second) << 8) |
+                          (static_cast<uint64_t>(channel) << 16) |
+                          (static_cast<uint64_t>(group) << 24);
+  return static_cast<int64_t>(packed);
+}
+
+// Queues @p command, or throws OutOfMemory (transient back-pressure) with @p message.
+template <typename Engine>
+void pushEngineCommand(Engine& engine, const sonare::rt::Command& command, const char* message) {
+  if (!engine.push_command(command)) {
+    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory, message);
+  }
+}
+
 }  // namespace
 
 void RealtimeEngineWasm::setMidiInputSource(const val& destination_id_val) {
@@ -28,8 +45,7 @@ void RealtimeEngineWasm::setMidiInputSource(const val& destination_id_val) {
   midi_input_source_enabled_ = true;
 #else
   (void)destination_id_val;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -61,8 +77,7 @@ void RealtimeEngineWasm::setMidiDestinationExternal(const val& destination_id_va
 #else
   (void)destination_id_val;
   (void)external;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -73,8 +88,7 @@ void RealtimeEngineWasm::setExternalMidiClockEnabled(bool enabled) {
   engine_.set_external_midi_clock_enabled(enabled);
 #else
   (void)enabled;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -233,8 +247,7 @@ void RealtimeEngineWasm::pushMidiInputCc(const val& group_val, const val& channe
   (void)controller_val;
   (void)value_val;
   (void)offset_in_block_samples;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -273,8 +286,7 @@ void RealtimeEngineWasm::pushMidiInputPitchBend(const val& group_val, const val&
   (void)channel;
   (void)bend14;
   (void)offset_in_block_samples;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -296,8 +308,7 @@ void RealtimeEngineWasm::pushMidiInputChannelPressure(const val& group_val, cons
   (void)channel;
   (void)pressure;
   (void)offset_in_block_samples;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -321,8 +332,7 @@ void RealtimeEngineWasm::pushMidiInputPolyPressure(const val& group_val, const v
   (void)note;
   (void)pressure;
   (void)offset_in_block_samples;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -365,18 +375,12 @@ void RealtimeEngineWasm::pushMidiCc(const val& destination_id_val, const val& gr
   const int value = checkedIntFromVal(value_val, "value");
   refuseLivePushArg("pushMidiCc",
                     sonare::midi::live_push_cc_error(group, channel, controller, value));
-  const uint64_t packed = static_cast<uint64_t>(value) | (static_cast<uint64_t>(controller) << 8) |
-                          (static_cast<uint64_t>(channel) << 16) |
-                          (static_cast<uint64_t>(group) << 24);
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kMidiCcImmediate;
   command.target_id = destination_id;
   command.sample_time = renderFrameFromVal(render_frame_val);
-  command.arg.i = static_cast<int64_t>(packed);
-  if (!engine_.push_command(command)) {
-    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
-                                  "failed to queue MIDI CC command");
-  }
+  command.arg.i = packMidiScalar(value, controller, channel, group);
+  pushEngineCommand(engine_, command, "failed to queue MIDI CC command");
 }
 
 // Reads 1 to 4 UMP words from a JS array or Uint32Array. A word is idiomatically
@@ -437,8 +441,7 @@ void RealtimeEngineWasm::pushMidiInputUmp(const val& words_val, int64_t offset_i
   pushMidiInputUmpInternal(ump, offset_in_block_samples, "pushMidiInputUmp");
 #else
   (void)offset_in_block_samples;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -502,8 +505,7 @@ void RealtimeEngineWasm::pushMidiProgram(const val& destination_id_val, const va
   (void)args;
   (void)destination_id;
   (void)render_frame;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -526,8 +528,7 @@ void RealtimeEngineWasm::pushMidiInputProgram(const val& group_val, const val& c
 #else
   (void)args;
   (void)offset_in_block_samples;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -538,10 +539,7 @@ void RealtimeEngineWasm::queueMidiUmp(uint32_t destination_id, uint32_t word0,
   command.target_id = destination_id;
   command.sample_time = render_frame;
   command.arg.i = static_cast<int64_t>(word0);
-  if (!engine_.push_command(command)) {
-    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
-                                  "failed to queue MIDI UMP command");
-  }
+  pushEngineCommand(engine_, command, "failed to queue MIDI UMP command");
 }
 
 // The three per-note expression dimensions take the raw-UMP command path rather
@@ -569,8 +567,7 @@ void RealtimeEngineWasm::pushMidiPitchBend(const val& destination_id_val, const 
   (void)channel;
   (void)bend14;
   (void)render_frame_val;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -597,8 +594,7 @@ void RealtimeEngineWasm::pushMidiChannelPressure(const val& destination_id_val,
   (void)channel;
   (void)pressure;
   (void)render_frame_val;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -627,8 +623,7 @@ void RealtimeEngineWasm::pushMidiPolyPressure(const val& destination_id_val, con
   (void)note;
   (void)pressure;
   (void)render_frame_val;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 
@@ -674,10 +669,7 @@ void RealtimeEngineWasm::pushMidiPanic(const val& render_frame_val) {
   command.type = sonare::rt::CommandType::kMidiAllNotesOff;
   command.target_id = 0;
   command.sample_time = renderFrameFromVal(render_frame_val);
-  if (!engine_.push_command(command)) {
-    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
-                                  "failed to queue MIDI panic command");
-  }
+  pushEngineCommand(engine_, command, "failed to queue MIDI panic command");
 }
 
 void RealtimeEngineWasm::pushMidiNote(uint32_t destination_id, int group, int channel, int note,
@@ -686,18 +678,12 @@ void RealtimeEngineWasm::pushMidiNote(uint32_t destination_id, int group, int ch
   refuseLivePushArg(
       type == sonare::rt::CommandType::kMidiNoteOnImmediate ? "pushMidiNoteOn" : "pushMidiNoteOff",
       sonare::midi::live_push_note_error(group, channel, note, velocity));
-  const uint64_t packed = static_cast<uint64_t>(velocity) | (static_cast<uint64_t>(note) << 8) |
-                          (static_cast<uint64_t>(channel) << 16) |
-                          (static_cast<uint64_t>(group) << 24);
   sonare::rt::Command command{};
   command.type = type;
   command.target_id = destination_id;
   command.sample_time = render_frame;
-  command.arg.i = static_cast<int64_t>(packed);
-  if (!engine_.push_command(command)) {
-    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
-                                  "failed to queue MIDI note command");
-  }
+  command.arg.i = packMidiScalar(velocity, note, channel, group);
+  pushEngineCommand(engine_, command, "failed to queue MIDI note command");
 }
 
 void RealtimeEngineWasm::pushMidiInputEvent(int group, int channel, int note, int velocity,
@@ -720,8 +706,7 @@ void RealtimeEngineWasm::pushMidiInputEvent(int group, int channel, int note, in
   (void)velocity;
   (void)offset_in_block_samples;
   (void)note_on;
-  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
-                                "arrangement/MIDI engine is not available in this build");
+  throwMidiEngineUnavailable();
 #endif
 }
 

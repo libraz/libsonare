@@ -234,6 +234,12 @@ inline std::string cErrorMessage(SonareError err, const char* context) {
                                 std::string(context) + text);
 }
 
+/// @brief Throws NotImplemented for an arrangement/MIDI entry point in a build without the engine.
+[[noreturn]] inline void throwMidiEngineUnavailable() {
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "arrangement/MIDI engine is not available in this build");
+}
+
 /// Conservative wasm32 budget for caller-owned Float32Array data copied into
 /// the linear-memory heap. Keeping this below the native offline ceiling leaves
 /// room for the input copy, DSP work buffers, and output arrays.
