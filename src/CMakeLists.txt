@@ -439,6 +439,7 @@ if(BUILD_MASTERING)
     mastering/api/chain_params.cpp
     mastering/api/chain_streaming.cpp
     mastering/api/insert_factory.cpp
+    mastering/api/insert_param_catalog.cpp
     mastering/api/named_processor.cpp
     mastering/api/named_processor_registry.cpp
     mastering/api/presets.cpp
@@ -1671,6 +1672,7 @@ if(BUILD_WASM)
       mastering/api/chain.cpp
       mastering/api/chain_json.cpp
       mastering/api/insert_factory.cpp
+      mastering/api/insert_param_catalog.cpp
       mastering/api/named_processor_registry.cpp
       mastering/assistant/audio_profile.cpp
       mastering/assistant/repair_session.cpp

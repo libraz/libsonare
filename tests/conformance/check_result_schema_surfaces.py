@@ -70,7 +70,7 @@ FAMILIES = {
         },
     },
     "insert_param_info_schema_paths": {
-        "source": REPO_ROOT / "src/mastering/api/insert_factory.cpp",
+        "source": REPO_ROOT / "src/mastering/api/insert_param_catalog.cpp",
         "root": "MasteringInsertParamInfo",
         "surfaces": {
             "node": NODE / "mastering_chain.ts",
@@ -363,9 +363,7 @@ def scan_python(paths: list[str], text: str, root: str) -> tuple[list, list, int
     comparisons = 0
     for path in paths:
         segments = [
-            segment
-            for segment in (s.replace("[]", "") for s in path.split("."))
-            if segment
+            segment for segment in (s.replace("[]", "") for s in path.split(".")) if segment
         ]
         if not segments:
             unreached.append(path)
@@ -405,7 +403,8 @@ def scan_surface(paths: list[str], path: Path, root: str) -> tuple[list, list, i
 
 
 _RELATIVE_MODULE = re.compile(
-    r"""^(?:import|export)\s+(?:type\s+)?(?:\{[^}]*\}|\*)\s+from\s+['"](\./[^'"]+)['"]""", re.MULTILINE
+    r"""^(?:import|export)\s+(?:type\s+)?(?:\{[^}]*\}|\*)\s+from\s+['"](\./[^'"]+)['"]""",
+    re.MULTILINE,
 )
 
 
@@ -447,9 +446,7 @@ def scan(paths: list[str], text: str, root: str) -> tuple[list, list, int]:
         # An array segment names the element type rather than a property, and a
         # root array leaves an empty leading segment once its brackets are gone.
         segments = [
-            segment
-            for segment in (s.replace("[]", "") for s in path.split("."))
-            if segment
+            segment for segment in (s.replace("[]", "") for s in path.split(".")) if segment
         ]
         if not segments:
             unreached.append(path)
@@ -491,9 +488,7 @@ def main() -> int:
             for entry in unreached:
                 print(f"NOT COMPARED {entry} [{side}]: no such path under {root}")
             for entry in missing:
-                print(
-                    f"MISSING {entry} [{side}]: {root} reaches the block but lacks the leaf"
-                )
+                print(f"MISSING {entry} [{side}]: {root} reaches the block but lacks the leaf")
             if missing or unreached or comparisons == 0:
                 failed = True
     if failed:
