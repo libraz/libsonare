@@ -47,6 +47,7 @@ if str(Path(__file__).resolve().parent.parent) not in sys.path:
     sys.path.insert(1, str(Path(__file__).resolve().parent.parent))
 
 from _repo import REPO_ROOT
+from efx_tables_header import camel
 
 TOOLS = Path(__file__).resolve().parent
 GENERATED_BY = "tools/gs/bindings_header.py"
@@ -345,10 +346,6 @@ def float_literal(value: float) -> str:
 def law_constant(law_id: str) -> str:
     """``d.cutoff_hz`` -> ``kGsEfxLawCutoffHz``; ``none`` -> ``kGsEfxLawNone``."""
     return "kGsEfxLaw" + camel(law_id.removeprefix("d."))
-
-
-def camel(name: str) -> str:
-    return "".join(part.capitalize() for part in name.split("_"))
 
 
 def render(rows: list[dict], enables: list[dict]) -> str:
