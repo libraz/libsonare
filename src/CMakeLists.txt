@@ -963,6 +963,8 @@ if(BUILD_ARRANGEMENT)
     midi/synth/native_synth_voice.cpp
     midi/synth/native_synth_live_control.cpp
     midi/synth/native_synth.cpp
+    midi/synth/native_synth_render.cpp
+    midi/synth/native_synth_controllers.cpp
     midi/synth/gm_fallback_map.cpp
     midi/synth/gm_fallback_families.cpp
     midi/synth/gm_fallback_programs.cpp

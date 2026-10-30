@@ -215,7 +215,7 @@ TEST_CASE("onset seed and bow acceleration stay stable across the shipped voices
   // asserted, is that the mechanisms never destabilise the loop.
   constexpr float kAttackNoiseOn = 0.1f;
   constexpr float kBowAccelOnMs = 40.0f;
-  // clamp_synth_patch (native_synth.h:1240-1245) accepts attack_noise anywhere
+  // clamp_synth_patch (patch_clamp.h) accepts attack_noise anywhere
   // in [0,1] and bow_accel_ms anywhere in [0,2000], so the stability check
   // below runs BOTH the candidate depth and the clamp's own upper end -- a
   // bound justified by the clamp range has to be measured over it, not over
