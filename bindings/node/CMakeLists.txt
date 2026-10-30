@@ -64,6 +64,9 @@ set(ADDON_SOURCES
   src/addon/engine/clips_capture.cpp
   src/addon/engine/graph_offline.cpp
   src/addon/engine/strip_controls.cpp
+  src/addon/engine/midi_instruments.cpp
+  src/addon/engine/midi_control.cpp
+  src/addon/engine/midi_io.cpp
   src/addon/sonare_wrap_project.cpp
   src/addon/project/edit.cpp
   src/addon/project/external_stems.cpp

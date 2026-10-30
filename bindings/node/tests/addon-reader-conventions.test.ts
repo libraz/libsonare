@@ -169,7 +169,7 @@ const NON_OPTION_SHARED_READERS: ReadonlySet<string> = new Set([
 
 const BARE_HAS_ALLOWLIST: ReadonlyMap<string, string> = new Map([
   [
-    'sonare_wrap_engine.cpp:events',
+    'engine/midi_instruments.cpp:events',
     'Both branches feed ReadEngineMidiEvents, which rejects a non-array; undefined and omitted produce the same throw.',
   ],
   [

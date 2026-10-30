@@ -190,31 +190,31 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     'A spectral-edit op start position in samples; 0 is the first sample of the buffer.',
   ],
   [
-    'sonare_wrap_engine.cpp:renderFrame',
+    'engine/midi_instruments.cpp:renderFrame',
     'The absolute frame an event is scheduled at; 0 is the first frame of the timeline.',
   ],
   [
-    'sonare_wrap_engine.cpp:data0',
+    'engine/midi_instruments.cpp:data0',
     'The compatibility alias word0 falls back to; 0 is the empty word, and wordCount decides how many words are read.',
   ],
   [
-    'sonare_wrap_engine.cpp:data1',
+    'engine/midi_instruments.cpp:data1',
     'The compatibility alias word1 falls back to; 0 is the empty word, and wordCount decides how many words are read.',
   ],
   [
-    'sonare_wrap_engine.cpp:word2',
+    'engine/midi_instruments.cpp:word2',
     'A trailing UMP word; 0 is the empty word, and wordCount rather than this zero decides how many are read.',
   ],
   [
-    'sonare_wrap_engine.cpp:word3',
+    'engine/midi_instruments.cpp:word3',
     'A trailing UMP word; 0 is the empty word, and wordCount rather than this zero decides how many are read.',
   ],
   [
-    'sonare_wrap_engine.cpp:wordCount',
+    'engine/midi_instruments.cpp:wordCount',
     'Documented as tolerant — anything outside [1,4] lets the C bridge infer the word form. Unsettled: an inferred form and a requested one are not distinguishable from the JS surface, so no control separates them.',
   ],
   [
-    'sonare_wrap_engine.cpp:sysexHandle',
+    'engine/midi_instruments.cpp:sysexHandle',
     'Unsettled: 0 is the absent-handle spelling, and a control needs a live registered handle, which this entry point cannot produce, so what a truncated handle does has not been observed.',
   ],
   ['sonare_wrap_engine.cpp:curveToNext', 'Automation curve ordinal, where 0 is a named curve.'],
@@ -223,22 +223,22 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     'A signed count of sharps or flats; 0 is C major, a quantity the caller can mean.',
   ],
   [
-    'sonare_wrap_engine.cpp:id',
+    'engine/midi_instruments.cpp:id',
     'A host-assigned MIDI clip id, where 0 is the unset id rather than a selector for a default clip.',
   ],
   [
-    'sonare_wrap_engine.cpp:trackId',
+    'engine/midi_instruments.cpp:trackId',
     'The unassigned track id, and also what destinationId falls back to; the clip player returns on it rather than substituting a track.',
   ],
   [
-    'sonare_wrap_engine.cpp:startSample',
+    'engine/midi_instruments.cpp:startSample',
     'A clip start position on the timeline; 0 is the first frame.',
   ],
   [
-    'sonare_wrap_engine.cpp:fadeInSamples',
+    'engine/midi_instruments.cpp:fadeInSamples',
     'A MIDI clip fade length in samples; 0 is no fade, a length the caller can mean.',
   ],
-  ['sonare_wrap_engine.cpp:fadeOutSamples', 'Fade length, as fadeInSamples.'],
+  ['engine/midi_instruments.cpp:fadeOutSamples', 'Fade length, as fadeInSamples.'],
   [
     'sonare_wrap_note_objects.h:timeOffsetSamples',
     'Zero is the identity shift, a displacement a caller can mean rather than a stand-in for absence.',
