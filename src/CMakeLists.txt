@@ -925,6 +925,7 @@ if(BUILD_ARRANGEMENT)
     midi/midi_clip.cpp
     midi/note_targets.cpp
     midi/sequencer.cpp
+    midi/clip_chase.cpp
     midi/smf.cpp
     midi/smf2.cpp
     midi/sysex_framing.cpp
