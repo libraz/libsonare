@@ -42,6 +42,10 @@ struct ModalMode {
   float gain = 1.0f;
   /// t60 multiplier for this mode (< 1 = dies faster than the fundamental).
   float decay_scale = 1.0f;
+  /// Octaves the ratio moves per octave of key, ratio * 2^(key_slope * octaves
+  /// above A4): the untuned upper modes of a short bar fall against its
+  /// fundamental as the bar shortens. 0 = the ratio at every key, bit-identical.
+  float key_slope = 0.0f;
 };
 
 /// Modal section of a NativeSynthPatch (used when mode == kModal).
@@ -68,6 +72,13 @@ struct ModalPatchParams {
   /// How far the contact shortens as the strike hardens: tau = mallet_ms *
   /// vel01 ^ -mallet_vel_exp. 0.2 is the Hertzian mallet-on-bar result.
   float mallet_vel_exp = 0.0f;
+  /// The force pulse read at each mode under @c mallet_ms: the raised cosine
+  /// nulls a mode sitting at twice 1 / tau, the Gaussian does not.
+  ContactShape mallet_shape = ContactShape::kRaisedCosine;
+  /// Phase LFO2 starts its cycle at when the bar is struck, in degrees. A
+  /// motor's vane is wherever it happens to be; a module's sampled tremolo
+  /// starts from one point every time. 0 = the LFO's own start, bit-identical.
+  float tremolo_phase_deg = 0.0f;
   /// Level of the mallet's direct contact radiation, a pulse outside the
   /// envelope that the slow resonators cannot supply in the first milliseconds.
   /// Scaled by velocity. 0 = off, bit-identical.

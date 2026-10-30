@@ -28,10 +28,16 @@
 namespace {
 
 using sonare::midi::MidiEvent;
+using sonare::midi::synth::contact_spectrum;
+using sonare::midi::synth::contact_spectrum_gaussian;
+using sonare::midi::synth::ContactShape;
 using sonare::midi::synth::gm_fallback_drum_patch;
 using sonare::midi::synth::gm_fallback_patch;
+using sonare::midi::synth::LfoShape;
 using sonare::midi::synth::ModalPatchParams;
 using sonare::midi::synth::ModalVoiceCore;
+using sonare::midi::synth::ModDestination;
+using sonare::midi::synth::ModSource;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
@@ -362,6 +368,86 @@ TEST_CASE("mallet velocity controls strike brightness", "[midi][synth][modal]") 
   const double hard_high = high_band_fraction(hard, 512, 440.0 * 3.0);
   const double soft_high = high_band_fraction(soft, 512, 440.0 * 3.0);
   REQUIRE(hard_high > 2.0 * soft_high);
+}
+
+TEST_CASE("a sloped modal mode falls against the key and a flat one holds its ratio",
+          "[midi][synth][modal]") {
+  // A short bar's untuned third mode: 8 f0 at A4, a quarter octave per octave below it.
+  ModalPatchParams params = single_modal_mode(1.0f);
+  params.num_modes = 2;
+  params.modes[1] = {8.0f, 1.0f, 1.0f, -0.25f};
+  for (const uint8_t note : {uint8_t{57}, uint8_t{81}}) {
+    const double f0 = sonare::midi::synth::note_to_hz(note);
+    const double octaves_above_a4 = (static_cast<double>(note) - 69.0) / 12.0;
+    const double expected = 8.0 * std::exp2(-0.25 * octaves_above_a4);
+    const std::vector<float> sloped = render_modal_core(params, note, 1.0f, 48000);
+    const std::vector<double> power = power_spectrum(sloped, 2048);
+    const double peak = refine_peak_hz(power, f0 * expected);
+    INFO("note " << int(note) << " expected ratio " << expected);
+    REQUIRE(std::abs(peak / f0 - expected) < 0.01 * expected);
+    // The flat ratio sits at 8 f0 on both keys, and the sloped one has left it.
+    params.modes[1].key_slope = 0.0f;
+    const std::vector<float> flat = render_modal_core(params, note, 1.0f, 48000);
+    const double flat_peak = refine_peak_hz(power_spectrum(flat, 2048), f0 * 8.0);
+    REQUIRE(std::abs(flat_peak / f0 - 8.0) < 0.08);
+    REQUIRE(band_power(power, f0 * 8.0) < 0.01 * band_power(power, f0 * expected));
+    params.modes[1].key_slope = -0.25f;
+  }
+}
+
+TEST_CASE("the Gaussian contact force has no null where the raised cosine does",
+          "[midi][synth][modal]") {
+  // Both pass unity at DC and half at x = 1; the raised cosine nulls at x = 2.
+  REQUIRE(contact_spectrum(0.0f) == 1.0f);
+  REQUIRE(contact_spectrum_gaussian(0.0f) == 1.0f);
+  REQUIRE(contact_spectrum(1.0f) == 0.5f);
+  REQUIRE(contact_spectrum_gaussian(1.0f) == 0.5f);
+  REQUIRE(contact_spectrum(2.0f) < 1.0e-6f);
+  REQUIRE(contact_spectrum_gaussian(2.0f) == 0.0625f);
+  REQUIRE(contact_spectrum(2.0f, ContactShape::kRaisedCosine) == contact_spectrum(2.0f));
+  REQUIRE(contact_spectrum(2.0f, ContactShape::kGaussian) == contact_spectrum_gaussian(2.0f));
+
+  // A bar whose one mode sits exactly on that null: struck by the raised cosine
+  // it stays silent, by the Gaussian it rings.
+  ModalPatchParams params = single_modal_mode(1.0f);
+  const double f0 = sonare::midi::synth::note_to_hz(uint8_t{69});
+  params.mallet_ms = static_cast<float>(2000.0 / f0);
+  params.mallet_vel_exp = 0.0f;
+  const std::vector<float> nulled = render_modal_core(params, 69, 1.0f, 24000);
+  params.mallet_shape = ContactShape::kGaussian;
+  const std::vector<float> rings = render_modal_core(params, 69, 1.0f, 24000);
+  const double nulled_power = band_power(power_spectrum(nulled, 1024), f0);
+  const double ringing_power = band_power(power_spectrum(rings, 1024), f0);
+  REQUIRE(ringing_power > 0.0);
+  REQUIRE(nulled_power < 1.0e-6 * ringing_power);
+}
+
+TEST_CASE("the vane phase moves where the modal tremolo starts and a full turn is no move",
+          "[midi][synth][modal]") {
+  NativeSynthPatch patch{};
+  patch.mode = SynthEngineMode::kModal;
+  patch.modal = single_modal_mode(1.0f);
+  patch.cutoff_hz = 20000.0f;
+  patch.amp_env.attack_ms = 0.5f;
+  patch.amp_env.decay_ms = 0.0f;
+  patch.amp_env.sustain = 1.0f;
+  patch.amp_env.release_ms = 350.0f;
+  patch.lfo_shape = LfoShape::kSine;
+  patch.lfo2_rate_hz = 4.0f;
+  patch.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kAmpGain, 0.3f};
+  const std::vector<float> from_zero = render_patch(patch, 69, 100, 24000);
+  patch.modal.tremolo_phase_deg = 180.0f;
+  const std::vector<float> from_half = render_patch(patch, 69, 100, 24000);
+  // At a quarter of the 4 Hz cycle the sine from 0 is at its crest and the one
+  // from a half turn at its trough: 1.3 against 0.7.
+  const size_t quarter = static_cast<size_t>(0.25 * kRate / 4.0);
+  const float crest = rms(from_zero, quarter - 200, quarter + 200);
+  const float trough = rms(from_half, quarter - 200, quarter + 200);
+  REQUIRE(crest > 0.0f);
+  REQUIRE(std::abs(crest / trough - 1.3f / 0.7f) < 0.1f);
+  // 360 degrees wraps onto the LFO's own start, sample for sample.
+  patch.modal.tremolo_phase_deg = 360.0f;
+  REQUIRE(render_patch(patch, 69, 100, 24000) == from_zero);
 }
 
 TEST_CASE("modal rendering is deterministic and damps at note-off", "[midi][synth][modal]") {

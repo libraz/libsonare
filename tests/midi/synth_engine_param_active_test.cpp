@@ -63,6 +63,8 @@ const Excuse kExcuses[] = {
      "performance: acts only on a velocity above peakVelocity"},
     {SynthEngineMode::kFlute, "jetCentringPerOctave",
      "acts only above the first register (f0 over 2 x C4), a relation to the key"},
+    {SynthEngineMode::kModal, "tremoloPhaseDeg",
+     "acts only through a mod-matrix route from lfo2, which no engine key names"},
 };
 
 bool excuse_matches(const Excuse& e, SynthEngineMode mode, const std::string& key) {
@@ -211,6 +213,7 @@ struct WrapperNumber {
 const WrapperNumber kWrapperNumbers[] = {
     {"bodyMix", &NativeSynthPatch::body_mix, nullptr, 0.0, 1.0},
     {"unison", nullptr, &NativeSynthPatch::unison, 1.0, 7.0},
+    {"lfo2RateHz", &NativeSynthPatch::lfo2_rate_hz, nullptr, 0.0, 40.0},
 };
 
 const WrapperNumber& wrapper_number(const std::string& key) {

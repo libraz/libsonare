@@ -59,15 +59,21 @@ void ModalVoiceCore::start(const ModalPatchParams& params, double sample_rate, u
   for (int k = 0; k < num_modes_; ++k) {
     const ModalMode& src = params.modes[static_cast<size_t>(k)];
     Mode& mode = modes_[static_cast<size_t>(k)];
-    const double freq = f0 * std::max(0.01, static_cast<double>(src.ratio));
+    double ratio = std::max(0.01, static_cast<double>(src.ratio));
+    // A sloped mode moves against the key; at 0 the ratio is left untouched.
+    if (src.key_slope != 0.0f) {
+      ratio *= std::exp2(-static_cast<double>(src.key_slope) * octaves_below_a4);
+    }
+    const double freq = f0 * ratio;
     mode.y_s = 0.0;
     mode.y_c = 0.0;
     mode.omega = kTwoPiD * freq / sample_rate_;
     mode.r = radius_for(sample_rate_, t60 * std::max(0.01, static_cast<double>(src.decay_scale)));
     // Mallet curve: soft strikes excite the fundamental only; the seeded
     // +-10% scatter keeps repeated strikes from sounding machine-identical.
-    const float mallet = tau_s > 0.0 ? contact_spectrum(static_cast<float>(freq * tau_s))
-                                     : std::exp(-(1.0f - hardness) * 1.5f * static_cast<float>(k));
+    const float mallet =
+        tau_s > 0.0 ? contact_spectrum(static_cast<float>(freq * tau_s), params.mallet_shape)
+                    : std::exp(-(1.0f - hardness) * 1.5f * static_cast<float>(k));
     const float jitter = 1.0f + 0.1f * scatter.bipolar_at(static_cast<uint64_t>(k));
     // Preserve the strike weight; quadrature initialization applies sin(w).
     const float excitation = std::max(0.0f, src.gain) * mallet * jitter;

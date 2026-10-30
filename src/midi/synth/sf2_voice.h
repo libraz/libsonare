@@ -216,13 +216,15 @@ enum class LfoShape : int {
 /// rises positive first.
 class Sf2Lfo {
  public:
-  /// @p seed feeds kRandom's targets; derive it from the voice seed.
+  /// @p seed feeds kRandom's targets; derive it from the voice seed. @p
+  /// start_turns is where the cycle begins, wrapped into [0, 1).
   void start(double sample_rate, float delay_seconds, float freq_hz,
-             LfoShape shape = LfoShape::kTriangle, uint64_t seed = 0) noexcept {
+             LfoShape shape = LfoShape::kTriangle, uint64_t seed = 0,
+             float start_turns = 0.0f) noexcept {
     const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
     delay_samples_ = delay_seconds > 0.0f ? static_cast<int64_t>(delay_seconds * sr) : 0;
     inc_ = freq_hz > 0.0f ? static_cast<float>(freq_hz / sr) : 0.0f;
-    phase_ = 0.0;
+    phase_ = static_cast<double>(start_turns) - std::floor(static_cast<double>(start_turns));
     settling_ = false;
     shape_ = shape;
     if (shape == LfoShape::kRandom) {

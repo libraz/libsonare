@@ -8,6 +8,7 @@
 
 #include "midi/synth/envelope.h"
 #include "midi/synth/native_synth_patch.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -172,7 +173,15 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
     mode.gain = std::clamp(patch_clamp_detail::sanitize(mode.gain, 1.0f), 0.0f, 4.0f);
     mode.decay_scale =
         std::clamp(patch_clamp_detail::sanitize(mode.decay_scale, 1.0f), 0.01f, 4.0f);
+    mode.key_slope = std::clamp(patch_clamp_detail::sanitize(mode.key_slope, 0.0f), -1.0f, 1.0f);
   }
+  if (static_cast<int>(p.modal.mallet_shape) < static_cast<int>(ContactShape::kRaisedCosine) ||
+      static_cast<int>(p.modal.mallet_shape) > static_cast<int>(ContactShape::kGaussian)) {
+    p.modal.mallet_shape = ContactShape::kRaisedCosine;
+  }
+  p.modal.tremolo_phase_deg =
+      std::clamp(patch_clamp_detail::sanitize(p.modal.tremolo_phase_deg, 0.0f), 0.0f,
+                 sonare::constants::kDegreesPerTurn);
   p.modal.decay_s = std::clamp(patch_clamp_detail::sanitize(p.modal.decay_s, 2.0f), 0.01f, 60.0f);
   p.modal.decay_stretch =
       std::clamp(patch_clamp_detail::sanitize(p.modal.decay_stretch, 0.3f), 0.0f, 1.0f);

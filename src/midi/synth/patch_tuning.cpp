@@ -647,6 +647,9 @@ void apply_modal(NativeSynthPatch& p, const Fields& f) {
   F(modal.release_damp_s);
   F(modal.mallet_ms);
   F(modal.mallet_vel_exp);
+  I_TYPED(modal.mallet_shape, static_cast<int>(ContactShape::kRaisedCosine),
+          static_cast<int>(ContactShape::kGaussian));
+  F(modal.tremolo_phase_deg);
   F(modal.contact);
   F(modal.contact_ms);
   F(modal.velocity_exponent);
@@ -656,6 +659,7 @@ void apply_modal(NativeSynthPatch& p, const Fields& f) {
     m.ratio = f((base + "ratio").c_str(), m.ratio, "modal.modes.ratio");
     m.gain = f((base + "gain").c_str(), m.gain, "modal.modes.gain");
     m.decay_scale = f((base + "decay_scale").c_str(), m.decay_scale, "modal.modes.decay_scale");
+    m.key_slope = f((base + "key_slope").c_str(), m.key_slope, "modal.modes.key_slope");
   }
 }
 

@@ -146,6 +146,12 @@ float sampler_velocity_exponent(const NativeSynthPatch& p) noexcept {
   return 2.0f;
 }
 
+/// Where LFO2 starts its cycle, in turns: the modal section's vane phase, 0 elsewhere.
+float lfo2_start_turns(const NativeSynthPatch& p) noexcept {
+  if (p.mode != SynthEngineMode::kModal) return 0.0f;
+  return p.modal.tremolo_phase_deg / sonare::constants::kDegreesPerTurn;
+}
+
 /// The curve at @p exponent. The spec's exponent keeps the spec's own squaring
 /// rather than reaching `pow` for it, so a build that never moves the knob is
 /// bit-identical to one compiled before it existed.
@@ -482,7 +488,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   // edit is the only thing that can give it one.
   vibrato_lfo.start(sample_rate, gs_vib_delay_seconds(0.0f, part_mod.vib_delay_scale),
                     p.lfo_rate_hz * part_mod.vib_rate_scale, p.lfo_shape, seed ^ 106);
-  lfo2.start(sample_rate, 0.0f, p.lfo2_rate_hz, p.lfo_shape, seed ^ 107);
+  lfo2.start(sample_rate, 0.0f, p.lfo2_rate_hz, p.lfo_shape, seed ^ 107, lfo2_start_turns(p));
   // Per-voice drift: seeded depth (sign included) and a seeded rate offset so
   // stacked voices beat against each other instead of wobbling in unison.
   drift_seed = seq.bipolar_at(101);

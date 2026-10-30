@@ -28,6 +28,24 @@ inline float contact_spectrum(float x) noexcept {
   return std::abs(s / (1.0f - ax * ax));
 }
 
+/// The force pulse a struck resonator's modes are weighted by.
+enum class ContactShape : int {
+  /// A raised cosine over the contact time: nulls at x = 2, 3, ... (contact_spectrum).
+  kRaisedCosine = 0,
+  /// A Gaussian with the raised cosine's -6 dB point, falling without a null: the
+  /// spectrum a mallet whose contact varies a little from strike to strike averages to.
+  kGaussian = 1,
+};
+
+/// Magnitude spectrum of the Gaussian contact force, read at x = f * tau and
+/// normalised to unity at DC, -6 dB at x = 1 like the raised cosine's: 2^(-x^2).
+inline float contact_spectrum_gaussian(float x) noexcept { return std::exp2(-x * x); }
+
+/// @ref contact_spectrum or @ref contact_spectrum_gaussian, by @p shape.
+inline float contact_spectrum(float x, ContactShape shape) noexcept {
+  return shape == ContactShape::kGaussian ? contact_spectrum_gaussian(x) : contact_spectrum(x);
+}
+
 /// Samples a contact pulse of @p contact_ms spans: one more than its period,
 /// since the pulse runs over [0, 1] inclusive and the knob keeps its unit.
 inline int contact_pulse_samples(float contact_ms, double sample_rate) noexcept {

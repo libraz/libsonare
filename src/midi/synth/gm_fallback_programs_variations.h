@@ -163,27 +163,51 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   // wide in front of the player; each is voiced against the module's own bars.
   o.vibraphone_wide = o.vibraphone;
   o.vibraphone_wide.stereo_spread = 0.775735f;
-  o.vibraphone_wide.amp_env.attack_ms = 0.213234f;
+  // The recordings reach their level 20-40 ms after the onset, not at the strike.
+  o.vibraphone_wide.amp_env.attack_ms = 15.0f;
   o.vibraphone_wide.amp_env.release_ms = 1284.15f;
   o.vibraphone_wide.amp_env.sustain = 0.836881f;
   o.vibraphone_wide.cutoff_hz = 14003.3f;
-  o.vibraphone_wide.drive = 0.15f;
-  o.vibraphone_wide.modal.contact = 1.67935f;
+  o.vibraphone_wide.modal.contact = 1.0f;
   o.vibraphone_wide.modal.contact_ms = 0.812739f;
-  // The module's bars ring shorter than the capital's reference: 5 s at A4.
-  o.vibraphone_wide.modal.decay_s = 5.0f;
-  o.vibraphone_wide.modal.decay_stretch = 0.212461f;
+  // The module's bars ring shorter than the capital's reference: t60 5.6 s at A4,
+  // 0.23 octaves of ring per octave of key, read off its five recordings.
+  o.vibraphone_wide.modal.decay_s = 5.6f;
+  o.vibraphone_wide.modal.decay_stretch = 0.23f;
   o.vibraphone_wide.modal.release_damp_s = 0.744614f;
-  // The module's bars hold the 4 f0 mode 10-16 dB under the fundamental through the
-  // sustain, where the capital's reference lets it go; a softer mallet keeps the
-  // strike's 4-8 kHz share where the recordings put it.
-  o.vibraphone_wide.modal.modes[1].gain = 0.6f;
-  o.vibraphone_wide.modal.modes[1].decay_scale = 0.8f;
-  o.vibraphone_wide.modal.mallet_ms = 0.36f;
+  // The module's own bars, not the capital's. The octave-tuned 4 f0 holds 10 dB
+  // under the fundamental for the whole ring. The third mode is not tuned: it
+  // falls from 10.6 f0 at F#3 to 7.6 f0 at F#5 (8.67 at A4, -0.247 oct/oct) and
+  // rings in two stages, a loud one spent inside 150 ms over a quiet one that
+  // lasts. The fourth and fifth slide the same way, and three strike lines near
+  // 5.2, 6.1 and 6.6 kHz sit at the same frequency on every key. The integer
+  // partials the capital's drive made by intermodulation are under -37 dB in the
+  // recordings, so the drive is off.
+  o.vibraphone_wide.modal.num_modes = 9;
+  o.vibraphone_wide.modal.modes[0] = {1.0f, 1.0f, 1.0f};
+  o.vibraphone_wide.modal.modes[1] = {4.0f, 0.4f, 0.9f};
+  o.vibraphone_wide.modal.modes[2] = {8.67f, 0.9f, 0.07f, -0.247f};
+  o.vibraphone_wide.modal.modes[3] = {8.67f, 0.2f, 0.8f, -0.247f};
+  o.vibraphone_wide.modal.modes[4] = {11.9f, 0.32f, 0.07f, -0.2f};
+  o.vibraphone_wide.modal.modes[5] = {13.4f, 0.32f, 0.07f, -0.33f};
+  o.vibraphone_wide.modal.modes[6] = {11.8f, 0.6f, 0.02f, -1.0f};
+  o.vibraphone_wide.modal.modes[7] = {13.9f, 1.4f, 0.02f, -1.0f};
+  o.vibraphone_wide.modal.modes[8] = {15.1f, 1.3f, 0.02f, -1.0f};
+  for (int k = 9; k < kMaxModalModes; ++k) {
+    o.vibraphone_wide.modal.modes[static_cast<size_t>(k)] = {};
+  }
+  // At velocity 100 the raised cosine's null lands between 5.3 and 6.4 kHz for
+  // every contact time that fits the lower modes, on the strike lines and on the
+  // fourth mode of C5; the Gaussian falls there without one.
+  o.vibraphone_wide.modal.mallet_ms = 0.27f;
+  o.vibraphone_wide.modal.mallet_shape = ContactShape::kGaussian;
   o.vibraphone_wide.resonance_q = 1.05271f;
-  // The module's motor turns slower and shallower: 3.0 Hz at 2.5 dB peak to peak.
+  // The module's motor turns slower and shallower: 3.0 Hz at 2.4 dB peak to
+  // peak, and its sampled vane starts every note from one point, 73 ms before
+  // its first trough.
   o.vibraphone_wide.lfo2_rate_hz = 3.0f;
-  o.vibraphone_wide.mod_matrix.routes[0].depth = 0.15f;
+  o.vibraphone_wide.mod_matrix.routes[0].depth = 0.145f;
+  o.vibraphone_wide.modal.tremolo_phase_deg = 185.0f;
   o.marimba_wide = o.marimba;
   o.marimba_wide.amp_env.attack_ms = 0.5f;
   o.marimba_wide.amp_env.release_ms = 250.0f;

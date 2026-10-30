@@ -44,6 +44,7 @@ constexpr ModalMode blank_modal_mode() noexcept {
   z.ratio = 0.0f;
   z.gain = 0.0f;
   z.decay_scale = 0.0f;
+  z.key_slope = 0.0f;
   return z;
 }
 
@@ -130,6 +131,8 @@ constexpr ModalPatchParams blank_modal() noexcept {
   z.release_damp_s = 0.0f;
   z.mallet_ms = 0.0f;
   z.mallet_vel_exp = 0.0f;
+  z.mallet_shape = static_cast<ContactShape>(0);
+  z.tremolo_phase_deg = 0.0f;
   z.contact = 0.0f;
   z.contact_ms = 0.0f;
   z.velocity_exponent = 0.0f;

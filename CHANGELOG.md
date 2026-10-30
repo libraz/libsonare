@@ -182,7 +182,7 @@ This release tightens argument validation on every surface: values that used to 
   - Karplus-Strong: `sympathetic`, `haloDampS`, `bodyAirHz`, `bodyAirT60S`, `bodyKnock`, `pickPositionPerOctave`, `excBrightnessPerOctave`
   - plucked string: `hfDecayS`, `midDecayS`, `inharmonicityB`, `pickNoise`, `pickPositionPerOctave`, `excBrightnessPerOctave`
   - harpsichord: `rippleLossShare`, `rippleRatio`, `polCoupling`, `polDetuneCents`, `polT60Ratio`
-  - modal: `malletMs`, `malletVelExp`, `contact`, `contactMs`
+  - modal: `malletMs`, `malletVelExp`, `malletShape`, `tremoloPhaseDeg`, `contact`, `contactMs`, and per mode `modes<N>.keySlope`
   - pipe organ: `pipeDetuneCents`, `loopPhaseServo`, `windRegulated`
   - vocal: `sectionSpreadCents`, `sectionRateHz`
 - `SynthParamInfo.unit` can be `'N'` (newtons), for the bowed string's `stringTensionN`.
