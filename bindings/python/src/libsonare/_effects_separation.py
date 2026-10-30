@@ -421,6 +421,17 @@ def nn_filter(
         return _from_c_float_array(out, out_length.value).reshape(n_features, n_frames)
 
 
+def _remix_interval_array(
+    intervals: Sequence[int] | list[int],
+) -> tuple[ctypes.Array[ctypes.c_int32], int]:
+    """Marshal a flat ``(start, end)`` list, refusing a non-1-D or odd-length one."""
+    shape = np.shape(intervals)
+    if len(shape) != 1 or shape[0] % 2 != 0:
+        raise SonareValueError("intervals must be a flat sequence of (start, end) pairs")
+    array, n_ints = _to_c_int_array(intervals, "intervals")
+    return array, n_ints // 2
+
+
 @_guard_buffer("samples")
 def remix(
     samples: Sequence[float] | list[float],
@@ -446,7 +457,7 @@ def remix(
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    intervals_array, n_ints = _to_c_int_array(intervals, "intervals")
+    intervals_array, n_pairs = _remix_interval_array(intervals)
     with _out_float_array(lib) as (out, out_length):
         _check(
             lib.sonare_remix(
@@ -454,7 +465,7 @@ def remix(
                 _to_c_size_t(length, "length"),
                 _to_c_int(sample_rate, "sample_rate"),
                 intervals_array,
-                ctypes.c_size_t(n_ints // 2),
+                ctypes.c_size_t(n_pairs),
                 ctypes.c_int(1 if align_zeros else 0),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
@@ -495,7 +506,7 @@ def remix_aligned_intervals(
     if not hasattr(lib, "sonare_remix_aligned_intervals"):
         raise _not_supported("loaded libsonare does not expose sonare_remix_aligned_intervals")
     c_array, length = _to_c_float_array(samples)
-    intervals_array, n_ints = _to_c_int_array(intervals, "intervals")
+    intervals_array, n_pairs = _remix_interval_array(intervals)
     with _out_int_array(lib) as (out, out_count):
         _check(
             lib.sonare_remix_aligned_intervals(
@@ -503,7 +514,7 @@ def remix_aligned_intervals(
                 _to_c_size_t(length, "length"),
                 _to_c_int(sample_rate, "sample_rate"),
                 intervals_array,
-                ctypes.c_size_t(n_ints // 2),
+                ctypes.c_size_t(n_pairs),
                 ctypes.c_int(1 if align_zeros else 0),
                 ctypes.byref(out),
                 ctypes.byref(out_count),

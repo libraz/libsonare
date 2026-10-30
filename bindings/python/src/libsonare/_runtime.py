@@ -205,6 +205,7 @@ def _validate_samples(
 
 
 _GuardedFn = TypeVar("_GuardedFn", bound=Callable[..., Any])
+_T = TypeVar("_T")
 
 
 def _guard_buffer(
@@ -427,7 +428,19 @@ def _as_float32_buffer(
         raise _not_a_buffer(samples, fn_name, arg_name)
     if converted.ndim != 1:
         raise _not_one_dimensional(converted, fn_name, arg_name)
-    return np.ascontiguousarray(converted)
+    buf = np.ascontiguousarray(converted)
+    # A read-only buffer (a memoryview over bytes) comes back as a view, and
+    # `ctypes.from_buffer` needs a writable one.
+    if not buf.flags["WRITEABLE"]:
+        buf = np.array(buf, dtype=np.float32, copy=True, order="C")
+    return buf
+
+
+def _require_instance(value: object, expected: type[_T], name: str) -> _T:
+    """Return ``value`` if it is an ``expected``, else raise the wrong-type ``TypeError``."""
+    if not isinstance(value, expected):
+        raise TypeError(f"{name} must be a {expected.__name__}, got {type(value).__name__}")
+    return value
 
 
 def _not_planar_channels(channels: object, subject: str) -> SonareValueError:

@@ -31,13 +31,15 @@ POISON_INDEX = 100
 # Blocks the stream is allowed to take to rejoin its control. A cell returns to
 # its post-reset value at once; the stream rejoins only once the smoother behind
 # that cell has re-converged, so each bound follows the slowest time constant in
-# its path. Measured first-identical blocks are 66 / 25 / 261 / 82, and each bound
+# its path. Measured first-identical blocks are 66 / 25 / 348 / 82, and each bound
 # sits about half again above its own: the crossing is where an exponential tail
 # passes one float ULP, and a one-ULP difference in the platform's sin() moved the
-# same fixture's crossing by 45%.
+# same fixture's crossing by 45%. The auto-threshold follower steps once per 64-sample
+# control interval, so its per-step coefficient is smaller and the float rounding stall
+# that decides bit identity is wider, which puts its crossing later than a per-block step.
 BIQUAD_RECOVERY_BLOCKS = 120
 DETECTOR_RECOVERY_BLOCKS = 45
-AUTO_THRESHOLD_RECOVERY_BLOCKS = 330
+AUTO_THRESHOLD_RECOVERY_BLOCKS = 520
 AUTO_GAIN_RECOVERY_BLOCKS = 150
 # Blocks run past the bound, so a run that misses it still shows how far it got.
 HORIZON_SLACK = 20

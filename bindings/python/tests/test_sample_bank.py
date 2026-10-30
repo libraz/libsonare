@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from libsonare import (
+    ErrorCode,
     Project,
     RealtimeEngine,
     SampleBank,
@@ -16,6 +17,8 @@ from libsonare import (
     synth_enum_tables,
 )
 from libsonare._project import SYNTH_ENUM_TABLES
+
+from ._helpers import raises_coded
 
 SAMPLE_RATE = 48000
 
@@ -101,7 +104,7 @@ def test_bank_counts_what_was_added_and_closes_deterministically() -> None:
         # Sets are dense: appending to set 2 creates 0 and 1 empty.
         bank.add_zone(2, sample_index=first)
         assert bank.set_count == 3
-    with pytest.raises(RuntimeError, match="SampleBank is closed"):
+    with raises_coded(ErrorCode.INVALID_STATE, match="SampleBank is closed"):
         bank.add_zone(0, sample_index=0)
     bank.close()  # idempotent
 
@@ -462,9 +465,9 @@ def test_a_closed_bank_is_rejected_on_both_hosts() -> None:
     engine = RealtimeEngine()
     try:
         engine.prepare(float(SAMPLE_RATE), BLOCK, 16, 16)
-        with pytest.raises(RuntimeError, match="SampleBank is closed"):
+        with raises_coded(ErrorCode.INVALID_STATE, match="SampleBank is closed"):
             engine.set_synth_instrument(_sample_patch(bank), destination_id=DESTINATION)
     finally:
         engine.close()
-    with pytest.raises(RuntimeError, match="SampleBank is closed"):
+    with raises_coded(ErrorCode.INVALID_STATE, match="SampleBank is closed"):
         _render(60, _sample_patch(bank))

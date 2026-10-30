@@ -8,13 +8,14 @@ import numpy as np
 import pytest
 
 from libsonare import (
+    ErrorCode,
     LoudnessMatch,
     MasteringStereoResult,
     SonareError,
     SonareValueError,
 )
 
-from ._helpers import sine
+from ._helpers import raises_coded, sine
 
 
 def test_public_stereo_pair_and_loudness_functions_exist() -> None:
@@ -208,7 +209,7 @@ def test_streaming_set_parameter_is_prepared_only_and_rejects_nonfinite() -> Non
         chain.set_parameter("eq.tilt.tiltDb", math.inf)
     chain.set_parameter("eq.tilt.tiltDb", 3.0)
     chain.close()
-    with pytest.raises(RuntimeError, match="closed"):
+    with raises_coded(ErrorCode.INVALID_STATE, match="closed"):
         chain.set_parameter("eq.tilt.tiltDb", 3.0)
 
 

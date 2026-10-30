@@ -20,6 +20,10 @@ from pathlib import Path
 
 import pytest
 
+from libsonare import ErrorCode
+
+from ._helpers import raises_coded
+
 
 def test_import_libsonare() -> None:
     """``import libsonare`` must not raise at module load."""
@@ -62,7 +66,7 @@ def test_library_abi_is_checked_before_configuring_symbols(
         pytest.fail("configured function signatures before checking the ABI")
 
     monkeypatch.setattr(ffi, "configure_core_signatures", unexpected_configuration)
-    with pytest.raises(RuntimeError, match="ABI mismatch"):
+    with raises_coded(ErrorCode.ABI_MISMATCH, match="ABI mismatch"):
         ffi.load_library("/tmp/old-libsonare.dylib")
 
 

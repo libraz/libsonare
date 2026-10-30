@@ -130,7 +130,7 @@ def test_dunder_version_attribute() -> None:
 
 def test_unsupported_format_error_is_actionable() -> None:
     """Loading an unsupported format raises a helpful, format-specific error."""
-    from libsonare import Audio
+    from libsonare import Audio, ErrorCode, SonareError
 
     # Write a small file with an .m4a extension but no real audio payload, so
     # we can verify the error path even without an actual M4A decoder. (When
@@ -141,8 +141,9 @@ def test_unsupported_format_error_is_actionable() -> None:
         path = f.name
 
     try:
-        with pytest.raises(RuntimeError) as exc:
+        with pytest.raises(SonareError) as exc:
             Audio.from_file(path)
+        assert exc.value.code in (ErrorCode.INVALID_FORMAT, ErrorCode.DECODE_FAILED)
         msg = str(exc.value)
         # Must always carry *some* concrete signal, not just "Invalid format".
         assert msg != "Invalid format"

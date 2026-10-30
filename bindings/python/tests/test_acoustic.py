@@ -12,6 +12,11 @@ import libsonare
 
 from ._helpers import LIB_AVAILABLE
 
+
+class _ForeignEstimateError(Exception):
+    """Stands for a failure raised by code outside the binding."""
+
+
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not available")
 
 
@@ -250,10 +255,10 @@ def test_estimate_room_frees_a_partial_foreign_result_before_check(
     monkeypatch.setattr(acoustic_module, "_get_lib", lambda: foreign)
 
     def raise_from_check(_rc: int) -> None:
-        raise RuntimeError("foreign estimate failure")
+        raise _ForeignEstimateError("foreign estimate failure")
 
     monkeypatch.setattr(acoustic_module, "_check", raise_from_check)
-    with pytest.raises(RuntimeError, match="foreign estimate failure"):
+    with pytest.raises(_ForeignEstimateError, match="foreign estimate failure"):
         acoustic_module.estimate_room([0.0, 1.0], sample_rate=48000)
     assert foreign.estimate_calls == 1
     assert foreign.free_calls == 1

@@ -15,8 +15,9 @@ import pytest
 from numpy.typing import NDArray
 
 import libsonare
+from libsonare import ErrorCode
 
-from ._helpers import LIB_AVAILABLE
+from ._helpers import LIB_AVAILABLE, raises_coded
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library missing")
 
@@ -123,7 +124,7 @@ def test_metering_scope_columns_come_from_one_shared_bulk_copy() -> None:
     class _Padded(ctypes.Structure):
         _fields_ = [("mid", ctypes.c_float), ("flag", ctypes.c_double)]
 
-    with pytest.raises(RuntimeError):
+    with raises_coded(ErrorCode.UNKNOWN):
         _scope_point_columns(None, 1, _Padded)
 
     # Every entry point returns the helper's columns.
@@ -159,9 +160,9 @@ def test_metering_stereo_rejects_mismatched_lengths() -> None:
 
 def test_metering_stereo_rejects_invalid_sample_rates() -> None:
     left = _sine(440.0, 0.1)
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         libsonare.metering_stereo_correlation(left, left, 0)
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         libsonare.metering_phase_scope(left, left, -1)
 
 
@@ -197,5 +198,5 @@ def test_metering_spectrum_uses_defaults() -> None:
 
 def test_metering_spectrum_rejects_non_power_of_two_n_fft() -> None:
     samples = _sine(440.0, 0.1)
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         libsonare.metering_spectrum(samples, SR, n_fft=1500)

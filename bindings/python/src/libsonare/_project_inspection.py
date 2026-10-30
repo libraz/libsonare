@@ -36,6 +36,7 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _narrow_int,
+    _require_instance,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -462,6 +463,7 @@ class _ProjectInspectionMixin:
         structured key. Pass ``marker.id == 0`` to allocate a new marker id;
         the affected id is returned.
         """
+        _require_instance(marker, ProjectMarker, "marker")
         raw = SonareProjectMarker()
         # Assigned unconverted so the struct's own narrowing sees each caller
         # value; int() would truncate a fraction past it.

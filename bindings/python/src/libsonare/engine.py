@@ -85,6 +85,7 @@ from ._runtime import (
     _get_lib,
     _int_refusal,
     _narrow_int,
+    _require_instance,
     _resolve_render_frame,
     _to_c_float,
     _to_c_int,
@@ -206,6 +207,9 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         a later ``prepare`` at another rate is refused until the timeline's clips
         are cleared.
         """
+        from ._project import ProjectTimeline
+
+        _require_instance(timeline, ProjectTimeline, "timeline")
         _check(
             _get_lib().sonare_engine_apply_project_timeline(
                 self._require_handle(), timeline._require_handle()
@@ -521,6 +525,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
 
     def add_parameter(self, info: ParameterInfo) -> None:
+        _require_instance(info, ParameterInfo, "info")
         raw = SonareParameterInfo()
         # Assigned unconverted so the struct's own narrowing sees the caller's
         # value; int() would truncate a fraction onto a neighbouring parameter
@@ -688,6 +693,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     def set_clips(self, clips: Sequence[EngineClip]) -> None:
         page_providers: dict[int, list[ClipPageProvider]] = {}
         for clip in clips:
+            _require_instance(clip, EngineClip, "clip")
             provider = getattr(clip, "page_provider", None)
             if isinstance(provider, ClipPageProvider):
                 page_providers.setdefault(clip.id, []).append(provider)
@@ -855,6 +861,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         event_arrays: list[ctypes.Array[SonareEngineMidiEvent]] = []
         raw_clips = (SonareEngineMidiClipSchedule * len(clips))()
         for index, clip in enumerate(clips):
+            _require_instance(clip, EngineMidiClipSchedule, "clip")
             raw_events = (SonareEngineMidiEvent * len(clip.events))()
             for event_index, event in enumerate(clip.events):
                 # ctypes narrows to the c_uint8 field silently, so a group of 256

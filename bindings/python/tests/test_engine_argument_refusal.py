@@ -68,3 +68,35 @@ def test_call_on_closed_engine_is_coded_invalid_state() -> None:
         engine.set_track_output_bus(1, 0)
     assert not isinstance(exc.value, SonareValueError)
     assert exc.value.code == int(ErrorCode.INVALID_STATE)
+
+
+_WRONG_TYPE: list[tuple[str, Callable[[RealtimeEngine], object]]] = [
+    ("set_graph", lambda e: e.set_graph(object())),
+    ("add_parameter", lambda e: e.add_parameter("gain")),
+    ("set_metronome", lambda e: e.set_metronome(object())),
+    ("upsert_clip", lambda e: e.upsert_clip(object())),
+    ("set_clips", lambda e: e.set_clips([object()])),
+    ("set_markers", lambda e: e.set_markers([object()])),
+    ("set_midi_clips", lambda e: e.set_midi_clips([object()])),
+    ("bounce_offline", lambda e: e.bounce_offline(object())),
+    ("freeze_offline", lambda e: e.freeze_offline(object())),
+    ("apply_project_timeline", lambda e: e.apply_project_timeline(object())),
+]
+
+
+@pytest.mark.parametrize(("name", "call"), _WRONG_TYPE, ids=[n for n, _ in _WRONG_TYPE])
+def test_wrong_argument_type_is_type_error(
+    name: str, call: Callable[[RealtimeEngine], object]
+) -> None:
+    with (
+        RealtimeEngine(sample_rate=48000.0, max_block_size=64) as engine,
+        pytest.raises(TypeError, match="must be an?"),
+    ):
+        call(engine)
+
+
+def test_set_marker_ex_wrong_type_is_type_error() -> None:
+    from libsonare import Project
+
+    with Project() as project, pytest.raises(TypeError, match="marker must be a ProjectMarker"):
+        project.set_marker_ex(object())  # type: ignore[arg-type]

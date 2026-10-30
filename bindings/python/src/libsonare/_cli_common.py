@@ -9,7 +9,7 @@ import os
 import sys
 import tempfile
 from collections.abc import Iterable, Iterator, Sequence
-from contextlib import contextmanager, suppress
+from contextlib import AbstractContextManager, contextmanager, suppress
 from typing import Any, cast
 
 import numpy as np
@@ -660,12 +660,10 @@ class _PcmQuantizer:
 
 _WAV_CHUNK_FRAMES = 8192
 
-# UINT32_MAX minus the WAVE_FORMAT_EXTENSIBLE header's extra bytes over the
-# plain-PCM header (68 - 8), matching src/core/audio_io.cpp's
-# check_riff_size_fits exactly -- one RIFF chunk cannot declare a size past
-# 2**32 - 1, and both writers share that bound regardless of which header they
-# end up writing.
-_MAX_WAV_DATA_BYTES = 0xFFFFFFFF - 60
+# UINT32_MAX minus the WAVE_FORMAT_EXTENSIBLE header's bytes after the RIFF size
+# field (68 - 8) and the byte that closes an odd data chunk -- one RIFF chunk
+# cannot declare a size past 2**32 - 1, and both header shapes share that bound.
+_MAX_WAV_DATA_BYTES = 0xFFFFFFFF - 61
 
 
 def _check_wav_request(
@@ -691,18 +689,106 @@ def _check_wav_request(
         )
 
 
+# WAVE_FORMAT_PCM, WAVE_FORMAT_EXTENSIBLE and the KSDATAFORMAT_SUBTYPE_PCM
+# subformat GUID {00000001-0000-0010-8000-00AA00389B71} stored as little-endian
+# Data1/2/3 followed by the 8 Data4 bytes verbatim -- the same layout the native
+# CLI's `save_wav_multichannel` writes.
+_WAVE_FORMAT_PCM = 1
+_WAVE_FORMAT_EXTENSIBLE = 0xFFFE
+_PCM_SUBFORMAT_GUID = bytes(
+    [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71]
+)
+# dwChannelMask by channel count, matching src/core/channel_layout.h's
+# wave_channel_mask table (mono carries no meaningful mask).
+_CHANNEL_MASKS = {1: 0x0, 2: 0x3, 6: 0x3F, 8: 0x63F}
+# RIFF/WAVE(12) + fmt chunk id/size/body(8 + 16 or 40) + data chunk id/size(8).
+_PCM_HEADER_SIZE = 44
+_EXTENSIBLE_HEADER_SIZE = 68
+
+
+class _RiffWavWriter:
+    """Streams raw PCM into an open WAV file; the header is patched on :meth:`finish`.
+
+    The one RIFF writer for every width: plain WAVE_FORMAT_PCM for mono and
+    stereo, WAVE_FORMAT_EXTENSIBLE (with a channel mask) beyond that, both
+    byte-identical to the native CLI's writer. Exposes ``writeframesraw`` like
+    stdlib ``wave.Wave_write``, which is all the callers use.
+    """
+
+    def __init__(
+        self, handle: Any, channels: int, sample_rate: int, bits_per_sample: int, extensible: bool
+    ) -> None:
+        self._handle = handle
+        self._channels = channels
+        self._sample_rate = sample_rate
+        self._bits_per_sample = bits_per_sample
+        self._extensible = extensible
+        self._data_size = 0
+
+    @property
+    def header_size(self) -> int:
+        """Bytes the header occupies ahead of the first sample."""
+        return _EXTENSIBLE_HEADER_SIZE if self._extensible else _PCM_HEADER_SIZE
+
+    def writeframesraw(self, data: bytes | bytearray) -> None:
+        self._handle.write(bytes(data))
+        self._data_size += len(data)
+
+    def finish(self) -> None:
+        """Patch the header now that the data size is known, then close an odd data chunk."""
+        import struct
+
+        block_align = self._channels * (self._bits_per_sample // 8)
+        byte_rate = self._sample_rate * block_align
+        fmt_size = 40 if self._extensible else 16
+        # A RIFF chunk of odd size is followed by one zero byte the size counts.
+        pad = self._data_size & 1
+        riff_size = 4 + (8 + fmt_size) + (8 + self._data_size + pad)
+        header = bytearray()
+        header += b"RIFF" + struct.pack("<I", riff_size) + b"WAVE"
+        header += b"fmt " + struct.pack("<I", fmt_size)
+        header += struct.pack(
+            "<HHIIHH",
+            _WAVE_FORMAT_EXTENSIBLE if self._extensible else _WAVE_FORMAT_PCM,
+            self._channels,
+            self._sample_rate,
+            byte_rate,
+            block_align,
+            self._bits_per_sample,
+        )
+        if self._extensible:
+            header += struct.pack(
+                "<HHI",
+                22,  # cbSize
+                self._bits_per_sample,  # wValidBitsPerSample
+                _CHANNEL_MASKS.get(self._channels, 0),
+            )
+            header += _PCM_SUBFORMAT_GUID
+        header += b"data" + struct.pack("<I", self._data_size)
+        assert len(header) == self.header_size
+        self._handle.seek(0)
+        self._handle.write(bytes(header))
+        if pad:
+            self._handle.seek(0, os.SEEK_END)
+            self._handle.write(b"\x00")
+
+
 @contextmanager
-def _atomic_wav_writer(
-    path: str, channels: int, sample_rate: int, bits_per_sample: int = 16, *, frames: int
-) -> Iterator[Any]:
+def _atomic_riff_writer(
+    path: str,
+    channels: int,
+    sample_rate: int,
+    bits_per_sample: int,
+    *,
+    frames: int,
+    extensible: bool,
+) -> Iterator[_RiffWavWriter]:
     """Yield a WAV writer whose completed file atomically replaces ``path``.
 
     ``frames`` is the total frame count the caller intends to write, checked
     up front by @ref _check_wav_request -- before the temp file even
     exists, so a refused request touches neither it nor ``path``.
     """
-    import wave
-
     if bits_per_sample not in (16, 24):
         raise ValueError("WAV bits must be 16 or 24")
     _check_wav_request(path, frames, channels, sample_rate, bits_per_sample)
@@ -728,15 +814,12 @@ def _atomic_wav_writer(
     except OSError as exc:
         raise SonareError(SONARE_ERROR_ENCODE_FAILED, f"cannot write {path}: {exc}") from exc
     temporary = raw.name
-    wav = None
+    writer = _RiffWavWriter(raw, channels, int(sample_rate), bits_per_sample, extensible)
     try:
         try:
-            wav = wave.open(raw, "wb")  # noqa: SIM115 - closed before the atomic replace
-            wav.setnchannels(channels)
-            wav.setsampwidth(bits_per_sample // 8)
-            wav.setframerate(int(sample_rate))
-            yield wav
-            wav.close()
+            raw.seek(writer.header_size)
+            yield writer
+            writer.finish()
             raw.flush()
             os.fsync(raw.fileno())
             raw.close()
@@ -744,9 +827,6 @@ def _atomic_wav_writer(
         except OSError as exc:
             raise SonareError(SONARE_ERROR_ENCODE_FAILED, f"cannot write {path}: {exc}") from exc
     except BaseException:
-        if wav is not None:
-            with suppress(Exception):
-                wav.close()
         with suppress(Exception):
             raw.close()
         with suppress(FileNotFoundError):
@@ -754,121 +834,22 @@ def _atomic_wav_writer(
         raise
 
 
-# WAVE_FORMAT_EXTENSIBLE, and the KSDATAFORMAT_SUBTYPE_PCM subformat GUID
-# {00000001-0000-0010-8000-00AA00389B71} stored as little-endian Data1/2/3
-# followed by the 8 Data4 bytes verbatim -- the same layout the native CLI's
-# `save_wav_multichannel` writes.
-_WAVE_FORMAT_EXTENSIBLE = 0xFFFE
-_PCM_SUBFORMAT_GUID = bytes(
-    [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71]
-)
-# dwChannelMask by channel count, matching src/core/channel_layout.h's
-# wave_channel_mask table (mono carries no meaningful mask).
-_CHANNEL_MASKS = {1: 0x0, 2: 0x3, 6: 0x3F, 8: 0x63F}
-# RIFF/WAVE(12) + fmt chunk id/size/body(8 + 40) + data chunk id/size(8).
-_EXTENSIBLE_HEADER_SIZE = 68
+def _atomic_wav_writer(
+    path: str, channels: int, sample_rate: int, bits_per_sample: int = 16, *, frames: int
+) -> AbstractContextManager[_RiffWavWriter]:
+    """Plain WAVE_FORMAT_PCM writer, for the widths a plain header can describe (mono, stereo)."""
+    return _atomic_riff_writer(
+        path, channels, sample_rate, bits_per_sample, frames=frames, extensible=False
+    )
 
 
-class _ExtensibleWavWriter:
-    """Streams raw PCM into an open WAVE_FORMAT_EXTENSIBLE file; header patched on close.
-
-    Exposes the same ``writeframesraw`` surface stdlib ``wave.Wave_write``
-    does, so a caller already chunking through ``_atomic_wav_writer`` needs no
-    second code path for a >2-channel target.
-    """
-
-    def __init__(self, handle: Any, channels: int, sample_rate: int, bits_per_sample: int) -> None:
-        self._handle = handle
-        self._channels = channels
-        self._sample_rate = sample_rate
-        self._bits_per_sample = bits_per_sample
-        self._data_size = 0
-
-    def writeframesraw(self, data: bytes | bytearray) -> None:
-        self._handle.write(bytes(data))
-        self._data_size += len(data)
-
-    def write_header(self) -> None:
-        """Patch the RIFF/fmt/data header now that ``_data_size`` is known."""
-        import struct
-
-        block_align = self._channels * (self._bits_per_sample // 8)
-        byte_rate = self._sample_rate * block_align
-        fmt_size = 40
-        riff_size = 4 + (8 + fmt_size) + (8 + self._data_size)
-        channel_mask = _CHANNEL_MASKS.get(self._channels, 0)
-        header = bytearray()
-        header += b"RIFF" + struct.pack("<I", riff_size) + b"WAVE"
-        header += b"fmt " + struct.pack("<I", fmt_size)
-        header += struct.pack(
-            "<HHIIHHHHI",
-            _WAVE_FORMAT_EXTENSIBLE,
-            self._channels,
-            self._sample_rate,
-            byte_rate,
-            block_align,
-            self._bits_per_sample,
-            22,  # cbSize
-            self._bits_per_sample,  # wValidBitsPerSample
-            channel_mask,
-        )
-        header += _PCM_SUBFORMAT_GUID
-        header += b"data" + struct.pack("<I", self._data_size)
-        assert len(header) == _EXTENSIBLE_HEADER_SIZE
-        self._handle.seek(0)
-        self._handle.write(bytes(header))
-
-
-@contextmanager
 def _atomic_wav_writer_multichannel(
     path: str, channels: int, sample_rate: int, bits_per_sample: int = 16, *, frames: int
-) -> Iterator[_ExtensibleWavWriter]:
-    """Yield a WAVE_FORMAT_EXTENSIBLE writer whose completed file atomically replaces ``path``.
-
-    Stdlib ``wave`` always emits plain WAVE_FORMAT_PCM, which carries no
-    channel mask a 5.1/7.1 player needs to place its planes correctly, so a
-    width beyond stereo is hand-written here to match the native CLI's own
-    ``save_wav_multichannel`` layout byte for byte. Mono and stereo stay on
-    ``_atomic_wav_writer``, which already writes the right (plain-PCM) format
-    for those widths.
-
-    ``frames`` is checked up front the same way ``_atomic_wav_writer`` checks
-    it; see @ref _check_wav_request.
-    """
-    if bits_per_sample not in (16, 24):
-        raise ValueError("WAV bits must be 16 or 24")
-    _check_wav_request(path, frames, channels, sample_rate, bits_per_sample)
-    target = os.path.abspath(path)
-    directory = os.path.dirname(target)
-    try:
-        raw = tempfile.NamedTemporaryFile(  # noqa: SIM115 - lifetime spans the yielded writer
-            mode="w+b",
-            prefix=f".{os.path.basename(target)}.",
-            suffix=".tmp",
-            dir=directory,
-            delete=False,
-        )
-    except OSError as exc:
-        raise SonareError(SONARE_ERROR_ENCODE_FAILED, f"cannot write {path}: {exc}") from exc
-    temporary = raw.name
-    writer = _ExtensibleWavWriter(raw, channels, sample_rate, bits_per_sample)
-    try:
-        try:
-            raw.seek(_EXTENSIBLE_HEADER_SIZE)
-            yield writer
-            writer.write_header()
-            raw.flush()
-            os.fsync(raw.fileno())
-            raw.close()
-            os.replace(temporary, target)
-        except OSError as exc:
-            raise SonareError(SONARE_ERROR_ENCODE_FAILED, f"cannot write {path}: {exc}") from exc
-    except BaseException:
-        with suppress(Exception):
-            raw.close()
-        with suppress(FileNotFoundError):
-            os.unlink(temporary)
-        raise
+) -> AbstractContextManager[_RiffWavWriter]:
+    """WAVE_FORMAT_EXTENSIBLE writer, carrying the channel mask a 5.1/7.1 player needs."""
+    return _atomic_riff_writer(
+        path, channels, sample_rate, bits_per_sample, frames=frames, extensible=True
+    )
 
 
 def _write_wav_mono_frames(

@@ -10,7 +10,12 @@ from collections.abc import Callable, Sequence
 from typing import Any, Literal, cast
 
 from ._analysis_detection import _parse_analysis_json
-from ._cancellation import CancellationState, make_cancel_trampoline
+from ._cancellation import (
+    CancellationState,
+    make_cancel_trampoline,
+    make_progress_trampoline,
+    raise_callback_error,
+)
 from ._ffi import (
     SONARE_MAX_METER_CANDIDATE_NUMERATORS,
     SONARE_MUSIC_ANALYZE_OPTIONS_VERSION,
@@ -352,23 +357,16 @@ def analyze(
         lib.sonare_free_result(ctypes.byref(out))
 
 
+def _free_json(lib: ctypes.CDLL, out_json: ctypes.c_char_p) -> None:
+    if out_json.value and hasattr(lib, "sonare_free_string"):
+        lib.sonare_free_string(out_json)
+
+
 def _make_analyze_progress_trampoline(
     on_progress: Callable[[float, str], None], state: CancellationState
 ) -> Any:
-    """Wrap a Python callback for use as a C SonareAnalyzeProgressCallback.
-
-    The returned object MUST be kept alive across the C call to avoid GC
-    collecting the underlying ctypes closure.
-    """
-
-    def _trampoline(progress: float, stage_cstr: bytes | None, _user_data: int) -> None:
-        try:
-            stage = stage_cstr.decode("utf-8") if stage_cstr else ""
-            on_progress(float(progress), stage)
-        except Exception:  # noqa: BLE001 — never propagate Python exceptions into C
-            pass
-
-    return SonareAnalyzeProgressCallback(_trampoline)
+    """Wrap a Python callback for use as a C SonareAnalyzeProgressCallback."""
+    return make_progress_trampoline(SonareAnalyzeProgressCallback, on_progress, state)
 
 
 @_guard_buffer("samples")
@@ -414,9 +412,12 @@ def analyze_with_progress(
         sample_rate: Sample rate in Hz (default 22050).
         on_progress: Optional callable ``(progress: float, stage: str) -> object``
             invoked during analysis. Progress is in ``[0, 1]``. Its return
-            value is ignored. If ``None``, no callback is registered.
+            value is ignored. If ``None``, no callback is registered. An
+            exception it raises stops the analysis at its next cancellation
+            point and is raised from this call.
         cancel: Optional zero-argument callable polled by the native operation.
-            A true return value requests cancellation.
+            A true return value requests cancellation; an exception it raises
+            is raised from this call.
         n_fft, hop_length, bpm_min, bpm_max, start_bpm, use_triads_only,
         use_hpss, chroma_highpass_hz, use_bass_weighted, chroma_hop_multiplier,
         use_chord_hmm, use_chord_key_context, chord_hmm_beam_width,
@@ -476,13 +477,13 @@ def analyze_with_progress(
         cancel_cb,
         None,
     )
+    raise_callback_error(state, rc, lambda: _free_json(lib, out_json))
     _check(rc)
     try:
         raw = out_json.value
         data = json.loads(raw.decode("utf-8") if raw else "{}")
     finally:
-        if out_json.value and hasattr(lib, "sonare_free_string"):
-            lib.sonare_free_string(out_json)
+        _free_json(lib, out_json)
     return _parse_analysis_json(data)
 
 

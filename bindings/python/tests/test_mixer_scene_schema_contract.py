@@ -23,6 +23,9 @@ from typing import Any
 import pytest
 
 import libsonare
+from libsonare import ErrorCode
+
+from ._helpers import raises_coded
 
 ROOT = Path(__file__).resolve().parents[3]
 SCHEMA = json.loads((ROOT / "schemas/mixer-scene.schema.json").read_text(encoding="utf-8"))
@@ -193,7 +196,7 @@ def test_the_schema_and_the_loader_agree_on_where_each_bound_sits(
     _place(scene, path, maximum + 1)
     findings = _findings(scene)
     assert any("over the maximum" in finding for finding in findings), findings
-    with pytest.raises(RuntimeError):
+    with raises_coded(ErrorCode.INVALID_FORMAT):
         libsonare.Mixer.from_scene_json(json.dumps(scene))
 
 
@@ -212,5 +215,5 @@ def test_the_schema_and_the_loader_agree_on_the_true_peak_oversample_set(factor:
         libsonare.Mixer.from_scene_json(json.dumps(scene)).close()
     else:
         assert any("is outside [4, 8]" in finding for finding in findings), findings
-        with pytest.raises(RuntimeError):
+        with raises_coded(ErrorCode.INVALID_FORMAT):
             libsonare.Mixer.from_scene_json(json.dumps(scene))

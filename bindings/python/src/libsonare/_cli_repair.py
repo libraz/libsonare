@@ -354,7 +354,7 @@ def cmd_repair(args: argparse.Namespace) -> int:
         result = master_audio(
             samples,
             sample_rate=sr,
-            preset_name=cast("MasteringPreset", preset),
+            preset=cast("MasteringPreset", preset),
             overrides=overrides,
         )
         mode = "preset"

@@ -52,14 +52,14 @@ def test_chain_stereo_matches_the_document_chain_config() -> None:
 def test_chain_overrides_master_audio() -> None:
     """The extracted chain is accepted as master_audio overrides as-is."""
     chain = mastering_assistant_suggest_chain(SAMPLES, sample_rate=SR, params=PARAMS)
-    result = master_audio(SAMPLES, sample_rate=SR, preset_name="pop", overrides=chain)
+    result = master_audio(SAMPLES, sample_rate=SR, preset="pop", overrides=chain)
     assert result.report is not None
 
 
 def test_chain_stereo_overrides_master_audio_stereo() -> None:
     """The extracted stereo chain is accepted as master_audio_stereo overrides as-is."""
     chain = mastering_assistant_suggest_chain_stereo(LEFT, RIGHT, sample_rate=SR, params=PARAMS)
-    result = master_audio_stereo(LEFT, RIGHT, sample_rate=SR, preset_name="pop", overrides=chain)
+    result = master_audio_stereo(LEFT, RIGHT, sample_rate=SR, preset="pop", overrides=chain)
     assert result.report is not None
 
 

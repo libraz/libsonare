@@ -14,7 +14,7 @@ from numpy.typing import NDArray
 
 import libsonare
 
-from ._helpers import LIB_AVAILABLE, sine
+from ._helpers import LIB_AVAILABLE, raises_coded, sine
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library missing")
 
@@ -93,18 +93,18 @@ def test_heal_radius_frames_zero_uses_core_default() -> None:
     out = np.asarray(libsonare.spectral_edit(x, SR, [], heal_radius_frames=0), dtype=np.float32)
     assert len(out) == len(x)
     assert np.all(np.isfinite(out))
-    with pytest.raises((ValueError, Exception)):
+    with raises_coded():
         libsonare.spectral_edit(x, SR, [], heal_radius_frames=-1)
 
 
 def test_invalid_parameters_raise() -> None:
     x = sine(440.0, 0.25, amp=0.4)
-    with pytest.raises((ValueError, Exception)):
+    with raises_coded():
         libsonare.spectral_edit(x, SR, [], n_fft=2000)  # not a power of two
     with pytest.raises(ValueError, match="power of two >= 4"):
         libsonare.spectral_edit(x, SR, [], n_fft=2, hop_length=1, window="rectangular")
-    with pytest.raises((ValueError, Exception)):
+    with raises_coded():
         libsonare.spectral_edit(x, SR, [], n_fft=2048, hop_length=2048)  # hop > n_fft/2
-    with pytest.raises((ValueError, Exception)):
+    with raises_coded():
         op = libsonare.SpectralRegionOp(0, len(x), 0.0, 0.0, mode="nonsense")
         libsonare.spectral_edit(x, SR, [op])

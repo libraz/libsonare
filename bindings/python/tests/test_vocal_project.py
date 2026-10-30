@@ -40,6 +40,10 @@ from libsonare.vocal_project import (
 )
 
 
+class _CancelProbeError(Exception):
+    """Raised by a test cancel probe; stands for the caller's own exception."""
+
+
 def _source_and_render() -> tuple[np.ndarray, int, bytes, np.ndarray, object]:
     sample_rate = 16_000
     source = (0.35 * np.sin(2.0 * np.pi * 440.0 * np.arange(8192) / sample_rate)).astype(np.float32)
@@ -185,9 +189,9 @@ def test_apply_roundtrip_and_rehydrate_after_project_reload() -> None:
         assert restored.get_vocal_edit_dependencies()[0].derived_pcm_available is False
 
         def fail_from_probe() -> bool:
-            raise RuntimeError("cancel probe failed")
+            raise _CancelProbeError("cancel probe failed")
 
-        with pytest.raises(RuntimeError, match="cancel probe failed"):
+        with pytest.raises(_CancelProbeError, match="cancel probe failed"):
             restored.rehydrate_vocal_edits(
                 original_sources,
                 cancel=fail_from_probe,

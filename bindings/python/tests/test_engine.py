@@ -11,6 +11,7 @@ from libsonare import (
     AutomationPoint,
     EngineMarker,
     EngineMetronomeConfig,
+    ErrorCode,
     MarkerKind,
     ParameterInfo,
     RealtimeEngine,
@@ -19,6 +20,8 @@ from libsonare import (
     engine_abi_version,
     voice_changer_abi_version,
 )
+
+from ._helpers import raises_coded
 
 
 def test_engine_abi_version() -> None:
@@ -160,7 +163,7 @@ def test_engine_destroy_and_delete_aliases() -> None:
     engine.destroy()
     # delete() is the second cross-binding alias and is safe to call again.
     engine.delete()
-    with pytest.raises(RuntimeError):
+    with raises_coded(ErrorCode.INVALID_STATE):
         engine.play()
 
 
@@ -373,7 +376,7 @@ def test_engine_set_param_smoothing_ms_validates_argument() -> None:
     ) as engine:
         engine.set_param_smoothing_ms(0.0)
         engine.set_param_smoothing_ms(75.0)
-        with pytest.raises((ValueError, RuntimeError)):
+        with raises_coded():
             engine.set_param_smoothing_ms(-1.0)
-        with pytest.raises((ValueError, RuntimeError)):
+        with raises_coded():
             engine.set_param_smoothing_ms(float("nan"))

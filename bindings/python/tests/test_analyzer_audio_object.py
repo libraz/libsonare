@@ -6,6 +6,7 @@ from __future__ import annotations
 import numpy as np
 
 from ._analyzer_helpers import *
+from ._helpers import raises_coded
 
 
 def test_resample() -> None:
@@ -53,7 +54,7 @@ def test_invalid_sample_rate() -> None:
     from libsonare import detect_bpm
 
     silence = [0.0] * 100
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         detect_bpm(silence, sample_rate=0)
 
 
@@ -128,6 +129,16 @@ def test_detect_onsets_function() -> None:
     assert isinstance(onsets, list)
     for t in onsets:
         assert t >= 0.0
+
+
+def test_detect_onsets_refusal_names_the_keyword() -> None:
+    """A negative window or delta is refused naming the keyword the caller wrote."""
+    from libsonare import SonareValueError, detect_onsets
+
+    tone = _generate_sine(440, 22050, 0.5)
+    for key in ("pre_max", "post_max", "pre_avg", "post_avg", "wait", "backtrack_range", "delta"):
+        with pytest.raises(SonareValueError, match=key):
+            detect_onsets(tone, sample_rate=22050, **{key: -1})
 
 
 ## Analyze with real signal

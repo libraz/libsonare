@@ -317,8 +317,10 @@ def _project_align_takes(args: argparse.Namespace) -> int:
     if not args.output:
         raise ValueError("project align-takes requires --output")
     reference_source = int(args.reference_source)
-    if reference_source < 1:
-        raise ValueError(f"--reference-source must be >= 1, got {reference_source}")
+    if not 1 <= reference_source <= 0xFFFFFFFF:
+        raise ValueError(
+            f"--reference-source must be between 1 and 4294967295, got {reference_source}"
+        )
     if args.hop_length < 0:
         raise ValueError(f"--hop-length must be >= 0, got {args.hop_length}")
     if args.bins_per_octave < 0:
@@ -816,11 +818,12 @@ def register_project_parsers(
     _cli_domain(
         palign.add_argument(
             "--reference-source",
-            type=_c_int,
+            type=int,
             required=True,
             help="Audio source id whose timeline every take is aligned to",
         ),
         minimum=1,
+        maximum=0xFFFFFFFF,
         reject_exit="invalid_parameter",
     )
     palign.add_argument(

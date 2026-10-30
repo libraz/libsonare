@@ -36,7 +36,7 @@ def test_mastering_preset_params_and_bits_reach_api_and_writer(
     patch_mono_decode(monkeypatch, lambda path: ([0.0], 44_100))
 
     def master_audio(*args, **kwargs):
-        calls["preset"] = kwargs["preset_name"]
+        calls["preset"] = kwargs["preset"]
         calls["overrides"] = kwargs["overrides"]
         return _result(stages=["eq.tilt", "loudness"])
 

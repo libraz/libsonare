@@ -12,7 +12,9 @@ import json
 
 import pytest
 
-from libsonare import Project, SonareError, mastering_insert_names
+from libsonare import ErrorCode, Project, SonareError, mastering_insert_names
+
+from ._helpers import raises_coded
 
 
 def _audio_project() -> tuple[Project, int, int]:
@@ -43,7 +45,7 @@ def test_set_clip_gain_accepts_zero_mute_and_undoes() -> None:
     assert muted != before
     p.undo()
     assert p.to_json() == before
-    with pytest.raises((ValueError, Exception)):
+    with raises_coded():
         p.set_clip_gain(clip, -1.0)
 
 
@@ -69,7 +71,7 @@ def test_set_clip_fade_and_loop_round_trip() -> None:
     assert p.to_json() != before
     p.undo()
     assert p.to_json() == before
-    with pytest.raises((ValueError, Exception)):
+    with raises_coded():
         p.set_clip_loop(clip, "loop", 240.0, loop_crossfade_ppq=-1.0)  # crossfade must be >= 0
 
 
@@ -198,7 +200,7 @@ def test_set_max_history_bytes_reports_missing_additive_symbol(
 
     p = Project()
     monkeypatch.setattr(project_edit, "_get_lib", lambda: object())
-    with pytest.raises(RuntimeError, match="sonare_project_set_max_history_bytes"):
+    with raises_coded(ErrorCode.NOT_SUPPORTED, match="sonare_project_set_max_history_bytes"):
         p.set_max_history_bytes(0)
 
 
@@ -322,7 +324,7 @@ def test_move_clip_rejects_cross_kind_track() -> None:
     p, _audio_track, audio_clip = _audio_project()
     midi_track = p.add_track("midi", "keys")
     before = p.to_json()
-    with pytest.raises(RuntimeError):
+    with raises_coded(ErrorCode.INVALID_STATE):
         p.move_clip(audio_clip, 0.0, midi_track)  # audio clip onto a MIDI track
     assert p.to_json() == before  # rejected without mutating state
 

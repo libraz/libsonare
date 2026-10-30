@@ -17,6 +17,7 @@ import numpy as np
 import pytest
 
 from libsonare import (
+    ErrorCode,
     MarkerKind,
     Project,
     ProjectMarker,
@@ -25,6 +26,7 @@ from libsonare import (
 )
 from libsonare._project import EXPECTED_PROJECT_ABI_VERSION
 
+from ._helpers import raises_coded
 from ._project_helpers import _build_project
 
 
@@ -213,7 +215,7 @@ def test_import_external_stems_creates_normal_audio_tracks() -> None:
         assert len(clip_ids) == 2
         assert project.track_count() == 2
         assert project.clip_count() == 2
-        with pytest.raises(RuntimeError):
+        with raises_coded():
             project.import_external_stems(
                 48000,
                 [
@@ -340,10 +342,12 @@ def test_deserialized_audio_source_can_be_rebound_before_bounce() -> None:
 
 
 def test_malformed_deserialize_raises_without_crashing() -> None:
-    with pytest.raises(ValueError):
+    with raises_coded(ErrorCode.INVALID_FORMAT):
         Project.from_json("{ this is not valid project json ]]")
-    with pytest.raises(ValueError):
+    with raises_coded(ErrorCode.INVALID_FORMAT):
         Project.from_json(b"")
+    with raises_coded(ErrorCode.INVALID_FORMAT):
+        Project.from_json_with_diagnostics("{ this is not valid project json ]]")
 
 
 def test_from_json_with_diagnostics_returns_success_warnings() -> None:
@@ -787,7 +791,7 @@ def test_project_rejects_audio_length_not_matching_channels() -> None:
 def test_set_track_midi_destination_rejects_unknown_track() -> None:
     project = Project()
     try:
-        with pytest.raises(RuntimeError):
+        with raises_coded():
             project.set_track_midi_destination(9999, 1)
     finally:
         project.close()
@@ -837,7 +841,7 @@ def test_context_manager_and_aliases_close_handle() -> None:
     project.destroy()
     project.delete()
     project.close()
-    with pytest.raises(RuntimeError):
+    with raises_coded(ErrorCode.INVALID_STATE):
         project.add_track("audio")
 
 

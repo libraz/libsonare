@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from libsonare import SonareValueError
+from libsonare import ErrorCode, SonareValueError
 from libsonare._runtime import _pan_law_value
 
-from ._helpers import LIB_AVAILABLE
+from ._helpers import LIB_AVAILABLE, raises_coded
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not found")
 
@@ -160,7 +160,7 @@ def test_bus_non_finite_discard_count_rejects_an_uncompiled_bus(mixer) -> None:
     zero that reads as "clean" for a bus that was never actually processed.
     """
     mixer.add_bus("py-scratch-bus", "aux")
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         mixer.bus_non_finite_discard_count("py-scratch-bus")
 
     mixer.compile()
@@ -168,7 +168,7 @@ def test_bus_non_finite_discard_count_rejects_an_uncompiled_bus(mixer) -> None:
 
 
 def test_bus_non_finite_discard_count_rejects_an_unknown_bus_id(mixer) -> None:
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         mixer.bus_non_finite_discard_count("no-such-bus")
 
 
@@ -481,6 +481,16 @@ def test_set_surround_pan_reflected_in_scene(mixer) -> None:
     assert pan["distance"] == pytest.approx(1.0)
 
 
+@pytest.mark.parametrize(
+    "field", [{"azimuth": 181.0}, {"azimuth": -181.0}, {"divergence": 1.5}, {"lfe": -0.1}]
+)
+def test_set_surround_pan_refuses_out_of_range_fields(mixer, field) -> None:
+    before = mixer.to_scene_json()
+    with raises_coded():
+        mixer.set_surround_pan("vocal", **field)
+    assert mixer.to_scene_json() == before
+
+
 def test_soloed_and_solo_safe_reflected_in_scene(mixer) -> None:
     """set_soloed / set_solo_safe are reflected in the re-serialized scene."""
     scene_before = json.loads(mixer.to_scene_json())
@@ -512,7 +522,7 @@ def test_remove_send_drops_a_send_and_shifts_indices(mixer) -> None:
     mixer.remove_send("vocal", i0)
     # The surviving send shifted down to i0; the old top index is now out of range.
     mixer.set_send_db("vocal", i0, -6.0)
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         mixer.set_send_db("vocal", i1, -6.0)
 
 
@@ -552,9 +562,9 @@ def test_strip_can_be_added_to_a_live_mixer(mixer) -> None:
 
     # The C entry point reports failure by returning NULL, not an error code, so
     # a facade that forgot to check it would report success on both of these.
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         mixer.add_strip("py-live-strip")
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         mixer.add_strip("py-oversampled", true_peak_oversample=99)
 
 
@@ -690,7 +700,7 @@ def test_mixer_is_a_context_manager() -> None:
 
     with Mixer.from_scene_json(_first_preset_json(), sample_rate=48000, block_size=256) as mixer:
         assert mixer.strip_count() > 0
-    with pytest.raises(RuntimeError):
+    with raises_coded(ErrorCode.INVALID_STATE):
         mixer.strip_count()
 
     with (
@@ -698,22 +708,22 @@ def test_mixer_is_a_context_manager() -> None:
         Mixer.from_scene_json(_first_preset_json(), sample_rate=48000, block_size=256) as raised,
     ):
         raise KeyError("inside")
-    with pytest.raises(RuntimeError):
+    with raises_coded(ErrorCode.INVALID_STATE):
         raised.strip_count()
 
 
 def test_methods_after_close_raise(mixer) -> None:
     """Calling a method after close raises RuntimeError (guarded contract)."""
     mixer.close()
-    with pytest.raises(RuntimeError):
+    with raises_coded(ErrorCode.INVALID_STATE):
         mixer.strip_count()
-    with pytest.raises(RuntimeError):
+    with raises_coded(ErrorCode.INVALID_STATE):
         mixer.set_soloed("vocal", True)
-    with pytest.raises(RuntimeError):
+    with raises_coded(ErrorCode.INVALID_STATE):
         mixer.settle("vocal")
-    with pytest.raises(RuntimeError):
+    with raises_coded(ErrorCode.INVALID_STATE):
         mixer.strip_non_finite_discard_count("vocal")
-    with pytest.raises(RuntimeError):
+    with raises_coded(ErrorCode.INVALID_STATE):
         mixer.bus_non_finite_discard_count("master")
 
 

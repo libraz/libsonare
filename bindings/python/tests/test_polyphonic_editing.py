@@ -26,9 +26,9 @@ import pytest
 from numpy.typing import NDArray
 
 import libsonare
-from libsonare import SonareError, SonareValueError
+from libsonare import ErrorCode, SonareError, SonareValueError
 
-from ._helpers import LIB_AVAILABLE, sine
+from ._helpers import LIB_AVAILABLE, raises_coded, sine
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library missing")
 
@@ -109,7 +109,7 @@ def test_destroy_and_delete_alias_close(chord: NDArray[np.float32]) -> None:
     handle = libsonare.PolyphonicAnalysis(chord, SR)
     handle.destroy()
     handle.delete()
-    with pytest.raises(RuntimeError, match="closed"):
+    with raises_coded(ErrorCode.INVALID_STATE, match="closed"):
         handle.note_count()
 
 
@@ -124,20 +124,20 @@ def test_use_after_close_raises(chord: NDArray[np.float32]) -> None:
         handle.polyphony,
         handle.render,
     ):
-        with pytest.raises(RuntimeError, match="closed"):
+        with raises_coded(ErrorCode.INVALID_STATE, match="closed"):
             call()
-    with pytest.raises(RuntimeError, match="closed"):
+    with raises_coded(ErrorCode.INVALID_STATE, match="closed"):
         handle.note_f0(0)
-    with pytest.raises(RuntimeError, match="closed"):
+    with raises_coded(ErrorCode.INVALID_STATE, match="closed"):
         handle.note_envelope(0)
-    with pytest.raises(RuntimeError, match="closed"):
+    with raises_coded(ErrorCode.INVALID_STATE, match="closed"):
         handle.set_note_edit(0, libsonare.NoteEdit())
 
 
 def test_context_manager_closes(chord: NDArray[np.float32]) -> None:
     with libsonare.PolyphonicAnalysis(chord, SR) as handle:
         assert handle.frame_count() > 0
-    with pytest.raises(RuntimeError, match="closed"):
+    with raises_coded(ErrorCode.INVALID_STATE, match="closed"):
         handle.frame_count()
 
 

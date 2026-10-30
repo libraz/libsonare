@@ -170,16 +170,16 @@ def test_atomic_byte_writer_preserves_old_output_at_every_failure_stage(
     _assert_only_old_output(tmp_path, output)
 
 
-class _WaveCloseProxy:
-    def __init__(self, wav: Any) -> None:
-        self._wav = wav
+class _CloseFailureProxy:
+    def __init__(self, raw: Any) -> None:
+        self._raw = raw
 
     def close(self) -> None:
-        self._wav.close()
+        self._raw.close()
         raise OSError("injected close failure")
 
     def __getattr__(self, name: str) -> Any:
-        return getattr(self._wav, name)
+        return getattr(self._raw, name)
 
 
 @pytest.mark.parametrize("stage", ["write", "close", "replace"])
@@ -201,12 +201,12 @@ def test_atomic_wav_writer_preserves_old_output_at_every_failure_stage(
             lambda *_args: (_ for _ in ()).throw(OSError("injected write failure")),
         )
     elif stage == "close":
-        original_wave_open = wave.open
+        original_temporary_file = implementation.tempfile.NamedTemporaryFile
 
-        def failing_close_wave(*args, **kwargs):
-            return _WaveCloseProxy(original_wave_open(*args, **kwargs))
+        def failing_close_file(*args, **kwargs):
+            return _CloseFailureProxy(original_temporary_file(*args, **kwargs))
 
-        monkeypatch.setattr(wave, "open", failing_close_wave)
+        monkeypatch.setattr(implementation.tempfile, "NamedTemporaryFile", failing_close_file)
     else:
         monkeypatch.setattr(
             implementation.os,
@@ -384,6 +384,33 @@ def test_atomic_wav_writer_accepts_the_legal_edge_of_the_riff_32_bit_size_limit(
     with implementation._atomic_wav_writer(str(output), 1, 48000, frames=max_frames):
         pass
     assert output.exists()
+
+
+@pytest.mark.parametrize(
+    ("writer_name", "channels", "header_size"),
+    [("_atomic_wav_writer", 1, 44), ("_atomic_wav_writer_multichannel", 3, 68)],
+)
+def test_wav_writers_close_an_odd_data_chunk_with_a_counted_pad_byte(
+    tmp_path, writer_name: str, channels: int, header_size: int
+) -> None:
+    """An odd data chunk is followed by one zero byte only the RIFF size counts."""
+    import struct
+
+    import libsonare._cli_common as implementation
+
+    output = tmp_path / "odd.wav"
+    payload = bytes(range(1, 3 * channels + 1))  # one 24-bit frame, odd for an odd width
+    with getattr(implementation, writer_name)(str(output), channels, 48000, 24, frames=1) as wav:
+        wav.writeframesraw(payload)
+
+    blob = output.read_bytes()
+    assert len(payload) % 2 == 1
+    assert blob[:4] == b"RIFF"
+    assert struct.unpack("<I", blob[4:8])[0] == len(blob) - 8
+    assert struct.unpack("<I", blob[header_size - 4 : header_size])[0] == len(payload)
+    assert blob[header_size : header_size + len(payload)] == payload
+    assert len(blob) == header_size + len(payload) + 1
+    assert blob[-1] == 0
 
 
 @pytest.mark.parametrize(

@@ -144,10 +144,16 @@ def cmd_timbre(args: argparse.Namespace) -> int:
 
 
 def cmd_lufs(args: argparse.Namespace) -> int:
-    from ._features import lufs, momentary_lufs, short_term_lufs
+    from ._cli_common import _load_audio_channels
+    from ._cli_playback import _interleave_planes
+    from ._features import lufs_interleaved, lufs_series_interleaved
 
-    samples, sr = _load_audio(args.file)
-    r = lufs(samples, sample_rate=sr)
+    # Every source channel, summed per ITU-R BS.1770, so a stereo file reads the
+    # value `master` reports for it rather than the downmix's.
+    planes, sr = _load_audio_channels(args.file)
+    channels = len(planes)
+    samples = _interleave_planes(planes)
+    r = lufs_interleaved(samples, channels, sample_rate=sr)
 
     payload: dict[str, object] = {
         "integrated_lufs": r.integrated_lufs,
@@ -158,8 +164,9 @@ def cmd_lufs(args: argparse.Namespace) -> int:
     momentary_series: list[float] = []
     short_term_series: list[float] = []
     if args.series:
-        momentary_series = momentary_lufs(samples, sample_rate=sr)
-        short_term_series = short_term_lufs(samples, sample_rate=sr)
+        momentary_series, short_term_series = lufs_series_interleaved(
+            samples, channels, sample_rate=sr
+        )
 
     if args.json:
         if args.series:

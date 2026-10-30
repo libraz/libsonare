@@ -17,7 +17,7 @@ from libsonare import (
     SonareValueError,
 )
 
-from ._helpers import _midi1_word
+from ._helpers import _midi1_word, raises_coded
 
 # ---------------------------------------------------------------------------
 # Live-MIDI parity surface (built-in instrument bind, CC bindings, queued
@@ -327,7 +327,7 @@ def test_engine_external_destination_table_overflow() -> None:
         # Re-marking an existing destination is idempotent.
         engine.set_midi_destination_external(3, True)
         # The 17th distinct destination overflows the slot table.
-        with pytest.raises((ValueError, RuntimeError)):
+        with raises_coded(ErrorCode.INVALID_STATE):
             engine.set_midi_destination_external(99, True)
         # Freeing a slot lets the next mark succeed.
         engine.set_midi_destination_external(3, False)

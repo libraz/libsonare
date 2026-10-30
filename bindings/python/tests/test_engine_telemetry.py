@@ -137,6 +137,10 @@ def test_engine_set_track_strip_surround_pan_moves_lane_between_planes() -> None
         assert nan_error.value.code == 4
         with pytest.raises(SonareError):
             engine.set_track_strip_surround_pan(10, lfe=math.inf)
+        for field in ({"azimuth": 181.0}, {"divergence": 1.5}, {"lfe": -0.1}):
+            with pytest.raises(SonareValueError) as range_error:
+                engine.set_track_strip_surround_pan(10, **field)
+            assert range_error.value.code == 4
         with pytest.raises(SonareValueError) as unknown_error:
             engine.set_track_strip_surround_pan(99, azimuth=0.0)
         assert unknown_error.value.code == 4

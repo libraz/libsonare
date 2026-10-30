@@ -96,7 +96,7 @@ def test_new_fields_round_trip_through_the_pod() -> None:
         pitch_correction_key_root=9,
         pitch_correction_amount=0.75,
         harmony_voices=2,
-        harmony_steps=(2, 4, -3),
+        harmony_steps=(5, -2, -7),
         character_type="bbd_chorus",
         reverb_variation_variation="tempo_delay",
         reverb_variation_division="dotted_eighth",
@@ -105,14 +105,14 @@ def test_new_fields_round_trip_through_the_pod() -> None:
     )
     pod = cfg.to_pod()
     assert pod.struct_version == 2
-    assert list(pod.harmony_steps) == [2, 4, -3]
+    assert list(pod.harmony_steps) == [5, -2, -7]
     assert pod.pitch_correction_scale == 1
     assert pod.reverb_variation_division == 2
     assert libsonare.RealtimeVoiceChangerConfig.from_pod(pod) == cfg
     with _changer(base) as changer:
         changer.set_config_pod(cfg)
         live = changer.config_pod()
-        assert live.harmony_steps == (2, 4, -3)
+        assert live.harmony_steps == (5, -2, -7)
         assert live.pitch_correction_scale == "natural_minor"
         assert live.character_type == "bbd_chorus"
         assert live.midi_release == "input"

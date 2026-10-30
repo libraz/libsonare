@@ -21,6 +21,7 @@ from ._runtime import (
     SonareMixMeterSnapshot,
     SonareValueError,
     _check,
+    _check_realtime,
     _curve_value,
     _float_array_result,
     _get_lib,
@@ -493,6 +494,11 @@ class Mixer:
         reserved. Applied when the engine's track mixer renders this strip's
         lane into a destination with more than two channels; the stereo-only
         :class:`Mixer` block entry points ignore it.
+
+        Raises:
+            SonareValueError: If ``azimuth`` is outside [-180, 180], ``divergence``
+                or ``lfe`` is outside [0, 1], or any field is non-finite; nothing
+                is clamped.
         """
         handle = self._strip_handle(strip)
         pan = SonareSurroundPan(
@@ -706,7 +712,7 @@ class Mixer:
         if not hasattr(lib, "sonare_strip_non_finite_discard_count"):
             raise _not_supported("libsonare was built without strip discard-count support")
         out = ctypes.c_uint32()
-        _check(lib.sonare_strip_non_finite_discard_count(handle, ctypes.byref(out)))
+        _check_realtime(lib.sonare_strip_non_finite_discard_count(handle, ctypes.byref(out)))
         return int(out.value)
 
     def bus_non_finite_discard_count(self, bus_id: str) -> int:
@@ -728,7 +734,7 @@ class Mixer:
         if not hasattr(lib, "sonare_mixer_bus_non_finite_discard_count"):
             raise _not_supported("libsonare was built without bus discard-count support")
         out = ctypes.c_uint32()
-        _check(
+        _check_realtime(
             lib.sonare_mixer_bus_non_finite_discard_count(
                 self._handle, _utf8_arg(bus_id, "bus_id"), ctypes.byref(out)
             )

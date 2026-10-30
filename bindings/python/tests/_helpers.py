@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 import numpy as np
+import pytest
 
 
 def sine(freq: float, duration_sec: float, sr: int = 22050, amp: float = 0.5) -> np.ndarray:
@@ -61,3 +65,24 @@ def patch_mono_decode(monkeypatch, loader) -> None:
         "_load_audio_known_channels",
         lambda path, channels, *, emit_warning=False: loader(path),
     )
+
+
+@contextmanager
+def raises_coded(code: int | None = None, match: str | None = None) -> Iterator[None]:
+    """Assert the block raises a ``SonareError`` of exactly the class and code the cause maps to.
+
+    ``code`` defaults to ``INVALID_PARAMETER``, which is always a ``SonareValueError``
+    (a refused argument); every other code must be a plain coded ``SonareError``, so
+    neither a generic ``RuntimeError`` nor the wrong class passes.
+    """
+    from libsonare import ErrorCode, SonareError, SonareValueError
+
+    expected = int(ErrorCode.INVALID_PARAMETER if code is None else code)
+    with pytest.raises(SonareError, match=match) as excinfo:
+        yield
+    error = excinfo.value
+    assert error.code == expected, f"expected code {expected}, got {error.code}: {error}"
+    if expected == int(ErrorCode.INVALID_PARAMETER):
+        assert isinstance(error, SonareValueError), type(error)
+    else:
+        assert not isinstance(error, SonareValueError), type(error)

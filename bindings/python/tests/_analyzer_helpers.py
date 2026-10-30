@@ -43,7 +43,7 @@ def _read_wav_extensible_header(path: str) -> tuple[int, int, int]:
     Stdlib ``wave`` refuses format tag 0xFFFE, which is exactly what a >2
     channel bounce correctly writes (it carries the speaker-position mask a
     5.1/7.1 player needs, plain WAVE_FORMAT_PCM cannot). This parses the same
-    fixed 68-byte RIFF/fmt/data header ``_ExtensibleWavWriter.write_header``
+    fixed 68-byte RIFF/fmt/data header ``_RiffWavWriter.finish``
     (``libsonare._cli_common``) emits, instead of going through a reader that
     cannot open the format the product deliberately writes.
     """

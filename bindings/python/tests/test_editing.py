@@ -9,7 +9,9 @@ import numpy as np
 import pytest
 
 import libsonare
-from libsonare import Audio
+from libsonare import Audio, ErrorCode
+
+from ._helpers import raises_coded
 
 
 def _tone(sample_rate: int = 22050, duration: float = 0.5, freq: float = 220.0) -> list[float]:
@@ -44,7 +46,7 @@ def test_pitch_correct_to_midi_rejects_out_of_range() -> None:
     samples = _tone(sr)
 
     for current, target in ((57.0, 200.0), (57.0, -1.0), (-1.0, 60.0), (200.0, 60.0)):
-        with pytest.raises((ValueError, RuntimeError)):
+        with raises_coded():
             libsonare.pitch_correct_to_midi(
                 samples, sample_rate=sr, current_midi=current, target_midi=target
             )
@@ -112,7 +114,7 @@ def test_pitch_correct_to_midi_timevarying_derives_voicing_from_voiced_prob() ->
     # At/above 0.5: every frame reads as voiced, so a voiced frame carrying
     # NaN (no measured pitch) is rejected, the same as an explicit voiced=1.
     for threshold in (0.9, 0.5):
-        with pytest.raises((ValueError, RuntimeError)):
+        with raises_coded():
             libsonare.pitch_correct_to_midi_timevarying(
                 samples,
                 f0,
@@ -123,7 +125,7 @@ def test_pitch_correct_to_midi_timevarying_derives_voicing_from_voiced_prob() ->
             )
     # voiced_prob absent too: every frame defaults to voiced, so NaN is
     # rejected exactly like the all-voiced case above.
-    with pytest.raises((ValueError, RuntimeError)):
+    with raises_coded():
         libsonare.pitch_correct_to_midi_timevarying(
             samples, f0, 60.0, sample_rate=sr, hop_length=hop
         )
@@ -140,7 +142,7 @@ def test_pitch_correct_timevarying_derives_voicing_from_voiced_prob() -> None:
     libsonare.pitch_correct_timevarying(
         samples, f0, sample_rate=sr, hop_length=hop, voiced_prob=[0.1] * n_frames
     )
-    with pytest.raises((ValueError, RuntimeError)):
+    with raises_coded():
         libsonare.pitch_correct_timevarying(
             samples, f0, sample_rate=sr, hop_length=hop, voiced_prob=[0.9] * n_frames
         )
@@ -188,7 +190,7 @@ def test_pitch_correction_explicit_voiced_ignores_invalid_probability_shape_and_
     # Without explicit flags, the probability track still owns the [0,1] and
     # finite-value contract on both APIs.
     for invalid in (math.nan, -0.1, 1.1):
-        with pytest.raises((ValueError, RuntimeError)):
+        with raises_coded():
             libsonare.pitch_correct_to_midi_timevarying(
                 samples,
                 f0,
@@ -197,7 +199,7 @@ def test_pitch_correction_explicit_voiced_ignores_invalid_probability_shape_and_
                 hop_length=hop,
                 voiced_prob=[invalid] * n_frames,
             )
-        with pytest.raises((ValueError, RuntimeError)):
+        with raises_coded():
             libsonare.pitch_correct_timevarying(
                 samples,
                 f0,
@@ -279,11 +281,11 @@ def test_pitch_correct_timevarying_scale_and_knobs() -> None:
     assert any(abs(a - b) > 1e-6 for a, b in zip(full, gentle, strict=True))
 
     # Out-of-range knobs are rejected.
-    with pytest.raises((ValueError, RuntimeError)):
+    with raises_coded():
         libsonare.pitch_correct_timevarying(
             samples, f0, sample_rate=sr, hop_length=hop, retune_amount=2.0
         )
-    with pytest.raises((ValueError, RuntimeError)):
+    with raises_coded():
         libsonare.pitch_correct_timevarying(
             samples, f0, sample_rate=sr, hop_length=hop, target_midi=200.0
         )
@@ -483,39 +485,35 @@ def test_editing_audio_methods() -> None:
 
 def test_realtime_voice_changer_invalid_sample_rate() -> None:
     """Negative or zero sample_rate must be rejected at construction."""
-    import pytest
 
-    with pytest.raises((ValueError, RuntimeError)):
+    with raises_coded():
         libsonare.RealtimeVoiceChanger(-1, "neutral-monitor")
 
-    with pytest.raises((ValueError, RuntimeError)):
+    with raises_coded():
         libsonare.RealtimeVoiceChanger(0, "neutral-monitor")
 
 
 def test_realtime_voice_changer_invalid_channels() -> None:
     """channels > 2 must be rejected at construction."""
-    import pytest
 
-    with pytest.raises((ValueError, RuntimeError)):
+    with raises_coded():
         libsonare.RealtimeVoiceChanger(48000, "neutral-monitor", channels=3)
 
 
 def test_realtime_voice_changer_invalid_max_block_size() -> None:
     """max_block_size <= 0 must be rejected at construction."""
-    import pytest
 
-    with pytest.raises((ValueError, RuntimeError)):
+    with raises_coded():
         libsonare.RealtimeVoiceChanger(48000, "neutral-monitor", max_block_size=-1)
 
-    with pytest.raises((ValueError, RuntimeError)):
+    with raises_coded():
         libsonare.RealtimeVoiceChanger(48000, "neutral-monitor", max_block_size=0)
 
 
 def test_realtime_voice_changer_invalid_preset_id() -> None:
     """An unrecognised preset string must be rejected at construction."""
-    import pytest
 
-    with pytest.raises((ValueError, RuntimeError)):
+    with raises_coded(ErrorCode.INVALID_FORMAT):
         libsonare.RealtimeVoiceChanger(48000, "nonexistent-preset-id-xyz")
 
 
@@ -539,11 +537,10 @@ def test_realtime_voice_changer_invalid_json_config() -> None:
 
 def test_realtime_voice_changer_close_then_process() -> None:
     """process_mono after close() must raise (NULL handle returns INVALID_PARAMETER)."""
-    import pytest
 
     changer = libsonare.RealtimeVoiceChanger(48000, "neutral-monitor", max_block_size=128)
     changer.close()
-    with pytest.raises(RuntimeError):
+    with raises_coded(ErrorCode.INVALID_STATE):
         changer.process_mono([0.0] * 128)
     # Idempotent close should be a no-op even after handle is already null.
     changer.close()

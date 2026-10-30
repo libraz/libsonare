@@ -8,6 +8,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
+from libsonare import ErrorCode
 from libsonare._errors import SonareError, SonareValueError
 from libsonare._ffi_types_vocal import (
     SONARE_VOCAL_EDIT_API_VERSION,
@@ -33,6 +34,12 @@ from libsonare.vocal_edit import (
     restore_vocal_edit_session,
     vocal_edit_api_version,
 )
+
+from ._helpers import raises_coded
+
+
+class _CancelProbeError(Exception):
+    """Raised by a test cancel probe; stands for the caller's own exception."""
 
 
 def _native_vocal_available() -> bool:
@@ -341,24 +348,24 @@ def test_cancellation_callback_exception_is_propagated(operation: str) -> None:
     source, analysis = _source_and_analysis()
 
     def failing_probe() -> bool:
-        raise RuntimeError("cancel probe failed")
+        raise _CancelProbeError("cancel probe failed")
 
     with (
         create_vocal_edit_session(source, 16_000, analysis=analysis) as session,
         session.capture_render_snapshot() as snapshot,
     ):
         if operation == "render":
-            with pytest.raises(RuntimeError, match="cancel probe failed"):
+            with pytest.raises(_CancelProbeError, match="cancel probe failed"):
                 snapshot.render(cancel=failing_probe)
         else:
             with snapshot.begin_render_job() as job:
                 if operation == "next":
-                    with pytest.raises(RuntimeError, match="cancel probe failed"):
+                    with pytest.raises(_CancelProbeError, match="cancel probe failed"):
                         job.next(cancel=failing_probe)
                 else:
                     while not job.next():
                         pass
-                    with pytest.raises(RuntimeError, match="cancel probe failed"):
+                    with pytest.raises(_CancelProbeError, match="cancel probe failed"):
                         job.finalize(cancel=failing_probe)
 
 
@@ -445,5 +452,5 @@ def test_vocal_api_version_mismatch_is_refused_when_configuring_signatures() -> 
 
     lib = MagicMock()
     lib.sonare_vocal_edit_api_version.return_value = SONARE_VOCAL_EDIT_API_VERSION + 1
-    with pytest.raises(RuntimeError, match="ABI mismatch"):
+    with raises_coded(ErrorCode.ABI_MISMATCH, match="ABI mismatch"):
         configure_vocal_signatures(lib)

@@ -16,7 +16,7 @@ import pytest
 
 import libsonare
 
-from ._helpers import LIB_AVAILABLE
+from ._helpers import LIB_AVAILABLE, raises_coded
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library unavailable")
 
@@ -188,6 +188,15 @@ def test_remix_concatenates_intervals() -> None:
     out = libsonare.remix(x, [half, len(x), 0, half])
     assert np.asarray(out).size == len(x)
     assert _finite(out)
+
+
+@pytest.mark.parametrize("intervals", [[0, 100, 200], [0], 5, [[0, 100], [200, 300]]])
+def test_remix_refuses_odd_length_or_non_flat_intervals(intervals: Any) -> None:
+    x = _tone(440.0, 0.5)
+    with raises_coded(match="intervals"):
+        libsonare.remix(x, intervals)
+    with raises_coded(match="intervals"):
+        libsonare.remix_aligned_intervals(x, intervals)
 
 
 def test_hpss_with_residual_splits_three_ways() -> None:

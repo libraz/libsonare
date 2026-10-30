@@ -10,11 +10,11 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from libsonare import Audio, _cli_analysis
+from libsonare import Audio, ErrorCode, _cli_analysis
 from libsonare import audio as audio_module
 from libsonare._runtime import SonareError
 
-from ._helpers import LIB_AVAILABLE
+from ._helpers import LIB_AVAILABLE, raises_coded
 
 
 def _source_probe_available() -> bool:
@@ -59,7 +59,7 @@ def test_audio_file_channel_count_propagates_probe_failure(tmp_path) -> None:
 
 def test_audio_file_channel_count_reports_missing_optional_symbol(monkeypatch) -> None:
     monkeypatch.setattr(audio_module, "_get_lib", lambda: SimpleNamespace())
-    with pytest.raises(RuntimeError, match="sonare_audio_file_channel_count"):
+    with raises_coded(ErrorCode.NOT_SUPPORTED, match="sonare_audio_file_channel_count"):
         Audio.file_channel_count("input.wav")
 
 
@@ -97,7 +97,7 @@ def test_info_rejects_successful_zero_channel_probe(monkeypatch):
     monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: (np.zeros(1), 10))
     monkeypatch.setattr(Audio, "file_channel_count", lambda path: 0)
 
-    with pytest.raises(RuntimeError, match="invalid audio channel count"):
+    with raises_coded(ErrorCode.UNKNOWN, match="invalid audio channel count"):
         _cli_analysis.cmd_info(SimpleNamespace(file="broken.wav", json=True))
 
 
@@ -114,11 +114,16 @@ def test_info_reports_the_real_channel_probe_failure_without_a_wav_fallback(
     monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: (np.zeros(2), 10))
 
     def missing_probe(path):
-        raise RuntimeError("loaded libsonare does not expose sonare_audio_file_channel_count")
+        raise SonareError(
+            int(ErrorCode.NOT_SUPPORTED),
+            "loaded libsonare does not expose sonare_audio_file_channel_count",
+        )
 
     monkeypatch.setattr(Audio, "file_channel_count", missing_probe)
 
-    with pytest.raises(RuntimeError, match="does not expose sonare_audio_file_channel_count"):
+    with raises_coded(
+        ErrorCode.NOT_SUPPORTED, match="does not expose sonare_audio_file_channel_count"
+    ):
         _cli_analysis.cmd_info(SimpleNamespace(file=str(source), json=True))
 
 

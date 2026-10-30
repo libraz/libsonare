@@ -777,6 +777,8 @@ python = [
   "mastering_repair_analyze", # Python folds the C request JSON into the prefer_streaming_safe keyword
   "chord_symbol_from_analysis", # the facade folds root/quality/bass into one analysis chord object and sizes the extensions array itself
   "mastering_repair_apply", # Python serializes the `stages` mappings into stages_json and folds the cancel callback pair into `cancel`
+  "master_audio", # ergonomic rename: the keyword is `preset`, the field name the JS request objects use; the C parameter is preset_name
+  "master_audio_stereo", # ergonomic rename: `preset` as in master_audio and the JS request objects; the C parameter is preset_name
 ]
 
 # ---------------------------------------------------------------------------

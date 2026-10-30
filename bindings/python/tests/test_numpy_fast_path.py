@@ -71,6 +71,20 @@ def test_to_c_float_array_accepts_read_only_float32_ndarray() -> None:
     assert list(c_array)[:3] == [0.0, 1.0, 2.0]
 
 
+def test_to_c_float_array_accepts_a_read_only_memoryview() -> None:
+    """A memoryview over bytes takes the sequence path and arrives read-only; it must
+    be copied writable rather than raising a bare ctypes ``TypeError``."""
+    view = memoryview(np.arange(8, dtype=np.float32).tobytes()).cast("f")
+    assert view.readonly
+    c_array, length = _to_c_float_array(view)
+    assert length == 8
+    assert list(c_array)[:3] == [0.0, 1.0, 2.0]
+    audio = memoryview(np.ascontiguousarray(_sine(2048)).tobytes()).cast("f")
+    result = np.asarray(libsonare.rms_energy(audio), dtype=np.float64)
+    assert result.size > 0
+    assert np.all(np.isfinite(result))
+
+
 def test_samples_api_accepts_read_only_ndarray() -> None:
     """End-to-end: a samples-accepting public API must accept a read-only array
     instead of raising ``TypeError: underlying buffer is not writable``."""

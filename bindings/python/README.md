@@ -28,7 +28,7 @@ print(f"BPM: {result.bpm:.1f}  Key: {result.key.root.name} {result.key.mode.name
 
 # Master toward a target loudness with a named preset
 mastered = libsonare.master_audio(
-    audio.data, sample_rate=audio.sample_rate, preset_name="streaming",
+    audio.data, sample_rate=audio.sample_rate, preset="streaming",
 )
 print(mastered.output_lufs, mastered.applied_gain_db)
 ```

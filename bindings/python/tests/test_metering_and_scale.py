@@ -15,7 +15,7 @@ import pytest
 
 import libsonare
 
-from ._helpers import LIB_AVAILABLE
+from ._helpers import LIB_AVAILABLE, raises_coded
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library missing")
 
@@ -58,9 +58,9 @@ def test_pitch_and_dc_offset_reject_nonfinite_samples_and_invalid_rates() -> Non
         libsonare.pitch_yin(invalid, SR)
     with pytest.raises(ValueError):
         libsonare.metering_dc_offset(invalid, SR)
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         libsonare.pitch_yin(_sine(440.0, 0.1), 0)
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         libsonare.metering_dc_offset(_sine(440.0, 0.1), 0)
 
 
@@ -74,7 +74,7 @@ def test_metering_true_peak_db_default_oversample() -> None:
 
 def test_metering_true_peak_rejects_non_power_of_two() -> None:
     samples = _sine(440.0, 0.1)
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         libsonare.metering_true_peak_db(samples, SR, oversample_factor=3)
 
 
@@ -117,15 +117,15 @@ def test_metering_dynamic_range_returns_positive_dr_for_varying_signal() -> None
 
 def test_metering_dynamic_range_rejects_inverted_percentiles() -> None:
     samples = _sine(440.0, 1.0)
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         libsonare.metering_dynamic_range(samples, SR, low_percentile=0.9, high_percentile=0.1)
 
 
 def test_metering_dynamic_range_rejects_non_finite_options() -> None:
     samples = _sine(440.0, 1.0)
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         libsonare.metering_dynamic_range(samples, SR, window_sec=float("nan"))
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         libsonare.metering_dynamic_range(samples, SR, high_percentile=float("inf"))
 
 
@@ -218,13 +218,13 @@ def test_scale_pitch_class_enabled_reflects_mode_mask() -> None:
 
 
 def test_scale_quantize_rejects_bad_args() -> None:
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         libsonare.scale_quantize_midi(-1, C_MAJOR_MASK, 60.0)
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         libsonare.scale_quantize_midi(0, 0, 60.0)
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         libsonare.scale_quantize_midi(0, 5000, 60.0)
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         libsonare.scale_quantize_midi(0, -1, 60.0)
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         libsonare.scale_pitch_class_enabled(0, C_MAJOR_MASK, 12)

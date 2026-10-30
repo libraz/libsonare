@@ -356,14 +356,14 @@ def cmd_mastering(args: argparse.Namespace) -> int:
                 planes[0],
                 planes[1],
                 sample_rate=sr,
-                preset_name=cast("MasteringPreset", preset),
+                preset=cast("MasteringPreset", preset),
                 overrides=params or None,
             )
         else:
             result = master_audio(
                 samples,
                 sample_rate=sr,
-                preset_name=cast("MasteringPreset", preset),
+                preset=cast("MasteringPreset", preset),
                 overrides=params or None,
             )
         mode = "preset"
@@ -881,12 +881,12 @@ def cmd_master(args: argparse.Namespace) -> int:
         mode = "assistant"
     elif stereo:
         stereo_result = master_audio_stereo(
-            planes[0], planes[1], sample_rate=sr, preset_name=args.preset, overrides=overrides
+            planes[0], planes[1], sample_rate=sr, preset=args.preset, overrides=overrides
         )
         result, rendered = stereo_result, [stereo_result.left, stereo_result.right]
     else:
         mono_result = master_audio(
-            planes[0], sample_rate=sr, preset_name=args.preset, overrides=overrides
+            planes[0], sample_rate=sr, preset=args.preset, overrides=overrides
         )
         result, rendered = mono_result, [mono_result.samples]
     report_path = getattr(args, "report", "")

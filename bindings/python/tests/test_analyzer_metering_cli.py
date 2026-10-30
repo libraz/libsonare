@@ -493,12 +493,12 @@ def test_master_cli_applies_preset_and_override_params(monkeypatch, tmp_path, ca
         samples: list[float],
         *,
         sample_rate: int,
-        preset_name: str,
+        preset: str,
         overrides: dict[str, object],
     ) -> SimpleNamespace:
         calls["samples"] = samples
         calls["sample_rate"] = sample_rate
-        calls["preset_name"] = preset_name
+        calls["preset"] = preset
         calls["overrides"] = overrides
         return SimpleNamespace(
             samples=[0.0, 0.2],
@@ -525,7 +525,7 @@ def test_master_cli_applies_preset_and_override_params(monkeypatch, tmp_path, ca
     assert cli.cmd_master(args) == 0
     assert calls["samples"] == [0.1, -0.1]
     assert calls["sample_rate"] == 44100
-    assert calls["preset_name"] == "streaming"
+    assert calls["preset"] == "streaming"
     assert calls["overrides"] == {"eq.tilt.tiltDb": -0.5, "loudness.enabled": 1.0}
     assert output.exists()
     payload = json.loads(capsys.readouterr().out)

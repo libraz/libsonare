@@ -14,7 +14,9 @@ from typing import Any
 
 import pytest
 
-from ._helpers import LIB_AVAILABLE, sine
+from libsonare import ErrorCode
+
+from ._helpers import LIB_AVAILABLE, raises_coded, sine
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not available")
 
@@ -112,7 +114,7 @@ def test_context_manager_closes_the_handle() -> None:
     """Leaving a with block frees the handle and arms the guard."""
     with _make_audio() as audio:
         assert audio.length > 0
-    with pytest.raises(RuntimeError, match="Audio is closed"):
+    with raises_coded(ErrorCode.INVALID_STATE, match="Audio is closed"):
         _ = audio.duration
 
 

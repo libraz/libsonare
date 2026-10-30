@@ -510,7 +510,8 @@ class RealtimeVoiceChanger:
 
         Held notes become the voices' pitch targets, the newest leading, up to
         ``1 + harmony_voices`` of them. ``note`` outside [0, 127] or
-        ``velocity`` outside (0, 1] raises ``SonareValueError``. A grain-engine
+        ``velocity`` outside (0, 1] raises ``SonareValueError``; the velocity is
+        validated only and does not change the sound. A grain-engine
         handle, or a full event queue (the event is dropped), raises
         ``SonareError`` (invalid state).
         """
@@ -547,10 +548,11 @@ def voice_change_realtime(
     When ``channels`` > 1 the input must be interleaved (LRLR…) and the
     output is returned interleaved in the same layout.
 
-    The chain's processing latency (retune grain + ISP-limiter lookahead) is
-    compensated internally — a silent tail is flushed and the leading pre-roll
-    is dropped — so the result is time-aligned with the input rather than
-    shifted by the chain latency.
+    The chain's processing latency (the engine's own: retune grain plus warp for
+    the grain engine, ``ceil(sample_rate / f0_min)`` for psola; plus the
+    ISP-limiter lookahead when enabled) is compensated internally — a silent tail
+    is flushed and the leading pre-roll is dropped — so the result is time-aligned
+    with the input rather than shifted by the chain latency.
 
     Returns a ``numpy.ndarray`` of dtype ``float32`` (changed from
     ``list[float]`` in the prior implementation). ``len(result)`` still
@@ -702,16 +704,17 @@ class RealtimeVoiceChangerConfig:
     from the library once and cached), so a default-constructed instance is a
     usable neutral voice rather than a bypassed-gate / flat-EQ configuration.
     An out-of-range entry is refused by
-    :func:`RealtimeVoiceChanger.set_config_pod` and at creation with a
-    ``SonareValueError``; nothing is clamped.
+    :func:`RealtimeVoiceChanger.set_config_pod` with a ``SonareValueError`` and
+    at creation with a coded ``SonareError`` (``INVALID_FORMAT``, the creation
+    document being a JSON entry point); nothing is clamped.
 
     ``formant_mode`` is ``"relative"`` (default) or ``"absolute"`` and is fixed
     when the changer is created: :func:`RealtimeVoiceChanger.set_config_pod`
     with a different mode raises. In absolute mode ``formant_factor`` is the
     formant shift relative to the input, ``formant_amount`` is ignored, one
     analysis frame of latency is added, and a configuration whose warp
-    ``formant_factor / 2**(retune_semitones / 12)`` leaves [0.55, 1.65] raises
-    a ``SonareValueError`` naming the reachable ``formant_factor`` range.
+    ``formant_factor / 2**(retune_semitones / 12)`` leaves [0.55, 1.65] is
+    refused, naming the reachable ``formant_factor`` range, the same way.
 
     The enum-valued fields hold snake_case spellings: ``voice_engine_engine``
     (``"grain"`` or ``"psola"``, fixed at creation), ``pitch_correction_mode``,

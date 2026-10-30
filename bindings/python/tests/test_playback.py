@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from libsonare import (
+    ErrorCode,
     HrtfSet,
     PlaybackLoudnessMeter,
     PlaybackRenderer,
@@ -21,6 +22,8 @@ from libsonare import (
     capabilities,
     render_playback,
 )
+
+from ._helpers import raises_coded
 
 SR = 48000
 BLOCK = 128
@@ -57,7 +60,7 @@ def test_require_playback_names_the_missing_capability() -> None:
     """
     from libsonare._playback import _require_playback
 
-    with pytest.raises(RuntimeError, match="playback"):
+    with raises_coded(ErrorCode.NOT_SUPPORTED, match="playback"):
         _require_playback(_LibWithoutPlayback())
 
 
@@ -315,10 +318,10 @@ def test_a_closed_hrtf_set_is_refused_rather_than_silently_falling_back_to_the_d
     hrtf = HrtfSet.default()
     hrtf.close()
 
-    with pytest.raises(RuntimeError, match="closed"):
+    with raises_coded(ErrorCode.INVALID_STATE, match="closed"):
         PlaybackRenderer({}, hrtf=hrtf, max_block_size=BLOCK)
 
-    with pytest.raises(RuntimeError, match="closed"):
+    with raises_coded(ErrorCode.INVALID_STATE, match="closed"):
         render_playback(
             np.zeros(4, dtype=np.float32), channels=2, sample_rate=SR, config={}, hrtf=hrtf
         )

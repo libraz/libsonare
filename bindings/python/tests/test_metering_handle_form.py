@@ -17,9 +17,9 @@ import numpy as np
 import pytest
 
 import libsonare
-from libsonare import Audio
+from libsonare import Audio, ErrorCode
 
-from ._helpers import LIB_AVAILABLE
+from ._helpers import LIB_AVAILABLE, raises_coded
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library missing")
 
@@ -205,9 +205,9 @@ def test_handle_measures_samples_at_creation_time_not_at_call_time() -> None:
 def test_metering_methods_reject_use_after_close() -> None:
     audio = Audio.from_buffer(_sine(440.0, 0.1), sample_rate=SR)
     audio.close()
-    with pytest.raises(RuntimeError):
+    with raises_coded(ErrorCode.INVALID_STATE):
         audio.peak_db()
-    with pytest.raises(RuntimeError):
+    with raises_coded(ErrorCode.INVALID_STATE):
         audio.detect_clipping()
-    with pytest.raises(RuntimeError):
+    with raises_coded(ErrorCode.INVALID_STATE):
         audio.spectrum_frame()

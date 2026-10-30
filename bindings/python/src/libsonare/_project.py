@@ -71,8 +71,8 @@ from ._project_model import (
 from ._project_render import _compile_result_fields, _ProjectRenderMixin
 from ._runtime import (
     SonareProjectCompileResult,
-    SonareValueError,
     _check,
+    _coded_error,
     _get_lib,
     _utf8_arg,
 )
@@ -274,9 +274,8 @@ class Project(
     def from_json(cls, json: str | bytes) -> Project:
         """Deserialize project JSON into a new :class:`Project`.
 
-        Raises :class:`SonareValueError` on malformed input (with the joined
-        native diagnostic messages and the C error code, ``INVALID_FORMAT`` for
-        a malformed document), never crashing.
+        Raises a coded :class:`SonareError` (``INVALID_FORMAT`` for a malformed
+        document) carrying the joined native diagnostic messages, never crashing.
         """
         lib = _get_lib()
         _check_project_abi(lib)
@@ -292,7 +291,7 @@ class Project(
             finally:
                 if diag:
                     lib.sonare_free_string(diag)
-            raise SonareValueError(detail or "failed to deserialize project JSON", code=rc)
+            raise _coded_error(rc, detail or "failed to deserialize project JSON")
         if diag:
             lib.sonare_free_string(diag)
         obj = cls.__new__(cls)
@@ -316,7 +315,7 @@ class Project(
             if diag:
                 lib.sonare_free_string(diag)
         if rc != 0:
-            raise SonareValueError(diagnostics or "failed to deserialize project JSON", code=rc)
+            raise _coded_error(rc, diagnostics or "failed to deserialize project JSON")
         obj = cls.__new__(cls)
         obj._handle = handle
         return ProjectDeserializeResult(project=obj, diagnostics=diagnostics)

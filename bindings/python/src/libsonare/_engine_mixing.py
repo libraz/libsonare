@@ -488,7 +488,8 @@ class _EngineMixingMixin:
 
         Fields as in :meth:`Mixer.set_surround_pan`; a ``distance`` of 0 or less
         means the default of 1. Applied when the lane feeds a bus with more than
-        two channels; non-finite fields are rejected.
+        two channels; non-finite or out-of-range ``azimuth`` / ``divergence`` /
+        ``lfe`` raise :class:`SonareValueError` rather than being clamped.
         """
         pan = SonareSurroundPan(
             azimuth=_to_c_float(azimuth, "azimuth"),

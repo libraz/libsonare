@@ -13,12 +13,14 @@ import pytest
 from libsonare import (
     BuiltinSynthConfig,
     EngineBounceOptions,
+    ErrorCode,
     Project,
     ProjectTimeline,
     RealtimeEngine,
     SonareError,
 )
 
+from ._helpers import raises_coded
 from ._project_helpers import _make_stereo_sine
 
 _RATE = 48000
@@ -147,7 +149,7 @@ def test_timeline_close_is_idempotent_and_context_managed() -> None:
         with _compile(project) as timeline:
             assert isinstance(timeline, ProjectTimeline)
         timeline.close()
-        with _prepared_engine() as engine, pytest.raises(RuntimeError, match="closed"):
+        with _prepared_engine() as engine, raises_coded(ErrorCode.INVALID_STATE, match="closed"):
             engine.apply_project_timeline(timeline)
 
 

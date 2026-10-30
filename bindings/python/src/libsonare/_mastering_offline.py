@@ -8,7 +8,12 @@ import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any, cast
 
-from ._cancellation import CancellationState, make_cancel_trampoline
+from ._cancellation import (
+    CancellationState,
+    make_cancel_trampoline,
+    make_progress_trampoline,
+    raise_callback_error,
+)
 from ._errors import ErrorCode, _not_supported
 from ._ffi import (
     SonareMasteringChainResult,
@@ -704,20 +709,8 @@ def _extract_mastering_report(raw: object) -> MasteringReport:
 def _make_progress_trampoline(
     on_progress: Callable[[float, str], None], state: CancellationState
 ) -> Any:
-    """Wrap a Python callback for use as a C SonareMasteringProgressCallback.
-
-    The returned object MUST be kept alive across the C call to avoid GC
-    collecting the underlying ctypes closure.
-    """
-
-    def _trampoline(progress: float, stage_cstr: bytes | None, _user_data: int) -> None:
-        try:
-            stage = stage_cstr.decode("utf-8") if stage_cstr else ""
-            on_progress(float(progress), stage)
-        except Exception:  # noqa: BLE001 — never propagate Python exceptions into C
-            pass
-
-    return SonareMasteringProgressCallback(_trampoline)
+    """Wrap a Python callback for use as a C SonareMasteringProgressCallback."""
+    return make_progress_trampoline(SonareMasteringProgressCallback, on_progress, state)
 
 
 @_guard_buffer("samples")
@@ -748,8 +741,9 @@ def mastering_chain(
         on_progress: Optional callback ``(progress, stage)`` invoked after
             each enabled stage completes. ``progress`` is in ``[0.0, 1.0]``
             and ``stage`` is the stage identifier (e.g.
-            ``"dynamics.compressor"``). Its return value is ignored. Exceptions
-            raised inside the callback are swallowed.
+            ``"dynamics.compressor"``). Its return value is ignored. An exception
+            raised inside the callback stops the chain at its next cancellation
+            point and is raised from this call.
         cancel: Optional zero-argument callable. A true return value requests
             cancellation at the next native cancellation point.
 
@@ -763,6 +757,7 @@ def mastering_chain(
     c_array, length = _to_c_float_array(samples)
     param_array, param_count = _chain_params(config)
     out = SonareMasteringChainResult()
+    state = CancellationState(cancel)
     if on_progress is None and cancel is None:
         rc = lib.sonare_mastering_chain(
             c_array,
@@ -773,7 +768,6 @@ def mastering_chain(
             ctypes.byref(out),
         )
     elif hasattr(lib, "sonare_mastering_chain_with_progress_ex"):
-        state = CancellationState(cancel)
         cb = (
             _make_progress_trampoline(on_progress, state)
             if on_progress is not None
@@ -799,7 +793,7 @@ def mastering_chain(
             raise AssertionError("progress callback is required on this path")
         if not hasattr(lib, "sonare_mastering_chain_with_progress"):
             raise _not_supported("libsonare was built without mastering progress support")
-        cb = _make_progress_trampoline(on_progress, CancellationState(None))
+        cb = _make_progress_trampoline(on_progress, state)
         rc = lib.sonare_mastering_chain_with_progress(
             c_array,
             _to_c_size_t(length, "length"),
@@ -810,6 +804,9 @@ def mastering_chain(
             None,
             ctypes.byref(out),
         )
+    raise_callback_error(
+        state, rc, lambda: lib.sonare_free_mastering_chain_result(ctypes.byref(out))
+    )
     _check(rc)
     try:
         return MasteringChainResult(
@@ -859,6 +856,7 @@ def mastering_chain_stereo(
         raise SonareValueError("left and right channel lengths must match")
     param_array, param_count = _chain_params(config)
     out = SonareMasteringChainStereoResult()
+    state = CancellationState(cancel)
     if on_progress is None and cancel is None:
         rc = lib.sonare_mastering_chain_stereo(
             left_array,
@@ -870,7 +868,6 @@ def mastering_chain_stereo(
             ctypes.byref(out),
         )
     elif hasattr(lib, "sonare_mastering_chain_stereo_with_progress_ex"):
-        state = CancellationState(cancel)
         cb = (
             _make_progress_trampoline(on_progress, state)
             if on_progress is not None
@@ -897,7 +894,7 @@ def mastering_chain_stereo(
             raise AssertionError("progress callback is required on this path")
         if not hasattr(lib, "sonare_mastering_chain_stereo_with_progress"):
             raise _not_supported("libsonare was built without mastering progress support")
-        cb = _make_progress_trampoline(on_progress, CancellationState(None))
+        cb = _make_progress_trampoline(on_progress, state)
         rc = lib.sonare_mastering_chain_stereo_with_progress(
             left_array,
             right_array,
@@ -909,6 +906,9 @@ def mastering_chain_stereo(
             None,
             ctypes.byref(out),
         )
+    raise_callback_error(
+        state, rc, lambda: lib.sonare_free_mastering_chain_stereo_result(ctypes.byref(out))
+    )
     _check(rc)
     try:
         return MasteringChainStereoResult(
@@ -961,7 +961,7 @@ def mastering_platform_names() -> list[str]:
 def master_audio(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
-    preset_name: str = "pop",
+    preset: str = "pop",
     overrides: dict[str, Any] | None = None,
     on_progress: Callable[[float, str], None] | None = None,
     *,
@@ -972,7 +972,7 @@ def master_audio(
     Args:
         samples: Mono audio samples.
         sample_rate: Sample rate in Hz (default 22050).
-        preset_name: Preset identifier from :func:`mastering_preset_names`.
+        preset: Preset identifier from :func:`mastering_preset_names`.
         overrides: Optional nested overrides applied on top of the preset
             defaults. Uses the same config shape as :func:`mastering_chain`.
             Exception: the color stages ``saturation.tape`` and
@@ -996,9 +996,10 @@ def master_audio(
     c_array, length = _to_c_float_array(samples)
     param_array, param_count = _chain_params(overrides)
     out = SonareMasteringChainResult()
+    state = CancellationState(cancel)
     if on_progress is None and cancel is None:
         rc = lib.sonare_master_audio(
-            _utf8_arg(preset_name, "preset_name"),
+            _utf8_arg(preset, "preset"),
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_int(sample_rate, "sample_rate"),
@@ -1007,7 +1008,6 @@ def master_audio(
             ctypes.byref(out),
         )
     elif hasattr(lib, "sonare_master_audio_with_progress_ex"):
-        state = CancellationState(cancel)
         cb = (
             _make_progress_trampoline(on_progress, state)
             if on_progress is not None
@@ -1015,7 +1015,7 @@ def master_audio(
         )
         cancel_cb = make_cancel_trampoline(state)
         rc = lib.sonare_master_audio_with_progress_ex(
-            _utf8_arg(preset_name, "preset_name"),
+            _utf8_arg(preset, "preset"),
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_int(sample_rate, "sample_rate"),
@@ -1034,9 +1034,9 @@ def master_audio(
             raise AssertionError("progress callback is required on this path")
         if not hasattr(lib, "sonare_master_audio_with_progress"):
             raise _not_supported("libsonare was built without mastering progress support")
-        cb = _make_progress_trampoline(on_progress, CancellationState(None))
+        cb = _make_progress_trampoline(on_progress, state)
         rc = lib.sonare_master_audio_with_progress(
-            _utf8_arg(preset_name, "preset_name"),
+            _utf8_arg(preset, "preset"),
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_int(sample_rate, "sample_rate"),
@@ -1046,6 +1046,9 @@ def master_audio(
             None,
             ctypes.byref(out),
         )
+    raise_callback_error(
+        state, rc, lambda: lib.sonare_free_mastering_chain_result(ctypes.byref(out))
+    )
     _check(rc)
     try:
         return MasteringChainResult(
@@ -1075,7 +1078,7 @@ def master_audio_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int = 22050,
-    preset_name: str = "pop",
+    preset: str = "pop",
     overrides: dict[str, Any] | None = None,
     on_progress: Callable[[float, str], None] | None = None,
     *,
@@ -1083,7 +1086,7 @@ def master_audio_stereo(
 ) -> MasteringChainStereoResult:
     """Apply a named mastering preset chain to stereo audio.
 
-    See :func:`master_audio` for the ``preset_name``, ``overrides``,
+    See :func:`master_audio` for the ``preset``, ``overrides``,
     ``on_progress``, and ``cancel`` semantics.
     """
     lib = _get_lib()
@@ -1095,9 +1098,10 @@ def master_audio_stereo(
         raise SonareValueError("left and right channel lengths must match")
     param_array, param_count = _chain_params(overrides)
     out = SonareMasteringChainStereoResult()
+    state = CancellationState(cancel)
     if on_progress is None and cancel is None:
         rc = lib.sonare_master_audio_stereo(
-            _utf8_arg(preset_name, "preset_name"),
+            _utf8_arg(preset, "preset"),
             left_array,
             right_array,
             _to_c_size_t(left_length, "left_length"),
@@ -1107,7 +1111,6 @@ def master_audio_stereo(
             ctypes.byref(out),
         )
     elif hasattr(lib, "sonare_master_audio_stereo_with_progress_ex"):
-        state = CancellationState(cancel)
         cb = (
             _make_progress_trampoline(on_progress, state)
             if on_progress is not None
@@ -1115,7 +1118,7 @@ def master_audio_stereo(
         )
         cancel_cb = make_cancel_trampoline(state)
         rc = lib.sonare_master_audio_stereo_with_progress_ex(
-            _utf8_arg(preset_name, "preset_name"),
+            _utf8_arg(preset, "preset"),
             left_array,
             right_array,
             _to_c_size_t(left_length, "left_length"),
@@ -1135,9 +1138,9 @@ def master_audio_stereo(
             raise AssertionError("progress callback is required on this path")
         if not hasattr(lib, "sonare_master_audio_stereo_with_progress"):
             raise _not_supported("libsonare was built without mastering progress support")
-        cb = _make_progress_trampoline(on_progress, CancellationState(None))
+        cb = _make_progress_trampoline(on_progress, state)
         rc = lib.sonare_master_audio_stereo_with_progress(
-            _utf8_arg(preset_name, "preset_name"),
+            _utf8_arg(preset, "preset"),
             left_array,
             right_array,
             _to_c_size_t(left_length, "left_length"),
@@ -1148,6 +1151,9 @@ def master_audio_stereo(
             None,
             ctypes.byref(out),
         )
+    raise_callback_error(
+        state, rc, lambda: lib.sonare_free_mastering_chain_stereo_result(ctypes.byref(out))
+    )
     _check(rc)
     try:
         return MasteringChainStereoResult(

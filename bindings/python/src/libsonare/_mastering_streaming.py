@@ -840,7 +840,9 @@ class StreamingEqualizer:
         if not hasattr(self._lib, "sonare_eq_non_finite_discard_count"):
             raise _not_supported("libsonare was built without EQ discard-count support")
         out = ctypes.c_uint32()
-        _check(self._lib.sonare_eq_non_finite_discard_count(self._handle, ctypes.byref(out)))
+        _check_realtime(
+            self._lib.sonare_eq_non_finite_discard_count(self._handle, ctypes.byref(out))
+        )
         return int(out.value)
 
     def close(self) -> None:

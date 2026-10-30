@@ -6,6 +6,7 @@ import math
 
 # ruff: noqa: F403,F405
 from ._analyzer_helpers import *
+from ._helpers import raises_coded
 
 
 def test_stream_analyzer_rejects_malformed_config_geometry() -> None:
@@ -331,7 +332,7 @@ def test_streaming_mastering_chain_accepts_loudness_with_static_gain() -> None:
     from libsonare import StreamingMasteringChain
 
     # Without a static gain a loudness target raises (cannot measure online)...
-    with pytest.raises(RuntimeError):
+    with raises_coded():
         StreamingMasteringChain({"loudness.targetLufs": -14.0})
 
     # ...but supplying a precomputed static gain makes it processable.

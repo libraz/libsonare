@@ -1498,7 +1498,7 @@ def mix_stereo(
 def master_audio(
     samples: FloatSamples,
     sample_rate: int = 22050,
-    preset_name: MasteringPreset = "pop",
+    preset: MasteringPreset = "pop",
     overrides: dict[str, Any] | None = None,
     on_progress: ProgressCallback | None = None,
     *,
@@ -1508,7 +1508,7 @@ def master_audio_stereo(
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int = 22050,
-    preset_name: MasteringPreset = "pop",
+    preset: MasteringPreset = "pop",
     overrides: dict[str, Any] | None = None,
     on_progress: ProgressCallback | None = None,
     *,

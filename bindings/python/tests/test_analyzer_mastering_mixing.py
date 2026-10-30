@@ -559,7 +559,7 @@ def test_mastering_chain_reports_output_metrics() -> None:
         assert reduction.gain_reduction_db <= 0.0
 
     # master_audio (preset + overrides path) exposes the same fields.
-    preset_result = libsonare.master_audio(samples, sample_rate=sr, preset_name="pop")
+    preset_result = libsonare.master_audio(samples, sample_rate=sr, preset="pop")
     assert math.isfinite(preset_result.output_true_peak_dbtp)
     assert math.isfinite(preset_result.output_lra)
     assert isinstance(preset_result.stage_gain_reductions, list)
@@ -738,8 +738,8 @@ def test_clean_input_reports_no_non_finite_substitution() -> None:
         ),
         libsonare.mastering_chain(samples, sample_rate=sr, config=config),
         libsonare.mastering_chain_stereo(samples, other, sample_rate=sr, config=config),
-        libsonare.master_audio(samples, sample_rate=sr, preset_name="pop"),
-        libsonare.master_audio_stereo(samples, other, sample_rate=sr, preset_name="pop"),
+        libsonare.master_audio(samples, sample_rate=sr, preset="pop"),
+        libsonare.master_audio_stereo(samples, other, sample_rate=sr, preset="pop"),
     ]
 
     for result in results:

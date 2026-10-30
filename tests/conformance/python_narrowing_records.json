@@ -109,6 +109,12 @@
       "argument": "values",
       "type": "c_uint32",
       "reason": "Already narrowed: every entry is the .value of _to_c_uint32 for that word, so the list reaching this conversion holds only values it cannot change."
+    },
+    {
+      "file": "_effects_separation.py",
+      "argument": "n_pairs",
+      "type": "c_size_t",
+      "reason": "Half the element count _to_c_int_array returned for an intervals buffer _remix_interval_array already allocated and checked to be even, so it is bounded by that allocation."
     }
   ],
   "argtype_arguments": [],

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import ctypes
 import json
 import re
@@ -11,10 +10,14 @@ from typing import Any, cast
 
 import numpy as np
 
-from ._cancellation import CancellationState, make_cancel_trampoline
+from ._cancellation import (
+    CancellationState,
+    make_cancel_trampoline,
+    make_progress_trampoline,
+    raise_callback_error,
+)
 from ._effects_repair_common import _linked_channel_planes, _linked_output_planes
 from ._ffi import SonareMasteringProgressCallback
-from ._narrowing import _narrow_double
 from ._runtime import (
     _check,
     _get_lib,
@@ -71,20 +74,11 @@ def _stage_reports(entry: Mapping[str, Any]) -> RepairStageReports:
 
 
 def _progress_trampoline(
-    on_progress: Callable[[float, str], None] | None,
+    on_progress: Callable[[float, str], None] | None, state: CancellationState
 ) -> Any:
     if on_progress is None:
         return SonareMasteringProgressCallback(0)
-
-    def _trampoline(progress: float, stage_cstr: bytes | None, _user_data: int) -> None:
-        # Never propagate a Python exception into C.
-        with contextlib.suppress(Exception):
-            on_progress(
-                _narrow_double(progress, "progress"),
-                stage_cstr.decode("utf-8") if stage_cstr else "",
-            )
-
-    return SonareMasteringProgressCallback(_trampoline)
+    return make_progress_trampoline(SonareMasteringProgressCallback, on_progress, state)
 
 
 def _take_string(lib: ctypes.CDLL, pointer: ctypes.c_char_p) -> str:
@@ -194,8 +188,9 @@ def mastering_repair_apply(
             ``repair.denoiseClassical``, ``repair.dereverbClassical``); an enum
             takes its choice name or wire value. An unknown one is refused.
         on_progress: Optional callback ``(progress, stage)`` invoked after each
-            stage with the fraction done and ``"repair.<stage>"``. Exceptions
-            raised inside it are swallowed.
+            stage with the fraction done and ``"repair.<stage>"``. An exception
+            raised inside it stops the repair at its next cancellation point
+            and is raised from this call.
         cancel: Optional zero-argument callable polled after each progress
             report. A true return value cancels with ``SonareError``.
 
@@ -223,24 +218,25 @@ def mastering_repair_apply(
     arrays, in_ptrs, frame_count = _planar_channel_arrays(planes, subject="channels")
     stages_json = json.dumps([dict(stage) for stage in stages])
     out_buffers, out_ptrs = _linked_output_planes(len(arrays), frame_count)
-    progress_cb = _progress_trampoline(on_progress)
-    cancel_cb = make_cancel_trampoline(CancellationState(cancel))
+    state = CancellationState(cancel)
+    progress_cb = _progress_trampoline(on_progress, state)
+    cancel_cb = make_cancel_trampoline(state)
     reports_ptr = ctypes.c_char_p()
-    _check(
-        lib.sonare_mastering_repair_apply(
-            ctypes.cast(in_ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
-            _to_c_size_t(len(arrays), "channel_count"),
-            _to_c_size_t(frame_count, "length"),
-            _to_c_int(sample_rate, "sample_rate"),
-            _utf8_arg(stages_json, "stages"),
-            progress_cb,
-            None,
-            ctypes.cast(out_ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
-            ctypes.byref(reports_ptr),
-            cancel_cb,
-            None,
-        )
+    rc = lib.sonare_mastering_repair_apply(
+        ctypes.cast(in_ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
+        _to_c_size_t(len(arrays), "channel_count"),
+        _to_c_size_t(frame_count, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        _utf8_arg(stages_json, "stages"),
+        progress_cb,
+        None,
+        ctypes.cast(out_ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),
+        ctypes.byref(reports_ptr),
+        cancel_cb,
+        None,
     )
+    raise_callback_error(state, rc, lambda: _take_string(lib, reports_ptr))
+    _check(rc)
     entries = json.loads(_take_string(lib, reports_ptr))
     return RepairApplyResult(
         channels=out_buffers, reports=[_stage_reports(entry) for entry in entries]

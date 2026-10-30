@@ -46,6 +46,7 @@ from ._runtime import (
     _float_array_result,
     _narrow_int,
     _planar_channel_arrays,
+    _require_instance,
     _utf8_arg,
     _validate_c_int_field,
     _warp_mode_value,
@@ -138,6 +139,7 @@ def _parameter_from_c(raw: SonareParameterInfo) -> ParameterInfo:
 
 
 def _marker_to_c(marker: EngineMarker) -> SonareEngineMarker:
+    _require_instance(marker, EngineMarker, "marker")
     try:
         marker_id = operator.index(marker.id)
     except TypeError as exc:
@@ -168,6 +170,7 @@ def _marker_from_c(raw: SonareEngineMarker) -> EngineMarker:
 
 
 def _metronome_to_c(config: EngineMetronomeConfig) -> SonareEngineMetronomeConfig:
+    _require_instance(config, EngineMetronomeConfig, "config")
     raw = SonareEngineMetronomeConfig()
     raw.enabled = int(config.enabled)
     raw.beat_gain = _narrow_double(config.beat_gain, "config.beat_gain")
@@ -209,6 +212,7 @@ def _clips_to_c(
     warp_arrays: list[ctypes.Array[SonareEngineWarpAnchor]] = []
     raw_items: list[SonareEngineClip] = []
     for clip in clips:
+        _require_instance(clip, EngineClip, "clip")
         page_provider = getattr(clip, "page_provider", None)
         if page_provider is not None and not isinstance(page_provider, ClipPageProvider):
             raise TypeError("clip page_provider must be a ClipPageProvider")

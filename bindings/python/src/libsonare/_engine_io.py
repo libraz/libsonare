@@ -64,6 +64,7 @@ from ._runtime import (
     _get_lib,
     _narrow_int,
     _planar_channel_arrays,
+    _require_instance,
     _resolve_render_frame,
     _resolve_sample_bound,
     _to_c_float,
@@ -198,6 +199,7 @@ class _EngineIoMixin:
         return [_float_array_result(array, frames) for array in self._capture_arrays]
 
     def set_graph(self, spec: EngineGraphSpec) -> None:
+        _require_instance(spec, EngineGraphSpec, "spec")
         nodes = (SonareEngineGraphNode * len(spec.nodes))(
             *[_graph_node_to_c(node) for node in spec.nodes]
         )
@@ -354,6 +356,7 @@ class _EngineIoMixin:
         Render longer material in chunks through
         ``render_offline(..., finalize=False)``.
         """
+        _require_instance(options, EngineBounceOptions, "options")
         lib = _get_lib()
         raw_options = SonareEngineBounceOptions()
         # Seeded from the C defaults so a field appended to the struct on the C
@@ -410,6 +413,7 @@ class _EngineIoMixin:
         is withdrawn in the same call, so nothing plays twice; live MIDI input
         still reaches the instruments.
         """
+        _require_instance(options, EngineFreezeOptions, "options")
         raw_options = SonareEngineFreezeOptions()
         # Assigned unconverted so the struct's own narrowing sees each caller
         # value; int() would truncate a fraction past it.

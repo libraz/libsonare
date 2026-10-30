@@ -407,3 +407,23 @@ def test_room_morph_cli_keeps_a_mono_input_mono(tmp_path) -> None:
     with wave.open(str(output), "rb") as wav:
         assert wav.getnchannels() == 1
     assert json.loads(result.stdout)["stereo"] is False
+
+
+def test_lufs_cli_reports_the_channel_summed_value_master_reports(tmp_path) -> None:
+    """`lufs` on a stereo file is the BS.1770 channel sum, the figure `master` calls its input."""
+    source = tmp_path / "mix.wav"
+    output = tmp_path / "master.wav"
+    length = 48000 * 2
+    left = [0.2 * math.sin(2.0 * math.pi * 220.0 * i / 48000) for i in range(length)]
+    right = [0.2 * math.sin(2.0 * math.pi * 330.0 * i / 48000) for i in range(length)]
+    _write_stereo_wav(str(source), left, right, 48000)
+
+    measured = _run_cli(["lufs", str(source), "--json"])
+    mastered = _run_cli(["master", str(source), "-o", str(output), "--preset", "pop", "--json"])
+
+    assert measured.returncode == 0, measured.stderr
+    assert mastered.returncode == 0, mastered.stderr
+    assert "downmixed to mono" not in measured.stderr
+    assert json.loads(measured.stdout)["integrated_lufs"] == pytest.approx(
+        json.loads(mastered.stdout)["input_lufs"], abs=0.1
+    )
