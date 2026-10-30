@@ -1351,6 +1351,7 @@ if(BUILD_WASM)
       wasm/bindings/analysis/features.cpp
       wasm/bindings/analysis/quick.cpp
       wasm/bindings/analysis/quick_detailed.cpp
+      wasm/bindings/analysis/room_acoustics.cpp
       wasm/bindings/features/core.cpp
       wasm/bindings/features/music.cpp
       wasm/bindings/features/pitch.cpp
@@ -1399,6 +1400,7 @@ if(BUILD_WASM)
       wasm/bindings/project/project_meta.cpp
       wasm/bindings/analysis/quick.cpp
       wasm/bindings/analysis/quick_detailed.cpp
+      wasm/bindings/analysis/room_acoustics.cpp
       wasm/bindings/effects/repair.cpp
       wasm/bindings/effects/realtime_voice_changer.cpp
       wasm/bindings/playback/playback.cpp
@@ -1406,6 +1408,8 @@ if(BUILD_WASM)
       wasm/bindings/realtime/transport.cpp
       wasm/bindings/realtime/params.cpp
       wasm/bindings/realtime/midi.cpp
+      wasm/bindings/realtime/midi_control.cpp
+      wasm/bindings/realtime/midi_io.cpp
       wasm/bindings/realtime/mixer.cpp
       wasm/bindings/realtime/clips.cpp
       wasm/bindings/realtime/capture.cpp
@@ -1568,6 +1572,7 @@ if(BUILD_WASM)
       wasm/bindings.cpp
       wasm/bindings/analysis/quick.cpp
       wasm/bindings/analysis/quick_detailed.cpp
+      wasm/bindings/analysis/room_acoustics.cpp
       wasm/bindings/analysis/stream_analyzer.cpp
       wasm/bindings/common/common.cpp
       wasm/bindings/editing/polyphony.cpp
@@ -1611,6 +1616,8 @@ if(BUILD_WASM)
       wasm/bindings/realtime/clips.cpp
       wasm/bindings/realtime/engine.cpp
       wasm/bindings/realtime/midi.cpp
+      wasm/bindings/realtime/midi_control.cpp
+      wasm/bindings/realtime/midi_io.cpp
       wasm/bindings/realtime/mixer.cpp
       wasm/bindings/realtime/params.cpp
       wasm/bindings/realtime/processing.cpp

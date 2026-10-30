@@ -127,6 +127,8 @@ void registerRealtimeEngineBindings() {
   registerRealtimeEngineTransport(cls);
   registerRealtimeEngineParams(cls);
   registerRealtimeEngineMidi(cls);
+  registerRealtimeEngineMidiControl(cls);
+  registerRealtimeEngineMidiIo(cls);
   registerRealtimeEngineMixer(cls);
 #if defined(SONARE_WITH_ARRANGEMENT)
   cls.function("applyProjectTimeline", &RealtimeEngineWasm::applyProjectTimeline);

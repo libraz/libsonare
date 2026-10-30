@@ -640,6 +640,7 @@ void registerMasteringChainBindings();
 void registerMasteringApiBindings();
 void registerQuickAnalysisBindings();
 void registerQuickDetailedAnalysisBindings();
+void registerRoomAcousticsBindings();
 void registerAnalysisFeatureBindings();
 
 #endif  // __EMSCRIPTEN__

@@ -555,6 +555,8 @@ class RealtimeEngineWasm {
 void registerRealtimeEngineTransport(emscripten::class_<RealtimeEngineWasm>& cls);
 void registerRealtimeEngineParams(emscripten::class_<RealtimeEngineWasm>& cls);
 void registerRealtimeEngineMidi(emscripten::class_<RealtimeEngineWasm>& cls);
+void registerRealtimeEngineMidiControl(emscripten::class_<RealtimeEngineWasm>& cls);
+void registerRealtimeEngineMidiIo(emscripten::class_<RealtimeEngineWasm>& cls);
 void registerRealtimeEngineMixer(emscripten::class_<RealtimeEngineWasm>& cls);
 void registerRealtimeEngineClips(emscripten::class_<RealtimeEngineWasm>& cls);
 void registerRealtimeEngineCapture(emscripten::class_<RealtimeEngineWasm>& cls);

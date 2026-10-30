@@ -43,6 +43,7 @@ GATED_IN_ANALYSIS_BUILD = frozenset(
         "wasm/bindings/common/common.cpp",
         "wasm/bindings/analysis/quick.cpp",
         "wasm/bindings/analysis/quick_detailed.cpp",
+        "wasm/bindings/analysis/room_acoustics.cpp",
         "wasm/bindings/features/core.cpp",
         "wasm/bindings/features/music.cpp",
         "wasm/bindings/features/pitch.cpp",

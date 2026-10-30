@@ -83,7 +83,7 @@ const REMOVED_FILTERS: ReadonlyArray<{
       'The engine command and telemetry queue depths, whose 0 selects the internal minimum. Reachable only from this surface: the C ABI declares both as size_t, so only the WASM facade can express the negative that used to read as the sentinel.',
   },
   {
-    file: 'src/wasm/bindings/analysis/quick.cpp',
+    file: 'src/wasm/bindings/analysis/room_acoustics.cpp',
     fields: ['seed_in', 'seed'],
     reason:
       'The deterministic late-tail seed, whose 0 keeps the library default. The asymmetry was the sharp part: a seed past the uint32 range threw while a negative one was substituted, inside the function whose own comment says a silent default is what made the earlier gap invisible.',

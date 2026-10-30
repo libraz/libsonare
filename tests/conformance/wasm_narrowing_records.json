@@ -15,7 +15,7 @@
   "narrowings": [],
   "readers": [
     {
-      "file": "bindings/analysis/quick.cpp",
+      "file": "bindings/analysis/room_acoustics.cpp",
       "symbol": "seedFromVal",
       "reason": "A default seeder rather than an options-bag reader: it rejects a non-number, turns a non-positive value into a deterministic seed, and refuses anything past the type's maximum by name. Every value in the type's range is a legal seed, so truncating a fractional one cannot land outside the domain -- driving it, a seed moves the synthesized response, 4294967296 and Infinity are refused, and 0 / -1 / NaN all fall back to the documented default."
     },
@@ -60,7 +60,7 @@
       "reason": "signedField's standing, over the shared intProperty, for the transcription fields whose domain is an integer range rather than a sign (fixedVelocity in [1, 127], maxPolyphony in [1, 64], minNoteDivision in [1, 128]). The same presence gate applies for the same reason, and 0 is additionally outside every range. Measured: 0 and 128 are refused with InvalidParameter, omission reproduces the baseline exactly, and a fixedVelocity of 77 is observed on every emitted note-on, so the field is read rather than merely accepted. The message wording is the Node facade's verbatim, so one domain reports one way on both surfaces."
     },
     {
-      "file": "bindings/realtime/midi.cpp",
+      "file": "bindings/realtime/midi_io.cpp",
       "symbol": "umpWordsFromVal",
       "reason": "Delegates every element's narrowing to the shared checkedWordFromVal and the array's length to the shared wasmArrayLikeLength, so the conversion contract is single-sourced. What is local is the message's own domain: a UMP carries one to four words, which only the two raw-UMP push entry points ask."
     }
