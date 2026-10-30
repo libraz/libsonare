@@ -61,6 +61,13 @@ const GsAddressEntry* gs_lookup_address(uint32_t addr) noexcept {
   return nullptr;
 }
 
+const GsAddressEntry* gs_lookup_display_address(uint32_t addr) noexcept {
+  for (const GsAddressEntry& entry : kGsDisplayTable) {
+    if (detail::gs_row_claims(entry, addr)) return &entry;
+  }
+  return nullptr;
+}
+
 const GsAddressRange* gs_lookup_range(uint32_t addr) noexcept {
   for (const GsAddressRange& range : kGsUndefinedRanges) {
     const uint32_t base = addr & ~range.mask;
@@ -69,9 +76,13 @@ const GsAddressRange* gs_lookup_range(uint32_t addr) noexcept {
   return nullptr;
 }
 
-size_t gs_decode_writes(const GsFrame& frame, GsWrite* out, size_t capacity,
-                        uint32_t* unknown_writes) noexcept {
-  if (!frame.valid || frame.command != kGsCommandDt1 || frame.model != kGsModelId) return 0;
+namespace {
+
+/// Walks @p frame's data bytes through @p lookup; the GS and display decodes
+/// differ in the table behind it and in whether the GS undefined ranges apply.
+template <typename Lookup>
+size_t decode_frame(const GsFrame& frame, Lookup lookup, bool gs_ranges, GsWrite* out,
+                    size_t capacity, uint32_t* unknown_writes) noexcept {
   if (frame.data == nullptr) return 0;
 
   size_t produced = 0;
@@ -79,13 +90,13 @@ size_t gs_decode_writes(const GsFrame& frame, GsWrite* out, size_t capacity,
     GsWrite write;
     write.addr = gs_address_offset(frame.addr, static_cast<uint32_t>(i));
     write.value = static_cast<uint8_t>(frame.data[i] & 0x7Fu);
-    if (const GsAddressEntry* entry = gs_lookup_address(write.addr)) {
+    if (const GsAddressEntry* entry = lookup(write.addr)) {
       write.param = entry->param;
       write.part = gs_address_block_index(write.addr, entry->mask);
       write.index = (entry->mask & 0xFFu) != 0
                         ? static_cast<uint8_t>(write.addr & 0xFFu)
                         : static_cast<uint8_t>((write.addr & 0xFFu) - (entry->addr & 0xFFu));
-    } else if (gs_lookup_range(write.addr) != nullptr) {
+    } else if (gs_ranges && gs_lookup_range(write.addr) != nullptr) {
       write.param = GsParam::kUndefined;
     } else if (unknown_writes != nullptr) {
       ++*unknown_writes;
@@ -94,6 +105,20 @@ size_t gs_decode_writes(const GsFrame& frame, GsWrite* out, size_t capacity,
     ++produced;
   }
   return produced;
+}
+
+}  // namespace
+
+size_t gs_decode_writes(const GsFrame& frame, GsWrite* out, size_t capacity,
+                        uint32_t* unknown_writes) noexcept {
+  if (!frame.valid || frame.command != kGsCommandDt1 || frame.model != kGsModelId) return 0;
+  return decode_frame(frame, gs_lookup_address, true, out, capacity, unknown_writes);
+}
+
+size_t gs_decode_display_writes(const GsFrame& frame, GsWrite* out, size_t capacity,
+                                uint32_t* unknown_writes) noexcept {
+  if (!frame.valid || frame.command != kGsCommandDt1 || frame.model != kGsDisplayModelId) return 0;
+  return decode_frame(frame, gs_lookup_display_address, false, out, capacity, unknown_writes);
 }
 
 size_t gs_decode_sysex(const uint8_t* data, size_t size, GsWrite* out, size_t capacity,

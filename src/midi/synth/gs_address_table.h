@@ -174,7 +174,11 @@ enum class GsLevel : uint8_t {
   X(kDrumRxNoteOff)           \
   X(kDrumRxNoteOn)            \
   X(kDrumDelaySend)           \
-  X(kOppositeGroupBlock)
+  X(kOppositeGroupBlock)      \
+  X(kDisplayText)             \
+  X(kDisplayDotData)          \
+  X(kDisplayPage)             \
+  X(kDisplayTime)
 
 /// The parameter a decoded byte addresses. kUnknown means no table row claimed
 /// the address; kUndefined means a range-table row did (an address the manual
@@ -833,7 +837,8 @@ inline constexpr std::array<GsAddressRange, 28> kGsUndefinedRanges = {{
 // --- Frame layer ---
 
 inline constexpr uint8_t kRolandManufacturerId = 0x41;
-inline constexpr uint8_t kGsModelId = 0x42;  ///< GS. 0x45 is the SC-88 display.
+inline constexpr uint8_t kGsModelId = 0x42;         ///< GS.
+inline constexpr uint8_t kGsDisplayModelId = 0x45;  ///< The SC-88 display.
 inline constexpr uint8_t kGsCommandRq1 = 0x11;
 inline constexpr uint8_t kGsCommandDt1 = 0x12;
 
@@ -862,6 +867,36 @@ constexpr uint32_t gs_address_offset(uint32_t addr, uint32_t n) noexcept {
       ((addr >> 16) & 0x7Fu) * 16384u + ((addr >> 8) & 0x7Fu) * 128u + (addr & 0x7Fu) + n;
   return (((flat / 16384u) & 0x7Fu) << 16) | (((flat / 128u) % 128u) << 8) | (flat % 128u);
 }
+
+// --- Display (model 0x45) ---
+
+/// The SC-88 display frames, a second address space beside the GS one: same row
+/// shape, keyed by the model ID. Every row is kAccept, so a display frame is
+/// understood and counted nowhere as unknown, and no apply layer reads it.
+inline constexpr std::array<GsAddressEntry, 8> kGsDisplayTable = {{
+    {0x100000, 0x000000, GsParam::kDisplayText, GsLevel::kAccept, 32, 0x20, 0x7F, 0x20,
+     "a display string, and a renderer has nothing to display it on"},
+    // 10 0p 00-7F, p = 1..5: pages 1-10, 64 bytes of 16x16 dots each.
+    {0x100100, 0x000000, GsParam::kDisplayDotData, GsLevel::kAccept, 128, 0x00, 0x7F, 0x00,
+     "dot data for a display, and a renderer has nothing to display it on"},
+    {0x100200, 0x000000, GsParam::kDisplayDotData, GsLevel::kAccept, 128, 0x00, 0x7F, 0x00,
+     "dot data for a display, and a renderer has nothing to display it on"},
+    {0x100300, 0x000000, GsParam::kDisplayDotData, GsLevel::kAccept, 128, 0x00, 0x7F, 0x00,
+     "dot data for a display, and a renderer has nothing to display it on"},
+    {0x100400, 0x000000, GsParam::kDisplayDotData, GsLevel::kAccept, 128, 0x00, 0x7F, 0x00,
+     "dot data for a display, and a renderer has nothing to display it on"},
+    {0x100500, 0x000000, GsParam::kDisplayDotData, GsLevel::kAccept, 128, 0x00, 0x7F, 0x00,
+     "dot data for a display, and a renderer has nothing to display it on"},
+    // 00 shows the level bars, 01-0A a dot page.
+    {0x102000, 0x000000, GsParam::kDisplayPage, GsLevel::kAccept, 1, 0x00, 0x0A, 0x00,
+     "which page a display shows, and a renderer has nothing to display it on"},
+    // 00-0F is 0-7.2 s.
+    {0x102001, 0x000000, GsParam::kDisplayTime, GsLevel::kAccept, 1, 0x00, 0x0F, 0x06,
+     "how long a display shows a page, and a renderer has nothing to display it on"},
+}};
+
+/// The display-table row claiming @p addr, or nullptr.
+const GsAddressEntry* gs_lookup_display_address(uint32_t addr) noexcept;
 
 // --- Lookup ---
 
@@ -1015,13 +1050,19 @@ struct GsWrite {
 /// stored and the caller can see the truncation.
 ///
 /// Only a valid DT1 frame addressed to the GS model produces writes: an RQ1
-/// request and another Roland model are accepted and counted as neither writes
-/// nor unknowns.
+/// request and another Roland model (the display has gs_decode_display_writes) are accepted and
+/// counted as neither writes nor unknowns.
 ///
 /// @param unknown_writes  Optional counter, incremented once per data byte no
 ///   table row claimed. Those bytes are still emitted, as GsParam::kUnknown.
 size_t gs_decode_writes(const GsFrame& frame, GsWrite* out, size_t capacity,
                         uint32_t* unknown_writes) noexcept;
+
+/// The display-model counterpart of gs_decode_writes: a valid DT1 frame addressed
+/// to kGsDisplayModelId walked over kGsDisplayTable. It shares no caller with the
+/// GS decode, so a display write never reaches an apply layer.
+size_t gs_decode_display_writes(const GsFrame& frame, GsWrite* out, size_t capacity,
+                                uint32_t* unknown_writes) noexcept;
 
 /// gs_sysex_frame followed by gs_decode_writes, so a caller holding a raw SysEx
 /// payload does not re-derive the framing. Returns 0 for anything the frame
@@ -1205,6 +1246,20 @@ constexpr bool gs_ranges_are_consistent() noexcept {
   return true;
 }
 
+constexpr bool gs_display_table_is_consistent() noexcept {
+  for (size_t i = 0; i < kGsDisplayTable.size(); ++i) {
+    const GsAddressEntry& e = kGsDisplayTable[i];
+    if (e.level != GsLevel::kAccept || e.why == nullptr || e.why[0] == '\0') return false;
+    if (e.mask != 0 || e.size == 0 || gs_row_low_end(e) > 0x7Fu) return false;
+    if (e.lo > e.hi || e.def < e.lo || e.def > e.hi) return false;
+    if (i > 0 && kGsDisplayTable[i - 1].addr >= e.addr) return false;
+    for (size_t j = 0; j < i; ++j) {
+      if (gs_rows_overlap(kGsDisplayTable[j], e)) return false;
+    }
+  }
+  return true;
+}
+
 }  // namespace detail
 
 // These are evaluated out of one constexpr step budget shared by the whole
@@ -1218,6 +1273,10 @@ constexpr bool gs_ranges_are_consistent() noexcept {
 static_assert(detail::gs_table_is_consistent(),
               "GS address table: a reason missing from a kIgnore/kAccept row or present on a row "
               "that takes none, a bad size/mask/range/default, or two rows claiming one address");
+static_assert(
+    detail::gs_display_table_is_consistent(),
+    "GS display table: a row that is not kAccept or has no reason, a bad size/range/default, "
+    "or two rows claiming one address");
 static_assert(detail::gs_ranges_are_consistent(),
               "GS undefined ranges: a row without a reason, an inverted range, or a range "
               "overlapping another range or a defined address");

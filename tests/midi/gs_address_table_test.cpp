@@ -25,8 +25,10 @@ namespace {
 
 using sonare::midi::synth::gs_address_block_index;
 using sonare::midi::synth::gs_address_offset;
+using sonare::midi::synth::gs_decode_display_writes;
 using sonare::midi::synth::gs_decode_writes;
 using sonare::midi::synth::gs_lookup_address;
+using sonare::midi::synth::gs_lookup_display_address;
 using sonare::midi::synth::gs_param_name;
 using sonare::midi::synth::gs_part_block_to_channel;
 using sonare::midi::synth::gs_reset_default;
@@ -42,6 +44,7 @@ using sonare::midi::synth::GsWrite;
 using sonare::midi::synth::kGsAddressTable;
 using sonare::midi::synth::kGsCommandDt1;
 using sonare::midi::synth::kGsCommandRq1;
+using sonare::midi::synth::kGsDisplayModelId;
 using sonare::midi::synth::kGsModelId;
 using sonare::midi::synth::kGsUndefinedRanges;
 using sonare::midi::synth::kRolandManufacturerId;
@@ -575,6 +578,105 @@ TEST_CASE("GS decode: only a GS DT1 frame writes", "[midi][gs][address]") {
     const Decoded decoded = decode(bad);
     CHECK(decoded.total == 0);
     CHECK(decoded.unknown == 0);
+  }
+}
+
+namespace {
+
+Decoded decode_display(const std::vector<uint8_t>& msg) {
+  Decoded out;
+  const GsFrame frame = gs_sysex_frame(msg.data(), msg.size());
+  std::vector<GsWrite> buffer(256);
+  out.total = gs_decode_display_writes(frame, buffer.data(), buffer.size(), &out.unknown);
+  buffer.resize(std::min(out.total, buffer.size()));
+  out.writes = buffer;
+  return out;
+}
+
+std::vector<uint8_t> display_message(uint32_t addr, const std::vector<uint8_t>& data) {
+  return roland_message(addr, data, kGsCommandDt1, kGsDisplayModelId);
+}
+
+}  // namespace
+
+TEST_CASE("GS display: model 0x45 frames are understood and never counted unknown",
+          "[midi][gs][address][display]") {
+  SECTION("each display parameter decodes to its row") {
+    struct Case {
+      uint32_t addr;
+      uint8_t value;
+      GsParam param;
+      uint8_t index;
+    };
+    const Case cases[] = {
+        {0x100000, 0x41, GsParam::kDisplayText, 0},
+        {0x10001F, 0x7F, GsParam::kDisplayText, 31},
+        {0x100100, 0x1F, GsParam::kDisplayDotData, 0},
+        {0x10017F, 0x01, GsParam::kDisplayDotData, 127},
+        {0x100500, 0x00, GsParam::kDisplayDotData, 0},
+        {0x10057F, 0x7F, GsParam::kDisplayDotData, 127},
+        {0x102000, 0x0A, GsParam::kDisplayPage, 0},
+        {0x102001, 0x0F, GsParam::kDisplayTime, 0},
+    };
+    for (const Case& c : cases) {
+      INFO("address " << hex24(c.addr));
+      const Decoded decoded = decode_display(display_message(c.addr, {c.value}));
+      REQUIRE(decoded.writes.size() == 1);
+      CHECK(decoded.writes[0].param == c.param);
+      CHECK(decoded.writes[0].index == c.index);
+      CHECK(decoded.writes[0].value == c.value);
+      CHECK(decoded.unknown == 0);
+      const GsAddressEntry* entry = gs_lookup_display_address(c.addr);
+      REQUIRE(entry != nullptr);
+      CHECK(entry->level == GsLevel::kAccept);
+    }
+  }
+
+  SECTION("a text run walks the row and a byte past its end is counted") {
+    std::vector<uint8_t> text(33, 0x41);
+    const Decoded decoded = decode_display(display_message(0x100000, text));
+    REQUIRE(decoded.total == 33);
+    CHECK(decoded.writes[31].param == GsParam::kDisplayText);
+    CHECK(decoded.writes[32].param == GsParam::kUnknown);
+    CHECK(decoded.unknown == 1);
+  }
+
+  SECTION("page and time reject values past their range") {
+    const GsAddressEntry* page = gs_lookup_display_address(0x102000);
+    const GsAddressEntry* time = gs_lookup_display_address(0x102001);
+    REQUIRE(page != nullptr);
+    REQUIRE(time != nullptr);
+    CHECK(gs_value_in_range(*page, 0x0A));
+    CHECK_FALSE(gs_value_in_range(*page, 0x0B));
+    CHECK(gs_value_in_range(*time, 0x0F));
+    CHECK_FALSE(gs_value_in_range(*time, 0x10));
+    CHECK(time->def == 0x06);
+  }
+
+  SECTION("an address outside every display row is counted") {
+    const Decoded decoded = decode_display(display_message(0x100600, {0x01}));
+    REQUIRE(decoded.writes.size() == 1);
+    CHECK(decoded.writes[0].param == GsParam::kUnknown);
+    CHECK(decoded.unknown == 1);
+  }
+
+  SECTION("a bad checksum produces nothing") {
+    std::vector<uint8_t> bad = display_message(0x102000, {0x03});
+    bad[bad.size() - 2] ^= 0x01u;
+    const Decoded decoded = decode_display(bad);
+    CHECK(decoded.total == 0);
+    CHECK(decoded.unknown == 0);
+  }
+
+  SECTION("an RQ1 request produces nothing") {
+    const Decoded decoded = decode_display(
+        roland_message(0x102000, {0x00, 0x00, 0x00, 0x01}, kGsCommandRq1, kGsDisplayModelId));
+    CHECK(decoded.total == 0);
+  }
+
+  SECTION("the two decodes never take each other's frames") {
+    CHECK(decode(display_message(0x102000, {0x03})).total == 0);
+    CHECK(decode_display(roland_message(0x400004, {0x50})).total == 0);
   }
 }
 

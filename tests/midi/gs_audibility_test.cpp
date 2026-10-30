@@ -1073,6 +1073,32 @@ TEST_CASE("every GS address row keeps the promise its level makes",
   CHECK(fixed_gaps.empty());
 }
 
+TEST_CASE("a display frame leaves both banks' render bit-identical", "[midi][synth][gs][display]") {
+  // Model 0x45 rows are all ACCEPT: no apply layer may read them, whatever the
+  // text, dot page, page or time byte says.
+  const GsAddressEntry* row = sonare::midi::synth::gs_lookup_address(0x400004);  // MASTER VOLUME
+  REQUIRE(row != nullptr);
+  auto display = [](uint32_t addr, const std::vector<uint8_t>& data) {
+    std::vector<uint8_t> msg = dt1(addr, data);
+    msg[3] = sonare::midi::synth::kGsDisplayModelId;
+    return msg;
+  };
+  const std::vector<std::vector<uint8_t>> frames{
+      display(0x100000, std::vector<uint8_t>(32, 0x41)),
+      display(0x100100, std::vector<uint8_t>(128, 0x1F)),
+      display(0x102000, {0x05}),
+      display(0x102001, {0x0F}),
+  };
+  for (const Bank bank : {Bank::kSoundFont, Bank::kModel}) {
+    INFO(bank_name(bank));
+    const StereoRender base = render(bank, setup_for(*row), {}, *row);
+    const StereoRender shown = render(bank, setup_for(*row), frames, *row);
+    CHECK(base.left == shown.left);
+    CHECK(base.right == shown.right);
+    CHECK(peak(base) > 0.0);
+  }
+}
+
 #endif  // SONARE_MIDI_WITH_FX && SONARE_WITH_MASTERING
 
 TEST_CASE("a kAudible GS row whose range admits only its default has no probe value",
