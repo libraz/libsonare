@@ -496,6 +496,12 @@ class Audio:
         """
         return _require_open(self._handle, "Audio")
 
+    def _audio_float(self, symbol: str, handle: ctypes.c_void_p, *args: Any) -> float:
+        """Call ``symbol(handle, *args, &out)`` and return the ``float`` out-parameter."""
+        out = ctypes.c_float(0.0)
+        _check(getattr(self._lib, symbol)(handle, *args, ctypes.byref(out)))
+        return float(out.value)
+
     @property
     def data(self) -> np.ndarray:
         """Return audio samples as a ``float32`` numpy array.
@@ -554,11 +560,7 @@ class Audio:
         Raises:
             RuntimeError: If the audio has been closed.
         """
-        handle = self._require_handle()
-        out_bpm = ctypes.c_float()
-        rc = self._lib.sonare_audio_detect_bpm(handle, ctypes.byref(out_bpm))
-        _check(rc)
-        return float(out_bpm.value)
+        return self._audio_float("sonare_audio_detect_bpm", self._require_handle())
 
     def detect_key(
         self,
@@ -1166,31 +1168,19 @@ class Audio:
 
     def peak_db(self) -> float:
         """Sample-peak in dBFS over the buffer."""
-        out = ctypes.c_float(0.0)
-        rc = self._lib.sonare_audio_peak_db(self._require_handle(), ctypes.byref(out))
-        _check(rc)
-        return float(out.value)
+        return self._audio_float("sonare_audio_peak_db", self._require_handle())
 
     def rms_db(self) -> float:
         """RMS level in dBFS over the buffer."""
-        out = ctypes.c_float(0.0)
-        rc = self._lib.sonare_audio_rms_db(self._require_handle(), ctypes.byref(out))
-        _check(rc)
-        return float(out.value)
+        return self._audio_float("sonare_audio_rms_db", self._require_handle())
 
     def dc_offset(self) -> float:
         """DC offset (mean) of the buffer in linear amplitude."""
-        out = ctypes.c_float(0.0)
-        rc = self._lib.sonare_audio_dc_offset(self._require_handle(), ctypes.byref(out))
-        _check(rc)
-        return float(out.value)
+        return self._audio_float("sonare_audio_dc_offset", self._require_handle())
 
     def crest_factor_db(self) -> float:
         """Crest factor in dB (peak_db - rms_db)."""
-        out = ctypes.c_float(0.0)
-        rc = self._lib.sonare_audio_crest_factor_db(self._require_handle(), ctypes.byref(out))
-        _check(rc)
-        return float(out.value)
+        return self._audio_float("sonare_audio_crest_factor_db", self._require_handle())
 
     def silence_ratio(
         self,
@@ -1199,16 +1189,13 @@ class Audio:
         hop_length: int = 256,
     ) -> float:
         """Fraction of analysis frames whose RMS is below ``threshold_db``."""
-        out = ctypes.c_float(0.0)
-        rc = self._lib.sonare_audio_silence_ratio(
+        return self._audio_float(
+            "sonare_audio_silence_ratio",
             self._require_handle(),
             _to_c_float(threshold_db, "threshold_db"),
             _to_c_int(frame_length, "frame_length"),
             _to_c_int(hop_length, "hop_length"),
-            ctypes.byref(out),
         )
-        _check(rc)
-        return float(out.value)
 
     def true_peak_db(self, oversample_factor: int = 4) -> float:
         """Inter-sample (true) peak in dBFS.
@@ -1216,14 +1203,11 @@ class Audio:
         ``oversample_factor`` must be a power of two in [1, 16]; pass 0 for the
         library default (4).
         """
-        out = ctypes.c_float(0.0)
-        rc = self._lib.sonare_audio_true_peak_db(
+        return self._audio_float(
+            "sonare_audio_true_peak_db",
             self._require_handle(),
             _to_c_int(oversample_factor, "oversample_factor"),
-            ctypes.byref(out),
         )
-        _check(rc)
-        return float(out.value)
 
     def detect_clipping(
         self,

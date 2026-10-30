@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextlib
 import ctypes
+import json
 from collections.abc import Mapping, Sequence
 
 import numpy as np
@@ -20,6 +21,8 @@ from ._errors import _not_supported, _require_open
 from ._ffi_types_mastering_project import SonareSampleDesc, SonareSampleZoneDesc
 from ._narrowing import _is_number, _narrow_double
 from ._runtime import (
+    _C_INT_MAX,
+    _C_INT_MIN,
     _UINT8_MAX,
     _UINT32_MAX,
     ErrorCode,
@@ -28,9 +31,11 @@ from ._runtime import (
     _get_lib,
     _joined_names,
     _last_error,
+    _narrow_int,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _utf8_arg,
     _validate_samples,
 )
 from ._runtime import _synth_enum_value as _synth_enum_value
@@ -98,6 +103,42 @@ _SAMPLE_DESC_LOOP_MODES = {
 }
 # SonarePartRigMode.
 PART_RIG_MODES = {"bank": 0, "none": 1, "chain": 2}
+# SONARE_PART_RIG_ALL_PARTS: every part of a destination.
+PART_RIG_ALL_PARTS = 0xFF
+
+
+def _part_rig_mode_value(mode: str | int) -> int:
+    """Resolve a part-rig mode name (or its ordinal) to the C value."""
+    if isinstance(mode, str):
+        try:
+            return PART_RIG_MODES[mode]
+        except KeyError:
+            raise SonareValueError(
+                f"unknown part rig mode {mode!r}; expected one of {sorted(PART_RIG_MODES)}"
+            ) from None
+    return _narrow_int(mode, "mode", _C_INT_MIN, _C_INT_MAX)
+
+
+def _part_rig_inserts_arg(
+    mode_value: int, inserts: Sequence[Mapping[str, object]] | None
+) -> bytes | None:
+    """Serialize a chain's inserts to the C JSON form; None unless the mode is a chain."""
+    if inserts is None:
+        return None
+    entries = []
+    for i, insert in enumerate(inserts):
+        if "processor" not in insert:
+            raise SonareValueError(f"inserts[{i}] needs a 'processor' key")
+        params = insert.get("params", {})
+        entries.append(
+            {
+                "processor": insert["processor"],
+                "params": params if isinstance(params, str) else json.dumps(params),
+            }
+        )
+    return _utf8_arg(json.dumps(entries), "entries")
+
+
 _SYNTH_OSC_WAVEFORMS = {
     "default": 0,
     "sine": 1,

@@ -27,7 +27,10 @@ from typing import TYPE_CHECKING, Any, Literal, SupportsFloat, TypeAlias, cast
 if TYPE_CHECKING:
     from ._project import Project, ProjectTimeline
 
-from ._errors import ErrorCode, SonareError, _not_supported
+from ._errors import ErrorCode, SonareError
+from ._ffi_types_mastering_project import (
+    SONARE_ERROR_INVALID_STATE as SONARE_ERROR_INVALID_STATE,
+)
 from ._project_instruments import (
     _GS_EFX_REALIZATIONS as _GS_EFX_REALIZATIONS,
 )
@@ -131,15 +134,11 @@ from ._runtime import (
     _check,
     _curve_value,
     _get_lib,
+    _require_export,
     _resolve_enum,
     _to_c_size_t,
     _utf8_arg,
 )
-
-# Mirrors SONARE_ERROR_INVALID_STATE in sonare_c.h. The pure MIDI conversion
-# helpers return this when no result is produced (e.g. learn found no binding);
-# the Python wrappers translate it to ``None`` rather than raising.
-SONARE_ERROR_INVALID_STATE = 7
 
 # Must match SONARE_PROJECT_ABI_VERSION (include/sonare/sonare_c_project.h) and the other
 # bindings' expected project ABI constant. A mismatch means the loaded native
@@ -548,8 +547,9 @@ def project_abi_version() -> int:
 
 
 def _check_project_abi(lib: Any) -> None:
-    if not hasattr(lib, "sonare_project_abi_version"):
-        raise _not_supported("libsonare was built without arrangement support")
+    _require_export(
+        lib, "sonare_project_abi_version", "libsonare was built without arrangement support"
+    )
     abi = int(lib.sonare_project_abi_version())
     if abi != EXPECTED_PROJECT_ABI_VERSION:
         raise SonareError(

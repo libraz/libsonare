@@ -226,11 +226,28 @@ from ._vocal_edit_model import (
 )
 
 
+@contextlib.contextmanager
+def _owned_result(lib: ctypes.CDLL, init: str, cls: type[Any], free: str) -> Iterator[Any]:
+    """Initialise a native result struct and release it with ``free`` on exit."""
+    raw = _new_result(lib, init, cls)
+    try:
+        yield raw
+    finally:
+        getattr(lib, free)(ctypes.byref(raw))
+
+
+def _owned_edit_result(lib: ctypes.CDLL) -> contextlib.AbstractContextManager[Any]:
+    return _owned_result(
+        lib, "sonare_vocal_edit_result_init", SonareVocalEditResult, "sonare_vocal_free_edit_result"
+    )
+
+
 class _HandleOwner:
     _handle: ctypes.c_void_p
     _destroy_symbol: str
     _active_native_calls: int
     _close_pending: bool
+    _symbol_prefix: str
 
     def _require_handle(self) -> ctypes.c_void_p:
         if not self._handle or not self._handle.value or getattr(self, "_close_pending", False):
@@ -264,6 +281,59 @@ class _HandleOwner:
             if self._active_native_calls == 0 and getattr(self, "_close_pending", False):
                 self._destroy_handle()
 
+    def _owned_notes(self) -> tuple[tuple[VocalNote, ...], tuple[VocalTransition, ...]]:
+        lib = _get_lib()
+        with _owned_result(
+            lib, "sonare_vocal_notes_result_init", SonareVocalNotesResult, "sonare_vocal_free_notes"
+        ) as raw:
+            _vocal_check(
+                getattr(lib, f"{self._symbol_prefix}_notes")(
+                    self._require_handle(), ctypes.byref(raw)
+                )
+            )
+            return _notes_from_result(raw)
+
+    def _owned_token(self) -> VocalStateToken:
+        lib = _get_lib()
+        raw = SonareVocalStateToken()
+        _vocal_check(
+            getattr(lib, f"{self._symbol_prefix}_token")(self._require_handle(), ctypes.byref(raw))
+        )
+        return _state_token(raw)
+
+    def _owned_evaluate_pitch(self, note_id: int) -> VocalPitchResult:
+        return _evaluate_pitch(
+            _get_lib(), f"{self._symbol_prefix}_evaluate_pitch", self._require_handle(), note_id
+        )
+
+    def _owned_source_to_destination(self, note_id: int, source_sample: float) -> float:
+        return _coordinate(
+            _get_lib(),
+            f"{self._symbol_prefix}_source_to_destination",
+            self._require_handle(),
+            note_id,
+            source_sample,
+        )
+
+    def _owned_destination_to_source(self, note_id: int, destination_sample: float) -> float:
+        return _coordinate(
+            _get_lib(),
+            f"{self._symbol_prefix}_destination_to_source",
+            self._require_handle(),
+            note_id,
+            destination_sample,
+        )
+
+    def _capture_snapshot_handle(self) -> ctypes.c_void_p:
+        lib = _get_lib()
+        handle = ctypes.c_void_p()
+        _vocal_check(
+            getattr(lib, f"{self._symbol_prefix}_capture_snapshot")(
+                self._require_handle(), ctypes.byref(handle)
+            )
+        )
+        return handle
+
     def __enter__(self) -> Self:
         self._require_handle()
         return self
@@ -280,6 +350,7 @@ class VocalEditSession(_HandleOwner):
     """A control-thread-owned, immutable-source vocal editing session."""
 
     _destroy_symbol = "sonare_vocal_session_destroy"
+    _symbol_prefix = "sonare_vocal_session"
 
     def _destroy_handle(self) -> None:
         # Drafts reference the session, so closing it disposes every live draft first.
@@ -398,24 +469,20 @@ class VocalEditSession(_HandleOwner):
         return obj
 
     def notes(self) -> tuple[tuple[VocalNote, ...], tuple[VocalTransition, ...]]:
-        lib = _get_lib()
-        raw = _new_result(lib, "sonare_vocal_notes_result_init", SonareVocalNotesResult)
-        try:
-            _vocal_check(lib.sonare_vocal_session_notes(self._require_handle(), ctypes.byref(raw)))
-            return _notes_from_result(raw)
-        finally:
-            lib.sonare_vocal_free_notes(ctypes.byref(raw))
+        return self._owned_notes()
 
     def analysis(self) -> VocalAnalysisResult:
         lib = _get_lib()
-        raw = _new_result(lib, "sonare_vocal_analysis_result_init", SonareVocalAnalysisResult)
-        try:
+        with _owned_result(
+            lib,
+            "sonare_vocal_analysis_result_init",
+            SonareVocalAnalysisResult,
+            "sonare_vocal_free_analysis",
+        ) as raw:
             _vocal_check(
                 lib.sonare_vocal_session_analysis(self._require_handle(), ctypes.byref(raw))
             )
             return _analysis_from_result(raw)
-        finally:
-            lib.sonare_vocal_free_analysis(ctypes.byref(raw))
 
     def capabilities(self) -> VocalCapabilities:
         lib = _get_lib()
@@ -433,10 +500,7 @@ class VocalEditSession(_HandleOwner):
         )
 
     def token(self) -> VocalStateToken:
-        lib = _get_lib()
-        raw = SonareVocalStateToken()
-        _vocal_check(lib.sonare_vocal_session_token(self._require_handle(), ctypes.byref(raw)))
-        return _state_token(raw)
+        return self._owned_token()
 
     @property
     def revision(self) -> int:
@@ -495,56 +559,36 @@ class VocalEditSession(_HandleOwner):
             if expected_revision is None
             else _uint64(expected_revision, "expected_revision")
         )
-        raw = _new_result(lib, "sonare_vocal_edit_result_init", SonareVocalEditResult)
-        try:
+        with _owned_edit_result(lib) as raw:
             _vocal_check(
                 getattr(lib, symbol)(self._require_handle(), int(revision), ctypes.byref(raw))
             )
             return _edit_result_from_c(raw)
-        finally:
-            lib.sonare_vocal_free_edit_result(ctypes.byref(raw))
 
     def evaluate_pitch(self, note_id: int) -> VocalPitchResult:
-        return _evaluate_pitch(
-            _get_lib(), "sonare_vocal_session_evaluate_pitch", self._require_handle(), note_id
-        )
+        return self._owned_evaluate_pitch(note_id)
 
     def source_sample_to_destination_sample(self, note_id: int, source_sample: float) -> float:
-        return _coordinate(
-            _get_lib(),
-            "sonare_vocal_session_source_to_destination",
-            self._require_handle(),
-            note_id,
-            source_sample,
-        )
+        return self._owned_source_to_destination(note_id, source_sample)
 
     def destination_sample_to_source_sample(self, note_id: int, destination_sample: float) -> float:
-        return _coordinate(
-            _get_lib(),
-            "sonare_vocal_session_destination_to_source",
-            self._require_handle(),
-            note_id,
-            destination_sample,
-        )
+        return self._owned_destination_to_source(note_id, destination_sample)
 
     def capture_render_snapshot(self) -> VocalRenderSnapshot:
-        lib = _get_lib()
-        handle = ctypes.c_void_p()
-        _vocal_check(
-            lib.sonare_vocal_session_capture_snapshot(self._require_handle(), ctypes.byref(handle))
-        )
-        return VocalRenderSnapshot(handle, self._sample_rate)
+        return VocalRenderSnapshot(self._capture_snapshot_handle(), self._sample_rate)
 
     def export_state(self) -> bytes:
         lib = _get_lib()
-        raw = _new_result(lib, "sonare_vocal_state_bytes_init", SonareVocalStateBytes)
-        try:
+        with _owned_result(
+            lib,
+            "sonare_vocal_state_bytes_init",
+            SonareVocalStateBytes,
+            "sonare_vocal_free_state_bytes",
+        ) as raw:
             _vocal_check(
                 lib.sonare_vocal_session_export_state(self._require_handle(), ctypes.byref(raw))
             )
             return bytes(_copy_pointer(raw.data, int(raw.size), np.dtype(np.uint8)))
-        finally:
-            lib.sonare_vocal_free_state_bytes(ctypes.byref(raw))
 
     def render(
         self,
@@ -578,6 +622,7 @@ class VocalEditSession(_HandleOwner):
 
 class VocalEditDraft(_HandleOwner):
     _destroy_symbol = "sonare_vocal_draft_destroy"
+    _symbol_prefix = "sonare_vocal_draft"
 
     def __init__(self, session: VocalEditSession, handle: ctypes.c_void_p) -> None:
         self._session = session
@@ -585,19 +630,10 @@ class VocalEditDraft(_HandleOwner):
         self._output_length = session.output_length_samples
 
     def notes(self) -> tuple[tuple[VocalNote, ...], tuple[VocalTransition, ...]]:
-        lib = _get_lib()
-        raw = _new_result(lib, "sonare_vocal_notes_result_init", SonareVocalNotesResult)
-        try:
-            _vocal_check(lib.sonare_vocal_draft_notes(self._require_handle(), ctypes.byref(raw)))
-            return _notes_from_result(raw)
-        finally:
-            lib.sonare_vocal_free_notes(ctypes.byref(raw))
+        return self._owned_notes()
 
     def token(self) -> VocalStateToken:
-        lib = _get_lib()
-        raw = SonareVocalStateToken()
-        _vocal_check(lib.sonare_vocal_draft_token(self._require_handle(), ctypes.byref(raw)))
-        return _state_token(raw)
+        return self._owned_token()
 
     def apply(
         self,
@@ -612,8 +648,7 @@ class VocalEditDraft(_HandleOwner):
         for i, operation in enumerate(ops):
             raw_ops[i], buffers = _operation_to_c(lib, operation, self._session._sample_rate)
             keepalive.extend(buffers)
-        raw = _new_result(lib, "sonare_vocal_edit_result_init", SonareVocalEditResult)
-        try:
+        with _owned_edit_result(lib) as raw:
             pointer = ctypes.cast(raw_ops, ctypes.POINTER(SonareVocalOperation)) if ops else None
             _vocal_check(
                 lib.sonare_vocal_draft_apply(
@@ -621,8 +656,6 @@ class VocalEditDraft(_HandleOwner):
                 )
             )
             return _edit_result_from_c(raw)
-        finally:
-            lib.sonare_vocal_free_edit_result(ctypes.byref(raw))
 
     def commit(self, expected_revision: int | None = None) -> VocalEditResult:
         lib = _get_lib()
@@ -631,51 +664,29 @@ class VocalEditDraft(_HandleOwner):
             if expected_revision is None
             else _uint64(expected_revision, "expected_revision")
         )
-        raw = _new_result(lib, "sonare_vocal_edit_result_init", SonareVocalEditResult)
-        try:
+        with _owned_edit_result(lib) as raw:
             _vocal_check(
                 lib.sonare_vocal_draft_commit(
                     self._require_handle(), int(revision), ctypes.byref(raw)
                 )
             )
             return _edit_result_from_c(raw)
-        finally:
-            lib.sonare_vocal_free_edit_result(ctypes.byref(raw))
 
     def cancel(self) -> None:
         lib = _get_lib()
         _vocal_check(lib.sonare_vocal_draft_cancel(self._require_handle()))
 
     def evaluate_pitch(self, note_id: int) -> VocalPitchResult:
-        return _evaluate_pitch(
-            _get_lib(), "sonare_vocal_draft_evaluate_pitch", self._require_handle(), note_id
-        )
+        return self._owned_evaluate_pitch(note_id)
 
     def source_sample_to_destination_sample(self, note_id: int, source_sample: float) -> float:
-        return _coordinate(
-            _get_lib(),
-            "sonare_vocal_draft_source_to_destination",
-            self._require_handle(),
-            note_id,
-            source_sample,
-        )
+        return self._owned_source_to_destination(note_id, source_sample)
 
     def destination_sample_to_source_sample(self, note_id: int, destination_sample: float) -> float:
-        return _coordinate(
-            _get_lib(),
-            "sonare_vocal_draft_destination_to_source",
-            self._require_handle(),
-            note_id,
-            destination_sample,
-        )
+        return self._owned_destination_to_source(note_id, destination_sample)
 
     def capture_render_snapshot(self) -> VocalRenderSnapshot:
-        lib = _get_lib()
-        handle = ctypes.c_void_p()
-        _vocal_check(
-            lib.sonare_vocal_draft_capture_snapshot(self._require_handle(), ctypes.byref(handle))
-        )
-        return VocalRenderSnapshot(handle, self._session._sample_rate)
+        return VocalRenderSnapshot(self._capture_snapshot_handle(), self._session._sample_rate)
 
 
 class VocalRenderSnapshot(_HandleOwner):
@@ -813,16 +824,18 @@ class VocalRenderJob(_HandleOwner):
 def _evaluate_pitch(
     lib: ctypes.CDLL, symbol: str, handle: ctypes.c_void_p, note_id: int
 ) -> VocalPitchResult:
-    raw = _new_result(lib, "sonare_vocal_pitch_result_init", SonareVocalPitchResult)
-    try:
+    with _owned_result(
+        lib,
+        "sonare_vocal_pitch_result_init",
+        SonareVocalPitchResult,
+        "sonare_vocal_free_pitch_result",
+    ) as raw:
         _vocal_check(
             getattr(lib, symbol)(
                 handle, _uint32(note_id, "note_id", allow_zero=False), ctypes.byref(raw)
             )
         )
         return _pitch_result_from_c(raw)
-    finally:
-        lib.sonare_vocal_free_pitch_result(ctypes.byref(raw))
 
 
 def _coordinate(

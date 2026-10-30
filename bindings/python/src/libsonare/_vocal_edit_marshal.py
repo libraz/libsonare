@@ -36,6 +36,7 @@ from ._ffi_types_vocal import (
 from ._runtime import (
     _INT64_MAX,
     _INT64_MIN,
+    _UINT32_MAX,
     _check,
     _get_lib,
     _narrow_int,
@@ -70,7 +71,6 @@ from ._vocal_edit_model import (
     VocalTransition,
 )
 
-_UINT32_MAX = (1 << 32) - 1
 _UINT64_MAX = (1 << 64) - 1
 _MAX_RESULT_ITEMS = 1 << 28
 
@@ -94,27 +94,18 @@ def _bool_flag(value: object, name: str) -> int:
 
 
 def _int64(value: object, name: str) -> int:
-    try:
-        return _narrow_int(value, name, _INT64_MIN, _INT64_MAX)
-    except SonareValueError:
-        raise
+    return _narrow_int(value, name, _INT64_MIN, _INT64_MAX)
 
 
 def _uint32(value: object, name: str, *, allow_zero: bool = True) -> int:
-    try:
-        result = _narrow_int(value, name, 0, _UINT32_MAX)
-    except SonareValueError:
-        raise
+    result = _narrow_int(value, name, 0, _UINT32_MAX)
     if not allow_zero and result == 0:
         raise SonareValueError(f"{name} must be positive")
     return result
 
 
 def _uint64(value: object, name: str, *, allow_zero: bool = True) -> int:
-    try:
-        result = _narrow_int(value, name, 0, _UINT64_MAX)
-    except SonareValueError:
-        raise
+    result = _narrow_int(value, name, 0, _UINT64_MAX)
     if not allow_zero and result == 0:
         raise SonareValueError(f"{name} must be positive")
     return result

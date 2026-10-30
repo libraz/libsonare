@@ -7,7 +7,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import cast
 
-from ._errors import _not_supported, _unknown_error
+from ._errors import _unknown_error
 from ._ffi import (
     SONARE_CHORD_DETECTION_OPTIONS_VERSION,
     SonareBoundaryOptions,
@@ -27,6 +27,7 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _last_error,
+    _require_export,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -370,8 +371,9 @@ def analyze_sections(
         ``result.sections`` rather than indexing the result directly.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_analyze_sections"):
-        raise _not_supported("libsonare was built without section-analysis support")
+    _require_export(
+        lib, "sonare_analyze_sections", "libsonare was built without section-analysis support"
+    )
     c_array, length = _to_c_float_array(samples)
     out = SonareSectionResult()
     rc = lib.sonare_analyze_sections(
@@ -468,8 +470,9 @@ def detect_boundaries(
             there is nothing to combine.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_detect_boundaries"):
-        raise _not_supported("libsonare was built without boundary-detection support")
+    _require_export(
+        lib, "sonare_detect_boundaries", "libsonare was built without boundary-detection support"
+    )
     c_array, length = _to_c_float_array(samples)
     options = SonareBoundaryOptions(
         n_fft=_to_c_int(n_fft, "n_fft"),
@@ -589,8 +592,9 @@ def analyze_melody(
         finally:
             lib.sonare_free_melody_result(ctypes.byref(out))
 
-    if not hasattr(lib, "sonare_analyze_melody"):
-        raise _not_supported("libsonare was built without melody-analysis support")
+    _require_export(
+        lib, "sonare_analyze_melody", "libsonare was built without melody-analysis support"
+    )
     c_array, length = _to_c_float_array(samples)
     out = SonareMelodyResult()
     rc = lib.sonare_analyze_melody(
@@ -639,11 +643,12 @@ def capabilities() -> Capabilities:
     the Python package that happens to call it.
     """
     lib = _get_lib()
-    if not hasattr(lib, "sonare_capabilities_json"):
-        raise _not_supported(
-            "loaded libsonare does not expose sonare_capabilities_json; "
-            "rebuild or install a newer native library"
-        )
+    _require_export(
+        lib,
+        "sonare_capabilities_json",
+        "loaded libsonare does not expose sonare_capabilities_json; "
+        "rebuild or install a newer native library",
+    )
     payload = lib.sonare_capabilities_json()
     if not payload:
         raise _last_error(

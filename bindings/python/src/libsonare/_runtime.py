@@ -21,6 +21,7 @@ import numpy as np
 from ._errors import ErrorCode as ErrorCode
 from ._errors import SonareError as SonareError
 from ._errors import SonareValueError as SonareValueError
+from ._errors import _not_supported as _not_supported
 from ._errors import _unsupported_effect_symbol as _unsupported_effect_symbol
 from ._ffi import *  # noqa: F403
 from ._narrowing import _FLOAT32_MAX as _FLOAT32_MAX
@@ -58,6 +59,12 @@ def _get_lib() -> ctypes.CDLL:
     if _lib is None:
         _lib = load_library()
     return _lib
+
+
+def _require_export(lib: Any, symbol: str, message: str) -> None:
+    """Raise NOT_SUPPORTED with ``message`` unless ``lib`` exports ``symbol``."""
+    if not hasattr(lib, symbol):
+        raise _not_supported(message)
 
 
 def _generic_error(rc: int) -> SonareError:

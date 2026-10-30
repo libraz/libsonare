@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import os
+import struct
 import tempfile
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager, suppress
@@ -18,6 +19,15 @@ from ._ffi import (
 from ._runtime import SonareError
 
 
+@contextmanager
+def _encode_failed_on_oserror(path: str) -> Iterator[None]:
+    """Re-raise an ``OSError`` from producing ``path`` as an ENCODE_FAILED error."""
+    try:
+        yield
+    except OSError as exc:
+        raise SonareError(SONARE_ERROR_ENCODE_FAILED, f"cannot write {path}: {exc}") from exc
+
+
 def _to_float32(value: float) -> float:
     """Round a Python float to the nearest ``float`` the C++ writer would hold.
 
@@ -27,8 +37,6 @@ def _to_float32(value: float) -> float:
     32-bit float can hold becomes an infinity, as the narrowing conversion does,
     rather than an error.
     """
-    import struct
-
     # struct.unpack is typed as tuple[Any, ...], so the element is narrowed here
     # rather than left to leak an untyped value out of a float-returning helper.
     try:
@@ -122,8 +130,6 @@ def _pcm16(sample: float, tpdf: float = 0.0) -> bytes:
     Shared by every WAV writer so the clamp-and-scale contract stays identical.
     A non-finite sample is written as digital silence; see ``_quantize_sample``.
     """
-    import struct
-
     return struct.pack("<h", _quantize_sample(sample, 32768.0, -32768, 32767, tpdf))
 
 
@@ -332,8 +338,6 @@ class _RiffWavWriter:
 
     def finish(self) -> None:
         """Patch the header now that the data size is known, then close an odd data chunk."""
-        import struct
-
         block_align = self._channels * (self._bits_per_sample // 8)
         byte_rate = self._sample_rate * block_align
         fmt_size = 40 if self._extensible else 16
@@ -399,7 +403,7 @@ def _atomic_riff_writer(
     # covered too: the only file it touches is this one, so an OSError raised
     # there is a failed write to the output rather than an unrelated caller
     # error, which is why the conversion is by exception type and not by scope.
-    try:
+    with _encode_failed_on_oserror(path):
         raw = tempfile.NamedTemporaryFile(  # noqa: SIM115 - lifetime spans the yielded writer
             mode="w+b",
             prefix=f".{os.path.basename(target)}.",
@@ -407,12 +411,10 @@ def _atomic_riff_writer(
             dir=directory,
             delete=False,
         )
-    except OSError as exc:
-        raise SonareError(SONARE_ERROR_ENCODE_FAILED, f"cannot write {path}: {exc}") from exc
     temporary = raw.name
     writer = _RiffWavWriter(raw, channels, int(sample_rate), bits_per_sample, extensible)
     try:
-        try:
+        with _encode_failed_on_oserror(path):
             raw.seek(writer.header_size)
             yield writer
             writer.finish()
@@ -420,8 +422,6 @@ def _atomic_riff_writer(
             os.fsync(raw.fileno())
             raw.close()
             os.replace(temporary, target)
-        except OSError as exc:
-            raise SonareError(SONARE_ERROR_ENCODE_FAILED, f"cannot write {path}: {exc}") from exc
     except BaseException:
         with suppress(Exception):
             raw.close()
@@ -626,7 +626,9 @@ def _atomic_write_bytes(path: str, data: bytes) -> None:
     directory = os.path.dirname(target)
     temporary = ""
     try:
-        try:
+        # Every stage is part of producing the output, and the raw errno names the
+        # scratch file rather than the destination the caller asked for.
+        with _encode_failed_on_oserror(path):
             with tempfile.NamedTemporaryFile(
                 mode="wb",
                 prefix=f".{os.path.basename(target)}.",
@@ -639,11 +641,6 @@ def _atomic_write_bytes(path: str, data: bytes) -> None:
                 fh.flush()
                 os.fsync(fh.fileno())
             os.replace(temporary, target)
-        except OSError as exc:
-            # Same classification the WAV writer applies: every stage here is
-            # part of producing the output, and the raw errno names the scratch
-            # file rather than the destination the caller asked for.
-            raise SonareError(SONARE_ERROR_ENCODE_FAILED, f"cannot write {path}: {exc}") from exc
     except BaseException:
         if temporary:
             with suppress(FileNotFoundError):

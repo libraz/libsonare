@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
-from ._errors import _not_supported
 from ._project_mir import TakeAlignment as TakeAlignment
 from ._project_mir import align_take_to_reference as align_take_to_reference
 from ._project_mir import chord_symbol_from_analysis as chord_symbol_from_analysis
@@ -29,10 +28,19 @@ from ._project_model import (
     _track_kind_value,
 )
 from ._project_synth import (
+    PART_RIG_ALL_PARTS as PART_RIG_ALL_PARTS,
+)
+from ._project_synth import (
     PART_RIG_MODES as PART_RIG_MODES,
 )
 from ._project_synth import (
     SYNTH_ENUM_TABLES as SYNTH_ENUM_TABLES,
+)
+from ._project_synth import (
+    _part_rig_inserts_arg as _part_rig_inserts_arg,
+)
+from ._project_synth import (
+    _part_rig_mode_value as _part_rig_mode_value,
 )
 from ._project_synth import (
     synth_enum_tables as synth_enum_tables,
@@ -62,6 +70,7 @@ from ._runtime import (
     _narrow_double,
     _narrow_float,
     _narrow_int,
+    _require_export,
     _to_c_float_array,
     _to_c_int,
     _to_c_int64,
@@ -72,42 +81,6 @@ from ._runtime import (
     _warp_mode_value,
 )
 from .types import ProjectSource
-
-# SONARE_PART_RIG_ALL_PARTS: every part of a destination.
-PART_RIG_ALL_PARTS = 0xFF
-
-
-def _part_rig_mode_value(mode: str | int) -> int:
-    """Resolve a part-rig mode name (or its ordinal) to the C value."""
-    if isinstance(mode, str):
-        try:
-            return PART_RIG_MODES[mode]
-        except KeyError:
-            raise SonareValueError(
-                f"unknown part rig mode {mode!r}; expected one of {sorted(PART_RIG_MODES)}"
-            ) from None
-    return _narrow_int(mode, "mode", _C_INT_MIN, _C_INT_MAX)
-
-
-def _part_rig_inserts_arg(
-    mode_value: int, inserts: Sequence[Mapping[str, object]] | None
-) -> bytes | None:
-    """Serialize a chain's inserts to the C JSON form; None unless the mode is a chain."""
-    if inserts is None:
-        return None
-    entries = []
-    for i, insert in enumerate(inserts):
-        if "processor" not in insert:
-            raise SonareValueError(f"inserts[{i}] needs a 'processor' key")
-        params = insert.get("params", {})
-        entries.append(
-            {
-                "processor": insert["processor"],
-                "params": params if isinstance(params, str) else json.dumps(params),
-            }
-        )
-    return _utf8_arg(json.dumps(entries), "entries")
-
 
 # Mirrors SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL.
 _LOOP_RECORDING_DROP_PARTIAL_TAIL = 1
@@ -221,8 +194,11 @@ class _ProjectEditMixin:
         if not isinstance(content_hash, str) or not isinstance(external_stem_role, str):
             raise TypeError("content_hash and external_stem_role must be strings")
         lib = _get_lib()
-        if not hasattr(lib, "sonare_project_set_audio_source_metadata"):
-            raise _not_supported("loaded libsonare does not support audio-source metadata")
+        _require_export(
+            lib,
+            "sonare_project_set_audio_source_metadata",
+            "loaded libsonare does not support audio-source metadata",
+        )
         _check(
             lib.sonare_project_set_audio_source_metadata(
                 self._require_handle(),
@@ -725,11 +701,12 @@ class _ProjectEditMixin:
         mode_value = _part_rig_mode_value(mode)
         json_arg = _part_rig_inserts_arg(mode_value, inserts)
         lib = _get_lib()
-        if not hasattr(lib, "sonare_project_set_part_rig"):
-            raise _not_supported(
-                "loaded libsonare does not export sonare_project_set_part_rig; "
-                "rebuild or upgrade the shared library before calling set_part_rig"
-            )
+        _require_export(
+            lib,
+            "sonare_project_set_part_rig",
+            "loaded libsonare does not export sonare_project_set_part_rig; "
+            "rebuild or upgrade the shared library before calling set_part_rig",
+        )
         _check(
             lib.sonare_project_set_part_rig(
                 self._require_handle(),
@@ -751,11 +728,12 @@ class _ProjectEditMixin:
         ``None`` otherwise.
         """
         lib = _get_lib()
-        if not hasattr(lib, "sonare_project_get_part_rig"):
-            raise _not_supported(
-                "loaded libsonare does not export sonare_project_get_part_rig; "
-                "rebuild or upgrade the shared library before calling get_part_rig"
-            )
+        _require_export(
+            lib,
+            "sonare_project_get_part_rig",
+            "loaded libsonare does not export sonare_project_get_part_rig; "
+            "rebuild or upgrade the shared library before calling get_part_rig",
+        )
         mode = ctypes.c_int()
         out_json = ctypes.c_char_p()
         present = ctypes.c_int()
@@ -794,11 +772,12 @@ class _ProjectEditMixin:
     def clear_part_rig(self, destination_id: int, part: int) -> None:
         """Remove one part-rig entry via an undoable edit (absent entries are a no-op)."""
         lib = _get_lib()
-        if not hasattr(lib, "sonare_project_clear_part_rig"):
-            raise _not_supported(
-                "loaded libsonare does not export sonare_project_clear_part_rig; "
-                "rebuild or upgrade the shared library before calling clear_part_rig"
-            )
+        _require_export(
+            lib,
+            "sonare_project_clear_part_rig",
+            "loaded libsonare does not export sonare_project_clear_part_rig; "
+            "rebuild or upgrade the shared library before calling clear_part_rig",
+        )
         _check(
             lib.sonare_project_clear_part_rig(
                 self._require_handle(),
@@ -1069,8 +1048,11 @@ class _ProjectEditMixin:
                 )
             )
         else:
-            if not hasattr(lib, "sonare_project_add_automation_lane_ex"):
-                raise _not_supported("loaded libsonare does not support typed automation lanes")
+            _require_export(
+                lib,
+                "sonare_project_add_automation_lane_ex",
+                "loaded libsonare does not support typed automation lanes",
+            )
             desc_ex = SonareAutomationLaneDescEx(
                 target_param_id=desc.target_param_id,
                 target_kind=kind,
@@ -1131,8 +1113,11 @@ class _ProjectEditMixin:
                 )
             )
         else:
-            if not hasattr(lib, "sonare_project_edit_automation_lane_ex"):
-                raise _not_supported("loaded libsonare does not support typed automation lanes")
+            _require_export(
+                lib,
+                "sonare_project_edit_automation_lane_ex",
+                "loaded libsonare does not support typed automation lanes",
+            )
             desc_ex = SonareAutomationLaneDescEx(
                 target_param_id=desc.target_param_id,
                 target_kind=kind,
@@ -1200,12 +1185,13 @@ class _ProjectEditMixin:
             raise SonareValueError("bytes must be a non-negative integer within size_t range")
 
         lib = _get_lib()
-        if not hasattr(lib, "sonare_project_set_max_history_bytes"):
-            raise _not_supported(
-                "loaded libsonare does not export sonare_project_set_max_history_bytes; "
-                "rebuild or upgrade the shared library before calling "
-                "Project.set_max_history_bytes"
-            )
+        _require_export(
+            lib,
+            "sonare_project_set_max_history_bytes",
+            "loaded libsonare does not export sonare_project_set_max_history_bytes; "
+            "rebuild or upgrade the shared library before calling "
+            "Project.set_max_history_bytes",
+        )
         _check(
             lib.sonare_project_set_max_history_bytes(
                 self._require_handle(), _to_c_size_t(value, "value")
