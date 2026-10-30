@@ -26,6 +26,50 @@ using ::sonare::constants::kCentsPerOctave;
 using ::sonare::constants::kCentsPerSemitone;
 using ::sonare::constants::kSemitonesPerOctave;
 
+/// GS drum-kit NRPN MSBs; the LSB is the drum note.
+constexpr uint8_t kNrpnDrumPitch = 0x18;
+constexpr uint8_t kNrpnDrumLevel = 0x1A;
+constexpr uint8_t kNrpnDrumPan = 0x1C;
+constexpr uint8_t kNrpnDrumReverb = 0x1D;
+constexpr uint8_t kNrpnDrumChorus = 0x1E;
+constexpr uint8_t kNrpnDrumDelay = 0x1F;
+
+/// ChannelVoiceEvent::flags bits (see channel_voice_decode.h).
+constexpr uint8_t kFlagBankValid = 0x01;
+constexpr uint8_t kFlagPerNoteReset = 0x01;
+constexpr uint8_t kFlagPerNoteDetach = 0x02;
+
+/// Damper strength of a half-pedal at @p level: 1 with the pedal up, 0 fully down.
+float half_pedal_strength(int level) noexcept { return static_cast<float>(127 - level) / 63.0f; }
+
+/// Bend range in cents from the RPN 0/0 data word: semitones in the top seven bits, cents below.
+float bend_range_cents_from_word(uint16_t v14) noexcept {
+  return kCentsPerSemitone * static_cast<float>(v14 >> 7) + static_cast<float>(v14 & 0x7Fu);
+}
+
+/// Moves the NRPN or RPN selection that parameter-number controller @p controller carries.
+void select_parameter_number(ChannelParamState& params, uint8_t controller,
+                             uint8_t value) noexcept {
+  switch (controller) {
+    case cc::kNrpnLsb:
+      params.select_nrpn_lsb(value);
+      break;
+    case cc::kNrpnMsb:
+      params.select_nrpn_msb(value);
+      break;
+    case cc::kRpnLsb:
+      params.select_rpn_lsb(value);
+      params.deselect_on_rpn_null();
+      break;
+    case cc::kRpnMsb:
+      params.select_rpn_msb(value);
+      params.deselect_on_rpn_null();
+      break;
+    default:
+      break;
+  }
+}
+
 /// Whether a part holding @p rx_switches receives @p u at all (GsRxSwitch).
 /// Control changes answer to their own switch as well as to the master one, and
 /// that pair is decided in control_change, where the controller number is known.
@@ -136,6 +180,17 @@ ComposedPitch Sf2Player::compose_per_note(const Sf2PerNoteVoice& state) const no
   req.per_note_bend_sensitivity = per_note_bend_sensitivity_[state.binding.channel & 0x0Fu];
   // The channel terms stay on this player's own path; only the per-note share is taken.
   return compose_note_pitch(req);
+}
+
+ComposedPitch Sf2Player::bind_note_pitch(Sf2PerNoteVoice& state, const ChannelState& part,
+                                         uint8_t channel, uint8_t note, uint8_t attribute_type,
+                                         uint16_t attribute_data) const noexcept {
+  bind_per_note(state, channel, note, attribute_type, attribute_data);
+  const ComposedPitch pitch = compose_per_note(state);
+  state.gs_tuning_cents = gs_scale_tuning_cents(part.scale_tuning, note) +
+                          gs_pitch_offset_fine_cents(part.pitch_offset_fine, note);
+  state.baked_gs_tuning_cents = pitch.absolute ? 0.0f : state.gs_tuning_cents;
+  return pitch;
 }
 
 void Sf2Player::refresh_per_note_pitch(Sf2PerNoteVoice& state) const noexcept {
@@ -275,12 +330,8 @@ Sf2Player::NoteRoute Sf2Player::route_note_on(uint8_t channel, uint8_t note, Vel
   // note to work it out against.
   // An absolute pitch (attribute 7.9 or Pitch 7.25) overrides tuning tables, so neither is added
   // to it (M2-104-UM §7.4.15.2).
-  bind_per_note(route.per_note, channel, note, attribute_type, attribute_data);
-  route.note_pitch = compose_per_note(route.per_note);
-  route.per_note.gs_tuning_cents = gs_scale_tuning_cents(ch.scale_tuning, note) +
-                                   gs_pitch_offset_fine_cents(ch.pitch_offset_fine, note);
-  route.per_note.baked_gs_tuning_cents =
-      route.note_pitch.absolute ? 0.0f : route.per_note.gs_tuning_cents;
+  route.note_pitch =
+      bind_note_pitch(route.per_note, ch, channel, note, attribute_type, attribute_data);
   route.note_pitch_cents = route.per_note.baked_gs_tuning_cents;
   route.gd = drum_note_params(ch, is_drum, note);
   // GS RX NOTE ON (41 m8 rr / 21 d8 rr): a note the kit has switched off is not
@@ -325,10 +376,7 @@ Sf2Player::NoteRoute Sf2Player::route_note_on(uint8_t channel, uint8_t note, Vel
   // The sample zone follows the integer part of an absolute pitch (§7.4.15.3), so a far
   // transposition does not stretch one recording across the keyboard.
   if (route.note_pitch.absolute) {
-    route.sound_note = static_cast<uint8_t>(
-        std::clamp(static_cast<int>(
-                       std::floor(static_cast<double>(note) + route.note_pitch.per_note_semitones)),
-                   0, 127));
+    route.sound_note = absolute_pitch_key(note, route.note_pitch);
     // A play-note substitution plays at its own root, so only a pitch-chosen zone moves the key
     // the per-note offset is measured from.
     route.per_note.zone_key = route.sound_note;
@@ -521,7 +569,7 @@ void Sf2Player::note_off(uint8_t channel, uint8_t note, uint32_t source_track_id
       } else if (st.sustain_level < 127 && v.patch != nullptr &&
                  v.patch->mode == SynthEngineMode::kPiano) {
         // Half-pedal: the partially raised damper rests on the string.
-        v.piano.damp(static_cast<float>(127 - st.sustain_level) / 63.0f);
+        v.piano.damp(half_pedal_strength(st.sustain_level));
       }
     }
   }
@@ -556,7 +604,7 @@ void Sf2Player::sustain_cc(uint8_t channel, uint8_t value) noexcept {
     // Half-pedal: a partially raised damper still rests on the piano strings,
     // so held-but-released fallback notes are damped rather than ringing
     // freely. Key-down and sostenuto-captured notes keep their dampers off.
-    const float strength = static_cast<float>(127 - value) / 63.0f;
+    const float strength = half_pedal_strength(value);
     for (NativeSynthVoice& v : fallback_pool_) {
       if (v.active && v.channel == ch && !v.key_down && !v.releasing && !v.sostenuto &&
           v.patch != nullptr && v.patch->mode == SynthEngineMode::kPiano) {
@@ -605,7 +653,7 @@ void Sf2Player::sostenuto_pedal(uint8_t channel, bool down) noexcept {
         if (!st.sustain) {
           v.release();
         } else if (v.patch != nullptr && v.patch->mode == SynthEngineMode::kPiano) {
-          const float strength = static_cast<float>(127 - st.sustain_level) / 63.0f;
+          const float strength = half_pedal_strength(st.sustain_level);
           v.piano.damp(strength);
         }
       }
@@ -632,7 +680,7 @@ void Sf2Player::all_notes_off(uint8_t channel) noexcept {
         v.release();
       } else if (st.sustain_level < 127 && v.patch != nullptr &&
                  v.patch->mode == SynthEngineMode::kPiano) {
-        v.piano.damp(static_cast<float>(127 - st.sustain_level) / 63.0f);
+        v.piano.damp(half_pedal_strength(st.sustain_level));
       }
     }
   }
@@ -698,27 +746,27 @@ void Sf2Player::apply_nrpn(uint8_t channel, uint8_t value) noexcept {
   // sees it.
   GsDrumNoteParams& d = drum_params_[st.drum_map_slot()][st.params.nrpn_lsb & 0x7Fu];
   switch (st.params.nrpn_msb) {
-    case 0x18:
+    case kNrpnDrumPitch:
       d.pitch_coarse = offset;
       d.flags |= GsDrumNoteParams::kPitch;
       break;
-    case 0x1A:
+    case kNrpnDrumLevel:
       d.level = value;
       d.flags |= GsDrumNoteParams::kLevel;
       break;
-    case 0x1C:
+    case kNrpnDrumPan:
       d.pan = value;
       d.flags |= GsDrumNoteParams::kPan;
       break;
-    case 0x1D:
+    case kNrpnDrumReverb:
       d.reverb = value;
       d.flags |= GsDrumNoteParams::kReverb;
       break;
-    case 0x1E:
+    case kNrpnDrumChorus:
       d.chorus = value;
       d.flags |= GsDrumNoteParams::kChorus;
       break;
-    case 0x1F:
+    case kNrpnDrumDelay:
       d.delay = value;
       d.flags |= GsDrumNoteParams::kDelay;
       break;
@@ -789,20 +837,7 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, Control32 va
     // The parameter-number controllers still move the selection when their switch is off: the
     // switches gate what data entry applies, and a selection left stale would send the next data
     // entry to whichever parameter was chosen before.
-    if (controller == cc::kNrpnLsb || controller == cc::kNrpnMsb) {
-      if (controller == cc::kNrpnLsb) {
-        st.params.select_nrpn_lsb(value);
-      } else {
-        st.params.select_nrpn_msb(value);
-      }
-    } else if (controller == cc::kRpnLsb || controller == cc::kRpnMsb) {
-      if (controller == cc::kRpnLsb) {
-        st.params.select_rpn_lsb(value);
-      } else {
-        st.params.select_rpn_msb(value);
-      }
-      st.params.deselect_on_rpn_null();
-    }
+    select_parameter_number(st.params, controller, value);
     return;
   }
   if (controller == cc::kDataEntryMsb || controller == cc::kDataEntryLsb) {
@@ -853,7 +888,7 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, Control32 va
       break;
     case cc::kDataEntryMsb:  // Data entry MSB -> active RPN or GS NRPN
       if (st.params.selected_rpn(0, 0)) {
-        st.bend_range_cents = 100.0f * static_cast<float>(value);
+        st.bend_range_cents = kCentsPerSemitone * static_cast<float>(value);
         refresh_channel_mod(ch);
       } else if (st.params.selected_rpn(0, 1)) {
         // Master fine tuning: 14-bit, MSB is the top 7 bits.
@@ -874,7 +909,8 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, Control32 va
     case cc::kDataEntryLsb:
       if (st.params.selected_rpn(0, 0)) {
         st.bend_range_cents =
-            100.0f * std::floor(st.bend_range_cents / 100.0f) + static_cast<float>(value);
+            kCentsPerSemitone * std::floor(st.bend_range_cents / kCentsPerSemitone) +
+            static_cast<float>(value);
         refresh_channel_mod(ch);
       } else if (st.params.selected_rpn(0, 1)) {
         st.pitch_fine_tune =
@@ -923,18 +959,10 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, Control32 va
       break;
     }
     case cc::kNrpnLsb:
-      st.params.select_nrpn_lsb(value);
-      break;
     case cc::kNrpnMsb:
-      st.params.select_nrpn_msb(value);
-      break;
     case cc::kRpnLsb:
-      st.params.select_rpn_lsb(value);
-      st.params.deselect_on_rpn_null();
-      break;
     case cc::kRpnMsb:
-      st.params.select_rpn_msb(value);
-      st.params.deselect_on_rpn_null();
+      select_parameter_number(st.params, controller, value);
       break;
     case cc::kDamperPedal:
       sustain_cc(ch, value);
@@ -992,7 +1020,7 @@ void Sf2Player::registered_controller(uint8_t ch, const Ump& ump,
       if (!received) return;
       // Semitones in the top seven bits, cents below them: the RPN 0/0 data entry MSB and LSB.
       const uint16_t v14 = ev.value.u14();
-      st.bend_range_cents = 100.0f * static_cast<float>(v14 >> 7) + static_cast<float>(v14 & 0x7Fu);
+      st.bend_range_cents = bend_range_cents_from_word(v14);
       refresh_channel_mod(ch);
       return;
     }
@@ -1010,7 +1038,6 @@ void Sf2Player::registered_controller(uint8_t ch, const Ump& ump,
     control_change(ch, lowered.messages[i].note_number(),
                    Control32::from7(lowered.messages[i].data2_7bit()));
   }
-  return;
 }
 
 bool Sf2Player::relative_controller(uint8_t ch, const ChannelVoiceEvent& ev) noexcept {
@@ -1021,13 +1048,15 @@ bool Sf2Player::relative_controller(uint8_t ch, const ChannelVoiceEvent& ev) noe
     case kRcPitchBendSensitivity: {
       if (!received) return true;
       // The held range in RPN 0/0 form, moved and read back as the absolute message would be.
-      const int semitones = std::clamp(static_cast<int>(st.bend_range_cents / 100.0f), 0, 127);
-      const int cents = std::clamp(
-          static_cast<int>(st.bend_range_cents - 100.0f * static_cast<float>(semitones) + 0.5f), 0,
-          127);
+      const int semitones =
+          std::clamp(static_cast<int>(st.bend_range_cents / kCentsPerSemitone), 0, 127);
+      const int cents =
+          std::clamp(static_cast<int>(st.bend_range_cents -
+                                      kCentsPerSemitone * static_cast<float>(semitones) + 0.5f),
+                     0, 127);
       const auto held = static_cast<uint32_t>((semitones << 7) | cents) << 18;
       const uint16_t v14 = add_saturating(Control32::from_raw(held), ev.value).u14();
-      st.bend_range_cents = 100.0f * static_cast<float>(v14 >> 7) + static_cast<float>(v14 & 0x7Fu);
+      st.bend_range_cents = bend_range_cents_from_word(v14);
       refresh_channel_mod(ch);
       return true;
     }
@@ -1104,8 +1133,8 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
         // bank-select switches decide these fields as they decide CC0 and CC32:
         // one storage location, and a second transport to it does not get to
         // arrive past a switch that closed the first.
-        if (u.message_type() == UmpMessageType::kMidi2ChannelVoice && (ev.flags & 0x01u) != 0 &&
-            channels_[ch].receives(GsRxSwitch::kBankSelect)) {
+        if (u.message_type() == UmpMessageType::kMidi2ChannelVoice &&
+            (ev.flags & kFlagBankValid) != 0 && channels_[ch].receives(GsRxSwitch::kBankSelect)) {
           channels_[ch].bank_msb = ev.bank_msb;
           channels_[ch].bank_lsb =
               channels_[ch].receives(GsRxSwitch::kBankSelectLsb) ? ev.bank_lsb : uint8_t{0};
@@ -1152,7 +1181,8 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
         skipped = true;
         break;
       case ChannelVoiceKind::PerNoteManagement:
-        manage_per_note(ch, ev.note, (ev.flags & 0x02u) != 0, (ev.flags & 0x01u) != 0);
+        manage_per_note(ch, ev.note, (ev.flags & kFlagPerNoteDetach) != 0,
+                        (ev.flags & kFlagPerNoteReset) != 0);
         break;
     }
   }

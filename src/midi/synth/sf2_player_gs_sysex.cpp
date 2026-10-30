@@ -18,9 +18,19 @@
 #include "midi/synth/gs_efx_bindings.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
+#include "util/constants.h"
 #include "util/dsp_primitives.h"
 
 namespace sonare::midi::synth {
+
+namespace {
+
+/// The dirty-mask bit of the part a write addresses.
+uint16_t part_bit(const GsWrite& w) noexcept {
+  return static_cast<uint16_t>(1u << (w.part & 0x0Fu));
+}
+
+}  // namespace
 
 bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
   const GsSysEx msg = parse_gs_sysex(data, size);
@@ -229,8 +239,8 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
     // the middle of a bulk run (40 1x 14, 15, ...).
     if (w.param == GsParam::kUseForRhythmPart) {
       st.drum_map = w.value <= 2 ? w.value : 1;
-      dirty |= static_cast<uint16_t>(1u << (w.part & 0x0Fu));
-      rig_dirty |= static_cast<uint16_t>(1u << (w.part & 0x0Fu));
+      dirty |= part_bit(w);
+      rig_dirty |= part_bit(w);
       return true;
     }
     if (!gs_value_in_range(*entry, w.value)) return false;
@@ -254,7 +264,7 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
           reset_drum_map_on_set_change(st, w.value);
           st.program = w.value;
         }
-        rig_dirty |= static_cast<uint16_t>(1u << (w.part & 0x0Fu));
+        rig_dirty |= part_bit(w);
         break;
       case GsParam::kPartToneMapNumber:
         // The storage Bank Select LSB writes, not a second copy of it. The two
@@ -263,7 +273,7 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
         // (tools/gs/docs/unit-diff.md). It resolves a preset, so the rig binding
         // is refreshed for the reason a tone number refreshes it.
         st.bank_lsb = w.value;
-        rig_dirty |= static_cast<uint16_t>(1u << (w.part & 0x0Fu));
+        rig_dirty |= part_bit(w);
         break;
       case GsParam::kPartRxChannel:
         st.rx_channel = w.value;
@@ -380,12 +390,12 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
       case GsParam::kPartBendPitchControl:
         // The same range RPN 00 00 writes, in whole semitones above 40; the
         // cents its LSB carries have no address of their own here.
-        st.bend_range_cents = 100.0f * static_cast<float>(w.value - 0x40);
+        st.bend_range_cents = constants::kCentsPerSemitone * static_cast<float>(w.value - 0x40);
         break;
       default:
         return false;
     }
-    dirty |= static_cast<uint16_t>(1u << (w.part & 0x0Fu));
+    dirty |= part_bit(w);
     return true;
   });
   for (uint8_t ch = 0; ch < 16; ++ch) {

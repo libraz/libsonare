@@ -13,6 +13,7 @@
 #include "midi/builtin_synth.h"
 #include "midi/control_value.h"
 #include "midi/controller_numbers.h"
+#include "midi/synth/channel_mapping.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/gs_efx_bindings.h"
@@ -85,8 +86,7 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
   mod.breath01 = st.cc_position[cc::kBreathController].f7() / 127.0f;
   mod.aftertouch01 = st.channel_pressure.f7() / 127.0f;
   mod.expression01 = st.cc_position[cc::kExpression].f7() / 127.0f;
-  mod.pitch_bend01 =
-      (st.pitch_bend.f14() - static_cast<float>(kBend14Center)) / static_cast<float>(kBend14Center);
+  mod.pitch_bend01 = bend_bipolar(st.pitch_bend);
   // Where each controller source presently sits, in the block's own order. The
   // bend and polyphonic aftertouch have no position here and stay at rest, so
   // the sum below is over six terms and four of them can move.
@@ -143,7 +143,7 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
   // Not clamped, unlike the two above it: a filter swing has no end of its own
   // to pass, and the cutoff it lands on is bounded where every other cutoff is.
   mod.lfo_cutoff_cents = tvf_lfo_cents;
-  mod.pan_units = (st.pan.f7() - 64.0f) / 63.0f * 500.0f;
+  mod.pan_units = cc_pan_units(st.pan.f7());
   mod.reverb_send = kCcSendDepth * static_cast<float>(st.reverb_send) / 127.0f;
   mod.chorus_send = kCcSendDepth * static_cast<float>(st.chorus_send) / 127.0f;
   mod.delay_send = kCcSendDepth * static_cast<float>(st.delay_send) / 127.0f;

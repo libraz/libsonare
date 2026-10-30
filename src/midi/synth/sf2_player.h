@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -136,6 +137,19 @@ struct Sf2PlayerConfig {
   GsEffectsConfig effects;
 #endif
 };
+
+/// Whether @p snapshot feeds @p unit with an EFX of @p type.
+inline bool snapshot_unit_matches(const PartFxSnapshot* snapshot, size_t unit,
+                                  uint16_t type) noexcept {
+  return snapshot != nullptr && snapshot->unit_fed[unit] &&
+         snapshot->gs_efx_state[unit].type == type;
+}
+
+/// The key an absolute pitch (attribute 7.9 or Pitch 7.25) selects a zone or drum piece by.
+inline uint8_t absolute_pitch_key(uint8_t note, const ComposedPitch& pitch) noexcept {
+  return static_cast<uint8_t>(std::clamp(
+      static_cast<int>(std::floor(static_cast<double>(note) + pitch.per_note_semitones)), 0, 127));
+}
 
 class Sf2Player final : public MidiInstrument, private PartFxHost {
  public:
@@ -617,6 +631,11 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
                      uint16_t attribute_data) const noexcept;
   /// The per-note share of @p state's pitch (§7.4.15).
   ComposedPitch compose_per_note(const Sf2PerNoteVoice& state) const noexcept;
+  /// Binds @p state to the struck note, composes its pitch and records the GS tuning terms the
+  /// part adds, which an absolute pitch removes.
+  ComposedPitch bind_note_pitch(Sf2PerNoteVoice& state, const ChannelState& part, uint8_t channel,
+                                uint8_t note, uint8_t attribute_type,
+                                uint16_t attribute_data) const noexcept;
   /// Recomputes the pitch offset @p state carries from its binding and attribute.
   void refresh_per_note_pitch(Sf2PerNoteVoice& state) const noexcept;
   /// Re-evaluates every sounding voice on (channel, note), or on the whole channel when
@@ -974,6 +993,11 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   /// rebuilt under a new realisation or row set, and publish @p reserved behind
   /// every direct write already queued.
   void restart_prepared_runtime(DirectGsNode* reserved) noexcept;
+  /// CONTROL thread: runs @p set (which changes the realisation or row set), rebuilds the
+  /// published units, and restarts the prepared runtime. A throwing rebuild runs @p undo, restores
+  /// the mirror and drops the reserved restart node before rethrowing.
+  template <typename Set, typename Undo>
+  void rebuild_gs_efx_with(Set&& set, Undo&& undo);
   /// AUDIO thread: drop every prepared node and adopt @p domain. The scheduled
   /// raw GS state is kept; a unit whose rebuilt snapshot has the same type
   /// takes it, any other renders empty.

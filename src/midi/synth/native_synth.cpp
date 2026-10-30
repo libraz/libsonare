@@ -6,6 +6,7 @@
 #include "midi/builtin_synth.h"
 #include "midi/controller_numbers.h"
 #include "midi/synth/articulation.h"
+#include "midi/synth/channel_mapping.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/mix_dc_blocker.h"
@@ -17,6 +18,7 @@
 
 namespace sonare::midi::synth {
 
+using sonare::constants::kCentsPerSemitone;
 using sonare::constants::kDefaultDawSampleRate;
 
 namespace {
@@ -35,8 +37,10 @@ constexpr uint8_t kAttributePitch79 = 0x03;
 /// Registered Per-Note Controller #3 is Pitch 7.25 (M2-104-UM §7.4.12).
 constexpr uint8_t kRpncPitch725 = 3;
 
+using native_synth_detail::bus_drive_gain;
 using native_synth_detail::excitation_axis_mask;
 using native_synth_detail::excitation_value;
+using native_synth_detail::store_excitation_value;
 
 }  // namespace
 
@@ -47,9 +51,11 @@ using native_synth_detail::excitation_value;
 NativeSynth::NativeSynth(const NativeSynthConfig& config) : config_(config) {
   config_.patch = clamp_synth_patch(config_.patch);
   // An explicit 0 is silence; only a negative or non-finite gain is not a level.
-  if (config_.gain < 0.0f || !std::isfinite(config_.gain)) config_.gain = 0.5f;
-  config_.gain = std::min(config_.gain, 4.0f);
-  config_.polyphony = config_.polyphony > 0 ? std::min(config_.polyphony, kMaxSynthVoices) : 16;
+  if (config_.gain < 0.0f || !std::isfinite(config_.gain))
+    config_.gain = native_synth_detail::kDefaultGain;
+  config_.gain = std::min(config_.gain, native_synth_detail::kMaxGain);
+  config_.polyphony = config_.polyphony > 0 ? std::min(config_.polyphony, kMaxSynthVoices)
+                                            : native_synth_detail::kDefaultPolyphony;
   config_.bus_drive =
       std::isfinite(config_.bus_drive) ? std::clamp(config_.bus_drive, 0.0f, 1.0f) : 0.0f;
   // The stage owns the factory and the bank-rig switch from here on. The GS
@@ -165,45 +171,27 @@ EnvelopeTimeScales NativeSynth::gs_tail_scales() const noexcept {
 
 void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
-  residual_splitter_.configure(sample_rate_, kResidualTauSeconds);
-  residual_splitter_.reset();
-  piano_residual_splitter_.configure(sample_rate_, kResidualTauSeconds);
-  piano_residual_splitter_.reset();
-  guitar_residual_splitter_.configure(sample_rate_, kResidualTauSeconds);
-  guitar_residual_splitter_.reset();
-  for (SourceResidualSplitter& s : part_bus_splitters_) {
+  const auto configure_splitter = [this](SourceResidualSplitter& s) {
     s.configure(sample_rate_, kResidualTauSeconds);
     s.reset();
-  }
-  for (SourceResidualSplitter& s : unit_splitters_) {
-    s.configure(sample_rate_, kResidualTauSeconds);
-    s.reset();
-  }
-  for (SourceResidualSplitter& s : part_piano_splitters_) {
-    s.configure(sample_rate_, kResidualTauSeconds);
-    s.reset();
-  }
-  for (SourceResidualSplitter& s : part_organ_splitters_) {
-    s.configure(sample_rate_, kResidualTauSeconds);
-    s.reset();
-  }
-  for (SourceResidualSplitter& s : part_guitar_splitters_) {
-    s.configure(sample_rate_, kResidualTauSeconds);
-    s.reset();
-  }
+  };
+  configure_splitter(residual_splitter_);
+  configure_splitter(piano_residual_splitter_);
+  configure_splitter(guitar_residual_splitter_);
+  for (SourceResidualSplitter& s : part_bus_splitters_) configure_splitter(s);
+  for (SourceResidualSplitter& s : unit_splitters_) configure_splitter(s);
+  for (SourceResidualSplitter& s : part_piano_splitters_) configure_splitter(s);
+  for (SourceResidualSplitter& s : part_organ_splitters_) configure_splitter(s);
+  for (SourceResidualSplitter& s : part_guitar_splitters_) configure_splitter(s);
   part_fx_.clear_mirror();
   part_fx_.prepare(sample_rate_);
-  for (PianoResonanceBank& halo : part_halo_) halo.reset();
-  part_halo_armed_.fill(false);
   part_soundboards_.clear();
   part_resonance_.clear();
   if (part_fx_.enabled()) {
     part_soundboards_.resize(16);
     part_resonance_.resize(16);
   }
-  for (PianoSoundboard& board : part_soundboards_) board.reset();
-  for (PianoResonanceBank& bank : part_resonance_) bank.reset();
-  for (PianoPartState& state : part_piano_state_) state = {};
+  reset_part_bodies();
   pool_.prepare(config_.polyphony);
   // One entry per voice bounds the notes one channel can be sounding, and this
   // is the only place the attribution scratch is sized.
@@ -270,12 +258,7 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
     pipe_organ_buffers_.clear();
   }
   // Organ wind and swell arm per part at note-on, since GM programs resolve after prepare().
-  for (OrganWindSupply& wind : part_wind_) wind.reset();
-  for (OrganPartParams& params : organ_part_params_) params = {};
-  part_swell_depth_.fill(0.0f);
-  part_swell_coeff_.fill(1.0f);
-  part_swell_lp_l_.fill(0.0f);
-  part_swell_lp_r_.fill(0.0f);
+  reset_organ_parts();
   // Bowed string: one delay slab per voice slot (two delay-line spans, the neck
   // and bridge). The only allocation site; voices attach their slab at note-on.
   bowed_string_capacity_ = bowed_string_buffer_capacity(sample_rate_);
@@ -342,23 +325,16 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   } else {
     harpsichord_buffers_.clear();
   }
-  channels_ = {};
-  // GM power-on: channel 10 is the rhythm part (no SysEx needed). MPE mode is
-  // off until an MCM turns it on, which is what a power-on default of "no zone
-  // configured" means (2.2.1); the refresh below therefore takes the ordinary
-  // per-channel path.
-  channels_[kDrumChannelIndex].drums = true;
-  mpe_.reset();
-  bus_fed_channels_ = 0;
+  power_on_channels();
   refresh_all_channel_mods();
   tail_patch_count_ = 0;
   tail_patches_full_ = false;
   // Mix-bus polish: ~8 Hz DC blocker pole and the gain-neutral drive factor.
-  dc_r_ = 1.0f - static_cast<float>(constants::kTwoPiD * 8.0 / sample_rate_);
+  dc_r_ = mix_dc_blocker_pole(sample_rate_);
   tail_samples_->store(recompute_tail(), std::memory_order_relaxed);
   dc_x1_ = {};
   dc_y1_ = {};
-  bus_drive_gain_ = config_.bus_drive > 0.0f ? 1.0f + 3.0f * config_.bus_drive : 0.0f;
+  bus_drive_gain_ = bus_drive_gain(config_.bus_drive);
   live_dirty_ = 0;
   prepared_ = true;
   // The rig entries and the bank rigs the parts' power-on programs bind, so a
@@ -386,11 +362,7 @@ void NativeSynth::reset() {
   resonance_.reset();
   soundboard_.reset();
   guitar_halo_.reset();
-  for (PianoResonanceBank& halo : part_halo_) halo.reset();
-  part_halo_armed_.fill(false);
-  for (PianoSoundboard& board : part_soundboards_) board.reset();
-  for (PianoResonanceBank& bank : part_resonance_) bank.reset();
-  for (PianoPartState& state : part_piano_state_) state = {};
+  reset_part_bodies();
   // A GM-mode body was tuned by a note-on, so it goes back to untuned; a
   // configured piano keeps the tuning prepare() gave it.
   piano_body_active_ = piano_mode_;
@@ -399,20 +371,8 @@ void NativeSynth::reset() {
   // configured Karplus-Strong sympathetic patch keeps the arming prepare() gave it.
   guitar_halo_active_ =
       config_.patch.mode == SynthEngineMode::kKarplusStrong && config_.patch.ks.sympathetic;
-  for (OrganWindSupply& wind : part_wind_) wind.reset();
-  for (OrganPartParams& params : organ_part_params_) params = {};
-  part_swell_depth_.fill(0.0f);
-  part_swell_coeff_.fill(1.0f);
-  part_swell_lp_l_.fill(0.0f);
-  part_swell_lp_r_.fill(0.0f);
-  channels_ = {};
-  // GM power-on: channel 10 is the rhythm part (no SysEx needed). MPE mode is
-  // off until an MCM turns it on, which is what a power-on default of "no zone
-  // configured" means (2.2.1); the refresh below therefore takes the ordinary
-  // per-channel path.
-  channels_[kDrumChannelIndex].drums = true;
-  mpe_.reset();
-  bus_fed_channels_ = 0;
+  reset_organ_parts();
+  power_on_channels();
   skipped_events_ = 0;
   per_note_.assign(per_note_.size(), Sf2PerNoteVoice{});
   per_note_pitch_.clear();
@@ -440,18 +400,16 @@ void NativeSynth::refresh_channel_mod(uint8_t channel) noexcept {
   // sections 2.2.5 - 2.2.7). Outside one -- which is every channel until an MCM
   // arrives -- this is the arithmetic that was always here.
   const bool zoned = mpe_.role(ch) != MpeChannelRole::kUnassigned;
-  mod.pitch_cents = zoned ? mpe_.bend_semitones(ch) * 100.0f
-                          : (st.pitch_bend.f14() - static_cast<float>(kBend14Center)) /
-                                static_cast<float>(kBend14Center) * st.bend_range_cents;
+  mod.pitch_cents = zoned ? mpe_.bend_semitones(ch) * kCentsPerSemitone
+                          : bend_bipolar(st.pitch_bend) * st.bend_range_cents;
   mod.gain = sf2_cc_gain(st.volume) * sf2_cc_gain(st.expression);
   mod.mod_wheel01 = st.mod_wheel.f7() / 127.0f;
   mod.extra_vibrato_cents = st.mod_depth_cents * mod.mod_wheel01;
-  mod.pan_units = (st.pan.f7() - 64.0f) / 63.0f * 500.0f;
+  mod.pan_units = cc_pan_units(st.pan.f7());
   mod.breath01 = st.breath.f7() / 127.0f;
   mod.aftertouch01 = (zoned ? mpe_.pressure(ch) : st.pressure.f7()) / 127.0f;
   mod.expression01 = st.expression.f7() / 127.0f;
-  mod.pitch_bend01 =
-      (st.pitch_bend.f14() - static_cast<float>(kBend14Center)) / static_cast<float>(kBend14Center);
+  mod.pitch_bend01 = bend_bipolar(st.pitch_bend);
   // The three axes that land on the channel rather than inside an engine. Each
   // is folded only when a binding has reached it, so a profile that names none
   // leaves this arithmetic untouched rather than multiplying by an identity.
@@ -465,6 +423,34 @@ void NativeSynth::refresh_channel_mod(uint8_t channel) noexcept {
     mod.extra_vibrato_cents += st.axes.values[static_cast<size_t>(ControllerAxis::kVibratoDepth)];
   }
   refresh_mpe_note_mods(ch);
+}
+
+void NativeSynth::reset_part_bodies() noexcept {
+  for (PianoResonanceBank& halo : part_halo_) halo.reset();
+  part_halo_armed_.fill(false);
+  for (PianoSoundboard& board : part_soundboards_) board.reset();
+  for (PianoResonanceBank& bank : part_resonance_) bank.reset();
+  for (PianoPartState& state : part_piano_state_) state = {};
+}
+
+void NativeSynth::reset_organ_parts() noexcept {
+  for (OrganWindSupply& wind : part_wind_) wind.reset();
+  for (OrganPartParams& params : organ_part_params_) params = {};
+  part_swell_depth_.fill(0.0f);
+  part_swell_coeff_.fill(1.0f);
+  part_swell_lp_l_.fill(0.0f);
+  part_swell_lp_r_.fill(0.0f);
+}
+
+void NativeSynth::power_on_channels() noexcept {
+  channels_ = {};
+  // GM power-on: channel 10 is the rhythm part (no SysEx needed). MPE mode is
+  // off until an MCM turns it on, which is what a power-on default of "no zone
+  // configured" means (2.2.1); the refresh that follows therefore takes the
+  // ordinary per-channel path.
+  channels_[kDrumChannelIndex].drums = true;
+  mpe_.reset();
+  bus_fed_channels_ = 0;
 }
 
 void NativeSynth::refresh_all_channel_mods() noexcept {
@@ -764,11 +750,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   voice->live_excitation_axes.reset();
   voice->live_mpe_pressure_axes = kAxisNone;
   voice->live_mpe_timbre_axes = kAxisNone;
-  voice->live_mpe_bend_axes = kAxisNone;
-  voice->mpe_member_pressure = Control32::from_raw(0);
-  voice->mpe_member_timbre = Control32::from_raw(0);
-  voice->mpe_member_pressure_present = false;
-  voice->mpe_member_timbre_present = false;
+  voice->clear_mpe_member();
   per_note_[voice_index] = per_note;
   // Seed the engine's excitation axes at the channel's current controllers (no
   // glide on the first sample) so a note struck mid-phrase starts at the live
@@ -781,10 +763,6 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
       const ControllerAxis axis = static_cast<ControllerAxis>(i);
       if (excitation_axis_mask(axis) == kAxisNone || !st.axes.has(axis)) continue;
       voice->live_excitation_axes.set(axis, st.axes.values[i]);
-    }
-    for (size_t i = 0; i < kControllerAxisCount; ++i) {
-      const ControllerAxis axis = static_cast<ControllerAxis>(i);
-      if (excitation_axis_mask(axis) == kAxisNone || !st.axes.has(axis)) continue;
       const uint32_t axis_bit = 1u << static_cast<uint32_t>(i);
       if ((st.mpe_pressure_axes & axis_bit) != 0u) {
         voice->live_mpe_pressure_axes |= axis_bit;
@@ -803,17 +781,11 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
           mpe_.own_control(ch, MpeDimension::kTimbre, &voice->mpe_member_timbre);
     }
     if (velocity_excitation_mask != kAxisNone) {
-      if ((velocity_excitation_mask & kAxisForce) != 0u) {
-        base.force = velocity_excitation.force;
-      }
-      if ((velocity_excitation_mask & kAxisPosition) != 0u) {
-        base.position = velocity_excitation.position;
-      }
-      if ((velocity_excitation_mask & kAxisBrightness) != 0u) {
-        base.brightness = velocity_excitation.brightness;
-      }
-      if ((velocity_excitation_mask & kAxisMorph) != 0u) {
-        base.morph = velocity_excitation.morph;
+      for (const ControllerAxis axis : {ControllerAxis::kExcitation, ControllerAxis::kPosition,
+                                        ControllerAxis::kBrightness, ControllerAxis::kMorph}) {
+        if ((velocity_excitation_mask & excitation_axis_mask(axis)) != 0u) {
+          store_excitation_value(base, axis, excitation_value(velocity_excitation, axis));
+        }
       }
       present |= velocity_excitation_mask;
       record_velocity_axes(*voice, velocity_excitation, velocity_excitation_mask);
@@ -879,27 +851,23 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
     }
     part_swell_depth_[ch] = patch->pipe_organ.swell;
   }
-  // Bus-level open-string halo, the same lazy-arming rule as the piano body
-  // above but for a Karplus-Strong voice that asks for it. Guarded so an
+  // Bus-level open-string halo, armed lazily like the piano body above. Guarded so an
   // already-armed bank (configured, or armed by an earlier note-on) is never
-  // re-prepared, which would clear its ringing state.
-  if (patch->mode == SynthEngineMode::kKarplusStrong && patch->ks.sympathetic &&
-      !part_fx_.enabled() && !guitar_halo_active_) {
-    guitar_halo_.prepare_guitar_sympathetic(sample_rate_);
-    guitar_halo_active_ = true;
-  }
-  // The part's own halo too, which the render drives in place of the shared
-  // one whenever the part is bussed.
-  if (patch->mode == SynthEngineMode::kKarplusStrong && patch->ks.sympathetic &&
-      part_fx_.enabled() && !part_halo_armed_[ch]) {
-    part_halo_[ch].prepare_guitar_sympathetic(sample_rate_);
-    part_halo_armed_[ch] = true;
-  }
-  // A bank outlives any one patch, so every halo note restates how a hand damps it.
+  // re-prepared, which would clear its ringing state. A bussed part drives its own halo
+  // in place of the shared one.
   if (patch->mode == SynthEngineMode::kKarplusStrong && patch->ks.sympathetic) {
     if (part_fx_.enabled()) {
+      if (!part_halo_armed_[ch]) {
+        part_halo_[ch].prepare_guitar_sympathetic(sample_rate_);
+        part_halo_armed_[ch] = true;
+      }
+      // A bank outlives any one patch, so every halo note restates how a hand damps it.
       part_halo_[ch].set_hand_damping(patch->ks.halo_damp_s);
     } else {
+      if (!guitar_halo_active_) {
+        guitar_halo_.prepare_guitar_sympathetic(sample_rate_);
+        guitar_halo_active_ = true;
+      }
       guitar_halo_.set_hand_damping(patch->ks.halo_damp_s);
     }
   }

@@ -5,11 +5,45 @@
 #include <array>
 #include <cmath>
 
+#include "midi/synth/mix_dc_blocker.h"
 #include "midi/synth/native_synth.h"
 #include "util/constants.h"
 #include "util/non_finite_sample.h"
 
 namespace sonare::midi::synth {
+
+namespace {
+
+/// Organ swell box low-pass corner: fully shut, fully open, and the level above which the box
+/// is treated as open.
+constexpr float kSwellShutHz = 300.0f;
+constexpr float kSwellOpenHz = 20000.0f;
+constexpr float kSwellOpenThresholdHz = 19000.0f;
+
+/// Adds a bussed voice's pre-rig legs: the common mono leg for a mono rig, else its stereo legs.
+void add_pre_rig_legs(float& out_l, float& out_r, bool mono_rig, float s, float bus_l,
+                      float bus_r) noexcept {
+  if (mono_rig) {
+    const float raw = constants::kInvSqrt2 * s;
+    out_l += raw;
+    out_r += raw;
+  } else {
+    out_l += bus_l;
+    out_r += bus_r;
+  }
+}
+
+/// Sends one sample into a part bus as the mono value or the stereo pair, per the rig's prefix.
+void send_to_part_bus(PartFxStage& part_fx, int part, int c, bool mono_rig, float mono, float l,
+                      float r) noexcept {
+  if (mono_rig) {
+    part_fx.add_mono(part, c, mono);
+  } else {
+    part_fx.add_stereo(part, c, l, r);
+  }
+}
+
+}  // namespace
 
 void NativeSynth::process(float* const* channels, int num_channels, int num_samples) {
   process_impl(channels, nullptr, 0, num_channels, num_samples);
@@ -63,6 +97,14 @@ void NativeSynth::process_impl(float* const* channels,
   float* left = source_render ? nullptr : channels[0];
   float* right = !source_render && num_channels > 1 ? channels[1] : nullptr;
   const bool mono = right == nullptr;
+  const auto clear_part_chunk = [this](size_t part, size_t at) noexcept {
+    chunk_part_piano_l_[part][at] = 0.0f;
+    chunk_part_piano_r_[part][at] = 0.0f;
+    chunk_part_organ_l_[part][at] = 0.0f;
+    chunk_part_organ_r_[part][at] = 0.0f;
+    chunk_part_guitar_l_[part][at] = 0.0f;
+    chunk_part_guitar_r_[part][at] = 0.0f;
+  };
 
   const auto target_for = [&](uint32_t source_track_id) noexcept -> float* const* {
     if (source_render) {
@@ -133,9 +175,10 @@ void NativeSynth::process_impl(float* const* channels,
     }
     const float expression = channels_[part].expression.f7();
     const float shut = (1.0f - expression / 127.0f) * depth;
-    const float fc = std::exp(std::log(20000.0f) + shut * (std::log(300.0f) - std::log(20000.0f)));
+    const float fc =
+        std::exp(std::log(kSwellOpenHz) + shut * (std::log(kSwellShutHz) - std::log(kSwellOpenHz)));
     // Above ~19 kHz the shutter is effectively open.
-    if (fc < 19000.0f) {
+    if (fc < kSwellOpenThresholdHz) {
       part_swell_active[part] = true;
       part_swell_coeff_[part] = std::clamp(
           1.0f - std::exp(-constants::kTwoPi * fc / static_cast<float>(sample_rate_)), 0.0f, 1.0f);
@@ -211,14 +254,7 @@ void NativeSynth::process_impl(float* const* channels,
       // halo is additive to the dry KS voice rather than replacing it.
       float guitar_l = 0.0f;
       float guitar_r = 0.0f;
-      for (size_t part = 0; part < 16; ++part) {
-        chunk_part_piano_l_[part][static_cast<size_t>(c)] = 0.0f;
-        chunk_part_piano_r_[part][static_cast<size_t>(c)] = 0.0f;
-        chunk_part_organ_l_[part][static_cast<size_t>(c)] = 0.0f;
-        chunk_part_organ_r_[part][static_cast<size_t>(c)] = 0.0f;
-        chunk_part_guitar_l_[part][static_cast<size_t>(c)] = 0.0f;
-        chunk_part_guitar_r_[part][static_cast<size_t>(c)] = 0.0f;
-      }
+      for (size_t part = 0; part < 16; ++part) clear_part_chunk(part, static_cast<size_t>(c));
       for (NativeSynthVoice& v : pool_) {
         if (!v.active) continue;
         // The channel's, except on a member channel sounding more than one note,
@@ -226,10 +262,10 @@ void NativeSynth::process_impl(float* const* channels,
         // attributed (M1-100-UM v1.1 section 2.2.4.1).
         const Sf2ChannelMod& channel_mod =
             v.mpe_mod_active ? v.mpe_mod : channel_mods_[v.channel & 0x0Fu];
-        const size_t part_index = static_cast<size_t>(v.channel & 0x0Fu);
+        const int part = v.channel & 0x0F;
         const bool organ_voice = v.patch != nullptr && v.patch->mode == SynthEngineMode::kPipeOrgan;
         const OrganWindSupply::State& voice_wind =
-            organ_voice ? wind_state[part_index] : unity_wind;
+            organ_voice ? wind_state[static_cast<size_t>(part)] : unity_wind;
         // A key carrying per-note pitch renders through a copy of that mod with its offset
         // added; every other voice reads the mod itself.
         const float per_note_offset = per_note_[static_cast<size_t>(&v - pool_.data())].cents;
@@ -246,7 +282,6 @@ void NativeSynth::process_impl(float* const* channels,
         const bool halo_voice = v.patch != nullptr &&
                                 v.patch->mode == SynthEngineMode::kKarplusStrong &&
                                 v.patch->ks.sympathetic;
-        const int part = v.channel & 0x0F;
         if (any_bussed && fx->part_bussed[static_cast<size_t>(part)]) {
           // The rig's processors are recursive state a non-finite sample would poison.
           discarded |= resolve_non_finite(SampleDestination::kRecursiveState, s);
@@ -257,44 +292,27 @@ void NativeSynth::process_impl(float* const* channels,
           if (organ_voice) {
             // Organ swell is a part stage before the rig, so retain its stereo
             // legs until the per-part filter pass below.
-            if (mono_rig) {
-              const float raw = constants::kInvSqrt2 * s;
-              chunk_part_organ_l_[static_cast<size_t>(part)][static_cast<size_t>(c)] += raw;
-              chunk_part_organ_r_[static_cast<size_t>(part)][static_cast<size_t>(c)] += raw;
-            } else {
-              chunk_part_organ_l_[static_cast<size_t>(part)][static_cast<size_t>(c)] += bus_l;
-              chunk_part_organ_r_[static_cast<size_t>(part)][static_cast<size_t>(c)] += bus_r;
-            }
+            add_pre_rig_legs(chunk_part_organ_l_[static_cast<size_t>(part)][static_cast<size_t>(c)],
+                             chunk_part_organ_r_[static_cast<size_t>(part)][static_cast<size_t>(c)],
+                             mono_rig, s, bus_l, bus_r);
           } else if (part_fx_.enabled() && piano_voice) {
             // Factory-backed piano bodies are also part stages. A mono pickup
             // feeds the board with the same common leg the rig receives.
-            const float raw = constants::kInvSqrt2 * s;
-            if (mono_rig) {
-              chunk_part_piano_l_[static_cast<size_t>(part)][static_cast<size_t>(c)] += raw;
-              chunk_part_piano_r_[static_cast<size_t>(part)][static_cast<size_t>(c)] += raw;
-            } else {
-              chunk_part_piano_l_[static_cast<size_t>(part)][static_cast<size_t>(c)] += bus_l;
-              chunk_part_piano_r_[static_cast<size_t>(part)][static_cast<size_t>(c)] += bus_r;
-            }
+            add_pre_rig_legs(chunk_part_piano_l_[static_cast<size_t>(part)][static_cast<size_t>(c)],
+                             chunk_part_piano_r_[static_cast<size_t>(part)][static_cast<size_t>(c)],
+                             mono_rig, s, bus_l, bus_r);
           } else if (part_fx_.enabled() && halo_voice &&
                      part_halo_armed_[static_cast<size_t>(part)]) {
-            if (mono_rig) {
-              const float raw = constants::kInvSqrt2 * s;
-              chunk_part_guitar_l_[static_cast<size_t>(part)][static_cast<size_t>(c)] += raw;
-              chunk_part_guitar_r_[static_cast<size_t>(part)][static_cast<size_t>(c)] += raw;
-            } else {
-              chunk_part_guitar_l_[static_cast<size_t>(part)][static_cast<size_t>(c)] += bus_l;
-              chunk_part_guitar_r_[static_cast<size_t>(part)][static_cast<size_t>(c)] += bus_r;
-            }
+            add_pre_rig_legs(
+                chunk_part_guitar_l_[static_cast<size_t>(part)][static_cast<size_t>(c)],
+                chunk_part_guitar_r_[static_cast<size_t>(part)][static_cast<size_t>(c)], mono_rig,
+                s, bus_l, bus_r);
           } else {
             // Remaining voices feed the part bus directly (pianos at their direct gain).
             const float direct = piano_voice ? kPianoDirectGain : 1.0f;
-            if (mono_rig) {
-              // A mono pickup feeds the rig's amp, so CC10 cannot move its drive.
-              part_fx_.add_mono(part, c, direct * constants::kInvSqrt2 * s);
-            } else {
-              part_fx_.add_stereo(part, c, direct * bus_l, direct * bus_r);
-            }
+            // A mono pickup feeds the rig's amp, so CC10 cannot move its drive.
+            send_to_part_bus(part_fx_, part, c, mono_rig, direct * constants::kInvSqrt2 * s,
+                             direct * bus_l, direct * bus_r);
             if (halo_voice && part_halo_armed_[static_cast<size_t>(part)]) {
               // Without per-part FX the halo leg is driven from the bussed dry signal.
               if (any_bussed) {
@@ -344,20 +362,21 @@ void NativeSynth::process_impl(float* const* channels,
           // pre-rig swell residual is added and attributed per part below.
           mix_l += voice_l;
           mix_r += voice_r;
-          chunk_part_organ_l_[static_cast<size_t>(part_index)][static_cast<size_t>(c)] += voice_l;
-          chunk_part_organ_r_[static_cast<size_t>(part_index)][static_cast<size_t>(c)] += voice_r;
+          chunk_part_organ_l_[static_cast<size_t>(part)][static_cast<size_t>(c)] += voice_l;
+          chunk_part_organ_r_[static_cast<size_t>(part)][static_cast<size_t>(c)] += voice_r;
         } else if (part_fx_.enabled() && piano_voice) {
           // Keep the raw string contribution in the per-part stage. The full
           // body return is added below in one operation, matching the legacy
           // unbussed piano arithmetic while still giving a bussed part a
           // complete pre-rig return.
-          chunk_part_piano_l_[static_cast<size_t>(part_index)][static_cast<size_t>(c)] += voice_l;
-          chunk_part_piano_r_[static_cast<size_t>(part_index)][static_cast<size_t>(c)] += voice_r;
-        } else if (part_fx_.enabled() && halo_voice && part_halo_armed_[part_index]) {
+          chunk_part_piano_l_[static_cast<size_t>(part)][static_cast<size_t>(c)] += voice_l;
+          chunk_part_piano_r_[static_cast<size_t>(part)][static_cast<size_t>(c)] += voice_r;
+        } else if (part_fx_.enabled() && halo_voice &&
+                   part_halo_armed_[static_cast<size_t>(part)]) {
           mix_l += voice_l;
           mix_r += voice_r;
-          chunk_part_guitar_l_[part_index][static_cast<size_t>(c)] += voice_l;
-          chunk_part_guitar_r_[part_index][static_cast<size_t>(c)] += voice_r;
+          chunk_part_guitar_l_[static_cast<size_t>(part)][static_cast<size_t>(c)] += voice_l;
+          chunk_part_guitar_r_[static_cast<size_t>(part)][static_cast<size_t>(c)] += voice_r;
         } else if (piano_voice) {
           piano_l += voice_l;
           piano_r += voice_r;
@@ -383,13 +402,16 @@ void NativeSynth::process_impl(float* const* channels,
             guitar_residual_splitter_.accumulate(v.source_track_id, src_l, src_r);
           }
           if (part_fx_.enabled() && piano_voice) {
-            part_piano_splitters_[part_index].accumulate(v.source_track_id, src_l, src_r);
+            part_piano_splitters_[static_cast<size_t>(part)].accumulate(v.source_track_id, src_l,
+                                                                        src_r);
           }
           if (organ_voice) {
-            part_organ_splitters_[part_index].accumulate(v.source_track_id, src_l, src_r);
+            part_organ_splitters_[static_cast<size_t>(part)].accumulate(v.source_track_id, src_l,
+                                                                        src_r);
           }
-          if (part_fx_.enabled() && halo_voice && part_halo_armed_[part_index]) {
-            part_guitar_splitters_[part_index].accumulate(v.source_track_id, src_l, src_r);
+          if (part_fx_.enabled() && halo_voice && part_halo_armed_[static_cast<size_t>(part)]) {
+            part_guitar_splitters_[static_cast<size_t>(part)].accumulate(v.source_track_id, src_l,
+                                                                         src_r);
           }
         }
       }
@@ -425,11 +447,8 @@ void NativeSynth::process_impl(float* const* channels,
         chunk_part_organ_l_[part][static_cast<size_t>(c)] = organ_res_l;
         chunk_part_organ_r_[part][static_cast<size_t>(c)] = organ_res_r;
         if (bussed_part) {
-          if (fx->mono_prefix[part] != 0) {
-            part_fx_.add_mono(static_cast<int>(part), c, 0.5f * (organ_out_l + organ_out_r));
-          } else {
-            part_fx_.add_stereo(static_cast<int>(part), c, organ_out_l, organ_out_r);
-          }
+          send_to_part_bus(part_fx_, static_cast<int>(part), c, fx->mono_prefix[part] != 0,
+                           0.5f * (organ_out_l + organ_out_r), organ_out_l, organ_out_r);
         } else {
           mix_l += organ_res_l;
           mix_r += organ_res_r;
@@ -450,11 +469,8 @@ void NativeSynth::process_impl(float* const* channels,
           chunk_part_piano_l_[part][static_cast<size_t>(c)] = piano_res_l;
           chunk_part_piano_r_[part][static_cast<size_t>(c)] = piano_res_r;
           if (bussed_part) {
-            if (fx->mono_prefix[part] != 0) {
-              part_fx_.add_mono(static_cast<int>(part), c, 0.5f * (piano_out_l + piano_out_r));
-            } else {
-              part_fx_.add_stereo(static_cast<int>(part), c, piano_out_l, piano_out_r);
-            }
+            send_to_part_bus(part_fx_, static_cast<int>(part), c, fx->mono_prefix[part] != 0,
+                             0.5f * (piano_out_l + piano_out_r), piano_out_l, piano_out_r);
           } else {
             mix_l += piano_out_l;
             mix_r += piano_out_r;
@@ -470,13 +486,9 @@ void NativeSynth::process_impl(float* const* channels,
           chunk_part_guitar_l_[part][static_cast<size_t>(c)] = halo;
           chunk_part_guitar_r_[part][static_cast<size_t>(c)] = halo;
           if (bussed_part) {
-            if (fx->mono_prefix[part] != 0) {
-              part_fx_.add_mono(static_cast<int>(part), c,
-                                0.5f * (guitar_raw_l + guitar_raw_r) + halo);
-            } else {
-              part_fx_.add_stereo(static_cast<int>(part), c, guitar_raw_l + halo,
-                                  guitar_raw_r + halo);
-            }
+            send_to_part_bus(part_fx_, static_cast<int>(part), c, fx->mono_prefix[part] != 0,
+                             0.5f * (guitar_raw_l + guitar_raw_r) + halo, guitar_raw_l + halo,
+                             guitar_raw_r + halo);
           } else {
             mix_l += halo;
             mix_r += halo;
@@ -603,12 +615,7 @@ void NativeSynth::process_impl(float* const* channels,
       float part_guitar_res_r = 0.0f;
       for (size_t part = 0; part < 16; ++part) {
         if (any_bussed && fx->part_bussed[part]) {
-          chunk_part_piano_l_[part][at] = 0.0f;
-          chunk_part_piano_r_[part][at] = 0.0f;
-          chunk_part_organ_l_[part][at] = 0.0f;
-          chunk_part_organ_r_[part][at] = 0.0f;
-          chunk_part_guitar_l_[part][at] = 0.0f;
-          chunk_part_guitar_r_[part][at] = 0.0f;
+          clear_part_chunk(part, at);
           continue;
         }
         const float piano_component_l = chunk_part_piano_l_[part][at] * config_.gain;
@@ -697,14 +704,8 @@ void NativeSynth::process_impl(float* const* channels,
       discarded |= resolve_non_finite(SampleDestination::kRecursiveState, mix_l);
       discarded |= resolve_non_finite(SampleDestination::kRecursiveState, mix_r);
       if (config_.dc_block) {
-        const float l = mix_l - dc_x1_[0] + dc_r_ * dc_y1_[0];
-        dc_x1_[0] = mix_l;
-        dc_y1_[0] = l;
-        mix_l = l;
-        const float r = mix_r - dc_x1_[1] + dc_r_ * dc_y1_[1];
-        dc_x1_[1] = mix_r;
-        dc_y1_[1] = r;
-        mix_r = r;
+        mix_l = mix_dc_blocker_step(mix_l, dc_r_, dc_x1_[0], dc_y1_[0]);
+        mix_r = mix_dc_blocker_step(mix_r, dc_r_, dc_x1_[1], dc_y1_[1]);
       }
       if (source_render) {
         // Shared bodies, bus drive and DC filtering are destination-scoped; their

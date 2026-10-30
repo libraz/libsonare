@@ -11,6 +11,7 @@
 #include "midi/channel_voice_decode.h"
 #include "midi/controller_numbers.h"
 #include "midi/per_note_state.h"
+#include "midi/synth/channel_mapping.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_layer.h"
 #include "midi/synth/pitch.h"
@@ -24,6 +25,12 @@ namespace {
 
 using ::sonare::constants::kSemitonesPerOctave;
 
+/// Points @p span at its per-voice slice of @p buffers; an engine with no buffer stays unattached.
+template <typename Span>
+void attach_slab(Span& span, std::vector<float>& buffers, size_t offset, int capacity) noexcept {
+  if (!buffers.empty()) span.attach(buffers.data() + offset, capacity);
+}
+
 }  // namespace
 
 void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
@@ -35,11 +42,8 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 veloc
   const bool is_drum = bank == kDrumBank;
   // Compose first: an absolute MIDI 2.0 pitch picks the key the physical model starts from.
   Sf2PerNoteVoice per_note;
-  bind_per_note(per_note, channel, note, attribute_type, attribute_data);
-  const ComposedPitch note_pitch = compose_per_note(per_note);
-  per_note.gs_tuning_cents = gs_scale_tuning_cents(ch.scale_tuning, note) +
-                             gs_pitch_offset_fine_cents(ch.pitch_offset_fine, note);
-  per_note.baked_gs_tuning_cents = note_pitch.absolute ? 0.0f : per_note.gs_tuning_cents;
+  const ComposedPitch note_pitch =
+      bind_note_pitch(per_note, ch, channel, note, attribute_type, attribute_data);
   // The per-note GS edits, read before the patch: PLAY NOTE NUMBER picks which
   // kit piece answers and ASSIGN GROUP which group it belongs to, and both are
   // needed before the choke below, let alone the voice.
@@ -51,9 +55,7 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 veloc
   if ((gd.flags & GsDrumNoteParams::kPlayNote) != 0) sound_note = gd.play_note;
   // An absolute pitch overrides PLAY NOTE NUMBER / user-set substitution.
   if (note_pitch.absolute) {
-    sound_note = static_cast<uint8_t>(std::clamp(
-        static_cast<int>(std::floor(static_cast<double>(note) + note_pitch.per_note_semitones)), 0,
-        127));
+    sound_note = absolute_pitch_key(note, note_pitch);
     per_note.zone_key = sound_note;
   }
   per_note.cents = per_note_cents(per_note, note_pitch);
@@ -76,63 +78,32 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 veloc
   if (voice == nullptr) return;
   const uint32_t voice_index = static_cast<uint32_t>(voice - fallback_pool_.data());
   // KS patches get their delay span before start() (pointer wiring only).
-  if (!fallback_ks_buffers_.empty()) {
-    voice->ks.attach(
-        fallback_ks_buffers_.data() + static_cast<size_t>(voice_index) * 3 * fallback_ks_capacity_,
-        fallback_ks_capacity_);
-  }
-  if (!fallback_piano_buffers_.empty()) {
-    voice->piano.attach(fallback_piano_buffers_.data() + static_cast<size_t>(voice_index) *
-                                                             kMaxPianoStrings *
-                                                             fallback_piano_string_capacity_,
-                        fallback_piano_string_capacity_);
-  }
-  if (!fallback_pipe_organ_buffers_.empty()) {
-    // Each rank holds TWO spans (bore + jet), so the per-voice stride is
-    // 2 * kMaxPipeRanks spans; without the 2, adjacent voices' slabs overlap
-    // and simultaneous (legato) organ voices corrupt each other's bores.
-    voice->pipe_organ.attach(
-        fallback_pipe_organ_buffers_.data() +
-            static_cast<size_t>(voice_index) * 2 * kMaxPipeRanks * fallback_pipe_organ_capacity_,
-        fallback_pipe_organ_capacity_);
-  }
-  if (!fallback_bowed_buffers_.empty()) {
-    voice->bowed_string.attach(fallback_bowed_buffers_.data() + static_cast<size_t>(voice_index) *
-                                                                    kBowedSlabSpans *
-                                                                    fallback_bowed_capacity_,
-                               fallback_bowed_capacity_);
-  }
-  if (!fallback_vocal_buffers_.empty()) {
-    voice->vocal.attach(fallback_vocal_buffers_.data() +
-                            static_cast<size_t>(voice_index) * fallback_vocal_capacity_,
-                        fallback_vocal_capacity_);
-  }
-  if (!fallback_reed_buffers_.empty()) {
-    voice->reed.attach(
-        fallback_reed_buffers_.data() + static_cast<size_t>(voice_index) * fallback_reed_capacity_,
-        fallback_reed_capacity_);
-  }
-  if (!fallback_brass_buffers_.empty()) {
-    voice->brass.attach(fallback_brass_buffers_.data() +
-                            static_cast<size_t>(voice_index) * fallback_brass_capacity_,
-                        fallback_brass_capacity_);
-  }
-  if (!fallback_flute_buffers_.empty()) {
-    voice->flute.attach(fallback_flute_buffers_.data() +
-                            static_cast<size_t>(voice_index) * 2 * fallback_flute_capacity_,
-                        fallback_flute_capacity_);
-  }
-  if (!fallback_plucked_string_buffers_.empty()) {
-    voice->plucked_string.attach(
-        fallback_plucked_string_buffers_.data() +
-            static_cast<size_t>(voice_index) * fallback_plucked_string_capacity_,
-        fallback_plucked_string_capacity_);
-  }
-  if (!fallback_harpsichord_buffers_.empty()) {
-    voice->harpsichord.attach(fallback_harpsichord_buffers_.data() +
-                                  static_cast<size_t>(voice_index) * fallback_harpsichord_stride_,
-                              fallback_harpsichord_capacity_);
-  }
+  const size_t slot = static_cast<size_t>(voice_index);
+  attach_slab(voice->ks, fallback_ks_buffers_, slot * 3 * fallback_ks_capacity_,
+              fallback_ks_capacity_);
+  attach_slab(voice->piano, fallback_piano_buffers_,
+              slot * kMaxPianoStrings * fallback_piano_string_capacity_,
+              fallback_piano_string_capacity_);
+  // Each rank holds TWO spans (bore + jet), so the per-voice stride is
+  // 2 * kMaxPipeRanks spans; without the 2, adjacent voices' slabs overlap
+  // and simultaneous (legato) organ voices corrupt each other's bores.
+  attach_slab(voice->pipe_organ, fallback_pipe_organ_buffers_,
+              slot * 2 * kMaxPipeRanks * fallback_pipe_organ_capacity_,
+              fallback_pipe_organ_capacity_);
+  attach_slab(voice->bowed_string, fallback_bowed_buffers_,
+              slot * kBowedSlabSpans * fallback_bowed_capacity_, fallback_bowed_capacity_);
+  attach_slab(voice->vocal, fallback_vocal_buffers_, slot * fallback_vocal_capacity_,
+              fallback_vocal_capacity_);
+  attach_slab(voice->reed, fallback_reed_buffers_, slot * fallback_reed_capacity_,
+              fallback_reed_capacity_);
+  attach_slab(voice->brass, fallback_brass_buffers_, slot * fallback_brass_capacity_,
+              fallback_brass_capacity_);
+  attach_slab(voice->flute, fallback_flute_buffers_, slot * 2 * fallback_flute_capacity_,
+              fallback_flute_capacity_);
+  attach_slab(voice->plucked_string, fallback_plucked_string_buffers_,
+              slot * fallback_plucked_string_capacity_, fallback_plucked_string_capacity_);
+  attach_slab(voice->harpsichord, fallback_harpsichord_buffers_,
+              slot * fallback_harpsichord_stride_, fallback_harpsichord_capacity_);
   // GS drum-kit variation: the drum channel's program picks the kit (Room /
   // Power / TR-808 / ...); melodic fallback voices pass 0 (no kit).
   // A user drum set names the kit per note, so the program that picks the
@@ -152,7 +123,7 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 veloc
       drum_mod.level_gain = v * v;  // same square law as CC7 / velocity
     }
     if ((gd.flags & GsDrumNoteParams::kPan) != 0) {
-      drum_mod.pan_units = (static_cast<float>(gd.pan & 0x7Fu) - 64.0f) / 63.0f * 500.0f;
+      drum_mod.pan_units = cc_pan_units(static_cast<float>(gd.pan & 0x7Fu));
     }
     if ((gd.flags & GsDrumNoteParams::kReverb) != 0) {
       drum_mod.reverb_scale = static_cast<float>(gd.reverb & 0x7Fu) / 127.0f;

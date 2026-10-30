@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "midi/controller_numbers.h"
+#include "midi/synth/channel_mapping.h"
 #include "midi/synth/mod_matrix.h"
 #include "midi/synth/sf2_voice.h"
 #include "midi/ump.h"
@@ -250,8 +251,7 @@ void BuiltinSynth::pitch_bend(uint8_t channel, Bend32 bend) noexcept {
   if (!prepared_) return;
   const uint8_t ch = static_cast<uint8_t>(channel & 0x0Fu);
   // 14-bit scale, center 8192 -> [-1, +1] -> semitones; f14() keeps a MIDI 2.0 bend's fraction.
-  const float norm =
-      (bend.f14() - static_cast<float>(kBend14Center)) / static_cast<float>(kBend14Center);
+  const float norm = synth::bend_bipolar(bend);
   channel_bend_semitones_[ch] = clampf(norm, -1.0f, 1.0f) * kPitchBendRangeSemitones;
   mpe_.track_bend(ch, bend);
   refresh_channel_expression(ch);

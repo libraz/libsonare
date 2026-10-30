@@ -19,6 +19,7 @@ using sonare::constants::kDefaultDawSampleRate;
 namespace {
 
 using sonare::constants::kCentsPerOctave;
+using sonare::constants::kCentsPerSemitone;
 using sonare::constants::kSemitonesPerOctave;
 
 /// Hands @p base to whichever engine the voice is running, optionally snapping
@@ -165,7 +166,7 @@ float unison_detune_ratio(float detune_cents, float spread) noexcept {
 float static_cutoff_offset_cents(const NativeSynthPatch& p, float velocity01,
                                  float note_offset_semitones, float part_cutoff_cents) noexcept {
   return p.vel_to_cutoff_cents * (velocity01 - 1.0f) +
-         p.key_track * 100.0f * note_offset_semitones + part_cutoff_cents;
+         p.key_track * kCentsPerSemitone * note_offset_semitones + part_cutoff_cents;
 }
 
 /// Gain-compensated tanh drive (same law as the Sf2 part insert); gain 0 = off.
@@ -937,7 +938,7 @@ void NativeSynthVoice::retune(uint8_t new_note, uint8_t voiced_note, float per_n
   // of two frequencies. Accumulated against the current note, which means a
   // chain of slurs needs no memory of where the phrase began.
   const float target =
-      retune_cents + 100.0f * (static_cast<float>(new_note) - static_cast<float>(note));
+      retune_cents + kCentsPerSemitone * (static_cast<float>(new_note) - static_cast<float>(note));
   // Where the pitch is right now, so the transition starts from the sound
   // rather than from the note that was asked for.
   const float sounding = retune_cents + glide_cents;

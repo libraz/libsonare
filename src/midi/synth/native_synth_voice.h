@@ -276,6 +276,14 @@ struct NativeSynthVoice : VoiceState {
   Control32 mpe_member_timbre = Control32::from_raw(0);
   bool mpe_member_pressure_present = false;
   bool mpe_member_timbre_present = false;
+  /// Forgets the member's bend axes and its own pressure/timbre values.
+  void clear_mpe_member() noexcept {
+    live_mpe_bend_axes = kAxisNone;
+    mpe_member_pressure = Control32::from_raw(0);
+    mpe_member_timbre = Control32::from_raw(0);
+    mpe_member_pressure_present = false;
+    mpe_member_timbre_present = false;
+  }
   bool key_down = false;
   /// Captured by the sostenuto pedal (CC66): held past key-up until the pedal
   /// lifts, regardless of the sustain pedal.

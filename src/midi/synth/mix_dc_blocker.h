@@ -7,8 +7,25 @@
 #include <cstdint>
 
 #include "rt/tail_budget.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
+
+/// @brief Corner frequency of the mix-bus DC blocker in hertz.
+inline constexpr double kMixDcBlockerCornerHz = 8.0;
+
+/// @brief Pole of the mix-bus DC blocker at @p sample_rate.
+inline float mix_dc_blocker_pole(double sample_rate) noexcept {
+  return 1.0f - static_cast<float>(constants::kTwoPiD * kMixDcBlockerCornerHz / sample_rate);
+}
+
+/// @brief One sample of the DC blocker; updates the input and output histories.
+inline float mix_dc_blocker_step(float in, float pole, float& x1, float& y1) noexcept {
+  const float out = in - x1 + pole * y1;
+  x1 = in;
+  y1 = out;
+  return out;
+}
 
 /// @brief Samples the mix-bus DC blocker with pole @p pole rings on once its input stops.
 /// @details The impulse scale |1 - pole| covers a fresh input; the unit-state bound beside it

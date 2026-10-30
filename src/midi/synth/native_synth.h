@@ -119,14 +119,48 @@ inline float excitation_value(const ExcitationAxes& axes, ControllerAxis axis) n
   return 0.0f;
 }
 
+/// Master gain a config that leaves it out (or gives a negative one) plays at, and its ceiling.
+inline constexpr float kDefaultGain = 0.5f;
+inline constexpr float kMaxGain = 4.0f;
+/// Voice pool size of a config that leaves it out.
+inline constexpr int kDefaultPolyphony = 16;
+
+/// Drive factor of the gain-neutral bus saturator; 0 leaves the stage out.
+inline float bus_drive_gain(float bus_drive) noexcept {
+  return bus_drive > 0.0f ? 1.0f + 3.0f * bus_drive : 0.0f;
+}
+
+/// Writes @p value into the slot @p axis fills; a channel-level axis writes nothing.
+inline void store_excitation_value(ExcitationAxes& out, ControllerAxis axis, float value) noexcept {
+  switch (axis) {
+    case ControllerAxis::kExcitation:
+      out.force = value;
+      break;
+    case ControllerAxis::kPosition:
+      out.position = value;
+      break;
+    case ControllerAxis::kBrightness:
+      out.brightness = value;
+      break;
+    case ControllerAxis::kMorph:
+      out.morph = value;
+      break;
+    case ControllerAxis::kNone:
+    case ControllerAxis::kLoudness:
+    case ControllerAxis::kPitchCents:
+    case ControllerAxis::kVibratoDepth:
+      break;
+  }
+}
+
 }  // namespace native_synth_detail
 
 struct NativeSynthConfig {
   NativeSynthPatch patch;
   /// Master output gain applied to the summed voices (linear).
-  float gain = 0.5f;
+  float gain = native_synth_detail::kDefaultGain;
   /// Voice pool size (clamped to [1, kMaxSynthVoices]).
-  int polyphony = 16;
+  int polyphony = native_synth_detail::kDefaultPolyphony;
   /// Gentle gain-neutral tanh on the mix bus in [0,1] (0 = clean) — glues a
   /// stack of voices together.
   float bus_drive = 0.0f;
@@ -631,6 +665,12 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   void reset_controllers(uint8_t channel) noexcept;
   void refresh_channel_mod(uint8_t channel) noexcept;
   void refresh_all_channel_mods() noexcept;
+  /// Returns the per-part piano bodies, halos and piano state to their unarmed state.
+  void reset_part_bodies() noexcept;
+  /// Returns every part's organ wind supply and swell to rest.
+  void reset_organ_parts() noexcept;
+  /// Restores the GM power-on channel table (rhythm on channel 10, MPE off).
+  void power_on_channels() noexcept;
   /// Refreshes every channel a zone-wide value arriving on @p channel reaches.
   void refresh_channel_mods_in_scope(uint8_t channel) noexcept;
   /// Accepts an MPE Configuration Message and does what accepting one obliges:

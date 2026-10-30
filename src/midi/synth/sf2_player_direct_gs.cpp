@@ -34,11 +34,32 @@ constexpr std::array<uint8_t GsSystemEffects::*, kGsSystemEffectFieldCount> kDir
 #undef SONARE_GS_DIRECT_MEMBER
 }};
 
+constexpr std::array<uint8_t GsMasterEq::*, 4> kDirectEqMembers{
+    {&GsMasterEq::low_freq, &GsMasterEq::low_gain, &GsMasterEq::high_freq, &GsMasterEq::high_gain}};
+
 // A system-effect parameter indexes kDirectFxMembers by its distance from kReverbMacro.
 static_assert(static_cast<size_t>(GsParam::kDelaySendToReverb) -
                       static_cast<size_t>(GsParam::kReverbMacro) + 1 ==
                   kGsSystemEffectFieldCount,
               "the system-effect GsParam run must match SONARE_GS_SYSTEM_EFFECT_FIELDS");
+
+// Bit i of the result is set for each candidate naming unit i.
+template <typename Token>
+uint32_t candidate_unit_mask(const Token& token) noexcept {
+  uint32_t mask = 0;
+  for (const auto& candidate : token.candidates) {
+    if (candidate.unit < kGsEfxUnitCount) mask |= uint32_t{1} << candidate.unit;
+  }
+  return mask;
+}
+
+// Sets the fallback flag of every unit whose bit is set in @p units.
+void set_fallback_units(std::array<bool, kGsEfxUnitCount>& fallback, uint32_t units,
+                        bool value) noexcept {
+  for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
+    if ((units & (uint32_t{1} << unit)) != 0) fallback[unit] = value;
+  }
+}
 
 // Each field is one byte, so a field's offset is its kDirectFxMembers index.
 constexpr size_t kDirectChorusFirst = offsetof(GsSystemEffects, chorus_macro);
@@ -154,7 +175,9 @@ void Sf2Player::publish_direct_system_patch(bool reset, const uint8_t* data, siz
   auto stamp_fx_range = [&](size_t first, size_t count) {
     for (size_t i = 0; i < count && first + i < kDirectFxMembers.size(); ++i) stamp_fx(first + i);
   };
-  auto stamp_eq = [&](size_t index, uint8_t value) { stamp(kDirectEqBase + index, value); };
+  auto stamp_eq = [&](size_t index) {
+    stamp(kDirectEqBase + index, master_eq_.*kDirectEqMembers[index]);
+  };
   auto stamp_part_eq = [&](size_t part) {
     stamp(kDirectPartEqBase + (part & 0x0Fu), eq_part_bypassed_[part & 0x0Fu] ? 1 : 0);
   };
@@ -179,16 +202,16 @@ void Sf2Player::publish_direct_system_patch(bool reset, const uint8_t* data, siz
       } else {
         switch (w.param) {
           case GsParam::kEqLowFreq:
-            stamp_eq(0, master_eq_.low_freq);
+            stamp_eq(0);
             break;
           case GsParam::kEqLowGain:
-            stamp_eq(1, master_eq_.low_gain);
+            stamp_eq(1);
             break;
           case GsParam::kEqHighFreq:
-            stamp_eq(2, master_eq_.high_freq);
+            stamp_eq(2);
             break;
           case GsParam::kEqHighGain:
-            stamp_eq(3, master_eq_.high_gain);
+            stamp_eq(3);
             break;
           case GsParam::kPartEqSwitch:
             stamp_part_eq(w.part);
@@ -220,28 +243,23 @@ void Sf2Player::drain_direct_system_patch() noexcept {
     const DirectSystemField& field = patch.fields[index];
     return patch.last_reset_seq >= field.seq ? default_value : field.value;
   };
+  const GsSystemEffects fx_default{};
   for (size_t i = 0; i < kDirectFxMembers.size(); ++i) {
     if (!should_apply(kDirectFxBase + i)) continue;
-    const uint8_t next = value(kDirectFxBase + i, GsSystemEffects{}.*kDirectFxMembers[i]);
+    const uint8_t next = value(kDirectFxBase + i, fx_default.*kDirectFxMembers[i]);
     if (direct_system_audio_fx_.*kDirectFxMembers[i] != next) changed = true;
     if (prepared_sys_fx_.*kDirectFxMembers[i] != next) prepared_changed = true;
     direct_system_audio_fx_.*kDirectFxMembers[i] = next;
     prepared_sys_fx_.*kDirectFxMembers[i] = next;
   }
   const GsMasterEq eq_default{};
-  const uint8_t eq_values[4] = {eq_default.low_freq, eq_default.low_gain, eq_default.high_freq,
-                                eq_default.high_gain};
-  uint8_t* eq_fields[4] = {&direct_system_audio_eq_.low_freq, &direct_system_audio_eq_.low_gain,
-                           &direct_system_audio_eq_.high_freq, &direct_system_audio_eq_.high_gain};
-  uint8_t* prepared_eq_fields[4] = {&prepared_master_eq_.low_freq, &prepared_master_eq_.low_gain,
-                                    &prepared_master_eq_.high_freq, &prepared_master_eq_.high_gain};
-  for (size_t i = 0; i < 4; ++i) {
+  for (size_t i = 0; i < kDirectEqMembers.size(); ++i) {
     if (!should_apply(kDirectEqBase + i)) continue;
-    const uint8_t next = value(kDirectEqBase + i, eq_values[i]);
-    if (*eq_fields[i] != next) changed = true;
-    if (*prepared_eq_fields[i] != next) prepared_changed = true;
-    *eq_fields[i] = next;
-    *prepared_eq_fields[i] = next;
+    const uint8_t next = value(kDirectEqBase + i, eq_default.*kDirectEqMembers[i]);
+    if (direct_system_audio_eq_.*kDirectEqMembers[i] != next) changed = true;
+    if (prepared_master_eq_.*kDirectEqMembers[i] != next) prepared_changed = true;
+    direct_system_audio_eq_.*kDirectEqMembers[i] = next;
+    prepared_master_eq_.*kDirectEqMembers[i] = next;
   }
   for (size_t part = 0; part < 16; ++part) {
     if (!should_apply(kDirectPartEqBase + part)) continue;
@@ -293,9 +311,7 @@ void Sf2Player::restart_prepared_audio_runtime(uint64_t domain) noexcept {
     activate_prepared_node(unit, nullptr);
     prepared_unit_overridden_[unit] = false;
     if (!prepared_runtime_active_) continue;
-    const bool matching = snapshot != nullptr && snapshot->unit_fed[unit] &&
-                          snapshot->gs_efx_state[unit].type == prepared_efx_[unit].type;
-    if (matching) {
+    if (snapshot_unit_matches(snapshot, unit, prepared_efx_[unit].type)) {
       part_fx_.apply_legacy_plan(unit, prepared_efx_[unit], prepared_control_part(unit), *this);
     } else {
       prepared_unit_overridden_[unit] = true;
@@ -304,16 +320,16 @@ void Sf2Player::restart_prepared_audio_runtime(uint64_t domain) noexcept {
   raise_prepared_fx_tail();
 }
 
-void Sf2Player::set_gs_efx_realization(GsEfxRealization realization) {
-  if (part_fx_.realization() == realization) return;
+template <typename Set, typename Undo>
+void Sf2Player::rebuild_gs_efx_with(Set&& set, Undo&& undo) {
   DirectGsNode* restart = reserve_restart_node();
-  const GsEfxRealization previous = part_fx_.realization();
   const PartFxStage::Checkpoint saved = part_fx_.checkpoint();
-  part_fx_.set_realization(realization);
+  set();
   try {
+    // A throwing factory leaves the published graph and its tokens usable.
     realize_gs_efx();
   } catch (...) {
-    part_fx_.set_realization(previous);
+    undo();
     part_fx_.restore(saved);
     if (restart != nullptr) direct_queue_->owned.pop_back();
     throw;
@@ -321,22 +337,17 @@ void Sf2Player::set_gs_efx_realization(GsEfxRealization realization) {
   restart_prepared_runtime(restart);
 }
 
+void Sf2Player::set_gs_efx_realization(GsEfxRealization realization) {
+  if (part_fx_.realization() == realization) return;
+  const GsEfxRealization previous = part_fx_.realization();
+  rebuild_gs_efx_with([&] { part_fx_.set_realization(realization); },
+                      [&] { part_fx_.set_realization(previous); });
+}
+
 void Sf2Player::set_gs_efx_rows(const GsEfxRowView* rows) {
   if (part_fx_.rows() == rows) return;
-  DirectGsNode* restart = reserve_restart_node();
   const GsEfxRowView* previous_rows = part_fx_.rows();
-  const PartFxStage::Checkpoint saved = part_fx_.checkpoint();
-  part_fx_.set_rows(rows);
-  try {
-    // A throwing factory leaves the published graph and its tokens usable.
-    realize_gs_efx();
-  } catch (...) {
-    part_fx_.set_rows(previous_rows);
-    part_fx_.restore(saved);
-    if (restart != nullptr) direct_queue_->owned.pop_back();
-    throw;
-  }
-  restart_prepared_runtime(restart);
+  rebuild_gs_efx_with([&] { part_fx_.set_rows(rows); }, [&] { part_fx_.set_rows(previous_rows); });
 }
 
 void Sf2Player::on_control_sysex(const uint8_t* data, size_t size) noexcept {
@@ -391,11 +402,7 @@ void Sf2Player::on_control_sysex(const uint8_t* data, size_t size) noexcept {
     // The overlay would replace an unrelated custom unit with a null node; stay
     // on the full snapshot only when this message reaches that unit.
     forced_legacy_direct = true;
-    for (const PreparedEfxCandidate& candidate : prepared_token->candidates) {
-      if (candidate.unit < kGsEfxUnitCount) {
-        legacy_candidate_replaces_units |= uint32_t{1} << candidate.unit;
-      }
-    }
+    legacy_candidate_replaces_units = candidate_unit_mask(*prepared_token);
     prepared_ok = false;
     prepared.reset();
     prepared_token = nullptr;
@@ -416,27 +423,16 @@ void Sf2Player::on_control_sysex(const uint8_t* data, size_t size) noexcept {
         case GsSysExKind::kNone: {
           // A selected prepared node ends this unit's full-snapshot fallback.
           if (prepared_token != nullptr) {
-            uint32_t candidate_units = 0;
-            for (const PreparedEfxCandidate& candidate : prepared_token->candidates) {
-              if (candidate.unit < kGsEfxUnitCount)
-                candidate_units |= uint32_t{1} << candidate.unit;
-            }
-            for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
-              if ((candidate_units & (uint32_t{1} << unit)) != 0)
-                direct_legacy_efx_fallback_[unit] = false;
-            }
+            set_fallback_units(direct_legacy_efx_fallback_, candidate_unit_mask(*prepared_token),
+                               false);
           }
           break;
         }
       }
       part_fx_.clear_dirty();
     } else {
-      if (!forced_legacy_direct) {
-        for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
-          if ((affected_units & (uint32_t{1} << unit)) != 0)
-            direct_legacy_efx_fallback_[unit] = true;
-        }
-      }
+      if (!forced_legacy_direct)
+        set_fallback_units(direct_legacy_efx_fallback_, affected_units, true);
       bool rebuilt = false;
       try {
         rebuilt = part_fx_.apply_control_sysex(data, size);
@@ -458,10 +454,7 @@ void Sf2Player::on_control_sysex(const uint8_t* data, size_t size) noexcept {
         }
       }
       if (rebuilt && !direct_rebuild_failed) {
-        for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
-          if ((legacy_candidate_replaces_units & (uint32_t{1} << unit)) != 0)
-            direct_legacy_efx_fallback_[unit] = false;
-        }
+        set_fallback_units(direct_legacy_efx_fallback_, legacy_candidate_replaces_units, false);
       }
     }
   }
@@ -472,10 +465,7 @@ void Sf2Player::on_control_sysex(const uint8_t* data, size_t size) noexcept {
       try {
         part_fx_.discard_unit_runtimes();
         realize_gs_efx();
-        for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
-          if ((affected_units & (uint32_t{1} << unit)) != 0)
-            direct_legacy_efx_fallback_[unit] = true;
-        }
+        set_fallback_units(direct_legacy_efx_fallback_, affected_units, true);
       } catch (...) {
         restore_direct_mirror();
       }

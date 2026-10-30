@@ -13,6 +13,7 @@
 #include "midi/builtin_synth.h"
 #include "midi/control_value.h"
 #include "midi/controller_numbers.h"
+#include "midi/synth/channel_mapping.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/gs_efx_bindings.h"
@@ -22,12 +23,29 @@
 
 namespace sonare::midi::synth {
 
+namespace {
+
+/// The control as efx_control_byte reads it: @p control's range with @p efx's raw bytes.
+template <typename Control>
+Sf2EfxControlRt effective_efx_control(const Control& control, const GsEfx& efx, size_t k,
+                                      uint8_t source) noexcept {
+  Sf2EfxControlRt effective;
+  effective.source = source;
+  effective.depth = efx.control_depth[k];
+  effective.slot = control.slot;
+  effective.lo = control.lo;
+  effective.hi = control.hi;
+  effective.states = control.states;
+  effective.base_byte = efx.params[control.slot];
+  return effective;
+}
+
+}  // namespace
+
 float Sf2Player::part_controller_position(int part, uint8_t source) const noexcept {
   // Read at full width, as refresh_channel_mod reads the same controllers.
   const ChannelState& st = channels_[static_cast<size_t>(part & 0x0F)];
-  if (source == kEfxSourceBend)
-    return (st.pitch_bend.f14() - static_cast<float>(kBend14Center)) /
-           static_cast<float>(kBend14Center);
+  if (source == kEfxSourceBend) return bend_bipolar(st.pitch_bend);
   if (source == kEfxSourceAftertouch) return st.channel_pressure.f7() / 127.0f;
   return st.cc_position[source & 0x7Fu].f7() / 127.0f;
 }
@@ -330,11 +348,8 @@ void Sf2Player::apply_prepared_efx_controls() noexcept {
   if (!prepared_runtime_active_) return;
   const GsEfx& efx = prepared_efx_[0];
   // The controllers are the lowest part the overlay routes to unit 0 at this block.
-  size_t routed_part = 0;
-  while (routed_part < prepared_part_unit_.size() && prepared_part_unit_[routed_part] != 0) {
-    ++routed_part;
-  }
-  if (routed_part >= channels_.size()) return;
+  const int routed_part = prepared_control_part(0);
+  if (routed_part < 0) return;
   const auto apply_controls = [&](const auto& controls, const auto& stages) noexcept {
     for (size_t k = 0; k < controls.size() && k < efx.control_source.size(); ++k) {
       const auto& control = controls[k];
@@ -343,16 +358,9 @@ void Sf2Player::apply_prepared_efx_controls() noexcept {
           control.slot >= efx.params.size()) {
         continue;
       }
-      Sf2EfxControlRt effective;
-      effective.source = source;
-      effective.depth = efx.control_depth[k];
-      effective.slot = control.slot;
-      effective.lo = control.lo;
-      effective.hi = control.hi;
-      effective.states = control.states;
-      effective.base_byte = efx.params[control.slot];
-      const uint8_t byte = efx_control_byte(
-          effective, part_controller_position(static_cast<int>(routed_part), effective.source));
+      const Sf2EfxControlRt effective = effective_efx_control(control, efx, k, source);
+      const uint8_t byte =
+          efx_control_byte(effective, part_controller_position(routed_part, effective.source));
       for (uint8_t d = 0; d < control.n_dest; ++d) {
         const Sf2EfxControlDest& dest = control.dest[d];
         if (dest.stage_index >= stages.size()) continue;
@@ -376,9 +384,7 @@ void Sf2Player::apply_prepared_efx_controls() noexcept {
   }
   if (prepared_unit_overridden_[0]) return;
   const PartFxSnapshot* snapshot = part_fx_.current();
-  if (snapshot == nullptr || !snapshot->unit_fed[0] || snapshot->gs_efx_state[0].type != efx.type) {
-    return;
-  }
+  if (!snapshot_unit_matches(snapshot, 0, efx.type)) return;
   apply_controls(snapshot->unit(0).legacy_controls, snapshot->unit(0).stages);
   raise_prepared_fx_tail();
 }
@@ -414,8 +420,7 @@ void Sf2Player::apply_prepared_gs_delta(const PreparedSysEx& token, const uint8_
   sync_prepared_base();
 
   const GsSysEx msg = parse_gs_sysex(data, size);
-  if (msg.kind == GsSysExKind::kGm1Reset || msg.kind == GsSysExKind::kGm2Reset ||
-      msg.kind == GsSysExKind::kGsReset) {
+  if (gs_sysex_resets(msg.kind)) {
     // Host/static part chains stay in the snapshot and keep their tails.
     if (apply_performance) handle_sysex(data, size);
     for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
@@ -473,9 +478,7 @@ void Sf2Player::apply_prepared_gs_delta(const PreparedSysEx& token, const uint8_
         apply_prepared_node_plan(*active, prepared_efx_[unit], true);
       } else if (!full_reapply && !was_overridden && active == nullptr) {
         const PartFxSnapshot* snapshot = part_fx_.current();
-        const bool matching_legacy = snapshot != nullptr && snapshot->unit_fed[unit] &&
-                                     snapshot->gs_efx_state[unit].type == prepared_efx_[unit].type;
-        if (matching_legacy) {
+        if (snapshot_unit_matches(snapshot, unit, prepared_efx_[unit].type)) {
           // Not overridden: the published processors keep running with their tail.
           part_fx_.apply_legacy_plan(unit, prepared_efx_[unit], prepared_control_part(unit), *this);
         } else {
@@ -504,19 +507,15 @@ int Sf2Player::gs_efx_control_byte(size_t control) const noexcept {
   if (prepared_runtime_active_ && prepared_active_nodes_[0] != nullptr) {
     const PreparedEfxNode& node = *prepared_active_nodes_[0];
     if (control >= node.controls.size()) return -1;
-    Sf2EfxControlRt effective = node.controls[control];
+    const Sf2EfxControlRt& stored = node.controls[control];
     const GsEfx& efx = prepared_efx_[0];
     const uint8_t source = efx.control_source[control];
-    if (source == 0 || source > kEfxSourceBend || effective.n_dest == 0) return -1;
-    size_t part = 0;
-    while (part < prepared_part_unit_.size() && prepared_part_unit_[part] != 0) ++part;
-    if (part >= prepared_part_unit_.size()) return -1;
-    effective.source = source;
-    effective.depth = efx.control_depth[control];
-    if (effective.slot >= efx.params.size()) return -1;
-    effective.base_byte = efx.params[effective.slot];
-    return efx_control_byte(effective,
-                            part_controller_position(static_cast<int>(part), effective.source));
+    if (source == 0 || source > kEfxSourceBend || stored.n_dest == 0) return -1;
+    const int part = prepared_control_part(0);
+    if (part < 0) return -1;
+    if (stored.slot >= efx.params.size()) return -1;
+    const Sf2EfxControlRt effective = effective_efx_control(stored, efx, control, source);
+    return efx_control_byte(effective, part_controller_position(part, effective.source));
   }
   const PartFxSnapshot* snapshot = part_fx_.current();
   if (snapshot == nullptr || control >= snapshot->controls.size()) return -1;

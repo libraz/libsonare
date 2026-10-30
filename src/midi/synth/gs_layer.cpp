@@ -13,6 +13,7 @@
 
 #include "effects/common/mix_law.h"
 #include "midi/controller_numbers.h"
+#include "midi/synth/channel_mapping.h"
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/gs_efx_bindings.h"
 #include "midi/synth/gs_efx_convert.h"
@@ -331,7 +332,7 @@ void apply_gs_drum_params(Sf2VoiceParams& params, const GsDrumNoteParams& drum) 
     params.attenuation_gain *= v * v;  // same square law as CC7/velocity
   }
   if ((drum.flags & GsDrumNoteParams::kPan) != 0) {
-    params.pan_units = (static_cast<float>(drum.pan & 0x7Fu) - 64.0f) / 63.0f * 500.0f;
+    params.pan_units = cc_pan_units(static_cast<float>(drum.pan & 0x7Fu));
   }
   // A drum note's sends MULTIPLY what the note sends into that unit, they do not
   // add to it (docs/gs.md; the manual calls the field a multiplicand over

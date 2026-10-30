@@ -9,6 +9,7 @@
 
 #include "midi/builtin_synth.h"
 #include "midi/synth/gm_fallback_map.h"
+#include "midi/synth/mix_dc_blocker.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
 #include "util/constants.h"
@@ -816,16 +817,10 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
     // render sees the same bus (the filtered delta lands in the target-zero
     // residual below, like the part inserts and the effect returns).
     for (int i = 0; i < n; ++i) {
-      const float in_l = mix_l_[static_cast<size_t>(i)];
-      const float l = in_l - dc_x1_[0] + dc_r_ * dc_y1_[0];
-      dc_x1_[0] = in_l;
-      dc_y1_[0] = l;
-      mix_l_[static_cast<size_t>(i)] = l;
-      const float in_r = mix_r_[static_cast<size_t>(i)];
-      const float r = in_r - dc_x1_[1] + dc_r_ * dc_y1_[1];
-      dc_x1_[1] = in_r;
-      dc_y1_[1] = r;
-      mix_r_[static_cast<size_t>(i)] = r;
+      float& mix_l = mix_l_[static_cast<size_t>(i)];
+      float& mix_r = mix_r_[static_cast<size_t>(i)];
+      mix_l = mix_dc_blocker_step(mix_l, dc_r_, dc_x1_[0], dc_y1_[0]);
+      mix_r = mix_dc_blocker_step(mix_r, dc_r_, dc_x1_[1], dc_y1_[1]);
     }
   }
   if (source_render) {

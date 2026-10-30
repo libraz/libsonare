@@ -469,7 +469,7 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   mix_l_.assign(kChunkFrames, 0.0f);
   mix_r_.assign(kChunkFrames, 0.0f);
   // Mix-bus polish: the same ~8 Hz DC blocker pole the NativeSynth host uses.
-  dc_r_ = 1.0f - static_cast<float>(constants::kTwoPiD * 8.0 / sample_rate_);
+  dc_r_ = mix_dc_blocker_pole(sample_rate_);
   dc_x1_ = {};
   dc_y1_ = {};
   // One bus per part and per insertion unit, so parts sharing a unit sum into

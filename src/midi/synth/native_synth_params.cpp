@@ -32,7 +32,7 @@ struct ParamEntry {
 /// waveguide slab or swap a filter topology, none of which is audio-thread
 /// safe; they stay patch edits applied through the instrument sync path.
 constexpr std::array<ParamEntry, 33> kParams{{
-    {"gain", NativeSynthParamId::kGain, 0.0f, 4.0f, ""},
+    {"gain", NativeSynthParamId::kGain, 0.0f, native_synth_detail::kMaxGain, ""},
     {"busDrive", NativeSynthParamId::kBusDrive, 0.0f, 1.0f, ""},
     {"cutoffHz", NativeSynthParamId::kCutoffHz, 10.0f, 22000.0f, "Hz"},
     {"resonanceQ", NativeSynthParamId::kResonanceQ, 0.5f, 30.0f, "Q"},
@@ -237,7 +237,7 @@ bool NativeSynth::apply_parameter(unsigned int param_id, float value) noexcept {
     case NativeSynthParamId::kBusDrive:
       config_.bus_drive = clamp_finite(value, entry->min, entry->max, config_.bus_drive);
       // Mirror prepare()'s derivation so the change is audible this block.
-      bus_drive_gain_ = config_.bus_drive > 0.0f ? 1.0f + 3.0f * config_.bus_drive : 0.0f;
+      bus_drive_gain_ = native_synth_detail::bus_drive_gain(config_.bus_drive);
       return true;
     case NativeSynthParamId::kCutoffHz:
       p.cutoff_hz = clamp_finite(value, entry->min, entry->max, p.cutoff_hz);

@@ -1,8 +1,10 @@
 #include <array>
 #include <utility>
 
+#include "midi/synth/channel_mapping.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
+#include "util/constants.h"
 
 namespace sonare::midi::synth {
 
@@ -10,28 +12,8 @@ namespace {
 
 using native_synth_detail::excitation_axis_mask;
 using native_synth_detail::excitation_value;
-
-void store_excitation_value(ExcitationAxes& out, ControllerAxis axis, float value) noexcept {
-  switch (axis) {
-    case ControllerAxis::kExcitation:
-      out.force = value;
-      break;
-    case ControllerAxis::kPosition:
-      out.position = value;
-      break;
-    case ControllerAxis::kBrightness:
-      out.brightness = value;
-      break;
-    case ControllerAxis::kMorph:
-      out.morph = value;
-      break;
-    case ControllerAxis::kNone:
-    case ControllerAxis::kLoudness:
-    case ControllerAxis::kPitchCents:
-    case ControllerAxis::kVibratoDepth:
-      break;
-  }
-}
+using native_synth_detail::store_excitation_value;
+using sonare::constants::kCentsPerSemitone;
 
 }  // namespace
 
@@ -112,11 +94,7 @@ void NativeSynth::restore_excitation_control(uint8_t channel, bool mpe_dimension
       v.live_excitation_axes.reset();
       v.live_mpe_pressure_axes = kAxisNone;
       v.live_mpe_timbre_axes = kAxisNone;
-      v.live_mpe_bend_axes = kAxisNone;
-      v.mpe_member_pressure = Control32::from_raw(0);
-      v.mpe_member_timbre = Control32::from_raw(0);
-      v.mpe_member_pressure_present = false;
-      v.mpe_member_timbre_present = false;
+      v.clear_mpe_member();
     }
   }
 }
@@ -214,7 +192,7 @@ void NativeSynth::refresh_mpe_note_mods(uint8_t channel) noexcept {
   const uint8_t pressure_note = mpe_attributed_note(ch, MpeDimension::kPressure);
   const Sf2ChannelMod& mod = channel_mods_[ch];
   const float member_bend_cents =
-      (mpe_.bend_semitones(ch) - mpe_.manager_bend_semitones(ch)) * 100.0f;
+      (mpe_.bend_semitones(ch) - mpe_.manager_bend_semitones(ch)) * kCentsPerSemitone;
   const uint8_t manager = mpe_.role(ch) == MpeChannelRole::kMember
                               ? (mpe_.zone_of(ch) == MpeZone::kLower ? kMpeLowerManagerChannel
                                                                      : kMpeUpperManagerChannel)
@@ -305,9 +283,9 @@ void NativeSynth::freeze_mpe_voice(NativeSynthVoice& voice, uint8_t channel) noe
   }
   voice.mpe_frozen_aftertouch01 = effective.aftertouch01;
   // The member's own bend: the effective pitch less the channel's other bend and the manager's.
-  voice.mpe_frozen_member_bend_cents = effective.pitch_cents -
-                                       (current.pitch_cents - mpe_.bend_semitones(ch) * 100.0f) -
-                                       mpe_.manager_bend_semitones(ch) * 100.0f;
+  voice.mpe_frozen_member_bend_cents =
+      effective.pitch_cents - (current.pitch_cents - mpe_.bend_semitones(ch) * kCentsPerSemitone) -
+      mpe_.manager_bend_semitones(ch) * kCentsPerSemitone;
 }
 
 void NativeSynth::refresh_frozen_mpe_voice(NativeSynthVoice& voice, uint8_t channel) noexcept {
@@ -355,7 +333,7 @@ void NativeSynth::refresh_frozen_mpe_voice(NativeSynthVoice& voice, uint8_t chan
   }
 
   const float current_member_bend_cents =
-      (mpe_.bend_semitones(ch) - mpe_.manager_bend_semitones(ch)) * 100.0f;
+      (mpe_.bend_semitones(ch) - mpe_.manager_bend_semitones(ch)) * kCentsPerSemitone;
   voice.mpe_mod.pitch_cents += voice.mpe_frozen_member_bend_cents - current_member_bend_cents;
   voice.mpe_mod.aftertouch01 = voice.mpe_frozen_aftertouch01;
   voice.mpe_mod_active = true;
@@ -670,9 +648,7 @@ void NativeSynth::apply_resolved_input(const Ump& ump) noexcept {
 float NativeSynth::part_controller_position(int part, uint8_t source) const noexcept {
   // Read at full width, as refresh_channel_mod reads the same controllers.
   const ChannelState& st = channels_[static_cast<size_t>(part & 0x0F)];
-  if (source == kEfxSourceBend)
-    return (st.pitch_bend.f14() - static_cast<float>(kBend14Center)) /
-           static_cast<float>(kBend14Center);
+  if (source == kEfxSourceBend) return bend_bipolar(st.pitch_bend);
   if (source == kEfxSourceAftertouch) return st.pressure.f7() / 127.0f;
   return st.cc_position[source & 0x7Fu].f7() / 127.0f;
 }

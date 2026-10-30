@@ -386,11 +386,7 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
         voice.restore_excitation_base();
         restore_manager_axes(voice.live_excitation_axes, voice.live_mpe_pressure_axes,
                              voice.live_mpe_timbre_axes, true);
-        voice.live_mpe_bend_axes = kAxisNone;
-        voice.mpe_member_pressure = Control32::from_raw(0);
-        voice.mpe_member_timbre = Control32::from_raw(0);
-        voice.mpe_member_pressure_present = false;
-        voice.mpe_member_timbre_present = false;
+        voice.clear_mpe_member();
         uint32_t present = kAxisNone;
         const ExcitationAxes live = channel_excitation(voice.live_excitation_axes, present);
         if (present != kAxisNone) voice.push_excitation(live, present);
@@ -407,7 +403,7 @@ void NativeSynth::bend_range_msb(uint8_t channel, uint8_t semitones) noexcept {
   if (mpe_.apply_bend_sensitivity(ch, static_cast<float>(semitones))) {
     refresh_all_channel_mods();
   } else {
-    channels_[ch].bend_range_cents = 100.0f * static_cast<float>(semitones);
+    channels_[ch].bend_range_cents = constants::kCentsPerSemitone * static_cast<float>(semitones);
     refresh_channel_mod(ch);
   }
 }
@@ -420,11 +416,13 @@ void NativeSynth::bend_range_lsb(uint8_t channel, uint8_t cents) noexcept {
   // takes it on the same terms the channel always has.
   if (mpe_.role(ch) != MpeChannelRole::kUnassigned) {
     const float whole = std::floor(mpe_.bend_sensitivity(ch));
-    mpe_.apply_bend_sensitivity(ch, whole + static_cast<float>(cents) / 100.0f);
+    mpe_.apply_bend_sensitivity(ch,
+                                whole + static_cast<float>(cents) / constants::kCentsPerSemitone);
     refresh_all_channel_mods();
   } else {
-    st.bend_range_cents =
-        100.0f * std::floor(st.bend_range_cents / 100.0f) + static_cast<float>(cents);
+    st.bend_range_cents = constants::kCentsPerSemitone *
+                              std::floor(st.bend_range_cents / constants::kCentsPerSemitone) +
+                          static_cast<float>(cents);
     refresh_channel_mod(ch);
   }
 }
