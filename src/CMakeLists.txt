@@ -783,6 +783,8 @@ if(BUILD_PITCH_EDITOR)
     editing/vocal_edit/analysis.cpp
     editing/vocal_edit/pitch_plan.cpp
     editing/vocal_edit/session.cpp
+    editing/vocal_edit/state_validation.cpp
+    editing/vocal_edit/note_operations.cpp
     editing/vocal_edit/render_snapshot.cpp
     editing/vocal_edit/render_cache.cpp
     editing/vocal_edit/renderer.cpp
@@ -1734,6 +1736,8 @@ if(BUILD_WASM)
       editing/vocal_edit/analysis.cpp
       editing/vocal_edit/pitch_plan.cpp
       editing/vocal_edit/session.cpp
+      editing/vocal_edit/state_validation.cpp
+      editing/vocal_edit/note_operations.cpp
       editing/vocal_edit/render_snapshot.cpp
       editing/vocal_edit/render_cache.cpp
       editing/vocal_edit/state_codec.cpp
