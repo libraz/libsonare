@@ -1069,6 +1069,7 @@ if(BUILD_ARRANGEMENT)
     arrangement/retained_bytes.cpp
     arrangement/edit_history.cpp
     arrangement/edit_compiler.cpp
+    arrangement/timeline_apply.cpp
   )
   target_include_directories(sonare_arrangement PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
   target_include_directories(sonare_arrangement SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
@@ -1617,6 +1618,7 @@ if(BUILD_WASM)
   if(TARGET sonare_arrangement)
     set_source_files_properties(
       arrangement/edit_compiler.cpp
+      arrangement/timeline_apply.cpp
       arrangement/vocal_edit_sidecar.cpp
       arrangement/edit_command_clip.cpp
       arrangement/edit_command_track.cpp

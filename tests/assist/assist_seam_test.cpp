@@ -2809,7 +2809,7 @@ TEST_CASE("assist seam is not reachable from rt/ or engine/", "[assist]") {
   }
 
   // compiler / rt / engine MUST NOT read AssistSidecar. The compiler lives
-  // in arrangement/edit_compiler.*; rt/ and engine/ are scanned above.
+  // in arrangement/edit_compiler.* and timeline_apply.cpp; rt/ and engine/ are scanned above.
   const std::vector<fs::path> no_sidecar_dirs = {src / "rt", src / "engine"};
   for (const auto& dir : no_sidecar_dirs) {
     for (const auto& f : source_files(dir)) {
@@ -2817,7 +2817,7 @@ TEST_CASE("assist seam is not reachable from rt/ or engine/", "[assist]") {
       REQUIRE_FALSE(file_contains(f, "AssistSidecar"));
     }
   }
-  for (const char* compiler_file : {"edit_compiler.h", "edit_compiler.cpp"}) {
+  for (const char* compiler_file : {"edit_compiler.h", "edit_compiler.cpp", "timeline_apply.cpp"}) {
     const fs::path cf = src / "arrangement" / compiler_file;
     REQUIRE(fs::is_regular_file(cf));
     INFO("compiler must not reference AssistSidecar: " << cf.string());
