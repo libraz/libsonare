@@ -1275,9 +1275,9 @@ Napi::Value VocalEditSessionWrap::Redo(const Napi::CallbackInfo& info) {
 namespace {
 
 template <typename Handle>
-Napi::Value EvaluateNotePitch(
-    const Napi::CallbackInfo& info, const Handle* handle,
-    SonareError (*evaluate)(const Handle*, uint32_t, SonareVocalPitchResult*)) {
+Napi::Value EvaluateNotePitch(const Napi::CallbackInfo& info, const Handle* handle,
+                              SonareError (*evaluate)(const Handle*, uint32_t,
+                                                      SonareVocalPitchResult*)) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (handle == nullptr) return RequireSessionValue(env, nullptr);
@@ -1320,7 +1320,8 @@ Napi::Value VocalEditSessionWrap::SourceSampleToDestinationSample(const Napi::Ca
 }
 
 Napi::Value VocalEditSessionWrap::DestinationSampleToSourceSample(const Napi::CallbackInfo& info) {
-  return MapNoteSample(info, session_, "destinationSample", &sonare_vocal_session_destination_to_source);
+  return MapNoteSample(info, session_, "destinationSample",
+                       &sonare_vocal_session_destination_to_source);
 }
 
 Napi::Value VocalEditSessionWrap::CaptureRenderSnapshot(const Napi::CallbackInfo& info) {
@@ -1530,7 +1531,8 @@ Napi::Value VocalEditDraftWrap::SourceSampleToDestinationSample(const Napi::Call
 }
 
 Napi::Value VocalEditDraftWrap::DestinationSampleToSourceSample(const Napi::CallbackInfo& info) {
-  return MapNoteSample(info, draft_, "destinationSample", &sonare_vocal_draft_destination_to_source);
+  return MapNoteSample(info, draft_, "destinationSample",
+                       &sonare_vocal_draft_destination_to_source);
 }
 
 Napi::Value VocalEditDraftWrap::CaptureRenderSnapshot(const Napi::CallbackInfo& info) {
@@ -1617,7 +1619,8 @@ Napi::Value VocalRenderSnapshotWrap::Render(const Napi::CallbackInfo& info) {
   if (snapshot_ == nullptr) return RequireSessionValue(env, nullptr);
   SonareVocalRange range{};
   uint64_t request_id = 0;
-  if (!ReadRenderRange(env, info, "render(range, requestId?) requires a range", &range, &request_id)) {
+  if (!ReadRenderRange(env, info, "render(range, requestId?) requires a range", &range,
+                       &request_id)) {
     return env.Undefined();
   }
   RenderGuard result;
@@ -1634,7 +1637,8 @@ Napi::Value VocalRenderSnapshotWrap::RenderAsync(const Napi::CallbackInfo& info)
   if (snapshot_ == nullptr) return RejectedVocalPromise(env, SONARE_ERROR_INVALID_STATE);
   SonareVocalRange range{};
   uint64_t request_id = 0;
-  if (!ReadRenderRange(env, info, "renderAsync(range, requestId?, signal?) requires a range", &range, &request_id)) {
+  if (!ReadRenderRange(env, info, "renderAsync(range, requestId?, signal?) requires a range",
+                       &range, &request_id)) {
     return sonare_node::RejectedFromPending(env);
   }
   SonareVocalRenderJob* job = nullptr;
@@ -1666,7 +1670,8 @@ Napi::Value VocalRenderSnapshotWrap::BeginRenderJob(const Napi::CallbackInfo& in
   if (snapshot_ == nullptr) return RequireSessionValue(env, nullptr);
   SonareVocalRange range{};
   uint64_t request_id = 0;
-  if (!ReadRenderRange(env, info, "beginRenderJob(range, requestId?) requires a range", &range, &request_id)) {
+  if (!ReadRenderRange(env, info, "beginRenderJob(range, requestId?) requires a range", &range,
+                       &request_id)) {
     return env.Undefined();
   }
   SonareVocalRenderJob* job = nullptr;

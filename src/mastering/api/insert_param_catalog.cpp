@@ -1206,7 +1206,8 @@ std::string insert_param_info_json_at_rate(const std::string& requested_name, do
   const std::string memo_key = name + '@' + std::to_string(sample_rate);
   const auto cached = memo.find(memo_key);
   if (cached != memo.end()) return cached->second;
-  return memo.emplace(memo_key, info_or_repair(build_insert_param_info_json(name, sample_rate), name))
+  return memo
+      .emplace(memo_key, info_or_repair(build_insert_param_info_json(name, sample_rate), name))
       .first->second;
 }
 

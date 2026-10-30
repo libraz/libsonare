@@ -48,7 +48,8 @@ constexpr uint8_t kRealtimeSlot = 2;
 
 /// A framed GS DT1 write of @p value at 40 @p block @p offset, with the checksum.
 std::array<uint8_t, 11> dt1(uint8_t block, uint8_t offset, uint8_t value) {
-  std::array<uint8_t, 11> m = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, block, offset, value, 0x00, 0xF7};
+  std::array<uint8_t, 11> m = {0xF0,  0x41,   0x10,  0x42, 0x12, 0x40,
+                               block, offset, value, 0x00, 0xF7};
   const uint32_t sum = m[5] + m[6] + m[7] + m[8];
   m[9] = static_cast<uint8_t>((128u - (sum & 0x7Fu)) & 0x7Fu);
   return m;
@@ -58,7 +59,7 @@ std::array<uint8_t, 11> dt1(uint8_t block, uint8_t offset, uint8_t value) {
 std::array<uint8_t, 12> type_write(uint16_t type, uint8_t block = 0x03) {
   const auto msb = static_cast<uint8_t>(type >> 8);
   const auto lsb = static_cast<uint8_t>(type & 0x7F);
-  std::array<uint8_t, 12> m = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
+  std::array<uint8_t, 12> m = {0xF0,  0x41, 0x10, 0x42, 0x12, 0x40,
                                block, 0x00, msb,  lsb,  0x00, 0xF7};
   const uint32_t sum = m[5] + m[6] + m[7] + m[8] + m[9];
   m[10] = static_cast<uint8_t>((128u - (sum & 0x7Fu)) & 0x7Fu);
@@ -225,7 +226,8 @@ TEST_CASE("changing one part's rig keeps another part's chain tail", "[part-fx-r
     prime(*fx, {kPartA});
   }
   REQUIRE(edited.set_part_rig_and_publish(kPartB, delay_rig(45), true));
-  require_same(run_pair(edited, control, kTailBlocks, [](const Block& b) { return b.parts[kPartA]; }));
+  require_same(
+      run_pair(edited, control, kTailBlocks, [](const Block& b) { return b.parts[kPartA]; }));
 }
 
 TEST_CASE("changing a part's rig keeps the tail of the unit it shares", "[part-fx-runtime]") {
@@ -286,8 +288,8 @@ TEST_CASE("a destination default rebuilds only the parts without their own entry
 TEST_CASE("assign, send and CONTROL edits keep the unit; a type change rebuilds it",
           "[part-fx-runtime]") {
   const auto assign_b = dt1(0x41 + kPartB, 0x22, 0x01);  // Part 2 joins the spec unit.
-  const auto send = dt1(0x03, 0x17, 0x10);                // EFX -> reverb send.
-  const auto source = dt1(0x03, 0x1B, 0x01);              // CONTROL 1 <- CC1.
+  const auto send = dt1(0x03, 0x17, 0x10);               // EFX -> reverb send.
+  const auto source = dt1(0x03, 0x1B, 0x01);             // CONTROL 1 <- CC1.
   const auto type = type_write(kOverdrive);
   struct Edit {
     const char* name;
@@ -313,7 +315,8 @@ TEST_CASE("assign, send and CONTROL edits keep the unit; a type change rebuilds 
       // Each of these needs a full publish; none is a parameter-only edit.
       REQUIRE(edited.apply_control_sysex(edit.data, edit.size));
       edited.publish();
-      const Diff d = run_pair(edited, control, kTailBlocks, [](const Block& b) { return b.units[0]; });
+      const Diff d =
+          run_pair(edited, control, kTailBlocks, [](const Block& b) { return b.units[0]; });
       if (edit.keeps) {
         require_same(d);
       } else {
@@ -377,7 +380,8 @@ TEST_CASE("clear_mirror and prepare still rebuild every chain", "[part-fx-runtim
       REQUIRE(fx.set_part_rig(kPartA, delay_rig(20)));
       prime(fx, {kPartA});
       float before = 0.0f;
-      for (int b = 0; b < 16; ++b) before = std::max(before, peak(render_block(fx, {}).parts[kPartA]));
+      for (int b = 0; b < 16; ++b)
+        before = std::max(before, peak(render_block(fx, {}).parts[kPartA]));
       REQUIRE(before > 1e-3f);
       if (use_prepare) {
         fx.prepare(kRate);
@@ -387,14 +391,14 @@ TEST_CASE("clear_mirror and prepare still rebuild every chain", "[part-fx-runtim
       fx.publish();
       fx.settle_quiescent(QuietHost{});
       float after = 0.0f;
-      for (int b = 0; b < 16; ++b) after = std::max(after, peak(render_block(fx, {}).parts[kPartA]));
+      for (int b = 0; b < 16; ++b)
+        after = std::max(after, peak(render_block(fx, {}).parts[kPartA]));
       REQUIRE(after == 0.0f);
     }
   }
 }
 
-TEST_CASE("a classic unit keeps its state across an unrelated rig change",
-          "[part-fx-runtime]") {
+TEST_CASE("a classic unit keeps its state across an unrelated rig change", "[part-fx-runtime]") {
   s::PartFxStage edited(stage_config(s::GsEfxRealization::kClassic));
   s::PartFxStage control(stage_config(s::GsEfxRealization::kClassic));
   for (s::PartFxStage* fx : {&edited, &control}) {
@@ -444,7 +448,8 @@ TEST_CASE("a realisation switch rebuilds the unit", "[part-fx-runtime]") {
   }
   edited.set_realization(s::GsEfxRealization::kClassic);
   edited.publish();
-  require_different(run_pair(edited, control, kTailBlocks, [](const Block& b) { return b.units[0]; }));
+  require_different(
+      run_pair(edited, control, kTailBlocks, [](const Block& b) { return b.units[0]; }));
 }
 
 TEST_CASE("a parameter byte that needs a publish rebuilds the unit", "[part-fx-runtime]") {
@@ -471,7 +476,8 @@ TEST_CASE("a parameter byte that needs a publish rebuilds the unit", "[part-fx-r
   }
   REQUIRE(control_sysex(edited, slot_write(static_cast<uint8_t>(slot), 0x05)));
   edited.publish();
-  require_different(run_pair(edited, control, kTailBlocks, [](const Block& b) { return b.units[0]; }));
+  require_different(
+      run_pair(edited, control, kTailBlocks, [](const Block& b) { return b.units[0]; }));
 }
 
 TEST_CASE("switching a kept unit's CONTROL source off puts its slot back at the base",
@@ -488,7 +494,8 @@ TEST_CASE("switching a kept unit's CONTROL source off puts its slot back at the 
     const auto depth = dt1(0x03, 0x1C, 0x7F);  // Full positive modulation.
     REQUIRE(fx->apply_unit_sysex(depth.data(), depth.size()));
     fx->publish();
-    for (int b = 0; b < 4; ++b) render_block(*fx, b == 0 ? std::vector<int>{kPartA} : std::vector<int>{}, true, host);
+    for (int b = 0; b < 4; ++b)
+      render_block(*fx, b == 0 ? std::vector<int>{kPartA} : std::vector<int>{}, true, host);
   }
   // Source off on one side, depth to the centre on the other: both leave the
   // slot at its base, so the kept units must agree from here on.

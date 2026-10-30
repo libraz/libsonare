@@ -205,9 +205,8 @@ inline eq::DynamicEqBand dynamic_eq_band(const ParamMap& params, const std::stri
 /// @brief Publishes one dynamic-EQ band's keys, types and defaults. Declaration
 /// counterpart of @ref dynamic_eq_band; see @ref declare_eq_band_params.
 inline void declare_dynamic_eq_band_params(const ParamMap& params, const std::string& prefix) {
-  adopt_from(params, [&](const ParamMap& declaration) {
-    (void)dynamic_eq_band(declaration, prefix);
-  });
+  adopt_from(params,
+             [&](const ParamMap& declaration) { (void)dynamic_eq_band(declaration, prefix); });
 }
 
 /// @brief The field names @p read_band reads, found by replaying it against an
@@ -357,7 +356,8 @@ inline void populate_crossover_bands(std::vector<BandConfig>& bands,
       read_band(params, prefix, bands[index]);
     } else if (params.records_declarations()) {
       BandConfig band{};
-      adopt_from(params, [&](const ParamMap& declaration) { read_band(declaration, prefix, band); });
+      adopt_from(params,
+                 [&](const ParamMap& declaration) { read_band(declaration, prefix, band); });
     }
   }
 }

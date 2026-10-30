@@ -135,9 +135,7 @@ SKIPS: dict[str, str] = {
     "_require_instance": (
         "an isinstance check on a dataclass argument; no integer domain is involved"
     ),
-    "_require_export": (
-        "a symbol-presence check on the loaded library; no argument value is read"
-    ),
+    "_require_export": ("a symbol-presence check on the loaded library; no argument value is read"),
 }
 
 
