@@ -13,6 +13,38 @@
 
 namespace sonare::engine {
 
+namespace {
+
+// Every strip scalar the constructor config does not carry.
+void apply_shared_strip_scalars(mixing::ChannelStrip& strip, const mixing::api::Strip& spec) {
+  strip.set_vca_offset_db(spec.vca_offset_db);
+  strip.set_width(spec.width);
+  strip.set_muted(spec.muted);
+  strip.set_soloed(spec.soloed);
+  strip.set_solo_safe(spec.solo_safe);
+  strip.set_pan_mode(to_pan_mode(spec.pan_mode));
+  strip.set_dual_pan(spec.dual_pan_left, spec.dual_pan_right);
+  strip.set_polarity_invert(spec.polarity_invert_left, spec.polarity_invert_right);
+  strip.set_channel_delay_samples(spec.channel_delay_samples);
+  strip.set_surround_pan_params({spec.surround_pan.azimuth, spec.surround_pan.elevation,
+                                 spec.surround_pan.divergence, spec.surround_pan.lfe,
+                                 spec.surround_pan.distance});
+}
+
+}  // namespace
+
+std::unique_ptr<rt::ProcessorBase> make_insert_processor(const mixing::api::Insert& insert,
+                                                         double build_sample_rate,
+                                                         bool* stereo_pair_only) {
+  auto processor =
+      mastering::api::make_insert(insert.processor_name, insert.params_json, nullptr,
+                                  resource::kDefaultProjectImportResourceLimits, build_sample_rate);
+  if (!processor) return nullptr;
+  *stereo_pair_only = mastering::api::channel_policy(insert.processor_name) ==
+                      mastering::api::ChannelPolicy::StereoPairOnly;
+  return processor;
+}
+
 std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing::api::Strip& spec,
                                                                    double build_sample_rate) {
   mixing::ChannelStripConfig config{spec.fader_db,
@@ -24,28 +56,14 @@ std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing:
                                     false};
   config.mono_pan_centre_unity = true;
   auto strip = std::make_unique<mixing::ChannelStrip>(config);
-  strip->set_vca_offset_db(spec.vca_offset_db);
-  strip->set_width(spec.width);
-  strip->set_muted(spec.muted);
-  strip->set_soloed(spec.soloed);
-  strip->set_solo_safe(spec.solo_safe);
-  strip->set_pan_mode(to_pan_mode(spec.pan_mode));
-  strip->set_dual_pan(spec.dual_pan_left, spec.dual_pan_right);
-  strip->set_polarity_invert(spec.polarity_invert_left, spec.polarity_invert_right);
-  strip->set_channel_delay_samples(spec.channel_delay_samples);
-  strip->set_surround_pan_params({spec.surround_pan.azimuth, spec.surround_pan.elevation,
-                                  spec.surround_pan.divergence, spec.surround_pan.lfe,
-                                  spec.surround_pan.distance});
+  apply_shared_strip_scalars(*strip, spec);
   mixing::apply_strip_eq(*strip, spec.eq, nullptr);
   for (const auto& insert : spec.inserts) {
-    auto processor = mastering::api::make_insert(insert.processor_name, insert.params_json, nullptr,
-                                                 resource::kDefaultProjectImportResourceLimits,
-                                                 build_sample_rate);
+    bool spo = false;
+    auto processor = make_insert_processor(insert, build_sample_rate, &spo);
     if (!processor) {
       return nullptr;
     }
-    const bool spo = mastering::api::channel_policy(insert.processor_name) ==
-                     mastering::api::ChannelPolicy::StereoPairOnly;
     if (insert.slot == mixing::api::InsertSlot::PreFader) {
       strip->add_pre_insert(std::move(processor), spo);
     } else {
@@ -153,18 +171,7 @@ void apply_strip_scalars(mixing::ChannelStrip& strip, const mixing::api::Strip& 
   strip.set_pan(next.pan);
   strip.set_pan_law(mixing::pan_law_from_index(next.pan_law));
   strip.set_input_trim_db(next.input_trim_db);
-  strip.set_vca_offset_db(next.vca_offset_db);
-  strip.set_width(next.width);
-  strip.set_muted(next.muted);
-  strip.set_soloed(next.soloed);
-  strip.set_solo_safe(next.solo_safe);
-  strip.set_pan_mode(to_pan_mode(next.pan_mode));
-  strip.set_dual_pan(next.dual_pan_left, next.dual_pan_right);
-  strip.set_polarity_invert(next.polarity_invert_left, next.polarity_invert_right);
-  strip.set_channel_delay_samples(next.channel_delay_samples);
-  strip.set_surround_pan_params({next.surround_pan.azimuth, next.surround_pan.elevation,
-                                 next.surround_pan.divergence, next.surround_pan.lfe,
-                                 next.surround_pan.distance});
+  apply_shared_strip_scalars(strip, next);
   mixing::apply_strip_eq(strip, next.eq, &previous.eq);
 }
 

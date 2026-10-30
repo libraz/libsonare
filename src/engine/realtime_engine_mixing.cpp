@@ -88,12 +88,12 @@ TrackLaneRemapResult remap_track_command(
     size_t new_lane_count) noexcept {
   switch (command.type) {
     case rt::CommandType::kSetTrackInsertParam: {
-      const uint32_t old_lane = (command.target_id >> 16u) & 0xFFu;
+      const uint32_t old_lane = rt::track_insert_lane(command.target_id);
       uint32_t new_lane = 0;
       const TrackLaneRemapResult result = remap_track_lane_index(
           old_lane, old_lane_ids, old_lane_count, new_lane_ids, new_lane_count, &new_lane);
       if (result == TrackLaneRemapResult::kRemapped) {
-        command.target_id = (command.target_id & ~0x00FF0000u) | (new_lane << 16u);
+        command.target_id = rt::with_track_insert_lane(command.target_id, new_lane);
       }
       return result;
     }
@@ -489,13 +489,7 @@ InsertParamSetResult RealtimeEngine::set_track_insert_param_detailed(uint32_t tr
   }
   const int64_t id = resolve_track_insert_automation_id(track_id, insert_index, key);
   if (id < 0) return InsertParamSetResult::kInvalidTarget;
-  rt::Command command;
-  // Generic reserved id so apply_command records the manual base.
-  command.type = rt::CommandType::kSetParam;
-  command.target_id = static_cast<uint32_t>(id);
-  command.sample_time = -1;  // block head / immediate
-  command.arg.f = value;
-  return push_command(command) ? InsertParamSetResult::kQueued : InsertParamSetResult::kQueueFull;
+  return push_insert_param_command(id, value);
 }
 
 bool RealtimeEngine::set_track_insert_param(uint32_t track_id, unsigned int insert_index,
@@ -511,8 +505,7 @@ bool RealtimeEngine::apply_track_insert_param_by_name_now(uint32_t track_id,
   const bool applied =
       track_mixer_runtime_.apply_track_insert_param_by_name_now(track_id, insert_index, key, value);
   if (applied) {
-    const int64_t automation_id = resolve_track_insert_automation_id(track_id, insert_index, key);
-    if (automation_id >= 0) record_parameter_base(static_cast<uint32_t>(automation_id), value);
+    record_insert_base(resolve_track_insert_automation_id(track_id, insert_index, key), value);
   }
   return applied;
 }
@@ -524,8 +517,7 @@ bool RealtimeEngine::restore_track_insert_param_by_name(uint32_t track_id,
   const bool applied =
       track_mixer_runtime_.restore_track_insert_param_by_name(track_id, insert_index, key, value);
   if (applied) {
-    const int64_t automation_id = resolve_track_insert_automation_id(track_id, insert_index, key);
-    if (automation_id >= 0) record_parameter_base(static_cast<uint32_t>(automation_id), value);
+    record_insert_base(resolve_track_insert_automation_id(track_id, insert_index, key), value);
   }
   return applied;
 }
@@ -547,12 +539,7 @@ InsertParamSetResult RealtimeEngine::set_master_insert_param_detailed(unsigned i
   if (!insert_param_value_acceptable(value)) return InsertParamSetResult::kInvalidTarget;
   const int64_t id = resolve_master_insert_automation_id(insert_index, key);
   if (id < 0) return InsertParamSetResult::kInvalidTarget;
-  rt::Command command;
-  command.type = rt::CommandType::kSetParam;
-  command.target_id = static_cast<uint32_t>(id);
-  command.sample_time = -1;
-  command.arg.f = value;
-  return push_command(command) ? InsertParamSetResult::kQueued : InsertParamSetResult::kQueueFull;
+  return push_insert_param_command(id, value);
 }
 
 bool RealtimeEngine::set_master_insert_param(unsigned int insert_index, const std::string& key,
@@ -593,8 +580,7 @@ bool RealtimeEngine::restore_master_insert_param_by_name(unsigned int insert_ind
         slot.assigned = false;
       }
     }
-    const int64_t automation_id = resolve_master_insert_automation_id(insert_index, key);
-    if (automation_id >= 0) record_parameter_base(static_cast<uint32_t>(automation_id), value);
+    record_insert_base(resolve_master_insert_automation_id(insert_index, key), value);
   }
   return applied;
 }
@@ -615,12 +601,7 @@ InsertParamSetResult RealtimeEngine::set_bus_insert_param_detailed(uint32_t bus_
   }
   const int64_t id = resolve_bus_insert_automation_id(bus_id, insert_index, key);
   if (id < 0) return InsertParamSetResult::kInvalidTarget;
-  rt::Command command;
-  command.type = rt::CommandType::kSetParam;
-  command.target_id = static_cast<uint32_t>(id);
-  command.sample_time = -1;  // block head / immediate
-  command.arg.f = value;
-  return push_command(command) ? InsertParamSetResult::kQueued : InsertParamSetResult::kQueueFull;
+  return push_insert_param_command(id, value);
 }
 
 bool RealtimeEngine::set_bus_insert_param(uint32_t bus_id, unsigned int insert_index,
@@ -635,8 +616,7 @@ bool RealtimeEngine::apply_bus_insert_param_by_name_now(uint32_t bus_id, unsigne
   const bool applied =
       track_mixer_runtime_.apply_bus_insert_param_by_name_now(bus_id, insert_index, key, value);
   if (applied) {
-    const int64_t automation_id = resolve_bus_insert_automation_id(bus_id, insert_index, key);
-    if (automation_id >= 0) record_parameter_base(static_cast<uint32_t>(automation_id), value);
+    record_insert_base(resolve_bus_insert_automation_id(bus_id, insert_index, key), value);
   }
   return applied;
 }
@@ -647,8 +627,7 @@ bool RealtimeEngine::restore_bus_insert_param_by_name(uint32_t bus_id, unsigned 
   const bool applied =
       track_mixer_runtime_.restore_bus_insert_param_by_name(bus_id, insert_index, key, value);
   if (applied) {
-    const int64_t automation_id = resolve_bus_insert_automation_id(bus_id, insert_index, key);
-    if (automation_id >= 0) record_parameter_base(static_cast<uint32_t>(automation_id), value);
+    record_insert_base(resolve_bus_insert_automation_id(bus_id, insert_index, key), value);
   }
   return applied;
 }
@@ -761,6 +740,27 @@ bool RealtimeEngine::set_master_eq_band(size_t band_index,
   }
 }
 
+void RealtimeEngine::record_insert_base(int64_t automation_id, float value) noexcept {
+  if (automation_id >= 0) record_parameter_base(static_cast<uint32_t>(automation_id), value);
+}
+
+InsertParamSetResult RealtimeEngine::push_insert_param_command(int64_t automation_id,
+                                                               float value) noexcept {
+  rt::Command command;
+  // Generic reserved id so apply_command records the manual base.
+  command.type = rt::CommandType::kSetParam;
+  command.target_id = static_cast<uint32_t>(automation_id);
+  command.sample_time = -1;  // block head / immediate
+  command.arg.f = value;
+  return push_command(command) ? InsertParamSetResult::kQueued : InsertParamSetResult::kQueueFull;
+}
+
+void RealtimeEngine::prepare_scope_tap() {
+  scope_tap_.prepare(sample_rate_, max_block_size_,
+                     8 * (TrackMixerRuntime::kMaxTrackLanes + TrackMixerRuntime::kMaxBusLanes + 2),
+                     2048, scope_band_count_);
+}
+
 uint32_t RealtimeEngine::configure_scope_telemetry(int interval_frames, uint32_t band_count) {
   scope_interval_frames_.store(std::max(0, interval_frames), std::memory_order_relaxed);
   const uint32_t clamped = std::clamp<uint32_t>(band_count, 1, ScopeTelemetryRecord::kMaxBands);
@@ -769,10 +769,7 @@ uint32_t RealtimeEngine::configure_scope_telemetry(int interval_frames, uint32_t
     if (max_block_size_ > 0) {
       // Re-prepare the tap with the new band resolution. Control-thread only,
       // not concurrent with process() (same contract as prepare()).
-      scope_tap_.prepare(
-          sample_rate_, max_block_size_,
-          8 * (TrackMixerRuntime::kMaxTrackLanes + TrackMixerRuntime::kMaxBusLanes + 2), 2048,
-          scope_band_count_);
+      prepare_scope_tap();
     }
   }
   // Before prepare(), the tap still carries its default band count. Return the
@@ -849,7 +846,7 @@ bool RealtimeEngine::route_master_insert_param_smoothed(unsigned int insert_inde
   free_slot->assigned = true;
   free_slot->insert_index = insert_index;
   free_slot->param_id = param_id;
-  free_slot->smoother.prepare(sample_rate_, 5.0f);
+  free_slot->smoother.prepare(sample_rate_, kMixerSmoothingMs);
   free_slot->smoother.reset(baseline);
   free_slot->smoother.set_target(value);
   return true;
@@ -857,7 +854,6 @@ bool RealtimeEngine::route_master_insert_param_smoothed(unsigned int insert_inde
 
 void RealtimeEngine::advance_master_insert_automations(int num_steps) noexcept {
   if (num_steps <= 0 || owned_master_strip_ == nullptr) return;
-  constexpr float kSettleEpsilon = 1.0e-6f;
   for (MasterInsertAutoSlot& slot : master_insert_auto_slots_) {
     if (!slot.active) continue;
     const float value = slot.smoother.advance(num_steps);

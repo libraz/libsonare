@@ -39,9 +39,8 @@ bool lane_sends_equal(const TrackLaneConfig& left, const TrackLaneConfig& right)
 bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
   last_refusal_ = MixerRefusal::kArgument;
   if (!lane_config_valid(lanes)) return false;
-  constexpr int kMaxLaneClipDelayQ8 = mixing::kMaxAlignmentDelaySamples << 8;
   // Refuse a non-empty lane snapshot when the retained direct delay exceeds the lane bank ceiling.
-  if (!lanes.empty() && clip_pdc_delay_q8_ > kMaxLaneClipDelayQ8) return refuse_from_state();
+  if (!lanes.empty() && clip_pdc_delay_q8_ > kMaxClipDelayQ8) return refuse_from_state();
   std::shared_ptr<const std::vector<TrackLaneConfig>> snapshot;
   try {
     snapshot = std::make_shared<const std::vector<TrackLaneConfig>>(std::move(lanes));
@@ -111,8 +110,7 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
       std::array<mixing::SendConfig, mixing::ChannelStrip::kMaxSends> sends{};
       for (size_t send_index = 0; send_index < config.sends.size(); ++send_index) {
         const TrackLaneConfig::Send& send = config.sends[send_index];
-        sends[send_index] =
-            mixing::SendConfig{send.enabled ? send.level_db : kFloorDb, send.timing, 5.0f};
+        sends[send_index] = send_config_for(send);
       }
       if (!candidate_strips[lane_index]->prepare_sends(sends.data(), config.sends.size(),
                                                        staged_sends[lane_index])) {
@@ -141,18 +139,7 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
   // Insert ramps stay keyed by track identity; only a track leaving the snapshot is retired.
   settle_insert_automations(*snapshot, true);
   remap_lane_insert_automations(*snapshot);
-  for (size_t lane_index = 0; lane_index < snapshot->size(); ++lane_index) {
-    if (staged_owned[lane_index] == nullptr) continue;
-    mixing::ChannelStrip* raw = staged_owned[lane_index].get();
-    owned_strips_.push_back(
-        OwnedStrip{(*snapshot)[lane_index].track_id, std::move(staged_owned[lane_index]), {}});
-    record_track_strip_binding((*snapshot)[lane_index].track_id, raw);
-  }
-  for (size_t lane_index = 0; lane_index < snapshot->size(); ++lane_index) {
-    if (candidate_strips[lane_index] != nullptr && replace_sends[lane_index]) {
-      candidate_strips[lane_index]->commit_sends(staged_sends[lane_index]);
-    }
-  }
+  commit_staged_lane_strips(*snapshot, staged_owned, candidate_strips, replace_sends, staged_sends);
   commit_pdc_updates(prepared_pdc);
   // snapshot is non-null and publish() has no other rejection path.  Treat
   // this as the publication point so a hypothetical future failure cannot
@@ -487,28 +474,24 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
       kMaxSidechainBindings * kMaxLaneChannels * static_cast<size_t>(max_block_size_), 0.0f);
   master_key_frames_.fill(0);
   for (LaneState& lane : lane_states_) {
-    lane.fader_gain.prepare(sample_rate_, 5.0f);
-    lane.pan.prepare(sample_rate_, 5.0f);
-    lane.gate.prepare(sample_rate_, 10.0f);
+    lane.fader_gain.prepare(sample_rate_, kMixerSmoothingMs);
+    lane.pan.prepare(sample_rate_, kMixerSmoothingMs);
+    lane.gate.prepare(sample_rate_, kLaneGateSmoothingMs);
     lane.clip_pdc_delay.set_prepared_channels(kMaxLaneChannels);
     lane.clip_pdc_delay.prepare(sample_rate_, max_block_size_);
     // Same time constant as the stereo pan smoother, so a surround placement
     // glides over the same interval a stereo pan does.
-    lane.surround_glide.prepare(sample_rate_, 5.0f);
+    lane.surround_glide.prepare(sample_rate_, kMixerSmoothingMs);
     lane.surround_primed_channels = -1;
-    lane.fader_gain.reset(1.0f);
-    lane.pan.reset(0.0f);
-    lane.gate.reset(1.0f);
-    lane.solo = false;
-    lane.mute = false;
+    reset_lane_controls(lane);
     lane.monitor_mode = TrackMonitorMode::kOff;
     if (lane.strip) {
       lane.strip->prepare(sample_rate_, max_block_size_);
     }
   }
   for (BusState& bus : bus_states_) {
-    bus.gain.prepare(sample_rate_, 5.0f);
-    bus.input_trim_gain.prepare(sample_rate_, 5.0f);
+    bus.gain.prepare(sample_rate_, kMixerSmoothingMs);
+    bus.input_trim_gain.prepare(sample_rate_, kMixerSmoothingMs);
     bus.width.prepare(sample_rate_, max_block_size_);
     // Every slot, configured or not, so the render never meets an unprepared
     // stage and a surround bus finds state for all of its planes.
@@ -555,7 +538,7 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
     }
   }
   for (InsertAutoSlot& slot : insert_auto_slots_) {
-    slot.smoother.prepare(sample_rate_, 5.0f);
+    slot.smoother.prepare(sample_rate_, kMixerSmoothingMs);
     slot.smoother.reset(0.0f);
     slot.active = false;
     slot.assigned = false;
@@ -586,13 +569,7 @@ void TrackMixerRuntime::process(float* const* channels, int num_channels, int nu
 }
 
 void TrackMixerRuntime::reset() {
-  for (LaneState& lane : lane_states_) {
-    lane.fader_gain.reset(1.0f);
-    lane.pan.reset(0.0f);
-    lane.gate.reset(1.0f);
-    lane.solo = false;
-    lane.mute = false;
-  }
+  for (LaneState& lane : lane_states_) reset_lane_controls(lane);
   flush_pdc_delays();
   flush_clip_pdc_delays();
 }
@@ -606,11 +583,10 @@ bool TrackMixerRuntime::set_clip_pdc_delay_q8(int delay_samples_q8) noexcept {
 
 bool TrackMixerRuntime::prepare_clip_pdc_delay_q8(int delay_samples_q8,
                                                   ClipPdcPlan& out) const noexcept {
-  constexpr int kMaxDelayQ8 = mixing::kMaxAlignmentDelaySamples << 8;
   if (delay_samples_q8 < 0) return false;
   // With no lanes there is no clip bank, so a direct-only latency above the lane ceiling is valid.
   const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get();
-  if ((lanes == nullptr || lanes->empty()) && delay_samples_q8 > kMaxDelayQ8) {
+  if ((lanes == nullptr || lanes->empty()) && delay_samples_q8 > kMaxClipDelayQ8) {
     try {
       for (size_t lane_index = 0; lane_index < lane_states_.size(); ++lane_index) {
         out.banks[lane_index] = lane_states_[lane_index].clip_pdc_delay;
@@ -622,7 +598,7 @@ bool TrackMixerRuntime::prepare_clip_pdc_delay_q8(int delay_samples_q8,
     }
   }
   // Never clamp only the lane side: lane clips would sit on a different timebase than direct clips.
-  if (delay_samples_q8 > kMaxDelayQ8) return false;
+  if (delay_samples_q8 > kMaxClipDelayQ8) return false;
   const int bounded = delay_samples_q8;
   // Stage on copies of the live banks so a failure leaves lanes untouched and history survives.
   try {
@@ -730,6 +706,55 @@ void TrackMixerRuntime::settle_insert_automations(const std::vector<TrackLaneCon
   }
 }
 
+bool TrackMixerRuntime::sends_valid(const std::vector<TrackLaneConfig::Send>& sends,
+                                    bool require_declared) const noexcept {
+  if (sends.size() > mixing::ChannelStrip::kMaxSends) return false;
+  for (size_t send_index = 0; send_index < sends.size(); ++send_index) {
+    const TrackLaneConfig::Send& send = sends[send_index];
+    if (send.bus_id == 0 || !gain_db_in_range(send.level_db) ||
+        (require_declared && bus_state_for(send.bus_id) == nullptr)) {
+      return false;
+    }
+    for (size_t other = send_index + 1; other < sends.size(); ++other) {
+      if (send.bus_id == sends[other].bus_id) return false;
+    }
+  }
+  return true;
+}
+
+mixing::SendConfig TrackMixerRuntime::send_config_for(const TrackLaneConfig::Send& send) noexcept {
+  return mixing::SendConfig{send.enabled ? send.level_db : kFloorDb, send.timing,
+                            kMixerSmoothingMs};
+}
+
+void TrackMixerRuntime::commit_staged_lane_strips(
+    const std::vector<TrackLaneConfig>& lanes,
+    std::array<std::unique_ptr<mixing::ChannelStrip>, kMaxTrackLanes>& staged_owned,
+    const std::array<mixing::ChannelStrip*, kMaxTrackLanes>& strips,
+    const std::array<bool, kMaxTrackLanes>& replace_sends,
+    std::array<mixing::ChannelStrip::PreparedSends, kMaxTrackLanes>& staged_sends) {
+  for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
+    if (staged_owned[lane_index] == nullptr) continue;
+    mixing::ChannelStrip* raw = staged_owned[lane_index].get();
+    owned_strips_.push_back(
+        OwnedStrip{lanes[lane_index].track_id, std::move(staged_owned[lane_index]), {}});
+    record_track_strip_binding(lanes[lane_index].track_id, raw);
+  }
+  for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
+    if (strips[lane_index] != nullptr && replace_sends[lane_index]) {
+      strips[lane_index]->commit_sends(staged_sends[lane_index]);
+    }
+  }
+}
+
+void TrackMixerRuntime::reset_lane_controls(LaneState& lane) noexcept {
+  lane.fader_gain.reset(1.0f);
+  lane.pan.reset(0.0f);
+  lane.gate.reset(1.0f);
+  lane.solo = false;
+  lane.mute = false;
+}
+
 bool TrackMixerRuntime::lane_config_valid(
     const std::vector<TrackLaneConfig>& lanes) const noexcept {
   if (lanes.size() > kMaxTrackLanes) return false;
@@ -739,17 +764,7 @@ bool TrackMixerRuntime::lane_config_valid(
     if (lanes[i].output_bus_id != 0 && bus_state_for(lanes[i].output_bus_id) == nullptr) {
       return false;
     }
-    if (lanes[i].sends.size() > mixing::ChannelStrip::kMaxSends) return false;
-    for (size_t send_index = 0; send_index < lanes[i].sends.size(); ++send_index) {
-      const TrackLaneConfig::Send& send = lanes[i].sends[send_index];
-      if (send.bus_id == 0 || !gain_db_in_range(send.level_db) ||
-          bus_state_for(send.bus_id) == nullptr) {
-        return false;
-      }
-      for (size_t other = send_index + 1; other < lanes[i].sends.size(); ++other) {
-        if (send.bus_id == lanes[i].sends[other].bus_id) return false;
-      }
-    }
+    if (!sends_valid(lanes[i].sends, true)) return false;
     for (size_t j = i + 1; j < lanes.size(); ++j) {
       if (lanes[i].track_id == lanes[j].track_id) return false;
     }
@@ -855,7 +870,8 @@ void TrackMixerRuntime::record_track_strip_binding(uint32_t track_id, mixing::Ch
 
 std::unique_ptr<mixing::ChannelStrip> TrackMixerRuntime::make_seed_strip() const {
   mixing::ChannelStripConfig config{
-      0.0f, 0.0f, mixing::PanLaw::Linear0dB, 5.0f, mixing::EqPosition::PreFader, 0.0f, false};
+      0.0f, 0.0f, mixing::PanLaw::Linear0dB, kMixerSmoothingMs, mixing::EqPosition::PreFader,
+      0.0f, false};
   config.mono_pan_centre_unity = true;
   auto strip = std::make_unique<mixing::ChannelStrip>(config);
   if (max_block_size_ > 0) {
@@ -909,17 +925,20 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
     }
   }
 
+  const auto first_unmoved_previous = [&previous, &moved_previous]() noexcept {
+    for (size_t previous_index = 0; previous_index < previous.size(); ++previous_index) {
+      if (!moved_previous[previous_index]) return static_cast<int>(previous_index);
+    }
+    return -1;
+  };
+
   const auto reset_state = [this](LaneState& lane, uint32_t track_id) noexcept {
     lane.track_id = track_id;
-    lane.fader_gain.prepare(sample_rate_, 5.0f);
-    lane.pan.prepare(sample_rate_, 5.0f);
-    lane.gate.prepare(sample_rate_, 10.0f);
-    lane.surround_glide.prepare(sample_rate_, 5.0f);
-    lane.fader_gain.reset(1.0f);
-    lane.pan.reset(0.0f);
-    lane.gate.reset(1.0f);
-    lane.solo = false;
-    lane.mute = false;
+    lane.fader_gain.prepare(sample_rate_, kMixerSmoothingMs);
+    lane.pan.prepare(sample_rate_, kMixerSmoothingMs);
+    lane.gate.prepare(sample_rate_, kLaneGateSmoothingMs);
+    lane.surround_glide.prepare(sample_rate_, kMixerSmoothingMs);
+    reset_lane_controls(lane);
     lane.monitor_mode = TrackMonitorMode::kOff;
     lane.strip = nullptr;
     // A new track identity must not inherit the previous occupant's clip delay audio.
@@ -954,14 +973,7 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
         break;
       }
     }
-    if (source_index < 0) {
-      for (size_t previous_index = 0; previous_index < previous.size(); ++previous_index) {
-        if (!moved_previous[previous_index]) {
-          source_index = static_cast<int>(previous_index);
-          break;
-        }
-      }
-    }
+    if (source_index < 0) source_index = first_unmoved_previous();
     if (source_index >= 0) {
       const size_t source = static_cast<size_t>(source_index);
       next[next_index] = std::move(previous[source]);
@@ -988,12 +1000,7 @@ void TrackMixerRuntime::prepare_lanes_from_snapshot(
       next[next_index].clip_pdc_delay.reset();
       continue;
     }
-    for (size_t previous_index = 0; previous_index < previous.size(); ++previous_index) {
-      if (!moved_previous[previous_index]) {
-        source_index = static_cast<int>(previous_index);
-        break;
-      }
-    }
+    source_index = first_unmoved_previous();
     if (source_index >= 0) {
       const size_t source = static_cast<size_t>(source_index);
       next[next_index] = std::move(previous[source]);
@@ -1078,8 +1085,7 @@ void TrackMixerRuntime::configure_strip_sends(const TrackLaneConfig& config,
     if (bus_state_for(send.bus_id) == nullptr) {
       throw std::invalid_argument("track send references an unknown bus");
     }
-    configs[send_index] =
-        mixing::SendConfig{send.enabled ? send.level_db : kFloorDb, send.timing, 5.0f};
+    configs[send_index] = send_config_for(send);
   }
   mixing::ChannelStrip::PreparedSends prepared;
   if (!strip.prepare_sends(configs.data(), config.sends.size(), prepared)) {

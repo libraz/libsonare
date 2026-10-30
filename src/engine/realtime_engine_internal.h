@@ -17,6 +17,12 @@ inline bool command_belongs_to_block(int64_t sample_time, int64_t block_start,
   return sample_time >= block_start && sample_time < block_end_frame(block_start, num_frames);
 }
 
+/// Smoothing time of the master insert automation ramps.
+inline constexpr float kMixerSmoothingMs = 5.0f;
+
+/// Distance from its target under which an automation smoother counts as settled.
+inline constexpr float kSettleEpsilon = 1.0e-6f;
+
 constexpr uint32_t kEngineParamNamespace = 0x4D580000u;
 constexpr uint32_t kEngineParamNamespaceMask = 0xFFFF0000u;
 constexpr uint32_t kEngineParamLaneMask = 0x0000FF00u;

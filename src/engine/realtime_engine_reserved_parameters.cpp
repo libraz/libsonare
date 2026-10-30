@@ -349,8 +349,8 @@ bool RealtimeEngine::describe_reserved_parameter(uint32_t id,
   return true;
 }
 
-bool RealtimeEngine::constructed_insert_parameter_base(uint32_t target_id,
-                                                       float* out_value) const noexcept {
+bool RealtimeEngine::insert_parameter_constructed_value(uint32_t target_id,
+                                                        float* out_value) const noexcept {
   if (out_value == nullptr || !is_insert_param_id(target_id)) return false;
   const InsertAutomationTarget* target = live_insert_target(target_id);
   if (target == nullptr || !insert_target_holds(*target)) return false;
@@ -407,11 +407,6 @@ bool RealtimeEngine::restore_track_lane_parameter(uint32_t target_id) noexcept {
   if (target == nullptr || target->strip != InsertStripKind::kTrackLane) return false;
   return track_mixer_runtime_.restore_track_parameter(target->owner_id,
                                                       insert_param_param(target_id));
-}
-
-bool RealtimeEngine::insert_parameter_constructed_value(uint32_t target_id,
-                                                        float* out_value) const noexcept {
-  return constructed_insert_parameter_base(target_id, out_value);
 }
 
 #endif

@@ -86,7 +86,7 @@ void RealtimeEngine::release_parameter_base(uint32_t target_id) noexcept {
   // table. Reconstructing a DSP processor on the audio thread is forbidden;
   // insert factories attach an immutable construction baseline instead.
   if (!found && is_insert_param_id(target_id)) {
-    found = constructed_insert_parameter_base(target_id, &value);
+    found = insert_parameter_constructed_value(target_id, &value);
   }
   if (!found) {
     restore_track_lane_parameter(target_id);
@@ -154,7 +154,7 @@ void RealtimeEngine::purge_insert_edits(const InsertPurge& purge) noexcept {
                                    // The legacy track command stores the lane position in
                                    // bits 16..23.
                                    return purge.legacy_track_lane >= 0 &&
-                                          ((command.target_id >> 16u) & 0xFFu) ==
+                                          rt::track_insert_lane(command.target_id) ==
                                               static_cast<uint32_t>(purge.legacy_track_lane);
                                  case rt::CommandType::kSetMasterInsertParam:
                                    return purge.legacy_master;
@@ -508,7 +508,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       // slot-table overflow, surfaced via kInsertAutomationOverflow telemetry,
       // or a value the processor refuses, which this id-less command cannot name.
       const uint32_t packed = command.target_id;
-      const size_t lane_index = (packed >> 16) & 0xFFu;
+      const size_t lane_index = rt::track_insert_lane(packed);
       const unsigned int insert_index = (packed >> 8) & 0xFFu;
       const unsigned int param_id = packed & 0xFFu;
       // Positional legacy command: it carries no insert id, so it records no manual base.
@@ -780,7 +780,6 @@ void RealtimeEngine::tick_smoothed_params(int num_steps) noexcept {
       slot.smoother.set_target(target);
     }
   }
-  constexpr float kSettleEpsilon = 1.0e-6f;
   for (SmoothedParam& slot : smoothed_params_) {
     if (!slot.active) continue;
     const float current = slot.smoother.advance(num_steps);

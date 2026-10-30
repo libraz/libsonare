@@ -663,6 +663,13 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   };
 
  private:
+  /// Smoothing time of the fader, pan, bus gain and send ramps.
+  static constexpr float kMixerSmoothingMs = 5.0f;
+  /// Smoothing time of the lane gate ramp.
+  static constexpr float kLaneGateSmoothingMs = 10.0f;
+  /// Ceiling of the retained clip delay in Q8 samples (the lane alignment bank length).
+  static constexpr int kMaxClipDelayQ8 = mixing::kMaxAlignmentDelaySamples << 8;
+
   // An allocation failure recorded deeper in the same call outranks the state verdict.
   bool refuse_from_state() noexcept {
     if (last_refusal_ != MixerRefusal::kOutOfMemory) last_refusal_ = MixerRefusal::kState;
@@ -680,9 +687,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     uint32_t track_id = 0;
     // Linear gain, even though the public parameter is dB. Converting once at
     // control rate matches ChannelStrip's gain ramp and avoids pow() per sample.
-    rt::ParamSmoother fader_gain{1.0f, 5.0f, sonare::constants::kDefaultDawSampleRate};
-    rt::ParamSmoother pan{0.0f, 5.0f, sonare::constants::kDefaultDawSampleRate};
-    rt::ParamSmoother gate{1.0f, 10.0f, sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother fader_gain{1.0f, kMixerSmoothingMs, sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother pan{0.0f, kMixerSmoothingMs, sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother gate{1.0f, kLaneGateSmoothingMs, sonare::constants::kDefaultDawSampleRate};
     bool solo = false;
     bool mute = false;
     TrackMonitorMode monitor_mode = TrackMonitorMode::kOff;
@@ -735,15 +742,16 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
 
   struct BusState {
     uint32_t bus_id = 0;
-    rt::ParamSmoother gain{1.0f, 5.0f, sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother gain{1.0f, kMixerSmoothingMs, sonare::constants::kDefaultDawSampleRate};
     // Bus output trim / width / polarity, mirroring a strip. Trim and polarity
     // run before the insert chain, width after it. At their defaults (0 dB /
     // width 1 / no invert) the per-block processing is skipped entirely, so a
     // bus that never engages them stays bit-identical. The trim smoother holds a
     // linear gain (not dB), smoothing in the linear domain exactly like the
     // strip's GainProcessor, so a bus and a strip ramp identically.
-    rt::ParamSmoother input_trim_gain{1.0f, 5.0f, sonare::constants::kDefaultDawSampleRate};
-    mixing::StereoWidthProcessor width{1.0f, 5.0f};
+    rt::ParamSmoother input_trim_gain{1.0f, kMixerSmoothingMs,
+                                      sonare::constants::kDefaultDawSampleRate};
+    mixing::StereoWidthProcessor width{1.0f, kMixerSmoothingMs};
     std::atomic<float> polarity_left{1.0f};
     std::atomic<float> polarity_right{1.0f};
     // Output pan (after the inserts) and dedicated EQ (before them), kept outside
@@ -825,6 +833,20 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void clear_bus_insert_automations() noexcept;
 
   bool lane_config_valid(const std::vector<TrackLaneConfig>& lanes) const noexcept;
+  // Value rules of one send list: size cap, bus id, level range, no repeated target. A lane's
+  // list also has to name declared buses (@p require_declared); a bus's targets are graph-checked.
+  bool sends_valid(const std::vector<TrackLaneConfig::Send>& sends,
+                   bool require_declared) const noexcept;
+  static mixing::SendConfig send_config_for(const TrackLaneConfig::Send& send) noexcept;
+  // Appends the staged seed strips to the owned table, then commits the prepared send tables.
+  void commit_staged_lane_strips(
+      const std::vector<TrackLaneConfig>& lanes,
+      std::array<std::unique_ptr<mixing::ChannelStrip>, kMaxTrackLanes>& staged_owned,
+      const std::array<mixing::ChannelStrip*, kMaxTrackLanes>& strips,
+      const std::array<bool, kMaxTrackLanes>& replace_sends,
+      std::array<mixing::ChannelStrip::PreparedSends, kMaxTrackLanes>& staged_sends);
+  // Restores a lane's fader, pan, gate and solo/mute to their rest state.
+  static void reset_lane_controls(LaneState& lane) noexcept;
   bool bus_config_valid(const std::vector<TrackBusConfig>& buses) const noexcept;
   // Topologically orders @p buses over their output, send and bus-to-bus key
   // edges (Kahn, lowest declared index first, so an edge-free list keeps its
@@ -952,6 +974,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // dedicated EQ history follows it too and resets only when set_buses changes
   // that bus's channel layout. Staging copies everything but the owned FxBus and
   // spec and may throw, leaving @p from intact; adopting moves all of it and cannot.
+  static void copy_bus_scalars(const BusState& from, BusState& to) noexcept;
   static void stage_bus_state(const BusState& from, BusState& to);
   static void adopt_bus_state(BusState& from, BusState& to) noexcept;
   // Returns a slot to the state of a bus that was never configured.

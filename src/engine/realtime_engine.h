@@ -967,9 +967,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   // audio state.
   int64_t resolve_master_automation_id(const std::string& key) const noexcept;
   /// Reads the immutable construction value captured by the resolved insert
-  /// parameter. Control-thread only; this never mutates live DSP state and
-  /// returns false for a null output, an unknown target, or a target whose
-  /// processor no longer exists.
+  /// parameter. This never allocates or mutates live DSP state, so the audio
+  /// thread's manual-base fallback reads it too. Returns false for a null
+  /// output, an unknown target, or a target whose processor no longer exists.
   bool insert_parameter_constructed_value(uint32_t target_id, float* out_value) const noexcept;
   bool set_track_eq_band(uint32_t track_id, size_t band_index,
                          const mastering::eq::EqBand& band) noexcept;
@@ -1127,6 +1127,12 @@ class RealtimeEngine : private ClipPageRequestSink {
   // once the automation lane driving that id empties. See
   // release_parameter_base() and AutomationEngine::LaneReleaseCallback.
   void record_parameter_base(uint32_t target_id, float value) noexcept;
+  // Records @p value as the base of a resolved insert automation id; a negative id is skipped.
+  void record_insert_base(int64_t automation_id, float value) noexcept;
+  // Queues a block-head kSetParam for a resolved insert automation id.
+  InsertParamSetResult push_insert_param_command(int64_t automation_id, float value) noexcept;
+  // Sizes the spectrum/vectorscope tap for the current rate, block size and band count.
+  void prepare_scope_tap();
   bool parameter_base_lookup(uint32_t target_id, float* out_value) const noexcept;
   void release_parameter_base(uint32_t target_id) noexcept;
   static void release_parameter_base_thunk(void* context, uint32_t param_id) noexcept;
@@ -1249,10 +1255,6 @@ class RealtimeEngine : private ClipPageRequestSink {
   // Control thread: the reserved id for (live entry of @p target, @p param_id), or -1.
   int64_t insert_automation_id(const InsertAutomationTarget& target,
                                unsigned int param_id) const noexcept;
-  // Fallback for insert ids whose manual table entry was purged during a full
-  // strip replacement. The immutable construction metadata belongs to the
-  // processor instance and is read without allocation on the audio thread.
-  bool constructed_insert_parameter_base(uint32_t target_id, float* out_value) const noexcept;
   // Fallback for a track-lane fader/pan id with no manual base: it has no
   // construction value, so it returns to the lane's rest value.
   bool restore_track_lane_parameter(uint32_t target_id) noexcept;

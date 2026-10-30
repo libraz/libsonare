@@ -133,6 +133,16 @@ enum class CommandType : uint16_t {
   kResetProcessorState,
 };
 
+/// Lane position field (bits 16..23) of a kSetTrackInsertParam target_id.
+constexpr uint32_t track_insert_lane(uint32_t target_id) noexcept {
+  return (target_id >> 16u) & 0xFFu;
+}
+
+/// @p target_id with its kSetTrackInsertParam lane field replaced by @p lane.
+constexpr uint32_t with_track_insert_lane(uint32_t target_id, uint32_t lane) noexcept {
+  return (target_id & ~0x00FF0000u) | (lane << 16u);
+}
+
 union CommandArg {
   float f;
   double d;  // full-precision scalar (e.g. seek PPQ); shares the 64-bit slot

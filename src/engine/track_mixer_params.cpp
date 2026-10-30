@@ -4,6 +4,7 @@
 #include <cmath>
 #include <iterator>
 
+#include "engine/realtime_engine_internal.h"
 #include "engine/track_mixer.h"
 #include "util/constants.h"
 #include "util/db.h"
@@ -436,7 +437,6 @@ bool TrackMixerRuntime::route_track_insert_param_smoothed_by_id(uint32_t track_i
 
 void TrackMixerRuntime::advance_insert_automations(int num_samples) noexcept {
   if (num_samples <= 0) return;
-  constexpr float kSettleEpsilon = 1.0e-6f;
   for (InsertAutoSlot& slot : insert_auto_slots_) {
     if (!slot.active) continue;
     const float value = slot.smoother.advance(num_samples);

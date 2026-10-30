@@ -19,6 +19,12 @@ namespace sonare::engine {
 std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing::api::Strip& spec,
                                                                    double build_sample_rate = 0.0);
 
+/// Builds the processor for @p insert, or nullptr when it cannot be built. On success
+/// @p stereo_pair_only receives whether the processor only accepts a stereo pair.
+std::unique_ptr<rt::ProcessorBase> make_insert_processor(const mixing::api::Insert& insert,
+                                                         double build_sample_rate,
+                                                         bool* stereo_pair_only);
+
 /// True when two insert chains have the same effective processors and semantic
 /// parameters, so a strip or bus can be updated in place instead of rebuilt.
 /// Track/master strips use the runtime's combined [pre...post...] order;

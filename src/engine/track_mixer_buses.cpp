@@ -10,16 +10,11 @@
 #include "engine/strip_spec.h"
 #include "engine/track_mixer.h"
 #include "engine/track_mixer_internal.h"
-#include "mastering/api/insert_factory.h"
-#include "mastering/api/named_processor.h"
 #include "mixing/channel_strip_eq.h"
 #include "mixing/pan_law.h"
-#include "util/constants.h"
 #include "util/db.h"
 
 namespace sonare::engine {
-
-using sonare::constants::kFloorDb;
 
 namespace {
 
@@ -190,8 +185,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
       std::array<mixing::SendConfig, mixing::ChannelStrip::kMaxSends> configs{};
       for (size_t send_index = 0; send_index < config.sends.size(); ++send_index) {
         const TrackLaneConfig::Send& send = config.sends[send_index];
-        configs[send_index] =
-            mixing::SendConfig{send.enabled ? send.level_db : kFloorDb, send.timing, 5.0f};
+        configs[send_index] = send_config_for(send);
       }
       if (!strip->prepare_sends(configs.data(), config.sends.size(),
                                 prepared_lane_sends[lane_index])) {
@@ -243,8 +237,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
     for (size_t index = 0; index < buses.size(); ++index) {
       for (size_t send_index = 0; send_index < buses[index].sends.size(); ++send_index) {
         const TrackLaneConfig::Send& send = buses[index].sends[send_index];
-        auto processor = std::make_unique<mixing::SendProcessor>(
-            mixing::SendConfig{send.enabled ? send.level_db : kFloorDb, send.timing, 5.0f});
+        auto processor = std::make_unique<mixing::SendProcessor>(send_config_for(send));
         if (max_block_size_ > 0) processor->prepare(sample_rate_, max_block_size_);
         sends[index][send_index] = std::move(processor);
       }
@@ -330,18 +323,8 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
   bus_configs_ = std::move(buses);
   for (InsertGainReductionBoard& board : bus_insert_gr_boards_) board.clear();
   bus_sends_ = std::move(sends);
-  for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
-    if (staged_lane_owned[lane_index] == nullptr) continue;
-    mixing::ChannelStrip* raw = staged_lane_owned[lane_index].get();
-    owned_strips_.push_back(
-        OwnedStrip{lanes[lane_index].track_id, std::move(staged_lane_owned[lane_index]), {}});
-    record_track_strip_binding(lanes[lane_index].track_id, raw);
-  }
-  for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
-    if (lane_send_strips[lane_index] != nullptr && replace_lane_sends[lane_index]) {
-      lane_send_strips[lane_index]->commit_sends(prepared_lane_sends[lane_index]);
-    }
-  }
+  commit_staged_lane_strips(lanes, staged_lane_owned, lane_send_strips, replace_lane_sends,
+                            prepared_lane_sends);
   for (size_t i = binding_count; i > 0; --i) {
     if (drop[i - 1]) remove_sidechain_binding(i - 1);
   }
@@ -371,9 +354,9 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
         state.gain.set_target(db_to_linear(bus_configs_[index].gain_db));
       }
     } else {
-      state.gain.prepare(sample_rate_, 5.0f);
+      state.gain.prepare(sample_rate_, kMixerSmoothingMs);
       state.gain.reset(db_to_linear(bus_configs_[index].gain_db));
-      state.input_trim_gain.prepare(sample_rate_, 5.0f);
+      state.input_trim_gain.prepare(sample_rate_, kMixerSmoothingMs);
       if (max_block_size_ > 0) {
         state.width.prepare(sample_rate_, max_block_size_);
       }
@@ -398,7 +381,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
   return true;
 }
 
-void TrackMixerRuntime::stage_bus_state(const BusState& from, BusState& to) {
+void TrackMixerRuntime::copy_bus_scalars(const BusState& from, BusState& to) noexcept {
   to.bus_id = from.bus_id;
   to.gain = from.gain;
   to.input_trim_gain = from.input_trim_gain;
@@ -408,27 +391,21 @@ void TrackMixerRuntime::stage_bus_state(const BusState& from, BusState& to) {
   to.polarity_right.store(from.polarity_right.load(std::memory_order_relaxed),
                           std::memory_order_relaxed);
   to.panner.copy_state_from(from.panner);
-  // The state belongs to the bus identity, so a positional move must carry it
-  // across with the rest of the retained bus state. set_buses() resets it after
-  // this transfer only when the destination layout changes.
-  to.eq = from.eq;
   to.eq_enabled.store(from.eq_enabled.load(std::memory_order_relaxed), std::memory_order_relaxed);
   to.eq_active.store(from.eq_active.load(std::memory_order_relaxed), std::memory_order_relaxed);
 }
 
+void TrackMixerRuntime::stage_bus_state(const BusState& from, BusState& to) {
+  copy_bus_scalars(from, to);
+  // The state belongs to the bus identity, so a positional move must carry it
+  // across with the rest of the retained bus state. set_buses() resets it after
+  // this transfer only when the destination layout changes.
+  to.eq = from.eq;
+}
+
 void TrackMixerRuntime::adopt_bus_state(BusState& from, BusState& to) noexcept {
-  to.bus_id = from.bus_id;
-  to.gain = from.gain;
-  to.input_trim_gain = from.input_trim_gain;
-  to.width.copy_state_from(from.width);
-  to.polarity_left.store(from.polarity_left.load(std::memory_order_relaxed),
-                         std::memory_order_relaxed);
-  to.polarity_right.store(from.polarity_right.load(std::memory_order_relaxed),
-                          std::memory_order_relaxed);
-  to.panner.copy_state_from(from.panner);
+  copy_bus_scalars(from, to);
   to.eq = std::move(from.eq);
-  to.eq_enabled.store(from.eq_enabled.load(std::memory_order_relaxed), std::memory_order_relaxed);
-  to.eq_active.store(from.eq_active.load(std::memory_order_relaxed), std::memory_order_relaxed);
   to.bus = std::move(from.bus);
   to.spec = std::move(from.spec);
 }
@@ -490,12 +467,9 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
     fx->set_channel_layout(bus_configs_[bus_index].layout);
     try {
       for (const auto& insert : bus.inserts) {
-        auto processor = mastering::api::make_insert(
-            insert.processor_name, insert.params_json, nullptr,
-            resource::kDefaultProjectImportResourceLimits, sample_rate_);
+        bool spo = false;
+        auto processor = make_insert_processor(insert, sample_rate_, &spo);
         if (!processor) return false;
-        const bool spo = mastering::api::channel_policy(insert.processor_name) ==
-                         mastering::api::ChannelPolicy::StereoPairOnly;
         fx->add_insert(std::move(processor), spo);
       }
     } catch (const std::bad_alloc&) {
@@ -571,17 +545,7 @@ bool TrackMixerRuntime::bus_config_valid(const std::vector<TrackBusConfig>& buse
       if (buses[i].bus_id == buses[j].bus_id) return false;
     }
     // Same value rules as a lane send; targets are checked by validate_bus_graph.
-    const std::vector<TrackLaneConfig::Send>& sends = buses[i].sends;
-    if (sends.size() > mixing::ChannelStrip::kMaxSends) return false;
-    for (size_t send_index = 0; send_index < sends.size(); ++send_index) {
-      const TrackLaneConfig::Send& send = sends[send_index];
-      if (send.bus_id == 0 || !gain_db_in_range(send.level_db)) {
-        return false;
-      }
-      for (size_t other = send_index + 1; other < sends.size(); ++other) {
-        if (send.bus_id == sends[other].bus_id) return false;
-      }
-    }
+    if (!sends_valid(buses[i].sends, false)) return false;
   }
   return true;
 }

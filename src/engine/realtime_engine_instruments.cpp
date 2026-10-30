@@ -7,6 +7,7 @@
 
 #include "engine/instrument_automation_id.h"
 #include "engine/realtime_engine.h"
+#include "engine/realtime_engine_internal.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
@@ -67,7 +68,6 @@ bool RealtimeEngine::route_instrument_param_smoothed(uint32_t destination_id, un
 
 void RealtimeEngine::advance_instrument_automations(int num_steps) noexcept {
   if (num_steps <= 0) return;
-  constexpr float kSettleEpsilon = 1.0e-6f;
   for (InstrumentAutoSlot& slot : instrument_auto_slots_) {
     if (!slot.active) continue;
     const float value = slot.smoother.advance(num_steps);
