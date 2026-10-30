@@ -71,7 +71,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from _repo import REPO_ROOT
-from autofit import render_model_rows_subprocess
 from build_lib import dylib_path
 from catalogue import dump_catalogue
 from knobs import (
@@ -81,6 +80,7 @@ from knobs import (
     format_value,
     tunable_overrides,
 )
+from render_rows import render_model_rows_subprocess
 
 SR = 48000
 

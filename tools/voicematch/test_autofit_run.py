@@ -25,6 +25,7 @@ import autofit
 import autofit_report
 import build_lib
 import eval_cache
+import render_rows
 from autofit import Evaluator, winner_or_defaults
 from autofit_test_fixtures import (
     _fit_args,
@@ -551,7 +552,7 @@ def test_the_thread_count_reaches_the_process_that_does_the_measuring(
         seen.append(cmd)
         return subprocess.CompletedProcess(cmd, 0, stdout="[]", stderr="")
 
-    monkeypatch.setattr(autofit.subprocess, "run", fake_run)
+    monkeypatch.setattr(render_rows.subprocess, "run", fake_run)
     ev._render_terms([0.5])
     assert "--metric-threads" in seen[0]
     assert seen[0][seen[0].index("--metric-threads") + 1] == str(ev.metric_threads)

@@ -13,11 +13,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
-from autofit import dylib_path, render_model_rows_subprocess
 from autofit_resolve import resolve_probe
+from build_lib import dylib_path
 from fit_quality import quality_report
 from loss_aggregate import robust_score_terms
 from loss_weights import LossWeights, cli_weights
+from render_rows import render_model_rows_subprocess
 
 
 def probe(build_dir, drum_note=38, velocities="64,100"):
