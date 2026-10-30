@@ -1249,6 +1249,26 @@ export class SonareEngine {
     );
   }
 
+  /** Pushes a live MIDI input event into the offline engine, then mirrors it to the worklet. */
+  private mirrorMidiInput(
+    pushOffline: () => void,
+    type:
+      | 'syncMidiInputNoteOn'
+      | 'syncMidiInputNoteOff'
+      | 'syncMidiInputCc'
+      | 'syncMidiInputPitchBend'
+      | 'syncMidiInputChannelPressure'
+      | 'syncMidiInputPolyPressure',
+    group: number,
+    channel: number,
+    data0: number,
+    data1: number,
+    offsetInBlockSamples: number,
+  ): void {
+    pushOffline();
+    this.postSync({ type, group, channel, data0, data1, offsetInBlockSamples });
+  }
+
   /**
    * Push a live MIDI note-on to the engine-owned MIDI input source.
    *
@@ -1262,15 +1282,22 @@ export class SonareEngine {
     velocity: number,
     offsetInBlockSamples = 0,
   ): void {
-    this.offlineEngine.pushMidiInputNoteOn(group, channel, note, velocity, offsetInBlockSamples);
-    this.postSync({
-      type: 'syncMidiInputNoteOn',
+    this.mirrorMidiInput(
+      () =>
+        this.offlineEngine.pushMidiInputNoteOn(
+          group,
+          channel,
+          note,
+          velocity,
+          offsetInBlockSamples,
+        ),
+      'syncMidiInputNoteOn',
       group,
       channel,
-      data0: note,
-      data1: velocity,
+      note,
+      velocity,
       offsetInBlockSamples,
-    });
+    );
   }
 
   /**
@@ -1286,15 +1313,22 @@ export class SonareEngine {
     velocity = 0,
     offsetInBlockSamples = 0,
   ): void {
-    this.offlineEngine.pushMidiInputNoteOff(group, channel, note, velocity, offsetInBlockSamples);
-    this.postSync({
-      type: 'syncMidiInputNoteOff',
+    this.mirrorMidiInput(
+      () =>
+        this.offlineEngine.pushMidiInputNoteOff(
+          group,
+          channel,
+          note,
+          velocity,
+          offsetInBlockSamples,
+        ),
+      'syncMidiInputNoteOff',
       group,
       channel,
-      data0: note,
-      data1: velocity,
+      note,
+      velocity,
       offsetInBlockSamples,
-    });
+    );
   }
 
   /**
@@ -1310,15 +1344,16 @@ export class SonareEngine {
     value: number,
     offsetInBlockSamples = 0,
   ): void {
-    this.offlineEngine.pushMidiInputCc(group, channel, controller, value, offsetInBlockSamples);
-    this.postSync({
-      type: 'syncMidiInputCc',
+    this.mirrorMidiInput(
+      () =>
+        this.offlineEngine.pushMidiInputCc(group, channel, controller, value, offsetInBlockSamples),
+      'syncMidiInputCc',
       group,
       channel,
-      data0: controller,
-      data1: value,
+      controller,
+      value,
       offsetInBlockSamples,
-    });
+    );
   }
 
   /**
@@ -1333,15 +1368,15 @@ export class SonareEngine {
     bend14: number,
     offsetInBlockSamples = 0,
   ): void {
-    this.offlineEngine.pushMidiInputPitchBend(group, channel, bend14, offsetInBlockSamples);
-    this.postSync({
-      type: 'syncMidiInputPitchBend',
+    this.mirrorMidiInput(
+      () => this.offlineEngine.pushMidiInputPitchBend(group, channel, bend14, offsetInBlockSamples),
+      'syncMidiInputPitchBend',
       group,
       channel,
-      data0: bend14,
-      data1: 0,
+      bend14,
+      0,
       offsetInBlockSamples,
-    });
+    );
   }
 
   /**
@@ -1356,15 +1391,21 @@ export class SonareEngine {
     pressure: number,
     offsetInBlockSamples = 0,
   ): void {
-    this.offlineEngine.pushMidiInputChannelPressure(group, channel, pressure, offsetInBlockSamples);
-    this.postSync({
-      type: 'syncMidiInputChannelPressure',
+    this.mirrorMidiInput(
+      () =>
+        this.offlineEngine.pushMidiInputChannelPressure(
+          group,
+          channel,
+          pressure,
+          offsetInBlockSamples,
+        ),
+      'syncMidiInputChannelPressure',
       group,
       channel,
-      data0: pressure,
-      data1: 0,
+      pressure,
+      0,
       offsetInBlockSamples,
-    });
+    );
   }
 
   /**
@@ -1380,21 +1421,22 @@ export class SonareEngine {
     pressure: number,
     offsetInBlockSamples = 0,
   ): void {
-    this.offlineEngine.pushMidiInputPolyPressure(
+    this.mirrorMidiInput(
+      () =>
+        this.offlineEngine.pushMidiInputPolyPressure(
+          group,
+          channel,
+          note,
+          pressure,
+          offsetInBlockSamples,
+        ),
+      'syncMidiInputPolyPressure',
       group,
       channel,
       note,
       pressure,
       offsetInBlockSamples,
     );
-    this.postSync({
-      type: 'syncMidiInputPolyPressure',
-      group,
-      channel,
-      data0: note,
-      data1: pressure,
-      offsetInBlockSamples,
-    });
   }
 
   /**

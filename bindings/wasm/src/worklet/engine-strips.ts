@@ -1,6 +1,7 @@
 import { panLawCode, panModeCode } from '../codes.js';
 import { ErrorCode, SonareError } from '../errors.js';
 import type { EqBand, PanLawInput, PanMode, RealtimeEngine, UmpWords } from '../index.js';
+import { eqBandJson } from '../internal/eq_band_json.js';
 import { packMidi2Program } from '../internal/midi_program_pack.js';
 import type { SurroundPan } from '../public_types.js';
 import { resolveRenderFrame } from '../validation.js';
@@ -109,7 +110,7 @@ export function setTrackStripEqBand(
   band: EqBand | string,
 ): void {
   const trackId = trackIdFor(ctx, target);
-  const bandJson = typeof band === 'string' ? band : JSON.stringify(band);
+  const bandJson = eqBandJson(band);
   commitSync(
     ctx,
     (offline) => offline.setTrackStripEqBandJson(trackId, bandIndex, bandJson),
@@ -301,7 +302,7 @@ export function setMasterStripEqBand(
   bandIndex: number,
   band: EqBand | string,
 ): void {
-  const bandJson = typeof band === 'string' ? band : JSON.stringify(band);
+  const bandJson = eqBandJson(band);
   commitSync(
     ctx,
     (offline) => offline.setMasterStripEqBandJson(bandIndex, bandJson),
@@ -390,7 +391,7 @@ export function setBusStripEqBand(
   bandIndex: number,
   band: EqBand | string,
 ): void {
-  const bandJson = typeof band === 'string' ? band : JSON.stringify(band);
+  const bandJson = eqBandJson(band);
   commitSync(
     ctx,
     (offline) => offline.setBusStripEqBandJson(busId, bandIndex, bandJson),

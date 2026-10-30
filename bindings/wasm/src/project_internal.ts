@@ -16,6 +16,7 @@ import type {
   SynthPatch,
 } from './instrument_types.js';
 import { releasedHandleError } from './internal/handle_guard.js';
+import { assertEventPpq, umpWord0 } from './internal/ump_events.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AlignTakeToReferenceRequest,
@@ -578,9 +579,7 @@ export function projectMidi1Event(
   data1: number,
   data2 = 0,
 ): ProjectMidiEvent {
-  if (!Number.isFinite(ppq) || ppq < 0) {
-    throw new RangeError(`${fnName}: ppq must be a non-negative finite number`);
-  }
+  assertEventPpq(fnName, ppq);
   const g = assertNibble(fnName, group, 'group');
   const ch = assertNibble(fnName, channel, 'channel');
   const d1 = assertU7(fnName, data1, 'data1');
@@ -589,7 +588,7 @@ export function projectMidi1Event(
   // sonare::midi::make_midi1_* (C-ABI sonare_midi_*, which Python delegates to);
   // this hand-written copy is locked against those words by the golden vectors
   // in project.test.ts (mirrored in the Node suite) so it cannot silently drift.
-  const word = ((0x2 << 28) | (g << 24) | (status << 20) | (ch << 16) | (d1 << 8) | d2) >>> 0;
+  const word = umpWord0(0x2, g, status, ch, d1, d2);
   return { ppq, data0: word, data1: 0 };
 }
 

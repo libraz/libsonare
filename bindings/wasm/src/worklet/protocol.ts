@@ -101,7 +101,6 @@ export {
   sonareMeterRingBufferByteLength,
   sonareSpectrumRingBufferByteLength,
   spectrumRingFromSharedBuffer,
-  toDb,
 } from './meter-rings.js';
 export {
   commitOverwriteWrite,

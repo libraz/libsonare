@@ -543,7 +543,10 @@ const ChordFunctionalAnalysisRequestKeys = keysOf<ChordFunctionalAnalysisRequest
   'samples',
   'sampleRate',
 ]);
-const Anon19Keys = keysOf<ChordFunctionsRequest<ChordFunctionsInput>>()(['chords', 'key']);
+const ChordFunctionsRequestKeys = keysOf<ChordFunctionsRequest<ChordFunctionsInput>>()([
+  'chords',
+  'key',
+]);
 const SpectrogramRequestKeys = keysOf<SpectrogramRequest>()([
   'samples',
   'sampleRate',
@@ -1025,7 +1028,7 @@ const MasteringDynamicsTransientShaperRequestKeys =
     'lookaheadMs',
     'validate',
   ]);
-const Anon74Keys = keysOf<MasteringPairAnalyzeRequest<PairAnalysis>>()([
+const MasteringPairAnalyzeRequestKeys = keysOf<MasteringPairAnalyzeRequest<PairAnalysis>>()([
   'analysisName',
   'source',
   'reference',
@@ -1370,7 +1373,7 @@ const MasteringRepairTrimSilenceStereoRequestKeys =
     'gateLufs',
     'windowMs',
   ]);
-const Anon105Keys = keysOf<MasteringStereoAnalyzeRequest<StereoAnalysis>>()([
+const MasteringStereoAnalyzeRequestKeys = keysOf<MasteringStereoAnalyzeRequest<StereoAnalysis>>()([
   'analysisName',
   'left',
   'right',
@@ -1976,7 +1979,7 @@ const SegmentSubsegmentRequestKeys = keysOf<SegmentSubsegmentRequest>()([
   'boundaries',
   'nSegments',
 ]);
-const Anon168Keys = keysOf<SpectralFrameRequest & { p?: number }>()([
+const SpectralBandwidthRequestKeys = keysOf<SpectralFrameRequest & { p?: number }>()([
   'samples',
   'sampleRate',
   'nFft',
@@ -2008,7 +2011,7 @@ const SpectralEditRequestKeys = keysOf<SpectralEditRequest>()([
   'healRadiusFrames',
   'validate',
 ]);
-const Anon172Keys = keysOf<SpectralFrameRequest & { lag?: number }>()([
+const SpectralFluxRequestKeys = keysOf<SpectralFrameRequest & { lag?: number }>()([
   'samples',
   'sampleRate',
   'nFft',
@@ -2253,7 +2256,7 @@ export const REQUEST_SHAPES: Readonly<Record<string, RequestShape>> = {
   bassChroma: { keys: BassChromaSpectrogramRequestKeys },
   chirp: { keys: ChirpRequestKeys },
   chordFunctionalAnalysis: { keys: ChordFunctionalAnalysisRequestKeys },
-  chordFunctions: { keys: Anon19Keys },
+  chordFunctions: { keys: ChordFunctionsRequestKeys },
   chroma: { keys: SpectrogramRequestKeys },
   chromaCens: { keys: ChromaSpectrogramRequestKeys },
   chromaCqt: { keys: ChromaSpectrogramRequestKeys },
@@ -2339,7 +2342,7 @@ export const REQUEST_SHAPES: Readonly<Record<string, RequestShape>> = {
   masteringDynamicsCompressor: { keys: MasteringDynamicsCompressorRequestKeys },
   masteringDynamicsGate: { keys: MasteringDynamicsGateRequestKeys },
   masteringDynamicsTransientShaper: { keys: MasteringDynamicsTransientShaperRequestKeys },
-  masteringPairAnalyze: { keys: Anon74Keys },
+  masteringPairAnalyze: { keys: MasteringPairAnalyzeRequestKeys },
   masteringPairProcess: { keys: MasteringPairProcessRequestKeys },
   masteringPairProcessStereo: { keys: MasteringPairProcessStereoRequestKeys },
   masteringProcess: { keys: MasteringProcessRequestKeys },
@@ -2378,7 +2381,7 @@ export const REQUEST_SHAPES: Readonly<Record<string, RequestShape>> = {
   masteringRepairNoiseBandBins: { keys: MasteringRepairNoiseBandBinsRequestKeys },
   masteringRepairTrimSilence: { keys: MasteringRepairTrimSilenceRequestKeys },
   masteringRepairTrimSilenceStereo: { keys: MasteringRepairTrimSilenceStereoRequestKeys },
-  masteringStereoAnalyze: { keys: Anon105Keys },
+  masteringStereoAnalyze: { keys: MasteringStereoAnalyzeRequestKeys },
   masteringStreamingPreview: { keys: MasteringStreamingPreviewRequestKeys },
   masteringStreamingPreviewStereo: { keys: MasteringStreamingPreviewStereoRequestKeys },
   melDelta: { keys: MelDeltaRequestKeys },
@@ -2467,12 +2470,12 @@ export const REQUEST_SHAPES: Readonly<Record<string, RequestShape>> = {
   segmentRecurrenceToLag: { keys: SegmentRecurrenceToLagRequestKeys },
   segmentSubsegment: { keys: SegmentSubsegmentRequestKeys },
   shortTermLufs: { keys: LufsRequestKeys },
-  spectralBandwidth: { keys: Anon168Keys },
+  spectralBandwidth: { keys: SpectralBandwidthRequestKeys },
   spectralCentroid: { keys: SpectralFrameRequestKeys },
   spectralContrast: { keys: SpectralContrastRequestKeys },
   spectralEdit: { keys: SpectralEditRequestKeys },
   spectralFlatness: { keys: SpectralFrameRequestKeys },
-  spectralFlux: { keys: Anon172Keys },
+  spectralFlux: { keys: SpectralFluxRequestKeys },
   spectralRolloff: { keys: SpectralRolloffRequestKeys },
   splitNote: { keys: SplitNoteRequestKeys },
   splitSilence: { keys: SilenceRequestKeys },

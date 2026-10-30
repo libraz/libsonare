@@ -7,6 +7,7 @@ import {
   trackMonitorModeCode,
 } from './codes.js';
 import { ErrorCode, SonareError } from './errors.js';
+import { eqBandJson } from './internal/eq_band_json.js';
 import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -193,6 +194,16 @@ export function engineCapabilities(): EngineCapabilities {
     audioWorklet,
     mode: sharedArrayBuffer && atomics ? 'sab' : 'postMessage',
   };
+}
+
+/** Refuses unparseable JSON as InvalidFormat, keeping the parser message when it has one. */
+function assertSceneJson(json: string, fallbackMessage: string): void {
+  try {
+    JSON.parse(json);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : fallbackMessage;
+    throw new SonareError(ErrorCode.InvalidFormat, 'InvalidFormat', message);
+  }
 }
 
 /** The clip shape the embind layer reads: a page provider travels as its id. */
@@ -1524,31 +1535,17 @@ export class RealtimeEngine {
   }
 
   setBusStripJson(busId: number, sceneJson: string): void {
-    try {
-      JSON.parse(sceneJson);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'invalid bus strip JSON';
-      throw new SonareError(ErrorCode.InvalidFormat, 'InvalidFormat', message);
-    }
+    assertSceneJson(sceneJson, 'invalid bus strip JSON');
     this.native.setBusStripJson(busId, sceneJson);
   }
 
   setTrackStripJson(trackId: number, sceneJson: string): void {
-    try {
-      JSON.parse(sceneJson);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'invalid track strip JSON';
-      throw new SonareError(ErrorCode.InvalidFormat, 'InvalidFormat', message);
-    }
+    assertSceneJson(sceneJson, 'invalid track strip JSON');
     this.native.setTrackStripJson(trackId, sceneJson);
   }
 
   setTrackStripEqBand(trackId: number, bandIndex: number, band: EqBand | string): void {
-    this.native.setTrackStripEqBandJson(
-      trackId,
-      bandIndex,
-      typeof band === 'string' ? band : JSON.stringify(band),
-    );
+    this.native.setTrackStripEqBandJson(trackId, bandIndex, eqBandJson(band));
   }
 
   setTrackStripEqBandJson(trackId: number, bandIndex: number, bandJson: string): void {
@@ -1571,11 +1568,7 @@ export class RealtimeEngine {
 
   /** Bus-strip counterpart of {@link setTrackStripEqBand}. */
   setBusStripEqBand(busId: number, bandIndex: number, band: EqBand | string): void {
-    this.native.setBusStripEqBandJson(
-      busId,
-      bandIndex,
-      typeof band === 'string' ? band : JSON.stringify(band),
-    );
+    this.native.setBusStripEqBandJson(busId, bandIndex, eqBandJson(band));
   }
 
   setBusStripEqBandJson(busId: number, bandIndex: number, bandJson: string): void {
@@ -1583,20 +1576,12 @@ export class RealtimeEngine {
   }
 
   setMasterStripJson(sceneJson: string): void {
-    try {
-      JSON.parse(sceneJson);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'invalid master strip JSON';
-      throw new SonareError(ErrorCode.InvalidFormat, 'InvalidFormat', message);
-    }
+    assertSceneJson(sceneJson, 'invalid master strip JSON');
     this.native.setMasterStripJson(sceneJson);
   }
 
   setMasterStripEqBand(bandIndex: number, band: EqBand | string): void {
-    this.native.setMasterStripEqBandJson(
-      bandIndex,
-      typeof band === 'string' ? band : JSON.stringify(band),
-    );
+    this.native.setMasterStripEqBandJson(bandIndex, eqBandJson(band));
   }
 
   setMasterStripEqBandJson(bandIndex: number, bandJson: string): void {
