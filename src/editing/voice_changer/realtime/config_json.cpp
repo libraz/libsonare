@@ -247,6 +247,29 @@ void dump_dsp_section(std::string& out, const RealtimeVoiceChangerConfig& c) {
   out += "}}";
 }
 
+// A preset document: schema version, identity (description optional), then the dsp object.
+void dump_preset_envelope(std::string& out, const std::string& id, const std::string& name,
+                          const std::string* description, const std::string& category,
+                          const RealtimeVoiceChangerConfig& config) {
+  out += "{\"schemaVersion\":";
+  out += std::to_string(kVoiceChangerPresetSchemaVersion);
+  out += ",\"id\":\"";
+  out += sonare::util::json::escape_string(id);
+  out += "\",\"name\":\"";
+  out += sonare::util::json::escape_string(name);
+  out += "\"";
+  if (description != nullptr) {
+    out += ",\"description\":\"";
+    out += sonare::util::json::escape_string(*description);
+    out += "\"";
+  }
+  out += ",\"category\":\"";
+  out += sonare::util::json::escape_string(category);
+  out += "\",";
+  dump_dsp_section(out, config);
+  out += "}";
+}
+
 std::string trim_copy(std::string_view text) {
   std::size_t first = 0;
   while (first < text.size() && std::isspace(static_cast<unsigned char>(text[first]))) ++first;
@@ -310,59 +333,200 @@ bool require_bool(const sonare::util::json::Value& object, const char* key, cons
   return false;
 }
 
-// Every key of a voice transformer section is required once the section is present.
-bool require_section_keys(const sonare::util::json::Value& section,
-                          std::initializer_list<const char*> keys, const char* path,
-                          std::string* error) {
-  for (const char* key : keys) {
-    if (!require_key(section, key, path, error)) return false;
+// How a section key is checked. A null @c check is a range test over @c range; @c required
+// is whether the key must be present at all.
+using FieldCheck = bool (*)(const sonare::util::json::Value&, const char*, const char*,
+                            std::string*);
+
+struct FieldSpec {
+  const char* key;
+  FieldCheck check;
+  Range range;
+  bool integer;
+  bool required;
+};
+
+constexpr FieldSpec range_field(const char* key, Range range, bool integer = false,
+                                bool required = true) {
+  return {key, nullptr, range, integer, required};
+}
+
+template <typename Enum>
+constexpr FieldSpec enum_field(const char* key) {
+  return {key, &require_enum<Enum>, {}, false, true};
+}
+
+constexpr FieldSpec bool_field(const char* key, bool required = true) {
+  return {key, &require_bool, {}, false, required};
+}
+
+// A key whose value is checked elsewhere; only its presence is required here.
+bool accept_any(const sonare::util::json::Value&, const char*, const char*, std::string*) {
+  return true;
+}
+
+bool require_formant_mode(const sonare::util::json::Value& object, const char* key,
+                          const char* path, std::string* error) {
+  const auto* mode = object.find(key);
+  if (!mode->is_string() || (mode->as_string() != "relative" && mode->as_string() != "absolute")) {
+    if (error) *error = std::string("field must be 'relative' or 'absolute': ") + path + "." + key;
+    return false;
   }
   return true;
 }
 
+template <std::size_t N>
+bool has_allowed_fields(const sonare::util::json::Value& object, const FieldSpec (&fields)[N],
+                        std::string_view path, std::string* error) {
+  if (!object.is_object()) {
+    if (error) *error = std::string(path) + " must be an object";
+    return false;
+  }
+  for (const auto& [key, _value] : object.as_object()) {
+    bool allowed = false;
+    for (const FieldSpec& field : fields) {
+      if (key == field.key) {
+        allowed = true;
+        break;
+      }
+    }
+    if (!allowed) {
+      if (error) *error = "unknown field: " + std::string(path) + "." + key;
+      return false;
+    }
+  }
+  return true;
+}
+
+// Allowed keys, then required keys, then each present key's check, in table order.
+template <std::size_t N>
+bool validate_range_section(const sonare::util::json::Value& section, const char* path,
+                            const FieldSpec (&fields)[N], std::string* error) {
+  if (!has_allowed_fields(section, fields, path, error)) return false;
+  for (const FieldSpec& field : fields) {
+    if (field.required && !require_key(section, field.key, path, error)) return false;
+  }
+  for (const FieldSpec& field : fields) {
+    if (!field.required && section.find(field.key) == nullptr) continue;
+    const bool ok = field.check != nullptr
+                        ? field.check(section, field.key, path, error)
+                        : require_in(section, field.key, field.range, path, error, field.integer);
+    if (!ok) return false;
+  }
+  return true;
+}
+
+// A section checked only when present.
+template <std::size_t N>
+bool validate_optional_section(const sonare::util::json::Value& parent, const char* key,
+                               const char* path, const FieldSpec (&fields)[N], std::string* error) {
+  const auto* section = parent.find(key);
+  return section == nullptr || validate_range_section(*section, path, fields, error);
+}
+
+constexpr FieldSpec kRetuneFields[] = {
+    range_field("semitones", kSemitones),
+    range_field("mix", kUnit),
+    range_field("grainSize", kGrainSize, true),
+};
+constexpr FieldSpec kFormantFields[] = {
+    range_field("factor", kFormantFactor), range_field("amount", kUnit),
+    range_field("body", kBipolar),         range_field("brightness", kBipolar),
+    range_field("nasal", kBipolar),        {"mode", &require_formant_mode, {}, false, false},
+};
+constexpr FieldSpec kEqFields[] = {
+    range_field("highpassHz", kHighpassHz),
+    range_field("bodyDb", kEqGainDb),
+    range_field("presenceDb", kEqGainDb),
+    range_field("airDb", kEqGainDb),
+};
+constexpr FieldSpec kGateFields[] = {
+    range_field("thresholdDb", kGateThresholdDb),
+    range_field("attackMs", kGateAttackMs),
+    range_field("releaseMs", kGateReleaseMs),
+    range_field("rangeDb", kGateRangeDb),
+};
+constexpr FieldSpec kCompressorFields[] = {
+    range_field("thresholdDb", kCompThresholdDb), range_field("ratio", kCompRatio),
+    range_field("attackMs", kCompAttackMs),       range_field("releaseMs", kCompReleaseMs),
+    range_field("makeupGainDb", kMakeupGainDb),
+};
+constexpr FieldSpec kDeesserFields[] = {
+    range_field("frequencyHz", kDeessFrequencyHz),
+    range_field("thresholdDb", kDeessThresholdDb),
+    range_field("ratio", kDeessRatio),
+    range_field("rangeDb", kDeessRangeDb),
+};
+constexpr FieldSpec kReverbFields[] = {
+    range_field("mix", kReverbMix),
+    range_field("timeMs", kReverbTimeMs),
+    range_field("damping", kUnit),
+    range_field("seed", kReverbSeed, true),
+};
+// enableIspLimiter / ispCeilingDbtp are optional: presets authored before the ISP stage omit
+// them and fall back to the POD defaults.
+constexpr FieldSpec kLimiterFields[] = {
+    range_field("ceilingDb", kLimiterCeilingDb),
+    range_field("releaseMs", kLimiterReleaseMs),
+    bool_field("enableIspLimiter", false),
+    range_field("ispCeilingDbtp", kIspCeilingDbtp, false, false),
+};
+
+constexpr FieldSpec kVoiceEngineFields[] = {
+    enum_field<PitchEngine>("engine"),
+    range_field("f0MinHz", kF0MinHz),
+};
+constexpr FieldSpec kPitchCorrectionFields[] = {
+    enum_field<PitchCorrectionMode>("mode"),
+    range_field("amount", kUnit),
+    range_field("speedMs", kCorrectionSpeedMs),
+    range_field("keyRoot", kKeyRoot, true),
+    enum_field<ScaleKind>("scale"),
+    range_field("robotOctave", kRobotOctave, true),
+};
+constexpr FieldSpec kHarmonyFields[] = {
+    range_field("voices", kHarmonyVoices, true),
+    {"steps", &accept_any, {}, false, true},
+    range_field("level", kUnit),
+    range_field("leadLevel", kUnit),
+    range_field("detuneCents", kDetuneCents),
+    range_field("delayMs", kHarmonyDelayMs),
+};
+constexpr FieldSpec kVocoderFields[] = {
+    bool_field("enabled"),
+    range_field("bands", kVocoderBands, true),
+    range_field("attackMs", kVocoderAttackMs),
+    range_field("releaseMs", kVocoderReleaseMs),
+    range_field("sibilance", kUnit),
+    enum_field<VocoderCarrierSource>("carrierSource"),
+    enum_field<VocoderCarrierWave>("carrierWave"),
+    range_field("ensembleDetuneCents", kDetuneCents),
+    range_field("level", kUnit),
+};
+constexpr FieldSpec kCharacterFields[] = {
+    enum_field<CharacterType>("type"),
+    range_field("amount", kUnit),
+    range_field("tone", kBipolar),
+};
+constexpr FieldSpec kReverbVariationFields[] = {
+    enum_field<ReverbVariation>("variation"), range_field("delayMs", kSpaceDelayMs),
+    range_field("feedback", kSpaceFeedback),  range_field("tempoBpm", kTempoBpm),
+    enum_field<NoteDivision>("division"),
+};
+constexpr FieldSpec kMidiFields[] = {
+    enum_field<MidiRelease>("release"),
+};
+
 // The voice transformer sections of a dsp object. Present sections are validated in full.
 bool validate_transform_sections(const sonare::util::json::Value& dsp, std::string* error) {
-  if (const auto* section = dsp.find("voiceEngine")) {
-    constexpr const char* kPath = "dsp.voiceEngine";
-    if (!has_allowed_keys(*section, {"engine", "f0MinHz"}, kPath, error) ||
-        !require_section_keys(*section, {"engine", "f0MinHz"}, kPath, error) ||
-        !require_enum<PitchEngine>(*section, "engine", kPath, error) ||
-        !require_in(*section, "f0MinHz", kF0MinHz, kPath, error)) {
-      return false;
-    }
-  }
-  if (const auto* section = dsp.find("pitchCorrection")) {
-    constexpr const char* kPath = "dsp.pitchCorrection";
-    if (!has_allowed_keys(*section,
-                          {"mode", "amount", "speedMs", "keyRoot", "scale", "robotOctave"}, kPath,
-                          error) ||
-        !require_section_keys(*section,
-                              {"mode", "amount", "speedMs", "keyRoot", "scale", "robotOctave"},
-                              kPath, error) ||
-        !require_enum<PitchCorrectionMode>(*section, "mode", kPath, error) ||
-        !require_in(*section, "amount", kUnit, kPath, error) ||
-        !require_in(*section, "speedMs", kCorrectionSpeedMs, kPath, error) ||
-        !require_in(*section, "keyRoot", kKeyRoot, kPath, error, true) ||
-        !require_enum<ScaleKind>(*section, "scale", kPath, error) ||
-        !require_in(*section, "robotOctave", kRobotOctave, kPath, error, true)) {
-      return false;
-    }
+  if (!validate_optional_section(dsp, "voiceEngine", "dsp.voiceEngine", kVoiceEngineFields,
+                                 error) ||
+      !validate_optional_section(dsp, "pitchCorrection", "dsp.pitchCorrection",
+                                 kPitchCorrectionFields, error)) {
+    return false;
   }
   if (const auto* section = dsp.find("harmony")) {
-    constexpr const char* kPath = "dsp.harmony";
-    if (!has_allowed_keys(*section,
-                          {"voices", "steps", "level", "leadLevel", "detuneCents", "delayMs"},
-                          kPath, error) ||
-        !require_section_keys(*section,
-                              {"voices", "steps", "level", "leadLevel", "detuneCents", "delayMs"},
-                              kPath, error) ||
-        !require_in(*section, "voices", kHarmonyVoices, kPath, error, true) ||
-        !require_in(*section, "level", kUnit, kPath, error) ||
-        !require_in(*section, "leadLevel", kUnit, kPath, error) ||
-        !require_in(*section, "detuneCents", kDetuneCents, kPath, error) ||
-        !require_in(*section, "delayMs", kHarmonyDelayMs, kPath, error)) {
-      return false;
-    }
+    if (!validate_range_section(*section, "dsp.harmony", kHarmonyFields, error)) return false;
     // One step per harmony voice at least, three at most.
     const auto& steps = *section->find("steps");
     const auto voices = static_cast<std::size_t>(section->find("voices")->as_number());
@@ -381,61 +545,11 @@ bool validate_transform_sections(const sonare::util::json::Value& dsp, std::stri
       return false;
     }
   }
-  if (const auto* section = dsp.find("vocoder")) {
-    constexpr const char* kPath = "dsp.vocoder";
-    if (!has_allowed_keys(*section,
-                          {"enabled", "bands", "attackMs", "releaseMs", "sibilance",
-                           "carrierSource", "carrierWave", "ensembleDetuneCents", "level"},
-                          kPath, error) ||
-        !require_section_keys(*section,
-                              {"enabled", "bands", "attackMs", "releaseMs", "sibilance",
-                               "carrierSource", "carrierWave", "ensembleDetuneCents", "level"},
-                              kPath, error) ||
-        !require_bool(*section, "enabled", kPath, error) ||
-        !require_in(*section, "bands", kVocoderBands, kPath, error, true) ||
-        !require_in(*section, "attackMs", kVocoderAttackMs, kPath, error) ||
-        !require_in(*section, "releaseMs", kVocoderReleaseMs, kPath, error) ||
-        !require_in(*section, "sibilance", kUnit, kPath, error) ||
-        !require_enum<VocoderCarrierSource>(*section, "carrierSource", kPath, error) ||
-        !require_enum<VocoderCarrierWave>(*section, "carrierWave", kPath, error) ||
-        !require_in(*section, "ensembleDetuneCents", kDetuneCents, kPath, error) ||
-        !require_in(*section, "level", kUnit, kPath, error)) {
-      return false;
-    }
-  }
-  if (const auto* section = dsp.find("character")) {
-    constexpr const char* kPath = "dsp.character";
-    if (!has_allowed_keys(*section, {"type", "amount", "tone"}, kPath, error) ||
-        !require_section_keys(*section, {"type", "amount", "tone"}, kPath, error) ||
-        !require_enum<CharacterType>(*section, "type", kPath, error) ||
-        !require_in(*section, "amount", kUnit, kPath, error) ||
-        !require_in(*section, "tone", kBipolar, kPath, error)) {
-      return false;
-    }
-  }
-  if (const auto* section = dsp.find("reverbVariation")) {
-    constexpr const char* kPath = "dsp.reverbVariation";
-    if (!has_allowed_keys(*section, {"variation", "delayMs", "feedback", "tempoBpm", "division"},
-                          kPath, error) ||
-        !require_section_keys(
-            *section, {"variation", "delayMs", "feedback", "tempoBpm", "division"}, kPath, error) ||
-        !require_enum<ReverbVariation>(*section, "variation", kPath, error) ||
-        !require_in(*section, "delayMs", kSpaceDelayMs, kPath, error) ||
-        !require_in(*section, "feedback", kSpaceFeedback, kPath, error) ||
-        !require_in(*section, "tempoBpm", kTempoBpm, kPath, error) ||
-        !require_enum<NoteDivision>(*section, "division", kPath, error)) {
-      return false;
-    }
-  }
-  if (const auto* section = dsp.find("midi")) {
-    constexpr const char* kPath = "dsp.midi";
-    if (!has_allowed_keys(*section, {"release"}, kPath, error) ||
-        !require_section_keys(*section, {"release"}, kPath, error) ||
-        !require_enum<MidiRelease>(*section, "release", kPath, error)) {
-      return false;
-    }
-  }
-  return true;
+  return validate_optional_section(dsp, "vocoder", "dsp.vocoder", kVocoderFields, error) &&
+         validate_optional_section(dsp, "character", "dsp.character", kCharacterFields, error) &&
+         validate_optional_section(dsp, "reverbVariation", "dsp.reverbVariation",
+                                   kReverbVariationFields, error) &&
+         validate_optional_section(dsp, "midi", "dsp.midi", kMidiFields, error);
 }
 
 constexpr std::array<const char*, 7> kTransformSections = {
@@ -471,145 +585,16 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, int schema_versi
   }
   if (dsp.find("wetMix") && !require_in(dsp, "wetMix", kUnit, "dsp", error)) return false;
 
-  const auto& retune = *dsp.find("retune");
-  if (!has_allowed_keys(retune, {"semitones", "mix", "grainSize"}, "dsp.retune", error)) {
+  if (!validate_range_section(*dsp.find("retune"), "dsp.retune", kRetuneFields, error) ||
+      !validate_range_section(*dsp.find("formant"), "dsp.formant", kFormantFields, error) ||
+      !validate_range_section(*dsp.find("eq"), "dsp.eq", kEqFields, error) ||
+      !validate_range_section(*dsp.find("gate"), "dsp.gate", kGateFields, error) ||
+      !validate_range_section(*dsp.find("compressor"), "dsp.compressor", kCompressorFields,
+                              error) ||
+      !validate_range_section(*dsp.find("deesser"), "dsp.deesser", kDeesserFields, error) ||
+      !validate_range_section(*dsp.find("reverb"), "dsp.reverb", kReverbFields, error) ||
+      !validate_range_section(*dsp.find("limiter"), "dsp.limiter", kLimiterFields, error)) {
     return false;
-  }
-  for (const char* key : {"semitones", "mix", "grainSize"}) {
-    if (!require_key(retune, key, "dsp.retune", error)) return false;
-  }
-  if (!require_in(retune, "semitones", kSemitones, "dsp.retune", error)) return false;
-  if (!require_in(retune, "mix", kUnit, "dsp.retune", error)) return false;
-  if (!require_in(retune, "grainSize", kGrainSize, "dsp.retune", error, true)) {
-    return false;
-  }
-
-  const auto& formant = *dsp.find("formant");
-  if (!has_allowed_keys(formant, {"factor", "amount", "body", "brightness", "nasal", "mode"},
-                        "dsp.formant", error)) {
-    return false;
-  }
-  for (const char* key : {"factor", "amount", "body", "brightness", "nasal"}) {
-    if (!require_key(formant, key, "dsp.formant", error)) return false;
-  }
-  if (!require_in(formant, "factor", kFormantFactor, "dsp.formant", error)) return false;
-  if (!require_in(formant, "amount", kUnit, "dsp.formant", error)) return false;
-  if (!require_in(formant, "body", kBipolar, "dsp.formant", error)) return false;
-  if (!require_in(formant, "brightness", kBipolar, "dsp.formant", error)) return false;
-  if (!require_in(formant, "nasal", kBipolar, "dsp.formant", error)) return false;
-  if (const auto* mode = formant.find("mode")) {
-    if (!mode->is_string() ||
-        (mode->as_string() != "relative" && mode->as_string() != "absolute")) {
-      if (error) *error = "field must be 'relative' or 'absolute': dsp.formant.mode";
-      return false;
-    }
-  }
-
-  const auto& eq = *dsp.find("eq");
-  if (!has_allowed_keys(eq, {"highpassHz", "bodyDb", "presenceDb", "airDb"}, "dsp.eq", error)) {
-    return false;
-  }
-  for (const char* key : {"highpassHz", "bodyDb", "presenceDb", "airDb"}) {
-    if (!require_key(eq, key, "dsp.eq", error)) return false;
-  }
-  if (!require_in(eq, "highpassHz", kHighpassHz, "dsp.eq", error)) return false;
-  if (!require_in(eq, "bodyDb", kEqGainDb, "dsp.eq", error)) return false;
-  if (!require_in(eq, "presenceDb", kEqGainDb, "dsp.eq", error)) return false;
-  if (!require_in(eq, "airDb", kEqGainDb, "dsp.eq", error)) return false;
-
-  const auto& gate = *dsp.find("gate");
-  if (!has_allowed_keys(gate, {"thresholdDb", "attackMs", "releaseMs", "rangeDb"}, "dsp.gate",
-                        error)) {
-    return false;
-  }
-  for (const char* key : {"thresholdDb", "attackMs", "releaseMs", "rangeDb"}) {
-    if (!require_key(gate, key, "dsp.gate", error)) return false;
-  }
-  if (!require_in(gate, "thresholdDb", kGateThresholdDb, "dsp.gate", error)) return false;
-  if (!require_in(gate, "attackMs", kGateAttackMs, "dsp.gate", error)) return false;
-  if (!require_in(gate, "releaseMs", kGateReleaseMs, "dsp.gate", error)) return false;
-  if (!require_in(gate, "rangeDb", kGateRangeDb, "dsp.gate", error)) return false;
-
-  const auto& compressor = *dsp.find("compressor");
-  if (!has_allowed_keys(compressor,
-                        {"thresholdDb", "ratio", "attackMs", "releaseMs", "makeupGainDb"},
-                        "dsp.compressor", error)) {
-    return false;
-  }
-  for (const char* key : {"thresholdDb", "ratio", "attackMs", "releaseMs", "makeupGainDb"}) {
-    if (!require_key(compressor, key, "dsp.compressor", error)) return false;
-  }
-  if (!require_in(compressor, "thresholdDb", kCompThresholdDb, "dsp.compressor", error)) {
-    return false;
-  }
-  if (!require_in(compressor, "ratio", kCompRatio, "dsp.compressor", error)) return false;
-  if (!require_in(compressor, "attackMs", kCompAttackMs, "dsp.compressor", error)) return false;
-  if (!require_in(compressor, "releaseMs", kCompReleaseMs, "dsp.compressor", error)) {
-    return false;
-  }
-  if (!require_in(compressor, "makeupGainDb", kMakeupGainDb, "dsp.compressor", error)) {
-    return false;
-  }
-
-  const auto& deesser = *dsp.find("deesser");
-  if (!has_allowed_keys(deesser, {"frequencyHz", "thresholdDb", "ratio", "rangeDb"}, "dsp.deesser",
-                        error)) {
-    return false;
-  }
-  for (const char* key : {"frequencyHz", "thresholdDb", "ratio", "rangeDb"}) {
-    if (!require_key(deesser, key, "dsp.deesser", error)) return false;
-  }
-  if (!require_in(deesser, "frequencyHz", kDeessFrequencyHz, "dsp.deesser", error)) {
-    return false;
-  }
-  if (!require_in(deesser, "thresholdDb", kDeessThresholdDb, "dsp.deesser", error)) return false;
-  if (!require_in(deesser, "ratio", kDeessRatio, "dsp.deesser", error)) return false;
-  if (!require_in(deesser, "rangeDb", kDeessRangeDb, "dsp.deesser", error)) return false;
-
-  const auto& reverb = *dsp.find("reverb");
-  if (!has_allowed_keys(reverb, {"mix", "timeMs", "damping", "seed"}, "dsp.reverb", error)) {
-    return false;
-  }
-  for (const char* key : {"mix", "timeMs", "damping", "seed"}) {
-    if (!require_key(reverb, key, "dsp.reverb", error)) return false;
-  }
-  if (!require_in(reverb, "mix", kReverbMix, "dsp.reverb", error)) return false;
-  if (!require_in(reverb, "timeMs", kReverbTimeMs, "dsp.reverb", error)) {
-    return false;
-  }
-  if (!require_in(reverb, "damping", kUnit, "dsp.reverb", error)) return false;
-  if (!require_in(reverb, "seed", kReverbSeed, "dsp.reverb", error, true)) {
-    return false;
-  }
-
-  const auto& limiter = *dsp.find("limiter");
-  // enableIspLimiter / ispCeilingDbtp are optional: presets authored before the
-  // ISP stage was added omit them and fall back to the POD defaults (enabled,
-  // -1.0 dBTP). When present they are validated below.
-  if (!has_allowed_keys(limiter, {"ceilingDb", "releaseMs", "enableIspLimiter", "ispCeilingDbtp"},
-                        "dsp.limiter", error)) {
-    return false;
-  }
-  for (const char* key : {"ceilingDb", "releaseMs"}) {
-    if (!require_key(limiter, key, "dsp.limiter", error)) return false;
-  }
-  // True-peak headroom: sample-domain limiter cannot bound inter-sample peaks,
-  // so the upper bound is -1.0 dBFS (one full dB of inter-sample headroom)
-  // rather than -0.3 dBFS. Builds that opt in to a 4x-oversampled TP detector
-  // can later relax this.
-  if (!require_in(limiter, "ceilingDb", kLimiterCeilingDb, "dsp.limiter", error)) return false;
-  if (!require_in(limiter, "releaseMs", kLimiterReleaseMs, "dsp.limiter", error)) return false;
-  if (const auto* isp = limiter.find("enableIspLimiter")) {
-    if (!isp->is_bool()) {
-      if (error) *error = "field must be a boolean: dsp.limiter.enableIspLimiter";
-      return false;
-    }
-  }
-  // The ISP stage detects inter-sample peaks via 4x oversampling, so its ceiling
-  // may legitimately reach 0.0 dBTP (no extra headroom needed) unlike the
-  // sample-domain ceilingDb above.
-  if (limiter.find("ispCeilingDbtp") != nullptr) {
-    if (!require_in(limiter, "ispCeilingDbtp", kIspCeilingDbtp, "dsp.limiter", error)) return false;
   }
   return true;
 }
@@ -909,31 +894,18 @@ RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_v
 std::string realtime_voice_changer_config_to_json(const RealtimeVoiceChangerConfig& config) {
   const auto c = normalize_config(config);
   std::string out;
-  // A normalized config is also a valid, saveable custom preset. Include the
-  // metadata required by the strict preset validator so callers can validate
-  // its output again without reconstructing an envelope around the DSP object.
-  out += "{\"schemaVersion\":";
-  out += std::to_string(kVoiceChangerPresetSchemaVersion);
-  out += ",\"id\":\"custom\",\"name\":\"Custom\",\"category\":\"custom\",";
-  dump_dsp_section(out, c);
-  out += "}";
+  // A normalized config is also a valid, saveable custom preset with the metadata the strict
+  // preset validator requires.
+  dump_preset_envelope(out, "custom", "Custom", nullptr, "custom", c);
   return out;
 }
 
 std::string realtime_voice_changer_preset_json(VoiceCharacterPreset preset) {
   const auto c = realtime_voice_changer_preset(preset);
   std::string out;
-  out += "{\"schemaVersion\":";
-  out += std::to_string(kVoiceChangerPresetSchemaVersion);
-  out += ",\"id\":\"";
-  out += sonare::util::json::escape_string(realtime_voice_changer_preset_id(preset));
-  out += "\",\"name\":\"";
-  out += sonare::util::json::escape_string(realtime_voice_changer_preset_display_name(preset));
-  out += "\",\"category\":\"";
-  out += sonare::util::json::escape_string(std::string(preset_metadata(preset).category));
-  out += "\",";
-  dump_dsp_section(out, c);
-  out += "}";
+  dump_preset_envelope(out, realtime_voice_changer_preset_id(preset),
+                       realtime_voice_changer_preset_display_name(preset), nullptr,
+                       std::string(preset_metadata(preset).category), c);
   return out;
 }
 
@@ -942,13 +914,14 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
   if (normalized_json) normalized_json->clear();
   if (error) error->clear();
   try {
+    const std::string trimmed = trim_copy(json);
     // Strict parse: a preset document with duplicate keys (e.g. two `"id"`
     // entries) is a user-config bug — fail fast rather than silently keeping
     // the last value. The lenient `realtime_voice_changer_config_from_json`
     // path below keeps using `admit` (not `admit_strict`) because it doubles
     // as the realtime C-API entry point and must stay maximally tolerant of
     // duplicate keys; both still run under the same resource budget.
-    const auto root = sonare::util::json::admit_strict(trim_copy(json));
+    const auto root = sonare::util::json::admit_strict(trimmed);
     if (!has_allowed_keys(
             root, {"schemaVersion", "id", "name", "description", "category", "macros", "dsp"}, "$",
             error)) {
@@ -1012,7 +985,7 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
     if (dsp != nullptr && !validate_dsp_section(*dsp, schema_version, error)) return false;
     RealtimeVoiceChangerConfig macro_config;
     if (macros != nullptr && !apply_macro_section(*macros, &macro_config, error)) return false;
-    const auto config = realtime_voice_changer_config_from_json(trim_copy(json));
+    const auto config = realtime_voice_changer_config_from_json(trimmed);
     // What only the whole configuration can say; the same rule create and set_config apply.
     if (!validate_realtime_voice_changer_config(config, nullptr, error)) return false;
     if (normalized_json) {
@@ -1023,26 +996,10 @@ bool validate_realtime_voice_changer_preset_json(std::string_view json,
       // id here breaks find_voice_preset_in_pack lookups and a pack's own
       // id-uniqueness contract on every round trip through this validator.
       std::string out;
-      out += "{\"schemaVersion\":";
-      out += std::to_string(kVoiceChangerPresetSchemaVersion);
-      out += ",\"id\":\"";
-      out += sonare::util::json::escape_string(root.find("id")->as_string());
-      out += "\",\"name\":\"";
-      out += sonare::util::json::escape_string(root.find("name")->as_string());
-      out += "\"";
-      if (const auto* description = root.find("description")) {
-        out += ",\"description\":\"";
-        out += sonare::util::json::escape_string(description->as_string());
-        out += "\"";
-      }
-      if (const auto* category = root.find("category")) {
-        out += ",\"category\":\"";
-        out += sonare::util::json::escape_string(category->as_string());
-        out += "\"";
-      }
-      out += ",";
-      dump_dsp_section(out, config);
-      out += "}";
+      const auto* description = root.find("description");
+      dump_preset_envelope(out, root.find("id")->as_string(), root.find("name")->as_string(),
+                           description ? &description->as_string() : nullptr,
+                           root.find("category")->as_string(), config);
       *normalized_json = out;
     }
     return true;
