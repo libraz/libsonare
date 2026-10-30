@@ -69,6 +69,7 @@ _PYTHON_CLI_NON_REGISTERING = frozenset(
         "_cli_common.py",
         "_cli_inventory.py",
         "_cli_options.py",
+        "_cli_output.py",
     }
 )
 

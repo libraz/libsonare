@@ -132,7 +132,7 @@ class _TemporaryFileProxy:
 def test_atomic_byte_writer_preserves_old_output_at_every_failure_stage(
     monkeypatch, tmp_path, stage
 ) -> None:
-    import libsonare._cli_common as implementation
+    import libsonare._cli_output as implementation
     from libsonare import cli
     from libsonare._cli_common import EXIT_ENCODE_FAILED
     from libsonare._runtime import SonareError
@@ -186,7 +186,7 @@ class _CloseFailureProxy:
 def test_atomic_wav_writer_preserves_old_output_at_every_failure_stage(
     monkeypatch, tmp_path, stage
 ) -> None:
-    import libsonare._cli_common as implementation
+    import libsonare._cli_output as implementation
     from libsonare import cli
     from libsonare._cli_common import EXIT_ENCODE_FAILED
     from libsonare._runtime import SonareError

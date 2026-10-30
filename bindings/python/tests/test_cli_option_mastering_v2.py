@@ -30,7 +30,7 @@ def test_mastering_preset_params_and_bits_reach_api_and_writer(
     monkeypatch, capsys, tmp_path
 ) -> None:
     import libsonare
-    from libsonare import _cli_common, _cli_mastering, cli
+    from libsonare import _cli_mastering, _cli_output, cli
 
     calls: dict[str, object] = {}
     patch_mono_decode(monkeypatch, lambda path: ([0.0], 44_100))
@@ -42,7 +42,7 @@ def test_mastering_preset_params_and_bits_reach_api_and_writer(
 
     monkeypatch.setattr(libsonare, "master_audio", master_audio)
     monkeypatch.setattr(
-        _cli_common,
+        _cli_output,
         "_write_wav",
         lambda path, samples, sample_rate, bits: calls.update(writer=(path, sample_rate, bits)),
     )
@@ -193,7 +193,7 @@ def test_mastering_processor_hands_a_stereo_source_to_the_facade_unmixed(
     channel count is the whole decision.
     """
     import libsonare
-    from libsonare import _cli_common, _cli_mastering, cli
+    from libsonare import _cli_common, _cli_mastering, _cli_output, cli
 
     calls: dict[str, object] = {}
     monkeypatch.setattr(_cli_common, "_source_channel_count", lambda path: 2)
@@ -216,7 +216,7 @@ def test_mastering_processor_hands_a_stereo_source_to_the_facade_unmixed(
 
     monkeypatch.setattr(libsonare, "mastering_process_stereo", stereo)
     monkeypatch.setattr(
-        _cli_common,
+        _cli_output,
         "_write_wav_stereo",
         lambda path, left, right, sample_rate, bits: calls.update(
             writer=(left, right, sample_rate, bits)

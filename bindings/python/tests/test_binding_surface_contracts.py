@@ -16,8 +16,9 @@ pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared libr
 _SRC = Path(__file__).resolve().parents[1] / "src" / "libsonare"
 
 
-def test_project_edit_has_no_bare_float_coercion() -> None:
-    text = (_SRC / "_project_edit.py").read_text(encoding="utf-8")
+@pytest.mark.parametrize("module", ["_project_edit.py", "_project_mir.py"])
+def test_project_edit_has_no_bare_float_coercion(module: str) -> None:
+    text = (_SRC / module).read_text(encoding="utf-8")
     assert re.findall(r"(?:^|[^_.a-zA-Z])float\(", text, flags=re.MULTILINE) == []
 
 

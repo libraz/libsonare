@@ -18,80 +18,99 @@ without ``SONARE_WITH_ARRANGEMENT`` every call returns
 from __future__ import annotations
 
 import ctypes
-import json
 import math
 import numbers
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, Protocol, SupportsFloat, TypeAlias, cast
-
-import numpy as np
+from typing import TYPE_CHECKING, Any, Literal, SupportsFloat, TypeAlias, cast
 
 if TYPE_CHECKING:
     from ._project import Project, ProjectTimeline
-    from ._types_capabilities import SynthParamInfo
 
 from ._errors import ErrorCode, SonareError, _not_supported
-from ._ffi_types_mastering_project import (
-    SONARE_SYNTH_FIELD2_AMP_DELAY_MS,
-    SONARE_SYNTH_FIELD2_AMP_HOLD_MS,
-    SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ,
-    SONARE_SYNTH_FIELD2_FILTER_DELAY_MS,
-    SONARE_SYNTH_FIELD2_FILTER_HOLD_MS,
-    SONARE_SYNTH_FIELD2_ONE_SHOT,
-    SONARE_SYNTH_FIELD_AMP_ATTACK_MS,
-    SONARE_SYNTH_FIELD_AMP_DECAY_MS,
-    SONARE_SYNTH_FIELD_AMP_RELEASE_MS,
-    SONARE_SYNTH_FIELD_AMP_SUSTAIN,
-    SONARE_SYNTH_FIELD_BIT_DEPTH,
-    SONARE_SYNTH_FIELD_BODY_MIX,
-    SONARE_SYNTH_FIELD_BUS_DRIVE,
-    SONARE_SYNTH_FIELD_CUTOFF_HZ,
-    SONARE_SYNTH_FIELD_DETUNE_CENTS,
-    SONARE_SYNTH_FIELD_DRIFT_CENTS,
-    SONARE_SYNTH_FIELD_DRIVE,
-    SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS,
-    SONARE_SYNTH_FIELD_FILTER_ATTACK_MS,
-    SONARE_SYNTH_FIELD_FILTER_DECAY_MS,
-    SONARE_SYNTH_FIELD_FILTER_RELEASE_MS,
-    SONARE_SYNTH_FIELD_FILTER_SUSTAIN,
-    SONARE_SYNTH_FIELD_GAIN,
-    SONARE_SYNTH_FIELD_GLIDE_MS,
-    SONARE_SYNTH_FIELD_HP_CUTOFF_HZ,
-    SONARE_SYNTH_FIELD_KEY_TRACK,
-    SONARE_SYNTH_FIELD_LFO2_RATE_HZ,
-    SONARE_SYNTH_FIELD_LFO_RATE_HZ,
-    SONARE_SYNTH_FIELD_LFO_TO_PITCH_CENTS,
-    SONARE_SYNTH_FIELD_MOD_ROUTINGS,
-    SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS,
-    SONARE_SYNTH_FIELD_POLYPHONY,
-    SONARE_SYNTH_FIELD_RESONANCE_Q,
-    SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ,
-    SONARE_SYNTH_FIELD_STEREO_SPREAD,
-    SONARE_SYNTH_FIELD_UNISON,
-    SONARE_SYNTH_FIELD_VEL_TO_CUTOFF_CENTS,
-    SONARE_SYNTH_PATCH_MOD_ROUTINGS,
-    SONARE_SYNTH_PRESET_NAME_MAX,
+from ._project_instruments import (
+    _GS_EFX_REALIZATIONS as _GS_EFX_REALIZATIONS,
 )
-from ._narrowing import _narrow_double
-from ._project_synth import (
-    _SAMPLE_KEY_TRACKS,
-    _SAMPLE_LOOP_MODES,
-    _SYNTH_BODY_TYPES,
-    _SYNTH_ENGINE_MODES,
-    _SYNTH_FILTER_MODEL_INPUT,
-    _SYNTH_FILTER_MODELS,
-    _SYNTH_FILTER_OUTPUTS,
-    _SYNTH_LFO_SHAPES,
-    _SYNTH_MOD_DESTINATIONS,
-    _SYNTH_MOD_SOURCES,
-    _SYNTH_OSC_WAVEFORMS,
-    _SYNTH_RETRIGGERS,
-    _sample_key_track_value,
-    _sample_loop_value,
-    _strip_va_prefix,
-    _synth_enum_name,
-    _synth_enum_value,
+from ._project_instruments import (
+    _SYNTH_WAVEFORM_NAMES as _SYNTH_WAVEFORM_NAMES,
+)
+from ._project_instruments import (
+    SOURCE_BACKEND_SF2 as SOURCE_BACKEND_SF2,
+)
+from ._project_instruments import (
+    SOURCE_BACKEND_SYNTH as SOURCE_BACKEND_SYNTH,
+)
+from ._project_instruments import (
+    SYNTH_WAVEFORM_SAW as SYNTH_WAVEFORM_SAW,
+)
+from ._project_instruments import (
+    SYNTH_WAVEFORM_SINE as SYNTH_WAVEFORM_SINE,
+)
+from ._project_instruments import (
+    SYNTH_WAVEFORM_SQUARE as SYNTH_WAVEFORM_SQUARE,
+)
+from ._project_instruments import (
+    SYNTH_WAVEFORM_TRIANGLE as SYNTH_WAVEFORM_TRIANGLE,
+)
+from ._project_instruments import (
+    BuiltinSynthConfig as BuiltinSynthConfig,
+)
+from ._project_instruments import (
+    ExternalInstrument as ExternalInstrument,
+)
+from ._project_instruments import (
+    GsEfxRealization as GsEfxRealization,
+)
+from ._project_instruments import (
+    Sf2InstrumentConfig as Sf2InstrumentConfig,
+)
+from ._project_instruments import (
+    Sf2ProgramStatus as Sf2ProgramStatus,
+)
+from ._project_instruments import (
+    SynthModRouting as SynthModRouting,
+)
+from ._project_instruments import (
+    SynthPatch as SynthPatch,
+)
+from ._project_instruments import (
+    _gs_efx_realization_value as _gs_efx_realization_value,
+)
+from ._project_instruments import (
+    _make_instrument_callbacks as _make_instrument_callbacks,
+)
+from ._project_instruments import (
+    _synth_param_info as _synth_param_info,
+)
+from ._project_instruments import (
+    _synth_patch_arg as _synth_patch_arg,
+)
+from ._project_instruments import (
+    _synth_waveform_value as _synth_waveform_value,
+)
+from ._project_instruments import (
+    controller_profile_names as controller_profile_names,
+)
+from ._project_instruments import (
+    synth_engine_param_info as synth_engine_param_info,
+)
+from ._project_instruments import (
+    synth_gs_drum_kit_is_voiced_apart as synth_gs_drum_kit_is_voiced_apart,
+)
+from ._project_instruments import (
+    synth_gs_drum_kit_name as synth_gs_drum_kit_name,
+)
+from ._project_instruments import (
+    synth_gs_variation_is_voiced_apart as synth_gs_variation_is_voiced_apart,
+)
+from ._project_instruments import (
+    synth_patch_param_info as synth_patch_param_info,
+)
+from ._project_instruments import (
+    synth_preset_names as synth_preset_names,
+)
+from ._project_instruments import (
+    synth_preset_patch as synth_preset_patch,
 )
 from ._project_synth import (
     SYNTH_ENUM_TABLES as SYNTH_ENUM_TABLES,
@@ -106,48 +125,21 @@ from ._runtime import (
     _UINT32_MAX,
     SonareAutomationLaneDesc,
     SonareAutomationPoint,
-    SonareBuiltinSynthConfig,
-    SonareInstrumentCallbacks,
-    SonareInstrumentOnEventCallback,
-    SonareInstrumentPrepareCallback,
-    SonareInstrumentRenderCallback,
     SonareMidiCcBinding,
     SonareMidiEventPod,
-    SonareSf2InstrumentConfig,
-    SonareSynthEngineParam,
-    SonareSynthModRouting,
-    SonareSynthPatch,
     SonareValueError,
     _check,
     _curve_value,
     _get_lib,
-    _joined_names,
-    _last_error,
     _resolve_enum,
-    _to_c_int,
     _to_c_size_t,
     _utf8_arg,
-    _validate_c_int_field,
 )
 
 # Mirrors SONARE_ERROR_INVALID_STATE in sonare_c.h. The pure MIDI conversion
 # helpers return this when no result is produced (e.g. learn found no binding);
 # the Python wrappers translate it to ``None`` rather than raising.
 SONARE_ERROR_INVALID_STATE = 7
-
-# Built-in synth waveform ordinals (mirror SonareSynthWaveform).
-SYNTH_WAVEFORM_SINE = 0
-SYNTH_WAVEFORM_SAW = 1
-SYNTH_WAVEFORM_SQUARE = 2
-SYNTH_WAVEFORM_TRIANGLE = 3
-
-_SYNTH_WAVEFORM_NAMES = {
-    "sine": SYNTH_WAVEFORM_SINE,
-    "saw": SYNTH_WAVEFORM_SAW,
-    "sawtooth": SYNTH_WAVEFORM_SAW,
-    "square": SYNTH_WAVEFORM_SQUARE,
-    "triangle": SYNTH_WAVEFORM_TRIANGLE,
-}
 
 # Must match SONARE_PROJECT_ABI_VERSION (include/sonare/sonare_c_project.h) and the other
 # bindings' expected project ABI constant. A mismatch means the loaded native
@@ -208,7 +200,6 @@ PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB = AUTOMATION_TARGET_TRACK_FADER_DB
 PROJECT_AUTOMATION_TARGET_TRACK_PAN = AUTOMATION_TARGET_TRACK_PAN
 
 ProjectAutomationTargetKind: TypeAlias = Literal["opaque", "track-fader-db", "track-pan", 0, 1, 2]
-GsEfxRealization: TypeAlias = Literal["modern", "classic"]
 
 _AUTOMATION_TARGET_KIND_NAMES = {
     "opaque": AUTOMATION_TARGET_OPAQUE,
@@ -503,113 +494,6 @@ def _cc_binding_from_c(b: SonareMidiCcBinding) -> MidiCcBinding:
     )
 
 
-@dataclass(frozen=True)
-class BuiltinSynthConfig:
-    """Patch for the built-in polyphonic oscillator synth (see
-    :meth:`Project.bounce_with_builtin_instrument`).
-
-    Every numeric field uses "0 (or non-positive) => sensible default", so a
-    default-constructed config is the default sine patch; override only what you
-    need. ``waveform`` may be an ordinal (0=sine, 1=saw, 2=square, 3=triangle)
-    or a name (``"sine"`` / ``"saw"`` / ``"square"`` / ``"triangle"``). It is the
-    one field with no "nearest sensible value": anything outside that set raises
-    :class:`SonareValueError` rather than falling back to sine.
-
-    ``attack_ms`` is a linear ramp that reaches full level at the set time;
-    ``decay_ms`` and ``release_ms`` are linear too, the set time being a full 0
-    to 1 sweep (they take proportionally less from a lower level).
-    """
-
-    waveform: str | int = SYNTH_WAVEFORM_SINE
-    gain: float = 0.0
-    attack_ms: float = 0.0
-    decay_ms: float = 0.0
-    sustain: float = 0.0
-    release_ms: float = 0.0
-    polyphony: int = 0
-
-    def _to_c(self) -> SonareBuiltinSynthConfig:
-        return SonareBuiltinSynthConfig(
-            waveform=_synth_waveform_value(self.waveform),
-            gain=float(self.gain),
-            attack_ms=float(self.attack_ms),
-            decay_ms=float(self.decay_ms),
-            sustain=float(self.sustain),
-            release_ms=float(self.release_ms),
-            # Narrowed rather than coerced: int(0.5) is the 0 this field reads as
-            # "keep the default 16", so a fractional voice count would run at the
-            # default and report success.
-            polyphony=_validate_c_int_field("BuiltinSynthConfig", self.polyphony, "polyphony"),
-        )
-
-
-# Source backend ordinals (mirror SonareSourceBackend).
-SOURCE_BACKEND_SYNTH = 0
-SOURCE_BACKEND_SF2 = 1
-
-
-@dataclass(frozen=True)
-class Sf2InstrumentConfig:
-    """Patch for the SoundFont (SF2) player (see
-    :meth:`Project.bounce_with_sf2_instrument`).
-
-    Every field uses "0 (or non-positive) => sensible default" (gain 0.5,
-    polyphony 48). ``prefer_model_for_modeled_families`` defaults to false,
-    retaining the established SoundFont-first behavior.
-
-    ``clear_bank_rig`` removes the stage the bank binds after a voice — the
-    amplifier and cabinet an electric guitar is never heard without. It defaults
-    to false, so a MIDI file that selects a distorted guitar and asks for
-    nothing else still comes out amplified. Set it to render the instrument
-    alone, which is what a calibration fit measures against a direct reference.
-
-    ``gs_efx_realization`` selects how the GS insertion effects are realised:
-    ``"modern"`` (the default) or ``"classic"``. Any other value raises
-    :class:`SonareValueError`.
-    """
-
-    gain: float = 0.0
-    polyphony: int = 0
-    prefer_model_for_modeled_families: bool = False
-    clear_bank_rig: bool = False
-    gs_efx_realization: GsEfxRealization = "modern"
-
-    def _to_c(self) -> SonareSf2InstrumentConfig:
-        return SonareSf2InstrumentConfig(
-            struct_version=4,
-            gain=float(self.gain),
-            # Same sentinel as BuiltinSynthConfig.polyphony, at a different default (48).
-            polyphony=_validate_c_int_field("Sf2InstrumentConfig", self.polyphony, "polyphony"),
-            prefer_model_for_modeled_families=int(self.prefer_model_for_modeled_families),
-            clear_bank_rig=int(self.clear_bank_rig),
-            gs_efx_realization=_gs_efx_realization_value(self.gs_efx_realization),
-        )
-
-
-_GS_EFX_REALIZATIONS = {"modern": 0, "classic": 1}
-
-
-def _gs_efx_realization_value(name: str) -> int:
-    if not isinstance(name, str) or name not in _GS_EFX_REALIZATIONS:
-        raise SonareValueError(f"gs_efx_realization must be 'modern' or 'classic', got {name!r}")
-    return _GS_EFX_REALIZATIONS[name]
-
-
-@dataclass(frozen=True)
-class Sf2ProgramStatus:
-    """One :meth:`Project.soundfont_manifest` entry: a (channel, bank, program)
-    combination the arrangement plays, with the backend it resolves to
-    (:data:`SOURCE_BACKEND_SF2` or :data:`SOURCE_BACKEND_SYNTH`) and the
-    resolved SF2 preset name (GS fallback included; empty for the synth
-    fallback)."""
-
-    channel: int
-    bank: int
-    program: int
-    backend: int
-    preset_name: str
-
-
 def _marker_name_bytes(name: str | None) -> bytes:
     """UTF-8-encode a marker name for the fixed 64-byte C ``name`` field.
 
@@ -619,717 +503,6 @@ def _marker_name_bytes(name: str | None) -> bytes:
     if not name:
         return b""
     return _utf8_arg(name, "name")[:63].decode("utf-8", "ignore").encode("utf-8")
-
-
-def _synth_waveform_value(waveform: str | int) -> int:
-    if isinstance(waveform, str):
-        resolver = getattr(_get_lib(), "sonare_synth_builtin_waveform_from_name", None)
-        if resolver is not None:
-            value = int(resolver(_utf8_arg(waveform, "waveform")))
-            if value >= 0:
-                return value
-            raise SonareValueError(f"unknown synth waveform: {waveform!r}")
-    # validate_int keeps the ordinal on the same contract as the name: the C ABI
-    # refuses an ordinal outside the enum, and without this a caller's 4 or -1
-    # would pass through the binding and be refused there instead, or silently
-    # not at all on an older core. reject_bool because True is an int in Python
-    # and would otherwise resolve to saw.
-    return _resolve_enum(
-        waveform,
-        _SYNTH_WAVEFORM_NAMES,
-        "synth waveform",
-        validate_int=True,
-        reject_bool=True,
-        expected=True,
-    )
-
-
-@dataclass(frozen=True)
-class SynthModRouting:
-    """One NativeSynth mod-matrix routing (see :class:`SynthPatch`).
-
-    ``source`` / ``destination`` accept the ordinal or a name (sources:
-    ``"amp-env"`` / ``"filter-env"`` / ``"lfo1"`` / ``"lfo2"`` / ``"velocity"``
-    / ``"key-track"`` / ``"mod-wheel"`` / ``"random"`` / ``"breath"`` /
-    ``"aftertouch"`` / ``"expression-cc"`` / ``"pitch-bend"``; destinations:
-    ``"pitch-cents"`` / ``"cutoff-cents"`` / ``"amp-gain"`` / ``"pan-units"`` /
-    ``"resonance-q"`` / ``"vibrato-depth-cents"`` / ``"filter-env-depth"`` /
-    ``"lfo1-rate-scale"`` / ``"excitation-force"`` / ``"excitation-position"`` /
-    ``"excitation-brightness"`` / ``"spectrum-morph"``). ``"none"`` is refused
-    for either field: a routing driven by or aimed at nothing is a caller
-    mistake, not an empty slot.
-
-    ``depth`` is destination units at full source deflection, summed onto
-    whatever the patch or a CC already set and then handled per destination:
-
-    - ``"pan-units"``: SF2 pan units, clamped to ``[-500, 500]`` -- ``1`` moves
-      the image by about 0.2% of a side.
-    - ``"amp-gain"`` / ``"filter-env-depth"``: multiplicative. Each routing's
-      amount composes onto a running multiplier clamped to ``[0, 4]``.
-      ``"filter-env-depth"`` has nothing to scale while the patch's
-      ``env_to_cutoff_cents`` is ``0``.
-    - ``"resonance-q"``: added to the patch's own Q, then floored at a fixed
-      ``0.5`` (not at that patch's own Q).
-    - ``"lfo1-rate-scale"``: multiplicative, clamped to ``[1/16, 16]``. It
-      retunes LFO1 rather than sounding on its own, so it is audible only once
-      something else already reads LFO1's output (vibrato depth, the filter's
-      LFO amount, tremolo).
-    - The three ``excitation-*`` destinations and ``"spectrum-morph"``: an
-      offset in the engine's own normalized ``[0, 1]`` units -- the same scale
-      the live-control CCs drive -- clamped to ``[-1, 1]``. Reach is per engine
-      and not uniform across the three: ``"excitation-force"`` reaches pipe
-      organ, bowed string, reed, brass, flute and free reed;
-      ``"excitation-position"`` reaches bowed string only;
-      ``"excitation-brightness"`` reaches pipe organ, reed, brass, flute, free
-      reed and vocal. An engine outside a destination's list ignores it -- its
-      exciter is finished before the second sample renders, or it has none.
-      ``"spectrum-morph"`` travels between the two spectral tables an additive
-      patch carries; a patch needs an explicit ``drawbars_b`` distinct from
-      ``drawbars`` to have a second table to travel to, and no catalog preset
-      ships one, so the destination is currently unreachable from a preset name
-      alone.
-
-    Percussion reaches none of the above: a drum channel's voice runs the
-    per-note kit patch instead of this one, so the whole mod matrix is
-    discarded before the voice starts.
-    """
-
-    source: str | int
-    destination: str | int
-    depth: float
-
-
-@dataclass(frozen=True)
-class SynthPatch:
-    """Versioned NativeSynth patch (see
-    :meth:`Project.bounce_with_synth_instrument` and
-    :meth:`RealtimeEngine.set_synth_instrument`).
-
-    The patch starts from a BASE — the named ``preset`` (see
-    :func:`synth_preset_names`; a ``"va:"`` routing prefix is accepted) or,
-    when ``preset`` is empty, the default subtractive patch. Every numeric
-    field defaults to ``None``, meaning "keep the base value"; any value given
-    overrides it, including an explicit ``0``. A value that is non-finite or
-    outside the range :func:`synth_patch_param_info` publishes for its field is
-    refused with a :class:`SonareValueError` naming the field, and so are more than 8
-    mod routings. Enum fields accept the C ordinal or a name with ``"default"``
-    = keep. A
-    ``mod_routings`` tuple REPLACES the base mod matrix, and an empty tuple
-    clears it, while ``None`` keeps it.
-
-    Every engine mode except ``"sample"`` is audible from ``engine_mode`` alone:
-    the engine section is the named preset's when that preset uses the selected
-    engine, else the engine's base preset's, so the bare ``"fm"``, ``"modal"``,
-    ``"percussion"`` and ``"karplus-strong"`` modes voice their base preset
-    (``"percussion"`` is the GM drum kit) and follow that preset's bank version.
-    ``"sample"`` without a bank stays silent. The fields are the wrapper
-    sections; which engines honour each one:
-
-    - subtractive only: ``waveform``, ``unison``, ``detune_cents``.
-    - sample only: the ``sample_*`` fields.
-    - every engine: ``pitch_offset_cents``, the LFOs, ``drift_cents`` /
-      ``drift_rate_hz``, ``glide_ms``, the filter and its envelope, the
-      amplitude envelope (an undamped harpsichord tail outlasts it),
-      ``one_shot``, ``body`` / ``body_mix``, ``drive``, ``hp_cutoff_hz``,
-      ``sample_hold_hz`` / ``bit_depth``, ``stereo_spread``.
-    - every engine and a percussion channel: ``gain``, ``polyphony``,
-      ``bus_drive``. On a percussion channel (a percussion patch voicing a GM
-      kit, as the ``"drum-kit"`` preset does) each note runs its per-note kit
-      patch and every other field is discarded.
-
-    ``drift_rate_hz`` is the per-voice drift rate in Hz, ``[0.01, 20]``;
-    ``amp_delay_ms`` / ``filter_delay_ms`` wait before each envelope's attack
-    and ``amp_hold_ms`` / ``filter_hold_ms`` hold its peak, each ``[0, 5000]``
-    ms. ``one_shot=True`` ignores note-off, so the voice ends with its
-    envelope's decay or its engine's own end, as a drum hit does; it must be a
-    ``bool``.
-
-    ``engine_params`` sets fields of the selected engine's own section by public
-    key (``"bowForce"``, ``"ops1.level"``; the keys and their ranges, units and
-    defaults are :func:`synth_engine_param_info`). A key outside the selected
-    engine's section, a non-finite value, a fractional value for an integer
-    field or a value outside a bounded field's range is refused with a
-    :class:`SonareValueError` naming the key; nothing is clamped. A patch read back
-    from a preset carries ``None`` here.
-
-    ``env_to_cutoff_cents`` is the filter envelope's cutoff depth, in cents at
-    full envelope; ``0`` leaves the envelope's cutoff contribution off. The
-    cutoff is multiplied by ``2 ** (envelope * env_to_cutoff_cents / 1200)``, so
-    the response moves by exactly that interval wherever the corner sits well
-    below Nyquist; near the top the ``"svf"`` model moves slightly less and the
-    ladders slightly more. ``cutoff_hz`` is the -3 dB corner only for ``"svf"``
-    at ``resonance_q`` 0.707: with resonance the SVF corner sits above it, and
-    the ladder and Sallen-Key models put their resonant peak on it with the
-    -3 dB point one to three octaves lower, so measure a depth as a ratio of
-    corners rather than against ``cutoff_hz``.
-    ``vel_to_cutoff_cents`` is velocity's cutoff depth, in cents: the rendered
-    term is ``vel_to_cutoff_cents * (velocity / 127 - 1)``, so velocity 127 is
-    the anchor where it is exactly zero -- a positive value darkens softer
-    notes, a negative value brightens them, and both effects grow the further
-    the velocity sits below 127.
-
-    The ``sample_*`` fields are read only when the resolved engine is
-    ``"sample"``, which is what lets ``sample_set`` keep its natural zero: a
-    patch voicing another engine never consults them, so set 0 stays
-    addressable. ``sample_loop`` overrides what the bank recorded
-    (``"default"`` / ``"none"`` / ``"continuous"`` / ``"key-down"``) and
-    ``sample_key_track`` whether the sample follows the played key
-    (``"default"`` / ``"on"`` / ``"off"``); both accept the C ordinal too.
-
-    ``lfo_shape`` (``"default"`` / ``"triangle"`` / ``"sine"`` / ``"random"``,
-    or the C ordinal) is the patch's LFO waveform (vibrato and tremolo LFOs),
-    wherever either is read: vibrato depth, the GS LFO cutoff and amplitude
-    depths, and the ``lfo1`` and ``lfo2`` mod sources. ``"triangle"`` is every catalog
-    preset's shape; ``"sine"`` carries no harmonics, so a vibrato's or a
-    tremolo's sidebands sit where a player's do. ``"random"`` glides to a new
-    seeded value in [-1, 1] each cycle, so it wanders with no line at the rate;
-    it is seeded per voice, so a bounce repeats it exactly.
-
-    ``retrigger`` picks what seeds each voice's start state (``"default"`` /
-    ``"free"`` / ``"note"``, or the C ordinal). ``"note"`` derives oscillator
-    start phases, unison jitter, drift and every engine's noise stream from
-    the note number, so the same note played again after its tail has ended
-    renders the same samples; ``"free"`` (the built-in patches' choice) varies
-    them per note. State outside the voice is reset by neither: controllers,
-    the bus DC blocker, a piano's shared soundboard, a plucked string's
-    sympathetic halo, an organ's wind chest and effect tails. The
-    ``"drum-kit"`` preset's per-note pieces keep their own mode.
-
-    ``sample_bank`` carries the PCM those fields address. It is a BINDING
-    option, not a patch field -- it travels on the C binding struct rather than
-    inside the patch, so every bound destination has its own bank and two
-    destinations may carry different ones. Node and WASM spell it
-    ``sampleBank`` on the same object for the same reason. A sample patch bound
-    without a bank renders silence rather than failing, the same way one naming
-    a keymap set the bank lacks does.
-
-    ``use_gm_programs`` is a BINDING option too (Node and WASM spell it
-    ``useGmPrograms``): it makes this destination resolve each MIDI channel from
-    its GM bank/program messages. ``None`` means "not stated", falling back to
-    :meth:`Project.bounce_with_synth_instrument`'s ``auto_select_gm``.
-
-    ``amp_attack_ms`` / ``filter_attack_ms`` reach full level at the set time.
-    ``*_decay_ms`` and ``*_release_ms`` are three time constants: about -26 dB
-    of the remaining distance at the set time.
-    """
-
-    preset: str = ""
-    engine_mode: str | int = 0
-    waveform: str | int = 0
-    unison: int | None = None
-    detune_cents: float | None = None
-    drift_cents: float | None = None
-    drive: float | None = None
-    filter_model: str | int = 0
-    filter_output: str | int = 0
-    cutoff_hz: float | None = None
-    hp_cutoff_hz: float | None = None
-    sample_hold_hz: float | None = None
-    bit_depth: float | None = None
-    pitch_offset_cents: float | None = None
-    resonance_q: float | None = None
-    key_track: float | None = None
-    env_to_cutoff_cents: float | None = None
-    vel_to_cutoff_cents: float | None = None
-    amp_attack_ms: float | None = None
-    amp_decay_ms: float | None = None
-    amp_sustain: float | None = None
-    amp_release_ms: float | None = None
-    filter_attack_ms: float | None = None
-    filter_decay_ms: float | None = None
-    filter_sustain: float | None = None
-    filter_release_ms: float | None = None
-    lfo_rate_hz: float | None = None
-    lfo_to_pitch_cents: float | None = None
-    lfo_shape: str | int = 0
-    lfo2_rate_hz: float | None = None
-    glide_ms: float | None = None
-    body: str | int = 0
-    body_mix: float | None = None
-    stereo_spread: float | None = None
-    retrigger: str | int = 0
-    mod_routings: tuple[SynthModRouting, ...] | None = None
-    gain: float | None = None
-    polyphony: int | None = None
-    bus_drive: float | None = None
-    sample_set: int | None = None
-    sample_level: float | None = None
-    sample_loop: str | int = 0
-    sample_start_offset: float | None = None
-    sample_key_track: str | int = 0
-    # A BINDING option rather than a NativeSynth patch field: it travels on
-    # SonareSynthInstrumentBinding, not SonareSynthPatch, so _to_c() does not
-    # carry it and _from_c() never fills it. It lives here because the C ABI
-    # gives every binding its own bank, which a per-call argument cannot.
-    sample_bank: SampleBank | None = None
-    # The same kind of BINDING option, spelled `useGmPrograms` by Node and
-    # WASM: it travels on SonareSynthInstrumentBinding, so _to_c() does not
-    # carry it and _from_c() never fills it. None means "not stated", which is
-    # what leaves Project.bounce_with_synth_instrument's per-call
-    # `auto_select_gm` reachable as the fallback.
-    use_gm_programs: bool | None = None
-    engine_params: Mapping[str, float] | None = None
-    drift_rate_hz: float | None = None
-    amp_delay_ms: float | None = None
-    amp_hold_ms: float | None = None
-    filter_delay_ms: float | None = None
-    filter_hold_ms: float | None = None
-    one_shot: bool | None = None
-
-    def _to_c(self) -> SonareSynthPatch:
-        if not isinstance(self.preset, str):
-            raise TypeError("synth patch preset must be a string")
-        c = SonareSynthPatch()
-        c.struct_version = 10
-
-        # A field left at None keeps the base; anything supplied — including a
-        # zero — is marked present so the core overrides with it.
-        def _set_float(name: str, bit: int, value: float | None) -> None:
-            if value is None:
-                return
-            # Unconverted, so the struct's _narrow_float refuses overflow and bool by name.
-            setattr(c, name, value)
-            c.present_fields |= bit
-
-        def _set_int(name: str, bit: int, value: int | None) -> None:
-            if value is None:
-                return
-            # Assigned unconverted so the struct's own narrowing sees the
-            # caller's value; int() would truncate a fraction past it.
-            setattr(c, name, value)
-            c.present_fields |= bit
-
-        def _set_float2(name: str, bit: int, value: float | None) -> None:
-            if value is None:
-                return
-            setattr(c, name, value)
-            c.present_fields2 |= bit
-
-        c.preset = _utf8_arg(_strip_va_prefix(self.preset), "preset")[
-            : SONARE_SYNTH_PRESET_NAME_MAX - 1
-        ]
-        c.engine_mode = _synth_enum_value(self.engine_mode, _SYNTH_ENGINE_MODES, "engine mode")
-        c.waveform = _synth_enum_value(self.waveform, _SYNTH_OSC_WAVEFORMS, "oscillator waveform")
-        _set_int("unison", SONARE_SYNTH_FIELD_UNISON, self.unison)
-        _set_float("detune_cents", SONARE_SYNTH_FIELD_DETUNE_CENTS, self.detune_cents)
-        _set_float("drift_cents", SONARE_SYNTH_FIELD_DRIFT_CENTS, self.drift_cents)
-        _set_float("drive", SONARE_SYNTH_FIELD_DRIVE, self.drive)
-        c.filter_model = _synth_enum_value(
-            self.filter_model, _SYNTH_FILTER_MODEL_INPUT, "filter model"
-        )
-        c.filter_output = _synth_enum_value(
-            self.filter_output, _SYNTH_FILTER_OUTPUTS, "filter output"
-        )
-        _set_float("cutoff_hz", SONARE_SYNTH_FIELD_CUTOFF_HZ, self.cutoff_hz)
-        _set_float("hp_cutoff_hz", SONARE_SYNTH_FIELD_HP_CUTOFF_HZ, self.hp_cutoff_hz)
-        _set_float("sample_hold_hz", SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ, self.sample_hold_hz)
-        _set_float("bit_depth", SONARE_SYNTH_FIELD_BIT_DEPTH, self.bit_depth)
-        _set_float(
-            "pitch_offset_cents", SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS, self.pitch_offset_cents
-        )
-        _set_float("resonance_q", SONARE_SYNTH_FIELD_RESONANCE_Q, self.resonance_q)
-        _set_float("key_track", SONARE_SYNTH_FIELD_KEY_TRACK, self.key_track)
-        _set_float(
-            "env_to_cutoff_cents",
-            SONARE_SYNTH_FIELD_ENV_TO_CUTOFF_CENTS,
-            self.env_to_cutoff_cents,
-        )
-        _set_float(
-            "vel_to_cutoff_cents",
-            SONARE_SYNTH_FIELD_VEL_TO_CUTOFF_CENTS,
-            self.vel_to_cutoff_cents,
-        )
-        _set_float("amp_attack_ms", SONARE_SYNTH_FIELD_AMP_ATTACK_MS, self.amp_attack_ms)
-        _set_float("amp_decay_ms", SONARE_SYNTH_FIELD_AMP_DECAY_MS, self.amp_decay_ms)
-        _set_float("amp_sustain", SONARE_SYNTH_FIELD_AMP_SUSTAIN, self.amp_sustain)
-        _set_float("amp_release_ms", SONARE_SYNTH_FIELD_AMP_RELEASE_MS, self.amp_release_ms)
-        _set_float("filter_attack_ms", SONARE_SYNTH_FIELD_FILTER_ATTACK_MS, self.filter_attack_ms)
-        _set_float("filter_decay_ms", SONARE_SYNTH_FIELD_FILTER_DECAY_MS, self.filter_decay_ms)
-        _set_float("filter_sustain", SONARE_SYNTH_FIELD_FILTER_SUSTAIN, self.filter_sustain)
-        _set_float(
-            "filter_release_ms", SONARE_SYNTH_FIELD_FILTER_RELEASE_MS, self.filter_release_ms
-        )
-        _set_float("lfo_rate_hz", SONARE_SYNTH_FIELD_LFO_RATE_HZ, self.lfo_rate_hz)
-        _set_float(
-            "lfo_to_pitch_cents", SONARE_SYNTH_FIELD_LFO_TO_PITCH_CENTS, self.lfo_to_pitch_cents
-        )
-        _set_float("lfo2_rate_hz", SONARE_SYNTH_FIELD_LFO2_RATE_HZ, self.lfo2_rate_hz)
-        _set_float("glide_ms", SONARE_SYNTH_FIELD_GLIDE_MS, self.glide_ms)
-        c.body = _synth_enum_value(self.body, _SYNTH_BODY_TYPES, "body type")
-        _set_float("body_mix", SONARE_SYNTH_FIELD_BODY_MIX, self.body_mix)
-        _set_float("stereo_spread", SONARE_SYNTH_FIELD_STEREO_SPREAD, self.stereo_spread)
-        c.retrigger = _synth_enum_value(self.retrigger, _SYNTH_RETRIGGERS, "retrigger mode")
-        c.lfo_shape = _synth_enum_value(self.lfo_shape, _SYNTH_LFO_SHAPES, "LFO shape")
-        routings = list(self.mod_routings or ())
-        if self.mod_routings is not None:
-            c.present_fields |= SONARE_SYNTH_FIELD_MOD_ROUTINGS
-        if len(routings) > SONARE_SYNTH_PATCH_MOD_ROUTINGS:
-            raise SonareValueError(
-                f"a synth patch supports at most {SONARE_SYNTH_PATCH_MOD_ROUTINGS} mod routings"
-            )
-        c.num_mod_routings = len(routings)
-        for i, routing in enumerate(routings):
-            c.mod_routings[i] = SonareSynthModRouting(
-                source=_synth_enum_value(routing.source, _SYNTH_MOD_SOURCES, "mod source"),
-                destination=_synth_enum_value(
-                    routing.destination, _SYNTH_MOD_DESTINATIONS, "mod destination"
-                ),
-                depth=_narrow_double(routing.depth, "routing.depth"),
-            )
-        _set_float("gain", SONARE_SYNTH_FIELD_GAIN, self.gain)
-        _set_int("polyphony", SONARE_SYNTH_FIELD_POLYPHONY, self.polyphony)
-        _set_float("bus_drive", SONARE_SYNTH_FIELD_BUS_DRIVE, self.bus_drive)
-        _set_float2("drift_rate_hz", SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ, self.drift_rate_hz)
-        _set_float2("amp_delay_ms", SONARE_SYNTH_FIELD2_AMP_DELAY_MS, self.amp_delay_ms)
-        _set_float2("amp_hold_ms", SONARE_SYNTH_FIELD2_AMP_HOLD_MS, self.amp_hold_ms)
-        _set_float2("filter_delay_ms", SONARE_SYNTH_FIELD2_FILTER_DELAY_MS, self.filter_delay_ms)
-        _set_float2("filter_hold_ms", SONARE_SYNTH_FIELD2_FILTER_HOLD_MS, self.filter_hold_ms)
-        if self.one_shot is not None:
-            if not isinstance(self.one_shot, bool):
-                raise TypeError("synth patch one_shot must be a bool")
-            c.one_shot = 1 if self.one_shot else 0
-            c.present_fields2 |= SONARE_SYNTH_FIELD2_ONE_SHOT
-        # Sample engine: no presence bits, because only a sample patch reads the
-        # block at all. That is what keeps set 0 addressable without one.
-        c.sample_set = 0 if self.sample_set is None else self.sample_set
-        c.sample_level = 0.0 if self.sample_level is None else float(self.sample_level)
-        c.sample_loop = _sample_loop_value(self.sample_loop)
-        c.sample_start_offset = (
-            0.0 if self.sample_start_offset is None else float(self.sample_start_offset)
-        )
-        c.sample_key_track = _sample_key_track_value(self.sample_key_track)
-        if self.engine_params:
-            # The struct borrows the key bytes and the array, and copying the
-            # struct into a binding array copies bytes only, so the caller keeps
-            # the returned object alive until the C call returns.
-            keys: list[bytes] = []
-            for key in self.engine_params:
-                if not isinstance(key, str):
-                    raise TypeError("engine_params keys must be strings")
-                keys.append(_utf8_arg(key, "engine_params key"))
-            params = (SonareSynthEngineParam * len(keys))()
-            for i, (raw_key, (param_name, value)) in enumerate(
-                zip(keys, self.engine_params.items(), strict=True)
-            ):
-                params[i].key = raw_key
-                params[i].value = _narrow_double(value, f"engine_params[{param_name!r}]")
-            c.engine_params = ctypes.cast(params, ctypes.POINTER(SonareSynthEngineParam))
-            c.engine_param_count = len(keys)
-            c._keepalive = (keys, params)
-        return c
-
-    @classmethod
-    def _from_c(cls, c: SonareSynthPatch) -> SynthPatch:
-        routings = tuple(
-            SynthModRouting(
-                source=_synth_enum_name(int(r.source), _SYNTH_MOD_SOURCES),
-                destination=_synth_enum_name(int(r.destination), _SYNTH_MOD_DESTINATIONS),
-                depth=float(r.depth),
-            )
-            for r in c.mod_routings[: int(c.num_mod_routings)]
-        )
-        return cls(
-            preset=c.preset.decode("utf-8", errors="replace"),
-            engine_mode=_synth_enum_name(int(c.engine_mode), _SYNTH_ENGINE_MODES),
-            waveform=_synth_enum_name(int(c.waveform), _SYNTH_OSC_WAVEFORMS),
-            unison=int(c.unison),
-            detune_cents=float(c.detune_cents),
-            drift_cents=float(c.drift_cents),
-            drive=float(c.drive),
-            filter_model=_synth_enum_name(int(c.filter_model), _SYNTH_FILTER_MODELS),
-            filter_output=_synth_enum_name(int(c.filter_output), _SYNTH_FILTER_OUTPUTS),
-            cutoff_hz=float(c.cutoff_hz),
-            hp_cutoff_hz=float(c.hp_cutoff_hz),
-            sample_hold_hz=float(c.sample_hold_hz),
-            bit_depth=float(c.bit_depth),
-            pitch_offset_cents=float(c.pitch_offset_cents),
-            resonance_q=float(c.resonance_q),
-            key_track=float(c.key_track),
-            env_to_cutoff_cents=float(c.env_to_cutoff_cents),
-            vel_to_cutoff_cents=float(c.vel_to_cutoff_cents),
-            amp_attack_ms=float(c.amp_attack_ms),
-            amp_decay_ms=float(c.amp_decay_ms),
-            amp_sustain=float(c.amp_sustain),
-            amp_release_ms=float(c.amp_release_ms),
-            filter_attack_ms=float(c.filter_attack_ms),
-            filter_decay_ms=float(c.filter_decay_ms),
-            filter_sustain=float(c.filter_sustain),
-            filter_release_ms=float(c.filter_release_ms),
-            lfo_rate_hz=float(c.lfo_rate_hz),
-            lfo_to_pitch_cents=float(c.lfo_to_pitch_cents),
-            lfo2_rate_hz=float(c.lfo2_rate_hz),
-            glide_ms=float(c.glide_ms),
-            body=_synth_enum_name(int(c.body), _SYNTH_BODY_TYPES),
-            body_mix=float(c.body_mix),
-            stereo_spread=float(c.stereo_spread),
-            retrigger=_synth_enum_name(int(c.retrigger), _SYNTH_RETRIGGERS),
-            lfo_shape=_synth_enum_name(int(c.lfo_shape), _SYNTH_LFO_SHAPES),
-            mod_routings=routings,
-            gain=float(c.gain),
-            polyphony=int(c.polyphony),
-            bus_drive=float(c.bus_drive),
-            sample_set=int(c.sample_set),
-            sample_level=float(c.sample_level),
-            sample_loop=_synth_enum_name(int(c.sample_loop), _SAMPLE_LOOP_MODES),
-            sample_start_offset=float(c.sample_start_offset),
-            sample_key_track=_synth_enum_name(int(c.sample_key_track), _SAMPLE_KEY_TRACKS),
-            drift_rate_hz=float(c.drift_rate_hz),
-            amp_delay_ms=float(c.amp_delay_ms),
-            amp_hold_ms=float(c.amp_hold_ms),
-            filter_delay_ms=float(c.filter_delay_ms),
-            filter_hold_ms=float(c.filter_hold_ms),
-            one_shot=bool(c.one_shot),
-        )
-
-
-def _synth_patch_arg(instrument: SynthPatch | str | None) -> SynthPatch:
-    if instrument is None:
-        return SynthPatch()
-    if isinstance(instrument, str):
-        return SynthPatch(preset=instrument)
-    return instrument
-
-
-def synth_preset_names() -> list[str]:
-    """NativeSynth preset catalog names (``"sine"``, ``"saw-lead"``,
-    ``"e-piano"``, ``"drum-kit"``, ...). Use these to discover valid
-    :class:`SynthPatch` preset names instead of hardcoding magic strings."""
-    lib = _get_lib()
-    if not hasattr(lib, "sonare_synth_preset_names"):
-        raise _not_supported("libsonare was built without the NativeSynth ABI")
-    return _joined_names(lib.sonare_synth_preset_names(), "synth preset names")
-
-
-def _synth_param_info(raw: bytes | None, what: str) -> list[SynthParamInfo]:
-    if raw is None:
-        raise _last_error(int(ErrorCode.INVALID_PARAMETER), what)
-    return cast("list[SynthParamInfo]", json.loads(raw.decode("utf-8")))
-
-
-def synth_engine_param_info(engine_mode: str | int) -> list[SynthParamInfo]:
-    """Describe every :attr:`SynthPatch.engine_params` key of ``engine_mode``.
-
-    One descriptor per field of that engine's own section, in the layout of
-    :func:`mastering_insert_param_info` plus an ``integer`` flag (present and
-    true for a field taking whole numbers). ``min`` / ``max`` are present only
-    for a field with a closed range, which a value outside is refused rather than
-    clamped; ``default`` is the engine's base preset value. The ``"default"``
-    and ``"sample"`` modes have no engine section and give an empty list. An
-    unknown mode raises.
-    """
-    lib = _get_lib()
-    if not hasattr(lib, "sonare_synth_engine_param_info"):
-        raise _not_supported("libsonare was built without the NativeSynth ABI")
-    mode = _synth_enum_value(engine_mode, _SYNTH_ENGINE_MODES, "engine mode")
-    return _synth_param_info(
-        lib.sonare_synth_engine_param_info(_to_c_int(mode, "engine_mode")),
-        "synth engine param info",
-    )
-
-
-def synth_patch_param_info() -> list[SynthParamInfo]:
-    """Describe every numeric :class:`SynthPatch` wrapper field.
-
-    One descriptor per field, in the layout of :func:`synth_engine_param_info`:
-    ``name`` is the binding spelling of the field, ``min`` / ``max`` the range it
-    is accepted in (a value outside it is refused) and ``default`` the init
-    patch's value. Enum fields, the preset name and the mod matrix are not
-    described.
-    """
-    lib = _get_lib()
-    if not hasattr(lib, "sonare_synth_patch_param_info"):
-        raise _not_supported("libsonare was built without the NativeSynth ABI")
-    return _synth_param_info(lib.sonare_synth_patch_param_info(), "synth patch param info")
-
-
-def synth_gs_drum_kit_name(program: int) -> str | None:
-    """GS rhythm-set name a rhythm part's ``program`` selects (``"Standard"``,
-    ``"Room"``, ``"Jazz"``, ...), or ``None`` when the module's own tone map
-    defines no set there.
-
-    The answer is the module's own map, which is the newest one and reaches
-    every set this build voices; a file selecting an older map reaches fewer.
-    """
-    lib = _get_lib()
-    if not hasattr(lib, "sonare_synth_gs_drum_kit_name"):
-        raise _not_supported("libsonare was built without the NativeSynth ABI")
-    raw = lib.sonare_synth_gs_drum_kit_name(_to_c_int(program, "program"))
-    return raw.decode("utf-8") if raw else None
-
-
-def synth_gs_drum_kit_is_voiced_apart(program: int) -> bool | None:
-    """Whether the GS rhythm set at ``program`` is voiced apart from Standard:
-    ``True`` when at least one drum note differs, ``False`` when the set renders
-    exactly as Standard, ``None`` when no set sits at ``program``.
-
-    Derived by applying the set to every note's resolved patch and comparing, so
-    the answer follows the voicing rather than a list kept in step with it. Four
-    sets GS fills with one-shots share the Standard voicing deliberately, so a
-    host offering every set without this query offers four choices that change
-    nothing.
-    """
-    lib = _get_lib()
-    if not hasattr(lib, "sonare_synth_gs_drum_kit_is_voiced_apart"):
-        raise _not_supported("libsonare was built without the NativeSynth ABI")
-    r = lib.sonare_synth_gs_drum_kit_is_voiced_apart(_to_c_int(program, "program"))
-    return None if r < 0 else bool(r)
-
-
-def synth_gs_variation_is_voiced_apart(bank: int, program: int) -> bool | None:
-    """Whether melodic Bank Select ``bank`` on ``program`` is voiced apart from
-    the capital tone: ``True`` when the bank has a patch of its own, ``False``
-    when it resolves to the capital, ``None`` when either argument is outside
-    ``[0, 127]`` -- both are seven-bit MIDI values, so ``128`` is out of range
-    rather than the drum bank here.
-
-    Resolving an unvoiced variation to its capital is what GS specifies, so a
-    ``False`` is correct behaviour rather than a gap — but only this query
-    separates it from a bank that is voiced, which otherwise takes rendering
-    both and comparing. Accepts the GS Bank Select MSB and the GM2 LSB alike,
-    since both address the same variation.
-    """
-    lib = _get_lib()
-    if not hasattr(lib, "sonare_synth_gs_variation_is_voiced_apart"):
-        raise _not_supported("libsonare was built without the NativeSynth ABI")
-    r = lib.sonare_synth_gs_variation_is_voiced_apart(
-        _to_c_int(bank, "bank"), _to_c_int(program, "program")
-    )
-    return None if r < 0 else bool(r)
-
-
-def controller_profile_names() -> list[str]:
-    """Controller-profile preset names (``"gm"``, ``"breath"``,
-    ``"breath-aftertouch"``, ``"mpe"``, ...). Use these to discover the names
-    :meth:`RealtimeEngine.set_controller_profile` accepts instead of hardcoding
-    magic strings."""
-    lib = _get_lib()
-    if not hasattr(lib, "sonare_controller_profile_names"):
-        raise _not_supported("libsonare was built without the controller-profile ABI")
-    return _joined_names(lib.sonare_controller_profile_names(), "controller profile names")
-
-
-def synth_preset_patch(name: str) -> SynthPatch:
-    """Fetch the named catalog preset as a :class:`SynthPatch` (the preset name
-    plus the wrapper-section values), so hosts can inspect a preset and tweak
-    fields before binding it. A ``"va:"`` routing prefix is accepted. Raises
-    :class:`SonareValueError` for unknown names."""
-    lib = _get_lib()
-    if not hasattr(lib, "sonare_synth_preset_patch"):
-        raise _not_supported("libsonare was built without the NativeSynth ABI")
-    out = SonareSynthPatch()
-    _check(
-        lib.sonare_synth_preset_patch(_utf8_arg(_strip_va_prefix(name), "name"), ctypes.byref(out))
-    )
-    return SynthPatch._from_c(out)
-
-
-class ExternalInstrument(Protocol):
-    """A host-supplied instrument driven during :meth:`Project.bounce_with_instruments`.
-
-    The object models a MIDI instrument the bounce engine hosts in place of the
-    built-in synth. Only :meth:`render` is required; ``prepare``, ``on_event``
-    and a ``latency_samples`` attribute are optional (duck-typed). Every method
-    is called synchronously on the thread that invokes the bounce, so no
-    cross-thread state sharing is involved.
-
-    Optional members::
-
-        def prepare(self, sample_rate: float, max_block_size: int) -> None: ...
-                def on_event(self, destination_id: int,
-                             ump_words: tuple[int, ...], render_frame: int) -> None: ...
-                latency_samples: int  # reported plugin-delay (PDC); defaults to 0
-                tail_samples: int  # release/effect tail for auto-length bounce; defaults to 0
-    """
-
-    def render(self, channels: np.ndarray, num_frames: int) -> None:
-        """Add ``num_frames`` of audio into the planar ``(channels, num_frames)``
-        float32 array (already zero-filled). Sum into it; do not overwrite
-        unrelated frames."""
-        ...
-
-
-def _make_instrument_callbacks(
-    instrument: ExternalInstrument,
-    errors: list[BaseException],
-    keepalive: list[object],
-) -> SonareInstrumentCallbacks:
-    """Build the C callback table for one external instrument.
-
-    The returned closures capture ``instrument`` directly (so ``user_data`` is
-    unused) and record the first exception raised by any user callback into
-    ``errors`` instead of propagating through the C frames (ctypes would only
-    print it). The ``ctypes`` callback objects are appended to ``keepalive``;
-    the caller MUST keep that list referenced for the whole bounce call, since
-    copying the struct into the bindings array does not pin the closures.
-    """
-    cbs = SonareInstrumentCallbacks()
-    cbs.user_data = None
-    # Assigned unconverted so the struct's own narrowing sees the instrument's
-    # value; int() would truncate a fractional latency past it.
-    latency = getattr(instrument, "latency_samples", 0)
-    cbs.latency_samples = latency if latency else 0
-    tail = getattr(instrument, "tail_samples", 0)
-    cbs.tail_samples = tail if tail else 0
-
-    prepare = getattr(instrument, "prepare", None)
-    if callable(prepare):
-
-        def _prepare(_user, sample_rate, max_block_size, _fn=prepare):  # type: ignore[no-untyped-def]
-            if errors:
-                return
-            try:
-                _fn(float(sample_rate), int(max_block_size))
-            except BaseException as exc:  # noqa: BLE001
-                if not errors:
-                    errors.append(exc)
-
-        cb_prepare = SonareInstrumentPrepareCallback(_prepare)
-        keepalive.append(cb_prepare)
-        cbs.prepare = cb_prepare
-
-    on_event = getattr(instrument, "on_event", None)
-    if callable(on_event):
-
-        def _on_event(_user, dest, words, count, frame, _fn=on_event):  # type: ignore[no-untyped-def]
-            if errors:
-                return
-            try:
-                ump = tuple(int(words[i]) for i in range(int(count)))
-                _fn(int(dest), ump, int(frame))
-            except BaseException as exc:  # noqa: BLE001
-                if not errors:
-                    errors.append(exc)
-
-        cb_event = SonareInstrumentOnEventCallback(_on_event)
-        keepalive.append(cb_event)
-        cbs.on_event = cb_event
-
-    render = instrument.render
-
-    def _render(_user, channels, num_channels, num_frames, _fn=render):  # type: ignore[no-untyped-def]
-        if errors:
-            return
-        try:
-            nch = int(num_channels)
-            nfr = int(num_frames)
-            if nch <= 0 or nfr <= 0:
-                return
-            # The engine zero-fills the C scratch before this call; the
-            # instrument sums into `block`, and we add `block` back into each
-            # planar channel buffer (a view that shares the C memory).
-            block = np.zeros((nch, nfr), dtype=np.float32)
-            _fn(block, nfr)
-            for ch in range(nch):
-                dst = np.ctypeslib.as_array(channels[ch], shape=(nfr,))
-                dst += block[ch]
-        except BaseException as exc:  # noqa: BLE001
-            if not errors:
-                errors.append(exc)
-
-    cb_render = SonareInstrumentRenderCallback(_render)
-    keepalive.append(cb_render)
-    cbs.render = cb_render
-    return cbs
 
 
 @dataclass(frozen=True)
