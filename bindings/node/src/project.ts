@@ -1640,6 +1640,19 @@ export class Project {
     }
   }
 
+  private bounceNativeBindings<E, R>(
+    fnName: string,
+    plural: boolean,
+    instruments: E | ReadonlyArray<E>,
+    options: ProjectBounceOptions,
+    entry: (binding: E) => R,
+    render: (native: InstanceType<typeof addon.Project>, bindings: R[]) => Float32Array,
+  ): Float32Array {
+    assertBounceOptions(fnName, options);
+    const native = this.native;
+    return render(native, normalizeInstrumentBindings(fnName, plural, instruments, true, entry));
+  }
+
   /**
    * Like {@link bounce}, but renders MIDI tracks routed to a destination
    * through the built-in oscillator synth so a MIDI-only arrangement bounces
@@ -1653,16 +1666,13 @@ export class Project {
     instruments: ReadonlyArray<BuiltinInstrumentConfig | SynthWaveform> = [],
     options: ProjectBounceOptions = {},
   ): Float32Array {
-    assertBounceOptions('bounceWithBuiltinInstruments', options);
-    return this.native.bounceWithBuiltinInstruments(
-      normalizeInstrumentBindings(
-        'bounceWithBuiltinInstruments',
-        true,
-        instruments,
-        true,
-        builtinInstrumentConfig,
-      ),
+    return this.bounceNativeBindings(
+      'bounceWithBuiltinInstruments',
+      true,
+      instruments,
       options,
+      builtinInstrumentConfig,
+      (native, bindings) => native.bounceWithBuiltinInstruments(bindings, options),
     );
   }
 
@@ -1684,16 +1694,13 @@ export class Project {
       | ReadonlyArray<BuiltinInstrumentConfig | SynthWaveform> = {},
     options: ProjectBounceOptions = {},
   ): Float32Array {
-    assertBounceOptions('bounceWithBuiltinInstrument', options);
-    return this.native.bounceWithBuiltinInstruments(
-      normalizeInstrumentBindings(
-        'bounceWithBuiltinInstrument',
-        false,
-        instrument,
-        true,
-        builtinInstrumentConfig,
-      ),
+    return this.bounceNativeBindings(
+      'bounceWithBuiltinInstrument',
+      false,
+      instrument,
       options,
+      builtinInstrumentConfig,
+      (native, bindings) => native.bounceWithBuiltinInstruments(bindings, options),
     );
   }
 
@@ -1720,16 +1727,13 @@ export class Project {
     instruments: ReadonlyArray<SynthPatch | string> = [],
     options: ProjectBounceOptions = {},
   ): Float32Array {
-    assertBounceOptions('bounceWithSynthInstruments', options);
-    return this.native.bounceWithSynthInstruments(
-      normalizeInstrumentBindings(
-        'bounceWithSynthInstruments',
-        true,
-        instruments,
-        true,
-        normalizeSynthInstrument,
-      ),
+    return this.bounceNativeBindings(
+      'bounceWithSynthInstruments',
+      true,
+      instruments,
       options,
+      normalizeSynthInstrument,
+      (native, bindings) => native.bounceWithSynthInstruments(bindings, options),
     );
   }
 
@@ -1744,16 +1748,13 @@ export class Project {
     instrument: SynthPatch | string | ReadonlyArray<SynthPatch | string> = {},
     options: ProjectBounceOptions = {},
   ): Float32Array {
-    assertBounceOptions('bounceWithSynthInstrument', options);
-    return this.native.bounceWithSynthInstruments(
-      normalizeInstrumentBindings(
-        'bounceWithSynthInstrument',
-        false,
-        instrument,
-        true,
-        normalizeSynthInstrument,
-      ),
+    return this.bounceNativeBindings(
+      'bounceWithSynthInstrument',
+      false,
+      instrument,
       options,
+      normalizeSynthInstrument,
+      (native, bindings) => native.bounceWithSynthInstruments(bindings, options),
     );
   }
 

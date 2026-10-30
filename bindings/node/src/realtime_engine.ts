@@ -1,4 +1,5 @@
 import { ClipPageProvider, FileClipPageProvider } from './clip_page_provider.js';
+import { eqBandJson } from './internal/eq_band_json.js';
 import { addon } from './native.js';
 import type { ProjectTimeline } from './project.js';
 import type {
@@ -70,12 +71,7 @@ import {
 
 export * from './clip_page_provider.js';
 
-/**
- * Resolves each send's `sendTiming` spelling to its C ABI ordinal, shared by
- * {@link RealtimeEngine.setTrackLanes} and {@link RealtimeEngine.setTrackBuses}
- * so a track lane's sends and a bus's sends normalize identically.
- */
-// The addon reads a page provider by its numeric handle.
+/** The addon reads a page provider by its numeric handle. */
 function toNativeClip(clip: EngineClip): unknown {
   return {
     ...clip,
@@ -86,6 +82,11 @@ function toNativeClip(clip: EngineClip): unknown {
   };
 }
 
+/**
+ * Resolves each send's `sendTiming` spelling to its C ABI ordinal, shared by
+ * {@link RealtimeEngine.setTrackLanes} and {@link RealtimeEngine.setTrackBuses}
+ * so a track lane's sends and a bus's sends normalize identically.
+ */
 function normalizeSends(sends: EngineTrackSend[]): EngineTrackSend[] {
   return sends.map((send) =>
     send.sendTiming === undefined
@@ -651,11 +652,7 @@ export class RealtimeEngine {
 
   /** Bus-strip counterpart of {@link setTrackStripEqBand}. */
   setBusStripEqBand(busId: number, bandIndex: number, band: EqBandInput | string): void {
-    this.native.setBusStripEqBandJson(
-      busId,
-      bandIndex,
-      typeof band === 'string' ? band : JSON.stringify(band),
-    );
+    this.native.setBusStripEqBandJson(busId, bandIndex, eqBandJson(band));
   }
 
   /** Bus-strip counterpart of {@link setTrackStripEqBandJson}. */
@@ -668,11 +665,7 @@ export class RealtimeEngine {
   }
 
   setTrackStripEqBand(trackId: number, bandIndex: number, band: EqBandInput | string): void {
-    this.native.setTrackStripEqBandJson(
-      trackId,
-      bandIndex,
-      typeof band === 'string' ? band : JSON.stringify(band),
-    );
+    this.native.setTrackStripEqBandJson(trackId, bandIndex, eqBandJson(band));
   }
 
   setTrackStripEqBandJson(trackId: number, bandIndex: number, bandJson: string): void {
@@ -693,10 +686,7 @@ export class RealtimeEngine {
   }
 
   setMasterStripEqBand(bandIndex: number, band: EqBandInput | string): void {
-    this.native.setMasterStripEqBandJson(
-      bandIndex,
-      typeof band === 'string' ? band : JSON.stringify(band),
-    );
+    this.native.setMasterStripEqBandJson(bandIndex, eqBandJson(band));
   }
 
   setMasterStripEqBandJson(bandIndex: number, bandJson: string): void {

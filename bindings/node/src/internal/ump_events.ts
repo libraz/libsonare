@@ -6,7 +6,7 @@ const MIDI2_U32_MAX = 0xffffffff;
 
 // UMP MIDI-2.0 channel-voice packet (message type 0x4). Canonical layout is
 // sonare::midi::make_midi2_* (C-ABI sonare_midi2_*); the golden vectors in
-// midi2-builders.test.ts lock this copy against it.
+// midi2-ump.test.ts lock this copy against it.
 export function midi2Event(
   fnName: string,
   ppq: number,

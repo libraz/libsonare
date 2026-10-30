@@ -1017,7 +1017,6 @@ function resolveChordOptions(options: ChordDetectionOptions): ResolvedChordParam
   };
 }
 
-/** Validate the resolved chord params the addon narrows into C ints, before they are sent. */
 /**
  * The chord parameters both entry points resolve the same way. The key is not
  * among them: `chordFunctionalAnalysis` takes it as its own argument and sends
@@ -1031,6 +1030,64 @@ function assertChordParams(
   // The domain (>= 0) is the C ABI's; this only keeps the addon's int narrowing from wrapping.
   assertInt32(fnName, p.hmmBeamWidth, 'hmmBeamWidth');
   return fft;
+}
+
+/** Resolves the positional or request form of a chord call, then validates audio and parameters. */
+function resolveChordCall(
+  fnName: string,
+  samples: Float32Array | DetectChordsRequest | ChordFunctionalAnalysisRequest,
+  sampleRate: number,
+  minDurationOrOptions: number | ChordDetectionOptions,
+  smoothingWindow: number,
+  threshold: number,
+  useTriadsOnly: boolean,
+  nFft: number,
+  hopLength: number,
+  useBeatSync: boolean,
+  useHmm: boolean,
+  hmmBeamWidth: number,
+  useKeyContext: boolean,
+  keyRoot: ChordFunctionsKey['root'],
+  keyMode: ChordFunctionsKey['mode'],
+  detectInversions: boolean,
+  chromaMethod: ChordChromaMethod,
+): {
+  p: ResolvedChordParams;
+  fft: { nFft: number; hopLength: number };
+  resolvedSampleRate: number;
+} {
+  const p: ResolvedChordParams =
+    samples instanceof Float32Array && typeof minDurationOrOptions === 'object'
+      ? resolveChordOptions(minDurationOrOptions)
+      : samples instanceof Float32Array
+        ? {
+            minDuration: minDurationOrOptions as number,
+            smoothingWindow,
+            threshold,
+            useTriadsOnly,
+            nFft,
+            hopLength,
+            useBeatSync,
+            useHmm,
+            hmmBeamWidth,
+            useKeyContext,
+            keyRoot,
+            keyMode,
+            detectInversions,
+            chromaMethod,
+            tuning: 0,
+          }
+        : resolveChordOptions(samples);
+  const resolvedSampleRate =
+    samples instanceof Float32Array ? sampleRate : (samples.sampleRate ?? 22050);
+  assertAudioInput(
+    fnName,
+    samples instanceof Float32Array ? samples : samples.samples,
+    resolvedSampleRate,
+    samples instanceof Float32Array ? {} : samples,
+  );
+  const fft = assertChordParams(fnName, p);
+  return { p, fft, resolvedSampleRate };
 }
 
 /**
@@ -1086,37 +1143,25 @@ export function detectChords(
   if (!(samples instanceof Float32Array)) {
     requestObject('detectChords', samples);
   }
-  const p: ResolvedChordParams =
-    samples instanceof Float32Array && typeof minDurationOrOptions === 'object'
-      ? resolveChordOptions(minDurationOrOptions)
-      : samples instanceof Float32Array
-        ? {
-            minDuration: minDurationOrOptions as number,
-            smoothingWindow,
-            threshold,
-            useTriadsOnly,
-            nFft,
-            hopLength,
-            useBeatSync,
-            useHmm,
-            hmmBeamWidth,
-            useKeyContext,
-            keyRoot,
-            keyMode,
-            detectInversions,
-            chromaMethod,
-            tuning: 0,
-          }
-        : resolveChordOptions(samples);
-  const resolvedSampleRate =
-    samples instanceof Float32Array ? sampleRate : (samples.sampleRate ?? 22050);
-  assertAudioInput(
+  const { p, fft, resolvedSampleRate } = resolveChordCall(
     'detectChords',
-    samples instanceof Float32Array ? samples : samples.samples,
-    resolvedSampleRate,
-    samples instanceof Float32Array ? {} : samples,
+    samples,
+    sampleRate,
+    minDurationOrOptions,
+    smoothingWindow,
+    threshold,
+    useTriadsOnly,
+    nFft,
+    hopLength,
+    useBeatSync,
+    useHmm,
+    hmmBeamWidth,
+    useKeyContext,
+    keyRoot,
+    keyMode,
+    detectInversions,
+    chromaMethod,
   );
-  const fft = assertChordParams('detectChords', p);
   return addon.detectChords(
     samples instanceof Float32Array ? samples : samples.samples,
     resolvedSampleRate,
@@ -1196,37 +1241,25 @@ export function chordFunctionalAnalysis(
   if (!(samples instanceof Float32Array)) {
     requestObject('chordFunctionalAnalysis', samples);
   }
-  const p: ResolvedChordParams =
-    samples instanceof Float32Array && typeof minDurationOrOptions === 'object'
-      ? resolveChordOptions(minDurationOrOptions)
-      : samples instanceof Float32Array
-        ? {
-            minDuration: minDurationOrOptions as number,
-            smoothingWindow,
-            threshold,
-            useTriadsOnly,
-            nFft,
-            hopLength,
-            useBeatSync,
-            useHmm,
-            hmmBeamWidth,
-            useKeyContext,
-            keyRoot: keyRoot ?? 0,
-            keyMode,
-            detectInversions,
-            chromaMethod,
-            tuning: 0,
-          }
-        : resolveChordOptions(samples);
-  const resolvedSampleRate =
-    samples instanceof Float32Array ? sampleRate : (samples.sampleRate ?? 22050);
-  assertAudioInput(
+  const { p, fft, resolvedSampleRate } = resolveChordCall(
     'chordFunctionalAnalysis',
-    samples instanceof Float32Array ? samples : samples.samples,
-    resolvedSampleRate,
-    samples instanceof Float32Array ? {} : samples,
+    samples,
+    sampleRate,
+    minDurationOrOptions,
+    smoothingWindow,
+    threshold,
+    useTriadsOnly,
+    nFft,
+    hopLength,
+    useBeatSync,
+    useHmm,
+    hmmBeamWidth,
+    useKeyContext,
+    keyRoot ?? 0,
+    keyMode,
+    detectInversions,
+    chromaMethod,
   );
-  const fft = assertChordParams('chordFunctionalAnalysis', p);
   // Ahead of the key, because a first argument that is neither form reads as a
   // request whose every field is absent, and the key would be blamed for it.
   if (!(samples instanceof Float32Array) && !(samples.samples instanceof Float32Array)) {
