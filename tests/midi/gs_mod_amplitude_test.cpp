@@ -203,7 +203,7 @@ TEST_CASE("40 2x 02 at 00 lands where a zero CC7 lands", "[midi][synth][gs]") {
   //
   // Not stated as silence, which it is on the SoundFont bank and is not on the
   // model one. A fallback piano's note-on strikes the part's shared soundboard
-  // directly (sf2_player_midi.cpp), outside the voice and so outside the
+  // directly (sf2_player_model_floor.cpp), outside the voice and so outside the
   // channel gain, and CC7 zero does not silence that either — which is what
   // makes the comparison against CC7 the claim worth making here.
   for (const Bank bank : {Bank::kSoundFont, Bank::kModel}) {

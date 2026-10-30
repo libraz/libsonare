@@ -985,7 +985,11 @@ if(BUILD_ARRANGEMENT)
     midi/synth/sf2_voice.cpp
     midi/synth/part_fx_stage.cpp
     midi/synth/sf2_player.cpp
-    midi/synth/sf2_player_control.cpp
+    midi/synth/sf2_player_direct_gs.cpp
+    midi/synth/sf2_player_gs_sysex.cpp
+    midi/synth/sf2_player_model_floor.cpp
+    midi/synth/sf2_player_part_state.cpp
+    midi/synth/sf2_player_prepared_efx.cpp
     midi/synth/sf2_player_midi.cpp
     midi/synth/sf2_player_render.cpp
     midi/synth/render_path_record.cpp
@@ -1707,7 +1711,8 @@ if(BUILD_WASM)
       midi/sequencer.cpp
       midi/synth/native_synth_live_control.cpp
       midi/synth/part_fx_stage.cpp
-      midi/synth/sf2_player_control.cpp
+      midi/synth/sf2_player_direct_gs.cpp
+      midi/synth/sf2_player_prepared_efx.cpp
       TARGET_DIRECTORY sonare_midi
       PROPERTIES COMPILE_OPTIONS -fexceptions)
   endif()
