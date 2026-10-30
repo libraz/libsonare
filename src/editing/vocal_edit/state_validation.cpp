@@ -113,10 +113,9 @@ void validate_state(const VocalEditState& state, const VocalAnalysisData& analys
                            static_cast<double>(note.source_range.length());
     bool saw_frame = false;
     for (uint32_t frame = note.analysis_frame_start; frame < note.analysis_frame_end; ++frame) {
-      const double frame_sample = analysis.grid.frame_origin_sample +
-                                  static_cast<double>(frame) * analysis.grid.samples_per_frame;
-      if (frame_sample + 1.0e-9 < source_window_start ||
-          frame_sample - 1.0e-9 > source_window_end) {
+      const double frame_sample = frame_sample_position(analysis.grid, frame);
+      if (frame_sample + kFrameWindowToleranceSamples < source_window_start ||
+          frame_sample - kFrameWindowToleranceSamples > source_window_end) {
         continue;
       }
       saw_frame = true;
@@ -149,13 +148,7 @@ void validate_state(const VocalEditState& state, const VocalAnalysisData& analys
         right_note.edit.muted) {
       invalid("transition", "transition notes must be continuous and audible");
     }
-    if (transition.left_window_samples <= 0 || transition.right_window_samples <= 0 ||
-        transition.left_window_samples > left_note.edit.destination_length_samples ||
-        transition.right_window_samples > right_note.edit.destination_length_samples ||
-        !std::isfinite(transition.strength) || transition.strength < 0.0 ||
-        transition.strength > 1.0 || transition.curve != TransitionCurve::kSmoothstep) {
-      invalid("transition", "transition values are malformed");
-    }
+    validate_transition_values(transition, left_note, right_note);
     if (!window_is_voiced(left_note, true, transition.left_window_samples) ||
         !window_is_voiced(right_note, false, transition.right_window_samples)) {
       invalid("transition", "transition windows must be fully voiced");
@@ -194,6 +187,17 @@ int64_t checked_end(int64_t start, int64_t length, const std::string& field) {
   return start + length;
 }
 
+void validate_transition_values(const PitchTransition& transition, const VocalNote& left_note,
+                                const VocalNote& right_note) {
+  if (transition.left_window_samples <= 0 || transition.right_window_samples <= 0 ||
+      transition.left_window_samples > left_note.edit.destination_length_samples ||
+      transition.right_window_samples > right_note.edit.destination_length_samples ||
+      !std::isfinite(transition.strength) || transition.strength < 0.0 ||
+      transition.strength > 1.0 || transition.curve != TransitionCurve::kSmoothstep) {
+    invalid("transition", "transition values are malformed");
+  }
+}
+
 void validate_note(const VocalNote& note, const VocalAnalysisData& analysis, int64_t source_length,
                    int64_t output_length) {
   if (note.id == kInvalidVocalNoteId) invalid("note.id", "must be non-zero");
@@ -207,8 +211,7 @@ void validate_note(const VocalNote& note, const VocalAnalysisData& analysis, int
     invalid("note.analysis_frame", "must be inside analysis");
   }
   const auto frame_sample = [&](uint32_t frame) {
-    return analysis.grid.frame_origin_sample +
-           static_cast<double>(frame) * analysis.grid.samples_per_frame;
+    return frame_sample_position(analysis.grid, frame);
   };
   // A rounded absolute-origin boundary can land half a sample away from the
   // ideal frame position. Verify that each declared frame edge brackets the

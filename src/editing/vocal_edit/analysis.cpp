@@ -11,6 +11,7 @@
 
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/pitch_editor/note_segmenter.h"
+#include "editing/vocal_edit/session_internal.h"
 #include "editing/vocal_edit/source_digest.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -18,6 +19,10 @@
 
 namespace sonare::editing::vocal_edit {
 
+using detail::frame_ceil;
+using detail::frame_raw_position;
+using detail::frame_sample_position;
+using detail::invalid;
 using sonare::constants::kA4Hz;
 using sonare::constants::kCentsPerOctave;
 using sonare::constants::kCentsPerSemitone;
@@ -25,10 +30,6 @@ using sonare::constants::kMidiA4;
 using sonare::constants::kSemitonesPerOctave;
 
 namespace {
-
-[[noreturn]] void invalid(const std::string& field, const std::string& message) {
-  throw VocalEditException(VocalReason::kInvalidInput, message, field);
-}
 
 class DigestBuilder {
  public:
@@ -61,10 +62,6 @@ class DigestBuilder {
  private:
   util::Sha256 hash_;
 };
-
-double sample_at(const AnalysisGrid& grid, uint32_t frame) {
-  return grid.frame_origin_sample + static_cast<double>(frame) * grid.samples_per_frame;
-}
 
 int64_t rounded_sample(double value) {
   const double int64_lower = -std::ldexp(1.0, 63);
@@ -114,7 +111,7 @@ float refine_frame_f0(const Audio& source, const AnalysisGrid& grid, uint32_t fr
   const int lag_high = static_cast<int>(lag_high_raw);
   const int window = frame_length - lag_high;
 
-  const double centre = sample_at(grid, frame);
+  const double centre = frame_sample_position(grid, frame);
   const int64_t begin = static_cast<int64_t>(std::floor(centre - 0.5 * frame_length));
   frame_samples.assign(static_cast<size_t>(frame_length), 0.0f);
   const int64_t source_size = static_cast<int64_t>(source.size());
@@ -192,6 +189,7 @@ constexpr double kProminentPeakFraction = 0.5;
 // Vibrato rates the fallback fit searches, and its grid step.
 constexpr double kVibratoRateMinHz = 3.5;
 constexpr double kVibratoRateMaxHz = 8.5;
+constexpr double kVibratoRateToleranceHz = 1e-9;
 constexpr double kVibratoRateStepHz = 0.05;
 // Below two cycles a growing amplitude is not separable from the centre (fit outliers of 80 cents).
 constexpr double kGrowthFitMinCycles = 2.0;
@@ -211,7 +209,7 @@ bool fit_vibrato(const std::vector<double>& seconds, const std::vector<double>& 
   const Eigen::Map<const Eigen::VectorXd> target(values.data(), static_cast<Eigen::Index>(n));
   for (int step = 0;; ++step) {
     const double rate = lowest + step * kVibratoRateStepHz;
-    if (rate > kVibratoRateMaxHz + 1e-9) break;
+    if (rate > kVibratoRateMaxHz + kVibratoRateToleranceHz) break;
     const double omega = sonare::constants::kTwoPiD * rate;
     for (size_t k = 0; k < n; ++k) {
       const double t = seconds[k];
@@ -531,7 +529,7 @@ VocalAnalysisData validate_analysis(const Audio& source, VocalAnalysisData analy
   if (analysis.amplitude.empty()) {
     analysis.amplitude.assign(analysis.f0_hz.size(), 0.0f);
     for (size_t frame = 0; frame < analysis.amplitude.size(); ++frame) {
-      const double centre = sample_at(analysis.grid, static_cast<uint32_t>(frame));
+      const double centre = frame_sample_position(analysis.grid, static_cast<uint32_t>(frame));
       const long double begin_position =
           std::floor(static_cast<long double>(centre) -
                      static_cast<long double>(analysis.grid.frame_length_samples) * 0.5L);
@@ -601,11 +599,13 @@ std::vector<VocalNote> extract_vocal_notes(const Audio& source, const VocalAnaly
   notes.reserve(regions.size());
   for (const auto& region : regions) {
     const int64_t start = std::max<int64_t>(
-        0, std::min<int64_t>(static_cast<int64_t>(source.size()),
-                             rounded_sample(sample_at(analysis.grid, region.frame_start))));
+        0, std::min<int64_t>(
+               static_cast<int64_t>(source.size()),
+               rounded_sample(frame_sample_position(analysis.grid, region.frame_start))));
     int64_t end = std::max<int64_t>(
-        start, std::min<int64_t>(static_cast<int64_t>(source.size()),
-                                 rounded_sample(sample_at(analysis.grid, region.frame_end))));
+        start,
+        std::min<int64_t>(static_cast<int64_t>(source.size()),
+                          rounded_sample(frame_sample_position(analysis.grid, region.frame_end))));
     if (end <= start) end = std::min<int64_t>(static_cast<int64_t>(source.size()), start + 1);
     if (end <= start) continue;
     if (notes.size() >= static_cast<size_t>(std::numeric_limits<VocalNoteId>::max())) {
@@ -635,21 +635,15 @@ VocalNote measure_vocal_note(const Audio& source, const VocalAnalysisData& analy
     invalid("analysis.grid", "analysis grid and arrays are malformed");
   }
   const auto frame_boundary = [&](int64_t sample) -> uint32_t {
-    const double raw = (static_cast<double>(sample) - analysis.grid.frame_origin_sample) /
-                       analysis.grid.samples_per_frame;
-    const double rounded = std::ceil(raw - 1.0e-12);
+    const double rounded = frame_ceil(analysis.grid, sample);
     if (!std::isfinite(rounded)) invalid("source_range", "source frame position is not finite");
     const double frame_count = static_cast<double>(analysis.f0_hz.size());
     if (rounded <= 0.0) return 0;
     if (rounded >= frame_count) return static_cast<uint32_t>(analysis.f0_hz.size());
     return static_cast<uint32_t>(rounded);
   };
-  const double first_raw =
-      (static_cast<double>(source_range.start) - analysis.grid.frame_origin_sample) /
-      analysis.grid.samples_per_frame;
-  const double last_raw =
-      (static_cast<double>(source_range.end) - analysis.grid.frame_origin_sample) /
-      analysis.grid.samples_per_frame;
+  const double first_raw = frame_raw_position(analysis.grid, source_range.start);
+  const double last_raw = frame_raw_position(analysis.grid, source_range.end);
   if (!std::isfinite(first_raw) || !std::isfinite(last_raw)) {
     invalid("source_range", "source frame position is not finite");
   }

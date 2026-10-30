@@ -86,9 +86,7 @@ std::vector<float> split_envelope(const std::vector<float>& envelope, double fra
 }
 
 uint32_t frame_for_sample_start(const AnalysisGrid& grid, uint32_t frame_count, int64_t sample) {
-  const double raw =
-      (static_cast<double>(sample) - grid.frame_origin_sample) / grid.samples_per_frame;
-  const double frame = std::ceil(raw - 1.0e-12);
+  const double frame = frame_ceil(grid, sample);
   if (!std::isfinite(frame) || frame < 0.0 || frame >= static_cast<double>(frame_count)) {
     invalid("source_range", "source span contains no analysis frame");
   }
@@ -96,9 +94,7 @@ uint32_t frame_for_sample_start(const AnalysisGrid& grid, uint32_t frame_count, 
 }
 
 uint32_t frame_for_sample_end(const AnalysisGrid& grid, uint32_t frame_count, int64_t sample) {
-  const double raw =
-      (static_cast<double>(sample) - grid.frame_origin_sample) / grid.samples_per_frame;
-  const double frame = std::ceil(raw - 1.0e-12);
+  const double frame = frame_ceil(grid, sample);
   if (!std::isfinite(frame) || frame <= 0.0 || frame > static_cast<double>(frame_count)) {
     invalid("source_range", "source span contains no analysis frame");
   }
@@ -316,10 +312,6 @@ size_t find_note(const VocalEditState& state, VocalNoteId id) {
   throw VocalEditException(VocalReason::kInvalidState, "note ID was not found", "note_id");
 }
 
-size_t find_note_or_throw(const VocalEditState& state, VocalNoteId id) {
-  return find_note(state, id);
-}
-
 void sort_transitions(VocalEditState& state) {
   insertion_sort(state.transitions.begin(), state.transitions.end(),
                  [](const PitchTransition& lhs, const PitchTransition& rhs) {
@@ -337,14 +329,14 @@ const VocalNote* find_note_or_null(const VocalEditState& state, VocalNoteId id) 
 }
 
 void apply_set_edit(VocalEditState& state, const SetNoteEditOp& operation) {
-  const size_t index = find_note_or_throw(state, operation.note_id);
+  const size_t index = find_note(state, operation.note_id);
   state.notes[index].edit = operation.edit;
 }
 
 void apply_set_source(VocalEditState& state, const SetNoteSourceSpanOp& operation,
                       const Audio& source, const VocalAnalysisData& analysis,
                       int64_t source_length) {
-  const size_t index = find_note_or_throw(state, operation.note_id);
+  const size_t index = find_note(state, operation.note_id);
   if (operation.source_range.start < 0 ||
       operation.source_range.end <= operation.source_range.start ||
       operation.source_range.end > source_length) {
@@ -376,7 +368,7 @@ void apply_set_source(VocalEditState& state, const SetNoteSourceSpanOp& operatio
 void apply_split(VocalEditState& state, const SplitNoteOp& operation, const Audio& source,
                  const VocalAnalysisData& analysis, int64_t source_length, int64_t output_length,
                  uint64_t& next_id, std::vector<IdChange>& changes) {
-  const size_t index = find_note_or_throw(state, operation.note_id);
+  const size_t index = find_note(state, operation.note_id);
   const VocalNote original = state.notes[index];
   if (operation.source_sample <= original.source_range.start ||
       operation.source_sample >= original.source_range.end) {
@@ -384,8 +376,7 @@ void apply_split(VocalEditState& state, const SplitNoteOp& operation, const Audi
   }
   uint32_t split_frame = original.analysis_frame_start;
   while (split_frame < original.analysis_frame_end) {
-    const double frame_sample = analysis.grid.frame_origin_sample +
-                                static_cast<double>(split_frame) * analysis.grid.samples_per_frame;
+    const double frame_sample = frame_sample_position(analysis.grid, split_frame);
     if (frame_sample >= static_cast<double>(operation.source_sample)) break;
     ++split_frame;
   }
@@ -438,7 +429,7 @@ void apply_merge(VocalEditState& state, const MergeNotesOp& operation, const Aud
   if (operation.note_ids.size() < 2) invalid("note_ids", "merge requires at least two notes");
   std::vector<size_t> indices;
   indices.reserve(operation.note_ids.size());
-  for (const auto id : operation.note_ids) indices.push_back(find_note_or_throw(state, id));
+  for (const auto id : operation.note_ids) indices.push_back(find_note(state, id));
   insertion_sort(indices.begin(), indices.end());
   for (size_t i = 1; i < indices.size(); ++i) {
     if (indices[i] != indices[i - 1] + 1) invalid("note_ids", "merge notes must be adjacent");
@@ -473,8 +464,6 @@ void apply_merge(VocalEditState& state, const MergeNotesOp& operation, const Aud
         invalid("merge.edits", "preserving edits would silently discard an edit");
       }
     }
-    const int64_t first_destination_end = checked_end(
-        first.edit.destination_start_sample, first.edit.destination_length_samples, "destination");
     for (size_t i = 1; i < selected.size(); ++i) {
       const int64_t previous_end =
           checked_end(selected[i - 1].edit.destination_start_sample,
@@ -483,7 +472,6 @@ void apply_merge(VocalEditState& state, const MergeNotesOp& operation, const Aud
         invalid("merge.destination", "preserving edits requires contiguous destination ranges");
       }
     }
-    static_cast<void>(first_destination_end);
   } else if (operation.mode != MergeMode::kResetEdits) {
     invalid("merge.mode", "unknown merge mode");
   }
@@ -520,21 +508,15 @@ void apply_merge(VocalEditState& state, const MergeNotesOp& operation, const Aud
 
 void apply_set_transition(VocalEditState& state, const SetTransitionOp& operation) {
   const auto& transition = operation.transition;
-  const size_t left_index = find_note_or_throw(state, transition.left_note_id);
-  const size_t right_index = find_note_or_throw(state, transition.right_note_id);
+  const size_t left_index = find_note(state, transition.left_note_id);
+  const size_t right_index = find_note(state, transition.right_note_id);
   if (left_index + 1 != right_index ||
       state.notes[left_index].edit.destination_start_sample +
               state.notes[left_index].edit.destination_length_samples !=
           state.notes[right_index].edit.destination_start_sample) {
     invalid("transition", "transition notes must be adjacent in destination time");
   }
-  if (transition.left_window_samples <= 0 || transition.right_window_samples <= 0 ||
-      transition.left_window_samples > state.notes[left_index].edit.destination_length_samples ||
-      transition.right_window_samples > state.notes[right_index].edit.destination_length_samples ||
-      !std::isfinite(transition.strength) || transition.strength < 0.0 ||
-      transition.strength > 1.0 || transition.curve != TransitionCurve::kSmoothstep) {
-    invalid("transition", "transition values are malformed");
-  }
+  validate_transition_values(transition, state.notes[left_index], state.notes[right_index]);
   state.transitions.erase(
       std::remove_if(state.transitions.begin(), state.transitions.end(),
                      [&](const PitchTransition& existing) {
@@ -563,8 +545,8 @@ void apply_remove_transition(VocalEditState& state, const RemoveTransitionOp& op
                      }),
       state.transitions.end());
   if (state.transitions.size() == before) invalid("transition", "transition was not found");
-  static_cast<void>(find_note_or_throw(state, operation.left_note_id));
-  static_cast<void>(find_note_or_throw(state, operation.right_note_id));
+  static_cast<void>(find_note(state, operation.left_note_id));
+  static_cast<void>(find_note(state, operation.right_note_id));
 }
 
 }  // namespace detail

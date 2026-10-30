@@ -16,6 +16,7 @@
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/pitch_editor/pitch_corrector.h"
 #include "editing/vocal_edit/render_cache.h"
+#include "editing/vocal_edit/session_internal.h"
 #include "effects/formant_warp.h"
 #include "effects/time_stretch.h"
 #include "util/constants.h"
@@ -25,20 +26,16 @@
 #include "util/numeric_validation.h"
 
 namespace sonare::editing::vocal_edit {
+
+using detail::invalid;
+using detail::invalid_state;
+
 namespace {
 
 constexpr int64_t kAssemblyTileSamples = 4096;
 
 using sonare::editing::pitch_editor::F0Track;
 using sonare::editing::pitch_editor::PitchCorrector;
-
-[[noreturn]] void invalid(const std::string& field, const std::string& message) {
-  throw VocalEditException(VocalReason::kInvalidInput, message, field);
-}
-
-[[noreturn]] void invalid_state(const std::string& field, const std::string& message) {
-  throw VocalEditException(VocalReason::kInvalidState, message, field);
-}
 
 [[noreturn]] void cancelled() {
   throw VocalEditException(VocalReason::kCancelled, "vocal render was cancelled", "render");

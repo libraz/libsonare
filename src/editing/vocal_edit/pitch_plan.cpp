@@ -10,19 +10,14 @@
 #include "editing/note_model/note_object.h"
 #include "editing/note_model/pitch_decomposition.h"
 #include "editing/vocal_edit/analysis.h"
+#include "editing/vocal_edit/session_internal.h"
 #include "util/constants.h"
 
 namespace sonare::editing::vocal_edit {
 
+using detail::frame_sample_position;
+using detail::invalid;
 using sonare::constants::kCentsPerSemitone;
-
-namespace {
-
-[[noreturn]] void invalid(const std::string& field, const std::string& message) {
-  throw VocalEditException(VocalReason::kInvalidInput, message, field);
-}
-
-}  // namespace
 
 void validate_pitch_parameters(const VocalPitchEdit& pitch, SampleRange source_range) {
   const auto finite = [](double value) { return std::isfinite(value); };
@@ -175,8 +170,7 @@ CompiledPitchPlan compile_pitch_plan_at_rate(const VocalAnalysisData& analysis,
   for (size_t offset = 0; offset < frame_count; ++offset) {
     const uint32_t frame = note.analysis_frame_start + static_cast<uint32_t>(offset);
     const size_t index = static_cast<size_t>(frame);
-    const double source_sample = analysis.grid.frame_origin_sample +
-                                 static_cast<double>(frame) * analysis.grid.samples_per_frame;
+    const double source_sample = frame_sample_position(analysis.grid, frame);
     if (!std::isfinite(source_sample)) invalid("analysis.grid", "frame position is not finite");
     const bool is_voiced = voiced[offset];
     PitchEvaluationPoint point;

@@ -24,10 +24,6 @@
 namespace sonare::editing::vocal_edit {
 namespace detail {
 
-[[noreturn]] void invalid(const std::string& field, const std::string& message) {
-  throw VocalEditException(VocalReason::kInvalidInput, message, field);
-}
-
 bool contains_id(const std::set<VocalNoteId>& ids, VocalNoteId id) {
   return ids.find(id) != ids.end();
 }
@@ -78,8 +74,28 @@ VocalSessionEpoch issue_session_epoch() {
   }
 }
 
-[[noreturn]] void invalid_state(const std::string& field, const std::string& message) {
-  throw VocalEditException(VocalReason::kInvalidState, message, field);
+template <typename Impl>
+void require_session_alive(const std::shared_ptr<Impl>& impl) {
+  if (!impl || !impl->session_alive) invalid_state("session", "session is not alive");
+}
+
+[[noreturn]] void draft_not_active() { invalid_state("draft", "draft is not active"); }
+
+template <typename Impl>
+void require_draft_active(bool active, const std::shared_ptr<Impl>& impl) {
+  if (!active || !impl || !impl->session_alive) draft_not_active();
+}
+
+template <typename Impl, typename State>
+void require_draft_active(bool active, const std::shared_ptr<Impl>& impl,
+                          const std::shared_ptr<State>& candidate) {
+  if (!active || !impl || !impl->session_alive || !candidate) draft_not_active();
+}
+
+template <typename Impl>
+void set_formant_capabilities(Impl& impl) {
+  impl.capabilities.min_formant_shift_semitones = kMinFormantShiftSemitones;
+  impl.capabilities.max_formant_shift_semitones = kMaxFormantShiftSemitones;
 }
 
 [[noreturn]] void revision_conflict(const std::string& field, uint64_t expected, uint64_t actual) {
@@ -318,8 +334,7 @@ VocalEditSession VocalEditSession::create(Audio source, const VocalSessionCreate
   impl->source_descriptor = descriptor;
   impl->session_id = make_session_id(descriptor, epoch);
   impl->analysis = std::make_shared<const VocalAnalysisData>(std::move(analysis));
-  impl->capabilities.min_formant_shift_semitones = kMinFormantShiftSemitones;
-  impl->capabilities.max_formant_shift_semitones = kMaxFormantShiftSemitones;
+  set_formant_capabilities(*impl);
   impl->render_settings = options.render_settings;
   impl->output_length_samples = output_length;
   impl->limits = options.limits;
@@ -413,8 +428,7 @@ VocalEditSession VocalEditSession::restore(Audio source, const std::vector<uint8
   impl->epoch = epoch;
   impl->revision = persisted.committed_revision;
   impl->next_note_id = persisted.next_note_id;
-  impl->capabilities.min_formant_shift_semitones = kMinFormantShiftSemitones;
-  impl->capabilities.max_formant_shift_semitones = kMaxFormantShiftSemitones;
+  set_formant_capabilities(*impl);
   impl->committed = std::make_shared<const VocalEditState>(persisted.edit_state);
   impl->history.push_back(impl->committed);
   return VocalEditSession(std::move(impl));
@@ -441,17 +455,17 @@ VocalEditSession& VocalEditSession::operator=(VocalEditSession&& other) noexcept
 }
 
 std::vector<VocalNote> VocalEditSession::notes() const {
-  if (!impl_ || !impl_->session_alive) invalid_state("session", "session is not alive");
+  require_session_alive(impl_);
   return impl_->committed->notes;
 }
 
 VocalAnalysisData VocalEditSession::analysis() const {
-  if (!impl_ || !impl_->session_alive) invalid_state("session", "session is not alive");
+  require_session_alive(impl_);
   return *impl_->analysis;
 }
 
 SourceDescriptor VocalEditSession::source_descriptor() const {
-  if (!impl_ || !impl_->session_alive) invalid_state("session", "session is not alive");
+  require_session_alive(impl_);
   return impl_->source_descriptor;
 }
 
@@ -461,27 +475,27 @@ VocalCapabilities VocalEditSession::capabilities() const noexcept {
 }
 
 std::vector<PitchTransition> VocalEditSession::transitions() const {
-  if (!impl_ || !impl_->session_alive) invalid_state("session", "session is not alive");
+  require_session_alive(impl_);
   return impl_->committed->transitions;
 }
 
 VocalStateToken VocalEditSession::token() const {
-  if (!impl_ || !impl_->session_alive) invalid_state("session", "session is not alive");
+  require_session_alive(impl_);
   return {impl_->epoch, impl_->revision, 0, 0};
 }
 
 int64_t VocalEditSession::output_length_samples() const {
-  if (!impl_ || !impl_->session_alive) invalid_state("session", "session is not alive");
+  require_session_alive(impl_);
   return impl_->output_length_samples;
 }
 
 const RenderSettings& VocalEditSession::render_settings() const {
-  if (!impl_ || !impl_->session_alive) invalid_state("session", "session is not alive");
+  require_session_alive(impl_);
   return impl_->render_settings;
 }
 
 std::unique_ptr<VocalEditDraft> VocalEditSession::begin_edit(VocalRevision expected_revision) {
-  if (!impl_ || !impl_->session_alive) invalid_state("session", "session is not alive");
+  require_session_alive(impl_);
   if (expected_revision != impl_->revision)
     revision_conflict("revision", expected_revision, impl_->revision);
   if (impl_->draft_open) invalid_state("draft", "only one draft may be open");
@@ -501,7 +515,7 @@ std::unique_ptr<VocalEditDraft> VocalEditSession::begin_edit(VocalRevision expec
 }
 
 std::shared_ptr<const VocalRenderSnapshot> VocalEditSession::capture_render_snapshot() const {
-  if (!impl_ || !impl_->session_alive) invalid_state("session", "session is not alive");
+  require_session_alive(impl_);
   auto data = std::make_shared<VocalRenderSnapshotData>();
   data->source = impl_->source;
   data->source_descriptor = impl_->source_descriptor;
@@ -518,21 +532,21 @@ std::shared_ptr<const VocalRenderSnapshot> VocalEditSession::capture_render_snap
 
 std::vector<CompiledPitchPlan> VocalEditSession::evaluate_pitch(
     const std::vector<VocalNoteId>& note_ids) const {
-  if (!impl_ || !impl_->session_alive) invalid_state("session", "session is not alive");
+  require_session_alive(impl_);
   return evaluate_state(*impl_->analysis, *impl_->committed, impl_->render_settings,
                         impl_->source_descriptor.sample_rate, note_ids);
 }
 
 double VocalEditSession::source_sample_to_destination_sample(VocalNoteId note_id,
                                                              double source_sample) const {
-  if (!impl_ || !impl_->session_alive) invalid_state("session", "session is not alive");
+  require_session_alive(impl_);
   const auto& note = impl_->committed->notes[find_note(*impl_->committed, note_id)];
   return ::sonare::editing::vocal_edit::source_sample_to_destination_sample(note, source_sample);
 }
 
 double VocalEditSession::destination_sample_to_source_sample(VocalNoteId note_id,
                                                              double destination_sample) const {
-  if (!impl_ || !impl_->session_alive) invalid_state("session", "session is not alive");
+  require_session_alive(impl_);
   const auto& note = impl_->committed->notes[find_note(*impl_->committed, note_id)];
   return ::sonare::editing::vocal_edit::destination_sample_to_source_sample(note,
                                                                             destination_sample);
@@ -540,7 +554,7 @@ double VocalEditSession::destination_sample_to_source_sample(VocalNoteId note_id
 
 StateChangeResult VocalEditSession::undo(VocalRevision expected_revision,
                                          const StateResultPreparation& before_publish) {
-  if (!impl_ || !impl_->session_alive) invalid_state("session", "session is not alive");
+  require_session_alive(impl_);
   if (impl_->draft_open) invalid_state("draft", "undo is not allowed while a draft is open");
   if (expected_revision != impl_->revision)
     revision_conflict("revision", expected_revision, impl_->revision);
@@ -566,7 +580,7 @@ StateChangeResult VocalEditSession::undo(VocalRevision expected_revision,
 
 StateChangeResult VocalEditSession::redo(VocalRevision expected_revision,
                                          const StateResultPreparation& before_publish) {
-  if (!impl_ || !impl_->session_alive) invalid_state("session", "session is not alive");
+  require_session_alive(impl_);
   if (impl_->draft_open) invalid_state("draft", "redo is not allowed while a draft is open");
   if (expected_revision != impl_->revision)
     revision_conflict("revision", expected_revision, impl_->revision);
@@ -599,7 +613,7 @@ bool VocalEditSession::can_redo() const noexcept {
 }
 
 std::vector<uint8_t> VocalEditSession::export_state() const {
-  if (!impl_ || !impl_->session_alive) invalid_state("session", "session is not alive");
+  require_session_alive(impl_);
   if (impl_->draft_open) invalid_state("draft", "cannot export while a draft is open");
   VocalPersistedState persisted;
   persisted.session_id = impl_->session_id;
@@ -640,32 +654,29 @@ VocalEditDraft& VocalEditDraft::operator=(VocalEditDraft&& other) noexcept {
 }
 
 std::vector<VocalNote> VocalEditDraft::notes() const {
-  if (!active_ || !impl_ || !impl_->session_alive || !candidate_)
-    invalid_state("draft", "draft is not active");
+  require_draft_active(active_, impl_, candidate_);
   return candidate_->notes;
 }
 
 VocalAnalysisData VocalEditDraft::analysis() const {
-  if (!active_ || !impl_ || !impl_->session_alive) invalid_state("draft", "draft is not active");
+  require_draft_active(active_, impl_);
   return *impl_->analysis;
 }
 
 std::vector<PitchTransition> VocalEditDraft::transitions() const {
-  if (!active_ || !impl_ || !impl_->session_alive || !candidate_)
-    invalid_state("draft", "draft is not active");
+  require_draft_active(active_, impl_, candidate_);
   return candidate_->transitions;
 }
 
 VocalStateToken VocalEditDraft::token() const {
-  if (!active_ || !impl_ || !impl_->session_alive) invalid_state("draft", "draft is not active");
+  require_draft_active(active_, impl_);
   return draft_token_;
 }
 
 DraftApplyResult VocalEditDraft::apply(VocalGeneration expected_generation,
                                        const std::vector<Operation>& operations,
                                        const DraftResultPreparation& before_publish) {
-  if (!active_ || !impl_ || !impl_->session_alive || !candidate_)
-    invalid_state("draft", "draft is not active");
+  require_draft_active(active_, impl_, candidate_);
   if (expected_generation != draft_token_.draft_generation) {
     revision_conflict("generation", expected_generation, draft_token_.draft_generation);
   }
@@ -710,7 +721,7 @@ DraftApplyResult VocalEditDraft::apply(VocalGeneration expected_generation,
           if constexpr (std::is_same_v<T, SetNoteEditOp>) {
             apply_set_edit(*candidate, typed);
           } else if constexpr (std::is_same_v<T, SetNoteSourceSpanOp>) {
-            const size_t current_index = find_note_or_throw(*candidate, typed.note_id);
+            const size_t current_index = find_note(*candidate, typed.note_id);
             const auto& current = candidate->notes[current_index];
             if (current.edit.pitch.target.mode == PitchTargetMode::kCurve &&
                 (typed.source_range.start < current.source_range.start ||
@@ -738,7 +749,7 @@ DraftApplyResult VocalEditDraft::apply(VocalGeneration expected_generation,
             apply_remove_transition(*candidate, typed);
           } else if constexpr (std::is_same_v<T, ResetNotesOp>) {
             for (const auto id : typed.note_ids) {
-              const size_t index = find_note_or_throw(*candidate, id);
+              const size_t index = find_note(*candidate, id);
               candidate->notes[index].edit =
                   VocalNoteEdit::identity_for(candidate->notes[index].source_range);
             }
@@ -749,12 +760,14 @@ DraftApplyResult VocalEditDraft::apply(VocalGeneration expected_generation,
       changes[i].operation_index = static_cast<uint32_t>(operation_index);
     }
   }
+  const auto has_companion_set_edit = [&operations](VocalNoteId note_id) {
+    return std::any_of(operations.begin(), operations.end(), [note_id](const Operation& operation) {
+      return std::holds_alternative<SetNoteEditOp>(operation) &&
+             std::get<SetNoteEditOp>(operation).note_id == note_id;
+    });
+  };
   for (const auto note_id : expanded_curve_ids) {
-    const bool has_companion_edit =
-        std::any_of(operations.begin(), operations.end(), [note_id](const Operation& operation) {
-          return std::holds_alternative<SetNoteEditOp>(operation) &&
-                 std::get<SetNoteEditOp>(operation).note_id == note_id;
-        });
+    const bool has_companion_edit = has_companion_set_edit(note_id);
     if (!has_companion_edit) {
       invalid("source_range", "expanding a curve source span requires a companion SetNoteEdit");
     }
@@ -769,11 +782,7 @@ DraftApplyResult VocalEditDraft::apply(VocalGeneration expected_generation,
     }
   }
   for (const auto note_id : expanded_envelope_ids) {
-    const bool has_companion_edit =
-        std::any_of(operations.begin(), operations.end(), [note_id](const Operation& operation) {
-          return std::holds_alternative<SetNoteEditOp>(operation) &&
-                 std::get<SetNoteEditOp>(operation).note_id == note_id;
-        });
+    const bool has_companion_edit = has_companion_set_edit(note_id);
     if (!has_companion_edit ||
         candidate->notes[find_note(*candidate, note_id)].edit.amplitude_envelope.empty()) {
       invalid("source_range",
@@ -799,15 +808,13 @@ DraftApplyResult VocalEditDraft::apply(VocalGeneration expected_generation,
 
 std::vector<CompiledPitchPlan> VocalEditDraft::evaluate_pitch(
     const std::vector<VocalNoteId>& note_ids) const {
-  if (!active_ || !impl_ || !impl_->session_alive || !candidate_)
-    invalid_state("draft", "draft is not active");
+  require_draft_active(active_, impl_, candidate_);
   return evaluate_state(*impl_->analysis, *candidate_, impl_->render_settings,
                         impl_->source_descriptor.sample_rate, note_ids);
 }
 
 std::shared_ptr<const VocalRenderSnapshot> VocalEditDraft::capture_render_snapshot() const {
-  if (!active_ || !impl_ || !impl_->session_alive || !candidate_)
-    invalid_state("draft", "draft is not active");
+  require_draft_active(active_, impl_, candidate_);
   auto data = std::make_shared<VocalRenderSnapshotData>();
   data->source = impl_->source;
   data->source_descriptor = impl_->source_descriptor;
@@ -824,16 +831,14 @@ std::shared_ptr<const VocalRenderSnapshot> VocalEditDraft::capture_render_snapsh
 
 double VocalEditDraft::source_sample_to_destination_sample(VocalNoteId note_id,
                                                            double source_sample) const {
-  if (!active_ || !impl_ || !impl_->session_alive || !candidate_)
-    invalid_state("draft", "draft is not active");
+  require_draft_active(active_, impl_, candidate_);
   const auto& note = candidate_->notes[find_note(*candidate_, note_id)];
   return ::sonare::editing::vocal_edit::source_sample_to_destination_sample(note, source_sample);
 }
 
 double VocalEditDraft::destination_sample_to_source_sample(VocalNoteId note_id,
                                                            double destination_sample) const {
-  if (!active_ || !impl_ || !impl_->session_alive || !candidate_)
-    invalid_state("draft", "draft is not active");
+  require_draft_active(active_, impl_, candidate_);
   const auto& note = candidate_->notes[find_note(*candidate_, note_id)];
   return ::sonare::editing::vocal_edit::destination_sample_to_source_sample(note,
                                                                             destination_sample);
@@ -841,8 +846,7 @@ double VocalEditDraft::destination_sample_to_source_sample(VocalNoteId note_id,
 
 StateChangeResult VocalEditDraft::commit(VocalRevision expected_revision,
                                          const StateResultPreparation& before_publish) {
-  if (!active_ || !impl_ || !impl_->session_alive || !candidate_)
-    invalid_state("draft", "draft is not active");
+  require_draft_active(active_, impl_, candidate_);
   if (expected_revision != impl_->revision)
     revision_conflict("revision", expected_revision, impl_->revision);
   // A draft that was never applied closes without touching history or redo.
