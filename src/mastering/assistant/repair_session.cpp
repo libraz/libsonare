@@ -10,7 +10,7 @@
 
 #include "core/audio.h"
 #include "mastering/api/param_field_tables.h"
-#include "mastering/api/processor_params.h"
+#include "mastering/api/repair_params.h"
 #include "mastering/assistant/audio_profile.h"
 #include "mastering/assistant/suggester.h"
 #include "mastering/common/loudness_measure.h"

@@ -101,8 +101,7 @@ inline std::vector<float> cutoffs(const ParamMap& params) {
   std::vector<float> values;
   for (int index = 0; index < kMaxCrossoverCutoffs; ++index) {
     const std::string key = "cutoff" + std::to_string(index) + "Hz";
-    params.note_kind(key, ParamKind::Number);
-    params.note_meta(key, kHzLog);
+    declare_number(params, key, kHzLog);
     if (index > 0) {
       note_pair_order(params, ("cutoff" + std::to_string(index - 1) + "Hz").c_str(), Relation::Lt,
                       key.c_str());
@@ -155,6 +154,16 @@ inline eq::EqBand eq_band(const ParamMap& params, const std::string& prefix) {
   return band;
 }
 
+/// @brief Replays @p reader against an empty map and adopts what it declared, when @p params
+///        records declarations.
+template <typename Reader>
+inline void adopt_from(const ParamMap& params, Reader reader) {
+  if (!params.records_declarations()) return;
+  ParamMap declaration;
+  reader(declaration);
+  params.adopt_declarations(declaration);
+}
+
 /// @brief Publishes one EQ band's keys, types and defaults to the catalog.
 /// @details A band the caller supplied no key for is never read, so without
 /// this the whole per-band surface — the bulk of the flat parameter set —
@@ -162,10 +171,7 @@ inline eq::EqBand eq_band(const ParamMap& params, const std::string& prefix) {
 /// source of that list: it is replayed against an empty map, which cannot read
 /// or reject anything, and only the recording is kept.
 inline void declare_eq_band_params(const ParamMap& params, const std::string& prefix) {
-  if (!params.records_declarations()) return;
-  ParamMap declaration;
-  (void)eq_band(declaration, prefix);
-  params.adopt_declarations(declaration);
+  adopt_from(params, [&](const ParamMap& declaration) { (void)eq_band(declaration, prefix); });
 }
 
 /// @brief Reads one dynamic-EQ band from `<prefix><field>` keys.
@@ -199,10 +205,9 @@ inline eq::DynamicEqBand dynamic_eq_band(const ParamMap& params, const std::stri
 /// @brief Publishes one dynamic-EQ band's keys, types and defaults. Declaration
 /// counterpart of @ref dynamic_eq_band; see @ref declare_eq_band_params.
 inline void declare_dynamic_eq_band_params(const ParamMap& params, const std::string& prefix) {
-  if (!params.records_declarations()) return;
-  ParamMap declaration;
-  (void)dynamic_eq_band(declaration, prefix);
-  params.adopt_declarations(declaration);
+  adopt_from(params, [&](const ParamMap& declaration) {
+    (void)dynamic_eq_band(declaration, prefix);
+  });
 }
 
 /// @brief The field names @p read_band reads, found by replaying it against an
@@ -256,15 +261,23 @@ inline void note_crossover_band_slot(const ParamMap& params, size_t index) {
                    SlotDeclaration{std::string(), false, static_cast<int>(index)});
 }
 
-inline void configure_parametric(eq::ParametricEq& processor, const ParamMap& params,
-                                 const std::string& prefix = "band") {
-  for (size_t index = 0; index < eq::ParametricEq::kMaxBands; ++index) {
+/// @brief Reads `<prefix><i>.<field>` for each of @p Processor's bands; a band exists once any
+///        of its keys is supplied.
+template <typename Processor>
+inline void configure_eq_bands(Processor& processor, const ParamMap& params,
+                               const std::string& prefix) {
+  for (size_t index = 0; index < Processor::kMaxBands; ++index) {
     const std::string band_prefix = prefix + std::to_string(index) + ".";
     declare_eq_band_params(params, band_prefix);
     if (supplied_slot(params, band_prefix, eq_band_fields())) {
       processor.set_band(index, eq_band(params, band_prefix));
     }
   }
+}
+
+inline void configure_parametric(eq::ParametricEq& processor, const ParamMap& params,
+                                 const std::string& prefix = "band") {
+  configure_eq_bands(processor, params, prefix);
 }
 
 inline void configure_equalizer(eq::EqualizerProcessor& processor, const ParamMap& params,
@@ -274,13 +287,7 @@ inline void configure_equalizer(eq::EqualizerProcessor& processor, const ParamMa
   processor.set_output_gain_db(f(params, "outputGainDb", processor.output_gain_db(), kDb));
   processor.set_output_pan(f(params, "outputPan", processor.output_pan(), kNone));
   processor.set_phase_mode(read_enum(params, "phaseMode", processor.phase_mode()));
-  for (size_t index = 0; index < eq::EqualizerProcessor::kMaxBands; ++index) {
-    const std::string band_prefix = prefix + std::to_string(index) + ".";
-    declare_eq_band_params(params, band_prefix);
-    if (supplied_slot(params, band_prefix, eq_band_fields())) {
-      processor.set_band(index, eq_band(params, band_prefix));
-    }
-  }
+  configure_eq_bands(processor, params, prefix);
 }
 
 inline dynamics::CompressorConfig compressor_config(const ParamMap& params) {
@@ -349,10 +356,8 @@ inline void populate_crossover_bands(std::vector<BandConfig>& bands,
     if (index < bands.size()) {
       read_band(params, prefix, bands[index]);
     } else if (params.records_declarations()) {
-      ParamMap declaration;
       BandConfig band{};
-      read_band(declaration, prefix, band);
-      params.adopt_declarations(declaration);
+      adopt_from(params, [&](const ParamMap& declaration) { read_band(declaration, prefix, band); });
     }
   }
 }
@@ -442,7 +447,7 @@ inline void populate_imager_bands(multiband::MultibandImagerConfig& config,
 // band{i}.dyn{j} parameter ids address it.
 inline void populate_dynamic_eq_bands(multiband::MultibandDynamicEqConfig& config,
                                       const ParamMap& params) {
-  config.bands.resize(config.crossover.cutoffs_hz.size() + 1);
+  resize_bands_to_crossover(config.bands, config.crossover);
   for (size_t index = 0; index < kMaxCrossoverBands; ++index) {
     const std::string band = "band" + std::to_string(index);
     note_crossover_band_slot(params, index);
@@ -564,13 +569,7 @@ inline void configure_stepped_proportional_q(eq::SteppedProportionalQEq& p,
 }
 
 inline void configure_minimum_phase(eq::MinimumPhaseEq& p, const ParamMap& params) {
-  for (size_t index = 0; index < eq::MinimumPhaseEq::kMaxBands; ++index) {
-    const std::string prefix = "band" + std::to_string(index) + ".";
-    declare_eq_band_params(params, prefix);
-    if (supplied_slot(params, prefix, eq_band_fields())) {
-      p.set_band(index, eq_band(params, prefix));
-    }
-  }
+  configure_eq_bands(p, params, "band");
 }
 
 inline eq::LinearPhaseEqConfig linear_phase_config(const ParamMap& params) {
@@ -595,13 +594,7 @@ inline eq::EqualizerProcessorConfig equalizer_config(const ParamMap& params, int
 }
 
 inline void configure_linear_phase_bands(eq::LinearPhaseEq& p, const ParamMap& params) {
-  for (size_t index = 0; index < eq::LinearPhaseEq::kMaxBands; ++index) {
-    const std::string prefix = "band" + std::to_string(index) + ".";
-    declare_eq_band_params(params, prefix);
-    if (supplied_slot(params, prefix, eq_band_fields())) {
-      p.set_band(index, eq_band(params, prefix));
-    }
-  }
+  configure_eq_bands(p, params, "band");
 }
 
 inline void configure_dynamic_eq_bands(eq::DynamicEq& p, const ParamMap& params) {

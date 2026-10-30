@@ -178,8 +178,7 @@ bool read_chain_only_config(const ParamMap& params) {
   const std::pair<std::string, detail::ParamMeta> undefaulted[] = {
       {kChainCutoffList, detail::kHzLog}, {"repair.denoise.gainFloor", detail::kNone}};
   for (const auto& [key, meta] : undefaulted) {
-    params.note_kind(key, ParamKind::Number);
-    params.note_meta(key, meta);
+    detail::declare_number(params, key, meta);
     const auto given = params.find(key);
     if (given == params.end()) continue;
     supplied.push_back(Param{key == kChainCutoffList ? key + ".0" : key, given->second});
@@ -483,6 +482,16 @@ double settle_measured_bound(double accepted, bool is_max) {
   return std::fabs(settled) < kBoundZeroSnap ? 0.0 : settled;
 }
 
+// Bisects from @p rejected to @p accepted, settles the bound toward the accepted side and
+// reports whether construction refuses the settled value itself.
+double settle_side(const AcceptFn& accepts, double rejected, double accepted, bool integer_valued,
+                   bool is_max, bool* exclusive) {
+  const double bound = settle_measured_bound(
+      bisect_accepted_boundary(accepts, rejected, accepted, integer_valued), is_max);
+  *exclusive = !accepts(bound);
+  return bound;
+}
+
 struct MeasuredBounds {
   bool has_min = false;
   double min = 0.0;
@@ -537,19 +546,13 @@ MeasuredBounds measure_bounds(const std::string& name, const std::string& key,
   MeasuredBounds bounds;
   if (lowest_accepted > 0) {
     bounds.has_min = true;
-    bounds.min =
-        settle_measured_bound(bisect_accepted_boundary(accepts, points[lowest_accepted - 1],
-                                                       points[lowest_accepted], integer_valued),
-                              false);
-    bounds.min_exclusive = !accepts(bounds.min);
+    bounds.min = settle_side(accepts, points[lowest_accepted - 1], points[lowest_accepted],
+                             integer_valued, false, &bounds.min_exclusive);
   }
   if (highest_accepted + 1 < points.size()) {
     bounds.has_max = true;
-    bounds.max =
-        settle_measured_bound(bisect_accepted_boundary(accepts, points[highest_accepted + 1],
-                                                       points[highest_accepted], integer_valued),
-                              true);
-    bounds.max_exclusive = !accepts(bounds.max);
+    bounds.max = settle_side(accepts, points[highest_accepted + 1], points[highest_accepted],
+                             integer_valued, true, &bounds.max_exclusive);
   }
   // Only the default builds, and bisecting from it finds no width: it is accepted because a
   // sibling sits at its own default, which bounds nothing, so the key is reported unbounded
@@ -598,9 +601,7 @@ void measure_ceiling_at_rate(const std::string& name, const std::string& key, do
   const double rejected = std::max(bounds->max, ceiling) * (1.0 + 1.0e-3);
   const double accepted = bounds->has_min ? 0.5 * (bounds->min + ceiling) : 0.5 * ceiling;
   if (accepts(rejected) || !accepts(accepted)) return;
-  bounds->max =
-      settle_measured_bound(bisect_accepted_boundary(accepts, rejected, accepted, false), true);
-  bounds->max_exclusive = !accepts(bounds->max);
+  bounds->max = settle_side(accepts, rejected, accepted, false, true, &bounds->max_exclusive);
 }
 
 // The declared values of an enum key that construction accepts.
@@ -945,6 +946,17 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
   out += "]}";
 }
 
+// Appends an entry for each key only construction reads, except the keys in @p skip.
+void append_construction_entries(std::string& out, const std::string& name, const ParamMap& params,
+                                 double sample_rate,
+                                 const std::unordered_set<std::string>* skip = nullptr) {
+  for (const std::string& key : construction_keys(params)) {
+    if (skip != nullptr && skip->find(key) != skip->end()) continue;
+    if (out.size() > 1) out += ',';
+    append_param_entry(out, name, key, "null", false, params, sample_rate);
+  }
+}
+
 std::string build_insert_param_info_json(const std::string& name, double sample_rate,
                                          bool share_indexed_verdicts = true) {
   // Build a throwaway processor (like insert_param_names). Its descriptor table
@@ -970,11 +982,7 @@ std::string build_insert_param_info_json(const std::string& name, double sample_
     descriptor_keys.insert(descriptor.key);
   }
   // Then the keys only construction reads, which take effect when the insert is built.
-  for (const std::string& key : construction_keys(params)) {
-    if (descriptor_keys.find(key) != descriptor_keys.end()) continue;
-    if (out.size() > 1) out += ',';
-    append_param_entry(out, name, key, "null", false, params, sample_rate);
-  }
+  append_construction_entries(out, name, params, sample_rate, &descriptor_keys);
   out += ']';
   return out;
 }
@@ -989,10 +997,7 @@ std::string repair_param_info_json(const std::string& name) {
   ParamMap params;
   if (!read_repair_config(name, params)) return "[]";
   std::string out = "[";
-  for (const std::string& key : construction_keys(params)) {
-    if (out.size() > 1) out += ',';
-    append_param_entry(out, name, key, "null", false, params, 0.0);
-  }
+  append_construction_entries(out, name, params, 0.0);
   out += ']';
   return memo.emplace(name, std::move(out)).first->second;
 }
@@ -1098,10 +1103,7 @@ std::string chain_only_param_info_json() {
   ParamMap params;
   (void)read_chain_only_config(params);
   std::string out = "[";
-  for (const std::string& key : construction_keys(params)) {
-    if (out.size() > 1) out += ',';
-    append_param_entry(out, kChainOnlyProbe, key, "null", false, params, 0.0);
-  }
+  append_construction_entries(out, kChainOnlyProbe, params, 0.0);
   out += ']';
   return out;
 }
@@ -1147,6 +1149,15 @@ std::string chain_catalog_json() {
   return out;
 }
 
+namespace {
+
+// An id that builds no insert may still be a repair stage, which has descriptors of its own.
+std::string info_or_repair(std::string info, const std::string& name) {
+  return info == "[]" ? repair_param_info_json(name) : std::move(info);
+}
+
+}  // namespace
+
 std::string insert_slot_info_json(const std::string& requested_name) {
   const std::string name = canonical_processor_id(requested_name);
   // Same declarations the param entries' `slot` field is read from.
@@ -1183,10 +1194,8 @@ std::string insert_param_info_json(const std::string& requested_name) {
   static thread_local std::unordered_map<std::string, std::string> memo;
   const auto cached = memo.find(name);
   if (cached != memo.end()) return cached->second;
-  std::string info = build_insert_param_info_json(name, 0.0);
-  // An id that builds no insert may still be a repair stage, which has descriptors of its own.
-  if (info == "[]") info = repair_param_info_json(name);
-  return memo.emplace(name, std::move(info)).first->second;
+  return memo.emplace(name, info_or_repair(build_insert_param_info_json(name, 0.0), name))
+      .first->second;
 }
 
 std::string insert_param_info_json_at_rate(const std::string& requested_name, double sample_rate) {
@@ -1197,17 +1206,15 @@ std::string insert_param_info_json_at_rate(const std::string& requested_name, do
   const std::string memo_key = name + '@' + std::to_string(sample_rate);
   const auto cached = memo.find(memo_key);
   if (cached != memo.end()) return cached->second;
-  std::string info = build_insert_param_info_json(name, sample_rate);
-  if (info == "[]") info = repair_param_info_json(name);
-  return memo.emplace(memo_key, std::move(info)).first->second;
+  return memo.emplace(memo_key, info_or_repair(build_insert_param_info_json(name, sample_rate), name))
+      .first->second;
 }
 
 std::string insert_param_info_json_measured_per_key(const std::string& requested_name,
                                                     double sample_rate) {
   const std::string name = canonical_processor_id(requested_name);
-  std::string info =
-      build_insert_param_info_json(name, sample_rate, /*share_indexed_verdicts=*/false);
-  return info == "[]" ? repair_param_info_json(name) : info;
+  return info_or_repair(
+      build_insert_param_info_json(name, sample_rate, /*share_indexed_verdicts=*/false), name);
 }
 
 const std::vector<std::string>& insert_param_info_schema_paths() {

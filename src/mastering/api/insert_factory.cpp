@@ -289,6 +289,9 @@ std::vector<Param> insert_params_from_root(const Value* root, const std::string&
 
 using Processor = sonare::rt::ProcessorBase;
 
+// -ln(1000): the tank amplitude reaches -60 dB after the decay time.
+constexpr float kNegLn1000 = -6.907755f;
+
 template <typename T, typename... Args>
 std::unique_ptr<Processor> make(Args&&... args) {
   return std::make_unique<T>(std::forward<Args>(args)...);
@@ -683,6 +686,25 @@ sonare::acoustic::ShoeboxRoom acoustic_room_from_json(const detail::ParamMap& pa
   }
   return make_uniform_room(dims, request);
 }
+// Reads <prefix>X/Y/Z in that order, each defaulting to the matching field of @p defaults.
+template <typename V>
+V read_vec3(const ParamMap& params, const std::string& prefix, const V& defaults) {
+  return {f(params, (prefix + "X").c_str(), defaults.x, kMeters),
+          f(params, (prefix + "Y").c_str(), defaults.y, kMeters),
+          f(params, (prefix + "Z").c_str(), defaults.z, kMeters)};
+}
+
+// Climate pair and receiver spacing; 0 selects the library value for each.
+template <typename Config>
+void read_air_and_spacing(const ParamMap& params, Config& config) {
+  config.air.temperature_c = ZeroIsDefault(f(params, "airTemperatureC", 0.0f, kDegreesCelsius))
+                                 .or_default(config.air.temperature_c);
+  config.air.humidity_percent = ZeroIsDefault(f(params, "airHumidityPercent", 0.0f, kPercent))
+                                    .or_default(config.air.humidity_percent);
+  config.receiver_spacing_m = ZeroIsDefault(f(params, "receiverSpacingM", 0.0f, kMeters))
+                                  .or_default(config.receiver_spacing_m);
+}
+
 // Source and listener sit inside the shoebox, so each coordinate is bounded by its dimension.
 void note_room_containment(const ParamMap& params) {
   static constexpr const char* kAxes[3][3] = {{"sourceX", "listenerX", "lengthM"},
@@ -727,20 +749,18 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     // is applied twice per half). Requiring the amplitude to reach 1e-3 (-60 dB)
     // after T60 seconds gives decay = exp(-ln(1000) * Tloop / (4 * T60)).
     // Read only when present, so the key has a type and no fallback.
-    params.note_kind("decaySec", ParamKind::Number);
-    params.note_meta("decaySec", kSecondsLog);
-    params.note_kind("preDelayMs", ParamKind::Number);
-    params.note_meta("preDelayMs", kMs);
+    detail::declare_number(params, "decaySec", kSecondsLog);
+    detail::declare_number(params, "preDelayMs", kMs);
     if (params.find("decaySec") != params.end()) {
       constexpr float kTankLoopSeconds = 21589.0f / 29761.0f;  // both halves at ref rate
       constexpr float kMinDecaySeconds = 0.05f;
       // The tank feedback reaches the core's ceiling at this tail length.
       const float max_decay_sec =
-          -6.907755f * kTankLoopSeconds / (4.0f * std::log(effects::common::kMaxFeedback));
+          kNegLn1000 * kTankLoopSeconds / (4.0f * std::log(effects::common::kMaxFeedback));
       const float decay_sec = f(params, "decaySec", 5.0f, kSecondsLog);
       effects::common::require_in_domain(name.c_str(), "decaySec", decay_sec, kMinDecaySeconds,
                                          max_decay_sec);
-      config.decay = std::exp(-6.907755f * kTankLoopSeconds / (4.0f * decay_sec));
+      config.decay = std::exp(kNegLn1000 * kTankLoopSeconds / (4.0f * decay_sec));
     } else {
       config.decay = f(params, "decay", config.decay, kNone);
     }
@@ -778,8 +798,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     // decay (0..1.5), damping (0..1) and dryWet instead — a host automating the
     // tail at audio rate must target those, not decaySec/hfDamping.
     FdnReverbConfig config;
-    params.note_kind("decaySec", ParamKind::Number);
-    params.note_meta("decaySec", kSecondsLog);
+    detail::declare_number(params, "decaySec", kSecondsLog);
     if (params.find("decaySec") != params.end()) {
       // decaySec is the approximate RT60 tail length in seconds. The FDN's
       // T60_lf = max(0.01, decay * 10), so decaySec maps to T60 directly via
@@ -802,8 +821,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     VelvetReverbConfig config;
     config.decay = f(params, "decay", config.decay, kNone);
     config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
-    params.note_kind("decaySec", ParamKind::Number);
-    params.note_meta("decaySec", kSecondsLog);
+    detail::declare_number(params, "decaySec", kSecondsLog);
     if (params.find("decaySec") != params.end()) {
       // Velvet's effective T60 = reverb_time_s * (0.5 + decay). To make decaySec
       // mean approximately the same RT60 as FDN (decaySec == ~T60), set
@@ -838,8 +856,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     // the JSON side-channel below, not from the flat map.
     detail::note_side_channel_key(params, "irF32Base64", ParamKind::String);
     ConvolutionReverbConfig config;
-    params.note_kind("decaySec", ParamKind::Number);
-    params.note_meta("decaySec", kSecondsLog);
+    detail::declare_number(params, "decaySec", kSecondsLog);
     if (params.find("decaySec") != params.end()) {
       // An out-of-range request like {decaySec:40} is refused by key, not truncated
       // to the ceiling.
@@ -865,12 +882,8 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.dims = {f(params, "lengthM", config.dims.length, kMeters),
                    f(params, "widthM", config.dims.width, kMeters),
                    f(params, "heightM", config.dims.height, kMeters)};
-    config.source = {f(params, "sourceX", config.source.x, kMeters),
-                     f(params, "sourceY", config.source.y, kMeters),
-                     f(params, "sourceZ", config.source.z, kMeters)};
-    config.listener = {f(params, "listenerX", config.listener.x, kMeters),
-                       f(params, "listenerY", config.listener.y, kMeters),
-                       f(params, "listenerZ", config.listener.z, kMeters)};
+    config.source = read_vec3(params, "source", config.source);
+    config.listener = read_vec3(params, "listener", config.listener);
     note_room_containment(params);
     note_room_coupling(params);
     // Rejected rather than clamped, matching sonare_synthesize_rir: the same
@@ -887,13 +900,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     // The climate pair follows the acoustic ABI's "0 selects the library value"
     // rule (the ISO reference climate), so the same option bag resolves to the
     // same room here as on the offline facade.
-    config.air.temperature_c = ZeroIsDefault(f(params, "airTemperatureC", 0.0f, kDegreesCelsius))
-                                   .or_default(config.air.temperature_c);
-    config.air.humidity_percent = ZeroIsDefault(f(params, "airHumidityPercent", 0.0f, kPercent))
-                                      .or_default(config.air.humidity_percent);
-    // Same "0 selects the library value" convention; the constructor refuses the rest.
-    config.receiver_spacing_m = ZeroIsDefault(f(params, "receiverSpacingM", 0.0f, kMeters))
-                                    .or_default(config.receiver_spacing_m);
+    read_air_and_spacing(params, config);
     return make<RoomReverb>(config, sonare::acoustic::ReceiverLayout::MonoAndPair);
   }
   if (name == "effects.acoustic.roomMorph") {
@@ -908,12 +915,8 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.target = acoustic_room_from_json(params, json_root);
     const auto& source = sonare::acoustic::kDefaultPlacement.source;
     const auto& listener = sonare::acoustic::kDefaultPlacement.listener;
-    config.placement.source = {f(params, "sourceX", source.x, kMeters),
-                               f(params, "sourceY", source.y, kMeters),
-                               f(params, "sourceZ", source.z, kMeters)};
-    config.placement.listener = {f(params, "listenerX", listener.x, kMeters),
-                                 f(params, "listenerY", listener.y, kMeters),
-                                 f(params, "listenerZ", listener.z, kMeters)};
+    config.placement.source = read_vec3(params, "source", source);
+    config.placement.listener = read_vec3(params, "listener", listener);
     note_room_containment(params);
     note_room_coupling(params);
     config.source_tail_suppression =
@@ -933,12 +936,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.air_absorption_enabled =
         b(params, "airAbsorptionEnabled", config.air_absorption_enabled);
     // Same climate convention as effects.reverb.room above.
-    config.air.temperature_c = ZeroIsDefault(f(params, "airTemperatureC", 0.0f, kDegreesCelsius))
-                                   .or_default(config.air.temperature_c);
-    config.air.humidity_percent = ZeroIsDefault(f(params, "airHumidityPercent", 0.0f, kPercent))
-                                      .or_default(config.air.humidity_percent);
-    config.receiver_spacing_m = ZeroIsDefault(f(params, "receiverSpacingM", 0.0f, kMeters))
-                                    .or_default(config.receiver_spacing_m);
+    read_air_and_spacing(params, config);
     return make<effects::acoustic::RoomMorphProcessor>(
         config, sonare::acoustic::ReceiverLayout::MonoAndPair);
   }
@@ -1298,6 +1296,17 @@ void attach_constructed_parameter_values(Processor* processor, const ParamMap& p
   processor->set_constructed_parameter_values(std::move(values));
 }
 
+// Attaches the constructed values and, for a built processor, reports the keys it never read.
+std::unique_ptr<Processor> finish_insert(std::unique_ptr<Processor> processor,
+                                         const ParamMap& params,
+                                         std::vector<std::string>* out_unknown_keys) {
+  attach_constructed_parameter_values(processor.get(), params);
+  if (out_unknown_keys != nullptr && processor != nullptr) {
+    *out_unknown_keys = params.unprobed_keys();
+  }
+  return processor;
+}
+
 }  // namespace
 
 void prepare_for_build_rate(sonare::rt::ProcessorBase& processor, double sample_rate) {
@@ -1315,16 +1324,10 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert(
   const Value* json_root = admit_insert_params(json_params, limits, &root);
   const std::vector<Param> param_list = insert_params_from_root(json_root, name);
   const ParamMap params = detail::make_map(param_list);
-  auto processor = build_insert(name, params, json_root, build_sample_rate);
-  attach_constructed_parameter_values(processor.get(), params);
-  // Only report ignored keys for a recognized processor: build_insert() probes
-  // every key the processor reads (even absent ones), so any supplied key it
-  // never touched took no effect. An unknown name is surfaced as a hard error by
-  // the caller, not as an ignored-keys warning.
-  if (out_unknown_keys != nullptr && processor != nullptr) {
-    *out_unknown_keys = params.unprobed_keys();
-  }
-  return processor;
+  // Only a recognized processor reports ignored keys: build_insert() probes every key it reads
+  // (even absent ones), so a supplied key it never touched took no effect.
+  return finish_insert(build_insert(name, params, json_root, build_sample_rate), params,
+                       out_unknown_keys);
 }
 
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert_from_params(
@@ -1332,12 +1335,7 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert_from_params(
     std::vector<std::string>* out_unknown_keys) {
   const std::string name = canonical_processor_id(requested_name);
   const ParamMap params = detail::make_map(param_list);
-  auto processor = build_insert(name, params);
-  attach_constructed_parameter_values(processor.get(), params);
-  if (out_unknown_keys != nullptr && processor != nullptr) {
-    *out_unknown_keys = params.unprobed_keys();
-  }
-  return processor;
+  return finish_insert(build_insert(name, params), params, out_unknown_keys);
 }
 
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(

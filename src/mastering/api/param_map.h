@@ -325,6 +325,12 @@ inline float f(const ParamMap& params, const char* key, float default_value, Par
   return f(params, key, default_value);
 }
 
+/// Declares @p key as a number with @p meta without reading it.
+inline void declare_number(const ParamMap& params, const std::string& key, ParamMeta meta) {
+  params.note_kind(key, ParamKind::Number);
+  params.note_meta(key, meta);
+}
+
 inline int i(const ParamMap& params, const char* key, int default_value) {
   params.note_kind(key, ParamKind::Integer);
   params.note_default(key, static_cast<double>(default_value));
