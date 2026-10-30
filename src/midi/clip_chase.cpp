@@ -12,47 +12,62 @@
 
 namespace sonare::midi::detail {
 
-bool is_reset_key(uint32_t key) noexcept {
-  const uint32_t kind = key & ((1u << kChaseKindBits) - 1u);
-  return kind == kChaseKindReset || kind == kChaseKindSystemReset;
-}
+namespace {
 
-/// Whether Reset All Controllers returns the state of @p key to the default the
-/// controller reset a seek or wrap sends already restores.
-bool reset_covers(uint32_t key) noexcept {
-  switch (key & ((1u << kChaseKindBits) - 1u)) {
-    case cc::kModulationWheel:
-    case cc::kBreathController:
-    case cc::kExpression:
-    case cc::kDamperPedal:
-    case cc::kPortamentoOnOff:
-    case cc::kSostenuto:
-    case cc::kSoftPedal:
-    case kChaseKindChannelPressure:
-    case kChaseKindPitchBend:
-      return true;
-    default:
-      return false;
-  }
-}
+constexpr uint32_t kChaseKindProgram = 128;
+constexpr uint32_t kChaseKindChannelPressure = 129;
+constexpr uint32_t kChaseKindPitchBend = 130;
+constexpr uint32_t kChaseKindRegistered = 0x10000;
+constexpr uint32_t kChaseKindAssignable = 0x20000;
+
+// SysEx framing and the GM / GS / XG system reset messages (payload bytes after F0, before F7).
+constexpr uint8_t kSysExStart = 0xF0;
+constexpr uint8_t kSysExEnd = 0xF7;
+constexpr uint8_t kUniversalNonRealtimeId = 0x7E;
+constexpr uint8_t kGeneralMidiSubId = 0x09;
+constexpr uint8_t kGmSystemOn = 0x01;
+constexpr uint8_t kGm2SystemOn = 0x03;
+constexpr uint8_t kRolandId = 0x41;
+constexpr uint8_t kGsModelId = 0x42;
+constexpr uint8_t kRolandDataSet = 0x12;
+constexpr uint8_t kGsModeSetAddr0 = 0x40;
+constexpr uint8_t kGsModeSetAddr1 = 0x00;
+constexpr uint8_t kGsModeSetAddr2 = 0x7F;
+constexpr uint8_t kGsModeSetData = 0x00;
+constexpr uint8_t kGsModeSetChecksum = 0x41;
+constexpr uint8_t kYamahaId = 0x43;
+constexpr uint8_t kYamahaParameterChange = 0x10;
+constexpr uint8_t kXgModelId = 0x4C;
+constexpr uint8_t kXgSystemOnAddr0 = 0x00;
+constexpr uint8_t kXgSystemOnAddr1 = 0x00;
+constexpr uint8_t kXgSystemOnAddr2 = 0x7E;
+constexpr uint8_t kXgSystemOnData = 0x00;
 
 /// Whether a SysEx payload (F0/F7 framing optional) is a GM, GS or XG system reset.
 bool is_system_reset_sysex(const uint8_t* payload, size_t size) noexcept {
   if (payload == nullptr) return false;
-  if (size > 0 && payload[0] == 0xF0u) {
+  if (size > 0 && payload[0] == kSysExStart) {
     ++payload;
     --size;
   }
-  if (size > 0 && payload[size - 1] == 0xF7u) --size;
-  const bool gm = size == 4 && payload[0] == 0x7Eu && payload[2] == 0x09u &&
-                  (payload[3] == 0x01u || payload[3] == 0x03u);
-  const bool gs = size == 9 && payload[0] == 0x41u && payload[2] == 0x42u && payload[3] == 0x12u &&
-                  payload[4] == 0x40u && payload[5] == 0x00u && payload[6] == 0x7Fu &&
-                  payload[7] == 0x00u && payload[8] == 0x41u;
-  const bool xg = size == 7 && payload[0] == 0x43u && (payload[1] & 0xF0u) == 0x10u &&
-                  payload[2] == 0x4Cu && payload[3] == 0x00u && payload[4] == 0x00u &&
-                  payload[5] == 0x7Eu && payload[6] == 0x00u;
+  if (size > 0 && payload[size - 1] == kSysExEnd) --size;
+  const bool gm = size == 4 && payload[0] == kUniversalNonRealtimeId &&
+                  payload[2] == kGeneralMidiSubId &&
+                  (payload[3] == kGmSystemOn || payload[3] == kGm2SystemOn);
+  const bool gs = size == 9 && payload[0] == kRolandId && payload[2] == kGsModelId &&
+                  payload[3] == kRolandDataSet && payload[4] == kGsModeSetAddr0 &&
+                  payload[5] == kGsModeSetAddr1 && payload[6] == kGsModeSetAddr2 &&
+                  payload[7] == kGsModeSetData && payload[8] == kGsModeSetChecksum;
+  const bool xg = size == 7 && payload[0] == kYamahaId &&
+                  (payload[1] & 0xF0u) == kYamahaParameterChange && payload[2] == kXgModelId &&
+                  payload[3] == kXgSystemOnAddr0 && payload[4] == kXgSystemOnAddr1 &&
+                  payload[5] == kXgSystemOnAddr2 && payload[6] == kXgSystemOnData;
   return gm || gs || xg;
+}
+
+/// The (group, channel) part of a chase key, above kChaseKindBits.
+uint32_t channel_prefix(const Ump& ump) noexcept {
+  return (static_cast<uint32_t>(ump.group & 0x0Fu) << 4 | ump.channel()) << kChaseKindBits;
 }
 
 /// The chase key of an event that resets channel state: Reset All Controllers on its
@@ -69,8 +84,7 @@ bool reset_chase_key(const MidiEvent& event, uint32_t* key) noexcept {
       ump.note_number() != cc::kResetAllControllers) {
     return false;
   }
-  *key = ((static_cast<uint32_t>(ump.group & 0x0Fu) << 4 | ump.channel()) << kChaseKindBits) |
-         kChaseKindReset;
+  *key = channel_prefix(ump) | kChaseKindReset;
   return true;
 }
 
@@ -111,13 +125,39 @@ bool chase_key(const Ump& ump, uint32_t* key) noexcept {
     default:
       return false;
   }
-  *key = ((static_cast<uint32_t>(ump.group & 0x0Fu) << 4 | ump.channel()) << kChaseKindBits) | kind;
+  *key = channel_prefix(ump) | kind;
   return true;
+}
+
+}  // namespace
+
+bool is_reset_key(uint32_t key) noexcept {
+  const uint32_t kind = key & kChaseKindMask;
+  return kind == kChaseKindReset || kind == kChaseKindSystemReset;
+}
+
+/// Whether Reset All Controllers returns the state of @p key to the default the
+/// controller reset a seek or wrap sends already restores.
+bool reset_covers(uint32_t key) noexcept {
+  switch (key & kChaseKindMask) {
+    case cc::kModulationWheel:
+    case cc::kBreathController:
+    case cc::kExpression:
+    case cc::kDamperPedal:
+    case cc::kPortamentoOnOff:
+    case cc::kSostenuto:
+    case cc::kSoftPedal:
+    case kChaseKindChannelPressure:
+    case kChaseKindPitchBend:
+      return true;
+    default:
+      return false;
+  }
 }
 
 /// Emission pass of a chase key: bank select, then program, then the rest, bend last.
 int chase_pass(uint32_t key) noexcept {
-  const uint32_t kind = key & ((1u << kChaseKindBits) - 1u);
+  const uint32_t kind = key & kChaseKindMask;
   if (kind == cc::kBankSelectMsb || kind == cc::kBankSelectLsb) return 0;
   if (kind == kChaseKindProgram) return 1;
   if (kind == kChaseKindChannelPressure || kind == kChaseKindPitchBend) return 3;

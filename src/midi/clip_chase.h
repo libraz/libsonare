@@ -3,25 +3,19 @@
 /// @file clip_chase.h
 /// @brief Chase keys and the per-clip chase index the sequencer seeks with.
 
-#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <memory>
 
 #include "midi/midi_clip.h"
 #include "midi/midi_event.h"
-#include "midi/ump.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::midi::detail {
 
 // Chase keys: (group, channel) above kChaseKindBits, the state kind below it.
 constexpr uint32_t kChaseKindBits = 18;
-constexpr uint32_t kChaseKindProgram = 128;
-constexpr uint32_t kChaseKindChannelPressure = 129;
-constexpr uint32_t kChaseKindPitchBend = 130;
-constexpr uint32_t kChaseKindRegistered = 0x10000;
-constexpr uint32_t kChaseKindAssignable = 0x20000;
+constexpr uint32_t kChaseKindMask = (1u << kChaseKindBits) - 1u;
 // Resets are not states: they only retire the older states they cover. Both flag bits set
 // never occurs in a registered or assignable key, so these cannot collide with one.
 constexpr uint32_t kChaseKindReset = 0x30000;
@@ -41,10 +35,6 @@ inline int64_t loop_phase(const MidiClipSchedule& clip, int64_t frame) noexcept 
 
 bool is_reset_key(uint32_t key) noexcept;
 bool reset_covers(uint32_t key) noexcept;
-bool is_system_reset_sysex(const uint8_t* payload, size_t size) noexcept;
-bool reset_chase_key(const MidiEvent& event, uint32_t* key) noexcept;
-bool is_sequence_controller(uint8_t controller) noexcept;
-bool chase_key(const Ump& ump, uint32_t* key) noexcept;
 int chase_pass(uint32_t key) noexcept;
 std::shared_ptr<const MidiClipChaseIndex> build_chase_index(const MidiClipSchedule& clip);
 const MidiEvent* chased_event(const MidiClipSchedule& clip, const uint32_t* first,

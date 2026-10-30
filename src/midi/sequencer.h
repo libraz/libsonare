@@ -386,6 +386,13 @@ class MidiSequencer {
   // optionally limited to one destination. Non-mutating; RT-safe, no alloc.
   void emit_active_controller_resets(bool single_destination, uint32_t destination_id,
                                      DeviceFrame render_frame) noexcept;
+  /// The note-off that releases @p note at @p frame.
+  static MidiEvent note_off_for(const ActiveNote& note, int64_t frame) noexcept;
+  /// Returns the next MIDI-FX configuration generation (never 0).
+  uint64_t take_midi_fx_generation() noexcept;
+  /// Cancels every live pending FX event @p pred accepts, clearing its note tracking first.
+  template <typename Pred>
+  void cancel_pending_if(Pred&& pred) noexcept;
   DestinationFx* find_midi_fx(uint32_t destination_id) noexcept;
   const DestinationFx* find_midi_fx(uint32_t destination_id) const noexcept;
   // Runs one device-framed event through the destination's MIDI-FX chain; output

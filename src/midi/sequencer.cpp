@@ -22,7 +22,7 @@ using detail::build_chase_index;
 using detail::chase_pass;
 using detail::chased_event;
 using detail::is_reset_key;
-using detail::kChaseKindBits;
+using detail::kChaseKindMask;
 using detail::kChaseKindReset;
 using detail::kChaseKindSystemReset;
 using detail::kChasePasses;
@@ -268,12 +268,22 @@ void MidiSequencer::clear_retained_channel_states(bool single_destination,
   }
 }
 
+uint64_t MidiSequencer::take_midi_fx_generation() noexcept {
+  const uint64_t generation = next_midi_fx_generation_++;
+  if (next_midi_fx_generation_ == 0) next_midi_fx_generation_ = 1;
+  return generation;
+}
+
+MidiEvent MidiSequencer::note_off_for(const ActiveNote& note, int64_t frame) noexcept {
+  MidiEvent off;
+  off.render_frame = frame;
+  off.ump = make_midi1_note_off(note.group, note.channel, note.note, 0);
+  off.source_track_id = note.source_track_id;
+  return off;
+}
+
 MidiSequencer::DestinationFx* MidiSequencer::find_midi_fx(uint32_t destination_id) noexcept {
-  if (runtime_storage_ == nullptr) return nullptr;
-  for (DestinationFx& fx : runtime_storage_->midi_fx) {
-    if (fx.active && fx.destination_id == destination_id) return &fx;
-  }
-  return nullptr;
+  return const_cast<DestinationFx*>(std::as_const(*this).find_midi_fx(destination_id));
 }
 
 const MidiSequencer::DestinationFx* MidiSequencer::find_midi_fx(
@@ -310,8 +320,7 @@ bool MidiSequencer::set_midi_fx(uint32_t destination_id, const MidiFxChain& chai
     if (slot == nullptr) return false;
     slot->active = true;
     slot->destination_id = destination_id;
-    slot->generation = next_midi_fx_generation_++;
-    if (next_midi_fx_generation_ == 0) next_midi_fx_generation_ = 1;
+    slot->generation = take_midi_fx_generation();
     slot->transpose = chain.transpose();
     slot->quantize = chain.quantize();
     slot->velocity = chain.velocity_curve();
@@ -333,8 +342,7 @@ void MidiSequencer::clear_midi_fx(uint32_t destination_id) noexcept {
       if (!slot.active || slot.destination_id != destination_id) continue;
       slot.active = false;
       slot.destination_id = 0;
-      slot.generation = next_midi_fx_generation_++;
-      if (next_midi_fx_generation_ == 0) next_midi_fx_generation_ = 1;
+      slot.generation = take_midi_fx_generation();
       midi_fx_snapshots_.publish(std::shared_ptr<const MidiFxSnapshot>(std::move(next)));
       return;
     }
@@ -456,22 +464,28 @@ void MidiSequencer::clear_pending_note_tracking_for_event(const PendingFxEvent& 
   }
 }
 
-void MidiSequencer::clear_pending_note_events_for_channel(uint32_t destination_id, uint8_t group,
-                                                          uint8_t channel) noexcept {
+template <typename Pred>
+void MidiSequencer::cancel_pending_if(Pred&& pred) noexcept {
   if (runtime_storage_ == nullptr) return;
   size_t i = 0;
   while (i < pending_fx_count_) {
     const PendingFxEvent& pending = runtime_storage_->pending_fx[i];
-    if (pending.dead || pending.destination_id != destination_id ||
-        pending.event.ump.group != group || pending.event.ump.channel() != channel ||
-        !is_channel_voice(pending.event.ump) ||
-        (!pending.event.ump.is_note_on() && !pending.event.ump.is_note_off())) {
+    if (pending.dead || !pred(pending)) {
       ++i;
       continue;
     }
     clear_pending_note_tracking_for_event(pending);
     cancel_pending(i++);
   }
+}
+
+void MidiSequencer::clear_pending_note_events_for_channel(uint32_t destination_id, uint8_t group,
+                                                          uint8_t channel) noexcept {
+  cancel_pending_if([&](const PendingFxEvent& pending) noexcept {
+    return pending.destination_id == destination_id && pending.event.ump.group == group &&
+           pending.event.ump.channel() == channel && is_channel_voice(pending.event.ump) &&
+           (pending.event.ump.is_note_on() || pending.event.ump.is_note_off());
+  });
 }
 
 void MidiSequencer::retire_channel_mode_reset(uint32_t destination_id, uint8_t group,
@@ -573,31 +587,15 @@ void MidiSequencer::compact_pending() noexcept {
 }
 
 void MidiSequencer::clear_pending_for_destination(uint32_t destination_id) noexcept {
-  if (runtime_storage_ == nullptr) return;
-  size_t i = 0;
-  while (i < pending_fx_count_) {
-    if (runtime_storage_->pending_fx[i].dead ||
-        runtime_storage_->pending_fx[i].destination_id != destination_id) {
-      ++i;
-      continue;
-    }
-    clear_pending_note_tracking_for_event(runtime_storage_->pending_fx[i]);
-    cancel_pending(i++);
-  }
+  cancel_pending_if([destination_id](const PendingFxEvent& pending) noexcept {
+    return pending.destination_id == destination_id;
+  });
 }
 
 void MidiSequencer::clear_pending_for_clip(uint32_t clip_id) noexcept {
-  if (runtime_storage_ == nullptr) return;
-  size_t i = 0;
-  while (i < pending_fx_count_) {
-    if (runtime_storage_->pending_fx[i].dead || !runtime_storage_->pending_fx[i].from_clip ||
-        runtime_storage_->pending_fx[i].clip_id != clip_id) {
-      ++i;
-      continue;
-    }
-    clear_pending_note_tracking_for_event(runtime_storage_->pending_fx[i]);
-    cancel_pending(i++);
-  }
+  cancel_pending_if([clip_id](const PendingFxEvent& pending) noexcept {
+    return pending.from_clip && pending.clip_id == clip_id;
+  });
 }
 
 void MidiSequencer::release_notes_for_clip(uint32_t clip_id, DeviceFrame render_frame,
@@ -609,10 +607,7 @@ void MidiSequencer::release_notes_for_clip(uint32_t clip_id, DeviceFrame render_
       continue;
     }
     const ActiveNote note = active_[i];
-    MidiEvent off;
-    off.render_frame = render_frame.value;
-    off.ump = make_midi1_note_off(note.group, note.channel, note.note, 0);
-    off.source_track_id = note.source_track_id;
+    const MidiEvent off = note_off_for(note, render_frame.value);
     clear_note_tracking_for_event(note.destination_id, off, note.from_clip, note.clip_id);
     active_[i] = active_[active_count_ - 1];
     --active_count_;
@@ -644,31 +639,17 @@ void MidiSequencer::release_notes_for_absent_clips(const std::vector<MidiClipSch
       continue;
     }
     const ActiveNote note = active_[i];
-    MidiEvent off;
-    off.render_frame = clock.device.value;
-    off.ump = make_midi1_note_off(note.group, note.channel, note.note, 0);
-    off.source_track_id = note.source_track_id;
+    const MidiEvent off = note_off_for(note, clock.device.value);
     clear_note_tracking_for_event(note.destination_id, off, note.from_clip, note.clip_id);
     active_[i] = active_[active_count_ - 1];
     --active_count_;
     dispatch(note.destination_id, off);
   }
-  size_t p = 0;
-  if (runtime_storage_ == nullptr) return;
-  while (p < pending_fx_count_) {
-    if (runtime_storage_->pending_fx[p].dead || !runtime_storage_->pending_fx[p].from_clip ||
-        present(runtime_storage_->pending_fx[p].clip_id,
-                runtime_storage_->pending_fx[p].destination_id,
-                runtime_storage_->pending_fx[p].event.source_track_id,
-                device_to_timeline(DeviceFrame{runtime_storage_->pending_fx[p].event.render_frame},
-                                   clock)
-                    .value)) {
-      ++p;
-      continue;
-    }
-    clear_pending_note_tracking_for_event(runtime_storage_->pending_fx[p]);
-    cancel_pending(p++);
-  }
+  cancel_pending_if([&](const PendingFxEvent& pending) noexcept {
+    return pending.from_clip &&
+           !present(pending.clip_id, pending.destination_id, pending.event.source_track_id,
+                    device_to_timeline(DeviceFrame{pending.event.render_frame}, clock).value);
+  });
 }
 
 void MidiSequencer::process_event(uint32_t destination_id, const MidiEvent& event, bool from_clip,
@@ -704,16 +685,12 @@ void MidiSequencer::process_event(uint32_t destination_id, const MidiEvent& even
       // With the pending list full, a note-off releases its note now rather than never,
       // and a still-pending note-on it would have ended is withdrawn so it cannot hang.
       if (!transformed.ump.is_note_off()) continue;
-      for (size_t p = 0; runtime_storage_ != nullptr && p < pending_fx_count_; ++p) {
-        const PendingFxEvent& pending = runtime_storage_->pending_fx[p];
-        if (!pending.dead && pending.destination_id == destination_id &&
-            pending.event.ump.is_note_on() && pending.event.ump.group == transformed.ump.group &&
-            pending.event.ump.channel() == transformed.ump.channel() &&
-            pending.event.ump.note_number() == transformed.ump.note_number()) {
-          clear_pending_note_tracking_for_event(pending);
-          cancel_pending(p);
-        }
-      }
+      cancel_pending_if([&](const PendingFxEvent& pending) noexcept {
+        return pending.destination_id == destination_id && pending.event.ump.is_note_on() &&
+               pending.event.ump.group == transformed.ump.group &&
+               pending.event.ump.channel() == transformed.ump.channel() &&
+               pending.event.ump.note_number() == transformed.ump.note_number();
+      });
       MidiEvent release = transformed;
       release.render_frame = event.render_frame;
       dispatch_transformed(destination_id, release, from_clip, clip_id);
@@ -921,6 +898,9 @@ void MidiSequencer::chase_clip_state(const std::vector<MidiClipSchedule>& clips,
   bool overflowed = false;
   constexpr size_t kMask = kMaxChasedStates - 1;
   static_assert((kMaxChasedStates & kMask) == 0, "kMaxChasedStates must be a power of two");
+  const auto home_slot = [](uint32_t destination_id, uint32_t key) noexcept -> size_t {
+    return (key * 2654435761u ^ destination_id * 40503u) & kMask;
+  };
   for (const MidiClipSchedule& clip : clips) {
     if (clip.chase_index == nullptr) continue;
     const MidiClipChaseIndex& index = *clip.chase_index;
@@ -930,7 +910,7 @@ void MidiSequencer::chase_clip_state(const std::vector<MidiClipSchedule>& clips,
           chased_event(clip, index.event_indices.data() + run.begin,
                        index.event_indices.data() + run.end, clock.timeline.value, &frame);
       if (event == nullptr) continue;
-      size_t slot = (run.key * 2654435761u ^ clip.destination_id * 40503u) & kMask;
+      size_t slot = home_slot(clip.destination_id, run.key);
       while (table[slot].event != nullptr &&
              (table[slot].destination_id != clip.destination_id || table[slot].key != run.key)) {
         slot = (slot + 1) & kMask;
@@ -955,7 +935,7 @@ void MidiSequencer::chase_clip_state(const std::vector<MidiClipSchedule>& clips,
   if (overflowed) chase_overflow_count_.fetch_add(1, std::memory_order_relaxed);
   // The newest reset of one (destination, key) the chase found, or nullptr.
   const auto reset_of = [&](uint32_t destination_id, uint32_t key) noexcept -> const ChasedState* {
-    size_t slot = (key * 2654435761u ^ destination_id * 40503u) & kMask;
+    size_t slot = home_slot(destination_id, key);
     for (size_t probes = 0; probes < kMaxChasedStates && table[slot].event != nullptr; ++probes) {
       if (table[slot].destination_id == destination_id && table[slot].key == key) {
         return &table[slot];
@@ -967,7 +947,7 @@ void MidiSequencer::chase_clip_state(const std::vector<MidiClipSchedule>& clips,
   // A state set before a reset covering it is not what continuous playback holds.
   const auto superseded = [&](const ChasedState& state) noexcept {
     if (!reset_covers(state.key)) return false;
-    const uint32_t channel_reset = (state.key & ~((1u << kChaseKindBits) - 1u)) | kChaseKindReset;
+    const uint32_t channel_reset = (state.key & ~kChaseKindMask) | kChaseKindReset;
     for (const uint32_t reset_key : {channel_reset, kChaseKindSystemReset}) {
       const ChasedState* reset = reset_of(state.destination_id, reset_key);
       if (reset != nullptr && reset->frame > state.frame) return true;
@@ -1022,10 +1002,7 @@ void MidiSequencer::all_notes_off(DeviceFrame render_frame) noexcept {
   // clear at the end; no allocation.
   for (size_t i = 0; i < active_count_; ++i) {
     const ActiveNote& note = active_[i];
-    MidiEvent off;
-    off.render_frame = render_frame.value;
-    off.ump = make_midi1_note_off(note.group, note.channel, note.note, 0);
-    off.source_track_id = note.source_track_id;
+    const MidiEvent off = note_off_for(note, render_frame.value);
     dispatch(note.destination_id, off);
   }
   // Controller reset AFTER the note-offs (so a note under a held damper is first
@@ -1051,10 +1028,7 @@ void MidiSequencer::release_clip_playback(DeviceFrame render_frame) noexcept {
       continue;
     }
     const ActiveNote note = active_[i];
-    MidiEvent off;
-    off.render_frame = render_frame.value;
-    off.ump = make_midi1_note_off(note.group, note.channel, note.note, 0);
-    off.source_track_id = note.source_track_id;
+    const MidiEvent off = note_off_for(note, render_frame.value);
     active_[i] = active_[active_count_ - 1];
     --active_count_;
     dispatch(note.destination_id, off);
@@ -1098,10 +1072,7 @@ void MidiSequencer::all_notes_off_for_destination(uint32_t destination_id,
       continue;
     }
     const ActiveNote note = active_[i];
-    MidiEvent off;
-    off.render_frame = render_frame.value;
-    off.ump = make_midi1_note_off(note.group, note.channel, note.note, 0);
-    off.source_track_id = note.source_track_id;
+    const MidiEvent off = note_off_for(note, render_frame.value);
     // Drop the entry first so dispatch (and any re-entrant query) sees a
     // consistent table, then emit the note-off.
     active_[i] = active_[active_count_ - 1];
