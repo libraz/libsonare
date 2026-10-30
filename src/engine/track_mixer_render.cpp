@@ -894,4 +894,23 @@ float* TrackMixerRuntime::lane_gate(size_t lane_index) noexcept {
   return lane_gate_scratch_.data() + lane_index * static_cast<size_t>(max_block_size_);
 }
 
+void TrackMixerRuntime::drain_clip_pdc_delays(int num_channels, int num_samples) noexcept {
+  if (num_channels <= 0 || num_samples <= 0) return;
+  const std::vector<TrackLaneConfig>* lanes = lanes_.current();
+  if (lanes == nullptr || lanes->empty()) return;
+  const int render_channels = std::min(num_channels, kMaxLaneChannels);
+  if (render_channels <= 0) return;
+  for (size_t lane_index = 0; lane_index < lanes->size(); ++lane_index) {
+    // A stopped block still runs every lane so tails advance; raw clip delay drains here.
+    source_mix_lane_active_[lane_index] = true;
+    for (int ch = 0; ch < render_channels; ++ch) {
+      float* lane = lane_channel(lane_index, ch);
+      std::fill(lane, lane + num_samples, 0.0f);
+      lane_channel_ptrs_[static_cast<size_t>(ch)] = lane;
+    }
+    lane_states_[lane_index].clip_pdc_delay.process(lane_channel_ptrs_.data(), render_channels,
+                                                    num_samples);
+  }
+}
+
 }  // namespace sonare::engine

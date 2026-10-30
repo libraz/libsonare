@@ -651,6 +651,7 @@ set(SONARE_ENGINE_SOURCES
   engine/realtime_engine_instruments.cpp
   engine/realtime_engine_midi.cpp
   engine/realtime_engine_mixing.cpp
+  engine/realtime_engine_reserved_parameters.cpp
   engine/tempo_sync.cpp
   engine/warp_stretch.cpp
 )
@@ -667,6 +668,8 @@ if(BUILD_MIXING)
     engine/track_mixer_params.cpp
     engine/track_mixer_render.cpp
     engine/track_mixer_routing.cpp
+    engine/strip_spec.cpp
+    engine/track_mixer_buses.cpp
   )
 endif()
 add_library(sonare_engine STATIC ${SONARE_ENGINE_SOURCES})
@@ -1667,9 +1670,12 @@ if(BUILD_WASM)
       engine/realtime_engine_lifecycle.cpp
       engine/realtime_engine_midi.cpp
       engine/realtime_engine_mixing.cpp
+      engine/realtime_engine_reserved_parameters.cpp
       engine/track_mixer.cpp
       engine/track_mixer_params.cpp
       engine/track_mixer_routing.cpp
+      engine/strip_spec.cpp
+      engine/track_mixer_buses.cpp
       TARGET_DIRECTORY sonare_engine
       PROPERTIES COMPILE_OPTIONS -fexceptions)
   endif()

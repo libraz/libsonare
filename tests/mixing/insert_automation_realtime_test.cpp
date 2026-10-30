@@ -208,7 +208,7 @@ TEST_CASE("Lane insert automation reaches the processor and smooths between brea
 TEST_CASE("Lane insert smoother advances exactly once per block (no double advance)",
           "[mixing][automation]") {
   // advance_insert_automations is invoked from three mutually-exclusive entry
-  // points in track_mixer.cpp (render_clips / mix_source / begin_source_mix);
+  // points in track_mixer_render.cpp (render_clips / mix_source / begin_source_mix);
   // only one runs per sub-block. A single breakpoint jump driven block by block
   // must therefore track the closed-form one-pole response sample-for-sample. If
   // the smoother were advanced twice per block it would reach its target in half
