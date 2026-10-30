@@ -199,7 +199,7 @@ void fill_tempo_map(const Project& project, transport::TempoMap* map) {
 
   std::vector<transport::TimeSignatureSegment> sigs = project.time_signatures();
   if (sigs.empty()) {
-    sigs.push_back(transport::TimeSignatureSegment{0.0, transport::TimeSignature{4, 4}});
+    sigs.push_back(transport::TimeSignatureSegment{0.0, transport::TimeSignature{}});
   }
   map->set_time_signatures(std::move(sigs));
 }
@@ -451,6 +451,28 @@ bool fixed_period_loop_is_exact(const Project& project, const EditClip& clip, do
   // Same samples-per-quarter expression as the tempo map's.
   const double period = loop_ppq * (project.sample_rate() * constants::kSecondsPerMinute / bpm);
   return static_cast<double>(period_samples) == period;
+}
+
+// Samples from @p start_sample to the tempo-mapped position of @p end_ppq, never negative.
+int64_t samples_after(const transport::TempoMap& tempo_map, double end_ppq, int64_t start_sample) {
+  return std::max<int64_t>(0, tempo_map.ppq_to_sample(end_ppq) - start_sample);
+}
+
+struct ClipFadeSamples {
+  int64_t fade_in;
+  int64_t fade_out;
+};
+
+// Clamp each fade length to the clip's own duration so an oversized fade
+// cannot push the fade-out start before the clip start (which would
+// attenuate the whole clip). A negative stored length is treated as no fade.
+ClipFadeSamples clip_fade_samples(const transport::TempoMap& tempo_map, const EditClip& clip,
+                                  int64_t clip_start_sample) {
+  const double fade_in_ppq = std::clamp(clip.fade_in.length_ppq, 0.0, clip.length_ppq);
+  const double fade_out_ppq = std::clamp(clip.fade_out.length_ppq, 0.0, clip.length_ppq);
+  return {samples_after(tempo_map, clip.start_ppq + fade_in_ppq, clip_start_sample),
+          std::max<int64_t>(0, tempo_map.ppq_to_sample(clip.end_ppq()) -
+                                   tempo_map.ppq_to_sample(clip.end_ppq() - fade_out_ppq))};
 }
 
 // Appends the clip's events as render frames over `iterations` repeats of its
@@ -964,11 +986,10 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       // Take base at clip start plus elapsed part onset; a legacy base is converted from PPQ first.
       int64_t clip_offset_samples = 0;
       if (part.source_offset_seconds.has_value()) {
-        const int64_t part_start_sample = tempo_map.ppq_to_sample(clip.start_ppq + part.start_ppq);
         const int64_t physical_base_samples =
             rounded_nonnegative_physical_samples(*part.source_offset_seconds, project_sr);
         const long double physical_samples = static_cast<long double>(physical_base_samples) +
-                                             static_cast<long double>(part_start_sample) -
+                                             static_cast<long double>(start_sample) -
                                              static_cast<long double>(clip_start_sample);
         if (!(physical_samples > 0.0L)) {
           clip_offset_samples = 0;
@@ -1099,16 +1120,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       const int64_t source_samples =
           num_channels > 0 ? static_cast<int64_t>(storage->channels[0].size()) : 0;
 
-      // Clamp each fade length to the clip's own duration so an oversized fade
-      // cannot push the fade-out start before the clip start (which would
-      // attenuate the whole clip). A negative stored length is treated as no fade.
-      const double fade_in_ppq = std::clamp(clip.fade_in.length_ppq, 0.0, clip.length_ppq);
-      const double fade_out_ppq = std::clamp(clip.fade_out.length_ppq, 0.0, clip.length_ppq);
-      const int64_t fade_in_samples = std::max<int64_t>(
-          0, tempo_map.ppq_to_sample(clip.start_ppq + fade_in_ppq) - clip_start_sample);
-      const int64_t fade_out_samples =
-          std::max<int64_t>(0, tempo_map.ppq_to_sample(clip.end_ppq()) -
-                                   tempo_map.ppq_to_sample(clip.end_ppq() - fade_out_ppq));
+      const ClipFadeSamples fades = clip_fade_samples(tempo_map, clip, clip_start_sample);
 
       engine::ClipAudioBuffer buffer;
       buffer.channels = storage->channel_ptrs.data();
@@ -1118,9 +1130,8 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       const bool is_whole_clip = part.start_ppq == 0.0 && part.end_ppq == clip.length_ppq;
       const bool loop = is_whole_clip && clip.loop_mode == LoopMode::kLoop;
       int64_t loop_length_samples =
-          loop ? std::max<int64_t>(
-                     0, tempo_map.ppq_to_sample(clip.start_ppq + effective_loop_length_ppq(clip)) -
-                            start_sample)
+          loop ? samples_after(tempo_map, clip.start_ppq + effective_loop_length_ppq(clip),
+                               start_sample)
                : 0;
       int64_t loop_phase_samples = 0;
       bool preserve_loop_period = false;
@@ -1134,9 +1145,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       // length. The engine clamps it to the available pre-roll and half the loop.
       const int64_t loop_crossfade_samples =
           loop && clip.loop_crossfade_ppq > 0.0
-              ? std::max<int64_t>(
-                    0, tempo_map.ppq_to_sample(clip.start_ppq + clip.loop_crossfade_ppq) -
-                           start_sample)
+              ? samples_after(tempo_map, clip.start_ppq + clip.loop_crossfade_ppq, start_sample)
               : 0;
       const engine::FadeCurve fade_in_curve = to_engine_fade_curve(clip.fade_in.curve);
       const engine::FadeCurve fade_out_curve = to_engine_fade_curve(clip.fade_out.curve);
@@ -1158,7 +1167,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
                                : 1.0f;
       engine::ClipSchedule sched(clip.id, buffer, clip.start_ppq + part.start_ppq, start_sample,
                                  clip_offset_samples, length_samples, loop, clip.gain * track_gain,
-                                 fade_in_samples, fade_out_samples, fade_in_curve, fade_out_curve,
+                                 fades.fade_in, fades.fade_out, fade_in_curve, fade_out_curve,
                                  /*clip_has_separate_fade_out_curve=*/true);
       sched.loop_length_samples = loop_length_samples;
       sched.loop_phase_samples = loop_phase_samples;
@@ -1171,17 +1180,15 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       // tempo change rather than its sample length.
       sched.seam_fade_in_samples =
           part.seam_fade_in_ppq > 0.0
-              ? std::max<int64_t>(
-                    0, tempo_map.ppq_to_sample(clip.start_ppq + part.reference_start_ppq +
-                                               part.seam_fade_in_ppq) -
-                           tempo_map.ppq_to_sample(clip.start_ppq + part.reference_start_ppq))
+              ? samples_after(tempo_map,
+                              clip.start_ppq + part.reference_start_ppq + part.seam_fade_in_ppq,
+                              tempo_map.ppq_to_sample(clip.start_ppq + part.reference_start_ppq))
               : 0;
       sched.seam_fade_out_samples =
           part.seam_fade_out_ppq > 0.0
-              ? std::max<int64_t>(
-                    0, tempo_map.ppq_to_sample(clip.start_ppq + part.reference_end_ppq) -
-                           tempo_map.ppq_to_sample(clip.start_ppq + part.reference_end_ppq -
-                                                   part.seam_fade_out_ppq))
+              ? samples_after(tempo_map, clip.start_ppq + part.reference_end_ppq,
+                              tempo_map.ppq_to_sample(clip.start_ppq + part.reference_end_ppq -
+                                                      part.seam_fade_out_ppq))
               : 0;
       if (part.has_seam_reference) {
         const int64_t reference_start_sample =
@@ -1313,15 +1320,14 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
     }
     sched.start_ppq = clip.start_ppq;
     sched.start_sample = tempo_map.ppq_to_sample(clip.start_ppq);
-    sched.length_samples =
-        std::max<int64_t>(0, tempo_map.ppq_to_sample(clip.end_ppq()) - sched.start_sample);
+    sched.length_samples = samples_after(tempo_map, clip.end_ppq(), sched.start_sample);
     sched.loop_mode = clip.loop_mode == LoopMode::kLoop ? midi::MidiLoopMode::kLoop
                                                         : midi::MidiLoopMode::kOneShot;
     size_t iterations = 1;
     if (sched.loop_mode == midi::MidiLoopMode::kLoop) {
       const double loop_ppq = effective_loop_length_ppq(clip);
-      sched.loop_length_samples = std::max<int64_t>(
-          0, tempo_map.ppq_to_sample(clip.start_ppq + loop_ppq) - sched.start_sample);
+      sched.loop_length_samples =
+          samples_after(tempo_map, clip.start_ppq + loop_ppq, sched.start_sample);
       // A fixed sample period drifts from the tempo map wherever the tempo moves,
       // so such a loop is written out repeat by repeat instead.
       if (!fixed_period_loop_is_exact(project, clip, loop_ppq, sched.loop_length_samples)) {
@@ -1347,13 +1353,9 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
     // length, so this schedule is never the open-ended case.
     sched.gain = clip.gain;
     {
-      const double fade_in_ppq = std::clamp(clip.fade_in.length_ppq, 0.0, clip.length_ppq);
-      const double fade_out_ppq = std::clamp(clip.fade_out.length_ppq, 0.0, clip.length_ppq);
-      sched.fade_in_samples = std::max<int64_t>(
-          0, tempo_map.ppq_to_sample(clip.start_ppq + fade_in_ppq) - sched.start_sample);
-      sched.fade_out_samples =
-          std::max<int64_t>(0, tempo_map.ppq_to_sample(clip.end_ppq()) -
-                                   tempo_map.ppq_to_sample(clip.end_ppq() - fade_out_ppq));
+      const ClipFadeSamples fades = clip_fade_samples(tempo_map, clip, sched.start_sample);
+      sched.fade_in_samples = fades.fade_in;
+      sched.fade_out_samples = fades.fade_out;
     }
     sched.fade_in_curve = to_engine_fade_curve(clip.fade_in.curve);
     sched.fade_out_curve = to_engine_fade_curve(clip.fade_out.curve);

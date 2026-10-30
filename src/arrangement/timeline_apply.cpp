@@ -17,6 +17,8 @@ using constants::kDefaultBpm;
 
 namespace {
 
+constexpr transport::TimeSignature kDefaultTimeSignature{};
+
 ApplyResult apply_refused(ErrorCode code, std::string message) {
   ApplyResult result;
   result.code = code;
@@ -24,6 +26,15 @@ ApplyResult apply_refused(ErrorCode code, std::string message) {
   result.outcome = ApplyOutcome::kUnchanged;
   return result;
 }
+
+#if defined(SONARE_WITH_MIXING)
+bool has_track_lane(const CompiledTimeline& timeline, TrackId track_id) noexcept {
+  for (const CompiledTrackLane& lane : timeline.track_lanes) {
+    if (lane.track_id == track_id) return true;
+  }
+  return false;
+}
+#endif
 
 // Collects the playback lanes; @p lane_tracks receives, per lane, the track a typed
 // lane drives (0 for an opaque one), whose engine id exists only once the engine
@@ -53,9 +64,7 @@ std::vector<automation::AutomationLane> resolve_playback_lanes(const CompiledTim
     TrackId track_id = 0;
     if (binding.lane.target_kind() != automation::AutomationTargetKind::kOpaque) {
 #if defined(SONARE_WITH_MIXING)
-      for (const CompiledTrackLane& track_lane : timeline.track_lanes) {
-        if (track_lane.track_id == binding.track_id) track_id = binding.track_id;
-      }
+      if (has_track_lane(timeline, binding.track_id)) track_id = binding.track_id;
 #endif
       // A typed lane with no engine track lane has nothing to drive.
       if (track_id == 0) continue;
@@ -92,13 +101,6 @@ const mixing::api::Strip* find_scene_strip(const MixerRequest& mixer,
   return nullptr;
 }
 
-bool has_track_lane(const CompiledTimeline& timeline, TrackId track_id) noexcept {
-  for (const CompiledTrackLane& lane : timeline.track_lanes) {
-    if (lane.track_id == track_id) return true;
-  }
-  return false;
-}
-
 bool has_strip_binding(const CompiledTimeline& timeline, TrackId track_id) noexcept {
   for (const MixerStripBinding& binding : timeline.mixer.bindings) {
     if (binding.track_id == track_id) return true;
@@ -133,7 +135,9 @@ void clear_timeline_domains(engine::RealtimeEngine& engine) noexcept {
   attempt([&] { engine.set_track_lanes({}); });
 #endif
   attempt([&] { engine.set_tempo(kDefaultBpm); });
-  attempt([&] { engine.set_time_signature(4, 4); });
+  attempt([&] {
+    engine.set_time_signature(kDefaultTimeSignature.numerator, kDefaultTimeSignature.denominator);
+  });
   attempt([&] { engine.set_applied_timeline_sample_rate(0.0); });
 }
 
@@ -275,7 +279,7 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
     if (!timeline.time_signatures.empty()) {
       engine.set_time_signature_segments(timeline.time_signatures);
     } else {
-      engine.set_time_signature(4, 4);
+      engine.set_time_signature(kDefaultTimeSignature.numerator, kDefaultTimeSignature.denominator);
     }
     // Marker names point into the timeline's own storage.
     engine.set_markers(timeline.markers);
